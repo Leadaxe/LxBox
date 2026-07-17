@@ -100,11 +100,10 @@ Future<void> showPingSettings(
   BuildContext context,
   HomeController controller,
 ) async {
+  // §279 — typed PingOptionsModel из локализованного шаблона (load() на
+  // каждое открытие sheet'а → имена пресетов всегда на активной локали).
   final template = await TemplateLoader.load();
-  final pingOpts = template.pingOptions;
-  final presets = (pingOpts['presets'] as List<dynamic>? ?? [])
-      .whereType<Map<String, dynamic>>()
-      .toList();
+  final presets = template.pingOptionsModel.presets;
 
   if (!context.mounted) return;
   // §040: dialog scope — global / per-group. Если у текущего канала есть
@@ -168,13 +167,13 @@ Future<void> showPingSettings(
                   spacing: 8,
                   runSpacing: 4,
                   children: presets.map((p) {
-                    final name = p['name']?.toString() ?? '';
-                    final url = p['url']?.toString() ?? '';
-                    final selected = urlCtrl.text == url;
+                    final selected = urlCtrl.text == p.url;
                     return ChoiceChip(
-                      label: Text(name, style: const TextStyle(fontSize: 12)),
+                      label:
+                          Text(p.name, style: const TextStyle(fontSize: 12)),
                       selected: selected,
-                      onSelected: (_) => setSheetState(() => urlCtrl.text = url),
+                      onSelected: (_) =>
+                          setSheetState(() => urlCtrl.text = p.url),
                     );
                   }).toList(),
                 ),

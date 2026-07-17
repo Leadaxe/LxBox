@@ -4,5 +4,6 @@
   "commonSave": "Сохранить",
   "commonOk": "ОК",
   "settingsLanguageTitle": "Язык",
-  "settingsLanguageSystem": "Как в системе"
+  "settingsLanguageSystem": "Как в системе",
+  "dnsMyDnsSeedName": "Мой DNS"
 }

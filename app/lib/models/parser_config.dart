@@ -10,7 +10,15 @@ class WizardTemplate {
     required this.dnsOptions,
     required this.pingOptions,
     required this.speedTestOptions,
-  });
+    DnsOptionsModel? dnsOptionsModel,
+    PingOptionsModel? pingOptionsModel,
+    SpeedTestOptionsModel? speedTestOptionsModel,
+  })  : dnsOptionsModel =
+            dnsOptionsModel ?? DnsOptionsModel.fromJson(dnsOptions),
+        pingOptionsModel =
+            pingOptionsModel ?? PingOptionsModel.fromJson(pingOptions),
+        speedTestOptionsModel = speedTestOptionsModel ??
+            SpeedTestOptionsModel.fromJson(speedTestOptions);
 
   final ParserConfigBlock parserConfig;
   final GroupTemplates groupTemplates; // §267 (было: List<PresetGroup> presetGroups)
@@ -20,6 +28,14 @@ class WizardTemplate {
   final Map<String, dynamic> dnsOptions;
   final Map<String, dynamic> pingOptions;
   final Map<String, dynamic> speedTestOptions;
+
+  /// §279 Phase 2 (§3.3 hardening) — typed-модели трёх raw-секций для экранов.
+  /// Парсятся из УЖЕ оверлеенного JSON (display-поля локализованы) — новое
+  /// display-поле нельзя потребить мимо choke point. Raw-мапы выше остаются
+  /// для machine-level билдера (build_config), он display-текст не читает.
+  final DnsOptionsModel dnsOptionsModel;
+  final PingOptionsModel pingOptionsModel;
+  final SpeedTestOptionsModel speedTestOptionsModel;
 
   final List<VarSection> varSections;
 
@@ -111,6 +127,171 @@ class ParserConfigBlock {
       reload: parser['reload'] as String? ?? '12h',
     );
   }
+}
+
+// ===========================================================================
+// §279 Phase 2 (§3.3) — typed-модели raw-секций dns_options / ping_options /
+// speed_test_options. Тонкие: только поля, реально потребляемые экранами
+// (tag/id, name/description, vars). У DNS-серверов дополнительно хранится
+// исходная §117-обёртка (`wrapper`) — резолверу/редактору нужен machine-body.
+// ===========================================================================
+
+/// §279 — один template-DNS-server из `dns_options.servers[]` (§117-обёртка
+/// `{description, enabled, vars?, server}`). `tag` — из вложенного `server`
+/// (single source of truth, top-level `tag` не существует).
+class TemplateDnsServerEntry {
+  TemplateDnsServerEntry({
+    required this.tag,
+    this.description = '',
+    this.enabled = true,
+    this.vars = const [],
+    this.wrapper = const {},
+  });
+
+  final String tag;
+  final String description; // display (локализуется overlay'ем)
+  final bool enabled;
+  final List<WizardVar> vars; // display-титулы var'ов (локализуются)
+
+  /// Исходная §117-обёртка целиком — для резолвера body
+  /// (`resolveTemplateDnsServerBody`) и редактора. Machine-уровень.
+  final Map<String, dynamic> wrapper;
+
+  /// null если у записи нет валидного `server.tag` (malformed — пропускается).
+  static TemplateDnsServerEntry? fromWrapper(Map<String, dynamic> w) {
+    final server = w['server'];
+    final tag = server is Map ? server['tag'] : null;
+    if (tag is! String || tag.isEmpty) return null;
+    return TemplateDnsServerEntry(
+      tag: tag,
+      description: w['description']?.toString() ?? '',
+      enabled: w['enabled'] as bool? ?? true,
+      vars: (w['vars'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map((v) => WizardVar.fromJson(v))
+          .toList(),
+      wrapper: w,
+    );
+  }
+}
+
+/// §279 — typed-view `dns_options` для экранов (DNS Settings, редактор
+/// правила). `rules` остаются raw (их `name` — identity-ключ, не display).
+class DnsOptionsModel {
+  DnsOptionsModel({this.servers = const []});
+
+  final List<TemplateDnsServerEntry> servers;
+
+  /// tag → §117-обёртка (зеркало `templateDnsServersByTag` билдера).
+  Map<String, Map<String, dynamic>> get wrappersByTag =>
+      {for (final s in servers) s.tag: s.wrapper};
+
+  factory DnsOptionsModel.fromJson(Map<String, dynamic> json) {
+    final servers = <TemplateDnsServerEntry>[];
+    for (final s in json['servers'] as List<dynamic>? ?? const []) {
+      if (s is! Map<String, dynamic>) continue;
+      final entry = TemplateDnsServerEntry.fromWrapper(s);
+      if (entry != null) servers.add(entry);
+    }
+    return DnsOptionsModel(servers: servers);
+  }
+}
+
+/// §279 — пресет ping-URL из `ping_options.presets[]` (id — стабильный
+/// machine-ключ, §279 Phase 0; name — display).
+class PingPreset {
+  PingPreset({required this.id, this.name = '', this.url = ''});
+
+  final String id;
+  final String name; // display (локализуется overlay'ем)
+  final String url;
+
+  factory PingPreset.fromJson(Map<String, dynamic> json) => PingPreset(
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        url: json['url']?.toString() ?? '',
+      );
+}
+
+/// §279 — typed-view `ping_options` (дефолтный URL/timeout + пресеты).
+class PingOptionsModel {
+  PingOptionsModel({
+    this.defaultUrl = '',
+    this.defaultTimeoutMs = 0,
+    this.presets = const [],
+  });
+
+  final String defaultUrl;
+  final int defaultTimeoutMs; // 0 = не задан (caller применяет свой дефолт)
+  final List<PingPreset> presets;
+
+  factory PingOptionsModel.fromJson(Map<String, dynamic> json) {
+    final timeout = json['timeout_ms'];
+    return PingOptionsModel(
+      defaultUrl: json['url']?.toString() ?? '',
+      defaultTimeoutMs: (timeout is num && timeout > 0) ? timeout.toInt() : 0,
+      presets: (json['presets'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(PingPreset.fromJson)
+          .toList(),
+    );
+  }
+}
+
+/// §279 — speed-test сервер из `speed_test_options.servers[]` (id —
+/// стабильный machine-ключ выбора, §279 Phase 0; name — display).
+class SpeedTestServer {
+  SpeedTestServer({
+    required this.id,
+    this.name = '',
+    this.downloadUrl = '',
+    this.uploadUrl,
+    this.uploadMethod = 'PUT',
+    this.pingUrl = '',
+  });
+
+  final String id;
+  final String name; // display (локализуется overlay'ем)
+  final String downloadUrl;
+  final String? uploadUrl; // null → fallback на downloadUrl
+  final String uploadMethod; // 'PUT' | 'POST'
+  final String pingUrl; // пустой → fallback на downloadUrl
+
+  factory SpeedTestServer.fromJson(Map<String, dynamic> json) =>
+      SpeedTestServer(
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        downloadUrl: json['download_url']?.toString() ?? '',
+        uploadUrl: json['upload_url']?.toString(),
+        uploadMethod: json['upload_method']?.toString() ?? 'PUT',
+        pingUrl: json['ping_url']?.toString() ?? '',
+      );
+}
+
+/// §279 — typed-view `speed_test_options` (серверы + варианты потоков).
+class SpeedTestOptionsModel {
+  SpeedTestOptionsModel({
+    this.servers = const [],
+    this.streamOptions = const [],
+    this.defaultStreams,
+  });
+
+  final List<SpeedTestServer> servers;
+  final List<int> streamOptions;
+  final int? defaultStreams;
+
+  factory SpeedTestOptionsModel.fromJson(Map<String, dynamic> json) =>
+      SpeedTestOptionsModel(
+        servers: (json['servers'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(SpeedTestServer.fromJson)
+            .toList(),
+        streamOptions: (json['stream_options'] as List<dynamic>? ?? const [])
+            .whereType<num>()
+            .map((n) => n.toInt())
+            .toList(),
+        defaultStreams: (json['default_streams'] as num?)?.toInt(),
+      );
 }
 
 // §267 — `group_templates` + `default_channels` заменяют плоский `preset_groups`.

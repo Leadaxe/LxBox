@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../controllers/home_controller.dart';
+import '../models/parser_config.dart' show SpeedTestServer;
 import '../services/app_log.dart';
 import '../services/error_format.dart';
+import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
 
 class SpeedTestScreen extends StatefulWidget {
@@ -41,7 +43,8 @@ class _SpeedTestResult {
 /// Session-scoped history — survives screen close, cleared on app restart.
 final _sessionHistory = <_SpeedTestResult>[];
 
-class _SpeedTestScreenState extends State<SpeedTestScreen> {
+class _SpeedTestScreenState extends State<SpeedTestScreen>
+    with TemplateAwareState<SpeedTestScreen> {
   bool _running = false;
   String _status = 'Tap Start to begin';
   double _downloadMbps = 0;
@@ -55,42 +58,37 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
   /// list index (order/names may change between template versions).
   String? _selectedServerId;
 
-  // Loaded from wizard_template
-  var _servers = <Map<String, dynamic>>[];
+  // Loaded from wizard_template (§279 — typed SpeedTestOptionsModel).
+  var _servers = <SpeedTestServer>[];
   var _streamOptions = <int>[1, 4, 10];
 
   /// Index of the selected server; unknown/absent id falls back to the
   /// default (first) server.
   int get _selectedServer {
-    final i = _servers.indexWhere((s) => s['id'] == _selectedServerId);
+    final i = _servers.indexWhere((s) => s.id == _selectedServerId);
     return i >= 0 ? i : 0;
   }
 
-  String _serverId(int i) => _servers[i]['id']?.toString() ?? '$i';
+  String _serverId(int i) => _servers[i].id.isNotEmpty ? _servers[i].id : '$i';
 
+  /// §279 — fetch через TemplateAwareState: первый вызов — полная загрузка,
+  /// смена локали — refetch имён серверов (выбор/`_streams` юзера не трогаем).
   @override
-  void initState() {
-    super.initState();
-    unawaited(_loadConfig());
+  void onLocaleTemplateFetch({required bool first}) {
+    unawaited(_loadConfig(seedDefaults: first));
   }
 
-  Future<void> _loadConfig() async {
+  Future<void> _loadConfig({required bool seedDefaults}) async {
     final template = await TemplateLoader.load();
-    final opts = template.speedTestOptions;
-    final servers = (opts['servers'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .toList();
-    final streams = (opts['stream_options'] as List<dynamic>?)
-        ?.whereType<num>()
-        .map((n) => n.toInt())
-        .toList();
-    final defaultStreams = (opts['default_streams'] as num?)?.toInt();
+    final opts = template.speedTestOptionsModel;
 
     if (mounted) {
       setState(() {
-        if (servers.isNotEmpty) _servers = servers;
-        if (streams != null && streams.isNotEmpty) _streamOptions = streams;
-        if (defaultStreams != null) _streams = defaultStreams;
+        if (opts.servers.isNotEmpty) _servers = opts.servers;
+        if (opts.streamOptions.isNotEmpty) _streamOptions = opts.streamOptions;
+        if (seedDefaults && opts.defaultStreams != null) {
+          _streams = opts.defaultStreams!;
+        }
       });
     }
   }
@@ -163,7 +161,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     }
   }
 
-  String _serverPingUrl(int i) => _servers[i]['ping_url']?.toString() ?? _serverDownloadUrl(i);
+  String _serverPingUrl(int i) =>
+      _servers[i].pingUrl.isNotEmpty ? _servers[i].pingUrl : _serverDownloadUrl(i);
 
   Future<double> _testPing() async {
     final url = _serverPingUrl(_selectedServer);
@@ -191,10 +190,11 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     return times.reduce((a, b) => a + b) / times.length;
   }
 
-  String _serverName(int i) => _servers[i]['name']?.toString() ?? 'Server $i';
-  String _serverDownloadUrl(int i) => _servers[i]['download_url']?.toString() ?? '';
-  String? _serverUploadUrl(int i) => _servers[i]['upload_url']?.toString();
-  String _serverUploadMethod(int i) => _servers[i]['upload_method']?.toString() ?? 'PUT';
+  String _serverName(int i) =>
+      _servers[i].name.isNotEmpty ? _servers[i].name : 'Server $i';
+  String _serverDownloadUrl(int i) => _servers[i].downloadUrl;
+  String? _serverUploadUrl(int i) => _servers[i].uploadUrl;
+  String _serverUploadMethod(int i) => _servers[i].uploadMethod;
 
   /// Download test: parallel streams with real-time speed updates.
   Future<double> _testDownload() async {

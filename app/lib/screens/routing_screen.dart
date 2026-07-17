@@ -10,7 +10,9 @@ import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/normalize_pinned_presets.dart';
 import '../services/channel_mutations.dart';
+import '../services/l10n/template_aware_state.dart';
 import '../services/preset_on_change.dart';
+import '../services/rule_display_names.dart';
 import '../services/rule_set_downloader.dart';
 import '../services/selectable_to_custom.dart';
 import '../services/settings_storage.dart';
@@ -59,7 +61,8 @@ class _RoutingScreenState extends State<RoutingScreen>
     with
         WidgetsBindingObserver,
         LazyPersistMixin<RoutingScreen>,
-        _RoutingSrsCacheMixin {
+        _RoutingSrsCacheMixin,
+        TemplateAwareState<RoutingScreen> {
   @override
   WizardTemplate? _template;
   @override
@@ -90,10 +93,23 @@ class _RoutingScreenState extends State<RoutingScreen>
   @override
   SubscriptionController get lazyController => widget.subController;
 
+  // §279 — загрузка стартует из onLocaleTemplateFetch (TemplateAwareState):
+  // первый вызов (до первого build) — полный _load(); смена локали — только
+  // refetch локализованного шаблона (буферы каналов/правил юзера не трогаем;
+  // live-label'ы пресетов и каталог перерендерятся из нового _template).
   @override
-  void initState() {
-    super.initState();
-    unawaited(_load().then((_) => _focusChannelIfAny()));
+  void onLocaleTemplateFetch({required bool first}) {
+    if (first) {
+      unawaited(_load().then((_) => _focusChannelIfAny()));
+    } else {
+      unawaited(_refetchTemplate());
+    }
+  }
+
+  Future<void> _refetchTemplate() async {
+    final template = await TemplateLoader.load();
+    if (!mounted) return;
+    setState(() => _template = template);
   }
 
   @override
@@ -544,6 +560,9 @@ class _RoutingScreenState extends State<RoutingScreen>
     return CustomRuleTile(
       index: index,
       rule: rule,
+      // §279 (§3.5.1) — live display-имя: label пресета из локализованного
+      // шаблона + порядковый суффикс копий; fallback — сохранённый снапшот.
+      displayName: ruleDisplayName(rule, _customRules, _template),
       options: options,
       subtitle: subtitle,
       pickerValue: pickerValue,
@@ -666,7 +685,8 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   Future<void> _confirmDeleteCustomRule(int index) async {
     final rule = _customRules[index];
-    final ok = await showDeleteCustomRuleDialog(context, rule);
+    final ok = await showDeleteCustomRuleDialog(context, rule,
+        displayName: ruleDisplayName(rule, _customRules, _template));
     if (ok != true || !mounted) return;
     setState(() {
       _customRules.removeAt(index);
@@ -701,7 +721,9 @@ class _RoutingScreenState extends State<RoutingScreen>
       outboundOptions: _outboundOptions()
           .map((o) => OutboundOption(value: o.tag, label: o.label))
           .toList(),
-      existingNames: _customRules.map((r) => r.name).toSet(),
+      // §279 — дедуп по ВИДИМЫМ именам: inline-правило не может взять
+      // live-label пресета (display-резолв + снапшоты).
+      existingNames: visibleRuleNames(_customRules, _template),
     );
     if (result == null) return;
     if (result.wasDeleted) return; // нечего удалять — только что создали
@@ -717,10 +739,9 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   Future<void> _openCustomRuleEditor(int index) async {
     final current = _customRules[index];
-    final existing = _customRules
-        .where((r) => r.id != current.id)
-        .map((r) => r.name)
-        .toSet();
+    // §279 — дедуп по видимым именам (live-label'ы пресетов + снапшоты).
+    final existing =
+        visibleRuleNames(_customRules, _template, excludeId: current.id);
     final result = await openCustomRuleEditor(
       context,
       initial: current,
@@ -730,6 +751,11 @@ class _RoutingScreenState extends State<RoutingScreen>
       existingNames: existing,
       preset: current.kind == CustomRuleKind.preset
           ? _presetFor(current.presetId)
+          : null,
+      // §279 — display-имя для read-only Name-поля preset-ветки редактора
+      // (live-label + порядковый суффикс копии).
+      displayName: current.kind == CustomRuleKind.preset
+          ? ruleDisplayName(current, _customRules, _template)
           : null,
     );
     if (result == null || !mounted) return;
@@ -833,5 +859,6 @@ class _RoutingScreenState extends State<RoutingScreen>
       RoutingHelpers.ruleSubtitle(rule, preset);
 
   String _uniqueCustomRuleName(String requested, String selfId) =>
-      RoutingHelpers.uniqueCustomRuleName(requested, selfId, _customRules);
+      RoutingHelpers.uniqueCustomRuleName(
+          requested, selfId, _customRules, _template);
 }
