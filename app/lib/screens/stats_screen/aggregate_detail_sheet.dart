@@ -110,7 +110,10 @@ class _AggregateDetailSheet extends StatelessWidget {
                     color: cs.secondary.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(axis == AggAxis.domain ? 'Domain' : 'IP',
+                  child: Text(
+                      axis == AggAxis.domain
+                          ? context.l.statsAggAxisDomain
+                          : context.l.statsAggAxisIp,
                       style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,

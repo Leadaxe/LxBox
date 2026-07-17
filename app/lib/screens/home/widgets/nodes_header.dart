@@ -111,7 +111,9 @@ class NodesHeader extends StatelessWidget {
             // `Icons.filter_list` (унифицирована с control-строкой профайлера).
             // Primary-цвет + точка когда есть active match-filter (§095).
             IconButton(
-              tooltip: filter.panelExpanded ? 'Hide filters' : 'Show filters',
+              tooltip: filter.panelExpanded
+                  ? context.l.homeHideFiltersTooltip
+                  : context.l.homeShowFiltersTooltip,
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),

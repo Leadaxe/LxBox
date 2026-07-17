@@ -118,7 +118,9 @@ class _FilterPanelState extends State<FilterPanel>
     // фильтр (вернуть «показать всё»).
     if (f.detourActive) {
       chips.add(InputChip(
-        tooltip: f.detourHide ? 'Detour hidden' : 'Detour only',
+        tooltip: f.detourHide
+            ? context.l.homeFilterDetourHidden
+            : context.l.homeFilterDetourOnly,
         label: f.detourHide
             ? _gearOffIcon()
             : const Icon(Icons.settings, size: 18),
@@ -299,8 +301,8 @@ class _FilterPanelState extends State<FilterPanel>
                       // снятие галки надпись не меняет (вкл/выкл видно по
                       // чекбоксу + чипу/точке).
                       f.detourHide
-                          ? 'Hide detour servers'
-                          : 'Show only detour servers',
+                          ? context.l.homeFilterHideDetourServers
+                          : context.l.homeFilterShowOnlyDetourServers,
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),

@@ -78,7 +78,7 @@ class _TrafficEventDetailSheet extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    title.isNotEmpty ? title : '(event)',
+                    title.isNotEmpty ? title : context.l.statsEventFallbackTitle,
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600),
                     softWrap: true,

@@ -542,6 +542,12 @@ automation/                  # §047 Dart-сторона automation (допол�
   automation_dispatcher.dart #   диспетчер входящих команд (start/stop/toggle/select-node/…)
   event_emitter.dart         #   исходящие события (VPN up/down, sub-refresh) с throttle (default OFF)
   handlers.dart              #   обработчики команд поверх контроллеров
+l10n/                        # §279 подсистема локализации (см. раздел «Локализация (l10n)»)
+  l10n.dart                  #   L10n holder (eager; пиненный L10n.en) + extension context.l
+  locale_controller.dart     #   LocaleController — единственный владелец пайплайна смены локали
+  template_overlay.dart      #   TemplateOverlay.apply/extract — pre-parse оверлей шаблона
+  app_language_reconcile.dart#   трёхсторонний reconciliation LocaleManager↔storage (Android 13+)
+  template_aware_state.dart  #   mixin: перечитывание шаблона в didChangeDependencies по локали
 support/                     # §105 support-message + активное время
   support_message.dart       #   fetch+cache support-сообщения (баннер)
   support_state.dart         #   персист support-стейта (SupportState.I)
@@ -1284,6 +1290,51 @@ Lifecycle-сигналы (`connectScreen`/`disconnectScreen`, `connectProfiler`/
   - **Главный экран** ([`traffic_bar.dart`](../app/lib/screens/home/widgets/traffic_bar.dart)) — два раздельных чипа: `connectionsIn` (🔗 = `trafficManager.ConnectionsLen()` ядра = соединения **приложений**, ТЕ ЖЕ что в `CommandConnections`-списке = на Stats) и `connectionsOut` (🗄 = `connectionManager.Count()` = **физические** соединения наружу к серверам). Раньше шапка складывала In+Out в одно число — путало, т.к. не сходилось со списком на Stats.
   - **Stats** — активные из списка (`closedAt==0`) ≈ `connectionsIn`.
   - **Conns** — живые + closed-история, показывает «N active / M total».
+
+---
+
+## Локализация (l10n, §279)
+
+en (базовый) + ru; новый язык = один ARB + один template-overlay + один
+`values-<lang>/` без структурных изменений. Runtime-переключение без рестарта
+приложения, включая нативные поверхности при живом VPN-сервисе. Полная
+архитектура — [спека §279](spec/features/279%20localization/spec.md);
+translator-guide — [`l10n.md`](l10n.md).
+
+| Компонент | Роль |
+|---|---|
+| `lib/l10n/app_en.arb` / `app_ru.arb` | Каталог строк (gen_l10n + ICU-плюралы); `lib/l10n/gen/` генерируется `pub get`, в .gitignore |
+| `lib/services/l10n/l10n.dart` | `L10n.current` (eager-init en до error boundary) + пиненный `L10n.en` для machine-поверхностей; extension `context.l` |
+| `lib/services/l10n/locale_controller.dart` | `LocaleController` — **единственный владелец** смены локали; `WidgetsBindingObserver.didChangeLocales` ловит смену системного языка при `setting=='system'` |
+| `lib/services/l10n/template_overlay.dart` | Pre-parse оверлей display-текста `wizard_template.json` (адреса по machine-id, см. [TEMPLATE.md](TEMPLATE.md#локализация-display-текста--l10n-overlay-279)) |
+| `lib/services/l10n/template_aware_state.dart` | Mixin: refetch template-derived состояния в `didChangeDependencies` по `Localizations.localeOf` (initState переживает rebuild — снапшот локали там запрещён checker'ом) |
+| `lib/services/l10n/app_language_reconcile.dart` | Трёхсторонний reconciliation `LocaleManager`↔storage на старте (Android 13+, зеркало `last_pushed_locale`) |
+| `lib/models/ui_msg.dart` | sealed `UiMsg` — хранимые ошибки/статусы как типизированные объекты; `render(l)` в build, `renderEn()` — единственный путь UiMsg→String вне build (automation/AppLog/notification) |
+| `app/tool/l10n/` | 4 CI-checker'а (`--strict` на каждом PR с Phase 7): template_check / arb_check / hardcoded_check (+ rendering-locality) / kotlin_check |
+| `android … L10n.kt` | Нативный резолвер: читает `boxvpn_boot.app_language`, `createConfigurationContext` **в момент рендера, без кэша** — работает в сервис-процессе при мёртвом Flutter |
+
+**Пайплайн смены языка** (любой путь записи `app_language` — picker, Debug API
+side-effect hook, restore, смена системного языка — сходится в
+`LocaleController.set()` / `_applyLocale()`):
+
+```
+LocaleController.set(v)
+  ├─ SettingsStorage.setAppLanguage(v)      # JSON-var (истина) + MethodChannel-зеркало
+  │     └─ native: BootReceiver pref → resubmit notification-канала →
+  │        ServiceNotification.relabel → updateShortcuts (+onResume retry) →
+  │        tile.requestListeningState → Libbox.setLocale → LocaleManager (33+)
+  └─ _applyLocale(effective)
+        ├─ L10n.current = lookup(loc)
+        ├─ await TemplateLoader.reload(tag)  # ПРОГРЕВ ДО notify (кэш ключуется тегом локали)
+        ├─ RuleNameResolver.relocalize(...)  # display-зеркала билдера без ребилда конфига
+        ├─ LazyPersistFlush.flushAll()
+        └─ notifyListeners()                 # merged Listenable с themeNotifier → rebuild MaterialApp
+```
+
+**Границы** (английские навсегда): логи, Debug API-ответы, automation/Tasker-payload'ы,
+`emitWarnings`, wire-значения и теги, имена файлов, user data, payload
+OS/ядра (passthrough `RawMsg.detail`). Единицы (`B/KB/MB`, `Mbps`, `ms`) и
+суффиксы длительности — латиница в обеих локалях.
 
 ---
 

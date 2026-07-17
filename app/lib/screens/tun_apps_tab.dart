@@ -346,7 +346,7 @@ class _TunAppsTabState extends State<TunAppsTab>
         ),
       ),
       subtitle: Text(
-        uninstalled ? '$pkg — uninstalled, auto-skipped' : pkg,
+        uninstalled ? context.l.tunAppsUninstalledSkipped(pkg) : pkg,
         style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
       ),
       trailing: IconButton(

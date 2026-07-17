@@ -29,16 +29,20 @@
 ## Реализация
 
 Первый цикл реализации — [задача 280](../../tasks/280-l10n-first-version.md)
-(фазы 0–7 плана миграции, §10).
+(фазы 0–7 плана миграции, §10). **Статус: фазы 0–7 выполнены** (Phase 6 —
+device-verify отложен, DEVICE-PENDING-матрица в задаче 280).
 
 ## Docs to update
 
-- `docs/STORAGE.md` — var `app_language` (system|en|ru), место относительно §189 native_prefs.
-- `docs/TEMPLATE.md` — overlay-файлы `assets/l10n/template/*.json`, схема адресов, `src`-hash.
-- `docs/api/debug-api-reference.md` — side-effect роут `PUT /settings/vars/app_language`.
-- `docs/ARCHITECTURE.md` — подсистема l10n (LocaleController, TemplateOverlay, checkers).
-- `CHANGELOG.md` — Unreleased: выбор языка, русская локализация.
-- `docs/BUILD.md` — gen_l10n в сборке (генерация при pub get), tool/l10n checkers в CI.
+Выполнено в Phase 7:
+
+- [x] `docs/STORAGE.md` — var `app_language` (system|en|ru), место относительно §189 native_prefs (derived cache, не `NativePrefsKeys`).
+- [x] `docs/TEMPLATE.md` — overlay-файлы `assets/l10n/template/*.json`, схема адресов, `src`-hash (раздел «Локализация display-текста»).
+- [x] `docs/api/debug-api-reference.md` — side-effect роут `PUT /settings/vars/app_language` (+ DELETE, bash-примеры).
+- [x] `docs/ARCHITECTURE.md` — подсистема l10n (LocaleController-пайплайн, TemplateOverlay, UiMsg, checkers, L10n.kt) + `lib/services/l10n/` в дереве исходников.
+- [x] `CHANGELOG.md` — Unreleased: выбор языка, русская локализация, runtime-переключение.
+- [x] `docs/BUILD.md` — gen_l10n в сборке (генерация при pub get), tool/l10n checkers в CI.
+- [x] `docs/l10n.md` — новый translator-guide (язык end-to-end, `src`-hash accept, hotfix baseline, l10n-exempt).
 
 ---
 
@@ -402,20 +406,24 @@ App Settings → General → "Appearance", `RadioGroup` под theme-picker'ом
 
 ## 9. Guard-rails / CI
 
-Один шаг в `checks`-джобе; **двухступенчатость — зашита в wiring, не в прозе** (ревью: `--strict` на tag-билдах и «отчёт в PR» не имели механизма):
+Один шаг в `checks`-джобе. Миграционный период (Phases 1–6) жил в
+двухступенчатом режиме — warnings на PR, `--strict` только на tag-билдах
+(`startsWith(github.ref, 'refs/tags/')`). **С Phase 7 условие удалено — все
+четыре checker'а идут с `--strict` на каждом push/PR** (baseline пуст, ru
+100%, orphan'ов нет — warnings фатальны):
 
 ```yaml
 - name: L10n checks
   if: ${{ github.event.inputs.test_path == '' }}
   working-directory: app
   run: |
-    STRICT=${{ startsWith(github.ref, 'refs/tags/') && '--strict' || '' }}
-    dart run tool/l10n/template_check.dart $STRICT
-    dart run tool/l10n/arb_check.dart $STRICT
-    dart run tool/l10n/hardcoded_check.dart
+    dart run tool/l10n/template_check.dart --strict
+    dart run tool/l10n/arb_check.dart --strict
+    dart run tool/l10n/hardcoded_check.dart --strict
+    dart run tool/l10n/kotlin_check.dart --strict
 ```
 
-Checkers пишут отчёт (missing/stale/untranslated-счётчики) в `$GITHUB_STEP_SUMMARY` — виден в каждом PR, не требует `pull-requests: write` (у workflow только `contents: read`). Phase 7 = удаление условия, `--strict` безусловно.
+Checkers пишут отчёт (missing/stale/untranslated-счётчики) в `$GITHUB_STEP_SUMMARY` — виден в каждом PR, не требует `pull-requests: write` (у workflow только `contents: read`).
 
 ### 9.1. `template_check.dart`
 
@@ -474,7 +482,7 @@ Grep-tier (набор файлов мал и закрыт): `"`-литерал �
 | **4. Warnings/errors — атомарная** | **Не waveable** (ревью): смена сигнатур sealed-иерархии + возврат `UiMsg` у форматтеров — compile-wide break при CI-analyze на весь проект включая test/. Полный closure одной короткой веткой, merge между релизами: `lib/services/parser/*`, `transport_spec.dart`, `validation.dart`, оба форматтера, контроллеры (`home_controller` + `config_io` + `ping_orchestration`, `subscription_controller`), render-сайты, **`renderEn()`-миграция Tasker/AppLog/notification-push (§4.4)**, 4+ test-файла (12 `.message`-ссылок, 14 форматтер-ссылок в `error_format_test.dart`, 9 `NodeWarning`); включение rendering-locality-правила в fail-режим | одна ветка, ~25 файлов + тесты |
 | **5. Форматирование** | intl-даты, relativeTime-плюралы, unit-смежные слова, дедуп `_formatDuration`; суффиксы `d/h/m/s` не трогаются | ~10 файлов |
 | **6. Android native** | strings.xml + values-ru, manifest `@string`, `L10n.kt` (wrap-no-cache), `relabel()`, `ACTION_LOCALE_CHANGED`-receiver (+ `Libbox.setLocale`), `updateShortcuts` + onResume-retry, localeConfig + `LocaleManager` **(empty-list на `system`)** + трёхсторонний reconciliation + `last_pushed_locale`, `Libbox.setLocale` в setAppLanguage-handler (верификация mid-run; иначе — документированное окно), Kotlin-guard. Включить `Русский` → **релиз**. Device-матрица: QS-тайл cold-start на ru; Stop/Reconnect после смены языка при видимой нотификации; **смена языка устройства при `app_language=system` с приложением в foreground и background** (UI и натив переключаются согласованно); **`ru → System default → restart` на 33+**; **restore бэкапа с `app_language` на 33+ при выставленном LocaleManager**; **pinned-shortcut-лейблы после смены**; имя канала в системных настройках; boot-start; Tasker-строки. Release notes: Tasker-блёрбы меняют язык (display-only, матчинг по extras); окно kernel-строк, если mid-run `setLocale` не поддержан | ~12 Kotlin-файлов, ~40 ресурсов |
-| **7. Lock down** | Baseline → ноль; ru-гейт и orphan-гейт → hard-fail на каждый PR (`--strict` безусловно — удаление CI-условия); доки (STORAGE.md, debug-api-reference **с описанием side-effect-роута `app_language`**, translator-guide `docs/l10n.md` вкл. hotfix-путь baseline и `src`-hash-workflow) | скрипты/конфиг/доки |
+| **7. Lock down** — ✅ | Baseline → ноль (выполнено; попутно `hardcoded_check` научен рекурсии в ternary/switch-ветки display-позиций — вскрытая сотня литералов домигрирована в ARB, скан вынесен в `tool/l10n/src/hardcoded_scan.dart` + self-тест `test/tool/`); ru-гейт и orphan-гейт → hard-fail на каждый PR (`--strict` безусловно — CI-условие удалено); доки (STORAGE.md, TEMPLATE.md, BUILD.md, ARCHITECTURE.md, debug-api-reference **с описанием side-effect-роута `app_language`**, CHANGELOG, translator-guide `docs/l10n.md` вкл. hotfix-путь baseline и `src`-hash-workflow) | скрипты/конфиг/доки |
 
 **Тесты**: ~1768 существующих — подавляющее большинство проходит как есть (en = source, «en-ARB = литералы дословно», латинские единицы); исключение — Phase-4-closure, перечисленный выше. 5 `pumpWidget`-файлов получают `test/helpers/pump_app.dart`. Новые: applier (адреса, whitelist, fallback, дубль-fail), детерминизм экстрактора, checkers self-tested, mid-flight-инвалидация loader'а, rootBundle-загрузка overlay, LocaleController (персистентность + didChangeLocales-пайплайн), §221 (membership + round-trip-с-эффектом на 33+), Debug-API-консистентность, дизамбигуация дублей пресета под обеими локалями, рендеры NodeWarning под обеими локалями, `StopReason`, equatable `UiMsg`, `NativePrefsKeys`-guard.
 

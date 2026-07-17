@@ -213,7 +213,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
       setState(() => _result = account);
       await widget.onAdded();
       if (!mounted) return;
-      showSnack(account.warpPlus ? 'Added WARP+ node' : 'Added WARP node');
+      showSnack(account.warpPlus
+          ? context.l.warpAddedPlusNodeSnack
+          : context.l.warpAddedNodeSnack);
       Navigator.of(context).pop();
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -371,8 +373,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       const SizedBox(height: 6),
                       Text(
                         _masqueNetwork == 'h2'
-                            ? 'HTTP/2 over TCP — use where QUIC/UDP is blocked.'
-                            : 'HTTP/3 over QUIC — the default, fastest path.',
+                            ? context.l.warpMasqueH2Note
+                            : context.l.warpMasqueH3Note,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -625,10 +627,11 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                           const SizedBox(height: 6),
                           Text(
                             _masqIp == 'dns' || _masqIp == 'sip'
-                                ? 'Domain (below) is visible on the wire as the '
-                                    '${_masqIp == 'dns' ? 'DNS QNAME' : 'SIP host'}.'
-                                : 'QUIC/STUN decoy carries no hostname — the domain '
-                                    'below is cosmetic for this protocol.',
+                                // Имена полей протокола (wire-термины) —
+                                // подставляются как payload, не переводятся.
+                                ? context.l.warpDecoyDomainVisible(
+                                    _masqIp == 'dns' ? 'DNS QNAME' : 'SIP host')
+                                : context.l.warpDecoyNoHostname,
                             style: Theme.of(context)
                                 .textTheme
                                 .bodySmall
@@ -747,7 +750,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.bolt),
-              label: Text(_busy ? 'Registering…' : 'Register'),
+              label: Text(_busy
+                  ? context.l.warpRegisteringButton
+                  : context.l.warpRegisterButton),
             ),
             if (_result != null) ...[
               const SizedBox(height: 16),
@@ -803,7 +808,10 @@ class _StatusCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(account.warpPlus ? 'Registered: WARP+' : 'Registered: WARP',
+            Text(
+                account.warpPlus
+                    ? context.l.warpRegisteredPlusTitle
+                    : context.l.warpRegisteredTitle,
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             _row('Account', account.accountId),

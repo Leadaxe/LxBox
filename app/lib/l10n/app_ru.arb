@@ -1062,5 +1062,527 @@
   "aboutReleasedAgo": "Выпущено {when}",
   "aboutCachedInfo": "(данные из кэша)",
   "routingWifiLastSeenNever": "никогда",
-  "routingWifiLastSeenUnknown": "неизвестно"
+  "routingWifiLastSeenUnknown": "неизвестно",
+  "aboutUpdateAvailable": "Доступна {tag}",
+  "@aboutUpdateAvailable": {
+    "description": "About screen, update row: a newer release is known; tag = release tag like v2.15.0.",
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutNoUpdatesPending": "Обновлений нет",
+  "@aboutNoUpdatesPending": {
+    "description": "About screen, update row: the app is on the latest known release."
+  },
+  "appPickerHideSystemApps": "Скрыть системные приложения",
+  "@appPickerHideSystemApps": {
+    "description": "App picker menu item: hide system apps from the list (shown while they are visible)."
+  },
+  "appPickerShowSystemApps": "Показать системные приложения",
+  "@appPickerShowSystemApps": {
+    "description": "App picker menu item: include system apps in the list (shown while they are hidden)."
+  },
+  "appPickerLoadingApps": "Загрузка приложений…",
+  "@appPickerLoadingApps": {
+    "description": "App picker: status line while the installed-apps list is loading."
+  },
+  "appPickerSelectedShown": "{selected} выбрано · {shown} показано",
+  "@appPickerSelectedShown": {
+    "description": "App picker: status line with selection counters.",
+    "placeholders": {
+      "selected": {
+        "type": "int"
+      },
+      "shown": {
+        "type": "int"
+      }
+    }
+  },
+  "appSettingsConfigLockedSnack": "Конфиг заблокирован. Действия в UI не пересобирают конфиг.",
+  "@appSettingsConfigLockedSnack": {
+    "description": "App Settings: snackbar after enabling the debug config lock."
+  },
+  "appSettingsConfigUnlockedSnack": "Конфиг разблокирован. Следующее действие в UI пересоберёт его из настроек.",
+  "@appSettingsConfigUnlockedSnack": {
+    "description": "App Settings: snackbar after disabling the debug config lock."
+  },
+  "appSettingsAutoRecordOnSnack": "Автозапись включена. Сети добавляются после 5 минут пребывания в них.",
+  "@appSettingsAutoRecordOnSnack": {
+    "description": "App Settings: snackbar after enabling Wi-Fi history auto-record."
+  },
+  "appSettingsAutoRecordOffSnack": "Автозапись выключена. Существующая история сохранена.",
+  "@appSettingsAutoRecordOffSnack": {
+    "description": "App Settings: snackbar after disabling Wi-Fi history auto-record."
+  },
+  "appSettingsDiagBatteryWhitelisted": "В белом списке — VPN может работать в фоне",
+  "@appSettingsDiagBatteryWhitelisted": {
+    "description": "Diagnostics tab, battery row subtitle: optimization exemption granted."
+  },
+  "appSettingsDiagBatteryRestricted": "Ограничено — Android может приостанавливать VPN в простое. Нажмите, чтобы разрешить.",
+  "@appSettingsDiagBatteryRestricted": {
+    "description": "Diagnostics tab, battery row subtitle: optimization exemption missing."
+  },
+  "appSettingsDiagNotifAllowed": "Разрешены — foreground-сервис показывает статус VPN",
+  "@appSettingsDiagNotifAllowed": {
+    "description": "Diagnostics tab, notifications row subtitle: permission granted."
+  },
+  "appSettingsDiagNotifBlocked": "Заблокированы — Android может ограничивать VPN-сервис. Нажмите, чтобы разрешить.",
+  "@appSettingsDiagNotifBlocked": {
+    "description": "Diagnostics tab, notifications row subtitle: permission missing."
+  },
+  "appSettingsDiagLocationGranted": "Выдано — sing-box может читать состояние Wi-Fi для правил маршрутизации",
+  "@appSettingsDiagLocationGranted": {
+    "description": "Diagnostics tab, background location row subtitle: permission granted."
+  },
+  "appSettingsDiagLocationRequired": "Нужно для правил маршрутизации по Wi-Fi. Нажмите, чтобы выдать.",
+  "@appSettingsDiagLocationRequired": {
+    "description": "Diagnostics tab, background location row subtitle: permission missing."
+  },
+  "appSettingsDiagNearbyWifiGranted": "Выдано — доступны настоящие SSID/BSSID",
+  "@appSettingsDiagNearbyWifiGranted": {
+    "description": "Diagnostics tab, nearby Wi-Fi row subtitle: permission granted."
+  },
+  "appSettingsDiagNearbyWifiRequired": "Android 13+ требует это разрешение для SSID. Нажмите, чтобы выдать.",
+  "@appSettingsDiagNearbyWifiRequired": {
+    "description": "Diagnostics tab, nearby Wi-Fi row subtitle: permission missing."
+  },
+  "appSettingsDiagDebugApiOn": "Доступен на http://127.0.0.1:{port} (только через adb forward)",
+  "@appSettingsDiagDebugApiOn": {
+    "description": "Diagnostics tab, Debug API row subtitle while enabled; port = configured TCP port.",
+    "placeholders": {
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "appSettingsDiagDebugApiOff": "HTTP-сервер для отладки через adb forward.",
+  "@appSettingsDiagDebugApiOff": {
+    "description": "Diagnostics tab, Debug API row subtitle while disabled."
+  },
+  "appSettingsDiagLockConfigOn": "Закреплён. Действия в UI не пересобирают конфиг — удобно при тестировании override через PUT /config.",
+  "@appSettingsDiagLockConfigOn": {
+    "description": "Diagnostics tab, lock-config row subtitle while locked."
+  },
+  "appSettingsDiagLockConfigOff": "Выключено — действия в UI пересобирают конфиг из настроек как обычно.",
+  "@appSettingsDiagLockConfigOff": {
+    "description": "Diagnostics tab, lock-config row subtitle while unlocked."
+  },
+  "appSettingsDiagForwardLogsOn": "Видны в Debug → Core.",
+  "@appSettingsDiagForwardLogsOn": {
+    "description": "Diagnostics tab, forward-core-logs row subtitle while enabled."
+  },
+  "appSettingsDiagForwardLogsOff": "Выключено.",
+  "@appSettingsDiagForwardLogsOff": {
+    "description": "Diagnostics tab, forward-core-logs row subtitle while disabled."
+  },
+  "appSettingsDiagAutoRecordOn": "Сети, где вы находитесь ≥ 5 минут, появляются в редакторе правила маршрутизации → «Pick saved».",
+  "@appSettingsDiagAutoRecordOn": {
+    "description": "Diagnostics tab, auto-record Wi-Fi row subtitle while enabled."
+  },
+  "appSettingsDiagAutoRecordOff": "Выключено. «Pick saved» пополняется только через Add current / Manual.",
+  "@appSettingsDiagAutoRecordOff": {
+    "description": "Diagnostics tab, auto-record Wi-Fi row subtitle while disabled."
+  },
+  "appSettingsSubsUaDefault": "По умолчанию · {ua}",
+  "@appSettingsSubsUaDefault": {
+    "description": "Subscriptions tab, User-Agent row subtitle when no custom UA is set; ua = built-in default.",
+    "placeholders": {
+      "ua": {
+        "type": "String"
+      }
+    }
+  },
+  "appSettingsSubsEmptyValue": "(пусто)",
+  "@appSettingsSubsEmptyValue": {
+    "description": "Subscriptions tab: subtitle placeholder for an identity header with no value."
+  },
+  "channelEditUsedInFastestHelper": "используется в режиме «Самый быстрый»",
+  "@channelEditUsedInFastestHelper": {
+    "description": "Channel editor: helper under the tolerance field while Load balance mode is selected."
+  },
+  "channelEditOfNodesHelper": "{count, plural, one{из {count} узла} few{из {count} узлов} many{из {count} узлов} other{из {count} узла}}",
+  "@channelEditOfNodesHelper": {
+    "description": "Channel editor: helper under the pool size field; count = matched node count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statsConnNoneToClose": "Нет активных соединений для закрытия",
+  "@statsConnNoneToClose": {
+    "description": "Connections tab: snackbar when close-all finds nothing to close."
+  },
+  "statsConnClosedCount": "{count, plural, one{Закрыто {count} соединение} few{Закрыто {count} соединения} many{Закрыто {count} соединений} other{Закрыто {count} соединения}}",
+  "@statsConnClosedCount": {
+    "description": "Connections tab: snackbar after close-all; count = closed connections.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statsConnKeepAllTooltip": "Закрытые хранятся всегда (нажмите — окно 30 с)",
+  "@statsConnKeepAllTooltip": {
+    "description": "Connections tab: tooltip of the history toggle while accumulate mode is on."
+  },
+  "statsConnKeep30sTooltip": "Закрытые хранятся 30 с (нажмите, чтобы хранить все)",
+  "@statsConnKeep30sTooltip": {
+    "description": "Connections tab: tooltip of the history toggle while the 30s window is active."
+  },
+  "statsConnFallbackTitle": "(соединение)",
+  "@statsConnFallbackTitle": {
+    "description": "Connection detail sheet: title fallback when the connection has no host/IP title."
+  },
+  "ruleEditResolveOnlySummary": "✳ Только резолв{suffix}",
+  "@ruleEditResolveOnlySummary": {
+    "description": "Rule editor, params tab: resolve summary line for resolve-only mode; suffix = optional \" · strategy\" tail (wire value).",
+    "placeholders": {
+      "suffix": {
+        "type": "String"
+      }
+    }
+  },
+  "ruleEditResolveFirstSummary": "✳ Сначала резолвить{suffix}",
+  "@ruleEditResolveFirstSummary": {
+    "description": "Rule editor, params tab: resolve summary line for resolve-first mode; suffix = optional \" · strategy\" tail (wire value).",
+    "placeholders": {
+      "suffix": {
+        "type": "String"
+      }
+    }
+  },
+  "ruleEditItemsInvalidCount": "{count} · {invalid} некорректных",
+  "@ruleEditItemsInvalidCount": {
+    "description": "Rule editor, items field counter: total entries and how many failed validation.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "invalid": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleEditWifiNotConnected": "Нет подключения к Wi-Fi.",
+  "@ruleEditWifiNotConnected": {
+    "description": "Rule editor: snackbar when adding the current Wi-Fi while not connected to Wi-Fi."
+  },
+  "ruleEditWifiUnknownSsid": "Не удалось прочитать данные Wi-Fi — выключите и включите Wi-Fi.",
+  "@ruleEditWifiUnknownSsid": {
+    "description": "Rule editor: snackbar when the current SSID cannot be read."
+  },
+  "ruleEditWifiReadFailed": "Не удалось определить текущую сеть Wi-Fi ({reason}).",
+  "@ruleEditWifiReadFailed": {
+    "description": "Rule editor: snackbar for other Wi-Fi read failures; reason = wire error code.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "debugNoMatches": "Нет совпадений для «{query}»",
+  "@debugNoMatches": {
+    "description": "Debug screen: empty state while a search query filters out all events.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "debugNoEventsYet": "Событий пока нет",
+  "@debugNoEventsYet": {
+    "description": "Debug screen: empty state before any log events arrive."
+  },
+  "dnsFormAddressHintHttps": "192.168.1.1 / dns.example.com / https://… URL",
+  "@dnsFormAddressHintHttps": {
+    "description": "DNS server editor: address field example hint for the HTTPS mode."
+  },
+  "dnsFormAddressHintPlain": "192.168.1.1 / dns.example.com",
+  "@dnsFormAddressHintPlain": {
+    "description": "DNS server editor: address field example hint for non-HTTPS modes."
+  },
+  "homeFilterDetourHidden": "Detour скрыты",
+  "@homeFilterDetourHidden": {
+    "description": "Home filter chip tooltip: detour servers are currently hidden."
+  },
+  "homeFilterDetourOnly": "Только detour",
+  "@homeFilterDetourOnly": {
+    "description": "Home filter chip tooltip: only detour servers are currently shown."
+  },
+  "homeFilterHideDetourServers": "Скрывать detour-серверы",
+  "@homeFilterHideDetourServers": {
+    "description": "Home filter panel: label of the detour filter row while hide-mode is selected."
+  },
+  "homeFilterShowOnlyDetourServers": "Показывать только detour-серверы",
+  "@homeFilterShowOnlyDetourServers": {
+    "description": "Home filter panel: label of the detour filter row while show-only-mode is selected."
+  },
+  "homeStartButton": "Запустить",
+  "@homeStartButton": {
+    "description": "Home screen: main tunnel button label while the tunnel is down."
+  },
+  "homeStopButton": "Остановить",
+  "@homeStopButton": {
+    "description": "Home screen: main tunnel button label while the tunnel is up."
+  },
+  "homeChannelSavedSnack": "Канал «{label}» сохранён",
+  "@homeChannelSavedSnack": {
+    "description": "Home: snackbar after saving a channel from the node list.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "homeChannelSavedHealedSnack": "Канал «{label}» сохранён — {healed}",
+  "@homeChannelSavedHealedSnack": {
+    "description": "Home: snackbar after saving a channel when references were healed; healed = joined description parts.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "healed": {
+        "type": "String"
+      }
+    }
+  },
+  "homeHideFiltersTooltip": "Скрыть фильтры",
+  "@homeHideFiltersTooltip": {
+    "description": "Home nodes header: tooltip on the filter toggle while the panel is open."
+  },
+  "homeShowFiltersTooltip": "Показать фильтры",
+  "@homeShowFiltersTooltip": {
+    "description": "Home nodes header: tooltip on the filter toggle while the panel is closed."
+  },
+  "statsLiveRecording": "Идёт запись общесистемных событий",
+  "@statsLiveRecording": {
+    "description": "Live events tab header: recording is active."
+  },
+  "statsLiveNotRecording": "Запись не идёт",
+  "@statsLiveNotRecording": {
+    "description": "Live events tab header: recording is stopped."
+  },
+  "statsLiveDurationEvents": "{duration} · {count} соб.",
+  "@statsLiveDurationEvents": {
+    "description": "Live events tab header: elapsed recording time and event counter; duration = formatted mm:ss.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statsLiveTapStartHint": "Нажмите START, чтобы начать запись. Запись продолжится, когда вы уйдёте с этой вкладки.",
+  "@statsLiveTapStartHint": {
+    "description": "Live events tab header: hint shown while not recording."
+  },
+  "statsRecStartButton": "START",
+  "@statsRecStartButton": {
+    "description": "Recording toggle button label (live events / per-app trace): start capture. Kept Latin in all locales — referenced as START in help texts."
+  },
+  "statsRecStopButton": "STOP",
+  "@statsRecStopButton": {
+    "description": "Recording toggle button label (live events / per-app trace): stop capture. Kept Latin in all locales — referenced as STOP in help texts."
+  },
+  "statsTraceStatusRecording": "Идёт запись",
+  "@statsTraceStatusRecording": {
+    "description": "Per-app trace, session row: the session is still recording."
+  },
+  "statsTraceStatusStopped": "Остановлена",
+  "@statsTraceStatusStopped": {
+    "description": "Per-app trace, session row: the session has finished."
+  },
+  "statsTraceNoOwner": "(без владельца)",
+  "@statsTraceNoOwner": {
+    "description": "Per-app trace live view: placeholder when the event has no owning process."
+  },
+  "statsTracePauseTooltip": "Пауза",
+  "@statsTracePauseTooltip": {
+    "description": "Trace explorer: tooltip of the live-feed pause button."
+  },
+  "statsTraceResumeTooltip": "Продолжить",
+  "@statsTraceResumeTooltip": {
+    "description": "Trace explorer: tooltip of the live-feed resume button."
+  },
+  "statsTraceFilterButton": "Фильтр",
+  "@statsTraceFilterButton": {
+    "description": "Trace explorer: filter button label with no active filters."
+  },
+  "statsTraceFilterButtonCount": "Фильтр ({count})",
+  "@statsTraceFilterButtonCount": {
+    "description": "Trace explorer: filter button label; count = active filter count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routingSrsDownloadedSnack": "Скачан «{name}»",
+  "@routingSrsDownloadedSnack": {
+    "description": "Routing: snackbar after a single SRS rule file downloaded; name = rule name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "routingSrsDownloadFailedSnack": "Не удалось скачать «{name}» — проверьте URL и сеть",
+  "@routingSrsDownloadFailedSnack": {
+    "description": "Routing: snackbar when an SRS download fails; name = rule name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "routingSrsDownloadedCountSnack": "{count, plural, one{Скачан «{name}» ({count} rule-set)} few{Скачан «{name}» ({count} rule-set)} many{Скачан «{name}» ({count} rule-set)} other{Скачан «{name}» ({count} rule-set)}}",
+  "@routingSrsDownloadedCountSnack": {
+    "description": "Routing: snackbar after all rule-sets of a preset downloaded; name = rule name, count = rule-set count.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routingSrsPartialSnack": "Частично: {ok} успешно, {failed} с ошибкой для «{name}»",
+  "@routingSrsPartialSnack": {
+    "description": "Routing: snackbar when only part of the rule-sets downloaded.",
+    "placeholders": {
+      "ok": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "routingPresetInRules": "В правилах",
+  "@routingPresetInRules": {
+    "description": "Routing preset catalog tile: button state when the preset is already added to rules."
+  },
+  "routingPresetAddToRules": "Добавить в правила",
+  "@routingPresetAddToRules": {
+    "description": "Routing preset catalog tile: button that copies the preset into rules."
+  },
+  "statsAggAxisDomain": "Домен",
+  "@statsAggAxisDomain": {
+    "description": "Aggregate detail sheet: badge for the domain aggregation axis."
+  },
+  "statsAggAxisIp": "IP",
+  "@statsAggAxisIp": {
+    "description": "Aggregate detail sheet: badge for the IP aggregation axis."
+  },
+  "statsFilterFinalChip": "final",
+  "@statsFilterFinalChip": {
+    "description": "Profiler filter sheet: chip for events matched by no rule (routed to Final). Kept Latin — mirrors the Final route terminology."
+  },
+  "statsEventFallbackTitle": "(событие)",
+  "@statsEventFallbackTitle": {
+    "description": "Traffic event detail sheet: title fallback when the event has no host/IP title."
+  },
+  "tunAppsUninstalledSkipped": "{pkg} — удалено, пропускается автоматически",
+  "@tunAppsUninstalledSkipped": {
+    "description": "Tunnel apps list: subtitle for a selected package that is no longer installed; pkg = package name.",
+    "placeholders": {
+      "pkg": {
+        "type": "String"
+      }
+    }
+  },
+  "vpnModeAllowBypassOn": "Приложения могут обходить туннель через ConnectivityManager.",
+  "@vpnModeAllowBypassOn": {
+    "description": "VPN mode tab, allow-bypass subtitle while enabled."
+  },
+  "vpnModeAllowBypassOff": "Строгий туннель — весь трафик идёт через tun.",
+  "@vpnModeAllowBypassOff": {
+    "description": "VPN mode tab, allow-bypass subtitle while disabled."
+  },
+  "vpnModeListenPublicNote": "Доступен с других устройств в сети — требуется аутентификация.",
+  "@vpnModeListenPublicNote": {
+    "description": "VPN mode tab, proxy listen note for 0.0.0.0."
+  },
+  "vpnModeListenLocalNote": "Доступен только с этого устройства.",
+  "@vpnModeListenLocalNote": {
+    "description": "VPN mode tab, proxy listen note for 127.0.0.1."
+  },
+  "vpnModeAuthRequiredPublic": "Обязательно для прокси, доступного из локальной сети (нельзя отключить).",
+  "@vpnModeAuthRequiredPublic": {
+    "description": "VPN mode tab, proxy auth subtitle while listening on 0.0.0.0."
+  },
+  "vpnModeAuthRecommended": "Рекомендуется. Защищает локальный порт прокси.",
+  "@vpnModeAuthRecommended": {
+    "description": "VPN mode tab, proxy auth subtitle while listening locally."
+  },
+  "vpnModeShowPasswordTooltip": "Показать",
+  "@vpnModeShowPasswordTooltip": {
+    "description": "VPN mode tab: tooltip of the reveal-proxy-password button."
+  },
+  "vpnModeHidePasswordTooltip": "Скрыть",
+  "@vpnModeHidePasswordTooltip": {
+    "description": "VPN mode tab: tooltip of the hide-proxy-password button."
+  },
+  "warpAddedNodeSnack": "Узел WARP добавлен",
+  "@warpAddedNodeSnack": {
+    "description": "WARP wizard: snackbar after a free WARP account is registered and added."
+  },
+  "warpAddedPlusNodeSnack": "Узел WARP+ добавлен",
+  "@warpAddedPlusNodeSnack": {
+    "description": "WARP wizard: snackbar after a WARP+ account is registered and added."
+  },
+  "warpMasqueH2Note": "HTTP/2 поверх TCP — используйте там, где QUIC/UDP блокируется.",
+  "@warpMasqueH2Note": {
+    "description": "WARP wizard, MASQUE network note for the h2 transport."
+  },
+  "warpMasqueH3Note": "HTTP/3 поверх QUIC — путь по умолчанию, самый быстрый.",
+  "@warpMasqueH3Note": {
+    "description": "WARP wizard, MASQUE network note for the h3 transport."
+  },
+  "warpDecoyDomainVisible": "Домен (ниже) виден в трафике как {field}.",
+  "@warpDecoyDomainVisible": {
+    "description": "WARP wizard, decoy note: the domain is carried on the wire; field = protocol field name (DNS QNAME / SIP host, wire terms).",
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "warpDecoyNoHostname": "Приманка QUIC/STUN не содержит имени хоста — домен ниже для этого протокола чисто косметический.",
+  "@warpDecoyNoHostname": {
+    "description": "WARP wizard, decoy note for hostname-less decoy protocols."
+  },
+  "warpRegisteringButton": "Регистрация…",
+  "@warpRegisteringButton": {
+    "description": "WARP wizard: register button label while registration is in flight."
+  },
+  "warpRegisterButton": "Зарегистрировать",
+  "@warpRegisterButton": {
+    "description": "WARP wizard: register button label."
+  },
+  "warpRegisteredTitle": "Зарегистрировано: WARP",
+  "@warpRegisteredTitle": {
+    "description": "WARP wizard, result card title for a free WARP account."
+  },
+  "warpRegisteredPlusTitle": "Зарегистрировано: WARP+",
+  "@warpRegisteredPlusTitle": {
+    "description": "WARP wizard, result card title for a WARP+ account."
+  },
+  "homeNodeActiveTooltip": "Активен",
+  "@homeNodeActiveTooltip": {
+    "description": "Node row: tooltip of the activate button while this node is already active."
+  },
+  "homeNodeUseTooltip": "Использовать узел",
+  "@homeNodeUseTooltip": {
+    "description": "Node row: tooltip of the activate button."
+  }
 }

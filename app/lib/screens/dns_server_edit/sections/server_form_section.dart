@@ -89,8 +89,8 @@ class ServerFormSection extends StatelessWidget {
                 decoration: InputDecoration(
                   labelText: context.l.dnsFormServerAddressLabel,
                   hintText: mode == 'https'
-                      ? '192.168.1.1 / dns.example.com / https://… URL'
-                      : '192.168.1.1 / dns.example.com',
+                      ? context.l.dnsFormAddressHintHttps
+                      : context.l.dnsFormAddressHintPlain,
                   border: const OutlineInputBorder(),
                   isDense: true,
                 ),

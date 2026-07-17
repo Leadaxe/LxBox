@@ -177,7 +177,7 @@ class _ItemsFieldState extends State<ItemsField> {
               Text(
                 invalid == 0
                     ? (count == 0 ? '' : '$count')
-                    : '$count · $invalid invalid',
+                    : context.l.ruleEditItemsInvalidCount(count, invalid),
                 style: TextStyle(
                   fontSize: 12,
                   color: invalid > 0

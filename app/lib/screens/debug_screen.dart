@@ -308,8 +308,8 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
             child: filtered.isEmpty
                 ? Center(
                     child: Text(_searchQuery.isNotEmpty
-                        ? 'No matches for "$_searchQuery"'
-                        : 'No events yet'))
+                        ? context.l.debugNoMatches(_searchQuery)
+                        : context.l.debugNoEventsYet))
                 : ListView.separated(
                     itemCount: filtered.length,
                     separatorBuilder: (_, _) => const Divider(height: 1),

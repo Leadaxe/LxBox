@@ -53,6 +53,26 @@ class BootReceiver : BroadcastReceiver() {
         const val MEMORY_LIMIT_AUTO = "auto"
         const val MEMORY_LIMIT_OFF = "off"
 
+        /// §279 — язык приложения ("system" | "en" | "ru"). Derived cache от
+        /// var `app_language` в lxbox_settings.json (истина — Dart-сторадж,
+        /// спека 279 §6.5): пишется MethodChannel-handler'ом setAppLanguage и
+        /// пере-пушится bootstrapAndSyncNativePrefs на каждом старте. Читается
+        /// L10n.ctx в момент рендера нативных поверхностей (без Flutter).
+        private const val KEY_APP_LANGUAGE = "app_language"
+
+        /// §279 — зеркало последнего значения, которое МЫ запушили в
+        /// LocaleManager (33+): "" = пустой список (system), "en"/"ru" — явный
+        /// выбор; отсутствие ключа = ещё не пушили. Нужен трёхстороннему
+        /// reconciliation на Dart-старте (спека 279 §6.4): расхождение
+        /// getApplicationLocales с этим зеркалом = юзер менял язык в системных
+        /// Settings → система побеждает.
+        private const val KEY_LAST_PUSHED_LOCALE = "last_pushed_locale"
+
+        /// §279 — updateShortcuts отработал под rate-limit (locale-change в
+        /// background) → гарантированный retry из MainActivity.onResume
+        /// (foreground, rate-limit не применяется).
+        private const val KEY_SHORTCUT_RELABEL_PENDING = "shortcut_relabel_pending"
+
         /// Три режима фоновой работы tunnel'а. По умолчанию "never" — максимум
         /// стабильности, минимум экономии батареи. VPN-пользователи обычно
         /// выбирают надёжность (пуши, длинные TCP-сокеты), поэтому default
@@ -63,6 +83,40 @@ class BootReceiver : BroadcastReceiver() {
         const val BG_MODE_NEVER = "never"
         const val BG_MODE_LAZY = "lazy"
         const val BG_MODE_ALWAYS = "always"
+
+        /// §279 — см. KEY_APP_LANGUAGE. Писать только через L10n.applySetting
+        /// (pref + LocaleManager + relabel поверхностей одним путём).
+        fun setAppLanguage(context: Context, value: String) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putString(KEY_APP_LANGUAGE, value).apply()
+        }
+
+        fun getAppLanguage(context: Context): String {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_APP_LANGUAGE, "system") ?: "system"
+        }
+
+        /// §279 — см. KEY_LAST_PUSHED_LOCALE. null = ещё не пушили.
+        fun setLastPushedLocale(context: Context, value: String) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putString(KEY_LAST_PUSHED_LOCALE, value).apply()
+        }
+
+        fun getLastPushedLocale(context: Context): String? {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_LAST_PUSHED_LOCALE, null)
+        }
+
+        /// §279 — см. KEY_SHORTCUT_RELABEL_PENDING.
+        fun setShortcutRelabelPending(context: Context, pending: Boolean) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_SHORTCUT_RELABEL_PENDING, pending).apply()
+        }
+
+        fun isShortcutRelabelPending(context: Context): Boolean {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_SHORTCUT_RELABEL_PENDING, false)
+        }
 
         fun setMemoryLimit(context: Context, value: String) {
             context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)

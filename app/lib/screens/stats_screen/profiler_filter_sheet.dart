@@ -251,7 +251,7 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
         children: [
           for (final r in all)
             FilterChip(
-              label: Text(r.isEmpty ? 'final' : r),
+              label: Text(r.isEmpty ? context.l.statsFilterFinalChip : r),
               selected: f.hasRule(r),
               onSelected: (v) => f.toggleRule(r, v),
             ),

@@ -1061,6 +1061,59 @@ Editorial-конвенции для **бандл**-шаблона (`app/assets/w
 
 ---
 
+## Локализация display-текста — l10n overlay (§279)
+
+`wizard_template.json` остаётся **единственным структурным шаблоном** с
+английским display-текстом. Переводы не форкают структуру — это плоские
+overlay-файлы, патчащие декодированный JSON **до парсинга и до
+preset_expand-снапшотов** (`TemplateOverlay.apply`, зовётся из
+`TemplateLoader`; кэш loader'а ключуется тегом локали):
+
+```
+app/assets/l10n/template/en.json   # генерируемое зеркало английского display-текста
+app/assets/l10n/template/ru.json   # ручной перевод (объектный формат, см. ниже)
+```
+
+- `en.json` — плоский `Map<String, String>`, регенерируется
+  `dart run tool/l10n/template_check.dart --write-en`; коммитнутая копия обязана
+  быть byte-equal свежей экстракции (CI).
+- `ru.json` (и любой будущий `<lang>.json`) — объектный, каждая запись несёт
+  `src` — первые 8 hex sha256 **текущего английского значения** по этому адресу:
+
+  ```json
+  "preset.ru-direct.var.dns_server.title": { "text": "DNS-сервер", "src": "a1b2c3d4" }
+  ```
+
+  Изменился en-текст → `src` расходится → ключ протухает (durable per-key
+  fail в CI под `--strict`). После пересмотра перевода принять новый hash:
+  `--accept ru:<key>`.
+
+**Схема адресов** (полная таблица — [§279 spec, §3.2](./spec/features/279%20localization/spec.md)):
+rule-локальные vars скоупятся по `preset_id`
+(`preset.<preset_id>.var.<name>.title`) — одноимённые vars разных пресетов
+несут разный текст; глобальные vars — `var.<name>.*`; секции —
+`section.<id>.*`; плюс `magic.<role>.title`, `channel.<tag>.label`,
+`dns_server.<tag>.description`, `ping.<id>.name`, `speed.<id>.name`.
+Не адресуемо (whitelist applier'а): всё под `config`/`parser_config`,
+`name`/`tag`/`value`/`default_value`/`preset_id`, bare-string enum-опции,
+`dns_options.rules[].name` (латентный identity-ключ).
+
+**Load-bearing запреты**: перевод, начинающийся с `@`, был бы интерпретирован
+как var-ссылка (overlay применяется до `substituteVars`); `{` ломает parsing —
+оба запрещены `template_check` безусловно. Fallback per-key тихий (нет ключа →
+английское значение); отказ целого файла — громкий (`AppLog.error` +
+debug-assert + flutter-тест rootBundle-загрузки каждого overlay).
+
+### Добавляем display-поле в шаблон
+
+Новое user-visible поле обязано попасть в **экстрактор + whitelist**
+`TemplateOverlay` (`template_overlay.dart`) — иначе оно тихо шипится
+английским во всех локалях. Self-check `template_check` следит, чтобы whitelist
+покрывал каждое display-поле экстрактора; после добавления — `--write-en`,
+перевод в `ru.json`, `flutter test` (applier-тесты).
+
+---
+
 ## Когда что ломается
 
 ### Добавляем новый top-level ключ
@@ -1113,3 +1166,4 @@ Settings — заводи её в секции `internal` (chapter не ренд
 - [§040 per-group ping settings](./spec/tasks/040-per-group-ping-test-settings.md) — `ping_options`
 - [§015 speed test](./spec/features/015%20speed%20test/spec.md) — `speed_test_options`
 - [§022 app settings](./spec/features/022%20app%20settings/spec.md) — Wizard UI и `sections[]`
+- [§279 localization](./spec/features/279%20localization/spec.md) — l10n-overlay display-текста шаблона, схема адресов, `src`-hash; translator-guide — [`l10n.md`](./l10n.md)

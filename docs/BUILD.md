@@ -131,7 +131,7 @@ Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); полный
 
 | Событие | Что запускается |
 |---------|-----------------|
-| push / PR в `main`, `develop` | ✓ только `checks` (`flutter analyze`, `flutter test`) — без Java/Gradle |
+| push / PR в `main`, `develop` | ✓ только `checks` (`flutter analyze`, L10n checks, `flutter test`) — без Java/Gradle |
 | push tag `v*` | ✓ `meta` + `checks` + `android` + `release` + `publish-manifest` (полный релиз) |
 | `workflow_dispatch`, `run_mode=checks` | ○ только `checks` |
 | `workflow_dispatch`, `run_mode=build` | ○ `checks` + `android` (APK в artifacts, без релиза) |
@@ -145,6 +145,22 @@ gh workflow run CI -f run_mode=build    # ○ + APK в artifacts
 ```
 
 Джоб `android` собирает **только release**-APK: universal (fat, все ABI) + 3 per-ABI через `--split-per-abi` (arm64-v8a / armeabi-v7a / x86_64). Debug-APK CI не собирает. Перед сборкой шаг `Fetch sing-box-lx core` скачивает fork-ядро по пину `app/android/libbox.version` (см. [«Ядро sing-box-lx»](#ядро-sing-box-lx-libbox)).
+
+### Локализация в сборке и CI (§279)
+
+- **Кодген строк — бесплатный**: `flutter pub get` при `flutter: generate: true`
+  сам генерирует `lib/l10n/gen/` из ARB (`app/l10n.yaml`); отдельного CI-шага
+  кодгена нет, каталог в `.gitignore`. Отсутствующий ключ = ошибка
+  `flutter analyze`. Локально после правки ARB: `flutter gen-l10n` (или любой
+  `pub get`).
+- **Шаг `L10n checks`** в джобе `checks` — четыре guard-checker'а
+  ([`app/tool/l10n/README.md`](../app/tool/l10n/README.md)): `template_check`
+  (byte-equal `en.json`, `src`-hash staleness ru-overlay), `arb_check`
+  (непереведённые ru-ключи, AST-orphan-скан, паритет placeholder'ов),
+  `hardcoded_check` (ratchet против новых hardcoded display-строк +
+  rendering-locality), `kotlin_check` (нативные литералы Android + parity
+  `values/strings.xml` ↔ `values-ru/`). С Phase 7 все идут с `--strict` на
+  каждом push/PR — warnings фатальны.
 
 ### Подпись release (один ключ между сборками)
 

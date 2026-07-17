@@ -16,6 +16,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.leadaxe.lxbox.R
 import io.nekohasekai.libbox.CommandServer
 import io.nekohasekai.libbox.CommandServerHandler
 import io.nekohasekai.libbox.Libbox
@@ -152,7 +153,9 @@ class BoxService(
                         runCatching {
                             notification.show(
                                 ConfigManager.notificationTitle,
-                                ConfigManager.notificationText.ifEmpty { "Connected" },
+                                ConfigManager.notificationText.ifEmpty {
+                                    L10n.str(service, R.string.status_connected)
+                                },
                             )
                         }.onFailure { Log.e(TAG, "ACTION_UPDATE_NOTIFICATION failed", it) }
                     }
@@ -189,7 +192,10 @@ class BoxService(
 
     fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "[vpn] onStartCommand action=${intent?.action} status=${status.name} startId=$startId receiverRegistered=$receiverRegistered")
-        notification.show(ConfigManager.notificationTitle, "Starting...")
+        notification.show(
+            ConfigManager.notificationTitle,
+            L10n.str(service, R.string.notification_status_starting),
+        )
 
         if (status != VpnStatus.Stopped) {
             Log.w(TAG, "[vpn] onStartCommand GUARD — status=${status.name} != Stopped, silent return")
@@ -232,7 +238,9 @@ class BoxService(
                 startSingbox()
             } catch (t: Throwable) {
                 Log.e(TAG, "Start failed", t)
-                stopAndAlert(t.message ?: "Unknown error")
+                // Payload (t.message) — OS/kernel passthrough, не переводится.
+                stopAndAlert(t.message
+                    ?: L10n.str(service, R.string.stop_alert_unknown_error))
             }
         }
         return Service.START_NOT_STICKY
@@ -274,6 +282,8 @@ class BoxService(
         // Start + чип «Taken by another VPN»). §224 — текст самодостаточный:
         // Dart его перекрывает, но native-строка уходит в lastStartError и
         // Debug API (§250), сырой оставлять нельзя.
+        // §279 — намеренно НЕ локализуется (wire-only): display перекрывает
+        // Dart, а Debug API / lastStartError — английские навсегда (спека §8).
         setStatus(
             VpnStatus.Stopped,
             error = "Another VPN app took the system VPN slot " +
@@ -312,13 +322,14 @@ class BoxService(
         try {
             BoxApplication.libboxReady.await()
         } catch (t: Throwable) {
-            stopAndAlert("Libbox init failed: ${t.message}")
+            stopAndAlert(L10n.str(
+                service, R.string.stop_alert_libbox_init_failed, t.message ?: ""))
             return
         }
 
         val config = ConfigManager.load()
         if (config.isBlank() || config == "{}") {
-            stopAndAlert("Empty configuration")
+            stopAndAlert(L10n.str(service, R.string.stop_alert_empty_config))
             return
         }
 
@@ -335,14 +346,15 @@ class BoxService(
         // один раз в BoxApplication.setupLibbox.
 
         val cs = commandServer.get() ?: run {
-            stopAndAlert("CommandServer not initialized")
+            stopAndAlert(L10n.str(service, R.string.stop_alert_no_command_server))
             return
         }
 
         try {
             cs.startOrReloadService(config, buildOverrideOptions(config))
         } catch (t: Throwable) {
-            stopAndAlert("Failed to start service: ${t.message}")
+            stopAndAlert(L10n.str(
+                service, R.string.stop_alert_start_failed, t.message ?: ""))
             return
         }
 
@@ -426,7 +438,9 @@ class BoxService(
             // setNotificationText). Пусто → fallback на статус "Connected".
             notification.show(
                 ConfigManager.notificationTitle,
-                ConfigManager.notificationText.ifEmpty { "Connected" },
+                ConfigManager.notificationText.ifEmpty {
+                    L10n.str(service, R.string.status_connected)
+                },
             )
         }
     }
@@ -544,7 +558,8 @@ class BoxService(
         closeCommandServerAtomic("stopAndAlert: $message")
 
         withContext(Dispatchers.Main) {
-            notification.show("Error", message)
+            notification.show(
+                L10n.str(service, R.string.notification_error_title), message)
             if (receiverRegistered) {
                 runCatching { service.unregisterReceiver(receiver) }
                 receiverRegistered = false
@@ -836,7 +851,9 @@ class BoxService(
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val channelId = notification.identifier.ifBlank { "lxbox-core" }
-        val channelName = notification.typeName.ifBlank { "Core notifications" }
+        val channelName = notification.typeName.ifBlank {
+            L10n.str(context, R.string.core_channel_fallback_name)
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(

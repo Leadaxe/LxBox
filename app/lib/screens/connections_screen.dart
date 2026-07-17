@@ -180,8 +180,8 @@ class _ConnectionsViewState extends State<ConnectionsView> {
         SnackBar(
           duration: const Duration(seconds: 2),
           content: Text(liveNow.isEmpty
-              ? 'No active connections to close'
-              : 'Closed ${liveNow.length} connection${liveNow.length == 1 ? "" : "s"}'),
+              ? context.l.statsConnNoneToClose
+              : context.l.statsConnClosedCount(liveNow.length)),
         ),
       );
     } else {
@@ -211,8 +211,8 @@ class _ConnectionsViewState extends State<ConnectionsView> {
               // Toggle: 30s-история (закрытые серым ~30с) ↔ Accumulate (навсегда).
               IconButton(
                 tooltip: _accumulate
-                    ? 'Keeping all closed (tap for 30s window)'
-                    : 'Closed kept 30s (tap to keep all)',
+                    ? context.l.statsConnKeepAllTooltip
+                    : context.l.statsConnKeep30sTooltip,
                 icon: Icon(
                   _accumulate ? Icons.history_toggle_off : Icons.history,
                 ),

@@ -264,6 +264,7 @@ Per-key спеки и shape — в разделах ниже.
 | `allow_rotation` | `'false'` | [§220] | Снятие портретной фиксации: `'true'` → пустой preferred-orientations (ориентацию решает системный auto-rotate). Default — жёсткий портрет. Toggle в App Settings → General → Behavior. |
 | `resolve_enabled` | template | §263/§265 | Гейт route-resolve-правила пресета `traffic-processing`. Var секции `internal` (в VPN Settings не видна), редактируется в правиле через ref-var. Гасится on_change при вкл. FakeIP (§266). |
 | `resolve_strategy` | template | §249/§265 | IP-версия route-resolve (`ipv4_only`/`prefer_ipv4`/…). Var секции `internal`, ref-var в `traffic-processing`. Пишется on_change тумблера IPv6. |
+| `app_language` | `'system'` | §279 | Язык приложения: `system` \| `en` \| `ru`. **Единственный источник истины** — эта var; неизвестное значение (hand-edited бэкап) валидируется в `system`. НЕ config-var (не грязнит sing-box-конфиг). Все пути записи сходятся в `LocaleController` (picker, Debug API side-effect hook, restore, смена системного языка) — голого `setVar` нет by construction. Копии `boxvpn_boot.app_language` + `boxvpn_boot.last_pushed_locale` — **derived cache** для Dart-less нативных поверхностей (шторка/тайл/shortcuts при мёртвом Flutter); пере-пушатся `setAppLanguage` и `bootstrapAndSyncNativePrefs`. **Явно НЕ член `NativePrefsKeys`** (§189): членство продублировало бы настройку в `vpn_settings`-блоке бэкапа — единственный backup-дом = `vars` (guard-тест рядом с §221-сьютом). |
 | `<custom>` | — | — | Любые юзерские template-vars, выставленные через UI / `PUT /settings/vars/<key>`. |
 
 > Полный код-список app-флагов — `SettingsStorage._appFeatureFlagVars`; держать таблицу в синхроне с ним.
@@ -791,6 +792,18 @@ Debug API handlers — идут через единую дверь `SettingsStor
 > вычисляемое значение, оно живёт только в native (`boxvpn_boot.has_tun`) и **не**
 > хранится в JSON-секции `native_prefs` — пересчитывается из `vpn_mode`.
 
+> **`app_language` + `last_pushed_locale` ([§279]) — ещё два native-ключа НЕ в
+> JSON-секции.** `boxvpn_boot.app_language` — derived cache var'а
+> [`vars.app_language`](#vars--template-vars--app-flags) (источник истины —
+> JSON-var, кэш пере-пушится `setAppLanguage` / `bootstrapAndSyncNativePrefs`);
+> нужен нативным поверхностям (шторка/QS-тайл/shortcuts) при мёртвом Flutter.
+> `boxvpn_boot.last_pushed_locale` — зеркало последнего значения, которое
+> приложение само запушило в `LocaleManager` (Android 13+), опора трёхстороннего
+> reconciliation «система против стораджа». Оба — документированное исключение
+> из состава `NativePrefsKeys`: членство экспортировало бы их в
+> `vpn_settings`-блок бэкапа вторым представлением одной настройки
+> (backup-дом `app_language` — только `vars`).
+
 ---
 
 ## `channels` — [§125] каналы роутинга (template→storage)
@@ -950,6 +963,8 @@ storage. Template стал **seed'ом** — значениями по умол�
 | `boxvpn_boot.allow_bypass` | `Boolean` | Kotlin (зеркало JSON) | [§189]/§069 | Allow VPN bypass. Истина — `native_prefs.allow_bypass`. |
 | `boxvpn_boot.auto_redirect` | `Boolean` | Kotlin (зеркало JSON) | [§189] | Auto-redirect. Истина — `native_prefs.auto_redirect`. |
 | `boxvpn_boot.has_tun` | `Boolean` | Kotlin (зеркало `vpn_mode`) | [§192] | **Вычисляемое**, default `true`. Производное от `vpn_mode` (§119): proxy → `false`. Гейтит `VpnService.prepare()` (proxy не отзывает чужой VPN). **НЕ** в backup-блоке, **НЕ** в JSON-секции `native_prefs` — пересчитывается из `vpn_mode`. |
+| `boxvpn_boot.app_language` | `String` | Kotlin (зеркало `vars.app_language`) | [§279] | `system` \| `en` \| `ru`. Derived cache для Dart-less нативных поверхностей: `L10n.kt` оборачивает контекст в момент рендера (шторка/тайл/shortcuts при мёртвом Flutter). Истина — [`vars.app_language`](#vars--template-vars--app-flags); **НЕ** член `NativePrefsKeys`, **НЕ** в backup-блоке. |
+| `boxvpn_boot.last_pushed_locale` | `String` | Kotlin | [§279] | Последнее значение, которое приложение само запушило в `LocaleManager` (Android 13+; `""` = system). Опора трёхстороннего reconciliation на старте: смена в системных Settings побеждает сторадж, смена стораджа (restore/Debug API) пере-пушится в `LocaleManager`. **НЕ** в backup-блоке. |
 
 ---
 
@@ -1000,6 +1015,7 @@ storage. Template стал **seed'ом** — значениями по умол�
 [§117]: ./spec/features/117%20dns-rework/spec.md
 [§189]: ./spec/tasks/189-native-prefs-mirror-in-json.md
 [§192]: ./spec/tasks/192-proxy-mode-prepare-revokes-foreign-vpn.md
+[§279]: ./spec/features/279%20localization/spec.md
 [§220]: ./spec/tasks/220-allow-rotation-setting.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md

@@ -633,8 +633,8 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/enabled_groups` | PUT | `{"groups": ["tag",...]}`. **§125 legacy: фактически no-op** — после миграции на `channels[]` билдер читает `enabledGroups` только когда `channels` пуст, иначе `channels[]` перекрывает эту запись. Для управления каналами используйте UI (App Settings → Channels) / backup. `?rebuild=true` пересоберёт конфиг, но результат не изменится. → `{ok, action:"settings-enabled-groups", count, ...rebuild-extras}`. |
 | `/settings/vpn_mode` | GET | →`{"ok":true,"vpn_mode":{...}}` — текущий `VpnModeConfig`. |
 | `/settings/vpn_mode` | PUT | частичное обновление (copyWith поверх текущего): `mode`/`proxy_protocol`/`proxy_port`/`proxy_listen`/`proxy_auth`/`proxy_user`/`proxy_pass`. `proxy_listen` валидируется как IPv4 (иначе 400). **Config-significant** (меняет inbounds) → `?rebuild=true`. → `{ok, action:"settings-vpn-mode", vpn_mode, ...rebuild-extras}`. |
-| `/settings/vars/{key}` | PUT | `{"value":"<str>"}` |
-| `/settings/vars/{key}` | DELETE | — (удаляет ключ; не пишет пустую строку) |
+| `/settings/vars/{key}` | PUT | `{"value":"<str>"}`. Для ключей с side-effect-hook (§279: `app_language`) запись идёт через владеющий сервис, не через голый `setVar` — см. «Side-effect vars» ниже. |
+| `/settings/vars/{key}` | DELETE | — (удаляет ключ; не пишет пустую строку). Для hook-ключей = сброс к дефолту через тот же сервис. |
 | `/settings/dns_options/servers` | PUT | §043 + §044: kind-refs `[{enabled, kind: 'inline'\|'preset'\|'template', tag, description?, body?}]`. Для `kind: inline` обязателен `body` (partial sing-box shape **без** `tag`/`description`/`enabled` — они на ref-level). Legacy full-body snapshot и §043 inline (с tag/description в body) тоже принимаются — auto-migrate на ближайший resolver. |
 | `/settings/dns_options/rules` | PUT | `{"rules":"<JSON string>"}` (**legacy, §061**: пишет `dns_options.rules_json`, который билдер игнорирует → фактически no-op; используй `dns_options/servers` + custom-rules) |
 | `/settings/config_locked` | PUT | `{"locked": true\|false}` — §037 toggle auto-rebuild lock. true → `generateConfig` возвращает null silently, custom config через `PUT /config` не перетирается UI. |
@@ -673,6 +673,35 @@ curl -s -H "$HDR" "$BASE/state/storage" | jq '.vars'
 
 # Удалить var (getVar с default вернёт default)
 curl -X DELETE -H "$HDR" "$BASE/settings/vars/route-strategy"
+```
+
+**Side-effect vars (§279):** часть ключей нельзя писать голым `setVar` —
+сторадж разошёлся бы с живым состоянием до следующего полного старта. Для них
+в vars-handler'е стоит per-key registry (прецедент §275 — мутации только через
+владеющий сервис); generic-путь для остальных ключей не меняется.
+
+- `app_language` (`system` | `en` | `ru`) — язык приложения (см.
+  [STORAGE.md](../STORAGE.md#vars--template-vars--app-flags)). `PUT` диспатчится
+  в `LocaleController.set()`: полный пайплайн смены локали — persist +
+  native-зеркало (`boxvpn_boot.app_language`, notification/тайл/shortcuts
+  перештамповываются при живом VPN) + `LocaleManager` на Android 13+ + rebuild
+  UI. Невалидное значение → 400. `DELETE` = `set('system')` (ключ остаётся со
+  значением `system`).
+
+```bash
+# Переключить приложение на русский (эффект мгновенный, без рестарта)
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"value":"ru"}' \
+  "$BASE/settings/vars/app_language"
+
+# Невалидное значение → 400
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"value":"de"}' \
+  "$BASE/settings/vars/app_language"
+# → 400 {"error":{"code":"bad_request","message":"app_language must be \"system\", \"en\" or \"ru\""}}
+
+# Вернуть системный язык
+curl -X DELETE -H "$HDR" "$BASE/settings/vars/app_language"
 ```
 
 **Blocklist (409 `conflict`):** Ключи ниже нельзя менять через API — управляются UI App Settings → Developer.

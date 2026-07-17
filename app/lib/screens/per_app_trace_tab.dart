@@ -254,7 +254,9 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
             onPressed: canRecord ? _toggleRecording : null,
             icon: Icon(isRecording ? Icons.stop : Icons.play_arrow,
                 size: 18),
-            label: Text(isRecording ? 'STOP' : 'START'),
+            label: Text(isRecording
+                ? context.l.statsRecStopButton
+                : context.l.statsRecStartButton),
             style: FilledButton.styleFrom(
               backgroundColor:
                   isRecording ? cs.error : cs.primary,
@@ -338,7 +340,9 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
           Icon(Icons.fiber_manual_record, size: 12, color: cs.error),
           const SizedBox(width: 6),
           Text(
-            s.finishedAt == null ? 'Recording' : 'Stopped',
+            s.finishedAt == null
+                ? context.l.statsTraceStatusRecording
+                : context.l.statsTraceStatusStopped,
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
           const SizedBox(width: 8),

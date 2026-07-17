@@ -204,7 +204,9 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
                 const PopupMenuDivider(),
                 PopupMenuItem(
                   value: 'system',
-                  child: Text(_showSystem ? 'Hide system apps' : 'Show system apps'),
+                  child: Text(_showSystem
+                      ? context.l.appPickerHideSystemApps
+                      : context.l.appPickerShowSystemApps),
                 ),
               ],
             ),
@@ -232,8 +234,9 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Text(
                 _loading
-                    ? 'Loading apps...'
-                    : '${_selected.length} selected \u00b7 ${apps.length} shown',
+                    ? context.l.appPickerLoadingApps
+                    : context.l
+                        .appPickerSelectedShown(_selected.length, apps.length),
                 style: Theme.of(context).textTheme.labelSmall,
               ),
             ),

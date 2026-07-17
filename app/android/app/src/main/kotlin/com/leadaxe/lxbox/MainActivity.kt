@@ -11,7 +11,9 @@ import android.widget.Toast
 import com.leadaxe.lxbox.vpn.BootReceiver
 import com.leadaxe.lxbox.vpn.BoxApplication
 import com.leadaxe.lxbox.vpn.BoxVpnService
+import com.leadaxe.lxbox.vpn.L10n
 import com.leadaxe.lxbox.vpn.PermissionUtils
+import com.leadaxe.lxbox.vpn.QuickShortcuts
 import com.leadaxe.lxbox.vpn.VpnPlugin
 import com.leadaxe.lxbox.vpn.VpnStatus
 import com.leadaxe.lxbox.vpn.WifiHistoryBridge
@@ -190,6 +192,14 @@ class MainActivity : FlutterActivity() {
         handleQuickAction(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // §279 — гарантированный retry relabel'а shortcuts, отложенного из-за
+        // rate-limit'а (смена языка в background): foreground-вызовы
+        // ShortcutManager rate-limit не применяет. No-op без pending-флага.
+        QuickShortcuts.retryPendingRelabel(applicationContext)
+    }
+
     private fun handleQuickAction(intent: Intent?) {
         val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
         Log.d(TAG, "handleQuickAction action=$action currentStatus=${BoxVpnService.currentStatus.name}")
@@ -239,7 +249,12 @@ class MainActivity : FlutterActivity() {
         // Покажем тост ровно если activity «просто открылась» под consent —
         // обычный запуск через UI и так показывает диалог как часть flow.
         if (finishAfterConsent) {
-            Toast.makeText(applicationContext, R.string.qc_first_open, Toast.LENGTH_SHORT).show()
+            // §279 — текст через L10n (in-app язык может отличаться от системного).
+            Toast.makeText(
+                applicationContext,
+                L10n.str(applicationContext, R.string.qc_first_open),
+                Toast.LENGTH_SHORT,
+            ).show()
         }
         try {
             startActivityForResult(prep, VPN_REQUEST_CODE_QUICK)
@@ -305,7 +320,12 @@ class MainActivity : FlutterActivity() {
             BoxVpnService.start(applicationContext)
             if (finishAfterConsent) finish()
         } else {
-            Toast.makeText(applicationContext, R.string.qc_consent_denied, Toast.LENGTH_SHORT).show()
+            // §279 — текст через L10n (in-app язык может отличаться от системного).
+            Toast.makeText(
+                applicationContext,
+                L10n.str(applicationContext, R.string.qc_consent_denied),
+                Toast.LENGTH_SHORT,
+            ).show()
             if (finishAfterConsent) finish()
         }
     }
