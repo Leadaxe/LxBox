@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_info.dart';
 import '../../services/app_info_cache.dart';
+import '../../services/l10n/l10n.dart';
 
 class SingleAppPickerScreen extends StatefulWidget {
   const SingleAppPickerScreen({super.key});
@@ -53,10 +54,10 @@ class _SingleAppPickerScreenState extends State<SingleAppPickerScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pick app to trace'),
+        title: Text(context.l.statsTracePickAppTitle),
         actions: [
           IconButton(
-            tooltip: 'Show system apps',
+            tooltip: context.l.statsTraceShowSystemApps,
             icon: Icon(
               _showSystem ? Icons.visibility : Icons.visibility_off,
             ),
@@ -69,10 +70,10 @@ class _SingleAppPickerScreenState extends State<SingleAppPickerScreen> {
           Padding(
             padding: const EdgeInsets.all(8),
             child: TextField(
-              decoration: const InputDecoration(
-                hintText: 'Search by name or package',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: context.l.statsTraceSearchApps,
+                prefixIcon: const Icon(Icons.search),
+                border: const OutlineInputBorder(),
                 isDense: true,
               ),
               onChanged: (v) => setState(() => _search = v),

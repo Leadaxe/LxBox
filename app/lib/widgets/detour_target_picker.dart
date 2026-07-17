@@ -5,6 +5,7 @@ import '../models/channel.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../services/selector_info.dart';
+import '../services/l10n/l10n.dart';
 import '../services/tag_resolver.dart';
 
 /// §239 — выбранная цель detour-пикера.
@@ -212,27 +213,27 @@ Future<DetourTarget?> showDetourTargetPicker(
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text('Detour server',
+                child: Text(ctx.l.subDetourPickerTitle,
                     style: theme.textTheme.titleMedium),
               ),
               ListTile(
                 leading: const Icon(Icons.block_flipped, size: 20),
-                title: const Text('None (direct)'),
+                title: Text(ctx.l.subDetourNone),
                 onTap: () => Navigator.pop(ctx, DetourTarget.none),
               ),
               if (folder != null)
                 ExpansionTile(
                   leading: const Icon(Icons.folder_outlined, size: 20),
-                  title: Text('This folder (${members.length})'),
+                  title: Text(ctx.l.subDetourThisFolder(members.length)),
                   subtitle: Text(
-                    'Chains inside the folder get the folder detour appended',
+                    ctx.l.subDetourThisFolderSub,
                     style: TextStyle(fontSize: 12, color: muted),
                   ),
                   children: members.isEmpty
                       ? [
                           Padding(
                             padding: const EdgeInsets.all(12),
-                            child: Text('No other servers in this folder',
+                            child: Text(ctx.l.subDetourNoOtherServers,
                                 style: TextStyle(color: muted)),
                           ),
                         ]
@@ -261,7 +262,7 @@ Future<DetourTarget?> showDetourTargetPicker(
               if (detourChannels.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Text('Channels',
+                  child: Text(ctx.l.subDetourChannelsHeader,
                       style: theme.textTheme.titleSmall
                           ?.copyWith(color: theme.colorScheme.primary)),
                 ),
@@ -272,7 +273,7 @@ Future<DetourTarget?> showDetourTargetPicker(
                     title: Text(_channelTitle(c),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
-                      'Switchable detour channel',
+                      ctx.l.subDetourSwitchableChannel,
                       style: TextStyle(fontSize: 12, color: muted),
                     ),
                     onTap: () => Navigator.pop(
@@ -284,7 +285,7 @@ Future<DetourTarget?> showDetourTargetPicker(
               if (free.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Text('Standalone servers',
+                  child: Text(ctx.l.subDetourStandaloneHeader,
                       style: theme.textTheme.titleSmall
                           ?.copyWith(color: theme.colorScheme.primary)),
                 ),
@@ -302,7 +303,7 @@ Future<DetourTarget?> showDetourTargetPicker(
               ] else
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text('No standalone servers available',
+                  child: Text(ctx.l.subDetourNoStandalone,
                       style: TextStyle(color: muted)),
                 ),
               const SizedBox(height: 8),

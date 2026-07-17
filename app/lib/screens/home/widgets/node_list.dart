@@ -8,6 +8,7 @@ import '../../../models/home_state.dart';
 import '../../../services/channel_mutations.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/haptic_service.dart';
+import '../../../services/l10n/l10n.dart';
 import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
 import '../../../widgets/node_view_item.dart';
@@ -89,7 +90,7 @@ class HomeNodeList extends StatelessWidget {
                       size: 48, color: cs.onSurfaceVariant.withAlpha(120)),
                   const SizedBox(height: 12),
                   Text(
-                    'No nodes in this channel.\nTry another one.',
+                    context.l.homeNoNodesInChannel,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: cs.onSurfaceVariant,
@@ -127,7 +128,7 @@ class HomeNodeList extends StatelessWidget {
                         size: 64, color: cs.primary),
                     const SizedBox(height: 12),
                     Text(
-                      'Tap to connect',
+                      context.l.homeTapToConnect,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             color: cs.primary,
@@ -377,8 +378,8 @@ class HomeNodeList extends StatelessWidget {
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Apply to $label'),
-        content: Text('Use "$pattern" as…'),
+        title: Text(ctx.l.homeApplyToTitle(label)),
+        content: Text(ctx.l.homeUseRegexAs(pattern)),
         // Горизонтально (Row), порядок: Channel filter → Default → Cancel.
         // Короткие лейблы держат всё в один ряд на телефоне.
         actionsAlignment: MainAxisAlignment.end,
@@ -390,15 +391,15 @@ class HomeNodeList extends StatelessWidget {
               foregroundColor: Theme.of(ctx).colorScheme.primary,
               textStyle: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            child: const Text('Filter'),
+            child: Text(ctx.l.homeRegexAsFilter),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'default'),
-            child: const Text('Default'),
+            child: Text(ctx.l.homeRegexAsDefault),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(ctx.l.commonCancel),
           ),
         ],
       ),
@@ -451,7 +452,7 @@ class HomeNodeList extends StatelessWidget {
     );
     if (state.tunnelUp && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Restart VPN to apply changes')),
+        SnackBar(content: Text(context.l.homeRestartVpnToApply)),
       );
     }
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../services/l10n/l10n.dart';
 import '../../../services/relative_time.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/update_checker.dart';
@@ -84,7 +85,7 @@ class _UpdateStatusRowState extends State<UpdateStatusRow> {
           else
             TextButton(
               onPressed: _checkNow,
-              child: const Text('Check now'),
+              child: Text(context.l.appSettingsGenCheckNow),
             ),
         ],
       ),

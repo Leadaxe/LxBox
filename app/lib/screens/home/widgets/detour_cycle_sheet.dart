@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/validation.dart';
+import '../../../services/l10n/l10n.dart';
 import '../../../services/builder/validator.dart' show kMaxDetourCulprits;
 
 /// §254/§255 — bottom sheet «Routing loop — VPN not started».
@@ -60,11 +61,11 @@ class _DetourCycleSheet extends StatelessWidget {
               children: [
                 Icon(Icons.link_off, color: cs.error, size: 20),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Routing loop — VPN not started',
-                    style:
-                        TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    context.l.homeDetourLoopTitle,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -104,7 +105,7 @@ class _DetourCycleSheet extends StatelessWidget {
                     tilePadding: EdgeInsets.zero,
                     childrenPadding: const EdgeInsets.only(bottom: 12),
                     shape: const Border(),
-                    title: Text('Show loop',
+                    title: Text(context.l.homeDetourLoopShow,
                         style: TextStyle(
                             fontSize: 13, color: cs.onSurfaceVariant)),
                     children: [
@@ -122,7 +123,7 @@ class _DetourCycleSheet extends StatelessWidget {
                 if (maybeMore) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'More loops may remain — fix these and try again.',
+                    context.l.homeDetourLoopMore,
                     style: TextStyle(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
@@ -192,7 +193,7 @@ class _CulpritTile extends StatelessWidget {
                           style: const TextStyle(
                               fontSize: 14, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text('detour → $detour',
+                      Text(context.l.homeDetourLoopEdge(detour),
                           style: TextStyle(
                               fontSize: 12,
                               fontFamily: 'monospace',

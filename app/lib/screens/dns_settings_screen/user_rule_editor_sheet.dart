@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../services/error_format.dart';
+import '../../services/l10n/l10n.dart';
 
 /// Bottom-sheet editor for an inline user DNS rule (`kind: inline`).
 ///
@@ -34,14 +35,14 @@ void showUserRuleEditor(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(isNew ? 'Add DNS Rule' : 'Edit DNS Rule',
+          Text(isNew ? ctx.l.dnsRuleSheetAddTitle : ctx.l.dnsRuleSheetEditTitle,
               style: Theme.of(ctx).textTheme.titleMedium),
           const SizedBox(height: 12),
           TextField(
             controller: nameCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: ctx.l.ruleEditNameLabel,
+              border: const OutlineInputBorder(),
               isDense: true,
             ),
           ),
@@ -53,9 +54,9 @@ void showUserRuleEditor(
               maxLines: null,
               expands: true,
               style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-              decoration: const InputDecoration(
-                labelText: 'Rule body (JSON)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: ctx.l.dnsRuleBodyLabel,
+                border: const OutlineInputBorder(),
                 isDense: true,
                 alignLabelWithHint: true,
               ),
@@ -63,6 +64,7 @@ void showUserRuleEditor(
           ),
           const SizedBox(height: 8),
           const Text(
+            // l10n-exempt: JSON shape example (literal braces)
             'sing-box DNS rule shape: {rule_set, domain, domain_suffix, server, ...}',
             style: TextStyle(fontSize: 11, color: Colors.grey),
           ),
@@ -72,7 +74,7 @@ void showUserRuleEditor(
               final name = nameCtrl.text.trim();
               if (name.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Name is required')));
+                    SnackBar(content: Text(ctx.l.ruleEditNameRequired)));
                 return;
               }
               Map<String, dynamic>? parsed;
@@ -83,8 +85,8 @@ void showUserRuleEditor(
                 }
                 parsed = obj;
               } catch (e) {
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text('Invalid JSON: ${formatUserError(e)}')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(ctx.l.subInvalidJson(formatUserError(e)))));
                 return;
               }
               Navigator.pop(ctx);
@@ -96,7 +98,7 @@ void showUserRuleEditor(
               };
               onSave(entry);
             },
-            child: const Text('Save'),
+            child: Text(ctx.l.commonSave),
           ),
         ],
       ),

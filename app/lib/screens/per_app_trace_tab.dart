@@ -23,6 +23,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/traffic_profiler.dart';
 import '../services/format_utils.dart';
+import '../services/l10n/l10n.dart';
 import '../widgets/core_logs_hint_banner.dart';
 import 'app_picker_screen.dart';
 import 'stats_screen/profiler_filter.dart';
@@ -145,9 +146,8 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
     // показываем snackbar.
     if (TrafficProfiler.I.isRecording) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Verbose toggle takes effect on next session — stop and restart.'),
+        SnackBar(
+          content: Text(context.l.statsTraceVerboseNextSession),
         ),
       );
     }
@@ -163,7 +163,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
     await Clipboard.setData(ClipboardData(text: json));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Session JSON copied to clipboard')),
+      SnackBar(content: Text(context.l.statsTraceSessionJsonCopied)),
     );
   }
 
@@ -282,42 +282,42 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
               CheckedPopupMenuItem(
                 value: _verbose ? 'verbose-off' : 'verbose-on',
                 checked: _verbose,
-                child: const Text('Verbose core logs (debug)'),
+                child: Text(context.l.statsTraceMenuVerbose),
               ),
               const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'copy',
                 enabled: active != null,
-                child: const ListTile(
-                  leading: Icon(Icons.copy),
-                  title: Text('Copy session JSON'),
+                child: ListTile(
+                  leading: const Icon(Icons.copy),
+                  title: Text(context.l.statsTraceMenuCopyJson),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
               PopupMenuItem(
                 value: 'share',
                 enabled: active != null,
-                child: const ListTile(
-                  leading: Icon(Icons.share),
-                  title: Text('Share session'),
+                child: ListTile(
+                  leading: const Icon(Icons.share),
+                  title: Text(context.l.statsTraceMenuShare),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'wipe',
                 child: ListTile(
-                  leading: Icon(Icons.delete_outline),
-                  title: Text('Clear all sessions'),
+                  leading: const Icon(Icons.delete_outline),
+                  title: Text(context.l.statsTraceMenuClearAll),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'help',
                 child: ListTile(
-                  leading: Icon(Icons.help_outline),
-                  title: Text('Help'),
+                  leading: const Icon(Icons.help_outline),
+                  title: Text(context.l.commonHelp),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -345,11 +345,13 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
           Text(formatDuration(dur),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           const SizedBox(width: 16),
-          Text('${s.byDomain.length} doms · ${s.byIp.length} ips · ${s.events.length} ev',
+          Text(
+              context.l.statsTraceStatsLine(
+                  s.byDomain.length, s.byIp.length, s.events.length),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           if (s.eventsDropped > 0) ...[
             const SizedBox(width: 8),
-            Text('· ${s.eventsDropped} dropped',
+            Text(context.l.statsTraceDropped(s.eventsDropped),
                 style: TextStyle(fontSize: 12, color: cs.error)),
           ],
         ],
@@ -373,7 +375,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
               runSpacing: 2,
               children: [
                 if (s.secondaryPackages.isEmpty)
-                  Text('No secondary packages',
+                  Text(context.l.statsTraceNoSecondary,
                       style: TextStyle(
                           fontSize: 11, color: cs.onSurfaceVariant)),
                 for (final pkg in s.secondaryPackages)
@@ -389,8 +391,8 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
           TextButton.icon(
             onPressed: _pickSecondaryPackages,
             icon: const Icon(Icons.add, size: 14),
-            label: const Text('Edit secondary',
-                style: TextStyle(fontSize: 11)),
+            label: Text(context.l.statsTraceEditSecondary,
+                style: const TextStyle(fontSize: 11)),
             style: TextButton.styleFrom(
               padding:
                   const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../services/community_servers_loader.dart';
+import '../../services/l10n/l10n.dart';
 import '../../services/url_launcher.dart';
 
 /// Загрузка community-манифеста + dialog выбора public test-server list.
@@ -18,14 +19,14 @@ Future<void> pickPublicTestServer(
   } catch (_) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Test servers list unavailable')),
+      SnackBar(content: Text(context.l.subTestServersUnavailable)),
     );
     return;
   }
   if (!context.mounted) return;
   if (manifest.lists.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Test servers list unavailable')),
+      SnackBar(content: Text(context.l.subTestServersUnavailable)),
     );
     return;
   }
@@ -33,7 +34,7 @@ Future<void> pickPublicTestServer(
   showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Get Public Test Servers'),
+      title: Text(ctx.l.subGetPublicTestServers),
       contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -57,7 +58,7 @@ Future<void> pickPublicTestServer(
                 if (manifest.attribution!.link.isNotEmpty)
                   IconButton(
                     icon: const Icon(Icons.open_in_new, size: 18),
-                    tooltip: 'View on GitHub',
+                    tooltip: ctx.l.subViewOnGithub,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onPressed: () =>
@@ -71,7 +72,7 @@ Future<void> pickPublicTestServer(
             final list = manifest.lists[i];
             return ListTile(
               leading: const Icon(Icons.list_alt),
-              title: Text('List ${i + 1}'),
+              title: Text(ctx.l.subListN(i + 1)),
               dense: true,
               contentPadding: EdgeInsets.zero,
               onTap: () {
@@ -85,7 +86,7 @@ Future<void> pickPublicTestServer(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
+          child: Text(ctx.l.commonCancel),
         ),
       ],
     ),

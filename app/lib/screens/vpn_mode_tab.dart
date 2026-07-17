@@ -23,6 +23,7 @@ import 'package:flutter/services.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/parser_config.dart' show WizardTemplate, WizardVar;
+import '../services/l10n/l10n.dart';
 import '../services/settings_storage.dart'
     show SettingsStorage, VpnModeConfig, NativePrefsKeys;
 import '../services/subscription/subscription_identity.dart'
@@ -378,19 +379,19 @@ class _VpnModeTabState extends State<VpnModeTab>
           const SizedBox(height: 16),
           const Divider(height: 1),
           const SizedBox(height: 16),
-          Text('Tunnel options', style: tt.titleMedium),
+          Text(context.l.vpnModeTunnelOptions, style: tt.titleMedium),
           const SizedBox(height: 4),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Keep VPN on exit'),
-            subtitle: const Text('VPN stays active when app is closed'),
+            title: Text(context.l.vpnModeKeepOnExitTitle),
+            subtitle: Text(context.l.vpnModeKeepOnExitSubtitle),
             secondary: const Icon(Icons.exit_to_app),
             value: _keepOnExit,
             onChanged: _tunTogglesLoaded ? _toggleKeepOnExit : null,
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Allow VPN bypass'),
+            title: Text(context.l.vpnModeAllowBypassTitle),
             subtitle: Text(
               _allowBypass
                   ? 'Apps may use ConnectivityManager to bypass tun.'
@@ -406,7 +407,7 @@ class _VpnModeTabState extends State<VpnModeTab>
           const SizedBox(height: 16),
           const Divider(height: 1),
           const SizedBox(height: 16),
-          Text('Local proxy', style: tt.titleMedium),
+          Text(context.l.vpnModeLocalProxy, style: tt.titleMedium),
           const SizedBox(height: 12),
 
           // ─── PROTOCOL (proxy_type → dropdown) ───
@@ -439,7 +440,7 @@ class _VpnModeTabState extends State<VpnModeTab>
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
               labelText: _portNode.title,
-              helperText: 'Range 1024..65535',
+              helperText: context.l.vpnModePortRangeHelper,
               errorText: _portError.isEmpty ? null : _portError,
               isDense: true,
               border: const OutlineInputBorder(),
@@ -498,7 +499,7 @@ class _VpnModeTabState extends State<VpnModeTab>
                           setState(() => _showPassword = !_showPassword),
                     ),
                     IconButton(
-                      tooltip: 'Regenerate',
+                      tooltip: context.l.commonRegenerate,
                       icon: const Icon(Icons.refresh, size: 20),
                       onPressed: _regeneratePassword,
                     ),

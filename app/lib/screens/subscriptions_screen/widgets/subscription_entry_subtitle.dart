@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/server_list.dart';
+import '../../../services/l10n/l10n.dart';
 import '../../../services/subscription/input_helpers.dart';
 
 /// Строка под именем подписки. Для SubscriptionServers показываем:
@@ -21,21 +22,27 @@ Widget? buildSubscriptionEntrySubtitle(
   // SubscriptionServers — нодcount + ⚙ если есть detour-цепочки.
   // FolderServers (§234) — счётчик членов + сколько выключено.
   final isUser = entry.list is UserServer;
+  final l = context.l;
   String statusText;
   if (entry.list is FolderServers) {
     final folder = entry.list as FolderServers;
     final total = folder.members.length;
     final off = folder.disabledCount;
     statusText = total == 0
-        ? 'Empty folder'
-        : '$total server${total == 1 ? '' : 's'}${off > 0 ? ' · $off off' : ''}';
+        ? l.subEntryEmptyFolder
+        : off > 0
+            ? l.subEntryFolderServersOff(total, off)
+            : l.subFolderServersCount(total);
   } else if (isUser) {
     final node = entry.list.nodes.isNotEmpty ? entry.list.nodes.first : null;
-    statusText = node != null ? '${node.protocol.toUpperCase()} server' : '';
+    statusText = node != null
+        ? l.subEntryProtocolServer(node.protocol.toUpperCase())
+        : '';
   } else if (entry.status.isNotEmpty) {
     statusText = entry.status;
   } else {
-    statusText = entry.nodeCount > 0 ? '${entry.nodeCount} nodes' : '';
+    statusText =
+        entry.nodeCount > 0 ? l.subEntryNodesCount(entry.nodeCount) : '';
   }
   if (statusText.isNotEmpty) {
     parts.add(Text(statusText, style: textStyle));
@@ -48,7 +55,7 @@ Widget? buildSubscriptionEntrySubtitle(
         isFileSubscription((entry.list as SubscriptionServers).url);
     if (isFile) {
       parts.add(Icon(Icons.insert_drive_file_outlined, size: 12, color: muted));
-      parts.add(Text('file', style: textStyle));
+      parts.add(Text(l.subEntryFileBadge, style: textStyle));
     } else {
       final intervalH = entry.updateIntervalHours;
       if (intervalH > 0) {
@@ -66,14 +73,14 @@ Widget? buildSubscriptionEntrySubtitle(
       parts.add(Text(SubscriptionEntry.formatAgo(last), style: textStyle));
     } else if (entry.lastUpdateStatus == UpdateStatus.never) {
       parts.add(Icon(Icons.schedule, size: 12, color: muted));
-      parts.add(Text('never', style: textStyle));
+      parts.add(Text(l.subEntryNever, style: textStyle));
     }
 
     final fails = entry.consecutiveFails;
     if (fails > 0) {
       final failColor = entry.enabled ? scheme.error : muted;
       parts.add(Text(
-        '($fails fail${fails == 1 ? '' : 's'})',
+        l.subEntryFails(fails),
         style: TextStyle(fontSize: 12, color: failColor),
       ));
     }

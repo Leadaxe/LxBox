@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
+import '../services/l10n/l10n.dart';
 import '../services/settings_storage.dart';
 import '../services/ui_helpers.dart';
 import '../services/url_launcher.dart' as ul;
@@ -96,7 +97,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     final name = _ctrl.nameCtrl.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name is required')),
+        SnackBar(content: Text(context.l.ruleEditNameRequired)),
       );
       return;
     }
@@ -108,7 +109,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       }
       finalName = '$name ($i)';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Name in use — renamed to "$finalName"')),
+        SnackBar(content: Text(context.l.ruleEditNameInUse(finalName))),
       );
     }
 
@@ -140,10 +141,10 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   Future<void> _delete() async {
     final confirmed = await showDeleteConfirmDialog(
       context,
-      title: 'Delete rule?',
+      title: context.l.ruleEditDeleteTitle,
       // §279 — display-имя (live-label пресета), fallback — снапшот.
-      message:
-          'Remove "${widget.displayName ?? widget.initial.name}" permanently?',
+      message: context.l
+          .ruleEditDeleteBody(widget.displayName ?? widget.initial.name),
     ); // §219
     if (confirmed == true && mounted) {
       Navigator.pop(context, _CustomRuleEditResult.deleted());
@@ -186,13 +187,13 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
         overlay.size.height - pos.dy,
       ),
       items: [
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'refresh',
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.refresh, size: 20),
-            title: Text('Refresh SRS'),
+            leading: const Icon(Icons.refresh, size: 20),
+            title: Text(context.l.ruleEditRefreshSrs),
           ),
         ),
         PopupMenuItem<String>(
@@ -202,7 +203,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.cloud_off_outlined,
                 size: 20, color: Theme.of(context).colorScheme.error),
-            title: Text('Clear cached file',
+            title: Text(context.l.ruleEditClearCachedFile,
                 style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ),
         ),
@@ -298,8 +299,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-            'Failed to download SRS for "$varDisplay". Check internet and try again.'),
+        content: Text(context.l.ruleEditSrsDownloadFailed(varDisplay)),
       ),
     );
   }
@@ -333,7 +333,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           length: 2,
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('Edit rule'),
+              title: Text(context.l.ruleEditTitle),
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: _handleBack,
@@ -343,15 +343,18 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
                 // delete-иконку скрываем.
                 if (!(_ctrl.preset?.locked ?? false))
                   IconButton(
-                    tooltip: 'Delete rule',
+                    tooltip: context.l.ruleEditDeleteRule,
                     icon: Icon(Icons.delete_outline,
                         color: Theme.of(context).colorScheme.error),
                     onPressed: _delete,
                   ),
                 _SaveIconButton(controller: _ctrl, onPressed: _save),
               ],
-              bottom: const TabBar(
-                tabs: [Tab(text: 'Params'), Tab(text: 'View')],
+              bottom: TabBar(
+                tabs: [
+                  Tab(text: context.l.ruleEditTabParams),
+                  Tab(text: context.l.ruleEditTabView),
+                ],
               ),
             ),
             body: TabBarView(
@@ -386,7 +389,7 @@ class _SaveIconButton extends StatelessWidget {
       builder: (ctx, _) {
         final dirty = controller.isDirty();
         return IconButton(
-          tooltip: 'Save',
+          tooltip: ctx.l.commonSave,
           icon: Icon(Icons.save,
               color: dirty ? Theme.of(ctx).colorScheme.primary : null),
           onPressed: onPressed,

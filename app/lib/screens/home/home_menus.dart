@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../controllers/home_controller.dart';
 import '../../models/home_state.dart';
 import '../../services/settings_storage.dart';
+import '../../services/l10n/l10n.dart';
 import '../../services/template_loader.dart';
 
 /// §070 — modal bottom sheet опций сортировки нод (long-press по sort-кнопке
@@ -26,7 +27,7 @@ Future<void> showSortOptionsMenu(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Sort options',
+                Text(sheetCtx.l.homeSortOptionsTitle,
                     style: Theme.of(sheetCtx).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 // §100 — выбор режима сортировки (incl. Custom = ручная,
@@ -55,7 +56,7 @@ Future<void> showSortOptionsMenu(
                     controller.setPinDirect(v ?? false);
                     setSheetState(() {});
                   },
-                  title: const Text('Pin DIRECT to top'),
+                  title: Text(sheetCtx.l.homeSortPinDirect),
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
                   dense: true,
@@ -66,7 +67,7 @@ Future<void> showSortOptionsMenu(
                     controller.setPinAuto(v ?? false);
                     setSheetState(() {});
                   },
-                  title: const Text('Pin AUTO to top'),
+                  title: Text(sheetCtx.l.homeSortPinAuto),
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
                   dense: true,
@@ -77,7 +78,7 @@ Future<void> showSortOptionsMenu(
                     controller.setResortOnManualPing(v ?? false);
                     setSheetState(() {});
                   },
-                  title: const Text('Re-sort on manual ping'),
+                  title: Text(sheetCtx.l.homeSortResortOnPing),
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
                   dense: true,
@@ -143,13 +144,14 @@ Future<void> showPingSettings(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Ping Settings', style: Theme.of(ctx).textTheme.titleMedium),
+              Text(ctx.l.homePingSettingsTitle,
+                  style: Theme.of(ctx).textTheme.titleMedium),
               const SizedBox(height: 8),
               if (canApplyToGroup) ...[
                 SegmentedButton<bool>(
                   segments: [
-                    const ButtonSegment(
-                        value: false, label: Text('All channels')),
+                    ButtonSegment(
+                        value: false, label: Text(ctx.l.homePingAllChannels)),
                     ButtonSegment(
                         value: true,
                         label: Text(currentGroup,
@@ -181,18 +183,18 @@ Future<void> showPingSettings(
               ],
               TextField(
                 controller: urlCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Test URL',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: ctx.l.homePingTestUrl,
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: timeoutCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Timeout (ms)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: ctx.l.homePingTimeoutMs,
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
                 keyboardType: TextInputType.number,
@@ -204,7 +206,7 @@ Future<void> showPingSettings(
                     Expanded(
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.restart_alt, size: 18),
-                        label: const Text('Reset to global'),
+                        label: Text(ctx.l.homePingResetToGlobal),
                         onPressed: () async {
                           await SettingsStorage.clearGroupPing(currentGroup);
                           await controller.reloadPingOptions();
@@ -232,7 +234,7 @@ Future<void> showPingSettings(
                         await controller.reloadPingOptions();
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
-                      child: const Text('Save'),
+                      child: Text(ctx.l.commonSave),
                     ),
                   ),
                 ],

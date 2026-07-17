@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/format_utils.dart';
+import '../../services/l10n/l10n.dart';
 import 'memory_detail_sheet.dart';
 import 'overview_models.dart';
 
@@ -92,10 +93,10 @@ class _OverviewTabState extends State<OverviewTab> {
           ),
         ),
         const SizedBox(height: 16),
-        Text('Traffic by Rule', style: theme.textTheme.titleMedium),
+        Text(context.l.statsTrafficByRule, style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         if (sorted.isEmpty)
-          const Center(child: Text('No active connections'))
+          Center(child: Text(context.l.statsNoActiveConnections))
         else
           ...sorted.map(_buildOutboundCard),
         const SizedBox(height: 8),
@@ -174,7 +175,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   Padding(
                     padding: EdgeInsets.only(left: 8.0 + i * 12.0, top: 2),
                     child: Text(
-                      '↳ via ${chain[i]}',
+                      context.l.statsViaChain(chain[i]),
                       style: TextStyle(
                         fontSize: 11,
                         color: cs.onSurfaceVariant,
@@ -184,7 +185,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
-                    '${group.connections.length} connections',
+                    context.l.statsConnectionsCount(group.connections.length),
                     style: const TextStyle(fontSize: 11),
                   ),
                 ),
@@ -269,13 +270,14 @@ class _OverviewTabState extends State<OverviewTab> {
     return Card(
       child: ExpansionTile(
         initiallyExpanded: true,
-        title: Text('By routing rule', style: theme.textTheme.titleSmall),
-        subtitle: Text('$total conns', style: const TextStyle(fontSize: 11)),
+        title: Text(context.l.statsByRoutingRule, style: theme.textTheme.titleSmall),
+        subtitle: Text(context.l.statsConnsShort(total),
+            style: const TextStyle(fontSize: 11)),
         tilePadding: const EdgeInsets.symmetric(horizontal: 16),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: entries.isEmpty
             ? [
-                Text('No rule data',
+                Text(context.l.statsNoRuleData,
                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))
               ]
             : [

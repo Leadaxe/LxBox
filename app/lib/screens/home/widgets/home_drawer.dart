@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../services/subscription/auto_updater.dart';
+import '../../../services/l10n/l10n.dart';
 import '../../about_screen.dart';
 import '../../app_settings_screen.dart';
 import '../../config_screen.dart';
@@ -44,8 +45,8 @@ class HomeDrawer extends StatelessWidget {
             const SizedBox(height: 12),
             ListTile(
               leading: const Icon(Icons.dns_outlined),
-              title: const Text('Servers'),
-              subtitle: const Text('Subscriptions & proxy'),
+              title: Text(context.l.homeDrawerServers),
+              subtitle: Text(context.l.homeDrawerServersSub),
               onTap: () => _go(
                 context,
                 SubscriptionsScreen(
@@ -57,8 +58,8 @@ class HomeDrawer extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.alt_route_outlined),
-              title: const Text('Routing'),
-              subtitle: const Text('Channels and routing rules'),
+              title: Text(context.l.homeDrawerRouting),
+              subtitle: Text(context.l.homeDrawerRoutingSub),
               onTap: () => _go(
                 context,
                 RoutingScreen(
@@ -69,8 +70,8 @@ class HomeDrawer extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.dns_outlined),
-              title: const Text('DNS Settings'),
-              subtitle: const Text('DNS servers and rules'),
+              title: Text(context.l.homeDrawerDns),
+              subtitle: Text(context.l.homeDrawerDnsSub),
               onTap: () => _go(
                 context,
                 DnsSettingsScreen(
@@ -81,8 +82,8 @@ class HomeDrawer extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.tune_outlined),
-              title: const Text('VPN Settings'),
-              subtitle: const Text('Config variables'),
+              title: Text(context.l.homeDrawerVpnSettings),
+              subtitle: Text(context.l.homeDrawerVpnSettingsSub),
               onTap: () => _go(
                 context,
                 SettingsScreen(
@@ -93,22 +94,22 @@ class HomeDrawer extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.settings_outlined),
-              title: const Text('App Settings'),
-              subtitle: const Text('Theme, appearance'),
+              title: Text(context.l.homeDrawerAppSettings),
+              subtitle: Text(context.l.homeDrawerAppSettingsSub),
               onTap: () => _go(context, const AppSettingsScreen()),
             ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.speed_outlined),
-              title: const Text('Speed Test'),
-              subtitle: const Text('Test download/upload speed'),
+              title: Text(context.l.homeDrawerSpeedTest),
+              subtitle: Text(context.l.homeDrawerSpeedTestSub),
               onTap: () =>
                   _go(context, SpeedTestScreen(homeController: controller)),
             ),
             ListTile(
               leading: const Icon(Icons.bar_chart_outlined),
-              title: const Text('Statistics'),
-              subtitle: const Text('Traffic by outbound'),
+              title: Text(context.l.homeDrawerStats),
+              subtitle: Text(context.l.homeDrawerStatsSub),
               enabled: controller.state.tunnelUp,
               onTap: () => _go(
                 context,
@@ -121,20 +122,20 @@ class HomeDrawer extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.description_outlined),
-              title: const Text('Config Editor'),
-              subtitle: const Text('View, edit, import JSON'),
+              title: Text(context.l.homeDrawerConfigEditor),
+              subtitle: Text(context.l.homeDrawerConfigEditorSub),
               onTap: () => _go(context, ConfigScreen(controller: controller)),
             ),
             ListTile(
               leading: const Icon(Icons.bug_report_outlined),
-              title: const Text('Debug'),
-              subtitle: const Text('Last 100 events'),
+              title: Text(context.l.homeDrawerDebug),
+              subtitle: Text(context.l.homeDrawerDebugSub),
               onTap: () => _go(context, const DebugScreen()),
             ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('About'),
+              title: Text(context.l.homeDrawerAbout),
               onTap: () => _go(context, const AboutScreen()),
             ),
           ],

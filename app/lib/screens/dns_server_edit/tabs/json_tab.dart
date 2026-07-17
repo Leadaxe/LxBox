@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../../services/builder/post_steps.dart'
     show resolveTemplateDnsServerBody;
 import '../../../services/builder/preset_expand.dart' show normalizeDnsDetour;
+import '../../../services/l10n/l10n.dart';
 import '../../dns_settings_screen/resolved_server.dart';
 import '../edit_controller.dart';
 
@@ -43,11 +44,7 @@ class _InlineBodyEditor extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            c.isNew
-                ? 'sing-box server JSON — tag editable here or in Params; '
-                    'description/enabled live on the list entry'
-                : 'sing-box server JSON — tag locked while editing; '
-                    'description/enabled live on the list entry',
+            c.isNew ? context.l.dnsJsonHeaderNew : context.l.dnsJsonHeaderEdit,
             style: theme.textTheme.labelSmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
@@ -112,7 +109,7 @@ class _ReadOnlyPreview extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text('storage shape (lxbox_settings.json)',
+                child: Text(context.l.ruleEditViewStorageShape,
                     style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
               ),
@@ -140,7 +137,7 @@ class _ReadOnlyPreview extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text('sing-box server preview (read-only)',
+                child: Text(context.l.dnsJsonPreviewLabel,
                     style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
               ),
@@ -178,12 +175,13 @@ class _CopyButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextButton.icon(
       icon: const Icon(Icons.content_copy, size: 14),
-      label: const Text('Copy', style: TextStyle(fontSize: 12)),
+      label: Text(context.l.commonCopy, style: const TextStyle(fontSize: 12)),
       onPressed: () async {
         final messenger = ScaffoldMessenger.of(context);
+        final copied = context.l.commonCopied;
         await Clipboard.setData(ClipboardData(text: text));
         messenger.showSnackBar(
-          const SnackBar(content: Text('Copied')),
+          SnackBar(content: Text(copied)),
         );
       },
     );

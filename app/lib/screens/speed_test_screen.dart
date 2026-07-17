@@ -8,6 +8,7 @@ import '../controllers/home_controller.dart';
 import '../models/parser_config.dart' show SpeedTestServer;
 import '../services/app_log.dart';
 import '../services/error_format.dart';
+import '../services/l10n/l10n.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
 
@@ -46,7 +47,10 @@ final _sessionHistory = <_SpeedTestResult>[];
 class _SpeedTestScreenState extends State<SpeedTestScreen>
     with TemplateAwareState<SpeedTestScreen> {
   bool _running = false;
-  String _status = 'Tap Start to begin';
+
+  /// §279 — пусто = idle-подсказка (speedStatusIdle); локализованные статусы
+  /// пишутся в момент присвоения (эфемерные, не переживают смену локали).
+  String _status = '';
   double _downloadMbps = 0;
   double _uploadMbps = 0;
   double _ping = 0;
@@ -95,7 +99,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
   String get _currentProxy {
     final state = widget.homeController.state;
-    if (!state.tunnelUp) return 'Direct';
+    if (!state.tunnelUp) return 'Direct'; // l10n-exempt: outbound tag-like label
     return state.activeInGroup ?? state.selectedGroup ?? 'VPN';
   }
 
@@ -105,7 +109,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
     if (_running) return;
     setState(() {
       _running = true;
-      _status = 'Testing ping...';
+      _status = context.l.speedStatusPing;
       _downloadMbps = 0;
       _uploadMbps = 0;
       _ping = 0;
@@ -119,7 +123,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
       setState(() {
         _ping = pingResult;
         _progress = 0.15;
-        _status = 'Testing download...';
+        _status = context.l.speedStatusDownload;
       });
 
       // Download — 4 parallel streams
@@ -128,7 +132,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
       setState(() {
         _downloadMbps = dlSpeed;
         _progress = 0.65;
-        _status = 'Testing upload...';
+        _status = context.l.speedStatusUpload;
       });
 
       // Upload
@@ -137,7 +141,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
       setState(() {
         _uploadMbps = ulSpeed;
         _progress = 1.0;
-        _status = 'Complete';
+        _status = context.l.speedStatusComplete;
       });
 
       // Save to session history
@@ -155,7 +159,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
       );
       if (_history.length > 10) _history.removeLast();
     } catch (e) {
-      if (mounted) setState(() => _status = 'Error: ${formatUserError(e)}');
+      if (mounted) {
+        setState(() => _status = context.l.subErrorSnack(formatUserError(e)));
+      }
     } finally {
       if (mounted) setState(() => _running = false);
     }
@@ -191,7 +197,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
   }
 
   String _serverName(int i) =>
-      _servers[i].name.isNotEmpty ? _servers[i].name : 'Server $i';
+      _servers[i].name.isNotEmpty ? _servers[i].name : context.l.speedServerN(i);
   String _serverDownloadUrl(int i) => _servers[i].downloadUrl;
   String? _serverUploadUrl(int i) => _servers[i].uploadUrl;
   String _serverUploadMethod(int i) => _servers[i].uploadMethod;
@@ -326,7 +332,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Speed Test')),
+      appBar: AppBar(title: Text(context.l.homeDrawerSpeedTest)),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -346,7 +352,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  _vpnEnabled ? 'Via: $_currentProxy' : 'Direct (no VPN)',
+                  _vpnEnabled
+                      ? context.l.speedViaProxy(_currentProxy)
+                      : context.l.speedDirectNoVpn,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: cs.onSurfaceVariant,
                   ),
@@ -358,8 +366,10 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
           // Ping
           _buildGauge(
-            'Ping',
-            _ping < 0 ? 'Failed' : '${_ping.toStringAsFixed(0)} ms',
+            context.l.homeNodeMenuPing,
+            _ping < 0
+                ? context.l.speedFailed
+                : '${_ping.toStringAsFixed(0)} ms',
             Icons.network_ping,
             cs.primary,
           ),
@@ -367,7 +377,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
           // Download
           _buildGauge(
-            'Download',
+            context.l.speedDownloadLabel,
             '${_downloadMbps.toStringAsFixed(1)} Mbps',
             Icons.arrow_downward,
             cs.tertiary,
@@ -376,7 +386,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
           // Upload
           _buildGauge(
-            'Upload',
+            context.l.speedUploadLabel,
             '${_uploadMbps.toStringAsFixed(1)} Mbps',
             Icons.arrow_upward,
             cs.secondary,
@@ -385,7 +395,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
           if (_running) LinearProgressIndicator(value: _progress),
           const SizedBox(height: 8),
-          Text(_status, style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
+          Text(_status.isEmpty ? context.l.speedStatusIdle : _status,
+              style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
           const SizedBox(height: 24),
 
           // Settings
@@ -396,11 +407,12 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
                   child: DropdownButtonFormField<String>(
                     initialValue:
                         _servers.isEmpty ? null : _serverId(_selectedServer),
-                    decoration: const InputDecoration(
-                      labelText: 'Server',
+                    decoration: InputDecoration(
+                      labelText: context.l.subServerTitle,
                       isDense: true,
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                     ),
                     style: TextStyle(fontSize: 13, color: cs.onSurface),
                     items: List.generate(_servers.length, (i) =>
@@ -414,11 +426,12 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
                   width: 100,
                   child: DropdownButtonFormField<int>(
                     initialValue: _streams,
-                    decoration: const InputDecoration(
-                      labelText: 'Streams',
+                    decoration: InputDecoration(
+                      labelText: context.l.speedStreamsLabel,
                       isDense: true,
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                     ),
                     style: TextStyle(fontSize: 13, color: cs.onSurface),
                     items: _streamOptions.map((n) =>
@@ -438,14 +451,16 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
             child: FilledButton.icon(
               onPressed: _running ? null : _runTest,
               icon: Icon(_running ? Icons.hourglass_top : Icons.speed),
-              label: Text(_running ? 'Testing...' : 'Start Test'),
+              label: Text(_running
+                  ? context.l.speedTestingButton
+                  : context.l.speedStartButton),
             ),
           ),
 
           // History
           if (_history.isNotEmpty) ...[
             const SizedBox(height: 32),
-            Text('Session History', style: theme.textTheme.titleSmall),
+            Text(context.l.speedSessionHistory, style: theme.textTheme.titleSmall),
             const SizedBox(height: 8),
             ..._history.map((r) => _buildHistoryTile(r, theme, cs)),
           ],
@@ -507,6 +522,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
             ),
           ),
           Text(
+            // l10n-exempt: latency value + unit suffix
             '${r.ping.toStringAsFixed(0)}ms',
             style: theme.textTheme.bodySmall?.copyWith(color: cs.primary),
           ),

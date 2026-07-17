@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/l10n/l10n.dart';
 import '../../services/traffic_profiler.dart';
 import '../per_app_trace_tab/widgets/aggregate_axis.dart';
 import '../per_app_trace_tab/widgets/aggregated_view.dart';
@@ -189,7 +190,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
     }
 
     return PopupMenuButton<int>(
-      tooltip: 'Live retention window',
+      tooltip: context.l.statsRetentionTooltip,
       onSelected: (sec) async {
         await TrafficProfiler.I.setRetention(Duration(seconds: sec));
         if (mounted) setState(() {});
@@ -207,7 +208,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
                   size: 18,
                 ),
                 const SizedBox(width: 8),
-                Text('Keep $label'),
+                Text(context.l.statsRetentionKeep(label)),
               ],
             ),
           ),
@@ -239,7 +240,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
       label = _aggAxis == AggAxis.domain ? 'by Domain' : 'by IP';
     }
     return PopupMenuButton<String>(
-      tooltip: 'Grouping',
+      tooltip: context.l.statsGroupingTooltip,
       onSelected: (v) => setState(() {
         switch (v) {
           case 'stream':

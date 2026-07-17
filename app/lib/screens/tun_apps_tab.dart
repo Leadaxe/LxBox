@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/app_info_cache.dart';
+import '../services/l10n/l10n.dart';
 import '../services/settings_storage.dart' show SettingsStorage, TunAppsConfig;
 import 'app_picker_screen.dart';
 import 'lazy_persist_mixin.dart';
@@ -111,15 +112,14 @@ class _TunAppsTabState extends State<TunAppsTab>
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Clear all apps?'),
+        title: Text(ctx.l.tunAppsClearTitle),
         content: Text(
-          'Remove all ${_cfg.packages.length} apps from the list. '
-          'Mode (${_cfg.mode}) is kept.',
+          ctx.l.tunAppsClearBody(_cfg.packages.length, _cfg.mode),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(ctx.l.commonCancel),
           ),
           FilledButton(
             onPressed: () {
@@ -127,7 +127,7 @@ class _TunAppsTabState extends State<TunAppsTab>
               setState(() => _cfg = _cfg.copyWith(packages: const <String>[]));
               markDirty();
             },
-            child: const Text('Clear'),
+            child: Text(ctx.l.commonClear),
           ),
         ],
       ),
@@ -151,28 +151,14 @@ class _TunAppsTabState extends State<TunAppsTab>
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Tunnel apps — OS-level split'),
-        content: const SingleChildScrollView(
-          child: Text(
-            'This is OS-level split-tunneling. It controls which apps see the '
-            'VPN tunnel at all — packets from excluded apps go directly via '
-            'cellular/wifi without entering sing-box.\n\n'
-            '• Off — every app uses the VPN (default)\n'
-            '• Allow-list — ONLY listed apps go through VPN; everything else '
-            'bypasses\n'
-            '• Deny-list — listed apps bypass VPN; everything else goes '
-            'through\n\n'
-            'Note: apps in the Allow-list still go through your normal routing '
-            'rules. Apps that bypass the tunnel are not visible to sing-box at '
-            'all — your custom rules with package_name will not match them.\n\n'
-            'Changes require a full VPN restart to apply (Android creates the '
-            'tun interface only at start).',
-          ),
+        title: Text(ctx.l.tunAppsHelpTitle),
+        content: SingleChildScrollView(
+          child: Text(ctx.l.tunAppsHelpBody),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
+            child: Text(ctx.l.commonOk),
           ),
         ],
       ),
@@ -204,7 +190,7 @@ class _TunAppsTabState extends State<TunAppsTab>
         // ─── Header: Mode + tooltip + overflow ───
         Row(
           children: [
-            Text('Mode', style: tt.titleMedium),
+            Text(context.l.settingsTabMode, style: tt.titleMedium),
             const SizedBox(width: 4),
             Tooltip(
               message:
@@ -221,7 +207,7 @@ class _TunAppsTabState extends State<TunAppsTab>
             ),
             const Spacer(),
             PopupMenuButton<String>(
-              tooltip: 'More',
+              tooltip: context.l.commonMore,
               icon: const Icon(Icons.more_vert),
               onSelected: (v) {
                 switch (v) {
@@ -234,11 +220,11 @@ class _TunAppsTabState extends State<TunAppsTab>
                 }
               },
               itemBuilder: (_) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'vpn_system',
                   child: ListTile(
-                    leading: Icon(Icons.tune),
-                    title: Text('VPN settings (System)'),
+                    leading: const Icon(Icons.tune),
+                    title: Text(context.l.tunAppsVpnSettingsSystem),
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                   ),
@@ -247,19 +233,22 @@ class _TunAppsTabState extends State<TunAppsTab>
                 PopupMenuItem(
                   value: 'clear',
                   enabled: _cfg.packages.isNotEmpty,
-                  child: const Text('Clear all'),
+                  child: Text(context.l.commonClearAll),
                 ),
-                const PopupMenuItem(value: 'help', child: Text('Help')),
+                PopupMenuItem(
+                    value: 'help', child: Text(context.l.commonHelp)),
               ],
             ),
           ],
         ),
         const SizedBox(height: 8),
         SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'off', label: Text('Off')),
-            ButtonSegment(value: 'allow', label: Text('Allow-list')),
-            ButtonSegment(value: 'deny', label: Text('Deny-list')),
+          segments: [
+            ButtonSegment(value: 'off', label: Text(context.l.commonOff)),
+            ButtonSegment(
+                value: 'allow', label: Text(context.l.tunAppsAllowList)),
+            ButtonSegment(
+                value: 'deny', label: Text(context.l.tunAppsDenyList)),
           ],
           selected: {_cfg.mode},
           onSelectionChanged: (s) => _setMode(s.first),
@@ -281,14 +270,14 @@ class _TunAppsTabState extends State<TunAppsTab>
           Row(
             children: [
               Text(
-                'Apps in this list (${_cfg.packages.length})',
+                context.l.tunAppsInList(_cfg.packages.length),
                 style: tt.titleMedium,
               ),
               const Spacer(),
               FilledButton.tonalIcon(
                 onPressed: _pickApps,
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add app'),
+                label: Text(context.l.tunAppsAddApp),
               ),
             ],
           ),
@@ -297,7 +286,7 @@ class _TunAppsTabState extends State<TunAppsTab>
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Text(
-                'No apps yet. Tap "Add app" to pick.',
+                context.l.tunAppsEmpty,
                 textAlign: TextAlign.center,
                 style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
               ),
@@ -362,7 +351,7 @@ class _TunAppsTabState extends State<TunAppsTab>
       ),
       trailing: IconButton(
         icon: const Icon(Icons.close, size: 20),
-        tooltip: 'Remove',
+        tooltip: context.l.commonRemove,
         onPressed: () => _removeApp(pkg),
       ),
     );

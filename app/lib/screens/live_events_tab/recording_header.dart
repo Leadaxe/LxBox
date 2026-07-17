@@ -6,6 +6,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../services/l10n/l10n.dart';
 import '../../services/traffic_profiler.dart';
 import '../../services/format_utils.dart';
 
@@ -78,7 +79,7 @@ class LiveRecordingHeader extends StatelessWidget {
           // §044 — экспорт записанного, справа от большой кнопки.
           if (onExport != null)
             IconButton(
-              tooltip: 'Export events',
+              tooltip: context.l.statsLiveExportTooltip,
               icon: const Icon(Icons.download, size: 22),
               onPressed: eventCount == 0 ? null : onExport,
             ),

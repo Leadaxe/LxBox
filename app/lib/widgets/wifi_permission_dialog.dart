@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/url_launcher.dart' as ul;
+import '../services/l10n/l10n.dart';
 
 /// §051 — shared explainer dialog для Wi-Fi-related permissions.
 ///
@@ -60,12 +61,12 @@ class WifiPermissionDialog {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog.adaptive(
-        title: const Text('Wi-Fi rules need permissions'),
+        title: Text(ctx.l.routingWifiPermTitle),
         content: SingleChildScrollView(child: Text(body.toString())),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
+            child: Text(ctx.l.commonCancel),
           ),
           if (needsNearby)
             TextButton(
@@ -73,14 +74,14 @@ class WifiPermissionDialog {
                 Navigator.of(ctx).pop();
                 await ul.UrlLauncher.requestNearbyWifiPermission();
               },
-              child: const Text('Allow Wi-Fi info'),
+              child: Text(ctx.l.routingWifiAllowInfo),
             ),
           FilledButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
               await ul.UrlLauncher.openAppSettings();
             },
-            child: const Text('Open Settings'),
+            child: Text(ctx.l.commonOpenSettings),
           ),
         ],
       ),

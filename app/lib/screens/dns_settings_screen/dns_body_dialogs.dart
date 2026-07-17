@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../services/l10n/l10n.dart';
 
 /// Read-only dialog с полным JSON body правила. Юзер видит что внутри
 /// без необходимости лезть в исходник (особенно для kind=template/rule
@@ -17,14 +18,14 @@ void showRuleBodyDialog(
     _ => body,
   };
   final pretty = unwrapped == null
-      ? '(content unavailable)'
+      ? context.l.dnsBodyUnavailable
       : const JsonEncoder.withIndent('  ').convert(unwrapped);
   final sourceLabel = switch (kind) {
-    'template' => 'template',
-    'preset' => 'preset',
-    'srs' => 'srs',
-    'rule' => 'routing rule',
-    _ => 'user rule',
+    'template' => context.l.dnsSourceTemplate,
+    'preset' => context.l.dnsSourcePreset,
+    'srs' => context.l.dnsSourceSrs,
+    'rule' => context.l.dnsSourceRoutingRule,
+    _ => context.l.dnsSourceUserRule,
   };
   showDialog<void>(
     context: context,
@@ -49,7 +50,7 @@ void showRuleBodyDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Close'),
+          child: Text(ctx.l.commonClose),
         ),
       ],
     ),

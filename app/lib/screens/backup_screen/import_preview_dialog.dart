@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/backup_service.dart';
+import '../../services/l10n/l10n.dart';
 
 class ImportDialogResult {
   const ImportDialogResult({required this.include, required this.merge});
@@ -23,7 +24,7 @@ Future<ImportDialogResult?> showImportPreview(
       builder: (ctx, set) {
         final servers = c.splitServerLists();
         return AlertDialog(
-          title: const Text('Import backup'),
+          title: Text(ctx.l.backupPreviewTitle),
           content: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -33,7 +34,8 @@ Future<ImportDialogResult?> showImportPreview(
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Text(
-                      'Created: ${c.createdAt!.toLocal().toString().split('.')[0]}',
+                      ctx.l.backupPreviewCreated(
+                          c.createdAt!.toLocal().toString().split('.')[0]),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
@@ -41,13 +43,13 @@ Future<ImportDialogResult?> showImportPreview(
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
-                      'App version: ${c.sourceAppVersion}',
+                      ctx.l.backupPreviewAppVersion('${c.sourceAppVersion}'),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
-                const Text(
-                  'Includes:',
-                  style: TextStyle(fontWeight: FontWeight.w500),
+                Text(
+                  ctx.l.backupPreviewIncludes,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
                 if (available.contains(BackupCategory.serverLists))
                   _previewCheckbox(
@@ -121,34 +123,34 @@ Future<ImportDialogResult?> showImportPreview(
                     }),
                   ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Mode:',
-                  style: TextStyle(fontWeight: FontWeight.w500),
+                Text(
+                  ctx.l.backupPreviewMode,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
                 RadioGroup<bool>(
                   groupValue: merge,
                   onChanged: (v) => set(() => merge = v ?? true),
-                  child: const Column(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       RadioListTile<bool>(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         value: true,
-                        title: Text('Merge with existing (recommended)'),
+                        title: Text(ctx.l.backupMergeTitle),
                         subtitle: Text(
-                          'Adds new items, keeps existing.',
-                          style: TextStyle(fontSize: 11),
+                          ctx.l.backupMergeSubtitle,
+                          style: const TextStyle(fontSize: 11),
                         ),
                       ),
                       RadioListTile<bool>(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         value: false,
-                        title: Text('Replace all (destructive)'),
+                        title: Text(ctx.l.backupReplaceTitle),
                         subtitle: Text(
-                          'Wipes existing data in selected categories.',
-                          style: TextStyle(fontSize: 11),
+                          ctx.l.backupReplaceSubtitle,
+                          style: const TextStyle(fontSize: 11),
                         ),
                       ),
                     ],
@@ -160,7 +162,7 @@ Future<ImportDialogResult?> showImportPreview(
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
+              child: Text(ctx.l.commonCancel),
             ),
             FilledButton(
               onPressed: include.isEmpty
@@ -170,16 +172,12 @@ Future<ImportDialogResult?> showImportPreview(
                         final ok = await showDialog<bool>(
                           context: ctx,
                           builder: (cctx) => AlertDialog(
-                            title: const Text('Replace all data?'),
-                            content: const Text(
-                              'This will overwrite your current data in '
-                              'the selected categories. This cannot be '
-                              'undone.',
-                            ),
+                            title: Text(cctx.l.backupReplaceConfirmTitle),
+                            content: Text(cctx.l.backupReplaceConfirmBody),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(cctx, false),
-                                child: const Text('Cancel'),
+                                child: Text(cctx.l.commonCancel),
                               ),
                               FilledButton(
                                 style: FilledButton.styleFrom(
@@ -191,7 +189,7 @@ Future<ImportDialogResult?> showImportPreview(
                                       .onErrorContainer,
                                 ),
                                 onPressed: () => Navigator.pop(cctx, true),
-                                child: const Text('Replace'),
+                                child: Text(cctx.l.commonReplace),
                               ),
                             ],
                           ),
@@ -207,7 +205,7 @@ Future<ImportDialogResult?> showImportPreview(
                         ),
                       );
                     },
-              child: const Text('Import'),
+              child: Text(ctx.l.backupImportButton),
             ),
           ],
         );

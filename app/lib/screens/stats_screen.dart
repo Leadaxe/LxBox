@@ -6,6 +6,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/config_node.dart';
 import '../services/format_utils.dart';
+import '../services/l10n/l10n.dart';
 import '../services/traffic_profiler.dart';
 import '../widgets/banner_palette.dart';
 import '../vpn/box_vpn_client.dart';
@@ -209,7 +210,7 @@ class _StatsScreenState extends State<StatsScreen> {
       child: Builder(
         builder: (innerCtx) => Scaffold(
           appBar: AppBar(
-            title: const Text('Statistics'),
+            title: Text(context.l.homeDrawerStats),
             actions: [
               // §069 — warning если bypass реально applied в текущей VPN-сессии
               // (runtime, не persisted). Видимо на всех 4 tabs.
@@ -240,8 +241,10 @@ class _StatsScreenState extends State<StatsScreen> {
               // §048: 4 tab'а делят width поровну. «Connections» → «Conns»
               // чтобы влезли без horizontal scroll'а на 360dp экранах.
               tabs: [
-                const Tab(icon: Icon(Icons.dashboard_outlined), text: 'Stats'),
-                const Tab(icon: Icon(Icons.link), text: 'Conns'),
+                Tab(
+                    icon: const Icon(Icons.dashboard_outlined),
+                    text: context.l.statsTabStats),
+                Tab(icon: const Icon(Icons.link), text: context.l.statsTabConns),
                 Tab(
                   icon: const Icon(Icons.travel_explore),
                   child: AnimatedBuilder(
@@ -250,7 +253,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('App'),
+                        Text(context.l.statsTabApp),
                         if (TrafficProfiler.I.isRecording) ...[
                           const SizedBox(width: 4),
                           Icon(
@@ -271,7 +274,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('Profiler'),
+                        Text(context.l.statsTabProfiler),
                         if (TrafficProfiler.I.unattributedBannerActive) ...[
                           const SizedBox(width: 4),
                           Icon(

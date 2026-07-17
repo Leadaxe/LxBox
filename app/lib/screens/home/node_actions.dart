@@ -8,6 +8,7 @@ import '../../controllers/subscription_controller.dart';
 import '../../models/home_state.dart';
 import '../../models/node_spec.dart';
 import '../../services/tag_resolver.dart';
+import '../../services/l10n/l10n.dart';
 import '../outbound_view_screen.dart';
 
 /// Node long-press action helpers.
@@ -29,7 +30,7 @@ void viewOutboundJson(
   final chain = intro.outboundChain(tag);
   if (chain.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Not found: $tag')),
+      SnackBar(content: Text(context.l.homeNodeNotFound(tag))),
     );
     return;
   }
@@ -74,7 +75,7 @@ void copyNodeJson(
       if (detour == null) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No detour for this node')),
+            SnackBar(content: Text(context.l.homeNodeNoDetour)),
           );
         }
         return;
@@ -132,7 +133,7 @@ void copyNodeUri(
   if (node == null) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No source URI for this node')),
+        SnackBar(content: Text(context.l.homeNodeNoSourceUri)),
       );
     }
     return;
@@ -142,7 +143,7 @@ void copyNodeUri(
   Clipboard.setData(ClipboardData(text: uri));
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('URI copied')),
+      SnackBar(content: Text(context.l.homeNodeUriCopied)),
     );
   }
 }

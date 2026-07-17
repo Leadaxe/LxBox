@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/format_utils.dart';
+import '../../services/l10n/l10n.dart';
 import '../../vpn/cc_channel.dart';
 import '../stats_screen/routing_section.dart';
 
@@ -109,8 +110,8 @@ class _ConnectionDetailSheet extends StatelessWidget {
                           Colors.pink.withValues(alpha: 0.22), cs.surface),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Text('One-way',
-                        style: TextStyle(
+                    child: Text(context.l.statsConnOneWayBadge,
+                        style: const TextStyle(
                             fontSize: 11, fontWeight: FontWeight.w600)),
                   ),
                 if (closed)
@@ -121,7 +122,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
                       color: cs.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text('closed',
+                    child: Text(context.l.statsConnClosedBadge,
                         style: TextStyle(
                             fontSize: 11, color: cs.onSurfaceVariant)),
                   ),
@@ -252,8 +253,8 @@ class _ConnectionDetailSheet extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('One-way traffic',
-                    style: TextStyle(
+                Text(context.l.statsConnOneWayTitle,
+                    style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 Text(detail,
@@ -341,7 +342,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
           Expanded(
             child: OutlinedButton.icon(
               icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Copy JSON'),
+              label: Text(context.l.subCopyJson),
               onPressed: () => _copy(
                 context,
                 const JsonEncoder.withIndent('  ').convert(_toJson()),
@@ -353,7 +354,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
           Expanded(
             child: FilledButton.tonalIcon(
               icon: const Icon(Icons.close, size: 16),
-              label: const Text('Close'),
+              label: Text(context.l.commonClose),
               onPressed: canClose
                   ? () {
                       onClose(id);

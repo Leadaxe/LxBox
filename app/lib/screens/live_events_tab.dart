@@ -23,6 +23,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
+import '../services/l10n/l10n.dart';
 import '../services/traffic_profiler.dart';
 import '../widgets/core_logs_hint_banner.dart';
 import 'live_events_tab/dns_health_banner.dart';
@@ -117,7 +118,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
           children: [
             ListTile(
               leading: const Icon(Icons.share),
-              title: Text('Share ${_events.length} events (JSON)'),
+              title: Text(context.l.statsLiveShareEvents(_events.length)),
               onTap: () {
                 Navigator.pop(sheetCtx);
                 Share.share(json, subject: 'LxBox profiler export');
@@ -125,13 +126,13 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
             ),
             ListTile(
               leading: const Icon(Icons.copy),
-              title: const Text('Copy JSON to clipboard'),
+              title: Text(context.l.statsLiveCopyJson),
               onTap: () async {
                 Navigator.pop(sheetCtx);
                 await Clipboard.setData(ClipboardData(text: json));
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Export JSON copied')),
+                  SnackBar(content: Text(context.l.statsLiveExportCopied)),
                 );
               },
             ),

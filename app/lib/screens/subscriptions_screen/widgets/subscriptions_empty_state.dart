@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/l10n/l10n.dart';
+
 /// Onboarding card (night T5-1): вместо голого "No subscriptions yet"
 /// показываем карточку с 3-step start — пользователь сразу видит что
 /// делать. ListView+AlwaysScrollable чтобы pull-to-refresh (T3-2)
@@ -33,30 +35,30 @@ class SubscriptionsEmptyState extends StatelessWidget {
                   children: [
                     Icon(Icons.rocket_launch, color: cs.primary),
                     const SizedBox(width: 10),
-                    Text('Getting started',
+                    Text(context.l.subEmptyGettingStarted,
                         style: Theme.of(context).textTheme.titleMedium),
                   ],
                 ),
                 const SizedBox(height: 14),
-                const Text('1. Get a subscription URL from your VPN provider, or a direct proxy link (vless://, trojan://, vmess://, ss://…).'),
+                Text(context.l.subEmptyStep1),
                 const SizedBox(height: 8),
-                const Text('2. Paste it into the field above, or tap ⋮ → «Paste from clipboard», «Scan QR code».'),
+                Text(context.l.subEmptyStep2),
                 const SizedBox(height: 8),
-                const Text('3. Hit «+». L×Box will fetch, parse and configure — and you can connect from the Home tab.'),
+                Text(context.l.subEmptyStep3),
                 const SizedBox(height: 18),
                 Text(
-                  'No provider yet?',
+                  context.l.subEmptyNoProvider,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 8),
-                const Text('Try a public test server — free, limited, good for first-time check:'),
+                Text(context.l.subEmptyTryPublic),
                 const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: busy
                       ? null
                       : onPickPublicTestServer,
                   icon: const Icon(Icons.flash_on),
-                  label: const Text('Get Public Test Servers'),
+                  label: Text(context.l.subGetPublicTestServers),
                 ),
               ],
             ),
@@ -66,7 +68,7 @@ class SubscriptionsEmptyState extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Text(
-            'Tip: pull down to refresh, or tap ⟳ in the top bar after adding.',
+            context.l.subEmptyTip,
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),

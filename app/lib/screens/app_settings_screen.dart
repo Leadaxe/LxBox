@@ -9,6 +9,7 @@ import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
 import '../services/error_format.dart';
 import '../services/haptic_service.dart';
+import '../services/l10n/l10n.dart';
 import '../services/profile_dump_writer.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/subscription_identity.dart';
@@ -255,9 +256,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     await Clipboard.setData(ClipboardData(text: _debugToken));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Token copied'),
-        duration: Duration(seconds: 1),
+      SnackBar(
+        content: Text(context.l.appSettingsTokenCopied),
+        duration: const Duration(seconds: 1),
       ),
     );
   }
@@ -297,9 +298,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         NativePrefsKeys.coreLogsEnabled, enable);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Saved. Force-stop & reopen app to apply.'),
-        duration: Duration(seconds: 3),
+      SnackBar(
+        content: Text(context.l.appSettingsCoreLogsSaved),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -448,13 +449,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
           initialIndex: widget.initialTab.clamp(0, 3),
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('App Settings'),
-              bottom: const _FadingTabBar(
+              title: Text(context.l.homeDrawerAppSettings),
+              bottom: _FadingTabBar(
                 tabs: [
-                  Tab(text: 'General'),
-                  Tab(text: 'Subscriptions'),
-                  Tab(text: 'Diagnostics'),
-                  Tab(text: 'Automation'),
+                  Tab(text: context.l.appSettingsTabGeneral),
+                  Tab(text: context.l.appSettingsTabSubscriptions),
+                  Tab(text: context.l.appSettingsTabDiagnostics),
+                  Tab(text: context.l.appSettingsTabAutomation),
                 ],
               ),
             ),
@@ -504,11 +505,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(ctx.l.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, ctl.text),
-            child: const Text('Save'),
+            child: Text(ctx.l.commonSave),
           ),
         ],
       ),
@@ -712,18 +713,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   Future<void> _captureProfile(PprofProfile p) async {
     if (_capturing) return;
     if (!(await _vpn.getVpnStatus()).isUp) {
-      _diagSnack('VPN must be running to capture a profile.');
+      _diagSnack(L10n.current.appSettingsPprofNeedVpn);
       return;
     }
     setState(() => _capturing = true);
     if (p.blockingSeconds > 0) {
-      _diagSnack('Profiling for ${p.blockingSeconds}s…');
+      _diagSnack(L10n.current.appSettingsPprofProfiling(p.blockingSeconds));
     }
     try {
       final bytes = await _vpn.pprofRaw(p.pathAndQuery,
           blockingSeconds: p.blockingSeconds);
       if (bytes.isEmpty) {
-        _diagSnack('Profile was empty (timeout?).');
+        _diagSnack(L10n.current.appSettingsPprofEmpty);
         return;
       }
       final path = await ProfileDumpWriter.writeProfile(p, bytes);
@@ -741,7 +742,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         subject: name,
       );
     } catch (e) {
-      _diagSnack('Capture failed: ${formatUserError(e)}');
+      _diagSnack(L10n.current.appSettingsPprofCaptureFailed(formatUserError(e)));
     } finally {
       if (mounted) setState(() => _capturing = false);
     }

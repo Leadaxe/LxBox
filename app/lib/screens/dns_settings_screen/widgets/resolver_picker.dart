@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/l10n/l10n.dart';
 import '../../../widgets/banner_palette.dart';
 
 /// §047/§048 — DNS resolver picker с info-icon ℹ tooltip'ом и опциональным
@@ -54,7 +55,7 @@ class ResolverPicker extends StatelessWidget {
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
       trailing: DropdownButton<String>(
         value: serverTags.contains(value) ? value : null,
-        hint: const Text('select'),
+        hint: Text(context.l.dnsSelectHint),
         items: serverTags
             .map((t) => DropdownMenuItem(
                 value: t,

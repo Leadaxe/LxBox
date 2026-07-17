@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/l10n/l10n.dart';
 import '../../services/traffic_profiler.dart';
 import '../../services/format_utils.dart';
 
@@ -19,8 +20,8 @@ Widget unattributedBanner(BuildContext context) {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            '${TrafficProfiler.I.recentUnattributedCount} unattributed events / 30s — '
-            'attribution gaps detected. See "System-wide" section in Live tab.',
+            context.l.statsTraceUnattributedBanner(
+                TrafficProfiler.I.recentUnattributedCount),
             style: TextStyle(fontSize: 12, color: cs.onErrorContainer),
           ),
         ),
@@ -41,7 +42,7 @@ Widget verboseBanner(BuildContext context) {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Verbose core logs active — battery/CPU impact while session runs',
+            context.l.statsTraceVerboseBanner,
             style: TextStyle(fontSize: 12, color: cs.onTertiaryContainer),
           ),
         ),
@@ -67,7 +68,7 @@ Widget savedSessions(BuildContext context,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Text('Saved sessions (last ${sessions.length})',
+          child: Text(context.l.statsTraceSavedSessions(sessions.length),
               style: Theme.of(context).textTheme.labelMedium),
         ),
         ...sessions.map((s) => ListTile(
@@ -75,8 +76,10 @@ Widget savedSessions(BuildContext context,
               title: Text(s.targetPackage,
                   style: const TextStyle(fontSize: 13)),
               subtitle: Text(
-                '${formatDuration(s.finishedAt!.difference(s.startedAt))} · '
-                '${s.byDomain.length} doms · ${s.byIp.length} ips',
+                context.l.statsTraceSessionSubtitle(
+                    formatDuration(s.finishedAt!.difference(s.startedAt)),
+                    s.byDomain.length,
+                    s.byIp.length),
                 style: const TextStyle(fontSize: 11),
               ),
               trailing: Wrap(
@@ -84,12 +87,12 @@ Widget savedSessions(BuildContext context,
                 children: [
                   IconButton(
                     icon: const Icon(Icons.share, size: 18),
-                    tooltip: 'Share',
+                    tooltip: context.l.commonShare,
                     onPressed: () => onShare(s),
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline, size: 18),
-                    tooltip: 'Delete',
+                    tooltip: context.l.commonDelete,
                     onPressed: () {
                       TrafficProfiler.I.delete(s.id);
                     },

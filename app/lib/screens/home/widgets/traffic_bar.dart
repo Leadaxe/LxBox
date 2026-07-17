@@ -4,6 +4,7 @@ import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
 import '../../../services/format_utils.dart';
+import '../../../services/l10n/l10n.dart';
 import '../../../services/traffic_profiler.dart';
 import '../../stats_screen.dart';
 
@@ -88,7 +89,7 @@ class TrafficBar extends StatelessWidget {
                     Icons.link,
                     '${state.traffic.connectionsIn}',
                     cs.secondary,
-                    tooltip: 'App connections',
+                    tooltip: context.l.homeAppConnectionsTooltip,
                   ),
                   const SizedBox(width: 8),
                   _chip(
@@ -96,7 +97,7 @@ class TrafficBar extends StatelessWidget {
                     Icons.dns_outlined,
                     '${state.traffic.connectionsOut}',
                     cs.secondary,
-                    tooltip: 'Outbound connections to servers',
+                    tooltip: context.l.homeOutboundConnectionsTooltip,
                   ),
                 ],
                 if (profiler.isRecording) ...[

@@ -4,6 +4,7 @@ import '../screens/app_settings_screen.dart';
 import '../services/relative_time.dart';
 import '../services/settings_storage.dart';
 import '../services/app_log.dart';
+import '../services/l10n/l10n.dart';
 import 'wifi_entry.dart';
 
 /// §053 Stage 1 — extract bottom sheet «Pick saved Wi-Fi» из
@@ -80,7 +81,7 @@ Future<List<WifiEntry>?> showWifiSavedPickerSheet(
                 style: const TextStyle(fontSize: 13),
               ),
               subtitle: Text(
-                '→ in: $ruleNames',
+                ctx.l.routingWifiUsedIn(ruleNames),
                 style: const TextStyle(fontSize: 11),
               ),
             ));
@@ -120,8 +121,7 @@ Future<List<WifiEntry>?> showWifiSavedPickerSheet(
           entries.add(Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              'Nothing saved yet. Use "Add current" / "Manual" or stay on '
-              'a Wi-Fi network for 5 minutes.',
+              ctx.l.routingWifiNothingSaved,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,
@@ -145,7 +145,7 @@ Future<List<WifiEntry>?> showWifiSavedPickerSheet(
                     children: [
                       Expanded(
                         child: Text(
-                          'Saved networks',
+                          ctx.l.routingWifiSavedTitle,
                           style: Theme.of(ctx).textTheme.titleMedium,
                         ),
                       ),
@@ -173,7 +173,7 @@ Future<List<WifiEntry>?> showWifiSavedPickerSheet(
                       TextButton(
                         onPressed: () =>
                             Navigator.of(ctx).pop<List<WifiEntry>>(null),
-                        child: const Text('Cancel'),
+                        child: Text(ctx.l.commonCancel),
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
@@ -181,7 +181,7 @@ Future<List<WifiEntry>?> showWifiSavedPickerSheet(
                             ? null
                             : () =>
                                 Navigator.of(ctx).pop(selected.toList()),
-                        child: Text('Add ${selected.length}'),
+                        child: Text(ctx.l.routingWifiAddCount(selected.length)),
                       ),
                     ],
                   ),
@@ -229,7 +229,7 @@ Widget _autoRecordOffBanner(BuildContext ctx, BuildContext outerCtx) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Auto-record is off',
+                ctx.l.routingWifiAutoRecordOff,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -238,8 +238,7 @@ Widget _autoRecordOffBanner(BuildContext ctx, BuildContext outerCtx) {
               ),
               const SizedBox(height: 4),
               Text(
-                'Enable it in Settings → Diagnostics to grow this list '
-                'as you stay on Wi-Fi networks.',
+                ctx.l.routingWifiAutoRecordOffBody,
                 style: TextStyle(
                   fontSize: 11,
                   color: Theme.of(ctx).colorScheme.onSurfaceVariant,
@@ -248,7 +247,7 @@ Widget _autoRecordOffBanner(BuildContext ctx, BuildContext outerCtx) {
               const SizedBox(height: 6),
               OutlinedButton.icon(
                 icon: const Icon(Icons.settings, size: 14),
-                label: const Text('Open Settings'),
+                label: Text(ctx.l.commonOpenSettings),
                 onPressed: () {
                   Navigator.of(ctx).pop<List<WifiEntry>>(null);
                   Navigator.of(outerCtx).push(MaterialPageRoute<void>(
@@ -314,7 +313,7 @@ Widget _historyRow({
             ),
           ),
           IconButton(
-            tooltip: 'Remove from history',
+            tooltip: ctx.l.routingWifiRemoveFromHistory,
             icon: const Icon(Icons.close, size: 18),
             visualDensity: VisualDensity.compact,
             onPressed: () async {

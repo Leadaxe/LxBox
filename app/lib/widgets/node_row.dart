@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../screens/home/special_node_display.dart';
+import '../services/l10n/l10n.dart';
 import 'node_view_item.dart';
 
 /// One row в node list на главной screen'е. Read-only widget от
@@ -87,7 +88,7 @@ class NodeRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(3),
             ),
             child: Text(
-              'ACTIVE',
+              context.l.homeNodeActiveBadge,
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
@@ -223,7 +224,7 @@ class NodeRow extends StatelessWidget {
               size: 20,
               color: canPing ? null : Theme.of(context).disabledColor,
             ),
-            title: const Text('Ping'),
+            title: Text(context.l.homeNodeMenuPing),
           ),
         ),
         PopupMenuItem<String>(
@@ -237,7 +238,7 @@ class NodeRow extends StatelessWidget {
               size: 20,
               color: canActivate ? null : Theme.of(context).disabledColor,
             ),
-            title: const Text('Use this node'),
+            title: Text(context.l.homeNodeMenuUse),
           ),
         ),
         if (onRunUrltest != null)
@@ -254,7 +255,7 @@ class NodeRow extends StatelessWidget {
                     ? null
                     : Theme.of(context).disabledColor,
               ),
-              title: const Text('Run URLTest'),
+              title: Text(context.l.homeNodeMenuRunUrltest),
             ),
           ),
         // §203 — «Select server»: только для auto/urltest-ноды с текущим
@@ -267,7 +268,7 @@ class NodeRow extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.my_location, size: 20),
-              title: const Text('Select server'),
+              title: Text(context.l.homeNodeMenuSelectServer),
             ),
           ),
         // §208 — «View pool»: только для auto-ноды round_robin-канала
@@ -279,7 +280,7 @@ class NodeRow extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.hub_outlined, size: 20),
-              title: const Text('View pool'),
+              title: Text(context.l.homeNodeMenuViewPool),
             ),
           ),
         if (onViewJson != null) const PopupMenuDivider(),
@@ -292,7 +293,7 @@ class NodeRow extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.info_outline, size: 20),
-              title: const Text('View details'),
+              title: Text(context.l.homeNodeMenuViewDetails),
             ),
           ),
         if (showCopy) const PopupMenuDivider(),
@@ -303,7 +304,7 @@ class NodeRow extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.link, size: 20),
-              title: const Text('Copy URI'),
+              title: Text(context.l.homeNodeMenuCopyUri),
             ),
           ),
         // §099 — Copy JSON / detour / server+detour перенесены в View JSON.

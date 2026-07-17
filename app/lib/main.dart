@@ -151,10 +151,12 @@ class _FallbackErrorWidget extends StatelessWidget {
         children: [
           const Icon(Icons.error_outline, color: Colors.white70, size: 40),
           const SizedBox(height: 12),
-          const Text(
-            'Something went wrong in this section.\nCheck Debug → Logs.',
+          // L10n.current (не context.l): ErrorWidget.builder может рендерить
+          // без Localizations-ancestor'а (краш до/вне MaterialApp).
+          Text(
+            L10n.current.errSectionFallback,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white, fontSize: 14),
+            style: const TextStyle(color: Colors.white, fontSize: 14),
           ),
           if (kDebugMode) ...[
             const SizedBox(height: 12),

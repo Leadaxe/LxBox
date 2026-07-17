@@ -7,6 +7,7 @@ import '../services/app_log.dart';
 import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
+import '../services/l10n/l10n.dart';
 import '../services/settings_storage.dart';
 import '../models/channel.dart';
 import '../models/node_spec.dart';
@@ -274,7 +275,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
             .then((err) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(err.isEmpty ? 'Saved' : err)),
+            SnackBar(content: Text(err.isEmpty ? context.l.commonSaved : err)),
           );
         }));
         return;
@@ -282,13 +283,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
       widget.subController.updateConnectionAt(widget.index, [jsonStr]);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Saved')),
+          SnackBar(content: Text(context.l.commonSaved)),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Invalid JSON: ${formatUserError(e)}')),
+          SnackBar(content: Text(context.l.subInvalidJson(formatUserError(e)))),
         );
       }
     }
@@ -301,17 +302,22 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title:
-              Text(_tagCtrl.text.isNotEmpty ? _tagCtrl.text : 'Node Settings'),
+          title: Text(_tagCtrl.text.isNotEmpty
+              ? _tagCtrl.text
+              : context.l.subNodeSettingsTitle),
           actions: [
             IconButton(
-              tooltip: 'Save',
+              tooltip: context.l.commonSave,
               icon: const Icon(Icons.save),
               onPressed: _saveJson,
             ),
           ],
-          bottom: const TabBar(
-            tabs: [Tab(text: 'Settings'), Tab(text: 'JSON')],
+          bottom: TabBar(
+            tabs: [
+              Tab(text: context.l.subTabSettings),
+              // l10n-exempt: format name, locale-invariant
+              const Tab(text: 'JSON'),
+            ],
           ),
         ),
         body: _originalTag.isEmpty
@@ -331,20 +337,21 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
       padding:
           EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
       children: [
-        _sectionHeader('Info', 'Protocol and server details', theme),
+        _sectionHeader(
+            context.l.subInfoHeader, context.l.subInfoHeaderSub, theme),
         // Лейбл в title, значение в subtitle (во всю ширину, перенос по словам).
         // Раньше длинное значение в `trailing` сжимало title до нуля и «Server»
         // переносился вертикально по буквам (напр. WARP-хост
         // engage.cloudflareclient.com:2408).
         ListTile(
           leading: const Icon(Icons.security, size: 20),
-          title: const Text('Protocol'),
+          title: Text(context.l.subProtocolTitle),
           // §130 — для AWG subtitle = «AmneziaWG (wireguard)» (см. _scheme в _load).
           subtitle: Text(_scheme, style: theme.textTheme.bodyMedium),
         ),
         ListTile(
           leading: const Icon(Icons.dns, size: 20),
-          title: const Text('Server'),
+          title: Text(context.l.subServerTitle),
           subtitle: Text(_serverInfo, style: theme.textTheme.bodyMedium),
         ),
         Padding(
@@ -354,8 +361,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               border: const OutlineInputBorder(),
-              labelText: 'Tag',
-              hintText: 'Display name in node list',
+              labelText: context.l.subTagLabel,
+              hintText: context.l.subTagHint,
               isDense: true,
               prefixIcon: const Icon(Icons.label_outline, size: 18),
               // §090 G2b — эмодзи-пикер: тап → палитра → вставка в курсор.
@@ -364,13 +371,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        _sectionHeader('Detour', 'Route through another server first', theme),
+        _sectionHeader(
+            context.l.subDetourTitle, context.l.subDetourHeaderSub, theme),
         ListTile(
           leading: const Icon(Icons.alt_route, size: 20),
-          title: const Text('Detour server'),
+          title: Text(context.l.subDetourPickerTitle),
           // §248 — канальная цель рендерится как «⚙ <label>».
-          subtitle:
-              Text(_detour.isEmpty ? 'None (direct)' : _detourDisplay(_detour)),
+          subtitle: Text(_detour.isEmpty
+              ? context.l.subDetourNone
+              : _detourDisplay(_detour)),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => unawaited(_pickDetour()),
         ),
@@ -387,8 +396,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'AmneziaWG nodes cannot run through WireGuard — such targets '
-                    'are hidden. Use a non-wireguard detour (e.g. vless).',
+                    context.l.subAwgHiddenNote,
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
@@ -402,8 +410,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
             // §252 — полная цепочка «как пакет пойдёт»: цель → её собственный
             // detour → … (detourPathHops), а не только первый хоп.
             _detour.isEmpty
-                ? 'Traffic goes directly to this server.'
-                : 'Phone → ${_detourPath()} → $_originalTag → Internet',
+                ? context.l.subTrafficDirect
+                : context.l.subNodePathPreview(_detourPath(), _originalTag),
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
@@ -417,8 +425,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
       padding:
           EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
       children: [
-        _sectionHeader(
-            'Outbound JSON', 'Edit tag, detour, and all server parameters', theme),
+        _sectionHeader(context.l.subOutboundJsonHeader,
+            context.l.subOutboundJsonHeaderSub, theme),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Stack(
@@ -439,12 +447,12 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                 right: 4,
                 child: IconButton(
                   icon: const Icon(Icons.copy, size: 16),
-                  tooltip: 'Copy JSON',
+                  tooltip: context.l.subCopyJson,
                   visualDensity: VisualDensity.compact,
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: _jsonCtrl.text));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('JSON copied')),
+                      SnackBar(content: Text(context.l.subJsonCopied)),
                     );
                   },
                 ),

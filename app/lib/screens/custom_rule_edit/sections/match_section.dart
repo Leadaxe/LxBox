@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/l10n/l10n.dart';
 import '../punycode.dart';
 import '../validators.dart' as v;
 import '../widgets/items_field.dart';
@@ -99,14 +100,13 @@ class MatchSection extends StatelessWidget {
           controlAffinity: ListTileControlAffinity.leading,
           value: ipIsPrivate,
           onChanged: (v) => onIpIsPrivateChanged(v ?? false),
-          title: const Text(
-            'Private IP',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          title: Text(
+            context.l.ruleEditPrivateIp,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
-          subtitle: const Text(
-            'Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + '
-            'link-local',
-            style: TextStyle(fontSize: 11),
+          subtitle: Text(
+            context.l.ruleEditPrivateIpSub,
+            style: const TextStyle(fontSize: 11),
           ),
         ),
         // §030/new_fields — source-ось: по источнику пакета (AND с группой
@@ -131,13 +131,13 @@ class MatchSection extends StatelessWidget {
           controlAffinity: ListTileControlAffinity.leading,
           value: sourceIpIsPrivate,
           onChanged: (v) => onSourceIpIsPrivateChanged(v ?? false),
-          title: const Text(
-            'Private source IP',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          title: Text(
+            context.l.ruleEditPrivateSourceIp,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
-          subtitle: const Text(
-            'Match when the packet SOURCE is a private address',
-            style: TextStyle(fontSize: 11),
+          subtitle: Text(
+            context.l.ruleEditPrivateSourceIpSub,
+            style: const TextStyle(fontSize: 11),
           ),
         ),
       ],

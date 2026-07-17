@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/custom_rule.dart';
+import '../../services/l10n/l10n.dart';
 import '../../services/settings_storage.dart';
 import '../dns_settings_screen.dart';
 import '../routing_screen.dart';
@@ -124,44 +125,38 @@ class _DnsHealthSheetState extends State<_DnsHealthSheet> {
               children: [
                 Icon(Icons.dns_outlined, color: cs.error, size: 20),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'DNS queries are failing',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    context.l.statsDnsHealthTitle,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              'Names are not resolving while the connection is alive — the DNS '
-              'path looks blocked. In DNS settings you can:\n'
-              '  • route your DNS servers through the VPN — set their outbound '
-              'to a channel so queries go inside the tunnel;\n'
-              '  • switch the final resolver to your operator\'s DNS — works '
-              'everywhere, but your operator sees every domain.\n'
-              'FakeIP resolves names inside the tunnel with placeholder IPs — '
-              'no pre-tunnel DNS leaks.',
+              context.l.statsDnsHealthBody,
               style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
             if (_canNavigate) ...[
               FilledButton(
                 onPressed: _openDnsSettings,
-                child: const Text('Open DNS settings'),
+                child: Text(context.l.statsDnsHealthOpenSettings),
               ),
               if (showFakeIp) ...[
                 const SizedBox(height: 8),
                 OutlinedButton(
                   onPressed: _openFakeIpPreset,
-                  child: const Text('Enable FakeIP'),
+                  child: Text(context.l.statsDnsHealthEnableFakeIp),
                 ),
               ],
             ],
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
+              child: Text(context.l.commonClose),
             ),
           ],
         ),

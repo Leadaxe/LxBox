@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/l10n/l10n.dart';
 import '../../../widgets/reorder_grab_strip.dart';
 import '../dns_body_dialogs.dart';
 import '../dns_format.dart';
@@ -50,7 +51,7 @@ class DnsMirrorGroupCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'From routing rules · ordered as in Routing',
+                    context.l.dnsMirrorGroupHeader,
                     style: TextStyle(
                       fontSize: 11,
                       color: theme.colorScheme.onSurfaceVariant,
@@ -144,7 +145,7 @@ class DnsMirrorTile extends StatelessWidget {
             ? Icon(Icons.dns_outlined, size: 22, color: cs.onSurfaceVariant)
             : Switch(value: enabled, onChanged: onToggle),
         title: Text(
-          title.isNotEmpty ? title : '(unnamed rule)',
+          title.isNotEmpty ? title : context.l.dnsUnnamedRule,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
@@ -224,7 +225,7 @@ class DnsRuleAspectsTile extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    title.isNotEmpty ? title : '(unnamed rule)',
+                    title.isNotEmpty ? title : context.l.dnsUnnamedRule,
                     style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w500),
                   ),
@@ -233,9 +234,10 @@ class DnsRuleAspectsTile extends StatelessWidget {
               ],
             ),
           ),
-          if (serverRow != null) _aspectRow(context, 'Server', serverRow!),
+          if (serverRow != null)
+            _aspectRow(context, context.l.subServerTitle, serverRow!),
           if (forceIpv4Row != null)
-            _aspectRow(context, 'Force IPv4 (drop AAAA)', forceIpv4Row!),
+            _aspectRow(context, context.l.ruleEditForceIpv4, forceIpv4Row!),
           const SizedBox(height: 4),
         ],
       ),
@@ -279,7 +281,7 @@ class DnsRuleAspectsTile extends StatelessWidget {
           ? null
           : IconButton(
               icon: Icon(Icons.close, size: 18, color: cs.error),
-              tooltip: 'Remove',
+              tooltip: context.l.commonRemove,
               visualDensity: VisualDensity.compact,
               onPressed: row.onRemove,
             ),

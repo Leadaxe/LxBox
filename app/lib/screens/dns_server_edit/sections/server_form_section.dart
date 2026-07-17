@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../services/l10n/l10n.dart';
 import '../edit_controller.dart';
 
 /// §117 задача 4b — структурная форма inline-DNS-сервера: три режима
@@ -38,8 +39,7 @@ class ServerFormSection extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Custom server type "${c.rawServerType}" — edit it on the '
-                'JSON tab. The form supports UDP / DoT / DoH.',
+                context.l.dnsFormCustomTypeNote(c.rawServerType),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ),
@@ -54,8 +54,11 @@ class ServerFormSection extends StatelessWidget {
         const SizedBox(height: 4),
         SegmentedButton<String>(
           segments: const [
+            // l10n-exempt: protocol name
             ButtonSegment(value: 'udp', label: Text('UDP')),
+            // l10n-exempt: protocol name
             ButtonSegment(value: 'tls', label: Text('DoT')),
+            // l10n-exempt: protocol name
             ButtonSegment(value: 'https', label: Text('DoH')),
           ],
           selected: {mode},
@@ -67,9 +70,9 @@ class ServerFormSection extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4),
           child: Text(
             switch (mode) {
-              'tls' => 'DNS-over-TLS · port 853',
-              'https' => 'DNS-over-HTTPS · port 443',
-              _ => 'Plain UDP · port 53 · fast, unencrypted',
+              'tls' => context.l.dnsFormModeDotDesc,
+              'https' => context.l.dnsFormModeDohDesc,
+              _ => context.l.dnsFormModeUdpDesc,
             },
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
@@ -84,7 +87,7 @@ class ServerFormSection extends StatelessWidget {
                 controller: c.addressCtrl,
                 keyboardType: TextInputType.url,
                 decoration: InputDecoration(
-                  labelText: 'Server address',
+                  labelText: context.l.dnsFormServerAddressLabel,
                   hintText: mode == 'https'
                       ? '192.168.1.1 / dns.example.com / https://… URL'
                       : '192.168.1.1 / dns.example.com',
@@ -102,7 +105,7 @@ class ServerFormSection extends StatelessWidget {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
-                  labelText: 'Port',
+                  labelText: context.l.appSettingsDiagPortLabel,
                   hintText: '${defaultDnsPort(mode)}',
                   border: const OutlineInputBorder(),
                   isDense: true,
@@ -116,10 +119,11 @@ class ServerFormSection extends StatelessWidget {
           const SizedBox(height: 12),
           TextField(
             controller: c.pathCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Path',
+            decoration: InputDecoration(
+              labelText: context.l.dnsFormPathLabel,
+              // l10n-exempt: URL path example
               hintText: '/dns-query',
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
               isDense: true,
             ),
             onChanged: c.onPathChanged,
@@ -129,10 +133,10 @@ class ServerFormSection extends StatelessWidget {
           const SizedBox(height: 12),
           TextField(
             controller: c.sniCtrl,
-            decoration: const InputDecoration(
-              labelText: 'TLS server name (SNI) — optional',
-              hintText: 'dns.example.com — needed when address is an IP',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: context.l.dnsFormSniLabel,
+              hintText: context.l.dnsFormSniHint,
+              border: const OutlineInputBorder(),
               isDense: true,
             ),
             onChanged: c.onSniChanged,
@@ -165,10 +169,10 @@ class _DomainResolverPicker extends StatelessWidget {
       key: ValueKey('dns-domres-$current'),
       initialValue: tags.contains(current) ? current : null,
       isExpanded: true,
-      decoration: const InputDecoration(
-        labelText: 'Domain resolver',
-        helperText: 'Resolves the server hostname itself',
-        border: OutlineInputBorder(),
+      decoration: InputDecoration(
+        labelText: context.l.dnsFormDomainResolverLabel,
+        helperText: context.l.dnsFormDomainResolverHelper,
+        border: const OutlineInputBorder(),
         isDense: true,
       ),
       items: tags

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../controllers/home_controller.dart';
 import '../../models/home_state.dart';
 import '../../services/settings_storage.dart';
+import '../../services/l10n/l10n.dart';
 import '../../services/support/support_message.dart';
 import '../../services/update_checker.dart';
 import '../../services/url_launcher.dart' as ul;
@@ -24,18 +25,18 @@ void confirmStop(
     showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Stop VPN?'),
+        title: Text(ctx.l.homeStopVpnTitle),
         content: Text(
-          '${state.traffic.activeConnections} active connections will be closed.',
+          ctx.l.homeStopVpnBody(state.traffic.activeConnections),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(ctx.l.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Stop'),
+            child: Text(ctx.l.homeStopVpnStop),
           ),
         ],
       ),
@@ -59,27 +60,23 @@ Future<bool?> showForeignVpnDialog(BuildContext context) {
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog.adaptive(
-      title: const Text('Another VPN is active'),
-      content: const Text(
-        'Another VPN app is currently running. Switch to L×Box?\n\n'
-        'To see which app it is, open VPN settings — the active VPN '
-        'is marked as connected.',
-      ),
+      title: Text(ctx.l.homeForeignVpnTitle),
+      content: Text(ctx.l.homeForeignVpnBody),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Cancel'),
+          child: Text(ctx.l.commonCancel),
         ),
         TextButton(
           onPressed: () {
             Navigator.of(ctx).pop(false);
             unawaited(BoxVpnClient.I.openVpnSettings());
           },
-          child: const Text('VPN settings'),
+          child: Text(ctx.l.homeForeignVpnOpenSettings),
         ),
         FilledButton(
           onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('Switch'),
+          child: Text(ctx.l.homeForeignVpnSwitch),
         ),
       ],
     ),
@@ -125,8 +122,7 @@ Future<void> maybeShowUpdateSnackbar(
         children: [
           Expanded(
             child: Text(
-              'L×Box ${info.tag} available '
-              '(you have v${VersionInfo.I.version})',
+              context.l.homeUpdateAvailable(info.tag, VersionInfo.I.version),
             ),
           ),
           // §090 G1 — «Later» persist'ит dismissed-версию → этот релиз больше
@@ -137,12 +133,12 @@ Future<void> maybeShowUpdateSnackbar(
               messenger.hideCurrentSnackBar();
               unawaited(UpdateChecker.I.dismissCurrent());
             },
-            child: const Text('Later'),
+            child: Text(context.l.commonLater),
           ),
         ],
       ),
       action: SnackBarAction(
-        label: 'View',
+        label: context.l.homeUpdateView,
         onPressed: () async {
           await ul.UrlLauncher.open(info.htmlUrl);
         },
@@ -169,22 +165,16 @@ Future<void> maybeShowNotificationPermissionDialog(BuildContext context) async {
     context: context,
     barrierDismissible: false,
     builder: (ctx) => AlertDialog.adaptive(
-      title: const Text('Allow notifications'),
-      content: const Text(
-        'L×Box runs as a foreground service while VPN is active. '
-        'A persistent notification is required by Android — it lets you '
-        'see at a glance that VPN is on, and prevents the system from '
-        'killing the tunnel in the background.\n\n'
-        'No promotional or alert notifications will be sent.',
-      ),
+      title: Text(ctx.l.homeNotifPermTitle),
+      content: Text(ctx.l.homeNotifPermBody),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Skip'),
+          child: Text(ctx.l.homeNotifPermSkip),
         ),
         FilledButton(
           onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('Allow'),
+          child: Text(ctx.l.commonAllow),
         ),
       ],
     ),
@@ -220,17 +210,12 @@ Future<void> maybeShowBatteryOptimizationDialog(
   await showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog.adaptive(
-      title: const Text('Allow background activity'),
-      content: const Text(
-        'Android restricts background activity to save battery. '
-        'Without an exception, the VPN tunnel may be killed when the '
-        'screen turns off — your connection drops until you reopen L×Box.\n\n'
-        'Open system settings and choose "Unrestricted" / "Not optimized".',
-      ),
+      title: Text(ctx.l.homeBatteryTitle),
+      content: Text(ctx.l.homeBatteryBody),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Later'),
+          child: Text(ctx.l.commonLater),
         ),
         FilledButton(
           onPressed: () async {
@@ -246,7 +231,7 @@ Future<void> maybeShowBatteryOptimizationDialog(
             // State.mounted в оригинале.
             if (context.mounted) await showOemBatteryFollowupDialog(context, vpn);
           },
-          child: const Text('Allow'),
+          child: Text(ctx.l.commonAllow),
         ),
       ],
     ),
@@ -267,27 +252,19 @@ Future<void> showOemBatteryFollowupDialog(
   await showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog.adaptive(
-      title: const Text('Disable battery restrictions'),
-      content: const Text(
-        'To keep the VPN running in background, also disable battery '
-        'restrictions for L×Box. The settings screen will open — find '
-        'and toggle:\n\n'
-        '• "Battery usage" → "Don\'t optimize" or "Allow background '
-        'activity"\n\n'
-        '• On OnePlus / OPPO / Realme also:\n'
-        '  "Stop activity when idle" → OFF',
-      ),
+      title: Text(ctx.l.homeOemBatteryTitle),
+      content: Text(ctx.l.homeOemBatteryBody),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Close'),
+          child: Text(ctx.l.commonClose),
         ),
         FilledButton(
           onPressed: () async {
             Navigator.of(ctx).pop();
             await vpn.openAppDetailsSettings();
           },
-          child: const Text('Open Settings'),
+          child: Text(ctx.l.commonOpenSettings),
         ),
       ],
     ),
@@ -343,14 +320,14 @@ Future<void> showSupportDialog(BuildContext context, SupportMessage m) async {
             Navigator.of(ctx).pop();
             await SupportMessageService.I.dismissForever(m);
           },
-          child: const Text("Don't show again"),
+          child: Text(ctx.l.homeSupportDontShowAgain),
         ),
         FilledButton(
           onPressed: () async {
             Navigator.of(ctx).pop();
             await SupportMessageService.I.snooze(m);
           },
-          child: const Text('Later'),
+          child: Text(ctx.l.commonLater),
         ),
       ],
     ),
