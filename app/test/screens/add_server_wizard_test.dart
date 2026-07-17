@@ -90,7 +90,7 @@ void main() {
   Future<void> submit(WidgetTester tester, SubscriptionController c) async {
     await tester.tap(find.widgetWithText(FilledButton, 'Add'));
     await tester.runAsync(() async {
-      for (var i = 0; i < 400 && c.entries.isEmpty && c.lastError.isEmpty; i++) {
+      for (var i = 0; i < 400 && c.entries.isEmpty && c.lastError == null; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 5));
       }
     });
@@ -108,7 +108,7 @@ void main() {
       await tester.enterText(find.byType(TextFormField).first, '🚀 My proxy');
       await submit(tester, c);
 
-      expect(c.lastError, '');
+      expect(c.lastError, isNull);
       final entry = c.entries.single;
       final us = entry.list as UserServer;
       expect(us.name, ''); // §243 — визард name больше не пишет
@@ -121,7 +121,7 @@ void main() {
       final c = await openWizard(tester);
       await submit(tester, c);
 
-      expect(c.lastError, '');
+      expect(c.lastError, isNull);
       final us = c.entries.single.list as UserServer;
       expect(us.name, '');
       // Дефолтный host = 127.0.0.1 → авто-эмодзи 🔁 (localhost).
@@ -162,7 +162,7 @@ void main() {
       await tester.enterText(find.byType(TextFormField).first, '🌍 Corp http');
       await submit(tester, c);
 
-      expect(c.lastError, '');
+      expect(c.lastError, isNull);
       final us = c.entries.single.list as UserServer;
       expect(us.name, '');
       expect(us.nodes.single.tag, '🌍 Corp http');

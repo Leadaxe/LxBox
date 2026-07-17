@@ -742,7 +742,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         subject: name,
       );
     } catch (e) {
-      _diagSnack(L10n.current.appSettingsPprofCaptureFailed(formatUserError(e)));
+      _diagSnack(L10n.current
+          .appSettingsPprofCaptureFailed(formatUserError(e).render(L10n.current)));
     } finally {
       if (mounted) setState(() => _capturing = false);
     }

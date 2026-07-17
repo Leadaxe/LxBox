@@ -5,6 +5,7 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/validation.dart';
+import 'package:lxbox/services/l10n/l10n.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
@@ -238,7 +239,7 @@ void main() {
       final cycles = cyclesOf(r);
       expect(cycles, hasLength(1));
       expect(cycles.single.culprits.single.tag, 'Relay Berlin');
-      expect(cycles.single.message, contains('Routing loop'));
+      expect(cycles.single.message(L10n.en), contains('Routing loop'));
     });
 
     test('транзитивный цикл через промежуточный узел — 1 culprit', () async {
@@ -363,7 +364,7 @@ void main() {
       expect(cycles.single.culprits, [(tag: 'IN Awg', detour: 'vpn-2')]);
       // Флот не тронут и не оговорён.
       expect(byTag(r, 'BL Sofia')['detour'], 'vpn-3');
-      expect(cycles.single.message, isNot(contains('BL Sofia')));
+      expect(cycles.single.message(L10n.en), isNot(contains('BL Sofia')));
     });
 
     test('линейная цепочка каналов C1→C2→C3 без замыкания → ok', () async {

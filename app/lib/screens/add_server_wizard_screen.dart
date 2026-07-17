@@ -247,8 +247,8 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   Future<void> _afterAdd({String? addedTag}) async {
     if (!mounted) return;
     final err = widget.subController.lastError;
-    if (err.isNotEmpty) {
-      showSnack(err);
+    if (err != null) {
+      showSnack(err.render(context.l));
       return;
     }
     await widget.onAdded();

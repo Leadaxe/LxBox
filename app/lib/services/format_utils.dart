@@ -4,6 +4,19 @@
 // `live_events_tab`, `per_app_trace_tab` с разным неймингом
 // (`_fmtBytes`/`_formatBytes`), видимостью и расходящимся выводом.
 // Единый источник здесь.
+//
+// §279 Phase 5 — граница локализации единиц (спека §5, решение 9):
+// байтовые/скоростные единицы (`B/KB/MB/GB`, `Mbps`) и суффиксы длительности
+// (`d/h/m/s`) НАМЕРЕННО латиница в обеих локалях, десятичная точка —
+// ru-техноаудитория читает латиницу нативно, «МБ/Мб» вносит байт/бит-
+// двусмысленность, паритет с логами ядра / Debug API. Это не то же самое,
+// что редакционное «мс» в отдельно стоящих ru-ЛЕЙБЛАХ («Тайм-аут (мс)») —
+// там слово живёт в ARB; здесь — машинная композиция число+единица, она
+// втекает в локализованные предложения плейсхолдером и не переводится.
+// Время/дата — через intl: локаль берётся из Intl.defaultLocale
+// (проставляет LocaleController при каждой смене локали).
+
+import 'package:intl/intl.dart';
 
 /// Человекочитаемый размер. `spaced=false` → компактно (`100KB`,
 /// live/per-app trace). `spaced=true` → с пробелом + явный `0 B` для
@@ -52,8 +65,26 @@ String portOf(String destination) {
   return destination.substring(i + 1);
 }
 
-/// Wall-clock `HH:mm:ss`.
-String formatTime(DateTime t) =>
-    '${t.hour.toString().padLeft(2, '0')}:'
-    '${t.minute.toString().padLeft(2, '0')}:'
-    '${t.second.toString().padLeft(2, '0')}';
+/// §219 (было `connections_screen._formatDuration`) — грубая длительность
+/// одним доминирующим разрядом: `30s` / `5m` / `2h5m`. Для age-колонки списка
+/// соединений; НЕ сливать с [formatDuration] — там другой вывод (`5m 30s`).
+String formatDurationCoarse(Duration d) {
+  if (d.inSeconds < 60) return '${d.inSeconds}s';
+  if (d.inMinutes < 60) return '${d.inMinutes}m';
+  return '${d.inHours}h${d.inMinutes % 60}m';
+}
+
+/// Wall-clock `HH:mm:ss` (§279 Phase 5 — intl, локаль из Intl.defaultLocale).
+String formatTime(DateTime t) => DateFormat.Hms().format(t);
+
+/// Wall-clock `HH:mm` (§279 Phase 5 — было ручное padLeft в speed_test).
+String formatTimeHm(DateTime t) => DateFormat.Hm().format(t);
+
+/// `yyyy-MM-dd HH:mm:ss` для detail-sheet'ов (Started/Created). §279 Phase 5 —
+/// ISO-порядок даты СОЗНАТЕЛЬНО в обеих локалях (спека §5): это технический
+/// timestamp рядом с copy-кнопкой, ISO однозначен и сортируем; локализуется
+/// только время (через [formatTime]).
+String formatDateTime(DateTime t) {
+  String pad(int n) => n.toString().padLeft(2, '0');
+  return '${t.year}-${pad(t.month)}-${pad(t.day)} ${formatTime(t)}';
+}

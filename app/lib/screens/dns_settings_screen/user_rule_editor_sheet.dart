@@ -86,7 +86,8 @@ void showUserRuleEditor(
                 parsed = obj;
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(ctx.l.subInvalidJson(formatUserError(e)))));
+                    content: Text(ctx.l
+                        .subInvalidJson(formatUserError(e).render(ctx.l)))));
                 return;
               }
               Navigator.pop(ctx);

@@ -8,6 +8,7 @@ import '../controllers/home_controller.dart';
 import '../models/parser_config.dart' show SpeedTestServer;
 import '../services/app_log.dart';
 import '../services/error_format.dart';
+import '../services/format_utils.dart' show formatTimeHm;
 import '../services/l10n/l10n.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
@@ -160,7 +161,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
       if (_history.length > 10) _history.removeLast();
     } catch (e) {
       if (mounted) {
-        setState(() => _status = context.l.subErrorSnack(formatUserError(e)));
+        setState(() =>
+            _status = context.l.subErrorSnack(formatUserError(e).render(context.l)));
       }
     } finally {
       if (mounted) setState(() => _running = false);
@@ -486,7 +488,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
   }
 
   Widget _buildHistoryTile(_SpeedTestResult r, ThemeData theme, ColorScheme cs) {
-    final time = '${r.timestamp.hour.toString().padLeft(2, '0')}:${r.timestamp.minute.toString().padLeft(2, '0')}';
+    final time = formatTimeHm(r.timestamp);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(

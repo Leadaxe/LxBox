@@ -37,10 +37,10 @@ mixin _PingMixin on ChangeNotifier {
         _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
         _addDebug(DebugSource.app, 'URLTest $nodeTag → $url: ${ms}ms');
       } else {
-        final msg = '${_routeLabel(nodeTag, url)} — ${r.error}';
+        final msg = ProbeErrorMsg(nodeTag, _probeHost(url), RawMsg(r.error));
         _emit(_state.copyWith(
             lastDelay: nextDelay, pingBusy: nextBusy, lastError: msg));
-        _addDebug(DebugSource.app, msg);
+        _addDebug(DebugSource.app, msg.renderEn());
       }
     } catch (e) {
       final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = -1;
@@ -48,7 +48,7 @@ mixin _PingMixin on ChangeNotifier {
       final msg = _formatProbeError(nodeTag, url, e);
       _emit(_state.copyWith(
           lastDelay: nextDelay, pingBusy: nextBusy, lastError: msg));
-      _addDebug(DebugSource.app, msg);
+      _addDebug(DebugSource.app, msg.renderEn());
     }
   }
 
@@ -59,18 +59,18 @@ mixin _PingMixin on ChangeNotifier {
   ///   "direct-out → ya.ru — timeout 5.8s"
   ///   "vpn-2 → ya.ru — HTTP 503"
   ///   "direct-out → ya.ru — connection refused"
-  static String _formatProbeError(String target, String url, Object e) {
-    return '${_routeLabel(target, url)} — ${formatUserError(e)}';
+  static ProbeErrorMsg _formatProbeError(String target, String url, Object e) {
+    return ProbeErrorMsg(target, _probeHost(url), formatUserError(e));
   }
 
-  /// `direct-out → ya.ru` если URL валиден, иначе только `direct-out`.
-  static String _routeLabel(String target, String url) {
-    if (url.isEmpty) return target;
+  /// Host из ping-URL для `<target> → <host>`-метки; '' если URL невалиден.
+  static String _probeHost(String url) {
+    if (url.isEmpty) return '';
     try {
-      final host = Uri.parse(url).host;
-      if (host.isNotEmpty) return '$target → $host';
-    } catch (_) {}
-    return target;
+      return Uri.parse(url).host;
+    } catch (_) {
+      return '';
+    }
   }
 
   bool _massPingRunning = false;
@@ -189,7 +189,7 @@ mixin _PingMixin on ChangeNotifier {
       _emit(_state.copyWith(pingBatchGen: _state.pingBatchGen + 1));
     } catch (e) {
       final msg = _formatProbeError(groupTag, url, e);
-      _addDebug(DebugSource.app, msg);
+      _addDebug(DebugSource.app, msg.renderEn());
       _emit(_state.copyWith(lastError: msg));
     }
   }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/date_symbol_data_local.dart' show initializeDateFormatting;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
@@ -78,6 +79,11 @@ void main() async {
     // setting=='system' (didChangeLocales). best-effort (try выше).
     LocaleController.I.bootstrap(await SettingsStorage.getAppLanguage());
     WidgetsBinding.instance.addObserver(LocaleController.I);
+    // §279 Phase 5 — intl date-symbols для ru (format_utils.formatTime и др.
+    // используют DateFormat под Intl.defaultLocale). ДО первого кадра, чтобы
+    // DateFormat('ru') не бросил до того, как flutter_localizations прогреет
+    // локаль сам. best-effort (try выше).
+    await initializeDateFormatting('ru');
     // §125 F0 — one-shot миграция enabled_groups[] → channels[] (seed состава
     // каналов из template на первом запуске). Идемпотентна. ДО первого билда
     // конфига, чтобы билдер (после F1) читал channels[] как source-of-truth.

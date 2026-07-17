@@ -557,7 +557,8 @@ Future<DebugResponse> _rebuildConfig(DebugContext ctx) async {
   final home = ctx.requireHome();
   final json = await sub.generateConfig();
   if (json == null) {
-    throw UpstreamError('generate failed: ${sub.lastError}');
+    throw UpstreamError(
+        'generate failed: ${sub.lastError?.renderEn() ?? ''}');
   }
   final saved = await home.saveParsedConfig(json);
   if (!saved) {

@@ -101,8 +101,10 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   final before = sub.entries.map((e) => e.id).toSet();
   await sub.addFromInput(input);
   // Если controller записал lastError — input отвергнут целиком, ничего не добавилось.
-  if (sub.lastError.isNotEmpty && sub.entries.map((e) => e.id).toSet().length == before.length) {
-    throw BadRequest('addFromInput rejected: ${sub.lastError}');
+  if (sub.lastError != null &&
+      sub.entries.map((e) => e.id).toSet().length == before.length) {
+    throw BadRequest(
+        'addFromInput rejected: ${sub.lastError?.renderEn() ?? ''}');
   }
   // Находим новую запись (или записи — JSON outbounds могут создать несколько).
   final added = sub.entries.where((e) => !before.contains(e.id)).toList();

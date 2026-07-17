@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../models/ui_msg.dart';
+
 import '../../../services/l10n/l10n.dart';
 
 /// Source tab: live HTTP response headers (important + collapsible "others")
@@ -23,7 +25,7 @@ class SubscriptionSourceTab extends StatelessWidget {
 
   final bool hasUrl;
   final bool sourceLoading;
-  final String? sourceError;
+  final UiMsg? sourceError;
   final Map<String, String> rawHeaders;
   final String rawSource;
   final bool showAllHeaders;
@@ -88,7 +90,7 @@ class SubscriptionSourceTab extends StatelessWidget {
           if (sourceError != null)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(context.l.subFetchFailed(sourceError!),
+              child: Text(context.l.subFetchFailed(sourceError!.render(context.l)),
                   style: TextStyle(fontSize: 12, color: cs.error)),
             )
           else if (sourceLoading && rawHeaders.isEmpty)

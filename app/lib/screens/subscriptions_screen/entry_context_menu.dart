@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
+import '../../models/ui_msg.dart';
 import '../../services/l10n/l10n.dart';
 import '../../services/subscription/auto_updater.dart';
 import '../../services/subscription/input_helpers.dart';
@@ -118,9 +119,9 @@ void showEntryContextMenu(
                 if (serverIndex < 0) return;
                 final err = await subController.moveServerToFolder(
                     serverIndex, folderIndex);
-                if (err.isNotEmpty && context.mounted) {
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text(err)));
+                if (err != null && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(err.render(context.l))));
                 }
               },
             ),
@@ -332,7 +333,7 @@ Future<void> showEditSourceDialog(
                 ? null
                 : () async {
                     setLocal(() => busy = true);
-                    String err;
+                    UiMsg? err;
                     if (fileMode) {
                       if (pickedBody == null) {
                         // file-режим без нового файла: если и было file — просто
@@ -361,12 +362,12 @@ Future<void> showEditSourceDialog(
                           httpUrl: url);
                     }
                     if (!dCtx.mounted) return;
-                    if (err.isEmpty) {
+                    if (err == null) {
                       Navigator.pop(dCtx);
                     } else {
                       setLocal(() => busy = false);
-                      ScaffoldMessenger.of(dCtx)
-                          .showSnackBar(SnackBar(content: Text(err)));
+                      ScaffoldMessenger.of(dCtx).showSnackBar(
+                          SnackBar(content: Text(err.render(dCtx.l))));
                     }
                   },
             child: busy

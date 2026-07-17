@@ -649,8 +649,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final idx = _index;
     if (idx < 0) return;
     final err = await widget.controller.addMembersToFolder(idx, text);
-    await _showError(err);
-    if (err.isEmpty) setState(() {});
+    if (!mounted) return;
+    if (err != null) {
+      await _showError(err.render(context.l));
+      return;
+    }
+    setState(() {});
   }
 
   Future<void> _addFromFiles() async {
@@ -678,10 +682,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           text,
           nameFallback: SubscriptionController.fileBaseName(file.name),
         );
-        if (err.isEmpty) {
+        if (err == null) {
           added++;
         } else {
-          errors.add('${file.name}: $err');
+          if (!mounted) return;
+          errors.add('${file.name}: ${err.render(context.l)}');
         }
       }
       if (!mounted) return;
@@ -693,7 +698,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       setState(() {});
     } catch (e) {
       if (!mounted) return;
-      await _showError(context.l.subErrorSnack(formatUserError(e)));
+      await _showError(context.l.subErrorSnack(formatUserError(e).render(context.l)));
     }
   }
 
@@ -747,8 +752,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final idx = _index;
     if (idx < 0) return;
     final err = await widget.controller.addUrlSnapshotToFolder(idx, url);
-    await _showError(err);
-    if (err.isEmpty) setState(() {});
+    if (!mounted) return;
+    if (err != null) {
+      await _showError(err.render(context.l));
+      return;
+    }
+    setState(() {});
   }
 
   // ───────────────────────── Member actions ─────────────────────────
@@ -790,8 +799,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final idx = _index;
     if (idx < 0) return;
     final err = await widget.controller.updateMemberAt(idx, memberIndex, newRaw);
-    await _showError(err);
-    if (err.isEmpty) setState(() {});
+    if (!mounted) return;
+    if (err != null) {
+      await _showError(err.render(context.l));
+      return;
+    }
+    setState(() {});
   }
 
   Future<void> _moveMember(int memberIndex) async {
@@ -803,8 +816,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     if (idx < 0) return;
     final err =
         await widget.controller.moveMemberToFolder(idx, memberIndex, toIndex);
-    await _showError(err);
-    if (err.isEmpty) setState(() {});
+    if (!mounted) return;
+    if (err != null) {
+      await _showError(err.render(context.l));
+      return;
+    }
+    setState(() {});
   }
 
   Future<void> _ungroupMember(int memberIndex) async {

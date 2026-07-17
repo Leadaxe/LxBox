@@ -24,3 +24,11 @@ dart run tool/l10n/kotlin_check.dart [--strict]   # report-only до Phase 6
   строке литерала или строкой выше.
 - Snack/dialog-хелперы с display-параметрами регистрируются в
   `l10n_helpers.json` — незарегистрированный хелпер = дыра в ratchet.
+- **hardcoded_check — rendering-locality (Phase 4, fail-режим)**: `.render(`
+  легален в `lib/screens|lib/widgets` или в функции с
+  `AppLocalizations`-параметром; `renderEn(` — только в allowlist-файлах
+  machine-поверхностей (`render_allowlist.json`: automation, Debug API,
+  AppLog-сайты, notification-push, emitWarnings); `L10n.current` вне
+  allowlist → fail; прямой `L10n.en` вне `lib/models/ui_msg.dart` → fail;
+  паттерн «поле `WizardTemplate?` + присваивание в initState» → fail
+  (fetch шаблона — в `didChangeDependencies`, решение 15 спеки).

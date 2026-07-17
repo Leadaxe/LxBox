@@ -66,7 +66,7 @@ class SubscriptionMeta extends StatelessWidget {
                 Icon(Icons.schedule, size: 14, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
-                  SubscriptionEntry.formatAgo(entry.lastUpdated!),
+                  SubscriptionEntry.formatAgo(context.l, entry.lastUpdated!),
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(width: 16),
@@ -95,7 +95,7 @@ class SubscriptionMeta extends StatelessWidget {
                 Icon(Icons.event_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
-                  context.l.subExpires(formatExpire(entry.expireTimestamp)),
+                  context.l.subExpires(formatExpire(context.l, entry.expireTimestamp)),
                   style: theme.textTheme.bodySmall,
                 ),
               ],

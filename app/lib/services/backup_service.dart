@@ -415,6 +415,9 @@ class BackupService {
           onError: (key, e) => errors.add('vpn_settings.$key: $e'));
 
   /// Suggested filename для export'а: `lxbox-backup-v{appver}-{YYYYMMDD-HHMM}.json`.
+  ///
+  /// §279 Phase 5 — timestamp в ИМЕНИ ФАЙЛА сознательно locale-invariant
+  /// (machine-поверхность, спека §5): ручная композиция, не intl DateFormat.
   static Future<String> suggestedFilename() async {
     String appVersion = '0';
     try {

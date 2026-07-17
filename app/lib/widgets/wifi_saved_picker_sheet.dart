@@ -306,7 +306,7 @@ Widget _historyRow({
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  humanLastSeen(lastSeenIso),
+                  humanLastSeen(ctx.l, lastSeenIso),
                   style: const TextStyle(fontSize: 11),
                 ),
               ],
@@ -329,14 +329,15 @@ Widget _historyRow({
 /// `5 минут назад` / `Yesterday` / `Mar 15` для wifi_history
 /// `last_seen`. Empty input → `never`; malformed ISO → `unknown` +
 /// AppLog warning (traceable malformed entries).
-String humanLastSeen(String iso) {
-  if (iso.isEmpty) return 'never';
+String humanLastSeen(AppLocalizations l, String iso) {
+  if (iso.isEmpty) return l.routingWifiLastSeenNever;
   final dt = DateTime.tryParse(iso);
   if (dt == null) {
+    // AppLog — machine-поверхность, остаётся английской (спека §4.4).
     AppLog.I.warning(
       '[wifi_history] humanLastSeen: malformed ISO timestamp "$iso"',
     );
-    return 'unknown';
+    return l.routingWifiLastSeenUnknown;
   }
-  return relativeTime(DateTime.now(), dt);
+  return relativeTime(l, DateTime.now(), dt);
 }

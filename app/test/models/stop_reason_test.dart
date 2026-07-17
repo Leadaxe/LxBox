@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/stop_reason.dart';
+import 'package:lxbox/services/l10n/l10n.dart';
 
 // §279 Phase 0 — разбор строкового native-протокола stop-событий в typed
 // StopReason. Инвариант миграции: message() воспроизводит дословно те же
@@ -10,7 +11,7 @@ void main() {
       final r = StopReason.fromEvent(revoked: true, errorReason: 'whatever');
       expect(r, isA<StopRevoked>());
       expect(
-        r!.message(),
+        r!.message(L10n.en),
         'Another VPN app took the system VPN slot (e.g. an always-on VPN). '
         'Start again to reconnect.',
       );
@@ -25,14 +26,15 @@ void main() {
       expect(r, isA<StopPermissionLocation>());
       expect((r as StopPermissionLocation).permissions, 'fine,background');
       // Debug API lastStartError — та же строка, что до §279.
-      expect(r.message(), 'Stopped: alert:permission_location:fine,background');
+      expect(r.message(L10n.en),
+          'Stopped: alert:permission_location:fine,background');
     });
 
     test('прочий errorReason → StopError passthrough', () {
       final r = StopReason.fromEvent(
           revoked: false, errorReason: 'create service: bind failed');
       expect(r, isA<StopError>());
-      expect(r!.message(), 'Stopped: create service: bind failed');
+      expect(r!.message(L10n.en), 'Stopped: create service: bind failed');
     });
 
     test('чистый user-stop (errorReason null) → null', () {

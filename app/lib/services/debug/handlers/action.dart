@@ -165,7 +165,7 @@ Future<DebugResponse> _emulateError(
   final samples = <Map<String, String>>[];
   for (final k in kinds) {
     final e = buildException(k);
-    final humanized = humanizeError(e);
+    final humanized = humanizeError(e).renderEn();
     samples.add({'kind': k, 'humanized': humanized});
     AppLog.I.error('emulate-error [kind=$k]: $humanized');
   }

@@ -10,12 +10,15 @@ part of '../subscription_controller.dart';
 class SubscriptionEntry extends ChangeNotifier {
   ServerList _list;
   int nodeCount;
-  String status;
+
+  /// §279 Phase 4 — статус = типизированный [UiMsg] (рендер по локали в
+  /// build), `null` = статуса нет.
+  UiMsg? status;
 
   SubscriptionEntry({
     required ServerList list,
     int? nodeCount,
-    this.status = '',
+    this.status,
   })  : _list = list,
         nodeCount = nodeCount ??
             (list is SubscriptionServers ? list.lastNodeCount : list.nodes.length);
@@ -82,7 +85,7 @@ class SubscriptionEntry extends ChangeNotifier {
   String get overrideDetour => detourPolicy.overrideDetour;
   bool get replaceDetourChain => detourPolicy.replaceDetourChain;
 
-  static String formatAgo(DateTime dt) => _formatAgo(dt);
+  static String formatAgo(AppLocalizations l, DateTime dt) => _formatAgo(l, dt);
 
   String get displayName {
     // §243 — у одиночного сервера (UserServer) поле name игнорируем:
@@ -110,18 +113,24 @@ class SubscriptionEntry extends ChangeNotifier {
       }
       return c.length > 40 ? '${c.substring(0, 40)}...' : c;
     }
+    // §279 — display-имя составлено из user data (name/host/tag/URI) и не
+    // локализуется; '(empty)'-маркер пустой записи оставлен английским
+    // сознательно (граница §8: name-fallback'и не мигрируются).
     return '(empty)';
   }
 
-  String get subtitle {
+  /// §279 — компонует локализованный статус в момент показа; принимает
+  /// [AppLocalizations] параметром (render-path по построению, spec §4.2).
+  String subtitle(AppLocalizations l) {
     final parts = <String>[];
-    if (status.isNotEmpty) parts.add(status);
-    if (lastUpdated != null) parts.add(_formatAgo(lastUpdated!));
+    final s = status;
+    if (s != null) parts.add(s.render(l));
+    if (lastUpdated != null) parts.add(_formatAgo(l, lastUpdated!));
     return parts.join(' · ');
   }
 
-  static String _formatAgo(DateTime dt) =>
-      relativeTime(DateTime.now(), dt);
+  static String _formatAgo(AppLocalizations l, DateTime dt) =>
+      relativeTime(l, DateTime.now(), dt);
 
   void _replaceList(ServerList next) {
     _list = next;

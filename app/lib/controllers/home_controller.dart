@@ -267,7 +267,7 @@ class HomeController extends ChangeNotifier
         connectedSince: DateTime.now(),
         configChangedNeedRestart: false,
         // §250 — успешный старт = ЕДИНСТВЕННОЕ место очистки lastStartError
-        // (clearError/оптимистичные lastError:'' его не трогают).
+        // (clearError/оптимистичные lastError: null его не трогают).
         lastStartError: '',
         lastStartErrorAt: null,
       ));
@@ -333,25 +333,28 @@ class HomeController extends ChangeNotifier
       SelectorInfo.I.clearSelected();
       // §279 — строковый native-протокол (errorReason + revoked-флаг)
       // парсится в typed StopReason здесь, при ingestion; UI ветвится по
-      // типу, не по подстрокам. `reason` — тот же English-рендер, что раньше.
+      // типу, не по подстрокам. lastError хранит типизированный UiMsg
+      // (рендер в build); машинный дубль (Debug API/AppLog) — renderEn().
       final stopReason = StopReason.fromEvent(
           revoked: tunnel == TunnelStatus.revoked,
           errorReason: event.errorReason);
-      final reason = stopReason?.message() ?? '';
+      final reasonEn = stopReason?.renderEn() ?? '';
       _emit(
         _state.copyWith(
           tunnel: tunnel,
-          lastError: reason.isNotEmpty ? reason : _state.lastError,
-          stopReason:
-              reason.isNotEmpty ? stopReason : _state.stopReason,
+          lastError: stopReason != null
+              ? StopReasonMsg(stopReason)
+              : _state.lastError,
+          stopReason: stopReason ?? _state.stopReason,
           // §250 — диагностический дубль для Debug API: живёт до следующего
           // УСПЕШНОГО старта (UI-consume через clearError его не затирает).
           // Пустой reason (чистый user-stop) НЕ затирает предыдущее значение —
-          // симметрично поведению lastError строкой выше.
+          // симметрично поведению lastError строкой выше. Всегда English
+          // (wire-поверхность, spec §4.4).
           lastStartError:
-              reason.isNotEmpty ? reason : _state.lastStartError,
+              reasonEn.isNotEmpty ? reasonEn : _state.lastStartError,
           lastStartErrorAt:
-              reason.isNotEmpty ? DateTime.now() : _state.lastStartErrorAt,
+              reasonEn.isNotEmpty ? DateTime.now() : _state.lastStartErrorAt,
           ccGroups: const <CcGroup>[],
           groups: <String>[],
           nodes: <String>[],
@@ -373,8 +376,8 @@ class HomeController extends ChangeNotifier
         // (чтобы не срабатывать при revoked → disconnected дубле).
         _autoUpdater?.onVpnStopped();
       }
-      if (reason.isNotEmpty) {
-        _addDebug(DebugSource.core, reason);
+      if (reasonEn.isNotEmpty) {
+        _addDebug(DebugSource.core, reasonEn);
       }
       // §047 — outgoing lifecycle events (gated, default OFF). revoked → своё
       // событие; ошибочный stop (errorReason present) → VPN_ERROR + DISCONNECTED;
@@ -415,7 +418,7 @@ class HomeController extends ChangeNotifier
     _transientTimeoutTimer = Timer(timeout, () async {
       if (_state.tunnel != expected) return;
       _addDebug(
-          DebugSource.app, 'Timeout in ${expected.label}, forcing disconnect');
+          DebugSource.app, 'Timeout in ${expected.name}, forcing disconnect');
       // §129 — таймаут transient-фазы = ядро НЕ отдало Stopped само (зависло
       // вхолостую: detour AWG→WG #2 — tun0 жив, 0 трафика, dial заклинен).
       // Раньше тут был только _emit(disconnected) — UI «disconnected», а
@@ -425,14 +428,14 @@ class HomeController extends ChangeNotifier
       // виснет. forceStopVPN — fire-and-forget. После — синхронизируем UI.
       await _vpn.forceStopVPN();
       if (_disposed) return; // §219 — могли dispose'нуться за await → не эмитим
-      _addDebug(DebugSource.app, '[vpn] forceStopVPN sent (timeout in ${expected.label})');
+      _addDebug(DebugSource.app, '[vpn] forceStopVPN sent (timeout in ${expected.name})');
       if (_state.tunnel != expected) return;
       // §251 — синтезированный tunnel-down: настоящий Stopped потом проглотит
       // stale-terminal guard, его clearSelected недостижим — чистим здесь.
       SelectorInfo.I.clearSelected();
       _emit(_state.copyWith(
         tunnel: TunnelStatus.disconnected,
-        lastError: 'Connection timed out',
+        lastError: const ErrMsg(ErrKey.connectionTimedOut),
         ccGroups: const <CcGroup>[],
         groups: <String>[],
         nodes: <String>[],
@@ -539,11 +542,11 @@ class HomeController extends ChangeNotifier
   }
 
   Future<void> start() async {
-    _emit(_state.copyWith(busy: true, lastError: ''));
+    _emit(_state.copyWith(busy: true, lastError: null));
     try {
       final ok = await _startInternal();
       if (!ok) {
-        _emit(_state.copyWith(lastError: 'Failed to start VPN'));
+        _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.failedToStartVpn)));
       }
     } catch (e) {
       _emit(_state.copyWith(lastError: formatUserError(e)));
@@ -554,11 +557,11 @@ class HomeController extends ChangeNotifier
   }
 
   Future<void> stop() async {
-    _emit(_state.copyWith(busy: true, lastError: ''));
+    _emit(_state.copyWith(busy: true, lastError: null));
     try {
       final ok = await _stopInternal();
       if (!ok) {
-        _emit(_state.copyWith(lastError: 'Stop timed out'));
+        _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.stopTimedOut)));
       }
     } catch (e) {
       _emit(_state.copyWith(lastError: formatUserError(e)));
@@ -594,7 +597,8 @@ class HomeController extends ChangeNotifier
       _lastReloadTap = prevReloadTap; // откат cooldown
       _addDebug(DebugSource.app, '[vpn] reload error: $e');
       if (!_disposed) {
-        _emit(_state.copyWith(lastError: 'Reload failed: ${formatUserError(e)}'));
+        _emit(_state.copyWith(
+            lastError: PrefixedMsg(ErrPrefix.reloadFailed, formatUserError(e))));
       }
       return;
     }
@@ -633,17 +637,18 @@ class HomeController extends ChangeNotifier
       await start();
       return;
     }
-    _emit(_state.copyWith(busy: true, lastError: ''));
+    _emit(_state.copyWith(busy: true, lastError: null));
     try {
       final stopped = await _stopInternal();
       if (!stopped) {
-        _emit(_state.copyWith(lastError: 'Stop timed out — reconnect aborted'));
+        _emit(_state.copyWith(
+            lastError: const ErrMsg(ErrKey.stopTimedOutReconnectAborted)));
         _addDebug(DebugSource.app, 'reconnect: stop timed out, aborting start');
         return;
       }
       final started = await _startInternal();
       if (!started) {
-        _emit(_state.copyWith(lastError: 'Failed to start VPN'));
+        _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.failedToStartVpn)));
       }
     } catch (e) {
       _emit(_state.copyWith(lastError: formatUserError(e)));
@@ -983,7 +988,7 @@ class HomeController extends ChangeNotifier
       BoxVpnClient.I.setAutomationActiveState(node: nodeTag, group: group);
     } catch (e) {
       _emit(_state.copyWith(
-          lastError: 'Switch failed: ${formatUserError(e)}'));
+          lastError: PrefixedMsg(ErrPrefix.switchFailed, formatUserError(e))));
       _addDebug(DebugSource.app, 'Node switch error: $e');
     } finally {
       _emit(_state.copyWith(busy: false));
@@ -1093,8 +1098,8 @@ class HomeController extends ChangeNotifier
   }
 
   void clearError() {
-    if (_state.lastError.isNotEmpty) {
-      _emit(_state.copyWith(lastError: ''));
+    if (_state.lastError != null) {
+      _emit(_state.copyWith(lastError: null));
     }
   }
 

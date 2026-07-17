@@ -377,7 +377,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                       ],
                       if (duration != null) ...[
                         const SizedBox(width: 6),
-                        Text(_formatDuration(duration),
+                        Text(formatDurationCoarse(duration),
                             style: TextStyle(
                                 fontSize: 10, color: cs.onSurfaceVariant)),
                       ],
@@ -422,9 +422,5 @@ class _ConnectionsViewState extends State<ConnectionsView> {
     );
   }
 
-  static String _formatDuration(Duration d) {
-    if (d.inSeconds < 60) return '${d.inSeconds}s';
-    if (d.inMinutes < 60) return '${d.inMinutes}m';
-    return '${d.inHours}h${d.inMinutes % 60}m';
-  }
+  // §279 Phase 5 — _formatDuration слит в format_utils.formatDurationCoarse.
 }

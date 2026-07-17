@@ -1,18 +1,25 @@
-/// Предупреждения узла — типизированные, агрегируемые, plain-EN строки.
+/// Предупреждения узла — типизированные, агрегируемые, рендер по локали.
 ///
 /// Плюсуются в `NodeSpec.warnings` (mutable list, §2.4 спеки 026) при
 /// парсинге и при emit'е (fallback'ах типа XHTTP → httpupgrade). UI
-/// (`subscription_detail_screen`) рендерит по severity.
+/// (`subscription_detail_screen`) рендерит по severity через `message(l)`;
+/// machine-поверхности (emitWarnings/AppLog) — `renderEn()` (ui_msg.dart).
+library;
+
+import '../services/l10n/l10n.dart' show AppLocalizations;
+
 enum WarningSeverity { info, warning, error }
 
 sealed class NodeWarning {
   const NodeWarning();
 
-  String message();
+  /// §279 — рендер в момент показа; интерполяции (scheme/transport/field) —
+  /// wire-идентификаторы, не переводятся.
+  String message(AppLocalizations l);
   WarningSeverity get severity;
 
   /// Поля данных подкласса для равенства/hashCode. Dedup — по runtimeType +
-  /// данным, НЕ по отрендеренной строке (§279: строка станет locale-зависимой,
+  /// данным, НЕ по отрендеренной строке (§279: строка locale-зависима,
   /// равенство по ней ломало бы dedup при смене языка).
   List<Object?> get props => const [];
 
@@ -27,7 +34,7 @@ sealed class NodeWarning {
   int get hashCode => Object.hashAll([runtimeType, ...props]);
 
   @override
-  String toString() => '$runtimeType(${message()})';
+  String toString() => '$runtimeType(${props.join(', ')})';
 }
 
 bool _propsEqual(List<Object?> a, List<Object?> b) {
@@ -47,8 +54,8 @@ final class UnsupportedTransportWarning extends NodeWarning {
   List<Object?> get props => [name, fallback];
 
   @override
-  String message() =>
-      'Transport "$name" is not supported by sing-box; using "$fallback" fallback (node may fail to connect).';
+  String message(AppLocalizations l) =>
+      l.warnUnsupportedTransport(name, fallback);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -62,7 +69,7 @@ final class UnsupportedProtocolWarning extends NodeWarning {
   List<Object?> get props => [scheme];
 
   @override
-  String message() => 'Protocol "$scheme" is not supported.';
+  String message(AppLocalizations l) => l.warnUnsupportedProtocol(scheme);
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -76,7 +83,7 @@ final class MissingFieldWarning extends NodeWarning {
   List<Object?> get props => [field];
 
   @override
-  String message() => 'Required field "$field" is missing.';
+  String message(AppLocalizations l) => l.warnMissingField(field);
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -90,7 +97,7 @@ final class DeprecatedFlowWarning extends NodeWarning {
   List<Object?> get props => [flow];
 
   @override
-  String message() => 'Flow "$flow" is deprecated.';
+  String message(AppLocalizations l) => l.warnDeprecatedFlow(flow);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -107,8 +114,7 @@ final class VisionWithTransportWarning extends NodeWarning {
   List<Object?> get props => [transport];
 
   @override
-  String message() =>
-      'Flow "xtls-rprx-vision" is incompatible with "$transport" transport — flow dropped.';
+  String message(AppLocalizations l) => l.warnVisionWithTransport(transport);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -118,7 +124,7 @@ final class InsecureTlsWarning extends NodeWarning {
   const InsecureTlsWarning();
 
   @override
-  String message() => 'TLS certificate verification is disabled.';
+  String message(AppLocalizations l) => l.warnInsecureTls;
 
   /// Info, не warning — это часто **намеренный** выбор провайдера (REALITY,
   /// IP-литералы, self-signed). Не должен крадовать XHTTP-fallback и прочие
@@ -135,8 +141,7 @@ final class NaiveBuildTagWarning extends NodeWarning {
   const NaiveBuildTagWarning();
 
   @override
-  String message() =>
-      'NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).';
+  String message(AppLocalizations l) => l.warnNaiveBuildTag;
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -175,15 +180,17 @@ final class XhttpParamResetWarning extends NodeWarning {
   List<Object?> get props => [field, reason, value];
 
   @override
-  String message() {
+  String message(AppLocalizations l) {
     final why = switch (reason) {
-      XhttpResetReason.invalidEnumValue => 'value "$value" is not a valid $field',
-      XhttpResetReason.invalidPlacementValue => 'value "$value" is not valid',
+      XhttpResetReason.invalidEnumValue =>
+        l.warnXhttpReasonInvalidEnum(value, field),
+      XhttpResetReason.invalidPlacementValue =>
+        l.warnXhttpReasonInvalidValue(value),
       XhttpResetReason.placementRequiresPacketUp =>
-        'header/cookie placement requires packet-up mode',
-      XhttpResetReason.getRequiresPacketUp => 'GET requires packet-up mode',
+        l.warnXhttpReasonPlacementPacketUp,
+      XhttpResetReason.getRequiresPacketUp => l.warnXhttpReasonGetPacketUp,
     };
-    return 'XHTTP "$field" reset to default — $why (would otherwise break the whole config).';
+    return l.warnXhttpParamReset(field, why);
   }
 
   @override

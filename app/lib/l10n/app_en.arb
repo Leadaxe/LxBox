@@ -157,6 +157,22 @@
   "@homeSortOptionsTitle": {
     "description": "Home: title of the node sort options bottom sheet (long-press on the sort button)."
   },
+  "homeSortModeDefault": "Default",
+  "@homeSortModeDefault": {
+    "description": "Home sort mode label: config order."
+  },
+  "homeSortModePing": "Ping",
+  "@homeSortModePing": {
+    "description": "Home sort mode label: by latency ascending."
+  },
+  "homeSortModeAz": "A–Z",
+  "@homeSortModeAz": {
+    "description": "Home sort mode label: alphabetical by node name."
+  },
+  "homeSortModeCustom": "Custom",
+  "@homeSortModeCustom": {
+    "description": "Home sort mode label: manual drag order."
+  },
   "homeSortPinDirect": "Pin DIRECT to top",
   "@homeSortPinDirect": {
     "description": "Home sort options: checkbox — keep the DIRECT control node at the top of the list. DIRECT is a node tag, keep as is."
@@ -527,6 +543,20 @@
   "subDetourNoStandalone": "No standalone servers available",
   "@subDetourNoStandalone": {
     "description": "Detour target picker: placeholder when there are no standalone servers to pick."
+  },
+  "routingRuleAddedSrs": "Added \"{label}\" — tap ☁ to download, then enable",
+  "@routingRuleAddedSrs": {
+    "description": "Routing snackbar: rule preset added but its rule-set file still needs downloading; label = preset display name.",
+    "placeholders": {
+      "label": {"type": "String"}
+    }
+  },
+  "routingRuleAdded": "Added \"{label}\" to Rules",
+  "@routingRuleAdded": {
+    "description": "Routing snackbar: rule preset added and ready; label = preset display name.",
+    "placeholders": {
+      "label": {"type": "String"}
+    }
   },
   "routingRejectOption": "Reject",
   "@routingRejectOption": {
@@ -4006,5 +4036,811 @@
   "statsGroupingTooltip": "Grouping",
   "@statsGroupingTooltip": {
     "description": "Trace explorer: tooltip of the stream/by-domain/by-IP grouping menu."
+  },
+  "warnUnsupportedTransport": "Transport \"{name}\" is not supported by sing-box; using \"{fallback}\" fallback (node may fail to connect).",
+  "@warnUnsupportedTransport": {
+    "description": "Node warning: unknown transport replaced by a fallback; name/fallback = wire transport names.",
+    "placeholders": {
+      "name": {"type": "String"},
+      "fallback": {"type": "String"}
+    }
+  },
+  "warnUnsupportedProtocol": "Protocol \"{scheme}\" is not supported.",
+  "@warnUnsupportedProtocol": {
+    "description": "Node warning: unsupported URI scheme; scheme = wire value.",
+    "placeholders": {
+      "scheme": {"type": "String"}
+    }
+  },
+  "warnMissingField": "Required field \"{field}\" is missing.",
+  "@warnMissingField": {
+    "description": "Node warning: required config field absent; field = wire field name.",
+    "placeholders": {
+      "field": {"type": "String"}
+    }
+  },
+  "warnDeprecatedFlow": "Flow \"{flow}\" is deprecated.",
+  "@warnDeprecatedFlow": {
+    "description": "Node warning: deprecated VLESS flow value; flow = wire value.",
+    "placeholders": {
+      "flow": {"type": "String"}
+    }
+  },
+  "warnVisionWithTransport": "Flow \"xtls-rprx-vision\" is incompatible with \"{transport}\" transport — flow dropped.",
+  "@warnVisionWithTransport": {
+    "description": "Node warning: vision flow dropped because a transport is set; transport = wire name.",
+    "placeholders": {
+      "transport": {"type": "String"}
+    }
+  },
+  "warnInsecureTls": "TLS certificate verification is disabled.",
+  "@warnInsecureTls": {
+    "description": "Node warning (info): insecure TLS flag on the node."
+  },
+  "warnNaiveBuildTag": "NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).",
+  "@warnNaiveBuildTag": {
+    "description": "Node warning: libbox built without the naive outbound build tag."
+  },
+  "warnXhttpParamReset": "XHTTP \"{field}\" reset to default — {reason} (would otherwise break the whole config).",
+  "@warnXhttpParamReset": {
+    "description": "Node warning frame: an XHTTP param was reset; field = wire param name, reason = one of the warnXhttpReason* phrases.",
+    "placeholders": {
+      "field": {"type": "String"},
+      "reason": {"type": "String"}
+    }
+  },
+  "warnXhttpReasonInvalidEnum": "value \"{value}\" is not a valid {field}",
+  "@warnXhttpReasonInvalidEnum": {
+    "description": "XHTTP reset reason: rejected enum value; value/field = wire values.",
+    "placeholders": {
+      "value": {"type": "String"},
+      "field": {"type": "String"}
+    }
+  },
+  "warnXhttpReasonInvalidValue": "value \"{value}\" is not valid",
+  "@warnXhttpReasonInvalidValue": {
+    "description": "XHTTP reset reason: rejected placement value; value = wire value.",
+    "placeholders": {
+      "value": {"type": "String"}
+    }
+  },
+  "warnXhttpReasonPlacementPacketUp": "header/cookie placement requires packet-up mode",
+  "@warnXhttpReasonPlacementPacketUp": {
+    "description": "XHTTP reset reason: placement only valid in packet-up mode."
+  },
+  "warnXhttpReasonGetPacketUp": "GET requires packet-up mode",
+  "@warnXhttpReasonGetPacketUp": {
+    "description": "XHTTP reset reason: GET method only valid in packet-up mode."
+  },
+  "warnRowMore": "{message} (+{count} more)",
+  "@warnRowMore": {
+    "description": "Node warning row: first warning plus a count of the remaining ones.",
+    "placeholders": {
+      "message": {"type": "String"},
+      "count": {"type": "int"}
+    }
+  },
+  "warnDanglingOutboundRef": "Rule \"{rule}\" references missing outbound \"{tag}\".",
+  "@warnDanglingOutboundRef": {
+    "description": "Config validation (fatal): route rule points to a non-existent outbound; rule/tag = wire values.",
+    "placeholders": {
+      "rule": {"type": "String"},
+      "tag": {"type": "String"}
+    }
+  },
+  "warnDanglingDetourRef": "Outbound \"{owner}\" detour references missing outbound \"{tag}\".",
+  "@warnDanglingDetourRef": {
+    "description": "Config validation (fatal): detour points to a non-existent outbound; owner/tag = wire tags.",
+    "placeholders": {
+      "owner": {"type": "String"},
+      "tag": {"type": "String"}
+    }
+  },
+  "warnDanglingDnsServerRef": "{field} references missing DNS server \"{tag}\".",
+  "@warnDanglingDnsServerRef": {
+    "description": "Config validation (fatal): dns.final / default_domain_resolver points to a missing DNS server; field/tag = wire values.",
+    "placeholders": {
+      "field": {"type": "String"},
+      "tag": {"type": "String"}
+    }
+  },
+  "warnDetourCycleGroups": "Routing loop between groups: {cycle} — fix group membership to start the VPN.",
+  "@warnDetourCycleGroups": {
+    "description": "Config validation (fatal): detour cycle made only of groups; cycle = arrow-joined wire tags.",
+    "placeholders": {
+      "cycle": {"type": "String"}
+    }
+  },
+  "warnDetourCycleSingle": "Routing loop: \"{tag}\" points back into \"{detour}\" — change or remove its detour to start the VPN.",
+  "@warnDetourCycleSingle": {
+    "description": "Config validation (fatal): single culprit node closing a detour loop; tag/detour = wire tags.",
+    "placeholders": {
+      "tag": {"type": "String"},
+      "detour": {"type": "String"}
+    }
+  },
+  "warnDetourCycleMulti": "Routing loop: {count} nodes point back into their own chain — change or remove their detours to start the VPN: {tags}.",
+  "@warnDetourCycleMulti": {
+    "description": "Config validation (fatal): several culprit nodes close detour loops; count >= 2, tags = quoted comma-joined wire tags.",
+    "placeholders": {
+      "count": {"type": "int"},
+      "tags": {"type": "String"}
+    }
+  },
+  "warnEmptyUrltestGroup": "URL-test group \"{tag}\" has no outbounds.",
+  "@warnEmptyUrltestGroup": {
+    "description": "Config validation (fatal): urltest group with an empty member list; tag = wire tag.",
+    "placeholders": {
+      "tag": {"type": "String"}
+    }
+  },
+  "warnInvalidDefault": "Selector \"{group}\" default \"{tag}\" is not in the options list.",
+  "@warnInvalidDefault": {
+    "description": "Config validation (fatal): selector default not among its options; group/tag = wire tags.",
+    "placeholders": {
+      "group": {"type": "String"},
+      "tag": {"type": "String"}
+    }
+  },
+  "errStopRevoked": "Another VPN app took the system VPN slot (e.g. an always-on VPN). Start again to reconnect.",
+  "@errStopRevoked": {
+    "description": "Stop reason snackbar: the VPN slot was revoked by another app."
+  },
+  "errStoppedReason": "Stopped: {detail}",
+  "@errStoppedReason": {
+    "description": "Stop reason snackbar frame: tunnel stopped with a native/kernel reason; detail = English wire payload.",
+    "placeholders": {
+      "detail": {"type": "String"}
+    }
+  },
+  "errTimeoutShort": "timeout {seconds}s",
+  "@errTimeoutShort": {
+    "description": "formatUserError(TimeoutException): short timeout note; seconds = pre-formatted number (latin s suffix by policy).",
+    "placeholders": {
+      "seconds": {"type": "String"}
+    }
+  },
+  "errPlatformError": "platform error: {code}",
+  "@errPlatformError": {
+    "description": "formatUserError(PlatformException) without message; code = wire error code.",
+    "placeholders": {
+      "code": {"type": "String"}
+    }
+  },
+  "errReloadFailed": "Reload failed: {detail}",
+  "@errReloadFailed": {
+    "description": "Home: in-place VPN reload threw; detail = formatted error.",
+    "placeholders": {
+      "detail": {"type": "String"}
+    }
+  },
+  "errSwitchFailed": "Switch failed: {detail}",
+  "@errSwitchFailed": {
+    "description": "Home: node switch threw; detail = formatted error.",
+    "placeholders": {
+      "detail": {"type": "String"}
+    }
+  },
+  "errParseConfigFailed": "Failed to parse config: {detail}",
+  "@errParseConfigFailed": {
+    "description": "Config import: JSON parse failure; detail = parser message (English payload).",
+    "placeholders": {
+      "detail": {"type": "String"}
+    }
+  },
+  "errReadFileFailed": "Failed to read file: {detail}",
+  "@errReadFileFailed": {
+    "description": "Config import: file read failure; detail = formatted error.",
+    "placeholders": {
+      "detail": {"type": "String"}
+    }
+  },
+  "errFileError": "File error: {detail}",
+  "@errFileError": {
+    "description": "Generic file operation failure frame; detail = formatted error / OS payload.",
+    "placeholders": {
+      "detail": {"type": "String"}
+    }
+  },
+  "errFailedToStartVpn": "Failed to start VPN",
+  "@errFailedToStartVpn": {
+    "description": "Home snackbar: startVPN returned false."
+  },
+  "errStopTimedOut": "Stop timed out",
+  "@errStopTimedOut": {
+    "description": "Home snackbar: stopVPN did not confirm in time."
+  },
+  "errStopTimedOutReconnect": "Stop timed out — reconnect aborted",
+  "@errStopTimedOutReconnect": {
+    "description": "Home snackbar: reconnect aborted because the stop phase timed out."
+  },
+  "errConnectionTimedOut": "Connection timed out",
+  "@errConnectionTimedOut": {
+    "description": "Home snackbar: transient connecting/stopping phase timed out, service force-stopped."
+  },
+  "errTunnelNotResponding": "Connection lost — VPN tunnel is not responding",
+  "@errTunnelNotResponding": {
+    "description": "Home error banner: heartbeat watchdog declared the tunnel dead (no status snapshots)."
+  },
+  "errFailedToSaveConfig": "Failed to save config",
+  "@errFailedToSaveConfig": {
+    "description": "Config save: native saveConfig returned false."
+  },
+  "errConfigIsEmpty": "Config is empty",
+  "@errConfigIsEmpty": {
+    "description": "Config save: rejected empty config text."
+  },
+  "errClipboardIsEmpty": "Clipboard is empty",
+  "@errClipboardIsEmpty": {
+    "description": "Config import: clipboard had no text."
+  },
+  "errFailedToParseConfig": "Failed to parse config",
+  "@errFailedToParseConfig": {
+    "description": "Config import: parse failed without a specific message."
+  },
+  "errFailedToReadFile": "Failed to read file",
+  "@errFailedToReadFile": {
+    "description": "Config import: picked file had neither bytes nor path."
+  },
+  "errFileIsEmpty": "File is empty",
+  "@errFileIsEmpty": {
+    "description": "Config import: picked file was empty."
+  },
+  "errInvalidMasqueConfig": "Invalid MASQUE config",
+  "@errInvalidMasqueConfig": {
+    "description": "Add server: generated MASQUE URI failed to parse back."
+  },
+  "errInvalidWarpConfigObfuscated": "Invalid WARP config (obfuscated)",
+  "@errInvalidWarpConfigObfuscated": {
+    "description": "Add server: generated obfuscated WARP config failed to parse."
+  },
+  "errInvalidWarpConfig": "Invalid WARP config",
+  "@errInvalidWarpConfig": {
+    "description": "Add server: generated WARP URI failed to parse."
+  },
+  "errInvalidWireguardConfig": "Invalid WireGuard config",
+  "@errInvalidWireguardConfig": {
+    "description": "Add server: pasted WireGuard INI failed to parse."
+  },
+  "errNoWgInVpnLink": "No WireGuard/AmneziaWG config in vpn:// link",
+  "@errNoWgInVpnLink": {
+    "description": "Add server: Amnezia vpn:// container had no usable config."
+  },
+  "errCouldNotParseDirectLink": "Could not parse direct link",
+  "@errCouldNotParseDirectLink": {
+    "description": "Add server: proxy URI failed to parse."
+  },
+  "errInputNotRecognized": "Input is not a subscription URL, proxy link, or outbound JSON",
+  "@errInputNotRecognized": {
+    "description": "Add server: pasted text matched no known input format."
+  },
+  "errNoValidOutboundsInJson": "No valid outbounds in JSON",
+  "@errNoValidOutboundsInJson": {
+    "description": "Add server: JSON input contained no outbound objects."
+  },
+  "errNoConnection": "No connection — check network or URL",
+  "@errNoConnection": {
+    "description": "humanizeError(SocketException) without an identifiable host."
+  },
+  "errNoConnectionToHost": "No connection to {host} — check network or URL",
+  "@errNoConnectionToHost": {
+    "description": "humanizeError(SocketException); host = wire hostname.",
+    "placeholders": {
+      "host": {"type": "String"}
+    }
+  },
+  "errTimedOutAfter": "Timed out after {seconds}s — server slow or unreachable",
+  "@errTimedOutAfter": {
+    "description": "humanizeError(TimeoutException) with known duration; latin s suffix by policy.",
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
+  "errRequestTimedOut": "Request timed out — server slow or unreachable",
+  "@errRequestTimedOut": {
+    "description": "humanizeError(TimeoutException) without a duration."
+  },
+  "errCantParseResponse": "Can't parse response (invalid format)",
+  "@errCantParseResponse": {
+    "description": "humanizeError(FormatException): response body was not a subscription."
+  },
+  "errHttpAccessDenied": "Access denied ({code}) — check subscription token",
+  "@errHttpAccessDenied": {
+    "description": "humanizeError HTTP 401/403; code = HTTP status.",
+    "placeholders": {
+      "code": {"type": "int"}
+    }
+  },
+  "errHttpNotFound": "Not found (404) — subscription URL may be removed",
+  "@errHttpNotFound": {
+    "description": "humanizeError HTTP 404."
+  },
+  "errHttpGone": "Gone (410) — subscription deleted by provider",
+  "@errHttpGone": {
+    "description": "humanizeError HTTP 410."
+  },
+  "errHttpRateLimited": "Rate limited (429) — try again later",
+  "@errHttpRateLimited": {
+    "description": "humanizeError HTTP 429."
+  },
+  "errHttpServerError": "Server error ({code}) — provider is down, try later",
+  "@errHttpServerError": {
+    "description": "humanizeError HTTP 5xx; code = HTTP status.",
+    "placeholders": {
+      "code": {"type": "int"}
+    }
+  },
+  "errHttpRejected": "Request rejected ({code})",
+  "@errHttpRejected": {
+    "description": "humanizeError other HTTP 4xx; code = HTTP status.",
+    "placeholders": {
+      "code": {"type": "int"}
+    }
+  },
+  "errHttpPlain": "HTTP {code}",
+  "@errHttpPlain": {
+    "description": "humanizeError fallback for unclassified HTTP codes.",
+    "placeholders": {
+      "code": {"type": "int"}
+    }
+  },
+  "errConfigInvalidOne": "Config invalid: {issues}",
+  "@errConfigInvalidOne": {
+    "description": "Fatal validation frame for a single issue; issues = rendered issue text.",
+    "placeholders": {
+      "issues": {"type": "String"}
+    }
+  },
+  "errConfigInvalidMany": "Config invalid ({count} issues): {issues}",
+  "@errConfigInvalidMany": {
+    "description": "Fatal validation frame for several issues; issues = semicolon-joined rendered texts.",
+    "placeholders": {
+      "count": {"type": "int"},
+      "issues": {"type": "String"}
+    }
+  },
+  "errFolderNotFound": "Folder not found",
+  "@errFolderNotFound": {
+    "description": "Folder ops: target folder disappeared or index invalid."
+  },
+  "errNotAFolder": "Not a folder",
+  "@errNotAFolder": {
+    "description": "Folder ops: entry at index is not a folder."
+  },
+  "errServerNotFound": "Server not found",
+  "@errServerNotFound": {
+    "description": "Folder ops: member/server index invalid."
+  },
+  "errInvalidSubscription": "Invalid subscription",
+  "@errInvalidSubscription": {
+    "description": "Edit source: entry index invalid."
+  },
+  "errNotASubscription": "Not a subscription",
+  "@errNotASubscription": {
+    "description": "Edit source: entry is not a subscription."
+  },
+  "errNoSourceProvided": "No source provided",
+  "@errNoSourceProvided": {
+    "description": "Edit source: neither URL nor file given."
+  },
+  "errCouldNotLoadNewSource": "Couldn't load new source — keeping current subscription",
+  "@errCouldNotLoadNewSource": {
+    "description": "Edit source: new source fetch/parse failed, transaction rolled back."
+  },
+  "errNoServersFoundInInput": "No servers found in input",
+  "@errNoServersFoundInInput": {
+    "description": "Folder add: pasted text parsed to zero nodes."
+  },
+  "errNoServersFoundAtUrl": "No servers found at this URL",
+  "@errNoServersFoundAtUrl": {
+    "description": "Folder URL snapshot: fetched body parsed to zero nodes."
+  },
+  "errMemberParseKeepCurrent": "Could not parse server config — keeping current",
+  "@errMemberParseKeepCurrent": {
+    "description": "Folder member edit: new raw failed to parse, member kept."
+  },
+  "errDetourSelf": "A server cannot detour through itself",
+  "@errDetourSelf": {
+    "description": "Folder member detour: self-reference rejected."
+  },
+  "errDetourLoopInFolder": "This would create a detour loop inside the folder",
+  "@errDetourLoopInFolder": {
+    "description": "Folder member detour: intra-folder cycle rejected."
+  },
+  "errOnlySingleServersMove": "Only single servers can be moved",
+  "@errOnlySingleServersMove": {
+    "description": "Move to folder: only single-server entries can be moved into folders."
+  },
+  "subStatusFetching": "Fetching...",
+  "@subStatusFetching": {
+    "description": "Subscription row status while an update is in flight."
+  },
+  "subStatusJsonOutbound": "JSON outbound",
+  "@subStatusJsonOutbound": {
+    "description": "Subscription row status after saving inline JSON outbounds."
+  },
+  "subStatusCached": "{status} (cached)",
+  "@subStatusCached": {
+    "description": "Subscription row status frame: node count restored from the HTTP cache; status = rendered count text.",
+    "placeholders": {
+      "status": {"type": "String"}
+    }
+  },
+  "subStatusUpdateFailed": "{count} nodes (update failed)",
+  "@subStatusUpdateFailed": {
+    "description": "Subscription row status: refresh failed, previous nodes kept; count = kept nodes.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "subStatusUpdateFailedZero": "{count} nodes (update failed: 0 parsed)",
+  "@subStatusUpdateFailedZero": {
+    "description": "Subscription row status: refresh returned a body that parsed to zero nodes; count = kept nodes.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "subStatusZeroNodes": "0 nodes",
+  "@subStatusZeroNodes": {
+    "description": "Subscription row status: fetch parsed to zero nodes and none were kept."
+  },
+  "subStatusZeroNodesHint": "0 nodes — {hint}",
+  "@subStatusZeroNodesHint": {
+    "description": "Subscription row status with a parser diagnosis; hint = English parser hint (machine payload).",
+    "placeholders": {
+      "hint": {"type": "String"}
+    }
+  },
+  "subProgressBuildingConfig": "Building config...",
+  "@subProgressBuildingConfig": {
+    "description": "Progress banner while the config is being generated."
+  },
+  "homeTunnelDisconnected": "Disconnected",
+  "@homeTunnelDisconnected": {
+    "description": "Tunnel status chip label."
+  },
+  "homeTunnelConnecting": "Connecting…",
+  "@homeTunnelConnecting": {
+    "description": "Tunnel status chip label."
+  },
+  "homeTunnelConnected": "Connected",
+  "@homeTunnelConnected": {
+    "description": "Tunnel status chip label."
+  },
+  "homeTunnelStopping": "Stopping…",
+  "@homeTunnelStopping": {
+    "description": "Tunnel status chip label."
+  },
+  "homeTunnelRevoked": "Taken by another VPN",
+  "@homeTunnelRevoked": {
+    "description": "Tunnel status label when the VPN slot was revoked."
+  },
+  "homeTunnelError": "Error",
+  "@homeTunnelError": {
+    "description": "Tunnel status label for the error state."
+  },
+  "homeTunnelUnknown": "Unknown",
+  "@homeTunnelUnknown": {
+    "description": "Tunnel status label for an unrecognized native status."
+  },
+  "homeDetourLoopLeadGroups": "A routing loop was found between groups. Review the loop below and break it, then start again.",
+  "@homeDetourLoopLeadGroups": {
+    "description": "Detour-loop sheet lead text when the loop consists only of groups."
+  },
+  "homeDetourLoopLeadOne": "One node routes traffic back into its own chain. Tap it to open its source, change or remove its detour, then start again.",
+  "@homeDetourLoopLeadOne": {
+    "description": "Detour-loop sheet lead text for a single culprit node."
+  },
+  "homeDetourLoopLeadMany": "{count} nodes route traffic back into their own chain. Tap a node to open its source, change or remove its detour, then start again.",
+  "@homeDetourLoopLeadMany": {
+    "description": "Detour-loop sheet lead text for several culprit nodes; count >= 2.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "homeChannelNoNodesOne": "Channel \"{name}\" matched no nodes — check its node filter.",
+  "@homeChannelNoNodesOne": {
+    "description": "Home snackbar after a rebuild: one channel's node filter matched nothing; name = channel label.",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "homeChannelNoNodesMany": "{count} channels matched no nodes — check their node filters.",
+  "@homeChannelNoNodesMany": {
+    "description": "Home snackbar after a rebuild: several channels' node filters matched nothing.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "relTimeJustNow": "just now",
+  "@relTimeJustNow": {
+    "description": "Relative timestamp: less than a minute ago."
+  },
+  "relTimeMinutesAgo": "{count} min ago",
+  "@relTimeMinutesAgo": {
+    "description": "Relative timestamp: minutes ago; count = whole minutes (1..59).",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "relTimeHoursAgo": "{count}h ago",
+  "@relTimeHoursAgo": {
+    "description": "Relative timestamp: hours ago; count = whole hours (1..23).",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "relTimeYesterday": "yesterday",
+  "@relTimeYesterday": {
+    "description": "Relative timestamp: exactly one calendar day ago."
+  },
+  "relTimeDaysAgo": "{count}d ago",
+  "@relTimeDaysAgo": {
+    "description": "Relative timestamp: days ago; count = whole days (2..6).",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "relTimeWeeksAgo": "{count}w ago",
+  "@relTimeWeeksAgo": {
+    "description": "Relative timestamp: weeks ago; count = whole weeks (1..4).",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "relTimeMonthsAgo": "{count}mo ago",
+  "@relTimeMonthsAgo": {
+    "description": "Relative timestamp: months ago; count = whole months (1..12).",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "relTimeYearsAgo": "{count}y ago",
+  "@relTimeYearsAgo": {
+    "description": "Relative timestamp: years ago; count = whole years.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "subUpdateStatusOk": "OK",
+  "@subUpdateStatusOk": {
+    "description": "Subscription detail, status tile: last refresh succeeded."
+  },
+  "subUpdateStatusFailed": "Failed",
+  "@subUpdateStatusFailed": {
+    "description": "Subscription detail, status tile: last refresh failed (single failure)."
+  },
+  "subUpdateStatusFailedN": "Failed ({count} in a row)",
+  "@subUpdateStatusFailedN": {
+    "description": "Subscription detail, status tile: several consecutive refresh failures; count = failure streak.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "subUpdateStatusRefreshing": "Refreshing…",
+  "@subUpdateStatusRefreshing": {
+    "description": "Subscription detail, status tile: a refresh is in progress."
+  },
+  "subUpdateStatusNever": "Never updated",
+  "@subUpdateStatusNever": {
+    "description": "Subscription detail, status tile: the subscription has never been refreshed."
+  },
+  "subStatusLastSuccess": "Last success: {ago}",
+  "@subStatusLastSuccess": {
+    "description": "Subscription detail, status subtitle part: time of the last successful refresh; ago = relative time (e.g. '2h ago').",
+    "placeholders": {
+      "ago": {"type": "String"}
+    }
+  },
+  "subStatusLastAttempt": "Last attempt: {ago}",
+  "@subStatusLastAttempt": {
+    "description": "Subscription detail, status subtitle part: time of the last refresh attempt (differs from last success); ago = relative time.",
+    "placeholders": {
+      "ago": {"type": "String"}
+    }
+  },
+  "subIntervalEveryDays": "{count, plural, one{day} other{{count} days}}",
+  "@subIntervalEveryDays": {
+    "description": "Update-interval fragment embedded into 'auto-refresh every {interval}' / '({interval})': a whole number of days; count = days.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "subIntervalHoursLong": "{hours}h (auto-refresh every {interval})",
+  "@subIntervalHoursLong": {
+    "description": "Subscription detail, update-interval subtitle; hours = interval in hours, interval = human form ('day', '2 days', '36h').",
+    "placeholders": {
+      "hours": {"type": "int"},
+      "interval": {"type": "String"}
+    }
+  },
+  "subIntervalHoursShort": "{hours}h ({interval})",
+  "@subIntervalHoursShort": {
+    "description": "Subscription detail, update-interval menu option; hours = interval in hours, interval = human form ('day', '2 days').",
+    "placeholders": {
+      "hours": {"type": "int"},
+      "interval": {"type": "String"}
+    }
+  },
+  "subExpireUnlimited": "Unlimited",
+  "@subExpireUnlimited": {
+    "description": "Subscription expiry value: no expiry date (rendered after 'Expires:')."
+  },
+  "subExpireExpired": "Expired",
+  "@subExpireExpired": {
+    "description": "Subscription expiry value: the subscription has already expired (rendered after 'Expires:')."
+  },
+  "subExpireDaysLeft": "{count, plural, one{{count} day left} other{{count} days left}}",
+  "@subExpireDaysLeft": {
+    "description": "Subscription expiry value: days remaining; count = whole days.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "subExpireHoursLeft": "{count, plural, one{{count} hour left} other{{count} hours left}}",
+  "@subExpireHoursLeft": {
+    "description": "Subscription expiry value: hours remaining (less than a day); count = whole hours.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummaryDomains": "{count, plural, one{{count} domain} other{{count} domains}}",
+  "@ruleSummaryDomains": {
+    "description": "Routing rule summary chip: exact-domain match count.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummarySuffixes": "{count, plural, one{{count} suffix} other{{count} suffixes}}",
+  "@ruleSummarySuffixes": {
+    "description": "Routing rule summary chip: domain-suffix match count.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummaryKeywords": "{count, plural, one{{count} keyword} other{{count} keywords}}",
+  "@ruleSummaryKeywords": {
+    "description": "Routing rule summary chip: domain-keyword (substring) match count.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummaryCidrs": "{count, plural, one{{count} cidr} other{{count} cidrs}}",
+  "@ruleSummaryCidrs": {
+    "description": "Routing rule summary chip: destination IP CIDR count.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummaryPrivateIp": "private ip",
+  "@ruleSummaryPrivateIp": {
+    "description": "Routing rule summary chip: rule matches private destination IPs."
+  },
+  "ruleSummarySources": "{count} src",
+  "@ruleSummarySources": {
+    "description": "Routing rule summary chip: source IP CIDR count ('src' abbreviation).",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummaryPrivateSrc": "private src",
+  "@ruleSummaryPrivateSrc": {
+    "description": "Routing rule summary chip: rule matches private source IPs."
+  },
+  "ruleSummaryPorts": "{count, plural, one{{count} port} other{{count} ports}}",
+  "@ruleSummaryPorts": {
+    "description": "Routing rule summary chip: port + port-range count.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummaryApps": "{count, plural, one{{count} app} other{{count} apps}}",
+  "@ruleSummaryApps": {
+    "description": "Routing rule summary chip: Android package (per-app) match count.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummaryProtos": "{count} proto",
+  "@ruleSummaryProtos": {
+    "description": "Routing rule summary chip: sniffed-protocol match count ('proto' abbreviation).",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummaryNets": "{count} net",
+  "@ruleSummaryNets": {
+    "description": "Routing rule summary chip: L4 network (tcp/udp/icmp) match count ('net' abbreviation).",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummaryInbounds": "{count} in",
+  "@ruleSummaryInbounds": {
+    "description": "Routing rule summary chip: inbound match count ('in' abbreviation).",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummaryWifi": "{count} wifi",
+  "@ruleSummaryWifi": {
+    "description": "Routing rule summary chip: Wi-Fi SSID match count.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "ruleSummarySrs": "SRS: {host}",
+  "@ruleSummarySrs": {
+    "description": "Routing rule summary for a remote .srs rule-set; host = rule-set URL host (or the raw URL if it has no host).",
+    "placeholders": {
+      "host": {"type": "String"}
+    }
+  },
+  "routingRulePresetMissing": "Preset not found — tap to fix",
+  "@routingRulePresetMissing": {
+    "description": "Routing rules list, rule subtitle: the preset this rule references no longer exists in the template."
+  },
+  "routingRuleTapToEdit": "Tap to edit",
+  "@routingRuleTapToEdit": {
+    "description": "Routing rules list, rule subtitle: preset rule with no non-default vars to show."
+  },
+  "routingRuleSummaryTapToEdit": "{summary} — tap to edit",
+  "@routingRuleSummaryTapToEdit": {
+    "description": "Routing rules list, rule subtitle; summary = short description of the rule's match fields or non-default vars.",
+    "placeholders": {
+      "summary": {"type": "String"}
+    }
+  },
+  "routingRuleTapToAddFields": "Tap to add match fields",
+  "@routingRuleTapToAddFields": {
+    "description": "Routing rules list, rule subtitle: inline rule with no match fields yet."
+  },
+  "appSettingsGenUpdateAvailable": "{tag} available",
+  "@appSettingsGenUpdateAvailable": {
+    "description": "Update-check result line: a newer release exists; tag = release tag (e.g. 'v2.15.11').",
+    "placeholders": {
+      "tag": {"type": "String"}
+    }
+  },
+  "appSettingsGenUpToDate": "You're up to date",
+  "@appSettingsGenUpToDate": {
+    "description": "Update-check result line: the installed version is the latest."
+  },
+  "appSettingsGenUpdateCheckFailed": "Check failed: {message}",
+  "@appSettingsGenUpdateCheckFailed": {
+    "description": "Update-check result line: the check failed; message = error detail passthrough.",
+    "placeholders": {
+      "message": {"type": "String"}
+    }
+  },
+  "appSettingsGenLastCheckNever": "Last check: never",
+  "@appSettingsGenLastCheckNever": {
+    "description": "Update-check status line: no update check has ever run."
+  },
+  "appSettingsGenLastCheck": "Last check: {when}",
+  "@appSettingsGenLastCheck": {
+    "description": "Update-check status line; when = relative time of the last check (e.g. '2h ago').",
+    "placeholders": {
+      "when": {"type": "String"}
+    }
+  },
+  "aboutReleasedAgo": "Released {when}",
+  "@aboutReleasedAgo": {
+    "description": "About screen, update info: when the latest release was published; when = relative time (e.g. '3d ago').",
+    "placeholders": {
+      "when": {"type": "String"}
+    }
+  },
+  "aboutCachedInfo": "(cached info)",
+  "@aboutCachedInfo": {
+    "description": "About screen, update info: release info comes from cache and has no publish date."
+  },
+  "routingWifiLastSeenNever": "never",
+  "@routingWifiLastSeenNever": {
+    "description": "Saved Wi-Fi picker, last-seen column: the network was never seen (no timestamp recorded)."
+  },
+  "routingWifiLastSeenUnknown": "unknown",
+  "@routingWifiLastSeenUnknown": {
+    "description": "Saved Wi-Fi picker, last-seen column: the stored timestamp is malformed."
   }
 }

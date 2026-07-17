@@ -40,7 +40,7 @@ Future<void> showSortOptionsMenu(
                     for (final m in NodeSortMode.values)
                       ChoiceChip(
                         avatar: Icon(m.icon, size: 16),
-                        label: Text(m.label),
+                        label: Text(m.label(context.l)),
                         selected: s.sortMode == m,
                         onSelected: (_) {
                           controller.setSortMode(m);
