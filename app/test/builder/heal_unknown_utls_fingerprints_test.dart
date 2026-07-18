@@ -117,6 +117,35 @@ void main() {
           reason: 'без uTLS ядро отвергает reality-outbound на старте');
     });
 
+    test(
+        'РЕВЬЮ §282: QUIC (hysteria2/tuic) → utls И reality СНЯТЫ, '
+        'НЕ восстановлены (иначе воскрешение мёртвой QUIC-ноды)', () {
+      for (final type in ['hysteria2', 'tuic']) {
+        final config = {
+          'outbounds': [
+            {
+              'tag': 'q',
+              'type': type,
+              'tls': {
+                'enabled': true,
+                'server_name': 'x.com',
+                'reality': {'enabled': true, 'public_key': 'pk'},
+                'utls': {'enabled': true, 'fingerprint': 'garbage'},
+              },
+            },
+          ],
+        };
+        final healed = healUnknownUtlsFingerprints(config);
+
+        expect(healed, isEmpty, reason: '$type: срез — молча');
+        final tls = ((config['outbounds'] as List)[0] as Map)['tls'] as Map;
+        expect(tls.containsKey('utls'), isFalse, reason: '$type utls снят');
+        expect(tls.containsKey('reality'), isFalse,
+            reason: '$type reality снят');
+        expect(tls['server_name'], 'x.com', reason: '$type остальное цело');
+      }
+    });
+
     test('РЕВЬЮ §281: REALITY + utls.enabled=false → включён', () {
       final config = {
         'outbounds': [

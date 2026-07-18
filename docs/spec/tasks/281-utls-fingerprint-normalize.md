@@ -104,9 +104,10 @@ severity warning, ARB-ключ `warnUnknownFingerprint` (en+ru), рендер в
    срезает до enabled/server_name (зеркало naive_parser).
 3. Отдельно (не config-fatal): uTLS поверх QUIC (hysteria2/tuic) в ядре
    не работает вообще (`STDConfig()` → «unsupported usage for uTLS») —
-   нода с fingerprint мертва per-connection. Решение пользователя
-   2026-07-18: чинится НА СТОРОНЕ ЯДРА (запрос в sing-box-lx отправлен);
-   app-side срез utls для QUIC-протоколов НЕ делаем.
+   нода с fingerprint мертва per-connection. Аудит ядра
+   `SPECS/027-UTLS_OVER_QUIC`: настоящий фикс недостижим/отложен, предписано
+   лечить app-side (прекратить эмиссию `fp` для hy2/tuic). Реализовано в
+   §282 (срез utls-блока в emitHysteria2/emitTuic).
 
 ## Что НЕ делает
 

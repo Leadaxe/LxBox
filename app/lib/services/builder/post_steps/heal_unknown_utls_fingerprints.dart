@@ -23,6 +23,15 @@ List<({String owner, String original})> healUnknownUtlsFingerprints(
   for (final o in outbounds) {
     final tls = o['tls'];
     if (tls is! Map<String, dynamic>) continue;
+    // §282 — uTLS И reality поверх QUIC (hysteria2/tuic) = мёртвая нода
+    // (SPECS/027). Здесь именно СНИМАЕМ оба блока (эмиттер их не пишет, но
+    // vars/будущие пути могут); НЕ восстанавливаем utls как для TCP+reality
+    // ниже — иначе воскресили бы мёртвую QUIC-ноду.
+    if (o['type'] == 'hysteria2' || o['type'] == 'tuic') {
+      tls.remove('utls');
+      tls.remove('reality');
+      continue;
+    }
     var utls = tls['utls'];
     // §281 (ревью) — REALITY без uTLS-блока = fatal «uTLS is required by
     // reality client» при создании outbound. Восстанавливаем минимальный

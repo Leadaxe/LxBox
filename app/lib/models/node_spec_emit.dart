@@ -308,7 +308,8 @@ Outbound emitHysteria2(Hysteria2Spec s, TemplateVars vars) {
   }
   if (s.upMbps != null) out['up_mbps'] = s.upMbps;
   if (s.downMbps != null) out['down_mbps'] = s.downMbps;
-  out['tls'] = s.tls.toSingbox();
+  // §282 — QUIC не поддерживает uTLS; fp на hysteria2 = мусор подписок.
+  out['tls'] = s.tls.toSingboxForQuic();
   _addDetour(out, s);
   return Outbound(out);
 }
@@ -403,7 +404,8 @@ Outbound emitTuic(TuicSpec s, TemplateVars vars) {
     ..['congestion_control'] = s.congestionControl
     ..['udp_relay_mode'] = s.udpRelayMode;
   if (s.zeroRtt) out['zero_rtt_handshake'] = true;
-  out['tls'] = s.tls.toSingbox();
+  // §282 — QUIC не поддерживает uTLS; fp на tuic = мусор подписок.
+  out['tls'] = s.tls.toSingboxForQuic();
   _addDetour(out, s);
   return Outbound(out);
 }
