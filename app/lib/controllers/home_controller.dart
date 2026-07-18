@@ -15,6 +15,7 @@ import '../models/home_state.dart';
 import '../services/app_log.dart';
 import '../services/automation/event_emitter.dart';
 import '../services/error_format.dart';
+import '../services/probe/probe_lifecycle.dart';
 import '../services/rule_name_resolver.dart';
 import '../services/selector_info.dart';
 import '../services/settings_storage.dart';
@@ -315,14 +316,12 @@ class HomeController extends ChangeNotifier
         return;
       }
       _stopHeartbeat();
-      // §141 P1.2b — единый контракт «tunnel down»: отменяем in-flight mass-ping
-      // ПЕРЕД гашением канала, симметрично `_onTunnelDead` (heartbeat.dart).
-      // Иначе воркеры mass-ping'а, стартовавшие из _scheduleAutoPing/ручного
-      // запуска, дописывают stale-delay в мёртвую сессию (epoch-гейт их
-      // самоисцелит, но явная отмена — чище и не зависит от тайминга).
-      cancelMassPing();
-      _autoPingTimer?.cancel();
-      _autoPingTimer = null;
+      // §141 P1.2b / §286 — единый контракт «tunnel down»: гасим ВСЁ пробирование
+      // (mass-ping + auto-ping-таймер + folder-probe sweep'ы) ПЕРЕД гашением
+      // канала, симметрично `_onTunnelDead`. Иначе воркеры/пробы дописывают
+      // stale-результаты в мёртвую сессию (epoch-гейт mass-ping'а их самоисцелит,
+      // но folder-probe не epoch-aware — явная отмена детерминирована).
+      haltAllProbing();
       // §122 — гасим CommandClient-стримы и screenClient (disconnectScreen).
       // На следующем `connected` пересоберём (`_startCcStreams`).
       _stopCcStreams();
@@ -1129,6 +1128,13 @@ class HomeController extends ChangeNotifier
   /// таймер не создаёт. Поэтому на resume рестартуем явно (см. `_resyncOnResume`).
   void onAppPaused() {
     _stopHeartbeat();
+    // §286 — в фоне пробирование бессмысленно и «молотит после сворачивания»:
+    // folder-probe sweep / mass-ping / auto-ping-таймер переживали фон, т.к.
+    // onAppPaused гасил только status+screen-клиенты. Гасим ВСЁ пробирование
+    // (решение: сворачивание = отмена проб). Возврат из фона свежий прогон
+    // запустит заново, если нужно. Безусловно (не завязано на tunnelUp) —
+    // headless-проба папки может идти и при down-туннеле.
+    haltAllProbing();
     // §164 — энергомодель: в фоне UI не виден → гасим status+screen CC-клиенты
     // (0 тиков/0 drain). profilerClient НЕ трогаем (recording живёт в фоне).
     // Выключение VPN в фоне ловит нативный broadcast (не CC) → не слепнем.

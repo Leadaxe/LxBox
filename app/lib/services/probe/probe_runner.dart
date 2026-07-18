@@ -5,6 +5,7 @@ import '../../vpn/cc_channel.dart';
 import '../app_log.dart';
 import '../tag_resolver.dart';
 import 'probe_config.dart';
+import 'probe_lifecycle.dart';
 
 /// §236 — вердикт теста одного члена папки.
 enum ProbeStatus {
@@ -63,57 +64,66 @@ class FolderProbeRunner {
     required void Function(int memberIndex, ProbeResult result) onResult,
   }) async {
     _cancelled = false;
-    final cfg = buildProbeConfig(folder);
+    // §286 — регистрируем отмену в общем реестре: stop VPN / смерть туннеля /
+    // сворадивание дёрнут ProbeLifecycle.haltAll() → cancel() здесь, и sweep
+    // прекратится, даже если экран деталей папки не в фокусе. Снимаем в finally.
+    final canceller = ProbeLifecycle.I.register(cancel);
+    try {
+      final cfg = buildProbeConfig(folder);
 
-    // Битые/несобираемые — вердикт сразу, без ядра.
-    cfg.brokenByMember.forEach((i, why) {
-      onResult(
-          i,
-          ProbeResult(
-            why == 'broken' ? ProbeStatus.broken : ProbeStatus.invalid,
-            message: why,
-          ));
-    });
-    if (cfg.configJson == null) return '';
+      // Битые/несобираемые — вердикт сразу, без ядра.
+      cfg.brokenByMember.forEach((i, why) {
+        onResult(
+            i,
+            ProbeResult(
+              why == 'broken' ? ProbeStatus.broken : ProbeStatus.invalid,
+              message: why,
+            ));
+      });
+      if (cfg.configJson == null) return '';
 
-    final err = await _cc.probeStart(cfg.configJson!);
-    if (err.isEmpty) {
-      try {
-        await _runPool(
-          cfg.tagByMember,
-          test: (tag) => _cc.probeUrlTest(tag, link: url, timeoutMs: timeoutMs),
-          onResult: onResult,
-        );
-      } finally {
-        await _cc.probeStop();
+      final err = await _cc.probeStart(cfg.configJson!);
+      if (err.isEmpty) {
+        try {
+          await _runPool(
+            cfg.tagByMember,
+            test: (tag) =>
+                _cc.probeUrlTest(tag, link: url, timeoutMs: timeoutMs),
+            onResult: onResult,
+          );
+        } finally {
+          await _cc.probeStop();
+        }
+        return '';
       }
+
+      if (!_looksLikeVpnRunning(err)) {
+        AppLog.I.warning('Probe session failed to start: $err');
+        return err;
+      }
+
+      // VPN запущен → тестируем через боевое ядро. В конфиге только включённые
+      // члены (и только если сама папка включена); теги — display-form с
+      // префиксом папки (§080-паттерн; collision-суффикс ядра не учитывается —
+      // известное ограничение).
+      final liveTags = <int, String>{};
+      for (final i in cfg.tagByMember.keys) {
+        final m = folder.members[i];
+        if (!folder.enabled || !m.enabled) {
+          onResult(i, const ProbeResult(ProbeStatus.notInConfig));
+          continue;
+        }
+        liveTags[i] = TagResolver.displayTag(folder.tagPrefix, m.node!.tag);
+      }
+      await _runPool(
+        liveTags,
+        test: (tag) => _cc.urlTestOutbound(tag, link: url, timeoutMs: timeoutMs),
+        onResult: onResult,
+      );
       return '';
+    } finally {
+      ProbeLifecycle.I.deregister(canceller);
     }
-
-    if (!_looksLikeVpnRunning(err)) {
-      AppLog.I.warning('Probe session failed to start: $err');
-      return err;
-    }
-
-    // VPN запущен → тестируем через боевое ядро. В конфиге только включённые
-    // члены (и только если сама папка включена); теги — display-form с
-    // префиксом папки (§080-паттерн; collision-суффикс ядра не учитывается —
-    // известное ограничение).
-    final liveTags = <int, String>{};
-    for (final i in cfg.tagByMember.keys) {
-      final m = folder.members[i];
-      if (!folder.enabled || !m.enabled) {
-        onResult(i, const ProbeResult(ProbeStatus.notInConfig));
-        continue;
-      }
-      liveTags[i] = TagResolver.displayTag(folder.tagPrefix, m.node!.tag);
-    }
-    await _runPool(
-      liveTags,
-      test: (tag) => _cc.urlTestOutbound(tag, link: url, timeoutMs: timeoutMs),
-      onResult: onResult,
-    );
-    return '';
   }
 
   static bool _looksLikeVpnRunning(String err) =>
