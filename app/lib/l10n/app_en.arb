@@ -4367,6 +4367,15 @@
   "@warnNaiveBuildTag": {
     "description": "Node warning: libbox built without the naive outbound build tag."
   },
+  "warnUnknownFingerprint": "Unknown uTLS fingerprint \"{value}\" replaced with \"chrome\" (would otherwise break the whole config).",
+  "@warnUnknownFingerprint": {
+    "description": "Node warning: uTLS fingerprint not in the sing-box dictionary was replaced with chrome; value = wire value.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "warnXhttpParamReset": "XHTTP \"{field}\" reset to default — {reason} (would otherwise break the whole config).",
   "@warnXhttpParamReset": {
     "description": "Node warning frame: an XHTTP param was reset; field = wire param name, reason = one of the warnXhttpReason* phrases.",

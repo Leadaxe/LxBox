@@ -3,6 +3,7 @@ import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
 import 'uri_utils.dart';
+import 'utls_fingerprint.dart';
 
 /// Парсинг Xray JSON array (одно вхождение — один узел).
 /// Упрощённая версия — поддерживает VLESS + SOCKS для detour-chain.
@@ -96,7 +97,9 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
   }
 
   final stream = o['streamSettings'] as Map? ?? const {};
-  final tls = _xrayTlsFromStream(stream, server);
+  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
+  final tls =
+      normalizeTlsFingerprint(_xrayTlsFromStream(stream, server), warnings);
   final transport = _xrayTransportFromStream(stream);
 
   // §115 — flow берём из конфига как есть (раньше REALITY+tcp без flow
@@ -353,7 +356,10 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         rawUri: '',
         username: entry['username']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
-        tls: _tlsFromSingbox(entry['tls'], server),
+        // §281 (ревью) — naive принимает ТОЛЬКО enabled/server_name в TLS:
+        // alpn/utls/insecure/reality ядро отклоняет при создании outbound
+        // (fatal всего конфига). Зеркало naive_parser: срезаем блок.
+        tls: _naiveTlsFromSingbox(entry['tls'], server),
         extraHeaders: extraHeaders,
       );
     case 'tuic':
@@ -536,12 +542,22 @@ List<int>? _reservedFromJson(dynamic raw) {
   return out;
 }
 
+/// §281 — TLS для naive-entry: только enabled/server_name (см. naive_parser).
+TlsSpec _naiveTlsFromSingbox(dynamic raw, String server) {
+  final full = _tlsFromSingbox(raw, server);
+  if (!full.enabled) return full;
+  return TlsSpec(enabled: true, serverName: full.serverName);
+}
+
 TlsSpec _tlsFromSingbox(dynamic raw, String server) {
   if (raw is! Map) return TlsSpec.disabled;
   if (raw['enabled'] != true) return TlsSpec.disabled;
   final utls = raw['utls'] as Map?;
   final reality = raw['reality'] as Map?;
-  return TlsSpec(
+  // §281 — fp канонизируется молча (псевдонимы И мусор → словарь ядра):
+  // у parseSingboxEntry нет warnings-аккумулятора, это power-user путь
+  // JSON-редактора/Smart-Paste — итоговое значение видно в самом JSON.
+  return normalizeTlsFingerprint(TlsSpec(
     enabled: true,
     serverName: raw['server_name']?.toString() ?? server,
     alpn: (raw['alpn'] as List?)?.map((e) => e.toString()).toList() ?? const [],
@@ -558,7 +574,7 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
             shortId:
                 normalizeRealityShortId(reality['short_id']?.toString() ?? ''),
           ),
-  );
+  ), null);
 }
 
 TransportSpec? _transportFromSingbox(dynamic raw) {
