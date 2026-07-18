@@ -53,6 +53,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   // §236 — состояние Test servers. Результаты эфемерны (не персистятся).
   final Map<int, ProbeResult> _probe = {};
   FolderProbeRunner? _runner;
+  // §286 — коалесцированный ребилд результатов пробы: onResult пишет в _probe
+  // без setState-на-члена (у «WARP GENERATOR» ~100 членов → ~100 ребилдов
+  // пачкой), а этот throttle сливает их в один setState раз в ~120мс.
+  Timer? _probeFlushTimer;
   bool _testing = false;
   ProbeThresholds _thresholds = const ProbeThresholds();
 
@@ -188,6 +192,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     widget.controller.removeListener(_onEntriesChanged); // §278
     // Отмена доводит run() до finally → probeStop (сессия не повисает).
     _runner?.cancel();
+    _probeFlushTimer?.cancel(); // §286
+    _probeFlushTimer = null;
     _tabCtrl.dispose();
     _nameCtrl.dispose();
     _filterRegexCtl.dispose();
@@ -212,9 +218,21 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
 
   // ─────────────────────── §236 — Test servers ───────────────────────
 
+  /// §286 — коалесцированный ребилд результатов пробы: trailing-throttle ~120мс.
+  /// Много onResult подряд → один setState на окно, а не setState на член.
+  void _scheduleProbeFlush() {
+    if (_probeFlushTimer != null) return;
+    _probeFlushTimer = Timer(const Duration(milliseconds: 120), () {
+      _probeFlushTimer = null;
+      if (mounted) setState(() {});
+    });
+  }
+
   Future<void> _toggleTest() async {
     if (_testing) {
       _runner?.cancel();
+      _probeFlushTimer?.cancel();
+      _probeFlushTimer = null;
       setState(() => _testing = false);
       return;
     }
@@ -245,9 +263,15 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       timeoutMs: timeoutMs,
       onResult: (i, r) {
         if (!mounted) return;
-        setState(() => _probe[i] = r);
+        // §286 — накапливаем без setState-на-члена; throttle сольёт в один
+        // ребилд (~120мс). Иначе «WARP GENERATOR» (~100 членов) даёт ~100
+        // setState пачкой → главный поток лагает.
+        _probe[i] = r;
+        _scheduleProbeFlush();
       },
     );
+    _probeFlushTimer?.cancel();
+    _probeFlushTimer = null;
     if (!mounted) return;
     setState(() => _testing = false);
     if (err.isNotEmpty) {
