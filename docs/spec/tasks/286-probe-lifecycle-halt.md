@@ -1,6 +1,6 @@
 # §286 — Детерминированная остановка пробирования (URLTest) на stop/pause + батчинг UI
 
-**Тип:** bug + UX · **Статус:** in progress
+**Тип:** bug + UX · **Статус:** complete (коммиты `18a1111` fix + `ff25cdd` test, develop)
 
 ## Проблема
 
