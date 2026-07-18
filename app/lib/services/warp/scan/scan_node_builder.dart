@@ -1,16 +1,21 @@
 // §284 — сборка узла-кандидата (URI) из WARP-аккаунта. Одна регистрация →
-// множество узлов на разных IP:port/SNI/протоколе. Креды (ключи, client_id,
-// server-pubkey) переиспользуются: у Cloudflare они привязаны к аккаунту
-// устройства, а не к конкретному data-plane IP.
+// множество узлов на разных IP:port/SNI/протоколе/приманке. Креды (ключи,
+// client_id, server-pubkey) переиспользуются: у Cloudflare они привязаны к
+// аккаунту устройства, а не к конкретному data-plane IP.
+//
+// Тег узла (заголовок в списке) = [ScanCandidate.nodeTitle], проносится через
+// фрагмент URI: для MASQUE — `#<label>` напрямую; для WG (.conf/INI) — через
+// `nameHint` парсера, который кладёт его во фрагмент.
 
+import '../../parser/ini_parser.dart';
 import '../masque_account.dart';
 import '../masquerade_params.dart';
 import '../warp_account.dart';
 import '../warp_client.dart';
 import 'scan_models.dart';
 
-/// Строит `wireguard://`/`masque://` URI для кандидата поверх аккаунтов.
-/// Возвращает null, если для нужного протокола нет аккаунта (caller пропускает).
+/// Строит `wireguard://`/`masque://` URI (с тегом-заголовком) для кандидата.
+/// Возвращает null, если для протокола нет аккаунта или сборка/парс не удались.
 class ScanNodeBuilder {
   ScanNodeBuilder({this.warp, this.masque});
 
@@ -27,19 +32,32 @@ class ScanNodeBuilder {
     }
   }
 
-  /// AWG-узел: аккаунт с подменённым endpoint + обфускация (masquerade-домен =
-  /// SNI кандидата). `.conf` (INI) — как обфусцированный WARP в §126.
+  /// AWG-узел: аккаунт с подменённым endpoint + обфускация (masquerade `ip`
+  /// приманки + `id`=SNI). `.conf` → `parseWireguardIni(nameHint: nodeTitle)`
+  /// → канонический `wireguard://…#nodeTitle`.
   String? _wgUri(ScanCandidate c) {
     final acc = warp;
     if (acc == null) return null;
-    final awg = WarpClient.buildAmneziaAwg(QuicParams(sni: c.sni));
+    final p = c.awgParams;
+    final awg = WarpClient.buildAmneziaAwg(QuicParams(
+      sni: c.sni,
+      ip: p?.ip ?? 'quic',
+      jc: p?.jc ?? 4,
+      jmin: p?.jmin ?? 40,
+      jmax: p?.jmax ?? 70,
+    ));
     final tuned = acc.copyWith(endpoint: c.endpoint, awg: awg);
     // reserved опускаем: рабочие AWG-конфиги идут без client_id (§142).
-    return tuned.toWireguardConf(includeReserved: false);
+    final spec = parseWireguardIni(
+      tuned.toWireguardConf(includeReserved: false),
+      nameHint: c.nodeTitle,
+    );
+    return spec?.toUri();
   }
 
   /// MASQUE-узел: те же креды, свой data-plane IP:port + network (h3/h2) + SNI.
-  /// server/port нет в copyWith — пересобираем аккаунт (ip:port из кандидата).
+  /// server/port нет в copyWith — пересобираем аккаунт. Фрагмент URI переписываем
+  /// на nodeTitle (тег = фрагмент, `tagFromLabel`).
   String? _masqueUri(ScanCandidate c) {
     final acc = masque;
     if (acc == null) return null;
@@ -58,6 +76,9 @@ class ScanNodeBuilder {
       idleTimeout: acc.idleTimeout,
       keepAlive: acc.keepAlive,
     );
-    return tuned.toMasqueUri();
+    final uri = tuned.toMasqueUri();
+    final hash = uri.lastIndexOf('#');
+    final base = hash < 0 ? uri : uri.substring(0, hash);
+    return '$base#${Uri.encodeComponent(c.nodeTitle)}';
   }
 }

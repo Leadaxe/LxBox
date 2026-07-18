@@ -60,4 +60,21 @@ void main() {
     final onlyWarp = ScanNodeBuilder(warp: warp());
     expect(onlyWarp.uriFor(cand(ScanProtocol.masqueH3)), isNull);
   });
+
+  test('заголовок узла (nodeTitle) проносится в фрагмент URI', () {
+    final b = ScanNodeBuilder(warp: warp(), masque: masque());
+
+    final awg = ScanCandidate(
+      ip: '162.159.192.7',
+      port: 2408,
+      protocol: ScanProtocol.awg,
+      sni: 'ya.ru',
+      awgParams: const AwgParams(ip: 'quic', jc: 4, jmin: 40, jmax: 70),
+    );
+    final awgUri = Uri.decodeComponent(b.uriFor(awg)!);
+    expect(awgUri, contains('WARP AWG (quic ya.ru)'));
+
+    final h3 = b.uriFor(cand(ScanProtocol.masqueH3, ip: '162.159.198.5', port: 443))!;
+    expect(Uri.decodeComponent(h3), contains('WARP MASQUE (h3: yandex.ru)'));
+  });
 }

@@ -31,6 +31,10 @@ class CandidateGenerator {
         : _masqueCandidate(proto);
   }
 
+  /// Протоколы приманки AWG (masquerade `ip`). quic — самый частый (мимикрия
+  /// под QUIC/HTTP3), но варьируем — иначе все AWG-узлы одинаковы.
+  static const _awgIpModes = ['quic', 'quic', 'quic', 'dns', 'stun'];
+
   ScanCandidate _wgCandidate(ScanProtocol proto) {
     final useV6 = _pool.wgV6Cidr.isNotEmpty && _rng.nextBool();
     final cidr = _pick(useV6 ? _pool.wgV6Cidr : _pool.wgV4Cidr);
@@ -39,8 +43,19 @@ class CandidateGenerator {
       port: _pickWgPort(),
       protocol: proto,
       sni: _pool.sniPool.isEmpty ? '' : _pick(_pool.sniPool),
+      awgParams: _randomAwg(),
     );
   }
+
+  /// AWG-параметры. Jitter фиксирован дефолтом Amnezia 1.5 (4/40/70 —
+  /// обкатанное значение; варьировать его смысла нет, liveness не меняет).
+  /// Разнообразие даёт только `ip` — протокол приманки (quic/dns/stun).
+  AwgParams _randomAwg() => AwgParams(
+        ip: _pick(_awgIpModes),
+        jc: 4,
+        jmin: 40,
+        jmax: 70,
+      );
 
   ScanCandidate _masqueCandidate(ScanProtocol proto) {
     final cidr = _pick(_pool.masqueV4Cidr);
@@ -104,6 +119,7 @@ class CandidateGenerator {
       port: isWg ? _pickWgPort() : _pool.masquePort,
       protocol: p,
       sni: sniPool.isEmpty ? '' : _pick(sniPool),
+      awgParams: isWg ? _randomAwg() : null,
     );
   }
 }

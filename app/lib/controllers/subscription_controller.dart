@@ -11,7 +11,6 @@ import '../models/ui_msg.dart';
 import '../models/subscription_meta.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
-import '../services/l10n/l10n.dart' show AppLocalizations;
 import '../services/automation/event_emitter.dart';
 import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
@@ -37,6 +36,7 @@ import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/warp_client.dart';
 import '../services/warp/warp_endpoint_picker.dart';
+import '../vpn/box_vpn_client.dart';
 import '../services/probe/probe_runner.dart';
 import '../services/warp/scan/candidate_generator.dart';
 import '../services/warp/scan/scan_models.dart';
@@ -973,6 +973,11 @@ class SubscriptionController extends ChangeNotifier {
   }) async {
     final pool = (await WarpEndpointPicker.load()).scan;
     if (pool == null) return null;
+
+    // 0. Стоп боевого VPN — пробы должны уходить напрямую (probe-сессия требует
+    //    выключенного туннеля; ProbeSession гейтится на commandClient==null).
+    //    Блокирующий до Stopped; если VPN уже опущен — быстрый no-op.
+    await BoxVpnClient().stopVPN();
 
     // 1. Аккаунты: кеш → или регистрация один раз (обоих типов — для смешанного
     //    посева). Регистрация может частично не удаться — используем что есть.
