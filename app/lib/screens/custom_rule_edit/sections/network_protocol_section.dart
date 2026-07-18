@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/custom_rule.dart'
     show kKnownNetworks, kKnownProtocols;
-import '../../../services/l10n/l10n.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §240 — NETWORK & PROTOCOL section.
 ///
@@ -66,14 +66,14 @@ class NetworkProtocolSection extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      context.l.ruleEditNetworkProtocolHeader,
+                      getLocalText.s("NETWORK & PROTOCOL"),
                       style: t.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
                         color: t.colorScheme.primary,
                       ),
                     ),
                     Text(
-                      context.l.ruleEditNetworkProtocolHint,
+                      getLocalText.s("AND with match. Transport (L4) and L7 sniff."),
                       style: TextStyle(
                         fontSize: 12,
                         color: t.colorScheme.onSurfaceVariant,
@@ -84,7 +84,7 @@ class NetworkProtocolSection extends StatelessWidget {
               ),
               TextButton.icon(
                 icon: const Icon(Icons.tune, size: 18),
-                label: Text(context.l.commonEdit),
+                label: Text(getLocalText.s("Edit")),
                 onPressed: () => _openSheet(context),
               ),
             ],
@@ -94,7 +94,7 @@ class NetworkProtocolSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: Text(
-              context.l.ruleEditNetworkProtocolAny,
+              getLocalText.s("Any — tap Edit to filter by network / L7 protocol"),
               style: TextStyle(
                 fontSize: 13,
                 color: t.colorScheme.onSurfaceVariant,
@@ -200,11 +200,11 @@ class _NetworkProtocolSheetState extends State<NetworkProtocolSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(context.l.ruleEditProtocolFilterTitle,
+            Text(getLocalText.s("Protocol filter"),
                 style: t.textTheme.titleMedium),
             const SizedBox(height: 2),
             Text(
-              context.l.ruleEditProtocolFilterSub,
+              getLocalText.s("Matches when traffic is on a selected network AND matches a selected L7 protocol."),
               style: TextStyle(
                 fontSize: 12,
                 color: t.colorScheme.onSurfaceVariant,
@@ -255,12 +255,12 @@ class _NetworkProtocolSheetState extends State<NetworkProtocolSheet> {
                           setState(() {});
                         }
                       : null,
-                  child: Text(context.l.commonClearAll),
+                  child: Text(getLocalText.s("Clear all")),
                 ),
                 const Spacer(),
                 FilledButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: Text(context.l.commonDone),
+                  child: Text(getLocalText.s("Done")),
                 ),
               ],
             ),

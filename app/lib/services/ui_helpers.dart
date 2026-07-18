@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'l10n/l10n.dart';
+import 'l10n/locale_controller.dart';
 
 /// §219 — общий snackbar-хелпер для State'ов. До этого `_snack`/`_showSnack`
 /// дублировались приватно в backup/debug/warp_wizard/add_server_wizard экранах.
@@ -36,13 +36,13 @@ Future<bool?> showDeleteConfirmDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
-          child: Text(ctx.l.commonCancel),
+          child: Text(getLocalText.s("Cancel")),
         ),
         TextButton(
           onPressed: () => Navigator.pop(ctx, true),
           style: TextButton.styleFrom(
               foregroundColor: Theme.of(ctx).colorScheme.error),
-          child: Text(confirmLabel ?? ctx.l.commonDelete),
+          child: Text(confirmLabel ?? getLocalText.s("Delete")),
         ),
       ],
     ),
@@ -59,19 +59,19 @@ Future<String?> showUnsavedChangesDialog(BuildContext context) {
     builder: (ctx) {
       final cs = Theme.of(ctx).colorScheme;
       return AlertDialog(
-        title: Text(ctx.l.commonUnsavedChangesTitle),
-        content: Text(ctx.l.commonUnsavedChangesBody),
+        title: Text(getLocalText.s("Unsaved changes")),
+        content: Text(getLocalText.s("You have unsaved changes. Save before leaving?")),
         // §045 — все TextButton + короткие надписи вмещаются в строку.
         actionsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'discard'),
             style: TextButton.styleFrom(foregroundColor: cs.error),
-            child: Text(ctx.l.commonDiscard),
+            child: Text(getLocalText.s("Discard")),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'keep'),
-            child: Text(ctx.l.commonKeep),
+            child: Text(getLocalText.s("Keep")),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'save'),
@@ -79,7 +79,7 @@ Future<String?> showUnsavedChangesDialog(BuildContext context) {
               foregroundColor: cs.primary,
               textStyle: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            child: Text(ctx.l.commonSave),
+            child: Text(getLocalText.s("Save")),
           ),
         ],
       );

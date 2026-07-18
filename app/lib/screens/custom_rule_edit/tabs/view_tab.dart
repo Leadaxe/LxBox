@@ -5,10 +5,10 @@ import 'package:flutter/services.dart';
 
 import '../../../models/custom_rule.dart';
 import '../../../services/builder/post_steps.dart';
-import '../../../services/l10n/l10n.dart';
 import '../../../services/builder/preset_expand.dart';
 import '../../../services/builder/rule_set_registry.dart';
 import '../edit_controller.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §053 Stage 3 — View tab: showcase storage JSON + sing-box config preview.
 ///
@@ -107,7 +107,7 @@ class ViewTab extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(context.l.ruleEditViewStorageShape,
+                child: Text(getLocalText.s("storage shape (lxbox_settings.json)"),
                     style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
               ),
@@ -135,7 +135,7 @@ class ViewTab extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(context.l.ruleEditViewConfigPreview,
+                child: Text(getLocalText.s("sing-box config preview"),
                     style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
               ),
@@ -187,10 +187,10 @@ class _CopyButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextButton.icon(
       icon: const Icon(Icons.content_copy, size: 14),
-      label: Text(context.l.commonCopy, style: const TextStyle(fontSize: 12)),
+      label: Text(getLocalText.s("Copy"), style: const TextStyle(fontSize: 12)),
       onPressed: () async {
         final messenger = ScaffoldMessenger.of(context);
-        final copied = context.l.commonCopied;
+        final copied = getLocalText.s("Copied");
         await Clipboard.setData(ClipboardData(text: text));
         messenger.showSnackBar(
           SnackBar(content: Text(copied)),

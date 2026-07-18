@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models/channel.dart';
-import '../services/l10n/l10n.dart';
 import '../services/ui_helpers.dart';
 import 'home/filter_widgets.dart' show NegateToggle;
+import '../services/l10n/locale_controller.dart';
 
 /// §125 — полноэкранный редактор канала роутинга. Идиома проекта
 /// ([custom_rule_edit_screen.dart], [dns_server_edit_screen.dart]):
@@ -218,9 +218,11 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   Future<void> _delete() async {
     final confirmed = await showDeleteConfirmDialog(
       context,
-      title: context.l.channelEditDeleteTitle,
-      message: context.l
-          .channelEditDeleteBody(widget.initial.label, widget.initial.tag),
+      title: getLocalText.s("Delete channel?"),
+      message: getLocalText.s(
+          "Remove \"%1\$s\" (%2\$s)? References to it fall back to vpn-1.",
+          widget.initial.label,
+          widget.initial.tag),
     ); // §219
     if (confirmed == true && mounted) {
       Navigator.pop(context, ChannelEditResult.deleted());
@@ -275,7 +277,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(context.l.channelEditTitle(c.tag)),
+          title: Text(getLocalText.s("Edit channel · %s", c.tag)),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: _handleBack,
@@ -283,12 +285,12 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
           actions: [
             if (widget.canDelete)
               IconButton(
-                tooltip: context.l.channelEditDeleteTooltip,
+                tooltip: getLocalText.s("Delete channel"),
                 icon: Icon(Icons.delete_outline, color: cs.error),
                 onPressed: _delete,
               ),
             IconButton(
-              tooltip: context.l.commonSave,
+              tooltip: getLocalText.s("Save"),
               icon: Icon(Icons.check,
                   color: dirty ? cs.primary : cs.onSurfaceVariant),
               onPressed: _save,
@@ -320,7 +322,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
             TextField(
               controller: _labelCtrl,
               decoration: InputDecoration(
-                labelText: context.l.channelEditTitleLabel,
+                labelText: getLocalText.s("Title"),
                 border: const OutlineInputBorder(),
                 isDense: true,
               ),
@@ -333,7 +335,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               visualDensity: VisualDensity.compact,
-              title: Text(context.l.channelEditIncludeDirect,
+              title: Text(getLocalText.s("Include direct-out"),
                   style: const TextStyle(fontSize: 14)),
               value: _includeDirect,
               onChanged: (v) => setState(() => _includeDirect = v ?? false),
@@ -349,9 +351,9 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
                 visualDensity: VisualDensity.compact,
-                title: Text(context.l.channelEditUseAsDetour,
+                title: Text(getLocalText.s("Use as detour"),
                     style: const TextStyle(fontSize: 14)),
-                subtitle: Text(context.l.channelEditUseAsDetourSub,
+                subtitle: Text(getLocalText.s("can be picked as a detour target for servers and folders"),
                     style: const TextStyle(fontSize: 11)),
                 value: _isDetour,
                 // §274 — ⚙ живёт в самом label: переименовываем поле СРАЗУ,
@@ -368,9 +370,9 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               visualDensity: VisualDensity.compact,
-              title: Text(context.l.channelEditIncludeBlock,
+              title: Text(getLocalText.s("Include block"),
                   style: const TextStyle(fontSize: 14)),
-              subtitle: Text(context.l.channelEditIncludeBlockSub,
+              subtitle: Text(getLocalText.s("drop traffic option in the selector"),
                   style: const TextStyle(fontSize: 11)),
               value: _includeBlock,
               onChanged: (v) => setState(() => _includeBlock = v ?? false),
@@ -380,7 +382,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               visualDensity: VisualDensity.compact,
-              title: Text(context.l.settingsInterruptTitle,
+              title: Text(getLocalText.s("Interrupt connections on switch"),
                   style: const TextStyle(fontSize: 14)),
               value: _interrupt,
               onChanged: (v) => setState(() => _interrupt = v ?? false),
@@ -389,7 +391,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
 
             // node-filter regex + live-превью. §197 — `!`-тогл слева
             // (NegateToggle, как §048): инвертирует фильтр (ноды НЕ матчащие).
-            Text(context.l.channelEditNodeFilterLabel,
+            Text(getLocalText.s("Node filter (regex)"),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             const SizedBox(height: 4),
             Row(
@@ -401,7 +403,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                     active: _nodeFilterInvert,
                     onToggle: () => setState(
                         () => _nodeFilterInvert = !_nodeFilterInvert),
-                    tooltip: context.l.channelEditInvertTooltip,
+                    tooltip: getLocalText.s("Exclude matching (invert)"),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -409,7 +411,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                   child: TextField(
                     controller: _nodeFilterCtrl,
                     decoration: InputDecoration(
-                      hintText: context.l.channelEditNodeFilterHint,
+                      hintText: getLocalText.s("e.g. 🇩🇪|🇳🇱 — empty = all nodes"),
                       border: const OutlineInputBorder(),
                       isDense: true,
                       errorText: nodeFilterValid ? null : 'Invalid regex',
@@ -431,13 +433,13 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
             const SizedBox(height: 16),
 
             // default-filter regex + live-превью
-            Text(context.l.channelEditDefaultFilterLabel,
+            Text(getLocalText.s("Default (regex)"),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             const SizedBox(height: 4),
             TextField(
               controller: _defaultFilterCtrl,
               decoration: InputDecoration(
-                hintText: context.l.channelEditDefaultFilterHint,
+                hintText: getLocalText.s("first matching node becomes default"),
                 border: const OutlineInputBorder(),
                 isDense: true,
                 errorText: defaultValid ? null : 'Invalid regex',
@@ -461,9 +463,9 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               visualDensity: VisualDensity.compact,
-              title: Text(context.l.channelEditIncludeAuto,
+              title: Text(getLocalText.s("Include auto (urltest)"),
                   style: const TextStyle(fontSize: 14)),
-              subtitle: Text(context.l.channelEditIncludeAutoSub,
+              subtitle: Text(getLocalText.s("latency-tested twin of this channel"),
                   style: const TextStyle(fontSize: 11)),
               value: _autoEnabled,
               onChanged: (v) => setState(() => _autoEnabled = v ?? false),
@@ -473,7 +475,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               TextField(
                 controller: _autoUrlCtrl,
                 decoration: InputDecoration(
-                  labelText: context.l.homePingTestUrl,
+                  labelText: getLocalText.s("Test URL"),
                   border: const OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -490,12 +492,12 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                     child: TextField(
                       controller: _autoIntervalCtrl,
                       decoration: InputDecoration(
-                        labelText: context.l.channelEditIntervalLabel,
+                        labelText: getLocalText.s("Interval"),
                         // l10n-exempt: duration literal, locale-independent
                         hintText: '15m',
                         // §272 — каждый цикл дайлит серверы (будит спящие
                         // туннели): большие значения экономят батарею.
-                        helperText: context.l.channelEditIntervalHelper,
+                        helperText: getLocalText.s("Larger values save battery"),
                         border: const OutlineInputBorder(),
                         isDense: true,
                       ),
@@ -511,11 +513,11 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                       // (за гистерезис отвечает Pool tolerance) → гасим.
                       enabled: _autoMode == UrltestMode.leastTest,
                       decoration: InputDecoration(
-                        labelText: context.l.channelEditToleranceLabel,
+                        labelText: getLocalText.s("Tolerance (ms)"),
                         border: const OutlineInputBorder(),
                         isDense: true,
                         helperText: _autoMode == UrltestMode.roundRobin
-                            ? context.l.channelEditUsedInFastestHelper
+                            ? getLocalText.s("used in Fastest mode")
                             : null,
                         helperStyle: const TextStyle(fontSize: 10),
                       ),
@@ -528,7 +530,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               TextField(
                 controller: _autoIdleCtrl,
                 decoration: InputDecoration(
-                  labelText: context.l.channelEditIdleTimeoutLabel,
+                  labelText: getLocalText.s("Idle timeout"),
                   // l10n-exempt: duration literal, locale-independent
                   hintText: '30m',
                   border: const OutlineInputBorder(),
@@ -545,7 +547,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                         size: 14, color: cs.error),
                     const SizedBox(width: 4),
                     Expanded(
-                      child: Text(context.l.channelEditIntervalExceedsIdle,
+                      child: Text(getLocalText.s("Interval must be ≤ idle timeout"),
                           style: TextStyle(fontSize: 11, color: cs.error)),
                     ),
                   ],
@@ -556,19 +558,19 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               // §208 — режим выбора узла (Fastest = least_test / Load balance =
               // round_robin). Балансировщик-поля показываются только под Load
               // balance.
-              Text(context.l.settingsTabMode,
+              Text(getLocalText.s("Mode"),
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
               const SizedBox(height: 6),
               SegmentedButton<UrltestMode>(
                 segments: [
                   ButtonSegment(
                     value: UrltestMode.leastTest,
-                    label: Text(context.l.channelEditModeFastest),
+                    label: Text(getLocalText.s("Fastest")),
                     icon: const Icon(Icons.bolt, size: 16),
                   ),
                   ButtonSegment(
                     value: UrltestMode.roundRobin,
-                    label: Text(context.l.channelEditModeLoadBalance),
+                    label: Text(getLocalText.s("Load balance")),
                     icon: const Icon(Icons.hub_outlined, size: 16),
                   ),
                 ],
@@ -596,7 +598,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
                 visualDensity: VisualDensity.compact,
-                title: Text(context.l.settingsInterruptTitle,
+                title: Text(getLocalText.s("Interrupt connections on switch"),
                     style: const TextStyle(fontSize: 14)),
                 value: _autoInterrupt,
                 onChanged: (v) => setState(() => _autoInterrupt = v ?? false),
@@ -631,11 +633,11 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               controller: _autoPoolCtrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: context.l.channelEditPoolSizeLabel,
+                labelText: getLocalText.s("Pool size"),
                 border: const OutlineInputBorder(),
                 isDense: true,
                 helperText: nodeCount > 0
-                    ? context.l.channelEditOfNodesHelper(nodeCount)
+                    ? getLocalText.plural("of %d nodes", nodeCount)
                     : null,
                 helperStyle: const TextStyle(fontSize: 10),
               ),
@@ -648,10 +650,10 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               controller: _autoPoolToleranceCtrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: context.l.channelEditPoolToleranceLabel,
+                labelText: getLocalText.s("Pool tolerance (ms)"),
                 border: const OutlineInputBorder(),
                 isDense: true,
-                helperText: context.l.channelEditPoolToleranceHelper,
+                helperText: getLocalText.s("0 = keep pool full"),
                 helperStyle: const TextStyle(fontSize: 10),
               ),
               style: const TextStyle(fontSize: 13),
@@ -660,7 +662,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
         ],
       ),
       const SizedBox(height: 10),
-      Text(context.l.channelEditStickyLabel,
+      Text(getLocalText.s("Sticky session by"),
           style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
       const SizedBox(height: 4),
       // §208 — чипы в один ряд с горизонтальной прокруткой (не Wrap-перенос:

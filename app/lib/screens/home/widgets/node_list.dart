@@ -8,7 +8,6 @@ import '../../../models/home_state.dart';
 import '../../../services/channel_mutations.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/haptic_service.dart';
-import '../../../services/l10n/l10n.dart';
 import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
 import '../../../widgets/node_view_item.dart';
@@ -19,6 +18,7 @@ import '../node_filter_view_model.dart';
 import '../node_list_presenter.dart';
 import 'add_server_cta.dart';
 import 'filter_panel.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Node-list секция главного экрана.
 ///
@@ -90,7 +90,7 @@ class HomeNodeList extends StatelessWidget {
                       size: 48, color: cs.onSurfaceVariant.withAlpha(120)),
                   const SizedBox(height: 12),
                   Text(
-                    context.l.homeNoNodesInChannel,
+                    getLocalText.s("No nodes in this channel.\nTry another one."),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: cs.onSurfaceVariant,
@@ -128,7 +128,7 @@ class HomeNodeList extends StatelessWidget {
                         size: 64, color: cs.primary),
                     const SizedBox(height: 12),
                     Text(
-                      context.l.homeTapToConnect,
+                      getLocalText.s("Tap to connect"),
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             color: cs.primary,
@@ -378,8 +378,8 @@ class HomeNodeList extends StatelessWidget {
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.homeApplyToTitle(label)),
-        content: Text(ctx.l.homeUseRegexAs(pattern)),
+        title: Text(getLocalText.s("Apply to %s", label)),
+        content: Text(getLocalText.s("Use \"%s\" as…", pattern)),
         // Горизонтально (Row), порядок: Channel filter → Default → Cancel.
         // Короткие лейблы держат всё в один ряд на телефоне.
         actionsAlignment: MainAxisAlignment.end,
@@ -391,15 +391,15 @@ class HomeNodeList extends StatelessWidget {
               foregroundColor: Theme.of(ctx).colorScheme.primary,
               textStyle: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            child: Text(ctx.l.homeRegexAsFilter),
+            child: Text(getLocalText.s("Filter")),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'default'),
-            child: Text(ctx.l.homeRegexAsDefault),
+            child: Text(getLocalText.s("Default")),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(ctx.l.commonCancel),
+            child: Text(getLocalText.s("Cancel")),
           ),
         ],
       ),
@@ -447,13 +447,13 @@ class HomeNodeList extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
           content: Text(healedParts.isEmpty
-              ? context.l.homeChannelSavedSnack(label)
-              : context.l
-                  .homeChannelSavedHealedSnack(label, healedParts.join('; ')))),
+              ? getLocalText.s("Saved channel \"%s\"", label)
+              : getLocalText.s("Saved channel \"%1\$s\" — %2\$s", label,
+                  healedParts.join('; ')))),
     );
     if (state.tunnelUp && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.homeRestartVpnToApply)),
+        SnackBar(content: Text(getLocalText.s("Restart VPN to apply changes"))),
       );
     }
   }

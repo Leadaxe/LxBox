@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/app_info.dart';
 import '../services/app_info_cache.dart';
-import '../services/l10n/l10n.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// Screen for selecting apps. Returns updated list of package names on pop.
 class AppPickerResult {
@@ -119,7 +119,7 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
     await Clipboard.setData(ClipboardData(text: _selected.join('\n')));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.appPickerCopiedSnack(_selected.length))),
+        SnackBar(content: Text(getLocalText.plural("%d packages copied", _selected.length))),
       );
     }
   }
@@ -138,7 +138,7 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
     final added = pkgs.intersection(known);
     setState(() => _selected.addAll(added));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l.appPickerImportedSnack(added.length))),
+      SnackBar(content: Text(getLocalText.plural("%d packages imported", added.length))),
     );
   }
 
@@ -158,7 +158,7 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(context.l.appPickerTitle),
+          title: Text(getLocalText.s("Select apps")),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: _safePop,
@@ -184,29 +184,29 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
                 PopupMenuItem(
                     value: 'select_all',
                     enabled: !_loading,
-                    child: Text(context.l.appPickerSelectAll)),
+                    child: Text(getLocalText.s("Select all"))),
                 PopupMenuItem(
                     value: 'deselect_all',
                     enabled: !_loading,
-                    child: Text(context.l.appPickerDeselectAll)),
+                    child: Text(getLocalText.s("Deselect all"))),
                 PopupMenuItem(
                     value: 'invert',
                     enabled: !_loading,
-                    child: Text(context.l.appPickerInvert)),
+                    child: Text(getLocalText.s("Invert"))),
                 const PopupMenuDivider(),
                 PopupMenuItem(
                     value: 'import',
                     enabled: !_loading,
-                    child: Text(context.l.appPickerImportClipboard)),
+                    child: Text(getLocalText.s("Import from clipboard"))),
                 PopupMenuItem(
                     value: 'export',
-                    child: Text(context.l.appPickerExportClipboard)),
+                    child: Text(getLocalText.s("Export to clipboard"))),
                 const PopupMenuDivider(),
                 PopupMenuItem(
                   value: 'system',
                   child: Text(_showSystem
-                      ? context.l.appPickerHideSystemApps
-                      : context.l.appPickerShowSystemApps),
+                      ? getLocalText.s("Hide system apps")
+                      : getLocalText.s("Show system apps")),
                 ),
               ],
             ),
@@ -219,7 +219,7 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: TextField(
                 decoration: InputDecoration(
-                  hintText: context.l.appPickerSearchHint,
+                  hintText: getLocalText.s("Search apps..."),
                   prefixIcon: const Icon(Icons.search, size: 20),
                   isDense: true,
                   border: const OutlineInputBorder(),
@@ -234,9 +234,9 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Text(
                 _loading
-                    ? context.l.appPickerLoadingApps
-                    : context.l
-                        .appPickerSelectedShown(_selected.length, apps.length),
+                    ? getLocalText.s("Loading apps...")
+                    : getLocalText.s("%1\$d selected · %2\$d shown",
+                        _selected.length, apps.length),
                 style: Theme.of(context).textTheme.labelSmall,
               ),
             ),

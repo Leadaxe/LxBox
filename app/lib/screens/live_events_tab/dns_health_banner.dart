@@ -13,9 +13,9 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
-import '../../services/l10n/l10n.dart';
 import '../../services/traffic_profiler.dart';
 import 'dns_health_sheet.dart';
+import '../../services/l10n/locale_controller.dart';
 
 class DnsHealthBanner extends StatelessWidget {
   const DnsHealthBanner({super.key, this.subController, this.homeController});
@@ -42,8 +42,7 @@ class DnsHealthBanner extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  context.l.statsDnsHealthBanner(
-                      TrafficProfiler.I.dnsHealthFailPercent),
+                  getLocalText.s("%d% of DNS queries failing while the connection is alive — tap to fix", TrafficProfiler.I.dnsHealthFailPercent),
                   style: TextStyle(fontSize: 12, color: cs.onErrorContainer),
                 ),
               ),

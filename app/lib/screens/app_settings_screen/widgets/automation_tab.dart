@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../services/automation/event_emitter.dart';
-import '../../../services/l10n/l10n.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/url_launcher.dart' as ul;
 import '../../../vpn/box_vpn_client.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §047 Public Intent API — вкладка App Settings → Automation.
 ///
@@ -91,16 +91,16 @@ class _AutomationTabState extends State<AutomationTab> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.appSettingsAutomationEnableTitle),
-        content: Text(ctx.l.appSettingsAutomationEnableBody),
+        title: Text(getLocalText.s("Enable command receiver?")),
+        content: Text(getLocalText.s("Any app on this device will be able to control the VPN via broadcast commands while this is on. Only turn it on if you use Tasker / Macrodroid and understand the implications.")),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(ctx.l.commonCancel),
+            child: Text(getLocalText.s("Cancel")),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(ctx.l.appSettingsAutomationEnableConfirm),
+            child: Text(getLocalText.s("Enable")),
           ),
         ],
       ),
@@ -128,16 +128,16 @@ class _AutomationTabState extends State<AutomationTab> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.appSettingsAutomationEmitTitle),
-        content: Text(ctx.l.appSettingsAutomationEmitBody),
+        title: Text(getLocalText.s("Emitting events outward")),
+        content: Text(getLocalText.s("Enabling this category lets other apps receive L×Box events.\n\nEvents do NOT contain subscription / config secrets — only labels (node tags, group names, status).")),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(ctx.l.commonCancel),
+            child: Text(getLocalText.s("Cancel")),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(ctx.l.commonContinue),
+            child: Text(getLocalText.s("Continue")),
           ),
         ],
       ),
@@ -151,7 +151,7 @@ class _AutomationTabState extends State<AutomationTab> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(context.l.appSettingsAutomationCopiedSnack(label)),
+          content: Text(getLocalText.s("%s copied", label)),
           duration: const Duration(seconds: 1)),
     );
   }
@@ -169,21 +169,21 @@ class _AutomationTabState extends State<AutomationTab> {
     return ListView(
       padding: widget.padding,
       children: [
-        Text(context.l.appSettingsAutomationApiTitle,
+        Text(getLocalText.s("Automation API"),
             style: theme.textTheme.titleMedium),
         const SizedBox(height: 4),
         Text(
-          context.l.appSettingsAutomationApiBody,
+          getLocalText.s("Control L×Box from Tasker / Macrodroid / Llama and other automation apps via Android broadcast intents."),
           style: muted,
         ),
         const Divider(height: 28),
 
         // ─── Master ───
-        Text(context.l.appSettingsAutomationReceiverHeader,
+        Text(getLocalText.s("Command receiver"),
             style: theme.textTheme.titleSmall),
         SwitchListTile(
-          title: Text(context.l.appSettingsAutomationAcceptTitle),
-          subtitle: Text(context.l.appSettingsAutomationAcceptSubtitle),
+          title: Text(getLocalText.s("Accept automation commands")),
+          subtitle: Text(getLocalText.s("Start / Stop / Toggle / Switch / Refresh / … (default OFF)")),
           secondary: const Icon(Icons.settings_remote),
           value: _receiveEnabled,
           onChanged: _loaded ? _onReceiveChanged : null,
@@ -192,11 +192,11 @@ class _AutomationTabState extends State<AutomationTab> {
         const Divider(height: 28),
 
         // ─── Commands ───
-        Text(context.l.appSettingsAutomationCommandsHeader,
+        Text(getLocalText.s("Commands (intent actions)"),
             style: theme.textTheme.titleSmall),
         const SizedBox(height: 2),
         Text(
-          context.l.appSettingsAutomationCommandsBody,
+          getLocalText.s("Paste into the \"Send Intent\" of your automation app. Target: Broadcast Receiver."),
           style: muted,
         ),
         const SizedBox(height: 4),
@@ -210,20 +210,20 @@ class _AutomationTabState extends State<AutomationTab> {
             ),
             subtitle: extra.isEmpty ? null : Text(extra, style: muted),
             trailing: IconButton(
-              tooltip: context.l.commonCopy,
+              tooltip: getLocalText.s("Copy"),
               icon: const Icon(Icons.copy, size: 18),
               onPressed: () =>
-                  _copy(action, context.l.appSettingsAutomationCommandLabel),
+                  _copy(action, getLocalText.s("Command")),
             ),
           ),
 
         const Divider(height: 28),
 
         // ─── Emit categories ───
-        Text(context.l.appSettingsAutomationEventsHeader,
+        Text(getLocalText.s("Outbound events (emit)"),
             style: theme.textTheme.titleSmall),
         SwitchListTile(
-          title: Text(context.l.appSettingsAutomationLifecycle),
+          title: Text(getLocalText.s("Lifecycle")),
           subtitle: const Text(
             // l10n-exempt: broadcast event names (wire values)
             'VPN_CONNECTED · DISCONNECTED · ERROR · REVOKED · '
@@ -237,7 +237,7 @@ class _AutomationTabState extends State<AutomationTab> {
               : null,
         ),
         SwitchListTile(
-          title: Text(context.l.appSettingsAutomationState),
+          title: Text(getLocalText.s("State")),
           // l10n-exempt: broadcast event names (wire values)
           subtitle: const Text('ACTIVE_NODE_CHANGED · ACTIVE_GROUP_CHANGED'),
           value: _emitState,
@@ -247,7 +247,7 @@ class _AutomationTabState extends State<AutomationTab> {
               : null,
         ),
         SwitchListTile(
-          title: Text(context.l.appSettingsAutomationSubscription),
+          title: Text(getLocalText.s("Subscription")),
           // l10n-exempt: broadcast event names (wire values)
           subtitle: const Text('SUB_REFRESHED · SUB_REFRESH_FAILED'),
           value: _emitSubs,
@@ -257,7 +257,7 @@ class _AutomationTabState extends State<AutomationTab> {
               : null,
         ),
         SwitchListTile(
-          title: Text(context.l.appSettingsAutomationHealth),
+          title: Text(getLocalText.s("Health")),
           subtitle: const Text(
             // l10n-exempt: broadcast event names (wire values)
             'HEARTBEAT_FAILED · LATENCY_DEGRADED',
@@ -274,7 +274,7 @@ class _AutomationTabState extends State<AutomationTab> {
         OutlinedButton.icon(
           onPressed: () => ul.UrlLauncher.open(_docsUrl),
           icon: const Icon(Icons.menu_book_outlined, size: 18),
-          label: Text(context.l.appSettingsAutomationDocsButton),
+          label: Text(getLocalText.s("Documentation and Tasker recipes")),
         ),
         const SizedBox(height: 12),
       ],

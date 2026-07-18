@@ -1,5 +1,5 @@
 {
-  "_comment": "§279 (спека §9.4) — rendering-locality allowlists. renderEn: файлы/каталоги (префиксы путей), где разрешён фиксированный английский рендер (machine-поверхности: automation-броадкасты, Debug API, AppLog-интерполяции, notification-push, emitWarnings). l10nCurrent: где разрешён прямой L10n.current (инициализация пайплайна + немедленное потребление). L10n.en разрешён ТОЛЬКО в lib/models/ui_msg.dart (захардкожено в checker'е).",
+  "_comment": "§285 — rendering-locality allowlist. renderEn: файлы/каталоги (префиксы путей), где разрешён вызов renderEn() — фиксированный английский рендер UiMsg на machine-поверхностях (automation-броадкасты, Debug API, AppLog-интерполяции, notification-push, emitWarnings). Модельные иерархии lib/models/* (где определён renderEn() и разрешён прямой GetLocalText.en) захардкожены в checker'е и здесь не перечислены.",
   "renderEn": [
     "lib/services/automation/",
     "lib/services/debug/",
@@ -8,10 +8,5 @@
     "lib/controllers/home_controller/",
     "lib/controllers/subscription_controller.dart",
     "lib/screens/home_screen.dart"
-  ],
-  "l10nCurrent": [
-    "lib/main.dart",
-    "lib/services/l10n/",
-    "lib/screens/app_settings_screen.dart"
   ]
 }

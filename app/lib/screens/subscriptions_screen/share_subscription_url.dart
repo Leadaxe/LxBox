@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../controllers/subscription_controller.dart';
-import '../../services/l10n/l10n.dart';
 import '../../services/url_mask.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Share URL подписки (night T6-2). По умолчанию предлагаем masked
 /// вариант (`scheme://host/***`) — безопасно расшарить в чат / саппорт.
@@ -17,31 +17,31 @@ Future<void> shareSubscriptionUrl(
   final choice = await showDialog<String>(
     context: context,
     builder: (dCtx) => AlertDialog(
-      title: Text(dCtx.l.subShareUrlTitle),
+      title: Text(getLocalText.s("Share subscription URL")),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(dCtx.l.subShareMaskedSafe),
+          Text(getLocalText.s("Masked URL is safe to share — it has no token:")),
           const SizedBox(height: 6),
           SelectableText(masked,
               style: const TextStyle(fontFamily: 'monospace')),
           const SizedBox(height: 16),
-          Text(dCtx.l.subShareFullWarning),
+          Text(getLocalText.s("Full URL contains your provider token — share only with people who have access to your subscription.")),
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dCtx, null),
-          child: Text(dCtx.l.commonCancel),
+          child: Text(getLocalText.s("Cancel")),
         ),
         TextButton(
           onPressed: () => Navigator.pop(dCtx, 'masked'),
-          child: Text(dCtx.l.subShareMasked),
+          child: Text(getLocalText.s("Share masked")),
         ),
         FilledButton.tonal(
           onPressed: () => Navigator.pop(dCtx, 'full'),
-          child: Text(dCtx.l.subShareFull),
+          child: Text(getLocalText.s("Share full")),
         ),
       ],
     ),

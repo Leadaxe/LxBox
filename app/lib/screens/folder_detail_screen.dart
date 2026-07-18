@@ -9,7 +9,6 @@ import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/server_list.dart';
 import '../services/error_format.dart';
-import '../services/l10n/l10n.dart';
 import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/input_helpers.dart';
@@ -21,6 +20,7 @@ import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscriptions_screen/folder_picker.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/reorder_grab_strip.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §234 — экран папки серверов. Зеркалит SubscriptionDetailScreen: вкладка
 /// членов (per-member toggle, drag-reorder, long-press меню) + Settings
@@ -256,12 +256,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text(ctx.l.folderVpnRunningTitle),
-          content: Text(ctx.l.folderSkippedNotTested(skipped)),
+          title: Text(getLocalText.s("VPN is running")),
+          content: Text(getLocalText.plural("%d disabled servers were not tested — they are not part of the running config. Stop VPN and run the test again to test every server in this folder.", skipped)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(ctx.l.commonOk),
+              child: Text(getLocalText.s("OK")),
             ),
           ],
         ),
@@ -280,8 +280,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           children: [
             ListTile(
               leading: const Icon(Icons.link),
-              title: Text(ctx.l.folderPingUrlTimeoutMenu),
-              subtitle: Text(ctx.l.folderPingUrlTimeoutMenuSub),
+              title: Text(getLocalText.s("Ping URL & timeout…")),
+              subtitle: Text(getLocalText.s("Shared with the home screen ping")),
               onTap: () {
                 Navigator.pop(ctx);
                 unawaited(_editPingTarget());
@@ -289,7 +289,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             ),
             ListTile(
               leading: const Icon(Icons.palette_outlined),
-              title: Text(ctx.l.folderPingThresholdsMenu),
+              title: Text(getLocalText.s("Ping color thresholds…")),
               onTap: () {
                 Navigator.pop(ctx);
                 unawaited(_editThresholds());
@@ -311,7 +311,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.folderPingTargetTitle),
+        title: Text(getLocalText.s("Ping target")),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -320,8 +320,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               keyboardType: TextInputType.url,
               autocorrect: false,
               decoration: InputDecoration(
-                labelText: ctx.l.homePingTestUrl,
-                hintText: ctx.l.folderPingUrlHint,
+                labelText: getLocalText.s("Test URL"),
+                hintText: getLocalText.s("empty = core default"),
                 border: const OutlineInputBorder(),
                 isDense: true,
               ),
@@ -331,7 +331,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               controller: timeoutCtl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: ctx.l.folderTimeoutMsLabel,
+                labelText: getLocalText.s("Timeout, ms"),
                 border: const OutlineInputBorder(),
                 isDense: true,
               ),
@@ -341,10 +341,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text(ctx.l.commonCancel)),
+              child: Text(getLocalText.s("Cancel"))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text(ctx.l.commonSave)),
+              child: Text(getLocalText.s("Save"))),
         ],
       ),
     );
@@ -385,23 +385,23 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final ms = await showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.folderDisableSlowTitle),
+        title: Text(getLocalText.s("Disable slow servers")),
         content: TextField(
           controller: ctl,
           autofocus: true,
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
-            labelText: ctx.l.folderSlowerThanLabel,
+            labelText: getLocalText.s("Slower than, ms"),
             border: const OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(ctx.l.commonCancel)),
+              child: Text(getLocalText.s("Cancel"))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, int.tryParse(ctl.text.trim())),
-            child: Text(ctx.l.folderDisableButton),
+            child: Text(getLocalText.s("Disable")),
           ),
         ],
       ),
@@ -413,7 +413,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         if (e.value.status == ProbeStatus.ok && e.value.delayMs > ms) e.key,
     };
     if (slow.isEmpty) {
-      await _showError(context.l.folderNoSlowerServers(ms));
+      await _showError(getLocalText.s("No tested servers slower than %d ms", ms));
       return;
     }
     final idx = _index;
@@ -421,7 +421,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     await widget.controller.setMembersEnabled(idx, slow, false);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l.folderDisabledSlow(slow.length, ms))),
+      SnackBar(content: Text(getLocalText.plural("Disabled %1\$d servers > %2\$d ms", slow.length, ms))),
     );
     setState(() {});
   }
@@ -435,23 +435,23 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           e.key,
     };
     if (dead.isEmpty) {
-      await _showError(context.l.folderNoUnreachable);
+      await _showError(getLocalText.s("No unreachable or broken servers in last test"));
       return;
     }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.folderDeleteUnreachableTitle),
-        content: Text(ctx.l.folderDeleteUnreachableBody(dead.length)),
+        title: Text(getLocalText.s("Delete unreachable?")),
+        content: Text(getLocalText.plural("Remove %d servers that failed the test (unreachable or broken)?", dead.length)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text(ctx.l.commonCancel)),
+              child: Text(getLocalText.s("Cancel"))),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(
                 foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: Text(ctx.l.commonDelete),
+            child: Text(getLocalText.s("Delete")),
           ),
         ],
       ),
@@ -523,15 +523,15 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.folderPingThresholdsTitle),
+        title: Text(getLocalText.s("Ping color thresholds")),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            field(g, ctx.l.folderThresholdGreenLabel),
-            field(y, ctx.l.folderThresholdYellowLabel),
-            field(o, ctx.l.folderThresholdOrangeLabel),
+            field(g, getLocalText.s("Green up to, ms")),
+            field(y, getLocalText.s("Yellow up to, ms")),
+            field(o, getLocalText.s("Orange up to, ms")),
             Text(
-              ctx.l.folderThresholdRedNote,
+              getLocalText.s("Anything above is red."),
               style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                   color: Theme.of(ctx).colorScheme.onSurfaceVariant),
             ),
@@ -540,10 +540,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text(ctx.l.commonCancel)),
+              child: Text(getLocalText.s("Cancel"))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text(ctx.l.commonSave)),
+              child: Text(getLocalText.s("Save"))),
         ],
       ),
     );
@@ -582,27 +582,27 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.subDeleteFolderTitle),
+        title: Text(getLocalText.s("Delete folder?")),
         content: Text(_folder.members.isEmpty
-            ? ctx.l.subDeleteRemoveBody(widget.entry.displayName)
-            : ctx.l.subDeleteFolderBody(
+            ? getLocalText.s("Remove \"%s\"?", widget.entry.displayName)
+            : getLocalText.plural("Folder \"%2\$s\" contains %1\$d servers.",
                 _folder.members.length, widget.entry.displayName)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(ctx.l.commonCancel)),
+              child: Text(getLocalText.s("Cancel"))),
           if (_folder.members.isNotEmpty)
             TextButton(
               onPressed: () => Navigator.pop(ctx, 'keep'),
-              child: Text(ctx.l.subKeepServers),
+              child: Text(getLocalText.s("Keep servers")),
             ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'all'),
             style: TextButton.styleFrom(
                 foregroundColor: Theme.of(ctx).colorScheme.error),
             child: Text(_folder.members.isEmpty
-                ? ctx.l.commonDelete
-                : ctx.l.subDeleteFolderAndServers),
+                ? getLocalText.s("Delete")
+                : getLocalText.s("Delete folder & servers")),
           ),
         ],
       ),
@@ -643,7 +643,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     if (!mounted) return;
     final text = data?.text?.trim() ?? '';
     if (text.isEmpty) {
-      await _showError(context.l.subClipboardEmpty);
+      await _showError(getLocalText.s("Clipboard is empty"));
       return;
     }
     final idx = _index;
@@ -651,7 +651,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final err = await widget.controller.addMembersToFolder(idx, text);
     if (!mounted) return;
     if (err != null) {
-      await _showError(err.render(context.l));
+      await _showError(err.render());
       return;
     }
     setState(() {});
@@ -686,19 +686,19 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           added++;
         } else {
           if (!mounted) return;
-          errors.add('${file.name}: ${err.render(context.l)}');
+          errors.add('${file.name}: ${err.render()}');
         }
       }
       if (!mounted) return;
       if (errors.isNotEmpty) {
         await _showError(errors.join('\n'));
       } else if (added == 0) {
-        await _showError(context.l.folderNoServersInFiles);
+        await _showError(getLocalText.s("No servers found in selected files"));
       }
       setState(() {});
     } catch (e) {
       if (!mounted) return;
-      await _showError(context.l.subErrorSnack(formatUserError(e).render(context.l)));
+      await _showError(getLocalText.s("Error: %s", formatUserError(e).render()));
     }
   }
 
@@ -707,7 +707,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final url = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.folderAddByUrlTitle),
+        title: Text(getLocalText.s("Add servers by URL")),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -716,7 +716,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               controller: ctl,
               autofocus: true,
               decoration: InputDecoration(
-                labelText: ctx.l.folderUrlLabel,
+                labelText: getLocalText.s("URL"),
                 // l10n-exempt: URL scheme example
                 hintText: 'https://…',
                 border: const OutlineInputBorder(),
@@ -726,7 +726,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              ctx.l.folderUrlSnapshotNote,
+              getLocalText.s("Fetched once — servers are added as a snapshot and won't auto-update. For live updates add a subscription instead."),
               style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                   color: Theme.of(ctx).colorScheme.onSurfaceVariant),
             ),
@@ -735,10 +735,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(ctx.l.commonCancel)),
+              child: Text(getLocalText.s("Cancel"))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctl.text.trim()),
-            child: Text(ctx.l.folderFetchButton),
+            child: Text(getLocalText.s("Fetch")),
           ),
         ],
       ),
@@ -746,7 +746,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     ctl.dispose();
     if (url == null || url.isEmpty || !mounted) return;
     if (!isSubscriptionUrl(url)) {
-      await _showError(context.l.subEnterValidUrl);
+      await _showError(getLocalText.s("Enter a valid http(s):// URL"));
       return;
     }
     final idx = _index;
@@ -754,7 +754,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final err = await widget.controller.addUrlSnapshotToFolder(idx, url);
     if (!mounted) return;
     if (err != null) {
-      await _showError(err.render(context.l));
+      await _showError(err.render());
       return;
     }
     setState(() {});
@@ -771,7 +771,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final newRaw = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.folderEditServerTitle),
+        title: Text(getLocalText.s("Edit server")),
         content: TextField(
           controller: ctl,
           autofocus: true,
@@ -780,16 +780,16 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
           decoration: InputDecoration(
             border: const OutlineInputBorder(),
-            hintText: ctx.l.folderEditServerHint,
+            hintText: getLocalText.s("Proxy link, WireGuard config or outbound JSON"),
           ),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(ctx.l.commonCancel)),
+              child: Text(getLocalText.s("Cancel"))),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctl.text),
-            child: Text(ctx.l.commonSave),
+            child: Text(getLocalText.s("Save")),
           ),
         ],
       ),
@@ -801,7 +801,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final err = await widget.controller.updateMemberAt(idx, memberIndex, newRaw);
     if (!mounted) return;
     if (err != null) {
-      await _showError(err.render(context.l));
+      await _showError(err.render());
       return;
     }
     setState(() {});
@@ -818,7 +818,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         await widget.controller.moveMemberToFolder(idx, memberIndex, toIndex);
     if (!mounted) return;
     if (err != null) {
-      await _showError(err.render(context.l));
+      await _showError(err.render());
       return;
     }
     setState(() {});
@@ -830,7 +830,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     await widget.controller.ungroupMemberAt(idx, memberIndex);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l.folderMovedOutSnack)),
+      SnackBar(content: Text(getLocalText.s("Moved out of folder"))),
     );
     setState(() {});
   }
@@ -841,17 +841,17 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.folderDeleteServerTitle),
-        content: Text(ctx.l.folderDeleteServerBody(_memberTitle(member))),
+        title: Text(getLocalText.s("Delete server?")),
+        content: Text(getLocalText.s("Remove \"%s\" from this folder?", _memberTitle(member))),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text(ctx.l.commonCancel)),
+              child: Text(getLocalText.s("Cancel"))),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(
                 foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: Text(ctx.l.commonDelete),
+            child: Text(getLocalText.s("Delete")),
           ),
         ],
       ),
@@ -872,7 +872,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           children: [
             ListTile(
               leading: const Icon(Icons.edit_outlined),
-              title: Text(ctx.l.folderMenuEdit),
+              title: Text(getLocalText.s("Edit…")),
               onTap: () {
                 Navigator.pop(ctx);
                 unawaited(_editMember(memberIndex));
@@ -880,7 +880,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             ),
             ListTile(
               leading: const Icon(Icons.drive_file_move_outline),
-              title: Text(ctx.l.subMoveToFolderMenu),
+              title: Text(getLocalText.s("Move to folder…")),
               onTap: () {
                 Navigator.pop(ctx);
                 unawaited(_moveMember(memberIndex));
@@ -888,8 +888,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             ),
             ListTile(
               leading: const Icon(Icons.folder_off_outlined),
-              title: Text(ctx.l.folderMenuMoveOut),
-              subtitle: Text(ctx.l.folderMenuMoveOutSub),
+              title: Text(getLocalText.s("Move out of folder")),
+              subtitle: Text(getLocalText.s("Becomes a standalone server")),
               onTap: () {
                 Navigator.pop(ctx);
                 unawaited(_ungroupMember(memberIndex));
@@ -898,7 +898,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             ListTile(
               leading: Icon(Icons.delete_outline,
                   color: Theme.of(ctx).colorScheme.error),
-              title: Text(ctx.l.commonDelete,
+              title: Text(getLocalText.s("Delete"),
                   style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
               onTap: () {
                 Navigator.pop(ctx);
@@ -936,7 +936,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                   style: theme.textTheme.titleLarge,
                   decoration: InputDecoration(
                     border: InputBorder.none,
-                    hintText: context.l.subFolderNameLabel,
+                    hintText: getLocalText.s("Folder name"),
                   ),
                   onSubmitted: (_) => _toggleEdit(),
                 )
@@ -955,12 +955,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                 ),
           actions: [
             IconButton(
-              tooltip: _editing ? context.l.commonSave : context.l.commonRename,
+              tooltip: _editing ? getLocalText.s("Save") : getLocalText.s("Rename"),
               icon: Icon(_editing ? Icons.check : Icons.edit_outlined),
               onPressed: _toggleEdit,
             ),
             PopupMenuButton<String>(
-              tooltip: context.l.folderAddServersTooltip,
+              tooltip: getLocalText.s("Add servers"),
               icon: const Icon(Icons.add),
               onSelected: (v) {
                 if (v == 'paste') unawaited(_addFromClipboard());
@@ -970,16 +970,16 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               itemBuilder: (menuCtx) => [
                 PopupMenuItem(
                     value: 'paste',
-                    child: Text(menuCtx.l.subMenuPasteFromClipboard)),
+                    child: Text(getLocalText.s("Paste from clipboard"))),
                 PopupMenuItem(
                     value: 'file',
-                    child: Text(menuCtx.l.folderImportFromFilesMenu)),
+                    child: Text(getLocalText.s("Import from files…"))),
                 PopupMenuItem(
-                    value: 'url', child: Text(menuCtx.l.folderAddByUrlMenu)),
+                    value: 'url', child: Text(getLocalText.s("Add by URL…"))),
               ],
             ),
             IconButton(
-              tooltip: context.l.folderDeleteFolderTooltip,
+              tooltip: getLocalText.s("Delete folder"),
               icon: const Icon(Icons.delete_outline),
               onPressed: _delete,
             ),
@@ -987,8 +987,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           bottom: TabBar(
             controller: _tabCtrl,
             tabs: [
-              Tab(text: context.l.homeDrawerServers),
-              Tab(text: context.l.subTabSettings),
+              Tab(text: getLocalText.s("Servers")),
+              Tab(text: getLocalText.s("Settings")),
             ],
           ),
         ),
@@ -1015,11 +1015,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               Icon(Icons.folder_open,
                   size: 48, color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(height: 12),
-              Text(context.l.folderEmptyTitle,
+              Text(getLocalText.s("Folder is empty"),
                   style: theme.textTheme.titleMedium),
               const SizedBox(height: 4),
               Text(
-                context.l.folderEmptyBody,
+                getLocalText.s("Add servers with the + button above, or long-press a standalone server on the Servers screen and choose \"Move to folder…\"."),
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
@@ -1162,23 +1162,22 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   Widget _buildControlBar(ThemeData theme) {
     final muted = theme.colorScheme.onSurfaceVariant;
     final s = _probeSummary();
-    final l = context.l;
     final String info;
     if (_testing) {
-      info = l.folderTestingProgress(s.ok + s.dead);
+      info = getLocalText.s("Testing… %d done", s.ok + s.dead);
     } else if (_probe.isNotEmpty) {
       info = [
-        l.folderSummaryOk(s.ok),
-        l.folderSummaryErr(s.dead),
-        if (s.broken > 0) l.folderSummaryBroken(s.broken),
-        if (s.skipped > 0) l.folderSummaryNotTested(s.skipped),
+        getLocalText.s("%d ok", s.ok),
+        getLocalText.plural("%d err", s.dead),
+        if (s.broken > 0) getLocalText.plural("%d broken", s.broken),
+        if (s.skipped > 0) getLocalText.plural("%d not tested", s.skipped),
       ].join(' · ');
     } else {
       final total = _folder.members.length;
       final off = _folder.disabledCount;
       info = [
-        l.subFolderServersCount(total),
-        if (off > 0) l.folderOffCount(off),
+        getLocalText.plural("%d servers", total),
+        if (off > 0) getLocalText.s("%d off", off),
       ].join(' · ');
     }
     return Padding(
@@ -1210,8 +1209,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           // активных фильтрах.
           IconButton(
             tooltip: _filterExpanded
-                ? l.folderHideFiltersTooltip
-                : l.folderShowFiltersTooltip,
+                ? getLocalText.s("Hide filters")
+                : getLocalText.s("Show filters"),
             visualDensity: VisualDensity.compact,
             onPressed: () =>
                 setState(() => _filterExpanded = !_filterExpanded),
@@ -1243,7 +1242,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           ),
           if (_probe.isNotEmpty && !_testing)
             PopupMenuButton<String>(
-              tooltip: l.folderTestActionsTooltip,
+              tooltip: getLocalText.s("Test actions"),
               icon: const Icon(Icons.more_vert, size: 20),
               onSelected: (v) {
                 if (v == 'disable_slow') unawaited(_disableSlowerThan());
@@ -1253,12 +1252,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               itemBuilder: (menuCtx) => [
                 PopupMenuItem(
                     value: 'disable_slow',
-                    child: Text(menuCtx.l.folderMenuDisableSlower)),
+                    child: Text(getLocalText.s("Disable slower than…"))),
                 PopupMenuItem(
                     value: 'delete_dead',
-                    child: Text(menuCtx.l.folderMenuDeleteUnreachable)),
+                    child: Text(getLocalText.s("Delete unreachable"))),
                 PopupMenuItem(
-                    value: 'sort', child: Text(menuCtx.l.folderMenuSortByPing)),
+                    value: 'sort', child: Text(getLocalText.s("Sort by ping"))),
               ],
             ),
         ],
@@ -1501,19 +1500,19 @@ class _MemberTile extends StatelessWidget {
             _ => theme.colorScheme.error,
           }
         ),
-      ProbeStatus.failed => (context.l.folderProbeErr, theme.colorScheme.error),
+      ProbeStatus.failed => (getLocalText.s("err"), theme.colorScheme.error),
       ProbeStatus.broken => (
-          context.l.folderProbeBroken,
+          getLocalText.s("broken"),
           theme.colorScheme.error
         ),
       ProbeStatus.invalid => (
-          context.l.folderProbeInvalid,
+          getLocalText.s("invalid"),
           theme.colorScheme.error
         ),
       // НЕ «недоступен»: член выключен → его нет в конфиге работающего
       // ядра → не тестировался вовсе. Подсказка «как протестировать» — в
       // сводке (_buildTestBar): выключить VPN, probe-сессия меряет всех.
-      ProbeStatus.notInConfig => (context.l.folderProbeNotTested, muted),
+      ProbeStatus.notInConfig => (getLocalText.s("not tested (off)"), muted),
     };
     return GestureDetector(
       onTap: onProbeBadgeTap,
@@ -1536,11 +1535,11 @@ class _MemberTile extends StatelessWidget {
     final active = member.enabled && folderEnabled;
     final muted = theme.colorScheme.onSurfaceVariant;
     var title = node == null
-        ? context.l.folderUnreadableEntry
+        ? getLocalText.s("Unreadable entry")
         : (node.label.isNotEmpty ? node.label : node.tag);
     if (isChainLink) title = '⚙ $title'; // §239 — авто-маркировка звена
     final subtitle = node == null
-        ? context.l.folderTapToEditOrDelete
+        ? getLocalText.s("Tap to edit or delete")
         : '${node.protocol.toUpperCase()} · ${node.server}:${node.port}';
 
     final tile = ListTile(

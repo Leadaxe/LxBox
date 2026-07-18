@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/ui_msg.dart';
-import '../../../services/l10n/l10n.dart';
 import 'node_warning_row.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Nodes-tab list: actionable-warning banner + node rows with §283 toggle,
 /// label/tag, protocol + server:port subtitle, inline warning and a
@@ -45,7 +45,7 @@ class SubscriptionNodeList extends StatelessWidget {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(error!.render(context.l),
+          child: Text(error!.render(),
               style: TextStyle(color: theme.colorScheme.error)),
         ),
       );
@@ -56,7 +56,7 @@ class SubscriptionNodeList extends StatelessWidget {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(context.l.subUpdateToSeeNodes),
+          child: Text(getLocalText.s("Update subscription to see nodes")),
         ),
       );
     }
@@ -66,7 +66,7 @@ class SubscriptionNodeList extends StatelessWidget {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(context.l.subNoNodesFound),
+          child: Text(getLocalText.s("No nodes found")),
         ),
       );
     }
@@ -90,7 +90,7 @@ class SubscriptionNodeList extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    context.l.subNodesWithWarnings(actionableCount),
+                    getLocalText.plural("%d nodes with warnings (XHTTP fallback etc.)", actionableCount),
                     style: const TextStyle(fontSize: 12, color: Colors.orange),
                   ),
                 ),
@@ -168,25 +168,25 @@ class SubscriptionNodeList extends StatelessWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.copy),
-              title: Text(ctx.l.subCopyNodeInfo),
+              title: Text(getLocalText.s("Copy node info")),
               subtitle: Text(info, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
               onTap: () {
                 Clipboard.setData(ClipboardData(text: info));
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.l.subNodeInfoCopied)),
+                  SnackBar(content: Text(getLocalText.s("Node info copied"))),
                 );
               },
             ),
             ListTile(
               leading: const Icon(Icons.label_outline),
-              title: Text(ctx.l.subCopyTag),
+              title: Text(getLocalText.s("Copy tag")),
               subtitle: Text(node.tag, style: const TextStyle(fontSize: 11)),
               onTap: () {
                 Clipboard.setData(ClipboardData(text: node.tag));
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.l.subTagCopied)),
+                  SnackBar(content: Text(getLocalText.s("Tag copied"))),
                 );
               },
             ),

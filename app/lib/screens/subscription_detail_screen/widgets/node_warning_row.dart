@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/node_warning.dart';
-import '../../../services/l10n/l10n.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Inline warning-line под нодой. Сортируем по severity (error → warning →
 /// info), показываем первый. Цвет: error=красный, warning=оранжевый,
@@ -29,8 +29,8 @@ class NodeWarningRow extends StatelessWidget {
         Expanded(
           child: Text(
             more > 0
-                ? context.l.warnRowMore(w.message(context.l), more)
-                : w.message(context.l),
+                ? getLocalText.s("%1\$s (+%2\$d more)", w.message(), more)
+                : w.message(),
             style: TextStyle(fontSize: 10, color: color),
           ),
         ),

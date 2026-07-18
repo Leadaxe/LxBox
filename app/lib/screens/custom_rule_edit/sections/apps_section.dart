@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/l10n/l10n.dart';
 import '../widgets/section_header.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §053 Stage 2 — APPS section: tap → AppPicker. Кнопка Clear.
 class AppsSection extends StatelessWidget {
@@ -55,7 +55,7 @@ class AppsSection extends StatelessWidget {
                 if (!empty)
                   IconButton(
                     icon: const Icon(Icons.clear, size: 18),
-                    tooltip: context.l.commonClear,
+                    tooltip: getLocalText.s("Clear"),
                     onPressed: onClear,
                   ),
                 const Icon(Icons.chevron_right, size: 18),

@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../services/l10n/l10n.dart';
 import '../../../services/relative_time.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/update_checker.dart';
 import '../../../services/version_info.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// "Last check: …" + Check now-кнопка под Updates-toggle. Подписан на
 /// `UpdateChecker.latest` чтобы при успешном fetch'е результат сразу
@@ -46,17 +46,16 @@ class _UpdateStatusRowState extends State<UpdateStatusRow> {
     if (!mounted) return;
     // §279 — screen-local transient render (mounted-гейт выше): строка живёт
     // до следующего чека, смену локали не переживает сознательно.
-    final l = context.l;
     setState(() {
       _checking = false;
       _lastCheck = dt;
       switch (result.kind) {
         case UpdateCheckKind.newer:
-          _resultLine = l.appSettingsGenUpdateAvailable(result.info!.tag);
+          _resultLine = getLocalText.s(1, "%s available", result.info!.tag);
         case UpdateCheckKind.upToDate:
-          _resultLine = l.appSettingsGenUpToDate;
+          _resultLine = getLocalText.s("You're up to date");
         case UpdateCheckKind.failed:
-          _resultLine = l.appSettingsGenUpdateCheckFailed(result.message ?? '');
+          _resultLine = getLocalText.s("Check failed: %s", result.message ?? '');
         case UpdateCheckKind.skipped:
           _resultLine = null;
       }
@@ -67,9 +66,9 @@ class _UpdateStatusRowState extends State<UpdateStatusRow> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final lastCheckText = _lastCheck == null
-        ? context.l.appSettingsGenLastCheckNever
-        : context.l
-            .appSettingsGenLastCheck(relativeTime(context.l, DateTime.now(), _lastCheck!));
+        ? getLocalText.s("Last check: never")
+        : getLocalText.s("Last check: %s",
+            relativeTime(DateTime.now(), _lastCheck!));
     return Padding(
       padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
       child: Row(
@@ -89,7 +88,7 @@ class _UpdateStatusRowState extends State<UpdateStatusRow> {
           else
             TextButton(
               onPressed: _checkNow,
-              child: Text(context.l.appSettingsGenCheckNow),
+              child: Text(getLocalText.s("Check now")),
             ),
         ],
       ),

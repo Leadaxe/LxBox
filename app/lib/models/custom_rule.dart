@@ -1,6 +1,6 @@
 import '../config/consts.dart' show kDirectOutboundTag;
-import '../services/l10n/l10n.dart' show AppLocalizations;
 import '../services/parser/uri_utils.dart' show newUuidV4;
+import '../services/l10n/locale_controller.dart';
 
 /// Sealed-иерархия пользовательских правил маршрутизации (spec §030, v1.4.1
 /// task 011). Три варианта с разным шейпом и поведением:
@@ -38,9 +38,9 @@ sealed class CustomRule {
   Map<String, dynamic> toJson();
 
   /// Короткая сводка для subtitle на RoutingScreen. Пустая → UI покажет
-  /// заглушку "Tap to edit". §279 Phase 5 — существительные-счётчики через
-  /// ARB-плюралы; принимает [AppLocalizations] (render-path по построению).
-  String summary(AppLocalizations l);
+  /// заглушку "Tap to edit". Существительные-счётчики через getLocalText.plural
+  /// (рендер по локали в момент показа).
+  String summary();
 
   // ─── Convenience getters — упрощают чтение в UI/builder без pattern-match.
   // Поля, которых нет в данном subclass, возвращают пустое/дефолтное
@@ -563,28 +563,28 @@ class CustomRuleInline extends CustomRule {
   CustomRuleKind get kind => CustomRuleKind.inline;
 
   @override
-  String summary(AppLocalizations l) {
+  String summary() {
     final parts = <String>[];
-    if (domains.isNotEmpty) parts.add(l.ruleSummaryDomains(domains.length));
+    if (domains.isNotEmpty) parts.add(getLocalText.plural("%d domains", domains.length));
     if (domainSuffixes.isNotEmpty) {
-      parts.add(l.ruleSummarySuffixes(domainSuffixes.length));
+      parts.add(getLocalText.plural("%d suffixes", domainSuffixes.length));
     }
     if (domainKeywords.isNotEmpty) {
-      parts.add(l.ruleSummaryKeywords(domainKeywords.length));
+      parts.add(getLocalText.plural("%d keywords", domainKeywords.length));
     }
-    if (ipCidrs.isNotEmpty) parts.add(l.ruleSummaryCidrs(ipCidrs.length));
-    if (ipIsPrivate) parts.add(l.ruleSummaryPrivateIp);
+    if (ipCidrs.isNotEmpty) parts.add(getLocalText.plural("%d cidrs", ipCidrs.length));
+    if (ipIsPrivate) parts.add(getLocalText.s("private ip"));
     if (sourceIpCidrs.isNotEmpty) {
-      parts.add(l.ruleSummarySources(sourceIpCidrs.length));
+      parts.add(getLocalText.plural("%d src", sourceIpCidrs.length));
     }
-    if (sourceIpIsPrivate) parts.add(l.ruleSummaryPrivateSrc);
+    if (sourceIpIsPrivate) parts.add(getLocalText.s("private src"));
     final totalPorts = ports.length + portRanges.length;
-    if (totalPorts > 0) parts.add(l.ruleSummaryPorts(totalPorts));
-    if (packages.isNotEmpty) parts.add(l.ruleSummaryApps(packages.length));
-    if (protocols.isNotEmpty) parts.add(l.ruleSummaryProtos(protocols.length));
-    if (network.isNotEmpty) parts.add(l.ruleSummaryNets(network.length));
-    if (inbounds.isNotEmpty) parts.add(l.ruleSummaryInbounds(inbounds.length));
-    if (wifiSsids.isNotEmpty) parts.add(l.ruleSummaryWifi(wifiSsids.length));
+    if (totalPorts > 0) parts.add(getLocalText.plural("%d ports", totalPorts));
+    if (packages.isNotEmpty) parts.add(getLocalText.plural("%d apps", packages.length));
+    if (protocols.isNotEmpty) parts.add(getLocalText.plural("%d proto", protocols.length));
+    if (network.isNotEmpty) parts.add(getLocalText.plural("%d net", network.length));
+    if (inbounds.isNotEmpty) parts.add(getLocalText.s("%d in", inbounds.length));
+    if (wifiSsids.isNotEmpty) parts.add(getLocalText.s("%d wifi", wifiSsids.length));
     return parts.join(' · ');
   }
 
@@ -777,10 +777,10 @@ class CustomRuleSrs extends CustomRule {
   CustomRuleKind get kind => CustomRuleKind.srs;
 
   @override
-  String summary(AppLocalizations l) {
+  String summary() {
     if (srsUrl.trim().isEmpty) return '';
     final host = Uri.tryParse(srsUrl)?.host;
-    return l.ruleSummarySrs(host?.isNotEmpty == true ? host! : srsUrl);
+    return getLocalText.s("SRS: %s", host?.isNotEmpty == true ? host! : srsUrl);
   }
 
   @override
@@ -916,7 +916,7 @@ class CustomRulePreset extends CustomRule {
   CustomRuleKind get kind => CustomRuleKind.preset;
 
   @override
-  String summary(AppLocalizations l) {
+  String summary() {
     // Preset-факт уже виден в UI — read-only `name` (snapshot template-label'а)
     // плюс 🔒 иконка. Дублировать «preset: <id>» в subtitle не нужно.
     // Показываем только user-выставленные vars (если есть и непусты).
@@ -1009,7 +1009,7 @@ class CustomRuleJson extends CustomRule {
   CustomRuleKind get kind => CustomRuleKind.json;
 
   @override
-  String summary(AppLocalizations l) {
+  String summary() {
     // `l` не нужен: сырой JSON — wire-данные, не переводятся.
     final oneLine = json.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (oneLine.isEmpty) return '';

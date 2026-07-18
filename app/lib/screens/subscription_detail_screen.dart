@@ -9,7 +9,6 @@ import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/ui_msg.dart';
 import '../services/error_humanize.dart';
-import '../services/l10n/l10n.dart';
 import '../services/node_hash.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/sources.dart';
@@ -22,6 +21,7 @@ import 'subscription_detail_screen/widgets/subscription_meta.dart';
 import 'subscription_detail_screen/widgets/subscription_node_list.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_source_tab.dart';
+import '../services/l10n/locale_controller.dart';
 
 class SubscriptionDetailScreen extends StatefulWidget {
   const SubscriptionDetailScreen({
@@ -225,14 +225,14 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.subDeleteSubscriptionTitle),
-        content: Text(ctx.l.subDeleteRemoveBody(widget.entry.displayName)),
+        title: Text(getLocalText.s("Delete subscription?")),
+        content: Text(getLocalText.s("Remove \"%s\"?", widget.entry.displayName)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.l.commonCancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(getLocalText.s("Cancel"))),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: Text(ctx.l.commonDelete),
+            child: Text(getLocalText.s("Delete")),
           ),
         ],
       ),
@@ -253,7 +253,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final opened = await UrlLauncher.open(url);
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.subCopiedUrl(url))),
+        SnackBar(content: Text(getLocalText.s("Copied: %s", url))),
       );
     }
   }
@@ -283,7 +283,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                 style: theme.textTheme.titleLarge,
                 decoration: InputDecoration(
                   border: InputBorder.none,
-                  hintText: context.l.subDisplayNameHint,
+                  hintText: getLocalText.s("Display name"),
                 ),
                 onSubmitted: (_) => _toggleEdit(),
               )
@@ -294,17 +294,17 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
               ),
         actions: [
           IconButton(
-            tooltip: _editing ? context.l.commonSave : context.l.commonRename,
+            tooltip: _editing ? getLocalText.s("Save") : getLocalText.s("Rename"),
             icon: Icon(_editing ? Icons.check : Icons.edit_outlined),
             onPressed: _toggleEdit,
           ),
           IconButton(
-            tooltip: context.l.commonRefresh,
+            tooltip: getLocalText.s("Refresh"),
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : () => _loadNodes(cacheOnly: false),
           ),
           IconButton(
-            tooltip: context.l.commonDelete,
+            tooltip: getLocalText.s("Delete"),
             icon: const Icon(Icons.delete_outline),
             onPressed: _delete,
           ),
@@ -312,9 +312,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         bottom: TabBar(
           controller: _tabCtrl,
           tabs: [
-            Tab(text: context.l.homeNodesTitle),
-            Tab(text: context.l.subTabSettings),
-            Tab(text: context.l.subTabSource),
+            Tab(text: getLocalText.s("Nodes")),
+            Tab(text: getLocalText.s("Settings")),
+            Tab(text: getLocalText.s("Source")),
           ],
         ),
       ),
@@ -392,7 +392,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(context.l.subUrlCopied),
+              content: Text(getLocalText.s("URL copied")),
               duration: const Duration(seconds: 1)),
         );
       },
@@ -419,7 +419,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final chosen = await showDialog<int>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: Text(ctx.l.subUpdateIntervalTitle),
+        title: Text(getLocalText.s("Update interval")),
         children: [
           for (final h in presets)
             SimpleDialogOption(
@@ -432,9 +432,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                     const SizedBox(width: 18),
                   const SizedBox(width: 8),
                   Text(switch (h) {
-                    < 0 => ctx.l.subIntervalDontAuto,
-                    0 => ctx.l.subIntervalNeverRespect,
-                    _ => ctx.l.subIntervalHoursShort(h, intervalHuman(ctx.l, h)),
+                    < 0 => getLocalText.s("Don't auto-update"),
+                    0 => getLocalText.s("Never (respect server)"),
+                    _ => getLocalText.s("%1\$dh (%2\$s)", h, intervalHuman(h)),
                   }),
                 ],
               ),

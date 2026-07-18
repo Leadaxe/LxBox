@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/l10n/l10n.dart';
 import '../../../widgets/outbound_picker.dart';
 import '../../../widgets/template_var_list.dart';
 import '../../dns_settings_screen/resolved_server.dart';
 import '../edit_controller.dart';
 import '../sections/server_form_section.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §117 задача 4 — Params tab редактора DNS-сервера. Состав по `kind`:
 ///
@@ -36,15 +36,15 @@ class DnsServerParamsTab extends StatelessWidget {
           TextField(
             controller: c.tagCtrl,
             decoration: InputDecoration(
-              labelText: context.l.subTagLabel,
+              labelText: getLocalText.s("Tag"),
               border: const OutlineInputBorder(),
               isDense: true,
               prefixIcon: const Icon(Icons.tag, size: 18),
               helperText: c.isNew
-                  ? context.l.dnsParamsTagHelpNew
+                  ? getLocalText.s("Unique id — referenced by DNS rules / resolvers")
                   // §117 задача 4b: rename каскадно обновляет все ссылки
                   // (DNS-правила, resolvers, domain_resolver'ы).
-                  : context.l.dnsParamsTagHelpEdit,
+                  : getLocalText.s("Renaming updates all references automatically"),
             ),
           ),
           const SizedBox(height: 12),
@@ -52,7 +52,7 @@ class DnsServerParamsTab extends StatelessWidget {
         TextField(
           controller: c.descCtrl,
           decoration: InputDecoration(
-            labelText: context.l.dnsParamsDescriptionLabel,
+            labelText: getLocalText.s("Description"),
             border: const OutlineInputBorder(),
             isDense: true,
             prefixIcon: const Icon(Icons.label_outline, size: 18),
@@ -61,7 +61,7 @@ class DnsServerParamsTab extends StatelessWidget {
         const SizedBox(height: 4),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: Text(context.l.dnsParamsEnabled),
+          title: Text(getLocalText.s("Enabled")),
           // §117 lifecycle (locked №7): реферимый сервер force-include'ится
           // build'ом — показываем ON, тоггл заблокирован.
           subtitle: c.locked
@@ -71,7 +71,7 @@ class DnsServerParamsTab extends StatelessWidget {
                     Icon(Icons.lock_outline, size: 14, color: cs.primary),
                     const SizedBox(width: 4),
                     Flexible(
-                      child: Text(context.l.dnsUsedBy(c.lockedByLabel),
+                      child: Text(getLocalText.s("used by %s", c.lockedByLabel),
                           style: TextStyle(fontSize: 12, color: cs.primary)),
                     ),
                   ],
@@ -102,11 +102,11 @@ class DnsServerParamsTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(context.l.dnsParamsOutboundDetour,
+                      Text(getLocalText.s("Outbound (detour)"),
                           style: theme.textTheme.bodyLarge),
                       const SizedBox(height: 2),
                       Text(
-                        context.l.dnsParamsOutboundDetourSub,
+                        getLocalText.s("Which channel carries DNS queries to this server. Direct — no detour key in the config."),
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: cs.onSurfaceVariant),
                       ),
@@ -136,8 +136,7 @@ class DnsServerParamsTab extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      context.l.dnsParamsPresetNote(
-                          c.resolved?.presetLabel ?? ''),
+                      getLocalText.s("Registered by preset \"%s\". Parameters are edited in the preset rule (Routing → Rules).", c.resolved?.presetLabel ?? ''),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
@@ -150,7 +149,7 @@ class DnsServerParamsTab extends StatelessWidget {
         const SizedBox(height: 12),
         FilledButton.icon(
           icon: const Icon(Icons.save, size: 18),
-          label: Text(context.l.commonSave),
+          label: Text(getLocalText.s("Save")),
           onPressed: onSave,
         ),
       ],

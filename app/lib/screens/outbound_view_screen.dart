@@ -6,10 +6,10 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/config_node.dart';
-import '../services/l10n/l10n.dart';
 import '../services/runtime_chain.dart';
 import '../services/settings_storage.dart';
 import 'owner_navigation.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §258 — экран деталей outbound'а («View details» из меню ноды): вкладки
 /// **Overview** (основные параметры + рантайм-цепочка detour, хопы
@@ -92,7 +92,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       onOwnerNotFound: () {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l.outboundViewSourceNotFound)),
+          SnackBar(content: Text(getLocalText.s("Source not found in your lists"))),
         );
       },
     ));
@@ -112,7 +112,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
               overflow: TextOverflow.ellipsis),
           bottom: TabBar(
             tabs: [
-              Tab(text: context.l.outboundViewTabOverview),
+              Tab(text: getLocalText.s("Overview")),
               // l10n-exempt: acronym, same in all locales
               const Tab(text: 'JSON'),
             ],
@@ -122,7 +122,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
             // выпадашка (Copy server JSON / Copy detour / Copy server + detour(s)).
             if (widget.detourCount > 0)
               PopupMenuButton<String>(
-                tooltip: context.l.commonCopy,
+                tooltip: getLocalText.s("Copy"),
                 icon: const Icon(Icons.content_copy),
                 onSelected: widget.onCopy,
                 itemBuilder: (_) => [
@@ -132,7 +132,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.content_copy, size: 20),
-                      title: Text(context.l.outboundViewCopyServerJson),
+                      title: Text(getLocalText.s("Copy server JSON")),
                     ),
                   ),
                   PopupMenuItem(
@@ -141,7 +141,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.alt_route, size: 20),
-                      title: Text(context.l.outboundViewCopyDetour),
+                      title: Text(getLocalText.s("Copy detour")),
                     ),
                   ),
                   PopupMenuItem(
@@ -157,7 +157,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
               )
             else
               IconButton(
-                tooltip: context.l.subCopyJson,
+                tooltip: getLocalText.s("Copy JSON"),
                 icon: const Icon(Icons.content_copy),
                 onPressed: () => widget.onCopy('server'),
               ),
@@ -189,7 +189,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            context.l.outboundViewRouteHint,
+            getLocalText.s("Live path in packet order. Tap a hop to open its source."),
             style: TextStyle(
               fontSize: 12,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -298,7 +298,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       contentPadding: EdgeInsets.zero,
       leading: Icon(Icons.more_vert, size: 20, color: cs.onSurfaceVariant),
       title: Text(
-        context.l.outboundViewConnectToSee,
+        getLocalText.s("connect to see the full path"),
         style: TextStyle(
             fontSize: 12,
             fontStyle: FontStyle.italic,

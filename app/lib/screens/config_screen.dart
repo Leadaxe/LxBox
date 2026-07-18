@@ -10,7 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../config/config_parse.dart';
 import '../controllers/home_controller.dart';
 import '../services/error_format.dart';
-import '../services/l10n/l10n.dart';
+import '../services/l10n/locale_controller.dart';
 
 class ConfigScreen extends StatefulWidget {
   const ConfigScreen({super.key, required this.controller});
@@ -42,7 +42,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
     await Clipboard.setData(ClipboardData(text: _textController.text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l.configCopiedToClipboard)),
+      SnackBar(content: Text(getLocalText.s("Copied to clipboard"))),
     );
   }
 
@@ -60,7 +60,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(
-                context.l.commonShareFailed(formatUserError(e).render(context.l)))),
+                getLocalText.s("Share failed: %s", formatUserError(e).render()))),
       );
     }
   }
@@ -71,7 +71,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
     if (text.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l.subClipboardEmpty)),
+          SnackBar(content: Text(getLocalText.s("Clipboard is empty"))),
         );
       }
       return;
@@ -79,7 +79,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
     _textController.text = prettyJsonForDisplay(text);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.configPastedFromClipboard)),
+        SnackBar(content: Text(getLocalText.s("Pasted from clipboard"))),
       );
     }
   }
@@ -100,7 +100,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
       _textController.text = prettyJsonForDisplay(text.trim());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l.configLoadedFromFile)),
+          SnackBar(content: Text(getLocalText.s("Loaded from file"))),
         );
       }
     } catch (e) {
@@ -108,7 +108,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(
-                  context.l.subErrorSnack(formatUserError(e).render(context.l)))),
+                  getLocalText.s("Error: %s", formatUserError(e).render()))),
         );
       }
     }
@@ -119,7 +119,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
     if (!mounted) return;
     if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.configSavedSnack)),
+        SnackBar(content: Text(getLocalText.s("Config saved"))),
       );
     }
   }
@@ -132,11 +132,11 @@ class _ConfigScreenState extends State<ConfigScreen> {
         final busy = widget.controller.state.busy;
         return Scaffold(
           appBar: AppBar(
-            title: Text(context.l.configTitle),
+            title: Text(getLocalText.s("Config")),
             actions: [
               TextButton(
                 onPressed: busy ? null : _save,
-                child: Text(context.l.commonSave),
+                child: Text(getLocalText.s("Save")),
               ),
               PopupMenuButton<String>(
                 onSelected: (v) {
@@ -150,16 +150,16 @@ class _ConfigScreenState extends State<ConfigScreen> {
                 itemBuilder: (_) => [
                   PopupMenuItem(
                       value: 'paste',
-                      child: Text(context.l.subMenuPasteFromClipboard)),
+                      child: Text(getLocalText.s("Paste from clipboard"))),
                   PopupMenuItem(
                       value: 'file',
-                      child: Text(context.l.configMenuLoadFromFile)),
+                      child: Text(getLocalText.s("Load from file"))),
                   const PopupMenuDivider(),
                   PopupMenuItem(
                       value: 'copy',
-                      child: Text(context.l.configMenuCopyToClipboard)),
+                      child: Text(getLocalText.s("Copy to clipboard"))),
                   PopupMenuItem(
-                      value: 'share', child: Text(context.l.commonShare)),
+                      value: 'share', child: Text(getLocalText.s("Share"))),
                 ],
               ),
             ],
@@ -177,7 +177,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
                   style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
-                    hintText: context.l.configEditorHint,
+                    hintText: getLocalText.s("JSON or JSON5 (// and /* */ comments)"),
                     alignLabelWithHint: true,
                     contentPadding: const EdgeInsets.fromLTRB(12, 12, 40, 12),
                   ),
@@ -187,7 +187,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
                   right: 4,
                   child: IconButton(
                     icon: const Icon(Icons.copy, size: 16),
-                    tooltip: context.l.commonCopy,
+                    tooltip: getLocalText.s("Copy"),
                     visualDensity: VisualDensity.compact,
                     onPressed: () async {
                       // §219 — await + mounted перед snackbar (как _copy():40),
@@ -196,7 +196,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
                           ClipboardData(text: _textController.text));
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(context.l.configCopiedSnack)),
+                        SnackBar(content: Text(getLocalText.s("Config copied"))),
                       );
                     },
                   ),

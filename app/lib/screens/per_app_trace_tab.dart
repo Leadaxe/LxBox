@@ -23,7 +23,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/traffic_profiler.dart';
 import '../services/format_utils.dart';
-import '../services/l10n/l10n.dart';
 import '../widgets/core_logs_hint_banner.dart';
 import 'app_picker_screen.dart';
 import 'stats_screen/profiler_filter.dart';
@@ -33,6 +32,7 @@ import 'per_app_trace_tab/session_json.dart';
 import 'per_app_trace_tab/single_app_picker_screen.dart';
 import 'per_app_trace_tab/trace_dialogs.dart';
 import 'per_app_trace_tab/trace_sections.dart';
+import '../services/l10n/locale_controller.dart';
 
 class PerAppTraceTab extends StatefulWidget {
   const PerAppTraceTab({super.key});
@@ -147,7 +147,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
     if (TrafficProfiler.I.isRecording) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.l.statsTraceVerboseNextSession),
+          content: Text(getLocalText.s("Verbose toggle takes effect on next session — stop and restart.")),
         ),
       );
     }
@@ -163,7 +163,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
     await Clipboard.setData(ClipboardData(text: json));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l.statsTraceSessionJsonCopied)),
+      SnackBar(content: Text(getLocalText.s("Session JSON copied to clipboard"))),
     );
   }
 
@@ -255,8 +255,8 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
             icon: Icon(isRecording ? Icons.stop : Icons.play_arrow,
                 size: 18),
             label: Text(isRecording
-                ? context.l.statsRecStopButton
-                : context.l.statsRecStartButton),
+                ? getLocalText.s("STOP")
+                : getLocalText.s("START")),
             style: FilledButton.styleFrom(
               backgroundColor:
                   isRecording ? cs.error : cs.primary,
@@ -284,7 +284,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
               CheckedPopupMenuItem(
                 value: _verbose ? 'verbose-off' : 'verbose-on',
                 checked: _verbose,
-                child: Text(context.l.statsTraceMenuVerbose),
+                child: Text(getLocalText.s("Verbose core logs (debug)")),
               ),
               const PopupMenuDivider(),
               PopupMenuItem(
@@ -292,7 +292,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
                 enabled: active != null,
                 child: ListTile(
                   leading: const Icon(Icons.copy),
-                  title: Text(context.l.statsTraceMenuCopyJson),
+                  title: Text(getLocalText.s("Copy session JSON")),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -301,7 +301,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
                 enabled: active != null,
                 child: ListTile(
                   leading: const Icon(Icons.share),
-                  title: Text(context.l.statsTraceMenuShare),
+                  title: Text(getLocalText.s("Share session")),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -310,7 +310,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
                 value: 'wipe',
                 child: ListTile(
                   leading: const Icon(Icons.delete_outline),
-                  title: Text(context.l.statsTraceMenuClearAll),
+                  title: Text(getLocalText.s("Clear all sessions")),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -319,7 +319,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
                 value: 'help',
                 child: ListTile(
                   leading: const Icon(Icons.help_outline),
-                  title: Text(context.l.commonHelp),
+                  title: Text(getLocalText.s("Help")),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -341,8 +341,8 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
           const SizedBox(width: 6),
           Text(
             s.finishedAt == null
-                ? context.l.statsTraceStatusRecording
-                : context.l.statsTraceStatusStopped,
+                ? getLocalText.s("Recording")
+                : getLocalText.s("Stopped"),
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
           const SizedBox(width: 8),
@@ -350,12 +350,11 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           const SizedBox(width: 16),
           Text(
-              context.l.statsTraceStatsLine(
-                  s.byDomain.length, s.byIp.length, s.events.length),
+              getLocalText.s("%1\$d doms · %2\$d ips · %3\$d ev", s.byDomain.length, s.byIp.length, s.events.length),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           if (s.eventsDropped > 0) ...[
             const SizedBox(width: 8),
-            Text(context.l.statsTraceDropped(s.eventsDropped),
+            Text(getLocalText.s("· %d dropped", s.eventsDropped),
                 style: TextStyle(fontSize: 12, color: cs.error)),
           ],
         ],
@@ -379,7 +378,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
               runSpacing: 2,
               children: [
                 if (s.secondaryPackages.isEmpty)
-                  Text(context.l.statsTraceNoSecondary,
+                  Text(getLocalText.s("No secondary packages"),
                       style: TextStyle(
                           fontSize: 11, color: cs.onSurfaceVariant)),
                 for (final pkg in s.secondaryPackages)
@@ -395,7 +394,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
           TextButton.icon(
             onPressed: _pickSecondaryPackages,
             icon: const Icon(Icons.add, size: 14),
-            label: Text(context.l.statsTraceEditSecondary,
+            label: Text(getLocalText.s("Edit secondary"),
                 style: const TextStyle(fontSize: 11)),
             style: TextButton.styleFrom(
               padding:

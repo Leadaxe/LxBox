@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/l10n/l10n.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §030/new_fields — INBOUND section: фильтр по inbound'у, через который
 /// пришёл пакет (`tun-in` — VpnService, `mixed-in` — локальный SOCKS/HTTP
@@ -70,14 +70,14 @@ class _InboundSectionState extends State<InboundSection> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        context.l.ruleEditInboundHeader,
+                        getLocalText.s("INBOUND"),
                         style: t.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: t.colorScheme.primary,
                         ),
                       ),
                       Text(
-                        context.l.ruleEditInboundHint,
+                        getLocalText.s("AND. Which interface the packet came in on."),
                         style: TextStyle(
                           fontSize: 12,
                           color: t.colorScheme.onSurfaceVariant,

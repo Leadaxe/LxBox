@@ -8,10 +8,10 @@ import 'package:flutter/services.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
 import '../../models/ui_msg.dart';
-import '../../services/l10n/l10n.dart';
 import '../../services/subscription/auto_updater.dart';
 import '../../services/subscription/input_helpers.dart';
 import 'folder_picker.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Long-press bottom-sheet для записи подписки/сервера. Поведение 1:1 с
 /// прежним `_showContextMenu` — копировать URL, share, update,
@@ -37,7 +37,7 @@ void showEntryContextMenu(
         children: [
           ListTile(
             leading: const Icon(Icons.copy),
-            title: Text(ctx.l.subCopyUrl),
+            title: Text(getLocalText.s("Copy URL")),
             onTap: () {
               final url = entry.url.isNotEmpty
                   ? entry.url
@@ -47,7 +47,7 @@ void showEntryContextMenu(
               if (url.isNotEmpty) {
                 Clipboard.setData(ClipboardData(text: url));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(ctx.l.subUrlCopied)),
+                  SnackBar(content: Text(getLocalText.s("URL copied"))),
                 );
               }
               Navigator.pop(ctx);
@@ -59,7 +59,7 @@ void showEntryContextMenu(
           if (entry.url.isNotEmpty)
             ListTile(
               leading: const Icon(Icons.ios_share),
-              title: Text(ctx.l.subShareUrlMenu),
+              title: Text(getLocalText.s("Share URL…")),
               onTap: () async {
                 Navigator.pop(ctx);
                 await onShareUrl(entry);
@@ -67,7 +67,7 @@ void showEntryContextMenu(
             ),
           ListTile(
             leading: const Icon(Icons.refresh),
-            title: Text(ctx.l.subMenuUpdate),
+            title: Text(getLocalText.s("Update")),
             onTap: () {
               Navigator.pop(ctx);
               unawaited(subController.updateAt(index));
@@ -79,7 +79,7 @@ void showEntryContextMenu(
           // (выбрать файл заново).
           ListTile(
             leading: const Icon(Icons.edit_outlined),
-            title: Text(ctx.l.subEditSourceMenu),
+            title: Text(getLocalText.s("Edit source…")),
             onTap: () async {
               Navigator.pop(ctx);
               await showEditSourceDialog(context, index, entry, subController);
@@ -91,14 +91,14 @@ void showEntryContextMenu(
           if (entry.url.isNotEmpty)
             ListTile(
               leading: const Icon(Icons.restart_alt),
-              title: Text(ctx.l.subResetFailMenu),
+              title: Text(getLocalText.s("Reset fail count & retry")),
               onTap: () async {
                 Navigator.pop(ctx);
                 autoUpdater.resetFailCount(entry.url);
                 await subController.updateAt(index);
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.l.subResetFailSnack)),
+                  SnackBar(content: Text(getLocalText.s("Fail count reset, retrying…"))),
                 );
               },
             ),
@@ -107,7 +107,7 @@ void showEntryContextMenu(
           if (entry.list is UserServer)
             ListTile(
               leading: const Icon(Icons.drive_file_move_outline),
-              title: Text(ctx.l.subMoveToFolderMenu),
+              title: Text(getLocalText.s("Move to folder…")),
               onTap: () async {
                 Navigator.pop(ctx);
                 final folderIndex =
@@ -121,26 +121,26 @@ void showEntryContextMenu(
                     serverIndex, folderIndex);
                 if (err != null && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(err.render(context.l))));
+                      SnackBar(content: Text(err.render())));
                 }
               },
             ),
           ListTile(
             leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-            title: Text(ctx.l.commonDelete, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            title: Text(getLocalText.s("Delete"), style: TextStyle(color: Theme.of(context).colorScheme.error)),
             onTap: () async {
               Navigator.pop(ctx);
               final confirmed = await showDialog<bool>(
                 context: context,
                 builder: (dCtx) => AlertDialog(
-                  title: Text(dCtx.l.subDeleteSubscriptionTitle),
-                  content: Text(dCtx.l.subDeleteRemoveBody(entry.displayName)),
+                  title: Text(getLocalText.s("Delete subscription?")),
+                  content: Text(getLocalText.s("Remove \"%s\"?", entry.displayName)),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(dCtx, false), child: Text(dCtx.l.commonCancel)),
+                    TextButton(onPressed: () => Navigator.pop(dCtx, false), child: Text(getLocalText.s("Cancel"))),
                     TextButton(
                       onPressed: () => Navigator.pop(dCtx, true),
                       style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
-                      child: Text(dCtx.l.commonDelete),
+                      child: Text(getLocalText.s("Delete")),
                     ),
                   ],
                 ),
@@ -172,12 +172,12 @@ void _showFolderContextMenu(
         children: [
           ListTile(
             leading: const Icon(Icons.edit_outlined),
-            title: Text(ctx.l.subRenameMenu),
+            title: Text(getLocalText.s("Rename…")),
             onTap: () async {
               Navigator.pop(ctx);
               if (!context.mounted) return;
               final name = await showFolderNameDialog(context,
-                  initial: entry.name, title: context.l.subRenameFolderTitle);
+                  initial: entry.name, title: getLocalText.s("Rename folder"));
               if (name == null) return;
               await subController.renameAt(index, name);
             },
@@ -185,26 +185,28 @@ void _showFolderContextMenu(
           ListTile(
             leading: Icon(Icons.delete_outline,
                 color: Theme.of(context).colorScheme.error),
-            title: Text(ctx.l.subDeleteFolderMenu,
+            title: Text(getLocalText.s("Delete…"),
                 style: TextStyle(color: Theme.of(context).colorScheme.error)),
             onTap: () async {
               Navigator.pop(ctx);
               final choice = await showDialog<String>(
                 context: context,
                 builder: (dCtx) => AlertDialog(
-                  title: Text(dCtx.l.subDeleteFolderTitle),
+                  title: Text(getLocalText.s("Delete folder?")),
                   content: Text(folder.members.isEmpty
-                      ? dCtx.l.subDeleteRemoveBody(entry.displayName)
-                      : dCtx.l.subDeleteFolderBody(
-                          folder.members.length, entry.displayName)),
+                      ? getLocalText.s("Remove \"%s\"?", entry.displayName)
+                      : getLocalText.plural(
+                          "Folder \"%2\$s\" contains %1\$d servers.",
+                          folder.members.length,
+                          entry.displayName)),
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(dCtx),
-                        child: Text(dCtx.l.commonCancel)),
+                        child: Text(getLocalText.s("Cancel"))),
                     if (folder.members.isNotEmpty)
                       TextButton(
                         onPressed: () => Navigator.pop(dCtx, 'keep'),
-                        child: Text(dCtx.l.subKeepServers),
+                        child: Text(getLocalText.s("Keep servers")),
                       ),
                     TextButton(
                       onPressed: () => Navigator.pop(dCtx, 'all'),
@@ -212,8 +214,8 @@ void _showFolderContextMenu(
                           foregroundColor:
                               Theme.of(dCtx).colorScheme.error),
                       child: Text(folder.members.isEmpty
-                          ? dCtx.l.commonDelete
-                          : dCtx.l.subDeleteFolderAndServers),
+                          ? getLocalText.s("Delete")
+                          : getLocalText.s("Delete folder & servers")),
                     ),
                   ],
                 ),
@@ -249,7 +251,7 @@ Future<void> showEditSourceDialog(
     context: context,
     builder: (dCtx) => StatefulBuilder(
       builder: (dCtx, setLocal) => AlertDialog(
-        title: Text(dCtx.l.subEditSourceTitle),
+        title: Text(getLocalText.s("Edit source")),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,12 +264,12 @@ Future<void> showEditSourceDialog(
                 children: [
                   RadioListTile<bool>(
                     value: false,
-                    title: Text(dCtx.l.subSourceOnlineUrl),
+                    title: Text(getLocalText.s("Online URL")),
                     contentPadding: EdgeInsets.zero,
                   ),
                   RadioListTile<bool>(
                     value: true,
-                    title: Text(dCtx.l.subSourceLocalFile),
+                    title: Text(getLocalText.s("Local file")),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ],
@@ -278,7 +280,7 @@ Future<void> showEditSourceDialog(
               TextField(
                 controller: urlCtl,
                 decoration: InputDecoration(
-                  labelText: dCtx.l.subSubscriptionUrlLabel,
+                  labelText: getLocalText.s("Subscription URL"),
                   // l10n-exempt: URL scheme hint, locale-invariant
                   hintText: 'https://…',
                 ),
@@ -292,7 +294,7 @@ Future<void> showEditSourceDialog(
                     child: Text(
                       pickedBody == null
                           ? (pickedName.isEmpty
-                              ? dCtx.l.subNoFileChosen
+                              ? getLocalText.s("No file chosen")
                               : pickedName)
                           : pickedName,
                       overflow: TextOverflow.ellipsis,
@@ -317,7 +319,7 @@ Future<void> showEditSourceDialog(
                         pickedName = f.name;
                       });
                     },
-                    child: Text(dCtx.l.subChooseFile),
+                    child: Text(getLocalText.s("Choose…")),
                   ),
                 ],
               ),
@@ -326,7 +328,7 @@ Future<void> showEditSourceDialog(
         actions: [
           TextButton(
             onPressed: busy ? null : () => Navigator.pop(dCtx),
-            child: Text(dCtx.l.commonCancel),
+            child: Text(getLocalText.s("Cancel")),
           ),
           FilledButton(
             onPressed: busy
@@ -340,7 +342,7 @@ Future<void> showEditSourceDialog(
                         // переоткрыть текущий кэш нельзя, требуем выбор.
                         setLocal(() => busy = false);
                         ScaffoldMessenger.of(dCtx).showSnackBar(
-                          SnackBar(content: Text(dCtx.l.subChooseFileFirst)),
+                          SnackBar(content: Text(getLocalText.s("Choose a file first"))),
                         );
                         return;
                       }
@@ -354,7 +356,7 @@ Future<void> showEditSourceDialog(
                       if (!isSubscriptionUrl(url)) {
                         setLocal(() => busy = false);
                         ScaffoldMessenger.of(dCtx).showSnackBar(
-                          SnackBar(content: Text(dCtx.l.subEnterValidUrl)),
+                          SnackBar(content: Text(getLocalText.s("Enter a valid http(s):// URL"))),
                         );
                         return;
                       }
@@ -367,13 +369,13 @@ Future<void> showEditSourceDialog(
                     } else {
                       setLocal(() => busy = false);
                       ScaffoldMessenger.of(dCtx).showSnackBar(
-                          SnackBar(content: Text(err.render(dCtx.l))));
+                          SnackBar(content: Text(err.render())));
                     }
                   },
             child: busy
                 ? const SizedBox(
                     width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(dCtx.l.commonSave),
+                : Text(getLocalText.s("Save")),
           ),
         ],
       ),

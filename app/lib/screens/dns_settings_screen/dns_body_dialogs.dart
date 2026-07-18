@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import '../../services/l10n/l10n.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Read-only dialog с полным JSON body правила. Юзер видит что внутри
 /// без необходимости лезть в исходник (особенно для kind=template/rule
@@ -18,14 +18,14 @@ void showRuleBodyDialog(
     _ => body,
   };
   final pretty = unwrapped == null
-      ? context.l.dnsBodyUnavailable
+      ? getLocalText.s("(content unavailable)")
       : const JsonEncoder.withIndent('  ').convert(unwrapped);
   final sourceLabel = switch (kind) {
-    'template' => context.l.dnsSourceTemplate,
-    'preset' => context.l.dnsSourcePreset,
-    'srs' => context.l.dnsSourceSrs,
-    'rule' => context.l.dnsSourceRoutingRule,
-    _ => context.l.dnsSourceUserRule,
+    'template' => getLocalText.s("template"),
+    'preset' => getLocalText.s("preset"),
+    'srs' => getLocalText.s("srs"),
+    'rule' => getLocalText.s("routing rule"),
+    _ => getLocalText.s("user rule"),
   };
   showDialog<void>(
     context: context,
@@ -50,7 +50,7 @@ void showRuleBodyDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: Text(ctx.l.commonClose),
+          child: Text(getLocalText.s("Close")),
         ),
       ],
     ),

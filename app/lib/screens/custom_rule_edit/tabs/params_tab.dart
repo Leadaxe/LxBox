@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/custom_rule.dart';
-import '../../../services/l10n/l10n.dart';
 import '../../../widgets/outbound_picker.dart';
 import '../edit_controller.dart';
 import '../sections/apps_section.dart';
@@ -14,6 +13,7 @@ import '../sections/port_section.dart';
 import '../sections/srs_section.dart';
 import '../sections/wifi_section.dart';
 import 'preset_params_tab.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §053 Stage 3 — Params tab для inline/srs ветки.
 ///
@@ -54,7 +54,7 @@ class ParamsTab extends StatelessWidget {
                 controller: c.nameCtrl,
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
-                  labelText: context.l.ruleEditNameLabel,
+                  labelText: getLocalText.s("Name"),
                   isDense: true,
                   prefixIcon: const Icon(Icons.label_outline, size: 18),
                 ),
@@ -88,7 +88,7 @@ class ParamsTab extends StatelessWidget {
               if (c.resolveEligible) ...[
                 const SizedBox(width: 4),
                 IconButton(
-                  tooltip: context.l.ruleEditActionResolveTitle,
+                  tooltip: getLocalText.s("Action & Resolve"),
                   icon: Icon(
                     Icons.settings_outlined,
                     color: c.resolve != null
@@ -106,12 +106,10 @@ class ParamsTab extends StatelessWidget {
               padding: const EdgeInsets.only(top: 6, left: 4),
               child: Text(
                 c.resolve!.only
-                    ? context.l.ruleEditResolveOnlySummary(
-                        c.resolve!.strategy.isNotEmpty
+                    ? getLocalText.s("✳ Resolve only%s", c.resolve!.strategy.isNotEmpty
                             ? ' · ${c.resolve!.strategy}'
                             : '')
-                    : context.l.ruleEditResolveFirstSummary(
-                        c.resolve!.strategy.isNotEmpty
+                    : getLocalText.s("✳ Resolve first%s", c.resolve!.strategy.isNotEmpty
                             ? ' · ${c.resolve!.strategy}'
                             : ''),
                 style: theme.textTheme.bodySmall
@@ -128,7 +126,7 @@ class ParamsTab extends StatelessWidget {
           const SizedBox(height: 8),
         ],
         const Divider(),
-        Text(context.l.subTabSource, style: theme.textTheme.titleSmall),
+        Text(getLocalText.s("Source"), style: theme.textTheme.titleSmall),
         const SizedBox(height: 4),
         RadioGroup<CustomRuleKind>(
           groupValue: c.kind,
@@ -143,7 +141,7 @@ class ParamsTab extends StatelessWidget {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   value: CustomRuleKind.inline,
-                  title: Text(context.l.ruleEditSourceInline),
+                  title: Text(getLocalText.s("Inline")),
                 ),
               ),
               Expanded(
@@ -151,7 +149,7 @@ class ParamsTab extends StatelessWidget {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   value: CustomRuleKind.srs,
-                  title: Text(context.l.ruleEditSourceRemote),
+                  title: Text(getLocalText.s("Remote (.srs)")),
                 ),
               ),
               Expanded(
@@ -159,7 +157,7 @@ class ParamsTab extends StatelessWidget {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   value: CustomRuleKind.json,
-                  title: Text(context.l.ruleEditSourceRawJson),
+                  title: Text(getLocalText.s("Raw JSON")),
                 ),
               ),
             ],
@@ -241,7 +239,7 @@ class ParamsTab extends StatelessWidget {
         const SizedBox(height: 12),
         FilledButton.icon(
           icon: const Icon(Icons.save, size: 18),
-          label: Text(context.l.commonSave),
+          label: Text(getLocalText.s("Save")),
           // §225 — json-режим: блокируем Save на невалидном/пустом теле.
           onPressed: c.jsonError == null ? actions.onSave : null,
         ),

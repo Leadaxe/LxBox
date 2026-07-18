@@ -6,26 +6,41 @@
 
 ## Фазы
 
-- [ ] **Ф1 — движок + resolver'ы.** `get_local_text.dart` (`GetLocalText.s/.plural`,
-  printf `%s/%d/%1$s/%%`, форма-индекс, fallback = ключ); `PluralResolver` +
-  `EnPluralResolver`/`RuPluralResolver` (CLDR ru); загрузка `assets/l10n/ui/<tag>.json`;
-  интеграция в `LocaleController` (resolver по локали, dict-reload в пайплайне).
-  Юнит-тесты движка (fallback, plural ru-формы 1/2/5/22/25, special-индексы,
-  placeholders, %1$s reorder).
-- [ ] **Ф2 — миграционный скрипт.** `tool/l10n/arb_to_getlocaltext.dart`:
-  ARB en/ru → `assets/l10n/ui/ru.json` (plural ICU→объект, `{x}`→`%s/%d`);
-  отчёт о коллизиях (одинаковый en, разный ru). Прогон, ручная триажировка
-  коллизий в special-формы. Валидация: кол-во ключей, placeholder-арность.
-- [ ] **Ф3 — миграция call-site'ов волнами.** `context.l.<key>` →
-  `getLocalText.s/.plural("<en>", args)` по ARB-маппингу; удалить импорты
-  `l10n.dart`/gen. ~1451 сайт, ~135 файлов. Каждая волна: analyze + tests зелёные.
-- [ ] **Ф4 — CI-гейты.** `ui_check.dart` (AST-скан getLocalText → сверка ru.json:
-  missing/orphan/plural-forms/special-index/placeholder-арность); `hardcoded_check`
-  ужесточить под новый паттерн; удалить `arb_check.dart`. CI-шаг обновить.
-- [ ] **Ф5 — снос ARB.** Удалить `l10n.yaml`, `lib/l10n/*.arb`, `lib/l10n/gen/`,
-  `AppLocalizations`-делегат, `flutter: generate`, `context.l`-extension,
-  `intl`-ARB-зависимость (intl остаётся для DateFormat). Доки (l10n.md,
-  ARCHITECTURE, spec.md §2 mark superseded). Финальный gate.
+- [x] **Ф1 — движок + resolver'ы.** `get_local_text.dart` (`GetLocalText.s/.plural`,
+  printf `%s/%d/%1$s/%%`, форма-индекс, fallback = ключ); `plural_resolver.dart`
+  (`PluralResolver` + `EnPluralResolver`/`RuPluralResolver`, CLDR ru); загрузка
+  `assets/l10n/ui/<tag>.json`; интеграция в `LocaleController` (resolver по
+  локали, dict-reload в `_applyLocale`, глобальный `getLocalText` getter).
+  Юнит-тесты движка.
+- [x] **Ф2 — миграционный скрипт (одноразовый, снесён).** ARB en/ru →
+  `assets/l10n/ui/ru.json` (plural ICU→объект, `{x}`→`%s/%d`), коллизии →
+  special-формы. Итог: словарь `ru.json` (1146 записей: 1088 строк, 58 plural,
+  8 special). Инструменты (`arb_to_getlocaltext.dart`, `migrate_callsites.dart`,
+  `_arb_migration_map.json`) удалены как отработавшие.
+- [x] **Ф3 — миграция call-site'ов.** `context.l.<key>` /`L10n.current.<key>` →
+  `getLocalText.s/.plural("<en>", args)`; ~1450 сайтов; импорты `l10n.dart`/gen
+  сняты. analyze + tests зелёные.
+- [x] **Ф4 — CI-гейты.** `ui_check.dart` + `src/ui_scan.dart` (AST-скан
+  getLocalText → сверка ru.json: missing/orphan/orphan-special/usage-conflict/
+  shape/placeholder-арность; `--strict` эскалирует warn→fail); self-тест
+  `test/tool/ui_check_test.dart`. `hardcoded_check` rendering-locality
+  переписан под getLocalText (`.render()` разгейчен, `renderEn`/`GetLocalText.en`
+  правила сохранены). `arb_check.dart` удалён. CI-шаг «L10n checks» обновлён
+  (ui_check добавлен, arb_check убран).
+- [x] **Ф5 — снос ARB.** Удалены `l10n.yaml`, `lib/l10n/*.arb`, `lib/l10n/gen/`,
+  `services/l10n/l10n.dart` (`L10n`/`context.l`), `AppLocalizations`-делегат из
+  `MaterialApp` (Global* делегаты сохранены), `flutter: generate` из pubspec,
+  analyzer-exclude + .gitignore записи для gen. `flutter_localizations` + `intl`
+  оставлены (Global*Localizations / DateFormat). Доки: l10n.md, ARCHITECTURE,
+  CLAUDE.md, tool/l10n/README.md переписаны; getlocaltext.md помечен LIVE.
+  Финальный gate: analyze/test/4 checkers --strict зелёные.
+
+## Итог
+
+- `ui_check`: 1146 keys, 0 missing, 0 orphan, 0 arity-errors, 0 dynamic-skipped.
+- Видимый текст не изменился (en-ключ = прежнее ARB-en дословно); `find.text`
+  в тестах переживает.
+- Русского текста в коде нет (ключ всегда английский).
 
 ## Инварианты
 

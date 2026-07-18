@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../services/l10n/l10n.dart';
 import '../../services/traffic_profiler.dart';
 import '../../services/format_utils.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §048 Принцип 1 — banner с count'ом unattributed events за last 30s.
 /// Показывается когда recentUnattributedCount > 5: это сигнал что
@@ -20,8 +20,7 @@ Widget unattributedBanner(BuildContext context) {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            context.l.statsTraceUnattributedBanner(
-                TrafficProfiler.I.recentUnattributedCount),
+            getLocalText.plural("%d unattributed events / 30s — attribution gaps detected. See \"System-wide\" section in Live tab.", TrafficProfiler.I.recentUnattributedCount),
             style: TextStyle(fontSize: 12, color: cs.onErrorContainer),
           ),
         ),
@@ -42,7 +41,7 @@ Widget verboseBanner(BuildContext context) {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            context.l.statsTraceVerboseBanner,
+            getLocalText.s("Verbose core logs active — battery/CPU impact while session runs"),
             style: TextStyle(fontSize: 12, color: cs.onTertiaryContainer),
           ),
         ),
@@ -68,7 +67,7 @@ Widget savedSessions(BuildContext context,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Text(context.l.statsTraceSavedSessions(sessions.length),
+          child: Text(getLocalText.s("Saved sessions (last %d)", sessions.length),
               style: Theme.of(context).textTheme.labelMedium),
         ),
         ...sessions.map((s) => ListTile(
@@ -76,10 +75,7 @@ Widget savedSessions(BuildContext context,
               title: Text(s.targetPackage,
                   style: const TextStyle(fontSize: 13)),
               subtitle: Text(
-                context.l.statsTraceSessionSubtitle(
-                    formatDuration(s.finishedAt!.difference(s.startedAt)),
-                    s.byDomain.length,
-                    s.byIp.length),
+                getLocalText.s("%1\$s · %2\$d doms · %3\$d ips", formatDuration(s.finishedAt!.difference(s.startedAt)), s.byDomain.length, s.byIp.length),
                 style: const TextStyle(fontSize: 11),
               ),
               trailing: Wrap(
@@ -87,12 +83,12 @@ Widget savedSessions(BuildContext context,
                 children: [
                   IconButton(
                     icon: const Icon(Icons.share, size: 18),
-                    tooltip: context.l.commonShare,
+                    tooltip: getLocalText.s("Share"),
                     onPressed: () => onShare(s),
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline, size: 18),
-                    tooltip: context.l.commonDelete,
+                    tooltip: getLocalText.s("Delete"),
                     onPressed: () {
                       TrafficProfiler.I.delete(s.id);
                     },

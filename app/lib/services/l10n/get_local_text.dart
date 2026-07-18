@@ -15,6 +15,15 @@ class GetLocalText {
   // из ключа. По построению словарь плоский (englishKey → entry-map).
   GetLocalText(this._dict, this._plural);
 
+  /// §285 — пиненный английский рендерер для machine-поверхностей (renderEn):
+  /// dict=null → любой ключ печатается как есть (английский текст call-site'а)
+  /// с подставленными аргументами, НЕЗАВИСИМО от активной локали. Заменяет
+  /// прежний `L10n.en`-путь Phase 4.
+  static const en = GetLocalText.raw();
+  const GetLocalText.raw()
+      : _dict = null,
+        _plural = const EnPluralResolver();
+
   final Map<String, dynamic>? _dict;
   final PluralResolver _plural;
 
@@ -23,7 +32,13 @@ class GetLocalText {
   ///
   ///   s("Connected to %s", host)   → форма 0
   ///   s(1, "New")                   → особая форма №1 (special["1"])
-  String s(Object a0, [Object? a1, Object? a2, Object? a3, Object? a4]) {
+  String s(Object a0,
+      [Object? a1,
+      Object? a2,
+      Object? a3,
+      Object? a4,
+      Object? a5,
+      Object? a6]) {
     final int formIndex;
     final String key;
     final List<Object?> args;
@@ -32,11 +47,11 @@ class GetLocalText {
     if (a0 is int) {
       formIndex = a0;
       key = a1 is String ? a1 : a1.toString();
-      args = _prefixNonNull([a2, a3, a4]);
+      args = _prefixNonNull([a2, a3, a4, a5, a6]);
     } else {
       formIndex = 0;
       key = a0 is String ? a0 : a0.toString();
-      args = _prefixNonNull([a1, a2, a3, a4]);
+      args = _prefixNonNull([a1, a2, a3, a4, a5, a6]);
     }
 
     final raw = _lookupValue(key, formIndex);

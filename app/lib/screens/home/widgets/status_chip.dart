@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/home_state.dart';
-import '../../../services/l10n/l10n.dart';
 
 /// Статус-чип VPN-туннеля в connect-controls на главном экране: иконка щита +
 /// label текущего [TunnelStatus]. Во время connecting иконка вращается
@@ -34,8 +33,8 @@ class StatusChip extends StatelessWidget {
     final bgColor =
         state.tunnelUp ? Theme.of(context).colorScheme.primaryContainer : null;
     final label = (isRevoked || state.tunnel == TunnelStatus.unknown)
-        ? TunnelStatus.disconnected.label(context.l)
-        : state.tunnel.label(context.l);
+        ? TunnelStatus.disconnected.label()
+        : state.tunnel.label();
 
     Widget iconWidget = Icon(icon, size: 18, color: color);
     if (isConnecting) {

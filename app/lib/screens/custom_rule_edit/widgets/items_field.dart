@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../services/l10n/l10n.dart';
 import '../normalizers.dart' as norm;
+import '../../../services/l10n/locale_controller.dart';
 
 /// §053 Stage 2 — multiline TextField + count badge + Paste/Clear actions.
 ///
@@ -99,7 +99,7 @@ class _ItemsFieldState extends State<ItemsField> {
     if (text.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.subClipboardEmpty)),
+        SnackBar(content: Text(getLocalText.s("Clipboard is empty"))),
       );
       return;
     }
@@ -177,7 +177,7 @@ class _ItemsFieldState extends State<ItemsField> {
               Text(
                 invalid == 0
                     ? (count == 0 ? '' : '$count')
-                    : context.l.ruleEditItemsInvalidCount(count, invalid),
+                    : getLocalText.s("%1\$d · %2\$d invalid", count, invalid),
                 style: TextStyle(
                   fontSize: 12,
                   color: invalid > 0
@@ -208,7 +208,7 @@ class _ItemsFieldState extends State<ItemsField> {
             children: [
               TextButton.icon(
                 icon: const Icon(Icons.content_paste, size: 14),
-                label: Text(context.l.commonPaste,
+                label: Text(getLocalText.s("Paste"),
                     style: const TextStyle(fontSize: 12)),
                 onPressed: _pasteInto,
                 style: TextButton.styleFrom(
@@ -219,7 +219,7 @@ class _ItemsFieldState extends State<ItemsField> {
               if (widget.presets.isNotEmpty)
                 TextButton.icon(
                   icon: const Icon(Icons.list, size: 14),
-                  label: Text(context.l.settingsPresetsTooltip,
+                  label: Text(getLocalText.s("Presets"),
                       style: const TextStyle(fontSize: 12)),
                   onPressed: _showPresetMenu,
                   style: TextButton.styleFrom(
@@ -229,7 +229,7 @@ class _ItemsFieldState extends State<ItemsField> {
                 ),
               TextButton.icon(
                 icon: const Icon(Icons.clear, size: 14),
-                label: Text(context.l.commonClear,
+                label: Text(getLocalText.s("Clear"),
                     style: const TextStyle(fontSize: 12)),
                 onPressed: () => widget.controller.clear(),
                 style: TextButton.styleFrom(

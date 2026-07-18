@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/format_utils.dart';
-import '../../services/l10n/l10n.dart';
 import '../../vpn/box_vpn_client.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Bottom-sheet с детализацией памяти процесса приложения.
 ///
@@ -96,7 +96,7 @@ class _MemoryDetailSheetState extends State<_MemoryDetailSheet> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    context.l.statsMemoryTitle,
+                    getLocalText.s("Memory"),
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600),
                   ),
@@ -211,7 +211,7 @@ class _MemoryDetailSheetState extends State<_MemoryDetailSheet> {
         Clipboard.setData(ClipboardData(text: value));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(context.l.commonCopiedValue(value)),
+              content: Text(getLocalText.s("Copied: %s", value)),
               duration: const Duration(seconds: 1)),
         );
       },

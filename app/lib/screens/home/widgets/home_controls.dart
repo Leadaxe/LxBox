@@ -6,11 +6,11 @@ import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
 import '../../../services/haptic_service.dart';
-import '../../../services/l10n/l10n.dart';
 import '../home_dialogs.dart';
 import '../home_menus.dart';
 import '../node_list_presenter.dart';
 import 'app_banner.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Controls-блок главного экрана.
 ///
@@ -88,8 +88,8 @@ class HomeControls extends StatelessWidget {
                   size: 20,
                 ),
                 label: Text(state.tunnelUp
-                    ? context.l.homeStopButton
-                    : context.l.homeStartButton),
+                    ? getLocalText.s("Stop")
+                    : getLocalText.s("Start")),
               ),
               const SizedBox(width: 8),
               connectingAnimChild,
@@ -118,7 +118,7 @@ class HomeControls extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              Text(context.l.homeChannelLabel,
+              Text(getLocalText.s("Channel"),
                   style: const TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(width: 12),
               Expanded(
@@ -136,7 +136,7 @@ class HomeControls extends StatelessWidget {
                       value: state.groups.contains(state.selectedGroup)
                           ? state.selectedGroup
                           : null,
-                      hint: Text(context.l.homeSelectChannelHint),
+                      hint: Text(getLocalText.s("Select channel")),
                       items: state.groups
                           .map((g) => DropdownMenuItem(
                               value: g, child: Text(state.groupLabelOf(g))))
@@ -272,7 +272,7 @@ class HomeControls extends StatelessWidget {
             child: Row(children: [
               const Icon(Icons.bolt, size: 18),
               const SizedBox(width: 12),
-              Text(anchorCtx.l.homeMenuReload),
+              Text(getLocalText.s("Reload")),
             ]),
           ),
         PopupMenuItem(
@@ -288,7 +288,7 @@ class HomeControls extends StatelessWidget {
           child: Row(children: [
             const Icon(Icons.build_circle_outlined, size: 18),
             const SizedBox(width: 12),
-            Text(anchorCtx.l.homeMenuRebuildOnly),
+            Text(getLocalText.s("Rebuild config only")),
           ]),
         ),
         PopupMenuItem(

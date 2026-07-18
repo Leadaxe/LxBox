@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../screens/home/special_node_display.dart';
-import '../services/l10n/l10n.dart';
 import 'node_view_item.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// One row в node list на главной screen'е. Read-only widget от
 /// [NodeViewItem] data + callbacks.
@@ -88,7 +88,7 @@ class NodeRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(3),
             ),
             child: Text(
-              context.l.homeNodeActiveBadge,
+              getLocalText.s("ACTIVE"),
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
@@ -224,7 +224,7 @@ class NodeRow extends StatelessWidget {
               size: 20,
               color: canPing ? null : Theme.of(context).disabledColor,
             ),
-            title: Text(context.l.homeNodeMenuPing),
+            title: Text(getLocalText.s("Ping")),
           ),
         ),
         PopupMenuItem<String>(
@@ -238,7 +238,7 @@ class NodeRow extends StatelessWidget {
               size: 20,
               color: canActivate ? null : Theme.of(context).disabledColor,
             ),
-            title: Text(context.l.homeNodeMenuUse),
+            title: Text(getLocalText.s("Use this node")),
           ),
         ),
         if (onRunUrltest != null)
@@ -255,7 +255,7 @@ class NodeRow extends StatelessWidget {
                     ? null
                     : Theme.of(context).disabledColor,
               ),
-              title: Text(context.l.homeNodeMenuRunUrltest),
+              title: Text(getLocalText.s("Run URLTest")),
             ),
           ),
         // §203 — «Select server»: только для auto/urltest-ноды с текущим
@@ -268,7 +268,7 @@ class NodeRow extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.my_location, size: 20),
-              title: Text(context.l.homeNodeMenuSelectServer),
+              title: Text(getLocalText.s("Select server")),
             ),
           ),
         // §208 — «View pool»: только для auto-ноды round_robin-канала
@@ -280,7 +280,7 @@ class NodeRow extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.hub_outlined, size: 20),
-              title: Text(context.l.homeNodeMenuViewPool),
+              title: Text(getLocalText.s("View pool")),
             ),
           ),
         if (onViewJson != null) const PopupMenuDivider(),
@@ -293,7 +293,7 @@ class NodeRow extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.info_outline, size: 20),
-              title: Text(context.l.homeNodeMenuViewDetails),
+              title: Text(getLocalText.s("View details")),
             ),
           ),
         if (showCopy) const PopupMenuDivider(),
@@ -304,7 +304,7 @@ class NodeRow extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.link, size: 20),
-              title: Text(context.l.homeNodeMenuCopyUri),
+              title: Text(getLocalText.s("Copy URI")),
             ),
           ),
         // §099 — Copy JSON / detour / server+detour перенесены в View JSON.
@@ -400,8 +400,8 @@ class NodeRow extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
                 tooltip: item.active
-                    ? context.l.homeNodeActiveTooltip
-                    : context.l.homeNodeUseTooltip,
+                    ? getLocalText.s("Active")
+                    : getLocalText.s("Use node"),
                 onPressed: canActivate ? onActivate : null,
                 icon: Icon(
                   item.active ? Icons.check_circle : Icons.play_circle_outline,

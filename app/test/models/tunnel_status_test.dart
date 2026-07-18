@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/tunnel_status.dart';
-import 'package:lxbox/services/l10n/l10n.dart';
 
 /// §276 — контракт статуса native↔Dart.
 ///
@@ -83,7 +82,7 @@ void main() {
 
   group('label', () {
     test('revoked назван по-человечески (не «Disconnected»)', () {
-      expect(TunnelStatus.revoked.label(L10n.en), 'Taken by another VPN');
+      expect(TunnelStatus.revoked.label(), 'Taken by another VPN');
     });
   });
 }

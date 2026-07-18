@@ -1,10 +1,8 @@
-import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
-import 'package:lxbox/services/l10n/l10n.dart';
 
 void main() {
   group('applyCustomRules — inline', () {
@@ -381,11 +379,10 @@ void main() {
   });
 
   group('CustomRule.summary', () {
-    // §279 Phase 5 — summary принимает AppLocalizations (ARB-плюралы).
-    final en = lookupAppLocalizations(const Locale('en'));
-
+    // summary рендерит через getLocalText (в тестах — fallback на английский
+    // ключ: dict не загружен, плюрал печатается из самого ключа).
     test('пустой inline → empty', () {
-      expect(CustomRuleInline(name: 'x').summary(en), '');
+      expect(CustomRuleInline(name: 'x').summary(), '');
     });
 
     test('inline с полями → разделённый dot', () {
@@ -394,7 +391,7 @@ void main() {
         domainSuffixes: ['a', 'b'],
         ports: ['443'],
         protocols: ['tls'],
-      ).summary(en);
+      ).summary();
       expect(s, contains('2 suffixes'));
       expect(s, contains('1 port'));
       expect(s, contains('1 proto'));
@@ -404,7 +401,7 @@ void main() {
       final s = CustomRuleSrs(
         name: 'x',
         srsUrl: 'https://rules.example.com/geo.srs',
-      ).summary(en);
+      ).summary();
       expect(s, 'SRS: rules.example.com');
     });
   });

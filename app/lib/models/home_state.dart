@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../services/l10n/l10n.dart' show AppLocalizations;
 import '../vpn/cc_channel.dart';
 import 'config_node.dart';
 import 'debug_entry.dart';
@@ -8,6 +7,7 @@ import 'stop_reason.dart';
 import 'traffic_snapshot.dart';
 import 'tunnel_status.dart';
 import 'ui_msg.dart';
+import '../services/l10n/locale_controller.dart';
 
 export 'config_node.dart';
 export 'stop_reason.dart';
@@ -30,11 +30,11 @@ enum NodeSortMode {
 
   /// §279 — display-label режима (рендер по локали в момент показа).
   /// Персист/Debug API используют `.name` (wire), не label.
-  String label(AppLocalizations l) => switch (this) {
-        defaultOrder => l.homeSortModeDefault,
-        latencyAsc => l.homeSortModePing,
-        nameAsc => l.homeSortModeAz,
-        manual => l.homeSortModeCustom,
+  String label() => switch (this) {
+        defaultOrder => getLocalText.s("Default"),
+        latencyAsc => getLocalText.s("Ping"),
+        nameAsc => getLocalText.s("A–Z"),
+        manual => getLocalText.s("Custom"),
       };
 
   /// §100: cycle включает все 4 режима (carousel) —

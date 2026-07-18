@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../services/l10n/l10n.dart';
 import '../edit_controller.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §117 задача 4b — структурная форма inline-DNS-сервера: три режима
 /// **UDP / DoT / DoH** (sing-box `udp`/`tls`/`https`) + адрес/порт,
@@ -39,7 +39,7 @@ class ServerFormSection extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                context.l.dnsFormCustomTypeNote(c.rawServerType),
+                getLocalText.s("Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH.", c.rawServerType),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ),
@@ -70,9 +70,9 @@ class ServerFormSection extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4),
           child: Text(
             switch (mode) {
-              'tls' => context.l.dnsFormModeDotDesc,
-              'https' => context.l.dnsFormModeDohDesc,
-              _ => context.l.dnsFormModeUdpDesc,
+              'tls' => getLocalText.s("DNS-over-TLS · port 853"),
+              'https' => getLocalText.s("DNS-over-HTTPS · port 443"),
+              _ => getLocalText.s("Plain UDP · port 53 · fast, unencrypted"),
             },
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
@@ -87,10 +87,10 @@ class ServerFormSection extends StatelessWidget {
                 controller: c.addressCtrl,
                 keyboardType: TextInputType.url,
                 decoration: InputDecoration(
-                  labelText: context.l.dnsFormServerAddressLabel,
+                  labelText: getLocalText.s("Server address"),
                   hintText: mode == 'https'
-                      ? context.l.dnsFormAddressHintHttps
-                      : context.l.dnsFormAddressHintPlain,
+                      ? getLocalText.s("192.168.1.1 / dns.example.com / https://… URL")
+                      : getLocalText.s("192.168.1.1 / dns.example.com"),
                   border: const OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -105,7 +105,7 @@ class ServerFormSection extends StatelessWidget {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
-                  labelText: context.l.appSettingsDiagPortLabel,
+                  labelText: getLocalText.s("Port"),
                   hintText: '${defaultDnsPort(mode)}',
                   border: const OutlineInputBorder(),
                   isDense: true,
@@ -120,7 +120,7 @@ class ServerFormSection extends StatelessWidget {
           TextField(
             controller: c.pathCtrl,
             decoration: InputDecoration(
-              labelText: context.l.dnsFormPathLabel,
+              labelText: getLocalText.s("Path"),
               // l10n-exempt: URL path example
               hintText: '/dns-query',
               border: const OutlineInputBorder(),
@@ -134,8 +134,8 @@ class ServerFormSection extends StatelessWidget {
           TextField(
             controller: c.sniCtrl,
             decoration: InputDecoration(
-              labelText: context.l.dnsFormSniLabel,
-              hintText: context.l.dnsFormSniHint,
+              labelText: getLocalText.s("TLS server name (SNI) — optional"),
+              hintText: getLocalText.s("dns.example.com — needed when address is an IP"),
               border: const OutlineInputBorder(),
               isDense: true,
             ),
@@ -170,8 +170,8 @@ class _DomainResolverPicker extends StatelessWidget {
       initialValue: tags.contains(current) ? current : null,
       isExpanded: true,
       decoration: InputDecoration(
-        labelText: context.l.dnsFormDomainResolverLabel,
-        helperText: context.l.dnsFormDomainResolverHelper,
+        labelText: getLocalText.s("Domain resolver"),
+        helperText: getLocalText.s("Resolves the server hostname itself"),
         border: const OutlineInputBorder(),
         isDense: true,
       ),

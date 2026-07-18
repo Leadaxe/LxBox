@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:lxbox/services/l10n/l10n.dart';
+import 'package:lxbox/services/l10n/get_local_text.dart';
 import 'package:lxbox/services/l10n/locale_controller.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/template_loader.dart';
@@ -46,7 +46,7 @@ void main() {
     }
   });
 
-  test('set() persists, warms template cache, updates L10n and notifies',
+  test('set() persists, warms template cache, updates getLocalText and notifies',
       () async {
     var notified = 0;
     void listener() => notified++;
@@ -61,9 +61,12 @@ void main() {
     expect(notified, 1);
     // Прогрев ДО notify: кэш нового тега тёплый в момент rebuild.
     expect(TemplateLoader.cachedOrNull('ru'), isNotNull);
-    expect(L10n.current.localeName, 'ru');
-    // Пиненный en не переприсваивается.
-    expect(L10n.en.localeName, 'en');
+    // §285 — глобальный getLocalText переключился на ru-словарь: известный
+    // ключ рендерится по-русски (fallback на английский ключ означал бы, что
+    // словарь не загрузился).
+    expect(getLocalText.s('Cancel'), 'Отмена');
+    // Пиненный английский рендерер machine-поверхностей неизменен.
+    expect(GetLocalText.en.s('Cancel'), 'Cancel');
   });
 
   test('set() with unknown value falls back to system', () async {

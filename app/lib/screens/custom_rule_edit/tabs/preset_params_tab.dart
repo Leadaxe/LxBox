@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/parser_config.dart' show WizardVar;
-import '../../../services/l10n/l10n.dart';
 import '../../../widgets/outbound_picker.dart';
 import '../edit_controller.dart';
 import 'params_tab.dart' show ParamsTabActions;
+import '../../../services/l10n/locale_controller.dart';
 
 /// §053 Stage 3 — Params tab для preset-ветки (§033 / §045).
 ///
@@ -45,13 +45,13 @@ class PresetParamsTab extends StatelessWidget {
                   Icon(Icons.warning_amber_outlined,
                       color: cs.error, size: 18),
                   const SizedBox(width: 6),
-                  Text(context.l.ruleEditPresetNotFound,
+                  Text(getLocalText.s("Preset not found"),
                       style: TextStyle(
                           fontWeight: FontWeight.w600, color: cs.error)),
                 ]),
                 const SizedBox(height: 4),
                 Text(
-                  context.l.ruleEditPresetNotFoundBody(c.initial.presetId),
+                  getLocalText.s("Preset \"%s\" no longer exists in this version of the app. The rule will be skipped when the config is generated. Delete it or update to a newer version that still has this preset.", c.initial.presetId),
                   style: const TextStyle(fontSize: 12),
                 ),
               ],
@@ -60,7 +60,7 @@ class PresetParamsTab extends StatelessWidget {
           const SizedBox(height: 24),
           OutlinedButton.icon(
             icon: Icon(Icons.delete_outline, size: 18, color: cs.error),
-            label: Text(context.l.ruleEditDeleteRule,
+            label: Text(getLocalText.s("Delete rule"),
                 style: TextStyle(color: cs.error)),
             onPressed: actions.onDelete,
           ),
@@ -112,7 +112,7 @@ class PresetParamsTab extends StatelessWidget {
               Row(children: [
                 Icon(Icons.push_pin_outlined, size: 16, color: cs.primary),
                 const SizedBox(width: 6),
-                Text(context.l.ruleEditBasedOnPreset,
+                Text(getLocalText.s("Based on preset"),
                     style: TextStyle(fontSize: 12, color: cs.primary)),
                 // §231 — чип «DNS»: пресет трогает DNS-настройки (сервер/правило).
                 if (preset.touchesDns) ...[
@@ -170,7 +170,7 @@ class PresetParamsTab extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    context.l.ruleEditTouchesDnsNote,
+                    getLocalText.s("This rule changes DNS settings — it adds a DNS server and/or a DNS rule. See DNS Settings."),
                     style: const TextStyle(fontSize: 12),
                   ),
                 ),
@@ -194,7 +194,7 @@ class PresetParamsTab extends StatelessWidget {
                 readOnly: true,
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
-                  labelText: context.l.ruleEditNameLabel,
+                  labelText: getLocalText.s("Name"),
                   isDense: true,
                   prefixIcon: const Icon(Icons.lock_outline, size: 18),
                 ),
@@ -216,7 +216,7 @@ class PresetParamsTab extends StatelessWidget {
         // иначе рисуется мёртвый контрол (dropdown из одного пункта).
         if (visibleVars.isNotEmpty) ...[
           const SizedBox(height: 20),
-          Text(context.l.ruleEditParametersHeader,
+          Text(getLocalText.s("PARAMETERS"),
               style: theme.textTheme.titleSmall?.copyWith(
                   color: cs.primary, fontWeight: FontWeight.w600)),
           const Divider(),
@@ -232,7 +232,7 @@ class PresetParamsTab extends StatelessWidget {
         const SizedBox(height: 12),
         FilledButton.icon(
           icon: const Icon(Icons.save, size: 18),
-          label: Text(context.l.commonSave),
+          label: Text(getLocalText.s("Save")),
           onPressed: actions.onSave,
         ),
       ],
@@ -296,7 +296,7 @@ class _PresetVarWidget extends StatelessWidget {
         if (!v.required) {
           items.add(DropdownMenuItem<String>(
             value: '',
-            child: Text(context.l.ruleEditDefaultDnsOption,
+            child: Text(getLocalText.s("— (default DNS)"),
                 style: const TextStyle(
                     fontSize: 13, fontStyle: FontStyle.italic)),
           ));
@@ -338,7 +338,7 @@ class _PresetVarWidget extends StatelessWidget {
         if (!v.required) {
           items.add(DropdownMenuItem<String>(
             value: '',
-            child: Text(context.l.ruleEditNoneOption,
+            child: Text(getLocalText.s("— (none)"),
                 style: const TextStyle(
                     fontSize: 13, fontStyle: FontStyle.italic)),
           ));
@@ -431,7 +431,7 @@ class _PresetVarWidget extends StatelessWidget {
         );
       default:
         control = Text(
-          context.l.ruleEditUnsupportedVarType(v.type),
+          getLocalText.s("(unsupported var type: %s)", v.type),
           style: TextStyle(fontSize: 12, color: cs.error),
         );
     }

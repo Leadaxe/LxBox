@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../main.dart';
-import '../../../services/l10n/l10n.dart';
 import '../../../services/l10n/locale_controller.dart';
 import 'update_status_row.dart';
 
@@ -51,7 +50,7 @@ class GeneralTab extends StatelessWidget {
     return ListView(
       padding: padding,
       children: [
-        Text(context.l.appSettingsGenAppearanceHeader,
+        Text(getLocalText.s("Appearance"),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         RadioGroup<ThemeMode>(
@@ -80,7 +79,7 @@ class GeneralTab extends StatelessWidget {
         const SizedBox(height: 8),
         // §279 — выбор языка приложения; смена применяется мгновенно через
         // LocaleController (полный пайплайн: ARB + template + rebuild).
-        Text(context.l.settingsLanguageTitle,
+        Text(getLocalText.s("Language"),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         RadioGroup<String>(
@@ -90,7 +89,7 @@ class GeneralTab extends StatelessWidget {
             children: [
               RadioListTile<String>(
                 value: 'system',
-                title: Text(context.l.settingsLanguageSystem),
+                title: Text(getLocalText.s("System default")),
                 secondary: const Icon(Icons.language),
               ),
               // Эндонимы: каждая метка на своём языке, сознательно не из ARB
@@ -107,12 +106,12 @@ class GeneralTab extends StatelessWidget {
           ),
         ),
         const Divider(height: 32),
-        Text(context.l.appSettingsGenBehaviorHeader,
+        Text(getLocalText.s("Behavior"),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         SwitchListTile(
-          title: Text(context.l.appSettingsGenAutoStartTitle),
-          subtitle: Text(context.l.appSettingsGenAutoStartSubtitle),
+          title: Text(getLocalText.s("Auto-start on boot")),
+          subtitle: Text(getLocalText.s("Start VPN when device turns on")),
           secondary: const Icon(Icons.power_settings_new),
           value: autoStart,
           onChanged: loaded ? onAutoStartChanged : null,
@@ -120,68 +119,68 @@ class GeneralTab extends StatelessWidget {
         // §220 — снятие портретной фиксации (планшетный фидбэк). Применяется
         // сразу, без рестарта; уважает системный auto-rotate.
         SwitchListTile(
-          title: Text(context.l.appSettingsGenAllowRotationTitle),
-          subtitle: Text(context.l.appSettingsGenAllowRotationSubtitle),
+          title: Text(getLocalText.s("Allow rotation")),
+          subtitle: Text(getLocalText.s("Rotate to landscape when the device turns — handy on tablets. Follows the system auto-rotate setting.")),
           secondary: const Icon(Icons.screen_rotation),
           value: allowRotation,
           onChanged: loaded ? onAllowRotationChanged : null,
         ),
         const Divider(height: 32),
-        Text(context.l.appSettingsGenQuickConnectHeader,
+        Text(getLocalText.s("Quick connect"),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         ListTile(
           leading: const Icon(Icons.dashboard_customize_outlined),
-          title: Text(context.l.appSettingsGenQsTileTitle),
-          subtitle: Text(context.l.appSettingsGenQsTileSubtitle),
+          title: Text(getLocalText.s("Quick Settings tile")),
+          subtitle: Text(getLocalText.s("Add to status-bar shade for one-tap toggle. Android 13+ shows a system prompt; on older versions edit the shade manually.")),
           trailing: TextButton(
             onPressed: onAddQuickSettingsTile,
-            child: Text(context.l.commonAdd),
+            child: Text(getLocalText.s("Add")),
           ),
         ),
         ListTile(
           leading: const Icon(Icons.touch_app_outlined),
-          title: Text(context.l.appSettingsGenShortcutTitle),
-          subtitle: Text(context.l.appSettingsGenShortcutSubtitle),
+          title: Text(getLocalText.s("Home-screen shortcut")),
+          subtitle: Text(getLocalText.s("Long-press the L×Box icon on your home screen → choose \"Toggle VPN\".")),
         ),
         const Divider(height: 32),
-        Text(context.l.appSettingsGenUpdatesHeader,
+        Text(getLocalText.s("Updates"),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         SwitchListTile(
-          title: Text(context.l.appSettingsGenCheckUpdatesTitle),
-          subtitle: Text(context.l.appSettingsGenCheckUpdatesSubtitle),
+          title: Text(getLocalText.s("Check for updates on launch")),
+          subtitle: Text(getLocalText.s("Pings github.com once a day to check for new releases. \"View\" opens the release page in browser; install is manual.")),
           secondary: const Icon(Icons.system_update_alt),
           value: autoCheckUpdates,
           onChanged: loaded ? onAutoCheckUpdatesChanged : null,
         ),
         const UpdateStatusRow(),
         const Divider(height: 32),
-        Text(context.l.appSettingsGenFeedbackHeader,
+        Text(getLocalText.s("Feedback"),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         SwitchListTile(
-          title: Text(context.l.appSettingsGenAutoPingTitle),
-          subtitle: Text(context.l.appSettingsGenAutoPingSubtitle),
+          title: Text(getLocalText.s("Auto-ping after connect")),
+          subtitle: Text(getLocalText.s("Ping nodes of active group 5s after VPN starts (once per connect)")),
           secondary: const Icon(Icons.network_ping),
           value: autoPing,
           onChanged: loaded ? onAutoPingChanged : null,
         ),
         SwitchListTile(
-          title: Text(context.l.appSettingsGenHapticTitle),
-          subtitle: Text(context.l.appSettingsGenHapticSubtitle),
+          title: Text(getLocalText.s("Haptic feedback")),
+          subtitle: Text(getLocalText.s("Vibrate on connect, disconnect and errors. Respects system \"Touch feedback\" setting")),
           secondary: const Icon(Icons.vibration),
           value: haptic,
           onChanged: loaded ? onHapticChanged : null,
         ),
         const Divider(height: 32),
-        Text(context.l.appSettingsGenBackupHeader,
+        Text(getLocalText.s("Backup & restore"),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         ListTile(
           leading: const Icon(Icons.import_export),
-          title: Text(context.l.appSettingsGenBackupHeader),
-          subtitle: Text(context.l.appSettingsGenBackupSubtitle),
+          title: Text(getLocalText.s("Backup & restore")),
+          subtitle: Text(getLocalText.s("Export subscriptions, routing setup and preferences as JSON.")),
           trailing: const Icon(Icons.chevron_right),
           contentPadding: EdgeInsets.zero,
           onTap: onOpenBackup,

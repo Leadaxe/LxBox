@@ -1337,12 +1337,12 @@
   "Download": {
     "value": "Загрузка"
   },
-  "Downloaded \"%1$s\" (%2$d rule-sets)": {
+  "Downloaded \"%2$s\" (%1$d rule-sets)": {
     "value": {
-      "one": "Скачан «%1$s» (%2$d rule-set)",
-      "few": "Скачан «%1$s» (%2$d rule-set)",
-      "many": "Скачан «%1$s» (%2$d rule-set)",
-      "other": "Скачан «%1$s» (%2$d rule-set)"
+      "one": "Скачан «%2$s» (%1$d rule-set)",
+      "few": "Скачан «%2$s» (%1$d rule-set)",
+      "many": "Скачан «%2$s» (%1$d rule-set)",
+      "other": "Скачан «%2$s» (%1$d rule-set)"
     }
   },
   "Downloaded \"%s\"": {
@@ -1573,14 +1573,6 @@
   },
   "Flush FakeIP allocations and cached DNS responses. Reloads the VPN if running.": {
     "value": "Сбросить выделения FakeIP и закэшированные DNS-ответы. Перезагружает VPN, если он работает."
-  },
-  "Folder \"%1$s\" contains %2$d servers.": {
-    "value": {
-      "one": "В папке «%1$s» %2$d сервер.",
-      "few": "В папке «%1$s» %2$d сервера.",
-      "many": "В папке «%1$s» %2$d серверов.",
-      "other": "В папке «%1$s» %2$d сервера."
-    }
   },
   "Folder is empty": {
     "value": "Папка пуста"
@@ -3766,5 +3758,13 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
+  },
+  "Folder \"%2$s\" contains %1$d servers.": {
+    "value": {
+      "one": "В папке «%2$s» %1$d сервер.",
+      "few": "В папке «%2$s» %1$d сервера.",
+      "many": "В папке «%2$s» %1$d серверов.",
+      "other": "В папке «%2$s» %1$d сервера."
+    }
   }
 }

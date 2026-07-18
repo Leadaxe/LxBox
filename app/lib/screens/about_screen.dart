@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/l10n/l10n.dart';
 import '../services/relative_time.dart';
 import '../services/update_checker.dart';
 import '../services/url_launcher.dart' as ul;
 import '../services/version_info.dart';
 import '../vpn/box_vpn_client.dart';
+import '../services/l10n/locale_controller.dart';
 
 
 class AboutScreen extends StatelessWidget {
@@ -21,7 +21,7 @@ class AboutScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: Text(context.l.homeDrawerAbout)),
+      appBar: AppBar(title: Text(getLocalText.s("About"))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -63,7 +63,7 @@ class AboutScreen extends StatelessWidget {
               children: [
                 ListTile(
                   leading: const Icon(Icons.code),
-                  title: Text(context.l.aboutSourceCode),
+                  title: Text(getLocalText.s("Source Code")),
                   subtitle: const Text(_repoUrl),
                   trailing: const Icon(Icons.open_in_new, size: 18),
                   onTap: () => ul.UrlLauncher.open(_repoUrl),
@@ -85,7 +85,7 @@ class AboutScreen extends StatelessWidget {
                     };
                     return ListTile(
                       leading: const Icon(Icons.architecture),
-                      title: Text(context.l.aboutVpnCore),
+                      title: Text(getLocalText.s("VPN core")),
                       subtitle: Text(subtitle),
                       trailing: const Icon(Icons.open_in_new, size: 18),
                       onTap: () => ul.UrlLauncher.open(_singboxUpstreamUrl),
@@ -97,7 +97,7 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            context.l.aboutCredits,
+            getLocalText.s("Credits"),
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -110,7 +110,7 @@ class AboutScreen extends StatelessWidget {
                   leading: const Icon(Icons.person_outline),
                   // l10n-exempt: project name
                   title: const Text('singbox-launcher'),
-                  subtitle: Text(context.l.aboutLauncherSubtitle),
+                  subtitle: Text(getLocalText.s("Config wizard and parser reference")),
                   trailing: const Icon(Icons.open_in_new, size: 18),
                   onTap: () => ul.UrlLauncher.open(_singboxLauncherUrl),
                 ),
@@ -121,11 +121,11 @@ class AboutScreen extends StatelessWidget {
           FilledButton.icon(
             onPressed: () => _showDonateDialog(context),
             icon: const Icon(Icons.favorite),
-            label: Text(context.l.aboutSupportProject),
+            label: Text(getLocalText.s("Support the project")),
           ),
           const SizedBox(height: 16),
           Text(
-            context.l.aboutTechStack,
+            getLocalText.s("Tech Stack"),
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -160,7 +160,7 @@ class AboutScreen extends StatelessWidget {
       builder: (ctx) => DefaultTabController(
         length: 2,
         child: AlertDialog(
-          title: Text(context.l.aboutDonateTitle),
+          title: Text(getLocalText.s("Support L×Box")),
           contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
           content: SizedBox(
             width: double.maxFinite,
@@ -169,7 +169,7 @@ class AboutScreen extends StatelessWidget {
               children: [
                 TabBar(
                   tabs: [
-                    Tab(text: context.l.aboutDonateTabCrypto),
+                    Tab(text: getLocalText.s("Crypto")),
                     // l10n-exempt: brand name
                     const Tab(text: 'Boosty'),
                   ],
@@ -193,7 +193,7 @@ class AboutScreen extends StatelessWidget {
                             TextButton.icon(
                               onPressed: () => _copyToClipboard(ctx, '0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea'),
                               icon: const Icon(Icons.copy, size: 14),
-                              label: Text(context.l.aboutCopyErc20, style: const TextStyle(fontSize: 12)),
+                              label: Text(getLocalText.s("Copy ERC20"), style: const TextStyle(fontSize: 12)),
                             ),
                             const SizedBox(height: 12),
                             // l10n-exempt: currency/network name
@@ -207,7 +207,7 @@ class AboutScreen extends StatelessWidget {
                             TextButton.icon(
                               onPressed: () => _copyToClipboard(ctx, 'TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun'),
                               icon: const Icon(Icons.copy, size: 14),
-                              label: Text(context.l.aboutCopyTrc20, style: const TextStyle(fontSize: 12)),
+                              label: Text(getLocalText.s("Copy TRC20"), style: const TextStyle(fontSize: 12)),
                             ),
                           ],
                         ),
@@ -215,7 +215,7 @@ class AboutScreen extends StatelessWidget {
                       // Boosty tab
                       Padding(
                         padding: const EdgeInsets.only(top: 16),
-                        child: Center(child: Text(context.l.aboutComingSoon)),
+                        child: Center(child: Text(getLocalText.s("Coming soon"))),
                       ),
                     ],
                   ),
@@ -224,7 +224,7 @@ class AboutScreen extends StatelessWidget {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(ctx.l.commonClose)),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(getLocalText.s("Close"))),
           ],
         ),
       ),
@@ -234,7 +234,7 @@ class AboutScreen extends StatelessWidget {
   void _copyToClipboard(BuildContext context, String text) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l.commonCopiedValue(text))),
+      SnackBar(content: Text(getLocalText.s("Copied: %s", text))),
     );
   }
 }
@@ -299,8 +299,8 @@ class _UpdateBlockState extends State<_UpdateBlock> {
                     Expanded(
                       child: Text(
                         info != null
-                            ? context.l.aboutUpdateAvailable(info.tag)
-                            : context.l.aboutNoUpdatesPending,
+                            ? getLocalText.s("%s available", info.tag)
+                            : getLocalText.s("No updates pending"),
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ),
@@ -313,7 +313,7 @@ class _UpdateBlockState extends State<_UpdateBlock> {
                     else
                       TextButton(
                         onPressed: _checkNow,
-                        child: Text(context.l.appSettingsGenCheckNow),
+                        child: Text(getLocalText.s("Check now")),
                       ),
                   ],
                 ),
@@ -323,9 +323,9 @@ class _UpdateBlockState extends State<_UpdateBlock> {
                     padding: const EdgeInsets.only(left: 26),
                     child: Text(
                       info.publishedAt != null
-                          ? context.l.aboutReleasedAgo(relativeTime(
-                              context.l, DateTime.now(), info.publishedAt!))
-                          : context.l.aboutCachedInfo,
+                          ? getLocalText.s("Released %s",
+                              relativeTime(DateTime.now(), info.publishedAt!))
+                          : getLocalText.s("(cached info)"),
                       style: TextStyle(
                           fontSize: 12, color: cs.onSurfaceVariant),
                     ),
@@ -336,7 +336,7 @@ class _UpdateBlockState extends State<_UpdateBlock> {
                     child: TextButton.icon(
                       onPressed: () => ul.UrlLauncher.open(info.htmlUrl),
                       icon: const Icon(Icons.open_in_new, size: 16),
-                      label: Text(context.l.aboutViewRelease),
+                      label: Text(getLocalText.s("View release")),
                     ),
                   ),
                 ],

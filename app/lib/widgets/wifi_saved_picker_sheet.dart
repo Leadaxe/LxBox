@@ -4,8 +4,8 @@ import '../screens/app_settings_screen.dart';
 import '../services/relative_time.dart';
 import '../services/settings_storage.dart';
 import '../services/app_log.dart';
-import '../services/l10n/l10n.dart';
 import 'wifi_entry.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §053 Stage 1 — extract bottom sheet «Pick saved Wi-Fi» из
 /// `custom_rule_edit_screen.dart`. Self-contained: сам грузит данные
@@ -81,7 +81,7 @@ Future<List<WifiEntry>?> showWifiSavedPickerSheet(
                 style: const TextStyle(fontSize: 13),
               ),
               subtitle: Text(
-                ctx.l.routingWifiUsedIn(ruleNames),
+                getLocalText.s("→ in: %s", ruleNames),
                 style: const TextStyle(fontSize: 11),
               ),
             ));
@@ -121,7 +121,7 @@ Future<List<WifiEntry>?> showWifiSavedPickerSheet(
           entries.add(Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              ctx.l.routingWifiNothingSaved,
+              getLocalText.s("Nothing saved yet. Use \"Add current\" / \"Manual\" or stay on a Wi-Fi network for 5 minutes."),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,
@@ -145,7 +145,7 @@ Future<List<WifiEntry>?> showWifiSavedPickerSheet(
                     children: [
                       Expanded(
                         child: Text(
-                          ctx.l.routingWifiSavedTitle,
+                          getLocalText.s("Saved networks"),
                           style: Theme.of(ctx).textTheme.titleMedium,
                         ),
                       ),
@@ -173,7 +173,7 @@ Future<List<WifiEntry>?> showWifiSavedPickerSheet(
                       TextButton(
                         onPressed: () =>
                             Navigator.of(ctx).pop<List<WifiEntry>>(null),
-                        child: Text(ctx.l.commonCancel),
+                        child: Text(getLocalText.s("Cancel")),
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
@@ -181,7 +181,7 @@ Future<List<WifiEntry>?> showWifiSavedPickerSheet(
                             ? null
                             : () =>
                                 Navigator.of(ctx).pop(selected.toList()),
-                        child: Text(ctx.l.routingWifiAddCount(selected.length)),
+                        child: Text(getLocalText.s("Add %d", selected.length)),
                       ),
                     ],
                   ),
@@ -229,7 +229,7 @@ Widget _autoRecordOffBanner(BuildContext ctx, BuildContext outerCtx) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                ctx.l.routingWifiAutoRecordOff,
+                getLocalText.s("Auto-record is off"),
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -238,7 +238,7 @@ Widget _autoRecordOffBanner(BuildContext ctx, BuildContext outerCtx) {
               ),
               const SizedBox(height: 4),
               Text(
-                ctx.l.routingWifiAutoRecordOffBody,
+                getLocalText.s("Enable it in Settings → Diagnostics to grow this list as you stay on Wi-Fi networks."),
                 style: TextStyle(
                   fontSize: 11,
                   color: Theme.of(ctx).colorScheme.onSurfaceVariant,
@@ -247,7 +247,7 @@ Widget _autoRecordOffBanner(BuildContext ctx, BuildContext outerCtx) {
               const SizedBox(height: 6),
               OutlinedButton.icon(
                 icon: const Icon(Icons.settings, size: 14),
-                label: Text(ctx.l.commonOpenSettings),
+                label: Text(getLocalText.s("Open Settings")),
                 onPressed: () {
                   Navigator.of(ctx).pop<List<WifiEntry>>(null);
                   Navigator.of(outerCtx).push(MaterialPageRoute<void>(
@@ -306,14 +306,14 @@ Widget _historyRow({
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  humanLastSeen(ctx.l, lastSeenIso),
+                  humanLastSeen(lastSeenIso),
                   style: const TextStyle(fontSize: 11),
                 ),
               ],
             ),
           ),
           IconButton(
-            tooltip: ctx.l.routingWifiRemoveFromHistory,
+            tooltip: getLocalText.s("Remove from history"),
             icon: const Icon(Icons.close, size: 18),
             visualDensity: VisualDensity.compact,
             onPressed: () async {
@@ -329,15 +329,15 @@ Widget _historyRow({
 /// `5 минут назад` / `Yesterday` / `Mar 15` для wifi_history
 /// `last_seen`. Empty input → `never`; malformed ISO → `unknown` +
 /// AppLog warning (traceable malformed entries).
-String humanLastSeen(AppLocalizations l, String iso) {
-  if (iso.isEmpty) return l.routingWifiLastSeenNever;
+String humanLastSeen(String iso) {
+  if (iso.isEmpty) return getLocalText.s("never");
   final dt = DateTime.tryParse(iso);
   if (dt == null) {
     // AppLog — machine-поверхность, остаётся английской (спека §4.4).
     AppLog.I.warning(
       '[wifi_history] humanLastSeen: malformed ISO timestamp "$iso"',
     );
-    return l.routingWifiLastSeenUnknown;
+    return getLocalText.s("unknown");
   }
-  return relativeTime(l, DateTime.now(), dt);
+  return relativeTime(DateTime.now(), dt);
 }

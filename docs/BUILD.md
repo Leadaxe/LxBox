@@ -146,21 +146,21 @@ gh workflow run CI -f run_mode=build    # ○ + APK в artifacts
 
 Джоб `android` собирает **только release**-APK: universal (fat, все ABI) + 3 per-ABI через `--split-per-abi` (arm64-v8a / armeabi-v7a / x86_64). Debug-APK CI не собирает. Перед сборкой шаг `Fetch sing-box-lx core` скачивает fork-ядро по пину `app/android/libbox.version` (см. [«Ядро sing-box-lx»](#ядро-sing-box-lx-libbox)).
 
-### Локализация в сборке и CI (§279)
+### Локализация в сборке и CI (§279 / §285)
 
-- **Кодген строк — бесплатный**: `flutter pub get` при `flutter: generate: true`
-  сам генерирует `lib/l10n/gen/` из ARB (`app/l10n.yaml`); отдельного CI-шага
-  кодгена нет, каталог в `.gitignore`. Отсутствующий ключ = ошибка
-  `flutter analyze`. Локально после правки ARB: `flutter gen-l10n` (или любой
-  `pub get`).
+- **Кодгена строк нет** (§285): UI локализуется через natural keys
+  (`getLocalText.s/.plural`, английский текст = ключ), словарь —
+  `assets/l10n/ui/<tag>.json` (asset, не кодген). ARB/gen_l10n/`l10n.yaml`
+  снесены; `flutter: generate` из pubspec убран. Отсутствие перевода → fallback
+  на английский ключ (под `--strict` = fail `ui_check`).
 - **Шаг `L10n checks`** в джобе `checks` — четыре guard-checker'а
-  ([`app/tool/l10n/README.md`](../app/tool/l10n/README.md)): `template_check`
-  (byte-equal `en.json`, `src`-hash staleness ru-overlay), `arb_check`
-  (непереведённые ru-ключи, AST-orphan-скан, паритет placeholder'ов),
-  `hardcoded_check` (ratchet против новых hardcoded display-строк +
+  ([`app/tool/l10n/README.md`](../app/tool/l10n/README.md)): `ui_check`
+  (natural-key словарь ↔ обращения `getLocalText` в коде: missing/orphan/
+  shape/арность), `template_check` (byte-equal `en.json`, `src`-hash staleness
+  ru-overlay), `hardcoded_check` (ratchet против новых hardcoded display-строк +
   rendering-locality), `kotlin_check` (нативные литералы Android + parity
-  `values/strings.xml` ↔ `values-ru/`). С Phase 7 все идут с `--strict` на
-  каждом push/PR — warnings фатальны.
+  `values/strings.xml` ↔ `values-ru/`). Все идут с `--strict` на каждом
+  push/PR — warnings фатальны.
 
 ### Подпись release (один ключ между сборками)
 

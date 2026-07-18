@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
-import '../services/l10n/l10n.dart';
 import '../services/ui_helpers.dart';
 import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/warp_endpoint_picker.dart';
 import 'folder_detail_screen.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §025 — Full-screen визард «Get WARP». Открывается из overflow-меню
 /// Subscriptions. Один тап «Register» для free; license/endpoint опциональны
@@ -181,16 +181,16 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(context.l.warpScanConfirmTitle),
-        content: Text(context.l.warpScanConfirmBody),
+        title: Text(getLocalText.s("Scan endpoints?")),
+        content: Text(getLocalText.s("Scanning stops the VPN and probes endpoints directly to find one that works on this network. Continue?")),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.l.commonCancel),
+            child: Text(getLocalText.s("Cancel")),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.l.commonContinue),
+            child: Text(getLocalText.s("Continue")),
           ),
         ],
       ),
@@ -209,7 +209,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
         },
       );
     } catch (e) {
-      if (mounted) showSnack(context.l.warpScanFailed);
+      if (mounted) showSnack(getLocalText.s("Scan failed — no WARP account or endpoints unreachable."));
     } finally {
       if (mounted) {
         setState(() {
@@ -221,7 +221,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     if (!mounted) return;
 
     if (folderIdx == null) {
-      showSnack(context.l.warpScanFailed);
+      showSnack(getLocalText.s("Scan failed — no WARP account or endpoints unreachable."));
       return;
     }
     // Открываем папку «SCAN WARP» — она и есть результат (живые эндпоинты).
@@ -274,16 +274,16 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
       final err = widget.subController.lastError;
       if (account == null || err != null) {
         showSnack(err != null
-            ? err.render(context.l)
-            : context.l.warpRegistrationFailed);
+            ? err.render()
+            : getLocalText.s("WARP registration failed"));
         return;
       }
       setState(() => _result = account);
       await widget.onAdded();
       if (!mounted) return;
       showSnack(account.warpPlus
-          ? context.l.warpAddedPlusNodeSnack
-          : context.l.warpAddedNodeSnack);
+          ? getLocalText.s("Added WARP+ node")
+          : getLocalText.s("Added WARP node"));
       Navigator.of(context).pop();
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -304,13 +304,13 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     final err = widget.subController.lastError;
     if (account == null || err != null) {
       showSnack(err != null
-          ? err.render(context.l)
-          : context.l.warpMasqueRegistrationFailed);
+          ? err.render()
+          : getLocalText.s("MASQUE registration failed"));
       return;
     }
     await widget.onAdded();
     if (!mounted) return;
-    showSnack(context.l.warpAddedMasqueNode);
+    showSnack(getLocalText.s("Added MASQUE node"));
     Navigator.of(context).pop();
   }
 
@@ -329,11 +329,11 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.l.warpTitle),
+        title: Text(getLocalText.s("Get WARP")),
         actions: [
           TextButton(
             onPressed: _busy ? null : () => Navigator.of(context).pop(),
-            child: Text(context.l.commonCancel),
+            child: Text(getLocalText.s("Cancel")),
           ),
         ],
       ),
@@ -361,7 +361,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
             ),
             const SizedBox(height: 8),
             Text(
-              context.l.warpIntro,
+              getLocalText.s("Registers a free WireGuard tunnel on Cloudflare. The private key is generated on this device and never leaves it."),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: cs.onSurfaceVariant,
@@ -403,9 +403,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                     : const Icon(Icons.radar_outlined),
                 label: Text(
                   _scanProgress != null
-                      ? context.l.warpScanProgress(
-                          _scanProgress!.done, _scanProgress!.total)
-                      : context.l.warpScanButton,
+                      ? getLocalText.s("Probing %1\$d/%2\$d…", _scanProgress!.done, _scanProgress!.total)
+                      : getLocalText.s("Scan"),
                 ),
               ),
             ],
@@ -421,7 +420,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        context.l.warpMasqueIntro,
+                        getLocalText.s("MASQUE tunnels IP over HTTP/3 (QUIC) to Cloudflare — it looks like ordinary HTTPS to DPI and often exits from a foreign IP."),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -462,8 +461,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       const SizedBox(height: 6),
                       Text(
                         _masqueNetwork == 'h2'
-                            ? context.l.warpMasqueH2Note
-                            : context.l.warpMasqueH3Note,
+                            ? getLocalText.s("HTTP/2 over TCP — use where QUIC/UDP is blocked.")
+                            : getLocalText.s("HTTP/3 over QUIC — the default, fastest path."),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -484,7 +483,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                                 width: c.maxWidth,
                                 requestFocusOnTap: true,
                                 menuHeight: 280,
-                                hintText: context.l.warpMasqueSniHint,
+                                hintText: getLocalText.s("Leave empty for the default SNI"),
                                 dropdownMenuEntries: [
                                   for (final s in _masqueSniPool)
                                     DropdownMenuEntry(value: s, label: s),
@@ -494,7 +493,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                           ),
                           IconButton(
                             icon: const Icon(Icons.casino_outlined),
-                            tooltip: context.l.warpRandomDomainTooltip,
+                            tooltip: getLocalText.s("Pick another random domain"),
                             onPressed: _busy ? null : _fillRandomMasqueSni,
                           ),
                         ],
@@ -512,7 +511,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                                 FilteringTextInputFormatter.digitsOnly
                               ],
                               decoration: _input('5').copyWith(
-                                labelText: context.l.warpIdleTimeoutLabel,
+                                labelText: getLocalText.s("Idle timeout (min)"),
                               ),
                             ),
                           ),
@@ -527,7 +526,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                                 FilteringTextInputFormatter.digitsOnly
                               ],
                               decoration: _input('30').copyWith(
-                                labelText: context.l.warpKeepAliveLabel,
+                                labelText: getLocalText.s("Keep-alive (sec)"),
                               ),
                             ),
                           ),
@@ -535,7 +534,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        context.l.warpMasqueTimersHelp,
+                        getLocalText.s("Idle timeout suspends the tunnel after inactivity to save battery (default 5 min). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults."),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -547,8 +546,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                         onChanged: _busy
                             ? null
                             : (v) => setState(() => _forceNew = v ?? false),
-                        title: Text(context.l.warpForceNewTitle),
-                        subtitle: Text(context.l.warpForceNewSubtitle),
+                        title: Text(getLocalText.s("Re-register (force new account)")),
+                        subtitle: Text(getLocalText.s("Ignore the cached account and register a fresh one.")),
                       ),
                     ],
                   ),
@@ -581,8 +580,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                               _resetObfuscationFields();
                             }
                           },
-                    title: Text(context.l.warpObfuscateTitle),
-                    subtitle: Text(context.l.warpObfuscateSubtitle),
+                    title: Text(getLocalText.s("Add Amnezia obfuscation")),
+                    subtitle: Text(getLocalText.s("Masks WireGuard from DPI by adding junk traffic. Enable if WARP is blocked.")),
                   ),
                   // §143 — masquerade под выбранный протокол (id/ip/ib, ядро
                   // 009 генерит i1). Протокол/домен/браузер — в Advanced.
@@ -590,7 +589,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                       child: Text(
-                        context.l.warpObfuscateHint,
+                        getLocalText.s("Junk traffic masquerades as a real protocol. Pick protocol/domain in Advanced."),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -611,7 +610,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                   value: 'advanced',
                   canTapOnHeader: true,
                   headerBuilder: (_, _) =>
-                      ListTile(title: Text(context.l.commonAdvanced)),
+                      ListTile(title: Text(getLocalText.s("Advanced"))),
                   body: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: Column(
@@ -625,7 +624,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          context.l.warpPlusHelp,
+                          getLocalText.s("WARP+ adds Argo Smart Routing (lower latency). Privacy is the same as free. Leave empty for free WARP."),
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: cs.onSurfaceVariant,
                               ),
@@ -647,7 +646,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                             suffixIcon: _obfuscate
                                 ? IconButton(
                                     icon: const Icon(Icons.casino_outlined),
-                                    tooltip: context.l.warpRandomEndpointTooltip,
+                                    tooltip: getLocalText.s("Pick another random IP:port"),
                                     onPressed:
                                         _busy ? null : _fillRandomEndpoint,
                                   )
@@ -656,7 +655,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          context.l.warpEndpointHelp,
+                          getLocalText.s("host:port of the Cloudflare peer. With obfuscation a random working IP:port is filled in — tap the dice to reroll, or type your own to pin a specific one."),
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: cs.onSurfaceVariant,
                               ),
@@ -670,8 +669,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                               ? null
                               : (v) =>
                                   setState(() => _includeReserved = v),
-                          title: Text(context.l.warpReservedTitle),
-                          subtitle: Text(context.l.warpReservedSubtitle),
+                          title: Text(getLocalText.s("Bind to this device (reserved)")),
+                          subtitle: Text(getLocalText.s("Sends the Cloudflare client_id. Off for obfuscation (the device binding tends to get blocked).")),
                         ),
                         // §143 — masquerade id/ip/ib (ядро 009 генерит i1).
                         if (_obfuscate) ...[
@@ -718,9 +717,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                             _masqIp == 'dns' || _masqIp == 'sip'
                                 // Имена полей протокола (wire-термины) —
                                 // подставляются как payload, не переводятся.
-                                ? context.l.warpDecoyDomainVisible(
-                                    _masqIp == 'dns' ? 'DNS QNAME' : 'SIP host')
-                                : context.l.warpDecoyNoHostname,
+                                ? getLocalText.s("Domain (below) is visible on the wire as the %s.", _masqIp == 'dns' ? 'DNS QNAME' : 'SIP host')
+                                : getLocalText.s("QUIC/STUN decoy carries no hostname — the domain below is cosmetic for this protocol."),
                             style: Theme.of(context)
                                 .textTheme
                                 .bodySmall
@@ -750,7 +748,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                               ),
                               IconButton(
                                 icon: const Icon(Icons.casino_outlined),
-                                tooltip: context.l.warpRandomDomainTooltip,
+                                tooltip: getLocalText.s("Pick another random domain"),
                                 onPressed: _busy ? null : _fillRandomSni,
                               ),
                             ],
@@ -819,8 +817,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                           onChanged: _busy
                               ? null
                               : (v) => setState(() => _forceNew = v ?? false),
-                          title: Text(context.l.warpForceNewTitle),
-                          subtitle: Text(context.l.warpForceNewSubtitle),
+                          title: Text(getLocalText.s("Re-register (force new account)")),
+                          subtitle: Text(getLocalText.s("Ignore the cached account and register a fresh one.")),
                         ),
                       ],
                     ),
@@ -840,8 +838,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                     )
                   : const Icon(Icons.bolt),
               label: Text(_busy
-                  ? context.l.warpRegisteringButton
-                  : context.l.warpRegisterButton),
+                  ? getLocalText.s("Registering…")
+                  : getLocalText.s("Register")),
             ),
             if (_result != null) ...[
               const SizedBox(height: 16),
@@ -899,8 +897,8 @@ class _StatusCard extends StatelessWidget {
           children: [
             Text(
                 account.warpPlus
-                    ? context.l.warpRegisteredPlusTitle
-                    : context.l.warpRegisteredTitle,
+                    ? getLocalText.s("Registered: WARP+")
+                    : getLocalText.s("Registered: WARP"),
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             _row('Account', account.accountId),

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/l10n/l10n.dart';
 import '../punycode.dart';
 import '../validators.dart' as v;
 import '../widgets/items_field.dart';
 import '../widgets/section_header.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §030 new_fields — quick-вставки для CIDR-полей (кнопка «Presets ▾»).
 /// Три ходовых сценария: само устройство, домашний Wi-Fi, поймать всё.
@@ -101,11 +101,11 @@ class MatchSection extends StatelessWidget {
           value: ipIsPrivate,
           onChanged: (v) => onIpIsPrivateChanged(v ?? false),
           title: Text(
-            context.l.ruleEditPrivateIp,
+            getLocalText.s("Private IP"),
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           subtitle: Text(
-            context.l.ruleEditPrivateIpSub,
+            getLocalText.s("Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local"),
             style: const TextStyle(fontSize: 11),
           ),
         ),
@@ -132,11 +132,11 @@ class MatchSection extends StatelessWidget {
           value: sourceIpIsPrivate,
           onChanged: (v) => onSourceIpIsPrivateChanged(v ?? false),
           title: Text(
-            context.l.ruleEditPrivateSourceIp,
+            getLocalText.s("Private source IP"),
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           subtitle: Text(
-            context.l.ruleEditPrivateSourceIpSub,
+            getLocalText.s("Match when the packet SOURCE is a private address"),
             style: const TextStyle(fontSize: 11),
           ),
         ),

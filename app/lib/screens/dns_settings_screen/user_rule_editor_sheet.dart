@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../services/error_format.dart';
-import '../../services/l10n/l10n.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Bottom-sheet editor for an inline user DNS rule (`kind: inline`).
 ///
@@ -35,13 +35,13 @@ void showUserRuleEditor(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(isNew ? ctx.l.dnsRuleSheetAddTitle : ctx.l.dnsRuleSheetEditTitle,
+          Text(isNew ? getLocalText.s("Add DNS Rule") : getLocalText.s("Edit DNS Rule"),
               style: Theme.of(ctx).textTheme.titleMedium),
           const SizedBox(height: 12),
           TextField(
             controller: nameCtrl,
             decoration: InputDecoration(
-              labelText: ctx.l.ruleEditNameLabel,
+              labelText: getLocalText.s("Name"),
               border: const OutlineInputBorder(),
               isDense: true,
             ),
@@ -55,7 +55,7 @@ void showUserRuleEditor(
               expands: true,
               style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
               decoration: InputDecoration(
-                labelText: ctx.l.dnsRuleBodyLabel,
+                labelText: getLocalText.s("Rule body (JSON)"),
                 border: const OutlineInputBorder(),
                 isDense: true,
                 alignLabelWithHint: true,
@@ -74,7 +74,7 @@ void showUserRuleEditor(
               final name = nameCtrl.text.trim();
               if (name.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(ctx.l.ruleEditNameRequired)));
+                    SnackBar(content: Text(getLocalText.s("Name is required"))));
                 return;
               }
               Map<String, dynamic>? parsed;
@@ -86,8 +86,8 @@ void showUserRuleEditor(
                 parsed = obj;
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(ctx.l
-                        .subInvalidJson(formatUserError(e).render(ctx.l)))));
+                    content: Text(getLocalText.s(
+                        "Invalid JSON: %s", formatUserError(e).render()))));
                 return;
               }
               Navigator.pop(ctx);
@@ -99,7 +99,7 @@ void showUserRuleEditor(
               };
               onSave(entry);
             },
-            child: Text(ctx.l.commonSave),
+            child: Text(getLocalText.s("Save")),
           ),
         ],
       ),

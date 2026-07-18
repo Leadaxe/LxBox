@@ -220,7 +220,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   Future<void> _downloadSrsForSrsRule(CustomRuleSrs rule) async {
     if (rule.srsUrl.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.routingSrsUrlEmpty)),
+        SnackBar(content: Text(getLocalText.s("SRS URL is empty"))),
       );
       return;
     }
@@ -234,8 +234,8 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(path != null
-            ? context.l.routingSrsDownloadedSnack(rule.name)
-            : context.l.routingSrsDownloadFailedSnack(rule.name)),
+            ? getLocalText.s("Downloaded \"%s\"", rule.name)
+            : getLocalText.s("Failed to download \"%s\" — check URL/network", rule.name)),
       ),
     );
     if (path != null) _markDirty();
@@ -248,7 +248,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     final preset = _presetFor(rule.presetId);
     if (preset == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.routingPresetNotFound(rule.presetId))),
+        SnackBar(content: Text(getLocalText.s("Preset \"%s\" not found", rule.presetId))),
       );
       return;
     }
@@ -273,8 +273,8 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(failed == 0
-            ? context.l.routingSrsDownloadedCountSnack(rule.name, ok)
-            : context.l.routingSrsPartialSnack(ok, failed, rule.name)),
+            ? getLocalText.plural("Downloaded \"%2\$s\" (%1\$d rule-sets)", ok, rule.name)
+            : getLocalText.s("Partial: %1\$d ok, %2\$d failed for \"%3\$s\"", ok, failed, rule.name)),
       ),
     );
     if (ok > 0) _markDirty();

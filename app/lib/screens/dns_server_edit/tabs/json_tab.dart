@@ -6,9 +6,9 @@ import 'package:flutter/services.dart';
 import '../../../services/builder/post_steps.dart'
     show resolveTemplateDnsServerBody;
 import '../../../services/builder/preset_expand.dart' show normalizeDnsDetour;
-import '../../../services/l10n/l10n.dart';
 import '../../dns_settings_screen/resolved_server.dart';
 import '../edit_controller.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §117 задача 4 — JSON tab редактора DNS-сервера (locked decision №9):
 ///
@@ -44,7 +44,7 @@ class _InlineBodyEditor extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            c.isNew ? context.l.dnsJsonHeaderNew : context.l.dnsJsonHeaderEdit,
+            c.isNew ? getLocalText.s("sing-box server JSON — tag editable here or in Params; description/enabled live on the list entry") : getLocalText.s("sing-box server JSON — tag locked while editing; description/enabled live on the list entry"),
             style: theme.textTheme.labelSmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
@@ -109,7 +109,7 @@ class _ReadOnlyPreview extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(context.l.ruleEditViewStorageShape,
+                child: Text(getLocalText.s("storage shape (lxbox_settings.json)"),
                     style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
               ),
@@ -137,7 +137,7 @@ class _ReadOnlyPreview extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(context.l.dnsJsonPreviewLabel,
+                child: Text(getLocalText.s("sing-box server preview (read-only)"),
                     style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
               ),
@@ -175,10 +175,10 @@ class _CopyButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextButton.icon(
       icon: const Icon(Icons.content_copy, size: 14),
-      label: Text(context.l.commonCopy, style: const TextStyle(fontSize: 12)),
+      label: Text(getLocalText.s("Copy"), style: const TextStyle(fontSize: 12)),
       onPressed: () async {
         final messenger = ScaffoldMessenger.of(context);
-        final copied = context.l.commonCopied;
+        final copied = getLocalText.s("Copied");
         await Clipboard.setData(ClipboardData(text: text));
         messenger.showSnackBar(
           SnackBar(content: Text(copied)),

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
-import '../services/l10n/l10n.dart';
 import '../services/settings_storage.dart';
 import '../services/ui_helpers.dart';
 import '../services/url_launcher.dart' as ul;
@@ -19,6 +18,7 @@ import 'custom_rule_edit/action_resolve_sheet.dart';
 import 'custom_rule_edit/edit_controller.dart';
 import 'custom_rule_edit/tabs/params_tab.dart';
 import 'custom_rule_edit/tabs/view_tab.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// Редактор `CustomRule` (spec §030).
 ///
@@ -97,7 +97,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     final name = _ctrl.nameCtrl.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.ruleEditNameRequired)),
+        SnackBar(content: Text(getLocalText.s("Name is required"))),
       );
       return;
     }
@@ -109,7 +109,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       }
       finalName = '$name ($i)';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.ruleEditNameInUse(finalName))),
+        SnackBar(content: Text(getLocalText.s("Name in use — renamed to \"%s\"", finalName))),
       );
     }
 
@@ -141,10 +141,10 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   Future<void> _delete() async {
     final confirmed = await showDeleteConfirmDialog(
       context,
-      title: context.l.ruleEditDeleteTitle,
+      title: getLocalText.s("Delete rule?"),
       // §279 — display-имя (live-label пресета), fallback — снапшот.
-      message: context.l
-          .ruleEditDeleteBody(widget.displayName ?? widget.initial.name),
+      message: getLocalText.s(
+          "Remove \"%s\" permanently?", widget.displayName ?? widget.initial.name),
     ); // §219
     if (confirmed == true && mounted) {
       Navigator.pop(context, _CustomRuleEditResult.deleted());
@@ -193,7 +193,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
             dense: true,
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.refresh, size: 20),
-            title: Text(context.l.ruleEditRefreshSrs),
+            title: Text(getLocalText.s("Refresh SRS")),
           ),
         ),
         PopupMenuItem<String>(
@@ -203,7 +203,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.cloud_off_outlined,
                 size: 20, color: Theme.of(context).colorScheme.error),
-            title: Text(context.l.ruleEditClearCachedFile,
+            title: Text(getLocalText.s("Clear cached file"),
                 style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ),
         ),
@@ -243,9 +243,9 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           SnackBar(
             duration: const Duration(seconds: 3),
             content: Text(switch (reason) {
-              'no_wifi' => context.l.ruleEditWifiNotConnected,
-              'unknown_ssid' => context.l.ruleEditWifiUnknownSsid,
-              _ => context.l.ruleEditWifiReadFailed(reason),
+              'no_wifi' => getLocalText.s("Not connected to Wi-Fi."),
+              'unknown_ssid' => getLocalText.s("Cannot read Wi-Fi info — try toggling Wi-Fi off/on."),
+              _ => getLocalText.s("Could not read current Wi-Fi (%s).", reason),
             }),
           ),
         );
@@ -298,7 +298,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(context.l.ruleEditSrsDownloadFailed(varDisplay)),
+        content: Text(getLocalText.s("Failed to download SRS for \"%s\". Check internet and try again.", varDisplay)),
       ),
     );
   }
@@ -332,7 +332,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           length: 2,
           child: Scaffold(
             appBar: AppBar(
-              title: Text(context.l.ruleEditTitle),
+              title: Text(getLocalText.s("Edit rule")),
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: _handleBack,
@@ -342,7 +342,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
                 // delete-иконку скрываем.
                 if (!(_ctrl.preset?.locked ?? false))
                   IconButton(
-                    tooltip: context.l.ruleEditDeleteRule,
+                    tooltip: getLocalText.s("Delete rule"),
                     icon: Icon(Icons.delete_outline,
                         color: Theme.of(context).colorScheme.error),
                     onPressed: _delete,
@@ -351,8 +351,8 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
               ],
               bottom: TabBar(
                 tabs: [
-                  Tab(text: context.l.ruleEditTabParams),
-                  Tab(text: context.l.ruleEditTabView),
+                  Tab(text: getLocalText.s("Params")),
+                  Tab(text: getLocalText.s(1, "View")),
                 ],
               ),
             ),
@@ -388,7 +388,7 @@ class _SaveIconButton extends StatelessWidget {
       builder: (ctx, _) {
         final dirty = controller.isDirty();
         return IconButton(
-          tooltip: ctx.l.commonSave,
+          tooltip: getLocalText.s("Save"),
           icon: Icon(Icons.save,
               color: dirty ? Theme.of(ctx).colorScheme.primary : null),
           onPressed: onPressed,

@@ -1,54 +1,62 @@
-import 'package:flutter/widgets.dart' show Locale;
+import 'dart:convert';
+
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/services/l10n/l10n.dart';
+import 'package:lxbox/services/l10n/get_local_text.dart';
+import 'package:lxbox/services/l10n/plural_resolver.dart';
 import 'package:lxbox/services/relative_time.dart';
 
+/// §285 — relativeTime через getLocalText. Локализатор инъектируется (DI):
+/// en-группа не передаёт `t` → глобальный fallback печатает английский ключ;
+/// ru-группа передаёт GetLocalText, собранный из настоящего
+/// assets/l10n/ui/ru.json + RuPluralResolver (без глобального LocaleController).
 void main() {
-  final en = lookupAppLocalizations(const Locale('en'));
-  final ru = lookupAppLocalizations(const Locale('ru'));
+  TestWidgetsFlutterBinding.ensureInitialized();
   final now = DateTime(2026, 4, 22, 12, 0, 0);
 
-  group('relativeTime en (night T6-1, §279 Phase 5 — ARB)', () {
+  group('relativeTime en (night T6-1, §285 — natural keys, fallback)', () {
+    // Без `t`: глобальный getLocalText в тесте = fallback → английский ключ.
+    String ago(Duration d) => relativeTime(now, now.subtract(d));
+
     test('<60 sec → "just now"', () {
-      expect(relativeTime(en, now, now.subtract(const Duration(seconds: 30))),
-          'just now');
+      expect(ago(const Duration(seconds: 30)), 'just now');
     });
     test('future → "just now" (не пугаем)', () {
-      expect(relativeTime(en, now, now.add(const Duration(minutes: 5))),
-          'just now');
+      expect(relativeTime(now, now.add(const Duration(minutes: 5))), 'just now');
     });
     test('5 min → "5 min ago"', () {
-      expect(relativeTime(en, now, now.subtract(const Duration(minutes: 5))),
-          '5 min ago');
+      expect(ago(const Duration(minutes: 5)), '5 min ago');
     });
     test('2 h → "2h ago"', () {
-      expect(relativeTime(en, now, now.subtract(const Duration(hours: 2))),
-          '2h ago');
+      expect(ago(const Duration(hours: 2)), '2h ago');
     });
     test('ровно 24ч → yesterday', () {
-      expect(relativeTime(en, now, now.subtract(const Duration(days: 1))),
-          'yesterday');
+      expect(ago(const Duration(days: 1)), 'yesterday');
     });
     test('3 дня → "3d ago"', () {
-      expect(relativeTime(en, now, now.subtract(const Duration(days: 3))),
-          '3d ago');
+      expect(ago(const Duration(days: 3)), '3d ago');
     });
     test('2 недели → "2w ago"', () {
-      expect(relativeTime(en, now, now.subtract(const Duration(days: 14))),
-          '2w ago');
+      expect(ago(const Duration(days: 14)), '2w ago');
     });
     test('2 месяца → "2mo ago"', () {
-      expect(relativeTime(en, now, now.subtract(const Duration(days: 65))),
-          '2mo ago');
+      expect(ago(const Duration(days: 65)), '2mo ago');
     });
     test('2 года → "2y ago"', () {
-      expect(relativeTime(en, now, now.subtract(const Duration(days: 800))),
-          '2y ago');
+      expect(ago(const Duration(days: 800)), '2y ago');
     });
   });
 
-  group('relativeTime ru — ICU-плюралы (§279 Phase 5)', () {
-    String ago(Duration d) => relativeTime(ru, now, now.subtract(d));
+  group('relativeTime ru — DI-инъекция ru-словаря (CLDR-плюралы)', () {
+    late GetLocalText ru;
+
+    setUpAll(() async {
+      final raw = await rootBundle.loadString('assets/l10n/ui/ru.json');
+      final dict = jsonDecode(raw) as Map<String, dynamic>;
+      ru = GetLocalText(dict, const RuPluralResolver());
+    });
+
+    String ago(Duration d) => relativeTime(now, now.subtract(d), t: ru);
 
     test('<60 сек → «только что»', () {
       expect(ago(const Duration(seconds: 30)), 'только что');

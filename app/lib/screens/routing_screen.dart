@@ -10,7 +10,6 @@ import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/normalize_pinned_presets.dart';
 import '../services/channel_mutations.dart';
-import '../services/l10n/l10n.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/preset_on_change.dart';
 import '../services/rule_display_names.dart';
@@ -31,6 +30,7 @@ import 'routing_screen/widgets/routing_group_tile.dart';
 import 'routing_screen/widgets/routing_tabs.dart';
 import 'routing_screen/widgets/srs_status_button.dart';
 import 'tun_apps_tab.dart';
+import '../services/l10n/locale_controller.dart';
 
 part 'routing_screen/routing_srs_cache.dart';
 
@@ -180,7 +180,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: Text(context.l.homeDrawerRouting)),
+        appBar: AppBar(title: Text(getLocalText.s("Routing"))),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -194,15 +194,15 @@ class _RoutingScreenState extends State<RoutingScreen>
       initialIndex: widget.initialPresetsTab ? 1 : 0,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(context.l.homeDrawerRouting),
+          title: Text(getLocalText.s("Routing")),
           bottom: TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,
             tabs: [
-              Tab(text: context.l.subDetourChannelsHeader),
-              Tab(text: context.l.settingsPresetsTooltip),
-              Tab(text: context.l.routingTabRules),
-              Tab(text: context.l.routingTabTunnelApps),
+              Tab(text: getLocalText.s("Channels")),
+              Tab(text: getLocalText.s("Presets")),
+              Tab(text: getLocalText.s("Rules")),
+              Tab(text: getLocalText.s("Tunnel apps")),
             ],
           ),
         ),
@@ -466,8 +466,8 @@ class _RoutingScreenState extends State<RoutingScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(needsSrs
-            ? context.l.routingRuleAddedSrs(rule.label)
-            : context.l.routingRuleAdded(rule.label)),
+            ? getLocalText.s("Added \"%s\" — tap ☁ to download, then enable", rule.label)
+            : getLocalText.s("Added \"%s\" to Rules", rule.label)),
       ),
     );
   }
@@ -857,7 +857,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       RoutingHelpers.presetOut(rule, preset);
 
   String _ruleSubtitle(CustomRule rule, SelectableRule? preset) =>
-      RoutingHelpers.ruleSubtitle(context.l, rule, preset);
+      RoutingHelpers.ruleSubtitle(rule, preset);
 
   String _uniqueCustomRuleName(String requested, String selfId) =>
       RoutingHelpers.uniqueCustomRuleName(

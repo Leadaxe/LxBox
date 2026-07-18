@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/l10n/l10n.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Таб "Channels": proxy-groups + default-fallback + Auto tuning. Все тайлы
 /// собираются в экране и приходят сюда готовыми списками — поведение
@@ -32,7 +32,7 @@ class RoutingChannelsTab extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad),
       children: [
         Text(
-          context.l.routingChannelsIntro,
+          getLocalText.s("Enabled channels appear in the selector on the home screen. Tap a channel to edit its nodes, filter and auto twin."),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -44,7 +44,7 @@ class RoutingChannelsTab extends StatelessWidget {
           child: TextButton.icon(
             onPressed: onAddChannel,
             icon: const Icon(Icons.add, size: 18),
-            label: Text(context.l.routingAddChannel(channelCount, maxChannels)),
+            label: Text(getLocalText.s("Add channel  (%1\$d/%2\$d)", channelCount, maxChannels)),
           ),
         ),
         const Divider(height: 24),
@@ -71,7 +71,7 @@ class RoutingPresetsTab extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad),
       children: [
         Text(
-          context.l.routingPresetsIntro,
+          getLocalText.s("Ready-made rules you can copy into Rules, then edit freely."),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -113,7 +113,7 @@ class RoutingRulesTab extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
-            context.l.routingRulesIntro,
+            getLocalText.s("Route or block by app / domain / IP / port / protocol, or remote .srs rule-set."),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -136,7 +136,7 @@ class RoutingRulesTab extends StatelessWidget {
           child: TextButton.icon(
             onPressed: onAdd,
             icon: const Icon(Icons.add, size: 18),
-            label: Text(context.l.routingAddRule),
+            label: Text(getLocalText.s("Add rule")),
           ),
         ),
       ],

@@ -9,7 +9,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
 import 'services/app_log.dart';
-import 'services/l10n/l10n.dart';
 import 'services/l10n/locale_controller.dart';
 import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/event_emitter.dart';
@@ -157,10 +156,10 @@ class _FallbackErrorWidget extends StatelessWidget {
         children: [
           const Icon(Icons.error_outline, color: Colors.white70, size: 40),
           const SizedBox(height: 12),
-          // L10n.current (не context.l): ErrorWidget.builder может рендерить
-          // без Localizations-ancestor'а (краш до/вне MaterialApp).
+          // getLocalText (не Localizations.of): ErrorWidget.builder может
+          // рендерить без Localizations-ancestor'а (краш до/вне MaterialApp).
           Text(
-            L10n.current.errSectionFallback,
+            getLocalText.s("Something went wrong in this section.\nCheck Debug → Logs."),
             textAlign: TextAlign.center,
             style: const TextStyle(color: Colors.white, fontSize: 14),
           ),
@@ -226,9 +225,9 @@ class LxBoxApp extends StatelessWidget {
     return AnimatedBuilder(
       animation: Listenable.merge([themeNotifier, LocaleController.I]),
       builder: (context, _) {
-        // §279 — L10n.current всегда отслеживает применяемую локаль (в т.ч.
-        // system-резолюцию: effective повторяет fallback supportedLocales→en).
-        L10n.current = lookupAppLocalizations(LocaleController.I.effective);
+        // §285 — getLocalText отслеживает применяемую локаль через
+        // LocaleController._applyLocale (dict-reload на каждую смену); отдельного
+        // per-build присваивания активного локализатора не требуется.
         return MaterialApp(
           title: 'L×Box',
           theme: ThemeData(
@@ -252,8 +251,10 @@ class LxBoxApp extends StatelessWidget {
           // значение форсит пересборку Localizations на каждую смену.
           locale: LocaleController.I.effective,
           supportedLocales: LocaleController.supportedLocales,
+          // §285 — только Flutter-встроенные делегаты (Material/Widgets/
+          // Cupertino chrome). Строки приложения идут через getLocalText,
+          // не через Localizations-делегат.
           localizationsDelegates: const [
-            AppLocalizations.delegate,
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
