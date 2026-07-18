@@ -38,10 +38,13 @@ void main() {
       }
     });
 
-    test('фаза-1 fp всегда chrome', () {
+    test('SNI берётся из соответствующего пула', () {
       final g = CandidateGenerator(fullPool(), rng: Random(3));
+      const wgSni = {'www.google.com', 'yandex.ru'};
+      const masqueSni = {'www.cloudflare.com', 'yandex.ru'};
       for (final c in g.seed(100)) {
-        expect(c.utlsFp, 'chrome');
+        final pool = c.protocol == ScanProtocol.awg ? wgSni : masqueSni;
+        expect(pool.contains(c.sni), isTrue, reason: 'sni ${c.sni}');
       }
     });
 

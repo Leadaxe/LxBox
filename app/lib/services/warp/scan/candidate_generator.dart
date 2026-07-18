@@ -1,6 +1,6 @@
-// §284 фаза 1 — генератор случайных полных конфигураций (Монте-Карло по всему
-// пространству {IP × port × protocol × SNI × fp}). Ни один протокол не
-// привилегирован. Фаза 2 — вариации вокруг живого IP (метод [variations]).
+// §284 — генератор случайных кандидатов (Монте-Карло по {IP × port × protocol
+// × SNI}). Ни один протокол не привилегирован. Фаза 2 — вариации вокруг живого
+// IP (метод [variations]). Кандидаты затем собираются в узлы папки «SCAN WARP».
 
 import 'dart:math';
 
@@ -21,9 +21,6 @@ class CandidateGenerator {
   /// Доля проб на empirical-порт (§132: достоверны только 2408/500/1701/4500).
   final double _empiricalRatio;
 
-  /// Фаза-1 fingerprint фиксирован — fp-диагностика включается лишь в фазе 2.
-  static const phase1Fp = 'chrome';
-
   /// n независимых кандидатов для посева.
   List<ScanCandidate> seed(int n) => List.generate(n, (_) => _one());
 
@@ -42,7 +39,6 @@ class CandidateGenerator {
       port: _pickWgPort(),
       protocol: proto,
       sni: _pool.sniPool.isEmpty ? '' : _pick(_pool.sniPool),
-      utlsFp: phase1Fp,
     );
   }
 
@@ -53,7 +49,6 @@ class CandidateGenerator {
       port: _pool.masquePort,
       protocol: proto,
       sni: _pool.masqueSniPool.isEmpty ? '' : _pick(_pool.masqueSniPool),
-      utlsFp: phase1Fp,
     );
   }
 
@@ -85,16 +80,15 @@ class CandidateGenerator {
 
   T _pick<T>(List<T> xs) => xs[_rng.nextInt(xs.length)];
 
-  /// Фаза 2 — вариации вокруг одного живого IP. Гарантирует по одной базовой
-  /// пробе на каждый доступный протокол, добивает случайными комбинациями
-  /// (SNI × fp) до [limit]. Повторные комбинации допустимы — это заодно
-  /// проверка стабильности (loss).
+  /// Фаза 2 — вариации вокруг одного живого IP: по одной пробе на каждый
+  /// доступный протокол, добор случайными комбинациями (protocol × SNI) до
+  /// [limit]. Повторы допустимы (заодно проверка стабильности).
   List<ScanCandidate> variations(String ip, {int limit = 12}) {
     final protos = _protocols();
     if (protos.isEmpty) return const [];
     final out = <ScanCandidate>[];
     for (final p in protos) {
-      out.add(_variationOne(ip, p, baseFp: true));
+      out.add(_variationOne(ip, p));
     }
     while (out.length < limit) {
       out.add(_variationOne(ip, protos[_rng.nextInt(protos.length)]));
@@ -102,19 +96,14 @@ class CandidateGenerator {
     return out.take(limit).toList();
   }
 
-  ScanCandidate _variationOne(String ip, ScanProtocol p, {bool baseFp = false}) {
+  ScanCandidate _variationOne(String ip, ScanProtocol p) {
     final isWg = p == ScanProtocol.awg;
     final sniPool = isWg ? _pool.sniPool : _pool.masqueSniPool;
-    // fp значим только для masque-проб; для WG держим chrome (не влияет на WG).
-    final fp = (isWg || baseFp || _pool.utlsFpPool.isEmpty)
-        ? 'chrome'
-        : _pick(_pool.utlsFpPool);
     return ScanCandidate(
       ip: ip,
       port: isWg ? _pickWgPort() : _pool.masquePort,
       protocol: p,
       sni: sniPool.isEmpty ? '' : _pick(sniPool),
-      utlsFp: fp,
     );
   }
 }

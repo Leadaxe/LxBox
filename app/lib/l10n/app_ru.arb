@@ -1606,24 +1606,8 @@
       "total": { "type": "int" }
     }
   },
-  "warpScanResultsTitle": "Результаты сканирования",
-  "@warpScanResultsTitle": {
-    "description": "WARP scan: title of the results sheet."
-  },
-  "warpScanWorkingHeader": "Рабочие",
-  "@warpScanWorkingHeader": {
-    "description": "WARP scan results: header of the section listing endpoints that responded."
-  },
-  "warpScanFailedHeader": "Не работают",
-  "@warpScanFailedHeader": {
-    "description": "WARP scan results: header of the section listing endpoints that did not respond."
-  },
-  "warpScanEmptyResult": "Ни один эндпоинт не ответил в этой сети.",
-  "@warpScanEmptyResult": {
-    "description": "WARP scan results: shown when nothing was reachable."
-  },
-  "warpScanProbeUnavailable": "Проверка эндпоинтов требует обновления ядра — будет доступна после следующего релиза.",
-  "@warpScanProbeUnavailable": {
-    "description": "WARP scan: shown when the kernel build does not yet expose the raw probe."
+  "warpScanFailed": "Сканирование не удалось — нет WARP-аккаунта или эндпоинты недоступны.",
+  "@warpScanFailed": {
+    "description": "WARP scan: shown when the scan could not run or found nothing."
   }
 }

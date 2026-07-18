@@ -760,16 +760,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(null)
                 }
             }
-            // §284 — сырая WARP-проба по IP (WG/QUIC/TLS handshake) в probe-сессии.
-            // args — весь map кандидата (ip/port/protocol/sni/utlsFp/timeoutMs/reserved).
-            "warpProbe" -> {
-                @Suppress("UNCHECKED_CAST")
-                val args = (call.arguments as? Map<String, Any?>) ?: emptyMap()
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { ProbeSession.warpProbe(args) }
-                    result.success(r)
-                }
-            }
             // §209 — null = клиент недоступен (различаем от [] = правил нет).
             // Dart getRules превращает null в пустой список (диагностика —
             // отсутствие данных там не отличают от пустых, см. CcChannel.getRules).
