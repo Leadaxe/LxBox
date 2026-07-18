@@ -111,11 +111,29 @@ class SubscriptionNodeList extends StatelessWidget {
         final togglable =
             onToggleNode != null && togglableNodes.contains(node);
         final disabled = disabledNodes.contains(node);
+        final icon = _protocolIcon(node.protocol,
+            dimColor: disabled ? theme.colorScheme.onSurfaceVariant : null);
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: _protocolIcon(node.protocol,
-              dimColor:
-                  disabled ? theme.colorScheme.onSurfaceVariant : null),
+          // §283 — Switch слева, как per-member toggle папок (§234); иконка
+          // протокола остаётся рядом (в подписке она несёт информацию —
+          // протоколы вперемешку, у папок её не было).
+          leading: togglable
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 40,
+                      child: Switch(
+                        value: !disabled,
+                        onChanged: (_) => onToggleNode!(node),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    icon,
+                  ],
+                )
+              : icon,
           title: Text(
             node.label.isNotEmpty ? node.label : node.tag,
             maxLines: 1,
@@ -136,15 +154,6 @@ class SubscriptionNodeList extends StatelessWidget {
               if (node.warnings.isNotEmpty) NodeWarningRow(node.warnings),
             ],
           ),
-          trailing: togglable
-              ? SizedBox(
-                  width: 40,
-                  child: Switch(
-                    value: !disabled,
-                    onChanged: (_) => onToggleNode!(node),
-                  ),
-                )
-              : null,
           dense: true,
           onLongPress: () => _showNodeMenu(context, node),
         );
