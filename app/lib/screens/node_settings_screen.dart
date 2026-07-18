@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/app_log.dart';
 import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
@@ -53,9 +52,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   String _scheme = '';
   String _serverInfo = '';
   String _detour = '';
-  // §130 — узел = AmneziaWG (WireguardSpec с непустыми AWG-obfuscation полями).
-  // У WG и AWG одинаковый protocol == 'wireguard'; различие — поле `awg`.
-  // AWG с detour на wireguard вешает ядро на Android (#2) → фильтруем detour.
+  // Узел = AmneziaWG (WireguardSpec с непустыми AWG-obfuscation полями). У WG и
+  // AWG одинаковый protocol == 'wireguard'; различие — поле `awg`. Используется
+  // только для подписи схемы «AmneziaWG (wireguard)».
   bool _isAwg = false;
 
   // §248 — каналы: секция Channels в пикере + рендер сохранённого канального
@@ -124,41 +123,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     // (_pickDetour перечитывает свежий список перед показом пикера).
     _channels = await SettingsStorage.getChannels();
 
-    // §239 — кандидаты теперь живут в общем пикере (showDetourTargetPicker):
-    // «свободные» одиночки + члены СВОЕЙ папки (для member-режима). Здесь
-    // осталась только §130-страховка: сохранённый AWG→wireguard detour из
-    // старого конфига сбрасываем сразу.
-    if (_isAwg && _detour.isNotEmpty && _detourTargetIsWireguard(_detour)) {
-      final removed = _detour;
-      _detour = '';
-      unawaited(_persistDetour(''));
-      _logResetDetour(removed);
-    }
+    // §239 — кандидаты живут в общем пикере (showDetourTargetPicker):
+    // «свободные» одиночки + члены СВОЕЙ папки (для member-режима).
 
     if (mounted) setState(() {});
-  }
-
-  /// §239/§130 — является ли сохранённая цель detour wireguard-нодой.
-  /// Member-режим: сперва голые теги членов своей папки; затем display-теги
-  /// свободных одиночек (§080).
-  bool _detourTargetIsWireguard(String stored) {
-    final list = widget.entry.list;
-    if (widget.memberIndex != null && list is FolderServers) {
-      for (final m in list.members) {
-        final n = m.node;
-        if (n != null && n.tag == stored) return n is WireguardSpec;
-      }
-    }
-    for (final e in widget.subController.entries) {
-      final l = e.list;
-      if (l is! UserServer || !l.enabled) continue;
-      for (final n in l.nodes) {
-        if (TagResolver.displayTag(l.tagPrefix, n.tag) == stored) {
-          return n is WireguardSpec;
-        }
-      }
-    }
-    return false;
   }
 
   /// §239 — открыть единый пикер цели detour.
@@ -178,7 +146,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
       selfDisplayTag: member == null
           ? TagResolver.displayTag(list.tagPrefix, _originalTag)
           : '',
-      excludeWireguard: _isAwg,
     );
     if (target == null || !mounted) return;
     setState(() => _detour = target.storeValue);
@@ -211,13 +178,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
           ? list
           : null,
     ).join(' → ');
-  }
-
-  /// §130 — лог сброса невалидного AWG→WireGuard detour при открытии редактора.
-  void _logResetDetour(String removed) {
-    AppLog.I.info(
-        'AWG node "$_originalTag" — cleared invalid detour "$removed" '
-        '(AWG cannot run through WireGuard, hangs the core on Android)');
   }
 
   /// §237 — единая точка записи detour: член папки → setMemberDetour,
@@ -388,27 +348,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => unawaited(_pickDetour()),
         ),
-        // §130 — для AWG-узла WireGuard-цели исключены из списка (AWG поверх
-        // WireGuard вешает ядро на Android). Поясняем, почему их нет.
-        if (_isAwg)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline,
-                    size: 16, color: theme.colorScheme.onSurfaceVariant),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    getLocalText.s("AmneziaWG nodes cannot run through WireGuard — such targets are hidden. Use a non-wireguard detour (e.g. vless)."),
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ),
-              ],
-            ),
-          ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Text(

@@ -152,9 +152,6 @@ List<Channel> visibleDetourChannels(
 ///
 /// [selfBareTag] — исключить сам настраиваемый узел (по голому тегу для
 /// членов текущей папки и по display-form для свободных, см. вызовы).
-/// [excludeWireguard] — §130: AWG-узел не может detour-ить в wireguard.
-/// Каналы под этот гейт НЕ попадают: состав канала не ограничен (§248 Q2),
-/// AWG→WG-риск через канал прикрыт advisory-warning'ом билдера.
 ///
 /// Возвращает null при отмене, [DetourTarget.none] при «None».
 Future<DetourTarget?> showDetourTargetPicker(
@@ -164,7 +161,6 @@ Future<DetourTarget?> showDetourTargetPicker(
   FolderServers? currentFolder,
   String selfBareTag = '',
   String selfDisplayTag = '',
-  bool excludeWireguard = false,
 }) {
   // Свободные одиночки (display-form, §080).
   final free = <(String display, NodeSpec node)>[];
@@ -174,7 +170,6 @@ Future<DetourTarget?> showDetourTargetPicker(
     if (!list.enabled) continue; // disabled не эмитит outbounds (§080)
     for (final n in list.nodes) {
       if (n.tag.isEmpty) continue;
-      if (excludeWireguard && n is WireguardSpec) continue;
       final display = TagResolver.displayTag(list.tagPrefix, n.tag);
       if (selfDisplayTag.isNotEmpty && display == selfDisplayTag) continue;
       free.add((display, n));
@@ -188,7 +183,6 @@ Future<DetourTarget?> showDetourTargetPicker(
     for (final m in folder.members) {
       final n = m.node;
       if (n == null || n.tag.isEmpty) continue;
-      if (excludeWireguard && n is WireguardSpec) continue;
       if (selfBareTag.isNotEmpty && n.tag == selfBareTag) continue;
       members.add((n.tag, n));
     }
