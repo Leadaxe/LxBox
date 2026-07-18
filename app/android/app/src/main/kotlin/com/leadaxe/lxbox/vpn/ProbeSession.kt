@@ -121,7 +121,8 @@ object ProbeSession : CommandServerHandler {
         //     val timeoutMs = (args["timeoutMs"] as? Number)?.toInt() ?: 0
         //     val reserved = (args["reserved"] as? List<*>)
         //         ?.map { (it as Number).toByte() }?.toByteArray() ?: ByteArray(0)
-        //     val r = client.get()!!.warpProbe(ip, port, protocol, sni, utlsFp, timeoutMs, reserved)
+        //     val peerPubkey = args["peerPubkey"] as? String ?: "" // пусто → ядро берёт CF WARP default
+        //     val r = client.get()!!.warpProbe(ip, port, protocol, sni, utlsFp, timeoutMs, reserved, peerPubkey)
         //     mapOf("alive" to r.alive, "rttMs" to r.rttMs, "error" to (r.error ?: ""))
         // }.getOrElse {
         //     mapOf("alive" to false, "rttMs" to 0, "error" to (it.message ?: "warpProbe failed"))

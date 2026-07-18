@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft — реализация app-стороны в этой итерации; kernel raw-probe = отдельная задача (`sing-box-lx SPEC 028`), device-verify отложен |
+| Статус | App-сторона реализована (коммит f45dd1b, develop). Kernel raw-probe — `sing-box-lx SPEC 028` реализован на ветке `lx-spec028-warp-raw-probe` (d769f650: 4 build-комбо exit 0 + byte-exact WG-тесты). Осталось: rebuild `.aar` (`make lib_android`) + re-pin `libbox.version` + device-verify |
 | Дата старта | 2026-07-18 |
 | Связанные spec'ы | [`025 warp integration`](../025%20warp%20integration/spec.md) (базовый WARP, endpoint-override §135/§138 — снимаем «сканер вне итерации»); [`130 masque-warp-transport`](../130%20masque-warp-transport/spec.md) (MASQUE h3/h2, модель kernel-контракта); [`236 folder-server-testing`](../236%20folder-server-testing/spec.md) (ProbeSession — headless-проба без tun, переиспользуем lifecycle); [`132-warp-endpoint-scanner-research`](../../tasks/132-warp-endpoint-scanner-research.md) (research: liveness-контракт, диапазоны, порты — закрываем его open questions) |
 | Затронутые файлы | **app (эта итерация):** `app/assets/warp_endpoints.json`, `app/lib/services/warp/warp_endpoint_picker.dart`, `app/lib/services/warp/scan/*` (новое: candidate-генератор, scan-runner, модели), `app/lib/vpn/cc_channel.dart`, `app/android/.../vpn/ProbeSession.kt`, `app/android/.../vpn/VpnPlugin.kt`, `app/lib/screens/warp_wizard_screen.dart`, `app/lib/screens/warp_wizard/scan_results_sheet.dart` (новое), `app/lib/l10n/app_en.arb` + `app_ru.arb`, `app/test/warp/scan/*`, `docs/spec/features/025 .../spec.md`, `docs/STORAGE.md`, `CHANGELOG.md`, `docs/ARCHITECTURE.md` · **kernel (SPEC 028):** `sing-box-lx/daemon/started_service.proto`, `daemon/started_service_command_lx.go`, `experimental/libbox/command_client_command_lx.go`, `app/android/libbox.version` (re-pin после release) |
@@ -146,10 +146,10 @@ WARP-нода эмитится либо как WG (Endpoint, TLS нет), либ
 
 Модель — §130 (Dart-does / Ядро-does, byte-exact test-vector согласуется первым).
 
-**Ядро реализует** новый gRPC-метод `WarpProbe` рядом с `URLTestOutbound`:
+**Ядро реализует** новый gRPC-метод `WarpProbe` рядом с `URLTestOutbound` (✅ реализовано на ветке `lx-spec028-warp-raw-probe` d769f650: handler `daemon/started_service_warp_probe_lx.go`, utls-путь `..._utls_lx.go`, libbox-обёртка `command_client_command_lx.go`, byte-exact WG handshake-тесты):
 - Точка вставки: `daemon/started_service.proto` (+ regen `*.pb.go`), handler `daemon/started_service_command_lx.go` (build-tag `with_lx_command`; stub-twin возвращает `Unimplemented`), client wrapper `experimental/libbox/command_client_command_lx.go`.
 - **Error model — Variant B** (как `URLTestOutbound`): исход всегда в payload (`{alive, rtt_ms, error}`), не gRPC-ошибка. `alive==false && error==""` невозможно; `rtt_ms` валиден iff `alive`.
-- Вход: `{ip, port, protocol(enum awg|masque_h3|masque_h2), sni, utls_fp, timeout_ms, reserved?(3 bytes)}`. **DNS не используется — dial строго по IP:port.**
+- Вход: `{ip, port, protocol(enum awg|masque_h3|masque_h2), sni, utls_fp, timeout_ms, reserved?(3 bytes), peer_pubkey?(base64)}`. **DNS не используется — dial строго по IP:port.** `peer_pubkey` нужен для сборки WG handshake initiation (MAC1 + DH-seal static); пуст → ядро берёт фиксированный CF WARP серверный pubkey (единый для всех эндпоинтов). App для WARP-скана шлёт пусто.
 - Семантика по протоколу:
   - `awg` — сырой WireGuard Handshake Initiation (msg type 1, 148 байт vanilla — к CF-endpoint это plain WG, §132 caveat); alive iff Handshake Response (type 2, 92 байта, LE-uint32==2). `reserved` нули; ретрай с реальным на молчании — на стороне Dart (два вызова). RTT = post-write→response.
   - `masque_h3` — QUIC/HTTP3 handshake на `IP:443` c `sni`+`utls_fp` (переиспользовать `protocol/masque` QUIC/utls path); alive iff QUIC-handshake завершился. Фаза-1 = reachability (без MASQUE-enroll); полный MASQUE-auth не требуется для liveness.

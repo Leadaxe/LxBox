@@ -84,6 +84,8 @@ class ScanCandidate {
         'utlsFp': utlsFp,
         'timeoutMs': timeoutMs,
         if (reserved != null) 'reserved': reserved,
+        // peerPubkey не шлём: все CF WARP-эндпоинты используют единый серверный
+        // pubkey → ядро (SPEC 028) подставляет его как default при пустом поле.
       };
 }
 
