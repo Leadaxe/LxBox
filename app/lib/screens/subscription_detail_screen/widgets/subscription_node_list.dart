@@ -7,9 +7,9 @@ import '../../../models/ui_msg.dart';
 import '../../../services/l10n/l10n.dart';
 import 'node_warning_row.dart';
 
-/// Nodes-tab list: actionable-warning banner + node rows with protocol icon,
-/// label/tag, server:port, inline warning and a long-press copy menu.
-/// Extracted verbatim from `_buildNodeList` / `_protocolIcon` / `_showNodeMenu`.
+/// Nodes-tab list: actionable-warning banner + node rows with §283 toggle,
+/// label/tag, protocol + server:port subtitle, inline warning and a
+/// long-press copy menu.
 class SubscriptionNodeList extends StatelessWidget {
   const SubscriptionNodeList({
     super.key,
@@ -111,29 +111,21 @@ class SubscriptionNodeList extends StatelessWidget {
         final togglable =
             onToggleNode != null && togglableNodes.contains(node);
         final disabled = disabledNodes.contains(node);
-        final icon = _protocolIcon(node.protocol,
-            dimColor: disabled ? theme.colorScheme.onSurfaceVariant : null);
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          // §283 — Switch слева, как per-member toggle папок (§234); иконка
-          // протокола остаётся рядом (в подписке она несёт информацию —
-          // протоколы вперемешку, у папок её не было).
+          // §283 — Switch слева, как per-member toggle папок (§234). Иконки
+          // протокола нет (решение пользователя): протокол виден в подстроке.
+          // Строки без тоггла (chained-дети) получают placeholder той же
+          // ширины — выравнивание не пляшет; UserServer — без leading вовсе.
           leading: togglable
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 40,
-                      child: Switch(
-                        value: !disabled,
-                        onChanged: (_) => onToggleNode!(node),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    icon,
-                  ],
+              ? SizedBox(
+                  width: 40,
+                  child: Switch(
+                    value: !disabled,
+                    onChanged: (_) => onToggleNode!(node),
+                  ),
                 )
-              : icon,
+              : (togglableNodes.isEmpty ? null : const SizedBox(width: 40)),
           title: Text(
             node.label.isNotEmpty ? node.label : node.tag,
             maxLines: 1,
@@ -204,18 +196,4 @@ class SubscriptionNodeList extends StatelessWidget {
     );
   }
 
-  Widget _protocolIcon(String scheme, {Color? dimColor}) {
-    final icon = switch (scheme) {
-      'vless' => Icons.security,
-      'vmess' => Icons.vpn_key,
-      'trojan' => Icons.shield_outlined,
-      'ss' => Icons.lock_outline,
-      'hysteria2' || 'hy2' => Icons.speed,
-      'wireguard' => Icons.lan_outlined,
-      'masque' => Icons.cloud_outlined, // §130 — WARP-транспорт
-      'anytls' => Icons.enhanced_encryption, // §269
-      _ => Icons.public,
-    };
-    return Icon(icon, size: 20, color: dimColor);
-  }
 }
