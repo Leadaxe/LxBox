@@ -12,6 +12,7 @@ import '../../models/template_vars.dart';
 import '../../config/consts.dart';
 import '../../models/validation.dart';
 import '../json_clone.dart';
+import '../node_hash.dart';
 import '../rule_set_downloader.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
@@ -209,7 +210,18 @@ Future<BuildResult> buildConfig({
   final emitWarnings = <String>[];
   for (final list in lists) {
     if (!list.enabled) continue;
+    // §283 — зеркало фильтра ServerListBuild.build: выключенная нода не
+    // эмитится → её warnings не сыпем (цикл идёт по list.nodes мимо build).
+    final disabledHashes = switch (list) {
+      final SubscriptionServers s when s.disabledHashes.isNotEmpty =>
+        s.disabledHashes,
+      _ => null,
+    };
     for (final node in list.nodes) {
+      if (disabledHashes != null &&
+          disabledHashes.containsKey(nodeIdentityHash(node))) {
+        continue;
+      }
       for (final w in node.warnings) {
         final line = '${node.tag}: ${w.renderEn()}';
         if (!emitWarnings.contains(line)) emitWarnings.add(line);

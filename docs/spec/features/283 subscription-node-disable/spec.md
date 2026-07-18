@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Feature (модель + builder + UI) |
-| Статус | Спека утверждена, реализация не начата |
+| Статус | Реализовано (device-pending) |
 | Связано | [234 server-folders](../234%20server-folders/spec.md) (эталон per-member toggle), [129 file-subscription](../129%20file-subscription/spec.md) (file:-подписки — GC выключен), task [172](../../tasks/172-heal-dangling-detour.md) (heal detour на выключенную ⚙-ноду), task [221](../../tasks/221-backup-allowlist-export.md) (backup-инвариант) |
 
 Пользователь может выключить отдельную ноду **внутри подписки** — как это уже
@@ -250,8 +250,10 @@ warnings выключенных нод продолжат сыпаться в em
   (сейчас он StatelessWidget без контроллера — сохранить чистоту, данные
   сверху).
 
-Опционально (не v1): bulk-действия («reset disabled»), по образцу
-`setMembersEnabled`.
+Опционально (не v1, из ревью): bulk-действия («reset disabled», по образцу
+`setMembersEnabled`); счётчик «M off» в строке подписки на общем списке
+(симметрия с папками); disabled-count в Debug API `/state/subs` и маркер
+выключенных нод в dump_builder.
 
 ---
 
@@ -285,6 +287,19 @@ warnings выключенных нод продолжат сыпаться в em
   toggle-off ставит lastSeen=now.
 - **Round-trip через backup**: buildExport→applyImport (merge) сохраняет
   отметки.
+
+## Отклонения реализации от спеки (осознанные)
+
+- **Switch в trailing, не в leading**: leading строки ноды занят
+  protocol-иконкой (в отличие от folder-строк) — тоггл справа, глушение
+  цветом как у папок. Семантика идентична.
+- **`disabledCount` НЕ на модели, а на экране**: геттер на модели хешировал
+  бы все ноды на каждый build-фрейм. Экран держит identity-кэш хешей
+  (`_hashCache`) и derived-set `_disabledNodes` — полный проход хеширования
+  происходит только при непустых `disabledHashes` (подписка без отметок не
+  платит ничего), count = размер set.
+- **GC-guard**: хеши свежих нод на refresh считаются только при непустых
+  `disabledHashes` (10k×sha256 не платим просто так).
 
 ## Docs to update
 

@@ -17,6 +17,7 @@ import '../services/error_humanize.dart';
 import '../services/parse_hints.dart';
 import '../services/relative_time.dart';
 import '../services/node_emoji.dart';
+import '../services/node_hash.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
 import '../services/parser/body_decoder.dart';
@@ -1047,6 +1048,28 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
+  /// §283 — вкл/выкл одной ноды подписки. Ключ — identity-хеш сути узла
+  /// (node_hash.dart): переживает refresh/рестарт/переименование ноды
+  /// провайдером; дубли одного сервера с разными лейблами гасятся одним
+  /// toggle (by design). При выключении lastSeen = now (старт TTL-отсчёта,
+  /// GC — на успешном сетевом refresh в _fetchEntryByRef).
+  Future<void> toggleSubscriptionNode(int index, NodeSpec node) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final list = entry.list;
+    if (list is! SubscriptionServers) return;
+    final hash = nodeIdentityHash(node);
+    final next = Map<String, DateTime>.from(list.disabledHashes);
+    if (next.containsKey(hash)) {
+      next.remove(hash);
+    } else {
+      next[hash] = DateTime.now();
+    }
+    entry._replaceList(list.copyWith(disabledHashes: next));
+    await _persist();
+    notifyListeners();
+  }
+
   /// Вкл/выкл одного члена папки.
   Future<void> toggleMemberAt(int index, int memberIndex) async {
     if (index < 0 || index >= _entries.length) return;
@@ -1582,6 +1605,19 @@ class SubscriptionController extends ChangeNotifier {
       final nextInterval = current.updateIntervalHours < 0
           ? current.updateIntervalHours // -1: жёстко, сервер не переубедит
           : (result.meta?.updateIntervalHours ?? current.updateIntervalHours);
+      // §283 — GC отметок disable ТОЛЬКО здесь (успешный сетевой fetch =
+      // единственный сигнал «нода ушла из подписки»; failed fetch и
+      // регидрация из кэша состав не проясняют, file:-подписки сюда не
+      // доходят — guard выше). Хеш свежих нод считаем лишь когда есть что
+      // чистить.
+      final nextDisabled = current.disabledHashes.isEmpty
+          ? current.disabledHashes
+          : gcDisabledHashes(
+              current.disabledHashes,
+              {for (final n in result.nodes) nodeIdentityHash(n)},
+              updateIntervalHours: nextInterval,
+              now: DateTime.now(),
+            );
       final next = current.copyWith(
         name: nextName,
         meta: result.meta,
@@ -1591,6 +1627,7 @@ class SubscriptionController extends ChangeNotifier {
         lastNodeCount: result.nodes.length,
         consecutiveFails: 0,
         updateIntervalHours: nextInterval,
+        disabledHashes: nextDisabled,
         nodes: result.nodes,
       );
       entry._replaceList(next);

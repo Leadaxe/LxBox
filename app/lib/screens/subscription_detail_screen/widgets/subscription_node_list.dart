@@ -16,11 +16,26 @@ class SubscriptionNodeList extends StatelessWidget {
     required this.nodes,
     required this.loading,
     required this.error,
+    this.togglableNodes = const {},
+    this.disabledNodes = const {},
+    this.onToggleNode,
   });
 
   final List<NodeSpec>? nodes;
   final bool loading;
   final UiMsg? error;
+
+  /// §283 — top-level ноды подписки (identity-set): у них есть toggle.
+  /// Chained-дети (развёрнутые строки) управляются родителем — без toggle.
+  /// Пусто = не подписка (UserServer) — тогглов нет вовсе.
+  final Set<NodeSpec> togglableNodes;
+
+  /// §283 — выключенные ноды (identity-subset [togglableNodes]). Дубли по
+  /// хешу приходят выключенными синхронно — состояние считает экран от
+  /// `disabledHashes`, не по-строчно.
+  final Set<NodeSpec> disabledNodes;
+
+  final void Function(NodeSpec node)? onToggleNode;
 
   @override
   Widget build(BuildContext context) {
@@ -92,14 +107,24 @@ class SubscriptionNodeList extends StatelessWidget {
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final node = nodes[i];
+        // §283 — per-node toggle (только top-level ноды подписки).
+        final togglable =
+            onToggleNode != null && togglableNodes.contains(node);
+        final disabled = disabledNodes.contains(node);
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: _protocolIcon(node.protocol),
+          leading: _protocolIcon(node.protocol,
+              dimColor:
+                  disabled ? theme.colorScheme.onSurfaceVariant : null),
           title: Text(
             node.label.isNotEmpty ? node.label : node.tag,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13),
+            style: TextStyle(
+              fontSize: 13,
+              // Выключенная — глушим цветом (паттерн folder_detail §234).
+              color: disabled ? theme.colorScheme.onSurfaceVariant : null,
+            ),
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -111,6 +136,15 @@ class SubscriptionNodeList extends StatelessWidget {
               if (node.warnings.isNotEmpty) NodeWarningRow(node.warnings),
             ],
           ),
+          trailing: togglable
+              ? SizedBox(
+                  width: 40,
+                  child: Switch(
+                    value: !disabled,
+                    onChanged: (_) => onToggleNode!(node),
+                  ),
+                )
+              : null,
           dense: true,
           onLongPress: () => _showNodeMenu(context, node),
         );
@@ -161,7 +195,7 @@ class SubscriptionNodeList extends StatelessWidget {
     );
   }
 
-  Widget _protocolIcon(String scheme) {
+  Widget _protocolIcon(String scheme, {Color? dimColor}) {
     final icon = switch (scheme) {
       'vless' => Icons.security,
       'vmess' => Icons.vpn_key,
@@ -173,6 +207,6 @@ class SubscriptionNodeList extends StatelessWidget {
       'anytls' => Icons.enhanced_encryption, // §269
       _ => Icons.public,
     };
-    return Icon(icon, size: 20);
+    return Icon(icon, size: 20, color: dimColor);
   }
 }

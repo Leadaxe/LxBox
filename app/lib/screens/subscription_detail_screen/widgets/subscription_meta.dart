@@ -15,10 +15,14 @@ class SubscriptionMeta extends StatelessWidget {
     super.key,
     required this.entry,
     required this.onOpenUrl,
+    this.offCount = 0,
   });
 
   final SubscriptionEntry entry;
   final Future<void> Function(String) onOpenUrl;
+
+  /// §283 — сколько нод выключено per-node toggle'ом («M off» в счётчике).
+  final int offCount;
 
   @override
   Widget build(BuildContext context) {
@@ -74,10 +78,14 @@ class SubscriptionMeta extends StatelessWidget {
               Icon(Icons.dns_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(width: 4),
               Text(
-                entry.detourCount > 0
-                    ? context.l
-                        .subNodesCountWithDetour(entry.nodeCount, entry.detourCount)
-                    : context.l.subEntryNodesCount(entry.nodeCount),
+                [
+                  entry.detourCount > 0
+                      ? context.l.subNodesCountWithDetour(
+                          entry.nodeCount, entry.detourCount)
+                      : context.l.subEntryNodesCount(entry.nodeCount),
+                  // §283 — счётчик выключенных (ключ общий с папками §234).
+                  if (offCount > 0) context.l.folderOffCount(offCount),
+                ].join(' · '),
                 style: theme.textTheme.bodySmall,
               ),
             ],
