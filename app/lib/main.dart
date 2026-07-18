@@ -243,11 +243,14 @@ class LxBoxApp extends StatelessWidget {
             useMaterial3: true,
           ),
           themeMode: themeNotifier.mode,
-          // §279 — 'system' → locale: null (резолвит Flutter по языку
-          // устройства), явный выбор — фиксированная локаль.
-          locale: LocaleController.I.setting == 'system'
-              ? null
-              : LocaleController.I.effective,
+          // §279 — ВСЕГДА подаём явную локаль (effective уже резолвит
+          // 'system' по языку устройства через PlatformDispatcher). Ранее
+          // 'system' давал locale: null, и Flutter полагался на собственный
+          // резолв null-локали; при runtime-переходе явная→null (напр. ru →
+          // «как в системе» на устройстве с English) Localizations не
+          // пересчитывал локаль — UI застревал на прежнем русском. Явное
+          // значение форсит пересборку Localizations на каждую смену.
+          locale: LocaleController.I.effective,
           supportedLocales: LocaleController.supportedLocales,
           localizationsDelegates: const [
             AppLocalizations.delegate,

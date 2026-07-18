@@ -10,6 +10,7 @@ import '../services/debug/transport/server.dart';
 import '../services/error_format.dart';
 import '../services/haptic_service.dart';
 import '../services/l10n/l10n.dart';
+import '../services/l10n/locale_controller.dart';
 import '../services/profile_dump_writer.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/subscription_identity.dart';
@@ -442,7 +443,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: themeNotifier,
+      // §279 — слушаем и LocaleController: этот экран показан как pushed route,
+      // rebuild корневого MaterialApp его не перестраивает (Navigator держит
+      // route поверх). Без подписки смена языка не двигала radio-галку picker'а
+      // и не перерисовывала строки самого экрана настроек.
+      animation: Listenable.merge([themeNotifier, LocaleController.I]),
       builder: (context, _) {
         return DefaultTabController(
           length: 4,
