@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/backup_service.dart';
-import '../../services/l10n/l10n.dart';
+import '../../services/l10n/locale_controller.dart';
 
 class ExportCard extends StatelessWidget {
   const ExportCard({
@@ -39,12 +39,12 @@ class ExportCard extends StatelessWidget {
               children: [
                 const Icon(Icons.upload_outlined),
                 const SizedBox(width: 8),
-                Text(context.l.commonExport, style: theme.textTheme.titleMedium),
+                Text(getLocalText.s("Export"), style: theme.textTheme.titleMedium),
               ],
             ),
             const SizedBox(height: 4),
             Text(
-              context.l.backupExportSubtitle,
+              getLocalText.s("Save your subscriptions, routing setup and preferences as a JSON file."),
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
@@ -52,9 +52,9 @@ class ExportCard extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: Text(context.l.backupCatServerLists),
+              title: Text(getLocalText.s("Server lists")),
               subtitle: Text(
-                context.l.backupCatServerListsSub,
+                getLocalText.s("Subscriptions and custom servers"),
                 style: const TextStyle(fontSize: 11),
               ),
               value: serverLists,
@@ -65,9 +65,9 @@ class ExportCard extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: Text(context.l.homeDrawerRouting),
+              title: Text(getLocalText.s("Routing")),
               subtitle: Text(
-                context.l.backupCatRoutingSub,
+                getLocalText.s("Custom rules, tun apps, DNS options, final outbound"),
                 style: const TextStyle(fontSize: 11),
               ),
               value: routing,
@@ -77,9 +77,9 @@ class ExportCard extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: Text(context.l.backupCatAppSettings),
+              title: Text(getLocalText.s("App settings")),
               subtitle: Text(
-                context.l.backupCatAppSettingsSub,
+                getLocalText.s("Preferences, ping options, auto-update, wifi history"),
                 style: const TextStyle(fontSize: 11),
               ),
               value: appSettings,
@@ -90,9 +90,9 @@ class ExportCard extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: Text(context.l.backupCatVpnToggles),
+              title: Text(getLocalText.s("VPN system toggles")),
               subtitle: Text(
-                context.l.backupCatVpnTogglesSub,
+                getLocalText.s("auto-start, keep on exit, background mode, allow bypass"),
                 style: const TextStyle(fontSize: 11),
               ),
               value: vpnSettings,
@@ -104,11 +104,11 @@ class ExportCard extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               title: Text(
-                context.l.backupCatDebugConfig,
+                getLocalText.s("Debug API config"),
                 style: TextStyle(color: theme.colorScheme.error),
               ),
               subtitle: Text(
-                context.l.backupCatDebugConfigSub,
+                getLocalText.s("Includes the access token. Sensitive — leave OFF unless you know why."),
                 style: const TextStyle(fontSize: 11),
               ),
               value: debugConfig,
@@ -120,7 +120,7 @@ class ExportCard extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: busy ? null : onExport,
                 icon: const Icon(Icons.share),
-                label: Text(context.l.backupExportButton),
+                label: Text(getLocalText.s("Export...")),
               ),
             ),
           ],

@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import '../../models/channel.dart';
-import '../../models/ui_msg.dart';
 import '../../models/custom_rule.dart';
 import '../../models/emit_context.dart';
 import '../../models/node_spec.dart' show Awg;

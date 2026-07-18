@@ -5,10 +5,10 @@ import 'package:flutter/services.dart';
 
 import '../../services/app_info_cache.dart';
 import '../../services/format_utils.dart';
-import '../../services/l10n/l10n.dart';
 import '../../services/traffic_profiler.dart';
 import '../../services/process_name.dart';
 import 'routing_section.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §160 — детальный bottom-sheet по одному [TrafficEvent] (Live-лента
 /// per-app trace, в перспективе — и Stats→Live).
@@ -78,7 +78,7 @@ class _TrafficEventDetailSheet extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    title.isNotEmpty ? title : context.l.statsEventFallbackTitle,
+                    title.isNotEmpty ? title : getLocalText.s("(event)"),
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600),
                     softWrap: true,
@@ -435,7 +435,7 @@ class _TrafficEventDetailSheet extends StatelessWidget {
         width: double.infinity,
         child: OutlinedButton.icon(
           icon: const Icon(Icons.copy, size: 16),
-          label: Text(context.l.subCopyJson),
+          label: Text(getLocalText.s("Copy JSON")),
           onPressed: () => _copy(
             context,
             const JsonEncoder.withIndent('  ').convert(event.toJson()),

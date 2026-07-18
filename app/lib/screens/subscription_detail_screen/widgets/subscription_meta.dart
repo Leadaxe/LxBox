@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../controllers/subscription_controller.dart';
-import '../../../services/l10n/l10n.dart';
 import '../subscription_detail_format.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Header/meta block on the Nodes tab: url + copy, last-updated, node counts,
 /// traffic quota bar, expiry, support/web-page chips. Extracted verbatim from
@@ -52,11 +52,11 @@ class SubscriptionMeta extends StatelessWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.copy, size: 16),
-                  tooltip: context.l.subCopyUrl,
+                  tooltip: getLocalText.s("Copy URL"),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: url));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(context.l.subUrlCopied)),
+                      SnackBar(content: Text(getLocalText.s("URL copied"))),
                     );
                   },
                 ),
@@ -70,7 +70,7 @@ class SubscriptionMeta extends StatelessWidget {
                 Icon(Icons.schedule, size: 14, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
-                  SubscriptionEntry.formatAgo(context.l, entry.lastUpdated!),
+                  SubscriptionEntry.formatAgo(entry.lastUpdated!),
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(width: 16),
@@ -80,11 +80,10 @@ class SubscriptionMeta extends StatelessWidget {
               Text(
                 [
                   entry.detourCount > 0
-                      ? context.l.subNodesCountWithDetour(
-                          entry.nodeCount, entry.detourCount)
-                      : context.l.subEntryNodesCount(entry.nodeCount),
+                      ? getLocalText.plural("%1\$d +%2\$d⚙ nodes", entry.nodeCount, entry.detourCount)
+                      : getLocalText.plural("%d nodes", entry.nodeCount),
                   // §283 — счётчик выключенных (ключ общий с папками §234).
-                  if (offCount > 0) context.l.folderOffCount(offCount),
+                  if (offCount > 0) getLocalText.s("%d off", offCount),
                 ].join(' · '),
                 style: theme.textTheme.bodySmall,
               ),
@@ -103,7 +102,7 @@ class SubscriptionMeta extends StatelessWidget {
                 Icon(Icons.event_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
-                  context.l.subExpires(formatExpire(context.l, entry.expireTimestamp)),
+                  getLocalText.s("Expires: %s", formatExpire(entry.expireTimestamp)),
                   style: theme.textTheme.bodySmall,
                 ),
               ],
@@ -124,13 +123,13 @@ class SubscriptionMeta extends StatelessWidget {
                           ? const Color(0xFF2AABEE)
                           : null,
                     ),
-                    label: Text(context.l.subSupportChip),
+                    label: Text(getLocalText.s("Support")),
                     onPressed: () => unawaited(onOpenUrl(entry.supportUrl)),
                   ),
                 if (entry.webPageUrl.isNotEmpty)
                   ActionChip(
                     avatar: const Icon(Icons.language, size: 16),
-                    label: Text(context.l.subWebPageChip),
+                    label: Text(getLocalText.s("Web page")),
                     onPressed: () => unawaited(Future.sync(() => onOpenUrl(entry.webPageUrl))),
                   ),
               ],
@@ -152,7 +151,7 @@ class SubscriptionMeta extends StatelessWidget {
         LinearProgressIndicator(value: pct),
         const SizedBox(height: 2),
         Text(
-          context.l.subTrafficUsed(formatBytes(used), formatBytes(total)),
+          getLocalText.s("%1\$s / %2\$s used", formatBytes(used), formatBytes(total)),
           style: theme.textTheme.bodySmall,
         ),
       ],

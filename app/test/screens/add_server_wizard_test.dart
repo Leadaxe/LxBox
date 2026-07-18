@@ -3,8 +3,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/services/l10n/l10n.dart';
+import 'package:lxbox/services/l10n/locale_controller.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/screens/add_server_wizard_screen.dart';
@@ -75,8 +76,12 @@ void main() {
   Future<SubscriptionController> openWizard(WidgetTester tester) async {
     final c = SubscriptionController();
     await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: LocaleController.supportedLocales,
       home: _Launcher(c),
     ));
     await tester.tap(find.text('open wizard'));

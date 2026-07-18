@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../models/ui_msg.dart';
 
-import '../../../services/l10n/l10n.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Source tab: live HTTP response headers (important + collapsible "others")
 /// and the raw response body. Extracted verbatim from `_buildSourceTab` /
@@ -57,22 +57,22 @@ class SubscriptionSourceTab extends StatelessWidget {
             children: [
               Text(
                 sourceLoading
-                    ? context.l.subFetching
-                    : context.l.subResponseHeaders,
+                    ? getLocalText.s("Fetching…")
+                    : getLocalText.s("Response headers"),
                 style: theme.textTheme.titleSmall?.copyWith(
                     color: cs.primary, fontWeight: FontWeight.bold),
               ),
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.refresh, size: 18),
-                tooltip: context.l.subRefetchLive,
+                tooltip: getLocalText.s("Re-fetch live"),
                 visualDensity: VisualDensity.compact,
                 onPressed: sourceLoading ? null : onRefetch,
               ),
               if (rawHeaders.isNotEmpty)
                 IconButton(
                   icon: const Icon(Icons.copy, size: 16),
-                  tooltip: context.l.subCopyHeaders,
+                  tooltip: getLocalText.s("Copy headers"),
                   visualDensity: VisualDensity.compact,
                   onPressed: () {
                     final text = rawHeaders.entries
@@ -80,7 +80,7 @@ class SubscriptionSourceTab extends StatelessWidget {
                         .join('\n');
                     Clipboard.setData(ClipboardData(text: text));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(context.l.subHeadersCopied)),
+                      SnackBar(content: Text(getLocalText.s("Headers copied"))),
                     );
                   },
                 ),
@@ -90,13 +90,13 @@ class SubscriptionSourceTab extends StatelessWidget {
           if (sourceError != null)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(context.l.subFetchFailed(sourceError!.render(context.l)),
+              child: Text(getLocalText.s("Fetch failed: %s", sourceError!.render()),
                   style: TextStyle(fontSize: 12, color: cs.error)),
             )
           else if (sourceLoading && rawHeaders.isEmpty)
             const LinearProgressIndicator()
           else if (rawHeaders.isEmpty)
-            Text(context.l.subNoDataTapRefresh,
+            Text(getLocalText.s("No data — tap refresh above"),
                 style: const TextStyle(
                     fontSize: 12, fontStyle: FontStyle.italic))
           else ...[
@@ -112,9 +112,8 @@ class SubscriptionSourceTab extends StatelessWidget {
                         : Icons.expand_more,
                     size: 16),
                 label: Text(showAllHeaders
-                    ? context.l.subHideOthers
-                    : context.l.subShowAllHeaders(
-                        rawHeaders.length - importantHeaders.length)),
+                    ? getLocalText.s("Hide others")
+                    : getLocalText.s("Show all (%d)", rawHeaders.length - importantHeaders.length)),
               ),
               if (showAllHeaders)
                 for (final h in moreHeaders)
@@ -125,12 +124,12 @@ class SubscriptionSourceTab extends StatelessWidget {
         ],
 
         // Raw source
-        Text(context.l.subRawResponse, style: theme.textTheme.titleSmall?.copyWith(
+        Text(getLocalText.s("Raw response"), style: theme.textTheme.titleSmall?.copyWith(
           color: cs.primary, fontWeight: FontWeight.bold,
         )),
         const Divider(),
         if (rawSource.isEmpty)
-          Text(context.l.subNoCachedSource)
+          Text(getLocalText.s("No cached source data"))
         else
           Stack(
             children: [
@@ -143,12 +142,12 @@ class SubscriptionSourceTab extends StatelessWidget {
                 right: 0,
                 child: IconButton(
                   icon: const Icon(Icons.copy, size: 16),
-                  tooltip: context.l.subCopySource,
+                  tooltip: getLocalText.s("Copy source"),
                   visualDensity: VisualDensity.compact,
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: rawSource));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(context.l.subSourceCopied)),
+                      SnackBar(content: Text(getLocalText.s("Source copied"))),
                     );
                   },
                 ),

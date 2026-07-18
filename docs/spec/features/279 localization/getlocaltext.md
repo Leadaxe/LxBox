@@ -1,9 +1,13 @@
 # getLocalText — natural-key локализация (замена gen_l10n/ARB)
 
+> **Статус: LIVE (§285 реализован).** ARB/gen_l10n снесены; весь UI
+> локализуется через `getLocalText`. Раздел UI-строк в [spec.md §2](spec.md)
+> (ARB-подход) — superseded этим документом. Реализация — [задача
+> 285](../../tasks/285-getlocaltext-migration.md).
+
 Ревизия механизма UI-локализации из [спеки 279](spec.md). ARB + gen_l10n
-(искусственные ключи `commonCancel`, кодген, типизированные геттеры) заменяется
-на **natural keys**: английский текст на call-site *и есть* ключ. Реализация —
-[задача 285](../../tasks/285-getlocaltext-migration.md).
+(искусственные ключи `commonCancel`, кодген, типизированные геттеры) заменены
+на **natural keys**: английский текст на call-site *и есть* ключ.
 
 ## Мотивация
 

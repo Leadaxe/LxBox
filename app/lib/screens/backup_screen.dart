@@ -8,7 +8,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
 import '../services/error_format.dart';
-import '../services/l10n/l10n.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
 import '../vpn/box_vpn_client.dart';
@@ -43,7 +42,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.l.backupTitle)),
+      appBar: AppBar(title: Text(getLocalText.s("Backup & restore"))),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
@@ -93,7 +92,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   Future<void> _onExport() async {
     final include = _exportInclude();
     if (include.isEmpty) {
-      showSnack(context.l.backupNothingToExport);
+      showSnack(getLocalText.s("Nothing to export — pick at least one category."));
       return;
     }
     setState(() => _busy = true);
@@ -110,10 +109,10 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         subject: 'LxBox backup',
       );
       if (!mounted) return;
-      showSnack(context.l.backupExportedSnack(json.length));
+      showSnack(getLocalText.s("Backup exported (%d bytes)", json.length));
     } catch (e) {
       if (!mounted) return;
-      showSnack(context.l.backupExportFailed(formatUserError(e).render(context.l)));
+      showSnack(getLocalText.s("Export failed: %s", formatUserError(e).render()));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -140,7 +139,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       }
       if (raw == null) {
         if (!mounted) return;
-        showSnack(context.l.backupCouldNotReadFile);
+        showSnack(getLocalText.s("Could not read file."));
         return;
       }
 
@@ -149,7 +148,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         contents = await _service.parseImport(raw);
       } on FormatException catch (e) {
         if (!mounted) return;
-        _showError(context.l.backupInvalidTitle, e.message);
+        _showError(getLocalText.s("Invalid backup"), e.message);
         return;
       }
 
@@ -207,7 +206,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
             action: parts.isEmpty
                 ? null
                 : SnackBarAction(
-                    label: context.l.backupRestartNow,
+                    label: getLocalText.s("Restart now"),
                     onPressed: () =>
                         unawaited(BoxVpnClient().quitApp()),
                   ),
@@ -216,7 +215,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       }
     } catch (e) {
       if (!mounted) return;
-      showSnack(context.l.backupImportFailed(formatUserError(e).render(context.l)));
+      showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -232,7 +231,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         content: Text(message),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: Text(ctx.l.commonOk))
+              onPressed: () => Navigator.pop(ctx), child: Text(getLocalText.s("OK")))
         ],
       ),
     );

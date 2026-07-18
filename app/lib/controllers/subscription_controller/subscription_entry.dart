@@ -85,7 +85,7 @@ class SubscriptionEntry extends ChangeNotifier {
   String get overrideDetour => detourPolicy.overrideDetour;
   bool get replaceDetourChain => detourPolicy.replaceDetourChain;
 
-  static String formatAgo(AppLocalizations l, DateTime dt) => _formatAgo(l, dt);
+  static String formatAgo(DateTime dt) => _formatAgo(dt);
 
   String get displayName {
     // §243 — у одиночного сервера (UserServer) поле name игнорируем:
@@ -119,18 +119,17 @@ class SubscriptionEntry extends ChangeNotifier {
     return '(empty)';
   }
 
-  /// §279 — компонует локализованный статус в момент показа; принимает
-  /// [AppLocalizations] параметром (render-path по построению, spec §4.2).
-  String subtitle(AppLocalizations l) {
+  /// §285 — компонует локализованный статус в момент показа через
+  /// getLocalText (render-path, без BuildContext-параметра).
+  String subtitle() {
     final parts = <String>[];
     final s = status;
-    if (s != null) parts.add(s.render(l));
-    if (lastUpdated != null) parts.add(_formatAgo(l, lastUpdated!));
+    if (s != null) parts.add(s.render());
+    if (lastUpdated != null) parts.add(_formatAgo(lastUpdated!));
     return parts.join(' · ');
   }
 
-  static String _formatAgo(AppLocalizations l, DateTime dt) =>
-      relativeTime(l, DateTime.now(), dt);
+  static String _formatAgo(DateTime dt) => relativeTime(DateTime.now(), dt);
 
   void _replaceList(ServerList next) {
     _list = next;

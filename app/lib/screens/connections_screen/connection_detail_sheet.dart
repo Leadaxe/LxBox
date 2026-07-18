@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/format_utils.dart';
-import '../../services/l10n/l10n.dart';
 import '../../vpn/cc_channel.dart';
 import '../stats_screen/routing_section.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §152 — детальный bottom sheet по одному соединению.
 ///
@@ -94,7 +94,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    title.isNotEmpty ? title : context.l.statsConnFallbackTitle,
+                    title.isNotEmpty ? title : getLocalText.s("(connection)"),
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600),
                     softWrap: true,
@@ -110,7 +110,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
                           Colors.pink.withValues(alpha: 0.22), cs.surface),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(context.l.statsConnOneWayBadge,
+                    child: Text(getLocalText.s("One-way"),
                         style: const TextStyle(
                             fontSize: 11, fontWeight: FontWeight.w600)),
                   ),
@@ -122,7 +122,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
                       color: cs.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(context.l.statsConnClosedBadge,
+                    child: Text(getLocalText.s("closed"),
                         style: TextStyle(
                             fontSize: 11, color: cs.onSurfaceVariant)),
                   ),
@@ -251,7 +251,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(context.l.statsConnOneWayTitle,
+                Text(getLocalText.s("One-way traffic"),
                     style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
@@ -340,7 +340,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
           Expanded(
             child: OutlinedButton.icon(
               icon: const Icon(Icons.copy, size: 16),
-              label: Text(context.l.subCopyJson),
+              label: Text(getLocalText.s("Copy JSON")),
               onPressed: () => _copy(
                 context,
                 const JsonEncoder.withIndent('  ').convert(_toJson()),
@@ -352,7 +352,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
           Expanded(
             child: FilledButton.tonalIcon(
               icon: const Icon(Icons.close, size: 16),
-              label: Text(context.l.commonClose),
+              label: Text(getLocalText.s("Close")),
               onPressed: canClose
                   ? () {
                       onClose(id);

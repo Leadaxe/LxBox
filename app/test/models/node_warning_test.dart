@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_warning.dart';
-import 'package:lxbox/services/l10n/l10n.dart';
 
 void main() {
   group('NodeWarning equality', () {
@@ -37,14 +36,14 @@ void main() {
         const XhttpParamResetWarning(
                 'session_placement', XhttpResetReason.invalidEnumValue,
                 value: 'bogus')
-            .message(L10n.en),
+            .renderEn(),
         'XHTTP "session_placement" reset to default — value "bogus" is not '
         'a valid session_placement (would otherwise break the whole config).',
       );
       expect(
         const XhttpParamResetWarning(
                 'uplink_http_method', XhttpResetReason.getRequiresPacketUp)
-            .message(L10n.en),
+            .renderEn(),
         'XHTTP "uplink_http_method" reset to default — GET requires '
         'packet-up mode (would otherwise break the whole config).',
       );

@@ -6,16 +6,28 @@
 /// machine-поверхности (emitWarnings/AppLog) — `renderEn()` (ui_msg.dart).
 library;
 
-import '../services/l10n/l10n.dart' show AppLocalizations;
+import '../services/l10n/get_local_text.dart';
+import '../services/l10n/locale_controller.dart';
 
 enum WarningSeverity { info, warning, error }
 
 sealed class NodeWarning {
   const NodeWarning();
 
-  /// §279 — рендер в момент показа; интерполяции (scheme/transport/field) —
-  /// wire-идентификаторы, не переводятся.
-  String message(AppLocalizations l);
+  /// §285 — тело рендера подкласса. [t] — локализатор: активная локаль для
+  /// [message], пиненный английский [GetLocalText.en] для [renderEn].
+  /// Публичный — переиспользуется композицией из ui_msg.dart (пофайловая
+  /// приватность Dart). Интерполяции (scheme/transport/field) — wire-иды,
+  /// не переводятся.
+  String messageWith(GetLocalText t);
+
+  /// §285 — рендер в момент показа (активная локаль через global getLocalText).
+  String message() => messageWith(getLocalText);
+
+  /// Machine-рендер (emitWarnings/AppLog) — пиненный английский, независимо
+  /// от активной локали.
+  String renderEn() => messageWith(GetLocalText.en);
+
   WarningSeverity get severity;
 
   /// Поля данных подкласса для равенства/hashCode. Dedup — по runtimeType +
@@ -54,8 +66,8 @@ final class UnsupportedTransportWarning extends NodeWarning {
   List<Object?> get props => [name, fallback];
 
   @override
-  String message(AppLocalizations l) =>
-      l.warnUnsupportedTransport(name, fallback);
+  String messageWith(GetLocalText t) =>
+      t.s("Transport \"%1\$s\" is not supported by sing-box; using \"%2\$s\" fallback (node may fail to connect).", name, fallback);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -69,7 +81,7 @@ final class UnsupportedProtocolWarning extends NodeWarning {
   List<Object?> get props => [scheme];
 
   @override
-  String message(AppLocalizations l) => l.warnUnsupportedProtocol(scheme);
+  String messageWith(GetLocalText t) => t.s("Protocol \"%s\" is not supported.", scheme);
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -83,7 +95,7 @@ final class MissingFieldWarning extends NodeWarning {
   List<Object?> get props => [field];
 
   @override
-  String message(AppLocalizations l) => l.warnMissingField(field);
+  String messageWith(GetLocalText t) => t.s("Required field \"%s\" is missing.", field);
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -97,7 +109,7 @@ final class DeprecatedFlowWarning extends NodeWarning {
   List<Object?> get props => [flow];
 
   @override
-  String message(AppLocalizations l) => l.warnDeprecatedFlow(flow);
+  String messageWith(GetLocalText t) => t.s("Flow \"%s\" is deprecated.", flow);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -114,7 +126,7 @@ final class VisionWithTransportWarning extends NodeWarning {
   List<Object?> get props => [transport];
 
   @override
-  String message(AppLocalizations l) => l.warnVisionWithTransport(transport);
+  String messageWith(GetLocalText t) => t.s("Flow \"xtls-rprx-vision\" is incompatible with \"%s\" transport — flow dropped.", transport);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -124,7 +136,7 @@ final class InsecureTlsWarning extends NodeWarning {
   const InsecureTlsWarning();
 
   @override
-  String message(AppLocalizations l) => l.warnInsecureTls;
+  String messageWith(GetLocalText t) => t.s("TLS certificate verification is disabled.");
 
   /// Info, не warning — это часто **намеренный** выбор провайдера (REALITY,
   /// IP-литералы, self-signed). Не должен крадовать XHTTP-fallback и прочие
@@ -141,7 +153,7 @@ final class NaiveBuildTagWarning extends NodeWarning {
   const NaiveBuildTagWarning();
 
   @override
-  String message(AppLocalizations l) => l.warnNaiveBuildTag;
+  String messageWith(GetLocalText t) => t.s("NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).");
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -160,7 +172,7 @@ final class UnknownFingerprintWarning extends NodeWarning {
   List<Object?> get props => [value];
 
   @override
-  String message(AppLocalizations l) => l.warnUnknownFingerprint(value);
+  String messageWith(GetLocalText t) => t.s("Unknown uTLS fingerprint \"%s\" replaced with \"chrome\" (would otherwise break the whole config).", value);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -199,17 +211,17 @@ final class XhttpParamResetWarning extends NodeWarning {
   List<Object?> get props => [field, reason, value];
 
   @override
-  String message(AppLocalizations l) {
+  String messageWith(GetLocalText t) {
     final why = switch (reason) {
       XhttpResetReason.invalidEnumValue =>
-        l.warnXhttpReasonInvalidEnum(value, field),
+        t.s("value \"%1\$s\" is not a valid %2\$s", value, field),
       XhttpResetReason.invalidPlacementValue =>
-        l.warnXhttpReasonInvalidValue(value),
+        t.s("value \"%s\" is not valid", value),
       XhttpResetReason.placementRequiresPacketUp =>
-        l.warnXhttpReasonPlacementPacketUp,
-      XhttpResetReason.getRequiresPacketUp => l.warnXhttpReasonGetPacketUp,
+        t.s("header/cookie placement requires packet-up mode"),
+      XhttpResetReason.getRequiresPacketUp => t.s("GET requires packet-up mode"),
     };
-    return l.warnXhttpParamReset(field, why);
+    return t.s("XHTTP \"%1\$s\" reset to default — %2\$s (would otherwise break the whole config).", field, why);
   }
 
   @override

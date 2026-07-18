@@ -1,15 +1,25 @@
-import 'package:flutter/widgets.dart' show Locale;
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/stop_reason.dart';
 import 'package:lxbox/models/ui_msg.dart';
 import 'package:lxbox/models/validation.dart';
-import 'package:lxbox/services/l10n/l10n.dart';
+import 'package:lxbox/services/l10n/get_local_text.dart';
+import 'package:lxbox/services/l10n/plural_resolver.dart';
 
-// §279 Phase 4 — sealed UiMsg: равенство по данным, рендер по локали,
-// стабильность renderEn() (machine-поверхности не зависят от активной локали).
+// §285 — sealed UiMsg: равенство по данным, рендер по локали (через
+// GetLocalText, не ARB), стабильность renderEn() (machine-поверхности не
+// зависят от активной локали). `_ru` — реальный словарь assets/l10n/ui/ru.json.
+GetLocalText _loadRu() {
+  final raw = File('assets/l10n/ui/ru.json').readAsStringSync();
+  final dict = jsonDecode(raw) as Map<String, dynamic>;
+  return GetLocalText(dict, const RuPluralResolver());
+}
+
 void main() {
-  final ru = lookupAppLocalizations(const Locale('ru'));
+  final ru = _loadRu();
 
   group('UiMsg equality (по данным, не по строке)', () {
     test('одинаковые данные == равны, hashCode совпадает', () {
@@ -47,25 +57,24 @@ void main() {
     });
   });
 
-  group('render(l) — обе локали', () {
-    test('ErrMsg рендерится в обеих локалях, en = прежняя строка verbatim',
-        () {
+  group('render — обе локали', () {
+    test('ErrMsg: en verbatim (renderEn), ru отличается', () {
       const m = ErrMsg(ErrKey.failedToStartVpn);
-      expect(m.render(L10n.en), 'Failed to start VPN');
-      expect(m.render(ru), isNotEmpty);
-      expect(m.render(ru), isNot(m.render(L10n.en)));
+      expect(m.renderEn(), 'Failed to start VPN');
+      expect(m.renderWith(ru), isNotEmpty);
+      expect(m.renderWith(ru), isNot(m.renderEn()));
     });
 
     test('PrefixedMsg: payload проходит verbatim в обеих локалях', () {
       const m = PrefixedMsg(ErrPrefix.fileError, RawMsg('ENOENT'));
-      expect(m.render(L10n.en), 'File error: ENOENT');
-      expect(m.render(ru), contains('ENOENT'));
+      expect(m.renderEn(), 'File error: ENOENT');
+      expect(m.renderWith(ru), contains('ENOENT'));
     });
 
     test('TimeoutError: формат секунд одинаковый, слово локализуется', () {
       const m = TimeoutError(5800);
-      expect(m.render(L10n.en), 'timeout 5.8s');
-      expect(m.render(ru), contains('5.8s'));
+      expect(m.renderEn(), 'timeout 5.8s');
+      expect(m.renderWith(ru), contains('5.8s'));
     });
 
     test('ErrMsg(tunnelNotResponding): heartbeat-стоп — типизированный UiMsg',
@@ -73,62 +82,62 @@ void main() {
       // Регрессия: heartbeat._onTunnelDead писал сырой String в
       // copyWith(lastError:) (Object?-параметр) → runtime cast error.
       const m = ErrMsg(ErrKey.tunnelNotResponding);
-      expect(m.render(L10n.en), 'Connection lost — VPN tunnel is not responding');
-      expect(m.render(ru), isNot(m.render(L10n.en)));
-      expect(m.render(ru), isNotEmpty);
+      expect(m.renderEn(), 'Connection lost — VPN tunnel is not responding');
+      expect(m.renderWith(ru), isNot(m.renderEn()));
+      expect(m.renderWith(ru), isNotEmpty);
     });
 
     test('SubStatusNodes: cached-фрейм в обеих локалях', () {
       const m = SubStatusNodes(2, cached: true);
-      expect(m.render(L10n.en), '2 nodes (cached)');
-      expect(m.render(ru), contains('2'));
-      expect(m.render(ru), isNot(m.render(L10n.en)));
+      expect(m.renderEn(), '2 nodes (cached)');
+      expect(m.renderWith(ru), contains('2'));
+      expect(m.renderWith(ru), isNot(m.renderEn()));
     });
 
-    test('ValidationFatalMsg: полный перечень issues в обеих локалях', () {
+    test('ValidationFatalMsg: полный перечень issues (en verbatim)', () {
       const m = ValidationFatalMsg([
         DanglingOutboundRef('rules[0]', 'ghost'),
         EmptyUrltestGroup('auto'),
       ]);
-      expect(m.render(L10n.en),
+      expect(m.renderEn(),
           'Config invalid (2 issues): Rule "rules[0]" references missing '
           'outbound "ghost".; URL-test group "auto" has no outbounds.');
-      expect(m.render(ru), contains('ghost'));
-      expect(m.render(ru), contains('auto'));
+      expect(m.renderWith(ru), contains('ghost'));
+      expect(m.renderWith(ru), contains('auto'));
     });
 
     test('ProbeErrorMsg: wire-части не переводятся', () {
       const m = ProbeErrorMsg('vpn-1', 'ya.ru', ErrMsg(ErrKey.noConnection));
-      expect(m.render(L10n.en),
+      expect(m.renderEn(),
           'vpn-1 → ya.ru — No connection — check network or URL');
-      expect(m.render(ru), startsWith('vpn-1 → ya.ru — '));
+      expect(m.renderWith(ru), startsWith('vpn-1 → ya.ru — '));
     });
 
     test('NodeWarning: рендер под обеими локалями, интерполяции verbatim', () {
       const w = UnsupportedTransportWarning('xhttp', 'httpupgrade');
       expect(
-        w.message(L10n.en),
+        w.renderEn(),
         'Transport "xhttp" is not supported by sing-box; using "httpupgrade" '
         'fallback (node may fail to connect).',
       );
-      final rendered = w.message(ru);
+      final rendered = w.messageWith(ru);
       expect(rendered, contains('xhttp'));
       expect(rendered, contains('httpupgrade'));
-      expect(rendered, isNot(w.message(L10n.en)));
+      expect(rendered, isNot(w.renderEn()));
     });
 
     test('StopReason: рендер под обеими локалями', () {
       const r = StopRevoked();
-      expect(r.message(L10n.en), contains('Another VPN app'));
-      expect(r.message(ru), isNot(r.message(L10n.en)));
+      expect(r.renderEn(), contains('Another VPN app'));
+      expect(r.messageWith(ru), isNot(r.renderEn()));
       const e = StopError('create service: bind failed');
-      expect(e.message(L10n.en), 'Stopped: create service: bind failed');
-      expect(e.message(ru), contains('create service: bind failed'));
+      expect(e.renderEn(), 'Stopped: create service: bind failed');
+      expect(e.messageWith(ru), contains('create service: bind failed'));
     });
   });
 
-  group('renderEn() — стабильность при смене локали', () {
-    test('переключение L10n.current не меняет renderEn-вывод', () {
+  group('renderEn() — пиненный английский', () {
+    test('renderEn() всегда английский, независимо от локали', () {
       const msgs = <UiMsg>[
         ErrMsg(ErrKey.connectionTimedOut),
         PrefixedMsg(ErrPrefix.switchFailed, RawMsg('boom')),
@@ -137,21 +146,16 @@ void main() {
         HttpStatusMsg(503),
         StopReasonMsg(StopRevoked()),
       ];
-      final before = [for (final m in msgs) m.renderEn()];
-      final saved = L10n.current;
-      L10n.current = ru;
-      try {
-        final after = [for (final m in msgs) m.renderEn()];
-        expect(after, before);
-        // NodeWarning/ValidationIssue/StopReason En-мосты — та же гарантия.
-        expect(const InsecureTlsWarning().renderEn(),
-            'TLS certificate verification is disabled.');
-        expect(const EmptyUrltestGroup('auto').renderEn(),
-            'URL-test group "auto" has no outbounds.');
-        expect(const StopError('x').renderEn(), 'Stopped: x');
-      } finally {
-        L10n.current = saved;
+      // renderEn() не зависит ни от какого внешнего состояния локали.
+      for (final m in msgs) {
+        expect(m.renderEn(), isNot(contains(RegExp('[а-яА-ЯёЁ]'))));
       }
+      // NodeWarning/ValidationIssue/StopReason — та же гарантия.
+      expect(const InsecureTlsWarning().renderEn(),
+          'TLS certificate verification is disabled.');
+      expect(const EmptyUrltestGroup('auto').renderEn(),
+          'URL-test group "auto" has no outbounds.');
+      expect(const StopError('x').renderEn(), 'Stopped: x');
     });
   });
 

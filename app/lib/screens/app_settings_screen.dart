@@ -9,7 +9,6 @@ import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
 import '../services/error_format.dart';
 import '../services/haptic_service.dart';
-import '../services/l10n/l10n.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/profile_dump_writer.dart';
 import '../services/settings_storage.dart';
@@ -213,8 +212,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(locked
-            ? context.l.appSettingsConfigLockedSnack
-            : context.l.appSettingsConfigUnlockedSnack),
+            ? getLocalText.s("Config locked. UI actions will not rebuild config.")
+            : getLocalText.s("Config unlocked. Next UI action will rebuild from settings.")),
         duration: const Duration(seconds: 3),
       ),
     );
@@ -258,7 +257,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(context.l.appSettingsTokenCopied),
+        content: Text(getLocalText.s("Token copied")),
         duration: const Duration(seconds: 1),
       ),
     );
@@ -300,7 +299,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(context.l.appSettingsCoreLogsSaved),
+        content: Text(getLocalText.s("Saved. Force-stop & reopen app to apply.")),
         duration: const Duration(seconds: 3),
       ),
     );
@@ -454,13 +453,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
           initialIndex: widget.initialTab.clamp(0, 3),
           child: Scaffold(
             appBar: AppBar(
-              title: Text(context.l.homeDrawerAppSettings),
+              title: Text(getLocalText.s("App Settings")),
               bottom: _FadingTabBar(
                 tabs: [
-                  Tab(text: context.l.appSettingsTabGeneral),
-                  Tab(text: context.l.appSettingsTabSubscriptions),
-                  Tab(text: context.l.appSettingsTabDiagnostics),
-                  Tab(text: context.l.appSettingsTabAutomation),
+                  Tab(text: getLocalText.s("General")),
+                  Tab(text: getLocalText.s("Subscriptions")),
+                  Tab(text: getLocalText.s("Diagnostics")),
+                  Tab(text: getLocalText.s("Automation")),
                 ],
               ),
             ),
@@ -510,11 +509,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(ctx.l.commonCancel),
+            child: Text(getLocalText.s("Cancel")),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, ctl.text),
-            child: Text(ctx.l.commonSave),
+            child: Text(getLocalText.s("Save")),
           ),
         ],
       ),
@@ -718,18 +717,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   Future<void> _captureProfile(PprofProfile p) async {
     if (_capturing) return;
     if (!(await _vpn.getVpnStatus()).isUp) {
-      _diagSnack(L10n.current.appSettingsPprofNeedVpn);
+      _diagSnack(getLocalText.s("VPN must be running to capture a profile."));
       return;
     }
     setState(() => _capturing = true);
     if (p.blockingSeconds > 0) {
-      _diagSnack(L10n.current.appSettingsPprofProfiling(p.blockingSeconds));
+      _diagSnack(getLocalText.s("Profiling for %ds…", p.blockingSeconds));
     }
     try {
       final bytes = await _vpn.pprofRaw(p.pathAndQuery,
           blockingSeconds: p.blockingSeconds);
       if (bytes.isEmpty) {
-        _diagSnack(L10n.current.appSettingsPprofEmpty);
+        _diagSnack(getLocalText.s("Profile was empty (timeout?)."));
         return;
       }
       final path = await ProfileDumpWriter.writeProfile(p, bytes);
@@ -747,8 +746,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         subject: name,
       );
     } catch (e) {
-      _diagSnack(L10n.current
-          .appSettingsPprofCaptureFailed(formatUserError(e).render(L10n.current)));
+      _diagSnack(getLocalText.s(
+          "Capture failed: %s", formatUserError(e).render()));
     } finally {
       if (mounted) setState(() => _capturing = false);
     }
@@ -773,8 +772,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       SnackBar(
         duration: const Duration(seconds: 2),
         content: Text(enabled
-            ? context.l.appSettingsAutoRecordOnSnack
-            : context.l.appSettingsAutoRecordOffSnack),
+            ? getLocalText.s("Auto-record on. Networks added after 5 min of stay.")
+            : getLocalText.s("Auto-record off. Existing history kept.")),
       ),
     );
   }

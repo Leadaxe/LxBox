@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/custom_rule.dart' show kOutboundReject;
-import '../services/l10n/l10n.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// Опция в [OutboundPicker] — либо outbound tag, либо sentinel "reject".
 class OutboundOption {
@@ -69,7 +69,7 @@ class OutboundPicker extends StatelessWidget {
           children: [
             Icon(Icons.block, size: iconSize, color: cs.error),
             const SizedBox(width: 6),
-            Text(context.l.routingRejectOption,
+            Text(getLocalText.s("Reject"),
                 style: TextStyle(fontSize: fontSize, color: cs.error)),
           ],
         ),

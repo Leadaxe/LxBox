@@ -543,9 +543,10 @@ automation/                  # §047 Dart-сторона automation (допол�
   automation_dispatcher.dart #   диспетчер входящих команд (start/stop/toggle/select-node/…)
   event_emitter.dart         #   исходящие события (VPN up/down, sub-refresh) с throttle (default OFF)
   handlers.dart              #   обработчики команд поверх контроллеров
-l10n/                        # §279 подсистема локализации (см. раздел «Локализация (l10n)»)
-  l10n.dart                  #   L10n holder (eager; пиненный L10n.en) + extension context.l
-  locale_controller.dart     #   LocaleController — единственный владелец пайплайна смены локали
+l10n/                        # §279/§285 подсистема локализации (см. раздел «Локализация (l10n)»)
+  get_local_text.dart        #   GetLocalText (natural-key движок: .s/.plural, printf, fallback=ключ); GetLocalText.en
+  plural_resolver.dart       #   PluralResolver + En/RuPluralResolver (CLDR формы плюрала)
+  locale_controller.dart     #   LocaleController — владелец пайплайна смены локали + глобальный getLocalText
   template_overlay.dart      #   TemplateOverlay.apply/extract — pre-parse оверлей шаблона
   app_language_reconcile.dart#   трёхсторонний reconciliation LocaleManager↔storage (Android 13+)
   template_aware_state.dart  #   mixin: перечитывание шаблона в didChangeDependencies по локали
@@ -1295,25 +1296,33 @@ Lifecycle-сигналы (`connectScreen`/`disconnectScreen`, `connectProfiler`/
 
 ---
 
-## Локализация (l10n, §279)
+## Локализация (l10n, §279 / §285)
 
-en (базовый) + ru; новый язык = один ARB + один template-overlay + один
-`values-<lang>/` без структурных изменений. Runtime-переключение без рестарта
-приложения, включая нативные поверхности при живом VPN-сервисе. Полная
-архитектура — [спека §279](spec/features/279%20localization/spec.md);
+en (базовый) + ru; новый язык = один natural-key словарь + один
+template-overlay + один `values-<lang>/` без структурных изменений.
+Runtime-переключение без рестарта приложения, включая нативные поверхности при
+живом VPN-сервисе. С §285 UI-строки локализуются через **natural keys**
+(английский текст call-site'а И ЕСТЬ ключ; ARB/gen_l10n снесены). Полная
+архитектура — [спека §279](spec/features/279%20localization/spec.md) +
+[ревизия getLocalText](spec/features/279%20localization/getlocaltext.md);
 translator-guide — [`l10n.md`](l10n.md).
 
 | Компонент | Роль |
 |---|---|
-| `lib/l10n/app_en.arb` / `app_ru.arb` | Каталог строк (gen_l10n + ICU-плюралы); `lib/l10n/gen/` генерируется `pub get`, в .gitignore |
-| `lib/services/l10n/l10n.dart` | `L10n.current` (eager-init en до error boundary) + пиненный `L10n.en` для machine-поверхностей; extension `context.l` |
-| `lib/services/l10n/locale_controller.dart` | `LocaleController` — **единственный владелец** смены локали; `WidgetsBindingObserver.didChangeLocales` ловит смену системного языка при `setting=='system'` |
+| `lib/services/l10n/get_local_text.dart` | `GetLocalText` — natural-key движок: `.s("en text", args)` / `.plural("%d en", n)`, printf `%s/%d/%1$s/%%`, форма-индекс, fallback = сам ключ; `GetLocalText.en` — пиненный английский рендерер |
+| `lib/services/l10n/plural_resolver.dart` | `PluralResolver` + `En`/`RuPluralResolver` (CLDR формы: ru one/few/many/other) — набор форм диктует shape plural-объекта в словаре |
+| `assets/l10n/ui/ru.json` | Natural-key словарь: `englishKey → { value: String\|pluralObj, special: {"N": {value}} }`. `en.json` нет by design (fallback на ключ) |
+| `lib/services/l10n/locale_controller.dart` | `LocaleController` — **единственный владелец** смены локали + глобальный `getLocalText` getter (dict-reload в пайплайне); `didChangeLocales` ловит смену системного языка при `setting=='system'` |
 | `lib/services/l10n/template_overlay.dart` | Pre-parse оверлей display-текста `wizard_template.json` (адреса по machine-id, см. [TEMPLATE.md](TEMPLATE.md#локализация-display-текста--l10n-overlay-279)) |
 | `lib/services/l10n/template_aware_state.dart` | Mixin: refetch template-derived состояния в `didChangeDependencies` по `Localizations.localeOf` (initState переживает rebuild — снапшот локали там запрещён checker'ом) |
 | `lib/services/l10n/app_language_reconcile.dart` | Трёхсторонний reconciliation `LocaleManager`↔storage на старте (Android 13+, зеркало `last_pushed_locale`) |
-| `lib/models/ui_msg.dart` | sealed `UiMsg` — хранимые ошибки/статусы как типизированные объекты; `render(l)` в build, `renderEn()` — единственный путь UiMsg→String вне build (automation/AppLog/notification) |
-| `app/tool/l10n/` | 4 CI-checker'а (`--strict` на каждом PR с Phase 7): template_check / arb_check / hardcoded_check (+ rendering-locality) / kotlin_check |
+| `lib/models/ui_msg.dart` | sealed `UiMsg` — хранимые ошибки/статусы как типизированные объекты; `render()` через ambient `getLocalText` в момент показа, `renderEn()` → `GetLocalText.en` — путь UiMsg→String на machine-поверхностях (automation/AppLog/notification) |
+| `app/tool/l10n/` | 4 CI-checker'а (`--strict` на каждом PR): ui_check (natural-key словарь↔код) / template_check / hardcoded_check (+ rendering-locality) / kotlin_check |
 | `android … L10n.kt` | Нативный резолвер: читает `boxvpn_boot.app_language`, `createConfigurationContext` **в момент рендера, без кэша** — работает в сервис-процессе при мёртвом Flutter |
+
+`MaterialApp.localizationsDelegates` несёт только Flutter-встроенные делегаты
+(Global Material/Widgets/Cupertino chrome); строки приложения идут через
+`getLocalText`, не через `Localizations`-делегат.
 
 **Пайплайн смены языка** (любой путь записи `app_language` — picker, Debug API
 side-effect hook, restore, смена системного языка — сходится в
@@ -1326,7 +1335,7 @@ LocaleController.set(v)
   │        ServiceNotification.relabel → updateShortcuts (+onResume retry) →
   │        tile.requestListeningState → Libbox.setLocale → LocaleManager (33+)
   └─ _applyLocale(effective)
-        ├─ L10n.current = lookup(loc)
+        ├─ _text = GetLocalText(dict<tag>, resolver<tag>)  # natural-key словарь новой локали
         ├─ await TemplateLoader.reload(tag)  # ПРОГРЕВ ДО notify (кэш ключуется тегом локали)
         ├─ RuleNameResolver.relocalize(...)  # display-зеркала билдера без ребилда конфига
         ├─ LazyPersistFlush.flushAll()

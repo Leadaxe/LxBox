@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/l10n/l10n.dart';
 import '../../../widgets/banner_palette.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §047 — banner который показывается под `Default Domain Resolver` когда
 /// выбран `local_dns_resolver`. Объясняет риск + предлагает quick-fix
@@ -39,7 +39,7 @@ class LocalResolverWarningBanner extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  context.l.dnsLocalLeakTitle,
+                  getLocalText.s("System DNS leaks lookups to your ISP"),
                   style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -50,7 +50,7 @@ class LocalResolverWarningBanner extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            context.l.dnsLocalLeakBody,
+            getLocalText.s("Hostnames sing-box resolves internally (your VPN server addresses, custom outbound endpoints) will go through your ISP's DNS, bypassing the VPN tunnel. Pick a regular DNS server for full privacy."),
             style: TextStyle(fontSize: 12, color: c.foreground),
           ),
           if (hasCloudflareUdp) ...[
@@ -59,7 +59,7 @@ class LocalResolverWarningBanner extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: TextButton.icon(
                 icon: const Icon(Icons.bolt, size: 16),
-                label: Text(context.l.dnsSwitchToCloudflare),
+                label: Text(getLocalText.s("Switch to cloudflare_udp")),
                 onPressed: onSwitchToCloudflareUdp,
                 style: TextButton.styleFrom(
                   foregroundColor: c.action,

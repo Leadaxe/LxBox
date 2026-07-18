@@ -26,35 +26,38 @@ import 'src/sha256.dart';
 // через --write-baseline); замена hash'а в файле легальна, пока счётчик
 // файла не растёт (hotfix-путь).
 
-// §279 Phase 4 (спека §9.4) — rendering-locality-правила, FAIL-режим:
-//   - `.render(` легален только в lib/screens|lib/widgets ИЛИ внутри функции,
-//     принимающей AppLocalizations параметром (render-path по построению);
+// §285 — rendering-locality-правила, FAIL-режим (getLocalText-эпоха):
 //   - `renderEn(` — только в allowlist-файлах (render_allowlist.json:
 //     machine-поверхности — automation, Debug API, AppLog-сайты,
-//     notification-push, emitWarnings);
-//   - `L10n.current` вне allowlist → fail; `L10n.en` вне lib/models/ui_msg.dart
-//     → fail (единственный санкционированный путь — renderEn());
+//     notification-push, emitWarnings) плюс модельные иерархии, где определён
+//     сам renderEn() (lib/models/);
+//   - прямой `GetLocalText.en` вне lib/models/ → fail (единственный
+//     санкционированный путь на machine-поверхностях — renderEn());
 //   - паттерн «поле `WizardTemplate?` + заполнение в initState» → fail
 //     (спека, решение 15: fetch шаблона — в didChangeDependencies).
+//
+// §285 — `.render()` (UiMsg → String через ambient getLocalText активной
+// локали) больше НЕ гейтится по каталогу: он не требует BuildContext и
+// безопасен из сервисов/контроллеров (прежнее правило было привязано к
+// context.l/AppLocalizations-параметру, которых больше нет).
 
 const String _baselinePath = 'tool/l10n/hardcoded_baseline.json';
 const String _helpersPath = 'tool/l10n/l10n_helpers.json';
 const String _renderAllowlistPath = 'tool/l10n/render_allowlist.json';
 
-/// Единственный файл, где разрешён прямой `L10n.en` и определён `renderEn()`.
-const String _uiMsgFile = 'lib/models/ui_msg.dart';
+/// Каталог модельных иерархий, где определён `renderEn()` и разрешён прямой
+/// `GetLocalText.en` (ui_msg/validation/stop_reason/node_warning).
+const String _modelsDir = 'lib/models/';
 
 class _RenderAllowlist {
-  _RenderAllowlist(this.renderEn, this.l10nCurrent);
+  _RenderAllowlist(this.renderEn);
   final List<String> renderEn;
-  final List<String> l10nCurrent;
 
   static _RenderAllowlist load() {
     final raw = jsonDecode(File(_renderAllowlistPath).readAsStringSync())
         as Map<String, dynamic>;
     return _RenderAllowlist(
       ((raw['renderEn'] as List?) ?? const []).cast<String>(),
-      ((raw['l10nCurrent'] as List?) ?? const []).cast<String>(),
     );
   }
 
@@ -62,8 +65,7 @@ class _RenderAllowlist {
       prefixes.any((p) => p.endsWith('/') ? file.startsWith(p) : file == p);
 
   bool renderEnAllowed(String file) =>
-      file == _uiMsgFile || _match(renderEn, file);
-  bool l10nCurrentAllowed(String file) => _match(l10nCurrent, file);
+      file.startsWith(_modelsDir) || _match(renderEn, file);
 }
 
 Map<String, DisplayHelper> _loadHelpers() {
@@ -92,38 +94,11 @@ class _LocalityVisitor extends RecursiveAstVisitor<void> {
   final _RenderAllowlist allow;
   final CheckReporter r;
 
-  bool get _isWidgetDir =>
-      file.startsWith('lib/screens/') || file.startsWith('lib/widgets/');
-
   int _line(AstNode e) => lineInfo.getLocation(e.offset).lineNumber;
-
-  /// Есть ли у объемлющей функции/метода параметр типа AppLocalizations
-  /// (render-path по построению — спека §9.4).
-  bool _inL10nParamFunction(AstNode node) {
-    for (AstNode? n = node; n != null; n = n.parent) {
-      FormalParameterList? params;
-      if (n is MethodDeclaration) params = n.parameters;
-      if (n is FunctionDeclaration) params = n.functionExpression.parameters;
-      if (n is FunctionExpression) params = n.parameters;
-      if (params != null && params.toSource().contains('AppLocalizations')) {
-        return true;
-      }
-    }
-    return false;
-  }
 
   @override
   void visitMethodInvocation(MethodInvocation node) {
-    final name = node.methodName.name;
-    if (name == 'render' && node.realTarget != null) {
-      if (file != _uiMsgFile &&
-          !_isWidgetDir &&
-          !_inL10nParamFunction(node)) {
-        r.fail('$file:${_line(node)}: `.render(` outside lib/screens|lib/'
-            'widgets and outside an AppLocalizations-parameter function — '
-            'store the typed UiMsg and render at display time');
-      }
-    } else if (name == 'renderEn') {
+    if (node.methodName.name == 'renderEn') {
       if (!allow.renderEnAllowed(file)) {
         r.fail('$file:${_line(node)}: `renderEn(` outside the machine-surface '
             'allowlist (tool/l10n/render_allowlist.json) — English render is '
@@ -135,16 +110,15 @@ class _LocalityVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitPrefixedIdentifier(PrefixedIdentifier node) {
-    if (node.prefix.name == 'L10n') {
-      final member = node.identifier.name;
-      if (member == 'current' && !allow.l10nCurrentAllowed(file)) {
-        r.fail('$file:${_line(node)}: `L10n.current` outside the allowlist '
-            '(tool/l10n/render_allowlist.json) — use context.l in widgets or '
-            'a typed UiMsg for stored state');
-      } else if (member == 'en' && file != _uiMsgFile) {
-        r.fail('$file:${_line(node)}: direct `L10n.en` — go through '
-            'renderEn() ($_uiMsgFile is the only sanctioned access point)');
-      }
+    // §285 — прямой `GetLocalText.en` (пиненный английский рендерер) легален
+    // только в модельных иерархиях, где определён renderEn(); везде ещё —
+    // идти через renderEn() (санкционированный machine-surface путь).
+    if (node.prefix.name == 'GetLocalText' &&
+        node.identifier.name == 'en' &&
+        !file.startsWith(_modelsDir)) {
+      r.fail('$file:${_line(node)}: direct `GetLocalText.en` — go through '
+          'renderEn() (only $_modelsDir* may reference the pinned English '
+          'renderer directly)');
     }
     super.visitPrefixedIdentifier(node);
   }

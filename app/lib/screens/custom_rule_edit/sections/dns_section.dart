@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/custom_rule.dart';
-import '../../../services/l10n/l10n.dart';
 import '../widgets/section_header.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §117 задача 3 — DNS section: «DNS follows the rule».
 ///
@@ -65,7 +65,7 @@ class DnsSection extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           controlAffinity: ListTileControlAffinity.leading,
           visualDensity: VisualDensity.compact,
-          title: Text(context.l.ruleEditDnsDedicated,
+          title: Text(getLocalText.s("Send DNS to dedicated server"),
               style: const TextStyle(fontSize: 13)),
           value: enabled,
           onChanged: gateBlocked ? null : (v) => onEnabledChanged(v ?? false),
@@ -74,7 +74,7 @@ class DnsSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(left: 12, bottom: 4),
             child: Text(
-              context.l.ruleEditDnsGateBlocked,
+              getLocalText.s("Unavailable with port/protocol filters — they are unknown at DNS-query time."),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
           ),
@@ -85,7 +85,7 @@ class DnsSection extends StatelessWidget {
               initialValue: tags.contains(serverTag) ? serverTag : null,
               isExpanded: true,
               decoration: InputDecoration(
-                labelText: context.l.ruleEditDnsServerLabel,
+                labelText: getLocalText.s("DNS server"),
                 border: const OutlineInputBorder(),
                 isDense: true,
               ),
@@ -106,7 +106,7 @@ class DnsSection extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 12, top: 6),
               child: Text(
-                context.l.ruleEditDnsSrsNote,
+                getLocalText.s("Works only if the rule-set contains domains — IP-only lists never match DNS queries."),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ),
@@ -118,10 +118,10 @@ class DnsSection extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           controlAffinity: ListTileControlAffinity.leading,
           visualDensity: VisualDensity.compact,
-          title: Text(context.l.ruleEditForceIpv4,
+          title: Text(getLocalText.s("Force IPv4 (drop AAAA)"),
               style: const TextStyle(fontSize: 13)),
           subtitle: Text(
-            context.l.ruleEditForceIpv4Sub,
+            getLocalText.s("Answer AAAA (IPv6) queries locally so matched traffic uses IPv4. No DNS server required."),
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
           value: forceIpv4,

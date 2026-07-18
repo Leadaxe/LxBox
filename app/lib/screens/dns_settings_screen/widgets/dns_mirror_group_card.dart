@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/l10n/l10n.dart';
 import '../../../widgets/reorder_grab_strip.dart';
 import '../dns_body_dialogs.dart';
 import '../dns_format.dart';
 import 'dns_badge.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §117 (решение №6) — атомарная mirror-группа в списке DNS Rules.
 ///
@@ -51,7 +51,7 @@ class DnsMirrorGroupCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    context.l.dnsMirrorGroupHeader,
+                    getLocalText.s("From routing rules · ordered as in Routing"),
                     style: TextStyle(
                       fontSize: 11,
                       color: theme.colorScheme.onSurfaceVariant,
@@ -145,7 +145,7 @@ class DnsMirrorTile extends StatelessWidget {
             ? Icon(Icons.dns_outlined, size: 22, color: cs.onSurfaceVariant)
             : Switch(value: enabled, onChanged: onToggle),
         title: Text(
-          title.isNotEmpty ? title : context.l.dnsUnnamedRule,
+          title.isNotEmpty ? title : getLocalText.s("(unnamed rule)"),
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
@@ -225,7 +225,7 @@ class DnsRuleAspectsTile extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    title.isNotEmpty ? title : context.l.dnsUnnamedRule,
+                    title.isNotEmpty ? title : getLocalText.s("(unnamed rule)"),
                     style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w500),
                   ),
@@ -235,9 +235,9 @@ class DnsRuleAspectsTile extends StatelessWidget {
             ),
           ),
           if (serverRow != null)
-            _aspectRow(context, context.l.subServerTitle, serverRow!),
+            _aspectRow(context, getLocalText.s("Server"), serverRow!),
           if (forceIpv4Row != null)
-            _aspectRow(context, context.l.ruleEditForceIpv4, forceIpv4Row!),
+            _aspectRow(context, getLocalText.s("Force IPv4 (drop AAAA)"), forceIpv4Row!),
           const SizedBox(height: 4),
         ],
       ),
@@ -281,7 +281,7 @@ class DnsRuleAspectsTile extends StatelessWidget {
           ? null
           : IconButton(
               icon: Icon(Icons.close, size: 18, color: cs.error),
-              tooltip: context.l.commonRemove,
+              tooltip: getLocalText.s("Remove"),
               visualDensity: VisualDensity.compact,
               onPressed: row.onRemove,
             ),

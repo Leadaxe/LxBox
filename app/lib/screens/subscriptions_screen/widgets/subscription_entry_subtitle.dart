@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/server_list.dart';
-import '../../../services/l10n/l10n.dart';
 import '../../../services/subscription/input_helpers.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Строка под именем подписки. Для SubscriptionServers показываем:
 /// `{nodes} · 🔄 24h · 🕐 3h ago · (2 fails)`
@@ -22,27 +22,26 @@ Widget? buildSubscriptionEntrySubtitle(
   // SubscriptionServers — нодcount + ⚙ если есть detour-цепочки.
   // FolderServers (§234) — счётчик членов + сколько выключено.
   final isUser = entry.list is UserServer;
-  final l = context.l;
   String statusText;
   if (entry.list is FolderServers) {
     final folder = entry.list as FolderServers;
     final total = folder.members.length;
     final off = folder.disabledCount;
     statusText = total == 0
-        ? l.subEntryEmptyFolder
+        ? getLocalText.s("Empty folder")
         : off > 0
-            ? l.subEntryFolderServersOff(total, off)
-            : l.subFolderServersCount(total);
+            ? getLocalText.plural("%1\$d servers · %2\$d off", total, off)
+            : getLocalText.plural("%d servers", total);
   } else if (isUser) {
     final node = entry.list.nodes.isNotEmpty ? entry.list.nodes.first : null;
     statusText = node != null
-        ? l.subEntryProtocolServer(node.protocol.toUpperCase())
+        ? getLocalText.s("%s server", node.protocol.toUpperCase())
         : '';
   } else if (entry.status != null) {
-    statusText = entry.status!.render(l);
+    statusText = entry.status!.render();
   } else {
     statusText =
-        entry.nodeCount > 0 ? l.subEntryNodesCount(entry.nodeCount) : '';
+        entry.nodeCount > 0 ? getLocalText.plural("%d nodes", entry.nodeCount) : '';
   }
   if (statusText.isNotEmpty) {
     parts.add(Text(statusText, style: textStyle));
@@ -55,7 +54,7 @@ Widget? buildSubscriptionEntrySubtitle(
         isFileSubscription((entry.list as SubscriptionServers).url);
     if (isFile) {
       parts.add(Icon(Icons.insert_drive_file_outlined, size: 12, color: muted));
-      parts.add(Text(l.subEntryFileBadge, style: textStyle));
+      parts.add(Text(getLocalText.s("file"), style: textStyle));
     } else {
       final intervalH = entry.updateIntervalHours;
       if (intervalH > 0) {
@@ -70,17 +69,17 @@ Widget? buildSubscriptionEntrySubtitle(
     final last = entry.lastUpdated;
     if (last != null) {
       parts.add(Icon(Icons.schedule, size: 12, color: muted));
-      parts.add(Text(SubscriptionEntry.formatAgo(l, last), style: textStyle));
+      parts.add(Text(SubscriptionEntry.formatAgo(last), style: textStyle));
     } else if (entry.lastUpdateStatus == UpdateStatus.never) {
       parts.add(Icon(Icons.schedule, size: 12, color: muted));
-      parts.add(Text(l.subEntryNever, style: textStyle));
+      parts.add(Text(getLocalText.s("never"), style: textStyle));
     }
 
     final fails = entry.consecutiveFails;
     if (fails > 0) {
       final failColor = entry.enabled ? scheme.error : muted;
       parts.add(Text(
-        l.subEntryFails(fails),
+        getLocalText.plural("(%d fails)", fails),
         style: TextStyle(fontSize: 12, color: failColor),
       ));
     }

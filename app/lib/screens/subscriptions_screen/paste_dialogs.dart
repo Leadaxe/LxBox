@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../services/l10n/l10n.dart';
 import 'clipboard_analysis.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Dialog «Unknown format» — показывает обрезанный текст clipboard'а.
 /// Поведение 1:1 с прежней inline-версией в `_pasteFromClipboard`.
@@ -9,7 +9,7 @@ void showUnknownFormatDialog(BuildContext context, String text) {
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text(ctx.l.subAddFromClipboardTitle),
+      title: Text(getLocalText.s("Add from clipboard")),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -18,7 +18,7 @@ void showUnknownFormatDialog(BuildContext context, String text) {
             children: [
               Icon(Icons.warning_amber, color: Theme.of(context).colorScheme.error),
               const SizedBox(width: 8),
-              Text(ctx.l.subUnknownFormat,
+              Text(getLocalText.s("Unknown format"),
                   style: const TextStyle(fontWeight: FontWeight.bold)),
             ],
           ),
@@ -33,7 +33,7 @@ void showUnknownFormatDialog(BuildContext context, String text) {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(ctx), child: Text(ctx.l.commonOk)),
+            onPressed: () => Navigator.pop(ctx), child: Text(getLocalText.s("OK"))),
       ],
     ),
   );
@@ -46,12 +46,12 @@ Future<bool?> showConfirmAddDialog(
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text(ctx.l.subAddFromClipboardTitle),
+      title: Text(getLocalText.s("Add from clipboard")),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(ctx.l.subDetected(analysis.title),
+          Text(getLocalText.s("Detected: %s", analysis.title),
               style: const TextStyle(fontWeight: FontWeight.bold)),
           if (analysis.subtitle.isNotEmpty) ...[
             const SizedBox(height: 4),
@@ -62,10 +62,10 @@ Future<bool?> showConfirmAddDialog(
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(ctx.l.commonCancel)),
+            child: Text(getLocalText.s("Cancel"))),
         FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(ctx.l.commonAdd)),
+            child: Text(getLocalText.s("Add"))),
       ],
     ),
   );

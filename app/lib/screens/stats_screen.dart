@@ -6,7 +6,6 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/config_node.dart';
 import '../services/format_utils.dart';
-import '../services/l10n/l10n.dart';
 import '../services/traffic_profiler.dart';
 import '../widgets/banner_palette.dart';
 import '../vpn/box_vpn_client.dart';
@@ -16,6 +15,7 @@ import 'live_events_tab.dart';
 import 'per_app_trace_tab.dart';
 import 'stats_screen/overview_models.dart';
 import 'stats_screen/overview_tab.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §044/§048: enum для start-tab выбора в StatsScreen. Передаётся при
 /// `Navigator.push(StatsScreen(initialTab: StatsTab.perApp))`.
@@ -210,7 +210,7 @@ class _StatsScreenState extends State<StatsScreen> {
       child: Builder(
         builder: (innerCtx) => Scaffold(
           appBar: AppBar(
-            title: Text(context.l.homeDrawerStats),
+            title: Text(getLocalText.s("Statistics")),
             actions: [
               // §069 — warning если bypass реально applied в текущей VPN-сессии
               // (runtime, не persisted). Видимо на всех 4 tabs.
@@ -243,8 +243,8 @@ class _StatsScreenState extends State<StatsScreen> {
               tabs: [
                 Tab(
                     icon: const Icon(Icons.dashboard_outlined),
-                    text: context.l.statsTabStats),
-                Tab(icon: const Icon(Icons.link), text: context.l.statsTabConns),
+                    text: getLocalText.s("Stats")),
+                Tab(icon: const Icon(Icons.link), text: getLocalText.s("Conns")),
                 Tab(
                   icon: const Icon(Icons.travel_explore),
                   child: AnimatedBuilder(
@@ -253,7 +253,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(context.l.statsTabApp),
+                        Text(getLocalText.s(1, "App")),
                         if (TrafficProfiler.I.isRecording) ...[
                           const SizedBox(width: 4),
                           Icon(
@@ -274,7 +274,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(context.l.statsTabProfiler),
+                        Text(getLocalText.s("Profiler")),
                         if (TrafficProfiler.I.unattributedBannerActive) ...[
                           const SizedBox(width: 4),
                           Icon(

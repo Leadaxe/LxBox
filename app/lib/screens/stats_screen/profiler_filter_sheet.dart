@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../services/app_info_cache.dart';
-import '../../services/l10n/l10n.dart';
 import '../../services/traffic_profiler.dart';
 import '../per_app_trace_tab/app_multi_picker.dart';
 import 'profiler_filter.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §044/new-profiler — фильтр-окно профайлера. Bottom-sheet, паттерн
 /// `home/widgets/filter_panel.dart`: TabBar с amber-точкой на табе с активным
@@ -184,7 +184,7 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
           padding: const EdgeInsets.only(bottom: 4),
           child: OutlinedButton.icon(
             icon: const Icon(Icons.add, size: 18),
-            label: Text(context.l.statsFilterAddAppFull),
+            label: Text(getLocalText.s("Add app from full list")),
             onPressed: _openPicker,
           ),
         ),
@@ -198,15 +198,15 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
             contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             secondary: Icon(Icons.help_outline,
                 color: Theme.of(context).colorScheme.onSurfaceVariant),
-            title: Text(context.l.statsFilterUnattributed,
+            title: Text(getLocalText.s("Unattributed (no owner)"),
                 style: const TextStyle(fontSize: 13)),
-            subtitle: Text(context.l.statsFilterUnattributedSub,
+            subtitle: Text(getLocalText.s("Events with no owning app"),
                 style: const TextStyle(fontSize: 10)),
           ),
         if (all.isEmpty && !widget.hasUnattributed)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Text(context.l.statsFilterNoApps,
+            child: Text(getLocalText.s("No apps seen yet — traffic will populate this list."),
                 style: const TextStyle(fontSize: 12)),
           ),
         for (final pkg in all)
@@ -239,7 +239,7 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
     if (all.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Text(context.l.statsFilterNoRules,
+        child: Text(getLocalText.s("No rules seen yet — traffic will populate this list."),
             style: const TextStyle(fontSize: 12)),
       );
     }
@@ -251,7 +251,7 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
         children: [
           for (final r in all)
             FilterChip(
-              label: Text(r.isEmpty ? context.l.statsFilterFinalChip : r),
+              label: Text(r.isEmpty ? getLocalText.s("final") : r),
               selected: f.hasRule(r),
               onSelected: (v) => f.toggleRule(r, v),
             ),
@@ -272,7 +272,7 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
     if (all.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Text(context.l.statsFilterNoOutbounds,
+        child: Text(getLocalText.s("No outbounds seen yet — traffic will populate this list."),
             style: const TextStyle(fontSize: 12)),
       );
     }
@@ -359,14 +359,14 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
               Row(
                 children: [
                   Expanded(
-                    child: Text(context.l.statsFilterTitle,
+                    child: Text(getLocalText.s("Filter events"),
                         style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
                   if (f.isActive)
                     TextButton(
                       onPressed: f.clearAll,
-                      child: Text(context.l.statsFilterResetAll),
+                      child: Text(getLocalText.s("Reset all")),
                     ),
                 ],
               ),
@@ -380,13 +380,13 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
                   textInputAction: TextInputAction.search,
                   decoration: InputDecoration(
                     isDense: true,
-                    hintText: context.l.statsFilterSearchHint,
+                    hintText: getLocalText.s("Search domain / IP / app"),
                     prefixIcon: const Icon(Icons.search, size: 18),
                     suffixIcon: _searchCtrl.text.isEmpty
                         ? null
                         : IconButton(
                             icon: const Icon(Icons.close, size: 18),
-                            tooltip: context.l.commonClear,
+                            tooltip: getLocalText.s("Clear"),
                             onPressed: () {
                               _searchCtrl.clear();
                               f.search = '';
@@ -451,7 +451,7 @@ class _PickerSheetState extends State<_PickerSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text(context.l.statsFilterAddAppTitle,
+              child: Text(getLocalText.s("Add app to filter"),
                   style: const TextStyle(
                       fontSize: 16, fontWeight: FontWeight.w600)),
             ),

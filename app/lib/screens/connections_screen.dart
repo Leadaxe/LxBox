@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../services/app_info_cache.dart';
 import '../services/format_utils.dart';
-import '../services/l10n/l10n.dart';
 import '../services/rule_name_resolver.dart';
 import '../vpn/cc_channel.dart';
 import 'connections_screen/connection_detail_sheet.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §153 — «однобокое» (зависшее) соединение: TCP, прожившее ≥
 /// [oneWayMinAge], где трафик идёт строго в одну сторону (up>0/down=0 или
@@ -180,15 +180,15 @@ class _ConnectionsViewState extends State<ConnectionsView> {
         SnackBar(
           duration: const Duration(seconds: 2),
           content: Text(liveNow.isEmpty
-              ? context.l.statsConnNoneToClose
-              : context.l.statsConnClosedCount(liveNow.length)),
+              ? getLocalText.s("No active connections to close")
+              : getLocalText.plural("Closed %d connections", liveNow.length)),
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 2),
-          content: Text(context.l.statsConnCloseFailed),
+          content: Text(getLocalText.s("Failed to close connections (tunnel down?)")),
         ),
       );
     }
@@ -211,8 +211,8 @@ class _ConnectionsViewState extends State<ConnectionsView> {
               // Toggle: 30s-история (закрытые серым ~30с) ↔ Accumulate (навсегда).
               IconButton(
                 tooltip: _accumulate
-                    ? context.l.statsConnKeepAllTooltip
-                    : context.l.statsConnKeep30sTooltip,
+                    ? getLocalText.s("Keeping all closed (tap for 30s window)")
+                    : getLocalText.s("Closed kept 30s (tap to keep all)"),
                 icon: Icon(
                   _accumulate ? Icons.history_toggle_off : Icons.history,
                 ),
@@ -233,17 +233,15 @@ class _ConnectionsViewState extends State<ConnectionsView> {
               // в _closedIds), всего = весь набор (живые + закрытая история).
               // Снимает путаницу разных счётчиков между экранами.
               Text(
-                context.l.statsConnActiveTotal(
-                    list
+                getLocalText.s("%1\$d active / %2\$d total", list
                         .where((c) =>
                             c.closedAt == 0 && !_closedIds.contains(c.id))
-                        .length,
-                    list.length),
+                        .length, list.length),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
               if (list.isNotEmpty)
                 IconButton(
-                  tooltip: context.l.statsConnCloseAll,
+                  tooltip: getLocalText.s("Close all"),
                   icon: const Icon(Icons.close_rounded),
                   onPressed: _closeAll,
                 ),
@@ -254,7 +252,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : list.isEmpty
-                  ? Center(child: Text(context.l.statsNoActiveConnections))
+                  ? Center(child: Text(getLocalText.s("No active connections")))
                   : ListView.separated(
                       itemCount: list.length,
                       separatorBuilder: (_, _) => const Divider(height: 1),
@@ -346,7 +344,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                       child: IconButton(
                         icon: const Icon(Icons.close, size: 14),
                         padding: EdgeInsets.zero,
-                        tooltip: context.l.commonClose,
+                        tooltip: getLocalText.s("Close"),
                         onPressed: (closed || id.isEmpty)
                             ? null
                             : () => _closeConnection(id),
@@ -371,7 +369,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                       ),
                       if (closed) ...[
                         const SizedBox(width: 6),
-                        Text(context.l.statsConnClosedBadge,
+                        Text(getLocalText.s("closed"),
                             style: TextStyle(
                                 fontSize: 10, color: cs.onSurfaceVariant)),
                       ],

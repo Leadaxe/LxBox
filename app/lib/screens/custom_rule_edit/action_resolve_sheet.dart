@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../models/custom_rule.dart';
-import '../../services/l10n/l10n.dart';
 import '../../widgets/outbound_picker.dart';
 import 'edit_controller.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §247 — модальное окно «Action & Resolve» (за ⚙ рядом с Action-пикером).
 ///
@@ -202,11 +202,11 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
             ),
           ),
           const SizedBox(height: 12),
-          Text(context.l.ruleEditActionResolveTitle,
+          Text(getLocalText.s("Action & Resolve"),
               style: theme.textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            context.l.ruleEditActionResolveSub,
+            getLocalText.s("How this rule directs and resolves matched traffic."),
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: cs.onSurfaceVariant),
           ),
@@ -223,8 +223,8 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   value: false,
-                  title: Text(context.l.ruleEditRouteToOutbound),
-                  subtitle: Text(context.l.ruleEditRouteToOutboundSub),
+                  title: Text(getLocalText.s("Route to outbound")),
+                  subtitle: Text(getLocalText.s("Send matched traffic to a channel.")),
                 ),
                 if (!_resolveOnly)
                   Padding(
@@ -246,8 +246,8 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
                           value: _resolveFirst,
                           onChanged: (v) =>
                               setState(() => _resolveFirst = v ?? false),
-                          title: Text(context.l.ruleEditResolveFirst),
-                          subtitle: Text(context.l.ruleEditResolveFirstSub),
+                          title: Text(getLocalText.s("Resolve first")),
+                          subtitle: Text(getLocalText.s("Resolve the domain before routing — force an address family (e.g. IPv4 only).")),
                         ),
                       ],
                     ),
@@ -259,8 +259,8 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   value: true,
-                  title: Text(context.l.ruleEditResolveOnly),
-                  subtitle: Text(context.l.ruleEditResolveOnlySub),
+                  title: Text(getLocalText.s("Resolve only")),
+                  subtitle: Text(getLocalText.s("Resolve, then fall through to the next rule.")),
                 ),
                 if (_resolveOnly)
                   Padding(
@@ -280,7 +280,7 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              context.l.ruleEditResolveOnlyWarning,
+                              getLocalText.s("Advanced: this rule resolves but does not route. If no later rule matches, traffic goes to Final."),
                               style: theme.textTheme.bodySmall,
                             ),
                           ),
@@ -295,19 +295,19 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
           // ─── Единая панель Resolve options ───────────────────────────
           if (_resolveActive) ...[
             const SizedBox(height: 8),
-            Text(context.l.ruleEditResolveOptions,
+            Text(getLocalText.s("Resolve options"),
                 style: theme.textTheme.titleSmall),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               initialValue: _strategies.contains(_strategy) ? _strategy : '',
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
-                labelText: context.l.ruleEditStrategyLabel,
+                labelText: getLocalText.s("Strategy"),
                 isDense: true,
               ),
               items: [
                 DropdownMenuItem(
-                    value: '', child: Text(context.l.ruleEditStrategyInherit)),
+                    value: '', child: Text(getLocalText.s("(inherit DNS strategy)"))),
                 const DropdownMenuItem(
                     // l10n-exempt: wire strategy value shown as-is
                     value: 'prefer_ipv4', child: Text('prefer_ipv4')),
@@ -328,12 +328,12 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
               initialValue: _serverTag,
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
-                labelText: context.l.ruleEditDnsServerLabel,
+                labelText: getLocalText.s("DNS server"),
                 isDense: true,
               ),
               items: [
                 DropdownMenuItem(
-                    value: '', child: Text(context.l.ruleEditDnsServerAuto)),
+                    value: '', child: Text(getLocalText.s("(auto — route DNS)"))),
                 for (final tag in widget.controller.dnsServerTags)
                   DropdownMenuItem(value: tag, child: Text(tag)),
                 // Сохранённый tag, которого нет в текущем списке (сервер
@@ -343,14 +343,14 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
                     !widget.controller.dnsServerTags.contains(_serverTag))
                   DropdownMenuItem(
                       value: _serverTag,
-                      child: Text(context.l.ruleEditDnsServerMissing(_serverTag))),
+                      child: Text(getLocalText.s("%s (missing)", _serverTag))),
               ],
               onChanged: (v) => setState(() => _serverTag = v ?? ''),
             ),
             const SizedBox(height: 4),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
-              title: Text(context.l.ruleEditAdvancedDnsOptions,
+              title: Text(getLocalText.s("Advanced DNS options"),
                   style: theme.textTheme.titleSmall),
               children: [
                 SwitchListTile(
@@ -358,7 +358,7 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
                   contentPadding: EdgeInsets.zero,
                   value: _disableCache,
                   onChanged: (v) => setState(() => _disableCache = v),
-                  title: Text(context.l.ruleEditDisableCache),
+                  title: Text(getLocalText.s("Disable cache")),
                 ),
                 SwitchListTile(
                   dense: true,
@@ -366,7 +366,7 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
                   value: _disableOptimisticCache,
                   onChanged: (v) =>
                       setState(() => _disableOptimisticCache = v),
-                  title: Text(context.l.ruleEditDisableOptimisticCache),
+                  title: Text(getLocalText.s("Disable optimistic cache")),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -374,8 +374,8 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
-                    labelText: context.l.ruleEditRewriteTtlLabel,
-                    hintText: context.l.ruleEditRewriteTtlHint,
+                    labelText: getLocalText.s("Rewrite TTL"),
+                    hintText: getLocalText.s("seconds, empty = keep"),
                     isDense: true,
                     errorText: _ttlError,
                   ),
@@ -386,8 +386,8 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
                   controller: _timeoutCtrl,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
-                    labelText: context.l.ruleEditQueryTimeoutLabel,
-                    hintText: context.l.ruleEditQueryTimeoutHint,
+                    labelText: getLocalText.s("Query timeout"),
+                    hintText: getLocalText.s("e.g. 5s, empty = default"),
                     isDense: true,
                     errorText: _timeoutError,
                   ),
@@ -398,8 +398,8 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
                   controller: _subnetCtrl,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
-                    labelText: context.l.ruleEditClientSubnetLabel,
-                    hintText: context.l.ruleEditClientSubnetHint,
+                    labelText: getLocalText.s("Client subnet"),
+                    hintText: getLocalText.s("e.g. 1.2.3.0/24, empty = off"),
                     isDense: true,
                     errorText: _subnetError,
                   ),
@@ -412,7 +412,7 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
 
           // ─── Preview ────────────────────────────────────────────────
           const SizedBox(height: 12),
-          Text(context.l.ruleEditPreviewRouteRules,
+          Text(getLocalText.s("Preview (route.rules)"),
               style: theme.textTheme.titleSmall),
           const SizedBox(height: 6),
           Container(
@@ -435,12 +435,12 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
             children: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text(context.l.commonCancel),
+                child: Text(getLocalText.s("Cancel")),
               ),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: _hasErrors ? null : _done,
-                child: Text(context.l.commonDone),
+                child: Text(getLocalText.s("Done")),
               ),
             ],
           ),

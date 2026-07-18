@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/node_emoji.dart';
-import '../services/l10n/l10n.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §090 G2b — кнопка-пикер эмодзи. Открывает bottom-sheet с палитрой
 /// [kEmojiPalette]; тап по эмодзи зовёт [onPick]. Caller сам вставляет
@@ -16,7 +16,7 @@ class EmojiPickerButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       icon: const Icon(Icons.add_reaction_outlined),
-      tooltip: context.l.commonInsertEmoji,
+      tooltip: getLocalText.s("Insert emoji"),
       onPressed: () async {
         final picked = await showModalBottomSheet<String>(
           context: context,

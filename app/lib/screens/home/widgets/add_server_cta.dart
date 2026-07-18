@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../services/subscription/auto_updater.dart';
-import '../../../services/l10n/l10n.dart';
 import '../../subscriptions_screen.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Гайд пустого состояния главного экрана (нет конфига/нод): заголовок, FAB
 /// «Add a server» → [SubscriptionsScreen] и ссылка restore-from-backup
@@ -37,14 +37,14 @@ class AddServerCta extends StatelessWidget {
                 size: 64, color: cs.onSurfaceVariant.withAlpha(140)),
             const SizedBox(height: 20),
             Text(
-              context.l.homeAddServerTitle,
+              getLocalText.s("Add a server"),
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
             ),
             const SizedBox(height: 8),
             Text(
-              context.l.homeAddServerSubtitle,
+              getLocalText.s("Connect a subscription or add a node manually to get started."),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: cs.onSurfaceVariant,
@@ -64,7 +64,7 @@ class AddServerCta extends StatelessWidget {
                     ),
                   ),
                 ),
-                tooltip: context.l.homeAddServerTitle,
+                tooltip: getLocalText.s("Add a server"),
                 child: const Icon(Icons.add, size: 32),
               ),
             ),
@@ -72,7 +72,7 @@ class AddServerCta extends StatelessWidget {
             TextButton.icon(
               onPressed: onRestoreFromBackup,
               icon: const Icon(Icons.restore, size: 18),
-              label: Text(context.l.homeRestoreFromBackup),
+              label: Text(getLocalText.s("Restore from backup")),
               style: TextButton.styleFrom(
                 foregroundColor: cs.onSurfaceVariant,
               ),

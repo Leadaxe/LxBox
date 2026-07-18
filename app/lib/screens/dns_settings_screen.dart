@@ -9,7 +9,6 @@ import '../models/parser_config.dart';
 import '../services/builder/post_steps.dart';
 import '../services/builder/preset_expand.dart';
 import '../services/builder/rule_set_registry.dart';
-import '../services/l10n/l10n.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
 import '../services/preset_on_change.dart';
@@ -26,6 +25,7 @@ import 'dns_settings_screen/widgets/local_resolver_warning_banner.dart';
 import 'dns_settings_screen/widgets/merged_server_tile.dart';
 import 'dns_settings_screen/widgets/resolver_picker.dart';
 import 'lazy_persist_mixin.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// DNS Settings (§014, §061 dns-rules-refactor, бывший feature §041).
 ///
@@ -383,7 +383,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         'tag': 'dns_new',
         // §279 seed-time-локализация: метка резолвится через активную локаль
         // в момент создания (дальше — user data, ретроактивно не мигрируется).
-        'description': context.l.dnsMyDnsSeedName,
+        'description': getLocalText.s("My DNS"),
         'body': <String, dynamic>{'type': 'udp'},
       },
       outboundOptions: _outboundOptions,
@@ -583,8 +583,8 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                   enabled: cr.dns!.enabled,
                   onToggle: (v) => _toggleRuleDns(cr, v),
                   note: [
-                    if (cr is CustomRuleSrs) context.l.dnsNoteSrsDomainsOnly,
-                    if (missing) context.l.dnsNoteServerMissing,
+                    if (cr is CustomRuleSrs) getLocalText.s("matches only domains in the rule-set"),
+                    if (missing) getLocalText.s("server missing"),
                   ].join(' · '),
                 )
               : null,
@@ -661,7 +661,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: Text(context.l.homeDrawerDns)),
+        appBar: AppBar(title: Text(getLocalText.s("DNS Settings"))),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -676,14 +676,14 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     final rows = _ruleDisplayRows;
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.l.homeDrawerDns)),
+      appBar: AppBar(title: Text(getLocalText.s("DNS Settings"))),
       body: ListView(
         padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 24),
         children: [
           // --- Servers ---
           Row(
             children: [
-              Text(context.l.dnsServersHeader,
+              Text(getLocalText.s("DNS Servers"),
                   style: theme.textTheme.titleMedium),
               const Spacer(),
               IconButton(icon: const Icon(Icons.add), onPressed: _addServer),
@@ -703,7 +703,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // --- Strategy ---
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text(context.l.dnsStrategyLabel),
+            title: Text(getLocalText.s("Strategy")),
             trailing: DropdownButton<String>(
               value: ['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'].contains(_strategy)
                   ? _strategy : 'ipv4_only',
@@ -722,12 +722,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // --- DNS Rules (§061 dns-rules-refactor) ---
           Row(
             children: [
-              Text(context.l.dnsRulesHeader, style: theme.textTheme.titleMedium),
+              Text(getLocalText.s("DNS Rules"), style: theme.textTheme.titleMedium),
               const Spacer(),
               TextButton.icon(
                 onPressed: _addUserRule,
                 icon: const Icon(Icons.add, size: 18),
-                label: Text(context.l.dnsAddUserRule),
+                label: Text(getLocalText.s("Add user rule")),
               ),
             ],
           ),
@@ -736,7 +736,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
-                context.l.dnsNoRulesNote,
+                getLocalText.s("No DNS rules. Add user rules manually, or enable presets / template defaults."),
                 style: const TextStyle(color: Colors.grey, fontSize: 13),
               ),
             )
@@ -790,12 +790,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // вызывается через protected JNI path для apps. Encrypted options
           // (`google_doh`, `*_dot`) рекомендуем для privacy.
           ResolverPicker(
-            title: context.l.dnsFinalTitle,
-            subtitle: context.l.dnsFinalSubtitle,
+            title: getLocalText.s("DNS Final"),
+            subtitle: getLocalText.s("For apps · default fallback when no DNS rule matches"),
             value: _dnsFinal,
             serverTags: serverTags,
             onChanged: (v) => setState(() { _dnsFinal = v; _markDirty(); }),
-            tooltip: context.l.dnsFinalTooltip,
+            tooltip: getLocalText.s("Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private."),
             warnIfLocal: false,
           ),
 
@@ -807,12 +807,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // → §047 deterioration через несколько часов uptime. Показываем
           // жёлтый ⚠ если выбран local_dns_resolver.
           ResolverPicker(
-            title: context.l.dnsDefaultResolverTitle,
-            subtitle: context.l.dnsDefaultResolverSubtitle,
+            title: getLocalText.s("Default Domain Resolver"),
+            subtitle: getLocalText.s("For routing · resolves hostnames inside sing-box (outbound endpoints, routing rules)"),
             value: _defaultResolver,
             serverTags: serverTags,
             onChanged: (v) => setState(() { _defaultResolver = v; _markDirty(); }),
-            tooltip: context.l.dnsDefaultResolverTooltip,
+            tooltip: getLocalText.s("Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."),
             warnIfLocal: true,
           ),
           if (_defaultResolver == 'local_dns_resolver')
@@ -831,8 +831,8 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           ListTile(
             leading: Icon(Icons.cleaning_services_outlined,
                 color: Theme.of(context).colorScheme.error),
-            title: Text(context.l.dnsClearCacheTitle),
-            subtitle: Text(context.l.dnsClearCacheSubtitle),
+            title: Text(getLocalText.s("Clear DNS cache")),
+            subtitle: Text(getLocalText.s("Flush FakeIP allocations and cached DNS responses. Reloads the VPN if running.")),
             onTap: _confirmClearDnsCache,
           ),
         ],
@@ -848,20 +848,20 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.l.dnsClearCacheConfirmTitle),
+        title: Text(getLocalText.s("Clear DNS cache?")),
         content: Text(
-          ctx.l.dnsClearCacheBody(running
-              ? ctx.l.dnsClearCacheReloadNote
-              : ctx.l.dnsClearCacheNextConnectNote),
+          getLocalText.s("This deletes the DNS cache (FakeIP allocations and cached responses).\n\n%s", running
+              ? getLocalText.s("The VPN will briefly reload to apply.")
+              : getLocalText.s("It will be rebuilt clean on the next connect.")),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(ctx.l.commonCancel),
+            child: Text(getLocalText.s("Cancel")),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(ctx.l.commonClear),
+            child: Text(getLocalText.s("Clear")),
           ),
         ],
       ),
@@ -874,9 +874,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     messenger.showSnackBar(SnackBar(
       content: Text(ok
           ? (running
-              ? context.l.dnsCacheClearedReloading
-              : context.l.dnsCacheCleared)
-          : context.l.dnsCacheClearFailed),
+              ? getLocalText.s("DNS cache cleared — reloading")
+              : getLocalText.s("DNS cache cleared"))
+          : getLocalText.s("Could not clear DNS cache")),
     ));
   }
 

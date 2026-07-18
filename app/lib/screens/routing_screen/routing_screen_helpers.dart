@@ -2,8 +2,8 @@ import '../../config/consts.dart' show kBlockOutboundTag, kDirectOutboundTag;
 import '../../models/channel.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
-import '../../services/l10n/l10n.dart';
 import '../../services/rule_display_names.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Remote `rule_set` пресета (type=remote + url).
 class PresetRemoteRuleSet {
@@ -157,10 +157,9 @@ class RoutingHelpers {
     return kDirectOutboundTag;
   }
 
-  static String ruleSubtitle(
-      AppLocalizations l, CustomRule rule, SelectableRule? preset) {
+  static String ruleSubtitle(CustomRule rule, SelectableRule? preset) {
     if (rule.kind == CustomRuleKind.preset) {
-      if (preset == null) return l.routingRulePresetMissing;
+      if (preset == null) return getLocalText.s("Preset not found — tap to fix");
       // §045: только non-default vars; preset.label дублирует title (rule.name)
       final extras = <String>[];
       for (final v in preset.vars) {
@@ -175,13 +174,13 @@ class RoutingHelpers {
         if (value.isEmpty || value == v.defaultValue) continue;
         extras.add('${v.name}: $value');
       }
-      if (extras.isEmpty) return l.routingRuleTapToEdit;
-      return l.routingRuleSummaryTapToEdit(extras.take(2).join(' · '));
+      if (extras.isEmpty) return getLocalText.s("Tap to edit");
+      return getLocalText.s("%s — tap to edit", extras.take(2).join(' · '));
     }
-    final summary = rule.summary(l);
+    final summary = rule.summary();
     return summary.isEmpty
-        ? l.routingRuleTapToAddFields
-        : l.routingRuleSummaryTapToEdit(summary);
+        ? getLocalText.s("Tap to add match fields")
+        : getLocalText.s("%s — tap to edit", summary);
   }
 
   /// §279 (§3.5.1) — дедуп по DISPLAY-резолвнутым именам: live-label'ы

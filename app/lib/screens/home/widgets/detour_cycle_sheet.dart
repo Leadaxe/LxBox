@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/validation.dart';
-import '../../../services/l10n/l10n.dart';
 import '../../../services/builder/validator.dart' show kMaxDetourCulprits;
+import '../../../services/l10n/locale_controller.dart';
 
 /// §254/§255 — bottom sheet «Routing loop — VPN not started».
 ///
@@ -63,7 +63,7 @@ class _DetourCycleSheet extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    context.l.homeDetourLoopTitle,
+                    getLocalText.s("Routing loop — VPN not started"),
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600),
                   ),
@@ -90,7 +90,7 @@ class _DetourCycleSheet extends StatelessWidget {
                     // culprit-нод нет, показываем message как есть.
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(issue.message(context.l),
+                      child: Text(issue.message(),
                           style: const TextStyle(fontSize: 13)),
                     )
                   else
@@ -105,7 +105,7 @@ class _DetourCycleSheet extends StatelessWidget {
                     tilePadding: EdgeInsets.zero,
                     childrenPadding: const EdgeInsets.only(bottom: 12),
                     shape: const Border(),
-                    title: Text(context.l.homeDetourLoopShow,
+                    title: Text(getLocalText.s("Show loop"),
                         style: TextStyle(
                             fontSize: 13, color: cs.onSurfaceVariant)),
                     children: [
@@ -123,7 +123,7 @@ class _DetourCycleSheet extends StatelessWidget {
                 if (maybeMore) ...[
                   const SizedBox(height: 4),
                   Text(
-                    context.l.homeDetourLoopMore,
+                    getLocalText.s("More loops may remain — fix these and try again."),
                     style: TextStyle(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
@@ -142,10 +142,10 @@ class _DetourCycleSheet extends StatelessWidget {
     if (culpritCount == 0) {
       // Кольцо только из групп (selector/urltest ссылаются друг на друга) —
       // виновных нод нет, править состав групп.
-      return context.l.homeDetourLoopLeadGroups;
+      return getLocalText.s("A routing loop was found between groups. Review the loop below and break it, then start again.");
     }
-    if (culpritCount == 1) return context.l.homeDetourLoopLeadOne;
-    return context.l.homeDetourLoopLeadMany(culpritCount);
+    if (culpritCount == 1) return getLocalText.s("One node routes traffic back into its own chain. Tap it to open its source, change or remove its detour, then start again.");
+    return getLocalText.plural("%d nodes route traffic back into their own chain. Tap a node to open its source, change or remove its detour, then start again.", culpritCount);
   }
 }
 
@@ -187,7 +187,7 @@ class _CulpritTile extends StatelessWidget {
                           style: const TextStyle(
                               fontSize: 14, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text(context.l.homeDetourLoopEdge(detour),
+                      Text(getLocalText.s("detour → %s", detour),
                           style: TextStyle(
                               fontSize: 12,
                               fontFamily: 'monospace',

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../screens/custom_rule_edit/validators.dart';
-import '../services/l10n/l10n.dart';
 import 'wifi_entry.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §053 Stage 1 — extract «Manual add Wi-Fi» dialog из
 /// `custom_rule_edit_screen.dart`. Self-contained, возвращает либо
@@ -22,7 +22,7 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setDlgState) => AlertDialog(
-        title: Text(ctx.l.routingWifiAddTitle),
+        title: Text(getLocalText.s("Add Wi-Fi network")),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -31,7 +31,7 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
               controller: ssidCtrl,
               autofocus: true,
               decoration: InputDecoration(
-                labelText: ctx.l.routingWifiSsidLabel,
+                labelText: getLocalText.s("SSID"),
                 // l10n-exempt: пример SSID, не переводится
                 hintText: 'lexRouter',
                 errorText: ssidError,
@@ -43,7 +43,7 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
             TextField(
               controller: bssidCtrl,
               decoration: InputDecoration(
-                labelText: ctx.l.routingWifiBssidLabel,
+                labelText: getLocalText.s("BSSID (optional)"),
                 // l10n-exempt: пример MAC-адреса, не переводится
                 hintText: '38:2c:4a:cf:6d:5c',
                 // l10n-exempt: маска формата, одинакова во всех локалях
@@ -59,7 +59,7 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(null),
-            child: Text(ctx.l.commonCancel),
+            child: Text(getLocalText.s("Cancel")),
           ),
           FilledButton(
             onPressed: () {
@@ -78,7 +78,7 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
               }
               Navigator.of(ctx).pop(WifiEntry(ssid, bssid));
             },
-            child: Text(ctx.l.commonAdd),
+            child: Text(getLocalText.s("Add")),
           ),
         ],
       ),

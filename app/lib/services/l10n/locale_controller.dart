@@ -15,7 +15,6 @@ import '../rule_name_resolver.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
 import 'get_local_text.dart';
-import 'l10n.dart';
 import 'plural_resolver.dart';
 
 /// §285 — глобальный доступ к natural-key локализатору (аналог `L10n.current`,
@@ -60,7 +59,6 @@ class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
     setting = stored;
     final loc = effective;
     _lastApplied = loc;
-    L10n.current = lookupAppLocalizations(loc);
     // §279 Phase 5 — intl-форматтеры дат (format_utils) берут локаль отсюда.
     Intl.defaultLocale = loc.toLanguageTag();
   }
@@ -95,12 +93,11 @@ class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _applyLocale(Locale loc) async {
     _lastApplied = loc;
-    L10n.current = lookupAppLocalizations(loc);
     // §279 Phase 5 — intl-форматтеры дат (format_utils) берут локаль отсюда.
     Intl.defaultLocale = loc.toLanguageTag();
     // §279 — прогрев шаблона/зеркал best-effort: его сбой (или зависание
-    // загрузки ассета) НЕ должен блокировать переключение языка. ARB-строки
-    // (весь UI-chrome) уже переключены выше через L10n.current + rebuild ниже;
+    // загрузки ассета) НЕ должен блокировать переключение языка. getLocalText
+    // словарь переключается ниже (_buildGetLocalText) + rebuild MaterialApp;
     // шаблонные метки в худшем случае догрузятся при следующем чтении кэша.
     try {
       // §285 — natural-key словарь новой локали. Сбой (нет файла / битый JSON)

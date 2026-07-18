@@ -3,7 +3,8 @@
 /// Fatal → UI отказывается запускать VPN. Warn → debug log.
 library;
 
-import '../services/l10n/l10n.dart' show AppLocalizations;
+import '../services/l10n/get_local_text.dart';
+import '../services/l10n/locale_controller.dart';
 
 enum Severity { fatal, warn }
 
@@ -11,9 +12,17 @@ sealed class ValidationIssue {
   const ValidationIssue();
   Severity get severity;
 
-  /// §279 — рендер в момент показа (UI — `message(context.l)`, логи —
-  /// `renderEn()` из ui_msg.dart). Теги/поля — wire-значения, не переводятся.
-  String message(AppLocalizations l);
+  /// §285 — тело рендера подкласса. [t] — локализатор: активная локаль для
+  /// [message], пиненный английский [GetLocalText.en] для [renderEn].
+  /// Публичный — переиспользуется композицией из ui_msg.dart (пофайловая
+  /// приватность Dart). Теги/поля — wire-значения, не переводятся.
+  String messageWith(GetLocalText t);
+
+  /// §285 — рендер в момент показа (активная локаль через global getLocalText).
+  String message() => messageWith(getLocalText);
+
+  /// Machine-рендер (AppLog) — пиненный английский, независимо от локали.
+  String renderEn() => messageWith(GetLocalText.en);
 
   /// Поля данных подкласса — равенство/hashCode по данным, не по строке
   /// (§279: строка locale-зависима).
@@ -53,7 +62,7 @@ final class DanglingOutboundRef extends ValidationIssue {
   List<Object?> get props => [rule, tag];
 
   @override
-  String message(AppLocalizations l) => l.warnDanglingOutboundRef(rule, tag);
+  String messageWith(GetLocalText t) => t.s("Rule \"%1\$s\" references missing outbound \"%2\$s\".", rule, tag);
 }
 
 /// §084 H1 — outbound с `detour`, ссылающимся на несуществующий tag.
@@ -72,7 +81,7 @@ final class DanglingDetourRef extends ValidationIssue {
   List<Object?> get props => [owner, tag];
 
   @override
-  String message(AppLocalizations l) => l.warnDanglingDetourRef(owner, tag);
+  String messageWith(GetLocalText t) => t.s("Outbound \"%1\$s\" detour references missing outbound \"%2\$s\".", owner, tag);
 }
 
 /// §121 — `dns.final` или `route.default_domain_resolver` ссылается на
@@ -91,7 +100,7 @@ final class DanglingDnsServerRef extends ValidationIssue {
   List<Object?> get props => [field, tag];
 
   @override
-  String message(AppLocalizations l) => l.warnDanglingDnsServerRef(field, tag);
+  String messageWith(GetLocalText t) => t.s("%1\$s references missing DNS server \"%2\$s\".", field, tag);
 }
 
 /// §141 P1.8a / §254 — цикл в detour-графе (включая self-reference
@@ -127,16 +136,16 @@ final class DetourCycle extends ValidationIssue {
       ];
 
   @override
-  String message(AppLocalizations l) {
+  String messageWith(GetLocalText t) {
     if (culprits.isEmpty) {
-      return l.warnDetourCycleGroups('${cycle.join(" → ")} → ${cycle.first}');
+      return t.s("Routing loop between groups: %s — fix group membership to start the VPN.", '${cycle.join(" → ")} → ${cycle.first}');
     }
     if (culprits.length == 1) {
       final c = culprits.single;
-      return l.warnDetourCycleSingle(c.tag, c.detour);
+      return t.s("Routing loop: \"%1\$s\" points back into \"%2\$s\" — change or remove its detour to start the VPN.", c.tag, c.detour);
     }
     final tags = culprits.map((c) => '"${c.tag}"').join(', ');
-    return l.warnDetourCycleMulti(culprits.length, tags);
+    return t.plural("Routing loop: %1\$d nodes point back into their own chain — change or remove their detours to start the VPN: %2\$s.", culprits.length, tags);
   }
 }
 
@@ -151,7 +160,7 @@ final class EmptyUrltestGroup extends ValidationIssue {
   List<Object?> get props => [tag];
 
   @override
-  String message(AppLocalizations l) => l.warnEmptyUrltestGroup(tag);
+  String messageWith(GetLocalText t) => t.s("URL-test group \"%s\" has no outbounds.", tag);
 }
 
 final class InvalidDefault extends ValidationIssue {
@@ -166,7 +175,7 @@ final class InvalidDefault extends ValidationIssue {
   List<Object?> get props => [group, tag];
 
   @override
-  String message(AppLocalizations l) => l.warnInvalidDefault(group, tag);
+  String messageWith(GetLocalText t) => t.s("Selector \"%1\$s\" default \"%2\$s\" is not in the options list.", group, tag);
 }
 
 class ValidationResult {

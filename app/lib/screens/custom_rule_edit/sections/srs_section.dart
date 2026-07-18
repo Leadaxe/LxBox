@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../services/l10n/l10n.dart';
 import '../validators.dart' as v;
 import '../widgets/section_header.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §053 Stage 2 — состояние ☁ кнопки рядом с SRS URL.
 /// Public (раньше был private `_SrsDownloadState`).
@@ -124,12 +124,12 @@ class _SrsSectionState extends State<SrsSection> {
             hintText: 'https://example.com/rules.srs',
             prefixIcon: IconButton(
               icon: const Icon(Icons.link, size: 18),
-              tooltip: context.l.subCopyUrl,
+              tooltip: getLocalText.s("Copy URL"),
               onPressed: () async {
                 final text = widget.urlCtrl.text.trim();
                 if (text.isEmpty) return;
                 final messenger = ScaffoldMessenger.of(context);
-                final copied = context.l.subUrlCopied;
+                final copied = getLocalText.s("URL copied");
                 await Clipboard.setData(ClipboardData(text: text));
                 if (!mounted) return;
                 messenger.showSnackBar(
@@ -146,7 +146,7 @@ class _SrsSectionState extends State<SrsSection> {
         const SizedBox(height: 4),
         TextButton.icon(
           icon: const Icon(Icons.content_paste, size: 14),
-          label: Text(context.l.commonPaste,
+          label: Text(getLocalText.s("Paste"),
               style: const TextStyle(fontSize: 12)),
           onPressed: () async {
             final data = await Clipboard.getData(Clipboard.kTextPlain);

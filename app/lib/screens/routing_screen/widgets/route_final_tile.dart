@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/l10n/l10n.dart';
 import '../routing_screen_helpers.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// ListTile с дропдауном "Default traffic" (route.final) на табе Channels.
 class RouteFinalTile extends StatelessWidget {
@@ -21,9 +21,9 @@ class RouteFinalTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      title: Text(context.l.routingDefaultTraffic),
+      title: Text(getLocalText.s("Default traffic")),
       subtitle: Text(
-        context.l.routingDefaultTrafficSub,
+        getLocalText.s("Fallback for unmatched traffic (route.final)"),
         style: const TextStyle(fontSize: 12),
       ),
       trailing: SizedBox(

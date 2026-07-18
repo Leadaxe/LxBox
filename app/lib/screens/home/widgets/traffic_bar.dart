@@ -4,9 +4,9 @@ import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
 import '../../../services/format_utils.dart';
-import '../../../services/l10n/l10n.dart';
 import '../../../services/traffic_profiler.dart';
 import '../../stats_screen.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Полоса трафика под статус-чипом на главном экране: ↑/↓ скорость, число
 /// активных соединений, recording-индикаторы профайлера (§044) и uptime.
@@ -89,7 +89,7 @@ class TrafficBar extends StatelessWidget {
                     Icons.link,
                     '${state.traffic.connectionsIn}',
                     cs.secondary,
-                    tooltip: context.l.homeAppConnectionsTooltip,
+                    tooltip: getLocalText.s("App connections"),
                   ),
                   const SizedBox(width: 8),
                   _chip(
@@ -97,7 +97,7 @@ class TrafficBar extends StatelessWidget {
                     Icons.dns_outlined,
                     '${state.traffic.connectionsOut}',
                     cs.secondary,
-                    tooltip: context.l.homeOutboundConnectionsTooltip,
+                    tooltip: getLocalText.s("Outbound connections to servers"),
                   ),
                 ],
                 if (profiler.isRecording) ...[

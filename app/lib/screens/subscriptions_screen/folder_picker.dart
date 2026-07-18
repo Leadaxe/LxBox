@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
-import '../../services/l10n/l10n.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §234 — bottom-sheet выбора папки (для «Move to folder…»). Показывает все
 /// папки кроме [excludeId] + пункт «New folder…» (создаёт и сразу выбирает).
@@ -30,7 +30,7 @@ Future<int?> showFolderPicker(
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Text(title ?? ctx.l.subMoveToFolderTitle,
+            child: Text(title ?? getLocalText.s("Move to folder"),
                 style: Theme.of(ctx).textTheme.titleMedium),
           ),
           Flexible(
@@ -42,12 +42,12 @@ Future<int?> showFolderPicker(
                     leading: const Icon(Icons.folder_outlined),
                     title: Text(f.name),
                     subtitle:
-                        Text(ctx.l.subFolderServersCount(f.members.length)),
+                        Text(getLocalText.plural("%d servers", f.members.length)),
                     onTap: () => Navigator.pop(ctx, f.id),
                   ),
                 ListTile(
                   leading: const Icon(Icons.create_new_folder_outlined),
-                  title: Text(ctx.l.subMenuNewFolder),
+                  title: Text(getLocalText.s("New folder…")),
                   onTap: () => Navigator.pop(ctx, ''),
                 ),
               ],
@@ -82,12 +82,12 @@ Future<String?> showFolderNameDialog(BuildContext context,
   final name = await showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text(title ?? ctx.l.subNewFolderTitle),
+      title: Text(title ?? getLocalText.s("New folder")),
       content: TextField(
         controller: ctl,
         autofocus: true,
         decoration: InputDecoration(
-          labelText: ctx.l.subFolderNameLabel,
+          labelText: getLocalText.s("Folder name"),
           border: const OutlineInputBorder(),
         ),
         onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
@@ -95,10 +95,10 @@ Future<String?> showFolderNameDialog(BuildContext context,
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(ctx.l.commonCancel)),
+            child: Text(getLocalText.s("Cancel"))),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, ctl.text.trim()),
-          child: Text(ctx.l.commonSave),
+          child: Text(getLocalText.s("Save")),
         ),
       ],
     ),

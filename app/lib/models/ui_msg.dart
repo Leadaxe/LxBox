@@ -1,32 +1,41 @@
-// §279 Phase 4 — sealed-иерархия хранимых пользовательских сообщений.
+// §279 Phase 4 / §285 — sealed-иерархия хранимых пользовательских сообщений.
 //
 // Хранимые ошибки/статусы (`lastError`, `SubscriptionEntry.status` и т.п.) —
 // типизированные объекты, НЕ отрендеренные строки: рендер происходит в момент
-// показа (`render(l)` в build) — смена локали мгновенно перерендеривает
-// хранимое состояние. Машинные поверхности (Tasker, AppLog, Debug API,
-// notification-labels) используют `renderEn()` — пиненный английский рендер.
+// показа (`render()` в build через глобальный getLocalText) — смена локали
+// мгновенно перерендеривает хранимое состояние. Машинные поверхности (Tasker,
+// AppLog, Debug API, notification-labels) используют `renderEn()` — пиненный
+// английский рендер (GetLocalText.en, dict=null → английский ключ).
 //
-// Это ЕДИНСТВЕННЫЙ файл, где разрешён прямой доступ к `L10n.en`
-// (rendering-locality-правило в tool/l10n/hardcoded_check.dart). En-мосты
-// для соседних иерархий (NodeWarning/ValidationIssue/StopReason) живут здесь
-// же extension'ами по той же причине.
+// En-мосты для соседних иерархий (NodeWarning/ValidationIssue/StopReason)
+// живут здесь же extension'ами (renderEn-allowlist-правило в
+// tool/l10n/hardcoded_check.dart).
 
-import 'node_warning.dart';
 import 'stop_reason.dart';
 import 'validation.dart';
-import '../services/l10n/l10n.dart';
+import '../services/l10n/get_local_text.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// Пользовательское сообщение с ленивым рендером. Equatable по данным
 /// (runtimeType + [props]) — dedup/сравнение не зависят от локали.
 sealed class UiMsg {
   const UiMsg();
 
-  String render(AppLocalizations l);
+  /// §285 — тело рендера подкласса. [t] — локализатор: глобальный getLocalText
+  /// (активная локаль) для [render], пиненный английский [GetLocalText.en] для
+  /// [renderEn]. Одно тело обслуживает обе поверхности. Публичный (а не
+  /// приватный) — вложенные UiMsg/соседние иерархии композируют его напрямую,
+  /// пробрасывая тот же [t] (Dart-приватность пофайловая).
+  String renderWith(GetLocalText t);
+
+  /// §285 — рендер активной локали через глобальный t.
+  String render() => renderWith(getLocalText);
 
   /// Фиксированный английский рендер для machine-поверхностей (automation,
   /// AppLog, Debug API, notification-labels). Единственный санкционированный
-  /// путь UiMsg → String вне build.
-  String renderEn() => render(L10n.en);
+  /// путь UiMsg → String вне build. [GetLocalText.en] — пиненный английский
+  /// локализатор (dict=null → печатает английский ключ независимо от локали).
+  String renderEn() => renderWith(GetLocalText.en);
 
   List<Object?> get props => const [];
 
@@ -54,22 +63,9 @@ bool propsEquals(List<Object?> a, List<Object?> b) {
   return true;
 }
 
-// ─────────────────────────── En-мосты соседних иерархий ───────────────────────
-
-/// Machine-рендер NodeWarning (emitWarnings/AppLog — spec §4.4).
-extension NodeWarningRenderEn on NodeWarning {
-  String renderEn() => message(L10n.en);
-}
-
-/// Machine-рендер ValidationIssue (AppLog).
-extension ValidationIssueRenderEn on ValidationIssue {
-  String renderEn() => message(L10n.en);
-}
-
-/// Machine-рендер StopReason (Debug API `lastStartError`, AppLog).
-extension StopReasonRenderEn on StopReason {
-  String renderEn() => message(L10n.en);
-}
+// §285 — renderEn() соседних иерархий (NodeWarning/ValidationIssue/StopReason)
+// теперь живёт в их собственных base-классах (message()/_message(t)/renderEn()),
+// см. node_warning.dart / validation.dart / stop_reason.dart.
 
 // ──────────────────────────────── Подклассы ───────────────────────────────────
 
@@ -83,7 +79,7 @@ final class RawMsg extends UiMsg {
   List<Object?> get props => [detail];
 
   @override
-  String render(AppLocalizations l) => detail;
+  String renderWith(GetLocalText t) => detail;
 }
 
 /// `formatUserError(TimeoutException)` — "timeout 10s" / "timeout 5.8s".
@@ -95,9 +91,9 @@ final class TimeoutError extends UiMsg {
   List<Object?> get props => [ms];
 
   @override
-  String render(AppLocalizations l) {
+  String renderWith(GetLocalText t) {
     final s = (ms / 1000).toStringAsFixed(ms % 1000 == 0 ? 0 : 1);
-    return l.errTimeoutShort(s);
+    return t.s("timeout %ss", s);
   }
 }
 
@@ -135,16 +131,16 @@ final class PrefixedMsg extends UiMsg {
   List<Object?> get props => [prefix, detail];
 
   @override
-  String render(AppLocalizations l) {
-    final d = detail.render(l);
+  String renderWith(GetLocalText t) {
+    final d = detail.renderWith(t);
     return switch (prefix) {
-      ErrPrefix.platformError => l.errPlatformError(d),
-      ErrPrefix.reloadFailed => l.errReloadFailed(d),
-      ErrPrefix.switchFailed => l.errSwitchFailed(d),
-      ErrPrefix.parseConfigFailed => l.errParseConfigFailed(d),
-      ErrPrefix.readFileFailed => l.errReadFileFailed(d),
-      ErrPrefix.fileError => l.errFileError(d),
-      ErrPrefix.error => l.subErrorSnack(d),
+      ErrPrefix.platformError => t.s("platform error: %s", d),
+      ErrPrefix.reloadFailed => t.s("Reload failed: %s", d),
+      ErrPrefix.switchFailed => t.s("Switch failed: %s", d),
+      ErrPrefix.parseConfigFailed => t.s("Failed to parse config: %s", d),
+      ErrPrefix.readFileFailed => t.s("Failed to read file: %s", d),
+      ErrPrefix.fileError => t.s("File error: %s", d),
+      ErrPrefix.error => t.s("Error: %s", d),
     };
   }
 }
@@ -200,42 +196,42 @@ final class ErrMsg extends UiMsg {
   List<Object?> get props => [key];
 
   @override
-  String render(AppLocalizations l) => switch (key) {
-        ErrKey.failedToStartVpn => l.errFailedToStartVpn,
-        ErrKey.stopTimedOut => l.errStopTimedOut,
-        ErrKey.stopTimedOutReconnectAborted => l.errStopTimedOutReconnect,
-        ErrKey.connectionTimedOut => l.errConnectionTimedOut,
-        ErrKey.tunnelNotResponding => l.errTunnelNotResponding,
-        ErrKey.failedToSaveConfig => l.errFailedToSaveConfig,
-        ErrKey.configIsEmpty => l.errConfigIsEmpty,
-        ErrKey.clipboardIsEmpty => l.errClipboardIsEmpty,
-        ErrKey.failedToParseConfig => l.errFailedToParseConfig,
-        ErrKey.failedToReadFile => l.errFailedToReadFile,
-        ErrKey.fileIsEmpty => l.errFileIsEmpty,
-        ErrKey.invalidMasqueConfig => l.errInvalidMasqueConfig,
-        ErrKey.invalidWarpConfigObfuscated => l.errInvalidWarpConfigObfuscated,
-        ErrKey.invalidWarpConfig => l.errInvalidWarpConfig,
-        ErrKey.invalidWireguardConfig => l.errInvalidWireguardConfig,
-        ErrKey.noWgInVpnLink => l.errNoWgInVpnLink,
-        ErrKey.couldNotParseDirectLink => l.errCouldNotParseDirectLink,
-        ErrKey.inputNotRecognized => l.errInputNotRecognized,
-        ErrKey.noValidOutboundsInJson => l.errNoValidOutboundsInJson,
-        ErrKey.noConnection => l.errNoConnection,
-        ErrKey.requestTimedOut => l.errRequestTimedOut,
-        ErrKey.cantParseResponse => l.errCantParseResponse,
-        ErrKey.folderNotFound => l.errFolderNotFound,
-        ErrKey.notAFolder => l.errNotAFolder,
-        ErrKey.serverNotFound => l.errServerNotFound,
-        ErrKey.invalidSubscription => l.errInvalidSubscription,
-        ErrKey.notASubscription => l.errNotASubscription,
-        ErrKey.noSourceProvided => l.errNoSourceProvided,
-        ErrKey.couldNotLoadNewSource => l.errCouldNotLoadNewSource,
-        ErrKey.noServersFoundInInput => l.errNoServersFoundInInput,
-        ErrKey.noServersFoundAtUrl => l.errNoServersFoundAtUrl,
-        ErrKey.memberParseKeepCurrent => l.errMemberParseKeepCurrent,
-        ErrKey.detourSelf => l.errDetourSelf,
-        ErrKey.detourLoopInFolder => l.errDetourLoopInFolder,
-        ErrKey.onlySingleServersCanBeMoved => l.errOnlySingleServersMove,
+  String renderWith(GetLocalText t) => switch (key) {
+        ErrKey.failedToStartVpn => t.s("Failed to start VPN"),
+        ErrKey.stopTimedOut => t.s("Stop timed out"),
+        ErrKey.stopTimedOutReconnectAborted => t.s("Stop timed out — reconnect aborted"),
+        ErrKey.connectionTimedOut => t.s("Connection timed out"),
+        ErrKey.tunnelNotResponding => t.s("Connection lost — VPN tunnel is not responding"),
+        ErrKey.failedToSaveConfig => t.s("Failed to save config"),
+        ErrKey.configIsEmpty => t.s("Config is empty"),
+        ErrKey.clipboardIsEmpty => t.s("Clipboard is empty"),
+        ErrKey.failedToParseConfig => t.s("Failed to parse config"),
+        ErrKey.failedToReadFile => t.s("Failed to read file"),
+        ErrKey.fileIsEmpty => t.s("File is empty"),
+        ErrKey.invalidMasqueConfig => t.s("Invalid MASQUE config"),
+        ErrKey.invalidWarpConfigObfuscated => t.s("Invalid WARP config (obfuscated)"),
+        ErrKey.invalidWarpConfig => t.s("Invalid WARP config"),
+        ErrKey.invalidWireguardConfig => t.s("Invalid WireGuard config"),
+        ErrKey.noWgInVpnLink => t.s("No WireGuard/AmneziaWG config in vpn:// link"),
+        ErrKey.couldNotParseDirectLink => t.s("Could not parse direct link"),
+        ErrKey.inputNotRecognized => t.s("Input is not a subscription URL, proxy link, or outbound JSON"),
+        ErrKey.noValidOutboundsInJson => t.s("No valid outbounds in JSON"),
+        ErrKey.noConnection => t.s("No connection — check network or URL"),
+        ErrKey.requestTimedOut => t.s("Request timed out — server slow or unreachable"),
+        ErrKey.cantParseResponse => t.s("Can't parse response (invalid format)"),
+        ErrKey.folderNotFound => t.s("Folder not found"),
+        ErrKey.notAFolder => t.s("Not a folder"),
+        ErrKey.serverNotFound => t.s("Server not found"),
+        ErrKey.invalidSubscription => t.s("Invalid subscription"),
+        ErrKey.notASubscription => t.s("Not a subscription"),
+        ErrKey.noSourceProvided => t.s("No source provided"),
+        ErrKey.couldNotLoadNewSource => t.s("Couldn't load new source — keeping current subscription"),
+        ErrKey.noServersFoundInInput => t.s("No servers found in input"),
+        ErrKey.noServersFoundAtUrl => t.s("No servers found at this URL"),
+        ErrKey.memberParseKeepCurrent => t.s("Could not parse server config — keeping current"),
+        ErrKey.detourSelf => t.s("A server cannot detour through itself"),
+        ErrKey.detourLoopInFolder => t.s("This would create a detour loop inside the folder"),
+        ErrKey.onlySingleServersCanBeMoved => t.s("Only single servers can be moved"),
       };
 }
 
@@ -248,7 +244,7 @@ final class NoConnectionToHost extends UiMsg {
   List<Object?> get props => [host];
 
   @override
-  String render(AppLocalizations l) => l.errNoConnectionToHost(host);
+  String renderWith(GetLocalText t) => t.s("No connection to %s — check network or URL", host);
 }
 
 /// `humanizeError(TimeoutException)` с известной длительностью.
@@ -260,7 +256,7 @@ final class TimedOutAfter extends UiMsg {
   List<Object?> get props => [seconds];
 
   @override
-  String render(AppLocalizations l) => l.errTimedOutAfter(seconds);
+  String renderWith(GetLocalText t) => t.s("Timed out after %ds — server slow or unreachable", seconds);
 }
 
 /// `humanizeError(HttpException)` — короткое описание по HTTP-коду.
@@ -272,14 +268,14 @@ final class HttpStatusMsg extends UiMsg {
   List<Object?> get props => [code];
 
   @override
-  String render(AppLocalizations l) {
-    if (code == 401 || code == 403) return l.errHttpAccessDenied(code);
-    if (code == 404) return l.errHttpNotFound;
-    if (code == 410) return l.errHttpGone;
-    if (code == 429) return l.errHttpRateLimited;
-    if (code >= 500 && code < 600) return l.errHttpServerError(code);
-    if (code >= 400 && code < 500) return l.errHttpRejected(code);
-    return l.errHttpPlain(code);
+  String renderWith(GetLocalText t) {
+    if (code == 401 || code == 403) return t.s("Access denied (%d) — check subscription token", code);
+    if (code == 404) return t.s("Not found (404) — subscription URL may be removed");
+    if (code == 410) return t.s("Gone (410) — subscription deleted by provider");
+    if (code == 429) return t.s("Rate limited (429) — try again later");
+    if (code >= 500 && code < 600) return t.s("Server error (%d) — provider is down, try later", code);
+    if (code >= 400 && code < 500) return t.s("Request rejected (%d)", code);
+    return t.s("HTTP %d", code);
   }
 }
 
@@ -292,11 +288,11 @@ final class ValidationFatalMsg extends UiMsg {
   List<Object?> get props => [issues.length, ...issues];
 
   @override
-  String render(AppLocalizations l) {
-    final joined = issues.map((i) => i.message(l)).join('; ');
+  String renderWith(GetLocalText t) {
+    final joined = issues.map((i) => i.messageWith(t)).join('; ');
     return issues.length == 1
-        ? l.errConfigInvalidOne(joined)
-        : l.errConfigInvalidMany(issues.length, joined);
+        ? t.s("Config invalid: %s", joined)
+        : t.plural("Config invalid (%1\$d issues): %2\$s", issues.length, joined);
   }
 }
 
@@ -309,7 +305,7 @@ final class StopReasonMsg extends UiMsg {
   List<Object?> get props => [reason];
 
   @override
-  String render(AppLocalizations l) => reason.message(l);
+  String renderWith(GetLocalText t) => reason.messageWith(t);
 }
 
 /// Ошибка ping/URLTest: `<target> → <host> — <reason>` (или без host).
@@ -325,9 +321,9 @@ final class ProbeErrorMsg extends UiMsg {
   List<Object?> get props => [target, host, reason];
 
   @override
-  String render(AppLocalizations l) {
+  String renderWith(GetLocalText t) {
     final label = host.isEmpty ? target : '$target → $host';
-    return '$label — ${reason.render(l)}';
+    return '$label — ${reason.renderWith(t)}';
   }
 }
 
@@ -338,21 +334,21 @@ final class SubStatusBuildingConfig extends UiMsg {
   const SubStatusBuildingConfig();
 
   @override
-  String render(AppLocalizations l) => l.subProgressBuildingConfig;
+  String renderWith(GetLocalText t) => t.s("Building config...");
 }
 
 final class SubStatusFetching extends UiMsg {
   const SubStatusFetching();
 
   @override
-  String render(AppLocalizations l) => l.subStatusFetching;
+  String renderWith(GetLocalText t) => t.s("Fetching...");
 }
 
 final class SubStatusJsonOutbound extends UiMsg {
   const SubStatusJsonOutbound();
 
   @override
-  String render(AppLocalizations l) => l.subStatusJsonOutbound;
+  String renderWith(GetLocalText t) => t.s("JSON outbound");
 }
 
 /// `{n} nodes` / `{n} +{d}⚙ nodes`, опционально с суффиксом `(cached)`.
@@ -366,11 +362,11 @@ final class SubStatusNodes extends UiMsg {
   List<Object?> get props => [nodes, detours, cached];
 
   @override
-  String render(AppLocalizations l) {
+  String renderWith(GetLocalText t) {
     final base = detours > 0
-        ? l.subNodesCountWithDetour(nodes, detours)
-        : l.subEntryNodesCount(nodes);
-    return cached ? l.subStatusCached(base) : base;
+        ? t.plural("%1\$d +%2\$d⚙ nodes", nodes, detours)
+        : t.plural("%d nodes", nodes);
+    return cached ? t.s("%s (cached)", base) : base;
   }
 }
 
@@ -384,9 +380,9 @@ final class SubStatusUpdateFailed extends UiMsg {
   List<Object?> get props => [nodes, zeroParsed];
 
   @override
-  String render(AppLocalizations l) => zeroParsed
-      ? l.subStatusUpdateFailedZero(nodes)
-      : l.subStatusUpdateFailed(nodes);
+  String renderWith(GetLocalText t) => zeroParsed
+      ? t.plural("%d nodes (update failed: 0 parsed)", nodes)
+      : t.plural("%d nodes (update failed)", nodes);
 }
 
 /// `0 nodes` / `0 nodes — {hint}`; hint — английская диагностика парсера
@@ -399,10 +395,10 @@ final class SubStatusZeroNodes extends UiMsg {
   List<Object?> get props => [hint];
 
   @override
-  String render(AppLocalizations l) {
+  String renderWith(GetLocalText t) {
     final h = hint;
     return (h == null || h.isEmpty)
-        ? l.subStatusZeroNodes
-        : l.subStatusZeroNodesHint(h);
+        ? t.s("0 nodes")
+        : t.s("0 nodes — %s", h);
   }
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../services/l10n/l10n.dart';
 import '../../services/traffic_profiler.dart';
 import '../per_app_trace_tab/widgets/aggregate_axis.dart';
 import '../per_app_trace_tab/widgets/aggregated_view.dart';
@@ -9,6 +8,7 @@ import 'aggregate_detail_sheet.dart';
 import 'profiler_filter.dart';
 import 'profiler_filter_sheet.dart';
 import 'traffic_event_detail_sheet.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §160 / §044-new-profiler — общий explorer трафика. Единый движок Profiler
 /// (Stats→Live) и per-app trace, без дубля кода.
@@ -156,8 +156,8 @@ class _TraceExplorerState extends State<TraceExplorer> {
           if (_mode == _Mode.live)
             IconButton(
               tooltip: _paused
-                  ? context.l.statsTraceResumeTooltip
-                  : context.l.statsTracePauseTooltip,
+                  ? getLocalText.s("Resume")
+                  : getLocalText.s("Pause"),
               icon: Icon(_paused ? Icons.play_arrow : Icons.pause, size: 22),
               color: _paused ? cs.error : cs.primary,
               onPressed: _togglePause,
@@ -192,7 +192,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
     }
 
     return PopupMenuButton<int>(
-      tooltip: context.l.statsRetentionTooltip,
+      tooltip: getLocalText.s("Live retention window"),
       onSelected: (sec) async {
         await TrafficProfiler.I.setRetention(Duration(seconds: sec));
         if (mounted) setState(() {});
@@ -210,7 +210,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
                   size: 18,
                 ),
                 const SizedBox(width: 8),
-                Text(context.l.statsRetentionKeep(label)),
+                Text(getLocalText.s("Keep %s", label)),
               ],
             ),
           ),
@@ -242,7 +242,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
       label = _aggAxis == AggAxis.domain ? 'by Domain' : 'by IP';
     }
     return PopupMenuButton<String>(
-      tooltip: context.l.statsGroupingTooltip,
+      tooltip: getLocalText.s("Grouping"),
       onSelected: (v) => setState(() {
         switch (v) {
           case 'stream':
@@ -371,8 +371,8 @@ class _TraceExplorerState extends State<TraceExplorer> {
               size: 20, color: active ? cs.primary : null),
           label: Text(
               active
-                  ? context.l.statsTraceFilterButtonCount(n)
-                  : context.l.statsTraceFilterButton,
+                  ? getLocalText.s("Filter (%d)", n)
+                  : getLocalText.s("Filter"),
               style:
                   TextStyle(fontSize: 12, color: active ? cs.primary : null)),
           onPressed: () => _openFilterSheet(context),

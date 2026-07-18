@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../services/l10n/l10n.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §118 — App Settings → Subscriptions tab. Глобальные настройки HTTP-фетча
 /// подписок: авто-обновление, кастомный User-Agent, HWID + device-meta
@@ -65,26 +65,26 @@ class SubscriptionsTab extends StatelessWidget {
     return ListView(
       padding: padding,
       children: [
-        Text(context.l.appSettingsSubsAutoUpdateHeader,
+        Text(getLocalText.s("Auto-update"),
             style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         SwitchListTile(
-          title: Text(context.l.appSettingsSubsAutoUpdateTitle),
-          subtitle: Text(context.l.appSettingsSubsAutoUpdateSubtitle),
+          title: Text(getLocalText.s("Auto-update subscriptions")),
+          subtitle: Text(getLocalText.s("Refresh on app start, after VPN connects, and periodically. Manual ⟳ works regardless.")),
           secondary: const Icon(Icons.cloud_sync_outlined),
           value: autoUpdateSubs,
           onChanged: loaded ? onAutoUpdateSubsChanged : null,
         ),
         const Divider(height: 32),
-        Text(context.l.appSettingsSubsFetchIdentityHeader,
+        Text(getLocalText.s("Fetch identity"),
             style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         ListTile(
           leading: const Icon(Icons.badge_outlined),
-          title: Text(context.l.appSettingsSubsUaTitle),
+          title: Text(getLocalText.s("Custom User-Agent")),
           subtitle: Text(
             userAgent.isEmpty
-                ? context.l.appSettingsSubsUaDefault(defaultUserAgent)
+                ? getLocalText.s("Default · %s", defaultUserAgent)
                 : userAgent,
             style: TextStyle(
               fontStyle: userAgent.isEmpty ? FontStyle.italic : null,
@@ -96,13 +96,13 @@ class SubscriptionsTab extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text(
-            context.l.appSettingsSubsUaNote,
+            getLocalText.s("Some panels return the config by a substring in the User-Agent — a custom UA without the \"LxBox\" token may yield an unsupported format and break the update. Change only if you know why."),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
         ),
         SwitchListTile(
-          title: Text(context.l.appSettingsSubsSendHwidTitle),
-          subtitle: Text(context.l.appSettingsSubsSendHwidSubtitle),
+          title: Text(getLocalText.s("Send HWID")),
+          subtitle: Text(getLocalText.s("Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). Off by default.")),
           secondary: const Icon(Icons.devices_outlined),
           value: sendHwid,
           onChanged: loaded ? onSendHwidChanged : null,
@@ -117,7 +117,7 @@ class SubscriptionsTab extends StatelessWidget {
             onEdit: onEditHwid,
             extra: IconButton(
               icon: const Icon(Icons.refresh, size: 20),
-              tooltip: context.l.commonRegenerate,
+              tooltip: getLocalText.s("Regenerate"),
               onPressed: loaded ? onRegenerateHwid : null,
             ),
           ),
@@ -135,7 +135,7 @@ class SubscriptionsTab extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
-              context.l.appSettingsSubsHeadersNote,
+              getLocalText.s("These headers identify your device to the panel. Defaults come from the device — override any of them (empty = device default)."),
               style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
             ),
           ),
@@ -157,7 +157,7 @@ class SubscriptionsTab extends StatelessWidget {
       leading: Icon(icon),
       title: Text(label),
       subtitle: Text(
-        value.isEmpty ? context.l.appSettingsSubsEmptyValue : value,
+        value.isEmpty ? getLocalText.s("(empty)") : value,
         style: TextStyle(
           fontFamily: monospace ? 'monospace' : null,
           fontSize: monospace ? 12 : null,
@@ -172,7 +172,7 @@ class SubscriptionsTab extends StatelessWidget {
           ?extra,
           IconButton(
             icon: const Icon(Icons.edit_outlined, size: 20),
-            tooltip: context.l.commonEdit,
+            tooltip: getLocalText.s("Edit"),
             onPressed: loaded ? onEdit : null,
           ),
         ],

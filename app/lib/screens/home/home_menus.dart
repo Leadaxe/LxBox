@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../controllers/home_controller.dart';
 import '../../models/home_state.dart';
 import '../../services/settings_storage.dart';
-import '../../services/l10n/l10n.dart';
 import '../../services/template_loader.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §070 — modal bottom sheet опций сортировки нод (long-press по sort-кнопке
 /// в [NodesHeader]). Sheet остаётся открытым — можно тоггнуть несколько опций
@@ -27,7 +27,7 @@ Future<void> showSortOptionsMenu(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(sheetCtx.l.homeSortOptionsTitle,
+                Text(getLocalText.s("Sort options"),
                     style: Theme.of(sheetCtx).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 // §100 — выбор режима сортировки (incl. Custom = ручная,
@@ -40,7 +40,7 @@ Future<void> showSortOptionsMenu(
                     for (final m in NodeSortMode.values)
                       ChoiceChip(
                         avatar: Icon(m.icon, size: 16),
-                        label: Text(m.label(context.l)),
+                        label: Text(m.label()),
                         selected: s.sortMode == m,
                         onSelected: (_) {
                           controller.setSortMode(m);
@@ -56,7 +56,7 @@ Future<void> showSortOptionsMenu(
                     controller.setPinDirect(v ?? false);
                     setSheetState(() {});
                   },
-                  title: Text(sheetCtx.l.homeSortPinDirect),
+                  title: Text(getLocalText.s("Pin DIRECT to top")),
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
                   dense: true,
@@ -67,7 +67,7 @@ Future<void> showSortOptionsMenu(
                     controller.setPinAuto(v ?? false);
                     setSheetState(() {});
                   },
-                  title: Text(sheetCtx.l.homeSortPinAuto),
+                  title: Text(getLocalText.s("Pin AUTO to top")),
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
                   dense: true,
@@ -78,7 +78,7 @@ Future<void> showSortOptionsMenu(
                     controller.setResortOnManualPing(v ?? false);
                     setSheetState(() {});
                   },
-                  title: Text(sheetCtx.l.homeSortResortOnPing),
+                  title: Text(getLocalText.s("Re-sort on manual ping")),
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
                   dense: true,
@@ -144,14 +144,14 @@ Future<void> showPingSettings(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(ctx.l.homePingSettingsTitle,
+              Text(getLocalText.s("Ping Settings"),
                   style: Theme.of(ctx).textTheme.titleMedium),
               const SizedBox(height: 8),
               if (canApplyToGroup) ...[
                 SegmentedButton<bool>(
                   segments: [
                     ButtonSegment(
-                        value: false, label: Text(ctx.l.homePingAllChannels)),
+                        value: false, label: Text(getLocalText.s("All channels"))),
                     ButtonSegment(
                         value: true,
                         label: Text(currentGroup,
@@ -184,7 +184,7 @@ Future<void> showPingSettings(
               TextField(
                 controller: urlCtrl,
                 decoration: InputDecoration(
-                  labelText: ctx.l.homePingTestUrl,
+                  labelText: getLocalText.s("Test URL"),
                   border: const OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -193,7 +193,7 @@ Future<void> showPingSettings(
               TextField(
                 controller: timeoutCtrl,
                 decoration: InputDecoration(
-                  labelText: ctx.l.homePingTimeoutMs,
+                  labelText: getLocalText.s("Timeout (ms)"),
                   border: const OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -206,7 +206,7 @@ Future<void> showPingSettings(
                     Expanded(
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.restart_alt, size: 18),
-                        label: Text(ctx.l.homePingResetToGlobal),
+                        label: Text(getLocalText.s("Reset to global")),
                         onPressed: () async {
                           await SettingsStorage.clearGroupPing(currentGroup);
                           await controller.reloadPingOptions();
@@ -234,7 +234,7 @@ Future<void> showPingSettings(
                         await controller.reloadPingOptions();
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
-                      child: Text(ctx.l.commonSave),
+                      child: Text(getLocalText.s("Save")),
                     ),
                   ),
                 ],

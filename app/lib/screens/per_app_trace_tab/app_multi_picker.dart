@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_info.dart';
 import '../../services/app_info_cache.dart';
-import '../../services/l10n/l10n.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §044/new-profiler — **встраиваемый** мульти-select пикер приложений для
 /// фильтр-окна профайлера (App-таб). В отличие от
@@ -83,7 +83,7 @@ class _AppMultiPickerState extends State<AppMultiPicker> {
             Expanded(
               child: TextField(
                 decoration: InputDecoration(
-                  hintText: context.l.statsTraceSearchApps,
+                  hintText: getLocalText.s("Search by name or package"),
                   prefixIcon: const Icon(Icons.search, size: 18),
                   border: const OutlineInputBorder(),
                   isDense: true,
@@ -95,7 +95,7 @@ class _AppMultiPickerState extends State<AppMultiPicker> {
               ),
             ),
             IconButton(
-              tooltip: context.l.statsTraceShowSystemApps,
+              tooltip: getLocalText.s(1, "Show system apps"),
               visualDensity: VisualDensity.compact,
               icon: Icon(
                 _showSystem ? Icons.visibility : Icons.visibility_off,
@@ -119,7 +119,7 @@ class _AppMultiPickerState extends State<AppMultiPicker> {
                       children: [
                         const CircularProgressIndicator(),
                         const SizedBox(height: 12),
-                        Text(context.l.statsTraceLoadingApps,
+                        Text(getLocalText.s("Loading installed apps…"),
                             style: const TextStyle(fontSize: 12)),
                       ],
                     ),
@@ -129,7 +129,7 @@ class _AppMultiPickerState extends State<AppMultiPicker> {
                   ? Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Text(context.l.statsTraceNoAppsMatch,
+                        child: Text(getLocalText.s("No apps match"),
                             style: const TextStyle(fontSize: 12)),
                       ),
                     )

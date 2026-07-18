@@ -9,9 +9,9 @@ import '../models/parser_config.dart' show SpeedTestServer;
 import '../services/app_log.dart';
 import '../services/error_format.dart';
 import '../services/format_utils.dart' show formatTimeHm;
-import '../services/l10n/l10n.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
+import '../services/l10n/locale_controller.dart';
 
 class SpeedTestScreen extends StatefulWidget {
   const SpeedTestScreen({super.key, required this.homeController});
@@ -110,7 +110,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
     if (_running) return;
     setState(() {
       _running = true;
-      _status = context.l.speedStatusPing;
+      _status = getLocalText.s("Testing ping...");
       _downloadMbps = 0;
       _uploadMbps = 0;
       _ping = 0;
@@ -124,7 +124,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
       setState(() {
         _ping = pingResult;
         _progress = 0.15;
-        _status = context.l.speedStatusDownload;
+        _status = getLocalText.s("Testing download...");
       });
 
       // Download — 4 parallel streams
@@ -133,7 +133,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
       setState(() {
         _downloadMbps = dlSpeed;
         _progress = 0.65;
-        _status = context.l.speedStatusUpload;
+        _status = getLocalText.s("Testing upload...");
       });
 
       // Upload
@@ -142,7 +142,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
       setState(() {
         _uploadMbps = ulSpeed;
         _progress = 1.0;
-        _status = context.l.speedStatusComplete;
+        _status = getLocalText.s("Complete");
       });
 
       // Save to session history
@@ -162,7 +162,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
     } catch (e) {
       if (mounted) {
         setState(() =>
-            _status = context.l.subErrorSnack(formatUserError(e).render(context.l)));
+            _status = getLocalText.s("Error: %s", formatUserError(e).render()));
       }
     } finally {
       if (mounted) setState(() => _running = false);
@@ -199,7 +199,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
   }
 
   String _serverName(int i) =>
-      _servers[i].name.isNotEmpty ? _servers[i].name : context.l.speedServerN(i);
+      _servers[i].name.isNotEmpty ? _servers[i].name : getLocalText.s("Server %d", i);
   String _serverDownloadUrl(int i) => _servers[i].downloadUrl;
   String? _serverUploadUrl(int i) => _servers[i].uploadUrl;
   String _serverUploadMethod(int i) => _servers[i].uploadMethod;
@@ -334,7 +334,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.l.homeDrawerSpeedTest)),
+      appBar: AppBar(title: Text(getLocalText.s("Speed Test"))),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -355,8 +355,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
                 const SizedBox(width: 8),
                 Text(
                   _vpnEnabled
-                      ? context.l.speedViaProxy(_currentProxy)
-                      : context.l.speedDirectNoVpn,
+                      ? getLocalText.s("Via: %s", _currentProxy)
+                      : getLocalText.s("Direct (no VPN)"),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: cs.onSurfaceVariant,
                   ),
@@ -368,9 +368,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
           // Ping
           _buildGauge(
-            context.l.homeNodeMenuPing,
+            getLocalText.s("Ping"),
             _ping < 0
-                ? context.l.speedFailed
+                ? getLocalText.s("Failed")
                 : '${_ping.toStringAsFixed(0)} ms',
             Icons.network_ping,
             cs.primary,
@@ -379,7 +379,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
           // Download
           _buildGauge(
-            context.l.speedDownloadLabel,
+            getLocalText.s("Download"),
             '${_downloadMbps.toStringAsFixed(1)} Mbps',
             Icons.arrow_downward,
             cs.tertiary,
@@ -388,7 +388,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
           // Upload
           _buildGauge(
-            context.l.speedUploadLabel,
+            getLocalText.s("Upload"),
             '${_uploadMbps.toStringAsFixed(1)} Mbps',
             Icons.arrow_upward,
             cs.secondary,
@@ -397,7 +397,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
 
           if (_running) LinearProgressIndicator(value: _progress),
           const SizedBox(height: 8),
-          Text(_status.isEmpty ? context.l.speedStatusIdle : _status,
+          Text(_status.isEmpty ? getLocalText.s("Tap Start to begin") : _status,
               style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
           const SizedBox(height: 24),
 
@@ -410,7 +410,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
                     initialValue:
                         _servers.isEmpty ? null : _serverId(_selectedServer),
                     decoration: InputDecoration(
-                      labelText: context.l.subServerTitle,
+                      labelText: getLocalText.s("Server"),
                       isDense: true,
                       border: const OutlineInputBorder(),
                       contentPadding: const EdgeInsets.symmetric(
@@ -429,7 +429,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
                   child: DropdownButtonFormField<int>(
                     initialValue: _streams,
                     decoration: InputDecoration(
-                      labelText: context.l.speedStreamsLabel,
+                      labelText: getLocalText.s("Streams"),
                       isDense: true,
                       border: const OutlineInputBorder(),
                       contentPadding: const EdgeInsets.symmetric(
@@ -454,15 +454,15 @@ class _SpeedTestScreenState extends State<SpeedTestScreen>
               onPressed: _running ? null : _runTest,
               icon: Icon(_running ? Icons.hourglass_top : Icons.speed),
               label: Text(_running
-                  ? context.l.speedTestingButton
-                  : context.l.speedStartButton),
+                  ? getLocalText.s("Testing...")
+                  : getLocalText.s("Start Test")),
             ),
           ),
 
           // History
           if (_history.isNotEmpty) ...[
             const SizedBox(height: 32),
-            Text(context.l.speedSessionHistory, style: theme.textTheme.titleSmall),
+            Text(getLocalText.s("Session History"), style: theme.textTheme.titleSmall),
             const SizedBox(height: 8),
             ..._history.map((r) => _buildHistoryTile(r, theme, cs)),
           ],

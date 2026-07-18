@@ -23,7 +23,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
-import '../services/l10n/l10n.dart';
 import '../services/traffic_profiler.dart';
 import '../widgets/core_logs_hint_banner.dart';
 import 'live_events_tab/dns_health_banner.dart';
@@ -33,6 +32,7 @@ import 'per_app_trace_tab/session_json.dart';
 import 'stats_screen/profiler_filter.dart';
 import 'stats_screen/profiler_filters.dart';
 import 'stats_screen/trace_explorer.dart';
+import '../services/l10n/locale_controller.dart';
 
 class LiveEventsTab extends StatefulWidget {
   const LiveEventsTab({super.key, this.subController, this.homeController});
@@ -118,7 +118,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
           children: [
             ListTile(
               leading: const Icon(Icons.share),
-              title: Text(context.l.statsLiveShareEvents(_events.length)),
+              title: Text(getLocalText.plural("Share %d events (JSON)", _events.length)),
               onTap: () {
                 Navigator.pop(sheetCtx);
                 Share.share(json, subject: 'LxBox profiler export');
@@ -126,13 +126,13 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
             ),
             ListTile(
               leading: const Icon(Icons.copy),
-              title: Text(context.l.statsLiveCopyJson),
+              title: Text(getLocalText.s("Copy JSON to clipboard")),
               onTap: () async {
                 Navigator.pop(sheetCtx);
                 await Clipboard.setData(ClipboardData(text: json));
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.l.statsLiveExportCopied)),
+                  SnackBar(content: Text(getLocalText.s("Export JSON copied"))),
                 );
               },
             ),

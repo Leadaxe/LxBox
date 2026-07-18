@@ -8,7 +8,6 @@ import '../models/home_state.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
 import '../services/error_humanize.dart';
-import '../services/l10n/l10n.dart';
 import '../services/support/active_time_tracker.dart';
 import '../services/support/support_message.dart';
 import '../services/version_info.dart';
@@ -36,6 +35,7 @@ import '../services/nav/home_return_observer.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
+import '../services/l10n/locale_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -247,8 +247,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final msg = names.length == 1
-          ? context.l.homeChannelNoNodesOne(names.first)
-          : context.l.homeChannelNoNodesMany(names.length);
+          ? getLocalText.s("Channel \"%s\" matched no nodes — check its node filter.", names.first)
+          : getLocalText.plural("%d channels matched no nodes — check their node filters.", names.length);
       // Без hideCurrentSnackBar: этот показ соседствует с actionable-снеками
       // того же rebuild-флоу («Config rebuilt … restart VPN», heal-счётчики)
       // — гасить их нельзя, встаём в очередь ScaffoldMessenger.
@@ -310,7 +310,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(
-            content: Text(msg.render(context.l)),
+            content: Text(msg.render()),
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 5),
           ));
@@ -474,7 +474,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(context.l.homeResumedSyncing),
+        content: Text(getLocalText.s("Resumed — syncing tunnel…")),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -588,7 +588,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     _subController.progressMessage != null)
                   ProgressBanner(
                       message:
-                          _subController.progressMessage!.render(context.l)),
+                          _subController.progressMessage!.render()),
                 // §095 — NODES-строка только когда подключено И фильтр закрыт.
                 // STOP-режим: нод нет → фильтровать нечего → строку прячем.
                 if (state.tunnelUp && !_filter.panelExpanded) ...[
@@ -792,8 +792,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         SnackBar(
           content: Text(
             _controller.state.tunnelUp
-                ? context.l.homeConfigRebuiltRestart(nodeCount)
-                : context.l.homeConfigRebuilt(nodeCount),
+                ? getLocalText.plural("Config rebuilt: %d nodes — restart VPN to apply", nodeCount)
+                : getLocalText.plural("Config rebuilt: %d nodes", nodeCount),
           ),
         ),
       );
