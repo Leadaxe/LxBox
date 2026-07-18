@@ -108,3 +108,20 @@ ProbeConfig buildProbeConfig(FolderServers folder) {
     brokenByMember: brokenByMember,
   );
 }
+
+/// §284 — минимальный headless-конфиг для WARP-скана: БЕЗ нод (сырая проба идёт
+/// по IP напрямую, теги не нужны), только `direct` + local DNS, чтобы ядро
+/// поднялось. `openTun` не вызывается (нет inbound'ов, §119-инвариант).
+String buildScanProbeConfigJson() => jsonEncode(<String, dynamic>{
+      'log': {'level': 'error'},
+      'dns': {
+        'servers': [
+          {'type': 'local', 'tag': kProbeDnsTag},
+        ],
+      },
+      'outbounds': [
+        {'type': 'direct', 'tag': kDirectOutboundTag},
+      ],
+      'route': {'default_domain_resolver': kProbeDnsTag},
+    });
+

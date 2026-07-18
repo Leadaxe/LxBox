@@ -258,6 +258,27 @@ class CcChannel {
   /// Гасит probe-сессию (идемпотентно).
   Future<void> probeStop() => _methods.invokeMethod<void>('probeStop');
 
+  /// §284 — сырая проба одного WARP-endpoint по IP (WG-handshake / QUIC-h3 /
+  /// TLS-h2), DNS-независимо. Semantics Variant B (провал только в `error`).
+  /// `args` = `ScanCandidate.toProbeArgs(timeoutMs)`. Пока libbox без символа
+  /// `WarpProbe` (kernel SPEC 028) — натив вернёт `error='probe unavailable'`,
+  /// скан не крашит. cc_channel остаётся низкоуровневым: не знает про ScanCandidate.
+  Future<CcProbeResult> warpProbe(Map<String, Object?> args) async {
+    try {
+      final r = await _methods
+          .invokeMethod<Map<dynamic, dynamic>>('warpProbe', args);
+      return CcProbeResult.fromMap(_asMap(r ?? const {}));
+    } on MissingPluginException {
+      // Старый .aar без 'warpProbe'-хендлера (version-skew) → graceful degrade,
+      // как задумано: скан не падает, UI покажет «probe unavailable».
+      return const CcProbeResult(
+          alive: false, rttMs: 0, error: 'probe unavailable');
+    } on PlatformException catch (e) {
+      return CcProbeResult(
+          alive: false, rttMs: 0, error: e.message ?? 'warpProbe failed');
+    }
+  }
+
   /// §4.7 — снапшот route+DNS правил (диагностика).
   Future<List<CcRule>> getRules() async {
     final r = await _methods.invokeMethod<List<dynamic>>('ccGetRules');
@@ -708,6 +729,25 @@ class CcDelayResult {
         delay: _int(m['delay']),
         error: m['error']?.toString() ?? '',
       );
+}
+
+/// §284 — результат сырой WARP-пробы (Variant B). `alive` iff `error==''`;
+/// `rttMs` валиден только при `alive` (ядро клампит).
+class CcProbeResult {
+  const CcProbeResult({
+    required this.alive,
+    required this.rttMs,
+    required this.error,
+  });
+
+  final bool alive;
+  final int rttMs;
+  final String error;
+
+  factory CcProbeResult.fromMap(Map<String, dynamic> m) {
+    final error = m['error']?.toString() ?? '';
+    return CcProbeResult(alive: error.isEmpty, rttMs: _int(m['rttMs']), error: error);
+  }
 }
 
 /// §208 (SPEC 019 V2) — один слот пула round_robin-группы (`getPool`). Слоты

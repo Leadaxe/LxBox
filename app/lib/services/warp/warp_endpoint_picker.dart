@@ -3,6 +3,8 @@ import 'dart:math';
 
 import 'package:flutter/services.dart' show rootBundle;
 
+import 'scan/scan_pool.dart';
+
 /// §136 — рандом WARP-endpoint из зашитых Cloudflare-блоков (реверс
 /// `warp-generator.github.io` `generateRandomEndpoint`). **БЕЗ пробы/скана.**
 ///
@@ -16,8 +18,8 @@ import 'package:flutter/services.dart' show rootBundle;
 /// дохлые/режимые на LTE-DPI; остались твёрдые anycast 162.159.192/195 +
 /// 188.114.96-98.
 class WarpEndpointPicker {
-  WarpEndpointPicker._(
-      this._prefixes, this._ports, this._sniPool, this._masqueSniPool);
+  WarpEndpointPicker._(this._prefixes, this._ports, this._sniPool,
+      this._masqueSniPool, this._scan);
 
   static const String _assetPath = 'assets/warp_endpoints.json';
   static final Random _rng = Random.secure();
@@ -33,6 +35,9 @@ class WarpEndpointPicker {
   /// в asset нет отдельного masque_sni_pool.
   final List<String> _masqueSniPool;
 
+  /// §284 — пул для WARP-скана (scan-блок asset). null → кнопка SCAN скрыта.
+  final ScanPool? _scan;
+
   static WarpEndpointPicker? _cached;
 
   /// Загружает asset один раз (кэш). При ошибке — пустые списки (caller
@@ -43,16 +48,24 @@ class WarpEndpointPicker {
       final raw = await rootBundle.loadString(_assetPath);
       final json = jsonDecode(raw) as Map<String, dynamic>;
       final sniPool = (json['sni_pool'] as List?)?.cast<String>() ?? const [];
+      // §130 — fallback на общий пул, если masque_sni_pool не задан.
+      final masqueSniPool =
+          (json['masque_sni_pool'] as List?)?.cast<String>() ?? sniPool;
       _cached = WarpEndpointPicker._(
         (json['prefixes'] as List?)?.cast<String>() ?? const [],
         (json['ports'] as List?)?.map((e) => (e as num).toInt()).toList() ??
             const [],
         sniPool,
-        // §130 — fallback на общий пул, если masque_sni_pool не задан.
-        (json['masque_sni_pool'] as List?)?.cast<String>() ?? sniPool,
+        masqueSniPool,
+        ScanPool.fromJson(
+          (json['scan'] as Map?)?.cast<String, dynamic>(),
+          sniPool: sniPool,
+          masqueSniPool: masqueSniPool,
+        ),
       );
     } catch (_) {
-      _cached = WarpEndpointPicker._(const [], const [], const [], const []);
+      _cached =
+          WarpEndpointPicker._(const [], const [], const [], const [], null);
     }
     return _cached!;
   }
@@ -82,6 +95,9 @@ class WarpEndpointPicker {
 
   /// §130 — MASQUE SNI-пул (может содержать cloudflare-домены).
   List<String> get masqueSniPool => List.unmodifiable(_masqueSniPool);
+
+  /// §284 — пул скана (null если scan-блок отсутствует/битый).
+  ScanPool? get scan => _scan;
 
   /// Для тестов — сброс кэша.
   static void resetForTest() => _cached = null;
