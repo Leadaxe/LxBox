@@ -102,10 +102,11 @@ severity warning, ARB-ключ `warnUnknownFingerprint` (en+ru), рендер в
    (alpn/utls/insecure/reality) — ядро отклоняет всё это при создании
    naive-outbound (fatal всего конфига). Фикс: `_naiveTlsFromSingbox`
    срезает до enabled/server_name (зеркало naive_parser).
-3. Отдельной задачей (не config-fatal): uTLS поверх QUIC (hysteria2/tuic)
-   в ядре не работает вообще (`STDConfig()` → «unsupported usage for
-   uTLS») — нода с fingerprint мертва per-connection; правильное лечение —
-   не эмитить utls для QUIC-протоколов.
+3. Отдельно (не config-fatal): uTLS поверх QUIC (hysteria2/tuic) в ядре
+   не работает вообще (`STDConfig()` → «unsupported usage for uTLS») —
+   нода с fingerprint мертва per-connection. Решение пользователя
+   2026-07-18: чинится НА СТОРОНЕ ЯДРА (запрос в sing-box-lx отправлен);
+   app-side срез utls для QUIC-протоколов НЕ делаем.
 
 ## Что НЕ делает
 
