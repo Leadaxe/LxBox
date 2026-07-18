@@ -2,12 +2,12 @@
 
 Все команды запускаются из `app/`. CI гоняет их в job `checks`
 (`.github/workflows/ci.yml`, шаг «L10n checks») — **все четыре checker'а идут
-с `--strict` на каждом push/PR** (warnings фатальны: протухший `src`-hash,
-непереведённый / orphan ключ словаря).
+с `--strict` на каждом push/PR** (warnings фатальны: непереведённый / orphan
+ключ словаря).
 
 ```
 dart run tool/l10n/ui_check.dart [--strict]
-dart run tool/l10n/template_check.dart [--strict] [--write-en] [--accept <tag>:<key>]
+dart run tool/l10n/template_check.dart [--strict]
 dart run tool/l10n/hardcoded_check.dart [--strict] [--write-baseline]
 dart run tool/l10n/kotlin_check.dart [--strict]
 ```
@@ -15,7 +15,7 @@ dart run tool/l10n/kotlin_check.dart [--strict]
 - **ui_check** (§285, заменил ARB-эпохи `arb_check`): AST-скан `lib/` собирает
   все обращения к локализатору (`getLocalText.s/.plural`, `t`/`loc`-параметры
   `renderWith`/`messageWith`, `GetLocalText.en`) и сверяет с natural-key
-  словарём `assets/l10n/ui/ru.json`:
+  словарём `assets/l10n/ru/ui.json`:
   - **missing** — ключ из кода отсутствует в словаре (warn, strict→fail);
   - **orphan** — ключ словаря не встречается в коде (warn, strict→fail);
   - **orphan-special** — форма `special["N"]` определена, но код не зовёт её
@@ -31,11 +31,13 @@ dart run tool/l10n/kotlin_check.dart [--strict]
   Динамические (не-литеральные) ключи `getLocalText.s(var)` валидировать
   нельзя — только считаются. Логика скана+валидации — `src/ui_scan.dart`
   (чистая, без `dart:io`), покрыта self-тестом `test/tool/ui_check_test.dart`.
-- **template_check**: `assets/l10n/template/en.json` — генерируемое зеркало
-  display-строк шаблона, обязано быть byte-equal свежей экстракции;
-  регенерация — `--write-en`. В ru.json каждая запись несёт `src` — первые
-  8 hex sha256 английского значения. Изменился en-текст → ключ протухает;
-  после пересмотра перевода принять новый hash: `--accept ru:<key>`.
+- **template_check**: overlay-файлы `assets/l10n/<tag>/template.json` — тот же
+  shape, что ui/-словарь: `{ "<english>": { "value": "<перевод>" } }`. Отдельного
+  `en.json` нет — английский базовый и живёт в самом `wizard_template.json`
+  (он же fallback); checker извлекает display-строки через `TemplateOverlay.extract`
+  и сверяет с ними каждый overlay. Неизвестный ключ (english-текст не извлекается
+  из шаблона) / пустой value / value с `@`-префиксом или `{` — fail;
+  непереведённый english-ключ — warn (strict→fail).
 - **hardcoded_check**: ratchet. `hardcoded_baseline.json` — grandfathered-сайты
   (hash канонизирован: `${...}` → `{}`); **baseline пуст** — любой новый
   hardcoded display-литерал fail'ит CI. `Text(getLocalText.s("..."))` легален

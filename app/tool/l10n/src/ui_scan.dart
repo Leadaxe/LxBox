@@ -6,7 +6,7 @@ import 'package:analyzer/source/line_info.dart';
 import 'package:lxbox/services/l10n/plural_resolver.dart';
 
 // §285 Ф3 — natural-key CI-гейт (аналог мёртвого arb_check для ARB-мира).
-// Держит call-site'ы getLocalText и словарь assets/l10n/ui/<tag>.json в
+// Держит call-site'ы getLocalText и словарь assets/l10n/<tag>/ui.json в
 // синхроне. Логика чистая (без dart:io) — тестируется из
 // test/tool/ui_check_test.dart; entrypoint — tool/l10n/ui_check.dart.
 //
@@ -265,7 +265,7 @@ class UiValidation {
 
 /// Ядро валидации: чистая функция над собранными обращениями [uses],
 /// количеством динамических ключей [dynamicCount] и словарём [dict]
-/// (englishKey to entry-map, как в `assets/l10n/ui/ru.json`). [forms] —
+/// (englishKey to entry-map, как в `assets/l10n/ru/ui.json`). [forms] —
 /// обязательный набор plural-форм активного resolver'а (RuPluralResolver.forms).
 UiValidation validateUiKeys({
   required List<UiKeyUse> uses,

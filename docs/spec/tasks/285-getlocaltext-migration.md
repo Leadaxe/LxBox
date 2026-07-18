@@ -9,11 +9,11 @@
 - [x] **Ф1 — движок + resolver'ы.** `get_local_text.dart` (`GetLocalText.s/.plural`,
   printf `%s/%d/%1$s/%%`, форма-индекс, fallback = ключ); `plural_resolver.dart`
   (`PluralResolver` + `EnPluralResolver`/`RuPluralResolver`, CLDR ru); загрузка
-  `assets/l10n/ui/<tag>.json`; интеграция в `LocaleController` (resolver по
+  `assets/l10n/<tag>/ui.json`; интеграция в `LocaleController` (resolver по
   локали, dict-reload в `_applyLocale`, глобальный `getLocalText` getter).
   Юнит-тесты движка.
 - [x] **Ф2 — миграционный скрипт (одноразовый, снесён).** ARB en/ru →
-  `assets/l10n/ui/ru.json` (plural ICU→объект, `{x}`→`%s/%d`), коллизии →
+  `assets/l10n/ru/ui.json` (plural ICU→объект, `{x}`→`%s/%d`), коллизии →
   special-формы. Итог: словарь `ru.json` (1146 записей: 1088 строк, 58 plural,
   8 special). Инструменты (`arb_to_getlocaltext.dart`, `migrate_callsites.dart`,
   `_arb_migration_map.json`) удалены как отработавшие.

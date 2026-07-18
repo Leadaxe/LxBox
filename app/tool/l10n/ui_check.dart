@@ -5,7 +5,7 @@ import 'src/check_common.dart';
 import 'src/ui_scan.dart';
 
 // §285 Ф3 — CI-гейт natural-key локализации (заменил мёртвый arb_check).
-// Держит call-site'ы getLocalText в lib/ и словарь assets/l10n/ui/ru.json в
+// Держит call-site'ы getLocalText в lib/ и словарь assets/l10n/ru/ui.json в
 // синхроне: missing/orphan-ключи (warn, strict→fail), shape (.s↔String /
 // .plural↔полный plural-объект) и арность плейсхолдеров (fail всегда).
 // Динамические (не-литеральные) ключи валидировать нельзя — только считаются.
@@ -14,7 +14,7 @@ import 'src/ui_scan.dart';
 // test/tool/ui_check_test.dart). Набор plural-форм берётся из
 // RuPluralResolver.forms (lib) — не дублируется, живёт в синхроне.
 
-const String _dictPath = 'assets/l10n/ui/ru.json';
+const String _dictPath = 'assets/l10n/ru/ui.json';
 
 void main(List<String> args) {
   ensureAppCwd();
