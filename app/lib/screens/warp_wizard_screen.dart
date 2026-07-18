@@ -73,8 +73,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   WarpEndpointPicker? _picker; // §136 — для рандома endpoint/SNI
   bool _endpointAutoFilled = false; // §136 — endpoint в поле = наш авто-рандом
 
-  // §284 — WARP endpoint scanner (SCAN). _scanProgress != null пока идёт скан.
-  _ScanProgress? _scanProgress;
 
   @override
   void initState() {
@@ -170,61 +168,36 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     super.dispose();
   }
 
-  // ─────────────────────────── §284 — SCAN ───────────────────────────
+  // ───────────────────────── §284 — WARP GENERATOR ─────────────────────────
 
-  /// Пересоздаёт папку «SCAN WARP», гонит рандом-скан (DNS-независимо), оставляет
-  /// живые эндпоинты и открывает папку с результатом. Гейтится подтверждением
-  /// (скан останавливает VPN).
-  Future<void> _runScan() async {
+  /// Генерирует 100 случайных WARP-узлов (WG/AWG/h3/h2) в папку «WARP GENERATOR»
+  /// и открывает её. Пробы не гоняет — пользователь тестирует штатной кнопкой
+  /// Test в папке. Повторный GENERATE пересоздаёт папку.
+  Future<void> _runGenerate() async {
     if (_picker?.scan == null || _busy) return;
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(getLocalText.s("Scan endpoints?")),
-        content: Text(getLocalText.s("Scanning stops the VPN and probes endpoints directly to find one that works on this network. Continue?")),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(getLocalText.s("Cancel")),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(getLocalText.s("Continue")),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-
-    setState(() {
-      _busy = true;
-      _scanProgress = const _ScanProgress(0, 0);
-    });
+    setState(() => _busy = true);
     int? folderIdx;
     try {
-      folderIdx = await widget.subController.scanWarp(
-        onProgress: (done, total) {
-          if (mounted) setState(() => _scanProgress = _ScanProgress(done, total));
-        },
-      );
+      folderIdx = await widget.subController.generateWarp();
     } catch (e) {
-      if (mounted) showSnack(getLocalText.s("Scan failed — no WARP account or endpoints unreachable."));
-    } finally {
       if (mounted) {
-        setState(() {
-          _busy = false;
-          _scanProgress = null;
-        });
+        showSnack(getLocalText.s("Generation failed — no WARP account."));
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
     if (!mounted) return;
 
     if (folderIdx == null) {
-      showSnack(getLocalText.s("Scan failed — no WARP account or endpoints unreachable."));
+      showSnack(widget.subController.lastScanNote ??
+          getLocalText.s("Generation failed — no WARP account."));
       return;
     }
-    // Открываем папку «SCAN WARP» — она и есть результат (живые эндпоинты).
+    // Замечание при частичном результате (напр. MASQUE выпал — только WG в папке).
+    final note = widget.subController.lastScanNote;
+    if (note != null) showSnack(note);
+    // Открываем папку «WARP GENERATOR».
     final entry = widget.subController.entries[folderIdx];
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => FolderDetailScreen(
@@ -388,24 +361,20 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                   ? null
                   : (sel) => setState(() => _transport = sel.first),
             ),
-            // §284 — SCAN: рандом-посев эндпоинтов → папка «SCAN WARP» с живыми.
+            // §284 — GENERATE: 100 случайных WARP-узлов → папка «WARP GENERATOR».
             // Виден только если в asset есть scan-пул.
             if (_picker?.scan != null) ...[
               const SizedBox(height: 12),
               OutlinedButton.icon(
-                onPressed: _busy ? null : _runScan,
-                icon: _scanProgress != null
+                onPressed: _busy ? null : _runGenerate,
+                icon: _busy
                     ? const SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.radar_outlined),
-                label: Text(
-                  _scanProgress != null
-                      ? getLocalText.s("Probing %1\$d/%2\$d…", _scanProgress!.done, _scanProgress!.total)
-                      : getLocalText.s("Scan"),
-                ),
+                    : const Icon(Icons.auto_awesome_outlined),
+                label: Text(getLocalText.s("Generate")),
               ),
             ],
             const SizedBox(height: 16),
@@ -927,9 +896,3 @@ class _StatusCard extends StatelessWidget {
       );
 }
 
-/// §284 — прогресс скана для подписи кнопки SCAN.
-class _ScanProgress {
-  const _ScanProgress(this.done, this.total);
-  final int done;
-  final int total;
-}

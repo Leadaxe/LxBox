@@ -351,6 +351,12 @@ final class FolderServers extends ServerList {
   final List<FolderMember> members;
   final DateTime createdAt;
 
+  /// §284 — опции теста этой папки (override глобальных ping_options). null =
+  /// брать глобальное значение. Хранятся в самом объекте папки (едут в backup).
+  /// Папка «WARP GENERATOR» ставит IP-URL сюда, чтобы Test шёл без DNS.
+  final String? pingUrl;
+  final int? pingTimeoutMs;
+
   FolderServers({
     required super.id,
     required super.name,
@@ -359,6 +365,8 @@ final class FolderServers extends ServerList {
     required super.detourPolicy,
     List<FolderMember>? members,
     DateTime? createdAt,
+    this.pingUrl,
+    this.pingTimeoutMs,
   })  : members = members ?? <FolderMember>[],
         createdAt = createdAt ?? DateTime.now(),
         super(nodes: [
@@ -389,6 +397,8 @@ final class FolderServers extends ServerList {
         'detour_policy': detourPolicy.toJson(),
         'created_at': createdAt.toIso8601String(),
         'members': members.map((m) => m.toJson()).toList(),
+        if (pingUrl != null) 'ping_url': pingUrl,
+        if (pingTimeoutMs != null) 'ping_timeout_ms': pingTimeoutMs,
       };
 
   factory FolderServers.fromJson(Map<String, dynamic> j) => FolderServers(
@@ -404,6 +414,10 @@ final class FolderServers extends ServerList {
             .whereType<Map>()
             .map((m) => FolderMember.fromJson(m.cast<String, dynamic>()))
             .toList(),
+        pingUrl: (j['ping_url'] as String?)?.trim().isNotEmpty == true
+            ? (j['ping_url'] as String).trim()
+            : null,
+        pingTimeoutMs: (j['ping_timeout_ms'] as num?)?.toInt(),
       );
 
   FolderServers copyWith({
@@ -412,6 +426,9 @@ final class FolderServers extends ServerList {
     String? tagPrefix,
     DetourPolicy? detourPolicy,
     List<FolderMember>? members,
+    String? pingUrl,
+    int? pingTimeoutMs,
+    bool clearPing = false,
   }) =>
       FolderServers(
         id: id,
@@ -421,6 +438,8 @@ final class FolderServers extends ServerList {
         detourPolicy: detourPolicy ?? this.detourPolicy,
         createdAt: createdAt,
         members: members ?? this.members,
+        pingUrl: clearPing ? null : (pingUrl ?? this.pingUrl),
+        pingTimeoutMs: clearPing ? null : (pingTimeoutMs ?? this.pingTimeoutMs),
       );
 }
 

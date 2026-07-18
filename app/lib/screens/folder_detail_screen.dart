@@ -220,8 +220,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     }
     if (_folder.members.isEmpty) return;
     final ping = await SettingsStorage.getPingOptions();
-    final url = (ping['url'] as String?)?.trim() ?? '';
-    final timeoutMs = (ping['timeout_ms'] as num?)?.toInt() ?? 3000;
+    // §284 — опции теста самой папки (ping_url/ping_timeout_ms в объекте папки)
+    // перекрывают глобальные. Папка «WARP GENERATOR» так тестируется по IP без DNS.
+    final url =
+        (_folder.pingUrl ?? (ping['url'] as String?))?.trim() ?? '';
+    final timeoutMs = _folder.pingTimeoutMs ??
+        (ping['timeout_ms'] as num?)?.toInt() ??
+        3000;
     if (!mounted) return;
     setState(() {
       _testing = true;
@@ -426,14 +431,31 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     setState(() {});
   }
 
+  /// §284 — множество индексов членов, не прошедших последний тест.
+  Set<int> _unreachableIndexes() => {
+        for (final e in _probe.entries)
+          if (e.value.status == ProbeStatus.failed ||
+              e.value.status == ProbeStatus.broken ||
+              e.value.status == ProbeStatus.invalid)
+            e.key,
+      };
+
+  /// §284 — выключить (не удалять) недоступные по последнему тесту. Узлы
+  /// остаются в папке серыми; результаты теста сохраняются (индексы не съезжают).
+  Future<void> _disableUnreachable() async {
+    final dead = _unreachableIndexes();
+    if (dead.isEmpty) {
+      await _showError(
+          getLocalText.s("No unreachable or broken servers in last test"));
+      return;
+    }
+    final idx = _index;
+    if (idx < 0) return;
+    await widget.controller.setMembersEnabled(idx, dead, false);
+  }
+
   Future<void> _deleteUnreachable() async {
-    final dead = <int>{
-      for (final e in _probe.entries)
-        if (e.value.status == ProbeStatus.failed ||
-            e.value.status == ProbeStatus.broken ||
-            e.value.status == ProbeStatus.invalid)
-          e.key,
-    };
+    final dead = _unreachableIndexes();
     if (dead.isEmpty) {
       await _showError(getLocalText.s("No unreachable or broken servers in last test"));
       return;
@@ -1246,6 +1268,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               icon: const Icon(Icons.more_vert, size: 20),
               onSelected: (v) {
                 if (v == 'disable_slow') unawaited(_disableSlowerThan());
+                if (v == 'disable_dead') unawaited(_disableUnreachable());
                 if (v == 'delete_dead') unawaited(_deleteUnreachable());
                 if (v == 'sort') unawaited(_sortByPing());
               },
@@ -1253,6 +1276,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                 PopupMenuItem(
                     value: 'disable_slow',
                     child: Text(getLocalText.s("Disable slower than…"))),
+                PopupMenuItem(
+                    value: 'disable_dead',
+                    child: Text(getLocalText.s("Disable unreachable"))),
                 PopupMenuItem(
                     value: 'delete_dead',
                     child: Text(getLocalText.s("Delete unreachable"))),

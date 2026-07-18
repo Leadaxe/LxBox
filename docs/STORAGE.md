@@ -345,6 +345,8 @@ Sealed по полю `type`:
   "tag_prefix":    "<str>",
   "detour_policy": { … },
   "created_at":    "ISO-8601",
+  "ping_url":         "<url>",                  // §284 — опц. override URL теста
+  "ping_timeout_ms":  3000,                     // §284 — опц. override таймаута
   "members": [                                  // порядок = порядок в UI
     { "raw": "vless://…#Alpha", "enabled": true,
       "detour": "Jump" },                            // §237 — личный detour (опц.)
@@ -352,6 +354,12 @@ Sealed по полю `type`:
   ]
 }
 ```
+
+`ping_url` / `ping_timeout_ms` (§284) — **опции теста самой папки**, перекрывают
+глобальные `ping_options` при нажатии Test в папке. Отсутствуют → берётся
+глобальное значение. Хранятся в объекте папки (едут в backup автоматически).
+Папка «WARP GENERATOR» ставит сюда IP-URL (`1.1.1.1/cdn-cgi/trace`) — тест по IP
+без DNS.
 
 `raw` — самодостаточный парсируемый фрагмент (URI / WG-INI / outbound-JSON);
 ноды реконструируются re-parse'ом каждого `raw` при загрузке (как `raw_body`

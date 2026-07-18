@@ -55,23 +55,30 @@ class ScanNodeBuilder {
     return spec?.toUri();
   }
 
-  /// MASQUE-узел: те же креды, свой data-plane IP:port + network (h3/h2) + SNI.
-  /// server/port нет в copyWith — пересобираем аккаунт. Фрагмент URI переписываем
-  /// на nodeTitle (тег = фрагмент, `tagFromLabel`).
+  /// MASQUE-узел: те же креды, network (h3/h2) + SNI из кандидата.
+  ///
+  /// ВАЖНО (device-verified): **h3 (QUIC) поднимается ТОЛЬКО на стандартном
+  /// MASQUE-сервере**, который CF отдал при регистрации (`acc.server`). На
+  /// случайном IP блока h3 даёт `CRYPTO_ERROR ... x509: algorithm unimplemented`.
+  /// h2 (TCP-TLS) терпимее — работает на разных IP, поэтому ему даём случайный
+  /// IP кандидата (разнообразие endpoint). server/port нет в copyWith —
+  /// пересобираем аккаунт.
   String? _masqueUri(ScanCandidate c) {
     final acc = masque;
     if (acc == null) return null;
+    final isH3 = c.protocol == ScanProtocol.masqueH3;
     final tuned = MasqueAccount(
       privKeyDer: acc.privKeyDer,
       serverPubDer: acc.serverPubDer,
       clientV4: acc.clientV4,
       clientV6: acc.clientV6,
-      server: c.ip,
-      port: c.port,
+      // h3 — только стандартный сервер из реги; h2 — случайный IP кандидата.
+      server: isH3 ? acc.server : c.ip,
+      port: isH3 ? acc.port : c.port,
       deviceId: acc.deviceId,
       token: acc.token,
       createdAt: acc.createdAt,
-      network: c.protocol == ScanProtocol.masqueH3 ? 'h3' : 'h2',
+      network: isH3 ? 'h3' : 'h2',
       sni: c.sni,
       idleTimeout: acc.idleTimeout,
       keepAlive: acc.keepAlive,

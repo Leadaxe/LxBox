@@ -82,6 +82,46 @@ void main() {
       expect(rt.members[1].enabled, isFalse);
     });
 
+    test('§284 ping_url/ping_timeout_ms: round-trip + copyWith сохраняет', () {
+      final f = FolderServers(
+        id: 'f-2',
+        name: 'WARP GENERATOR',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        members: [FolderMember(raw: uriA)],
+        pingUrl: 'https://1.1.1.1/cdn-cgi/trace',
+        pingTimeoutMs: 3000,
+      );
+      // backup-инвариант: поля переживают toJson→fromJson.
+      final rt = ServerList.fromJson(f.toJson()) as FolderServers;
+      expect(rt.pingUrl, 'https://1.1.1.1/cdn-cgi/trace');
+      expect(rt.pingTimeoutMs, 3000);
+
+      // copyWith без ping-аргументов НЕ теряет поля.
+      final kept = f.copyWith(members: [FolderMember(raw: uriB)]);
+      expect(kept.pingUrl, 'https://1.1.1.1/cdn-cgi/trace');
+      expect(kept.pingTimeoutMs, 3000);
+
+      // clearPing сбрасывает в null (→ глобальный ping при тесте).
+      final cleared = f.copyWith(clearPing: true);
+      expect(cleared.pingUrl, isNull);
+      expect(cleared.pingTimeoutMs, isNull);
+      expect(cleared.toJson().containsKey('ping_url'), isFalse);
+
+      // Папка без ping-полей → null (берётся глобальное).
+      final plain = FolderServers(
+        id: 'f-3',
+        name: 'Plain',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+      );
+      expect(plain.pingUrl, isNull);
+      expect((ServerList.fromJson(plain.toJson()) as FolderServers).pingUrl,
+          isNull);
+    });
+
     test('nodes = только включённые члены (builder-контракт)', () {
       final folder = FolderServers(
         id: 'f-1',
