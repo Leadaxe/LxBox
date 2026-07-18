@@ -2,6 +2,12 @@
 // Cloudflare-first-party (cloudflare.com/ips: 162.158.0.0/15 ⊃ 162.159.192/193/195;
 // 188.114.96.0/20 ⊃ 188.114.96-99) + §132-verified. НЕТ сторонних реестров.
 //
+// MASQUE (masque_v4_cidr): .198.0/24 — device-verified (h2 стабилен на всём блоке;
+// дефолты .198.1 h3, .198.2 h2). .197.0/24 — официальный CF-анонс MASQUE (firewall-док).
+// .192.0/24 — доп. блок, что перебирают референсные реимплементации (usque, masque-plus).
+// h3 пинит серверный pubkey из реги: на IP с другим anycast-ключом падает (не IP-блок,
+// а pinning) — эксперимент показывает, где ключ совпадает.
+//
 // Парсится из `scan`-блока assets/warp_endpoints.json. SNI-пулы приходят из
 // уже существующих sni_pool / masque_sni_pool (их грузит WarpEndpointPicker).
 

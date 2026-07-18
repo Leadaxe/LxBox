@@ -60,8 +60,9 @@ class ScanNodeBuilder {
   /// ВАЖНО (device-verified): **h3 (QUIC) поднимается ТОЛЬКО на стандартном
   /// MASQUE-сервере**, который CF отдал при регистрации (`acc.server`). На
   /// случайном IP блока h3 даёт `CRYPTO_ERROR ... x509: algorithm unimplemented`.
-  /// h2 (TCP-TLS) терпимее — работает на разных IP, поэтому ему даём случайный
-  /// IP кандидата (разнообразие endpoint). server/port нет в copyWith —
+  /// **h2 (TCP-TLS) стабильно работает на всём блоке `162.159.198.*`** (проверено
+  /// на устройстве) — ограничения по IP нет, поэтому ему даём случайный IP
+  /// кандидата (разнообразие endpoint). server/port нет в copyWith —
   /// пересобираем аккаунт.
   String? _masqueUri(ScanCandidate c) {
     final acc = masque;
