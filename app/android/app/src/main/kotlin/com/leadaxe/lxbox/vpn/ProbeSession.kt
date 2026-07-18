@@ -96,6 +96,39 @@ object ProbeSession : CommandServerHandler {
         }
     }
 
+    /// §284 — сырая проба WARP-endpoint по IP (WG-handshake / QUIC-h3 / TLS-h2).
+    /// Variant B: провал — в `error` результата, не в исключении. Требует
+    /// активной probe-сессии (headless ядро поднято через [start]).
+    ///
+    /// ВНИМАНИЕ: реальный вызов `client.warpProbe(...)` появится только в libbox
+    /// с kernel SPEC 028 (≥ v1.14.0-lx.10). До re-pin `libbox.version` символа
+    /// в .aar нет → Kotlin не скомпилировался бы с прямым вызовом, поэтому пока
+    /// graceful-заглушка: Dart/UI показывают «probe unavailable», скан живой.
+    /// TODO(§284): после re-pin на .aar с WarpProbe — заменить тело на реальный
+    /// вызов (шаблон в комментарии ниже).
+    fun warpProbe(args: Map<String, Any?>): Map<String, Any> {
+        if (client.get() == null) {
+            return mapOf(
+                "alive" to false, "rttMs" to 0, "error" to "probe session not running",
+            )
+        }
+        // return runCatching {
+        //     val ip = args["ip"] as? String ?: ""
+        //     val port = (args["port"] as? Number)?.toInt() ?: 0
+        //     val protocol = (args["protocol"] as? Number)?.toInt() ?: 0
+        //     val sni = args["sni"] as? String ?: ""
+        //     val utlsFp = args["utlsFp"] as? String ?: ""
+        //     val timeoutMs = (args["timeoutMs"] as? Number)?.toInt() ?: 0
+        //     val reserved = (args["reserved"] as? List<*>)
+        //         ?.map { (it as Number).toByte() }?.toByteArray() ?: ByteArray(0)
+        //     val r = client.get()!!.warpProbe(ip, port, protocol, sni, utlsFp, timeoutMs, reserved)
+        //     mapOf("alive" to r.alive, "rttMs" to r.rttMs, "error" to (r.error ?: ""))
+        // }.getOrElse {
+        //     mapOf("alive" to false, "rttMs" to 0, "error" to (it.message ?: "warpProbe failed"))
+        // }
+        return mapOf("alive" to false, "rttMs" to 0, "error" to "probe unavailable")
+    }
+
     @Synchronized
     fun stop() = stopInternal()
 

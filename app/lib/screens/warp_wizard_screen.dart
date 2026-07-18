@@ -9,6 +9,9 @@ import '../services/ui_helpers.dart';
 import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/warp_endpoint_picker.dart';
+import '../services/warp/scan/scan_models.dart';
+import '../services/warp/scan/warp_scan_runner.dart';
+import 'warp_wizard/scan_results_sheet.dart';
 
 /// §025 — Full-screen визард «Get WARP». Открывается из overflow-меню
 /// Subscriptions. Один тап «Register» для free; license/endpoint опциональны
@@ -71,6 +74,10 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
 
   WarpEndpointPicker? _picker; // §136 — для рандома endpoint/SNI
   bool _endpointAutoFilled = false; // §136 — endpoint в поле = наш авто-рандом
+
+  // §284 — WARP endpoint scanner (SCAN). _scanProgress != null пока идёт скан.
+  WarpScanRunner? _scanRunner;
+  WarpScanProgress? _scanProgress;
 
   @override
   void initState() {
@@ -163,7 +170,94 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     _jc.dispose();
     _jmin.dispose();
     _jmax.dispose();
+    _scanRunner?.cancel(); // §284 — прервать скан при уходе с экрана
     super.dispose();
+  }
+
+  // ─────────────────────────── §284 — SCAN ───────────────────────────
+
+  /// Останавливает VPN, гонит двухфазный рандом-скан, показывает таблицу,
+  /// применяет выбранную ноду. Гейтится подтверждением (скан рвёт туннель).
+  Future<void> _runScan() async {
+    final pool = _picker?.scan;
+    if (pool == null || _busy) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.l.warpScanConfirmTitle),
+        content: Text(context.l.warpScanConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.l.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.l.commonContinue),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() {
+      _busy = true;
+      _scanProgress = const WarpScanProgress(0, 0, 'seed');
+    });
+    final runner = WarpScanRunner();
+    _scanRunner = runner;
+    List<ScanResult> results = const [];
+    try {
+      results = await runner.scan(
+        pool: pool,
+        onProgress: (p) {
+          if (mounted) setState(() => _scanProgress = p);
+        },
+      );
+    } finally {
+      _scanRunner = null;
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _scanProgress = null;
+        });
+      }
+    }
+    if (!mounted) return;
+
+    // Ядро без raw-probe (старый .aar): все мёртвые с 'probe unavailable' →
+    // осмысленный снек вместо пустой таблицы.
+    final allUnavailable = results.isNotEmpty &&
+        results.every((r) =>
+            !r.alive && (r.error ?? '').contains('probe unavailable'));
+    if (allUnavailable) {
+      showSnack(context.l.warpScanProbeUnavailable);
+      return;
+    }
+
+    final choice = await showWarpScanResults(context, results);
+    if (choice == null || !mounted) return;
+    _applyScanChoice(choice);
+  }
+
+  /// Подставляет выбранную из таблицы ноду в поля визарда. Для WG — endpoint +
+  /// SNI (полноценно, §135/§138). Для MASQUE — только транспорт+SNI: у MASQUE
+  /// нет endpoint-поля (сервер резолвится registerMasque), перенос IP:port —
+  /// follow-up (§284 open).
+  void _applyScanChoice(ScanChoice c) {
+    setState(() {
+      if (c.protocol == ScanProtocol.awg) {
+        _transport = 'wireguard';
+        _endpoint.text = c.endpoint;
+        _endpointAutoFilled = true;
+        if (c.sni.isNotEmpty) _sni.text = c.sni;
+      } else {
+        _transport = 'masque';
+        _masqueNetwork = c.protocol == ScanProtocol.masqueH3 ? 'h3' : 'h2';
+        if (c.sni.isNotEmpty) _masqueSni.text = c.sni;
+      }
+    });
   }
 
   /// Собирает [QuicParams] из Advanced-полей (с дефолтами при пустых/битых).
@@ -320,6 +414,27 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                   ? null
                   : (sel) => setState(() => _transport = sel.first),
             ),
+            // §284 — SCAN: рандом-посев эндпоинтов → таблица → выбор рабочей ноды.
+            // Виден только если в asset есть scan-пул.
+            if (_picker?.scan != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _runScan,
+                icon: _scanProgress != null
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.radar_outlined),
+                label: Text(
+                  _scanProgress != null
+                      ? context.l.warpScanProgress(
+                          _scanProgress!.done, _scanProgress!.total)
+                      : context.l.warpScanButton,
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             // §130 — MASQUE: транспорт h3/h2 + опц. SNI. Обфускация и WG-Advanced
             // не применяются (MASQUE сам маскируется под HTTPS/QUIC).

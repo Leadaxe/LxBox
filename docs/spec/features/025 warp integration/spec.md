@@ -20,7 +20,7 @@
 - **WARP+** — опциональное поле «License key (optional)». Пусто → free WARP. Заполнено → `PATCH /reg/{id}/account` привязывает ключ. WARP+ даёт Argo Smart Routing (чуть меньше пинг / стабильнее маршрут); приватность и шифрование идентичны free.
 - **UX результата** — успешная регистрация **сразу добавляет WireGuard-узел как профиль** (`UserServer` с одним inline-узлом) в список Servers, как обычная подписка. Не показываем сырой конфиг отдельным экраном.
 - **Вход в фичу** — пункт **«Get WARP»** в overflow-меню экрана Servers (рядом с «Add server…», «Get Public Test Servers») → открывает **полноэкранный визард** `WarpWizardScreen` (по образцу `add_server_wizard_screen.dart`, §074): логотип/заголовок, поле license, Advanced (endpoint, re-register), статус после регистрации, кнопка Register.
-- **Endpoint по умолчанию** — `engage.cloudflareclient.com:2408`. Юзер может переопределить (рабочий IP:port из стороннего сканера) — мы **не** делаем встроенный сканер в этой итерации.
+- **Endpoint по умолчанию** — `engage.cloudflareclient.com:2408`. Юзер может переопределить вручную или через встроенный сканер ([§284](../284%20warp-endpoint-scanner/spec.md) — кнопка SCAN подбирает рабочий `IP:port` на текущей сети). Раньше сканер был вынесен «вне итерации» — теперь его доставляет §284.
 - **Route through proxy** — опциональный тумблер: WARP-узел получает `detour` на выбранную proxy-подписку (proxy → WARP → интернет). За рамками первой итерации, заложить место в модели.
 - **Идемпотентность** — WARP-аккаунт кешируется в storage. Повторный «Get WARP» по умолчанию **переиспользует** существующий аккаунт (а не плодит регистрации); есть «Re-register» для форс-нового.
 
@@ -224,7 +224,7 @@ class WarpAccount {
 
 ## Future extensions (вне этой итерации)
 
-- Встроенный сканер рабочих endpoint'ов (когда `engage.*:2408` заблокирован). **Research готов — [§132](../../tasks/132-warp-endpoint-scanner-research.md)** (диапазоны, порты, liveness-проба handshake'ом, AWG-нюанс).
+- ~~Встроенный сканер рабочих endpoint'ов~~ — **доставлен [§284](../284%20warp-endpoint-scanner/spec.md)** (кнопка SCAN, двухфазный рандом-посев, raw-probe через ядро по IP). Research-фундамент — [§132](../../tasks/132-warp-endpoint-scanner-research.md).
 - «Route through proxy» — `detour` WARP-узла на выбранную proxy-подписку (§111).
 - Авто-ротация endpoint при падении хендшейка.
 - WARP как полноценная подписка с авто-апдейтом (перерегистрация по расписанию).
