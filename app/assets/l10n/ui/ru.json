@@ -649,9 +649,6 @@
   "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the channels' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on.": {
     "value": "Усыплять и туннели активного маршрута (члены пула, выбранный узел) после долгого затишья — например, за ночь. Первое соединение после сна будет дольше примерно на один RTT. Держите значение не меньше тайм-аута простоя каналов (по умолчанию 30 минут). Требует включённой настройки «Усыплять неактивные туннели»."
   },
-  "AmneziaWG nodes cannot run through WireGuard — such targets are hidden. Use a non-wireguard detour (e.g. vless).": {
-    "value": "Узлы AmneziaWG не работают через WireGuard — такие цели скрыты. Используйте detour другого типа (например, vless)."
-  },
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ требует это разрешение для SSID. Нажмите, чтобы выдать."
   },

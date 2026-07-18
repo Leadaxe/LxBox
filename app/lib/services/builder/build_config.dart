@@ -3,7 +3,6 @@ import 'dart:convert';
 import '../../models/channel.dart';
 import '../../models/custom_rule.dart';
 import '../../models/emit_context.dart';
-import '../../models/node_spec.dart' show Awg;
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/singbox_entry.dart';
@@ -590,28 +589,8 @@ List<Map<String, dynamic>> _buildChannelGroups({
 
   // §248 — member-set'ы считаем один раз: их делят selector и auto-двойник.
   // §254 — детур-циклы билдер больше НЕ рвёт: детекция и минимальный набор
-  // виновников — в validateConfig (fatal, конфиг не собирается); здесь
-  // структуры графа нужны только AWG-advisory ниже.
+  // виновников — в validateConfig (fatal, конфиг не собирается).
   final memberSets = [for (final c in active) nodesFor(c)];
-  final entryByTag = <String, Map<String, dynamic>>{
-    for (final m in nodeEntries)
-      if (m['tag'] is String) m['tag'] as String: m,
-  };
-  final channelByAlias = <String, int>{
-    for (var i = 0; i < active.length; i++) ...{
-      active[i].tag: i,
-      active[i].autoTag: i,
-    },
-  };
-
-  _warnAwgDetourViaWgChannels(
-    active: active,
-    memberSets: memberSets,
-    nodeEntries: nodeEntries,
-    entryByTag: entryByTag,
-    channelByAlias: channelByAlias,
-    emitWarnings: emitWarnings,
-  );
 
   final result = <Map<String, dynamic>>[];
   for (var i = 0; i < active.length; i++) {
@@ -722,45 +701,6 @@ List<Map<String, dynamic>> _buildChannelGroups({
     }
   }
   return result;
-}
-
-/// §248 — advisory: узел AmneziaWG детурится через канал, в node-set
-/// которого есть wireguard-эндпоинты. Прямую ссылку AWG→WG прячет §130-гейт
-/// пикера; канальная секция его осознанно обходит (состав канала не
-/// ограничен) — предупреждаем, не запрещаем (AWG через WireGuard вешает
-/// ядро на Android).
-void _warnAwgDetourViaWgChannels({
-  required List<Channel> active,
-  required List<List<String>> memberSets,
-  required List<Map<String, dynamic>> nodeEntries,
-  required Map<String, Map<String, dynamic>> entryByTag,
-  required Map<String, int> channelByAlias,
-  required List<String> emitWarnings,
-}) {
-  bool isWg(Map<String, dynamic> m) => m['type'] == 'wireguard';
-  // §097 — AWG = wireguard-endpoint с obfuscation-полями в корне (writeInto).
-  bool isAwg(Map<String, dynamic> m) =>
-      isWg(m) &&
-      (Awg.numKeys.any(m.containsKey) || Awg.strKeys.any(m.containsKey));
-
-  final channelHasWg = <int, bool>{};
-  for (final m in nodeEntries) {
-    final d = m['detour'];
-    if (d is! String || d.isEmpty) continue;
-    final ci = channelByAlias[d];
-    if (ci == null || !isAwg(m)) continue;
-    final hasWg = channelHasWg[ci] ??= memberSets[ci].any((t) {
-      final e = entryByTag[t];
-      return e != null && isWg(e);
-    });
-    if (hasWg) {
-      final c = active[ci];
-      final label = c.label.isNotEmpty ? c.label : c.tag;
-      emitWarnings.add('Node "${m['tag']}" (AmneziaWG) detours via channel '
-          '"$label" which contains WireGuard node(s) — this can hang the '
-          'tunnel on Android.');
-    }
-  }
 }
 
 /// §125 fallback — синтез `List<Channel>` из `template.groupTemplates`, когда

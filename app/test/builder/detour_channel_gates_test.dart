@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/channel.dart';
 import 'package:lxbox/models/custom_rule.dart';
-import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/validation.dart';
@@ -550,88 +549,6 @@ void main() {
         routeFinal: 'vpn-2',
       );
       expect((r.config['route'] as Map)['final'], 'vpn-2');
-    });
-  });
-
-  group('§248 — AWG→WG advisory', () {
-    WireguardSpec wgSpec({
-      required String tag,
-      Awg? awg,
-    }) =>
-        WireguardSpec(
-          id: tag,
-          tag: tag,
-          label: tag,
-          server: '10.0.0.1',
-          port: 51820,
-          rawUri: '',
-          privateKey: 'cHJpdmF0ZS1rZXktdGVzdA==',
-          localAddresses: const ['10.0.0.2/32'],
-          peers: const [
-            WireguardPeer(
-              publicKey: 'cHVibGljLWtleS10ZXN0AAAA',
-              endpointHost: '10.0.0.1',
-              endpointPort: 51820,
-            ),
-          ],
-          awg: awg,
-        );
-
-    UserServer wgServer({
-      required String id,
-      required WireguardSpec spec,
-      DetourPolicy policy = DetourPolicy.defaults,
-    }) =>
-        UserServer(
-          id: id,
-          name: id,
-          enabled: true,
-          tagPrefix: '',
-          detourPolicy: policy,
-          origin: UserSource.paste,
-          createdAt: DateTime.now(),
-          nodes: [spec],
-        );
-
-    test('AWG-узел детурится через канал с WG-нодой → advisory', () async {
-      final r = await build([
-        wgServer(id: 'exit', spec: wgSpec(tag: 'WG Exit')),
-        wgServer(
-            id: 'awg',
-            spec: wgSpec(
-                tag: 'AWG Client', awg: const Awg({'jc': 4, 'jmin': 10})),
-            policy: const DetourPolicy(overrideDetour: 'vpn-2')),
-      ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
-            tag: 'vpn-2',
-            label: 'Relay',
-            isDetour: true,
-            nodeFilter: 'WG Exit'),
-      ]);
-      expect(
-          r.emitWarnings,
-          contains(contains(
-              'Node "AWG Client" (AmneziaWG) detours via channel "Relay"')));
-    });
-
-    test('обычный (не-AWG) WG-узел через канал с WG — без advisory',
-        () async {
-      final r = await build([
-        wgServer(id: 'exit', spec: wgSpec(tag: 'WG Exit')),
-        wgServer(
-            id: 'wg',
-            spec: wgSpec(tag: 'WG Client'),
-            policy: const DetourPolicy(overrideDetour: 'vpn-2')),
-      ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
-            tag: 'vpn-2',
-            label: 'Relay',
-            isDetour: true,
-            nodeFilter: 'WG Exit'),
-      ]);
-      expect(r.emitWarnings, isNot(contains(contains('AmneziaWG'))));
     });
   });
 }
