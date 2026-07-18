@@ -54,7 +54,7 @@ class TemplateLoader {
     if (tag != 'en') {
       try {
         final ovRaw =
-            await rootBundle.loadString('assets/l10n/template/$tag.json');
+            await rootBundle.loadString('assets/l10n/$tag/template.json');
         final overlay = TemplateOverlay.parseLocaleFile(
             jsonDecode(ovRaw) as Map<String, dynamic>);
         TemplateOverlay.apply(json, overlay);

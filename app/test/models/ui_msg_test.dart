@@ -11,9 +11,9 @@ import 'package:lxbox/services/l10n/plural_resolver.dart';
 
 // §285 — sealed UiMsg: равенство по данным, рендер по локали (через
 // GetLocalText, не ARB), стабильность renderEn() (machine-поверхности не
-// зависят от активной локали). `_ru` — реальный словарь assets/l10n/ui/ru.json.
+// зависят от активной локали). `_ru` — реальный словарь assets/l10n/ru/ui.json.
 GetLocalText _loadRu() {
-  final raw = File('assets/l10n/ui/ru.json').readAsStringSync();
+  final raw = File('assets/l10n/ru/ui.json').readAsStringSync();
   final dict = jsonDecode(raw) as Map<String, dynamic>;
   return GetLocalText(dict, const RuPluralResolver());
 }

@@ -3763,5 +3763,14 @@
       "many": "В папке «%2$s» %1$d серверов.",
       "other": "В папке «%2$s» %1$d сервера."
     }
+  },
+  "Generate": {
+    "value": "Сгенерировать"
+  },
+  "Generation failed — no WARP account.": {
+    "value": "Генерация не удалась — нет WARP-аккаунта."
+  },
+  "Disable unreachable": {
+    "value": "Отключить недоступные"
   }
 }

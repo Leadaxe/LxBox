@@ -10,10 +10,10 @@ import 'package:lxbox/services/l10n/plural_resolver.dart';
 // §285 — симуляция смены локали на живых lazy-рендер объектах: один и тот же
 // сохранённый объект (NodeWarning в подписке, UiMsg в home_state.lastError)
 // рендерится по-русски через renderWith(ru)-путь (активная локаль = словарь
-// assets/l10n/ui/ru.json), а machine-путь renderEn() остаётся байт-в-байт
+// assets/l10n/ru/ui.json), а machine-путь renderEn() остаётся байт-в-байт
 // английским (spec §4.4).
 GetLocalText _loadRu() {
-  final raw = File('assets/l10n/ui/ru.json').readAsStringSync();
+  final raw = File('assets/l10n/ru/ui.json').readAsStringSync();
   final dict = jsonDecode(raw) as Map<String, dynamic>;
   return GetLocalText(dict, const RuPluralResolver());
 }

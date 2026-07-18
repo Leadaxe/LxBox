@@ -1311,7 +1311,7 @@ translator-guide — [`l10n.md`](l10n.md).
 |---|---|
 | `lib/services/l10n/get_local_text.dart` | `GetLocalText` — natural-key движок: `.s("en text", args)` / `.plural("%d en", n)`, printf `%s/%d/%1$s/%%`, форма-индекс, fallback = сам ключ; `GetLocalText.en` — пиненный английский рендерер |
 | `lib/services/l10n/plural_resolver.dart` | `PluralResolver` + `En`/`RuPluralResolver` (CLDR формы: ru one/few/many/other) — набор форм диктует shape plural-объекта в словаре |
-| `assets/l10n/ui/ru.json` | Natural-key словарь: `englishKey → { value: String\|pluralObj, special: {"N": {value}} }`. `en.json` нет by design (fallback на ключ) |
+| `assets/l10n/ru/ui.json` | Natural-key словарь: `englishKey → { value: String\|pluralObj, special: {"N": {value}} }`. `en`-файла нет by design — английский базовый, в коде (fallback на сам ключ) |
 | `lib/services/l10n/locale_controller.dart` | `LocaleController` — **единственный владелец** смены локали + глобальный `getLocalText` getter (dict-reload в пайплайне); `didChangeLocales` ловит смену системного языка при `setting=='system'` |
 | `lib/services/l10n/template_overlay.dart` | Pre-parse оверлей display-текста `wizard_template.json` (адреса по machine-id, см. [TEMPLATE.md](TEMPLATE.md#локализация-display-текста--l10n-overlay-279)) |
 | `lib/services/l10n/template_aware_state.dart` | Mixin: refetch template-derived состояния в `didChangeDependencies` по `Localizations.localeOf` (initState переживает rebuild — снапшот локали там запрещён checker'ом) |

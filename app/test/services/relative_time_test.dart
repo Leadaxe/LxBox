@@ -9,7 +9,7 @@ import 'package:lxbox/services/relative_time.dart';
 /// §285 — relativeTime через getLocalText. Локализатор инъектируется (DI):
 /// en-группа не передаёт `t` → глобальный fallback печатает английский ключ;
 /// ru-группа передаёт GetLocalText, собранный из настоящего
-/// assets/l10n/ui/ru.json + RuPluralResolver (без глобального LocaleController).
+/// assets/l10n/ru/ui.json + RuPluralResolver (без глобального LocaleController).
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final now = DateTime(2026, 4, 22, 12, 0, 0);
@@ -51,7 +51,7 @@ void main() {
     late GetLocalText ru;
 
     setUpAll(() async {
-      final raw = await rootBundle.loadString('assets/l10n/ui/ru.json');
+      final raw = await rootBundle.loadString('assets/l10n/ru/ui.json');
       final dict = jsonDecode(raw) as Map<String, dynamic>;
       ru = GetLocalText(dict, const RuPluralResolver());
     });

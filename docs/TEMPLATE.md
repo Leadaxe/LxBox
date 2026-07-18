@@ -1070,21 +1070,22 @@ preset_expand-снапшотов** (`TemplateOverlay.apply`, зовётся из
 `TemplateLoader`; кэш loader'а ключуется тегом локали):
 
 ```
-app/assets/l10n/template/en.json   # генерируемое english→english зеркало display-текста
-app/assets/l10n/template/ru.json   # ручной перевод (тот же shape, что UI-словарь)
+app/assets/l10n/ru/template.json   # ручной перевод (тот же shape, что UI-словарь)
 ```
 
-Ключ overlay = **сам английский текст** display-поля (тот же принцип, что
-natural-key UI-словарь `assets/l10n/ui/<tag>.json`), а не структурный адрес.
+Английский display-текст живёт в самом `wizard_template.json` (базовый язык, в
+коде) — отдельного en-файла нет. Ключ overlay = **сам английский текст**
+display-поля (тот же принцип, что natural-key UI-словарь
+`assets/l10n/<tag>/ui.json`), а не структурный адрес.
 `TemplateOverlay.apply` ходит по whitelist-схеме шаблона, читает английское
 значение узла и подменяет его переводом по этому тексту.
 
-- `en.json` — плоский `Map<String, String>` english→english (ключ = значение),
-  регенерируется `dart run tool/l10n/template_check.dart --write-en`; коммитнутая
-  копия обязана быть byte-equal свежей экстракции (CI). Повторяющийся один и тот
-  же английский текст в разных местах шаблона схлопывается в один ключ (фича, не
-  конфликт).
-- `ru.json` (и любой будущий `<lang>.json`) — тот же объектный shape, что
+- Английские ключи — базовый язык, в коде: коммитнутого/генерируемого en-файла
+  нет. `template_check` извлекает их живьём из `wizard_template.json` через
+  `TemplateOverlay.extract()` на каждом прогоне и валидирует каждый overlay
+  локали против этой экстракции. Повторяющийся один и тот же английский текст в
+  разных местах шаблона схлопывается в один ключ (фича, не конфликт).
+- `template.json` (и любой будущий `<lang>/template.json`) — тот же объектный shape, что
   UI-словарь: `{ "<english>": { "value": "<перевод>" } }`:
 
   ```json
@@ -1113,8 +1114,9 @@ debug-assert + flutter-тест rootBundle-загрузки каждого overl
 Новое user-visible поле обязано попасть в **экстрактор + whitelist**
 `TemplateOverlay` (`template_overlay.dart`) — иначе оно тихо шипится
 английским во всех локалях. Self-check `template_check` следит, чтобы whitelist
-покрывал каждое display-поле экстрактора; после добавления — `--write-en`,
-перевод в `ru.json`, `flutter test` (applier-тесты).
+покрывал каждое display-поле экстрактора (английский ключ извлекается живьём из
+`wizard_template.json`, отдельного en-файла нет); после добавления — перевод в
+`ru/template.json`, `flutter test` (applier-тесты).
 
 ---
 

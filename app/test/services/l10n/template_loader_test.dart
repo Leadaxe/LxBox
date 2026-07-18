@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/l10n/locale_controller.dart';
+import 'package:lxbox/services/l10n/template_overlay.dart';
 import 'package:lxbox/services/template_loader.dart';
 
 /// §279 — TemplateLoader: кэш по тегу локали, mid-flight смена локали не
@@ -82,16 +83,19 @@ void main() {
   test('every declared template overlay asset loads and parses', () async {
     for (final tag in LocaleController.supportedTags) {
       if (tag == 'en') {
-        // en-зеркало — тоже заявленный ассет (для checkers), валидный JSON.
-        final raw =
-            await rootBundle.loadString('assets/l10n/template/en.json');
-        expect(jsonDecode(raw), isA<Map<String, dynamic>>());
+        // Английский — базовый язык: он в коде (display-поля самого шаблона),
+        // а не в файле. Overlay-файла для en нет by design — проверяем, что
+        // источник даёт непустое english→english зеркало.
+        final template = jsonDecode(
+                await rootBundle.loadString('assets/wizard_template.json'))
+            as Map<String, dynamic>;
+        expect(TemplateOverlay.extract(template), isNotEmpty);
         continue;
       }
       final raw =
-          await rootBundle.loadString('assets/l10n/template/$tag.json');
+          await rootBundle.loadString('assets/l10n/$tag/template.json');
       expect(jsonDecode(raw), isA<Map<String, dynamic>>(),
-          reason: 'overlay $tag.json обязан быть валидным JSON-объектом');
+          reason: 'overlay $tag/template.json обязан быть валидным JSON-объектом');
     }
   });
 }

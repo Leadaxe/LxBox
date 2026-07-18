@@ -116,14 +116,6 @@ void main() {
       expect(a.keys.toList(), equals(b.keys.toList()));
     });
 
-    test('committed en.json equals fresh extraction', () {
-      final committed = jsonDecode(
-              File('assets/l10n/template/en.json').readAsStringSync())
-          as Map<String, dynamic>;
-      final fresh = TemplateOverlay.extract(loadRealTemplate());
-      expect(Map<String, String>.from(committed), equals(fresh));
-    });
-
     test('english → english mirror per §3.2 schema', () {
       final m = TemplateOverlay.extract(syntheticTemplate());
       // Ключ = само display-значение; map — english→english зеркало.

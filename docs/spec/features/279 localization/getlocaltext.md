@@ -49,7 +49,7 @@ printf-стиль, позиционные:
 
 ## Формат словаря
 
-`app/assets/l10n/ui/ru.json` — плоский `Map<englishKey, entry>`:
+`app/assets/l10n/ru/ui.json` — плоский `Map<englishKey, entry>`:
 
 ```json
 {
@@ -127,7 +127,7 @@ plural-объекта в словаре обязан покрывать `resolve
 
 ## Интеграция с рантаймом
 
-- `LocaleController` грузит `assets/l10n/ui/<tag>.json` (для `en` — словаря нет,
+- `LocaleController` грузит `assets/l10n/<tag>/ui.json` (для `en` — словаря нет,
   всё fallback) и подставляет resolver по локали. `set()`/`didChangeLocales`/
   runtime-switch — как сейчас, `notifyListeners()` → rebuild.
 - `MaterialApp.localizationsDelegates` теряет `AppLocalizations.delegate`, но

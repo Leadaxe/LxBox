@@ -150,14 +150,14 @@ gh workflow run CI -f run_mode=build    # ○ + APK в artifacts
 
 - **Кодгена строк нет** (§285): UI локализуется через natural keys
   (`getLocalText.s/.plural`, английский текст = ключ), словарь —
-  `assets/l10n/ui/<tag>.json` (asset, не кодген). ARB/gen_l10n/`l10n.yaml`
+  `assets/l10n/<tag>/ui.json` (asset, не кодген). ARB/gen_l10n/`l10n.yaml`
   снесены; `flutter: generate` из pubspec убран. Отсутствие перевода → fallback
   на английский ключ (под `--strict` = fail `ui_check`).
 - **Шаг `L10n checks`** в джобе `checks` — четыре guard-checker'а
   ([`app/tool/l10n/README.md`](../app/tool/l10n/README.md)): `ui_check`
   (natural-key словарь ↔ обращения `getLocalText` в коде: missing/orphan/
-  shape/арность), `template_check` (byte-equal `en.json`, `src`-hash staleness
-  ru-overlay), `hardcoded_check` (ratchet против новых hardcoded display-строк +
+  shape/арность), `template_check` (unknown/missing-ключи overlay против
+  english-строк, извлечённых из `wizard_template.json`), `hardcoded_check` (ratchet против новых hardcoded display-строк +
   rendering-locality), `kotlin_check` (нативные литералы Android + parity
   `values/strings.xml` ↔ `values-ru/`). Все идут с `--strict` на каждом
   push/PR — warnings фатальны.

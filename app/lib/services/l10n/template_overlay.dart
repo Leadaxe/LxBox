@@ -10,7 +10,7 @@
 // walker их просто не посещает.
 //
 // Файл — pure Dart (без flutter-импортов): его использует и runtime-loader,
-// и CLI-checkers (tool/l10n), и генерация en.json.
+// и CLI-checkers (tool/l10n).
 
 /// Callback walker'а: (address, map-узел, имя display-поля в узле). `address` —
 /// имя маршрута обхода (whitelist-скоуп); apply/extract ключуются САМИМ
@@ -54,10 +54,10 @@ class TemplateOverlay {
     return out;
   }
 
-  /// Парсит содержимое locale-overlay файла (`assets/l10n/template/<tag>.json`)
+  /// Парсит содержимое locale-overlay файла (`assets/l10n/<tag>/template.json`)
   /// в плоскую Map английский→перевод. Формат зеркалит ui/-словарь: записи —
   /// объектные `{"value": "<перевод>"}`; плоские строковые значения тоже
-  /// принимаются (формат en.json английский→английский).
+  /// принимаются (плоский формат английский→английский).
   static Map<String, String> parseLocaleFile(Map<String, dynamic> json) {
     final out = <String, String>{};
     json.forEach((key, value) {

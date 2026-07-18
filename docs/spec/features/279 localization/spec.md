@@ -37,12 +37,12 @@ device-verify отложен, DEVICE-PENDING-матрица в задаче 280)
 Выполнено в Phase 7:
 
 - [x] `docs/STORAGE.md` — var `app_language` (system|en|ru), место относительно §189 native_prefs (derived cache, не `NativePrefsKeys`).
-- [x] `docs/TEMPLATE.md` — overlay-файлы `assets/l10n/template/*.json`, схема адресов, `src`-hash (раздел «Локализация display-текста»).
+- [x] `docs/TEMPLATE.md` — per-language overlay-файлы `assets/l10n/<tag>/template.json`, схема адресов (раздел «Локализация display-текста»). Базовый английский display-текст живёт в самом `wizard_template.json`; отдельного en-файла нет.
 - [x] `docs/api/debug-api-reference.md` — side-effect роут `PUT /settings/vars/app_language` (+ DELETE, bash-примеры).
 - [x] `docs/ARCHITECTURE.md` — подсистема l10n (LocaleController-пайплайн, TemplateOverlay, UiMsg, checkers, L10n.kt) + `lib/services/l10n/` в дереве исходников.
 - [x] `CHANGELOG.md` — Unreleased: выбор языка, русская локализация, runtime-переключение.
 - [x] `docs/BUILD.md` — gen_l10n в сборке (генерация при pub get), tool/l10n checkers в CI.
-- [x] `docs/l10n.md` — новый translator-guide (язык end-to-end, `src`-hash accept, hotfix baseline, l10n-exempt).
+- [x] `docs/l10n.md` — новый translator-guide (язык end-to-end, hotfix baseline, l10n-exempt). (Исходно включал `src`-hash-accept workflow — позже упразднён, см. §3.1.)
 
 ---
 
@@ -120,20 +120,21 @@ class L10n {
 
 ### 3.1. Один структурный шаблон + плоские overlay
 
-`wizard_template.json` остаётся единственным структурным шаблоном (machine-конфиг, `@var`-плейсхолдеры, id, английский display-текст). Переводы не форкают структуру:
+`wizard_template.json` остаётся единственным структурным шаблоном (machine-конфиг, `@var`-плейсхолдеры, id, английский display-текст) — и он же источник базового английского display-текста. Переводы не форкают структуру:
 
 ```
-app/assets/l10n/template/en.json   # генерируемое зеркало английского display-текста (коммитится)
-app/assets/l10n/template/ru.json   # ручной перевод
+app/assets/l10n/ru/template.json   # ручной перевод (per-language overlay)
 ```
 
-**Формат locale-файлов — объектный, с hash английского источника** (закрывает эфемерность stale-детекции: git-diff показывает изменение en-значения только внутри меняющего его PR, после merge протухший ru невидим навсегда):
+Английский — базовый язык, живёт в коде (в `wizard_template.json`): отдельного en-overlay-файла нет.
+
+**Формат locale-файлов — объектный, записи адресуются английским текстом-ключом** (english-text keys):
 
 ```json
-"preset.ru-direct.var.dns_server.title": { "text": "DNS-сервер", "src": "a1b2c3d4" }
+"preset.ru-direct.var.dns_server.title": { "value": "DNS-сервер" }
 ```
 
-`src` = усечённый hash текущего английского значения по этому адресу. `template_check` сравнивает `src` каждой записи с hash актуального `en.json`-значения: расхождение = **stale-ошибка, durable, per-key** — ловится каждым CI-прогоном, а не только в PR, менявшем en. Регенерация `src` (флаг `--accept <key>` или ручная правка) — явный акт «перевод пересмотрен». `en.json` остаётся плоским `Map<String, String>`; его коммитнутая копия обязана быть byte-equal свежей экстракции (CI).
+`template_check` не сравнивает записи с коммитнутым en-файлом (его нет): базовый английский источник живёт в `wizard_template.json`, и на каждом прогоне чекер извлекает английские ключи вживую через `TemplateOverlay.extract()`, затем валидирует каждый locale-overlay против этой экстракции. Отдельного durable `src`-hash на записи нет.
 
 ### 3.2. Схема адресов
 
@@ -196,7 +197,7 @@ class TemplateLoader {
 
 Старый in-flight `load()` кладёт результат под свой (старый) тег — новый язык не затирается по построению. Unit-тест: старт `load()`, смена локали mid-flight, ассерт что `cachedOrNull` нового тега — новая локаль.
 
-**(b) Silent fallback не должен маскировать packaging-сбой**: per-key fallback (нет ключа в overlay) — тихий, by design; **отказ целого файла — громкий**: для любого тега из `supportedLocales`, кроме `en`, ошибка `rootBundle.loadString` или парсинга `assets/l10n/template/<tag>.json` → `AppLog.error` + `assert(false)` в debug. Плюс flutter-тест, который rootBundle-загружает и JSON-парсит каждый заявленный overlay: `flutter test` бандлит pubspec-ассеты, поэтому забытая per-file запись в `app/pubspec.yaml` красит CI.
+**(b) Silent fallback не должен маскировать packaging-сбой**: per-key fallback (нет ключа в overlay) — тихий, by design; **отказ целого файла — громкий**: для любого тега из `supportedLocales`, кроме `en`, ошибка `rootBundle.loadString` или парсинга `assets/l10n/<tag>/template.json` → `AppLog.error` + `assert(false)` в debug. Плюс flutter-тест, который rootBundle-загружает и JSON-парсит каждый заявленный overlay: `flutter test` бандлит pubspec-ассеты, поэтому забытая per-file запись в `app/pubspec.yaml` красит CI.
 
 ### 3.5. Персистентные снапшоты шаблонного текста
 
@@ -427,9 +428,8 @@ Checkers пишут отчёт (missing/stale/untranslated-счётчики) в 
 
 ### 9.1. `template_check.dart`
 
-- Регенерированная экстракция byte-equal коммитнутому `en.json`; **экстрактор fail'ит дубликат адреса с конфликтом значений** (§3.2).
-- Locale-файлы: неизвестный ключ → fail; пустой `text` → fail; `text`, начинающийся с `@`, или содержащий `{` → fail (load-bearing, §3.2).
-- **`src`-hash ≠ hash актуального en-значения → stale-fail под `--strict`, warning иначе** — durable per-key детекция (§3.1), а не эфемерный git-diff.
+- Английские ключи извлекаются вживую из `wizard_template.json` через `TemplateOverlay.extract()` (коммитнутого en-файла нет); каждый locale-overlay валидируется против этой свежей экстракции. **Экстрактор fail'ит дубликат адреса с конфликтом значений** (§3.2).
+- Locale-файлы: неизвестный ключ → fail; пустой `value` → fail; `value`, начинающийся с `@`, или содержащий `{` → fail (load-bearing, §3.2).
 - Missing-ключи → warning / `--strict`-fail.
 - Self-check: whitelist applier'а покрывает каждое display-поле экстрактора.
 
@@ -477,12 +477,12 @@ Grep-tier (набор файлов мал и закрыт): `"`-литерал �
 |---|---|---|
 | **0. Развязка протоколов** | `StopReason`-парсинг (Kotlin нетронут); равенство NodeWarning/ValidationIssue → поля данных; `XhttpResetReason`; поля `id` в sections/ping/speed + speed-выбор по id; **механический prep-коммит: `NodeWarning.message` getter → метод `message()` (пока без параметра, делегирует в текущий текст)** — сжимает атомарный diff Phase 4 до signature-only где возможно | ~10 файлов + шаблон |
 | **1. Инфраструктура** | l10n.yaml/`app_en.arb` (seed `common*` + пилот), `L10n` (eager, + пиненный `en`), `LocaleController` **с WidgetsBindingObserver-регистрацией**, wiring MaterialApp, `TemplateOverlay` applier+extractor **со скоупированной схемой адресов (§3.2 — до первой строки ru.json)** и дубль-fail'ом, `TemplateLoader` с кэшом-по-локали + тест mid-flight-инвалидации, три checker'а (hardcoded в ratchet-режиме, rendering-locality в warning-режиме) + канонизированный hash-baseline (~1000 сайтов) + `GITHUB_STEP_SUMMARY`-отчёт + tag-`--strict`-wiring, `app_language`-var + side-effect-registry Debug API + `_appFeatureFlagVars` + §221-тесты + `NativePrefsKeys`-guard-тест + MethodChannel-зеркало + `last_pushed_locale`, LazyPersist-flush, picker (System/English). Ships inert. Release note: `GlobalMaterialLocalizations` немедленно переводит встроенные Material-тексты для system-ru — окно смешанных языков объявляется | ~18 файлов + tool/ |
-| **2. Сердце — шаблон** | `ru.json` (объектный формат с `src`-hash); live-резолюция preset-имён + ordinal-дизамбигуация + display-dedup (§3.5.1); magic-nodes из шаблона; `RuleNameResolver.relocalize`; typed-модели трёх raw-секций; **перенос `_template`-fetch в `didChangeDependencies` на 4 экранах** (settings, dns_settings, speed_test, home_menus); flutter-тест rootBundle-загрузки всех overlay | шаблон + ~12 файлов + перевод |
+| **2. Сердце — шаблон** | `assets/l10n/ru/template.json` (объектный формат, english-text keys `{"value": ...}`; исходно проектировался с `src`-hash — позже упразднён, см. §3.1); live-резолюция preset-имён + ordinal-дизамбигуация + display-dedup (§3.5.1); magic-nodes из шаблона; `RuleNameResolver.relocalize`; typed-модели трёх raw-секций; **перенос `_template`-fetch в `didChangeDependencies` на 4 экранах** (settings, dns_settings, speed_test, home_menus); flutter-тест rootBundle-загрузки всех overlay | шаблон + ~12 файлов + перевод |
 | **3. Sweep UI-chrome** | ~1000 сайтов / ~100 файлов, независимо шипуемые волны (home → subscriptions → routing/folders → stats/profiler → хвост); ICU-плюралы; baseline сужается поволново | самая большая, механическая, параллелизуемая |
 | **4. Warnings/errors — атомарная** | **Не waveable** (ревью): смена сигнатур sealed-иерархии + возврат `UiMsg` у форматтеров — compile-wide break при CI-analyze на весь проект включая test/. Полный closure одной короткой веткой, merge между релизами: `lib/services/parser/*`, `transport_spec.dart`, `validation.dart`, оба форматтера, контроллеры (`home_controller` + `config_io` + `ping_orchestration`, `subscription_controller`), render-сайты, **`renderEn()`-миграция Tasker/AppLog/notification-push (§4.4)**, 4+ test-файла (12 `.message`-ссылок, 14 форматтер-ссылок в `error_format_test.dart`, 9 `NodeWarning`); включение rendering-locality-правила в fail-режим | одна ветка, ~25 файлов + тесты |
 | **5. Форматирование** | intl-даты, relativeTime-плюралы, unit-смежные слова, дедуп `_formatDuration`; суффиксы `d/h/m/s` не трогаются | ~10 файлов |
 | **6. Android native** | strings.xml + values-ru, manifest `@string`, `L10n.kt` (wrap-no-cache), `relabel()`, `ACTION_LOCALE_CHANGED`-receiver (+ `Libbox.setLocale`), `updateShortcuts` + onResume-retry, localeConfig + `LocaleManager` **(empty-list на `system`)** + трёхсторонний reconciliation + `last_pushed_locale`, `Libbox.setLocale` в setAppLanguage-handler (верификация mid-run; иначе — документированное окно), Kotlin-guard. Включить `Русский` → **релиз**. Device-матрица: QS-тайл cold-start на ru; Stop/Reconnect после смены языка при видимой нотификации; **смена языка устройства при `app_language=system` с приложением в foreground и background** (UI и натив переключаются согласованно); **`ru → System default → restart` на 33+**; **restore бэкапа с `app_language` на 33+ при выставленном LocaleManager**; **pinned-shortcut-лейблы после смены**; имя канала в системных настройках; boot-start; Tasker-строки. Release notes: Tasker-блёрбы меняют язык (display-only, матчинг по extras); окно kernel-строк, если mid-run `setLocale` не поддержан | ~12 Kotlin-файлов, ~40 ресурсов |
-| **7. Lock down** — ✅ | Baseline → ноль (выполнено; попутно `hardcoded_check` научен рекурсии в ternary/switch-ветки display-позиций — вскрытая сотня литералов домигрирована в ARB, скан вынесен в `tool/l10n/src/hardcoded_scan.dart` + self-тест `test/tool/`); ru-гейт и orphan-гейт → hard-fail на каждый PR (`--strict` безусловно — CI-условие удалено); доки (STORAGE.md, TEMPLATE.md, BUILD.md, ARCHITECTURE.md, debug-api-reference **с описанием side-effect-роута `app_language`**, CHANGELOG, translator-guide `docs/l10n.md` вкл. hotfix-путь baseline и `src`-hash-workflow) | скрипты/конфиг/доки |
+| **7. Lock down** — ✅ | Baseline → ноль (выполнено; попутно `hardcoded_check` научен рекурсии в ternary/switch-ветки display-позиций — вскрытая сотня литералов домигрирована в ARB, скан вынесен в `tool/l10n/src/hardcoded_scan.dart` + self-тест `test/tool/`); ru-гейт и orphan-гейт → hard-fail на каждый PR (`--strict` безусловно — CI-условие удалено); доки (STORAGE.md, TEMPLATE.md, BUILD.md, ARCHITECTURE.md, debug-api-reference **с описанием side-effect-роута `app_language`**, CHANGELOG, translator-guide `docs/l10n.md` вкл. hotfix-путь baseline; `src`-hash-workflow исходно был описан, позже упразднён — см. §3.1) | скрипты/конфиг/доки |
 
 **Тесты**: ~1768 существующих — подавляющее большинство проходит как есть (en = source, «en-ARB = литералы дословно», латинские единицы); исключение — Phase-4-closure, перечисленный выше. 5 `pumpWidget`-файлов получают `test/helpers/pump_app.dart`. Новые: applier (адреса, whitelist, fallback, дубль-fail), детерминизм экстрактора, checkers self-tested, mid-flight-инвалидация loader'а, rootBundle-загрузка overlay, LocaleController (персистентность + didChangeLocales-пайплайн), §221 (membership + round-trip-с-эффектом на 33+), Debug-API-консистентность, дизамбигуация дублей пресета под обеими локалями, рендеры NodeWarning под обеими локалями, `StopReason`, equatable `UiMsg`, `NativePrefsKeys`-guard.
 
@@ -493,7 +493,7 @@ Grep-tier (набор файлов мал и закрыт): `"`-литерал �
 | # | Решение |
 |---|---|
 | 1 | Overlay применяется к декодированному JSON шаблона **до парсинга и до preset_expand-снапшотов**; запрет `@`-в-начале значений — load-bearing |
-| 2 | Один структурный шаблон; `en.json` генерируется, `ru.json` — единственный рукописный артефакт; **каждая ru-запись несёт `src`-hash английского источника — staleness durable и per-key** |
+| 2 | Один структурный шаблон; базовый английский display-текст живёт в самом `wizard_template.json` (отдельного en-файла нет), overlay-файлы — per-language (`assets/l10n/ru/template.json`), `ru`-overlay — единственный рукописный артефакт; записи адресуются английским текстом-ключом (`{"value": ...}`), durable `src`-hash нет — `template_check` валидирует каждый overlay против живой экстракции из шаблона |
 | 3 | Все overlay-ключи из machine-id; **rule-локальные vars и preset-body dns_servers скоупятся по `preset_id`; dns-server-vars получают `.option.<value>`**; три узла получают `id`; экстрактор fail'ит дубль-конфликт |
 | 4 | Отсутствующий перевод ключа = тихий en-fallback; **отказ целого overlay-файла = громкий (AppLog.error + debug-assert + flutter-тест бандла)**; неизвестный ключ = ошибка CI |
 | 5 | gen_l10n/ARB, `nullable-getter: false`, `required-resource-attributes: true`; генерируемый вывод в .gitignore |
@@ -524,7 +524,7 @@ Grep-tier (набор файлов мал и закрыт): `"`-литерал �
 1. **Schema-drift applier'а**: новое display-поле без обновления экстрактора/whitelist тихо шипится английским. Митигация: self-check экстрактор↔whitelist + typed-модели raw-секций + review-чеклист. Остаток: поле, добавленное в шаблон и модель, но не в экстрактор, — ловится только ревью.
 2. **Смена равенства NodeWarning** меняет dedup-гранулярность — целевой тест на warning-списки.
 3. **Churn sweep'а** (~1000 сайтов, ~100 файлов) конфликтует с параллельными сессиями — волны короткие, baseline-конфликты после канонизации hash'ей тривиальны; hotfix-путь (same-file replacement) документирован.
-4. **Staleness ru в миграционный период** — окно смешанных экранов на develop; `src`-hash делает протухание видимым в каждом summary; hard-fail в Phase 7.
+4. **Staleness ru в миграционный период** — окно смешанных экранов на develop; missing-ключи видны в каждом summary; hard-fail в Phase 7. (Исходно предполагался `src`-hash для durable stale-детекции — позже упразднён, см. §3.1.)
 5. **Phase 4 атомарна** — единственная неразрезаемая фаза, наиболее подвержена коллизиям с параллельными сессиями; митигация: prep-rename в Phase 0 + короткая ветка между релизами; риск остаётся расписанным, а не сюрпризом.
 6. **Реконструкция notification-builder'а** — territory неидемпотентного `addAction`; обязательный device-тест в матрице Phase 6.
 7. **`Libbox.setLocale` mid-run может быть не поддержан** — тогда kernel-строки и `typeName`-каналы переключаются на следующем рестарте VPN; окно документируется, не маскируется.
@@ -552,7 +552,7 @@ Grep-tier (набор файлов мал и закрыт): `"`-литерал �
 | Прогрева шаблона нет: rebuild видит null-кэш, «re-await в initState» не существует (**P1**) | §7.2: `await TemplateLoader.reload()` до `notifyListeners()`; `_template`-fetch в `didChangeDependencies` по локали; паттерн охраняется checker'ом |
 | Гонка `invalidate()`: in-flight load кэширует старую локаль (**P1**) | §3.4: кэш ключуется тегом локали; unit-тест mid-flight |
 | Два класса display-полей без адреса (preset-body `dns_servers[].description`, option-титулы dns-server-vars) (**P1**) | §3.2: два новых адрес-класса; порядок overlay-до-preset_expand контрактный; `@`-запрет объявлен load-bearing |
-| Stale-детекция эфемерна — гейт сертифицирует наличие ключа, не свежесть (**P1**) | §3.1/§9.1: `src`-hash у каждой ru-записи; расхождение = durable per-key fail под `--strict` |
+| Stale-детекция эфемерна — гейт сертифицирует наличие ключа, не свежесть (**P1**) | §3.1/§9.1: исходно `src`-hash у каждой ru-записи (durable per-key fail) — позже упразднён; актуально: `template_check` валидирует overlay против живой экстракции из `wizard_template.json` |
 | `hardcoded_check` слеп к helper-идиомам (`showSnack` и др.) (**P1**) | §9.3: конфигурируемый helper-лист + литерал-присваивания в UiMsg-смежные поля + self-check-эвристика новых helpers |
 | Hash-baseline + «только сужается» = hotfix-ловушка или exempt-гниение (**P1**) | §9.3: канонизация интерполяций в hash'е + same-file replacement с неубывающим-запретом; путь в `docs/l10n.md`; объём честно ~1000 |
 | Debug API `PUT /settings/vars/app_language` обходит весь пайплайн (**P1**+P2, ×2 находки) | §7.3: per-key side-effect-registry → `LocaleController.set()`; `DELETE` → `set('system')`; backup-import → `reloadFromStorage()`; тест консистентности |

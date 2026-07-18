@@ -20,13 +20,16 @@
   supportedLocales en+ru); `TemplateOverlay` (apply/extract, скоупированная
   схема адресов, fail на дубль-конфликте); `TemplateLoader` — кэш по тегу
   локали; `assets/l10n/template/en.json` (генерируемое зеркало);
+  *(позже: en.json удалён — базовый английский живёт в самом `wizard_template.json`,*
+  *а словари перегруппированы под `assets/l10n/<tag>/`.)*
   var `app_language` (`system|en|ru`) в `_appFeatureFlagVars` + typed-аксессоры;
   Debug API per-key side-effect registry; language picker в App Settings →
   General (System default / English / Русский); checkers `tool/l10n/`
   (template_check, arb_check, hardcoded_check + baseline) + шаг CI.
   *Итог: выполнено; отгружено inert (ru скрыт до Phase 6).*
 - [x] **Phase 2 — шаблон.** `assets/l10n/template/ru.json` (объектный формат
-  с `src`-hash); live-резолюция preset-label'ов (ordinal-дизамбигуация копий,
+  с `src`-hash) *(позже: путь → `assets/l10n/ru/template.json`; entry без*
+  *`src`-hash — plain `{"value": ...}` по english-text-ключу)*; live-резолюция preset-label'ов (ordinal-дизамбигуация копий,
   dedup по display-именам); magic-node-титулы из шаблона (снос хардкод-зеркала
   `special_node_display`); typed-модели raw-секций; `_template`-fetch →
   `didChangeDependencies` (settings, dns_settings, speed_test, home_menus);

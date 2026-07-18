@@ -37,7 +37,7 @@ class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
   // §285 — natural-key локализатор активной локали. Eager-инициализация
   // fallback-инстансом (dict=null → печатает английский ключ): доступен из
   // getLocalText ДО первой загрузки словаря (как L10n.current с английским).
-  // Переприсваивается в _applyLocale после загрузки assets/l10n/ui/<tag>.json.
+  // Переприсваивается в _applyLocale после загрузки assets/l10n/<tag>/ui.json.
   GetLocalText _text = GetLocalText(null, const EnPluralResolver());
   GetLocalText get text => _text;
 
@@ -119,8 +119,9 @@ class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// §285 — собрать GetLocalText для [tag]: resolver по языку + словарь из
-  /// `assets/l10n/ui/<tag>.json`. Для 'en' (и любого отсутствующего файла) словарь
-  /// = null → чистый fallback на английский ключ (en.json не хранится by design).
+  /// `assets/l10n/<tag>/ui.json`. Для 'en' (и любого отсутствующего файла) словарь
+  /// = null → чистый fallback на английский ключ (английский базовый и живёт в
+  /// коде — отдельного словаря для него нет by design).
   /// Бросить может (нет ассета / битый JSON) — вызывается под общим try
   /// _applyLocale, где сбой не блокирует переключение языка.
   static Future<GetLocalText> _buildGetLocalText(String tag) async {
@@ -128,7 +129,7 @@ class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
         tag == 'ru' ? const RuPluralResolver() : const EnPluralResolver();
     if (tag == 'en') return GetLocalText(null, resolver);
     try {
-      final raw = await rootBundle.loadString('assets/l10n/ui/$tag.json');
+      final raw = await rootBundle.loadString('assets/l10n/$tag/ui.json');
       final dict = jsonDecode(raw) as Map<String, dynamic>;
       return GetLocalText(dict, resolver);
     } on FlutterError {
