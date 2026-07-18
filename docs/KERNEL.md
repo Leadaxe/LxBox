@@ -21,8 +21,11 @@ round-robin balancer, XHTTP full params, DNS-стрим и др.).
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.1`** — первый стабильный релиз ветки `lx-1.14`
-(rc-история — в конце файла), выпущен вместе с LxBox v2.9.0.
+**Текущий пин: `v1.14.0-lx.11`** — снят guard AWG-over-WireGuard (SPEC 007):
+первопричина ушла на новом графте (SPEC 025/026 + re-graft AWG2), связка
+AWG-over-AWG/WG поднимается и несёт трафик. Device-verified на CPH2411
+(WARP AWG → domashний AWG, реальные delays, ядро не виснет). История версий
+`lx.1…lx.11` — в конце файла.
 
 ### AAR до релиза ядра
 
@@ -107,3 +110,4 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | rc.19 | idle-suspend за `with_lx_idle_suspend` (mobile-only, см. ловушку 1) |
 | rc.20 | XHTTP GET→POST soft-fallback (дублирует §217); udpnat2 buffer fix; upstream sync |
 | **v1.14.0-lx.1** (стабильный) | Первый стабильный релиз ветки `lx-1.14` (rc.16→rc.22): MASQUE outbound (§130), стабилизация; собран с LxBox v2.9.0 |
+| **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
