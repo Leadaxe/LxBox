@@ -44,7 +44,7 @@ void main() {
 
   test('MASQUE h3 → server ИЗ АККАУНТА (стандартный); h2 → IP кандидата', () {
     // device-verified: h3 (QUIC) поднимается только на стандартном MASQUE-сервере
-    // из реги. Случайный IP → CRYPTO_ERROR. h2 терпит любой IP.
+    // из реги. Случайный IP → CRYPTO_ERROR. h2 стабилен на всём блоке 162.159.198.*.
     final b = ScanNodeBuilder(masque: masque());
 
     final h3 = b.uriFor(cand(ScanProtocol.masqueH3, ip: '162.159.198.5', port: 443));

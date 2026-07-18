@@ -3772,5 +3772,17 @@
   },
   "Disable unreachable": {
     "value": "Отключить недоступные"
+  },
+  "Make experiment": {
+    "value": "Провести эксперимент"
+  },
+  "Number of nodes": {
+    "value": "Количество узлов"
+  },
+  "Create": {
+    "value": "Создать"
+  },
+  "Generates random WARP nodes (WireGuard/AWG/MASQUE h2/h3) into the «WARP GENERATOR» folder. Test them there and keep what works.": {
+    "value": "Создаёт случайные WARP-узлы (WireGuard/AWG/MASQUE h2/h3) в папку «WARP GENERATOR». Протестируйте их там и оставьте рабочие."
   }
 }

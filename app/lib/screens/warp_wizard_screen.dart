@@ -170,16 +170,64 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
 
   // ───────────────────────── §284 — WARP GENERATOR ─────────────────────────
 
-  /// Генерирует 100 случайных WARP-узлов (WG/AWG/h3/h2) в папку «WARP GENERATOR»
+  /// §284 — попап «Make experiment»: микро-описание + количество нод (дефолт 20).
+  /// Возвращает count или null (отмена). Клампит 1..200.
+  Future<int?> _askExperimentSize() async {
+    final ctl = TextEditingController(text: '20');
+    final result = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(getLocalText.s("Make experiment")),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(getLocalText.s(
+                "Generates random WARP nodes (WireGuard/AWG/MASQUE h2/h3) into the «WARP GENERATOR» folder. Test them there and keep what works.")),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ctl,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: getLocalText.s("Number of nodes"),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(getLocalText.s("Cancel")),
+          ),
+          FilledButton(
+            onPressed: () {
+              final n = int.tryParse(ctl.text.trim()) ?? 20;
+              Navigator.pop(ctx, n.clamp(1, 200));
+            },
+            child: Text(getLocalText.s("Create")),
+          ),
+        ],
+      ),
+    );
+    ctl.dispose();
+    return result;
+  }
+
+  /// Генерирует случайные WARP-узлы (WG/AWG/h3/h2) в папку «WARP GENERATOR»
   /// и открывает её. Пробы не гоняет — пользователь тестирует штатной кнопкой
-  /// Test в папке. Повторный GENERATE пересоздаёт папку.
+  /// Test в папке. Повторный запуск пересоздаёт папку.
   Future<void> _runGenerate() async {
     if (_picker?.scan == null || _busy) return;
+
+    final count = await _askExperimentSize();
+    if (count == null || !mounted) return;
 
     setState(() => _busy = true);
     int? folderIdx;
     try {
-      folderIdx = await widget.subController.generateWarp();
+      folderIdx = await widget.subController.generateWarp(seedCount: count);
     } catch (e) {
       if (mounted) {
         showSnack(getLocalText.s("Generation failed — no WARP account."));
@@ -373,8 +421,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.auto_awesome_outlined),
-                label: Text(getLocalText.s("Generate")),
+                    : const Icon(Icons.science_outlined),
+                label: Text(getLocalText.s("Make experiment")),
               ),
             ],
             const SizedBox(height: 16),
