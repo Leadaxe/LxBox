@@ -517,7 +517,7 @@ warp/                        # §025/§130 WARP + MASQUE-транспорт (п�
   warp_client.dart           #   регистрация в Cloudflare (POST /reg): X25519-приватник не покидает телефон
   warp_account.dart          #   WARP-аккаунт (client_id→reserved, ключи)
   warp_endpoint_picker.dart  #   пул WARP-эндпоинтов + рандом endpoint/SNI (§148 курированные блоки; БЕЗ пробы)
-  scan/                      #   §284 endpoint scanner: рандом-посев → raw-probe по IP (WG/QUIC/TLS) → выбор
+  scan/                      #   §284 endpoint scanner: рандом-посев узлов → папка «SCAN WARP» → urltest
   masque_account.dart · masque_keys.dart · masquerade_params.dart  #   §130 MASQUE (Cloudflare QUIC/CONNECT-IP) — эмит MasqueSpec
 migration/proxy_source_migration.dart  # one-shot v1 proxy_sources → v2 server_lists
 nav/home_return_observer.dart          # глобальный NavigatorObserver (§076): rebuild на возврат к home
@@ -886,7 +886,7 @@ Cloudflare WARP-интеграция (`services/warp/`, мастер `screens/wa
 
 - **WARP-WireGuard (§025).** `WarpClient` регистрирует устройство сам (POST в Cloudflare) — приватный ключ **X25519 генерируется на телефоне и не покидает его**. `client_id` (3 байта из base64) → WireGuard `reserved`; default-пир `engage.cloudflareclient.com:2408`. `warp_endpoint_picker.dart` даёт пул диапазонов/портов и рандомит endpoint (без пробы). Эмитится как обычная WireGuard-нода.
 - **MASQUE (§130, флагман v2.9.0).** Отдельная крипта (`masque_keys.dart` — ECDSA P-256, не X25519), `masque_account.dart`, `masquerade_params.dart`. `MasqueSpec` ([`node_spec.dart`](../app/lib/models/node_spec.dart), `protocol='masque'`) эмитит sing-box outbound `type: masque` (Cloudflare QUIC / CONNECT-IP), `network` = `h3`/`h2`. Требует ядро с поддержкой masque-транспорта — см. `KERNEL.md`.
-- **Endpoint scanner (§284).** Кнопка SCAN в мастере (`services/warp/scan/`): стоп боевого VPN → headless probe-сессия без tun → 100 случайных полных конфигов (IP × port × protocol{AWG, h3, h2} × SNI × fp) в **сырые пробы по IP** (WG-handshake / QUIC / TLS, DNS-независимо) → дотест топ-3 → таблица (рабочие / нет) → выбор в конфиг. Raw-probe — kernel-side (`sing-box-lx SPEC 028`); до re-pin нового `.aar` мост graceful-деградирует («probe unavailable»).
+- **Endpoint scanner (§284).** Кнопка SCAN в мастере (`services/warp/scan/` + `SubscriptionController.scanWarp`): одна регистрация → 100 случайных узлов (IP × port × protocol{AWG, h3, h2} × SNI) поверх кредов (`ScanNodeBuilder`) → (пере)создаётся папка **«SCAN WARP»** → штатная probe-механика (`FolderProbeRunner`, стоп VPN → probe-сессия без tun → `probeUrlTest`) → мёртвые узлы удаляются, живые сортируются по задержке → дотест топ-3 → открывается папка с живыми эндпоинтами. **DNS-независимо**: url пробы — IP-литерал `https://1.1.1.1/cdn-cgi/trace` (доменный резолвился бы через local-dns). Без изменений ядра.
 
 ### 6. AppLog (per-source ring buffers, §043)
 
