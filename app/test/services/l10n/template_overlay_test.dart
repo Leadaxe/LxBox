@@ -124,52 +124,43 @@ void main() {
       expect(Map<String, String>.from(committed), equals(fresh));
     });
 
-    test('scoped addresses per §3.2 schema', () {
+    test('english → english mirror per §3.2 schema', () {
       final m = TemplateOverlay.extract(syntheticTemplate());
-      expect(m['section.general.name'], 'General');
-      expect(m['section.general.description'], 'General settings');
-      expect(m['var.log_level.title'], 'Log level');
-      expect(m['var.log_level.tooltip'], 'Verbosity');
-      expect(m['var.vpn_mode.option.vpn'], 'VPN — system-wide');
-      // Rule-локальные vars скоупятся preset_id — одноимённые не схлопнуты.
-      expect(m['preset.ru-direct.var.dns_server.title'], 'DNS server');
-      expect(m['preset.fakeip.var.dns_server.title'], 'FakeIP server');
-      expect(m['preset.ru-direct.label'], 'RU Direct');
-      expect(m['preset.ru-direct.dns_server.yandex_udp.description'],
-          'Yandex UDP');
-      expect(m['magic.direct.title'], 'Direct');
-      expect(m['channel.vpn-1.label'], 'VPN 1');
-      expect(m['dns_server.google_udp.description'], 'Google DNS');
-      expect(m['dns_server.google_udp.var.dns_ip.option.8.8.8.8'],
-          '8.8.8.8 · Primary v4');
-      expect(m['ping.google-204.name'], 'Google 204');
-      expect(m['speed.cloudflare.name'], 'Cloudflare');
-      // Machine-поля не адресуются.
-      expect(m.keys.where((k) => k.contains('identity-name')), isEmpty);
-      expect(m.values.where((v) => v == 'machine'), isEmpty);
-      // Bare-string enum-опции не адресуются.
-      expect(m.keys.where((k) => k.startsWith('var.log_level.option')),
-          isEmpty);
+      // Ключ = само display-значение; map — english→english зеркало.
+      expect(m['General'], 'General');
+      expect(m['General settings'], 'General settings');
+      expect(m['Log level'], 'Log level');
+      expect(m['Verbosity'], 'Verbosity');
+      expect(m['VPN — system-wide'], 'VPN — system-wide');
+      // Одноимённые vars разных пресетов несут РАЗНЫЙ текст → оба ключа есть.
+      expect(m['DNS server'], 'DNS server');
+      expect(m['FakeIP server'], 'FakeIP server');
+      expect(m['RU Direct'], 'RU Direct');
+      expect(m['Yandex UDP'], 'Yandex UDP');
+      expect(m['Direct'], 'Direct');
+      expect(m['VPN 1'], 'VPN 1');
+      expect(m['Google DNS'], 'Google DNS');
+      expect(m['8.8.8.8 · Primary v4'], '8.8.8.8 · Primary v4');
+      expect(m['Google 204'], 'Google 204');
+      expect(m['Cloudflare'], 'Cloudflare');
+      // Machine-значения не извлекаются.
+      expect(m.containsKey('machine'), isFalse);
+      expect(m.containsKey('identity-name'), isFalse);
+      // Bare-string enum-опции (wire-значения) не извлекаются.
+      expect(m.containsKey('warn'), isFalse);
+      expect(m.containsKey('info'), isFalse);
     });
 
-    test('hard-fails on duplicate address with conflicting values', () {
+    test('repeated english text collapses to one key (not a conflict)', () {
       final t = syntheticTemplate();
+      // Второй section с ТЕМ ЖЕ english name — схлопывается в один ключ.
       (t['sections'] as List).add({
-        'id': 'general', // дубль id с другим name
-        'name': 'Different',
+        'id': 'general-2',
+        'name': 'General', // тот же текст, что и у первой секции
         'vars': <dynamic>[],
       });
-      expect(() => TemplateOverlay.extract(t), throwsStateError);
-    });
-
-    test('duplicate address with identical value is allowed', () {
-      final t = syntheticTemplate();
-      (t['sections'] as List).add({
-        'id': 'general',
-        'name': 'General', // same value → не конфликт
-        'vars': <dynamic>[],
-      });
-      expect(TemplateOverlay.extract(t)['section.general.name'], 'General');
+      final m = TemplateOverlay.extract(t);
+      expect(m['General'], 'General');
     });
   });
 
@@ -180,10 +171,10 @@ void main() {
       final configBefore = jsonEncode(t['config']);
       final parserBefore = jsonEncode(t['parser_config']);
       TemplateOverlay.apply(t, {
-        'section.general.name': 'Общие',
-        'preset.ru-direct.var.dns_server.title': 'DNS-сервер',
-        'var.vpn_mode.option.vpn': 'VPN — весь трафик',
-        'dns_server.google_udp.description': 'Google DNS (напрямую)',
+        'General': 'Общие',
+        'DNS server': 'DNS-сервер',
+        'VPN — system-wide': 'VPN — весь трафик',
+        'Google DNS': 'Google DNS (напрямую)',
       });
       final sections = t['sections'] as List;
       expect((sections.first as Map)['name'], 'Общие');
@@ -191,7 +182,8 @@ void main() {
       final ruVar =
           (((rules.first as Map)['vars'] as List).first as Map);
       expect(ruVar['title'], 'DNS-сервер');
-      // fakeip (одноимённая var) не тронута — скоупинг работает.
+      // fakeip несёт ДРУГОЙ english ('FakeIP server') → не тронута overlay'ем
+      // для 'DNS server'; english-ключ разводит их так же, как раньше адрес.
       final fakeVar =
           (((rules[1] as Map)['vars'] as List).first as Map);
       expect(fakeVar['title'], 'FakeIP server');
@@ -208,28 +200,28 @@ void main() {
     test('skips values starting with @ or containing {', () {
       final t = syntheticTemplate();
       TemplateOverlay.apply(t, {
-        'section.general.name': '@log_level',
-        'section.general.description': 'bad {placeholder}',
+        'General': '@log_level',
+        'General settings': 'bad {placeholder}',
       });
       final s = (t['sections'] as List).first as Map;
       expect(s['name'], 'General');
       expect(s['description'], 'General settings');
     });
 
-    test('unknown addresses are a silent no-op', () {
+    test('unknown english keys are a silent no-op', () {
       final t = syntheticTemplate();
       final before = jsonEncode(t);
-      TemplateOverlay.apply(t, {'section.nonexistent.name': 'X'});
+      TemplateOverlay.apply(t, {'Not in template': 'X'});
       expect(jsonEncode(t), before);
     });
   });
 
   group('parseLocaleFile', () {
-    test('accepts object entries and flat strings, ignores src', () {
+    test('accepts {value} object entries and flat strings', () {
       final m = TemplateOverlay.parseLocaleFile({
-        'a': {'text': 'A-текст', 'src': 'deadbeef'},
+        'a': {'value': 'A-текст'},
         'b': 'B-текст',
-        'c': {'no_text': true},
+        'c': {'no_value': true},
         'd': 42,
       });
       expect(m, {'a': 'A-текст', 'b': 'B-текст'});
