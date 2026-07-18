@@ -42,15 +42,20 @@ void main() {
     expect(uri, contains('162.159.192.7:2408'));
   });
 
-  test('MASQUE-узел несёт IP:port кандидата и правильный network', () {
+  test('MASQUE h3 → server ИЗ АККАУНТА (стандартный); h2 → IP кандидата', () {
+    // device-verified: h3 (QUIC) поднимается только на стандартном MASQUE-сервере
+    // из реги. Случайный IP → CRYPTO_ERROR. h2 терпит любой IP.
     final b = ScanNodeBuilder(masque: masque());
+
     final h3 = b.uriFor(cand(ScanProtocol.masqueH3, ip: '162.159.198.5', port: 443));
     expect(h3, isNotNull);
     expect(h3, startsWith('masque://'));
-    expect(h3, contains('162.159.198.5:443'));
+    expect(h3, contains('162.159.198.1:443'), reason: 'h3 — server из аккаунта');
+    expect(h3, isNot(contains('162.159.198.5')), reason: 'h3 НЕ на случайном IP');
     expect(h3, contains('network=h3'));
 
     final h2 = b.uriFor(cand(ScanProtocol.masqueH2, ip: '162.159.198.5', port: 443));
+    expect(h2, contains('162.159.198.5:443'), reason: 'h2 — IP кандидата');
     expect(h2, contains('network=h2'));
   });
 

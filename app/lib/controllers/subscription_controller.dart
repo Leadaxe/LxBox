@@ -36,8 +36,6 @@ import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/warp_client.dart';
 import '../services/warp/warp_endpoint_picker.dart';
-import '../vpn/box_vpn_client.dart';
-import '../services/probe/probe_runner.dart';
 import '../services/warp/scan/candidate_generator.dart';
 import '../services/warp/scan/scan_models.dart';
 import '../services/warp/scan/scan_node_builder.dart';
@@ -947,41 +945,34 @@ class SubscriptionController extends ChangeNotifier {
     AppLog.I.info('Folder created: $name');
   }
 
-  /// §284 — имя папки с результатами WARP-скана. Повторный скан её пересоздаёт.
-  static const kScanFolderName = 'SCAN WARP';
+  /// §284 — имя папки-генератора WARP-узлов. Повторный GENERATE её пересоздаёт.
+  static const kScanFolderName = 'WARP GENERATOR';
 
-  /// §284 — DNS-независимый liveness-URL: HTTP через сам тестируемый WARP-туннель
-  /// на IP-литерал (без резолва). `1.1.1.1` — Cloudflare, серт валиден для IP,
-  /// `cdn-cgi/trace` даёт `warp=on` (подтверждает проход через туннель).
-  static const kScanProbeUrl = 'https://1.1.1.1/cdn-cgi/trace';
+  /// §284 — заметка о последней генерации (напр. почему пропал MASQUE).
+  /// Показывается снеком в визарде. null = без замечаний.
+  String? lastScanNote;
 
-  /// §284 — WARP endpoint scanner. Собирает 100 случайных узлов поверх одной
-  /// регистрации, кладёт в (пере)созданную папку «SCAN WARP», гоняет штатную
-  /// probe-механику (DNS-независимо), оставляет только рабочие (сорт по задержке),
-  /// дотестирует топ-3 другими протоколами. Возвращает индекс папки в [entries]
-  /// (для навигации) или null, если скан не состоялся.
+  /// §284 — WARP GENERATOR: собирает [seedCount] случайных узлов (Монте-Карло по
+  /// {IP × port × protocol{AWG,h3,h2} × SNI × приманка}) поверх ОДНОЙ
+  /// регистрации, кладёт в (пере)созданную папку «WARP GENERATOR». Пробы НЕ
+  /// гоняет и мёртвые НЕ удаляет — пользователь сам тестирует штатной кнопкой
+  /// Test в папке. Возвращает индекс папки в [entries] (для навигации) или null.
   ///
-  /// [onProgress] — (сделано, всего) по мере проб. [runner]/[rng] инъектируются
-  /// для тестов.
-  Future<int?> scanWarp({
+  /// [rng]/[client] инъектируются для тестов.
+  Future<int?> generateWarp({
     int seedCount = 100,
-    int topN = 3,
-    void Function(int done, int total)? onProgress,
-    FolderProbeRunner? runner,
     Random? rng,
     WarpClient? client,
   }) async {
+    lastScanNote = null;
     final pool = (await WarpEndpointPicker.load()).scan;
     if (pool == null) return null;
 
-    // 0. Стоп боевого VPN — пробы должны уходить напрямую (probe-сессия требует
-    //    выключенного туннеля; ProbeSession гейтится на commandClient==null).
-    //    Блокирующий до Stopped; если VPN уже опущен — быстрый no-op.
-    await BoxVpnClient().stopVPN();
-
-    // 1. Аккаунты: кеш → или регистрация один раз (обоих типов — для смешанного
-    //    посева). Регистрация может частично не удаться — используем что есть.
+    // Аккаунты: кеш → или регистрация один раз (обоих типов — для смешанного
+    //   посева). Кешированный аккаунт (ручной MASQUE §130) переиспользуем без
+    //   реги. Регистрация может частично не удаться — используем что есть.
     final warp = client ?? WarpClient();
+    ScanNodeBuilder builder;
     try {
       final now = DateTime.now().toUtc().toIso8601String();
       var warpAcc = await SettingsStorage.getWarpAccount();
@@ -989,37 +980,16 @@ class SubscriptionController extends ChangeNotifier {
       var masqueAcc = await SettingsStorage.getMasqueAccount();
       masqueAcc ??= await _tryRegisterMasque(warp, now);
       if (warpAcc == null && masqueAcc == null) return null;
-
-      final builder = ScanNodeBuilder(warp: warpAcc, masque: masqueAcc);
-      final gen = CandidateGenerator(pool, rng: rng);
-
-      // 2. Посев → URI-узлы (пропускаем протоколы без аккаунта).
-      final seedUris = _candidatesToUris(gen.seed(seedCount), builder);
-      if (seedUris.isEmpty) return null;
-
-      // 3. (Пере)создать папку «SCAN WARP», наполнить узлами.
-      final idx = await _recreateScanFolder(seedUris);
-
-      // 4. Пробы + автоочистка (оставить живые по задержке).
-      final aliveIps =
-          await _probeAndPrune(idx, runner: runner, onProgress: onProgress);
-
-      // 5. Фаза 2 — дотест топ-N живых IP другими протоколами → в ту же папку.
-      final top = aliveIps.take(topN).toList();
-      if (top.isNotEmpty) {
-        final varUris = <String>[];
-        for (final ip in top) {
-          varUris.addAll(_candidatesToUris(gen.variations(ip), builder));
-        }
-        if (varUris.isNotEmpty) {
-          await _appendToScanFolder(idx, varUris);
-          await _probeAndPrune(idx, runner: runner, onProgress: onProgress);
-        }
-      }
-      return _scanFolderIndex();
+      builder = ScanNodeBuilder(warp: warpAcc, masque: masqueAcc);
     } finally {
       if (client == null) warp.close();
     }
+
+    // Посев → URI-узлы (пропускаем протоколы без аккаунта) → папка.
+    final gen = CandidateGenerator(pool, rng: rng);
+    final seedUris = _candidatesToUris(gen.seed(seedCount), builder);
+    if (seedUris.isEmpty) return null;
+    return _recreateScanFolder(seedUris);
   }
 
   Future<WarpAccount?> _tryRegisterWarp(WarpClient warp, String now) async {
@@ -1028,7 +998,7 @@ class SubscriptionController extends ChangeNotifier {
       await SettingsStorage.setWarpAccount(acc);
       return acc;
     } catch (e) {
-      AppLog.I.warning('scanWarp: WARP register failed: $e');
+      AppLog.I.warning('generateWarp: WARP register failed: $e');
       return null;
     }
   }
@@ -1039,7 +1009,8 @@ class SubscriptionController extends ChangeNotifier {
       await SettingsStorage.setMasqueAccount(acc);
       return acc;
     } catch (e) {
-      AppLog.I.warning('scanWarp: MASQUE register failed: $e');
+      AppLog.I.warning('generateWarp: MASQUE register failed: $e');
+      lastScanNote = 'MASQUE (h3/h2) unavailable: registration failed — $e';
       return null;
     }
   }
@@ -1047,7 +1018,7 @@ class SubscriptionController extends ChangeNotifier {
   List<String> _candidatesToUris(List<ScanCandidate> cs, ScanNodeBuilder b) =>
       [for (final c in cs) b.uriFor(c)].whereType<String>().toList();
 
-  /// Индекс папки «SCAN WARP» в [_entries] или null.
+  /// Индекс папки «WARP GENERATOR» в [_entries] или null.
   int? _scanFolderIndex() {
     for (var i = 0; i < _entries.length; i++) {
       final l = _entries[i].list;
@@ -1056,7 +1027,14 @@ class SubscriptionController extends ChangeNotifier {
     return null;
   }
 
-  /// Пересоздаёт папку «SCAN WARP» с заданными узлами. Возвращает её индекс.
+  /// §284 — DNS-независимый ping-URL для папки «WARP GENERATOR»: HTTP через сам
+  /// тестируемый узел на IP-литерал (без резолва). Кладётся в саму папку
+  /// (FolderServers.pingUrl) — Test в папке идёт по нему.
+  static const kScanProbeUrl = 'https://1.1.1.1/cdn-cgi/trace';
+
+  /// Пересоздаёт папку «WARP GENERATOR» с заданными узлами. Возвращает её индекс.
+  /// Папка несёт свой ping-URL (IP, без DNS) в собственном объекте — при
+  /// пересоздании/удалении опции уходят вместе с ней.
   Future<int> _recreateScanFolder(List<String> uris) async {
     final old = _scanFolderIndex();
     if (old != null) _entries.removeAt(old);
@@ -1068,6 +1046,8 @@ class SubscriptionController extends ChangeNotifier {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         members: [for (final u in uris) FolderMember(raw: u)],
+        pingUrl: kScanProbeUrl,
+        pingTimeoutMs: 3000,
       ),
       nodeCount: uris.length,
     ));
@@ -1075,63 +1055,6 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
     return _entries.length - 1;
   }
-
-  Future<void> _appendToScanFolder(int idx, List<String> uris) async {
-    final entry = _entries[idx];
-    final folder = entry.list;
-    if (folder is! FolderServers) return;
-    final added = [for (final u in uris) FolderMember(raw: u)];
-    entry._replaceList(
-        folder.copyWith(members: [...folder.members, ...added]));
-    entry.nodeCount = entry.list.nodes.length;
-    await _persist();
-    notifyListeners();
-  }
-
-  /// Гоняет пробы по папке [idx], удаляет мёртвые члены, оставляет живые
-  /// (сортировка по задержке). Возвращает IP живых (для фазы-2 дотеста).
-  Future<List<String>> _probeAndPrune(int idx,
-      {FolderProbeRunner? runner,
-      void Function(int done, int total)? onProgress}) async {
-    final entry = _entries[idx];
-    final folder = entry.list;
-    if (folder is! FolderServers) return const [];
-
-    final delays = <int, int>{}; // memberIndex → delayMs (живые)
-    var done = 0;
-    final total = folder.members.length;
-    await (runner ?? FolderProbeRunner()).run(
-      folder,
-      url: kScanProbeUrl,
-      timeoutMs: 3000,
-      onResult: (i, r) {
-        done++;
-        onProgress?.call(done, total);
-        if (r.status == ProbeStatus.ok) delays[i] = r.delayMs;
-      },
-    );
-
-    // Оставляем только живые, сортируем по задержке.
-    final alive = delays.keys.toList()
-      ..sort((a, b) => delays[a]!.compareTo(delays[b]!));
-    final keptMembers = [for (final i in alive) folder.members[i]];
-    entry._replaceList(folder.copyWith(members: keptMembers));
-    entry.nodeCount = entry.list.nodes.length;
-    await _persist();
-    notifyListeners();
-
-    return [
-      for (final i in alive)
-        if (folder.members[i].node case final n?) _serverOf(n),
-    ].whereType<String>().toList();
-  }
-
-  /// server (IP) ноды — для группировки топ-IP в фазе 2.
-  static String? _serverOf(NodeSpec n) => switch (n) {
-        WireguardSpec(:final server) => server,
-        MasqueSpec(:final server) => server,
-        _ => null,
-      };
 
   /// Удалить папку. [keepServers] = вынести членов одиночными серверами на
   /// место папки (порядок и per-member enabled сохраняются).
