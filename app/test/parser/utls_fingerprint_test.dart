@@ -169,6 +169,75 @@ void main() {
     });
   });
 
+  group('§282 — QUIC (hysteria2/tuic) не эмитит uTLS', () {
+    Map<String, dynamic> emitTls(NodeSpec spec) =>
+        spec.emit(TemplateVars.empty).map['tls'] as Map<String, dynamic>;
+
+    test('hysteria2 URI с fp → emit-конфиг БЕЗ utls', () {
+      final spec = parseHysteria2('hysteria2://p@h:443?fp=chrome&sni=x.com#L')!;
+      expect(spec.tls.fingerprint, 'chrome', reason: 'в модели fp живёт');
+      final tls = emitTls(spec);
+      expect(tls.containsKey('utls'), isFalse,
+          reason: 'uTLS поверх QUIC = мёртвая нода');
+      expect(tls['server_name'], 'x.com', reason: 'остальной TLS цел');
+    });
+
+    test('hysteria2 round-trip URI сохраняет fp (данные не теряются)', () {
+      final spec = parseHysteria2('hysteria2://p@h:443?fp=chrome&sni=x.com#L')!;
+      expect(spec.toUri(), contains('fp=chrome'));
+    });
+
+    test('tuic из sing-box JSON с fp → emit-конфиг БЕЗ utls', () {
+      final spec = parseSingboxEntry({
+        'type': 'tuic',
+        'tag': 't',
+        'server': 'h',
+        'server_port': 443,
+        'uuid': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c',
+        'password': 'p',
+        'tls': {
+          'enabled': true,
+          'server_name': 'x.com',
+          'alpn': ['h3'],
+          'utls': {'enabled': true, 'fingerprint': 'chrome'},
+        },
+      })!;
+      final tls = emitTls(spec);
+      expect(tls.containsKey('utls'), isFalse);
+      expect(tls['alpn'], ['h3'], reason: 'alpn для QUIC валиден, не трогаем');
+    });
+
+    test('TCP-протокол (vless) с fp → utls НА МЕСТЕ (контроль)', () {
+      final spec =
+          parseVless('vless://u@h:443?security=tls&fp=chrome&sni=x.com#L')!;
+      final tls = emitTls(spec);
+      expect((tls['utls'] as Map)['fingerprint'], 'chrome');
+    });
+
+    test('РЕВЬЮ §282: reality на tuic → emit БЕЗ reality и БЕЗ utls', () {
+      // reality поверх QUIC тоже мёртв (RealityClientConfig.STDConfig ошибка);
+      // reality на hy2/tuic = мусор подписок, срезаем оба блока.
+      final spec = parseSingboxEntry({
+        'type': 'tuic',
+        'tag': 't',
+        'server': 'h',
+        'server_port': 443,
+        'uuid': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c',
+        'password': 'p',
+        'tls': {
+          'enabled': true,
+          'server_name': 'x.com',
+          'reality': {'enabled': true, 'public_key': _validPbk},
+          'utls': {'enabled': true, 'fingerprint': 'chrome'},
+        },
+      })!;
+      final tls = emitTls(spec);
+      expect(tls.containsKey('utls'), isFalse);
+      expect(tls.containsKey('reality'), isFalse);
+      expect(tls['server_name'], 'x.com');
+    });
+  });
+
   group('JSON-парсеры', () {
     test('xray streamSettings: псевдоним в reality.fingerprint → chrome', () {
       final spec = parseXrayOutbound(<String, dynamic>{
