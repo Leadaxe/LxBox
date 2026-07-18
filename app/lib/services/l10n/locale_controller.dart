@@ -81,14 +81,23 @@ class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
     L10n.current = lookupAppLocalizations(loc);
     // §279 Phase 5 — intl-форматтеры дат (format_utils) берут локаль отсюда.
     Intl.defaultLocale = loc.toLanguageTag();
-    // Прогрев ДО notifyListeners: каждый rebuild видит тёплый кэш новой
-    // локали, cachedOrNull не null ни в один момент переключения.
-    await TemplateLoader.reload(loc.languageCode);
-    // Display-зеркала билдера пере-дерайвятся без ребилда конфига.
-    RuleNameResolver.I.relocalize(TemplateLoader.cachedOrNull(loc.languageCode));
-    // Слить staged lazy-persist правки (LazyPersistMixin пишет в _cache,
-    // диск — отложенно; полный rebuild ниже не должен их потерять).
-    await SettingsStorage.flushToDisk();
+    // §279 — прогрев шаблона/зеркал best-effort: его сбой (или зависание
+    // загрузки ассета) НЕ должен блокировать переключение языка. ARB-строки
+    // (весь UI-chrome) уже переключены выше через L10n.current + rebuild ниже;
+    // шаблонные метки в худшем случае догрузятся при следующем чтении кэша.
+    try {
+      // Прогрев ДО notifyListeners: каждый rebuild видит тёплый кэш новой
+      // локали, cachedOrNull не null ни в один момент переключения.
+      await TemplateLoader.reload(loc.languageCode);
+      // Display-зеркала билдера пере-дерайвятся без ребилда конфига.
+      RuleNameResolver.I
+          .relocalize(TemplateLoader.cachedOrNull(loc.languageCode));
+      // Слить staged lazy-persist правки (LazyPersistMixin пишет в _cache,
+      // диск — отложенно; полный rebuild ниже не должен их потерять).
+      await SettingsStorage.flushToDisk();
+    } catch (_) {
+      // best-effort — язык всё равно применяем (notify ниже безусловен).
+    }
     notifyListeners(); // → полный rebuild MaterialApp (merged Listenable)
   }
 }

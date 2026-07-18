@@ -481,6 +481,10 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               ),
               const SizedBox(height: 8),
               Row(
+                // §279 — выравнивание по верху: у полей разная высота helper'а
+                // (у Interval он всегда есть, у Tolerance — только в round-robin),
+                // дефолтный center разносил сами инпуты по высоте.
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: TextField(
