@@ -925,6 +925,7 @@
   "warnVisionWithTransport": "Flow «xtls-rprx-vision» несовместим с транспортом «{transport}» — flow убран.",
   "warnInsecureTls": "Проверка TLS-сертификата отключена.",
   "warnNaiveBuildTag": "NaïveProxy не входит в эту сборку libbox (пересоберите с -tags with_naive_outbound).",
+  "warnUnknownFingerprint": "Неизвестный uTLS fingerprint «{value}» заменён на «chrome» (иначе сломался бы весь конфиг).",
   "warnXhttpParamReset": "Параметр XHTTP «{field}» сброшен на значение по умолчанию — {reason} (иначе сломался бы весь конфиг).",
   "warnXhttpReasonInvalidEnum": "значение «{value}» недопустимо для {field}",
   "warnXhttpReasonInvalidValue": "значение «{value}» недопустимо",

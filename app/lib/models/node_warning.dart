@@ -147,6 +147,25 @@ final class NaiveBuildTagWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.error;
 }
 
+/// §281 — uTLS fingerprint вне словаря ядра заменён на chrome. Ядро матчит
+/// fingerprint строго (`uTLSClientHelloID`, case-sensitive) — неизвестное
+/// значение fatal для ВСЕГО конфига при старте. Известные xray-псевдонимы
+/// (hellochrome_120 и т.п.) канонизируются молча — warning только на
+/// полностью неопознанный мусор.
+final class UnknownFingerprintWarning extends NodeWarning {
+  final String value;
+  const UnknownFingerprintWarning(this.value);
+
+  @override
+  List<Object?> get props => [value];
+
+  @override
+  String message(AppLocalizations l) => l.warnUnknownFingerprint(value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
 /// §217 — причина сброса XHTTP-параметра (§279: enum вместо free-text —
 /// текст рендерится в [XhttpParamResetWarning.message], не хранится).
 enum XhttpResetReason {

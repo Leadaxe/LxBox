@@ -3,6 +3,7 @@ import '../../../models/node_warning.dart';
 import '../../../models/tls_spec.dart';
 import '../transport.dart';
 import '../uri_utils.dart';
+import '../utls_fingerprint.dart';
 import 'naive_parser.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -42,9 +43,12 @@ HttpSpec? parseHttpProxy(String uri) {
 
   // TLS-параметры — конвенции trojan (sni/peer/host, fp, alpn,
   // insecure-алиасы). Схема — дискриминатор: proxy-http → TLS выключен.
-  final tls = secure ? parseTrojanTls(q, server) : TlsSpec.disabled;
-
+  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
   final warnings = <NodeWarning>[];
+  final tls = secure
+      ? normalizeTlsFingerprint(parseTrojanTls(q, server), warnings)
+      : TlsSpec.disabled;
+
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
   return HttpSpec(

@@ -467,6 +467,17 @@ Future<BuildResult> buildConfig({
         'to the global DNS strategy.');
   }
 
+  // §281 — неизвестный uTLS fingerprint = fatal у ядра при создании outbound
+  // («unknown uTLS fingerprint») — конфиг не встаёт целиком. Парсер уже
+  // канонизирует на входе (xray-псевдонимы hellochrome_* → chrome, мусор →
+  // chrome); этот post-step — страховка для путей мимо парсера.
+  final healedFingerprints = healUnknownUtlsFingerprints(config);
+  for (final h in healedFingerprints) {
+    emitWarnings.add(
+        'Fingerprint replaced: outbound "${h.owner}" had unknown uTLS '
+        'fingerprint "${h.original}" — using "chrome" instead.');
+  }
+
   final validation = validateConfig(config);
   return BuildResult(
     configJson: jsonEncode(config),

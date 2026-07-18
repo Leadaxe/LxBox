@@ -77,6 +77,7 @@ void main() {
         InsecureTlsWarning() => 'tls',
         NaiveBuildTagWarning() => 'naive_build',
         XhttpParamResetWarning() => 'xhttp_reset',
+        UnknownFingerprintWarning() => 'fingerprint',
       };
       expect(label, 'transport');
     });

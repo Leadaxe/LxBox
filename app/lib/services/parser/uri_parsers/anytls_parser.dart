@@ -2,6 +2,7 @@ import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../transport.dart';
 import '../uri_utils.dart';
+import '../utls_fingerprint.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // AnyTLS — see task 269.
@@ -31,9 +32,11 @@ AnyTlsSpec? parseAnyTls(String uri) {
   // терять параметры — снимаем security перед парсингом, чтобы не получить
   // disabled (обнулив весь TLS-блок).
   final tlsQuery = Map<String, String>.from(q)..remove('security');
-  final tls = parseVlessTls(tlsQuery, server, port);
-
   final warnings = <NodeWarning>[];
+  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
+  final tls =
+      normalizeTlsFingerprint(parseVlessTls(tlsQuery, server, port), warnings);
+
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
   return AnyTlsSpec(
