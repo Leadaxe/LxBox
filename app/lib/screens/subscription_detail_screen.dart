@@ -10,6 +10,7 @@ import '../models/server_list.dart';
 import '../models/ui_msg.dart';
 import '../services/error_humanize.dart';
 import '../services/l10n/l10n.dart';
+import '../services/node_hash.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/sources.dart';
 import '../widgets/detour_target_picker.dart';
@@ -55,6 +56,75 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   // канальной override-цели в Settings-вкладке.
   List<Channel> _channels = const [];
 
+  // §283 — per-node disable. Хеш ноды считается лениво и кэшируется по
+  // identity. Полный проход хеширования происходит ТОЛЬКО когда есть
+  // выключенные отметки — подписка без них не платит ничего.
+  final Map<NodeSpec, String> _hashCache = Map.identity();
+  Set<NodeSpec> _togglableNodes = Set.identity();
+  Set<NodeSpec> _disabledNodes = Set.identity();
+
+  // От какого List<NodeSpec> построены строки/кэш (identity-маркер):
+  // refresh подменяет и список, и инстансы → кэш хешей протухает целиком;
+  // toggle идёт через copyWith с тем же List → кэш живёт (не хешируем
+  // 10k нод заново на каждый toggle).
+  List<NodeSpec>? _hashedNodesList;
+
+  String _hashOf(NodeSpec n) => _hashCache[n] ??= nodeIdentityHash(n);
+
+  /// §283 (ревью) — строки, togglable- и disabled-set'ы пересобираются от
+  /// ЖИВЫХ инстансов entry.list.nodes одним местом. Иначе refresh мимо
+  /// _loadNodes (фоновый AutoUpdater, «Refresh now» из Settings-вкладки,
+  /// смена источника) подменял инстансы, identity-set'ы расходились со
+  /// строками — и все тогглы исчезали.
+  void _rebuildRowsFromEntry() {
+    final nodes = widget.entry.list.nodes;
+    if (!identical(nodes, _hashedNodesList)) {
+      _hashCache.clear();
+      _hashedNodesList = nodes;
+    }
+    final expanded = <NodeSpec>[];
+    for (final node in nodes) {
+      expanded.add(node);
+      if (node.chained != null) expanded.add(node.chained!);
+    }
+    _nodes = expanded;
+    _togglableNodes = widget.entry.list is SubscriptionServers
+        ? (Set<NodeSpec>.identity()..addAll(nodes))
+        : Set<NodeSpec>.identity();
+    _recomputeDisabled();
+  }
+
+  /// Derived-set выключенных нод от `disabledHashes` подписки. Дубли по
+  /// хешу гаснут синхронно — состояние строки считается отсюда.
+  void _recomputeDisabled() {
+    final list = widget.entry.list;
+    final next = Set<NodeSpec>.identity();
+    if (list is SubscriptionServers && list.disabledHashes.isNotEmpty) {
+      for (final n in list.nodes) {
+        if (list.disabledHashes.containsKey(_hashOf(n))) {
+          next.add(n);
+          // chained-ребёнок рисуется отдельной строкой — глушим вместе с
+          // родителем (он и не эмитится: родитель пропущен целиком).
+          if (n.chained != null) next.add(n.chained!);
+        }
+      }
+    }
+    _disabledNodes = next;
+  }
+
+  void _onEntryChanged() {
+    if (!mounted) return;
+    setState(_rebuildRowsFromEntry);
+  }
+
+  Future<void> _toggleNode(NodeSpec node) async {
+    // §219 — index по ссылке (список мог сместиться от reorder).
+    final idx = widget.controller.entries.indexOf(widget.entry);
+    if (idx < 0) return;
+    await widget.controller.toggleSubscriptionNode(idx, node);
+    // Пересборку строк/set'ов делает listener entry (_onEntryChanged).
+  }
+
   /// Headers, которые нам реально нужны — подписочные метаданные.
   /// Остальное (server, date, cookies, content-length, ddos-guard, etc.) —
   /// под раскрывашкой.
@@ -72,6 +142,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.name);
+    // §283 — entry.list может смениться мимо _loadNodes (см.
+    // _rebuildRowsFromEntry); _replaceList нотифицирует entry.
+    widget.entry.addListener(_onEntryChanged);
     unawaited(_loadNodes());
     unawaited(_loadChannels());
     // При первом заходе на Source — живой GET.
@@ -84,6 +157,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
 
   @override
   void dispose() {
+    widget.entry.removeListener(_onEntryChanged); // §283
     _tabCtrl.dispose();
     _nameCtrl.dispose();
     super.dispose();
@@ -134,18 +208,14 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       }
       // v2: узлы уже распарсены в entry.list.nodes. Детоур-узлы показываем
       // отдельной строкой под родителем.
-      final expanded = <NodeSpec>[];
-      for (final node in widget.entry.list.nodes) {
-        expanded.add(node);
-        if (node.chained != null) expanded.add(node.chained!);
-      }
+      _rebuildRowsFromEntry(); // §283 — строки + togglable/disabled set'ы
       // Source-вкладка теперь подтягивается живым GET при переключении туда.
       // Для UserServer (connections) показываем сразу что есть.
       if (widget.entry.connections.isNotEmpty) {
         _rawSource = widget.entry.connections.join('\n');
         _sourceLoaded = true;
       }
-      if (mounted) setState(() { _nodes = expanded; _loading = false; });
+      if (mounted) setState(() => _loading = false);
     } catch (e) {
       if (mounted) setState(() { _error = humanizeError(e); _loading = false; });
     }
@@ -256,13 +326,25 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_loading) const LinearProgressIndicator(),
-              SubscriptionMeta(entry: entry, onOpenUrl: _openUrl),
+              SubscriptionMeta(
+                entry: entry,
+                onOpenUrl: _openUrl,
+                offCount: _disabledNodes.length, // §283
+              ),
               const Divider(height: 1),
               Expanded(
                 child: SubscriptionNodeList(
                   nodes: _nodes,
                   loading: _loading,
                   error: _error,
+                  // §283 — toggle только у top-level нод подписки; chained-
+                  // дети управляются родителем, UserServer — без тогглов.
+                  // Set'ы — поля, пересобираемые _rebuildRowsFromEntry
+                  // синхронно со строками (одни инстансы — нет рассинхрона).
+                  togglableNodes: _togglableNodes,
+                  disabledNodes: _disabledNodes,
+                  onToggleNode:
+                      entry.list is SubscriptionServers ? _toggleNode : null,
                 ),
               ),
             ],

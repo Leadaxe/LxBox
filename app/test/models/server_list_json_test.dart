@@ -87,4 +87,57 @@ void main() {
       expect(updated.url, 'https://x');
     });
   });
+
+  // §283 — per-node disable: отметки живут в записи подписки и обязаны
+  // переживать toJson→fromJson (merge-импорт backup гоняет ровно этот
+  // round-trip) и copyWith-мутации других полей.
+  group('§283 disabledHashes', () {
+    SubscriptionServers sub({Map<String, DateTime> disabled = const {}}) =>
+        SubscriptionServers(
+          id: 's1',
+          name: 'S',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          url: 'https://x',
+          disabledHashes: disabled,
+        );
+
+    test('toJson → fromJson сохраняет hash → lastSeen', () {
+      final t1 = DateTime.utc(2026, 7, 18, 10);
+      final t2 = DateTime.utc(2026, 7, 1, 8, 30);
+      final rt = ServerList.fromJson(
+              sub(disabled: {'aaa': t1, 'bbb': t2}).toJson())
+          as SubscriptionServers;
+      expect(rt.disabledHashes, {'aaa': t1, 'bbb': t2});
+    });
+
+    test('пустые отметки → ключа в JSON нет; старый JSON без ключа → {}', () {
+      final j = sub().toJson();
+      expect(j.containsKey('disabled_hashes'), isFalse);
+      final rt = ServerList.fromJson(j) as SubscriptionServers;
+      expect(rt.disabledHashes, isEmpty);
+    });
+
+    test('copyWith других полей отметки НЕ затирает', () {
+      final t = DateTime.utc(2026, 7, 18);
+      final updated = sub(disabled: {'aaa': t})
+          .copyWith(name: 'renamed', lastNodeCount: 9);
+      expect(updated.disabledHashes, {'aaa': t});
+    });
+
+    test('толерантный парс: мусор вместо map / битые даты → скип', () {
+      final base = sub().toJson();
+      expect(
+          (ServerList.fromJson({...base, 'disabled_hashes': 'oops'})
+                  as SubscriptionServers)
+              .disabledHashes,
+          isEmpty);
+      final mixed = ServerList.fromJson({
+        ...base,
+        'disabled_hashes': {'good': '2026-07-18T00:00:00.000Z', 'bad': 42},
+      }) as SubscriptionServers;
+      expect(mixed.disabledHashes.keys, ['good']);
+    });
+  });
 }

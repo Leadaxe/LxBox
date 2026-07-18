@@ -38,6 +38,7 @@ dependencies:
   package_info_plus: ^8.0.2
   connectivity_plus: ^6.0.5
   collection: ^1.18.0
+  crypto: ^3.0.3 # §283 — sha256 для identity-хеша ноды подписки
   pointycastle: ^4.0.0 # §130 — ECDSA P-256 keygen (pure-Dart, работает на Android; cryptography P-256 keygen не реализует)
 
 dev_dependencies:

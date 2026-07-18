@@ -42,6 +42,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ update_interval_hours int           default 24; §129 спец: -1=никогда, 0=respect server, N>0=каждые N ч
 │       ├─ last_node_count       int
 │       ├─ consecutive_fails     int           для UI "(N fails)"
+│       ├─ disabled_hashes       map?          §283 — {identity-хеш ноды: ISO-8601 lastSeen}; per-node disable
 │       │                        — user only —
 │       ├─ origin                "paste"|"file"|"qr"|"manual"
 │       ├─ created_at            ISO-8601
@@ -304,7 +305,13 @@ Sealed по полю `type`:
                                                // принимаем, N>0 = каждые N ч.
                                                // AutoUpdater пропускает interval ≤ 0.
   "last_node_count":       0,
-  "consecutive_fails":     0                  // для UI "(N fails)"; freezing — in-memory
+  "consecutive_fails":     0,                 // для UI "(N fails)"; freezing — in-memory
+  "disabled_hashes": {                        // §283 — per-node disable (опционален,
+    "<sha256-hex>": "2026-07-18T10:00:00Z"    // пустой не пишется). Ключ = identity-хеш
+  }                                           // сути ноды (emit − tag − detour, см.
+                                              // services/node_hash.dart); значение =
+                                              // lastSeen для TTL-GC (clamp(3×interval,
+                                              // 24ч, месяц)) на успешном сетевом refresh.
 }
 ```
 

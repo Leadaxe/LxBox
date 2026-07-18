@@ -516,7 +516,8 @@ debug/                       # localhost HTTP Debug API (§031)
 warp/                        # §025/§130 WARP + MASQUE-транспорт (питает warp_wizard_screen)
   warp_client.dart           #   регистрация в Cloudflare (POST /reg): X25519-приватник не покидает телефон
   warp_account.dart          #   WARP-аккаунт (client_id→reserved, ключи)
-  warp_endpoint_picker.dart  #   скан WARP-эндпоинтов (порты 2408/500/1701/4500, WG-handshake liveness)
+  warp_endpoint_picker.dart  #   пул WARP-эндпоинтов + рандом endpoint/SNI (§148 курированные блоки; БЕЗ пробы)
+  scan/                      #   §284 endpoint scanner: рандом-посев → raw-probe по IP (WG/QUIC/TLS) → выбор
   masque_account.dart · masque_keys.dart · masquerade_params.dart  #   §130 MASQUE (Cloudflare QUIC/CONNECT-IP) — эмит MasqueSpec
 migration/proxy_source_migration.dart  # one-shot v1 proxy_sources → v2 server_lists
 nav/home_return_observer.dart          # глобальный NavigatorObserver (§076): rebuild на возврат к home
@@ -883,8 +884,9 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
 
 Cloudflare WARP-интеграция (`services/warp/`, мастер `screens/warp_wizard_screen.dart`, storage `settings_storage/warp.dart`). Два транспорта:
 
-- **WARP-WireGuard (§025).** `WarpClient` регистрирует устройство сам (POST в Cloudflare) — приватный ключ **X25519 генерируется на телефоне и не покидает его**. `client_id` (3 байта из base64) → WireGuard `reserved`; default-пир `engage.cloudflareclient.com:2408`. `warp_endpoint_picker.dart` сканирует диапазоны IP/портов, liveness = настоящий WG-handshake. Эмитится как обычная WireGuard-нода.
+- **WARP-WireGuard (§025).** `WarpClient` регистрирует устройство сам (POST в Cloudflare) — приватный ключ **X25519 генерируется на телефоне и не покидает его**. `client_id` (3 байта из base64) → WireGuard `reserved`; default-пир `engage.cloudflareclient.com:2408`. `warp_endpoint_picker.dart` даёт пул диапазонов/портов и рандомит endpoint (без пробы). Эмитится как обычная WireGuard-нода.
 - **MASQUE (§130, флагман v2.9.0).** Отдельная крипта (`masque_keys.dart` — ECDSA P-256, не X25519), `masque_account.dart`, `masquerade_params.dart`. `MasqueSpec` ([`node_spec.dart`](../app/lib/models/node_spec.dart), `protocol='masque'`) эмитит sing-box outbound `type: masque` (Cloudflare QUIC / CONNECT-IP), `network` = `h3`/`h2`. Требует ядро с поддержкой masque-транспорта — см. `KERNEL.md`.
+- **Endpoint scanner (§284).** Кнопка SCAN в мастере (`services/warp/scan/`): стоп боевого VPN → headless probe-сессия без tun → 100 случайных полных конфигов (IP × port × protocol{AWG, h3, h2} × SNI × fp) в **сырые пробы по IP** (WG-handshake / QUIC / TLS, DNS-независимо) → дотест топ-3 → таблица (рабочие / нет) → выбор в конфиг. Raw-probe — kernel-side (`sing-box-lx SPEC 028`); до re-pin нового `.aar` мост graceful-деградирует («probe unavailable»).
 
 ### 6. AppLog (per-source ring buffers, §043)
 
@@ -1528,6 +1530,11 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | **128** | **Idle-suspend** (`route.lx_idle_suspend`, ядро SPEC 020; default `30s`) |
 | **129** | **File subscription** (url=file:<uuid>, HttpCache-снапшот, транзакционная смена online↔file) |
 | **130** | **MASQUE WARP transport** (флагман v2.9.0 — MasqueSpec, Cloudflare QUIC/CONNECT-IP; services/warp/) |
+| **234** | **Server folders** (папки ручных серверов: FolderMember + per-member toggle + tag_prefix/detour-политика) |
+| 236 | Folder server testing (headless probe членов папки) |
+| **248** | **Detour channels** (каналы как detour-цели; §254 циклы → fatal с виновниками) |
+| **279** | **Localization** (en+ru: ARB + template-overlay + values-<lang>; §280 фазы 0-7) |
+| **283** | **Subscription node disable** (per-node toggle в подписке: identity-хеш сути узла + TTL-GC отметок) |
 
 **Демотированные (через §054) — теперь в `tasks/`:**
 

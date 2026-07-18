@@ -2842,7 +2842,7 @@
   },
   "folderOffCount": "{count} off",
   "@folderOffCount": {
-    "description": "Folder detail control bar: suffix chunk — disabled members count.",
+    "description": "Shared disabled-entries counter suffix ('N off'): folder detail control bar (disabled members) and subscription header (disabled nodes).",
     "placeholders": {
       "count": {
         "type": "int"
@@ -5815,5 +5815,45 @@
   "homeNodeUseTooltip": "Use node",
   "@homeNodeUseTooltip": {
     "description": "Node row: tooltip of the activate button."
+  },
+  "warpScanButton": "Scan",
+  "@warpScanButton": {
+    "description": "WARP wizard: button that scans endpoints for a working IP:port."
+  },
+  "warpScanConfirmTitle": "Scan endpoints?",
+  "@warpScanConfirmTitle": {
+    "description": "WARP scan: confirmation dialog title before stopping the VPN."
+  },
+  "warpScanConfirmBody": "Scanning stops the VPN and probes endpoints directly to find one that works on this network. Continue?",
+  "@warpScanConfirmBody": {
+    "description": "WARP scan: confirmation dialog body explaining the VPN will stop."
+  },
+  "warpScanProgress": "Probing {done}/{total}…",
+  "@warpScanProgress": {
+    "description": "WARP scan: progress line while probing endpoints.",
+    "placeholders": {
+      "done": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "warpScanResultsTitle": "Scan results",
+  "@warpScanResultsTitle": {
+    "description": "WARP scan: title of the results sheet."
+  },
+  "warpScanWorkingHeader": "Working",
+  "@warpScanWorkingHeader": {
+    "description": "WARP scan results: header of the section listing endpoints that responded."
+  },
+  "warpScanFailedHeader": "Not working",
+  "@warpScanFailedHeader": {
+    "description": "WARP scan results: header of the section listing endpoints that did not respond."
+  },
+  "warpScanEmptyResult": "No endpoints responded on this network.",
+  "@warpScanEmptyResult": {
+    "description": "WARP scan results: shown when nothing was reachable."
+  },
+  "warpScanProbeUnavailable": "Endpoint probing needs a core update — available after the next release.",
+  "@warpScanProbeUnavailable": {
+    "description": "WARP scan: shown when the kernel build does not yet expose the raw probe."
   }
 }

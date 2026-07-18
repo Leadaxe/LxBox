@@ -60,6 +60,15 @@ final class SubscriptionServers extends ServerList {
   /// с maxFailsPerSession=5, которое сбрасывается на рестарт (спек §026).
   final int consecutiveFails;
 
+  /// §283 — per-node disable: identity-хеш ноды (см. services/node_hash.dart)
+  /// → когда источник ноды последний раз видели в теле подписки (lastSeen —
+  /// для TTL-очистки спящих отметок на успешном сетевом refresh). Оверлей
+  /// поверх `nodes`: сами ноды остаются видны в UI (с toggle), но builder их
+  /// не эмитит. Персистится (в отличие от nodes) и потому обязан жить в
+  /// трио toJson/fromJson/copyWith — merge-импорт backup гоняет записи через
+  /// fromJson→toJson, поле только в toJson молча терялось бы.
+  final Map<String, DateTime> disabledHashes;
+
   SubscriptionServers({
     required super.id,
     required super.name,
@@ -74,6 +83,7 @@ final class SubscriptionServers extends ServerList {
     this.updateIntervalHours = 24,
     this.lastNodeCount = 0,
     this.consecutiveFails = 0,
+    this.disabledHashes = const {},
     super.nodes,
   });
 
@@ -97,7 +107,22 @@ final class SubscriptionServers extends ServerList {
         'update_interval_hours': updateIntervalHours,
         'last_node_count': lastNodeCount,
         'consecutive_fails': consecutiveFails,
+        if (disabledHashes.isNotEmpty)
+          'disabled_hashes': disabledHashes
+              .map((k, v) => MapEntry(k, v.toIso8601String())),
       };
+
+  /// §283 — толерантный парс: не-Map → пусто, битые значения-даты — скип
+  /// записи (отметка без валидного lastSeen бесполезна для TTL).
+  static Map<String, DateTime> _disabledHashesFromJson(dynamic raw) {
+    if (raw is! Map) return const {};
+    final out = <String, DateTime>{};
+    raw.forEach((k, v) {
+      final t = v is String ? DateTime.tryParse(v) : null;
+      if (t != null) out[k.toString()] = t;
+    });
+    return out;
+  }
 
   factory SubscriptionServers.fromJson(Map<String, dynamic> j) =>
       SubscriptionServers(
@@ -126,6 +151,7 @@ final class SubscriptionServers extends ServerList {
             (j['update_interval_hours'] as num?)?.toInt() ?? 24,
         lastNodeCount: (j['last_node_count'] as num?)?.toInt() ?? 0,
         consecutiveFails: (j['consecutive_fails'] as num?)?.toInt() ?? 0,
+        disabledHashes: _disabledHashesFromJson(j['disabled_hashes']),
       );
 
   SubscriptionServers copyWith({
@@ -141,6 +167,7 @@ final class SubscriptionServers extends ServerList {
     int? updateIntervalHours,
     int? lastNodeCount,
     int? consecutiveFails,
+    Map<String, DateTime>? disabledHashes,
     List<NodeSpec>? nodes,
   }) =>
       SubscriptionServers(
@@ -157,6 +184,7 @@ final class SubscriptionServers extends ServerList {
         updateIntervalHours: updateIntervalHours ?? this.updateIntervalHours,
         lastNodeCount: lastNodeCount ?? this.lastNodeCount,
         consecutiveFails: consecutiveFails ?? this.consecutiveFails,
+        disabledHashes: disabledHashes ?? this.disabledHashes,
         nodes: nodes ?? this.nodes,
       );
 }
