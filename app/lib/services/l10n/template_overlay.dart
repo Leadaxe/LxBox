@@ -12,20 +12,26 @@
 // Файл — pure Dart (без flutter-импортов): его использует и runtime-loader,
 // и CLI-checkers (tool/l10n), и генерация en.json.
 
-/// Callback walker'а: (адрес, map-узел, имя display-поля в узле).
+/// Callback walker'а: (address, map-узел, имя display-поля в узле). `address` —
+/// имя маршрута обхода (whitelist-скоуп); apply/extract ключуются САМИМ
+/// английским значением node[field], не адресом, поэтому address тут только для
+/// трассировки/симметрии обхода. Оставлен, чтобы не трогать 20+ visit-точек.
 typedef _Visit = void Function(String address, Map node, String field);
 
 class TemplateOverlay {
   TemplateOverlay._();
 
-  /// Применить [overlay] (адрес → перевод) к декодированному шаблону.
-  /// Мутирует [templateJson] in-place. Отсутствующий в overlay адрес —
-  /// тихий английский fallback (by design).
+  /// Применить [overlay] (английский текст → перевод) к декодированному
+  /// шаблону. Мутирует [templateJson] in-place. Ключ overlay — САМО английское
+  /// значение display-поля (принцип ui/-словаря), не адрес: walker держит
+  /// прямую (node, field)-ссылку, адрес — лишь имя обхода. Отсутствующий в
+  /// overlay текст — тихий английский fallback (by design).
   static void apply(
       Map<String, dynamic> templateJson, Map<String, String> overlay) {
     if (overlay.isEmpty) return;
     _walk(templateJson, (address, node, field) {
-      final v = overlay[address];
+      final english = node[field] as String;
+      final v = overlay[english];
       if (v == null || v.isEmpty) return;
       // Load-bearing (не гигиена): overlay применяется ДО preset_expand, т.е.
       // строка с '@'-префиксом стала бы var-ссылкой, а '{' — ICU/подстановкой.
@@ -35,35 +41,30 @@ class TemplateOverlay {
     });
   }
 
-  /// Извлечь адрес → английское значение из декодированного шаблона.
-  /// Hard-fail на дубликате адреса с конфликтующими значениями (last-wins
-  /// запрещён — коллизия видна в момент внесения, не после отгрузки ru.json).
+  /// Извлечь плоское зеркало английский→английский из декодированного шаблона.
+  /// Ключ = само display-значение (совпадает по форме с ui/-словарём). Повторы
+  /// одного текста схлопываются в один ключ — это фича, не конфликт (ключ ЕСТЬ
+  /// значение, поэтому расхождение по построению невозможно).
   static Map<String, String> extract(Map<String, dynamic> templateJson) {
     final out = <String, String>{};
     _walk(templateJson, (address, node, field) {
       final v = node[field] as String;
-      final prev = out[address];
-      if (prev != null && prev != v) {
-        throw StateError(
-            'duplicate overlay address "$address" with conflicting values: '
-            '"$prev" vs "$v"');
-      }
-      out[address] = v;
+      out[v] = v;
     });
     return out;
   }
 
   /// Парсит содержимое locale-overlay файла (`assets/l10n/template/<tag>.json`)
-  /// в плоскую Map. Записи — объектные `{"text": "...", "src": "<hash>"}`
-  /// (`src` — durable stale-маркер для CI, в runtime игнорируется); плоские
-  /// строковые значения тоже принимаются (формат en.json).
+  /// в плоскую Map английский→перевод. Формат зеркалит ui/-словарь: записи —
+  /// объектные `{"value": "<перевод>"}`; плоские строковые значения тоже
+  /// принимаются (формат en.json английский→английский).
   static Map<String, String> parseLocaleFile(Map<String, dynamic> json) {
     final out = <String, String>{};
     json.forEach((key, value) {
       if (value is String) {
         out[key] = value;
-      } else if (value is Map && value['text'] is String) {
-        out[key] = value['text'] as String;
+      } else if (value is Map && value['value'] is String) {
+        out[key] = value['value'] as String;
       }
     });
     return out;

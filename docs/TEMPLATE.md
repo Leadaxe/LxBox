@@ -1070,33 +1070,37 @@ preset_expand-снапшотов** (`TemplateOverlay.apply`, зовётся из
 `TemplateLoader`; кэш loader'а ключуется тегом локали):
 
 ```
-app/assets/l10n/template/en.json   # генерируемое зеркало английского display-текста
-app/assets/l10n/template/ru.json   # ручной перевод (объектный формат, см. ниже)
+app/assets/l10n/template/en.json   # генерируемое english→english зеркало display-текста
+app/assets/l10n/template/ru.json   # ручной перевод (тот же shape, что UI-словарь)
 ```
 
-- `en.json` — плоский `Map<String, String>`, регенерируется
-  `dart run tool/l10n/template_check.dart --write-en`; коммитнутая копия обязана
-  быть byte-equal свежей экстракции (CI).
-- `ru.json` (и любой будущий `<lang>.json`) — объектный, каждая запись несёт
-  `src` — первые 8 hex sha256 **текущего английского значения** по этому адресу:
+Ключ overlay = **сам английский текст** display-поля (тот же принцип, что
+natural-key UI-словарь `assets/l10n/ui/<tag>.json`), а не структурный адрес.
+`TemplateOverlay.apply` ходит по whitelist-схеме шаблона, читает английское
+значение узла и подменяет его переводом по этому тексту.
+
+- `en.json` — плоский `Map<String, String>` english→english (ключ = значение),
+  регенерируется `dart run tool/l10n/template_check.dart --write-en`; коммитнутая
+  копия обязана быть byte-equal свежей экстракции (CI). Повторяющийся один и тот
+  же английский текст в разных местах шаблона схлопывается в один ключ (фича, не
+  конфликт).
+- `ru.json` (и любой будущий `<lang>.json`) — тот же объектный shape, что
+  UI-словарь: `{ "<english>": { "value": "<перевод>" } }`:
 
   ```json
-  "preset.ru-direct.var.dns_server.title": { "text": "DNS-сервер", "src": "a1b2c3d4" }
+  "DNS server": { "value": "DNS-сервер" }
   ```
 
-  Изменился en-текст → `src` расходится → ключ протухает (durable per-key
-  fail в CI под `--strict`). После пересмотра перевода принять новый hash:
-  `--accept ru:<key>`.
+  Изменился en-текст → сменился ключ: старая запись становится unknown-key (fail
+  `template_check`), новый английский ключ — missing (warn, strict→fail).
+  Workflow идентичен UI-строке: переименовать ключ, пересмотреть перевод.
 
-**Схема адресов** (полная таблица — [§279 spec, §3.2](./spec/features/279%20localization/spec.md)):
-rule-локальные vars скоупятся по `preset_id`
-(`preset.<preset_id>.var.<name>.title`) — одноимённые vars разных пресетов
-несут разный текст; глобальные vars — `var.<name>.*`; секции —
-`section.<id>.*`; плюс `magic.<role>.title`, `channel.<tag>.label`,
-`dns_server.<tag>.description`, `ping.<id>.name`, `speed.<id>.name`.
-Не адресуемо (whitelist applier'а): всё под `config`/`parser_config`,
-`name`/`tag`/`value`/`default_value`/`preset_id`, bare-string enum-опции,
-`dns_options.rules[].name` (латентный identity-ключ).
+**Схема обхода** (полная таблица — [§279 spec, §3.2](./spec/features/279%20localization/spec.md)):
+applier посещает display-поля секций, глобальных и rule-локальных vars, magic-нод,
+каналов, dns-серверов, ping/speed-пресетов. Не посещается (whitelist applier'а):
+всё под `config`/`parser_config`, `name`/`tag`/`value`/`default_value`/`preset_id`,
+bare-string enum-опции, `dns_options.rules[].name` (латентный identity-ключ) —
+поэтому эти строки в overlay не попадают.
 
 **Load-bearing запреты**: перевод, начинающийся с `@`, был бы интерпретирован
 как var-ссылка (overlay применяется до `substituteVars`); `{` ломает parsing —
@@ -1166,4 +1170,4 @@ Settings — заводи её в секции `internal` (chapter не ренд
 - [§040 per-group ping settings](./spec/tasks/040-per-group-ping-test-settings.md) — `ping_options`
 - [§015 speed test](./spec/features/015%20speed%20test/spec.md) — `speed_test_options`
 - [§022 app settings](./spec/features/022%20app%20settings/spec.md) — Wizard UI и `sections[]`
-- [§279 localization](./spec/features/279%20localization/spec.md) — l10n-overlay display-текста шаблона, схема адресов, `src`-hash; translator-guide — [`l10n.md`](./l10n.md)
+- [§279 localization](./spec/features/279%20localization/spec.md) — l10n-overlay display-текста шаблона; ключ overlay = сам английский текст (принцип `ui/`-словаря, `{value}`-формат, без адресов и `src`-hash — §285); translator-guide — [`l10n.md`](./l10n.md)
