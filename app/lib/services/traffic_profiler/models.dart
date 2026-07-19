@@ -51,11 +51,10 @@ class ConnectionIssue {
       };
 }
 
-/// §160 — чистый аггрегатор событий в `byDomain` / `byIp`. Вынесен из
-/// `Session._recompute` чтобы переиспользоваться и для session.events
-/// (per-app trace), и для globalRollingBuffer (Stats→Live) одним кодом —
-/// без дубля и расхождения логики (TraceExplorer считает агрегаты сам из
-/// переданного списка событий, не завязываясь на Session).
+/// §160 — чистый аггрегатор событий в `byDomain` / `byIp`. Считает агрегаты
+/// из переданного списка событий (globalRollingBuffer / отфильтрованный набор
+/// в TraceExplorer) — TraceExplorer вызывает его сам, не завязываясь на
+/// внутреннее состояние профайлера.
 ///
 /// Unattributed-события пропускаются (как и раньше): чтобы «nearby» events
 /// без owner'а не пачкали Domains/IPs картинку. В Live-ленте они видны.
@@ -384,76 +383,3 @@ class IpStats {
       };
 }
 
-class Session {
-  Session({
-    required this.id,
-    required this.targetPackage,
-    required this.startedAt,
-    this.wasVerbose = false,
-    Set<String>? secondaryPackages,
-  }) : secondaryPackages = secondaryPackages ?? <String>{};
-
-  final String id;
-  final String targetPackage;
-
-  /// §048 Принцип 3 — additional package names which should be considered
-  /// part of the target app's traffic. Configurable per session через UI
-  /// и API. Default `{}`. Typical values: `com.google.android.webview`,
-  /// `com.android.chrome` (если target — Chrome-derived app).
-  final Set<String> secondaryPackages;
-
-  final DateTime startedAt;
-  DateTime? finishedAt;
-  bool wasVerbose;
-  int eventsDropped = 0;
-
-  /// Newest-last (append-only). Pruning см. в `_pruneOld`.
-  final List<TrafficEvent> events = <TrafficEvent>[];
-
-  /// Aggregates — рассчитываются on-demand на view request.
-  Map<String, DomainStats> _byDomain = {};
-  Map<String, IpStats> _byIp = {};
-  bool _aggregatesDirty = true;
-
-  void _markDirty() => _aggregatesDirty = true;
-
-  void _recompute() {
-    final agg = computeTraceAggregates(events);
-    _byDomain = agg.byDomain;
-    _byIp = agg.byIp;
-    _aggregatesDirty = false;
-  }
-
-  Map<String, DomainStats> get byDomain {
-    if (_aggregatesDirty) _recompute();
-    return _byDomain;
-  }
-
-  Map<String, IpStats> get byIp {
-    if (_aggregatesDirty) _recompute();
-    return _byIp;
-  }
-
-  Map<String, Object?> toMetaJson() => {
-        'session_id': id,
-        'target_package': targetPackage,
-        'secondary_packages': secondaryPackages.toList(),
-        'started_at': startedAt.toUtc().toIso8601String(),
-        if (finishedAt != null)
-          'finished_at': finishedAt!.toUtc().toIso8601String(),
-        'verbose': wasVerbose,
-        'events_count': events.length,
-        'events_dropped': eventsDropped,
-        'unattributed_count': events
-            .where((e) => e.confidence == ConfidenceLevel.unattributed)
-            .length,
-        'domains_count': byDomain.length,
-        'ips_count': byIp.length,
-        if (finishedAt == null)
-          'duration_ms':
-              DateTime.now().difference(startedAt).inMilliseconds
-        else
-          'duration_ms':
-              finishedAt!.difference(startedAt).inMilliseconds,
-      };
-}

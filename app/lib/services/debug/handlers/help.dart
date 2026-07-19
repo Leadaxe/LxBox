@@ -281,28 +281,11 @@ GET /files/srs/list                            Cached SRS files: [{rule_id, size
 GET /files/srs?ruleId=<id>                     Binary SRS dump (octet-stream)
 GET /files/local?name=<n>                      Whitelisted internal-storage files (cache.db, stderr.log). `/files/external` — legacy alias.
 
-=== Traffic Profiler (per-app + system-wide) ===
-
-Per-app session (only one active at a time):
-POST   /profiler/start                         Body: {"package":"<pkg>", "verbose":false, "secondary_packages":["<pkg>",...]}.
-                                                 verbose=true → log_level toggle to debug; secondary_packages →
-                                                 events from related apps arrive with confidence=secondary.
-                                                 409 if already active (with current id).
-POST   /profiler/stop                          Stop active session. 404 if nothing active.
-GET    /profiler/active                        Current session metadata. 404 if nothing.
-GET    /profiler/sessions                      Last 5 completed sessions (FIFO ring).
-DELETE /profiler/sessions                      Clear all completed.
-GET    /profiler/session/{id}?include=events,domains,ips
-                                                 events — full event log; domains — by-domain agg;
-                                                 ips — by-IP agg. Without include — meta only.
-DELETE /profiler/session/{id}                  Delete one session.
-GET    /profiler/stream                        SSE per-session live stream (requires active session).
-PATCH  /profiler/secondary-packages            Body: {"secondary_packages":[...]}; updates live on active.
-                                                 Returns 404 if no active session.
+=== Traffic Profiler (system-wide) ===
 
 System-wide (inclusive observer — Live tab in Statistics):
-POST   /profiler/live/start                    startGlobalRecording — subscribes to core logs +
-                                                 starts _pollConnections (5s). Idempotent.
+POST   /profiler/live/start                    startGlobalRecording — subscribes to core connections +
+                                                 DNS streams. Idempotent.
 POST   /profiler/live/stop                     stopGlobalRecording. Idempotent.
 GET    /profiler/live/state                    {recording, started_at, buffer_count, unattributed_count, banner_active}.
 GET    /profiler/live?seconds=60               Snapshot of the global rolling buffer for the window (default 60s).
@@ -513,16 +496,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/files/srs/list', 'description': 'Cached SRS [{rule_id,size,mtime}]'},
     {'method': 'GET', 'path': '/files/srs', 'params': {'ruleId': 'id'}, 'description': 'Binary SRS dump'},
     {'method': 'GET', 'path': '/files/local', 'params': {'name': 'cache.db|stderr.log'}, 'description': 'Whitelisted internal-storage files (filesDir). `/files/external` — legacy alias.'},
-    // Profiler (per-app + system-wide)
-    {'method': 'POST', 'path': '/profiler/start', 'body': '{"package":"<pkg>","verbose":false,"secondary_packages":[...]}', 'description': 'Start per-app session. 409 if already active.'},
-    {'method': 'POST', 'path': '/profiler/stop', 'description': 'Stop active session. 404 if none.'},
-    {'method': 'GET', 'path': '/profiler/active', 'description': 'Active session metadata or 404.'},
-    {'method': 'GET', 'path': '/profiler/sessions', 'description': 'Last 5 completed sessions (FIFO ring).'},
-    {'method': 'DELETE', 'path': '/profiler/sessions', 'description': 'Clear all completed.'},
-    {'method': 'GET', 'path': '/profiler/session/{id}', 'params': {'include': 'events,domains,ips (any subset)'}, 'description': 'Session details. include=events for full log.'},
-    {'method': 'DELETE', 'path': '/profiler/session/{id}', 'description': 'Delete one session.'},
-    {'method': 'GET', 'path': '/profiler/stream', 'description': 'SSE per-session live events (requires active).'},
-    {'method': 'PATCH', 'path': '/profiler/secondary-packages', 'body': '{"secondary_packages":[...]}', 'description': 'Update secondary packages on active session. POST also accepted.'},
+    // Profiler (system-wide)
     {'method': 'POST', 'path': '/profiler/live/start', 'description': 'startGlobalRecording (system-wide). Idempotent.'},
     {'method': 'POST', 'path': '/profiler/live/stop', 'description': 'stopGlobalRecording. Idempotent.'},
     {'method': 'GET', 'path': '/profiler/live/state', 'description': '{recording,started_at,buffer_count,unattributed_count,banner_active}'},
