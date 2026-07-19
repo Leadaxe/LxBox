@@ -111,7 +111,15 @@ class HomeController extends ChangeNotifier
   /// `connecting`/`stopping` в мс) может их переопределить для on-device теста
   /// force-stop'а (например, connecting=500мс, чтобы не ждать реальный зависон ядра).
   Timer? _transientTimeoutTimer;
-  static const _defaultStoppingTimeout = Duration(seconds: 10);
+  // §287 — 3с (было 10с): при stop с активным mass-ping'ом libbox `closeService()`
+  // синхронно ждёт teardown всех WG-endpoint'ов, порождённых пингом (device-verified:
+  // stop без пинга 0.16с, с пингом — упирался в этот таймаут ~10с). Снижение порога
+  // раньше отдаёт управление force-stop-пути (`doForceStop`, teardown под
+  // withTimeout(2с)) — юзер не ждёт зависший WG-teardown. box.Close() при этом не
+  // обрывается: Kotlin перестаёт ЖДАТЬ, но Go-горутина доигрывает endpoint.Close()
+  // по цепочке в фоне (воркеры гаснут по порядку, не зомби). Чистый stop = 0.16с,
+  // запас до 3с большой; корень (closeService не должен ждать пинг-dial'ы) — в ядре.
+  static const _defaultStoppingTimeout = Duration(seconds: 3);
   static const _defaultConnectingTimeout = Duration(seconds: 15);
   Duration _stoppingTimeout = _defaultStoppingTimeout;
   Duration _connectingTimeout = _defaultConnectingTimeout;
@@ -408,7 +416,7 @@ class HomeController extends ChangeNotifier
   /// Перезапускает safety-timer на transient-фазу. Cancel'ит предыдущий
   /// (защита от спама `Future.delayed` при множественных stopping/
   /// connecting подряд) и стартует новый. §140 — порог зависит от фазы:
-  /// `connecting` (медленный старт) — длиннее, `stopping` (реальный зависон) — 10с.
+  /// `connecting` (медленный старт) — длиннее, `stopping` (реальный зависон) — 3с (§287).
   void _armTransientTimeout(TunnelStatus expected) {
     _transientTimeoutTimer?.cancel();
     final timeout = expected == TunnelStatus.connecting
