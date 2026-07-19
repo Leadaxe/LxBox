@@ -40,16 +40,13 @@ class TrafficBar extends StatelessWidget {
         : '';
     return GestureDetector(
       onTap: () {
-        // §044: идёт recording → сразу Per-app tab, иначе Overview.
-        final initial = TrafficProfiler.I.isRecording
-            ? StatsTab.perApp
-            : StatsTab.overview;
+        // §288 — вкладка Per-app удалена; всегда открываем Overview.
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => StatsScreen(
               configRaw: controller.state.configRaw,
-              initialTab: initial,
+              initialTab: StatsTab.overview,
               subController: subController,
               homeController: controller,
             ),

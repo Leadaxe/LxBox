@@ -5,9 +5,8 @@ import '../../services/app_info_cache.dart';
 import '../../services/l10n/locale_controller.dart';
 
 /// §044/new-profiler — **встраиваемый** мульти-select пикер приложений для
-/// фильтр-окна профайлера (App-таб). В отличие от
-/// [SingleAppPickerScreen] (полноэкранный, `Navigator.pop(package)` по тапу),
-/// этот — виджет внутри таба: чекбоксы + накопление в [selected], без навигации.
+/// фильтр-окна профайлера (Profiler-таб). Это виджет внутри фильтр-листа:
+/// чекбоксы + накопление в [selected], без навигации.
 ///
 /// Источник списка и icon-cache те же (`AppInfoCache.loadAllApps` + `ensure`),
 /// чтобы не грузить иконки дважды.
