@@ -55,12 +55,27 @@ class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
   /// main()-старт: применить сохранённую настройку ДО runApp (первый кадр
   /// локализован) без прогрева шаблона — init ниже по main() сам грузит
   /// template под effectiveTag — и без notify (слушателей ещё нет).
-  void bootstrap(String stored) {
+  ///
+  /// Словарь `_text` прогревается ЗДЕСЬ (а не только в _applyLocale): при
+  /// холодном старте с сохранённым 'ru' ни один пайплайн (set/reload/
+  /// didChangeLocales) не срабатывает, поэтому без этого первый кадр печатал
+  /// английский ключ (fallback dict=null), пока юзер не переключал язык
+  /// вручную. `await` в main() держит первый кадр до готовности словаря.
+  /// best-effort: сбой загрузки → _text остаётся fallback'ом (английский
+  /// ключ), запуск не блокируется. Template/relocalize сюда не тянем — их
+  /// грузит init ниже по main() (первый TemplateLoader.load), notify не нужен
+  /// (слушателей ещё нет).
+  Future<void> bootstrap(String stored) async {
     setting = stored;
     final loc = effective;
     _lastApplied = loc;
     // §279 Phase 5 — intl-форматтеры дат (format_utils) берут локаль отсюда.
     Intl.defaultLocale = loc.toLanguageTag();
+    try {
+      _text = await _buildGetLocalText(loc.languageCode);
+    } catch (_) {
+      // best-effort — fallback-локализатор (английский ключ) остаётся.
+    }
   }
 
   /// Регистрируется в main(): WidgetsBinding.instance.addObserver(I).

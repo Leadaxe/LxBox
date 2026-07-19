@@ -76,7 +76,7 @@ void main() async {
     // резолвятся через активную локаль — TemplateLoader.load() кладёт кэш
     // под effectiveTag). Observer ловит смену языка устройства при
     // setting=='system' (didChangeLocales). best-effort (try выше).
-    LocaleController.I.bootstrap(await SettingsStorage.getAppLanguage());
+    await LocaleController.I.bootstrap(await SettingsStorage.getAppLanguage());
     WidgetsBinding.instance.addObserver(LocaleController.I);
     // §279 Phase 5 — intl date-symbols для ru (format_utils.formatTime и др.
     // используют DateFormat под Intl.defaultLocale). ДО первого кадра, чтобы
