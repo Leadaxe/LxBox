@@ -449,5 +449,4 @@ String _probeStatusWire(ProbeStatus s) => switch (s) {
       ProbeStatus.failed => 'failed',
       ProbeStatus.broken => 'broken',
       ProbeStatus.invalid => 'invalid',
-      ProbeStatus.notInConfig => 'not_in_config',
     };
