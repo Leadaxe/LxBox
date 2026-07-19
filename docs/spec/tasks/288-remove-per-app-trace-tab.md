@@ -1,6 +1,12 @@
-# §288 — Удаление вкладки «App» (per-app trace) из статистики
+# §288 — Удаление per-app trace целиком (вкладка + сервис + Debug API)
 
 **Тип:** cleanup / UX · **Статус:** in progress (develop)
+
+> **Фаза 1** (сделана, коммит §288) — убрана вкладка `App` из UI + 4 UI-файла +
+> l10n-ключи. **Фаза 2** (этот же §288) — полное удаление per-app из сервисного
+> слоя: `TrafficProfiler` session-путь, класс `Session`, Debug API `/profiler/*`
+> per-app роуты, тесты, home-бар чип. Остаётся ТОЛЬКО system-wide Profiler
+> (global recording, live-поток по всем приложениям).
 
 ## Проблема
 
@@ -80,15 +86,82 @@ TabBar становится трёхтабовым: `Stats`, `Conns`, `Profiler`
 `Help`, `Search by name or package`, `Show system apps`, system-wide unattributed
 Profiler-баннер) — **не трогать**.
 
+## Фаза 2 — удаление per-app из сервисного слоя
+
+Инвариант, делающий операцию безопасной: global-путь (`_globalRollingBuffer`,
+`_globalUnattributedEvents`, SSE) пишется **безусловно** в Step 1–3
+`_routeEvent`/`_ingestCcConnections`; запись в `_active.events` — отдельный
+Step 4 add-on. Выкидывание session-ветки не трогает global buffer.
+
+### `traffic_profiler.dart` — что удалить
+
+- Публичные per-app: `start`, `stop`, `delete`, `clearAll`, `getById`,
+  `updateSecondaryPackages`, `liveStream` (per-session SSE), геттеры `active`,
+  `completed`, `current` (уже мёртв), `isRecording`.
+- Поля: `_active`, `_completed`, `_maxCompleted`, `_maxEventsPerSession`,
+  `_slidingWindow`, `_verboseSavedLogLevel`, `_sessionStreamSinks`.
+- Приватные session-only: `_resolveForSession`, `_withConfidence`,
+  `_backfillFromGlobalRollingBuffer`, `_splitPackageNames`, `_stripUid`,
+  `_appendEvent`, `_pruneOld`, `_emitSessionStream`, `_scheduleNotify`
+  (+`_notifyThrottleTimer`), verbose-путь (`log_level=debug` toggle в start/stop).
+- Горячий путь — упростить (выкинуть session-ветку, оставить global):
+  `_routeEvent` (Step 4), `_ingestCcConnections` (`if (s != null)` ветка + guard),
+  `_ingestDnsQueries` guard, `_attachCcConnections`/`_maybeDetachCcConnections`
+  guard на `_active`, `_maybeStopGcTimer` guard, `resetForTesting` (убрать чистку
+  `_active`/`_completed`).
+
+Оставить (global): `startGlobalRecording`/`stopGlobalRecording`/
+`isGlobalRecording`/`globalRecordingStartedAt`/`globalLiveStream`/
+`globalSnapshot`/`globalRollingBuffer`/`globalUnattributedEvents`/
+`recentUnattributedCount`/`unattributedBannerActive`/`dnsHealth*`/
+`retention` (`loadRetention`/`setRetention` — global-окно, нужно `showRetention`)/
+test-hooks (`resetForTesting`/`ingestForTest`/`ingestDnsForTest`/`gcOnceForTest`).
+
+### `models.dart`
+- Удалить весь класс `Session` (387–459). Используется только per-app; Profiler
+  работает с `List<TrafficEvent>`.
+- Оставить: `TrafficEvent`, `TrafficEventKind`, `ConfidenceLevel`,
+  `ConnectionIssue`/`Kind`, `computeTraceAggregates`, `DomainStats`/`IpStats`.
+
+### `session_json.dart` (в `per_app_trace_tab/`)
+- Удалить функцию `sessionToJson` (per-app). Оставить `eventsToJson`
+  (использует `live_events_tab`). Файл целиком **не** удалять.
+
+### Debug API `debug/handlers/profiler.dart`
+- Удалить per-app роуты: `POST /profiler/start`, `/stop`, `GET /profiler/active`,
+  `/sessions` (+DELETE), `/session/<id>` (+DELETE), `/stream`,
+  `PATCH /profiler/secondary-packages` + doc-строки.
+- Оставить `/profiler/live*` (snapshot/stream/unattributed/start/stop/state).
+- `debug/handlers/help.dart` — удалить per-app doc-строки (287–300, 517–525).
+
+### `traffic_bar.dart`
+- Удалить per-app чип `if (profiler.isRecording)` + `_shortPkg`. Оставить
+  `if (profiler.isGlobalRecording)` (чип «Live»).
+
+### Тесты `traffic_profiler_test.dart`
+- Удалить per-app группы (~80%: session lifecycle, log parsing, connection
+  ingest, aggregates, meta JSON, DNS record-type, secondary, backfill).
+- Сохранить `§048 Live system-wide buffer`. Переписать `§181 routingLine` и
+  DNS-семантику на global-драйвер (`startGlobalRecording`+`globalRollingBuffer`
+  вместо `start`+`active!.events`), чтобы не потерять покрытие.
+- `profiler_filter_test.dart` — убрать импорт/вызовы `sessionToJson` (оставить
+  `eventsToJson`-тесты).
+
+Native (`android/`) — ссылок нет, не трогаем.
+
 ## Что остаётся у пользователя
 
 Профилирование трафика приложения — через `Profiler`: START/STOP запись,
 app-фильтр (выбрать нужные пакеты), Live/Aggregated, поиск, drill-down, экспорт
-JSON. Debug API per-app-профайлера (`/profiler/*`) сохраняется без изменений.
+JSON. Debug API — только `/profiler/live*` (system-wide).
 
 ## Приёмка
 
 - `StatsScreen` показывает 3 вкладки: `Stats`, `Conns`, `Profiler`.
 - Home-бар при тапе открывает `Stats` (Overview); global-recording чип работает.
-- `flutter analyze` (lib + test) зелёный, sealed-switch по `StatsTab` закрыт.
-- `flutter test` зелёный — ни один тест не импортировал удаляемые файлы.
+- Profiler (live_events_tab) работает без изменений: recording, live-поток,
+  фильтр, retention, DNS-health/unattributed баннеры.
+- В `TrafficProfiler` нет `Session`/`start`/`stop`/`active`/`secondary`/verbose.
+- Debug API отдаёт только `/profiler/live*`.
+- `flutter analyze` (lib + test) зелёный; `flutter test` зелёный;
+  `dart tool/l10n/ui_check.dart --strict` — missing/arity/failures = 0.

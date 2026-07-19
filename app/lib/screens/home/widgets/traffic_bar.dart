@@ -9,10 +9,10 @@ import '../../stats_screen.dart';
 import '../../../services/l10n/locale_controller.dart';
 
 /// Полоса трафика под статус-чипом на главном экране: ↑/↓ скорость, число
-/// активных соединений, recording-индикаторы профайлера (§044) и uptime.
-/// Тап открывает [StatsScreen] (на Per-app tab'е если идёт recording).
+/// активных соединений, global-recording индикатор профайлера (§044) и uptime.
+/// Тап открывает [StatsScreen] (Overview).
 ///
-/// Перерисовывается на `TrafficProfiler.I` (recording-флаги) через внутренний
+/// Перерисовывается на `TrafficProfiler.I` (recording-флаг) через внутренний
 /// `AnimatedBuilder`; трафик/uptime приходят из переданного [state].
 class TrafficBar extends StatelessWidget {
   const TrafficBar({
@@ -97,15 +97,6 @@ class TrafficBar extends StatelessWidget {
                     tooltip: getLocalText.s("Outbound connections to servers"),
                   ),
                 ],
-                if (profiler.isRecording) ...[
-                  const SizedBox(width: 8),
-                  _chip(
-                    context,
-                    Icons.bolt,
-                    _shortPkg(profiler.active!.targetPackage),
-                    cs.error,
-                  ),
-                ],
                 if (profiler.isGlobalRecording) ...[
                   const SizedBox(width: 8),
                   _chip(context, Icons.podcasts, 'Live', cs.error),
@@ -157,12 +148,4 @@ class TrafficBar extends StatelessWidget {
       child: row,
     );
   }
-
-  /// `"ru.tinkoff.investing"` → `"ru.tinkoff"` (первые два сегмента пакета).
-  static String _shortPkg(String pkg) {
-    final parts = pkg.split('.');
-    if (parts.length <= 2) return pkg;
-    return '${parts[0]}.${parts[1]}';
-  }
-
 }
