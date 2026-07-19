@@ -121,14 +121,6 @@
       "other": "осталось %d дня"
     }
   },
-  "%d disabled servers were not tested — they are not part of the running config. Stop VPN and run the test again to test every server in this folder.": {
-    "value": {
-      "one": "%d выключенный сервер не тестировался — он не входит в работающий конфиг. Остановите VPN и запустите тест заново, чтобы проверить все серверы этой папки.",
-      "few": "%d выключенных сервера не тестировались — они не входят в работающий конфиг. Остановите VPN и запустите тест заново, чтобы проверить все серверы этой папки.",
-      "many": "%d выключенных серверов не тестировались — они не входят в работающий конфиг. Остановите VPN и запустите тест заново, чтобы проверить все серверы этой папки.",
-      "other": "%d выключенного сервера не тестировались — они не входят в работающий конфиг. Остановите VPN и запустите тест заново, чтобы проверить все серверы этой папки."
-    }
-  },
   "%d domains": {
     "value": {
       "one": "%d домен",
@@ -242,14 +234,6 @@
       "few": "%d узла с предупреждениями (XHTTP-фоллбэк и др.)",
       "many": "%d узлов с предупреждениями (XHTTP-фоллбэк и др.)",
       "other": "%d узла с предупреждениями (XHTTP-фоллбэк и др.)"
-    }
-  },
-  "%d not tested": {
-    "value": {
-      "one": "%d не тестировался",
-      "few": "%d не тестировались",
-      "many": "%d не тестировались",
-      "other": "%d не тестировались"
     }
   },
   "%d off": {
@@ -1088,6 +1072,9 @@
   },
   "Couldn't load new source — keeping current subscription": {
     "value": "Не удалось загрузить новый источник — текущая подписка сохранена"
+  },
+  "Couldn't stop the VPN — try again.": {
+    "value": "Не удалось остановить VPN — попробуйте ещё раз."
   },
   "Created: %s": {
     "value": "Создана: %s"
@@ -2933,6 +2920,9 @@
   "Servers": {
     "value": "Серверы"
   },
+  "Servers can't be tested while the VPN is on — the test needs its own core session, which can't run alongside the active tunnel. Stop the VPN to test every server in this folder.": {
+    "value": "Серверы нельзя протестировать при включённом VPN — тесту нужна собственная сессия ядра, а она не может работать одновременно с активным туннелем. Остановите VPN, чтобы проверить все серверы этой папки."
+  },
   "Servers in this folder have no detours yet. You can still route all of them through one of your servers, or set personal detours per server (tap a server on the Servers tab).": {
     "value": "У серверов этой папки пока нет detour. Тем не менее можно направить их все через один из ваших серверов или задать каждому личный detour (нажмите на сервер на вкладке «Серверы»)."
   },
@@ -3092,6 +3082,9 @@
   },
   "Stop": {
     "value": "Остановить"
+  },
+  "Stop VPN": {
+    "value": "Остановить VPN"
   },
   "Stop VPN?": {
     "value": "Остановить VPN?"
@@ -3636,9 +3629,6 @@
   },
   "never": {
     "value": "никогда"
-  },
-  "not tested (off)": {
-    "value": "не тестировался (выкл.)"
   },
   "of %d nodes": {
     "value": {

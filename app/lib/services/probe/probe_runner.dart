@@ -3,9 +3,13 @@ import 'dart:async';
 import '../../models/server_list.dart';
 import '../../vpn/cc_channel.dart';
 import '../app_log.dart';
-import '../tag_resolver.dart';
 import 'probe_config.dart';
 import 'probe_lifecycle.dart';
+
+/// §236 — маркер, что тест не запустился из-за активного VPN. UI ловит его
+/// (равенством) и показывает попап-гейт с кнопкой Stop VPN вместо ошибки.
+/// Не человеко-читаемый текст: наружу как сообщение не идёт.
+const kProbeVpnRunning = '__vpn_running__';
 
 /// §236 — вердикт теста одного члена папки.
 enum ProbeStatus {
@@ -23,9 +27,6 @@ enum ProbeStatus {
 
   /// emit ноды упал — конфиг из неё не собрать.
   invalid,
-
-  /// VPN запущен, член выключен → его нет в боевом конфиге. Включи — протестируем.
-  notInConfig,
 }
 
 class ProbeResult {
@@ -38,10 +39,12 @@ class ProbeResult {
 
 /// §236 — прогон теста по членам папки.
 ///
-/// Ветвление по состоянию VPN решает НЕ UI, а native-гейт: пробуем поднять
-/// probe-сессию; ответ «VPN is running…» → тестируем через боевое ядро
-/// (это честный тест — outbound-dial ядра protected, мимо tun), но только
-/// включённых членов (остальные [ProbeStatus.notInConfig]).
+/// Тест возможен только при выключенном VPN: probe-сессия — временный
+/// CommandServer без tun (два CommandServer на процесс невозможны). При живом
+/// туннеле `probeStart` вернёт «VPN is running…» → возвращаем [kProbeVpnRunning],
+/// UI показывает гейт-попап (Stop VPN). Через боевое ядро НЕ тестируем: замер
+/// шёл бы поверх активного детура/цепочки, а не по чистой ноде, и выключенные
+/// члены выпадали бы из конфига — вводило в заблуждение (§236 UI-rework).
 class FolderProbeRunner {
   FolderProbeRunner({CcChannel? cc}) : _cc = cc ?? CcChannel.instance;
 
@@ -97,30 +100,13 @@ class FolderProbeRunner {
         return '';
       }
 
-      if (!_looksLikeVpnRunning(err)) {
-        AppLog.I.warning('Probe session failed to start: $err');
-        return err;
-      }
+      // VPN активен → probe-сессию не поднять. UI гейтит тест ещё до run()
+      // (getVpnStatus), но между проверкой и probeStart VPN мог стартовать —
+      // ловим здесь маркером, не боевой веткой.
+      if (_looksLikeVpnRunning(err)) return kProbeVpnRunning;
 
-      // VPN запущен → тестируем через боевое ядро. В конфиге только включённые
-      // члены (и только если сама папка включена); теги — display-form с
-      // префиксом папки (§080-паттерн; collision-суффикс ядра не учитывается —
-      // известное ограничение).
-      final liveTags = <int, String>{};
-      for (final i in cfg.tagByMember.keys) {
-        final m = folder.members[i];
-        if (!folder.enabled || !m.enabled) {
-          onResult(i, const ProbeResult(ProbeStatus.notInConfig));
-          continue;
-        }
-        liveTags[i] = TagResolver.displayTag(folder.tagPrefix, m.node!.tag);
-      }
-      await _runPool(
-        liveTags,
-        test: (tag) => _cc.urlTestOutbound(tag, link: url, timeoutMs: timeoutMs),
-        onResult: onResult,
-      );
-      return '';
+      AppLog.I.warning('Probe session failed to start: $err');
+      return err;
     } finally {
       ProbeLifecycle.I.deregister(canceller);
     }

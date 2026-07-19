@@ -6,8 +6,8 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/probe/probe_config.dart';
 import 'package:lxbox/services/probe/probe_runner.dart';
 
-/// §236 — headless probe: конфиг, ветвление раннера (сессия vs боевое ядро),
-/// пороги шкалы.
+/// §236 — headless probe: конфиг, раннер (probe-сессия; при живом VPN —
+/// маркер-гейт, боевое ядро НЕ зовётся), пороги шкалы.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -137,9 +137,8 @@ void main() {
       expect(results[1]!.status, ProbeStatus.broken);
     });
 
-    test('VPN запущен: ветка боевого ядра, выключенные → notInConfig',
-        () async {
-      probeStartAnswer = 'VPN is running — test uses the live tunnel instead';
+    test('VPN запущен: маркер-гейт, боевое ядро не зовётся', () async {
+      probeStartAnswer = 'VPN is running — test needs its own core session';
       final results = <int, ProbeResult>{};
       final err = await FolderProbeRunner().run(
         folder(),
@@ -147,14 +146,12 @@ void main() {
         timeoutMs: 0,
         onResult: (i, r) => results[i] = r,
       );
-      expect(err, isEmpty);
-      expect(results[0]!.status, ProbeStatus.ok);
-      expect(results[0]!.delayMs, 42);
-      expect(results[1]!.status, ProbeStatus.notInConfig);
-      // Живая ветка зовёт ccUrlTestOutbound с display-тегом (префикс папки).
-      final live = calls.firstWhere((c) => c.method == 'ccUrlTestOutbound');
-      expect((live.arguments as Map)['tag'], 'pr: Alpha');
-      // probeStop в живой ветке не нужен (сессия не поднималась).
+      // §236 UI-rework — тест через боевое ядро выпилен: возвращаем маркер,
+      // UI показывает гейт-попап (Stop VPN). Ни одной ноды не тестируем.
+      expect(err, kProbeVpnRunning);
+      expect(results, isEmpty);
+      expect(calls.map((c) => c.method), isNot(contains('ccUrlTestOutbound')));
+      // Сессия не поднялась → probeStop не нужен.
       expect(calls.map((c) => c.method), isNot(contains('probeStop')));
     });
 

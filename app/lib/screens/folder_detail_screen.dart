@@ -8,10 +8,12 @@ import 'package:flutter/services.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/server_list.dart';
+import '../models/tunnel_status.dart';
 import '../services/error_format.dart';
 import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/input_helpers.dart';
+import '../vpn/box_vpn_client.dart';
 import 'home/filter_widgets.dart';
 import 'node_settings_screen.dart';
 import 'home/node_list_presenter.dart' show protoLabel;
@@ -237,6 +239,21 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       return;
     }
     if (_folder.members.isEmpty) return;
+    // §236 UI-rework — probe-сессия (временный CommandServer без tun) не
+    // поднимается поверх живого туннеля: два CommandServer на процесс
+    // невозможны. Пока VPN включён, тест недоступен — гейтим попапом с
+    // кнопкой Stop VPN, а не молча меряем «ноду поверх туннеля».
+    if ((await BoxVpnClient().getVpnStatus()) != TunnelStatus.disconnected) {
+      if (mounted) await _showVpnRunningGate();
+      return;
+    }
+    await _runProbe();
+  }
+
+  /// §236 — сам прогон пробы (VPN уже выключен). Вынесен из [_toggleTest],
+  /// чтобы гейт-попап мог перезапустить его после Stop VPN.
+  Future<void> _runProbe() async {
+    if (_folder.members.isEmpty) return;
     final ping = await SettingsStorage.getPingOptions();
     // §284 — опции теста самой папки (ping_url/ping_timeout_ms в объекте папки)
     // перекрывают глобальные. Папка «WARP GENERATOR» так тестируется по IP без DNS.
@@ -274,28 +291,48 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     _probeFlushTimer = null;
     if (!mounted) return;
     setState(() => _testing = false);
+    // §236 — VPN стартовал между гейтом и probeStart (гонка): runner вернул
+    // маркер → тот же гейт-попап, не текст ошибки.
+    if (err == kProbeVpnRunning) {
+      if (mounted) await _showVpnRunningGate();
+      return;
+    }
     if (err.isNotEmpty) {
       await _showError(err);
       return;
     }
-    // §236 UI-rework — при живом VPN выключенные члены не в конфиге →
-    // не тестировались. Говорим явно попапом, а не только бейджами.
-    final skipped = _probeSummary().skipped;
-    if (skipped > 0 && mounted) {
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(getLocalText.s("VPN is running")),
-          content: Text(getLocalText.plural("%d disabled servers were not tested — they are not part of the running config. Stop VPN and run the test again to test every server in this folder.", skipped)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(getLocalText.s("OK")),
-            ),
-          ],
-        ),
-      );
+  }
+
+  /// §236 — попап-гейт «тест невозможен, пока VPN активен». Кнопка Stop VPN
+  /// глушит туннель (блокирующий stopVPN — ждёт Stopped) и сразу запускает
+  /// прогон, чтобы юзеру не жать тест повторно.
+  Future<void> _showVpnRunningGate() async {
+    final stop = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(getLocalText.s("VPN is running")),
+        content: Text(getLocalText.s(
+            "Servers can't be tested while the VPN is on — the test needs its own core session, which can't run alongside the active tunnel. Stop the VPN to test every server in this folder.")),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(getLocalText.s("Cancel")),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(getLocalText.s("Stop VPN")),
+          ),
+        ],
+      ),
+    );
+    if (stop != true) return;
+    final ok = await BoxVpnClient().stopVPN();
+    if (!mounted) return;
+    if (!ok) {
+      await _showError(getLocalText.s("Couldn't stop the VPN — try again."));
+      return;
     }
+    await _runProbe();
   }
 
   /// §236 UI-rework — настройки теста (long-press на кнопке, как на главном):
@@ -389,8 +426,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   /// Число завершённых тестов (для строки-сводки).
-  ({int ok, int dead, int broken, int skipped}) _probeSummary() {
-    var ok = 0, dead = 0, broken = 0, skipped = 0;
+  ({int ok, int dead, int broken}) _probeSummary() {
+    var ok = 0, dead = 0, broken = 0;
     for (final r in _probe.values) {
       switch (r.status) {
         case ProbeStatus.ok:
@@ -400,13 +437,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         case ProbeStatus.broken:
         case ProbeStatus.invalid:
           broken++;
-        case ProbeStatus.notInConfig:
-          skipped++;
         case ProbeStatus.pending:
           break;
       }
     }
-    return (ok: ok, dead: dead, broken: broken, skipped: skipped);
+    return (ok: ok, dead: dead, broken: broken);
   }
 
   Future<void> _disableSlowerThan() async {
@@ -520,7 +555,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       if (r == null) return 1 << 30;
       return switch (r.status) {
         ProbeStatus.ok => r.delayMs,
-        ProbeStatus.pending || ProbeStatus.notInConfig => 1 << 30,
+        ProbeStatus.pending => 1 << 30,
         // err/broken — в конец, ниже нетестированных.
         ProbeStatus.failed ||
         ProbeStatus.broken ||
@@ -1216,7 +1251,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         getLocalText.s("%d ok", s.ok),
         getLocalText.plural("%d err", s.dead),
         if (s.broken > 0) getLocalText.plural("%d broken", s.broken),
-        if (s.skipped > 0) getLocalText.plural("%d not tested", s.skipped),
       ].join(' · ');
     } else {
       final total = _folder.members.length;
@@ -1538,9 +1572,8 @@ class _MemberTile extends StatelessWidget {
   Widget? _probeBadge(BuildContext context, ThemeData theme) {
     final r = probe;
     if (r == null) return null;
-    final muted = theme.colorScheme.onSurfaceVariant;
     final (String text, Color color) = switch (r.status) {
-      ProbeStatus.pending => ('…', muted),
+      ProbeStatus.pending => ('…', theme.colorScheme.onSurfaceVariant),
       ProbeStatus.ok => (
           '${r.delayMs} ms', // l10n-exempt: latency value + unit
           switch (thresholds.bandOf(r.delayMs)) {
@@ -1559,10 +1592,6 @@ class _MemberTile extends StatelessWidget {
           getLocalText.s("invalid"),
           theme.colorScheme.error
         ),
-      // НЕ «недоступен»: член выключен → его нет в конфиге работающего
-      // ядра → не тестировался вовсе. Подсказка «как протестировать» — в
-      // сводке (_buildTestBar): выключить VPN, probe-сессия меряет всех.
-      ProbeStatus.notInConfig => (getLocalText.s("not tested (off)"), muted),
     };
     return GestureDetector(
       onTap: onProbeBadgeTap,
