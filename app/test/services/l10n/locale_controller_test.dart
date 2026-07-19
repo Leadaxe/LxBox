@@ -69,6 +69,26 @@ void main() {
     expect(GetLocalText.en.s('Cancel'), 'Cancel');
   });
 
+  test('bootstrap() warms getLocalText dict — cold start is localized', () async {
+    // Регресс на баг «переключение языка не сохраняется»: при холодном старте
+    // с сохранённым 'ru' bootstrap() ставил setting, но НЕ грузил словарь —
+    // getLocalText оставался fallback'ом (печатал английский ключ), пока юзер
+    // не переключит язык вручную. Теперь bootstrap грузит ui.json в _text.
+    await LocaleController.I.bootstrap('ru');
+    expect(LocaleController.I.setting, 'ru');
+    expect(LocaleController.I.effectiveTag, 'ru');
+    // Ключевая проверка: словарь загружен (иначе вернулся бы английский ключ).
+    expect(getLocalText.s('Cancel'), 'Отмена');
+  });
+
+  test('bootstrap(en) leaves getLocalText on english-key fallback', () async {
+    // Для 'en' словаря нет by design (английский текст = ключ). bootstrap не
+    // должен падать и печатает английский ключ.
+    await LocaleController.I.bootstrap('en');
+    expect(LocaleController.I.setting, 'en');
+    expect(getLocalText.s('Cancel'), 'Cancel');
+  });
+
   test('set() with unknown value falls back to system', () async {
     await LocaleController.I.set('klingon');
     expect(LocaleController.I.setting, 'system');
