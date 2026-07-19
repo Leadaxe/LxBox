@@ -12,14 +12,15 @@ import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
 import 'connections_screen.dart';
 import 'live_events_tab.dart';
-import 'per_app_trace_tab.dart';
 import 'stats_screen/overview_models.dart';
 import 'stats_screen/overview_tab.dart';
 import '../services/l10n/locale_controller.dart';
 
 /// §044/§048: enum для start-tab выбора в StatsScreen. Передаётся при
-/// `Navigator.push(StatsScreen(initialTab: StatsTab.perApp))`.
-enum StatsTab { overview, connections, perApp, live }
+/// `Navigator.push(StatsScreen(initialTab: StatsTab.live))`. Порядок значений
+/// = порядок вкладок TabBar (используется как `initialTab.index`).
+/// §288 — вкладка `App` (per-app trace) удалена: дублировала Profiler.
+enum StatsTab { overview, connections, live }
 
 /// §122 — Statistics-экран на libbox `CommandClient` (push-стримы), а не
 /// Clash HTTP-pull. `CcChannel.instance` даёт status/connections-стримы;
@@ -205,7 +206,7 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 3,
       initialIndex: widget.initialTab.index,
       child: Builder(
         builder: (innerCtx) => Scaffold(
@@ -238,34 +239,13 @@ class _StatsScreenState extends State<StatsScreen> {
                 ),
             ],
             bottom: TabBar(
-              // §048: 4 tab'а делят width поровну. «Connections» → «Conns»
+              // §048/§288: 3 tab'а делят width поровну. «Connections» → «Conns»
               // чтобы влезли без horizontal scroll'а на 360dp экранах.
               tabs: [
                 Tab(
                     icon: const Icon(Icons.dashboard_outlined),
                     text: getLocalText.s("Stats")),
                 Tab(icon: const Icon(Icons.link), text: getLocalText.s("Conns")),
-                Tab(
-                  icon: const Icon(Icons.travel_explore),
-                  child: AnimatedBuilder(
-                    animation: TrafficProfiler.I,
-                    builder: (_, _) => Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(getLocalText.s(1, "App")),
-                        if (TrafficProfiler.I.isRecording) ...[
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.bolt,
-                            size: 14,
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
                 Tab(
                   icon: const Icon(Icons.podcasts),
                   child: AnimatedBuilder(
@@ -306,7 +286,6 @@ class _StatsScreenState extends State<StatsScreen> {
                 detourChain: _detourChain,
               ),
               const ConnectionsView(),
-              const PerAppTraceTab(),
               LiveEventsTab(
                 subController: widget.subController,
                 homeController: widget.homeController,

@@ -10,9 +10,6 @@
   "%1$d active / %2$d total": {
     "value": "Активных: %1$d / всего: %2$d"
   },
-  "%1$d doms · %2$d ips · %3$d ev": {
-    "value": "%1$d дом. · %2$d IP · %3$d соб."
-  },
   "%1$d selected · %2$d shown": {
     "value": "%1$d выбрано · %2$d показано"
   },
@@ -44,9 +41,6 @@
   },
   "%1$s references missing DNS server \"%2$s\".": {
     "value": "%1$s ссылается на несуществующий DNS-сервер «%2$s»."
-  },
-  "%1$s · %2$d doms · %3$d ips": {
-    "value": "%1$s · %2$d дом. · %3$d IP"
   },
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d соб."
@@ -304,14 +298,6 @@
       "few": "%d суффикса",
       "many": "%d суффиксов",
       "other": "%d суффикса"
-    }
-  },
-  "%d unattributed events / 30s — attribution gaps detected. See \"System-wide\" section in Live tab.": {
-    "value": {
-      "one": "%d событие без владельца за 30 с — есть пробелы атрибуции. См. секцию «System-wide» на вкладке Live.",
-      "few": "%d события без владельца за 30 с — есть пробелы атрибуции. См. секцию «System-wide» на вкладке Live.",
-      "many": "%d событий без владельца за 30 с — есть пробелы атрибуции. См. секцию «System-wide» на вкладке Live.",
-      "other": "%d события без владельца за 30 с — есть пробелы атрибуции. См. секцию «System-wide» на вкладке Live."
     }
   },
   "%d unattributed events / 30s — sing-box could not detect the owner package for some DNS/TCP traffic": {
@@ -661,12 +647,7 @@
     "value": "Всё, что выше, — красный."
   },
   "App": {
-    "value": "Приложение",
-    "special": {
-      "1": {
-        "value": "Прил."
-      }
-    }
+    "value": "Приложение"
   },
   "App Settings": {
     "value": "Настройки приложения"
@@ -844,12 +825,6 @@
   },
   "Clear all apps?": {
     "value": "Очистить список приложений?"
-  },
-  "Clear all sessions": {
-    "value": "Очистить все сессии"
-  },
-  "Clear all sessions?": {
-    "value": "Очистить все сессии?"
   },
   "Clear cached file": {
     "value": "Удалить кэшированный файл"
@@ -1039,9 +1014,6 @@
   },
   "Copy server JSON": {
     "value": "Копировать JSON сервера"
-  },
-  "Copy session JSON": {
-    "value": "Копировать JSON сессии"
   },
   "Copy source": {
     "value": "Копировать источник"
@@ -1355,9 +1327,6 @@
   },
   "Edit rule": {
     "value": "Изменить правило"
-  },
-  "Edit secondary": {
-    "value": "Изменить связанные"
   },
   "Edit server": {
     "value": "Изменить сервер"
@@ -2105,9 +2074,6 @@
   "No rules seen yet — traffic will populate this list.": {
     "value": "Правил пока нет — список заполнится по мере появления трафика."
   },
-  "No secondary packages": {
-    "value": "Связанных пакетов нет"
-  },
   "No servers found at this URL": {
     "value": "По этому URL серверы не найдены"
   },
@@ -2320,26 +2286,17 @@
   "Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until unlock.": {
     "value": "Приостанавливать туннель при каждом выключении экрана. Максимальная экономия, но push-уведомления, входящие звонки и фоновая синхронизация не работают до разблокировки."
   },
-  "Per-app trace": {
-    "value": "Запись трафика приложения"
-  },
   "Phone → %1$s → %2$s → Internet": {
     "value": "Телефон → %1$s → %2$s → Интернет"
   },
   "Phone → %s → Nodes → Internet": {
     "value": "Телефон → %s → Узлы → Интернет"
   },
-  "Pick an app and tap START to record its DNS resolves, connections, and routing chain.\n\n• Live — newest events first (DNS + TCP/UDP) + System-wide section (events without owner detection — e.g. DNS fails).\n• Domains — aggregated unique domains, with CNAME chain & IPs. Search by domain or IP.\n• IPs — aggregated unique destination IPs (ports, conns, bytes, outbound)\n• Connections — per-connection timeline. Tap a row to inline-expand (CNAME, all IPs, issues); button [View in Domains →] jumps to aggregated breakdown.\n\nConfidence badges:\n  • (default) — verified: router log explicitly named the target\n  • 🔗 sec — secondary: matched via secondary packages (WebView etc)\n  • 〽 — inferred: a recently DNS-resolved IP belongs to the target\n  • ? — unattributed: owner package not detected, event shown as \"nearby\"\n\nEdit secondary — add packages to count as part of this app's traffic (WebView, sandboxed renderer, etc.).\n\nLive system-wide tab (4th in Statistics) — discovery without picking a target: see all traffic from all apps in real-time.\n\nVerbose mode (debug-level core logs) gives more detail but increases CPU/battery use until you disable it. Toggling verbose takes effect on the next session.\n\nSessions are kept in memory only — last 5 are saved across recordings, but ALL are wiped if the app is force-stopped.": {
-    "value": "Выберите приложение и нажмите START, чтобы записать его DNS-резолвы, соединения и цепочку маршрутизации.\n\n• Live — новые события сверху (DNS + TCP/UDP) + общесистемная секция (события без определённого владельца — например, сбои DNS).\n• Domains — агрегированные уникальные домены с цепочкой CNAME и IP. Поиск по домену или IP.\n• IPs — агрегированные уникальные IP назначения (порты, соединения, байты, исходящий канал)\n• Connections — таймлайн по соединениям. Нажмите на строку, чтобы развернуть её на месте (CNAME, все IP, проблемы); кнопка [View in Domains →] ведёт к агрегированной разбивке.\n\nБейджи достоверности:\n  • (по умолчанию) — подтверждено: лог роутера явно назвал цель\n  • 🔗 sec — по связанным пакетам (WebView и т. п.)\n  • 〽 — предположение: недавно отрезолвленный IP принадлежит цели\n  • ? — без владельца: приложение не определено, событие показано «рядом»\n\n«Изменить связанные» — добавьте пакеты, которые считать частью трафика этого приложения (WebView, изолированный рендерер и т. п.).\n\nВкладка Live (4-я в «Статистике») — обзор без выбора цели: весь трафик всех приложений в реальном времени.\n\nПодробный режим (debug-логи ядра) даёт больше деталей, но повышает расход CPU и батареи, пока вы его не выключите. Переключение применяется со следующей сессии.\n\nСессии хранятся только в памяти — последние 5 переживают новые записи, но ВСЕ пропадают при принудительной остановке приложения."
-  },
   "Pick another random IP:port": {
     "value": "Подставить другой случайный IP:port"
   },
   "Pick another random domain": {
     "value": "Подставить другой случайный домен"
-  },
-  "Pick app to trace": {
-    "value": "Выбор приложения для записи"
   },
   "Pick file...": {
     "value": "Выбрать файл…"
@@ -2538,9 +2495,6 @@
   },
   "Recommended. Protects the local proxy port.": {
     "value": "Рекомендуется. Защищает локальный порт прокси."
-  },
-  "Recording": {
-    "value": "Идёт запись"
   },
   "Recording system-wide events": {
     "value": "Идёт запись общесистемных событий"
@@ -2833,12 +2787,6 @@
   "Saved networks": {
     "value": "Сохранённые сети"
   },
-  "Saved sessions (last %d)": {
-    "value": "Сохранённые сессии (последние %d)"
-  },
-  "Saved trace sessions will be removed.": {
-    "value": "Сохранённые сессии записи будут удалены."
-  },
   "Saved. Force-stop & reopen app to apply.": {
     "value": "Сохранено. Полностью закройте и снова откройте приложение, чтобы применить."
   },
@@ -2929,9 +2877,6 @@
   "Session History": {
     "value": "История сессии"
   },
-  "Session JSON copied to clipboard": {
-    "value": "JSON сессии скопирован"
-  },
   "Setting is saved immediately, but `Libbox.setup` reads the `debug` flag once per process. Stop/start VPN does NOT re-apply — force-stop the app (or use the button below) and reopen.": {
     "value": "Настройка сохраняется сразу, но `Libbox.setup` читает флаг `debug` один раз на процесс. Перезапуск VPN её НЕ применяет — полностью закройте приложение (или нажмите кнопку ниже) и откройте снова."
   },
@@ -2963,9 +2908,6 @@
   },
   "Share masked": {
     "value": "Маскированный"
-  },
-  "Share session": {
-    "value": "Поделиться сессией"
   },
   "Share stderr.log files": {
     "value": "Поделиться файлами stderr.log"
@@ -3094,9 +3036,6 @@
   },
   "Stop timed out — reconnect aborted": {
     "value": "Остановка не завершилась вовремя — переподключение отменено"
-  },
-  "Stopped": {
-    "value": "Остановлена"
   },
   "Stopped: %s": {
     "value": "Остановлено: %s"
@@ -3472,15 +3411,6 @@
   "VPN system toggles": {
     "value": "Системные переключатели VPN"
   },
-  "Verbose core logs (debug)": {
-    "value": "Подробные логи ядра (debug)"
-  },
-  "Verbose core logs active — battery/CPU impact while session runs": {
-    "value": "Включены подробные логи ядра — повышенный расход батареи и CPU, пока идёт сессия"
-  },
-  "Verbose toggle takes effect on next session — stop and restart.": {
-    "value": "Подробные логи применятся со следующей сессии — остановите запись и запустите заново."
-  },
   "Via: %s": {
     "value": "Через: %s"
   },
@@ -3718,9 +3648,6 @@
   },
   "yesterday": {
     "value": "вчера"
-  },
-  "· %d dropped": {
-    "value": "· %d отброшено"
   },
   "— (default DNS)": {
     "value": "— (DNS по умолчанию)"
