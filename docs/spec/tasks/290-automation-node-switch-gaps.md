@@ -281,10 +281,21 @@ Signal`, включая generic-нормализацию F5) + `emitVpnError` ga
   провайдера в refresh, сбой urltest) происходят **после** возврата хендлера →
   `catchError` их не видит → `VPN_ERROR` не летит. Для refresh есть отложенный
   `SUB_REFRESH_FAILED`; для остальных — тишина. By design.
-- **urltest-group дубль** — Debug API `_urltest` (`action.dart:191`) не проходит
-  через shared `actionUrltestGroup`, дублирует tunnel-check и `runGroupUrltest`
-  (у него шире scope: `?tag`/`?all`/`?cancel`). Единственное нарушение общей
-  базы. Рефакторинг рискует задеть `?all`/`?cancel`-ветки — отдельной таской.
+### urltest-group дубль — УСТРАНЁН
+
+Было единственное нарушение общей базы: Debug API `_urltest` (`action.dart:191`)
+не проходил через shared `actionUrltestGroup`, а дублировал tunnel-check +
+`runGroupUrltest` в своей group-ветке (у `_urltest` шире scope: `?tag`/`?group`/
+`?all`/`?cancel`).
+
+**Фикс:** group-ветка `_urltest` теперь делегирует в `automation.actionUrltest
+Group(group, ctx)` — единственный источник правды для group-urltest, тексты
+ошибок/precondition'ы не могут разъехаться. Прочие scope (`tag`/`all`/`cancel`)
+остались Debug-only (automation их не экспонирует). Контракт ответа не изменился
+(`{scope:'group', group}`). Покрыто новым `test/services/debug/
+action_urltest_test.dart` (9 кейсов: scope-роутинг + делегация group → тот же
+`Conflict`/`BadRequest`, что shared) — заодно закрыта дыра «Debug `/action` без
+тестов».
 
 ## Приёмка
 
