@@ -42,15 +42,12 @@ static Future<VpnModeConfig> applyVpnMode(VpnModeConfig requested,
 
 ### План (strangler)
 
-- **V2 (S, CODE-PROVABLE СЕЙЧАС):** создать `VpnSettingsFacade.applyVpnMode`
-  (чистая делегация в существующие `SettingsStorage`+`generateProxyPassword`,
-  3 инварианта) + `loadVpnMode` passthrough. Без вызывающих. Юнит-тест на 3
-  инварианта. 0 изменений поведения.
-- **V3 (S, CODE-PROVABLE СЕЙЧАС — strangler-win):** Debug `_putVpnMode` через
-  `applyVpnMode`. Чинит stale-`has_tun` + missing-password БЕЗ трогания UI.
-  §292-валидация-BadRequest остаётся ПЕРЕД фасадом. Тест: `PUT mode=proxy`
-  теперь флипает native `has_tun`. **Highest-value, lowest-risk — ship
-  standalone.**
+- **V2 (S, ✅ РЕАЛИЗОВАНО):** `VpnSettingsFacade.applyVpnMode` (3 инварианта) +
+  `loadVpnMode` — `lib/services/vpn_settings/vpn_settings_facade.dart`. 7 тестов.
+- **V3 (S, ✅ РЕАЛИЗОВАНО — strangler-win):** Debug `_putVpnMode` через
+  `applyVpnMode`. **Баг исправлен:** `PUT mode=proxy` теперь флипает native
+  `has_tun` (тест `mode → proxy: зеркалит setHasTun(false)`). §292-валидация
+  осталась ПЕРЕД фасадом.
 - **V4 (M, DEVICE-REQUIRED):** `vpn_mode_tab._setMode/_applyListen/_toggleAuth`
   → `applyVpnMode`, удалить дубли (~30 строк). Трогает device-verified UI.
 

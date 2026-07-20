@@ -1,6 +1,7 @@
 import '../../../models/background_mode.dart';
 import '../../../models/dns_ref.dart';
 import '../../l10n/locale_controller.dart';
+import '../../vpn_settings/vpn_settings_facade.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
@@ -239,7 +240,7 @@ Future<DebugResponse> _putVpnMode(DebugRequest req, DebugContext ctx) async {
     throw BadRequest(
         'invalid "proxy_protocol" (mixed|http|socks required): $protocol');
   }
-  final next = cur.copyWith(
+  final requested = cur.copyWith(
     mode: fieldString(body, 'mode'),
     proxyProtocol: protocol,
     proxyPort: port,
@@ -248,7 +249,11 @@ Future<DebugResponse> _putVpnMode(DebugRequest req, DebugContext ctx) async {
     proxyUsername: fieldString(body, 'proxy_user'),
     proxyPassword: fieldString(body, 'proxy_pass'),
   );
-  await SettingsStorage.setVpnMode(next);
+  // §293 — через фасад: несёт 3 инварианта (password-gen / auth-force /
+  // setNativeHasTun-зеркало), которые раньше Debug пропускал → PUT mode=proxy
+  // оставлял native has_tun устаревшим. Возвращает resolved config (пароль мог
+  // сгенериться).
+  final next = await VpnSettingsFacade.applyVpnMode(requested);
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({'ok': true, 'action': 'settings-vpn-mode', 'vpn_mode': next.toJson(), ...extras});
 }
