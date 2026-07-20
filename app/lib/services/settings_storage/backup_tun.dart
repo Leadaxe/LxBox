@@ -107,11 +107,7 @@ Future<TunAppsConfig> _getTunApps() async {
 }
 
 Future<void> _setTunApps(TunAppsConfig cfg, {bool flush = true}) async {
-  if (![
-    SettingsStorage._tunAppsModeOff,
-    SettingsStorage._tunAppsModeAllow,
-    SettingsStorage._tunAppsModeDeny,
-  ].contains(cfg.mode)) {
+  if (!TunAppsConfig.isValidMode(cfg.mode)) {
     throw ArgumentError('tun_apps.mode must be off|allow|deny: ${cfg.mode}');
   }
   final dedup = <String>{};
@@ -137,6 +133,11 @@ class TunAppsConfig {
   /// `"off"` | `"allow"` | `"deny"`.
   final String mode;
   final List<String> packages;
+
+  /// §293 — валиден ли `mode` (единый источник для write-путей: storage-сеттер
+  /// и Debug-handler; был инлайн-список в обоих).
+  static bool isValidMode(String mode) =>
+      mode == 'off' || mode == 'allow' || mode == 'deny';
 
   bool get isOff => mode == 'off';
   bool get isAllow => mode == 'allow';
