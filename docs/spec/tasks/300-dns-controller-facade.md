@@ -1,6 +1,17 @@
 # §300 — DnsController: фасад DNS под probe-эталон (load/snapshot + чистые статики)
 
-**Тип:** structural refactor (Шаг 2a фичи [§291](../features/291%20layered-architecture-facades/spec.md); эталон — ProbeController §296) · **Статус:** spec (code-provable) · **Размер:** S–M · **Зависит от:** [§294](294-dns-typed-model.md) (done) · **Разблокирует:** [§295](295-dns-dual-write-fix.md)
+**Тип:** structural refactor (Шаг 2a фичи [§291](../features/291%20layered-architecture-facades/spec.md); эталон — ProbeController §296) · **Статус:** D1+D3 РЕАЛИЗОВАНЫ; D2 остаётся · **Размер:** S–M · **Зависит от:** [§294](294-dns-typed-model.md) (done) · **Разблокирует:** [§295](295-dns-dual-write-fix.md)
+
+> **Реализовано (D1+D3, коммит ниже):** `lib/services/dns/dns_controller.dart` —
+> `DnsController.load()` → `DnsSettingsSnapshot` (тело `_load` ~175 строк verbatim,
+> типизация краёв §294); `stage()` trio (byte-identical, без custom_rules).
+> `dns_settings_screen._load` → присвоение snapshot, `stageChanges` → `stage()`;
+> экран сдулся 985→811. 2 теста на `stage()` (пишет ключи; custom_rules не тронут).
+> Поведение identical по построению. **D2** (чистые статики `ruleDisplayRows/
+> reorderRules/ruleRefsByTag`) — остаётся, отдельным шагом. §295 (custom_rules
+> в staged-путь) разблокирован, но device-required.
+> **Известный долг:** `DnsController` импортит resolver из `screens/` (§294 VIEW);
+> перенос resolver в `services/` — отдельный шаг, scope D1 не расширяли.
 
 Приводит `dns_settings_screen` (985 строк, screen==controller) к **probe-эталону**:
 контроллер владеет storage + чистой логикой, экран тонкий. Выделено из §295,

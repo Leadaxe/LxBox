@@ -5,10 +5,8 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/custom_rule.dart';
-import '../models/parser_config.dart';
 import '../services/builder/post_steps.dart';
-import '../services/builder/preset_expand.dart';
-import '../services/builder/rule_set_registry.dart';
+import '../services/dns/dns_controller.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
 import '../services/preset_on_change.dart';
@@ -132,226 +130,46 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   void _markDirty() => markDirty();
 
   Future<void> _load() async {
-    final template = await TemplateLoader.load();
-    final vars = await SettingsStorage.getAllVars();
-
-    // Parse dns_options from template (§279 — typed DnsOptionsModel; raw
-    // остаётся только у machine-полей `rules`).
-    final templateServersRaw = [
-      for (final s in template.dnsOptionsModel.servers) s.wrapper,
-    ];
-    final templateRulesRaw =
-        (template.dnsOptions['rules'] as List<dynamic>? ?? [])
-            .whereType<Map<String, dynamic>>()
-            .toList();
-
-    // §043: storage хранит kind-discriminated refs (симметрия с DNS rules).
-    // Resolver делает auto-discovery + orphan cleanup + legacy migration.
-    // §117: template-серверы — обёртки `{description, enabled, vars?, server}`.
-    final templateByTag = template.dnsOptionsModel.wrappersByTag;
-
-    // §125: активные каналы для outbound-пикера vars (storage, не template).
-    // vpn-1 присутствует required-инвариантом модели.
-    final channels = await SettingsStorage.getChannels();
-    final outboundOptions = <OutboundOption>[
-      const OutboundOption(value: 'direct-out', label: 'direct'),
-      // §274 — ⚙-префикс detour-канала как во всех пикерах (displayLabel).
-      for (final c in channels)
-        if (c.enabled || c.isRequired)
-          OutboundOption(value: c.tag, label: c.displayLabel),
-    ];
-
-    // §033: build template rules map by name
-    final templateRulesByName = <String, Map<String, dynamic>>{
-      for (final r in templateRulesRaw)
-        if (r['name'] is String && (r['name'] as String).isNotEmpty)
-          r['name'] as String: r,
-    };
-
-    // §033/§121: build active preset rules maps by presetId + dns_servers.
-    // §121 — routing-тоггл = король: выключенный пресет (cr.enabled=false) не
-    // порождает ни DNS-серверы, ни DNS-правила, ни mirror'ы. Симметрия с
-    // build-time (custom_rules.dart dnsEnabled gate + build_config
-    // activePresetIdsWithDnsRule). Иначе UI набрал бы серверы/правила
-    // выключенного пресета и orphan-cleanup рассинхронизировался бы с серверами.
-    final presetRulesByPresetId = <String, List<Map<String, dynamic>>>{};
-    final presetLabelByPresetId = <String, String>{};
-    final presetDnsEnable = <String, bool>{}; // §257
-    final presetServersWithLabel = <Map<String, dynamic>>[];
-    final activeRules = await SettingsStorage.getCustomRules();
-    final allPresets = template.selectableRules;
-    final activePresetIdsWithDnsRule = <String>{};
-    for (final cr in activeRules) {
-      if (cr is! CustomRulePreset) continue;
-      if (cr.presetId.isEmpty) continue;
-      if (!cr.enabled) continue; // §121: routing off → пресет мёртв целиком
-      SelectableRule? match;
-      for (final p in allPresets) {
-        if (p.presetId == cr.presetId) {
-          match = p;
-          break;
-        }
-      }
-      if (match == null) continue;
-      if (match.dnsRules.isNotEmpty) {
-        activePresetIdsWithDnsRule.add(cr.presetId);
-      }
-      // §257: тумблер DNS-блока пресета — магическая var dns_enable
-      // (единая точка истины с билдером). Нет var → ключ не пишем
-      // (UI рисует строку без свитча).
-      if (match.vars.any((v) => v.name == 'dns_enable')) {
-        presetDnsEnable[cr.presetId] = presetDnsEnableVar(cr, match);
-      }
-      final fragments = expandPreset(cr, match);
-      if (match.dnsRules.isNotEmpty) {
-        // §253: ключ по СЫРОМУ шаблону — симметрия с
-        // activePresetIdsWithDnsRule выше. Если expansion выкинул все
-        // DNS-правила (нескачанный SRS и т.п.), запись kind:preset не должна
-        // выпасть из persist'а (cleanDnsRulesForPersist фильтрует по
-        // containsKey) — иначе auto-discovery воскресит её с enabled=true и
-        // затрёт выключенное юзером состояние.
-        presetRulesByPresetId[cr.presetId] = fragments.dnsRules;
-      }
-      presetLabelByPresetId[cr.presetId] = match.label;
-      // Collect preset's expanded dns_servers — annotate with preset.label
-      // for display badge. Tag-collisions с template/user разрешаются на
-      // build'е (дедуп по tag, first-wins); UI просто показывает что есть.
-      for (final s in fragments.dnsServers) {
-        final annotated = Map<String, dynamic>.from(s)
-          ..['_preset_label'] = match.label;
-        presetServersWithLabel.add(annotated);
-      }
-    }
-
-    // §033: resolve current rules list (auto-discover + orphan cleanup +
-    // persist if changed). Single source of truth shared with builder.
-    final resolvedRules = await resolveDnsRulesList(
-      templateRules: templateRulesRaw,
-      activePresetIdsWithDnsRule: activePresetIdsWithDnsRule,
-    );
-
-    // §043: resolve servers refs list (legacy migration → kind-refs;
-    // auto-discovery template+preset; orphan cleanup; persist if changed).
-    final presetServersByTag = <String, Map<String, dynamic>>{
-      for (final s in presetServersWithLabel)
-        if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
-          s['tag'] as String: s,
-    };
-    final resolvedServers = await resolveDnsServersList(
-      templateServers: templateServersRaw,
-      presetServersByTag: presetServersByTag,
-    );
-
-    // §117: реальные тела DNS-mirror'ов (rule-источники) для превью —
-    // подзаголовок `rule_set` + read-only диалог по тапу. Гоним тот же
-    // эмиттер, что и финальный билд (тег rule_set совпадает), но с
-    // **force-active** eligible-правилами: тело строится и для выключенного
-    // DNS-аспекта, чтобы выключенная строка осталась видимой/информативной.
-    // Persisted-правила не трогаем. srs: dummy-path (как ViewTab) — mirror
-    // породится без скачанного .srs.
-    final previewRules = [
-      for (final cr in activeRules)
-        if (cr.dnsMirrorEligible && !(cr.dns?.enabled ?? false))
-          switch (cr) {
-            CustomRuleInline() =>
-              cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
-            CustomRuleSrs() =>
-              cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
-            _ => cr,
-          }
-        else
-          cr,
-    ];
-    final mirrorSrsPaths = <String, String>{
-      for (final cr in previewRules)
-        if (cr is CustomRuleSrs) cr.id: '<srs>',
-    };
-    final unifiedMirrors = applyAllCustomRules(
-      RuleSetRegistry(),
-      previewRules,
-      allPresets,
-      srsPaths: mirrorSrsPaths,
-    );
-    // §257: правило может нести ДВА mirror'а (server + serverless Force
-    // IPv4) — группируем списком (Map→entry молча терял бы второй).
-    final dnsMirrorsByRuleId = <String, List<DnsMirrorEntry>>{};
-    for (final m in unifiedMirrors.dnsMirrors) {
-      final id = m.ruleId;
-      if (id == null || id.isEmpty) continue;
-      (dnsMirrorsByRuleId[id] ??= []).add(m);
-    }
-
-    // §121: автосброс DNS Final / Default Resolver на template-дефолт, если
-    // выбранный сервер исчез из каталога (напр. выключили пресет, чьи серверы
-    // были выбраны резольверами). Иначе битый tag уходит в config → sing-box
-    // реджектит «server not found» при старте. Считаем доступные tag'и из
-    // локальных resolved-значений (state ещё не присвоен).
-    final ruleRefsByTag = <String, String>{
-      for (final cr in activeRules)
-        if (cr.dnsMirrorActive)
-          cr.dns!.serverTag: cr.name.isNotEmpty ? cr.name : 'rule',
-    };
-    final availableTags = enabledServerTags(resolveDisplayedServers(
-      resolvedServers, templateByTag, presetServersByTag,
-      ruleRefsByTag: ruleRefsByTag));
-    var dnsFinal = vars['dns_final'] ?? '';
-    var defaultResolver = vars['dns_default_domain_resolver'] ?? '';
-    var resolverReset = false;
-    if (dnsFinal.isNotEmpty && !availableTags.contains(dnsFinal)) {
-      dnsFinal = 'cloudflare_udp'; // template default_value
-      resolverReset = true;
-    }
-    if (defaultResolver.isNotEmpty && !availableTags.contains(defaultResolver)) {
-      defaultResolver = 'cloudflare_udp'; // template default_value
-      resolverReset = true;
-    }
-
-    if (mounted) {
-      setState(() {
-        _servers = resolvedServers;
-        _templateByTag = templateByTag;
-        _presetServersByTag = presetServersByTag;
-        _rules = resolvedRules;
-        _templateRulesByName = templateRulesByName;
-        _presetRulesByPresetId = presetRulesByPresetId;
-        _presetLabelByPresetId = presetLabelByPresetId;
-        _presetDnsEnable = presetDnsEnable;
-        _outboundOptions = outboundOptions;
-        _customRules = activeRules;
-        _dnsMirrorsByRuleId = dnsMirrorsByRuleId;
-        // Fallback = default_value шаблона (ipv4_only) — иначе UI покажет
-        // не то, что реально применит билдер при незаписанном var'е.
-        _strategy = vars['dns_strategy'] ?? 'ipv4_only';
-        _dnsFinal = dnsFinal;
-        _defaultResolver = defaultResolver;
-        _loading = false;
-      });
-      // §121: исчезнувший resolver-tag сброшен → persist (config dirty),
-      // чтобы битый ref не дожил до buildّа даже если юзер ничего не трогает.
-      if (resolverReset) _markDirty();
-    }
+    // §300 — вся read+derive-логика вынесена в DnsController.load() (тело
+    // verbatim + типизация краёв §294). Экран только присваивает snapshot.
+    final s = await DnsController.load();
+    if (!mounted) return;
+    setState(() {
+      _servers = s.servers;
+      _templateByTag = s.templateByTag;
+      _presetServersByTag = s.presetServersByTag;
+      _rules = s.rules;
+      _templateRulesByName = s.templateRulesByName;
+      _presetRulesByPresetId = s.presetRulesByPresetId;
+      _presetLabelByPresetId = s.presetLabelByPresetId;
+      _presetDnsEnable = s.presetDnsEnable;
+      _outboundOptions = s.outboundOptions;
+      _customRules = s.customRules;
+      _dnsMirrorsByRuleId = s.dnsMirrorsByRuleId;
+      _strategy = s.strategy;
+      _dnsFinal = s.dnsFinal;
+      _defaultResolver = s.defaultResolver;
+      _loading = false;
+    });
+    // §121: исчезнувший resolver-tag сброшен → persist (config dirty).
+    if (s.resolverReset) _markDirty();
   }
 
   /// §107: staging — буфер экрана в `_cache` на каждую мутацию; дисковый
   /// flush — mixin'ом (flushToDisk) на dispose/paused.
   @override
   Future<void> stageChanges() async {
-    await SettingsStorage.saveDnsServers(_servers, flush: false);
-    final cleaned = cleanDnsRulesForPersist(
-      _rules,
-      _templateRulesByName,
-      _presetRulesByPresetId,
+    // §300 D3 — staged-запись через DnsController.stage (byte-identical).
+    // custom_rules НЕ входит (это §295, device). §076: configDirty уже true.
+    await DnsController.stage(
+      servers: _servers,
+      rules: _rules,
+      templateRulesByName: _templateRulesByName,
+      presetRulesByPresetId: _presetRulesByPresetId,
+      strategy: _strategy,
+      dnsFinal: _dnsFinal,
+      defaultResolver: _defaultResolver,
     );
-    await SettingsStorage.saveDnsRulesList(cleaned, flush: false);
-    await SettingsStorage.setVar('dns_strategy', _strategy, flush: false);
-    await SettingsStorage.setVar('dns_final', _dnsFinal, flush: false);
-    await SettingsStorage.setVar(
-      'dns_default_domain_resolver',
-      _defaultResolver,
-      flush: false,
-    );
-
-    // §076: configDirty уже true (set в _markDirty).
   }
 
   /// §117 задача 3: tag → имя routing-правила с активной DNS-опцией —
