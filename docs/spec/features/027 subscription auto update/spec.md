@@ -13,7 +13,7 @@
 | Модель: `UpdateStatus`, `lastUpdateAttempt`, `lastUpdateStatus`, `consecutiveFails` | ✅ |
 | `SubscriptionController.refreshEntry` + записи статуса + crash-safe init-sweep | ✅ |
 | Dedup guard внутри `_fetchEntryByRef` (проверка inProgress) | ✅ |
-| `AutoUpdater` (4 триггера, gating, fail-cap) | ✅ |
+| `AutoUpdater` (6 триггеров, gating, fail-cap) | ✅ |
 | UI: interval/ago/fails в строках подписок + блок "Subscription" в detail | ✅ |
 | Wiring: `HomeScreen.initState` создаёт AutoUpdater, зовёт `start()` после `_subController.init()` | ✅ |
 | Wiring: `HomeController._handleStatusEvent` дёргает `onVpnConnected`/`onVpnStopped` на tunnel transitions | ✅ |
@@ -43,8 +43,11 @@ Sing-box клиент потребляет URL-подписки, список у
 | 3 | `periodic` | Таймер | **раз в 1 час** | ❌ |
 | 4 | `vpnStopped` | Туннель ушёл из `connected` | сразу | ❌ |
 | 5 | `manual` | Юзер нажал ⟳ на Servers / Detail | сразу | ✅ |
+| 6 | `resumed` | App вернулся из фона (`AppLifecycleState.resumed`) | сразу | ❌ |
 
 Все триггеры ведут в единый метод `AutoUpdater.maybeUpdateAll(trigger, {force})` — решает **одна функция** `_shouldUpdate`, логика not duplicated.
+
+**§291 — `resumed` vs background-fetch.** `periodic` (#3) тикает только пока процесс жив; при свёрнутом app с выключенным VPN Android со временем замораживает процесс — таймер засыпает, и к вечеру подписки «обновлены 14ч назад». `resumed` закрывает ровно этот случай: возврат из фона — бесплатный по батарее момент (UI уже на переднем плане) досмотреть, не пора ли обновить. Не force — проходит `auto_update_subs` и весь `_shouldUpdate`-гейт (min-retry/interval/fail-cap), нагрузки на провайдера сверх остальных не-manual триггеров нет. Полноценный **background-fetch выгруженного app** (WorkManager) остаётся вне скопа — это отдельная бОльшая задача (см. ниже).
 
 ---
 
@@ -52,7 +55,7 @@ Sing-box клиент потребляет URL-подписки, список у
 
 | Gate | Значение | Переживает рестарт? | Что защищает |
 |------|----------|---------------------|---------------|
-| **`auto_update_subs` global toggle** | `true` default, stored в `SettingsStorage.vars['auto_update_subs']` | ✅ JSON | **Выключает все автоматические триггеры (appStart/vpnConnected/periodic/vpnStopped).** Manual (⟳) и `force=true` флаг обходят. Тоггл дублируется в двух местах UI: App Settings → Subscriptions и PopupMenu в `SubscriptionsScreen` (три точки справа-сверху). |
+| **`auto_update_subs` global toggle** | `true` default, stored в `SettingsStorage.vars['auto_update_subs']` | ✅ JSON | **Выключает все автоматические триггеры (appStart/vpnConnected/periodic/vpnStopped/resumed).** Manual (⟳) и `force=true` флаг обходят. Тоггл дублируется в двух местах UI: App Settings → Subscriptions и PopupMenu в `SubscriptionsScreen` (три точки справа-сверху). |
 | `updateIntervalHours` | 24ч default, override из `profile-update-interval` header или UI | ✅ JSON | Основной «пора ли»: `now - lastUpdated >= interval`. |
 | `minRetryInterval` | 15 мин | ✅ JSON (через `lastUpdateAttempt`) | Не дёргать ту же подписку чаще раз в 15 мин. Спасает при fail-шторме на каждом триггере. |
 | `maxFailsPerSession` | 5 | ❌ (in-memory) | После 5 фейлов подряд подписка заморожена **до рестарта app**. Спек-решение: не переживать рестарт, чтобы юзер с «поправленной подпиской» не ждал сброса. |

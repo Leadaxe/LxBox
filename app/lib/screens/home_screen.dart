@@ -450,6 +450,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _lifecycle = state;
     if (state == AppLifecycleState.resumed) {
       _controller.onAppResumed();
+      // §291 — досмотреть подписки на возврате из фона: periodic-таймер спит
+      // вместе с замороженным процессом (свёрнут + VPN off), так что вечером
+      // «обновлено 14ч назад». Не блокирует resync; `_running`/min-retry сами
+      // защищают от частых сворачиваний, тумблер/updateIntervalHours==0 чтит.
+      unawaited(_autoUpdater.maybeUpdateAll(UpdateTrigger.resumed));
       _maybeShowSupport();
       _maybeShowResumeSnack(); // §216
     } else if (state == AppLifecycleState.paused ||
