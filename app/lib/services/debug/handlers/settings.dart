@@ -1,4 +1,5 @@
 import '../../../models/background_mode.dart';
+import '../../../models/dns_ref.dart';
 import '../../l10n/locale_controller.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
@@ -353,7 +354,19 @@ Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
     if (s is! Map) {
       throw const BadRequest('each servers[i] must be an object');
     }
-    servers.add(s.cast<String, dynamic>());
+    final map = s.cast<String, dynamic>();
+    // §294 — new-format (kind-ref) валидируется через DnsServerRef (симметрия
+    // с типизированным /rules); legacy full-body snapshot (нет `kind`)
+    // пропускается verbatim — резолвер сконвертирует его на ближайший load.
+    if (map.containsKey('kind')) {
+      try {
+        servers.add(DnsServerRef.fromJsonStrict(map).toJson());
+      } on DnsRefFormatException catch (e) {
+        throw BadRequest(e.message);
+      }
+    } else {
+      servers.add(map); // legacy — как раньше
+    }
   }
   await SettingsStorage.saveDnsServers(servers);
   final extras = await maybeRebuild(req, ctx);
@@ -367,16 +380,44 @@ Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
 
 Future<DebugResponse> _putDnsRules(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
-  final rules = fieldString(body, 'rules');
-  if (rules == null) {
-    throw const BadRequest('field "rules" required (JSON string)');
+  // §294 — новый путь: `{"rules": [ {kind, …}, … ]}` — массив kind-ref'ов,
+  // валидируется через DnsRuleRef (симметрия с /rules) и пишется в живой
+  // `dns_options.rules` через saveDnsRulesList. Билдер читает именно его.
+  final arr = body['rules'];
+  if (arr is List) {
+    final rules = <Map<String, dynamic>>[];
+    for (final r in arr) {
+      if (r is! Map) {
+        throw const BadRequest('each rules[i] must be an object');
+      }
+      try {
+        rules.add(DnsRuleRef.fromJsonStrict(r.cast<String, dynamic>()).toJson());
+      } on DnsRefFormatException catch (e) {
+        throw BadRequest(e.message);
+      }
+    }
+    await SettingsStorage.saveDnsRulesList(rules);
+    final extras = await maybeRebuild(req, ctx);
+    return JsonResponse({
+      'ok': true,
+      'action': 'settings-dns-rules',
+      'count': rules.length,
+      ...extras,
+    });
   }
-  await SettingsStorage.saveDnsRules(rules);
+  // Legacy: `{"rules": "<json-string>"}` — deprecated `rules_json` (builder
+  // его игнорирует, §061); оставлено для обратной совместимости старых клиентов.
+  final rulesStr = fieldString(body, 'rules');
+  if (rulesStr == null) {
+    throw const BadRequest(
+        'field "rules" required (array of kind-refs, or legacy JSON string)');
+  }
+  await SettingsStorage.saveDnsRules(rulesStr);
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,
     'action': 'settings-dns-rules',
-    'bytes': rules.length,
+    'bytes': rulesStr.length,
     ...extras,
   });
 }
