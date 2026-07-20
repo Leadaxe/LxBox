@@ -98,6 +98,21 @@ Platform напрямую — только через контроллеры.
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
+**Инвариант фасадов (§291):** домен даёт наружу **фасад** и не знает
+потребителей (в сигнатурах нет `DebugContext`/виджетов/intent'ов); внешние
+адаптеры (Debug HTTP · Automation broadcast · UI) знают транспорт+безопасность,
+но не то, к чему дают доступ; общая операция объявлена один раз, все адаптеры
+сводятся к вызову фасада. Эталоны формы: `ChannelMutations` (атомарный
+heal+resync, сырые статики `@visibleForTesting`), `SubscriptionController`
+(владеет мутациями server-lists; Debug+Automation делегируют), `ProbeController`
+(`services/probe/` — общий probe над всей подсистемой ServerList: пороги/ping/
+чистые решения + `probeNodesOf`-адаптер; `ProbeGateMixin` — общий VPN-гейт),
+`DnsController` (`services/dns/` — `load()`→snapshot + `stage()` над DNS-секцией;
+экран тонкий), `VpnSettingsFacade` (`services/vpn_settings/` — `applyVpnMode`
+несёт инварианты password-gen/auth-force/`has_tun`-зеркало для UI **и** Debug).
+Типизированные storage-модели: sealed `DnsServerRef`/`DnsRuleRef` (§294).
+Полный инвариант + план strangler — `docs/spec/features/291 layered-architecture-facades/`.
+
 **Брокеры событий (push, снизу вверх):** §122 — управляющий канал UI переведён
 на libbox **CommandClient** (server-stream push вместо Timer-polling). Push-каналы:
 native статус-`Stream<TunnelStatusEvent>` (lifecycle туннеля), `lxbox/coreLog`-stream
