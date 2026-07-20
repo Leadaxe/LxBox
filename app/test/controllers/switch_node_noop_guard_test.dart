@@ -6,6 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/home_controller.dart';
 import 'package:lxbox/services/automation/event_emitter.dart';
+import 'package:lxbox/services/automation/handlers.dart' as automation;
+import 'package:lxbox/services/debug/context.dart';
+import 'package:lxbox/services/debug/contract/errors.dart';
+import 'package:lxbox/services/debug/debug_registry.dart';
 import 'package:lxbox/services/haptic_service.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -59,9 +63,13 @@ void main() {
       state: true,
       onSend: (a, e) => emitted.add((a, e)),
     );
+    // §290 — привязать контроллер к registry, чтобы automation-хендлеры
+    // (actionSwitchNode/actionSetGroup) видели его через requireHome().
+    DebugRegistry.I.home = controller;
   });
 
   tearDown(() async {
+    DebugRegistry.I.home = null;
     controller.dispose();
     await Future<void>.delayed(const Duration(milliseconds: 50));
     for (final ch in [methods, ccStatus, ccGroups]) {
@@ -70,6 +78,9 @@ void main() {
     AutomationEventEmitter.I.debugConfigureForTest(); // сброс
     if (await tempDir.exists()) await tempDir.delete(recursive: true);
   });
+
+  DebugContext ctx() =>
+      DebugContext(registry: DebugRegistry.I, appStartedAt: DateTime(2026));
 
   test('switchNode на уже активную ноду — no-op + NODE_ALREADY_ACTIVE', () async {
     controller.debugSeedNodeState(group: 'vpn-1', activeNode: '🇫🇮node');
@@ -92,5 +103,40 @@ void main() {
 
     expect(methodCalls, contains('ccSelectOutbound'));
     expect(emitted.map((e) => e.$1), isNot(contains('NODE_ALREADY_ACTIVE')));
+  });
+
+  // ─── §290 automation preconditions (F1/F3) ─────────────────────────────────
+
+  test('actionSwitchNode: группа выбрана, туннель опущен → Conflict (не немой)',
+      () async {
+    // group != null, но tunnelUp == false — раньше switchNode молча return'ил.
+    controller.debugSeedNodeState(
+        group: 'vpn-1', activeNode: '🇫🇮node', tunnelUp: false);
+
+    await expectLater(
+      automation.actionSwitchNode('🇩🇪other', ctx()),
+      throwsA(isA<Conflict>()),
+    );
+    expect(methodCalls, isNot(contains('ccSelectOutbound')));
+  });
+
+  test('actionSetGroup: несуществующая группа → NotFound (без ложного события)',
+      () async {
+    controller.debugSeedNodeState(
+        group: 'vpn-1', activeNode: '🇫🇮node', groups: ['vpn-1', 'work']);
+
+    await expectLater(
+      automation.actionSetGroup('ghost', ctx()),
+      throwsA(isA<NotFound>()),
+    );
+    expect(emitted.map((e) => e.$1), isNot(contains('ACTIVE_GROUP_CHANGED')));
+  });
+
+  test('actionSetGroup: существующая группа → без броска', () async {
+    controller.debugSeedNodeState(
+        group: 'vpn-1', activeNode: '🇫🇮node', groups: ['vpn-1', 'work']);
+
+    // не должно бросить (группа есть в списке)
+    await automation.actionSetGroup('work', ctx());
   });
 }

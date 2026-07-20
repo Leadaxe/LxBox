@@ -131,21 +131,21 @@ Profile активируется, пока условие истинно. Host �
 |---|---|---|---|
 | `VPN_CONNECTED` | — | Lifecycle | Туннель поднят |
 | `VPN_DISCONNECTED` | `reason` (`user`/`error`/`revoked`) | Lifecycle | Туннель упал |
-| `VPN_ERROR` | `code`, `message` | Lifecycle | Любой error path / провал automation-команды |
+| `VPN_ERROR` | `code`, `message` | Lifecycle | Любой error path / провал automation-команды. `code` = `tunnel_error` (аварийный обрыв туннеля) либо `conflict`/`bad_request`/`not_found`/… (провал команды) |
 | `VPN_REVOKED` | — | Lifecycle | Другая VPN-app перехватила туннель |
 | `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | Найдена новая версия |
-| `PERMISSION_NEEDED` | `permission` | Lifecycle | Требуется runtime-permission (резерв) |
 | `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | Сменилась активная нода |
 | `NODE_ALREADY_ACTIVE` | `tag`, `group` | State | `SWITCH_NODE` пришёл на уже активную ноду — нода **не** менялась (подтверждение вместо смены) |
 | `ACTIVE_GROUP_CHANGED` | `old_group`, `new_group`, `reason` | State | Сменилась активная группа |
 | `SUB_REFRESHED` | `sub_id`, `nodes_count`, `delta_count` | Subscription | Подписка обновилась |
 | `SUB_REFRESH_FAILED` | `sub_id`, `error` | Subscription | Подписка не обновилась (throttle 1/min на sub_id) |
 
-### Future (с §042 health watchdog)
+### Зарезервированные (namespace есть, источника пока нет)
 
-`HEARTBEAT_FAILED` · `LATENCY_DEGRADED` · `UNATTRIBUTED_BURST` — namespace
-зарезервирован, источники появятся вместе с §042. Категория **Health** в UI
-уже есть.
+- `HEARTBEAT_FAILED` · `LATENCY_DEGRADED` · `UNATTRIBUTED_BURST` (категория
+  **Health**) — появятся вместе с §042 health watchdog. Категория в UI уже есть.
+- `PERMISSION_NEEDED` (`permission`, категория **Lifecycle**) — зарезервировано
+  под runtime-permission промпты; источника эмиссии пока нет.
 
 ---
 
@@ -165,9 +165,16 @@ Task "Switch to Russia with confirmation":
      If timeout              → Notify "⚠️ нет ответа"
 ```
 
-При провале команды (нет группы, tunnel down и т.п.) L×Box эмитит `VPN_ERROR`
-с `code` (`conflict` / `bad_request` / …) и `message` — ждущий Tasker узнаёт
-о провале вместо тихого fire-and-forget.
+При провале команды (нет группы, tunnel down, несуществующая нода/группа и т.п.)
+L×Box эмитит `VPN_ERROR` с `code` (`conflict` / `bad_request` / `not_found` / …)
+и `message` — ждущий Tasker узнаёт о провале вместо тихого fire-and-forget.
+
+> **Важно: для request-response включите обе категории — `Lifecycle` и
+> `State`.** Успех переключения приходит в категории **State**
+> (`ACTIVE_NODE_CHANGED` / `NODE_ALREADY_ACTIVE`), а провал — как `VPN_ERROR` в
+> категории **Lifecycle**. Если включить только State, ждущий сценарий не
+> получит `VPN_ERROR` на ошибке и уйдёт в timeout вместо ветки ошибки.
+> (App Settings → Automation → Outbound events.)
 
 **`SWITCH_NODE` на уже активную ноду** не рвёт соединения и не делает re-select
 (это была бы лишняя нагрузка), но всё равно шлёт `NODE_ALREADY_ACTIVE` —
