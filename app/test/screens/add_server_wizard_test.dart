@@ -3,7 +3,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/l10n/locale_controller.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/screens/add_server_wizard_screen.dart';
@@ -73,7 +75,15 @@ void main() {
 
   Future<SubscriptionController> openWizard(WidgetTester tester) async {
     final c = SubscriptionController();
-    await tester.pumpWidget(MaterialApp(home: _Launcher(c)));
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: LocaleController.supportedLocales,
+      home: _Launcher(c),
+    ));
     await tester.tap(find.text('open wizard'));
     await tester.pumpAndSettle();
     return c;
@@ -85,7 +95,7 @@ void main() {
   Future<void> submit(WidgetTester tester, SubscriptionController c) async {
     await tester.tap(find.widgetWithText(FilledButton, 'Add'));
     await tester.runAsync(() async {
-      for (var i = 0; i < 400 && c.entries.isEmpty && c.lastError.isEmpty; i++) {
+      for (var i = 0; i < 400 && c.entries.isEmpty && c.lastError == null; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 5));
       }
     });
@@ -103,7 +113,7 @@ void main() {
       await tester.enterText(find.byType(TextFormField).first, '🚀 My proxy');
       await submit(tester, c);
 
-      expect(c.lastError, '');
+      expect(c.lastError, isNull);
       final entry = c.entries.single;
       final us = entry.list as UserServer;
       expect(us.name, ''); // §243 — визард name больше не пишет
@@ -116,7 +126,7 @@ void main() {
       final c = await openWizard(tester);
       await submit(tester, c);
 
-      expect(c.lastError, '');
+      expect(c.lastError, isNull);
       final us = c.entries.single.list as UserServer;
       expect(us.name, '');
       // Дефолтный host = 127.0.0.1 → авто-эмодзи 🔁 (localhost).
@@ -157,7 +167,7 @@ void main() {
       await tester.enterText(find.byType(TextFormField).first, '🌍 Corp http');
       await submit(tester, c);
 
-      expect(c.lastError, '');
+      expect(c.lastError, isNull);
       final us = c.entries.single.list as UserServer;
       expect(us.name, '');
       expect(us.nodes.single.tag, '🌍 Corp http');

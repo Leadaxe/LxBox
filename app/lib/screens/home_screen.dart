@@ -35,6 +35,7 @@ import '../services/nav/home_return_observer.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
+import '../services/l10n/locale_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -135,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// Ключевое: side-effects **НЕ** в `build` (анти-паттерн Flutter) —
   /// вся мутация state/timers/animations идёт через этот listener.
   TunnelStatus _prevTunnel = TunnelStatus.disconnected;
-  String _prevError = '';
+  UiMsg? _prevError;
 
   @override
   void initState() {
@@ -243,12 +244,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _prevNoNodesStamp = stamp;
     final names = _subController.channelsWithoutNodes;
     if (names.isEmpty) return;
-    final msg = names.length == 1
-        ? 'Channel "${names.first}" matched no nodes — check its node filter.'
-        : '${names.length} channels matched no nodes — check their node '
-            'filters.';
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      final msg = names.length == 1
+          ? getLocalText.s("Channel \"%s\" matched no nodes — check its node filter.", names.first)
+          : getLocalText.plural("%d channels matched no nodes — check their node filters.", names.length);
       // Без hideCurrentSnackBar: этот показ соседствует с actionable-снеками
       // того же rebuild-флоу («Config rebuilt … restart VPN», heal-счётчики)
       // — гасить их нельзя, встаём в очередь ScaffoldMessenger.
@@ -276,20 +276,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       _connectingAnim.reset();
     }
 
-    // §050 — structured alert prefix `alert:permission_location:<perm>` →
-    // show AlertDialog with "Open Settings" button instead of plain error.
-    // Background: ACCESS_BACKGROUND_LOCATION on API 30+ can only be granted
-    // through Settings (not via runtime permission dialog), so we explain
-    // and offer button.
+    // §050 — location-permission stop → AlertDialog with "Open Settings"
+    // button instead of plain error. Background: ACCESS_BACKGROUND_LOCATION
+    // on API 30+ can only be granted through Settings (not via runtime
+    // permission dialog), so we explain and offer button. §279 — native
+    // string protocol parsed into typed StopReason at ingestion
+    // (HomeController), no string surgery here.
+    final nowReason = state.stopReason;
     if (nowError != _prevError &&
-        nowError.contains('alert:permission_location:') &&
+        nowReason is StopPermissionLocation &&
         !_permissionDialogShowing) {
       _permissionDialogShowing = true;
-      // Strip the "Stopped: " prefix that HomeController prepends.
-      final permName = nowError
-          .replaceFirst(RegExp(r'^Stopped:\s*'), '')
-          .replaceFirst('alert:permission_location:', '')
-          .trim();
+      final permName = nowReason.permissions;
       // Clear immediately so toast/snackbar для same error не показывается.
       _controller.clearError();
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -303,8 +301,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // snackbar + clearError, чтобы верхний banner не зажёгся. Location-alert и
     // config_load_error идут своими путями (dialog / отдельный banner-ключ).
     if (nowError != _prevError &&
-        nowError.isNotEmpty &&
-        !nowError.contains('alert:permission_location:')) {
+        nowError != null &&
+        nowReason is! StopPermissionLocation) {
       final msg = nowError;
       _controller.clearError();
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -312,7 +310,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(
-            content: Text(msg),
+            content: Text(msg.render()),
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 5),
           ));
@@ -399,7 +397,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       // getVpnStatus и т.п.) или saveParsedConfig не должен убивать метод —
       // ниже единственный call-site AutoUpdater.start() во всём app.
       // Bootstrap скипается, работаем с прежним конфигом.
-      AppLog.I.error('Bootstrap skipped: ${humanizeError(e)}');
+      AppLog.I.error('Bootstrap skipped: ${humanizeError(e).renderEn()}');
     } finally {
       // §101 — AutoUpdater после bootstrap'а: его appStart-fetch'и персистят
       // настройки (mtime bump) и не должны попадать в окно сборки конфига.
@@ -452,6 +450,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _lifecycle = state;
     if (state == AppLifecycleState.resumed) {
       _controller.onAppResumed();
+      // §291 — досмотреть подписки на возврате из фона: periodic-таймер спит
+      // вместе с замороженным процессом (свёрнут + VPN off), так что вечером
+      // «обновлено 14ч назад». Не блокирует resync; `_running`/min-retry сами
+      // защищают от частых сворачиваний, тумблер/updateIntervalHours==0 чтит.
+      unawaited(_autoUpdater.maybeUpdateAll(UpdateTrigger.resumed));
       _maybeShowSupport();
       _maybeShowResumeSnack(); // §216
     } else if (state == AppLifecycleState.paused ||
@@ -475,9 +478,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (!_controller.state.tunnelUp) return;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Resumed — syncing tunnel…'),
-        duration: Duration(seconds: 2),
+      SnackBar(
+        content: Text(getLocalText.s("Resumed — syncing tunnel…")),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -541,6 +544,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
         return Scaffold(
+          // l10n-exempt: brand name, идентичен во всех локалях
           appBar: AppBar(title: const Text('L×Box')),
           drawer: HomeDrawer(
             controller: _controller,
@@ -585,8 +589,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     controller: _controller,
                     subController: _subController,
                   ),
-                if (_subController.busy && _subController.progressMessage.isNotEmpty)
-                  ProgressBanner(message: _subController.progressMessage),
+                if (_subController.busy &&
+                    _subController.progressMessage != null)
+                  ProgressBanner(
+                      message:
+                          _subController.progressMessage!.render()),
                 // §095 — NODES-строка только когда подключено И фильтр закрыт.
                 // STOP-режим: нод нет → фильтровать нечего → строку прячем.
                 if (state.tunnelUp && !_filter.panelExpanded) ...[
@@ -789,7 +796,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Config rebuilt: $nodeCount nodes${_controller.state.tunnelUp ? " — restart VPN to apply" : ""}',
+            _controller.state.tunnelUp
+                ? getLocalText.plural("Config rebuilt: %d nodes — restart VPN to apply", nodeCount)
+                : getLocalText.plural("Config rebuilt: %d nodes", nodeCount),
           ),
         ),
       );

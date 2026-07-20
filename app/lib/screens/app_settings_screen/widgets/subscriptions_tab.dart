@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/l10n/locale_controller.dart';
+
 /// §118 — App Settings → Subscriptions tab. Глобальные настройки HTTP-фетча
 /// подписок: авто-обновление, кастомный User-Agent, HWID + device-meta
 /// (Remnawave `x-hwid`/`x-device-os`/`x-ver-os`/`x-device-model`).
@@ -63,25 +65,27 @@ class SubscriptionsTab extends StatelessWidget {
     return ListView(
       padding: padding,
       children: [
-        Text('Auto-update', style: theme.textTheme.titleMedium),
+        Text(getLocalText.s("Auto-update"),
+            style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         SwitchListTile(
-          title: const Text('Auto-update subscriptions'),
-          subtitle: const Text(
-              'Refresh on app start, after VPN connects, and periodically. '
-              'Manual ⟳ works regardless.'),
+          title: Text(getLocalText.s("Auto-update subscriptions")),
+          subtitle: Text(getLocalText.s("Refresh on app start, after VPN connects, and periodically. Manual ⟳ works regardless.")),
           secondary: const Icon(Icons.cloud_sync_outlined),
           value: autoUpdateSubs,
           onChanged: loaded ? onAutoUpdateSubsChanged : null,
         ),
         const Divider(height: 32),
-        Text('Fetch identity', style: theme.textTheme.titleMedium),
+        Text(getLocalText.s("Fetch identity"),
+            style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         ListTile(
           leading: const Icon(Icons.badge_outlined),
-          title: const Text('Custom User-Agent'),
+          title: Text(getLocalText.s("Custom User-Agent")),
           subtitle: Text(
-            userAgent.isEmpty ? 'Default · $defaultUserAgent' : userAgent,
+            userAgent.isEmpty
+                ? getLocalText.s("Default · %s", defaultUserAgent)
+                : userAgent,
             style: TextStyle(
               fontStyle: userAgent.isEmpty ? FontStyle.italic : null,
             ),
@@ -92,17 +96,13 @@ class SubscriptionsTab extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text(
-            'Some panels return the config by a substring in the User-Agent — '
-            'a custom UA without the "LxBox" token may yield an unsupported '
-            'format and break the update. Change only if you know why.',
+            getLocalText.s("Some panels return the config by a substring in the User-Agent — a custom UA without the \"LxBox\" token may yield an unsupported format and break the update. Change only if you know why."),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
         ),
         SwitchListTile(
-          title: const Text('Send HWID'),
-          subtitle: const Text(
-              'Send x-hwid + device headers on every subscription fetch — for '
-              'panels with HWID device limits (Remnawave). Off by default.'),
+          title: Text(getLocalText.s("Send HWID")),
+          subtitle: Text(getLocalText.s("Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). Off by default.")),
           secondary: const Icon(Icons.devices_outlined),
           value: sendHwid,
           onChanged: loaded ? onSendHwidChanged : null,
@@ -117,7 +117,7 @@ class SubscriptionsTab extends StatelessWidget {
             onEdit: onEditHwid,
             extra: IconButton(
               icon: const Icon(Icons.refresh, size: 20),
-              tooltip: 'Regenerate',
+              tooltip: getLocalText.s("Regenerate"),
               onPressed: loaded ? onRegenerateHwid : null,
             ),
           ),
@@ -135,8 +135,7 @@ class SubscriptionsTab extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
-              'These headers identify your device to the panel. Defaults come '
-              'from the device — override any of them (empty = device default).',
+              getLocalText.s("These headers identify your device to the panel. Defaults come from the device — override any of them (empty = device default)."),
               style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
             ),
           ),
@@ -158,7 +157,7 @@ class SubscriptionsTab extends StatelessWidget {
       leading: Icon(icon),
       title: Text(label),
       subtitle: Text(
-        value.isEmpty ? '(empty)' : value,
+        value.isEmpty ? getLocalText.s("(empty)") : value,
         style: TextStyle(
           fontFamily: monospace ? 'monospace' : null,
           fontSize: monospace ? 12 : null,
@@ -173,7 +172,7 @@ class SubscriptionsTab extends StatelessWidget {
           ?extra,
           IconButton(
             icon: const Icon(Icons.edit_outlined, size: 20),
-            tooltip: 'Edit',
+            tooltip: getLocalText.s("Edit"),
             onPressed: loaded ? onEdit : null,
           ),
         ],

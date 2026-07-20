@@ -9,18 +9,48 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.leadaxe.lxbox.R
 
 class ServiceNotification(private val service: Service) {
     companion object {
+        // Wire: id канала стабилен между релизами и локалями — НЕ в ресурсы.
         private const val CHANNEL_ID = "boxvpn_vpn_channel"
         private const val NOTIFICATION_ID = 1
+
+        /// §279 — идемпотентный (пере)сабмит канала. createNotificationChannel
+        /// с тем же id обновляет имя/описание (документированный rename-путь) —
+        /// зовётся из init и из L10n.refreshSurfaces при смене языка.
+        fun createChannel(ctx: Context) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    L10n.str(ctx, R.string.notification_channel_name),
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description =
+                        L10n.str(ctx, R.string.notification_channel_description)
+                    setShowBadge(false)
+                }
+                BoxApplication.notificationManager.createNotificationChannel(channel)
+            }
+        }
     }
 
-    private val builder: NotificationCompat.Builder
-
     init {
-        createChannel()
-        val openIntent = service.packageManager.getLaunchIntentForPackage(service.packageName)
+        createChannel(service)
+    }
+
+    /// §182/§279 — builder реконструируется ЦЕЛИКОМ на каждый show():
+    /// `addAction` НЕ идемпотентен (на переиспользуемом builder'е кнопки
+    /// Stop/Reconnect стекались бы на каждый апдейт), а лейблы обязаны
+    /// перечитываться из ресурсов на активной локали в момент рендера
+    /// (§279: relabel при смене языка = обычный show()-путь через
+    /// ACTION_UPDATE_NOTIFICATION). show() зовётся редко (connect / смена
+    /// лейбла) — цена реконструкции незначима.
+    private fun buildNotification(title: String, text: String)
+        : android.app.Notification {
+        val openIntent = service.packageManager
+            .getLaunchIntentForPackage(service.packageName)
         val pendingIntent = if (openIntent != null) {
             PendingIntent.getActivity(
                 service, 0, openIntent,
@@ -28,10 +58,10 @@ class ServiceNotification(private val service: Service) {
             )
         } else null
 
-        builder = NotificationCompat.Builder(service, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(service, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
-            .setContentTitle(ConfigManager.notificationTitle)
-            .setContentText("Connecting...")
+            .setContentTitle(title)
+            .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
@@ -39,13 +69,20 @@ class ServiceNotification(private val service: Service) {
         if (pendingIntent != null) builder.setContentIntent(pendingIntent)
 
         // §182 — кнопки Stop / Reconnect прямо в шторке (фидбэк #180/#261).
-        // ВАЖНО: addAction НЕ идемпотентен — навешиваем СТРОГО здесь, в init
-        // (builder переиспользуется между show()), иначе кнопки стекаются на
-        // каждый апдейт title/text. icon=0: на Android 7+ action-иконки в
-        // развёрнутом уведомлении compat-стиль скрывает, текст-лейбла достаточно.
+        // icon=0: на Android 7+ action-иконки в развёрнутом уведомлении
+        // compat-стиль скрывает, текст-лейбла достаточно.
         builder
-            .addAction(0, "Stop", broadcastPI(BoxVpnService.ACTION_STOP, 1))
-            .addAction(0, "Reconnect", broadcastPI(BoxVpnService.ACTION_RECONNECT, 2))
+            .addAction(
+                0,
+                L10n.str(service, R.string.notification_action_stop),
+                broadcastPI(BoxVpnService.ACTION_STOP, 1),
+            )
+            .addAction(
+                0,
+                L10n.str(service, R.string.notification_action_reconnect),
+                broadcastPI(BoxVpnService.ACTION_RECONNECT, 2),
+            )
+        return builder.build()
     }
 
     /// §182 — PendingIntent на explicit-broadcast (только своему пакету →
@@ -59,25 +96,8 @@ class ServiceNotification(private val service: Service) {
         )
     }
 
-    private fun createChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "VPN Service",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Shows when VPN is active"
-                setShowBadge(false)
-            }
-            BoxApplication.notificationManager.createNotificationChannel(channel)
-        }
-    }
-
     fun show(title: String, text: String) {
-        val notification = builder
-            .setContentTitle(title)
-            .setContentText(text)
-            .build()
+        val notification = buildNotification(title, text)
         // На Android 14+ (API 34) Google требует typed startForeground —
         // иначе MissingForegroundServiceTypeException на строгих OEM
         // (One UI 6, MIUI 14). На младших API typed-перегрузка отсутствует

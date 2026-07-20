@@ -15,6 +15,7 @@ import '../models/home_state.dart';
 import '../services/app_log.dart';
 import '../services/automation/event_emitter.dart';
 import '../services/error_format.dart';
+import '../services/probe/probe_lifecycle.dart';
 import '../services/rule_name_resolver.dart';
 import '../services/selector_info.dart';
 import '../services/settings_storage.dart';
@@ -110,7 +111,15 @@ class HomeController extends ChangeNotifier
   /// `connecting`/`stopping` в мс) может их переопределить для on-device теста
   /// force-stop'а (например, connecting=500мс, чтобы не ждать реальный зависон ядра).
   Timer? _transientTimeoutTimer;
-  static const _defaultStoppingTimeout = Duration(seconds: 10);
+  // §287 — 3с (было 10с): при stop с активным mass-ping'ом libbox `closeService()`
+  // синхронно ждёт teardown всех WG-endpoint'ов, порождённых пингом (device-verified:
+  // stop без пинга 0.16с, с пингом — упирался в этот таймаут ~10с). Снижение порога
+  // раньше отдаёт управление force-stop-пути (`doForceStop`, teardown под
+  // withTimeout(2с)) — юзер не ждёт зависший WG-teardown. box.Close() при этом не
+  // обрывается: Kotlin перестаёт ЖДАТЬ, но Go-горутина доигрывает endpoint.Close()
+  // по цепочке в фоне (воркеры гаснут по порядку, не зомби). Чистый stop = 0.16с,
+  // запас до 3с большой; корень (closeService не должен ждать пинг-dial'ы) — в ядре.
+  static const _defaultStoppingTimeout = Duration(seconds: 3);
   static const _defaultConnectingTimeout = Duration(seconds: 15);
   Duration _stoppingTimeout = _defaultStoppingTimeout;
   Duration _connectingTimeout = _defaultConnectingTimeout;
@@ -248,6 +257,24 @@ class HomeController extends ChangeNotifier
   void debugHandleStatusEvent(TunnelStatusEvent event) =>
       _handleStatusEvent(event);
 
+  /// §290 — засеять минимум state для тестов `switchNode`-гейта и
+  /// automation-preconditions (группа/tunnel/активная нода/список групп) без
+  /// прогона всего стрима групп.
+  @visibleForTesting
+  void debugSeedNodeState({
+    required String group,
+    required String activeNode,
+    bool tunnelUp = true,
+    List<String>? groups,
+  }) =>
+      _emit(_state.copyWith(
+        tunnel: tunnelUp ? TunnelStatus.connected : TunnelStatus.disconnected,
+        selectedGroup: group,
+        activeInGroup: activeNode,
+        highlightedNode: activeNode,
+        groups: groups ?? <String>[group],
+      ));
+
   void _handleStatusEvent(TunnelStatusEvent event) {
     final tunnel = event.status;
     final prevTunnel = _state.tunnel;
@@ -267,7 +294,7 @@ class HomeController extends ChangeNotifier
         connectedSince: DateTime.now(),
         configChangedNeedRestart: false,
         // §250 — успешный старт = ЕДИНСТВЕННОЕ место очистки lastStartError
-        // (clearError/оптимистичные lastError:'' его не трогают).
+        // (clearError/оптимистичные lastError: null его не трогают).
         lastStartError: '',
         lastStartErrorAt: null,
       ));
@@ -282,8 +309,11 @@ class HomeController extends ChangeNotifier
       // §165 — наполнить резолвер имён правил из custom_rules (для Stats/Conns
       // «Traffic by Rule»: c.rule ядра → title правила). Конфиг уже актуален
       // (раз connected) → правила те же, что зашиты в running-конфиг.
-      unawaited(SettingsStorage.getCustomRules()
-          .then((r) => RuleNameResolver.I.setRules(r)));
+      // §279 — template даёт live-label'ы preset-правил (локализованный кэш;
+      // холодный кэш → fallback на name-снапшоты, relocalize догонит).
+      unawaited(SettingsStorage.getCustomRules().then((r) =>
+          RuleNameResolver.I
+              .setRules(r, template: TemplateLoader.cachedOrNull())));
       _startHeartbeat();
       _heartbeatFailNotified = false;
       HapticService.I.onVpnConnected();
@@ -312,14 +342,12 @@ class HomeController extends ChangeNotifier
         return;
       }
       _stopHeartbeat();
-      // §141 P1.2b — единый контракт «tunnel down»: отменяем in-flight mass-ping
-      // ПЕРЕД гашением канала, симметрично `_onTunnelDead` (heartbeat.dart).
-      // Иначе воркеры mass-ping'а, стартовавшие из _scheduleAutoPing/ручного
-      // запуска, дописывают stale-delay в мёртвую сессию (epoch-гейт их
-      // самоисцелит, но явная отмена — чище и не зависит от тайминга).
-      cancelMassPing();
-      _autoPingTimer?.cancel();
-      _autoPingTimer = null;
+      // §141 P1.2b / §286 — единый контракт «tunnel down»: гасим ВСЁ пробирование
+      // (mass-ping + auto-ping-таймер + folder-probe sweep'ы) ПЕРЕД гашением
+      // канала, симметрично `_onTunnelDead`. Иначе воркеры/пробы дописывают
+      // stale-результаты в мёртвую сессию (epoch-гейт mass-ping'а их самоисцелит,
+      // но folder-probe не epoch-aware — явная отмена детерминирована).
+      haltAllProbing();
       // §122 — гасим CommandClient-стримы и screenClient (disconnectScreen).
       // На следующем `connected` пересоберём (`_startCcStreams`).
       _stopCcStreams();
@@ -328,21 +356,30 @@ class HomeController extends ChangeNotifier
       // §251 — выборы групп протухли (туннель down); ТЕГИ остаются — история
       // профайлера/закрытых conns продолжает фолдиться корректно.
       SelectorInfo.I.clearSelected();
-      final reason = tunnel == TunnelStatus.revoked
-          ? 'Another VPN app took the system VPN slot (e.g. an always-on VPN). Start again to reconnect.'
-          : (event.errorReason != null ? 'Stopped: ${event.errorReason}' : '');
+      // §279 — строковый native-протокол (errorReason + revoked-флаг)
+      // парсится в typed StopReason здесь, при ingestion; UI ветвится по
+      // типу, не по подстрокам. lastError хранит типизированный UiMsg
+      // (рендер в build); машинный дубль (Debug API/AppLog) — renderEn().
+      final stopReason = StopReason.fromEvent(
+          revoked: tunnel == TunnelStatus.revoked,
+          errorReason: event.errorReason);
+      final reasonEn = stopReason?.renderEn() ?? '';
       _emit(
         _state.copyWith(
           tunnel: tunnel,
-          lastError: reason.isNotEmpty ? reason : _state.lastError,
+          lastError: stopReason != null
+              ? StopReasonMsg(stopReason)
+              : _state.lastError,
+          stopReason: stopReason ?? _state.stopReason,
           // §250 — диагностический дубль для Debug API: живёт до следующего
           // УСПЕШНОГО старта (UI-consume через clearError его не затирает).
           // Пустой reason (чистый user-stop) НЕ затирает предыдущее значение —
-          // симметрично поведению lastError строкой выше.
+          // симметрично поведению lastError строкой выше. Всегда English
+          // (wire-поверхность, spec §4.4).
           lastStartError:
-              reason.isNotEmpty ? reason : _state.lastStartError,
+              reasonEn.isNotEmpty ? reasonEn : _state.lastStartError,
           lastStartErrorAt:
-              reason.isNotEmpty ? DateTime.now() : _state.lastStartErrorAt,
+              reasonEn.isNotEmpty ? DateTime.now() : _state.lastStartErrorAt,
           ccGroups: const <CcGroup>[],
           groups: <String>[],
           nodes: <String>[],
@@ -364,8 +401,8 @@ class HomeController extends ChangeNotifier
         // (чтобы не срабатывать при revoked → disconnected дубле).
         _autoUpdater?.onVpnStopped();
       }
-      if (reason.isNotEmpty) {
-        _addDebug(DebugSource.core, reason);
+      if (reasonEn.isNotEmpty) {
+        _addDebug(DebugSource.core, reasonEn);
       }
       // §047 — outgoing lifecycle events (gated, default OFF). revoked → своё
       // событие; ошибочный stop (errorReason present) → VPN_ERROR + DISCONNECTED;
@@ -397,7 +434,7 @@ class HomeController extends ChangeNotifier
   /// Перезапускает safety-timer на transient-фазу. Cancel'ит предыдущий
   /// (защита от спама `Future.delayed` при множественных stopping/
   /// connecting подряд) и стартует новый. §140 — порог зависит от фазы:
-  /// `connecting` (медленный старт) — длиннее, `stopping` (реальный зависон) — 10с.
+  /// `connecting` (медленный старт) — длиннее, `stopping` (реальный зависон) — 3с (§287).
   void _armTransientTimeout(TunnelStatus expected) {
     _transientTimeoutTimer?.cancel();
     final timeout = expected == TunnelStatus.connecting
@@ -406,7 +443,7 @@ class HomeController extends ChangeNotifier
     _transientTimeoutTimer = Timer(timeout, () async {
       if (_state.tunnel != expected) return;
       _addDebug(
-          DebugSource.app, 'Timeout in ${expected.label}, forcing disconnect');
+          DebugSource.app, 'Timeout in ${expected.name}, forcing disconnect');
       // §129 — таймаут transient-фазы = ядро НЕ отдало Stopped само (зависло
       // вхолостую: detour AWG→WG #2 — tun0 жив, 0 трафика, dial заклинен).
       // Раньше тут был только _emit(disconnected) — UI «disconnected», а
@@ -416,14 +453,14 @@ class HomeController extends ChangeNotifier
       // виснет. forceStopVPN — fire-and-forget. После — синхронизируем UI.
       await _vpn.forceStopVPN();
       if (_disposed) return; // §219 — могли dispose'нуться за await → не эмитим
-      _addDebug(DebugSource.app, '[vpn] forceStopVPN sent (timeout in ${expected.label})');
+      _addDebug(DebugSource.app, '[vpn] forceStopVPN sent (timeout in ${expected.name})');
       if (_state.tunnel != expected) return;
       // §251 — синтезированный tunnel-down: настоящий Stopped потом проглотит
       // stale-terminal guard, его clearSelected недостижим — чистим здесь.
       SelectorInfo.I.clearSelected();
       _emit(_state.copyWith(
         tunnel: TunnelStatus.disconnected,
-        lastError: 'Connection timed out',
+        lastError: const ErrMsg(ErrKey.connectionTimedOut),
         ccGroups: const <CcGroup>[],
         groups: <String>[],
         nodes: <String>[],
@@ -530,11 +567,11 @@ class HomeController extends ChangeNotifier
   }
 
   Future<void> start() async {
-    _emit(_state.copyWith(busy: true, lastError: ''));
+    _emit(_state.copyWith(busy: true, lastError: null));
     try {
       final ok = await _startInternal();
       if (!ok) {
-        _emit(_state.copyWith(lastError: 'Failed to start VPN'));
+        _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.failedToStartVpn)));
       }
     } catch (e) {
       _emit(_state.copyWith(lastError: formatUserError(e)));
@@ -545,11 +582,11 @@ class HomeController extends ChangeNotifier
   }
 
   Future<void> stop() async {
-    _emit(_state.copyWith(busy: true, lastError: ''));
+    _emit(_state.copyWith(busy: true, lastError: null));
     try {
       final ok = await _stopInternal();
       if (!ok) {
-        _emit(_state.copyWith(lastError: 'Stop timed out'));
+        _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.stopTimedOut)));
       }
     } catch (e) {
       _emit(_state.copyWith(lastError: formatUserError(e)));
@@ -585,7 +622,8 @@ class HomeController extends ChangeNotifier
       _lastReloadTap = prevReloadTap; // откат cooldown
       _addDebug(DebugSource.app, '[vpn] reload error: $e');
       if (!_disposed) {
-        _emit(_state.copyWith(lastError: 'Reload failed: ${formatUserError(e)}'));
+        _emit(_state.copyWith(
+            lastError: PrefixedMsg(ErrPrefix.reloadFailed, formatUserError(e))));
       }
       return;
     }
@@ -624,17 +662,18 @@ class HomeController extends ChangeNotifier
       await start();
       return;
     }
-    _emit(_state.copyWith(busy: true, lastError: ''));
+    _emit(_state.copyWith(busy: true, lastError: null));
     try {
       final stopped = await _stopInternal();
       if (!stopped) {
-        _emit(_state.copyWith(lastError: 'Stop timed out — reconnect aborted'));
+        _emit(_state.copyWith(
+            lastError: const ErrMsg(ErrKey.stopTimedOutReconnectAborted)));
         _addDebug(DebugSource.app, 'reconnect: stop timed out, aborting start');
         return;
       }
       final started = await _startInternal();
       if (!started) {
-        _emit(_state.copyWith(lastError: 'Failed to start VPN'));
+        _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.failedToStartVpn)));
       }
     } catch (e) {
       _emit(_state.copyWith(lastError: formatUserError(e)));
@@ -925,6 +964,15 @@ class HomeController extends ChangeNotifier
     final group = _state.selectedGroup;
     if (group == null || !_state.tunnelUp) return;
     final prevNode = _state.activeInGroup;
+    // §290 — уже активна: не делать re-select и не рвать соединения группы
+    // (interrupt-on-switch §143) на ровном месте. Общий путь UI + automation:
+    // тап по подсвеченной ноде тоже не должен дёргать сеть. Ждущему Tasker'у
+    // шлём лёгкое подтверждение (gated за State), иначе Wait Event уйдёт в
+    // timeout — смены нет, поэтому НЕ ACTIVE_NODE_CHANGED.
+    if (prevNode == nodeTag) {
+      AutomationEventEmitter.I.emitNodeAlreadyActive(nodeTag, group);
+      return;
+    }
     _emit(_state.copyWith(busy: true, highlightedNode: nodeTag));
     try {
       // §122 — выбор ноды через CommandClient `selectOutbound` (unary RPC),
@@ -974,7 +1022,7 @@ class HomeController extends ChangeNotifier
       BoxVpnClient.I.setAutomationActiveState(node: nodeTag, group: group);
     } catch (e) {
       _emit(_state.copyWith(
-          lastError: 'Switch failed: ${formatUserError(e)}'));
+          lastError: PrefixedMsg(ErrPrefix.switchFailed, formatUserError(e))));
       _addDebug(DebugSource.app, 'Node switch error: $e');
     } finally {
       _emit(_state.copyWith(busy: false));
@@ -1084,8 +1132,8 @@ class HomeController extends ChangeNotifier
   }
 
   void clearError() {
-    if (_state.lastError.isNotEmpty) {
-      _emit(_state.copyWith(lastError: ''));
+    if (_state.lastError != null) {
+      _emit(_state.copyWith(lastError: null));
     }
   }
 
@@ -1115,6 +1163,13 @@ class HomeController extends ChangeNotifier
   /// таймер не создаёт. Поэтому на resume рестартуем явно (см. `_resyncOnResume`).
   void onAppPaused() {
     _stopHeartbeat();
+    // §286 — в фоне пробирование бессмысленно и «молотит после сворачивания»:
+    // folder-probe sweep / mass-ping / auto-ping-таймер переживали фон, т.к.
+    // onAppPaused гасил только status+screen-клиенты. Гасим ВСЁ пробирование
+    // (решение: сворачивание = отмена проб). Возврат из фона свежий прогон
+    // запустит заново, если нужно. Безусловно (не завязано на tunnelUp) —
+    // headless-проба папки может идти и при down-туннеле.
+    haltAllProbing();
     // §164 — энергомодель: в фоне UI не виден → гасим status+screen CC-клиенты
     // (0 тиков/0 drain). profilerClient НЕ трогаем (recording живёт в фоне).
     // Выключение VPN в фоне ловит нативный broadcast (не CC) → не слепнем.

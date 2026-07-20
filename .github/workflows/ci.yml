@@ -112,6 +112,20 @@ jobs:
         if: ${{ github.event.inputs.test_path == '' }}
         run: flutter analyze
 
+      # §285 — l10n guard-rails (tool/l10n/README.md): template-overlay,
+      # natural-key словарь (ui_check заменил ARB-эпохи arb_check),
+      # hardcoded-ratchet, kotlin-guard. --strict безусловен на каждом push/PR:
+      # baseline пуст, ru-словарь переведён на 100%, orphan'ов нет — warnings
+      # фатальны везде (протухший src-hash, непереведённый/orphan ключ).
+      - name: L10n checks
+        if: ${{ github.event.inputs.test_path == '' }}
+        working-directory: app
+        run: |
+          dart run tool/l10n/template_check.dart --strict
+          dart run tool/l10n/ui_check.dart --strict
+          dart run tool/l10n/hardcoded_check.dart --strict
+          dart run tool/l10n/kotlin_check.dart --strict
+
       - name: Test
         run: |
           TEST_PATH="${{ github.event.inputs.test_path }}"

@@ -10,6 +10,7 @@ import '../home_dialogs.dart';
 import '../home_menus.dart';
 import '../node_list_presenter.dart';
 import 'app_banner.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Controls-блок главного экрана.
 ///
@@ -86,7 +87,9 @@ class HomeControls extends StatelessWidget {
                   state.tunnelUp ? Icons.stop_rounded : Icons.play_arrow_rounded,
                   size: 20,
                 ),
-                label: Text(state.tunnelUp ? 'Stop' : 'Start'),
+                label: Text(state.tunnelUp
+                    ? getLocalText.s("Stop")
+                    : getLocalText.s("Start")),
               ),
               const SizedBox(width: 8),
               connectingAnimChild,
@@ -115,7 +118,8 @@ class HomeControls extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              const Text('Channel', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text(getLocalText.s("Channel"),
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(width: 12),
               Expanded(
                 child: Container(
@@ -132,7 +136,7 @@ class HomeControls extends StatelessWidget {
                       value: state.groups.contains(state.selectedGroup)
                           ? state.selectedGroup
                           : null,
-                      hint: const Text('Select channel'),
+                      hint: Text(getLocalText.s("Select channel")),
                       items: state.groups
                           .map((g) => DropdownMenuItem(
                               value: g, child: Text(state.groupLabelOf(g))))
@@ -263,12 +267,12 @@ class HomeControls extends StatelessWidget {
         // Reload первый — самый light recovery (in-place через CommandServer.
         // startOrReloadService). Tap по кнопке выполняет это же действие.
         if (state.tunnelUp)
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'reload',
             child: Row(children: [
-              Icon(Icons.bolt, size: 18),
-              SizedBox(width: 12),
-              Text('Reload'),
+              const Icon(Icons.bolt, size: 18),
+              const SizedBox(width: 12),
+              Text(getLocalText.s("Reload")),
             ]),
           ),
         PopupMenuItem(
@@ -279,12 +283,12 @@ class HomeControls extends StatelessWidget {
             Text(reconnectLabel),
           ]),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'rebuild',
           child: Row(children: [
-            Icon(Icons.build_circle_outlined, size: 18),
-            SizedBox(width: 12),
-            Text('Rebuild config only'),
+            const Icon(Icons.build_circle_outlined, size: 18),
+            const SizedBox(width: 12),
+            Text(getLocalText.s("Rebuild config only")),
           ]),
         ),
         PopupMenuItem(

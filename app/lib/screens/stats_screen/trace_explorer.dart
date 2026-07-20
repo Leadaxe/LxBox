@@ -8,6 +8,7 @@ import 'aggregate_detail_sheet.dart';
 import 'profiler_filter.dart';
 import 'profiler_filter_sheet.dart';
 import 'traffic_event_detail_sheet.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §160 / §044-new-profiler — общий explorer трафика. Единый движок Profiler
 /// (Stats→Live) и per-app trace, без дубля кода.
@@ -154,7 +155,9 @@ class _TraceExplorerState extends State<TraceExplorer> {
           // 1 — Live / pause (только в Live-режиме).
           if (_mode == _Mode.live)
             IconButton(
-              tooltip: _paused ? 'Resume' : 'Pause',
+              tooltip: _paused
+                  ? getLocalText.s("Resume")
+                  : getLocalText.s("Pause"),
               icon: Icon(_paused ? Icons.play_arrow : Icons.pause, size: 22),
               color: _paused ? cs.error : cs.primary,
               onPressed: _togglePause,
@@ -189,7 +192,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
     }
 
     return PopupMenuButton<int>(
-      tooltip: 'Live retention window',
+      tooltip: getLocalText.s("Live retention window"),
       onSelected: (sec) async {
         await TrafficProfiler.I.setRetention(Duration(seconds: sec));
         if (mounted) setState(() {});
@@ -207,7 +210,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
                   size: 18,
                 ),
                 const SizedBox(width: 8),
-                Text('Keep $label'),
+                Text(getLocalText.s("Keep %s", label)),
               ],
             ),
           ),
@@ -239,7 +242,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
       label = _aggAxis == AggAxis.domain ? 'by Domain' : 'by IP';
     }
     return PopupMenuButton<String>(
-      tooltip: 'Grouping',
+      tooltip: getLocalText.s("Grouping"),
       onSelected: (v) => setState(() {
         switch (v) {
           case 'stream':
@@ -366,7 +369,10 @@ class _TraceExplorerState extends State<TraceExplorer> {
         TextButton.icon(
           icon: Icon(Icons.filter_list,
               size: 20, color: active ? cs.primary : null),
-          label: Text(active ? 'Filter ($n)' : 'Filter',
+          label: Text(
+              active
+                  ? getLocalText.s("Filter (%d)", n)
+                  : getLocalText.s("Filter"),
               style:
                   TextStyle(fontSize: 12, color: active ? cs.primary : null)),
           onPressed: () => _openFilterSheet(context),

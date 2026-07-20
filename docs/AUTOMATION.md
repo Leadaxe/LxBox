@@ -94,6 +94,13 @@ Host → State / Condition → Plugin → **L×Box** → выбрать пров
 
 Profile активируется, пока условие истинно. Host опрашивает периодически.
 
+> **Как узнать текущую активную ноду.** Событий-«ответов» ждать не обязательно:
+> условие **Active node =** — это pull-проверка активной ноды прямо сейчас
+> (читает кеш, который L×Box обновляет при каждой смене). Ставите его в State
+> сценария и сравниваете с нужным тегом — истинно, пока эта нода активна. То же
+> для **Active group =**. Событие `ACTIVE_NODE_CHANGED` (ниже) — это push «нода
+> сменилась», а condition — pull «какая нода сейчас»; выбирайте по задаче.
+
 > Под капотом plugin использует стандарт
 > `com.twofortyfouram.locale.intent.action.FIRE_SETTING` / `QUERY_CONDITION` и
 > те же команды, что raw-actions ниже. UI плагина — на английском.
@@ -131,20 +138,21 @@ Profile активируется, пока условие истинно. Host �
 |---|---|---|---|
 | `VPN_CONNECTED` | — | Lifecycle | Туннель поднят |
 | `VPN_DISCONNECTED` | `reason` (`user`/`error`/`revoked`) | Lifecycle | Туннель упал |
-| `VPN_ERROR` | `code`, `message` | Lifecycle | Любой error path / провал automation-команды |
+| `VPN_ERROR` | `code`, `message` | Lifecycle | Любой error path / провал automation-команды. `code` = `tunnel_error` (аварийный обрыв туннеля) либо `conflict`/`bad_request`/`not_found`/… (провал команды) |
 | `VPN_REVOKED` | — | Lifecycle | Другая VPN-app перехватила туннель |
 | `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | Найдена новая версия |
-| `PERMISSION_NEEDED` | `permission` | Lifecycle | Требуется runtime-permission (резерв) |
 | `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | Сменилась активная нода |
+| `NODE_ALREADY_ACTIVE` | `tag`, `group` | State | `SWITCH_NODE` пришёл на уже активную ноду — нода **не** менялась (подтверждение вместо смены) |
 | `ACTIVE_GROUP_CHANGED` | `old_group`, `new_group`, `reason` | State | Сменилась активная группа |
 | `SUB_REFRESHED` | `sub_id`, `nodes_count`, `delta_count` | Subscription | Подписка обновилась |
 | `SUB_REFRESH_FAILED` | `sub_id`, `error` | Subscription | Подписка не обновилась (throttle 1/min на sub_id) |
 
-### Future (с §042 health watchdog)
+### Зарезервированные (namespace есть, источника пока нет)
 
-`HEARTBEAT_FAILED` · `LATENCY_DEGRADED` · `UNATTRIBUTED_BURST` — namespace
-зарезервирован, источники появятся вместе с §042. Категория **Health** в UI
-уже есть.
+- `HEARTBEAT_FAILED` · `LATENCY_DEGRADED` · `UNATTRIBUTED_BURST` (категория
+  **Health**) — появятся вместе с §042 health watchdog. Категория в UI уже есть.
+- `PERMISSION_NEEDED` (`permission`, категория **Lifecycle**) — зарезервировано
+  под runtime-permission промпты; источника эмиссии пока нет.
 
 ---
 
@@ -155,15 +163,31 @@ Profile активируется, пока условие истинно. Host �
 ```
 Task "Switch to Russia with confirmation":
   1. Send Intent: SWITCH_NODE extra tag="🇷🇺Россия"
-  2. Wait Event: ACTIVE_NODE_CHANGED (new_tag ~ "🇷🇺.*")  OR  VPN_ERROR   (timeout 10s)
-  3. If ACTIVE_NODE_CHANGED → Vibrate + Notify "✅"
-     If VPN_ERROR          → Notify "❌ %code: %message"
-     If timeout            → Notify "⚠️ нет ответа"
+  2. Wait Event: ACTIVE_NODE_CHANGED (new_tag ~ "🇷🇺.*")
+       OR  NODE_ALREADY_ACTIVE (tag ~ "🇷🇺.*")
+       OR  VPN_ERROR                                        (timeout 10s)
+  3. If ACTIVE_NODE_CHANGED  → Vibrate + Notify "✅ переключено"
+     If NODE_ALREADY_ACTIVE  → Notify "✅ уже на этой ноде"
+     If VPN_ERROR            → Notify "❌ %code: %message"
+     If timeout              → Notify "⚠️ нет ответа"
 ```
 
-При провале команды (нет группы, tunnel down и т.п.) L×Box эмитит `VPN_ERROR`
-с `code` (`conflict` / `bad_request` / …) и `message` — ждущий Tasker узнаёт
-о провале вместо тихого fire-and-forget.
+При провале команды (нет группы, tunnel down, несуществующая нода/группа и т.п.)
+L×Box эмитит `VPN_ERROR` с `code` (`conflict` / `bad_request` / `not_found` / …)
+и `message` — ждущий Tasker узнаёт о провале вместо тихого fire-and-forget.
+
+> **Важно: для request-response включите обе категории — `Lifecycle` и
+> `State`.** Успех переключения приходит в категории **State**
+> (`ACTIVE_NODE_CHANGED` / `NODE_ALREADY_ACTIVE`), а провал — как `VPN_ERROR` в
+> категории **Lifecycle**. Если включить только State, ждущий сценарий не
+> получит `VPN_ERROR` на ошибке и уйдёт в timeout вместо ветки ошибки.
+> (App Settings → Automation → Outbound events.)
+
+**`SWITCH_NODE` на уже активную ноду** не рвёт соединения и не делает re-select
+(это была бы лишняя нагрузка), но всё равно шлёт `NODE_ALREADY_ACTIVE` —
+поэтому wait-сценарий получает детерминированный ответ, а не уходит в timeout.
+Если ждать только `ACTIVE_NODE_CHANGED`, повторная команда той же ноды повиснет
+до таймаута — добавляйте `NODE_ALREADY_ACTIVE` в Wait Event.
 
 ---
 
@@ -229,11 +253,26 @@ Task "Switch to Russia with confirmation":
 |---|---|---|
 | Команда не доходит | Мастер-toggle OFF | Включить в App Settings → Automation |
 | Тоже, но toggle ON | Неверный action / target не Broadcast Receiver / опечатка в `com.leadaxe.lxbox.…` | Сверить со списком команд; факт приёма — в logcat `adb logcat -s LxBoxIntent` (строка `received <action>`); результат команд — log filter `automation` |
+| **Событие не приходит** (напр. `ACTIVE_NODE_CHANGED` не ловится) | **Категория события OFF** — проверять первым | Включить нужную категорию (для `ACTIVE_NODE_CHANGED` / `NODE_ALREADY_ACTIVE` — **State**) в App Settings → Automation → Outbound events. Пока категория выключена, событие не эмитится вовсе |
+| Событие приходит, но переменные (`%new_tag` и пр.) пустые | Экстры не объявлены в Tasker | В `Event → System → Intent Received` вручную добавить имена переменных-экстр (см. ниже) — Tasker не подхватывает их автоматически |
 | `SWITCH_NODE` не выбирает ноду | tag не существует / typo | Проверить log filter `automation` |
 | В плагине «Custom…» вместо списка нод/групп — поле ввода | Кеш пуст (L×Box не открывался после установки/смены подписки) | Открыть L×Box, зайти в группу (список закешируется), переоткрыть плагин |
 | L×Box не виден в списке плагинов host'а | Host без plugin-блока (напр. бесплатный Automate) | Использовать MacroDroid (бесплатно) или raw `am broadcast` |
 | `START_VPN` не работает первый раз | VPN consent не давали | Один раз нажать Connect в app |
 | На MIUI / ColorOS receiver мёртв | OEM auto-start restriction | Добавить L×Box в «Автозапуск» системных настроек |
+
+> **Объявление экстр в Tasker.** Событие несёт данные в intent-экстрах, но
+> Tasker не создаёт из них переменные сам — имена нужно прописать вручную в
+> `Event → System → Intent Received` (фильтр action — полное имя события, напр.
+> `com.leadaxe.lxbox.event.ACTIVE_NODE_CHANGED`), после чего они доступны как
+> `%new_tag` и т.д. Ключи по событиям:
+> - `ACTIVE_NODE_CHANGED` — `old_tag`, `new_tag`, `group`, `reason`;
+> - `NODE_ALREADY_ACTIVE` — `tag`, `group`;
+> - `ACTIVE_GROUP_CHANGED` — `old_group`, `new_group`, `reason`.
+>
+> `old_tag` пуст на **первом** переключении после старта приложения (предыдущей
+> ноды ещё нет — экстра не кладётся); `new_tag` / `group` / `reason` заполнены
+> всегда. Это норма, не баг.
 
 ---
 

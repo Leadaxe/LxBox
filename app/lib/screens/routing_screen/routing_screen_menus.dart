@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/custom_rule.dart';
 import '../../services/ui_helpers.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Popup-меню экрана Routing. Чистая презентация: показывают `showMenu` /
 /// `showDialog` и возвращают выбор. Вся state-мутация остаётся в экране.
@@ -23,13 +24,13 @@ Future<String?> showPresetCloudMenu(
       overlay.size.height - pos.dy,
     ),
     items: [
-      const PopupMenuItem<String>(
+      PopupMenuItem<String>(
         value: 'refresh',
         child: ListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
-          leading: Icon(Icons.refresh, size: 20),
-          title: Text('Refresh rule-sets'),
+          leading: const Icon(Icons.refresh, size: 20),
+          title: Text(getLocalText.s("Refresh rule-sets")),
         ),
       ),
       PopupMenuItem<String>(
@@ -39,7 +40,7 @@ Future<String?> showPresetCloudMenu(
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.cloud_off_outlined,
               size: 20, color: Theme.of(context).colorScheme.error),
-          title: Text('Clear cached files',
+          title: Text(getLocalText.s("Clear cached files"),
               style: TextStyle(color: Theme.of(context).colorScheme.error)),
         ),
       ),
@@ -70,7 +71,7 @@ Future<String?> showRuleContextMenu(
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.delete_outline,
               size: 20, color: Theme.of(context).colorScheme.error),
-          title: Text('Delete',
+          title: Text(getLocalText.s("Delete"),
               style: TextStyle(color: Theme.of(context).colorScheme.error)),
         ),
       ),
@@ -80,13 +81,16 @@ Future<String?> showRuleContextMenu(
 
 /// Confirm-dialog удаления custom-rule. §219 — тонкая обёртка над общим
 /// showDeleteConfirmDialog (ui_helpers). Возвращает true если юзер подтвердил.
+/// §279 — [displayName] — live display-имя (label пресета из локализованного
+/// шаблона); null → сохранённое `rule.name`.
 Future<bool?> showDeleteCustomRuleDialog(
   BuildContext context,
-  CustomRule rule,
-) {
+  CustomRule rule, {
+  String? displayName,
+}) {
   return showDeleteConfirmDialog(
     context,
-    title: 'Delete rule?',
-    message: 'Remove "${rule.name}" permanently?',
+    title: getLocalText.s("Delete rule?"),
+    message: getLocalText.s("Remove \"%s\" permanently?", displayName ?? rule.name),
   );
 }

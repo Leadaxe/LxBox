@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
+import '../models/ui_msg.dart';
 import '../models/subscription_meta.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
@@ -15,6 +17,7 @@ import '../services/error_humanize.dart';
 import '../services/parse_hints.dart';
 import '../services/relative_time.dart';
 import '../services/node_emoji.dart';
+import '../services/node_hash.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
 import '../services/parser/body_decoder.dart';
@@ -28,11 +31,15 @@ import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/subscription/sources.dart';
+import '../services/subscription/subscription_identity.dart';
 import '../services/warp/masque_account.dart';
 import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/warp_client.dart';
 import '../services/warp/warp_endpoint_picker.dart';
+import '../services/warp/scan/candidate_generator.dart';
+import '../services/warp/scan/scan_models.dart';
+import '../services/warp/scan/scan_node_builder.dart';
 
 // Та же библиотека (`part`), поэтому library-private доступ
 // (`_replaceList`, `_formatAgo`) к/между основным файлом и part'ом доступен.
@@ -77,8 +84,10 @@ class SubscriptionController extends ChangeNotifier {
   @visibleForTesting
   Future<void>? lastCacheSaveForTesting;
 
-  String _lastError = '';
-  String get lastError => _lastError;
+  UiMsg? _lastError;
+
+  /// §279 Phase 4 — хранимая ошибка = [UiMsg] (рендер в build). null = нет.
+  UiMsg? get lastError => _lastError;
 
   /// §254 — структурный дубль [lastError]: fatal-issues последней генерации.
   /// UI различает по типу (DetourCycle → bottom sheet со списком виновников
@@ -97,8 +106,8 @@ class SubscriptionController extends ChangeNotifier {
   int _channelsWithoutNodesStamp = 0;
   int get channelsWithoutNodesStamp => _channelsWithoutNodesStamp;
 
-  String _progressMessage = '';
-  String get progressMessage => _progressMessage;
+  UiMsg? _progressMessage;
+  UiMsg? get progressMessage => _progressMessage;
 
   String? _lastGeneratedConfig;
   String? get lastGeneratedConfig => _lastGeneratedConfig;
@@ -188,14 +197,13 @@ class SubscriptionController extends ChangeNotifier {
           entry._replaceList(next);
           final detours = nodes.where((n) => n.chained != null).length;
           entry.nodeCount = nodes.length;
-          entry.status = detours > 0
-              ? '${nodes.length} +$detours⚙ nodes (cached)'
-              : '${nodes.length} nodes (cached)';
+          entry.status =
+              SubStatusNodes(nodes.length, detours: detours, cached: true);
           AppLog.I.info(
               'Re-hydrated ${nodes.length} nodes from cache: ${maskSubscriptionUrl(list.url)}');
         } catch (e) {
           AppLog.I.warning(
-              'Re-hydrate failed for ${maskSubscriptionUrl(list.url)}: ${humanizeError(e)}');
+              'Re-hydrate failed for ${maskSubscriptionUrl(list.url)}: ${humanizeError(e).renderEn()}');
         }
       }
       notifyListeners();
@@ -211,7 +219,7 @@ class SubscriptionController extends ChangeNotifier {
   /// structured form path.
   Future<void> addUserServer(UserServer us) async {
     _busy = true;
-    _lastError = '';
+    _lastError = null;
     notifyListeners();
     try {
       final tagged = _autoEmoji(us);
@@ -251,7 +259,7 @@ class SubscriptionController extends ChangeNotifier {
     WarpClient? client,
   }) async {
     _busy = true;
-    _lastError = '';
+    _lastError = null;
     notifyListeners();
     final warp = client ?? WarpClient();
     try {
@@ -322,11 +330,11 @@ class SubscriptionController extends ChangeNotifier {
       } else {
         await _addWarpPlain(account, tag, withReserved);
       }
-      if (_lastError.isNotEmpty) return null;
+      if (_lastError != null) return null;
       return account;
     } catch (e) {
       _lastError = humanizeError(e);
-      AppLog.I.error('addWarp failed: $_lastError');
+      AppLog.I.error('addWarp failed: ${_lastError?.renderEn()}');
       return null;
     } finally {
       if (client == null) warp.close();
@@ -348,7 +356,7 @@ class SubscriptionController extends ChangeNotifier {
     WarpClient? client,
   }) async {
     _busy = true;
-    _lastError = '';
+    _lastError = null;
     notifyListeners();
     final warp = client ?? WarpClient();
     try {
@@ -376,11 +384,11 @@ class SubscriptionController extends ChangeNotifier {
 
       final tag = _uniqueWarpTag(MasqueAccount.nodeTag());
       await _addMasqueNode(account, tag);
-      if (_lastError.isNotEmpty) return null;
+      if (_lastError != null) return null;
       return account;
     } catch (e) {
       _lastError = humanizeError(e);
-      AppLog.I.error('addMasque failed: $_lastError');
+      AppLog.I.error('addMasque failed: ${_lastError?.renderEn()}');
       return null;
     } finally {
       if (client == null) warp.close();
@@ -393,7 +401,7 @@ class SubscriptionController extends ChangeNotifier {
   Future<void> _addMasqueNode(MasqueAccount account, String tag) async {
     final spec = parseMasqueUri(account.toMasqueUri());
     if (spec == null) {
-      _lastError = 'Invalid MASQUE config';
+      _lastError = const ErrMsg(ErrKey.invalidMasqueConfig);
       return;
     }
     final tagged = MasqueSpec(
@@ -467,7 +475,7 @@ class SubscriptionController extends ChangeNotifier {
     final spec =
         parseWireguardIni(account.toWireguardConf(includeReserved: includeReserved));
     if (spec == null) {
-      _lastError = 'Invalid WARP config (obfuscated)';
+      _lastError = const ErrMsg(ErrKey.invalidWarpConfigObfuscated);
       return;
     }
     final tagged = WireguardSpec(
@@ -510,7 +518,7 @@ class SubscriptionController extends ChangeNotifier {
     final spec = parseWireguardUri(
         account.toWireguardUri(includeReserved: includeReserved));
     if (spec == null) {
-      _lastError = 'Invalid WARP config';
+      _lastError = const ErrMsg(ErrKey.invalidWarpConfig);
       return;
     }
     final tagged = WireguardSpec(
@@ -571,7 +579,7 @@ class SubscriptionController extends ChangeNotifier {
     if (trimmed.isEmpty) return;
 
     _busy = true;
-    _lastError = '';
+    _lastError = null;
     notifyListeners();
     // Input может быть URL подписки (с токеном), direct-link (vless://user@host),
     // JSON-outbound. Маскируем, если detect'им URL — иначе только kind.
@@ -598,7 +606,7 @@ class SubscriptionController extends ChangeNotifier {
       } else if (isWireGuardConfig(trimmed)) {
         final spec = parseWireguardIni(trimmed, nameHint: nameHint);
         if (spec == null) {
-          _lastError = 'Invalid WireGuard config';
+          _lastError = const ErrMsg(ErrKey.invalidWireguardConfig);
           return;
         }
         final wgServer = _autoEmoji(UserServer(
@@ -621,7 +629,7 @@ class SubscriptionController extends ChangeNotifier {
         // fromJson ре-парсит её тем же decode-путём.
         final nodes = parseAll(decode(trimmed));
         if (nodes.isEmpty) {
-          _lastError = 'No WireGuard/AmneziaWG config in vpn:// link';
+          _lastError = const ErrMsg(ErrKey.noWgInVpnLink);
           return;
         }
         final vpnServer = _autoEmoji(UserServer(
@@ -641,7 +649,7 @@ class SubscriptionController extends ChangeNotifier {
       } else if (isDirectLink(trimmed)) {
         final spec = parseUri(trimmed);
         if (spec == null) {
-          _lastError = 'Could not parse direct link';
+          _lastError = const ErrMsg(ErrKey.couldNotParseDirectLink);
           return;
         }
         final dlServer = _autoEmoji(UserServer(
@@ -661,7 +669,7 @@ class SubscriptionController extends ChangeNotifier {
       } else if (_isJsonOutbound(trimmed)) {
         await _addJsonOutbounds(trimmed);
       } else {
-        _lastError = 'Input is not a subscription URL, proxy link, or outbound JSON';
+        _lastError = const ErrMsg(ErrKey.inputNotRecognized);
       }
     } catch (e) {
       _lastError = humanizeError(e);
@@ -696,7 +704,7 @@ class SubscriptionController extends ChangeNotifier {
       outbounds.addAll(parsed.whereType<Map<String, dynamic>>());
     }
     if (outbounds.isEmpty) {
-      _lastError = 'No valid outbounds in JSON';
+      _lastError = const ErrMsg(ErrKey.noValidOutboundsInJson);
       return;
     }
 
@@ -786,29 +794,34 @@ class SubscriptionController extends ChangeNotifier {
   /// кэш/url/ноды сбрасываются ТОЛЬКО после успеха нового (> 0 нод), иначе
   /// полный откат — подписка остаётся на прежнем источнике, юзер не остаётся без
   /// нод.** Возвращает пустую строку при успехе, текст ошибки — при откате.
-  Future<String> updateSourceAt(int index,
+  Future<UiMsg?> updateSourceAt(int index,
       {String? httpUrl, String? fileBody}) async {
-    if (index < 0 || index >= _entries.length) return 'Invalid subscription';
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.invalidSubscription);
+    }
     final entry = _entries[index];
     final old = entry.list;
-    if (old is! SubscriptionServers) return 'Not a subscription';
+    if (old is! SubscriptionServers) {
+      return const ErrMsg(ErrKey.notASubscription);
+    }
 
     final toFile = fileBody != null;
     final newUrl = toFile ? 'file:${newUuidV4()}' : (httpUrl ?? '').trim();
-    if (newUrl.isEmpty) return 'No source provided';
+    if (newUrl.isEmpty) return const ErrMsg(ErrKey.noSourceProvided);
 
     _busy = true;
     notifyListeners();
     try {
       // 1. Получаем НОВЫЙ источник (ещё ничего не трогаем).
+      // §289 — сохраняем per-subscription идентичность при смене источника.
       final result = toFile
           ? await parseFromSource(InlineSource(fileBody))
-          : await parseFromSource(UrlSource(newUrl),
+          : await parseFromSource(UrlSource(newUrl, identity: old.identity),
               client: httpClientForTesting);
 
       // 2. Успех нового = > 0 нод. Иначе — полный откат (§101-инвариант).
       if (result.nodes.isEmpty) {
-        return 'Couldn\'t load new source — keeping current subscription';
+        return const ErrMsg(ErrKey.couldNotLoadNewSource);
       }
 
       // 3. Коммит: снапшот нового + чистка старого кэша + подмена url/nodes.
@@ -839,10 +852,10 @@ class SubscriptionController extends ChangeNotifier {
       notifyListeners();
       AppLog.I.info(
           'Source changed → ${maskSubscriptionUrl(newUrl)}: ${result.nodes.length} nodes');
-      return '';
+      return null;
     } catch (e) {
       AppLog.I.warning('updateSourceAt failed (kept current): $e');
-      return 'Couldn\'t load new source — keeping current subscription';
+      return const ErrMsg(ErrKey.couldNotLoadNewSource);
     } finally {
       _busy = false;
       notifyListeners();
@@ -934,6 +947,117 @@ class SubscriptionController extends ChangeNotifier {
     AppLog.I.info('Folder created: $name');
   }
 
+  /// §284 — имя папки-генератора WARP-узлов. Повторный GENERATE её пересоздаёт.
+  static const kScanFolderName = 'WARP GENERATOR';
+
+  /// §284 — заметка о последней генерации (напр. почему пропал MASQUE).
+  /// Показывается снеком в визарде. null = без замечаний.
+  String? lastScanNote;
+
+  /// §284 — WARP GENERATOR: собирает [seedCount] случайных узлов (Монте-Карло по
+  /// {IP × port × protocol{AWG,h3,h2} × SNI × приманка}) поверх ОДНОЙ
+  /// регистрации, кладёт в (пере)созданную папку «WARP GENERATOR». Пробы НЕ
+  /// гоняет и мёртвые НЕ удаляет — пользователь сам тестирует штатной кнопкой
+  /// Test в папке. Возвращает индекс папки в [entries] (для навигации) или null.
+  ///
+  /// [rng]/[client] инъектируются для тестов.
+  Future<int?> generateWarp({
+    int seedCount = 100,
+    Random? rng,
+    WarpClient? client,
+  }) async {
+    lastScanNote = null;
+    final pool = (await WarpEndpointPicker.load()).scan;
+    if (pool == null) return null;
+
+    // Аккаунты: кеш → или регистрация один раз (обоих типов — для смешанного
+    //   посева). Кешированный аккаунт (ручной MASQUE §130) переиспользуем без
+    //   реги. Регистрация может частично не удаться — используем что есть.
+    final warp = client ?? WarpClient();
+    ScanNodeBuilder builder;
+    try {
+      final now = DateTime.now().toUtc().toIso8601String();
+      var warpAcc = await SettingsStorage.getWarpAccount();
+      warpAcc ??= await _tryRegisterWarp(warp, now);
+      var masqueAcc = await SettingsStorage.getMasqueAccount();
+      masqueAcc ??= await _tryRegisterMasque(warp, now);
+      if (warpAcc == null && masqueAcc == null) return null;
+      builder = ScanNodeBuilder(warp: warpAcc, masque: masqueAcc);
+    } finally {
+      if (client == null) warp.close();
+    }
+
+    // Посев → URI-узлы (пропускаем протоколы без аккаунта) → папка.
+    final gen = CandidateGenerator(pool, rng: rng);
+    final seedUris = _candidatesToUris(gen.seed(seedCount), builder);
+    if (seedUris.isEmpty) return null;
+    return _recreateScanFolder(seedUris);
+  }
+
+  Future<WarpAccount?> _tryRegisterWarp(WarpClient warp, String now) async {
+    try {
+      final acc = await warp.register(endpoint: WarpAccount.defaultEndpoint, nowIso8601: now);
+      await SettingsStorage.setWarpAccount(acc);
+      return acc;
+    } catch (e) {
+      AppLog.I.warning('generateWarp: WARP register failed: $e');
+      return null;
+    }
+  }
+
+  Future<MasqueAccount?> _tryRegisterMasque(WarpClient warp, String now) async {
+    try {
+      final acc = await warp.registerMasque(nowIso8601: now);
+      await SettingsStorage.setMasqueAccount(acc);
+      return acc;
+    } catch (e) {
+      AppLog.I.warning('generateWarp: MASQUE register failed: $e');
+      lastScanNote = 'MASQUE (h3/h2) unavailable: registration failed — $e';
+      return null;
+    }
+  }
+
+  List<String> _candidatesToUris(List<ScanCandidate> cs, ScanNodeBuilder b) =>
+      [for (final c in cs) b.uriFor(c)].whereType<String>().toList();
+
+  /// Индекс папки «WARP GENERATOR» в [_entries] или null.
+  int? _scanFolderIndex() {
+    for (var i = 0; i < _entries.length; i++) {
+      final l = _entries[i].list;
+      if (l is FolderServers && l.name == kScanFolderName) return i;
+    }
+    return null;
+  }
+
+  /// §284 — DNS-независимый ping-URL для папки «WARP GENERATOR»: HTTP через сам
+  /// тестируемый узел на IP-литерал (без резолва). Кладётся в саму папку
+  /// (FolderServers.pingUrl) — Test в папке идёт по нему.
+  static const kScanProbeUrl = 'https://1.1.1.1/cdn-cgi/trace';
+
+  /// Пересоздаёт папку «WARP GENERATOR» с заданными узлами. Возвращает её индекс.
+  /// Папка несёт свой ping-URL (IP, без DNS) в собственном объекте — при
+  /// пересоздании/удалении опции уходят вместе с ней.
+  Future<int> _recreateScanFolder(List<String> uris) async {
+    final old = _scanFolderIndex();
+    if (old != null) _entries.removeAt(old);
+    _entries.add(SubscriptionEntry(
+      list: FolderServers(
+        id: newUuidV4(),
+        name: kScanFolderName,
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        members: [for (final u in uris) FolderMember(raw: u)],
+        pingUrl: kScanProbeUrl,
+        pingTimeoutMs: 3000,
+      ),
+      nodeCount: uris.length,
+    ));
+    await _persist();
+    notifyListeners();
+    return _entries.length - 1;
+  }
+
   /// Удалить папку. [keepServers] = вынести членов одиночными серверами на
   /// место папки (порядок и per-member enabled сохраняются).
   Future<void> deleteFolderAt(int index, {required bool keepServers}) async {
@@ -960,12 +1084,14 @@ class SubscriptionController extends ChangeNotifier {
   /// 1:1 по нодам. [nameFallback] — имя для нод без собственного (имя
   /// файла); коллизии внутри вызова получают суффикс « 2», « 3»…
   /// Возвращает '' при успехе, иначе текст ошибки.
-  Future<String> addMembersToFolder(int index, String input,
+  Future<UiMsg?> addMembersToFolder(int index, String input,
       {String? nameFallback}) async {
-    if (index < 0 || index >= _entries.length) return 'Folder not found';
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
     final entry = _entries[index];
     final folder = entry.list;
-    if (folder is! FolderServers) return 'Not a folder';
+    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
 
     List<NodeSpec> nodes;
     try {
@@ -975,7 +1101,7 @@ class SubscriptionController extends ChangeNotifier {
     } catch (e) {
       return humanizeError(e);
     }
-    if (nodes.isEmpty) return 'No servers found in input';
+    if (nodes.isEmpty) return const ErrMsg(ErrKey.noServersFoundInInput);
 
     final usedNames = <String>{};
     final added = <FolderMember>[];
@@ -998,25 +1124,29 @@ class SubscriptionController extends ChangeNotifier {
     await _persist();
     notifyListeners();
     AppLog.I.info('Folder "${folder.name}": +${added.length} servers');
-    return '';
+    return null;
   }
 
   /// Одноразовый импорт в папку по ссылке: fetch → parse → статичные члены.
   /// Снапшот: meta/auto-update не сохраняются, URL не хранится.
-  Future<String> addUrlSnapshotToFolder(int index, String url) async {
-    if (index < 0 || index >= _entries.length) return 'Folder not found';
+  Future<UiMsg?> addUrlSnapshotToFolder(int index, String url) async {
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
     final entry = _entries[index];
-    if (entry.list is! FolderServers) return 'Not a folder';
+    if (entry.list is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
     _busy = true;
     notifyListeners();
     try {
       final result = await parseFromSource(UrlSource(url.trim()),
           client: httpClientForTesting);
-      if (result.nodes.isEmpty) return 'No servers found at this URL';
+      if (result.nodes.isEmpty) {
+        return const ErrMsg(ErrKey.noServersFoundAtUrl);
+      }
       // Guard после await: entry могли удалить/подменить.
       final cur = entry.list;
       if (cur is! FolderServers || !_entries.contains(entry)) {
-        return 'Folder not found';
+        return const ErrMsg(ErrKey.folderNotFound);
       }
       final added =
           result.nodes.map((n) => FolderMember(raw: memberRawFor(n))).toList();
@@ -1025,13 +1155,35 @@ class SubscriptionController extends ChangeNotifier {
       await _persist();
       AppLog.I.info(
           'Folder "${cur.name}": +${added.length} servers (URL snapshot)');
-      return '';
+      return null;
     } catch (e) {
       return humanizeError(e);
     } finally {
       _busy = false;
       notifyListeners();
     }
+  }
+
+  /// §283 — вкл/выкл одной ноды подписки. Ключ — identity-хеш сути узла
+  /// (node_hash.dart): переживает refresh/рестарт/переименование ноды
+  /// провайдером; дубли одного сервера с разными лейблами гасятся одним
+  /// toggle (by design). При выключении lastSeen = now (старт TTL-отсчёта,
+  /// GC — на успешном сетевом refresh в _fetchEntryByRef).
+  Future<void> toggleSubscriptionNode(int index, NodeSpec node) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final list = entry.list;
+    if (list is! SubscriptionServers) return;
+    final hash = nodeIdentityHash(node);
+    final next = Map<String, DateTime>.from(list.disabledHashes);
+    if (next.containsKey(hash)) {
+      next.remove(hash);
+    } else {
+      next[hash] = DateTime.now();
+    }
+    entry._replaceList(list.copyWith(disabledHashes: next));
+    await _persist();
+    notifyListeners();
   }
 
   /// Вкл/выкл одного члена папки.
@@ -1052,19 +1204,21 @@ class SubscriptionController extends ChangeNotifier {
 
   /// Правка raw-фрагмента члена. Новый raw обязан парситься ≥1 ноды, иначе
   /// откат (возврат текста ошибки, старый член не трогается).
-  Future<String> updateMemberAt(
+  Future<UiMsg?> updateMemberAt(
       int index, int memberIndex, String newRaw) async {
-    if (index < 0 || index >= _entries.length) return 'Folder not found';
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
     final entry = _entries[index];
     final folder = entry.list;
-    if (folder is! FolderServers) return 'Not a folder';
+    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
     if (memberIndex < 0 || memberIndex >= folder.members.length) {
-      return 'Server not found';
+      return const ErrMsg(ErrKey.serverNotFound);
     }
     final trimmed = newRaw.trim();
     final probe = FolderMember(raw: trimmed);
     if (probe.node == null) {
-      return 'Could not parse server config — keeping current';
+      return const ErrMsg(ErrKey.memberParseKeepCurrent);
     }
     final members = [...folder.members];
     members[memberIndex] = members[memberIndex].copyWith(raw: trimmed);
@@ -1072,7 +1226,7 @@ class SubscriptionController extends ChangeNotifier {
     entry.nodeCount = entry.list.nodes.length;
     await _persist();
     notifyListeners();
-    return '';
+    return null;
   }
 
   /// Удалить члена из папки (совсем).
@@ -1128,14 +1282,16 @@ class SubscriptionController extends ChangeNotifier {
   /// ГОЛЫЙ тег члена (resolve при сборке — переживает смену префикса), для
   /// внешней — display-form (§080). Отклоняет self и ребро, замыкающее
   /// интра-цикл. Возвращает '' при успехе, иначе текст ошибки.
-  Future<String> setMemberDetour(
+  Future<UiMsg?> setMemberDetour(
       int index, int memberIndex, String detour) async {
-    if (index < 0 || index >= _entries.length) return 'Folder not found';
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
     final entry = _entries[index];
     final folder = entry.list;
-    if (folder is! FolderServers) return 'Not a folder';
+    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
     if (memberIndex < 0 || memberIndex >= folder.members.length) {
-      return 'Server not found';
+      return const ErrMsg(ErrKey.serverNotFound);
     }
 
     if (detour.isNotEmpty) {
@@ -1148,7 +1304,7 @@ class SubscriptionController extends ChangeNotifier {
       }
       final target = bare[detour];
       if (target == memberIndex) {
-        return 'A server cannot detour through itself';
+        return const ErrMsg(ErrKey.detourSelf);
       }
       if (target != null) {
         int? edgeOf(int k) {
@@ -1163,7 +1319,7 @@ class SubscriptionController extends ChangeNotifier {
         int? cur = target;
         while (cur != null && seen.add(cur)) {
           if (cur == memberIndex) {
-            return 'This would create a detour loop inside the folder';
+            return const ErrMsg(ErrKey.detourLoopInFolder);
           }
           cur = edgeOf(cur);
         }
@@ -1175,7 +1331,7 @@ class SubscriptionController extends ChangeNotifier {
     entry._replaceList(folder.copyWith(members: members));
     await _persist();
     notifyListeners();
-    return '';
+    return null;
   }
 
   /// §236 — массовый toggle членов (Disable slower than N ms и т.п.).
@@ -1234,18 +1390,24 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// Перенести члена из папки [fromIndex] в папку [toIndex].
-  Future<String> moveMemberToFolder(
+  Future<UiMsg?> moveMemberToFolder(
       int fromIndex, int memberIndex, int toIndex) async {
-    if (fromIndex < 0 || fromIndex >= _entries.length) return 'Folder not found';
-    if (toIndex < 0 || toIndex >= _entries.length) return 'Folder not found';
-    if (fromIndex == toIndex) return '';
+    if (fromIndex < 0 || fromIndex >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
+    if (toIndex < 0 || toIndex >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
+    if (fromIndex == toIndex) return null;
     final fromEntry = _entries[fromIndex];
     final toEntry = _entries[toIndex];
     final from = fromEntry.list;
     final to = toEntry.list;
-    if (from is! FolderServers || to is! FolderServers) return 'Not a folder';
+    if (from is! FolderServers || to is! FolderServers) {
+      return const ErrMsg(ErrKey.notAFolder);
+    }
     if (memberIndex < 0 || memberIndex >= from.members.length) {
-      return 'Server not found';
+      return const ErrMsg(ErrKey.serverNotFound);
     }
     final member = from.members[memberIndex];
     final fromMembers = [...from.members]..removeAt(memberIndex);
@@ -1255,25 +1417,27 @@ class SubscriptionController extends ChangeNotifier {
     toEntry.nodeCount = toEntry.list.nodes.length;
     await _persist();
     notifyListeners();
-    return '';
+    return null;
   }
 
   /// Перенести одиночный сервер в папку. rawBody сплитится на членов 1:1 по
   /// нодам; личные tag_prefix/detour_policy сервера отбрасываются — действуют
   /// папочные (осознанный trade-off §234). Одиночная запись удаляется.
-  Future<String> moveServerToFolder(int serverIndex, int folderIndex) async {
+  Future<UiMsg?> moveServerToFolder(int serverIndex, int folderIndex) async {
     if (serverIndex < 0 || serverIndex >= _entries.length) {
-      return 'Server not found';
+      return const ErrMsg(ErrKey.serverNotFound);
     }
     if (folderIndex < 0 || folderIndex >= _entries.length) {
-      return 'Folder not found';
+      return const ErrMsg(ErrKey.folderNotFound);
     }
     final serverEntry = _entries[serverIndex];
     final folderEntry = _entries[folderIndex];
     final server = serverEntry.list;
     final folder = folderEntry.list;
-    if (server is! UserServer) return 'Only single servers can be moved';
-    if (folder is! FolderServers) return 'Not a folder';
+    if (server is! UserServer) {
+      return const ErrMsg(ErrKey.onlySingleServersCanBeMoved);
+    }
+    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
 
     // §237 — личный detour одиночного (overrideDetour) переезжает в члена;
     // прочая политика (register-флаги и т.п.) заменяется папочной.
@@ -1303,7 +1467,7 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
     AppLog.I.info(
         'Server moved to folder "${folder.name}" (+${added.length})');
-    return '';
+    return null;
   }
 
   /// Публичный refresh для AutoUpdater. Помечает попытку
@@ -1354,7 +1518,7 @@ class SubscriptionController extends ChangeNotifier {
       return null;
     }
     _busy = true;
-    _lastError = '';
+    _lastError = null;
     _lastFatalIssues = const [];
     notifyListeners();
     try {
@@ -1369,14 +1533,14 @@ class SubscriptionController extends ChangeNotifier {
       return null;
     } finally {
       _busy = false;
-      _progressMessage = '';
+      _progressMessage = null;
       notifyListeners();
     }
   }
 
   Future<String> _generate() async {
     AppLog.I.info('Generating config...');
-    _progressMessage = 'Building config...';
+    _progressMessage = const SubStatusBuildingConfig();
     notifyListeners();
 
     final settings = BuildSettings(
@@ -1418,7 +1582,7 @@ class SubscriptionController extends ChangeNotifier {
     if (result.validation.hasFatal) {
       final fatal = result.validation.fatal;
       for (final issue in fatal) {
-        AppLog.I.error('Validation: ${issue.message}');
+        AppLog.I.error('Validation: ${issue.renderEn()}');
       }
       throw FatalValidationException(fatal);
     }
@@ -1479,7 +1643,7 @@ class SubscriptionController extends ChangeNotifier {
     AppLog.I.info('Fetching subscription [$triggerName]: $shortUrl');
     final attemptAt = DateTime.now();
     try {
-      entry.status = 'Fetching...';
+      entry.status = const SubStatusFetching();
       // Помечаем попытку до начала fetch'а, чтобы при крэше app
       // (или kill процесса) AutoUpdater всё равно увидел, что мы пробовали.
       entry._replaceList(list.copyWith(
@@ -1489,7 +1653,9 @@ class SubscriptionController extends ChangeNotifier {
       await _persist();
       notifyListeners();
 
-      final result = await parseFromSource(UrlSource(list.url),
+      // §289 — per-subscription идентичность (null → глобальная).
+      final result = await parseFromSource(
+          UrlSource(list.url, identity: list.identity),
           client: httpClientForTesting);
       AppLog.I.info(
           'Fetched ${result.nodes.length} nodes from $shortUrl'
@@ -1505,8 +1671,8 @@ class SubscriptionController extends ChangeNotifier {
         AppLog.I.warning(
             'Fetch returned 0 nodes for $shortUrl — keeping previous state');
         entry.status = entry.nodeCount > 0
-            ? '${entry.nodeCount} nodes (update failed: 0 parsed)'
-            : (hint != null ? '0 nodes — $hint' : '0 nodes');
+            ? SubStatusUpdateFailed(entry.nodeCount, zeroParsed: true)
+            : SubStatusZeroNodes(hint);
         final current = entry.list as SubscriptionServers;
         entry._replaceList(current.copyWith(
           lastUpdateAttempt: attemptAt,
@@ -1520,7 +1686,7 @@ class SubscriptionController extends ChangeNotifier {
           // consecutiveFails инкрементится повторно и haptic дублируется.
           // In-memory состояние уже корректно; теряем только запись на диск.
           AppLog.I.error(
-              'Persist failed after empty fetch: ${humanizeError(e)}');
+              'Persist failed after empty fetch: ${humanizeError(e).renderEn()}');
         }
         if (trigger == UpdateTrigger.manual) HapticService.I.onFetchError();
         // §047 — outgoing subscription event (gated, default OFF, throttled).
@@ -1542,9 +1708,7 @@ class SubscriptionController extends ChangeNotifier {
       }
       entry.nodeCount = result.nodes.length;
       final detours = result.nodes.where((n) => n.chained != null).length;
-      entry.status = detours > 0
-          ? '${result.nodes.length} +$detours⚙ nodes'
-          : '${result.nodes.length} nodes';
+      entry.status = SubStatusNodes(result.nodes.length, detours: detours);
 
       final current = entry.list as SubscriptionServers;
       final nextName = current.name.isEmpty && result.meta?.profileTitle != null
@@ -1559,6 +1723,19 @@ class SubscriptionController extends ChangeNotifier {
       final nextInterval = current.updateIntervalHours < 0
           ? current.updateIntervalHours // -1: жёстко, сервер не переубедит
           : (result.meta?.updateIntervalHours ?? current.updateIntervalHours);
+      // §283 — GC отметок disable ТОЛЬКО здесь (успешный сетевой fetch =
+      // единственный сигнал «нода ушла из подписки»; failed fetch и
+      // регидрация из кэша состав не проясняют, file:-подписки сюда не
+      // доходят — guard выше). Хеш свежих нод считаем лишь когда есть что
+      // чистить.
+      final nextDisabled = current.disabledHashes.isEmpty
+          ? current.disabledHashes
+          : gcDisabledHashes(
+              current.disabledHashes,
+              {for (final n in result.nodes) nodeIdentityHash(n)},
+              updateIntervalHours: nextInterval,
+              now: DateTime.now(),
+            );
       final next = current.copyWith(
         name: nextName,
         meta: result.meta,
@@ -1568,6 +1745,7 @@ class SubscriptionController extends ChangeNotifier {
         lastNodeCount: result.nodes.length,
         consecutiveFails: 0,
         updateIntervalHours: nextInterval,
+        disabledHashes: nextDisabled,
         nodes: result.nodes,
       );
       entry._replaceList(next);
@@ -1585,8 +1763,8 @@ class SubscriptionController extends ChangeNotifier {
     } catch (e) {
       AppLog.I.error('Fetch failed for $shortUrl: $e');
       entry.status = entry.nodeCount > 0
-          ? '${entry.nodeCount} nodes (update failed)'
-          : 'Error: $e';
+          ? SubStatusUpdateFailed(entry.nodeCount)
+          : PrefixedMsg(ErrPrefix.error, RawMsg('$e'));
       // Записываем factual fail-статус: nodes/lastUpdated сохраняем
       // (последнее успешное состояние), но lastUpdateAttempt + status=failed
       // обновляем — чтобы AutoUpdater видел fail и считал в `_failCounts`.
@@ -1603,7 +1781,7 @@ class SubscriptionController extends ChangeNotifier {
       // §047 — outgoing subscription event (gated, default OFF; throttled
       // 1/min на sub_id в эмиттере, чтобы network-outage не заспамил Tasker).
       AutomationEventEmitter.I
-          .emitSubRefreshFailed(shortUrl, humanizeError(e));
+          .emitSubRefreshFailed(shortUrl, humanizeError(e).renderEn());
     }
     notifyListeners();
   }
@@ -1633,7 +1811,7 @@ class SubscriptionController extends ChangeNotifier {
     );
     _entries[index]._replaceList(next);
     _entries[index].nodeCount = nodes.length;
-    _entries[index].status = 'JSON outbound';
+    _entries[index].status = const SubStatusJsonOutbound();
     await _persist();
     notifyListeners();
   }

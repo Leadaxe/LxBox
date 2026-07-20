@@ -1,4 +1,7 @@
 import '../../../models/background_mode.dart';
+import '../../../models/dns_ref.dart';
+import '../../l10n/locale_controller.dart';
+import '../../vpn_settings/vpn_settings_facade.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
@@ -226,16 +229,31 @@ Future<DebugResponse> _putVpnMode(DebugRequest req, DebugContext ctx) async {
   if (listen != null && !VpnModeConfig.isValidListenAddr(listen)) {
     throw BadRequest('invalid "proxy_listen" (IPv4 required): $listen');
   }
-  final next = cur.copyWith(
+  // §292 — порт/протокол валидируются на модели (тот же инвариант, что UI),
+  // иначе мусорный proxy_port/proxy_protocol доходит до sing-box inbounds.
+  final port = fieldInt(body, 'proxy_port');
+  if (port != null && !VpnModeConfig.isValidPort(port)) {
+    throw BadRequest('invalid "proxy_port" (1024..65535 required): $port');
+  }
+  final protocol = fieldString(body, 'proxy_protocol');
+  if (protocol != null && !VpnModeConfig.isValidProtocol(protocol)) {
+    throw BadRequest(
+        'invalid "proxy_protocol" (mixed|http|socks required): $protocol');
+  }
+  final requested = cur.copyWith(
     mode: fieldString(body, 'mode'),
-    proxyProtocol: fieldString(body, 'proxy_protocol'),
-    proxyPort: fieldInt(body, 'proxy_port'),
+    proxyProtocol: protocol,
+    proxyPort: port,
     proxyListen: listen,
     proxyAuthEnabled: fieldBool(body, 'proxy_auth'),
     proxyUsername: fieldString(body, 'proxy_user'),
     proxyPassword: fieldString(body, 'proxy_pass'),
   );
-  await SettingsStorage.setVpnMode(next);
+  // §293 — через фасад: несёт 3 инварианта (password-gen / auth-force /
+  // setNativeHasTun-зеркало), которые раньше Debug пропускал → PUT mode=proxy
+  // оставлял native has_tun устаревшим. Возвращает resolved config (пароль мог
+  // сгенериться).
+  final next = await VpnSettingsFacade.applyVpnMode(requested);
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({'ok': true, 'action': 'settings-vpn-mode', 'vpn_mode': next.toJson(), ...extras});
 }
@@ -252,6 +270,24 @@ const Set<String> _varBlocklist = {
   'debug_port',
 };
 
+// §279 — per-key side-effect registry: ключи, чья запись обязана пройти через
+// владеющий сервис (прецедент §275 — мутации только через владельца), а не
+// голый setVar (иначе сторадж и живое состояние расходятся до рестарта).
+// Generic-путь остаётся generic для остальных ключей.
+final _varPutHooks = <String, Future<void> Function(String value)>{
+  'app_language': (value) async {
+    if (!SettingsStorage.appLanguageValues.contains(value)) {
+      throw const BadRequest('app_language must be "system", "en" or "ru"');
+    }
+    await LocaleController.I.set(value);
+  },
+};
+
+final _varDeleteHooks = <String, Future<void> Function()>{
+  // DELETE = сброс к дефолту через тот же пайплайн (ключ остаётся с 'system').
+  'app_language': () => LocaleController.I.set('system'),
+};
+
 Future<DebugResponse> _putVar(String key, DebugRequest req, DebugContext ctx) async {
   if (_varBlocklist.contains(key)) {
     throw Conflict('var "$key" is managed via App Settings UI only');
@@ -261,7 +297,12 @@ Future<DebugResponse> _putVar(String key, DebugRequest req, DebugContext ctx) as
   if (value == null) {
     throw const BadRequest('field "value" required (string)');
   }
-  await SettingsStorage.setVar(key, value);
+  final hook = _varPutHooks[key];
+  if (hook != null) {
+    await hook(value);
+  } else {
+    await SettingsStorage.setVar(key, value);
+  }
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,
@@ -276,7 +317,12 @@ Future<DebugResponse> _deleteVar(String key, DebugRequest req, DebugContext ctx)
   if (_varBlocklist.contains(key)) {
     throw Conflict('var "$key" is managed via App Settings UI only');
   }
-  await SettingsStorage.removeVar(key);
+  final hook = _varDeleteHooks[key]; // §279 — side-effect registry
+  if (hook != null) {
+    await hook();
+  } else {
+    await SettingsStorage.removeVar(key);
+  }
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,
@@ -313,7 +359,19 @@ Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
     if (s is! Map) {
       throw const BadRequest('each servers[i] must be an object');
     }
-    servers.add(s.cast<String, dynamic>());
+    final map = s.cast<String, dynamic>();
+    // §294 — new-format (kind-ref) валидируется через DnsServerRef (симметрия
+    // с типизированным /rules); legacy full-body snapshot (нет `kind`)
+    // пропускается verbatim — резолвер сконвертирует его на ближайший load.
+    if (map.containsKey('kind')) {
+      try {
+        servers.add(DnsServerRef.fromJsonStrict(map).toJson());
+      } on DnsRefFormatException catch (e) {
+        throw BadRequest(e.message);
+      }
+    } else {
+      servers.add(map); // legacy — как раньше
+    }
   }
   await SettingsStorage.saveDnsServers(servers);
   final extras = await maybeRebuild(req, ctx);
@@ -327,16 +385,44 @@ Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
 
 Future<DebugResponse> _putDnsRules(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
-  final rules = fieldString(body, 'rules');
-  if (rules == null) {
-    throw const BadRequest('field "rules" required (JSON string)');
+  // §294 — новый путь: `{"rules": [ {kind, …}, … ]}` — массив kind-ref'ов,
+  // валидируется через DnsRuleRef (симметрия с /rules) и пишется в живой
+  // `dns_options.rules` через saveDnsRulesList. Билдер читает именно его.
+  final arr = body['rules'];
+  if (arr is List) {
+    final rules = <Map<String, dynamic>>[];
+    for (final r in arr) {
+      if (r is! Map) {
+        throw const BadRequest('each rules[i] must be an object');
+      }
+      try {
+        rules.add(DnsRuleRef.fromJsonStrict(r.cast<String, dynamic>()).toJson());
+      } on DnsRefFormatException catch (e) {
+        throw BadRequest(e.message);
+      }
+    }
+    await SettingsStorage.saveDnsRulesList(rules);
+    final extras = await maybeRebuild(req, ctx);
+    return JsonResponse({
+      'ok': true,
+      'action': 'settings-dns-rules',
+      'count': rules.length,
+      ...extras,
+    });
   }
-  await SettingsStorage.saveDnsRules(rules);
+  // Legacy: `{"rules": "<json-string>"}` — deprecated `rules_json` (builder
+  // его игнорирует, §061); оставлено для обратной совместимости старых клиентов.
+  final rulesStr = fieldString(body, 'rules');
+  if (rulesStr == null) {
+    throw const BadRequest(
+        'field "rules" required (array of kind-refs, or legacy JSON string)');
+  }
+  await SettingsStorage.saveDnsRules(rulesStr);
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,
     'action': 'settings-dns-rules',
-    'bytes': rules.length,
+    'bytes': rulesStr.length,
     ...extras,
   });
 }
@@ -528,7 +614,8 @@ Future<DebugResponse> _rebuildConfig(DebugContext ctx) async {
   final home = ctx.requireHome();
   final json = await sub.generateConfig();
   if (json == null) {
-    throw UpstreamError('generate failed: ${sub.lastError}');
+    throw UpstreamError(
+        'generate failed: ${sub.lastError?.renderEn() ?? ''}');
   }
   final saved = await home.saveParsedConfig(json);
   if (!saved) {
@@ -559,7 +646,8 @@ Future<DebugResponse> _putTunApps(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
 
   final mode = body['mode'];
-  if (mode is! String || !['off', 'allow', 'deny'].contains(mode)) {
+  // §293 — валидатор на модели (единый источник с storage-сеттером).
+  if (mode is! String || !TunAppsConfig.isValidMode(mode)) {
     throw const BadRequest('field "mode" must be one of: off|allow|deny');
   }
 
@@ -653,7 +741,9 @@ Future<DebugResponse> _putBackgroundMode(DebugRequest req) async {
   if (raw is! String) {
     throw const BadRequest('body must be {"mode": "never"|"lazy"|"always"}');
   }
-  if (!const {'never', 'lazy', 'always'}.contains(raw)) {
+  // §293 — валидатор на enum (единый источник; fromNative молча fallback'ит,
+  // а write-путь обязан отвергать мусор).
+  if (!BackgroundMode.isValid(raw)) {
     throw BadRequest('mode must be one of: never|lazy|always (got "$raw")');
   }
   final mode = BackgroundMode.fromNative(raw);

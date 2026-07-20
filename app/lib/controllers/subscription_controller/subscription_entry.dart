@@ -10,12 +10,15 @@ part of '../subscription_controller.dart';
 class SubscriptionEntry extends ChangeNotifier {
   ServerList _list;
   int nodeCount;
-  String status;
+
+  /// §279 Phase 4 — статус = типизированный [UiMsg] (рендер по локали в
+  /// build), `null` = статуса нет.
+  UiMsg? status;
 
   SubscriptionEntry({
     required ServerList list,
     int? nodeCount,
-    this.status = '',
+    this.status,
   })  : _list = list,
         nodeCount = nodeCount ??
             (list is SubscriptionServers ? list.lastNodeCount : list.nodes.length);
@@ -70,6 +73,15 @@ class SubscriptionEntry extends ChangeNotifier {
       ? (_list as SubscriptionServers).lastUpdateStatus
       : UpdateStatus.never;
 
+  /// §289 — per-subscription слепок идентичности фетча. `null` = режим Default
+  /// (глобальная идентичность). Пусто для не-подписок.
+  SubscriptionIdentityOverride? get identity => _list is SubscriptionServers
+      ? (_list as SubscriptionServers).identity
+      : null;
+
+  /// §289 — режим Custom активен (у подписки свой слепок идентичности).
+  bool get hasCustomIdentity => identity != null;
+
   /// Количество chained-детур узлов (⚙). В `nodeCount` они не включены,
   /// потому что в списке `.nodes` детуры живут как поле `.chained` у
   /// главного узла, не отдельным элементом.
@@ -110,18 +122,23 @@ class SubscriptionEntry extends ChangeNotifier {
       }
       return c.length > 40 ? '${c.substring(0, 40)}...' : c;
     }
+    // §279 — display-имя составлено из user data (name/host/tag/URI) и не
+    // локализуется; '(empty)'-маркер пустой записи оставлен английским
+    // сознательно (граница §8: name-fallback'и не мигрируются).
     return '(empty)';
   }
 
-  String get subtitle {
+  /// §285 — компонует локализованный статус в момент показа через
+  /// getLocalText (render-path, без BuildContext-параметра).
+  String subtitle() {
     final parts = <String>[];
-    if (status.isNotEmpty) parts.add(status);
+    final s = status;
+    if (s != null) parts.add(s.render());
     if (lastUpdated != null) parts.add(_formatAgo(lastUpdated!));
     return parts.join(' · ');
   }
 
-  static String _formatAgo(DateTime dt) =>
-      relativeTime(DateTime.now(), dt);
+  static String _formatAgo(DateTime dt) => relativeTime(DateTime.now(), dt);
 
   void _replaceList(ServerList next) {
     _list = next;
@@ -153,6 +170,31 @@ class SubscriptionEntry extends ChangeNotifier {
     if (list is! SubscriptionServers) return;
     final clamped = v < -1 ? -1 : v;
     _replaceList(list.copyWith(updateIntervalHours: clamped));
+  }
+
+  /// §289 — включить режим Custom: инициализировать слепок копией текущих
+  /// глобальных значений. No-op для не-подписок и если Custom уже активен.
+  void enableCustomIdentity() {
+    final list = _list;
+    if (list is! SubscriptionServers || list.identity != null) return;
+    _replaceList(
+        list.copyWith(identity: SubscriptionIdentity.snapshotGlobal()));
+  }
+
+  /// §289 — выключить Custom: отбросить слепок (→ Default/глобальная). No-op
+  /// для не-подписок. clearIdentity снимает поле в null (обычный `??` не может).
+  void disableCustomIdentity() {
+    final list = _list;
+    if (list is! SubscriptionServers) return;
+    _replaceList(list.copyWith(clearIdentity: true));
+  }
+
+  /// §289 — обновить слепок Custom (правка отдельных полей). No-op если Custom
+  /// не активен (сначала [enableCustomIdentity]).
+  void updateIdentity(SubscriptionIdentityOverride next) {
+    final list = _list;
+    if (list is! SubscriptionServers || list.identity == null) return;
+    _replaceList(list.copyWith(identity: next));
   }
 
   set registerDetourServers(bool v) =>

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- §279 Phase 6 — русский перевод нативных поверхностей. Терминология
+     согласована с lib/l10n/app_ru.arb (Подключено/Отключено/Остановка…,
+     «узел»/«группа»). Payload-аргументы (%1$s) не переводятся. -->
+<resources>
+    <!-- Quick Connect (tile / shortcuts consent flow) -->
+    <string name="qc_first_open">Открываем L×Box для разрешения VPN (однократно)</string>
+    <string name="qc_consent_denied">В разрешении VPN отказано. Откройте L×Box, чтобы повторить.</string>
+    <string name="qc_connect_label">Подключить</string>
+    <string name="qc_disconnect_label">Отключить</string>
+
+    <!-- Foreground-service notification -->
+    <string name="notification_channel_name">VPN-сервис</string>
+    <string name="notification_channel_description">Показывается, пока VPN активен</string>
+    <string name="notification_status_starting">Запуск…</string>
+    <string name="status_connected">Подключено</string>
+    <string name="notification_action_stop">Остановить</string>
+    <string name="notification_action_reconnect">Переподключить</string>
+    <string name="notification_error_title">Ошибка</string>
+    <string name="core_channel_fallback_name">Уведомления ядра</string>
+
+    <!-- stopAndAlert frames -->
+    <string name="stop_alert_unknown_error">Неизвестная ошибка</string>
+    <string name="stop_alert_libbox_init_failed">Не удалось инициализировать libbox: %1$s</string>
+    <string name="stop_alert_empty_config">Пустая конфигурация</string>
+    <string name="stop_alert_no_command_server">CommandServer не инициализирован</string>
+    <string name="stop_alert_start_failed">Не удалось запустить сервис: %1$s</string>
+
+    <!-- QS tile subtitles -->
+    <string name="tile_status_connecting">Подключение…</string>
+    <string name="tile_status_stopping">Остановка…</string>
+    <string name="tile_status_disconnected">Отключено</string>
+
+    <!-- §047 Locale/Tasker plugin surfaces -->
+    <string name="label_plugin_custom">L×Box: Своя команда…</string>
+    <string name="label_plugin_start">L×Box: Запустить VPN</string>
+    <string name="label_plugin_stop">L×Box: Остановить VPN</string>
+    <string name="label_plugin_toggle">L×Box: Переключить VPN</string>
+    <string name="automation_blurb_start">Запустить VPN</string>
+    <string name="automation_blurb_stop">Остановить VPN</string>
+    <string name="automation_blurb_toggle">Переключить VPN</string>
+    <string name="automation_command_prompt">Команда L×Box:</string>
+    <string name="automation_condition_prompt">Условие L×Box:</string>
+    <string name="automation_cmd_switch_node">Переключить узел</string>
+    <string name="automation_cmd_set_group">Задать группу</string>
+    <string name="automation_cmd_urltest_group">URL-тест группы</string>
+    <string name="automation_cmd_refresh_subs">Обновить подписки</string>
+    <string name="automation_cmd_rebuild_config">Пересобрать конфиг</string>
+    <string name="automation_cmd_reset_network">Сбросить сеть</string>
+    <string name="automation_check_vpn_up">VPN включён</string>
+    <string name="automation_check_active_node">Активный узел =</string>
+    <string name="automation_check_active_group">Активная группа =</string>
+    <string name="automation_value_label">Значение (%1$s):</string>
+    <string name="automation_value_plain">Значение:</string>
+    <string name="automation_save">Сохранить</string>
+</resources>

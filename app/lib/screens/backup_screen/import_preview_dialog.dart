@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../services/backup_service.dart';
+import '../../services/format_utils.dart' show formatDateTime;
+import '../../services/l10n/locale_controller.dart';
 
 class ImportDialogResult {
   const ImportDialogResult({required this.include, required this.merge});
@@ -23,7 +25,7 @@ Future<ImportDialogResult?> showImportPreview(
       builder: (ctx, set) {
         final servers = c.splitServerLists();
         return AlertDialog(
-          title: const Text('Import backup'),
+          title: Text(getLocalText.s("Import backup")),
           content: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -33,7 +35,7 @@ Future<ImportDialogResult?> showImportPreview(
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Text(
-                      'Created: ${c.createdAt!.toLocal().toString().split('.')[0]}',
+                      getLocalText.s("Created: %s", formatDateTime(c.createdAt!.toLocal())),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
@@ -41,13 +43,13 @@ Future<ImportDialogResult?> showImportPreview(
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
-                      'App version: ${c.sourceAppVersion}',
+                      getLocalText.s("App version: %s", '${c.sourceAppVersion}'),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
-                const Text(
-                  'Includes:',
-                  style: TextStyle(fontWeight: FontWeight.w500),
+                Text(
+                  getLocalText.s("Includes:"),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
                 if (available.contains(BackupCategory.serverLists))
                   _previewCheckbox(
@@ -121,34 +123,34 @@ Future<ImportDialogResult?> showImportPreview(
                     }),
                   ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Mode:',
-                  style: TextStyle(fontWeight: FontWeight.w500),
+                Text(
+                  getLocalText.s("Mode:"),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
                 RadioGroup<bool>(
                   groupValue: merge,
                   onChanged: (v) => set(() => merge = v ?? true),
-                  child: const Column(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       RadioListTile<bool>(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         value: true,
-                        title: Text('Merge with existing (recommended)'),
+                        title: Text(getLocalText.s("Merge with existing (recommended)")),
                         subtitle: Text(
-                          'Adds new items, keeps existing.',
-                          style: TextStyle(fontSize: 11),
+                          getLocalText.s("Adds new items, keeps existing."),
+                          style: const TextStyle(fontSize: 11),
                         ),
                       ),
                       RadioListTile<bool>(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         value: false,
-                        title: Text('Replace all (destructive)'),
+                        title: Text(getLocalText.s("Replace all (destructive)")),
                         subtitle: Text(
-                          'Wipes existing data in selected categories.',
-                          style: TextStyle(fontSize: 11),
+                          getLocalText.s("Wipes existing data in selected categories."),
+                          style: const TextStyle(fontSize: 11),
                         ),
                       ),
                     ],
@@ -160,7 +162,7 @@ Future<ImportDialogResult?> showImportPreview(
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
+              child: Text(getLocalText.s("Cancel")),
             ),
             FilledButton(
               onPressed: include.isEmpty
@@ -170,16 +172,12 @@ Future<ImportDialogResult?> showImportPreview(
                         final ok = await showDialog<bool>(
                           context: ctx,
                           builder: (cctx) => AlertDialog(
-                            title: const Text('Replace all data?'),
-                            content: const Text(
-                              'This will overwrite your current data in '
-                              'the selected categories. This cannot be '
-                              'undone.',
-                            ),
+                            title: Text(getLocalText.s("Replace all data?")),
+                            content: Text(getLocalText.s("This will overwrite your current data in the selected categories. This cannot be undone.")),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(cctx, false),
-                                child: const Text('Cancel'),
+                                child: Text(getLocalText.s("Cancel")),
                               ),
                               FilledButton(
                                 style: FilledButton.styleFrom(
@@ -191,7 +189,7 @@ Future<ImportDialogResult?> showImportPreview(
                                       .onErrorContainer,
                                 ),
                                 onPressed: () => Navigator.pop(cctx, true),
-                                child: const Text('Replace'),
+                                child: Text(getLocalText.s("Replace")),
                               ),
                             ],
                           ),
@@ -207,7 +205,7 @@ Future<ImportDialogResult?> showImportPreview(
                         ),
                       );
                     },
-              child: const Text('Import'),
+              child: Text(getLocalText.s("Import")),
             ),
           ],
         );

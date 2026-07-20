@@ -106,9 +106,10 @@ class LxBoxTileService : TileService() {
         // §155 — TileService.onClick не гарантирует main thread, а Toast
         // обязан показываться с looper-потока. Постим на mainHandler.
         mainHandler.post {
+            // §279 — текст через L10n (in-app язык может отличаться от системного).
             Toast.makeText(
                 applicationContext,
-                R.string.qc_first_open,
+                L10n.str(applicationContext, R.string.qc_first_open),
                 Toast.LENGTH_SHORT,
             ).show()
         }
@@ -142,18 +143,23 @@ class LxBoxTileService : TileService() {
     private fun renderTile(override: VpnStatus? = null) {
         val tile = qsTile ?: return
         val effective = override ?: BoxVpnService.currentStatus
+        // §279 — subtitle/label через L10n в момент рендера (без кэша).
         val (state, subtitle) = when (effective) {
-            VpnStatus.Started -> Tile.STATE_ACTIVE to "Connected"
+            VpnStatus.Started ->
+                Tile.STATE_ACTIVE to L10n.str(this, R.string.status_connected)
             // ACTIVE (а не INACTIVE) на Starting — чтобы тап на серую плитку
             // мгновенно менял цвет, юзер видит реакцию на тап.
-            VpnStatus.Starting -> Tile.STATE_ACTIVE to "Connecting…"
+            VpnStatus.Starting ->
+                Tile.STATE_ACTIVE to L10n.str(this, R.string.tile_status_connecting)
             // INACTIVE на Stopping — симметрично: тап на синюю флипает в
             // серую сразу, юзер видит «отжалось» и subtitle подтверждает.
-            VpnStatus.Stopping -> Tile.STATE_INACTIVE to "Stopping…"
-            VpnStatus.Stopped -> Tile.STATE_INACTIVE to "Disconnected"
+            VpnStatus.Stopping ->
+                Tile.STATE_INACTIVE to L10n.str(this, R.string.tile_status_stopping)
+            VpnStatus.Stopped ->
+                Tile.STATE_INACTIVE to L10n.str(this, R.string.tile_status_disconnected)
         }
         tile.state = state
-        tile.label = "L×Box"
+        tile.label = L10n.str(this, R.string.app_name)
         // Tile.setSubtitle добавлен в API 29 (Android 10). Извлечено в
         // @RequiresApi-helper чтобы ART class verifier на API < 29 не
         // встретил ссылку на отсутствующий метод и не отказался грузить

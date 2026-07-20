@@ -6,6 +6,7 @@ import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../services/selector_info.dart';
 import '../services/tag_resolver.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §239 — выбранная цель detour-пикера.
 class DetourTarget {
@@ -151,9 +152,6 @@ List<Channel> visibleDetourChannels(
 ///
 /// [selfBareTag] — исключить сам настраиваемый узел (по голому тегу для
 /// членов текущей папки и по display-form для свободных, см. вызовы).
-/// [excludeWireguard] — §130: AWG-узел не может detour-ить в wireguard.
-/// Каналы под этот гейт НЕ попадают: состав канала не ограничен (§248 Q2),
-/// AWG→WG-риск через канал прикрыт advisory-warning'ом билдера.
 ///
 /// Возвращает null при отмене, [DetourTarget.none] при «None».
 Future<DetourTarget?> showDetourTargetPicker(
@@ -163,7 +161,6 @@ Future<DetourTarget?> showDetourTargetPicker(
   FolderServers? currentFolder,
   String selfBareTag = '',
   String selfDisplayTag = '',
-  bool excludeWireguard = false,
 }) {
   // Свободные одиночки (display-form, §080).
   final free = <(String display, NodeSpec node)>[];
@@ -173,7 +170,6 @@ Future<DetourTarget?> showDetourTargetPicker(
     if (!list.enabled) continue; // disabled не эмитит outbounds (§080)
     for (final n in list.nodes) {
       if (n.tag.isEmpty) continue;
-      if (excludeWireguard && n is WireguardSpec) continue;
       final display = TagResolver.displayTag(list.tagPrefix, n.tag);
       if (selfDisplayTag.isNotEmpty && display == selfDisplayTag) continue;
       free.add((display, n));
@@ -187,7 +183,6 @@ Future<DetourTarget?> showDetourTargetPicker(
     for (final m in folder.members) {
       final n = m.node;
       if (n == null || n.tag.isEmpty) continue;
-      if (excludeWireguard && n is WireguardSpec) continue;
       if (selfBareTag.isNotEmpty && n.tag == selfBareTag) continue;
       members.add((n.tag, n));
     }
@@ -212,27 +207,27 @@ Future<DetourTarget?> showDetourTargetPicker(
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text('Detour server',
+                child: Text(getLocalText.s("Detour server"),
                     style: theme.textTheme.titleMedium),
               ),
               ListTile(
                 leading: const Icon(Icons.block_flipped, size: 20),
-                title: const Text('None (direct)'),
+                title: Text(getLocalText.s("None (direct)")),
                 onTap: () => Navigator.pop(ctx, DetourTarget.none),
               ),
               if (folder != null)
                 ExpansionTile(
                   leading: const Icon(Icons.folder_outlined, size: 20),
-                  title: Text('This folder (${members.length})'),
+                  title: Text(getLocalText.s("This folder (%d)", members.length)),
                   subtitle: Text(
-                    'Chains inside the folder get the folder detour appended',
+                    getLocalText.s("Chains inside the folder get the folder detour appended"),
                     style: TextStyle(fontSize: 12, color: muted),
                   ),
                   children: members.isEmpty
                       ? [
                           Padding(
                             padding: const EdgeInsets.all(12),
-                            child: Text('No other servers in this folder',
+                            child: Text(getLocalText.s("No other servers in this folder"),
                                 style: TextStyle(color: muted)),
                           ),
                         ]
@@ -261,7 +256,7 @@ Future<DetourTarget?> showDetourTargetPicker(
               if (detourChannels.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Text('Channels',
+                  child: Text(getLocalText.s("Channels"),
                       style: theme.textTheme.titleSmall
                           ?.copyWith(color: theme.colorScheme.primary)),
                 ),
@@ -272,7 +267,7 @@ Future<DetourTarget?> showDetourTargetPicker(
                     title: Text(_channelTitle(c),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
-                      'Switchable detour channel',
+                      getLocalText.s("Switchable detour channel"),
                       style: TextStyle(fontSize: 12, color: muted),
                     ),
                     onTap: () => Navigator.pop(
@@ -284,7 +279,7 @@ Future<DetourTarget?> showDetourTargetPicker(
               if (free.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Text('Standalone servers',
+                  child: Text(getLocalText.s("Standalone servers"),
                       style: theme.textTheme.titleSmall
                           ?.copyWith(color: theme.colorScheme.primary)),
                 ),
@@ -302,7 +297,7 @@ Future<DetourTarget?> showDetourTargetPicker(
               ] else
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text('No standalone servers available',
+                  child: Text(getLocalText.s("No standalone servers available"),
                       style: TextStyle(color: muted)),
                 ),
               const SizedBox(height: 8),

@@ -9,6 +9,7 @@ import '../../models/home_state.dart';
 import '../../models/node_spec.dart';
 import '../../services/tag_resolver.dart';
 import '../outbound_view_screen.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Node long-press action helpers.
 /// Все принимают `context` явно (раньше использовали `mounted`/`context`
@@ -29,7 +30,7 @@ void viewOutboundJson(
   final chain = intro.outboundChain(tag);
   if (chain.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Not found: $tag')),
+      SnackBar(content: Text(getLocalText.s("Not found: %s", tag))),
     );
     return;
   }
@@ -74,7 +75,7 @@ void copyNodeJson(
       if (detour == null) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No detour for this node')),
+            SnackBar(content: Text(getLocalText.s("No detour for this node"))),
           );
         }
         return;
@@ -132,7 +133,7 @@ void copyNodeUri(
   if (node == null) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No source URI for this node')),
+        SnackBar(content: Text(getLocalText.s("No source URI for this node"))),
       );
     }
     return;
@@ -142,7 +143,7 @@ void copyNodeUri(
   Clipboard.setData(ClipboardData(text: uri));
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('URI copied')),
+      SnackBar(content: Text(getLocalText.s("URI copied"))),
     );
   }
 }

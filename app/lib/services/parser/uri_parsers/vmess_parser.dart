@@ -4,6 +4,7 @@ import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../transport.dart';
 import '../uri_utils.dart';
+import '../utls_fingerprint.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // VMess (legacy JSON base64 + modern cleartext)
@@ -71,9 +72,10 @@ VmessSpec? _vmessFromJson(Map<String, dynamic> cfg, String rawUri) {
     defaultHost: server,
   );
 
-  final tls = parseVmessTls(cfg, server, net);
-
   final warnings = <NodeWarning>[];
+  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
+  final tls = normalizeTlsFingerprint(parseVmessTls(cfg, server, net), warnings);
+
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
   return VmessSpec(

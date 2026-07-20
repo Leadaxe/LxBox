@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/parser_config.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:lxbox/services/l10n/locale_controller.dart';
 import 'package:lxbox/widgets/template_var_list.dart';
 import 'package:lxbox/widgets/var_values_model.dart';
 
@@ -25,6 +27,12 @@ Future<VarValuesModel> _pump(
     for (final v in vars) v.name: initialValues[v.name] ?? v.defaultValue,
   });
   await tester.pumpWidget(MaterialApp(
+    localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: LocaleController.supportedLocales,
     home: Scaffold(
       body: TemplateVarListView(
         vars: vars,

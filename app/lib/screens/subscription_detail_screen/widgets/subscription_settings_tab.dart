@@ -4,9 +4,11 @@ import '../../../controllers/subscription_controller.dart';
 import '../../../models/channel.dart';
 import '../../../models/server_list.dart';
 import '../../../services/subscription/input_helpers.dart';
+import '../../../services/subscription/user_agent.dart';
 import '../../../widgets/detour_target_picker.dart' show detourChannelDisplay;
 import '../detour_mode.dart';
 import '../subscription_detail_format.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Settings tab: tag-prefix field, detour-mode radio group (+ sub-options) and
 /// the subscription-info block. Extracted verbatim from `_buildSettingsTab` /
@@ -31,6 +33,15 @@ class SubscriptionSettingsTab extends StatelessWidget {
     required this.onShowIntervalPicker,
     required this.onRefreshNow,
     required this.onEditSource,
+    // §289 — per-subscription fetch identity (nullable: папка не рисует секцию).
+    this.onToggleCustomIdentity,
+    this.onEditIdentityUserAgent,
+    this.onIdentitySendHwidChanged,
+    this.onEditIdentityHwid,
+    this.onRegenerateIdentityHwid,
+    this.onEditIdentityDeviceOs,
+    this.onEditIdentityVerOs,
+    this.onEditIdentityDeviceModel,
   });
 
   final SubscriptionEntry entry;
@@ -59,6 +70,18 @@ class SubscriptionSettingsTab extends StatelessWidget {
   final VoidCallback onShowIntervalPicker;
   final VoidCallback onRefreshNow;
   final VoidCallback onEditSource; // §129 — сменить источник (online↔file)
+
+  // §289 — Fetch identity (секция «Custom identity»). Nullable: секция видна
+  // только для SubscriptionServers, папка (folderMode) их не передаёт и не
+  // рисует блок — колбэки не зовутся.
+  final ValueChanged<bool>? onToggleCustomIdentity;
+  final VoidCallback? onEditIdentityUserAgent;
+  final ValueChanged<bool>? onIdentitySendHwidChanged;
+  final VoidCallback? onEditIdentityHwid;
+  final VoidCallback? onRegenerateIdentityHwid;
+  final VoidCallback? onEditIdentityDeviceOs;
+  final VoidCallback? onEditIdentityVerOs;
+  final VoidCallback? onEditIdentityDeviceModel;
 
   /// §248 — подпись override-цели: тег detour-канала (или его auto-двойника)
   /// → «⚙ <label>»; канал не найден → сырой тег. Интра-омоним папки (bare-тег
@@ -89,19 +112,15 @@ class SubscriptionSettingsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Tag prefix', style: theme.textTheme.titleSmall?.copyWith(
+        Text(getLocalText.s("Tag prefix"), style: theme.textTheme.titleSmall?.copyWith(
           color: theme.colorScheme.primary,
           fontWeight: FontWeight.bold,
         )),
         const SizedBox(height: 4),
         Text(
           folderMode
-              ? 'Prefix applied to every server tag in this folder '
-                  '(e.g. "BL:" → "BL: Frankfurt"). Lets a routing channel '
-                  'match the whole folder by regex.'
-              : 'Prefix applied to every tag from this subscription '
-                  '(e.g. "BL:" → "BL: Frankfurt"). Used to distinguish servers '
-                  'from different subscriptions and resolve name collisions.',
+              ? getLocalText.s("Prefix applied to every server tag in this folder (e.g. \"BL:\" → \"BL: Frankfurt\"). Lets a routing channel match the whole folder by regex.")
+              : getLocalText.s("Prefix applied to every tag from this subscription (e.g. \"BL:\" → \"BL: Frankfurt\"). Used to distinguish servers from different subscriptions and resolve name collisions."),
           style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 8),
@@ -109,10 +128,10 @@ class SubscriptionSettingsTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: TextFormField(
             initialValue: entry.tagPrefix,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Prefix',
-              hintText: 'empty = no prefix',
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: getLocalText.s("Prefix"),
+              hintText: getLocalText.s("empty = no prefix"),
               isDense: true,
             ),
             onChanged: onTagPrefixChanged,
@@ -120,7 +139,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         if (hasDetour) ...[
-          Text('Detour servers', style: theme.textTheme.titleSmall?.copyWith(
+          Text(getLocalText.s("Detour servers"), style: theme.textTheme.titleSmall?.copyWith(
             color: theme.colorScheme.primary,
             fontWeight: FontWeight.bold,
           )),
@@ -140,22 +159,22 @@ class SubscriptionSettingsTab extends StatelessWidget {
               RadioListTile<DetourMode>(
                 value: DetourMode.use,
                 title: Text(folderMode
-                    ? "Use servers' own detours"
-                    : 'Use subscription detour servers'),
+                    ? getLocalText.s("Use servers' own detours")
+                    : getLocalText.s("Use subscription detour servers")),
                 subtitle: Text(folderMode
-                    ? 'Members connect through their personal detours'
-                    : 'Nodes connect through detour servers'),
+                    ? getLocalText.s("Members connect through their personal detours")
+                    : getLocalText.s("Nodes connect through detour servers")),
               ),
               // §096 — register-тоглы под Use (нативные детуры используются).
-              if (detourMode == DetourMode.use) _registerToggles(),
+              if (detourMode == DetourMode.use) _registerToggles(context),
               RadioListTile<DetourMode>(
                 value: DetourMode.override,
-                title: const Text('Add detour'),
+                title: Text(getLocalText.s("Add detour")),
                 subtitle: Text(entry.overrideDetour.isEmpty
-                    ? 'Append an outbound to the end of the chain'
+                    ? getLocalText.s("Append an outbound to the end of the chain")
                     : entry.replaceDetourChain
-                        ? 'Replace all → ${_overrideDisplay()}'
-                        : 'Fill missing → ${_overrideDisplay()}'),
+                        ? getLocalText.s("Replace all → %s", _overrideDisplay())
+                        : getLocalText.s("Fill missing → %s", _overrideDisplay())),
               ),
               // Sub-tiles под «Add detour»: outbound picker + выбор режима.
               // §073/§245: тот же bool replaceDetourChain, но вместо
@@ -166,9 +185,9 @@ class SubscriptionSettingsTab extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(left: 24),
                   child: ListTile(
-                    title: const Text('Outbound'),
+                    title: Text(getLocalText.s("Outbound")),
                     subtitle: Text(entry.overrideDetour.isEmpty
-                        ? '(tap to choose)'
+                        ? getLocalText.s("(tap to choose)")
                         : _overrideDisplay()),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: onShowOverrideDetourPicker,
@@ -182,23 +201,17 @@ class SubscriptionSettingsTab extends StatelessWidget {
                     child: Column(children: [
                       RadioListTile<bool>(
                         value: true,
-                        title: const Text('Replace all'),
+                        title: Text(getLocalText.s("Replace all")),
                         subtitle: Text(folderMode
-                            ? 'Drop existing detours — every member '
-                                'connects through this outbound'
-                            : 'Drop existing detours — every node '
-                                'connects through this outbound'),
+                            ? getLocalText.s("Drop existing detours — every member connects through this outbound")
+                            : getLocalText.s("Drop existing detours — every node connects through this outbound")),
                       ),
                       RadioListTile<bool>(
                         value: false,
-                        title: const Text('Fill missing'),
+                        title: Text(getLocalText.s("Fill missing")),
                         subtitle: Text(folderMode
-                            ? 'Members with their own detour keep it; '
-                                'this outbound is set only where none '
-                                'is defined'
-                            : 'Nodes with their own detour keep it; '
-                                'this outbound is set only where none '
-                                'is defined'),
+                            ? getLocalText.s("Members with their own detour keep it; this outbound is set only where none is defined")
+                            : getLocalText.s("Nodes with their own detour keep it; this outbound is set only where none is defined")),
                       ),
                     ]),
                   ),
@@ -206,12 +219,12 @@ class SubscriptionSettingsTab extends StatelessWidget {
                 // §096 — в режиме Fill missing (append) нативные детуры
                 // подписки сохраняются в цепочке → register-тоглы
                 // осмысленны и тут.
-                if (!entry.replaceDetourChain) _registerToggles(),
+                if (!entry.replaceDetourChain) _registerToggles(context),
               ],
-              const RadioListTile<DetourMode>(
+              RadioListTile<DetourMode>(
                 value: DetourMode.none,
-                title: Text("Don't use detour servers"),
-                subtitle: Text('Nodes connect directly, detour skipped'),
+                title: Text(getLocalText.s("Don't use detour servers")),
+                subtitle: Text(getLocalText.s("Nodes connect directly, detour skipped")),
               ),
             ]),
           ),
@@ -221,47 +234,171 @@ class SubscriptionSettingsTab extends StatelessWidget {
           // неприменимы. Вместо него один пикер поверх тех же полей
           // DetourPolicy: выбор тага → useDetourServers=true + override
           // (builder: APPEND на пустой цепочке = 1-hop), None → override=''.
-          Text('Detour', style: theme.textTheme.titleSmall?.copyWith(
+          Text(getLocalText.s("Detour"), style: theme.textTheme.titleSmall?.copyWith(
             color: theme.colorScheme.primary,
             fontWeight: FontWeight.bold,
           )),
           const SizedBox(height: 4),
           Text(
             folderMode
-                ? 'Servers in this folder have no detours yet. You can still '
-                    'route all of them through one of your servers, or set '
-                    'personal detours per server (tap a server on the '
-                    'Servers tab).'
-                : 'This subscription has no detour servers of its own. You can '
-                    'still route all its nodes through one of your servers.',
+                ? getLocalText.s("Servers in this folder have no detours yet. You can still route all of them through one of your servers, or set personal detours per server (tap a server on the Servers tab).")
+                : getLocalText.s("This subscription has no detour servers of its own. You can still route all its nodes through one of your servers."),
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.alt_route, size: 20),
-            title: const Text('Detour server'),
+            title: Text(getLocalText.s("Detour server")),
             subtitle: Text(entry.overrideDetour.isEmpty
-                ? 'None — nodes connect directly'
+                ? getLocalText.s("None — nodes connect directly")
                 // detour — ВХОДНОЙ (трафик идёт через него ПЕРВЫМ, потом в
                 // ноды подписки, потом наружу). §252 — полная цепочка «как
                 // пакет пойдёт»: цель → её собственный detour → … (та же
                 // детализация, что у одиночного сервера в Node Settings).
-                : 'Phone → ${_overridePath()} → Nodes → Internet'),
+                : getLocalText.s("Phone → %s → Nodes → Internet", _overridePath())),
             trailing: const Icon(Icons.chevron_right),
             onTap: onShowOverrideDetourPicker,
           ),
         ],
         if (entry.list is SubscriptionServers) ...[
           const SizedBox(height: 24),
-          Text('Subscription', style: theme.textTheme.titleSmall?.copyWith(
+          Text(getLocalText.s(1, "Subscription"), style: theme.textTheme.titleSmall?.copyWith(
             color: theme.colorScheme.primary,
             fontWeight: FontWeight.bold,
           )),
           const Divider(),
-          _buildSubscriptionInfo(theme),
+          _buildSubscriptionInfo(context, theme),
+          const SizedBox(height: 24),
+          // §289 — per-subscription fetch identity (Default/Custom override).
+          Text(getLocalText.s("Fetch identity"), style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          )),
+          const Divider(),
+          ..._buildFetchIdentity(context, theme),
         ],
       ],
+    );
+  }
+
+  /// §289 — секция Fetch identity подписки. Тумблер «Custom identity» (off =
+  /// глобальная идентичность §118), при Custom — полный блок полей (UA, HWID,
+  /// device-meta), читающий значения из `entry.identity`. Форма полей —
+  /// зеркало глобального таба (app_settings_screen → Subscriptions).
+  List<Widget> _buildFetchIdentity(BuildContext context, ThemeData theme) {
+    final cs = theme.colorScheme;
+    final id = entry.identity; // null = Default
+    return [
+      SwitchListTile(
+        secondary: const Icon(Icons.badge_outlined),
+        title: Text(getLocalText.s("Custom identity")),
+        subtitle: Text(getLocalText.s(
+            "Override global fetch identity for this subscription.")),
+        value: entry.hasCustomIdentity,
+        onChanged: onToggleCustomIdentity,
+      ),
+      if (id != null) ...[
+        ListTile(
+          leading: const Icon(Icons.badge_outlined),
+          title: Text(getLocalText.s("Custom User-Agent")),
+          subtitle: Text(
+            id.userAgent.isEmpty
+                ? getLocalText.s("Default · %s", resolveSubscriptionUserAgent())
+                : id.userAgent,
+            style: TextStyle(
+              fontStyle: id.userAgent.isEmpty ? FontStyle.italic : null,
+            ),
+          ),
+          trailing: const Icon(Icons.edit_outlined),
+          onTap: onEditIdentityUserAgent,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            getLocalText.s("Some panels return the config by a substring in the User-Agent — a custom UA without the \"LxBox\" token may yield an unsupported format and break the update. Change only if you know why."),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
+        ),
+        SwitchListTile(
+          title: Text(getLocalText.s("Send HWID")),
+          subtitle: Text(getLocalText.s("Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). Off by default.")),
+          secondary: const Icon(Icons.devices_outlined),
+          value: id.sendHwid,
+          onChanged: onIdentitySendHwidChanged,
+        ),
+        if (id.sendHwid) ...[
+          _editRow(
+            context,
+            icon: Icons.tag,
+            label: 'HWID · x-hwid',
+            value: id.hwid,
+            monospace: true,
+            onEdit: onEditIdentityHwid,
+            extra: IconButton(
+              icon: const Icon(Icons.refresh, size: 20),
+              tooltip: getLocalText.s("Regenerate"),
+              onPressed: onRegenerateIdentityHwid,
+            ),
+          ),
+          _editRow(context,
+              icon: Icons.android, label: 'x-device-os', value: id.deviceOs,
+              onEdit: onEditIdentityDeviceOs),
+          _editRow(context,
+              icon: Icons.numbers, label: 'x-ver-os', value: id.verOs,
+              onEdit: onEditIdentityVerOs),
+          _editRow(context,
+              icon: Icons.phone_android,
+              label: 'x-device-model',
+              value: id.deviceModel,
+              onEdit: onEditIdentityDeviceModel),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              getLocalText.s("These headers identify your device to the panel. Defaults come from the device — override any of them (empty = device default)."),
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ],
+    ];
+  }
+
+  /// §289 — строка редактируемого заголовка идентичности (зеркало `_editRow`
+  /// глобального таба). `onEdit`/`extra` — nullable-колбэки родителя.
+  Widget _editRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required VoidCallback? onEdit,
+    bool monospace = false,
+    Widget? extra,
+  }) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(label),
+      subtitle: Text(
+        value.isEmpty ? getLocalText.s("(empty)") : value,
+        style: TextStyle(
+          fontFamily: monospace ? 'monospace' : null,
+          fontSize: monospace ? 12 : null,
+          color: value.isEmpty
+              ? Theme.of(context).colorScheme.onSurfaceVariant
+              : null,
+        ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ?extra,
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 20),
+            tooltip: getLocalText.s("Edit"),
+            onPressed: onEdit,
+          ),
+        ],
+      ),
     );
   }
 
@@ -271,27 +408,25 @@ class SubscriptionSettingsTab extends StatelessWidget {
   /// нечего).
   /// Делают detour-сервера видимыми как ноды (selector) / в ✨auto. Флаги
   /// хранятся независимо от режима — переключение Use↔Add detour их не теряет.
-  Widget _registerToggles() => Padding(
+  Widget _registerToggles(BuildContext context) => Padding(
         padding: const EdgeInsets.only(left: 24),
         child: Column(children: [
           SwitchListTile(
-            title: const Text('Register detour servers'),
-            subtitle: const Text(
-                'Add detour servers to proxy groups (visible in node list)'),
+            title: Text(getLocalText.s("Register detour servers")),
+            subtitle: Text(getLocalText.s("Add detour servers to proxy groups (visible in node list)")),
             value: entry.registerDetourServers,
             onChanged: onRegisterDetourServersChanged,
           ),
           SwitchListTile(
-            title: const Text('Register detour in auto group'),
-            subtitle: const Text(
-                'Include detour servers in auto-proxy-out urltest'),
+            title: Text(getLocalText.s("Register detour in auto group")),
+            subtitle: Text(getLocalText.s("Include detour servers in auto-proxy-out urltest")),
             value: entry.registerDetourInAuto,
             onChanged: onRegisterDetourInAutoChanged,
           ),
         ]),
       );
 
-  Widget _buildSubscriptionInfo(ThemeData theme) {
+  Widget _buildSubscriptionInfo(BuildContext context, ThemeData theme) {
     final list = entry.list as SubscriptionServers;
     final cs = theme.colorScheme;
     final label = statusLabel(list);
@@ -308,7 +443,8 @@ class SubscriptionSettingsTab extends StatelessWidget {
           return ListTile(
             leading: Icon(isFile ? Icons.insert_drive_file_outlined : Icons.link,
                 size: 20),
-            title: Text(isFile ? 'Source: local file' : 'URL'),
+            // l10n-exempt: 'URL' is locale-invariant
+            title: Text(isFile ? getLocalText.s("Source: local file") : 'URL'),
             subtitle: Text(isFile ? entry.displayName : list.url,
                 maxLines: 2, overflow: TextOverflow.ellipsis),
             trailing: isFile
@@ -318,7 +454,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.content_copy, size: 18),
-                        tooltip: 'Copy URL',
+                        tooltip: getLocalText.s("Copy URL"),
                         visualDensity: VisualDensity.compact,
                         onPressed: onCopyUrl,
                       ),
@@ -332,11 +468,11 @@ class SubscriptionSettingsTab extends StatelessWidget {
         // server (сами не по расписанию); >0 = раз в N часов.
         ListTile(
           leading: const Icon(Icons.sync, size: 20),
-          title: const Text('Update interval'),
+          title: Text(getLocalText.s("Update interval")),
           subtitle: Text(switch (list.updateIntervalHours) {
-            < 0 => "Don't auto-update (manual only)",
-            0 => 'Never (respect server) — manual only unless server sets one',
-            final h => '${h}h (auto-refresh every ${intervalHuman(h)})',
+            < 0 => getLocalText.s("Don't auto-update (manual only)"),
+            0 => getLocalText.s("Never (respect server) — manual only unless server sets one"),
+            final h => getLocalText.s("%1\$dh (auto-refresh every %2\$s)", h, intervalHuman(h)),
           }),
           trailing: const Icon(Icons.edit, size: 18),
           onTap: onShowIntervalPicker,
@@ -351,7 +487,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: onRefreshNow,
             icon: const Icon(Icons.refresh, size: 18),
-            label: const Text('Refresh now'),
+            label: Text(getLocalText.s("Refresh now")),
           ),
         ),
       ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/validation.dart';
 import '../../../services/builder/validator.dart' show kMaxDetourCulprits;
+import '../../../services/l10n/locale_controller.dart';
 
 /// §254/§255 — bottom sheet «Routing loop — VPN not started».
 ///
@@ -60,11 +61,11 @@ class _DetourCycleSheet extends StatelessWidget {
               children: [
                 Icon(Icons.link_off, color: cs.error, size: 20),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Routing loop — VPN not started',
-                    style:
-                        TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    getLocalText.s("Routing loop — VPN not started"),
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -79,7 +80,7 @@ class _DetourCycleSheet extends StatelessWidget {
                 // Короткая ошибка + требование (решение владельца: списком,
                 // без авто-действий). Tap → к владельцу.
                 Text(
-                  _leadText(culpritCount),
+                  _leadText(context, culpritCount),
                   style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                 ),
                 const SizedBox(height: 12),
@@ -89,7 +90,7 @@ class _DetourCycleSheet extends StatelessWidget {
                     // culprit-нод нет, показываем message как есть.
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(issue.message,
+                      child: Text(issue.message(),
                           style: const TextStyle(fontSize: 13)),
                     )
                   else
@@ -104,7 +105,7 @@ class _DetourCycleSheet extends StatelessWidget {
                     tilePadding: EdgeInsets.zero,
                     childrenPadding: const EdgeInsets.only(bottom: 12),
                     shape: const Border(),
-                    title: Text('Show loop',
+                    title: Text(getLocalText.s("Show loop"),
                         style: TextStyle(
                             fontSize: 13, color: cs.onSurfaceVariant)),
                     children: [
@@ -122,7 +123,7 @@ class _DetourCycleSheet extends StatelessWidget {
                 if (maybeMore) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'More loops may remain — fix these and try again.',
+                    getLocalText.s("More loops may remain — fix these and try again."),
                     style: TextStyle(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
@@ -137,20 +138,14 @@ class _DetourCycleSheet extends StatelessWidget {
     );
   }
 
-  String _leadText(int culpritCount) {
+  String _leadText(BuildContext context, int culpritCount) {
     if (culpritCount == 0) {
       // Кольцо только из групп (selector/urltest ссылаются друг на друга) —
       // виновных нод нет, править состав групп.
-      return 'A routing loop was found between groups. Review the loop below '
-          'and break it, then start again.';
+      return getLocalText.s("A routing loop was found between groups. Review the loop below and break it, then start again.");
     }
-    if (culpritCount == 1) {
-      return 'One node routes traffic back into its own chain. Tap it to open '
-          'its source, change or remove its detour, then start again.';
-    }
-    return '$culpritCount nodes route traffic back into their own chain. Tap a '
-        'node to open its source, change or remove its detour, then start '
-        'again.';
+    if (culpritCount == 1) return getLocalText.s("One node routes traffic back into its own chain. Tap it to open its source, change or remove its detour, then start again.");
+    return getLocalText.plural("%d nodes route traffic back into their own chain. Tap a node to open its source, change or remove its detour, then start again.", culpritCount);
   }
 }
 
@@ -192,7 +187,7 @@ class _CulpritTile extends StatelessWidget {
                           style: const TextStyle(
                               fontSize: 14, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text('detour → $detour',
+                      Text(getLocalText.s("detour → %s", detour),
                           style: TextStyle(
                               fontSize: 12,
                               fontFamily: 'monospace',

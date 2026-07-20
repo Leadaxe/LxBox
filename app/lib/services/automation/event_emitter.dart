@@ -105,6 +105,13 @@ class AutomationEventEmitter {
           {'old_group': oldGroup, 'new_group': newGroup, 'reason': reason},
           _stateEnabled);
 
+  /// §290 — подтверждение, что SWITCH_NODE пришёл на уже активную ноду: смены
+  /// нет (re-select/обрыв соединений пропущены), но ждущий Tasker получает
+  /// детерминированный ответ вместо timeout'а. Отдельное имя, не мимикрия под
+  /// `ACTIVE_NODE_CHANGED` — потребитель явно различает «сменилось»/«уже было».
+  void emitNodeAlreadyActive(String tag, String group) =>
+      _emit('NODE_ALREADY_ACTIVE', {'tag': tag, 'group': group}, _stateEnabled);
+
   // ─── Subscription ────────────────────────────────────────────────────────────
 
   void emitSubRefreshed(String subId, int nodesCount, int deltaCount) => _emit(

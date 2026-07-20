@@ -21,7 +21,17 @@ class TlsSpec {
 
   static const disabled = TlsSpec(enabled: false);
 
-  Map<String, dynamic> toSingbox() {
+  Map<String, dynamic> toSingbox() => _toSingbox(quic: false);
+
+  /// §282 — uTLS И REALITY поверх QUIC (hysteria2/tuic) в ядре не работают
+  /// вообще: их `STDConfig()` возвращает ошибку («unsupported usage for
+  /// uTLS»/«…for reality»), а QUIC-путь фолбэчит именно на `STDConfig()`
+  /// (аудит ядра SPECS/027-UTLS_OVER_QUIC). Оба блока на QUIC = мёртвая
+  /// нода, и `fp`/reality на hy2/tuic — мусор xray-подписок. Для QUIC-эмита
+  /// срезаем `utls` и `reality`; server_name/alpn/insecure цел.
+  Map<String, dynamic> toSingboxForQuic() => _toSingbox(quic: true);
+
+  Map<String, dynamic> _toSingbox({required bool quic}) {
     if (!enabled) return const {};
     final m = <String, dynamic>{'enabled': true};
     if (serverName != null && serverName!.isNotEmpty) {
@@ -29,10 +39,10 @@ class TlsSpec {
     }
     if (alpn.isNotEmpty) m['alpn'] = List<String>.from(alpn);
     if (insecure) m['insecure'] = true;
-    if (fingerprint != null && fingerprint!.isNotEmpty) {
+    if (!quic && fingerprint != null && fingerprint!.isNotEmpty) {
       m['utls'] = {'enabled': true, 'fingerprint': fingerprint};
     }
-    if (reality != null) {
+    if (!quic && reality != null) {
       m['reality'] = reality!.toSingbox();
     }
     return m;

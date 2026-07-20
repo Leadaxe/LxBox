@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/date_symbol_data_local.dart' show initializeDateFormatting;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
 import 'services/app_log.dart';
+import 'services/l10n/locale_controller.dart';
 import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/event_emitter.dart';
 import 'services/clash_log_pump.dart';
@@ -68,6 +71,18 @@ void main() async {
     // ДО UI (UI читает native-тумблеры из JSON-зеркала) и ДО возможного
     // авто-старта VPN. best-effort: ошибка не валит запуск (try выше).
     await SettingsStorage.bootstrapAndSyncNativePrefs();
+    // §279 — язык приложения: применить сохранённую настройку ДО runApp
+    // (первый кадр локализован) и ДО seed-миграций ниже (seed-time метки
+    // резолвятся через активную локаль — TemplateLoader.load() кладёт кэш
+    // под effectiveTag). Observer ловит смену языка устройства при
+    // setting=='system' (didChangeLocales). best-effort (try выше).
+    await LocaleController.I.bootstrap(await SettingsStorage.getAppLanguage());
+    WidgetsBinding.instance.addObserver(LocaleController.I);
+    // §279 Phase 5 — intl date-symbols для ru (format_utils.formatTime и др.
+    // используют DateFormat под Intl.defaultLocale). ДО первого кадра, чтобы
+    // DateFormat('ru') не бросил до того, как flutter_localizations прогреет
+    // локаль сам. best-effort (try выше).
+    await initializeDateFormatting('ru');
     // §125 F0 — one-shot миграция enabled_groups[] → channels[] (seed состава
     // каналов из template на первом запуске). Идемпотентна. ДО первого билда
     // конфига, чтобы билдер (после F1) читал channels[] как source-of-truth.
@@ -141,10 +156,12 @@ class _FallbackErrorWidget extends StatelessWidget {
         children: [
           const Icon(Icons.error_outline, color: Colors.white70, size: 40),
           const SizedBox(height: 12),
-          const Text(
-            'Something went wrong in this section.\nCheck Debug → Logs.',
+          // getLocalText (не Localizations.of): ErrorWidget.builder может
+          // рендерить без Localizations-ancestor'а (краш до/вне MaterialApp).
+          Text(
+            getLocalText.s("Something went wrong in this section.\nCheck Debug → Logs."),
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white, fontSize: 14),
+            style: const TextStyle(color: Colors.white, fontSize: 14),
           ),
           if (kDebugMode) ...[
             const SizedBox(height: 12),
@@ -203,9 +220,14 @@ class LxBoxApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // §279 — merged Listenable: смена локали = механизм themeNotifier
+    // (rebuild единственного MaterialApp, без remount и подъёма контроллеров).
     return AnimatedBuilder(
-      animation: themeNotifier,
+      animation: Listenable.merge([themeNotifier, LocaleController.I]),
       builder: (context, _) {
+        // §285 — getLocalText отслеживает применяемую локаль через
+        // LocaleController._applyLocale (dict-reload на каждую смену); отдельного
+        // per-build присваивания активного локализатора не требуется.
         return MaterialApp(
           title: 'L×Box',
           theme: ThemeData(
@@ -220,6 +242,23 @@ class LxBoxApp extends StatelessWidget {
             useMaterial3: true,
           ),
           themeMode: themeNotifier.mode,
+          // §279 — ВСЕГДА подаём явную локаль (effective уже резолвит
+          // 'system' по языку устройства через PlatformDispatcher). Ранее
+          // 'system' давал locale: null, и Flutter полагался на собственный
+          // резолв null-локали; при runtime-переходе явная→null (напр. ru →
+          // «как в системе» на устройстве с English) Localizations не
+          // пересчитывал локаль — UI застревал на прежнем русском. Явное
+          // значение форсит пересборку Localizations на каждую смену.
+          locale: LocaleController.I.effective,
+          supportedLocales: LocaleController.supportedLocales,
+          // §285 — только Flutter-встроенные делегаты (Material/Widgets/
+          // Cupertino chrome). Строки приложения идут через getLocalText,
+          // не через Localizations-делегат.
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           // §076: global observer срабатывает на возврат на home (root)
           // — auto-rebuild config'а если configDirty.
           navigatorObservers: [homeReturnObserver],

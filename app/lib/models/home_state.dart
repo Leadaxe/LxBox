@@ -3,26 +3,39 @@ import 'package:flutter/material.dart';
 import '../vpn/cc_channel.dart';
 import 'config_node.dart';
 import 'debug_entry.dart';
+import 'stop_reason.dart';
 import 'traffic_snapshot.dart';
 import 'tunnel_status.dart';
+import 'ui_msg.dart';
+import '../services/l10n/locale_controller.dart';
 
 export 'config_node.dart';
+export 'stop_reason.dart';
 export 'traffic_snapshot.dart';
+export 'ui_msg.dart';
 
 export 'debug_entry.dart';
 export 'tunnel_status.dart';
 
 enum NodeSortMode {
-  defaultOrder('Default', Icons.swap_vert),
-  latencyAsc('Ping', Icons.signal_cellular_alt),
-  nameAsc('A–Z', Icons.sort_by_alpha),
+  defaultOrder(Icons.swap_vert),
+  latencyAsc(Icons.signal_cellular_alt),
+  nameAsc(Icons.sort_by_alpha),
   // §071/§100 — manual («Custom»). Теперь ВХОДИТ в tap-cycle (carousel, см.
   // `next`) И выбирается из sort-меню; активируется выбором/cycle ИЛИ drag'ом.
-  manual('Custom', Icons.drag_indicator);
+  manual(Icons.drag_indicator);
 
-  const NodeSortMode(this.label, this.icon);
-  final String label;
+  const NodeSortMode(this.icon);
   final IconData icon;
+
+  /// §279 — display-label режима (рендер по локали в момент показа).
+  /// Персист/Debug API используют `.name` (wire), не label.
+  String label() => switch (this) {
+        defaultOrder => getLocalText.s("Default"),
+        latencyAsc => getLocalText.s("Ping"),
+        nameAsc => getLocalText.s("A–Z"),
+        manual => getLocalText.s("Custom"),
+      };
 
   /// §100: cycle включает все 4 режима (carousel) —
   /// default → ping → A–Z → Custom(manual) → default.
@@ -39,7 +52,8 @@ class HomeState {
     this.configRaw = '',
     ParsedConfig? configModel,
     this.tunnel = TunnelStatus.disconnected,
-    this.lastError = '',
+    this.lastError,
+    this.stopReason,
     this.busy = false,
     this.ccGroups = const <CcGroup>[],
     this.groups = const <String>[],
@@ -78,7 +92,17 @@ class HomeState {
   final ParsedConfig configModel;
 
   final TunnelStatus tunnel;
-  final String lastError;
+
+  /// §279 Phase 4 — хранимая ошибка = [UiMsg] (лениво рендерится в build,
+  /// смена локали мгновенно перерендеривает). `null` = ошибки нет.
+  final UiMsg? lastError;
+
+  /// §279 — типизированный разбор ТЕКУЩЕГО [lastError], когда тот пришёл из
+  /// stop-события native (parsed при ingestion, см. `StopReason.fromEvent`).
+  /// `null` — lastError пуст или записан другим сайтом (ping/start/reload
+  /// пишут произвольные строки). Инвариант поддерживает [copyWith]: любое
+  /// обновление lastError без явного stopReason сбрасывает поле в null.
+  final StopReason? stopReason;
   final bool busy;
 
   /// §122 — снапшот дерева групп из libbox CommandClient (`CcChannel.groups`).
@@ -133,7 +157,7 @@ class HomeState {
 
   /// §250 — диагностический дубль [lastError] для Debug API: причина
   /// последнего аварийного стопа/revoke. В отличие от [lastError] НЕ
-  /// расходуется UI (`clearError` §166 и оптимистичные `lastError: ''` в
+  /// расходуется UI (`clearError` §166 и оптимистичные `lastError: null` в
   /// start/stop/reload его не трогают); очищается ТОЛЬКО успешным стартом
   /// (`tunnel → connected`). In-memory by design — пусто после рестарта
   /// процесса.
@@ -277,7 +301,8 @@ class HomeState {
   HomeState copyWith({
     String? configRaw,
     TunnelStatus? tunnel,
-    String? lastError,
+    Object? lastError = _unset,
+    Object? stopReason = _unset,
     bool? busy,
     List<CcGroup>? ccGroups,
     List<String>? groups,
@@ -310,7 +335,14 @@ class HomeState {
       configModel:
           configRaw != null ? ParsedConfig.parse(configRaw) : configModel,
       tunnel: tunnel ?? this.tunnel,
-      lastError: lastError ?? this.lastError,
+      lastError: identical(lastError, _unset)
+          ? this.lastError
+          : lastError as UiMsg?,
+      // §279 — stopReason валиден только для lastError, вместе с которым был
+      // распарсен: смена lastError без явного stopReason обнуляет его.
+      stopReason: identical(stopReason, _unset)
+          ? (identical(lastError, _unset) ? this.stopReason : null)
+          : stopReason as StopReason?,
       busy: busy ?? this.busy,
       ccGroups: ccGroups ?? this.ccGroups,
       groups: groups ?? this.groups,

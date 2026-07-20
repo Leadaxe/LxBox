@@ -165,7 +165,7 @@ Future<DebugResponse> _emulateError(
   final samples = <Map<String, String>>[];
   for (final k in kinds) {
     final e = buildException(k);
-    final humanized = humanizeError(e);
+    final humanized = humanizeError(e).renderEn();
     samples.add({'kind': k, 'humanized': humanized});
     AppLog.I.error('emulate-error [kind=$k]: $humanized');
   }
@@ -216,11 +216,10 @@ Future<DebugResponse> _urltest(DebugRequest req, DebugContext ctx) async {
     return _ok('urltest', {'scope': 'node', 'tag': tag});
   }
   if (group != null) {
-    if (group.isEmpty) throw const BadRequest('"group" empty');
-    if (!home.state.tunnelUp) {
-      throw const Conflict('tunnel not connected');
-    }
-    unawaited(home.runGroupUrltest(group));
+    // §290 — group-scope делегируется в shared handler (общая база с Automation
+    // API), а не дублирует precondition'ы/вызов `runGroupUrltest` здесь. Прочие
+    // scope (tag/all/cancel) — Debug-only, остаются ниже.
+    await automation.actionUrltestGroup(group, ctx);
     return _ok('urltest', {'scope': 'group', 'group': group});
   }
   // all=true (or any value — presence-only flag)

@@ -8,6 +8,7 @@ import 'dns_server_edit/edit_controller.dart';
 import 'dns_server_edit/tabs/json_tab.dart';
 import 'dns_server_edit/tabs/params_tab.dart';
 import 'dns_settings_screen/resolved_server.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §117 задача 4 — полноэкранный редактор DNS-сервера (locked decision №8).
 /// Паттерн 1:1 с [CustomRuleEditScreen]: Scaffold-route,
@@ -81,13 +82,14 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
       final tag = _ctrl.tagCtrl.text.trim();
       if (tag.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Tag is required')),
+          SnackBar(content: Text(getLocalText.s("Tag is required"))),
         );
         return;
       }
       if (_ctrl.jsonError != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fix body JSON first: ${_ctrl.jsonError}')),
+          SnackBar(
+              content: Text(getLocalText.s("Fix body JSON first: %s", '${_ctrl.jsonError}'))),
         );
         return;
       }
@@ -95,7 +97,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
       if (_ctrl.serverMode != null &&
           _ctrl.addressCtrl.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Server address is required')),
+          SnackBar(content: Text(getLocalText.s("Server address is required"))),
         );
         return;
       }
@@ -105,7 +107,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
           tag != (widget.resolved?.tag ?? '') &&
           widget.existingTags.contains(tag)) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Tag "$tag" is already in use')),
+          SnackBar(content: Text(getLocalText.s("Tag \"%s\" is already in use", tag))),
         );
         return;
       }
@@ -115,16 +117,16 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
         final replace = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: Text('Tag "$tag" exists'),
-            content: const Text('Replace the existing server with this one?'),
+            title: Text(getLocalText.s("Tag \"%s\" exists", tag)),
+            content: Text(getLocalText.s("Replace the existing server with this one?")),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+                child: Text(getLocalText.s("Cancel")),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Replace'),
+                child: Text(getLocalText.s("Replace")),
               ),
             ],
           ),
@@ -140,8 +142,8 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
     final tag = widget.resolved?.tag ?? '';
     final confirmed = await showDeleteConfirmDialog(
       context,
-      title: 'Delete DNS server?',
-      message: 'Remove "$tag" permanently?',
+      title: getLocalText.s("Delete DNS server?"),
+      message: getLocalText.s("Remove \"%s\" permanently?", tag),
     ); // §219
     if (confirmed == true && mounted) {
       Navigator.pop(context, DnsServerEditResult.deleted());
@@ -157,18 +159,16 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reset to default?'),
-        content: Text(
-            'Discard the override and restore the ${overrides.name} '
-            'definition of "${resolved.tag}"?'),
+        title: Text(getLocalText.s("Reset to default?")),
+        content: Text(getLocalText.s("Discard the override and restore the %1\$s definition of \"%2\$s\"?", overrides.name, resolved.tag)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(getLocalText.s("Cancel")),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Reset'),
+            child: Text(getLocalText.s("Reset")),
           ),
         ],
       ),
@@ -218,7 +218,9 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
           length: 2,
           child: Scaffold(
             appBar: AppBar(
-              title: Text(_ctrl.isNew ? 'Add DNS Server' : 'Edit DNS Server'),
+              title: Text(_ctrl.isNew
+                  ? getLocalText.s("Add DNS Server")
+                  : getLocalText.s("Edit DNS Server")),
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: _handleBack,
@@ -226,21 +228,24 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
               actions: [
                 if (canReset)
                   IconButton(
-                    tooltip: 'Reset to default',
+                    tooltip: getLocalText.s("Reset to default"),
                     icon: const Icon(Icons.restart_alt),
                     onPressed: _resetToCanonical,
                   ),
                 if (canDelete)
                   IconButton(
-                    tooltip: 'Delete server',
+                    tooltip: getLocalText.s("Delete server"),
                     icon: Icon(Icons.delete_outline,
                         color: Theme.of(context).colorScheme.error),
                     onPressed: _delete,
                   ),
                 _SaveIconButton(controller: _ctrl, onPressed: _save),
               ],
-              bottom: const TabBar(
-                tabs: [Tab(text: 'Params'), Tab(text: 'JSON')],
+              bottom: TabBar(
+                tabs: [
+                  Tab(text: getLocalText.s("Params")),
+                  Tab(text: getLocalText.s("JSON")),
+                ],
               ),
             ),
             body: TabBarView(
@@ -271,7 +276,7 @@ class _SaveIconButton extends StatelessWidget {
       builder: (ctx, _) {
         final dirty = controller.isDirty();
         return IconButton(
-          tooltip: 'Save',
+          tooltip: getLocalText.s("Save"),
           icon: Icon(Icons.save,
               color: dirty ? Theme.of(ctx).colorScheme.primary : null),
           onPressed: onPressed,

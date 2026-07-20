@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- §279 Phase 6 (спека §6.4) — Android 13+ per-app language: заявленные
+     локали для системных Settings → App languages. Зеркало
+     LocaleController.supportedTags (Dart). -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="ru" />
+</locale-config>

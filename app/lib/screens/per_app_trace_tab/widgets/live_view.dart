@@ -5,6 +5,7 @@ import '../../../services/traffic_profiler.dart';
 import '../../../services/format_utils.dart';
 import '../../../services/process_name.dart';
 import 'empty_view.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §160 — Live-режим per-app trace. «Тупой» рендер уже отфильтрованного
 /// родителем таймлайна событий. Тап по строке → [onOpenDetail] (родитель
@@ -64,7 +65,7 @@ class LiveView extends StatelessWidget {
                       size: 14, color: cs.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Text(
-                    'System-wide events (no owner detected) — ${unattributed.length}',
+                    getLocalText.s("System-wide events (no owner detected) — %d", unattributed.length),
                     style: TextStyle(
                         fontSize: 11,
                         color: cs.onSurfaceVariant,
@@ -180,7 +181,7 @@ class LiveView extends StatelessWidget {
                         child: Text(
                           (e.process ?? '').isNotEmpty
                               ? e.process!
-                              : '(no owner)',
+                              : getLocalText.s("(no owner)"),
                           style: TextStyle(
                               fontSize: 11,
                               color: (e.process ?? '').isNotEmpty
@@ -191,7 +192,7 @@ class LiveView extends StatelessWidget {
                       ),
                       if (_isCached(e)) ...[
                         const SizedBox(width: 6),
-                        _cachedBadge(cs),
+                        _cachedBadge(context, cs),
                       ],
                     ],
                   ),
@@ -259,7 +260,7 @@ class LiveView extends StatelessWidget {
   }
 
   /// Маленький бейдж «cached» (вторая строка справа).
-  Widget _cachedBadge(ColorScheme cs) {
+  Widget _cachedBadge(BuildContext context, ColorScheme cs) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
       decoration: BoxDecoration(
@@ -271,7 +272,7 @@ class LiveView extends StatelessWidget {
         children: [
           Icon(Icons.cached, size: 10, color: cs.secondary),
           const SizedBox(width: 2),
-          Text('cached',
+          Text(getLocalText.s("cached"),
               style: TextStyle(
                   fontSize: 9,
                   fontWeight: FontWeight.w600,

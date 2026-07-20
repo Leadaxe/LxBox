@@ -106,6 +106,16 @@ class VpnModeConfig {
   /// Loopback (127.x.x.x) — виден только на самом устройстве, auth не форсится.
   static bool isLoopback(String addr) => addr.startsWith('127.');
 
+  /// §292 — валиден ли порт локального inbound: 1024..65535. Привилегированные
+  /// (<1024) не нужны и требуют root; 0/negative/>65535 роняют sing-box на
+  /// reload. Граница совпадает с UI (`vpn_mode_tab._applyPort`) — инвариант
+  /// живёт здесь, оба входа (UI + Debug API) его переиспользуют, не дублируют.
+  static bool isValidPort(int port) => port >= 1024 && port <= 65535;
+
+  /// §292 — валиден ли inbound-protocol (= sing-box inbound `type`).
+  static bool isValidProtocol(String proto) =>
+      proto == protoMixed || proto == protoHttp || proto == protoSocks;
+
   /// Тип локального inbound (= sing-box inbound `type`). У всех трёх одинаковая
   /// auth-структура `users:[{username,password}]`; http не поддерживает UDP.
   static const String protoMixed = 'mixed'; // HTTP + SOCKS5 на одном порту

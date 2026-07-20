@@ -9,11 +9,10 @@ mixin _HeartbeatMixin on ChangeNotifier {
   // --- surface, предоставляемая HomeController / другими частями ---
   HomeState get _state;
   BoxVpnClient get _vpn;
-  Timer? get _autoPingTimer;
-  set _autoPingTimer(Timer? value);
   void _emit(HomeState next);
   void _addDebug(DebugSource source, String message);
-  void cancelMassPing();
+  // §286 — единая остановка пробирования (реализация в `_PingMixin`).
+  void haltAllProbing();
 
   /// §122 — таймстемп последнего status-снапшота CommandClient'а (стрим тикает
   /// 1s). Watchdog считает туннель мёртвым, если снапшотов нет дольше порога.
@@ -103,9 +102,9 @@ mixin _HeartbeatMixin on ChangeNotifier {
 
   void _onTunnelDead() {
     _addDebug(DebugSource.app, 'Tunnel appears dead (heartbeat lost)');
-    cancelMassPing();
-    _autoPingTimer?.cancel();
-    _autoPingTimer = null;
+    // §286 — гасим всё пробирование (mass-ping + auto-ping + folder-probe),
+    // симметрично disconnected/revoked-ветке `_handleStatusEvent`.
+    haltAllProbing();
     // Полный cleanup как в `_handleStatusEvent` revoked/disconnected ветке —
     // traffic reset, connectedSince=null, configChangedNeedRestart=false. Единый
     // контракт очистки: через какой бы путь ни попали в «tunnel down»
@@ -124,7 +123,7 @@ mixin _HeartbeatMixin on ChangeNotifier {
         // onRevoke). Чаще — ядро не отвечает. Прежний текст гнал ложные
         // баг-репорты про «перехват». Реальный системный revoke пишет
         // отдельный foreign-VPN текст (см. _handleStatusEvent, §224).
-        lastError: 'Connection lost — VPN tunnel is not responding',
+        lastError: const ErrMsg(ErrKey.tunnelNotResponding),
         ccGroups: const <CcGroup>[],
         groups: <String>[],
         nodes: <String>[],

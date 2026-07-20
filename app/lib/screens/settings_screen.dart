@@ -8,11 +8,13 @@ import '../models/background_mode.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/parser_config.dart';
 import '../services/builder/if_engine.dart';
+import '../services/l10n/template_aware_state.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../widgets/template_var_list.dart';
 import '../widgets/var_values_model.dart';
 import 'vpn_mode_tab.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// VPN Settings — System (`VpnService.Builder` toggles) + Core (sing-box
 /// engine vars, `chapter: 'core'`). Routing/DNS vars живут на своих экранах.
@@ -35,7 +37,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, TemplateAwareState<SettingsScreen> {
+  // §279 — заполняется через TemplateAwareState (didChangeDependencies по
+  // локали), НЕ в initState: смена языка перечитывает локализованный шаблон.
   WizardTemplate? _template;
   // §232 — реактивная модель значений vars (per-key ValueNotifier). Единый
   // источник истины для экрана: поля TemplateVarListView подписаны каждый на
@@ -70,7 +74,25 @@ class _SettingsScreenState extends State<SettingsScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(_load());
+    // _load() стартует из onLocaleTemplateFetch (TemplateAwareState, §279).
+  }
+
+  /// §279 — первый вызов (до первого build) — полная загрузка; смена локали —
+  /// только refetch шаблона (модель значений var'ов — machine-ключи, staged
+  /// правки юзера не трогаем).
+  @override
+  void onLocaleTemplateFetch({required bool first}) {
+    if (first) {
+      unawaited(_load());
+    } else {
+      unawaited(_refetchTemplate());
+    }
+  }
+
+  Future<void> _refetchTemplate() async {
+    final template = await TemplateLoader.load();
+    if (!mounted) return;
+    setState(() => _template = template);
   }
 
   @override
@@ -164,9 +186,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     widget.subController.configDirty = true;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Applies on next connect.'),
-        duration: Duration(seconds: 3),
+      SnackBar(
+        content: Text(getLocalText.s("Applies on next connect.")),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -180,9 +202,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     widget.subController.configDirty = true;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Applies on next connect.'),
-        duration: Duration(seconds: 3),
+      SnackBar(
+        content: Text(getLocalText.s("Applies on next connect.")),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -195,9 +217,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     widget.subController.configDirty = true;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Applies on next connect.'),
-        duration: Duration(seconds: 3),
+      SnackBar(
+        content: Text(getLocalText.s("Applies on next connect.")),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -211,9 +233,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     await SettingsStorage.setNativeMemoryLimit(value);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Applied.'),
-        duration: Duration(seconds: 3),
+      SnackBar(
+        content: Text(getLocalText.s("Applied.")),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -258,7 +280,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('VPN Settings')),
+        appBar: AppBar(title: Text(getLocalText.s("VPN Settings"))),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -274,12 +296,12 @@ class _SettingsScreenState extends State<SettingsScreen>
       initialIndex: widget.initialTab.clamp(0, 2),
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('VPN Settings'),
-          bottom: const TabBar(
+          title: Text(getLocalText.s("VPN Settings")),
+          bottom: TabBar(
             tabs: [
-              Tab(text: 'System'),
-              Tab(text: 'Core'),
-              Tab(text: 'Mode'),
+              Tab(text: getLocalText.s("System")),
+              Tab(text: getLocalText.s("Core")),
+              Tab(text: getLocalText.s("Mode")),
             ],
           ),
         ),
@@ -306,10 +328,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         // §188 — «Allow VPN bypass» и «Keep VPN on exit» переехали в Mode-вкладку
         // (TUN-зависимы → видны только в vpn / vpn_proxy режимах).
         SwitchListTile(
-          title: const Text('Interrupt connections on switch'),
-          subtitle: const Text(
-              'Drop active connections when you switch nodes, so traffic '
-              'moves to the new node immediately'),
+          title: Text(getLocalText.s("Interrupt connections on switch")),
+          subtitle: Text(getLocalText.s("Drop active connections when you switch nodes, so traffic moves to the new node immediately")),
           secondary: const Icon(Icons.swap_horiz),
           value: _interruptOnSwitch,
           onChanged: _toggleInterruptOnSwitch,
@@ -329,14 +349,12 @@ class _SettingsScreenState extends State<SettingsScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Suspend idle tunnels',
+                getLocalText.s("Suspend idle tunnels"),
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: 2),
               Text(
-                'Put unreachable WireGuard tunnels to sleep after they sit '
-                'idle, freeing memory and saving battery. They wake instantly '
-                'on use. Only affects tunnels not on the active route.',
+                getLocalText.s("Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route."),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -352,11 +370,18 @@ class _SettingsScreenState extends State<SettingsScreen>
               border: OutlineInputBorder(),
               isDense: true,
             ),
-            items: const [
-              DropdownMenuItem<String>(value: '', child: Text('Off')),
-              DropdownMenuItem<String>(value: '30s', child: Text('30 seconds')),
-              DropdownMenuItem<String>(value: '2m', child: Text('2 minutes')),
-              DropdownMenuItem<String>(value: '5m', child: Text('5 minutes')),
+            items: [
+              DropdownMenuItem<String>(
+                  value: '', child: Text(getLocalText.s("Off"))),
+              DropdownMenuItem<String>(
+                  value: '30s',
+                  child: Text(getLocalText.plural("%d seconds", 30))),
+              DropdownMenuItem<String>(
+                  value: '2m',
+                  child: Text(getLocalText.plural("%d minutes", 2))),
+              DropdownMenuItem<String>(
+                  value: '5m',
+                  child: Text(getLocalText.plural("%d minutes", 5))),
             ],
             onChanged: (String? v) {
               if (!_vpnLoaded || v == null) return;
@@ -377,17 +402,12 @@ class _SettingsScreenState extends State<SettingsScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Suspend active-route tunnels',
+                getLocalText.s("Suspend active-route tunnels"),
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: 2),
               Text(
-                'Also put tunnels on the active route (pool members, the '
-                'selected node) to sleep after a long quiet period — e.g. '
-                'overnight. The first connection after sleep adds ~1 round '
-                'trip. Keep this at or above the channels\' idle timeout '
-                '(30 min by default). Requires "Suspend idle tunnels" to '
-                'be on.',
+                getLocalText.s("Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the channels' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on."),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -406,12 +426,21 @@ class _SettingsScreenState extends State<SettingsScreen>
               // становится и рамка, не только контент.
               enabled: _vpnLoaded && _idleSuspend.isNotEmpty,
             ),
-            items: const [
-              DropdownMenuItem<String>(value: '', child: Text('Off')),
-              DropdownMenuItem<String>(value: '5m', child: Text('5 minutes')),
-              DropdownMenuItem<String>(value: '15m', child: Text('15 minutes')),
-              DropdownMenuItem<String>(value: '30m', child: Text('30 minutes')),
-              DropdownMenuItem<String>(value: '1h', child: Text('1 hour')),
+            items: [
+              DropdownMenuItem<String>(
+                  value: '', child: Text(getLocalText.s("Off"))),
+              DropdownMenuItem<String>(
+                  value: '5m',
+                  child: Text(getLocalText.plural("%d minutes", 5))),
+              DropdownMenuItem<String>(
+                  value: '15m',
+                  child: Text(getLocalText.plural("%d minutes", 15))),
+              DropdownMenuItem<String>(
+                  value: '30m',
+                  child: Text(getLocalText.plural("%d minutes", 30))),
+              DropdownMenuItem<String>(
+                  value: '1h',
+                  child: Text(getLocalText.plural("%d hours", 1))),
             ],
             // §277 — onChanged: null = честный disabled (серый дропдаун),
             // пока базовый порог выключен.
@@ -435,12 +464,8 @@ class _SettingsScreenState extends State<SettingsScreen>
             if (!_vpnLoaded) return;
             unawaited(_applyPassiveCheck(v));
           },
-          title: const Text('Passive health check'),
-          subtitle: const Text(
-            'Skip periodic server probes while your own traffic already '
-            'proves the connection works. Fewer wakeups and less battery; '
-            'ping numbers refresh less often.',
-          ),
+          title: Text(getLocalText.s("Passive health check")),
+          subtitle: Text(getLocalText.s("Skip periodic server probes while your own traffic already proves the connection works. Fewer wakeups and less battery; ping numbers refresh less often.")),
         ),
         // §271 — memory limit ядра. Применяется к работающему ядру сразу.
         Padding(
@@ -449,15 +474,12 @@ class _SettingsScreenState extends State<SettingsScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Memory limit',
+                getLocalText.s("Memory limit"),
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: 2),
               Text(
-                'Caps the VPN core\'s memory. A cap that is too low keeps the '
-                'processor busy with garbage collection and heats the phone. '
-                'Auto sizes the cap to this device\'s RAM; Off removes the cap '
-                'but keeps low-memory monitoring. Applies immediately.',
+                getLocalText.s("Caps the VPN core's memory. A cap that is too low keeps the processor busy with garbage collection and heats the phone. Auto sizes the cap to this device's RAM; Off removes the cap but keeps low-memory monitoring. Applies immediately."),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -473,16 +495,21 @@ class _SettingsScreenState extends State<SettingsScreen>
               border: OutlineInputBorder(),
               isDense: true,
             ),
-            items: const [
+            items: [
               DropdownMenuItem<String>(
                   value: MemoryLimitSetting.auto,
-                  child: Text('Auto (recommended)')),
+                  child: Text(getLocalText.s("Auto (recommended)"))),
               DropdownMenuItem<String>(
-                  value: MemoryLimitSetting.off, child: Text('Off')),
-              DropdownMenuItem<String>(value: '200', child: Text('200 MB')),
-              DropdownMenuItem<String>(value: '384', child: Text('384 MB')),
-              DropdownMenuItem<String>(value: '512', child: Text('512 MB')),
-              DropdownMenuItem<String>(value: '768', child: Text('768 MB')),
+                  value: MemoryLimitSetting.off,
+                  child: Text(getLocalText.s("Off"))),
+              DropdownMenuItem<String>(
+                  value: '200', child: Text(getLocalText.s("%d MB", 200))),
+              DropdownMenuItem<String>(
+                  value: '384', child: Text(getLocalText.s("%d MB", 384))),
+              DropdownMenuItem<String>(
+                  value: '512', child: Text(getLocalText.s("%d MB", 512))),
+              DropdownMenuItem<String>(
+                  value: '768', child: Text(getLocalText.s("%d MB", 768))),
             ],
             onChanged: (String? v) {
               if (!_vpnLoaded || v == null) return;
@@ -496,13 +523,12 @@ class _SettingsScreenState extends State<SettingsScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Tunnel sleep mode',
+                getLocalText.s("Tunnel sleep mode"),
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: 2),
               Text(
-                'When to pause the tunnel to save battery. Takes effect on '
-                'next VPN connect.',
+                getLocalText.s("When to pause the tunnel to save battery. Takes effect on next VPN connect."),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -516,29 +542,22 @@ class _SettingsScreenState extends State<SettingsScreen>
             if (!_vpnLoaded) return;
             unawaited(_applyBackgroundMode(m));
           },
-          child: const Column(
+          child: Column(
             children: [
               RadioListTile<BackgroundMode>(
                 value: BackgroundMode.never,
-                title: Text('Never sleep (recommended)'),
-                subtitle: Text(
-                    'Tunnel is always active. Best reliability — pushes '
-                    'and long-lived sockets survive. Higher battery use.'),
+                title: Text(getLocalText.s("Never sleep (recommended)")),
+                subtitle: Text(getLocalText.s("Tunnel is always active. Best reliability — pushes and long-lived sockets survive. Higher battery use.")),
               ),
               RadioListTile<BackgroundMode>(
                 value: BackgroundMode.lazy,
-                title: Text('Lazy sleep'),
-                subtitle: Text(
-                    'Pause only in deep Doze (screen off for a long '
-                    'time + no motion). Balanced.'),
+                title: Text(getLocalText.s("Lazy sleep")),
+                subtitle: Text(getLocalText.s("Pause only in deep Doze (screen off for a long time + no motion). Balanced.")),
               ),
               RadioListTile<BackgroundMode>(
                 value: BackgroundMode.always,
-                title: Text('Aggressive battery saving'),
-                subtitle: Text(
-                    'Pause tunnel whenever screen turns off. Max '
-                    'battery savings, but pushes, incoming calls and '
-                    'background sync stop until unlock.'),
+                title: Text(getLocalText.s("Aggressive battery saving")),
+                subtitle: Text(getLocalText.s("Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until unlock.")),
               ),
             ],
           ),
@@ -553,7 +572,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     List<WizardVar> editableVars,
   ) {
     if (editableVars.isEmpty) {
-      return const Center(child: Text('No configurable variables'));
+      return Center(child: Text(getLocalText.s("No configurable variables")));
     }
     final sectionDescriptions = {
       for (final s in template.sectionsFor('core')) s.title: s.description,

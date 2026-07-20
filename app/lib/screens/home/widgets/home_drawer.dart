@@ -13,6 +13,7 @@ import '../../settings_screen.dart';
 import '../../speed_test_screen.dart';
 import '../../stats_screen.dart';
 import '../../subscriptions_screen.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Навигационное меню (Drawer) главного экрана: переход в разделы приложения.
 /// Каждый пункт закрывает drawer и push'ит экран. «Statistics» доступен только
@@ -44,8 +45,8 @@ class HomeDrawer extends StatelessWidget {
             const SizedBox(height: 12),
             ListTile(
               leading: const Icon(Icons.dns_outlined),
-              title: const Text('Servers'),
-              subtitle: const Text('Subscriptions & proxy'),
+              title: Text(getLocalText.s("Servers")),
+              subtitle: Text(getLocalText.s("Subscriptions & proxy")),
               onTap: () => _go(
                 context,
                 SubscriptionsScreen(
@@ -57,8 +58,8 @@ class HomeDrawer extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.alt_route_outlined),
-              title: const Text('Routing'),
-              subtitle: const Text('Channels and routing rules'),
+              title: Text(getLocalText.s("Routing")),
+              subtitle: Text(getLocalText.s("Channels and routing rules")),
               onTap: () => _go(
                 context,
                 RoutingScreen(
@@ -69,8 +70,8 @@ class HomeDrawer extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.dns_outlined),
-              title: const Text('DNS Settings'),
-              subtitle: const Text('DNS servers and rules'),
+              title: Text(getLocalText.s("DNS Settings")),
+              subtitle: Text(getLocalText.s("DNS servers and rules")),
               onTap: () => _go(
                 context,
                 DnsSettingsScreen(
@@ -81,8 +82,8 @@ class HomeDrawer extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.tune_outlined),
-              title: const Text('VPN Settings'),
-              subtitle: const Text('Config variables'),
+              title: Text(getLocalText.s("VPN Settings")),
+              subtitle: Text(getLocalText.s("Config variables")),
               onTap: () => _go(
                 context,
                 SettingsScreen(
@@ -93,22 +94,22 @@ class HomeDrawer extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.settings_outlined),
-              title: const Text('App Settings'),
-              subtitle: const Text('Theme, appearance'),
+              title: Text(getLocalText.s("App Settings")),
+              subtitle: Text(getLocalText.s("Theme, appearance")),
               onTap: () => _go(context, const AppSettingsScreen()),
             ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.speed_outlined),
-              title: const Text('Speed Test'),
-              subtitle: const Text('Test download/upload speed'),
+              title: Text(getLocalText.s("Speed Test")),
+              subtitle: Text(getLocalText.s("Test download/upload speed")),
               onTap: () =>
                   _go(context, SpeedTestScreen(homeController: controller)),
             ),
             ListTile(
               leading: const Icon(Icons.bar_chart_outlined),
-              title: const Text('Statistics'),
-              subtitle: const Text('Traffic by outbound'),
+              title: Text(getLocalText.s("Statistics")),
+              subtitle: Text(getLocalText.s("Traffic by outbound")),
               enabled: controller.state.tunnelUp,
               onTap: () => _go(
                 context,
@@ -121,20 +122,20 @@ class HomeDrawer extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.description_outlined),
-              title: const Text('Config Editor'),
-              subtitle: const Text('View, edit, import JSON'),
+              title: Text(getLocalText.s("Config Editor")),
+              subtitle: Text(getLocalText.s("View, edit, import JSON")),
               onTap: () => _go(context, ConfigScreen(controller: controller)),
             ),
             ListTile(
               leading: const Icon(Icons.bug_report_outlined),
-              title: const Text('Debug'),
-              subtitle: const Text('Last 100 events'),
+              title: Text(getLocalText.s("Debug")),
+              subtitle: Text(getLocalText.s("Last 100 events")),
               onTap: () => _go(context, const DebugScreen()),
             ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('About'),
+              title: Text(getLocalText.s("About")),
               onTap: () => _go(context, const AboutScreen()),
             ),
           ],

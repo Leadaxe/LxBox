@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../services/l10n/locale_controller.dart';
 
 /// Read-only dialog с полным JSON body правила. Юзер видит что внутри
 /// без необходимости лезть в исходник (особенно для kind=template/rule
@@ -17,14 +18,14 @@ void showRuleBodyDialog(
     _ => body,
   };
   final pretty = unwrapped == null
-      ? '(content unavailable)'
+      ? getLocalText.s("(content unavailable)")
       : const JsonEncoder.withIndent('  ').convert(unwrapped);
   final sourceLabel = switch (kind) {
-    'template' => 'template',
-    'preset' => 'preset',
-    'srs' => 'srs',
-    'rule' => 'routing rule',
-    _ => 'user rule',
+    'template' => getLocalText.s("template"),
+    'preset' => getLocalText.s("preset"),
+    'srs' => getLocalText.s("srs"),
+    'rule' => getLocalText.s("routing rule"),
+    _ => getLocalText.s("user rule"),
   };
   showDialog<void>(
     context: context,
@@ -49,7 +50,7 @@ void showRuleBodyDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Close'),
+          child: Text(getLocalText.s("Close")),
         ),
       ],
     ),

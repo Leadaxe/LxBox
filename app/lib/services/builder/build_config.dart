@@ -3,7 +3,6 @@ import 'dart:convert';
 import '../../models/channel.dart';
 import '../../models/custom_rule.dart';
 import '../../models/emit_context.dart';
-import '../../models/node_spec.dart' show Awg;
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/singbox_entry.dart';
@@ -11,6 +10,7 @@ import '../../models/template_vars.dart';
 import '../../config/consts.dart';
 import '../../models/validation.dart';
 import '../json_clone.dart';
+import '../node_hash.dart';
 import '../rule_set_downloader.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
@@ -208,9 +208,20 @@ Future<BuildResult> buildConfig({
   final emitWarnings = <String>[];
   for (final list in lists) {
     if (!list.enabled) continue;
+    // §283 — зеркало фильтра ServerListBuild.build: выключенная нода не
+    // эмитится → её warnings не сыпем (цикл идёт по list.nodes мимо build).
+    final disabledHashes = switch (list) {
+      final SubscriptionServers s when s.disabledHashes.isNotEmpty =>
+        s.disabledHashes,
+      _ => null,
+    };
     for (final node in list.nodes) {
+      if (disabledHashes != null &&
+          disabledHashes.containsKey(nodeIdentityHash(node))) {
+        continue;
+      }
       for (final w in node.warnings) {
-        final line = '${node.tag}: ${w.message}';
+        final line = '${node.tag}: ${w.renderEn()}';
         if (!emitWarnings.contains(line)) emitWarnings.add(line);
       }
     }
@@ -466,6 +477,17 @@ Future<BuildResult> buildConfig({
         'to the global DNS strategy.');
   }
 
+  // §281 — неизвестный uTLS fingerprint = fatal у ядра при создании outbound
+  // («unknown uTLS fingerprint») — конфиг не встаёт целиком. Парсер уже
+  // канонизирует на входе (xray-псевдонимы hellochrome_* → chrome, мусор →
+  // chrome); этот post-step — страховка для путей мимо парсера.
+  final healedFingerprints = healUnknownUtlsFingerprints(config);
+  for (final h in healedFingerprints) {
+    emitWarnings.add(
+        'Fingerprint replaced: outbound "${h.owner}" had unknown uTLS '
+        'fingerprint "${h.original}" — using "chrome" instead.');
+  }
+
   final validation = validateConfig(config);
   return BuildResult(
     configJson: jsonEncode(config),
@@ -567,28 +589,8 @@ List<Map<String, dynamic>> _buildChannelGroups({
 
   // §248 — member-set'ы считаем один раз: их делят selector и auto-двойник.
   // §254 — детур-циклы билдер больше НЕ рвёт: детекция и минимальный набор
-  // виновников — в validateConfig (fatal, конфиг не собирается); здесь
-  // структуры графа нужны только AWG-advisory ниже.
+  // виновников — в validateConfig (fatal, конфиг не собирается).
   final memberSets = [for (final c in active) nodesFor(c)];
-  final entryByTag = <String, Map<String, dynamic>>{
-    for (final m in nodeEntries)
-      if (m['tag'] is String) m['tag'] as String: m,
-  };
-  final channelByAlias = <String, int>{
-    for (var i = 0; i < active.length; i++) ...{
-      active[i].tag: i,
-      active[i].autoTag: i,
-    },
-  };
-
-  _warnAwgDetourViaWgChannels(
-    active: active,
-    memberSets: memberSets,
-    nodeEntries: nodeEntries,
-    entryByTag: entryByTag,
-    channelByAlias: channelByAlias,
-    emitWarnings: emitWarnings,
-  );
 
   final result = <Map<String, dynamic>>[];
   for (var i = 0; i < active.length; i++) {
@@ -701,45 +703,6 @@ List<Map<String, dynamic>> _buildChannelGroups({
   return result;
 }
 
-/// §248 — advisory: узел AmneziaWG детурится через канал, в node-set
-/// которого есть wireguard-эндпоинты. Прямую ссылку AWG→WG прячет §130-гейт
-/// пикера; канальная секция его осознанно обходит (состав канала не
-/// ограничен) — предупреждаем, не запрещаем (AWG через WireGuard вешает
-/// ядро на Android).
-void _warnAwgDetourViaWgChannels({
-  required List<Channel> active,
-  required List<List<String>> memberSets,
-  required List<Map<String, dynamic>> nodeEntries,
-  required Map<String, Map<String, dynamic>> entryByTag,
-  required Map<String, int> channelByAlias,
-  required List<String> emitWarnings,
-}) {
-  bool isWg(Map<String, dynamic> m) => m['type'] == 'wireguard';
-  // §097 — AWG = wireguard-endpoint с obfuscation-полями в корне (writeInto).
-  bool isAwg(Map<String, dynamic> m) =>
-      isWg(m) &&
-      (Awg.numKeys.any(m.containsKey) || Awg.strKeys.any(m.containsKey));
-
-  final channelHasWg = <int, bool>{};
-  for (final m in nodeEntries) {
-    final d = m['detour'];
-    if (d is! String || d.isEmpty) continue;
-    final ci = channelByAlias[d];
-    if (ci == null || !isAwg(m)) continue;
-    final hasWg = channelHasWg[ci] ??= memberSets[ci].any((t) {
-      final e = entryByTag[t];
-      return e != null && isWg(e);
-    });
-    if (hasWg) {
-      final c = active[ci];
-      final label = c.label.isNotEmpty ? c.label : c.tag;
-      emitWarnings.add('Node "${m['tag']}" (AmneziaWG) detours via channel '
-          '"$label" which contains WireGuard node(s) — this can hang the '
-          'tunnel on Android.');
-    }
-  }
-}
-
 /// §125 fallback — синтез `List<Channel>` из `template.groupTemplates`, когда
 /// storage ещё пуст (тесты без storage / первый билд до миграции). Та же
 /// seed-логика, что и one-shot миграция `_migrateChannelsIfNeeded`, но auto-
@@ -782,7 +745,10 @@ List<Channel> _channelsFromTemplate(
 /// ноды). Общий helper для билдера и live-превью редактора (§125 F4).
 RegExp? _tryCompileRegex(String pattern) {
   try {
-    return RegExp(pattern);
+    // §301 — node-filter регистронезависим (nodeFilter + defaultFilter). Тот
+    // же дефолт, что в основном окне поиска; здесь это решает, какие ноды
+    // реально попадают в канал в собранном конфиге, а не только в превью.
+    return RegExp(pattern, caseSensitive: false);
   } catch (_) {
     return null;
   }

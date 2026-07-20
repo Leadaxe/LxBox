@@ -9,6 +9,7 @@ import '../per_app_trace_tab/widgets/aggregate_axis.dart';
 import '../per_app_trace_tab/widgets/aggregated_view.dart';
 import '../per_app_trace_tab/widgets/ip_chip.dart';
 import 'traffic_event_detail_sheet.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §160 — детальный bottom-sheet по одному агрегату (домен или IP).
 ///
@@ -109,7 +110,10 @@ class _AggregateDetailSheet extends StatelessWidget {
                     color: cs.secondary.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(axis == AggAxis.domain ? 'Domain' : 'IP',
+                  child: Text(
+                      axis == AggAxis.domain
+                          ? getLocalText.s("Domain")
+                          : getLocalText.s("IP"),
                       style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -138,7 +142,7 @@ class _AggregateDetailSheet extends StatelessWidget {
                 if (conns.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text('No connections.',
+                    child: Text(getLocalText.s("No connections."),
                         style: TextStyle(
                             fontSize: 12, color: cs.onSurfaceVariant)),
                   )
@@ -195,7 +199,7 @@ class _AggregateDetailSheet extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 14, bottom: 2),
       child: Text(
-        'CONNECTIONS ($count)',
+        getLocalText.s("CONNECTIONS (%d)", count),
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -338,7 +342,7 @@ class _AggregateDetailSheet extends StatelessWidget {
         width: double.infinity,
         child: OutlinedButton.icon(
           icon: const Icon(Icons.copy, size: 16),
-          label: const Text('Copy JSON'),
+          label: Text(getLocalText.s("Copy JSON")),
           onPressed: () => _copy(context, _summaryJson(), message: 'JSON copied'),
         ),
       ),

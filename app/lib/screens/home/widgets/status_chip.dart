@@ -33,8 +33,8 @@ class StatusChip extends StatelessWidget {
     final bgColor =
         state.tunnelUp ? Theme.of(context).colorScheme.primaryContainer : null;
     final label = (isRevoked || state.tunnel == TunnelStatus.unknown)
-        ? TunnelStatus.disconnected.label
-        : state.tunnel.label;
+        ? TunnelStatus.disconnected.label()
+        : state.tunnel.label();
 
     Widget iconWidget = Icon(icon, size: 18, color: color);
     if (isConnecting) {

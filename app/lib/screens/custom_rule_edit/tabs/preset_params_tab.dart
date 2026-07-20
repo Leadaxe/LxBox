@@ -4,6 +4,7 @@ import '../../../models/parser_config.dart' show WizardVar;
 import '../../../widgets/outbound_picker.dart';
 import '../edit_controller.dart';
 import 'params_tab.dart' show ParamsTabActions;
+import '../../../services/l10n/locale_controller.dart';
 
 /// §053 Stage 3 — Params tab для preset-ветки (§033 / §045).
 ///
@@ -44,16 +45,13 @@ class PresetParamsTab extends StatelessWidget {
                   Icon(Icons.warning_amber_outlined,
                       color: cs.error, size: 18),
                   const SizedBox(width: 6),
-                  Text('Preset not found',
+                  Text(getLocalText.s("Preset not found"),
                       style: TextStyle(
                           fontWeight: FontWeight.w600, color: cs.error)),
                 ]),
                 const SizedBox(height: 4),
                 Text(
-                  'Preset "${c.initial.presetId}" no longer exists in '
-                  'this version of the app. The rule will be skipped when '
-                  'the config is generated. Delete it or update to a newer '
-                  'version that still has this preset.',
+                  getLocalText.s("Preset \"%s\" no longer exists in this version of the app. The rule will be skipped when the config is generated. Delete it or update to a newer version that still has this preset.", c.initial.presetId),
                   style: const TextStyle(fontSize: 12),
                 ),
               ],
@@ -62,7 +60,8 @@ class PresetParamsTab extends StatelessWidget {
           const SizedBox(height: 24),
           OutlinedButton.icon(
             icon: Icon(Icons.delete_outline, size: 18, color: cs.error),
-            label: Text('Delete rule', style: TextStyle(color: cs.error)),
+            label: Text(getLocalText.s("Delete rule"),
+                style: TextStyle(color: cs.error)),
             onPressed: actions.onDelete,
           ),
         ],
@@ -113,7 +112,7 @@ class PresetParamsTab extends StatelessWidget {
               Row(children: [
                 Icon(Icons.push_pin_outlined, size: 16, color: cs.primary),
                 const SizedBox(width: 6),
-                Text('Based on preset',
+                Text(getLocalText.s("Based on preset"),
                     style: TextStyle(fontSize: 12, color: cs.primary)),
                 // §231 — чип «DNS»: пресет трогает DNS-настройки (сервер/правило).
                 if (preset.touchesDns) ...[
@@ -129,6 +128,7 @@ class PresetParamsTab extends StatelessWidget {
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.dns_outlined, size: 12, color: cs.primary),
                       const SizedBox(width: 3),
+                      // l10n-exempt: acronym, same in all locales
                       Text('DNS',
                           style: TextStyle(
                               fontSize: 10,
@@ -170,8 +170,7 @@ class PresetParamsTab extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'This rule changes DNS settings — it adds a DNS server '
-                    'and/or a DNS rule. See DNS Settings.',
+                    getLocalText.s("This rule changes DNS settings — it adds a DNS server and/or a DNS rule. See DNS Settings."),
                     style: const TextStyle(fontSize: 12),
                   ),
                 ),
@@ -183,18 +182,21 @@ class PresetParamsTab extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              // §264 — имя пресета read-only: это snapshot `preset.label` из
-              // шаблона (🔒, STORAGE §030), юзер его не правит. Раньше поле было
-              // редактируемым — рассинхрон с label. Пресеты сюда попадают всегда,
-              // поэтому readOnly безусловно.
-              child: TextField(
-                controller: c.nameCtrl,
+              // §264 — имя пресета read-only: юзер его не правит. §279 —
+              // показываем LIVE display-имя (label локализованного шаблона +
+              // порядковый суффикс копии, передан RoutingScreen'ом), а не
+              // сохранённый снапшот из nameCtrl: снапшот заморожен на локали
+              // создания. nameCtrl не трогаем — save сохраняет снапшот.
+              child: TextFormField(
+                key: ValueKey('preset-name-${c.displayName ?? preset.label}'),
+                initialValue: c.displayName ??
+                    (preset.label.isNotEmpty ? preset.label : c.initial.name),
                 readOnly: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Name',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: getLocalText.s("Name"),
                   isDense: true,
-                  prefixIcon: Icon(Icons.lock_outline, size: 18),
+                  prefixIcon: const Icon(Icons.lock_outline, size: 18),
                 ),
               ),
             ),
@@ -214,7 +216,7 @@ class PresetParamsTab extends StatelessWidget {
         // иначе рисуется мёртвый контрол (dropdown из одного пункта).
         if (visibleVars.isNotEmpty) ...[
           const SizedBox(height: 20),
-          Text('PARAMETERS',
+          Text(getLocalText.s("PARAMETERS"),
               style: theme.textTheme.titleSmall?.copyWith(
                   color: cs.primary, fontWeight: FontWeight.w600)),
           const Divider(),
@@ -230,7 +232,7 @@ class PresetParamsTab extends StatelessWidget {
         const SizedBox(height: 12),
         FilledButton.icon(
           icon: const Icon(Icons.save, size: 18),
-          label: const Text('Save'),
+          label: Text(getLocalText.s("Save")),
           onPressed: actions.onSave,
         ),
       ],
@@ -292,11 +294,11 @@ class _PresetVarWidget extends StatelessWidget {
         }
         final items = <DropdownMenuItem<String>>[];
         if (!v.required) {
-          items.add(const DropdownMenuItem<String>(
+          items.add(DropdownMenuItem<String>(
             value: '',
-            child: Text('— (default DNS)',
-                style:
-                    TextStyle(fontSize: 13, fontStyle: FontStyle.italic)),
+            child: Text(getLocalText.s("— (default DNS)"),
+                style: const TextStyle(
+                    fontSize: 13, fontStyle: FontStyle.italic)),
           ));
         }
         for (final s in preset.dnsServers) {
@@ -334,11 +336,11 @@ class _PresetVarWidget extends StatelessWidget {
         }
         final items = <DropdownMenuItem<String>>[];
         if (!v.required) {
-          items.add(const DropdownMenuItem<String>(
+          items.add(DropdownMenuItem<String>(
             value: '',
-            child: Text('— (none)',
-                style:
-                    TextStyle(fontSize: 13, fontStyle: FontStyle.italic)),
+            child: Text(getLocalText.s("— (none)"),
+                style: const TextStyle(
+                    fontSize: 13, fontStyle: FontStyle.italic)),
           ));
         }
         for (final o in v.options) {
@@ -429,7 +431,7 @@ class _PresetVarWidget extends StatelessWidget {
         );
       default:
         control = Text(
-          '(unsupported var type: ${v.type})',
+          getLocalText.s("(unsupported var type: %s)", v.type),
           style: TextStyle(fontSize: 12, color: cs.error),
         );
     }

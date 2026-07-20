@@ -5,10 +5,9 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/custom_rule.dart';
-import '../models/parser_config.dart';
 import '../services/builder/post_steps.dart';
-import '../services/builder/preset_expand.dart';
-import '../services/builder/rule_set_registry.dart';
+import '../services/dns/dns_controller.dart';
+import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
 import '../services/preset_on_change.dart';
 import '../services/settings_storage.dart';
@@ -24,6 +23,7 @@ import 'dns_settings_screen/widgets/local_resolver_warning_banner.dart';
 import 'dns_settings_screen/widgets/merged_server_tile.dart';
 import 'dns_settings_screen/widgets/resolver_picker.dart';
 import 'lazy_persist_mixin.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// DNS Settings (§014, §061 dns-rules-refactor, бывший feature §041).
 ///
@@ -46,7 +46,10 @@ class DnsSettingsScreen extends StatefulWidget {
 }
 
 class _DnsSettingsScreenState extends State<DnsSettingsScreen>
-    with WidgetsBindingObserver, LazyPersistMixin<DnsSettingsScreen> {
+    with
+        WidgetsBindingObserver,
+        LazyPersistMixin<DnsSettingsScreen>,
+        TemplateAwareState<DnsSettingsScreen> {
   @override
   SubscriptionController get lazyController => widget.subController;
 
@@ -112,9 +115,14 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   String _dnsFinal = '';
   String _defaultResolver = '';
 
+  // §279 — _load() стартует из onLocaleTemplateFetch (TemplateAwareState):
+  // первый вызов — до первого build; смена локали — повторный _load()
+  // (безопасно: буферы экрана staged в SettingsStorage-кэш на каждую мутацию
+  // через markDirty→stageChanges, перечитывание вернёт их же, а
+  // template-derived display-данные — описания серверов, label'ы пресетов —
+  // пере-дерайвятся из свежелокализованного шаблона).
   @override
-  void initState() {
-    super.initState();
+  void onLocaleTemplateFetch({required bool first}) {
     unawaited(_load());
   }
 
@@ -122,226 +130,46 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   void _markDirty() => markDirty();
 
   Future<void> _load() async {
-    final template = await TemplateLoader.load();
-    final vars = await SettingsStorage.getAllVars();
-
-    // Parse dns_options from template
-    final templateDns = template.dnsOptions;
-    final templateServersRaw = (templateDns['servers'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .map((s) => Map<String, dynamic>.from(s))
-        .toList();
-    final templateRulesRaw = (templateDns['rules'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .toList();
-
-    // §043: storage хранит kind-discriminated refs (симметрия с DNS rules).
-    // Resolver делает auto-discovery + orphan cleanup + legacy migration.
-    // §117: template-серверы — обёртки `{description, enabled, vars?, server}`.
-    final templateByTag = templateDnsServersByTag(templateServersRaw);
-
-    // §125: активные каналы для outbound-пикера vars (storage, не template).
-    // vpn-1 присутствует required-инвариантом модели.
-    final channels = await SettingsStorage.getChannels();
-    final outboundOptions = <OutboundOption>[
-      const OutboundOption(value: 'direct-out', label: 'direct'),
-      // §274 — ⚙-префикс detour-канала как во всех пикерах (displayLabel).
-      for (final c in channels)
-        if (c.enabled || c.isRequired)
-          OutboundOption(value: c.tag, label: c.displayLabel),
-    ];
-
-    // §033: build template rules map by name
-    final templateRulesByName = <String, Map<String, dynamic>>{
-      for (final r in templateRulesRaw)
-        if (r['name'] is String && (r['name'] as String).isNotEmpty)
-          r['name'] as String: r,
-    };
-
-    // §033/§121: build active preset rules maps by presetId + dns_servers.
-    // §121 — routing-тоггл = король: выключенный пресет (cr.enabled=false) не
-    // порождает ни DNS-серверы, ни DNS-правила, ни mirror'ы. Симметрия с
-    // build-time (custom_rules.dart dnsEnabled gate + build_config
-    // activePresetIdsWithDnsRule). Иначе UI набрал бы серверы/правила
-    // выключенного пресета и orphan-cleanup рассинхронизировался бы с серверами.
-    final presetRulesByPresetId = <String, List<Map<String, dynamic>>>{};
-    final presetLabelByPresetId = <String, String>{};
-    final presetDnsEnable = <String, bool>{}; // §257
-    final presetServersWithLabel = <Map<String, dynamic>>[];
-    final activeRules = await SettingsStorage.getCustomRules();
-    final allPresets = template.selectableRules;
-    final activePresetIdsWithDnsRule = <String>{};
-    for (final cr in activeRules) {
-      if (cr is! CustomRulePreset) continue;
-      if (cr.presetId.isEmpty) continue;
-      if (!cr.enabled) continue; // §121: routing off → пресет мёртв целиком
-      SelectableRule? match;
-      for (final p in allPresets) {
-        if (p.presetId == cr.presetId) {
-          match = p;
-          break;
-        }
-      }
-      if (match == null) continue;
-      if (match.dnsRules.isNotEmpty) {
-        activePresetIdsWithDnsRule.add(cr.presetId);
-      }
-      // §257: тумблер DNS-блока пресета — магическая var dns_enable
-      // (единая точка истины с билдером). Нет var → ключ не пишем
-      // (UI рисует строку без свитча).
-      if (match.vars.any((v) => v.name == 'dns_enable')) {
-        presetDnsEnable[cr.presetId] = presetDnsEnableVar(cr, match);
-      }
-      final fragments = expandPreset(cr, match);
-      if (match.dnsRules.isNotEmpty) {
-        // §253: ключ по СЫРОМУ шаблону — симметрия с
-        // activePresetIdsWithDnsRule выше. Если expansion выкинул все
-        // DNS-правила (нескачанный SRS и т.п.), запись kind:preset не должна
-        // выпасть из persist'а (cleanDnsRulesForPersist фильтрует по
-        // containsKey) — иначе auto-discovery воскресит её с enabled=true и
-        // затрёт выключенное юзером состояние.
-        presetRulesByPresetId[cr.presetId] = fragments.dnsRules;
-      }
-      presetLabelByPresetId[cr.presetId] = match.label;
-      // Collect preset's expanded dns_servers — annotate with preset.label
-      // for display badge. Tag-collisions с template/user разрешаются на
-      // build'е (дедуп по tag, first-wins); UI просто показывает что есть.
-      for (final s in fragments.dnsServers) {
-        final annotated = Map<String, dynamic>.from(s)
-          ..['_preset_label'] = match.label;
-        presetServersWithLabel.add(annotated);
-      }
-    }
-
-    // §033: resolve current rules list (auto-discover + orphan cleanup +
-    // persist if changed). Single source of truth shared with builder.
-    final resolvedRules = await resolveDnsRulesList(
-      templateRules: templateRulesRaw,
-      activePresetIdsWithDnsRule: activePresetIdsWithDnsRule,
-    );
-
-    // §043: resolve servers refs list (legacy migration → kind-refs;
-    // auto-discovery template+preset; orphan cleanup; persist if changed).
-    final presetServersByTag = <String, Map<String, dynamic>>{
-      for (final s in presetServersWithLabel)
-        if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
-          s['tag'] as String: s,
-    };
-    final resolvedServers = await resolveDnsServersList(
-      templateServers: templateServersRaw,
-      presetServersByTag: presetServersByTag,
-    );
-
-    // §117: реальные тела DNS-mirror'ов (rule-источники) для превью —
-    // подзаголовок `rule_set` + read-only диалог по тапу. Гоним тот же
-    // эмиттер, что и финальный билд (тег rule_set совпадает), но с
-    // **force-active** eligible-правилами: тело строится и для выключенного
-    // DNS-аспекта, чтобы выключенная строка осталась видимой/информативной.
-    // Persisted-правила не трогаем. srs: dummy-path (как ViewTab) — mirror
-    // породится без скачанного .srs.
-    final previewRules = [
-      for (final cr in activeRules)
-        if (cr.dnsMirrorEligible && !(cr.dns?.enabled ?? false))
-          switch (cr) {
-            CustomRuleInline() =>
-              cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
-            CustomRuleSrs() =>
-              cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
-            _ => cr,
-          }
-        else
-          cr,
-    ];
-    final mirrorSrsPaths = <String, String>{
-      for (final cr in previewRules)
-        if (cr is CustomRuleSrs) cr.id: '<srs>',
-    };
-    final unifiedMirrors = applyAllCustomRules(
-      RuleSetRegistry(),
-      previewRules,
-      allPresets,
-      srsPaths: mirrorSrsPaths,
-    );
-    // §257: правило может нести ДВА mirror'а (server + serverless Force
-    // IPv4) — группируем списком (Map→entry молча терял бы второй).
-    final dnsMirrorsByRuleId = <String, List<DnsMirrorEntry>>{};
-    for (final m in unifiedMirrors.dnsMirrors) {
-      final id = m.ruleId;
-      if (id == null || id.isEmpty) continue;
-      (dnsMirrorsByRuleId[id] ??= []).add(m);
-    }
-
-    // §121: автосброс DNS Final / Default Resolver на template-дефолт, если
-    // выбранный сервер исчез из каталога (напр. выключили пресет, чьи серверы
-    // были выбраны резольверами). Иначе битый tag уходит в config → sing-box
-    // реджектит «server not found» при старте. Считаем доступные tag'и из
-    // локальных resolved-значений (state ещё не присвоен).
-    final ruleRefsByTag = <String, String>{
-      for (final cr in activeRules)
-        if (cr.dnsMirrorActive)
-          cr.dns!.serverTag: cr.name.isNotEmpty ? cr.name : 'rule',
-    };
-    final availableTags = enabledServerTags(resolveDisplayedServers(
-      resolvedServers, templateByTag, presetServersByTag,
-      ruleRefsByTag: ruleRefsByTag));
-    var dnsFinal = vars['dns_final'] ?? '';
-    var defaultResolver = vars['dns_default_domain_resolver'] ?? '';
-    var resolverReset = false;
-    if (dnsFinal.isNotEmpty && !availableTags.contains(dnsFinal)) {
-      dnsFinal = 'cloudflare_udp'; // template default_value
-      resolverReset = true;
-    }
-    if (defaultResolver.isNotEmpty && !availableTags.contains(defaultResolver)) {
-      defaultResolver = 'cloudflare_udp'; // template default_value
-      resolverReset = true;
-    }
-
-    if (mounted) {
-      setState(() {
-        _servers = resolvedServers;
-        _templateByTag = templateByTag;
-        _presetServersByTag = presetServersByTag;
-        _rules = resolvedRules;
-        _templateRulesByName = templateRulesByName;
-        _presetRulesByPresetId = presetRulesByPresetId;
-        _presetLabelByPresetId = presetLabelByPresetId;
-        _presetDnsEnable = presetDnsEnable;
-        _outboundOptions = outboundOptions;
-        _customRules = activeRules;
-        _dnsMirrorsByRuleId = dnsMirrorsByRuleId;
-        // Fallback = default_value шаблона (ipv4_only) — иначе UI покажет
-        // не то, что реально применит билдер при незаписанном var'е.
-        _strategy = vars['dns_strategy'] ?? 'ipv4_only';
-        _dnsFinal = dnsFinal;
-        _defaultResolver = defaultResolver;
-        _loading = false;
-      });
-      // §121: исчезнувший resolver-tag сброшен → persist (config dirty),
-      // чтобы битый ref не дожил до buildّа даже если юзер ничего не трогает.
-      if (resolverReset) _markDirty();
-    }
+    // §300 — вся read+derive-логика вынесена в DnsController.load() (тело
+    // verbatim + типизация краёв §294). Экран только присваивает snapshot.
+    final s = await DnsController.load();
+    if (!mounted) return;
+    setState(() {
+      _servers = s.servers;
+      _templateByTag = s.templateByTag;
+      _presetServersByTag = s.presetServersByTag;
+      _rules = s.rules;
+      _templateRulesByName = s.templateRulesByName;
+      _presetRulesByPresetId = s.presetRulesByPresetId;
+      _presetLabelByPresetId = s.presetLabelByPresetId;
+      _presetDnsEnable = s.presetDnsEnable;
+      _outboundOptions = s.outboundOptions;
+      _customRules = s.customRules;
+      _dnsMirrorsByRuleId = s.dnsMirrorsByRuleId;
+      _strategy = s.strategy;
+      _dnsFinal = s.dnsFinal;
+      _defaultResolver = s.defaultResolver;
+      _loading = false;
+    });
+    // §121: исчезнувший resolver-tag сброшен → persist (config dirty).
+    if (s.resolverReset) _markDirty();
   }
 
   /// §107: staging — буфер экрана в `_cache` на каждую мутацию; дисковый
   /// flush — mixin'ом (flushToDisk) на dispose/paused.
   @override
   Future<void> stageChanges() async {
-    await SettingsStorage.saveDnsServers(_servers, flush: false);
-    final cleaned = cleanDnsRulesForPersist(
-      _rules,
-      _templateRulesByName,
-      _presetRulesByPresetId,
+    // §300 D3 — staged-запись через DnsController.stage (byte-identical).
+    // custom_rules НЕ входит (это §295, device). §076: configDirty уже true.
+    await DnsController.stage(
+      servers: _servers,
+      rules: _rules,
+      templateRulesByName: _templateRulesByName,
+      presetRulesByPresetId: _presetRulesByPresetId,
+      strategy: _strategy,
+      dnsFinal: _dnsFinal,
+      defaultResolver: _defaultResolver,
     );
-    await SettingsStorage.saveDnsRulesList(cleaned, flush: false);
-    await SettingsStorage.setVar('dns_strategy', _strategy, flush: false);
-    await SettingsStorage.setVar('dns_final', _dnsFinal, flush: false);
-    await SettingsStorage.setVar(
-      'dns_default_domain_resolver',
-      _defaultResolver,
-      flush: false,
-    );
-
-    // §076: configDirty уже true (set в _markDirty).
   }
 
   /// §117 задача 3: tag → имя routing-правила с активной DNS-опцией —
@@ -371,7 +199,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         'enabled': true,
         'kind': 'inline',
         'tag': 'dns_new',
-        'description': 'My DNS',
+        // §279 seed-time-локализация: метка резолвится через активную локаль
+        // в момент создания (дальше — user data, ретроактивно не мигрируется).
+        'description': getLocalText.s("My DNS"),
         'body': <String, dynamic>{'type': 'udp'},
       },
       outboundOptions: _outboundOptions,
@@ -571,9 +401,8 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                   enabled: cr.dns!.enabled,
                   onToggle: (v) => _toggleRuleDns(cr, v),
                   note: [
-                    if (cr is CustomRuleSrs)
-                      'matches only domains in the rule-set',
-                    if (missing) 'server missing',
+                    if (cr is CustomRuleSrs) getLocalText.s("matches only domains in the rule-set"),
+                    if (missing) getLocalText.s("server missing"),
                   ].join(' · '),
                 )
               : null,
@@ -650,7 +479,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('DNS Settings')),
+        appBar: AppBar(title: Text(getLocalText.s("DNS Settings"))),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -665,14 +494,15 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     final rows = _ruleDisplayRows;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('DNS Settings')),
+      appBar: AppBar(title: Text(getLocalText.s("DNS Settings"))),
       body: ListView(
         padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 24),
         children: [
           // --- Servers ---
           Row(
             children: [
-              Text('DNS Servers', style: theme.textTheme.titleMedium),
+              Text(getLocalText.s("DNS Servers"),
+                  style: theme.textTheme.titleMedium),
               const Spacer(),
               IconButton(icon: const Icon(Icons.add), onPressed: _addServer),
             ],
@@ -691,15 +521,15 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // --- Strategy ---
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Strategy'),
+            title: Text(getLocalText.s("Strategy")),
             trailing: DropdownButton<String>(
               value: ['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'].contains(_strategy)
                   ? _strategy : 'ipv4_only',
               items: const [
-                DropdownMenuItem(value: 'prefer_ipv4', child: Text('prefer_ipv4')),
-                DropdownMenuItem(value: 'prefer_ipv6', child: Text('prefer_ipv6')),
-                DropdownMenuItem(value: 'ipv4_only', child: Text('ipv4_only')),
-                DropdownMenuItem(value: 'ipv6_only', child: Text('ipv6_only')),
+                DropdownMenuItem(value: 'prefer_ipv4', child: Text('prefer_ipv4')), // l10n-exempt: sing-box wire value
+                DropdownMenuItem(value: 'prefer_ipv6', child: Text('prefer_ipv6')), // l10n-exempt: sing-box wire value
+                DropdownMenuItem(value: 'ipv4_only', child: Text('ipv4_only')), // l10n-exempt: sing-box wire value
+                DropdownMenuItem(value: 'ipv6_only', child: Text('ipv6_only')), // l10n-exempt: sing-box wire value
               ],
               onChanged: (v) { if (v != null) setState(() { _strategy = v; _markDirty(); }); },
             ),
@@ -710,22 +540,22 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // --- DNS Rules (§061 dns-rules-refactor) ---
           Row(
             children: [
-              Text('DNS Rules', style: theme.textTheme.titleMedium),
+              Text(getLocalText.s("DNS Rules"), style: theme.textTheme.titleMedium),
               const Spacer(),
               TextButton.icon(
                 onPressed: _addUserRule,
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add user rule'),
+                label: Text(getLocalText.s("Add user rule")),
               ),
             ],
           ),
           const SizedBox(height: 4),
           if (_rules.isEmpty && mirrors.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
-                'No DNS rules. Add user rules manually, or enable presets / template defaults.',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+                getLocalText.s("No DNS rules. Add user rules manually, or enable presets / template defaults."),
+                style: const TextStyle(color: Colors.grey, fontSize: 13),
               ),
             )
           else
@@ -778,21 +608,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // вызывается через protected JNI path для apps. Encrypted options
           // (`google_doh`, `*_dot`) рекомендуем для privacy.
           ResolverPicker(
-            title: 'DNS Final',
-            subtitle:
-                'For apps · default fallback when no DNS rule matches',
+            title: getLocalText.s("DNS Final"),
+            subtitle: getLocalText.s("For apps · default fallback when no DNS rule matches"),
             value: _dnsFinal,
             serverTags: serverTags,
             onChanged: (v) => setState(() { _dnsFinal = v; _markDirty(); }),
-            tooltip: 'Default fallback DNS server. Used when an app makes a '
-                'DNS query and no DNS rule above matches it. Every app DNS '
-                'query that isn\'t routed by a rule ends up here.\n\n'
-                'Recommended:\n'
-                '  • google_doh — encrypted (DoH)\n'
-                '  • cloudflare_dot / google_dot — encrypted (DoT)\n'
-                '  • cloudflare_udp / google_udp — fast plain UDP\n\n'
-                'local_dns_resolver works but reveals queries to your ISP. '
-                'Encrypted options keep them private.',
+            tooltip: getLocalText.s("Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private."),
             warnIfLocal: false,
           ),
 
@@ -804,22 +625,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // → §047 deterioration через несколько часов uptime. Показываем
           // жёлтый ⚠ если выбран local_dns_resolver.
           ResolverPicker(
-            title: 'Default Domain Resolver',
-            subtitle:
-                'For routing · resolves hostnames inside sing-box (outbound '
-                'endpoints, routing rules)',
+            title: getLocalText.s("Default Domain Resolver"),
+            subtitle: getLocalText.s("For routing · resolves hostnames inside sing-box (outbound endpoints, routing rules)"),
             value: _defaultResolver,
             serverTags: serverTags,
             onChanged: (v) => setState(() { _defaultResolver = v; _markDirty(); }),
-            tooltip: 'Used by routing engine to resolve hostnames internally '
-                '(outbound endpoints, routing rules). Not the resolver apps '
-                'use.\n\n'
-                'Recommended:\n'
-                '  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n'
-                '  • google_udp — UDP to 8.8.8.8 (fast)\n'
-                '  • google_doh — encrypted\n\n'
-                '⚠ local_dns_resolver here leaks lookups to your ISP — '
-                'system DNS bypasses the VPN.',
+            tooltip: getLocalText.s("Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."),
             warnIfLocal: true,
           ),
           if (_defaultResolver == 'local_dns_resolver')
@@ -838,11 +649,8 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           ListTile(
             leading: Icon(Icons.cleaning_services_outlined,
                 color: Theme.of(context).colorScheme.error),
-            title: const Text('Clear DNS cache'),
-            subtitle: const Text(
-              'Flush FakeIP allocations and cached DNS responses. '
-              'Reloads the VPN if running.',
-            ),
+            title: Text(getLocalText.s("Clear DNS cache")),
+            subtitle: Text(getLocalText.s("Flush FakeIP allocations and cached DNS responses. Reloads the VPN if running.")),
             onTap: _confirmClearDnsCache,
           ),
         ],
@@ -858,20 +666,20 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Clear DNS cache?'),
+        title: Text(getLocalText.s("Clear DNS cache?")),
         content: Text(
-          'This deletes the DNS cache (FakeIP allocations and cached '
-          'responses).\n\n'
-          '${running ? 'The VPN will briefly reload to apply.' : 'It will be rebuilt clean on the next connect.'}',
+          getLocalText.s("This deletes the DNS cache (FakeIP allocations and cached responses).\n\n%s", running
+              ? getLocalText.s("The VPN will briefly reload to apply.")
+              : getLocalText.s("It will be rebuilt clean on the next connect.")),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(getLocalText.s("Cancel")),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Clear'),
+            child: Text(getLocalText.s("Clear")),
           ),
         ],
       ),
@@ -884,9 +692,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     messenger.showSnackBar(SnackBar(
       content: Text(ok
           ? (running
-              ? 'DNS cache cleared — reloading'
-              : 'DNS cache cleared')
-          : 'Could not clear DNS cache'),
+              ? getLocalText.s("DNS cache cleared — reloading")
+              : getLocalText.s("DNS cache cleared"))
+          : getLocalText.s("Could not clear DNS cache")),
     ));
   }
 

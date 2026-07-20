@@ -45,11 +45,11 @@ object QuickShortcuts {
 
         val list = mutableListOf<ShortcutInfo>()
         when (BoxVpnService.currentStatus) {
-            VpnStatus.Stopped -> list += build(ctx, ID_CONNECT, "Connect", MainActivity.ACTION_CONNECT)
-            VpnStatus.Started -> list += build(ctx, ID_DISCONNECT, "Disconnect", MainActivity.ACTION_DISCONNECT)
+            VpnStatus.Stopped -> list += buildConnect(ctx)
+            VpnStatus.Started -> list += buildDisconnect(ctx)
             VpnStatus.Starting, VpnStatus.Stopping -> {
-                list += build(ctx, ID_CONNECT, "Connect", MainActivity.ACTION_CONNECT)
-                list += build(ctx, ID_DISCONNECT, "Disconnect", MainActivity.ACTION_DISCONNECT)
+                list += buildConnect(ctx)
+                list += buildDisconnect(ctx)
             }
         }
         try {
@@ -58,6 +58,55 @@ object QuickShortcuts {
             // Rate-limited (system reset on launcher start). На следующий
             // setStatus всё равно повторим — некритично.
             Log.w(TAG, "dynamicShortcuts rate-limited: ${e.message}")
+        }
+    }
+
+    private fun buildConnect(ctx: Context): ShortcutInfo = build(
+        ctx, ID_CONNECT,
+        L10n.str(ctx, R.string.qc_connect_label),
+        MainActivity.ACTION_CONNECT,
+    )
+
+    private fun buildDisconnect(ctx: Context): ShortcutInfo = build(
+        ctx, ID_DISCONNECT,
+        L10n.str(ctx, R.string.qc_disconnect_label),
+        MainActivity.ACTION_DISCONNECT,
+    )
+
+    /// §279 (спека §6.3, шаг 3) — relabel при смене языка. НЕ doRefresh:
+    /// status-зависимый набор публикует только часть ярлыков (Stopped — один
+    /// Connect), а pinned-копия второго осталась бы на старом языке навсегда.
+    /// `updateShortcuts` — документированный API label-refresh'а: обновляет
+    /// существующие dynamic И pinned по id, несуществующие id игнорирует
+    /// (состав не меняется). Rate-limit (locale-change исполняется в
+    /// background) → флаг pending, гарантированный retry из
+    /// MainActivity.onResume (foreground — rate-limit не применяется).
+    fun relabel(ctx: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            val sm = ctx.getSystemService(ShortcutManager::class.java) ?: return
+            val both = listOf(buildConnect(ctx), buildDisconnect(ctx))
+            val ok = try {
+                sm.updateShortcuts(both)
+            } catch (e: IllegalStateException) {
+                Log.w(TAG, "updateShortcuts rate-limited: ${e.message}")
+                false
+            }
+            BootReceiver.setShortcutRelabelPending(ctx, !ok)
+        } catch (t: Throwable) {
+            Log.w(TAG, "relabel failed: ${t.message}")
+            BootReceiver.setShortcutRelabelPending(ctx, true)
+        }
+    }
+
+    /// §279 — retry отложенного relabel'а (см. [relabel]) из foreground.
+    fun retryPendingRelabel(ctx: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            if (!BootReceiver.isShortcutRelabelPending(ctx)) return
+            relabel(ctx)
+        } catch (t: Throwable) {
+            Log.w(TAG, "retryPendingRelabel failed: ${t.message}")
         }
     }
 

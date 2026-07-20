@@ -1,28 +1,60 @@
-/// Предупреждения узла — типизированные, агрегируемые, plain-EN строки.
+/// Предупреждения узла — типизированные, агрегируемые, рендер по локали.
 ///
 /// Плюсуются в `NodeSpec.warnings` (mutable list, §2.4 спеки 026) при
 /// парсинге и при emit'е (fallback'ах типа XHTTP → httpupgrade). UI
-/// (`subscription_detail_screen`) рендерит по severity.
+/// (`subscription_detail_screen`) рендерит по severity через `message(l)`;
+/// machine-поверхности (emitWarnings/AppLog) — `renderEn()` (ui_msg.dart).
+library;
+
+import '../services/l10n/get_local_text.dart';
+import '../services/l10n/locale_controller.dart';
+
 enum WarningSeverity { info, warning, error }
 
 sealed class NodeWarning {
   const NodeWarning();
 
-  String get message;
+  /// §285 — тело рендера подкласса. [t] — локализатор: активная локаль для
+  /// [message], пиненный английский [GetLocalText.en] для [renderEn].
+  /// Публичный — переиспользуется композицией из ui_msg.dart (пофайловая
+  /// приватность Dart). Интерполяции (scheme/transport/field) — wire-иды,
+  /// не переводятся.
+  String messageWith(GetLocalText t);
+
+  /// §285 — рендер в момент показа (активная локаль через global getLocalText).
+  String message() => messageWith(getLocalText);
+
+  /// Machine-рендер (emitWarnings/AppLog) — пиненный английский, независимо
+  /// от активной локали.
+  String renderEn() => messageWith(GetLocalText.en);
+
   WarningSeverity get severity;
+
+  /// Поля данных подкласса для равенства/hashCode. Dedup — по runtimeType +
+  /// данным, НЕ по отрендеренной строке (§279: строка locale-зависима,
+  /// равенство по ней ломало бы dedup при смене языка).
+  List<Object?> get props => const [];
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is NodeWarning &&
           runtimeType == other.runtimeType &&
-          message == other.message);
+          _propsEqual(props, other.props));
 
   @override
-  int get hashCode => Object.hash(runtimeType, message);
+  int get hashCode => Object.hashAll([runtimeType, ...props]);
 
   @override
-  String toString() => '$runtimeType($message)';
+  String toString() => '$runtimeType(${props.join(', ')})';
+}
+
+bool _propsEqual(List<Object?> a, List<Object?> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }
 
 final class UnsupportedTransportWarning extends NodeWarning {
@@ -31,8 +63,11 @@ final class UnsupportedTransportWarning extends NodeWarning {
   const UnsupportedTransportWarning(this.name, this.fallback);
 
   @override
-  String get message =>
-      'Transport "$name" is not supported by sing-box; using "$fallback" fallback (node may fail to connect).';
+  List<Object?> get props => [name, fallback];
+
+  @override
+  String messageWith(GetLocalText t) =>
+      t.s("Transport \"%1\$s\" is not supported by sing-box; using \"%2\$s\" fallback (node may fail to connect).", name, fallback);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -43,7 +78,10 @@ final class UnsupportedProtocolWarning extends NodeWarning {
   const UnsupportedProtocolWarning(this.scheme);
 
   @override
-  String get message => 'Protocol "$scheme" is not supported.';
+  List<Object?> get props => [scheme];
+
+  @override
+  String messageWith(GetLocalText t) => t.s("Protocol \"%s\" is not supported.", scheme);
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -54,7 +92,10 @@ final class MissingFieldWarning extends NodeWarning {
   const MissingFieldWarning(this.field);
 
   @override
-  String get message => 'Required field "$field" is missing.';
+  List<Object?> get props => [field];
+
+  @override
+  String messageWith(GetLocalText t) => t.s("Required field \"%s\" is missing.", field);
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -65,7 +106,10 @@ final class DeprecatedFlowWarning extends NodeWarning {
   const DeprecatedFlowWarning(this.flow);
 
   @override
-  String get message => 'Flow "$flow" is deprecated.';
+  List<Object?> get props => [flow];
+
+  @override
+  String messageWith(GetLocalText t) => t.s("Flow \"%s\" is deprecated.", flow);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -79,8 +123,10 @@ final class VisionWithTransportWarning extends NodeWarning {
   const VisionWithTransportWarning(this.transport);
 
   @override
-  String get message =>
-      'Flow "xtls-rprx-vision" is incompatible with "$transport" transport — flow dropped.';
+  List<Object?> get props => [transport];
+
+  @override
+  String messageWith(GetLocalText t) => t.s("Flow \"xtls-rprx-vision\" is incompatible with \"%s\" transport — flow dropped.", transport);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -90,7 +136,7 @@ final class InsecureTlsWarning extends NodeWarning {
   const InsecureTlsWarning();
 
   @override
-  String get message => 'TLS certificate verification is disabled.';
+  String messageWith(GetLocalText t) => t.s("TLS certificate verification is disabled.");
 
   /// Info, не warning — это часто **намеренный** выбор провайдера (REALITY,
   /// IP-литералы, self-signed). Не должен крадовать XHTTP-fallback и прочие
@@ -107,11 +153,45 @@ final class NaiveBuildTagWarning extends NodeWarning {
   const NaiveBuildTagWarning();
 
   @override
-  String get message =>
-      'NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).';
+  String messageWith(GetLocalText t) => t.s("NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).");
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
+}
+
+/// §281 — uTLS fingerprint вне словаря ядра заменён на chrome. Ядро матчит
+/// fingerprint строго (`uTLSClientHelloID`, case-sensitive) — неизвестное
+/// значение fatal для ВСЕГО конфига при старте. Известные xray-псевдонимы
+/// (hellochrome_120 и т.п.) канонизируются молча — warning только на
+/// полностью неопознанный мусор.
+final class UnknownFingerprintWarning extends NodeWarning {
+  final String value;
+  const UnknownFingerprintWarning(this.value);
+
+  @override
+  List<Object?> get props => [value];
+
+  @override
+  String messageWith(GetLocalText t) => t.s("Unknown uTLS fingerprint \"%s\" replaced with \"chrome\" (would otherwise break the whole config).", value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// §217 — причина сброса XHTTP-параметра (§279: enum вместо free-text —
+/// текст рендерится в [XhttpParamResetWarning.message], не хранится).
+enum XhttpResetReason {
+  /// Значение вне допустимого enum-множества ядра (placement/method).
+  invalidEnumValue,
+
+  /// `uplink_data_placement` вне множества body/auto/header/cookie.
+  invalidPlacementValue,
+
+  /// header/cookie placement валиден только в packet-up режиме.
+  placementRequiresPacketUp,
+
+  /// `uplink_http_method: GET` валиден только в packet-up режиме (meta.go:105).
+  getRequiresPacketUp,
 }
 
 /// §217 — XHTTP-параметр сброшен на дефолт, потому что его значение ядро
@@ -120,12 +200,29 @@ final class NaiveBuildTagWarning extends NodeWarning {
 /// (transport/v2rayxhttp/meta.go normalizeMeta). Нода остаётся рабочей.
 final class XhttpParamResetWarning extends NodeWarning {
   final String field;
-  final String reason;
-  const XhttpParamResetWarning(this.field, this.reason);
+  final XhttpResetReason reason;
+
+  /// Отвергнутое значение — только для invalid*-вариантов, иначе ''.
+  final String value;
+
+  const XhttpParamResetWarning(this.field, this.reason, {this.value = ''});
 
   @override
-  String get message =>
-      'XHTTP "$field" reset to default — $reason (would otherwise break the whole config).';
+  List<Object?> get props => [field, reason, value];
+
+  @override
+  String messageWith(GetLocalText t) {
+    final why = switch (reason) {
+      XhttpResetReason.invalidEnumValue =>
+        t.s("value \"%1\$s\" is not a valid %2\$s", value, field),
+      XhttpResetReason.invalidPlacementValue =>
+        t.s("value \"%s\" is not valid", value),
+      XhttpResetReason.placementRequiresPacketUp =>
+        t.s("header/cookie placement requires packet-up mode"),
+      XhttpResetReason.getRequiresPacketUp => t.s("GET requires packet-up mode"),
+    };
+    return t.s("XHTTP \"%1\$s\" reset to default — %2\$s (would otherwise break the whole config).", field, why);
+  }
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;

@@ -18,6 +18,7 @@ import '../node_filter_view_model.dart';
 import '../node_list_presenter.dart';
 import 'add_server_cta.dart';
 import 'filter_panel.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Node-list секция главного экрана.
 ///
@@ -89,7 +90,7 @@ class HomeNodeList extends StatelessWidget {
                       size: 48, color: cs.onSurfaceVariant.withAlpha(120)),
                   const SizedBox(height: 12),
                   Text(
-                    'No nodes in this channel.\nTry another one.',
+                    getLocalText.s("No nodes in this channel.\nTry another one."),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: cs.onSurfaceVariant,
@@ -127,7 +128,7 @@ class HomeNodeList extends StatelessWidget {
                         size: 64, color: cs.primary),
                     const SizedBox(height: 12),
                     Text(
-                      'Tap to connect',
+                      getLocalText.s("Tap to connect"),
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             color: cs.primary,
@@ -377,8 +378,8 @@ class HomeNodeList extends StatelessWidget {
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Apply to $label'),
-        content: Text('Use "$pattern" as…'),
+        title: Text(getLocalText.s("Apply to %s", label)),
+        content: Text(getLocalText.s("Use \"%s\" as…", pattern)),
         // Горизонтально (Row), порядок: Channel filter → Default → Cancel.
         // Короткие лейблы держат всё в один ряд на телефоне.
         actionsAlignment: MainAxisAlignment.end,
@@ -390,15 +391,15 @@ class HomeNodeList extends StatelessWidget {
               foregroundColor: Theme.of(ctx).colorScheme.primary,
               textStyle: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            child: const Text('Filter'),
+            child: Text(getLocalText.s("Filter")),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'default'),
-            child: const Text('Default'),
+            child: Text(getLocalText.s("Default")),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(getLocalText.s("Cancel")),
           ),
         ],
       ),
@@ -437,21 +438,18 @@ class HomeNodeList extends StatelessWidget {
     // detour-ссылки (rules-часть достижима только с disable/delete, которых
     // здесь нет; §274 убрал flag-set-heal) — досказываем счётчики в том же
     // SnackBar.
-    final healedParts = <String>[
-      if (healed.rules > 0)
-        '${healed.rules} rule reference(s) switched to vpn-1',
-      if (healed.detours > 0)
-        '${healed.detours} detour reference(s) reset to None',
-    ];
+    // §292 — части сообщения из единого форматтера (общий с routing_screen).
+    final healedParts = ChannelMutations.healMessageParts(healed);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
           content: Text(healedParts.isEmpty
-              ? 'Saved channel "$label"'
-              : 'Saved channel "$label" — ${healedParts.join('; ')}')),
+              ? getLocalText.s("Saved channel \"%s\"", label)
+              : getLocalText.s("Saved channel \"%1\$s\" — %2\$s", label,
+                  healedParts.join('; ')))),
     );
     if (state.tunnelUp && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Restart VPN to apply changes')),
+        SnackBar(content: Text(getLocalText.s("Restart VPN to apply changes"))),
       );
     }
   }

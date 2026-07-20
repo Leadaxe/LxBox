@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/traffic_profiler.dart';
 import '../../services/format_utils.dart';
+import '../../services/l10n/locale_controller.dart';
 
 class LiveRecordingHeader extends StatelessWidget {
   const LiveRecordingHeader({
@@ -47,7 +48,9 @@ class LiveRecordingHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isRec ? 'Recording system-wide events' : 'Not recording',
+                  isRec
+                      ? getLocalText.s("Recording system-wide events")
+                      : getLocalText.s("Not recording"),
                   style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
@@ -55,9 +58,8 @@ class LiveRecordingHeader extends StatelessWidget {
                 ),
                 Text(
                   isRec
-                      ? '${formatDuration(duration)} · $eventCount events'
-                      : 'Tap START to begin capture. Recording continues '
-                          'when you leave this tab.',
+                      ? getLocalText.s("%1\$s · %2\$d events", formatDuration(duration), eventCount)
+                      : getLocalText.s("Tap START to begin capture. Recording continues when you leave this tab."),
                   style: TextStyle(
                       fontSize: 11, color: cs.onSurfaceVariant),
                 ),
@@ -69,7 +71,9 @@ class LiveRecordingHeader extends StatelessWidget {
             onPressed: onToggle,
             icon: Icon(isRec ? Icons.stop : Icons.fiber_manual_record,
                 size: 18),
-            label: Text(isRec ? 'STOP' : 'START'),
+            label: Text(isRec
+                ? getLocalText.s("STOP")
+                : getLocalText.s("START")),
             style: FilledButton.styleFrom(
               backgroundColor: isRec ? cs.error : cs.primary,
               foregroundColor: isRec ? cs.onError : cs.onPrimary,
@@ -78,7 +82,7 @@ class LiveRecordingHeader extends StatelessWidget {
           // §044 — экспорт записанного, справа от большой кнопки.
           if (onExport != null)
             IconButton(
-              tooltip: 'Export events',
+              tooltip: getLocalText.s("Export events"),
               icon: const Icon(Icons.download, size: 22),
               onPressed: eventCount == 0 ? null : onExport,
             ),

@@ -4,6 +4,7 @@ import '../../services/app_info_cache.dart';
 import '../../services/traffic_profiler.dart';
 import '../per_app_trace_tab/app_multi_picker.dart';
 import 'profiler_filter.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §044/new-profiler — фильтр-окно профайлера. Bottom-sheet, паттерн
 /// `home/widgets/filter_panel.dart`: TabBar с amber-точкой на табе с активным
@@ -183,7 +184,7 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
           padding: const EdgeInsets.only(bottom: 4),
           child: OutlinedButton.icon(
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add app from full list'),
+            label: Text(getLocalText.s("Add app from full list")),
             onPressed: _openPicker,
           ),
         ),
@@ -197,16 +198,16 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
             contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             secondary: Icon(Icons.help_outline,
                 color: Theme.of(context).colorScheme.onSurfaceVariant),
-            title: const Text('Unattributed (no owner)',
-                style: TextStyle(fontSize: 13)),
-            subtitle: const Text('Events with no owning app',
-                style: TextStyle(fontSize: 10)),
+            title: Text(getLocalText.s("Unattributed (no owner)"),
+                style: const TextStyle(fontSize: 13)),
+            subtitle: Text(getLocalText.s("Events with no owning app"),
+                style: const TextStyle(fontSize: 10)),
           ),
         if (all.isEmpty && !widget.hasUnattributed)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Text('No apps seen yet — traffic will populate this list.',
-                style: TextStyle(fontSize: 12)),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(getLocalText.s("No apps seen yet — traffic will populate this list."),
+                style: const TextStyle(fontSize: 12)),
           ),
         for (final pkg in all)
           CheckboxListTile(
@@ -236,10 +237,10 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
         return a.compareTo(b);
       });
     if (all.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 16),
-        child: Text('No rules seen yet — traffic will populate this list.',
-            style: TextStyle(fontSize: 12)),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Text(getLocalText.s("No rules seen yet — traffic will populate this list."),
+            style: const TextStyle(fontSize: 12)),
       );
     }
     return Padding(
@@ -250,7 +251,7 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
         children: [
           for (final r in all)
             FilterChip(
-              label: Text(r.isEmpty ? 'final' : r),
+              label: Text(r.isEmpty ? getLocalText.s("final") : r),
               selected: f.hasRule(r),
               onSelected: (v) => f.toggleRule(r, v),
             ),
@@ -269,10 +270,10 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
         return a.compareTo(b);
       });
     if (all.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 16),
-        child: Text('No outbounds seen yet — traffic will populate this list.',
-            style: TextStyle(fontSize: 12)),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Text(getLocalText.s("No outbounds seen yet — traffic will populate this list."),
+            style: const TextStyle(fontSize: 12)),
       );
     }
     return Padding(
@@ -357,15 +358,15 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
             children: [
               Row(
                 children: [
-                  const Expanded(
-                    child: Text('Filter events',
-                        style: TextStyle(
+                  Expanded(
+                    child: Text(getLocalText.s("Filter events"),
+                        style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
                   if (f.isActive)
                     TextButton(
                       onPressed: f.clearAll,
-                      child: const Text('Reset all'),
+                      child: Text(getLocalText.s("Reset all")),
                     ),
                 ],
               ),
@@ -379,13 +380,13 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
                   textInputAction: TextInputAction.search,
                   decoration: InputDecoration(
                     isDense: true,
-                    hintText: 'Search domain / IP / app',
+                    hintText: getLocalText.s("Search domain / IP / app"),
                     prefixIcon: const Icon(Icons.search, size: 18),
                     suffixIcon: _searchCtrl.text.isEmpty
                         ? null
                         : IconButton(
                             icon: const Icon(Icons.close, size: 18),
-                            tooltip: 'Clear',
+                            tooltip: getLocalText.s("Clear"),
                             onPressed: () {
                               _searchCtrl.clear();
                               f.search = '';
@@ -448,11 +449,11 @@ class _PickerSheetState extends State<_PickerSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text('Add app to filter',
-                  style:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(getLocalText.s("Add app to filter"),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600)),
             ),
             Flexible(
               child: AppMultiPicker(

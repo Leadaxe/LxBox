@@ -10,6 +10,12 @@ void main() {
 
   setUp(() => sent = []);
 
+  // AutomationEventEmitter.I — синглтон: сбрасываем перехват/гейты после
+  // каждого теста, чтобы состояние не протекало в другие тест-файлы
+  // (иначе редкий cross-file flaky, когда шард стартует automation-тест
+  // до его setUp с чужим _sendOverride).
+  tearDown(() => AutomationEventEmitter.I.debugConfigureForTest());
+
   group('gates', () {
     test('all OFF — emit no-op', () {
       AutomationEventEmitter.I.debugConfigureForTest(onSend: capture);
@@ -28,6 +34,22 @@ void main() {
       expect(sent.map((e) => e.$1), ['VPN_CONNECTED']);
     });
 
+    test('VPN_ERROR gated by lifecycle, carries code/message', () {
+      // §290 — ядро request-response: провал команды идёт как VPN_ERROR под
+      // Lifecycle. При State-only (без Lifecycle) — молчит (см. F2/хинт в UI).
+      AutomationEventEmitter.I
+          .debugConfigureForTest(state: true, onSend: capture);
+      AutomationEventEmitter.I.emitVpnError('conflict', 'tunnel not connected');
+      expect(sent, isEmpty); // State включён, Lifecycle нет → дроп
+      // теперь под Lifecycle
+      AutomationEventEmitter.I
+          .debugConfigureForTest(lifecycle: true, onSend: capture);
+      AutomationEventEmitter.I.emitVpnError('conflict', 'tunnel not connected');
+      expect(sent.single.$1, 'VPN_ERROR');
+      expect(sent.single.$2['code'], 'conflict');
+      expect(sent.single.$2['message'], 'tunnel not connected');
+    });
+
     test('state gate emits node/group only', () {
       AutomationEventEmitter.I
           .debugConfigureForTest(state: true, onSend: capture);
@@ -40,6 +62,20 @@ void main() {
       expect(node['new_tag'], 'new');
       expect(node['group'], 'grp');
       expect(node['reason'], 'user');
+    });
+
+    test('node-already-active gated by state, carries tag/group', () {
+      // §290 — off без State-гейта.
+      AutomationEventEmitter.I.debugConfigureForTest(onSend: capture);
+      AutomationEventEmitter.I.emitNodeAlreadyActive('n', 'g');
+      expect(sent, isEmpty);
+      // on под State.
+      AutomationEventEmitter.I
+          .debugConfigureForTest(state: true, onSend: capture);
+      AutomationEventEmitter.I.emitNodeAlreadyActive('🇫🇮node', 'grp');
+      expect(sent.single.$1, 'NODE_ALREADY_ACTIVE');
+      expect(sent.single.$2['tag'], '🇫🇮node');
+      expect(sent.single.$2['group'], 'grp');
     });
 
     test('subs gate emits subscription events', () {

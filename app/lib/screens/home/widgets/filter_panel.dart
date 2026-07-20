@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../filter_widgets.dart';
 import '../node_filter_view_model.dart';
 import '../node_list_presenter.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §048 / §095 / §096 — Filter panel (expanded), tabbed.
 ///
@@ -107,7 +108,7 @@ class _FilterPanelState extends State<FilterPanel>
     final ms = f.activeMaxPingMs;
     if (ms != null) {
       chips.add(InputChip(
-        label: Text('≤${ms}ms'),
+        label: Text(getLocalText.s("≤%dms", ms)),
         onPressed: () => _tab.animateTo(3),
         onDeleted: f.clearPing,
       ));
@@ -117,7 +118,9 @@ class _FilterPanelState extends State<FilterPanel>
     // фильтр (вернуть «показать всё»).
     if (f.detourActive) {
       chips.add(InputChip(
-        tooltip: f.detourHide ? 'Detour hidden' : 'Detour only',
+        tooltip: f.detourHide
+            ? getLocalText.s("Detour hidden")
+            : getLocalText.s("Detour only"),
         label: f.detourHide
             ? _gearOffIcon()
             : const Icon(Icons.settings, size: 18),
@@ -127,7 +130,7 @@ class _FilterPanelState extends State<FilterPanel>
     }
     if (f.nonMatchingHidden) {
       chips.add(InputChip(
-        tooltip: 'Non-matching hidden',
+        tooltip: getLocalText.s("Non-matching hidden"),
         label: const Icon(Icons.visibility_off, size: 18),
         onPressed: () => _tab.animateTo(3),
         onDeleted: () => f.setShowNonMatching(true),
@@ -289,7 +292,7 @@ class _FilterPanelState extends State<FilterPanel>
                     // при выкл-фильтре (две ортогональные оси, как в спеке).
                     active: f.detourHide,
                     onToggle: f.toggleDetourHide,
-                    tooltip: 'Hide detour (on) / detour only (off)',
+                    tooltip: getLocalText.s("Hide detour (on) / detour only (off)"),
                   ),
                   const SizedBox(width: 4),
                   Expanded(
@@ -298,8 +301,8 @@ class _FilterPanelState extends State<FilterPanel>
                       // снятие галки надпись не меняет (вкл/выкл видно по
                       // чекбоксу + чипу/точке).
                       f.detourHide
-                          ? 'Hide detour servers'
-                          : 'Show only detour servers',
+                          ? getLocalText.s("Hide detour servers")
+                          : getLocalText.s("Show only detour servers"),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
@@ -347,7 +350,7 @@ class _FilterPanelState extends State<FilterPanel>
                 ),
               ),
               IconButton(
-                tooltip: 'Close filters',
+                tooltip: getLocalText.s("Close filters"),
                 visualDensity: VisualDensity.compact,
                 onPressed: f.togglePanel,
                 icon: const Icon(Icons.close, size: 20),

@@ -46,6 +46,76 @@ sealed class ServerList {
 /// Статус последней попытки auto-update подписки.
 enum UpdateStatus { never, ok, failed, inProgress }
 
+/// §289 — per-subscription override идентичности HTTP-фетча (§118). Полный
+/// слепок всех переменных: когда у подписки `identity != null` (режим Custom),
+/// фетч использует ТОЛЬКО эти значения и полностью игнорирует глобальный
+/// `SubscriptionIdentity`. `null` (режим Default) → глобальные значения, как §118.
+///
+/// Не каскад/не пофайловый fallback: либо весь глобальный набор, либо весь
+/// локальный слепок. Инициализируется копией глобальных при включении Custom;
+/// отбрасывается (→ null) при возврате в Default.
+class SubscriptionIdentityOverride {
+  /// User-Agent. Пусто → дефолт из глобала (брендированный `LxBox-android`,
+  /// см. `resolveSubscriptionUserAgent`).
+  final String userAgent;
+
+  /// Слать ли `x-hwid` + device-meta заголовки при фетче.
+  final bool sendHwid;
+
+  /// `x-hwid` (UUIDv4). Заголовок не кладём если пусто (или `sendHwid == false`).
+  final String hwid;
+
+  /// device-meta заголовки. Пусто → соответствующий заголовок не кладём.
+  final String deviceOs;
+  final String verOs;
+  final String deviceModel;
+
+  const SubscriptionIdentityOverride({
+    this.userAgent = '',
+    this.sendHwid = false,
+    this.hwid = '',
+    this.deviceOs = '',
+    this.verOs = '',
+    this.deviceModel = '',
+  });
+
+  Map<String, dynamic> toJson() => {
+        if (userAgent.isNotEmpty) 'user_agent': userAgent,
+        'send_hwid': sendHwid,
+        if (hwid.isNotEmpty) 'hwid': hwid,
+        if (deviceOs.isNotEmpty) 'device_os': deviceOs,
+        if (verOs.isNotEmpty) 'ver_os': verOs,
+        if (deviceModel.isNotEmpty) 'device_model': deviceModel,
+      };
+
+  factory SubscriptionIdentityOverride.fromJson(Map<String, dynamic> j) =>
+      SubscriptionIdentityOverride(
+        userAgent: (j['user_agent'] as String?) ?? '',
+        sendHwid: (j['send_hwid'] as bool?) ?? false,
+        hwid: (j['hwid'] as String?) ?? '',
+        deviceOs: (j['device_os'] as String?) ?? '',
+        verOs: (j['ver_os'] as String?) ?? '',
+        deviceModel: (j['device_model'] as String?) ?? '',
+      );
+
+  SubscriptionIdentityOverride copyWith({
+    String? userAgent,
+    bool? sendHwid,
+    String? hwid,
+    String? deviceOs,
+    String? verOs,
+    String? deviceModel,
+  }) =>
+      SubscriptionIdentityOverride(
+        userAgent: userAgent ?? this.userAgent,
+        sendHwid: sendHwid ?? this.sendHwid,
+        hwid: hwid ?? this.hwid,
+        deviceOs: deviceOs ?? this.deviceOs,
+        verOs: verOs ?? this.verOs,
+        deviceModel: deviceModel ?? this.deviceModel,
+      );
+}
+
 final class SubscriptionServers extends ServerList {
   final String url;
   final SubscriptionMeta? meta;
@@ -59,6 +129,21 @@ final class SubscriptionServers extends ServerList {
   /// для фризинга** — для этого есть in-memory `_failCounts` в `AutoUpdater`
   /// с maxFailsPerSession=5, которое сбрасывается на рестарт (спек §026).
   final int consecutiveFails;
+
+  /// §283 — per-node disable: identity-хеш ноды (см. services/node_hash.dart)
+  /// → когда источник ноды последний раз видели в теле подписки (lastSeen —
+  /// для TTL-очистки спящих отметок на успешном сетевом refresh). Оверлей
+  /// поверх `nodes`: сами ноды остаются видны в UI (с toggle), но builder их
+  /// не эмитит. Персистится (в отличие от nodes) и потому обязан жить в
+  /// трио toJson/fromJson/copyWith — merge-импорт backup гоняет записи через
+  /// fromJson→toJson, поле только в toJson молча терялось бы.
+  final Map<String, DateTime> disabledHashes;
+
+  /// §289 — per-subscription override идентичности фетча. `null` = режим Default
+  /// (глобальный `SubscriptionIdentity`); объект = режим Custom (полный слепок).
+  /// Персистится → обязан жить в трио toJson/fromJson/copyWith (как §283
+  /// `disabledHashes`), иначе merge-импорт backup (fromJson→toJson) молча терял бы.
+  final SubscriptionIdentityOverride? identity;
 
   SubscriptionServers({
     required super.id,
@@ -74,6 +159,8 @@ final class SubscriptionServers extends ServerList {
     this.updateIntervalHours = 24,
     this.lastNodeCount = 0,
     this.consecutiveFails = 0,
+    this.disabledHashes = const {},
+    this.identity,
     super.nodes,
   });
 
@@ -97,7 +184,23 @@ final class SubscriptionServers extends ServerList {
         'update_interval_hours': updateIntervalHours,
         'last_node_count': lastNodeCount,
         'consecutive_fails': consecutiveFails,
+        if (disabledHashes.isNotEmpty)
+          'disabled_hashes': disabledHashes
+              .map((k, v) => MapEntry(k, v.toIso8601String())),
+        if (identity != null) 'identity': identity!.toJson(),
       };
+
+  /// §283 — толерантный парс: не-Map → пусто, битые значения-даты — скип
+  /// записи (отметка без валидного lastSeen бесполезна для TTL).
+  static Map<String, DateTime> _disabledHashesFromJson(dynamic raw) {
+    if (raw is! Map) return const {};
+    final out = <String, DateTime>{};
+    raw.forEach((k, v) {
+      final t = v is String ? DateTime.tryParse(v) : null;
+      if (t != null) out[k.toString()] = t;
+    });
+    return out;
+  }
 
   factory SubscriptionServers.fromJson(Map<String, dynamic> j) =>
       SubscriptionServers(
@@ -126,6 +229,11 @@ final class SubscriptionServers extends ServerList {
             (j['update_interval_hours'] as num?)?.toInt() ?? 24,
         lastNodeCount: (j['last_node_count'] as num?)?.toInt() ?? 0,
         consecutiveFails: (j['consecutive_fails'] as num?)?.toInt() ?? 0,
+        disabledHashes: _disabledHashesFromJson(j['disabled_hashes']),
+        identity: j['identity'] == null
+            ? null
+            : SubscriptionIdentityOverride.fromJson(
+                (j['identity'] as Map).cast<String, dynamic>()),
       );
 
   SubscriptionServers copyWith({
@@ -141,6 +249,9 @@ final class SubscriptionServers extends ServerList {
     int? updateIntervalHours,
     int? lastNodeCount,
     int? consecutiveFails,
+    Map<String, DateTime>? disabledHashes,
+    SubscriptionIdentityOverride? identity,
+    bool clearIdentity = false,
     List<NodeSpec>? nodes,
   }) =>
       SubscriptionServers(
@@ -157,6 +268,10 @@ final class SubscriptionServers extends ServerList {
         updateIntervalHours: updateIntervalHours ?? this.updateIntervalHours,
         lastNodeCount: lastNodeCount ?? this.lastNodeCount,
         consecutiveFails: consecutiveFails ?? this.consecutiveFails,
+        disabledHashes: disabledHashes ?? this.disabledHashes,
+        // §289 — clearIdentity: true снимает Custom (→ Default); иначе обычный
+        // ?? (передача identity меняет слепок, null-аргумент сохраняет старый).
+        identity: clearIdentity ? null : (identity ?? this.identity),
         nodes: nodes ?? this.nodes,
       );
 }
@@ -323,6 +438,12 @@ final class FolderServers extends ServerList {
   final List<FolderMember> members;
   final DateTime createdAt;
 
+  /// §284 — опции теста этой папки (override глобальных ping_options). null =
+  /// брать глобальное значение. Хранятся в самом объекте папки (едут в backup).
+  /// Папка «WARP GENERATOR» ставит IP-URL сюда, чтобы Test шёл без DNS.
+  final String? pingUrl;
+  final int? pingTimeoutMs;
+
   FolderServers({
     required super.id,
     required super.name,
@@ -331,6 +452,8 @@ final class FolderServers extends ServerList {
     required super.detourPolicy,
     List<FolderMember>? members,
     DateTime? createdAt,
+    this.pingUrl,
+    this.pingTimeoutMs,
   })  : members = members ?? <FolderMember>[],
         createdAt = createdAt ?? DateTime.now(),
         super(nodes: [
@@ -361,6 +484,8 @@ final class FolderServers extends ServerList {
         'detour_policy': detourPolicy.toJson(),
         'created_at': createdAt.toIso8601String(),
         'members': members.map((m) => m.toJson()).toList(),
+        if (pingUrl != null) 'ping_url': pingUrl,
+        if (pingTimeoutMs != null) 'ping_timeout_ms': pingTimeoutMs,
       };
 
   factory FolderServers.fromJson(Map<String, dynamic> j) => FolderServers(
@@ -376,6 +501,10 @@ final class FolderServers extends ServerList {
             .whereType<Map>()
             .map((m) => FolderMember.fromJson(m.cast<String, dynamic>()))
             .toList(),
+        pingUrl: (j['ping_url'] as String?)?.trim().isNotEmpty == true
+            ? (j['ping_url'] as String).trim()
+            : null,
+        pingTimeoutMs: (j['ping_timeout_ms'] as num?)?.toInt(),
       );
 
   FolderServers copyWith({
@@ -384,6 +513,9 @@ final class FolderServers extends ServerList {
     String? tagPrefix,
     DetourPolicy? detourPolicy,
     List<FolderMember>? members,
+    String? pingUrl,
+    int? pingTimeoutMs,
+    bool clearPing = false,
   }) =>
       FolderServers(
         id: id,
@@ -393,6 +525,8 @@ final class FolderServers extends ServerList {
         detourPolicy: detourPolicy ?? this.detourPolicy,
         createdAt: createdAt,
         members: members ?? this.members,
+        pingUrl: clearPing ? null : (pingUrl ?? this.pingUrl),
+        pingTimeoutMs: clearPing ? null : (pingTimeoutMs ?? this.pingTimeoutMs),
       );
 }
 

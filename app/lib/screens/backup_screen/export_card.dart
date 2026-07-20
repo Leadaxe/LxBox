@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/backup_service.dart';
+import '../../services/l10n/locale_controller.dart';
 
 class ExportCard extends StatelessWidget {
   const ExportCard({
@@ -38,12 +39,12 @@ class ExportCard extends StatelessWidget {
               children: [
                 const Icon(Icons.upload_outlined),
                 const SizedBox(width: 8),
-                Text('Export', style: theme.textTheme.titleMedium),
+                Text(getLocalText.s("Export"), style: theme.textTheme.titleMedium),
               ],
             ),
             const SizedBox(height: 4),
             Text(
-              'Save your subscriptions, routing setup and preferences as a JSON file.',
+              getLocalText.s("Save your subscriptions, routing setup and preferences as a JSON file."),
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
@@ -51,10 +52,10 @@ class ExportCard extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('Server lists'),
-              subtitle: const Text(
-                'Subscriptions and custom servers',
-                style: TextStyle(fontSize: 11),
+              title: Text(getLocalText.s("Server lists")),
+              subtitle: Text(
+                getLocalText.s("Subscriptions and custom servers"),
+                style: const TextStyle(fontSize: 11),
               ),
               value: serverLists,
               onChanged: (v) =>
@@ -64,10 +65,10 @@ class ExportCard extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('Routing'),
-              subtitle: const Text(
-                'Custom rules, tun apps, DNS options, final outbound',
-                style: TextStyle(fontSize: 11),
+              title: Text(getLocalText.s("Routing")),
+              subtitle: Text(
+                getLocalText.s("Custom rules, tun apps, DNS options, final outbound"),
+                style: const TextStyle(fontSize: 11),
               ),
               value: routing,
               onChanged: (v) => onChange(BackupCategory.routing, v ?? false),
@@ -76,10 +77,10 @@ class ExportCard extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('App settings'),
-              subtitle: const Text(
-                'Preferences, ping options, auto-update, wifi history',
-                style: TextStyle(fontSize: 11),
+              title: Text(getLocalText.s("App settings")),
+              subtitle: Text(
+                getLocalText.s("Preferences, ping options, auto-update, wifi history"),
+                style: const TextStyle(fontSize: 11),
               ),
               value: appSettings,
               onChanged: (v) =>
@@ -89,10 +90,10 @@ class ExportCard extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('VPN system toggles'),
-              subtitle: const Text(
-                'auto-start, keep on exit, background mode, allow bypass',
-                style: TextStyle(fontSize: 11),
+              title: Text(getLocalText.s("VPN system toggles")),
+              subtitle: Text(
+                getLocalText.s("auto-start, keep on exit, background mode, allow bypass"),
+                style: const TextStyle(fontSize: 11),
               ),
               value: vpnSettings,
               onChanged: (v) =>
@@ -103,12 +104,12 @@ class ExportCard extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               title: Text(
-                'Debug API config',
+                getLocalText.s("Debug API config"),
                 style: TextStyle(color: theme.colorScheme.error),
               ),
-              subtitle: const Text(
-                'Includes the access token. Sensitive — leave OFF unless you know why.',
-                style: TextStyle(fontSize: 11),
+              subtitle: Text(
+                getLocalText.s("Includes the access token. Sensitive — leave OFF unless you know why."),
+                style: const TextStyle(fontSize: 11),
               ),
               value: debugConfig,
               onChanged: (v) =>
@@ -119,7 +120,7 @@ class ExportCard extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: busy ? null : onExport,
                 icon: const Icon(Icons.share),
-                label: const Text('Export...'),
+                label: Text(getLocalText.s("Export...")),
               ),
             ),
           ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../vpn/cc_channel.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §208 (SPEC 019 V2) — попап с текущим составом пула round_robin-группы.
 /// Открывается из контекстного меню auto-ноды («View pool»). Снапшот тянется
@@ -64,12 +65,12 @@ class _PoolDialogState extends State<_PoolDialog> {
           const Icon(Icons.hub_outlined, size: 18),
           const SizedBox(width: 8),
           Expanded(
-            child: Text('Pool · ${widget.title}',
+            child: Text(getLocalText.s("Pool · %s", widget.title),
                 style: const TextStyle(fontSize: 15),
                 overflow: TextOverflow.ellipsis),
           ),
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: getLocalText.s("Refresh"),
             icon: const Icon(Icons.refresh, size: 18),
             visualDensity: VisualDensity.compact,
             onPressed: _refresh,
@@ -98,14 +99,14 @@ class _PoolDialogState extends State<_PoolDialog> {
             if (slots == null) {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Text('Pool unavailable — tunnel not connected',
+                child: Text(getLocalText.s("Pool unavailable — tunnel not connected"),
                     style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
               );
             }
             if (slots.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Text('Pool is empty (not a load-balance group)',
+                child: Text(getLocalText.s("Pool is empty (not a load-balance group)"),
                     style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
               );
             }
@@ -121,7 +122,7 @@ class _PoolDialogState extends State<_PoolDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+          child: Text(getLocalText.s("Close")),
         ),
       ],
     );
@@ -136,7 +137,7 @@ class _PoolDialogState extends State<_PoolDialog> {
           // фиксированный номер слота
           SizedBox(
             width: 48,
-            child: Text('slot ${s.slot}',
+            child: Text(getLocalText.s("slot %d", s.slot),
                 style: TextStyle(
                     fontSize: 11,
                     fontFamily: 'monospace',

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:device_info_plus/device_info_plus.dart';
 
+import '../../models/server_list.dart';
 import '../settings_storage.dart';
 
 /// §118 — глобальная идентичность HTTP-фетча подписок: кастомный User-Agent +
@@ -96,17 +97,49 @@ class SubscriptionIdentity {
     }
   }
 
-  /// HWID-заголовки для GET подписки. Пусто, если HWID выключен или не задан.
-  /// Каждый meta-заголовок — effective (override > device-дефолт); пустые
-  /// не кладём.
-  static Map<String, String> fetchHeaders() {
+  /// HWID-заголовки для GET подписки (глобальная идентичность). Пусто, если
+  /// HWID выключен или не задан. Каждый meta-заголовок — effective (override >
+  /// device-дефолт); пустые не кладём.
+  static Map<String, String> fetchHeaders() => headersFrom(
+        sendHwid: sendHwid,
+        hwid: hwid,
+        deviceOs: effectiveDeviceOs,
+        verOs: effectiveVerOs,
+        deviceModel: effectiveDeviceModel,
+      );
+
+  /// §289 — снимок текущих глобальных значений в per-subscription слепок.
+  /// Используется при включении режима Custom у подписки: стартуем не с нуля, а
+  /// с копии глобальной идентичности. device-meta берём effective (override >
+  /// device-дефолт), чтобы слепок был самодостаточным (device-дефолты в слепке
+  /// не пересчитываются).
+  static SubscriptionIdentityOverride snapshotGlobal() =>
+      SubscriptionIdentityOverride(
+        userAgent: userAgentOverride,
+        sendHwid: sendHwid,
+        hwid: hwid,
+        deviceOs: effectiveDeviceOs,
+        verOs: effectiveVerOs,
+        deviceModel: effectiveDeviceModel,
+      );
+
+  /// §289 — общая форма HWID-заголовков из произвольных значений (глобальных
+  /// либо per-subscription слепка). Гейт: `sendHwid && hwid` непустой; пустые
+  /// device-meta не кладём. Значения передаются уже effective (caller решает
+  /// override vs device-дефолт).
+  static Map<String, String> headersFrom({
+    required bool sendHwid,
+    required String hwid,
+    required String deviceOs,
+    required String verOs,
+    required String deviceModel,
+  }) {
     if (!sendHwid || hwid.isEmpty) return const {};
     return {
       'x-hwid': hwid,
-      if (effectiveDeviceOs.isNotEmpty) 'x-device-os': effectiveDeviceOs,
-      if (effectiveVerOs.isNotEmpty) 'x-ver-os': effectiveVerOs,
-      if (effectiveDeviceModel.isNotEmpty)
-        'x-device-model': effectiveDeviceModel,
+      if (deviceOs.isNotEmpty) 'x-device-os': deviceOs,
+      if (verOs.isNotEmpty) 'x-ver-os': verOs,
+      if (deviceModel.isNotEmpty) 'x-device-model': deviceModel,
     };
   }
 }

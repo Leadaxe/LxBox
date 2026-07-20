@@ -2,6 +2,7 @@ import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../transport.dart';
 import '../uri_utils.dart';
+import '../utls_fingerprint.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Trojan
@@ -22,9 +23,10 @@ TrojanSpec? parseTrojan(String uri) {
   final tag = tagFromLabel(label, 'trojan', server, port);
 
   final transport = parseTransport(q);
-  final tls = parseTrojanTls(q, server);
-
   final warnings = <NodeWarning>[];
+  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
+  final tls = normalizeTlsFingerprint(parseTrojanTls(q, server), warnings);
+
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
   return TrojanSpec(

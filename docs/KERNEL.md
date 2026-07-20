@@ -21,8 +21,24 @@ round-robin balancer, XHTTP full params, DNS-стрим и др.).
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.1`** — первый стабильный релиз ветки `lx-1.14`
-(rc-история — в конце файла), выпущен вместе с LxBox v2.9.0.
+**Текущий пин: `v1.14.0-lx.15-rc.1`** — SPEC 002: XHTTP больше не ломается за
+reverse-proxy. VLESS+XHTTP через nginx/CDN с `mode: packet-up`, trailing-slash
+`path` (`/upload/`) и `session_placement: header` раньше падал с `unexpected
+download status: 301 Moved Permanently` (клиент безусловно срезал trailing slash
+для ВСЕХ mode; nginx `location /upload/ {}` отвечал 301-редиректом на bare-path,
+а download-запрос — raw HTTP/2 без follow-redirects — сюрфейсил это как dial
+error). Фикс: `path` сохраняется как есть, trailing slash срезается только на
+bare-path запросе stream-one. Дефолтные конфиги (session id в path) не
+затрагивались. Покрыто url_test-кейсом. + merge upstream `testing` (13 коммитов:
+async DNS refactor, WG detour fix сходится с SPEC 029, OpenConnect
+auth-challenge, прочие фиксы). База upstream `v1.14.0-alpha.48`. Build-теги AAR
+без изменений. **Device-verified** на CPH2411 (2026-07-21): старт без крашей,
+Debug API отвечает, VPN поднимается. История версий `lx.1…lx.15` — в конце файла.
+
+`lx.14` (предыдущий) — SPEC 030: остановка туннеля больше не виснет 10+ сек при
+многих WG/AWG-эндпоинтах (teardown в `box.Close()` ждал in-flight ping-wake;
+фикс — конкурентное закрытие эндпоинтов с прерыванием wake, ни один шаг teardown
+не пропущен). Ядровая половина §287.
 
 ### AAR до релиза ядра
 
@@ -107,3 +123,5 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | rc.19 | idle-suspend за `with_lx_idle_suspend` (mobile-only, см. ловушку 1) |
 | rc.20 | XHTTP GET→POST soft-fallback (дублирует §217); udpnat2 buffer fix; upstream sync |
 | **v1.14.0-lx.1** (стабильный) | Первый стабильный релиз ветки `lx-1.14` (rc.16→rc.22): MASQUE outbound (§130), стабилизация; собран с LxBox v2.9.0 |
+| **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
+| **v1.14.0-lx.14** (стабильный) | SPEC 030 — Stop не виснет 10+ сек при многих WG/AWG-эндпоинтах (глушение тика + upfront-закрытие UDP-сокетов + abort in-flight wake + конкурентный close). Ядровая половина §287. База upstream `alpha.47`. Build-теги AAR без изменений. (Промежуточные lx.12/lx.13 — см. `docs-lx/lx-changelog.md` в ядре) |

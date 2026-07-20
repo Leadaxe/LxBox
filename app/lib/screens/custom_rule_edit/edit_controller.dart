@@ -5,7 +5,6 @@ import 'package:flutter/widgets.dart';
 
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
-import '../../services/builder/post_steps.dart' show templateDnsServersByTag;
 import '../../services/preset_on_change.dart';
 import '../../services/rule_set_downloader.dart';
 import '../../services/settings_storage.dart';
@@ -46,6 +45,7 @@ class CustomRuleEditController extends ChangeNotifier {
     required this.initial,
     required this.preset,
     required this.existingNames,
+    this.displayName,
   }) {
     _init();
   }
@@ -61,8 +61,16 @@ class CustomRuleEditController extends ChangeNotifier {
   final SelectableRule? preset;
 
   /// Имена существующих правил (для auto-rename при коллизии). Не
-  /// включает `initial.name` — собирается RoutingScreen'ом.
+  /// включает `initial.name` — собирается RoutingScreen'ом. §279 —
+  /// display-резолвнутые (live-label'ы пресетов + снапшоты).
   final Set<String> existingNames;
+
+  /// §279 (§3.5.1) — live display-имя preset-правила для read-only Name-поля
+  /// (label из локализованного шаблона + порядковый суффикс копии). null —
+  /// не preset либо display недоступен (fallback: `preset.label` /
+  /// `initial.name`). `nameCtrl` при этом ПРОДОЛЖАЕТ держать сохранённый
+  /// снапшот — save не переписывает его локализованным label'ом.
+  final String? displayName;
 
   // ─── Text controllers ────────────────────────────────────────────────
 
@@ -266,17 +274,13 @@ class CustomRuleEditController extends ChangeNotifier {
   Future<void> _loadDnsServerTags() async {
     final stored = await SettingsStorage.getDnsServers();
     final template = await TemplateLoader.load();
-    final templateServers =
-        (template.dnsOptions['servers'] as List<dynamic>? ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .map((s) => Map<String, dynamic>.from(s))
-            .toList();
     final tags = <String>{};
     for (final s in stored) {
       final tag = s['tag']?.toString();
       if (tag != null && tag.isNotEmpty) tags.add(tag);
     }
-    tags.addAll(templateDnsServersByTag(templateServers).keys);
+    // §279 — typed DnsOptionsModel вместо raw-скана dns_options.servers.
+    tags.addAll(template.dnsOptionsModel.servers.map((s) => s.tag));
     if (_disposed) return;
     _dnsServerTags = tags.toList();
     notifyListeners();

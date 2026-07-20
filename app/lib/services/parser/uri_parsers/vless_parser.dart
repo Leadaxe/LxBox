@@ -2,6 +2,7 @@ import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../transport.dart';
 import '../uri_utils.dart';
+import '../utls_fingerprint.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // VLESS
@@ -19,10 +20,11 @@ VlessSpec? parseVless(String uri) {
   final tag = tagFromLabel(label, 'vless', server, port);
 
   final transport = parseTransport(q);
-  final tls = parseVlessTls(q, server, port);
+  final warnings = <NodeWarning>[];
+  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
+  final tls = normalizeTlsFingerprint(parseVlessTls(q, server, port), warnings);
 
   var flow = (q['flow'] ?? '').trim();
-  final warnings = <NodeWarning>[];
   var packetEncoding = '';
 
   // v1 quirk: flow=xtls-rprx-vision-udp443 → vision + packet_encoding=xudp.

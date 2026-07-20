@@ -1,0 +1,575 @@
+{
+  "0.0.0.0 — all interfaces (LAN)": {
+    "value": "0.0.0.0 — все интерфейсы (LAN)"
+  },
+  "1.0.0.1 · Secondary v4": {
+    "value": "1.0.0.1 · Резервный v4"
+  },
+  "1.1.1.1 · Primary v4": {
+    "value": "1.1.1.1 · Основной v4"
+  },
+  "127.0.0.1 — this device only": {
+    "value": "127.0.0.1 — только это устройство"
+  },
+  "1492 recommended for mobile/WiFi": {
+    "value": "Для мобильной сети и Wi-Fi рекомендуется 1492"
+  },
+  "2001:4860:4860::8844 · Secondary v6": {
+    "value": "2001:4860:4860::8844 · Резервный v6"
+  },
+  "2001:4860:4860::8888 · Primary v6": {
+    "value": "2001:4860:4860::8888 · Основной v6"
+  },
+  "2606:4700:4700::1001 · Secondary v6": {
+    "value": "2606:4700:4700::1001 · Резервный v6"
+  },
+  "2606:4700:4700::1111 · Primary v6": {
+    "value": "2606:4700:4700::1111 · Основной v6"
+  },
+  "2a02:6b8:0:1::feed:bad · Safe v6 alt": {
+    "value": "2a02:6b8:0:1::feed:bad · Безопасный v6 альт."
+  },
+  "2a02:6b8::feed:0ff · Base v6": {
+    "value": "2a02:6b8::feed:0ff · Базовый v6"
+  },
+  "2a02:6b8::feed:a11 · Family v6": {
+    "value": "2a02:6b8::feed:a11 · Семейный v6"
+  },
+  "2a02:6b8::feed:bad · Safe v6": {
+    "value": "2a02:6b8::feed:bad · Безопасный v6"
+  },
+  "77.88.8.1 · Base alt": {
+    "value": "77.88.8.1 · Базовый альт."
+  },
+  "77.88.8.2 · Safe alt": {
+    "value": "77.88.8.2 · Безопасный альт."
+  },
+  "77.88.8.3 · Family alt": {
+    "value": "77.88.8.3 · Семейный альт."
+  },
+  "77.88.8.7 · Family": {
+    "value": "77.88.8.7 · Семейный"
+  },
+  "77.88.8.8 · Base": {
+    "value": "77.88.8.8 · Базовый"
+  },
+  "77.88.8.88 · Safe": {
+    "value": "77.88.8.88 · Безопасный"
+  },
+  "8.8.4.4 · Secondary v4": {
+    "value": "8.8.4.4 · Резервный v4"
+  },
+  "8.8.8.8 · Primary v4": {
+    "value": "8.8.8.8 · Основной v4"
+  },
+  "AdGuard Family · ad + adult": {
+    "value": "AdGuard Family · реклама + 18+"
+  },
+  "AdGuard · ad block": {
+    "value": "AdGuard · блокировка рекламы"
+  },
+  "Add an IPv6 address to the tunnel. Off by default — turn on only if your network has working IPv6. Turning on sets resolution to prefer IPv4, turning off forces IPv4-only — you can change the strategy in DNS Settings.": {
+    "value": "Добавить туннелю IPv6-адрес. По умолчанию выключено — включайте, только если в вашей сети работает IPv6. Включение переводит резолв в режим «предпочитать IPv4», выключение — в «только IPv4»; стратегию можно поменять в настройках DNS."
+  },
+  "Apple": {
+    "value": "Apple"
+  },
+  "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.": {
+    "value": "Действует только для UDP. DoH и DoT закреплены за 77.88.8.88 с SNI safe.dot.dns.yandex.net."
+  },
+  "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset.": {
+    "value": "Применять FakeIP-обработку DNS этого пресета. Выключите, чтобы отключить FakeIP, не удаляя пресет."
+  },
+  "Auto": {
+    "value": "Авто"
+  },
+  "Auto Proxy": {
+    "value": "Автопрокси"
+  },
+  "Auto route": {
+    "value": "Автомаршрут"
+  },
+  "Auto-detect interface": {
+    "value": "Автоопределение интерфейса"
+  },
+  "Automatically detect the default network interface": {
+    "value": "Автоматически определять сетевой интерфейс по умолчанию"
+  },
+  "BitTorrent": {
+    "value": "BitTorrent"
+  },
+  "Block": {
+    "value": "Блокировка"
+  },
+  "Block Ads": {
+    "value": "Блокировка рекламы"
+  },
+  "Block HTTPS records": {
+    "value": "Блокировать HTTPS-записи"
+  },
+  "Cloudflare": {
+    "value": "Cloudflare"
+  },
+  "Cloudflare DoT": {
+    "value": "Cloudflare DoT"
+  },
+  "Cloudflare Public DNS address for DNS-over-TLS (port 853).": {
+    "value": "Адрес Cloudflare Public DNS для DNS-over-TLS (порт 853)."
+  },
+  "Cloudflare Public DNS address. IPv4 — universal; IPv6 — if your network supports it.": {
+    "value": "Адрес Cloudflare Public DNS. IPv4 — универсально; IPv6 — если ваша сеть его поддерживает."
+  },
+  "Cloudflare UDP": {
+    "value": "Cloudflare UDP"
+  },
+  "Connection and routing behavior": {
+    "value": "Поведение подключений и маршрутизации"
+  },
+  "Core packet handling: sniff the domain, hijack DNS into the tunnel, resolve destinations for routing. Applied first, before all other rules.": {
+    "value": "Базовая обработка пакетов: определение домена, перехват DNS в туннель, резолв адресов назначения для маршрутизации. Применяется первым, до всех остальных правил."
+  },
+  "Custom tunnel routes": {
+    "value": "Свои маршруты туннеля"
+  },
+  "DNS": {
+    "value": "DNS"
+  },
+  "DNS final": {
+    "value": "Финальный DNS"
+  },
+  "DNS resolution strategy": {
+    "value": "Стратегия резолва DNS"
+  },
+  "DNS server": {
+    "value": "DNS-сервер"
+  },
+  "DNS server used to resolve the Safe DNS hostname itself (AdGuard profiles use a domain address).": {
+    "value": "DNS-сервер, который резолвит сам домен безопасного DNS (профили AdGuard используют доменный адрес)."
+  },
+  "DNS-over-TLS with built-in blocking: malware (Quad9), ads (AdGuard), or ads + adult (AdGuard Family).": {
+    "value": "DNS-over-TLS со встроенной блокировкой: вредоносное ПО (Quad9), реклама (AdGuard) или реклама и контент 18+ (AdGuard Family)."
+  },
+  "DPI Bypass": {
+    "value": "Обход DPI"
+  },
+  "Default domain resolver": {
+    "value": "Резолвер доменов по умолчанию"
+  },
+  "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule. For privacy, prefer encrypted: google_doh, cloudflare_dot. For speed: cloudflare_udp, google_udp. local_dns_resolver (system DNS) is safe here.": {
+    "value": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом. Для приватности выбирайте шифрованные: google_doh, cloudflare_dot. Для скорости: cloudflare_udp, google_udp. local_dns_resolver (системный DNS) здесь безопасен."
+  },
+  "Detect protocol and domain from packets for accurate routing.\n⚠️ WARNING: turning this off stops protocol matching (e.g. BitTorrent, TLS, QUIC), and domain matching too unless FakeIP is on.": {
+    "value": "Определять протокол и домен из пакетов для точной маршрутизации.\n⚠️ ВНИМАНИЕ: выключение прекращает сопоставление по протоколу (например BitTorrent, TLS, QUIC), а без включённого FakeIP — и по домену."
+  },
+  "Direct": {
+    "value": "Напрямую"
+  },
+  "DoH server IP": {
+    "value": "IP-адрес DoH-сервера"
+  },
+  "DoT server IP": {
+    "value": "IP-адрес DoT-сервера"
+  },
+  "Domain name resolution": {
+    "value": "Разрешение доменных имён"
+  },
+  "Domain resolver": {
+    "value": "Резолвер домена"
+  },
+  "Enable IPv6": {
+    "value": "Включить IPv6"
+  },
+  "Endpoint for measuring proxy latency. Pick a preset or type any URL — 204 / tiny-body endpoints are best.": {
+    "value": "Адрес для измерения задержки прокси. Выберите готовый вариант или введите любой URL — лучше всего эндпоинты с ответом 204 или крошечным телом."
+  },
+  "FakeIP": {
+    "value": "FakeIP"
+  },
+  "FakeIP allocator": {
+    "value": "Аллокатор FakeIP"
+  },
+  "FakeIP server": {
+    "value": "Сервер FakeIP"
+  },
+  "Fallback delay": {
+    "value": "Резервная задержка"
+  },
+  "Firefox": {
+    "value": "Firefox"
+  },
+  "Force IPv4": {
+    "value": "Принудительно IPv4"
+  },
+  "General": {
+    "value": "Общие"
+  },
+  "GeoIP IP-range fallback": {
+    "value": "GeoIP-диапазоны (резерв)"
+  },
+  "Google 204": {
+    "value": "Google 204"
+  },
+  "Google DNS (direct)": {
+    "value": "Google DNS (напрямую)"
+  },
+  "Google DoH": {
+    "value": "Google DoH"
+  },
+  "Google DoT": {
+    "value": "Google DoT"
+  },
+  "Google Public DNS IP for IP-based DoH. TLS SNI is pinned to dns.google.": {
+    "value": "IP-адрес Google Public DNS для DoH по IP. TLS SNI закреплён как dns.google."
+  },
+  "Google Public DNS address for DNS-over-TLS (port 853).": {
+    "value": "Адрес Google Public DNS для DNS-over-TLS (порт 853)."
+  },
+  "Google Public DNS address. IPv4 — universal; IPv6 — if your network supports it.": {
+    "value": "Адрес Google Public DNS. IPv4 — универсально; IPv6 — если ваша сеть его поддерживает."
+  },
+  "HTTP only": {
+    "value": "Только HTTP"
+  },
+  "Hijack DNS": {
+    "value": "Перехват DNS"
+  },
+  "Hostkey (Amsterdam)": {
+    "value": "Hostkey (Амстердам)"
+  },
+  "Hostkey (Frankfurt)": {
+    "value": "Hostkey (Франкфурт)"
+  },
+  "Hostkey (Helsinki)": {
+    "value": "Hostkey (Хельсинки)"
+  },
+  "Hostkey (Moscow)": {
+    "value": "Hostkey (Москва)"
+  },
+  "Hostkey (New York)": {
+    "value": "Hostkey (Нью-Йорк)"
+  },
+  "How long to wait for the domain to appear in the packet before giving up.": {
+    "value": "Сколько ждать появления домена в пакете, прежде чем прекратить попытки."
+  },
+  "How often sing-box re-tests and re-picks. Lower → faster switching, but more background traffic and battery: each cycle dials the servers (waking suspended tunnels). 15m is the battery-friendly default.": {
+    "value": "Как часто sing-box перепроверяет серверы и делает выбор заново. Меньше → быстрее переключение, но больше фонового трафика и расхода батареи: каждый цикл опрашивает серверы (пробуждая приостановленные туннели). 15 минут — щадящий для батареи вариант по умолчанию."
+  },
+  "How the core captures traffic. Set from VPN Settings → Mode.": {
+    "value": "Как ядро перехватывает трафик. Задаётся в настройках VPN → Режим."
+  },
+  "IP version preference for DNS resolution": {
+    "value": "Предпочтение версии IP при резолве DNS"
+  },
+  "IPv4 address": {
+    "value": "IPv4-адрес"
+  },
+  "IPv4 the local proxy binds to. Suggestions above; any valid IPv4 is allowed (e.g. a specific LAN IP). Anything other than 127.x is reachable from the network and forces auth on.": {
+    "value": "IPv4-адрес, на котором слушает локальный прокси. Выше — подсказки; допустим любой корректный IPv4 (например, конкретный LAN-адрес). Всё, кроме 127.x, доступно из сети и принудительно включает авторизацию."
+  },
+  "IPv6 address": {
+    "value": "IPv6-адрес"
+  },
+  "Inbound type for the local proxy port.": {
+    "value": "Тип входящего подключения для порта локального прокси."
+  },
+  "Instant DNS via placeholder IPs; real names resolve inside the tunnel. Speeds up DNS and prevents pre-tunnel DNS leaks. Not a DPI bypass. Enable below special domains so GeoIP direct routing still works.": {
+    "value": "Мгновенный DNS через IP-заглушки; реальные имена резолвятся внутри туннеля. Ускоряет DNS и исключает утечки DNS до туннеля. Не является обходом DPI. Включайте ниже особых доменов, чтобы прямая маршрутизация по GeoIP продолжала работать."
+  },
+  "Internal": {
+    "value": "Внутренние"
+  },
+  "Internal globals referenced by presets — not shown as VPN settings.": {
+    "value": "Внутренние глобальные переменные, на которые ссылаются пресеты, — не показываются в настройках VPN."
+  },
+  "Let sing-box manage routing table": {
+    "value": "Доверить sing-box управление таблицей маршрутизации"
+  },
+  "Listen address": {
+    "value": "Адрес прослушивания"
+  },
+  "Listen port": {
+    "value": "Порт прослушивания"
+  },
+  "Local proxy inbound vars (hidden — values come from VpnModeConfig)": {
+    "value": "Переменные входящего локального прокси (скрыты — значения берутся из VpnModeConfig)"
+  },
+  "Local proxy port (1024..65535).": {
+    "value": "Порт локального прокси (1024..65535)."
+  },
+  "Local proxy protocol": {
+    "value": "Протокол локального прокси"
+  },
+  "Log level": {
+    "value": "Уровень логирования"
+  },
+  "Logging and core settings": {
+    "value": "Логирование и настройки ядра"
+  },
+  "MTU": {
+    "value": "MTU"
+  },
+  "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use.": {
+    "value": "Сопоставлять не только домены, но и IP российских автономных систем — ловит случаи CDN/QUIC/ECH, когда определение домена не срабатывает. При первом использовании автоматически загружает geoip-ru.srs (~150 КБ)."
+  },
+  "May break connectivity on some devices": {
+    "value": "На некоторых устройствах может нарушать связь"
+  },
+  "Mixed — HTTP + SOCKS5 on one port": {
+    "value": "Смешанный — HTTP + SOCKS5 на одном порту"
+  },
+  "Mixed-case SNI": {
+    "value": "SNI в смешанном регистре"
+  },
+  "Network": {
+    "value": "Сеть"
+  },
+  "OVH (France)": {
+    "value": "OVH (Франция)"
+  },
+  "Only switch proxy if latency difference exceeds this": {
+    "value": "Переключать прокси, только если разница задержек превышает это значение"
+  },
+  "Outbound": {
+    "value": "Исходящий канал"
+  },
+  "Packet sniffing": {
+    "value": "Анализ пакетов"
+  },
+  "Password for proxy auth. Auto-generated when auth turns on.": {
+    "value": "Пароль для авторизации на прокси. Генерируется автоматически при включении авторизации."
+  },
+  "Preferred IP version": {
+    "value": "Предпочитаемая версия IP"
+  },
+  "Private IPs": {
+    "value": "Частные IP"
+  },
+  "Proxy password": {
+    "value": "Пароль прокси"
+  },
+  "Proxy username": {
+    "value": "Имя пользователя прокси"
+  },
+  "Proxy — local port only, no TUN": {
+    "value": "Прокси — только локальный порт, без TUN"
+  },
+  "Quad9 · anti-malware": {
+    "value": "Quad9 · защита от вредоносного ПО"
+  },
+  "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering": {
+    "value": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). Обходит простой DPI с точным сравнением; бесполезно против фильтрации уровня GFW"
+  },
+  "Recommended: Base/UDP — most stable. DoH/DoT may be filtered by ISPs.": {
+    "value": "Рекомендуется базовый UDP — самый стабильный. DoH/DoT могут фильтроваться провайдерами."
+  },
+  "Reject = drop. Or pick Direct to send it outside the VPN.": {
+    "value": "Блокировка — трафик отбрасывается. Либо выберите «Напрямую», чтобы отправить его мимо VPN."
+  },
+  "Reject ad-related connections. Downloads rule set (~1 MB).": {
+    "value": "Блокирует рекламные подключения. Загружает набор правил (~1 МБ)."
+  },
+  "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.": {
+    "value": "Блокирует трафик в туннеле, не отнесённый ни к одному установленному приложению (фоновые/чужие процессы). Либо направьте его напрямую в обход VPN."
+  },
+  "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS.": {
+    "value": "Отвечать пустым ответом на DNS-записи HTTPS/SVCB (RFC 9460), чтобы приложения откатывались на обычные A/AAAA. Не даёт этим запросам утекать в резервный DNS."
+  },
+  "Require auth": {
+    "value": "Требовать авторизацию"
+  },
+  "Resolve Russian domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Works through this preset's DNS rule — keep the DNS toggle on. Turn off if your network has functional IPv6.": {
+    "value": "Резолвить российские домены только в IPv4. Предотвращает мёртвые IPv6-подключения в сетях без рабочего глобального IPv6. Работает через DNS-правило этого пресета — держите переключатель DNS включённым. Выключите, если в вашей сети IPv6 работает."
+  },
+  "Resolve destination IP": {
+    "value": "Резолвить IP назначения"
+  },
+  "Resolve strategy": {
+    "value": "Стратегия резолва"
+  },
+  "Resolve the sniffed domain to an IP before routing, so GeoIP and IP rules can match. Turn off when using FakeIP — the fake IP already carries the domain, and a real lookup here would bypass FakeIP and can fail on a broken resolver.": {
+    "value": "Резолвить обнаруженный домен в IP до маршрутизации, чтобы срабатывали правила GeoIP и IP. Выключите при использовании FakeIP — фиктивный IP уже несёт домен, а реальный запрос здесь обойдёт FakeIP и может не сработать на неисправном резолвере."
+  },
+  "Resolve these domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Turn off if your network has functional IPv6.": {
+    "value": "Резолвить эти домены только в IPv4. Предотвращает мёртвые IPv6-подключения в сетях без рабочего глобального IPv6. Выключите, если в вашей сети IPv6 работает."
+  },
+  "Route BitTorrent traffic. Direct by default, or send it to a separate channel.": {
+    "value": "Маршрутизация BitTorrent-трафика. По умолчанию — напрямую; можно направить в отдельный канал."
+  },
+  "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc) and Russian IP ranges directly.": {
+    "value": "Направляет напрямую российские TLD (.ru/.su/IDN), CDN сервисов (Яндекс/VK/Авито/2ГИС/банки и др.) и российские диапазоны IP."
+  },
+  "Route all DNS queries through the tunnel's DNS engine.\n⚠️ WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why.": {
+    "value": "Направлять все DNS-запросы через DNS-движок туннеля.\n⚠️ ВНИМАНИЕ: выключение отключает FakeIP и все DNS-правила — приложения будут напрямую и бесконтрольно обращаться к своим DNS. Не выключайте, если точно не знаете, зачем."
+  },
+  "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves.": {
+    "value": "Направлять весь IPv4 и IPv6 через туннель явными полудиапазонами вместо значений sing-box по умолчанию. По умолчанию выключено — включайте, только если стандартная маршрутизация работает неправильно."
+  },
+  "Route private IP ranges (LAN). Direct by default, or send to a channel to reach routers/devices over a local VPN.": {
+    "value": "Маршрутизация частных диапазонов IP (LAN). По умолчанию — напрямую; можно направить в канал, чтобы добираться до роутеров и устройств через локальный VPN."
+  },
+  "Russia-only services": {
+    "value": "Сервисы только для России"
+  },
+  "Russian domains & IPs": {
+    "value": "Российские домены и IP"
+  },
+  "SOCKS5 only": {
+    "value": "Только SOCKS5"
+  },
+  "Safe DNS (DoT)": {
+    "value": "Безопасный DNS (DoT)"
+  },
+  "Safe profile": {
+    "value": "Профиль защиты"
+  },
+  "Selectel (RU)": {
+    "value": "Selectel (RU)"
+  },
+  "Send matched domains to this preset's DNS server and apply DNS-level options like Force IPv4. Turn off to keep routing without DNS changes.": {
+    "value": "Отправлять совпавшие домены на DNS-сервер этого пресета и применять DNS-опции вроде «Принудительно IPv4». Выключите, чтобы сохранить маршрутизацию без изменений DNS."
+  },
+  "Services available only inside Russia. Direct by default, or route via a channel to reach them from abroad.": {
+    "value": "Сервисы, доступные только внутри России. По умолчанию — напрямую; можно направить через канал, чтобы пользоваться ими из-за рубежа."
+  },
+  "Sniff timeout": {
+    "value": "Тайм-аут анализа"
+  },
+  "Split TLS ClientHello into small TCP segments": {
+    "value": "Разбивать TLS ClientHello на мелкие TCP-сегменты"
+  },
+  "Split handshake into multiple TLS records (try this first)": {
+    "value": "Разбивать рукопожатие на несколько TLS-записей (попробуйте сначала это)"
+  },
+  "Stack": {
+    "value": "Стек"
+  },
+  "Strict route": {
+    "value": "Строгий маршрут"
+  },
+  "System DNS": {
+    "value": "Системный DNS"
+  },
+  "TLS Fragment": {
+    "value": "Фрагментация TLS"
+  },
+  "TLS Record Fragment": {
+    "value": "Фрагментация TLS-записей"
+  },
+  "TLS fragmentation to bypass censorship": {
+    "value": "Фрагментация TLS для обхода блокировок"
+  },
+  "TUN": {
+    "value": "TUN"
+  },
+  "TUN interface": {
+    "value": "Интерфейс TUN"
+  },
+  "TUN interface IPv6 address (CIDR). Applied only when Enable IPv6 is on.": {
+    "value": "IPv6-адрес интерфейса TUN (CIDR). Применяется, только когда включён IPv6."
+  },
+  "TUN interface address (CIDR)": {
+    "value": "Адрес интерфейса TUN (CIDR)"
+  },
+  "Tele2 (EU)": {
+    "value": "Tele2 (EU)"
+  },
+  "Test URL": {
+    "value": "URL теста"
+  },
+  "Test interval": {
+    "value": "Интервал теста"
+  },
+  "The FakeIP allocator. Internal — bound to the fakeip DNS server.": {
+    "value": "Аллокатор FakeIP. Внутренний — привязан к DNS-серверу fakeip."
+  },
+  "ThinkBroadband (UK)": {
+    "value": "ThinkBroadband (Великобритания)"
+  },
+  "Tolerance (ms)": {
+    "value": "Допуск (мс)"
+  },
+  "Traffic Processing": {
+    "value": "Обработка трафика"
+  },
+  "UDP server IP": {
+    "value": "IP-адрес UDP-сервера"
+  },
+  "URLTest tuning for the ✨auto group": {
+    "value": "Настройка URLTest для группы ✨Авто"
+  },
+  "Unknown traffic": {
+    "value": "Неизвестный трафик"
+  },
+  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use. Recommended: cloudflare_udp, google_udp, or google_doh. Avoid local_dns_resolver here — system DNS leaks these lookups to your ISP, bypassing the VPN.": {
+    "value": "Используется движком маршрутизации для внутреннего резолва имён (адреса серверов, правила маршрутизации). Это не резолвер для приложений. Рекомендуется: cloudflare_udp, google_udp или google_doh. Избегайте здесь local_dns_resolver — системный DNS отдаёт эти запросы провайдеру в обход VPN."
+  },
+  "Username for proxy auth (when auth is on).": {
+    "value": "Имя пользователя для авторизации на прокси (когда она включена)."
+  },
+  "VPN + Proxy — both": {
+    "value": "VPN + Прокси — оба режима"
+  },
+  "VPN Mode": {
+    "value": "Режим VPN"
+  },
+  "VPN mode": {
+    "value": "Режим VPN"
+  },
+  "VPN — system-wide tunnel": {
+    "value": "VPN — туннель для всей системы"
+  },
+  "VPN ①": {
+    "value": "VPN ①"
+  },
+  "VPN ②": {
+    "value": "VPN ②"
+  },
+  "Verbosity of sing-box logs": {
+    "value": "Подробность логов sing-box"
+  },
+  "Virtual network interface": {
+    "value": "Виртуальный сетевой интерфейс"
+  },
+  "Wait time when automatic detection fails": {
+    "value": "Время ожидания, когда автоопределение не сработало"
+  },
+  "Where to route BitTorrent. Direct to keep it off the VPN, or pick a channel to tunnel it.": {
+    "value": "Куда направлять BitTorrent: напрямую — мимо VPN, либо выберите канал, чтобы пустить его через туннель."
+  },
+  "Where to route Russia-only services. Direct on a Russian network; pick a Russian channel to reach them from abroad.": {
+    "value": "Куда направлять сервисы, доступные только в России: напрямую — в российской сети, либо через российский канал — чтобы открывать их из-за рубежа."
+  },
+  "Where to route private/LAN IPs. Direct for local access, or a channel to reach a remote LAN over VPN.": {
+    "value": "Куда направлять частные/LAN-адреса: напрямую — для локального доступа, либо в канал — чтобы добраться до удалённой LAN через VPN."
+  },
+  "Where to route traffic for Russian domains and IPs": {
+    "value": "Куда направлять трафик российских доменов и IP"
+  },
+  "Whether the local proxy requires username/password. Forced on for non-loopback listen.": {
+    "value": "Требует ли локальный прокси логин и пароль. Принудительно включается при прослушивании не на loopback."
+  },
+  "Which channel carries DNS queries to this server": {
+    "value": "Через какой канал идут DNS-запросы к этому серверу"
+  },
+  "Yandex": {
+    "value": "Яндекс"
+  },
+  "Yandex Safe DoH": {
+    "value": "Яндекс DoH (безопасный)"
+  },
+  "Yandex Safe DoT": {
+    "value": "Яндекс DoT (безопасный)"
+  },
+  "Yandex UDP (IP from above)": {
+    "value": "Яндекс UDP (IP из настройки выше)"
+  },
+  "outbound": {
+    "value": "исходящий канал"
+  },
+  "system (default), gvisor (userspace), mixed": {
+    "value": "system (по умолчанию), gvisor (пользовательское пространство), mixed"
+  },
+  "system name": {
+    "value": "системное имя"
+  }
+}

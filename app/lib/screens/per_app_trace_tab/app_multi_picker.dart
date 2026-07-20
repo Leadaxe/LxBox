@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_info.dart';
 import '../../services/app_info_cache.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §044/new-profiler — **встраиваемый** мульти-select пикер приложений для
-/// фильтр-окна профайлера (App-таб). В отличие от
-/// [SingleAppPickerScreen] (полноэкранный, `Navigator.pop(package)` по тапу),
-/// этот — виджет внутри таба: чекбоксы + накопление в [selected], без навигации.
+/// фильтр-окна профайлера (Profiler-таб). Это виджет внутри фильтр-листа:
+/// чекбоксы + накопление в [selected], без навигации.
 ///
 /// Источник списка и icon-cache те же (`AppInfoCache.loadAllApps` + `ensure`),
 /// чтобы не грузить иконки дважды.
@@ -81,20 +81,20 @@ class _AppMultiPickerState extends State<AppMultiPicker> {
           children: [
             Expanded(
               child: TextField(
-                decoration: const InputDecoration(
-                  hintText: 'Search by name or package',
-                  prefixIcon: Icon(Icons.search, size: 18),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  hintText: getLocalText.s("Search by name or package"),
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  border: const OutlineInputBorder(),
                   isDense: true,
                   contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
                 style: const TextStyle(fontSize: 13),
                 onChanged: (v) => setState(() => _search = v),
               ),
             ),
             IconButton(
-              tooltip: 'Show system apps',
+              tooltip: getLocalText.s(1, "Show system apps"),
               visualDensity: VisualDensity.compact,
               icon: Icon(
                 _showSystem ? Icons.visibility : Icons.visibility_off,
@@ -110,25 +110,26 @@ class _AppMultiPickerState extends State<AppMultiPicker> {
               // Грузим весь список установленных приложений (loadAllApps) — на
               // устройстве с 200+ apps это пара секунд. Текст вместо голого
               // спиннера, чтобы не выглядело зависшим. Иконки догрузятся лениво.
-              ? const Center(
+              ? Center(
                   child: Padding(
-                    padding: EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(24),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 12),
-                        Text('Loading installed apps…',
-                            style: TextStyle(fontSize: 12)),
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 12),
+                        Text(getLocalText.s("Loading installed apps…"),
+                            style: const TextStyle(fontSize: 12)),
                       ],
                     ),
                   ),
                 )
               : _filtered.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text('No apps match', style: TextStyle(fontSize: 12)),
+                        padding: const EdgeInsets.all(24),
+                        child: Text(getLocalText.s("No apps match"),
+                            style: const TextStyle(fontSize: 12)),
                       ),
                     )
                   : ListView.builder(

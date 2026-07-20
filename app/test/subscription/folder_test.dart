@@ -82,6 +82,46 @@ void main() {
       expect(rt.members[1].enabled, isFalse);
     });
 
+    test('§284 ping_url/ping_timeout_ms: round-trip + copyWith сохраняет', () {
+      final f = FolderServers(
+        id: 'f-2',
+        name: 'WARP GENERATOR',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        members: [FolderMember(raw: uriA)],
+        pingUrl: 'https://1.1.1.1/cdn-cgi/trace',
+        pingTimeoutMs: 3000,
+      );
+      // backup-инвариант: поля переживают toJson→fromJson.
+      final rt = ServerList.fromJson(f.toJson()) as FolderServers;
+      expect(rt.pingUrl, 'https://1.1.1.1/cdn-cgi/trace');
+      expect(rt.pingTimeoutMs, 3000);
+
+      // copyWith без ping-аргументов НЕ теряет поля.
+      final kept = f.copyWith(members: [FolderMember(raw: uriB)]);
+      expect(kept.pingUrl, 'https://1.1.1.1/cdn-cgi/trace');
+      expect(kept.pingTimeoutMs, 3000);
+
+      // clearPing сбрасывает в null (→ глобальный ping при тесте).
+      final cleared = f.copyWith(clearPing: true);
+      expect(cleared.pingUrl, isNull);
+      expect(cleared.pingTimeoutMs, isNull);
+      expect(cleared.toJson().containsKey('ping_url'), isFalse);
+
+      // Папка без ping-полей → null (берётся глобальное).
+      final plain = FolderServers(
+        id: 'f-3',
+        name: 'Plain',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+      );
+      expect(plain.pingUrl, isNull);
+      expect((ServerList.fromJson(plain.toJson()) as FolderServers).pingUrl,
+          isNull);
+    });
+
     test('nodes = только включённые члены (builder-контракт)', () {
       final folder = FolderServers(
         id: 'f-1',
@@ -131,7 +171,7 @@ void main() {
       expect(c.entries.single.list, isA<FolderServers>());
 
       final err = await c.addMembersToFolder(0, '$uriA\n$uriB');
-      expect(err, isEmpty);
+      expect(err, isNull);
 
       final folder = c.entries.single.list as FolderServers;
       expect(folder.members, hasLength(2));
@@ -148,7 +188,7 @@ void main() {
       await c.addFolder('F');
       final err = await c.addMembersToFolder(0, '$uriUnnamed\n$uriUnnamed2',
           nameFallback: 'proton-nl');
-      expect(err, isEmpty);
+      expect(err, isNull);
 
       final folder = c.entries.single.list as FolderServers;
       expect(folder.members[0].node!.tag, 'proton-nl');
@@ -156,7 +196,7 @@ void main() {
       // Именованная нода имя файла НЕ получает.
       final err2 =
           await c.addMembersToFolder(0, uriA, nameFallback: 'ignored');
-      expect(err2, isEmpty);
+      expect(err2, isNull);
       final folder2 = c.entries.single.list as FolderServers;
       expect(folder2.members[2].node!.tag, 'Alpha');
     });
@@ -180,12 +220,12 @@ void main() {
       await c.addMembersToFolder(0, uriA);
 
       final err = await c.updateMemberAt(0, 0, 'not-a-valid-config');
-      expect(err, isNotEmpty);
+      expect(err, isNotNull);
       final folder = c.entries.single.list as FolderServers;
       expect(folder.members.single.raw, uriA);
 
       final ok = await c.updateMemberAt(0, 0, uriB);
-      expect(ok, isEmpty);
+      expect(ok, isNull);
       final folder2 = c.entries.single.list as FolderServers;
       expect(folder2.members.single.node!.tag, 'Beta');
     });
@@ -242,7 +282,7 @@ void main() {
       await c.addFolder('F');
 
       final err = await c.moveServerToFolder(0, 1);
-      expect(err, isEmpty);
+      expect(err, isNull);
       expect(c.entries, hasLength(1));
       final folder = c.entries.single.list as FolderServers;
       // addFromInput добавил авто-эмодзи (§090) — сверяем по суффиксу.
@@ -257,7 +297,7 @@ void main() {
       await c.addMembersToFolder(0, '$uriA\n$uriB');
 
       final err = await c.moveMemberToFolder(0, 0, 1);
-      expect(err, isEmpty);
+      expect(err, isNull);
       final a = c.entries[0].list as FolderServers;
       final b = c.entries[1].list as FolderServers;
       expect(a.members.single.node!.tag, 'Beta');
@@ -284,7 +324,7 @@ void main() {
 
       final err =
           await c.addUrlSnapshotToFolder(0, 'https://example.com/sub');
-      expect(err, isEmpty);
+      expect(err, isNull);
       // Единственная запись — папка (никакой SubscriptionServers).
       expect(c.entries, hasLength(1));
       final folder = c.entries.single.list as FolderServers;
@@ -333,13 +373,13 @@ void main() {
       await c.addMembersToFolder(0, '$uriA\n$uriB');
 
       // self
-      expect(await c.setMemberDetour(0, 0, 'Alpha'), isNotEmpty);
+      expect(await c.setMemberDetour(0, 0, 'Alpha'), isNotNull);
       // интра-ребро A→B ок, хранится голым тегом
-      expect(await c.setMemberDetour(0, 0, 'Beta'), isEmpty);
+      expect(await c.setMemberDetour(0, 0, 'Beta'), isNull);
       var folder = c.entries.single.list as FolderServers;
       expect(folder.members[0].detour, 'Beta');
       // замыкающее B→A — отказ
-      expect(await c.setMemberDetour(0, 1, 'Alpha'), isNotEmpty);
+      expect(await c.setMemberDetour(0, 1, 'Alpha'), isNotNull);
       folder = c.entries.single.list as FolderServers;
       expect(folder.members[1].detour, isEmpty);
     });

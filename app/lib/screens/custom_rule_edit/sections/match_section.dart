@@ -4,6 +4,7 @@ import '../punycode.dart';
 import '../validators.dart' as v;
 import '../widgets/items_field.dart';
 import '../widgets/section_header.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §030 new_fields — quick-вставки для CIDR-полей (кнопка «Presets ▾»).
 /// Три ходовых сценария: само устройство, домашний Wi-Fi, поймать всё.
@@ -99,14 +100,13 @@ class MatchSection extends StatelessWidget {
           controlAffinity: ListTileControlAffinity.leading,
           value: ipIsPrivate,
           onChanged: (v) => onIpIsPrivateChanged(v ?? false),
-          title: const Text(
-            'Private IP',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          title: Text(
+            getLocalText.s("Private IP"),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
-          subtitle: const Text(
-            'Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + '
-            'link-local',
-            style: TextStyle(fontSize: 11),
+          subtitle: Text(
+            getLocalText.s("Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local"),
+            style: const TextStyle(fontSize: 11),
           ),
         ),
         // §030/new_fields — source-ось: по источнику пакета (AND с группой
@@ -131,13 +131,13 @@ class MatchSection extends StatelessWidget {
           controlAffinity: ListTileControlAffinity.leading,
           value: sourceIpIsPrivate,
           onChanged: (v) => onSourceIpIsPrivateChanged(v ?? false),
-          title: const Text(
-            'Private source IP',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          title: Text(
+            getLocalText.s("Private source IP"),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
-          subtitle: const Text(
-            'Match when the packet SOURCE is a private address',
-            style: TextStyle(fontSize: 11),
+          subtitle: Text(
+            getLocalText.s("Match when the packet SOURCE is a private address"),
+            style: const TextStyle(fontSize: 11),
           ),
         ),
       ],
