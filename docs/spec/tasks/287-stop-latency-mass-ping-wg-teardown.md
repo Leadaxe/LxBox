@@ -1,6 +1,6 @@
 # §287 — Долгая остановка VPN при активном mass-ping'е (WG-teardown блокирует stop)
 
-**Тип:** bug + UX · **Статус:** in progress (develop)
+**Тип:** bug + UX · **Статус:** complete (app-таймаут `6ed9619`; ядровая половина — bump пина `v1.14.0-lx.14` в `aa1d807f`, SPEC 030 stop-latency)
 
 ## Проблема
 
