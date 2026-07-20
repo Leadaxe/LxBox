@@ -1,5 +1,6 @@
 import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
+import 'l10n/locale_controller.dart';
 import 'settings_storage.dart';
 
 /// §275 — единственная точка мутации каналов для кода приложения.
@@ -23,7 +24,8 @@ import 'settings_storage.dart';
 /// а не тихо потом.
 ///
 /// Чего класс НЕ закрывает (осознанно):
-/// - `SettingsStorage.setChannels` — сырой bulk-overwrite мимо heal'а;
+/// - bulk-overwrite (`setChannels`) heal не даёт — но проходит через явный
+///   `bulkReplace` (§292), чтобы `setChannels` тоже стал `@visibleForTesting`;
 /// - `sub == null` (контроллер ещё не готов) — ресинк молча пропускается,
 ///   это законно: без контроллера нет и `_entries`, которые расходятся;
 /// - третий род ссылки на канал, буде появится, — против него работает
@@ -66,6 +68,36 @@ class ChannelMutations {
     _resync(healed, tag, sub);
     return healed;
   }
+
+  /// §292 — bulk-перезапись всего списка каналов БЕЗ heal'а. Явный heal-free
+  /// путь для трёх легитимных call-site'ов, которые не могут повесить ссылку:
+  ///   • routing_screen — уже застейдженный список (heal сделан ранее по мутации);
+  ///   • routing_srs_cache — staging-буфер экрана (flush mixin'ом на dispose);
+  ///   • debug /channels reorder — тот же набор тегов, только порядок.
+  /// Существование этого метода позволяет пометить `SettingsStorage.setChannels`
+  /// `@visibleForTesting` (§275): голый bulk-overwrite из `lib/` теперь красный
+  /// в CI, а осознанно heal-free случай проходит через названный вход.
+  static Future<void> bulkReplace(
+    List<Channel> channels, {
+    bool flush = true,
+  }) =>
+      // ignore: invalid_use_of_visible_for_testing_member
+      SettingsStorage.setChannels(channels, flush: flush);
+
+  /// §292 — локализованные части heal-сообщения из [ChannelHealResult].
+  /// Единый источник строк «N rule reference(s) switched to vpn-1» /
+  /// «M detour reference(s) reset to None» — раньше дублировались дословно в
+  /// `routing_screen._notifyHealed` (сырые строки) и `node_list` (l10n). Обе
+  /// части нулевые → пустой список (call-site решает, показывать ли SnackBar).
+  /// Обрамление (lead / join-разделитель) остаётся за call-site'ом.
+  static List<String> healMessageParts(ChannelHealResult healed) => [
+        if (healed.rules > 0)
+          getLocalText.s(
+              '%s rule reference(s) switched to vpn-1', '${healed.rules}'),
+        if (healed.detours > 0)
+          getLocalText.s(
+              '%s detour reference(s) reset to None', '${healed.detours}'),
+      ];
 
   /// Ресинк идемпотентен (`clearDetourChannelRefs` → `healed == null`, когда
   /// чистить нечего), но гейт по счётчику оставлен: он документирует связь

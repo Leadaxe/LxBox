@@ -1,6 +1,6 @@
 # §292 — Быстрые дыры инварианта (proxyPort · setChannels-guard · heal-formatter · l10n)
 
-**Тип:** refactor-pass + correctness (Шаг 1 фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** spec
+**Тип:** refactor-pass + correctness (Шаг 1 фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** реализовано (develop; device-pending)
 
 Четыре изолированных S-фикса, каждый релизится отдельно. Общая тема — закрыть
 мелкие нарушения инварианта §291 дёшево, до крупной DNS-работы. Две реальные

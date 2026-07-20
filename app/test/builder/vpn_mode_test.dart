@@ -540,4 +540,40 @@ void main() {
           ['0.0.0.0/1', '128.0.0.0/1', '::/1', '8000::/1']);
     });
   });
+
+  // §292 — валидаторы порта/протокола на модели (инвариант, общий для UI +
+  // Debug API). Ловят мусор, который иначе дошёл бы до sing-box inbounds.
+  group('§292 isValidPort', () {
+    test('в диапазоне 1024..65535 → true', () {
+      expect(VpnModeConfig.isValidPort(2080), isTrue);
+      expect(VpnModeConfig.isValidPort(1024), isTrue);
+      expect(VpnModeConfig.isValidPort(65535), isTrue);
+    });
+    test('привилегированные (<1024), 0, negative, >65535 → false', () {
+      expect(VpnModeConfig.isValidPort(1023), isFalse);
+      expect(VpnModeConfig.isValidPort(80), isFalse);
+      expect(VpnModeConfig.isValidPort(0), isFalse);
+      expect(VpnModeConfig.isValidPort(-1), isFalse);
+      expect(VpnModeConfig.isValidPort(65536), isFalse);
+      expect(VpnModeConfig.isValidPort(99999), isFalse);
+    });
+    test('граница совпадает с UI vpn_mode_tab (1024)', () {
+      // Регресс-якорь: UI _applyPort отвергает <1024; модель обязана тоже.
+      expect(VpnModeConfig.isValidPort(1024), isTrue);
+      expect(VpnModeConfig.isValidPort(1023), isFalse);
+    });
+  });
+
+  group('§292 isValidProtocol', () {
+    test('mixed/http/socks → true', () {
+      expect(VpnModeConfig.isValidProtocol(VpnModeConfig.protoMixed), isTrue);
+      expect(VpnModeConfig.isValidProtocol(VpnModeConfig.protoHttp), isTrue);
+      expect(VpnModeConfig.isValidProtocol(VpnModeConfig.protoSocks), isTrue);
+    });
+    test('мусор → false', () {
+      expect(VpnModeConfig.isValidProtocol('vless'), isFalse);
+      expect(VpnModeConfig.isValidProtocol(''), isFalse);
+      expect(VpnModeConfig.isValidProtocol('MIXED'), isFalse);
+    });
+  });
 }

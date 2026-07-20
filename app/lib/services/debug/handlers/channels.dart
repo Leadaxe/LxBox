@@ -165,7 +165,7 @@ Future<DebugResponse> _reorder(DebugRequest req, DebugContext ctx) async {
     );
   }
   final byTag = {for (final c in channels) c.tag: c};
-  await SettingsStorage.setChannels([for (final t in order) byTag[t]!]);
+  await ChannelMutations.bulkReplace([for (final t in order) byTag[t]!]);
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,

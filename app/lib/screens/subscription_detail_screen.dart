@@ -460,7 +460,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   /// §289 — правка UA слепка: пусто = дефолт (брендированный UA), поэтому trim
   /// без hint-подстановки; общий диалог с [_editIdentityField].
   Future<void> _editIdentityUserAgent() => _editIdentityField(
-        title: 'Custom User-Agent',
+        // §292 — человекочитаемый заголовок диалога (в отличие от HWID/
+        // x-device-* — те буквальные имена заголовков, перевод бессмыслен).
+        title: getLocalText.s('Custom User-Agent'),
         initial: widget.entry.identity?.userAgent ?? '',
         apply: (id, v) => id.copyWith(userAgent: v.trim()),
       );
