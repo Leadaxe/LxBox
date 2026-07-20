@@ -745,7 +745,10 @@ List<Channel> _channelsFromTemplate(
 /// ноды). Общий helper для билдера и live-превью редактора (§125 F4).
 RegExp? _tryCompileRegex(String pattern) {
   try {
-    return RegExp(pattern);
+    // §301 — node-filter регистронезависим (nodeFilter + defaultFilter). Тот
+    // же дефолт, что в основном окне поиска; здесь это решает, какие ноды
+    // реально попадают в канал в собранном конфиге, а не только в превью.
+    return RegExp(pattern, caseSensitive: false);
   } catch (_) {
     return null;
   }

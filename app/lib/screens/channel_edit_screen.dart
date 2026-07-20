@@ -235,7 +235,10 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   RegExp? _compile(String pattern) {
     if (pattern.isEmpty) return null;
     try {
-      return RegExp(pattern);
+      // §301 — node-filter regex регистронезависимы во всех точках (основное
+      // окно, превью, подсчёт, билдер). Юзер вводит `warp`, ждёт единого
+      // поведения; Dart RegExp не понимает inline `(?i)`, только этот флаг.
+      return RegExp(pattern, caseSensitive: false);
     } catch (_) {
       return null;
     }
