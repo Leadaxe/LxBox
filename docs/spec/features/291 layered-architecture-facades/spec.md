@@ -81,6 +81,27 @@
   **Эталон закрытой dual-write-ловушки.**
 - **sealed `ServerList` / `CustomRule`** — trio toJson/fromJson/copyWith,
   инварианты в trio (переживают backup merge). **Эталон модели** для DNS (task 294).
+- **`ProbeController`** (`services/probe/`, §296) — per-run stateless сервис:
+  storage-trio за load/save + чистые static-решения, что зовёт экран и применяет
+  к своему мутатору; ОДИН domain-shape адаптер (`probeNodesOf`). **Эталон
+  контроллера-над-подсистемой** — образец для DnsController (§300) и
+  VpnSettingsFacade (§293).
+
+### Общий рецепт фасада (probe-эталон обобщён)
+
+Повторяемая форма для §300/§293 и будущих:
+
+1. **ОДИН domain-shape адаптер** — единственное место, где сырая форма storage
+   резолвится в типизированный домен (probe: `probeNodesOf`; DNS: `load()` c
+   §294 `fromJson`; VPN: `hasTun`-зеркало).
+2. **Storage trio за load/save** = atomic-write choke point (probe:
+   `loadThresholds/saveThresholds`; DNS: `load()`/`stage()`; VPN: `applyVpnMode`).
+3. **Чистые static-решения**, что зовёт ЭКРАН и применяет к своему мутатору
+   (probe: `unreachableIndexes/…`; DNS: `ruleDisplayRows/toggleRule*`).
+4. **Экран тонкий**: transient-состояние + рендер + проводка решений; никакого
+   владения мутабельным доменом не мигрирует «в контроллер как поле» —
+   контроллер stateless, экран держит своё состояние локально (как folder_detail
+   держит `_probe`).
 
 ## Cross-cutting долг (чинится в нескольких task'ах)
 
@@ -103,7 +124,8 @@
 |---|---|---|---|
 | 1 | [292](../../tasks/292-quick-invariant-holes.md) | S×4 | Быстрые дыры: proxyPort-валидация (D), setChannels в фасад §275 (E), heal-formatter (G), l10n gap (H) |
 | 2 | [294](../../tasks/294-dns-typed-model.md) | L | DNS sealed-модель `DnsServer`/`DnsRule` (за resolver'ом) — крупнейшее снижение долга |
-| 2b | [295](../../tasks/295-dns-dual-write-fix.md) | M | DNS dual-write фикс (после 294) |
+| 2a | [300](../../tasks/300-dns-controller-facade.md) | S–M | DnsController — load/snapshot + чистые статики (code-provable; под probe-эталон) |
+| 2b | [295](../../tasks/295-dns-dual-write-fix.md) | M | DNS dual-write фикс (device; после 300) |
 | 3 | [296](../../tasks/296-folder-probe-controller.md) | M | ProbeController — общий probe-фасад над ServerList (subs+user+folder); сдувает folder_detail |
 | 4 | [297](../../tasks/297-onchange-single-dispatch.md) | M | onChange single-dispatch (после DNS-модели) |
 | 3b | [293](../../tasks/293-vpn-settings-facade.md) | M | VpnSettings-фасад (унификация 4 входов) |
