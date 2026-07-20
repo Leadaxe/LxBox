@@ -14,10 +14,18 @@ enum UpdateTrigger {
   periodic,      // раз в час
   vpnStopped,    // сразу по VPN disconnected
   manual,        // юзер нажал ⟳ (force=true)
+  resumed,       // §291 — app вернулся из фона (periodic мог спать в Doze)
 }
 
-/// Авто-обновление подписок по 5 триггерам (§027 спека):
-/// appStart / vpnConnected / periodic / vpnStopped / manual.
+/// Авто-обновление подписок по 6 триггерам (§027 спека):
+/// appStart / vpnConnected / periodic / vpnStopped / manual / resumed.
+///
+/// §291 — `resumed`: `periodic` тикает только пока процесс жив; при свёрнутом
+/// app с выключенным VPN Android со временем замораживает процесс и таймер
+/// засыпает. Возврат из фона — бесплатный (по батарее) момент досмотреть, не
+/// пора ли обновить. Не force: проходит `auto_update_subs` и весь
+/// `shouldUpdatePure`-гейт. Полноценный background-fetch выгруженного app
+/// (WorkManager) остаётся вне скопа.
 ///
 /// Параметры фиксированы (в спеке документированы):
 /// - `updateIntervalHours` берётся с каждой подписки (default 24, из
