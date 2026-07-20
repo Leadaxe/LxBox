@@ -54,7 +54,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
 
   // §236 — состояние Test servers. Результаты эфемерны (не персистятся).
   final Map<int, ProbeResult> _probe = {};
-  FolderProbeRunner? _runner;
+  ProbeRunner? _runner;
   // §286 — коалесцированный ребилд результатов пробы: onResult пишет в _probe
   // без setState-на-члена (у «WARP GENERATOR» ~100 членов → ~100 ребилдов
   // пачкой), а этот throttle сливает их в один setState раз в ~120мс.
@@ -272,10 +272,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             MapEntry(i, const ProbeResult(ProbeStatus.pending)),
         ]);
     });
-    final runner = FolderProbeRunner();
+    final runner = ProbeRunner();
     _runner = runner;
+    // §296 — probe над списком нод: члены папки (nullable, unfiltered, чтобы
+    // выключенные/битые сохранили индекс и вердикт — НЕ _folder.nodes, тот
+    // отфильтрован до enabled+parsed).
     final err = await runner.run(
-      _folder,
+      [for (final m in _folder.members) m.node],
       url: url,
       timeoutMs: timeoutMs,
       onResult: (i, r) {

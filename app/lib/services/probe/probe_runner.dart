@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import '../../models/server_list.dart';
+import '../../models/node_spec.dart';
 import '../../vpn/cc_channel.dart';
 import '../app_log.dart';
 import 'probe_config.dart';
@@ -37,16 +37,17 @@ class ProbeResult {
   final String message;
 }
 
-/// §236 — прогон теста по членам папки.
+/// §236/§296 — прогон теста по списку нод (общий для всей подсистемы
+/// ServerList: папки/подписки/серверы).
 ///
 /// Тест возможен только при выключенном VPN: probe-сессия — временный
 /// CommandServer без tun (два CommandServer на процесс невозможны). При живом
 /// туннеле `probeStart` вернёт «VPN is running…» → возвращаем [kProbeVpnRunning],
 /// UI показывает гейт-попап (Stop VPN). Через боевое ядро НЕ тестируем: замер
 /// шёл бы поверх активного детура/цепочки, а не по чистой ноде, и выключенные
-/// члены выпадали бы из конфига — вводило в заблуждение (§236 UI-rework).
-class FolderProbeRunner {
-  FolderProbeRunner({CcChannel? cc}) : _cc = cc ?? CcChannel.instance;
+/// ноды выпадали бы из конфига — вводило в заблуждение (§236 UI-rework).
+class ProbeRunner {
+  ProbeRunner({CcChannel? cc}) : _cc = cc ?? CcChannel.instance;
 
   final CcChannel _cc;
   bool _cancelled = false;
@@ -57,14 +58,18 @@ class FolderProbeRunner {
 
   void cancel() => _cancelled = true;
 
-  /// Прогоняет тест по всем членам [folder]. Результаты отдаются по мере
-  /// готовности в [onResult] (memberIndex, result). Возвращает '' или текст
-  /// фатальной ошибки (не пер-нодной).
+  /// Прогоняет тест по всем [nodes] (null-слот → вердикт 'broken', индекс
+  /// сохраняется). Результаты отдаются по мере готовности в [onResult]
+  /// (index, result). Возвращает '' или текст фатальной ошибки (не пер-нодной).
+  ///
+  /// §296 — вызывающий приводит свой домен к `List<NodeSpec?>`: папка передаёт
+  /// `folder.members.map((m)=>m.node)` (nullable, unfiltered — НЕ `folder.nodes`,
+  /// тот отфильтрован); подписка/сервер — `list.nodes` (disabled §283 → null).
   Future<String> run(
-    FolderServers folder, {
+    List<NodeSpec?> nodes, {
     required String url,
     required int timeoutMs,
-    required void Function(int memberIndex, ProbeResult result) onResult,
+    required void Function(int index, ProbeResult result) onResult,
   }) async {
     _cancelled = false;
     // §286 — регистрируем отмену в общем реестре: stop VPN / смерть туннеля /
@@ -72,10 +77,10 @@ class FolderProbeRunner {
     // прекратится, даже если экран деталей папки не в фокусе. Снимаем в finally.
     final canceller = ProbeLifecycle.I.register(cancel);
     try {
-      final cfg = buildProbeConfig(folder);
+      final cfg = buildProbeConfig(nodes);
 
       // Битые/несобираемые — вердикт сразу, без ядра.
-      cfg.brokenByMember.forEach((i, why) {
+      cfg.brokenByIndex.forEach((i, why) {
         onResult(
             i,
             ProbeResult(
@@ -89,7 +94,7 @@ class FolderProbeRunner {
       if (err.isEmpty) {
         try {
           await _runPool(
-            cfg.tagByMember,
+            cfg.tagByIndex,
             test: (tag) =>
                 _cc.probeUrlTest(tag, link: url, timeoutMs: timeoutMs),
             onResult: onResult,
@@ -118,7 +123,7 @@ class FolderProbeRunner {
   Future<void> _runPool(
     Map<int, String> tags, {
     required Future<CcDelayResult> Function(String tag) test,
-    required void Function(int memberIndex, ProbeResult result) onResult,
+    required void Function(int index, ProbeResult result) onResult,
   }) async {
     final queue = tags.entries.toList();
     var next = 0;
@@ -151,6 +156,10 @@ class ProbeThresholds {
     this.yellowMs = 500,
     this.orangeMs = 700,
   });
+
+  /// §296 — единственный источник дефолтов (был триплет 250/500/700,
+  /// скопированный в folder_detail 3×).
+  static const defaults = ProbeThresholds();
 
   final int greenMs;
   final int yellowMs;

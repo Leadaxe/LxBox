@@ -51,7 +51,7 @@ void main() {
   });
 
   test('cancel, синхронно снимающий себя через deregister, не ломает обход', () {
-    // Реальный сценарий: FolderProbeRunner.run() finally зовёт deregister из
+    // Реальный сценарий: ProbeRunner.run() finally зовёт deregister из
     // того же тика, что haltAll → мутация набора при обходе. haltAll берёт
     // снимок, поэтому это безопасно.
     var cancelled = 0;

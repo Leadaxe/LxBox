@@ -410,8 +410,10 @@ Future<DebugResponse> _probe(String id, DebugRequest req, DebugContext ctx) asyn
   if (timeoutMs <= 0) throw const BadRequest('field "timeout_ms" must be > 0');
 
   final results = <int, ProbeResult>{};
-  final err = await FolderProbeRunner().run(
-    folder,
+  // §296 — probe над списком нод; порядок членов = index результата (ниже
+  // ответ строится по тем же folder.members[i]).
+  final err = await ProbeRunner().run(
+    [for (final m in folder.members) m.node],
     url: url,
     timeoutMs: timeoutMs,
     onResult: (i, r) => results[i] = r,
