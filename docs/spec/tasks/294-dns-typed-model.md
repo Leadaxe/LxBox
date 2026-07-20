@@ -1,6 +1,16 @@
 # §294 — DNS servers+rules: типизированная sealed-модель
 
-**Тип:** structural refactor (Шаг 2 фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** spec · **Размер:** L · **Приоритет:** высший структурный
+**Тип:** structural refactor (Шаг 2 фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** реализовано (develop; device-pending) · **Размер:** факт. S (типизация §044/§279 уже была) · **Приоритет:** высший структурный
+
+> **Реализация (коммит ниже):** новый `lib/models/dns_ref.dart` — sealed
+> `DnsServerRef` {inline,preset,template} + `DnsRuleRef` {inline,srs,preset,
+> template}, trio по образцу `CustomRule`. `fromJson` толерантен (legacy/unknown
+> → null, как резолвер), `fromJsonStrict` бросает `DnsRefFormatException` на
+> write-пути. Debug `_putDnsServers`/`_putDnsRules` валидируют new-format через
+> модель (симметрия с `/rules`), legacy full-body/string пропускают. Форма на
+> диске НЕ мигрирована — `toJson` байт-совместим, golden round-trip тест = §221
+> guard (26 тестов в `test/models/dns_ref_test.dart`). Резолвер/`DnsOptionsModel`/
+> `ResolvedServer` НЕ тронуты. §295 (dual-write) — не входит, разблокирован.
 
 Крупнейшее снижение долга в приложении. DNS — единственный домен с оценкой
 **worst**: `dns_options.servers` и `dns_options.rules` хранятся как сырые
