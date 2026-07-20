@@ -339,10 +339,13 @@ void main() {
       // Миниатюра device-кейса: 3 «BL»-ноды в vpn-2 детурят в vpn-3
       // (WARP IN); внутри vpn-3 одна AWG-нода по ошибке детурит обратно в
       // vpn-2, две MASQUE-ноды чисты. Виновник — ровно AWG (1, не 3).
+      // §301 — фильтры теперь case-insensitive: имя не должно случайно
+      // подпадать под чужой фильтр иным регистром. `BL Helsinki` содержал "in"
+      // и после §301 попадал бы и в vpn-3 (nodeFilter 'IN') — берём `BL Varna`.
       final r = await buildRaw([
         vlessServer(
             id: 'bl',
-            names: ['BL Sofia', 'BL Zagreb', 'BL Helsinki'],
+            names: ['BL Sofia', 'BL Zagreb', 'BL Varna'],
             policy: const DetourPolicy(overrideDetour: 'vpn-3')),
         vlessServer(id: 'in1', names: ['IN Masque A']),
         vlessServer(id: 'in2', names: ['IN Masque B']),

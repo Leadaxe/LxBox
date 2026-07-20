@@ -331,7 +331,8 @@ class _RoutingScreenState extends State<RoutingScreen>
     if (all.isEmpty) return -1;
     if (channel.nodeFilter.isEmpty) return all.length;
     try {
-      final re = RegExp(channel.nodeFilter);
+      // §301 — регистронезависимо, как основное окно и билдер.
+      final re = RegExp(channel.nodeFilter, caseSensitive: false);
       return all.where(re.hasMatch).length;
     } catch (_) {
       return all.length; // невалидный regex → все ноды (как в билдере)
