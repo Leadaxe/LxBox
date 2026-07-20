@@ -2406,9 +2406,6 @@
   "Private source IP": {
     "value": "Приватный IP источника"
   },
-  "Probing %1$d/%2$d…": {
-    "value": "Проверка %1$d/%2$d…"
-  },
   "Profile was empty (timeout?).": {
     "value": "Профиль оказался пустым (тайм-аут?)."
   },
@@ -2817,20 +2814,8 @@
   "Saved. Force-stop & reopen app to apply.": {
     "value": "Сохранено. Полностью закройте и снова откройте приложение, чтобы применить."
   },
-  "Scan": {
-    "value": "Сканировать"
-  },
   "Scan QR code": {
     "value": "Сканировать QR-код"
-  },
-  "Scan endpoints?": {
-    "value": "Сканировать эндпоинты?"
-  },
-  "Scan failed — no WARP account or endpoints unreachable.": {
-    "value": "Сканирование не удалось — нет WARP-аккаунта или эндпоинты недоступны."
-  },
-  "Scanning stops the VPN and probes endpoints directly to find one that works on this network. Continue?": {
-    "value": "Сканирование остановит VPN и проверит эндпоинты напрямую, чтобы найти рабочий в этой сети. Продолжить?"
   },
   "Search apps...": {
     "value": "Поиск приложений…"
@@ -3707,9 +3692,6 @@
       "many": "В папке «%2$s» %1$d серверов.",
       "other": "В папке «%2$s» %1$d сервера."
     }
-  },
-  "Generate": {
-    "value": "Сгенерировать"
   },
   "Generation failed — no WARP account.": {
     "value": "Генерация не удалась — нет WARP-аккаунта."

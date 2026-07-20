@@ -94,6 +94,13 @@ Host → State / Condition → Plugin → **L×Box** → выбрать пров
 
 Profile активируется, пока условие истинно. Host опрашивает периодически.
 
+> **Как узнать текущую активную ноду.** Событий-«ответов» ждать не обязательно:
+> условие **Active node =** — это pull-проверка активной ноды прямо сейчас
+> (читает кеш, который L×Box обновляет при каждой смене). Ставите его в State
+> сценария и сравниваете с нужным тегом — истинно, пока эта нода активна. То же
+> для **Active group =**. Событие `ACTIVE_NODE_CHANGED` (ниже) — это push «нода
+> сменилась», а condition — pull «какая нода сейчас»; выбирайте по задаче.
+
 > Под капотом plugin использует стандарт
 > `com.twofortyfouram.locale.intent.action.FIRE_SETTING` / `QUERY_CONDITION` и
 > те же команды, что raw-actions ниже. UI плагина — на английском.
@@ -246,11 +253,26 @@ L×Box эмитит `VPN_ERROR` с `code` (`conflict` / `bad_request` / `not_fou
 |---|---|---|
 | Команда не доходит | Мастер-toggle OFF | Включить в App Settings → Automation |
 | Тоже, но toggle ON | Неверный action / target не Broadcast Receiver / опечатка в `com.leadaxe.lxbox.…` | Сверить со списком команд; факт приёма — в logcat `adb logcat -s LxBoxIntent` (строка `received <action>`); результат команд — log filter `automation` |
+| **Событие не приходит** (напр. `ACTIVE_NODE_CHANGED` не ловится) | **Категория события OFF** — проверять первым | Включить нужную категорию (для `ACTIVE_NODE_CHANGED` / `NODE_ALREADY_ACTIVE` — **State**) в App Settings → Automation → Outbound events. Пока категория выключена, событие не эмитится вовсе |
+| Событие приходит, но переменные (`%new_tag` и пр.) пустые | Экстры не объявлены в Tasker | В `Event → System → Intent Received` вручную добавить имена переменных-экстр (см. ниже) — Tasker не подхватывает их автоматически |
 | `SWITCH_NODE` не выбирает ноду | tag не существует / typo | Проверить log filter `automation` |
 | В плагине «Custom…» вместо списка нод/групп — поле ввода | Кеш пуст (L×Box не открывался после установки/смены подписки) | Открыть L×Box, зайти в группу (список закешируется), переоткрыть плагин |
 | L×Box не виден в списке плагинов host'а | Host без plugin-блока (напр. бесплатный Automate) | Использовать MacroDroid (бесплатно) или raw `am broadcast` |
 | `START_VPN` не работает первый раз | VPN consent не давали | Один раз нажать Connect в app |
 | На MIUI / ColorOS receiver мёртв | OEM auto-start restriction | Добавить L×Box в «Автозапуск» системных настроек |
+
+> **Объявление экстр в Tasker.** Событие несёт данные в intent-экстрах, но
+> Tasker не создаёт из них переменные сам — имена нужно прописать вручную в
+> `Event → System → Intent Received` (фильтр action — полное имя события, напр.
+> `com.leadaxe.lxbox.event.ACTIVE_NODE_CHANGED`), после чего они доступны как
+> `%new_tag` и т.д. Ключи по событиям:
+> - `ACTIVE_NODE_CHANGED` — `old_tag`, `new_tag`, `group`, `reason`;
+> - `NODE_ALREADY_ACTIVE` — `tag`, `group`;
+> - `ACTIVE_GROUP_CHANGED` — `old_group`, `new_group`, `reason`.
+>
+> `old_tag` пуст на **первом** переключении после старта приложения (предыдущей
+> ноды ещё нет — экстра не кладётся); `new_tag` / `group` / `reason` заполнены
+> всегда. Это норма, не баг.
 
 ---
 
