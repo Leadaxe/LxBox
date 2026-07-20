@@ -257,6 +257,21 @@ class HomeController extends ChangeNotifier
   void debugHandleStatusEvent(TunnelStatusEvent event) =>
       _handleStatusEvent(event);
 
+  /// §290 — засеять минимум state для тестов `switchNode`-гейта (группа/tunnel/
+  /// активная нода) без прогона всего стрима групп.
+  @visibleForTesting
+  void debugSeedNodeState({
+    required String group,
+    required String activeNode,
+    bool tunnelUp = true,
+  }) =>
+      _emit(_state.copyWith(
+        tunnel: tunnelUp ? TunnelStatus.connected : TunnelStatus.disconnected,
+        selectedGroup: group,
+        activeInGroup: activeNode,
+        highlightedNode: activeNode,
+      ));
+
   void _handleStatusEvent(TunnelStatusEvent event) {
     final tunnel = event.status;
     final prevTunnel = _state.tunnel;
@@ -946,6 +961,15 @@ class HomeController extends ChangeNotifier
     final group = _state.selectedGroup;
     if (group == null || !_state.tunnelUp) return;
     final prevNode = _state.activeInGroup;
+    // §290 — уже активна: не делать re-select и не рвать соединения группы
+    // (interrupt-on-switch §143) на ровном месте. Общий путь UI + automation:
+    // тап по подсвеченной ноде тоже не должен дёргать сеть. Ждущему Tasker'у
+    // шлём лёгкое подтверждение (gated за State), иначе Wait Event уйдёт в
+    // timeout — смены нет, поэтому НЕ ACTIVE_NODE_CHANGED.
+    if (prevNode == nodeTag) {
+      AutomationEventEmitter.I.emitNodeAlreadyActive(nodeTag, group);
+      return;
+    }
     _emit(_state.copyWith(busy: true, highlightedNode: nodeTag));
     try {
       // §122 — выбор ноды через CommandClient `selectOutbound` (unary RPC),

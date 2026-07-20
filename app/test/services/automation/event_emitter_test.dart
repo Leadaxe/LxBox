@@ -10,6 +10,12 @@ void main() {
 
   setUp(() => sent = []);
 
+  // AutomationEventEmitter.I — синглтон: сбрасываем перехват/гейты после
+  // каждого теста, чтобы состояние не протекало в другие тест-файлы
+  // (иначе редкий cross-file flaky, когда шард стартует automation-тест
+  // до его setUp с чужим _sendOverride).
+  tearDown(() => AutomationEventEmitter.I.debugConfigureForTest());
+
   group('gates', () {
     test('all OFF — emit no-op', () {
       AutomationEventEmitter.I.debugConfigureForTest(onSend: capture);
@@ -40,6 +46,20 @@ void main() {
       expect(node['new_tag'], 'new');
       expect(node['group'], 'grp');
       expect(node['reason'], 'user');
+    });
+
+    test('node-already-active gated by state, carries tag/group', () {
+      // §290 — off без State-гейта.
+      AutomationEventEmitter.I.debugConfigureForTest(onSend: capture);
+      AutomationEventEmitter.I.emitNodeAlreadyActive('n', 'g');
+      expect(sent, isEmpty);
+      // on под State.
+      AutomationEventEmitter.I
+          .debugConfigureForTest(state: true, onSend: capture);
+      AutomationEventEmitter.I.emitNodeAlreadyActive('🇫🇮node', 'grp');
+      expect(sent.single.$1, 'NODE_ALREADY_ACTIVE');
+      expect(sent.single.$2['tag'], '🇫🇮node');
+      expect(sent.single.$2['group'], 'grp');
     });
 
     test('subs gate emits subscription events', () {
