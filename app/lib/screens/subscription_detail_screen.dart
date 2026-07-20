@@ -12,6 +12,7 @@ import '../services/error_humanize.dart';
 import '../services/node_hash.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/sources.dart';
+import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
 import '../widgets/detour_target_picker.dart';
 import '../services/url_launcher.dart';
 import 'subscriptions_screen/entry_context_menu.dart' show showEditSourceDialog;
@@ -178,7 +179,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       _sourceError = null;
     });
     try {
-      final r = await fetchRaw(UrlSource(widget.entry.url));
+      // §289 — сырой ответ отражает реальную идентичность фетча (per-sub/глоб.).
+      final r = await fetchRaw(
+          UrlSource(widget.entry.url, identity: widget.entry.identity));
       if (!mounted) return;
       setState(() {
         _rawSource = r.body;
@@ -399,7 +402,115 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       onShowIntervalPicker: _showIntervalPicker,
       onRefreshNow: _refreshNow,
       onEditSource: _editSource, // §129
+      // §289 — per-subscription fetch identity (Default/Custom override).
+      onToggleCustomIdentity: (on) {
+        setState(() {
+          if (on) {
+            widget.entry.enableCustomIdentity();
+          } else {
+            widget.entry.disableCustomIdentity();
+          }
+        });
+        unawaited(widget.controller.persistSources());
+      },
+      onEditIdentityUserAgent: () => unawaited(_editIdentityUserAgent()),
+      onIdentitySendHwidChanged: (v) {
+        final id = widget.entry.identity;
+        if (id == null) return;
+        // §289 — как глобальный _setSendHwid: при первом включении с пустым
+        // HWID лениво генерим UUIDv4 (иначе x-hwid не положится — гейт по
+        // непустому hwid), device-meta берём как есть из слепка.
+        final next = v && id.hwid.isEmpty
+            ? id.copyWith(sendHwid: v, hwid: generateUuidV4())
+            : id.copyWith(sendHwid: v);
+        setState(() => widget.entry.updateIdentity(next));
+        unawaited(widget.controller.persistSources());
+      },
+      onEditIdentityHwid: () => unawaited(_editIdentityField(
+            title: 'HWID',
+            initial: widget.entry.identity?.hwid ?? '',
+            monospace: true,
+            apply: (id, v) => id.copyWith(hwid: v.trim()),
+          )),
+      onRegenerateIdentityHwid: () {
+        final id = widget.entry.identity;
+        if (id == null) return;
+        setState(() =>
+            widget.entry.updateIdentity(id.copyWith(hwid: generateUuidV4())));
+        unawaited(widget.controller.persistSources());
+      },
+      onEditIdentityDeviceOs: () => unawaited(_editIdentityField(
+            title: 'x-device-os',
+            initial: widget.entry.identity?.deviceOs ?? '',
+            apply: (id, v) => id.copyWith(deviceOs: v.trim()),
+          )),
+      onEditIdentityVerOs: () => unawaited(_editIdentityField(
+            title: 'x-ver-os',
+            initial: widget.entry.identity?.verOs ?? '',
+            apply: (id, v) => id.copyWith(verOs: v.trim()),
+          )),
+      onEditIdentityDeviceModel: () => unawaited(_editIdentityField(
+            title: 'x-device-model',
+            initial: widget.entry.identity?.deviceModel ?? '',
+            apply: (id, v) => id.copyWith(deviceModel: v.trim()),
+          )),
     );
+  }
+
+  /// §289 — правка UA слепка: пусто = дефолт (брендированный UA), поэтому trim
+  /// без hint-подстановки; общий диалог с [_editIdentityField].
+  Future<void> _editIdentityUserAgent() => _editIdentityField(
+        title: 'Custom User-Agent',
+        initial: widget.entry.identity?.userAgent ?? '',
+        apply: (id, v) => id.copyWith(userAgent: v.trim()),
+      );
+
+  /// §289 — общий edit-диалог одного поля слепка идентичности (зеркало
+  /// глобального `_editIdentityText`). Открывает однострочный ввод, применяет
+  /// [apply] к текущему слепку и персистит. No-op если Custom не активен.
+  Future<void> _editIdentityField({
+    required String title,
+    required String initial,
+    required SubscriptionIdentityOverride Function(
+            SubscriptionIdentityOverride id, String value)
+        apply,
+    bool monospace = false,
+  }) async {
+    final ctl = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          maxLines: null,
+          style: monospace
+              ? const TextStyle(fontFamily: 'monospace', fontSize: 13)
+              : null,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(getLocalText.s("Cancel")),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text),
+            child: Text(getLocalText.s("Save")),
+          ),
+        ],
+      ),
+    );
+    ctl.dispose();
+    if (result == null || !mounted) return;
+    final id = widget.entry.identity;
+    if (id == null) return;
+    setState(() => widget.entry.updateIdentity(apply(id, result)));
+    await widget.controller.persistSources();
   }
 
   /// §129 — сменить источник подписки (online↔file). Переиспользует общий

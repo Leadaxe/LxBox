@@ -31,6 +31,7 @@ import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/subscription/sources.dart';
+import '../services/subscription/subscription_identity.dart';
 import '../services/warp/masque_account.dart';
 import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
@@ -812,9 +813,10 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
     try {
       // 1. Получаем НОВЫЙ источник (ещё ничего не трогаем).
+      // §289 — сохраняем per-subscription идентичность при смене источника.
       final result = toFile
           ? await parseFromSource(InlineSource(fileBody))
-          : await parseFromSource(UrlSource(newUrl),
+          : await parseFromSource(UrlSource(newUrl, identity: old.identity),
               client: httpClientForTesting);
 
       // 2. Успех нового = > 0 нод. Иначе — полный откат (§101-инвариант).
@@ -1651,7 +1653,9 @@ class SubscriptionController extends ChangeNotifier {
       await _persist();
       notifyListeners();
 
-      final result = await parseFromSource(UrlSource(list.url),
+      // §289 — per-subscription идентичность (null → глобальная).
+      final result = await parseFromSource(
+          UrlSource(list.url, identity: list.identity),
           client: httpClientForTesting);
       AppLog.I.info(
           'Fetched ${result.nodes.length} nodes from $shortUrl'

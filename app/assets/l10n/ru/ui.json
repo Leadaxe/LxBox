@@ -1069,6 +1069,9 @@
   "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH.": {
     "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH."
   },
+  "Custom identity": {
+    "value": "Своя идентификация"
+  },
   "DNS / router events off": {
     "value": "События DNS и роутера выключены"
   },
@@ -2231,6 +2234,9 @@
   },
   "Overridden": {
     "value": "Переопределён"
+  },
+  "Override global fetch identity for this subscription.": {
+    "value": "Использовать свою идентификацию запросов для этой подписки вместо глобальной."
   },
   "Overview": {
     "value": "Обзор"

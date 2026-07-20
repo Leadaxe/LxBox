@@ -36,6 +36,49 @@ void main() {
       expect(roundtripped.lastUpdated, original.lastUpdated);
       expect(roundtripped.updateIntervalHours, 12);
       expect(roundtripped.lastNodeCount, 42);
+      // §289 — identity не задан → null после roundtrip.
+      expect(roundtripped.identity, isNull);
+    });
+
+    test('§289 — identity переживает JSON round-trip (§283-инвариант)', () {
+      final original = SubscriptionServers(
+        id: 'sub-id',
+        name: 'S',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://e.com/sub',
+        identity: const SubscriptionIdentityOverride(
+          userAgent: 'Panel/1',
+          sendHwid: true,
+          hwid: 'HW-42',
+          deviceOs: 'harmonyos',
+          verOs: '4.2',
+          deviceModel: 'P60',
+        ),
+      );
+      final r = ServerList.fromJson(original.toJson()) as SubscriptionServers;
+      expect(r.identity, isNotNull);
+      expect(r.identity!.userAgent, 'Panel/1');
+      expect(r.identity!.sendHwid, isTrue);
+      expect(r.identity!.hwid, 'HW-42');
+      expect(r.identity!.deviceModel, 'P60');
+    });
+
+    test('§289 — copyWith(clearIdentity) снимает слепок в null', () {
+      final withId = SubscriptionServers(
+        id: 'x',
+        name: 'X',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://e.com/sub',
+        identity: const SubscriptionIdentityOverride(hwid: 'HW'),
+      );
+      // Обычный copyWith без identity сохраняет слепок.
+      expect(withId.copyWith(name: 'Y').identity, isNotNull);
+      // clearIdentity снимает.
+      expect(withId.copyWith(clearIdentity: true).identity, isNull);
     });
 
     test('UserServer → JSON → UserServer', () {

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../models/node_spec.dart';
+import '../../models/server_list.dart';
 import '../../models/subscription_meta.dart';
 import '../parser/body_decoder.dart';
 import '../parser/parse_all.dart';
@@ -27,10 +28,17 @@ final class UrlSource extends SubscriptionSource {
   /// парсер v2). Бренд-токен `LxBox-android` опознаётся панелями
   /// (Remnawave/Marzban); голого `singbox` в UA нет.
   final String? userAgent;
+
+  /// §289 — per-subscription слепок идентичности. `null` → фетч использует
+  /// глобальный `SubscriptionIdentity` (режим Default). Не-null → ТОЛЬКО эти
+  /// значения (режим Custom), глобальные игнорируются.
+  final SubscriptionIdentityOverride? identity;
+
   final Duration timeout;
   const UrlSource(
     this.url, {
     this.userAgent,
+    this.identity,
     // Короткий таймаут на попытку. Fetch делает 3 попытки с exp backoff
     // (1s, 3s): 9+1+9+3+9 ≈ 31s worst case (см. `_fetch`).
     this.timeout = const Duration(seconds: 9),
@@ -167,16 +175,38 @@ Future<FetchResult> fetchRaw(SubscriptionSource source,
 
 Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async {
   switch (source) {
-    case UrlSource(url: final u, userAgent: final ua, timeout: final t):
-      // §118: UA — per-source > глобальный override > брендированный
-      // LxBox-android (см. user_agent.dart). HWID-заголовки (если включены)
-      // мёржатся из SubscriptionIdentity.
-      final override = SubscriptionIdentity.userAgentOverride;
-      final effectiveUa = ua ??
-          (override.isNotEmpty ? override : resolveSubscriptionUserAgent());
+    case UrlSource(
+        url: final u,
+        userAgent: final ua,
+        identity: final id,
+        timeout: final t
+      ):
+      // §289 — режим Default (id == null): UA = per-source > глобальный override
+      // > брендированный; HWID-заголовки из глобального SubscriptionIdentity.
+      // Режим Custom (id != null): UA и HWID-заголовки ТОЛЬКО из слепка;
+      // глобальные игнорируются. Пустой UA в слепке → брендированный дефолт.
+      final String effectiveUa;
+      final Map<String, String> idHeaders;
+      if (id != null) {
+        effectiveUa = id.userAgent.isNotEmpty
+            ? id.userAgent
+            : resolveSubscriptionUserAgent();
+        idHeaders = SubscriptionIdentity.headersFrom(
+          sendHwid: id.sendHwid,
+          hwid: id.hwid,
+          deviceOs: id.deviceOs,
+          verOs: id.verOs,
+          deviceModel: id.deviceModel,
+        );
+      } else {
+        final override = SubscriptionIdentity.userAgentOverride;
+        effectiveUa = ua ??
+            (override.isNotEmpty ? override : resolveSubscriptionUserAgent());
+        idHeaders = SubscriptionIdentity.fetchHeaders();
+      }
       final reqHeaders = <String, String>{
         'User-Agent': effectiveUa,
-        ...SubscriptionIdentity.fetchHeaders(),
+        ...idHeaders,
       };
       // 3 попытки с exp backoff (1s, 3s) — worst case ~31s (9+1+9+3+9).
       // Retry нужен для transient'ов мобильной сети (DNS fail, RST сразу

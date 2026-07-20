@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/subscription_meta.dart';
 import 'package:lxbox/services/subscription/sources.dart';
+import 'package:lxbox/services/subscription/subscription_identity.dart';
 
 void main() {
   // Нулевые backoff'ы — ретраи без реального сна 1s+3s (см. §101): иначе
@@ -109,6 +111,90 @@ void main() {
     test('валидный expire → сохраняется', () async {
       final m = await metaFor('expire=1893456000');
       expect(m?.expireTimestamp, 1893456000);
+    });
+  });
+
+  group('§289 — per-subscription fetch identity в заголовках', () {
+    // Перехватываем реальные заголовки запроса через MockClient.
+    Future<Map<String, String>> headersFor(UrlSource src) async {
+      late Map<String, String> captured;
+      final client = MockClient((req) async {
+        captured = Map<String, String>.from(req.headers);
+        return http.Response('vless://u@h.com:443#A', 200);
+      });
+      await parseFromSource(src, client: client);
+      return captured;
+    }
+
+    setUp(() {
+      // Глобальная идентичность — чистый лист (Default-подписка её и берёт).
+      SubscriptionIdentity.sendHwid = false;
+      SubscriptionIdentity.hwid = '';
+      SubscriptionIdentity.userAgentOverride = '';
+      SubscriptionIdentity.osVersion = '';
+      SubscriptionIdentity.deviceModel = '';
+      SubscriptionIdentity.deviceOsOverride = '';
+      SubscriptionIdentity.verOsOverride = '';
+      SubscriptionIdentity.deviceModelOverride = '';
+    });
+
+    test('Default (identity=null) → глобальная идентичность', () async {
+      SubscriptionIdentity.sendHwid = true;
+      SubscriptionIdentity.hwid = 'GLOBAL-HW';
+      final h = await headersFor(UrlSource('http://x.invalid/sub',
+          timeout: const Duration(milliseconds: 500)));
+      expect(h['x-hwid'], 'GLOBAL-HW');
+    });
+
+    test('Custom → слепок уходит в заголовки, глобальный игнорируется',
+        () async {
+      // Глобальный HWID есть, но подписка в Custom → едет ЕЁ слепок.
+      SubscriptionIdentity.sendHwid = true;
+      SubscriptionIdentity.hwid = 'GLOBAL-HW';
+      final h = await headersFor(UrlSource(
+        'http://x.invalid/sub',
+        timeout: const Duration(milliseconds: 500),
+        identity: const SubscriptionIdentityOverride(
+          userAgent: 'MyPanel/1.0',
+          sendHwid: true,
+          hwid: 'SUB-HW',
+          deviceOs: 'harmonyos',
+          verOs: '4.2',
+          deviceModel: 'P60',
+        ),
+      ));
+      expect(h['User-Agent'], 'MyPanel/1.0');
+      expect(h['x-hwid'], 'SUB-HW');
+      expect(h['x-device-os'], 'harmonyos');
+      expect(h['x-ver-os'], '4.2');
+      expect(h['x-device-model'], 'P60');
+    });
+
+    test('Custom с sendHwid=false → x-hwid не кладётся, даже при глоб. HWID',
+        () async {
+      SubscriptionIdentity.sendHwid = true;
+      SubscriptionIdentity.hwid = 'GLOBAL-HW';
+      final h = await headersFor(UrlSource(
+        'http://x.invalid/sub',
+        timeout: const Duration(milliseconds: 500),
+        identity: const SubscriptionIdentityOverride(
+          sendHwid: false,
+          hwid: 'SUB-HW',
+        ),
+      ));
+      expect(h.containsKey('x-hwid'), isFalse);
+    });
+
+    test('Custom с пустым UA → брендированный дефолт (не пустой заголовок)',
+        () async {
+      final h = await headersFor(UrlSource(
+        'http://x.invalid/sub',
+        timeout: const Duration(milliseconds: 500),
+        identity: const SubscriptionIdentityOverride(userAgent: ''),
+      ));
+      expect(h['User-Agent'], isNotNull);
+      expect(h['User-Agent'], isNotEmpty);
+      expect(h['User-Agent'], contains('LxBox'));
     });
   });
 }

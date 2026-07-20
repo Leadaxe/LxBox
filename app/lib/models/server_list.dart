@@ -46,6 +46,76 @@ sealed class ServerList {
 /// Статус последней попытки auto-update подписки.
 enum UpdateStatus { never, ok, failed, inProgress }
 
+/// §289 — per-subscription override идентичности HTTP-фетча (§118). Полный
+/// слепок всех переменных: когда у подписки `identity != null` (режим Custom),
+/// фетч использует ТОЛЬКО эти значения и полностью игнорирует глобальный
+/// `SubscriptionIdentity`. `null` (режим Default) → глобальные значения, как §118.
+///
+/// Не каскад/не пофайловый fallback: либо весь глобальный набор, либо весь
+/// локальный слепок. Инициализируется копией глобальных при включении Custom;
+/// отбрасывается (→ null) при возврате в Default.
+class SubscriptionIdentityOverride {
+  /// User-Agent. Пусто → дефолт из глобала (брендированный `LxBox-android`,
+  /// см. `resolveSubscriptionUserAgent`).
+  final String userAgent;
+
+  /// Слать ли `x-hwid` + device-meta заголовки при фетче.
+  final bool sendHwid;
+
+  /// `x-hwid` (UUIDv4). Заголовок не кладём если пусто (или `sendHwid == false`).
+  final String hwid;
+
+  /// device-meta заголовки. Пусто → соответствующий заголовок не кладём.
+  final String deviceOs;
+  final String verOs;
+  final String deviceModel;
+
+  const SubscriptionIdentityOverride({
+    this.userAgent = '',
+    this.sendHwid = false,
+    this.hwid = '',
+    this.deviceOs = '',
+    this.verOs = '',
+    this.deviceModel = '',
+  });
+
+  Map<String, dynamic> toJson() => {
+        if (userAgent.isNotEmpty) 'user_agent': userAgent,
+        'send_hwid': sendHwid,
+        if (hwid.isNotEmpty) 'hwid': hwid,
+        if (deviceOs.isNotEmpty) 'device_os': deviceOs,
+        if (verOs.isNotEmpty) 'ver_os': verOs,
+        if (deviceModel.isNotEmpty) 'device_model': deviceModel,
+      };
+
+  factory SubscriptionIdentityOverride.fromJson(Map<String, dynamic> j) =>
+      SubscriptionIdentityOverride(
+        userAgent: (j['user_agent'] as String?) ?? '',
+        sendHwid: (j['send_hwid'] as bool?) ?? false,
+        hwid: (j['hwid'] as String?) ?? '',
+        deviceOs: (j['device_os'] as String?) ?? '',
+        verOs: (j['ver_os'] as String?) ?? '',
+        deviceModel: (j['device_model'] as String?) ?? '',
+      );
+
+  SubscriptionIdentityOverride copyWith({
+    String? userAgent,
+    bool? sendHwid,
+    String? hwid,
+    String? deviceOs,
+    String? verOs,
+    String? deviceModel,
+  }) =>
+      SubscriptionIdentityOverride(
+        userAgent: userAgent ?? this.userAgent,
+        sendHwid: sendHwid ?? this.sendHwid,
+        hwid: hwid ?? this.hwid,
+        deviceOs: deviceOs ?? this.deviceOs,
+        verOs: verOs ?? this.verOs,
+        deviceModel: deviceModel ?? this.deviceModel,
+      );
+}
+
 final class SubscriptionServers extends ServerList {
   final String url;
   final SubscriptionMeta? meta;
@@ -69,6 +139,12 @@ final class SubscriptionServers extends ServerList {
   /// fromJson→toJson, поле только в toJson молча терялось бы.
   final Map<String, DateTime> disabledHashes;
 
+  /// §289 — per-subscription override идентичности фетча. `null` = режим Default
+  /// (глобальный `SubscriptionIdentity`); объект = режим Custom (полный слепок).
+  /// Персистится → обязан жить в трио toJson/fromJson/copyWith (как §283
+  /// `disabledHashes`), иначе merge-импорт backup (fromJson→toJson) молча терял бы.
+  final SubscriptionIdentityOverride? identity;
+
   SubscriptionServers({
     required super.id,
     required super.name,
@@ -84,6 +160,7 @@ final class SubscriptionServers extends ServerList {
     this.lastNodeCount = 0,
     this.consecutiveFails = 0,
     this.disabledHashes = const {},
+    this.identity,
     super.nodes,
   });
 
@@ -110,6 +187,7 @@ final class SubscriptionServers extends ServerList {
         if (disabledHashes.isNotEmpty)
           'disabled_hashes': disabledHashes
               .map((k, v) => MapEntry(k, v.toIso8601String())),
+        if (identity != null) 'identity': identity!.toJson(),
       };
 
   /// §283 — толерантный парс: не-Map → пусто, битые значения-даты — скип
@@ -152,6 +230,10 @@ final class SubscriptionServers extends ServerList {
         lastNodeCount: (j['last_node_count'] as num?)?.toInt() ?? 0,
         consecutiveFails: (j['consecutive_fails'] as num?)?.toInt() ?? 0,
         disabledHashes: _disabledHashesFromJson(j['disabled_hashes']),
+        identity: j['identity'] == null
+            ? null
+            : SubscriptionIdentityOverride.fromJson(
+                (j['identity'] as Map).cast<String, dynamic>()),
       );
 
   SubscriptionServers copyWith({
@@ -168,6 +250,8 @@ final class SubscriptionServers extends ServerList {
     int? lastNodeCount,
     int? consecutiveFails,
     Map<String, DateTime>? disabledHashes,
+    SubscriptionIdentityOverride? identity,
+    bool clearIdentity = false,
     List<NodeSpec>? nodes,
   }) =>
       SubscriptionServers(
@@ -185,6 +269,9 @@ final class SubscriptionServers extends ServerList {
         lastNodeCount: lastNodeCount ?? this.lastNodeCount,
         consecutiveFails: consecutiveFails ?? this.consecutiveFails,
         disabledHashes: disabledHashes ?? this.disabledHashes,
+        // §289 — clearIdentity: true снимает Custom (→ Default); иначе обычный
+        // ?? (передача identity меняет слепок, null-аргумент сохраняет старый).
+        identity: clearIdentity ? null : (identity ?? this.identity),
         nodes: nodes ?? this.nodes,
       );
 }
