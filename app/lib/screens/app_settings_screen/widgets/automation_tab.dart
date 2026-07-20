@@ -222,6 +222,19 @@ class _AutomationTabState extends State<AutomationTab> {
         // ─── Emit categories ───
         Text(getLocalText.s("Outbound events (emit)"),
             style: theme.textTheme.titleSmall),
+        // Хинт про request-response: успех команды приходит в State
+        // (ACTIVE_NODE_CHANGED), а провал — как VPN_ERROR в Lifecycle. Юзеры
+        // легко включают только одну категорию и не получают вторую половину.
+        Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 6),
+          child: Text(
+            getLocalText.s(
+              "For command confirmations, enable both Lifecycle and State: "
+              "success arrives in State, failures as VPN_ERROR in Lifecycle.",
+            ),
+            style: muted,
+          ),
+        ),
         SwitchListTile(
           title: Text(getLocalText.s("Lifecycle")),
           subtitle: const Text(

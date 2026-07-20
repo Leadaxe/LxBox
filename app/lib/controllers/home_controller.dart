@@ -257,19 +257,22 @@ class HomeController extends ChangeNotifier
   void debugHandleStatusEvent(TunnelStatusEvent event) =>
       _handleStatusEvent(event);
 
-  /// §290 — засеять минимум state для тестов `switchNode`-гейта (группа/tunnel/
-  /// активная нода) без прогона всего стрима групп.
+  /// §290 — засеять минимум state для тестов `switchNode`-гейта и
+  /// automation-preconditions (группа/tunnel/активная нода/список групп) без
+  /// прогона всего стрима групп.
   @visibleForTesting
   void debugSeedNodeState({
     required String group,
     required String activeNode,
     bool tunnelUp = true,
+    List<String>? groups,
   }) =>
       _emit(_state.copyWith(
         tunnel: tunnelUp ? TunnelStatus.connected : TunnelStatus.disconnected,
         selectedGroup: group,
         activeInGroup: activeNode,
         highlightedNode: activeNode,
+        groups: groups ?? <String>[group],
       ));
 
   void _handleStatusEvent(TunnelStatusEvent event) {

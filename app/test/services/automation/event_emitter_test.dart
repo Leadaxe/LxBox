@@ -34,6 +34,22 @@ void main() {
       expect(sent.map((e) => e.$1), ['VPN_CONNECTED']);
     });
 
+    test('VPN_ERROR gated by lifecycle, carries code/message', () {
+      // §290 — ядро request-response: провал команды идёт как VPN_ERROR под
+      // Lifecycle. При State-only (без Lifecycle) — молчит (см. F2/хинт в UI).
+      AutomationEventEmitter.I
+          .debugConfigureForTest(state: true, onSend: capture);
+      AutomationEventEmitter.I.emitVpnError('conflict', 'tunnel not connected');
+      expect(sent, isEmpty); // State включён, Lifecycle нет → дроп
+      // теперь под Lifecycle
+      AutomationEventEmitter.I
+          .debugConfigureForTest(lifecycle: true, onSend: capture);
+      AutomationEventEmitter.I.emitVpnError('conflict', 'tunnel not connected');
+      expect(sent.single.$1, 'VPN_ERROR');
+      expect(sent.single.$2['code'], 'conflict');
+      expect(sent.single.$2['message'], 'tunnel not connected');
+    });
+
     test('state gate emits node/group only', () {
       AutomationEventEmitter.I
           .debugConfigureForTest(state: true, onSend: capture);

@@ -1542,6 +1542,9 @@
   "For apps · default fallback when no DNS rule matches": {
     "value": "Для приложений · резервный вариант, когда ни одно DNS-правило не совпало"
   },
+  "For command confirmations, enable both Lifecycle and State: success arrives in State, failures as VPN_ERROR in Lifecycle.": {
+    "value": "Для подтверждения команд включите обе категории — Lifecycle и State: успех приходит в State, ошибки — как VPN_ERROR в Lifecycle."
+  },
   "For routing · resolves hostnames inside sing-box (outbound endpoints, routing rules)": {
     "value": "Для маршрутизации · резолвит имена хостов внутри sing-box (адреса исходящих серверов, правила маршрутизации)"
   },
