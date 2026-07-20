@@ -66,7 +66,7 @@
 | **Template-engine / vars / config-gen** | clean core | ⚠️ ядро едино; швы на краях (onChange UI-only, flatten-back) |
 | **DNS (servers+rules)** | **worst** | ❌ сырые `List<Map>`, нет модели, dual-write в экране |
 | **VPN-mode / tun / app-settings** | minor | ❌ нет сервиса; валидация в 3 слоях; ~4 входа переизобретают инвариант |
-| **Folders (folder_detail)** | minor | ❌ 1669 строк; §236-логика + 11 storage-вызовов в экране |
+| **Probe (§236)** | minor | ❌ у probe нет контроллера — живёт в folder_detail (1669 строк, 11 storage); folder-only по сигнатуре, хотя механизм общий для всей подсистемы ServerList (§296) |
 
 ## Эталоны (то, к чему приводим отстающих — НЕ трогать)
 
@@ -104,7 +104,7 @@
 | 1 | [292](../../tasks/292-quick-invariant-holes.md) | S×4 | Быстрые дыры: proxyPort-валидация (D), setChannels в фасад §275 (E), heal-formatter (G), l10n gap (H) |
 | 2 | [294](../../tasks/294-dns-typed-model.md) | L | DNS sealed-модель `DnsServer`/`DnsRule` (за resolver'ом) — крупнейшее снижение долга |
 | 2b | [295](../../tasks/295-dns-dual-write-fix.md) | M | DNS dual-write фикс (после 294) |
-| 3 | [296](../../tasks/296-folder-probe-controller.md) | M | FolderProbeController — сдуть folder_detail |
+| 3 | [296](../../tasks/296-folder-probe-controller.md) | M | ProbeController — общий probe-фасад над ServerList (subs+user+folder); сдувает folder_detail |
 | 4 | [297](../../tasks/297-onchange-single-dispatch.md) | M | onChange single-dispatch (после DNS-модели) |
 | 3b | [293](../../tasks/293-vpn-settings-facade.md) | M | VpnSettings-фасад (унификация 4 входов) |
 | — | [298](../../tasks/298-unify-substitution-engines.md) | M, RISKY | Слить движки подстановки — defer |
