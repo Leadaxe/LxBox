@@ -136,6 +136,7 @@ Profile активируется, пока условие истинно. Host �
 | `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | Найдена новая версия |
 | `PERMISSION_NEEDED` | `permission` | Lifecycle | Требуется runtime-permission (резерв) |
 | `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | Сменилась активная нода |
+| `NODE_ALREADY_ACTIVE` | `tag`, `group` | State | `SWITCH_NODE` пришёл на уже активную ноду — нода **не** менялась (подтверждение вместо смены) |
 | `ACTIVE_GROUP_CHANGED` | `old_group`, `new_group`, `reason` | State | Сменилась активная группа |
 | `SUB_REFRESHED` | `sub_id`, `nodes_count`, `delta_count` | Subscription | Подписка обновилась |
 | `SUB_REFRESH_FAILED` | `sub_id`, `error` | Subscription | Подписка не обновилась (throttle 1/min на sub_id) |
@@ -155,15 +156,24 @@ Profile активируется, пока условие истинно. Host �
 ```
 Task "Switch to Russia with confirmation":
   1. Send Intent: SWITCH_NODE extra tag="🇷🇺Россия"
-  2. Wait Event: ACTIVE_NODE_CHANGED (new_tag ~ "🇷🇺.*")  OR  VPN_ERROR   (timeout 10s)
-  3. If ACTIVE_NODE_CHANGED → Vibrate + Notify "✅"
-     If VPN_ERROR          → Notify "❌ %code: %message"
-     If timeout            → Notify "⚠️ нет ответа"
+  2. Wait Event: ACTIVE_NODE_CHANGED (new_tag ~ "🇷🇺.*")
+       OR  NODE_ALREADY_ACTIVE (tag ~ "🇷🇺.*")
+       OR  VPN_ERROR                                        (timeout 10s)
+  3. If ACTIVE_NODE_CHANGED  → Vibrate + Notify "✅ переключено"
+     If NODE_ALREADY_ACTIVE  → Notify "✅ уже на этой ноде"
+     If VPN_ERROR            → Notify "❌ %code: %message"
+     If timeout              → Notify "⚠️ нет ответа"
 ```
 
 При провале команды (нет группы, tunnel down и т.п.) L×Box эмитит `VPN_ERROR`
 с `code` (`conflict` / `bad_request` / …) и `message` — ждущий Tasker узнаёт
 о провале вместо тихого fire-and-forget.
+
+**`SWITCH_NODE` на уже активную ноду** не рвёт соединения и не делает re-select
+(это была бы лишняя нагрузка), но всё равно шлёт `NODE_ALREADY_ACTIVE` —
+поэтому wait-сценарий получает детерминированный ответ, а не уходит в timeout.
+Если ждать только `ACTIVE_NODE_CHANGED`, повторная команда той же ноды повиснет
+до таймаута — добавляйте `NODE_ALREADY_ACTIVE` в Wait Event.
 
 ---
 

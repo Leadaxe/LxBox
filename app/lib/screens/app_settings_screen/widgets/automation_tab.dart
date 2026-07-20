@@ -239,7 +239,8 @@ class _AutomationTabState extends State<AutomationTab> {
         SwitchListTile(
           title: Text(getLocalText.s("State")),
           // l10n-exempt: broadcast event names (wire values)
-          subtitle: const Text('ACTIVE_NODE_CHANGED · ACTIVE_GROUP_CHANGED'),
+          subtitle: const Text(
+              'ACTIVE_NODE_CHANGED · ACTIVE_GROUP_CHANGED · NODE_ALREADY_ACTIVE'),
           value: _emitState,
           onChanged: _loaded
               ? (v) => _onEmitChanged(v,
