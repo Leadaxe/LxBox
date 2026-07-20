@@ -91,7 +91,8 @@ void main() {
         'Stopped: Failed to start service: X');
     expect(controller.state.lastStartErrorAt, isNotNull);
     // lastError (UI-поле) выставлен той же причиной.
-    expect(controller.state.lastError, 'Stopped: Failed to start service: X');
+    expect(controller.state.lastError?.renderEn(),
+        'Stopped: Failed to start service: X');
   });
 
   test('clearError() чистит lastError, но НЕ трогает lastStartError', () {
@@ -102,7 +103,7 @@ void main() {
 
     controller.clearError();
 
-    expect(controller.state.lastError, isEmpty);
+    expect(controller.state.lastError, isNull);
     expect(controller.state.lastStartError, 'Stopped: boom');
     expect(controller.state.lastStartErrorAt, at);
   });
@@ -144,7 +145,8 @@ void main() {
 
     expect(controller.state.lastStartError, contains('Another VPN app'));
     expect(controller.state.lastStartErrorAt, isNotNull);
-    expect(controller.state.lastError, controller.state.lastStartError);
+    expect(controller.state.lastError?.renderEn(),
+        controller.state.lastStartError);
   });
 
   group('serializeHomeState (§250)', () {

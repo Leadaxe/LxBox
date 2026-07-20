@@ -11,6 +11,7 @@ import '../../services/url_launcher.dart' as ul;
 import '../../services/version_info.dart';
 import '../../vpn/box_vpn_client.dart';
 import '../../widgets/wifi_permission_dialog.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Подтверждение остановки VPN: если активных соединений > 3 — показываем
 /// диалог (их закрытие оборвёт сессии), иначе останавливаем сразу через
@@ -24,18 +25,18 @@ void confirmStop(
     showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Stop VPN?'),
+        title: Text(getLocalText.s("Stop VPN?")),
         content: Text(
-          '${state.traffic.activeConnections} active connections will be closed.',
+          getLocalText.plural("%d active connections will be closed.", state.traffic.activeConnections),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(getLocalText.s("Cancel")),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Stop'),
+            child: Text(getLocalText.s("Stop")),
           ),
         ],
       ),
@@ -59,27 +60,23 @@ Future<bool?> showForeignVpnDialog(BuildContext context) {
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog.adaptive(
-      title: const Text('Another VPN is active'),
-      content: const Text(
-        'Another VPN app is currently running. Switch to L×Box?\n\n'
-        'To see which app it is, open VPN settings — the active VPN '
-        'is marked as connected.',
-      ),
+      title: Text(getLocalText.s("Another VPN is active")),
+      content: Text(getLocalText.s("Another VPN app is currently running. Switch to L×Box?\n\nTo see which app it is, open VPN settings — the active VPN is marked as connected.")),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Cancel'),
+          child: Text(getLocalText.s("Cancel")),
         ),
         TextButton(
           onPressed: () {
             Navigator.of(ctx).pop(false);
             unawaited(BoxVpnClient.I.openVpnSettings());
           },
-          child: const Text('VPN settings'),
+          child: Text(getLocalText.s("VPN settings")),
         ),
         FilledButton(
           onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('Switch'),
+          child: Text(getLocalText.s("Switch")),
         ),
       ],
     ),
@@ -125,8 +122,7 @@ Future<void> maybeShowUpdateSnackbar(
         children: [
           Expanded(
             child: Text(
-              'L×Box ${info.tag} available '
-              '(you have v${VersionInfo.I.version})',
+              getLocalText.s("L×Box %1\$s available (you have v%2\$s)", info.tag, VersionInfo.I.version),
             ),
           ),
           // §090 G1 — «Later» persist'ит dismissed-версию → этот релиз больше
@@ -137,12 +133,12 @@ Future<void> maybeShowUpdateSnackbar(
               messenger.hideCurrentSnackBar();
               unawaited(UpdateChecker.I.dismissCurrent());
             },
-            child: const Text('Later'),
+            child: Text(getLocalText.s("Later")),
           ),
         ],
       ),
       action: SnackBarAction(
-        label: 'View',
+        label: getLocalText.s("View"),
         onPressed: () async {
           await ul.UrlLauncher.open(info.htmlUrl);
         },
@@ -169,22 +165,16 @@ Future<void> maybeShowNotificationPermissionDialog(BuildContext context) async {
     context: context,
     barrierDismissible: false,
     builder: (ctx) => AlertDialog.adaptive(
-      title: const Text('Allow notifications'),
-      content: const Text(
-        'L×Box runs as a foreground service while VPN is active. '
-        'A persistent notification is required by Android — it lets you '
-        'see at a glance that VPN is on, and prevents the system from '
-        'killing the tunnel in the background.\n\n'
-        'No promotional or alert notifications will be sent.',
-      ),
+      title: Text(getLocalText.s("Allow notifications")),
+      content: Text(getLocalText.s("L×Box runs as a foreground service while VPN is active. A persistent notification is required by Android — it lets you see at a glance that VPN is on, and prevents the system from killing the tunnel in the background.\n\nNo promotional or alert notifications will be sent.")),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Skip'),
+          child: Text(getLocalText.s("Skip")),
         ),
         FilledButton(
           onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('Allow'),
+          child: Text(getLocalText.s("Allow")),
         ),
       ],
     ),
@@ -220,17 +210,12 @@ Future<void> maybeShowBatteryOptimizationDialog(
   await showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog.adaptive(
-      title: const Text('Allow background activity'),
-      content: const Text(
-        'Android restricts background activity to save battery. '
-        'Without an exception, the VPN tunnel may be killed when the '
-        'screen turns off — your connection drops until you reopen L×Box.\n\n'
-        'Open system settings and choose "Unrestricted" / "Not optimized".',
-      ),
+      title: Text(getLocalText.s("Allow background activity")),
+      content: Text(getLocalText.s("Android restricts background activity to save battery. Without an exception, the VPN tunnel may be killed when the screen turns off — your connection drops until you reopen L×Box.\n\nOpen system settings and choose \"Unrestricted\" / \"Not optimized\".")),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Later'),
+          child: Text(getLocalText.s("Later")),
         ),
         FilledButton(
           onPressed: () async {
@@ -246,7 +231,7 @@ Future<void> maybeShowBatteryOptimizationDialog(
             // State.mounted в оригинале.
             if (context.mounted) await showOemBatteryFollowupDialog(context, vpn);
           },
-          child: const Text('Allow'),
+          child: Text(getLocalText.s("Allow")),
         ),
       ],
     ),
@@ -267,27 +252,19 @@ Future<void> showOemBatteryFollowupDialog(
   await showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog.adaptive(
-      title: const Text('Disable battery restrictions'),
-      content: const Text(
-        'To keep the VPN running in background, also disable battery '
-        'restrictions for L×Box. The settings screen will open — find '
-        'and toggle:\n\n'
-        '• "Battery usage" → "Don\'t optimize" or "Allow background '
-        'activity"\n\n'
-        '• On OnePlus / OPPO / Realme also:\n'
-        '  "Stop activity when idle" → OFF',
-      ),
+      title: Text(getLocalText.s("Disable battery restrictions")),
+      content: Text(getLocalText.s("To keep the VPN running in background, also disable battery restrictions for L×Box. The settings screen will open — find and toggle:\n\n• \"Battery usage\" → \"Don't optimize\" or \"Allow background activity\"\n\n• On OnePlus / OPPO / Realme also:\n  \"Stop activity when idle\" → OFF")),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Close'),
+          child: Text(getLocalText.s("Close")),
         ),
         FilledButton(
           onPressed: () async {
             Navigator.of(ctx).pop();
             await vpn.openAppDetailsSettings();
           },
-          child: const Text('Open Settings'),
+          child: Text(getLocalText.s("Open Settings")),
         ),
       ],
     ),
@@ -343,14 +320,14 @@ Future<void> showSupportDialog(BuildContext context, SupportMessage m) async {
             Navigator.of(ctx).pop();
             await SupportMessageService.I.dismissForever(m);
           },
-          child: const Text("Don't show again"),
+          child: Text(getLocalText.s("Don't show again")),
         ),
         FilledButton(
           onPressed: () async {
             Navigator.of(ctx).pop();
             await SupportMessageService.I.snooze(m);
           },
-          child: const Text('Later'),
+          child: Text(getLocalText.s("Later")),
         ),
       ],
     ),

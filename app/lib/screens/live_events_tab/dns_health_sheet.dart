@@ -22,6 +22,7 @@ import '../../models/custom_rule.dart';
 import '../../services/settings_storage.dart';
 import '../dns_settings_screen.dart';
 import '../routing_screen.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Открыть лист-подсказку (выезжает снизу вверх). Контроллеры нужны для
 /// навигационных кнопок; без них лист чисто информационный.
@@ -124,44 +125,38 @@ class _DnsHealthSheetState extends State<_DnsHealthSheet> {
               children: [
                 Icon(Icons.dns_outlined, color: cs.error, size: 20),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'DNS queries are failing',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    getLocalText.s("DNS queries are failing"),
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              'Names are not resolving while the connection is alive — the DNS '
-              'path looks blocked. In DNS settings you can:\n'
-              '  • route your DNS servers through the VPN — set their outbound '
-              'to a channel so queries go inside the tunnel;\n'
-              '  • switch the final resolver to your operator\'s DNS — works '
-              'everywhere, but your operator sees every domain.\n'
-              'FakeIP resolves names inside the tunnel with placeholder IPs — '
-              'no pre-tunnel DNS leaks.',
+              getLocalText.s("Names are not resolving while the connection is alive — the DNS path looks blocked. In DNS settings you can:\n  • route your DNS servers through the VPN — set their outbound to a channel so queries go inside the tunnel;\n  • switch the final resolver to your operator's DNS — works everywhere, but your operator sees every domain.\nFakeIP resolves names inside the tunnel with placeholder IPs — no pre-tunnel DNS leaks."),
               style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
             if (_canNavigate) ...[
               FilledButton(
                 onPressed: _openDnsSettings,
-                child: const Text('Open DNS settings'),
+                child: Text(getLocalText.s("Open DNS settings")),
               ),
               if (showFakeIp) ...[
                 const SizedBox(height: 8),
                 OutlinedButton(
                   onPressed: _openFakeIpPreset,
-                  child: const Text('Enable FakeIP'),
+                  child: Text(getLocalText.s("Enable FakeIP")),
                 ),
               ],
             ],
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
+              child: Text(getLocalText.s("Close")),
             ),
           ],
         ),

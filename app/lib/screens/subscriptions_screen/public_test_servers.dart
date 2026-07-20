@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/community_servers_loader.dart';
 import '../../services/url_launcher.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Загрузка community-манифеста + dialog выбора public test-server list.
 /// Поведение 1:1 с прежним `_pickPublicTestServer`: при ошибке/пустом
@@ -18,14 +19,14 @@ Future<void> pickPublicTestServer(
   } catch (_) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Test servers list unavailable')),
+      SnackBar(content: Text(getLocalText.s("Test servers list unavailable"))),
     );
     return;
   }
   if (!context.mounted) return;
   if (manifest.lists.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Test servers list unavailable')),
+      SnackBar(content: Text(getLocalText.s("Test servers list unavailable"))),
     );
     return;
   }
@@ -33,7 +34,7 @@ Future<void> pickPublicTestServer(
   showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Get Public Test Servers'),
+      title: Text(getLocalText.s("Get Public Test Servers")),
       contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -57,7 +58,7 @@ Future<void> pickPublicTestServer(
                 if (manifest.attribution!.link.isNotEmpty)
                   IconButton(
                     icon: const Icon(Icons.open_in_new, size: 18),
-                    tooltip: 'View on GitHub',
+                    tooltip: getLocalText.s("View on GitHub"),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onPressed: () =>
@@ -71,7 +72,7 @@ Future<void> pickPublicTestServer(
             final list = manifest.lists[i];
             return ListTile(
               leading: const Icon(Icons.list_alt),
-              title: Text('List ${i + 1}'),
+              title: Text(getLocalText.s("List %d", i + 1)),
               dense: true,
               contentPadding: EdgeInsets.zero,
               onTap: () {
@@ -85,7 +86,7 @@ Future<void> pickPublicTestServer(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
+          child: Text(getLocalText.s("Cancel")),
         ),
       ],
     ),

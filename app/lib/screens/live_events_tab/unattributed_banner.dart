@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/traffic_profiler.dart';
+import '../../services/l10n/locale_controller.dart';
 
 class UnattributedBanner extends StatelessWidget {
   const UnattributedBanner({super.key});
@@ -26,8 +27,7 @@ class UnattributedBanner extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              '${TrafficProfiler.I.recentUnattributedCount} unattributed events / 30s — '
-              'sing-box could not detect the owner package for some DNS/TCP traffic',
+              getLocalText.plural("%d unattributed events / 30s — sing-box could not detect the owner package for some DNS/TCP traffic", TrafficProfiler.I.recentUnattributedCount),
               style: TextStyle(
                   fontSize: 12, color: cs.onErrorContainer),
             ),

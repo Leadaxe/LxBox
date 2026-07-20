@@ -8,6 +8,7 @@ import '../../services/format_utils.dart';
 import '../../services/traffic_profiler.dart';
 import '../../services/process_name.dart';
 import 'routing_section.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §160 — детальный bottom-sheet по одному [TrafficEvent] (Live-лента
 /// per-app trace, в перспективе — и Stats→Live).
@@ -77,7 +78,7 @@ class _TrafficEventDetailSheet extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    title.isNotEmpty ? title : '(event)',
+                    title.isNotEmpty ? title : getLocalText.s("(event)"),
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600),
                     softWrap: true,
@@ -171,8 +172,7 @@ class _TrafficEventDetailSheet extends StatelessWidget {
 
     // Timing
     final local = e.ts.toLocal();
-    final started = '${local.year}-${_pad2(local.month)}-${_pad2(local.day)} '
-        '${formatTime(local)}';
+    final started = formatDateTime(local);
     out.addAll(_group(context, 'Timing', [
       _copyRow(context, 'Started', started),
       _copyRow(
@@ -435,7 +435,7 @@ class _TrafficEventDetailSheet extends StatelessWidget {
         width: double.infinity,
         child: OutlinedButton.icon(
           icon: const Icon(Icons.copy, size: 16),
-          label: const Text('Copy JSON'),
+          label: Text(getLocalText.s("Copy JSON")),
           onPressed: () => _copy(
             context,
             const JsonEncoder.withIndent('  ').convert(event.toJson()),
@@ -452,6 +452,4 @@ class _TrafficEventDetailSheet extends StatelessWidget {
       SnackBar(content: Text(message), duration: const Duration(seconds: 1)),
     );
   }
-
-  static String _pad2(int n) => n.toString().padLeft(2, '0');
 }

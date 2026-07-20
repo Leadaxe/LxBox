@@ -59,7 +59,7 @@ mixin _ConfigIoMixin on ChangeNotifier {
     }
     final ok = await _vpn.saveConfig(canonicalJson);
     if (!ok) {
-      _emit(_state.copyWith(lastError: 'Failed to save config'));
+      _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.failedToSaveConfig)));
       _addDebug(DebugSource.app, 'Save config failed');
       return false;
     }
@@ -88,7 +88,7 @@ mixin _ConfigIoMixin on ChangeNotifier {
         '[vpn] saveParsedConfig EXIT changed=$changed need_restart_after=$needRestart (tunnelUp=${_state.tunnelUp} || prev=${_state.configChangedNeedRestart})');
     _emit(_state.copyWith(
       configRaw: raw,
-      lastError: '',
+      lastError: null,
       configChangedNeedRestart: needRestart,
       // §116 — configRaw стал непустым → аномалия загрузки снята.
       configLoadError: false,
@@ -103,7 +103,7 @@ mixin _ConfigIoMixin on ChangeNotifier {
 
   Future<bool> saveConfigRaw(String raw) async {
     if (raw.trim().isEmpty) {
-      _emit(_state.copyWith(lastError: 'Config is empty'));
+      _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.configIsEmpty)));
       _addDebug(DebugSource.app, 'Save rejected: empty config');
       return false;
     }
@@ -111,7 +111,7 @@ mixin _ConfigIoMixin on ChangeNotifier {
       final canonical = canonicalJsonForSingbox(raw);
       return saveParsedConfig(canonical, displayRaw: raw);
     } on FormatException catch (e) {
-      _emit(_state.copyWith(lastError: 'Failed to parse config: ${e.message}'));
+      _emit(_state.copyWith(lastError: PrefixedMsg(ErrPrefix.parseConfigFailed, RawMsg(e.message))));
       _addDebug(DebugSource.app, 'Config parse error: ${e.message}');
       return false;
     }
@@ -122,12 +122,12 @@ mixin _ConfigIoMixin on ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   Future<bool> readFromClipboard() async {
-    _emit(_state.copyWith(busy: true, lastError: ''));
+    _emit(_state.copyWith(busy: true, lastError: null));
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       final text = data?.text ?? '';
       if (text.trim().isEmpty) {
-        _emit(_state.copyWith(lastError: 'Clipboard is empty', busy: false));
+        _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.clipboardIsEmpty), busy: false));
         _addDebug(DebugSource.app, 'Clipboard is empty');
         return false;
       }
@@ -136,18 +136,18 @@ mixin _ConfigIoMixin on ChangeNotifier {
       _emit(_state.copyWith(busy: false));
       return ok;
     } on FormatException catch (e) {
-      _emit(_state.copyWith(lastError: 'Failed to parse config: ${e.message}', busy: false));
+      _emit(_state.copyWith(lastError: PrefixedMsg(ErrPrefix.parseConfigFailed, RawMsg(e.message)), busy: false));
       _addDebug(DebugSource.app, 'Clipboard parse error: ${e.message}');
       return false;
     } catch (_) {
-      _emit(_state.copyWith(lastError: 'Failed to parse config', busy: false));
+      _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.failedToParseConfig), busy: false));
       _addDebug(DebugSource.app, 'Clipboard parse failed');
       return false;
     }
   }
 
   Future<bool> readFromFile() async {
-    _emit(_state.copyWith(busy: true, lastError: ''));
+    _emit(_state.copyWith(busy: true, lastError: null));
     try {
       final result = await FilePicker.pickFiles(withData: true, allowMultiple: false);
       if (result == null || result.files.isEmpty) {
@@ -166,19 +166,19 @@ mixin _ConfigIoMixin on ChangeNotifier {
           text = await File(path).readAsString();
         } on FileSystemException catch (e) {
           _emit(_state.copyWith(
-              lastError: 'Failed to read file: ${formatUserError(e)}',
+              lastError: PrefixedMsg(ErrPrefix.readFileFailed, formatUserError(e)),
               busy: false));
           _addDebug(DebugSource.app, 'File read error: $e');
           return false;
         }
       } else {
-        _emit(_state.copyWith(lastError: 'Failed to read file', busy: false));
+        _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.failedToReadFile), busy: false));
         _addDebug(DebugSource.app, 'File pick failed: no bytes and no path');
         return false;
       }
 
       if (text.trim().isEmpty) {
-        _emit(_state.copyWith(lastError: 'File is empty', busy: false));
+        _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.fileIsEmpty), busy: false));
         _addDebug(DebugSource.app, 'Selected file is empty');
         return false;
       }
@@ -188,12 +188,12 @@ mixin _ConfigIoMixin on ChangeNotifier {
       _emit(_state.copyWith(busy: false));
       return ok;
     } on FormatException catch (e) {
-      _emit(_state.copyWith(lastError: 'Failed to parse config: ${e.message}', busy: false));
+      _emit(_state.copyWith(lastError: PrefixedMsg(ErrPrefix.parseConfigFailed, RawMsg(e.message)), busy: false));
       _addDebug(DebugSource.app, 'File parse error: ${e.message}');
       return false;
     } catch (e) {
       _emit(_state.copyWith(
-          lastError: 'File error: ${formatUserError(e)}', busy: false));
+          lastError: PrefixedMsg(ErrPrefix.fileError, formatUserError(e)), busy: false));
       _addDebug(DebugSource.app, 'File read error: $e');
       return false;
     }

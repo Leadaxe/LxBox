@@ -1,56 +1,64 @@
 import 'dart:async';
 import 'dart:io';
 
+import '../models/ui_msg.dart';
+import '../models/validation.dart';
+
 /// Превращает технический exception в user-facing сообщение (night T2-2).
 ///
 /// §219 — НЕ путать с `formatUserError` (error_format.dart): «detailed»
 /// разбор по типу для сетевых операций подписок. `formatUserError` — «quick»
 /// generic-очистка для VPN-старта. Выбирай по домену, не конкурируют.
 ///
-/// Поведение:
+/// §279 — возвращает [UiMsg]: собственные фразы рендерятся по локали в момент
+/// показа, payload (`.message` исключений, kernel-строки) — passthrough в
+/// [RawMsg].
+///
+/// Поведение (английский рендер):
 /// - `SocketException` / network errors → `No connection to <host>` если host
 ///   удаётся извлечь, иначе generic "No connection"
 /// - `TimeoutException` → "Timed out after Ns" если `.duration` известен,
 ///   иначе generic "Request timed out"
 /// - `HttpException` с `HTTP NNN` → короткое описание по коду
 /// - `FormatException` → "Can't parse response (invalid format)"
+/// - [FatalValidationException] → [ValidationFatalMsg] (§141 P0.1 — полный
+///   перечень fatal-issues, рендер в момент показа)
 /// - Всё остальное — оригинальное `.toString()` с префиксом отрезанным
 ///   (удаляем "Exception: " чтобы не показывать юзеру).
-///
-/// Возвращает строку ≤140 chars, подходящую для Snackbar / inline-error.
-String humanizeError(Object e) {
+UiMsg humanizeError(Object e) {
+  if (e is FatalValidationException) {
+    return ValidationFatalMsg(e.issues);
+  }
   if (e is SocketException) {
     final host = _extractSocketHost(e);
     return host.isNotEmpty
-        ? 'No connection to $host — check network or URL'
-        : 'No connection — check network or URL';
+        ? NoConnectionToHost(host)
+        : const ErrMsg(ErrKey.noConnection);
   }
   if (e is TimeoutException) {
     final secs = e.duration?.inSeconds ?? 0;
-    if (secs > 0) {
-      return 'Timed out after ${secs}s — server slow or unreachable';
-    }
-    return 'Request timed out — server slow or unreachable';
+    if (secs > 0) return TimedOutAfter(secs);
+    return const ErrMsg(ErrKey.requestTimedOut);
   }
   if (e is HttpException) {
     final msg = e.message;
     final m = RegExp(r'HTTP (\d{3})').firstMatch(msg);
     if (m != null) {
-      final code = int.parse(m.group(1)!);
-      return _httpStatusReason(code);
+      return HttpStatusMsg(int.parse(m.group(1)!));
     }
-    return msg;
+    return RawMsg(msg);
   }
   if (e is FormatException) {
-    return 'Can\'t parse response (invalid format)';
+    return const ErrMsg(ErrKey.cantParseResponse);
   }
   if (e is FileSystemException) {
-    return 'File error: ${e.message}';
+    return PrefixedMsg(ErrPrefix.fileError, RawMsg(e.message));
   }
   final raw = e.toString();
   // Trim leading "Exception: " / "TypeError: " / etc — keep message only.
   final trimmed = raw.replaceFirst(RegExp(r'^[A-Za-z_]*(Exception|Error): '), '');
-  return trimmed.length > 140 ? '${trimmed.substring(0, 137)}...' : trimmed;
+  return RawMsg(
+      trimmed.length > 140 ? '${trimmed.substring(0, 137)}...' : trimmed);
 }
 
 /// Пытается достать host из `SocketException`. `e.address` обычно `null` при
@@ -70,18 +78,4 @@ String _extractSocketHost(SocketException e) {
     if (host.isNotEmpty) return host;
   }
   return '';
-}
-
-String _httpStatusReason(int code) {
-  if (code == 401 || code == 403) {
-    return 'Access denied ($code) — check subscription token';
-  }
-  if (code == 404) return 'Not found (404) — subscription URL may be removed';
-  if (code == 410) return 'Gone (410) — subscription deleted by provider';
-  if (code == 429) return 'Rate limited (429) — try again later';
-  if (code >= 500 && code < 600) {
-    return 'Server error ($code) — provider is down, try later';
-  }
-  if (code >= 400 && code < 500) return 'Request rejected ($code)';
-  return 'HTTP $code';
 }

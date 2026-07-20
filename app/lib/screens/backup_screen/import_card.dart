@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../services/l10n/locale_controller.dart';
+
 class ImportCard extends StatelessWidget {
   const ImportCard({super.key, required this.busy, required this.onImport});
   final bool busy;
@@ -19,12 +21,12 @@ class ImportCard extends StatelessWidget {
               children: [
                 const Icon(Icons.download_outlined),
                 const SizedBox(width: 8),
-                Text('Import', style: theme.textTheme.titleMedium),
+                Text(getLocalText.s(1, "Import"), style: theme.textTheme.titleMedium),
               ],
             ),
             const SizedBox(height: 4),
             Text(
-              'Restore from a backup JSON file. Preview shown before applying.',
+              getLocalText.s("Restore from a backup JSON file. Preview shown before applying."),
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -33,7 +35,7 @@ class ImportCard extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: busy ? null : onImport,
                 icon: const Icon(Icons.folder_open),
-                label: const Text('Pick file...'),
+                label: Text(getLocalText.s("Pick file...")),
               ),
             ),
           ],

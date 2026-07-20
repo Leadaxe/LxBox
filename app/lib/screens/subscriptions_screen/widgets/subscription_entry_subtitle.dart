@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/server_list.dart';
 import '../../../services/subscription/input_helpers.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Строка под именем подписки. Для SubscriptionServers показываем:
 /// `{nodes} · 🔄 24h · 🕐 3h ago · (2 fails)`
@@ -27,15 +28,20 @@ Widget? buildSubscriptionEntrySubtitle(
     final total = folder.members.length;
     final off = folder.disabledCount;
     statusText = total == 0
-        ? 'Empty folder'
-        : '$total server${total == 1 ? '' : 's'}${off > 0 ? ' · $off off' : ''}';
+        ? getLocalText.s("Empty folder")
+        : off > 0
+            ? getLocalText.plural("%1\$d servers · %2\$d off", total, off)
+            : getLocalText.plural("%d servers", total);
   } else if (isUser) {
     final node = entry.list.nodes.isNotEmpty ? entry.list.nodes.first : null;
-    statusText = node != null ? '${node.protocol.toUpperCase()} server' : '';
-  } else if (entry.status.isNotEmpty) {
-    statusText = entry.status;
+    statusText = node != null
+        ? getLocalText.s("%s server", node.protocol.toUpperCase())
+        : '';
+  } else if (entry.status != null) {
+    statusText = entry.status!.render();
   } else {
-    statusText = entry.nodeCount > 0 ? '${entry.nodeCount} nodes' : '';
+    statusText =
+        entry.nodeCount > 0 ? getLocalText.plural("%d nodes", entry.nodeCount) : '';
   }
   if (statusText.isNotEmpty) {
     parts.add(Text(statusText, style: textStyle));
@@ -48,7 +54,7 @@ Widget? buildSubscriptionEntrySubtitle(
         isFileSubscription((entry.list as SubscriptionServers).url);
     if (isFile) {
       parts.add(Icon(Icons.insert_drive_file_outlined, size: 12, color: muted));
-      parts.add(Text('file', style: textStyle));
+      parts.add(Text(getLocalText.s("file"), style: textStyle));
     } else {
       final intervalH = entry.updateIntervalHours;
       if (intervalH > 0) {
@@ -66,14 +72,14 @@ Widget? buildSubscriptionEntrySubtitle(
       parts.add(Text(SubscriptionEntry.formatAgo(last), style: textStyle));
     } else if (entry.lastUpdateStatus == UpdateStatus.never) {
       parts.add(Icon(Icons.schedule, size: 12, color: muted));
-      parts.add(Text('never', style: textStyle));
+      parts.add(Text(getLocalText.s("never"), style: textStyle));
     }
 
     final fails = entry.consecutiveFails;
     if (fails > 0) {
       final failColor = entry.enabled ? scheme.error : muted;
       parts.add(Text(
-        '($fails fail${fails == 1 ? '' : 's'})',
+        getLocalText.plural("(%d fails)", fails),
         style: TextStyle(fontSize: 12, color: failColor),
       ));
     }

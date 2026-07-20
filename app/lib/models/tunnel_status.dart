@@ -1,4 +1,8 @@
 /// Type-safe VPN tunnel status, mapped from native string events.
+library;
+
+import '../services/l10n/locale_controller.dart';
+
 enum TunnelStatus {
   disconnected,
   connecting,
@@ -31,14 +35,16 @@ enum TunnelStatus {
     };
   }
 
-  String get label => switch (this) {
-        disconnected => 'Disconnected',
-        connecting => 'Connecting…',
-        connected => 'Connected',
-        stopping => 'Stopping…',
-        revoked => 'Taken by another VPN',
-        error => 'Error',
-        unknown => 'Unknown',
+  /// §279 — display-label статуса (рендер по локали в момент показа).
+  /// Wire-литералы native ([fromNative]) не трогаются.
+  String label() => switch (this) {
+        disconnected => getLocalText.s("Disconnected"),
+        connecting => getLocalText.s("Connecting…"),
+        connected => getLocalText.s("Connected"),
+        stopping => getLocalText.s("Stopping…"),
+        revoked => getLocalText.s("Taken by another VPN"),
+        error => getLocalText.s("Error"),
+        unknown => getLocalText.s("Unknown"),
       };
 }
 

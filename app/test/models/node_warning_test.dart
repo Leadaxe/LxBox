@@ -10,6 +10,45 @@ void main() {
       );
     });
 
+    // §279 — равенство по runtimeType + полям данных (не по отрендеренной
+    // строке): dedup-гранулярность та же, но переживает смену локали.
+    test('same subclass + different fields != equal', () {
+      expect(
+        const UnsupportedTransportWarning('xhttp', 'httpupgrade') ==
+            const UnsupportedTransportWarning('xhttp', 'ws'),
+        isFalse,
+      );
+      expect(
+        const XhttpParamResetWarning(
+                'session_placement', XhttpResetReason.invalidEnumValue,
+                value: 'a') ==
+            const XhttpParamResetWarning(
+                'session_placement', XhttpResetReason.invalidEnumValue,
+                value: 'b'),
+        isFalse,
+      );
+    });
+
+    // §279 — XhttpResetReason: message() обязан воспроизводить дословно
+    // те же English-фразы, что были free-text до enum'а.
+    test('XhttpParamResetWarning renders verbatim from enum reason', () {
+      expect(
+        const XhttpParamResetWarning(
+                'session_placement', XhttpResetReason.invalidEnumValue,
+                value: 'bogus')
+            .renderEn(),
+        'XHTTP "session_placement" reset to default — value "bogus" is not '
+        'a valid session_placement (would otherwise break the whole config).',
+      );
+      expect(
+        const XhttpParamResetWarning(
+                'uplink_http_method', XhttpResetReason.getRequiresPacketUp)
+            .renderEn(),
+        'XHTTP "uplink_http_method" reset to default — GET requires '
+        'packet-up mode (would otherwise break the whole config).',
+      );
+    });
+
     test('different subclasses != equal', () {
       expect(
         const UnsupportedTransportWarning('xhttp', 'httpupgrade') ==
@@ -37,6 +76,7 @@ void main() {
         InsecureTlsWarning() => 'tls',
         NaiveBuildTagWarning() => 'naive_build',
         XhttpParamResetWarning() => 'xhttp_reset',
+        UnknownFingerprintWarning() => 'fingerprint',
       };
       expect(label, 'transport');
     });

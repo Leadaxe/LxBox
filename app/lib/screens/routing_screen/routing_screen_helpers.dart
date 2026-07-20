@@ -2,6 +2,8 @@ import '../../config/consts.dart' show kBlockOutboundTag, kDirectOutboundTag;
 import '../../models/channel.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../../services/rule_display_names.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Remote `rule_set` пресета (type=remote + url).
 class PresetRemoteRuleSet {
@@ -157,7 +159,7 @@ class RoutingHelpers {
 
   static String ruleSubtitle(CustomRule rule, SelectableRule? preset) {
     if (rule.kind == CustomRuleKind.preset) {
-      if (preset == null) return 'Preset not found — tap to fix';
+      if (preset == null) return getLocalText.s("Preset not found — tap to fix");
       // §045: только non-default vars; preset.label дублирует title (rule.name)
       final extras = <String>[];
       for (final v in preset.vars) {
@@ -172,24 +174,28 @@ class RoutingHelpers {
         if (value.isEmpty || value == v.defaultValue) continue;
         extras.add('${v.name}: $value');
       }
-      if (extras.isEmpty) return 'Tap to edit';
-      return '${extras.take(2).join(' · ')} — tap to edit';
+      if (extras.isEmpty) return getLocalText.s("Tap to edit");
+      return getLocalText.s("%s — tap to edit", extras.take(2).join(' · '));
     }
-    final summary = rule.summary;
+    final summary = rule.summary();
     return summary.isEmpty
-        ? 'Tap to add match fields'
-        : '$summary — tap to edit';
+        ? getLocalText.s("Tap to add match fields")
+        : getLocalText.s("%s — tap to edit", summary);
   }
 
+  /// §279 (§3.5.1) — дедуп по DISPLAY-резолвнутым именам: live-label'ы
+  /// preset-строк (из локализованного [template]) + сохранённые снапшоты.
+  /// Иначе inline-правило можно назвать ровно как видимый label пресета и
+  /// получить визуальный дубль. [template] null (холодный кэш) → сравнение
+  /// только по сохранённым именам (как раньше).
   static String uniqueCustomRuleName(
     String requested,
     String selfId,
     List<CustomRule> customRules,
+    WizardTemplate? template,
   ) {
-    final others = customRules
-        .where((r) => r.id != selfId)
-        .map((r) => r.name)
-        .toSet();
+    final others =
+        visibleRuleNames(customRules, template, excludeId: selfId);
     if (!others.contains(requested)) return requested;
     var i = 2;
     while (others.contains('$requested ($i)')) {

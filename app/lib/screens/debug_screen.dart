@@ -11,6 +11,7 @@ import '../services/error_format.dart';
 import '../services/stderr_reader.dart';
 import '../services/ui_helpers.dart';
 import 'app_settings_screen.dart';
+import '../services/l10n/locale_controller.dart';
 
 class DebugScreen extends StatefulWidget {
   const DebugScreen({super.key});
@@ -71,7 +72,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
 
   void _copyAll(List<DebugEntry> entries) {
     Clipboard.setData(ClipboardData(text: _entriesToText(entries)));
-    showSnack('${entries.length} entries copied');
+    showSnack(getLocalText.plural("%d entries copied", entries.length));
   }
 
   /// Собирает единый dump (config + vars + server_lists + debug-log)
@@ -89,7 +90,8 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
         subject: name,
       );
     } catch (e) {
-      showSnack('Share failed: ${formatUserError(e)}');
+      if (!mounted) return;
+      showSnack(getLocalText.s("Share failed: %s", formatUserError(e).render()));
     } finally {
       if (mounted) setState(() => _buildingDump = false);
     }
@@ -100,8 +102,9 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
   /// outbound'ов / host'ов, но не пароли.
   Future<void> _shareStderr() async {
     final p = await StderrReader.path();
+    if (!mounted) return;
     if (p == null) {
-      showSnack('stderr is empty');
+      showSnack(getLocalText.s("stderr is empty"));
       return;
     }
     try {
@@ -112,7 +115,8 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
         subject: 'L×Box stderr — $ts',
       );
     } catch (e) {
-      showSnack('Share failed: ${formatUserError(e)}');
+      if (!mounted) return;
+      showSnack(getLocalText.s("Share failed: %s", formatUserError(e).render()));
     }
   }
 
@@ -133,10 +137,11 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
         final filtered = _filteredEntries();
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Debug'),
+            title: Text(getLocalText.s("Debug")),
             actions: _buildAppBarActions(filtered),
             bottom: showStderrTab
-                ? const TabBar(tabs: [Tab(text: 'Log'), Tab(text: 'stderr')])
+                // l10n-exempt: stderr is a stream name
+                ? TabBar(tabs: [Tab(text: getLocalText.s("Log")), const Tab(text: 'stderr')])
                 : null,
           ),
           body: showStderrTab
@@ -175,7 +180,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Icon(Icons.ios_share),
-        tooltip: 'Share dump (config + vars + subs + log)',
+        tooltip: getLocalText.s("Share dump (config + vars + subs + log)"),
         onPressed: _buildingDump ? null : _shareDump,
       ),
       PopupMenuButton<_DebugAction>(
@@ -194,9 +199,9 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
           PopupMenuItem(
             value: _DebugAction.copy,
             enabled: filtered.isNotEmpty,
-            child: const ListTile(
-              leading: Icon(Icons.copy_outlined),
-              title: Text('Copy log'),
+            child: ListTile(
+              leading: const Icon(Icons.copy_outlined),
+              title: Text(getLocalText.s("Copy log")),
               dense: true,
               contentPadding: EdgeInsets.zero,
             ),
@@ -204,9 +209,9 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
           PopupMenuItem(
             value: _DebugAction.clear,
             enabled: AppLog.I.entries.isNotEmpty,
-            child: const ListTile(
-              leading: Icon(Icons.delete_sweep_outlined),
-              title: Text('Clear'),
+            child: ListTile(
+              leading: const Icon(Icons.delete_sweep_outlined),
+              title: Text(getLocalText.s("Clear")),
               dense: true,
               contentPadding: EdgeInsets.zero,
             ),
@@ -215,11 +220,11 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
           // "Forward sing-box logs" + Debug API + раздел Profiling (полный
           // набор pprof-кнопок: goroutine/CPU/heap/allocs).
           const PopupMenuDivider(),
-          const PopupMenuItem(
+          PopupMenuItem(
             value: _DebugAction.diagnosticsSettings,
             child: ListTile(
-              leading: Icon(Icons.tune),
-              title: Text('Diagnostics settings'),
+              leading: const Icon(Icons.tune),
+              title: Text(getLocalText.s("Diagnostics settings")),
               dense: true,
               contentPadding: EdgeInsets.zero,
             ),
@@ -244,10 +249,14 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SegmentedButton<DebugFilter>(
-            segments: const [
-              ButtonSegment(value: DebugFilter.all, label: Text('All')),
-              ButtonSegment(value: DebugFilter.core, label: Text('Core')),
-              ButtonSegment(value: DebugFilter.app, label: Text('App')),
+            segments: [
+              ButtonSegment(
+                  value: DebugFilter.all, label: Text(getLocalText.s("All"))),
+              ButtonSegment(
+                  value: DebugFilter.core,
+                  label: Text(getLocalText.s("Core"))),
+              ButtonSegment(
+                  value: DebugFilter.app, label: Text(getLocalText.s("App"))),
             ],
             selected: {_sourceFilter},
             onSelectionChanged: (s) =>
@@ -279,7 +288,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
             controller: _searchController,
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search, size: 18),
-              hintText: 'Filter by text…',
+              hintText: getLocalText.s("Filter by text…"),
               isDense: true,
               border: const OutlineInputBorder(),
               suffixIcon: _searchQuery.isEmpty
@@ -299,8 +308,8 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
             child: filtered.isEmpty
                 ? Center(
                     child: Text(_searchQuery.isNotEmpty
-                        ? 'No matches for "$_searchQuery"'
-                        : 'No events yet'))
+                        ? getLocalText.s("No matches for \"%s\"", _searchQuery)
+                        : getLocalText.s("No events yet")))
                 : ListView.separated(
                     itemCount: filtered.length,
                     separatorBuilder: (_, _) => const Divider(height: 1),
@@ -359,14 +368,13 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
             children: [
               Expanded(
                 child: Text(
-                  'Go runtime stderr from libbox / sing-box. '
-                  'Survives SIGABRT — useful for diagnosing native crashes.',
+                  getLocalText.s("Go runtime stderr from libbox / sing-box. Survives SIGABRT — useful for diagnosing native crashes."),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
               IconButton(
                 icon: const Icon(Icons.refresh, size: 20),
-                tooltip: 'Re-read stderr.log',
+                tooltip: getLocalText.s("Re-read stderr.log"),
                 onPressed: () async {
                   setState(() => _stderrLoading = true);
                   await _loadStderr();
@@ -374,7 +382,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
               ),
               IconButton(
                 icon: const Icon(Icons.ios_share, size: 20),
-                tooltip: 'Share stderr.log files',
+                tooltip: getLocalText.s("Share stderr.log files"),
                 onPressed: _shareStderr,
               ),
             ],

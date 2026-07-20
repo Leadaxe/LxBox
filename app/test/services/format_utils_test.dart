@@ -70,6 +70,26 @@ void main() {
         expect(formatTime(DateTime(2026, 1, 1, 23, 59, 59)), '23:59:59'));
   });
 
+  // §279 Phase 5 — intl-время HH:mm + композитный timestamp (ISO-порядок
+  // даты сознательно) + грубая длительность (было connections._formatDuration).
+  group('formatTimeHm', () {
+    test('HH:mm padded', () =>
+        expect(formatTimeHm(DateTime(2026, 1, 1, 9, 5, 3)), '09:05'));
+  });
+
+  group('formatDateTime', () {
+    test('yyyy-MM-dd HH:mm:ss', () => expect(
+        formatDateTime(DateTime(2026, 3, 7, 9, 5, 3)), '2026-03-07 09:05:03'));
+  });
+
+  group('formatDurationCoarse', () {
+    test('секунды/минуты/часы одним разрядом', () {
+      expect(formatDurationCoarse(const Duration(seconds: 30)), '30s');
+      expect(formatDurationCoarse(const Duration(minutes: 5, seconds: 30)), '5m');
+      expect(formatDurationCoarse(const Duration(hours: 2, minutes: 5)), '2h5m');
+    });
+  });
+
   // §219 — host:port extraction (было продублировано в connections/stats).
   group('hostOf / portOf', () {
     test('обычный host:port', () {

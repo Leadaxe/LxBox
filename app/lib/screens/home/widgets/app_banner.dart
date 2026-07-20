@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../models/home_state.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §116 — единый banner-механизм для home. Принцип: **баннер = чистая
 /// проекция наблюдаемого состояния**. Не отдельный стор и не императивный
@@ -212,7 +213,7 @@ class _BannerStackState extends State<BannerStack> {
           ),
           if (b.onDismiss != null)
             IconButton(
-              tooltip: 'Dismiss',
+              tooltip: getLocalText.s("Dismiss"),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),

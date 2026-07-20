@@ -20,7 +20,7 @@ Future<Map<String, Object?>> maybeRebuild(DebugRequest req, DebugContext ctx) as
     if (json == null) {
       return {
         'rebuilt': false,
-        'rebuild_error': 'generate failed: ${sub.lastError}',
+        'rebuild_error': 'generate failed: ${sub.lastError?.renderEn() ?? ''}',
       };
     }
     final saved = await home.saveParsedConfig(json);

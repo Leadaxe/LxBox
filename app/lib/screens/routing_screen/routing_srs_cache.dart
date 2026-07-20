@@ -87,7 +87,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   /// flush — mixin'ом (flushToDisk) на dispose/paused.
   @override
   Future<void> stageChanges() async {
-    await SettingsStorage.setChannels(_channels, flush: false); // §125
+    await ChannelMutations.bulkReplace(_channels, flush: false); // §125/§292
     await SettingsStorage.saveRouteFinal(_routeFinal, flush: false);
     await SettingsStorage.saveCustomRules(_customRules, flush: false);
     // §076: configDirty уже true (set синхронно в markDirty). НЕ
@@ -220,7 +220,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   Future<void> _downloadSrsForSrsRule(CustomRuleSrs rule) async {
     if (rule.srsUrl.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('SRS URL is empty')),
+        SnackBar(content: Text(getLocalText.s("SRS URL is empty"))),
       );
       return;
     }
@@ -234,8 +234,8 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(path != null
-            ? 'Downloaded "${rule.name}"'
-            : 'Failed to download "${rule.name}" — check URL/network'),
+            ? getLocalText.s("Downloaded \"%s\"", rule.name)
+            : getLocalText.s("Failed to download \"%s\" — check URL/network", rule.name)),
       ),
     );
     if (path != null) _markDirty();
@@ -248,7 +248,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     final preset = _presetFor(rule.presetId);
     if (preset == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Preset "${rule.presetId}" not found')),
+        SnackBar(content: Text(getLocalText.s("Preset \"%s\" not found", rule.presetId))),
       );
       return;
     }
@@ -273,8 +273,8 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(failed == 0
-            ? 'Downloaded "${rule.name}" ($ok rule-set${ok == 1 ? "" : "s"})'
-            : 'Partial: $ok ok, $failed failed for "${rule.name}"'),
+            ? getLocalText.plural("Downloaded \"%2\$s\" (%1\$d rule-sets)", ok, rule.name)
+            : getLocalText.s("Partial: %1\$d ok, %2\$d failed for \"%3\$s\"", ok, failed, rule.name)),
       ),
     );
     if (ok > 0) _markDirty();

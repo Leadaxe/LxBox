@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../normalizers.dart' as norm;
+import '../../../services/l10n/locale_controller.dart';
 
 /// §053 Stage 2 — multiline TextField + count badge + Paste/Clear actions.
 ///
@@ -98,7 +99,7 @@ class _ItemsFieldState extends State<ItemsField> {
     if (text.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Clipboard is empty')),
+        SnackBar(content: Text(getLocalText.s("Clipboard is empty"))),
       );
       return;
     }
@@ -176,7 +177,7 @@ class _ItemsFieldState extends State<ItemsField> {
               Text(
                 invalid == 0
                     ? (count == 0 ? '' : '$count')
-                    : '$count · $invalid invalid',
+                    : getLocalText.s("%1\$d · %2\$d invalid", count, invalid),
                 style: TextStyle(
                   fontSize: 12,
                   color: invalid > 0
@@ -207,8 +208,8 @@ class _ItemsFieldState extends State<ItemsField> {
             children: [
               TextButton.icon(
                 icon: const Icon(Icons.content_paste, size: 14),
-                label: const Text('Paste',
-                    style: TextStyle(fontSize: 12)),
+                label: Text(getLocalText.s("Paste"),
+                    style: const TextStyle(fontSize: 12)),
                 onPressed: _pasteInto,
                 style: TextButton.styleFrom(
                   minimumSize: const Size(0, 28),
@@ -218,8 +219,8 @@ class _ItemsFieldState extends State<ItemsField> {
               if (widget.presets.isNotEmpty)
                 TextButton.icon(
                   icon: const Icon(Icons.list, size: 14),
-                  label: const Text('Presets',
-                      style: TextStyle(fontSize: 12)),
+                  label: Text(getLocalText.s("Presets"),
+                      style: const TextStyle(fontSize: 12)),
                   onPressed: _showPresetMenu,
                   style: TextButton.styleFrom(
                     minimumSize: const Size(0, 28),
@@ -228,8 +229,8 @@ class _ItemsFieldState extends State<ItemsField> {
                 ),
               TextButton.icon(
                 icon: const Icon(Icons.clear, size: 14),
-                label: const Text('Clear',
-                    style: TextStyle(fontSize: 12)),
+                label: Text(getLocalText.s("Clear"),
+                    style: const TextStyle(fontSize: 12)),
                 onPressed: () => widget.controller.clear(),
                 style: TextButton.styleFrom(
                   minimumSize: const Size(0, 28),

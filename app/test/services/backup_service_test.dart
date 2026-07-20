@@ -253,6 +253,34 @@ void main() {
               'backup. Добавь в _topLevelRoutingKeys/_topLevelAppKeys '
               '(backup_service.dart): $missing');
     });
+
+    // §279 — app_language: var-allowlist membership (иначе import дропает
+    // неизвестный var → настройка не переживает restore).
+    test('§279 — app_language ∈ appFeatureFlagVars allowlist', () {
+      expect(SettingsStorage.allowedVarKeys(const []).contains('app_language'),
+          isTrue,
+          reason: 'app_language обязан переживать restore (§221-симметрия: '
+              'export vars нефильтрован, import — по allowlist)');
+    });
+
+    // §279/§189 — guard: app_language НЕ член NativePrefsKeys. Членство
+    // автоматически экспортировало бы его вторым представлением в
+    // vpn_settings-блок бэкапа (неопределённый precedence на import);
+    // boxvpn_boot-копия — derived cache, единственный дом бэкапа — vars.
+    test('§279 — app_language ∉ NativePrefsKeys.all (derived cache)', () {
+      expect(NativePrefsKeys.all.contains('app_language'), isFalse);
+    });
+
+    // §279 — полный export→import round-trip сохраняет app_language.
+    test('§279 — app_language переживает export→import round-trip', () async {
+      await seedStorage({
+        'vars': {'app_language': 'ru'},
+      });
+      final exported = await SettingsStorage.exportRaw();
+      SettingsStorage.resetCacheForTesting();
+      await SettingsStorage.replaceRaw(exported);
+      expect(await SettingsStorage.getAppLanguage(), 'ru');
+    });
   });
 
   group('BackupService.parseImport', () {

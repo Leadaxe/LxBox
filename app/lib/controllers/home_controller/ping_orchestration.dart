@@ -37,10 +37,10 @@ mixin _PingMixin on ChangeNotifier {
         _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
         _addDebug(DebugSource.app, 'URLTest $nodeTag → $url: ${ms}ms');
       } else {
-        final msg = '${_routeLabel(nodeTag, url)} — ${r.error}';
+        final msg = ProbeErrorMsg(nodeTag, _probeHost(url), RawMsg(r.error));
         _emit(_state.copyWith(
             lastDelay: nextDelay, pingBusy: nextBusy, lastError: msg));
-        _addDebug(DebugSource.app, msg);
+        _addDebug(DebugSource.app, msg.renderEn());
       }
     } catch (e) {
       final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = -1;
@@ -48,7 +48,7 @@ mixin _PingMixin on ChangeNotifier {
       final msg = _formatProbeError(nodeTag, url, e);
       _emit(_state.copyWith(
           lastDelay: nextDelay, pingBusy: nextBusy, lastError: msg));
-      _addDebug(DebugSource.app, msg);
+      _addDebug(DebugSource.app, msg.renderEn());
     }
   }
 
@@ -59,18 +59,18 @@ mixin _PingMixin on ChangeNotifier {
   ///   "direct-out → ya.ru — timeout 5.8s"
   ///   "vpn-2 → ya.ru — HTTP 503"
   ///   "direct-out → ya.ru — connection refused"
-  static String _formatProbeError(String target, String url, Object e) {
-    return '${_routeLabel(target, url)} — ${formatUserError(e)}';
+  static ProbeErrorMsg _formatProbeError(String target, String url, Object e) {
+    return ProbeErrorMsg(target, _probeHost(url), formatUserError(e));
   }
 
-  /// `direct-out → ya.ru` если URL валиден, иначе только `direct-out`.
-  static String _routeLabel(String target, String url) {
-    if (url.isEmpty) return target;
+  /// Host из ping-URL для `<target> → <host>`-метки; '' если URL невалиден.
+  static String _probeHost(String url) {
+    if (url.isEmpty) return '';
     try {
-      final host = Uri.parse(url).host;
-      if (host.isNotEmpty) return '$target → $host';
-    } catch (_) {}
-    return target;
+      return Uri.parse(url).host;
+    } catch (_) {
+      return '';
+    }
   }
 
   bool _massPingRunning = false;
@@ -136,13 +136,11 @@ mixin _PingMixin on ChangeNotifier {
   /// после CRUD). Не уведомляет listeners — values используются on-demand.
   Future<void> reloadPingOptions() async {
     try {
-      final tpl = await TemplateLoader.load();
-      final tplOpts = tpl.pingOptions;
-      final tplUrl = tplOpts['url'];
-      final tplTimeout = tplOpts['timeout_ms'];
-      _templatePingUrl = (tplUrl is String) ? tplUrl : '';
+      // §279 — typed PingOptionsModel (defaultTimeoutMs == 0 → «не задан»).
+      final opts = (await TemplateLoader.load()).pingOptionsModel;
+      _templatePingUrl = opts.defaultUrl;
       _templatePingTimeoutMs =
-          (tplTimeout is num && tplTimeout > 0) ? tplTimeout.toInt() : 10000;
+          opts.defaultTimeoutMs > 0 ? opts.defaultTimeoutMs : 10000;
     } catch (e) {
       _addDebug(DebugSource.app, 'Template load (ping options): $e');
     }
@@ -150,6 +148,11 @@ mixin _PingMixin on ChangeNotifier {
   }
 
   static const _pingConcurrency = 10;
+
+  /// §286 — интервал батч-флаша mass-ping результатов в UI. ~120мс = ~8 ребилдов
+  /// в секунду вместо ребилда на каждую из ~150 нод. Достаточно плавно для глаза,
+  /// но не грузит главный поток бёрстом notifyListeners.
+  static const _massPingFlushMs = 120;
 
   /// Запланировать автопинг через 5 сек после connect, если включено в
   /// App Settings (`auto_ping_on_start`, default true). Пингуем только
@@ -191,7 +194,7 @@ mixin _PingMixin on ChangeNotifier {
       _emit(_state.copyWith(pingBatchGen: _state.pingBatchGen + 1));
     } catch (e) {
       final msg = _formatProbeError(groupTag, url, e);
-      _addDebug(DebugSource.app, msg);
+      _addDebug(DebugSource.app, msg.renderEn());
       _emit(_state.copyWith(lastError: msg));
     }
   }
@@ -238,6 +241,30 @@ mixin _PingMixin on ChangeNotifier {
     final massPingUrl = pingUrlFor(massPingGroup);
     final massPingTimeout = pingTimeoutFor(massPingGroup);
 
+    // §286 — батчинг: воркеры пишут результат НЕ через _emit-на-ноду (это давало
+    // ~150 полных ребилдов HomeScreen пачкой при 148 нодах — главный источник
+    // «подлагивает»), а в аккумуляторы; периодический flush (_massPingFlushMs)
+    // сливает накопленное ОДНИМ _emit. Финальный flush — после Future.wait.
+    final pendingDelay = <String, int>{};
+    final pendingBusy = <String, String>{};
+    void flush() {
+      if (_massPingEpoch != epoch) return;
+      if (pendingDelay.isEmpty && pendingBusy.isEmpty) return;
+      final nextDelay = Map<String, int>.from(_state.lastDelay)
+        ..addAll(pendingDelay);
+      final nextBusy = Map<String, String>.from(_state.pingBusy)
+        ..addAll(pendingBusy);
+      pendingDelay.clear();
+      pendingBusy.clear();
+      _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+    }
+
+    final flushTimer =
+        Timer.periodic(const Duration(milliseconds: _massPingFlushMs), (_) {
+      if (_massPingEpoch != epoch) return;
+      flush();
+    });
+
     Future<void> worker() async {
       while (true) {
         final i = index++;
@@ -249,15 +276,12 @@ mixin _PingMixin on ChangeNotifier {
               link: massPingUrl, timeoutMs: massPingTimeout);
           if (_massPingEpoch != epoch) break;
           // §4.6 — ok → delay (вкл. 0мс); fail (error непустой) → -1.
-          final nextDelay = Map<String, int>.from(_state.lastDelay)
-            ..[tag] = r.lastDelayValue;
-          final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';
-          _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+          pendingDelay[tag] = r.lastDelayValue;
+          pendingBusy[tag] = '';
         } catch (_) {
           if (_massPingEpoch != epoch) break;
-          final nextDelay = Map<String, int>.from(_state.lastDelay)..[tag] = -1;
-          final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';
-          _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+          pendingDelay[tag] = -1;
+          pendingBusy[tag] = '';
         }
       }
     }
@@ -266,7 +290,12 @@ mixin _PingMixin on ChangeNotifier {
       _pingConcurrency.clamp(1, nodes.length),
       (_) => worker(),
     );
-    await Future.wait(workers);
+    try {
+      await Future.wait(workers);
+    } finally {
+      flushTimer.cancel();
+      flush(); // финальный слив накопленного (epoch-guarded внутри)
+    }
 
     if (_massPingEpoch == epoch) {
       _massPingRunning = false;
@@ -297,6 +326,21 @@ mixin _PingMixin on ChangeNotifier {
     // pingClient (lazy lifecycle: short-lived conn на прогон). Следующий прогон
     // поднимет свежий. При cancel — disconnect уже сделан в cancelMassPing.
     if (_massPingEpoch == epoch) unawaited(_cc.cancelPing());
+  }
+
+  /// §286 — единая детерминированная остановка ВСЕГО пробирования. Дёргается из
+  /// каждого «активность пора гасить» перехода: disconnected/revoked
+  /// (`_handleStatusEvent`), смерть туннеля (`_onTunnelDead`), сворачивание
+  /// приложения (`onAppPaused`). Гасит три независимых источника:
+  ///  1. mass-ping — epoch-bump + `_cc.cancelPing()` (внутри `cancelMassPing`);
+  ///  2. auto-ping-таймер (5с после connect) — чтобы не выстрелил в мёртвую сессию;
+  ///  3. активные folder-probe sweep'ы (`ProbeRunner`) через `ProbeLifecycle`.
+  /// Идемпотентно: каждый источник сам no-op, если неактивен.
+  void haltAllProbing() {
+    cancelMassPing();
+    _autoPingTimer?.cancel();
+    _autoPingTimer = null;
+    ProbeLifecycle.I.haltAll();
   }
 
   void cancelMassPing() {

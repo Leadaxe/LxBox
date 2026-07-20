@@ -1,6 +1,7 @@
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import 'builder/if_engine.dart';
+import 'builder/post_steps.dart' show presetDnsEnableVar;
 import 'settings_storage.dart';
 
 /// §232+§266 — декларативный side-effect `on_change` для ПРЕСЕТОВ.
@@ -51,7 +52,8 @@ Future<void> applyPresetOnChange(
   final ns = <String, String>{
     ...userVars,
     'rule_enable': cr.enabled ? 'true' : 'false',
-    'dns_enable': _dnsEnableValue(preset, cr) ? 'true' : 'false',
+    // §297 — единый предикат с билдером (был дубль `_dnsEnableValue`).
+    'dns_enable': presetDnsEnableVar(cr, preset) ? 'true' : 'false',
   };
 
   // WizardVar-ноды для коэрсинга типов резолвером (bool). Собираем из
@@ -68,23 +70,3 @@ Future<void> applyPresetOnChange(
   }
 }
 
-/// §257-паритет: значение магической `dns_enable` пресета. Дублирует
-/// `presetDnsEnableVar` (builder/post_steps) без импорта части-файла билдера.
-bool _dnsEnableValue(SelectableRule preset, CustomRulePreset cr) {
-  WizardVar? declared;
-  for (final v in preset.vars) {
-    if (v.name == 'dns_enable') {
-      declared = v;
-      break;
-    }
-  }
-  if (declared == null) return true; // нет var → DNS всегда on
-  // §265 — dns_enable как ref: значение в userVars, не varsValues. Здесь
-  // namespace on_change уже содержит dns_enable из этой же функции, поэтому
-  // ref-случай ловим на default (defensive: dns_enable сейчас обычная var).
-  if (declared.isRef) return true;
-  final explicit = cr.varsValues['dns_enable'];
-  if (explicit != null && explicit.isNotEmpty) return explicit == 'true';
-  final def = declared.defaultValue;
-  return def.isEmpty || def == 'true';
-}

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../services/url_launcher.dart' as ul;
+import '../services/l10n/locale_controller.dart';
 
 /// §051 — shared explainer dialog для Wi-Fi-related permissions.
 ///
 /// Single source of truth для двух точек вызова:
 /// - `BoxService` → `stopAndAlert("alert:permission_location:...")` →
-///   `HomeScreen._handleStatusEvent` парсит prefix и зовёт этот dialog.
+///   HomeController парсит wire-строку в `StopPermissionLocation` (§279),
+///   `HomeScreen._onControllerChange` зовёт этот dialog по typed-значению.
 /// - `Settings → Background → System setup` row tap (Location / Nearby Wi-Fi):
 ///   когда permission denied, dialog объясняет зачем нужно + предлагает
 ///   runtime prompt для NEARBY_WIFI_DEVICES или Settings link для
@@ -59,12 +61,12 @@ class WifiPermissionDialog {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog.adaptive(
-        title: const Text('Wi-Fi rules need permissions'),
+        title: Text(getLocalText.s("Wi-Fi rules need permissions")),
         content: SingleChildScrollView(child: Text(body.toString())),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
+            child: Text(getLocalText.s("Cancel")),
           ),
           if (needsNearby)
             TextButton(
@@ -72,14 +74,14 @@ class WifiPermissionDialog {
                 Navigator.of(ctx).pop();
                 await ul.UrlLauncher.requestNearbyWifiPermission();
               },
-              child: const Text('Allow Wi-Fi info'),
+              child: Text(getLocalText.s("Allow Wi-Fi info")),
             ),
           FilledButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
               await ul.UrlLauncher.openAppSettings();
             },
-            child: const Text('Open Settings'),
+            child: Text(getLocalText.s("Open Settings")),
           ),
         ],
       ),

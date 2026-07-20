@@ -4,10 +4,14 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/error_humanize.dart';
 
+// §279 Phase 4 — humanizeError возвращает UiMsg; тесты ассертят английский
+// рендер (renderEn).
+String hum(Object e) => humanizeError(e).renderEn();
+
 void main() {
   group('humanizeError (night T2-2)', () {
     test('SocketException → "No connection"', () {
-      final msg = humanizeError(
+      final msg = hum(
         const SocketException('x', address: null),
       );
       expect(msg, contains('No connection'));
@@ -20,19 +24,19 @@ void main() {
       const e = SocketException(
         "Failed host lookup: 'api.example.com'",
       );
-      final msg = humanizeError(e);
+      final msg = hum(e);
       expect(msg, contains('No connection to api.example.com'));
     });
 
     test('TimeoutException → timeout phrasing', () {
-      final msg = humanizeError(TimeoutException('x'));
+      final msg = hum(TimeoutException('x'));
       expect(msg.toLowerCase(), contains('time'));
     });
 
     test('TimeoutException with duration → includes seconds', () {
       // regression: doc обещал "Timed out after N seconds" — раньше код
       // всегда отдавал generic, теперь подставляет duration.
-      final msg = humanizeError(
+      final msg = hum(
         TimeoutException('x', const Duration(seconds: 30)),
       );
       expect(msg, contains('30s'));
@@ -40,40 +44,40 @@ void main() {
     });
 
     test('TimeoutException without duration → generic timeout phrasing', () {
-      final msg = humanizeError(TimeoutException('x'));
+      final msg = hum(TimeoutException('x'));
       expect(msg, isNot(contains('0s')));
       expect(msg.toLowerCase(), contains('timed out'));
     });
 
     test('HttpException with 401 → access denied hint', () {
-      final msg = humanizeError(const HttpException('HTTP 401 for http://x'));
+      final msg = hum(const HttpException('HTTP 401 for http://x'));
       expect(msg, contains('Access denied'));
       expect(msg, contains('401'));
     });
 
     test('HttpException with 404 → removed hint', () {
-      final msg = humanizeError(const HttpException('HTTP 404 for http://x'));
+      final msg = hum(const HttpException('HTTP 404 for http://x'));
       expect(msg, contains('Not found'));
     });
 
     test('HttpException with 503 → server down hint', () {
-      final msg = humanizeError(const HttpException('HTTP 503 for http://x'));
+      final msg = hum(const HttpException('HTTP 503 for http://x'));
       expect(msg.toLowerCase(), contains('server error'));
     });
 
     test('FormatException → parse error', () {
-      final msg = humanizeError(const FormatException('bad'));
+      final msg = hum(const FormatException('bad'));
       expect(msg, contains('parse'));
     });
 
     test('plain Exception → strips "Exception: " prefix', () {
-      final msg = humanizeError(Exception('something went wrong'));
+      final msg = hum(Exception('something went wrong'));
       expect(msg, 'something went wrong');
     });
 
     test('long message truncated to ≤140 chars', () {
       final long = 'a' * 300;
-      final msg = humanizeError(Exception(long));
+      final msg = hum(Exception(long));
       expect(msg.length, lessThanOrEqualTo(140));
       expect(msg, endsWith('...'));
     });

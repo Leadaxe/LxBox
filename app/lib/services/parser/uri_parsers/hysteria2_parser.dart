@@ -2,6 +2,7 @@ import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/tls_spec.dart';
 import '../uri_utils.dart';
+import '../utls_fingerprint.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Hysteria2
@@ -35,15 +36,20 @@ Hysteria2Spec? parseHysteria2(String uri) {
       ? const <String>[]
       : q['alpn']!.split(',').map((e) => e.trim()).toList();
 
-  final tls = TlsSpec(
-    enabled: true,
-    serverName: sni,
-    fingerprint: fp.isEmpty ? null : fp,
-    insecure: isTlsInsecure(q),
-    alpn: alpn,
+  final warnings = <NodeWarning>[];
+  // §281 — fp вне словаря ядра = fatal всего конфига (hysteria2 идёт через
+  // тот же tls.NewClient ядра); канонизируем на входе.
+  final tls = normalizeTlsFingerprint(
+    TlsSpec(
+      enabled: true,
+      serverName: sni,
+      fingerprint: fp.isEmpty ? null : fp,
+      insecure: isTlsInsecure(q),
+      alpn: alpn,
+    ),
+    warnings,
   );
 
-  final warnings = <NodeWarning>[];
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
   // §084 H3: bandwidth hint'ы для round-trip с toUriHysteria2.

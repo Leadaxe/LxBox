@@ -254,6 +254,17 @@ void main() {
       expect(us, ['🇺🇸 NYC']);
     });
 
+    test('§301 — nodeFilter регистронезависим: фильтр в другом регистре, '
+        'чем теги, всё равно матчит (раньше — пустой набор)', () async {
+      final outs = await build([
+        // теги: `🇩🇪 Berlin`, `🇺🇸 NYC` — фильтр нарочно в другом регистре.
+        const Channel(tag: 'vpn-1', label: 'lower', nodeFilter: 'berlin'),
+        const Channel(tag: 'vpn-2', label: 'lower', nodeFilter: 'nyc'),
+      ]);
+      expect((byTag(outs, 'vpn-1')['outbounds'] as List), ['🇩🇪 Berlin']);
+      expect((byTag(outs, 'vpn-2')['outbounds'] as List), ['🇺🇸 NYC']);
+    });
+
     test('пустой nodeFilter → все ноды', () async {
       final outs = await build([
         const Channel(tag: 'vpn-1', label: 'all'),
@@ -362,6 +373,14 @@ void main() {
     test('defaultFilter → первая matched нода как default', () async {
       final outs = await build([
         const Channel(tag: 'vpn-1', label: 'X', defaultFilter: 'Premium'),
+      ]);
+      expect(byTag(outs, 'vpn-1')['default'], '🇩🇪 Premium');
+    });
+
+    test('§301 — defaultFilter регистронезависим (тег `Premium`, фильтр '
+        '`premium`)', () async {
+      final outs = await build([
+        const Channel(tag: 'vpn-1', label: 'X', defaultFilter: 'premium'),
       ]);
       expect(byTag(outs, 'vpn-1')['default'], '🇩🇪 Premium');
     });

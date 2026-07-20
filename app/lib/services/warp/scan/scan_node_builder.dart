@@ -1,0 +1,92 @@
+// §284 — сборка узла-кандидата (URI) из WARP-аккаунта. Одна регистрация →
+// множество узлов на разных IP:port/SNI/протоколе/приманке. Креды (ключи,
+// client_id, server-pubkey) переиспользуются: у Cloudflare они привязаны к
+// аккаунту устройства, а не к конкретному data-plane IP.
+//
+// Тег узла (заголовок в списке) = [ScanCandidate.nodeTitle], проносится через
+// фрагмент URI: для MASQUE — `#<label>` напрямую; для WG (.conf/INI) — через
+// `nameHint` парсера, который кладёт его во фрагмент.
+
+import '../../parser/ini_parser.dart';
+import '../masque_account.dart';
+import '../masquerade_params.dart';
+import '../warp_account.dart';
+import '../warp_client.dart';
+import 'scan_models.dart';
+
+/// Строит `wireguard://`/`masque://` URI (с тегом-заголовком) для кандидата.
+/// Возвращает null, если для протокола нет аккаунта или сборка/парс не удались.
+class ScanNodeBuilder {
+  ScanNodeBuilder({this.warp, this.masque});
+
+  final WarpAccount? warp;
+  final MasqueAccount? masque;
+
+  String? uriFor(ScanCandidate c) {
+    switch (c.protocol) {
+      case ScanProtocol.awg:
+        return _wgUri(c);
+      case ScanProtocol.masqueH3:
+      case ScanProtocol.masqueH2:
+        return _masqueUri(c);
+    }
+  }
+
+  /// AWG-узел: аккаунт с подменённым endpoint + обфускация (masquerade `ip`
+  /// приманки + `id`=SNI). `.conf` → `parseWireguardIni(nameHint: nodeTitle)`
+  /// → канонический `wireguard://…#nodeTitle`.
+  String? _wgUri(ScanCandidate c) {
+    final acc = warp;
+    if (acc == null) return null;
+    final p = c.awgParams;
+    final awg = WarpClient.buildAmneziaAwg(QuicParams(
+      sni: c.sni,
+      ip: p?.ip ?? 'quic',
+      jc: p?.jc ?? 4,
+      jmin: p?.jmin ?? 40,
+      jmax: p?.jmax ?? 70,
+    ));
+    final tuned = acc.copyWith(endpoint: c.endpoint, awg: awg);
+    // reserved опускаем: рабочие AWG-конфиги идут без client_id (§142).
+    final spec = parseWireguardIni(
+      tuned.toWireguardConf(includeReserved: false),
+      nameHint: c.nodeTitle,
+    );
+    return spec?.toUri();
+  }
+
+  /// MASQUE-узел: те же креды, network (h3/h2) + SNI из кандидата.
+  ///
+  /// ВАЖНО (device-verified): **h3 (QUIC) поднимается ТОЛЬКО на стандартном
+  /// MASQUE-сервере**, который CF отдал при регистрации (`acc.server`). На
+  /// случайном IP блока h3 даёт `CRYPTO_ERROR ... x509: algorithm unimplemented`.
+  /// **h2 (TCP-TLS) стабильно работает на всём блоке `162.159.198.*`** (проверено
+  /// на устройстве) — ограничения по IP нет, поэтому ему даём случайный IP
+  /// кандидата (разнообразие endpoint). server/port нет в copyWith —
+  /// пересобираем аккаунт.
+  String? _masqueUri(ScanCandidate c) {
+    final acc = masque;
+    if (acc == null) return null;
+    final isH3 = c.protocol == ScanProtocol.masqueH3;
+    final tuned = MasqueAccount(
+      privKeyDer: acc.privKeyDer,
+      serverPubDer: acc.serverPubDer,
+      clientV4: acc.clientV4,
+      clientV6: acc.clientV6,
+      // h3 — только стандартный сервер из реги; h2 — случайный IP кандидата.
+      server: isH3 ? acc.server : c.ip,
+      port: isH3 ? acc.port : c.port,
+      deviceId: acc.deviceId,
+      token: acc.token,
+      createdAt: acc.createdAt,
+      network: isH3 ? 'h3' : 'h2',
+      sni: c.sni,
+      idleTimeout: acc.idleTimeout,
+      keepAlive: acc.keepAlive,
+    );
+    final uri = tuned.toMasqueUri();
+    final hash = uri.lastIndexOf('#');
+    final base = hash < 0 ? uri : uri.substring(0, hash);
+    return '$base#${Uri.encodeComponent(c.nodeTitle)}';
+  }
+}

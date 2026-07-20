@@ -1,6 +1,7 @@
 import '../../config/consts.dart';
 import '../../models/emit_context.dart';
 import '../../models/server_list.dart';
+import '../node_hash.dart';
 import '../tag_resolver.dart';
 
 /// Сборка одной подписки в контекст `EmitContext`.
@@ -23,8 +24,23 @@ extension ServerListBuild on ServerList {
       _ => null,
     };
 
+    // §283 — per-node disable подписки: выключенная нода видна в UI (с
+    // toggle), но в конфиг не эмитится. Ключ — identity-хеш сути узла
+    // (переживает refresh и переименования, см. node_hash.dart). Папки
+    // фильтруют members по enabled в конструкторе модели; у подписки nodes
+    // нужен UI полным — поэтому фильтр здесь, в билдере.
+    final disabledHashes = switch (this) {
+      final SubscriptionServers s when s.disabledHashes.isNotEmpty =>
+        s.disabledHashes,
+      _ => null,
+    };
+
     for (var i = 0; i < nodes.length; i++) {
       final server = nodes[i];
+      if (disabledHashes != null &&
+          disabledHashes.containsKey(nodeIdentityHash(server))) {
+        continue;
+      }
       final policy =
           plan == null ? detourPolicy : plan.policyFor(i, detourPolicy);
 

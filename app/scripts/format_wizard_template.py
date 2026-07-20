@@ -328,6 +328,8 @@ def format_template(data: dict[str, Any]) -> str:
     sections = data["sections"]
     for si, sec in enumerate(sections):
         out.append(pad(2) + "{")
+        if "id" in sec:  # §279 — stable machine-id (l10n overlay address)
+            out.append(pad(3) + f'"id": {json.dumps(sec["id"], ensure_ascii=False)},')
         out.append(pad(3) + f'"name": {json.dumps(sec["name"], ensure_ascii=False)},')
         out.append(pad(3) + f'"chapter": {json.dumps(sec["chapter"], ensure_ascii=False)},')
         out.append(pad(3) + f'"description": {json.dumps(sec["description"], ensure_ascii=False)},')

@@ -40,3 +40,6 @@ docs/night-reports/
 
 # §097 — local sing-box-lx core AAR (dev-only, not committed)
 app/android/app/libs/
+
+# Отладочные логи probe/e2e (случайно закоммичены в §285, удалены)
+*.log

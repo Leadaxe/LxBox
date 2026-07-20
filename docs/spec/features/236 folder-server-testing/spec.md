@@ -1,5 +1,15 @@
 # §236 — Test servers в папке (headless probe + пороги + массовые действия)
 
+> **UPDATE (19.07.2026) — тест гейтится при активном VPN.** Ветка «тест через
+> боевое ядро» (VPN-on) выпилена: замер шёл бы поверх активного детура/цепочки
+> боевого конфига, а не по чистой ноде, а выключенные члены выпадали из конфига
+> (вводило в заблуждение). Теперь при живом туннеле тест **не запускается** —
+> попап-гейт «VPN is running» с кнопкой **Stop VPN** (блокирующий `stopVPN`,
+> затем авто-прогон). Вердикт `notInConfig`/бейдж «not tested (off)»/сводка
+> «N not tested» удалены. Гейт — в UI (`getVpnStatus` до `run()`); гонку
+> (VPN стартовал между проверкой и `probeStart`) ловит маркер `kProbeVpnRunning`
+> из раннера → тот же попап. См. таблицу режимов и UI ниже.
+>
 > **СТАТУС: РЕАЛИЗОВАНО, device-verified** (04.07.2026, CPH2411 dev.14).
 > Device-прогон папки «test» (VPN off, 14 нод): 10 ok (VLESS 97мс, AWG
 > 49–135мс, plain WARP 80мс, MASQUE «in» 189мс) / 4 failed (MASQUE QUIC
@@ -30,9 +40,12 @@ per-member toggle/delete уже есть.
 | Состояние VPN | Механика | Кто тестируется |
 |---|---|---|
 | **Выключен** | probe-сессия: временный `CommandServer` (без tun) + probe-конфиг | **все** члены папки, включая выключенных |
-| **Запущен** | существующий `ccUrlTestOutbound` через боевое ядро | только включённые (они в конфиге); выключенные → вердикт `enable to test` |
+| **Запущен** | тест недоступен → попап-гейт «VPN is running» (кнопка Stop VPN) | никто (пока не остановлен VPN) |
 
-Тест при запущенном VPN честный: outbound-dial ядра protected → мимо tun.
+Ранее (до 19.07.2026) при запущенном VPN тест шёл через боевое ядро
+(`ccUrlTestOutbound`). Убрано: замер поверх активного детура/цепочки ≠ чистая
+нода, выключенные члены вне конфига. Гейт до старта — источник истины
+`getVpnStatus()`; страховка от гонки — маркер `kProbeVpnRunning` из раннера.
 
 ### Probe-сессия (native, VPN выключен)
 
@@ -86,9 +99,11 @@ stop():
     панель фильтра: **regex + протокол-чипы** (виджеты §048/§095 главного);
     при активном фильтре drag-reorder выключен (индексы вида ≠ состава).
 - У каждого члена — бейдж по мере результатов: `123 ms` цветом шкалы, `err`
-  (красный, **тап по бейджу — текст ошибки**), `broken`, `not tested (off)`.
-- **VPN запущен + есть выключенные члены → попап** после теста: «N disabled
-  server(s) were not tested … Stop VPN and run the test again».
+  (красный, **тап по бейджу — текст ошибки**), `broken`, `invalid`.
+- **VPN запущен → попап-гейт до старта** (не после): «VPN is running — тесту
+  нужна собственная сессия ядра, она не уживается с активным туннелем». Кнопки
+  **Stop VPN** (блокирующий `stopVPN` → авто-прогон) и **Cancel**. Тест
+  стартует только при `disconnected`.
 - **Цветовая шкала** (пороги — настройка, дефолты NeoCat):
   зелёный ≤ 250 < жёлтый ≤ 500 < оранжевый ≤ 700 < красный. Хранение —
   `vars.probe_ms_green/yellow/orange` (в `_appFeatureFlagVars` → переживают
@@ -116,9 +131,9 @@ stop():
 | native | `VpnPlugin.kt` | кейсы probeStart/probeUrlTest/probeStop |
 | native | `BoxService.kt` | стоп probe перед стартом VPN |
 | dart | `services/probe/probe_config.dart` (новый) | мини-билдер конфига |
-| dart | `services/probe/probe_runner.dart` (новый) | пул, вердикты, отмена; ветка VPN-on → ccUrlTestOutbound |
+| dart | `services/probe/probe_runner.dart` (новый) | пул, вердикты, отмена; VPN-on → маркер `kProbeVpnRunning` (боевая ветка выпилена 19.07) |
 | dart | `vpn/cc_channel.dart` | probe-методы MethodChannel |
-| ui | `folder_detail_screen.dart` | кнопка/бейджи/шкала/массовые действия/диалог порогов |
+| ui | `folder_detail_screen.dart` | кнопка/бейджи/шкала/массовые действия/диалог порогов; **VPN-гейт-попап (Stop VPN)** |
 | storage | `vars` | probe_ms_green/yellow/orange (defaults 250/500/700) |
 | тесты | `test/probe/` | probe-конфиг (все enabled, broken исключён, dns/resolver), классификация порогов, bulk-действия, ветка вердиктов |
 

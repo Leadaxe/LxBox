@@ -379,8 +379,10 @@ void main() {
   });
 
   group('CustomRule.summary', () {
+    // summary рендерит через getLocalText (в тестах — fallback на английский
+    // ключ: dict не загружен, плюрал печатается из самого ключа).
     test('пустой inline → empty', () {
-      expect(CustomRuleInline(name: 'x').summary, '');
+      expect(CustomRuleInline(name: 'x').summary(), '');
     });
 
     test('inline с полями → разделённый dot', () {
@@ -389,8 +391,8 @@ void main() {
         domainSuffixes: ['a', 'b'],
         ports: ['443'],
         protocols: ['tls'],
-      ).summary;
-      expect(s, contains('2 suffix'));
+      ).summary();
+      expect(s, contains('2 suffixes'));
       expect(s, contains('1 port'));
       expect(s, contains('1 proto'));
     });
@@ -399,7 +401,7 @@ void main() {
       final s = CustomRuleSrs(
         name: 'x',
         srsUrl: 'https://rules.example.com/geo.srs',
-      ).summary;
+      ).summary();
       expect(s, 'SRS: rules.example.com');
     });
   });

@@ -10,7 +10,9 @@ import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/normalize_pinned_presets.dart';
 import '../services/channel_mutations.dart';
+import '../services/l10n/template_aware_state.dart';
 import '../services/preset_on_change.dart';
+import '../services/rule_display_names.dart';
 import '../services/rule_set_downloader.dart';
 import '../services/selectable_to_custom.dart';
 import '../services/settings_storage.dart';
@@ -28,6 +30,7 @@ import 'routing_screen/widgets/routing_group_tile.dart';
 import 'routing_screen/widgets/routing_tabs.dart';
 import 'routing_screen/widgets/srs_status_button.dart';
 import 'tun_apps_tab.dart';
+import '../services/l10n/locale_controller.dart';
 
 part 'routing_screen/routing_srs_cache.dart';
 
@@ -59,7 +62,8 @@ class _RoutingScreenState extends State<RoutingScreen>
     with
         WidgetsBindingObserver,
         LazyPersistMixin<RoutingScreen>,
-        _RoutingSrsCacheMixin {
+        _RoutingSrsCacheMixin,
+        TemplateAwareState<RoutingScreen> {
   @override
   WizardTemplate? _template;
   @override
@@ -90,10 +94,23 @@ class _RoutingScreenState extends State<RoutingScreen>
   @override
   SubscriptionController get lazyController => widget.subController;
 
+  // §279 — загрузка стартует из onLocaleTemplateFetch (TemplateAwareState):
+  // первый вызов (до первого build) — полный _load(); смена локали — только
+  // refetch локализованного шаблона (буферы каналов/правил юзера не трогаем;
+  // live-label'ы пресетов и каталог перерендерятся из нового _template).
   @override
-  void initState() {
-    super.initState();
-    unawaited(_load().then((_) => _focusChannelIfAny()));
+  void onLocaleTemplateFetch({required bool first}) {
+    if (first) {
+      unawaited(_load().then((_) => _focusChannelIfAny()));
+    } else {
+      unawaited(_refetchTemplate());
+    }
+  }
+
+  Future<void> _refetchTemplate() async {
+    final template = await TemplateLoader.load();
+    if (!mounted) return;
+    setState(() => _template = template);
   }
 
   @override
@@ -163,7 +180,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Routing')),
+        appBar: AppBar(title: Text(getLocalText.s("Routing"))),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -177,15 +194,15 @@ class _RoutingScreenState extends State<RoutingScreen>
       initialIndex: widget.initialPresetsTab ? 1 : 0,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Routing'),
-          bottom: const TabBar(
+          title: Text(getLocalText.s("Routing")),
+          bottom: TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,
             tabs: [
-              Tab(text: 'Channels'),
-              Tab(text: 'Presets'),
-              Tab(text: 'Rules'),
-              Tab(text: 'Tunnel apps'),
+              Tab(text: getLocalText.s("Channels")),
+              Tab(text: getLocalText.s("Presets")),
+              Tab(text: getLocalText.s("Rules")),
+              Tab(text: getLocalText.s("Tunnel apps")),
             ],
           ),
         ),
@@ -270,7 +287,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       _markDirty();
     });
     // enable heal'ов не даёт (нулевые счётчики) — SnackBar молчит.
-    _notifyHealed(next, healed, ruleLead: 'disabled');
+    _notifyHealed(next, healed, ruleLead: getLocalText.s('disabled'));
   }
 
   /// §248 — heal мог переписать route_final / custom-rule outbounds в storage
@@ -298,14 +315,10 @@ class _RoutingScreenState extends State<RoutingScreen>
     if (healed.rules == 0 && healed.detours == 0) return;
     final label = channel.label.isNotEmpty ? channel.label : channel.tag;
     final lead = healed.rules > 0
-        ? 'Channel "$label" $ruleLead'
-        : 'Channel "$label" is no longer a detour target';
-    final parts = [
-      if (healed.rules > 0)
-        '${healed.rules} rule reference(s) switched to vpn-1',
-      if (healed.detours > 0)
-        '${healed.detours} detour reference(s) reset to None',
-    ];
+        ? getLocalText.s('Channel "%1\$s" %2\$s', label, ruleLead)
+        : getLocalText.s('Channel "%s" is no longer a detour target', label);
+    // §292 — части сообщения из единого форматтера (общий с node_list).
+    final parts = ChannelMutations.healMessageParts(healed);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('$lead — ${parts.join(', ')}.')),
     );
@@ -318,7 +331,8 @@ class _RoutingScreenState extends State<RoutingScreen>
     if (all.isEmpty) return -1;
     if (channel.nodeFilter.isEmpty) return all.length;
     try {
-      final re = RegExp(channel.nodeFilter);
+      // §301 — регистронезависимо, как основное окно и билдер.
+      final re = RegExp(channel.nodeFilter, caseSensitive: false);
       return all.where(re.hasMatch).length;
     } catch (_) {
       return all.length; // невалидный regex → все ноды (как в билдере)
@@ -373,7 +387,7 @@ class _RoutingScreenState extends State<RoutingScreen>
         _invalidateOutboundOptions();
       });
       _markDirty();
-      _notifyHealed(channel, healed, ruleLead: 'deleted');
+      _notifyHealed(channel, healed, ruleLead: getLocalText.s('deleted'));
     } else if (result.saved != null) {
       final saved = result.saved!;
       // §202/§248/§274 — persist канала: disable лечит оба рода ссылок,
@@ -393,12 +407,12 @@ class _RoutingScreenState extends State<RoutingScreen>
       // heal-триггер: detour-флаг — разрешение, канал остаётся целью
       // правил). ruleLead поэтому один; detours-часть (flag-unset) свою
       // вводную берёт в _notifyHealed.
-      _notifyHealed(saved, healed, ruleLead: 'disabled');
+      _notifyHealed(saved, healed, ruleLead: getLocalText.s('disabled'));
     }
     // §125 — обновить tag→label кеш для home-dropdown (label мог измениться,
     // канал мог удалиться). stageChanges уже застейджила channels; здесь только
     // освежаем labels в HomeState. Persist канала — flushToDisk на dispose.
-    await SettingsStorage.setChannels(_channels, flush: true);
+    await ChannelMutations.bulkReplace(_channels, flush: true);
     await widget.homeController.refreshChannelLabels();
   }
 
@@ -449,8 +463,8 @@ class _RoutingScreenState extends State<RoutingScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(needsSrs
-            ? 'Added "${rule.label}" — tap ☁ to download, then enable'
-            : 'Added "${rule.label}" to Rules'),
+            ? getLocalText.s("Added \"%s\" — tap ☁ to download, then enable", rule.label)
+            : getLocalText.s("Added \"%s\" to Rules", rule.label)),
       ),
     );
   }
@@ -544,6 +558,9 @@ class _RoutingScreenState extends State<RoutingScreen>
     return CustomRuleTile(
       index: index,
       rule: rule,
+      // §279 (§3.5.1) — live display-имя: label пресета из локализованного
+      // шаблона + порядковый суффикс копий; fallback — сохранённый снапшот.
+      displayName: ruleDisplayName(rule, _customRules, _template),
       options: options,
       subtitle: subtitle,
       pickerValue: pickerValue,
@@ -666,7 +683,8 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   Future<void> _confirmDeleteCustomRule(int index) async {
     final rule = _customRules[index];
-    final ok = await showDeleteCustomRuleDialog(context, rule);
+    final ok = await showDeleteCustomRuleDialog(context, rule,
+        displayName: ruleDisplayName(rule, _customRules, _template));
     if (ok != true || !mounted) return;
     setState(() {
       _customRules.removeAt(index);
@@ -701,7 +719,9 @@ class _RoutingScreenState extends State<RoutingScreen>
       outboundOptions: _outboundOptions()
           .map((o) => OutboundOption(value: o.tag, label: o.label))
           .toList(),
-      existingNames: _customRules.map((r) => r.name).toSet(),
+      // §279 — дедуп по ВИДИМЫМ именам: inline-правило не может взять
+      // live-label пресета (display-резолв + снапшоты).
+      existingNames: visibleRuleNames(_customRules, _template),
     );
     if (result == null) return;
     if (result.wasDeleted) return; // нечего удалять — только что создали
@@ -717,10 +737,9 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   Future<void> _openCustomRuleEditor(int index) async {
     final current = _customRules[index];
-    final existing = _customRules
-        .where((r) => r.id != current.id)
-        .map((r) => r.name)
-        .toSet();
+    // §279 — дедуп по видимым именам (live-label'ы пресетов + снапшоты).
+    final existing =
+        visibleRuleNames(_customRules, _template, excludeId: current.id);
     final result = await openCustomRuleEditor(
       context,
       initial: current,
@@ -730,6 +749,11 @@ class _RoutingScreenState extends State<RoutingScreen>
       existingNames: existing,
       preset: current.kind == CustomRuleKind.preset
           ? _presetFor(current.presetId)
+          : null,
+      // §279 — display-имя для read-only Name-поля preset-ветки редактора
+      // (live-label + порядковый суффикс копии).
+      displayName: current.kind == CustomRuleKind.preset
+          ? ruleDisplayName(current, _customRules, _template)
           : null,
     );
     if (result == null || !mounted) return;
@@ -833,5 +857,6 @@ class _RoutingScreenState extends State<RoutingScreen>
       RoutingHelpers.ruleSubtitle(rule, preset);
 
   String _uniqueCustomRuleName(String requested, String selfId) =>
-      RoutingHelpers.uniqueCustomRuleName(requested, selfId, _customRules);
+      RoutingHelpers.uniqueCustomRuleName(
+          requested, selfId, _customRules, _template);
 }

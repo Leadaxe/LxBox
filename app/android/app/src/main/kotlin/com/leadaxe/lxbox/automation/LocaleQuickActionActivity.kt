@@ -3,6 +3,8 @@ package com.leadaxe.lxbox.automation
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import com.leadaxe.lxbox.R
+import com.leadaxe.lxbox.vpn.L10n
 
 /// §047 Шаг 2 — headless edit-Activity для частых команд (Start / Stop /
 /// Toggle). Host (Tasker / MacroDroid) показывает их **отдельными строками** в
@@ -16,11 +18,15 @@ import android.os.Bundle
 class LocaleQuickActionActivity : Activity() {
 
     companion object {
-        /// alias FQN → (cmd, blurb). Alias'ы объявлены в манифесте.
+        /// alias FQN → (cmd, blurb-resource). Alias'ы объявлены в манифесте.
+        /// §279 — cmd = wire, блёрб display-only (host матчит по extras).
         private val ALIAS_CMD = mapOf(
-            "com.leadaxe.lxbox.automation.LocaleStartAlias" to ("start-vpn" to "Start VPN"),
-            "com.leadaxe.lxbox.automation.LocaleStopAlias" to ("stop-vpn" to "Stop VPN"),
-            "com.leadaxe.lxbox.automation.LocaleToggleAlias" to ("toggle-vpn" to "Toggle VPN"),
+            "com.leadaxe.lxbox.automation.LocaleStartAlias" to
+                ("start-vpn" to R.string.automation_blurb_start),
+            "com.leadaxe.lxbox.automation.LocaleStopAlias" to
+                ("stop-vpn" to R.string.automation_blurb_stop),
+            "com.leadaxe.lxbox.automation.LocaleToggleAlias" to
+                ("toggle-vpn" to R.string.automation_blurb_toggle),
         )
     }
 
@@ -28,8 +34,10 @@ class LocaleQuickActionActivity : Activity() {
         super.onCreate(savedInstanceState)
         // Имя alias'а, через который host нас открыл.
         val alias = intent.component?.className
-        val entry = ALIAS_CMD[alias] ?: ("toggle-vpn" to "Toggle VPN")
-        val (cmd, blurb) = entry
+        val entry = ALIAS_CMD[alias]
+            ?: ("toggle-vpn" to R.string.automation_blurb_toggle)
+        val (cmd, blurbRes) = entry
+        val blurb = L10n.str(this, blurbRes)
 
         val data = Intent().apply {
             putExtra(

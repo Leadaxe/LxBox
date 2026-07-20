@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../screens/app_settings_screen.dart';
 import '../vpn/box_vpn_client.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// Banner showing «DNS / router events off» when «Forward sing-box logs»
 /// (Diagnostics → §043) is disabled. Used in tabs that depend on core logs
@@ -101,7 +102,7 @@ class _CoreLogsHintBannerState extends State<CoreLogsHintBanner>
                   Icon(Icons.info_outline,
                       size: 14, color: cs.onSurfaceVariant),
                   const SizedBox(width: 8),
-                  Text('DNS / router events off', style: textStyle),
+                  Text(getLocalText.s("DNS / router events off"), style: textStyle),
                 ],
               ),
             ),
@@ -115,7 +116,7 @@ class _CoreLogsHintBannerState extends State<CoreLogsHintBanner>
                   children: [
                     Expanded(
                       child: Text(
-                        "— turn on 'Forward sing-box logs'",
+                        getLocalText.s("— turn on 'Forward sing-box logs'"),
                         style: textStyle,
                         overflow: TextOverflow.ellipsis,
                       ),

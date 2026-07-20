@@ -12,6 +12,7 @@ import '../models/tls_spec.dart';
 import '../services/parser/uri_utils.dart' show newUuidV4;
 import '../services/ui_helpers.dart';
 import '../widgets/emoji_picker_button.dart';
+import '../services/l10n/locale_controller.dart';
 
 // SocksSpec.emit() требует TemplateVars — для wizard-created SOCKS5 без
 // substitution используем пустые. Это match'ит manual UserServer pattern
@@ -139,7 +140,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     // проверка returns раньше чем мы упрёмся в SocksSpec assertion'ы.
     final port = int.tryParse(_socksPort.text.trim()) ?? 0;
     if (port < 1 || port > 65535) {
-      showSnack('Invalid port');
+      showSnack(getLocalText.s("Invalid port"));
       return;
     }
     final user = _socksUser.text;
@@ -190,7 +191,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     final host = _httpHost.text.trim();
     final port = int.tryParse(_httpPort.text.trim()) ?? 0;
     if (port < 1 || port > 65535) {
-      showSnack('Invalid port');
+      showSnack(getLocalText.s("Invalid port"));
       return;
     }
 
@@ -228,7 +229,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   Future<void> _submitInput(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) {
-      showSnack('Input is empty');
+      showSnack(getLocalText.s("Input is empty"));
       return;
     }
     await widget.subController.addFromInput(trimmed);
@@ -246,15 +247,15 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   Future<void> _afterAdd({String? addedTag}) async {
     if (!mounted) return;
     final err = widget.subController.lastError;
-    if (err.isNotEmpty) {
-      showSnack(err);
+    if (err != null) {
+      showSnack(err.render());
       return;
     }
     await widget.onAdded();
     if (!mounted) return;
     final msg = addedTag != null && addedTag.isNotEmpty
-        ? 'Added: $addedTag'
-        : 'Added';
+        ? getLocalText.s("Added: %s", addedTag)
+        : getLocalText.s("Added");
     showSnack(msg);
     Navigator.of(context).pop();
   }
@@ -265,17 +266,17 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add server'),
+        title: Text(getLocalText.s("Add server")),
         actions: [
           TextButton(
             onPressed: _busy ? null : () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text(getLocalText.s("Cancel")),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: FilledButton(
               onPressed: _busy ? null : _submit,
-              child: const Text('Add'),
+              child: Text(getLocalText.s("Add")),
             ),
           ),
         ],
@@ -283,11 +284,11 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           controller: _tab,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          tabs: const [
-            Tab(text: 'SOCKS5'),
-            Tab(text: 'HTTP'),
-            Tab(text: 'Paste URI'),
-            Tab(text: 'Paste JSON'),
+          tabs: [
+            Tab(text: getLocalText.s("SOCKS5")),
+            Tab(text: getLocalText.s("HTTP")),
+            Tab(text: getLocalText.s("Paste URI")),
+            Tab(text: getLocalText.s("Paste JSON")),
           ],
         ),
       ),
@@ -329,7 +330,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           children: [
             // §243 — tag = заголовок записи; поле опционально (пусто →
             // дефолтный tag). Отдельного «Display name» больше нет.
-            _label('Tag (optional)'),
+            _label(getLocalText.s("Tag (optional)")),
             TextFormField(
               controller: _socksTag,
               decoration: _input(_kDefaultSocksTag).copyWith(
@@ -338,23 +339,23 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              'Shown as the server title in the Servers list. If empty, '
-              '"$_kDefaultSocksTag" is used.',
+              getLocalText.s("Shown as the server title in the Servers list. If empty, \"%s\" is used.", _kDefaultSocksTag),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
             const SizedBox(height: 12),
-            _label('Host'),
+            _label(getLocalText.s("Host")),
             TextFormField(
               controller: _socksHost,
               decoration: _input('127.0.0.1'),
               keyboardType: TextInputType.url,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Host required' : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? getLocalText.s("Host required")
+                  : null,
             ),
             const SizedBox(height: 12),
-            _label('Port'),
+            _label(getLocalText.s("Port")),
             TextFormField(
               controller: _socksPort,
               decoration: _input('1080'),
@@ -362,18 +363,20 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               validator: (v) {
                 final n = int.tryParse((v ?? '').trim());
-                if (n == null || n < 1 || n > 65535) return 'Port 1..65535';
+                if (n == null || n < 1 || n > 65535) {
+                  return getLocalText.s("Port 1..65535");
+                }
                 return null;
               },
             ),
             const SizedBox(height: 12),
-            _label('Username (optional)'),
+            _label(getLocalText.s("Username (optional)")),
             TextFormField(
               controller: _socksUser,
               decoration: _input(''),
             ),
             const SizedBox(height: 12),
-            _label('Password (optional)'),
+            _label(getLocalText.s("Password (optional)")),
             TextFormField(
               controller: _socksPass,
               decoration: _input(''),
@@ -411,7 +414,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           children: [
             // §243 — tag = заголовок записи; поле опционально (пусто →
             // дефолтный tag). Отдельного «Display name» больше нет.
-            _label('Tag (optional)'),
+            _label(getLocalText.s("Tag (optional)")),
             TextFormField(
               controller: _httpTag,
               decoration: _input(_kDefaultHttpTag).copyWith(
@@ -420,23 +423,23 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              'Shown as the server title in the Servers list. If empty, '
-              '"$_kDefaultHttpTag" is used.',
+              getLocalText.s("Shown as the server title in the Servers list. If empty, \"%s\" is used.", _kDefaultHttpTag),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
             const SizedBox(height: 12),
-            _label('Host'),
+            _label(getLocalText.s("Host")),
             TextFormField(
               controller: _httpHost,
               decoration: _input('127.0.0.1'),
               keyboardType: TextInputType.url,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Host required' : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? getLocalText.s("Host required")
+                  : null,
             ),
             const SizedBox(height: 12),
-            _label('Port'),
+            _label(getLocalText.s("Port")),
             TextFormField(
               controller: _httpPort,
               decoration: _input('8080'),
@@ -444,18 +447,20 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               validator: (v) {
                 final n = int.tryParse((v ?? '').trim());
-                if (n == null || n < 1 || n > 65535) return 'Port 1..65535';
+                if (n == null || n < 1 || n > 65535) {
+                  return getLocalText.s("Port 1..65535");
+                }
                 return null;
               },
             ),
             const SizedBox(height: 12),
-            _label('Username (optional)'),
+            _label(getLocalText.s("Username (optional)")),
             TextFormField(
               controller: _httpUser,
               decoration: _input(''),
             ),
             const SizedBox(height: 12),
-            _label('Password (optional)'),
+            _label(getLocalText.s("Password (optional)")),
             TextFormField(
               controller: _httpPass,
               decoration: _input(''),
@@ -464,10 +469,8 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             const SizedBox(height: 12),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('HTTPS (TLS to proxy)'),
-              subtitle: const Text(
-                  'Connect to the proxy over TLS. Advanced TLS options '
-                  '(SNI, ALPN) can be edited later via node JSON.'),
+              title: Text(getLocalText.s("HTTPS (TLS to proxy)")),
+              subtitle: Text(getLocalText.s("Connect to the proxy over TLS. Advanced TLS options (SNI, ALPN) can be edited later via node JSON.")),
               value: _httpTls,
               onChanged: (v) => setState(() => _httpTls = v),
             ),
@@ -483,7 +486,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _label('Paste a proxy URL'),
+          _label(getLocalText.s("Paste a proxy URL")),
           Expanded(
             child: TextField(
               controller: _uriCtrl,
@@ -497,7 +500,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            'Supported: vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard URLs',
+            getLocalText.s("Supported: vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard URLs"),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -513,7 +516,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _label('Paste a sing-box outbound JSON'),
+          _label(getLocalText.s("Paste a sing-box outbound JSON")),
           Expanded(
             child: TextField(
               controller: _jsonCtrl,
@@ -526,7 +529,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            'Single object or array of outbounds. WireGuard routes to endpoints[] automatically.',
+            getLocalText.s("Single object or array of outbounds. WireGuard routes to endpoints[] automatically."),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),

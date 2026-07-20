@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../controllers/subscription_controller.dart';
 import '../subscription_detail_format.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Header/meta block on the Nodes tab: url + copy, last-updated, node counts,
 /// traffic quota bar, expiry, support/web-page chips. Extracted verbatim from
@@ -14,10 +15,14 @@ class SubscriptionMeta extends StatelessWidget {
     super.key,
     required this.entry,
     required this.onOpenUrl,
+    this.offCount = 0,
   });
 
   final SubscriptionEntry entry;
   final Future<void> Function(String) onOpenUrl;
+
+  /// §283 — сколько нод выключено per-node toggle'ом («M off» в счётчике).
+  final int offCount;
 
   @override
   Widget build(BuildContext context) {
@@ -47,11 +52,11 @@ class SubscriptionMeta extends StatelessWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.copy, size: 16),
-                  tooltip: 'Copy URL',
+                  tooltip: getLocalText.s("Copy URL"),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: url));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('URL copied')),
+                      SnackBar(content: Text(getLocalText.s("URL copied"))),
                     );
                   },
                 ),
@@ -73,9 +78,13 @@ class SubscriptionMeta extends StatelessWidget {
               Icon(Icons.dns_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(width: 4),
               Text(
-                entry.detourCount > 0
-                    ? '${entry.nodeCount} +${entry.detourCount}⚙ nodes'
-                    : '${entry.nodeCount} nodes',
+                [
+                  entry.detourCount > 0
+                      ? getLocalText.plural("%1\$d +%2\$d⚙ nodes", entry.nodeCount, entry.detourCount)
+                      : getLocalText.plural("%d nodes", entry.nodeCount),
+                  // §283 — счётчик выключенных (ключ общий с папками §234).
+                  if (offCount > 0) getLocalText.s("%d off", offCount),
+                ].join(' · '),
                 style: theme.textTheme.bodySmall,
               ),
             ],
@@ -83,7 +92,7 @@ class SubscriptionMeta extends StatelessWidget {
           // Traffic quota
           if (entry.totalBytes > 0) ...[
             const SizedBox(height: 8),
-            _buildTrafficBar(entry, theme),
+            _buildTrafficBar(context, entry, theme),
           ],
           // Expire
           if (entry.expireTimestamp > 0) ...[
@@ -93,7 +102,7 @@ class SubscriptionMeta extends StatelessWidget {
                 Icon(Icons.event_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
-                  'Expires: ${formatExpire(entry.expireTimestamp)}',
+                  getLocalText.s("Expires: %s", formatExpire(entry.expireTimestamp)),
                   style: theme.textTheme.bodySmall,
                 ),
               ],
@@ -114,13 +123,13 @@ class SubscriptionMeta extends StatelessWidget {
                           ? const Color(0xFF2AABEE)
                           : null,
                     ),
-                    label: const Text('Support'),
+                    label: Text(getLocalText.s("Support")),
                     onPressed: () => unawaited(onOpenUrl(entry.supportUrl)),
                   ),
                 if (entry.webPageUrl.isNotEmpty)
                   ActionChip(
                     avatar: const Icon(Icons.language, size: 16),
-                    label: const Text('Web page'),
+                    label: Text(getLocalText.s("Web page")),
                     onPressed: () => unawaited(Future.sync(() => onOpenUrl(entry.webPageUrl))),
                   ),
               ],
@@ -131,7 +140,8 @@ class SubscriptionMeta extends StatelessWidget {
     );
   }
 
-  Widget _buildTrafficBar(SubscriptionEntry entry, ThemeData theme) {
+  Widget _buildTrafficBar(
+      BuildContext context, SubscriptionEntry entry, ThemeData theme) {
     final used = entry.uploadBytes + entry.downloadBytes;
     final total = entry.totalBytes;
     final pct = total > 0 ? (used / total).clamp(0.0, 1.0) : 0.0;
@@ -141,7 +151,7 @@ class SubscriptionMeta extends StatelessWidget {
         LinearProgressIndicator(value: pct),
         const SizedBox(height: 2),
         Text(
-          '${formatBytes(used)} / ${formatBytes(total)} used',
+          getLocalText.s("%1\$s / %2\$s used", formatBytes(used), formatBytes(total)),
           style: theme.textTheme.bodySmall,
         ),
       ],

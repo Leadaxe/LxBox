@@ -42,6 +42,9 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ update_interval_hours int           default 24; §129 спец: -1=никогда, 0=respect server, N>0=каждые N ч
 │       ├─ last_node_count       int
 │       ├─ consecutive_fails     int           для UI "(N fails)"
+│       ├─ disabled_hashes       map?          §283 — {identity-хеш ноды: ISO-8601 lastSeen}; per-node disable
+│       ├─ identity              object?       §289 — per-sub override идентичности фетча (null=глоб.);
+│       │                                      {user_agent?, send_hwid, hwid?, device_os?, ver_os?, device_model?}
 │       │                        — user only —
 │       ├─ origin                "paste"|"file"|"qr"|"manual"
 │       ├─ created_at            ISO-8601
@@ -264,6 +267,7 @@ Per-key спеки и shape — в разделах ниже.
 | `allow_rotation` | `'false'` | [§220] | Снятие портретной фиксации: `'true'` → пустой preferred-orientations (ориентацию решает системный auto-rotate). Default — жёсткий портрет. Toggle в App Settings → General → Behavior. |
 | `resolve_enabled` | template | §263/§265 | Гейт route-resolve-правила пресета `traffic-processing`. Var секции `internal` (в VPN Settings не видна), редактируется в правиле через ref-var. Гасится on_change при вкл. FakeIP (§266). |
 | `resolve_strategy` | template | §249/§265 | IP-версия route-resolve (`ipv4_only`/`prefer_ipv4`/…). Var секции `internal`, ref-var в `traffic-processing`. Пишется on_change тумблера IPv6. |
+| `app_language` | `'system'` | §279 | Язык приложения: `system` \| `en` \| `ru`. **Единственный источник истины** — эта var; неизвестное значение (hand-edited бэкап) валидируется в `system`. НЕ config-var (не грязнит sing-box-конфиг). Все пути записи сходятся в `LocaleController` (picker, Debug API side-effect hook, restore, смена системного языка) — голого `setVar` нет by construction. Копии `boxvpn_boot.app_language` + `boxvpn_boot.last_pushed_locale` — **derived cache** для Dart-less нативных поверхностей (шторка/тайл/shortcuts при мёртвом Flutter); пере-пушатся `setAppLanguage` и `bootstrapAndSyncNativePrefs`. **Явно НЕ член `NativePrefsKeys`** (§189): членство продублировало бы настройку в `vpn_settings`-блоке бэкапа — единственный backup-дом = `vars` (guard-тест рядом с §221-сьютом). |
 | `<custom>` | — | — | Любые юзерские template-vars, выставленные через UI / `PUT /settings/vars/<key>`. |
 
 > Полный код-список app-флагов — `SettingsStorage._appFeatureFlagVars`; держать таблицу в синхроне с ним.
@@ -303,7 +307,21 @@ Sealed по полю `type`:
                                                // принимаем, N>0 = каждые N ч.
                                                // AutoUpdater пропускает interval ≤ 0.
   "last_node_count":       0,
-  "consecutive_fails":     0                  // для UI "(N fails)"; freezing — in-memory
+  "consecutive_fails":     0,                 // для UI "(N fails)"; freezing — in-memory
+  "disabled_hashes": {                        // §283 — per-node disable (опционален,
+    "<sha256-hex>": "2026-07-18T10:00:00Z"    // пустой не пишется). Ключ = identity-хеш
+  },                                          // сути ноды (emit − tag − detour, см.
+                                              // services/node_hash.dart); значение =
+                                              // lastSeen для TTL-GC (clamp(3×interval,
+                                              // 24ч, месяц)) на успешном сетевом refresh.
+  "identity": {                               // §289 — per-sub override идентичности фетча.
+    "user_agent": "MyPanel/1.0",              // Опционален: null/отсутствует = режим Default
+    "send_hwid": true,                        // (глобальный SubscriptionIdentity). Объект =
+    "hwid": "550e8400-...",                   // режим Custom: фетч использует ТОЛЬКО эти
+    "device_os": "android",                   // значения. Пустые строки (user_agent/hwid/
+    "ver_os": "14",                           // device_*) не сериализуются. Включается копией
+    "device_model": "Pixel 7"                 // глобальных; отбрасывается при возврате в Default.
+  }
 }
 ```
 
@@ -337,6 +355,8 @@ Sealed по полю `type`:
   "tag_prefix":    "<str>",
   "detour_policy": { … },
   "created_at":    "ISO-8601",
+  "ping_url":         "<url>",                  // §284 — опц. override URL теста
+  "ping_timeout_ms":  3000,                     // §284 — опц. override таймаута
   "members": [                                  // порядок = порядок в UI
     { "raw": "vless://…#Alpha", "enabled": true,
       "detour": "Jump" },                            // §237 — личный detour (опц.)
@@ -344,6 +364,12 @@ Sealed по полю `type`:
   ]
 }
 ```
+
+`ping_url` / `ping_timeout_ms` (§284) — **опции теста самой папки**, перекрывают
+глобальные `ping_options` при нажатии Test в папке. Отсутствуют → берётся
+глобальное значение. Хранятся в объекте папки (едут в backup автоматически).
+Папка «WARP GENERATOR» ставит сюда IP-URL (`1.1.1.1/cdn-cgi/trace`) — тест по IP
+без DNS.
 
 `raw` — самодостаточный парсируемый фрагмент (URI / WG-INI / outbound-JSON);
 ноды реконструируются re-parse'ом каждого `raw` при загрузке (как `raw_body`
@@ -488,6 +514,14 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
   "rules_json":  "<deprecated>"
 }
 ```
+
+**§294 — типизация:** kind-ref'ы `servers[]`/`rules[]` типизированы моделью
+`lib/models/dns_ref.dart` (sealed `DnsServerRef` {inline·preset·template} +
+`DnsRuleRef` {inline·srs·preset·template}). **Форма на диске НЕ изменилась** —
+`toJson` байт-совместим (§221 backup); `fromJson` толерантен на чтение
+(legacy full-body / unknown-kind → null, дропаются как в резолвере). Строгий
+`fromJsonStrict` — только на Debug write-пути (`PUT /settings/dns_options/*` →
+400 на битую форму). Резолвер (`resolveDisplayedServers`, VIEW-слой) не тронут.
 
 ### `dns_options.servers[i]` — kind-discriminated ref ([§044])
 
@@ -791,6 +825,18 @@ Debug API handlers — идут через единую дверь `SettingsStor
 > вычисляемое значение, оно живёт только в native (`boxvpn_boot.has_tun`) и **не**
 > хранится в JSON-секции `native_prefs` — пересчитывается из `vpn_mode`.
 
+> **`app_language` + `last_pushed_locale` ([§279]) — ещё два native-ключа НЕ в
+> JSON-секции.** `boxvpn_boot.app_language` — derived cache var'а
+> [`vars.app_language`](#vars--template-vars--app-flags) (источник истины —
+> JSON-var, кэш пере-пушится `setAppLanguage` / `bootstrapAndSyncNativePrefs`);
+> нужен нативным поверхностям (шторка/QS-тайл/shortcuts) при мёртвом Flutter.
+> `boxvpn_boot.last_pushed_locale` — зеркало последнего значения, которое
+> приложение само запушило в `LocaleManager` (Android 13+), опора трёхстороннего
+> reconciliation «система против стораджа». Оба — документированное исключение
+> из состава `NativePrefsKeys`: членство экспортировало бы их в
+> `vpn_settings`-блок бэкапа вторым представлением одной настройки
+> (backup-дом `app_language` — только `vars`).
+
 ---
 
 ## `channels` — [§125] каналы роутинга (template→storage)
@@ -950,6 +996,8 @@ storage. Template стал **seed'ом** — значениями по умол�
 | `boxvpn_boot.allow_bypass` | `Boolean` | Kotlin (зеркало JSON) | [§189]/§069 | Allow VPN bypass. Истина — `native_prefs.allow_bypass`. |
 | `boxvpn_boot.auto_redirect` | `Boolean` | Kotlin (зеркало JSON) | [§189] | Auto-redirect. Истина — `native_prefs.auto_redirect`. |
 | `boxvpn_boot.has_tun` | `Boolean` | Kotlin (зеркало `vpn_mode`) | [§192] | **Вычисляемое**, default `true`. Производное от `vpn_mode` (§119): proxy → `false`. Гейтит `VpnService.prepare()` (proxy не отзывает чужой VPN). **НЕ** в backup-блоке, **НЕ** в JSON-секции `native_prefs` — пересчитывается из `vpn_mode`. |
+| `boxvpn_boot.app_language` | `String` | Kotlin (зеркало `vars.app_language`) | [§279] | `system` \| `en` \| `ru`. Derived cache для Dart-less нативных поверхностей: `L10n.kt` оборачивает контекст в момент рендера (шторка/тайл/shortcuts при мёртвом Flutter). Истина — [`vars.app_language`](#vars--template-vars--app-flags); **НЕ** член `NativePrefsKeys`, **НЕ** в backup-блоке. |
+| `boxvpn_boot.last_pushed_locale` | `String` | Kotlin | [§279] | Последнее значение, которое приложение само запушило в `LocaleManager` (Android 13+; `""` = system). Опора трёхстороннего reconciliation на старте: смена в системных Settings побеждает сторадж, смена стораджа (restore/Debug API) пере-пушится в `LocaleManager`. **НЕ** в backup-блоке. |
 
 ---
 
@@ -1000,6 +1048,7 @@ storage. Template стал **seed'ом** — значениями по умол�
 [§117]: ./spec/features/117%20dns-rework/spec.md
 [§189]: ./spec/tasks/189-native-prefs-mirror-in-json.md
 [§192]: ./spec/tasks/192-proxy-mode-prepare-revokes-foreign-vpn.md
+[§279]: ./spec/features/279%20localization/spec.md
 [§220]: ./spec/tasks/220-allow-rotation-setting.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md

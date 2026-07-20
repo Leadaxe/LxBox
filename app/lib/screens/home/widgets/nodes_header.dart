@@ -5,6 +5,7 @@ import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
 import '../../routing_screen.dart';
 import '../node_filter_view_model.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Заголовок секции нод на главном экране: «Nodes (N)», кнопка сортировки
 /// (tap = cycle режима, long-press = меню опций; amber-точка когда sort
@@ -48,7 +49,7 @@ class NodesHeader extends StatelessWidget {
         child: Row(
           children: [
             Text(
-              'Nodes',
+              getLocalText.s("Nodes"),
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -66,7 +67,7 @@ class NodesHeader extends StatelessWidget {
             // §070: sort = InkWell (tap=cycle, long-press=меню), не IconButton.
             // Amber-точка когда sort non-default; иконка в `manual` = ⠿ (§071).
             Tooltip(
-              message: state.sortMode.label,
+              message: state.sortMode.label(),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -110,7 +111,9 @@ class NodesHeader extends StatelessWidget {
             // `Icons.filter_list` (унифицирована с control-строкой профайлера).
             // Primary-цвет + точка когда есть active match-filter (§095).
             IconButton(
-              tooltip: filter.panelExpanded ? 'Hide filters' : 'Show filters',
+              tooltip: filter.panelExpanded
+                  ? getLocalText.s("Hide filters")
+                  : getLocalText.s("Show filters"),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),

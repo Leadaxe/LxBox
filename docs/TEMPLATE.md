@@ -55,11 +55,11 @@ wizard_template.json
 │   ├─ url                         string        global default (e.g. gstatic.com/generate_204)
 │   ├─ timeout_ms                  int           default 5000
 │   └─ presets[]                   list          dropdown options в Ping Settings UI
-│       └─ {name, url}             object
+│       └─ {id, name, url}         object        id — stable machine-id (§279)
 │
 ├─ speed_test_options              object{3 keys}       (§015)
 │   ├─ servers[]                   list[10]      Cloudflare, Selectel, Hetzner, OVH, etc.
-│   │   └─ {name, download_url, upload_url, upload_method, ping_url}
+│   │   └─ {id, name, download_url, upload_url, upload_method, ping_url}
 │   ├─ stream_options              list[3]       parallel-streams choices (e.g. [1,4,10])
 │   └─ default_streams             int           default 4
 │
@@ -84,9 +84,10 @@ wizard_template.json
 │       ├─ label                    string        UI display ("VPN ①")
 │       └─ default_enabled          bool          вкл в новой установке?
 │
-├─ sections[]                      list[7]       Wizard UI chapters (§022)
+├─ sections[]                      list[8]       Wizard UI chapters (§022)
 │   └─ <Section>                   object
-│       ├─ name                    string        "General", "DNS", "TUN", etc.
+│       ├─ id                      string        stable machine-id, kebab-case (§279: "general", "auto-proxy", …)
+│       ├─ name                    string        "General", "DNS", "TUN", etc. — внутренний join-ключ vars↔section
 │       ├─ chapter                 string        grouping ("core"|"routing"|"dns")
 │       ├─ description             string
 │       └─ vars[]                  list          переменные секции
@@ -288,8 +289,8 @@ Default URL/timeout для ping/mass-URLTest. Storage может override чер
   "url":        "https://www.gstatic.com/generate_204",   // global default
   "timeout_ms": 5000,
   "presets": [
-    {"name": "Google 204",   "url": "https://www.gstatic.com/generate_204"},
-    {"name": "Cloudflare",   "url": "..."},
+    {"id": "google-204", "name": "Google 204",   "url": "https://www.gstatic.com/generate_204"},
+    {"id": "cloudflare", "name": "Cloudflare",   "url": "..."},
     …
   ]
 }
@@ -299,7 +300,7 @@ Default URL/timeout для ping/mass-URLTest. Storage может override чер
 |---|---|
 | `url` | Default endpoint для ping. Юзер может override globally / per-group. |
 | `timeout_ms` | Default timeout. Bump'ится для slow networks. |
-| `presets[]` | Pre-configured options в Ping Settings UI dropdown — `{name, url}` пары. |
+| `presets[]` | Pre-configured options в Ping Settings UI dropdown — `{id, name, url}`. `id` — стабильный machine-id (§279, адрес для l10n); display-поле — `name`. |
 
 ---
 
@@ -311,6 +312,7 @@ Endpoints для speed-test screen. Не override'ится юзером (но ю
 {
   "servers": [
     {
+      "id":            "cloudflare",
       "name":          "Cloudflare",
       "download_url":  "https://speed.cloudflare.com/__down?bytes=25000000",
       "upload_url":    "https://speed.cloudflare.com/__up",
@@ -325,6 +327,8 @@ Endpoints для speed-test screen. Не override'ится юзером (но ю
 ```
 
 10 серверов в текущем template'е (Cloudflare, Selectel, Hetzner, OVH, etc.).
+`id` — стабильный machine-id (§279): runtime-выбор сервера на speed-test-экране
+ключуется по нему (не по индексу); неизвестный id → default (первый сервер).
 
 ---
 
@@ -441,6 +445,7 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 ```jsonc
 [
   {
+    "id":          "general",               // stable machine-id (§279, адрес l10n)
     "name":        "General",
     "chapter":     "core",                  // grouping тэг (UI tabs)
     "description": "Logging and core settings",
@@ -462,6 +467,11 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 ```
 
 8 секций в текущем template'е: `General`, `Network`, `Internal`, `Auto Proxy`, `DNS`, `TUN`, `VPN Mode`, `DPI Bypass`. Расфасованы по **4 chapter'ам** (`core`, `routing`, `dns`, `internal`).
+
+`id` — стабильный kebab-case machine-id (§279): `general`, `network`, `internal`,
+`auto-proxy`, `dns`, `tun`, `vpn-mode`, `dpi-bypass`. Служит адресом l10n-overlay
+для display-полей (`name`/`description`). Внутренним join-ключом секция↔vars
+остаётся `name` (`parser_config.dart`, `settings_screen.dart`) — `id` его не заменяет.
 
 ### `chapter` — кто рендерит секцию
 
@@ -1051,6 +1061,65 @@ Editorial-конвенции для **бандл**-шаблона (`app/assets/w
 
 ---
 
+## Локализация display-текста — l10n overlay (§279)
+
+`wizard_template.json` остаётся **единственным структурным шаблоном** с
+английским display-текстом. Переводы не форкают структуру — это плоские
+overlay-файлы, патчащие декодированный JSON **до парсинга и до
+preset_expand-снапшотов** (`TemplateOverlay.apply`, зовётся из
+`TemplateLoader`; кэш loader'а ключуется тегом локали):
+
+```
+app/assets/l10n/ru/template.json   # ручной перевод (тот же shape, что UI-словарь)
+```
+
+Английский display-текст живёт в самом `wizard_template.json` (базовый язык, в
+коде) — отдельного en-файла нет. Ключ overlay = **сам английский текст**
+display-поля (тот же принцип, что natural-key UI-словарь
+`assets/l10n/<tag>/ui.json`), а не структурный адрес.
+`TemplateOverlay.apply` ходит по whitelist-схеме шаблона, читает английское
+значение узла и подменяет его переводом по этому тексту.
+
+- Английские ключи — базовый язык, в коде: коммитнутого/генерируемого en-файла
+  нет. `template_check` извлекает их живьём из `wizard_template.json` через
+  `TemplateOverlay.extract()` на каждом прогоне и валидирует каждый overlay
+  локали против этой экстракции. Повторяющийся один и тот же английский текст в
+  разных местах шаблона схлопывается в один ключ (фича, не конфликт).
+- `template.json` (и любой будущий `<lang>/template.json`) — тот же объектный shape, что
+  UI-словарь: `{ "<english>": { "value": "<перевод>" } }`:
+
+  ```json
+  "DNS server": { "value": "DNS-сервер" }
+  ```
+
+  Изменился en-текст → сменился ключ: старая запись становится unknown-key (fail
+  `template_check`), новый английский ключ — missing (warn, strict→fail).
+  Workflow идентичен UI-строке: переименовать ключ, пересмотреть перевод.
+
+**Схема обхода** (полная таблица — [§279 spec, §3.2](./spec/features/279%20localization/spec.md)):
+applier посещает display-поля секций, глобальных и rule-локальных vars, magic-нод,
+каналов, dns-серверов, ping/speed-пресетов. Не посещается (whitelist applier'а):
+всё под `config`/`parser_config`, `name`/`tag`/`value`/`default_value`/`preset_id`,
+bare-string enum-опции, `dns_options.rules[].name` (латентный identity-ключ) —
+поэтому эти строки в overlay не попадают.
+
+**Load-bearing запреты**: перевод, начинающийся с `@`, был бы интерпретирован
+как var-ссылка (overlay применяется до `substituteVars`); `{` ломает parsing —
+оба запрещены `template_check` безусловно. Fallback per-key тихий (нет ключа →
+английское значение); отказ целого файла — громкий (`AppLog.error` +
+debug-assert + flutter-тест rootBundle-загрузки каждого overlay).
+
+### Добавляем display-поле в шаблон
+
+Новое user-visible поле обязано попасть в **экстрактор + whitelist**
+`TemplateOverlay` (`template_overlay.dart`) — иначе оно тихо шипится
+английским во всех локалях. Self-check `template_check` следит, чтобы whitelist
+покрывал каждое display-поле экстрактора (английский ключ извлекается живьём из
+`wizard_template.json`, отдельного en-файла нет); после добавления — перевод в
+`ru/template.json`, `flutter test` (applier-тесты).
+
+---
+
 ## Когда что ломается
 
 ### Добавляем новый top-level ключ
@@ -1103,3 +1172,4 @@ Settings — заводи её в секции `internal` (chapter не ренд
 - [§040 per-group ping settings](./spec/tasks/040-per-group-ping-test-settings.md) — `ping_options`
 - [§015 speed test](./spec/features/015%20speed%20test/spec.md) — `speed_test_options`
 - [§022 app settings](./spec/features/022%20app%20settings/spec.md) — Wizard UI и `sections[]`
+- [§279 localization](./spec/features/279%20localization/spec.md) — l10n-overlay display-текста шаблона; ключ overlay = сам английский текст (принцип `ui/`-словаря, `{value}`-формат, без адресов и `src`-hash — §285); translator-guide — [`l10n.md`](./l10n.md)

@@ -27,6 +27,7 @@ import 'subscriptions_screen/share_subscription_url.dart';
 import 'subscriptions_screen/widgets/add_icon_button.dart';
 import 'subscriptions_screen/widgets/subscription_entry_tile.dart';
 import 'subscriptions_screen/widgets/subscriptions_empty_state.dart';
+import '../services/l10n/locale_controller.dart';
 
 class SubscriptionsScreen extends StatefulWidget {
   const SubscriptionsScreen({
@@ -135,17 +136,16 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Discard input?'),
-        content: const Text(
-            'You have unsaved text in the input field. Leave and discard it?'),
+        title: Text(getLocalText.s("Discard input?")),
+        content: Text(getLocalText.s("You have unsaved text in the input field. Leave and discard it?")),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Stay'),
+            child: Text(getLocalText.s("Stay")),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Discard'),
+            child: Text(getLocalText.s("Discard")),
           ),
         ],
       ),
@@ -191,7 +191,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       return;
     }
     await widget.subController.addFromInput(text);
-    if (widget.subController.lastError.isEmpty) {
+    if (widget.subController.lastError == null) {
       _inputController.clear();
       await _regenerateAndSave();
     }
@@ -208,7 +208,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         .where((e) => e.enabled)
         .fold<int>(0, (s, e) => s + e.nodeCount);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Config regenerated: $n nodes'),
+      SnackBar(content: Text(getLocalText.plural("Config regenerated: %d nodes", n)),
           duration: const Duration(seconds: 2)),
     );
   }
@@ -219,7 +219,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (text.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Clipboard is empty')),
+          SnackBar(content: Text(getLocalText.s("Clipboard is empty"))),
         );
       }
       return;
@@ -237,11 +237,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
     if (confirmed != true || !mounted) return;
     await widget.subController.addFromInput(text);
-    if (widget.subController.lastError.isEmpty) {
+    final addErr = widget.subController.lastError;
+    if (addErr == null) {
       await _regenerateAndSave();
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.subController.lastError)),
+        SnackBar(content: Text(addErr.render())),
       );
     }
   }
@@ -249,7 +250,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   Future<void> _scanQrCode() async {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('QR scanner coming soon')),
+        SnackBar(content: Text(getLocalText.s("QR scanner coming soon"))),
       );
     }
   }
@@ -283,7 +284,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       if (text.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('File is empty')),
+            SnackBar(content: Text(getLocalText.s("File is empty"))),
           );
         }
         return;
@@ -303,17 +304,20 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         await widget.subController.addFromInput(text,
             nameHint: SubscriptionController.fileBaseName(file.name));
       }
-      if (widget.subController.lastError.isEmpty) {
+      final importErr = widget.subController.lastError;
+      if (importErr == null) {
         await _regenerateAndSave();
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.subController.lastError)),
+          SnackBar(content: Text(importErr.render())),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${formatUserError(e)}')),
+          SnackBar(
+              content: Text(getLocalText.s(
+                  "Error: %s", formatUserError(e).render()))),
         );
       }
     }
@@ -330,7 +334,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   /// §234 — несколько выбранных файлов → новая папка со всеми серверами.
   Future<void> _importFilesIntoFolder(List<PlatformFile> files) async {
     final name = await showFolderNameDialog(context,
-        title: 'Import ${files.length} files into folder');
+        title: getLocalText.plural("Import %d files into folder", files.length));
     if (name == null || !mounted) return;
     await widget.subController.addFolder(name);
     final folderIndex = widget.subController.entries.length - 1;
@@ -339,7 +343,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     for (final file in files) {
       final text = (await _readPickedFile(file))?.trim() ?? '';
       if (text.isEmpty) {
-        errors.add('${file.name}: empty file');
+        errors.add(getLocalText.s("%s: empty file", file.name));
         continue;
       }
       final err = await widget.subController.addMembersToFolder(
@@ -347,10 +351,10 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         text,
         nameFallback: SubscriptionController.fileBaseName(file.name),
       );
-      if (err.isEmpty) {
+      if (err == null) {
         addedFiles++;
       } else {
-        errors.add('${file.name}: $err');
+        errors.add('${file.name}: ${err.render()}');
       }
     }
     if (!mounted) return;
@@ -380,8 +384,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Config generated: '
-              '${widget.subController.entries.fold<int>(0, (s, e) => s + e.nodeCount)} nodes',
+              getLocalText.plural("Config generated: %d nodes", widget.subController.entries
+                  .fold<int>(0, (s, e) => s + e.nodeCount)),
             ),
           ),
         );
@@ -405,16 +409,18 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           },
           child: Scaffold(
             appBar: AppBar(
-              title: const Column(
+              title: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Servers'),
-                  Text('Subscriptions & proxy', style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
+                  Text(getLocalText.s("Servers")),
+                  Text(getLocalText.s("Subscriptions & proxy"),
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.normal)),
                 ],
               ),
               actions: [
                 IconButton(
-                  tooltip: 'Update all & generate',
+                  tooltip: getLocalText.s("Update all & generate"),
                   onPressed: ctrl.busy ? null : () => unawaited(_updateAll()),
                   icon: const Icon(Icons.refresh),
                 ),
@@ -434,25 +440,25 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     if (v == 'sub_settings') _openSubscriptionSettings();
                   },
                   itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'wizard', child: Text('Add server…')),
-                    const PopupMenuItem(value: 'warp', child: Text('Get WARP')),
+                    PopupMenuItem(value: 'wizard', child: Text(getLocalText.s("Add server…"))),
+                    PopupMenuItem(value: 'warp', child: Text(getLocalText.s("Get WARP"))),
                     const PopupMenuDivider(),
-                    const PopupMenuItem(value: 'paste', child: Text('Paste from clipboard')),
-                    const PopupMenuItem(value: 'qr', child: Text('Scan QR code')),
-                    const PopupMenuItem(value: 'file', child: Text('Import from file…')),
-                    const PopupMenuItem(value: 'folder', child: Text('New folder…')),
+                    PopupMenuItem(value: 'paste', child: Text(getLocalText.s("Paste from clipboard"))),
+                    PopupMenuItem(value: 'qr', child: Text(getLocalText.s("Scan QR code"))),
+                    PopupMenuItem(value: 'file', child: Text(getLocalText.s("Import from file…"))),
+                    PopupMenuItem(value: 'folder', child: Text(getLocalText.s("New folder…"))),
                     const PopupMenuDivider(),
-                    const PopupMenuItem(value: 'public', child: Text('Get Public Test Servers')),
+                    PopupMenuItem(value: 'public', child: Text(getLocalText.s("Get Public Test Servers"))),
                     const PopupMenuDivider(),
                     CheckedPopupMenuItem<String>(
                       value: 'auto_update',
                       checked: _autoUpdateEnabled,
-                      child: const Text('Auto-update subscriptions'),
+                      child: Text(getLocalText.s("Auto-update subscriptions")),
                     ),
                     const PopupMenuDivider(),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'sub_settings',
-                      child: Text('Subscription settings…'),
+                      child: Text(getLocalText.s("Subscription settings…")),
                     ),
                   ],
                 ),
@@ -461,15 +467,15 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             body: Column(
               children: [
                 _buildInputBar(ctrl),
-                if (ctrl.lastError.isNotEmpty)
+                if (ctrl.lastError != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
-                      ctrl.lastError,
+                      ctrl.lastError!.render(),
                       style: TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
                   ),
-                if (ctrl.progressMessage.isNotEmpty)
+                if (ctrl.progressMessage != null)
                   Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(
@@ -480,7 +486,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                         const SizedBox(width: 8),
-                        Expanded(child: Text(ctrl.progressMessage)),
+                        Expanded(child: Text(ctrl.progressMessage!.render())),
                       ],
                     ),
                   ),
@@ -512,11 +518,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           Expanded(
             child: TextField(
               controller: _inputController,
-              decoration: const InputDecoration(
-                hintText: 'Subscription URL or proxy link',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: getLocalText.s("Subscription URL or proxy link"),
+                border: const OutlineInputBorder(),
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               ),
               style: const TextStyle(fontSize: 13),
             ),
@@ -556,7 +563,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final opened = await UrlLauncher.open(url);
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Copied: $url')),
+        SnackBar(content: Text(getLocalText.s("Copied: %s", url))),
       );
     }
   }

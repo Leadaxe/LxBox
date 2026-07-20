@@ -65,7 +65,7 @@ Future<DebugResponse> warpHandler(DebugRequest req, DebugContext ctx) async {
   );
 
   if (account == null) {
-    throw BadRequest('addWarp failed: ${sub.lastError}');
+    throw BadRequest('addWarp failed: ${sub.lastError?.renderEn() ?? ''}');
   }
 
   final extras = await maybeRebuild(req, ctx);

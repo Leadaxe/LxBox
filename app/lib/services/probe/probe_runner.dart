@@ -1,10 +1,15 @@
 import 'dart:async';
 
-import '../../models/server_list.dart';
+import '../../models/node_spec.dart';
 import '../../vpn/cc_channel.dart';
 import '../app_log.dart';
-import '../tag_resolver.dart';
 import 'probe_config.dart';
+import 'probe_lifecycle.dart';
+
+/// §236 — маркер, что тест не запустился из-за активного VPN. UI ловит его
+/// (равенством) и показывает попап-гейт с кнопкой Stop VPN вместо ошибки.
+/// Не человеко-читаемый текст: наружу как сообщение не идёт.
+const kProbeVpnRunning = '__vpn_running__';
 
 /// §236 — вердикт теста одного члена папки.
 enum ProbeStatus {
@@ -22,9 +27,6 @@ enum ProbeStatus {
 
   /// emit ноды упал — конфиг из неё не собрать.
   invalid,
-
-  /// VPN запущен, член выключен → его нет в боевом конфиге. Включи — протестируем.
-  notInConfig,
 }
 
 class ProbeResult {
@@ -35,14 +37,17 @@ class ProbeResult {
   final String message;
 }
 
-/// §236 — прогон теста по членам папки.
+/// §236/§296 — прогон теста по списку нод (общий для всей подсистемы
+/// ServerList: папки/подписки/серверы).
 ///
-/// Ветвление по состоянию VPN решает НЕ UI, а native-гейт: пробуем поднять
-/// probe-сессию; ответ «VPN is running…» → тестируем через боевое ядро
-/// (это честный тест — outbound-dial ядра protected, мимо tun), но только
-/// включённых членов (остальные [ProbeStatus.notInConfig]).
-class FolderProbeRunner {
-  FolderProbeRunner({CcChannel? cc}) : _cc = cc ?? CcChannel.instance;
+/// Тест возможен только при выключенном VPN: probe-сессия — временный
+/// CommandServer без tun (два CommandServer на процесс невозможны). При живом
+/// туннеле `probeStart` вернёт «VPN is running…» → возвращаем [kProbeVpnRunning],
+/// UI показывает гейт-попап (Stop VPN). Через боевое ядро НЕ тестируем: замер
+/// шёл бы поверх активного детура/цепочки, а не по чистой ноде, и выключенные
+/// ноды выпадали бы из конфига — вводило в заблуждение (§236 UI-rework).
+class ProbeRunner {
+  ProbeRunner({CcChannel? cc}) : _cc = cc ?? CcChannel.instance;
 
   final CcChannel _cc;
   bool _cancelled = false;
@@ -53,67 +58,63 @@ class FolderProbeRunner {
 
   void cancel() => _cancelled = true;
 
-  /// Прогоняет тест по всем членам [folder]. Результаты отдаются по мере
-  /// готовности в [onResult] (memberIndex, result). Возвращает '' или текст
-  /// фатальной ошибки (не пер-нодной).
+  /// Прогоняет тест по всем [nodes] (null-слот → вердикт 'broken', индекс
+  /// сохраняется). Результаты отдаются по мере готовности в [onResult]
+  /// (index, result). Возвращает '' или текст фатальной ошибки (не пер-нодной).
+  ///
+  /// §296 — вызывающий приводит свой домен к `List<NodeSpec?>`: папка передаёт
+  /// `folder.members.map((m)=>m.node)` (nullable, unfiltered — НЕ `folder.nodes`,
+  /// тот отфильтрован); подписка/сервер — `list.nodes` (disabled §283 → null).
   Future<String> run(
-    FolderServers folder, {
+    List<NodeSpec?> nodes, {
     required String url,
     required int timeoutMs,
-    required void Function(int memberIndex, ProbeResult result) onResult,
+    required void Function(int index, ProbeResult result) onResult,
   }) async {
     _cancelled = false;
-    final cfg = buildProbeConfig(folder);
+    // §286 — регистрируем отмену в общем реестре: stop VPN / смерть туннеля /
+    // сворадивание дёрнут ProbeLifecycle.haltAll() → cancel() здесь, и sweep
+    // прекратится, даже если экран деталей папки не в фокусе. Снимаем в finally.
+    final canceller = ProbeLifecycle.I.register(cancel);
+    try {
+      final cfg = buildProbeConfig(nodes);
 
-    // Битые/несобираемые — вердикт сразу, без ядра.
-    cfg.brokenByMember.forEach((i, why) {
-      onResult(
-          i,
-          ProbeResult(
-            why == 'broken' ? ProbeStatus.broken : ProbeStatus.invalid,
-            message: why,
-          ));
-    });
-    if (cfg.configJson == null) return '';
+      // Битые/несобираемые — вердикт сразу, без ядра.
+      cfg.brokenByIndex.forEach((i, why) {
+        onResult(
+            i,
+            ProbeResult(
+              why == 'broken' ? ProbeStatus.broken : ProbeStatus.invalid,
+              message: why,
+            ));
+      });
+      if (cfg.configJson == null) return '';
 
-    final err = await _cc.probeStart(cfg.configJson!);
-    if (err.isEmpty) {
-      try {
-        await _runPool(
-          cfg.tagByMember,
-          test: (tag) => _cc.probeUrlTest(tag, link: url, timeoutMs: timeoutMs),
-          onResult: onResult,
-        );
-      } finally {
-        await _cc.probeStop();
+      final err = await _cc.probeStart(cfg.configJson!);
+      if (err.isEmpty) {
+        try {
+          await _runPool(
+            cfg.tagByIndex,
+            test: (tag) =>
+                _cc.probeUrlTest(tag, link: url, timeoutMs: timeoutMs),
+            onResult: onResult,
+          );
+        } finally {
+          await _cc.probeStop();
+        }
+        return '';
       }
-      return '';
-    }
 
-    if (!_looksLikeVpnRunning(err)) {
+      // VPN активен → probe-сессию не поднять. UI гейтит тест ещё до run()
+      // (getVpnStatus), но между проверкой и probeStart VPN мог стартовать —
+      // ловим здесь маркером, не боевой веткой.
+      if (_looksLikeVpnRunning(err)) return kProbeVpnRunning;
+
       AppLog.I.warning('Probe session failed to start: $err');
       return err;
+    } finally {
+      ProbeLifecycle.I.deregister(canceller);
     }
-
-    // VPN запущен → тестируем через боевое ядро. В конфиге только включённые
-    // члены (и только если сама папка включена); теги — display-form с
-    // префиксом папки (§080-паттерн; collision-суффикс ядра не учитывается —
-    // известное ограничение).
-    final liveTags = <int, String>{};
-    for (final i in cfg.tagByMember.keys) {
-      final m = folder.members[i];
-      if (!folder.enabled || !m.enabled) {
-        onResult(i, const ProbeResult(ProbeStatus.notInConfig));
-        continue;
-      }
-      liveTags[i] = TagResolver.displayTag(folder.tagPrefix, m.node!.tag);
-    }
-    await _runPool(
-      liveTags,
-      test: (tag) => _cc.urlTestOutbound(tag, link: url, timeoutMs: timeoutMs),
-      onResult: onResult,
-    );
-    return '';
   }
 
   static bool _looksLikeVpnRunning(String err) =>
@@ -122,7 +123,7 @@ class FolderProbeRunner {
   Future<void> _runPool(
     Map<int, String> tags, {
     required Future<CcDelayResult> Function(String tag) test,
-    required void Function(int memberIndex, ProbeResult result) onResult,
+    required void Function(int index, ProbeResult result) onResult,
   }) async {
     final queue = tags.entries.toList();
     var next = 0;
@@ -155,6 +156,10 @@ class ProbeThresholds {
     this.yellowMs = 500,
     this.orangeMs = 700,
   });
+
+  /// §296 — единственный источник дефолтов (был триплет 250/500/700,
+  /// скопированный в folder_detail 3×).
+  static const defaults = ProbeThresholds();
 
   final int greenMs;
   final int yellowMs;

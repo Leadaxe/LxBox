@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/wifi_entry.dart';
 import '../widgets/section_header.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §053 Stage 2 — WI-FI NETWORK section. Chip-list + 3 action buttons
 /// (Add current / Pick saved / Manual) + permissions hint.
@@ -40,7 +41,7 @@ class WifiSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(
-              'No Wi-Fi conditions — rule is active on every network.',
+              getLocalText.s("No Wi-Fi conditions — rule is active on every network."),
               style: TextStyle(
                 fontSize: 12,
                 color: t.colorScheme.onSurfaceVariant,
@@ -96,8 +97,7 @@ class WifiSection extends StatelessWidget {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    'Needs Location + Nearby Wi-Fi permissions. Tap to '
-                    'manage.',
+                    getLocalText.s("Needs Location + Nearby Wi-Fi permissions. Tap to manage."),
                     style: TextStyle(
                       fontSize: 11,
                       color: t.colorScheme.onSurfaceVariant,

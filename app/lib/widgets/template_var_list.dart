@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../models/parser_config.dart';
 import 'outbound_picker.dart';
 import 'var_values_model.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// Рендерит список [WizardVar] с секция-заголовками и типизированными
 /// контролами:
@@ -211,7 +212,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
           tooltip: v.tooltip,
           onChanged: (val) => _update(v.name, val),
           trailing: IconButton(
-            tooltip: 'Generate random',
+            tooltip: getLocalText.s("Generate random"),
             icon: const Icon(Icons.refresh, size: 20),
             onPressed: () {
               final rng = Random.secure();
@@ -431,7 +432,7 @@ class _VarTextFieldState extends State<_VarTextField> {
     }
     if (widget.suggestions.isEmpty) return null;
     return PopupMenuButton<String>(
-      tooltip: 'Presets',
+      tooltip: getLocalText.s("Presets"),
       icon: const Icon(Icons.arrow_drop_down),
       padding: EdgeInsets.zero,
       position: PopupMenuPosition.under,

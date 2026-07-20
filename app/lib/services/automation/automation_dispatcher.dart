@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../vpn/box_vpn_client.dart';
 import '../app_log.dart';
 import '../debug/context.dart';
@@ -56,11 +58,11 @@ void _dispatch(String name, Map<String, dynamic> args) {
   run().then((_) {
     AppLog.I.info('[automation] action $name → ok');
   }).catchError((Object e) {
-    final code = e is DebugError ? e.code : 'error';
-    final message = e is DebugError ? e.message : e.toString();
-    AppLog.I.warning('[automation] action $name → ERROR $code: $message');
+    final signal = automationErrorSignal(e);
+    // Полный текст (включая произвольное исключение) — только в лог.
+    AppLog.I.warning('[automation] action $name → ERROR ${signal.code}: $e');
     // Symmetric: дать ждущему Tasker'у понять что запрос провалился.
-    AutomationEventEmitter.I.emitVpnError(code, message);
+    AutomationEventEmitter.I.emitVpnError(signal.code, signal.message);
   });
 }
 
@@ -70,6 +72,25 @@ String _str(Map<String, dynamic> args, String key) =>
 bool _bool(Map<String, dynamic> args, String key) {
   final v = args[key];
   if (v is bool) return v;
-  if (v is String) return v.toLowerCase() == 'true';
+  // §290 — тот же набор литералов, что Debug API `qBool` (true/1/yes), чтобы
+  // строковый bool парсился одинаково на обоих транспортах. Native обычно шлёт
+  // настоящий Boolean (getBooleanExtra), но контракт парсеров держим единым.
+  if (v is String) {
+    final s = v.toLowerCase();
+    return s == 'true' || s == '1' || s == 'yes';
+  }
   return false;
+}
+
+/// §290 — маппинг брошенного из handler'а исключения в пару `(code, message)`
+/// для outgoing `VPN_ERROR`. Контролируемые [DebugError]-сообщения отдаём как
+/// есть; любое другое исключение (generateConfig/saveParsedConfig и т.п.) может
+/// нести путь файла, URL подписки или фрагмент конфига — в **открытый**
+/// broadcast такое не шлём, отдаём generic-текст (детали остаются в AppLog).
+/// Симметрично тому, как Debug API прячет произвольное исключение в
+/// [InternalError]. Вынесено отдельно для юнит-теста symmetric-response.
+@visibleForTesting
+({String code, String message}) automationErrorSignal(Object e) {
+  if (e is DebugError) return (code: e.code, message: e.message);
+  return (code: 'error', message: 'internal error');
 }

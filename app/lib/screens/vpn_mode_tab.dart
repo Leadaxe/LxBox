@@ -28,6 +28,7 @@ import '../services/settings_storage.dart'
 import '../services/subscription/subscription_identity.dart'
     show generateProxyPassword;
 import 'lazy_persist_mixin.dart';
+import '../services/l10n/locale_controller.dart';
 
 class VpnModeTab extends StatefulWidget {
   const VpnModeTab({
@@ -378,23 +379,23 @@ class _VpnModeTabState extends State<VpnModeTab>
           const SizedBox(height: 16),
           const Divider(height: 1),
           const SizedBox(height: 16),
-          Text('Tunnel options', style: tt.titleMedium),
+          Text(getLocalText.s("Tunnel options"), style: tt.titleMedium),
           const SizedBox(height: 4),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Keep VPN on exit'),
-            subtitle: const Text('VPN stays active when app is closed'),
+            title: Text(getLocalText.s("Keep VPN on exit")),
+            subtitle: Text(getLocalText.s("VPN stays active when app is closed")),
             secondary: const Icon(Icons.exit_to_app),
             value: _keepOnExit,
             onChanged: _tunTogglesLoaded ? _toggleKeepOnExit : null,
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Allow VPN bypass'),
+            title: Text(getLocalText.s("Allow VPN bypass")),
             subtitle: Text(
               _allowBypass
-                  ? 'Apps may use ConnectivityManager to bypass tun.'
-                  : 'Strict tunnel — all traffic goes through tun.',
+                  ? getLocalText.s("Apps may use ConnectivityManager to bypass tun.")
+                  : getLocalText.s("Strict tunnel — all traffic goes through tun."),
             ),
             secondary: const Icon(Icons.alt_route),
             value: _allowBypass,
@@ -406,7 +407,7 @@ class _VpnModeTabState extends State<VpnModeTab>
           const SizedBox(height: 16),
           const Divider(height: 1),
           const SizedBox(height: 16),
-          Text('Local proxy', style: tt.titleMedium),
+          Text(getLocalText.s("Local proxy"), style: tt.titleMedium),
           const SizedBox(height: 12),
 
           // ─── PROTOCOL (proxy_type → dropdown) ───
@@ -426,8 +427,8 @@ class _VpnModeTabState extends State<VpnModeTab>
           const SizedBox(height: 4),
           Text(
             _cfg.isPublicListen
-                ? 'Reachable from other devices on the network — auth required.'
-                : 'Reachable only from this device.',
+                ? getLocalText.s("Reachable from other devices on the network — auth required.")
+                : getLocalText.s("Reachable only from this device."),
             style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
@@ -439,7 +440,7 @@ class _VpnModeTabState extends State<VpnModeTab>
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
               labelText: _portNode.title,
-              helperText: 'Range 1024..65535',
+              helperText: getLocalText.s("Range 1024..65535"),
               errorText: _portError.isEmpty ? null : _portError,
               isDense: true,
               border: const OutlineInputBorder(),
@@ -454,8 +455,8 @@ class _VpnModeTabState extends State<VpnModeTab>
             title: Text(_authNode.title),
             subtitle: Text(
               _cfg.isPublicListen
-                  ? 'Required for LAN-exposed proxy (cannot be disabled).'
-                  : 'Recommended. Protects the local proxy port.',
+                  ? getLocalText.s("Required for LAN-exposed proxy (cannot be disabled).")
+                  : getLocalText.s("Recommended. Protects the local proxy port."),
             ),
             value: _cfg.effectiveAuth,
             // 0.0.0.0 → залочен on (onChanged null = disabled).
@@ -487,7 +488,9 @@ class _VpnModeTabState extends State<VpnModeTab>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      tooltip: _showPassword ? 'Hide' : 'Show',
+                      tooltip: _showPassword
+                          ? getLocalText.s("Hide")
+                          : getLocalText.s("Show"),
                       icon: Icon(
                         _showPassword
                             ? Icons.visibility_off
@@ -498,7 +501,7 @@ class _VpnModeTabState extends State<VpnModeTab>
                           setState(() => _showPassword = !_showPassword),
                     ),
                     IconButton(
-                      tooltip: 'Regenerate',
+                      tooltip: getLocalText.s("Regenerate"),
                       icon: const Icon(Icons.refresh, size: 20),
                       onPressed: _regeneratePassword,
                     ),

@@ -3,22 +3,39 @@ import 'package:flutter/services.dart';
 
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
+import '../../../models/ui_msg.dart';
 import 'node_warning_row.dart';
+import '../../../services/l10n/locale_controller.dart';
 
-/// Nodes-tab list: actionable-warning banner + node rows with protocol icon,
-/// label/tag, server:port, inline warning and a long-press copy menu.
-/// Extracted verbatim from `_buildNodeList` / `_protocolIcon` / `_showNodeMenu`.
+/// Nodes-tab list: actionable-warning banner + node rows with §283 toggle,
+/// label/tag, protocol + server:port subtitle, inline warning and a
+/// long-press copy menu.
 class SubscriptionNodeList extends StatelessWidget {
   const SubscriptionNodeList({
     super.key,
     required this.nodes,
     required this.loading,
     required this.error,
+    this.togglableNodes = const {},
+    this.disabledNodes = const {},
+    this.onToggleNode,
   });
 
   final List<NodeSpec>? nodes;
   final bool loading;
-  final String? error;
+  final UiMsg? error;
+
+  /// §283 — top-level ноды подписки (identity-set): у них есть toggle.
+  /// Chained-дети (развёрнутые строки) управляются родителем — без toggle.
+  /// Пусто = не подписка (UserServer) — тогглов нет вовсе.
+  final Set<NodeSpec> togglableNodes;
+
+  /// §283 — выключенные ноды (identity-subset [togglableNodes]). Дубли по
+  /// хешу приходят выключенными синхронно — состояние считает экран от
+  /// `disabledHashes`, не по-строчно.
+  final Set<NodeSpec> disabledNodes;
+
+  final void Function(NodeSpec node)? onToggleNode;
 
   @override
   Widget build(BuildContext context) {
@@ -28,27 +45,28 @@ class SubscriptionNodeList extends StatelessWidget {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(error!, style: TextStyle(color: theme.colorScheme.error)),
+          child: Text(error!.render(),
+              style: TextStyle(color: theme.colorScheme.error)),
         ),
       );
     }
 
     final nodes = this.nodes;
     if (nodes == null && !loading) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('Update subscription to see nodes'),
+          padding: const EdgeInsets.all(24),
+          child: Text(getLocalText.s("Update subscription to see nodes")),
         ),
       );
     }
 
     if (nodes == null || nodes.isEmpty) {
       if (loading) return const SizedBox.shrink();
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('No nodes found'),
+          padding: const EdgeInsets.all(24),
+          child: Text(getLocalText.s("No nodes found")),
         ),
       );
     }
@@ -72,7 +90,7 @@ class SubscriptionNodeList extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '$actionableCount node${actionableCount == 1 ? "" : "s"} with warnings (XHTTP fallback etc.)',
+                    getLocalText.plural("%d nodes with warnings (XHTTP fallback etc.)", actionableCount),
                     style: const TextStyle(fontSize: 12, color: Colors.orange),
                   ),
                 ),
@@ -89,14 +107,34 @@ class SubscriptionNodeList extends StatelessWidget {
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final node = nodes[i];
+        // §283 — per-node toggle (только top-level ноды подписки).
+        final togglable =
+            onToggleNode != null && togglableNodes.contains(node);
+        final disabled = disabledNodes.contains(node);
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: _protocolIcon(node.protocol),
+          // §283 — Switch слева, как per-member toggle папок (§234). Иконки
+          // протокола нет (решение пользователя): протокол виден в подстроке.
+          // Строки без тоггла (chained-дети) получают placeholder той же
+          // ширины — выравнивание не пляшет; UserServer — без leading вовсе.
+          leading: togglable
+              ? SizedBox(
+                  width: 40,
+                  child: Switch(
+                    value: !disabled,
+                    onChanged: (_) => onToggleNode!(node),
+                  ),
+                )
+              : (togglableNodes.isEmpty ? null : const SizedBox(width: 40)),
           title: Text(
             node.label.isNotEmpty ? node.label : node.tag,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13),
+            style: TextStyle(
+              fontSize: 13,
+              // Выключенная — глушим цветом (паттерн folder_detail §234).
+              color: disabled ? theme.colorScheme.onSurfaceVariant : null,
+            ),
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -130,25 +168,25 @@ class SubscriptionNodeList extends StatelessWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.copy),
-              title: const Text('Copy node info'),
+              title: Text(getLocalText.s("Copy node info")),
               subtitle: Text(info, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
               onTap: () {
                 Clipboard.setData(ClipboardData(text: info));
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Node info copied')),
+                  SnackBar(content: Text(getLocalText.s("Node info copied"))),
                 );
               },
             ),
             ListTile(
               leading: const Icon(Icons.label_outline),
-              title: const Text('Copy tag'),
+              title: Text(getLocalText.s("Copy tag")),
               subtitle: Text(node.tag, style: const TextStyle(fontSize: 11)),
               onTap: () {
                 Clipboard.setData(ClipboardData(text: node.tag));
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Tag copied')),
+                  SnackBar(content: Text(getLocalText.s("Tag copied"))),
                 );
               },
             ),
@@ -158,18 +196,4 @@ class SubscriptionNodeList extends StatelessWidget {
     );
   }
 
-  Widget _protocolIcon(String scheme) {
-    final icon = switch (scheme) {
-      'vless' => Icons.security,
-      'vmess' => Icons.vpn_key,
-      'trojan' => Icons.shield_outlined,
-      'ss' => Icons.lock_outline,
-      'hysteria2' || 'hy2' => Icons.speed,
-      'wireguard' => Icons.lan_outlined,
-      'masque' => Icons.cloud_outlined, // §130 — WARP-транспорт
-      'anytls' => Icons.enhanced_encryption, // §269
-      _ => Icons.public,
-    };
-    return Icon(icon, size: 20);
-  }
 }

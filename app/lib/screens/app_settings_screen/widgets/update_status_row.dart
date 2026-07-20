@@ -6,6 +6,7 @@ import '../../../services/relative_time.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/update_checker.dart';
 import '../../../services/version_info.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// "Last check: …" + Check now-кнопка под Updates-toggle. Подписан на
 /// `UpdateChecker.latest` чтобы при успешном fetch'е результат сразу
@@ -43,16 +44,18 @@ class _UpdateStatusRowState extends State<UpdateStatusRow> {
     );
     final dt = await SettingsStorage.getLastUpdateCheck();
     if (!mounted) return;
+    // §279 — screen-local transient render (mounted-гейт выше): строка живёт
+    // до следующего чека, смену локали не переживает сознательно.
     setState(() {
       _checking = false;
       _lastCheck = dt;
       switch (result.kind) {
         case UpdateCheckKind.newer:
-          _resultLine = '${result.info!.tag} available';
+          _resultLine = getLocalText.s(1, "%s available", result.info!.tag);
         case UpdateCheckKind.upToDate:
-          _resultLine = "You're up to date";
+          _resultLine = getLocalText.s("You're up to date");
         case UpdateCheckKind.failed:
-          _resultLine = 'Check failed: ${result.message ?? ''}';
+          _resultLine = getLocalText.s("Check failed: %s", result.message ?? '');
         case UpdateCheckKind.skipped:
           _resultLine = null;
       }
@@ -63,8 +66,9 @@ class _UpdateStatusRowState extends State<UpdateStatusRow> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final lastCheckText = _lastCheck == null
-        ? 'Last check: never'
-        : 'Last check: ${relativeTime(DateTime.now(), _lastCheck!)}';
+        ? getLocalText.s("Last check: never")
+        : getLocalText.s("Last check: %s",
+            relativeTime(DateTime.now(), _lastCheck!));
     return Padding(
       padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
       child: Row(
@@ -84,7 +88,7 @@ class _UpdateStatusRowState extends State<UpdateStatusRow> {
           else
             TextButton(
               onPressed: _checkNow,
-              child: const Text('Check now'),
+              child: Text(getLocalText.s("Check now")),
             ),
         ],
       ),

@@ -77,7 +77,7 @@ void main() {
       await c.rehydrationDone;
 
       expect(c.entries.single.list.nodes, hasLength(2));
-      expect(c.entries.single.status, '2 nodes (cached)');
+      expect(c.entries.single.status?.renderEn(), '2 nodes (cached)');
     });
 
     test('кеш парсится в 0 нод → ноды пусты, completer завершён', () async {
@@ -144,7 +144,8 @@ void main() {
       expect(list.lastNodeCount, 2);
       expect(list.lastUpdateStatus, UpdateStatus.failed);
       expect(list.consecutiveFails, 1);
-      expect(c.entries.single.status, contains('update failed: 0 parsed'));
+      expect(c.entries.single.status?.renderEn(),
+          contains('update failed: 0 parsed'));
       expect(await HttpCache.loadBody('http://x/a'), bodyA,
           reason: 'кеш на диске не перезаписан мусором');
     });

@@ -183,7 +183,7 @@ final class XhttpTransport extends TransportSpec {
         m[key] = value;
       } else {
         warnings.add(XhttpParamResetWarning(
-            key, 'value "$value" is not a valid $key'));
+            key, XhttpResetReason.invalidEnumValue, value: value));
       }
     }
 
@@ -200,10 +200,11 @@ final class XhttpTransport extends TransportSpec {
       if (!const {'body', 'auto', 'header', 'cookie'}
           .contains(uplinkDataPlacement)) {
         warnings.add(XhttpParamResetWarning('uplink_data_placement',
-            'value "$uplinkDataPlacement" is not valid'));
+            XhttpResetReason.invalidPlacementValue,
+            value: uplinkDataPlacement));
       } else if ((up == 'header' || up == 'cookie') && !isPacketUp) {
         warnings.add(const XhttpParamResetWarning('uplink_data_placement',
-            'header/cookie placement requires packet-up mode'));
+            XhttpResetReason.placementRequiresPacketUp));
       } else {
         m['uplink_data_placement'] = uplinkDataPlacement;
       }
@@ -215,7 +216,7 @@ final class XhttpTransport extends TransportSpec {
     if (uplinkHttpMethod.isNotEmpty) {
       if (uplinkHttpMethod.toUpperCase() == 'GET' && !isPacketUp) {
         warnings.add(const XhttpParamResetWarning(
-            'uplink_http_method', 'GET requires packet-up mode'));
+            'uplink_http_method', XhttpResetReason.getRequiresPacketUp));
       } else {
         m['uplink_http_method'] = uplinkHttpMethod;
       }

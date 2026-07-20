@@ -8,6 +8,7 @@ import '../../../services/builder/post_steps.dart'
 import '../../../services/builder/preset_expand.dart' show normalizeDnsDetour;
 import '../../dns_settings_screen/resolved_server.dart';
 import '../edit_controller.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// §117 задача 4 — JSON tab редактора DNS-сервера (locked decision №9):
 ///
@@ -43,11 +44,7 @@ class _InlineBodyEditor extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            c.isNew
-                ? 'sing-box server JSON — tag editable here or in Params; '
-                    'description/enabled live on the list entry'
-                : 'sing-box server JSON — tag locked while editing; '
-                    'description/enabled live on the list entry',
+            c.isNew ? getLocalText.s("sing-box server JSON — tag editable here or in Params; description/enabled live on the list entry") : getLocalText.s("sing-box server JSON — tag locked while editing; description/enabled live on the list entry"),
             style: theme.textTheme.labelSmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
@@ -112,7 +109,7 @@ class _ReadOnlyPreview extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text('storage shape (lxbox_settings.json)',
+                child: Text(getLocalText.s("storage shape (lxbox_settings.json)"),
                     style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
               ),
@@ -140,7 +137,7 @@ class _ReadOnlyPreview extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text('sing-box server preview (read-only)',
+                child: Text(getLocalText.s("sing-box server preview (read-only)"),
                     style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
               ),
@@ -178,12 +175,13 @@ class _CopyButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextButton.icon(
       icon: const Icon(Icons.content_copy, size: 14),
-      label: const Text('Copy', style: TextStyle(fontSize: 12)),
+      label: Text(getLocalText.s("Copy"), style: const TextStyle(fontSize: 12)),
       onPressed: () async {
         final messenger = ScaffoldMessenger.of(context);
+        final copied = getLocalText.s("Copied");
         await Clipboard.setData(ClipboardData(text: text));
         messenger.showSnackBar(
-          const SnackBar(content: Text('Copied')),
+          SnackBar(content: Text(copied)),
         );
       },
     );

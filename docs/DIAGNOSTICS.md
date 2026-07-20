@@ -67,8 +67,7 @@ Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token с�
 | `GET /logs?source=core&q=tinkoff&level=error,warning` | Фильтрация по substring + level |
 | `GET /diag/*` | §038 диагностика runtime'а (см. api/debug-api-reference.md) |
 | `GET /diag/pprof?profile=P` | §207 — pprof-слепок живого ядра. `P` = `heap` (что держит память, `?query=gc=1` форсит GC) \| `allocs` \| `profile` (CPU, `?query=seconds=10`) \| `goroutine` (`?query=debug=2` — полные стеки). Туннель up. `.pb` → `go tool pprof`; `goroutine?debug=*` → текст |
-| `GET /profiler/active` | §044/§048 — текущая per-app session (или null) |
-| `POST /profiler/live/start` | Включить system-wide rolling-buffer (или тап START в Live tab) |
+| `POST /profiler/live/start` | Включить system-wide rolling-buffer (или тап START в Profiler tab) |
 | `POST /profiler/live/stop` | Выключить |
 | `GET /profiler/live?seconds=N` | §048 — **где идёт трафик сейчас**: system-wide events за окно N сек (TCP/UDP open/close + DNS resolve/fail всех packages, с routing-цепочкой per event). Требует предшествующий `live/start` |
 | `GET /profiler/live/stream` | SSE stream system-wide events (live push) |

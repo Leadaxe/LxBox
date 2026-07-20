@@ -82,7 +82,7 @@ void main() {
 
   group('label', () {
     test('revoked назван по-человечески (не «Disconnected»)', () {
-      expect(TunnelStatus.revoked.label, 'Taken by another VPN');
+      expect(TunnelStatus.revoked.label(), 'Taken by another VPN');
     });
   });
 }

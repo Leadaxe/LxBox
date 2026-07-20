@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../services/format_utils.dart';
 import '../../vpn/cc_channel.dart';
 import '../stats_screen/routing_section.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// §152 — детальный bottom sheet по одному соединению.
 ///
@@ -93,7 +94,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    title.isNotEmpty ? title : '(connection)',
+                    title.isNotEmpty ? title : getLocalText.s("(connection)"),
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600),
                     softWrap: true,
@@ -109,8 +110,8 @@ class _ConnectionDetailSheet extends StatelessWidget {
                           Colors.pink.withValues(alpha: 0.22), cs.surface),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Text('One-way',
-                        style: TextStyle(
+                    child: Text(getLocalText.s("One-way"),
+                        style: const TextStyle(
                             fontSize: 11, fontWeight: FontWeight.w600)),
                   ),
                 if (closed)
@@ -121,7 +122,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
                       color: cs.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text('closed',
+                    child: Text(getLocalText.s("closed"),
                         style: TextStyle(
                             fontSize: 11, color: cs.onSurfaceVariant)),
                   ),
@@ -205,9 +206,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
       final startTime =
           DateTime.fromMillisecondsSinceEpoch(conn.createdAt);
       final local = startTime.toLocal();
-      timingStart =
-          '${local.year}-${_pad2(local.month)}-${_pad2(local.day)} '
-          '${formatTime(local)}';
+      timingStart = formatDateTime(local);
       final end = closed && conn.closedAt > 0
           ? DateTime.fromMillisecondsSinceEpoch(conn.closedAt)
           : DateTime.now();
@@ -252,8 +251,8 @@ class _ConnectionDetailSheet extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('One-way traffic',
-                    style: TextStyle(
+                Text(getLocalText.s("One-way traffic"),
+                    style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 Text(detail,
@@ -341,7 +340,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
           Expanded(
             child: OutlinedButton.icon(
               icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Copy JSON'),
+              label: Text(getLocalText.s("Copy JSON")),
               onPressed: () => _copy(
                 context,
                 const JsonEncoder.withIndent('  ').convert(_toJson()),
@@ -353,7 +352,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
           Expanded(
             child: FilledButton.tonalIcon(
               icon: const Icon(Icons.close, size: 16),
-              label: const Text('Close'),
+              label: Text(getLocalText.s("Close")),
               onPressed: canClose
                   ? () {
                       onClose(id);
@@ -385,6 +384,4 @@ class _ConnectionDetailSheet extends StatelessWidget {
       SnackBar(content: Text(message), duration: const Duration(seconds: 1)),
     );
   }
-
-  static String _pad2(int n) => n.toString().padLeft(2, '0');
 }

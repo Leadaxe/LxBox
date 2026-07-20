@@ -98,6 +98,21 @@ Platform напрямую — только через контроллеры.
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
+**Инвариант фасадов (§291):** домен даёт наружу **фасад** и не знает
+потребителей (в сигнатурах нет `DebugContext`/виджетов/intent'ов); внешние
+адаптеры (Debug HTTP · Automation broadcast · UI) знают транспорт+безопасность,
+но не то, к чему дают доступ; общая операция объявлена один раз, все адаптеры
+сводятся к вызову фасада. Эталоны формы: `ChannelMutations` (атомарный
+heal+resync, сырые статики `@visibleForTesting`), `SubscriptionController`
+(владеет мутациями server-lists; Debug+Automation делегируют), `ProbeController`
+(`services/probe/` — общий probe над всей подсистемой ServerList: пороги/ping/
+чистые решения + `probeNodesOf`-адаптер; `ProbeGateMixin` — общий VPN-гейт),
+`DnsController` (`services/dns/` — `load()`→snapshot + `stage()` над DNS-секцией;
+экран тонкий), `VpnSettingsFacade` (`services/vpn_settings/` — `applyVpnMode`
+несёт инварианты password-gen/auth-force/`has_tun`-зеркало для UI **и** Debug).
+Типизированные storage-модели: sealed `DnsServerRef`/`DnsRuleRef` (§294).
+Полный инвариант + план strangler — `docs/spec/features/291 layered-architecture-facades/`.
+
 **Брокеры событий (push, снизу вверх):** §122 — управляющий канал UI переведён
 на libbox **CommandClient** (server-stream push вместо Timer-polling). Push-каналы:
 native статус-`Stream<TunnelStatusEvent>` (lifecycle туннеля), `lxbox/coreLog`-stream
@@ -438,10 +453,9 @@ dns_settings_screen.dart     # DNS-настройки (592) + editor-sheets + dn
 custom_rule_edit_screen.dart # CustomRule editor (456) + custom_rule_edit/ (edit_controller, tabs/, sections/, widgets/)
 subscription_detail_screen.dart # детали подписки (431, TabController) + widgets/ (settings/source/meta/node_list)
 subscriptions_screen.dart    # список подписок (445) + widgets/ + helpers (clipboard/paste/share/context-menu)
-stats_screen.dart            # хост TabBarView: Overview + Connections + PerAppTrace + LiveEvents
+stats_screen.dart            # хост TabBarView: Overview + Connections + LiveEvents (§288 — PerAppTrace убран)
 stats_screen/overview_tab.dart  # Overview-таб + overview_models
-per_app_trace_tab.dart       # Stats-субтаб (446): live/connections/domains/ips views + dialogs
-live_events_tab.dart         # Stats-субтаб (371): event_tile/recording_header/unattributed_banner
+live_events_tab.dart         # Stats-субтаб «Profiler» (371): event_tile/recording_header/unattributed_banner
 tun_apps_tab.dart            # per-app VPN routing субтаб (384) — шарится Stats/Routing
 app_settings_screen.dart     # настройки приложения (516): General/Diagnostics табы + update_status_row
 backup_screen.dart           # export/import снапшота (229) + export_card/import_card/preview
@@ -516,7 +530,8 @@ debug/                       # localhost HTTP Debug API (§031)
 warp/                        # §025/§130 WARP + MASQUE-транспорт (питает warp_wizard_screen)
   warp_client.dart           #   регистрация в Cloudflare (POST /reg): X25519-приватник не покидает телефон
   warp_account.dart          #   WARP-аккаунт (client_id→reserved, ключи)
-  warp_endpoint_picker.dart  #   скан WARP-эндпоинтов (порты 2408/500/1701/4500, WG-handshake liveness)
+  warp_endpoint_picker.dart  #   пул WARP-эндпоинтов + рандом endpoint/SNI (§148 курированные блоки; БЕЗ пробы)
+  scan/                      #   §284 endpoint scanner: рандом-посев узлов → папка «SCAN WARP» → urltest
   masque_account.dart · masque_keys.dart · masquerade_params.dart  #   §130 MASQUE (Cloudflare QUIC/CONNECT-IP) — эмит MasqueSpec
 migration/proxy_source_migration.dart  # one-shot v1 proxy_sources → v2 server_lists
 nav/home_return_observer.dart          # глобальный NavigatorObserver (§076): rebuild на возврат к home
@@ -542,6 +557,13 @@ automation/                  # §047 Dart-сторона automation (допол�
   automation_dispatcher.dart #   диспетчер входящих команд (start/stop/toggle/select-node/…)
   event_emitter.dart         #   исходящие события (VPN up/down, sub-refresh) с throttle (default OFF)
   handlers.dart              #   обработчики команд поверх контроллеров
+l10n/                        # §279/§285 подсистема локализации (см. раздел «Локализация (l10n)»)
+  get_local_text.dart        #   GetLocalText (natural-key движок: .s/.plural, printf, fallback=ключ); GetLocalText.en
+  plural_resolver.dart       #   PluralResolver + En/RuPluralResolver (CLDR формы плюрала)
+  locale_controller.dart     #   LocaleController — владелец пайплайна смены локали + глобальный getLocalText
+  template_overlay.dart      #   TemplateOverlay.apply/extract — pre-parse оверлей шаблона
+  app_language_reconcile.dart#   трёхсторонний reconciliation LocaleManager↔storage (Android 13+)
+  template_aware_state.dart  #   mixin: перечитывание шаблона в didChangeDependencies по локали
 support/                     # §105 support-message + активное время
   support_message.dart       #   fetch+cache support-сообщения (баннер)
   support_state.dart         #   персист support-стейта (SupportState.I)
@@ -877,8 +899,9 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
 
 Cloudflare WARP-интеграция (`services/warp/`, мастер `screens/warp_wizard_screen.dart`, storage `settings_storage/warp.dart`). Два транспорта:
 
-- **WARP-WireGuard (§025).** `WarpClient` регистрирует устройство сам (POST в Cloudflare) — приватный ключ **X25519 генерируется на телефоне и не покидает его**. `client_id` (3 байта из base64) → WireGuard `reserved`; default-пир `engage.cloudflareclient.com:2408`. `warp_endpoint_picker.dart` сканирует диапазоны IP/портов, liveness = настоящий WG-handshake. Эмитится как обычная WireGuard-нода.
+- **WARP-WireGuard (§025).** `WarpClient` регистрирует устройство сам (POST в Cloudflare) — приватный ключ **X25519 генерируется на телефоне и не покидает его**. `client_id` (3 байта из base64) → WireGuard `reserved`; default-пир `engage.cloudflareclient.com:2408`. `warp_endpoint_picker.dart` даёт пул диапазонов/портов и рандомит endpoint (без пробы). Эмитится как обычная WireGuard-нода.
 - **MASQUE (§130, флагман v2.9.0).** Отдельная крипта (`masque_keys.dart` — ECDSA P-256, не X25519), `masque_account.dart`, `masquerade_params.dart`. `MasqueSpec` ([`node_spec.dart`](../app/lib/models/node_spec.dart), `protocol='masque'`) эмитит sing-box outbound `type: masque` (Cloudflare QUIC / CONNECT-IP), `network` = `h3`/`h2`. Требует ядро с поддержкой masque-транспорта — см. `KERNEL.md`.
+- **Endpoint scanner (§284).** Кнопка SCAN в мастере (`services/warp/scan/` + `SubscriptionController.scanWarp`): одна регистрация → 100 случайных узлов (IP × port × protocol{AWG, h3, h2} × SNI) поверх кредов (`ScanNodeBuilder`) → (пере)создаётся папка **«SCAN WARP»** → штатная probe-механика (`FolderProbeRunner`, стоп VPN → probe-сессия без tun → `probeUrlTest`) → мёртвые узлы удаляются, живые сортируются по задержке → дотест топ-3 → открывается папка с живыми эндпоинтами. **DNS-независимо**: url пробы — IP-литерал `https://1.1.1.1/cdn-cgi/trace` (доменный резолвился бы через local-dns). Без изменений ядра.
 
 ### 6. AppLog (per-source ring buffers, §043)
 
@@ -1287,6 +1310,59 @@ Lifecycle-сигналы (`connectScreen`/`disconnectScreen`, `connectProfiler`/
 
 ---
 
+## Локализация (l10n, §279 / §285)
+
+en (базовый) + ru; новый язык = один natural-key словарь + один
+template-overlay + один `values-<lang>/` без структурных изменений.
+Runtime-переключение без рестарта приложения, включая нативные поверхности при
+живом VPN-сервисе. С §285 UI-строки локализуются через **natural keys**
+(английский текст call-site'а И ЕСТЬ ключ; ARB/gen_l10n снесены). Полная
+архитектура — [спека §279](spec/features/279%20localization/spec.md) +
+[ревизия getLocalText](spec/features/279%20localization/getlocaltext.md);
+translator-guide — [`l10n.md`](l10n.md).
+
+| Компонент | Роль |
+|---|---|
+| `lib/services/l10n/get_local_text.dart` | `GetLocalText` — natural-key движок: `.s("en text", args)` / `.plural("%d en", n)`, printf `%s/%d/%1$s/%%`, форма-индекс, fallback = сам ключ; `GetLocalText.en` — пиненный английский рендерер |
+| `lib/services/l10n/plural_resolver.dart` | `PluralResolver` + `En`/`RuPluralResolver` (CLDR формы: ru one/few/many/other) — набор форм диктует shape plural-объекта в словаре |
+| `assets/l10n/ru/ui.json` | Natural-key словарь: `englishKey → { value: String\|pluralObj, special: {"N": {value}} }`. `en`-файла нет by design — английский базовый, в коде (fallback на сам ключ) |
+| `lib/services/l10n/locale_controller.dart` | `LocaleController` — **единственный владелец** смены локали + глобальный `getLocalText` getter (dict-reload в пайплайне); `didChangeLocales` ловит смену системного языка при `setting=='system'` |
+| `lib/services/l10n/template_overlay.dart` | Pre-parse оверлей display-текста `wizard_template.json` (адреса по machine-id, см. [TEMPLATE.md](TEMPLATE.md#локализация-display-текста--l10n-overlay-279)) |
+| `lib/services/l10n/template_aware_state.dart` | Mixin: refetch template-derived состояния в `didChangeDependencies` по `Localizations.localeOf` (initState переживает rebuild — снапшот локали там запрещён checker'ом) |
+| `lib/services/l10n/app_language_reconcile.dart` | Трёхсторонний reconciliation `LocaleManager`↔storage на старте (Android 13+, зеркало `last_pushed_locale`) |
+| `lib/models/ui_msg.dart` | sealed `UiMsg` — хранимые ошибки/статусы как типизированные объекты; `render()` через ambient `getLocalText` в момент показа, `renderEn()` → `GetLocalText.en` — путь UiMsg→String на machine-поверхностях (automation/AppLog/notification) |
+| `app/tool/l10n/` | 4 CI-checker'а (`--strict` на каждом PR): ui_check (natural-key словарь↔код) / template_check / hardcoded_check (+ rendering-locality) / kotlin_check |
+| `android … L10n.kt` | Нативный резолвер: читает `boxvpn_boot.app_language`, `createConfigurationContext` **в момент рендера, без кэша** — работает в сервис-процессе при мёртвом Flutter |
+
+`MaterialApp.localizationsDelegates` несёт только Flutter-встроенные делегаты
+(Global Material/Widgets/Cupertino chrome); строки приложения идут через
+`getLocalText`, не через `Localizations`-делегат.
+
+**Пайплайн смены языка** (любой путь записи `app_language` — picker, Debug API
+side-effect hook, restore, смена системного языка — сходится в
+`LocaleController.set()` / `_applyLocale()`):
+
+```
+LocaleController.set(v)
+  ├─ SettingsStorage.setAppLanguage(v)      # JSON-var (истина) + MethodChannel-зеркало
+  │     └─ native: BootReceiver pref → resubmit notification-канала →
+  │        ServiceNotification.relabel → updateShortcuts (+onResume retry) →
+  │        tile.requestListeningState → Libbox.setLocale → LocaleManager (33+)
+  └─ _applyLocale(effective)
+        ├─ _text = GetLocalText(dict<tag>, resolver<tag>)  # natural-key словарь новой локали
+        ├─ await TemplateLoader.reload(tag)  # ПРОГРЕВ ДО notify (кэш ключуется тегом локали)
+        ├─ RuleNameResolver.relocalize(...)  # display-зеркала билдера без ребилда конфига
+        ├─ LazyPersistFlush.flushAll()
+        └─ notifyListeners()                 # merged Listenable с themeNotifier → rebuild MaterialApp
+```
+
+**Границы** (английские навсегда): логи, Debug API-ответы, automation/Tasker-payload'ы,
+`emitWarnings`, wire-значения и теги, имена файлов, user data, payload
+OS/ядра (passthrough `RawMsg.detail`). Единицы (`B/KB/MB`, `Mbps`, `ms`) и
+суффиксы длительности — латиница в обеих локалях.
+
+---
+
 ## State Management
 
 | Controller | Responsibility |
@@ -1477,6 +1553,11 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | **128** | **Idle-suspend** (`route.lx_idle_suspend`, ядро SPEC 020; default `30s`) |
 | **129** | **File subscription** (url=file:<uuid>, HttpCache-снапшот, транзакционная смена online↔file) |
 | **130** | **MASQUE WARP transport** (флагман v2.9.0 — MasqueSpec, Cloudflare QUIC/CONNECT-IP; services/warp/) |
+| **234** | **Server folders** (папки ручных серверов: FolderMember + per-member toggle + tag_prefix/detour-политика) |
+| 236 | Folder server testing (headless probe членов папки) |
+| **248** | **Detour channels** (каналы как detour-цели; §254 циклы → fatal с виновниками) |
+| **279** | **Localization** (en+ru: ARB + template-overlay + values-<lang>; §280 фазы 0-7) |
+| **283** | **Subscription node disable** (per-node toggle в подписке: identity-хеш сути узла + TTL-GC отметок) |
 
 **Демотированные (через §054) — теперь в `tasks/`:**
 

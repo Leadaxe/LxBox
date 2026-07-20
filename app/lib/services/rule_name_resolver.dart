@@ -1,4 +1,6 @@
 import '../models/custom_rule.dart';
+import '../models/parser_config.dart';
+import 'rule_display_names.dart';
 
 /// §165 — резолвер человекочитаемого имени правила для Stats/Conns.
 ///
@@ -21,26 +23,84 @@ class RuleNameResolver {
   final Map<String, String> _cache = {};
 
   /// Эталонные нормализованные строки правил: normString → title. Перестраивается
-  /// при `setRules` (смена конфига).
+  /// при `setRules` (смена конфига) и `relocalize` (смена локали).
   final List<({String norm, String title})> _rules = [];
+
+  /// §279 — исходный список правил последнего [setRules]: relocalize
+  /// пере-дерайвит из него display-титулы под новый шаблон.
+  List<CustomRule> _sourceRules = const [];
+
+  /// §279 — preset-label-часть зеркал: rule_set-tag пресета → display-титул
+  /// правила-владельца. Preset-правила не несут match-полей (их условия живут
+  /// в шаблоне), kernel-строка матчится rule_set-фолбэком — без этой мапы
+  /// Stats показывал бы сырой тег вместо live-label'а пресета.
+  final Map<String, String> _ruleSetTagTitles = {};
 
   /// §165 — задать актуальные правила (из `getCustomRules()`). Сбрасывает кэш
   /// (строки правил сменились → старые соответствия невалидны). Зовётся на
   /// connect / смену конфига.
-  void setRules(List<CustomRule> rules) {
-    _rules.clear();
-    for (final r in rules) {
-      final s = _ruleConditionString(r);
-      if (s.isEmpty) continue;
-      _rules.add((norm: _norm(s), title: r.name));
-    }
-    _cache.clear();
+  ///
+  /// §279 — [template] (локализованный, `TemplateLoader.cachedOrNull()`) даёт
+  /// live-label'ы preset-правил + порядковую дизамбигуацию копий; null —
+  /// fallback на сохранённые `name`-снапшоты.
+  void setRules(List<CustomRule> rules, {WizardTemplate? template}) {
+    _sourceRules = List.of(rules);
+    _rebuild(template);
   }
 
   /// §165 — сброс при stop VPN (правила могут смениться к следующему запуску).
   void clear() {
     _cache.clear();
     _rules.clear();
+    _ruleSetTagTitles.clear();
+    _sourceRules = const [];
+  }
+
+  /// §279 (§3.5.4) — смена локали: пере-дерайв preset-label-частей зеркал из
+  /// сохранённых custom_rules + свежелокализованного [template] + сброс
+  /// мемоизации. Зовётся из LocaleController._applyLocale после прогрева
+  /// шаблона, БЕЗ касания конфига (никакого markConfigDirty — условия правил
+  /// не меняются, только display-титулы).
+  void relocalize(WizardTemplate? template) {
+    _rebuild(template);
+  }
+
+  /// Перестроить эталонные строки `norm → title` + мапу rule_set-тегов
+  /// пресетов из [_sourceRules] с display-титулами по [template]; сбросить
+  /// мемо-кэш.
+  void _rebuild(WizardTemplate? template) {
+    _rules.clear();
+    _ruleSetTagTitles.clear();
+    final titles = ruleDisplayNames(_sourceRules, template);
+    for (var i = 0; i < _sourceRules.length; i++) {
+      final r = _sourceRules[i];
+      if (r.kind == CustomRuleKind.preset) {
+        // §279 — match-полей у preset-правила нет; регистрируем rule_set-теги
+        // его шаблонного тела → live display-титул (первая копия wins).
+        final preset = _presetOf(template, r.presetId);
+        if (preset != null) {
+          for (final rs in preset.ruleSets) {
+            final tag = rs['tag'];
+            if (tag is String && tag.isNotEmpty) {
+              _ruleSetTagTitles.putIfAbsent(tag, () => titles[i]);
+            }
+          }
+        }
+        continue;
+      }
+      final s = _ruleConditionString(r);
+      if (s.isEmpty) continue;
+      _rules.add((norm: _norm(s), title: titles[i]));
+    }
+    _cache.clear();
+  }
+
+  static SelectableRule? _presetOf(WizardTemplate? template, String presetId) {
+    if (template == null || presetId.isEmpty) return null;
+    for (final p in template.selectableRules) {
+      if (p.presetId == presetId) return p;
+    }
+    return null;
   }
 
   /// Человекочитаемое имя для `connection.rule`. Кэшируется (вкл. промахи).
@@ -75,17 +135,21 @@ class RuleNameResolver {
     return _fallback(core);
   }
 
-  /// Fallback когда правило не сматчилось: `rule_set=<tag>` целиком, иначе
+  /// Fallback когда правило не сматчилось: `rule_set=<tag>` целиком (§279 —
+  /// тег пресета резолвится в live display-титул владельца), иначе
   /// одиночное условие, иначе `final`.
   String _fallback(String core) {
     final rsValue = _kvValue(core, 'rule_set=');
     if (rsValue != null && rsValue.isNotEmpty) {
+      String tag;
       if (rsValue.startsWith('[')) {
         var v = rsValue.substring(1);
         if (v.endsWith(']')) v = v.substring(0, v.length - 1);
-        return _firstToken(v.trim());
+        tag = _firstToken(v.trim());
+      } else {
+        tag = rsValue;
       }
-      return rsValue;
+      return _ruleSetTagTitles[tag] ?? tag;
     }
     final eq = core.indexOf('=');
     if (eq < 0) return core.isEmpty ? 'final' : _firstToken(core);

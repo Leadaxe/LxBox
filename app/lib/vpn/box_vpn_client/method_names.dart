@@ -76,6 +76,11 @@ class _Methods {
   static const getMemoryLimit = 'getMemoryLimit';
   static const setMemoryLimit = 'setMemoryLimit';
 
+  // §279 — app language mirror (boxvpn_boot) + relabel нативных поверхностей.
+  static const setAppLanguage = 'setAppLanguage';
+  // §279 Phase 6 — снимок per-app-локалей (33+) для reconciliation (§6.4).
+  static const getAppLanguageState = 'getAppLanguageState';
+
   // Quick Connect
   static const requestAddTile = 'requestAddTile';
 

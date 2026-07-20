@@ -9,6 +9,8 @@ import '../models/background_mode.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/tunnel_status.dart';
 import '../services/app_log.dart';
+import '../services/l10n/app_language_reconcile.dart'
+    show AppLanguageNativeState;
 import '../services/platform_channels.dart';
 
 // Method-name + timeout константы вынесены `part`'ами (та же библиотека, тот же
@@ -553,6 +555,43 @@ class BoxVpnClient {
       timeout: _Timeouts.settings,
       onTimeoutValue: null,
     );
+  }
+
+  /// §279 — зеркалит выбранный язык приложения (`system|en|ru`) в
+  /// `boxvpn_boot`: native-поверхности (шторка, тайл, shortcuts) читают его
+  /// без Flutter. Phase 6: native-handler дополнительно пушит LocaleManager
+  /// (33+, `system` → пустой список), обновляет `last_pushed_locale` и
+  /// перештамповывает все нативные поверхности (канал/шторка/shortcuts/тайл/
+  /// локаль ядра). На старом native — notImplemented; caller глотает.
+  Future<void> setAppLanguage(String tag) async {
+    await _invoke<void>(
+      _Methods.setAppLanguage,
+      args: {'tag': tag},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: null,
+    );
+  }
+
+  /// §279 Phase 6 (спека §6.4) — состояние per-app-локалей для трёхстороннего
+  /// reconciliation на старте. null → фича недоступна (API < 33, старый
+  /// native, timeout, тест без mock'а) — reconciliation делает no-op.
+  Future<AppLanguageNativeState?> getAppLanguageState() async {
+    try {
+      final r = await _invoke<Object>(
+        _Methods.getAppLanguageState,
+        timeout: _Timeouts.settings,
+        onTimeoutValue: null,
+      );
+      if (r is! Map || r['supported'] != true) return null;
+      return AppLanguageNativeState(
+        applicationLocales: r['applicationLocales']?.toString() ?? '',
+        lastPushedLocale: r['lastPushedLocale']?.toString(),
+      );
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------------------

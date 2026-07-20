@@ -10,6 +10,7 @@ import '../../services/app_log.dart';
 import '../../services/backup_service.dart';
 import '../../services/error_format.dart';
 import '../../services/subscription/auto_updater.dart';
+import '../../services/l10n/locale_controller.dart';
 
 /// Empty-state quick-restore flow.
 ///
@@ -44,7 +45,7 @@ Future<void> restoreFromBackup(
     if (raw == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not read file.')),
+          SnackBar(content: Text(getLocalText.s("Could not read file."))),
         );
       }
       return;
@@ -59,12 +60,12 @@ Future<void> restoreFromBackup(
       showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Invalid backup'),
+          title: Text(getLocalText.s("Invalid backup")),
           content: Text(e.message),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+              child: Text(getLocalText.s("OK")),
             ),
           ],
         ),
@@ -120,7 +121,9 @@ Future<void> restoreFromBackup(
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Restore failed: ${formatUserError(e)}')),
+        SnackBar(
+            content: Text(getLocalText.s(
+                "Restore failed: %s", formatUserError(e).render()))),
       );
     }
   }

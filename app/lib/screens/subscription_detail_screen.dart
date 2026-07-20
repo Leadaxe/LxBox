@@ -7,9 +7,12 @@ import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
+import '../models/ui_msg.dart';
 import '../services/error_humanize.dart';
+import '../services/node_hash.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/sources.dart';
+import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
 import '../widgets/detour_target_picker.dart';
 import '../services/url_launcher.dart';
 import 'subscriptions_screen/entry_context_menu.dart' show showEditSourceDialog;
@@ -19,6 +22,7 @@ import 'subscription_detail_screen/widgets/subscription_meta.dart';
 import 'subscription_detail_screen/widgets/subscription_node_list.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_source_tab.dart';
+import '../services/l10n/locale_controller.dart';
 
 class SubscriptionDetailScreen extends StatefulWidget {
   const SubscriptionDetailScreen({
@@ -39,19 +43,88 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   late final TabController _tabCtrl;
   List<NodeSpec>? _nodes;
   bool _loading = true;
-  String? _error;
+  UiMsg? _error;
   bool _editing = false;
   late TextEditingController _nameCtrl;
   String _rawSource = '';
   Map<String, String> _rawHeaders = const {};
   bool _sourceLoaded = false;
   bool _sourceLoading = false;
-  String? _sourceError;
+  UiMsg? _sourceError;
   bool _showAllHeaders = false;
 
   // §248 — каналы: секция Channels в detour-пикере + подпись «⚙ <label>»
   // канальной override-цели в Settings-вкладке.
   List<Channel> _channels = const [];
+
+  // §283 — per-node disable. Хеш ноды считается лениво и кэшируется по
+  // identity. Полный проход хеширования происходит ТОЛЬКО когда есть
+  // выключенные отметки — подписка без них не платит ничего.
+  final Map<NodeSpec, String> _hashCache = Map.identity();
+  Set<NodeSpec> _togglableNodes = Set.identity();
+  Set<NodeSpec> _disabledNodes = Set.identity();
+
+  // От какого List<NodeSpec> построены строки/кэш (identity-маркер):
+  // refresh подменяет и список, и инстансы → кэш хешей протухает целиком;
+  // toggle идёт через copyWith с тем же List → кэш живёт (не хешируем
+  // 10k нод заново на каждый toggle).
+  List<NodeSpec>? _hashedNodesList;
+
+  String _hashOf(NodeSpec n) => _hashCache[n] ??= nodeIdentityHash(n);
+
+  /// §283 (ревью) — строки, togglable- и disabled-set'ы пересобираются от
+  /// ЖИВЫХ инстансов entry.list.nodes одним местом. Иначе refresh мимо
+  /// _loadNodes (фоновый AutoUpdater, «Refresh now» из Settings-вкладки,
+  /// смена источника) подменял инстансы, identity-set'ы расходились со
+  /// строками — и все тогглы исчезали.
+  void _rebuildRowsFromEntry() {
+    final nodes = widget.entry.list.nodes;
+    if (!identical(nodes, _hashedNodesList)) {
+      _hashCache.clear();
+      _hashedNodesList = nodes;
+    }
+    final expanded = <NodeSpec>[];
+    for (final node in nodes) {
+      expanded.add(node);
+      if (node.chained != null) expanded.add(node.chained!);
+    }
+    _nodes = expanded;
+    _togglableNodes = widget.entry.list is SubscriptionServers
+        ? (Set<NodeSpec>.identity()..addAll(nodes))
+        : Set<NodeSpec>.identity();
+    _recomputeDisabled();
+  }
+
+  /// Derived-set выключенных нод от `disabledHashes` подписки. Дубли по
+  /// хешу гаснут синхронно — состояние строки считается отсюда.
+  void _recomputeDisabled() {
+    final list = widget.entry.list;
+    final next = Set<NodeSpec>.identity();
+    if (list is SubscriptionServers && list.disabledHashes.isNotEmpty) {
+      for (final n in list.nodes) {
+        if (list.disabledHashes.containsKey(_hashOf(n))) {
+          next.add(n);
+          // chained-ребёнок рисуется отдельной строкой — глушим вместе с
+          // родителем (он и не эмитится: родитель пропущен целиком).
+          if (n.chained != null) next.add(n.chained!);
+        }
+      }
+    }
+    _disabledNodes = next;
+  }
+
+  void _onEntryChanged() {
+    if (!mounted) return;
+    setState(_rebuildRowsFromEntry);
+  }
+
+  Future<void> _toggleNode(NodeSpec node) async {
+    // §219 — index по ссылке (список мог сместиться от reorder).
+    final idx = widget.controller.entries.indexOf(widget.entry);
+    if (idx < 0) return;
+    await widget.controller.toggleSubscriptionNode(idx, node);
+    // Пересборку строк/set'ов делает listener entry (_onEntryChanged).
+  }
 
   /// Headers, которые нам реально нужны — подписочные метаданные.
   /// Остальное (server, date, cookies, content-length, ddos-guard, etc.) —
@@ -70,6 +143,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.name);
+    // §283 — entry.list может смениться мимо _loadNodes (см.
+    // _rebuildRowsFromEntry); _replaceList нотифицирует entry.
+    widget.entry.addListener(_onEntryChanged);
     unawaited(_loadNodes());
     unawaited(_loadChannels());
     // При первом заходе на Source — живой GET.
@@ -82,6 +158,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
 
   @override
   void dispose() {
+    widget.entry.removeListener(_onEntryChanged); // §283
     _tabCtrl.dispose();
     _nameCtrl.dispose();
     super.dispose();
@@ -102,7 +179,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       _sourceError = null;
     });
     try {
-      final r = await fetchRaw(UrlSource(widget.entry.url));
+      // §289 — сырой ответ отражает реальную идентичность фетча (per-sub/глоб.).
+      final r = await fetchRaw(
+          UrlSource(widget.entry.url, identity: widget.entry.identity));
       if (!mounted) return;
       setState(() {
         _rawSource = r.body;
@@ -132,18 +211,14 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       }
       // v2: узлы уже распарсены в entry.list.nodes. Детоур-узлы показываем
       // отдельной строкой под родителем.
-      final expanded = <NodeSpec>[];
-      for (final node in widget.entry.list.nodes) {
-        expanded.add(node);
-        if (node.chained != null) expanded.add(node.chained!);
-      }
+      _rebuildRowsFromEntry(); // §283 — строки + togglable/disabled set'ы
       // Source-вкладка теперь подтягивается живым GET при переключении туда.
       // Для UserServer (connections) показываем сразу что есть.
       if (widget.entry.connections.isNotEmpty) {
         _rawSource = widget.entry.connections.join('\n');
         _sourceLoaded = true;
       }
-      if (mounted) setState(() { _nodes = expanded; _loading = false; });
+      if (mounted) setState(() => _loading = false);
     } catch (e) {
       if (mounted) setState(() { _error = humanizeError(e); _loading = false; });
     }
@@ -153,14 +228,14 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete subscription?'),
-        content: Text('Remove "${widget.entry.displayName}"?'),
+        title: Text(getLocalText.s("Delete subscription?")),
+        content: Text(getLocalText.s("Remove \"%s\"?", widget.entry.displayName)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(getLocalText.s("Cancel"))),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: const Text('Delete'),
+            child: Text(getLocalText.s("Delete")),
           ),
         ],
       ),
@@ -181,7 +256,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final opened = await UrlLauncher.open(url);
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Copied: $url')),
+        SnackBar(content: Text(getLocalText.s("Copied: %s", url))),
       );
     }
   }
@@ -209,9 +284,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                 controller: _nameCtrl,
                 autofocus: true,
                 style: theme.textTheme.titleLarge,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   border: InputBorder.none,
-                  hintText: 'Display name',
+                  hintText: getLocalText.s("Display name"),
                 ),
                 onSubmitted: (_) => _toggleEdit(),
               )
@@ -222,27 +297,27 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
               ),
         actions: [
           IconButton(
-            tooltip: _editing ? 'Save' : 'Rename',
+            tooltip: _editing ? getLocalText.s("Save") : getLocalText.s("Rename"),
             icon: Icon(_editing ? Icons.check : Icons.edit_outlined),
             onPressed: _toggleEdit,
           ),
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: getLocalText.s("Refresh"),
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : () => _loadNodes(cacheOnly: false),
           ),
           IconButton(
-            tooltip: 'Delete',
+            tooltip: getLocalText.s("Delete"),
             icon: const Icon(Icons.delete_outline),
             onPressed: _delete,
           ),
         ],
         bottom: TabBar(
           controller: _tabCtrl,
-          tabs: const [
-            Tab(text: 'Nodes'),
-            Tab(text: 'Settings'),
-            Tab(text: 'Source'),
+          tabs: [
+            Tab(text: getLocalText.s("Nodes")),
+            Tab(text: getLocalText.s("Settings")),
+            Tab(text: getLocalText.s("Source")),
           ],
         ),
       ),
@@ -254,13 +329,25 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_loading) const LinearProgressIndicator(),
-              SubscriptionMeta(entry: entry, onOpenUrl: _openUrl),
+              SubscriptionMeta(
+                entry: entry,
+                onOpenUrl: _openUrl,
+                offCount: _disabledNodes.length, // §283
+              ),
               const Divider(height: 1),
               Expanded(
                 child: SubscriptionNodeList(
                   nodes: _nodes,
                   loading: _loading,
                   error: _error,
+                  // §283 — toggle только у top-level нод подписки; chained-
+                  // дети управляются родителем, UserServer — без тогглов.
+                  // Set'ы — поля, пересобираемые _rebuildRowsFromEntry
+                  // синхронно со строками (одни инстансы — нет рассинхрона).
+                  togglableNodes: _togglableNodes,
+                  disabledNodes: _disabledNodes,
+                  onToggleNode:
+                      entry.list is SubscriptionServers ? _toggleNode : null,
                 ),
               ),
             ],
@@ -307,13 +394,125 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         await Clipboard.setData(ClipboardData(text: list.url));
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('URL copied'), duration: Duration(seconds: 1)),
+          SnackBar(
+              content: Text(getLocalText.s("URL copied")),
+              duration: const Duration(seconds: 1)),
         );
       },
       onShowIntervalPicker: _showIntervalPicker,
       onRefreshNow: _refreshNow,
       onEditSource: _editSource, // §129
+      // §289 — per-subscription fetch identity (Default/Custom override).
+      onToggleCustomIdentity: (on) {
+        setState(() {
+          if (on) {
+            widget.entry.enableCustomIdentity();
+          } else {
+            widget.entry.disableCustomIdentity();
+          }
+        });
+        unawaited(widget.controller.persistSources());
+      },
+      onEditIdentityUserAgent: () => unawaited(_editIdentityUserAgent()),
+      onIdentitySendHwidChanged: (v) {
+        final id = widget.entry.identity;
+        if (id == null) return;
+        // §289 — как глобальный _setSendHwid: при первом включении с пустым
+        // HWID лениво генерим UUIDv4 (иначе x-hwid не положится — гейт по
+        // непустому hwid), device-meta берём как есть из слепка.
+        final next = v && id.hwid.isEmpty
+            ? id.copyWith(sendHwid: v, hwid: generateUuidV4())
+            : id.copyWith(sendHwid: v);
+        setState(() => widget.entry.updateIdentity(next));
+        unawaited(widget.controller.persistSources());
+      },
+      onEditIdentityHwid: () => unawaited(_editIdentityField(
+            title: 'HWID',
+            initial: widget.entry.identity?.hwid ?? '',
+            monospace: true,
+            apply: (id, v) => id.copyWith(hwid: v.trim()),
+          )),
+      onRegenerateIdentityHwid: () {
+        final id = widget.entry.identity;
+        if (id == null) return;
+        setState(() =>
+            widget.entry.updateIdentity(id.copyWith(hwid: generateUuidV4())));
+        unawaited(widget.controller.persistSources());
+      },
+      onEditIdentityDeviceOs: () => unawaited(_editIdentityField(
+            title: 'x-device-os',
+            initial: widget.entry.identity?.deviceOs ?? '',
+            apply: (id, v) => id.copyWith(deviceOs: v.trim()),
+          )),
+      onEditIdentityVerOs: () => unawaited(_editIdentityField(
+            title: 'x-ver-os',
+            initial: widget.entry.identity?.verOs ?? '',
+            apply: (id, v) => id.copyWith(verOs: v.trim()),
+          )),
+      onEditIdentityDeviceModel: () => unawaited(_editIdentityField(
+            title: 'x-device-model',
+            initial: widget.entry.identity?.deviceModel ?? '',
+            apply: (id, v) => id.copyWith(deviceModel: v.trim()),
+          )),
     );
+  }
+
+  /// §289 — правка UA слепка: пусто = дефолт (брендированный UA), поэтому trim
+  /// без hint-подстановки; общий диалог с [_editIdentityField].
+  Future<void> _editIdentityUserAgent() => _editIdentityField(
+        // §292 — человекочитаемый заголовок диалога (в отличие от HWID/
+        // x-device-* — те буквальные имена заголовков, перевод бессмыслен).
+        title: getLocalText.s('Custom User-Agent'),
+        initial: widget.entry.identity?.userAgent ?? '',
+        apply: (id, v) => id.copyWith(userAgent: v.trim()),
+      );
+
+  /// §289 — общий edit-диалог одного поля слепка идентичности (зеркало
+  /// глобального `_editIdentityText`). Открывает однострочный ввод, применяет
+  /// [apply] к текущему слепку и персистит. No-op если Custom не активен.
+  Future<void> _editIdentityField({
+    required String title,
+    required String initial,
+    required SubscriptionIdentityOverride Function(
+            SubscriptionIdentityOverride id, String value)
+        apply,
+    bool monospace = false,
+  }) async {
+    final ctl = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          maxLines: null,
+          style: monospace
+              ? const TextStyle(fontFamily: 'monospace', fontSize: 13)
+              : null,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(getLocalText.s("Cancel")),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text),
+            child: Text(getLocalText.s("Save")),
+          ),
+        ],
+      ),
+    );
+    ctl.dispose();
+    if (result == null || !mounted) return;
+    final id = widget.entry.identity;
+    if (id == null) return;
+    setState(() => widget.entry.updateIdentity(apply(id, result)));
+    await widget.controller.persistSources();
   }
 
   /// §129 — сменить источник подписки (online↔file). Переиспользует общий
@@ -333,7 +532,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final chosen = await showDialog<int>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Update interval'),
+        title: Text(getLocalText.s("Update interval")),
         children: [
           for (final h in presets)
             SimpleDialogOption(
@@ -346,9 +545,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                     const SizedBox(width: 18),
                   const SizedBox(width: 8),
                   Text(switch (h) {
-                    < 0 => "Don't auto-update",
-                    0 => 'Never (respect server)',
-                    _ => '${h}h (${intervalHuman(h)})',
+                    < 0 => getLocalText.s("Don't auto-update"),
+                    0 => getLocalText.s("Never (respect server)"),
+                    _ => getLocalText.s("%1\$dh (%2\$s)", h, intervalHuman(h)),
                   }),
                 ],
               ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../services/template_loader.dart';
+
 /// §125/§267 — отображение служебных нод (direct / auto / block) человекочитаемым
 /// label'ом + иконкой вместо голого tag'а.
 ///
@@ -42,15 +44,27 @@ String? _roleForOutboundType(String? outboundType) {
 /// - `block`   → «Block» (дроп трафика, §201).
 SpecialNodeDisplay? specialNodeDisplayForType(String? outboundType) {
   final role = _roleForOutboundType(outboundType);
+  if (role == null) return null;
+  // §279 Phase 2 — титул берём из локализованного шаблона (`MagicNode.title`),
+  // хардкод-зеркало осталось только fallback'ом на холодный кэш (до первого
+  // TemplateLoader.load; при смене локали кэш прогрет ДО notifyListeners).
+  final title = TemplateLoader.cachedOrNull()?.groupTemplates.magicNodes[role]
+      ?.title;
   switch (role) {
     case 'direct':
-      return const SpecialNodeDisplay(label: 'Direct', icon: Icons.public);
+      return SpecialNodeDisplay(
+          label: _orFallback(title, 'Direct'), icon: Icons.public);
     case 'auto':
       // ✨ — узнаваемая иконка auto (как был эмодзи в старом теге '✨auto').
-      return const SpecialNodeDisplay(label: 'Auto', icon: Icons.auto_awesome);
+      return SpecialNodeDisplay(
+          label: _orFallback(title, 'Auto'), icon: Icons.auto_awesome);
     case 'block':
-      return const SpecialNodeDisplay(label: 'Block', icon: Icons.block);
+      return SpecialNodeDisplay(
+          label: _orFallback(title, 'Block'), icon: Icons.block);
     default:
       return null;
   }
 }
+
+String _orFallback(String? title, String fallback) =>
+    (title == null || title.isEmpty) ? fallback : title;

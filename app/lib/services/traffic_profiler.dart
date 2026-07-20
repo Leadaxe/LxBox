@@ -1,13 +1,12 @@
-// §044 — Per-app traffic profiler.
+// §044 — System-wide traffic profiler.
 // §048 — Inclusive observer with confidence: каждое событие попадает в UI
 // с confidence level'ом, юзер видит всё что произошло на сети.
+// §288 — per-app session-путь удалён; остался ТОЛЬКО system-wide profiler
+// (global recording, live-поток по всем приложениям).
 //
-// Singleton ChangeNotifier. Holds текущую recording session + ring-buffer
-// последних N завершённых session'ов + **глобальный rolling buffer** всех
-// событий (always-running, 60s window) для:
-//   - pre-session backfill (юзер ставит recording после того как заметил
-//     проблему — теряет первые 60s контекста)
-//   - Live system-wide tab — discovery-mode без выбора target заранее
+// Singleton ChangeNotifier. Holds **глобальный rolling buffer** всех
+// событий (окно настраивается юзером) для Live system-wide tab —
+// discovery-mode по всем приложениям без выбора target заранее.
 //
 // Всё in-memory — на kill app'а всё стирается. Сознательно: упрощает
 // model'ку, persist бы добавил schema'ы и migration'ы которые мало что
@@ -33,11 +32,9 @@
 //
 // Спарка connections — через `metadata.process`; DNS атрибутируется ядром.
 //
-// **Confidence levels** (§048 Принцип 3):
-//   - `verified`     — `router: found package` явный match с targetPackage
-//   - `secondary`    — match через `secondaryPackages` (WebView etc)
-//   - `inferred`     — match через recent DNS resolved IP (10s window)
-//   - `unattributed` — никакая strategy не сработала, но event возможно от target
+// **Confidence levels** (§048 Принцип 3) в global buffer'е:
+//   - `verified`     — процесс известен ядром (packageName)
+//   - `unattributed` — процесс не определён (DNS fail без owner / TCP без атрибуции)
 //
 // Connection-issue классификация: 2 типа — `dnsTimeout` (прямо из sing-box
 // log stream'а, реальная error-строка) и `tcpReset` (heuristic «conn
@@ -45,7 +42,6 @@
 
 import 'dart:async';
 import 'dart:collection';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -68,9 +64,6 @@ class TrafficProfiler extends ChangeNotifier {
   static final TrafficProfiler I = TrafficProfiler._();
 
   // ─── Config knobs ─────────────────────────────────────────────────────
-  static const int _maxCompleted = 5;
-  static const int _maxEventsPerSession = 50000;
-  static const Duration _slidingWindow = Duration(hours: 3);
   // §141 P3.2b — GC-интервал 15s: GC чистит rolling buffer'ы по retention-окну
   // + closed-guard. (§044 — _connIdTtl выпилен вместе с conn-id-мапой.)
   static const Duration _connIdGcInterval = Duration(seconds: 15);
@@ -107,20 +100,14 @@ class TrafficProfiler extends ChangeNotifier {
 
   // ─── Live wiring (§168) ───────────────────────────────────────────────
   // Источник connection-событий — CommandClient push-стрим. Подписка живёт
-  // пока есть active session ИЛИ global recording; снимается когда оба off.
+  // пока идёт global recording; снимается когда recording off.
   final CcChannel _cc = CcChannel.instance;
   StreamSubscription<List<CcConnection>>? _ccConnSub;
   StreamSubscription<List<CcDnsQuery>>? _ccDnsSub; // §180 — DNS-журнал из ядра
 
   // ─── State ────────────────────────────────────────────────────────────
-  Session? _active;
-  final ListQueue<Session> _completed = ListQueue<Session>();
-  String? _verboseSavedLogLevel; // pre-toggle value, чтобы revert на stop
 
   // SSE listeners — стрим эвентов наружу для Debug API SSE.
-  // Per-session stream'ы (исторический endpoint /profiler/stream).
-  final List<StreamController<Map<String, Object?>>> _sessionStreamSinks =
-      <StreamController<Map<String, Object?>>>[];
   // Global stream'ы (Live tab + /profiler/live/stream).
   final List<StreamController<Map<String, Object?>>> _globalStreamSinks =
       <StreamController<Map<String, Object?>>>[];
@@ -131,11 +118,8 @@ class TrafficProfiler extends ChangeNotifier {
   // app kill. Без active recording listener detached, buffer не растёт —
   // никаких теневых потребителей.
   //
-  // Используется для:
-  //   a) Pre-session backfill — на start session backfill события за last
-  //      60s которые match'ат target. Работает только если global
-  //      recording был включён.
-  //   b) Live system-wide tab — discovery без выбора target заранее.
+  // Используется Live system-wide tab'ом — discovery по всем приложениям
+  // без выбора target заранее.
   final ListQueue<TrafficEvent> _globalRollingBuffer =
       ListQueue<TrafficEvent>();
 
@@ -146,7 +130,7 @@ class TrafficProfiler extends ChangeNotifier {
 
   // §048 Принцип 1 — отдельный ring-buffer unattributed events (DNS fail
   // без owner / HTTPS / SOA / SVCB) для UI «System-wide events» секции
-  // в Per-app Live tab'е. 50 events достаточно чтобы юзер увидел тренд.
+  // в Live tab'е. 50 events достаточно чтобы юзер увидел тренд.
   final ListQueue<TrafficEvent> _globalUnattributedEvents =
       ListQueue<TrafficEvent>();
   static const int _globalUnattributedCap = 50;
@@ -156,14 +140,6 @@ class TrafficProfiler extends ChangeNotifier {
   // ниже). GC-таймер остаётся — чистит rolling buffer'ы по retention-окну, не
   // conn-id-мапу.
   Timer? _gcTimer;
-
-  // §141 P3.1a — leading-edge throttle для notifyListeners (≤60Hz), эталон
-  // AppLog._scheduleNotify. _appendEvent звался на КАЖДОМ traffic-event без
-  // троттла → на бёрсте (100+ ev/сек) UI ребилдился каждую мс. Stream-эмит
-  // (_emitSessionStream) остаётся per-event — он data-канал, не UI.
-  static const _notifyWindow = Duration(milliseconds: 16);
-  Timer? _notifyThrottleTimer;
-  bool _notifyPending = false;
 
   // §180 — `_dnsByConnId` (per-conn-id DNS accumulator) выпилен: cnameChain
   // теперь приходит целиком в одном CcDnsQuery.answers (ядро SPEC 018), ручная
@@ -182,11 +158,6 @@ class TrafficProfiler extends ChangeNotifier {
   final Map<String, DateTime> _closedHandled = <String, DateTime>{};
 
   // ─── Public API ───────────────────────────────────────────────────────
-
-  Session? get active => _active;
-  List<Session> get completed => List.unmodifiable(_completed);
-  bool get isRecording => _active != null;
-  Session? get current => _active;
 
   /// §048 — публичный getter глобального rolling buffer'а (для Live tab UI).
   List<TrafficEvent> get globalRollingBuffer =>
@@ -303,161 +274,6 @@ class TrafficProfiler extends ChangeNotifier {
   /// §262 — доля fail за окно (для текста баннера «N% queries failing»).
   int get dnsHealthFailPercent => (_computeDnsHealth().failRatio * 100).round();
 
-  /// Start session for [targetPackage]. If уже active — finalize старый
-  /// и стартуем новый. Если [verbose] = true — sets `log_level=debug`
-  /// (caller сам решает делать reload).
-  ///
-  /// §048 Принцип 4 — на старте делаем backfill из `_globalRollingBuffer`:
-  /// все events за last 60s которые match target → попадают в session.events
-  /// с флагом `backfilled=true` и оригинальным confidence уровнем.
-  Future<Session> start(
-    String targetPackage, {
-    bool verbose = false,
-    Set<String>? secondaryPackages,
-  }) async {
-    if (_active != null) {
-      await stop();
-    }
-    final session = Session(
-      id: _generateId(),
-      targetPackage: targetPackage,
-      startedAt: DateTime.now(),
-      wasVerbose: verbose,
-      secondaryPackages: secondaryPackages,
-    );
-    _active = session;
-
-    if (verbose) {
-      _verboseSavedLogLevel = await SettingsStorage.getVar('log_level', '');
-      await SettingsStorage.setVar('log_level', 'debug');
-    }
-
-    // Стартуем GC timer (no-op если уже запущен).
-    _ensureGcTimerStarted();
-    // §168 — подписка на CommandClient connections (no-op если уже подписаны
-    // через global recording).
-    _attachCcConnections();
-
-    // §048 Принцип 4 — backfill из global rolling buffer.
-    _backfillFromGlobalRollingBuffer(session);
-
-    AppLog.I.info('TrafficProfiler: session started for $targetPackage'
-        '${secondaryPackages != null && secondaryPackages.isNotEmpty
-            ? " (+secondary: ${secondaryPackages.join(",")})"
-            : ""}'
-        ' (backfilled ${session.events.length} events)');
-    _emitSessionStream({
-      'event': 'session_started',
-      'data': session.toMetaJson(),
-    });
-    notifyListeners();
-    return session;
-  }
-
-  /// Stop active session. Returns session (also added to completed).
-  /// Returns null если активной сессии не было.
-  Future<Session?> stop() async {
-    final s = _active;
-    if (s == null) return null;
-    s.finishedAt = DateTime.now();
-
-    // Stop session-specific data sources. CC connections / GC timer остаются
-    // running если есть global recording — иначе detach.
-    _maybeDetachCcConnections();
-    _maybeStopGcTimer();
-
-    // Revert log_level если был toggle.
-    if (s.wasVerbose) {
-      final prev = _verboseSavedLogLevel ?? '';
-      if (prev.isEmpty) {
-        await SettingsStorage.removeVar('log_level');
-      } else {
-        await SettingsStorage.setVar('log_level', prev);
-      }
-      _verboseSavedLogLevel = null;
-    }
-
-    // Push в completed ring-buffer.
-    _completed.addLast(s);
-    while (_completed.length > _maxCompleted) {
-      _completed.removeFirst();
-    }
-    _active = null;
-
-    // Очищаем session-scoped maps. _globalRollingBuffer не трогаем —
-    // он живёт независимо.
-    _connSnapshots.clear();
-    _closedHandled.clear(); // §176
-
-    AppLog.I.info(
-        'TrafficProfiler: session stopped, ${s.events.length} events, '
-        '${s.byDomain.length} domains');
-    _emitSessionStream({
-      'event': 'session_finished',
-      'data': s.toMetaJson(),
-    });
-    notifyListeners();
-    return s;
-  }
-
-  /// Удалить session из completed.
-  bool delete(String sessionId) {
-    final before = _completed.length;
-    _completed.removeWhere((s) => s.id == sessionId);
-    final removed = before != _completed.length;
-    if (removed) notifyListeners();
-    return removed;
-  }
-
-  /// Очистить все completed sessions.
-  int clearAll() {
-    final n = _completed.length;
-    _completed.clear();
-    if (n > 0) notifyListeners();
-    return n;
-  }
-
-  Session? getById(String sessionId) {
-    if (_active?.id == sessionId) return _active;
-    for (final s in _completed) {
-      if (s.id == sessionId) return s;
-    }
-    return null;
-  }
-
-  /// §048 Принцип 3 — изменить set secondary packages для активной session'и.
-  /// Эффект применяется к будущим events; уже накопленные events остаются
-  /// с старым confidence (юзер видит изменение в `Live` после toggle).
-  /// Возвращает `true` если что-то изменилось.
-  bool updateSecondaryPackages(Set<String> packages) {
-    final s = _active;
-    if (s == null) return false;
-    final wasSame = s.secondaryPackages.length == packages.length &&
-        s.secondaryPackages.containsAll(packages);
-    if (wasSame) return false;
-    s.secondaryPackages
-      ..clear()
-      ..addAll(packages);
-    s._markDirty();
-    notifyListeners();
-    return true;
-  }
-
-  /// Per-session live stream. Подписаться на events ТОЛЬКО для активной
-  /// session'и. Закрывается на session_finished. (Backward-compatible
-  /// endpoint для /profiler/stream.)
-  Stream<Map<String, Object?>> liveStream() {
-    late StreamController<Map<String, Object?>> ctrl;
-    ctrl = StreamController<Map<String, Object?>>(
-      onCancel: () {
-        _sessionStreamSinks.remove(ctrl);
-        ctrl.close();
-      },
-    );
-    _sessionStreamSinks.add(ctrl);
-    return ctrl.stream;
-  }
-
   /// §048 — Global system-wide live stream. Подписаться на ВСЕ events
   /// (без session filter'а). Используется Live tab'ом UI и
   /// `/profiler/live/stream` SSE endpoint'ом.
@@ -487,13 +303,6 @@ class TrafficProfiler extends ChangeNotifier {
         .toList(growable: false);
   }
 
-  void _emitSessionStream(Map<String, Object?> event) {
-    if (_sessionStreamSinks.isEmpty) return;
-    for (final c in List.of(_sessionStreamSinks)) {
-      if (!c.isClosed) c.add(event);
-    }
-  }
-
   void _emitGlobalStream(Map<String, Object?> event) {
     if (_globalStreamSinks.isEmpty) return;
     for (final c in List.of(_globalStreamSinks)) {
@@ -513,7 +322,6 @@ class TrafficProfiler extends ChangeNotifier {
   }
 
   void _maybeStopGcTimer() {
-    if (_active != null) return;
     if (_globalRecordingActive) return;
     _gcTimer?.cancel();
     _gcTimer = null;
@@ -603,8 +411,8 @@ class TrafficProfiler extends ChangeNotifier {
   /// Атрибуция к приложению —
   /// `q.packageName` ИЗ ЯДРА (processInfo), не connId-сшивка (корень §177-баннера).
   void _ingestDnsQueries(List<CcDnsQuery> queries) {
-    // Обрабатываем если есть session ИЛИ global recording (как connections).
-    if (_active == null && !_globalRecordingActive) return;
+    // Обрабатываем только при global recording.
+    if (!_globalRecordingActive) return;
     final now = DateTime.now();
     for (final q in queries) {
       _ingestDnsQuery(q, now);
@@ -701,126 +509,23 @@ class TrafficProfiler extends ChangeNotifier {
     ));
   }
 
-  // ─── Event routing (global + session) ─────────────────────────────────
+  // ─── Event routing (global) ───────────────────────────────────────────
 
   /// §048 — central routing. Каждое event'ое:
-  ///   1. Кладётся в `_globalRollingBuffer` (always-running).
-  ///   2. Эмитится в global SSE stream.
-  ///   3. Если есть active session — applies confidence resolution
-  ///      (verified / secondary / inferred / unattributed) и кладётся в
-  ///      session.events (даже unattributed, как nearby-event).
-  ///   4. Если confidence == unattributed без session — кладётся в
-  ///      `_globalUnattributedEvents` ring для banner detection.
+  ///   1. Кладётся в `_globalRollingBuffer` (always-running при recording).
+  ///   2. Если confidence == unattributed — в `_globalUnattributedEvents`
+  ///      ring для banner detection.
+  ///   3. Эмитится в global SSE stream.
   void _routeEvent(TrafficEvent ev) {
     // Step 1: global buffer (всегда).
     _appendToGlobalRollingBuffer(ev);
-    // Step 2: global unattributed ring (для banner detection / Per-app
-    // Live «System-wide events» section). Заполняется ВСЕГДА для
-    // unattributed (независимо от active session): banner должен fire
-    // даже во время recording'а — это и есть его смысл.
+    // Step 2: global unattributed ring (для banner detection / Live
+    // «System-wide events» section).
     if (ev.confidence == ConfidenceLevel.unattributed) {
       _appendToGlobalUnattributed(ev);
     }
     // Step 3: SSE.
     _emitGlobalStream({'event': 'traffic_event', 'data': ev.toJson()});
-
-    // Step 4: session matching.
-    final s = _active;
-    if (s != null) {
-      final resolved = _resolveForSession(ev, s);
-      if (resolved != null) {
-        _appendEvent(s, resolved);
-      }
-    }
-  }
-
-  /// §048 Принципы 1 и 3 — резолвим event для конкретной session'и:
-  /// получаем `verified` / `secondary` / `inferred` / `unattributed`
-  /// или `null` (если событие точно не related — например, verified-match
-  /// для другого app'а).
-  TrafficEvent? _resolveForSession(TrafficEvent ev, Session s) {
-    // Strategy 1: direct package match (verified).
-    final processNames = _splitPackageNames(ev.process);
-    if (processNames.contains(s.targetPackage)) {
-      return _withConfidence(ev,
-          confidence: ConfidenceLevel.verified, matchedVia: 'router_log');
-    }
-    // Strategy 2: secondary packages (WebView etc).
-    if (s.secondaryPackages.isNotEmpty &&
-        processNames.any(s.secondaryPackages.contains)) {
-      return _withConfidence(ev,
-          confidence: ConfidenceLevel.secondary,
-          matchedVia: 'secondary_packages');
-    }
-    // Strategy 3: UID suffix variants (Gap 5).
-    final stripped = processNames.map(_stripUid).toSet();
-    if (stripped.contains(s.targetPackage)) {
-      return _withConfidence(ev,
-          confidence: ConfidenceLevel.verified,
-          matchedVia: 'router_log_uid_stripped');
-    }
-    if (s.secondaryPackages.isNotEmpty &&
-        stripped.any(s.secondaryPackages.contains)) {
-      return _withConfidence(ev,
-          confidence: ConfidenceLevel.secondary,
-          matchedVia: 'secondary_packages_uid_stripped');
-    }
-    // §044 — Strategy 4 (inferred по recent DNS-IP, _inferProcessByIp) ВЫПИЛЕНА:
-    // после §168/§180 TCP-owner приходит из ядра (CcConnection.packageName),
-    // DNS — из стрима. Эвристика «безымянный TCP принадлежит target по DNS-IP»
-    // маргинальна, без тестов. Безымянный TCP теперь → unattributed (Strategy 5,
-    // ниже) вместо inferred — деградация точности, не поломка. ConfidenceLevel.
-    // inferred остаётся в enum (dormant) для совместимости старых session JSON.
-    //
-    // Strategy 5: unattributed (`process == null` или process не известный) —
-    // показываем в session как nearby event. Если process явно != target
-    // и явно НЕ в secondaryPackages — это not-related, drop.
-    if (ev.process == null || ev.process!.isEmpty) {
-      return _withConfidence(ev,
-          confidence: ConfidenceLevel.unattributed,
-          shownBecause:
-              'system-wide event without owner detection (during active session)');
-    }
-    // Process известен но это не target и не secondary — ev not related,
-    // drop. (Не пихаем чужие apps в session: банально шумно, юзер не
-    // ожидает увидеть Telegram трафик в session'е Tinkoff.)
-    return null;
-  }
-
-  TrafficEvent _withConfidence(TrafficEvent ev,
-      {required ConfidenceLevel confidence,
-      String? matchedVia,
-      String? shownBecause,
-      String? process,
-      bool? processInferred}) {
-    return TrafficEvent(
-      ts: ev.ts,
-      kind: ev.kind,
-      domain: ev.domain,
-      cnameChain: ev.cnameChain,
-      ip: ev.ip,
-      port: ev.port,
-      outboundChain: ev.outboundChain,
-      outboundType: ev.outboundType, // §219 — не терять §204-тип при resolve
-      detourChain: ev.detourChain, // §181
-      upBytes: ev.upBytes,
-      downBytes: ev.downBytes,
-      duration: ev.duration,
-      connId: ev.connId,
-      process: process ?? ev.process,
-      processInferred: processInferred ?? ev.processInferred,
-      network: ev.network,
-      rule: ev.rule,
-      rulePayload: ev.rulePayload,
-      rawLogLine: ev.rawLogLine,
-      confidence: confidence,
-      matchedVia: matchedVia,
-      shownBecause: shownBecause,
-      dnsRecordType: ev.dnsRecordType,
-      backfilled: ev.backfilled,
-      issues: ev.issues,
-      extra: ev.extra,
-    );
   }
 
   void _appendToGlobalRollingBuffer(TrafficEvent ev) {
@@ -839,63 +544,6 @@ class TrafficProfiler extends ChangeNotifier {
     }
   }
 
-  /// §048 Принцип 4 — backfill events за last 60s которые match new session'е.
-  /// Все backfilled events помечаются `backfilled=true` в UI.
-  void _backfillFromGlobalRollingBuffer(Session s) {
-    if (_globalRollingBuffer.isEmpty) return;
-    final cutoff = s.startedAt.subtract(_globalRollingWindow);
-    for (final ev in _globalRollingBuffer) {
-      if (ev.ts.isBefore(cutoff)) continue;
-      final resolved = _resolveForSession(ev, s);
-      if (resolved == null) continue;
-      // Mark backfilled. Drop unattributed из backfill — они уже в global
-      // buffer'е, не нужно дублировать в session.events с прошлым ts.
-      if (resolved.confidence == ConfidenceLevel.unattributed) continue;
-      final marked = TrafficEvent(
-        ts: resolved.ts,
-        kind: resolved.kind,
-        domain: resolved.domain,
-        cnameChain: resolved.cnameChain,
-        ip: resolved.ip,
-        port: resolved.port,
-        outboundChain: resolved.outboundChain,
-        outboundType: resolved.outboundType, // §219 — не терять §204-тип
-        detourChain: resolved.detourChain, // §181
-        upBytes: resolved.upBytes,
-        downBytes: resolved.downBytes,
-        duration: resolved.duration,
-        connId: resolved.connId,
-        process: resolved.process,
-        processInferred: resolved.processInferred,
-        network: resolved.network,
-        rule: resolved.rule,
-        rulePayload: resolved.rulePayload,
-        rawLogLine: resolved.rawLogLine,
-        confidence: resolved.confidence,
-        matchedVia: resolved.matchedVia,
-        shownBecause: resolved.shownBecause,
-        dnsRecordType: resolved.dnsRecordType,
-        backfilled: true,
-        issues: resolved.issues,
-        extra: resolved.extra,
-      );
-      s.events.add(marked);
-    }
-    s._markDirty();
-  }
-
-  /// Split process строки `"com.x.y, com.x.z (10999)"` на `{com.x.y, com.x.z}`
-  /// (UID strip'ается отдельно). §048 Gap 11 — sing-box передаёт через
-  /// запятую multiple packages для одного UID.
-  Set<String> _splitPackageNames(String? raw) {
-    if (raw == null || raw.isEmpty) return const <String>{};
-    return raw
-        .split(',')
-        .map((s) => _stripUid(s.trim()))
-        .where((s) => s.isNotEmpty)
-        .toSet();
-  }
-
   // ─── CommandClient connections (§168) ────────────────────────────────
   //
   // Источник tcp/udp open/close + per-app атрибуции — push-стрим
@@ -903,7 +551,7 @@ class TrafficProfiler extends ChangeNotifier {
   // энергомодель НЕ паузит в фоне → recording живёт при свёрнутом app.
 
   /// Подписка на CC connections + подъём profilerClient. Идемпотентна
-  /// (active session ИЛИ global recording могут вызвать обе).
+  /// (вызывается из startGlobalRecording).
   void _attachCcConnections() {
     if (_ccConnSub != null) return;
     // Поднимаем независимый profilerClient (фоновый, §164). Шлёт первый
@@ -926,10 +574,9 @@ class TrafficProfiler extends ChangeNotifier {
     );
   }
 
-  /// Снимает подписку + гасит profilerClient — только если ни active
-  /// session, ни global recording.
+  /// Снимает подписку + гасит profilerClient — только если global recording
+  /// off.
   void _maybeDetachCcConnections() {
-    if (_active != null) return;
     if (_globalRecordingActive) return;
     _detachCcConnections();
   }
@@ -944,12 +591,11 @@ class TrafficProfiler extends ChangeNotifier {
 
   /// §168 — обработка снапшота CommandClient connections: эмит tcp/udp
   /// open для новых conn'ов, close для исчезнувших (closed-detection через
-  /// `_connSnapshots` diff, как раньше делал Clash-poll). Per-app атрибуция
+  /// `_connSnapshots` diff, как раньше делал Clash-poll). Атрибуция
   /// через `CcConnection.packageName/processPath`.
   void _ingestCcConnections(List<CcConnection> conns) {
-    final s = _active;
-    // Обрабатываем если есть session ИЛИ global recording.
-    if (s == null && !_globalRecordingActive) return;
+    // Обрабатываем только при global recording.
+    if (!_globalRecordingActive) return;
     final now = DateTime.now();
 
     final seenIds = <String>{};
@@ -998,12 +644,13 @@ class TrafficProfiler extends ChangeNotifier {
 
       final prev = _connSnapshots[id];
       if (prev == null) {
-        // Новая connection — emit tcpOpen / udpOpen.
-        // Confidence resolution через _resolveForSession.
+        // Новая connection — emit tcpOpen / udpOpen в global buffer.
         final kind = network == 'udp'
             ? TrafficEventKind.udpOpen
             : TrafficEventKind.tcpOpen;
-        final raw = TrafficEvent(
+        // confidence verified если process известен ядром, иначе unattributed.
+        final hasProcess = rawProcess.isNotEmpty;
+        final globalEv = TrafficEvent(
           ts: now,
           kind: kind,
           domain: host.isNotEmpty ? host : null,
@@ -1014,58 +661,21 @@ class TrafficProfiler extends ChangeNotifier {
           outboundType: c.outboundType.isNotEmpty ? c.outboundType : null, // §204
           upBytes: up,
           downBytes: down,
-          process: rawProcess.isNotEmpty ? rawProcess : null,
+          process: hasProcess ? rawProcess : null,
           network: network,
           rule: rule.isNotEmpty ? rule : null,
           rulePayload: rulePayload.isNotEmpty ? rulePayload : null,
-        );
-        // Global rolling: всегда добавляем (даже не-target conn'ы, для
-        // Live system-wide tab'а) с confidence verified если process
-        // известен, иначе unattributed. §084 H6: copyWith вместо ручного
-        // копирования 20+ полей.
-        final globalEv = raw.copyWith(
-          confidence: raw.process == null
-              ? ConfidenceLevel.unattributed
-              : ConfidenceLevel.verified,
-          matchedVia: raw.process == null ? null : 'connections_meta',
+          confidence: hasProcess
+              ? ConfidenceLevel.verified
+              : ConfidenceLevel.unattributed,
+          matchedVia: hasProcess ? 'connections_meta' : null,
         );
         _appendToGlobalRollingBuffer(globalEv);
         _emitGlobalStream(
             {'event': 'traffic_event', 'data': globalEv.toJson()});
 
-        // Snapshot для closed-detection. Нужен и для session, и для
-        // global-only режима (чтобы emit'ить tcpClose когда Clash убрал
-        // connection из ответа).
-        var snapProcess = '';
-        var snapConfidence = ConfidenceLevel.unattributed;
-        String? snapMatchedVia;
-        // §160 — попало ли соединение в session при открытии. Решение
-        // фиксируется здесь и наследуется close'ом (см. closed-detection
-        // ниже): иначе close чужого conn'а ошибочно писался в session.
-        var snapInSession = false;
-
-        if (s != null) {
-          // Session resolution.
-          final resolved = _resolveForSession(raw, s);
-          if (resolved != null) {
-            _appendEvent(s, resolved);
-            snapProcess = resolved.process ?? '';
-            snapConfidence = resolved.confidence;
-            snapMatchedVia = resolved.matchedVia;
-            snapInSession = true;
-          } else {
-            // не related к target — в session не пишем, но snapshot
-            // нужен для global-only closed detection.
-            snapProcess = rawProcess;
-            snapConfidence = globalEv.confidence;
-            snapMatchedVia = globalEv.matchedVia;
-          }
-        } else {
-          snapProcess = rawProcess;
-          snapConfidence = globalEv.confidence;
-          snapMatchedVia = globalEv.matchedVia;
-        }
-
+        // Snapshot для closed-detection (emit'им tcpClose когда ядро убрало
+        // connection из снапшота).
         _connSnapshots[id] = _ConnSnapshot(
           id: id,
           host: host,
@@ -1078,12 +688,11 @@ class TrafficProfiler extends ChangeNotifier {
           upBytes: up,
           downBytes: down,
           startedAt: now,
-          process: snapProcess,
-          confidence: snapConfidence,
-          matchedVia: snapMatchedVia,
+          process: globalEv.process ?? '',
+          confidence: globalEv.confidence,
+          matchedVia: globalEv.matchedVia,
           rule: rule,
           rulePayload: rulePayload,
-          inSession: snapInSession,
         );
       } else {
         // Update bytes — снапшот latest values, не emit'им event.
@@ -1120,20 +729,10 @@ class TrafficProfiler extends ChangeNotifier {
         matchedVia: snap.matchedVia,
         issues: _classifyConnectionClose(snap, now),
       );
-      // §084 H5 — Global stream/buffer всегда, симметрично tcpOpen (который
-      // пишется безусловно выше). Раньше под `if (_globalRecordingActive)` —
-      // при active session без global recording lifecycle был неполным
-      // (open в buffer'е, close — нет). Комментарий «всегда» противоречил
-      // коду; теперь поведение соответствует.
+      // §084 H5 — Global stream/buffer, симметрично tcpOpen (который пишется
+      // выше). Lifecycle open/close полный в global buffer'е.
       _appendToGlobalRollingBuffer(closeEv);
       _emitGlobalStream({'event': 'traffic_event', 'data': closeEv.toJson()});
-      // §160 — Session только если соединение БЫЛО атрибутировано к target
-      // при открытии (`snap.inSession`). Раньше close писался безусловно →
-      // close чужого conn'а (youtube/imo и т.п.) попадал в session Telegram
-      // как verified-чужой, хотя его open был отброшен `_resolveForSession`.
-      if (s != null && snap.inSession) {
-        _appendEvent(s, closeEv);
-      }
     }
   }
 
@@ -1182,85 +781,10 @@ class TrafficProfiler extends ChangeNotifier {
     return out;
   }
 
-  // ─── Append + pruning ─────────────────────────────────────────────────
-
-  void _appendEvent(Session s, TrafficEvent ev) {
-    s.events.add(ev);
-    s._markDirty();
-    _pruneOld(s);
-    _emitSessionStream({
-      'event': 'traffic_event',
-      'data': ev.toJson(),
-    });
-    _scheduleNotify(); // §141 P3.1a — throttled вместо прямого notifyListeners
-  }
-
-  /// §141 P3.1a — leading-edge 16ms-throttle (эталон AppLog._scheduleNotify):
-  /// первый вызов сразу notify, последующие в окне коалесятся в один notify в
-  /// конце окна.
-  void _scheduleNotify() {
-    if (_notifyThrottleTimer != null) {
-      _notifyPending = true;
-      return;
-    }
-    notifyListeners();
-    _notifyThrottleTimer = Timer(_notifyWindow, () {
-      _notifyThrottleTimer = null;
-      if (_notifyPending) {
-        _notifyPending = false;
-        _scheduleNotify();
-      }
-    });
-  }
-
-  void _pruneOld(Session s) {
-    // 1) Time-based: drop старее sliding window.
-    final cutoff = DateTime.now().subtract(_slidingWindow);
-    var firstKeep = 0;
-    while (firstKeep < s.events.length &&
-        s.events[firstKeep].ts.isBefore(cutoff)) {
-      firstKeep++;
-    }
-    if (firstKeep > 0) {
-      s.events.removeRange(0, firstKeep);
-      s.eventsDropped += firstKeep;
-    }
-    // 2) Count-based fallback: если всё ещё > cap.
-    if (s.events.length > _maxEventsPerSession) {
-      final excess = s.events.length - _maxEventsPerSession;
-      s.events.removeRange(0, excess);
-      s.eventsDropped += excess;
-    }
-  }
-
-  // ─── Helpers ──────────────────────────────────────────────────────────
-
-  /// `"ru.tinkoff.investing (10999)"` → `"ru.tinkoff.investing"`. Sing-box
-  /// `find_process: true` суффиксует UID в скобках; targetPackage в picker'е
-  /// — без UID, поэтому тут strip'аем для матчинга. Также handle'им
-  /// формат `pkg/uid` если встретится.
-  static String _stripUid(String s) {
-    var t = s.trim();
-    if (t.isEmpty) return '';
-    final paren = t.indexOf(' (');
-    if (paren >= 0) t = t.substring(0, paren);
-    final slash = t.indexOf('/');
-    if (slash >= 0) t = t.substring(0, slash);
-    return t.trim();
-  }
-
-  static String _generateId() {
-    final now = DateTime.now().microsecondsSinceEpoch;
-    final rnd = math.Random.secure().nextInt(0x100000000);
-    return '${now.toRadixString(16)}-${rnd.toRadixString(16)}';
-  }
-
   // ─── Test-only helpers ────────────────────────────────────────────────
 
   @visibleForTesting
   void resetForTesting() {
-    _active = null;
-    _completed.clear();
     _connSnapshots.clear();
     _closedHandled.clear(); // §176
     _globalRollingBuffer.clear();
@@ -1273,10 +797,9 @@ class TrafficProfiler extends ChangeNotifier {
     _ccDnsSub = null;
     _gcTimer?.cancel();
     _gcTimer = null;
-    for (final c in [..._sessionStreamSinks, ..._globalStreamSinks]) {
+    for (final c in _globalStreamSinks) {
       if (!c.isClosed) c.close();
     }
-    _sessionStreamSinks.clear();
     _globalStreamSinks.clear();
   }
 

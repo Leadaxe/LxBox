@@ -1,0 +1,12 @@
+{
+  "_comment": "§285 — rendering-locality allowlist. renderEn: файлы/каталоги (префиксы путей), где разрешён вызов renderEn() — фиксированный английский рендер UiMsg на machine-поверхностях (automation-броадкасты, Debug API, AppLog-интерполяции, notification-push, emitWarnings). Модельные иерархии lib/models/* (где определён renderEn() и разрешён прямой GetLocalText.en) захардкожены в checker'е и здесь не перечислены.",
+  "renderEn": [
+    "lib/services/automation/",
+    "lib/services/debug/",
+    "lib/services/builder/build_config.dart",
+    "lib/controllers/home_controller.dart",
+    "lib/controllers/home_controller/",
+    "lib/controllers/subscription_controller.dart",
+    "lib/screens/home_screen.dart"
+  ]
+}

@@ -9,6 +9,7 @@ import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
 import '../services/error_format.dart';
 import '../services/haptic_service.dart';
+import '../services/l10n/locale_controller.dart';
 import '../services/profile_dump_writer.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/subscription_identity.dart';
@@ -211,8 +212,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(locked
-            ? 'Config locked. UI actions will not rebuild config.'
-            : 'Config unlocked. Next UI action will rebuild from settings.'),
+            ? getLocalText.s("Config locked. UI actions will not rebuild config.")
+            : getLocalText.s("Config unlocked. Next UI action will rebuild from settings.")),
         duration: const Duration(seconds: 3),
       ),
     );
@@ -255,9 +256,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     await Clipboard.setData(ClipboardData(text: _debugToken));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Token copied'),
-        duration: Duration(seconds: 1),
+      SnackBar(
+        content: Text(getLocalText.s("Token copied")),
+        duration: const Duration(seconds: 1),
       ),
     );
   }
@@ -297,9 +298,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         NativePrefsKeys.coreLogsEnabled, enable);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Saved. Force-stop & reopen app to apply.'),
-        duration: Duration(seconds: 3),
+      SnackBar(
+        content: Text(getLocalText.s("Saved. Force-stop & reopen app to apply.")),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -441,20 +442,24 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: themeNotifier,
+      // §279 — слушаем и LocaleController: этот экран показан как pushed route,
+      // rebuild корневого MaterialApp его не перестраивает (Navigator держит
+      // route поверх). Без подписки смена языка не двигала radio-галку picker'а
+      // и не перерисовывала строки самого экрана настроек.
+      animation: Listenable.merge([themeNotifier, LocaleController.I]),
       builder: (context, _) {
         return DefaultTabController(
           length: 4,
           initialIndex: widget.initialTab.clamp(0, 3),
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('App Settings'),
-              bottom: const _FadingTabBar(
+              title: Text(getLocalText.s("App Settings")),
+              bottom: _FadingTabBar(
                 tabs: [
-                  Tab(text: 'General'),
-                  Tab(text: 'Subscriptions'),
-                  Tab(text: 'Diagnostics'),
-                  Tab(text: 'Automation'),
+                  Tab(text: getLocalText.s("General")),
+                  Tab(text: getLocalText.s("Subscriptions")),
+                  Tab(text: getLocalText.s("Diagnostics")),
+                  Tab(text: getLocalText.s("Automation")),
                 ],
               ),
             ),
@@ -504,11 +509,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(getLocalText.s("Cancel")),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, ctl.text),
-            child: const Text('Save'),
+            child: Text(getLocalText.s("Save")),
           ),
         ],
       ),
@@ -712,18 +717,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   Future<void> _captureProfile(PprofProfile p) async {
     if (_capturing) return;
     if (!(await _vpn.getVpnStatus()).isUp) {
-      _diagSnack('VPN must be running to capture a profile.');
+      _diagSnack(getLocalText.s("VPN must be running to capture a profile."));
       return;
     }
     setState(() => _capturing = true);
     if (p.blockingSeconds > 0) {
-      _diagSnack('Profiling for ${p.blockingSeconds}s…');
+      _diagSnack(getLocalText.s("Profiling for %ds…", p.blockingSeconds));
     }
     try {
       final bytes = await _vpn.pprofRaw(p.pathAndQuery,
           blockingSeconds: p.blockingSeconds);
       if (bytes.isEmpty) {
-        _diagSnack('Profile was empty (timeout?).');
+        _diagSnack(getLocalText.s("Profile was empty (timeout?)."));
         return;
       }
       final path = await ProfileDumpWriter.writeProfile(p, bytes);
@@ -741,7 +746,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         subject: name,
       );
     } catch (e) {
-      _diagSnack('Capture failed: ${formatUserError(e)}');
+      _diagSnack(getLocalText.s(
+          "Capture failed: %s", formatUserError(e).render()));
     } finally {
       if (mounted) setState(() => _capturing = false);
     }
@@ -766,8 +772,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       SnackBar(
         duration: const Duration(seconds: 2),
         content: Text(enabled
-            ? 'Auto-record on. Networks added after 5 min of stay.'
-            : 'Auto-record off. Existing history kept.'),
+            ? getLocalText.s("Auto-record on. Networks added after 5 min of stay.")
+            : getLocalText.s("Auto-record off. Existing history kept.")),
       ),
     );
   }

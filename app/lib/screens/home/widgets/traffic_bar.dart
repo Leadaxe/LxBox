@@ -6,12 +6,13 @@ import '../../../models/home_state.dart';
 import '../../../services/format_utils.dart';
 import '../../../services/traffic_profiler.dart';
 import '../../stats_screen.dart';
+import '../../../services/l10n/locale_controller.dart';
 
 /// Полоса трафика под статус-чипом на главном экране: ↑/↓ скорость, число
-/// активных соединений, recording-индикаторы профайлера (§044) и uptime.
-/// Тап открывает [StatsScreen] (на Per-app tab'е если идёт recording).
+/// активных соединений, global-recording индикатор профайлера (§044) и uptime.
+/// Тап открывает [StatsScreen] (Overview).
 ///
-/// Перерисовывается на `TrafficProfiler.I` (recording-флаги) через внутренний
+/// Перерисовывается на `TrafficProfiler.I` (recording-флаг) через внутренний
 /// `AnimatedBuilder`; трафик/uptime приходят из переданного [state].
 class TrafficBar extends StatelessWidget {
   const TrafficBar({
@@ -39,16 +40,13 @@ class TrafficBar extends StatelessWidget {
         : '';
     return GestureDetector(
       onTap: () {
-        // §044: идёт recording → сразу Per-app tab, иначе Overview.
-        final initial = TrafficProfiler.I.isRecording
-            ? StatsTab.perApp
-            : StatsTab.overview;
+        // §288 — вкладка Per-app удалена; всегда открываем Overview.
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => StatsScreen(
               configRaw: controller.state.configRaw,
-              initialTab: initial,
+              initialTab: StatsTab.overview,
               subController: subController,
               homeController: controller,
             ),
@@ -88,7 +86,7 @@ class TrafficBar extends StatelessWidget {
                     Icons.link,
                     '${state.traffic.connectionsIn}',
                     cs.secondary,
-                    tooltip: 'App connections',
+                    tooltip: getLocalText.s("App connections"),
                   ),
                   const SizedBox(width: 8),
                   _chip(
@@ -96,16 +94,7 @@ class TrafficBar extends StatelessWidget {
                     Icons.dns_outlined,
                     '${state.traffic.connectionsOut}',
                     cs.secondary,
-                    tooltip: 'Outbound connections to servers',
-                  ),
-                ],
-                if (profiler.isRecording) ...[
-                  const SizedBox(width: 8),
-                  _chip(
-                    context,
-                    Icons.bolt,
-                    _shortPkg(profiler.active!.targetPackage),
-                    cs.error,
+                    tooltip: getLocalText.s("Outbound connections to servers"),
                   ),
                 ],
                 if (profiler.isGlobalRecording) ...[
@@ -159,12 +148,4 @@ class TrafficBar extends StatelessWidget {
       child: row,
     );
   }
-
-  /// `"ru.tinkoff.investing"` → `"ru.tinkoff"` (первые два сегмента пакета).
-  static String _shortPkg(String pkg) {
-    final parts = pkg.split('.');
-    if (parts.length <= 2) return pkg;
-    return '${parts[0]}.${parts[1]}';
-  }
-
 }

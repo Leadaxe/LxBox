@@ -361,7 +361,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(true)
             }
             "setNotificationTitle" -> {
-                val title = call.argument<String>("title") ?: "L×Box"
+                val title = call.argument<String>("title")
+                    ?: context.getString(com.leadaxe.lxbox.R.string.app_name)
                 // §223 — лейбл поменялся при живом туннеле → перерисовать шторку
                 // (#20: раньше строка только кэшировалась, рендер был лишь на connect).
                 val changed = title != ConfigManager.notificationTitle
@@ -541,6 +542,21 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             "getMemoryLimit" -> {
                 result.success(BootReceiver.getMemoryLimit(context))
+            }
+            // §279 Phase 6 (спека §6.3) — язык приложения из Dart (зеркало var
+            // `app_language`): pref + LocaleManager-пуш (33+, "system" = пустой
+            // список) + last_pushed_locale + relabel всех нативных поверхностей
+            // (канал, шторка, shortcuts, тайл, локаль ядра).
+            "setAppLanguage" -> {
+                val tag = call.argument<String>("tag") ?: "system"
+                L10n.applySetting(context, tag)
+                result.success(true)
+            }
+            // §279 (спека §6.4) — снимок per-app-локалей + last_pushed_locale
+            // для трёхстороннего reconciliation на Dart-старте. API < 33 →
+            // {"supported": false}.
+            "getAppLanguageState" -> {
+                result.success(L10n.appLanguageState(context))
             }
             "setMemoryLimit" -> {
                 // §271 — persist + мгновенное применение к работающему ядру.
@@ -1054,7 +1070,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             val replied = java.util.concurrent.atomic.AtomicBoolean(false)
             sbm.requestAddTileService(
                 component,
-                "L×Box",
+                context.getString(com.leadaxe.lxbox.R.string.app_name),
                 icon,
                 { runnable -> mainHandler.post(runnable) },
                 { code ->
