@@ -1,6 +1,20 @@
 # §296 — ProbeController: общий probe-фасад над ServerList
 
-**Тип:** structural refactor (Шаг 3 фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** spec (переписан — был folder-only) · **Размер:** M (фундамент S–M) · **Заменяет:** прежний «FolderProbeController»
+**Тип:** structural refactor (Шаг 3 фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** фундамент РЕАЛИЗОВАН (Steps 0–2, develop); UI-надстройка (Steps 3–4) pending-device · **Размер:** M (фундамент S–M) · **Заменяет:** прежний «FolderProbeController»
+
+> **Реализовано (Steps 0–2, коммиты 21f5116e · ebe43643 · cf108da0):**
+> - Step 0 — probe-ядро обобщено `FolderServers`→`List<NodeSpec?>`
+>   (`buildProbeConfig`/`ProbeRunner`); поля `tagByIndex`/`brokenByIndex`;
+>   `ProbeThresholds.defaults`. Code-provable-identical.
+> - Step 1 — `ProbeController` (пороги/ping/чистые bulk-хелперы
+>   unreachableIndexes/slowerThan/pingSortOrder/remapAfterReorder/probeNodesOf);
+>   folder_detail на него — probe-storage 10→0, сдулся ~69 строк. 12 тестов.
+> - Step 2 — VPN-гейт в общий `ProbeGateMixin`; folder_detail на него; текст
+>   нейтрализован.
+> **§296-цель (folder_detail сбросил probe-владение) достигнута.** Осталась
+> UI-надстройка для подписок/серверов — Steps 3–4 ниже, **требуют device**
+> (реальная probe-сессия, skip-disabled §283, expanded↔parent маппинг бейджей,
+> гонка background-refresh). Строить в цикле код→APK→устройство, не вслепую.
 
 Probe (§236/§286) сегодня **folder-only по сигнатуре**, хотя механизм
 доменно-агностичен. Это и есть настоящий §291-дефект: `folder_detail_screen`
