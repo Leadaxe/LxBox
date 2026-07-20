@@ -2895,8 +2895,8 @@
   "Servers": {
     "value": "Серверы"
   },
-  "Servers can't be tested while the VPN is on — the test needs its own core session, which can't run alongside the active tunnel. Stop the VPN to test every server in this folder.": {
-    "value": "Серверы нельзя протестировать при включённом VPN — тесту нужна собственная сессия ядра, а она не может работать одновременно с активным туннелем. Остановите VPN, чтобы проверить все серверы этой папки."
+  "Servers can't be tested while the VPN is on — the test needs its own core session, which can't run alongside the active tunnel. Stop the VPN to test the servers.": {
+    "value": "Серверы нельзя протестировать при включённом VPN — тесту нужна собственная сессия ядра, а она не может работать одновременно с активным туннелем. Остановите VPN, чтобы проверить серверы."
   },
   "Servers in this folder have no detours yet. You can still route all of them through one of your servers, or set personal detours per server (tap a server on the Servers tab).": {
     "value": "У серверов этой папки пока нет detour. Тем не менее можно направить их все через один из ваших серверов или задать каждому личный detour (нажмите на сервер на вкладке «Серверы»)."
