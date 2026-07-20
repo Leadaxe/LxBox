@@ -8,13 +8,12 @@ import 'package:flutter/services.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/server_list.dart';
-import '../models/tunnel_status.dart';
 import '../services/error_format.dart';
 import '../services/probe/probe_controller.dart';
 import '../services/probe/probe_runner.dart';
+import 'probe_gate_mixin.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/input_helpers.dart';
-import '../vpn/box_vpn_client.dart';
 import 'home/filter_widgets.dart';
 import 'node_settings_screen.dart';
 import 'home/node_list_presenter.dart' show protoLabel;
@@ -48,7 +47,7 @@ class FolderDetailScreen extends StatefulWidget {
 }
 
 class _FolderDetailScreenState extends State<FolderDetailScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, ProbeGateMixin<FolderDetailScreen> {
   late final TabController _tabCtrl;
   bool _editing = false;
   late TextEditingController _nameCtrl;
@@ -232,15 +231,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       return;
     }
     if (_folder.members.isEmpty) return;
-    // §236 UI-rework — probe-сессия (временный CommandServer без tun) не
-    // поднимается поверх живого туннеля: два CommandServer на процесс
-    // невозможны. Пока VPN включён, тест недоступен — гейтим попапом с
-    // кнопкой Stop VPN, а не молча меряем «ноду поверх туннеля».
-    if ((await BoxVpnClient().getVpnStatus()) != TunnelStatus.disconnected) {
-      if (mounted) await _showVpnRunningGate();
-      return;
+    // §236/§296 — probe-сессия (временный CommandServer без tun) не поднимается
+    // поверх живого туннеля. Общий гейт: при VPN-on показывает попап Stop VPN;
+    // true = можно тестировать (VPN off или успешно остановлен).
+    if (await ensureVpnStoppedForProbe()) {
+      await _runProbe();
     }
-    await _runProbe();
   }
 
   /// §236 — сам прогон пробы (VPN уже выключен). Вынесен из [_toggleTest],
@@ -288,45 +284,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     // §236 — VPN стартовал между гейтом и probeStart (гонка): runner вернул
     // маркер → тот же гейт-попап, не текст ошибки.
     if (err == kProbeVpnRunning) {
-      if (mounted) await _showVpnRunningGate();
+      if (mounted && await onProbeVpnRaceGate()) await _runProbe();
       return;
     }
     if (err.isNotEmpty) {
       await _showError(err);
       return;
     }
-  }
-
-  /// §236 — попап-гейт «тест невозможен, пока VPN активен». Кнопка Stop VPN
-  /// глушит туннель (блокирующий stopVPN — ждёт Stopped) и сразу запускает
-  /// прогон, чтобы юзеру не жать тест повторно.
-  Future<void> _showVpnRunningGate() async {
-    final stop = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(getLocalText.s("VPN is running")),
-        content: Text(getLocalText.s(
-            "Servers can't be tested while the VPN is on — the test needs its own core session, which can't run alongside the active tunnel. Stop the VPN to test every server in this folder.")),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(getLocalText.s("Cancel")),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(getLocalText.s("Stop VPN")),
-          ),
-        ],
-      ),
-    );
-    if (stop != true) return;
-    final ok = await BoxVpnClient().stopVPN();
-    if (!mounted) return;
-    if (!ok) {
-      await _showError(getLocalText.s("Couldn't stop the VPN — try again."));
-      return;
-    }
-    await _runProbe();
   }
 
   /// §236 UI-rework — настройки теста (long-press на кнопке, как на главном):
