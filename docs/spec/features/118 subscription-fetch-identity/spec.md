@@ -6,7 +6,7 @@
 | Дата старта | 2026-06-13 |
 | Дата завершения | — |
 | Коммиты | — |
-| Связанные spec'ы | tasks/114 (UA brand-token routing), features/026 (parser v2), App Settings (general tab) |
+| Связанные spec'ы | tasks/114 (UA brand-token routing), features/026 (parser v2), App Settings (general tab), tasks/289 (per-subscription override) |
 
 ## Зачем
 
@@ -167,3 +167,17 @@ subscriptions** (был в General).
 - `flutter analyze` чистый, полный `flutter test` зелёный.
 - Девайс-смок: включить HWID → фетч подписки шлёт `x-hwid`+meta (проверить
   Debug-логом / панелью); сменить UA → панель отдаёт другой формат.
+
+## Расширения
+
+- **§289 (tasks/289) — per-subscription override**. Идентичность §118 стала
+  глобальным *дефолтом*: у каждой подписки появился режим Default / Custom. В
+  Custom подписка несёт собственный слепок всех переменных (User-Agent, HWID,
+  device-meta) и фетчится только им, игнорируя глобальные значения. Слепок
+  живёт в `SubscriptionServers.identity` (`null` = Default), настраивается в
+  экране подписки (Settings → «Fetch identity»), инициализируется копией
+  глобальных при включении и отбрасывается при возврате в Default. Точка
+  резолва — `_fetch` в `sources.dart` (`UrlSource.identity`). Форма заголовков
+  вынесена в общий `SubscriptionIdentity.headersFrom`, снимок глобальных — в
+  `SubscriptionIdentity.snapshotGlobal`. Глобальный экран (App Settings →
+  Subscriptions) сохранён без изменений как источник дефолта.

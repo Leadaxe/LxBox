@@ -57,8 +57,14 @@ void _dispatch(String name, Map<String, dynamic> args) {
     AppLog.I.info('[automation] action $name → ok');
   }).catchError((Object e) {
     final code = e is DebugError ? e.code : 'error';
-    final message = e is DebugError ? e.message : e.toString();
-    AppLog.I.warning('[automation] action $name → ERROR $code: $message');
+    // §290 — наружу (открытый broadcast) отдаём только контролируемые
+    // DebugError-сообщения. Произвольное исключение (generateConfig/
+    // saveParsedConfig и т.п.) может нести путь файла, URL подписки, фрагмент
+    // конфига — как Debug API прячет его в generic InternalError, так и здесь
+    // шлём generic-текст; детали — в AppLog.
+    final message = e is DebugError ? e.message : 'internal error';
+    // Полный текст пишем только в лог (не в broadcast).
+    AppLog.I.warning('[automation] action $name → ERROR $code: $e');
     // Symmetric: дать ждущему Tasker'у понять что запрос провалился.
     AutomationEventEmitter.I.emitVpnError(code, message);
   });
@@ -70,6 +76,12 @@ String _str(Map<String, dynamic> args, String key) =>
 bool _bool(Map<String, dynamic> args, String key) {
   final v = args[key];
   if (v is bool) return v;
-  if (v is String) return v.toLowerCase() == 'true';
+  // §290 — тот же набор литералов, что Debug API `qBool` (true/1/yes), чтобы
+  // строковый bool парсился одинаково на обоих транспортах. Native обычно шлёт
+  // настоящий Boolean (getBooleanExtra), но контракт парсеров держим единым.
+  if (v is String) {
+    final s = v.toLowerCase();
+    return s == 'true' || s == '1' || s == 'yes';
+  }
   return false;
 }

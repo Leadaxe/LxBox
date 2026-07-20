@@ -43,6 +43,8 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ last_node_count       int
 │       ├─ consecutive_fails     int           для UI "(N fails)"
 │       ├─ disabled_hashes       map?          §283 — {identity-хеш ноды: ISO-8601 lastSeen}; per-node disable
+│       ├─ identity              object?       §289 — per-sub override идентичности фетча (null=глоб.);
+│       │                                      {user_agent?, send_hwid, hwid?, device_os?, ver_os?, device_model?}
 │       │                        — user only —
 │       ├─ origin                "paste"|"file"|"qr"|"manual"
 │       ├─ created_at            ISO-8601
@@ -308,10 +310,18 @@ Sealed по полю `type`:
   "consecutive_fails":     0,                 // для UI "(N fails)"; freezing — in-memory
   "disabled_hashes": {                        // §283 — per-node disable (опционален,
     "<sha256-hex>": "2026-07-18T10:00:00Z"    // пустой не пишется). Ключ = identity-хеш
-  }                                           // сути ноды (emit − tag − detour, см.
+  },                                          // сути ноды (emit − tag − detour, см.
                                               // services/node_hash.dart); значение =
                                               // lastSeen для TTL-GC (clamp(3×interval,
                                               // 24ч, месяц)) на успешном сетевом refresh.
+  "identity": {                               // §289 — per-sub override идентичности фетча.
+    "user_agent": "MyPanel/1.0",              // Опционален: null/отсутствует = режим Default
+    "send_hwid": true,                        // (глобальный SubscriptionIdentity). Объект =
+    "hwid": "550e8400-...",                   // режим Custom: фетч использует ТОЛЬКО эти
+    "device_os": "android",                   // значения. Пустые строки (user_agent/hwid/
+    "ver_os": "14",                           // device_*) не сериализуются. Включается копией
+    "device_model": "Pixel 7"                 // глобальных; отбрасывается при возврате в Default.
+  }
 }
 ```
 

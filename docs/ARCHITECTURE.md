@@ -438,10 +438,9 @@ dns_settings_screen.dart     # DNS-настройки (592) + editor-sheets + dn
 custom_rule_edit_screen.dart # CustomRule editor (456) + custom_rule_edit/ (edit_controller, tabs/, sections/, widgets/)
 subscription_detail_screen.dart # детали подписки (431, TabController) + widgets/ (settings/source/meta/node_list)
 subscriptions_screen.dart    # список подписок (445) + widgets/ + helpers (clipboard/paste/share/context-menu)
-stats_screen.dart            # хост TabBarView: Overview + Connections + PerAppTrace + LiveEvents
+stats_screen.dart            # хост TabBarView: Overview + Connections + LiveEvents (§288 — PerAppTrace убран)
 stats_screen/overview_tab.dart  # Overview-таб + overview_models
-per_app_trace_tab.dart       # Stats-субтаб (446): live/connections/domains/ips views + dialogs
-live_events_tab.dart         # Stats-субтаб (371): event_tile/recording_header/unattributed_banner
+live_events_tab.dart         # Stats-субтаб «Profiler» (371): event_tile/recording_header/unattributed_banner
 tun_apps_tab.dart            # per-app VPN routing субтаб (384) — шарится Stats/Routing
 app_settings_screen.dart     # настройки приложения (516): General/Diagnostics табы + update_status_row
 backup_screen.dart           # export/import снапшота (229) + export_card/import_card/preview

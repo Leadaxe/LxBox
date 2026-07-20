@@ -4,6 +4,7 @@ import '../../../controllers/subscription_controller.dart';
 import '../../../models/channel.dart';
 import '../../../models/server_list.dart';
 import '../../../services/subscription/input_helpers.dart';
+import '../../../services/subscription/user_agent.dart';
 import '../../../widgets/detour_target_picker.dart' show detourChannelDisplay;
 import '../detour_mode.dart';
 import '../subscription_detail_format.dart';
@@ -32,6 +33,15 @@ class SubscriptionSettingsTab extends StatelessWidget {
     required this.onShowIntervalPicker,
     required this.onRefreshNow,
     required this.onEditSource,
+    // §289 — per-subscription fetch identity (nullable: папка не рисует секцию).
+    this.onToggleCustomIdentity,
+    this.onEditIdentityUserAgent,
+    this.onIdentitySendHwidChanged,
+    this.onEditIdentityHwid,
+    this.onRegenerateIdentityHwid,
+    this.onEditIdentityDeviceOs,
+    this.onEditIdentityVerOs,
+    this.onEditIdentityDeviceModel,
   });
 
   final SubscriptionEntry entry;
@@ -60,6 +70,18 @@ class SubscriptionSettingsTab extends StatelessWidget {
   final VoidCallback onShowIntervalPicker;
   final VoidCallback onRefreshNow;
   final VoidCallback onEditSource; // §129 — сменить источник (online↔file)
+
+  // §289 — Fetch identity (секция «Custom identity»). Nullable: секция видна
+  // только для SubscriptionServers, папка (folderMode) их не передаёт и не
+  // рисует блок — колбэки не зовутся.
+  final ValueChanged<bool>? onToggleCustomIdentity;
+  final VoidCallback? onEditIdentityUserAgent;
+  final ValueChanged<bool>? onIdentitySendHwidChanged;
+  final VoidCallback? onEditIdentityHwid;
+  final VoidCallback? onRegenerateIdentityHwid;
+  final VoidCallback? onEditIdentityDeviceOs;
+  final VoidCallback? onEditIdentityVerOs;
+  final VoidCallback? onEditIdentityDeviceModel;
 
   /// §248 — подпись override-цели: тег detour-канала (или его auto-двойника)
   /// → «⚙ <label>»; канал не найден → сырой тег. Интра-омоним папки (bare-тег
@@ -247,8 +269,136 @@ class SubscriptionSettingsTab extends StatelessWidget {
           )),
           const Divider(),
           _buildSubscriptionInfo(context, theme),
+          const SizedBox(height: 24),
+          // §289 — per-subscription fetch identity (Default/Custom override).
+          Text(getLocalText.s("Fetch identity"), style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          )),
+          const Divider(),
+          ..._buildFetchIdentity(context, theme),
         ],
       ],
+    );
+  }
+
+  /// §289 — секция Fetch identity подписки. Тумблер «Custom identity» (off =
+  /// глобальная идентичность §118), при Custom — полный блок полей (UA, HWID,
+  /// device-meta), читающий значения из `entry.identity`. Форма полей —
+  /// зеркало глобального таба (app_settings_screen → Subscriptions).
+  List<Widget> _buildFetchIdentity(BuildContext context, ThemeData theme) {
+    final cs = theme.colorScheme;
+    final id = entry.identity; // null = Default
+    return [
+      SwitchListTile(
+        secondary: const Icon(Icons.badge_outlined),
+        title: Text(getLocalText.s("Custom identity")),
+        subtitle: Text(getLocalText.s(
+            "Override global fetch identity for this subscription.")),
+        value: entry.hasCustomIdentity,
+        onChanged: onToggleCustomIdentity,
+      ),
+      if (id != null) ...[
+        ListTile(
+          leading: const Icon(Icons.badge_outlined),
+          title: Text(getLocalText.s("Custom User-Agent")),
+          subtitle: Text(
+            id.userAgent.isEmpty
+                ? getLocalText.s("Default · %s", resolveSubscriptionUserAgent())
+                : id.userAgent,
+            style: TextStyle(
+              fontStyle: id.userAgent.isEmpty ? FontStyle.italic : null,
+            ),
+          ),
+          trailing: const Icon(Icons.edit_outlined),
+          onTap: onEditIdentityUserAgent,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            getLocalText.s("Some panels return the config by a substring in the User-Agent — a custom UA without the \"LxBox\" token may yield an unsupported format and break the update. Change only if you know why."),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
+        ),
+        SwitchListTile(
+          title: Text(getLocalText.s("Send HWID")),
+          subtitle: Text(getLocalText.s("Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). Off by default.")),
+          secondary: const Icon(Icons.devices_outlined),
+          value: id.sendHwid,
+          onChanged: onIdentitySendHwidChanged,
+        ),
+        if (id.sendHwid) ...[
+          _editRow(
+            context,
+            icon: Icons.tag,
+            label: 'HWID · x-hwid',
+            value: id.hwid,
+            monospace: true,
+            onEdit: onEditIdentityHwid,
+            extra: IconButton(
+              icon: const Icon(Icons.refresh, size: 20),
+              tooltip: getLocalText.s("Regenerate"),
+              onPressed: onRegenerateIdentityHwid,
+            ),
+          ),
+          _editRow(context,
+              icon: Icons.android, label: 'x-device-os', value: id.deviceOs,
+              onEdit: onEditIdentityDeviceOs),
+          _editRow(context,
+              icon: Icons.numbers, label: 'x-ver-os', value: id.verOs,
+              onEdit: onEditIdentityVerOs),
+          _editRow(context,
+              icon: Icons.phone_android,
+              label: 'x-device-model',
+              value: id.deviceModel,
+              onEdit: onEditIdentityDeviceModel),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              getLocalText.s("These headers identify your device to the panel. Defaults come from the device — override any of them (empty = device default)."),
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ],
+    ];
+  }
+
+  /// §289 — строка редактируемого заголовка идентичности (зеркало `_editRow`
+  /// глобального таба). `onEdit`/`extra` — nullable-колбэки родителя.
+  Widget _editRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required VoidCallback? onEdit,
+    bool monospace = false,
+    Widget? extra,
+  }) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(label),
+      subtitle: Text(
+        value.isEmpty ? getLocalText.s("(empty)") : value,
+        style: TextStyle(
+          fontFamily: monospace ? 'monospace' : null,
+          fontSize: monospace ? 12 : null,
+          color: value.isEmpty
+              ? Theme.of(context).colorScheme.onSurfaceVariant
+              : null,
+        ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ?extra,
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 20),
+            tooltip: getLocalText.s("Edit"),
+            onPressed: onEdit,
+          ),
+        ],
+      ),
     );
   }
 

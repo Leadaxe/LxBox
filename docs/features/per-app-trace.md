@@ -1,5 +1,16 @@
 # Per-app traffic profiler
 
+> ⚠️ **§288 — per-app часть УДАЛЕНА.** Отдельная вкладка `Statistics → App`
+> (per-app trace) и весь session-слой (запись именованных сессий с выбором
+> target-приложения, secondary-пакеты, verbose core logs, Debug API
+> `/profiler/{start,stop,active,sessions,session/<id>,stream,
+> secondary-packages}`) сняты. Остался только **system-wide Profiler**
+> (`Statistics → Profiler`): запись, live-поток по всем приложениям, фильтр по
+> приложениям, Live/Aggregated, экспорт; Debug API `/profiler/live*`. Разбор
+> трафика конкретного приложения делается через фильтр по приложениям на
+> вкладке Profiler. Документ ниже сохранён как исторический (описывает
+> ядровую атрибуцию §168/§180 и общий движок `TraceExplorer`, которые живы).
+
 Инструмент диагностики «куда конкретное приложение ходит и как роутится». Решает задачи вида: «X не открывается через VPN», «куда стучит этот фитнес-трекер», «через какой outbound реально идёт трафик банка». Без packet capture, без root, без ручного matching'а conn_id'ов между логами.
 
 **Inclusive observer with confidence** (§048): profiler не drop'ает события, каждое попадает в UI с уровнем уверенности (`verified` / `secondary` / `unattributed`). Юзер видит **всё что произошло**, и видит **что точно его app, а что возможно**.

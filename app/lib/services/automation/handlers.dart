@@ -27,20 +27,33 @@ import '../subscription/auto_updater.dart';
 /// статус наблюдается через `/state` или outgoing-события.
 
 /// `switch-node` — переключить активную ноду в текущей группе.
-/// Бросает [Conflict] если группа не выбрана.
+/// Бросает [Conflict] если группа не выбрана или туннель не поднят.
 Future<void> actionSwitchNode(String tag, DebugContext ctx) async {
   if (tag.isEmpty) throw const BadRequest('"tag" empty');
   final home = ctx.requireHome();
   if (home.state.selectedGroup == null) {
     throw const Conflict('no group selected — set group first');
   }
+  // §290 — precondition симметрична urltest-group/reset-network: без tunnel up
+  // `switchNode` молча делает ранний return (нет instance для selectOutbound),
+  // и automation-мост не смог бы отличить «сделано» от «нет» → уводил Tasker в
+  // timeout. Явный Conflict → мост эмитит VPN_ERROR.
+  if (!home.state.tunnelUp) {
+    throw const Conflict('tunnel not connected');
+  }
   unawaited(home.switchNode(tag));
 }
 
 /// `set-group` — сменить активную группу (+ загрузить её ноды).
+/// Бросает [NotFound] если группы с таким тегом нет: иначе `setSelectedGroup`
+/// эмитил бы ложный `ACTIVE_GROUP_CHANGED` на несуществующую группу, а
+/// `applyGroup` молча выходил (`groupOf → null`) и ноды не грузил.
 Future<void> actionSetGroup(String group, DebugContext ctx) async {
   if (group.isEmpty) throw const BadRequest('"group" empty');
   final home = ctx.requireHome();
+  if (!home.state.groups.contains(group)) {
+    throw NotFound('group not found: "$group"');
+  }
   home.setSelectedGroup(group);
   unawaited(home.applyGroup(group));
 }

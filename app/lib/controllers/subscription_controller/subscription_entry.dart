@@ -73,6 +73,15 @@ class SubscriptionEntry extends ChangeNotifier {
       ? (_list as SubscriptionServers).lastUpdateStatus
       : UpdateStatus.never;
 
+  /// §289 — per-subscription слепок идентичности фетча. `null` = режим Default
+  /// (глобальная идентичность). Пусто для не-подписок.
+  SubscriptionIdentityOverride? get identity => _list is SubscriptionServers
+      ? (_list as SubscriptionServers).identity
+      : null;
+
+  /// §289 — режим Custom активен (у подписки свой слепок идентичности).
+  bool get hasCustomIdentity => identity != null;
+
   /// Количество chained-детур узлов (⚙). В `nodeCount` они не включены,
   /// потому что в списке `.nodes` детуры живут как поле `.chained` у
   /// главного узла, не отдельным элементом.
@@ -161,6 +170,31 @@ class SubscriptionEntry extends ChangeNotifier {
     if (list is! SubscriptionServers) return;
     final clamped = v < -1 ? -1 : v;
     _replaceList(list.copyWith(updateIntervalHours: clamped));
+  }
+
+  /// §289 — включить режим Custom: инициализировать слепок копией текущих
+  /// глобальных значений. No-op для не-подписок и если Custom уже активен.
+  void enableCustomIdentity() {
+    final list = _list;
+    if (list is! SubscriptionServers || list.identity != null) return;
+    _replaceList(
+        list.copyWith(identity: SubscriptionIdentity.snapshotGlobal()));
+  }
+
+  /// §289 — выключить Custom: отбросить слепок (→ Default/глобальная). No-op
+  /// для не-подписок. clearIdentity снимает поле в null (обычный `??` не может).
+  void disableCustomIdentity() {
+    final list = _list;
+    if (list is! SubscriptionServers) return;
+    _replaceList(list.copyWith(clearIdentity: true));
+  }
+
+  /// §289 — обновить слепок Custom (правка отдельных полей). No-op если Custom
+  /// не активен (сначала [enableCustomIdentity]).
+  void updateIdentity(SubscriptionIdentityOverride next) {
+    final list = _list;
+    if (list is! SubscriptionServers || list.identity == null) return;
+    _replaceList(list.copyWith(identity: next));
   }
 
   set registerDetourServers(bool v) =>
