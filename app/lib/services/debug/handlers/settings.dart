@@ -641,7 +641,8 @@ Future<DebugResponse> _putTunApps(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
 
   final mode = body['mode'];
-  if (mode is! String || !['off', 'allow', 'deny'].contains(mode)) {
+  // §293 — валидатор на модели (единый источник с storage-сеттером).
+  if (mode is! String || !TunAppsConfig.isValidMode(mode)) {
     throw const BadRequest('field "mode" must be one of: off|allow|deny');
   }
 
@@ -735,7 +736,9 @@ Future<DebugResponse> _putBackgroundMode(DebugRequest req) async {
   if (raw is! String) {
     throw const BadRequest('body must be {"mode": "never"|"lazy"|"always"}');
   }
-  if (!const {'never', 'lazy', 'always'}.contains(raw)) {
+  // §293 — валидатор на enum (единый источник; fromNative молча fallback'ит,
+  // а write-путь обязан отвергать мусор).
+  if (!BackgroundMode.isValid(raw)) {
     throw BadRequest('mode must be one of: never|lazy|always (got "$raw")');
   }
   final mode = BackgroundMode.fromNative(raw);

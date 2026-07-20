@@ -66,6 +66,11 @@
   роутинга; невалидная форма → 400. Форма на диске не изменилась (обратная
   совместимость с legacy-снапшотами сохранена).
 
+- **§293 — Debug API отвергает невалидный `tun_apps.mode` / `background_mode`**.
+  `PUT /settings/tun_apps` и `/settings/vpn/background_mode` теперь проверяют
+  значение по единому валидатору модели (`off|allow|deny` / `never|lazy|always`);
+  мусор → 400 вместо тихого fallback.
+
 - **§290 — automation `SWITCH_NODE` на уже активную ноду больше не рвёт
   соединения**. Раньше команда переключения на ту ноду, что уже активна,
   безусловно делала re-select и — при включённом «Interrupt connections on

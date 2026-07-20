@@ -23,6 +23,11 @@ enum BackgroundMode {
   /// Симметричен `fromNative`.
   String get wireValue => name;
 
+  /// §293 — валиден ли wire-литерал (для write-путей, которые ДОЛЖНЫ отвергать
+  /// мусор, а не молча fallback'иться в `never` как [fromNative]).
+  static bool isValid(String raw) =>
+      raw == 'never' || raw == 'lazy' || raw == 'always';
+
   /// Парсинг ответа native. Unknown / null fallback'ится в `never` (default
   /// поведение, безопасно — туннель остаётся активным).
   static BackgroundMode fromNative(String? raw) {

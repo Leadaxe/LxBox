@@ -1,6 +1,15 @@
 # §293 — VpnSettings-фасад: унификация 4 входов настроек
 
-**Тип:** structural refactor (Шаг 3b фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** spec · **Размер:** M
+**Тип:** structural refactor (Шаг 3b фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** дедуп enum РЕАЛИЗОВАН; фасад+экраны pending-device · **Размер:** M
+
+> **Реализовано (безопасная часть, коммит ниже):** инлайн enum-валидация
+> settings-handler'а сведена к моделям (единый источник, как §292-D):
+> `BackgroundMode.isValid` (write-путь отвергает мусор — в отличие от
+> `fromNative`, что молча fallback'ит в `never`) и `TunAppsConfig.isValidMode`
+> (переиспользован и в `_setTunApps`, и в Debug `_putTunApps`/`_putBackgroundMode`
+> вместо инлайн-списков). 5 тестов. Полный `VpnSettingsFacade` + перевод 4
+> settings-экранов — **pending-device** (трогает device-verified UI, вслепую
+> рискованно; делать в цикле код→APK→устройство).
 
 Домен vpn-mode/tun-apps/app-settings — «эпицентр настроек»: **нет сервиса** между
 экранами и `SettingsStorage`-статиками; валидация размазана по 3 слоям; ~4 входа
