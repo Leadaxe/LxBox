@@ -21,17 +21,24 @@ round-robin balancer, XHTTP full params, DNS-стрим и др.).
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.14`** — SPEC 030: остановка туннеля больше не виснет
-10+ сек при многих WG/AWG-эндпоинтах (особенно сразу после health-check-пинга,
-разбудившего их из idle-suspend). Корень — порядок в `box.Close()`: teardown
-эндпоинтов ждал завершения in-flight ping-wake (полный rebuild+handshake, до
-нескольких секунд на каждый, серийно). Фикс: тик глушится, все WG-UDP-сокеты
-закрываются заранее, in-flight wake прерывается при старте close эндпоинта,
-эндпоинты закрываются конкурентно. Ни один шаг teardown не пропущен (сессии
-закрыты, ключи обнулены, netstack освобождён) — убрано только пустое ожидание.
-Это ядровая половина §287 (app-side порог force-stop 3с был паллиативом).
-База upstream `v1.14.0-alpha.47`. Build-теги AAR без изменений. История версий
-`lx.1…lx.14` — в конце файла.
+**Текущий пин: `v1.14.0-lx.15-rc.1`** — SPEC 002: XHTTP больше не ломается за
+reverse-proxy. VLESS+XHTTP через nginx/CDN с `mode: packet-up`, trailing-slash
+`path` (`/upload/`) и `session_placement: header` раньше падал с `unexpected
+download status: 301 Moved Permanently` (клиент безусловно срезал trailing slash
+для ВСЕХ mode; nginx `location /upload/ {}` отвечал 301-редиректом на bare-path,
+а download-запрос — raw HTTP/2 без follow-redirects — сюрфейсил это как dial
+error). Фикс: `path` сохраняется как есть, trailing slash срезается только на
+bare-path запросе stream-one. Дефолтные конфиги (session id в path) не
+затрагивались. Покрыто url_test-кейсом. + merge upstream `testing` (13 коммитов:
+async DNS refactor, WG detour fix сходится с SPEC 029, OpenConnect
+auth-challenge, прочие фиксы). База upstream `v1.14.0-alpha.48`. Build-теги AAR
+без изменений. **Device-verified** на CPH2411 (2026-07-21): старт без крашей,
+Debug API отвечает, VPN поднимается. История версий `lx.1…lx.15` — в конце файла.
+
+`lx.14` (предыдущий) — SPEC 030: остановка туннеля больше не виснет 10+ сек при
+многих WG/AWG-эндпоинтах (teardown в `box.Close()` ждал in-flight ping-wake;
+фикс — конкурентное закрытие эндпоинтов с прерыванием wake, ни один шаг teardown
+не пропущен). Ядровая половина §287.
 
 ### AAR до релиза ядра
 

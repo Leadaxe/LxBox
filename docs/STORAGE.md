@@ -515,6 +515,14 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 }
 ```
 
+**§294 — типизация:** kind-ref'ы `servers[]`/`rules[]` типизированы моделью
+`lib/models/dns_ref.dart` (sealed `DnsServerRef` {inline·preset·template} +
+`DnsRuleRef` {inline·srs·preset·template}). **Форма на диске НЕ изменилась** —
+`toJson` байт-совместим (§221 backup); `fromJson` толерантен на чтение
+(legacy full-body / unknown-kind → null, дропаются как в резолвере). Строгий
+`fromJsonStrict` — только на Debug write-пути (`PUT /settings/dns_options/*` →
+400 на битую форму). Резолвер (`resolveDisplayedServers`, VIEW-слой) не тронут.
+
 ### `dns_options.servers[i]` — kind-discriminated ref ([§044])
 
 ```jsonc
