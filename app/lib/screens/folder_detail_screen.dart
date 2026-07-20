@@ -10,6 +10,7 @@ import '../models/channel.dart';
 import '../models/server_list.dart';
 import '../models/tunnel_status.dart';
 import '../services/error_format.dart';
+import '../services/probe/probe_controller.dart';
 import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/input_helpers.dart';
@@ -205,17 +206,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   Future<void> _loadThresholds() async {
-    final g = int.tryParse(await SettingsStorage.getVar('probe_ms_green', ''));
-    final y = int.tryParse(await SettingsStorage.getVar('probe_ms_yellow', ''));
-    final o = int.tryParse(await SettingsStorage.getVar('probe_ms_orange', ''));
+    final t = await ProbeController.loadThresholds();
     if (!mounted) return;
-    setState(() {
-      _thresholds = ProbeThresholds(
-        greenMs: g ?? 250,
-        yellowMs: y ?? 500,
-        orangeMs: o ?? 700,
-      );
-    });
+    setState(() => _thresholds = t);
   }
 
   // ─────────────────────── §236 — Test servers ───────────────────────
@@ -254,14 +247,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   /// чтобы гейт-попап мог перезапустить его после Stop VPN.
   Future<void> _runProbe() async {
     if (_folder.members.isEmpty) return;
-    final ping = await SettingsStorage.getPingOptions();
     // §284 — опции теста самой папки (ping_url/ping_timeout_ms в объекте папки)
     // перекрывают глобальные. Папка «WARP GENERATOR» так тестируется по IP без DNS.
-    final url =
-        (_folder.pingUrl ?? (ping['url'] as String?))?.trim() ?? '';
-    final timeoutMs = _folder.pingTimeoutMs ??
-        (ping['timeout_ms'] as num?)?.toInt() ??
-        3000;
+    final (:url, :timeoutMs) = await ProbeController.resolvePingOptions(
+      overrideUrl: _folder.pingUrl,
+      overrideTimeoutMs: _folder.pingTimeoutMs,
+    );
     if (!mounted) return;
     setState(() {
       _testing = true;
@@ -371,12 +362,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   Future<void> _editPingTarget() async {
-    final ping = await SettingsStorage.getPingOptions();
+    final target = await ProbeController.globalPingTarget();
     if (!mounted) return;
-    final urlCtl =
-        TextEditingController(text: (ping['url'] as String?) ?? '');
-    final timeoutCtl = TextEditingController(
-        text: '${(ping['timeout_ms'] as num?)?.toInt() ?? 3000}');
+    final urlCtl = TextEditingController(text: target.url);
+    final timeoutCtl = TextEditingController(text: '${target.timeoutMs}');
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -422,10 +411,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     urlCtl.dispose();
     timeoutCtl.dispose();
     if (saved != true || !mounted) return;
-    await SettingsStorage.setGlobalPingUrl(url);
-    if (timeout != null && timeout > 0) {
-      await SettingsStorage.setGlobalPingTimeout(timeout);
-    }
+    await ProbeController.saveGlobalPing(url, timeoutMs: timeout);
   }
 
   /// Число завершённых тестов (для строки-сводки).
@@ -475,10 +461,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     );
     ctl.dispose();
     if (ms == null || !mounted) return;
-    final slow = <int>{
-      for (final e in _probe.entries)
-        if (e.value.status == ProbeStatus.ok && e.value.delayMs > ms) e.key,
-    };
+    final slow = ProbeController.slowerThan(_probe, ms);
     if (slow.isEmpty) {
       await _showError(getLocalText.s("No tested servers slower than %d ms", ms));
       return;
@@ -493,14 +476,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     setState(() {});
   }
 
-  /// §284 — множество индексов членов, не прошедших последний тест.
-  Set<int> _unreachableIndexes() => {
-        for (final e in _probe.entries)
-          if (e.value.status == ProbeStatus.failed ||
-              e.value.status == ProbeStatus.broken ||
-              e.value.status == ProbeStatus.invalid)
-            e.key,
-      };
+  /// §284/§296 — индексы членов, не прошедших последний тест (общий хелпер).
+  Set<int> _unreachableIndexes() => ProbeController.unreachableIndexes(_probe);
 
   /// §284 — выключить (не удалять) недоступные по последнему тесту. Узлы
   /// остаются в папке серыми; результаты теста сохраняются (индексы не съезжают).
@@ -552,34 +529,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   Future<void> _sortByPing() async {
     final idx = _index;
     if (idx < 0) return;
-    final n = _folder.members.length;
-    int rank(int i) {
-      final r = _probe[i];
-      if (r == null) return 1 << 30;
-      return switch (r.status) {
-        ProbeStatus.ok => r.delayMs,
-        ProbeStatus.pending => 1 << 30,
-        // err/broken — в конец, ниже нетестированных.
-        ProbeStatus.failed ||
-        ProbeStatus.broken ||
-        ProbeStatus.invalid =>
-          (1 << 30) + 1,
-      };
-    }
-
-    final order = [for (var i = 0; i < n; i++) i]
-      ..sort((a, b) {
-        final byRank = rank(a).compareTo(rank(b));
-        return byRank != 0 ? byRank : a.compareTo(b); // stable
-      });
+    final order =
+        ProbeController.pingSortOrder(_probe, _folder.members.length);
     await widget.controller.applyMembersOrder(idx, order);
     if (!mounted) return;
     // Перепривязка результатов к новым индексам.
-    final remapped = <int, ProbeResult>{};
-    for (var newI = 0; newI < order.length; newI++) {
-      final r = _probe[order[newI]];
-      if (r != null) remapped[newI] = r;
-    }
+    final remapped = ProbeController.remapAfterReorder(_probe, order);
     setState(() {
       _probe
         ..clear()
@@ -638,14 +593,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     y.dispose();
     o.dispose();
     if (saved != true || !mounted) return;
-    final next = ProbeThresholds(
-      greenMs: (gv == null || gv <= 0) ? 250 : gv,
-      yellowMs: (yv == null || yv <= 0) ? 500 : yv,
-      orangeMs: (ov == null || ov <= 0) ? 700 : ov,
+    final next = await ProbeController.saveThresholds(
+      greenMs: gv,
+      yellowMs: yv,
+      orangeMs: ov,
     );
-    await SettingsStorage.setVar('probe_ms_green', '${next.greenMs}');
-    await SettingsStorage.setVar('probe_ms_yellow', '${next.yellowMs}');
-    await SettingsStorage.setVar('probe_ms_orange', '${next.orangeMs}');
     if (!mounted) return;
     setState(() => _thresholds = next);
   }
