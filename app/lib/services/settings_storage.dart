@@ -280,6 +280,10 @@ class SettingsStorage {
 
   static Future<List<Channel>> getChannels() => _getChannels();
 
+  /// §292 — код приложения зовёт `ChannelMutations.bulkReplace`: bulk-overwrite
+  /// мимо heal'а допустим только там, где ссылка структурно не может повиснуть
+  /// (staging-буфер, reorder). Голый вызов из `lib/` — предупреждение analyze'а.
+  @visibleForTesting
   static Future<void> setChannels(List<Channel> channels, {bool flush = true}) =>
       _setChannels(channels, flush: flush);
 

@@ -227,10 +227,21 @@ Future<DebugResponse> _putVpnMode(DebugRequest req, DebugContext ctx) async {
   if (listen != null && !VpnModeConfig.isValidListenAddr(listen)) {
     throw BadRequest('invalid "proxy_listen" (IPv4 required): $listen');
   }
+  // §292 — порт/протокол валидируются на модели (тот же инвариант, что UI),
+  // иначе мусорный proxy_port/proxy_protocol доходит до sing-box inbounds.
+  final port = fieldInt(body, 'proxy_port');
+  if (port != null && !VpnModeConfig.isValidPort(port)) {
+    throw BadRequest('invalid "proxy_port" (1024..65535 required): $port');
+  }
+  final protocol = fieldString(body, 'proxy_protocol');
+  if (protocol != null && !VpnModeConfig.isValidProtocol(protocol)) {
+    throw BadRequest(
+        'invalid "proxy_protocol" (mixed|http|socks required): $protocol');
+  }
   final next = cur.copyWith(
     mode: fieldString(body, 'mode'),
-    proxyProtocol: fieldString(body, 'proxy_protocol'),
-    proxyPort: fieldInt(body, 'proxy_port'),
+    proxyProtocol: protocol,
+    proxyPort: port,
     proxyListen: listen,
     proxyAuthEnabled: fieldBool(body, 'proxy_auth'),
     proxyUsername: fieldString(body, 'proxy_user'),

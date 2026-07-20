@@ -2787,6 +2787,24 @@
   "Saved": {
     "value": "Сохранено"
   },
+  "%s rule reference(s) switched to vpn-1": {
+    "value": "ссылок в правилах переключено на vpn-1: %s"
+  },
+  "%s detour reference(s) reset to None": {
+    "value": "detour-ссылок сброшено в None: %s"
+  },
+  "Channel \"%1$s\" %2$s": {
+    "value": "Канал «%1$s» %2$s"
+  },
+  "Channel \"%s\" is no longer a detour target": {
+    "value": "Канал «%s» больше не является detour-целью"
+  },
+  "disabled": {
+    "value": "выключен"
+  },
+  "deleted": {
+    "value": "удалён"
+  },
   "Saved channel \"%1$s\" — %2$s": {
     "value": "Канал «%1$s» сохранён — %2$s"
   },

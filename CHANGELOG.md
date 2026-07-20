@@ -53,6 +53,12 @@
 
 ### Fixed
 
+- **§292 — Debug API отвергает невалидный `proxy_port`/`proxy_protocol`**.
+  `PUT /settings/vpn_mode` раньше записывал любое число в `proxy_port` и любую
+  строку в `proxy_protocol` — мусор доходил до sing-box inbounds и ронял reload.
+  Теперь порт валидируется в диапазоне 1024..65535, протокол — `mixed`/`http`/
+  `socks` (тот же инвариант, что в UI). Невалидное значение → 400.
+
 - **§290 — automation `SWITCH_NODE` на уже активную ноду больше не рвёт
   соединения**. Раньше команда переключения на ту ноду, что уже активна,
   безусловно делала re-select и — при включённом «Interrupt connections on

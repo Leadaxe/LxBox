@@ -287,7 +287,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       _markDirty();
     });
     // enable heal'ов не даёт (нулевые счётчики) — SnackBar молчит.
-    _notifyHealed(next, healed, ruleLead: 'disabled');
+    _notifyHealed(next, healed, ruleLead: getLocalText.s('disabled'));
   }
 
   /// §248 — heal мог переписать route_final / custom-rule outbounds в storage
@@ -315,14 +315,10 @@ class _RoutingScreenState extends State<RoutingScreen>
     if (healed.rules == 0 && healed.detours == 0) return;
     final label = channel.label.isNotEmpty ? channel.label : channel.tag;
     final lead = healed.rules > 0
-        ? 'Channel "$label" $ruleLead'
-        : 'Channel "$label" is no longer a detour target';
-    final parts = [
-      if (healed.rules > 0)
-        '${healed.rules} rule reference(s) switched to vpn-1',
-      if (healed.detours > 0)
-        '${healed.detours} detour reference(s) reset to None',
-    ];
+        ? getLocalText.s('Channel "%1\$s" %2\$s', label, ruleLead)
+        : getLocalText.s('Channel "%s" is no longer a detour target', label);
+    // §292 — части сообщения из единого форматтера (общий с node_list).
+    final parts = ChannelMutations.healMessageParts(healed);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('$lead — ${parts.join(', ')}.')),
     );
@@ -390,7 +386,7 @@ class _RoutingScreenState extends State<RoutingScreen>
         _invalidateOutboundOptions();
       });
       _markDirty();
-      _notifyHealed(channel, healed, ruleLead: 'deleted');
+      _notifyHealed(channel, healed, ruleLead: getLocalText.s('deleted'));
     } else if (result.saved != null) {
       final saved = result.saved!;
       // §202/§248/§274 — persist канала: disable лечит оба рода ссылок,
@@ -410,12 +406,12 @@ class _RoutingScreenState extends State<RoutingScreen>
       // heal-триггер: detour-флаг — разрешение, канал остаётся целью
       // правил). ruleLead поэтому один; detours-часть (flag-unset) свою
       // вводную берёт в _notifyHealed.
-      _notifyHealed(saved, healed, ruleLead: 'disabled');
+      _notifyHealed(saved, healed, ruleLead: getLocalText.s('disabled'));
     }
     // §125 — обновить tag→label кеш для home-dropdown (label мог измениться,
     // канал мог удалиться). stageChanges уже застейджила channels; здесь только
     // освежаем labels в HomeState. Persist канала — flushToDisk на dispose.
-    await SettingsStorage.setChannels(_channels, flush: true);
+    await ChannelMutations.bulkReplace(_channels, flush: true);
     await widget.homeController.refreshChannelLabels();
   }
 

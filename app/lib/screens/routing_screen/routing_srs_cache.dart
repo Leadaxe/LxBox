@@ -87,7 +87,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   /// flush — mixin'ом (flushToDisk) на dispose/paused.
   @override
   Future<void> stageChanges() async {
-    await SettingsStorage.setChannels(_channels, flush: false); // §125
+    await ChannelMutations.bulkReplace(_channels, flush: false); // §125/§292
     await SettingsStorage.saveRouteFinal(_routeFinal, flush: false);
     await SettingsStorage.saveCustomRules(_customRules, flush: false);
     // §076: configDirty уже true (set синхронно в markDirty). НЕ

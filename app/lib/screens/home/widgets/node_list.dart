@@ -438,12 +438,8 @@ class HomeNodeList extends StatelessWidget {
     // detour-ссылки (rules-часть достижима только с disable/delete, которых
     // здесь нет; §274 убрал flag-set-heal) — досказываем счётчики в том же
     // SnackBar.
-    final healedParts = <String>[
-      if (healed.rules > 0)
-        '${healed.rules} rule reference(s) switched to vpn-1',
-      if (healed.detours > 0)
-        '${healed.detours} detour reference(s) reset to None',
-    ];
+    // §292 — части сообщения из единого форматтера (общий с routing_screen).
+    final healedParts = ChannelMutations.healMessageParts(healed);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
           content: Text(healedParts.isEmpty
