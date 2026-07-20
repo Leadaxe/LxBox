@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/probe/probe_config.dart';
 import 'package:lxbox/services/probe/probe_runner.dart';
@@ -28,16 +29,22 @@ void main() {
             ],
       );
 
+  // §296 — probe теперь над List<NodeSpec?>; папка приводит члены к нодам
+  // (nullable, unfiltered) — тот же bridge, что folder_detail/folders.dart.
+  List<NodeSpec?> nodesOf(FolderServers f) =>
+      [for (final m in f.members) m.node];
+  ProbeConfig cfgOf(FolderServers f) => buildProbeConfig(nodesOf(f));
+
   group('§236 buildProbeConfig', () {
     test('ВСЕ члены (включая выключенных) попадают в конфиг, теги голые', () {
-      final cfg = buildProbeConfig(folder());
+      final cfg = cfgOf(folder());
       expect(cfg.configJson, isNotNull);
       final config = jsonDecode(cfg.configJson!) as Map<String, dynamic>;
       final tags = (config['outbounds'] as List)
           .map((o) => (o as Map)['tag'] as String)
           .toList();
       expect(tags, containsAll(['Alpha', 'Beta'])); // без префикса папки
-      expect(cfg.tagByMember, {0: 'Alpha', 1: 'Beta'});
+      expect(cfg.tagByIndex, {0: 'Alpha', 1: 'Beta'});
       // Без inbound'ов (openTun не должен вызываться) + local-резолвер.
       expect(config.containsKey('inbounds'), isFalse);
       expect((config['route'] as Map)['default_domain_resolver'], kProbeDnsTag);
@@ -46,34 +53,34 @@ void main() {
     });
 
     test('битый член исключён из конфига с вердиктом broken', () {
-      final cfg = buildProbeConfig(folder(members: [
+      final cfg = cfgOf(folder(members: [
         FolderMember(raw: uriA),
         FolderMember(raw: 'garbage-not-a-config'),
       ]));
-      expect(cfg.tagByMember.keys, [0]);
-      expect(cfg.brokenByMember, {1: 'broken'});
+      expect(cfg.tagByIndex.keys, [0]);
+      expect(cfg.brokenByIndex, {1: 'broken'});
     });
 
     test('все битые → configJson == null', () {
-      final cfg = buildProbeConfig(folder(members: [
+      final cfg = cfgOf(folder(members: [
         FolderMember(raw: 'garbage-1'),
         FolderMember(raw: 'garbage-2'),
       ]));
       expect(cfg.configJson, isNull);
-      expect(cfg.brokenByMember.length, 2);
+      expect(cfg.brokenByIndex.length, 2);
     });
 
     test('коллизия тегов членов уникализируется', () {
-      final cfg = buildProbeConfig(folder(members: [
+      final cfg = cfgOf(folder(members: [
         FolderMember(raw: uriA),
         FolderMember(raw: uriA),
       ]));
-      expect(cfg.tagByMember[0], 'Alpha');
-      expect(cfg.tagByMember[1], 'Alpha-2');
+      expect(cfg.tagByIndex[0], 'Alpha');
+      expect(cfg.tagByIndex[1], 'Alpha-2');
     });
   });
 
-  group('§236 FolderProbeRunner (mock method channel)', () {
+  group('§236 ProbeRunner (mock method channel)', () {
     const channel = MethodChannel('com.leadaxe.lxbox/methods');
     final calls = <MethodCall>[];
     String probeStartAnswer = '';
@@ -109,8 +116,8 @@ void main() {
 
     test('VPN выключен: сессия, тестируются ВСЕ члены, teardown', () async {
       final results = <int, ProbeResult>{};
-      final err = await FolderProbeRunner().run(
-        folder(),
+      final err = await ProbeRunner().run(
+        nodesOf(folder()),
         url: 'https://example.com/gen204',
         timeoutMs: 3000,
         onResult: (i, r) => results[i] = r,
@@ -125,11 +132,11 @@ void main() {
 
     test('битые члены получают вердикт до ядра', () async {
       final results = <int, ProbeResult>{};
-      await FolderProbeRunner().run(
-        folder(members: [
+      await ProbeRunner().run(
+        nodesOf(folder(members: [
           FolderMember(raw: uriA),
           FolderMember(raw: 'garbage'),
-        ]),
+        ])),
         url: '',
         timeoutMs: 0,
         onResult: (i, r) => results[i] = r,
@@ -140,8 +147,8 @@ void main() {
     test('VPN запущен: маркер-гейт, боевое ядро не зовётся', () async {
       probeStartAnswer = 'VPN is running — test needs its own core session';
       final results = <int, ProbeResult>{};
-      final err = await FolderProbeRunner().run(
-        folder(),
+      final err = await ProbeRunner().run(
+        nodesOf(folder()),
         url: '',
         timeoutMs: 0,
         onResult: (i, r) => results[i] = r,
@@ -158,8 +165,8 @@ void main() {
     test('фатальная ошибка старта (не «vpn running») возвращается наружу',
         () async {
       probeStartAnswer = 'create service: parse config: boom';
-      final err = await FolderProbeRunner().run(
-        folder(),
+      final err = await ProbeRunner().run(
+        nodesOf(folder()),
         url: '',
         timeoutMs: 0,
         onResult: (_, _) {},

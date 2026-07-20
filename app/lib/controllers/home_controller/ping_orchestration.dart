@@ -334,7 +334,7 @@ mixin _PingMixin on ChangeNotifier {
   /// приложения (`onAppPaused`). Гасит три независимых источника:
   ///  1. mass-ping — epoch-bump + `_cc.cancelPing()` (внутри `cancelMassPing`);
   ///  2. auto-ping-таймер (5с после connect) — чтобы не выстрелил в мёртвую сессию;
-  ///  3. активные folder-probe sweep'ы (`FolderProbeRunner`) через `ProbeLifecycle`.
+  ///  3. активные folder-probe sweep'ы (`ProbeRunner`) через `ProbeLifecycle`.
   /// Идемпотентно: каждый источник сам no-op, если неактивен.
   void haltAllProbing() {
     cancelMassPing();
