@@ -1,7 +1,7 @@
 # §189 — native_prefs: зеркало Android-prefs в lxbox_settings.json
 
 **Тип:** storage-архитектура (single source of truth)
-**Статус:** ✅ Реализовано (позже) — `NativePrefs` write-through/sync + `bootstrapAndSyncNativePrefs()` в main.dart:73; backup через JSON; auto_redirect доделан. Прежнее «Спроектировано» устарело.
+**Статус:** ✅ Реализовано (сверено с кодом 2026-07-21) — `NativePrefs` write-through/sync + `bootstrapAndSyncNativePrefs()` (main.dart:73); все 6 ключей в `NativePrefsKeys` (вкл. `auto_redirect`); Dart-обёртка `set/getAutoRedirect` (box_vpn_client.dart:317) — пункт «ОТСУТСТВУЕТ, доделать» закрыт; backup через JSON включает auto_redirect. Прежнее «Спроектировано» устарело.
 **Приоритет:** Medium
 **Связано:** §188 (TUN-тумблеры), §052/§049 F15/§124 (сами prefs), backup_service,
 STORAGE.md, [ARCHITECTURE.md → Хранилище]

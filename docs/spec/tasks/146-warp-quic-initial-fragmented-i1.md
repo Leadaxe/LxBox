@@ -2,7 +2,7 @@
 
 | Field | Value |
 |------|----------|
-| Status | ⏸️ On hold (ТЗ внешнему ядру) — спека адресована агенту форк-ядра `sing-box-lx` (ветка `lx`, 009-next / lx.12); реализация вне app-репо. LxBox-сторона (Awg `id/ip/ib`) — потребитель без изменений. Не заброшено — вынесено в репозиторий ядра. |
+| Status | ✅ Реализовано в ядре (форк `sing-box-lx`) — фрагментированный out-of-order QUIC Initial i1 генерится ядром; device-доказательство (out-of-order i1 пробивает LTE-DPI, ✅ PASS 257–861 мс, три SNI) — в §2 ниже. LxBox-сторона (Awg `id/ip/ib`) — потребитель без изменений (i1 разворачивает ядро, warp_client.dart:99). Реализация — в репозитории ядра, не в app-репо. |
 | Started | 2026-06-17 |
 | Trigger | §143 (`ip=quic` → ядро 009 генерит **линейный** QUIC junk без out-of-order фрагментации) **НЕ пробивает реальный DPI** на LTE-операторе. Device A/B (17.06, тест-телефон): все наши режимы (`ip=quic/dns/sip`) → Timeout, тогда как сторонний конфиг с явным фрагментированным `i1` → проходит стабильно. Эмпирически доказано (см. §«Device-доказательство»): причина — **порядок CRYPTO-фреймов**, а не SNI/endpoint/MTU/reserved. |
 | Related | [§143](143-warp-masquerade-id-ip-ib.md) (`id/ip/ib`, ядро 009 — генерит линейный i1, чинится этой таской); [§136](136-warp-quic-i1-generator.md) (Dart QUIC Initial — выпилен в §143); ядро: `sing-box-lx/SPECS/009-F-C-WIRESOCK_MASQUERADE_PROFILES` |
