@@ -113,7 +113,7 @@
 3. **onChange-каскад руками в 4 местах** (`applyPresetOnChange`) + дубль
    `_dnsEnableValue`. → task 297 (single-dispatch, после DNS-модели).
 4. **Два движка подстановки** (`preset_expand` return ↔ `build_config` mutate). →
-   task 298 (RISKY, defer).
+   task 298 — уже слиты в §120 (один `walk`-core, обёртки тонкие); закрыто по факту.
 5. **Fat-screen** (folder_detail 1669, dns_settings 985, routing 865). → точечно
    (task 296 folder), остальное — низкий приоритет.
 6. **Позиционные индексы** (`FolderMember` без id). → task 299 (RISKY, defer).
@@ -129,7 +129,7 @@
 | 3 | [296](../../tasks/296-folder-probe-controller.md) | M | ProbeController — общий probe-фасад над ServerList (subs+user+folder); сдувает folder_detail |
 | 4 | [297](../../tasks/297-onchange-single-dispatch.md) | M | onChange single-dispatch (после DNS-модели) |
 | 3b | [293](../../tasks/293-vpn-settings-facade.md) | M | VpnSettings-фасад (унификация 4 входов) |
-| — | [298](../../tasks/298-unify-substitution-engines.md) | M, RISKY | Слить движки подстановки — defer |
+| ✅ | [298](../../tasks/298-unify-substitution-engines.md) | M, RISKY | Слить движки подстановки — уже сделано §120 (кода не потребовалось) |
 | — | [299](../../tasks/299-folder-member-id.md) | L, RISKY | FolderMember id — defer |
 
 Правило: каждый шаг — strangler-move (новая структура за старым поведением),
@@ -151,11 +151,12 @@
 | 293 vpn-settings-facade | 🟡 частично | `VpnSettingsFacade` создан, но подключены не все входы — переключение экранов доведено не до конца; **не блокер** |
 | 295 dns-dual-write-fix | 🟡 открыто | в DNS-экранах остаются unawaited `saveCustomRules` (dual-write); device-required, отложено |
 | 297 onchange-single-dispatch | 🟡 частично | дедуп сделан; «не-UI писатели» — открыто |
-| 298 unify-substitution-engines | ⏸️ defer | RISKY (high blast-radius) — снято с плана |
+| 298 unify-substitution-engines | ✅ по факту §120 | один `walk`-core (`if_engine.dart`), обёртки тонкие; приёмка выполняется текущим кодом |
 | 299 folder-member-id | ⏸️ defer | RISKY (high blast-radius) — снято с плана |
 
-Фича закрыта как **достигшая цели**. Открытые хвосты (293/295/297) и deferred
-(298/299) остаются задокументированными в своих task'ах — не переоткрывают зонтик.
+Фича закрыта как **достигшая цели**. Открытые хвосты (293/295/297), закрытый по
+факту §120 (298) и deferred (299) остаются задокументированными в своих task'ах —
+не переоткрывают зонтик.
 
 ## Инвариант-тесты (защита от регресса к текущему состоянию)
 
