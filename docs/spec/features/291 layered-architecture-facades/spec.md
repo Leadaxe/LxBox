@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Feature (архитектурный инвариант + зонтик над task'ами 292–299) |
-| Статус | Инвариант принят; реализация — strangler-fig по task'ам (см. План) |
+| Статус | ✅ Достигнуто (в основном) — инвариант внедрён, ключевые домены за фасадами; хвост снят с активного плана (см. «Состояние по коду») |
 | Связано | task [290](../../tasks/290-automation-node-switch-gaps.md) (откуда пришло: «неверные уровни абстракции»), [031 debug api](../031%20debug%20api/spec.md), [047 public intent api](../047%20public%20intent%20api/spec.md), [125 configurable-channels](../125%20configurable-channels/spec.md) (эталон ChannelMutations), [123 subscription-model](../123%20subscription-model/spec.md) (эталон SubscriptionController) |
 
 Задаёт **один архитектурный инвариант** для всего приложения и фиксирует, какие
@@ -134,6 +134,28 @@
 
 Правило: каждый шаг — strangler-move (новая структура за старым поведением),
 оставляет приложение релизабельным. Big-bang рефактора `SettingsStorage` нет.
+
+## Состояние по коду (итог, проверено 2026-07-21)
+
+Инвариант внедрён, эталоны на месте (`ChannelMutations`, `SubscriptionController`,
+`HomeController`). Основные отстающие домены приведены к форме. Оставшийся хвост —
+точечный и низкоприоритетный/высокорисковый — **снят с активного плана**; вернёмся
+по необходимости.
+
+| Task | Состояние | По коду |
+|---|---|---|
+| 292 quick-invariant-holes | ✅ реализовано | — |
+| 294 dns-typed-model | ✅ реализовано | — |
+| 300 dns-controller-facade | ✅ реализовано | `DnsController` (272 стр.), подключён к `dns_settings_screen` (`.load()`/`.stage()`) |
+| 296 folder-probe-controller | ✅ по сути готово | `ProbeController` + `ProbeLifecycle`/`ProbeRunner` живут (`services/probe/`); UI-надстройка добита в §286 |
+| 293 vpn-settings-facade | 🟡 частично | `VpnSettingsFacade` создан, но подключены не все входы — переключение экранов доведено не до конца; **не блокер** |
+| 295 dns-dual-write-fix | 🟡 открыто | в DNS-экранах остаются unawaited `saveCustomRules` (dual-write); device-required, отложено |
+| 297 onchange-single-dispatch | 🟡 частично | дедуп сделан; «не-UI писатели» — открыто |
+| 298 unify-substitution-engines | ⏸️ defer | RISKY (high blast-radius) — снято с плана |
+| 299 folder-member-id | ⏸️ defer | RISKY (high blast-radius) — снято с плана |
+
+Фича закрыта как **достигшая цели**. Открытые хвосты (293/295/297) и deferred
+(298/299) остаются задокументированными в своих task'ах — не переоткрывают зонтик.
 
 ## Инвариант-тесты (защита от регресса к текущему состоянию)
 
