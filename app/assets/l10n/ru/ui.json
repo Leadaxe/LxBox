@@ -3729,8 +3729,20 @@
   "Enable import rules": {
     "value": "Включить правила импорта"
   },
+  "Enter a test line above to preview.": {
+    "value": "Введите тестовую строку выше, чтобы увидеть результат."
+  },
+  "Enter a valid pattern to preview.": {
+    "value": "Введите корректный шаблон, чтобы увидеть результат."
+  },
   "Filters": {
     "value": "Фильтры"
+  },
+  "Hides matching nodes from routing. They stay visible, struck through.": {
+    "value": "Скрывает подходящие узлы из маршрутизации. Они остаются видимыми, зачёркнутыми."
+  },
+  "Match — text rewritten": {
+    "value": "Совпадение — текст заменён"
   },
   "Invalid regular expression": {
     "value": "Некорректное регулярное выражение"
@@ -3738,11 +3750,20 @@
   "Modified by import rules": {
     "value": "Изменено правилами импорта"
   },
+  "No match — line unchanged": {
+    "value": "Нет совпадения — строка без изменений"
+  },
+  "No match — node kept": {
+    "value": "Нет совпадения — узел сохранён"
+  },
   "No rules yet. Add one to fix broken params or hide nodes.": {
     "value": "Правил пока нет. Добавьте, чтобы починить параметры или скрыть узлы."
   },
   "Pattern": {
     "value": "Шаблон"
+  },
+  "Preview": {
+    "value": "Предпросмотр"
   },
   "Pattern is required": {
     "value": "Укажите шаблон"
@@ -3756,8 +3777,23 @@
   "Rewrite or disable nodes when the subscription is imported": {
     "value": "Заменять или выключать узлы при импорте подписки"
   },
+  "Rewrites matching text in every node line (e.g. fix a broken fingerprint).": {
+    "value": "Заменяет подходящий текст в каждой строке узла (например, чинит сломанный fingerprint)."
+  },
   "Rules apply on the next update. Refresh to see the effect.": {
     "value": "Правила применяются при следующем обновлении. Обновите, чтобы увидеть результат."
+  },
+  "Rules changed. Refresh the subscription to apply them.": {
+    "value": "Правила изменены. Обновите подписку, чтобы применить их."
+  },
+  "Test line": {
+    "value": "Тестовая строка"
+  },
+  "Test the rule against a node line to see what it does.": {
+    "value": "Проверьте правило на строке узла, чтобы увидеть, что оно делает."
+  },
+  "This node would be disabled": {
+    "value": "Этот узел будет выключен"
   },
   "View JSON": {
     "value": "Показать JSON"

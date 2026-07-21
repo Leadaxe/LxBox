@@ -1,9 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:lxbox/models/emit_context.dart';
 import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/subscription_meta.dart';
+import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/builder/rule_set_registry.dart';
+import 'package:lxbox/services/builder/server_list_build.dart';
+import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/subscription/sources.dart';
 import 'package:lxbox/services/subscription/subscription_identity.dart';
 
@@ -128,6 +134,59 @@ void main() {
       expect(r.nodes, hasLength(2));
       expect(r.disabledLines, {'vless://u@h.com:8443#NL-Amsterdam'});
     });
+
+    // Регрессия: этап B (контроллер) должен брать disable-хеш от УЖЕ
+    // РАЗОБРАННОЙ ноды (result.nodes, матч по rawUri), а НЕ пере-парсить
+    // строку через parseUri. Иначе identity-хеш расходится с тем, что билдер
+    // считает от result.nodes, и нода не гаснет. Тест повторяет реальный путь:
+    // disabledLines → нода по rawUri → nodeIdentityHash → disabledHashes →
+    // билдер исключает эту ноду.
+    test('DISABLE-строка → хеш ноды из result.nodes → билдер её исключает',
+        () async {
+      const body =
+          'vless://u@h.com:443?type=ws&security=tls&sni=h.com#US-NewYork\n'
+          'vless://u@h.com:8443?type=ws&security=tls&sni=h.com#NL-Amsterdam';
+      final r = await parseFromSource(
+        const InlineSource(body),
+        importRules: const [
+          ImportRule(
+            action: ImportRuleAction.disable,
+            pattern: r'.*NL-.*',
+            isRegex: true,
+          ),
+        ],
+      );
+      expect(r.nodes, hasLength(2));
+
+      // Так же, как контроллер (этап B): хеш берём от ноды, чья rawUri попала
+      // в disabledLines — НЕ через parseUri(line).
+      final disabledHashes = <String, DateTime>{};
+      for (final n in r.nodes) {
+        if (r.disabledLines.contains(n.rawUri)) {
+          disabledHashes[nodeIdentityHash(n)] = DateTime.utc(2026, 7, 21);
+        }
+      }
+      expect(disabledHashes, hasLength(1),
+          reason: 'ровно одна нода (NL) помечена');
+
+      final sub = SubscriptionServers(
+        id: 's1',
+        name: 'S',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://example.com/sub',
+        disabledHashes: disabledHashes,
+        nodes: r.nodes,
+      );
+
+      final ctx = _FakeCtx();
+      sub.build(ctx);
+
+      // NL выключена билдером, US остаётся; nodes для UI целы (обе).
+      expect(ctx.entries.map((e) => e.tag), ['US-NewYork']);
+      expect(sub.nodes, hasLength(2), reason: 'UI-список не тронут');
+    });
   });
 
   group('§219 — expire в subscription-userinfo', () {
@@ -247,4 +306,38 @@ void main() {
       expect(h['User-Agent'], contains('LxBox'));
     });
   });
+}
+
+/// Минимальный EmitContext для §302-регрессии (копия паттерна из
+/// subscription_node_disable_test.dart) — собирает эмитнутые entry, чтобы
+/// проверить, что выключенная нода не попала в билд.
+class _FakeCtx implements EmitContext {
+  final entries = <SingboxEntry>[];
+  final _seen = <String>{};
+
+  @override
+  TemplateVars get vars => TemplateVars.empty;
+
+  @override
+  String allocateTag(String baseTag) {
+    var t = baseTag;
+    var i = 1;
+    while (!_seen.add(t)) {
+      t = '$baseTag-${i++}';
+    }
+    return t;
+  }
+
+  @override
+  void addEntry(SingboxEntry entry) => entries.add(entry);
+
+  @override
+  void addToSelectorTagList(SingboxEntry entry) {}
+
+  @override
+  void addToAutoList(SingboxEntry entry) {}
+
+  @override
+  final RuleSetRegistry ruleSets =
+      RuleSetRegistry(initialRuleSets: const [], initialRules: const []);
 }
