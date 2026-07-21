@@ -1752,15 +1752,25 @@ class SubscriptionController extends ChangeNotifier {
         }
       }
 
-      // §302 — DISABLE-правила: строки, помеченные на этапе A, парсим здесь
-      // (parseUri) → nodeIdentityHash → в disabledHashes с lastSeen = now.
-      // Делаем это ДО GC ниже, чтобы GC (now - lastSeen = 0 ≤ TTL) их не снял:
-      // правило — источник истины, переставляется на КАЖДОМ refresh.
+      // §302 — DISABLE-правила: строки, помеченные на этапе A, гасим здесь
+      // через identity-хеш → disabledHashes с lastSeen = now. Делаем это ДО GC
+      // ниже, чтобы GC (now - lastSeen = 0 ≤ TTL) их не снял: правило —
+      // источник истины, переставляется на КАЖДОМ refresh.
+      //
+      // ВАЖНО: хеш берём от УЖЕ РАЗОБРАННОЙ ноды (result.nodes), матчим её по
+      // rawUri (= послезаменная строка, тот же ключ, что originByRewritten).
+      // Нельзя пере-парсить строку голым parseUri: полный parseAll мог навесить
+      // detour / шаблон / magic-node, и nodeIdentityHash разошёлся бы с тем, что
+      // билдер считает от result.nodes → нода бы не погасла. Матч по rawUri
+      // гарантирует ruleHash ∈ freshHashes (обе стороны — хеш той же ноды).
       final ruleNow = DateTime.now();
       final ruleHashes = <String>{};
-      for (final line in result.disabledLines) {
-        final node = parseUri(line);
-        if (node != null) ruleHashes.add(nodeIdentityHash(node));
+      if (result.disabledLines.isNotEmpty) {
+        for (final n in result.nodes) {
+          if (result.disabledLines.contains(n.rawUri)) {
+            ruleHashes.add(nodeIdentityHash(n));
+          }
+        }
       }
 
       // §283 — GC отметок disable ТОЛЬКО здесь (успешный сетевой fetch =
