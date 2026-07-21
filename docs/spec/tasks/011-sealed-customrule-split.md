@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | ✅ Реализовано (позже) — `sealed class CustomRule` (Inline/Srs/Preset), дискриминация по `kind`; preset SRS-cache в rule_set_downloader.dart. Шапка «In progress» устарела. |
 | Дата старта | 2026-04-21 |
 | Связанные spec | [`030 custom routing rules`](../features/030%20custom%20routing%20rules/spec.md) (обновляется), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md), [`011 local ruleset cache`](../features/011%20local%20ruleset%20cache/spec.md) |
 | Лэндинг | v1.4.1 |

@@ -2,9 +2,25 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | ✅ Реализовано — вышло за рамки experimental-скопа (шапка была Draft, устарела) |
 | Дата | 2026-05-01 |
 | Связанные | [`030 vpn reload button`](030-vpn-reload-button.md), [`tasks/060-libbox-1-13-migration`](060-libbox-1-13-migration/spec.md) |
+
+> **Итог (сверено с кодом 2026-07-21).** Экспериментальная задача не только выполнена
+> (семантика `resetNetwork()` разобрана по исходникам — см. ниже), но и **перекрыта**:
+> метод давно в продакшене и используется шире, чем планировалось.
+>
+> | Компонент | Файл | Статус |
+> |---|---|---|
+> | MethodChannel `resetNetwork()` | [`box_vpn_client.dart:724`](../../../app/lib/vpn/box_vpn_client.dart) | ✅ |
+> | Debug API `POST /action/reset-network` | [`debug/handlers/action.dart:51,369`](../../../app/lib/services/debug/handlers/action.dart) | ✅ (в спеке значилось «НЕ добавлено» — добавили позже) |
+> | Вызов из recovery-UI | [`home_controller.dart:647`](../../../app/lib/controllers/home_controller.dart) | ✅ |
+> | Вызов из automation (§047) | [`automation/handlers.dart:102`](../../../app/lib/services/automation/handlers.dart) | ✅ |
+>
+> «Auto-recovery на wake» (§035-candidate, ради которого затевался эксперимент) —
+> **не делается**: относится к health-watchdog [§042](../features/042%20health%20watchdog/spec.md),
+> от которого отказались из-за расхода батареи. Ручной resetNetwork остаётся как
+> recovery-действие. Разбор семантики ниже сохранён как reference.
 
 ## Цель
 

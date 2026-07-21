@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Design — реализует **failure mode 2** из §086 (после ночи / Doze) |
+| Статус | ⏸️ On hold (design-документ) — реализации в коде НЕТ (нет USER_PRESENT-ресивера / escalation-ladder / gate-probe). Отложено осознанно вместе с отказом от health-watchdog [§042](../features/042%20health%20watchdog/spec.md) (батарея). Ручной recovery покрыт §087 (force-reset на смену сети) + §030 reload + §031 resetNetwork. Реализовал бы failure mode 2 из §086. |
 | Дата | 2026-06-08 |
 | Тип | feature / native + Dart |
 | Основание | [§086](086-stale-connections-network-change-doze.md) — root-cause найден; §087 закрыл failure mode 1 (смена сети), **mode 2 остаётся**. |

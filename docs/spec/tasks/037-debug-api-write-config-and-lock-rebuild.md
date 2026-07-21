@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | ✅ Реализовано (позже) — `PUT /config` (saveParsedConfig), `GET/PUT /state|settings/config_locked`. Шапка «Draft» устарела. |
 | Дата | 2026-05-06 |
 | Связанные | [`031 debug api`](../features/031%20debug%20api/spec.md), [`036 sendNotification`](036-send-notification-clickable-url.md) |
 

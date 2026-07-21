@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress — High (H1–H6) + Medium-«консистентность» (M7/M9/M10/M12/M14/M16) закрыты; M13 false-positive; остальные Medium/Low в backlog |
+| Статус | ✅ Реализовано (реестр по сути исчерпан) — все High (H1–H6) + консистентность-Medium закрыты и проверяемы в коде; остался Low-долг «по случаю» (не заброшен). Прежний «In progress» ниже — исторический реестр. |
 | Дата | 2026-06-08 |
 | Тип | audit / tech-debt |
 | Метод | Multi-agent deep audit: 13 областей × (аудитор + adversarial-verify каждой high/medium находки). 46 агентов, 2.2M токенов. **28 confirmed** (6 high + 22 medium, прошли скептика), **62 low** (passed as-is), **5 refuted**. |
