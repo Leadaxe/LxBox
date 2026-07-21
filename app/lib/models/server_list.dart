@@ -1,5 +1,6 @@
 import '../services/parser/body_decoder.dart';
 import '../services/parser/parse_all.dart';
+import 'import_rule.dart';
 import 'node_spec.dart';
 import 'subscription_meta.dart';
 
@@ -145,6 +146,16 @@ final class SubscriptionServers extends ServerList {
   /// `disabledHashes`), иначе merge-импорт backup (fromJson→toJson) молча терял бы.
   final SubscriptionIdentityOverride? identity;
 
+  /// §302 — per-subscription правила обработки тела на импорте (REPLACE +
+  /// DISABLE, см. import_rule.dart). Пустой список = поведение как сейчас.
+  /// Часть сериализации подписки → едет в backup вместе с ней (инвариант §221);
+  /// обязан жить в трио toJson/fromJson/copyWith (как §283 `disabledHashes`).
+  final List<ImportRule> importRules;
+
+  /// §302 — общий тумблер набора правил. `false` → все правила подписки
+  /// игнорируются на импорте (не удаляя их). Плюс per-rule `ImportRule.enabled`.
+  final bool importRulesEnabled;
+
   SubscriptionServers({
     required super.id,
     required super.name,
@@ -161,8 +172,15 @@ final class SubscriptionServers extends ServerList {
     this.consecutiveFails = 0,
     this.disabledHashes = const {},
     this.identity,
+    this.importRules = const [],
+    this.importRulesEnabled = true,
     super.nodes,
   });
+
+  /// §302 — правила, реально применяемые на импорте: набор включён + правило
+  /// включено + паттерн валиден. Пусто → тело подписки не трогается.
+  List<ImportRule> get activeImportRules =>
+      importRulesEnabled ? importRules.where((r) => r.isUsable).toList() : const [];
 
   @override
   String get type => 'subscription';
@@ -188,6 +206,11 @@ final class SubscriptionServers extends ServerList {
           'disabled_hashes': disabledHashes
               .map((k, v) => MapEntry(k, v.toIso8601String())),
         if (identity != null) 'identity': identity!.toJson(),
+        if (importRules.isNotEmpty)
+          'import_rules': importRules.map((r) => r.toJson()).toList(),
+        // Пишем ключ только когда набор выключен (дефолт true) — не раздуваем
+        // JSON у большинства подписок без правил.
+        if (!importRulesEnabled) 'import_rules_enabled': false,
       };
 
   /// §283 — толерантный парс: не-Map → пусто, битые значения-даты — скип
@@ -234,7 +257,18 @@ final class SubscriptionServers extends ServerList {
             ? null
             : SubscriptionIdentityOverride.fromJson(
                 (j['identity'] as Map).cast<String, dynamic>()),
+        importRules: _importRulesFromJson(j['import_rules']),
+        importRulesEnabled: (j['import_rules_enabled'] as bool?) ?? true,
       );
+
+  /// §302 — толерантный парс: не-List → пусто, не-Map элементы — скип.
+  static List<ImportRule> _importRulesFromJson(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((m) => ImportRule.fromJson(m.cast<String, dynamic>()))
+        .toList();
+  }
 
   SubscriptionServers copyWith({
     String? name,
@@ -252,6 +286,8 @@ final class SubscriptionServers extends ServerList {
     Map<String, DateTime>? disabledHashes,
     SubscriptionIdentityOverride? identity,
     bool clearIdentity = false,
+    List<ImportRule>? importRules,
+    bool? importRulesEnabled,
     List<NodeSpec>? nodes,
   }) =>
       SubscriptionServers(
@@ -272,6 +308,8 @@ final class SubscriptionServers extends ServerList {
         // §289 — clearIdentity: true снимает Custom (→ Default); иначе обычный
         // ?? (передача identity меняет слепок, null-аргумент сохраняет старый).
         identity: clearIdentity ? null : (identity ?? this.identity),
+        importRules: importRules ?? this.importRules,
+        importRulesEnabled: importRulesEnabled ?? this.importRulesEnabled,
         nodes: nodes ?? this.nodes,
       );
 }

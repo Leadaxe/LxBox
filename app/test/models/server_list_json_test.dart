@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/subscription_meta.dart';
 
@@ -79,6 +80,65 @@ void main() {
       expect(withId.copyWith(name: 'Y').identity, isNotNull);
       // clearIdentity снимает.
       expect(withId.copyWith(clearIdentity: true).identity, isNull);
+    });
+
+    test('§302 — importRules переживают JSON round-trip (§221-инвариант)', () {
+      final original = SubscriptionServers(
+        id: 'x',
+        name: 'X',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://e.com/sub',
+        importRules: const [
+          ImportRule(
+            action: ImportRuleAction.replace,
+            pattern: 'hellochrome_120',
+            replacement: 'chrome',
+          ),
+          ImportRule(
+            action: ImportRuleAction.disable,
+            pattern: r'.*Netherlands.*',
+            isRegex: true,
+            caseSensitive: true,
+          ),
+        ],
+        importRulesEnabled: false,
+      );
+
+      final r = ServerList.fromJson(original.toJson()) as SubscriptionServers;
+      expect(r.importRules, hasLength(2));
+      expect(r.importRules[0].action, ImportRuleAction.replace);
+      expect(r.importRules[0].pattern, 'hellochrome_120');
+      expect(r.importRules[0].replacement, 'chrome');
+      expect(r.importRules[1].action, ImportRuleAction.disable);
+      expect(r.importRules[1].isRegex, isTrue);
+      expect(r.importRules[1].caseSensitive, isTrue);
+      // Порядок сохраняется (значим для цепочки replace→disable).
+      expect(r.importRules[1].pattern, r'.*Netherlands.*');
+      expect(r.importRulesEnabled, isFalse);
+    });
+
+    test('§302 — пустые importRules: ключи не пишутся, дефолты после rt', () {
+      final original = SubscriptionServers(
+        id: 'x',
+        name: 'X',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://e.com/sub',
+      );
+      final j = original.toJson();
+      // Пустой список и дефолтный тумблер не раздувают JSON.
+      expect(j.containsKey('import_rules'), isFalse);
+      expect(j.containsKey('import_rules_enabled'), isFalse);
+      final r = ServerList.fromJson(j) as SubscriptionServers;
+      expect(r.importRules, isEmpty);
+      expect(r.importRulesEnabled, isTrue);
+      // copyWith сохраняет правила при мутации других полей.
+      final withRules = original.copyWith(
+          importRules: const [ImportRule(pattern: 'a', replacement: 'b')]);
+      expect(withRules.copyWith(name: 'Y').importRules, hasLength(1));
     });
 
     test('UserServer → JSON → UserServer', () {

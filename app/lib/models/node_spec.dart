@@ -30,6 +30,14 @@ sealed class NodeSpec {
   final NodeSpec? chained;
   final List<NodeWarning> warnings;
 
+  /// §302 — сырая строка подписки ДО применения import-rules (REPLACE).
+  /// Проставляется постфактум контроллером на нодах, чьё тело правило
+  /// изменило (иначе `null`). Только для UI: значок «были замены» + diff
+  /// before/after (`originLine` ↔ `rawUri`). На `emit`/`nodeIdentityHash`
+  /// НЕ влияет — как и `warnings`, mutable и не сериализуется (пересоздаётся
+  /// на каждый parse; проставляется заново на каждом refresh).
+  String? originLine;
+
   NodeSpec({
     required this.id,
     required this.tag,

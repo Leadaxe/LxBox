@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/subscription_meta.dart';
 import 'package:lxbox/services/subscription/sources.dart';
@@ -77,6 +78,55 @@ void main() {
           'dmxlc3M6Ly91QGguY29tOjQ0MyN4CnRyb2phbjovL3BAaC5jb206NDQzI3kK';
       final r = await parseFromSource(const InlineSource(raw));
       expect(r.nodes, hasLength(2));
+    });
+  });
+
+  group('§302 — import-rules end-to-end (этап A)', () {
+    test('пустой список правил → тело нетронуто, сеты пусты', () async {
+      const body = 'vless://u1@h1.com:443#A\ntrojan://p@h2.com:443#B\n';
+      final r = await parseFromSource(const InlineSource(body));
+      expect(r.nodes, hasLength(2));
+      expect(r.disabledLines, isEmpty);
+      expect(r.originByRewritten, isEmpty);
+    });
+
+    test('REPLACE меняет распарсенную ноду + origin-карта', () async {
+      const body = 'vless://u@h.com:443?fp=hellochrome_120&type=ws#NL';
+      final r = await parseFromSource(
+        const InlineSource(body),
+        importRules: const [
+          ImportRule(
+            action: ImportRuleAction.replace,
+            pattern: 'hellochrome_120',
+            replacement: 'chrome',
+          ),
+        ],
+      );
+      expect(r.nodes, hasLength(1));
+      // rawUri ноды = послезаменная строка.
+      expect(r.nodes.single.rawUri, contains('fp=chrome'));
+      expect(r.nodes.single.rawUri, isNot(contains('hellochrome')));
+      // origin-карта хранит оригинал под послезаменным ключом.
+      expect(r.originByRewritten[r.nodes.single.rawUri],
+          'vless://u@h.com:443?fp=hellochrome_120&type=ws#NL');
+    });
+
+    test('DISABLE помечает строку, нода всё равно парсится', () async {
+      const body =
+          'vless://u@h.com:443#US-NewYork\nvless://u@h.com:8443#NL-Amsterdam';
+      final r = await parseFromSource(
+        const InlineSource(body),
+        importRules: const [
+          ImportRule(
+            action: ImportRuleAction.disable,
+            pattern: r'.*NL-.*',
+            isRegex: true,
+          ),
+        ],
+      );
+      // Обе ноды заведены (disable не удаляет).
+      expect(r.nodes, hasLength(2));
+      expect(r.disabledLines, {'vless://u@h.com:8443#NL-Amsterdam'});
     });
   });
 

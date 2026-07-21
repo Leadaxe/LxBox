@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/import_rule.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/ui_msg.dart';
@@ -29,6 +30,7 @@ import '../services/haptic_service.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
+import '../services/subscription/import_rules.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart';
@@ -171,7 +173,20 @@ class SubscriptionController extends ChangeNotifier {
         if (body == null || body.isEmpty) continue;
         try {
           final decoded = decode(body);
-          final nodes = parseAll(decoded);
+          // §302 — применяем те же import-rules к кэшу: иначе после рестарта
+          // ноды вернулись бы в ДОзаменном виде, их nodeIdentityHash не совпал
+          // бы с персистентными DISABLE-хешами (посчитанными от послезаменных
+          // нод) → выключение слетело бы до следующего сетевого refresh, а
+          // REPLACE не применился бы (значок пропал). GC/пересчёт disable здесь
+          // НЕ делаем — regidration не сигнал «нода ушла» (§283).
+          final ruled = applyImportRules(decoded, list.activeImportRules);
+          final nodes = parseAll(ruled.body);
+          if (ruled.originByRewritten.isNotEmpty) {
+            for (final n in nodes) {
+              final origin = ruled.originByRewritten[n.rawUri];
+              if (origin != null) n.originLine = origin;
+            }
+          }
           if (nodes.isEmpty) {
             // §101 — раньше скипали молча; UI-счётчик при этом показывает
             // stale lastNodeCount. Логируем с подсказкой, что в кеше.
@@ -1654,9 +1669,12 @@ class SubscriptionController extends ChangeNotifier {
       notifyListeners();
 
       // §289 — per-subscription идентичность (null → глобальная).
+      // §302 — per-subscription import-rules (REPLACE + пометка DISABLE-строк);
+      // activeImportRules учитывает тумблер набора + per-rule enabled + валидность.
       final result = await parseFromSource(
           UrlSource(list.url, identity: list.identity),
-          client: httpClientForTesting);
+          client: httpClientForTesting,
+          importRules: list.activeImportRules);
       AppLog.I.info(
           'Fetched ${result.nodes.length} nodes from $shortUrl'
           '${result.meta?.profileTitle == null ? "" : " (title: ${result.meta!.profileTitle})"}');
@@ -1723,19 +1741,48 @@ class SubscriptionController extends ChangeNotifier {
       final nextInterval = current.updateIntervalHours < 0
           ? current.updateIntervalHours // -1: жёстко, сервер не переубедит
           : (result.meta?.updateIntervalHours ?? current.updateIntervalHours);
+      // §302 — проставляем originLine на ноды, чьё тело изменил REPLACE
+      // (матч по rawUri = послезаменная строка). Только для UI (значок/diff);
+      // mutable-поле, как warnings — на emit/хеш не влияет. Мутируем сами
+      // инстансы result.nodes (они же уйдут в entry ниже).
+      if (result.originByRewritten.isNotEmpty) {
+        for (final n in result.nodes) {
+          final origin = result.originByRewritten[n.rawUri];
+          if (origin != null) n.originLine = origin;
+        }
+      }
+
+      // §302 — DISABLE-правила: строки, помеченные на этапе A, парсим здесь
+      // (parseUri) → nodeIdentityHash → в disabledHashes с lastSeen = now.
+      // Делаем это ДО GC ниже, чтобы GC (now - lastSeen = 0 ≤ TTL) их не снял:
+      // правило — источник истины, переставляется на КАЖДОМ refresh.
+      final ruleNow = DateTime.now();
+      final ruleHashes = <String>{};
+      for (final line in result.disabledLines) {
+        final node = parseUri(line);
+        if (node != null) ruleHashes.add(nodeIdentityHash(node));
+      }
+
       // §283 — GC отметок disable ТОЛЬКО здесь (успешный сетевой fetch =
       // единственный сигнал «нода ушла из подписки»; failed fetch и
       // регидрация из кэша состав не проясняют, file:-подписки сюда не
       // доходят — guard выше). Хеш свежих нод считаем лишь когда есть что
       // чистить.
-      final nextDisabled = current.disabledHashes.isEmpty
+      final baseDisabled = current.disabledHashes.isEmpty && ruleHashes.isEmpty
           ? current.disabledHashes
           : gcDisabledHashes(
               current.disabledHashes,
               {for (final n in result.nodes) nodeIdentityHash(n)},
               updateIntervalHours: nextInterval,
-              now: DateTime.now(),
+              now: ruleNow,
             );
+      // Наложить хеши от DISABLE-правил поверх результата GC (правило > GC).
+      final nextDisabled = ruleHashes.isEmpty
+          ? baseDisabled
+          : {
+              ...baseDisabled,
+              for (final h in ruleHashes) h: ruleNow,
+            };
       final next = current.copyWith(
         name: nextName,
         meta: result.meta,

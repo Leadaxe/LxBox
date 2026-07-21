@@ -45,6 +45,9 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ disabled_hashes       map?          §283 — {identity-хеш ноды: ISO-8601 lastSeen}; per-node disable
 │       ├─ identity              object?       §289 — per-sub override идентичности фетча (null=глоб.);
 │       │                                      {user_agent?, send_hwid, hwid?, device_os?, ver_os?, device_model?}
+│       ├─ import_rules           list?         §302 — правила обработки тела на импорте (REPLACE+DISABLE);
+│       │                                      [{action, pattern, replacement?, is_regex?, case_sensitive?, enabled?}]
+│       ├─ import_rules_enabled   bool?         §302 — тумблер набора (пишется только когда false; дефолт true)
 │       │                        — user only —
 │       ├─ origin                "paste"|"file"|"qr"|"manual"
 │       ├─ created_at            ISO-8601
@@ -321,7 +324,21 @@ Sealed по полю `type`:
     "device_os": "android",                   // значения. Пустые строки (user_agent/hwid/
     "ver_os": "14",                           // device_*) не сериализуются. Включается копией
     "device_model": "Pixel 7"                 // глобальных; отбрасывается при возврате в Default.
-  }
+  },
+  "import_rules": [                           // §302 — правила обработки тела на импорте.
+    {                                         // Применяются построчно ДО парсинга, по порядку
+      "action": "replace",                    // (drag-reorder). Опционален (пустой не пишется).
+      "pattern": "hellochrome_120",           // action ∈ {replace, disable}. is_regex/
+      "replacement": "chrome"                 // case_sensitive/enabled пишутся только когда
+    },                                        // отличны от дефолта (false/false/true).
+    {                                         // REPLACE переписывает строку (пустой replacement
+      "action": "disable",                    // = вырезать фрагмент). DISABLE помечает ноду →
+      "pattern": ".*Netherlands.*",           // её identity-хеш (суть, как disabled_hashes)
+      "is_regex": true                        // ставится на каждом refresh (правило > TTL-GC).
+    }
+  ],
+  "import_rules_enabled": false               // §302 — тумблер набора; пишется ТОЛЬКО когда
+                                              // false (дефолт true = набор активен).
 }
 ```
 
