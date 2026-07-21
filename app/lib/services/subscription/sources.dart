@@ -3,11 +3,13 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import '../../models/import_rule.dart';
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
 import '../../models/subscription_meta.dart';
 import '../parser/body_decoder.dart';
 import '../parser/parse_all.dart';
+import 'import_rules.dart';
 import 'subscription_identity.dart';
 import 'user_agent.dart';
 
@@ -78,8 +80,21 @@ class ParseResult {
   final DecodedBody decoded;
   final String rawBody;
   final Map<String, String> headers;
+
+  /// §302 — строки (послезаменные), помеченные DISABLE-правилом. Этап B в
+  /// контроллере парсит их (`parseUri`) и выключает ноды через §283.
+  final Set<String> disabledLines;
+
+  /// §302 — карта `послезаменная строка → оригинал` для строк, изменённых
+  /// REPLACE. Контроллер кладёт оригинал в `NodeSpec.originLine` (для UI).
+  final Map<String, String> originByRewritten;
+
   const ParseResult(this.nodes, this.decoded,
-      [this.meta, this.rawBody = '', this.headers = const {}]);
+      [this.meta,
+      this.rawBody = '',
+      this.headers = const {},
+      this.disabledLines = const {},
+      this.originByRewritten = const {}]);
 }
 
 /// Fetch + decode + parse — верхнеуровневый pipeline одного источника (§3.1).
@@ -88,7 +103,7 @@ class ParseResult {
 /// в начале тела) — некоторые провайдеры кладут метаданные в комменты,
 /// а не в HTTP-headers. HTTP первичны, inline как fallback.
 Future<ParseResult> parseFromSource(SubscriptionSource source,
-    {http.Client? client}) async {
+    {http.Client? client, List<ImportRule> importRules = const []}) async {
   // §219 — закрываем ТОЛЬКО самосозданный клиент (инжектированный извне
   // закрывает владелец): иначе `http.Client()` течёт на каждый fetch.
   final owned = client == null;
@@ -100,8 +115,12 @@ Future<ParseResult> parseFromSource(SubscriptionSource source,
     final merged = <String, String>{...inline, ...fetch.headers};
     final meta = _metaFromHeaders(merged);
     final decoded = decode(fetch.body);
-    final nodes = parseAll(decoded);
-    return ParseResult(nodes, decoded, meta, fetch.body, fetch.headers);
+    // §302 — этап A: import-rules (REPLACE + пометка DISABLE-строк) на
+    // ДЕКОДИРОВАННОМ теле, ДО парсинга. Пустой список → no-op (тот же decoded).
+    final ruled = applyImportRules(decoded, importRules);
+    final nodes = parseAll(ruled.body);
+    return ParseResult(nodes, ruled.body, meta, fetch.body, fetch.headers,
+        ruled.disabledLines, ruled.originByRewritten);
   } finally {
     if (owned) c.close();
   }

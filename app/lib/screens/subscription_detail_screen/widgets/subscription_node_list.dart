@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
+import '../../../models/template_vars.dart';
 import '../../../models/ui_msg.dart';
 import 'node_warning_row.dart';
 import '../../../services/l10n/locale_controller.dart';
@@ -126,15 +129,33 @@ class SubscriptionNodeList extends StatelessWidget {
                   ),
                 )
               : (togglableNodes.isEmpty ? null : const SizedBox(width: 40)),
-          title: Text(
-            node.label.isNotEmpty ? node.label : node.tag,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              // Выключенная — глушим цветом (паттерн folder_detail §234).
-              color: disabled ? theme.colorScheme.onSurfaceVariant : null,
-            ),
+          title: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  node.label.isNotEmpty ? node.label : node.tag,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    // Выключенная — глушим цветом (паттерн folder_detail §234).
+                    color:
+                        disabled ? theme.colorScheme.onSurfaceVariant : null,
+                  ),
+                ),
+              ),
+              // §302 — значок «тело изменено import-rules» (REPLACE). Тап =
+              // меню с diff before/after. originLine != null только когда
+              // правило реально поменяло строку ноды.
+              if (node.originLine != null) ...[
+                const SizedBox(width: 6),
+                Tooltip(
+                  message: getLocalText.s("Modified by import rules"),
+                  child: Icon(Icons.edit_note,
+                      size: 16, color: theme.colorScheme.primary),
+                ),
+              ],
+            ],
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,10 +211,80 @@ class SubscriptionNodeList extends StatelessWidget {
                 );
               },
             ),
+            // §302 — итоговый sing-box outbound (что нода превратится в конфиге,
+            // включая эффект REPLACE). Симметрия с папкой §234 / node_settings.
+            ListTile(
+              leading: const Icon(Icons.data_object),
+              title: Text(getLocalText.s("View JSON")),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showJsonDialog(context, node);
+              },
+            ),
+            // §302 — diff before/after для нод, чьё тело изменил REPLACE.
+            if (node.originLine != null)
+              ListTile(
+                leading: const Icon(Icons.difference_outlined),
+                title: Text(getLocalText.s("View replacements")),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showReplacementsDialog(context, node);
+                },
+              ),
           ],
         ),
       ),
     );
   }
 
+  /// §302 — итоговый JSON-outbound ноды (`emit`), как node_settings_screen.
+  void _showJsonDialog(BuildContext context, NodeSpec node) {
+    final json = const JsonEncoder.withIndent('  ')
+        .convert(node.emit(TemplateVars.empty).map);
+    _showMonoDialog(context, getLocalText.s("View JSON"), json);
+  }
+
+  /// §302 — diff «до/после» import-rules: сырая строка подписки (`originLine`)
+  /// vs результат (`rawUri`). Оба моноширинным, с copy.
+  void _showReplacementsDialog(BuildContext context, NodeSpec node) {
+    final before = node.originLine ?? '';
+    final after = node.rawUri;
+    final text = '${getLocalText.s("Before")}:\n$before'
+        '\n\n${getLocalText.s("After")}:\n$after';
+    _showMonoDialog(context, getLocalText.s("View replacements"), text);
+  }
+
+  void _showMonoDialog(BuildContext context, String title, String body) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              body,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: body));
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(getLocalText.s("Copied"))),
+              );
+            },
+            child: Text(getLocalText.s("Copy")),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(getLocalText.s("Close")),
+          ),
+        ],
+      ),
+    );
+  }
 }

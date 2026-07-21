@@ -19,6 +19,7 @@ import 'subscriptions_screen/entry_context_menu.dart' show showEditSourceDialog;
 import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/subscription_detail_format.dart';
 import 'subscription_detail_screen/widgets/subscription_meta.dart';
+import 'subscription_detail_screen/widgets/subscription_filters_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_node_list.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_source_tab.dart';
@@ -141,7 +142,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    // §302 — 4-я вкладка «Filters» (import-rules). Порядок Nodes/Settings/
+    // Source/Filters сохраняет index Source=2 (слушатель ниже не меняется).
+    _tabCtrl = TabController(length: 4, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.name);
     // §283 — entry.list может смениться мимо _loadNodes (см.
     // _rebuildRowsFromEntry); _replaceList нотифицирует entry.
@@ -314,10 +317,12 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         ],
         bottom: TabBar(
           controller: _tabCtrl,
+          isScrollable: true,
           tabs: [
             Tab(text: getLocalText.s("Nodes")),
             Tab(text: getLocalText.s("Settings")),
             Tab(text: getLocalText.s("Source")),
+            Tab(text: getLocalText.s("Filters")),
           ],
         ),
       ),
@@ -356,6 +361,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
           _buildSettingsTab(theme),
           // Tab 3: Source
           _buildSourceTab(theme),
+          // Tab 4: Filters (§302 — import-rules)
+          SubscriptionFiltersTab(
+            entry: widget.entry,
+            controller: widget.controller,
+          ),
         ],
       ),
     );

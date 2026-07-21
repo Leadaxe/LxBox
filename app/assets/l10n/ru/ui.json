@@ -3710,5 +3710,68 @@
   },
   "Generates random WARP nodes (WireGuard/AWG/MASQUE h2/h3) into the «WARP GENERATOR» folder. Test them there and keep what works.": {
     "value": "Создаёт случайные WARP-узлы (WireGuard/AWG/MASQUE h2/h3) в папку «WARP GENERATOR». Протестируйте их там и оставьте рабочие."
+  },
+  "(remove)": {
+    "value": "(удалить)"
+  },
+  "After": {
+    "value": "После"
+  },
+  "Before": {
+    "value": "До"
+  },
+  "Case-sensitive": {
+    "value": "Учитывать регистр"
+  },
+  "Empty removes the matched text": {
+    "value": "Пустое поле удаляет совпавший текст"
+  },
+  "Enable import rules": {
+    "value": "Включить правила импорта"
+  },
+  "Filters": {
+    "value": "Фильтры"
+  },
+  "Invalid regular expression": {
+    "value": "Некорректное регулярное выражение"
+  },
+  "Modified by import rules": {
+    "value": "Изменено правилами импорта"
+  },
+  "No rules yet. Add one to fix broken params or hide nodes.": {
+    "value": "Правил пока нет. Добавьте, чтобы починить параметры или скрыть узлы."
+  },
+  "Pattern": {
+    "value": "Шаблон"
+  },
+  "Pattern is required": {
+    "value": "Укажите шаблон"
+  },
+  "Regular expression": {
+    "value": "Регулярное выражение"
+  },
+  "Replacement": {
+    "value": "Замена"
+  },
+  "Rewrite or disable nodes when the subscription is imported": {
+    "value": "Заменять или выключать узлы при импорте подписки"
+  },
+  "Rules apply on the next update. Refresh to see the effect.": {
+    "value": "Правила применяются при следующем обновлении. Обновите, чтобы увидеть результат."
+  },
+  "View JSON": {
+    "value": "Показать JSON"
+  },
+  "View replacements": {
+    "value": "Показать замены"
+  },
+  "case-sensitive": {
+    "value": "с учётом регистра"
+  },
+  "invalid pattern — skipped": {
+    "value": "некорректный шаблон — пропущено"
+  },
+  "regex": {
+    "value": "regex"
   }
 }
