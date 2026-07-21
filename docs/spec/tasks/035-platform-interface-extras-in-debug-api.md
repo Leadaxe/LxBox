@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | ✅ Реализовано (позже, в изменённой форме) — `readWIFIState()` (WifiInfoReader.kt); clearDNSCache переосмыслен в `ACTION_CLEAR_DNS_CACHE` (§263); WiFi ушёл в MethodChannel `getCurrentWifiInfo`, а не в Debug `/state/wifi`. Шапка «Draft» устарела. |
 | Дата | 2026-05-06 |
 | Связанные | [`031 debug api`](../features/031%20debug%20api/spec.md), [`030 vpn reload button`](030-vpn-reload-button.md), [`031 reset-network API`](031-reset-network-api.md), [`tasks/060-libbox-1-13-migration`](060-libbox-1-13-migration/spec.md) |
 

@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress (v1.9.1) |
+| Статус | ✅ Реализовано (позже) — пикер хранит display-form через `TagResolver.displayTag` (detour_target_picker.dart). Шапка «In progress» устарела. |
 | Дата | 2026-06-08 |
 | Тип | fix (config emission breakage) |
 | Зависимости | §073 (`server_list_build._withPrefix` + overrideDetour application), §077/§079 (same prefix-form bug class). |
