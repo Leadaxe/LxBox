@@ -10,6 +10,9 @@
   "%1$d active / %2$d total": {
     "value": "Активных: %1$d / всего: %2$d"
   },
+  "%1$d of %2$d nodes match": {
+    "value": "Совпадений: %1$d из %2$d узлов"
+  },
   "%1$d selected · %2$d shown": {
     "value": "%1$d выбрано · %2$d показано"
   },
@@ -534,6 +537,21 @@
   },
   "Add servers by URL": {
     "value": "Добавить серверы по URL"
+  },
+  "Applied — %d nodes": {
+    "value": "Применено — узлов: %d"
+  },
+  "Applied — %1$d nodes, %2$d disabled": {
+    "value": "Применено — узлов: %1$d, выключено: %2$d"
+  },
+  "Apply": {
+    "value": "Применить"
+  },
+  "Apply rules": {
+    "value": "Применить правила"
+  },
+  "Applying…": {
+    "value": "Применение…"
   },
   "Add servers with the + button above, or long-press a standalone server on the Servers screen and choose \"Move to folder…\".": {
     "value": "Добавьте серверы кнопкой «+» выше или удерживайте отдельный сервер на экране «Серверы» и выберите «Переместить в папку…»."
@@ -1914,6 +1932,9 @@
   },
   "Match when the packet SOURCE is a private address": {
     "value": "Совпадает, когда ИСТОЧНИК пакета — приватный адрес"
+  },
+  "Matches": {
+    "value": "Совпадения"
   },
   "Matches when traffic is on a selected network AND matches a selected L7 protocol.": {
     "value": "Совпадает, когда трафик идёт по выбранной сети И соответствует выбранному L7-протоколу."
@@ -3473,6 +3494,9 @@
   "Whitelisted — VPN can run in background": {
     "value": "В белом списке — VPN может работать в фоне"
   },
+  "Will be disabled": {
+    "value": "Будет выключен"
+  },
   "Wi-Fi rules need permissions": {
     "value": "Правилам Wi-Fi нужны разрешения"
   },
@@ -3756,6 +3780,12 @@
   "No match — node kept": {
     "value": "Нет совпадения — узел сохранён"
   },
+  "No nodes loaded yet. Apply rules to load them.": {
+    "value": "Узлы ещё не загружены. Нажмите «Применить правила», чтобы загрузить."
+  },
+  "No nodes match this pattern. Check it against a node line in the Rule tab.": {
+    "value": "Ни один узел не подходит под шаблон. Проверьте его на строке узла во вкладке «Правило»."
+  },
   "No rules yet. Add one to fix broken params or hide nodes.": {
     "value": "Правил пока нет. Добавьте, чтобы починить параметры или скрыть узлы."
   },
@@ -3780,11 +3810,14 @@
   "Rewrites matching text in every node line (e.g. fix a broken fingerprint).": {
     "value": "Заменяет подходящий текст в каждой строке узла (например, чинит сломанный fingerprint)."
   },
-  "Rules apply on the next update. Refresh to see the effect.": {
-    "value": "Правила применяются при следующем обновлении. Обновите, чтобы увидеть результат."
+  "Rule": {
+    "value": "Правило"
   },
   "Rules changed. Refresh the subscription to apply them.": {
     "value": "Правила изменены. Обновите подписку, чтобы применить их."
+  },
+  "Rules run when the subscription body is loaded. Tap Apply rules to reload it now.": {
+    "value": "Правила срабатывают при загрузке тела подписки. Нажмите «Применить правила», чтобы перезагрузить его сейчас."
   },
   "Test line": {
     "value": "Тестовая строка"
