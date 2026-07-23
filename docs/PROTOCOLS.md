@@ -172,11 +172,13 @@ vless://UUID@host:port?query_params#label
 |------|---------------|-------------------|
 | TCP (raw) | `tcp`, `raw`, empty | No transport block |
 | TCP + HTTP headers | `tcp`/`raw` + `headerType=http` | `{"type": "http", "path": ..., "host": [...]}` |
-| WebSocket | `ws` | `{"type": "ws", "path": ..., "headers": {"Host": ...}}` |
+| WebSocket | `ws` | `{"type": "ws", "path": ..., "headers": {"Host": ...}}` — `?ed=N` в пути → `max_early_data` (§303, см. заметку ниже) |
 | gRPC | `grpc` | `{"type": "grpc", "service_name": ...}` |
 | HTTP/2 | `http` | `{"type": "http", "path": ..., "host": [...]}` |
 | HTTPUpgrade | `httpupgrade` | `{"type": "httpupgrade", "path": ..., "host": ...}` |
 | XHTTP | `xhttp` | `{"type": "xhttp", "path": ..., "host": ..., "mode": ...}` — нативный с §097, см. [XHTTP transport](#xhttp-transport) |
+
+> **Note on WebSocket early data (§303).** Xray задаёт early data хвостом пути — `"path": "/api/v2/channel?ed=2560"`. В sing-box это отдельное поле транспорта, а хвост в `path` уходит в HTTP-запрос и даёт `404`. При импорте (URI, Xray JSON, sing-box JSON) хвост срезается, а `ed=N` становится `max_early_data: N`. Имя заголовка при этом **не** подставляется: пустой `early_data_header_name` = ядро шлёт early data в путь (`transport/v2raywebsocket/conn.go`), ровно как Xray для `?ed=`; подстановка `Sec-WebSocket-Protocol` переключила бы режим на header-based и сломала бы совместимость с сервером. Явный `Sec-WebSocket-Protocol` в `wsSettings.headers` по-прежнему читается как обычный заголовок. Для `httpupgrade` такого поля у транспорта нет — хвост срезается, `ed` отбрасывается. Обратный emit в URI склеивает `path?ed=N` назад, чтобы round-trip не терял параметр.
 
 > **Note on XHTTP.** С §097 (ядро = fork [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx), build-тег `with_xhttp`) XHTTP эмитится **нативно**: `{"type": "xhttp", ...}` без подмены wire-протокола. Прежний fallback на `httpupgrade` с `UnsupportedTransportWarning` (Parser v2, до v1.8.2 включительно) удалён. XHTTP-специфичные query-ключи — `mode`, `xPaddingBytes`/`x_padding_bytes`, `noGRPCHeader`/`no_grpc_header` (camelCase = Xray-URI, snake = sing-box). С `flow=xtls-rprx-vision` несовместим — Vision живёт только на голом TCP. Подробности: [XHTTP transport](#xhttp-transport).
 
