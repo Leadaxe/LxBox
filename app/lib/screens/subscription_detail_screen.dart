@@ -60,7 +60,12 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   /// не видно ни строк-нод, ни того, с чем работают import-rules. Галка
   /// прогоняет тело тем же декодером, что и парсер (`decode`), — вид
   /// совпадает с тем, что видят правила.
-  bool _decodeSource = false;
+  ///
+  /// `null` = пользователь галку не трогал → действует дефолт «включено»
+  /// (галка вообще показывается только когда тело закодировано, значит
+  /// раскрытый вид — то, ради чего её показали). Явный выбор пользователя
+  /// перекрывает дефолт и живёт до ухода с экрана.
+  bool? _decodeSource;
 
   // §248 — каналы: секция Channels в detour-пикере + подпись «⚙ <label>»
   // канальной override-цели в Settings-вкладке.
@@ -641,12 +646,15 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   Widget _buildSourceTab(ThemeData theme) {
     final entry = widget.entry;
     final decodable = _sourceIsBase64;
+    // Дефолт — раскрытый вид: галка показывается только когда есть что
+    // раскрывать, так что показ ⇒ включено. Явный выбор юзера важнее.
+    final showDecoded = decodable && (_decodeSource ?? true);
     return SubscriptionSourceTab(
       hasUrl: entry.url.isNotEmpty,
       sourceLoading: _sourceLoading,
       sourceError: _sourceError,
       rawHeaders: _rawHeaders,
-      rawSource: _decodeSource && decodable ? _decodedSource : _rawSource,
+      rawSource: showDecoded ? _decodedSource : _rawSource,
       showAllHeaders: _showAllHeaders,
       importantHeaders: _filteredHeaders(important: true),
       moreHeaders: _filteredHeaders(important: false),
@@ -654,7 +662,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       onToggleShowAll: () =>
           setState(() => _showAllHeaders = !_showAllHeaders),
       canDecode: decodable,
-      decoded: _decodeSource && decodable,
+      decoded: showDecoded,
       onToggleDecode: (v) => setState(() => _decodeSource = v),
     );
   }

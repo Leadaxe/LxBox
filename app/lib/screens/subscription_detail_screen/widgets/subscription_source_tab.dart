@@ -143,21 +143,22 @@ class SubscriptionSourceTab extends StatelessWidget {
         // §302 — многие провайдеры отдают подписку одной base64-простынёй:
         // в таком виде не видно ни строк-нод, ни того, с чем работают
         // import-rules. Галка раскрывает тело тем же декодером, что и парсер.
-        if (rawSource.isNotEmpty)
+        // Показываем её ТОЛЬКО когда есть что раскрывать (тело закодировано);
+        // для plain-тел галки нет вовсе — неактивный контрол лишь захламляет
+        // экран. Раз показана — значит включена по умолчанию (см. экран).
+        if (canDecode)
           CheckboxListTile(
             value: decoded,
-            onChanged: canDecode && onToggleDecode != null
-                ? (v) => onToggleDecode!(v ?? false)
-                : null,
+            onChanged: onToggleDecode == null
+                ? null
+                : (v) => onToggleDecode!(v ?? false),
             controlAffinity: ListTileControlAffinity.leading,
             contentPadding: EdgeInsets.zero,
             dense: true,
             title: Text(getLocalText.s("Decode base64"),
                 style: const TextStyle(fontSize: 13)),
             subtitle: Text(
-              canDecode
-                  ? getLocalText.s("Show the decoded body — what import rules see")
-                  : getLocalText.s("Body is not base64-encoded"),
+              getLocalText.s("Show the decoded body — what import rules see"),
               style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
             ),
           ),
