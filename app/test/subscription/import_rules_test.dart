@@ -153,6 +153,41 @@ void main() {
           reason: 'tag содержит NL');
     });
 
+    test('пустой путь = поиск по всему JSON узла', () {
+      // Не знаем, в каком поле лежит значение — ищем везде сразу.
+      final rule = ImportRule(
+        conditions: [cond('', ImportRuleOperator.contains, 'h.com')],
+        action: ImportRuleAction.disable,
+      );
+      expect(rule.isUsable, isTrue, reason: 'пустой путь допустим в условии');
+      // server = h.com → найдётся в сериализованном узле.
+      expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isTrue);
+      // Значения нет нигде в узле.
+      final other = node('vless://u@other.net:443#A');
+      expect(applyRulesToNode(other, [rule]).disabled, isFalse);
+    });
+
+    test('пустой путь ловит значение в глубоком поле', () {
+      // fingerprint лежит в tls.utls.fingerprint — путь не указываем.
+      final rule = ImportRule(
+        conditions: [cond('', ImportRuleOperator.contains, 'firefox')],
+        action: ImportRuleAction.disable,
+      );
+      expect(applyRulesToNode(fpNode('firefox'), [rule]).disabled, isTrue);
+      expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isFalse);
+    });
+
+    test('Replace с пустой целью непригоден (узел не затирается)', () {
+      final rule = ImportRule(
+        conditions: [cond('', ImportRuleOperator.contains, 'h.com')],
+        action: ImportRuleAction.replace,
+        targetPath: '',
+        replacement: 'x',
+      );
+      expect(rule.isUsable, isFalse);
+      expect(applyRulesToNode(fpNode('chrome'), [rule]).changed, isFalse);
+    });
+
     test('битый regex делает правило непригодным (узел не трогаем)', () {
       final rule = ImportRule(
         conditions: [cond('tag', ImportRuleOperator.matches, '[')],

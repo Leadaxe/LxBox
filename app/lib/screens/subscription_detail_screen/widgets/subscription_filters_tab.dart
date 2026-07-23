@@ -338,7 +338,7 @@ class _SubscriptionFiltersTabState extends State<SubscriptionFiltersTab> {
         ? getLocalText.s("(no conditions)")
         : rule.conditions
             .map((c) =>
-                '${c.path} ${c.negate ? '!' : ''}${c.op.name} ${c.pattern}')
+                '${c.path.isEmpty ? '*' : c.path} ${c.negate ? '!' : ''}${c.op.name} ${c.pattern}')
             .join(rule.matchMode == ImportRuleMatchMode.all
                 ? '  AND  '
                 : '  OR  ');
@@ -499,11 +499,13 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
   /// null = сохранять можно; иначе причина, по которой Save заблокирован.
   String? get _saveBlocker {
     final rule = _current();
-    if (!rule.conditions.any((c) => c.path.isNotEmpty)) {
+    // Условие определяется паттерном, а не путём: пустой путь = поиск по
+    // всему JSON узла (валидный сценарий «не знаю, в каком поле искать»).
+    if (!rule.conditions.any((c) => c.pattern.isNotEmpty)) {
       return getLocalText.s("Add at least one condition");
     }
     for (final c in rule.conditions) {
-      if (c.path.isEmpty) continue;
+      if (c.pattern.isEmpty && c.path.isEmpty) continue;
       if (c.pattern.isEmpty) return getLocalText.s("Condition needs a value");
       if (c.op == ImportRuleOperator.matches && c.compiledPattern == null) {
         return getLocalText.s("Invalid regular expression");
@@ -592,7 +594,7 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
         const SizedBox(height: 4),
         Text(
           getLocalText.s(
-              "Paths point into the node JSON: tag, server, tls.utls.fingerprint."),
+              "Paths point into the node JSON: tag, server, tls.utls.fingerprint. Leave a path empty to search the whole node."),
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
@@ -734,7 +736,8 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
                     style: const TextStyle(fontFamily: 'monospace'),
                     decoration: InputDecoration(
                       labelText: getLocalText.s("Path"),
-                      hintText: 'tag',
+                      // Пусто — валидный ввод: ищем по всему узлу.
+                      hintText: getLocalText.s("whole node"),
                       border: const OutlineInputBorder(),
                       isDense: true,
                     ),

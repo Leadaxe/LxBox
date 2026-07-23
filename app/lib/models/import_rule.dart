@@ -104,10 +104,11 @@ class ImportRuleCondition {
     }
   }
 
-  /// Условие пригодно к применению: есть путь, есть паттерн, а для `matches`
-  /// паттерн ещё и компилируется.
+  /// Условие пригодно к применению: есть паттерн, а для `matches` он ещё и
+  /// компилируется. Пустой путь допустим — это поиск по всему JSON узла
+  /// (см. [readJsonPath]), удобно когда неизвестно, в каком поле искать.
   bool get isUsable {
-    if (path.isEmpty || pattern.isEmpty) return false;
+    if (pattern.isEmpty) return false;
     if (op == ImportRuleOperator.matches) return compiledPattern != null;
     return true;
   }
@@ -290,7 +291,9 @@ class ImportRule {
   String get summary {
     final parts = [
       for (final c in conditions)
-        '${c.path} ${c.negate ? 'not ' : ''}${c.op.name} ${c.pattern}',
+        // Пустой путь = весь узел, показываем как `*`.
+        '${c.path.isEmpty ? '*' : c.path} '
+            '${c.negate ? 'not ' : ''}${c.op.name} ${c.pattern}',
     ];
     final cond = parts.isEmpty
         ? '(no conditions)'
@@ -341,7 +344,9 @@ class ImportRule {
 /// `toString`), не-лист (Map/List) — компактным JSON, чтобы правило могло
 /// работать с поддеревом как с текстом. `null` — пути нет.
 String? readJsonPath(Map<String, dynamic> map, JsonPath path) {
-  if (path.isEmpty) return null;
+  // Пустой путь = весь узел: сериализуем JSON целиком, чтобы условие искало
+  // по любому полю сразу («не знаю, где лежит — найди везде»).
+  if (path.isEmpty) return jsonEncode(map);
   Object? cur = map;
   for (final seg in path.split('.')) {
     if (seg.isEmpty) return null;

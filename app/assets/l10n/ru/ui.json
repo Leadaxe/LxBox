@@ -2444,8 +2444,8 @@
   "Path": {
     "value": "Путь"
   },
-  "Paths point into the node JSON: tag, server, tls.utls.fingerprint.": {
-    "value": "Пути указывают внутрь JSON узла: tag, server, tls.utls.fingerprint."
+  "Paths point into the node JSON: tag, server, tls.utls.fingerprint. Leave a path empty to search the whole node.": {
+    "value": "Пути указывают внутрь JSON узла: tag, server, tls.utls.fingerprint. Оставьте путь пустым, чтобы искать по всему узлу."
   },
   "Pause": {
     "value": "Пауза"
@@ -3863,6 +3863,9 @@
   },
   "value \"%s\" is not valid": {
     "value": "значение «%s» недопустимо"
+  },
+  "whole node": {
+    "value": "весь узел"
   },
   "yesterday": {
     "value": "вчера"
