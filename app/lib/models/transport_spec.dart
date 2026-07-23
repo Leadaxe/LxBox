@@ -15,14 +15,19 @@ final class WsTransport extends TransportSpec {
   final String path;
   final String host;
   final Map<String, String> headers;
-  final int? earlyDataHeaderMaxLen;
+
+  /// §303 — WebSocket early data. Xray задаёт его хвостом пути (`/x?ed=2560`),
+  /// у sing-box это отдельное поле `max_early_data` (option/v2ray_transport.go).
+  /// Пустой [earlyDataHeaderName] = early data уходит в путь (режим Xray `ed`);
+  /// заданный — в одноимённый HTTP-заголовок.
+  final int? maxEarlyData;
   final String? earlyDataHeaderName;
 
   const WsTransport({
     this.path = '/',
     this.host = '',
     this.headers = const {},
-    this.earlyDataHeaderMaxLen,
+    this.maxEarlyData,
     this.earlyDataHeaderName,
   });
 
@@ -34,8 +39,8 @@ final class WsTransport extends TransportSpec {
     } else if (headers.isNotEmpty) {
       m['headers'] = Map<String, String>.from(headers);
     }
-    if (earlyDataHeaderMaxLen != null) {
-      m['early_data_header_max_len'] = earlyDataHeaderMaxLen;
+    if (maxEarlyData != null) {
+      m['max_early_data'] = maxEarlyData;
     }
     if (earlyDataHeaderName != null) {
       m['early_data_header_name'] = earlyDataHeaderName;
