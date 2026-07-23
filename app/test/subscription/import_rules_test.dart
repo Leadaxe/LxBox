@@ -1,175 +1,368 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/import_rule.dart';
-import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/subscription/import_rules.dart';
 
-/// §302 — pure applyImportRules: REPLACE + DISABLE-пометка + origin-карта.
-
-UriLines _uri(List<String> lines) => UriLines(lines, 0);
-
-ImportRule _replace(String pattern, String replacement,
-        {bool isRegex = false, bool caseSensitive = false, bool enabled = true}) =>
-    ImportRule(
-      action: ImportRuleAction.replace,
-      pattern: pattern,
-      replacement: replacement,
-      isRegex: isRegex,
-      caseSensitive: caseSensitive,
-      enabled: enabled,
-    );
-
-ImportRule _disable(String pattern,
-        {bool isRegex = true, bool caseSensitive = false}) =>
-    ImportRule(
-      action: ImportRuleAction.disable,
-      pattern: pattern,
-      isRegex: isRegex,
-      caseSensitive: caseSensitive,
-    );
-
-List<String> _lines(ImportRulesResult r) => (r.body as UriLines).lines;
-
+/// §302 — правила работают над готовым JSON узла (`NodeSpec.emit`), а не над
+/// текстом тела: `emit` одинаков для всех форматов подписки, поэтому одно
+/// правило работает и для URI-строк, и для Xray-JSON, и для INI.
 void main() {
-  group('applyImportRules — пустой/no-op', () {
-    test('пустой список правил → тело как есть, сеты пусты', () {
-      final input = _uri(['vless://a@h:443#N1', 'vless://b@h:443#N2']);
-      final r = applyImportRules(input, const []);
-      expect(_lines(r), ['vless://a@h:443#N1', 'vless://b@h:443#N2']);
-      expect(r.disabledLines, isEmpty);
-      expect(r.originByRewritten, isEmpty);
+  NodeSpec node(String uri) => parseUri(uri)!;
+
+  // Узел с TLS-fingerprint. ВАЖНО: парсер канонизирует fp на входе (§281,
+  // `hellochrome_*` → `chrome`), поэтому для проверок «правило меняет fp»
+  // берём значение, которое нормализация не трогает, и правим уже готовый
+  // JSON — правила работают именно над ним.
+  NodeSpec fpNode(String fp, {String name = 'NL'}) =>
+      node('vless://u@h.com:443?security=tls&sni=h.com&fp=$fp&type=ws#$name');
+
+  ImportRuleCondition cond(
+    String path,
+    ImportRuleOperator op,
+    String pattern, {
+    bool negate = false,
+    bool caseSensitive = false,
+  }) =>
+      ImportRuleCondition(
+        path: path,
+        op: op,
+        pattern: pattern,
+        negate: negate,
+        caseSensitive: caseSensitive,
+      );
+
+  group('readJsonPath', () {
+    test('лист, вложенный путь, отсутствие пути', () {
+      final map = node('vless://u@h.com:443?security=tls&sni=x.com#A')
+          .emit(TemplateVars.empty)
+          .map;
+      expect(readJsonPath(map, 'tag'), 'A');
+      expect(readJsonPath(map, 'server'), 'h.com');
+      expect(readJsonPath(map, 'tls.server_name'), 'x.com');
+      expect(readJsonPath(map, 'nope'), isNull);
+      expect(readJsonPath(map, 'tls.nope.deep'), isNull);
     });
 
-    test('выключенное правило пропускается', () {
-      final input = _uri(['vless://a@h:443?fp=hellochrome_120#N1']);
-      final r = applyImportRules(
-          input, [_replace('hellochrome_120', 'chrome', enabled: false)]);
-      expect(_lines(r), ['vless://a@h:443?fp=hellochrome_120#N1']);
-      expect(r.originByRewritten, isEmpty);
-    });
-  });
-
-  group('REPLACE', () {
-    test('literal — все вхождения в строке', () {
-      final input = _uri(['a=x&b=x&c=y']);
-      final r = applyImportRules(input, [_replace('x', 'Z')]);
-      expect(_lines(r), ['a=Z&b=Z&c=y']);
-    });
-
-    test('regex fingerprint hellochrome_120 → chrome', () {
-      final input = _uri(['vless://a@h:443?fp=hellochrome_120#NL']);
-      final r = applyImportRules(
-          input, [_replace(r'hellochrome_\d+', 'chrome', isRegex: true)]);
-      expect(_lines(r).single, 'vless://a@h:443?fp=chrome#NL');
-    });
-
-    test('пустая замена вырезает фрагмент (&type=raw → "")', () {
-      final input = _uri(['vless://a@h:443?type=tcp&type=raw#N']);
-      final r = applyImportRules(input, [_replace('&type=raw', '')]);
-      expect(_lines(r).single, 'vless://a@h:443?type=tcp#N');
-    });
-
-    test('caseSensitive=false матчит любой регистр (дефолт §301)', () {
-      final input = _uri(['HELLOChrome_120']);
-      final r = applyImportRules(
-          input, [_replace('hellochrome_120', 'chrome')]);
-      expect(_lines(r).single, 'chrome');
-    });
-
-    test('caseSensitive=true не матчит другой регистр', () {
-      final input = _uri(['HELLOChrome_120']);
-      final r = applyImportRules(
-          input, [_replace('hellochrome_120', 'chrome', caseSensitive: true)]);
-      expect(_lines(r).single, 'HELLOChrome_120');
-    });
-
-    test('порядок: второе правило видит результат первого', () {
-      final input = _uri(['aaa']);
-      final r = applyImportRules(
-          input, [_replace('aaa', 'bbb'), _replace('bbb', 'ccc')]);
-      expect(_lines(r).single, 'ccc');
-    });
-
-    test('битый regex скипается, остальные применяются', () {
-      final input = _uri(['fooBAR']);
-      final r = applyImportRules(input, [
-        _replace('(unclosed', 'X', isRegex: true), // невалидный → скип
-        _replace('BAR', 'baz'),
-      ]);
-      expect(_lines(r).single, 'foobaz');
+    test('число отдаётся строкой, поддерево — компактным JSON', () {
+      final map = node('vless://u@h.com:8443?security=tls&sni=x.com#A')
+          .emit(TemplateVars.empty)
+          .map;
+      expect(readJsonPath(map, 'server_port'), '8443');
+      final tls = readJsonPath(map, 'tls');
+      expect(tls, startsWith('{'));
+      expect(tls, contains('x.com'));
     });
   });
 
-  group('origin-карта', () {
-    test('изменённая строка → карта послезаменная→оригинал', () {
-      final input = _uri([
-        'vless://a@h:443?fp=hellochrome_120#NL', // изменится
-        'vless://b@h:443#US', // не тронута
+  group('writeJsonPath', () {
+    test('пишет лист и создаёт промежуточные мапы', () {
+      final map = <String, dynamic>{'tag': 'A'};
+      expect(writeJsonPath(map, 'tag', 'B'), isTrue);
+      expect(map['tag'], 'B');
+      expect(writeJsonPath(map, 'tls.utls.fingerprint', 'chrome'), isTrue);
+      expect((map['tls'] as Map)['utls'], {'fingerprint': 'chrome'});
+    });
+
+    test('сохраняет тип значения (порт остаётся числом)', () {
+      final map = <String, dynamic>{'server_port': 443, 'ok': true};
+      writeJsonPath(map, 'server_port', '8443');
+      writeJsonPath(map, 'ok', 'false');
+      expect(map['server_port'], 8443);
+      expect(map['ok'], false);
+    });
+
+    test('не перезаписывает лист как мапу', () {
+      final map = <String, dynamic>{'tag': 'A'};
+      expect(writeJsonPath(map, 'tag.deep', 'x'), isFalse);
+      expect(map['tag'], 'A');
+    });
+  });
+
+  group('условия', () {
+    test('contains по tag — регистронезависим по умолчанию', () {
+      final rule = ImportRule(
+        conditions: [cond('tag', ImportRuleOperator.contains, 'nl')],
+        action: ImportRuleAction.disable,
+      );
+      expect(applyRulesToNode(fpNode('chrome', name: 'NL-01'), [rule]).disabled,
+          isTrue);
+      expect(applyRulesToNode(fpNode('chrome', name: 'DE-01'), [rule]).disabled,
+          isFalse);
+    });
+
+    test('caseSensitive различает регистр', () {
+      final rule = ImportRule(
+        conditions: [
+          cond('tag', ImportRuleOperator.contains, 'nl', caseSensitive: true)
+        ],
+        action: ImportRuleAction.disable,
+      );
+      expect(applyRulesToNode(fpNode('chrome', name: 'NL'), [rule]).disabled,
+          isFalse);
+      expect(applyRulesToNode(fpNode('chrome', name: 'nl'), [rule]).disabled,
+          isTrue);
+    });
+
+    test('equals требует полного совпадения', () {
+      final rule = ImportRule(
+        conditions: [cond('tag', ImportRuleOperator.equals, 'NL')],
+        action: ImportRuleAction.disable,
+      );
+      expect(applyRulesToNode(fpNode('chrome', name: 'NL'), [rule]).disabled,
+          isTrue);
+      expect(applyRulesToNode(fpNode('chrome', name: 'NL-01'), [rule]).disabled,
+          isFalse);
+    });
+
+    test('negate инвертирует — и ловит отсутствие поля', () {
+      final rule = ImportRule(
+        conditions: [
+          cond('tls.utls.fingerprint', ImportRuleOperator.contains, 'chrome',
+              negate: true)
+        ],
+        action: ImportRuleAction.disable,
+      );
+      // fp=chrome → условие с negate ложно, узел не трогаем.
+      expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isFalse);
+      // fp=firefox → negate истинно.
+      expect(applyRulesToNode(fpNode('firefox'), [rule]).disabled, isTrue);
+      // поля нет вовсе (без TLS) → negate тоже истинно.
+      expect(applyRulesToNode(node('vless://u@h.com:443#A'), [rule]).disabled,
+          isTrue);
+    });
+
+    test('AND требует всех условий, OR — любого', () {
+      final conds = [
+        cond('tag', ImportRuleOperator.contains, 'NL'),
+        cond('server', ImportRuleOperator.contains, 'zzz'),
+      ];
+      final and = ImportRule(
+          conditions: conds,
+          matchMode: ImportRuleMatchMode.all,
+          action: ImportRuleAction.disable);
+      final or = ImportRule(
+          conditions: conds,
+          matchMode: ImportRuleMatchMode.any,
+          action: ImportRuleAction.disable);
+      final n = fpNode('chrome', name: 'NL');
+      expect(applyRulesToNode(n, [and]).disabled, isFalse,
+          reason: 'server не содержит zzz');
+      expect(applyRulesToNode(n, [or]).disabled, isTrue,
+          reason: 'tag содержит NL');
+    });
+
+    test('битый regex делает правило непригодным (узел не трогаем)', () {
+      final rule = ImportRule(
+        conditions: [cond('tag', ImportRuleOperator.matches, '[')],
+        action: ImportRuleAction.disable,
+      );
+      expect(rule.isUsable, isFalse);
+      expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isFalse);
+    });
+  });
+
+  group('Replace', () {
+    test('set пишет значение целиком', () {
+      final rule = ImportRule(
+        conditions: [
+          cond('tls.utls.fingerprint', ImportRuleOperator.contains, 'firefox')
+        ],
+        action: ImportRuleAction.replace,
+        targetPath: 'tls.utls.fingerprint',
+        replacement: 'chrome',
+      );
+      final out = applyRulesToNode(fpNode('firefox'), [rule]);
+      expect(out.patchedJson, isNotNull);
+      expect(readJsonPath(out.patchedJson!, 'tls.utls.fingerprint'), 'chrome');
+    });
+
+    test('карманы из matches подставляются в замену', () {
+      final rule = ImportRule(
+        conditions: [
+          cond('tag', ImportRuleOperator.matches, r'^(NL)-\d+$'),
+        ],
+        action: ImportRuleAction.replace,
+        targetPath: 'tag',
+        replacement: r'$1',
+      );
+      final out = applyRulesToNode(fpNode('chrome', name: 'NL-01'), [rule]);
+      expect(readJsonPath(out.patchedJson!, 'tag'), 'NL');
+    });
+
+    test('substitute вырезает фрагмент, остальное значение сохраняется', () {
+      // Убрать ⚡ из имени: tag matches ^(.*)⚡(.*)$ → tag = $1$2.
+      final rule = ImportRule(
+        conditions: [
+          cond('tag', ImportRuleOperator.matches, r'^(.*)⚡(.*)$'),
+        ],
+        action: ImportRuleAction.replace,
+        targetPath: 'tag',
+        replacement: r'$1$2',
+      );
+      final out = applyRulesToNode(fpNode('chrome', name: 'DE⚡Berlin'), [rule]);
+      expect(readJsonPath(out.patchedJson!, 'tag'), 'DEBerlin');
+    });
+
+    test('substitute-режим по подстроке без regex', () {
+      final rule = ImportRule(
+        conditions: [cond('tag', ImportRuleOperator.contains, '⚡')],
+        action: ImportRuleAction.replace,
+        targetPath: 'tag',
+        replaceMode: ImportRuleReplaceMode.substitute,
+        replacement: '',
+      );
+      final out = applyRulesToNode(fpNode('chrome', name: 'DE⚡Berlin'), [rule]);
+      expect(readJsonPath(out.patchedJson!, 'tag'), 'DEBerlin');
+    });
+
+    test('порт остаётся числом после замены', () {
+      final rule = ImportRule(
+        conditions: [cond('server_port', ImportRuleOperator.equals, '443')],
+        action: ImportRuleAction.replace,
+        targetPath: 'server_port',
+        replacement: '8443',
+      );
+      final out = applyRulesToNode(fpNode('chrome'), [rule]);
+      expect(out.patchedJson!['server_port'], 8443);
+      expect(out.patchedJson!['server_port'], isA<int>());
+    });
+
+    test('замена того же значения — не считается изменением', () {
+      final rule = ImportRule(
+        conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
+        action: ImportRuleAction.replace,
+        targetPath: 'tag',
+        replacement: 'NL',
+      );
+      final out = applyRulesToNode(fpNode('chrome', name: 'NL'), [rule]);
+      expect(out.changed, isFalse);
+    });
+
+    test('emit узла отдаёт патч (замена доезжает до конфига)', () {
+      final n = fpNode('firefox');
+      final rule = ImportRule(
+        conditions: [
+          cond('tls.utls.fingerprint', ImportRuleOperator.contains, 'firefox')
+        ],
+        action: ImportRuleAction.replace,
+        targetPath: 'tls.utls.fingerprint',
+        replacement: 'chrome',
+      );
+      final out = applyRulesToNode(n, [rule]);
+      n.patchedJson = out.patchedJson;
+      expect(
+        readJsonPath(n.emit(TemplateVars.empty).map, 'tls.utls.fingerprint'),
+        'chrome',
+      );
+    });
+  });
+
+  group('applyImportRules по списку узлов', () {
+    test('индексы выключенных + следы замен', () {
+      final nodes = [
+        fpNode('chrome', name: 'NL-1'),
+        fpNode('chrome', name: 'DE-1'),
+        fpNode('firefox', name: 'NL-2'),
+      ];
+      final rules = [
+        ImportRule(
+          conditions: [cond('tag', ImportRuleOperator.contains, 'DE')],
+          action: ImportRuleAction.disable,
+        ),
+        ImportRule(
+          conditions: [
+            cond('tls.utls.fingerprint', ImportRuleOperator.contains, 'firefox')
+          ],
+          action: ImportRuleAction.replace,
+          targetPath: 'tls.utls.fingerprint',
+          replacement: 'chrome',
+        ),
+      ];
+      final res = applyImportRules(nodes, rules);
+      expect(res.disabledIndexes, {1});
+      expect(res.outcomes[2]!.replacements.single, contains('chrome'));
+      expect(res.outcomes.containsKey(0), isFalse, reason: 'узел не затронут');
+    });
+
+    test('выключенное правило игнорируется', () {
+      final res = applyImportRules([
+        fpNode('chrome', name: 'NL')
+      ], [
+        ImportRule(
+          conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
+          action: ImportRuleAction.disable,
+          enabled: false,
+        )
       ]);
-      final r = applyImportRules(
-          input, [_replace('hellochrome_120', 'chrome')]);
-      expect(r.originByRewritten, {
-        'vless://a@h:443?fp=chrome#NL':
-            'vless://a@h:443?fp=hellochrome_120#NL',
+      expect(res.isEmpty, isTrue);
+    });
+
+    test('правила применяются по порядку — следующее видит патч', () {
+      final rules = [
+        ImportRule(
+          conditions: [cond('tag', ImportRuleOperator.contains, 'raw')],
+          action: ImportRuleAction.replace,
+          targetPath: 'tag',
+          replacement: 'stage1',
+        ),
+        ImportRule(
+          conditions: [cond('tag', ImportRuleOperator.contains, 'stage1')],
+          action: ImportRuleAction.replace,
+          targetPath: 'tag',
+          replacement: 'stage2',
+        ),
+      ];
+      final out = applyRulesToNode(fpNode('chrome', name: 'raw'), rules);
+      expect(readJsonPath(out.patchedJson!, 'tag'), 'stage2');
+    });
+  });
+
+  group('сериализация', () {
+    test('round-trip нового формата', () {
+      final rule = ImportRule(
+        conditions: [
+          cond('tls.utls.fingerprint', ImportRuleOperator.matches,
+              r'^hello(.*)$'),
+          cond('tag', ImportRuleOperator.contains, 'NL', negate: true),
+        ],
+        matchMode: ImportRuleMatchMode.any,
+        action: ImportRuleAction.replace,
+        targetPath: 'tls.utls.fingerprint',
+        replacement: r'$1',
+        replaceMode: ImportRuleReplaceMode.substitute,
+        substitutePattern: 'hello',
+        enabled: false,
+      );
+      expect(ImportRule.fromJson(rule.toJson()), rule);
+    });
+
+    test('миграция старого плоского правила → условие по tag', () {
+      // v1: {action, pattern, is_regex, case_sensitive} по тексту строки.
+      final migrated = ImportRule.fromJson({
+        'action': 'disable',
+        'pattern': '⚡',
       });
-      // Нетронутая строка в карту не попадает.
-      expect(r.originByRewritten.containsValue('vless://b@h:443#US'), isFalse);
-    });
-  });
-
-  group('DISABLE', () {
-    test('помечает совпавшую строку, НЕ удаляет её из тела', () {
-      final input = _uri([
-        'vless://a@h:443#US-NewYork',
-        'vless://b@h:443#NL-Amsterdam',
-      ]);
-      final r = applyImportRules(input, [_disable(r'.*Netherlands.*')]);
-      // Netherlands в имени нет → не совпало.
-      expect(r.disabledLines, isEmpty);
-
-      final r2 = applyImportRules(input, [_disable(r'.*NL-.*')]);
-      expect(_lines(r2).length, 2, reason: 'строка остаётся в теле');
-      expect(r2.disabledLines, {'vless://b@h:443#NL-Amsterdam'});
+      expect(migrated.conditions.single.path, 'tag');
+      expect(migrated.conditions.single.op, ImportRuleOperator.contains);
+      expect(migrated.conditions.single.pattern, '⚡');
+      expect(migrated.action, ImportRuleAction.disable);
+      // И сразу работает: узел с ⚡ в имени гасится.
+      expect(
+          applyRulesToNode(fpNode('chrome', name: 'HU⚡Budapest'), [migrated])
+              .disabled,
+          isTrue);
     });
 
-    test('disable матчит ПОСЛЕзаменную строку', () {
-      // replace переименовывает в Netherlands, потом disable по нему.
-      final input = _uri(['vless://b@h:443#NL']);
-      final r = applyImportRules(input, [
-        _replace('#NL', '#Netherlands'),
-        _disable(r'.*Netherlands.*'),
-      ]);
-      expect(_lines(r).single, 'vless://b@h:443#Netherlands');
-      expect(r.disabledLines, {'vless://b@h:443#Netherlands'});
-    });
-
-    test('caseSensitive disable (дефолт false матчит любой регистр)', () {
-      final input = _uri(['vless://b@h:443#netherlands']);
-      final r = applyImportRules(input, [_disable(r'.*Netherlands.*')]);
-      expect(r.disabledLines, {'vless://b@h:443#netherlands'});
-    });
-  });
-
-  group('не-URI тела', () {
-    test('INI: REPLACE работает по тексту, disable неприменим', () {
-      const ini = '[Interface]\nMTU = 1280\n[Peer]\nEndpoint = h:51820';
-      final r = applyImportRules(
-          IniConfig(ini), [_replace('1280', '1420')]);
-      expect((r.body as IniConfig).text, contains('MTU = 1420'));
-      expect(r.disabledLines, isEmpty);
-    });
-
-    test('INI: disable-правило не помечает ничего (нет строки-ноды)', () {
-      const ini = '[Interface]\n# Netherlands\n[Peer]\nEndpoint = h:51820';
-      final r = applyImportRules(
-          IniConfig(ini), [_disable(r'.*Netherlands.*')]);
-      expect(r.disabledLines, isEmpty);
-    });
-
-    test('JSON: тело не трогается (ноды — элементы, не строки)', () {
-      final json = JsonConfig(
-          [<String, dynamic>{'type': 'vless'}], JsonFlavor.unknown);
-      final r = applyImportRules(json, [_replace('vless', 'trojan')]);
-      expect(identical(r.body, json), isTrue);
+    test('миграция v1 replace несёт substitute-семантику', () {
+      final migrated = ImportRule.fromJson({
+        'action': 'replace',
+        'pattern': 'hellochrome_120',
+        'replacement': 'chrome',
+      });
+      expect(migrated.replaceMode, ImportRuleReplaceMode.substitute);
+      expect(migrated.targetPath, 'tag');
     });
   });
 }

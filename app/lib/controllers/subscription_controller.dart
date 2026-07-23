@@ -173,20 +173,14 @@ class SubscriptionController extends ChangeNotifier {
         if (body == null || body.isEmpty) continue;
         try {
           final decoded = decode(body);
+          final nodes = parseAll(decoded);
           // §302 — применяем те же import-rules к кэшу: иначе после рестарта
-          // ноды вернулись бы в ДОзаменном виде, их nodeIdentityHash не совпал
-          // бы с персистентными DISABLE-хешами (посчитанными от послезаменных
-          // нод) → выключение слетело бы до следующего сетевого refresh, а
-          // REPLACE не применился бы (значок пропал). GC/пересчёт disable здесь
-          // НЕ делаем — regidration не сигнал «нода ушла» (§283).
-          final ruled = applyImportRules(decoded, list.activeImportRules);
-          final nodes = parseAll(ruled.body);
-          if (ruled.originByRewritten.isNotEmpty) {
-            for (final n in nodes) {
-              final origin = ruled.originByRewritten[n.rawUri];
-              if (origin != null) n.originLine = origin;
-            }
-          }
+          // узлы вернулись бы в ДОзаменном виде, их nodeIdentityHash не совпал
+          // бы с персистентными DISABLE-хешами → выключение слетело бы до
+          // следующего сетевого refresh, а REPLACE не применился бы. GC и
+          // пересчёт disable здесь НЕ делаем — регидрация не сигнал «узел ушёл»
+          // (§283).
+          _applyRulesToNodes(nodes, list.activeImportRules);
           if (nodes.isEmpty) {
             // §101 — раньше скипали молча; UI-счётчик при этом показывает
             // stale lastNodeCount. Логируем с подсказкой, что в кеше.
@@ -225,6 +219,30 @@ class SubscriptionController extends ChangeNotifier {
     } finally {
       if (!_rehydrated.isCompleted) _rehydrated.complete();
     }
+  }
+
+  /// §302 — применяет import-rules к разобранным узлам и возвращает набор
+  /// identity-хешей узлов, помеченных к выключению.
+  ///
+  /// REPLACE патчит `NodeSpec.patchedJson` (узел эмитится из него), поэтому
+  /// хеш считаем ПОСЛЕ применения — выключение и роутинг работают с итоговым
+  /// видом узла, как его увидит билдер.
+  Set<String> _applyRulesToNodes(List<NodeSpec> nodes, List<ImportRule> rules) {
+    if (rules.isEmpty || nodes.isEmpty) return const {};
+    final result = applyImportRules(nodes, rules);
+    if (result.isEmpty) return const {};
+
+    final hashes = <String>{};
+    result.outcomes.forEach((i, outcome) {
+      if (i < 0 || i >= nodes.length) return;
+      final node = nodes[i];
+      if (outcome.patchedJson != null) {
+        node.patchedJson = outcome.patchedJson;
+        node.ruleTrail = outcome.replacements;
+      }
+      if (outcome.disabled) hashes.add(nodeIdentityHash(node));
+    });
+    return hashes;
   }
 
   /// §074 — add a fully-constructed UserServer (used by Add server wizard
@@ -1669,12 +1687,11 @@ class SubscriptionController extends ChangeNotifier {
       notifyListeners();
 
       // §289 — per-subscription идентичность (null → глобальная).
-      // §302 — per-subscription import-rules (REPLACE + пометка DISABLE-строк);
-      // activeImportRules учитывает тумблер набора + per-rule enabled + валидность.
+      // §302 — import-rules здесь не участвуют: применяются ниже, к уже
+      // разобранным узлам.
       final result = await parseFromSource(
           UrlSource(list.url, identity: list.identity),
-          client: httpClientForTesting,
-          importRules: list.activeImportRules);
+          client: httpClientForTesting);
       AppLog.I.info(
           'Fetched ${result.nodes.length} nodes from $shortUrl'
           '${result.meta?.profileTitle == null ? "" : " (title: ${result.meta!.profileTitle})"}');
@@ -1741,37 +1758,18 @@ class SubscriptionController extends ChangeNotifier {
       final nextInterval = current.updateIntervalHours < 0
           ? current.updateIntervalHours // -1: жёстко, сервер не переубедит
           : (result.meta?.updateIntervalHours ?? current.updateIntervalHours);
-      // §302 — проставляем originLine на ноды, чьё тело изменил REPLACE
-      // (матч по rawUri = послезаменная строка). Только для UI (значок/diff);
-      // mutable-поле, как warnings — на emit/хеш не влияет. Мутируем сами
-      // инстансы result.nodes (они же уйдут в entry ниже).
-      if (result.originByRewritten.isNotEmpty) {
-        for (final n in result.nodes) {
-          final origin = result.originByRewritten[n.rawUri];
-          if (origin != null) n.originLine = origin;
-        }
-      }
-
-      // §302 — DISABLE-правила: строки, помеченные на этапе A, гасим здесь
-      // через identity-хеш → disabledHashes с lastSeen = now. Делаем это ДО GC
-      // ниже, чтобы GC (now - lastSeen = 0 ≤ TTL) их не снял: правило —
-      // источник истины, переставляется на КАЖДОМ refresh.
+      // §302 — import-rules применяем к УЖЕ РАЗОБРАННЫМ узлам (их emit-JSON):
+      // REPLACE патчит узел (`patchedJson` → уходит в конфиг), DISABLE даёт
+      // identity-хеши для §283. Делаем это ДО GC ниже, чтобы GC (now -
+      // lastSeen = 0 ≤ TTL) свежие пометки не снял: правило — источник истины
+      // и переставляется на КАЖДОМ refresh.
       //
-      // ВАЖНО: хеш берём от УЖЕ РАЗОБРАННОЙ ноды (result.nodes), матчим её по
-      // rawUri (= послезаменная строка, тот же ключ, что originByRewritten).
-      // Нельзя пере-парсить строку голым parseUri: полный parseAll мог навесить
-      // detour / шаблон / magic-node, и nodeIdentityHash разошёлся бы с тем, что
-      // билдер считает от result.nodes → нода бы не погасла. Матч по rawUri
-      // гарантирует ruleHash ∈ freshHashes (обе стороны — хеш той же ноды).
+      // Хеш считается ПОСЛЕ патча, тем же путём, что у билдера (обе стороны —
+      // `nodeIdentityHash` того же инстанса), поэтому пометка гарантированно
+      // совпадает с узлом, который билдер увидит.
       final ruleNow = DateTime.now();
-      final ruleHashes = <String>{};
-      if (result.disabledLines.isNotEmpty) {
-        for (final n in result.nodes) {
-          if (result.disabledLines.contains(n.rawUri)) {
-            ruleHashes.add(nodeIdentityHash(n));
-          }
-        }
-      }
+      final ruleHashes =
+          _applyRulesToNodes(result.nodes, current.activeImportRules);
 
       // §283 — GC отметок disable ТОЛЬКО здесь (успешный сетевой fetch =
       // единственный сигнал «нода ушла из подписки»; failed fetch и
