@@ -1036,6 +1036,15 @@
   "Copy source": {
     "value": "Копировать источник"
   },
+  "Decode base64": {
+    "value": "Раскодировать base64"
+  },
+  "Body is not base64-encoded": {
+    "value": "Тело не закодировано в base64"
+  },
+  "Show the decoded body — what import rules see": {
+    "value": "Показать раскодированное тело — то, что видят правила импорта"
+  },
   "Copy tag": {
     "value": "Копировать тег"
   },
