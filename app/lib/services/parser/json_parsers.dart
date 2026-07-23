@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
@@ -54,6 +56,13 @@ NodeSpec? parseXrayOutbound(Map<String, dynamic> element) {
   final spec = _xrayVlessToSpec(main, remarks);
   if (spec == null) return null;
 
+  // §302 — исходник ноды для UI («Source» на экране ноды) и для правил по
+  // JSON-телам: compact = сам outbound, extended = весь элемент как пришёл
+  // от провайдера (dns/inbounds/routing соседи). rawUri для таких нод —
+  // синтетическая заглушка `xray://<tag>`, источником служить не может.
+  final compact = _prettyJson(main);
+  final extended = _prettyJson(element);
+
   if (detour != null) {
     final chained = _xrayDetourToSpec(detour);
     if (chained != null) {
@@ -70,10 +79,23 @@ NodeSpec? parseXrayOutbound(Map<String, dynamic> element) {
         transport: spec.transport,
         chained: chained,
         warnings: spec.warnings,
-      );
+      )
+        ..sourceCompact = compact
+        ..sourceExtended = extended == compact ? null : extended;
     }
   }
-  return spec;
+  return spec
+    ..sourceCompact = compact
+    ..sourceExtended = extended == compact ? null : extended;
+}
+
+/// §302 — стабильный отступ для показа фрагмента подписки пользователю.
+String _prettyJson(Object? value) {
+  try {
+    return const JsonEncoder.withIndent('  ').convert(value);
+  } catch (_) {
+    return value.toString();
+  }
 }
 
 VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
