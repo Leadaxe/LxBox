@@ -92,15 +92,27 @@ void main() {
         url: 'https://e.com/sub',
         importRules: const [
           ImportRule(
+            conditions: [
+              ImportRuleCondition(
+                path: 'tls.utls.fingerprint',
+                op: ImportRuleOperator.contains,
+                pattern: 'hellochrome_120',
+              ),
+            ],
             action: ImportRuleAction.replace,
-            pattern: 'hellochrome_120',
+            targetPath: 'tls.utls.fingerprint',
             replacement: 'chrome',
           ),
           ImportRule(
+            conditions: [
+              ImportRuleCondition(
+                path: 'tag',
+                op: ImportRuleOperator.matches,
+                pattern: r'.*Netherlands.*',
+                caseSensitive: true,
+              ),
+            ],
             action: ImportRuleAction.disable,
-            pattern: r'.*Netherlands.*',
-            isRegex: true,
-            caseSensitive: true,
           ),
         ],
         importRulesEnabled: false,
@@ -109,13 +121,14 @@ void main() {
       final r = ServerList.fromJson(original.toJson()) as SubscriptionServers;
       expect(r.importRules, hasLength(2));
       expect(r.importRules[0].action, ImportRuleAction.replace);
-      expect(r.importRules[0].pattern, 'hellochrome_120');
+      expect(r.importRules[0].conditions.single.path, 'tls.utls.fingerprint');
+      expect(r.importRules[0].targetPath, 'tls.utls.fingerprint');
       expect(r.importRules[0].replacement, 'chrome');
       expect(r.importRules[1].action, ImportRuleAction.disable);
-      expect(r.importRules[1].isRegex, isTrue);
-      expect(r.importRules[1].caseSensitive, isTrue);
+      expect(r.importRules[1].conditions.single.op, ImportRuleOperator.matches);
+      expect(r.importRules[1].conditions.single.caseSensitive, isTrue);
       // Порядок сохраняется (значим для цепочки replace→disable).
-      expect(r.importRules[1].pattern, r'.*Netherlands.*');
+      expect(r.importRules[1].conditions.single.pattern, r'.*Netherlands.*');
       expect(r.importRulesEnabled, isFalse);
     });
 
@@ -136,8 +149,12 @@ void main() {
       expect(r.importRules, isEmpty);
       expect(r.importRulesEnabled, isTrue);
       // copyWith сохраняет правила при мутации других полей.
-      final withRules = original.copyWith(
-          importRules: const [ImportRule(pattern: 'a', replacement: 'b')]);
+      final withRules = original.copyWith(importRules: const [
+        ImportRule(
+          conditions: [ImportRuleCondition(path: 'tag', pattern: 'a')],
+          action: ImportRuleAction.disable,
+        )
+      ]);
       expect(withRules.copyWith(name: 'Y').importRules, hasLength(1));
     });
 

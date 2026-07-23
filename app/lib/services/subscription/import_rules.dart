@@ -1,107 +1,256 @@
 import '../../models/import_rule.dart';
-import '../parser/body_decoder.dart';
+import '../../models/node_spec.dart';
+import '../../models/template_vars.dart';
 
-/// §302 — результат применения import-rules к декодированному телу (этап A).
+/// §302 — применение import-rules к УЖЕ РАЗОБРАННЫМ узлам подписки.
 ///
-/// - [body] — переписанное тело для `parseAll` (REPLACE применён). Тот же
-///   вариант `DecodedBody`, что на входе (структура сохранена).
-/// - [disabledLines] — строки (в их ПОСЛЕзаменном виде), совпавшие с
-///   DISABLE-правилом. Этап B (контроллер) парсит их через `parseUri` и
-///   выключает соответствующие ноды через §283. Пусто для не-URI тел.
-/// - [originByRewritten] — карта `послезаменная строка → оригинал` только для
-///   строк, которые REPLACE реально изменил. Контроллер кладёт оригинал в
-///   `NodeSpec.originLine` (матч по `rawUri`) для UI-значка/diff. Пусто, если
-///   ни одна строка не изменилась.
-class ImportRulesResult {
-  final DecodedBody body;
-  final Set<String> disabledLines;
-  final Map<String, String> originByRewritten;
+/// Правила работают над каноническим sing-box JSON узла (`NodeSpec.emit`), а
+/// не над текстом тела: `emit` одинаков для всех форматов подписки (URI-строки,
+/// Xray-JSON, INI/Amnezia), поэтому одно правило работает везде.
+///
+/// Порядок: правила применяются сверху вниз. REPLACE меняет JSON узла, и
+/// следующее правило видит уже изменённый вид — это позволяет строить цепочки.
+/// DISABLE помечает узел; на дальнейшее вычисление правил это не влияет
+/// (пометка — решение о роутинге, а не о структуре).
 
-  const ImportRulesResult(
-    this.body, {
-    this.disabledLines = const {},
-    this.originByRewritten = const {},
+/// Что правила сделали с одним узлом.
+class NodeRuleOutcome {
+  /// Узел помечен к выключению (`Disable`).
+  final bool disabled;
+
+  /// JSON узла после всех REPLACE. `null` — изменений не было.
+  final Map<String, dynamic>? patchedJson;
+
+  /// Человекочитаемые следы замен для UI: «tls.utls.fingerprint:
+  /// hellochrome_120 → chrome».
+  final List<String> replacements;
+
+  const NodeRuleOutcome({
+    this.disabled = false,
+    this.patchedJson,
+    this.replacements = const [],
   });
+
+  bool get changed => disabled || patchedJson != null;
 }
 
-/// Применяет [rules] к декодированному телу подписки (этап A pipeline'а).
+/// Результат применения набора правил ко всем узлам подписки.
+class ImportRulesResult {
+  /// Индексы узлов (в исходном списке), помеченных к выключению.
+  final Set<int> disabledIndexes;
+
+  /// Итог по каждому узлу — по индексу исходного списка. Узлы, которых
+  /// правила не коснулись, в карте отсутствуют.
+  final Map<int, NodeRuleOutcome> outcomes;
+
+  const ImportRulesResult({
+    this.disabledIndexes = const {},
+    this.outcomes = const {},
+  });
+
+  bool get isEmpty => disabledIndexes.isEmpty && outcomes.isEmpty;
+}
+
+/// Прогоняет [rules] по [nodes]. Pure: узлы не мутируются, ничего не пишет.
 ///
-/// Семантика (согласовано §302):
-/// - **REPLACE** переписывает текст (все вхождения, literal/regex/caseSensitive
-///   по правилу). Для `UriLines` — построчно; для INI/JSON/Amnezia — по всему
-///   блоку текста (это один «конфиг», не список нод).
-/// - **DISABLE** НЕ удаляет строку (нода должна завестись и быть видна
-///   зачёркнутой) — только помечает её послезаменный вид в [disabledLines].
-///   Применяется лишь к `UriLines` (построчная нода ↔ строка); для INI/JSON
-///   понятия «строка-нода» нет — DISABLE там игнорируется.
-/// - Правила идут по порядку; для каждой строки сначала прогоняются ВСЕ
-///   replace (сверху вниз), затем проверяются disable — на послезаменном виде.
-/// - Битое/выключенное правило пропускается (`ImportRule.isUsable`).
-///
-/// Pure: без сети, без стораджа. Пустой [rules] → тело как есть, пустые сеты.
-ImportRulesResult applyImportRules(DecodedBody decoded, List<ImportRule> rules) {
+/// Вызывающий (контроллер) решает, что делать с результатом: выключить узлы
+/// через §283 `disabledHashes` и/или применить `patchedJson`.
+ImportRulesResult applyImportRules(List<NodeSpec> nodes, List<ImportRule> rules,
+    {TemplateVars vars = TemplateVars.empty}) {
   final usable = rules.where((r) => r.isUsable).toList();
-  if (usable.isEmpty) return ImportRulesResult(decoded);
+  if (usable.isEmpty || nodes.isEmpty) return const ImportRulesResult();
 
-  final replaces =
-      usable.where((r) => r.action == ImportRuleAction.replace).toList();
-  final disables =
-      usable.where((r) => r.action == ImportRuleAction.disable).toList();
+  final disabled = <int>{};
+  final outcomes = <int, NodeRuleOutcome>{};
 
-  switch (decoded) {
-    case UriLines(lines: final lines, skippedComments: final skipped):
-      final out = <String>[];
-      final disabledLines = <String>{};
-      final originByRewritten = <String, String>{};
-      for (final original in lines) {
-        final rewritten = _applyReplaces(original, replaces);
-        if (rewritten != original) originByRewritten[rewritten] = original;
-        out.add(rewritten);
-        // DISABLE — по послезаменной строке (порядок: replace раньше disable).
-        for (final d in disables) {
-          if (d.compiledPattern!.hasMatch(rewritten)) {
-            disabledLines.add(rewritten);
-            break;
-          }
-        }
+  for (var i = 0; i < nodes.length; i++) {
+    final outcome = applyRulesToNode(nodes[i], usable, vars: vars);
+    if (!outcome.changed) continue;
+    outcomes[i] = outcome;
+    if (outcome.disabled) disabled.add(i);
+  }
+
+  return ImportRulesResult(disabledIndexes: disabled, outcomes: outcomes);
+}
+
+/// Применяет правила к одному узлу. Вынесено отдельно — этим же путём ходит
+/// предпросмотр в редакторе правила (тот же результат, что при импорте).
+NodeRuleOutcome applyRulesToNode(NodeSpec node, List<ImportRule> rules,
+    {TemplateVars vars = TemplateVars.empty}) {
+  // Рабочая копия JSON узла: REPLACE правит её, следующее правило видит
+  // изменённый вид.
+  final json = Map<String, dynamic>.from(node.emit(vars).map);
+  var patched = false;
+  var disabled = false;
+  final trail = <String>[];
+
+  for (final rule in rules) {
+    final match = _evaluate(rule, json);
+    if (!match.matched) continue;
+
+    if (rule.action == ImportRuleAction.disable) {
+      disabled = true;
+      continue;
+    }
+
+    final before = readJsonPath(json, rule.targetPath);
+    final next = _buildReplacement(rule, match, before);
+    if (next == null || next == before) continue;
+    if (!writeJsonPath(json, rule.targetPath, next)) continue;
+    patched = true;
+    trail.add('${rule.targetPath}: ${before ?? '(none)'} → $next');
+  }
+
+  return NodeRuleOutcome(
+    disabled: disabled,
+    patchedJson: patched ? json : null,
+    replacements: trail,
+  );
+}
+
+/// Итог вычисления условий правила.
+class _MatchResult {
+  final bool matched;
+
+  /// Карманы (`$1`…`$9`) по путям: группы захвата `matches`-условий.
+  /// Ключ — путь условия, значение — список групп (индекс 0 = `$1`).
+  final Map<JsonPath, List<String>> groups;
+
+  const _MatchResult(this.matched, [this.groups = const {}]);
+}
+
+_MatchResult _evaluate(ImportRule rule, Map<String, dynamic> json) {
+  final conds = rule.usableConditions;
+  if (conds.isEmpty) return const _MatchResult(false);
+
+  final groups = <JsonPath, List<String>>{};
+  var anyTrue = false;
+  var allTrue = true;
+
+  for (final c in conds) {
+    final value = readJsonPath(json, c.path);
+    final hit = _test(c, value, groups);
+    if (hit) {
+      anyTrue = true;
+    } else {
+      allTrue = false;
+    }
+  }
+
+  final matched =
+      rule.matchMode == ImportRuleMatchMode.all ? allTrue : anyTrue;
+  return _MatchResult(matched, groups);
+}
+
+/// Проверяет одно условие. Побочно копит карманы для `matches`.
+bool _test(ImportRuleCondition c, String? value,
+    Map<JsonPath, List<String>> groups) {
+  // Пути нет — условие ложно; с `negate` это делает его истинным, что и
+  // даёт «поля нет / поле не такое».
+  if (value == null) return c.negate;
+
+  var hit = false;
+  switch (c.op) {
+    case ImportRuleOperator.contains:
+      hit = c.caseSensitive
+          ? value.contains(c.pattern)
+          : value.toLowerCase().contains(c.pattern.toLowerCase());
+    case ImportRuleOperator.equals:
+      hit = c.caseSensitive
+          ? value == c.pattern
+          : value.toLowerCase() == c.pattern.toLowerCase();
+    case ImportRuleOperator.matches:
+      final re = c.compiledPattern;
+      if (re == null) return c.negate;
+      final m = re.firstMatch(value);
+      hit = m != null;
+      if (m != null) {
+        groups[c.path] = [
+          for (var g = 1; g <= m.groupCount; g++) m.group(g) ?? '',
+        ];
       }
-      return ImportRulesResult(
-        UriLines(out, skipped),
-        disabledLines: disabledLines,
-        originByRewritten: originByRewritten,
-      );
+  }
+  return c.negate ? !hit : hit;
+}
 
-    // INI / Amnezia / JSON — единый блок текста, «строка-нода» отсутствует.
-    // REPLACE переписывает текст целиком; DISABLE неприменим (см. док).
-    case IniConfig(text: final t):
-      final r = _applyReplaces(t, replaces);
-      return ImportRulesResult(r == t ? decoded : IniConfig(r));
-    case AmneziaConfig(iniTexts: final ts):
-      var changed = false;
-      final out = [
-        for (final t in ts)
-          () {
-            final r = _applyReplaces(t, replaces);
-            if (r != t) changed = true;
-            return r;
-          }()
-      ];
-      return ImportRulesResult(changed ? AmneziaConfig(out) : decoded);
-    case JsonConfig():
-    case DecodeFailure():
-      // JSON-тело — структура, не текст-строки; REPLACE по «строкам» здесь
-      // семантически не определён (ноды — элементы, не строки). Не трогаем.
-      return ImportRulesResult(decoded);
+/// Собирает новое значение для Replace.
+String? _buildReplacement(
+    ImportRule rule, _MatchResult match, String? currentValue) {
+  final pockets = match.groups[rule.targetPath] ??
+      // Карманы берём по цели; если по ней условия не было — по первому
+      // matches-условию правила (частый случай: условие и цель — один путь,
+      // но пользователь мог указать разные).
+      (match.groups.isEmpty ? const <String>[] : match.groups.values.first);
+
+  final expanded = _expandPockets(rule.replacement, pockets);
+
+  switch (rule.replaceMode) {
+    case ImportRuleReplaceMode.set:
+      return expanded;
+
+    case ImportRuleReplaceMode.substitute:
+      if (currentValue == null) return null;
+      // Что искать внутри значения: явный substitutePattern, иначе паттерн
+      // условия по тому же пути.
+      final needle = rule.substitutePattern.isNotEmpty
+          ? rule.substitutePattern
+          : _patternForPath(rule, rule.targetPath);
+      if (needle == null || needle.isEmpty) return null;
+
+      final cond = _conditionForPath(rule, rule.targetPath);
+      final useRegex = rule.substitutePattern.isEmpty &&
+          cond?.op == ImportRuleOperator.matches;
+      final caseSensitive = cond?.caseSensitive ?? false;
+      try {
+        final re = useRegex
+            ? RegExp(needle, caseSensitive: caseSensitive)
+            : RegExp(RegExp.escape(needle), caseSensitive: caseSensitive);
+        return currentValue.replaceAllMapped(
+          re,
+          (m) => _expandPockets(
+            rule.replacement,
+            [for (var g = 1; g <= m.groupCount; g++) m.group(g) ?? ''],
+          ),
+        );
+      } catch (_) {
+        return null;
+      }
   }
 }
 
-/// Прогоняет все REPLACE-правила по одной строке по порядку. Каждое —
-/// `replaceAll` (все вхождения). `compiledPattern` уже отфильтрован на
-/// `isUsable` (не null).
-String _applyReplaces(String line, List<ImportRule> replaces) {
-  var s = line;
-  for (final r in replaces) {
-    s = s.replaceAll(r.compiledPattern!, r.replacement);
+ImportRuleCondition? _conditionForPath(ImportRule rule, JsonPath path) {
+  for (final c in rule.usableConditions) {
+    if (c.path == path) return c;
   }
-  return s;
+  return null;
+}
+
+String? _patternForPath(ImportRule rule, JsonPath path) =>
+    _conditionForPath(rule, path)?.pattern;
+
+/// Подставляет карманы `$1`…`$9`. `$$` — литеральный доллар.
+String _expandPockets(String template, List<String> pockets) {
+  if (!template.contains(r'$')) return template;
+  final out = StringBuffer();
+  for (var i = 0; i < template.length; i++) {
+    final ch = template[i];
+    if (ch != r'$' || i + 1 >= template.length) {
+      out.write(ch);
+      continue;
+    }
+    final next = template[i + 1];
+    if (next == r'$') {
+      out.write(r'$');
+      i++;
+      continue;
+    }
+    final idx = int.tryParse(next);
+    if (idx == null || idx < 1) {
+      out.write(ch);
+      continue;
+    }
+    out.write(idx <= pockets.length ? pockets[idx - 1] : '');
+    i++;
+  }
+  return out.toString();
 }

@@ -374,6 +374,12 @@
   "%s copied": {
     "value": "Скопировано: %s"
   },
+  "%s detour reference(s) reset to None": {
+    "value": "detour-ссылок сброшено в None: %s"
+  },
+  "%s rule reference(s) switched to vpn-1": {
+    "value": "ссылок в правилах переключено на vpn-1: %s"
+  },
   "%s server": {
     "value": "Сервер %s"
   },
@@ -415,8 +421,14 @@
   "(inherit DNS strategy)": {
     "value": "(наследовать стратегию DNS)"
   },
+  "(no conditions)": {
+    "value": "(нет условий)"
+  },
   "(no owner)": {
     "value": "(без владельца)"
+  },
+  "(remove)": {
+    "value": "(удалить)"
   },
   "(tap to choose)": {
     "value": "(нажмите, чтобы выбрать)"
@@ -460,6 +472,9 @@
   "ACTIVE": {
     "value": "АКТИВЕН"
   },
+  "AND": {
+    "value": "И"
+  },
   "AND with match. Transport (L4) and L7 sniff.": {
     "value": "AND с match-условиями. Транспорт (L4) и L7-сниффинг."
   },
@@ -474,6 +489,9 @@
   },
   "Access denied (%d) — check subscription token": {
     "value": "Доступ запрещён (%d) — проверьте токен подписки"
+  },
+  "Action": {
+    "value": "Действие"
   },
   "Action & Resolve": {
     "value": "Действие и резолв"
@@ -511,11 +529,17 @@
   "Add app to filter": {
     "value": "Добавить приложение в фильтр"
   },
+  "Add at least one condition": {
+    "value": "Добавьте хотя бы одно условие"
+  },
   "Add by URL…": {
     "value": "Добавить по URL…"
   },
   "Add channel  (%1$d/%2$d)": {
     "value": "Добавить канал  (%1$d/%2$d)"
+  },
+  "Add condition": {
+    "value": "Добавить условие"
   },
   "Add detour": {
     "value": "Добавить detour"
@@ -537,21 +561,6 @@
   },
   "Add servers by URL": {
     "value": "Добавить серверы по URL"
-  },
-  "Applied — %d nodes": {
-    "value": "Применено — узлов: %d"
-  },
-  "Applied — %1$d nodes, %2$d disabled": {
-    "value": "Применено — узлов: %1$d, выключено: %2$d"
-  },
-  "Apply": {
-    "value": "Применить"
-  },
-  "Apply rules": {
-    "value": "Применить правила"
-  },
-  "Applying…": {
-    "value": "Применение…"
   },
   "Add servers with the + button above, or long-press a standalone server on the Servers screen and choose \"Move to folder…\".": {
     "value": "Добавьте серверы кнопкой «+» выше или удерживайте отдельный сервер на экране «Серверы» и выберите «Переместить в папку…»."
@@ -600,6 +609,9 @@
   },
   "Advanced: this rule resolves but does not route. If no later rule matches, traffic goes to Final.": {
     "value": "Продвинутый режим: правило резолвит, но не маршрутизирует. Если ни одно последующее правило не совпадёт, трафик уйдёт в Final."
+  },
+  "After": {
+    "value": "После"
   },
   "Aggressive battery saving": {
     "value": "Агрессивная экономия батареи"
@@ -688,14 +700,29 @@
   "Append an outbound to the end of the chain": {
     "value": "Добавить исходящий канал в конец цепочки"
   },
+  "Applied — %1$d nodes, %2$d disabled": {
+    "value": "Применено — узлов: %1$d, выключено: %2$d"
+  },
+  "Applied — %d nodes": {
+    "value": "Применено — узлов: %d"
+  },
   "Applied.": {
     "value": "Применено."
   },
   "Applies on next connect.": {
     "value": "Применится при следующем подключении."
   },
+  "Apply": {
+    "value": "Применить"
+  },
+  "Apply rules": {
+    "value": "Применить правила"
+  },
   "Apply to %s": {
     "value": "Применить к %s"
+  },
+  "Applying…": {
+    "value": "Применение…"
   },
   "Apps in this list (%d)": {
     "value": "Приложений в списке: %d"
@@ -757,6 +784,9 @@
   "Becomes a standalone server": {
     "value": "Станет отдельным сервером"
   },
+  "Before": {
+    "value": "До"
+  },
   "Behavior": {
     "value": "Поведение"
   },
@@ -799,11 +829,23 @@
   "Capture failed: %s": {
     "value": "Не удалось снять профиль: %s"
   },
+  "Capture groups are available as $1, $2 in Replace": {
+    "value": "Группы захвата доступны как $1, $2 в замене"
+  },
+  "Case-sensitive": {
+    "value": "Учитывать регистр"
+  },
   "Chains inside the folder get the folder detour appended": {
     "value": "К цепочкам внутри папки добавляется detour самой папки"
   },
   "Channel": {
     "value": "Канал"
+  },
+  "Channel \"%1$s\" %2$s": {
+    "value": "Канал «%1$s» %2$s"
+  },
+  "Channel \"%s\" is no longer a detour target": {
+    "value": "Канал «%s» больше не является detour-целью"
   },
   "Channel \"%s\" matched no nodes — check its node filter.": {
     "value": "Канал «%s» не нашёл ни одного узла — проверьте его фильтр узлов."
@@ -888,8 +930,17 @@
   "Commands (intent actions)": {
     "value": "Команды (intent actions)"
   },
+  "Compact": {
+    "value": "Кратко"
+  },
   "Complete": {
     "value": "Готово"
+  },
+  "Condition needs a value": {
+    "value": "У условия должно быть значение"
+  },
+  "Conditions": {
+    "value": "Условия"
   },
   "Config": {
     "value": "Конфиг"
@@ -1036,33 +1087,6 @@
   "Copy source": {
     "value": "Копировать источник"
   },
-  "Decode base64": {
-    "value": "Раскодировать base64"
-  },
-  "Show the decoded body — what import rules see": {
-    "value": "Показать раскодированное тело — то, что видят правила импорта"
-  },
-  "Compact": {
-    "value": "Кратко"
-  },
-  "Extended": {
-    "value": "Полностью"
-  },
-  "Inspect node": {
-    "value": "Разобрать узел"
-  },
-  "JSON and source": {
-    "value": "JSON и исходник"
-  },
-  "Just the outbound this node was built from": {
-    "value": "Только outbound, из которого собран узел"
-  },
-  "The whole element as the provider sent it": {
-    "value": "Элемент целиком, как прислал провайдер"
-  },
-  "Nothing to show": {
-    "value": "Нечего показать"
-  },
   "Copy tag": {
     "value": "Копировать тег"
   },
@@ -1093,6 +1117,9 @@
   "Couldn't stop the VPN — try again.": {
     "value": "Не удалось остановить VPN — попробуйте ещё раз."
   },
+  "Create": {
+    "value": "Создать"
+  },
   "Created: %s": {
     "value": "Создана: %s"
   },
@@ -1108,14 +1135,14 @@
   "Custom User-Agent": {
     "value": "Свой User-Agent"
   },
+  "Custom identity": {
+    "value": "Своя идентификация"
+  },
   "Custom rules, tun apps, DNS options, final outbound": {
     "value": "Свои правила, приложения туннеля, параметры DNS, финальный исходящий канал"
   },
   "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH.": {
     "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH."
-  },
-  "Custom identity": {
-    "value": "Своя идентификация"
   },
   "DNS / router events off": {
     "value": "События DNS и роутера выключены"
@@ -1161,6 +1188,9 @@
   },
   "Debug API config": {
     "value": "Конфигурация Debug API"
+  },
+  "Decode base64": {
+    "value": "Раскодировать base64"
   },
   "Default": {
     "value": "По умолчанию"
@@ -1282,6 +1312,9 @@
   "Disable slower than…": {
     "value": "Выключить медленнее чем…"
   },
+  "Disable unreachable": {
+    "value": "Отключить недоступные"
+  },
   "Disabled %1$d servers > %2$d ms": {
     "value": {
       "one": "Выключен %1$d сервер > %2$d мс",
@@ -1397,6 +1430,9 @@
   "Empty folder": {
     "value": "Пустая папка"
   },
+  "Empty reuses the condition pattern": {
+    "value": "Пусто — берётся шаблон из условия"
+  },
   "Enable": {
     "value": "Включить"
   },
@@ -1405,6 +1441,9 @@
   },
   "Enable command receiver?": {
     "value": "Включить приём команд?"
+  },
+  "Enable import rules": {
+    "value": "Включить правила импорта"
   },
   "Enable it in Settings → Diagnostics to grow this list as you stay on Wi-Fi networks.": {
     "value": "Включите её в Настройки → Диагностика, чтобы список пополнялся, пока вы находитесь в сетях Wi-Fi."
@@ -1462,6 +1501,9 @@
   },
   "Exposed on http://127.0.0.1:%d (adb forward only)": {
     "value": "Доступен на http://127.0.0.1:%d (только через adb forward)"
+  },
+  "Extended": {
+    "value": "Полностью"
   },
   "Fail count reset, retrying…": {
     "value": "Счётчик сбоев сброшен, повторяем…"
@@ -1560,8 +1602,17 @@
   "Filter events": {
     "value": "Фильтр событий"
   },
+  "Filters": {
+    "value": "Фильтры"
+  },
+  "Find inside the value": {
+    "value": "Искать внутри значения"
+  },
   "Find these toggles": {
     "value": "Где искать переключатели"
+  },
+  "Finish the rule to see what it matches.": {
+    "value": "Дозаполните правило, чтобы увидеть совпадения."
   },
   "Fix body JSON first: %s": {
     "value": "Сначала исправьте JSON тела: %s"
@@ -1574,6 +1625,14 @@
   },
   "Flush FakeIP allocations and cached DNS responses. Reloads the VPN if running.": {
     "value": "Сбросить выделения FakeIP и закэшированные DNS-ответы. Перезагружает VPN, если он работает."
+  },
+  "Folder \"%2$s\" contains %1$d servers.": {
+    "value": {
+      "one": "В папке «%2$s» %1$d сервер.",
+      "few": "В папке «%2$s» %1$d сервера.",
+      "many": "В папке «%2$s» %1$d серверов.",
+      "other": "В папке «%2$s» %1$d сервера."
+    }
   },
   "Folder is empty": {
     "value": "Папка пуста"
@@ -1613,6 +1672,12 @@
   },
   "Generate random": {
     "value": "Сгенерировать случайное"
+  },
+  "Generates random WARP nodes (WireGuard/AWG/MASQUE h2/h3) into the «WARP GENERATOR» folder. Test them there and keep what works.": {
+    "value": "Создаёт случайные WARP-узлы (WireGuard/AWG/MASQUE h2/h3) в папку «WARP GENERATOR». Протестируйте их там и оставьте рабочие."
+  },
+  "Generation failed — no WARP account.": {
+    "value": "Генерация не удалась — нет WARP-аккаунта."
   },
   "Get Public Test Servers": {
     "value": "Получить публичные тестовые серверы"
@@ -1685,6 +1750,9 @@
   },
   "Hide system apps": {
     "value": "Скрыть системные приложения"
+  },
+  "Hides matching nodes from routing. They stay visible, struck through.": {
+    "value": "Скрывает подходящие узлы из маршрутизации. Они остаются видимыми, зачёркнутыми."
   },
   "Home-screen shortcut": {
     "value": "Ярлык на главном экране"
@@ -1789,6 +1857,9 @@
   "Insert emoji": {
     "value": "Вставить эмодзи"
   },
+  "Inspect node": {
+    "value": "Разобрать узел"
+  },
   "Interrupt connections on switch": {
     "value": "Разрывать соединения при переключении"
   },
@@ -1819,6 +1890,9 @@
   "Invalid port": {
     "value": "Некорректный порт"
   },
+  "Invalid regular expression": {
+    "value": "Некорректное регулярное выражение"
+  },
   "Invalid subscription": {
     "value": "Некорректная подписка"
   },
@@ -1831,6 +1905,9 @@
   "JSON": {
     "value": "JSON"
   },
+  "JSON and source": {
+    "value": "JSON и исходник"
+  },
   "JSON copied": {
     "value": "JSON скопирован"
   },
@@ -1842,6 +1919,9 @@
   },
   "Junk traffic masquerades as a real protocol. Pick protocol/domain in Advanced.": {
     "value": "Мусорный трафик маскируется под настоящий протокол. Протокол и домен выбираются в разделе «Дополнительно»."
+  },
+  "Just the outbound this node was built from": {
+    "value": "Только outbound, из которого собран узел"
   },
   "Keep": {
     "value": "Остаться"
@@ -1948,6 +2028,9 @@
   "MASQUE tunnels IP over HTTP/3 (QUIC) to Cloudflare — it looks like ordinary HTTPS to DPI and often exits from a foreign IP.": {
     "value": "MASQUE туннелирует IP поверх HTTP/3 (QUIC) в Cloudflare — для DPI это выглядит как обычный HTTPS, а выход часто идёт с зарубежного IP."
   },
+  "Make experiment": {
+    "value": "Провести эксперимент"
+  },
   "Masked URL is safe to share — it has no token:": {
     "value": "Маскированный URL можно передавать спокойно — в нём нет токена:"
   },
@@ -1986,6 +2069,9 @@
   },
   "Mode:": {
     "value": "Режим:"
+  },
+  "Modified by import rules": {
+    "value": "Изменено правилами импорта"
   },
   "More": {
     "value": "Ещё"
@@ -2053,6 +2139,9 @@
   "New folder…": {
     "value": "Новая папка…"
   },
+  "New value": {
+    "value": "Новое значение"
+  },
   "No DNS rules. Add user rules manually, or enable presets / template defaults.": {
     "value": "DNS-правил нет. Добавьте свои правила вручную или включите пресеты / шаблонные правила."
   },
@@ -2113,6 +2202,12 @@
   "No nodes in this channel.\nTry another one.": {
     "value": "В этом канале нет узлов.\nПопробуйте другой."
   },
+  "No nodes loaded yet. Apply rules to load them.": {
+    "value": "Узлы ещё не загружены. Нажмите «Применить правила», чтобы загрузить."
+  },
+  "No nodes match. Check the path against a node's JSON.": {
+    "value": "Совпадений нет. Сверьте путь с JSON узла."
+  },
   "No other servers in this folder": {
     "value": "В этой папке нет других серверов"
   },
@@ -2127,6 +2222,9 @@
   },
   "No rules seen yet — traffic will populate this list.": {
     "value": "Правил пока нет — список заполнится по мере появления трафика."
+  },
+  "No rules yet. Add one to fix broken params or hide nodes.": {
+    "value": "Правил пока нет. Добавьте, чтобы починить параметры или скрыть узлы."
   },
   "No servers found at this URL": {
     "value": "По этому URL серверы не найдены"
@@ -2188,6 +2286,9 @@
   "None — nodes connect directly": {
     "value": "Нет — узлы подключаются напрямую"
   },
+  "Not": {
+    "value": "Не"
+  },
   "Not a folder": {
     "value": "Это не папка"
   },
@@ -2212,8 +2313,14 @@
   "Nothing to export — pick at least one category.": {
     "value": "Нечего экспортировать — выберите хотя бы одну категорию."
   },
+  "Nothing to show": {
+    "value": "Нечего показать"
+  },
   "Notifications": {
     "value": "Уведомления"
+  },
+  "Number of nodes": {
+    "value": "Количество узлов"
   },
   "OEM-specific toggles to keep VPN alive in background.": {
     "value": "Фирменные переключатели производителя, не дающие системе закрыть VPN в фоне."
@@ -2225,6 +2332,9 @@
         "value": "OK"
       }
     }
+  },
+  "OR": {
+    "value": "ИЛИ"
   },
   "Off": {
     "value": "Выключено"
@@ -2333,6 +2443,9 @@
   },
   "Path": {
     "value": "Путь"
+  },
+  "Paths point into the node JSON: tag, server, tls.utls.fingerprint.": {
+    "value": "Пути указывают внутрь JSON узла: tag, server, tls.utls.fingerprint."
   },
   "Pause": {
     "value": "Пауза"
@@ -2674,6 +2787,9 @@
   "Replace all → %s": {
     "value": "Заменить все → %s"
   },
+  "Replace needs a target path": {
+    "value": "Для замены нужен путь назначения"
+  },
   "Replace the existing server with this one?": {
     "value": "Заменить существующий сервер этим?"
   },
@@ -2758,6 +2874,9 @@
   "Rewrite TTL": {
     "value": "Переписывать TTL"
   },
+  "Rewrite or disable nodes when the subscription is imported": {
+    "value": "Заменять или выключать узлы при импорте подписки"
+  },
   "Rotate to landscape when the device turns — handy on tablets. Follows the system auto-rotate setting.": {
     "value": "Поворачивать в альбомную ориентацию вместе с устройством — удобно на планшетах. Учитывает системный автоповорот."
   },
@@ -2790,6 +2909,9 @@
       "other": "Петля маршрутизации: %1$d узла ведут трафик обратно в собственные цепочки — измените или уберите их detour, чтобы запустить VPN: %2$s."
     }
   },
+  "Rule": {
+    "value": "Правило"
+  },
   "Rule \"%1$s\" references missing outbound \"%2$s\".": {
     "value": "Правило «%1$s» ссылается на несуществующий исходящий канал «%2$s»."
   },
@@ -2798,6 +2920,12 @@
   },
   "Rules": {
     "value": "Правила"
+  },
+  "Rules changed. Refresh the subscription to apply them.": {
+    "value": "Правила изменены. Обновите подписку, чтобы применить их."
+  },
+  "Rules run when the subscription body is loaded. Tap Apply rules to reload it now.": {
+    "value": "Правила срабатывают при загрузке тела подписки. Нажмите «Применить правила», чтобы перезагрузить его сейчас."
   },
   "Run URLTest": {
     "value": "Запустить URLTest"
@@ -2831,24 +2959,6 @@
   },
   "Saved": {
     "value": "Сохранено"
-  },
-  "%s rule reference(s) switched to vpn-1": {
-    "value": "ссылок в правилах переключено на vpn-1: %s"
-  },
-  "%s detour reference(s) reset to None": {
-    "value": "detour-ссылок сброшено в None: %s"
-  },
-  "Channel \"%1$s\" %2$s": {
-    "value": "Канал «%1$s» %2$s"
-  },
-  "Channel \"%s\" is no longer a detour target": {
-    "value": "Канал «%s» больше не является detour-целью"
-  },
-  "disabled": {
-    "value": "выключен"
-  },
-  "deleted": {
-    "value": "удалён"
   },
   "Saved channel \"%1$s\" — %2$s": {
     "value": "Канал «%1$s» сохранён — %2$s"
@@ -2937,6 +3047,9 @@
   "Session History": {
     "value": "История сессии"
   },
+  "Set whole value": {
+    "value": "Заменить целиком"
+  },
   "Setting is saved immediately, but `Libbox.setup` reads the `debug` flag once per process. Stop/start VPN does NOT re-apply — force-stop the app (or use the button below) and reopen.": {
     "value": "Настройка сохраняется сразу, но `Libbox.setup` читает флаг `debug` один раз на процесс. Перезапуск VPN её НЕ применяет — полностью закройте приложение (или нажмите кнопку ниже) и откройте снова."
   },
@@ -3006,6 +3119,9 @@
         "value": "Показывать системные приложения"
       }
     }
+  },
+  "Show the decoded body — what import rules see": {
+    "value": "Показать раскодированное тело — то, что видят правила импорта"
   },
   "Shown as the server title in the Servers list. If empty, \"%s\" is used.": {
     "value": "Показывается как заголовок сервера в списке «Серверы». Если пусто, используется «%s»."
@@ -3141,6 +3257,9 @@
   "Subscriptions and custom servers": {
     "value": "Подписки и собственные серверы"
   },
+  "Substitute part": {
+    "value": "Заменить часть"
+  },
   "Support": {
     "value": "Поддержка"
   },
@@ -3234,6 +3353,9 @@
   "Tap to edit or delete": {
     "value": "Нажмите, чтобы изменить или удалить"
   },
+  "Target path": {
+    "value": "Путь назначения"
+  },
   "Tech Stack": {
     "value": "Технологии"
   },
@@ -3272,6 +3394,9 @@
   },
   "The VPN will briefly reload to apply.": {
     "value": "VPN ненадолго перезагрузится, чтобы применить."
+  },
+  "The whole element as the provider sent it": {
+    "value": "Элемент целиком, как прислал провайдер"
   },
   "Theme, appearance": {
     "value": "Тема и внешний вид"
@@ -3423,6 +3548,9 @@
   "Use \"%s\" as…": {
     "value": "Использовать «%s» как…"
   },
+  "Use $1, $2 for regex capture groups": {
+    "value": "Используйте $1, $2 для групп захвата"
+  },
   "Use as detour": {
     "value": "Использовать как detour"
   },
@@ -3471,6 +3599,9 @@
   "VPN system toggles": {
     "value": "Системные переключатели VPN"
   },
+  "Value": {
+    "value": "Значение"
+  },
   "Via: %s": {
     "value": "Через: %s"
   },
@@ -3497,6 +3628,9 @@
   "View release": {
     "value": "Открыть релиз"
   },
+  "View replacements": {
+    "value": "Показать замены"
+  },
   "View, edit, import JSON": {
     "value": "Просмотр, правка и импорт JSON"
   },
@@ -3521,17 +3655,20 @@
   "Whitelisted — VPN can run in background": {
     "value": "В белом списке — VPN может работать в фоне"
   },
-  "Will be disabled": {
-    "value": "Будет выключен"
-  },
   "Wi-Fi rules need permissions": {
     "value": "Правилам Wi-Fi нужны разрешения"
+  },
+  "Will be disabled": {
+    "value": "Будет выключен"
   },
   "Wipes existing data in selected categories.": {
     "value": "Стирает текущие данные в выбранных категориях."
   },
   "Works only if the rule-set contains domains — IP-only lists never match DNS queries.": {
     "value": "Работает, только если rule-set содержит домены — списки из одних IP никогда не совпадают с DNS-запросами."
+  },
+  "Writes a new value into the matching nodes.": {
+    "value": "Записывает новое значение в подходящие узлы."
   },
   "XHTTP \"%1$s\" reset to default — %2$s (would otherwise break the whole config).": {
     "value": "Параметр XHTTP «%1$s» сброшен на значение по умолчанию — %2$s (иначе сломался бы весь конфиг)."
@@ -3566,8 +3703,17 @@
   "connect to see the full path": {
     "value": "подключитесь, чтобы увидеть весь путь"
   },
+  "contains": {
+    "value": "содержит"
+  },
+  "deleted": {
+    "value": "удалён"
+  },
   "detour → %s": {
     "value": "detour → %s"
+  },
+  "disabled": {
+    "value": "выключен"
   },
   "dns.example.com — needed when address is an IP": {
     "value": "dns.example.com — нужно, когда адрес задан IP"
@@ -3590,6 +3736,9 @@
   "empty = no prefix": {
     "value": "пусто = без префикса"
   },
+  "equals": {
+    "value": "равно"
+  },
   "err": {
     "value": "сбой"
   },
@@ -3611,11 +3760,17 @@
   "invalid": {
     "value": "некорректный"
   },
+  "invalid pattern — skipped": {
+    "value": "некорректный шаблон — пропущено"
+  },
   "just now": {
     "value": "только что"
   },
   "latency-tested twin of this channel": {
     "value": "двойник этого канала с тестом задержки"
+  },
+  "matches": {
+    "value": "совпадает с regex"
   },
   "matches only domains in the rule-set": {
     "value": "совпадает только с доменами из rule-set"
@@ -3735,136 +3890,5 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
-  },
-  "Folder \"%2$s\" contains %1$d servers.": {
-    "value": {
-      "one": "В папке «%2$s» %1$d сервер.",
-      "few": "В папке «%2$s» %1$d сервера.",
-      "many": "В папке «%2$s» %1$d серверов.",
-      "other": "В папке «%2$s» %1$d сервера."
-    }
-  },
-  "Generation failed — no WARP account.": {
-    "value": "Генерация не удалась — нет WARP-аккаунта."
-  },
-  "Disable unreachable": {
-    "value": "Отключить недоступные"
-  },
-  "Make experiment": {
-    "value": "Провести эксперимент"
-  },
-  "Number of nodes": {
-    "value": "Количество узлов"
-  },
-  "Create": {
-    "value": "Создать"
-  },
-  "Generates random WARP nodes (WireGuard/AWG/MASQUE h2/h3) into the «WARP GENERATOR» folder. Test them there and keep what works.": {
-    "value": "Создаёт случайные WARP-узлы (WireGuard/AWG/MASQUE h2/h3) в папку «WARP GENERATOR». Протестируйте их там и оставьте рабочие."
-  },
-  "(remove)": {
-    "value": "(удалить)"
-  },
-  "After": {
-    "value": "После"
-  },
-  "Before": {
-    "value": "До"
-  },
-  "Case-sensitive": {
-    "value": "Учитывать регистр"
-  },
-  "Empty removes the matched text": {
-    "value": "Пустое поле удаляет совпавший текст"
-  },
-  "Enable import rules": {
-    "value": "Включить правила импорта"
-  },
-  "Enter a test line above to preview.": {
-    "value": "Введите тестовую строку выше, чтобы увидеть результат."
-  },
-  "Enter a valid pattern to preview.": {
-    "value": "Введите корректный шаблон, чтобы увидеть результат."
-  },
-  "Filters": {
-    "value": "Фильтры"
-  },
-  "Hides matching nodes from routing. They stay visible, struck through.": {
-    "value": "Скрывает подходящие узлы из маршрутизации. Они остаются видимыми, зачёркнутыми."
-  },
-  "Match — text rewritten": {
-    "value": "Совпадение — текст заменён"
-  },
-  "Invalid regular expression": {
-    "value": "Некорректное регулярное выражение"
-  },
-  "Modified by import rules": {
-    "value": "Изменено правилами импорта"
-  },
-  "No match — line unchanged": {
-    "value": "Нет совпадения — строка без изменений"
-  },
-  "No match — node kept": {
-    "value": "Нет совпадения — узел сохранён"
-  },
-  "No nodes loaded yet. Apply rules to load them.": {
-    "value": "Узлы ещё не загружены. Нажмите «Применить правила», чтобы загрузить."
-  },
-  "No nodes match this pattern. Check it against a node line in the Rule tab.": {
-    "value": "Ни один узел не подходит под шаблон. Проверьте его на строке узла во вкладке «Правило»."
-  },
-  "No rules yet. Add one to fix broken params or hide nodes.": {
-    "value": "Правил пока нет. Добавьте, чтобы починить параметры или скрыть узлы."
-  },
-  "Pattern": {
-    "value": "Шаблон"
-  },
-  "Preview": {
-    "value": "Предпросмотр"
-  },
-  "Pattern is required": {
-    "value": "Укажите шаблон"
-  },
-  "Regular expression": {
-    "value": "Регулярное выражение"
-  },
-  "Replacement": {
-    "value": "Замена"
-  },
-  "Rewrite or disable nodes when the subscription is imported": {
-    "value": "Заменять или выключать узлы при импорте подписки"
-  },
-  "Rewrites matching text in every node line (e.g. fix a broken fingerprint).": {
-    "value": "Заменяет подходящий текст в каждой строке узла (например, чинит сломанный fingerprint)."
-  },
-  "Rule": {
-    "value": "Правило"
-  },
-  "Rules changed. Refresh the subscription to apply them.": {
-    "value": "Правила изменены. Обновите подписку, чтобы применить их."
-  },
-  "Rules run when the subscription body is loaded. Tap Apply rules to reload it now.": {
-    "value": "Правила срабатывают при загрузке тела подписки. Нажмите «Применить правила», чтобы перезагрузить его сейчас."
-  },
-  "Test line": {
-    "value": "Тестовая строка"
-  },
-  "Test the rule against a node line to see what it does.": {
-    "value": "Проверьте правило на строке узла, чтобы увидеть, что оно делает."
-  },
-  "This node would be disabled": {
-    "value": "Этот узел будет выключен"
-  },
-  "View replacements": {
-    "value": "Показать замены"
-  },
-  "case-sensitive": {
-    "value": "с учётом регистра"
-  },
-  "invalid pattern — skipped": {
-    "value": "некорректный шаблон — пропущено"
-  },
-  "regex": {
-    "value": "regex"
   }
 }

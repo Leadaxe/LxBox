@@ -166,6 +166,13 @@ class SubscriptionNodeList extends StatelessWidget {
             ],
           ),
           dense: true,
+          // §302 — короткий тап открывает разбор ноды (JSON + исходник):
+          // самое частое действие, ради него не надо лезть в меню. Включение/
+          // выключение узла живёт на Switch слева, так что тап по строке
+          // свободен. Долгий тап — меню (копирование, diff замен).
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => NodeInspectScreen(node: node),
+          )),
           onLongPress: () => _showNodeMenu(context, node),
         );
       },
