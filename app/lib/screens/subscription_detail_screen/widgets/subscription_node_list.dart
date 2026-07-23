@@ -1,13 +1,11 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
-import '../../../models/template_vars.dart';
 import '../../../models/ui_msg.dart';
 import 'node_warning_row.dart';
+import '../node_inspect_screen.dart';
 import '../../../services/l10n/locale_controller.dart';
 
 /// Nodes-tab list: actionable-warning banner + node rows with §283 toggle,
@@ -211,14 +209,20 @@ class SubscriptionNodeList extends StatelessWidget {
                 );
               },
             ),
-            // §302 — итоговый sing-box outbound (что нода превратится в конфиге,
-            // включая эффект REPLACE). Симметрия с папкой §234 / node_settings.
+            // §302 — экран разбора ноды: JSON (результат парсинга) + Source
+            // (исходный фрагмент подписки, для JSON-тел с переключателем
+            // Compact/Extended). Заменил попап «View JSON» — в попапе не
+            // помещался ни источник, ни переключение вида.
             ListTile(
               leading: const Icon(Icons.data_object),
-              title: Text(getLocalText.s("View JSON")),
+              title: Text(getLocalText.s("Inspect node")),
+              subtitle: Text(getLocalText.s("JSON and source"),
+                  style: const TextStyle(fontSize: 11)),
               onTap: () {
                 Navigator.pop(ctx);
-                _showJsonDialog(context, node);
+                Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => NodeInspectScreen(node: node),
+                ));
               },
             ),
             // §302 — diff before/after для нод, чьё тело изменил REPLACE.
@@ -235,13 +239,6 @@ class SubscriptionNodeList extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  /// §302 — итоговый JSON-outbound ноды (`emit`), как node_settings_screen.
-  void _showJsonDialog(BuildContext context, NodeSpec node) {
-    final json = const JsonEncoder.withIndent('  ')
-        .convert(node.emit(TemplateVars.empty).map);
-    _showMonoDialog(context, getLocalText.s("View JSON"), json);
   }
 
   /// §302 — diff «до/после» import-rules: сырая строка подписки (`originLine`)

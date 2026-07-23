@@ -1042,6 +1042,27 @@
   "Show the decoded body — what import rules see": {
     "value": "Показать раскодированное тело — то, что видят правила импорта"
   },
+  "Compact": {
+    "value": "Кратко"
+  },
+  "Extended": {
+    "value": "Полностью"
+  },
+  "Inspect node": {
+    "value": "Разобрать узел"
+  },
+  "JSON and source": {
+    "value": "JSON и исходник"
+  },
+  "Just the outbound this node was built from": {
+    "value": "Только outbound, из которого собран узел"
+  },
+  "The whole element as the provider sent it": {
+    "value": "Элемент целиком, как прислал провайдер"
+  },
+  "Nothing to show": {
+    "value": "Нечего показать"
+  },
   "Copy tag": {
     "value": "Копировать тег"
   },
@@ -3833,9 +3854,6 @@
   },
   "This node would be disabled": {
     "value": "Этот узел будет выключен"
-  },
-  "View JSON": {
-    "value": "Показать JSON"
   },
   "View replacements": {
     "value": "Показать замены"
