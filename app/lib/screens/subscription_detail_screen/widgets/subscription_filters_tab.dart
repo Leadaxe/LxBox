@@ -649,6 +649,7 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
             style: const TextStyle(fontFamily: 'monospace'),
             decoration: InputDecoration(
               labelText: getLocalText.s("Target path"),
+              // l10n-exempt: config field path example
               hintText: 'tls.utls.fingerprint', // l10n-exempt: JSON path example
               border: const OutlineInputBorder(),
               isDense: true,
@@ -689,6 +690,7 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
             style: const TextStyle(fontFamily: 'monospace'),
             decoration: InputDecoration(
               labelText: getLocalText.s("New value"),
+              // l10n-exempt: uTLS fingerprint value example
               hintText: 'chrome', // l10n-exempt: uTLS fingerprint value
               helperText: getLocalText.s(r"Use $1, $2 for regex capture groups"),
               border: const OutlineInputBorder(),
