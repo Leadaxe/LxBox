@@ -99,12 +99,19 @@ void main() {
   test('§305 masque-блоки asset = только живые .198/.199', () async {
     final p = await WarpEndpointPicker.load();
     expect(p.masqueV4Cidr, ['162.159.198.0/24', '162.159.199.0/24']);
+    // §305 — h3 живёт только на 4 хостах (device-verified), не по всему блоку.
+    expect(p.scan!.masqueH3V4Cidr, [
+      '162.159.198.1/32',
+      '162.159.198.2/32',
+      '162.159.199.1/32',
+      '162.159.199.2/32',
+    ]);
   });
 
   test('§305 masque-порты раздельны по транспорту (device-verified)', () async {
     final p = await WarpEndpointPicker.load();
-    expect(p.masquePortsFor('h3'), [443, 4443, 8095]);
-    expect(p.masquePortsFor('h2'), [500, 4500, 8443]);
+    expect(p.masquePortsFor('h3'), [443, 500, 1701, 4500, 4443, 8443, 8095]);
+    expect(p.masquePortsFor('h2'), [443, 500, 1701, 4500, 4443, 8443, 8095]);
   });
 
   test('§305 randomMasqueIp в известных блоках; randomMasquePortFor в наборе',
@@ -117,7 +124,8 @@ void main() {
           isTrue,
           reason: 'ip $ip вне masque-блоков');
     }
-    expect([443, 4443, 8095], contains(p.randomMasquePortFor('h3')));
-    expect([500, 4500, 8443], contains(p.randomMasquePortFor('h2')));
+    const allPorts = [443, 500, 1701, 4500, 4443, 8443, 8095];
+    expect(allPorts, contains(p.randomMasquePortFor('h3')));
+    expect(allPorts, contains(p.randomMasquePortFor('h2')));
   });
 }

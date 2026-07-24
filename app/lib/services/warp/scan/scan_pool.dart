@@ -25,6 +25,7 @@ class ScanPool {
     required this.wgSniPool,
     required this.utlsFpPool,
     required this.masqueV4Cidr,
+    required this.masqueH3V4Cidr,
     required this.masquePortsH3,
     required this.masquePortsH2,
     required this.masqueSniPool,
@@ -46,7 +47,14 @@ class ScanPool {
   final List<String> utlsFpPool;
 
   // --- MASQUE ---
+
+  /// §305 — CIDR-блоки для h2 (h2 живёт по всему блоку). h3 их НЕ использует.
   final List<String> masqueV4Cidr;
+
+  /// §305 — device-verified: h3 (QUIC) живёт ТОЛЬКО на этих адресах (CIDR, обычно
+  /// /32), НЕ на всём блоке. Рандомить h3 по широкому CIDR нельзя (попадание ~1%
+  /// → мёртвые ноды). CIDR (а не голый IP) — на будущее (под-диапазоны).
+  final List<String> masqueH3V4Cidr;
 
   /// §305 — device-verified порты MASQUE, РАЗДЕЛЬНО по транспорту (h3 и h2 живут
   /// на разных портах).
@@ -67,6 +75,14 @@ class ScanPool {
   /// §305 — порты для транспорта: `h2` → h2-набор, иначе h3-набор.
   List<int> masquePortsFor(String network) =>
       network == 'h2' ? masquePortsH2 : masquePortsH3;
+
+  /// §305 — CIDR-источник IP для транспорта. h2 → весь блок (`masqueV4Cidr`);
+  /// h3 → узкий `masqueH3V4Cidr` (device-verified 4 хоста). Фолбэк h3 на блок,
+  /// если h3-список пуст (обратная совместимость со старым asset).
+  List<String> masqueV4CidrFor(String network) {
+    if (network == 'h2') return masqueV4Cidr;
+    return masqueH3V4Cidr.isNotEmpty ? masqueH3V4Cidr : masqueV4Cidr;
+  }
 
   /// Парс полной структуры файла (`{wireguard:{...}, masque:{...}}`). Возвращает
   /// null, если структура битая/пустая (caller прячет генератор). Один парсер и
@@ -89,6 +105,7 @@ class ScanPool {
       wgSniPool: strs(wg, 'sni_pool'),
       utlsFpPool: strs(wg, 'utls_fp_pool'),
       masqueV4Cidr: strs(mq, 'v4_cidr'),
+      masqueH3V4Cidr: strs(mq, 'h3_v4_cidr'),
       masquePortsH3: ints(mq, 'ports_h3'),
       masquePortsH2: ints(mq, 'ports_h2'),
       masqueSniPool: strs(mq, 'sni_pool'),

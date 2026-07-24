@@ -263,9 +263,11 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     // Замечание при частичном результате (напр. MASQUE выпал — только WG в папке).
     final note = widget.subController.lastScanNote;
     if (note != null) showSnack(note);
-    // Открываем папку «WARP GENERATOR».
+    // §305 — открываем папку «WARP GENERATOR» ЗАМЕНОЙ визарда в стеке
+    // (pushReplacement): после генерации визард не нужен, «назад» из папки
+    // должен вести на Servers, а не обратно в визард.
     final entry = widget.subController.entries[folderIdx];
-    await Navigator.of(context).push(MaterialPageRoute(
+    await Navigator.of(context).pushReplacement(MaterialPageRoute(
       builder: (_) => FolderDetailScreen(
         entry: entry,
         controller: widget.subController,
