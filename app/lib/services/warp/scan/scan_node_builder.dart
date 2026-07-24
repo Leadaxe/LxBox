@@ -58,12 +58,12 @@ class ScanNodeBuilder {
   /// MASQUE-узел: те же креды, network (h3/h2) + IP:port + SNI из кандидата.
   ///
   /// §305 — h3 И h2 берут IP:port кандидата (разнообразие endpoint). Прошлый
-  /// форсинг h3 на `acc.server` снят: боевой тест (пинг через рабочий туннель)
-  /// показал, что h3 живёт и на чужих IP блока (.198.1/.199.1/.199.2, порты
-  /// 443/4443/8095) — вывод «h3 привязан к server» был артефактом headless-probe
-  /// (probe при остановленном VPN не поднимает QUIC). Порты кандидата уже
-  /// раздельны по транспорту (candidate_generator §305). server/port нет в
-  /// copyWith — пересобираем аккаунт.
+  /// форсинг h3 на `acc.server` снят: вывод «h3 привязан к server» был артефактом
+  /// headless-probe (probe при остановленном VPN не поднимает QUIC). Боевой тест
+  /// (reconnect + urltest) показал: h3 живёт на 4 адресах блока (.198.1/.2,
+  /// .199.1/.2) на всех 7 портах, h2 — по всему блоку. Узкий h3-источник задаёт
+  /// генератор (`masqueV4CidrFor`), сюда приходит уже готовый кандидат.
+  /// server/port нет в copyWith — пересобираем аккаунт.
   String? _masqueUri(ScanCandidate c) {
     final acc = masque;
     if (acc == null) return null;

@@ -3896,5 +3896,20 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
+  },
+  "1–200": {
+    "value": "1–200"
+  },
+  "Endpoint IP (optional)": {
+    "value": "Endpoint IP (необязательно)"
+  },
+  "Endpoint pool (JSON) — IP blocks, ports and SNI the generator draws from. Edit to test your own ranges.": {
+    "value": "Пул эндпоинтов (JSON) — блоки IP, порты и SNI, из которых генератор берёт узлы. Правьте, чтобы протестировать свои диапазоны."
+  },
+  "Invalid pool JSON — check the structure.": {
+    "value": "Некорректный JSON пула — проверьте структуру."
+  },
+  "Leave IP empty to use the server from registration. HTTP/3 only works on a few Cloudflare addresses, HTTP/2 works across the whole block.": {
+    "value": "Оставьте IP пустым, чтобы использовать сервер из регистрации. HTTP/3 работает лишь на нескольких адресах Cloudflare, HTTP/2 — на всём блоке."
   }
 }

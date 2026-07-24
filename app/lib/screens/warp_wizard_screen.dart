@@ -174,7 +174,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   /// §305 — 🎲 у endpoint IP: случайный MASQUE-IP из блока + случайный порт из
   /// набора текущего транспорта.
   void _fillRandomMasqueIp() {
-    final ip = _picker?.randomMasqueIp();
+    // §305 — IP по текущему транспорту (h3 — только 4 живых хоста).
+    final ip = _picker?.randomMasqueIp(network: _masqueNetwork);
     if (ip == null) return;
     final port = _picker?.randomMasquePortFor(_masqueNetwork);
     setState(() {
@@ -568,7 +569,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        getLocalText.s("Leave IP empty to use the server from registration. HTTP/3 and HTTP/2 live on different ports — the list adapts to the transport."),
+                        getLocalText.s("Leave IP empty to use the server from registration. HTTP/3 only works on a few Cloudflare addresses, HTTP/2 works across the whole block."),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
