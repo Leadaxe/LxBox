@@ -6,7 +6,9 @@
 
 ## Проблема
 
-`_deleteRule` в [`dns_settings_screen.dart`](../../../app/lib/screens/dns_settings_screen.dart) делал `_rules.removeAt(index)` прямо из `onPressed` тайла ([`dns_rule_tile.dart:149`](../../../app/lib/screens/dns_settings_screen/widgets/dns_rule_tile.dart)). Цена ошибки — не косметическая: у `kind: inline` тело правила хранится только в storage, восстановить его из шаблона (в отличие от `template`/`preset`/`srs`, которые проксируются) нечем. Undo нет, snackbar'а с откатом нет.
+`_deleteRule` в [`dns_settings_screen.dart`](../../../app/lib/screens/dns_settings_screen.dart) делал `_rules.removeAt(index)` прямо из `onPressed` тайла ([`dns_rule_tile.dart:149`](../../../app/lib/screens/dns_settings_screen/widgets/dns_rule_tile.dart)). Цена ошибки — не косметическая: у `kind: inline` тело правила хранится только в storage, восстановить его из шаблона (в отличие от `template`/`preset`/`srs`, которые проксируются) нечем. Undo нет.
+
+**Undo/snackbar с откатом отклонён:** решение — именно вопрос перед удалением, как во всех остальных точках проекта. Отложенный откат к этой задаче не возвращаем.
 
 Остальные удаления в проекте уже прикрыты общим §219-диалогом:
 
