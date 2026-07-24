@@ -3757,6 +3757,9 @@
   "host:port of the Cloudflare peer. With obfuscation a random working IP:port is filled in — tap the dice to reroll, or type your own to pin a specific one.": {
     "value": "host:port пира Cloudflare. При обфускации подставляется случайный рабочий IP:port — нажмите на кубик, чтобы сменить, или впишите свой, чтобы закрепить конкретный."
   },
+  "Keeps the tunnel alive while idle so it doesn't rot to timeouts (default 25). 0 = off.": {
+    "value": "Держит туннель живым при простое, чтобы он не деградировал в таймауты (по умолчанию 25). 0 = выкл."
+  },
   "invalid": {
     "value": "некорректный"
   },

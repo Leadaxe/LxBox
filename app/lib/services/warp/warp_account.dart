@@ -110,7 +110,12 @@ class WarpAccount {
   /// §142 — [includeReserved]: класть ли client_id в reserved. Plain WARP —
   /// true (своя регистрация, §025). Обфускация — обычно false (привязка к
   /// устройству режется; рабочие конфиги все БЕЗ reserved).
-  String toWireguardUri({bool includeReserved = true}) {
+  ///
+  /// §304 — [persistentKeepalive] (секунды) держит NAT-маппинг открытым при
+  /// простое (без него UDP-маппинг оператора закрывается за 30–120с → пинг в
+  /// err). `null`/`<=0` = не писать keepalive (дефолт: как раньше; генератор
+  /// §284 идёт этим путём). Ручная регистрация подставляет 25 из Advanced.
+  String toWireguardUri({bool includeReserved = true, int? persistentKeepalive}) {
     final res = includeReserved ? reserved : null;
     final addrs = [clientV4, if (clientV6.isNotEmpty) clientV6].join(',');
     // §137 — тег с эмодзи (plain = облако). Коллизию контроллер чинит ре-тегом.
@@ -121,6 +126,8 @@ class WarpAccount {
       'allowedips': '0.0.0.0/0,::/0',
       'mtu': '1280',
       if (res != null) 'reserved': res.join(','),
+      if (persistentKeepalive != null && persistentKeepalive > 0)
+        'keepalive': '$persistentKeepalive',
     };
     final qs = q.entries
         .map((e) =>
@@ -140,7 +147,11 @@ class WarpAccount {
   ///
   /// §142 — [includeReserved]: обфусцированный узел обычно БЕЗ reserved
   /// (привязка к устройству режется, рабочие конфиги все без него).
-  String toWireguardConf({bool includeReserved = true}) {
+  ///
+  /// §304 — [persistentKeepalive] (секунды) в `[Peer]` держит NAT-маппинг/сессию
+  /// живыми при простое. `null`/`<=0` = не писать (дефолт; генератор §284 идёт
+  /// без keepalive). Ручная регистрация подставляет 25 из Advanced.
+  String toWireguardConf({bool includeReserved = true, int? persistentKeepalive}) {
     final res = includeReserved ? reserved : null;
     final tag = warpPlus ? 'WARP+' : 'WARP';
     final addrs = [clientV4, if (clientV6.isNotEmpty) clientV6].join(', ');
@@ -166,6 +177,9 @@ class WarpAccount {
       ..writeln('PublicKey = $peerPub')
       ..writeln('AllowedIPs = 0.0.0.0/0, ::/0')
       ..writeln('Endpoint = $endpoint');
+    if (persistentKeepalive != null && persistentKeepalive > 0) {
+      b.writeln('PersistentKeepalive = $persistentKeepalive');
+    }
     if (res != null) {
       b.writeln('Reserved = ${res.join(',')}');
     }

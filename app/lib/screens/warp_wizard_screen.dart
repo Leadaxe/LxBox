@@ -47,6 +47,10 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   final _jc = TextEditingController(text: '4');
   final _jmin = TextEditingController(text: '40');
   final _jmax = TextEditingController(text: '70');
+  // §304 — persistent keepalive (секунды) для WG/AWG-узла. Держит NAT-маппинг
+  // и WG-сессию живыми при простое (иначе пинг деградирует в err). Пусто/0 =
+  // выключено. Дефолт 25 (типовое значение WARP).
+  final _keepalive = TextEditingController(text: '25');
 
   bool _forceNew = false;
   bool _busy = false;
@@ -165,6 +169,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     _jc.dispose();
     _jmin.dispose();
     _jmax.dispose();
+    _keepalive.dispose();
     super.dispose();
   }
 
@@ -289,6 +294,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
         obfuscate: _obfuscate,
         quicParams: _buildQuicParams(),
         includeReserved: _includeReserved,
+        // §304 — пусто/битое → null (keepalive не пишется); 0 явно выключает.
+        persistentKeepalive: int.tryParse(_keepalive.text.trim()),
       );
 
       if (!mounted) return;
@@ -673,6 +680,24 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                         const SizedBox(height: 6),
                         Text(
                           getLocalText.s("host:port of the Cloudflare peer. With obfuscation a random working IP:port is filled in — tap the dice to reroll, or type your own to pin a specific one."),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                        ),
+                        // §304 — persistent keepalive. Держит туннель живым при
+                        // простое (без него пинг WARP деградирует в err и коннект
+                        // отваливается). Виден и для plain, и для AWG.
+                        const SizedBox(height: 12),
+                        _label('Persistent keepalive (s)'),
+                        TextField(
+                          controller: _keepalive,
+                          enabled: !_busy,
+                          keyboardType: TextInputType.number,
+                          decoration: _input('25'),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          getLocalText.s("Keeps the tunnel alive while idle so it doesn't rot to timeouts (default 25). 0 = off."),
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: cs.onSurfaceVariant,
                               ),
