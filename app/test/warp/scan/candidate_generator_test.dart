@@ -15,6 +15,7 @@ void main() {
         wgSniPool: ['www.google.com', 'yandex.ru'],
         utlsFpPool: ['chrome', 'firefox', 'safari'],
         masqueV4Cidr: ['162.159.198.0/24', '162.159.199.0/24'],
+        masqueH3V4Cidr: ['162.159.198.1/32', '162.159.199.1/32'],
         masquePortsH3: [443, 4443, 8095],
         masquePortsH2: [500, 4500, 8443],
         masqueSniPool: ['www.cloudflare.com', 'yandex.ru'],
@@ -47,6 +48,26 @@ void main() {
       expect(sawH3 && sawH2, isTrue, reason: 'оба транспорта встретились');
     });
 
+    test('§305 — h3-IP ТОЛЬКО из h3-списка; h2-IP из блока', () {
+      final g = CandidateGenerator(fullPool(), rng: Random(13));
+      // fullPool: h3_v4_cidr = .198.1/.199.1 (/32); h2 v4_cidr = /24 блоки.
+      const h3hosts = {'162.159.198.1', '162.159.199.1'};
+      var sawH3 = false, sawH2 = false;
+      for (final c in g.seed(400)) {
+        if (c.protocol == ScanProtocol.masqueH3) {
+          expect(h3hosts.contains(c.ip), isTrue,
+              reason: 'h3 IP ${c.ip} должен быть из h3-списка');
+          sawH3 = true;
+        } else if (c.protocol == ScanProtocol.masqueH2) {
+          // h2 — по блоку, октет варьируется (не только .1).
+          expect(c.ip.startsWith('162.159.198.') ||
+              c.ip.startsWith('162.159.199.'), isTrue);
+          sawH2 = true;
+        }
+      }
+      expect(sawH3 && sawH2, isTrue);
+    });
+
     test('SNI берётся из соответствующего пула', () {
       final g = CandidateGenerator(fullPool(), rng: Random(3));
       const wgSni = {'www.google.com', 'yandex.ru'};
@@ -72,6 +93,7 @@ void main() {
         wgSniPool: [],
         utlsFpPool: ['chrome'],
         masqueV4Cidr: ['162.159.198.0/24'],
+        masqueH3V4Cidr: [], // фолбэк на блок при пустом h3-списке
         masquePortsH3: [443],
         masquePortsH2: [500],
         masqueSniPool: ['yandex.ru'],
@@ -91,6 +113,7 @@ void main() {
         wgSniPool: [],
         utlsFpPool: ['chrome'],
         masqueV4Cidr: ['162.159.198.0/24'],
+        masqueH3V4Cidr: [], // фолбэк на блок при пустом h3-списке
         masquePortsH3: [443],
         masquePortsH2: [500],
         masqueSniPool: ['y'],

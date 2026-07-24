@@ -63,7 +63,10 @@ class CandidateGenerator {
       );
 
   ScanCandidate _masqueCandidate(ScanProtocol proto) {
-    final cidr = _pick(_pool.masqueV4Cidr);
+    // §305 — IP-источник ЗАВИСИТ от транспорта: h3 живёт только на 4 хостах
+    // (masqueH3V4Cidr), h2 — по всему блоку. Рандомить h3 по блоку нельзя.
+    final net = proto == ScanProtocol.masqueH2 ? 'h2' : 'h3';
+    final cidr = _pick(_pool.masqueV4CidrFor(net));
     return ScanCandidate(
       ip: randomIpInCidr(cidr, _rng),
       port: _pickMasquePort(proto),
