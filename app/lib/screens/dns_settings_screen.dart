@@ -10,6 +10,7 @@ import '../services/dns/dns_controller.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
 import '../services/preset_on_change.dart';
+import '../services/ui_helpers.dart';
 import '../services/settings_storage.dart';
 import '../vpn/box_vpn_client.dart';
 import '../widgets/outbound_picker.dart';
@@ -792,10 +793,20 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     }());
   }
 
-  /// §033: Delete inline user-rule.
-  void _deleteRule(int index) {
+  /// §033: Delete inline user-rule. §219 — удаление необратимо (правило не
+  /// восстановить из шаблона, как template/preset), поэтому через confirm.
+  Future<void> _deleteRule(int index) async {
+    if (index < 0 || index >= _rules.length) return;
+    final name = _rules[index]['name'] as String? ?? '';
+    final confirmed = await showDeleteConfirmDialog(
+      context,
+      title: getLocalText.s("Delete rule?"),
+      message: getLocalText.s("Remove \"%s\" permanently?", name),
+    );
+    if (confirmed != true || !mounted) return;
+    // Список мог укоротиться, пока висел диалог, — проверяем индекс повторно.
     setState(() {
-      _rules.removeAt(index);
+      if (index < _rules.length) _rules.removeAt(index);
       _markDirty();
     });
   }
