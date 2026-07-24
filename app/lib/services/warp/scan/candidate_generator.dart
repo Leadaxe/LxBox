@@ -12,11 +12,16 @@ class CandidateGenerator {
     this._pool, {
     Random? rng,
     double empiricalPortRatio = 0.3,
+    // §305 — v6-endpoint генерим ТОЛЬКО если в системе включён IPv6
+    // (`ipv6_enabled`). Иначе v6-нода мёртва (нет маршрута). Дефолт false.
+    bool allowV6 = false,
   })  : _rng = rng ?? Random.secure(),
-        _empiricalRatio = empiricalPortRatio;
+        _empiricalRatio = empiricalPortRatio,
+        _allowV6 = allowV6;
 
   final ScanPool _pool;
   final Random _rng;
+  final bool _allowV6;
 
   /// Доля проб на empirical-порт (§132: достоверны только 2408/500/1701/4500).
   final double _empiricalRatio;
@@ -36,13 +41,13 @@ class CandidateGenerator {
   static const _awgIpModes = ['quic', 'quic', 'quic', 'dns', 'stun'];
 
   ScanCandidate _wgCandidate(ScanProtocol proto) {
-    final useV6 = _pool.wgV6Cidr.isNotEmpty && _rng.nextBool();
+    final useV6 = _allowV6 && _pool.wgV6Cidr.isNotEmpty && _rng.nextBool();
     final cidr = _pick(useV6 ? _pool.wgV6Cidr : _pool.wgV4Cidr);
     return ScanCandidate(
       ip: randomIpInCidr(cidr, _rng),
       port: _pickWgPort(),
       protocol: proto,
-      sni: _pool.sniPool.isEmpty ? '' : _pick(_pool.sniPool),
+      sni: _pool.wgSniPool.isEmpty ? '' : _pick(_pool.wgSniPool),
       awgParams: _randomAwg(),
     );
   }
@@ -61,10 +66,19 @@ class CandidateGenerator {
     final cidr = _pick(_pool.masqueV4Cidr);
     return ScanCandidate(
       ip: randomIpInCidr(cidr, _rng),
-      port: _pool.masquePort,
+      port: _pickMasquePort(proto),
       protocol: proto,
       sni: _pool.masqueSniPool.isEmpty ? '' : _pick(_pool.masqueSniPool),
     );
+  }
+
+  /// §305 — MASQUE-порт по транспорту (h3 и h2 живут на разных). Фолбэк на
+  /// h3-набор при неизвестном протоколе; на 443, если набор пуст.
+  int _pickMasquePort(ScanProtocol proto) {
+    final ports = proto == ScanProtocol.masqueH2
+        ? _pool.masquePortsH2
+        : _pool.masquePortsH3;
+    return ports.isEmpty ? 443 : _pick(ports);
   }
 
   /// Равновероятно среди доступных протоколов. Исключает masque, если нет
@@ -87,9 +101,9 @@ class CandidateGenerator {
       ];
 
   int _pickWgPort() {
-    final useEmpirical = _pool.wgPortsEmpirical.isNotEmpty &&
+    final useExtra = _pool.wgPortsExtra.isNotEmpty &&
         _rng.nextDouble() < _empiricalRatio;
-    final ports = useEmpirical ? _pool.wgPortsEmpirical : _pool.wgPorts;
+    final ports = useExtra ? _pool.wgPortsExtra : _pool.wgPorts;
     return _pick(ports);
   }
 
@@ -113,10 +127,10 @@ class CandidateGenerator {
 
   ScanCandidate _variationOne(String ip, ScanProtocol p) {
     final isWg = p == ScanProtocol.awg;
-    final sniPool = isWg ? _pool.sniPool : _pool.masqueSniPool;
+    final sniPool = isWg ? _pool.wgSniPool : _pool.masqueSniPool;
     return ScanCandidate(
       ip: ip,
-      port: isWg ? _pickWgPort() : _pool.masquePort,
+      port: isWg ? _pickWgPort() : _pickMasquePort(p),
       protocol: p,
       sni: sniPool.isEmpty ? '' : _pick(sniPool),
       awgParams: isWg ? _randomAwg() : null,

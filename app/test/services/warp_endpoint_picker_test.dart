@@ -13,32 +13,31 @@ void main() {
     expect(p.sniPool, isNotEmpty);
   });
 
-  test('randomEndpoint: формат prefix+N:port, N∈1..10, известные блоки',
-      () async {
+  test('§305 randomEndpoint: host:port, порт валиден, v4/v6-хост', () async {
     final p = await WarpEndpointPicker.load();
-    final re = RegExp(r'^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3}):(\d{1,5})$');
+    // v4: a.b.c.d:port; v6: [....]:port (полный рандом по CIDR, не только .1-.10).
+    final v4 = RegExp(r'^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})$');
+    final v6 = RegExp(r'^\[[0-9a-f:]+\]:(\d{1,5})$');
     for (var i = 0; i < 200; i++) {
       final ep = p.randomEndpoint();
       expect(ep, isNotNull);
-      final m = re.firstMatch(ep!);
-      expect(m, isNotNull, reason: 'не ip:port: $ep');
-      final last = int.parse(m!.group(2)!);
-      final port = int.parse(m.group(3)!);
-      expect(last, inInclusiveRange(1, 10), reason: 'last octet $last (ep=$ep)');
-      expect(port, inInclusiveRange(1, 65535), reason: 'port $port');
+      final port = int.parse(ep!.substring(ep.lastIndexOf(':') + 1));
+      expect(port, inInclusiveRange(1, 65535), reason: 'port $port (ep=$ep)');
+      expect(v4.hasMatch(ep) || v6.hasMatch(ep), isTrue,
+          reason: 'не host:port: $ep');
     }
   });
 
-  test('randomEndpoint: использует известные Cloudflare-префиксы', () async {
+  test('§305 randomEndpoint: v4-хосты в известных Cloudflare-блоках', () async {
     final p = await WarpEndpointPicker.load();
     final seen = <String>{};
     for (var i = 0; i < 500; i++) {
       final ep = p.randomEndpoint()!;
-      // префикс = всё до последнего октета.
+      if (ep.startsWith('[')) continue; // v6 — пропускаем для этой проверки
       final prefix = ep.substring(0, ep.lastIndexOf('.') + 1);
       seen.add(prefix);
     }
-    // должны встретиться твёрдые блоки (162.159.*/188.114.*).
+    // твёрдые v4-блоки (162.159.*/188.114.*).
     expect(
         seen.any((p) => p.startsWith('162.159.') || p.startsWith('188.114.')),
         isTrue,
@@ -94,5 +93,31 @@ void main() {
     final p = await WarpEndpointPicker.load();
     expect(p.sniPool, contains('cdn.jsdelivr.net'));
     expect(p.sniPool, contains('aws.amazon.com'));
+  });
+
+  // §305 — asset несёт device-verified MASQUE-данные боевого теста.
+  test('§305 masque-блоки asset = только живые .198/.199', () async {
+    final p = await WarpEndpointPicker.load();
+    expect(p.masqueV4Cidr, ['162.159.198.0/24', '162.159.199.0/24']);
+  });
+
+  test('§305 masque-порты раздельны по транспорту (device-verified)', () async {
+    final p = await WarpEndpointPicker.load();
+    expect(p.masquePortsFor('h3'), [443, 4443, 8095]);
+    expect(p.masquePortsFor('h2'), [500, 4500, 8443]);
+  });
+
+  test('§305 randomMasqueIp в известных блоках; randomMasquePortFor в наборе',
+      () async {
+    final p = await WarpEndpointPicker.load();
+    for (var i = 0; i < 100; i++) {
+      final ip = p.randomMasqueIp();
+      expect(ip, isNotNull);
+      expect(ip!.startsWith('162.159.198.') || ip.startsWith('162.159.199.'),
+          isTrue,
+          reason: 'ip $ip вне masque-блоков');
+    }
+    expect([443, 4443, 8095], contains(p.randomMasquePortFor('h3')));
+    expect([500, 4500, 8443], contains(p.randomMasquePortFor('h2')));
   });
 }

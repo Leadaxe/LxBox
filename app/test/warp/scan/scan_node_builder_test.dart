@@ -42,20 +42,22 @@ void main() {
     expect(uri, contains('162.159.192.7:2408'));
   });
 
-  test('MASQUE h3 → server ИЗ АККАУНТА (стандартный); h2 → IP кандидата', () {
-    // device-verified: h3 (QUIC) поднимается только на стандартном MASQUE-сервере
-    // из реги. Случайный IP → CRYPTO_ERROR. h2 стабилен на всём блоке 162.159.198.*.
+  test('§305 MASQUE h3 И h2 → IP:port кандидата (форсинг h3→server снят)', () {
+    // Боевой тест (пинг через рабочий туннель) опроверг привязку h3 к серверу
+    // реги: h3 живёт на чужих IP блока. Оба транспорта берут endpoint кандидата.
     final b = ScanNodeBuilder(masque: masque());
 
-    final h3 = b.uriFor(cand(ScanProtocol.masqueH3, ip: '162.159.198.5', port: 443));
+    final h3 = b.uriFor(
+        cand(ScanProtocol.masqueH3, ip: '162.159.199.5', port: 4443));
     expect(h3, isNotNull);
     expect(h3, startsWith('masque://'));
-    expect(h3, contains('162.159.198.1:443'), reason: 'h3 — server из аккаунта');
-    expect(h3, isNot(contains('162.159.198.5')), reason: 'h3 НЕ на случайном IP');
+    expect(h3, contains('162.159.199.5:4443'), reason: 'h3 — IP:port кандидата');
+    expect(h3, isNot(contains('162.159.198.1')), reason: 'НЕ server из аккаунта');
     expect(h3, contains('network=h3'));
 
-    final h2 = b.uriFor(cand(ScanProtocol.masqueH2, ip: '162.159.198.5', port: 443));
-    expect(h2, contains('162.159.198.5:443'), reason: 'h2 — IP кандидата');
+    final h2 = b.uriFor(
+        cand(ScanProtocol.masqueH2, ip: '162.159.198.5', port: 8443));
+    expect(h2, contains('162.159.198.5:8443'), reason: 'h2 — IP:port кандидата');
     expect(h2, contains('network=h2'));
   });
 
