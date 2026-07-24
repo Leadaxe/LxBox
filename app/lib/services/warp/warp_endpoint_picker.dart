@@ -103,8 +103,10 @@ class WarpEndpointPicker {
 
   /// §305 — случайный MASQUE-IP из случайного блока. null если пусто/битый CIDR
   /// (caller оставляет endpoint из регистрации).
-  String? randomMasqueIp() {
-    final blocks = _scan?.masqueV4Cidr ?? const [];
+  String? randomMasqueIp({String network = 'h3'}) {
+    // §305 — источник ЗАВИСИТ от транспорта: h3 живёт только на 4 хостах, рандом
+    // по всему блоку дал бы мёртвый адрес в ~99% случаев.
+    final blocks = _scan?.masqueV4CidrFor(network) ?? const [];
     if (blocks.isEmpty) return null;
     final cidr = blocks[_rng.nextInt(blocks.length)];
     try {

@@ -75,7 +75,8 @@ class CandidateGenerator {
     );
   }
 
-  /// §305 — MASQUE-порт по транспорту (h3 и h2 живут на разных). Фолбэк на
+  /// §305 — MASQUE-порт из набора своего транспорта (наборы device-verified
+  /// совпадают, но ключи раздельные — см. ScanPool). Фолбэк на
   /// h3-набор при неизвестном протоколе; на 443, если набор пуст.
   int _pickMasquePort(ScanProtocol proto) {
     final ports = proto == ScanProtocol.masqueH2

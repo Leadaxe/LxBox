@@ -108,22 +108,39 @@ void main() {
     ]);
   });
 
-  test('§305 masque-порты раздельны по транспорту (device-verified)', () async {
+  test('§305 masque-порты: все 7 рабочих у ОБОИХ транспортов', () async {
     final p = await WarpEndpointPicker.load();
+    // Наборы заданы раздельными ключами (ports_h3/ports_h2), но device-verified
+    // рабочие порты одинаковы — важно, что это не сузилось случайно.
     expect(p.masquePortsFor('h3'), [443, 500, 1701, 4500, 4443, 8443, 8095]);
     expect(p.masquePortsFor('h2'), [443, 500, 1701, 4500, 4443, 8443, 8095]);
   });
 
-  test('§305 randomMasqueIp в известных блоках; randomMasquePortFor в наборе',
+  test('§305 randomMasqueIp: h3 — ТОЛЬКО 4 живых хоста, h2 — весь блок',
       () async {
     final p = await WarpEndpointPicker.load();
+    const h3hosts = {
+      '162.159.198.1',
+      '162.159.198.2',
+      '162.159.199.1',
+      '162.159.199.2',
+    };
+    final h2seen = <String>{};
     for (var i = 0; i < 100; i++) {
-      final ip = p.randomMasqueIp();
-      expect(ip, isNotNull);
-      expect(ip!.startsWith('162.159.198.') || ip.startsWith('162.159.199.'),
-          isTrue,
-          reason: 'ip $ip вне masque-блоков');
+      // h3 — рандом по узкому списку: любой результат обязан быть живым хостом.
+      final ipH3 = p.randomMasqueIp(network: 'h3');
+      expect(h3hosts, contains(ipH3), reason: 'h3 IP $ipH3 вне живых хостов');
+      // h2 — по всему блоку.
+      final ipH2 = p.randomMasqueIp(network: 'h2');
+      expect(ipH2, isNotNull);
+      expect(ipH2!.startsWith('162.159.198.') ||
+          ipH2.startsWith('162.159.199.'), isTrue,
+          reason: 'h2 IP $ipH2 вне masque-блоков');
+      h2seen.add(ipH2);
     }
+    // h2 действительно варьируется по блоку, а не сидит на 4 адресах.
+    expect(h2seen.length, greaterThan(h3hosts.length),
+        reason: 'h2 должен разбрасываться шире, чем h3-список');
     const allPorts = [443, 500, 1701, 4500, 4443, 8443, 8095];
     expect(allPorts, contains(p.randomMasquePortFor('h3')));
     expect(allPorts, contains(p.randomMasquePortFor('h2')));
