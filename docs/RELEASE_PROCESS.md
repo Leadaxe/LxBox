@@ -52,8 +52,14 @@ CI (`.github/workflows/ci.yml`) триггерится на:
    ```bash
    cd app
    flutter analyze && flutter test
+   dart run tool/l10n/template_check.dart --strict
+   dart run tool/l10n/ui_check.dart --strict
+   dart run tool/l10n/hardcoded_check.dart --strict
+   dart run tool/l10n/kotlin_check.dart --strict
    ```
    ⚠ Именно `flutter analyze` **без аргумента** — CI анализирует **весь** проект, включая `test/`. Локальная привычка `flutter analyze lib/` пропускает ошибки в тестах (особенно `non_exhaustive_switch` после добавления подтипа в sealed-класс) — они всплывут в CI уже **после** пуша тега и уронят релиз (ловили на v2.8.2 / §217).
+
+   ⚠ Четыре l10n-чекера — **не опционально**: job `checks` гоняет их шагом «L10n checks», и падение любого роняет релиз ровно так же, как упавший тест. На v2.17.0 тег пришлось перевыпускать из-за `hardcoded_check`: два `hintText`-примера в §302 (`tls.utls.fingerprint`, `chrome`). Технические идентификаторы в UI (JSON-пути, значения протокольных полей) переводу не подлежат — лечение не «завести ключ в словаре», а аннотация `// l10n-exempt: <причина>` в конце строки (см. [l10n.md](l10n.md)).
 2. `develop` — прямой потомок последнего stable-тега:
    ```bash
    git fetch --tags
@@ -278,7 +284,7 @@ git tag -d vX.Y.Z
 
 ### Stable vX.Y.Z
 
-- [ ] `develop` зелёная (`cd app && flutter analyze && flutter test`), descendant от прошлого stable-тега.
+- [ ] `develop` зелёная (`cd app && flutter analyze && flutter test` **+ четыре `dart run tool/l10n/*_check.dart --strict`** — CI гоняет их шагом «L10n checks», см. §2.1 п.1), descendant от прошлого stable-тега.
 - [ ] **Ядро:** `app/android/app/build.gradle.kts` → `implementation(files("libs/libbox.aar"))` (активной Maven-строки стокового libbox нет); в `ci.yml` job `android` есть шаг `Fetch sing-box-lx core`, пин `app/android/libbox.version` = версии local smoke. Стоковое 1.13.11 отвергает AWG/XHTTP-конфиги — такой релиз не выпускать.
 - [ ] Релиз-доки синхронизированы: `CHANGELOG.md`, `ARCHITECTURE.md` / `DEVELOPMENT_REPORT.md` (если затронуты), `README.md` + `README_RU.md` (если фичи видимые), spec'и → `status: released`.
 - [ ] `app/pubspec.yaml` **не трогать** — там placeholder `0.0.0-dev+0`. Версия инжектится CI из tag (§065).
