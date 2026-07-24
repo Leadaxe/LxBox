@@ -53,45 +53,66 @@ void main() {
     });
   });
 
-  group('ScanPool.fromJson', () {
-    test('парсит scan-блок и hasData', () {
-      final pool = ScanPool.fromJson(
-        {
-          'wg_v4_cidr': ['162.159.192.0/24'],
-          'wg_ports': [2408, 500],
-          'wg_ports_empirical': [7156],
-          'masque_v4_cidr': ['162.159.198.0/24'],
-          'masque_port': 443,
+  group('ScanPool.fromFullJson', () {
+    test('парсит wireguard+masque секции и hasData', () {
+      final pool = ScanPool.fromFullJson({
+        'wireguard': {
+          'v4_cidr': ['162.159.192.0/24'],
+          'ports': [2408, 500],
+          'ports_extra': [7156],
+          'sni_pool': ['a'],
           'utls_fp_pool': ['chrome'],
         },
-        sniPool: ['a'],
-        masqueSniPool: ['b'],
-      );
+        'masque': {
+          'v4_cidr': ['162.159.198.0/24', '162.159.199.0/24'],
+          'ports_h3': [443, 4443, 8095],
+          'ports_h2': [500, 4500, 8443],
+          'sni_pool': ['b'],
+        },
+      });
       expect(pool, isNotNull);
       expect(pool!.hasData, isTrue);
       expect(pool.wgPorts, [2408, 500]);
-      expect(pool.masquePort, 443);
-      expect(pool.sniPool, ['a']);
+      expect(pool.wgPortsExtra, [7156]);
+      expect(pool.wgSniPool, ['a']);
+      expect(pool.masqueV4Cidr, ['162.159.198.0/24', '162.159.199.0/24']);
+      expect(pool.masquePortsH3, [443, 4443, 8095]);
+      expect(pool.masquePortsH2, [500, 4500, 8443]);
+      expect(pool.masqueSniPool, ['b']);
     });
 
-    test('null / пустой блок → null', () {
-      expect(ScanPool.fromJson(null, sniPool: [], masqueSniPool: []), isNull);
+    test('§305 — masquePortsFor разделяет h3/h2', () {
+      final pool = ScanPool.fromFullJson({
+        'masque': {
+          'v4_cidr': ['162.159.198.0/24'],
+          'ports_h3': [443, 4443],
+          'ports_h2': [500, 8443],
+        },
+      });
+      expect(pool!.masquePortsFor('h3'), [443, 4443]);
+      expect(pool.masquePortsFor('h2'), [500, 8443]);
+      // Неизвестный транспорт → h3-набор дефолтом.
+      expect(pool.masquePortsFor('foo'), [443, 4443]);
+    });
+
+    test('null / пустой → null', () {
+      expect(ScanPool.fromFullJson(null), isNull);
       expect(
-        ScanPool.fromJson({}, sniPool: [], masqueSniPool: []),
+        ScanPool.fromFullJson({}),
         isNull,
         reason: 'нет диапазонов → hasData=false → null',
       );
     });
 
-    test('masque-only (без wg-портов) → hasData true, не null', () {
-      final pool = ScanPool.fromJson(
-        {
-          'masque_v4_cidr': ['162.159.198.0/24'],
-          'masque_port': 443,
+    test('masque-only (без wg) → hasData true, не null', () {
+      final pool = ScanPool.fromFullJson({
+        'masque': {
+          'v4_cidr': ['162.159.198.0/24'],
+          'ports_h3': [443],
+          'ports_h2': [500],
+          'sni_pool': ['y'],
         },
-        sniPool: [],
-        masqueSniPool: ['y'],
-      );
+      });
       expect(pool, isNotNull);
       expect(pool!.hasData, isTrue);
       expect(pool.wgPorts, isEmpty);

@@ -42,6 +42,7 @@ import '../services/warp/warp_endpoint_picker.dart';
 import '../services/warp/scan/candidate_generator.dart';
 import '../services/warp/scan/scan_models.dart';
 import '../services/warp/scan/scan_node_builder.dart';
+import '../services/warp/scan/scan_pool.dart';
 
 // Та же библиотека (`part`), поэтому library-private доступ
 // (`_replaceList`, `_formatAgo`) к/между основным файлом и part'ом доступен.
@@ -320,9 +321,15 @@ class SubscriptionController extends ChangeNotifier {
       // §138 — endpoint, который реально должен попасть в узел. Юзер вписал
       // свой (не дефолт) → он; обфускация+дефолт → рандомный §136; иначе дефолт.
       final userPicked = endpoint != WarpAccount.defaultEndpoint;
+      // §305 — v6-endpoint только если в системе включён IPv6 (иначе мёртв).
+      final allowV6 = (await SettingsStorage.getVar('ipv6_enabled', 'false'))
+              .toLowerCase() ==
+          'true';
       final resolvedEndpoint = userPicked
           ? endpoint
-          : (obfuscate ? (picker.randomEndpoint() ?? endpoint) : endpoint);
+          : (obfuscate
+              ? (picker.randomEndpoint(allowV6: allowV6) ?? endpoint)
+              : endpoint);
 
       account ??= await warp.register(
         licenseKey: licenseKey,
@@ -390,6 +397,10 @@ class SubscriptionController extends ChangeNotifier {
     String? sni,
     String? idleTimeout,
     String? keepAlive,
+    // §305 — ручной override endpoint. null → endpoint из регистрации. Пишется
+    // только в узел, НЕ в кеш аккаунта (кеш держит канонический server реги).
+    String? server,
+    int? port,
     bool reuse = true,
     bool forceNew = false,
     WarpClient? client,
@@ -420,6 +431,30 @@ class SubscriptionController extends ChangeNotifier {
       );
 
       await SettingsStorage.setMasqueAccount(account);
+
+      // §305 — override endpoint применяем ТОЛЬКО к узлу (после setMasqueAccount,
+      // чтобы кеш держал server реги). Срабатывает если задан server ИЛИ port
+      // (порт-only override не теряется). Пустое поле → значение из реги.
+      // copyWith не несёт server/port → полный конструктор (как _masqueUri).
+      final hasServerOverride = server != null && server.trim().isNotEmpty;
+      final hasPortOverride = port != null && port > 0;
+      if (hasServerOverride || hasPortOverride) {
+        account = MasqueAccount(
+          privKeyDer: account.privKeyDer,
+          serverPubDer: account.serverPubDer,
+          clientV4: account.clientV4,
+          clientV6: account.clientV6,
+          server: hasServerOverride ? server.trim() : account.server,
+          port: hasPortOverride ? port : account.port,
+          deviceId: account.deviceId,
+          token: account.token,
+          createdAt: account.createdAt,
+          network: account.network,
+          sni: account.sni,
+          idleTimeout: account.idleTimeout,
+          keepAlive: account.keepAlive,
+        );
+      }
 
       final tag = _uniqueWarpTag(MasqueAccount.nodeTag());
       await _addMasqueNode(account, tag);
@@ -1008,9 +1043,11 @@ class SubscriptionController extends ChangeNotifier {
     int seedCount = 100,
     Random? rng,
     WarpClient? client,
+    // §305 — override пула из JSON-окна эксперимента. null → bundled asset.
+    ScanPool? poolOverride,
   }) async {
     lastScanNote = null;
-    final pool = (await WarpEndpointPicker.load()).scan;
+    final pool = poolOverride ?? (await WarpEndpointPicker.load()).scan;
     if (pool == null) return null;
 
     // Аккаунты: кеш → или регистрация один раз (обоих типов — для смешанного
@@ -1031,7 +1068,11 @@ class SubscriptionController extends ChangeNotifier {
     }
 
     // Посев → URI-узлы (пропускаем протоколы без аккаунта) → папка.
-    final gen = CandidateGenerator(pool, rng: rng);
+    // §305 — v6-кандидаты только если в системе включён IPv6 (иначе мёртвы).
+    final allowV6 =
+        (await SettingsStorage.getVar('ipv6_enabled', 'false')).toLowerCase() ==
+            'true';
+    final gen = CandidateGenerator(pool, rng: rng, allowV6: allowV6);
     final seedUris = _candidatesToUris(gen.seed(seedCount), builder);
     if (seedUris.isEmpty) return null;
     return _recreateScanFolder(seedUris);

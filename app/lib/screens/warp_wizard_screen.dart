@@ -7,8 +7,12 @@ import '../controllers/subscription_controller.dart';
 import '../services/ui_helpers.dart';
 import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
+import '../services/warp/masque_account.dart';
 import '../services/warp/warp_endpoint_picker.dart';
+import '../services/warp/scan/scan_pool.dart';
+import '../services/settings_storage.dart';
 import 'folder_detail_screen.dart';
+import 'warp_experiment_screen.dart';
 import '../services/l10n/locale_controller.dart';
 
 /// §025 — Full-screen визард «Get WARP». Открывается из overflow-меню
@@ -65,6 +69,11 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   // Пусто → дефолт ядра (5m / 30s). Плейсхолдеры показывают дефолт.
   final _masqueIdle = TextEditingController(); // минуты
   final _masqueKeepAlive = TextEditingController(); // секунды
+  // §305 — ручной override endpoint MASQUE (IP + порт). Пусто → endpoint из
+  // регистрации. Данные (блоки/порты) читаются из warp_endpoints.json через
+  // _picker. Порт — combo из masque_ports_h3/h2 по транспорту + свободный ввод.
+  final _masqueIp = TextEditingController();
+  final _masquePort = TextEditingController();
 
   bool get _isMasque => _transport == 'masque';
 
@@ -76,11 +85,27 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
 
   WarpEndpointPicker? _picker; // §136 — для рандома endpoint/SNI
   bool _endpointAutoFilled = false; // §136 — endpoint в поле = наш авто-рандом
+  // §305 — v6-endpoint подставляем только если в системе включён IPv6.
+  bool _ipv6Enabled = false;
+  // §305 — сервер из последней MASQUE-регистрации (placeholder пустого IP-поля,
+  // показывает КУДА пойдёт подключение, если IP не вписан). Дефолт ядра, если
+  // регистрации ещё не было.
+  String _masqueRegServer = MasqueAccount.defaultServer;
 
 
   @override
   void initState() {
     super.initState();
+    // §305 — читаем системный флаг IPv6 (гейтит v6-рандом endpoint).
+    SettingsStorage.getVar('ipv6_enabled', 'false').then((v) {
+      if (mounted) setState(() => _ipv6Enabled = v.toLowerCase() == 'true');
+    });
+    // §305 — сервер из закешированной MASQUE-реги → placeholder пустого IP-поля.
+    SettingsStorage.getMasqueAccount().then((acc) {
+      if (mounted && acc != null) {
+        setState(() => _masqueRegServer = acc.server);
+      }
+    });
     // §136 — подтягиваем picker (SNI-пул для dropdown + рандом endpoint/SNI).
     WarpEndpointPicker.load().then((p) {
       if (!mounted) return;
@@ -97,6 +122,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
         if (_masqueSni.text.trim().isEmpty) {
           _masqueSni.text = p.randomMasqueSni();
         }
+        // §305 — дефолтный порт = первый из набора текущего транспорта.
+        _syncDefaultMasquePort(p);
       });
       // Если юзер успел включить обфускацию до загрузки picker — заполняем.
       if (_obfuscate && _endpointReplaceable) _fillRandomEndpoint();
@@ -106,7 +133,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   /// §136 — генерирует рандомный endpoint в поле (при включении обфускации).
   /// Помечает поле как авто-заполненное.
   void _fillRandomEndpoint() {
-    final ep = _picker?.randomEndpoint();
+    final ep = _picker?.randomEndpoint(allowV6: _ipv6Enabled);
     if (ep != null) {
       setState(() {
         _endpoint.text = ep;
@@ -129,6 +156,31 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     if (sni != null && sni.isNotEmpty) {
       setState(() => _masqueSni.text = sni);
     }
+  }
+
+  /// §305 — дефолтный/консистентный порт для текущего транспорта: если поле
+  /// пусто ИЛИ значение не из набора этого транспорта (h3↔h2 сменили) —
+  /// ставим первый порт набора. Пустой набор → не трогаем.
+  void _syncDefaultMasquePort([WarpEndpointPicker? picker]) {
+    final ports = (picker ?? _picker)?.masquePortsFor(_masqueNetwork) ??
+        const <int>[];
+    if (ports.isEmpty) return;
+    final cur = int.tryParse(_masquePort.text.trim());
+    if (cur == null || !ports.contains(cur)) {
+      _masquePort.text = '${ports.first}';
+    }
+  }
+
+  /// §305 — 🎲 у endpoint IP: случайный MASQUE-IP из блока + случайный порт из
+  /// набора текущего транспорта.
+  void _fillRandomMasqueIp() {
+    final ip = _picker?.randomMasqueIp();
+    if (ip == null) return;
+    final port = _picker?.randomMasquePortFor(_masqueNetwork);
+    setState(() {
+      _masqueIp.text = ip;
+      if (port != null) _masquePort.text = '$port';
+    });
   }
 
   /// true если в поле endpoint — дефолт/пусто/наш авто-рандом (не вписан юзером
@@ -166,6 +218,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     _masqueSni.dispose();
     _masqueIdle.dispose();
     _masqueKeepAlive.dispose();
+    _masqueIp.dispose();
+    _masquePort.dispose();
     _jc.dispose();
     _jmin.dispose();
     _jmax.dispose();
@@ -175,64 +229,23 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
 
   // ───────────────────────── §284 — WARP GENERATOR ─────────────────────────
 
-  /// §284 — попап «Make experiment»: микро-описание + количество нод (дефолт 20).
-  /// Возвращает count или null (отмена). Клампит 1..200.
-  Future<int?> _askExperimentSize() async {
-    final ctl = TextEditingController(text: '20');
-    final result = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(getLocalText.s("Make experiment")),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(getLocalText.s(
-                "Generates random WARP nodes (WireGuard/AWG/MASQUE h2/h3) into the «WARP GENERATOR» folder. Test them there and keep what works.")),
-            const SizedBox(height: 16),
-            TextField(
-              controller: ctl,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: getLocalText.s("Number of nodes"),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(getLocalText.s("Cancel")),
-          ),
-          FilledButton(
-            onPressed: () {
-              final n = int.tryParse(ctl.text.trim()) ?? 20;
-              Navigator.pop(ctx, n.clamp(1, 200));
-            },
-            child: Text(getLocalText.s("Create")),
-          ),
-        ],
-      ),
-    );
-    ctl.dispose();
-    return result;
-  }
-
   /// Генерирует случайные WARP-узлы (WG/AWG/h3/h2) в папку «WARP GENERATOR»
   /// и открывает её. Пробы не гоняет — пользователь тестирует штатной кнопкой
   /// Test в папке. Повторный запуск пересоздаёт папку.
   Future<void> _runGenerate() async {
     if (_picker?.scan == null || _busy) return;
 
-    final count = await _askExperimentSize();
-    if (count == null || !mounted) return;
+    // §305 — параметры эксперимента (число нод + JSON-пул) на отдельном экране.
+    final exp = await Navigator.of(context).push<({int count, ScanPool pool})>(
+      MaterialPageRoute(builder: (_) => const WarpExperimentScreen()),
+    );
+    if (exp == null || !mounted) return;
 
     setState(() => _busy = true);
     int? folderIdx;
     try {
-      folderIdx = await widget.subController.generateWarp(seedCount: count);
+      folderIdx = await widget.subController.generateWarp(
+          seedCount: exp.count, poolOverride: exp.pool);
     } catch (e) {
       if (mounted) {
         showSnack(getLocalText.s("Generation failed — no WARP account."));
@@ -321,11 +334,15 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   /// §130 — регистрация MASQUE-транспорта (ECDSA + enroll).
   Future<void> _registerMasque() async {
     final sni = _masqueSni.text.trim();
+    final ip = _masqueIp.text.trim();
     final account = await widget.subController.addMasque(
       network: _masqueNetwork,
       sni: sni.isEmpty ? null : sni,
       idleTimeout: _durationOrNull(_masqueIdle.text, 'm'),
       keepAlive: _durationOrNull(_masqueKeepAlive.text, 's'),
+      // §305 — ручной override endpoint. Пусто → сервер из регистрации.
+      server: ip.isEmpty ? null : ip,
+      port: int.tryParse(_masquePort.text.trim()),
       forceNew: _forceNew,
     );
     if (!mounted) return;
@@ -476,8 +493,12 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                               ],
                               onChanged: _busy
                                   ? null
-                                  : (v) => setState(
-                                      () => _masqueNetwork = v ?? 'h3'),
+                                  : (v) => setState(() {
+                                        _masqueNetwork = v ?? 'h3';
+                                        // §305 — порт h3≠h2: пересинхронизируем
+                                        // под новый транспорт.
+                                        _syncDefaultMasquePort();
+                                      }),
                             ),
                           ),
                         ],
@@ -487,6 +508,65 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                         _masqueNetwork == 'h2'
                             ? getLocalText.s("HTTP/2 over TCP — use where QUIC/UDP is blocked.")
                             : getLocalText.s("HTTP/3 over QUIC — the default, fastest path."),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                      ),
+                      // §305 — ручной endpoint IP:port. Пусто → сервер из
+                      // регистрации. Порты РАЗДЕЛЬНЫ по транспорту (h3/h2 живут
+                      // на разных) — combo подтягивает нужный набор из asset.
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: TextField(
+                              controller: _masqueIp,
+                              enabled: !_busy,
+                              decoration: _input(_masqueRegServer).copyWith(
+                                labelText: getLocalText.s("Endpoint IP (optional)"),
+                                suffixIcon: IconButton(
+                                  icon: const Icon(Icons.casino_outlined),
+                                  tooltip: getLocalText.s("Pick another random IP:port"),
+                                  onPressed: _busy ? null : _fillRandomMasqueIp,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Порт — editable-combo той же высоты, что IP-поле
+                          // (DropdownButtonFormField isDense = высота TextField).
+                          Expanded(
+                            flex: 2,
+                            child: DropdownButtonFormField<String>(
+                              // Текущее значение порта; если его нет в наборе
+                              // транспорта — всё равно валидно (custom).
+                              initialValue: _masquePort.text.isEmpty
+                                  ? null
+                                  : _masquePort.text,
+                              isExpanded: true,
+                              decoration: _input('443').copyWith(
+                                labelText: getLocalText.s("Port"),
+                              ),
+                              items: [
+                                for (final p in (_picker
+                                        ?.masquePortsFor(_masqueNetwork) ??
+                                    const <int>[]))
+                                  DropdownMenuItem(
+                                      value: '$p', child: Text('$p')),
+                              ],
+                              onChanged: _busy
+                                  ? null
+                                  : (v) => setState(
+                                      () => _masquePort.text = v ?? ''),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        getLocalText.s("Leave IP empty to use the server from registration. HTTP/3 and HTTP/2 live on different ports — the list adapts to the transport."),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
