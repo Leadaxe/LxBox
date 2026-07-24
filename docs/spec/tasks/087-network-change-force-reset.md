@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Implementation — реализует **failure mode 1** из §086 |
+| Статус | ✅ Реализовано (позже) — native force-reset на смену интерфейса: `DefaultNetworkMonitor.onNetworkSwitch` + debounce → `resetNetwork()` (BoxService.kt). Реализует failure mode 1 из §086. Шапка «Implementation» устарела. |
 | Дата | 2026-06-08 |
 | Тип | bug-fix / native |
 | Основание | [§086](086-stale-connections-network-change-doze.md) — root-cause найден, recommendation = variant **C** (native force-reset на genuine interface change) |

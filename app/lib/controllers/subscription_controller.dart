@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/import_rule.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/ui_msg.dart';
@@ -29,6 +30,7 @@ import '../services/haptic_service.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
+import '../services/subscription/import_rules.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart';
@@ -40,6 +42,7 @@ import '../services/warp/warp_endpoint_picker.dart';
 import '../services/warp/scan/candidate_generator.dart';
 import '../services/warp/scan/scan_models.dart';
 import '../services/warp/scan/scan_node_builder.dart';
+import '../services/warp/scan/scan_pool.dart';
 
 // Та же библиотека (`part`), поэтому library-private доступ
 // (`_replaceList`, `_formatAgo`) к/между основным файлом и part'ом доступен.
@@ -172,6 +175,13 @@ class SubscriptionController extends ChangeNotifier {
         try {
           final decoded = decode(body);
           final nodes = parseAll(decoded);
+          // §302 — применяем те же import-rules к кэшу: иначе после рестарта
+          // узлы вернулись бы в ДОзаменном виде, их nodeIdentityHash не совпал
+          // бы с персистентными DISABLE-хешами → выключение слетело бы до
+          // следующего сетевого refresh, а REPLACE не применился бы. GC и
+          // пересчёт disable здесь НЕ делаем — регидрация не сигнал «узел ушёл»
+          // (§283).
+          _applyRulesToNodes(nodes, list.activeImportRules);
           if (nodes.isEmpty) {
             // §101 — раньше скипали молча; UI-счётчик при этом показывает
             // stale lastNodeCount. Логируем с подсказкой, что в кеше.
@@ -210,6 +220,30 @@ class SubscriptionController extends ChangeNotifier {
     } finally {
       if (!_rehydrated.isCompleted) _rehydrated.complete();
     }
+  }
+
+  /// §302 — применяет import-rules к разобранным узлам и возвращает набор
+  /// identity-хешей узлов, помеченных к выключению.
+  ///
+  /// REPLACE патчит `NodeSpec.patchedJson` (узел эмитится из него), поэтому
+  /// хеш считаем ПОСЛЕ применения — выключение и роутинг работают с итоговым
+  /// видом узла, как его увидит билдер.
+  Set<String> _applyRulesToNodes(List<NodeSpec> nodes, List<ImportRule> rules) {
+    if (rules.isEmpty || nodes.isEmpty) return const {};
+    final result = applyImportRules(nodes, rules);
+    if (result.isEmpty) return const {};
+
+    final hashes = <String>{};
+    result.outcomes.forEach((i, outcome) {
+      if (i < 0 || i >= nodes.length) return;
+      final node = nodes[i];
+      if (outcome.patchedJson != null) {
+        node.patchedJson = outcome.patchedJson;
+        node.ruleTrail = outcome.replacements;
+      }
+      if (outcome.disabled) hashes.add(nodeIdentityHash(node));
+    });
+    return hashes;
   }
 
   /// §074 — add a fully-constructed UserServer (used by Add server wizard
@@ -256,6 +290,10 @@ class SubscriptionController extends ChangeNotifier {
     // §142 — класть ли reserved (client_id). null → дефолт по галке: обфускация
     // ВКЛ → false (привязка к устройству режется), ВЫКЛ → true (§025).
     bool? includeReserved,
+    // §304 — persistent keepalive (секунды) для узла: держит NAT/сессию живыми
+    // при простое. null → не писать keepalive (как раньше). Ручная регистрация
+    // подставляет 25 из Advanced; генератор §284 сюда не ходит.
+    int? persistentKeepalive,
     WarpClient? client,
   }) async {
     _busy = true;
@@ -283,9 +321,15 @@ class SubscriptionController extends ChangeNotifier {
       // §138 — endpoint, который реально должен попасть в узел. Юзер вписал
       // свой (не дефолт) → он; обфускация+дефолт → рандомный §136; иначе дефолт.
       final userPicked = endpoint != WarpAccount.defaultEndpoint;
+      // §305 — v6-endpoint только если в системе включён IPv6 (иначе мёртв).
+      final allowV6 = (await SettingsStorage.getVar('ipv6_enabled', 'false'))
+              .toLowerCase() ==
+          'true';
       final resolvedEndpoint = userPicked
           ? endpoint
-          : (obfuscate ? (picker.randomEndpoint() ?? endpoint) : endpoint);
+          : (obfuscate
+              ? (picker.randomEndpoint(allowV6: allowV6) ?? endpoint)
+              : endpoint);
 
       account ??= await warp.register(
         licenseKey: licenseKey,
@@ -326,9 +370,11 @@ class SubscriptionController extends ChangeNotifier {
       // §126 — обфусцированный узел добавляем через `.conf` (i1 ~1700b удобнее
       // провести INI-путём); plain WARP — короткий URI как раньше.
       if (account.awg != null) {
-        await _addWarpObfuscated(account, tag, withReserved);
+        await _addWarpObfuscated(account, tag, withReserved,
+            persistentKeepalive: persistentKeepalive);
       } else {
-        await _addWarpPlain(account, tag, withReserved);
+        await _addWarpPlain(account, tag, withReserved,
+            persistentKeepalive: persistentKeepalive);
       }
       if (_lastError != null) return null;
       return account;
@@ -351,6 +397,10 @@ class SubscriptionController extends ChangeNotifier {
     String? sni,
     String? idleTimeout,
     String? keepAlive,
+    // §305 — ручной override endpoint. null → endpoint из регистрации. Пишется
+    // только в узел, НЕ в кеш аккаунта (кеш держит канонический server реги).
+    String? server,
+    int? port,
     bool reuse = true,
     bool forceNew = false,
     WarpClient? client,
@@ -381,6 +431,30 @@ class SubscriptionController extends ChangeNotifier {
       );
 
       await SettingsStorage.setMasqueAccount(account);
+
+      // §305 — override endpoint применяем ТОЛЬКО к узлу (после setMasqueAccount,
+      // чтобы кеш держал server реги). Срабатывает если задан server ИЛИ port
+      // (порт-only override не теряется). Пустое поле → значение из реги.
+      // copyWith не несёт server/port → полный конструктор (как _masqueUri).
+      final hasServerOverride = server != null && server.trim().isNotEmpty;
+      final hasPortOverride = port != null && port > 0;
+      if (hasServerOverride || hasPortOverride) {
+        account = MasqueAccount(
+          privKeyDer: account.privKeyDer,
+          serverPubDer: account.serverPubDer,
+          clientV4: account.clientV4,
+          clientV6: account.clientV6,
+          server: hasServerOverride ? server.trim() : account.server,
+          port: hasPortOverride ? port : account.port,
+          deviceId: account.deviceId,
+          token: account.token,
+          createdAt: account.createdAt,
+          network: account.network,
+          sni: account.sni,
+          idleTimeout: account.idleTimeout,
+          keepAlive: account.keepAlive,
+        );
+      }
 
       final tag = _uniqueWarpTag(MasqueAccount.nodeTag());
       await _addMasqueNode(account, tag);
@@ -471,9 +545,11 @@ class SubscriptionController extends ChangeNotifier {
   /// (несёт AWG; reserved по [includeReserved]). [tag] (с эмодзи ⛈️ +
   /// коллизия-суффикс) ставится принудительно (INI-путь иначе дал бы `WireGuard`).
   Future<void> _addWarpObfuscated(
-      WarpAccount account, String tag, bool includeReserved) async {
-    final spec =
-        parseWireguardIni(account.toWireguardConf(includeReserved: includeReserved));
+      WarpAccount account, String tag, bool includeReserved,
+      {int? persistentKeepalive}) async {
+    final spec = parseWireguardIni(account.toWireguardConf(
+        includeReserved: includeReserved,
+        persistentKeepalive: persistentKeepalive));
     if (spec == null) {
       _lastError = const ErrMsg(ErrKey.invalidWarpConfigObfuscated);
       return;
@@ -514,9 +590,11 @@ class SubscriptionController extends ChangeNotifier {
   /// §137/§142 — plain WARP-узел (без AWG) через короткий URI с [tag].
   /// reserved по [includeReserved].
   Future<void> _addWarpPlain(
-      WarpAccount account, String tag, bool includeReserved) async {
-    final spec = parseWireguardUri(
-        account.toWireguardUri(includeReserved: includeReserved));
+      WarpAccount account, String tag, bool includeReserved,
+      {int? persistentKeepalive}) async {
+    final spec = parseWireguardUri(account.toWireguardUri(
+        includeReserved: includeReserved,
+        persistentKeepalive: persistentKeepalive));
     if (spec == null) {
       _lastError = const ErrMsg(ErrKey.invalidWarpConfig);
       return;
@@ -965,9 +1043,11 @@ class SubscriptionController extends ChangeNotifier {
     int seedCount = 100,
     Random? rng,
     WarpClient? client,
+    // §305 — override пула из JSON-окна эксперимента. null → bundled asset.
+    ScanPool? poolOverride,
   }) async {
     lastScanNote = null;
-    final pool = (await WarpEndpointPicker.load()).scan;
+    final pool = poolOverride ?? (await WarpEndpointPicker.load()).scan;
     if (pool == null) return null;
 
     // Аккаунты: кеш → или регистрация один раз (обоих типов — для смешанного
@@ -988,7 +1068,11 @@ class SubscriptionController extends ChangeNotifier {
     }
 
     // Посев → URI-узлы (пропускаем протоколы без аккаунта) → папка.
-    final gen = CandidateGenerator(pool, rng: rng);
+    // §305 — v6-кандидаты только если в системе включён IPv6 (иначе мёртвы).
+    final allowV6 =
+        (await SettingsStorage.getVar('ipv6_enabled', 'false')).toLowerCase() ==
+            'true';
+    final gen = CandidateGenerator(pool, rng: rng, allowV6: allowV6);
     final seedUris = _candidatesToUris(gen.seed(seedCount), builder);
     if (seedUris.isEmpty) return null;
     return _recreateScanFolder(seedUris);
@@ -1654,6 +1738,8 @@ class SubscriptionController extends ChangeNotifier {
       notifyListeners();
 
       // §289 — per-subscription идентичность (null → глобальная).
+      // §302 — import-rules здесь не участвуют: применяются ниже, к уже
+      // разобранным узлам.
       final result = await parseFromSource(
           UrlSource(list.url, identity: list.identity),
           client: httpClientForTesting);
@@ -1723,19 +1809,39 @@ class SubscriptionController extends ChangeNotifier {
       final nextInterval = current.updateIntervalHours < 0
           ? current.updateIntervalHours // -1: жёстко, сервер не переубедит
           : (result.meta?.updateIntervalHours ?? current.updateIntervalHours);
+      // §302 — import-rules применяем к УЖЕ РАЗОБРАННЫМ узлам (их emit-JSON):
+      // REPLACE патчит узел (`patchedJson` → уходит в конфиг), DISABLE даёт
+      // identity-хеши для §283. Делаем это ДО GC ниже, чтобы GC (now -
+      // lastSeen = 0 ≤ TTL) свежие пометки не снял: правило — источник истины
+      // и переставляется на КАЖДОМ refresh.
+      //
+      // Хеш считается ПОСЛЕ патча, тем же путём, что у билдера (обе стороны —
+      // `nodeIdentityHash` того же инстанса), поэтому пометка гарантированно
+      // совпадает с узлом, который билдер увидит.
+      final ruleNow = DateTime.now();
+      final ruleHashes =
+          _applyRulesToNodes(result.nodes, current.activeImportRules);
+
       // §283 — GC отметок disable ТОЛЬКО здесь (успешный сетевой fetch =
       // единственный сигнал «нода ушла из подписки»; failed fetch и
       // регидрация из кэша состав не проясняют, file:-подписки сюда не
       // доходят — guard выше). Хеш свежих нод считаем лишь когда есть что
       // чистить.
-      final nextDisabled = current.disabledHashes.isEmpty
+      final baseDisabled = current.disabledHashes.isEmpty && ruleHashes.isEmpty
           ? current.disabledHashes
           : gcDisabledHashes(
               current.disabledHashes,
               {for (final n in result.nodes) nodeIdentityHash(n)},
               updateIntervalHours: nextInterval,
-              now: DateTime.now(),
+              now: ruleNow,
             );
+      // Наложить хеши от DISABLE-правил поверх результата GC (правило > GC).
+      final nextDisabled = ruleHashes.isEmpty
+          ? baseDisabled
+          : {
+              ...baseDisabled,
+              for (final h in ruleHashes) h: ruleNow,
+            };
       final next = current.copyWith(
         name: nextName,
         meta: result.meta,

@@ -11,11 +11,13 @@ void main() {
         wgV4Cidr: ['162.159.192.0/24', '188.114.96.0/22'],
         wgV6Cidr: ['2606:4700:d0::/64'],
         wgPorts: [2408, 500, 1701, 4500],
-        wgPortsEmpirical: [854, 7156],
-        masqueV4Cidr: ['162.159.198.0/24'],
-        masquePort: 443,
+        wgPortsExtra: [854, 7156],
+        wgSniPool: ['www.google.com', 'yandex.ru'],
         utlsFpPool: ['chrome', 'firefox', 'safari'],
-        sniPool: ['www.google.com', 'yandex.ru'],
+        masqueV4Cidr: ['162.159.198.0/24', '162.159.199.0/24'],
+        masqueH3V4Cidr: ['162.159.198.1/32', '162.159.199.1/32'],
+        masquePortsH3: [443, 4443, 8095],
+        masquePortsH2: [500, 4500, 8443],
         masqueSniPool: ['www.cloudflare.com', 'yandex.ru'],
       );
 
@@ -26,16 +28,44 @@ void main() {
       expect(g.seed(0), isEmpty);
     });
 
-    test('порт согласован с протоколом; masque=443, wg=из wg-портов', () {
+    test('§305 — порт согласован с протоколом; masque h3/h2 раздельно', () {
       final g = CandidateGenerator(fullPool(), rng: Random(7));
       final wgPorts = {2408, 500, 1701, 4500, 854, 7156};
-      for (final c in g.seed(200)) {
+      const h3 = {443, 4443, 8095};
+      const h2 = {500, 4500, 8443};
+      var sawH3 = false, sawH2 = false;
+      for (final c in g.seed(400)) {
         if (c.protocol == ScanProtocol.awg) {
           expect(wgPorts.contains(c.port), isTrue, reason: 'wg port ${c.port}');
+        } else if (c.protocol == ScanProtocol.masqueH3) {
+          expect(h3.contains(c.port), isTrue, reason: 'h3 port ${c.port}');
+          sawH3 = true;
         } else {
-          expect(c.port, 443, reason: 'masque port');
+          expect(h2.contains(c.port), isTrue, reason: 'h2 port ${c.port}');
+          sawH2 = true;
         }
       }
+      expect(sawH3 && sawH2, isTrue, reason: 'оба транспорта встретились');
+    });
+
+    test('§305 — h3-IP ТОЛЬКО из h3-списка; h2-IP из блока', () {
+      final g = CandidateGenerator(fullPool(), rng: Random(13));
+      // fullPool: h3_v4_cidr = .198.1/.199.1 (/32); h2 v4_cidr = /24 блоки.
+      const h3hosts = {'162.159.198.1', '162.159.199.1'};
+      var sawH3 = false, sawH2 = false;
+      for (final c in g.seed(400)) {
+        if (c.protocol == ScanProtocol.masqueH3) {
+          expect(h3hosts.contains(c.ip), isTrue,
+              reason: 'h3 IP ${c.ip} должен быть из h3-списка');
+          sawH3 = true;
+        } else if (c.protocol == ScanProtocol.masqueH2) {
+          // h2 — по блоку, октет варьируется (не только .1).
+          expect(c.ip.startsWith('162.159.198.') ||
+              c.ip.startsWith('162.159.199.'), isTrue);
+          sawH2 = true;
+        }
+      }
+      expect(sawH3 && sawH2, isTrue);
     });
 
     test('SNI берётся из соответствующего пула', () {
@@ -59,11 +89,13 @@ void main() {
         wgV4Cidr: [],
         wgV6Cidr: [],
         wgPorts: [443],
-        wgPortsEmpirical: [],
-        masqueV4Cidr: ['162.159.198.0/24'],
-        masquePort: 443,
+        wgPortsExtra: [],
+        wgSniPool: [],
         utlsFpPool: ['chrome'],
-        sniPool: [],
+        masqueV4Cidr: ['162.159.198.0/24'],
+        masqueH3V4Cidr: [], // фолбэк на блок при пустом h3-списке
+        masquePortsH3: [443],
+        masquePortsH2: [500],
         masqueSniPool: ['yandex.ru'],
       );
       final g = CandidateGenerator(pool, rng: Random(5));
@@ -77,11 +109,13 @@ void main() {
         wgV4Cidr: ['162.159.192.0/24'],
         wgV6Cidr: [],
         wgPorts: [],
-        wgPortsEmpirical: [],
-        masqueV4Cidr: ['162.159.198.0/24'],
-        masquePort: 443,
+        wgPortsExtra: [],
+        wgSniPool: [],
         utlsFpPool: ['chrome'],
-        sniPool: [],
+        masqueV4Cidr: ['162.159.198.0/24'],
+        masqueH3V4Cidr: [], // фолбэк на блок при пустом h3-списке
+        masquePortsH3: [443],
+        masquePortsH2: [500],
         masqueSniPool: ['y'],
       );
       final g = CandidateGenerator(pool, rng: Random(8));

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/subscription_meta.dart';
 
@@ -79,6 +80,82 @@ void main() {
       expect(withId.copyWith(name: 'Y').identity, isNotNull);
       // clearIdentity снимает.
       expect(withId.copyWith(clearIdentity: true).identity, isNull);
+    });
+
+    test('§302 — importRules переживают JSON round-trip (§221-инвариант)', () {
+      final original = SubscriptionServers(
+        id: 'x',
+        name: 'X',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://e.com/sub',
+        importRules: const [
+          ImportRule(
+            conditions: [
+              ImportRuleCondition(
+                path: 'tls.utls.fingerprint',
+                op: ImportRuleOperator.contains,
+                pattern: 'hellochrome_120',
+              ),
+            ],
+            action: ImportRuleAction.replace,
+            targetPath: 'tls.utls.fingerprint',
+            replacement: 'chrome',
+          ),
+          ImportRule(
+            conditions: [
+              ImportRuleCondition(
+                path: 'tag',
+                op: ImportRuleOperator.matches,
+                pattern: r'.*Netherlands.*',
+                caseSensitive: true,
+              ),
+            ],
+            action: ImportRuleAction.disable,
+          ),
+        ],
+        importRulesEnabled: false,
+      );
+
+      final r = ServerList.fromJson(original.toJson()) as SubscriptionServers;
+      expect(r.importRules, hasLength(2));
+      expect(r.importRules[0].action, ImportRuleAction.replace);
+      expect(r.importRules[0].conditions.single.path, 'tls.utls.fingerprint');
+      expect(r.importRules[0].targetPath, 'tls.utls.fingerprint');
+      expect(r.importRules[0].replacement, 'chrome');
+      expect(r.importRules[1].action, ImportRuleAction.disable);
+      expect(r.importRules[1].conditions.single.op, ImportRuleOperator.matches);
+      expect(r.importRules[1].conditions.single.caseSensitive, isTrue);
+      // Порядок сохраняется (значим для цепочки replace→disable).
+      expect(r.importRules[1].conditions.single.pattern, r'.*Netherlands.*');
+      expect(r.importRulesEnabled, isFalse);
+    });
+
+    test('§302 — пустые importRules: ключи не пишутся, дефолты после rt', () {
+      final original = SubscriptionServers(
+        id: 'x',
+        name: 'X',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://e.com/sub',
+      );
+      final j = original.toJson();
+      // Пустой список и дефолтный тумблер не раздувают JSON.
+      expect(j.containsKey('import_rules'), isFalse);
+      expect(j.containsKey('import_rules_enabled'), isFalse);
+      final r = ServerList.fromJson(j) as SubscriptionServers;
+      expect(r.importRules, isEmpty);
+      expect(r.importRulesEnabled, isTrue);
+      // copyWith сохраняет правила при мутации других полей.
+      final withRules = original.copyWith(importRules: const [
+        ImportRule(
+          conditions: [ImportRuleCondition(path: 'tag', pattern: 'a')],
+          action: ImportRuleAction.disable,
+        )
+      ]);
+      expect(withRules.copyWith(name: 'Y').importRules, hasLength(1));
     });
 
     test('UserServer → JSON → UserServer', () {

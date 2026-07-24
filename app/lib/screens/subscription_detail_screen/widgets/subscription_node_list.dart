@@ -5,6 +5,7 @@ import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/ui_msg.dart';
 import 'node_warning_row.dart';
+import '../node_inspect_screen.dart';
 import '../../../services/l10n/locale_controller.dart';
 
 /// Nodes-tab list: actionable-warning banner + node rows with §283 toggle,
@@ -126,15 +127,33 @@ class SubscriptionNodeList extends StatelessWidget {
                   ),
                 )
               : (togglableNodes.isEmpty ? null : const SizedBox(width: 40)),
-          title: Text(
-            node.label.isNotEmpty ? node.label : node.tag,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              // Выключенная — глушим цветом (паттерн folder_detail §234).
-              color: disabled ? theme.colorScheme.onSurfaceVariant : null,
-            ),
+          title: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  node.label.isNotEmpty ? node.label : node.tag,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    // Выключенная — глушим цветом (паттерн folder_detail §234).
+                    color:
+                        disabled ? theme.colorScheme.onSurfaceVariant : null,
+                  ),
+                ),
+              ),
+              // §302 — значок «тело изменено import-rules» (REPLACE). Тап =
+              // меню с diff before/after. originLine != null только когда
+              // правило реально поменяло строку ноды.
+              if (node.originLine != null) ...[
+                const SizedBox(width: 6),
+                Tooltip(
+                  message: getLocalText.s("Modified by import rules"),
+                  child: Icon(Icons.edit_note,
+                      size: 16, color: theme.colorScheme.primary),
+                ),
+              ],
+            ],
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,6 +166,13 @@ class SubscriptionNodeList extends StatelessWidget {
             ],
           ),
           dense: true,
+          // §302 — короткий тап открывает разбор ноды (JSON + исходник):
+          // самое частое действие, ради него не надо лезть в меню. Включение/
+          // выключение узла живёт на Switch слева, так что тап по строке
+          // свободен. Долгий тап — меню (копирование, diff замен).
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => NodeInspectScreen(node: node),
+          )),
           onLongPress: () => _showNodeMenu(context, node),
         );
       },
@@ -190,10 +216,79 @@ class SubscriptionNodeList extends StatelessWidget {
                 );
               },
             ),
+            // §302 — экран разбора ноды: JSON (результат парсинга) + Source
+            // (исходный фрагмент подписки, для JSON-тел с переключателем
+            // Compact/Extended). Заменил попап «View JSON» — в попапе не
+            // помещался ни источник, ни переключение вида.
+            ListTile(
+              leading: const Icon(Icons.data_object),
+              title: Text(getLocalText.s("Inspect node")),
+              subtitle: Text(getLocalText.s("JSON and source"),
+                  style: const TextStyle(fontSize: 11)),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => NodeInspectScreen(node: node),
+                ));
+              },
+            ),
+            // §302 — diff before/after для нод, чьё тело изменил REPLACE.
+            if (node.originLine != null)
+              ListTile(
+                leading: const Icon(Icons.difference_outlined),
+                title: Text(getLocalText.s("View replacements")),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showReplacementsDialog(context, node);
+                },
+              ),
           ],
         ),
       ),
     );
   }
 
+  /// §302 — diff «до/после» import-rules: сырая строка подписки (`originLine`)
+  /// vs результат (`rawUri`). Оба моноширинным, с copy.
+  void _showReplacementsDialog(BuildContext context, NodeSpec node) {
+    final before = node.originLine ?? '';
+    final after = node.rawUri;
+    final text = '${getLocalText.s("Before")}:\n$before'
+        '\n\n${getLocalText.s("After")}:\n$after';
+    _showMonoDialog(context, getLocalText.s("View replacements"), text);
+  }
+
+  void _showMonoDialog(BuildContext context, String title, String body) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              body,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: body));
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(getLocalText.s("Copied"))),
+              );
+            },
+            child: Text(getLocalText.s("Copy")),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(getLocalText.s("Close")),
+          ),
+        ],
+      ),
+    );
+  }
 }

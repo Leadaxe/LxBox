@@ -21,6 +21,9 @@ class SubscriptionSourceTab extends StatelessWidget {
     required this.moreHeaders,
     required this.onRefetch,
     required this.onToggleShowAll,
+    this.canDecode = false,
+    this.decoded = false,
+    this.onToggleDecode,
   });
 
   final bool hasUrl;
@@ -40,6 +43,16 @@ class SubscriptionSourceTab extends StatelessWidget {
 
   final VoidCallback onRefetch;
   final VoidCallback onToggleShowAll;
+
+  /// §302 — тело реально закодировано (base64): галка имеет смысл. Для
+  /// plain-подписок она показывается неактивной — раскрывать нечего.
+  final bool canDecode;
+
+  /// Показывать раскодированное тело (те самые строки, с которыми работают
+  /// import-rules), а не сырой ответ сервера.
+  final bool decoded;
+
+  final ValueChanged<bool>? onToggleDecode;
 
   bool get _hasMoreHeaders => moreHeaders.isNotEmpty;
 
@@ -127,6 +140,28 @@ class SubscriptionSourceTab extends StatelessWidget {
         Text(getLocalText.s("Raw response"), style: theme.textTheme.titleSmall?.copyWith(
           color: cs.primary, fontWeight: FontWeight.bold,
         )),
+        // §302 — многие провайдеры отдают подписку одной base64-простынёй:
+        // в таком виде не видно ни строк-нод, ни того, с чем работают
+        // import-rules. Галка раскрывает тело тем же декодером, что и парсер.
+        // Показываем её ТОЛЬКО когда есть что раскрывать (тело закодировано);
+        // для plain-тел галки нет вовсе — неактивный контрол лишь захламляет
+        // экран. Раз показана — значит включена по умолчанию (см. экран).
+        if (canDecode)
+          CheckboxListTile(
+            value: decoded,
+            onChanged: onToggleDecode == null
+                ? null
+                : (v) => onToggleDecode!(v ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(getLocalText.s("Decode base64"),
+                style: const TextStyle(fontSize: 13)),
+            subtitle: Text(
+              getLocalText.s("Show the decoded body — what import rules see"),
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
+          ),
         const Divider(),
         if (rawSource.isEmpty)
           Text(getLocalText.s("No cached source data"))

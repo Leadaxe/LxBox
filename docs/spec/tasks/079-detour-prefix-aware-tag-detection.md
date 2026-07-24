@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | ✅ Реализовано (позже, §085 R1) — `TagResolver.isDetourMarker` (tag_resolver.dart), заменил `startsWith('⚙ ')`. Шапка «In progress» устарела. |
 | Дата | 2026-06-08 |
 | Тип | fix (behaviour bug) |
 | Зависимости | §048 (home node filters, detour show/hide toggle), §073 (`server_list_build._withPrefix`), §077 (same prefix-form bug class). |

@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:lxbox/models/node_spec.dart' show Awg;
+import 'package:lxbox/services/parser/ini_parser.dart';
+import 'package:lxbox/services/parser/uri_parsers/wireguard_parser.dart';
 import 'package:lxbox/services/warp/warp_account.dart';
 import 'package:lxbox/services/warp/warp_client.dart';
 
@@ -153,6 +156,58 @@ void main() {
     // Запятые URL-энкодятся (%2C) — parser декодит обратно. Проверяем по
     // декодированному query, не по сырой строке.
     expect(parsed.queryParameters['reserved'], '12,34,56');
+  });
+
+  // §304 — persistent keepalive для ручной регистрации WARP.
+  group('§304 persistent keepalive', () {
+    Future<WarpAccount> account() async {
+      final client = MockClient(
+          (req) async => http.Response(jsonEncode(regResponse()), 200));
+      return WarpClient(client: client).register(nowIso8601: 'now');
+    }
+
+    test('toWireguardUri: keepalive=25 → query keepalive; round-trip', () async {
+      final acc = await account();
+      final uri = acc.toWireguardUri(persistentKeepalive: 25);
+      expect(Uri.parse(uri).queryParameters['keepalive'], '25');
+      final spec = parseWireguardUri(uri);
+      expect(spec!.peers.first.persistentKeepalive, 25);
+    });
+
+    test('toWireguardUri: без параметра → нет keepalive (дефолт)', () async {
+      final acc = await account();
+      final uri = acc.toWireguardUri();
+      expect(Uri.parse(uri).queryParameters.containsKey('keepalive'), isFalse);
+    });
+
+    test('toWireguardConf: keepalive=25 → [Peer] PersistentKeepalive; round-trip',
+        () async {
+      final acc = await account();
+      final conf = acc
+          .copyWith(awg: const Awg({'jc': '4'}))
+          .toWireguardConf(persistentKeepalive: 25);
+      expect(conf, contains('PersistentKeepalive = 25'));
+      final spec = parseWireguardIni(conf);
+      expect(spec!.peers.first.persistentKeepalive, 25);
+    });
+
+    test('toWireguardConf: без параметра → нет PersistentKeepalive (генератор)',
+        () async {
+      final acc = await account();
+      final conf = acc.toWireguardConf();
+      expect(conf, isNot(contains('PersistentKeepalive')));
+    });
+
+    test('keepalive=0 → не пишется (явное выключение)', () async {
+      final acc = await account();
+      expect(acc.toWireguardConf(persistentKeepalive: 0),
+          isNot(contains('PersistentKeepalive')));
+      expect(
+          Uri.parse(acc.toWireguardUri(persistentKeepalive: 0))
+              .queryParameters
+              .containsKey('keepalive'),
+          isFalse);
+    });
   });
 
   test('§137 nodeTag: облако/гроза, +, AWG-суффикс', () {

@@ -531,7 +531,7 @@ warp/                        # §025/§130 WARP + MASQUE-транспорт (п�
   warp_client.dart           #   регистрация в Cloudflare (POST /reg): X25519-приватник не покидает телефон
   warp_account.dart          #   WARP-аккаунт (client_id→reserved, ключи)
   warp_endpoint_picker.dart  #   пул WARP-эндпоинтов + рандом endpoint/SNI (§148 курированные блоки; БЕЗ пробы)
-  scan/                      #   §284 endpoint scanner: рандом-посев узлов → папка «SCAN WARP» → urltest
+  scan/                      #   §284/§305 генератор нод: рандом-посев (IP × port × proto × SNI) → папка «WARP GENERATOR»; пул scan_pool.dart ← assets/warp_endpoints.json
   masque_account.dart · masque_keys.dart · masquerade_params.dart  #   §130 MASQUE (Cloudflare QUIC/CONNECT-IP) — эмит MasqueSpec
 migration/proxy_source_migration.dart  # one-shot v1 proxy_sources → v2 server_lists
 nav/home_return_observer.dart          # глобальный NavigatorObserver (§076): rebuild на возврат к home
@@ -901,7 +901,12 @@ Cloudflare WARP-интеграция (`services/warp/`, мастер `screens/wa
 
 - **WARP-WireGuard (§025).** `WarpClient` регистрирует устройство сам (POST в Cloudflare) — приватный ключ **X25519 генерируется на телефоне и не покидает его**. `client_id` (3 байта из base64) → WireGuard `reserved`; default-пир `engage.cloudflareclient.com:2408`. `warp_endpoint_picker.dart` даёт пул диапазонов/портов и рандомит endpoint (без пробы). Эмитится как обычная WireGuard-нода.
 - **MASQUE (§130, флагман v2.9.0).** Отдельная крипта (`masque_keys.dart` — ECDSA P-256, не X25519), `masque_account.dart`, `masquerade_params.dart`. `MasqueSpec` ([`node_spec.dart`](../app/lib/models/node_spec.dart), `protocol='masque'`) эмитит sing-box outbound `type: masque` (Cloudflare QUIC / CONNECT-IP), `network` = `h3`/`h2`. Требует ядро с поддержкой masque-транспорта — см. `KERNEL.md`.
-- **Endpoint scanner (§284).** Кнопка SCAN в мастере (`services/warp/scan/` + `SubscriptionController.scanWarp`): одна регистрация → 100 случайных узлов (IP × port × protocol{AWG, h3, h2} × SNI) поверх кредов (`ScanNodeBuilder`) → (пере)создаётся папка **«SCAN WARP»** → штатная probe-механика (`FolderProbeRunner`, стоп VPN → probe-сессия без tun → `probeUrlTest`) → мёртвые узлы удаляются, живые сортируются по задержке → дотест топ-3 → открывается папка с живыми эндпоинтами. **DNS-независимо**: url пробы — IP-литерал `https://1.1.1.1/cdn-cgi/trace` (доменный резолвился бы через local-dns). Без изменений ядра.
+- **Endpoint generator (§284/§305).** Кнопка **«Make experiment»** в мастере (`services/warp/scan/` + `SubscriptionController.generateWarp`) открывает экран `screens/warp_experiment_screen.dart`: число узлов (дефолт 20, клампится 1..200) + **редактируемый JSON пула** (дефолт — bundled `assets/warp_endpoints.json`, кнопка Reset возвращает исходный). Дальше: одна регистрация WARP/MASQUE (кешированные аккаунты переиспользуются) → N случайных узлов (IP × port × protocol{AWG, h3, h2} × SNI) поверх кредов (`ScanNodeBuilder`) → (пере)создаётся папка **«WARP GENERATOR»** (`kScanFolderName`), которая сразу открывается через `pushReplacement` (назад → Servers). Пробы генератор **не гоняет** и мёртвые не удаляет — пользователь тестирует штатной кнопкой Test в папке. **DNS-независимо**: url пробы папки — IP-литерал `https://1.1.1.1/cdn-cgi/trace`. Без изменений ядра.
+- **Пул эндпоинтов (§305, device-verified).** `assets/warp_endpoints.json` сгруппирован **по транспорту**; парсер — `ScanPool.fromFullJson` (один и тот же для bundled asset и для JSON-override окна эксперимента):
+  - `wireguard`: `v4_cidr` · `v6_cidr` · `ports` (2408/500/1701/4500 — достоверные) · `ports_extra` (empirical, §132 — ниже приоритетом) · `sni_pool` · `utls_fp_pool`;
+  - `masque`: `v4_cidr` · **`h3_v4_cidr`** · `ports_h3` · `ports_h2` · `sni_pool`.
+
+  MASQUE-физика (боевой тест через рабочий туннель): **h2** живёт по всему блоку `162.159.198.0/24`+`162.159.199.0/24`, **h3 (QUIC) — только на 4 адресах** (`.198.1`, `.198.2`, `.199.1`, `.199.2`), поэтому для него отдельная секция `h3_v4_cidr` (рандом по /24 давал ~1% попаданий). Порты рабочие для обоих — все 7 (`443/500/1701/4500/4443/8443/8095`); SNI на h3 не влияет. Выбор источника — `ScanPool.masqueV4CidrFor(net)` / `masquePortsFor(net)`. v6-эндпоинты подставляются только при `ipv6_enabled`. Как **корректно мерить живость** узлов — см. [DIAGNOSTICS.md](DIAGNOSTICS.md) и [spec/tasks/305](spec/tasks/305-masque-endpoint-h2-pool-and-override.md).
 
 ### 6. AppLog (per-source ring buffers, §043)
 

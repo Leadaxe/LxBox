@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | ✅ Реализовано (позже) — `BoxService.sendNotification` (NotificationChannel + PendingIntent на openURL) + `POST_NOTIFICATIONS`. Шапка «Draft» устарела. |
 | Дата | 2026-05-06 |
 | Связанные | [`035 platform interface extras`](035-platform-interface-extras-in-debug-api.md) |
 

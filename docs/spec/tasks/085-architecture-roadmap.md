@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress — реализуется инкрементально по roadmap |
+| Статус | ✅ Реализовано (roadmap исполнен) — R1–R4 в коде (tag_resolver / node_filter_view_model / lazy_persist_mixin / ConfigNode); хвост «по случаю». Прежний «In progress» — исторический. |
 | Дата | 2026-06-08 |
 | Тип | architecture / refactor roadmap |
 | Метод | Multi-agent arch-analysis: 7 срезов × (анализатор Explore + verify high-impact рекомендаций). 28 агентов, 1.7M токенов. Факты верифицированы против кода. |

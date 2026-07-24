@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | ✅ Реализовано (позже) — единый словарь `inline\|srs\|preset\|template` в DNS refs (dns_ref.dart). Шапка «Draft» устарела. |
 | Дата | 2026-05-03 |
 | Связанные spec'ы / таски | [`tasks/061-dns-rules-refactor`](061-dns-rules-refactor/spec.md), [`030 custom routing rules`](../features/030%20custom%20routing%20rules/spec.md), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md), [`032 dns rules schema symmetry`](032-dns-rules-schema-symmetry.md) |
 

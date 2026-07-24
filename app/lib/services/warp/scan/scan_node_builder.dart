@@ -55,15 +55,15 @@ class ScanNodeBuilder {
     return spec?.toUri();
   }
 
-  /// MASQUE-узел: те же креды, network (h3/h2) + SNI из кандидата.
+  /// MASQUE-узел: те же креды, network (h3/h2) + IP:port + SNI из кандидата.
   ///
-  /// ВАЖНО (device-verified): **h3 (QUIC) поднимается ТОЛЬКО на стандартном
-  /// MASQUE-сервере**, который CF отдал при регистрации (`acc.server`). На
-  /// случайном IP блока h3 даёт `CRYPTO_ERROR ... x509: algorithm unimplemented`.
-  /// **h2 (TCP-TLS) стабильно работает на всём блоке `162.159.198.*`** (проверено
-  /// на устройстве) — ограничения по IP нет, поэтому ему даём случайный IP
-  /// кандидата (разнообразие endpoint). server/port нет в copyWith —
-  /// пересобираем аккаунт.
+  /// §305 — h3 И h2 берут IP:port кандидата (разнообразие endpoint). Прошлый
+  /// форсинг h3 на `acc.server` снят: вывод «h3 привязан к server» был артефактом
+  /// headless-probe (probe при остановленном VPN не поднимает QUIC). Боевой тест
+  /// (reconnect + urltest) показал: h3 живёт на 4 адресах блока (.198.1/.2,
+  /// .199.1/.2) на всех 7 портах, h2 — по всему блоку. Узкий h3-источник задаёт
+  /// генератор (`masqueV4CidrFor`), сюда приходит уже готовый кандидат.
+  /// server/port нет в copyWith — пересобираем аккаунт.
   String? _masqueUri(ScanCandidate c) {
     final acc = masque;
     if (acc == null) return null;
@@ -73,9 +73,8 @@ class ScanNodeBuilder {
       serverPubDer: acc.serverPubDer,
       clientV4: acc.clientV4,
       clientV6: acc.clientV6,
-      // h3 — только стандартный сервер из реги; h2 — случайный IP кандидата.
-      server: isH3 ? acc.server : c.ip,
-      port: isH3 ? acc.port : c.port,
+      server: c.ip,
+      port: c.port,
       deviceId: acc.deviceId,
       token: acc.token,
       createdAt: acc.createdAt,

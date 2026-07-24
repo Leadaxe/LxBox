@@ -1,15 +1,16 @@
-// §284 — источник пула для WARP-скана. Все диапазоны выведены из
-// Cloudflare-first-party (cloudflare.com/ips: 162.158.0.0/15 ⊃ 162.159.192/193/195;
-// 188.114.96.0/20 ⊃ 188.114.96-99) + §132-verified. НЕТ сторонних реестров.
+// §284/§305 — источник пула для WARP-генерации. Структура сгруппирована по
+// транспорту (`wireguard` / `masque`), парсится из assets/warp_endpoints.json.
 //
-// MASQUE (masque_v4_cidr): .198.0/24 — device-verified (h2 стабилен на всём блоке;
-// дефолты .198.1 h3, .198.2 h2). .197.0/24 — официальный CF-анонс MASQUE (firewall-док).
-// .192.0/24 — доп. блок, что перебирают референсные реимплементации (usque, masque-plus).
-// h3 пинит серверный pubkey из реги: на IP с другим anycast-ключом падает (не IP-блок,
-// а pinning) — эксперимент показывает, где ключ совпадает.
+// WireGuard (secion `wireguard`): v4/v6 CIDR-блоки Cloudflare-first-party
+// (cloudflare.com/ips: 162.159.192/193/195; 188.114.96.0/22), порты 2408/500/
+// 1701/4500 (достоверные) + ports_extra (empirical, §132 — ниже приоритетом).
 //
-// Парсится из `scan`-блока assets/warp_endpoints.json. SNI-пулы приходят из
-// уже существующих sni_pool / masque_sni_pool (их грузит WarpEndpointPicker).
+// MASQUE (section `masque`): device-verified боевым тестом (пинг через рабочий
+// туннель, §305) — живы только .198.0/24 и .199.0/24 (.197/.192 = 0 живых,
+// убраны). Порты РАЗДЕЛЬНЫ по транспорту: h3 — 443/4443/8095, h2 — 500/4500/8443.
+// h3 работает и на чужих IP блока (не только сервер реги) — прошлый вывод «h3
+// привязан к server» был артефактом headless-probe (probe при остановленном VPN
+// не поднимает QUIC); реальную живость мерить через боевое ядро.
 
 import 'dart:io' show InternetAddress;
 import 'dart:math';
@@ -20,61 +21,95 @@ class ScanPool {
     required this.wgV4Cidr,
     required this.wgV6Cidr,
     required this.wgPorts,
-    required this.wgPortsEmpirical,
-    required this.masqueV4Cidr,
-    required this.masquePort,
+    required this.wgPortsExtra,
+    required this.wgSniPool,
     required this.utlsFpPool,
-    required this.sniPool,
+    required this.masqueV4Cidr,
+    required this.masqueH3V4Cidr,
+    required this.masquePortsH3,
+    required this.masquePortsH2,
     required this.masqueSniPool,
   });
 
+  // --- WireGuard / AWG ---
   final List<String> wgV4Cidr;
   final List<String> wgV6Cidr;
 
   /// Cloudflare-достоверные WG-порты (2408/500/1701/4500). Приоритетны.
   final List<int> wgPorts;
 
-  /// Empirical-порты — ниже в приоритете (§132: длинный список зарублен голосованием).
-  final List<int> wgPortsEmpirical;
+  /// Empirical-порты — ниже приоритетом (§132: длинный список зарублен голосованием).
+  final List<int> wgPortsExtra;
 
-  final List<String> masqueV4Cidr;
-  final int masquePort;
+  /// SNI-приманки для AWG-обфускации (junk, НЕ cloudflare-домены).
+  final List<String> wgSniPool;
+
   final List<String> utlsFpPool;
-  final List<String> sniPool;
+
+  // --- MASQUE ---
+
+  /// §305 — CIDR-блоки для h2 (h2 живёт по всему блоку). h3 их НЕ использует.
+  final List<String> masqueV4Cidr;
+
+  /// §305 — device-verified: h3 (QUIC) живёт ТОЛЬКО на этих адресах (CIDR, обычно
+  /// /32), НЕ на всём блоке. Рандомить h3 по широкому CIDR нельзя (попадание ~1%
+  /// → мёртвые ноды). CIDR (а не голый IP) — на будущее (под-диапазоны).
+  final List<String> masqueH3V4Cidr;
+
+  /// §305 — порты MASQUE, задаются отдельными ключами на транспорт. Device-verified
+  /// рабочие наборы сейчас СОВПАДАЮТ (все 7: 443/500/1701/4500/4443/8443/8095) —
+  /// ключи раздельные на случай, если CF разведёт их в будущем.
+  final List<int> masquePortsH3;
+  final List<int> masquePortsH2;
+
+  /// SNI для MASQUE (МОЖЕТ содержать cloudflare-домены — трафик и так идёт в CF).
   final List<String> masqueSniPool;
 
   /// Пул пригоден, если валиден хотя бы один транспорт. WG требует портов
-  /// (иначе пробу не собрать); MASQUE использует свой masquePort, WG-портов
-  /// ему не нужно — поэтому masque-only пул валиден без wg_ports.
+  /// (иначе пробу не собрать); MASQUE использует свои masque-порты.
   bool get hasData {
-    final wgOk = (wgV4Cidr.isNotEmpty || wgV6Cidr.isNotEmpty) &&
-        wgPorts.isNotEmpty;
+    final wgOk =
+        (wgV4Cidr.isNotEmpty || wgV6Cidr.isNotEmpty) && wgPorts.isNotEmpty;
     return wgOk || masqueV4Cidr.isNotEmpty;
   }
 
-  /// Парс `scan`-блока. `sniPool`/`masqueSniPool` передаёт caller (они лежат в
-  /// корне asset, не в `scan`). Возвращает null, если блок отсутствует/битый —
-  /// caller тогда прячет кнопку SCAN.
-  static ScanPool? fromJson(
-    Map<String, dynamic>? scan, {
-    required List<String> sniPool,
-    required List<String> masqueSniPool,
-  }) {
-    if (scan == null) return null;
-    List<String> strs(String k) =>
-        (scan[k] as List?)?.map((e) => e.toString()).toList() ?? const [];
-    List<int> ints(String k) =>
-        (scan[k] as List?)?.map((e) => (e as num).toInt()).toList() ?? const [];
+  /// §305 — порты для транспорта: `h2` → h2-набор, иначе h3-набор.
+  List<int> masquePortsFor(String network) =>
+      network == 'h2' ? masquePortsH2 : masquePortsH3;
+
+  /// §305 — CIDR-источник IP для транспорта. h2 → весь блок (`masqueV4Cidr`);
+  /// h3 → узкий `masqueH3V4Cidr` (device-verified 4 хоста). Фолбэк h3 на блок,
+  /// если h3-список пуст (обратная совместимость со старым asset).
+  List<String> masqueV4CidrFor(String network) {
+    if (network == 'h2') return masqueV4Cidr;
+    return masqueH3V4Cidr.isNotEmpty ? masqueH3V4Cidr : masqueV4Cidr;
+  }
+
+  /// Парс полной структуры файла (`{wireguard:{...}, masque:{...}}`). Возвращает
+  /// null, если структура битая/пустая (caller прячет генератор). Один парсер и
+  /// для bundled asset, и для JSON-override окна эксперимента (§305).
+  static ScanPool? fromFullJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    final wg = (json['wireguard'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final mq = (json['masque'] as Map?)?.cast<String, dynamic>() ?? const {};
+
+    List<String> strs(Map m, String k) =>
+        (m[k] as List?)?.map((e) => e.toString()).toList() ?? const [];
+    List<int> ints(Map m, String k) =>
+        (m[k] as List?)?.map((e) => (e as num).toInt()).toList() ?? const [];
+
     final pool = ScanPool(
-      wgV4Cidr: strs('wg_v4_cidr'),
-      wgV6Cidr: strs('wg_v6_cidr'),
-      wgPorts: ints('wg_ports'),
-      wgPortsEmpirical: ints('wg_ports_empirical'),
-      masqueV4Cidr: strs('masque_v4_cidr'),
-      masquePort: (scan['masque_port'] as num?)?.toInt() ?? 443,
-      utlsFpPool: strs('utls_fp_pool'),
-      sniPool: sniPool,
-      masqueSniPool: masqueSniPool,
+      wgV4Cidr: strs(wg, 'v4_cidr'),
+      wgV6Cidr: strs(wg, 'v6_cidr'),
+      wgPorts: ints(wg, 'ports'),
+      wgPortsExtra: ints(wg, 'ports_extra'),
+      wgSniPool: strs(wg, 'sni_pool'),
+      utlsFpPool: strs(wg, 'utls_fp_pool'),
+      masqueV4Cidr: strs(mq, 'v4_cidr'),
+      masqueH3V4Cidr: strs(mq, 'h3_v4_cidr'),
+      masquePortsH3: ints(mq, 'ports_h3'),
+      masquePortsH2: ints(mq, 'ports_h2'),
+      masqueSniPool: strs(mq, 'sni_pool'),
     );
     return pool.hasData ? pool : null;
   }

@@ -249,6 +249,35 @@ Sing-box matches **первым попавшимся правилом** (top-dow
 4. `/state/storage` `vars.dns_final` / `route_final` — что в storage'е выбрано?
 5. Если group-default `✨auto` (URLTest) — он сам выбирает по ping; смотри historical delays per-node
 
+### «Нода живая, а пинг −1» — методика замера живости (§305)
+
+Замер врёт чаще, чем узел умирает. В §305 вывод «MASQUE h3 мёртв — 1 живая из 62»
+оказался артефактом измерения: после корректного прогона h3 отвечает на всех 7
+портах. **Прежде чем объявлять ноду мёртвой — проверь, чем её мерили.**
+
+| Способ | Годен | Почему |
+|---|---|---|
+| `POST /folders/{id}/probe` при **остановленном** VPN (headless §236) | только TCP | headless probe-сессия **не поднимает QUIC** → все h3/QUIC-ноды дают 0 живых (ложь). h2/TCP при этом меряется нормально |
+| `POST /folders/{id}/probe` при **запущенном** VPN | нет | отказывает: `probe failed to start: __vpn_running__` (два CommandServer на процесс невозможны) |
+| `rebuild-config` + `urltest` **без reconnect** | нет | ядро продолжает работать на старой сессии → живые ноды дают `-1` |
+| `rebuild-config` → **`/action/reconnect`** → `urltest` **по одной** | **да** | единственный достоверный путь |
+
+Порядок для честного замера:
+
+```bash
+# 1. ноды уже в папке → вложить в боевой конфиг
+curl -X POST -H "$HDR" "$BASE/action/rebuild-config"
+# 2. ОБЯЗАТЕЛЬНО: ядро должно перечитать конфиг
+curl -X POST -H "$HDR" "$BASE/action/reconnect"
+# 3. пинговать ПО ОДНОЙ (mass-ping даёт ложные -1 у QUIC: хендшейки конкурируют)
+curl -X POST -H "$HDR" "$BASE/action/urltest?tag=$(enc '<тег ноды>')"
+sleep 6
+curl -s -H "$HDR" "$BASE/state" | jq '.last_delay["<тег ноды>"]'
+```
+
+Живая карта MASQUE-эндпоинтов (какие IP/порты вообще должны отвечать) —
+в [spec/tasks/305](spec/tasks/305-masque-endpoint-h2-pool-and-override.md).
+
 ### «Load balance: трафик идёт не туда / перекос в один сервер» (§208)
 
 1. `/config` → `balancer` у `<tag>-auto`: `mode=round_robin`? `pool`/`pool_tolerance`/`sticky_hash` те, что ожидаешь?
@@ -353,6 +382,7 @@ Android держит **ОДИН** VPN-слот. Этот текст (§224/§276
 - [Debug API reference](api/debug-api-reference.md) — полный список endpoints (вкл. destructive)
 - [STORAGE.md](STORAGE.md) — что внутри `state/storage` snapshot'а
 - [TEMPLATE.md](TEMPLATE.md) — как читать `wizard_template.json` для понимания где какие vars / preset / DNS-server'а определены
+- [spec/tasks/305 — MASQUE endpoint](spec/tasks/305-masque-endpoint-h2-pool-and-override.md) — device-verified карта живых WARP-MASQUE IP/портов (h3 против h2) + таблица «чем мерить живость нод»
 - [scripts/lxbox-diag.sh](../scripts/lxbox-diag.sh) — автоматический сборщик snapshot'а
 - [scripts/ensure-wifi-adb.sh](../scripts/ensure-wifi-adb.sh) — поднять wifi-adb (USB → tcpip 5555)
 - [scripts/install-apk.sh](../scripts/install-apk.sh) — install + auto-forward Debug API

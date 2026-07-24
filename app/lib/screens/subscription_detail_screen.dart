@@ -10,6 +10,7 @@ import '../models/server_list.dart';
 import '../models/ui_msg.dart';
 import '../services/error_humanize.dart';
 import '../services/node_hash.dart';
+import '../services/parser/body_decoder.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
@@ -19,6 +20,7 @@ import 'subscriptions_screen/entry_context_menu.dart' show showEditSourceDialog;
 import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/subscription_detail_format.dart';
 import 'subscription_detail_screen/widgets/subscription_meta.dart';
+import 'subscription_detail_screen/widgets/subscription_filters_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_node_list.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_source_tab.dart';
@@ -52,6 +54,18 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   bool _sourceLoading = false;
   UiMsg? _sourceError;
   bool _showAllHeaders = false;
+
+  /// §302 — Source-вкладка: показывать тело раскодированным из base64.
+  /// Многие провайдеры отдают подписку одной base64-простынёй; в таком виде
+  /// не видно ни строк-нод, ни того, с чем работают import-rules. Галка
+  /// прогоняет тело тем же декодером, что и парсер (`decode`), — вид
+  /// совпадает с тем, что видят правила.
+  ///
+  /// `null` = пользователь галку не трогал → действует дефолт «включено»
+  /// (галка вообще показывается только когда тело закодировано, значит
+  /// раскрытый вид — то, ради чего её показали). Явный выбор пользователя
+  /// перекрывает дефолт и живёт до ухода с экрана.
+  bool? _decodeSource;
 
   // §248 — каналы: секция Channels в detour-пикере + подпись «⚙ <label>»
   // канальной override-цели в Settings-вкладке.
@@ -141,7 +155,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    // §302 — 4-я вкладка «Filters» (import-rules). Порядок Nodes/Settings/
+    // Source/Filters сохраняет index Source=2 (слушатель ниже не меняется).
+    _tabCtrl = TabController(length: 4, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.name);
     // §283 — entry.list может смениться мимо _loadNodes (см.
     // _rebuildRowsFromEntry); _replaceList нотифицирует entry.
@@ -314,10 +330,12 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         ],
         bottom: TabBar(
           controller: _tabCtrl,
+          isScrollable: true,
           tabs: [
             Tab(text: getLocalText.s("Nodes")),
             Tab(text: getLocalText.s("Settings")),
             Tab(text: getLocalText.s("Source")),
+            Tab(text: getLocalText.s("Filters")),
           ],
         ),
       ),
@@ -356,6 +374,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
           _buildSettingsTab(theme),
           // Tab 3: Source
           _buildSourceTab(theme),
+          // Tab 4: Filters (§302 — import-rules)
+          SubscriptionFiltersTab(
+            entry: widget.entry,
+            controller: widget.controller,
+          ),
         ],
       ),
     );
@@ -598,20 +621,49 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     unawaited(widget.controller.persistSources());
   }
 
+  /// §302 — тело, раскрытое из base64 (тот же путь, что у парсера: `decode`).
+  /// `UriLines` склеиваем обратно построчно — это ровно тот список строк, по
+  /// которому работают import-rules. INI/Amnezia/JSON отдаём как текст. Если
+  /// декодировать нечего (тело и так plain) — вернём его без изменений, а
+  /// галку в UI покажем неактивной через [_sourceIsBase64].
+  String get _decodedSource {
+    if (_rawSource.isEmpty) return '';
+    final d = decode(_rawSource);
+    return switch (d) {
+      UriLines(lines: final l) => l.join('\n'),
+      IniConfig(text: final t) => t,
+      AmneziaConfig(iniTexts: final ts) => ts.join('\n\n'),
+      JsonConfig() => _rawSource,
+      DecodeFailure() => _rawSource,
+    };
+  }
+
+  /// Тело реально закодировано (raw ≠ decoded) — только тогда галка имеет
+  /// смысл. Для plain-подписок она неактивна: раскрывать нечего.
+  bool get _sourceIsBase64 =>
+      _rawSource.isNotEmpty && _decodedSource.trim() != _rawSource.trim();
+
   Widget _buildSourceTab(ThemeData theme) {
     final entry = widget.entry;
+    final decodable = _sourceIsBase64;
+    // Дефолт — раскрытый вид: галка показывается только когда есть что
+    // раскрывать, так что показ ⇒ включено. Явный выбор юзера важнее.
+    final showDecoded = decodable && (_decodeSource ?? true);
     return SubscriptionSourceTab(
       hasUrl: entry.url.isNotEmpty,
       sourceLoading: _sourceLoading,
       sourceError: _sourceError,
       rawHeaders: _rawHeaders,
-      rawSource: _rawSource,
+      rawSource: showDecoded ? _decodedSource : _rawSource,
       showAllHeaders: _showAllHeaders,
       importantHeaders: _filteredHeaders(important: true),
       moreHeaders: _filteredHeaders(important: false),
       onRefetch: () => unawaited(_fetchSourceLive()),
       onToggleShowAll: () =>
           setState(() => _showAllHeaders = !_showAllHeaders),
+      canDecode: decodable,
+      decoded: showDecoded,
+      onToggleDecode: (v) => setState(() => _decodeSource = v),
     );
   }
 

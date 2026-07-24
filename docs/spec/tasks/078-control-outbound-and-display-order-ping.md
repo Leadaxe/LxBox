@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress (v1.9.1) |
+| Статус | ✅ Реализовано (позже) — `runMassUrltest({order})` в порядке отображения + control-outbound pass-through. Шапка «In progress» устарела. |
 | Дата | 2026-06-08 |
 | Тип | fix (UX) + small refactor |
 | Зависимости | §048 (NodeFilter), §077 (ambiguity-aware subscription lookup), §070 (sort options), §071 (manual reorder). |
