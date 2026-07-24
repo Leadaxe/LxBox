@@ -1,11 +1,17 @@
 # §257 — `dns_enable`-var пресета + Force IPv4 виден в DNS Settings
 
-> **СТАТУС: В РАБОТЕ** (07.07.2026). Следствие §256 (Force IPv4 у
-> пользовательского правила, в релизе v2.14.0): галку Force IPv4 без
-> dedicated-сервера юзер ставит, но правило **не появляется** в списке
-> DNS Settings — гейт видимости требовал `serverTag`. Плюс у пресета
-> ru-direct нет явной галки «DNS вкл/выкл» (тумблер спрятан в
-> `dns_options.rules`, дублирует смысл).
+> **СТАТУС: ✅ РЕАЛИЗОВАНО** (сверено с кодом 2026-07-21). Все артефакты спеки на
+> месте: `presetDnsEnableVar` (единая точка, custom_rules.dart), `isPresetDnsEnabled`
+> **удалён** (остались только tombstone-комменты), `DnsRuleAspectsTile`/`DnsAspectRow`
+> + `_toggleRuleForceIpv4`/`_togglePresetDnsEnable` (dns_settings_screen), гейт
+> видимости по `forceIpv4Active`, `copyWith(clearDns:)` у Inline/Srs, var `dns_enable`
+> в шаблоне (ru-direct + fakeip). Исходная жалоба (Force IPv4-only правило невидимо
+> в DNS Settings) закрыта. Прежний «В РАБОТЕ» устарел.
+>
+> Следствие §256 (Force IPv4 у пользовательского правила, в релизе v2.14.0): галку
+> Force IPv4 без dedicated-сервера юзер ставит, но правило **не появлялось** в списке
+> DNS Settings — гейт видимости требовал `serverTag`. Плюс у пресета ru-direct не было
+> явной галки «DNS вкл/выкл» (тумблер спрятан в `dns_options.rules`, дублировал смысл).
 >
 > **Решения владельца (диалог 07.07):** `RuleDns.enabled` НЕ трогаем;
 > геттеры `dnsMirror*` НЕ переименовываем; миграций НЕТ; `isPresetDnsEnabled`

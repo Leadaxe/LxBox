@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft — **backlog** (код не начат: классов `HealthWatchdog` / `HeartbeatHealth` в `app/lib` нет; проверено 2026-06-22, [§155 аудит](../../tasks/155-audit-2026-06-quick-wins.md)). §047 события `HEARTBEAT_FAILED` / `LATENCY_DEGRADED` зарезервированы под эту фичу и сейчас не эмитятся — см. [AUTOMATION.md](../../../AUTOMATION.md). |
+| Статус | 🚫 Won't-fix — от реализации отказались (активный health-watchdog слишком расходует батарею: постоянные пробы/heartbeat не окупают выигрыш). §047 события `HEARTBEAT_FAILED` / `LATENCY_DEGRADED` остаются зарезервированными заглушками (не эмитятся — см. [AUTOMATION.md](../../../AUTOMATION.md)); классов `HealthWatchdog` / `HeartbeatHealth` нет и не будет. Точечный wake-recovery закрывается другими механизмами (idle-suspend §215, reachable-suspend §277). |
 | Дата | 2026-05-05 |
 | Связанные | [`030 vpn reload button`](../../tasks/030-vpn-reload-button.md), [`031 reset network api`](../../tasks/031-reset-network-api.md), [`031 debug api`](../031%20debug%20api/spec.md), [`047 public intent api`](../047%20public%20intent%20api/spec.md) (health-события) |
 | Триггер | После выхода phone'а из сна direct/auto outbound'ы перестают отвечать (sing-box не знает что NAT-таблица оператора протухла, держит зомби-connections в tracker'е по 16+ минут пока TCP keep-alive не сработает). Текущий heartbeat детектит только liveness localhost Clash API, не реальный transport. |

@@ -5,99 +5,125 @@ import 'package:flutter/services.dart' show rootBundle;
 
 import 'scan/scan_pool.dart';
 
-/// §136 — рандом WARP-endpoint из зашитых Cloudflare-блоков (реверс
-/// `warp-generator.github.io` `generateRandomEndpoint`). **БЕЗ пробы/скана.**
+/// §136/§305 — рандом WARP-endpoint из зашитых Cloudflare-блоков. **БЕЗ пробы.**
 ///
-/// `prefix + rand(1..10) + ":" + pick(ports)`. Работает т.к. почти любой IP в
-/// этих /24-блоках на любом порту из списка = живой WARP anycast; DPI режет
-/// только дефолтный `engage.cloudflareclient.com:2408`.
+/// Единственный источник истины — [_assetPath] (`assets/warp_endpoints.json`),
+/// сгруппированный по транспорту (`wireguard`/`masque`). Весь пул парсится в
+/// [ScanPool]; picker — тонкая обёртка над ним (рандом IP/SNI/endpoint).
 ///
-/// Пулы prefixes/ports/sni_pool — в [_assetPath]
-/// (`assets/warp_endpoints.json`), единственный источник истины (легко
-/// обновить без пересборки логики). §148 — 8.x-блоки убраны из asset как
-/// дохлые/режимые на LTE-DPI; остались твёрдые anycast 162.159.192/195 +
-/// 188.114.96-98.
+/// WG-рандом (§136): случайный IP из `wireguard.v4_cidr`/`v6_cidr` + порт из
+/// `ports`(∪`ports_extra`). Работает т.к. почти любой IP этих блоков на любом
+/// порту = живой WARP anycast; DPI режет только `engage…:2408`.
 class WarpEndpointPicker {
-  WarpEndpointPicker._(this._prefixes, this._ports, this._sniPool,
-      this._masqueSniPool, this._scan);
+  WarpEndpointPicker._(this._scan);
 
   static const String _assetPath = 'assets/warp_endpoints.json';
   static final Random _rng = Random.secure();
 
-  final List<String> _prefixes;
-  final List<int> _ports;
-  final List<String> _sniPool;
-
-  /// §130 — отдельный SNI-пул для MASQUE. Отличается от [_sniPool] тем, что
-  /// МОЖЕТ содержать cloudflare-домены: у MASQUE это реальный TLS SNI QUIC-
-  /// сессии к Cloudflare (трафик и так идёт туда), а не junk-приманка §136,
-  /// где cloudflare-SNI палевен и режется DPI. Fallback на [_sniPool] если
-  /// в asset нет отдельного masque_sni_pool.
-  final List<String> _masqueSniPool;
-
-  /// §284 — пул для WARP-скана (scan-блок asset). null → кнопка SCAN скрыта.
+  /// Весь пул (null если asset битый/пустой). Picker выводит из него всё.
   final ScanPool? _scan;
 
   static WarpEndpointPicker? _cached;
 
-  /// Загружает asset один раз (кэш). При ошибке — пустые списки (caller
-  /// должен проверить [hasData] / fallback на дефолтный endpoint).
+  /// Загружает asset один раз (кэш). При ошибке — пул null (caller проверяет
+  /// [hasData] / fallback на дефолтный endpoint).
   static Future<WarpEndpointPicker> load() async {
     if (_cached != null) return _cached!;
     try {
       final raw = await rootBundle.loadString(_assetPath);
       final json = jsonDecode(raw) as Map<String, dynamic>;
-      final sniPool = (json['sni_pool'] as List?)?.cast<String>() ?? const [];
-      // §130 — fallback на общий пул, если masque_sni_pool не задан.
-      final masqueSniPool =
-          (json['masque_sni_pool'] as List?)?.cast<String>() ?? sniPool;
-      _cached = WarpEndpointPicker._(
-        (json['prefixes'] as List?)?.cast<String>() ?? const [],
-        (json['ports'] as List?)?.map((e) => (e as num).toInt()).toList() ??
-            const [],
-        sniPool,
-        masqueSniPool,
-        ScanPool.fromJson(
-          (json['scan'] as Map?)?.cast<String, dynamic>(),
-          sniPool: sniPool,
-          masqueSniPool: masqueSniPool,
-        ),
-      );
+      _cached = WarpEndpointPicker._(ScanPool.fromFullJson(json));
     } catch (_) {
-      _cached =
-          WarpEndpointPicker._(const [], const [], const [], const [], null);
+      _cached = WarpEndpointPicker._(null);
     }
     return _cached!;
   }
 
-  bool get hasData => _prefixes.isNotEmpty && _ports.isNotEmpty;
+  bool get hasData => _scan?.hasData ?? false;
 
-  /// `prefix + rand(1..10) + ":" + pick(ports)`. Возвращает null если нет
-  /// данных (caller оставляет дефолтный endpoint).
-  String? randomEndpoint() {
-    if (!hasData) return null;
-    final prefix = _prefixes[_rng.nextInt(_prefixes.length)];
-    final port = _ports[_rng.nextInt(_ports.length)];
-    final host = '$prefix${1 + _rng.nextInt(10)}';
-    return '$host:$port';
+  /// §136 — случайный WG-endpoint `ip:port`. IP из v4/v6-блока, порт из
+  /// `ports`∪`ports_extra`. null если нет WG-данных (caller оставляет дефолт).
+  ///
+  /// §305 — [allowV6]: подставлять v6-блок разрешено ТОЛЬКО если в системе
+  /// включён IPv6 (`ipv6_enabled`). Иначе v6-endpoint мёртв (нет маршрута).
+  /// Дефолт false — безопасный (v4-only).
+  String? randomEndpoint({bool allowV6 = false}) {
+    final s = _scan;
+    if (s == null) return null;
+    final useV6 = allowV6 && s.wgV6Cidr.isNotEmpty && _rng.nextBool();
+    final blocks = useV6 ? s.wgV6Cidr : s.wgV4Cidr;
+    final ports = [...s.wgPorts, ...s.wgPortsExtra];
+    if (blocks.isEmpty || ports.isEmpty) return null;
+    try {
+      final ip = randomIpInCidr(blocks[_rng.nextInt(blocks.length)], _rng);
+      final port = ports[_rng.nextInt(ports.length)];
+      // v6-литерал в скобках для host:port.
+      final host = ip.contains(':') ? '[$ip]' : ip;
+      return '$host:$port';
+    } catch (_) {
+      return null;
+    }
   }
 
-  /// Случайный SNI из пула (РФ-сайты + международные). '' если пул пуст.
-  String randomSni() =>
-      _sniPool.isEmpty ? '' : _sniPool[_rng.nextInt(_sniPool.length)];
+  /// Случайный SNI-приманка для AWG (WG-пул). '' если пуст.
+  String randomSni() {
+    final p = _scan?.wgSniPool ?? const [];
+    return p.isEmpty ? '' : p[_rng.nextInt(p.length)];
+  }
 
-  List<String> get sniPool => List.unmodifiable(_sniPool);
+  List<String> get sniPool => List.unmodifiable(_scan?.wgSniPool ?? const []);
 
   /// §130 — случайный SNI из MASQUE-пула. '' если пуст.
-  String randomMasqueSni() => _masqueSniPool.isEmpty
-      ? ''
-      : _masqueSniPool[_rng.nextInt(_masqueSniPool.length)];
+  String randomMasqueSni() {
+    final p = _scan?.masqueSniPool ?? const [];
+    return p.isEmpty ? '' : p[_rng.nextInt(p.length)];
+  }
 
   /// §130 — MASQUE SNI-пул (может содержать cloudflare-домены).
-  List<String> get masqueSniPool => List.unmodifiable(_masqueSniPool);
+  List<String> get masqueSniPool =>
+      List.unmodifiable(_scan?.masqueSniPool ?? const []);
 
-  /// §284 — пул скана (null если scan-блок отсутствует/битый).
+  /// §284 — весь пул (null если asset отсутствует/битый).
   ScanPool? get scan => _scan;
+
+  /// §305 — MASQUE CIDR-блоки для выбора endpoint. Пусто если нет пула.
+  List<String> get masqueV4Cidr =>
+      List.unmodifiable(_scan?.masqueV4Cidr ?? const []);
+
+  /// §305 — device-verified MASQUE-порты для транспорта (`h3`/`h2`). Пусто если
+  /// нет пула.
+  List<int> masquePortsFor(String network) =>
+      _scan?.masquePortsFor(network) ?? const [];
+
+  /// §305 — случайный MASQUE-порт для транспорта. null если набор пуст.
+  int? randomMasquePortFor(String network) {
+    final ports = masquePortsFor(network);
+    return ports.isEmpty ? null : ports[_rng.nextInt(ports.length)];
+  }
+
+  /// §305 — случайный MASQUE-IP из случайного блока. null если пусто/битый CIDR
+  /// (caller оставляет endpoint из регистрации).
+  String? randomMasqueIp({String network = 'h3'}) {
+    // §305 — источник ЗАВИСИТ от транспорта: h3 живёт только на 4 хостах, рандом
+    // по всему блоку дал бы мёртвый адрес в ~99% случаев.
+    final blocks = _scan?.masqueV4CidrFor(network) ?? const [];
+    if (blocks.isEmpty) return null;
+    final cidr = blocks[_rng.nextInt(blocks.length)];
+    try {
+      return randomIpInCidr(cidr, _rng);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// §305 — сырой JSON asset'а (для дефолта JSON-окна эксперимента). '' при сбое.
+  static Future<String> loadRawJson() async {
+    try {
+      return await rootBundle.loadString(_assetPath);
+    } catch (_) {
+      return '';
+    }
+  }
 
   /// Для тестов — сброс кэша.
   static void resetForTest() => _cached = null;

@@ -197,6 +197,23 @@ class SubscriptionEntry extends ChangeNotifier {
     _replaceList(list.copyWith(identity: next));
   }
 
+  /// §302 — заменить набор import-rules подписки целиком (после CRUD/reorder
+  /// в редакторе). No-op для не-подписок. UI persist'ит через
+  /// `controller.persistSources()`; правила вступают в силу на следующем
+  /// refresh (существующие ноды не переразбираются на месте).
+  void updateImportRules(List<ImportRule> rules) {
+    final list = _list;
+    if (list is! SubscriptionServers) return;
+    _replaceList(list.copyWith(importRules: rules));
+  }
+
+  /// §302 — общий тумблер набора (не удаляя правила). No-op для не-подписок.
+  set importRulesEnabled(bool v) {
+    final list = _list;
+    if (list is! SubscriptionServers) return;
+    _replaceList(list.copyWith(importRulesEnabled: v));
+  }
+
   set registerDetourServers(bool v) =>
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(registerDetourServers: v)));
   set registerDetourInAuto(bool v) =>

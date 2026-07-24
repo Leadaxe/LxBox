@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Implementing |
+| Статус | ✅ Реализовано (позже) — services/error_format.dart, `formatUserError` в ~16 файлах. Шапка «Implementing» устарела. |
 | Дата | 2026-05-07 |
 | Связанные spec'ы | [`014 dns settings`](../features/014%20dns%20settings/spec.md), [`040 per-group ping settings`](./040-per-group-ping-test-settings.md) |
 | Затронутые файлы | `app/lib/services/error_format.dart` (new), `app/lib/controllers/home_controller.dart`, `app/lib/screens/{node_settings,dns_settings,backup,config,debug}_screen.dart`, тесты |

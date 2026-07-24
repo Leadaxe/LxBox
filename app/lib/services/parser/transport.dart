@@ -31,11 +31,12 @@ TransportSpec? parseTransport(
 
   switch (typ) {
     case 'ws':
-      final path = q['path'] ?? '/';
+      // §303 — `?ed=N` в пути = early data (Xray), а не часть пути.
+      final (path, ed) = splitEarlyDataPath(q['path'] ?? '/');
       var host = (q['host'] ?? '').trim();
       if (host.isEmpty) host = (q['sni'] ?? '').trim();
       if (host.isEmpty) host = (q['obfsParam'] ?? '').trim();
-      return WsTransport(path: path, host: host);
+      return WsTransport(path: path, host: host, maxEarlyData: ed);
     case 'grpc':
       final sn = (q['serviceName'] ?? q['service_name'] ?? q['path'] ?? '').trim();
       return GrpcTransport(serviceName: sn);
@@ -56,7 +57,9 @@ TransportSpec? parseTransport(
         hosts: host.isNotEmpty ? [host] : const [],
       );
     case 'httpupgrade':
-      final path = q['path'] ?? '/';
+      // §303 — early data у httpupgrade в sing-box нет: хвост срезаем, ed
+      // отбрасываем (иначе он уедет в путь и даст 404).
+      final (path, _) = splitEarlyDataPath(q['path'] ?? '/');
       var host = (q['host'] ?? '').trim();
       if (host.isEmpty) host = (q['sni'] ?? '').trim();
       return HttpUpgradeTransport(path: path, host: host);
@@ -74,6 +77,32 @@ TransportSpec? parseTransport(
   }
 }
 
+/// §303 — разделить Xray-путь вида `/api/v2/channel?ed=2560` на чистый путь и
+/// значение early data. Хвост `?…` не является частью пути ни для одного
+/// транспорта sing-box — срезаем всегда, даже если `ed` невалиден или его нет.
+///
+/// Возвращает `(path, maxEarlyData)`; `maxEarlyData == null`, когда `ed`
+/// отсутствует или не является положительным целым.
+(String, int?) splitEarlyDataPath(String raw) {
+  final qIdx = raw.indexOf('?');
+  if (qIdx < 0) return (raw.isEmpty ? '/' : raw, null);
+
+  var path = raw.substring(0, qIdx);
+  if (path.isEmpty) path = '/';
+
+  // Битый percent-encoding в хвосте роняет splitQueryString — путь всё равно
+  // должен быть очищен, поэтому падение гасим до «ed отсутствует».
+  // splitQueryString бросает ArgumentError на битом percent-encoding.
+  String? ed;
+  try {
+    ed = Uri.splitQueryString(raw.substring(qIdx + 1))['ed'];
+  } catch (_) {
+    ed = null;
+  }
+  final parsed = ed == null ? null : int.tryParse(ed.trim());
+  return (path, parsed != null && parsed > 0 ? parsed : null);
+}
+
 /// §127 — разбор `type=xhttp` со всеми клиентскими полями SPEC 002 v2.
 ///
 /// Источник полей — плоские query И параметр `extra` (URL-encoded JSON).
@@ -83,10 +112,8 @@ XhttpTransport _parseXhttp(Map<String, String> q) {
   final m = _mergeXhttpExtra(q);
 
   // path: срезать `?…`-хвост (реальные ноды: path=/x?ed=2048 — хвост не путь).
-  var path = m['path'] ?? '/';
-  final qIdx = path.indexOf('?');
-  if (qIdx >= 0) path = path.substring(0, qIdx);
-  if (path.isEmpty) path = '/';
+  // §303 — общий хелпер; early data у xhttp нет, значение отбрасываем.
+  final (path, _) = splitEarlyDataPath(m['path'] ?? '/');
 
   var host = (m['host'] ?? '').trim();
   if (host.isEmpty) host = (m['sni'] ?? '').trim();
@@ -302,10 +329,13 @@ List<String> _normalizeAlpn(String raw) {
 /// `type`/`path`/`host`/`serviceName`, игнорируя пустые.
 Map<String, String> transportToQuery(TransportSpec t) {
   switch (t) {
-    case WsTransport(path: final p, host: final h):
+    case WsTransport(path: final p, host: final h, maxEarlyData: final ed):
+      // §303 — early data возвращаем в URI тем же хвостом пути, каким она в
+      // него пришла (`/x?ed=2560`), иначе round-trip её теряет.
+      final withEd = ed == null ? p : '${p.isEmpty ? '/' : p}?ed=$ed';
       return {
         'type': 'ws',
-        if (p.isNotEmpty && p != '/') 'path': p,
+        if (withEd.isNotEmpty && withEd != '/') 'path': withEd,
         if (h.isNotEmpty) 'host': h,
       };
     case GrpcTransport(serviceName: final sn):

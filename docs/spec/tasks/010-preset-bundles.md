@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | ✅ Реализовано (позже) — `CustomRulePreset` + `expandPreset`/`mergeFragments`; bundle `ru-direct` в wizard_template.json. Шапка «In progress» устарела. |
 | Дата старта | 2026-04-21 |
 | Связанный spec | [`033 preset bundles`](../features/033%20preset%20bundles/spec.md) |
 | Лэндинг | v1.5.0 |

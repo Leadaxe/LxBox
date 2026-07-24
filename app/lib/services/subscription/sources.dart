@@ -78,6 +78,7 @@ class ParseResult {
   final DecodedBody decoded;
   final String rawBody;
   final Map<String, String> headers;
+
   const ParseResult(this.nodes, this.decoded,
       [this.meta, this.rawBody = '', this.headers = const {}]);
 }
@@ -100,6 +101,10 @@ Future<ParseResult> parseFromSource(SubscriptionSource source,
     final merged = <String, String>{...inline, ...fetch.headers};
     final meta = _metaFromHeaders(merged);
     final decoded = decode(fetch.body);
+    // §302 — import-rules здесь НЕ применяются: они работают над готовым
+    // JSON узла (`NodeSpec.emit`), а не над текстом тела, и применяются в
+    // контроллере уже после парсинга. Так одно правило работает для всех
+    // форматов подписки (URI-строки / Xray-JSON / INI).
     final nodes = parseAll(decoded);
     return ParseResult(nodes, decoded, meta, fetch.body, fetch.headers);
   } finally {

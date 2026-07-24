@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
+import 'transport.dart';
 import 'uri_utils.dart';
 import 'utls_fingerprint.dart';
 
@@ -53,6 +56,13 @@ NodeSpec? parseXrayOutbound(Map<String, dynamic> element) {
   final spec = _xrayVlessToSpec(main, remarks);
   if (spec == null) return null;
 
+  // §302 — исходник ноды для UI («Source» на экране ноды) и для правил по
+  // JSON-телам: compact = сам outbound, extended = весь элемент как пришёл
+  // от провайдера (dns/inbounds/routing соседи). rawUri для таких нод —
+  // синтетическая заглушка `xray://<tag>`, источником служить не может.
+  final compact = _prettyJson(main);
+  final extended = _prettyJson(element);
+
   if (detour != null) {
     final chained = _xrayDetourToSpec(detour);
     if (chained != null) {
@@ -69,10 +79,23 @@ NodeSpec? parseXrayOutbound(Map<String, dynamic> element) {
         transport: spec.transport,
         chained: chained,
         warnings: spec.warnings,
-      );
+      )
+        ..sourceCompact = compact
+        ..sourceExtended = extended == compact ? null : extended;
     }
   }
-  return spec;
+  return spec
+    ..sourceCompact = compact
+    ..sourceExtended = extended == compact ? null : extended;
+}
+
+/// §302 — стабильный отступ для показа фрагмента подписки пользователю.
+String _prettyJson(Object? value) {
+  try {
+    return const JsonEncoder.withIndent('  ').convert(value);
+  } catch (_) {
+    return value.toString();
+  }
 }
 
 VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
@@ -203,7 +226,10 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
       final ws = stream['wsSettings'] as Map? ?? const {};
       final headers = (ws['headers'] as Map?)?.cast<String, dynamic>();
       final host = headers?['Host']?.toString() ?? '';
-      return WsTransport(path: ws['path']?.toString() ?? '/', host: host);
+      // §303 — Xray кладёт early data хвостом пути (`/x?ed=2560`); в sing-box
+      // это отдельное поле, а хвост в пути даёт 404.
+      final (path, ed) = splitEarlyDataPath(ws['path']?.toString() ?? '/');
+      return WsTransport(path: path, host: host, maxEarlyData: ed);
     case 'grpc':
       final g = stream['grpcSettings'] as Map? ?? const {};
       return GrpcTransport(
@@ -583,9 +609,19 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
   switch (type) {
     case 'ws':
       final headers = (raw['headers'] as Map?)?.cast<String, dynamic>();
+      // §303 — sing-box JSON обычно уже разделён (`max_early_data`), но в
+      // редактор попадают и склеенные Xray-пути.
+      final (path, edFromPath) =
+          splitEarlyDataPath(raw['path']?.toString() ?? '/');
+      final edField = raw['max_early_data'];
       return WsTransport(
-        path: raw['path']?.toString() ?? '/',
+        path: path,
         host: headers?['Host']?.toString() ?? '',
+        maxEarlyData: edField is int ? edField : edFromPath,
+        earlyDataHeaderName:
+            (raw['early_data_header_name']?.toString().isNotEmpty ?? false)
+                ? raw['early_data_header_name'].toString()
+                : null,
       );
     case 'grpc':
       return GrpcTransport(
@@ -597,8 +633,10 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
             const [],
       );
     case 'httpupgrade':
+      // §303 — early data у httpupgrade нет, но хвост пути всё равно чужой.
+      final (path, _) = splitEarlyDataPath(raw['path']?.toString() ?? '/');
       return HttpUpgradeTransport(
-        path: raw['path']?.toString() ?? '/',
+        path: path,
         host: raw['host']?.toString() ?? '',
       );
     case 'xhttp': // §097 — нативный xhttp из sing-box JSON

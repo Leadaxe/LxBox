@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Implementing |
+| Статус | ✅ Реализовано (позже) — `getPingOptions`/`savePingOptions`/`setGroupPing` + resolve-chain group→global→template (ping_orchestration.dart); §284 per-folder override. Шапка «Implementing» устарела. |
 | Дата | 2026-05-06 |
 | Связанные spec'ы | [`014 dns settings`](../features/014%20dns%20settings/spec.md), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md) |
 | Затронутые файлы | `app/lib/controllers/home_controller.dart`, `app/lib/services/settings_storage.dart`, `app/lib/screens/home_screen.dart`, `app/lib/services/debug/handlers/settings.dart`, `app/lib/services/clash_api_client.dart` (timeout sync), тесты |

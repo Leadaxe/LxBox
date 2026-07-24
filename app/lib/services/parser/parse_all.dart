@@ -14,11 +14,16 @@ import 'uri_parsers.dart';
 /// синтетического URI. URI-строки и JSON несут имена сами — hint игнорируют.
 List<NodeSpec> parseAll(DecodedBody decoded, {String? nameHint}) {
   return switch (decoded) {
-    UriLines(lines: final ls) =>
-      ls.map(parseUri).whereType<NodeSpec>().toList(),
+    // §302 — источник ноды для UI (вкладка Source на экране ноды): для
+    // URI-тел это сама строка. У JSON-веток источник проставляет парсер
+    // (там rawUri — синтетическая заглушка, см. json_parsers).
+    UriLines(lines: final ls) => [
+        for (final l in ls)
+          if (parseUri(l) case final NodeSpec n) n..sourceCompact = l,
+      ],
     IniConfig(text: final t) => [
         parseWireguardIni(t, nameHint: nameHint),
-      ].whereType<NodeSpec>().toList(),
+      ].whereType<NodeSpec>().map((n) => n..sourceCompact = t).toList(),
     // §110 — Amnezia vpn://: каждый контейнер → INI → нода (null-skip).
     // §243 — hint с индексным суффиксом (`hint`, `hint 2`, …): фрагмент
     // теперь «собственное имя» raw, суффикс-логика addMembersToFolder до

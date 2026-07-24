@@ -30,6 +30,41 @@ sealed class NodeSpec {
   final NodeSpec? chained;
   final List<NodeWarning> warnings;
 
+  /// §302 — сырая строка подписки ДО применения import-rules (REPLACE).
+  /// Проставляется постфактум контроллером на нодах, чьё тело правило
+  /// изменило (иначе `null`). Только для UI: значок «были замены» + diff
+  /// before/after (`originLine` ↔ `rawUri`). На `emit`/`nodeIdentityHash`
+  /// НЕ влияет — как и `warnings`, mutable и не сериализуется (пересоздаётся
+  /// на каждый parse; проставляется заново на каждом refresh).
+  String? originLine;
+
+  /// §302 — исходный фрагмент подписки, из которого собралась нода, в
+  /// «компактном» виде: для JSON-тел это САМ outbound-объект (без dns/
+  /// inbounds/routing соседей), для URI-строк — сама строка.
+  ///
+  /// Нужен, потому что `rawUri` у JSON-нод — синтетическая заглушка
+  /// (`xray://<tag>`), а не источник: показать пользователю «как устроено
+  /// после парсинга» по ней нельзя. Mutable, не сериализуется, на
+  /// `emit`/`nodeIdentityHash` не влияет — как `originLine`.
+  String? sourceCompact;
+
+  /// §302 — тот же фрагмент в «расширенном» виде: элемент как пришёл от
+  /// провайдера целиком (для Xray-массива — весь элемент с dns/inbounds/
+  /// routing). `null`, если расширенный вид не отличается от компактного.
+  String? sourceExtended;
+
+  /// §302 — JSON узла после применения import-rules (REPLACE). `null` —
+  /// правила узел не меняли. Когда не-null, [emit] отдаёт именно его: узел
+  /// уходит в конфиг в изменённом виде, и `nodeIdentityHash` считается от
+  /// него же (выключение/роутинг работают с итоговым видом).
+  ///
+  /// Mutable и не сериализуется — как `originLine`: правила переприменяются
+  /// на каждом импорте/регидрации, храниться этому незачем.
+  Map<String, dynamic>? patchedJson;
+
+  /// §302 — следы замен для UI («tls.utls.fingerprint: hello… → chrome»).
+  List<String> ruleTrail = const [];
+
   NodeSpec({
     required this.id,
     required this.tag,
@@ -44,7 +79,24 @@ sealed class NodeSpec {
   /// Чистая функция spec → sing-box entry. Не применяет prefix, не знает
   /// про подписку или детур-политику. Используется round-trip тестами,
   /// "view JSON" в UI, и внутри `getEntries`.
-  SingboxEntry emit(TemplateVars vars);
+  ///
+  /// §302 — если import-rules пропатчили узел ([patchedJson]), отдаём патч:
+  /// узел уходит в конфиг в изменённом виде, и `nodeIdentityHash` считается
+  /// от него же. Тип entry (Outbound/Endpoint) сохраняется — билдер
+  /// раскладывает по массивам exhaustive-switch'ем.
+  SingboxEntry emit(TemplateVars vars) {
+    final raw = emitRaw(vars);
+    final patch = patchedJson;
+    if (patch == null) return raw;
+    return switch (raw) {
+      Outbound() => Outbound(patch),
+      Endpoint() => Endpoint(patch),
+    };
+  }
+
+  /// Реализация эмита конкретного протокола. Не звать напрямую — снаружи
+  /// используется [emit], который учитывает патч import-rules.
+  SingboxEntry emitRaw(TemplateVars vars);
 
   /// Канонический URI. Инвариант: `parseUri(spec.toUri()) ≈ spec`.
   String toUri();
@@ -123,7 +175,7 @@ final class VlessSpec extends NodeSpec {
   String get protocol => 'vless';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitVless(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitVless(this, vars);
 
   @override
   String toUri() => e.toUriVless(this);
@@ -162,7 +214,7 @@ final class VmessSpec extends NodeSpec {
   String get protocol => 'vmess';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitVmess(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitVmess(this, vars);
 
   @override
   String toUri() => e.toUriVmess(this);
@@ -195,7 +247,7 @@ final class TrojanSpec extends NodeSpec {
   String get protocol => 'trojan';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitTrojan(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitTrojan(this, vars);
 
   @override
   String toUri() => e.toUriTrojan(this);
@@ -235,7 +287,7 @@ final class AnyTlsSpec extends NodeSpec {
   String get protocol => 'anytls';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitAnyTls(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitAnyTls(this, vars);
 
   @override
   String toUri() => e.toUriAnyTls(this);
@@ -270,7 +322,7 @@ final class ShadowsocksSpec extends NodeSpec {
   String get protocol => 'shadowsocks';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitShadowsocks(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitShadowsocks(this, vars);
 
   @override
   String toUri() => e.toUriShadowsocks(this);
@@ -309,7 +361,7 @@ final class Hysteria2Spec extends NodeSpec {
   String get protocol => 'hysteria2';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitHysteria2(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitHysteria2(this, vars);
 
   @override
   String toUri() => e.toUriHysteria2(this);
@@ -351,7 +403,7 @@ final class NaiveSpec extends NodeSpec {
   String get protocol => 'naive';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitNaive(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitNaive(this, vars);
 
   @override
   String toUri() => e.toUriNaive(this);
@@ -390,7 +442,7 @@ final class TuicSpec extends NodeSpec {
   String get protocol => 'tuic';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitTuic(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitTuic(this, vars);
 
   @override
   String toUri() => e.toUriTuic(this);
@@ -429,7 +481,7 @@ final class SshSpec extends NodeSpec {
   String get protocol => 'ssh';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitSsh(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitSsh(this, vars);
 
   @override
   String toUri() => e.toUriSsh(this);
@@ -462,7 +514,7 @@ final class SocksSpec extends NodeSpec {
   String get protocol => 'socks';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitSocks(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitSocks(this, vars);
 
   @override
   String toUri() => e.toUriSocks(this);
@@ -499,7 +551,7 @@ final class HttpSpec extends NodeSpec {
   String get protocol => 'http';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitHttp(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitHttp(this, vars);
 
   @override
   String toUri() => e.toUriHttp(this);
@@ -672,7 +724,7 @@ final class WireguardSpec extends NodeSpec {
   String get protocol => 'wireguard';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitWireguard(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitWireguard(this, vars);
 
   @override
   String toUri() => e.toUriWireguard(this);
@@ -738,7 +790,7 @@ final class MasqueSpec extends NodeSpec {
   String get protocol => 'masque';
 
   @override
-  SingboxEntry emit(TemplateVars vars) => e.emitMasque(this, vars);
+  SingboxEntry emitRaw(TemplateVars vars) => e.emitMasque(this, vars);
 
   @override
   String toUri() => e.toUriMasque(this);
