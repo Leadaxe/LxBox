@@ -45,8 +45,11 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ disabled_hashes       map?          §283 — {identity-хеш ноды: ISO-8601 lastSeen}; per-node disable
 │       ├─ identity              object?       §289 — per-sub override идентичности фетча (null=глоб.);
 │       │                                      {user_agent?, send_hwid, hwid?, device_os?, ver_os?, device_model?}
-│       ├─ import_rules           list?         §302 — правила обработки тела на импорте (REPLACE+DISABLE);
-│       │                                      [{action, pattern, replacement?, is_regex?, case_sensitive?, enabled?}]
+│       ├─ import_rules           list?         §302 — правила над emit-JSON узла (условия → Disable/Replace);
+│       │                                      [{conditions[], match?, action, target_path?, replacement?,
+│       │                                        replace_mode?, substitute?, enabled?}]; conditions[] =
+│       │                                      [{path, op, pattern, negate?, case_sensitive?}]; legacy-плоское
+│       │                                      {action, pattern, …} читается миграцией (условие по tag)
 │       ├─ import_rules_enabled   bool?         §302 — тумблер набора (пишется только когда false; дефолт true)
 │       │                        — user only —
 │       ├─ origin                "paste"|"file"|"qr"|"manual"
@@ -325,18 +328,30 @@ Sealed по полю `type`:
     "ver_os": "14",                           // device_*) не сериализуются. Включается копией
     "device_model": "Pixel 7"                 // глобальных; отбрасывается при возврате в Default.
   },
-  "import_rules": [                           // §302 — правила обработки тела на импорте.
-    {                                         // Применяются построчно ДО парсинга, по порядку
-      "action": "replace",                    // (drag-reorder). Опционален (пустой не пишется).
-      "pattern": "hellochrome_120",           // action ∈ {replace, disable}. is_regex/
-      "replacement": "chrome"                 // case_sensitive/enabled пишутся только когда
-    },                                        // отличны от дефолта (false/false/true).
-    {                                         // REPLACE переписывает строку (пустой replacement
-      "action": "disable",                    // = вырезать фрагмент). DISABLE помечает ноду →
-      "pattern": ".*Netherlands.*",           // её identity-хеш (суть, как disabled_hashes)
-      "is_regex": true                        // ставится на каждом refresh (правило > TTL-GC).
-    }
-  ],
+  "import_rules": [                           // §302 — правила над emit-JSON узла (не над телом!).
+    {                                         // Применяются к УЖЕ РАЗОБРАННЫМ узлам, по порядку
+      "conditions": [                         // (drag-reorder); следующее правило видит патч
+        {                                     // предыдущего. Опционален (пустой не пишется).
+          "path": "tls.utls.fingerprint",     // Условие: path (точечная нотация по emit-JSON;
+          "op": "matches",                    // ПУСТОЙ path = поиск по всему узлу), op ∈
+          "pattern": "^hello(chrome)_\\d+$"   // {contains|equals|matches}; negate?/case_sensitive?
+        }                                     // пишутся только когда true. match ∈ {all|any}
+      ],                                      // (дефолт all=AND, пишется только any).
+      "action": "replace",                    // action ∈ {replace, disable}.
+      "target_path": "tls.utls.fingerprint",  // REPLACE: target_path обязателен (пустой нельзя);
+      "replacement": "$1"                     // replacement с карманами $1..$9 из matches-условия.
+    },                                        // replace_mode ∈ {set|substitute} (пишется только
+    {                                         // substitute); substitute? = что искать в значении.
+      "conditions": [
+        {"path": "tag", "op": "contains", "pattern": "⚡"}
+      ],
+      "action": "disable"                     // DISABLE помечает узел → его identity-хеш (от
+    }                                         // ИТОГОВОГО вида, после патчей) ставится в
+  ],                                          // disabled_hashes на каждом refresh (правило > TTL-GC).
+                                              // Legacy-плоское {action, pattern, is_regex?, ...}
+                                              // читается миграцией как условие по tag (replace
+                                              // получает substitute-семантику); при первом
+                                              // сохранении перезаписывается новым форматом.
   "import_rules_enabled": false               // §302 — тумблер набора; пишется ТОЛЬКО когда
                                               // false (дефолт true = набор активен).
 }
