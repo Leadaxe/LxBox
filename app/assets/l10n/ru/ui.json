@@ -1812,6 +1812,9 @@
   "Import from file…": {
     "value": "Импорт из файла…"
   },
+  "Import rules changed this node. The JSON tab shows the result.": {
+    "value": "Import-правила изменили этот узел. На вкладке JSON — итоговый вид."
+  },
   "In Rules": {
     "value": "В правилах"
   },
@@ -1899,8 +1902,8 @@
   "JSON": {
     "value": "JSON"
   },
-  "JSON and source": {
-    "value": "JSON и исходник"
+  "JSON, source and replacements": {
+    "value": "JSON, исходник и замены"
   },
   "JSON copied": {
     "value": "JSON скопирован"
@@ -2775,6 +2778,9 @@
   "Replace all": {
     "value": "Заменить все"
   },
+  "Replacements": {
+    "value": "Замены"
+  },
   "Replace all (destructive)": {
     "value": "Заменить всё (необратимо)"
   },
@@ -3624,9 +3630,6 @@
   },
   "View release": {
     "value": "Открыть релиз"
-  },
-  "View replacements": {
-    "value": "Показать замены"
   },
   "View, edit, import JSON": {
     "value": "Просмотр, правка и импорт JSON"

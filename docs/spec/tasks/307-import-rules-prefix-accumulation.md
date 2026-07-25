@@ -53,7 +53,9 @@
 ## Сделано в этой же таске (запрос юзера 2026-07-25)
 
 - **Пустая цель REPLACE = substitute по всему узлу** (симметрия с пустым путём условия «ищи везде»): движок обходит все листья JSON, заменяет найденные фрагменты, типы листьев сохраняются (`coerceJsonLike`), следы замен несут реальные пути. Что искать — явный `substitutePattern`, иначе паттерн условия с пустым путём (regex → карманы из совпадения в самом листе). Режим `set` с пустой целью по-прежнему непригоден (весь узел строкой не затирается) — `isUsable` + Save-блокер в редакторе. В сводках пустая цель показывается как `*`.
-- **Значок «modified» и «View replacements» ожили**: были завязаны на `NodeSpec.originLine`, который никогда не проставлялся (мёртв с рождения §302) — значок и diff не показывались вовсе (4PDA #1262 «превью пустое»). Переведены на `ruleTrail` (заполняется контроллером при КАЖДОМ применении правил — refresh и регидрация из кэша, значок переживает рестарты). Диалог показывает следы замен «путь: до → после» вместо бессмысленного диффа `originLine ↔ rawUri` (REPLACE не меняет сырую строку). Поле `originLine` удалено.
+- **Значок «modified» и показ замен ожили**: были завязаны на `NodeSpec.originLine`, который никогда не проставлялся (мёртв с рождения §302) — значок и diff не показывались вовсе (4PDA #1262 «превью пустое»). Переведены на `ruleTrail` (заполняется контроллером при КАЖДОМ применении правил — refresh и регидрация из кэша, значок переживает рестарты). Поле `originLine` удалено.
+- **Замены — вкладкой внутри разбора ноды** (решение юзера): «Replacements» третьей вкладкой в `NodeInspectScreen`, видна только у пропатченных нод (`ruleTrail` непуст). Показывает следы «путь: до → после»; рядом вкладка JSON с итоговым видом. Прежний пункт меню долгого тапа «View replacements» + его диалог удалены — замены живут там же, где остальной разбор узла.
+- **Строка списка нод остаётся оригинальной** (решение юзера): `label`/`tag`/`server`/`port` — поля парсера, то есть ДО замен; факт правки показывает только карандаш. Патч виден в разборе ноды.
 
 ## Файлы
 
@@ -61,7 +63,8 @@
 - `lib/services/subscription/import_rules.dart` — основа из `emitRaw`; `_substituteWholeNode` (пустая цель).
 - `lib/models/import_rule.dart` — `isUsable`/`summary` для пустой цели; `coerceJsonLike` публичен.
 - `lib/controllers/subscription_controller.dart` — сброс патча перед переприменением.
-- `lib/screens/subscription_detail_screen/widgets/subscription_node_list.dart` — значок/диалог на `ruleTrail`.
+- `lib/screens/subscription_detail_screen/widgets/subscription_node_list.dart` — значок на `ruleTrail`; удалён пункт меню «View replacements» и диалог.
+- `lib/screens/subscription_detail_screen/node_inspect_screen.dart` — третья вкладка «Replacements» (только у пропатченных нод).
 - `lib/screens/subscription_detail_screen/widgets/subscription_filters_tab.dart` — Save-блокер и подсказки пустой цели.
 - `lib/services/builder/server_list_build.dart`, `lib/services/probe/probe_config.dart` — НЕ менялись (копия в `emit` закрывает обоих мутаторов).
 
@@ -74,7 +77,7 @@
 - [x] `nodeIdentityHash` с tag-патчем не меняется → `disabled_hashes` матчатся (регресс §283).
 - [x] REPLACE доезжает до конфига; цепочка правил работает (существующие тесты).
 - [x] Пустая цель: замена по всем листьям, типы сохранены, regex-карманы, `set` непригоден.
-- [ ] Device-verify: репро k-dmitriy (REPLACE + префикс), 5 рестартов VPN, смена префикса, холодный старт из кэша, значок «modified» после рестарта.
+- [ ] Device-verify: репро k-dmitriy (REPLACE + префикс), 5 рестартов VPN, смена префикса, холодный старт из кэша, значок «modified» после рестарта, вкладка Replacements непуста.
 
 ## Смежное из того же репорта — НЕ в этой таске
 
