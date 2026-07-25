@@ -6,7 +6,7 @@
 ## Что это
 
 Ядро — наш форк [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)
-(ветка `lx-1.14`, база upstream `v1.14.0-alpha.33`): upstream sing-box +
+(ветка `lx-1.14`, база upstream — см. «Текущий пин» ниже): upstream sing-box +
 AmneziaWG 2.0 + нативный XHTTP + LxBox-специфичные фичи (idle-suspend,
 round-robin balancer, XHTTP full params, DNS-стрим и др.).
 
@@ -21,7 +21,7 @@ round-robin balancer, XHTTP full params, DNS-стрим и др.).
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.15-rc.1`** — SPEC 002: XHTTP больше не ломается за
+**Текущий пин: `v1.14.0-lx.15`** — SPEC 002: XHTTP больше не ломается за
 reverse-proxy. VLESS+XHTTP через nginx/CDN с `mode: packet-up`, trailing-slash
 `path` (`/upload/`) и `session_placement: header` раньше падал с `unexpected
 download status: 301 Moved Permanently` (клиент безусловно срезал trailing slash
@@ -125,3 +125,4 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | **v1.14.0-lx.1** (стабильный) | Первый стабильный релиз ветки `lx-1.14` (rc.16→rc.22): MASQUE outbound (§130), стабилизация; собран с LxBox v2.9.0 |
 | **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.14** (стабильный) | SPEC 030 — Stop не виснет 10+ сек при многих WG/AWG-эндпоинтах (глушение тика + upfront-закрытие UDP-сокетов + abort in-flight wake + конкурентный close). Ядровая половина §287. База upstream `alpha.47`. Build-теги AAR без изменений. (Промежуточные lx.12/lx.13 — см. `docs-lx/lx-changelog.md` в ядре) |
+| **v1.14.0-lx.15** (стабильный, текущий пин) | SPEC 002 — XHTTP за reverse-proxy: `path` сохраняется как есть, trailing slash срезается только на bare-path запросе stream-one. + merge upstream `testing` (async DNS refactor, WG detour fix, OpenConnect auth-challenge). База upstream `alpha.48`. Build-теги AAR без изменений. Device-verified на CPH2411 (2026-07-21). Подробности — в блоке «Текущий пин» выше |
