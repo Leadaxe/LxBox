@@ -230,6 +230,14 @@ class CcChannel {
     return CcDelayResult.fromMap(_asMap(r ?? const {}));
   }
 
+  /// §308 — групповой URLTest: ядро force-тестит ВСЕХ членов группы её
+  /// конфиг-URL'ом (`urltest_url` шаблона, не ping settings) и делает
+  /// переселект на живой узел. Fire-and-forget: `true` = команда принята;
+  /// результаты приедут стримами (groups → selected, history → делеи).
+  Future<bool> urlTestGroup(String tag) async =>
+      await _methods.invokeMethod<bool>('ccUrlTestGroup', {'tag': tag}) ??
+      false;
+
   // ─── §236 — headless probe-сессия (Test servers при выключенном VPN) ───
 
   /// Стартует probe-инстанс ядра (конфиг БЕЗ tun). Возвращает '' при успехе,

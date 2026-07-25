@@ -735,6 +735,17 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
+            // §308 — групповой URLTest (force-тест всех членов + переселект в
+            // ядре). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound.
+            "ccUrlTestGroup" -> {
+                val cc = BoxService.commandClient
+                if (cc == null) { result.success(false); return }
+                val tag = call.argument<String>("tag") ?: ""
+                pluginScope.launch {
+                    val ok = withContext(Dispatchers.IO) { cc.urlTestGroup(tag) }
+                    result.success(ok)
+                }
+            }
             // §236 — headless probe-сессия (Test servers в папке при
             // ВЫКЛЮЧЕННОМ VPN). start/urlTest/stop; гейт «VPN не запущен» —
             // внутри ProbeSession. Все вызовы блокирующие → Dispatchers.IO.
