@@ -877,17 +877,22 @@ awg://PRIVATE_KEY@host:port?publickey=...&address=...&jc=4&jmin=40&jmax=70&s1=0&
 
 | Ключ | Тип | Назначение | Уровень |
 |------|-----|-----------|--------|
-| `jc`, `jmin`, `jmax` | int | junk-пакеты перед handshake: количество и границы размера | AWG 1.x |
-| `s1`, `s2` | int | junk-prefix у init/response handshake-пакетов | AWG 1.x |
-| `s3`, `s4` | int | transport-padding (data-пакеты) | AWG 2.0 |
-| `h1`–`h4` | int \| `"N-M"` | magic headers — подмена типов пакетов; диапазон `N-M` = ranged headers (§112) | AWG 1.x / 2.0 |
-| `i1`–`i5` | string | CPS decoy-пакеты, тег-формат `<b 0xHEX><r N>…` | AWG 2.0 |
-| `id`, `ip`, `ib` | string | masquerade-sugar (WireSock-style) над `i1` — ядро само разворачивает в CPS-пакет `i1`. **Взаимоисключающи с явным `i1`** (оба сразу → ошибка старта ядра). §143 | AWG 2.0 |
+| `jc`, `jmin`, `jmax` | int | junk-пакеты перед handshake: количество и границы размера | AWG 1.0 |
+| `s1`, `s2` | int | junk-prefix у init/response handshake-пакетов | AWG 1.0 |
+| `s3`, `s4` | int | junk-prefix у cookie-reply (`s3`) и transport/data-пакетов (`s4`) | AWG 2.0 |
+| `h1`–`h4` | int \| `"N-M"` | magic headers — подмена типов пакетов. Одиночное `N` = 1.0; диапазон `N-M` = ranged headers (§112) | AWG 1.0 / 2.0 |
+| `i1`–`i5` | string | CPS decoy-пакеты, тег-формат `<b 0xHEX><r N>…` | AWG 1.5 |
+| `id`, `ip`, `ib` | string | masquerade-sugar (WireSock-style) над `i1` — ядро само разворачивает в CPS-пакет `i1`. **Взаимоисключающи с явным `i1`** (оба сразу → ошибка старта ядра). §143 | AWG 1.5 |
 
 - Числовые поля — uint32, эмитятся как JSON **number**.
 - `h1`–`h4` (§112): значение `N` → `int` (строка-число `"5"` нормализуется в `int 5`), диапазон `N-M` → `String`, эмитится JSON **string** (контракт ядра ≥ `lx.6`). Глубже не валидируем (start ≤ end, uint32, непересечение диапазонов) — это делает ядро с явной ошибкой на старте; молчаливый drop здесь дал бы тихо сломанный handshake.
 - `i1`–`i5` — строки, **регистр сохраняется** как есть (case-sensitive, менять нельзя).
 - Битое число в query → поле молча пропускается (forward-compat, как `mtu`/`keepalive`), парс узла не валится. Для `h*` «битое» = не подходящее под `N`/`N-M`.
+
+> **`reserved` ≠ `reserved_zero[3]` — разные сущности на одних байтах.**
+> В терминологии LxBox `reserved` — это **Cloudflare WARP client_id**, 3 байта, эмитится **per-peer** (секция 8, `reserved: [b0,b1,b2]`).
+> В спеке WireGuard `reserved_zero[3]` — это байты `[1..3]` заголовка пакета, идущие сразу за message type `[0]`; magic headers `h1`–`h4` пишут во **все 4 байта** `[0..3]` целиком (uint32), то есть перезаписывают именно `reserved_zero`.
+> Байты физически одни и те же, смысл разный. Смешение уже приводило к реальному багу: безусловная очистка `b[1:4]` под WARP-client_id затирала ranged magic (фикс — ядро `lx.9`). При работе с любым из двух полей уточнять, о каком идёт речь.
 
 Модель: класс `Awg` в [`node_spec.dart`](../app/lib/models/node_spec.dart) (`WireguardSpec.awg`, `null` = обычный WG). Round-trip полный: URI / INI / sing-box JSON → `Awg` → `emit()` / `toUri()` без потерь.
 
