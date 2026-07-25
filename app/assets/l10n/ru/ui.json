@@ -610,9 +610,6 @@
   "Advanced: this rule resolves but does not route. If no later rule matches, traffic goes to Final.": {
     "value": "Продвинутый режим: правило резолвит, но не маршрутизирует. Если ни одно последующее правило не совпадёт, трафик уйдёт в Final."
   },
-  "After": {
-    "value": "После"
-  },
   "Aggressive battery saving": {
     "value": "Агрессивная экономия батареи"
   },
@@ -783,9 +780,6 @@
   },
   "Becomes a standalone server": {
     "value": "Станет отдельным сервером"
-  },
-  "Before": {
-    "value": "До"
   },
   "Behavior": {
     "value": "Поведение"
@@ -1971,6 +1965,9 @@
   "Leave empty for the default SNI": {
     "value": "Пусто — SNI по умолчанию"
   },
+  "Leave empty to substitute across the whole node": {
+    "value": "Пустой путь — замена по всему узлу"
+  },
   "Lifecycle": {
     "value": "Жизненный цикл"
   },
@@ -2787,9 +2784,6 @@
   "Replace all → %s": {
     "value": "Заменить все → %s"
   },
-  "Replace needs a target path": {
-    "value": "Для замены нужен путь назначения"
-  },
   "Replace the existing server with this one?": {
     "value": "Заменить существующий сервер этим?"
   },
@@ -3049,6 +3043,9 @@
   },
   "Set whole value": {
     "value": "Заменить целиком"
+  },
+  "Set whole value needs a target path": {
+    "value": "Режим «Заменить целиком» требует путь цели"
   },
   "Setting is saved immediately, but `Libbox.setup` reads the `debug` flag once per process. Stop/start VPN does NOT re-apply — force-stop the app (or use the button below) and reopen.": {
     "value": "Настройка сохраняется сразу, но `Libbox.setup` читает флаг `debug` один раз на процесс. Перезапуск VPN её НЕ применяет — полностью закройте приложение (или нажмите кнопку ниже) и откройте снова."
@@ -3654,6 +3651,9 @@
   },
   "Whitelisted — VPN can run in background": {
     "value": "В белом списке — VPN может работать в фоне"
+  },
+  "Whole-node replace needs a pattern to find": {
+    "value": "Замене по всему узлу нужен паттерн поиска"
   },
   "Wi-Fi rules need permissions": {
     "value": "Правилам Wi-Fi нужны разрешения"

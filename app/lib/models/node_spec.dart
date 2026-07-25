@@ -20,6 +20,19 @@ import 'transport_spec.dart';
 /// **Mutable `warnings`:** единственное mutable поле в spec'е (§2.4, решение
 /// §11 #9). Парсер заполняет при конструировании; `emit` дописывает при
 /// fallback'ах. Не сериализуется — пересоздаётся на каждом parse/emit.
+/// §307 — глубокая копия JSON-значения (Map/List рекурсивно, листья как есть:
+/// в JSON они иммутабельны). Нужна, чтобы `emit` отдавал сохранённый
+/// [NodeSpec.patchedJson] без разделяемого состояния с потребителем.
+Object? deepCopyJson(Object? value) {
+  if (value is Map) {
+    return <String, dynamic>{
+      for (final e in value.entries) e.key as String: deepCopyJson(e.value),
+    };
+  }
+  if (value is List) return [for (final v in value) deepCopyJson(v)];
+  return value;
+}
+
 sealed class NodeSpec {
   final String id;
   final String tag;
@@ -29,14 +42,6 @@ sealed class NodeSpec {
   final String rawUri;
   final NodeSpec? chained;
   final List<NodeWarning> warnings;
-
-  /// §302 — сырая строка подписки ДО применения import-rules (REPLACE).
-  /// Проставляется постфактум контроллером на нодах, чьё тело правило
-  /// изменило (иначе `null`). Только для UI: значок «были замены» + diff
-  /// before/after (`originLine` ↔ `rawUri`). На `emit`/`nodeIdentityHash`
-  /// НЕ влияет — как и `warnings`, mutable и не сериализуется (пересоздаётся
-  /// на каждый parse; проставляется заново на каждом refresh).
-  String? originLine;
 
   /// §302 — исходный фрагмент подписки, из которого собралась нода, в
   /// «компактном» виде: для JSON-тел это САМ outbound-объект (без dns/
@@ -54,15 +59,23 @@ sealed class NodeSpec {
   String? sourceExtended;
 
   /// §302 — JSON узла после применения import-rules (REPLACE). `null` —
-  /// правила узел не меняли. Когда не-null, [emit] отдаёт именно его: узел
+  /// правила узел не меняли. Когда не-null, [emit] отдаёт его КОПИЮ: узел
   /// уходит в конфиг в изменённом виде, и `nodeIdentityHash` считается от
   /// него же (выключение/роутинг работают с итоговым видом).
   ///
-  /// Mutable и не сериализуется — как `originLine`: правила переприменяются
+  /// §307 — именно копию: билдер мутирует map результата `emit` на месте
+  /// (префикс в `tag`, политика `detour`), и когда `emit` отдавал патч по
+  /// ссылке, эти мутации впечатывались сюда — префикс накапливался в теге
+  /// на каждом старте VPN. Патч — сохранённое состояние узла; писать в него
+  /// может только применение правил.
+  ///
+  /// Mutable и не сериализуется — как `sourceCompact`: правила переприменяются
   /// на каждом импорте/регидрации, храниться этому незачем.
   Map<String, dynamic>? patchedJson;
 
   /// §302 — следы замен для UI («tls.utls.fingerprint: hello… → chrome»).
+  /// Непустой ⇔ [patchedJson] != null; на нём значок «modified» и диалог
+  /// «View replacements» в списке нод.
   List<String> ruleTrail = const [];
 
   NodeSpec({
@@ -84,13 +97,19 @@ sealed class NodeSpec {
   /// узел уходит в конфиг в изменённом виде, и `nodeIdentityHash` считается
   /// от него же. Тип entry (Outbound/Endpoint) сохраняется — билдер
   /// раскладывает по массивам exhaustive-switch'ем.
+  ///
+  /// §307 — патч отдаётся ГЛУБОКОЙ копией (симметрия с `emitRaw`, который
+  /// строит свежие map на каждый вызов): результат `emit` одноразовый,
+  /// потребитель волен мутировать его как угодно, сохранённый патч не
+  /// пострадает. Отдача по ссылке накапливала префикс билдера в теге.
   SingboxEntry emit(TemplateVars vars) {
     final raw = emitRaw(vars);
     final patch = patchedJson;
     if (patch == null) return raw;
+    final copy = deepCopyJson(patch) as Map<String, dynamic>;
     return switch (raw) {
-      Outbound() => Outbound(patch),
-      Endpoint() => Endpoint(patch),
+      Outbound() => Outbound(copy),
+      Endpoint() => Endpoint(copy),
     };
   }
 
