@@ -47,11 +47,17 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
 
   bool get _hasExtended => (_node.sourceExtended ?? '').isNotEmpty;
 
+  /// §307 — правила поменяли тело узла: есть что показать во вкладке
+  /// Replacements. Пусто → вкладки нет вовсе (у большинства нод правил не
+  /// было, пустая вкладка была бы шумом).
+  bool get _hasReplacements => _node.ruleTrail.isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
     final title = _node.label.isNotEmpty ? _node.label : _node.tag;
+    final hasReplacements = _hasReplacements;
     return DefaultTabController(
-      length: 2,
+      length: hasReplacements ? 3 : 2,
       child: Scaffold(
         appBar: AppBar(
           title: Text(title.isEmpty ? _node.server : title,
@@ -60,6 +66,8 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
             tabs: [
               Tab(text: getLocalText.s("JSON")),
               Tab(text: getLocalText.s("Source")),
+              if (hasReplacements)
+                Tab(text: getLocalText.s("Replacements")),
             ],
           ),
         ),
@@ -67,9 +75,42 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
           children: [
             _monoBody(context, _json),
             _sourceTab(context),
+            if (hasReplacements) _replacementsTab(context),
           ],
         ),
       ),
+    );
+  }
+
+  /// §302/§307 — что именно поменяли import-rules: следы замен из `ruleTrail`
+  /// («tls.utls.fingerprint: firefox → chrome»), по одной на строку. Вкладка
+  /// JSON рядом показывает уже итоговый вид — здесь видно, чем он отличается
+  /// от разобранного оригинала.
+  Widget _replacementsTab(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          color: theme.colorScheme.surfaceContainerHighest,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Icon(Icons.edit_note, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  getLocalText.s(
+                      "Import rules changed this node. The JSON tab shows the result."),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: _monoBody(context, _node.ruleTrail.join('\n'))),
+      ],
     );
   }
 
