@@ -197,10 +197,21 @@ class ImportRule {
 
   /// Правило участвует в применении: включено, есть хотя бы одно пригодное
   /// условие, а для Replace — ещё и цель.
+  ///
+  /// §307 — пустая цель допустима в режиме `substitute`: это замена по всему
+  /// узлу (симметрия с пустым путём условия). Нужен паттерн поиска — явный
+  /// [substitutePattern] либо пригодное условие с пустым путём, иначе движку
+  /// нечего искать. В режиме `set` пустая цель по-прежнему непригодна
+  /// (весь узел строкой не затирается).
   bool get isUsable {
     if (!enabled) return false;
     if (!conditions.any((c) => c.isUsable)) return false;
-    if (action == ImportRuleAction.replace && targetPath.isEmpty) return false;
+    if (action == ImportRuleAction.replace && targetPath.isEmpty) {
+      if (replaceMode != ImportRuleReplaceMode.substitute) return false;
+      final hasNeedle = substitutePattern.isNotEmpty ||
+          conditions.any((c) => c.isUsable && c.path.isEmpty);
+      if (!hasNeedle) return false;
+    }
     return true;
   }
 
@@ -300,7 +311,8 @@ class ImportRule {
         : parts.join(matchMode == ImportRuleMatchMode.all ? ' AND ' : ' OR ');
     final act = action == ImportRuleAction.disable
         ? 'Disable'
-        : '$targetPath = $replacement';
+        // Пустая цель = substitute по всему узлу, показываем как `*` (§307).
+        : '${targetPath.isEmpty ? '*' : targetPath} = $replacement';
     return '$cond → $act';
   }
 
@@ -395,12 +407,14 @@ bool writeJsonPath(Map<String, dynamic> map, JsonPath path, String value) {
   }
   final last = segs.last;
   if (last.isEmpty) return false;
-  cur[last] = _coerceLike(cur[last], value);
+  cur[last] = coerceJsonLike(cur[last], value);
   return true;
 }
 
 /// Приводит новое строковое значение к типу прежнего, когда это безопасно.
-Object? _coerceLike(Object? previous, String value) {
+/// Публична: whole-node substitute (§307, import_rules.dart) сохраняет типы
+/// листьев тем же правилом.
+Object? coerceJsonLike(Object? previous, String value) {
   if (previous is int) {
     final n = int.tryParse(value);
     if (n != null) return n;

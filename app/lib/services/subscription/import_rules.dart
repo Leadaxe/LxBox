@@ -78,8 +78,11 @@ ImportRulesResult applyImportRules(List<NodeSpec> nodes, List<ImportRule> rules,
 NodeRuleOutcome applyRulesToNode(NodeSpec node, List<ImportRule> rules,
     {TemplateVars vars = TemplateVars.empty}) {
   // Рабочая копия JSON узла: REPLACE правит её, следующее правило видит
-  // изменённый вид.
-  final json = Map<String, dynamic>.from(node.emit(vars).map);
+  // изменённый вид. §307 — основа СТРОГО `emitRaw` (канонический вид узла),
+  // а не `emit`: тот отдаёт прошлый патч, и правила читали бы собственный
+  // предыдущий результат как исходник — повторное применение накапливалось
+  // бы. Прогон всех правил с нуля на каждом применении = детерминизм.
+  final json = node.emitRaw(vars).map;
   var patched = false;
   var disabled = false;
   final trail = <String>[];
@@ -90,6 +93,18 @@ NodeRuleOutcome applyRulesToNode(NodeSpec node, List<ImportRule> rules,
 
     if (rule.action == ImportRuleAction.disable) {
       disabled = true;
+      continue;
+    }
+
+    // §307 — пустая цель = substitute по ВСЕМУ узлу (симметрия с пустым
+    // путём условия «ищи везде»): найти паттерн в любом листе JSON и
+    // заменить только найденный фрагмент.
+    if (rule.targetPath.isEmpty) {
+      final changes = _substituteWholeNode(json, rule);
+      if (changes.isNotEmpty) {
+        patched = true;
+        trail.addAll(changes);
+      }
       continue;
     }
 
@@ -216,6 +231,79 @@ String? _buildReplacement(
         return null;
       }
   }
+}
+
+/// §307 — substitute по всему узлу (пустой `targetPath`): обходит все листья
+/// JSON, в каждом ищет паттерн и заменяет найденные фрагменты. Что искать —
+/// как в обычном substitute: явный `substitutePattern`, иначе паттерн условия
+/// с пустым путём (regex, если это `matches`-условие — тогда карманы `$1`…
+/// берутся из совпадения в самом листе). Типы значений сохраняются (порт
+/// остаётся числом). Возвращает следы замен («путь: до → после»).
+///
+/// Режим `set` с пустой целью смысла не имеет (весь узел строкой не
+/// затирается) — такое правило непригодно уже в [ImportRule.isUsable].
+List<String> _substituteWholeNode(Map<String, dynamic> json, ImportRule rule) {
+  if (rule.replaceMode != ImportRuleReplaceMode.substitute) return const [];
+
+  final needle = rule.substitutePattern.isNotEmpty
+      ? rule.substitutePattern
+      : _patternForPath(rule, '');
+  if (needle == null || needle.isEmpty) return const [];
+
+  final cond = _conditionForPath(rule, '');
+  final useRegex = rule.substitutePattern.isEmpty &&
+      cond?.op == ImportRuleOperator.matches;
+  final caseSensitive = cond?.caseSensitive ?? false;
+  final RegExp re;
+  try {
+    re = useRegex
+        ? RegExp(needle, caseSensitive: caseSensitive)
+        : RegExp(RegExp.escape(needle), caseSensitive: caseSensitive);
+  } catch (_) {
+    return const [];
+  }
+
+  final trail = <String>[];
+
+  // Замена в одном листе; null = не изменился. Не-строки сравниваем через
+  // toString (как readJsonPath), тип восстанавливает _coerceLike.
+  Object? replaceLeaf(Object value) {
+    final before = value.toString();
+    final after = before.replaceAllMapped(
+      re,
+      (m) => _expandPockets(
+        rule.replacement,
+        [for (var g = 1; g <= m.groupCount; g++) m.group(g) ?? ''],
+      ),
+    );
+    return after == before ? null : coerceJsonLike(value, after);
+  }
+
+  void visit(Object? node, String prefix,
+      void Function(Object coerced) write) {
+    if (node is Map<String, dynamic>) {
+      // Снимок ключей — замена пишет в тот же контейнер.
+      for (final key in node.keys.toList()) {
+        final path = prefix.isEmpty ? key : '$prefix.$key';
+        visit(node[key], path, (v) => node[key] = v);
+      }
+      return;
+    }
+    if (node is List) {
+      for (var i = 0; i < node.length; i++) {
+        visit(node[i], '$prefix.$i', (v) => node[i] = v);
+      }
+      return;
+    }
+    if (node == null) return;
+    final next = replaceLeaf(node);
+    if (next == null) return;
+    write(next);
+    trail.add('$prefix: $node → $next');
+  }
+
+  visit(json, '', (_) {});
+  return trail;
 }
 
 ImportRuleCondition? _conditionForPath(ImportRule rule, JsonPath path) {

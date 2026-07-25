@@ -142,10 +142,12 @@ class SubscriptionNodeList extends StatelessWidget {
                   ),
                 ),
               ),
-              // §302 — значок «тело изменено import-rules» (REPLACE). Тап =
-              // меню с diff before/after. originLine != null только когда
-              // правило реально поменяло строку ноды.
-              if (node.originLine != null) ...[
+              // §302/§307 — значок «тело изменено import-rules» (REPLACE).
+              // Ключ — ruleTrail: контроллер заполняет его при каждом
+              // применении правил (refresh И регидрация из кэша), поэтому
+              // значок переживает рестарты. Прежний ключ originLine никогда
+              // не проставлялся — значок был мёртв.
+              if (node.ruleTrail.isNotEmpty) ...[
                 const SizedBox(width: 6),
                 Tooltip(
                   message: getLocalText.s("Modified by import rules"),
@@ -232,8 +234,8 @@ class SubscriptionNodeList extends StatelessWidget {
                 ));
               },
             ),
-            // §302 — diff before/after для нод, чьё тело изменил REPLACE.
-            if (node.originLine != null)
+            // §302/§307 — список замен для нод, чьё тело изменил REPLACE.
+            if (node.ruleTrail.isNotEmpty)
               ListTile(
                 leading: const Icon(Icons.difference_outlined),
                 title: Text(getLocalText.s("View replacements")),
@@ -248,14 +250,13 @@ class SubscriptionNodeList extends StatelessWidget {
     );
   }
 
-  /// §302 — diff «до/после» import-rules: сырая строка подписки (`originLine`)
-  /// vs результат (`rawUri`). Оба моноширинным, с copy.
+  /// §302/§307 — что именно поменяли правила: следы замен из `ruleTrail`
+  /// («tls.utls.fingerprint: hellochrome_120 → chrome»), по одной на строку.
+  /// Прежний вариант диффал `originLine` ↔ `rawUri` — оба не отражают патч
+  /// (REPLACE правит `patchedJson`, а не сырую строку), диалог был пуст.
   void _showReplacementsDialog(BuildContext context, NodeSpec node) {
-    final before = node.originLine ?? '';
-    final after = node.rawUri;
-    final text = '${getLocalText.s("Before")}:\n$before'
-        '\n\n${getLocalText.s("After")}:\n$after';
-    _showMonoDialog(context, getLocalText.s("View replacements"), text);
+    _showMonoDialog(context, getLocalText.s("View replacements"),
+        node.ruleTrail.join('\n'));
   }
 
   void _showMonoDialog(BuildContext context, String title, String body) {
