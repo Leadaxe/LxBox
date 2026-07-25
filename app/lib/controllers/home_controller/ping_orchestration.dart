@@ -329,15 +329,30 @@ mixin _PingMixin on ChangeNotifier {
   }
 
   /// §286 — единая детерминированная остановка ВСЕГО пробирования. Дёргается из
-  /// каждого «активность пора гасить» перехода: disconnected/revoked
-  /// (`_handleStatusEvent`), смерть туннеля (`_onTunnelDead`), сворачивание
-  /// приложения (`onAppPaused`). Гасит три независимых источника:
+  /// «сессия мертва» переходов: disconnected/revoked (`_handleStatusEvent`),
+  /// смерть туннеля (`_onTunnelDead`). Гасит три независимых источника:
   ///  1. mass-ping — epoch-bump + `_cc.cancelPing()` (внутри `cancelMassPing`);
   ///  2. auto-ping-таймер (5с после connect) — чтобы не выстрелил в мёртвую сессию;
   ///  3. активные folder-probe sweep'ы (`ProbeRunner`) через `ProbeLifecycle`.
   /// Идемпотентно: каждый источник сам no-op, если неактивен.
+  ///
+  /// Сворачивание приложения сюда НЕ входит — см. [haltBackgroundProbing].
   void haltAllProbing() {
     cancelMassPing();
+    _autoPingTimer?.cancel();
+    _autoPingTimer = null;
+    ProbeLifecycle.I.haltAll();
+  }
+
+  /// §307 — остановка пробирования на сворачивании приложения (`onAppPaused`).
+  /// В отличие от [haltAllProbing] **не трогает mass-ping**: запустить пинг
+  /// списка и уйти в другое приложение — штатный сценарий, а до §307 фон рвал
+  /// прогон и на resume пользователь видел частичные результаты (авто-перезапуска
+  /// нет). Гасим только то, что в фоне бессмысленно или вредно:
+  ///  1. auto-ping-таймер — отложенный выстрел по невидимому UI;
+  ///  2. folder-probe sweep'ы — длинные (100+ нод) прогоны по живому ядру,
+  ///     ради которых §286 и заводился (флуд `ccUrlTestOutbound` после стопа).
+  void haltBackgroundProbing() {
     _autoPingTimer?.cancel();
     _autoPingTimer = null;
     ProbeLifecycle.I.haltAll();

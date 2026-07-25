@@ -1163,13 +1163,13 @@ class HomeController extends ChangeNotifier
   /// таймер не создаёт. Поэтому на resume рестартуем явно (см. `_resyncOnResume`).
   void onAppPaused() {
     _stopHeartbeat();
-    // §286 — в фоне пробирование бессмысленно и «молотит после сворачивания»:
-    // folder-probe sweep / mass-ping / auto-ping-таймер переживали фон, т.к.
-    // onAppPaused гасил только status+screen-клиенты. Гасим ВСЁ пробирование
-    // (решение: сворачивание = отмена проб). Возврат из фона свежий прогон
-    // запустит заново, если нужно. Безусловно (не завязано на tunnelUp) —
-    // headless-проба папки может идти и при down-туннеле.
-    haltAllProbing();
+    // §286 — folder-probe sweep / auto-ping-таймер переживали фон, т.к.
+    // onAppPaused гасил только status+screen-клиенты, и «молотили после
+    // сворачивания». Безусловно (не завязано на tunnelUp) — headless-проба
+    // папки может идти и при down-туннеле.
+    // §307 — но mass-ping в фоне НЕ рвём: «запустил пинг списка и свернул» —
+    // штатный сценарий, а автоперезапуска на resume нет.
+    haltBackgroundProbing();
     // §164 — энергомодель: в фоне UI не виден → гасим status+screen CC-клиенты
     // (0 тиков/0 drain). profilerClient НЕ трогаем (recording живёт в фоне).
     // Выключение VPN в фоне ловит нативный broadcast (не CC) → не слепнем.

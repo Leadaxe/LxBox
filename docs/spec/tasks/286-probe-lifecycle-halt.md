@@ -2,6 +2,14 @@
 
 **Тип:** bug + UX · **Статус:** complete (коммиты `18a1111` fix + `ff25cdd` test, develop)
 
+> **Поправка §307 (25.07.2026).** Исходное решение гасило на сворачивании **всё**
+> пробирование, включая mass-ping. С форума (жалоба на v2.16.0): «процесс пинга
+> останавливается, если просто свернуть окно» — запустить пинг списка и уйти в
+> другое приложение оказалось штатным сценарием, а автоперезапуска на resume нет,
+> так что пользователь возвращался к частичным результатам. Рычаг разделён:
+> сворачивание гасит folder-probe + auto-ping-таймер, mass-ping доживает прогон.
+> Детали — в разделе 2 ниже.
+
 ## Проблема
 
 После снятия guard'а AWG-over-WireGuard (§130 / kernel SPEC 007, ядро lx.11) на
@@ -52,22 +60,32 @@
 ProbeLifecycle.I.register(cancel) / .deregister(cancel) / .haltAll()
 ```
 
-### 2. `HomeController.haltAllProbing(reason)`
+### 2. Два рычага остановки (§307 — было один)
 
-Один метод, гасящий ВСЁ пробирование:
+**`haltAllProbing()`** — «сессия мертва», гасит ВСЁ:
 - `cancelMassPing()` (epoch-bump + `_cc.cancelPing()` — уже есть),
 - `_autoPingTimer?.cancel(); _autoPingTimer = null;`,
 - `ProbeLifecycle.I.haltAll()` (folder-probe).
 
-Зовётся из **всех** «активность пора гасить» переходов:
+Зовётся из переходов, после которых пробировать физически некуда:
 - `_handleStatusEvent` disconnected/revoked (заменяет текущие
   `cancelMassPing()` + timer-cancel, `home_controller.dart:323-325`);
-- `_onTunnelDead` (heartbeat, `heartbeat.dart:106-108`);
-- **`onAppPaused`** (НОВОЕ — дыра B; сворачивание отменяет пробы по решению
-  юзера «при сворачивании отменить»).
+- `_onTunnelDead` (heartbeat, `heartbeat.dart:106-108`).
 
-Итог-инвариант: **stop VPN ∪ tunnel-dead ∪ app-background ⇒ всё пробирование
-остановлено детерминированно** (не зависит от тайминга flip'а `tunnelUp`).
+**`haltBackgroundProbing()`** — сворачивание приложения (`onAppPaused`, дыра B).
+Гасит только то, что в фоне бессмысленно или вредно:
+- `_autoPingTimer` — отложенный выстрел по невидимому UI;
+- `ProbeLifecycle.I.haltAll()` — длинные folder-probe sweep'ы (100+ нод по
+  живому ядру), ради которых §286 и заводился.
+
+**mass-ping в фоне НЕ трогаем** (§307). Он короткий, epoch/tunnelUp-гейты его и
+так защищают, а `_cc.cancelPing()` рвёт in-flight urltest'ы в ядре (§175) —
+сворачивание посреди прогона списка давало частичные результаты на resume.
+Сессию mass-ping всё равно закрывает `haltAllProbing` через stop/tunnel-dead.
+
+Итог-инвариант: **stop VPN ∪ tunnel-dead ⇒ всё пробирование остановлено
+детерминированно** (не зависит от тайминга flip'а `tunnelUp`); **app-background
+⇒ остановлены folder-probe и auto-ping-таймер, mass-ping доживает прогон**.
 
 ### 3. Батчинг per-node emit
 
@@ -83,11 +101,11 @@ ProbeLifecycle.I.register(cancel) / .deregister(cancel) / .haltAll()
 |---|---|
 | `app/lib/services/probe/probe_lifecycle.dart` | НОВЫЙ — реестр + `haltAll()` |
 | `app/lib/services/probe/probe_runner.dart` | register/deregister `cancel` в `run()` |
-| `app/lib/controllers/home_controller.dart` | `haltAllProbing()`; вызов в disconnected/revoked + `onAppPaused` |
+| `app/lib/controllers/home_controller.dart` | `haltAllProbing()` в disconnected/revoked; `haltBackgroundProbing()` в `onAppPaused` (§307) |
 | `app/lib/controllers/home_controller/heartbeat.dart` | `_onTunnelDead` → `haltAllProbing()` |
-| `app/lib/controllers/home_controller/ping_orchestration.dart` | батч-флаш mass-ping |
+| `app/lib/controllers/home_controller/ping_orchestration.dart` | батч-флаш mass-ping; оба рычага остановки (§307) |
 | `app/lib/screens/folder_detail_screen.dart` | батч-флаш `onResult` |
-| `app/test/...` | §250-мост: massPingRunning==false после disconnect/revoked/pause; ProbeLifecycle unit |
+| `app/test/...` | §250-мост: massPingRunning==false после disconnect/revoked; НЕ сброшен после pause (§307); ProbeLifecycle unit |
 
 ## Вне скоупа (нота владельцу §284)
 
@@ -99,9 +117,14 @@ ProbeLifecycle.I.register(cancel) / .deregister(cancel) / .haltAll()
 
 - Stop VPN во время sweep папки → `ccUrlTestOutbound` прекращается в пределах
   одного in-flight вызова (не проходит весь список).
-- Сворачивание приложения во время sweep → то же (проба отменена, не переживает
-  фон).
+- Сворачивание приложения во время sweep папки → то же (проба отменена, не
+  переживает фон).
 - Смерть туннеля → то же.
+- **§307:** запустить mass-ping списка → свернуть окно на ~30с → вернуться:
+  прогон продолжался в фоне, результаты полные (кнопка пинга всё время в
+  состоянии «идёт»/Stop, а не сброшена).
+- **§307:** свернуть окно во время mass-ping → Stop VPN из шторки → прогон
+  остановлен (`haltAllProbing` через disconnected).
 - Большой sweep (100+ нод) не даёт бёрста ~150 ребилдов — UI отзывчив.
 - Существующие инварианты (§175 pingClient lazy lifecycle, §141 auto-ping,
   §122 CC-стримы) не регрессируют.

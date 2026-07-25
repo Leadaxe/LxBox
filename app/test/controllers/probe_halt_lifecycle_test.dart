@@ -1,5 +1,6 @@
 // ignore_for_file: depend_on_referenced_packages
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -24,7 +25,10 @@ class _FakePathProvider extends PathProviderPlatform
 /// §286 — детерминированная остановка пробирования. Через §250-мост
 /// `debugHandleStatusEvent` (и публичный `onAppPaused`) гоняем переходы и
 /// проверяем, что активная folder-probe (зарегистрированная в `ProbeLifecycle`)
-/// отменяется на: disconnected, revoked, сворадивание приложения.
+/// отменяется на: disconnected, revoked, сворачивание приложения.
+///
+/// §307 — сворачивание гасит folder-probe и auto-ping-таймер, но НЕ mass-ping:
+/// «запустил пинг списка → свернул → вернулся к результатам» — штатный сценарий.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -36,6 +40,7 @@ void main() {
 
   late Directory tempDir;
   late HomeController controller;
+  late List<String> methodCalls;
 
   TunnelStatusEvent event(TunnelStatus status, {String? reason}) {
     final raw = switch (status) {
@@ -51,8 +56,12 @@ void main() {
     tempDir = await Directory.systemTemp.createTemp('probe_halt_test_');
     PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
     HapticService.I.enabled = false;
+    methodCalls = <String>[];
     for (final ch in [methods, ccStatus, ccGroups]) {
-      messenger.setMockMethodCallHandler(ch, (call) async => null);
+      messenger.setMockMethodCallHandler(ch, (call) async {
+        methodCalls.add(call.method);
+        return null;
+      });
     }
     controller = HomeController();
     ProbeLifecycle.I.haltAll(); // чистый старт
@@ -96,7 +105,7 @@ void main() {
     expect(ProbeLifecycle.I.isProbing, isFalse);
   });
 
-  test('сворадивание приложения (onAppPaused) отменяет активную folder-probe',
+  test('сворачивание приложения (onAppPaused) отменяет активную folder-probe',
       () {
     final wasCancelled = armProbe();
 
@@ -104,5 +113,34 @@ void main() {
 
     expect(wasCancelled(), isTrue);
     expect(ProbeLifecycle.I.isProbing, isFalse);
+  });
+
+  // §307 — регресс жалобы «с v2.16.0 пинг останавливается при сворачивании».
+  // Запускаем НАСТОЯЩИЙ прогон (`order` минует state.nodes, нужен только
+  // tunnelUp), сворачиваем и проверяем, что он жив: флаг не сброшен и
+  // `ccCancelPing` (рвёт in-flight urltest'ы в ядре, §175) не вызывался.
+  test('сворачивание приложения НЕ отменяет mass-ping', () async {
+    controller.debugHandleStatusEvent(event(TunnelStatus.connected));
+    unawaited(controller.runMassUrltest(order: const ['a', 'b', 'c']));
+    expect(controller.massPingRunning, isTrue, reason: 'прогон должен идти');
+    methodCalls.clear();
+
+    controller.onAppPaused();
+
+    expect(controller.massPingRunning, isTrue);
+    expect(methodCalls, isNot(contains('ccCancelPing')));
+  });
+
+  // Контраст (§286 не регрессирует): «сессия мертва» рвёт mass-ping полностью.
+  test('disconnected отменяет идущий mass-ping', () async {
+    controller.debugHandleStatusEvent(event(TunnelStatus.connected));
+    unawaited(controller.runMassUrltest(order: const ['a', 'b', 'c']));
+    expect(controller.massPingRunning, isTrue);
+    methodCalls.clear();
+
+    controller.debugHandleStatusEvent(event(TunnelStatus.disconnected));
+
+    expect(controller.massPingRunning, isFalse);
+    expect(methodCalls, contains('ccCancelPing'));
   });
 }
