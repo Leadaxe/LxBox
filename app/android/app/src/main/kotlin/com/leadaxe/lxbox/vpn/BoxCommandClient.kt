@@ -358,6 +358,20 @@ class BoxCommandClient {
         }.getOrElse { mapOf("delay" to 0, "error" to (it.message ?: "urlTestOutbound failed")) }
     }
 
+    /// §308 — групповой URLTest: ядро force-тестит ВСЕХ членов группы её
+    /// конфиг-URL'ом и делает переселект на живой узел (+interrupt).
+    /// Fire-and-forget в ядре (`go CheckOutbounds`): RPC возвращается сразу,
+    /// без результатов — новый selected приедет groups-стримом, делеи членов
+    /// лягут в history. true = команда принята ядром.
+    fun urlTestGroup(tag: String): Boolean {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "urlTestGroup: no command client (paused/down)")
+            return false
+        }
+        return runCatching { client.urlTest(tag); true }
+            .getOrElse { Log.w(TAG, "urlTestGroup failed: ${it.message}"); false }
+    }
+
     /// §175/§209 — поднять pingClient лениво. Голый `PingHandler`: подписок нет,
     /// только unary RPC. Свой ctx/conn — disconnect рвёт лишь его вызовы.
     /// Идемпотентно (CAS): возвращает живой если есть.
