@@ -14,11 +14,6 @@ import '../transport/response.dart';
 ///
 /// Raw ответ на GET — ровно то что лежит в памяти HomeController (`configRaw`),
 /// без round-trip'а через jsonDecode. Pretty — валидный JSON parse + indent 2.
-///
-/// §309 — отдаёт **actual** (конфиг работающего ядра). При живом туннеле
-/// свежая пересборка живёт в `pendingConfigRaw` и здесь НЕ видна; факт её
-/// наличия — `pending_config_length` в `GET /state`. Это осознанно: диагностика
-/// спрашивает «на чём крутится ядро», а не «что соберётся при рестарте».
 Future<DebugResponse> configHandler(DebugRequest req, DebugContext ctx) async {
   if (req.path == '/config' && req.method == 'PUT') {
     return _put(req, ctx);

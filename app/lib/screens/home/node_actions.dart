@@ -15,16 +15,6 @@ import '../../services/l10n/locale_controller.dart';
 /// Все принимают `context` явно (раньше использовали `mounted`/`context`
 /// напрямую); поведение байт-в-байт идентично.
 
-/// §309 — тега нет в конфиге работающего ядра. После разведения running/pending
-/// это редкость (список нод и конфиг снова из одного среза), поэтому сообщение
-/// остаётся диагностическим — молча выходить нельзя ни в одном из действий.
-void _showTagMissing(BuildContext context, String tag) {
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(getLocalText.s("Not found: %s", tag))),
-  );
-}
-
 /// §258 — «View details»: экран Overview/JSON. Контроллеры нужны
 /// Overview-вкладке для навигации по хопам цепочки (openTagOwner).
 void viewOutboundJson(
@@ -39,7 +29,9 @@ void viewOutboundJson(
   final intro = state.configModel;
   final chain = intro.outboundChain(tag);
   if (chain.isEmpty) {
-    _showTagMissing(context, tag);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(getLocalText.s("Not found: %s", tag))),
+    );
     return;
   }
 
@@ -74,13 +66,7 @@ void copyNodeJson(
     if (detourTag != null) detour = intro.rawOf(detourTag);
   }
 
-  // §309 — раньше здесь был немой return: юзер жал «копировать», реакции нет,
-  // в буфере оставалось прошлое (анти-паттерн §277/§278). Теперь промах тега
-  // всегда объясняется вслух.
-  if (server == null) {
-    _showTagMissing(context, tag);
-    return;
-  }
+  if (server == null) return;
 
   Object toCopy;
   String label;

@@ -115,9 +115,8 @@ mixin _HeartbeatMixin on ChangeNotifier {
     // stale-terminal guard в _handleStatusEvent (prevTunnel уже terminal),
     // до его clearSelected дело не дойдёт — чистим здесь.
     SelectorInfo.I.clearSelected();
-    // §309 — tunnel down: running перестал существовать, pending → actual.
     _emit(
-      _state.promotePendingConfig().copyWith(
+      _state.copyWith(
         tunnel: TunnelStatus.revoked,
         // §140 — НЕ «another VPN may have taken over»: heartbeat-таймаут НЕ значит
         // перехват другим VPN (это синтез на стороне приложения, не системный
@@ -131,6 +130,7 @@ mixin _HeartbeatMixin on ChangeNotifier {
         highlightedNode: null,
         traffic: TrafficSnapshot.zero,
         connectedSince: null,
+        configChangedNeedRestart: false,
       ),
     );
     unawaited(_tryCleanStop());

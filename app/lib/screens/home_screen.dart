@@ -538,13 +538,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         // пустыми, реальный _controller.state не трогается.
         final realState = _controller.state;
         final state = _controller.previewEmpty
-            // §309 — гасим и pending, иначе `hasConfig` протащил бы конфиг
-            // мимо preview-заглушки.
-            ? realState.copyWith(
-                configRaw: '', pendingConfigRaw: null, nodes: const [])
+            ? realState.copyWith(configRaw: '', nodes: const [])
             : realState;
         final startActive = !state.tunnelUp;
-        final startEnabled = !state.busy && !state.tunnelUp && state.hasConfig;
+        final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
         return Scaffold(
           // l10n-exempt: brand name, идентичен во всех локалях
@@ -560,7 +557,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               // Empty state (no config) → guide + CTA берёт на себя весь
               // экран; controls/header не рисуем, чтобы disabled-кнопка
               // не путала первого пользователя.
-              if (state.hasConfig) ...[
+              if (state.configRaw.isNotEmpty) ...[
                 HomeControls(
                   controller: _controller,
                   subController: _subController,
