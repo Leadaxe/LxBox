@@ -130,49 +130,13 @@ Future<void> _saveCustomRules(List<CustomRule> rules,
   if (flush) await _save();
 }
 
-/// §228 — маппинг переименованных preset_id. Пресеты `bittorrent-direct` /
-/// `private-ip-direct` потеряли суффикс `-direct` (теперь у них выбираемый
-/// outbound, а не захардкоженный direct), `block_unknown` приведён к
-/// kebab-case. Без ремапа сохранённые у юзеров правила ссылались бы на
-/// несуществующий preset_id → «Preset not found» + осиротевший
-/// `varsValues['outbound']`.
-const _renamedPresetIds = <String, String>{
-  'bittorrent-direct': 'bittorrent',
-  'private-ip-direct': 'private-ip',
-  'block_unknown': 'unknown-traffic',
-};
-
-/// §228 — one-shot ремап preset_id в сохранённых `custom_rules`. Переписывает
-/// ТОЛЬКО `presetId`, `varsValues` (в т.ч. выбранный юзером outbound) остаётся
-/// нетронутым → выбор канала переживает переименование. Guard `preset_ids_remapped`.
-/// Идемпотентна. ДОЛЖНА идти до seed'а дефолтных пресетов (иначе уже засеянные
-/// юзеры не отремапятся).
-///
-/// ТЕХДОЛГ §229: удалить эту функцию + `_renamedPresetIds` в следующем релизе
-/// ПОСЛЕ выхода §228 в прод (миграция одноразовая; guard-ключ сохранить).
-/// См. docs/spec/tasks/229-remove-preset-id-migration.md.
-Future<void> _migrateRenamedPresetIds() async {
-  final data = await _load();
-  if (data['preset_ids_remapped'] == true) return;
-
-  final list = data['custom_rules'];
-  if (list is List) {
-    var changed = false;
-    for (final e in list) {
-      if (e is Map &&
-          e['kind'] == 'preset' &&
-          _renamedPresetIds.containsKey(e['presetId'])) {
-        e['presetId'] = _renamedPresetIds[e['presetId']];
-        changed = true;
-      }
-    }
-    if (changed) data['custom_rules'] = list;
-  }
-
-  data['preset_ids_remapped'] = true;
-  SettingsStorage._cache = data;
-  await _save();
-}
+// §229 — one-shot ремап preset_id (§228: `bittorrent-direct`→`bittorrent`,
+// `private-ip-direct`→`private-ip`, `block_unknown`→`unknown-traffic`) удалён:
+// §228 вышел в v2.10.0, обновившиеся юзеры давно отремаплены, код был мёртвым
+// грузом. Guard-ключ `preset_ids_remapped` СОХРАНЁН в persisted-keys
+// (settings_storage.dart) — имя не переиспользовать, старые storage с ним не
+// считать мусором. Пропустивший v2.10.0..v2.17.x получит «Preset not found» на
+// трёх старых id (мягкая деградация: warning + дроп при сборке).
 
 /// §159 — флаг «дефолтные пресеты уже засеяны» (fresh-install seed). Хранится
 /// в том же storage-ключе `presets_migrated`, что и снятая legacy-миграция —
