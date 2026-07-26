@@ -791,6 +791,18 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
+            // §311/SPEC036 — unary снапшот конфига работающего ядра. null =
+            // недоступен (down / не-STARTED / attached / ядро < lx.16-rc.3) —
+            // обёртка BoxCommandClient no-throw (runCatching внутри), Dart
+            // различает null от строки и деградирует к saved-файлу.
+            // Dispatchers.IO — unary RPC на main = ANR (§122).
+            "ccGetRunningConfig" -> {
+                val cc = BoxService.commandClient
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.getRunningConfig() }
+                    result.success(r)
+                }
+            }
             // §208/§209 — unary снапшот пула round_robin-группы. На Dispatchers.IO
             // (RPC может блокировать). КОНТРАКТ: null = клиент недоступен (сервис
             // down / pingClient не поднялся) → Dart рендерит «Pool unavailable» /

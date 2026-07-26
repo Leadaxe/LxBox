@@ -22,7 +22,7 @@ mixin _PingMixin on ChangeNotifier {
   Future<void> runNodeUrltest(String nodeTag) async {
     if (!_state.tunnelUp) return;
     // §201 — block дропает трафик: urltest всегда ERR, мерить нечего.
-    if (_state.configModel[nodeTag]?.type == 'block') return;
+    if (_state.activeModel[nodeTag]?.type == 'block') return; // §311 — срез ядра
     final pingBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '…';
     _emit(_state.copyWith(pingBusy: pingBusy));
     final group = _state.selectedGroup;
@@ -247,7 +247,7 @@ mixin _PingMixin on ChangeNotifier {
     // §201 — block-ноду не пингуем: она дропает любой коннект, urltest всегда
     // вернёт ERR. Исключаем из набора (и из single-node, и из mass-ping).
     final nodes = List<String>.from(order ?? _state.nodes)
-        .where((t) => _state.configModel[t]?.type != 'block')
+        .where((t) => _state.activeModel[t]?.type != 'block') // §311
         .toList();
     if (nodes.isEmpty) return;
 

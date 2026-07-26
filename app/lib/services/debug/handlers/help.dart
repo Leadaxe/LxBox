@@ -86,6 +86,7 @@ PUT /config                         Overwrite config.json + reload sing-box. Bod
                                       {"locked": true} before the write.
 GET /config/pretty                  Same with indent
 GET /config/path                    Absolute on-device file path
+GET /config/running                 Running kernel snapshot (409 if none)
 
 === Pool (round_robin balancer) ===
 
@@ -425,6 +426,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PUT', 'path': '/config', 'body': 'raw sing-box JSON (Map)', 'description': 'Overwrite config.json + reload sing-box. Temporary unless /settings/config_locked=true.'},
     {'method': 'GET', 'path': '/config/pretty', 'description': 'Indent-formatted'},
     {'method': 'GET', 'path': '/config/path', 'description': 'On-device file path'},
+    {'method': 'GET', 'path': '/config/running', 'description': 'Config of the running kernel (SPEC 036); 409 when unavailable'},
     // Logs
     {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warn,info,debug'}, 'description': 'AppLog entries'},
     {'method': 'GET', 'path': '/logs/app', 'description': 'Alias for /logs?source=app (same params)'},

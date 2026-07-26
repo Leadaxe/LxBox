@@ -94,7 +94,7 @@ auth), а не факт, что за границей всё открыто.
 |---|---|
 | `GET /ping` | `{pong,server,uptime_seconds}` — **без auth** |
 | `GET /help` | `?format=text\|json` — самодокументируемая карта всей поверхности API. **Без auth** (второй no-auth endpoint). `json` — для auto-tooling, `text` (default) — human-readable cheatsheet. |
-| `GET /state` | full HomeState: tunnel/busy/config_length/active_in_group/selected_group/last_delay/ping_busy/traffic/… **§250** — `last_start_error` + `last_start_error_at` (ISO-8601 / null): last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart). В отличие от `last_error` не затирается UI-consume (`clearError`) — живёт до следующего успешного старта. |
+| `GET /state` | full HomeState: tunnel/busy/config_length/**running_config_length** (§311: null = снапшота ядра нет; вместе с `config_length` показывает расхождение running↔saved)/active_in_group/selected_group/last_delay/ping_busy/traffic/… **§250** — `last_start_error` + `last_start_error_at` (ISO-8601 / null): last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart). В отличие от `last_error` не затирается UI-consume (`clearError`) — живёт до следующего успешного старта. |
 | `GET /state/subs` | массив подписок, `?reveal=true` показывает clear URLs |
 | `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
 | `GET /state/storage` | весь `SettingsStorage._cache` со scrubber'ом (token/URL/nodes маскируются) |
@@ -114,9 +114,10 @@ curl -s -H "$HDR" "$BASE/state/storage?reveal=true" | jq '.vars | keys'
 
 | Endpoint | Метод | Назначение |
 |---|---|---|
-| `GET /config` | GET | raw JSON конфига (as-is из памяти HomeController) |
+| `GET /config` | GET | raw JSON **сохранённого** конфига (as-is из памяти HomeController; §311 — при живом туннеле может опережать ядро) |
 | `GET /config/pretty` | GET | тот же JSON с indent: 2 |
 | `GET /config/path` | GET | `{app_documents_dir,note}` — путь Flutter dir, не sing-box (см. note) |
+| `GET /config/running` | GET | §311 — снапшот конфига **работающего ядра** (kernel SPEC 036 `GetRunningConfig`). Re-marshal распарсенных options (post-override tun, omitempty) — diff с `/config` только семантический. `409 conflict` = туннель down / ядро < `lx.16-rc.3` / снапшот ещё не подтянут lazy-fetch'ем |
 | `PUT /config` | PUT | **прямой override** — body = raw sing-box JSON объект. `HomeController.saveParsedConfig(raw)` минуя `buildConfig`. |
 
 ```bash

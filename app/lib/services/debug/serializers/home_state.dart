@@ -9,6 +9,10 @@ Map<String, Object?> serializeHomeState(HomeState s) {
     'tunnel_up': s.tunnelUp,
     'busy': s.busy,
     'config_length': s.configRaw.length,
+    // §311 — длина снапшота работающего ядра (GET /config/running); null =
+    // недоступен (туннель down / старое ядро / ещё не подтянут). Вместе с
+    // config_length показывает сам факт расхождения running vs saved.
+    'running_config_length': s.runningConfigRaw?.length,
     'active_in_group': s.activeInGroup,
     'selected_group': s.selectedGroup,
     'highlighted_node': s.highlightedNode,

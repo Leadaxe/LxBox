@@ -59,8 +59,9 @@ Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token с�
 | `GET /state/vpn` | auto_start / keep_on_exit / battery-opt status |
 | `GET /state/config_locked` | §037 — заперт ли auto-rebuild |
 | `GET /device` | Android version / model / ABI / app version + build / core version (libbox / sing-box-lx) / VPN perm / uptime |
-| `GET /config` | Финальный sing-box JSON (что ядро реально крутит) |
+| `GET /config` | **Сохранённый** sing-box JSON (файл; §311 — при живом туннеле может ОПЕРЕЖАТЬ ядро: пересборка до рестарта) |
 | `GET /config/pretty` | То же с indent:2 |
+| `GET /config/running` | §311 — снапшот конфига **работающего ядра** (kernel SPEC 036, захват на старте). Re-marshal — сравнивать с `/config` только семантически. `409` = туннель down / ядро < lx.16-rc.3 / ещё не подтянут. Расхождение running↔saved видно по `running_config_length` vs `config_length` в `/state` |
 | `GET /pool?tag=vpn-1-auto` | §208 — снапшот пула round_robin-группы: `{tag, count, slots:[{slot, tag, delay, alive}]}`. Какие N серверов в слотах сейчас + их пинг. Не-round_robin → `200 slots:[]`; туннель down → `409` (не пустой ответ — §209) |
 | `GET /logs?source=core&limit=500` | Sing-box internal logs (требует `core_logs_enabled=true`) |
 | `GET /logs?source=app&limit=300` | App-side warn/error |
