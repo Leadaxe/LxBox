@@ -289,11 +289,10 @@ class HomeController extends ChangeNotifier
     // событие. Теперь один emit, одно rebuild.
 
     if (tunnel == TunnelStatus.connected) {
-      // §309 — ядро поднялось: конфиг, который оно прочитало, и есть actual.
-      // promote ДО copyWith, иначе pending пережил бы старт (флаг = pending).
-      _emit(_state.promotePendingConfig().copyWith(
+      _emit(_state.copyWith(
         tunnel: tunnel,
         connectedSince: DateTime.now(),
+        configChangedNeedRestart: false,
         // §250 — успешный старт = ЕДИНСТВЕННОЕ место очистки lastStartError
         // (clearError/оптимистичные lastError: null его не трогают).
         lastStartError: '',
@@ -365,9 +364,8 @@ class HomeController extends ChangeNotifier
           revoked: tunnel == TunnelStatus.revoked,
           errorReason: event.errorReason);
       final reasonEn = stopReason?.renderEn() ?? '';
-      // §309 — туннель упал/остановлен: running больше нет, pending → actual.
       _emit(
-        _state.promotePendingConfig().copyWith(
+        _state.copyWith(
           tunnel: tunnel,
           lastError: stopReason != null
               ? StopReasonMsg(stopReason)
@@ -388,6 +386,7 @@ class HomeController extends ChangeNotifier
           highlightedNode: null,
           traffic: TrafficSnapshot.zero,
           connectedSince: null,
+          configChangedNeedRestart: false,
         ),
       );
       // Haptic — на революд/краш тяжёлый, на user-инициированный stop лёгкий.
@@ -459,8 +458,7 @@ class HomeController extends ChangeNotifier
       // §251 — синтезированный tunnel-down: настоящий Stopped потом проглотит
       // stale-terminal guard, его clearSelected недостижим — чистим здесь.
       SelectorInfo.I.clearSelected();
-      // §309 — синтезированный down: running нет, pending → actual.
-      _emit(_state.promotePendingConfig().copyWith(
+      _emit(_state.copyWith(
         tunnel: TunnelStatus.disconnected,
         lastError: const ErrMsg(ErrKey.connectionTimedOut),
         ccGroups: const <CcGroup>[],
@@ -468,6 +466,7 @@ class HomeController extends ChangeNotifier
         nodes: <String>[],
         traffic: TrafficSnapshot.zero,
         connectedSince: null,
+        configChangedNeedRestart: false,
       ));
     });
   }
@@ -519,9 +518,7 @@ class HomeController extends ChangeNotifier
     if (ok) {
       // Intent-based reset: юзер остановил туннель, saved конфиг больше
       // не "stale vs running" — running перестал существовать.
-      // §309 — промоушен pending → actual: следующий старт пойдёт с самого
-      // свежего конфига, и он же становится тем, что показывает UI.
-      _emit(_state.promotePendingConfig());
+      _emit(_state.copyWith(configChangedNeedRestart: false));
     }
     return ok;
   }
@@ -564,9 +561,7 @@ class HomeController extends ChangeNotifier
     if (ok) {
       // Intent-based reset: running теперь = saved (или станет через
       // мгновение на Started). Плашка "нужен restart" неактуальна.
-      // §309 — ядро стартует с pending-конфига (native читает файл, который
-      // saveConfig уже переписал) → он и есть новый actual.
-      _emit(_state.promotePendingConfig());
+      _emit(_state.copyWith(configChangedNeedRestart: false));
     }
     return ok;
   }
@@ -1121,8 +1116,7 @@ class HomeController extends ChangeNotifier
   /// следующем start без restart'а).
   void markConfigChangedNeedRestart() {
     if (_state.tunnelUp) {
-      // §309 — сам JSON не менялся, устарел лишь running: pending = actual.
-      _emit(_state.markRunningConfigStale());
+      _emit(_state.copyWith(configChangedNeedRestart: true));
     }
   }
 

@@ -50,7 +50,6 @@ enum NodeSortMode {
 class HomeState {
   HomeState({
     this.configRaw = '',
-    this.pendingConfigRaw,
     ParsedConfig? configModel,
     this.tunnel = TunnelStatus.disconnected,
     this.lastError,
@@ -79,56 +78,18 @@ class HomeState {
     this.manualOrder = const <String>[],
     this.traffic = TrafficSnapshot.zero,
     this.connectedSince,
+    this.configChangedNeedRestart = false,
     this.configLoadError = false,
     this.lastStartError = '',
     this.lastStartErrorAt,
   }) : configModel = configModel ?? ParsedConfig.parse(configRaw);
 
-  /// §309 — конфиг, на котором **работает ядро** (actual). При живом туннеле
-  /// НЕ перезаписывается пересборкой: свежесобранный уходит в
-  /// [pendingConfigRaw] и ждёт рестарта. Иначе UI смешивал бы срезы — список
-  /// нод приходит из памяти ядра (`ccGroups`, §122), а resolve тега шёл бы по
-  /// уже переписанному конфигу (типовой источник расхождения — import-rules
-  /// §302, смена `tag_prefix`, переименование ноды в фиде).
   final String configRaw;
-
-  /// §309 — результат последней пересборки, ещё не применённый ядром.
-  /// `null` = running и saved совпадают. Заполняется только при живом
-  /// туннеле; на старте/стопе промотируется в [configRaw].
-  final String? pendingConfigRaw;
 
   /// §091 — распарсенный конфиг (`Map<tag, ConfigNode>` + структурные
   /// запросы). Статик-слой: пересобирается в `copyWith` ТОЛЬКО при смене
   /// `configRaw`; пинги/active/urltest живут в отдельных динамик-map'ах.
-  /// §309 — строится от actual, т.е. описывает то, что реально крутится.
   final ParsedConfig configModel;
-
-  /// §309 — конфиг для редактора/экспорта: при живом туннеле показываем
-  /// pending (иначе правки юзера «пропадали» бы до рестарта), иначе actual.
-  String get editableConfigRaw => pendingConfigRaw ?? configRaw;
-
-  /// Есть ли что стартовать (§309 — pending считается: при выключенном
-  /// туннеле он null, но после стопа промотирован в actual).
-  bool get hasConfig => configRaw.isNotEmpty || (pendingConfigRaw?.isNotEmpty ?? false);
-
-  /// §309 — pending становится actual: ядро стартует/останавливается, значит
-  /// «работающий» конфиг = последний собранный. Идемпотентно (нет pending —
-  /// возвращает себя же), поэтому безопасно звать на каждом start/stop.
-  /// Гасит и `configChangedNeedRestart` — он производная от pending.
-  HomeState promotePendingConfig() {
-    final pending = pendingConfigRaw;
-    if (pending == null) return this;
-    return copyWith(configRaw: pending, pendingConfigRaw: null);
-  }
-
-  /// §309 — пометить running-конфиг устаревшим БЕЗ его пересборки (§076:
-  /// native-тоглы `VpnService.Builder` — allow_bypass / keep_on_exit /
-  /// background_mode — применяются на establish(), сам JSON не меняется).
-  /// Pending = текущий actual: содержимое то же, факт «нужен рестарт» — есть.
-  HomeState markRunningConfigStale() {
-    if (pendingConfigRaw != null) return this; // уже помечен, sticky
-    return copyWith(pendingConfigRaw: configRaw);
-  }
 
   final TunnelStatus tunnel;
 
@@ -184,12 +145,8 @@ class HomeState {
   /// §076 (rename from `configStaleSinceStart`): True, если `saveParsedConfig`
   /// был вызван при работающем туннеле — running config теперь устарел
   /// относительно saved, нужен restart чтобы native перечитал.
-  ///
-  /// §309 — больше НЕ самостоятельное поле, а производная от
-  /// [pendingConfigRaw]: инвариант `pending != null ⟺ флаг` держится
-  /// конструктивно, рассинхрон двух представлений одного факта невыразим.
-  /// Sticky: pending живёт до промоушена на `_startInternal`/`_stopInternal`.
-  bool get configChangedNeedRestart => pendingConfigRaw != null;
+  /// Sticky in-memory flag, сбрасывается на каждом успешном `_startInternal`.
+  final bool configChangedNeedRestart;
 
   /// §116 — на старте `getConfig()` не вернул конфиг (`configRaw` пустой) ПРИ
   /// живом туннеле: файл не прочёлся, но туннель уже несёт рабочий конфиг.
@@ -343,9 +300,6 @@ class HomeState {
 
   HomeState copyWith({
     String? configRaw,
-    // §309 — _unset-паттерн: pending надо уметь СБРАСЫВАТЬ в null (промоушен
-    // на старте/стопе), обычный `??` этого не умеет.
-    Object? pendingConfigRaw = _unset,
     TunnelStatus? tunnel,
     Object? lastError = _unset,
     Object? stopReason = _unset,
@@ -368,15 +322,13 @@ class HomeState {
     List<String>? manualOrder,
     TrafficSnapshot? traffic,
     Object? connectedSince = _unset,
+    bool? configChangedNeedRestart,
     bool? configLoadError,
     String? lastStartError,
     Object? lastStartErrorAt = _unset,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
-      pendingConfigRaw: identical(pendingConfigRaw, _unset)
-          ? this.pendingConfigRaw
-          : pendingConfigRaw as String?,
       // configModel пересчитываем ТОЛЬКО при смене configRaw. Иначе шарим
       // тот же immutable объект — несколько copyWith без configRaw не
       // делают jsonDecode.
@@ -418,6 +370,7 @@ class HomeState {
       connectedSince: identical(connectedSince, _unset)
           ? this.connectedSince
           : connectedSince as DateTime?,
+      configChangedNeedRestart: configChangedNeedRestart ?? this.configChangedNeedRestart,
       configLoadError: configLoadError ?? this.configLoadError,
       lastStartError: lastStartError ?? this.lastStartError,
       lastStartErrorAt: identical(lastStartErrorAt, _unset)

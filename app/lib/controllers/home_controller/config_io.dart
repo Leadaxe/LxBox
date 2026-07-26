@@ -68,8 +68,8 @@ mixin _ConfigIoMixin on ChangeNotifier {
     // `configRaw`. Если конфиг байт-в-байт тот же (canonical-to-canonical), эта
     // запись running config НЕ устаревает → restart не нужен. Убирает ложный
     // «Config changed» на bootstrap-пересборке при живом туннеле (репорт MIUI).
-    // §309 — сравниваем именно с actual (running), не с pending: вопрос ровно
-    // «устарел ли работающий туннель».
+    // Сравнение sticky: prev=true (более раннее реальное изменение, ещё не
+    // применённое рестартом) сохраняем.
     bool changed;
     try {
       changed = _state.configRaw.isEmpty ||
@@ -78,20 +78,18 @@ mixin _ConfigIoMixin on ChangeNotifier {
     } catch (_) {
       changed = true; // не смогли сравнить → safe: показать баннер, не спрятать
     }
-    // §309 — при живом туннеле НЕ трогаем `configRaw`: ядро продолжает крутить
-    // старый конфиг, и весь UI (resolve тега, список нод из `ccGroups`, шторка)
-    // обязан смотреть на него же. Свежесобранный уходит в pending до рестарта.
-    // Туннель down → actual'а не существует, пишем напрямую (поведение как было).
-    // Sticky: `changed == false` при уже висящем pending его не сбрасывает —
-    // более раннее реальное изменение всё ещё не применено.
-    final stale = changed && _state.tunnelUp;
+    // Если туннель уже крутит старый конфиг И конфиг реально изменился — флаг.
+    // Флаг sticky до up↔down. saveConfig выше уже переписал файл (mtime=now),
+    // так что отдельный touch не нужен — config новее settings, §113-bootstrap
+    // не перепроверит.
+    final needRestart =
+        (changed && _state.tunnelUp) || _state.configChangedNeedRestart;
     _addDebug(DebugSource.app,
-        '[vpn] saveParsedConfig EXIT changed=$changed stale=$stale (tunnelUp=${_state.tunnelUp} || prev_pending=${_state.pendingConfigRaw != null})');
+        '[vpn] saveParsedConfig EXIT changed=$changed need_restart_after=$needRestart (tunnelUp=${_state.tunnelUp} || prev=${_state.configChangedNeedRestart})');
     _emit(_state.copyWith(
-      configRaw: _state.tunnelUp ? null : raw,
-      // stale → новый pending; иначе pending не трогаем (sticky, см. выше).
-      pendingConfigRaw: stale ? raw : _state.pendingConfigRaw,
+      configRaw: raw,
       lastError: null,
+      configChangedNeedRestart: needRestart,
       // §116 — configRaw стал непустым → аномалия загрузки снята.
       configLoadError: false,
       // §070: config change → новый pool возможно → sort заново. Только при
