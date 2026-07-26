@@ -293,6 +293,13 @@ class HomeController extends ChangeNotifier
         tunnel: tunnel,
         connectedSince: DateTime.now(),
         configChangedNeedRestart: false,
+        // §311 — новая сессия ядра → старый снапшот протух, сбросить (lazy-
+        // fetch в _applyGroups перезахватит). На ДУБЛЕ connected (broadcast +
+        // §187-pull) не сбрасываем: сессия та же, иначе теряли бы уже
+        // захваченный снапшот до следующего groups-push.
+        runningConfigRaw: prevTunnel == TunnelStatus.connected
+            ? _state.runningConfigRaw
+            : _invalidateRunningConfig(),
         // §250 — успешный старт = ЕДИНСТВЕННОЕ место очистки lastStartError
         // (clearError/оптимистичные lastError: null его не трогают).
         lastStartError: '',
@@ -387,6 +394,7 @@ class HomeController extends ChangeNotifier
           traffic: TrafficSnapshot.zero,
           connectedSince: null,
           configChangedNeedRestart: false,
+          runningConfigRaw: _invalidateRunningConfig(), // §311 — running перестал существовать
         ),
       );
       // Haptic — на революд/краш тяжёлый, на user-инициированный stop лёгкий.
@@ -467,6 +475,7 @@ class HomeController extends ChangeNotifier
         traffic: TrafficSnapshot.zero,
         connectedSince: null,
         configChangedNeedRestart: false,
+        runningConfigRaw: _invalidateRunningConfig(), // §311 — синтезированный down
       ));
     });
   }
@@ -532,7 +541,9 @@ class HomeController extends ChangeNotifier
   ///           статусный fallback "Connected").
   /// Dart владеет обеими строками — native при своих show(...) не затирает их.
   Future<void> _pushNotificationLabels() async {
-    final routeFinal = RouteConfig.finalTag(_state.configRaw);
+    // §311 — шторка описывает ТЕКУЩИЙ туннель → route.final из среза ядра
+    // (activeConfigRaw; фоллбэк на файл, если снапшот ещё не подтянут).
+    final routeFinal = RouteConfig.finalTag(_state.activeConfigRaw);
     final title = (routeFinal == null || routeFinal.isEmpty)
         ? 'L×Box'
         : 'L×Box [final = $routeFinal]';
@@ -615,6 +626,11 @@ class HomeController extends ChangeNotifier
     // async) → cooldown оставался занятым, юзер не видел ошибки. Теперь
     // surface'им через _emit(lastError) и откатываем cooldown, чтобы повтор
     // был доступен сразу.
+    // §311 — reload пересоздаёт box → снапшот running config протухает.
+    // Сбрасываем ДО native-вызова; ядро перезахватит на новом старте, lazy-
+    // fetch подтянет со следующим groups-push. При ошибке reload'а туннель
+    // продолжает крутить старый конфиг — fetch просто вернёт его же.
+    _emit(_state.copyWith(runningConfigRaw: _invalidateRunningConfig()));
     try {
       final ok = await _vpn.reloadVPN();
       _addDebug(DebugSource.app, '[vpn] reload → ok=$ok');
@@ -752,6 +768,61 @@ class HomeController extends ChangeNotifier
     _startGroupsPull();
   }
 
+  /// §311 — guard от параллельных fetch'ей снапшота (groups-push'и частые).
+  bool _fetchingRunningConfig = false;
+
+  /// §311 — epoch сессии ядра для снапшота. Bump'ается ВМЕСТЕ с каждым
+  /// сбросом `runningConfigRaw`. Нужен потому, что `tunnelUp` НЕ различает
+  /// сессии: in-place reload идёт **без status-flap** (§049 F4 — ядро остаётся
+  /// `Started`), CommandServer его переживает, а groups-стрим не гасится.
+  /// Без epoch'а fetch, стартовавший до/во время reload'а, отвечал бы конфигом
+  /// СТАРОГО box'а и коммитил его ПОСЛЕ сброса — pre-check `!= null` затем
+  /// блокировал бы refetch, и stale-снапшот управлял бы `activeModel` до конца
+  /// сессии (ровно класс бага §311). Образец — epoch-гейт mass-ping'а.
+  int _runningConfigEpoch = 0;
+
+  /// §311 — инвалидация снапшота: bump epoch'а + сам сброс одним движением.
+  /// Возвращает `null` для передачи в `copyWith(runningConfigRaw: ...)`, чтобы
+  /// «сбросили, но забыли bump'нуть» было невыразимо. Зовётся на КАЖДОМ
+  /// переходе сессии ядра (см. вызовы).
+  @override
+  String? _invalidateRunningConfig() {
+    _runningConfigEpoch++;
+    return null;
+  }
+
+  /// §311 — lazy-подтяжка снапшота работающего конфига (kernel SPEC 036).
+  /// Зовётся из `_applyGroups` — к этому моменту CC-сессия жива и ядро с
+  /// высокой вероятностью STARTED. null-ответ (старое ядро / attached-путь /
+  /// гонка FailedPrecondition) НЕ ретраим таймером: следующий groups-push
+  /// попробует снова, а без снапшота `activeModel` деградирует к saved-файлу
+  /// (поведение до §311) — плашка §116 предупреждает об окне.
+  Future<void> _ensureRunningConfig() async {
+    if (_disposed || _fetchingRunningConfig) return;
+    if (!_state.tunnelUp || _state.runningConfigRaw != null) return;
+    _fetchingRunningConfig = true;
+    final epoch = _runningConfigEpoch;
+    try {
+      final raw = await _cc.getRunningConfig();
+      // §219 — dispose/ушли из connected за await → не эмитим.
+      if (_disposed || !_state.tunnelUp) return;
+      // §311 — сессия ядра сменилась за время RPC (reload/реконнект): ответ
+      // от СТАРОГО box'а, коммитить нельзя. Следующий groups-push перезапросит.
+      if (epoch != _runningConfigEpoch) {
+        _addDebug(DebugSource.app,
+            '[cc] running config dropped (epoch $epoch → $_runningConfigEpoch)');
+        return;
+      }
+      if (raw != null) {
+        _emit(_state.copyWith(runningConfigRaw: raw));
+        _addDebug(DebugSource.app,
+            '[cc] running config captured (${raw.length} bytes)');
+      }
+    } finally {
+      _fetchingRunningConfig = false;
+    }
+  }
+
   Timer? _groupsPullTimer;
   // getGroups бросает (status.Error), пока сервис не STARTED — ретраим короткими
   // шагами, ПОКА не получим снапшот. Не «N попыток и сдаёмся»: pull дешёвый и
@@ -870,6 +941,11 @@ class HomeController extends ChangeNotifier
   /// выбрать активную (sticky → route.final → первая) и применить её ноды.
   /// Вызывается из стрима И из `reloadProxies` (pull-refresh / после switchNode).
   void _applyGroups(List<CcGroup> ccGroups) {
+    // §311 — CC-сессия жива (группы текут) → самое время лениво подтянуть
+    // снапшот работающего конфига. Хук именно здесь: покрывает push-стрим,
+    // SPEC015-pull и reloadProxies одной точкой; guard'ы внутри делают
+    // повторные вызовы бесплатными.
+    unawaited(_ensureRunningConfig());
     // §251 — снапшот «тег группы → её текущий выбор» для fold'а
     // «селектор (выбор)» в routing-строках и пикере detour. Все группы
     // (selector + urltest): detour-ссылка может указывать и на двойник.
@@ -886,6 +962,10 @@ class HomeController extends ChangeNotifier
 
     String? initial = next.selectedGroup;
     if (initial == null || !groups.contains(initial)) {
+      // §311 — осознанно configRaw (НЕ activeConfigRaw): этот путь — триггер
+      // lazy-fetch'а снапшота, на первом проходе снапшота ещё нет. Выбор
+      // группы идёт по тегам селекторов; их переименование и так требует
+      // рестарта, так что файл здесь безопасен.
       final finalTag = RouteConfig.finalTag(next.configRaw);
       if (finalTag != null && groups.contains(finalTag)) {
         initial = finalTag;

@@ -59,7 +59,8 @@ class NodeListPresenter {
   /// Lookup protocol for tag — учитывает urltest group fallback (см. §048
   /// «Protocol detection»). Возвращает null если cache miss и urltest нет.
   String? protocolOfTag(String tag, HomeState state) {
-    final model = state.configModel;
+    // §311 — activeModel: теги строк приходят из ядра (ccGroups).
+    final model = state.activeModel;
     final urltestNow = state.urltestNowOf(tag);
     return model.protocolOf(tag) ??
         (urltestNow != null ? model.protocolOf(urltestNow) : null);
@@ -69,7 +70,8 @@ class NodeListPresenter {
   /// urltest-fallback что у [protocolOfTag] (payload-узел, давший протокол,
   /// даёт и теги). Пустой Set = unknown.
   Set<String> variantsOfTag(String tag, HomeState state) {
-    final model = state.configModel;
+    final model = state.activeModel; // §311
+
     var n = model[tag];
     if (n == null || n.isControl || n.type.isEmpty) {
       final urltestNow = state.urltestNowOf(tag);
@@ -138,7 +140,7 @@ class NodeListPresenter {
     final pool = sortedNodes
         .where((t) =>
             state.isControlTag(t) ||
-            filter.detourPoolPasses(state.configModel[t]?.isDetour ?? false))
+            filter.detourPoolPasses(state.activeModel[t]?.isDetour ?? false)) // §311
         .toList();
     final f = buildNodeFilter(state);
     final matching = <String>[];
@@ -205,13 +207,14 @@ class NodeListPresenter {
     final pool = allTags
         .where((t) =>
             state.isControlTag(t) ||
-            filter.detourPoolPasses(state.configModel[t]?.isDetour ?? false))
+            filter.detourPoolPasses(state.activeModel[t]?.isDetour ?? false)) // §311
         .toList();
 
-    // configModel парсится один раз при смене configRaw (см. HomeState),
+    // activeModel (§311): configModel/runningModel парсятся один раз при
+    // смене raw (см. HomeState), выбор среза — по tunnelUp,
     // здесь просто читаем. Раньше jsonDecode шёл на каждый rebuild
     // ListView — с 50+ нодами и сортировкой это был hot-path выжиматель.
-    final cache = state.configModel;
+    final cache = state.activeModel;
 
     // §048 Phase 2 — match filter: split pool на matching + nonMatching
     // (control-узлы короткозамкнуты в matching, §078). См. `splitNodes`.

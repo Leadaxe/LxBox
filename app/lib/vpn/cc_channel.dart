@@ -284,6 +284,26 @@ class CcChannel {
     return r.map((m) => CcGroup.fromMap(_asMap(m))).toList();
   }
 
+  /// §311 — unary снапшот конфига РАБОТАЮЩЕГО ядра (kernel SPEC 036
+  /// `GetRunningConfig`; javap rc.3: `String getRunningConfig() throws`).
+  /// Захвачен ядром один раз на старте, отдача — копия строки.
+  ///
+  /// КОНТРАКТ (модель §209): `null` = недоступен по ЛЮБОЙ причине — сервис
+  /// down, ядро без метода (< rc.3 / без with_lx_command → Unimplemented),
+  /// attached-путь (Unavailable), гонка старта (FailedPrecondition), старый
+  /// native без handler'а (MissingPlugin). Caller деградирует к saved-файлу.
+  /// Пустую строку native не отдаёт (SPEC 036: Unavailable вместо "").
+  Future<String?> getRunningConfig() async {
+    try {
+      final r = await _methods.invokeMethod<String>('ccGetRunningConfig');
+      return (r == null || r.isEmpty) ? null : r;
+    } on PlatformException {
+      return null; // ядро не STARTED / RPC-ошибка — не фатально
+    } on MissingPluginException {
+      return null; // юнит-тест / native не готов
+    }
+  }
+
   /// §208/§209 — unary снапшот пула round_robin-группы [tag]. Слоты
   /// `[{slot,tag,delay}]` в фиксированном порядке слота. `delay`==0 → мёртвая/не
   /// измерена.

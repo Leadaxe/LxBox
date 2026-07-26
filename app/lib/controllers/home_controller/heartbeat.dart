@@ -13,6 +13,8 @@ mixin _HeartbeatMixin on ChangeNotifier {
   void _addDebug(DebugSource source, String message);
   // §286 — единая остановка пробирования (реализация в `_PingMixin`).
   void haltAllProbing();
+  // §311 — инвалидация снапшота running-конфига (bump epoch + сброс).
+  String? _invalidateRunningConfig();
 
   /// §122 — таймстемп последнего status-снапшота CommandClient'а (стрим тикает
   /// 1s). Watchdog считает туннель мёртвым, если снапшотов нет дольше порога.
@@ -131,6 +133,8 @@ mixin _HeartbeatMixin on ChangeNotifier {
         traffic: TrafficSnapshot.zero,
         connectedSince: null,
         configChangedNeedRestart: false,
+        runningConfigRaw:
+            _invalidateRunningConfig(), // §311 — tunnel down, снапшот протух
       ),
     );
     unawaited(_tryCleanStop());

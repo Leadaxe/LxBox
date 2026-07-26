@@ -463,6 +463,26 @@ class BoxCommandClient {
     /// работают и когда приложение в фоне. КОНТРАКТ: `null` = клиент недоступен
     /// (туннель down / RPC-фейл), `[]` = пул пуст (группа не round_robin / нет
     /// данных). Caller различает «недоступно» от «пусто».
+    /// §311 (kernel SPEC 036) — unary снапшот конфига РАБОТАЮЩЕГО ядра:
+    /// канонический re-marshal запущенных options, захвачен ядром один раз на
+    /// старте, отдача — копия строки. null = недоступен: клиент down/paused,
+    /// ядро не-STARTED (FailedPrecondition), attached-путь (Unavailable),
+    /// сборка без with_lx_command (Unimplemented), ядро < lx.16-rc.3
+    /// (нет метода). Через незасыпающий pingClient (§209) — отдаёт и в фоне.
+    fun getRunningConfig(): String? {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "getRunningConfig: no command client (paused/down)")
+            return null
+        }
+        return runCatching {
+            client.getRunningConfig().takeIf { it.isNotEmpty() }
+        }.getOrElse {
+            // не-STARTED / старое ядро — НЕ ошибка приложения.
+            Log.d(TAG, "getRunningConfig unavailable: ${it.message}")
+            null
+        }
+    }
+
     fun getPool(tag: String): List<Map<String, Any>>? {
         val client = ensurePingClient() ?: run {
             Log.w(TAG, "getPool: no command client (paused/down)")

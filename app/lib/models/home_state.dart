@@ -50,7 +50,9 @@ enum NodeSortMode {
 class HomeState {
   HomeState({
     this.configRaw = '',
+    this.runningConfigRaw,
     ParsedConfig? configModel,
+    ParsedConfig? runningModel,
     this.tunnel = TunnelStatus.disconnected,
     this.lastError,
     this.stopReason,
@@ -82,14 +84,46 @@ class HomeState {
     this.configLoadError = false,
     this.lastStartError = '',
     this.lastStartErrorAt,
-  }) : configModel = configModel ?? ParsedConfig.parse(configRaw);
+  })  : configModel = configModel ?? ParsedConfig.parse(configRaw),
+        runningModel = runningModel ??
+            (runningConfigRaw != null
+                ? ParsedConfig.parse(runningConfigRaw)
+                : null);
 
+  /// Сохранённый конфиг (файл `singbox_config.json`) — то, что редактируется
+  /// и с чем стартует СЛЕДУЮЩИЙ запуск. §311 — при живом туннеле может
+  /// опережать работающее ядро (пересборка до рестарта); правду о запущенном
+  /// см. [runningConfigRaw]/[activeModel].
   final String configRaw;
+
+  /// §311 — канонический снапшот конфига РАБОТАЮЩЕГО ядра
+  /// (`CommandClient.getRunningConfig`, kernel SPEC 036). `null` = недоступен:
+  /// туннель down, старое ядро без метода, attached-путь, гонка старта.
+  /// Это re-marshal распарсенных options (порядок полей, omitempty, `[]→null`,
+  /// post-override tun) — НЕ участвует ни в каких diff'ах с [configRaw],
+  /// только чтение структуры узлов для resolve/показа.
+  final String? runningConfigRaw;
 
   /// §091 — распарсенный конфиг (`Map<tag, ConfigNode>` + структурные
   /// запросы). Статик-слой: пересобирается в `copyWith` ТОЛЬКО при смене
   /// `configRaw`; пинги/active/urltest живут в отдельных динамик-map'ах.
   final ParsedConfig configModel;
+
+  /// §311 — распарсенный [runningConfigRaw] (та же parse-once дисциплина §091).
+  final ParsedConfig? runningModel;
+
+  /// §311 — модель для вопросов «как устроен узел, который сейчас крутится»:
+  /// список нод приходит из памяти ядра (`ccGroups`, §122), значит и resolve
+  /// тега обязан идти по срезу ядра — иначе в окне «пересборка до рестарта»
+  /// UI мешает срезы (ложный «Not found» на видимую ноду, корень §309/§311).
+  /// Фоллбэк на [configModel] (туннель down / старое ядро) = поведение до §311.
+  ParsedConfig get activeModel =>
+      (tunnelUp ? runningModel : null) ?? configModel;
+
+  /// §311 — сырой аналог [activeModel] для потребителей строки
+  /// (`RouteConfig.finalTag` шторки, StatsScreen).
+  String get activeConfigRaw =>
+      (tunnelUp ? runningConfigRaw : null) ?? configRaw;
 
   final TunnelStatus tunnel;
 
@@ -202,10 +236,11 @@ class HomeState {
   /// Caller'ы короткозамыкают такие теги в matching (всегда видны) и исключают
   /// из 'Custom'-chip detection. Источник: дерево групп (selector/urltest) +
   /// `ConfigNode.isControl` из распарсенного конфига (direct/block/dns).
+  /// §311 — activeModel: tag приходит из списка (= из ядра при tunnelUp).
   bool isControlTag(String tag) {
     final g = groupOf(tag);
     if (g != null && (_isSelector(g.type) || _isUrltest(g.type))) return true;
-    return configModel[tag]?.isControl ?? false;
+    return activeModel[tag]?.isControl ?? false;
   }
 
   /// Все urltest-группы (для форс-URLTest после mass-ping, §070).
@@ -236,17 +271,20 @@ class HomeState {
   /// Пин по ТИПУ из конфига (`direct`/`urltest`/`block`), не по фикс-тегам.
   /// Порядок: direct → urltest-двойники → block → активная.
   List<String> _computePinned() {
+    // §311 — activeModel: сортируем `nodes` (срез ядра при tunnelUp), значит
+    // и тип узла берём из того же среза, иначе pin-by-type мажет по тегам.
+    final model = activeModel;
     final pinnedSet = <String>{
       for (final n in nodes)
-        if ((pinDirect && configModel[n]?.type == 'direct') ||
-            (pinAuto && configModel[n]?.type == 'urltest') ||
-            configModel[n]?.type == 'block') // §201 — block всегда сверху
+        if ((pinDirect && model[n]?.type == 'direct') ||
+            (pinAuto && model[n]?.type == 'urltest') ||
+            model[n]?.type == 'block') // §201 — block всегда сверху
           n,
     };
     final pinned = [
-      ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'direct'),
-      ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'urltest'),
-      ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'block'),
+      ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'direct'),
+      ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'urltest'),
+      ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'block'),
     ];
     // §196 — активная нода группы сразу ПОСЛЕ direct/auto, при ЛЮБОЙ сортировке
     // (не за тоглом). Только реальная прокси-нода (не сам direct/auto-двойник,
@@ -300,6 +338,9 @@ class HomeState {
 
   HomeState copyWith({
     String? configRaw,
+    // §311 — _unset-паттерн: снапшот надо уметь СБРАСЫВАТЬ в null (down /
+    // reload / новая сессия), обычный `??` этого не умеет.
+    Object? runningConfigRaw = _unset,
     TunnelStatus? tunnel,
     Object? lastError = _unset,
     Object? stopReason = _unset,
@@ -329,11 +370,21 @@ class HomeState {
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
+      runningConfigRaw: identical(runningConfigRaw, _unset)
+          ? this.runningConfigRaw
+          : runningConfigRaw as String?,
       // configModel пересчитываем ТОЛЬКО при смене configRaw. Иначе шарим
       // тот же immutable объект — несколько copyWith без configRaw не
       // делают jsonDecode.
       configModel:
           configRaw != null ? ParsedConfig.parse(configRaw) : configModel,
+      // §311 — та же parse-once дисциплина для снапшота ядра: новый raw →
+      // парс; явный null → сброс модели; _unset → шарим текущий объект.
+      runningModel: identical(runningConfigRaw, _unset)
+          ? runningModel
+          : (runningConfigRaw is String
+              ? ParsedConfig.parse(runningConfigRaw)
+              : null),
       tunnel: tunnel ?? this.tunnel,
       lastError: identical(lastError, _unset)
           ? this.lastError
