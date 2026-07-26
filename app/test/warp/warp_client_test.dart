@@ -191,8 +191,10 @@ void main() {
       expect(spec!.peers.first.persistentKeepalive, 25);
     });
 
-    test('toWireguardConf: без параметра → нет PersistentKeepalive (генератор)',
-        () async {
+    // §313 — «генератор без keepalive» здесь БОЛЬШЕ не проверяется: генератор
+    // теперь передаёт значение из пула явно (scan_node_builder_test). Тест про
+    // дефолт самого `toWireguardConf` остаётся — сигнатура не менялась.
+    test('toWireguardConf: без параметра → нет PersistentKeepalive', () async {
       final acc = await account();
       final conf = acc.toWireguardConf();
       expect(conf, isNot(contains('PersistentKeepalive')));

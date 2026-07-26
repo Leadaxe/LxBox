@@ -95,6 +95,25 @@ void main() {
       expect(pool.masquePortsFor('foo'), [443, 4443]);
     });
 
+    test('§313 — keepalive: число/строка/мусор/отсутствие', () {
+      ScanPool? pool(Object? keepalive) => ScanPool.fromFullJson({
+            'wireguard': {
+              'v4_cidr': ['162.159.192.0/24'],
+              'ports': [2408],
+              'keepalive': ?keepalive,
+            },
+          });
+
+      expect(pool(25)!.wgKeepalive, 25);
+      // JSON правит человек — строку принимаем.
+      expect(pool('25')!.wgKeepalive, 25);
+      expect(pool('nope')!.wgKeepalive, 0, reason: 'мусор → 0 = не писать');
+      final noKey = pool(null)!;
+      expect(noKey.wgKeepalive, 0, reason: 'старый asset без ключа');
+      expect(noKey.hasData, isTrue,
+          reason: 'keepalive на пригодность пула не влияет');
+    });
+
     test('null / пустой → null', () {
       expect(ScanPool.fromFullJson(null), isNull);
       expect(

@@ -1070,7 +1070,13 @@ class SubscriptionController extends ChangeNotifier {
       var masqueAcc = await SettingsStorage.getMasqueAccount();
       masqueAcc ??= await _tryRegisterMasque(warp, now);
       if (warpAcc == null && masqueAcc == null) return null;
-      builder = ScanNodeBuilder(warp: warpAcc, masque: masqueAcc);
+      // §313 — keepalive для WG/AWG-узлов берётся из того же пула, что CIDR/
+      // порты/SNI (правится JSON-окном эксперимента без пересборки).
+      builder = ScanNodeBuilder(
+        warp: warpAcc,
+        masque: masqueAcc,
+        wgKeepalive: pool.wgKeepalive,
+      );
     } finally {
       if (client == null) warp.close();
     }
