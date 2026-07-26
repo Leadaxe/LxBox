@@ -79,6 +79,24 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §316 — реальный native `Context.filesDir` (там ядро держит
+  /// `CrashReport-*.log` и `stderr.log`). `null` = канал недоступен.
+  ///
+  /// ВАЖНО: это НЕ `getApplicationDocumentsDirectory()` — у Flutter тот
+  /// указывает на `app_flutter`, а native/ядро пишут в `files`. Пока
+  /// диагностика ходила по Dart-пути, файлы ядра не находились никогда.
+  Future<String?> getFilesDir() async {
+    try {
+      return await _invoke<String>(
+        _Methods.getFilesDir,
+        timeout: _Timeouts.config,
+        onTimeoutValue: null,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Read current config from native storage. Empty fallback `{}` чтобы
   /// caller (Builder) мог parse'ить без null-проверок.
   Future<String> getConfig() async {

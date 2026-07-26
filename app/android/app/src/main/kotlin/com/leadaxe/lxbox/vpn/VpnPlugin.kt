@@ -278,6 +278,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(ConfigManager.save(config))
             }
             "getConfig" -> result.success(ConfigManager.load())
+            // §316 — РЕАЛЬНЫЙ `Context.filesDir`, куда ядро пишет краш-репорты
+            // и stderr. НЕ равен Dart-овскому `getApplicationDocumentsDirectory()`
+            // (у Flutter это `app_flutter`, у native — `files`): из-за этой
+            // подмены §038-канал stderr и краш-репорты ядра были недостижимы.
+            "getFilesDir" -> result.success(context.filesDir.path)
             "startVPN" -> startVpn(result)
             // §165 — headless-старт (Debug API / automation): без Activity, БЕЗ
             // consent-диалога. Работает ТОЛЬКО если VPN-разрешение уже выдано
