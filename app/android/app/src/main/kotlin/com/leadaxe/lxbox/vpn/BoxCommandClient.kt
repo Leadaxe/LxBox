@@ -814,6 +814,38 @@ class BoxCommandClient {
                         if (s.isNotEmpty()) outbound.add(s)
                     }
                 }
+                // §315 (kernel SPEC 035) — трасса DNS-группы: через какую группу
+                // шёл запрос, хронология проб (кто опрошен, исход, RTT), был ли
+                // веер и режим выживания. Каждый блок в своём runCatching: старое
+                // ядро без этих полей не должно ронять весь эмит события.
+                val groupPath = ArrayList<String>()
+                runCatching {
+                    val it = q.groupPath()
+                    while (it != null && it.hasNext()) {
+                        val s = it.next() ?: continue
+                        if (s.isNotEmpty()) groupPath.add(s)
+                    }
+                }
+                val attempts = ArrayList<Map<String, Any>>()
+                runCatching {
+                    val it = q.attempts()
+                    while (it != null && it.hasNext()) {
+                        val a = it.next() ?: continue
+                        attempts.add(mapOf(
+                            "server" to a.server,
+                            "serverType" to a.serverType,
+                            "outcome" to a.outcome,
+                            // gomobile: RTT капитализирован (getRTTMs)
+                            "rttMs" to a.rttMs,
+                        ))
+                    }
+                }
+                var fanned = false
+                var survival = false
+                runCatching {
+                    fanned = q.fanned
+                    survival = q.survival
+                }
                 // §180 — rcode КАК ЕСТЬ (Q1): getRcode() signed int. -1 = «нет
                 // ответа» (timeout), физически ≠ 65535. НЕ конвертим — Dart мапит
                 // rcode==-1 ДО toUInt.
@@ -831,6 +863,11 @@ class BoxCommandClient {
                     "dnsServerType" to dnsServerType,
                     "outbound" to outbound,
                     "answers" to answers,
+                    // §315 — трасса группы (пусто/false на не-групповых путях)
+                    "groupPath" to groupPath,
+                    "attempts" to attempts,
+                    "fanned" to fanned,
+                    "survival" to survival,
                 ))
             }.onFailure { Log.w(TAG, "writeDNSQuery failed: ${it.message}") }
         }

@@ -120,11 +120,24 @@ class _TrafficEventDetailSheet extends StatelessWidget {
     final dnsServerLabel = dnsServer.isEmpty
         ? ''
         : (dnsServerType.isEmpty ? dnsServer : '$dnsServer ($dnsServerType)');
+    // §315 — трасса DNS-группы (kernel SPEC 035). Строки пустые на не-групповых
+    // путях → `_copyRow` их не рисует. `Group mode` собирает флаги: fanned =
+    // в запросе был веер (цель сбоила и группа спаслась / выборы fastest),
+    // survival = чистых членов не осталось (красный флаг здоровья группы).
+    final groupMode = [
+      if (e.extra?['dns_fanned'] == 'true') 'fanned',
+      if (e.extra?['dns_survival'] == 'true') 'survival',
+    ].join(' · ');
     out.addAll(_group(context, 'DNS', [
       _copyRow(context, 'Record', e.dnsRecordType ?? ''),
       _copyRow(context, 'CNAME', e.cnameChain.join(' → ')),
       // rc.10 — какой DNS-сервер обработал запрос (на всех путях вкл. провалы).
       _copyRow(context, 'DNS server', dnsServerLabel),
+      // §315 — через какую группу шёл запрос (при вложенности: inner → outer).
+      _copyRow(context, 'Group', e.extra?['dns_group_path']?.toString() ?? ''),
+      // §315 — хронология проб: кто опрошен, исход, RTT.
+      _copyRow(context, 'Attempts', e.extra?['dns_attempts']?.toString() ?? ''),
+      _copyRow(context, 'Group mode', groupMode),
       // источник ответа: exchanged (сетевой запрос) / cached (из кэша) / …
       _copyRow(context, 'Source', e.extra?['source']?.toString() ?? ''),
     ]));
