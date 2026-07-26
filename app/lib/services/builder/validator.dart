@@ -91,16 +91,16 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
         .toList();
     if (members.isNotEmpty) groupMembers[tag] = members;
   }
-  issues.addAll(_detectDetourCycles(
-    detourEdge: detourEdge,
-    groupMembers: groupMembers,
-  ));
+  issues.addAll(
+    _detectDetourCycles(detourEdge: detourEdge, groupMembers: groupMembers),
+  );
 
   // §121 — DNS resolver refs → existing dns.servers tag.
   final dns = config['dns'];
   final dnsServerTags = <String>{
-    for (final s in (dns?['servers'] as List<dynamic>? ?? const [])
-        .whereType<Map<String, dynamic>>())
+    for (final s
+        in (dns?['servers'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>())
       s['tag'] as String? ?? '',
   }..remove('');
   final dnsFinal = dns?['final'];
@@ -114,8 +114,47 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
       domainResolver.isNotEmpty &&
       !dnsServerTags.contains(domainResolver)) {
     issues.add(
-        DanglingDnsServerRef('route.default_domain_resolver', domainResolver));
+      DanglingDnsServerRef('route.default_domain_resolver', domainResolver),
+    );
   }
+
+  // §312 — DNS-группы (kernel SPEC 033): пустая после эмиссионного фильтра /
+  // недопустимый тип члена (fakeip/hosts) / циклы групп. Всё зеркалит fatal'ы
+  // ядра — падаем ДО старта (§254-принцип). Dangling-члены здесь НЕ ловим:
+  // билдер их уже выкинул с warning'ом (drop-семантика §312 №3).
+  final dnsServerList = (dns?['servers'] as List<dynamic>? ?? const [])
+      .whereType<Map<String, dynamic>>()
+      .toList();
+  final dnsTypeByTag = <String, String>{
+    for (final s in dnsServerList)
+      if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
+        s['tag'] as String: s['type'] as String? ?? '',
+  };
+  final dnsGroupEdges = <String, List<String>>{};
+  for (final s in dnsServerList) {
+    if (s['type'] != 'group') continue;
+    final tag = s['tag'] as String? ?? '';
+    if (tag.isEmpty) continue;
+    final members = (s['servers'] as List<dynamic>? ?? const [])
+        .whereType<String>()
+        .toList();
+    if (members.isEmpty) {
+      issues.add(EmptyDnsGroup(tag));
+      continue;
+    }
+    for (final m in members) {
+      final mt = dnsTypeByTag[m];
+      if (mt == 'fakeip' || mt == 'hosts') {
+        issues.add(BadDnsGroupMember(tag, m, mt!));
+      }
+    }
+    // Рёбра цикл-графа: только члены-ГРУППЫ (лист цикл не образует).
+    dnsGroupEdges[tag] = [
+      for (final m in members)
+        if (dnsTypeByTag[m] == 'group') m,
+    ];
+  }
+  issues.addAll(_findDnsGroupCycles(dnsGroupEdges));
 
   // Empty urltest + invalid selector default.
   for (final o in outbounds) {
@@ -186,18 +225,23 @@ List<DetourCycle> _detectDetourCycles({
   while (culprits.length < kMaxDetourCulprits) {
     final cyclic = _cyclicNodes(nodes, detourEdge, groupMembers, removed);
     if (cyclic.isEmpty) break;
-    final candidates = detourEdge.keys
-        .where((u) =>
-            !removed.contains(u) &&
-            cyclic.contains(u) &&
-            cyclic.contains(detourEdge[u]))
-        .toList()
-      ..sort();
+    final candidates =
+        detourEdge.keys
+            .where(
+              (u) =>
+                  !removed.contains(u) &&
+                  cyclic.contains(u) &&
+                  cyclic.contains(detourEdge[u]),
+            )
+            .toList()
+          ..sort();
     var best = candidates.isEmpty ? null : candidates.first;
     var bestScore = 0;
     for (final u in candidates) {
-      final after =
-          _cyclicNodes(nodes, detourEdge, groupMembers, {...removed, u});
+      final after = _cyclicNodes(nodes, detourEdge, groupMembers, {
+        ...removed,
+        u,
+      });
       final score = cyclic.length - after.length;
       if (score > bestScore) {
         bestScore = score;
@@ -283,9 +327,9 @@ Set<String> _cyclicNodes(
   Set<String> removed,
 ) {
   List<String> adjOf(String u) => [
-        ...?groupMembers[u],
-        if (!removed.contains(u) && detourEdge.containsKey(u)) detourEdge[u]!,
-      ];
+    ...?groupMembers[u],
+    if (!removed.contains(u) && detourEdge.containsKey(u)) detourEdge[u]!,
+  ];
 
   final index = <String, int>{};
   final low = <String, int>{};
@@ -381,4 +425,40 @@ List<String> _representativeCycle(
   // path = [culprit, ..., target] в обратном порядке следования; развернём в
   // порядок обхода: culprit → target → ... → предшественник culprit.
   return [culprit, ...path.reversed.where((t) => t != culprit)];
+}
+
+/// §312 — циклы в графе DNS-групп (рёбра «группа → член-группа»). Рекурсивный
+/// DFS с path-стеком (глубина = число групп, единицы); один [DnsGroupCycle] на
+/// цикл-компоненту (узлы найденного цикла глушатся, чтобы не сыпать дубли
+/// того же кольца с разных входов). Правки конфига нет — юзер устраняет сам
+/// (§254-принцип).
+List<DnsGroupCycle> _findDnsGroupCycles(Map<String, List<String>> edges) {
+  final issues = <DnsGroupCycle>[];
+  final done = <String>{}; // полностью обработанные / в зарепорченном цикле
+  for (final start in edges.keys) {
+    if (done.contains(start)) continue;
+    final onPath = <String>[]; // текущий путь DFS (для вырезки цикла)
+    final visitedLocal = <String>{};
+    void dfs(String u) {
+      if (done.contains(u)) return;
+      final idx = onPath.indexOf(u);
+      if (idx != -1) {
+        // Нашли кольцо: срез пути от первого вхождения u.
+        final cycle = onPath.sublist(idx);
+        issues.add(DnsGroupCycle(List<String>.unmodifiable(cycle)));
+        done.addAll(cycle);
+        return;
+      }
+      if (!visitedLocal.add(u)) return;
+      onPath.add(u);
+      for (final v in (edges[u] ?? const [])) {
+        dfs(v);
+      }
+      onPath.removeLast();
+    }
+
+    dfs(start);
+    done.add(start);
+  }
+  return issues;
 }

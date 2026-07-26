@@ -3914,5 +3914,22 @@
   },
   "Leave IP empty to use the server from registration. HTTP/3 only works on a few Cloudflare addresses, HTTP/2 works across the whole block.": {
     "value": "Оставьте IP пустым, чтобы использовать сервер из регистрации. HTTP/3 работает лишь на нескольких адресах Cloudflare, HTTP/2 — на всём блоке."
-  }
+  },
+  "%s · disabled — will be skipped": "%s · выключен — будет пропущен",
+  "DNS group \"%1$s\": member \"%2$s\" of type \"%3$s\" is not allowed in a group.": "DNS-группа «%1$s»: член «%2$s» типа «%3$s» недопустим в группе.",
+  "DNS group \"%s\" has no usable members — enable or add at least one server.": "DNS-группа «%s» осталась без рабочих членов — включите или добавьте хотя бы один сервер.",
+  "DNS group loop: %s — fix group membership to start the VPN.": "Цикл DNS-групп: %s — исправьте состав групп, чтобы запустить VPN.",
+  "Error TTL": "TTL ошибки",
+  "Fastest — race, then stick to the winner": "Fastest — гонка, затем липнет к победителю",
+  "Group": "Группа",
+  "Invalid duration (e.g. 2m, 90s)": "Неверная длительность (напр. 2m, 90s)",
+  "Members": "Члены группы",
+  "No other DNS servers to add — create them first": "Других DNS-серверов нет — сначала создайте их",
+  "Parallel — race every query": "Parallel — каждый запрос гонкой",
+  "Selection mode": "Режим выбора",
+  "Server type": "Тип сервера",
+  "Several servers behind one tag — survives a member failure": "Несколько серверов под одним тегом — переживает сбой члена",
+  "Stable — stick to one until it fails": "Stable — держится за один, пока тот не сбоит",
+  "Win TTL": "TTL победы",
+  "unknown server — will be skipped": "неизвестный сервер — будет пропущен"
 }

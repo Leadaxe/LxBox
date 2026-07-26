@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../services/ui_helpers.dart';
 import '../widgets/outbound_picker.dart';
 import 'dns_server_edit/edit_controller.dart';
+// §312 — опция пикера членов группы нужна caller'у (dns_settings_screen).
+export 'dns_server_edit/edit_controller.dart' show DnsMemberOption;
 import 'dns_server_edit/tabs/json_tab.dart';
 import 'dns_server_edit/tabs/params_tab.dart';
 import 'dns_settings_screen/resolved_server.dart';
@@ -28,6 +30,7 @@ class DnsServerEditScreen extends StatefulWidget {
     this.canonicalDescription = '',
     this.outboundOptions = const [],
     this.dnsServerTags = const [],
+    this.dnsMemberOptions = const [],
     this.existingTags = const {},
   });
 
@@ -45,6 +48,10 @@ class DnsServerEditScreen extends StatefulWidget {
 
   final List<OutboundOption> outboundOptions;
   final List<String> dnsServerTags;
+
+  /// §312 — опции пикера членов DNS-группы (все серверы кроме self и
+  /// fakeip/hosts; disabled помечаются).
+  final List<DnsMemberOption> dnsMemberOptions;
 
   /// Существующие теги (new-режим): коллизия tag'а → confirm replace.
   final Set<String> existingTags;
@@ -66,6 +73,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
       canonicalDescription: widget.canonicalDescription,
       outboundOptions: widget.outboundOptions,
       dnsServerTags: widget.dnsServerTags,
+      dnsMemberOptions: widget.dnsMemberOptions,
     );
   }
 
@@ -311,6 +319,7 @@ Future<DnsServerEditResult?> openDnsServerEditor(
   String canonicalDescription = '',
   List<OutboundOption> outboundOptions = const [],
   List<String> dnsServerTags = const [],
+  List<DnsMemberOption> dnsMemberOptions = const [],
   Set<String> existingTags = const {},
 }) {
   return Navigator.push<DnsServerEditResult>(
@@ -323,6 +332,7 @@ Future<DnsServerEditResult?> openDnsServerEditor(
         canonicalDescription: canonicalDescription,
         outboundOptions: outboundOptions,
         dnsServerTags: dnsServerTags,
+        dnsMemberOptions: dnsMemberOptions,
         existingTags: existingTags,
       ),
     ),

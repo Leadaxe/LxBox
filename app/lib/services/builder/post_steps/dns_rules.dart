@@ -44,6 +44,7 @@ Future<void> applyCustomDns(
   Set<String> activePresetIdsWithDnsRule = const {},
   Map<String, String> dnsSrsCachedPaths = const {},
   List<DnsMirrorEntry> dnsMirrors = const [],
+  List<String>? warningsOut, // §312 — дропы членов DNS-групп → emitWarnings
 }) async {
   final dns = (config['dns'] as Map<String, dynamic>?) ?? <String, dynamic>{};
 
@@ -92,6 +93,7 @@ Future<void> applyCustomDns(
     presetServersByTag: presetServersByTag,
     knownOutboundTags: knownOutboundTags,
     ruleReferencedTags: ruleReferencedTags,
+    warningsOut: warningsOut,
   );
   dns['servers'] = serverBodies;
 
