@@ -655,6 +655,10 @@ class CcDnsQuery {
     this.dnsServerType = '',
     this.outbound = const [],
     this.answers = const [],
+    this.groupPath = const [],
+    this.attempts = const [],
+    this.fanned = false,
+    this.survival = false,
   });
 
   /// Запрошенный домен (оригинал, не финальный CNAME-target).
@@ -702,8 +706,29 @@ class CcDnsQuery {
   /// собирается из элементов с type==CNAME(5).
   final List<CcDnsAnswer> answers;
 
+  /// §315 (kernel SPEC 035) — путь DNS-групп ИЗНУТРИ НАРУЖУ; пусто = запрос
+  /// шёл мимо группы. При вложенности: `[inner, outer]`.
+  final List<String> groupPath;
+
+  /// §315 — хронология проб ЭТОГО запроса: кто опрошен, с каким исходом и
+  /// RTT. Пусто на кеш-попадании и на не-групповых путях. Опоздавшие ответы
+  /// веера сюда НЕ попадают (их не было на момент эмита) — полная картина
+  /// живёт в state-RPC `getDnsGroups` (§312).
+  final List<CcDnsGroupAttempt> attempts;
+
+  /// §315 — в запросе был веер (спасение после сбоя цели / выборы `fastest` /
+  /// любой запрос `parallel`).
+  final bool fanned;
+
+  /// §315 — режим выживания: чистых членов не осталось, ответ получен одной
+  /// попыткой к наименее грязному. Красный флаг здоровья группы.
+  final bool survival;
+
   /// Q1-helper: ответа от сервера не было (timeout).
   bool get noAnswer => rcode == -1;
+
+  /// §315 — запрос шёл через DNS-группу.
+  bool get viaGroup => groupPath.isNotEmpty;
 
   factory CcDnsQuery.fromMap(Map<String, dynamic> m) => CcDnsQuery(
     domain: m['domain']?.toString() ?? '',
@@ -732,7 +757,58 @@ class CcDnsQuery {
             )
             .toList() ??
         const [],
+    // §315 — трасса группы; на старом ядре/нативе ключей нет → пустые дефолты.
+    groupPath:
+        (m['groupPath'] as List?)
+            ?.map((e) => e.toString())
+            .where((s) => s.isNotEmpty)
+            .toList() ??
+        const [],
+    attempts:
+        (m['attempts'] as List?)
+            ?.whereType<Map>()
+            .map(
+              (a) => CcDnsGroupAttempt.fromMap(
+                a.map((k, v) => MapEntry(k.toString(), v)),
+              ),
+            )
+            .toList() ??
+        const [],
+    fanned: m['fanned'] == true,
+    survival: m['survival'] == true,
   );
+}
+
+/// §315 (kernel SPEC 035) — одна проба DNS-группы из трассы запроса.
+class CcDnsGroupAttempt {
+  const CcDnsGroupAttempt({
+    required this.server,
+    required this.serverType,
+    required this.outcome,
+    required this.rttMs,
+  });
+
+  /// Тег опрошенного участника (лист — не группа).
+  final String server;
+
+  /// Тип транспорта участника (udp/tls/https/…).
+  final String serverType;
+
+  /// `answered` · `timeout` · `network_error` · `servfail`.
+  final String outcome;
+
+  /// RTT пробы, мс.
+  final int rttMs;
+
+  bool get answered => outcome == 'answered';
+
+  factory CcDnsGroupAttempt.fromMap(Map<String, dynamic> m) =>
+      CcDnsGroupAttempt(
+        server: m['server']?.toString() ?? '',
+        serverType: m['serverType']?.toString() ?? '',
+        outcome: m['outcome']?.toString() ?? '',
+        rttMs: _int(m['rttMs']),
+      );
 }
 
 /// §180 — одна DNS-запись ответа (RR). Часть `CcDnsQuery.answers`.
