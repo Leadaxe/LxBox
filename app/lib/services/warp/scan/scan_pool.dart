@@ -3,7 +3,8 @@
 //
 // WireGuard (secion `wireguard`): v4/v6 CIDR-блоки Cloudflare-first-party
 // (cloudflare.com/ips: 162.159.192/193/195; 188.114.96.0/22), порты 2408/500/
-// 1701/4500 (достоверные) + ports_extra (empirical, §132 — ниже приоритетом).
+// 1701/4500 (достоверные) + ports_extra (empirical, §132 — ниже приоритетом),
+// keepalive (§313 — секунды, попадает в каждый сгенерированный WG/AWG-узел).
 //
 // MASQUE (section `masque`): device-verified боевым тестом (пинг через рабочий
 // туннель, §305) — живы только .198.0/24 и .199.0/24 (.197/.192 = 0 живых,
@@ -24,6 +25,7 @@ class ScanPool {
     required this.wgPortsExtra,
     required this.wgSniPool,
     required this.utlsFpPool,
+    this.wgKeepalive = 0,
     required this.masqueV4Cidr,
     required this.masqueH3V4Cidr,
     required this.masquePortsH3,
@@ -45,6 +47,17 @@ class ScanPool {
   final List<String> wgSniPool;
 
   final List<String> utlsFpPool;
+
+  /// §313 — `persistent_keepalive_interval` (секунды) для сгенерированных
+  /// WG/AWG-узлов. Ядро дефолт НЕ подставляет: без этой строки пир молчит при
+  /// простое, NAT-маппинг оператора закрывается за 30–120с и узел деградирует.
+  ///
+  /// Живёт в пуле (а не константой в коде), чтобы правиться JSON-окном
+  /// эксперимента (§305) без пересборки APK. `0` (и отсутствие ключа в старом/
+  /// пользовательском JSON) = keepalive не писать — гейт `> 0` в
+  /// [WarpAccount.toWireguardConf]. На [hasData] не влияет: keepalive — тюнинг,
+  /// а не источник кандидатов.
+  final int wgKeepalive;
 
   // --- MASQUE ---
 
@@ -97,6 +110,14 @@ class ScanPool {
         (m[k] as List?)?.map((e) => e.toString()).toList() ?? const [];
     List<int> ints(Map m, String k) =>
         (m[k] as List?)?.map((e) => (e as num).toInt()).toList() ?? const [];
+    // Нет ключа / не число (старый asset, пользовательский JSON-override) → 0 =
+    // keepalive не писать. Строку тоже принимаем — JSON правит человек.
+    int intOr0(Map m, String k) {
+      final v = m[k];
+      if (v is num) return v.toInt();
+      if (v is String) return int.tryParse(v.trim()) ?? 0;
+      return 0;
+    }
 
     final pool = ScanPool(
       wgV4Cidr: strs(wg, 'v4_cidr'),
@@ -105,6 +126,7 @@ class ScanPool {
       wgPortsExtra: ints(wg, 'ports_extra'),
       wgSniPool: strs(wg, 'sni_pool'),
       utlsFpPool: strs(wg, 'utls_fp_pool'),
+      wgKeepalive: intOr0(wg, 'keepalive'),
       masqueV4Cidr: strs(mq, 'v4_cidr'),
       masqueH3V4Cidr: strs(mq, 'h3_v4_cidr'),
       masquePortsH3: ints(mq, 'ports_h3'),
