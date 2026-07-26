@@ -475,7 +475,7 @@ parser/                      # Parser v2 (text → NodeSpec)
   parse_all.dart             #   Layer-2: exhaustive switch DecodedBody → List<NodeSpec> (per-line null-skip)
   uri_parsers.dart           #   barrel + parseUri scheme-dispatcher
   uri_parsers/<proto>.dart   #   per-protocol URI→NodeSpec (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg/masque)
-  json_parsers.dart          #   parseXrayOutbound + parseSingboxEntry (round-trip)
+  json_parsers.dart          #   parseXrayElement + parseSingboxEntry (round-trip)
   ini_parser.dart            #   WireGuard INI → wg:// URI → WireguardSpec
   transport.dart             #   parseTransport (query→TransportSpec) + transportToQuery
   uri_utils.dart             #   shared: base64-safe decode, newUuidV4, tagFromLabel, packet-encoding

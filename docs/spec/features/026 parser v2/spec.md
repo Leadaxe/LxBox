@@ -278,7 +278,7 @@ NodeSpec? parseUri(String uri) => switch (scheme) {
 };
 ```
 
-`parseAll(DecodedBody)` диспатчит по типу: `UriLines → parseUri` per-line; `IniConfig → parseWireguardIni`; `JsonConfig` → `xrayArray` через `parseXrayOutbound` / `singboxOutbound` через `parseSingboxEntry`.
+`parseAll(DecodedBody)` диспатчит по типу: `UriLines → parseUri` per-line; `IniConfig → parseWireguardIni`; `JsonConfig` → `xrayArray` через `parseXrayElement` (§310: элемент даёт N узлов — все VLESS, кроме dialer-целей) / `singboxOutbound` через `parseSingboxEntry`.
 
 Парсеры — pure, ошибки возвращают `null` (не throw). SIP003 plugin split (`plugin=name;k=v;…`) — в `parseShadowsocks`.
 
@@ -400,7 +400,7 @@ lib/
 │   ├── settings_storage.dart              # server_lists, vars, dns, rules, …
 │   ├── parser/
 │   │   ├── uri_parsers.dart               # 9 parse{Vless,…}(String) → NodeSpec?
-│   │   ├── json_parsers.dart              # parseXrayOutbound + parseSingboxEntry
+│   │   ├── json_parsers.dart              # parseXrayElement + parseSingboxEntry
 │   │   ├── ini_parser.dart                # WG INI → wg:// → parseWireguardUri
 │   │   ├── body_decoder.dart              # base64/JSON/INI/URI-lines
 │   │   ├── parse_all.dart                 # DecodedBody → List<NodeSpec>
