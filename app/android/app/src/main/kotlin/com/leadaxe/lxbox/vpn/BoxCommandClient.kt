@@ -463,6 +463,52 @@ class BoxCommandClient {
     /// работают и когда приложение в фоне. КОНТРАКТ: `null` = клиент недоступен
     /// (туннель down / RPC-фейл), `[]` = пул пуст (группа не round_robin / нет
     /// данных). Caller различает «недоступно» от «пусто».
+    /// §312 (kernel SPEC 035) — unary снапшот состояния DNS-групп (тип
+    /// сервера `group`, SPEC 033): по группе mode/current + члены с
+    /// clean/liveErrors/возрастом ошибки/liveWins/current/lastRtt.
+    /// null = недоступен (down/paused/не-STARTED/ядро без метода);
+    /// [] = групп в конфиге нет. Через незасыпающий pingClient (§209).
+    fun getDnsGroups(): List<Map<String, Any>>? {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "getDnsGroups: no command client (paused/down)")
+            return null
+        }
+        return runCatching {
+            val out = ArrayList<Map<String, Any>>()
+            val it = client.getDNSGroups()
+            while (it.hasNext()) {
+                val g = it.next()
+                val members = ArrayList<Map<String, Any>>()
+                val mi = g.members()
+                while (mi.hasNext()) {
+                    val m = mi.next()
+                    members.add(mapOf(
+                        "tag" to m.tag,
+                        "serverType" to m.serverType,
+                        "clean" to m.clean,
+                        "liveErrors" to m.liveErrors,
+                        "lastErrorAgeMs" to m.lastErrorAgeMs,
+                        "liveWins" to m.liveWins,
+                        "current" to m.current,
+                        // gomobile: RTT капитализирован (getLastRTTMs)
+                        "lastRttMs" to m.lastRTTMs,
+                    ))
+                }
+                out.add(mapOf(
+                    "tag" to g.tag,
+                    "mode" to g.mode,
+                    "current" to g.current,
+                    "members" to members,
+                ))
+            }
+            out
+        }.getOrElse {
+            // не-STARTED / Unimplemented — НЕ ошибка приложения.
+            Log.d(TAG, "getDnsGroups unavailable: ${it.message}")
+            null
+        }
+    }
+
     /// §311 (kernel SPEC 036) — unary снапшот конфига РАБОТАЮЩЕГО ядра:
     /// канонический re-marshal запущенных options, захвачен ядром один раз на
     /// старте, отдача — копия строки. null = недоступен: клиент down/paused,

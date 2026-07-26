@@ -796,6 +796,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // обёртка BoxCommandClient no-throw (runCatching внутри), Dart
             // различает null от строки и деградирует к saved-файлу.
             // Dispatchers.IO — unary RPC на main = ANR (§122).
+            // §312/SPEC035 — unary снапшот состояния DNS-групп. null =
+            // недоступен (Dart различает от [] «групп нет»); обёртка no-throw.
+            // Dispatchers.IO — unary RPC на main = ANR (§122).
+            "ccGetDnsGroups" -> {
+                val cc = BoxService.commandClient
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.getDnsGroups() }
+                    result.success(r)
+                }
+            }
             "ccGetRunningConfig" -> {
                 val cc = BoxService.commandClient
                 pluginScope.launch {

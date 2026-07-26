@@ -429,6 +429,7 @@ Future<BuildResult> buildConfig({
     activePresetIdsWithDnsRule: activePresetIdsWithDnsRule,
     dnsSrsCachedPaths: dnsSrsCachedPaths,
     dnsMirrors: unifiedApply.dnsMirrors,
+    warningsOut: emitWarnings, // §312 — дропы членов DNS-групп
   );
 
   // §119/§120: VPN-mode (tun-in/mixed-in/route-rules) теперь декларативен —

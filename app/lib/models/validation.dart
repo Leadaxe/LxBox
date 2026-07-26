@@ -62,7 +62,8 @@ final class DanglingOutboundRef extends ValidationIssue {
   List<Object?> get props => [rule, tag];
 
   @override
-  String messageWith(GetLocalText t) => t.s("Rule \"%1\$s\" references missing outbound \"%2\$s\".", rule, tag);
+  String messageWith(GetLocalText t) =>
+      t.s("Rule \"%1\$s\" references missing outbound \"%2\$s\".", rule, tag);
 }
 
 /// §084 H1 — outbound с `detour`, ссылающимся на несуществующий tag.
@@ -71,7 +72,7 @@ final class DanglingOutboundRef extends ValidationIssue {
 /// sing-box core реджектит такой config при старте → fatal.
 final class DanglingDetourRef extends ValidationIssue {
   final String owner; // tag outbound'а с битым detour
-  final String tag;   // на что ссылается (отсутствует в конфиге)
+  final String tag; // на что ссылается (отсутствует в конфиге)
   const DanglingDetourRef(this.owner, this.tag);
 
   @override
@@ -81,7 +82,11 @@ final class DanglingDetourRef extends ValidationIssue {
   List<Object?> get props => [owner, tag];
 
   @override
-  String messageWith(GetLocalText t) => t.s("Outbound \"%1\$s\" detour references missing outbound \"%2\$s\".", owner, tag);
+  String messageWith(GetLocalText t) => t.s(
+    "Outbound \"%1\$s\" detour references missing outbound \"%2\$s\".",
+    owner,
+    tag,
+  );
 }
 
 /// §121 — `dns.final` или `route.default_domain_resolver` ссылается на
@@ -100,7 +105,76 @@ final class DanglingDnsServerRef extends ValidationIssue {
   List<Object?> get props => [field, tag];
 
   @override
-  String messageWith(GetLocalText t) => t.s("%1\$s references missing DNS server \"%2\$s\".", field, tag);
+  String messageWith(GetLocalText t) =>
+      t.s("%1\$s references missing DNS server \"%2\$s\".", field, tag);
+}
+
+/// §312 — DNS-группа (kernel SPEC 033) осталась без единого члена: пуста в
+/// storage либо все члены выброшены эмиссионным фильтром (disabled/unknown/
+/// self/duplicate — см. `_filterDnsGroupMembers`). Ядро реджектит пустой
+/// `servers` на старте → fatal. Молча не чиним и не выкидываем группу —
+/// решение за юзером (анти-паттерн §277/§278).
+final class EmptyDnsGroup extends ValidationIssue {
+  final String tag;
+  const EmptyDnsGroup(this.tag);
+
+  @override
+  Severity get severity => Severity.fatal;
+
+  @override
+  List<Object?> get props => [tag];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+    "DNS group \"%s\" has no usable members — enable or add at least one server.",
+    tag,
+  );
+}
+
+/// §312 — член DNS-группы недопустимого типа: ядро запрещает `fakeip` и
+/// `hosts` внутри группы (fatal на старте). Форма такие серверы не
+/// предлагает, но JSON-вкладка/Debug PUT позволяют — ловим до старта ядра.
+final class BadDnsGroupMember extends ValidationIssue {
+  final String group;
+  final String member;
+  final String memberType; // 'fakeip' | 'hosts'
+  const BadDnsGroupMember(this.group, this.member, this.memberType);
+
+  @override
+  Severity get severity => Severity.fatal;
+
+  @override
+  List<Object?> get props => [group, member, memberType];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+    "DNS group \"%1\$s\": member \"%2\$s\" of type \"%3\$s\" is not allowed in a group.",
+    group,
+    member,
+    memberType,
+  );
+}
+
+/// §312 — цикл DNS-групп (группа→член→…→группа, включая самовключение,
+/// уцелевшее на пути мимо билдера). Ядро ловит циклы на старте → fatal;
+/// зеркалим до старта, аналог [DetourCycle] (§254 — не правим, юзер сам).
+final class DnsGroupCycle extends ValidationIssue {
+  /// Репрезентативный цикл: теги в порядке обхода, последний замыкает на
+  /// первый.
+  final List<String> cycle;
+  const DnsGroupCycle(this.cycle);
+
+  @override
+  Severity get severity => Severity.fatal;
+
+  @override
+  List<Object?> get props => [cycle.join('\u0000')];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+    "DNS group loop: %s — fix group membership to start the VPN.",
+    '${cycle.join(" → ")} → ${cycle.first}',
+  );
 }
 
 /// §141 P1.8a / §254 — цикл в detour-графе (включая self-reference
@@ -130,22 +204,33 @@ final class DetourCycle extends ValidationIssue {
 
   @override
   List<Object?> get props => [
-        // Списки схлопываем в строки — _propsEqual сравнивает элементы по `==`.
-        cycle.join('\u0000'),
-        culprits.map((c) => '${c.tag}\u0000${c.detour}').join('\u0001'),
-      ];
+    // Списки схлопываем в строки — _propsEqual сравнивает элементы по `==`.
+    cycle.join('\u0000'),
+    culprits.map((c) => '${c.tag}\u0000${c.detour}').join('\u0001'),
+  ];
 
   @override
   String messageWith(GetLocalText t) {
     if (culprits.isEmpty) {
-      return t.s("Routing loop between groups: %s — fix group membership to start the VPN.", '${cycle.join(" → ")} → ${cycle.first}');
+      return t.s(
+        "Routing loop between groups: %s — fix group membership to start the VPN.",
+        '${cycle.join(" → ")} → ${cycle.first}',
+      );
     }
     if (culprits.length == 1) {
       final c = culprits.single;
-      return t.s("Routing loop: \"%1\$s\" points back into \"%2\$s\" — change or remove its detour to start the VPN.", c.tag, c.detour);
+      return t.s(
+        "Routing loop: \"%1\$s\" points back into \"%2\$s\" — change or remove its detour to start the VPN.",
+        c.tag,
+        c.detour,
+      );
     }
     final tags = culprits.map((c) => '"${c.tag}"').join(', ');
-    return t.plural("Routing loop: %1\$d nodes point back into their own chain — change or remove their detours to start the VPN: %2\$s.", culprits.length, tags);
+    return t.plural(
+      "Routing loop: %1\$d nodes point back into their own chain — change or remove their detours to start the VPN: %2\$s.",
+      culprits.length,
+      tags,
+    );
   }
 }
 
@@ -160,7 +245,8 @@ final class EmptyUrltestGroup extends ValidationIssue {
   List<Object?> get props => [tag];
 
   @override
-  String messageWith(GetLocalText t) => t.s("URL-test group \"%s\" has no outbounds.", tag);
+  String messageWith(GetLocalText t) =>
+      t.s("URL-test group \"%s\" has no outbounds.", tag);
 }
 
 final class InvalidDefault extends ValidationIssue {
@@ -175,7 +261,11 @@ final class InvalidDefault extends ValidationIssue {
   List<Object?> get props => [group, tag];
 
   @override
-  String messageWith(GetLocalText t) => t.s("Selector \"%1\$s\" default \"%2\$s\" is not in the options list.", group, tag);
+  String messageWith(GetLocalText t) => t.s(
+    "Selector \"%1\$s\" default \"%2\$s\" is not in the options list.",
+    group,
+    tag,
+  );
 }
 
 class ValidationResult {
