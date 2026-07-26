@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-/// §311 — epoch-гейт снапшота running-конфига.
+/// §311 — захват снапшота running-конфига: прямые триггеры + epoch-гейт.
 ///
 /// Найдено ревью диффа §311: `tunnelUp` НЕ различает сессии ядра. In-place
 /// reload идёт **без status-flap** (§049 F4 — ядро остаётся `Started`),
@@ -30,16 +30,23 @@ void main() {
       return null;
     }
 
-    /// Копия `_ensureRunningConfig` с искусственной задержкой RPC.
-    Future<void> ensure(Future<String?> Function() rpc) async {
+    /// Копия `_captureRunningConfig`: прямой захват + ретрай (пока ядро не
+    /// STARTED → null, либо пока отдаёт ещё не подменённый конфиг == staleRaw)
+    /// + epoch-гейт.
+    Future<void> ensure(Future<String?> Function() rpc,
+        {int maxAttempts = 12, String? staleRaw}) async {
       if (fetching) return;
-      if (snapshot != null) return;
       fetching = true;
       final captured = epoch;
       try {
-        final raw = await rpc();
-        if (captured != epoch) return; // ← гейт
-        if (raw != null) snapshot = raw;
+        for (var i = 0; i < maxAttempts; i++) {
+          final raw = await rpc();
+          if (captured != epoch) return; // ← гейт: ответ старого box'а
+          if (raw != null && raw != staleRaw) {
+            snapshot = raw;
+            return;
+          }
+        }
       } finally {
         fetching = false;
       }
@@ -56,7 +63,7 @@ void main() {
       final inFlight = ensure(() async {
         await Future<void>.delayed(const Duration(milliseconds: 20));
         return 'config-OLD';
-      });
+      }, maxAttempts: 1);
       // reloadVpn: инвалидация посреди RPC (туннель остаётся connected!).
       snapshot = invalidate();
       await inFlight;
@@ -70,10 +77,10 @@ void main() {
       final inFlight = ensure(() async {
         await Future<void>.delayed(const Duration(milliseconds: 20));
         return 'config-OLD';
-      });
+      }, maxAttempts: 1);
       snapshot = invalidate();
       await inFlight;
-      // Следующий groups-push перезапрашивает — уже у новой сессии.
+      // Новая сессия запускает свой захват.
       await ensure(() async => 'config-NEW');
       expect(snapshot, 'config-NEW',
           reason: 'pre-check != null не должен залипать после дропа');
@@ -90,6 +97,52 @@ void main() {
       await Future.wait([ensure(rpc), ensure(rpc), ensure(rpc)]);
       expect(calls, 1);
       expect(snapshot, 'config-A');
+    });
+
+    /// Device-факт 26.07: снапшот залипал в null на всю сессию, когда захват
+    /// висел на `_applyGroups` — при in-place reload groups-push может не прийти
+    /// вовсе (CommandClient переживает reload, дерево групп то же, а groups-pull
+    /// заводится только на переходе в connected, которого при reload нет —
+    /// §049 F4). Отсюда ПРЯМОЙ триггер (connected + reloadVpn) с ретраем.
+    test('РЕГРЕСС: после reload снапшот перезахватывается ретраями', () async {
+      const stale = 'config-OLD';
+      snapshot = stale;
+      // reloadVpn: запоминаем прежний, сбрасываем, bump'аем.
+      snapshot = invalidate();
+
+      // Новый box ещё не STARTED — первая попытка null.
+      var attempt = 0;
+      Future<String?> rpc() async {
+        attempt++;
+        return attempt < 2 ? null : 'config-NEW';
+      }
+
+      await ensure(rpc, staleRaw: stale);
+
+      expect(snapshot, 'config-NEW',
+          reason: 'без ретраев снапшот залипал бы в null на всю сессию');
+    });
+
+    /// Device-факт 26.07 (вторая половина): `reloadVPN` — асинхронный
+    /// broadcast, ядро сразу после него ещё STARTED со СТАРЫМ box'ом и честно
+    /// отдаёт доreload'ный конфиг. Ретрай «по null» такой ответ НЕ отсеивает —
+    /// поэтому ждём ответ, отличный от прежнего снапшота.
+    test('РЕГРЕСС: доreload\'ный ответ ядра не принимается за новый', () async {
+      const stale = 'config-OLD';
+      snapshot = invalidate();
+
+      var attempt = 0;
+      Future<String?> rpc() async {
+        attempt++;
+        // Ядро ещё не подменило box: первые два ответа — прежний конфиг.
+        return attempt < 3 ? stale : 'config-NEW';
+      }
+
+      await ensure(rpc, staleRaw: stale);
+
+      expect(snapshot, 'config-NEW',
+          reason: 'иначе в кеш залипал бы конфиг до reload\'а');
+      expect(attempt, 3);
     });
 
     test('каждая инвалидация двигает epoch (сброс ⟺ bump)', () {
