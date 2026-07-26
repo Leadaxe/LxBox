@@ -8,85 +8,121 @@ import 'transport.dart';
 import 'uri_utils.dart';
 import 'utls_fingerprint.dart';
 
-/// Парсинг Xray JSON array (одно вхождение — один узел).
+/// §310 — Парсинг одного элемента Xray JSON array в список узлов.
+///
+/// Раньше элемент сворачивался в ОДИН узел («main» VLESS, остальные —
+/// отбрасывались). Провайдеры кладут в элемент несколько равноправных
+/// серверов (основной + резервные) — они терялись, подписка приезжала без
+/// резерва. Теперь каждый VLESS-outbound становится своим узлом.
+///
+/// Исключение — outbound'ы, на которые ссылается `sockopt.dialerProxy`: они
+/// приезжают как detour-звено (`⚙ <tag>`) своего владельца и самостоятельным
+/// узлом НЕ дублируются (контракт §018 detour-chain не меняется).
+///
 /// Упрощённая версия — поддерживает VLESS + SOCKS для detour-chain.
-NodeSpec? parseXrayOutbound(Map<String, dynamic> element) {
+List<NodeSpec> parseXrayElement(Map<String, dynamic> element) {
   final outbounds = element['outbounds'];
-  if (outbounds is! List) return null;
+  if (outbounds is! List) return const [];
 
-  Map<String, dynamic>? main;
-  Map<String, dynamic>? detour;
-  String? dialerRef;
+  final vlessAll =
+      outbounds.whereType<Map<String, dynamic>>().where((o) => o['protocol'] == 'vless').toList();
+  if (vlessAll.isEmpty) return const [];
 
-  // Найти main VLESS outbound с dialerProxy (предпочтительнее).
-  for (final ob in outbounds) {
-    if (ob is! Map<String, dynamic>) continue;
-    if (ob['protocol'] != 'vless') continue;
+  // dialerProxy-ссылки: цели исключаются из самостоятельных узлов.
+  final dialerRefOf = <Map<String, dynamic>, String>{};
+  final dialerTargets = <String>{};
+  for (final ob in vlessAll) {
     final sockopt = (ob['streamSettings']?['sockopt']) as Map?;
     final ref = sockopt?['dialerProxy']?.toString();
     if (ref != null && ref.isNotEmpty) {
-      main ??= ob;
-      dialerRef ??= ref;
+      dialerRefOf[ob] = ref;
+      dialerTargets.add(ref);
     }
   }
-  main ??= outbounds
-      .whereType<Map<String, dynamic>>()
-      .firstWhere(
-        (o) => o['protocol'] == 'vless' && o['tag'] == 'proxy',
-        orElse: () => outbounds
-            .whereType<Map<String, dynamic>>()
-            .firstWhere(
-              (o) => o['protocol'] == 'vless',
-              orElse: () => <String, dynamic>{},
-            ),
-      );
-  if (main.isEmpty) return null;
 
-  // Найти detour outbound по dialerRef.
-  if (dialerRef != null) {
-    detour = outbounds
-        .whereType<Map<String, dynamic>>()
-        .firstWhere((o) => o['tag'] == dialerRef,
-            orElse: () => <String, dynamic>{});
-    if (detour.isEmpty) detour = null;
-  }
+  // Порядок: «main» первым (dialerProxy → тег `proxy` → первый), чтобы у
+  // существующих подписок первый узел остался тем же, что и до §310.
+  final candidates = vlessAll
+      .where((o) => !dialerTargets.contains(o['tag']?.toString()))
+      .toList();
+  if (candidates.isEmpty) return const [];
+  final mainIdx = candidates.indexWhere((o) => dialerRefOf.containsKey(o)) >= 0
+      ? candidates.indexWhere((o) => dialerRefOf.containsKey(o))
+      : (candidates.indexWhere((o) => o['tag'] == 'proxy') >= 0
+          ? candidates.indexWhere((o) => o['tag'] == 'proxy')
+          : 0);
+  final ordered = [
+    candidates[mainIdx],
+    for (var i = 0; i < candidates.length; i++)
+      if (i != mainIdx) candidates[i],
+  ];
 
   final remarks = element['remarks']?.toString() ?? '';
-
-  final spec = _xrayVlessToSpec(main, remarks);
-  if (spec == null) return null;
-
-  // §302 — исходник ноды для UI («Source» на экране ноды) и для правил по
-  // JSON-телам: compact = сам outbound, extended = весь элемент как пришёл
-  // от провайдера (dns/inbounds/routing соседи). rawUri для таких нод —
-  // синтетическая заглушка `xray://<tag>`, источником служить не может.
-  final compact = _prettyJson(main);
   final extended = _prettyJson(element);
 
-  if (detour != null) {
-    final chained = _xrayDetourToSpec(detour);
-    if (chained != null) {
-      return VlessSpec(
-        id: spec.id,
-        tag: spec.tag,
-        label: spec.label,
-        server: spec.server,
-        port: spec.port,
-        rawUri: spec.rawUri,
-        uuid: spec.uuid,
-        flow: spec.flow,
-        tls: spec.tls,
-        transport: spec.transport,
-        chained: chained,
-        warnings: spec.warnings,
-      )
-        ..sourceCompact = compact
-        ..sourceExtended = extended == compact ? null : extended;
+  final result = <NodeSpec>[];
+  for (var i = 0; i < ordered.length; i++) {
+    final ob = ordered[i];
+    // §310 — имя разводим на парсинге: `allocateTag` уникализирует теги лишь
+    // на build'е (суффикс `-N`), а в списке узлов пользователь иначе увидит
+    // несколько одинаковых строк. Одиночный узел — имя ровно как до §310.
+    final spec = _xrayVlessToSpec(ob, _elementLabel(remarks, ob, i));
+    if (spec == null) continue;
+
+    // §302 — исходник узла для UI («Source» на экране узла) и для правил по
+    // JSON-телам: compact = сам outbound, extended = весь элемент как пришёл
+    // от провайдера (dns/inbounds/routing соседи). rawUri для таких узлов —
+    // синтетическая заглушка `xray://<tag>`, источником служить не может.
+    final compact = _prettyJson(ob);
+
+    final ref = dialerRefOf[ob];
+    NodeSpec? chained;
+    if (ref != null) {
+      final detour = outbounds.whereType<Map<String, dynamic>>().firstWhere(
+          (o) => o['tag'] == ref,
+          orElse: () => <String, dynamic>{});
+      if (detour.isNotEmpty) chained = _xrayDetourToSpec(detour);
     }
+
+    final node = chained == null
+        ? spec
+        : VlessSpec(
+            id: spec.id,
+            tag: spec.tag,
+            label: spec.label,
+            server: spec.server,
+            port: spec.port,
+            rawUri: spec.rawUri,
+            uuid: spec.uuid,
+            flow: spec.flow,
+            tls: spec.tls,
+            transport: spec.transport,
+            chained: chained,
+            warnings: spec.warnings,
+          );
+    result.add(node
+      ..sourceCompact = compact
+      ..sourceExtended = extended == compact ? null : extended);
   }
-  return spec
-    ..sourceCompact = compact
-    ..sourceExtended = extended == compact ? null : extended;
+  return result;
+}
+
+/// Первый («main») узел элемента или `null`. Совместимость с вызовами,
+/// которым нужен ровно один узел; полный список даёт [parseXrayElement].
+NodeSpec? parseXrayOutbound(Map<String, dynamic> element) {
+  final nodes = parseXrayElement(element);
+  return nodes.isEmpty ? null : nodes.first;
+}
+
+/// §310 — метка узла внутри элемента. Первый узел (`i == 0`) — `remarks` как
+/// есть (обратная совместимость: элемент с одним VLESS даёт то же имя, что и
+/// до таски). Последующие — `remarks` + тег outbound'а, а если тега нет —
+/// индексный суффикс (` 2`, ` 3`, …), как `_indexedHint` в §243.
+String _elementLabel(String remarks, Map<String, dynamic> ob, int i) {
+  if (i == 0) return remarks;
+  final tag = ob['tag']?.toString().trim() ?? '';
+  if (remarks.isEmpty) return tag;
+  return tag.isNotEmpty ? '$remarks $tag' : '$remarks ${i + 1}';
 }
 
 /// §302 — стабильный отступ для показа фрагмента подписки пользователю.

@@ -1270,13 +1270,16 @@ Auto-detected when input is a JSON array where the first element has `outbounds`
 
 ### Parsing Logic
 
+Since §310, one array element yields **N nodes** — one per VLESS outbound — instead of a single "main" node. Providers put several equivalent servers (primary + fallbacks) into one element; collapsing them to one dropped the fallbacks.
+
 1. For each element in the array, find all VLESS outbounds (`protocol: "vless"` with `vnext`).
-2. Pick the "main" VLESS outbound:
+2. Exclude outbounds referenced by another outbound's `sockopt.dialerProxy` — they are imported as a **detour server** of their owner, not as standalone nodes.
+3. Convert each remaining VLESS outbound to its own sing-box VLESS outbound.
+4. Node order — the "main" outbound comes first, so the first node stays what it was before §310:
    - Prefer the one with a `dialerProxy` in `sockopt` (chained proxy).
-   - If multiple have dialer refs, prefer the one tagged `"proxy"`.
-   - If none have dialer refs, prefer the one tagged `"proxy"`, else first.
-3. Convert the main VLESS outbound to a sing-box VLESS outbound.
-4. If the main outbound has `sockopt.dialerProxy`, resolve the referenced outbound and build it as a **detour server** (jump proxy).
+   - Else the one tagged `"proxy"`, else the first one.
+5. If an outbound has `sockopt.dialerProxy`, resolve the referenced outbound and build it as a **detour server** (jump proxy) of that node only.
+6. Naming — the first node takes the element's `remarks` verbatim; the rest get `remarks` + the outbound tag (`Main Server proxy-2`), falling back to an index suffix when the outbound has no tag. A single-VLESS element is named exactly as before.
 
 ### Supported Outbound Protocols
 

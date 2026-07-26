@@ -212,6 +212,89 @@ void main() {
     });
   });
 
+  group('§310 parseXrayElement — все ноды элемента', () {
+    const pbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
+    Map<String, dynamic> vless(String tag, String host) => {
+          'tag': tag,
+          'protocol': 'vless',
+          'settings': {
+            'vnext': [
+              {
+                'address': host,
+                'port': 443,
+                'users': [
+                  {'id': '11111111-2222-3333-4444-555555555555'}
+                ],
+              }
+            ],
+          },
+          'streamSettings': {
+            'network': 'tcp',
+            'security': 'reality',
+            'realitySettings': {'publicKey': pbk, 'shortId': 'ab'},
+          },
+        };
+
+    test('3 равноправных VLESS → 3 ноды, имена различимы', () {
+      final nodes = parseXrayElement({
+        'remarks': 'Main Server',
+        'outbounds': [
+          vless('proxy', 'node1.example'),
+          vless('proxy-2', 'node3.example'),
+          vless('proxy-3', 'node2n.example'),
+        ],
+      });
+      expect(nodes.length, 3, reason: 'резервные ноды больше не теряются');
+      expect(nodes.map((n) => n.server),
+          ['node1.example', 'node3.example', 'node2n.example']);
+      expect(nodes.map((n) => n.label),
+          ['Main Server', 'Main Server proxy-2', 'Main Server proxy-3']);
+      expect(nodes.map((n) => n.label).toSet().length, 3,
+          reason: 'в списке узлов не должно быть одинаковых строк');
+    });
+
+    test('одиночный VLESS → 1 нода, имя как до §310', () {
+      final nodes = parseXrayElement({
+        'remarks': 'Solo',
+        'outbounds': [vless('proxy', 'h.example')],
+      });
+      expect(nodes.length, 1);
+      expect(nodes.single.label, 'Solo');
+    });
+
+    test('§018 регрессия: dialerProxy → 1 нода с detour, цель НЕ отдельной нодой',
+        () {
+      final main = vless('proxy', 'main.example');
+      (main['streamSettings'] as Map)['sockopt'] = {'dialerProxy': 'jump'};
+      final nodes = parseXrayElement({
+        'remarks': 'Chained',
+        'outbounds': [main, vless('jump', 'jump.example')],
+      });
+      expect(nodes.length, 1, reason: 'dialer-цель не дублируется узлом');
+      expect(nodes.single.server, 'main.example');
+      expect(nodes.single.chained, isNotNull, reason: 'цепочка сохранена');
+      expect(nodes.single.chained!.server, 'jump.example');
+    });
+
+    test('main-приоритет: тег proxy идёт первым независимо от порядка', () {
+      final nodes = parseXrayElement({
+        'remarks': 'R',
+        'outbounds': [vless('extra', 'b.example'), vless('proxy', 'a.example')],
+      });
+      expect(nodes.first.server, 'a.example',
+          reason: 'первый узел тот же, что и до §310');
+      expect(nodes.length, 2);
+    });
+
+    test('remarks пустой → метка из тега outbound', () {
+      final nodes = parseXrayElement({
+        'outbounds': [vless('proxy', 'a.example'), vless('backup', 'b.example')],
+      });
+      expect(nodes.length, 2);
+      expect(nodes[1].label, 'backup');
+    });
+  });
+
   group('§169 _tlsFromSingbox pbk validation', () {
     test('sing-box reality + битый public_key → plain TLS, без reality', () {
       final spec = parseSingboxEntry({
