@@ -280,7 +280,10 @@ Cap 50 entries (LRU evict by last_seen). BSSID is normalized to lower-case.
 
 GET /files/srs/list                            Cached SRS files: [{rule_id, size, mtime}]
 GET /files/srs?ruleId=<id>                     Binary SRS dump (octet-stream)
-GET /files/local?name=<n>                      Whitelisted internal-storage files (cache.db, stderr.log). `/files/external` — legacy alias.
+GET /files/local?name=<n>                      Whitelisted internal-storage files (cache.db, stderr.log,
+                                               CrashReport-lxbox.log[.old] — Go panics of the core). `/files/external` — legacy alias.
+GET /files/crash/list                          Archived core crash reports: [{name, size, mtime}], newest first
+GET /files/crash?name=<n>                      Body of an archived crash report
 
 === Traffic Profiler (system-wide) ===
 
@@ -497,7 +500,9 @@ const Map<String, dynamic> _capabilityJson = {
     // Files
     {'method': 'GET', 'path': '/files/srs/list', 'description': 'Cached SRS [{rule_id,size,mtime}]'},
     {'method': 'GET', 'path': '/files/srs', 'params': {'ruleId': 'id'}, 'description': 'Binary SRS dump'},
-    {'method': 'GET', 'path': '/files/local', 'params': {'name': 'cache.db|stderr.log'}, 'description': 'Whitelisted internal-storage files (filesDir). `/files/external` — legacy alias.'},
+    {'method': 'GET', 'path': '/files/local', 'params': {'name': 'cache.db|stderr.log|CrashReport-lxbox.log'}, 'description': 'Whitelisted internal-storage files (filesDir); CrashReport-lxbox.log[.old] = Go panics of the core (§316). `/files/external` — legacy alias.'},
+    {'method': 'GET', 'path': '/files/crash/list', 'description': 'Archived core crash reports [{name,size,mtime}], newest first (§316)'},
+    {'method': 'GET', 'path': '/files/crash', 'params': {'name': '<file>'}, 'description': 'Body of an archived core crash report (§316)'},
     // Profiler (system-wide)
     {'method': 'POST', 'path': '/profiler/live/start', 'description': 'startGlobalRecording (system-wide). Idempotent.'},
     {'method': 'POST', 'path': '/profiler/live/stop', 'description': 'stopGlobalRecording. Idempotent.'},

@@ -842,8 +842,10 @@ Read-only file access.
 |---|---|
 | `GET /files/srs` | `ruleId=<id>` → octet-stream .srs |
 | `GET /files/srs/list` | — |
-| `GET /files/local` | `name=<name>` (whitelist: `cache.db`, `stderr.log`) |
+| `GET /files/local` | `name=<name>` (whitelist: `cache.db`, `stderr.log`, `CrashReport-lxbox.log`, `CrashReport-lxbox.log.old`) |
 | `GET /files/external` | legacy alias for `/files/local`, ради обратной совместимости |
+| `GET /files/crash/list` | §316 — архив краш-репортов ядра: `[{name, size, mtime}]`, новые первыми; `[]` если крашей не было |
+| `GET /files/crash` | §316 — `name=<file>` → тело архивного репорта |
 
 ```bash
 curl -s -H "$HDR" "$BASE/files/srs/list" | jq

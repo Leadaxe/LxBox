@@ -64,6 +64,8 @@ Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token с�
 | `GET /config/running` | §311 — снапшот конфига **работающего ядра** (kernel SPEC 036, захват на старте). Re-marshal — сравнивать с `/config` только семантически. `409` = туннель down / ядро < lx.16-rc.3 / ещё не подтянут. Расхождение running↔saved видно по `running_config_length` vs `config_length` в `/state` |
 | `GET /pool?tag=vpn-1-auto` | §208 — снапшот пула round_robin-группы: `{tag, count, slots:[{slot, tag, delay, alive}]}`. Какие N серверов в слотах сейчас + их пинг. Не-round_robin → `200 slots:[]`; туннель down → `409` (не пустой ответ — §209) |
 | `GET /logs?source=core&limit=500` | Sing-box internal logs (требует `core_logs_enabled=true`) |
+| `GET /files/crash/list` | §316 — **краши ядра**: архив Go-паник `[{name,size,mtime}]`, новые первыми. `[]` = крашей не было |
+| `GET /files/local?name=CrashReport-lxbox.log` | §316 — ТЕКУЩИЙ краш-репорт ядра (Go-паника с трейсом); `.old` — предыдущий |
 | `GET /logs?source=app&limit=300` | App-side warn/error |
 | `GET /logs?source=core&q=tinkoff&level=error,warning` | Фильтрация по substring + level |
 | `GET /diag/*` | §038 диагностика runtime'а (см. api/debug-api-reference.md) |
@@ -149,6 +151,27 @@ for e in sorted(es, key=lambda x: x['ts']):
 > **не** источник истины для диагностики.
 
 ---
+
+
+### §316 — «ядро упало» (SIGABRT в `libbox.so`)
+
+Симптом в logcat: `Fatal signal 6 (SIGABRT) … (DefaultDispatch)` + один фрейм
+`libbox.so` с голым адресом. Текст Go-паники в logcat **не попадает** — Go
+пишет его в stderr, а тот на Android уходит в `/dev/null` (§010). Ядро
+сохраняет трейс файлом само (`SetupOptions.crashReportSource = "lxbox"`):
+
+```bash
+curl -s -H "$HDR" "$BASE/files/crash/list" | jq          # был ли архив
+curl -s -H "$HDR" "$BASE/files/local?name=CrashReport-lxbox.log"   # текущий
+curl -s -H "$HDR" "$BASE/files/crash?name=<из list>"     # конкретный архивный
+```
+
+**Граница применимости.** `debug.SetCrashOutput` ловит только **паники
+Go-рантайма**. НЕ покрывает: SIGSEGV в cgo/нативе вне Go; `abort()` из JNI,
+когда колбэк бросил исключение (§050/§128 — процесс умирает раньше записи);
+kill системой (LMK/OOM-killer). Поэтому **пустой репорт при наличии
+tombstone — сам по себе вывод**: краш пришёл не из Go-паники, искать надо в
+JNI-обвязке или в системном kill'е, а не в логике ядра.
 
 ## Анализ — что значит что
 

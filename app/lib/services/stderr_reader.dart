@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../vpn/box_vpn_client.dart';
+
 /// §038 — read-only access к `filesDir/stderr.log`.
 ///
 /// Libbox через `Libbox.redirectStderr` (`BoxApplication.initializeLibbox`)
@@ -35,11 +37,20 @@ class StderrReader {
 
   /// Internal app-scoped storage (`/data/data/<pkg>/files/`) — то же место,
   /// куда нативка кладёт stderr.log через `Libbox.redirectStderr`.
-  /// `getApplicationDocumentsDirectory()` соответствует Android `filesDir`.
+  ///
+  /// §316 — путь берём у NATIVE (`getFilesDir`). Прежний комментарий
+  /// утверждал, что `getApplicationDocumentsDirectory()` соответствует
+  /// Android `filesDir`, — это неверно: у Flutter он указывает на
+  /// `app_flutter`, у native/ядра это `files`. Из-за подмены §038-канал
+  /// не находил файл НИКОГДА (device-verified §316). Фоллбэк на Dart-путь
+  /// оставлен для юнит-тестов, где MethodChannel не поднят.
   static Future<File?> _file() async {
     try {
-      final docs = await getApplicationDocumentsDirectory();
-      final f = File('${docs.path}/stderr.log');
+      final native = await BoxVpnClient().getFilesDir();
+      final base = (native != null && native.isNotEmpty)
+          ? native
+          : (await getApplicationDocumentsDirectory()).path;
+      final f = File('$base/stderr.log');
       if (await f.exists() && await f.length() > 0) return f;
       return null;
     } catch (_) {
