@@ -8,7 +8,12 @@ Map<String, Object?> serializeHomeState(HomeState s) {
     'tunnel': s.tunnel.name,
     'tunnel_up': s.tunnelUp,
     'busy': s.busy,
+    // §309 — actual (конфиг работающего ядра). Pending — отдельным полем ниже.
     'config_length': s.configRaw.length,
+    // §309 — длина последней пересборки, ещё не применённой рестартом
+    // (null = running и saved совпадают). Позволяет увидеть сам факт
+    // расхождения срезов, а не только флаг.
+    'pending_config_length': s.pendingConfigRaw?.length,
     'active_in_group': s.activeInGroup,
     'selected_group': s.selectedGroup,
     'highlighted_node': s.highlightedNode,
