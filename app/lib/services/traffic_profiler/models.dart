@@ -290,6 +290,11 @@ class TrafficEvent {
         if (backfilled) 'backfilled': true,
         if (issues.isNotEmpty)
           'issues': issues.map((a) => a.toJson()).toList(),
+        // §315 — `extra` НЕ сериализовался вовсе: UI-путь (detail-sheet)
+        // читает объект напрямую и работал, а Debug API (`/profiler/live`)
+        // молча терял dns_server/source (§180) и трассу группы (§315) —
+        // диагностика по API не видела того, что видит экран.
+        if (extra != null && extra!.isNotEmpty) 'extra': extra,
       };
 
   /// §084 H6 — копия с переопределением полей. Используется в
