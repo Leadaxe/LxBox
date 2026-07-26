@@ -45,7 +45,7 @@ void main() {
     test('tunnelUp + configChangedNeedRestart + !configDirty → restart', () {
       final s = HomeState(
         tunnel: TunnelStatus.connected,
-        configChangedNeedRestart: true,
+        pendingConfigRaw: '{}', // §309 — pending ⟺ needRestart
       );
       expect(keys(s), {'restart'});
     });
@@ -53,14 +53,14 @@ void main() {
     test('restart НЕ показывается при configDirty (сначала Apply)', () {
       final s = HomeState(
         tunnel: TunnelStatus.connected,
-        configChangedNeedRestart: true,
+        pendingConfigRaw: '{}', // §309 — pending ⟺ needRestart
       );
       // configDirty=true перебивает restart → только settings_changed.
       expect(keys(s, configDirty: true), {'settings_changed'});
     });
 
     test('restart НЕ показывается при выключенном туннеле', () {
-      final s = HomeState(configChangedNeedRestart: true);
+      final s = HomeState(pendingConfigRaw: '{}');
       expect(keys(s), isEmpty);
     });
 
@@ -87,7 +87,7 @@ void main() {
     test('§166 — несколько условий → стабильный порядок (без last_error)', () {
       final s = HomeState(
         tunnel: TunnelStatus.connected,
-        configChangedNeedRestart: true,
+        pendingConfigRaw: '{}', // §309 — pending ⟺ needRestart
         configLoadError: true,
         lastError: const RawMsg('boom'),
       );

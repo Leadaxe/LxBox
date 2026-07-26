@@ -28,7 +28,10 @@ class _ConfigScreenState extends State<ConfigScreen> {
   void initState() {
     super.initState();
     _textController = TextEditingController(
-      text: prettyJsonForDisplay(widget.controller.state.configRaw),
+      // §309 — редактор показывает pending (последнюю пересборку), иначе при
+      // живом туннеле правки «пропадали» бы до рестарта. Туннель down →
+      // pending нет, `editableConfigRaw` = actual.
+      text: prettyJsonForDisplay(widget.controller.state.editableConfigRaw),
     );
   }
 
