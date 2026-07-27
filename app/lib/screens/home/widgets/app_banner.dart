@@ -49,11 +49,19 @@ class BannerActions {
     required this.onRebuild,
     required this.onConfirmStop,
     required this.onClearError,
+    required this.onShareCrash,
+    required this.onDismissCrash,
   });
 
   final VoidCallback onRebuild;
   final VoidCallback onConfirmStop;
   final VoidCallback onClearError;
+
+  /// §316 — открыть/отдать краш-репорт ядра.
+  final VoidCallback onShareCrash;
+
+  /// §316 — «понял, больше не напоминай про этот краш».
+  final VoidCallback onDismissCrash;
 }
 
 /// Чистая проекция: состояние → упорядоченный список активных плашек. Guard'ы
@@ -66,13 +74,28 @@ List<AppBanner> activeBanners(
   required bool configDirty,
   required bool busy,
   required BannerActions actions,
+  bool crashPending = false,
 }) {
   final a = actions;
   final out = <AppBanner>[];
+  // §316 — ядро упало в прошлой сессии. Плашка ОДНА на краш: `crashPending`
+  // гаснет, как только `CrashBannerState` записал штамп файла (тап или
+  // крестик). Первой в списке — это самое важное, что можно сказать
+  // пользователю про прошлый запуск.
+  if (crashPending) {
+    out.add(AppBanner(
+      key: 'core_crash',
+      message: getLocalText.s("The core crashed last session — tap to share the report"),
+      icon: Icons.bug_report_outlined,
+      palette: BannerPalette.error,
+      onTap: a.onShareCrash,
+      onDismiss: a.onDismissCrash,
+    ));
+  }
   if (configDirty && !busy) {
     out.add(AppBanner(
       key: 'settings_changed',
-      message: 'Settings changed — tap to rebuild config',
+      message: getLocalText.s("Settings changed — tap to rebuild config"),
       icon: Icons.build_circle_outlined,
       palette: BannerPalette.info,
       onTap: a.onRebuild,
@@ -83,7 +106,7 @@ List<AppBanner> activeBanners(
   if (s.tunnelUp && s.configChangedNeedRestart && !configDirty) {
     out.add(AppBanner(
       key: 'restart',
-      message: 'Config changed — restart VPN to apply',
+      message: getLocalText.s("Config changed — restart VPN to apply"),
       icon: Icons.info_outline,
       palette: BannerPalette.warning,
       onTap: a.onConfirmStop,
@@ -94,7 +117,7 @@ List<AppBanner> activeBanners(
   if (s.configLoadError) {
     out.add(AppBanner(
       key: 'config_load_error',
-      message: 'Config loading error',
+      message: getLocalText.s("Config loading error"),
       icon: Icons.restart_alt,
       palette: BannerPalette.error,
       onTap: a.onConfirmStop,
