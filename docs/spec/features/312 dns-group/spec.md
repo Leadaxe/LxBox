@@ -1,8 +1,8 @@
 # §312 — DNS-группы: полный UI над kernel DNS_GROUP
 
 **Тип:** фича
-**Статус:** спека согласована (решения юзера 26.07.2026), реализация
-**Ядро:** sing-box-lx SPEC 033/035, feature DNS_GROUP; в пине `v1.14.0-lx.16-rc.3` (без build-tag; state-RPC за `with_lx_command` — наши сборки с ним)
+**Статус:** реализовано, device-verified 26.07.2026 (v2.18.0)
+**Ядро:** sing-box-lx SPEC 033/035, feature DNS_GROUP; в пине `v1.14.0-lx.16` (без build-tag; state-RPC за `with_lx_command` — наши сборки с ним)
 **Связано:** §294 (typed refs `dns_options.servers`), §117 (редактор DNS-сервера, форс-инклюд пресетных/правильных тегов), §121/§219 (validator dangling refs), §208/§209 (образец pool-RPC и null-контракта), §311 (образец CC-обвязки; `/help`-урок), §254 (циклы → fatal до старта ядра)
 
 ---
