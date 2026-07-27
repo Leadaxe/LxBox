@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/settings_storage.dart';
-import '../../../vpn/pprof_profile.dart';
-import '../../crash_reports_screen.dart';
 import '../../../services/l10n/locale_controller.dart';
 
 /// Diagnostics tab для App Settings.
@@ -43,8 +41,6 @@ class DiagnosticsTab extends StatelessWidget {
     required this.onCoreLogsChanged,
     required this.onQuitApp,
     required this.onAutoRecordWifiChanged,
-    required this.capturing,
-    required this.onCaptureProfile,
   });
 
   final bool loaded;
@@ -81,21 +77,6 @@ class DiagnosticsTab extends StatelessWidget {
   final ValueChanged<bool> onCoreLogsChanged;
   final VoidCallback onQuitApp;
   final ValueChanged<bool> onAutoRecordWifiChanged;
-
-  /// §207 — снять pprof-слепок (libbox PProfServer); аргумент = дескриптор
-  /// профиля ([PprofProfile]).
-  /// `capturing` = захват в процессе → все кнопки disabled (один сервер/порт).
-  final bool capturing;
-  final ValueChanged<PprofProfile> onCaptureProfile;
-
-  /// §207 — иконка кнопки по id профиля.
-  static IconData _iconFor(String id) => switch (id) {
-        'goroutine' => Icons.account_tree_outlined,
-        'profile' => Icons.speed_outlined,
-        'heap' => Icons.memory_outlined,
-        'allocs' => Icons.dataset_outlined,
-        _ => Icons.bug_report_outlined,
-      };
 
   @override
   Widget build(BuildContext context) {
@@ -177,18 +158,6 @@ class DiagnosticsTab extends StatelessWidget {
           subtitle: Text(getLocalText.s("OEM-specific toggles to keep VPN alive in background.")),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: onAppInfoTap,
-        ),
-        // §316 — краш-репорты ядра. НЕ в «Developer»: файл нужен обычному
-        // пользователю, чтобы приложить его к жалобе, а не только нам.
-        ListTile(
-          leading: const Icon(Icons.bug_report_outlined),
-          title: Text(getLocalText.s("Crash reports")),
-          subtitle: Text(getLocalText.s("Core panic logs — share one to report a crash.")),
-          trailing: const Icon(Icons.chevron_right, size: 18),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-                builder: (_) => const CrashReportsScreen()),
-          ),
         ),
         const Divider(height: 32),
         Text(getLocalText.s("Developer"),
@@ -321,53 +290,6 @@ class DiagnosticsTab extends StatelessWidget {
                 onPressed: loaded ? onQuitApp : null,
                 icon: const Icon(Icons.logout, size: 18),
                 label: Text(getLocalText.s("Quit & reopen app")),
-              ),
-            ],
-          ),
-        ),
-        // §207 — on-device profiling. Snapshots the running core via libbox
-        // PProfServer (goroutines / CPU / heap / allocs) — VPN must be
-        // running. Captured file opens the system Share sheet.
-        const Divider(height: 8),
-        Text(getLocalText.s("Profiling"),
-            style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                getLocalText.s("Capture a diagnostic snapshot of the running core and share it. Requires the VPN to be connected."),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 8),
-              for (final p in PprofProfile.all) ...[
-                OutlinedButton.icon(
-                  onPressed: (loaded && !capturing)
-                      ? () => onCaptureProfile(p)
-                      : null,
-                  icon: (capturing && p.blockingSeconds > 0)
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(_iconFor(p.id), size: 18),
-                  label: Text(getLocalText.s("Capture %s", p.label)),
-                ),
-                const SizedBox(height: 6),
-              ],
-              Text(
-                getLocalText.s("Binary profiles (.pb): go tool pprof file.pb\nHeap inuse_space: go tool pprof -inuse_space heap-*.pb"),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
               ),
             ],
           ),

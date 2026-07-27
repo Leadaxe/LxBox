@@ -4,7 +4,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../rule_set_downloader.dart';
 import '../../stderr_reader.dart'
-    show kCrashArchiveDir, kCrashReportBaseName, CrashReports;
+    show kCrashArchiveDir, kCrashReportBaseName, kCrashTraceName, CrashReports;
 import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
@@ -95,42 +95,44 @@ Future<DebugResponse> _localFile(DebugRequest req, DebugContext ctx) async {
 ///
 /// Пустой список (а не 404) при отсутствии папки — «крашей не было» это
 /// валидное состояние, а не ошибка запроса.
+/// Обход архива делегирован `CrashReports.list()` — один источник правды с
+/// UI. Своя реализация тут уже разошлась с реальностью: ядро складывает
+/// репорты КАТАЛОГАМИ `<таймстамп>/{go.log,metadata.json,configuration.json}`,
+/// а обход брал только файлы и молча отдавал `[]` при полном архиве.
 Future<DebugResponse> _crashList() async {
-  final base = await _nativeFilesDir();
-  final dir = Directory('$base/$kCrashArchiveDir');
-  if (!await dir.exists()) return const JsonResponse([]);
-  final entries = <({String name, int size, DateTime mtime})>[];
-  await for (final entity in dir.list(followLinks: false)) {
-    if (entity is! File) continue;
-    final stat = await entity.stat();
-    entries.add((
-      name: entity.uri.pathSegments.last,
-      size: stat.size,
-      mtime: stat.modified,
-    ));
-  }
-  entries.sort((a, b) => b.mtime.compareTo(a.mtime)); // новые первыми
+  final reports =
+      (await CrashReports.list()).where((r) => !r.isCurrent).toList();
   return JsonResponse([
-    for (final e in entries)
+    for (final r in reports)
       {
-        'name': e.name,
-        'size': e.size,
-        'mtime': e.mtime.toUtc().toIso8601String(),
+        'name': r.name,
+        'size': r.size,
+        'mtime': r.mtime.toUtc().toIso8601String(),
+        if (r.coreVersion != null) 'core_version': r.coreVersion,
+        // Каталог отдаётся пофайлово через `?name=<repo>&file=<...>`.
+        if (r.dirPath != null) 'kind': 'dir',
       },
   ]);
 }
 
-/// §316 — тело архивного краш-репорта. Подпапка задаётся СЕРВЕРОМ, клиент
-/// передаёт только basename (гейт `_assertSafeName`) — traversal невозможен
+/// §316 — тело архивного краш-репорта: по умолчанию `go.log`, конкретный
+/// файл каталога — через `&file=`. Подпапка задаётся СЕРВЕРОМ, клиент
+/// передаёт только basename'ы (гейт `_assertSafeName`) — traversal невозможен
 /// по построению, поэтому `/files/local` не пришлось учить путям со слэшем.
 Future<DebugResponse> _crashFile(DebugRequest req) async {
   final name = req.requiredQuery('name');
   _assertSafeName(name);
+  final inner = req.uri.queryParameters['file'];
+  if (inner != null) _assertSafeName(inner);
   final base = await _nativeFilesDir();
-  final f = File('$base/$kCrashArchiveDir/$name');
+  final root = '$base/$kCrashArchiveDir/$name';
+  // Каталог-репорт (текущая схема ядра) или плоский файл (ранние сборки).
+  final f = await Directory(root).exists()
+      ? File('$root/${inner ?? kCrashTraceName}')
+      : File(root);
   if (!await f.exists()) throw NotFound('crash report: $name');
   final bytes = await f.readAsBytes();
-  return BytesResponse(bytes, filename: name);
+  return BytesResponse(bytes, filename: '$name-${f.uri.pathSegments.last}');
 }
 
 /// §316 — native `Context.filesDir` (см. [CrashReports.baseDir]): ядро и
