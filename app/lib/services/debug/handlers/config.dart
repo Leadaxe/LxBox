@@ -7,13 +7,19 @@ import '../contract/errors.dart';
 import '../transport/request.dart';
 import '../transport/response.dart';
 
-/// `/config[/pretty|/path]` — GET возвращает сохранённый sing-box конфиг.
+/// `/config[/pretty|/path|/running]` — GET возвращает сохранённый sing-box
+/// конфиг (`/running` — снапшот работающего ядра, §311).
 /// `PUT /config` — прямой override (body = raw sing-box JSON). Минует
 /// `buildConfig(...)`, подписки, custom rules — пишет bytes как есть
 /// через `HomeController.saveParsedConfig`.
 ///
 /// Raw ответ на GET — ровно то что лежит в памяти HomeController (`configRaw`),
 /// без round-trip'а через jsonDecode. Pretty — валидный JSON parse + indent 2.
+///
+/// §311 — `/config` отдаёт СОХРАНЁННЫЙ файл; при живом туннеле он может
+/// опережать ядро (пересборка до рестарта). «Что реально крутится» —
+/// `GET /config/running` (kernel SPEC 036); факт расхождения виден по
+/// `running_config_length` vs `config_length` в `GET /state`.
 Future<DebugResponse> configHandler(DebugRequest req, DebugContext ctx) async {
   if (req.path == '/config' && req.method == 'PUT') {
     return _put(req, ctx);
@@ -25,8 +31,26 @@ Future<DebugResponse> configHandler(DebugRequest req, DebugContext ctx) async {
     '/config' => _body(ctx, pretty: false),
     '/config/pretty' => _body(ctx, pretty: true),
     '/config/path' => _path(),
+    '/config/running' => _running(ctx),
     _ => throw NotFound('config path: ${req.path}'),
   };
+}
+
+/// §311 — канонический снапшот конфига РАБОТАЮЩЕГО ядра (kernel SPEC 036
+/// `GetRunningConfig`; захвачен на старте ядра, живёт в
+/// `HomeState.runningConfigRaw`). Это re-marshal распарсенных options
+/// (post-override tun, omitempty) — сравнивать с `/config` только
+/// семантически. 409 — туннель down, ядро без метода (< lx.16-rc.3) или
+/// снапшот ещё не подтянут lazy-fetch'ем.
+Future<DebugResponse> _running(DebugContext ctx) async {
+  final home = ctx.requireHome();
+  final raw = home.state.runningConfigRaw;
+  if (raw == null || raw.isEmpty) {
+    throw const Conflict(
+        'running config unavailable (tunnel down, kernel without '
+        'GetRunningConfig, or snapshot not fetched yet)');
+  }
+  return RawJsonResponse(raw);
 }
 
 /// `PUT /config` — body это сырой sing-box JSON (объект). Валидируется

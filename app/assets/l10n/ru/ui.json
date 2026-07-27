@@ -371,6 +371,9 @@
       }
     }
   },
+  "%s · current session": {
+    "value": "%s · текущая сессия"
+  },
   "%s copied": {
     "value": "Скопировано: %s"
   },
@@ -610,9 +613,6 @@
   "Advanced: this rule resolves but does not route. If no later rule matches, traffic goes to Final.": {
     "value": "Продвинутый режим: правило резолвит, но не маршрутизирует. Если ни одно последующее правило не совпадёт, трафик уйдёт в Final."
   },
-  "After": {
-    "value": "После"
-  },
   "Aggressive battery saving": {
     "value": "Агрессивная экономия батареи"
   },
@@ -783,9 +783,6 @@
   },
   "Becomes a standalone server": {
     "value": "Станет отдельным сервером"
-  },
-  "Before": {
-    "value": "До"
   },
   "Behavior": {
     "value": "Поведение"
@@ -1000,6 +997,12 @@
       "other": "Конфиг пересобран: %d узла"
     }
   },
+  "Config changed — restart VPN to apply": {
+    "value": "Конфиг изменён — перезапустите VPN, чтобы применить"
+  },
+  "Config loading error": {
+    "value": "Ошибка загрузки конфига"
+  },
   "Config saved": {
     "value": "Конфиг сохранён"
   },
@@ -1096,6 +1099,9 @@
   "Core": {
     "value": "Ядро"
   },
+  "Core panic logs — share one to report a crash.": {
+    "value": "Логи паник ядра — приложите один к сообщению о падении."
+  },
   "Could not clear DNS cache": {
     "value": "Не удалось очистить кэш DNS"
   },
@@ -1119,6 +1125,9 @@
   },
   "Create": {
     "value": "Создать"
+  },
+  "Crash reports": {
+    "value": "Отчёты о падениях"
   },
   "Created: %s": {
     "value": "Создана: %s"
@@ -1818,6 +1827,9 @@
   "Import from file…": {
     "value": "Импорт из файла…"
   },
+  "Import rules changed this node. The JSON tab shows the result.": {
+    "value": "Import-правила изменили этот узел. На вкладке JSON — итоговый вид."
+  },
   "In Rules": {
     "value": "В правилах"
   },
@@ -1905,8 +1917,8 @@
   "JSON": {
     "value": "JSON"
   },
-  "JSON and source": {
-    "value": "JSON и исходник"
+  "JSON, source and replacements": {
+    "value": "JSON, исходник и замены"
   },
   "JSON copied": {
     "value": "JSON скопирован"
@@ -1970,6 +1982,9 @@
   },
   "Leave empty for the default SNI": {
     "value": "Пусто — SNI по умолчанию"
+  },
+  "Leave empty to substitute across the whole node": {
+    "value": "Пустой путь — замена по всему узлу"
   },
   "Lifecycle": {
     "value": "Жизненный цикл"
@@ -2171,6 +2186,12 @@
   },
   "No configurable variables": {
     "value": "Настраиваемых переменных нет"
+  },
+  "No crash report for this session": {
+    "value": "За эту сессию отчёта о падении нет"
+  },
+  "No crash reports": {
+    "value": "Отчётов о падениях нет"
   },
   "No connection to %s — check network or URL": {
     "value": "Нет соединения с %s — проверьте сеть или URL"
@@ -2639,8 +2660,8 @@
   "Re-fetch live": {
     "value": "Запросить с сервера заново"
   },
-  "Re-read stderr.log": {
-    "value": "Перечитать stderr.log"
+  "Re-read the crash report": {
+    "value": "Перечитать отчёт о падении"
   },
   "Re-register (force new account)": {
     "value": "Перерегистрировать (новый аккаунт)"
@@ -2778,6 +2799,9 @@
   "Replace all": {
     "value": "Заменить все"
   },
+  "Replacements": {
+    "value": "Замены"
+  },
   "Replace all (destructive)": {
     "value": "Заменить всё (необратимо)"
   },
@@ -2786,9 +2810,6 @@
   },
   "Replace all → %s": {
     "value": "Заменить все → %s"
-  },
-  "Replace needs a target path": {
-    "value": "Для замены нужен путь назначения"
   },
   "Replace the existing server with this one?": {
     "value": "Заменить существующий сервер этим?"
@@ -3050,11 +3071,17 @@
   "Set whole value": {
     "value": "Заменить целиком"
   },
+  "Set whole value needs a target path": {
+    "value": "Режим «Заменить целиком» требует путь цели"
+  },
   "Setting is saved immediately, but `Libbox.setup` reads the `debug` flag once per process. Stop/start VPN does NOT re-apply — force-stop the app (or use the button below) and reopen.": {
     "value": "Настройка сохраняется сразу, но `Libbox.setup` читает флаг `debug` один раз на процесс. Перезапуск VPN её НЕ применяет — полностью закройте приложение (или нажмите кнопку ниже) и откройте снова."
   },
   "Settings": {
     "value": "Настройки"
+  },
+  "Settings changed — tap to rebuild config": {
+    "value": "Настройки изменены — нажмите, чтобы пересобрать конфиг"
   },
   "Share": {
     "value": "Поделиться"
@@ -3082,8 +3109,8 @@
   "Share masked": {
     "value": "Маскированный"
   },
-  "Share stderr.log files": {
-    "value": "Поделиться файлами stderr.log"
+  "Share the crash report": {
+    "value": "Поделиться отчётом о падении"
   },
   "Share subscription URL": {
     "value": "Поделиться URL подписки"
@@ -3395,6 +3422,12 @@
   "The VPN will briefly reload to apply.": {
     "value": "VPN ненадолго перезагрузится, чтобы применить."
   },
+  "The core crashed last session — tap to share the report": {
+    "value": "В прошлой сессии упало ядро — нажмите, чтобы отправить отчёт"
+  },
+  "The core has not panicked. Note that this channel only covers Go panics — native crashes and kills by the system are not recorded here.": {
+    "value": "Ядро не паниковало. Учтите: сюда попадают только паники Go — нативные падения и убийства системой здесь не фиксируются."
+  },
   "The whole element as the provider sent it": {
     "value": "Элемент целиком, как прислал провайдер"
   },
@@ -3628,9 +3661,6 @@
   "View release": {
     "value": "Открыть релиз"
   },
-  "View replacements": {
-    "value": "Показать замены"
-  },
   "View, edit, import JSON": {
     "value": "Просмотр, правка и импорт JSON"
   },
@@ -3654,6 +3684,9 @@
   },
   "Whitelisted — VPN can run in background": {
     "value": "В белом списке — VPN может работать в фоне"
+  },
+  "Whole-node replace needs a pattern to find": {
+    "value": "Замене по всему узлу нужен паттерн поиска"
   },
   "Wi-Fi rules need permissions": {
     "value": "Правилам Wi-Fi нужны разрешения"
@@ -3837,9 +3870,6 @@
   "srs": {
     "value": "srs"
   },
-  "stderr is empty": {
-    "value": "stderr пуст"
-  },
   "storage shape (lxbox_settings.json)": {
     "value": "формат хранения (lxbox_settings.json)"
   },
@@ -3911,5 +3941,22 @@
   },
   "Leave IP empty to use the server from registration. HTTP/3 only works on a few Cloudflare addresses, HTTP/2 works across the whole block.": {
     "value": "Оставьте IP пустым, чтобы использовать сервер из регистрации. HTTP/3 работает лишь на нескольких адресах Cloudflare, HTTP/2 — на всём блоке."
-  }
+  },
+  "%s · disabled — will be skipped": "%s · выключен — будет пропущен",
+  "DNS group \"%1$s\": member \"%2$s\" of type \"%3$s\" is not allowed in a group.": "DNS-группа «%1$s»: член «%2$s» типа «%3$s» недопустим в группе.",
+  "DNS group \"%s\" has no usable members — enable or add at least one server.": "DNS-группа «%s» осталась без рабочих членов — включите или добавьте хотя бы один сервер.",
+  "DNS group loop: %s — fix group membership to start the VPN.": "Цикл DNS-групп: %s — исправьте состав групп, чтобы запустить VPN.",
+  "Error TTL": "TTL ошибки",
+  "Fastest — race, then stick to the winner": "Fastest — гонка, затем липнет к победителю",
+  "Group": "Группа",
+  "Invalid duration (e.g. 2m, 90s)": "Неверная длительность (напр. 2m, 90s)",
+  "Members": "Члены группы",
+  "No other DNS servers to add — create them first": "Других DNS-серверов нет — сначала создайте их",
+  "Parallel — race every query": "Parallel — каждый запрос гонкой",
+  "Selection mode": "Режим выбора",
+  "Server type": "Тип сервера",
+  "Several servers behind one tag — survives a member failure": "Несколько серверов под одним тегом — переживает сбой члена",
+  "Stable — stick to one until it fails": "Stable — держится за один, пока тот не сбоит",
+  "Win TTL": "TTL победы",
+  "unknown server — will be skipped": "неизвестный сервер — будет пропущен"
 }

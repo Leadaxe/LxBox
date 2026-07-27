@@ -382,7 +382,8 @@ class _SubscriptionFiltersTabState extends State<SubscriptionFiltersTab> {
       subtitle: Text(
         [
           if (isReplace)
-            '${rule.targetPath} = ${rule.replacement.isEmpty ? getLocalText.s("(remove)") : rule.replacement}',
+            // Пустая цель = замена по всему узлу, показываем как `*` (§307).
+            '${rule.targetPath.isEmpty ? '*' : rule.targetPath} = ${rule.replacement.isEmpty ? getLocalText.s("(remove)") : rule.replacement}',
           if (invalid) getLocalText.s("invalid pattern — skipped"),
         ].join('  ·  '),
         maxLines: 1,
@@ -512,7 +513,16 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
       }
     }
     if (rule.action == ImportRuleAction.replace && rule.targetPath.isEmpty) {
-      return getLocalText.s("Replace needs a target path");
+      // §307 — пустая цель валидна в substitute: замена по всему узлу.
+      // «Set whole value» с пустой целью затирал бы весь узел — запрещено.
+      if (rule.replaceMode != ImportRuleReplaceMode.substitute) {
+        return getLocalText.s("Set whole value needs a target path");
+      }
+      final hasNeedle = rule.substitutePattern.isNotEmpty ||
+          rule.conditions.any((c) => c.path.isEmpty && c.pattern.isNotEmpty);
+      if (!hasNeedle) {
+        return getLocalText.s("Whole-node replace needs a pattern to find");
+      }
     }
     return null;
   }
@@ -650,6 +660,11 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
             decoration: InputDecoration(
               labelText: getLocalText.s("Target path"),
               hintText: 'tls.utls.fingerprint', // l10n-exempt: JSON path example
+              // §307 — пустая цель = substitute по всему узлу.
+              helperText: _replaceMode == ImportRuleReplaceMode.substitute
+                  ? getLocalText
+                      .s("Leave empty to substitute across the whole node")
+                  : null,
               border: const OutlineInputBorder(),
               isDense: true,
             ),

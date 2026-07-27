@@ -131,7 +131,8 @@ class SettingsStorage {
     //                   allowlist → терялся при restore (default-deny)
     'last_global_update',
     'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
-    'preset_ids_remapped', // §228 — guard ремапа переименованных preset_id
+    'preset_ids_remapped', // §228 legacy guard; миграция удалена в §229, ключ
+    //                        сохранён (имя не переиспользовать, не мусор)
     'interrupt_connections_on_switch',
     'node_sort_mode',
     'node_manual_order',
@@ -150,6 +151,8 @@ class SettingsStorage {
     'last_update_check_at',
     'last_known_version',
     'dismissed_update_version',
+    // Краш-репорты ядра (§316)
+    'shown_crash_stamp',
     // Debug API / config-lock (§031, §037)
     'config_locked_for_debug',
     'debug_enabled',
@@ -319,10 +322,6 @@ class SettingsStorage {
   /// Идемпотентна. Зовётся из main() init до первого билда.
   static Future<void> migrateChannelsIfNeeded(GroupTemplates gt) =>
       _migrateChannelsIfNeeded(gt);
-
-  /// §228 — one-shot ремап переименованных preset_id в custom_rules.
-  /// Идемпотентна. Зовётся из main() init ДО seed'а дефолтных пресетов.
-  static Future<void> migrateRenamedPresetIds() => _migrateRenamedPresetIds();
 
   // ---------------------------------------------------------------------------
   // Last global update timestamp
@@ -637,6 +636,19 @@ class SettingsStorage {
 
   static Future<void> setDismissedUpdateVersion(String tag) =>
       setVar('dismissed_update_version', tag);
+
+  // ---------------------------------------------------------------------------
+  // Краш-репорты ядра (§316) — отметка «про этот краш уже сказали».
+  // ---------------------------------------------------------------------------
+
+  /// Штамп (`имя@mtime`, см. `CrashReports.stamp`) последнего краш-репорта,
+  /// про который баннер уже показали. Привязка к КОНКРЕТНОМУ файлу, а не
+  /// счётчик показов: повторный запуск молчит, новый краш — говорит.
+  static Future<String> getShownCrashStamp() async =>
+      getVar('shown_crash_stamp', '');
+
+  static Future<void> setShownCrashStamp(String stamp) =>
+      setVar('shown_crash_stamp', stamp);
 
   // ---------------------------------------------------------------------------
   // Debug API (§031) — runtime toggle, bearer token, port.

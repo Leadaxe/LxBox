@@ -571,5 +571,14 @@
   },
   "system name": {
     "value": "системное имя"
+  },
+  "Shield DNS (multi-provider group)": {
+    "value": "Shield DNS (группа из нескольких провайдеров)"
+  },
+  "OpenDNS UDP (direct)": {
+    "value": "OpenDNS UDP (напрямую)"
+  },
+  "Quad9 DoH (via VPN, anti-malware)": {
+    "value": "Quad9 DoH (через VPN, антивредонос)"
   }
 }

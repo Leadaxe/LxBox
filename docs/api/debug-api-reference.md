@@ -94,7 +94,7 @@ auth), а не факт, что за границей всё открыто.
 |---|---|
 | `GET /ping` | `{pong,server,uptime_seconds}` — **без auth** |
 | `GET /help` | `?format=text\|json` — самодокументируемая карта всей поверхности API. **Без auth** (второй no-auth endpoint). `json` — для auto-tooling, `text` (default) — human-readable cheatsheet. |
-| `GET /state` | full HomeState: tunnel/busy/config_length/active_in_group/selected_group/last_delay/ping_busy/traffic/… **§250** — `last_start_error` + `last_start_error_at` (ISO-8601 / null): last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart). В отличие от `last_error` не затирается UI-consume (`clearError`) — живёт до следующего успешного старта. |
+| `GET /state` | full HomeState: tunnel/busy/config_length/**running_config_length** (§311: null = снапшота ядра нет; вместе с `config_length` показывает расхождение running↔saved)/active_in_group/selected_group/last_delay/ping_busy/traffic/… **§250** — `last_start_error` + `last_start_error_at` (ISO-8601 / null): last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart). В отличие от `last_error` не затирается UI-consume (`clearError`) — живёт до следующего успешного старта. |
 | `GET /state/subs` | массив подписок, `?reveal=true` показывает clear URLs |
 | `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
 | `GET /state/storage` | весь `SettingsStorage._cache` со scrubber'ом (token/URL/nodes маскируются) |
@@ -114,9 +114,10 @@ curl -s -H "$HDR" "$BASE/state/storage?reveal=true" | jq '.vars | keys'
 
 | Endpoint | Метод | Назначение |
 |---|---|---|
-| `GET /config` | GET | raw JSON конфига (as-is из памяти HomeController) |
+| `GET /config` | GET | raw JSON **сохранённого** конфига (as-is из памяти HomeController; §311 — при живом туннеле может опережать ядро) |
 | `GET /config/pretty` | GET | тот же JSON с indent: 2 |
 | `GET /config/path` | GET | `{app_documents_dir,note}` — путь Flutter dir, не sing-box (см. note) |
+| `GET /config/running` | GET | §311 — снапшот конфига **работающего ядра** (kernel SPEC 036 `GetRunningConfig`). Re-marshal распарсенных options (post-override tun, omitempty) — diff с `/config` только семантический. `409 conflict` = туннель down / ядро < `lx.16-rc.3` / снапшот ещё не подтянут lazy-fetch'ем |
 | `PUT /config` | PUT | **прямой override** — body = raw sing-box JSON объект. `HomeController.saveParsedConfig(raw)` минуя `buildConfig`. |
 
 ```bash
@@ -212,7 +213,7 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 
 | Endpoint | Query | Что делает |
 |---|---|---|
-| `POST /action/urltest` | `tag=<node>` \| `group=<tag>` \| `all=true` \| `cancel=1` | единый URLTest-диспатч (ровно один scope): `tag` — single-node; `group` — group-delay (409 если tunnel down); `all` — mass-ping всех нод активной группы (concurrency 10); `cancel=1` — отмена in-flight mass-ping (§163, epoch-bump). → `{ok,action,scope,...}` |
+| `POST /action/urltest` | `tag=<node>` \| `group=<tag>` \| `all=true` \| `cancel=1` | единый URLTest-диспатч (ровно один scope): `tag` — single-node; `group` — групповой URLTest ядра (§308: force-тест ВСЕХ членов + переселект на живой узел; fire-and-forget — `ok` значит «команда принята», результат смотреть через `GET /state` → `active_in_group`; URL — из конфига группы, не из ping settings; 409 если tunnel down); `all` — mass-ping всех нод активной группы (concurrency 10); `cancel=1` — отмена in-flight mass-ping (§163, epoch-bump; уже запущенные групповые прогоны в ядре не отменяет). → `{ok,action,scope,...}` |
 | `POST /action/switch-node` | `tag=<tag>` | selector switch на node. 409 если не выбрана группа |
 | `POST /action/set-group` | `group=<tag>` | смена активной группы |
 | `POST /action/start-vpn` | — | `home.start()` (через Activity, с VpnService.prepare dance — может показать consent-диалог) |
@@ -841,8 +842,10 @@ Read-only file access.
 |---|---|
 | `GET /files/srs` | `ruleId=<id>` → octet-stream .srs |
 | `GET /files/srs/list` | — |
-| `GET /files/local` | `name=<name>` (whitelist: `cache.db`, `stderr.log`) |
+| `GET /files/local` | `name=<name>` (whitelist: `cache.db`, `stderr.log`, `CrashReport-lxbox.log`, `CrashReport-lxbox.log.old`) |
 | `GET /files/external` | legacy alias for `/files/local`, ради обратной совместимости |
+| `GET /files/crash/list` | §316 — архив краш-репортов ядра: `[{name, size, mtime}]`, новые первыми; `[]` если крашей не было |
+| `GET /files/crash` | §316 — `name=<file>` → тело архивного репорта |
 
 ```bash
 curl -s -H "$HDR" "$BASE/files/srs/list" | jq

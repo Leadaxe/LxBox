@@ -10,18 +10,46 @@ import '../../widgets/outbound_picker.dart';
 import '../../widgets/var_values_model.dart';
 import '../dns_settings_screen/resolved_server.dart';
 
-/// §117 задача 4b — три режима формы создания/редактирования inline-сервера.
+/// §117 задача 4b — режимы формы создания/редактирования inline-сервера.
 /// Значение = sing-box `type`. Прочие типы (`local`, `h3`, …) формой не
 /// выражаются — редактируются на JSON-вкладке.
-const kDnsServerModes = ['udp', 'tls', 'https'];
+/// §312 — `group` (kernel SPEC 033): группа DNS-серверов с резервированием.
+const kDnsServerModes = ['udp', 'tls', 'https', 'group'];
+
+/// §312 — режимы выбора цели DNS-группы (kernel SPEC 033).
+const kDnsGroupModes = ['stable', 'fastest', 'parallel'];
+
+/// §312 — валидация duration-полей группы (`error_ttl`/`win_ttl`).
+/// Go-совместимый композит: `2m`, `90s`, `1h5m30s`. Пустая строка валидна
+/// (ключ не пишется — ядро применит дефолт 2m/5m).
+final kDnsDurationRe = RegExp(r'^(\d+h)?(\d+m)?(\d+s)?$');
+
+bool isValidDnsDuration(String raw) {
+  final v = raw.trim();
+  if (v.isEmpty) return true;
+  final m = kDnsDurationRe.firstMatch(v);
+  return m != null && m[0] == v && v != '';
+}
+
+/// §312 — опция пикера членов DNS-группы.
+class DnsMemberOption {
+  const DnsMemberOption({
+    required this.tag,
+    required this.type,
+    required this.enabled,
+  });
+  final String tag;
+  final String type; // sing-box type (для подписи строки)
+  final bool enabled; // false → «disabled — will be skipped» (drop-семантика)
+}
 
 /// Дефолтный порт режима (sing-box применяет его сам при отсутствии
 /// `server_port` — храним ключ только для нестандартных портов).
 int defaultDnsPort(String mode) => switch (mode) {
-      'tls' => 853,
-      'https' => 443,
-      _ => 53,
-    };
+  'tls' => 853,
+  'https' => 443,
+  _ => 53,
+};
 
 /// §117 задача 4 — единая точка истины для редактора DNS-сервера.
 /// Паттерн 1:1 с [CustomRuleEditController] (§053 Stage 3): `ChangeNotifier`
@@ -48,6 +76,7 @@ class DnsServerEditController extends ChangeNotifier {
     this.canonicalDescription = '',
     this.outboundOptions = const [],
     this.dnsServerTags = const [],
+    this.dnsMemberOptions = const [],
   }) {
     _init();
   }
@@ -74,6 +103,11 @@ class DnsServerEditController extends ChangeNotifier {
   /// Теги DNS-серверов для `type: dns_servers` vars (без самого себя).
   final List<String> dnsServerTags;
 
+  /// §312 — опции пикера членов DNS-группы: ВСЕ серверы (включая disabled —
+  /// drop-семантика №3: выбираем, но помечаем «will be skipped»), кроме
+  /// самого себя; fakeip/hosts отфильтрованы источником (запрет ядра).
+  final List<DnsMemberOption> dnsMemberOptions;
+
   // ─── Производные ─────────────────────────────────────────────────────
 
   bool get isNew => resolved == null;
@@ -96,6 +130,10 @@ class DnsServerEditController extends ChangeNotifier {
   late final TextEditingController portCtrl;
   late final TextEditingController pathCtrl;
   late final TextEditingController sniCtrl;
+
+  // §312 — duration-поля DNS-группы.
+  late final TextEditingController errorTtlCtrl;
+  late final TextEditingController winTtlCtrl;
 
   late bool _enabled;
   late Map<String, String> _varValues;
@@ -148,9 +186,12 @@ class DnsServerEditController extends ChangeNotifier {
 
   void _init() {
     final r = resolved;
-    tagCtrl = TextEditingController(text: r?.tag ?? initialRef['tag']?.toString() ?? '');
+    tagCtrl = TextEditingController(
+      text: r?.tag ?? initialRef['tag']?.toString() ?? '',
+    );
     descCtrl = TextEditingController(
-        text: r?.description ?? initialRef['description']?.toString() ?? '');
+      text: r?.description ?? initialRef['description']?.toString() ?? '',
+    );
     _enabled = initialRef['enabled'] != false;
     final vv = initialRef['varValues'];
     _varValues = vv is Map
@@ -173,14 +214,26 @@ class DnsServerEditController extends ChangeNotifier {
     }
     _body = body;
     bodyCtrl = TextEditingController(
-        text: kind == ServerKind.inline ? _encodeBodyWithTag() : '');
-    addressCtrl = TextEditingController(text: _body['server']?.toString() ?? '');
+      text: kind == ServerKind.inline ? _encodeBodyWithTag() : '',
+    );
+    addressCtrl = TextEditingController(
+      text: _body['server']?.toString() ?? '',
+    );
     portCtrl = TextEditingController(
-        text: _body['server_port'] is int ? '${_body['server_port']}' : '');
+      text: _body['server_port'] is int ? '${_body['server_port']}' : '',
+    );
     pathCtrl = TextEditingController(text: _body['path']?.toString() ?? '');
     final tls = _body['tls'];
     sniCtrl = TextEditingController(
-        text: tls is Map ? (tls['server_name']?.toString() ?? '') : '');
+      text: tls is Map ? (tls['server_name']?.toString() ?? '') : '',
+    );
+    // §312 — групповые duration-поля.
+    errorTtlCtrl = TextEditingController(
+      text: _body['error_ttl']?.toString() ?? '',
+    );
+    winTtlCtrl = TextEditingController(
+      text: _body['win_ttl']?.toString() ?? '',
+    );
     tagCtrl.addListener(_onTagChanged);
     descCtrl.addListener(_onTextChanged);
   }
@@ -203,8 +256,9 @@ class DnsServerEditController extends ChangeNotifier {
 
   /// Полное тело для JSON-вкладки: `tag` (из tagCtrl) первым ключом +
   /// body. description/enabled — ref-level, в sing-box-тело не входят.
-  String _encodeBodyWithTag() => const JsonEncoder.withIndent('  ')
-      .convert({'tag': tagCtrl.text.trim(), ..._body});
+  String _encodeBodyWithTag() => const JsonEncoder.withIndent(
+    '  ',
+  ).convert({'tag': tagCtrl.text.trim(), ..._body});
 
   @override
   void dispose() {
@@ -221,6 +275,8 @@ class DnsServerEditController extends ChangeNotifier {
     portCtrl.dispose();
     pathCtrl.dispose();
     sniCtrl.dispose();
+    errorTtlCtrl.dispose();
+    winTtlCtrl.dispose();
     super.dispose();
   }
 
@@ -255,14 +311,45 @@ class DnsServerEditController extends ChangeNotifier {
   // текстом (затирает невалидный недонабранный JSON — осознанный trade-off:
   // валидный _body — последний источник правды).
 
-  /// Переключение режима UDP/DoT/DoH. Адрес/detour сохраняются; порт со
-  /// старого дефолта снимается (ключ уходит — sing-box применит дефолт
-  /// нового режима); path/tls чистятся под режим.
+  /// Переключение режима UDP/DoT/DoH/Group. Адрес/detour сохраняются между
+  /// транспортными режимами; порт со старого дефолта снимается (ключ уходит —
+  /// sing-box применит дефолт нового режима); path/tls чистятся под режим.
+  /// §312 — переход В группу чистит транспортные поля (у группы их нет),
+  /// переход ИЗ группы чистит групповые.
   void setServerMode(String mode) {
     if (!kDnsServerModes.contains(mode)) return;
     final old = serverMode;
     if (old == mode) return;
     _body['type'] = mode;
+    if (mode == 'group') {
+      // §312 — у группы только servers/mode/error_ttl/win_ttl.
+      _body
+        ..remove('server')
+        ..remove('server_port')
+        ..remove('path')
+        ..remove('tls')
+        ..remove('domain_resolver')
+        ..remove('detour');
+      _body['servers'] = _body['servers'] is List
+          ? _body['servers']
+          : <String>[];
+      addressCtrl.text = '';
+      portCtrl.text = '';
+      pathCtrl.text = '';
+      sniCtrl.text = '';
+      _syncJsonFromBody();
+      notifyListeners();
+      return;
+    }
+    if (old == 'group') {
+      _body
+        ..remove('servers')
+        ..remove('mode')
+        ..remove('error_ttl')
+        ..remove('win_ttl');
+      errorTtlCtrl.text = '';
+      winTtlCtrl.text = '';
+    }
     // Порт: стандартный для старого режима → убираем (дефолт нового);
     // нестандартный (юзер вводил) — сохраняем.
     final port = _body['server_port'];
@@ -274,6 +361,79 @@ class DnsServerEditController extends ChangeNotifier {
     if (mode == 'udp') _body.remove('tls');
     if (mode != 'https') pathCtrl.text = '';
     if (mode == 'udp') sniCtrl.text = '';
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  // ─── §312 — форма DNS-группы (kernel SPEC 033) ───────────────────────
+
+  /// Члены группы из body (порядок хранится как введён; ядру не значим).
+  List<String> get groupMembers => [
+    for (final m in (_body['servers'] as List<dynamic>? ?? const []))
+      if (m is String && m.isNotEmpty) m,
+  ];
+
+  /// Режим выбора цели; дефолт ядра — stable (ключ не материализуем).
+  String get groupMode {
+    final m = _body['mode'];
+    return m is String && kDnsGroupModes.contains(m) ? m : 'stable';
+  }
+
+  String get groupErrorTtl => _body['error_ttl']?.toString() ?? '';
+  String get groupWinTtl => _body['win_ttl']?.toString() ?? '';
+
+  /// §312 — ошибки duration-полей (форма показывает hint, save не блокируем:
+  /// невалидное значение просто не пишется в body — ядро применит дефолт).
+  bool get groupErrorTtlInvalid => !isValidDnsDuration(errorTtlCtrl.text);
+  bool get groupWinTtlInvalid => !isValidDnsDuration(winTtlCtrl.text);
+
+  void toggleGroupMember(String tag, bool on) {
+    if (tag.isEmpty || tag == tagCtrl.text.trim()) return;
+    final members = groupMembers;
+    if (on && !members.contains(tag)) {
+      members.add(tag);
+    } else if (!on) {
+      members.remove(tag);
+    } else {
+      return;
+    }
+    _body['servers'] = members;
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  /// `stable` (дефолт ядра) → ключ уходит; прочие пишутся явно.
+  void setGroupMode(String mode) {
+    if (!kDnsGroupModes.contains(mode) || groupMode == mode) return;
+    if (mode == 'stable') {
+      _body.remove('mode');
+    } else {
+      _body['mode'] = mode;
+    }
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  /// Duration-поле: валидное непустое → пишем; пустое/невалидное → ключ
+  /// уходит (дефолт ядра), форма показывает hint по [groupErrorTtlInvalid].
+  void onErrorTtlChanged(String raw) {
+    final v = raw.trim();
+    if (v.isEmpty || !isValidDnsDuration(v)) {
+      _body.remove('error_ttl');
+    } else {
+      _body['error_ttl'] = v;
+    }
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  void onWinTtlChanged(String raw) {
+    final v = raw.trim();
+    if (v.isEmpty || !isValidDnsDuration(v)) {
+      _body.remove('win_ttl');
+    } else {
+      _body['win_ttl'] = v;
+    }
     _syncJsonFromBody();
     notifyListeners();
   }
@@ -381,6 +541,11 @@ class DnsServerEditController extends ChangeNotifier {
     final tls = _body['tls'];
     final sni = tls is Map ? (tls['server_name']?.toString() ?? '') : '';
     if (sniCtrl.text != sni) sniCtrl.text = sni;
+    // §312 — групповые поля.
+    final ettl = _body['error_ttl']?.toString() ?? '';
+    if (errorTtlCtrl.text != ettl) errorTtlCtrl.text = ettl;
+    final wttl = _body['win_ttl']?.toString() ?? '';
+    if (winTtlCtrl.text != wttl) winTtlCtrl.text = wttl;
   }
 
   /// JSON-вкладка (inline): парс на каждый edit. Валидный объект →
@@ -481,8 +646,8 @@ class DnsServerEditScope extends InheritedNotifier<DnsServerEditController> {
   });
 
   static DnsServerEditController of(BuildContext context) {
-    final scope =
-        context.dependOnInheritedWidgetOfExactType<DnsServerEditScope>();
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<DnsServerEditScope>();
     assert(scope != null, 'DnsServerEditScope.of: no scope in context');
     return scope!.notifier!;
   }

@@ -358,6 +358,20 @@ class BoxCommandClient {
         }.getOrElse { mapOf("delay" to 0, "error" to (it.message ?: "urlTestOutbound failed")) }
     }
 
+    /// §308 — групповой URLTest: ядро force-тестит ВСЕХ членов группы её
+    /// конфиг-URL'ом и делает переселект на живой узел (+interrupt).
+    /// Fire-and-forget в ядре (`go CheckOutbounds`): RPC возвращается сразу,
+    /// без результатов — новый selected приедет groups-стримом, делеи членов
+    /// лягут в history. true = команда принята ядром.
+    fun urlTestGroup(tag: String): Boolean {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "urlTestGroup: no command client (paused/down)")
+            return false
+        }
+        return runCatching { client.urlTest(tag); true }
+            .getOrElse { Log.w(TAG, "urlTestGroup failed: ${it.message}"); false }
+    }
+
     /// §175/§209 — поднять pingClient лениво. Голый `PingHandler`: подписок нет,
     /// только unary RPC. Свой ctx/conn — disconnect рвёт лишь его вызовы.
     /// Идемпотентно (CAS): возвращает живой если есть.
@@ -449,6 +463,72 @@ class BoxCommandClient {
     /// работают и когда приложение в фоне. КОНТРАКТ: `null` = клиент недоступен
     /// (туннель down / RPC-фейл), `[]` = пул пуст (группа не round_robin / нет
     /// данных). Caller различает «недоступно» от «пусто».
+    /// §312 (kernel SPEC 035) — unary снапшот состояния DNS-групп (тип
+    /// сервера `group`, SPEC 033): по группе mode/current + члены с
+    /// clean/liveErrors/возрастом ошибки/liveWins/current/lastRtt.
+    /// null = недоступен (down/paused/не-STARTED/ядро без метода);
+    /// [] = групп в конфиге нет. Через незасыпающий pingClient (§209).
+    fun getDnsGroups(): List<Map<String, Any>>? {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "getDnsGroups: no command client (paused/down)")
+            return null
+        }
+        return runCatching {
+            val out = ArrayList<Map<String, Any>>()
+            val it = client.getDNSGroups()
+            while (it.hasNext()) {
+                val g = it.next()
+                val members = ArrayList<Map<String, Any>>()
+                val mi = g.members()
+                while (mi.hasNext()) {
+                    val m = mi.next()
+                    members.add(mapOf(
+                        "tag" to m.tag,
+                        "serverType" to m.serverType,
+                        "clean" to m.clean,
+                        "liveErrors" to m.liveErrors,
+                        "lastErrorAgeMs" to m.lastErrorAgeMs,
+                        "liveWins" to m.liveWins,
+                        "current" to m.current,
+                        // gomobile: RTT капитализирован (getLastRTTMs)
+                        "lastRttMs" to m.lastRTTMs,
+                    ))
+                }
+                out.add(mapOf(
+                    "tag" to g.tag,
+                    "mode" to g.mode,
+                    "current" to g.current,
+                    "members" to members,
+                ))
+            }
+            out
+        }.getOrElse {
+            // не-STARTED / Unimplemented — НЕ ошибка приложения.
+            Log.d(TAG, "getDnsGroups unavailable: ${it.message}")
+            null
+        }
+    }
+
+    /// §311 (kernel SPEC 036) — unary снапшот конфига РАБОТАЮЩЕГО ядра:
+    /// канонический re-marshal запущенных options, захвачен ядром один раз на
+    /// старте, отдача — копия строки. null = недоступен: клиент down/paused,
+    /// ядро не-STARTED (FailedPrecondition), attached-путь (Unavailable),
+    /// сборка без with_lx_command (Unimplemented), ядро < lx.16-rc.3
+    /// (нет метода). Через незасыпающий pingClient (§209) — отдаёт и в фоне.
+    fun getRunningConfig(): String? {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "getRunningConfig: no command client (paused/down)")
+            return null
+        }
+        return runCatching {
+            client.getRunningConfig().takeIf { it.isNotEmpty() }
+        }.getOrElse {
+            // не-STARTED / старое ядро — НЕ ошибка приложения.
+            Log.d(TAG, "getRunningConfig unavailable: ${it.message}")
+            null
+        }
+    }
+
     fun getPool(tag: String): List<Map<String, Any>>? {
         val client = ensurePingClient() ?: run {
             Log.w(TAG, "getPool: no command client (paused/down)")
@@ -734,6 +814,38 @@ class BoxCommandClient {
                         if (s.isNotEmpty()) outbound.add(s)
                     }
                 }
+                // §315 (kernel SPEC 035) — трасса DNS-группы: через какую группу
+                // шёл запрос, хронология проб (кто опрошен, исход, RTT), был ли
+                // веер и режим выживания. Каждый блок в своём runCatching: старое
+                // ядро без этих полей не должно ронять весь эмит события.
+                val groupPath = ArrayList<String>()
+                runCatching {
+                    val it = q.groupPath()
+                    while (it != null && it.hasNext()) {
+                        val s = it.next() ?: continue
+                        if (s.isNotEmpty()) groupPath.add(s)
+                    }
+                }
+                val attempts = ArrayList<Map<String, Any>>()
+                runCatching {
+                    val it = q.attempts()
+                    while (it != null && it.hasNext()) {
+                        val a = it.next() ?: continue
+                        attempts.add(mapOf(
+                            "server" to a.server,
+                            "serverType" to a.serverType,
+                            "outcome" to a.outcome,
+                            // gomobile: RTT капитализирован (getRTTMs)
+                            "rttMs" to a.rttMs,
+                        ))
+                    }
+                }
+                var fanned = false
+                var survival = false
+                runCatching {
+                    fanned = q.fanned
+                    survival = q.survival
+                }
                 // §180 — rcode КАК ЕСТЬ (Q1): getRcode() signed int. -1 = «нет
                 // ответа» (timeout), физически ≠ 65535. НЕ конвертим — Dart мапит
                 // rcode==-1 ДО toUInt.
@@ -751,6 +863,11 @@ class BoxCommandClient {
                     "dnsServerType" to dnsServerType,
                     "outbound" to outbound,
                     "answers" to answers,
+                    // §315 — трасса группы (пусто/false на не-групповых путях)
+                    "groupPath" to groupPath,
+                    "attempts" to attempts,
+                    "fanned" to fanned,
+                    "survival" to survival,
                 ))
             }.onFailure { Log.w(TAG, "writeDNSQuery failed: ${it.message}") }
         }

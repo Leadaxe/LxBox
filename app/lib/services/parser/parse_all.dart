@@ -51,10 +51,11 @@ List<NodeSpec> _parseJson(JsonConfig j) {
   switch (j.flavor) {
     case JsonFlavor.xrayArray:
       if (j.value is! List) return const [];
+      // §310 — элемент массива даёт N узлов (все VLESS, кроме dialer-целей),
+      // а не один «main». Порядок узлов внутри элемента задаёт парсер.
       return (j.value as List)
           .whereType<Map<String, dynamic>>()
-          .map(parseXrayOutbound)
-          .whereType<NodeSpec>()
+          .expand(parseXrayElement)
           .toList();
     case JsonFlavor.singboxOutbound:
       if (j.value is! Map<String, dynamic>) return const [];

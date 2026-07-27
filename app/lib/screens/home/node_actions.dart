@@ -15,6 +15,16 @@ import '../../services/l10n/locale_controller.dart';
 /// Все принимают `context` явно (раньше использовали `mounted`/`context`
 /// напрямую); поведение байт-в-байт идентично.
 
+/// §311 — тега нет в конфиге. После перехода на activeModel (срез ядра) это
+/// редкость — список и resolve снова из одного источника; сообщение остаётся
+/// диагностическим, но молчать нельзя ни в одном действии (§277/§278).
+void _showTagMissing(BuildContext context, String tag) {
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(getLocalText.s("Not found: %s", tag))),
+  );
+}
+
 /// §258 — «View details»: экран Overview/JSON. Контроллеры нужны
 /// Overview-вкладке для навигации по хопам цепочки (openTagOwner).
 void viewOutboundJson(
@@ -24,14 +34,19 @@ void viewOutboundJson(
   required SubscriptionController subController,
   required HomeController homeController,
 }) {
-  if (state.configRaw.isEmpty) return;
-  // §091 — уже распарсенная модель из state (без ре-парса на каждый tap).
-  final intro = state.configModel;
+  // §311 — конфига нет вовсе (ни файла, ни снапшота): молча выходить нельзя
+  // (§277/§278) — сообщение то же, причина для юзера одна «данных по тегу нет».
+  if (state.configRaw.isEmpty && state.runningConfigRaw == null) {
+    _showTagMissing(context, tag);
+    return;
+  }
+  // §311 — activeModel: tag пришёл из списка нод (= из ядра при tunnelUp),
+  // значит и искать его надо в срезе ядра, а не в пересобранном файле —
+  // иначе в окне «пересборка до рестарта» ловим ложный «Not found».
+  final intro = state.activeModel;
   final chain = intro.outboundChain(tag);
   if (chain.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(getLocalText.s("Not found: %s", tag))),
-    );
+    _showTagMissing(context, tag);
     return;
   }
 
@@ -55,10 +70,13 @@ void viewOutboundJson(
 
 void copyNodeJson(
     BuildContext context, String tag, HomeState state, String mode) {
-  if (state.configRaw.isEmpty) return;
+  if (state.configRaw.isEmpty && state.runningConfigRaw == null) {
+    _showTagMissing(context, tag); // §311 — не молчим (см. viewOutboundJson)
+    return;
+  }
 
-  // §091 — уже распарсенная модель из state (без ре-парса на каждый tap).
-  final intro = state.configModel;
+  // §311 — activeModel (см. viewOutboundJson).
+  final intro = state.activeModel;
   final Map<String, dynamic>? server = intro.rawOf(tag);
   Map<String, dynamic>? detour;
   if (server != null) {
@@ -66,7 +84,12 @@ void copyNodeJson(
     if (detourTag != null) detour = intro.rawOf(detourTag);
   }
 
-  if (server == null) return;
+  // §311 — раньше здесь был немой return: юзер жал «копировать», реакции
+  // нет, в буфере оставалось прошлое (анти-паттерн §277/§278).
+  if (server == null) {
+    _showTagMissing(context, tag);
+    return;
+  }
 
   Object toCopy;
   String label;

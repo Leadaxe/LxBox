@@ -13,6 +13,8 @@ import 'services/l10n/locale_controller.dart';
 import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/event_emitter.dart';
 import 'services/clash_log_pump.dart';
+import 'services/crash_banner_state.dart';
+import 'services/stderr_reader.dart';
 import 'services/subscription/subscription_identity.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
 import 'services/nav/home_return_observer.dart';
@@ -89,11 +91,8 @@ void main() async {
     // best-effort: ошибка не валит запуск (try выше).
     await SettingsStorage.migrateChannelsIfNeeded(
         (await TemplateLoader.load()).groupTemplates);
-    // §228 — ремап переименованных preset_id (bittorrent-direct→bittorrent,
-    // private-ip-direct→private-ip, block_unknown→unknown-traffic) в
-    // сохранённых custom_rules. ДО seed'а дефолтных пресетов и первого билда,
-    // чтобы правила юзеров не стали «not found». Идемпотентна, best-effort.
-    await SettingsStorage.migrateRenamedPresetIds();
+    // §229 — вызов one-shot ремапа preset_id (§228) убран: миграция удалена,
+    // отработала у всех, кто обновлялся начиная с v2.10.0.
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в
     // AppLog как DebugSource.core. Идемпотентно (повторный attach no-op).
     ClashLogPump.I.attach();
@@ -106,6 +105,14 @@ void main() async {
     // пока receiver disabled. Подгружаем emit-gates из storage (default OFF).
     registerAutomationBridge();
     unawaited(AutomationEventEmitter.I.reload());
+    // §316 — краш-репорты ядра. Ротация архива (ядро только докладывает
+    // файлы и размер папки не ограничивает) + проверка «падало ли в прошлый
+    // раз» для плашки на главном. Не блокируем старт: обе операции —
+    // чтение/удаление файлов, к первому кадру отношения не имеют.
+    unawaited(CrashReports.prune().then((removed) {
+      if (removed > 0) AppLog.I.info('Pruned $removed old crash report(s)');
+      return CrashBannerState.I.refresh();
+    }));
     // Первый read `appStartedAt` фиксирует момент старта для /device и /ping.
     // ignore: unused_local_variable
     final _ = debug_bootstrap.appStartedAt;

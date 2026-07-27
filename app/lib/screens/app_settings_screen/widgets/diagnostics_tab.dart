@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../services/settings_storage.dart';
 import '../../../vpn/pprof_profile.dart';
+import '../../crash_reports_screen.dart';
 import '../../../services/l10n/locale_controller.dart';
 
 /// Diagnostics tab для App Settings.
@@ -176,6 +177,18 @@ class DiagnosticsTab extends StatelessWidget {
           subtitle: Text(getLocalText.s("OEM-specific toggles to keep VPN alive in background.")),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: onAppInfoTap,
+        ),
+        // §316 — краш-репорты ядра. НЕ в «Developer»: файл нужен обычному
+        // пользователю, чтобы приложить его к жалобе, а не только нам.
+        ListTile(
+          leading: const Icon(Icons.bug_report_outlined),
+          title: Text(getLocalText.s("Crash reports")),
+          subtitle: Text(getLocalText.s("Core panic logs — share one to report a crash.")),
+          trailing: const Icon(Icons.chevron_right, size: 18),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+                builder: (_) => const CrashReportsScreen()),
+          ),
         ),
         const Divider(height: 32),
         Text(getLocalText.s("Developer"),

@@ -278,6 +278,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(ConfigManager.save(config))
             }
             "getConfig" -> result.success(ConfigManager.load())
+            // §316 — РЕАЛЬНЫЙ `Context.filesDir`, куда ядро пишет краш-репорты
+            // и stderr. НЕ равен Dart-овскому `getApplicationDocumentsDirectory()`
+            // (у Flutter это `app_flutter`, у native — `files`): из-за этой
+            // подмены §038-канал stderr и краш-репорты ядра были недостижимы.
+            "getFilesDir" -> result.success(context.filesDir.path)
             "startVPN" -> startVpn(result)
             // §165 — headless-старт (Debug API / automation): без Activity, БЕЗ
             // consent-диалога. Работает ТОЛЬКО если VPN-разрешение уже выдано
@@ -735,6 +740,17 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
+            // §308 — групповой URLTest (force-тест всех членов + переселект в
+            // ядре). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound.
+            "ccUrlTestGroup" -> {
+                val cc = BoxService.commandClient
+                if (cc == null) { result.success(false); return }
+                val tag = call.argument<String>("tag") ?: ""
+                pluginScope.launch {
+                    val ok = withContext(Dispatchers.IO) { cc.urlTestGroup(tag) }
+                    result.success(ok)
+                }
+            }
             // §236 — headless probe-сессия (Test servers в папке при
             // ВЫКЛЮЧЕННОМ VPN). start/urlTest/stop; гейт «VPN не запущен» —
             // внутри ProbeSession. Все вызовы блокирующие → Dispatchers.IO.
@@ -777,6 +793,28 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val cc = BoxService.commandClient
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getGroups() }
+                    result.success(r)
+                }
+            }
+            // §311/SPEC036 — unary снапшот конфига работающего ядра. null =
+            // недоступен (down / не-STARTED / attached / ядро < lx.16-rc.3) —
+            // обёртка BoxCommandClient no-throw (runCatching внутри), Dart
+            // различает null от строки и деградирует к saved-файлу.
+            // Dispatchers.IO — unary RPC на main = ANR (§122).
+            // §312/SPEC035 — unary снапшот состояния DNS-групп. null =
+            // недоступен (Dart различает от [] «групп нет»); обёртка no-throw.
+            // Dispatchers.IO — unary RPC на main = ANR (§122).
+            "ccGetDnsGroups" -> {
+                val cc = BoxService.commandClient
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.getDnsGroups() }
+                    result.success(r)
+                }
+            }
+            "ccGetRunningConfig" -> {
+                val cc = BoxService.commandClient
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.getRunningConfig() }
                     result.success(r)
                 }
             }

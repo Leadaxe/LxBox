@@ -438,6 +438,9 @@ class TrafficProfiler extends ChangeNotifier {
         failExtra['dns_server_type'] = q.dnsServerType;
       }
       if (q.source.isNotEmpty) failExtra['source'] = q.source;
+      // §315 — трасса группы: на провале она важнее всего (видно, кто из
+      // членов сбоил и добил ли веер).
+      _addDnsGroupTrace(failExtra, q);
       _routeEvent(TrafficEvent(
         ts: ts,
         kind: TrafficEventKind.dnsFail,
@@ -492,6 +495,7 @@ class TrafficProfiler extends ChangeNotifier {
     if (ip == null && q.answers.isNotEmpty) {
       extra['answer'] = _rdataValue(q.answers.first.rdata);
     }
+    _addDnsGroupTrace(extra, q); // §315
 
     _routeEvent(TrafficEvent(
       ts: ts,
@@ -507,6 +511,30 @@ class TrafficProfiler extends ChangeNotifier {
       matchedVia: attributed ? 'dns_stream' : null,
       extra: extra.isEmpty ? null : extra,
     ));
+  }
+
+  /// §315 (kernel SPEC 035) — трасса DNS-группы в `extra` события.
+  ///
+  /// Групповое живёт в `extra`, а не полями `TrafficEvent`: модель события
+  /// общая для TCP/UDP/DNS, и не-DNS события таскали бы мёртвые поля.
+  /// `attempts` схлопывается в плоскую строку — `extra` типизирован как
+  /// `Map<String, Object?>` и рендерится copy-строкой; структурный список
+  /// потребовал бы своего виджета, что избыточно для диагностики.
+  ///
+  /// Флаги пишутся ТОЛЬКО когда true — иначе `extra` мусорился бы `false`
+  /// на каждом обычном запросе (99% трафика идёт мимо групп).
+  static void _addDnsGroupTrace(Map<String, Object?> extra, CcDnsQuery q) {
+    if (q.groupPath.isNotEmpty) {
+      extra['dns_group_path'] = q.groupPath.join(' → ');
+    }
+    if (q.attempts.isNotEmpty) {
+      extra['dns_attempts'] = [
+        for (final a in q.attempts)
+          '${a.server} ${a.outcome}${a.rttMs > 0 ? ' ${a.rttMs}ms' : ''}',
+      ].join(' · ');
+    }
+    if (q.fanned) extra['dns_fanned'] = 'true';
+    if (q.survival) extra['dns_survival'] = 'true';
   }
 
   // ─── Event routing (global) ───────────────────────────────────────────

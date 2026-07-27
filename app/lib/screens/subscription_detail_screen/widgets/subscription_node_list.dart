@@ -142,10 +142,13 @@ class SubscriptionNodeList extends StatelessWidget {
                   ),
                 ),
               ),
-              // §302 — значок «тело изменено import-rules» (REPLACE). Тап =
-              // меню с diff before/after. originLine != null только когда
-              // правило реально поменяло строку ноды.
-              if (node.originLine != null) ...[
+              // §302/§307 — значок «тело изменено import-rules» (REPLACE).
+              // Ключ — ruleTrail: контроллер заполняет его при каждом
+              // применении правил (refresh И регидрация из кэша), поэтому
+              // значок переживает рестарты. Прежний ключ originLine никогда
+              // не проставлялся — значок был мёртв. Сами замены — во вкладке
+              // Replacements экрана разбора (тап по строке).
+              if (node.ruleTrail.isNotEmpty) ...[
                 const SizedBox(width: 6),
                 Tooltip(
                   message: getLocalText.s("Modified by import rules"),
@@ -223,7 +226,8 @@ class SubscriptionNodeList extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.data_object),
               title: Text(getLocalText.s("Inspect node")),
-              subtitle: Text(getLocalText.s("JSON and source"),
+              // §307 — у пропатченных нод там же третья вкладка Replacements.
+              subtitle: Text(getLocalText.s("JSON, source and replacements"),
                   style: const TextStyle(fontSize: 11)),
               onTap: () {
                 Navigator.pop(ctx);
@@ -232,62 +236,8 @@ class SubscriptionNodeList extends StatelessWidget {
                 ));
               },
             ),
-            // §302 — diff before/after для нод, чьё тело изменил REPLACE.
-            if (node.originLine != null)
-              ListTile(
-                leading: const Icon(Icons.difference_outlined),
-                title: Text(getLocalText.s("View replacements")),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showReplacementsDialog(context, node);
-                },
-              ),
           ],
         ),
-      ),
-    );
-  }
-
-  /// §302 — diff «до/после» import-rules: сырая строка подписки (`originLine`)
-  /// vs результат (`rawUri`). Оба моноширинным, с copy.
-  void _showReplacementsDialog(BuildContext context, NodeSpec node) {
-    final before = node.originLine ?? '';
-    final after = node.rawUri;
-    final text = '${getLocalText.s("Before")}:\n$before'
-        '\n\n${getLocalText.s("After")}:\n$after';
-    _showMonoDialog(context, getLocalText.s("View replacements"), text);
-  }
-
-  void _showMonoDialog(BuildContext context, String title, String body) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              body,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: body));
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(getLocalText.s("Copied"))),
-              );
-            },
-            child: Text(getLocalText.s("Copy")),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(getLocalText.s("Close")),
-          ),
-        ],
       ),
     );
   }
