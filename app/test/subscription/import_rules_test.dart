@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/subscription/import_rules.dart';
 
@@ -177,7 +178,7 @@ void main() {
       expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isFalse);
     });
 
-    test('Replace с пустой целью непригоден (узел не затирается)', () {
+    test('Replace(set) с пустой целью непригоден (узел не затирается)', () {
       final rule = ImportRule(
         conditions: [cond('', ImportRuleOperator.contains, 'h.com')],
         action: ImportRuleAction.replace,
@@ -275,6 +276,62 @@ void main() {
       expect(out.changed, isFalse);
     });
 
+    // §307 — накопление префикса (4PDA #1263): правила должны стартовать с
+    // канонического вида узла (emitRaw), а не с прошлого патча. Иначе
+    // повторное применение (рестарт, refresh) читает собственный прошлый
+    // результат как исходник и substitute накапливается.
+    test('§307: повторное применение стартует с чистого узла', () {
+      final n = fpNode('chrome', name: 'NL-Ams');
+      final rule = ImportRule(
+        conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
+        action: ImportRuleAction.replace,
+        targetPath: 'tag',
+        replaceMode: ImportRuleReplaceMode.substitute,
+        substitutePattern: 'NL',
+        replacement: 'XX NL',
+      );
+      final first = applyRulesToNode(n, [rule]);
+      expect(readJsonPath(first.patchedJson!, 'tag'), 'XX NL-Ams');
+
+      // Контроллер сохранил патч; правила применяются снова (refresh).
+      n.patchedJson = first.patchedJson;
+      n.ruleTrail = first.replacements;
+      final second = applyRulesToNode(n, [rule]);
+      expect(readJsonPath(second.patchedJson!, 'tag'), 'XX NL-Ams',
+          reason: 'не «XX XX NL-Ams» — прошлый патч не исходник');
+      expect(second.patchedJson, first.patchedJson,
+          reason: 'прогон детерминирован');
+    });
+
+    test('§307: emit отдаёт копию патча — мутации потребителя не текут', () {
+      final n = fpNode('firefox', name: 'NL');
+      final rule = ImportRule(
+        conditions: [
+          cond('tls.utls.fingerprint', ImportRuleOperator.contains, 'firefox')
+        ],
+        action: ImportRuleAction.replace,
+        targetPath: 'tls.utls.fingerprint',
+        replacement: 'chrome',
+      );
+      n.patchedJson = applyRulesToNode(n, [rule]).patchedJson;
+
+      // Билдер (server_list_build) и probe_config пишут tag/detour прямо в
+      // map результата emit — сохранённый патч страдать не должен.
+      final e1 = n.emit(TemplateVars.empty);
+      e1.map['tag'] = 'prefix ${e1.map['tag']}';
+      e1.map['detour'] = 'hop';
+      // И вглубь: вложенные map тоже должны быть копией.
+      (e1.map['tls'] as Map<String, dynamic>)['server_name'] = 'evil.com';
+
+      expect(n.patchedJson!['tag'], 'NL');
+      expect(n.patchedJson!.containsKey('detour'), isFalse);
+      expect(readJsonPath(n.patchedJson!, 'tls.server_name'), 'h.com');
+
+      final e2 = n.emit(TemplateVars.empty);
+      expect(e2.map['tag'], 'NL', reason: 'префикс не накапливается');
+      expect(e2.map.containsKey('detour'), isFalse);
+    });
+
     test('emit узла отдаёт патч (замена доезжает до конфига)', () {
       final n = fpNode('firefox');
       final rule = ImportRule(
@@ -291,6 +348,129 @@ void main() {
         readJsonPath(n.emit(TemplateVars.empty).map, 'tls.utls.fingerprint'),
         'chrome',
       );
+    });
+  });
+
+  // §307 — пустая цель Replace = substitute по всему узлу (симметрия с
+  // пустым путём условия «ищи везде»).
+  group('§307 Replace по всему узлу (пустая цель)', () {
+    test('явный substitutePattern меняет все листья с совпадением', () {
+      final rule = ImportRule(
+        conditions: [cond('', ImportRuleOperator.contains, 'h.com')],
+        action: ImportRuleAction.replace,
+        targetPath: '',
+        replaceMode: ImportRuleReplaceMode.substitute,
+        substitutePattern: 'h.com',
+        replacement: 'proxy.net',
+      );
+      expect(rule.isUsable, isTrue);
+      final out = applyRulesToNode(fpNode('chrome'), [rule]);
+      expect(out.patchedJson, isNotNull);
+      // server и tls.server_name оба были h.com — заменены оба.
+      expect(readJsonPath(out.patchedJson!, 'server'), 'proxy.net');
+      expect(readJsonPath(out.patchedJson!, 'tls.server_name'), 'proxy.net');
+      // Следы несут реальные пути listьев.
+      expect(out.replacements.any((t) => t.startsWith('server:')), isTrue);
+      expect(out.replacements.any((t) => t.startsWith('tls.server_name:')),
+          isTrue);
+    });
+
+    test('без явного паттерна берётся условие с пустым путём', () {
+      // Классика: вычистить ⚡ из имени, не зная где он ещё всплывёт.
+      final rule = ImportRule(
+        conditions: [cond('', ImportRuleOperator.contains, '⚡')],
+        action: ImportRuleAction.replace,
+        targetPath: '',
+        replaceMode: ImportRuleReplaceMode.substitute,
+        replacement: '',
+      );
+      final out =
+          applyRulesToNode(fpNode('chrome', name: 'DE⚡Berlin'), [rule]);
+      expect(readJsonPath(out.patchedJson!, 'tag'), 'DEBerlin');
+    });
+
+    test('regex-условие: карманы раскрываются по совпадению в самом листе',
+        () {
+      final rule = ImportRule(
+        conditions: [cond('', ImportRuleOperator.matches, r'NL-(\d+)')],
+        action: ImportRuleAction.replace,
+        targetPath: '',
+        replaceMode: ImportRuleReplaceMode.substitute,
+        replacement: r'N$1',
+      );
+      final out =
+          applyRulesToNode(fpNode('chrome', name: 'NL-01'), [rule]);
+      expect(readJsonPath(out.patchedJson!, 'tag'), 'N01');
+    });
+
+    test('тип листа сохраняется (порт остаётся числом)', () {
+      final rule = ImportRule(
+        conditions: [cond('', ImportRuleOperator.contains, '443')],
+        action: ImportRuleAction.replace,
+        targetPath: '',
+        replaceMode: ImportRuleReplaceMode.substitute,
+        substitutePattern: '443',
+        replacement: '8443',
+      );
+      final out = applyRulesToNode(fpNode('chrome'), [rule]);
+      expect(out.patchedJson!['server_port'], 8443);
+      expect(out.patchedJson!['server_port'], isA<int>());
+    });
+
+    test('substitute без паттерна поиска непригоден (нечего искать)', () {
+      final rule = ImportRule(
+        conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
+        action: ImportRuleAction.replace,
+        targetPath: '',
+        replaceMode: ImportRuleReplaceMode.substitute,
+        replacement: 'x',
+      );
+      expect(rule.isUsable, isFalse);
+    });
+
+    test('summary показывает пустую цель как *', () {
+      final rule = ImportRule(
+        conditions: [cond('', ImportRuleOperator.contains, '⚡')],
+        action: ImportRuleAction.replace,
+        targetPath: '',
+        replaceMode: ImportRuleReplaceMode.substitute,
+        replacement: '',
+      );
+      expect(rule.summary, contains('* = '));
+    });
+  });
+
+  // §307/§283 — tag не входит в nodeIdentityHash, поэтому правило,
+  // меняющее только имя, не сдвигает identity: DISABLE-пометки юзера
+  // (disabled_hashes) переживают такой патч.
+  group('§307 identity-хеш и патч', () {
+    test('патч только тега не меняет nodeIdentityHash', () {
+      final n = fpNode('chrome', name: 'NL');
+      final before = nodeIdentityHash(n);
+      final rule = ImportRule(
+        conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
+        action: ImportRuleAction.replace,
+        targetPath: 'tag',
+        replacement: 'Amsterdam',
+      );
+      n.patchedJson = applyRulesToNode(n, [rule]).patchedJson;
+      expect(nodeIdentityHash(n), before);
+    });
+
+    test('патч сути (fingerprint) меняет хеш — by design §283', () {
+      final n = fpNode('firefox');
+      final before = nodeIdentityHash(n);
+      final rule = ImportRule(
+        conditions: [
+          cond('tls.utls.fingerprint', ImportRuleOperator.contains, 'firefox')
+        ],
+        action: ImportRuleAction.replace,
+        targetPath: 'tls.utls.fingerprint',
+        replacement: 'chrome',
+      );
+      n.patchedJson = applyRulesToNode(n, [rule]).patchedJson;
+      expect(nodeIdentityHash(n), isNot(before),
+          reason: 'хеш считается от итогового вида узла');
     });
   });
 

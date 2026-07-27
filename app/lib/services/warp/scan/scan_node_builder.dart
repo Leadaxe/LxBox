@@ -17,10 +17,15 @@ import 'scan_models.dart';
 /// Строит `wireguard://`/`masque://` URI (с тегом-заголовком) для кандидата.
 /// Возвращает null, если для протокола нет аккаунта или сборка/парс не удались.
 class ScanNodeBuilder {
-  ScanNodeBuilder({this.warp, this.masque});
+  ScanNodeBuilder({this.warp, this.masque, this.wgKeepalive = 0});
 
   final WarpAccount? warp;
   final MasqueAccount? masque;
+
+  /// §313 — keepalive (сек) для WG/AWG-узлов, значение из пула
+  /// (`wireguard.keepalive`). `0` = не писать. Берём одно число, а не весь
+  /// [ScanPool]: билдеру от пула больше ничего не нужно.
+  final int wgKeepalive;
 
   String? uriFor(ScanCandidate c) {
     switch (c.protocol) {
@@ -48,8 +53,13 @@ class ScanNodeBuilder {
     ));
     final tuned = acc.copyWith(endpoint: c.endpoint, awg: awg);
     // reserved опускаем: рабочие AWG-конфиги идут без client_id (§142).
+    // §313 — keepalive из пула: без него пир молчит при простое, NAT-маппинг
+    // оператора закрывается и узел деградирует до `err` (гейт `> 0` внутри).
     final spec = parseWireguardIni(
-      tuned.toWireguardConf(includeReserved: false),
+      tuned.toWireguardConf(
+        includeReserved: false,
+        persistentKeepalive: wgKeepalive,
+      ),
       nameHint: c.nodeTitle,
     );
     return spec?.toUri();

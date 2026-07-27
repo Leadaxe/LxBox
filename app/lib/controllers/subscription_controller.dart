@@ -229,6 +229,14 @@ class SubscriptionController extends ChangeNotifier {
   /// хеш считаем ПОСЛЕ применения — выключение и роутинг работают с итоговым
   /// видом узла, как его увидит билдер.
   Set<String> _applyRulesToNodes(List<NodeSpec> nodes, List<ImportRule> rules) {
+    // §307 — правила НЕ инкрементальны: каждый прогон стартует с чистого
+    // узла (движок читает `emitRaw`), поэтому прошлый патч всегда сбрасываем.
+    // Сегодня узлы в обоих call-site'ах свежераспарсенные и сброс — no-op,
+    // но если сюда когда-нибудь придёт живой список, накопления не будет.
+    for (final n in nodes) {
+      n.patchedJson = null;
+      n.ruleTrail = const [];
+    }
     if (rules.isEmpty || nodes.isEmpty) return const {};
     final result = applyImportRules(nodes, rules);
     if (result.isEmpty) return const {};
@@ -1062,7 +1070,13 @@ class SubscriptionController extends ChangeNotifier {
       var masqueAcc = await SettingsStorage.getMasqueAccount();
       masqueAcc ??= await _tryRegisterMasque(warp, now);
       if (warpAcc == null && masqueAcc == null) return null;
-      builder = ScanNodeBuilder(warp: warpAcc, masque: masqueAcc);
+      // §313 — keepalive для WG/AWG-узлов берётся из того же пула, что CIDR/
+      // порты/SNI (правится JSON-окном эксперимента без пересборки).
+      builder = ScanNodeBuilder(
+        warp: warpAcc,
+        masque: masqueAcc,
+        wgKeepalive: pool.wgKeepalive,
+      );
     } finally {
       if (client == null) warp.close();
     }

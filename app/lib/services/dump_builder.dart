@@ -66,6 +66,10 @@ class DumpBuilder {
     final stderr = await StderrReader.read();
     final exitInfo = await ExitInfoReader.read();
     final logcatTail = await LogcatReader.tail();
+    // §316 — вся история Go-паник ядра одной кнопкой. Канал A выше отдаёт
+    // только ТЕКУЩИЙ репорт; архив ядро складывает в `crash_reports/` и
+    // раньше в пак не попадал вовсе.
+    final crashArchive = await _crashArchive();
 
     final dump = <String, dynamic>{
       'generated_at': now.toIso8601String(),
@@ -75,6 +79,7 @@ class DumpBuilder {
       'config': config == null ? null : _tryDecode(config),
       'debug_log': AppLog.I.entries.map(_entryJson).toList(),
       'stderr_log': stderr,
+      'crash_archive': crashArchive,
       'exit_info': exitInfo,
       'logcat_tail': logcatTail,
       'goroutines_stack': goroutinesStack,  // §207 — null если туннель не активен
@@ -87,6 +92,45 @@ class DumpBuilder {
     await file.writeAsString(
         const JsonEncoder.withIndent('  ').convert(dump));
     return file.path;
+  }
+
+  /// §316 — архивные краш-репорты ядра с содержимым. Текущий репорт сюда
+  /// НЕ кладём: он уже уехал в `stderr_log` отдельным полем.
+  ///
+  /// Тело каждого файла режем: Go-паника с сотней горутин бывает на сотни
+  /// KB, а решает всё голова трейса (паникующая горутина идёт первой).
+  /// Обрезанное помечаем явно, чтобы читающий не гадал, почему трейс
+  /// обрывается на полуслове.
+  static const _crashBodyLimit = 64 * 1024;
+
+  static Future<List<Map<String, Object?>>> _crashArchive() async {
+    try {
+      final reports =
+          (await CrashReports.list()).where((r) => !r.isCurrent).toList();
+      final out = <Map<String, Object?>>[];
+      for (final r in reports) {
+        String? content;
+        try {
+          content = await File(r.path).readAsString();
+        } catch (_) {
+          // Файл исчез между list() и чтением — пропускаем тело, метаданные
+          // всё ещё полезны (был краш в такое-то время).
+        }
+        final truncated =
+            content != null && content.length > _crashBodyLimit;
+        out.add({
+          'name': r.name,
+          'mtime': r.mtime.toUtc().toIso8601String(),
+          'size': r.size,
+          if (truncated) 'truncated': true,
+          'content':
+              truncated ? content.substring(0, _crashBodyLimit) : content,
+        });
+      }
+      return out;
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// `ServerList.toJson()` + node tags (без полного NodeSpec, чтобы файл

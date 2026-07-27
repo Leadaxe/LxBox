@@ -17,7 +17,8 @@ String? templateDnsServerTag(Map<String, dynamic> entry) {
 /// §117: tag → wrapper map для `dns_options.servers` шаблона. Используется
 /// и build'ом (applyCustomDns), и UI (DnsSettingsScreen) — единая точка.
 Map<String, Map<String, dynamic>> templateDnsServersByTag(
-    List<Map<String, dynamic>> templateServers) {
+  List<Map<String, dynamic>> templateServers,
+) {
   return {
     for (final s in templateServers)
       if (templateDnsServerTag(s) != null) templateDnsServerTag(s)!: s,
@@ -42,8 +43,9 @@ Map<String, dynamic>? resolveTemplateDnsServerBody(
   if (server is! Map) return null;
   final body = deepCopyJson(Map<String, dynamic>.from(server));
   final varsMap = <String, dynamic>{};
-  for (final d in (wrapper['vars'] as List<dynamic>? ?? const [])
-      .whereType<Map<String, dynamic>>()) {
+  for (final d
+      in (wrapper['vars'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()) {
     final name = d['name']?.toString();
     if (name == null || name.isEmpty) continue;
     final user = varValues[name]?.toString();
@@ -90,7 +92,11 @@ Future<List<Map<String, dynamic>>> resolveDnsServersList({
   final templateByTag = templateDnsServersByTag(templateServers);
 
   // Step 1: legacy migration (full-body snapshot → kind-refs).
-  final stored = _migrateLegacyDnsServers(raw, templateByTag, presetServersByTag);
+  final stored = _migrateLegacyDnsServers(
+    raw,
+    templateByTag,
+    presetServersByTag,
+  );
 
   // Step 2: filter / orphan-cleanup, preserving user order.
   final result = <Map<String, dynamic>>[];
@@ -172,13 +178,15 @@ List<Map<String, dynamic>> _migrateLegacyDnsServers(
       // pre-§043: classify by canonical match. §117: template canonical —
       // обёртка, для сравнения с legacy-снапшотом резолвим в default-body.
       final tplWrapper = templateByTag[tag];
-      final tpl =
-          tplWrapper == null ? null : resolveTemplateDnsServerBody(tplWrapper);
+      final tpl = tplWrapper == null
+          ? null
+          : resolveTemplateDnsServerBody(tplWrapper);
       if (tpl != null) normalizeDnsDetour(tpl); // как в эмиссии — для compare
       final preset = presetServersByTag[tag];
       final canonical = preset ?? tpl; // preset > template
-      final canonicalKind =
-          preset != null ? 'preset' : (tpl != null ? 'template' : null);
+      final canonicalKind = preset != null
+          ? 'preset'
+          : (tpl != null ? 'template' : null);
       final enabled = s['enabled'] != false;
       if (canonical == null) {
         // Pure custom — kind: inline с peeled description + partial body
@@ -194,9 +202,11 @@ List<Map<String, dynamic>> _migrateLegacyDnsServers(
       // Уже kind-ref. Проверяем — если body содержит tag/description/enabled
       // (это § 043 shape), peel'им их.
       final bodyRaw = s['body'];
-      final body =
-          bodyRaw is Map ? Map<String, dynamic>.from(bodyRaw) : <String, dynamic>{};
-      final needsPeel = body.containsKey('tag') ||
+      final body = bodyRaw is Map
+          ? Map<String, dynamic>.from(bodyRaw)
+          : <String, dynamic>{};
+      final needsPeel =
+          body.containsKey('tag') ||
           body.containsKey('description') ||
           body.containsKey('enabled');
       if (needsPeel) {
@@ -239,7 +249,10 @@ List<Map<String, dynamic>> _migrateLegacyDnsServers(
 /// Создаёт §044 inline ref из pre-§043 full-body snapshot'а:
 /// peel description на ref-level, body partial без tag/description/enabled.
 Map<String, dynamic> _makeInlineRef(
-    Map<String, dynamic> snapshot, String tag, bool enabled) {
+  Map<String, dynamic> snapshot,
+  String tag,
+  bool enabled,
+) {
   final ref = <String, dynamic>{
     'enabled': enabled,
     'kind': 'inline',
@@ -263,8 +276,10 @@ Map<String, dynamic> _makeInlineRef(
 /// Deep-equality по server shape (без mutable meta + UI-аннотаций).
 /// Order-insensitive — для сравнения pre-§043 snapshot'а с canonical.
 bool _serverShapesMatch(Map<String, dynamic> a, Map<String, dynamic> b) {
-  return const DeepCollectionEquality()
-      .equals(_stripMetaForCompare(a), _stripMetaForCompare(b));
+  return const DeepCollectionEquality().equals(
+    _stripMetaForCompare(a),
+    _stripMetaForCompare(b),
+  );
 }
 
 Map<String, dynamic> _stripMetaForCompare(Map<String, dynamic> m) {
@@ -299,12 +314,17 @@ Map<String, dynamic> _stripMetaForCompare(Map<String, dynamic> m) {
 /// - `detour` нормализуется ([normalizeDnsDetour]): `direct-out` /
 ///   отсутствующий в [knownOutboundTags] канал → ключ не пишется (§117
 ///   решение №2). `knownOutboundTags == null` — проверка только на direct-out.
+/// - §312: члены DNS-групп (`type: group`) фильтруются пост-проходом по
+///   реально эмитированным тегам ([_filterDnsGroupMembers]); каждый дроп —
+///   warning в [warningsOut]. Storage НЕ трогается: выключенный член при
+///   обратном включении «встаёт на место» (решение юзера §312 №3).
 List<Map<String, dynamic>> resolveDnsServersBodies({
   required List<Map<String, dynamic>> resolved,
   required Map<String, Map<String, dynamic>> templateByTag,
   required Map<String, Map<String, dynamic>> presetServersByTag,
   Set<String>? knownOutboundTags,
   Set<String> ruleReferencedTags = const {},
+  List<String>? warningsOut,
 }) {
   final out = <Map<String, dynamic>>[];
   final seen = <String>{};
@@ -347,5 +367,71 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
     out.add(body);
     seen.add(tag);
   }
+  _filterDnsGroupMembers(
+    out,
+    allRefTags: {
+      for (final e in resolved)
+        if (e['tag'] is String && (e['tag'] as String).isNotEmpty)
+          e['tag'] as String,
+    },
+    warningsOut: warningsOut,
+  );
   return out;
+}
+
+/// §312 — пост-проход фильтра членов DNS-групп (`type: group`, kernel
+/// SPEC 033). Именно ПОСЛЕ сборки всего списка: доступность члена зависит от
+/// полного набора эмитящихся тегов, включая серверы, стоящие в списке ниже
+/// группы.
+///
+/// Правило (решение юзера §312 №3): недоступный член выкидывается ИЗ ЭМИССИИ
+/// с warning'ом («ворчание в лог» — [warningsOut] → emitWarnings-снекбар §105
+/// + AppLog); storage не мутируется. Причины различаются в тексте:
+/// - `disabled` — тег известен ref-списку, но не эмитится (enabled: false);
+/// - `unknown`  — тега нет вовсе (опечатка через JSON-вкладку / удалён);
+/// - `itself`   — самовключение (ядро роняет конфиг — снимаем до старта);
+/// - `duplicate` — повтор (группа = множество, порядок не значим).
+///
+/// Пустая группа после фильтра НЕ чинится и не выкидывается молча — эмитится
+/// пустой, validator помечает `EmptyDnsGroup` (fatal): сборка блокируется до
+/// решения юзера, а не деградирует втихую (анти-паттерн §277/§278).
+void _filterDnsGroupMembers(
+  List<Map<String, dynamic>> out, {
+  required Set<String> allRefTags,
+  List<String>? warningsOut,
+}) {
+  final emittedTags = <String>{
+    for (final b in out)
+      if (b['tag'] is String) b['tag'] as String,
+  };
+  for (final body in out) {
+    if (body['type'] != 'group') continue;
+    final selfTag = body['tag'] as String;
+    final kept = <String>[];
+    for (final raw in (body['servers'] as List<dynamic>? ?? const [])) {
+      final m = raw?.toString() ?? '';
+      final String? dropReason;
+      if (m == selfTag) {
+        dropReason = 'itself';
+      } else if (kept.contains(m)) {
+        dropReason = 'duplicate';
+      } else if (m.isEmpty || !allRefTags.contains(m)) {
+        // Тега нет ни в одном ref'е — опечатка/удалён: надо чинить группу.
+        dropReason = 'unknown';
+      } else if (!emittedTags.contains(m)) {
+        // Ref есть, но не эмитится — выключен: включение вернёт члена.
+        dropReason = 'disabled';
+      } else {
+        dropReason = null;
+      }
+      if (dropReason != null) {
+        warningsOut?.add(
+          "DNS group '$selfTag': member '$m' dropped ($dropReason)",
+        );
+      } else {
+        kept.add(m);
+      }
+    }
+    body['servers'] = kept;
+  }
 }

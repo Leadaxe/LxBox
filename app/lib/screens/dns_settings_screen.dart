@@ -10,8 +10,10 @@ import '../services/dns/dns_controller.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
 import '../services/preset_on_change.dart';
+import '../services/ui_helpers.dart';
 import '../services/settings_storage.dart';
 import '../vpn/box_vpn_client.dart';
+import '../vpn/cc_channel.dart';
 import '../widgets/outbound_picker.dart';
 import 'dns_server_edit_screen.dart';
 import 'dns_settings_screen/dns_server_resolver.dart';
@@ -124,6 +126,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   @override
   void onLocaleTemplateFetch({required bool first}) {
     unawaited(_load());
+    // §312 — pull live-состояния DNS-групп на открытии экрана (решение №2:
+    // без таймера). Смена локали дёргает повторно — снапшот дешёвый.
+    if (first) unawaited(_pullDnsGroups());
   }
 
   // §085 R4 — alias: сохраняет существующие call-sites `_markDirty()`.
@@ -189,6 +194,32 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// Filter `enabled` на ref-level.
   List<String> get _enabledServerTags => enabledServerTags(_displayedServers);
 
+  /// §312 — опции пикера членов DNS-группы: ВСЕ серверы (disabled видимы и
+  /// помечаются — drop-семантика №3), кроме fakeip/hosts (запрет ядра).
+  /// Self-исключение делает сама секция формы (знает актуальный tag).
+  List<DnsMemberOption> get _dnsMemberOptions => [
+        for (final s in _displayedServers)
+          if (s.body['type'] != 'fakeip' && s.body['type'] != 'hosts')
+            DnsMemberOption(
+              tag: s.tag,
+              type: s.body['type']?.toString() ?? '',
+              enabled: s.enabled || s.locked,
+            ),
+      ];
+
+  /// §312 — live-состояние DNS-групп от ядра (pull на открытии экрана,
+  /// решение №2). Пусто = туннель down / ядро без метода / групп нет.
+  Map<String, CcDnsGroup> _liveDnsGroups = const {};
+
+  Future<void> _pullDnsGroups() async {
+    if (!widget.homeController.state.tunnelUp) return;
+    final groups = await CcChannel.instance.getDnsGroups();
+    if (!mounted || groups == null) return;
+    setState(() {
+      _liveDnsGroups = {for (final g in groups) g.tag: g};
+    });
+  }
+
   /// §117 задача 4: «+» → полноэкранный редактор в new-режиме (kind inline).
   /// Заготовка — форма UDP с пустым адресом (save требует ввода); порт/
   /// detour отсутствуют — ключи появляются только при явном выборе.
@@ -206,6 +237,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       },
       outboundOptions: _outboundOptions,
       dnsServerTags: _enabledServerTags,
+      dnsMemberOptions: _dnsMemberOptions,
       existingTags: {for (final s in _servers) s['tag'].toString()},
     );
     if (result == null || !mounted) return;
@@ -252,6 +284,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       outboundOptions: _outboundOptions,
       // §117: dom_resolver-пикер — теги без самого сервера (петля).
       dnsServerTags: _enabledServerTags.where((t) => t != tag).toList(),
+      dnsMemberOptions: _dnsMemberOptions,
       // §117 задача 4b: rename-коллизии (без текущего тега).
       existingTags: {
         for (final s in _servers)
@@ -514,6 +547,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                 entry: entry,
                 onToggleEnabled: _toggleServerEnabled,
                 onTap: _editServer,
+                liveGroup: _liveDnsGroups[entry.tag], // §312
               )),
 
           const Divider(height: 32),
@@ -792,10 +826,20 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     }());
   }
 
-  /// §033: Delete inline user-rule.
-  void _deleteRule(int index) {
+  /// §033: Delete inline user-rule. §219 — удаление необратимо (правило не
+  /// восстановить из шаблона, как template/preset), поэтому через confirm.
+  Future<void> _deleteRule(int index) async {
+    if (index < 0 || index >= _rules.length) return;
+    final name = _rules[index]['name'] as String? ?? '';
+    final confirmed = await showDeleteConfirmDialog(
+      context,
+      title: getLocalText.s("Delete rule?"),
+      message: getLocalText.s("Remove \"%s\" permanently?", name),
+    );
+    if (confirmed != true || !mounted) return;
+    // Список мог укоротиться, пока висел диалог, — проверяем индекс повторно.
     setState(() {
-      _rules.removeAt(index);
+      if (index < _rules.length) _rules.removeAt(index);
       _markDirty();
     });
   }

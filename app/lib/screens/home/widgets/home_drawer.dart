@@ -114,7 +114,7 @@ class HomeDrawer extends StatelessWidget {
               onTap: () => _go(
                 context,
                 StatsScreen(
-                  configRaw: controller.state.configRaw,
+                  configRaw: controller.state.activeConfigRaw, // §311 — срез ядра
                   subController: subController,
                   homeController: controller,
                 ),

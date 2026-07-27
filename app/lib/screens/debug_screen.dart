@@ -104,7 +104,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
     final p = await StderrReader.path();
     if (!mounted) return;
     if (p == null) {
-      showSnack(getLocalText.s("stderr is empty"));
+      showSnack(getLocalText.s("No crash report for this session"));
       return;
     }
     try {
@@ -374,7 +374,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
               ),
               IconButton(
                 icon: const Icon(Icons.refresh, size: 20),
-                tooltip: getLocalText.s("Re-read stderr.log"),
+                tooltip: getLocalText.s("Re-read the crash report"),
                 onPressed: () async {
                   setState(() => _stderrLoading = true);
                   await _loadStderr();
@@ -382,7 +382,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
               ),
               IconButton(
                 icon: const Icon(Icons.ios_share, size: 20),
-                tooltip: getLocalText.s("Share stderr.log files"),
+                tooltip: getLocalText.s("Share the crash report"),
                 onPressed: _shareStderr,
               ),
             ],

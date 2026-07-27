@@ -209,7 +209,9 @@ STORAGE.md Migration history). Добавление var:outbound миграци�
 
 ## Связано
 
-- §229 (техдолг) — удалить one-shot миграцию preset_id в следующем релизе:
+- §229 (техдолг, ВЫПОЛНЕН 2026-07-26) — one-shot миграция preset_id удалена,
+  guard-ключ `preset_ids_remapped` сохранён. Список файлов выше описывает
+  состояние на момент §228:
   [`229-remove-preset-id-migration.md`](229-remove-preset-id-migration.md).
 - §121 (routing = король над DNS; там же зафиксировано «independent_cache не
   генерируем»).

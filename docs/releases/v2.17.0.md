@@ -1,17 +1,136 @@
 # L×Box v2.17.0
 
+The headline is **Filters**: rules that fix and weed out subscription nodes on
+their own, on every refresh. Plus node inspection (what actually arrived from
+the subscription and what it turned into), keepalive in manual WARP
+registration, and a fixed MASQUE endpoint generator. Separately — a fix for
+WebSocket nodes with `?ed=N` in the path: they connected with a 404 and looked
+dead.
+
 Главное — **Filters**: правила, которые чинят и отсеивают узлы подписки сами, на
 каждом обновлении. Плюс разбор узла (что именно приехало из подписки и во что
 превратилось), keepalive в ручной регистрации WARP и починенный генератор
 MASQUE-эндпоинтов. Отдельно — фикс WebSocket-узлов с `?ed=N` в пути: они
 подключались с ошибкой 404 и выглядели мёртвыми.
 
-**Quick links:**
-[🆕 Что нового](#-что-нового) ·
-[🐞 Исправлено](#-исправлено) ·
-[📲 Install](#-install)
+---
+
+<details open>
+<summary><h2>🇬🇧 English</h2></summary>
+
+## 🆕 What's new
+
+### 🧰 Filters — subscription processing rules
+
+Every subscription now has a **Filters** tab. Rules apply to its nodes on import
+and on every refresh, so a broken parameter from the provider gets fixed once
+and stays fixed.
+
+A rule is a set of conditions plus an action. A condition reads as
+`path operator value`:
+
+- **path** points inside the node — `tag`, `server`, `server_port`,
+  `tls.utls.fingerprint`, `transport.headers.Host` and so on;
+- **operator** — `contains` (default), `equals` or `matches`
+  (regular expression), plus the **Not** and **Case-sensitive** checkboxes;
+- there can be several conditions, combined with **AND** or **OR**;
+- an empty path means searching the whole node at once, for when you don't know
+  which field holds the value.
+
+There are two actions:
+
+| Action | What it does |
+|---|---|
+| **Disable** | hides matching nodes from routing — they appear struck through in the list, same as manually disabled ones |
+| **Replace** | writes a value at the given path: either whole, or replacing part of the current one; captures `$1`, `$2`… from the regex condition's capture groups are available in the replacement |
+
+Examples:
+
+```
+tag contains ⚡                              → Disable
+tls.utls.fingerprint matches ^hello(chrome)_\d+$  → tls.utls.fingerprint = $1
+```
+
+Rules behave identically across all subscription formats — `vless://`/`trojan://`
+lists, Xray JSON, INI/Amnezia — because they apply to the already parsed node
+rather than to the subscription text.
+
+The **Apply rules** button at the bottom of the tab reloads the subscription and
+reports the outcome ("applied to N nodes, M disabled"). The rule editor has a
+**Matches** tab — it runs the rule against the subscription's nodes and shows
+which ones it will hit and what exactly it will change, before you even save.
+
+### 🔍 Subscription node inspection
+
+A short tap on a node in the subscription list opens its breakdown:
+
+| Tab | What it shows |
+|---|---|
+| **JSON** | how the node looks after parsing — what goes into the config |
+| **Source** | the original subscription fragment the node was built from |
+
+For JSON subscriptions, Source has a **Compact / Extended** switch: compact
+shows the node's outbound object, extended shows the whole element exactly as
+the provider sent it.
+
+Many providers serve the subscription as a single base64 string — above the raw
+response there's a **Decode base64** checkbox that expands the body into
+readable form, the same one the parser works with. The checkbox only appears
+when there is something to expand, and in that case it's on right away.
+
+### 🔗 Persistent keepalive for WARP
+
+The Advanced section of the manual WARP registration wizard now has a
+**Persistent keepalive (s)** field — for plain WireGuard and for AWG.
+
+| | Keepalive in manual WARP registration |
+|---|---|
+| Before | never set at all; while the node sat idle the carrier closed the UDP mapping within 30–120 s, ping went to error, the connection dropped — only Rebuild + Reconnect helped |
+| Now | a field in Advanced, 25 s by default; `0` or empty means off |
+
+MASQUE is untouched — it has its own QUIC keepalive.
+
+### 🛰️ MASQUE — manual endpoint and experiment window
+
+Manual MASQUE registration now has an **Endpoint IP** field (empty = the
+registration server's address) and a port picker; port lists are now separate
+per transport. The address pool the generator picks endpoints from has moved to
+a dedicated experiment screen — the pool's JSON is editable right there, and the
+**Reset** button restores the original. IPv6 endpoints are only offered when
+IPv6 is enabled: without a route they are dead anyway.
 
 ---
+
+## 🐞 Fixed
+
+- **WebSocket nodes with `?ed=N` in the path failed to connect.** Xray nodes
+  commonly set early data as a path suffix (`/api/v2/channel?ed=2560`).
+
+  | | Importing a ws node with `?ed=N` |
+  |---|---|
+  | Before | the suffix went into the config verbatim, the core requested the path together with `?ed=2560`, the server answered **404** — the node looked dead |
+  | Now | the suffix is stripped and the value moves into the core's early data parameter |
+
+  This works for every import path — links, Xray JSON and sing-box JSON. For
+  httpupgrade the suffix is stripped as well (the core has no early data field
+  for it). Exporting the node back to a link puts `?ed=N` back in place.
+
+- **The MASQUE endpoint generator produced almost nothing but dead h3 nodes.**
+  Addresses for h3 (QUIC) were picked across the entire `/24` block, whereas
+  they only live on four hosts.
+
+  | | h3 endpoint generation |
+  |---|---|
+  | Before | roughly a 1% hit rate — one working node out of fifty generated |
+  | Now | h3 is taken from its own section, h2 from the whole block; ports expanded to all seven working ones |
+
+  Blocks that live testing on a device found dead were dropped from the pool
+  along the way.
+
+</details>
+
+<details open>
+<summary><h2>🇷🇺 Русский</h2></summary>
 
 ## 🆕 Что нового
 
@@ -121,6 +240,8 @@ MASQUE поля не касается — там свой QUIC-keepalive.
   Заодно из пула убраны блоки, которые боевой тест на устройстве признал
   мёртвыми.
 
+</details>
+
 ---
 
 ## 📲 Install
@@ -129,8 +250,11 @@ MASQUE поля не касается — там свой QUIC-keepalive.
 adb install -r LxBox-v2.17.0-arm64-v8a.apk
 ```
 
+No uninstall needed — installs over the existing app, settings and
+subscriptions are preserved.
+
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
 
 ---
 
-Предыдущий релиз: [v2.16.0](docs/releases/v2.16.0.md).
+Previous release / Предыдущий релиз: [v2.16.0](docs/releases/v2.16.0.md).

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/parser/uri_parsers/wireguard_parser.dart';
 import 'package:lxbox/services/warp/masque_account.dart';
 import 'package:lxbox/services/warp/scan/scan_models.dart';
 import 'package:lxbox/services/warp/scan/scan_node_builder.dart';
@@ -66,6 +68,51 @@ void main() {
     expect(onlyMasque.uriFor(cand(ScanProtocol.awg)), isNull);
     final onlyWarp = ScanNodeBuilder(warp: warp());
     expect(onlyWarp.uriFor(cand(ScanProtocol.masqueH3)), isNull);
+  });
+
+  group('§313 keepalive из пула', () {
+    ScanCandidate awgCand() => ScanCandidate(
+          ip: '162.159.192.7',
+          port: 2408,
+          protocol: ScanProtocol.awg,
+          sni: 'yandex.ru',
+          awgParams: const AwgParams(ip: 'quic', jc: 4, jmin: 40, jmax: 70),
+        );
+
+    /// URI узла → эмит sing-box (то, что реально уйдёт в ядро).
+    Map<String, dynamic> emitOf(String uri) =>
+        parseWireguardUri(uri)!.emit(TemplateVars.empty).map;
+
+    test('пул с keepalive → в узле persistent_keepalive_interval', () {
+      final b = ScanNodeBuilder(warp: warp(), wgKeepalive: 25);
+      final uri = b.uriFor(awgCand())!;
+      expect(Uri.parse(uri).queryParameters['keepalive'], '25');
+      final peers = emitOf(uri)['peers'] as List;
+      expect((peers.first as Map)['persistent_keepalive_interval'], 25);
+    });
+
+    test('ключа нет в JSON (дефолт 0) → генерация цела, keepalive не пишется',
+        () {
+      final b = ScanNodeBuilder(warp: warp());
+      final uri = b.uriFor(awgCand());
+      expect(uri, isNotNull, reason: 'генерация не падает без keepalive');
+      final peers = emitOf(uri!)['peers'] as List;
+      expect((peers.first as Map).containsKey('persistent_keepalive_interval'),
+          isFalse);
+    });
+
+    test('keepalive=0 → не пишется (гейт > 0 в WarpAccount)', () {
+      final b = ScanNodeBuilder(warp: warp(), wgKeepalive: 0);
+      final uri = b.uriFor(awgCand())!;
+      expect(Uri.parse(uri).queryParameters.containsKey('keepalive'), isFalse);
+    });
+
+    test('MASQUE-ветка от wgKeepalive не зависит', () {
+      final b = ScanNodeBuilder(masque: masque(), wgKeepalive: 25);
+      final uri = b.uriFor(cand(ScanProtocol.masqueH3))!;
+      expect(uri, startsWith('masque://'));
+      expect(uri, isNot(contains('keepalive=25')));
+    });
   });
 
   test('заголовок узла (nodeTitle) проносится в фрагмент URI', () {

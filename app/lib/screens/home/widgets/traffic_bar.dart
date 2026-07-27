@@ -45,7 +45,7 @@ class TrafficBar extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) => StatsScreen(
-              configRaw: controller.state.configRaw,
+              configRaw: controller.state.activeConfigRaw, // §311 — срез ядра
               initialTab: StatsTab.overview,
               subController: subController,
               homeController: controller,

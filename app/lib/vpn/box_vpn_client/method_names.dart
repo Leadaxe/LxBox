@@ -15,6 +15,9 @@ class _Methods {
   // Config
   static const saveConfig = 'saveConfig';
   static const getConfig = 'getConfig';
+  /// §316 — native `Context.filesDir` (краш-репорты и stderr ядра лежат там,
+  /// а НЕ в Dart-овском `getApplicationDocumentsDirectory()` = `app_flutter`).
+  static const getFilesDir = 'getFilesDir';
 
   // VPN lifecycle
   static const startVPN = 'startVPN';

@@ -24,16 +24,21 @@ class CcChannel {
 
   static const MethodChannel _methods = MethodChannel(PlatformChannels.methods);
 
-  static const EventChannel _statusChannel =
-      EventChannel(PlatformChannels.ccStatus);
-  static const EventChannel _outboundsChannel =
-      EventChannel(PlatformChannels.ccOutbounds);
-  static const EventChannel _groupsChannel =
-      EventChannel(PlatformChannels.ccGroups);
-  static const EventChannel _connectionsChannel =
-      EventChannel(PlatformChannels.ccConnections);
-  static const EventChannel _dnsChannel =
-      EventChannel(PlatformChannels.ccDns); // §180
+  static const EventChannel _statusChannel = EventChannel(
+    PlatformChannels.ccStatus,
+  );
+  static const EventChannel _outboundsChannel = EventChannel(
+    PlatformChannels.ccOutbounds,
+  );
+  static const EventChannel _groupsChannel = EventChannel(
+    PlatformChannels.ccGroups,
+  );
+  static const EventChannel _connectionsChannel = EventChannel(
+    PlatformChannels.ccConnections,
+  );
+  static const EventChannel _dnsChannel = EventChannel(
+    PlatformChannels.ccDns,
+  ); // §180
 
   // ─────────────────────────── Streams ───────────────────────────
   //
@@ -56,24 +61,24 @@ class CcChannel {
   );
   late final Stream<List<CcOutbound>> _outboundsStream =
       _sharedStream<List<CcOutbound>>(
-    _outboundsChannel,
-    (e) => _asList(e).map((m) => CcOutbound.fromMap(_asMap(m))).toList(),
-  );
+        _outboundsChannel,
+        (e) => _asList(e).map((m) => CcOutbound.fromMap(_asMap(m))).toList(),
+      );
   late final Stream<List<CcGroup>> _groupsStream = _sharedStream<List<CcGroup>>(
     _groupsChannel,
     (e) => _asList(e).map((m) => CcGroup.fromMap(_asMap(m))).toList(),
   );
   late final Stream<List<CcConnection>> _connectionsStream =
       _sharedStream<List<CcConnection>>(
-    _connectionsChannel,
-    (e) => _asList(e).map((m) => CcConnection.fromMap(_asMap(m))).toList(),
-  );
+        _connectionsChannel,
+        (e) => _asList(e).map((m) => CcConnection.fromMap(_asMap(m))).toList(),
+      );
   // §180 — DNS-журнал (SPEC 018). Батч событий списком (EventEmitter native).
   late final Stream<List<CcDnsQuery>> _dnsQueriesStream =
       _sharedStream<List<CcDnsQuery>>(
-    _dnsChannel,
-    (e) => _asList(e).map((m) => CcDnsQuery.fromMap(_asMap(m))).toList(),
-  );
+        _dnsChannel,
+        (e) => _asList(e).map((m) => CcDnsQuery.fromMap(_asMap(m))).toList(),
+      );
 
   /// Статус-снапшот (always-on, §2.8): скорость, объём, память, число
   /// соединений. Shared — главный экран (watchdog/traffic_bar) + StatsScreen.
@@ -202,7 +207,9 @@ class CcChannel {
   Future<void> setStatusFast(bool fast) async {
     try {
       await _methods.invokeMethod<void>('ccSetStatusFast', {'fast': fast});
-    } catch (_) {/* native не готов — игнор, не критично */}
+    } catch (_) {
+      /* native не готов — игнор, не критично */
+    }
   }
 
   /// Фон (onAppPaused): гасим status+screen клиенты (0 тиков/0 drain).
@@ -230,14 +237,23 @@ class CcChannel {
     return CcDelayResult.fromMap(_asMap(r ?? const {}));
   }
 
+  /// §308 — групповой URLTest: ядро force-тестит ВСЕХ членов группы её
+  /// конфиг-URL'ом (`urltest_url` шаблона, не ping settings) и делает
+  /// переселект на живой узел. Fire-and-forget: `true` = команда принята;
+  /// результаты приедут стримами (groups → selected, history → делеи).
+  Future<bool> urlTestGroup(String tag) async =>
+      await _methods.invokeMethod<bool>('ccUrlTestGroup', {'tag': tag}) ??
+      false;
+
   // ─── §236 — headless probe-сессия (Test servers при выключенном VPN) ───
 
   /// Стартует probe-инстанс ядра (конфиг БЕЗ tun). Возвращает '' при успехе,
   /// текст ошибки иначе (в т.ч. «VPN is running…» — тогда caller уходит на
   /// ветку [urlTestOutbound] через боевое ядро).
   Future<String> probeStart(String config) async {
-    final r = await _methods
-        .invokeMethod<String>('probeStart', {'config': config});
+    final r = await _methods.invokeMethod<String>('probeStart', {
+      'config': config,
+    });
     return r ?? '';
   }
 
@@ -276,6 +292,26 @@ class CcChannel {
     return r.map((m) => CcGroup.fromMap(_asMap(m))).toList();
   }
 
+  /// §311 — unary снапшот конфига РАБОТАЮЩЕГО ядра (kernel SPEC 036
+  /// `GetRunningConfig`; javap rc.3: `String getRunningConfig() throws`).
+  /// Захвачен ядром один раз на старте, отдача — копия строки.
+  ///
+  /// КОНТРАКТ (модель §209): `null` = недоступен по ЛЮБОЙ причине — сервис
+  /// down, ядро без метода (< rc.3 / без with_lx_command → Unimplemented),
+  /// attached-путь (Unavailable), гонка старта (FailedPrecondition), старый
+  /// native без handler'а (MissingPlugin). Caller деградирует к saved-файлу.
+  /// Пустую строку native не отдаёт (SPEC 036: Unavailable вместо "").
+  Future<String?> getRunningConfig() async {
+    try {
+      final r = await _methods.invokeMethod<String>('ccGetRunningConfig');
+      return (r == null || r.isEmpty) ? null : r;
+    } on PlatformException {
+      return null; // ядро не STARTED / RPC-ошибка — не фатально
+    } on MissingPluginException {
+      return null; // юнит-тест / native не готов
+    }
+  }
+
   /// §208/§209 — unary снапшот пула round_robin-группы [tag]. Слоты
   /// `[{slot,tag,delay}]` в фиксированном порядке слота. `delay`==0 → мёртвая/не
   /// измерена.
@@ -285,15 +321,39 @@ class CcChannel {
   /// round_robin / нет данных). Идёт через незасыпающий pingClient (native), так
   /// что в фоне отдаёт данные, а не молчит.
   Future<List<CcPoolSlot>?> getPool(String tag) async {
-    final r = await _methods
-        .invokeMethod<List<dynamic>>('ccGetPool', {'tag': tag});
+    final r = await _methods.invokeMethod<List<dynamic>>('ccGetPool', {
+      'tag': tag,
+    });
     if (r == null) return null; // клиент недоступен (§209)
     return r.map((m) => CcPoolSlot.fromMap(_asMap(m))).toList();
   }
 
+  /// §312 — unary снапшот состояния DNS-групп (kernel SPEC 035
+  /// `GetDNSGroups`; тип сервера `group`, SPEC 033).
+  ///
+  /// КОНТРАКТ (модель §209): `null` = недоступен (сервис down / ядро без
+  /// метода / attached-путь / Unimplemented) — НЕ путать с `[]` = группы в
+  /// конфиге отсутствуют. Через незасыпающий pingClient — отдаёт и в фоне.
+  Future<List<CcDnsGroup>?> getDnsGroups() async {
+    try {
+      final r = await _methods.invokeMethod<List<dynamic>>('ccGetDnsGroups');
+      if (r == null) return null;
+      return [
+        for (final e in r)
+          if (e is Map) CcDnsGroup.fromMap(_asMap(e)),
+      ];
+    } on PlatformException {
+      return null; // RPC-ошибка / не-STARTED — не фатально
+    } on MissingPluginException {
+      return null; // юнит-тест / native не готов
+    }
+  }
+
   Future<bool> selectOutbound(String group, String tag) async =>
-      await _methods.invokeMethod<bool>(
-          'ccSelectOutbound', {'group': group, 'tag': tag}) ??
+      await _methods.invokeMethod<bool>('ccSelectOutbound', {
+        'group': group,
+        'tag': tag,
+      }) ??
       false;
 
   Future<bool> closeConnection(String id) async =>
@@ -353,15 +413,15 @@ class CcStatus {
   int get connectionsTotal => connectionsIn + connectionsOut;
 
   factory CcStatus.fromMap(Map<String, dynamic> m) => CcStatus(
-        uplink: _int(m['uplink']),
-        downlink: _int(m['downlink']),
-        uplinkTotal: _int(m['uplinkTotal']),
-        downlinkTotal: _int(m['downlinkTotal']),
-        memory: _int(m['memory']),
-        goroutines: _int(m['goroutines']),
-        connectionsIn: _int(m['connectionsIn']),
-        connectionsOut: _int(m['connectionsOut']),
-      );
+    uplink: _int(m['uplink']),
+    downlink: _int(m['downlink']),
+    uplinkTotal: _int(m['uplinkTotal']),
+    downlinkTotal: _int(m['downlinkTotal']),
+    memory: _int(m['memory']),
+    goroutines: _int(m['goroutines']),
+    connectionsIn: _int(m['connectionsIn']),
+    connectionsOut: _int(m['connectionsOut']),
+  );
 }
 
 /// §2.4 — плоский узел из `writeOutbounds` (outbound ИЛИ endpoint).
@@ -383,11 +443,11 @@ class CcOutbound {
   final int urlTestTime;
 
   factory CcOutbound.fromMap(Map<String, dynamic> m) => CcOutbound(
-        tag: m['tag']?.toString() ?? '',
-        type: m['type']?.toString() ?? '',
-        urlTestDelay: _int(m['urlTestDelay']),
-        urlTestTime: _int(m['urlTestTime']),
-      );
+    tag: m['tag']?.toString() ?? '',
+    type: m['type']?.toString() ?? '',
+    urlTestDelay: _int(m['urlTestDelay']),
+    urlTestTime: _int(m['urlTestTime']),
+  );
 }
 
 /// §2.4 — группа из `writeGroups` (дерево). `selectable` заменяет `type=='Selector'`,
@@ -410,15 +470,15 @@ class CcGroup {
   final List<CcOutbound> items;
 
   factory CcGroup.fromMap(Map<String, dynamic> m) => CcGroup(
-        tag: m['tag']?.toString() ?? '',
-        type: m['type']?.toString() ?? '',
-        selectable: m['selectable'] == true,
-        selected: m['selected']?.toString() ?? '',
-        isExpand: m['isExpand'] == true,
-        items: (m['items'] is List ? m['items'] as List : const [])
-            .map((e) => CcOutbound.fromMap(CcChannel._asMap(e)))
-            .toList(),
-      );
+    tag: m['tag']?.toString() ?? '',
+    type: m['type']?.toString() ?? '',
+    selectable: m['selectable'] == true,
+    selected: m['selected']?.toString() ?? '',
+    isExpand: m['isExpand'] == true,
+    items: (m['items'] is List ? m['items'] as List : const [])
+        .map((e) => CcOutbound.fromMap(CcChannel._asMap(e)))
+        .toList(),
+  );
 }
 
 /// §3.1/§3.2 — соединение из аккумулятора. `closedAt`>0 = закрытое (closed-история).
@@ -513,7 +573,9 @@ class CcConnection {
     final ruleText = (ruleLabel != null && ruleLabel.isNotEmpty)
         ? ruleLabel
         : (rule.isNotEmpty ? rule : 'final');
-    inner.add(!compact && network.isNotEmpty ? '[$network] $ruleText' : ruleText);
+    inner.add(
+      !compact && network.isNotEmpty ? '[$network] $ruleText' : ruleText,
+    );
     if (chains.length > 1) inner.addAll(chains.sublist(1).reversed);
     sb.write(inner.join(' ⇒ '));
     // §252 — физический путь (→ по ходу пакета): транспорт изнутри наружу
@@ -522,8 +584,9 @@ class CcConnection {
     // `[node, …selectors]`, не через SelectorInfo; пустые chains —
     // outbound-fallback) → назначение.
     final phys = <String>[...foldSelectorPairs(detours).reversed];
-    final exitChain =
-        chains.isNotEmpty ? chains : (outbound.isNotEmpty ? [outbound] : null);
+    final exitChain = chains.isNotEmpty
+        ? chains
+        : (outbound.isNotEmpty ? [outbound] : null);
     if (exitChain != null) {
       var exit = exitChain.first;
       for (final sel in exitChain.skip(1)) {
@@ -550,27 +613,27 @@ class CcConnection {
   }
 
   factory CcConnection.fromMap(Map<String, dynamic> m) => CcConnection(
-        id: m['id']?.toString() ?? '',
-        network: m['network']?.toString() ?? '',
-        domain: m['domain']?.toString() ?? '',
-        destination: m['destination']?.toString() ?? '',
-        rule: m['rule']?.toString() ?? '',
-        uplink: _int(m['uplink']),
-        downlink: _int(m['downlink']),
-        uplinkDelta: _int(m['uplinkDelta']),
-        downlinkDelta: _int(m['downlinkDelta']),
-        outbound: m['outbound']?.toString() ?? '',
-        outboundType: m['outboundType']?.toString() ?? '',
-        protocol: m['protocol']?.toString() ?? '',
-        chains: (m['chains'] as List?)?.map((e) => e.toString()).toList() ??
-            const [],
-        detours: (m['detours'] as List?)?.map((e) => e.toString()).toList() ??
-            const [],
-        packageName: m['packageName']?.toString() ?? '',
-        processPath: m['processPath']?.toString() ?? '',
-        createdAt: _int(m['createdAt']),
-        closedAt: _int(m['closedAt']),
-      );
+    id: m['id']?.toString() ?? '',
+    network: m['network']?.toString() ?? '',
+    domain: m['domain']?.toString() ?? '',
+    destination: m['destination']?.toString() ?? '',
+    rule: m['rule']?.toString() ?? '',
+    uplink: _int(m['uplink']),
+    downlink: _int(m['downlink']),
+    uplinkDelta: _int(m['uplinkDelta']),
+    downlinkDelta: _int(m['downlinkDelta']),
+    outbound: m['outbound']?.toString() ?? '',
+    outboundType: m['outboundType']?.toString() ?? '',
+    protocol: m['protocol']?.toString() ?? '',
+    chains:
+        (m['chains'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+    detours:
+        (m['detours'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+    packageName: m['packageName']?.toString() ?? '',
+    processPath: m['processPath']?.toString() ?? '',
+    createdAt: _int(m['createdAt']),
+    closedAt: _int(m['closedAt']),
+  );
 }
 
 /// §180 — структурное DNS-событие из ядра (SPEC 018 v2, §261: команда
@@ -592,6 +655,10 @@ class CcDnsQuery {
     this.dnsServerType = '',
     this.outbound = const [],
     this.answers = const [],
+    this.groupPath = const [],
+    this.attempts = const [],
+    this.fanned = false,
+    this.survival = false,
   });
 
   /// Запрошенный домен (оригинал, не финальный CNAME-target).
@@ -639,31 +706,108 @@ class CcDnsQuery {
   /// собирается из элементов с type==CNAME(5).
   final List<CcDnsAnswer> answers;
 
+  /// §315 (kernel SPEC 035) — путь DNS-групп ИЗНУТРИ НАРУЖУ; пусто = запрос
+  /// шёл мимо группы. При вложенности: `[inner, outer]`.
+  final List<String> groupPath;
+
+  /// §315 — хронология проб ЭТОГО запроса: кто опрошен, с каким исходом и
+  /// RTT. Пусто на кеш-попадании и на не-групповых путях. Опоздавшие ответы
+  /// веера сюда НЕ попадают (их не было на момент эмита) — полная картина
+  /// живёт в state-RPC `getDnsGroups` (§312).
+  final List<CcDnsGroupAttempt> attempts;
+
+  /// §315 — в запросе был веер (спасение после сбоя цели / выборы `fastest` /
+  /// любой запрос `parallel`).
+  final bool fanned;
+
+  /// §315 — режим выживания: чистых членов не осталось, ответ получен одной
+  /// попыткой к наименее грязному. Красный флаг здоровья группы.
+  final bool survival;
+
   /// Q1-helper: ответа от сервера не было (timeout).
   bool get noAnswer => rcode == -1;
 
+  /// §315 — запрос шёл через DNS-группу.
+  bool get viaGroup => groupPath.isNotEmpty;
+
   factory CcDnsQuery.fromMap(Map<String, dynamic> m) => CcDnsQuery(
-        domain: m['domain']?.toString() ?? '',
-        queryType: _int(m['queryType']),
-        rcode: _int(m['rcode']), // знак сохраняется → -1 остаётся -1 (Q1)
-        ttl: _int(m['ttl']),
-        source: m['source']?.toString() ?? '',
-        failed: m['failed'] == true,
-        error: m['error']?.toString() ?? '',
-        packageName: m['packageName']?.toString() ?? '',
-        processPath: m['processPath']?.toString() ?? '',
-        dnsServer: m['dnsServer']?.toString() ?? '',
-        dnsServerType: m['dnsServerType']?.toString() ?? '',
-        outbound: (m['outbound'] as List?)
-                ?.map((e) => e.toString())
-                .where((s) => s.isNotEmpty)
-                .toList() ??
-            const [],
-        answers: (m['answers'] as List?)
-                ?.map((a) => CcDnsAnswer.fromMap(
-                    (a as Map).map((k, v) => MapEntry(k.toString(), v))))
-                .toList() ??
-            const [],
+    domain: m['domain']?.toString() ?? '',
+    queryType: _int(m['queryType']),
+    rcode: _int(m['rcode']), // знак сохраняется → -1 остаётся -1 (Q1)
+    ttl: _int(m['ttl']),
+    source: m['source']?.toString() ?? '',
+    failed: m['failed'] == true,
+    error: m['error']?.toString() ?? '',
+    packageName: m['packageName']?.toString() ?? '',
+    processPath: m['processPath']?.toString() ?? '',
+    dnsServer: m['dnsServer']?.toString() ?? '',
+    dnsServerType: m['dnsServerType']?.toString() ?? '',
+    outbound:
+        (m['outbound'] as List?)
+            ?.map((e) => e.toString())
+            .where((s) => s.isNotEmpty)
+            .toList() ??
+        const [],
+    answers:
+        (m['answers'] as List?)
+            ?.map(
+              (a) => CcDnsAnswer.fromMap(
+                (a as Map).map((k, v) => MapEntry(k.toString(), v)),
+              ),
+            )
+            .toList() ??
+        const [],
+    // §315 — трасса группы; на старом ядре/нативе ключей нет → пустые дефолты.
+    groupPath:
+        (m['groupPath'] as List?)
+            ?.map((e) => e.toString())
+            .where((s) => s.isNotEmpty)
+            .toList() ??
+        const [],
+    attempts:
+        (m['attempts'] as List?)
+            ?.whereType<Map>()
+            .map(
+              (a) => CcDnsGroupAttempt.fromMap(
+                a.map((k, v) => MapEntry(k.toString(), v)),
+              ),
+            )
+            .toList() ??
+        const [],
+    fanned: m['fanned'] == true,
+    survival: m['survival'] == true,
+  );
+}
+
+/// §315 (kernel SPEC 035) — одна проба DNS-группы из трассы запроса.
+class CcDnsGroupAttempt {
+  const CcDnsGroupAttempt({
+    required this.server,
+    required this.serverType,
+    required this.outcome,
+    required this.rttMs,
+  });
+
+  /// Тег опрошенного участника (лист — не группа).
+  final String server;
+
+  /// Тип транспорта участника (udp/tls/https/…).
+  final String serverType;
+
+  /// `answered` · `timeout` · `network_error` · `servfail`.
+  final String outcome;
+
+  /// RTT пробы, мс.
+  final int rttMs;
+
+  bool get answered => outcome == 'answered';
+
+  factory CcDnsGroupAttempt.fromMap(Map<String, dynamic> m) =>
+      CcDnsGroupAttempt(
+        server: m['server']?.toString() ?? '',
+        serverType: m['serverType']?.toString() ?? '',
+        outcome: m['outcome']?.toString() ?? '',
+        rttMs: _int(m['rttMs']),
       );
 }
 
@@ -685,11 +829,11 @@ class CcDnsAnswer {
   bool get isAddress => type == 1 || type == 28; // A / AAAA
 
   factory CcDnsAnswer.fromMap(Map<String, dynamic> m) => CcDnsAnswer(
-        name: m['name']?.toString() ?? '',
-        type: _int(m['type']),
-        rdata: m['rdata']?.toString() ?? '',
-        ttl: _int(m['ttl']),
-      );
+    name: m['name']?.toString() ?? '',
+    type: _int(m['type']),
+    rdata: m['rdata']?.toString() ?? '',
+    ttl: _int(m['ttl']),
+  );
 }
 
 /// §4.6 — результат `urlTestOutbound`. Источник истины провала — `error`.
@@ -705,16 +849,20 @@ class CcDelayResult {
   int get lastDelayValue => ok ? delay : -1;
 
   factory CcDelayResult.fromMap(Map<String, dynamic> m) => CcDelayResult(
-        delay: _int(m['delay']),
-        error: m['error']?.toString() ?? '',
-      );
+    delay: _int(m['delay']),
+    error: m['error']?.toString() ?? '',
+  );
 }
 
 /// §208 (SPEC 019 V2) — один слот пула round_robin-группы (`getPool`). Слоты
 /// фиксированы по `slot`; нода в слоте может меняться (дотест). `delay`==0 →
 /// мёртвая / не измерена (живая всегда ≥1 — ядро клампит на чтении).
 class CcPoolSlot {
-  const CcPoolSlot({required this.slot, required this.tag, required this.delay});
+  const CcPoolSlot({
+    required this.slot,
+    required this.tag,
+    required this.delay,
+  });
 
   final int slot;
   final String tag;
@@ -724,10 +872,69 @@ class CcPoolSlot {
   bool get alive => delay > 0;
 
   factory CcPoolSlot.fromMap(Map<String, dynamic> m) => CcPoolSlot(
-        slot: _int(m['slot']),
-        tag: m['tag']?.toString() ?? '',
-        delay: _int(m['delay']),
-      );
+    slot: _int(m['slot']),
+    tag: m['tag']?.toString() ?? '',
+    delay: _int(m['delay']),
+  );
+}
+
+/// §312 — член DNS-группы из `getDNSGroups` (kernel SPEC 035, схема v3).
+class CcDnsGroupMember {
+  const CcDnsGroupMember({
+    required this.tag,
+    required this.serverType,
+    required this.clean,
+    required this.liveErrors,
+    required this.lastErrorAgeMs,
+    required this.liveWins,
+    required this.current,
+    required this.lastRttMs,
+  });
+
+  final String tag;
+  final String serverType;
+  final bool clean; // ноль живых ошибок
+  final int liveErrors;
+  final int lastErrorAgeMs; // возраст последней живой ошибки; -1 = нет
+  final int liveWins; // только fastest
+  final bool current; // текущая цель группы
+  final int lastRttMs; // последняя успешная проба; 0 = не мерялся
+
+  factory CcDnsGroupMember.fromMap(Map<String, dynamic> m) => CcDnsGroupMember(
+    tag: m['tag']?.toString() ?? '',
+    serverType: m['serverType']?.toString() ?? '',
+    clean: m['clean'] == true,
+    liveErrors: _int(m['liveErrors']),
+    lastErrorAgeMs: _int(m['lastErrorAgeMs'], fallback: -1),
+    liveWins: _int(m['liveWins']),
+    current: m['current'] == true,
+    lastRttMs: _int(m['lastRttMs']),
+  );
+}
+
+/// §312 — снапшот состояния DNS-группы из `getDNSGroups` (kernel SPEC 035).
+class CcDnsGroup {
+  const CcDnsGroup({
+    required this.tag,
+    required this.mode,
+    required this.current,
+    required this.members,
+  });
+
+  final String tag;
+  final String mode; // stable | fastest | parallel
+  final String current; // '' = ещё не выбиралась / parallel
+  final List<CcDnsGroupMember> members;
+
+  factory CcDnsGroup.fromMap(Map<String, dynamic> m) => CcDnsGroup(
+    tag: m['tag']?.toString() ?? '',
+    mode: m['mode']?.toString() ?? '',
+    current: m['current']?.toString() ?? '',
+    members: [
+      for (final e in (m['members'] as List<dynamic>? ?? const []))
+        if (e is Map) CcDnsGroupMember.fromMap(CcChannel._asMap(e)),
+    ],
+  );
 }
 
 /// §4.7 — правило из `getRules` (route+DNS).
@@ -745,11 +952,12 @@ class CcRule {
   final bool isDNS;
 
   factory CcRule.fromMap(Map<String, dynamic> m) => CcRule(
-        type: m['type']?.toString() ?? '',
-        payload: m['payload']?.toString() ?? '',
-        action: m['action']?.toString() ?? '',
-        isDNS: m['isDNS'] == true,
-      );
+    type: m['type']?.toString() ?? '',
+    payload: m['payload']?.toString() ?? '',
+    action: m['action']?.toString() ?? '',
+    isDNS: m['isDNS'] == true,
+  );
 }
 
-int _int(Object? v) => v is int ? v : (v is num ? v.toInt() : 0);
+int _int(Object? v, {int fallback = 0}) =>
+    v is int ? v : (v is num ? v.toInt() : fallback);

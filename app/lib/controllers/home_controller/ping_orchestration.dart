@@ -22,7 +22,7 @@ mixin _PingMixin on ChangeNotifier {
   Future<void> runNodeUrltest(String nodeTag) async {
     if (!_state.tunnelUp) return;
     // §201 — block дропает трафик: urltest всегда ERR, мерить нечего.
-    if (_state.configModel[nodeTag]?.type == 'block') return;
+    if (_state.activeModel[nodeTag]?.type == 'block') return; // §311 — срез ядра
     final pingBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '…';
     _emit(_state.copyWith(pingBusy: pingBusy));
     final group = _state.selectedGroup;
@@ -41,6 +41,7 @@ mixin _PingMixin on ChangeNotifier {
         _emit(_state.copyWith(
             lastDelay: nextDelay, pingBusy: nextBusy, lastError: msg));
         _addDebug(DebugSource.app, msg.renderEn());
+        _rescueGroupsSelecting(nodeTag);
       }
     } catch (e) {
       final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = -1;
@@ -49,6 +50,28 @@ mixin _PingMixin on ChangeNotifier {
       _emit(_state.copyWith(
           lastDelay: nextDelay, pingBusy: nextBusy, lastError: msg));
       _addDebug(DebugSource.app, msg.renderEn());
+      _rescueGroupsSelecting(nodeTag);
+    }
+  }
+
+  /// §308 — фейл единичного пинга узла, который сейчас ВЫБРАН какой-то
+  /// urltest-группой = эта группа маршрутизирует трафик в мёртвый узел.
+  /// Форсим групповой URLTest (тест всех членов + переселект в ядре), чтобы
+  /// группа слезла с него сразу, а не на interval-тике ядра (дефолт шаблона
+  /// 15m; тик к тому же стоит при screen-off). Для прочих узлов — no-op:
+  /// группа не на них, а force-прогон будит suspended-эндпоинты (SPEC 020),
+  /// впустую гонять его нельзя. Mass-ping сюда не ходит — его хвост
+  /// (`_runAllUrltestGroups`) и так прогоняет все urltest-группы.
+  /// Шторм от повторных фейлов гасит ядро: `checking`-CAS делает повторный
+  /// прогон при уже идущем тихим no-op.
+  void _rescueGroupsSelecting(String nodeTag) {
+    if (!_state.tunnelUp) return;
+    for (final g in _state.urltestGroups) {
+      if (g.selected == nodeTag) {
+        _addDebug(DebugSource.app,
+            'Ping failed for "$nodeTag" — selected by ${g.tag} → group URLTest');
+        unawaited(runGroupUrltest(g.tag));
+      }
     }
   }
 
@@ -176,33 +199,37 @@ mixin _PingMixin on ChangeNotifier {
     });
   }
 
-  /// Форсит URLTest на группе через CommandClient `urlTestOutbound(groupTag)`
-  /// (§122). Для URLTest-аутбаунда ядро само перебирает членов и обновляет
-  /// `selected`; groups-стрим приедет с новым выбором. Per-group resolved
-  /// url/timeout (§040).
+  /// Форсит URLTest на группе через групповой RPC `urlTestGroup` (§308):
+  /// ядро force-тестит ВСЕХ членов конфиг-URL'ом группы и само делает
+  /// переселект на живой узел (+interrupt зависших соединений группы).
+  /// Fire-and-forget — RPC возвращается сразу, новый `selected` приедет
+  /// groups-стримом (`_applyGroups`), делеи членов лягут в history ядра;
+  /// поэтому ни `reloadProxies()` (пере-применение УСТАРЕВШЕГО снапшота),
+  /// ни bump `pingBatchGen` (sort-источник `lastDelay` этот путь не
+  /// наполняет) после вызова не нужны.
+  ///
+  /// До §308 тут по ошибке звался per-node `urlTestOutbound(groupTag)` —
+  /// один замер СКВОЗЬ текущий выбор группы, без переселекта: мёртвый выбор
+  /// висел до interval-тика ядра («Auto держит нерабочий сервер»).
   Future<void> runGroupUrltest(String groupTag) async {
     if (!_state.tunnelUp) return;
-    final url = pingUrlFor(groupTag);
-    try {
-      final r = await _cc.urlTestOutbound(groupTag,
-          link: url, timeoutMs: pingTimeoutFor(groupTag));
-      if (!r.ok) throw FormatException(r.error);
-      _addDebug(DebugSource.app, 'Group URLTest done: $groupTag → $url');
-      await reloadProxies();
-      // §070: bump cache gen — re-sort после group URLtest (latency мог
-      // существенно измениться).
-      _emit(_state.copyWith(pingBatchGen: _state.pingBatchGen + 1));
-    } catch (e) {
-      final msg = _formatProbeError(groupTag, url, e);
+    final ok = await _cc.urlTestGroup(groupTag);
+    if (ok) {
+      _addDebug(DebugSource.app,
+          'Group URLTest started: $groupTag (core tests all members + reselect)');
+    } else {
+      final msg =
+          ProbeErrorMsg(groupTag, '', RawMsg('group URLTest RPC failed'));
       _addDebug(DebugSource.app, msg.renderEn());
       _emit(_state.copyWith(lastError: msg));
     }
   }
 
-  /// Mass URLTest на всех нодах активной группы — параллельные `clash.delay`
-  /// с concurrency cap (`_pingConcurrency`). Не путать с [runGroupUrltest]
-  /// (там единый clash `/group/<tag>/delay`). Использует per-group resolved
-  /// url/timeout (§040). Повторный вызов во время running — cancel.
+  /// Mass URLTest на всех нодах активной группы — параллельные
+  /// `urlTestOutbound` с concurrency cap (`_pingConcurrency`). Не путать с
+  /// [runGroupUrltest] (§308: единый групповой RPC, тест+переселект в ядре).
+  /// Использует per-group resolved url/timeout (§040). Повторный вызов во
+  /// время running — cancel.
   ///
   /// §078: [order] — optional explicit порядок тэгов для пинга. Если не
   /// передан, iterates `_state.nodes` (raw config-order, backward-compat).
@@ -220,7 +247,7 @@ mixin _PingMixin on ChangeNotifier {
     // §201 — block-ноду не пингуем: она дропает любой коннект, urltest всегда
     // вернёт ERR. Исключаем из набора (и из single-node, и из mass-ping).
     final nodes = List<String>.from(order ?? _state.nodes)
-        .where((t) => _state.configModel[t]?.type != 'block')
+        .where((t) => _state.activeModel[t]?.type != 'block') // §311
         .toList();
     if (nodes.isEmpty) return;
 
@@ -304,9 +331,11 @@ mixin _PingMixin on ChangeNotifier {
       // (notifyListeners выполнится внутри _emit.)
       _emit(_state.copyWith(pingBatchGen: _state.pingBatchGen + 1));
 
-      // Форсим URLTest на всех urltest-группах (auto и т.п.) —
-      // без этого sing-box держит `now` пустым до первого interval-тика
-      // (дефолт 5m). Использует pingUrl/pingTimeout из mass-ping'а.
+      // §308 — форсим ГРУППОВОЙ URLTest на всех urltest-группах (auto и
+      // т.п.): свежая mass-ping-история выбор группы НЕ меняет (ядро
+      // пересчитывает его только собственным прогоном), поэтому ядро
+      // тестит членов заново и делает переселект. Дубль-пробы — цена
+      // переселекта на текущем ядре.
       unawaited(_runAllUrltestGroups(epoch));
     }
   }
@@ -325,19 +354,37 @@ mixin _PingMixin on ChangeNotifier {
     // §175 — весь пинг-прогон (ноды + urltest-группы) завершён → освобождаем
     // pingClient (lazy lifecycle: short-lived conn на прогон). Следующий прогон
     // поднимет свежий. При cancel — disconnect уже сделан в cancelMassPing.
+    // §308: уже ЗАПУЩЕННЫЕ групповые прогоны это не отменяет — они живут в
+    // ядре (boxService.ctx), а не в per-call ctx pingClient'а; epoch-guard
+    // выше прерывает лишь запуск следующих групп.
     if (_massPingEpoch == epoch) unawaited(_cc.cancelPing());
   }
 
   /// §286 — единая детерминированная остановка ВСЕГО пробирования. Дёргается из
-  /// каждого «активность пора гасить» перехода: disconnected/revoked
-  /// (`_handleStatusEvent`), смерть туннеля (`_onTunnelDead`), сворачивание
-  /// приложения (`onAppPaused`). Гасит три независимых источника:
+  /// «сессия мертва» переходов: disconnected/revoked (`_handleStatusEvent`),
+  /// смерть туннеля (`_onTunnelDead`). Гасит три независимых источника:
   ///  1. mass-ping — epoch-bump + `_cc.cancelPing()` (внутри `cancelMassPing`);
   ///  2. auto-ping-таймер (5с после connect) — чтобы не выстрелил в мёртвую сессию;
   ///  3. активные folder-probe sweep'ы (`ProbeRunner`) через `ProbeLifecycle`.
   /// Идемпотентно: каждый источник сам no-op, если неактивен.
+  ///
+  /// Сворачивание приложения сюда НЕ входит — см. [haltBackgroundProbing].
   void haltAllProbing() {
     cancelMassPing();
+    _autoPingTimer?.cancel();
+    _autoPingTimer = null;
+    ProbeLifecycle.I.haltAll();
+  }
+
+  /// §307 — остановка пробирования на сворачивании приложения (`onAppPaused`).
+  /// В отличие от [haltAllProbing] **не трогает mass-ping**: запустить пинг
+  /// списка и уйти в другое приложение — штатный сценарий, а до §307 фон рвал
+  /// прогон и на resume пользователь видел частичные результаты (авто-перезапуска
+  /// нет). Гасим только то, что в фоне бессмысленно или вредно:
+  ///  1. auto-ping-таймер — отложенный выстрел по невидимому UI;
+  ///  2. folder-probe sweep'ы — длинные (100+ нод) прогоны по живому ядру,
+  ///     ради которых §286 и заводился (флуд `ccUrlTestOutbound` после стопа).
+  void haltBackgroundProbing() {
     _autoPingTimer?.cancel();
     _autoPingTimer = null;
     ProbeLifecycle.I.haltAll();
