@@ -284,6 +284,9 @@ GET /files/local?name=<n>                      Whitelisted internal-storage file
                                                CrashReport-lxbox.log[.old] — Go panics of the core). `/files/external` — legacy alias.
 GET /files/crash/list                          Archived core crash reports: [{name, size, mtime}], newest first
 GET /files/crash?name=<n>                      Body of an archived crash report
+GET /files/oom/list                            Core OOM snapshots: [{name, size, mtime, memory_usage, ...}], newest first
+GET /files/oom?name=<n>[&file=<f>]             File of an OOM snapshot; default metadata.json,
+                                               &file=heap.pb|allocs.pb|goroutine.pb|go.log|configuration.json
 
 === Traffic Profiler (system-wide) ===
 
@@ -503,6 +506,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/files/local', 'params': {'name': 'cache.db|stderr.log|CrashReport-lxbox.log'}, 'description': 'Whitelisted internal-storage files (filesDir); CrashReport-lxbox.log[.old] = Go panics of the core (§316). `/files/external` — legacy alias.'},
     {'method': 'GET', 'path': '/files/crash/list', 'description': 'Archived core crash reports [{name,size,mtime}], newest first (§316)'},
     {'method': 'GET', 'path': '/files/crash', 'params': {'name': '<file>'}, 'description': 'Body of an archived core crash report (§316)'},
+    {'method': 'GET', 'path': '/files/oom/list', 'description': 'Core OOM snapshots [{name,size,mtime,memory_usage,heap_inuse,num_goroutine}], newest first (§318)'},
+    {'method': 'GET', 'path': '/files/oom', 'params': {'name': '<snapshot>', 'file': 'metadata.json|heap.pb|allocs.pb|go.log'}, 'description': 'File of an OOM snapshot; default metadata.json (§318)'},
     // Profiler (system-wide)
     {'method': 'POST', 'path': '/profiler/live/start', 'description': 'startGlobalRecording (system-wide). Idempotent.'},
     {'method': 'POST', 'path': '/profiler/live/stop', 'description': 'stopGlobalRecording. Idempotent.'},

@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../../oom_reports.dart'
+    show kOomArchiveDir, kOomMetaName, OomReports;
 import '../../rule_set_downloader.dart';
 import '../../stderr_reader.dart'
     show kCrashArchiveDir, kCrashReportBaseName, kCrashTraceName, CrashReports;
@@ -26,6 +28,9 @@ Future<DebugResponse> filesHandler(DebugRequest req, DebugContext ctx) async {
     // §316 — архив краш-репортов ядра (ротация делается самим ядром).
     '/files/crash/list' => _crashList(),
     '/files/crash' => _crashFile(req),
+    // §318 — OOM-снимки ядра: те же две операции над вторым архивом.
+    '/files/oom/list' => _oomList(),
+    '/files/oom' => _oomFile(req),
     _ => throw NotFound('files path: ${req.path}'),
   };
 }
@@ -131,6 +136,43 @@ Future<DebugResponse> _crashFile(DebugRequest req) async {
       ? File('$root/${inner ?? kCrashTraceName}')
       : File(root);
   if (!await f.exists()) throw NotFound('crash report: $name');
+  final bytes = await f.readAsBytes();
+  return BytesResponse(bytes, filename: '$name-${f.uri.pathSegments.last}');
+}
+
+/// §318 — OOM-снимки ядра: `[{name, size, mtime, ...memstats}]`, новые
+/// первыми. `size` — размер ВСЕГО каталога: вес несут pprof-профили.
+///
+/// Пустой список (а не 404) при отсутствии папки: «killer не срабатывал» —
+/// валидное состояние, а не ошибка запроса.
+Future<DebugResponse> _oomList() async {
+  final reports = await OomReports.list();
+  return JsonResponse([
+    for (final r in reports)
+      {
+        'name': r.name,
+        'size': r.size,
+        'mtime': r.mtime.toUtc().toIso8601String(),
+        if (r.coreVersion != null) 'core_version': r.coreVersion,
+        if (r.memoryUsage != null) 'memory_usage': r.memoryUsage,
+        if (r.heapInuse != null) 'heap_inuse': r.heapInuse,
+        if (r.numGoroutine != null) 'num_goroutine': r.numGoroutine,
+      },
+  ]);
+}
+
+/// §318 — файл OOM-снимка: по умолчанию `metadata.json`, конкретный —
+/// через `&file=` (`heap.pb`, `allocs.pb`, `go.log`, `configuration.json`,
+/// `connections.json`). Подпапка задаётся СЕРВЕРОМ, клиент передаёт только
+/// basename'ы (гейт `_assertSafeName`) — traversal невозможен по построению.
+Future<DebugResponse> _oomFile(DebugRequest req) async {
+  final name = req.requiredQuery('name');
+  _assertSafeName(name);
+  final inner = req.uri.queryParameters['file'];
+  if (inner != null) _assertSafeName(inner);
+  final base = await _nativeFilesDir();
+  final f = File('$base/$kOomArchiveDir/$name/${inner ?? kOomMetaName}');
+  if (!await f.exists()) throw NotFound('oom report: $name');
   final bytes = await f.readAsBytes();
   return BytesResponse(bytes, filename: '$name-${f.uri.pathSegments.last}');
 }

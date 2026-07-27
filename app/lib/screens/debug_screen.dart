@@ -11,6 +11,7 @@ import '../services/error_format.dart';
 import '../services/ui_helpers.dart';
 import 'app_settings_screen.dart';
 import 'crash_reports_screen.dart';
+import 'oom_reports_screen.dart';
 import 'debug/profiling_tab.dart';
 import '../services/l10n/locale_controller.dart';
 
@@ -84,14 +85,18 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
         DebugLevel.error => Colors.red,
       };
 
-  /// §316 — две ПОСТОЯННЫЕ вкладки. Раньше вкладка stderr появлялась только
+  /// §316 — ПОСТОЯННЫЕ вкладки. Раньше вкладка stderr появлялась только
   /// при непустом файле: пока канал был сломан, интерфейс просто молчал, и
   /// понять «крашей нет или не читается» было нельзя. Теперь «Crashes» на
   /// месте всегда и сама говорит, что крашей не было.
+  ///
+  /// §318 — «OOM» отдельной вкладкой рядом: снимки памяти от oom-killer'а
+  /// ядра. В «Crashes» их не сливаем — паника и давление памяти это разные
+  /// события, в общем списке сигнал теряется.
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: AnimatedBuilder(
         animation: AppLog.I,
         builder: (context, _) {
@@ -100,15 +105,19 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
             appBar: AppBar(
               title: Text(getLocalText.s("Debug")),
               actions: _buildAppBarActions(filtered),
-              bottom: TabBar(tabs: [
+              // §318/§158 — четыре вкладки: `isScrollable` вместо равных
+              // долей, иначе на узких экранах «Profiling» обрезается.
+              bottom: TabBar(isScrollable: true, tabs: [
                 Tab(text: getLocalText.s("Log")),
                 Tab(text: getLocalText.s("Crashes")),
+                Tab(text: getLocalText.s("OOM")),
                 Tab(text: getLocalText.s("Profiling")),
               ]),
             ),
             body: TabBarView(children: [
               _buildLogTab(filtered),
               const CrashReportsTab(),
+              const OomReportsTab(),
               const ProfilingTab(),
             ]),
           );

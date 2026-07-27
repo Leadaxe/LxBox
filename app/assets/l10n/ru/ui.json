@@ -24,6 +24,14 @@
       "other": "%1$d сервера · %2$d выкл."
     }
   },
+  "%1$d snapshots · %2$s. Tap to inspect, share to get the pprof profiles.": {
+    "value": {
+      "one": "%1$d снимок · %2$s. Нажмите для просмотра, «Поделиться» — чтобы получить профили pprof.",
+      "few": "%1$d снимка · %2$s. Нажмите для просмотра, «Поделиться» — чтобы получить профили pprof.",
+      "many": "%1$d снимков · %2$s. Нажмите для просмотра, «Поделиться» — чтобы получить профили pprof.",
+      "other": "%1$d снимка · %2$s. Нажмите для просмотра, «Поделиться» — чтобы получить профили pprof."
+    }
+  },
   "%1$d · %2$d invalid": {
     "value": "%1$d · %2$d некорректных"
   },
@@ -50,6 +58,14 @@
   },
   "%d MB": {
     "value": "%d МБ"
+  },
+  "%d OOM reports deleted": {
+    "value": {
+      "one": "Удалён %d отчёт OOM",
+      "few": "Удалено %d отчёта OOM",
+      "many": "Удалено %d отчётов OOM",
+      "other": "Удалено %d отчёта OOM"
+    }
   },
   "%d active connections will be closed.": {
     "value": {
@@ -626,6 +642,9 @@
   "All channels": {
     "value": "Все каналы"
   },
+  "Allocated in total": {
+    "value": "Выделено всего"
+  },
   "Allow": {
     "value": "Разрешить"
   },
@@ -766,6 +785,9 @@
   },
   "Automation API": {
     "value": "API автоматизации"
+  },
+  "Available memory": {
+    "value": "Доступно памяти"
   },
   "A–Z": {
     "value": "А–Я"
@@ -1103,6 +1125,12 @@
   "Core": {
     "value": "Ядро"
   },
+  "Core log at snapshot time": {
+    "value": "Лог ядра на момент снимка"
+  },
+  "Core version": {
+    "value": "Версия ядра"
+  },
   "Could not clear DNS cache": {
     "value": "Не удалось очистить кэш DNS"
   },
@@ -1228,6 +1256,15 @@
   },
   "Delete DNS server?": {
     "value": "Удалить DNS-сервер?"
+  },
+  "Delete all": {
+    "value": "Удалить все"
+  },
+  "Delete all OOM reports": {
+    "value": "Удалить все отчёты OOM"
+  },
+  "Delete all OOM reports?": {
+    "value": "Удалить все отчёты OOM?"
   },
   "Delete channel": {
     "value": "Удалить канал"
@@ -1685,6 +1722,9 @@
   "Full URL contains your provider token — share only with people who have access to your subscription.": {
     "value": "Полный URL содержит токен вашего провайдера — делитесь им только с теми, у кого есть доступ к вашей подписке."
   },
+  "GC cycles": {
+    "value": "Циклов GC"
+  },
   "GET requires packet-up mode": {
     "value": "GET требует режима packet-up"
   },
@@ -1712,8 +1752,14 @@
   "Go panics of the sing-box core. Survives SIGABRT — tap a report to share it.": {
     "value": "Паники Go в ядре sing-box. Переживают SIGABRT — нажмите на отчёт, чтобы отправить его."
   },
+  "Go version": {
+    "value": "Версия Go"
+  },
   "Gone (410) — subscription deleted by provider": {
     "value": "Удалено (410) — провайдер удалил подписку"
+  },
+  "Goroutines": {
+    "value": "Горутины"
   },
   "Granted — real SSID/BSSID accessible": {
     "value": "Выдано — доступны настоящие SSID/BSSID"
@@ -1751,6 +1797,24 @@
   },
   "Health": {
     "value": "Работоспособность"
+  },
+  "Heap allocated": {
+    "value": "Выделено в куче"
+  },
+  "Heap from OS": {
+    "value": "Куча получена у ОС"
+  },
+  "Heap idle": {
+    "value": "Куча простаивает"
+  },
+  "Heap in use": {
+    "value": "Куча занята"
+  },
+  "Heap objects": {
+    "value": "Объектов в куче"
+  },
+  "Heap released": {
+    "value": "Куча возвращена ОС"
   },
   "Help": {
     "value": "Справка"
@@ -1982,6 +2046,9 @@
   "Last 100 events": {
     "value": "Последние 100 событий"
   },
+  "Last GC": {
+    "value": "Последний GC"
+  },
   "Last attempt: %s": {
     "value": "Последняя попытка: %s"
   },
@@ -2100,8 +2167,14 @@
   "Memory limit": {
     "value": "Лимит памяти"
   },
+  "Memory snapshots taken by the core when it approached its memory limit.": {
+    "value": "Снимки памяти, сделанные ядром при приближении к лимиту памяти."
+  },
   "Merge with existing (recommended)": {
     "value": "Объединить с текущими (рекомендуется)"
+  },
+  "Metadata is missing or unreadable.": {
+    "value": "Метаданные отсутствуют или не читаются."
   },
   "Mode": {
     "value": "Режим"
@@ -2181,8 +2254,14 @@
   "New value": {
     "value": "Новое значение"
   },
+  "Next GC at": {
+    "value": "Следующий GC при"
+  },
   "No DNS rules. Add user rules manually, or enable presets / template defaults.": {
     "value": "DNS-правил нет. Добавьте свои правила вручную или включите пресеты / шаблонные правила."
+  },
+  "No OOM reports": {
+    "value": "Отчётов OOM нет"
   },
   "No Wi-Fi conditions — rule is active on every network.": {
     "value": "Условий Wi-Fi нет — правило активно в любой сети."
@@ -2375,6 +2454,9 @@
         "value": "OK"
       }
     }
+  },
+  "OOM": {
+    "value": "OOM"
   },
   "OR": {
     "value": "ИЛИ"
@@ -2611,6 +2693,9 @@
   "Private source IP": {
     "value": "Приватный IP источника"
   },
+  "Process memory (RSS)": {
+    "value": "Память процесса (RSS)"
+  },
   "Profile was empty (timeout?).": {
     "value": "Профиль оказался пустым (тайм-аут?)."
   },
@@ -2703,6 +2788,9 @@
   },
   "Recommended. Protects the local proxy port.": {
     "value": "Рекомендуется. Защищает локальный порт прокси."
+  },
+  "Recorded at": {
+    "value": "Записано"
   },
   "Recording system-wide events": {
     "value": "Идёт запись общесистемных событий"
@@ -2848,6 +2936,9 @@
   },
   "Required for Wi-Fi-based routing rules. Tap to grant.": {
     "value": "Нужно для правил маршрутизации по Wi-Fi. Нажмите, чтобы выдать."
+  },
+  "Reserved from OS": {
+    "value": "Зарезервировано у ОС"
   },
   "Reset": {
     "value": "Сбросить"
@@ -3135,6 +3226,9 @@
   "Share subscription URL": {
     "value": "Поделиться URL подписки"
   },
+  "Share the OOM report": {
+    "value": "Поделиться отчётом OOM"
+  },
   "Share the crash report": {
     "value": "Поделиться отчётом о падении"
   },
@@ -3219,6 +3313,9 @@
     "value": "Тест скорости"
   },
   "Stable — stick to one until it fails": "Stable — держится за один, пока тот не сбоит",
+  "Stack in use": {
+    "value": "Стек занят"
+  },
   "Standalone servers": {
     "value": "Отдельные серверы"
   },
@@ -3449,6 +3546,9 @@
   "The core crashed last session — tap to share the report": {
     "value": "В прошлой сессии упало ядро — нажмите, чтобы отправить отчёт"
   },
+  "The core has not hit its memory limit. Snapshots appear here only when the OOM killer fires.": {
+    "value": "Ядро не упиралось в лимит памяти. Снимки появляются здесь только при срабатывании OOM killer."
+  },
   "The core has not panicked. Note that this channel only covers Go panics — native crashes and kills by the system are not recorded here.": {
     "value": "Ядро не паниковало. Учтите: сюда попадают только паники Go — нативные падения и убийства системой здесь не фиксируются."
   },
@@ -3466,6 +3566,9 @@
   },
   "This folder (%d)": {
     "value": "Эта папка (%d)"
+  },
+  "This frees %s. Memory profiles cannot be recovered afterwards.": {
+    "value": "Освободится %s. Восстановить профили памяти после удаления нельзя."
   },
   "This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges require a full VPN restart to apply (Android creates the tun interface only at start).": {
     "value": "Это разделение туннеля на уровне ОС: оно определяет, какие приложения вообще видят VPN-туннель — пакеты исключённых приложений идут напрямую через мобильную сеть или Wi-Fi, минуя sing-box.\n\n• Выключено — все приложения используют VPN (по умолчанию)\n• Белый список — через VPN идут ТОЛЬКО перечисленные приложения, остальные в обход\n• Чёрный список — перечисленные приложения идут в обход VPN, остальные через туннель\n\nВажно: приложения из белого списка по-прежнему проходят через обычные правила маршрутизации. Приложения в обход туннеля для sing-box невидимы — правила с package_name их не поймают.\n\nИзменения требуют полного перезапуска VPN (Android создаёт tun-интерфейс только при старте)."
