@@ -102,7 +102,9 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
         return;
       }
       // §117 задача 4b: для форменных режимов (UDP/DoT/DoH) адрес обязателен.
+      // §312: КРОМЕ группы — у неё вместо адреса участники (`isGroup`).
       if (_ctrl.serverMode != null &&
+          !_ctrl.isGroup &&
           _ctrl.addressCtrl.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(getLocalText.s("Server address is required"))),
