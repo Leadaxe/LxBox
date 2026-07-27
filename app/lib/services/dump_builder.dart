@@ -9,6 +9,7 @@ import 'app_log.dart';
 import 'debug/debug_registry.dart';
 import 'exit_info_reader.dart';
 import 'logcat_reader.dart';
+import 'oom_reports.dart';
 import 'settings_storage.dart';
 import 'stderr_reader.dart';
 import '../vpn/box_vpn_client.dart';
@@ -70,6 +71,9 @@ class DumpBuilder {
     // только ТЕКУЩИЙ репорт; архив ядро складывает в `crash_reports/` и
     // раньше в пак не попадал вовсе.
     final crashArchive = await _crashArchive();
+    // §318 — снимки oom-killer'а ядра. Второй автоматический канал улик по
+    // памяти: снят самим ядром в момент проблемы, до §318 в пак не попадал.
+    final oomReports = await _oomReports();
 
     final dump = <String, dynamic>{
       'generated_at': now.toIso8601String(),
@@ -80,6 +84,7 @@ class DumpBuilder {
       'debug_log': AppLog.I.entries.map(_entryJson).toList(),
       'stderr_log': stderr,
       'crash_archive': crashArchive,
+      'oom_reports': oomReports,
       'exit_info': exitInfo,
       'logcat_tail': logcatTail,
       'goroutines_stack': goroutinesStack,  // §207 — null если туннель не активен
@@ -129,6 +134,31 @@ class DumpBuilder {
         });
       }
       return out;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// §318 — OOM-снимки ядра: ТОЛЬКО метаданные, без тел.
+  ///
+  /// Тела не кладём осознанно: вес снимка — бинарные pprof-профили, в JSON
+  /// им не место, а `go.log` снимка дублирует общий лог. Кому нужны профили
+  /// — share конкретного снимка со вкладки OOM. Здесь важно другое: сам
+  /// факт, что killer срабатывал, и цифры памяти в этот момент.
+  static Future<List<Map<String, Object?>>> _oomReports() async {
+    try {
+      return [
+        for (final r in await OomReports.list())
+          {
+            'name': r.name,
+            'mtime': r.mtime.toUtc().toIso8601String(),
+            'size': r.size,
+            if (r.coreVersion != null) 'core_version': r.coreVersion,
+            if (r.memoryUsage != null) 'memory_usage': r.memoryUsage,
+            if (r.heapInuse != null) 'heap_inuse': r.heapInuse,
+            if (r.numGoroutine != null) 'num_goroutine': r.numGoroutine,
+          },
+      ];
     } catch (_) {
       return const [];
     }

@@ -30,6 +30,26 @@ void main() {
       c.dispose();
     });
 
+    // v2.18.0-регрессия: сохранение группы падало с «Server address is
+    // required». Гейт в `_save()` требовал адрес при `serverMode != null`, а
+    // 'group' входит в kDnsServerModes наравне с udp/tls/https — при том что
+    // форма для группы поле адреса вообще не рисует (там участники).
+    // Заполнить его было НЕЧЕМ → сохранить группу было нельзя вовсе.
+    test('isGroup отделяет группу от адресных режимов', () {
+      final g = newCtrl({'type': 'group', 'servers': ['a']});
+      expect(g.isGroup, isTrue);
+      expect(g.serverMode, 'group',
+          reason: 'группа остаётся формным режимом — гейт нельзя строить '
+              'на serverMode != null');
+      g.dispose();
+
+      for (final t in ['udp', 'tls', 'https']) {
+        final c = newCtrl({'type': t, 'server': '1.1.1.1'});
+        expect(c.isGroup, isFalse, reason: '$t — адресный режим');
+        c.dispose();
+      }
+    });
+
     test('дефолты не материализуются: stable → ключ mode уходит', () {
       final c = newCtrl({'type': 'group', 'servers': ['a'], 'mode': 'fastest'});
       c.setGroupMode('stable');

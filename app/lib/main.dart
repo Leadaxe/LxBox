@@ -14,6 +14,7 @@ import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/event_emitter.dart';
 import 'services/clash_log_pump.dart';
 import 'services/crash_banner_state.dart';
+import 'services/oom_reports.dart';
 import 'services/stderr_reader.dart';
 import 'services/subscription/subscription_identity.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
@@ -112,6 +113,14 @@ void main() async {
     unawaited(CrashReports.prune().then((removed) {
       if (removed > 0) AppLog.I.info('Pruned $removed old crash report(s)');
       return CrashBannerState.I.refresh();
+    }));
+    // §318 — OOM-снимки ядра. Ядро не ограничивает их ни числом, ни
+    // размером (один снимок ~750 КБ), и на тест-устройстве папка доросла до
+    // 427 МБ. Чистим на старте по той же причине, что и краши: в
+    // Diagnostics пользователь может не заходить годами. Баннера тут нет —
+    // OOM-снимок штатен и внимания не требует (§318 §3).
+    unawaited(OomReports.prune().then((removed) {
+      if (removed > 0) AppLog.I.info('Pruned $removed old OOM report(s)');
     }));
     // Первый read `appStartedAt` фиксирует момент старта для /device и /ping.
     // ignore: unused_local_variable
