@@ -66,6 +66,8 @@ Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token с�
 | `GET /logs?source=core&limit=500` | Sing-box internal logs (требует `core_logs_enabled=true`) |
 | `GET /files/crash/list` | §316 — **краши ядра**: архив Go-паник `[{name,size,mtime}]`, новые первыми. `[]` = крашей не было |
 | `GET /files/local?name=CrashReport-lxbox.log` | §316 — ТЕКУЩИЙ краш-репорт ядра (Go-паника с трейсом); `.old` — предыдущий |
+| `GET /files/oom/list` | §318 — **OOM-снимки ядра**: `[{name,size,mtime,memory_usage,heap_inuse,num_goroutine}]`, новые первыми. `size` — весь каталог (вес несут pprof-профили). `[]` = oom-killer не срабатывал |
+| `GET /files/oom?name=<из list>[&file=heap.pb]` | §318 — файл снимка; по умолчанию `metadata.json`. `&file=` — `heap.pb`/`allocs.pb`/`goroutine.pb`/`go.log`/`configuration.json`/`connections.json` |
 | `GET /logs?source=app&limit=300` | App-side warn/error |
 | `GET /logs?source=core&q=tinkoff&level=error,warning` | Фильтрация по substring + level |
 | `GET /diag/*` | §038 диагностика runtime'а (см. api/debug-api-reference.md) |
@@ -183,6 +185,41 @@ JNI-обвязке или в системном kill'е, а не в логике
 Ротацию архива делает приложение на старте — 10 свежих; **ядро размер
 папки не ограничивает**, оно только докладывает туда файлы при каждом
 `Setup()`.
+
+### OOM-снимки ядра (§318)
+
+Второй автоматический канал улик — по памяти, а не по паникам. Когда
+oom-killer ядра (§271, `SetupOptions.oomKillerEnabled`) видит превышение
+порога RSS, он складывает в `files/oom_reports/<ISO-таймстамп>/` полный
+набор pprof-профилей **в момент проблемы**: `heap.pb`, `allocs.pb`,
+`goroutine.pb`, `block.pb`, `mutex.pb`, `threadcreate.pb`, плюс
+`metadata.json` (memstats), `go.log`, `configuration.json`,
+`connections.json`.
+
+Ценность в том, что снято это **само, на устройстве пользователя** — не
+надо воспроизводить утечку под профайлером.
+
+```bash
+curl -s -H "$HDR" "$BASE/files/oom/list" | jq            # были ли снимки
+curl -s -H "$HDR" "$BASE/files/oom?name=<из list>" | jq  # memstats снимка
+curl -s -H "$HDR" "$BASE/files/oom?name=<из list>&file=heap.pb" -o heap.pb
+go tool pprof -top heap.pb
+```
+
+Что читать в `metadata.json`: `memoryUsage` (RSS) против `heapInuse` —
+расхождение означает рост вне Go-кучи (буферы, треды, нативное);
+`numGoroutine` при стабильной куче — утечка горутин; семизначный `numGC`
+при небольшой куче — GC-шторм у `GOMEMLIMIT` (§271).
+
+Без Debug API — **Debug → вкладка OOM**: список со временем, размером и
+RSS, тап открывает memstats + лог, share отдаёт каталог целиком с
+профилями. В `Share dump` уезжают только метаданные (поле `oom_reports`) —
+бинарным профилям в JSON не место.
+
+Ротация — приложение на старте, 5 свежих. **Ядро не ограничивает ни числом,
+ни размером**: дебаунс `writeOOMReport` (не чаще раза в час) живёт в поле
+инстанса сервиса и обнуляется на каждом рестарте туннеля. На тест-устройстве
+до §318 накопилось 575 снимков / 427 МБ.
 
 ## Анализ — что значит что
 

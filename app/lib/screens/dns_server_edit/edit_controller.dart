@@ -171,6 +171,13 @@ class DnsServerEditController extends ChangeNotifier {
     return t is String && kDnsServerModes.contains(t) ? t : null;
   }
 
+  /// §312 — это DNS-группа? У неё нет адреса: вместо `server` — список
+  /// участников. Отдельный признак, а не `serverMode != null`: `'group'`
+  /// входит в [kDnsServerModes] наравне с udp/tls/https, и гейт «адрес
+  /// обязателен для формного режима» ловил группу тоже (сохранение падало
+  /// с «Server address is required» — v2.18.0).
+  bool get isGroup => serverMode == 'group';
+
   /// Тип body как есть (для пометки «custom type — use JSON tab»).
   String get rawServerType => _body['type']?.toString() ?? '';
 

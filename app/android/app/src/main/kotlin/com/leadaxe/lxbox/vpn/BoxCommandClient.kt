@@ -511,17 +511,25 @@ class BoxCommandClient {
 
     /// §311 (kernel SPEC 036) — unary снапшот конфига РАБОТАЮЩЕГО ядра:
     /// канонический re-marshal запущенных options, захвачен ядром один раз на
-    /// старте, отдача — копия строки. null = недоступен: клиент down/paused,
-    /// ядро не-STARTED (FailedPrecondition), attached-путь (Unavailable),
-    /// сборка без with_lx_command (Unimplemented), ядро < lx.16-rc.3
-    /// (нет метода). Через незасыпающий pingClient (§209) — отдаёт и в фоне.
+    /// старте. null = недоступен: клиент down/paused, ядро не-STARTED
+    /// (FailedPrecondition), attached-путь (Unavailable), сборка без
+    /// with_lx_command (Unimplemented), ядро < lx.16-rc.3 (нет метода).
+    /// Через незасыпающий pingClient (§209) — отдаёт и в фоне.
+    ///
+    /// kernel SPEC 038: метод возвращает `RunningConfig` с геттером
+    /// `content()`, а НЕ голый `String`. Голая строка на android/arm64
+    /// убивала процесс ядра на каждом вызове (`bulkBarrierPreWrite:
+    /// unaligned arguments` — gomobile кладёт строку в packed-фрейм, тот
+    /// теряет 8-выравнивание, write-barrier делает throw). Это был не
+    /// теоретический риск: так падало ядро 26.07 (см. §316). Требует
+    /// ядро ≥ lx.17-rc.1.
     fun getRunningConfig(): String? {
         val client = ensurePingClient() ?: run {
             Log.w(TAG, "getRunningConfig: no command client (paused/down)")
             return null
         }
         return runCatching {
-            client.getRunningConfig().takeIf { it.isNotEmpty() }
+            client.getRunningConfig().content().takeIf { it.isNotEmpty() }
         }.getOrElse {
             // не-STARTED / старое ядро — НЕ ошибка приложения.
             Log.d(TAG, "getRunningConfig unavailable: ${it.message}")
