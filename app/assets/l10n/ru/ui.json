@@ -371,9 +371,6 @@
       }
     }
   },
-  "%s · current session": {
-    "value": "%s · текущая сессия"
-  },
   "%s copied": {
     "value": "Скопировано: %s"
   },
@@ -386,6 +383,10 @@
   "%s server": {
     "value": "Сервер %s"
   },
+  "%s · current session": {
+    "value": "%s · текущая сессия"
+  },
+  "%s · disabled — will be skipped": "%s · выключен — будет пропущен",
   "%s — tap to edit": {
     "value": "%s — нажмите, чтобы изменить"
   },
@@ -459,6 +460,9 @@
   },
   "192.168.1.1 / dns.example.com / https://… URL": {
     "value": "192.168.1.1 / dns.example.com / https://… URL"
+  },
+  "1–200": {
+    "value": "1–200"
   },
   "2. Paste it into the field above, or tap ⋮ → «Paste from clipboard», «Scan QR code».": {
     "value": "2. Вставьте её в поле выше или нажмите ⋮ → «Вставить из буфера обмена», «Сканировать QR-код»."
@@ -945,6 +949,9 @@
   "Config Editor": {
     "value": "Редактор конфига"
   },
+  "Config changed — restart VPN to apply": {
+    "value": "Конфиг изменён — перезапустите VPN, чтобы применить"
+  },
   "Config copied": {
     "value": "Конфиг скопирован"
   },
@@ -969,6 +976,9 @@
   },
   "Config is empty": {
     "value": "Конфиг пуст"
+  },
+  "Config loading error": {
+    "value": "Ошибка загрузки конфига"
   },
   "Config locked. UI actions will not rebuild config.": {
     "value": "Конфиг заблокирован. Действия в UI не пересобирают конфиг."
@@ -996,12 +1006,6 @@
       "many": "Конфиг пересобран: %d узлов",
       "other": "Конфиг пересобран: %d узла"
     }
-  },
-  "Config changed — restart VPN to apply": {
-    "value": "Конфиг изменён — перезапустите VPN, чтобы применить"
-  },
-  "Config loading error": {
-    "value": "Ошибка загрузки конфига"
   },
   "Config saved": {
     "value": "Конфиг сохранён"
@@ -1099,9 +1103,6 @@
   "Core": {
     "value": "Ядро"
   },
-  "Core panic logs — share one to report a crash.": {
-    "value": "Логи паник ядра — приложите один к сообщению о падении."
-  },
   "Could not clear DNS cache": {
     "value": "Не удалось очистить кэш DNS"
   },
@@ -1123,11 +1124,11 @@
   "Couldn't stop the VPN — try again.": {
     "value": "Не удалось остановить VPN — попробуйте ещё раз."
   },
+  "Crashes": {
+    "value": "Падения"
+  },
   "Create": {
     "value": "Создать"
-  },
-  "Crash reports": {
-    "value": "Отчёты о падениях"
   },
   "Created: %s": {
     "value": "Создана: %s"
@@ -1174,6 +1175,9 @@
   "DNS cache cleared — reloading": {
     "value": "Кэш DNS очищен — перезагрузка"
   },
+  "DNS group \"%1$s\": member \"%2$s\" of type \"%3$s\" is not allowed in a group.": "DNS-группа «%1$s»: член «%2$s» типа «%3$s» недопустим в группе.",
+  "DNS group \"%s\" has no usable members — enable or add at least one server.": "DNS-группа «%s» осталась без рабочих членов — включите или добавьте хотя бы один сервер.",
+  "DNS group loop: %s — fix group membership to start the VPN.": "Цикл DNS-групп: %s — исправьте состав групп, чтобы запустить VPN.",
   "DNS queries are failing": {
     "value": "DNS-запросы не проходят"
   },
@@ -1466,12 +1470,19 @@
   "Enabling this category lets other apps receive L×Box events.\n\nEvents do NOT contain subscription / config secrets — only labels (node tags, group names, status).": {
     "value": "Если включить эту категорию, другие приложения смогут получать события L×Box.\n\nСобытия НЕ содержат секретов подписок и конфига — только метки (теги узлов, имена групп, статус)."
   },
+  "Endpoint IP (optional)": {
+    "value": "Endpoint IP (необязательно)"
+  },
+  "Endpoint pool (JSON) — IP blocks, ports and SNI the generator draws from. Edit to test your own ranges.": {
+    "value": "Пул эндпоинтов (JSON) — блоки IP, порты и SNI, из которых генератор берёт узлы. Правьте, чтобы протестировать свои диапазоны."
+  },
   "Enter a valid http(s):// URL": {
     "value": "Введите корректный URL вида http(s)://"
   },
   "Error": {
     "value": "Ошибка"
   },
+  "Error TTL": "TTL ошибки",
   "Error: %s": {
     "value": "Ошибка: %s"
   },
@@ -1566,6 +1577,7 @@
   "Fastest": {
     "value": "Самый быстрый"
   },
+  "Fastest — race, then stick to the winner": "Fastest — гонка, затем липнет к победителю",
   "Feedback": {
     "value": "Отклик"
   },
@@ -1697,8 +1709,8 @@
   "Getting started": {
     "value": "С чего начать"
   },
-  "Go runtime stderr from libbox / sing-box. Survives SIGABRT — useful for diagnosing native crashes.": {
-    "value": "stderr Go-рантайма из libbox / sing-box. Переживает SIGABRT — полезен для диагностики нативных крашей."
+  "Go panics of the sing-box core. Survives SIGABRT — tap a report to share it.": {
+    "value": "Паники Go в ядре sing-box. Переживают SIGABRT — нажмите на отчёт, чтобы отправить его."
   },
   "Gone (410) — subscription deleted by provider": {
     "value": "Удалено (410) — провайдер удалил подписку"
@@ -1712,6 +1724,7 @@
   "Green up to, ms": {
     "value": "Зелёный до, мс"
   },
+  "Group": "Группа",
   "Grouping": {
     "value": "Группировка"
   },
@@ -1899,6 +1912,10 @@
   "Invalid backup": {
     "value": "Некорректная резервная копия"
   },
+  "Invalid duration (e.g. 2m, 90s)": "Неверная длительность (напр. 2m, 90s)",
+  "Invalid pool JSON — check the structure.": {
+    "value": "Некорректный JSON пула — проверьте структуру."
+  },
   "Invalid port": {
     "value": "Некорректный порт"
   },
@@ -1917,9 +1934,6 @@
   "JSON": {
     "value": "JSON"
   },
-  "JSON, source and replacements": {
-    "value": "JSON, исходник и замены"
-  },
   "JSON copied": {
     "value": "JSON скопирован"
   },
@@ -1928,6 +1942,9 @@
   },
   "JSON outbound": {
     "value": "JSON outbound"
+  },
+  "JSON, source and replacements": {
+    "value": "JSON, исходник и замены"
   },
   "Junk traffic masquerades as a real protocol. Pick protocol/domain in Advanced.": {
     "value": "Мусорный трафик маскируется под настоящий протокол. Протокол и домен выбираются в разделе «Дополнительно»."
@@ -1952,6 +1969,9 @@
   },
   "Keeping all closed (tap for 30s window)": {
     "value": "Закрытые хранятся всегда (нажмите — окно 30 с)"
+  },
+  "Keeps the tunnel alive while idle so it doesn't rot to timeouts (default 25). 0 = off.": {
+    "value": "Держит туннель живым при простое, чтобы он не деградировал в таймауты (по умолчанию 25). 0 = выкл."
   },
   "Language": {
     "value": "Язык"
@@ -1979,6 +1999,9 @@
   },
   "Lazy sleep": {
     "value": "Ленивый сон"
+  },
+  "Leave IP empty to use the server from registration. HTTP/3 only works on a few Cloudflare addresses, HTTP/2 works across the whole block.": {
+    "value": "Оставьте IP пустым, чтобы использовать сервер из регистрации. HTTP/3 работает лишь на нескольких адресах Cloudflare, HTTP/2 — на всём блоке."
   },
   "Leave empty for the default SNI": {
     "value": "Пусто — SNI по умолчанию"
@@ -2064,6 +2087,7 @@
   "Matches when traffic is on a selected network AND matches a selected L7 protocol.": {
     "value": "Совпадает, когда трафик идёт по выбранной сети И соответствует выбранному L7-протоколу."
   },
+  "Members": "Члены группы",
   "Members connect through their personal detours": {
     "value": "Члены папки подключаются через свои личные detour"
   },
@@ -2187,12 +2211,6 @@
   "No configurable variables": {
     "value": "Настраиваемых переменных нет"
   },
-  "No crash report for this session": {
-    "value": "За эту сессию отчёта о падении нет"
-  },
-  "No crash reports": {
-    "value": "Отчётов о падениях нет"
-  },
   "No connection to %s — check network or URL": {
     "value": "Нет соединения с %s — проверьте сеть или URL"
   },
@@ -2201,6 +2219,9 @@
   },
   "No connections.": {
     "value": "Соединений нет."
+  },
+  "No crash reports": {
+    "value": "Отчётов о падениях нет"
   },
   "No data — tap refresh above": {
     "value": "Нет данных — нажмите «Обновить» выше"
@@ -2229,6 +2250,7 @@
   "No nodes match. Check the path against a node's JSON.": {
     "value": "Совпадений нет. Сверьте путь с JSON узла."
   },
+  "No other DNS servers to add — create them first": "Других DNS-серверов нет — сначала создайте их",
   "No other servers in this folder": {
     "value": "В этой папке нет других серверов"
   },
@@ -2426,6 +2448,7 @@
   "PARAMETERS": {
     "value": "ПАРАМЕТРЫ"
   },
+  "Parallel — race every query": "Parallel — каждый запрос гонкой",
   "Params": {
     "value": "Параметры"
   },
@@ -2660,9 +2683,6 @@
   "Re-fetch live": {
     "value": "Запросить с сервера заново"
   },
-  "Re-read the crash report": {
-    "value": "Перечитать отчёт о падении"
-  },
   "Re-register (force new account)": {
     "value": "Перерегистрировать (новый аккаунт)"
   },
@@ -2799,9 +2819,6 @@
   "Replace all": {
     "value": "Заменить все"
   },
-  "Replacements": {
-    "value": "Замены"
-  },
   "Replace all (destructive)": {
     "value": "Заменить всё (необратимо)"
   },
@@ -2813,6 +2830,9 @@
   },
   "Replace the existing server with this one?": {
     "value": "Заменить существующий сервер этим?"
+  },
+  "Replacements": {
+    "value": "Замены"
   },
   "Request rejected (%d)": {
     "value": "Запрос отклонён (%d)"
@@ -3017,6 +3037,7 @@
   "Select server": {
     "value": "Показать выбранный сервер"
   },
+  "Selection mode": "Режим выбора",
   "Selector \"%1$s\" default \"%2$s\" is not in the options list.": {
     "value": "У селектора «%1$s» значение по умолчанию «%2$s» отсутствует в списке вариантов."
   },
@@ -3056,6 +3077,7 @@
   "Server not found": {
     "value": "Сервер не найден"
   },
+  "Server type": "Тип сервера",
   "Servers": {
     "value": "Серверы"
   },
@@ -3083,6 +3105,7 @@
   "Settings changed — tap to rebuild config": {
     "value": "Настройки изменены — нажмите, чтобы пересобрать конфиг"
   },
+  "Several servers behind one tag — survives a member failure": "Несколько серверов под одним тегом — переживает сбой члена",
   "Share": {
     "value": "Поделиться"
   },
@@ -3109,11 +3132,11 @@
   "Share masked": {
     "value": "Маскированный"
   },
-  "Share the crash report": {
-    "value": "Поделиться отчётом о падении"
-  },
   "Share subscription URL": {
     "value": "Поделиться URL подписки"
+  },
+  "Share the crash report": {
+    "value": "Поделиться отчётом о падении"
   },
   "Shared with the home screen ping": {
     "value": "Общие с пингом на главном экране"
@@ -3195,6 +3218,7 @@
   "Speed Test": {
     "value": "Тест скорости"
   },
+  "Stable — stick to one until it fails": "Stable — держится за один, пока тот не сбоит",
   "Standalone servers": {
     "value": "Отдельные серверы"
   },
@@ -3694,6 +3718,7 @@
   "Will be disabled": {
     "value": "Будет выключен"
   },
+  "Win TTL": "TTL победы",
   "Wipes existing data in selected categories.": {
     "value": "Стирает текущие данные в выбранных категориях."
   },
@@ -3790,9 +3815,6 @@
   "host:port of the Cloudflare peer. With obfuscation a random working IP:port is filled in — tap the dice to reroll, or type your own to pin a specific one.": {
     "value": "host:port пира Cloudflare. При обфускации подставляется случайный рабочий IP:port — нажмите на кубик, чтобы сменить, или впишите свой, чтобы закрепить конкретный."
   },
-  "Keeps the tunnel alive while idle so it doesn't rot to timeouts (default 25). 0 = off.": {
-    "value": "Держит туннель живым при простое, чтобы он не деградировал в таймауты (по умолчанию 25). 0 = выкл."
-  },
   "invalid": {
     "value": "некорректный"
   },
@@ -3882,6 +3904,7 @@
   "unknown": {
     "value": "неизвестно"
   },
+  "unknown server — will be skipped": "неизвестный сервер — будет пропущен",
   "used by %s": {
     "value": "используется: %s"
   },
@@ -3926,37 +3949,5 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
-  },
-  "1–200": {
-    "value": "1–200"
-  },
-  "Endpoint IP (optional)": {
-    "value": "Endpoint IP (необязательно)"
-  },
-  "Endpoint pool (JSON) — IP blocks, ports and SNI the generator draws from. Edit to test your own ranges.": {
-    "value": "Пул эндпоинтов (JSON) — блоки IP, порты и SNI, из которых генератор берёт узлы. Правьте, чтобы протестировать свои диапазоны."
-  },
-  "Invalid pool JSON — check the structure.": {
-    "value": "Некорректный JSON пула — проверьте структуру."
-  },
-  "Leave IP empty to use the server from registration. HTTP/3 only works on a few Cloudflare addresses, HTTP/2 works across the whole block.": {
-    "value": "Оставьте IP пустым, чтобы использовать сервер из регистрации. HTTP/3 работает лишь на нескольких адресах Cloudflare, HTTP/2 — на всём блоке."
-  },
-  "%s · disabled — will be skipped": "%s · выключен — будет пропущен",
-  "DNS group \"%1$s\": member \"%2$s\" of type \"%3$s\" is not allowed in a group.": "DNS-группа «%1$s»: член «%2$s» типа «%3$s» недопустим в группе.",
-  "DNS group \"%s\" has no usable members — enable or add at least one server.": "DNS-группа «%s» осталась без рабочих членов — включите или добавьте хотя бы один сервер.",
-  "DNS group loop: %s — fix group membership to start the VPN.": "Цикл DNS-групп: %s — исправьте состав групп, чтобы запустить VPN.",
-  "Error TTL": "TTL ошибки",
-  "Fastest — race, then stick to the winner": "Fastest — гонка, затем липнет к победителю",
-  "Group": "Группа",
-  "Invalid duration (e.g. 2m, 90s)": "Неверная длительность (напр. 2m, 90s)",
-  "Members": "Члены группы",
-  "No other DNS servers to add — create them first": "Других DNS-серверов нет — сначала создайте их",
-  "Parallel — race every query": "Parallel — каждый запрос гонкой",
-  "Selection mode": "Режим выбора",
-  "Server type": "Тип сервера",
-  "Several servers behind one tag — survives a member failure": "Несколько серверов под одним тегом — переживает сбой члена",
-  "Stable — stick to one until it fails": "Stable — держится за один, пока тот не сбоит",
-  "Win TTL": "TTL победы",
-  "unknown server — will be skipped": "неизвестный сервер — будет пропущен"
+  }
 }

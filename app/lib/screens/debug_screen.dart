@@ -8,9 +8,10 @@ import '../models/debug_entry.dart';
 import '../services/app_log.dart';
 import '../services/dump_builder.dart';
 import '../services/error_format.dart';
-import '../services/stderr_reader.dart';
 import '../services/ui_helpers.dart';
 import 'app_settings_screen.dart';
+import 'crash_reports_screen.dart';
+import 'debug/profiling_tab.dart';
 import '../services/l10n/locale_controller.dart';
 
 class DebugScreen extends StatefulWidget {
@@ -30,31 +31,10 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
   String _searchQuery = '';
   final _searchController = TextEditingController();
 
-  /// §038 MVP1 — содержимое `filesDir/stderr.log`. Грузится async в
-  /// initState; null означает «файл отсутствует/пуст» — в этом случае
-  /// TabBar не показываем (никакого следа от Go panic — нечего смотреть).
-  String? _stderrText;
-  bool _stderrLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadStderr();
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadStderr() async {
-    final text = await StderrReader.read();
-    if (!mounted) return;
-    setState(() {
-      _stderrText = text;
-      _stderrLoading = false;
-    });
   }
 
   static String _entriesToText(List<DebugEntry> entries) {
@@ -97,29 +77,6 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
     }
   }
 
-  /// §038 — поделиться файлом stderr.log напрямую (без обёртки в
-  /// Dump-pack). Stderr содержит Go panic-stacktrace и иногда имена
-  /// outbound'ов / host'ов, но не пароли.
-  Future<void> _shareStderr() async {
-    final p = await StderrReader.path();
-    if (!mounted) return;
-    if (p == null) {
-      showSnack(getLocalText.s("No crash report for this session"));
-      return;
-    }
-    try {
-      final ts = DateTime.now().toIso8601String();
-      // ignore: deprecated_member_use
-      await Share.shareXFiles(
-        [XFile(p, name: p.split('/').last, mimeType: 'text/plain')],
-        subject: 'L×Box stderr — $ts',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      showSnack(getLocalText.s("Share failed: %s", formatUserError(e).render()));
-    }
-  }
-
   Color _levelColor(DebugLevel l) => switch (l) {
         DebugLevel.debug => Colors.grey,
         DebugLevel.info => Colors.blue,
@@ -127,32 +84,37 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
         DebugLevel.error => Colors.red,
       };
 
+  /// §316 — две ПОСТОЯННЫЕ вкладки. Раньше вкладка stderr появлялась только
+  /// при непустом файле: пока канал был сломан, интерфейс просто молчал, и
+  /// понять «крашей нет или не читается» было нельзя. Теперь «Crashes» на
+  /// месте всегда и сама говорит, что крашей не было.
   @override
   Widget build(BuildContext context) {
-    final showStderrTab =
-        !_stderrLoading && _stderrText != null && _stderrText!.isNotEmpty;
-    final scaffold = AnimatedBuilder(
-      animation: AppLog.I,
-      builder: (context, _) {
-        final filtered = _filteredEntries();
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(getLocalText.s("Debug")),
-            actions: _buildAppBarActions(filtered),
-            bottom: showStderrTab
-                // l10n-exempt: stderr is a stream name
-                ? TabBar(tabs: [Tab(text: getLocalText.s("Log")), const Tab(text: 'stderr')])
-                : null,
-          ),
-          body: showStderrTab
-              ? TabBarView(children: [_buildLogTab(filtered), _buildStderrTab()])
-              : _buildLogTab(filtered),
-        );
-      },
+    return DefaultTabController(
+      length: 3,
+      child: AnimatedBuilder(
+        animation: AppLog.I,
+        builder: (context, _) {
+          final filtered = _filteredEntries();
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(getLocalText.s("Debug")),
+              actions: _buildAppBarActions(filtered),
+              bottom: TabBar(tabs: [
+                Tab(text: getLocalText.s("Log")),
+                Tab(text: getLocalText.s("Crashes")),
+                Tab(text: getLocalText.s("Profiling")),
+              ]),
+            ),
+            body: TabBarView(children: [
+              _buildLogTab(filtered),
+              const CrashReportsTab(),
+              const ProfilingTab(),
+            ]),
+          );
+        },
+      ),
     );
-    return showStderrTab
-        ? DefaultTabController(length: 2, child: scaffold)
-        : scaffold;
   }
 
   List<DebugEntry> _filteredEntries() {
@@ -356,54 +318,4 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
     );
   }
 
-  /// §038 stderr-tab. Plain SelectableText в monospace + кнопки Refresh
-  /// (перечитывает) и Share (отдаёт файлы напрямую через share_plus).
-  Widget _buildStderrTab() {
-    final text = _stderrText ?? '';
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  getLocalText.s("Go runtime stderr from libbox / sing-box. Survives SIGABRT — useful for diagnosing native crashes."),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.refresh, size: 20),
-                tooltip: getLocalText.s("Re-read the crash report"),
-                onPressed: () async {
-                  setState(() => _stderrLoading = true);
-                  await _loadStderr();
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.ios_share, size: 20),
-                tooltip: getLocalText.s("Share the crash report"),
-                onPressed: _shareStderr,
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(12),
-            child: SelectableText(
-              text,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 11,
-                height: 1.3,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }
-
