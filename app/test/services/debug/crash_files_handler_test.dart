@@ -118,6 +118,46 @@ void main() {
           contains('goroutine 1'));
     });
 
+    // Реальная схема ядра: репорт — КАТАЛОГ с go.log/metadata/configuration.
+    // Прежний обход брал только файлы и отдавал [] при полном архиве
+    // (device-verified 27.07.2026).
+    test('репорт-каталог ядра виден в list и отдаётся по name', () async {
+      await writeFile('crash_reports/2026-07-26T22-26-00/go.log',
+          'goroutine 711 gp=0x4000 [running]:');
+      await writeFile('crash_reports/2026-07-26T22-26-00/metadata.json',
+          '{"coreVersion":"1.14.0-lx.16-rc.3"}');
+
+      final list = await filesHandler(get('/files/crash/list'), ctx());
+      final body = (list as JsonResponse).body as List;
+      expect(body, hasLength(1));
+      expect((body.first as Map)['name'], '2026-07-26T22-26-00');
+      expect((body.first as Map)['core_version'], '1.14.0-lx.16-rc.3');
+      expect((body.first as Map)['kind'], 'dir');
+
+      // По умолчанию отдаётся трейс.
+      final trace = await filesHandler(
+          get('/files/crash?name=2026-07-26T22-26-00'), ctx());
+      expect(String.fromCharCodes((trace as BytesResponse).bytes),
+          contains('goroutine 711'));
+
+      // Конкретный файл каталога — через &file=.
+      final meta = await filesHandler(
+          get('/files/crash?name=2026-07-26T22-26-00&file=metadata.json'),
+          ctx());
+      expect(String.fromCharCodes((meta as BytesResponse).bytes),
+          contains('coreVersion'));
+    });
+
+    test('traversal в &file= отвергается', () async {
+      await writeFile('crash_reports/2026-07-26T22-26-00/go.log', 'x');
+      await expectLater(
+        filesHandler(
+            get('/files/crash?name=2026-07-26T22-26-00&file=${Uri.encodeComponent("../../cache.db")}'),
+            ctx()),
+        throwsA(isA<BadRequest>()),
+      );
+    });
+
     test('несуществующее имя → 404', () async {
       await expectLater(
         filesHandler(get('/files/crash?name=ghost.log'), ctx()),

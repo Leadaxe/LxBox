@@ -122,6 +122,7 @@ class DumpBuilder {
           'name': r.name,
           'mtime': r.mtime.toUtc().toIso8601String(),
           'size': r.size,
+          if (r.coreVersion != null) 'core_version': r.coreVersion,
           if (truncated) 'truncated': true,
           'content':
               truncated ? content.substring(0, _crashBodyLimit) : content,

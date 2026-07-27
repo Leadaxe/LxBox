@@ -2,15 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../main.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
-import '../services/error_format.dart';
 import '../services/haptic_service.dart';
 import '../services/l10n/locale_controller.dart';
-import '../services/profile_dump_writer.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/subscription_identity.dart';
 import '../services/subscription/user_agent.dart';
@@ -18,7 +15,6 @@ import '../services/url_launcher.dart' as ul;
 import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import '../vpn/box_vpn_client.dart';
-import '../vpn/pprof_profile.dart';
 import 'app_settings_screen/app_settings_dialogs.dart';
 import 'app_settings_screen/widgets/automation_tab.dart';
 import 'app_settings_screen/widgets/diagnostics_tab.dart';
@@ -62,7 +58,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _loaded = false;
   // §207 — pprof capture in flight (goroutine dump / CPU profile). Guards
   // both buttons so a double-tap can't spin two servers on the same port.
-  bool _capturing = false;
 
   bool _debugEnabled = false;
   String _debugToken = '';
@@ -706,59 +701,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       onCoreLogsChanged: (val) => unawaited(_toggleCoreLogs(val)),
       onQuitApp: () => unawaited(_confirmQuitApp()),
       onAutoRecordWifiChanged: (val) => unawaited(_toggleAutoRecordWifi(val)),
-      capturing: _capturing,
-      onCaptureProfile: (p) => unawaited(_captureProfile(p)),
     );
   }
 
-  /// §207 — снять pprof-слепок (libbox PProfServer) и открыть Share. Гейт:
-  /// туннель активен. `_capturing` дизейблит все кнопки (один сервер/порт).
-  /// `[p]` несёт path+query, имя файла, text/binary и blocking-секунды.
-  Future<void> _captureProfile(PprofProfile p) async {
-    if (_capturing) return;
-    if (!(await _vpn.getVpnStatus()).isUp) {
-      _diagSnack(getLocalText.s("VPN must be running to capture a profile."));
-      return;
-    }
-    setState(() => _capturing = true);
-    if (p.blockingSeconds > 0) {
-      _diagSnack(getLocalText.s("Profiling for %ds…", p.blockingSeconds));
-    }
-    try {
-      final bytes = await _vpn.pprofRaw(p.pathAndQuery,
-          blockingSeconds: p.blockingSeconds);
-      if (bytes.isEmpty) {
-        _diagSnack(getLocalText.s("Profile was empty (timeout?)."));
-        return;
-      }
-      final path = await ProfileDumpWriter.writeProfile(p, bytes);
-      final name = path.split('/').last;
-      // ignore: deprecated_member_use
-      await Share.shareXFiles(
-        [
-          XFile(path,
-              name: name,
-              mimeType: p.isText ? 'text/plain' : 'application/octet-stream')
-        ],
-        text: p.isText
-            ? 'L×Box ${p.label}'
-            : 'L×Box ${p.label} — analyze with: go tool pprof $name',
-        subject: name,
-      );
-    } catch (e) {
-      _diagSnack(getLocalText.s(
-          "Capture failed: %s", formatUserError(e).render()));
-    } finally {
-      if (mounted) setState(() => _capturing = false);
-    }
-  }
-
-  void _diagSnack(String text) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text), duration: const Duration(seconds: 2)),
-    );
-  }
 
   /// §051 Phase 3 — toggle для auto-record. Сразу sync'ит state в native
   /// observer (start/stop NetworkCallback). Существующая история не

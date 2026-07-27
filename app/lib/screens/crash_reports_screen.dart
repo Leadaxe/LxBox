@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../services/crash_share.dart';
@@ -6,25 +8,28 @@ import '../services/l10n/locale_controller.dart';
 import '../services/stderr_reader.dart';
 import '../services/ui_helpers.dart';
 
-/// §316 — история Go-паник ядра: список файлов, тап = поделиться.
+/// §316 — вкладка «Crashes» на экране Debug: история Go-паник ядра.
 ///
 /// Показываем архив `crash_reports/` плюс текущий репорт, если он непуст
-/// (текущая сессия ещё не архивирована ядром — ядро перекладывает файл
+/// (текущая сессия ещё не архивирована ядром — оно перекладывает файл
 /// только на следующем `Setup()`).
 ///
 /// Оговорка (см. §3 спеки): `debug.SetCrashOutput` ловит ТОЛЬКО паники
 /// Go-рантайма. JNI-abort, нативный SIGSEGV вне Go и kill системой сюда не
 /// попадают — пустой список при наличии tombstone это сам по себе сигнал.
-class CrashReportsScreen extends StatefulWidget {
-  const CrashReportsScreen({super.key});
+class CrashReportsTab extends StatefulWidget {
+  const CrashReportsTab({super.key});
 
   @override
-  State<CrashReportsScreen> createState() => _CrashReportsScreenState();
+  State<CrashReportsTab> createState() => _CrashReportsTabState();
 }
 
-class _CrashReportsScreenState extends State<CrashReportsScreen>
-    with SnackHelper {
+class _CrashReportsTabState extends State<CrashReportsTab>
+    with SnackHelper, AutomaticKeepAliveClientMixin {
   List<CrashReportFile>? _reports;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -46,23 +51,38 @@ class _CrashReportsScreenState extends State<CrashReportsScreen>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final reports = _reports;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(getLocalText.s("Crash reports")),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: getLocalText.s("Refresh"),
-            onPressed: _load,
+    if (reports == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  getLocalText.s("Go panics of the sing-box core. Survives SIGABRT — tap a report to share it."),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 20),
+                tooltip: getLocalText.s("Refresh"),
+                onPressed: _load,
+              ),
+            ],
           ),
-        ],
-      ),
-      body: reports == null
-          ? const Center(child: CircularProgressIndicator())
-          : reports.isEmpty
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: reports.isEmpty
               ? _buildEmpty(context)
               : _buildList(context, reports),
+        ),
+      ],
     );
   }
 
@@ -107,13 +127,92 @@ class _CrashReportsScreenState extends State<CrashReportsScreen>
           subtitle: Text(
             r.isCurrent
                 ? getLocalText.s("%s · current session", formatBytes(r.size))
-                : formatBytes(r.size),
+                : r.coreVersion != null
+                    // Версия ядра в подписи: сразу видно, актуально ли
+                    // падение для текущей сборки.
+                    ? '${formatBytes(r.size)} · ${r.coreVersion}'
+                    : formatBytes(r.size),
             style: const TextStyle(fontSize: 12),
           ),
-          trailing: const Icon(Icons.ios_share, size: 20),
-          onTap: () => _share(r),
+          trailing: IconButton(
+            icon: const Icon(Icons.ios_share, size: 20),
+            tooltip: getLocalText.s("Share the crash report"),
+            onPressed: () => _share(r),
+          ),
+          // Тап открывает трейс: чаще нужно посмотреть, а не сразу отдать.
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => CrashReportViewScreen(report: r),
+            ),
+          ),
         );
       },
+    );
+  }
+}
+
+/// §316 — просмотр одного репорта: сам Go-трейс, monospace, с кнопкой share.
+class CrashReportViewScreen extends StatefulWidget {
+  const CrashReportViewScreen({super.key, required this.report});
+
+  final CrashReportFile report;
+
+  @override
+  State<CrashReportViewScreen> createState() => _CrashReportViewScreenState();
+}
+
+class _CrashReportViewScreenState extends State<CrashReportViewScreen>
+    with SnackHelper {
+  String? _text;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    String text;
+    try {
+      text = await File(widget.report.path).readAsString();
+    } catch (e) {
+      text = 'Failed to read: $e';
+    }
+    if (!mounted) return;
+    setState(() => _text = text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.report;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(formatDateTime(r.mtime)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.ios_share),
+            tooltip: getLocalText.s("Share the crash report"),
+            onPressed: () async {
+              final ok = await shareCrashReport(r);
+              if (!mounted || ok) return;
+              showSnack(getLocalText.s("Share failed: %s", r.name));
+            },
+          ),
+        ],
+      ),
+      body: _text == null
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: SelectableText(
+                _text!,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  height: 1.3,
+                ),
+              ),
+            ),
     );
   }
 }

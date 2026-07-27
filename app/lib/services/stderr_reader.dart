@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
@@ -16,10 +17,25 @@ const kCrashReportBaseName = 'CrashReport-lxbox.log';
 /// Размер архива ядро не ограничивает — ротацию делаем мы ([CrashReports.prune]).
 const kCrashArchiveDir = 'crash_reports';
 
+/// §316 — файл Go-трейса внутри каталога архивного репорта. Ядро кладёт
+/// каждое падение отдельным каталогом `crash_reports/<ISO-таймстамп>/`, а не
+/// одним файлом: `go.log` + `metadata.json` + `configuration.json`.
+const kCrashTraceName = 'go.log';
+
+/// §316 — метаданные репорта (`source`, `coreVersion`, `goVersion`,
+/// `crashedAt`) рядом с трейсом.
+const kCrashMetaName = 'metadata.json';
+
 /// §316 — сколько архивных репортов держим.
 const kCrashKeep = 10;
 
-/// Один краш-репорт: файл + метаданные для списка.
+/// Один краш-репорт: файл трейса + метаданные для списка.
+///
+/// **Архивный репорт — это КАТАЛОГ, а не файл.** Ядро складывает каждое
+/// падение в `crash_reports/<ISO-таймстамп>/` из трёх файлов:
+/// `go.log` (сам трейс), `metadata.json` (версия ядра, Go, время краха),
+/// `configuration.json` (конфиг на момент падения). [path] указывает на
+/// `go.log` — это то, что отдаём пользователю; [size] — его размер.
 class CrashReportFile {
   const CrashReportFile({
     required this.path,
@@ -27,15 +43,27 @@ class CrashReportFile {
     required this.mtime,
     required this.size,
     required this.isCurrent,
+    this.dirPath,
+    this.coreVersion,
   });
 
+  /// Путь к файлу трейса (`go.log` для архивного, сам репорт для текущего).
   final String path;
+
+  /// Имя для показа/share: таймстамп-каталог у архивного, имя файла у текущего.
   final String name;
   final DateTime mtime;
   final int size;
 
   /// Текущий (ещё не архивированный ядром) репорт активной сессии.
   final bool isCurrent;
+
+  /// Каталог архивного репорта (`null` у текущего) — нужен, чтобы отдать
+  /// весь пакет целиком, а не только трейс.
+  final String? dirPath;
+
+  /// Версия ядра из `metadata.json` — сразу видно, на какой сборке упало.
+  final String? coreVersion;
 }
 
 /// §038/§316 — read-only доступ к Go-паникам ядра.
@@ -123,22 +151,58 @@ class CrashReports {
     return out;
   }
 
+  /// Архивные репорты. Каждый — КАТАЛОГ `<таймстамп>/` с `go.log` внутри
+  /// (см. [CrashReportFile]). Записи без `go.log` пропускаем: это не репорт,
+  /// а мусор/недописанный каталог, и делать вид, что он есть, — врать.
+  ///
+  /// Поддержан и плоский файл прямо в `crash_reports/`: ранние сборки ядра
+  /// клали репорты так, и у части пользователей они ещё лежат.
   static Future<List<CrashReportFile>> _archive(String base) async {
     final dir = Directory('$base/$kCrashArchiveDir');
     if (!await dir.exists()) return const [];
     final out = <CrashReportFile>[];
     await for (final entity in dir.list(followLinks: false)) {
-      if (entity is! File) continue;
-      final stat = await entity.stat();
-      out.add(CrashReportFile(
-        path: entity.path,
-        name: entity.uri.pathSegments.last,
-        mtime: stat.modified,
-        size: stat.size,
-        isCurrent: false,
-      ));
+      final name = entity.uri.pathSegments
+          .lastWhere((s) => s.isNotEmpty, orElse: () => '');
+      if (entity is Directory) {
+        final log = File('${entity.path}/$kCrashTraceName');
+        if (!await log.exists()) continue;
+        final stat = await log.stat();
+        out.add(CrashReportFile(
+          path: log.path,
+          name: name,
+          mtime: stat.modified,
+          size: stat.size,
+          isCurrent: false,
+          dirPath: entity.path,
+          coreVersion: await _coreVersionOf(entity.path),
+        ));
+      } else if (entity is File) {
+        final stat = await entity.stat();
+        out.add(CrashReportFile(
+          path: entity.path,
+          name: name,
+          mtime: stat.modified,
+          size: stat.size,
+          isCurrent: false,
+        ));
+      }
     }
     return out;
+  }
+
+  /// `coreVersion` из `metadata.json` репорта; `null` если файла нет или он
+  /// не читается — метаданные приятны, но не обязательны для показа.
+  static Future<String?> _coreVersionOf(String dirPath) async {
+    try {
+      final f = File('$dirPath/$kCrashMetaName');
+      if (!await f.exists()) return null;
+      final j = jsonDecode(await f.readAsString());
+      if (j is Map && j['coreVersion'] is String) return j['coreVersion'];
+    } catch (_) {
+      // Битый JSON — не повод прятать сам репорт.
+    }
+    return null;
   }
 
   /// Оставляет [keep] свежих архивных репортов, остальные удаляет.
@@ -148,7 +212,7 @@ class CrashReports {
   /// на старте приложения, а не при открытии экрана: в Diagnostics юзер
   /// может не заходить годами.
   ///
-  /// Возвращает число удалённых файлов (для лога/тестов).
+  /// Возвращает число удалённых репортов (для лога/тестов).
   static Future<int> prune({int keep = kCrashKeep}) async {
     try {
       final base = await baseDir();
@@ -156,12 +220,19 @@ class CrashReports {
       if (archive.length <= keep) return 0;
       archive.sort((a, b) => b.mtime.compareTo(a.mtime));
       var removed = 0;
-      for (final f in archive.skip(keep)) {
+      for (final r in archive.skip(keep)) {
         try {
-          await File(f.path).delete();
+          // Репорт = каталог целиком (трейс + метаданные + конфиг); у
+          // legacy-репортов каталога нет, там удаляем сам файл.
+          final dir = r.dirPath;
+          if (dir != null) {
+            await Directory(dir).delete(recursive: true);
+          } else {
+            await File(r.path).delete();
+          }
           removed++;
         } catch (_) {
-          // Файл занят/исчез — не повод валить старт.
+          // Занят/исчез — не повод валить старт.
         }
       }
       return removed;
