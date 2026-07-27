@@ -1,8 +1,22 @@
 # §311 — Running config от ядра (клиентская часть SPEC 036)
 
 **Тип:** таска (bug-fix через новый kernel-RPC)
-**Статус:** реализовано, device-verified 26.07.2026
-**Ядро:** sing-box-lx [SPEC 036 GetRunningConfig](../../../../sing-box-lx/SPECS/TASKS/036-RUNNING_CONFIG_RPC/SPEC.md), AAR `v1.14.0-lx.16-rc.3`
+**Статус:** реализовано; работоспособно с ядра `v1.14.0-lx.17-rc.1`
+(device-verified 27.07.2026). На `lx.16-rc.3` и stable `lx.16` — **не
+работало**: см. «Ядро» ниже.
+**Ядро:** sing-box-lx [SPEC 036 GetRunningConfig](../../../../sing-box-lx/SPECS/TASKS/036-RUNNING_CONFIG_RPC/SPEC.md)
++ [SPEC 038](../../../../sing-box-lx/SPECS/TASKS/038-GOMOBILE_STRING_RETURN_FRAME_KILL/SPEC.md)
+(фикс), AAR `v1.14.0-lx.17-rc.1`
+
+> ⚠️ **SPEC 038.** Первая редакция RPC возвращала голый `string`, и это
+> **убивало процесс ядра на android/arm64 при каждом вызове** (`throw:
+> bulkBarrierPreWrite: unaligned arguments` — gomobile кладёт строку в
+> packed-фрейм, тот теряет 8-выравнивание, write-barrier делает fatal
+> throw). Фича была мертва в rc.3 и в stable `lx.16` — то есть **в
+> релизе v2.18.0 §311 фактически не работал**, хотя заметки утверждали
+> обратное. Так падало ядро 26.07 (три репорта, найдены каналом §316).
+> С `lx.17-rc.1` метод возвращает `RunningConfig` с геттером `content()`;
+> клиент правится в `BoxCommandClient.getRunningConfig()`.
 **Связано:** §309 (первая попытка, ревертнута — 5b3722e8/5f9655d4), §116 (плашка restart), §091 (`ParsedConfig`), §122 (CommandClient), §302/§307 (import-rules — типовой источник смены тегов)
 
 ---
@@ -170,7 +184,8 @@ native). Kotlin: `runCatching` + `Dispatchers.IO` (unary на main = ANR).
    `running_config_length` в `GET /state`
    ([handlers/config.dart](../../../app/lib/services/debug/handlers/config.dart),
    [serializers/home_state.dart](../../../app/lib/services/debug/serializers/home_state.dart)).
-8. `app/android/libbox.version` → `v1.14.0-lx.16-rc.3`.
+8. `app/android/libbox.version` → `v1.14.0-lx.17-rc.1` (SPEC 038; на
+   `lx.16*` метод фатален — см. шапку).
 9. Доки: debug-api-reference, DIAGNOSTICS, KERNEL (rc-история).
 
 ## 8. Секреты
