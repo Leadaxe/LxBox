@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
+import '../../../services/crash_banner_state.dart';
+import '../../../services/crash_share.dart';
 import '../../../services/haptic_service.dart';
 import '../home_dialogs.dart';
 import '../home_menus.dart';
@@ -58,6 +60,17 @@ class HomeControls extends StatelessWidget {
   final Future<void> Function() onRebuildAndReconnect;
   final Future<void> Function() onRebuildAndStart;
 
+  /// §316 — отдать краш-репорт и погасить плашку. Штамп пишем в любом
+  /// случае: пользователь плашку уже увидел, повторять на каждом запуске —
+  /// навязчиво, даже если share сорвался (файл никуда не делся, он есть
+  /// в Diagnostics → Crash reports).
+  Future<void> _shareCrash() async {
+    final report = CrashBannerState.I.pending;
+    if (report == null) return;
+    await shareCrashReport(report);
+    await CrashBannerState.I.markShown();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isConnecting = state.tunnel == TunnelStatus.connecting;
@@ -100,18 +113,28 @@ class HomeControls extends StatelessWidget {
           // §116 — единый banner-механизм: проекция состояния → BannerStack.
           // Три исторических плашки (settings_changed / restart / last_error)
           // + config_load_error деривятся в activeBanners.
-          BannerStack(
-            banners: activeBanners(
-              state,
-              configDirty: subController.configDirty,
-              busy: subController.busy,
-              actions: BannerActions(
-                onRebuild: () => unawaited(onRebuildAndClearDirty()),
-                // Не гасим restart на тап — если юзер отменит Stop-диалог,
-                // banner остаётся; гаснет реальным tunnel up↔down.
-                onConfirmStop: () =>
-                    confirmStop(context, controller, controller.state),
-                onClearError: errorTimerOnDismiss,
+          // §316 — плашка «ядро падало» приходит не из HomeState, а из
+          // CrashBannerState (файловая система + storage-отметка), поэтому
+          // подписка отдельная.
+          AnimatedBuilder(
+            animation: CrashBannerState.I,
+            builder: (context, _) => BannerStack(
+              banners: activeBanners(
+                state,
+                configDirty: subController.configDirty,
+                busy: subController.busy,
+                crashPending: CrashBannerState.I.pending != null,
+                actions: BannerActions(
+                  onRebuild: () => unawaited(onRebuildAndClearDirty()),
+                  // Не гасим restart на тап — если юзер отменит Stop-диалог,
+                  // banner остаётся; гаснет реальным tunnel up↔down.
+                  onConfirmStop: () =>
+                      confirmStop(context, controller, controller.state),
+                  onClearError: errorTimerOnDismiss,
+                  onShareCrash: () => unawaited(_shareCrash()),
+                  onDismissCrash: () =>
+                      unawaited(CrashBannerState.I.markShown()),
+                ),
               ),
             ),
           ),

@@ -9,14 +9,21 @@ void main() {
     onRebuild: () {},
     onConfirmStop: () {},
     onClearError: () {},
+    onShareCrash: () {},
+    onDismissCrash: () {},
   );
 
   Set<String> keys(
     HomeState s, {
     bool configDirty = false,
     bool busy = false,
+    bool crashPending = false,
   }) =>
-      activeBanners(s, configDirty: configDirty, busy: busy, actions: actions)
+      activeBanners(s,
+              configDirty: configDirty,
+              busy: busy,
+              crashPending: crashPending,
+              actions: actions)
           .map((b) => b.key)
           .toSet();
 
@@ -25,13 +32,36 @@ void main() {
     String key, {
     bool configDirty = false,
     bool busy = false,
+    bool crashPending = false,
   }) =>
-      activeBanners(s, configDirty: configDirty, busy: busy, actions: actions)
+      activeBanners(s,
+              configDirty: configDirty,
+              busy: busy,
+              crashPending: crashPending,
+              actions: actions)
           .firstWhere((b) => b.key == key);
 
   group('§116 activeBanners', () {
     test('пустое состояние → нет плашек', () {
       expect(keys(HomeState()), isEmpty);
+    });
+
+    // §316 — плашка про краш ядра приходит не из HomeState (файловая
+    // система + storage-отметка), поэтому передаётся отдельным флагом.
+    test('crashPending → core_crash с крестиком (dismiss = «больше не надо»)',
+        () {
+      expect(keys(HomeState(), crashPending: true), {'core_crash'});
+      final b = byKey(HomeState(), 'core_crash', crashPending: true);
+      expect(b.palette, BannerPalette.error);
+      expect(b.onTap, isNotNull, reason: 'тап = поделиться репортом');
+      expect(b.onDismiss, isNotNull, reason: 'крестик гасит плашку навсегда');
+      expect(b.autoDismiss, isNull,
+          reason: 'не таймер: гаснет только явным действием юзера');
+    });
+
+    test('core_crash сосуществует с остальными плашками', () {
+      final s = HomeState(configLoadError: true);
+      expect(keys(s, crashPending: true), {'core_crash', 'config_load_error'});
     });
 
     test('configDirty && !busy → settings_changed', () {

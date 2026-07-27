@@ -371,6 +371,9 @@
       }
     }
   },
+  "%s · current session": {
+    "value": "%s · текущая сессия"
+  },
   "%s copied": {
     "value": "Скопировано: %s"
   },
@@ -994,6 +997,12 @@
       "other": "Конфиг пересобран: %d узла"
     }
   },
+  "Config changed — restart VPN to apply": {
+    "value": "Конфиг изменён — перезапустите VPN, чтобы применить"
+  },
+  "Config loading error": {
+    "value": "Ошибка загрузки конфига"
+  },
   "Config saved": {
     "value": "Конфиг сохранён"
   },
@@ -1090,6 +1099,9 @@
   "Core": {
     "value": "Ядро"
   },
+  "Core panic logs — share one to report a crash.": {
+    "value": "Логи паник ядра — приложите один к сообщению о падении."
+  },
   "Could not clear DNS cache": {
     "value": "Не удалось очистить кэш DNS"
   },
@@ -1113,6 +1125,9 @@
   },
   "Create": {
     "value": "Создать"
+  },
+  "Crash reports": {
+    "value": "Отчёты о падениях"
   },
   "Created: %s": {
     "value": "Создана: %s"
@@ -2172,6 +2187,12 @@
   "No configurable variables": {
     "value": "Настраиваемых переменных нет"
   },
+  "No crash report for this session": {
+    "value": "За эту сессию отчёта о падении нет"
+  },
+  "No crash reports": {
+    "value": "Отчётов о падениях нет"
+  },
   "No connection to %s — check network or URL": {
     "value": "Нет соединения с %s — проверьте сеть или URL"
   },
@@ -2639,8 +2660,8 @@
   "Re-fetch live": {
     "value": "Запросить с сервера заново"
   },
-  "Re-read stderr.log": {
-    "value": "Перечитать stderr.log"
+  "Re-read the crash report": {
+    "value": "Перечитать отчёт о падении"
   },
   "Re-register (force new account)": {
     "value": "Перерегистрировать (новый аккаунт)"
@@ -3059,6 +3080,9 @@
   "Settings": {
     "value": "Настройки"
   },
+  "Settings changed — tap to rebuild config": {
+    "value": "Настройки изменены — нажмите, чтобы пересобрать конфиг"
+  },
   "Share": {
     "value": "Поделиться"
   },
@@ -3085,8 +3109,8 @@
   "Share masked": {
     "value": "Маскированный"
   },
-  "Share stderr.log files": {
-    "value": "Поделиться файлами stderr.log"
+  "Share the crash report": {
+    "value": "Поделиться отчётом о падении"
   },
   "Share subscription URL": {
     "value": "Поделиться URL подписки"
@@ -3397,6 +3421,12 @@
   },
   "The VPN will briefly reload to apply.": {
     "value": "VPN ненадолго перезагрузится, чтобы применить."
+  },
+  "The core crashed last session — tap to share the report": {
+    "value": "В прошлой сессии упало ядро — нажмите, чтобы отправить отчёт"
+  },
+  "The core has not panicked. Note that this channel only covers Go panics — native crashes and kills by the system are not recorded here.": {
+    "value": "Ядро не паниковало. Учтите: сюда попадают только паники Go — нативные падения и убийства системой здесь не фиксируются."
   },
   "The whole element as the provider sent it": {
     "value": "Элемент целиком, как прислал провайдер"
@@ -3839,9 +3869,6 @@
   },
   "srs": {
     "value": "srs"
-  },
-  "stderr is empty": {
-    "value": "stderr пуст"
   },
   "storage shape (lxbox_settings.json)": {
     "value": "формат хранения (lxbox_settings.json)"

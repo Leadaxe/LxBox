@@ -151,6 +151,8 @@ class SettingsStorage {
     'last_update_check_at',
     'last_known_version',
     'dismissed_update_version',
+    // Краш-репорты ядра (§316)
+    'shown_crash_stamp',
     // Debug API / config-lock (§031, §037)
     'config_locked_for_debug',
     'debug_enabled',
@@ -634,6 +636,19 @@ class SettingsStorage {
 
   static Future<void> setDismissedUpdateVersion(String tag) =>
       setVar('dismissed_update_version', tag);
+
+  // ---------------------------------------------------------------------------
+  // Краш-репорты ядра (§316) — отметка «про этот краш уже сказали».
+  // ---------------------------------------------------------------------------
+
+  /// Штамп (`имя@mtime`, см. `CrashReports.stamp`) последнего краш-репорта,
+  /// про который баннер уже показали. Привязка к КОНКРЕТНОМУ файлу, а не
+  /// счётчик показов: повторный запуск молчит, новый краш — говорит.
+  static Future<String> getShownCrashStamp() async =>
+      getVar('shown_crash_stamp', '');
+
+  static Future<void> setShownCrashStamp(String stamp) =>
+      setVar('shown_crash_stamp', stamp);
 
   // ---------------------------------------------------------------------------
   // Debug API (§031) — runtime toggle, bearer token, port.

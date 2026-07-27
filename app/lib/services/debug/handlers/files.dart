@@ -2,8 +2,9 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-import '../../../vpn/box_vpn_client.dart';
 import '../../rule_set_downloader.dart';
+import '../../stderr_reader.dart'
+    show kCrashArchiveDir, kCrashReportBaseName, CrashReports;
 import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
@@ -60,26 +61,14 @@ Future<DebugResponse> _srsFile(DebugRequest req, DebugContext ctx) async {
   return BytesResponse(bytes, filename: '$id.srs');
 }
 
-/// Allow-list файлов в internal app-scoped storage
-/// (`/data/data/<pkg>/files/`, `getApplicationDocumentsDirectory()`).
-/// Выдаём только sing-box core stderr и HTTP cache — полезно для
-/// диагностики. До task 027 файлы лежали в external storage; теперь
-/// internal по причине Knox/SELinux quirks на отдельных OEM.
-/// §316 — базовое имя краш-репорта ядра. Совпадает с `crashReportSource`
-/// из `BoxApplication` (`SetupOptions.crashReportSource = "lxbox"`): ядро
-/// редиректит Go-stderr в `workingPath/CrashReport-<source>.log`
-/// (`experimental/libbox/setup.go`), где `workingPath` = native
-/// `Context.filesDir`. ВАЖНО: это НЕ `getApplicationDocumentsDirectory()` —
-/// у Flutter тот указывает на `app_flutter`, у native/ядра это `files`.
-/// Пока §038-канал ходил по Dart-пути, файлы ядра не находились НИКОГДА
-/// (device-verified §316). Путь берём у native (`getFilesDir`).
-const kCrashReportBaseName = 'CrashReport-lxbox.log';
-
-/// §316 — подпапка, куда ядро архивирует ПРОШЛЫЕ репорты при каждом
-/// `Setup()` (`archiveCrashReport`).
-const _crashArchiveDir = 'crash_reports';
-
+/// Allow-list файлов в internal app-scoped storage (native `Context.filesDir`,
+/// `/data/data/<pkg>/files/`). Выдаём только sing-box core stderr и HTTP
+/// cache — полезно для диагностики. До task 027 файлы лежали в external
+/// storage; теперь internal по причине Knox/SELinux quirks на отдельных OEM.
 const _localWhitelist = {
+  // Имя до libbox 1.14 — ядро его больше не пишет. Оставлено как read-only
+  // эндпоинт для устройств со старым файлом; UI-канал на него НЕ смотрит
+  // (§2.4 §316), там читается только `kCrashReportBaseName`.
   'stderr.log',
   'cache.db',
   // §316 — Go-паники ядра. Без этих имён история крашей физически лежала
@@ -108,7 +97,7 @@ Future<DebugResponse> _localFile(DebugRequest req, DebugContext ctx) async {
 /// валидное состояние, а не ошибка запроса.
 Future<DebugResponse> _crashList() async {
   final base = await _nativeFilesDir();
-  final dir = Directory('$base/$_crashArchiveDir');
+  final dir = Directory('$base/$kCrashArchiveDir');
   if (!await dir.exists()) return const JsonResponse([]);
   final entries = <({String name, int size, DateTime mtime})>[];
   await for (final entity in dir.list(followLinks: false)) {
@@ -138,21 +127,15 @@ Future<DebugResponse> _crashFile(DebugRequest req) async {
   final name = req.requiredQuery('name');
   _assertSafeName(name);
   final base = await _nativeFilesDir();
-  final f = File('$base/$_crashArchiveDir/$name');
+  final f = File('$base/$kCrashArchiveDir/$name');
   if (!await f.exists()) throw NotFound('crash report: $name');
   final bytes = await f.readAsBytes();
   return BytesResponse(bytes, filename: name);
 }
 
-/// §316 — native `Context.filesDir` с фоллбэком на Dart-путь (юнит-тесты,
-/// где MethodChannel не поднят). Фоллбэк намеренно НЕ молчаливый по смыслу:
-/// на устройстве канал всегда есть, а в тестах путь подменяется фейком
-/// path_provider.
-Future<String> _nativeFilesDir() async {
-  final native = await BoxVpnClient().getFilesDir();
-  if (native != null && native.isNotEmpty) return native;
-  return (await getApplicationDocumentsDirectory()).path;
-}
+/// §316 — native `Context.filesDir` (см. [CrashReports.baseDir]): ядро и
+/// AppLog пишут именно туда, а НЕ в `getApplicationDocumentsDirectory()`.
+Future<String> _nativeFilesDir() => CrashReports.baseDir();
 
 /// Защита от path traversal. Имя файла — только basename,
 /// без `/`, `\`, `..`, ведущей точки.

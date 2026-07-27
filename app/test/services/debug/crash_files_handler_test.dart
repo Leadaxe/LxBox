@@ -8,6 +8,7 @@ import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
 import 'package:lxbox/services/debug/debug_registry.dart';
 import 'package:lxbox/services/debug/handlers/files.dart';
+import 'package:lxbox/services/stderr_reader.dart' show kCrashReportBaseName;
 import 'package:lxbox/services/debug/transport/request.dart';
 import 'package:lxbox/services/debug/transport/response.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
