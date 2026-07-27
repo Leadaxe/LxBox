@@ -107,10 +107,14 @@ stderr, and on Android stderr goes to `/dev/null`. All logcat kept was a bare
 address with no symbols. The core saves that trace to a file by itself — that
 file is now reachable.
 
-**App Settings → Diagnostics → Crash reports**: every past crash with its date
+**Debug → the Crashes tab**: every past crash with its date
 and time, tap one to share the file. After a crash the app also raises a banner
 on the main screen — once per crash, not on every launch. The whole archive
 goes into **Share dump** as `crash_archive`; the last 10 reports are kept.
+
+The **Profiling** buttons moved to the same screen as a third tab — pprof
+snapshots are a diagnostic tool, not a setting, so they now sit next to the
+logs and crashes instead of among the toggles.
 
 For development there are two Debug API routes: `GET /files/crash/list` and
 `GET /files/local?name=CrashReport-lxbox.log`.
@@ -229,10 +233,14 @@ RTT.
 Android уходит в `/dev/null`. В logcat оставался только адрес без символов.
 Ядро сохраняет этот трейс файлом само — теперь до файла можно добраться.
 
-**Настройки → Diagnostics → Crash reports**: все прошлые падения с датой и
+**Debug → вкладка Crashes**: все прошлые падения с датой и
 временем, тап отдаёт файл. После падения приложение ещё и показывает плашку
 на главном — один раз на краш, а не при каждом запуске. Весь архив уезжает в
 **Share dump** полем `crash_archive`; хранятся 10 последних отчётов.
+
+Кнопки **Profiling** переехали на тот же экран третьей вкладкой:
+pprof-слепки — инструмент диагностики, а не настройка, и теперь лежат рядом
+с логами и падениями, а не среди тумблеров.
 
 Для разработки — два роута Debug API: `GET /files/crash/list` и
 `GET /files/local?name=CrashReport-lxbox.log`.
