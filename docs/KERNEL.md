@@ -21,7 +21,22 @@ round-robin balancer, XHTTP full params, DNS-стрим и др.).
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.16`** (стабильный) — SPEC 036: `CommandClient.GetRunningConfig`
+**Текущий пин: `v1.14.0-lx.17-rc.1`** — SPEC 038: `GetRunningConfig` возвращает
+объект `RunningConfig` с геттером `content()` вместо голого `String`. Голая
+строка **убивала процесс ядра на android/arm64 при каждом вызове**: gomobile
+кодирует Go-строку в `nstring{void*, len}`, cgo кладёт её в `__packed__`-фрейм,
+тот теряет 8-выравнивание, и присваивание слота с указателем идёт через
+`runtime.wbMove` → `bulkBarrierPreWrite` → `throw: unaligned arguments`. Это
+не паника, а fatal throw — туннель падал без шанса. Дефект внесён SPEC 036,
+поэтому §311 был неработоспособен и в rc.3, и в stable `lx.16`; именно так
+падало ядро 26.07 (найдено каналом §316). **javap-diff lx.16 → lx.17-rc.1:**
+единственное изменение — `getRunningConfig()` сменил возврат
+`String` → `RunningConfig`; `PlatformInterface` / `CommandClientHandler` /
+`Libbox` без изменений. Клиентская правка — `BoxCommandClient.getRunningConfig()`
+зовёт `.content()`. Device-verified 27.07.2026 (CPH2411): 6 вызовов подряд при
+живом туннеле → 200, ядро живо, новых крашей нет.
+
+**Предыдущий пин: `v1.14.0-lx.16`** (стабильный) — SPEC 036: `CommandClient.GetRunningConfig`
 — канонический снапшот конфига РАБОТАЮЩЕГО ядра (захват один раз на старте в
 `newInstance`, post-override, re-marshal; отдача — копия строки). Клиентская
 половина — §311 LxBox (`activeModel`, `GET /config/running`): закрывает окно
@@ -136,4 +151,5 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.14** (стабильный) | SPEC 030 — Stop не виснет 10+ сек при многих WG/AWG-эндпоинтах (глушение тика + upfront-закрытие UDP-сокетов + abort in-flight wake + конкурентный close). Ядровая половина §287. База upstream `alpha.47`. Build-теги AAR без изменений. (Промежуточные lx.12/lx.13 — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.15** (стабильный) | SPEC 002 — XHTTP за reverse-proxy: `path` сохраняется как есть, trailing slash срезается только на bare-path запросе stream-one. + merge upstream `testing` (async DNS refactor, WG detour fix, OpenConnect auth-challenge). База upstream `alpha.48`. Build-теги AAR без изменений. Device-verified на CPH2411 (2026-07-21) |
-| **v1.14.0-lx.16** (стабильный, текущий пин) | SPEC 036 — `GetRunningConfig`: снапшот работающего конфига по CommandClient (клиент — §311 LxBox); SPEC 033/035 — DNS_GROUP и его observability (клиенты — §312/§315). rc.1…rc.3 — промежуточные сборки той же ветки, метод появился в rc.3. `PlatformInterface` без изменений. Подробности — в блоке «Текущий пин» выше |
+| **v1.14.0-lx.17-rc.1** (текущий пин) | SPEC 038 — фикс fatal throw в `GetRunningConfig` (возврат `RunningConfig` вместо голой строки; см. блок «Текущий пин»). **API-брейк:** сигнатура метода изменилась, клиент обязан звать `.content()` |
+| **v1.14.0-lx.16** (стабильный) | SPEC 036 — `GetRunningConfig`: снапшот работающего конфига по CommandClient (клиент — §311 LxBox); SPEC 033/035 — DNS_GROUP и его observability (клиенты — §312/§315). rc.1…rc.3 — промежуточные сборки той же ветки, метод появился в rc.3. `PlatformInterface` без изменений. Подробности — в блоке «Текущий пин» выше |
