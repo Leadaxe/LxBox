@@ -506,6 +506,17 @@ void normalizeDnsDetour(
   Map<String, dynamic> server, {
   Set<String>? knownOutbounds,
 }) {
+  // §319 — у DNS-ГРУППЫ detour'а нет по определению: своего транспорта у неё
+  // не бывает, запросы несут участники (каждый со своим detour). Ядро
+  // принимает у `type: group` ровно {servers, mode, error_ttl, win_ttl}
+  // (kernel SPEC 033) и падает на лишнем ключе — «start» отваливался с
+  // ошибкой, стоило выбрать не-direct канал. Чистим ЗДЕСЬ, а не только в
+  // форме: у пострадавших ключ уже лежит в storage, и без этого конфиг
+  // оставался бы битым до ручного захода в редактор.
+  if (server['type'] == 'group') {
+    server.remove('detour');
+    return;
+  }
   final detour = server['detour'];
   if (detour is! String) return;
   if (detour.isEmpty ||

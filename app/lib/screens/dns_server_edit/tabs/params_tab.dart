@@ -97,29 +97,35 @@ class DnsServerParamsTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 ServerFormSection(c: c),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(getLocalText.s("Outbound (detour)"),
-                          style: theme.textTheme.bodyLarge),
-                      const SizedBox(height: 2),
-                      Text(
-                        getLocalText.s("Which channel carries DNS queries to this server. Direct — no detour key in the config."),
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: 8),
-                      OutboundPicker(
-                        value: c.inlineDetour,
-                        options: c.outboundOptions,
-                        allowReject: false,
-                        onChanged: c.setInlineDetour,
-                      ),
-                    ],
+                // §319 — у ГРУППЫ нет своего транспорта: запросы несут её
+                // участники, каждый со своим detour. Ядро принимает у
+                // `type: group` только {servers, mode, error_ttl, win_ttl}
+                // (kernel SPEC 033) и падает на лишнем ключе — поэтому
+                // пикер для группы не рисуем вовсе.
+                if (!c.isGroup)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(getLocalText.s("Outbound (detour)"),
+                            style: theme.textTheme.bodyLarge),
+                        const SizedBox(height: 2),
+                        Text(
+                          getLocalText.s("Which channel carries DNS queries to this server. Direct — no detour key in the config."),
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 8),
+                        OutboundPicker(
+                          value: c.inlineDetour,
+                          options: c.outboundOptions,
+                          allowReject: false,
+                          onChanged: c.setInlineDetour,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ServerKind.preset => Container(
