@@ -22,7 +22,8 @@ VlessSpec? parseVless(String uri) {
   final transport = parseTransport(q);
   final warnings = <NodeWarning>[];
   // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
-  final tls = normalizeTlsFingerprint(parseVlessTls(q, server, port), warnings);
+  final tls = normalizeTlsFingerprint(
+      parseVlessTls(q, server, port, warnings: warnings), warnings);
 
   var flow = (q['flow'] ?? '').trim();
   var packetEncoding = '';

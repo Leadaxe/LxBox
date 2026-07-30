@@ -179,6 +179,10 @@ vless://UUID@host:port?query_params#label
 | XHTTP | `xhttp` | `{"type": "xhttp", "path": ..., "host": ..., "mode": ...}` — нативный с §097, см. [XHTTP transport](#xhttp-transport) |
 
 > **Note on WebSocket early data (§303).** Xray задаёт early data хвостом пути — `"path": "/api/v2/channel?ed=2560"`. В sing-box это отдельное поле транспорта, а хвост в `path` уходит в HTTP-запрос и даёт `404`. При импорте (URI, Xray JSON, sing-box JSON) хвост срезается, а `ed=N` становится `max_early_data: N`. Имя заголовка при этом **не** подставляется: пустой `early_data_header_name` = ядро шлёт early data в путь (`transport/v2raywebsocket/conn.go`), ровно как Xray для `?ed=`; подстановка `Sec-WebSocket-Protocol` переключила бы режим на header-based и сломала бы совместимость с сервером. Явный `Sec-WebSocket-Protocol` в `wsSettings.headers` по-прежнему читается как обычный заголовок. Для `httpupgrade` такого поля у транспорта нет — хвост срезается, `ed` отбрасывается. Обратный emit в URI склеивает `path?ed=N` назад, чтобы round-trip не терял параметр.
+>
+> **Вторая форма — плоские `ed`/`eh` (§320).** Часть генераторов кладёт те же параметры отдельными ключами: `?ed=2560&eh=Sec-WebSocket-Protocol` (в Xray JSON — `wsSettings.ed` / `.eh`). Здесь `eh` задан **явно**, то есть провайдер сам указывает header-режим, и тогда `early_data_header_name` эмитится — без этого ядро дописывало бы base64 в путь, а сервер ждал его в заголовке (`404`). Хвост пути имеет приоритет над плоским `ed`: он адресует конкретный путь, а не ссылку целиком. `eh` без `ed` игнорируется — режим early data включается по `max_early_data > 0`, имя заголовка без размера ничего не значит. Для `httpupgrade` плоские `ed`/`eh` не читаются вовсе.
+>
+> **Двойное percent-кодирование пути (§320).** Агрегаторы отдают `path=%2F%252Fassignment`: `Uri.queryParameters` декодит ровно один раз, и в конфиг уезжало `/%2Fassignment` вместо `//assignment`. Остаток снимается (до 2 проходов) **до** срезки `?ed=`-хвоста, иначе дважды закодированный `%253Fed%253D2560` не распознаётся. Валидность пути при этом не проверяется — эмодзи, `//` и `@` легальны; путь без ведущего слэша ядро дополняет само (`client.go`).
 
 > **Note on XHTTP.** С §097 (ядро = fork [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx), build-тег `with_xhttp`) XHTTP эмитится **нативно**: `{"type": "xhttp", ...}` без подмены wire-протокола. Прежний fallback на `httpupgrade` с `UnsupportedTransportWarning` (Parser v2, до v1.8.2 включительно) удалён. XHTTP-специфичные query-ключи — `mode`, `xPaddingBytes`/`x_padding_bytes`, `noGRPCHeader`/`no_grpc_header` (camelCase = Xray-URI, snake = sing-box). С `flow=xtls-rprx-vision` несовместим — Vision живёт только на голом TCP. Подробности: [XHTTP transport](#xhttp-transport).
 
@@ -1371,6 +1375,20 @@ URIs exceeding the maximum length (defined by `maxURILength`) are rejected with 
 ### TLS Insecure Flag
 
 Multiple query keys are checked: `insecure`, `allowInsecure`, `allowinsecure`, `allow_insecure`, `skip-cert-verify`. Values `1`, `true`, `yes` all enable insecure mode.
+
+### ECH from subscriptions is ignored (§320)
+
+Xray links carry ECH as `ech=<query-name>+<resolver-URL>` (e.g. `ech=ip.gs+udp://8.8.8.8`), sometimes as a bare `ech=<query-name>`. **L×Box does not apply it** — the parameter is dropped with an `EchIgnoredWarning` (info severity: the node stays usable, only SNI masking is lost).
+
+The form carries no ECH key. It says "fetch the ECHConfigList from the DNS HTTPS record of `<query-name>`", and the key so obtained belongs to that name. Subscriptions put **public ECH probes** there. Device-verified: DNS returns the *same* config list for both `ip.gs` and `encryptedsni.com`, decoding to `public_name = cloudflare-ech.com`, while the node's SNI is `www.ignitelimit.com` / `space.byu.id.yxls.eu.cc`. The key does not belong to the node's server, so the encrypted ClientHello is undecryptable and the handshake fails.
+
+Measured on device (node `172.67.149.60` `/in-pdr`, path `/in-pdr`): **dead with `ech`, 723 ms without it.** NekoBox drops the parameter too — its database holds all 103 nodes of the same subscription with zero occurrences of `ech` — and keeps that node alive at 23 ms.
+
+Suitability cannot be checked before connecting: `public_name` is only visible after the DNS query, inside the core's runtime, and sing-box has no fallback to plain TLS (`common/tls/ech.go` returns an error rather than degrading). A stricter rule (`ech` must equal the SNI) would still not prove the key belongs to the server, so the parameter is not applied at all.
+
+`echfq` is not read either: it is Xray's pq-signature-schemes flag, and the core's counterpart is marked legacy and rejects the whole config when set.
+
+**ALPN is passed through verbatim.** An earlier revision of §320 stripped `h2`/`h3` for ws/httpupgrade on the theory that HTTP/2 negotiation breaks the WebSocket upgrade. That was never measured, and such links usually list `http/1.1` alongside — client and server negotiate it themselves. The filter was reverted: the config follows the link.
 
 ---
 

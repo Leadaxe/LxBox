@@ -42,6 +42,37 @@ void main() {
       expect(warnings, isEmpty);
     });
 
+    // §319 — жалоба 4PDA: «группа работает только с direct; переключишь на
+    // proxy — start падает с ошибкой». У группы нет своего транспорта:
+    // запросы несут участники. Ядро принимает у `type: group` ровно
+    // {servers, mode, error_ttl, win_ttl} (SPEC 033) и роняет конфиг на
+    // лишнем ключе. Чистим на билде, а не только в форме: у пострадавших
+    // detour уже лежит в storage.
+    test('§319 detour у группы вычищается из эмиссии', () {
+      final out = emit([
+        inlineRef('a', {'type': 'udp', 'server': '1.1.1.1'}),
+        inlineRef('grp', {
+          ...groupBody(['a']),
+          'detour': 'vpn-1',
+        }),
+      ]);
+      final grp = out.firstWhere((b) => b['tag'] == 'grp');
+      expect(grp.containsKey('detour'), isFalse,
+          reason: 'ядро падает на unknown field у type: group');
+      expect(grp['servers'], ['a'], reason: 'остальное не тронуто');
+    });
+
+    test('§319 у обычного сервера detour остаётся', () {
+      final out = emit([
+        inlineRef('a', {
+          'type': 'udp',
+          'server': '1.1.1.1',
+          'detour': 'vpn-1',
+        }),
+      ]);
+      expect(out.single['detour'], 'vpn-1');
+    });
+
     test('disabled-член выкидывается с warning (drop-семантика №3)', () {
       final warnings = <String>[];
       final out = emit([

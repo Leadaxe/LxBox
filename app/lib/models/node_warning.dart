@@ -227,3 +227,27 @@ final class XhttpParamResetWarning extends NodeWarning {
   @override
   WarningSeverity get severity => WarningSeverity.warning;
 }
+
+/// §320 — `ech` из подписки проигнорирован. Xray-форма `ech=<name>+<resolver>`
+/// не несёт ключа, а лишь имя для DNS-запроса; подписки кладут туда публичные
+/// ECH-пробники (`ip.gs`, `encryptedsni.com`), чьи ключи не принадлежат серверу
+/// узла — включённый ECH ломает рукопожатие. Проверить пригодность до
+/// подключения нельзя, fallback в ядре отсутствует, поэтому параметр не
+/// применяется. Info: узел от этого рабочий, теряется только маскировка SNI.
+final class EchIgnoredWarning extends NodeWarning {
+  /// Имя из левой части `ech` (до `+`), как его написал провайдер.
+  final String queryName;
+
+  const EchIgnoredWarning(this.queryName);
+
+  @override
+  List<Object?> get props => [queryName];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "ECH is not applied: \"%s\" from the link points to a public ECH probe, not to this server — enabling it would break the TLS handshake.",
+      queryName);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}

@@ -264,8 +264,24 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
       final host = headers?['Host']?.toString() ?? '';
       // §303 — Xray кладёт early data хвостом пути (`/x?ed=2560`); в sing-box
       // это отдельное поле, а хвост в пути даёт 404.
-      final (path, ed) = splitEarlyDataPath(ws['path']?.toString() ?? '/');
-      return WsTransport(path: path, host: host, maxEarlyData: ed);
+      final (path, edFromPath) =
+          splitEarlyDataPath(ws['path']?.toString() ?? '/');
+      // §320 — Xray-конфиги также несут early data отдельными полями
+      // `wsSettings.ed` / `.eh` (хвост пути в приоритете). `eh` без `ed`
+      // игнорируем: режим ядро включает по `max_early_data > 0`.
+      final edField = ws['ed'];
+      final ed = edFromPath ??
+          (edField is int && edField > 0
+              ? edField
+              : int.tryParse(edField?.toString().trim() ?? ''));
+      final eh = ws['eh']?.toString().trim() ?? '';
+      return WsTransport(
+        path: path,
+        host: host,
+        maxEarlyData: ed != null && ed > 0 ? ed : null,
+        earlyDataHeaderName:
+            (ed != null && ed > 0 && eh.isNotEmpty) ? eh : null,
+      );
     case 'grpc':
       final g = stream['grpcSettings'] as Map? ?? const {};
       return GrpcTransport(

@@ -1,7 +1,8 @@
 import 'dart:convert';
 
-import '../../models/transport_spec.dart';
+import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
+import '../../models/transport_spec.dart';
 import 'uri_utils.dart';
 
 /// Разбор query-параметров URI в `TransportSpec?`.
@@ -32,11 +33,25 @@ TransportSpec? parseTransport(
   switch (typ) {
     case 'ws':
       // §303 — `?ed=N` в пути = early data (Xray), а не часть пути.
-      final (path, ed) = splitEarlyDataPath(q['path'] ?? '/');
+      // §320 — путь мог прийти дважды percent-кодированным (`/%2Fassignment`);
+      // снимаем остаток ДО срезки хвоста, иначе `%3Fed%3D2560` не распознается.
+      final (path, edFromPath) =
+          splitEarlyDataPath(decodeResidualPercent(q['path'] ?? '/'));
       var host = (q['host'] ?? '').trim();
       if (host.isEmpty) host = (q['sni'] ?? '').trim();
       if (host.isEmpty) host = (q['obfsParam'] ?? '').trim();
-      return WsTransport(path: path, host: host, maxEarlyData: ed);
+      // §320 — вторая форма early data: плоские `ed`/`eh` (хвост пути в
+      // приоритете — он адресует конкретный путь, а не ссылку целиком).
+      final ed = edFromPath ?? _positiveInt(q['ed']);
+      // `eh` без `ed` — не сирота, а ничто: режим early data ядро включает по
+      // `max_early_data > 0`, имя заголовка без размера не значит ничего.
+      final eh = ed == null ? null : _nonEmpty(q['eh']);
+      return WsTransport(
+        path: path,
+        host: host,
+        maxEarlyData: ed,
+        earlyDataHeaderName: eh,
+      );
     case 'grpc':
       final sn = (q['serviceName'] ?? q['service_name'] ?? q['path'] ?? '').trim();
       return GrpcTransport(serviceName: sn);
@@ -58,8 +73,10 @@ TransportSpec? parseTransport(
       );
     case 'httpupgrade':
       // §303 — early data у httpupgrade в sing-box нет: хвост срезаем, ed
-      // отбрасываем (иначе он уедет в путь и даст 404).
-      final (path, _) = splitEarlyDataPath(q['path'] ?? '/');
+      // отбрасываем (иначе он уедет в путь и даст 404). §320 — включая форму
+      // плоским `ed`/`eh`: их здесь просто не читаем.
+      final (path, _) =
+          splitEarlyDataPath(decodeResidualPercent(q['path'] ?? '/'));
       var host = (q['host'] ?? '').trim();
       if (host.isEmpty) host = (q['sni'] ?? '').trim();
       return HttpUpgradeTransport(path: path, host: host);
@@ -101,6 +118,38 @@ TransportSpec? parseTransport(
   }
   final parsed = ed == null ? null : int.tryParse(ed.trim());
   return (path, parsed != null && parsed > 0 ? parsed : null);
+}
+
+/// §320 — снять остаточное percent-кодирование пути. Агрегаторы отдают
+/// `path=%2F%252Fassignment`: `Uri.queryParameters` декодит ровно один раз, и
+/// в путь уходит `/%2Fassignment` вместо `//assignment` → сервер даёт 404.
+///
+/// Тот же приём, что в `_normalizeAlpn` (§151), но БЕЗ проверки валидности:
+/// путь может содержать что угодно — эмодзи (`path=Telegram🇨🇳`), двойные
+/// слэши (`//assignment`), `@`. Здесь только доводим декодирование до конца,
+/// ничего не отбрасывая. До 2 проходов: больше — почти наверняка мусор.
+String decodeResidualPercent(String raw) {
+  var v = raw;
+  var guard = 0;
+  while (_percentSeq.hasMatch(v) && guard < 2) {
+    final decoded = Uri.tryParse('x://x?a=$v')?.queryParameters['a'];
+    if (decoded == null || decoded == v) break;
+    v = decoded;
+    guard++;
+  }
+  return v;
+}
+
+/// Положительное целое из query-значения; иначе `null` (0/отрицательное/мусор).
+int? _positiveInt(String? v) {
+  final n = int.tryParse((v ?? '').trim());
+  return n != null && n > 0 ? n : null;
+}
+
+/// Непустая обрезанная строка; иначе `null`.
+String? _nonEmpty(String? v) {
+  final s = (v ?? '').trim();
+  return s.isEmpty ? null : s;
 }
 
 /// §127 — разбор `type=xhttp` со всеми клиентскими полями SPEC 002 v2.
@@ -191,8 +240,42 @@ String _normScRange(String v) {
   return v;
 }
 
+/// §320 — ECH из подписки НЕ включаем, только предупреждаем.
+///
+/// Xray-форма `ech=<name>+<resolver>` не несёт ECH-ключа: она означает «возьми
+/// ECHConfigList из DNS HTTPS-записи имени `<name>`». Ключ привязан к тому
+/// имени, у которого взят, — а подписки кладут туда публичные ECH-пробники
+/// (`ip.gs`, `encryptedsni.com`). DEVICE-VERIFIED: DNS отдаёт для обоих ОДИН
+/// конфиг с `public_name = cloudflare-ech.com`, тогда как SNI узла —
+/// `www.ignitelimit.com`. Ключ не от того сервера ⇒ ClientHello зашифрован
+/// впустую и рукопожатие падает.
+///
+/// Замер на устройстве (узел 172.67.149.60 `/in-pdr`): с `ech` — мёртв, без
+/// `ech` — 723 мс. NekoBox этот параметр отбрасывает (в его базе 103 узла, ни
+/// одного упоминания `ech`) и держит тот же узел живым на 23 мс.
+///
+/// Проверить пригодность до подключения нельзя: `public_name` виден только
+/// после DNS-запроса, уже в рантайме ядра, а fallback на обычный TLS в sing-box
+/// отсутствует (`ech.go` при неудаче возвращает ошибку, а не откат). Поэтому
+/// единственное безопасное поведение — не включать, но сказать об этом.
+///
+/// `echfq` не читаем: Xray-шный pq-signature-schemes, парная опция ядра
+/// помечена «legacy… removed in sing-box 1.13.0» и при `true` роняет конфиг.
+void warnEchIgnored(Map<String, String> q, List<NodeWarning> warnings) {
+  final raw = (q['ech'] ?? '').trim();
+  if (raw.isEmpty || raw.toLowerCase() == 'none') return;
+  warnings.add(EchIgnoredWarning(raw.split('+').first.trim()));
+}
+
 /// TLS parameters for VLESS (с поддержкой REALITY через `pbk`/`sid`).
-TlsSpec parseVlessTls(Map<String, String> q, String server, int port) {
+TlsSpec parseVlessTls(
+  Map<String, String> q,
+  String server,
+  int port, {
+  List<NodeWarning>? warnings,
+}) {
+  // §320 — ECH из ссылки не включаем (ломает узлы), но предупреждаем.
+  if (warnings != null) warnEchIgnored(q, warnings);
   final sec = (q['security'] ?? '').toLowerCase().trim();
   final pbk = (q['pbk'] ?? '').trim();
 
@@ -218,7 +301,7 @@ TlsSpec parseVlessTls(Map<String, String> q, String server, int port) {
       ),
       insecure: isTlsInsecure(q),
       alpn: _alpnFromQuery(q),
-    );
+      );
   }
 
   if (sec == 'reality') {
@@ -228,7 +311,7 @@ TlsSpec parseVlessTls(Map<String, String> q, String server, int port) {
       fingerprint: fp,
       insecure: isTlsInsecure(q),
       alpn: _alpnFromQuery(q),
-    );
+      );
   }
 
   if (sec.isEmpty && plaintextVlessPorts.contains(port)) return TlsSpec.disabled;
@@ -243,7 +326,12 @@ TlsSpec parseVlessTls(Map<String, String> q, String server, int port) {
 }
 
 /// TLS parameters for Trojan.
-TlsSpec parseTrojanTls(Map<String, String> q, String server) {
+TlsSpec parseTrojanTls(
+  Map<String, String> q,
+  String server, {
+  List<NodeWarning>? warnings,
+}) {
+  if (warnings != null) warnEchIgnored(q, warnings);
   final sec = (q['security'] ?? '').toLowerCase().trim();
   if (sec == 'none') return TlsSpec.disabled;
 
@@ -329,7 +417,12 @@ List<String> _normalizeAlpn(String raw) {
 /// `type`/`path`/`host`/`serviceName`, игнорируя пустые.
 Map<String, String> transportToQuery(TransportSpec t) {
   switch (t) {
-    case WsTransport(path: final p, host: final h, maxEarlyData: final ed):
+    case WsTransport(
+        path: final p,
+        host: final h,
+        maxEarlyData: final ed,
+        earlyDataHeaderName: final eh
+      ):
       // §303 — early data возвращаем в URI тем же хвостом пути, каким она в
       // него пришла (`/x?ed=2560`), иначе round-trip её теряет.
       final withEd = ed == null ? p : '${p.isEmpty ? '/' : p}?ed=$ed';
@@ -337,6 +430,9 @@ Map<String, String> transportToQuery(TransportSpec t) {
         'type': 'ws',
         if (withEd.isNotEmpty && withEd != '/') 'path': withEd,
         if (h.isNotEmpty) 'host': h,
+        // §320 — header-режим восстановим только парой с `ed` (в одиночку `eh`
+        // при импорте игнорируется, вернуть его без размера = вернуть мусор).
+        if (ed != null && eh != null && eh.isNotEmpty) 'eh': eh,
       };
     case GrpcTransport(serviceName: final sn):
       return {

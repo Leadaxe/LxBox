@@ -77,6 +77,7 @@ void main() {
         NaiveBuildTagWarning() => 'naive_build',
         XhttpParamResetWarning() => 'xhttp_reset',
         UnknownFingerprintWarning() => 'fingerprint',
+        EchIgnoredWarning() => 'ech_ignored',
       };
       expect(label, 'transport');
     });
