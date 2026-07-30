@@ -227,3 +227,47 @@ final class XhttpParamResetWarning extends NodeWarning {
   @override
   WarningSeverity get severity => WarningSeverity.warning;
 }
+
+/// §320 — ALPN, несовместимый с транспортом узла, снят на эмите. `h2`/`h3`
+/// поверх WebSocket/httpupgrade — мусор из vless/vmess-шаблонов: сервер
+/// согласует HTTP/2 и апгрейд поверх HTTP/1.1 уже не проходит.
+final class IncompatibleAlpnWarning extends NodeWarning {
+  final String transport;
+
+  /// Снятые идентификаторы в порядке из ссылки.
+  final List<String> dropped;
+
+  const IncompatibleAlpnWarning(this.transport, this.dropped);
+
+  @override
+  List<Object?> get props => [transport, ...dropped];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "ALPN \"%1\$s\" dropped — \"%2\$s\" transport runs over HTTP/1.1 only (node would otherwise fail to connect).",
+      dropped.join(', '),
+      transport);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// §320 — у ECH-параметра подписки был указан свой DNS-резолвер
+/// (`ech=name+udp://8.8.8.8`), но в sing-box его прокинуть некуда: ECHConfigList
+/// тянется через общий DNS роутера. Имя запроса сохранено, резолвер отброшен.
+final class EchResolverIgnoredWarning extends NodeWarning {
+  final String resolver;
+
+  const EchResolverIgnoredWarning(this.resolver);
+
+  @override
+  List<Object?> get props => [resolver];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "ECH resolver \"%s\" ignored — sing-box fetches the ECH config list over the app's own DNS.",
+      resolver);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}

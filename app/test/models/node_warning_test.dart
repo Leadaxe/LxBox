@@ -77,6 +77,8 @@ void main() {
         NaiveBuildTagWarning() => 'naive_build',
         XhttpParamResetWarning() => 'xhttp_reset',
         UnknownFingerprintWarning() => 'fingerprint',
+        IncompatibleAlpnWarning() => 'alpn_transport',
+        EchResolverIgnoredWarning() => 'ech_resolver',
       };
       expect(label, 'transport');
     });

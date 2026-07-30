@@ -495,6 +495,9 @@
   "ACTIVE": {
     "value": "АКТИВЕН"
   },
+  "ALPN \"%1$s\" dropped — \"%2$s\" transport runs over HTTP/1.1 only (node would otherwise fail to connect).": {
+    "value": "ALPN «%1$s» отброшен — транспорт «%2$s» работает только поверх HTTP/1.1 (иначе узел не смог бы подключиться)."
+  },
   "AND": {
     "value": "И"
   },
@@ -1443,6 +1446,9 @@
   },
   "Drop existing detours — every node connects through this outbound": {
     "value": "Сбросить существующие detour — каждый узел подключается через этот исходящий канал"
+  },
+  "ECH resolver \"%s\" ignored — sing-box fetches the ECH config list over the app's own DNS.": {
+    "value": "DNS-сервер для ECH «%s» проигнорирован — sing-box получает список ECH-конфигураций через DNS приложения."
   },
   "Edit": {
     "value": "Изменить"

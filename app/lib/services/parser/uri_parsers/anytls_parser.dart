@@ -34,8 +34,8 @@ AnyTlsSpec? parseAnyTls(String uri) {
   final tlsQuery = Map<String, String>.from(q)..remove('security');
   final warnings = <NodeWarning>[];
   // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
-  final tls =
-      normalizeTlsFingerprint(parseVlessTls(tlsQuery, server, port), warnings);
+  final tls = normalizeTlsFingerprint(
+      parseVlessTls(tlsQuery, server, port, warnings: warnings), warnings);
 
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 

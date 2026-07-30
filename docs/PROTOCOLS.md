@@ -179,6 +179,10 @@ vless://UUID@host:port?query_params#label
 | XHTTP | `xhttp` | `{"type": "xhttp", "path": ..., "host": ..., "mode": ...}` — нативный с §097, см. [XHTTP transport](#xhttp-transport) |
 
 > **Note on WebSocket early data (§303).** Xray задаёт early data хвостом пути — `"path": "/api/v2/channel?ed=2560"`. В sing-box это отдельное поле транспорта, а хвост в `path` уходит в HTTP-запрос и даёт `404`. При импорте (URI, Xray JSON, sing-box JSON) хвост срезается, а `ed=N` становится `max_early_data: N`. Имя заголовка при этом **не** подставляется: пустой `early_data_header_name` = ядро шлёт early data в путь (`transport/v2raywebsocket/conn.go`), ровно как Xray для `?ed=`; подстановка `Sec-WebSocket-Protocol` переключила бы режим на header-based и сломала бы совместимость с сервером. Явный `Sec-WebSocket-Protocol` в `wsSettings.headers` по-прежнему читается как обычный заголовок. Для `httpupgrade` такого поля у транспорта нет — хвост срезается, `ed` отбрасывается. Обратный emit в URI склеивает `path?ed=N` назад, чтобы round-trip не терял параметр.
+>
+> **Вторая форма — плоские `ed`/`eh` (§320).** Часть генераторов кладёт те же параметры отдельными ключами: `?ed=2560&eh=Sec-WebSocket-Protocol` (в Xray JSON — `wsSettings.ed` / `.eh`). Здесь `eh` задан **явно**, то есть провайдер сам указывает header-режим, и тогда `early_data_header_name` эмитится — без этого ядро дописывало бы base64 в путь, а сервер ждал его в заголовке (`404`). Хвост пути имеет приоритет над плоским `ed`: он адресует конкретный путь, а не ссылку целиком. `eh` без `ed` игнорируется — режим early data включается по `max_early_data > 0`, имя заголовка без размера ничего не значит. Для `httpupgrade` плоские `ed`/`eh` не читаются вовсе.
+>
+> **Двойное percent-кодирование пути (§320).** Агрегаторы отдают `path=%2F%252Fassignment`: `Uri.queryParameters` декодит ровно один раз, и в конфиг уезжало `/%2Fassignment` вместо `//assignment`. Остаток снимается (до 2 проходов) **до** срезки `?ed=`-хвоста, иначе дважды закодированный `%253Fed%253D2560` не распознаётся. Валидность пути при этом не проверяется — эмодзи, `//` и `@` легальны; путь без ведущего слэша ядро дополняет само (`client.go`).
 
 > **Note on XHTTP.** С §097 (ядро = fork [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx), build-тег `with_xhttp`) XHTTP эмитится **нативно**: `{"type": "xhttp", ...}` без подмены wire-протокола. Прежний fallback на `httpupgrade` с `UnsupportedTransportWarning` (Parser v2, до v1.8.2 включительно) удалён. XHTTP-специфичные query-ключи — `mode`, `xPaddingBytes`/`x_padding_bytes`, `noGRPCHeader`/`no_grpc_header` (camelCase = Xray-URI, snake = sing-box). С `flow=xtls-rprx-vision` несовместим — Vision живёт только на голом TCP. Подробности: [XHTTP transport](#xhttp-transport).
 
@@ -1371,6 +1375,27 @@ URIs exceeding the maximum length (defined by `maxURILength`) are rejected with 
 ### TLS Insecure Flag
 
 Multiple query keys are checked: `insecure`, `allowInsecure`, `allowinsecure`, `allow_insecure`, `skip-cert-verify`. Values `1`, `true`, `yes` all enable insecure mode.
+
+### ALPN × transport (§320)
+
+WebSocket and httpupgrade run over HTTP/1.1 only (`ws.Dialer.Upgrade`, `transport/v2raywebsocket/client.go`). Subscription generators nevertheless copy `alpn=h3,h2,http/1.1` from vless/vmess templates: the server negotiates HTTP/2 and the upgrade then fails.
+
+For `ws` and `httpupgrade` everything except `http/1.1` is dropped **at emit time** with an `IncompatibleAlpnWarning`; if nothing is left, the `alpn` key is omitted entirely (the core applies its own default) rather than emitted as `[]`. Other transports are not restricted.
+
+The filter lives in the emit path, not the parser: `TlsSpec.alpn` keeps whatever the link contained, so `toUri()` and the node's Source tab stay faithful to the original.
+
+### ECH (§320)
+
+Xray links carry ECH as `ech=<query-name>+<resolver-URL>` (e.g. `ech=ip.gs+udp://8.8.8.8`), sometimes as a bare `ech=<query-name>`. The left side is the name to query over DNS HTTPS records — usually **different** from the SNI — which maps exactly onto the core's `query_server_name`:
+
+```json
+"tls": { "enabled": true, "server_name": "www.example.com",
+         "ech": { "enabled": true, "query_server_name": "ip.gs" } }
+```
+
+`config`/`config_path` stay unset on purpose: with both empty the core fetches the ECHConfigList itself from the DNS HTTPS record (`common/tls/ech.go`, `parseECHClientConfig` → `fetchAndHandshake`).
+
+The resolver part is **dropped** with an `EchResolverIgnoredWarning` — `option.OutboundECHOptions` has no field for it, the core resolves through the router's own DNS. `echfq` is not read at all: it is Xray's pq-signature-schemes flag, and the core's counterpart is marked legacy and rejects the whole config when set.
 
 ---
 

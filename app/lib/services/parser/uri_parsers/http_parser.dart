@@ -46,7 +46,8 @@ HttpSpec? parseHttpProxy(String uri) {
   // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
   final warnings = <NodeWarning>[];
   final tls = secure
-      ? normalizeTlsFingerprint(parseTrojanTls(q, server), warnings)
+      ? normalizeTlsFingerprint(
+          parseTrojanTls(q, server, warnings: warnings), warnings)
       : TlsSpec.disabled;
 
   if (tls.insecure) warnings.add(const InsecureTlsWarning());

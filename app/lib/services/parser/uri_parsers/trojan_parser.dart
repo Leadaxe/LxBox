@@ -25,7 +25,8 @@ TrojanSpec? parseTrojan(String uri) {
   final transport = parseTransport(q);
   final warnings = <NodeWarning>[];
   // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
-  final tls = normalizeTlsFingerprint(parseTrojanTls(q, server), warnings);
+  final tls = normalizeTlsFingerprint(
+      parseTrojanTls(q, server, warnings: warnings), warnings);
 
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
