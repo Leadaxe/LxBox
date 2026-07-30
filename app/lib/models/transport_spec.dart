@@ -9,12 +9,6 @@ sealed class TransportSpec {
 
   (Map<String, dynamic> map, List<NodeWarning> warnings) toSingbox(
       TemplateVars vars);
-
-  /// §320 — ALPN-идентификаторы, совместимые с транспортом; `null` = транспорт
-  /// ALPN не ограничивает. WebSocket/httpupgrade живут только поверх HTTP/1.1,
-  /// и согласованный сервером `h2`/`h3` ломает им апгрейд — такие значения
-  /// срезаются на эмите (`TlsSpec.alpnFor`), а не при парсинге.
-  List<String>? get compatibleAlpn => null;
 }
 
 final class WsTransport extends TransportSpec {
@@ -53,10 +47,6 @@ final class WsTransport extends TransportSpec {
     }
     return (m, const []);
   }
-
-  // §320 — ws-апгрейд в ядре идёт через ws.Dialer поверх HTTP/1.1.
-  @override
-  List<String>? get compatibleAlpn => const ['http/1.1'];
 }
 
 final class GrpcTransport extends TransportSpec {
@@ -101,10 +91,6 @@ final class HttpUpgradeTransport extends TransportSpec {
     if (host.isNotEmpty) m['host'] = host;
     return (m, const []);
   }
-
-  // §320 — httpupgrade по определению HTTP/1.1 (Upgrade-заголовок).
-  @override
-  List<String>? get compatibleAlpn => const ['http/1.1'];
 }
 
 /// §097 / §127 — XHTTP (Xray-совместимый `splithttp`). Форк `sing-box-lx`

@@ -2,74 +2,69 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
-import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
-/// §320 — ECH из подписок. Xray-форма `ech=<query-name>+<resolver-URL>`
-/// раньше отбрасывалась молча: терялось сокрытие SNI от DPI, ровно то, за чем
-/// такие ноды и берут.
+/// §320 — `ech` из подписки НЕ применяется, только предупреждение.
 ///
-/// Левая часть — имя для HTTPS-DNS-запроса, отличное от SNI, т.е.
-/// `query_server_name` ядра. Резолвер прокинуть некуда (в OutboundECHOptions
-/// поля нет — ядро идёт через общий dnsRouter), отбрасываем с warning'ом.
+/// Xray-форма `ech=<name>+<resolver>` не несёт ключа: это имя для DNS
+/// HTTPS-запроса. Подписки кладут туда публичные ECH-пробники — DEVICE-VERIFIED:
+/// DNS отдаёт для `ip.gs` и `encryptedsni.com` ОДИН конфиг с
+/// `public_name = cloudflare-ech.com`, тогда как SNI узла
+/// `www.ignitelimit.com`. Ключ не от того сервера ⇒ рукопожатие падает.
+///
+/// Замер (узел 172.67.149.60 `/in-pdr`): с `ech` мёртв, без — 723 мс. NekoBox
+/// параметр отбрасывает и держит тот же узел живым на 23 мс.
 void main() {
   Map<String, dynamic> tlsOf(NodeSpec n) =>
       n.emitRaw(const TemplateVars()).map['tls'] as Map<String, dynamic>;
 
-  group('парсинг ech', () {
-    test('name+resolver → query_server_name, резолвер в warning', () {
+  group('ech не попадает в конфиг', () {
+    test('name+resolver → ech-блока нет, warning есть', () {
       final n = parseUri(
-        'trojan://humanity@172.67.149.60:443?path=%2Fassignment'
-        '&security=tls&host=www.ignitelimit.com'
-        '&ech=ip.gs%2Budp%3A%2F%2F8.8.8.8&type=ws'
-        '&sni=www.ignitelimit.com#node',
+        'trojan://c206d543-023d-46cc-9d5a-1f0f2fc16323@172.67.149.60:443'
+        '?path=%2Fin-pdr&security=tls&insecure=0&host=space.byu.id.yxls.eu.cc'
+        '&ech=encryptedsni.com%2Budp%3A%2F%2F8.8.8.8&type=ws'
+        '&allowInsecure=0&sni=space.byu.id.yxls.eu.cc#node',
       )!;
-      expect(tlsOf(n)['ech'], {
-        'enabled': true,
-        'query_server_name': 'ip.gs',
-      });
+      expect(tlsOf(n).containsKey('ech'), isFalse);
       expect(
-        n.warnings.whereType<EchResolverIgnoredWarning>().single,
-        const EchResolverIgnoredWarning('udp://8.8.8.8'),
+        n.warnings.whereType<EchIgnoredWarning>().single,
+        const EchIgnoredWarning('encryptedsni.com'),
       );
+      // Остальное разобрано как обычно — узел рабочий.
+      expect(tlsOf(n)['server_name'], 'space.byu.id.yxls.eu.cc');
+      expect((n.emitRaw(const TemplateVars()).map['transport'] as Map)['path'],
+          '/in-pdr');
     });
 
-    test('только имя → без warning', () {
+    test('bare ech (без resolver) → тоже игнор + warning', () {
       final n = parseUri(
         'trojan://pw@example.com:443?type=ws&path=%2Fx&security=tls'
-        '&ech=encryptedsni.com&sni=example.com#node',
+        '&ech=ip.gs&sni=example.com#node',
       )!;
-      expect(tlsOf(n)['ech'],
-          {'enabled': true, 'query_server_name': 'encryptedsni.com'});
-      expect(n.warnings.whereType<EchResolverIgnoredWarning>(), isEmpty);
+      expect(tlsOf(n).containsKey('ech'), isFalse);
+      expect(n.warnings.whereType<EchIgnoredWarning>().single,
+          const EchIgnoredWarning('ip.gs'));
     });
 
-    test('пустое / none → ECH не включаем', () {
+    test('пустое / none → ни ech-блока, ни warning', () {
       for (final v in ['', 'none', 'NONE', '  ']) {
         final n = parseUri(
           'trojan://pw@example.com:443?type=ws&path=%2Fx&security=tls'
           '&ech=${Uri.encodeQueryComponent(v)}&sni=example.com#node',
         )!;
         expect(tlsOf(n).containsKey('ech'), isFalse, reason: 'ech=$v');
+        expect(n.warnings.whereType<EchIgnoredWarning>(), isEmpty,
+            reason: 'ech=$v');
       }
     });
 
-    test('ech отсутствует → ключа нет', () {
+    test('ech отсутствует → warning не появляется', () {
       final n = parseUri(
         'trojan://pw@example.com:443?type=ws&path=%2Fx'
         '&security=tls&sni=example.com#node',
       )!;
-      expect(tlsOf(n).containsKey('ech'), isFalse);
-    });
-
-    test('имя пустое при заданном резолвере → ECH включаем (ядро спросит sni)',
-        () {
-      final n = parseUri(
-        'trojan://pw@example.com:443?type=ws&path=%2Fx&security=tls'
-        '&ech=%2Budp%3A%2F%2F8.8.8.8&sni=example.com#node',
-      )!;
-      expect(tlsOf(n)['ech'], {'enabled': true});
-      expect(n.warnings.whereType<EchResolverIgnoredWarning>(), hasLength(1));
+      expect(n.warnings.whereType<EchIgnoredWarning>(), isEmpty);
     });
 
     test('echfq не читается совсем (legacy pq-schemes роняет конфиг ядра)', () {
@@ -79,67 +74,58 @@ void main() {
         '&fp=chrome&echfq=none#node',
       )!;
       expect(tlsOf(n).containsKey('ech'), isFalse);
-      expect(n.warnings.whereType<EchResolverIgnoredWarning>(), isEmpty);
+      expect(n.warnings.whereType<EchIgnoredWarning>(), isEmpty);
     });
 
-    test('security=none → TLS выключен, ech не всплывает', () {
-      final n = parseUri(
-        'trojan://pw@example.com:443?type=tcp&security=none'
-        '&ech=ip.gs#node',
-      )!;
-      expect(tlsOf(n), {'enabled': false});
-    });
-  });
-
-  group('vless: ECH во всех TLS-ветвях', () {
-    test('plain TLS', () {
+    test('vless: то же поведение', () {
       final n = parseUri(
         'vless://11111111-2222-3333-4444-555555555555@example.com:443'
         '?type=ws&path=%2Fx&security=tls&ech=ip.gs&sni=example.com#node',
       )!;
-      expect(tlsOf(n)['ech'], {'enabled': true, 'query_server_name': 'ip.gs'});
+      expect(tlsOf(n).containsKey('ech'), isFalse);
+      expect(n.warnings.whereType<EchIgnoredWarning>(), hasLength(1));
     });
 
-    test('REALITY — ECH сохраняется рядом', () {
+    test('REALITY-ветка: ech игнорируется, reality цел', () {
       const pbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
       final n = parseUri(
         'vless://11111111-2222-3333-4444-555555555555@example.com:443'
         '?security=reality&pbk=$pbk&sid=ab&ech=ip.gs&sni=example.com#node',
       )!;
       final tls = tlsOf(n);
-      expect(tls['ech'], {'enabled': true, 'query_server_name': 'ip.gs'});
+      expect(tls.containsKey('ech'), isFalse);
       expect((tls['reality'] as Map)['public_key'], pbk);
+      expect(n.warnings.whereType<EchIgnoredWarning>(), hasLength(1));
+    });
+  });
+
+  group('ALPN проносится дословно (§320 — фильтр по транспорту откачен)', () {
+    test('ws + h3,h2,http/1.1 → список как в ссылке', () {
+      final n = parseUri(
+        'trojan://humanity@45.130.125.158:443?path=%2Fassignment'
+        '&security=tls&alpn=h3%2Ch2%2Chttp%2F1.1&host=www.ignitelimit.com'
+        '&type=ws&sni=www.ignitelimit.com#node',
+      )!;
+      expect(tlsOf(n)['alpn'], ['h3', 'h2', 'http/1.1']);
+    });
+
+    test('ws + только h2 → h2 остаётся', () {
+      final n = parseUri(
+        'trojan://pw@example.com:443?type=ws&path=%2Fx&security=tls'
+        '&alpn=h2&sni=example.com#node',
+      )!;
+      expect(tlsOf(n)['alpn'], ['h2']);
     });
   });
 
   group('round-trip', () {
-    test('toUri несёт ech=, второй проход даёт тот же блок', () {
-      final src = 'trojan://pw@example.com:443?type=ws&path=%2Fx'
-          '&security=tls&ech=ip.gs%2Budp%3A%2F%2F8.8.8.8&sni=example.com#node';
-      final n = parseUri(src)! as TrojanSpec;
-      expect(n.tls.ech, const EchSpec(queryServerName: 'ip.gs'));
-
-      final uri = n.toUri();
-      expect(Uri.parse(uri).queryParameters['ech'], 'ip.gs');
-
-      // Резолвер уже отброшен — во втором проходе warning не повторяется.
-      final again = parseUri(uri)!;
-      expect(tlsOf(again)['ech'],
-          {'enabled': true, 'query_server_name': 'ip.gs'});
-      expect(again.warnings.whereType<EchResolverIgnoredWarning>(), isEmpty);
-    });
-  });
-
-  group('EchSpec', () {
-    test('пустое имя → только enabled', () {
-      expect(const EchSpec().toSingbox(), {'enabled': true});
-    });
-
-    test('равенство по значению', () {
-      expect(const EchSpec(queryServerName: 'a'),
-          const EchSpec(queryServerName: 'a'));
-      expect(const EchSpec(queryServerName: 'a'),
-          isNot(const EchSpec(queryServerName: 'b')));
+    test('toUri не изобретает ech', () {
+      final uri = parseUri(
+        'trojan://pw@example.com:443?type=ws&path=%2Fx&security=tls'
+        '&ech=ip.gs%2Budp%3A%2F%2F8.8.8.8&sni=example.com#node',
+      )!
+          .toUri();
+      expect(Uri.parse(uri).queryParameters.containsKey('ech'), isFalse);
     });
   });
 }

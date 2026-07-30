@@ -1,8 +1,12 @@
-# §320 — четыре потери при импорте ws-подписок: `ed`/`eh` в query, ALPN поверх ws, ECH, двойное кодирование пути
+# §320 — потери при импорте ws-подписок: `ed`/`eh` в query, двойное кодирование пути (+ ECH: почему НЕ применяем)
 
 **Тип:** bugfix (импорт/конвертация) · **Статус:** ✅ реализовано · **Размер:** M · **Область:** parser (URI + JSON) + tls/transport-модель
 
-Разбор публичной trojan-подписки (`arshiacomplus/v2rayExtractor`, 105 узлов) показал: парсер не отбрасывает ни одной строки, все 105 дают конфиг. Но у 10 узлов конфиг **неверный** — четыре независимых потери параметров. Пять из них не подключатся гарантированно.
+Разбор публичной trojan-подписки (`arshiacomplus/v2rayExtractor`, 105 узлов) показал: парсер не отбрасывает ни одной строки, все 105 дают конфиг.
+
+**Итог задачи после device-верификации:** реализованы только пункты 1 и 4 — они восстанавливают то, что в ссылке написано дословно. Пункты 2 (ALPN-фильтр) и 3 (включение ECH) **откачены**: оба были построены на рассуждении, а не на замере, и ECH доказанно ломал живой узел. Вместо включения ECH — `EchIgnoredWarning`, чтобы потеря была видимой.
+
+Принцип, к которому пришли: **конфиг строится строго по ссылке.** Отклонения допустимы только там, где ядро на входе из ссылки роняет весь конфиг (§169 битый `pbk`, §115 `flow`, §217 xhttp-энумы) — то есть как защита от fatal, а не как «мы знаем лучше провайдера`.
 
 Отдельно зафиксировано (не баг, чинить нечего): 78% подписки — один провайдер (пароль `humanity`, путь `/assignment`, 6 CDN-хостов), парсится корректно. Массовая неработоспособность такой подписки — состояние инфраструктуры провайдера, не парсинг.
 
@@ -19,34 +23,45 @@ trojan://Aimer@167.68.4.199:2053?ed=2560&eh=Sec-WebSocket-Protocol&path=%2F%3Fpr
 
 Здесь нет противоречия с §303, где path-режим оставлен намеренно: §303 говорит «не подставлять имя заголовка, которого в ссылке нет». Явный `eh=` в ссылке — это и есть указание провайдера использовать header-режим.
 
-## Проблема 2 — ALPN `h2`/`h3` поверх ws (3 узла, коннект сломан)
+## Проблема 2 — ALPN `h2`/`h3` поверх ws — ГИПОТЕЗА ОТКЛОНЕНА
+
+Первая редакция §320 срезала `h2`/`h3` для ws/httpupgrade: WebSocket в ядре идёт через `ws.Dialer.Upgrade` поверх HTTP/1.1 (`transport/v2raywebsocket/client.go`), и казалось, что согласованный HTTP/2 ломает апгрейд.
+
+**Проверки не было.** Ни один узел не замерен до/после — вывод сделан из чтения кода ядра. При этом в таких ссылках `http/1.1` обычно указан в списке рядом (`alpn=h3,h2,http/1.1`), то есть клиент и сервер договорятся о нём сами, и ломаться нечему.
+
+Фильтр откачен. ALPN проносится дословно, как в ссылке. Если `h2` действительно ломает ws-узлы — это надо сначала показать замером, и только потом чинить.
+
+## Проблема 3 — `ech`: включать НЕЛЬЗЯ (device-verified)
 
 ```
-trojan://humanity@45.130.125.158:443?alpn=h3%2Ch2%2Chttp%2F1.1&type=ws&…
-→ "alpn":["h3","h2","http/1.1"]
-```
-
-ALPN проносится дословно. Сервер согласует `h2` (или `h3`), после чего WebSocket-апгрейд поверх HTTP/1.1 не проходит. WebSocket в sing-box — только HTTP/1.1 (`ws.Dialer.Upgrade` в [`client.go:93`](../../../../sing-box-lx/transport/v2raywebsocket/client.go)); `httpupgrade` — тоже HTTP/1.1 по определению.
-
-Мусор происхождением из vless/vmess-шаблонов, где ALPN копируют в ссылку независимо от транспорта.
-
-## Проблема 3 — `ech` / `echfq` молча отбрасываются (4 узла, теряется маскировка SNI)
-
-```
-?ech=ip.gs%2Budp%3A%2F%2F8.8.8.8      →  в конфиг не попадает, warning'а нет
-?ech=encryptedsni.com%2Budp%3A%2F%2F8.8.8.8
+?ech=ip.gs%2Budp%3A%2F%2F8.8.8.8          (2 узла)
+?ech=encryptedsni.com%2Budp%3A%2F%2F8.8.8.8  (1 узел)
 ?echfq=none
 ```
 
-Коннект от этого не ломается (сервер ECH не требует), но теряется ровно то, за чем ноду и берут — сокрытие SNI от DPI. И теряется молча, что хуже самой потери.
+Первая редакция §320 включала ECH-блок ядра, считая, что параметр «молча теряется». Это оказалось **регрессом**: узел, работавший до фикса, стал мёртвым.
 
-Xray-формат: `<query-name>+<resolver-URL>`. Левая часть — имя для HTTPS-DNS-запроса, отличное от SNI (у всех 3 узлов так и есть: `ech=ip.gs` при `sni=www.ignitelimit.com`). Это в точности `query_server_name` ядра.
+**Почему.** Форма `ech=<name>+<resolver>` не несёт ECH-ключа — она означает «возьми ECHConfigList из DNS HTTPS-записи имени `<name>`», и ключ принадлежит тому имени, у которого взят. Подписки кладут туда **публичные ECH-пробники**. Логи ядра на устройстве:
 
-Модель ядра ([`common/tls/ech.go:27-55`](../../../../sing-box-lx/common/tls/ech.go)): при пустом `config`/`config_path` ядро **само** тянет ECHConfigList из DNS HTTPS-записи, спрашивая `query_server_name` (а при пустом — `server_name`). Значит для импорта достаточно `{"enabled":true,"query_server_name":"<левая часть>"}`.
+```
+dns: exchanged HTTPS encryptedsni.com. 300 IN HTTPS ... ech="AEX+DQBBLAAgACBjfySA55..."
+dns: cached   HTTPS ip.gs.            299 IN HTTPS ... ech="AEX+DQBBLAAgACBjfySA55..."   ← ТОТ ЖЕ конфиг
+```
 
-**Правая часть (resolver) отбрасывается осознанно:** в `OutboundECHOptions` поля под свой резолвер нет — ядро идёт через общий `dnsRouter` (`ech.go:151`). Пробрасывать некуда, и подмена глобального DNS ради одного узла была бы хуже потери. Отбрасывание — с `NodeWarning`, а не молча.
+Base64 декодируется в `public_name = cloudflare-ech.com`, тогда как SNI узлов — `www.ignitelimit.com` / `space.byu.id.yxls.eu.cc`. Ключ не от того сервера ⇒ ClientHello зашифрован впустую, рукопожатие падает.
 
-`echfq=none` — Xray-специфичный `pq-signature-schemes` флаг; в ядре парная опция помечена `Deprecated: not supported by stdlib` и при `true` **роняет конфиг** (`ech.go:38-40`: «legacy ECH options are deprecated… removed in sing-box 1.13.0»). Игнорируем полностью — ни в конфиг, ни в warning.
+**A/B на устройстве** (узел `172.67.149.60`, path `/in-pdr`, пароль `c206d543-…`):
+
+| конфиг | результат |
+|---|---|
+| с `ech` (первая редакция §320) | **−1, мёртв** |
+| без `ech` (после отката) | **723 ms** |
+
+**Эталон NekoBox.** В его базе (`/data/data/com.nb4a.plus/databases/sager_net.db`, таблица `proxy_entities`) те же 103 trojan-узла той же подписки — и **ноль** вхождений `ech` / `ip.gs` / `encryptedsni`. Параметр отбрасывается при импорте, тот же узел (`id=295`) живой на **23 ms**.
+
+**Почему нельзя починить фильтром.** Пригодность видна только по `public_name` из уже полученного ECHConfigList — то есть в рантайме ядра, после DNS-запроса. Fallback на обычный TLS в sing-box отсутствует: `common/tls/ech.go` при неудаче возвращает ошибку, а не деградирует. Правило «`ech` должно совпадать с `sni`» отсекло бы нынешние пробники, но не доказало бы, что ключ принадлежит серверу.
+
+**Решение:** ECH из URI-подписок не применяем. `EchIgnoredWarning` (severity info — узел рабочий, теряется только маскировка SNI). `echfq` не читаем вовсе: Xray-шный pq-signature-schemes, парная опция ядра помечена «legacy… removed in sing-box 1.13.0» и при `true` роняет конфиг.
 
 ## Проблема 4 — двойное percent-кодирование пути (1 узел, коннект сломан)
 
@@ -75,48 +90,15 @@ eh  := query['eh']                        // непустая строка, ин
 
 Для **httpupgrade** оба параметра отбрасываются как раньше (early data у него в ядре нет).
 
-### ALPN × транспорт (проблема 2)
+### ALPN (проблема 2) — ничего не делаем
 
-Фильтр применяется на **эмите**, не на парсинге: `TlsSpec` хранит то, что было в ссылке (round-trip и вкладка Source не должны врать), а `alpn` в конфиг отдаётся уже отфильтрованным по фактическому транспорту узла.
+Фильтр откачен, `compatibleAlpn`/`alpnFor` удалены. ALPN идёт в конфиг дословно из ссылки.
 
-Для `ws` / `httpupgrade`: из списка убираются все значения кроме `http/1.1`. Пустой результат → ключ `alpn` не эмитится вовсе (ядро подставит своё). Каждое снятое значение → `NodeWarning`.
+### ECH (проблема 3) — не применяем, но предупреждаем
 
-Транспорт знает про свой ALPN сам — новый геттер на `TransportSpec`, чтобы правило не расползлось по протоколам:
+Поля `TlsSpec.ech` и класса `EchSpec` нет — не заводим модель под то, что не эмитим. Вместо парсинга — `warnEchIgnored(q, warnings)` в `transport.dart`: при непустом и не-`none` значении добавляет `EchIgnoredWarning(<имя до "+">)`.
 
-```dart
-sealed class TransportSpec {
-  /// ALPN-идентификаторы, совместимые с транспортом; null = ограничений нет.
-  List<String>? get compatibleAlpn => null;   // grpc/http/h2/xhttp — не ограничиваем
-}
-final class WsTransport … {
-  @override List<String>? get compatibleAlpn => const ['http/1.1'];
-}
-final class HttpUpgradeTransport … {
-  @override List<String>? get compatibleAlpn => const ['http/1.1'];
-}
-```
-
-Применяется во всех протоколах, где транспорт и TLS соседствуют: trojan, vless, vmess (эмит через общий хелпер, а не копипастой в каждом `emit*`).
-
-### ECH (проблема 3)
-
-Новое поле `TlsSpec.ech` — отдельный класс, а не строка (в ядре это объект с четырьмя полями; строкой пришлось бы парсить на каждом эмите):
-
-```dart
-class EchSpec {
-  final String queryServerName;   // '' = ядро спросит server_name
-  Map<String, dynamic> toSingbox() => {
-    'enabled': true,
-    if (queryServerName.isNotEmpty) 'query_server_name': queryServerName,
-  };
-}
-```
-
-Парсинг `ech=<name>+<resolver>`: левая часть до первого `+` → `queryServerName`; `+resolver` при наличии → `EchResolverIgnoredWarning`. Значение без `+` — целиком имя. Пустое/`none` → ECH не включаем.
-
-`echfq` не читаем (см. выше).
-
-**§221 и round-trip.** Инвариант `parseUri(spec.toUri()) ≈ spec` ([`node_spec.dart:120`](../../../app/lib/models/node_spec.dart)) требует обратного хода: `toUri*` для протоколов с TLS отдаёт `ech=<queryServerName>`. Узлы персистятся как URI-строки, так что без этого ECH терялся бы при первом же пересохранении. Отдельного ключа в storage-allowlist не появляется — поле живёт внутри URI.
+Round-trip не затрагивается: `toUri*` про `ech` ничего не знает, так что параметр исчезает из ссылки при пересохранении узла. Это осознанно — хранить нерабочий параметр незачем, а warning объясняет, куда он делся.
 
 ### Двойное кодирование пути (проблема 4)
 
@@ -126,18 +108,15 @@ class EchSpec {
 
 ## Файлы
 
-- `lib/models/tls_spec.dart` — `EchSpec`, поле `ech` в `TlsSpec` (+ `copyWith`/`==`/`hashCode`), фильтр ALPN в `_toSingbox`.
-- `lib/models/transport_spec.dart` — геттер `compatibleAlpn` на `TransportSpec` + переопределения у `WsTransport` / `HttpUpgradeTransport`.
-- `lib/models/node_spec_emit.dart` — общий хелпер эмита TLS с ALPN-фильтром по транспорту; `ech=` в `toUri*`.
-- `lib/models/node_warning.dart` — `IncompatibleAlpnWarning`, `EchResolverIgnoredWarning`.
-- `lib/services/parser/transport.dart` — `ed`/`eh` из query, `decodeResidualPercent`, парсинг `ech` в `parseTrojanTls`/`parseVlessTls`.
+- `lib/models/node_warning.dart` — `EchIgnoredWarning` (info).
+- `lib/services/parser/transport.dart` — `ed`/`eh` из query, `decodeResidualPercent`, `warnEchIgnored` (вызов из `parseVlessTls`/`parseTrojanTls` через опциональный `warnings`).
 - `lib/services/parser/json_parsers.dart` — `wsSettings.ed` / `.eh` из Xray JSON.
+- `lib/models/transport_spec.dart` — round-trip `eh` в `transportToQuery`.
+- `assets/l10n/ru/ui.json` — строка warning'а.
 
-**ECH в JSON-путях не реализован осознанно.** У Xray-JSON своя схема ECH
-(`tlsSettings.echConfigList` — PEM/base64 самого конфига, а не `name+resolver`),
-и в разобранной подписке её нет ни в одном виде. Реализовать «по аналогии»
-значило бы угадывать формат; берётся отдельной задачей, когда появится живой
-образец. sing-box-JSON путь уже читает `early_data_header_name` штатно.
+`tls_spec.dart` и `node_spec_emit.dart` вернулись к исходному виду (правки ALPN/ECH откачены).
+
+**ECH в JSON-путях не реализован осознанно.** У Xray-JSON своя схема (`tlsSettings.echConfigList` — PEM самого конфига, а не `name+resolver`), и в разобранной подписке её нет. Реализовывать «по аналогии» значило бы угадывать формат.
 
 ## Приёмка
 
@@ -147,21 +126,20 @@ class EchSpec {
 - `?eh=X` без `ed` → ни одного из двух ключей.
 - `?ed=abc` / `ed=-1` / `ed=0` → ключей нет.
 - httpupgrade с `ed`/`eh` в query → путь чист, ключей нет.
+- Xray JSON `wsSettings.ed`/`.eh` (int и строкой) → те же поля.
 - `toUri()` возвращает и `path=/x?ed=N`, и `eh=` (когда header-режим).
 
-Проблема 2:
-- ws + `alpn=h3,h2,http/1.1` → `"alpn":["http/1.1"]` + `IncompatibleAlpnWarning`.
-- ws + `alpn=h2` → ключа `alpn` нет вовсе + warning.
-- ws + `alpn=http/1.1` → без изменений, без warning.
-- grpc/h2/xhttp + `alpn=h2` → без изменений (не ограничиваем).
-- `TlsSpec.alpn` после парсинга хранит исходный список (round-trip цел).
+Проблема 2 (откат):
+- ws + `alpn=h3,h2,http/1.1` → `"alpn":["h3","h2","http/1.1"]` дословно, без warning'а.
+- ws + `alpn=h2` → `"alpn":["h2"]`.
 
-Проблема 3:
-- `ech=ip.gs+udp://8.8.8.8` → `"ech":{"enabled":true,"query_server_name":"ip.gs"}` + `EchResolverIgnoredWarning`.
-- `ech=ip.gs` → тот же ech-блок, без warning.
-- `echfq=none` → ни ech-блока, ни warning.
-- `ech=` / `ech=none` → ech-блока нет.
-- round-trip: `parseUri(toUri())` сохраняет `queryServerName`.
+Проблема 3 (откат + warning):
+- `ech=ip.gs+udp://8.8.8.8` → ключа `ech` в конфиге НЕТ + `EchIgnoredWarning('ip.gs')`.
+- `ech=ip.gs` (без resolver) → то же.
+- `ech=` / `ech=none` → ни ключа, ни warning'а.
+- `echfq=none` → ни ключа, ни warning'а.
+- REALITY-ветка: `ech` игнорируется, `reality.public_key` цел.
+- `toUri()` не содержит `ech`.
 
 Проблема 4:
 - `path=%2F%252Fassignment` → `"path":"//assignment"`.
@@ -169,11 +147,16 @@ class EchSpec {
 - `path=Telegram🇨🇳` → как есть (ядро добавит слэш).
 - `path=%2F%253Fed%253D2560` (двойное кодирование хвоста) → путь `/`, `max_early_data:2560`.
 
-Регресс: `flutter test` целиком + `flutter analyze` по всему проекту (§CI — не только `lib/`).
+Device (выполнено):
+- конфиг с 103 trojan-узлами стартует, `last_start_error` пуст;
+- A/B ECH: с `ech` −1, без `ech` 723 мс — см. Проблему 3;
+- сверка с NekoBox по `sager_net.db`: 103 узла, 0 упоминаний `ech`, тот же узел живой 23 мс.
 
-**Тесты:** `test/parser/ws_query_early_data_test.dart`, `test/parser/alpn_transport_filter_test.dart`, `test/parser/ech_import_test.dart`, `test/parser/path_double_encoding_test.dart`.
+Регресс: `flutter test` целиком + `flutter analyze` по всему проекту + 4 l10n-чекера (§CI).
+
+**Тесты:** `test/parser/ws_query_early_data_test.dart` (14), `test/parser/ech_import_test.dart` (11 — игнор ECH + дословный ALPN), `test/parser/path_double_encoding_test.dart` (11).
 
 ## Docs to update
 
-- `docs/PROTOCOLS.md` — ECH в TLS-секции; ограничение ALPN для ws/httpupgrade.
-- Release notes — «ECH из подписок больше не теряется; ALPN `h2`/`h3` на WebSocket-узлах больше не ломает подключение; early data в форме `?ed=&eh=` распознаётся».
+- `docs/PROTOCOLS.md` — «ECH from subscriptions is ignored (§320)» в Common Behaviors + форма `?ed=&eh=` и двойное кодирование в заметке про early data. ✅
+- Release notes — «early data в форме `?ed=&eh=` распознаётся; путь с двойным percent-кодированием больше не даёт 404; `ech` из подписок не применяется (ломал рукопожатие) — узел помечается предупреждением».

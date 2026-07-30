@@ -228,45 +228,25 @@ final class XhttpParamResetWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
-/// §320 — ALPN, несовместимый с транспортом узла, снят на эмите. `h2`/`h3`
-/// поверх WebSocket/httpupgrade — мусор из vless/vmess-шаблонов: сервер
-/// согласует HTTP/2 и апгрейд поверх HTTP/1.1 уже не проходит.
-final class IncompatibleAlpnWarning extends NodeWarning {
-  final String transport;
+/// §320 — `ech` из подписки проигнорирован. Xray-форма `ech=<name>+<resolver>`
+/// не несёт ключа, а лишь имя для DNS-запроса; подписки кладут туда публичные
+/// ECH-пробники (`ip.gs`, `encryptedsni.com`), чьи ключи не принадлежат серверу
+/// узла — включённый ECH ломает рукопожатие. Проверить пригодность до
+/// подключения нельзя, fallback в ядре отсутствует, поэтому параметр не
+/// применяется. Info: узел от этого рабочий, теряется только маскировка SNI.
+final class EchIgnoredWarning extends NodeWarning {
+  /// Имя из левой части `ech` (до `+`), как его написал провайдер.
+  final String queryName;
 
-  /// Снятые идентификаторы в порядке из ссылки.
-  final List<String> dropped;
-
-  const IncompatibleAlpnWarning(this.transport, this.dropped);
-
-  @override
-  List<Object?> get props => [transport, ...dropped];
+  const EchIgnoredWarning(this.queryName);
 
   @override
-  String messageWith(GetLocalText t) => t.s(
-      "ALPN \"%1\$s\" dropped — \"%2\$s\" transport runs over HTTP/1.1 only (node would otherwise fail to connect).",
-      dropped.join(', '),
-      transport);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
-
-/// §320 — у ECH-параметра подписки был указан свой DNS-резолвер
-/// (`ech=name+udp://8.8.8.8`), но в sing-box его прокинуть некуда: ECHConfigList
-/// тянется через общий DNS роутера. Имя запроса сохранено, резолвер отброшен.
-final class EchResolverIgnoredWarning extends NodeWarning {
-  final String resolver;
-
-  const EchResolverIgnoredWarning(this.resolver);
-
-  @override
-  List<Object?> get props => [resolver];
+  List<Object?> get props => [queryName];
 
   @override
   String messageWith(GetLocalText t) => t.s(
-      "ECH resolver \"%s\" ignored — sing-box fetches the ECH config list over the app's own DNS.",
-      resolver);
+      "ECH is not applied: \"%s\" from the link points to a public ECH probe, not to this server — enabling it would break the TLS handshake.",
+      queryName);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;

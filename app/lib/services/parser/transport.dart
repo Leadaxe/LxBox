@@ -240,30 +240,31 @@ String _normScRange(String v) {
   return v;
 }
 
-/// §320 — ECH из query подписки. Xray-форма: `ech=<query-name>+<resolver-URL>`
-/// (`ech=ip.gs+udp://8.8.8.8`); часто и просто `ech=<query-name>`.
+/// §320 — ECH из подписки НЕ включаем, только предупреждаем.
 ///
-/// Левая часть — имя для HTTPS-DNS-запроса, ОТЛИЧНОЕ от SNI (реальные ноды:
-/// `ech=ip.gs` при `sni=www.ignitelimit.com`), т.е. ровно `query_server_name`.
-/// Резолвер отбрасываем с warning'ом: в `OutboundECHOptions` поля под него нет,
-/// ядро тянет ECHConfigList через общий DNS роутера (common/tls/ech.go).
+/// Xray-форма `ech=<name>+<resolver>` не несёт ECH-ключа: она означает «возьми
+/// ECHConfigList из DNS HTTPS-записи имени `<name>`». Ключ привязан к тому
+/// имени, у которого взят, — а подписки кладут туда публичные ECH-пробники
+/// (`ip.gs`, `encryptedsni.com`). DEVICE-VERIFIED: DNS отдаёт для обоих ОДИН
+/// конфиг с `public_name = cloudflare-ech.com`, тогда как SNI узла —
+/// `www.ignitelimit.com`. Ключ не от того сервера ⇒ ClientHello зашифрован
+/// впустую и рукопожатие падает.
 ///
-/// `echfq` НЕ читаем сознательно: это Xray-шный pq-signature-schemes, парная
-/// опция ядра помечена «legacy… removed in sing-box 1.13.0» и при `true`
-/// роняет весь конфиг (ech.go: parseECHClientConfig).
-EchSpec? parseEch(Map<String, String> q, List<NodeWarning> warnings) {
+/// Замер на устройстве (узел 172.67.149.60 `/in-pdr`): с `ech` — мёртв, без
+/// `ech` — 723 мс. NekoBox этот параметр отбрасывает (в его базе 103 узла, ни
+/// одного упоминания `ech`) и держит тот же узел живым на 23 мс.
+///
+/// Проверить пригодность до подключения нельзя: `public_name` виден только
+/// после DNS-запроса, уже в рантайме ядра, а fallback на обычный TLS в sing-box
+/// отсутствует (`ech.go` при неудаче возвращает ошибку, а не откат). Поэтому
+/// единственное безопасное поведение — не включать, но сказать об этом.
+///
+/// `echfq` не читаем: Xray-шный pq-signature-schemes, парная опция ядра
+/// помечена «legacy… removed in sing-box 1.13.0» и при `true` роняет конфиг.
+void warnEchIgnored(Map<String, String> q, List<NodeWarning> warnings) {
   final raw = (q['ech'] ?? '').trim();
-  if (raw.isEmpty || raw.toLowerCase() == 'none') return null;
-
-  final plus = raw.indexOf('+');
-  if (plus < 0) return EchSpec(queryServerName: raw);
-
-  final name = raw.substring(0, plus).trim();
-  final resolver = raw.substring(plus + 1).trim();
-  if (resolver.isNotEmpty) warnings.add(EchResolverIgnoredWarning(resolver));
-  // Имя пустое (`ech=+udp://…`) — ECH всё равно включаем: ядро в этом случае
-  // спросит HTTPS-запись для server_name, что для такой ссылки и логично.
-  return EchSpec(queryServerName: name);
+  if (raw.isEmpty || raw.toLowerCase() == 'none') return;
+  warnings.add(EchIgnoredWarning(raw.split('+').first.trim()));
 }
 
 /// TLS parameters for VLESS (с поддержкой REALITY через `pbk`/`sid`).
@@ -273,8 +274,8 @@ TlsSpec parseVlessTls(
   int port, {
   List<NodeWarning>? warnings,
 }) {
-  // §320 — ECH сквозной для всех ветвей ниже (plain TLS / REALITY / reality-sec).
-  final ech = parseEch(q, warnings ?? <NodeWarning>[]);
+  // §320 — ECH из ссылки не включаем (ломает узлы), но предупреждаем.
+  if (warnings != null) warnEchIgnored(q, warnings);
   final sec = (q['security'] ?? '').toLowerCase().trim();
   final pbk = (q['pbk'] ?? '').trim();
 
@@ -300,8 +301,7 @@ TlsSpec parseVlessTls(
       ),
       insecure: isTlsInsecure(q),
       alpn: _alpnFromQuery(q),
-      ech: ech,
-    );
+      );
   }
 
   if (sec == 'reality') {
@@ -311,8 +311,7 @@ TlsSpec parseVlessTls(
       fingerprint: fp,
       insecure: isTlsInsecure(q),
       alpn: _alpnFromQuery(q),
-      ech: ech,
-    );
+      );
   }
 
   if (sec.isEmpty && plaintextVlessPorts.contains(port)) return TlsSpec.disabled;
@@ -323,7 +322,6 @@ TlsSpec parseVlessTls(
     fingerprint: fp,
     insecure: isTlsInsecure(q),
     alpn: _alpnFromQuery(q),
-    ech: ech,
   );
 }
 
@@ -333,7 +331,7 @@ TlsSpec parseTrojanTls(
   String server, {
   List<NodeWarning>? warnings,
 }) {
-  final ech = parseEch(q, warnings ?? <NodeWarning>[]);
+  if (warnings != null) warnEchIgnored(q, warnings);
   final sec = (q['security'] ?? '').toLowerCase().trim();
   if (sec == 'none') return TlsSpec.disabled;
 
@@ -347,7 +345,6 @@ TlsSpec parseTrojanTls(
     fingerprint: fp.isEmpty ? null : fp,
     insecure: isTlsInsecure(q),
     alpn: _alpnFromQuery(q),
-    ech: ech,
   );
 }
 

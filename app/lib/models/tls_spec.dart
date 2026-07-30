@@ -1,5 +1,3 @@
-import 'transport_spec.dart';
-
 /// TLS-параметры узла. Singleton для «TLS выключен» — `TlsSpec.disabled`.
 ///
 /// `reality != null` — взаимоисключающе с uTLS fingerprint'ом в sing-box
@@ -12,9 +10,6 @@ class TlsSpec {
   final String? fingerprint; // utls: chrome, firefox, safari, etc.
   final RealitySpec? reality;
 
-  /// §320 — Encrypted Client Hello. `null` = ECH не запрошен.
-  final EchSpec? ech;
-
   const TlsSpec({
     required this.enabled,
     this.serverName,
@@ -22,31 +17,11 @@ class TlsSpec {
     this.insecure = false,
     this.fingerprint,
     this.reality,
-    this.ech,
   });
 
   static const disabled = TlsSpec(enabled: false);
 
-  Map<String, dynamic> toSingbox({TransportSpec? transport}) =>
-      _toSingbox(quic: false, transport: transport);
-
-  /// §320 — ALPN, совместимый с [transport] (`h2`/`h3` поверх ws/httpupgrade
-  /// ломают апгрейд). Возвращает `(отфильтрованный список, снятые значения)`;
-  /// снятые уходят в `IncompatibleAlpnWarning` на стороне эмита узла.
-  ///
-  /// Фильтр живёт на эмите, а не в парсере: `alpn` хранит то, что было в
-  /// ссылке, иначе round-trip (`toUri`) и вкладка Source врали бы.
-  static (List<String> kept, List<String> dropped) alpnFor(
-      List<String> alpn, TransportSpec? transport) {
-    final allowed = transport?.compatibleAlpn;
-    if (allowed == null || alpn.isEmpty) return (alpn, const []);
-    final kept = <String>[];
-    final dropped = <String>[];
-    for (final a in alpn) {
-      (allowed.contains(a) ? kept : dropped).add(a);
-    }
-    return (kept, dropped);
-  }
+  Map<String, dynamic> toSingbox() => _toSingbox(quic: false);
 
   /// §282 — uTLS И REALITY поверх QUIC (hysteria2/tuic) в ядре не работают
   /// вообще: их `STDConfig()` возвращает ошибку («unsupported usage for
@@ -56,21 +31,14 @@ class TlsSpec {
   /// срезаем `utls` и `reality`; server_name/alpn/insecure цел.
   Map<String, dynamic> toSingboxForQuic() => _toSingbox(quic: true);
 
-  Map<String, dynamic> _toSingbox({
-    required bool quic,
-    TransportSpec? transport,
-  }) {
+  Map<String, dynamic> _toSingbox({required bool quic}) {
     if (!enabled) return const {};
     final m = <String, dynamic>{'enabled': true};
     if (serverName != null && serverName!.isNotEmpty) {
       m['server_name'] = serverName;
     }
-    // §320 — пустой результат фильтра = ключ не эмитим вовсе (у ядра свой
-    // дефолт), а не `[]` — пустой список ядро трактует как «нет ALPN».
-    final (keptAlpn, _) = alpnFor(alpn, transport);
-    if (keptAlpn.isNotEmpty) m['alpn'] = List<String>.from(keptAlpn);
+    if (alpn.isNotEmpty) m['alpn'] = List<String>.from(alpn);
     if (insecure) m['insecure'] = true;
-    if (ech != null) m['ech'] = ech!.toSingbox();
     if (!quic && fingerprint != null && fingerprint!.isNotEmpty) {
       m['utls'] = {'enabled': true, 'fingerprint': fingerprint};
     }
@@ -87,7 +55,6 @@ class TlsSpec {
     bool? insecure,
     String? fingerprint,
     RealitySpec? reality,
-    EchSpec? ech,
   }) =>
       TlsSpec(
         enabled: enabled ?? this.enabled,
@@ -96,7 +63,6 @@ class TlsSpec {
         insecure: insecure ?? this.insecure,
         fingerprint: fingerprint ?? this.fingerprint,
         reality: reality ?? this.reality,
-        ech: ech ?? this.ech,
       );
 
   @override
@@ -108,42 +74,11 @@ class TlsSpec {
           _listEq(alpn, other.alpn) &&
           insecure == other.insecure &&
           fingerprint == other.fingerprint &&
-          reality == other.reality &&
-          ech == other.ech);
+          reality == other.reality);
 
   @override
   int get hashCode => Object.hash(enabled, serverName, Object.hashAll(alpn),
-      insecure, fingerprint, reality, ech);
-}
-
-/// §320 — Encrypted Client Hello (клиентская сторона).
-///
-/// Xray-подписки задают ECH строкой `<query-name>+<resolver-URL>`
-/// (`ech=ip.gs+udp://8.8.8.8`). Резолвер отбрасывается на парсинге: в
-/// `option.OutboundECHOptions` поля под него нет — ядро тянет ECHConfigList
-/// через общий `dnsRouter` (`common/tls/ech.go`).
-///
-/// `config`/`config_path` не заполняем: при пустых ядро само запрашивает
-/// HTTPS-запись DNS для [queryServerName] (а при пустом — для `server_name`),
-/// что и есть штатный режим для импортированных узлов.
-class EchSpec {
-  /// Имя для HTTPS-DNS-запроса. Пусто = ядро спросит `server_name`.
-  final String queryServerName;
-
-  const EchSpec({this.queryServerName = ''});
-
-  Map<String, dynamic> toSingbox() => {
-        'enabled': true,
-        if (queryServerName.isNotEmpty) 'query_server_name': queryServerName,
-      };
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is EchSpec && queryServerName == other.queryServerName);
-
-  @override
-  int get hashCode => queryServerName.hashCode;
+      insecure, fingerprint, reality);
 }
 
 class RealitySpec {

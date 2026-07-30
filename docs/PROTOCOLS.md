@@ -1376,26 +1376,19 @@ URIs exceeding the maximum length (defined by `maxURILength`) are rejected with 
 
 Multiple query keys are checked: `insecure`, `allowInsecure`, `allowinsecure`, `allow_insecure`, `skip-cert-verify`. Values `1`, `true`, `yes` all enable insecure mode.
 
-### ALPN × transport (§320)
+### ECH from subscriptions is ignored (§320)
 
-WebSocket and httpupgrade run over HTTP/1.1 only (`ws.Dialer.Upgrade`, `transport/v2raywebsocket/client.go`). Subscription generators nevertheless copy `alpn=h3,h2,http/1.1` from vless/vmess templates: the server negotiates HTTP/2 and the upgrade then fails.
+Xray links carry ECH as `ech=<query-name>+<resolver-URL>` (e.g. `ech=ip.gs+udp://8.8.8.8`), sometimes as a bare `ech=<query-name>`. **L×Box does not apply it** — the parameter is dropped with an `EchIgnoredWarning` (info severity: the node stays usable, only SNI masking is lost).
 
-For `ws` and `httpupgrade` everything except `http/1.1` is dropped **at emit time** with an `IncompatibleAlpnWarning`; if nothing is left, the `alpn` key is omitted entirely (the core applies its own default) rather than emitted as `[]`. Other transports are not restricted.
+The form carries no ECH key. It says "fetch the ECHConfigList from the DNS HTTPS record of `<query-name>`", and the key so obtained belongs to that name. Subscriptions put **public ECH probes** there. Device-verified: DNS returns the *same* config list for both `ip.gs` and `encryptedsni.com`, decoding to `public_name = cloudflare-ech.com`, while the node's SNI is `www.ignitelimit.com` / `space.byu.id.yxls.eu.cc`. The key does not belong to the node's server, so the encrypted ClientHello is undecryptable and the handshake fails.
 
-The filter lives in the emit path, not the parser: `TlsSpec.alpn` keeps whatever the link contained, so `toUri()` and the node's Source tab stay faithful to the original.
+Measured on device (node `172.67.149.60` `/in-pdr`, path `/in-pdr`): **dead with `ech`, 723 ms without it.** NekoBox drops the parameter too — its database holds all 103 nodes of the same subscription with zero occurrences of `ech` — and keeps that node alive at 23 ms.
 
-### ECH (§320)
+Suitability cannot be checked before connecting: `public_name` is only visible after the DNS query, inside the core's runtime, and sing-box has no fallback to plain TLS (`common/tls/ech.go` returns an error rather than degrading). A stricter rule (`ech` must equal the SNI) would still not prove the key belongs to the server, so the parameter is not applied at all.
 
-Xray links carry ECH as `ech=<query-name>+<resolver-URL>` (e.g. `ech=ip.gs+udp://8.8.8.8`), sometimes as a bare `ech=<query-name>`. The left side is the name to query over DNS HTTPS records — usually **different** from the SNI — which maps exactly onto the core's `query_server_name`:
+`echfq` is not read either: it is Xray's pq-signature-schemes flag, and the core's counterpart is marked legacy and rejects the whole config when set.
 
-```json
-"tls": { "enabled": true, "server_name": "www.example.com",
-         "ech": { "enabled": true, "query_server_name": "ip.gs" } }
-```
-
-`config`/`config_path` stay unset on purpose: with both empty the core fetches the ECHConfigList itself from the DNS HTTPS record (`common/tls/ech.go`, `parseECHClientConfig` → `fetchAndHandshake`).
-
-The resolver part is **dropped** with an `EchResolverIgnoredWarning` — `option.OutboundECHOptions` has no field for it, the core resolves through the router's own DNS. `echfq` is not read at all: it is Xray's pq-signature-schemes flag, and the core's counterpart is marked legacy and rejects the whole config when set.
+**ALPN is passed through verbatim.** An earlier revision of §320 stripped `h2`/`h3` for ws/httpupgrade on the theory that HTTP/2 negotiation breaks the WebSocket upgrade. That was never measured, and such links usually list `http/1.1` alongside — client and server negotiate it themselves. The filter was reverted: the config follows the link.
 
 ---
 

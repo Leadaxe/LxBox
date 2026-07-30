@@ -3,9 +3,7 @@ import 'dart:convert';
 import '../services/parser/transport.dart';
 import '../services/parser/uri_utils.dart';
 import 'node_spec.dart';
-import 'node_warning.dart';
 import 'singbox_entry.dart';
-import 'tls_spec.dart';
 import 'template_vars.dart';
 import 'transport_spec.dart';
 
@@ -30,30 +28,6 @@ Map<String, dynamic> _baseOutbound(String type, NodeSpec s) => <String, dynamic>
 /// 9 раз (`if (s.chained != null) out['detour'] = s.chained!.tag;`).
 void _addDetour(Map<String, dynamic> out, NodeSpec s) {
   if (s.chained != null) out['detour'] = s.chained!.tag;
-}
-
-/// §320 — эмит tls-блока с ALPN, отфильтрованным по фактическому транспорту
-/// узла: `h2`/`h3` поверх ws/httpupgrade ломают апгрейд (см. `TlsSpec.alpnFor`).
-/// Снятые значения → `IncompatibleAlpnWarning`.
-///
-/// Общий хелпер, а не копипаста в каждый `emit*`: правило одно для всех
-/// протоколов, где TLS и транспорт соседствуют (vless/vmess/trojan).
-Map<String, dynamic> _tlsWithTransport(
-    NodeSpec s, TlsSpec tls, TransportSpec? transport) {
-  final (_, dropped) = TlsSpec.alpnFor(tls.alpn, transport);
-  if (dropped.isNotEmpty) {
-    final name = switch (transport!) {
-      WsTransport() => 'ws',
-      HttpUpgradeTransport() => 'httpupgrade',
-      // Прочие транспорты ALPN не ограничивают — сюда не попадают (dropped
-      // непуст только когда compatibleAlpn != null).
-      _ => '',
-    };
-    if (!s.warnings.contains(IncompatibleAlpnWarning(name, dropped))) {
-      s.warnings.add(IncompatibleAlpnWarning(name, dropped));
-    }
-  }
-  return tls.toSingbox(transport: transport);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -82,7 +56,7 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
   }
   if (s.packetEncoding.isNotEmpty) out['packet_encoding'] = s.packetEncoding;
 
-  final tlsMap = _tlsWithTransport(s, s.tls, s.transport);
+  final tlsMap = s.tls.toSingbox();
   if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
 
   _addDetour(out, s);
@@ -119,9 +93,6 @@ String toUriVless(VlessSpec s) {
     }
     if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
     if (s.tls.insecure) q['allowInsecure'] = '1';
-    // §320 — ECH обратно в ссылку: узлы персистятся как URI, без этого поле
-    // терялось бы при первом пересохранении (инвариант NodeSpec.toUri).
-    if (s.tls.ech != null) q['ech'] = s.tls.ech!.queryServerName;
   } else {
     q['security'] = 'none';
   }
@@ -147,7 +118,7 @@ Outbound emitVmess(VmessSpec s, TemplateVars vars) {
     }
   }
 
-  final tlsMap = _tlsWithTransport(s, s.tls, s.transport);
+  final tlsMap = s.tls.toSingbox();
   if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
 
   _addDetour(out, s);
@@ -221,7 +192,7 @@ Outbound emitTrojan(TrojanSpec s, TemplateVars vars) {
     }
   }
   if (s.tls.enabled) {
-    out['tls'] = _tlsWithTransport(s, s.tls, s.transport);
+    out['tls'] = s.tls.toSingbox();
   } else {
     out['tls'] = {'enabled': false};
   }
@@ -238,8 +209,6 @@ String toUriTrojan(TrojanSpec s) {
     if (s.tls.fingerprint != null) q['fp'] = s.tls.fingerprint!;
     if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
     if (s.tls.insecure) q['allowInsecure'] = '1';
-    // §320 — см. toUriVless.
-    if (s.tls.ech != null) q['ech'] = s.tls.ech!.queryServerName;
   } else {
     q['security'] = 'none';
   }
