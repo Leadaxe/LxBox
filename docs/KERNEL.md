@@ -21,7 +21,27 @@ round-robin balancer, XHTTP full params, DNS-стрим и др.).
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.17-rc.1`** — SPEC 038: `GetRunningConfig` возвращает
+**Текущий пин: `v1.14.0-lx.17-rc.3`** (v2.18.2) — два фикса поверх rc.1, оба
+без клиентских правок. **rc.2:** ротация архива отчётов (SPEC 039 / feature
+HOTFIXES) — каталоги `files/oom_reports` и `files/crash_reports` не чистились
+никогда, на устройстве накопилось **575 каталогов / 427 МБ за 19 дней**;
+теперь перед записью нового отчёта архив подрезается до **32 каталогов и 64 МБ**
+(что раньше сработает), удаление — по mtime, не по имени (суффиксы коллизий
+`-1`…`-1000` ломают лексикографический порядок). Плюс **240 upstream-коммитов**:
+из заметных для форка — URLTest теперь *требует* history storage в контексте
+вместо молчаливого создания. **rc.3:** `Endpoint.Close()` снова возвращает
+ошибку закрытия tun-устройства (nil-guard из SPEC 020 глотал её и рапортовал
+чистое завершение); nil-проверка осталась, изменилось только распространение
+ошибки. **javap-diff rc.1 → rc.3: изменений НЕТ** — `PlatformInterface`,
+`CommandClient`, `BoxService`, `Libbox` идентичны, состав классов совпадает
+(226 в обоих AAR). Device-verified 30.07.2026 (CPH2411): старт чистый,
+`last_start_error` пуст, 0 ошибок/fatal в логах, 54 живых замера.
+
+Внимание при бампе через rc.2: он несёт 240 upstream-коммитов, поэтому
+javap-diff обязателен даже когда release notes обещают «one-line fix» —
+проверять надо против **своего** пина, а не против предыдущего rc.
+
+**Предыдущий пин: `v1.14.0-lx.17-rc.1`** — SPEC 038: `GetRunningConfig` возвращает
 объект `RunningConfig` с геттером `content()` вместо голого `String`. Голая
 строка **убивала процесс ядра на android/arm64 при каждом вызове**: gomobile
 кодирует Go-строку в `nstring{void*, len}`, cgo кладёт её в `__packed__`-фрейм,
@@ -151,5 +171,6 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.14** (стабильный) | SPEC 030 — Stop не виснет 10+ сек при многих WG/AWG-эндпоинтах (глушение тика + upfront-закрытие UDP-сокетов + abort in-flight wake + конкурентный close). Ядровая половина §287. База upstream `alpha.47`. Build-теги AAR без изменений. (Промежуточные lx.12/lx.13 — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.15** (стабильный) | SPEC 002 — XHTTP за reverse-proxy: `path` сохраняется как есть, trailing slash срезается только на bare-path запросе stream-one. + merge upstream `testing` (async DNS refactor, WG detour fix, OpenConnect auth-challenge). База upstream `alpha.48`. Build-теги AAR без изменений. Device-verified на CPH2411 (2026-07-21) |
-| **v1.14.0-lx.17-rc.1** (текущий пин) | SPEC 038 — фикс fatal throw в `GetRunningConfig` (возврат `RunningConfig` вместо голой строки; см. блок «Текущий пин»). **API-брейк:** сигнатура метода изменилась, клиент обязан звать `.content()` |
+| **v1.14.0-lx.17-rc.3** (текущий пин, v2.18.2) | SPEC 039 (rc.2) — ротация архива OOM/crash-отчётов: 32 каталога / 64 МБ, удаление по mtime (на устройстве было 575 каталогов / 427 МБ за 19 дней). + **240 upstream-коммитов** (URLTest требует history storage в контексте). rc.3 — `Endpoint.Close()` снова возвращает ошибку закрытия tun-устройства. **javap-diff rc.1 → rc.3: изменений нет**, клиентских правок не потребовалось |
+| **v1.14.0-lx.17-rc.1** | SPEC 038 — фикс fatal throw в `GetRunningConfig` (возврат `RunningConfig` вместо голой строки; см. блок «Текущий пин»). **API-брейк:** сигнатура метода изменилась, клиент обязан звать `.content()` |
 | **v1.14.0-lx.16** (стабильный) | SPEC 036 — `GetRunningConfig`: снапшот работающего конфига по CommandClient (клиент — §311 LxBox); SPEC 033/035 — DNS_GROUP и его observability (клиенты — §312/§315). rc.1…rc.3 — промежуточные сборки той же ветки, метод появился в rc.3. `PlatformInterface` без изменений. Подробности — в блоке «Текущий пин» выше |
