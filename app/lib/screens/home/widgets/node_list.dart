@@ -270,7 +270,9 @@ class HomeNodeList extends StatelessWidget {
               tag: tag,
               active: tag == state.activeInGroup,
               highlighted: tag == state.highlightedNode,
-              delay: state.lastDelay[tag],
+              delay: state.delayOf(tag),
+              // §325 — замер не этого канала: рисуем приглушённо со значком.
+              delayIsForeign: state.delayIsForeign(tag),
               pingBusy: state.pingBusy[tag] == '…',
               tunnelUp: state.tunnelUp,
               busy: state.busy,

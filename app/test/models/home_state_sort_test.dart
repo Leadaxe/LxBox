@@ -52,7 +52,8 @@ void main() {
         channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'y']),
         nodes: ['x', 'direct-out', 'y'],
-        lastDelay: {'x': 50, 'y': 30},
+        delayByChannel: const {'ch': {'x': 50, 'y': 30}},
+        selectedGroup: 'ch',
         sortMode: NodeSortMode.latencyAsc,
       );
       expect(s.sortedNodes.first, 'direct-out');
@@ -63,7 +64,10 @@ void main() {
         channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'y']),
         nodes: ['x', 'direct-out', 'y'],
-        lastDelay: {'x': 50, 'y': 30, 'direct-out': 10},
+        delayByChannel: const {
+          'ch': {'x': 50, 'y': 30, 'direct-out': 10}
+        },
+        selectedGroup: 'ch',
         sortMode: NodeSortMode.latencyAsc,
         pinDirect: false,
       );
@@ -138,7 +142,10 @@ void main() {
         channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'y', 'vpn-1-auto', 'z']),
         nodes: ['x', 'direct-out', 'y', 'vpn-1-auto', 'z'],
-        lastDelay: {'x': 10, 'y': 20, 'z': 30}, // z самый медленный
+        delayByChannel: const {
+          'ch': {'x': 10, 'y': 20, 'z': 30} // z самый медленный
+        },
+        selectedGroup: 'ch',
         activeInGroup: 'z',
         sortMode: NodeSortMode.latencyAsc,
       );
@@ -188,7 +195,8 @@ void main() {
         configRaw: cfgDA(['x', 'direct-out', 'y']),
         nodes: ['x', 'direct-out', 'y'],
         sortMode: NodeSortMode.latencyAsc,
-        lastDelay: {'x': 20, 'y': 10},
+        delayByChannel: const {'ch': {'x': 20, 'y': 10}},
+        selectedGroup: 'ch',
       );
       expect(s.sortedNodes, ['direct-out', 'y', 'x']);
     });

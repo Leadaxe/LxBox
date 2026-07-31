@@ -15,6 +15,7 @@ class NodeViewItem {
     required this.active,
     required this.highlighted,
     required this.delay,
+    this.delayIsForeign = false,
     required this.pingBusy,
     required this.tunnelUp,
     required this.busy,
@@ -38,6 +39,13 @@ class NodeViewItem {
 
   /// Последний ping result в ms. `null` если untested. Negative — ERR.
   final int? delay;
+
+  /// §325 — [delay] измерен в ДРУГОМ канале (в текущем ноду ещё не пинговали).
+  /// Замеры ведутся по каналам, потому что ping-URL и таймаут резолвятся
+  /// per-group (§040); показываем чужое число как ориентир, но помечаем — оно
+  /// получено другим тестом. `NodeRow` рисует такой бейдж приглушённо со
+  /// значком `~`.
+  final bool delayIsForeign;
 
   /// True если ping in-flight для этой ноды (`state.pingBusy[tag] == '…'`).
   final bool pingBusy;

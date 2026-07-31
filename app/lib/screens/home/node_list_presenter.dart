@@ -172,7 +172,9 @@ class NodeListPresenter {
         protocolOf: (t) => protocolOfTag(t, state),
         variantsOf: (t) => variantsOfTag(t, state),
         subscriptionsOf: _sourcesOfTag,
-        pingOf: (t) => state.lastDelay[t],
+        // §325 — фильтр по пингу видит то же число, что показано в строке
+        // (свой замер канала либо фоллбэк из другого).
+        pingOf: state.delayOf,
       );
 
   /// §085 R3 — pool (detour-фильтр) → split на matching/non-matching.

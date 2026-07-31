@@ -18,7 +18,14 @@ Map<String, Object?> serializeHomeState(HomeState s) {
     'highlighted_node': s.highlightedNode,
     'groups': s.groups,
     'nodes_count': s.nodes.length,
-    'last_delay': s.lastDelay,
+    // §325 — замеры разложены по каналам (`канал → тег → ms`); ключ
+    // `' scratch'` = замеры вне выбранного канала. `last_delay` — плоский срез
+    // ТЕКУЩЕГО канала с фоллбэком, ровно то, что видно в списке.
+    'delay_by_channel': s.delayByChannel,
+    'last_delay': {
+      for (final tag in s.nodes)
+        if (s.delayOf(tag) != null) tag: s.delayOf(tag),
+    },
     'ping_busy': s.pingBusy,
     'traffic': {
       'up_total': s.traffic.uploadTotal,

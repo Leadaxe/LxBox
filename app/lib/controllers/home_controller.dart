@@ -312,13 +312,15 @@ class HomeController extends ChangeNotifier
 
   /// §290 — засеять минимум state для тестов `switchNode`-гейта и
   /// automation-preconditions (группа/tunnel/активная нода/список групп) без
-  /// прогона всего стрима групп.
+  /// прогона всего стрима групп. §325 — плюс `delayByChannel` для регресса
+  /// «mass-ping не стирает замеры чужих каналов».
   @visibleForTesting
   void debugSeedNodeState({
     required String group,
     required String activeNode,
     bool tunnelUp = true,
     List<String>? groups,
+    Map<String, Map<String, int>>? delayByChannel,
   }) =>
       _emit(_state.copyWith(
         tunnel: tunnelUp ? TunnelStatus.connected : TunnelStatus.disconnected,
@@ -326,6 +328,7 @@ class HomeController extends ChangeNotifier
         activeInGroup: activeNode,
         highlightedNode: activeNode,
         groups: groups ?? <String>[group],
+        delayByChannel: delayByChannel,
       ));
 
   void _handleStatusEvent(TunnelStatusEvent event) {

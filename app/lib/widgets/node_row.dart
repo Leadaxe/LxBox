@@ -51,20 +51,35 @@ class NodeRow extends StatelessWidget {
   final VoidCallback? onViewPool;
 
   /// Right-side delay label (или PING… / ERR), цвет по latency.
+  ///
+  /// §325 — префикс `~` («приблизительно») у замера из другого канала: число
+  /// показано как ориентир, но получено чужим тестом (ping-URL и таймаут
+  /// резолвятся per-group, §040). Значок текстовый и однознаковый намеренно —
+  /// бейдж узкий и моноширинный, иконка сломала бы выравнивание колонки.
   String get _delayLabel {
     if (item.pingBusy) return 'PING…';
     final delay = item.delay;
     if (delay == null) return '';
-    return delay < 0 ? 'ERR' : '${delay}MS';
+    final prefix = item.delayIsForeign ? '~' : '';
+    return delay < 0 ? '${prefix}ERR' : '$prefix${delay}MS';
   }
 
   Color? _delayColor(BuildContext context) {
     final delay = item.delay;
     if (delay == null || item.pingBusy) return null;
-    if (delay < 0) return Theme.of(context).colorScheme.error;
-    if (delay < 200) return Colors.green;
-    if (delay < 500) return Colors.orange;
-    return Theme.of(context).colorScheme.error;
+    final Color base;
+    if (delay < 0) {
+      base = Theme.of(context).colorScheme.error;
+    } else if (delay < 200) {
+      base = Colors.green;
+    } else if (delay < 500) {
+      base = Colors.orange;
+    } else {
+      base = Theme.of(context).colorScheme.error;
+    }
+    // §325 — чужой замер приглушаем: цветовая шкала остаётся читаемой (видно,
+    // что «зелёный»), но бейдж не спорит за внимание со своими, актуальными.
+    return item.delayIsForeign ? base.withValues(alpha: 0.55) : base;
   }
 
   /// `[ACTIVE] [protocol]              [50MS]` — left part flex, ping right-aligned.
