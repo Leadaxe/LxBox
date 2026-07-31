@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
@@ -270,7 +271,7 @@ class BoxService(
     fun onRevoke() {
         Log.d(TAG, "onRevoke — VPN taken by another app")
         // §049 F5 — atomic close, безопасно на любом thread'е.
-        closeFileDescriptor()
+        closeFileDescriptor("onRevoke")
         closeCommandServerAtomic("revoke")
 
         if (receiverRegistered) {
@@ -298,9 +299,25 @@ class BoxService(
     // Start / stop sing-box
     // -------------------------------------------------------------------------
 
-    private fun closeFileDescriptor() {
-        fileDescriptor.getAndSet(null)?.runCatching { close() }
-            ?.onFailure { Log.w(TAG, "closeFileDescriptor: close failed: ${it.message}") }
+    /// §329 — `reason` называет teardown-путь, из которого пришло закрытие.
+    /// Четыре вызывающих (`onRevoke` / `doStop` / `doForceStop` / `stopAndAlert`)
+    /// раньше были неразличимы в логах, а именно источник и порядок закрытия —
+    /// предмет поиска триггера §047. `onDestroy` сюда НЕ приходит: он делает
+    /// `serviceScope.cancel()`, что может снять in-flight `doStop`-корутину ДО
+    /// её `closeFileDescriptor` — тогда fd остаётся незакрытым, и в логе будет
+    /// `[vpn] onDestroy` без парного `[fd §329] close(doStop)`. Такая пара (или
+    /// её отсутствие) — отдельный сигнал при разборе. Номер fd + монотонная метка
+    /// сопоставляются с `[fd §329] openTun` и с warn'ом ядра о смерти acceptLoop.
+    /// Единообразно с соседним `closeCommandServerAtomic(reason)`.
+    private fun closeFileDescriptor(reason: String) {
+        val pfd = fileDescriptor.getAndSet(null)
+        // Номер читаем ДО close() — после закрытия `pfd.fd` уже невалиден.
+        // no-op (уже закрыт другим потоком) логируем тоже: он говорит, что
+        // этот путь пришёл вторым, и называет победителя гонки по времени.
+        val fd = pfd?.runCatching { fd }?.getOrNull()
+        Log.w(TAG, "[fd §329] close($reason) fd=${fd ?: "already-closed"} at=${SystemClock.elapsedRealtime()}ms")
+        pfd?.runCatching { close() }
+            ?.onFailure { Log.w(TAG, "closeFileDescriptor($reason): close failed: ${it.message}") }
     }
 
     private fun closeCommandServerAtomic(reason: String) {
@@ -473,7 +490,7 @@ class BoxService(
         notification.stop()
 
         serviceScope.launch {
-            closeFileDescriptor()
+            closeFileDescriptor("doStop")
             DefaultNetworkMonitor.stop()
             closeCommandServerAtomic("doStop")
 
@@ -530,7 +547,7 @@ class BoxService(
         // Go-вызов отвалится по withTimeout и не заблокирует stopSelf().
         forceStopScope.launch {
             runCatching {
-                withTimeout(2_000) { closeFileDescriptor() }
+                withTimeout(2_000) { closeFileDescriptor("doForceStop") }
             }.onFailure { Log.w(TAG, "doForceStop: closeFileDescriptor timeout/fail: ${it.message}") }
             runCatching {
                 withTimeout(2_000) { DefaultNetworkMonitor.stop() }
@@ -553,7 +570,7 @@ class BoxService(
         // Same teardown sequence что и `doStop`, но в Main thread без
         // serviceScope.launch (мы уже в suspend) и с error message в
         // `setStatus(Stopped)` вместо silent stop.
-        closeFileDescriptor()
+        closeFileDescriptor("stopAndAlert")
         DefaultNetworkMonitor.stop()
         closeCommandServerAtomic("stopAndAlert: $message")
 

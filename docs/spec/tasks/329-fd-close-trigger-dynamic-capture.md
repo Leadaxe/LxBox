@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Статус | 📋 План (инструментировка не написана) |
-| Дата | 2026-07-31 |
+| Статус | 🔧 Инструментировка готова — DEVICE-PENDING (нужна сборка APK + репро-серия) |
+| Дата | 2026-07-31 (план) · 2026-08-01 (инструментировка) |
 | Связанные | [`047 tun TCP deterioration`](047-tun-tcp-deterioration-diagnosis.md) — клиентский симптом; [`049 sing-box wrapper audit`](049-singbox-wrapper-deep-audit/spec.md); kernel `SPECS/TASKS/040-SINGTUN_ACCEPTLOOP_SELFHEAL` в `sing-box-lx` — ядровая половина |
-| Затронутые файлы | `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/{BoxVpnService,BoxService}.kt`, `scripts/` (новый репро-скрипт) |
+| Затронутые файлы | [`BoxVpnService.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt) (лог `openTun`), [`BoxService.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt) (`closeFileDescriptor(reason)`), [`scripts/lxbox-fd-repro.sh`](../../../scripts/lxbox-fd-repro.sh) (новый) |
 
 ## Проблема
 
@@ -166,6 +166,14 @@ warn-логирует errno смерти листенера и самолечи�
 | `Timeout in stopping` | [home_controller.dart:515](../../../app/lib/controllers/home_controller.dart) | transient-таймаут Dart-стороны, т.е. ядро не ответило вовремя |
 | `[vpn] onDestroy` | [BoxService.kt:250](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt) | Android убил сервис — пересечение с рестартом |
 
+**Отдельный сигнал — `onDestroy` без парного close.** `onDestroy` не закрывает
+fd сам: он делает `serviceScope.cancel()`, что может снять in-flight
+`doStop`-корутину **до** её `closeFileDescriptor`. Тогда fd остаётся незакрытым
+и его номер продолжает жить, пока Android не приберёт процесс. В логе это видно
+как `[vpn] onDestroy` **без** парного `[fd §329] close(doStop)` — прямой
+кандидат на источник переиспользуемого номера. Проверять на каждой красной
+итерации наравне с тремя маркерами выше.
+
 Две поправки к grep'у, иначе маркеры не найдутся: строка Dart собирается
 шаблоном (`'Timeout in ${expected.name}, forcing disconnect'`) — искать по
 `Timeout in`, а не по целой фразе; `[vpn] onDestroy` логируется на уровне
@@ -199,10 +207,15 @@ warn-логирует errno смерти листенера и самолечи�
 - [ ] Подтвердить на устройстве, что fdsan действительно на FATAL (API 35,
       `debug.fdsan` пусто — проверено `getprop`; при появлении tombstone
       сверить, что он fdsan-овский)
-- [ ] Логи `openTun` / `closeFileDescriptor(reason)` видны в logcat на
-      release-сборке, номера fd и таймстампы читаемы
-- [ ] Репро-скрипт в `scripts/` отрабатывает ≥100 итераций без ручного участия и
-      останавливается на первой красной
+- [x] Логи `openTun` / `closeFileDescriptor(reason)` написаны; `compileDebugKotlin`
+      BUILD SUCCESSFUL, `flutter analyze` — No issues found
+- [ ] Логи видны в logcat на release-сборке, номера fd и таймстампы читаемы
+      (после сборки APK)
+- [x] Репро-скрипт [`lxbox-fd-repro.sh`](../../../scripts/lxbox-fd-repro.sh):
+      `bash -n` чист; обе пробы проверены на устройстве в обе стороны
+      (`nc -w 3 -z 1.1.1.1 443` → OK, закрытый порт → FAIL, `ping` → OK)
+- [ ] Репро-скрипт отрабатывает ≥100 итераций без ручного участия и
+      останавливается на первой красной (после сборки APK)
 - [ ] Проведена серия ≥100 итераций на «грязном» процессе
 - [ ] На красной итерации собраны: logcat с номерами fd, warn ядра с errno,
       результат TCP/UDP-проб, `./scripts/lxbox-diag.sh` snapshot
