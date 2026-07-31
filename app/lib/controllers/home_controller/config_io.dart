@@ -82,10 +82,18 @@ mixin _ConfigIoMixin on ChangeNotifier {
     // Флаг sticky до up↔down. saveConfig выше уже переписал файл (mtime=now),
     // так что отдельный touch не нужен — config новее settings, §113-bootstrap
     // не перепроверит.
+    //
+    // §323 — sticky отменяется при `changed == false`: гасим флаг, а не просто
+    // не поднимаем. Если saved config совпал байт-в-байт с running, running НЕ
+    // устарел — независимо от истории флага. Раньше prev=true переживал такую
+    // пересборку, и плашка висела над конфигом, идентичным работающему (типовой
+    // случай: подписка раз в час отдаёт тот же список нод → жалобы 4PDA).
+    // `configRaw.isEmpty` в `changed` выше даёт true, так что пустое состояние
+    // сюда не попадает и флаг не гасится вслепую.
     final needRestart =
-        (changed && _state.tunnelUp) || _state.configChangedNeedRestart;
+        changed && (_state.tunnelUp || _state.configChangedNeedRestart);
     _addDebug(DebugSource.app,
-        '[vpn] saveParsedConfig EXIT changed=$changed need_restart_after=$needRestart (tunnelUp=${_state.tunnelUp} || prev=${_state.configChangedNeedRestart})');
+        '[vpn] saveParsedConfig EXIT changed=$changed need_restart_after=$needRestart (tunnelUp=${_state.tunnelUp} prev=${_state.configChangedNeedRestart})');
     _emit(_state.copyWith(
       configRaw: raw,
       lastError: null,

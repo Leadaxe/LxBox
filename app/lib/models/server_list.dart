@@ -47,6 +47,36 @@ sealed class ServerList {
 /// Статус последней попытки auto-update подписки.
 enum UpdateStatus { never, ok, failed, inProgress }
 
+/// §323 — что делать после **успешного авто**-обновления подписки. Ручной ⟳
+/// сюда не относится: там юзер сам видит плашку и жмёт Apply.
+///
+/// Причина существования поля: до §323 автообновление шло тем же путём, что
+/// ручная правка (`_persist` → `configDirty` → пересборка → `saveParsedConfig`
+/// при живом туннеле → плашка «restart to apply»). Подписка почти всегда
+/// меняет конфиг, интервал бывает 1 час — плашка вылезала раз в час у юзера,
+/// который ничего не трогал.
+enum SubscriptionOnUpdateAction {
+  /// Пересобрать конфиг и записать. Туннель продолжает крутить старый —
+  /// плашка «restart to apply» остаётся, применяет юзер. Default: ровно
+  /// прежнее наблюдаемое поведение, поэтому миграция не нужна.
+  rebuild,
+
+  /// Пересобрать, записать и (если туннель up) `reloadVPN()` — ядро
+  /// перечитывает конфиг in-place. Плашки нет. Цена: туннель дропается ~3с,
+  /// in-flight TCP умирают (см. §030).
+  reload,
+
+  /// Ничего: ноды обновлены в списке, `configDirty` стоит. Конфиг пересоберётся
+  /// на следующем обычном триггере (возврат на home, Start, ручной Apply).
+  none;
+
+  static SubscriptionOnUpdateAction fromJson(dynamic raw) =>
+      SubscriptionOnUpdateAction.values.firstWhere(
+        (a) => a.name == raw,
+        orElse: () => SubscriptionOnUpdateAction.rebuild,
+      );
+}
+
 /// §289 — per-subscription override идентичности HTTP-фетча (§118). Полный
 /// слепок всех переменных: когда у подписки `identity != null` (режим Custom),
 /// фетч использует ТОЛЬКО эти значения и полностью игнорирует глобальный
@@ -156,6 +186,12 @@ final class SubscriptionServers extends ServerList {
   /// игнорируются на импорте (не удаляя их). Плюс per-rule `ImportRule.enabled`.
   final bool importRulesEnabled;
 
+  /// §323 — реакция на успешное **авто**-обновление (см.
+  /// [SubscriptionOnUpdateAction]). Персистится → обязан жить в трио
+  /// toJson/fromJson/copyWith (как §283 `disabledHashes`), иначе merge-импорт
+  /// backup (fromJson→toJson) молча терял бы выбор юзера.
+  final SubscriptionOnUpdateAction onUpdateAction;
+
   SubscriptionServers({
     required super.id,
     required super.name,
@@ -174,6 +210,7 @@ final class SubscriptionServers extends ServerList {
     this.identity,
     this.importRules = const [],
     this.importRulesEnabled = true,
+    this.onUpdateAction = SubscriptionOnUpdateAction.rebuild,
     super.nodes,
   });
 
@@ -211,6 +248,9 @@ final class SubscriptionServers extends ServerList {
         // Пишем ключ только когда набор выключен (дефолт true) — не раздуваем
         // JSON у большинства подписок без правил.
         if (!importRulesEnabled) 'import_rules_enabled': false,
+        // §323 — тем же принципом: дефолт (rebuild) ключа не пишет.
+        if (onUpdateAction != SubscriptionOnUpdateAction.rebuild)
+          'on_update_action': onUpdateAction.name,
       };
 
   /// §283 — толерантный парс: не-Map → пусто, битые значения-даты — скип
@@ -259,6 +299,8 @@ final class SubscriptionServers extends ServerList {
                 (j['identity'] as Map).cast<String, dynamic>()),
         importRules: _importRulesFromJson(j['import_rules']),
         importRulesEnabled: (j['import_rules_enabled'] as bool?) ?? true,
+        onUpdateAction:
+            SubscriptionOnUpdateAction.fromJson(j['on_update_action']),
       );
 
   /// §302 — толерантный парс: не-List → пусто, не-Map элементы — скип.
@@ -288,6 +330,7 @@ final class SubscriptionServers extends ServerList {
     bool clearIdentity = false,
     List<ImportRule>? importRules,
     bool? importRulesEnabled,
+    SubscriptionOnUpdateAction? onUpdateAction,
     List<NodeSpec>? nodes,
   }) =>
       SubscriptionServers(
@@ -310,6 +353,7 @@ final class SubscriptionServers extends ServerList {
         identity: clearIdentity ? null : (identity ?? this.identity),
         importRules: importRules ?? this.importRules,
         importRulesEnabled: importRulesEnabled ?? this.importRulesEnabled,
+        onUpdateAction: onUpdateAction ?? this.onUpdateAction,
         nodes: nodes ?? this.nodes,
       );
 }

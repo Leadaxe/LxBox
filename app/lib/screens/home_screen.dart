@@ -148,6 +148,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _autoUpdater = AutoUpdater(_subController);
     _subController.bindAutoUpdater(_autoUpdater);
     _controller = HomeController(autoUpdater: _autoUpdater);
+    // §323 — реакция на авто-обновление подписки. Привязываем ПОСЛЕ создания
+    // HomeController (замыкание держит `_controller`, до этой строки его нет).
+    _autoUpdater.bindOnUpdateReaction(_reactToSubscriptionUpdate);
     // §085 R3 — filter view-model: rebuild на любое изменение фильтров.
     _filter = NodeFilterViewModel()..addListener(_onFilterChanged);
     // Создаём presenter один раз тут чтобы §070 frozen-sort cache переживал
@@ -727,10 +730,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// §107 single-flight: параллельные триггеры (возврат на home + гейт на
   /// Start) делят одну пересборку. Dirty-флаг сбрасывает только успешный
   /// generate+save внутри `_rebuildConfig`.
-  Future<void> _rebuildAndClearDirty() {
+  ///
+  /// §323 — `silent` действует только на пересборку, которую этот вызов
+  /// реально запустил. Присоединиться к чужой (уже летящей) и переубедить её
+  /// молчать нельзя — snackbar там уже запланирован её инициатором. Для
+  /// авто-обновления это верно по смыслу: юзер в тот момент что-то нажимал,
+  /// его пересборка и отчитывается.
+  Future<void> _rebuildAndClearDirty({bool silent = false}) {
     return _rebuildInFlight ??= () async {
       try {
-        await _rebuildConfig();
+        await _rebuildConfig(silent: silent);
         if (mounted) setState(() {});
       } finally {
         _rebuildInFlight = null;
@@ -771,13 +780,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _subController.addListener(listener);
   }
 
+  /// §323 — реакция на успешное авто-обновление подписки. Привязана в
+  /// `initState` через `AutoUpdater.bindOnUpdateReaction`; зовётся один раз за
+  /// проход апдейтера (не на каждую подписку).
+  ///
+  /// `reload=false` (режим `rebuild`, дефолт): пересобрать и записать. Туннель
+  /// продолжает крутить старый конфиг, плашка «restart to apply» остаётся —
+  /// применяет юзер.
+  ///
+  /// `reload=true` (режим `reload`): то же плюс in-place reload ядра. Гейт:
+  /// reload'им ТОЛЬКО когда saved config реально разошёлся с running. Диff
+  /// живёт в `saveParsedConfig` (§116) и после него виден как
+  /// `configChangedNeedRestart`; провайдер, отдавший тот же список нод, даёт
+  /// `changed=false` → флаг погашен → рвать туннель незачем.
+  Future<void> _reactToSubscriptionUpdate({required bool reload}) async {
+    if (!mounted) return;
+    // Пересборка `silent`: юзер ничего не нажимал, snackbar был бы шумом.
+    // Ждём чужую пересборку, если она в полёте — своей не дублируем.
+    final inFlight = _rebuildInFlight;
+    if (inFlight != null) {
+      await inFlight;
+      if (!mounted) return;
+    } else {
+      await _rebuildAndClearDirty(silent: true);
+      if (!mounted) return;
+    }
+    if (!reload) return;
+    // Туннель не поднят — reload'ить нечего, конфиг подхватится на Start.
+    if (!_controller.state.tunnelUp) return;
+    // Гейт «состав не изменился»: пересборка дала конфиг, идентичный
+    // работающему. Ядро уже на нём — 3-секундный разрыв был бы ни за что.
+    if (!_controller.state.configChangedNeedRestart) {
+      AppLog.I.debug('§323: reload skipped — config identical to running');
+      return;
+    }
+    // canReload внутри отсеет cooldown (3с) и не-connected состояние; сброс
+    // `configChangedNeedRestart` при успехе тоже там (§323 fix).
+    await _controller.reloadVpn();
+  }
+
   /// Только пересборка конфига — без HTTP-fetch'а подписок. За fetch
   /// отвечает AutoUpdater (по 4 триггерам) и manual ⟳ на Servers.
   ///
   /// §107: `configDirty` сбрасывает успешная генерация (`generateConfig`,
   /// до записи на диск); если save не состоялся — восстанавливаем флаг,
   /// конфиг на диске остался старым.
-  Future<bool> _rebuildConfig() async {
+  /// §323 — `silent`: пересборка не по нажатию юзера (авто-обновление
+  /// подписки в фоне). Snackbar «Config rebuilt: N nodes» в этом случае —
+  /// шум: юзер ничего не нажимал, а всплывашка раз в час раздражает не
+  /// меньше плашки, из-за которой §323 и затевался.
+  Future<bool> _rebuildConfig({bool silent = false}) async {
     final config = await _subController.generateConfig();
     if (config == null) return false;
     if (!mounted) {
@@ -789,7 +841,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       _subController.configDirty = true;
       return false;
     }
-    if (mounted) {
+    if (mounted && !silent) {
       final nodeCount = ParsedConfig.parse(config).nodeCount;
       // configChangedNeedRestart выставляется внутри saveParsedConfig,
       // AnimatedBuilder переотрисует через _needsRestart getter.

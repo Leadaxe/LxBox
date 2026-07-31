@@ -1394,6 +1394,12 @@
   "Display name in node list": {
     "value": "Отображаемое имя в списке узлов"
   },
+  "Do nothing": {
+    "value": "Ничего не делать"
+  },
+  "Do nothing — apply on next rebuild": {
+    "value": "Ничего не делать — применится при следующей пересборке"
+  },
   "Documentation and Tasker recipes": {
     "value": "Документация и рецепты для Tasker"
   },
@@ -2254,6 +2260,12 @@
   "New folder…": {
     "value": "Новая папка…"
   },
+  "New nodes apply at once; the connection drops for a few seconds": {
+    "value": "Новые узлы применяются сразу; соединение прервётся на несколько секунд"
+  },
+  "New nodes go into the config; apply the change yourself": {
+    "value": "Новые узлы попадут в конфиг; применить изменение нужно вручную"
+  },
   "New value": {
     "value": "Новое значение"
   },
@@ -2399,6 +2411,9 @@
   "Nodes connect through detour servers": {
     "value": "Узлы подключаются через detour-серверы"
   },
+  "Nodes update in the list only; the config waits for the next rebuild": {
+    "value": "Узлы обновятся только в списке; конфиг дождётся следующей пересборки"
+  },
   "Nodes with their own detour keep it; this outbound is set only where none is defined": {
     "value": "Узлы со своим detour сохраняют его; этот исходящий канал назначается только там, где detour не задан"
   },
@@ -2475,6 +2490,9 @@
   },
   "Off. Pick saved is populated only by Add current / Manual.": {
     "value": "Выключено. «Pick saved» пополняется только через Add current / Manual."
+  },
+  "On update": {
+    "value": "При обновлении"
   },
   "One node routes traffic back into its own chain. Tap it to open its source, change or remove its detour, then start again.": {
     "value": "Один узел ведёт трафик обратно в собственную цепочку. Нажмите на него, чтобы открыть источник, измените или уберите его detour, затем запустите снова."
@@ -2786,8 +2804,20 @@
   "Ready-made rules you can copy into Rules, then edit freely.": {
     "value": "Готовые правила: скопируйте в «Правила» и свободно редактируйте."
   },
+  "Rebuild and reload core": {
+    "value": "Пересобрать и перезагрузить ядро"
+  },
+  "Rebuild and reload core — brief connection drop": {
+    "value": "Пересобрать и перезагрузить ядро — короткий обрыв соединения"
+  },
+  "Rebuild config": {
+    "value": "Пересобрать конфиг"
+  },
   "Rebuild config only": {
     "value": "Только пересобрать конфиг"
+  },
+  "Rebuild config — apply manually": {
+    "value": "Пересобрать конфиг — применить вручную"
   },
   "Recommended. Protects the local proxy port.": {
     "value": "Рекомендуется. Защищает локальный порт прокси."

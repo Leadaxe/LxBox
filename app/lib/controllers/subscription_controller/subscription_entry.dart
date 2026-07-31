@@ -73,6 +73,12 @@ class SubscriptionEntry extends ChangeNotifier {
       ? (_list as SubscriptionServers).lastUpdateStatus
       : UpdateStatus.never;
 
+  /// §323 — реакция на успешное авто-обновление. Для не-подписок значение
+  /// смысла не имеет: их никто не фетчит, отдаём дефолт.
+  SubscriptionOnUpdateAction get onUpdateAction => _list is SubscriptionServers
+      ? (_list as SubscriptionServers).onUpdateAction
+      : SubscriptionOnUpdateAction.rebuild;
+
   /// §289 — per-subscription слепок идентичности фетча. `null` = режим Default
   /// (глобальная идентичность). Пусто для не-подписок.
   SubscriptionIdentityOverride? get identity => _list is SubscriptionServers
@@ -170,6 +176,15 @@ class SubscriptionEntry extends ChangeNotifier {
     if (list is! SubscriptionServers) return;
     final clamped = v < -1 ? -1 : v;
     _replaceList(list.copyWith(updateIntervalHours: clamped));
+  }
+
+  /// §323 — реакция на успешное авто-обновление. No-op для не-подписок.
+  /// Persist через `controller.persistSources()` на стороне UI (как
+  /// `updateIntervalHours` выше).
+  set onUpdateAction(SubscriptionOnUpdateAction v) {
+    final list = _list;
+    if (list is! SubscriptionServers) return;
+    _replaceList(list.copyWith(onUpdateAction: v));
   }
 
   /// §289 — включить режим Custom: инициализировать слепок копией текущих

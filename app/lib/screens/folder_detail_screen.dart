@@ -1397,6 +1397,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       // (`entry.list is SubscriptionServers` false), no-op заглушки.
       onCopyUrl: () {},
       onShowIntervalPicker: () {},
+      onShowOnUpdateActionPicker: () {}, // §323
       onRefreshNow: () {},
       onEditSource: () {},
     );

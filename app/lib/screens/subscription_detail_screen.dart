@@ -423,6 +423,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         );
       },
       onShowIntervalPicker: _showIntervalPicker,
+      onShowOnUpdateActionPicker: _showOnUpdateActionPicker, // §323
       onRefreshNow: _refreshNow,
       onEditSource: _editSource, // §129
       // §289 — per-subscription fetch identity (Default/Custom override).
@@ -581,6 +582,66 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     if (chosen == null || !mounted) return;
     setState(() {
       widget.entry.updateIntervalHours = chosen;
+    });
+    await widget.controller.persistSources();
+  }
+
+  /// §323 — что делать после успешного АВТО-обновления этой подписки.
+  /// Ручной ⟳ («Refresh now») режимом не управляется: там юзер на экране,
+  /// видит плашку и применяет сам.
+  Future<void> _showOnUpdateActionPicker() async {
+    final list = widget.entry.list as SubscriptionServers;
+    final chosen = await showDialog<SubscriptionOnUpdateAction>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(getLocalText.s("On update")),
+        children: [
+          for (final a in SubscriptionOnUpdateAction.values)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, a),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (a == list.onUpdateAction)
+                    const Icon(Icons.check, size: 18)
+                  else
+                    const SizedBox(width: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(switch (a) {
+                          SubscriptionOnUpdateAction.rebuild =>
+                            getLocalText.s("Rebuild config"),
+                          SubscriptionOnUpdateAction.reload =>
+                            getLocalText.s("Rebuild and reload core"),
+                          SubscriptionOnUpdateAction.none =>
+                            getLocalText.s("Do nothing"),
+                        }),
+                        Text(
+                          switch (a) {
+                            SubscriptionOnUpdateAction.rebuild => getLocalText.s(
+                                "New nodes go into the config; apply the change yourself"),
+                            SubscriptionOnUpdateAction.reload => getLocalText.s(
+                                "New nodes apply at once; the connection drops for a few seconds"),
+                            SubscriptionOnUpdateAction.none => getLocalText.s(
+                                "Nodes update in the list only; the config waits for the next rebuild"),
+                          },
+                          style: Theme.of(ctx).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    setState(() {
+      widget.entry.onUpdateAction = chosen;
     });
     await widget.controller.persistSources();
   }

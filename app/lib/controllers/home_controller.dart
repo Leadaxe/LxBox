@@ -640,6 +640,15 @@ class HomeController extends ChangeNotifier
     try {
       final ok = await _vpn.reloadVPN();
       _addDebug(DebugSource.app, '[vpn] reload → ok=$ok');
+      // §323 — intent-based reset, как в `_startInternal()`: ядро перечитало
+      // конфиг с диска (`ConfigManager.load()` → `startOrReloadService`), значит
+      // running == saved и плашка «restart to apply» неактуальна. Раньше флаг
+      // выживал успешный reload, и юзер видел плашку над уже применённым
+      // конфигом — жать было нечего. Только при ok: провалившийся reload
+      // оставил ядро на старом конфиге, плашка там честная.
+      if (ok && !_disposed) {
+        _emit(_state.copyWith(configChangedNeedRestart: false));
+      }
     } catch (e) {
       _lastReloadTap = prevReloadTap; // откат cooldown
       _addDebug(DebugSource.app, '[vpn] reload error: $e');

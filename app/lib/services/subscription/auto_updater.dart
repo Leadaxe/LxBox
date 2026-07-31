@@ -39,6 +39,21 @@ class AutoUpdater {
   AutoUpdater(this._subController);
   final SubscriptionController _subController;
 
+  /// §323 — реакция на успешное авто-обновление. Ставит `home_screen`
+  /// (`bindOnUpdateReaction`), потому что AutoUpdater создаётся ДО
+  /// `HomeController` и прямой ссылки на него иметь не может.
+  ///
+  /// `reload = true` → после пересборки дёрнуть in-place reload ядра.
+  /// Контракт: реализация сама решает, поднят ли туннель, и сама молчит, если
+  /// пересборка дала конфиг, идентичный работающему (гейт §323 в
+  /// `saveParsedConfig`). Не задан (тесты, headless) — режимы деградируют до
+  /// `none`: ноды обновлены, `configDirty` стоит, применится обычным путём.
+  Future<void> Function({required bool reload})? _onUpdateReaction;
+
+  void bindOnUpdateReaction(Future<void> Function({required bool reload}) fn) {
+    _onUpdateReaction = fn;
+  }
+
   static const Duration minRetryInterval = Duration(minutes: 15);
   static const int maxFailsPerSession = 5;
   static const Duration perSubscriptionDelay = Duration(seconds: 10);
@@ -126,6 +141,14 @@ class AutoUpdater {
       }
       AppLog.I.info('AutoUpdater: ${candidates.length} to refresh');
 
+      // §323 — реакции копим за весь проход и применяем ОДИН раз в конце.
+      // Иначе три обновившиеся подписки дали бы три пересборки (и до трёх
+      // reload'ов) подряд, каждый со своим 3-секундным разрывом туннеля.
+      // `reload` побеждает `rebuild`: если хотя бы одна подписка просит
+      // применить немедленно, применяем — она всё равно уже в общем конфиге.
+      var needRebuild = false;
+      var needReload = false;
+
       for (var i = 0; i < candidates.length; i++) {
         final entry = candidates[i];
         final url = (entry.list as SubscriptionServers).url;
@@ -137,6 +160,15 @@ class AutoUpdater {
           if (fresh is SubscriptionServers &&
               fresh.lastUpdateStatus == UpdateStatus.ok) {
             _failCounts.remove(url);
+            switch (fresh.onUpdateAction) {
+              case SubscriptionOnUpdateAction.reload:
+                needReload = true;
+                needRebuild = true;
+              case SubscriptionOnUpdateAction.rebuild:
+                needRebuild = true;
+              case SubscriptionOnUpdateAction.none:
+                break;
+            }
           } else {
             _failCounts[url] = (_failCounts[url] ?? 0) + 1;
           }
@@ -152,6 +184,27 @@ class AutoUpdater {
           final jitter = Random().nextInt(4000) - 2000;
           await Future<void>.delayed(
               perSubscriptionDelay + Duration(milliseconds: jitter));
+        }
+      }
+
+      // §323 — ручной ⟳ исключён: юзер сам на экране, видит плашку и жмёт
+      // Apply когда готов. Молча рвать ему туннель по кнопке «обновить» —
+      // не то, о чём он просил.
+      if (needRebuild && trigger != UpdateTrigger.manual) {
+        final react = _onUpdateReaction;
+        if (react == null) {
+          AppLog.I.debug('AutoUpdater: no reaction bound — skip (acts as none)');
+        } else {
+          AppLog.I.info('AutoUpdater: reaction rebuild'
+              '${needReload ? ' + reload' : ''}');
+          try {
+            await react(reload: needReload);
+          } catch (e) {
+            // Пересборка/reload сорвались — ноды на диске уже свежие,
+            // `configDirty` стоит, обычный путь (возврат на home / Start)
+            // догонит. Проход апдейтера ронять нельзя: он в unawaited.
+            AppLog.I.warning('AutoUpdater: reaction failed: $e');
+          }
         }
       }
     } finally {
