@@ -56,7 +56,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   late TextEditingController _nameCtrl;
 
   // §236 — состояние Test servers. Результаты эфемерны (не персистятся).
-  final Map<int, ProbeResult> _probe = {};
+  // §326 — ключ = идентичность узла (`ProbeController.probeKeys`), НЕ позиция:
+  // удаление/вставка члена больше не сдвигает замеры соседей. Проекцию на
+  // индексы для позиционных bulk-хелперов даёт `_probeByIndex()`.
+  final Map<String, ProbeResult> _probe = {};
   ProbeRunner? _runner;
   // §286 — коалесцированный ребилд результатов пробы: onResult пишет в _probe
   // без setState-на-члена (у «WARP GENERATOR» ~100 членов → ~100 ребилдов
@@ -253,13 +256,17 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       overrideTimeoutMs: _folder.pingTimeoutMs,
     );
     if (!mounted) return;
+    // §326 — снимок ключей на старте прогона: onResult отдаёт позицию (runner
+    // работает над плоским списком нод и о папках не знает, §296), переводим
+    // её в ключ по этому снимку.
+    final probeKeys = _memberProbeKeys();
     setState(() {
       _testing = true;
       _probe
         ..clear()
         ..addEntries([
-          for (var i = 0; i < _folder.members.length; i++)
-            MapEntry(i, const ProbeResult(ProbeStatus.pending)),
+          for (final k in probeKeys)
+            MapEntry(k, const ProbeResult(ProbeStatus.pending)),
         ]);
     });
     final runner = ProbeRunner();
@@ -276,7 +283,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         // §286 — накапливаем без setState-на-члена; throttle сольёт в один
         // ребилд (~120мс). Иначе «WARP GENERATOR» (~100 членов) даёт ~100
         // setState пачкой → главный поток лагает.
-        _probe[i] = r;
+        if (i < probeKeys.length) _probe[probeKeys[i]] = r;
         _scheduleProbeFlush();
       },
     );
@@ -428,7 +435,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     );
     ctl.dispose();
     if (ms == null || !mounted) return;
-    final slow = ProbeController.slowerThan(_probe, ms);
+    final slow = ProbeController.slowerThan(_probeByIndex(), ms);
     if (slow.isEmpty) {
       await _showError(getLocalText.s("No tested servers slower than %d ms", ms));
       return;
@@ -443,11 +450,39 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     setState(() {});
   }
 
+  /// §326 — кеш `probeKeys` текущего состава: ключ — sha256 по emit-map узла,
+  /// считать его на каждый ребилд каждой строки (itemBuilder) дорого. Инвалидация
+  /// по самому списку членов: `SubscriptionController` отдаёт новый `List` на
+  /// любую мутацию состава, а правка члена меняет `raw` → identical() ложно.
+  List<FolderMember>? _probeKeysFor;
+  List<String> _probeKeysCache = const [];
+  List<String> _memberProbeKeys() {
+    final members = _folder.members;
+    if (!identical(_probeKeysFor, members)) {
+      _probeKeysFor = members;
+      _probeKeysCache = ProbeController.probeKeys(members);
+    }
+    return _probeKeysCache;
+  }
+
+  /// §326 — проекция результатов на текущие позиции членов. Bulk-решения
+  /// (`unreachableIndexes`/`slowerThan`/`pingSortOrder`) остаются индексными:
+  /// их выход скармливается позиционным мутаторам контроллера
+  /// (`setMembersEnabled`/`removeMembersAt`/`applyMembersOrder`). Граница
+  /// «ключ → индекс» ровно здесь.
+  Map<int, ProbeResult> _probeByIndex() {
+    final keys = _memberProbeKeys();
+    return {
+      for (var i = 0; i < keys.length; i++) i: ?_probe[keys[i]],
+    };
+  }
+
   /// §284/§296 — индексы членов, не прошедших последний тест (общий хелпер).
-  Set<int> _unreachableIndexes() => ProbeController.unreachableIndexes(_probe);
+  Set<int> _unreachableIndexes() =>
+      ProbeController.unreachableIndexes(_probeByIndex());
 
   /// §284 — выключить (не удалять) недоступные по последнему тесту. Узлы
-  /// остаются в папке серыми; результаты теста сохраняются (индексы не съезжают).
+  /// остаются в папке серыми; результаты теста сохраняются.
   Future<void> _disableUnreachable() async {
     final dead = _unreachableIndexes();
     if (dead.isEmpty) {
@@ -489,24 +524,20 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     if (idx < 0) return;
     await widget.controller.removeMembersAt(idx, dead);
     if (!mounted) return;
-    // Индексы съехали — результаты по оставшимся неатрибутируемы. Сброс.
-    setState(() => _probe.clear());
+    // §326 — результаты выживших остаются валидными: ключ = идентичность узла,
+    // а не позиция. До §326 здесь стоял `_probe.clear()` (индексы съезжали).
+    setState(() {});
   }
 
   Future<void> _sortByPing() async {
     final idx = _index;
     if (idx < 0) return;
     final order =
-        ProbeController.pingSortOrder(_probe, _folder.members.length);
+        ProbeController.pingSortOrder(_probeByIndex(), _folder.members.length);
     await widget.controller.applyMembersOrder(idx, order);
     if (!mounted) return;
-    // Перепривязка результатов к новым индексам.
-    final remapped = ProbeController.remapAfterReorder(_probe, order);
-    setState(() {
-      _probe
-        ..clear()
-        ..addAll(remapped);
-    });
+    // §326 — перепривязка не нужна: ключи едут вместе с членами.
+    setState(() {});
   }
 
   Future<void> _editThresholds() async {
@@ -1155,24 +1186,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           final idx = _index;
           if (idx < 0) return;
           unawaited(widget.controller.reorderMember(idx, oldIndex, newIndex));
-          // §236 — ручной drag во время/после теста: результаты по индексам,
-          // перепривязываем как в _sortByPing (иначе бейджи съедут).
-          if (_probe.isNotEmpty) {
-            final r = _probe.remove(oldIndex);
-            final shifted = <int, ProbeResult>{};
-            _probe.forEach((k, v) {
-              var nk = k;
-              if (k > oldIndex) nk--;
-              if (nk >= newIndex) nk++;
-              shifted[nk] = v;
-            });
-            if (r != null) shifted[newIndex] = r;
-            setState(() {
-              _probe
-                ..clear()
-                ..addAll(shifted);
-            });
-          }
+          // §326 — сдвиг ключей больше не нужен: результат привязан к узлу,
+          // а не к позиции, и едет вместе со строкой.
         },
         itemBuilder: (context, i) =>
             _memberTile(i, members[i], reorderable: true),
@@ -1191,6 +1206,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   Widget _memberTile(int i, FolderMember m, {required bool reorderable}) {
     final cs = Theme.of(context).colorScheme;
     final highlighted = _highlightedMember == i;
+    final keys = _memberProbeKeys();
+    final probe = i < keys.length ? _probe[keys[i]] : null; // §326
     // §255 — reorder-key top-level (KeyedSubtree); GlobalKey + вспышка на
     // внутреннем AnimatedContainer (навигация из detour-cycle sheet).
     return KeyedSubtree(
@@ -1212,7 +1229,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       dragIndex: i,
       reorderable: reorderable,
       folderEnabled: widget.entry.enabled,
-      probe: _probe[i],
+      probe: probe,
       thresholds: _thresholds,
       onToggle: () {
         final idx = _index;
@@ -1242,7 +1259,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               ).then((_) => mounted ? setState(() {}) : null);
             },
       onProbeBadgeTap: () {
-        final r = _probe[i];
+        final r = probe;
         if (r == null || r.message.isEmpty) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(r.message)),

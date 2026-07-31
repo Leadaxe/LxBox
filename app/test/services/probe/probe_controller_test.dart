@@ -54,18 +54,50 @@ void main() {
     });
   });
 
-  group('remapAfterReorder', () {
-    test('результаты переезжают на новые позиции', () {
-      final probe = {0: ok(300), 1: ok(100)};
-      // order[newI]=oldI: [1,0] → newIndex0 берёт old1, newIndex1 берёт old0.
-      final remapped = ProbeController.remapAfterReorder(probe, [1, 0]);
-      expect(remapped[0]!.delayMs, 100);
-      expect(remapped[1]!.delayMs, 300);
+  // §326 — ключ результата = идентичность узла, не позиция. `remapAfterReorder`
+  // снят вместе с позиционным хранением (перепривязывать больше нечего).
+  group('probeKeys', () {
+    FolderMember m(String raw) => FolderMember(raw: raw);
+    const a = 'vless://u@h1:443?type=ws&security=tls#A';
+    const b = 'vless://u@h2:443?type=ws&security=tls#B';
+
+    test('разные узлы → разные ключи', () {
+      final keys = ProbeController.probeKeys([m(a), m(b)]);
+      expect(keys[0], isNot(keys[1]));
     });
-    test('отсутствующий old-результат не создаёт запись', () {
-      final remapped = ProbeController.remapAfterReorder({0: ok(50)}, [1, 0]);
-      expect(remapped.containsKey(0), isFalse); // old1 нет
-      expect(remapped[1]!.delayMs, 50); // old0 → new1
+
+    test('ключ не зависит от позиции: удаление соседа не двигает остальные', () {
+      final before = ProbeController.probeKeys([m(a), m(b)]);
+      final after = ProbeController.probeKeys([m(b)]); // удалили первого
+      expect(after.single, before[1]); // ключ B тот же — замер остался при нём
+    });
+
+    test('переименование (ремарка) ключ не меняет — это тот же сервер', () {
+      final keys = ProbeController.probeKeys([m(a), m('$a-renamed')]);
+      expect(keys[0], keys[1].split('#').first);
+    });
+
+    test('правка параметров узла ключ меняет — считаем другим сервером', () {
+      final keys = ProbeController.probeKeys(
+          [m(a), m('vless://u@h1:8443?type=ws&security=tls#A')]);
+      expect(keys[0], isNot(keys[1]));
+    });
+
+    test('дубли одного сервера получают суффикс, а не делят ячейку', () {
+      final keys = ProbeController.probeKeys([m(a), m(a), m(a)]);
+      expect(keys.toSet().length, 3);
+      expect(keys[1], '${keys[0]}#2');
+      expect(keys[2], '${keys[0]}#3');
+    });
+
+    test('битый член (node == null) получает raw-ключ', () {
+      final keys = ProbeController.probeKeys([m('garbage'), m('other junk')]);
+      expect(keys[0], 'raw:garbage');
+      expect(keys[1], 'raw:other junk');
+    });
+
+    test('длина всегда равна числу членов (слот на каждую строку)', () {
+      expect(ProbeController.probeKeys([m(a), m('garbage'), m(a)]).length, 3);
     });
   });
 

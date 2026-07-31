@@ -12,6 +12,7 @@
 
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
+import '../node_hash.dart';
 import '../settings_storage.dart';
 import 'probe_runner.dart';
 
@@ -166,17 +167,36 @@ class ProbeController {
       });
   }
 
-  /// Перепривязка результатов к новым индексам после reorder по [order]
-  /// (order[newIndex] = oldIndex).
-  static Map<int, ProbeResult> remapAfterReorder(
-    Map<int, ProbeResult> probe,
-    List<int> order,
-  ) {
-    final remapped = <int, ProbeResult>{};
-    for (var newI = 0; newI < order.length; newI++) {
-      final r = probe[order[newI]];
-      if (r != null) remapped[newI] = r;
+  // ─── §326 — идентичность результата (ключ вместо позиции) ──────────────────
+
+  /// §326 — ключи членов папки в порядке позиций: `probeKeys(members)[i]` —
+  /// ключ i-го члена. Экран держит результаты под этими ключами, поэтому
+  /// удаление/вставка члена не сдвигает замеры соседей (до §326 ключом была
+  /// позиция, и точечное удаление уводило бейджи на строку вверх).
+  ///
+  /// Ключ = [nodeIdentityHash] (тот же механизм идентичности, что у per-node
+  /// disable §283). Не tag — внутри папки он не уникален (уникализация
+  /// `allocateTag` живёт в билдере конфига) и мутабелен. Не `NodeSpec.id` —
+  /// это `newUuidV4()`, новый на каждом re-parse `raw`.
+  ///
+  /// Битый член (`node == null`, нечитаемый raw) хеша не имеет — ключ
+  /// `raw:<raw>`: пингу он не подлежит, но слот под вердикт занимает.
+  ///
+  /// Дубли: одинаковые серверы дают один хеш (в §283 by design). Чтобы они не
+  /// делили одну ячейку результата, повторам добавляется суффикс `#2`, `#3`.
+  /// Ключ остаётся функцией состава, а не позиции: удаление члена в середине
+  /// ключи остальных не меняет, сдвигаются лишь сами дубли — неразличимые по
+  /// определению.
+  static List<String> probeKeys(List<FolderMember> members) {
+    final seen = <String, int>{};
+    final keys = <String>[];
+    for (final m in members) {
+      final node = m.node;
+      final base = node == null ? 'raw:${m.raw}' : nodeIdentityHash(node);
+      final n = (seen[base] ?? 0) + 1;
+      seen[base] = n;
+      keys.add(n == 1 ? base : '$base#$n');
     }
-    return remapped;
+    return keys;
   }
 }
