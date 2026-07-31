@@ -19,6 +19,7 @@ import '../services/parse_hints.dart';
 import '../services/relative_time.dart';
 import '../services/node_emoji.dart';
 import '../services/node_hash.dart';
+import '../services/node_identity.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
 import '../services/parser/body_decoder.dart';
@@ -251,7 +252,38 @@ class SubscriptionController extends ChangeNotifier {
       }
       if (outcome.disabled) hashes.add(nodeIdentityHash(node));
     });
+
+    // §322 — правила могли переписать `server`/`uuid`, и тогда идентичность
+    // узла другая, а синонимы группы указывают на прежнюю. Пересобираем
+    // таблицу по патченым узлам: тег провайдера тот же, ключ новый.
+    _remapAutoSelectSynonyms(nodes);
     return hashes;
+  }
+
+  /// §322 — пересчёт таблицы синонимов после §302-правил. Тег провайдера
+  /// (ключ таблицы) правила не трогают — меняется только идентичность, на
+  /// которую он указывает.
+  void _remapAutoSelectSynonyms(List<NodeSpec> nodes) {
+    final autos = nodes.whereType<AutoSelectSpec>().toList();
+    if (autos.isEmpty) return;
+    // Старая идентичность → новая. Считаем по узлам, которые правила задели.
+    final moved = <String, String>{};
+    for (final n in nodes) {
+      if (n.patchedJson == null) continue;
+      final before = nodeIdentityKeyRaw(n);
+      final after = nodeIdentityKey(n);
+      if (before != null && after != null && before != after) {
+        moved[before] = after;
+      }
+    }
+    if (moved.isEmpty) return;
+    for (var i = 0; i < nodes.length; i++) {
+      final a = nodes[i];
+      if (a is! AutoSelectSpec || a.tagSynonyms.isEmpty) continue;
+      nodes[i] = a.copyWith(tagSynonyms: {
+        for (final e in a.tagSynonyms.entries) e.key: moved[e.value] ?? e.value,
+      });
+    }
   }
 
   /// §074 — add a fully-constructed UserServer (used by Add server wizard

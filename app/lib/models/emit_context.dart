@@ -31,6 +31,13 @@ abstract class EmitContext {
   /// Пометить, что этот entry попадает в auto-proxy-out (urltest).
   void addToAutoList(SingboxEntry entry);
 
+  /// §272/§322 — глобальная настройка «Passive health check»: пока свежий
+  /// успешный дайл подтверждает узел, периодическая проба пропускается.
+  /// Каналы получают её напрямую в `buildConfig`; узлам автовыбора (§322)
+  /// она нужна здесь — их эмитит `ServerList.build`, куда настройки не
+  /// доходят. Дефолт `false` — апстрим-поведение, как omitempty у ядра.
+  bool get passiveCheck => false;
+
   /// Общий реестр для `route.rule_set` / `route.rules` секций. Живёт один
   /// на весь `buildConfig`, доступен post-steps и ServerList.build'у.
   /// Flush в `config.route` делает сам `buildConfig` в конце.

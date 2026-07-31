@@ -60,6 +60,13 @@ class HomeController extends ChangeNotifier
   /// у least_test пула нет). Обновляется вместе с _channelLabels.
   Set<String> _roundRobinAutoTags = const {};
 
+  /// §322 — auto-теги ВСЕХ каналов (`vpn-N-auto`). Строгий различитель:
+  /// ядру и наша группа §322, и двойник канала — одинаковый `urltest`, а
+  /// спец-обращение (подмена имени на «✨ Auto», пин в верхнюю секцию)
+  /// положено только двойнику. Тег канала генерит билдер, он не совпадает
+  /// со сгенерированным из имени тегом группы §322.
+  Set<String> _channelAutoTags = const {};
+
   @override
   HomeState _state = HomeState();
   HomeState get state => _state;
@@ -184,6 +191,8 @@ class HomeController extends ChangeNotifier
     _channelLabels = {
       for (final c in channels) c.tag: c.displayLabel,
     };
+    // §322 — auto-теги всех каналов (различитель «двойник канала vs группа»).
+    _channelAutoTags = {for (final c in channels) c.autoTag};
     // §208 — auto-теги round_robin-каналов (для гейта «View pool»).
     _roundRobinAutoTags = {
       for (final c in channels)
@@ -195,13 +204,56 @@ class HomeController extends ChangeNotifier
     SelectorInfo.I.setFallbackTags([
       for (final c in channels) ...[c.tag, c.autoTag],
     ]);
-    _emit(_state.copyWith(groupLabels: _channelLabels));
+    _emit(_state.copyWith(
+      groupLabels: _channelLabels,
+      channelAutoTags: _channelAutoTags, // §322 — гейт пина в верхнюю секцию
+    ));
   }
 
-  /// §208 — true, если [autoTag] — auto-двойник round_robin-канала (есть пул).
-  /// Sync-геттер для гейта пункта меню «View pool» (least_test → пула нет).
+  /// §322 — true, если [tag] — auto-двойник КАНАЛА (`vpn-N-auto`), а не наша
+  /// группа автовыбора. Только двойник получает подмену имени и пин наверх.
+  bool isChannelAutoTag(String tag) => _channelAutoTags.contains(tag);
+
+  // ── §322 — ленивый кэш живых пулов для значков в списке ──
+  //
+  // `getPool` — unary-RPC ядра; дёргать его на каждый ребилд строки нельзя.
+  // Тянем ОДИН раз на группу и держим до следующего пинг-раунда: состав пула
+  // меняется вместе с задержками, а `pingBatchGen` — ровно тот сигнал.
+  final _poolCache = <String, List<CcPoolSlot>>{};
+  final _poolInFlight = <String>{};
+  int _poolCacheGen = -1;
+
+  /// Живой состав пула [tag] из кэша. `null` — ещё не тянули: вызов ставит
+  /// фоновый запрос, результат приедет через `notifyListeners`.
+  List<CcPoolSlot>? poolSlots(String tag) {
+    // Пинг-раунд сменился → прежние слоты устарели.
+    if (_poolCacheGen != _state.pingBatchGen) {
+      _poolCacheGen = _state.pingBatchGen;
+      _poolCache.clear();
+      _poolInFlight.clear();
+    }
+    final cached = _poolCache[tag];
+    if (cached != null) return cached;
+    if (!_state.tunnelUp || !_poolInFlight.add(tag)) return null;
+    unawaited(_fetchPool(tag));
+    return null;
+  }
+
+  Future<void> _fetchPool(String tag) async {
+    final slots = await _cc.getPool(tag);
+    if (_disposed || slots == null) return;
+    _poolCache[tag] = slots;
+    notifyListeners();
+  }
+
+  /// §208/§322 — true, если у urltest-группы [autoTag] есть пул: это либо
+  /// auto-двойник round_robin-канала, либо узел автовыбора (§322) в режиме
+  /// round_robin. Sync-геттер для гейта пункта «View pool» (least_test → пула
+  /// нет). Для §322 смотрим тип прямо в конфиге: `balancer{}` в outbound'е
+  /// есть только под round_robin (см. AutoSelectParams.toJson).
   bool isRoundRobinAuto(String autoTag) =>
-      _roundRobinAutoTags.contains(autoTag);
+      _roundRobinAutoTags.contains(autoTag) ||
+      _state.configModel.rawOf(autoTag)?['balancer'] != null;
 
   /// §208/§209 — снапшот пула round_robin-группы [autoTag] (ядро SPEC 019 V2).
   /// `null` = CC-клиент недоступен (сервис down) — НЕ пустой пул. `[]` = пул

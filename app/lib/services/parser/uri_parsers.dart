@@ -1,6 +1,8 @@
+import '../../models/auto_select.dart';
 import '../../models/node_spec.dart';
 import 'uri_utils.dart';
 import 'uri_parsers/anytls_parser.dart';
+import 'uri_parsers/auto_group_parser.dart';
 import 'uri_parsers/http_parser.dart';
 import 'uri_parsers/hysteria2_parser.dart';
 import 'uri_parsers/masque_parser.dart';
@@ -39,6 +41,10 @@ NodeSpec? parseUri(String uri) {
   final scheme = t.split('://').first.toLowerCase();
   try {
     switch (scheme) {
+      // §322 — синтетическая схема узла автовыбора. Не протокол: несёт
+      // правило членства и параметры urltest (см. auto_select.dart).
+      case kAutoGroupScheme:
+        return parseAutoGroup(t);
       case 'vless':
         return parseVless(t);
       case 'vmess':

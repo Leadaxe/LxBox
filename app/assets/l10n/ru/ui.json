@@ -393,6 +393,9 @@
   "%s detour reference(s) reset to None": {
     "value": "detour-ссылок сброшено в None: %s"
   },
+  "%s of %s servers": {
+    "value": "%s из %s серверов"
+  },
   "%s rule reference(s) switched to vpn-1": {
     "value": "ссылок в правилах переключено на vpn-1: %s"
   },
@@ -554,6 +557,9 @@
   },
   "Add at least one condition": {
     "value": "Добавьте хотя бы одно условие"
+  },
+  "Add auto node…": {
+    "value": "Добавить авто-узел…"
   },
   "Add by URL…": {
     "value": "Добавить по URL…"
@@ -753,6 +759,9 @@
   "Apps may use ConnectivityManager to bypass tun.": {
     "value": "Приложения могут обходить туннель через ConnectivityManager."
   },
+  "Auto": {
+    "value": "Авто"
+  },
   "Auto (recommended)": {
     "value": "Авто (рекомендуется)"
   },
@@ -800,6 +809,9 @@
   },
   "Backup exported (%d bytes)": {
     "value": "Резервная копия экспортирована (%d байт)"
+  },
+  "Badge in list (regex)": {
+    "value": "Значок в списке (regex)"
   },
   "Based on preset": {
     "value": "На основе пресета"
@@ -1266,6 +1278,9 @@
   "Delete all OOM reports?": {
     "value": "Удалить все отчёты OOM?"
   },
+  "Delete auto node?": {
+    "value": "Удалить авто-узел?"
+  },
   "Delete channel": {
     "value": "Удалить канал"
   },
@@ -1462,6 +1477,9 @@
   "Edit DNS Server": {
     "value": "Изменить DNS-сервер"
   },
+  "Edit auto node": {
+    "value": "Настройка авто-узла"
+  },
   "Edit channel · %s": {
     "value": "Изменить канал · %s"
   },
@@ -1534,6 +1552,9 @@
   },
   "Events with no owning app": {
     "value": "События, у которых не определено приложение"
+  },
+  "Exclude (regex)": {
+    "value": "Исключить (regex)"
   },
   "Exclude matching (invert)": {
     "value": "Исключить совпадающие (инверсия)"
@@ -1700,6 +1721,9 @@
       "many": "В папке «%2$s» %1$d серверов.",
       "other": "В папке «%2$s» %1$d сервера."
     }
+  },
+  "Folder has no servers yet": {
+    "value": "В папке пока нет серверов"
   },
   "Folder is empty": {
     "value": "Папка пуста"
@@ -1921,6 +1945,9 @@
   },
   "In the next screen (system App info) look for:\n\n• Autostart / Startup manager — allow\n• Background activity / Allow in background — allow\n• Battery / Power usage → \"Don't optimize\" or \"No restrictions\"\n• Battery saver exceptions — add L×Box\n\nLocation of these toggles varies by OEM (Xiaomi/MIUI, Samsung/One UI, Oppo/ColorOS, Huawei, Google Pixel). Some are under Battery, others under App permissions.": {
     "value": "На следующем экране (системный «О приложении») найдите:\n\n• Автозапуск / Startup manager — разрешить\n• Фоновая активность / Разрешить в фоне — разрешить\n• Батарея / Энергопотребление → «Не оптимизировать» или «Без ограничений»\n• Исключения энергосбережения — добавьте L×Box\n\nРасположение зависит от производителя (Xiaomi/MIUI, Samsung/One UI, Oppo/ColorOS, Huawei, Google Pixel): что-то в разделе «Батарея», что-то в «Разрешениях приложений»."
+  },
+  "Include (regex)": {
+    "value": "Включить (regex)"
   },
   "Include auto (urltest)": {
     "value": "Добавлять auto (urltest)"
@@ -2253,6 +2280,9 @@
   },
   "Never updated": {
     "value": "Ещё не обновлялась"
+  },
+  "New auto node": {
+    "value": "Новый авто-узел"
   },
   "New folder": {
     "value": "Новая папка"
@@ -2608,6 +2638,9 @@
   },
   "Phone → %s → Nodes → Internet": {
     "value": "Телефон → %s → Узлы → Интернет"
+  },
+  "Pick": {
+    "value": "Выбор"
   },
   "Pick another random IP:port": {
     "value": "Подставить другой случайный IP:port"
@@ -3208,6 +3241,9 @@
   "Servers can't be tested while the VPN is on — the test needs its own core session, which can't run alongside the active tunnel. Stop the VPN to test the servers.": {
     "value": "Серверы нельзя протестировать при включённом VPN — тесту нужна собственная сессия ядра, а она не может работать одновременно с активным туннелем. Остановите VPN, чтобы проверить серверы."
   },
+  "Servers in the pool": {
+    "value": "Серверы в пуле"
+  },
   "Servers in this folder have no detours yet. You can still route all of them through one of your servers, or set personal detours per server (tap a server on the Servers tab).": {
     "value": "У серверов этой папки пока нет detour. Тем не менее можно направить их все через один из ваших серверов или задать каждому личный detour (нажмите на сервер на вкладке «Серверы»)."
   },
@@ -3468,6 +3504,9 @@
   "Switch to cloudflare_udp": {
     "value": "Переключить на cloudflare_udp"
   },
+  "Switch tolerance (ms)": {
+    "value": "Порог переключения (мс)"
+  },
   "Switchable detour channel": {
     "value": "Переключаемый detour-канал"
   },
@@ -3584,6 +3623,9 @@
   },
   "The core has not panicked. Note that this channel only covers Go panics — native crashes and kills by the system are not recorded here.": {
     "value": "Ядро не паниковало. Учтите: сюда попадают только паники Go — нативные падения и убийства системой здесь не фиксируются."
+  },
+  "The servers it selects from stay in the folder.": {
+    "value": "Серверы, из которых он выбирает, останутся в папке."
   },
   "The whole element as the provider sent it": {
     "value": "Элемент целиком, как прислал провайдер"
@@ -3879,6 +3921,9 @@
   "You're up to date": {
     "value": "У вас последняя версия"
   },
+  "applied after include": {
+    "value": "применяется после «включить»"
+  },
   "auto-start, keep on exit, background mode, allow bypass": {
     "value": "автозапуск, сохранение при выходе, фоновый режим, обход VPN"
   },
@@ -3896,6 +3941,9 @@
   },
   "connect to see the full path": {
     "value": "подключитесь, чтобы увидеть весь путь"
+  },
+  "connections with the same key keep one server": {
+    "value": "соединения с одним ключом держатся одного сервера"
   },
   "contains": {
     "value": "содержит"
@@ -3918,11 +3966,20 @@
   "e.g. 1.2.3.0/24, empty = off": {
     "value": "например 1.2.3.0/24, пусто = выключено"
   },
+  "e.g. 15m": {
+    "value": "например, 15m"
+  },
+  "e.g. 30m": {
+    "value": "например, 30m"
+  },
   "e.g. 5s, empty = default": {
     "value": "например 5s, пусто = по умолчанию"
   },
   "e.g. 🇩🇪|🇳🇱 — empty = all nodes": {
     "value": "например 🇩🇪|🇳🇱 — пусто = все узлы"
+  },
+  "empty = all servers": {
+    "value": "пусто = все серверы"
   },
   "empty = core default": {
     "value": "пусто = значение ядра по умолчанию"
@@ -3951,6 +4008,9 @@
   "host:port of the Cloudflare peer. With obfuscation a random working IP:port is filled in — tap the dice to reroll, or type your own to pin a specific one.": {
     "value": "host:port пира Cloudflare. При обфускации подставляется случайный рабочий IP:port — нажмите на кубик, чтобы сменить, или впишите свой, чтобы закрепить конкретный."
   },
+  "how much faster a rival must be to win": {
+    "value": "насколько быстрее должен быть соперник, чтобы победить"
+  },
   "invalid": {
     "value": "некорректный"
   },
@@ -3972,6 +4032,9 @@
   "never": {
     "value": "никогда"
   },
+  "no stickiness — every connection re-picks": {
+    "value": "без липкости — каждое соединение выбирает заново"
+  },
   "of %d nodes": {
     "value": {
       "one": "из %d узла",
@@ -3979,6 +4042,9 @@
       "many": "из %d узлов",
       "other": "из %d узла"
     }
+  },
+  "off: open connections finish on the old server": {
+    "value": "выкл: открытые соединения доживают на прежнем сервере"
   },
   "platform error: %s": {
     "value": "ошибка платформы: %s"
@@ -4022,14 +4088,23 @@
   "sing-box server preview (read-only)": {
     "value": "превью сервера sing-box (только чтение)"
   },
+  "single best server by latency": {
+    "value": "один лучший сервер по задержке"
+  },
   "slot %d": {
     "value": "слот %d"
+  },
+  "spread connections across a pool of servers": {
+    "value": "распределяет соединения по пулу серверов"
   },
   "srs": {
     "value": "srs"
   },
   "storage shape (lxbox_settings.json)": {
     "value": "формат хранения (lxbox_settings.json)"
+  },
+  "taken from member names; empty = no badges. Display only — not sent to the core": {
+    "value": "берётся из имён участников; пусто = без значков. Только для вида — в ядро не уходит"
   },
   "template": {
     "value": "шаблон"

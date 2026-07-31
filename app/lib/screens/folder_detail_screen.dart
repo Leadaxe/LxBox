@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import '../models/node_spec.dart';
+import '../services/node_identity.dart';
+import 'auto_group_edit_screen.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -702,6 +705,87 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     }
   }
 
+  /// §322 — создать узел автовыбора в этой папке. Кандидаты в пул — её же
+  /// члены: группа не выходит за границы контейнера.
+  Future<void> _addAutoNode() async {
+    final idx = _index;
+    if (idx < 0) return;
+    final folder = widget.controller.entries[idx].list;
+    if (folder is! FolderServers) return;
+
+    final candidates = _poolCandidates(folder);
+    final res = await Navigator.of(context).push<AutoGroupEditResult>(
+      MaterialPageRoute(
+        builder: (_) => AutoGroupEditScreen(
+          initial: null,
+          candidates: candidates,
+          canDelete: false,
+        ),
+      ),
+    );
+    if (!mounted || res is! AutoGroupSaved) return;
+
+    // Храним как обычного члена: `autogroup://`-URI парсится обратно при
+    // загрузке (§322 §7), отдельной ветки в модели папки не нужно.
+    final err = await widget.controller
+        .addMembersToFolder(idx, res.spec.toUri());
+    if (!mounted) return;
+    if (err != null) {
+      await _showError(err.render());
+      return;
+    }
+    setState(() {});
+  }
+
+  /// §322 — правка существующего узла автовыбора. Кандидаты считаем без
+  /// него самого: группа не может взять в пул саму себя.
+  Future<void> _editAutoNode(int memberIndex, AutoSelectSpec node) async {
+    final idx = _index;
+    if (idx < 0) return;
+    final folder = widget.controller.entries[idx].list;
+    if (folder is! FolderServers) return;
+
+    final res = await Navigator.of(context).push<AutoGroupEditResult>(
+      MaterialPageRoute(
+        builder: (_) => AutoGroupEditScreen(
+          initial: node,
+          candidates: _poolCandidates(folder),
+          canDelete: true,
+        ),
+      ),
+    );
+    if (!mounted || res == null) return;
+
+    switch (res) {
+      case AutoGroupSaved(:final spec):
+        final err = await widget.controller
+            .updateMemberAt(idx, memberIndex, spec.toUri());
+        if (!mounted) return;
+        if (err != null) {
+          await _showError(err.render());
+          return;
+        }
+      case AutoGroupDeleted():
+        await widget.controller.removeMemberAt(idx, memberIndex);
+        if (!mounted) return;
+    }
+    setState(() {});
+  }
+
+  /// Члены папки, которые могут попасть в пул: обычные узлы, без групп
+  /// (вложенность urltest в urltest бессмысленна) и без нечитаемых raw.
+  List<({String key, String label})> _poolCandidates(FolderServers folder) {
+    final out = <({String key, String label})>[];
+    for (final m in folder.members) {
+      final n = m.node;
+      if (n == null || n.isGroup) continue;
+      final k = nodeIdentityKey(n);
+      if (k == null) continue;
+      out.add((key: k, label: n.label.isEmpty ? n.tag : n.label));
+    }
+    return out;
+  }
+
   Future<void> _addFromUrl() async {
     final ctl = TextEditingController();
     final url = await showDialog<String>(
@@ -767,6 +851,15 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     // геттер context бросит на первой же строке (showDialog).
     if (!mounted) return;
     final member = _folder.members[memberIndex];
+
+    // §322 — у узла автовыбора свой редактор: сырой `autogroup://`-URI
+    // пользователю показывать нельзя (правило в percent-encoding).
+    final node = member.node;
+    if (node is AutoSelectSpec) {
+      await _editAutoNode(memberIndex, node);
+      return;
+    }
+
     final ctl = TextEditingController(text: member.raw);
     final newRaw = await showDialog<String>(
       context: context,
@@ -966,6 +1059,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                 if (v == 'paste') unawaited(_addFromClipboard());
                 if (v == 'file') unawaited(_addFromFiles());
                 if (v == 'url') unawaited(_addFromUrl());
+                if (v == 'auto') unawaited(_addAutoNode());
               },
               itemBuilder: (menuCtx) => [
                 PopupMenuItem(
@@ -976,6 +1070,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                     child: Text(getLocalText.s("Import from files…"))),
                 PopupMenuItem(
                     value: 'url', child: Text(getLocalText.s("Add by URL…"))),
+                const PopupMenuDivider(),
+                // §322 — не сервер, а пул автовыбора среди членов ЭТОЙ папки.
+                PopupMenuItem(
+                    value: 'auto',
+                    child: Text(getLocalText.s("Add auto node…"))),
               ],
             ),
             IconButton(

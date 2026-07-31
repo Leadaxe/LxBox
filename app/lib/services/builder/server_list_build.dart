@@ -1,7 +1,11 @@
 import '../../config/consts.dart';
 import '../../models/emit_context.dart';
 import '../../models/server_list.dart';
+import '../../models/auto_select.dart';
+import '../../models/node_spec.dart';
 import '../node_hash.dart';
+import '../node_identity.dart';
+import '../safe_regex.dart';
 import '../tag_resolver.dart';
 
 /// Сборка одной подписки в контекст `EmitContext`.
@@ -35,10 +39,20 @@ extension ServerListBuild on ServerList {
       _ => null,
     };
 
+    // §322 — узлы автовыбора собираем ВТОРЫМ проходом: их `outbounds` — теги
+    // членов, а те присваиваются `allocateTag` только в цикле ниже. Копим
+    // соответствие «узел → его итоговый тег», по нему потом резолвим пулы.
+    final autoSelects = <(AutoSelectSpec, int)>[];
+    final resolvedTags = <NodeSpec, String>{};
+
     for (var i = 0; i < nodes.length; i++) {
       final server = nodes[i];
       if (disabledHashes != null &&
           disabledHashes.containsKey(nodeIdentityHash(server))) {
+        continue;
+      }
+      if (server is AutoSelectSpec) {
+        autoSelects.add((server, i));
         continue;
       }
       final policy =
@@ -61,6 +75,9 @@ extension ServerListBuild on ServerList {
       }
       main.map['tag'] =
           ctx.allocateTag(TagResolver.displayTag(tagPrefix, main.tag));
+      // §322 — итоговый тег нужен второму проходу: пул автовыбора ссылается
+      // на членов уже ПОСЛЕ префикса и уникализации.
+      resolvedTags[server] = main.map['tag'] as String;
 
       // Применить detour policy.
       if (replaceMode) {
@@ -110,7 +127,81 @@ extension ServerListBuild on ServerList {
         if (detourPolicy.registerDetourInAuto) ctx.addToAutoList(d);
       }
     }
+
+    // §322 — второй проход: узлы автовыбора. Их состав — теги членов ЭТОГО же
+    // контейнера, известные только теперь.
+    for (final (spec, _) in autoSelects) {
+      final members = resolveAutoSelectMembers(spec, resolvedTags);
+      // Пустой urltest роняет старт ядра (validator.dart) — достижимо, если
+      // все члены выключены (§283) или подписка обновилась и пул опустел.
+      // Не эмитим вовсе: безопаснее, чем пустая группа.
+      if (members.isEmpty) continue;
+
+      final entry = spec.emit(ctx.vars);
+      // §272/§322 — глобальный «Passive health check»: пропускаем пробу, пока
+      // узел и так подтверждён своим трафиком. Для пула из 15 узлов это
+      // главная статья расхода батареи. Эмитим только при true (omitempty:
+      // отсутствие = false = апстрим), как канал в build_config.
+      if (ctx.passiveCheck) entry.map['passive_check'] = true;
+      entry.map['tag'] =
+          ctx.allocateTag(TagResolver.displayTag(tagPrefix, spec.tag));
+      entry.map['outbounds'] = members;
+      ctx.addEntry(entry);
+      ctx.addToSelectorTagList(entry);
+      // В ✨auto НЕ добавляем, и в urltest-двойник канала группа тоже не
+      // попадёт — билдер отсекает её по `type: urltest` (build_config).
+    }
   }
+}
+
+/// §322 §3.3 — состав пула по режиму членства.
+///
+/// [resolved] — узлы контейнера с их ИТОГОВЫМИ тегами (после префикса и
+/// `allocateTag`). Выключенных (§283) здесь уже нет: их отфильтровал билдер.
+List<String> resolveAutoSelectMembers(
+  AutoSelectSpec spec,
+  Map<NodeSpec, String> resolved,
+) {
+  final out = <String>[];
+  switch (spec.membership) {
+    case ExplicitMembers(:final keys):
+      // Порядок задаёт СПИСОК, а не обход контейнера: пользователь его
+      // осмысленно упорядочил (или он приехал из selector).
+      final byKey = <String, String>{};
+      for (final e in resolved.entries) {
+        final k = nodeIdentityKey(e.key);
+        if (k != null) byKey[k] = e.value;
+      }
+      for (final k in keys) {
+        final tag = byKey[k];
+        // Ключ без узла — член выключен или исчез из подписки. Пропускаем.
+        if (tag != null) out.add(tag);
+      }
+    case RuleMembers(:final include, :final exclude):
+      final inc = tryCompileRegex(include);
+      final exc = tryCompileRegex(exclude);
+      // §321 P6 — синонимы этого узла: теги провайдера, которые он видел в
+      // СВОЁМ элементе подписки. Когда они есть, пул ограничен ими: правило
+      // из `selector` написано в границах одного конфига, и матчить им по
+      // всему контейнеру нельзя (тег `proxy` есть у 31 элемента Liberty).
+      final scoped = spec.tagSynonyms.isNotEmpty;
+      final ownKeys = spec.tagSynonyms.values.toSet();
+      for (final e in resolved.entries) {
+        final key = nodeIdentityKey(e.key);
+        if (scoped && !ownKeys.contains(key)) continue;
+        // Имена для матчинга: итоговый тег, базовый тег и теги провайдера
+        // (правило из `selector` написано именно на них).
+        final names = <String>[
+          e.value,
+          e.key.tag,
+          ...spec.tagSynonyms.entries
+              .where((s) => s.value == key)
+              .map((s) => s.key),
+        ];
+        if (ruleAccepts(names, inc, exc)) out.add(e.value);
+      }
+  }
+  return out;
 }
 
 /// §239 — план detour-резолюции папки. Считается один раз на build:

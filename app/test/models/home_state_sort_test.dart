@@ -18,6 +18,10 @@ void main() {
     });
   }
 
+  // §322 — auto-теги КАНАЛОВ: только им положен пин в верхнюю секцию
+  // (у узла автовыбора подписки/папки тип тоже urltest, но он обычная нода).
+  const chAuto = {'✨auto', 'vpn-1-auto', 'vpn-2-auto'};
+
   // Часто используемая раскладка: direct-out=direct, *-auto=urltest.
   String cfgDA(List<String> tags) => cfg(tags, types: {
         'direct-out': 'direct',
@@ -45,6 +49,7 @@ void main() {
   group('HomeState.sortedNodes — pin toggles (§070/§125 по типу)', () {
     test('pinDirect ON + latencyAsc: direct первый', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'y']),
         nodes: ['x', 'direct-out', 'y'],
         lastDelay: {'x': 50, 'y': 30},
@@ -55,6 +60,7 @@ void main() {
 
     test('pinDirect OFF + latencyAsc: direct по latency', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'y']),
         nodes: ['x', 'direct-out', 'y'],
         lastDelay: {'x': 50, 'y': 30, 'direct-out': 10},
@@ -68,6 +74,7 @@ void main() {
     test('§125 — auto-двойник vpn-1-auto пинится по типу urltest', () {
       // Имя НЕ '✨auto', но type==urltest → должен попасть в pinned (вверх).
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['z', 'vpn-1-auto', 'a']),
         nodes: ['z', 'vpn-1-auto', 'a'],
         sortMode: NodeSortMode.nameAsc,
@@ -78,6 +85,7 @@ void main() {
 
     test('pinAuto OFF + nameAsc: auto-двойник сортируется по имени', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['z', 'vpn-1-auto', 'a']),
         nodes: ['z', 'vpn-1-auto', 'a'],
         sortMode: NodeSortMode.nameAsc,
@@ -90,6 +98,7 @@ void main() {
 
     test('default mode + pin ON: direct + auto сверху, rest pristine', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'y', 'vpn-1-auto']),
         nodes: ['x', 'direct-out', 'y', 'vpn-1-auto'],
         sortMode: NodeSortMode.defaultOrder,
@@ -100,6 +109,7 @@ void main() {
 
     test('default mode + pin OFF: чистый pristine config order', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'y', 'vpn-1-auto']),
         nodes: ['x', 'direct-out', 'y', 'vpn-1-auto'],
         sortMode: NodeSortMode.defaultOrder,
@@ -111,6 +121,7 @@ void main() {
 
     test('несколько auto-двойников: все пинятся, direct первым', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'vpn-2-auto', 'direct-out', 'vpn-1-auto', 'y']),
         nodes: ['x', 'vpn-2-auto', 'direct-out', 'vpn-1-auto', 'y'],
         sortMode: NodeSortMode.defaultOrder,
@@ -124,6 +135,7 @@ void main() {
   group('§196 — активная нода пинится после direct/auto', () {
     test('активная нода сразу после direct+auto при latencyAsc', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'y', 'vpn-1-auto', 'z']),
         nodes: ['x', 'direct-out', 'y', 'vpn-1-auto', 'z'],
         lastDelay: {'x': 10, 'y': 20, 'z': 30}, // z самый медленный
@@ -136,6 +148,7 @@ void main() {
 
     test('активная при любой сортировке — nameAsc', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['a', 'direct-out', 'b', 'z']),
         nodes: ['a', 'direct-out', 'b', 'z'],
         activeInGroup: 'z', // лексикографически последняя
@@ -147,6 +160,7 @@ void main() {
 
     test('активная при default order', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'y', 'z']),
         nodes: ['x', 'y', 'z'],
         activeInGroup: 'y',
@@ -157,6 +171,7 @@ void main() {
 
     test('активная нода = direct/auto → НЕ дублируется', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'vpn-1-auto']),
         nodes: ['x', 'direct-out', 'vpn-1-auto'],
         activeInGroup: 'vpn-1-auto', // уже в pinned (urltest)
@@ -169,6 +184,7 @@ void main() {
 
     test('нет активной → старое поведение', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'y']),
         nodes: ['x', 'direct-out', 'y'],
         sortMode: NodeSortMode.latencyAsc,
@@ -179,6 +195,7 @@ void main() {
 
     test('pinnedNodeCount = direct + auto + активная', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'vpn-1-auto', 'y']),
         nodes: ['x', 'direct-out', 'vpn-1-auto', 'y'],
         activeInGroup: 'x',
@@ -190,6 +207,7 @@ void main() {
 
     test('активная нода не в списке nodes → игнор', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'y']),
         nodes: ['x', 'y'],
         activeInGroup: 'ghost', // нет в nodes
@@ -203,6 +221,7 @@ void main() {
   group('§201 — block пинится сверху', () {
     test('block после direct/auto, перед rest', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'block', 'vpn-1-auto', 'y']),
         nodes: ['x', 'direct-out', 'block', 'vpn-1-auto', 'y'],
         sortMode: NodeSortMode.defaultOrder,
@@ -213,6 +232,7 @@ void main() {
 
     test('block пинится при любой сортировке', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['z', 'block', 'a']),
         nodes: ['z', 'block', 'a'],
         sortMode: NodeSortMode.nameAsc,
@@ -225,6 +245,7 @@ void main() {
   group('HomeState.sortedNodes — manual mode (§071)', () {
     test('manualOrder применяется к non-pinned', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['direct-out', 'x', 'y', 'z']),
         nodes: ['direct-out', 'x', 'y', 'z'],
         sortMode: NodeSortMode.manual,
@@ -235,6 +256,7 @@ void main() {
 
     test('новая нода (не в manualOrder) → конец', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfg(['x', 'y', 'newNode', 'z']),
         nodes: ['x', 'y', 'newNode', 'z'],
         sortMode: NodeSortMode.manual,
@@ -245,6 +267,7 @@ void main() {
 
     test('удалённая нода из manualOrder автоматически отфильтрована', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfg(['x', 'z']),
         nodes: ['x', 'z'],
         sortMode: NodeSortMode.manual,
@@ -255,6 +278,7 @@ void main() {
 
     test('manualOrder пустой + manual mode → fallback на pristine nodes', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfg(['a', 'b', 'c']),
         nodes: ['a', 'b', 'c'],
         sortMode: NodeSortMode.manual,
@@ -266,6 +290,7 @@ void main() {
 
     test('manual mode + pinDirect ON: direct остаётся сверху', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'y']),
         nodes: ['x', 'direct-out', 'y'],
         sortMode: NodeSortMode.manual,
@@ -277,6 +302,7 @@ void main() {
 
     test('manual mode + pinDirect OFF: direct в manualOrder', () {
       final s = HomeState(
+        channelAutoTags: chAuto,
         configRaw: cfgDA(['x', 'direct-out', 'y']),
         nodes: ['x', 'direct-out', 'y'],
         sortMode: NodeSortMode.manual,

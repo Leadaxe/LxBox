@@ -60,6 +60,7 @@ class HomeState {
     this.ccGroups = const <CcGroup>[],
     this.groups = const <String>[],
     this.groupLabels = const <String, String>{},
+    this.channelAutoTags = const <String>{},
     this.selectedGroup,
     this.nodes = const <String>[],
     this.activeInGroup,
@@ -147,6 +148,11 @@ class HomeState {
   /// §125 — tag→label каналов (из storage `channels[]`). Для отображения
   /// человекочитаемого имени канала в home-dropdown вместо tag ('vpn-1').
   final Map<String, String> groupLabels;
+
+  /// §322 — auto-теги каналов (`vpn-N-auto`). Пин в верхнюю секцию положен
+  /// только им: у узла автовыбора подписки/папки тип тоже `urltest`, но он
+  /// обычная нода списка и своего места не покидает.
+  final Set<String> channelAutoTags;
 
   /// Человекочитаемое имя группы: label канала из storage, иначе сам tag.
   String groupLabelOf(String tag) => groupLabels[tag] ?? tag;
@@ -277,13 +283,20 @@ class HomeState {
     final pinnedSet = <String>{
       for (final n in nodes)
         if ((pinDirect && model[n]?.type == 'direct') ||
-            (pinAuto && model[n]?.type == 'urltest') ||
+            // §322 — только auto-двойник КАНАЛА; группа автовыбора остаётся
+            // на своём месте в списке.
+            (pinAuto &&
+                model[n]?.type == 'urltest' &&
+                channelAutoTags.contains(n)) ||
             model[n]?.type == 'block') // §201 — block всегда сверху
           n,
     };
     final pinned = [
       ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'direct'),
-      ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'urltest'),
+      ...nodes.where((n) =>
+          pinnedSet.contains(n) &&
+          model[n]?.type == 'urltest' &&
+          channelAutoTags.contains(n)),
       ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'block'),
     ];
     // §196 — активная нода группы сразу ПОСЛЕ direct/auto, при ЛЮБОЙ сортировке
@@ -348,6 +361,7 @@ class HomeState {
     List<CcGroup>? ccGroups,
     List<String>? groups,
     Map<String, String>? groupLabels,
+    Set<String>? channelAutoTags,
     Object? selectedGroup = _unset,
     List<String>? nodes,
     Object? activeInGroup = _unset,
@@ -398,6 +412,7 @@ class HomeState {
       ccGroups: ccGroups ?? this.ccGroups,
       groups: groups ?? this.groups,
       groupLabels: groupLabels ?? this.groupLabels,
+      channelAutoTags: channelAutoTags ?? this.channelAutoTags,
       selectedGroup: identical(selectedGroup, _unset)
           ? this.selectedGroup
           : selectedGroup as String?,

@@ -2,6 +2,7 @@ import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/home_state.dart';
 import '../../models/server_list.dart';
+import '../../services/safe_regex.dart';
 import 'node_filter.dart';
 import 'node_filter_view_model.dart';
 import 'source_lookup.dart';
@@ -23,6 +24,53 @@ String protoLabel(String type) => switch (type) {
       'http' => 'HTTP',
       _ => type.toUpperCase(),
     };
+
+/// §322 — метка узла автовыбора для подзаголовка (перед «→ выбранный»).
+///
+/// У группы своего протокола нет — её члены разнородны, а протокол ВЫБРАННОГО
+/// узла меняется под пользователем при каждом переключении. Вместо него —
+/// режим и состав:
+///
+/// - `🎯 [3]` — least_test: выбирает одного быстрейшего из 3;
+/// - `🔀 [15/7]` — round_robin: всего 15 узлов, в работе пул из 7.
+///
+/// `null` — не urltest-группа либо outbound не найден.
+/// §322 — значки живого пула: `🇩🇪, 🇳🇱[2], 🇫🇮` из имён его членов.
+///
+/// [badge] — regexp пользователя (дефолт `kDefaultPoolBadge` = первый
+/// флаг-эмодзи). Ничего не нашлось — узел просто не даёт значка; совсем
+/// пустой результат = пустая строка (не показываем).
+///
+/// Повторы схлопываются с числом: два финских узла → `🇫🇮[2]`. Порядок —
+/// как в пуле (слоты ядра, отсортированы им же).
+String poolBadges(List<String> memberLabels, String badge) {
+  if (badge.isEmpty || memberLabels.isEmpty) return '';
+  // Битый regexp — молча без значков (инвариант §125: не роняем UI).
+  final re = tryCompileRegex(badge, unicode: true);
+  if (re == null) return '';
+  final counts = <String, int>{};
+  for (final l in memberLabels) {
+    final m = re.firstMatch(l);
+    if (m == null) continue;
+    final hit = m.group(0) ?? '';
+    if (hit.isEmpty) continue;
+    counts[hit] = (counts[hit] ?? 0) + 1;
+  }
+  return counts.entries
+      .map((e) => e.value > 1 ? '${e.key}[${e.value}]' : e.key)
+      .join(', ');
+}
+
+String? autoGroupLabel(Map<String, dynamic>? raw) {
+  if (raw == null || raw['type'] != 'urltest') return null;
+  final members = (raw['outbounds'] as List?)?.length ?? 0;
+  // `balancer{}` эмитится только под round_robin (§208 / §4.1 спеки 322).
+  final balancer = raw['balancer'];
+  if (balancer is! Map) return '🎯 [$members]';
+  // Пул больше состава — ядро схлопывает до доступных; показываем как есть.
+  final pool = (balancer['pool'] as num?)?.toInt() ?? members;
+  return '🔀 [$members/$pool]';
+}
 
 /// Prep-logic для node-list главного экрана.
 ///
@@ -108,7 +156,6 @@ class NodeListPresenter {
   /// (см. `home/source_lookup.dart`).
   Set<String> _sourcesOfTag(String tag) =>
       sourcesOfTag(tag, subController.entries);
-
 
   /// §085 R3 — единый `NodeFilter` из view-model + state-зависимых lookup'ов.
   /// Используется и `computeDisplayList`, и node-list (был дубль §078).

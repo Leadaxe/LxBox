@@ -170,6 +170,9 @@ Future<DetourTarget?> showDetourTargetPicker(
     if (!list.enabled) continue; // disabled не эмитит outbounds (§080)
     for (final n in list.nodes) {
       if (n.tag.isEmpty) continue;
+      // §322 — узел автовыбора целью detour быть не может: цепочка через
+      // ротирующийся пул непредсказуема (какой хоп сработает — решает ядро).
+      if (n.isGroup) continue;
       final display = TagResolver.displayTag(list.tagPrefix, n.tag);
       if (selfDisplayTag.isNotEmpty && display == selfDisplayTag) continue;
       free.add((display, n));
@@ -183,6 +186,7 @@ Future<DetourTarget?> showDetourTargetPicker(
     for (final m in folder.members) {
       final n = m.node;
       if (n == null || n.tag.isEmpty) continue;
+      if (n.isGroup) continue; // §322 — см. выше
       if (selfBareTag.isNotEmpty && n.tag == selfBareTag) continue;
       members.add((n.tag, n));
     }

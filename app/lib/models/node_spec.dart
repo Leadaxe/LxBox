@@ -1,3 +1,4 @@
+import 'auto_select.dart';
 import 'emit_context.dart';
 import 'node_entries.dart';
 import 'node_spec_emit.dart' as e;
@@ -123,6 +124,15 @@ sealed class NodeSpec {
   /// Тип протокола — для UI иконок и дебага.
   String get protocol;
 
+  /// §322 — узел-группа (пул автовыбора), а не соединение. У такого нет
+  /// адреса: `server`/`port` пусты, пинг берётся у выбранного члена. Гейт для
+  /// операций, требующих `server:port`, и для тех, что раздают ссылку наружу
+  /// (copy / QR / move): `autogroup://`-форма существует ради хранения, но
+  /// переносить её в другой контейнер бессмысленно — см. `autoGroupToUri`.
+  ///
+  /// Инвариант: `isGroup ⇔ server.isEmpty && port == 0` (проверяется тестом).
+  bool get isGroup => false;
+
   /// Превращает один сервер в список sing-box entries, которые надо
   /// положить в конфиг.
   ///
@@ -161,7 +171,6 @@ sealed class NodeSpec {
   @override
   String toString() => '$runtimeType($tag @ $server:$port)';
 }
-
 
 // ════════════════════════════════════════════════════════════════════════════
 // VLESS
@@ -813,4 +822,92 @@ final class MasqueSpec extends NodeSpec {
 
   @override
   String toUri() => e.toUriMasque(this);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Узел автовыбора (§322)
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Пул серверов, внутри которого ядро само выбирает выход (`urltest`).
+///
+/// В отличие от остальных вариантов [NodeSpec] это **не соединение**, а
+/// правило выбора среди уже существующих узлов — у него нет ни `server`, ни
+/// `port` (оба пустые, см. [isGroup]). Тот же водораздел, что у DNS-группы в
+/// §319: у группы нет адреса и транспорта.
+///
+/// Инвариант (§322 §2): узел **не покидает свой контейнер** — он ссылается на
+/// членов той же подписки/папки. Границу обеспечивает сам билдер: резолв
+/// состава идёт по узлам текущего контейнера и дальше не смотрит. Отдельного
+/// поля-владельца нет — оно дублировало бы эту границу и могло с ней разойтись.
+final class AutoSelectSpec extends NodeSpec {
+  /// Как набирается пул (§322 §3.1).
+  final AutoSelectMembership membership;
+
+  /// Параметры urltest, смапленные из Xray-стратегии (§322 §4).
+  final AutoSelectParams params;
+
+  /// §322 — regexp, которым из имени члена пула добывается значок для строки
+  /// списка (по умолчанию — первый флаг-эмодзи, [kDefaultPoolBadge]).
+  /// **UI-only:** в конфиг не уходит, ядру неизвестен. Пусто = значки не
+  /// показываем.
+  final String poolBadge;
+
+  /// §321 P6 — теги провайдера → идентичности. Нужна, чтобы `include` из
+  /// `selector` (написанный на ЧУЖИХ тегах) находил наши узлы после дедупа.
+  /// Производное от тела подписки, как `sourceCompact` (§302).
+  final Map<String, String> tagSynonyms;
+
+  AutoSelectSpec({
+    required super.id,
+    required super.tag,
+    required super.label,
+    this.membership = const RuleMembers(),
+    this.params = const AutoSelectParams(),
+    this.tagSynonyms = const {},
+    this.poolBadge = kDefaultPoolBadge,
+    super.warnings,
+  }) : super(server: '', port: 0, rawUri: '');
+
+  @override
+  String get protocol => 'urltest';
+
+  @override
+  bool get isGroup => true;
+
+  /// Эмиссия у этого узла особая: состав пула известен только билдеру (теги
+  /// членов присваиваются `allocateTag` уже после `getEntries`), поэтому
+  /// собственный `emitRaw` отдаёт заготовку БЕЗ `outbounds` — билдер
+  /// дописывает их сам (см. `auto_select_build.dart`).
+  @override
+  SingboxEntry emitRaw(TemplateVars vars) => Outbound({
+        'tag': tag,
+        'type': 'urltest',
+        'outbounds': <String>[],
+        ...params.toJson(),
+      });
+
+  /// §322 §7 — синтетический `autogroup://`. Нужен, чтобы группа хранилась в
+  /// папке общим механизмом (`FolderMember.raw`). НЕ переносимая ссылка:
+  /// правило написано под состав своей папки (см. `autoGroupToUri`).
+  @override
+  String toUri() => autoGroupToUri(label, membership, params, poolBadge);
+
+  AutoSelectSpec copyWith({
+    String? tag,
+    String? label,
+    AutoSelectMembership? membership,
+    AutoSelectParams? params,
+    Map<String, String>? tagSynonyms,
+    String? poolBadge,
+  }) =>
+      AutoSelectSpec(
+        id: id,
+        tag: tag ?? this.tag,
+        label: label ?? this.label,
+        membership: membership ?? this.membership,
+        params: params ?? this.params,
+        tagSynonyms: tagSynonyms ?? this.tagSynonyms,
+        poolBadge: poolBadge ?? this.poolBadge,
+        warnings: warnings,
+      );
 }

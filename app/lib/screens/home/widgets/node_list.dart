@@ -15,6 +15,8 @@ import '../../../widgets/reorder_grab_strip.dart';
 import '../../channel_edit_screen.dart';
 import '../node_actions.dart';
 import '../node_filter_view_model.dart';
+import '../../../models/auto_select.dart';
+import '../../../models/node_spec.dart';
 import '../node_list_presenter.dart';
 import 'add_server_cta.dart';
 import 'filter_panel.dart';
@@ -243,6 +245,9 @@ class HomeNodeList extends StatelessWidget {
         final group = state.groupOf(tag);
         final isUrltestGroup =
             group != null && group.type.toLowerCase().contains('urltest');
+        // §322 — auto-двойник КАНАЛА (не узел автовыбора): только ему положены
+        // подмена имени «✨ Auto» и пин в верхнюю секцию.
+        final isChannelAuto = controller.isChannelAutoTag(tag);
         // §102 — протокол и variant (transport/awg) берём с ОДНОГО узла:
         // сам tag, либо текущий выбор urltest-группы (§048 fallback).
         final protoSrc = cache.protocolOf(tag) != null
@@ -269,9 +274,22 @@ class HomeNodeList extends StatelessWidget {
               pingBusy: state.pingBusy[tag] == '…',
               tunnelUp: state.tunnelUp,
               busy: state.busy,
-              urltestNow: urltestNow,
+              // §322 — у round_robin одного «выбранного» нет: трафик
+              // раскладывается по пулу. Стрелку не рисуем — вместо неё
+              // значки живого пула в метке.
+              urltestNow:
+                  cache.rawOf(tag)?['balancer'] != null ? null : urltestNow,
               hasDetour: cache[tag]?.detour != null,
               outboundType: cache[tag]?.type, // §125 — точный тип из конфига
+              // §322 — двойник канала vs узел автовыбора: ядру оба `urltest`.
+              isChannelAuto: isChannelAuto,
+              // §322 — метка режима узла автовыбора (`🎯 [3]` / `🔀 [15/7]`)
+              // в подзаголовке. Двойник канала сюда не попадает — у него уже
+              // есть подменённое имя «✨ Auto».
+              autoGroupLabel: isChannelAuto
+                  ? null
+                  : _autoLabelWithBadges(
+                      controller, subController, cache, tag),
               protocolLabel: protoType == null
                   ? null
                   : [
@@ -468,4 +486,38 @@ class HomeNodeList extends StatelessWidget {
     }
     return out;
   }
+}
+
+/// §322 — метка режима + значки живого пула: `🔀 [15/7] 🇩🇪, 🇳🇱[2]`.
+///
+/// Состав берём у ЯДРА (`getPool`, §208), а не из конфига: в конфиге весь
+/// набор, а в работе — только `pool` штук. Кэш ленивый: первый ребилд отдаёт
+/// метку без значков, следом приходит ответ и строка дорисовывается.
+String? _autoLabelWithBadges(
+  HomeController controller,
+  SubscriptionController subs,
+  ParsedConfig cache,
+  String tag,
+) {
+  final base = autoGroupLabel(cache.rawOf(tag));
+  if (base == null) return null;
+  // Тег в конфиге — с префиксом контейнера и, возможно, суффиксом
+  // уникализации; ищем группу, чей базовый тег в нём содержится.
+  final badge = _poolBadgeOf(subs, tag);
+  if (badge.isEmpty) return base;
+  final slots = controller.poolSlots(tag);
+  if (slots == null || slots.isEmpty) return base;
+  final badges = poolBadges([for (final s in slots) s.tag], badge);
+  return badges.isEmpty ? base : '$base $badges';
+}
+
+/// §322 — regexp значков у группы с итоговым тегом [tag]. Дефолт, если группа
+/// не нашлась (узел мог приехать из конфиг-редактора, минуя подписки).
+String _poolBadgeOf(SubscriptionController subs, String tag) {
+  for (final e in subs.entries) {
+    for (final n in e.list.nodes) {
+      if (n is AutoSelectSpec && tag.endsWith(n.tag)) return n.poolBadge;
+    }
+  }
+  return kDefaultPoolBadge;
 }
