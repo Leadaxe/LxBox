@@ -183,11 +183,14 @@ only). Manual ⟳ still leaves the decision to you.
 
 ## ⚠️ Note / Оговорка
 
-The auto-select node was verified end-to-end against one provider (Liberty).
-Other subscriptions using `routing.balancers` may describe the pool
-differently; if the shape doesn't match, the entry falls back to plain nodes —
-the same behaviour as before this release.
+All four Xray balancer strategies are handled (`random`, `roundRobin`,
+`leastPing`, `leastLoad`), and malformed fields no longer break anything: a
+shape we can't read means no auto-select node for that entry, while its
+servers arrive as usual. Only Liberty was verified on a device, though — if
+another provider's pool behaves oddly, the report is worth sending.
 
-Узел автовыбора проверен от начала до конца на одном провайдере (Liberty).
-Другие подписки с `routing.balancers` могут описывать пул иначе; если форма
-не совпадёт, пункт разложится в обычные узлы — как и до этого релиза.
+Обработаны все четыре стратегии балансировщика Xray (`random`, `roundRobin`,
+`leastPing`, `leastLoad`), а битые поля больше ничего не ломают: непонятная
+форма означает, что у пункта не будет узла автовыбора, а его серверы приедут
+как обычно. На устройстве проверена только Liberty — если у другого
+провайдера пул поведёт себя странно, сообщение будет кстати.

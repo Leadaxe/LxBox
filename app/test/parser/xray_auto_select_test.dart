@@ -213,6 +213,45 @@ void main() {
               type: type, settings: settings)
         ]).whereType<AutoSelectSpec>().single;
 
+    test('random (дефолт Xray) → round_robin по ВСЕМУ набору', () {
+      // У `random` нет ни settings, ни expected: раскладка по всем членам.
+      final a = parse([
+        withBalancer('A', [
+          vless('1.1.1.1', tag: 'proxy-1'),
+          vless('2.2.2.2', tag: 'proxy-2'),
+          vless('3.3.3.3', tag: 'proxy-3'),
+        ], type: 'random', settings: const {})
+      ]).whereType<AutoSelectSpec>().single;
+      expect(a.params.mode, UrltestMode.roundRobin);
+      expect(a.params.pool, 3);
+    });
+
+    test('роль strategy отсутствует → как random', () {
+      final a = parse([
+        {
+          ...plain('A', [vless('1.1.1.1', tag: 'proxy-1')]),
+          'routing': {
+            'balancers': [
+              {'tag': 'B', 'selector': ['proxy']}, // без strategy вовсе
+            ],
+          },
+        }
+      ]).whereType<AutoSelectSpec>().single;
+      expect(a.params.mode, UrltestMode.roundRobin);
+      expect(a.params.pool, 1);
+    });
+
+    test('roundRobin → round_robin по всему набору', () {
+      final a = parse([
+        withBalancer('A', [
+          vless('1.1.1.1', tag: 'proxy-1'),
+          vless('2.2.2.2', tag: 'proxy-2'),
+        ], type: 'roundRobin', settings: const {})
+      ]).whereType<AutoSelectSpec>().single;
+      expect(a.params.mode, UrltestMode.roundRobin);
+      expect(a.params.pool, 2);
+    });
+
     test('leastPing → least_test', () {
       expect(build(type: 'leastPing').params.mode, UrltestMode.leastTest);
     });
@@ -263,6 +302,76 @@ void main() {
       ]).whereType<AutoSelectSpec>().single;
       expect(a.params.url, 'http://example.com/generate_204');
       expect(a.params.interval, '2m');
+    });
+  });
+
+  group('битые формы balancers не роняют парсинг', () {
+    // Подписку пишет провайдер: любое поле может приехать другого типа.
+    // Каст вместо `is` уронил бы парсинг ВСЕЙ подписки, а не одного пункта.
+    Map<String, dynamic> withRouting(Object? routing) => {
+          ...plain('X', [
+            vless('1.1.1.1', tag: 'proxy-1'),
+            vless('2.2.2.2', tag: 'proxy-2'),
+          ]),
+          // ignore: use_null_aware_elements — читаемость важнее краткости
+          if (routing != null) 'routing': routing,
+        };
+
+    void survives(String what, Object? routing, {int nodes = 2, int groups = 0}) {
+      final r = parse([withRouting(routing)]);
+      expect(r.whereType<VlessSpec>(), hasLength(nodes), reason: what);
+      expect(r.whereType<AutoSelectSpec>(), hasLength(groups), reason: what);
+    }
+
+    test('balancers пустой / не массив / мусор внутри', () {
+      survives('пустой массив', {'balancers': const []});
+      survives('число', {'balancers': 42});
+      survives('объект вместо массива', {'balancers': {'tag': 'B'}});
+      survives('строка внутри массива', {'balancers': const ['мусор']});
+    });
+
+    test('routing не объект', () {
+      survives('строка', 'мусор');
+      survives('список', const [1, 2]);
+    });
+
+    test('поля балансировщика битых типов → группа всё равно собирается', () {
+      Map<String, dynamic> bal(Map<String, dynamic> b) => {
+            'balancers': [
+              {'tag': 'B', ...b}
+            ]
+          };
+      survives('нет selector', bal({'strategy': {'type': 'random'}}), groups: 1);
+      survives('selector строкой', bal({'selector': 'proxy'}), groups: 1);
+      survives('strategy строкой',
+          bal({'selector': const ['proxy'], 'strategy': 'leastPing'}),
+          groups: 1);
+      survives(
+          'settings числом',
+          bal({
+            'selector': const ['proxy'],
+            'strategy': {'type': 'leastLoad', 'settings': 5},
+          }),
+          groups: 1);
+    });
+
+    test('expected строкой читается как число', () {
+      final a = parse([
+        withBalancer('A', [vless('1.1.1.1', tag: 'proxy-1')],
+            settings: const {'expected': '7'})
+      ]).whereType<AutoSelectSpec>().single;
+      expect(a.params.pool, 7);
+    });
+
+    test('burstObservatory не объект → дефолтные url/interval', () {
+      final a = parse([
+        {
+          ...withBalancer('A', [vless('1.1.1.1', tag: 'proxy-1')]),
+          'burstObservatory': 7,
+        }
+      ]).whereType<AutoSelectSpec>().single;
+      expect(a.params.url, const AutoSelectParams().url);
+      expect(a.params.interval, const AutoSelectParams().interval);
     });
   });
 

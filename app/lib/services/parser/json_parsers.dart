@@ -82,8 +82,11 @@ List<NodeSpec> parseXrayElement(
   // достаётся ровно ОДНОЙ сущности: группе, если она есть; иначе —
   // единственному узлу. При нескольких узлах без группы `remarks` не получает
   // никто, все идут с тегом (раньше — с индексом, §310).
-  final hasBalancer = (element['routing']?['balancers'] as List?)?.isNotEmpty
-      ?? false;
+  // `is`-проверки, не касты: `routing` мог приехать строкой, а `balancers` —
+  // объектом. Каст уронил бы парсинг всей подписки (см. _xrayAutoSelect).
+  final elRouting = element['routing'];
+  final elBalancers = elRouting is Map ? elRouting['balancers'] : null;
+  final hasBalancer = elBalancers is List && elBalancers.isNotEmpty;
   // `solo` — по ИСХОДНОМУ числу узлов, не по выжившим после дедупа (§321 P3):
   // если провайдер положил в элемент несколько серверов, `remarks` описывает
   // весь набор, а не того одного, кто случайно уцелел. Иначе имя элемента
@@ -183,33 +186,58 @@ AutoSelectSpec? _xrayAutoSelect(
   String remarks,
   Map<String, String>? synonyms,
 ) {
-  final balancers = element['routing']?['balancers'];
+  final routing = element['routing'];
+  final balancers = routing is Map ? routing['balancers'] : null;
   if (balancers is! List || balancers.isEmpty) return null;
   final b = balancers.first;
   if (b is! Map) return null;
 
-  final selector = (b['selector'] as List?)?.map((e) => '$e').toList() ?? const [];
-  final strategy = b['strategy'] as Map? ?? const {};
-  final settings = strategy['settings'] as Map? ?? const {};
-  final ping =
-      (element['burstObservatory']?['pingConfig']) as Map? ?? const {};
+  // Всё ниже — `is`-проверки, не `as`: подписку пишет провайдер, и любое поле
+  // может приехать другого типа. Каст бросил бы и уронил парсинг ВСЕЙ
+  // подписки, а не только этого пункта (проверено на крайних формах).
+  final rawSel = b['selector'];
+  final selector =
+      rawSel is List ? rawSel.map((e) => '$e').toList() : const <String>[];
+  final strategy = b['strategy'];
+  final strategyMap = strategy is Map ? strategy : const {};
+  final rawSettings = strategyMap['settings'];
+  final settings = rawSettings is Map ? rawSettings : const {};
+  final rawPing = element['burstObservatory'] is Map
+      ? (element['burstObservatory'] as Map)['pingConfig']
+      : null;
+  final ping = rawPing is Map ? rawPing : const {};
 
-  // Стратегия → режим. Решает не только тип, но и `expected` — размер пула,
-  // который Xray старается держать живым.
+  // Стратегия → режим. Xray знает ЧЕТЫРЕ (app/router/config.pb.go,
+  // BalancingRule.Strategy): `random` (дефолт), `roundRobin`, `leastPing`,
+  // `leastLoad`. `settings` есть только у `leastLoad`.
   //
-  // `expected: 1` — «держи ОДНОГО живого», а не «раздавай по пулу». Это наш
-  // least_test, а не round_robin: балансировщику с пулом из одного нечего
-  // балансировать (у Liberty так настроены все шесть «БС»-групп).
+  // | Xray | наш режим | pool |
+  // |---|---|---|
+  // | `leastPing` | least_test | — |
+  // | `leastLoad`, expected ≤ 1 | least_test | — |
+  // | `leastLoad`, expected > 1 | round_robin | expected |
+  // | `roundRobin` | round_robin | весь набор |
+  // | `random` / нет поля | round_robin | весь набор |
   //
-  // `leastPing` → least_test всегда: семантика совпадает.
+  // `leastPing` → least_test: семантика совпадает («самый быстрый по замерам»).
+  //
+  // `expected: 1` — «держи ОДНОГО живого», а не «раздавай по пулу»: это тоже
+  // наш least_test, балансировщику с пулом из одного нечего балансировать
+  // (у Liberty так настроены все шесть «БС»-групп).
+  //
   // `leastLoad` с expected > 1 → round_robin — приближение: Xray отбирает по
   // СТАБИЛЬНОСТИ задержки (baselines = допустимое СКО), мы по здоровью и окну
   // от лучшего. Общее — пул из N с раздачей по нему.
-  final expected = (settings['expected'] as num?)?.toInt();
-  final mode = switch (strategy['type']?.toString()) {
+  //
+  // `random`/`roundRobin` раскладывают по ВСЕМУ набору, размера пула у них
+  // нет — берём число членов (0 = «весь набор», см. AutoSelectParams.pool).
+  final type = strategyMap['type']?.toString();
+  final expected = _asInt(settings['expected']);
+  final spreadAll = type == null || type == 'random' || type == 'roundRobin';
+  final mode = switch (type) {
     'leastPing' => UrltestMode.leastTest,
-    null => UrltestMode.leastTest, // дефолт Xray — random, пула нет смысла
-    _ when expected != null && expected <= 1 => UrltestMode.leastTest,
+    'leastLoad' when expected != null && expected <= 1 =>
+      UrltestMode.leastTest,
     _ => UrltestMode.roundRobin,
   };
 
@@ -219,7 +247,10 @@ AutoSelectSpec? _xrayAutoSelect(
     interval: ping['interval']?.toString() ?? d.interval,
     idleTimeout: d.idleTimeout,
     mode: mode,
-    pool: expected ?? d.pool,
+    // §322 — у `random`/`roundRobin` размера пула нет: раскладка по всему
+    // набору. Считаем членов элемента — ровно столько, сколько отберёт
+    // `selector`; для leastLoad берём `expected` как есть.
+    pool: spreadAll ? _payloadCount(element) : (expected ?? d.pool),
     // maxRTT — АБСОЛЮТНЫЙ потолок у Xray, а pool_tolerance — окно от лучшего.
     // Числа переносим 1:1 (решение юзера 30.07.2026): пересчитать точнее
     // нельзя, минимум по пулу на парсинге неизвестен.
@@ -236,6 +267,27 @@ AutoSelectSpec? _xrayAutoSelect(
     tagSynonyms: synonyms == null ? const {} : Map.of(synonyms),
   );
 }
+
+/// §322 — сколько прокси-outbound'ов в элементе. Это и есть размер пула для
+/// `random`/`roundRobin`: у них своего размера нет, раскладка идёт по всему
+/// набору, который отобрал `selector`.
+int _payloadCount(Map<String, dynamic> element) {
+  final obs = element['outbounds'];
+  if (obs is! List) return 0;
+  return obs
+      .whereType<Map<String, dynamic>>()
+      .where((o) =>
+          !_kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''))
+      .length;
+}
+
+/// §322 — число из значения провайдера: `7`, `7.0` или `"7"`. Не число и не
+/// разбираемая строка → `null` (потребитель подставит дефолт).
+int? _asInt(Object? v) => switch (v) {
+      final num n => n.toInt(),
+      final String str => int.tryParse(str.trim()),
+      _ => null,
+    };
 
 /// Go-duration в миллисекунды: `"1500ms"`, `"3s"`, `"2m"`. `null` — не разобрали.
 int? _goDurationMs(Object? raw) {

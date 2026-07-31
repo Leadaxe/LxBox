@@ -272,8 +272,28 @@ REPLACE по адресу.
 | Xray `strategy.type` | наш `mode` | обоснование |
 |---|---|---|
 | `leastPing` | `least_test` | прямое соответствие |
-| `leastLoad`, `expected` > 1 | `round_robin` | ближайшее по смыслу: несколько узлов в работе |
-| **любая, `expected` ≤ 1** | **`least_test`** | «держи ОДНОГО живого» — это простой urltest, см. ниже |
+| `leastLoad`, `expected` > 1 | `round_robin`, pool = `expected` | ближайшее по смыслу |
+| `leastLoad`, `expected` ≤ 1 | **`least_test`** | «держи ОДНОГО живого» — это простой urltest |
+| `roundRobin` | `round_robin`, pool = весь набор | размера пула у стратегии нет |
+| `random` (дефолт) или поля нет | `round_robin`, pool = весь набор | то же |
+
+**Стратегий у Xray ровно четыре** — `random` (дефолт), `roundRobin`,
+`leastPing`, `leastLoad` ([`BalancingRule.Strategy`](https://pkg.go.dev/github.com/xtls/xray-core/app/router)).
+`settings` есть **только** у `leastLoad`:
+
+```go
+type StrategyLeastLoadConfig struct {
+    Baselines []int64            // допустимое СКО задержки
+    Expected  int32              // сколько узлов держать в работе
+    MaxRTT    int64              // абсолютный потолок
+    Tolerance float32
+    Costs     []*StrategyWeight  // {Match, Regexp, Value} — веса
+}
+```
+
+Первая реализация знала только две стратегии, а `random`/`roundRobin`
+проваливались в `_` и получали `pool: 3` — наш дефолт, взятый с потолка.
+Исправлено 31.07.2026 после сверки с исходником.
 | `random` | `round_robin` + sticky `["none"]` | чистая ротация |
 | `roundRobin` | `round_robin` | прямое |
 | отсутствует | `least_test` | дефолт Xray |
@@ -302,6 +322,20 @@ Warning не выдаём (решение юзера 30.07.2026: не сыпат
 > ([routing](https://xtls.github.io/en/config/routing.html),
 > [observatory](https://xtls.github.io/en/config/observatory.html)),
 > 30.07.2026.
+
+### Битые формы не роняют парсинг
+
+Подписку пишет провайдер, и любое поле может приехать другого типа. Первая
+реализация читала `balancers`/`strategy`/`settings` кастами (`as List?`,
+`as Map?`) — и **пять** крайних форм роняли парсинг **всей подписки**, а не
+одного пункта: `routing` строкой, `balancers` объектом, `selector` строкой,
+`strategy` строкой, `settings` числом.
+
+Все обращения переведены на `is`-проверки (31.07.2026). Поведение теперь:
+битая форма → группа не создаётся, **узлы приезжают как обычно**. Числа
+читаются через `_asInt`: `7`, `7.0` и `"7"` равнозначны.
+
+Покрыто группой тестов «битые формы balancers не роняют парсинг».
 
 **`expected: 1` → `least_test`, а не пул из одного.** Решение юзера
 31.07.2026. Балансировщику с пулом из одного нечего балансировать: Xray здесь
