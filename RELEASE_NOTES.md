@@ -67,6 +67,30 @@ create a twin. On Liberty 64 records fold into 43 nodes.
 
 ## 🐛 Fixed
 
+### 📶 Ping testing no longer wipes the other channels
+
+Latency was kept in one map shared by the whole app, while a mass test only
+walks the nodes of the **selected** channel — so it cleared everything and
+refilled its own part. Test one channel, and the rest went blank; do it after
+every switch, forever.
+
+Each channel now keeps **its own** measurements and never touches anyone
+else's. This isn't only about the wipe: the test URL and timeout are set per
+channel, so "180 ms" from two different probes are two different quantities
+and don't belong in one place.
+
+If a node has no measurement in the current channel, the last one from
+another channel is shown — marked `~` ("approximately") and dimmed, so it
+reads as what it is: a figure from a different probe.
+
+```
+120MS     measured here
+~120MS    carried over from another channel
+```
+
+The list never goes blank after a switch, and no foreign reading is passed
+off as your own. Sorting by latency uses the same number you see in the row.
+
 ### 🏷️ An entry's name no longer goes to a random server
 
 `remarks` belongs to exactly one thing: the auto-select node if the entry has
@@ -149,6 +173,29 @@ only). Manual ⟳ still leaves the decision to you.
 провайдера не плодит близнеца. На Liberty 64 записи сворачиваются в 43 узла.
 
 ## 🐛 Исправлено
+
+### 📶 Тест пинга больше не стирает результаты остальных каналов
+
+Задержки хранились одной картой на всё приложение, а массовый тест перебирает
+узлы только **выбранного** канала — то есть чистил всё, а заполнял свою часть.
+Пропинговал один канал — в остальных пусто, и так после каждого переключения.
+
+Теперь каждый канал ведёт **свои** замеры и чужих не касается. Дело не только
+в очистке: адрес и таймаут проверки задаются отдельно для каждого канала,
+поэтому «180 мс» от разных проверок — разные величины, и лежать в одном месте
+они не должны.
+
+Если в текущем канале узел ещё не проверяли, показывается последний замер из
+другого — со значком `~` («приблизительно») и приглушённым цветом, чтобы было
+видно, что это такое: число от другой проверки.
+
+```
+120MS     измерено здесь
+~120MS    перенесено из другого канала
+```
+
+Список не пустеет после переключения, и чужой замер не выдаётся за свой.
+Сортировка по задержке считает по тому же числу, что видно в строке.
 
 ### 🏷️ Имя пункта больше не достаётся случайному серверу
 
