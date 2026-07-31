@@ -632,7 +632,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     );
   }
 
-
   /// Rebuild config → reconnect (если up) или start (если down). §107:
   /// dirty-флаг сбрасывает только успешный rebuild (внутри `_rebuildConfig`);
   /// при ошибке reconnect идёт со старым конфигом, banner остаётся.

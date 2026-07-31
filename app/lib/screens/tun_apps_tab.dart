@@ -262,7 +262,6 @@ class _TunAppsTabState extends State<TunAppsTab>
         // §076: локальный «Restart needed» banner удалён.
         // Home banner единый source-of-truth для «Apply / Restart».
 
-
         if (!_cfg.isOff) ...[
           const SizedBox(height: 16),
           const Divider(height: 1),

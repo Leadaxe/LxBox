@@ -109,7 +109,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// (тумблера нет, DNS-блок жив пока routing on).
   Map<String, bool> _presetDnsEnable = const {};
 
-
   bool _loading = true;
   // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
 

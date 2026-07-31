@@ -704,7 +704,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     );
   }
 
-
   /// §051 Phase 3 — toggle для auto-record. Сразу sync'ит state в native
   /// observer (start/stop NetworkCallback). Существующая история не
   /// чистится при OFF — это user data, явный поход в Pick saved.

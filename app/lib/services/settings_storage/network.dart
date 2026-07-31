@@ -96,7 +96,6 @@ Future<void> _savePassiveCheck(bool enabled, {bool flush = true}) async {
   if (flush) await _save();
 }
 
-
 Future<List<Map<String, dynamic>>> _getDnsServers() async {
   final data = await _load();
   final dns = data['dns_options'] as Map<String, dynamic>?;

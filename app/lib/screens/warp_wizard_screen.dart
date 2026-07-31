@@ -92,7 +92,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   // регистрации ещё не было.
   String _masqueRegServer = MasqueAccount.defaultServer;
 
-
   @override
   void initState() {
     super.initState();
