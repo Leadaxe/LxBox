@@ -249,8 +249,8 @@
           "default_value": "ipv4_only",
           "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"]
         },
-        {"name": "dns_default_domain_resolver", "type": "text", "default_value": "dns_shield", "wizard_ui": "fix", "title": "Default domain resolver", "tooltip": "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use. Recommended: cloudflare_udp, google_udp, or google_doh. Avoid local_dns_resolver here — system DNS leaks these lookups to your ISP, bypassing the VPN."},
-        {"name": "dns_final", "type": "text", "default_value": "dns_shield", "wizard_ui": "fix", "title": "DNS final", "tooltip": "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule. For privacy, prefer encrypted: google_doh, cloudflare_dot. For speed: cloudflare_udp, google_udp. local_dns_resolver (system DNS) is safe here."}
+        {"name": "dns_default_domain_resolver", "type": "text", "default_value": "dns_shield", "required": true, "wizard_ui": "fix", "title": "Default domain resolver", "tooltip": "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • cloudflare_udp, google_udp — fast plain UDP\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."},
+        {"name": "dns_final", "type": "text", "default_value": "dns_shield", "required": true, "wizard_ui": "fix", "title": "DNS final", "tooltip": "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, single provider\n  • cloudflare_udp, google_udp — fast plain UDP\n\nlocal_dns_resolver (system DNS) is safe here."}
       ]
     },
     {
