@@ -762,6 +762,35 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §324 — каноническая форма [config] через `Libbox.formatConfig()`: ядро
+  /// парсит текст в свои `option.Options` и сериализует обратно ТЕМ ЖЕ
+  /// энкодером, которым делает снапшот работающего конфига (kernel SPEC 037
+  /// §3). Две канонические формы сравнимы побайтово — вся нормализация
+  /// (порядок полей, `omitempty`, `[] → null`) уже сделана ядром, клиентский
+  /// список «различий, которые игнорируем» не нужен.
+  ///
+  /// Статический Go-метод: живой сервис и `libbox.setup` НЕ требуются.
+  ///
+  /// `null` = ответить нельзя: невалидный конфиг, метод отсутствует в старом
+  /// .aar, timeout, native не готов. Вызывающий обязан деградировать
+  /// консервативно («изменилось»), а не считать конфиги равными.
+  Future<String?> formatConfig(String config) async {
+    if (config.trim().isEmpty) return null;
+    try {
+      return await _invoke<String>(
+        _Methods.formatConfig,
+        args: {'config': config},
+        timeout: _Timeouts.formatConfig,
+        onTimeoutValue: null,
+      );
+    } on PlatformException catch (e) {
+      AppLog.I.debug('formatConfig failed: ${e.message}');
+      return null;
+    } on MissingPluginException {
+      return null; // юнит-тест / старый native без handler'а
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Status stream
   // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Статус | 📝 Спека |
+| Статус | ✅ Реализовано (DEVICE-PENDING) |
 | Дата | 2026-07-31 |
 | Связанные | [`323 on-update action`](323-subscription-on-update-action.md), [`311 running config from kernel`](311-running-config-from-kernel.md), [`116 banner mechanism`](116-banner-mechanism-and-config-banner-fix.md), [`030 vpn reload button`](030-vpn-reload-button.md), kernel SPEC 037/038 |
 
@@ -167,18 +167,37 @@ cgo-фрейм, слот nstring-результата оказывается 4-�
 требует 8). `[]byte` не спасает — та же форма фрейма. Нужен
 **`v1.14.0-lx.16-rc.3` или новее** и вызов `Content()`.
 
-Наш Dart зовёт `ccGetRunningConfig` и ждёт `String`
-([cc_channel.dart:304](../../../app/lib/vpn/cc_channel.dart)) — при бампе ядра
-обвязку править. **javap-diff ДО сборки** (§178-181): `.aar` в
-`app/android/app/libs/` сейчас старее ядра, под которое написан Dart —
-`getRunningConfig` в нём отсутствует вовсе.
+### Найденный по пути баг: §311 был мёртв целиком
 
-## Секреты ⚠️
+Обвязка звала `cc.getRunningConfig()` и отдавала результат во Flutter как есть
+(`result.success(r)`), без `.content()`. С `lx.17-rc.1` метод возвращает
+**Java-объект** `RunningConfig`, который `MethodChannel` сериализовать не умеет
+→ Dart молча получал null. То есть `runningConfigRaw` **никогда не заполнялся**,
+и весь §311 (View details от ядра, resolve тегов через `activeModel`,
+закрытие дыры §309) деградировал на saved-файл.
 
-Канонический документ содержит приватные ключи и пароли как есть (kernel SPEC
-037 §4). **Не логировать, не прикладывать к отчётам.** Проверить, что снапшот не
-утекает в `crash_share`, `oom_share`, `dump_builder`, `profile_dump_writer` и
-Debug API `/state`.
+Симптомов не было видно, потому что §311 спроектирован с фоллбэком: `null`
+означает «недоступен», и UI тихо переключался на файл. Device-verify §311
+(п. 1–4) на это не поймал бы — оба среза совпадают, пока конфиг не менялся.
+
+Починено вместе с §324: `getRunningConfig()?.content()` + no-throw обёртка
+(ядро не STARTED / attached-путь бросают исключение — это ожидаемый `null`, а не
+ошибка). **Это предусловие §324:** без снапшота вердикт всегда `unknown`.
+
+### Грабля javap-диагностики
+
+Рядом с `libbox.aar` в `app/android/app/libs/` лежит **устаревший**
+`classes.jar`, оставшийся от чьей-то распаковки. Сборка его не использует
+(`implementation(files("libs/libbox.aar"))`), но javap по нему даёт ложную
+картину: `getRunningConfig` и класс `RunningConfig` «отсутствуют». Хеши
+`classes.jar` и `libbox.aar!/classes.jar` не совпадают.
+
+**Проверять только вложенный:**
+
+```bash
+unzip -p app/android/app/libs/libbox.aar classes.jar > /tmp/c.jar
+javap -classpath /tmp/c.jar io.nekohasekai.libbox.CommandClient | grep -i running
+```
 
 ## Реализация
 

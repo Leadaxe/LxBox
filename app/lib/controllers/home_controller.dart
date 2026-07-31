@@ -14,6 +14,7 @@ import '../models/channel.dart' show UrltestMode;
 import '../models/home_state.dart';
 import '../services/app_log.dart';
 import '../services/automation/event_emitter.dart';
+import '../services/config_staleness.dart';
 import '../services/error_format.dart';
 import '../services/probe/probe_lifecycle.dart';
 import '../services/rule_name_resolver.dart';

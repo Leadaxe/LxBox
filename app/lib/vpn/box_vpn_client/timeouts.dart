@@ -50,6 +50,12 @@ class _Timeouts {
   /// `resetNetwork` — лёгкий reset, должен быть мгновенным. Запас.
   static const resetNet = Duration(seconds: 5);
 
+  /// §324 `formatConfig` — парс + re-marshal конфига в Go. CPU-bound, без сети
+  /// и без RPC к сервису. На большом конфиге (10k нод) заметно дольше мелких
+  /// вызовов, но секунды хватает с запасом; на timeout деградируем
+  /// консервативно («изменилось»), так что щедрить смысла нет.
+  static const formatConfig = Duration(seconds: 5);
+
   /// §263 `clearDnsCache` — удалить cache.db + (при running) reload ядра ~3с.
   /// Запас на slow devices, как у reload.
   static const dnsCache = Duration(seconds: 10);

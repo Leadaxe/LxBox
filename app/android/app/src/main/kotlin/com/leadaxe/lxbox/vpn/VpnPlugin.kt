@@ -814,8 +814,56 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccGetRunningConfig" -> {
                 val cc = BoxService.commandClient
                 pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getRunningConfig() }
+                    // §324 — `.content()` ОБЯЗАТЕЛЕН: с lx.17-rc.1 (kernel SPEC
+                    // 038) метод возвращает не строку, а `RunningConfig`-объект
+                    // (голая строка роняла ядро на android/arm64 в
+                    // `bulkBarrierPreWrite` — cgo-фрейм выравнивал слот
+                    // результата на 4 байта вместо 8). Без `.content()`
+                    // `result.success` отдавал во Flutter Java-объект, который
+                    // MethodChannel сериализовать не умеет → Dart молча получал
+                    // null, и §311 был мёртв целиком.
+                    val r = withContext(Dispatchers.IO) {
+                        try {
+                            cc?.getRunningConfig()?.content()
+                        } catch (t: Throwable) {
+                            // Ядро не STARTED / attached-путь / RPC-ошибка —
+                            // ожидаемо, контракт §311: null = недоступен.
+                            Log.d(TAG, "ccGetRunningConfig failed: ${t.message}")
+                            null
+                        }
+                    }
                     result.success(r)
+                }
+            }
+            // §324 — каноническая форма конфига: `Libbox.formatConfig()` прогоняет
+            // текст через ТОТ ЖЕ парсер и энкодер, которым ядро делает снапшот
+            // работающего конфига (kernel SPEC 037 §3). Даёт сравнимые формы без
+            // клиентского списка «различий, которые игнорируем».
+            //
+            // Статический Go-метод: НЕ требует живого сервиса и libbox.setup —
+            // safe в любой момент (как getCoreVersion выше). На Dispatchers.IO:
+            // парс большого конфига на main = ANR (§122).
+            //
+            // КОНТРАКТ: null = ядро не смогло (невалидный конфиг, метод
+            // отсутствует в старом .aar, любой throw). Caller деградирует
+            // консервативно — «изменилось» (§324).
+            "formatConfig" -> {
+                val text = call.argument<String>("config") ?: ""
+                if (text.isBlank()) {
+                    result.success(null)
+                } else {
+                    pluginScope.launch {
+                        val r = withContext(Dispatchers.IO) {
+                            try {
+                                io.nekohasekai.libbox.Libbox.formatConfig(text)?.value
+                            } catch (t: Throwable) {
+                                // Невалидный конфиг — ожидаемый случай, не шумим error'ом.
+                                Log.d(TAG, "formatConfig failed: ${t.message}")
+                                null
+                            }
+                        }
+                        result.success(r)
+                    }
                 }
             }
             // §208/§209 — unary снапшот пула round_robin-группы. На Dispatchers.IO
