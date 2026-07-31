@@ -546,6 +546,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         final startActive = !state.tunnelUp;
         final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
+        // §328 — «нет серверов» считается по payload-нодам (конфиг + entries),
+        // а не по наличию файла конфига: шаблонная сборка при нуле серверов
+        // оставляет configRaw непустым навсегда. `e.nodeCount` — персистентный
+        // кэш: у подписок `list.nodes` до rehydration пуст, по нему одному
+        // гайд мигал бы на каждом старте.
+        final showEmptyGuide = showAddServerGuide(
+          tunnelUp: state.tunnelUp,
+          configEmpty: state.configRaw.isEmpty,
+          configNodeCount: state.configModel.nodeCount,
+          anyServerNodes: _subController.entries
+              .any((e) => e.nodeCount > 0 || e.list.nodes.isNotEmpty),
+        );
         return Scaffold(
           // l10n-exempt: brand name, идентичен во всех локалях
           appBar: AppBar(title: const Text('L×Box')),
@@ -557,10 +569,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Empty state (no config) → guide + CTA берёт на себя весь
-              // экран; controls/header не рисуем, чтобы disabled-кнопка
-              // не путала первого пользователя.
-              if (state.configRaw.isNotEmpty) ...[
+              // Empty state (§328 — нет серверов, не «нет конфига») → guide +
+              // CTA берёт на себя весь экран; controls/header не рисуем,
+              // чтобы disabled-кнопка не путала первого пользователя.
+              if (state.configRaw.isNotEmpty && !showEmptyGuide) ...[
                 HomeControls(
                   controller: _controller,
                   subController: _subController,
@@ -618,6 +630,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 filter: _filter,
                 presenter: _nodeList,
                 state: state,
+                showEmptyGuide: showEmptyGuide,
                 onRestoreFromBackup: () =>
                     restoreFromBackup(context, _subController, _autoUpdater),
                 onTapToConnect: () => unawaited(_startWithAutoRefresh()),

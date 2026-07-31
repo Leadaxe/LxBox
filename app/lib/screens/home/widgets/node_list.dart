@@ -22,6 +22,28 @@ import 'add_server_cta.dart';
 import 'filter_panel.dart';
 import '../../../services/l10n/locale_controller.dart';
 
+/// §328 — предикат полноэкранного гайда «Add a server».
+///
+/// «Нет серверов» ≠ «нет файла конфига»: конфиг становится непустым при нуле
+/// реальных серверов (bootstrap подписки, отдавшей 0 нод; Apply в настройках;
+/// удаление всех серверов), и по старому предикату (`configRaw.isEmpty`)
+/// подсказка после этого не показывалась больше никогда. Считаем по
+/// payload-нодам: [configNodeCount] — `ParsedConfig.nodeCount` сохранённого
+/// конфига (control-типы не в счёт; покрывает сырой импорт без entries),
+/// [anyServerNodes] — ноды entries (покрывает окно «сервер добавлен, конфиг
+/// ещё не пересобран»).
+///
+/// Только при туннеле down: up с пустым списком — состояния §116 (config load
+/// error) и «удалили на лету», у них свои плашки. Ветка [configEmpty]
+/// сохраняет прежнее поведение (вкл. Debug API `preview-empty-state`).
+bool showAddServerGuide({
+  required bool tunnelUp,
+  required bool configEmpty,
+  required int configNodeCount,
+  required bool anyServerNodes,
+}) =>
+    !tunnelUp && (configEmpty || (configNodeCount == 0 && !anyServerNodes));
+
 /// Node-list секция главного экрана.
 ///
 /// PRESERVED EXACTLY:
@@ -39,6 +61,7 @@ class HomeNodeList extends StatelessWidget {
     required this.filter,
     required this.presenter,
     required this.state,
+    required this.showEmptyGuide,
     required this.onRestoreFromBackup,
     required this.onTapToConnect,
     required this.rowKeyFor,
@@ -52,6 +75,10 @@ class HomeNodeList extends StatelessWidget {
   final NodeFilterViewModel filter;
   final NodeListPresenter presenter;
   final HomeState state;
+
+  /// §328 — результат [showAddServerGuide], посчитан в `_HomeScreenState.build`
+  /// (там же гейтит контролы — решение одно на весь экран).
+  final bool showEmptyGuide;
   final Future<void> Function() onRestoreFromBackup;
   final VoidCallback onTapToConnect;
 
@@ -65,9 +92,22 @@ class HomeNodeList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // §328 — ноль реальных серверов при туннеле down: гайд с CTA-кнопкой
+    // берёт весь экран ДО проверки `nodes.isEmpty` — конфиг из шаблона несёт
+    // control-ноды (direct/каналы), и по ним список выглядел бы «непустым».
+    if (showEmptyGuide) {
+      return Expanded(
+        child: AddServerCta(
+          controller: controller,
+          subController: subController,
+          autoUpdater: autoUpdater,
+          onRestoreFromBackup: onRestoreFromBackup,
+        ),
+      );
+    }
     if (state.nodes.isEmpty) {
-      // Empty state: первый запуск (нет конфига) — гайд с CTA-кнопкой;
-      // остальные пустые состояния — пассивный текст-подсказка.
+      // Empty state: residual-ветка гайда — туннель up при пустом конфиге
+      // (§116 аномалия); остальные пустые состояния — пассивный текст.
       if (state.configRaw.isEmpty) {
         return Expanded(
           child: AddServerCta(
