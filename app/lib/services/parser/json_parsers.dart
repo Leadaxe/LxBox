@@ -101,6 +101,9 @@ List<NodeSpec> parseXrayElement(
   }
 
   final result = <NodeSpec>[];
+  // §321 P5 — протоколы элемента, которые мы не умеем: висят на первом
+  // выжившем узле, чтобы пользователь видел, что провайдер прислал больше.
+  final unsupported = <String>{};
   for (var i = 0; i < ordered.length; i++) {
     final ob = ordered[i];
 
@@ -131,7 +134,15 @@ List<NodeSpec> parseXrayElement(
         tagUses: tagUses,
       ),
     );
-    if (spec == null) continue;
+    // §321 P5 — неподдержанный protocol не исчезает молча: узел не собрался,
+    // но провайдер его прислал. Warning вешаем на СОСЕДА по элементу (у
+    // NodeWarning нет носителя без узла); если соседей нет — элемент пуст, и
+    // об этом говорит `elementDropped` ниже.
+    if (spec == null) {
+      final proto = ob['protocol']?.toString() ?? '';
+      if (proto.isNotEmpty) unsupported.add(proto);
+      continue;
+    }
 
     // §302 — исходник узла для UI («Source» на экране узла) и для правил по
     // JSON-телам: compact = сам outbound, extended = весь элемент как пришёл
@@ -157,6 +168,14 @@ List<NodeSpec> parseXrayElement(
     result.add(node
       ..sourceCompact = compact
       ..sourceExtended = extended == compact ? null : extended);
+  }
+
+  // §321 P5 — развешиваем накопленное: по одному warning на протокол,
+  // на первом узле элемента (не на каждом — иначе N копий одного сообщения).
+  if (unsupported.isNotEmpty && result.isNotEmpty) {
+    for (final proto in unsupported) {
+      result.first.warnings.add(UnsupportedProtocolWarning(proto));
+    }
   }
 
   // §322 — балансировщик элемента → узел автовыбора. Ставим ПОСЛЕ узлов:

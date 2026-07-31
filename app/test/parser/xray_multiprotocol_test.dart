@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
@@ -187,6 +190,62 @@ void main() {
     expect(nodes.map((n) => n.protocol), containsAll(['vless', 'hysteria2']));
     expect(nodes, hasLength(2));
   });
+  group('§321 P5 — неподдержанный протокол не пропадает молча', () {
+    Map<String, dynamic> ob(String proto, String tag) => {
+          'tag': tag,
+          'protocol': proto,
+          'settings': {
+            'vnext': [
+              {
+                'address': '1.1.1.1',
+                'port': 443,
+                'users': [
+                  {'id': 'u'}
+                ]
+              }
+            ]
+          },
+          'streamSettings': {'network': 'tcp', 'security': 'none'},
+        };
+
+    List<NodeSpec> parse(List<Map<String, dynamic>> obs) =>
+        parseAll(decode(jsonEncode([
+          {'remarks': 'X', 'outbounds': obs}
+        ])));
+
+    test('warning висит на соседе по элементу', () {
+      final r = parse([ob('vless', 'v'), ob('wireguard', 'w')]);
+      expect(r, hasLength(1));
+      expect(r.first.warnings.whereType<UnsupportedProtocolWarning>(),
+          hasLength(1));
+    });
+
+    test('один warning на протокол, не на каждый outbound', () {
+      final r = parse([
+        ob('vless', 'v'),
+        ob('wireguard', 'w1'),
+        ob('wireguard', 'w2'),
+      ]);
+      expect(r.first.warnings.whereType<UnsupportedProtocolWarning>(),
+          hasLength(1));
+    });
+
+    test('разные протоколы → разные warnings', () {
+      final r = parse([ob('vless', 'v'), ob('wireguard', 'w'), ob('ssh', 's')]);
+      expect(r.first.warnings.whereType<UnsupportedProtocolWarning>(),
+          hasLength(2));
+    });
+
+    test('поддержанные протоколы warnings не порождают', () {
+      // Оба vless: у trojan своя схема (`settings.servers`), и хелпер `ob`
+      // с `vnext` дал бы ложный warning — проверяем не это.
+      final r = parse([ob('vless', 'v1'), ob('vless', 'v2')]);
+      for (final n in r) {
+        expect(n.warnings.whereType<UnsupportedProtocolWarning>(), isEmpty);
+      }
+    });
+  });
+
 }
 
 String _json(Map<String, dynamic> m) => _encode(m);
@@ -197,4 +256,5 @@ String _encode(Object? v) {
   if (v is List) return '[${v.map(_encode).join(',')}]';
   if (v is String) return '"$v"';
   return '$v';
+
 }

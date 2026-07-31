@@ -812,42 +812,71 @@ URI-форма не потребовала **ни одной**: `FolderMember._p
 
 ## 8. Файлы
 
-| файл | изменение |
-|---|---|
-| [node_spec.dart](../../../../app/lib/models/node_spec.dart) | `AutoSelectSpec`, `isGroup` в базе |
-| json_parsers.dart | чтение `routing.balancers` + `burstObservatory` |
-| balancer_map.dart (новый) | Xray-стратегия → `BalancerParams` |
-| [build_config.dart](../../../../app/lib/services/builder/build_config.dart) | эмиссия urltest, порядок, пустой пул |
-| [validator.dart](../../../../app/lib/services/builder/validator.dart) | detour на группу → снять |
-| node_row / server list | значок, подпись, гейты меню |
+**Новые:**
 
-`NodeSpec` sealed → новый вариант потребует веток во **всех** `switch`.
-Компилятор покажет; в `test/` тоже (грабля §320).
+| файл | что |
+|---|---|
+| `models/auto_select.dart` | членство, `AutoSelectParams`, `autogroup://`, `ruleAccepts` |
+| `screens/auto_group_edit_screen.dart` | редактор группы |
+| `services/node_identity.dart` | §321-ключ от `NodeSpec` (не от сырья) |
+| `services/safe_regex.dart` | `tryCompileRegex` — одна обвязка вместо четырёх копий |
+| `services/parser/uri_parsers/auto_group_parser.dart` | разбор `autogroup://` |
+
+**Изменённые:**
+
+| файл | что |
+|---|---|
+| `models/node_spec.dart` | `AutoSelectSpec` (15-й вариант sealed), `isGroup` в базе |
+| `models/emit_context.dart` | геттер `passiveCheck` (§4.2) |
+| `models/home_state.dart` | `channelAutoTags` — гейт пина (§6.1) |
+| `services/parser/json_parsers.dart` | `routing.balancers` + `burstObservatory`, схема имён (§321 P3), синонимы |
+| `services/parser/parse_all.dart`, `uri_parsers.dart` | проброс `synonyms`, ветка `autogroup` |
+| `services/builder/server_list_build.dart` | второй проход, `resolveAutoSelectMembers` |
+| `services/builder/build_config.dart` | группы не идут в urltest-двойник канала (§6.2) |
+| `controllers/home_controller.dart` | `_channelAutoTags`, ленивый кэш `poolSlots` |
+| `controllers/subscription_controller.dart` | пересчёт синонимов после §302 (§3.2.3) |
+| `screens/folder_detail_screen.dart` | «Add auto node…», правка группы |
+| `screens/node_settings_screen.dart` | блок Detour скрыт у группы (§6.3) |
+| `screens/home/node_list_presenter.dart` | `autoGroupLabel`, `poolBadges` |
+| `screens/home/widgets/node_list.dart` | метка + значки, гейт `isChannelAuto` |
+| `widgets/node_row.dart`, `node_view_item.dart` | подзаголовок, скрытый Copy URI |
+| `widgets/detour_target_picker.dart` | группа исключена из целей (§6.3) |
+
+**Не понадобилось.** `validator.dart` — цикл через группу невозможен: она не
+может взять в пул другую группу. Отдельный `balancer_map.dart` — маппинг
+уместился в `_xrayAutoSelect`. Модель папки — `autogroup://` пролез через
+существующий `FolderMember.raw` (§7).
+
+`NodeSpec` sealed → новый вариант потребовал веток в `switch`; компилятор
+показал их в `lib/` и `test/`. Грабля §320 подтвердилась дважды: `analyze lib/`
+ошибок в `test/` не видит, нужен `flutter analyze` без аргумента.
 
 ---
 
 ## 9. Тесты
 
-`test/parser/xray_balancer_test.dart`:
+Файлы (61 тест на 31.07.2026):
 
-- элемент с `balancers` → N узлов + 1 `AutoSelectSpec`
-- `leastLoad` → `round_robin` (warning не выдаём)
-- `maxRTT: "1500ms"` → `poolTolerance: 1500`
-- `costs` непусто → молча отбрасывается
-- `fallbackTag` → первый в `memberKeys`
-- элемент без `balancers` → только узлы, `AutoSelectSpec` нет
+**`test/parser/xray_auto_select_test.dart`** (47) — создание узла из
+`routing.balancers`, маппинг всех четырёх стратегий Xray, схема имён элемента
+(§321 P3), формат эмиссии `balancer{}`, round-trip `autogroup://`, битые формы
+полей балансировщика.
 
-`test/builder/balancer_node_test.dart`:
+**`test/builder/auto_group_folder_test.dart`** (10) — эмиссия из папки: три
+режима членства, пустой пул не эмитится, группа в selector но не в ✨auto,
+группа не берёт в пул другую группу, `passive_check` из настроек, persist
+round-trip через `FolderMember.raw`.
 
-- эмиссия urltest после членов
-- все члены выключены → узел не эмитится + warning
-- detour на балансировщик снимается
-- `interval > idle_timeout` → advisory
+**`test/parser/auto_select_rules_test.dart`** (4) — §302 × §322: правило
+импорта переписало `server`/`uuid` → идентичность считается от патча,
+`nodeIdentityKeyRaw` отдаёт доправочную.
 
-`test/models/balancer_spec_test.dart`:
+**`test/models/auto_group_ui_split_test.dart`** — разделение с auto-двойником
+канала: пин только для `vpn-N-auto`, метка режима `🎯 [3]` / `🔀 [15/7]`,
+значки пула со схлопыванием повторов.
 
-- инвариант `server.isEmpty && port == 0` ⇔ `isGroup`
-- `ownerListId` не меняется при copyWith
+**`test/builder/channel_groups_test.dart`** — узел автовыбора в selector
+канала есть, в его urltest-двойнике нет (§6.2).
 
 ---
 
@@ -857,20 +886,45 @@ URI-форма не потребовала **ни одной**: `FolderMember._p
    Xray — «Each string is used for prefix matching against outbound
    identifiers», `["a"]` матчит `["a","ab"]` из `["a","ab","c","ba"]`. То же
    для `burstObservatory.subjectSelector`. Значит `["proxy"]` → `^(proxy)`.
-2. **Несколько балансировщиков в одном элементе** — схема допускает массив.
+2. ~~Сколько стратегий у Xray?~~ **Закрыт 31.07.2026:** четыре — `random`
+   (дефолт), `roundRobin`, `leastPing`, `leastLoad`
+   ([`BalancingRule`](https://pkg.go.dev/github.com/xtls/xray-core/app/router)).
+   Первая реализация знала две, остальные молча получали `pool: 3`. См. §4.
+3. **Несколько балансировщиков в одном элементе** — схема допускает массив.
    У Liberty везде один. Берём первый, остальные молча игнорируем.
-3. **Обновление подписки меняет состав пула.** `memberKeys` резолвятся на
-   каждом билде, так что состав подтянется. Но если пользователь выбрал
-   балансировщик активным узлом, а тот исчез — сработает существующий
-   fallback канала.
+4. **Обновление подписки меняет состав пула.** Правило (`RuleMembers`)
+   перечитывается из `selector` и резолвится на каждом билде — состав
+   подтянется сам. Явный список (`ExplicitMembers`) хранит идентичности:
+   исчезнувший из подписки член просто пропускается.
+5. **Обсерватория для `leastPing`/`leastLoad`.** По документации Xray эти
+   стратегии без `burstObservatory` не работают вовсе («nodes not covered by
+   the observatory will be directly excluded»). Мы такой конфиг принимаем
+   молча: у нас `urltest` мерит сам, обсерватория не нужна. Решение юзера
+   31.07.2026 — «мы же не на Xray».
+6. **Веса не переносим.** `weights` у `random`, `costs`/`baselines`/
+   `tolerance` у `leastLoad` — у нас понятия веса нет. У Liberty `costs`
+   штрафует CDN-фронт значением 10, чтобы держать его про запас; в нашем пуле
+   он равноправный член.
 
 ---
 
-## 11. Device-verify (PENDING)
+## 11. Device-verify
 
-1. Liberty → 7 балансировщиков, «Авто | Лучший сервер» среди них.
-2. Выбрать его активным → VPN стартует, трафик идёт.
-3. `View pool` показывает 15 слотов с задержками.
-4. Выключить всех членов (§283) → узел исчезает, старт не падает.
-5. Меню балансировщика: нет Ungroup/Move/Copy.
-6. Detour на балансировщик недоступен в пикере.
+**Проверено 31.07.2026** на CPH2411, сборка 2181400, подписка Liberty:
+
+| | |
+|---|---|
+| групп | 7 (1 × `🔀`, 6 × `🎯`) |
+| составы пулов | сходятся с подпиской: 15 / 3 / 3 / 3 / 3 / 3 / 2 |
+| дубли имён | нет |
+| суффикс `-1` у группы | ушёл (§321 P3) |
+| старт туннеля | конфиг принимается ядром |
+
+«БС-5» с двумя членами вместо трёх — **дубль в самой подписке**: один сервер
+под тегами `…-direct` и `…-direct-1`, побайтово идентичные (адрес, порт, uuid,
+REALITY-ключи, shortId). Дедуп §321 P4 отработал верно.
+
+Не проверено на устройстве: узел автовыбора, созданный вручную в папке
+(механика та же, покрыта тестами билда); подписки других провайдеров с
+`routing.balancers` — формат может отличаться, битые формы деградируют без
+падения (§4, «Битые формы не роняют парсинг»).
