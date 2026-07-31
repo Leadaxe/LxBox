@@ -111,6 +111,55 @@ String defaultOf(String name) => templateDefaults[name] ?? '';
 Сведение тултипа к одному источнику — отдельная задача (меняет слой), здесь
 намеренно не делалось.
 
+## Второй случай той же болезни — seed auto-канала
+
+Поиск по коду («нет ли этого ещё где-то») дал **второй реальный баг**, не
+мёртвый код.
+
+`group_templates.auto.options` в шаблоне несёт `@urltest_*`-плейсхолдеры —
+var-substitution идёт позже, в билдере. Сид каналов на первом запуске
+(`_seedAutoFromTemplate`) их резолвить не умел и падал на литералы в коде:
+
+```dart
+url: str(opts['url']) ?? 'https://cp.cloudflare.com/generate_204',
+interval: str(opts['interval']) ?? '5m',
+tolerance: toInt(opts['tolerance']) ?? 50,
+```
+
+Литералы разошлись с шаблоном (`urltest_tolerance: 30`,
+`urltest_interval: 15m`), и в `channels[]` на чистой установке оседало
+чужое значение. Проверено прогоном до фикса:
+
+```
+vpn-1: tolerance=50 interval=5m     ← шаблон: 30 / 15m
+vpn-2: tolerance=50 interval=5m
+```
+
+Решение — `varDefaults` (имя var → `default_value`) пробрасывается в
+`migrateChannelsIfNeeded` из обоих вызывающих ([main.dart](../../../app/lib/main.dart),
+[routing_srs_cache.dart](../../../app/lib/screens/routing_screen/routing_srs_cache.dart)),
+и `@var` резолвится по нему. Порядок: значение из `options` → `default_value`
+его var → дефолт `ChannelAuto` (последний рубеж, если var исчезнет из шаблона).
+После фикса — `tolerance=30 interval=15m`, как в шаблоне.
+
+### Мёртвый код рядом
+
+В `_channelsFromTemplate` билдера ([build_config.dart:744](../../../app/lib/services/builder/build_config.dart:744))
+стояли те же литералы (`'50'`, `'15m'`), но **недостижимые**: `vars` в
+`buildConfig` уже наполнен `userVars[name] ?? defaultValue`, поэтому
+`resolve()` там никогда не возвращает `null`. Проверено прогоном настоящего
+билда — в конфиг приходит `tolerance=30` и при пустой, и при отсутствующей
+переменной. Литералы убраны: остались только дефолты `ChannelAuto`.
+
+### Что проверено и НЕ является багом
+
+| Место | Вердикт |
+|---|---|
+| `getVar(name, 'литерал')` по всем 43 vars шаблона | расхождений нет (`ipv6_enabled` совпадает) |
+| остальные 6 мест `getAllVars()` | берут `v.defaultValue` либо не про дефолты |
+| `ChannelAuto.fromJson` — `?? '5m'`, `?? 50` | **не дубль**: `toJson` пишет ключи всегда, значит `??` срабатывает только для каналов, сохранённых до §272 — законная граница совместимости (см. комментарий §272 в [channel.dart:97](../../../app/lib/models/channel.dart:97)) |
+| `wizard_ui: "fix"` vars | ровно две — обе из этой таски |
+
 ## Файлы
 
 | Файл | Изменение |
@@ -118,11 +167,20 @@ String defaultOf(String name) => templateDefaults[name] ?? '';
 | [`dns_controller.dart`](../../../app/lib/services/dns/dns_controller.dart) | `templateDefaults`/`defaultOf`; дефолты Final/Resolver/Strategy + автосброс из шаблона |
 | [`wizard_template.json`](../../../app/assets/wizard_template.json) | тултипы обеих vars; явный `required: true` |
 | [`dns_settings_screen.dart`](../../../app/lib/screens/dns_settings_screen.dart) | тултипы обоих `ResolverPicker` |
-| [`dns_controller_defaults_test.dart`](../../../app/test/services/dns_controller_defaults_test.dart) | регрессия: дефолты из шаблона, а не из литералов |
+| [`dns_controller_test.dart`](../../../app/test/services/dns_controller_test.dart) | регрессия: дефолты из шаблона, а не из литералов |
+| [`channels.dart`](../../../app/lib/services/settings_storage/channels.dart) | `varDefaults` в seed'е auto-канала; `@var` → `default_value` |
+| [`settings_storage.dart`](../../../app/lib/services/settings_storage.dart) | `migrateChannelsIfNeeded(gt, {varDefaults})` |
+| [`main.dart`](../../../app/lib/main.dart), [`routing_srs_cache.dart`](../../../app/lib/screens/routing_screen/routing_srs_cache.dart) | проброс `varDefaults` из шаблона |
+| [`build_config.dart`](../../../app/lib/services/builder/build_config.dart) | убраны недостижимые литералы в `_channelsFromTemplate` |
+| [`channels_migration_test.dart`](../../../app/test/migration/channels_migration_test.dart) | регрессия seed'а по `@var`; обновлён тест dev.91 |
 
 ## Проверка
 
-- [x] `flutter test` — вся сьюта
+- [x] `flutter test` — вся сьюта (2589)
 - [x] `flutter analyze` — весь проект (§CI: не только `lib/`)
+- [x] 4 l10n-чекера `--strict` (тултипы = ключи перевода → ru-словари)
+- [x] seed каналов на реальном шаблоне: `tolerance=30 interval=15m` (было 50/5m)
 - [ ] **device**: чистая установка → экран DNS показывает `dns_shield` в обоих
       полях; тронуть любую настройку → `stage()` не пишет `""`
+- [ ] **device**: чистая установка → auto-канал в Routing показывает
+      tolerance 30 / interval 15m

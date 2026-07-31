@@ -736,17 +736,20 @@ List<Channel> _channelsFromTemplate(
   Set<String> enabledGroupTags,
   VarResolver resolve,
 ) {
-  String s(String name, String fallback) {
-    final v = resolve(name);
-    return v == null ? fallback : v.toString();
-  }
+  // §327 — дефолты живут в шаблоне (`vars[].default_value`), и `resolve` их уже
+  // применил: `vars` в buildConfig наполнен `userVars[name] ?? defaultValue`.
+  // Прежние литералы (`'50'`, `'15m'`) были недостижимой копией шаблона и
+  // разошлись с ним (шаблон: 30). Здесь остаются только дефолты `ChannelAuto`
+  // — последний рубеж, если var из шаблона исчезнет.
+  const fallback = ChannelAuto();
+  String? s(String name) => resolve(name)?.toString();
 
   ChannelAuto seedAuto() => ChannelAuto(
-        url: s('urltest_url', 'https://cp.cloudflare.com/generate_204'),
-        interval: s('urltest_interval', '15m'), // §272 — батарея: см. channel.dart
-        tolerance: int.tryParse(s('urltest_tolerance', '50')) ?? 50,
-        idleTimeout: '30m',
-        interruptExistConnections: false,
+        url: s('urltest_url') ?? fallback.url,
+        interval: s('urltest_interval') ?? fallback.interval,
+        tolerance: int.tryParse(s('urltest_tolerance') ?? '') ?? fallback.tolerance,
+        idleTimeout: fallback.idleTimeout,
+        interruptExistConnections: fallback.interruptExistConnections,
       );
 
   final hasAuto = gt.channel.include.contains('auto');

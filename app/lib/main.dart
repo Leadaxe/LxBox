@@ -90,8 +90,14 @@ void main() async {
     // каналов из template на первом запуске). Идемпотентна. ДО первого билда
     // конфига, чтобы билдер (после F1) читал channels[] как source-of-truth.
     // best-effort: ошибка не валит запуск (try выше).
+    final channelsTemplate = await TemplateLoader.load();
     await SettingsStorage.migrateChannelsIfNeeded(
-        (await TemplateLoader.load()).groupTemplates);
+      channelsTemplate.groupTemplates,
+      // §327 — `@urltest_*` в шаблоне auto-канала резолвятся по default_value.
+      varDefaults: {
+        for (final v in channelsTemplate.vars) v.name: v.defaultValue,
+      },
+    );
     // §229 — вызов one-shot ремапа preset_id (§228) убран: миграция удалена,
     // отработала у всех, кто обновлялся начиная с v2.10.0.
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в
