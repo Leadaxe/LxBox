@@ -21,8 +21,12 @@ round-robin balancer, XHTTP full params, DNS-стрим и др.).
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.17-rc.4`** (v2.19.0) — два самолечащихся фикса
-поверх rc.3, оба без клиентских правок.
+**Текущий пин: `v1.14.0-lx.17-rc.5`** (v2.19.0, см. `app/android/libbox.version`)
+— два самолечащихся фикса поверх rc.3 (rc.4, ниже) плюс апстрим-синк 01.08 в
+rc.5: naiveproxy v150, гонка DNS-правил (завершённое правило блокировалось ранее
+взведённым), WireGuard system-device не конфигурил DNS интерфейса, TLS-фрагмент
+на Windows без TCP estats, routing loop на darwin. Клиентских правок не
+потребовал ни один.
 
 **rc.4 / SPEC 041** (feature HOTFIXES) — WG/AWG-эндпоинты чинят себя после сна
 устройства вместо вечного ERR до ручного реконнекта. Пока телефон спит, UDP-
@@ -228,7 +232,8 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.14** (стабильный) | SPEC 030 — Stop не виснет 10+ сек при многих WG/AWG-эндпоинтах (глушение тика + upfront-закрытие UDP-сокетов + abort in-flight wake + конкурентный close). Ядровая половина §287. База upstream `alpha.47`. Build-теги AAR без изменений. (Промежуточные lx.12/lx.13 — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.15** (стабильный) | SPEC 002 — XHTTP за reverse-proxy: `path` сохраняется как есть, trailing slash срезается только на bare-path запросе stream-one. + merge upstream `testing` (async DNS refactor, WG detour fix, OpenConnect auth-challenge). База upstream `alpha.48`. Build-теги AAR без изменений. Device-verified на CPH2411 (2026-07-21) |
-| **v1.14.0-lx.17-rc.4** (текущий пин, v2.19.0) | SPEC 041 — WG/AWG-эндпоинты самолечатся после сна устройства (rebind со свежим портом по исчерпании handshake-повторов, ~90 с; `listen_port` вручную = самолечение отключено). SPEC 040 — system-стек TCP: accept-цикл пересоздаёт убитый listener вместо молчаливого выхода (sing-tun как fork-сабмодуль); закрывает отказ §047 «браузер мёртв, QUIC жив», errno на устройстве = `EINVAL` (§329). Оба фикса внутри ядра, Java-поверхности не касаются — клиентских правок нет |
+| **v1.14.0-lx.17-rc.5** (текущий пин, v2.19.0) | Апстрим-синк 01.08 поверх rc.4: naiveproxy v150, гонка DNS-правил (завершённое правило блокировалось ранее взведённым), WireGuard system-device не конфигурил DNS интерфейса, TLS-фрагмент на Windows без TCP estats, routing loop на darwin. + device-верификация SPEC 040. Java-поверхности не касается |
+| **v1.14.0-lx.17-rc.4** (в составе v2.19.0) | SPEC 041 — WG/AWG-эндпоинты самолечатся после сна устройства (rebind со свежим портом по исчерпании handshake-повторов, ~90 с; `listen_port` вручную = самолечение отключено). SPEC 040 — system-стек TCP: accept-цикл пересоздаёт убитый listener вместо молчаливого выхода (sing-tun как fork-сабмодуль); закрывает отказ §047 «браузер мёртв, QUIC жив», errno на устройстве = `EINVAL` (§329). Оба фикса внутри ядра, Java-поверхности не касаются — клиентских правок нет |
 | **v1.14.0-lx.17-rc.3** (v2.18.2) | SPEC 039 (rc.2) — ротация архива OOM/crash-отчётов: 32 каталога / 64 МБ, удаление по mtime (на устройстве было 575 каталогов / 427 МБ за 19 дней). + **240 upstream-коммитов** (URLTest требует history storage в контексте). rc.3 — `Endpoint.Close()` снова возвращает ошибку закрытия tun-устройства. **javap-diff rc.1 → rc.3: изменений нет**, клиентских правок не потребовалось |
 | **v1.14.0-lx.17-rc.1** | SPEC 038 — фикс fatal throw в `GetRunningConfig` (возврат `RunningConfig` вместо голой строки; см. блок «Текущий пин»). **API-брейк:** сигнатура метода изменилась, клиент обязан звать `.content()` |
 | **v1.14.0-lx.16** (стабильный) | SPEC 036 — `GetRunningConfig`: снапшот работающего конфига по CommandClient (клиент — §311 LxBox); SPEC 033/035 — DNS_GROUP и его observability (клиенты — §312/§315). rc.1…rc.3 — промежуточные сборки той же ветки, метод появился в rc.3. `PlatformInterface` без изменений. Подробности — в блоке «Текущий пин» выше |
