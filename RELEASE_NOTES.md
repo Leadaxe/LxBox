@@ -547,3 +547,20 @@ another provider's pool behaves oddly, the report is worth sending.
 форма означает, что у пункта не будет узла автовыбора, а его серверы приедут
 как обычно. На устройстве проверена только Liberty — если у другого
 провайдера пул поведёт себя странно, сообщение будет кстати.
+
+---
+
+## 📲 Install
+
+```bash
+adb install -r LxBox-v2.19.0-arm64-v8a.apk
+```
+
+Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
+
+No uninstall needed — install over the existing one. Settings and
+subscriptions are preserved.
+
+---
+
+Previous release / Предыдущий релиз: [v2.18.2](docs/releases/v2.18.2.md).
