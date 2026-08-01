@@ -43,3 +43,8 @@ app/android/app/libs/
 
 # Отладочные логи probe/e2e (случайно закоммичены в §285, удалены)
 *.log
+
+# Архив темы 4PDA — локальный, в гит не идёт (личные данные пользователей)
+docs/forum/posts/
+docs/forum/INDEX.md
+docs/forum/state.json
