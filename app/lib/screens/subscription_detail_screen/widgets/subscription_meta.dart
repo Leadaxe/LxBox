@@ -95,25 +95,21 @@ class SubscriptionMeta extends StatelessWidget {
                   style: theme.textTheme.bodySmall,
                 ),
               ),
-              // §332 — bulk-переключатель. Адаптивный: есть выключенные →
-              // «Enable all» (4PDA-сценарий «всё выключилось, включить
-              // нечем»), все включены → «Disable all». Диалога нет —
-              // действие обратимо той же кнопкой.
+              // §332 — bulk-переключатель, только иконка (надпись съедала
+              // строку счётчиков). Адаптивный: есть выключенные → включить
+              // все, иначе выключить все. Диалога нет — действие обратимо
+              // той же кнопкой; смысл раскрывает tooltip.
               if (onToggleAll != null)
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                  ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  iconSize: 18,
+                  tooltip: offCount > 0
+                      ? getLocalText.s("Enable all")
+                      : getLocalText.s("Disable all"),
                   icon: Icon(
                     offCount > 0 ? Icons.toggle_on : Icons.toggle_off_outlined,
-                    size: 18,
-                  ),
-                  label: Text(
-                    offCount > 0
-                        ? getLocalText.s("Enable all")
-                        : getLocalText.s("Disable all"),
-                    style: const TextStyle(fontSize: 12),
                   ),
                   onPressed: () => onToggleAll!(offCount > 0),
                 ),
