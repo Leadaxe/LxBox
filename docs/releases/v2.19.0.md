@@ -11,7 +11,7 @@ isn't VLESS.
 Правила подписок научились **включать** узлы обратно, а не только выключать.
 Плюс Xray-подписки перестали терять всё, что не VLESS.
 
-Core / Ядро: **sing-box-lx `v1.14.0-lx.17-rc.4`**.
+Core / Ядро: **sing-box-lx `v1.14.0-lx.17-rc.5`**.
 
 ---
 
@@ -195,7 +195,9 @@ connection.
 
 ## 🧩 Core
 
-Kernel bumped to **`v1.14.0-lx.17-rc.4`**, which brings two self-healing fixes.
+Kernel bumped to **`v1.14.0-lx.17-rc.5`**, which brings two self-healing fixes
+plus an upstream sync: a DNS race where a finished rule was held up by an
+earlier pending one, a WireGuard interface DNS fix, and a naiveproxy update.
 
 ### 💤 WireGuard endpoints recover on their own after the phone sleeps
 
@@ -410,7 +412,9 @@ keeps serving. A deliberate shutdown stays silent as before.
 
 ## 🧩 Ядро
 
-Ядро обновлено до **`v1.14.0-lx.17-rc.4`** — два самолечащихся фикса.
+Ядро обновлено до **`v1.14.0-lx.17-rc.5`** — два самолечащихся фикса плюс
+синхронизация с апстримом: гонка в DNS (готовый ответ ждал зависший),
+исправление DNS у WireGuard-интерфейса и обновление naiveproxy.
 
 ### 💤 WireGuard-узлы сами восстанавливаются после сна телефона
 
