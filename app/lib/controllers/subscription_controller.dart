@@ -1772,7 +1772,7 @@ class SubscriptionController extends ChangeNotifier {
     final triggerName = trigger?.name ?? 'manual';
     AppLog.I.info('Fetching subscription [$triggerName]: $shortUrl');
     final attemptAt = DateTime.now();
-    // §326 — состояние флага ДО fetch'а. `_persist` ниже (пометка попытки)
+    // §331 — состояние флага ДО fetch'а. `_persist` ниже (пометка попытки)
     // поднимет `configDirty` раньше, чем мы узнаем состав; если состав окажется
     // тем же, флаг надо вернуть в исходное, а не просто «не поднимать».
     // Восстанавливаем именно прежнее значение, а не false: до fetch'а могли
@@ -1908,7 +1908,7 @@ class SubscriptionController extends ChangeNotifier {
         nodes: result.nodes,
       );
       entry._replaceList(next);
-      // §326 — состав узлов тот же ⇒ пересобирать конфиг не из чего, синюю
+      // §331 — состав узлов тот же ⇒ пересобирать конфиг не из чего, синюю
       // плашку «Settings changed» не поднимаем. На диск пишем всё равно:
       // last_updated / last_update_attempt / GC-отметки обновиться должны.
       //
@@ -1925,10 +1925,10 @@ class SubscriptionController extends ChangeNotifier {
         // Пометка попытки выше (status=inProgress) уже подняла флаг — возвращаем
         // ровно прежнее значение, чтобы не погасить чужие pending-изменения.
         configDirty = dirtyBeforeFetch;
-        AppLog.I.debug('§326: composition unchanged for $shortUrl → '
+        AppLog.I.debug('§331: composition unchanged for $shortUrl → '
             'configDirty restored to $dirtyBeforeFetch');
       }
-      // §326 — ручной ⟳ идёт сюда, минуя `AutoUpdater.maybeUpdateAll`, поэтому
+      // §331 — ручной ⟳ идёт сюда, минуя `AutoUpdater.maybeUpdateAll`, поэтому
       // реакцию подписки (`onUpdateAction`) применяем здесь сами. Только при
       // РЕАЛЬНО изменившемся составе: иначе кнопка «обновить» на неизменной
       // подписке рвала бы туннель на 3 секунды ни за что.
@@ -2011,7 +2011,7 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// §326 — отпечаток «состава» подписки: то и только то, от чего зависит
+  /// §331 — отпечаток «состава» подписки: то и только то, от чего зависит
   /// собранный конфиг. Одинаковый отпечаток ⇒ пересборка дала бы тот же
   /// результат ⇒ поднимать `configDirty` не за что.
   ///
@@ -2042,7 +2042,7 @@ class SubscriptionController extends ChangeNotifier {
   ) {
     // Длина каждого элемента в префиксе — иначе конкатенация склеивается
     // неоднозначно: две отметки `x`,`y` дали бы то же, что одна `x,y` (тест
-    // §326 «разделитель не даёт коллизии»). Хеши узлов фиксированной длины, но
+    // §331 «разделитель не даёт коллизии»). Хеши узлов фиксированной длины, но
     // отметки приходят из storage и гарантий не дают.
     String lenPrefixed(Iterable<String> items) =>
         items.map((s) => '${s.length}:$s').join();
@@ -2051,7 +2051,7 @@ class SubscriptionController extends ChangeNotifier {
     return '$tags|$disabled';
   }
 
-  /// [keepDirtyFlag] — §326: записать на диск, НЕ поднимая `configDirty`.
+  /// [keepDirtyFlag] — §331: записать на диск, НЕ поднимая `configDirty`.
   /// Единственный законный случай: успешный fetch, в котором состав узлов
   /// оказался тем же. На диск писать всё равно надо (`last_updated`,
   /// `last_update_attempt`, GC-отметки), но пересобирать конфиг не из чего —
