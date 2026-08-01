@@ -223,13 +223,15 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
-  /// §302 — применяет import-rules к разобранным узлам и возвращает набор
-  /// identity-хешей узлов, помеченных к выключению.
+  /// §302 — применяет import-rules к разобранным узлам и возвращает
+  /// identity-хеши узлов, помеченных к выключению (Disable) и к
+  /// принудительному включению (Enable, §332).
   ///
   /// REPLACE патчит `NodeSpec.patchedJson` (узел эмитится из него), поэтому
   /// хеш считаем ПОСЛЕ применения — выключение и роутинг работают с итоговым
   /// видом узла, как его увидит билдер.
-  Set<String> _applyRulesToNodes(List<NodeSpec> nodes, List<ImportRule> rules) {
+  ({Set<String> disable, Set<String> enable}) _applyRulesToNodes(
+      List<NodeSpec> nodes, List<ImportRule> rules) {
     // §307 — правила НЕ инкрементальны: каждый прогон стартует с чистого
     // узла (движок читает `emitRaw`), поэтому прошлый патч всегда сбрасываем.
     // Сегодня узлы в обоих call-site'ах свежераспарсенные и сброс — no-op,
@@ -238,11 +240,12 @@ class SubscriptionController extends ChangeNotifier {
       n.patchedJson = null;
       n.ruleTrail = const [];
     }
-    if (rules.isEmpty || nodes.isEmpty) return const {};
+    if (rules.isEmpty || nodes.isEmpty) return (disable: const {}, enable: const {});
     final result = applyImportRules(nodes, rules);
-    if (result.isEmpty) return const {};
+    if (result.isEmpty) return (disable: const {}, enable: const {});
 
-    final hashes = <String>{};
+    final disable = <String>{};
+    final enable = <String>{};
     result.outcomes.forEach((i, outcome) {
       if (i < 0 || i >= nodes.length) return;
       final node = nodes[i];
@@ -250,14 +253,15 @@ class SubscriptionController extends ChangeNotifier {
         node.patchedJson = outcome.patchedJson;
         node.ruleTrail = outcome.replacements;
       }
-      if (outcome.disabled) hashes.add(nodeIdentityHash(node));
+      if (outcome.disabled == true) disable.add(nodeIdentityHash(node));
+      if (outcome.disabled == false) enable.add(nodeIdentityHash(node));
     });
 
     // §322 — правила могли переписать `server`/`uuid`, и тогда идентичность
     // узла другая, а синонимы группы указывают на прежнюю. Пересобираем
     // таблицу по патченым узлам: тег провайдера тот же, ключ новый.
     _remapAutoSelectSynonyms(nodes);
-    return hashes;
+    return (disable: disable, enable: enable);
   }
 
   /// §322 — пересчёт таблицы синонимов после §302-правил. Тег провайдера
@@ -1316,6 +1320,36 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// §332 — вкл/выкл ВСЕХ нод подписки разом (кнопка на вкладке Nodes).
+  ///
+  /// enable: карта отметок очищается целиком — ручные (§283),
+  /// правило-отметки (§302) и TTL-хвосты ушедших узлов. DISABLE-правила при
+  /// следующем refresh поставят свои отметки заново (правило — источник
+  /// истины). disable: merge поверх существующих — TTL-отметки временно
+  /// отсутствующих узлов не теряются, GC доделает своё.
+  Future<void> setAllSubscriptionNodes(int index,
+      {required bool enabled}) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final list = entry.list;
+    if (list is! SubscriptionServers) return;
+    final Map<String, DateTime> next;
+    if (enabled) {
+      if (list.disabledHashes.isEmpty) return;
+      next = const {};
+    } else {
+      if (list.nodes.isEmpty) return;
+      final now = DateTime.now();
+      next = {
+        ...list.disabledHashes,
+        for (final n in list.nodes) nodeIdentityHash(n): now,
+      };
+    }
+    entry._replaceList(list.copyWith(disabledHashes: next));
+    await _persist();
+    notifyListeners();
+  }
+
   /// Вкл/выкл одного члена папки.
   Future<void> toggleMemberAt(int index, int memberIndex) async {
     if (index < 0 || index >= _entries.length) return;
@@ -1872,7 +1906,7 @@ class SubscriptionController extends ChangeNotifier {
       // `nodeIdentityHash` того же инстанса), поэтому пометка гарантированно
       // совпадает с узлом, который билдер увидит.
       final ruleNow = DateTime.now();
-      final ruleHashes =
+      final ruleMarks =
           _applyRulesToNodes(result.nodes, current.activeImportRules);
 
       // §283 — GC отметок disable ТОЛЬКО здесь (успешный сетевой fetch =
@@ -1880,21 +1914,23 @@ class SubscriptionController extends ChangeNotifier {
       // регидрация из кэша состав не проясняют, file:-подписки сюда не
       // доходят — guard выше). Хеш свежих нод считаем лишь когда есть что
       // чистить.
-      final baseDisabled = current.disabledHashes.isEmpty && ruleHashes.isEmpty
-          ? current.disabledHashes
-          : gcDisabledHashes(
-              current.disabledHashes,
-              {for (final n in result.nodes) nodeIdentityHash(n)},
-              updateIntervalHours: nextInterval,
-              now: ruleNow,
-            );
-      // Наложить хеши от DISABLE-правил поверх результата GC (правило > GC).
-      final nextDisabled = ruleHashes.isEmpty
-          ? baseDisabled
-          : {
-              ...baseDisabled,
-              for (final h in ruleHashes) h: ruleNow,
-            };
+      final baseDisabled =
+          current.disabledHashes.isEmpty && ruleMarks.disable.isEmpty
+              ? current.disabledHashes
+              : gcDisabledHashes(
+                  current.disabledHashes,
+                  {for (final n in result.nodes) nodeIdentityHash(n)},
+                  updateIntervalHours: nextInterval,
+                  now: ruleNow,
+                );
+      // §332 — итог правил поверх GC (правило > GC): ENABLE снимает отметки
+      // (включая ручные §283), DISABLE ставит.
+      final nextDisabled = applyRuleMarks(
+        baseDisabled,
+        enable: ruleMarks.enable,
+        disable: ruleMarks.disable,
+        now: ruleNow,
+      );
       final next = current.copyWith(
         name: nextName,
         meta: result.meta,

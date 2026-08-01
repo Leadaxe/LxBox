@@ -140,6 +140,13 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     // Пересборку строк/set'ов делает listener entry (_onEntryChanged).
   }
 
+  /// §332 — bulk вкл/выкл всех нод подписки (кнопка в SubscriptionMeta).
+  Future<void> _toggleAllNodes(bool enable) async {
+    final idx = widget.controller.entries.indexOf(widget.entry);
+    if (idx < 0) return;
+    await widget.controller.setAllSubscriptionNodes(idx, enabled: enable);
+  }
+
   /// Headers, которые нам реально нужны — подписочные метаданные.
   /// Остальное (server, date, cookies, content-length, ddos-guard, etc.) —
   /// под раскрывашкой.
@@ -351,6 +358,12 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                 entry: entry,
                 onOpenUrl: _openUrl,
                 offCount: _disabledNodes.length, // §283
+                // §332 — bulk вкл/выкл: только подписки с загруженными узлами
+                // (у UserServer тогглов нет, без узлов выключать нечего).
+                onToggleAll: entry.list is SubscriptionServers &&
+                        entry.list.nodes.isNotEmpty
+                    ? _toggleAllNodes
+                    : null,
               ),
               const Divider(height: 1),
               Expanded(

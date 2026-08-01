@@ -10,13 +10,16 @@ import '../../models/template_vars.dart';
 ///
 /// Порядок: правила применяются сверху вниз. REPLACE меняет JSON узла, и
 /// следующее правило видит уже изменённый вид — это позволяет строить цепочки.
-/// DISABLE помечает узел; на дальнейшее вычисление правил это не влияет
-/// (пометка — решение о роутинге, а не о структуре).
+/// DISABLE/ENABLE помечают узел; на дальнейшее вычисление правил это не влияет
+/// (пометка — решение о роутинге, а не о структуре). Последняя сработавшая
+/// пометка побеждает (§332).
 
 /// Что правила сделали с одним узлом.
 class NodeRuleOutcome {
-  /// Узел помечен к выключению (`Disable`).
-  final bool disabled;
+  /// Итог enable/disable-правил: `true` — выключить, `false` — принудительно
+  /// включить (§332, снимает отметку — в том числе ручную §283), `null` —
+  /// такие правила узла не касались. Последнее сработавшее правило побеждает.
+  final bool? disabled;
 
   /// JSON узла после всех REPLACE. `null` — изменений не было.
   final Map<String, dynamic>? patchedJson;
@@ -26,12 +29,12 @@ class NodeRuleOutcome {
   final List<String> replacements;
 
   const NodeRuleOutcome({
-    this.disabled = false,
+    this.disabled,
     this.patchedJson,
     this.replacements = const [],
   });
 
-  bool get changed => disabled || patchedJson != null;
+  bool get changed => disabled != null || patchedJson != null;
 }
 
 /// Результат применения набора правил ко всем узлам подписки.
@@ -39,16 +42,22 @@ class ImportRulesResult {
   /// Индексы узлов (в исходном списке), помеченных к выключению.
   final Set<int> disabledIndexes;
 
+  /// §332 — индексы узлов, помеченных к принудительному включению (Enable).
+  /// С [disabledIndexes] не пересекается: итог по узлу один.
+  final Set<int> enabledIndexes;
+
   /// Итог по каждому узлу — по индексу исходного списка. Узлы, которых
   /// правила не коснулись, в карте отсутствуют.
   final Map<int, NodeRuleOutcome> outcomes;
 
   const ImportRulesResult({
     this.disabledIndexes = const {},
+    this.enabledIndexes = const {},
     this.outcomes = const {},
   });
 
-  bool get isEmpty => disabledIndexes.isEmpty && outcomes.isEmpty;
+  bool get isEmpty =>
+      disabledIndexes.isEmpty && enabledIndexes.isEmpty && outcomes.isEmpty;
 }
 
 /// Прогоняет [rules] по [nodes]. Pure: узлы не мутируются, ничего не пишет.
@@ -61,16 +70,22 @@ ImportRulesResult applyImportRules(List<NodeSpec> nodes, List<ImportRule> rules,
   if (usable.isEmpty || nodes.isEmpty) return const ImportRulesResult();
 
   final disabled = <int>{};
+  final enabled = <int>{};
   final outcomes = <int, NodeRuleOutcome>{};
 
   for (var i = 0; i < nodes.length; i++) {
     final outcome = applyRulesToNode(nodes[i], usable, vars: vars);
     if (!outcome.changed) continue;
     outcomes[i] = outcome;
-    if (outcome.disabled) disabled.add(i);
+    if (outcome.disabled == true) disabled.add(i);
+    if (outcome.disabled == false) enabled.add(i);
   }
 
-  return ImportRulesResult(disabledIndexes: disabled, outcomes: outcomes);
+  return ImportRulesResult(
+    disabledIndexes: disabled,
+    enabledIndexes: enabled,
+    outcomes: outcomes,
+  );
 }
 
 /// Применяет правила к одному узлу. Вынесено отдельно — этим же путём ходит
@@ -84,7 +99,9 @@ NodeRuleOutcome applyRulesToNode(NodeSpec node, List<ImportRule> rules,
   // бы. Прогон всех правил с нуля на каждом применении = детерминизм.
   final json = node.emitRaw(vars).map;
   var patched = false;
-  var disabled = false;
+  // §332 — тристейт: правила идут по порядку, последнее сработавшее
+  // enable/disable перекрывает предыдущие («выключить всё → включить NL»).
+  bool? disabled;
   final trail = <String>[];
 
   for (final rule in rules) {
@@ -93,6 +110,10 @@ NodeRuleOutcome applyRulesToNode(NodeSpec node, List<ImportRule> rules,
 
     if (rule.action == ImportRuleAction.disable) {
       disabled = true;
+      continue;
+    }
+    if (rule.action == ImportRuleAction.enable) {
+      disabled = false;
       continue;
     }
 

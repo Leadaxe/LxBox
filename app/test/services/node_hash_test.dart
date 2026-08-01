@@ -174,4 +174,48 @@ void main() {
           isTrue);
     });
   });
+
+  group('§332 applyRuleMarks', () {
+    final now = DateTime(2026, 8, 1);
+    final old = now.subtract(const Duration(hours: 5));
+
+    test('enable снимает отметку — в том числе ручную §283', () {
+      final out = applyRuleMarks(
+        {'manual': old, 'stale-rule': old},
+        enable: {'manual', 'stale-rule'},
+        disable: const {},
+        now: now,
+      );
+      expect(out, isEmpty);
+    });
+
+    test('disable ставит отметку со свежим lastSeen, чужие не трогает', () {
+      final out = applyRuleMarks(
+        {'other': old},
+        enable: const {},
+        disable: {'fi-node'},
+        now: now,
+      );
+      expect(out, {'other': old, 'fi-node': now});
+    });
+
+    test('enable + disable за один вызов (наборы не пересекаются)', () {
+      final out = applyRuleMarks(
+        {'was-fi': old, 'manual': old},
+        enable: {'was-fi'},
+        disable: {'new-nl'},
+        now: now,
+      );
+      expect(out, {'manual': old, 'new-nl': now});
+    });
+
+    test('оба набора пусты → тот же инстанс без работы', () {
+      final base = {'x': old};
+      expect(
+          identical(
+              applyRuleMarks(base, enable: const {}, disable: const {}, now: now),
+              base),
+          isTrue);
+    });
+  });
 }

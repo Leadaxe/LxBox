@@ -16,6 +16,7 @@ class SubscriptionMeta extends StatelessWidget {
     required this.entry,
     required this.onOpenUrl,
     this.offCount = 0,
+    this.onToggleAll,
   });
 
   final SubscriptionEntry entry;
@@ -23,6 +24,11 @@ class SubscriptionMeta extends StatelessWidget {
 
   /// §283 — сколько нод выключено per-node toggle'ом («M off» в счётчике).
   final int offCount;
+
+  /// §332 — bulk-переключатель: есть выключенные → кнопка «Enable all»
+  /// (вызов с true), иначе «Disable all» (вызов с false). `null` — кнопки
+  /// нет (не подписка или узлы ещё не загружены).
+  final void Function(bool enable)? onToggleAll;
 
   @override
   Widget build(BuildContext context) {
@@ -77,16 +83,40 @@ class SubscriptionMeta extends StatelessWidget {
               ],
               Icon(Icons.dns_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(width: 4),
-              Text(
-                [
-                  entry.detourCount > 0
-                      ? getLocalText.plural("%1\$d +%2\$d⚙ nodes", entry.nodeCount, entry.detourCount)
-                      : getLocalText.plural("%d nodes", entry.nodeCount),
-                  // §283 — счётчик выключенных (ключ общий с папками §234).
-                  if (offCount > 0) getLocalText.s("%d off", offCount),
-                ].join(' · '),
-                style: theme.textTheme.bodySmall,
+              Expanded(
+                child: Text(
+                  [
+                    entry.detourCount > 0
+                        ? getLocalText.plural("%1\$d +%2\$d⚙ nodes", entry.nodeCount, entry.detourCount)
+                        : getLocalText.plural("%d nodes", entry.nodeCount),
+                    // §283 — счётчик выключенных (ключ общий с папками §234).
+                    if (offCount > 0) getLocalText.s("%d off", offCount),
+                  ].join(' · '),
+                  style: theme.textTheme.bodySmall,
+                ),
               ),
+              // §332 — bulk-переключатель. Адаптивный: есть выключенные →
+              // «Enable all» (4PDA-сценарий «всё выключилось, включить
+              // нечем»), все включены → «Disable all». Диалога нет —
+              // действие обратимо той же кнопкой.
+              if (onToggleAll != null)
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  icon: Icon(
+                    offCount > 0 ? Icons.toggle_on : Icons.toggle_off_outlined,
+                    size: 18,
+                  ),
+                  label: Text(
+                    offCount > 0
+                        ? getLocalText.s("Enable all")
+                        : getLocalText.s("Disable all"),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  onPressed: () => onToggleAll!(offCount > 0),
+                ),
             ],
           ),
           // Traffic quota

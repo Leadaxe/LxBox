@@ -52,10 +52,18 @@ enum ImportRuleMatchMode {
 
 enum ImportRuleAction {
   replace,
-  disable;
+  disable,
+
+  /// §332 — принудительно включить узел: снять disable-отметку, в том числе
+  /// ручную (§283). Правила последовательные, последнее сработавшее
+  /// enable/disable побеждает — «включить всё» первым правилом сбрасывает
+  /// прошлые отключения, дальше можно выборочно выключать (и наоборот:
+  /// «выключить всё» + точечные enable = whitelist).
+  enable;
 
   static ImportRuleAction fromName(String? s) => switch (s) {
         'disable' => ImportRuleAction.disable,
+        'enable' => ImportRuleAction.enable,
         _ => ImportRuleAction.replace,
       };
 }
@@ -309,10 +317,13 @@ class ImportRule {
     final cond = parts.isEmpty
         ? '(no conditions)'
         : parts.join(matchMode == ImportRuleMatchMode.all ? ' AND ' : ' OR ');
-    final act = action == ImportRuleAction.disable
-        ? 'Disable'
-        // Пустая цель = substitute по всему узлу, показываем как `*` (§307).
-        : '${targetPath.isEmpty ? '*' : targetPath} = $replacement';
+    final act = switch (action) {
+      ImportRuleAction.disable => 'Disable',
+      ImportRuleAction.enable => 'Enable',
+      // Пустая цель = substitute по всему узлу, показываем как `*` (§307).
+      ImportRuleAction.replace =>
+        '${targetPath.isEmpty ? '*' : targetPath} = $replacement',
+    };
     return '$cond → $act';
   }
 

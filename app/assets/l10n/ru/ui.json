@@ -1362,6 +1362,9 @@
   "Disable": {
     "value": "Выключить"
   },
+  "Disable all": {
+    "value": "Выключить все"
+  },
   "Disable battery restrictions": {
     "value": "Отключить ограничения батареи"
   },
@@ -1512,6 +1515,9 @@
   },
   "Enable": {
     "value": "Включить"
+  },
+  "Enable all": {
+    "value": "Включить все"
   },
   "Enable FakeIP": {
     "value": "Включить FakeIP"
@@ -2955,6 +2961,9 @@
   "Remove from history": {
     "value": "Убрать из истории"
   },
+  "Re-enables matching nodes, clearing disable marks from rules and manual toggles. Later rules can still disable them.": {
+    "value": "Включает совпавшие узлы обратно, снимая отметки выключения — и от правил, и ручные. Правила ниже по списку могут снова их выключить."
+  },
   "Rename": {
     "value": "Переименовать"
   },
@@ -3895,6 +3904,9 @@
   },
   "Will be disabled": {
     "value": "Будет выключен"
+  },
+  "Will be enabled": {
+    "value": "Будет включён"
   },
   "Win TTL": "TTL победы",
   "Wipes existing data in selected categories.": {
