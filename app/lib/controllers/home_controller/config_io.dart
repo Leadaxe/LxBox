@@ -72,9 +72,11 @@ mixin _ConfigIoMixin on ChangeNotifier {
     // применённое рестартом) сохраняем.
     bool changed;
     try {
+      // §333 — парс в изоляте: два конфига по сотням КБ на каждом
+      // сохранении/обновлении подписки фризили UI.
       changed = _state.configRaw.isEmpty ||
-          canonicalJsonForSingbox(canonicalJson) !=
-              canonicalJsonForSingbox(_state.configRaw);
+          await canonicalJsonForSingboxAsync(canonicalJson) !=
+              await canonicalJsonForSingboxAsync(_state.configRaw);
     } catch (_) {
       changed = true; // не смогли сравнить → safe: показать баннер, не спрятать
     }
@@ -195,7 +197,7 @@ mixin _ConfigIoMixin on ChangeNotifier {
       return false;
     }
     try {
-      final canonical = canonicalJsonForSingbox(raw);
+      final canonical = await canonicalJsonForSingboxAsync(raw);
       return saveParsedConfig(canonical, displayRaw: raw);
     } on FormatException catch (e) {
       _emit(_state.copyWith(lastError: PrefixedMsg(ErrPrefix.parseConfigFailed, RawMsg(e.message))));
@@ -218,7 +220,7 @@ mixin _ConfigIoMixin on ChangeNotifier {
         _addDebug(DebugSource.app, 'Clipboard is empty');
         return false;
       }
-      final canonical = canonicalJsonForSingbox(text);
+      final canonical = await canonicalJsonForSingboxAsync(text);
       final ok = await saveParsedConfig(canonical, displayRaw: text);
       _emit(_state.copyWith(busy: false));
       return ok;
@@ -270,7 +272,7 @@ mixin _ConfigIoMixin on ChangeNotifier {
         return false;
       }
 
-      final canonical = canonicalJsonForSingbox(text);
+      final canonical = await canonicalJsonForSingboxAsync(text);
       final ok = await saveParsedConfig(canonical, displayRaw: text);
       _emit(_state.copyWith(busy: false));
       return ok;

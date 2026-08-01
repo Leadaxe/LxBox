@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/format_utils.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/oom_reports.dart';
 import '../services/oom_share.dart';
 import '../services/ui_helpers.dart';
+import '../widgets/big_text_view.dart';
 
 /// §318 — вкладка «OOM» на экране Debug: снимки памяти, снятые ядром.
 ///
@@ -256,28 +258,61 @@ class _OomReportViewScreenState extends State<OomReportViewScreen>
           ),
         ],
       ),
+      // §333 — снапшот core-log читается целиком; в едином SelectableText
+      // это Paragraph на весь лог. Мета — шапкой, лог — построчными sliver'ами.
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(12),
-              children: [
-                _buildMeta(context),
-                if (_log != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    getLocalText.s("Core log at snapshot time"),
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  SelectableText(
-                    _log!,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 11,
-                      height: 1.3,
+          : CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.all(12),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildMeta(context),
+                        if (_log != null) ...[
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Text(
+                                getLocalText.s("Core log at snapshot time"),
+                                style:
+                                    Theme.of(context).textTheme.titleSmall,
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                icon: const Icon(Icons.copy, size: 16),
+                                tooltip: getLocalText.s("Copy"),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () async {
+                                  await Clipboard.setData(
+                                      ClipboardData(text: _log!));
+                                  if (!mounted) return;
+                                  showSnack(getLocalText
+                                      .s("Copied to clipboard"));
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ],
                     ),
                   ),
-                ],
+                ),
+                if (_log != null)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    sliver: BigTextSliver(
+                      text: _log!,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
               ],
             ),
     );

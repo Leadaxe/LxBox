@@ -1194,6 +1194,9 @@
   "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH.": {
     "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH."
   },
+  "Cut": {
+    "value": "Вырезать"
+  },
   "DNS / router events off": {
     "value": "События DNS и роутера выключены"
   },
@@ -1677,6 +1680,9 @@
   },
   "File is empty": {
     "value": "Файл пуст"
+  },
+  "File is too large to edit on device. Share it, edit externally, then load it back.": {
+    "value": "Файл слишком большой для правки на устройстве. Поделитесь им, отредактируйте во внешнем редакторе и загрузите обратно."
   },
   "Fill missing": {
     "value": "Дополнить недостающие"

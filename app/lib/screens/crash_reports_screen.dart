@@ -1,12 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/crash_share.dart';
 import '../services/format_utils.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/stderr_reader.dart';
 import '../services/ui_helpers.dart';
+import '../widgets/big_text_view.dart';
 
 /// §316 — вкладка «Crashes» на экране Debug: история Go-паник ядра.
 ///
@@ -189,6 +191,19 @@ class _CrashReportViewScreenState extends State<CrashReportViewScreen>
       appBar: AppBar(
         title: Text(formatDateTime(r.mtime)),
         actions: [
+          // §333 — «выделить всё» в построчном вьюере невозможно, копия
+          // целиком — кнопкой.
+          IconButton(
+            icon: const Icon(Icons.copy, size: 20),
+            tooltip: getLocalText.s("Copy"),
+            onPressed: _text == null
+                ? null
+                : () async {
+                    await Clipboard.setData(ClipboardData(text: _text!));
+                    if (!mounted) return;
+                    showSnack(getLocalText.s("Copied to clipboard"));
+                  },
+          ),
           IconButton(
             icon: const Icon(Icons.ios_share),
             tooltip: getLocalText.s("Share the crash report"),
@@ -200,17 +215,16 @@ class _CrashReportViewScreenState extends State<CrashReportViewScreen>
           ),
         ],
       ),
+      // §333 — Go-паника с goroutine dump бывает сотни КБ; единый
+      // SelectableText-Paragraph на слабом устройстве ронял просмотр.
       body: _text == null
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(12),
-              child: SelectableText(
-                _text!,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 11,
-                  height: 1.3,
-                ),
+          : BigTextView(
+              text: _text!,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                height: 1.3,
               ),
             ),
     );

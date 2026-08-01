@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Статус | 📝 Спека |
+| Статус | ✅ Реализовано (device-pending) |
 | Дата | 2026-08-01 |
 | Связанные | [`302 import-rules`](302-subscription-import-rewrite-rules.md) (decoded-режим Source-таба), [`318 oom-reports`](318-oom-reports-access.md), 4PDA k-dmitriy #1312/#1313/#1316 |
 
@@ -111,7 +111,16 @@ async-обёртки `prettyJsonForDisplayAsync` / `canonicalJsonForSingboxAsync
 `FormatException.source` весь входной текст — копировать его между
 изолятами и держать в state незачем. Вызовы в `config_io.dart`
 (`saveConfigRaw`, `readFromClipboard`, `readFromFile`) и `config_screen.dart`
-переводятся на async-обёртки.
+переводятся на async-обёртки. Туда же — canonical-to-canonical дифф в
+`saveParsedConfig` (§116/§323): он парсит **два** конфига на каждом
+сохранении/обновлении подписки и фризил UI ровно так же.
+
+Попутная находка при реализации: json5 на синтакс-ошибке бросает свой
+`SyntaxException` (implements Exception, **не** FormatException, из пакета
+не экспортирован) — он пролетал мимо всех `on FormatException` в
+`config_io`, и Save битого JSON5 падал unhandled без показа ошибки.
+`canonicalJsonForSingbox` теперь нормализует его в `FormatException`
+с тем же message (в нём координаты «… at line:col»).
 
 ### 3. Страховочный порог в config_screen
 
