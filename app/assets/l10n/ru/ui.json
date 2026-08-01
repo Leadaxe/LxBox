@@ -3597,6 +3597,9 @@
   "Test download/upload speed": {
     "value": "Проверка скорости загрузки и отдачи"
   },
+  "Test servers": {
+    "value": "Тест серверов"
+  },
   "Test servers list unavailable": {
     "value": "Список тестовых серверов недоступен"
   },
