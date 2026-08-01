@@ -144,8 +144,9 @@ class SettingsStorage {
   /// `template.vars` (см. [allowedVarKeys]). Template-vars не хардкодим — их
   /// источник правды сам template (зашит в APK, см. §159).
   static const _appFeatureFlagVars = <String>{
-    // Подписки (§027)
+    // Подписки (§027, §337)
     'auto_update_subs',
+    'auto_update_disabled_subs',
     // Обновления приложения (§036)
     'auto_check_updates',
     'last_update_check_at',
@@ -530,6 +531,16 @@ class SettingsStorage {
 
   static Future<void> setAutoUpdateSubs(bool enabled) =>
       setVar('auto_update_subs', enabled ? 'true' : 'false');
+
+  /// §337 — обновлять и **выключенные** подписки, чтобы их снапшот не тух до
+  /// момента, когда юзер их включит. Off по умолчанию: существующие установки
+  /// поведение не меняют. Живёт внутри `auto_update_subs` — при выключенном
+  /// глобальном тумблере не обновляется ничего.
+  static Future<bool> getAutoUpdateDisabledSubs() async =>
+      (await getVar('auto_update_disabled_subs', 'false')) == 'true';
+
+  static Future<void> setAutoUpdateDisabledSubs(bool enabled) =>
+      setVar('auto_update_disabled_subs', enabled ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
   // §037: Config lock for Debug API. Когда true — `generateConfig()` возвращает

@@ -2885,6 +2885,12 @@
   "Refresh on app start, after VPN connects, and periodically. Manual ⟳ works regardless.": {
     "value": "Обновлять при запуске приложения, после подключения VPN и периодически. Ручное ⟳ работает всегда."
   },
+  "Update disabled subscriptions": {
+    "value": "Обновлять выключенные подписки"
+  },
+  "Keep the node list of switched-off subscriptions fresh, so it is not stale when you switch one back on. Their nodes stay out of the config either way.": {
+    "value": "Держать список узлов выключенных подписок свежим, чтобы он не устарел к моменту, когда вы их включите. В конфиг их узлы всё равно не попадают."
+  },
   "Refresh rule-sets": {
     "value": "Обновить rule-set-файлы"
   },

@@ -52,6 +52,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _nearbyWifiGranted = false;
   bool _autoPing = true;
   bool _autoUpdateSubs = true;
+  bool _autoUpdateDisabledSubs = false;
   bool _autoCheckUpdates = true;
   // §220 — снятие портретной фиксации (default OFF = портрет).
   bool _allowRotation = false;
@@ -143,6 +144,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
     final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
     final autoUpdateSubs = await SettingsStorage.getAutoUpdateSubs();
+    final autoUpdateDisabledSubs =
+        await SettingsStorage.getAutoUpdateDisabledSubs();
     final autoCheckUpdates = await SettingsStorage.getAutoCheckUpdates();
     final allowRotation = await SettingsStorage.getAllowRotation();
     final debugEnabled = await SettingsStorage.getDebugEnabled();
@@ -182,6 +185,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _backgroundLocationGranted = bgLocation;
         _nearbyWifiGranted = nearbyWifi;
         _autoUpdateSubs = autoUpdateSubs;
+        _autoUpdateDisabledSubs = autoUpdateDisabledSubs;
         _autoCheckUpdates = autoCheckUpdates;
         _allowRotation = allowRotation;
         _debugEnabled = debugEnabled;
@@ -610,6 +614,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       onAutoUpdateSubsChanged: (val) {
         setState(() => _autoUpdateSubs = val);
         unawaited(SettingsStorage.setAutoUpdateSubs(val));
+      },
+      autoUpdateDisabledSubs: _autoUpdateDisabledSubs,
+      onAutoUpdateDisabledSubsChanged: (val) {
+        setState(() => _autoUpdateDisabledSubs = val);
+        unawaited(SettingsStorage.setAutoUpdateDisabledSubs(val));
       },
       userAgent: _userAgent,
       defaultUserAgent: resolveSubscriptionUserAgent(),
