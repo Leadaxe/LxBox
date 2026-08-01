@@ -61,7 +61,7 @@ Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token с�
 | `GET /device` | Android version / model / ABI / app version + build / core version (libbox / sing-box-lx) / VPN perm / uptime |
 | `GET /config` | **Сохранённый** sing-box JSON (файл; §311 — при живом туннеле может ОПЕРЕЖАТЬ ядро: пересборка до рестарта) |
 | `GET /config/pretty` | То же с indent:2 |
-| `GET /config/running` | §311 — снапшот конфига **работающего ядра** (kernel SPEC 036, захват на старте). Re-marshal — сравнивать с `/config` только семантически. `409` = туннель down / ядро < lx.16-rc.3 / ещё не подтянут. Расхождение running↔saved видно по `running_config_length` vs `config_length` в `/state` |
+| `GET /config/running` | §311 — снапшот конфига **работающего ядра** (kernel SPEC 036, захват на старте). Re-marshal — сравнивать с `/config` только семантически. `409` = туннель down / ядро < lx.16-rc.3 / ещё не подтянут. Расхождение running↔saved видно по `running_config_length` vs `config_length` в `/state`. **§324** — «семантически» = привести обе стороны к канонической форме силами ядра: `/config` → `formatConfig` (плюс наложить `OverrideOptions`, их `formatConfig` не применяет, а снапшот post-override), затем сравнить с `/config/running` побайтово. Разница длин сама по себе НЕ означает расхождения: re-marshal меняет порядок полей и выкидывает дефолты |
 | `GET /pool?tag=vpn-1-auto` | §208 — снапшот пула round_robin-группы: `{tag, count, slots:[{slot, tag, delay, alive}]}`. Какие N серверов в слотах сейчас + их пинг. Не-round_robin → `200 slots:[]`; туннель down → `409` (не пустой ответ — §209) |
 | `GET /logs?source=core&limit=500` | Sing-box internal logs (требует `core_logs_enabled=true`) |
 | `GET /files/crash/list` | §316 — **краши ядра**: архив Go-паник `[{name,size,mtime}]`, новые первыми. `[]` = крашей не было |
@@ -175,12 +175,41 @@ kill системой (LMK/OOM-killer). Поэтому **пустой репор
 tombstone — сам по себе вывод**: краш пришёл не из Go-паники, искать надо в
 JNI-обвязке или в системном kill'е, а не в логике ядра.
 
+**Tombstone от стороннего трекера (AppErrorsTracking и т.п.) причину НЕ
+содержит** — не тратить на него круги. Даёт только: сигнал, поток, время,
+регистры и `#00 … libbox.so` с голым адресом. Адрес не резолвится:
+`app/android/app/libs/libbox.aar` stripped (`nm` → «no symbols»). Читать в
+нём стоит ровно три вещи — `SI_TKILL` + не-`main` поток = подпись
+Go-`abort()` (искать `go.log`, а не сегфолт); `abort message` над
+`backtrace:`, если рантайм успел его продублировать; и метаданные
+(`System Locale`, версия ROM), которые задают контекст. Всё остальное —
+в `Crashes`.
+
 **Если Debug API недоступен** (устройство юзера, adb нет) — то же самое
 берётся из приложения: **Debug → вкладка Crashes**,
 список с датой-временем, тап отдаёт файл. Плюс архив целиком уезжает в
 `Share dump` полем `crash_archive` (тела режутся на 64 KB). После краша
 приложение само показывает плашку на главном — **ровно один раз на краш**
 (отметка `shown_crash_stamp` = `имя@mtime` показанного файла).
+
+Путь до экрана — **drawer → Debug**, вкладки `Log / Crashes / OOM /
+Profiling`; `Share dump` — иконка в аппбаре того же экрана. Не «Настройки»:
+в App Settings → Diagnostics живут только тумблеры (`Forward sing-box logs`,
+Profiling), самих улик там нет.
+
+**`core_logs_enabled` на крашрепорты не влияет.** Тумблер управляет
+форвардингом логов ядра в `/logs/core`; трейс пишет сам libbox через
+`SetupOptions.crashReportSource`. Репорты за прошлые падения есть у юзера
+и при выключенной галке — просить включить её **до** того, как забрал
+`Crashes`, не надо.
+
+**Что просить у пользователя одним сообщением:** архивный репорт это
+КАТАЛОГ из трёх файлов (`go.log` + `metadata.json` + `configuration.json`),
+share отдаёт все три — нужны все три, а не только трейс: `metadata.json`
+говорит, на какой сборке ядра упало, `configuration.json` — конфиг **на
+момент падения** (он может отличаться от того, что юзер прислал отдельно).
+При серии падений брать 2+ последних: совпадение трейсов сразу отделяет
+один баг от разных.
 
 Ротацию архива делает приложение на старте — 10 свежих; **ядро размер
 папки не ограничивает**, оно только докладывает туда файлы при каждом

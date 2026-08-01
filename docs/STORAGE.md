@@ -40,6 +40,8 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ last_update_attempt   ISO-8601?     любая попытка
 │       ├─ last_update_status    "never"|"ok"|"failed"|"inProgress"
 │       ├─ update_interval_hours int           default 24; §129 спец: -1=никогда, 0=respect server, N>0=каждые N ч
+│       ├─ on_update_action      string?       §323 — реакция на АВТО-обновление: "rebuild" (default,
+│       │                                      ключ не пишется) | "reload" | "none"
 │       ├─ last_node_count       int
 │       ├─ consecutive_fails     int           для UI "(N fails)"
 │       ├─ disabled_hashes       map?          §283 — {identity-хеш ноды: ISO-8601 lastSeen}; per-node disable
@@ -313,6 +315,14 @@ Sealed по полю `type`:
                                                // расписанию, но серверный интервал
                                                // принимаем, N>0 = каждые N ч.
                                                // AutoUpdater пропускает interval ≤ 0.
+  "on_update_action":      "reload"?,          // §323 — что делать после УСПЕШНОГО
+                                               // авто-обновления: "rebuild" (default —
+                                               // пересобрать конфиг, применяет юзер),
+                                               // "reload" (+ in-place reload ядра, разрыв
+                                               // ~3с), "none" (только список узлов).
+                                               // Ключ пишется ТОЛЬКО для не-дефолта;
+                                               // отсутствие/мусор → rebuild. Ручной ⟳
+                                               // режимом не управляется.
   "last_node_count":       0,
   "consecutive_fails":     0,                 // для UI "(N fails)"; freezing — in-memory
   "disabled_hashes": {                        // §283 — per-node disable (опционален,
