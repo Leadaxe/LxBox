@@ -23,7 +23,6 @@ import 'subscriptions_screen/entry_context_menu.dart';
 import 'subscriptions_screen/folder_picker.dart';
 import 'subscriptions_screen/paste_dialogs.dart';
 import 'subscriptions_screen/public_test_servers.dart';
-import 'subscriptions_screen/share_subscription_url.dart';
 import 'subscriptions_screen/widgets/add_icon_button.dart';
 import 'subscriptions_screen/widgets/subscription_entry_tile.dart';
 import 'subscriptions_screen/widgets/subscriptions_empty_state.dart';
@@ -555,7 +554,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       entry,
       subController: widget.subController,
       autoUpdater: widget.autoUpdater,
-      onShareUrl: _shareSubscriptionUrl,
     );
   }
 
@@ -567,9 +565,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       );
     }
   }
-
-  Future<void> _shareSubscriptionUrl(SubscriptionEntry entry) =>
-      shareSubscriptionUrl(context, entry);
 
   Future<void> _pickPublicTestServer() async {
     await pickPublicTestServer(

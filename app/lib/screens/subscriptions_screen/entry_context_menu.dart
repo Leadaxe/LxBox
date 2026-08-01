@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
@@ -23,7 +24,6 @@ void showEntryContextMenu(
   SubscriptionEntry entry, {
   required SubscriptionController subController,
   required AutoUpdater autoUpdater,
-  required Future<void> Function(SubscriptionEntry entry) onShareUrl,
 }) {
   if (entry.list is FolderServers) {
     _showFolderContextMenu(context, index, entry, subController);
@@ -53,16 +53,16 @@ void showEntryContextMenu(
               Navigator.pop(ctx);
             },
           ),
-          // Share (night T6-2): for SubscriptionServers с URL даём masked-
-          // share по умолчанию. Юзер может включить "Share with token"
-          // через confirm-dialog (с предупреждением).
-          if (entry.url.isNotEmpty)
+          // §338 — сразу системный share-sheet с полным URL, без
+          // промежуточного диалога masked/full. Для file-подписки (§129)
+          // пункт скрыт: `file:<uuid>` — локальный ключ кэша, шарить нечего.
+          if (entry.url.isNotEmpty && !isFileSubscription(entry.url))
             ListTile(
               leading: const Icon(Icons.ios_share),
               title: Text(getLocalText.s("Share URL…")),
               onTap: () async {
                 Navigator.pop(ctx);
-                await onShareUrl(entry);
+                await Share.share(entry.url, subject: 'LxBox subscription');
               },
             ),
           ListTile(

@@ -1764,9 +1764,6 @@
   "From routing rules · ordered as in Routing": {
     "value": "Из правил маршрутизации · порядок как в «Маршрутизации»"
   },
-  "Full URL contains your provider token — share only with people who have access to your subscription.": {
-    "value": "Полный URL содержит токен вашего провайдера — делитесь им только с теми, у кого есть доступ к вашей подписке."
-  },
   "GC cycles": {
     "value": "Циклов GC"
   },
@@ -2183,9 +2180,6 @@
   },
   "Make experiment": {
     "value": "Провести эксперимент"
-  },
-  "Masked URL is safe to share — it has no token:": {
-    "value": "Маскированный URL можно передавать спокойно — в нём нет токена:"
   },
   "Masks WireGuard from DPI by adding junk traffic. Enable if WARP is blocked.": {
     "value": "Маскирует WireGuard от DPI, добавляя мусорный трафик. Включите, если WARP заблокирован."
@@ -3307,15 +3301,6 @@
   "Share failed: %s": {
     "value": "Не удалось поделиться: %s"
   },
-  "Share full": {
-    "value": "Полный"
-  },
-  "Share masked": {
-    "value": "Маскированный"
-  },
-  "Share subscription URL": {
-    "value": "Поделиться URL подписки"
-  },
   "Share the OOM report": {
     "value": "Поделиться отчётом OOM"
   },
@@ -3611,6 +3596,9 @@
   },
   "Test download/upload speed": {
     "value": "Проверка скорости загрузки и отдачи"
+  },
+  "Test servers": {
+    "value": "Тест серверов"
   },
   "Test servers list unavailable": {
     "value": "Список тестовых серверов недоступен"
