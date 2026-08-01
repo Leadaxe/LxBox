@@ -1772,6 +1772,13 @@ class SubscriptionController extends ChangeNotifier {
     final triggerName = trigger?.name ?? 'manual';
     AppLog.I.info('Fetching subscription [$triggerName]: $shortUrl');
     final attemptAt = DateTime.now();
+    // §326 — состояние флага ДО fetch'а. `_persist` ниже (пометка попытки)
+    // поднимет `configDirty` раньше, чем мы узнаем состав; если состав окажется
+    // тем же, флаг надо вернуть в исходное, а не просто «не поднимать».
+    // Восстанавливаем именно прежнее значение, а не false: до fetch'а могли
+    // быть настоящие pending-изменения (правка настроек, другая подписка) —
+    // их гасить нельзя.
+    final dirtyBeforeFetch = configDirty;
     try {
       entry.status = const SubStatusFetching();
       // Помечаем попытку до начала fetch'а, чтобы при крэше app
@@ -1901,7 +1908,43 @@ class SubscriptionController extends ChangeNotifier {
         nodes: result.nodes,
       );
       entry._replaceList(next);
-      await _persist();
+      // §326 — состав узлов тот же ⇒ пересобирать конфиг не из чего, синюю
+      // плашку «Settings changed» не поднимаем. На диск пишем всё равно:
+      // last_updated / last_update_attempt / GC-отметки обновиться должны.
+      //
+      // Что входит в «состав» — ровно то, что видит билдер: identity-хеши
+      // узлов В ПОРЯДКЕ следования (порядок значим — от него зависят
+      // suffixes allocateTag и порядок в пулах) плюс набор disable-отметок
+      // (§283: снятая/поставленная отметка меняет, что эмитится, при том же
+      // списке узлов). Всё прочее в подписке — метаданные, конфиг от них не
+      // зависит.
+      final sameComposition = _compositionKey(current.nodes, current.disabledHashes.keys) ==
+          _compositionKey(result.nodes, nextDisabled.keys);
+      await _persist(keepDirtyFlag: sameComposition);
+      if (sameComposition) {
+        // Пометка попытки выше (status=inProgress) уже подняла флаг — возвращаем
+        // ровно прежнее значение, чтобы не погасить чужие pending-изменения.
+        configDirty = dirtyBeforeFetch;
+        AppLog.I.debug('§326: composition unchanged for $shortUrl → '
+            'configDirty restored to $dirtyBeforeFetch');
+      }
+      // §326 — ручной ⟳ идёт сюда, минуя `AutoUpdater.maybeUpdateAll`, поэтому
+      // реакцию подписки (`onUpdateAction`) применяем здесь сами. Только при
+      // РЕАЛЬНО изменившемся составе: иначе кнопка «обновить» на неизменной
+      // подписке рвала бы туннель на 3 секунды ни за что.
+      //
+      // Авто-триггеры реакцию получают в `maybeUpdateAll` — там она
+      // агрегируется за весь проход (один reload на N подписок, а не N).
+      if (trigger == UpdateTrigger.manual && !sameComposition) {
+        switch (next.onUpdateAction) {
+          case SubscriptionOnUpdateAction.reload:
+            await _autoUpdater?.applyReaction(reload: true);
+          case SubscriptionOnUpdateAction.rebuild:
+            await _autoUpdater?.applyReaction(reload: false);
+          case SubscriptionOnUpdateAction.none:
+            break;
+        }
+      }
       // Haptic только на user-инициированные fetch'и — auto/periodic тихие.
       if (trigger == UpdateTrigger.manual) HapticService.I.onFetchSuccess();
       // §047 — outgoing subscription event (gated, default OFF). delta =
@@ -1968,8 +2011,56 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _persist() async {
-    if (!_busy) configDirty = true;
+  /// §326 — отпечаток «состава» подписки: то и только то, от чего зависит
+  /// собранный конфиг. Одинаковый отпечаток ⇒ пересборка дала бы тот же
+  /// результат ⇒ поднимать `configDirty` не за что.
+  ///
+  /// Что входит:
+  /// - identity-хеши узлов **в порядке следования** — порядок значим: от него
+  ///   зависят суффиксы `allocateTag` (`X` / `X-1`) и порядок внутри пулов
+  ///   `urltest`/`selector`. Провайдер переставил узлы — это изменение;
+  /// - набор disable-отметок (§283) — при том же списке узлов снятая или
+  ///   поставленная отметка меняет, что билдер эмитит. Сортируем: порядок
+  ///   ключей map'а сам по себе ничего не значит.
+  ///
+  /// Что НЕ входит и не должно: `last_updated`, `last_update_attempt`,
+  /// `lastUpdateStatus`, `meta` (HTTP-заголовки, трафик, срок), `name`,
+  /// `consecutiveFails`, `updateIntervalHours` — билдер их не читает.
+  ///
+  /// Хеши считаются от УЖЕ пропатченных §302-правилами узлов (метод зовётся
+  /// после `_applyRulesToNodes`), тем же `nodeIdentityHash`, что у билдера.
+  @visibleForTesting
+  static String compositionKeyForTesting(
+    List<NodeSpec> nodes,
+    Iterable<String> disabledHashes,
+  ) =>
+      _compositionKey(nodes, disabledHashes);
+
+  static String _compositionKey(
+    List<NodeSpec> nodes,
+    Iterable<String> disabledHashes,
+  ) {
+    // Длина каждого элемента в префиксе — иначе конкатенация склеивается
+    // неоднозначно: две отметки `x`,`y` дали бы то же, что одна `x,y` (тест
+    // §326 «разделитель не даёт коллизии»). Хеши узлов фиксированной длины, но
+    // отметки приходят из storage и гарантий не дают.
+    String lenPrefixed(Iterable<String> items) =>
+        items.map((s) => '${s.length}:$s').join();
+    final tags = lenPrefixed(nodes.map(nodeIdentityHash));
+    final disabled = lenPrefixed(disabledHashes.toList()..sort());
+    return '$tags|$disabled';
+  }
+
+  /// [keepDirtyFlag] — §326: записать на диск, НЕ поднимая `configDirty`.
+  /// Единственный законный случай: успешный fetch, в котором состав узлов
+  /// оказался тем же. На диск писать всё равно надо (`last_updated`,
+  /// `last_update_attempt`, GC-отметки), но пересобирать конфиг не из чего —
+  /// а синяя плашка «Settings changed» именно это и предлагала, раз в час, на
+  /// подписке, которая не менялась.
+  ///
+  /// Для всех прочих вызовов дефолт неизменен: любая запись = pending changes.
+  Future<void> _persist({bool keepDirtyFlag = false}) async {
+    if (!_busy && !keepDirtyFlag) configDirty = true;
     await SettingsStorage.saveServerLists(_entries.map((e) => e.list).toList());
   }
 

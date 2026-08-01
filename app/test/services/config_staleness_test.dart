@@ -37,9 +37,12 @@ String _config({
       <String, dynamic>{
         'type': 'tun',
         'tag': 'tun-in-$i',
-        if (includePackage != null) 'include_package': includePackage,
-        if (excludePackage != null) 'exclude_package': excludePackage,
-        if (autoRedirect != null) 'auto_redirect': autoRedirect,
+        // Ключ появляется только когда значение задано: конфиг без per-app и
+        // без auto_redirect не должен нести пустые поля (как их не несёт §046
+        // post-step).
+        'include_package': ?includePackage,
+        'exclude_package': ?excludePackage,
+        'auto_redirect': ?autoRedirect,
       },
   ];
   return jsonEncode({

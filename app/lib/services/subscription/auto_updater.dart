@@ -187,28 +187,34 @@ class AutoUpdater {
         }
       }
 
-      // §323 — ручной ⟳ исключён: юзер сам на экране, видит плашку и жмёт
-      // Apply когда готов. Молча рвать ему туннель по кнопке «обновить» —
-      // не то, о чём он просил.
-      if (needRebuild && trigger != UpdateTrigger.manual) {
-        final react = _onUpdateReaction;
-        if (react == null) {
-          AppLog.I.debug('AutoUpdater: no reaction bound — skip (acts as none)');
-        } else {
-          AppLog.I.info('AutoUpdater: reaction rebuild'
-              '${needReload ? ' + reload' : ''}');
-          try {
-            await react(reload: needReload);
-          } catch (e) {
-            // Пересборка/reload сорвались — ноды на диске уже свежие,
-            // `configDirty` стоит, обычный путь (возврат на home / Start)
-            // догонит. Проход апдейтера ронять нельзя: он в unawaited.
-            AppLog.I.warning('AutoUpdater: reaction failed: $e');
-          }
-        }
-      }
+      // §326 — ручной ⟳ больше НЕ исключён. Прежняя логика («юзер сам на
+      // экране, сам применит») на практике читалась как сломанная настройка:
+      // выбрал «пересобрать и перезагрузить», нажал ⟳ — ничего. Настройка
+      // называется «При обновлении», а не «При автообновлении».
+      if (needRebuild) await applyReaction(reload: needReload);
     } finally {
       _running = false;
+    }
+  }
+
+  /// §326 — применить реакцию подписки (см. [SubscriptionOnUpdateAction]).
+  /// Публичный: ручной ⟳ идёт через `SubscriptionController.updateAt` →
+  /// `_fetchEntryByRef`, минуя `maybeUpdateAll`, и зовёт этот метод напрямую.
+  ///
+  /// No-throw: реакция не должна ронять ни проход апдейтера (он в `unawaited`),
+  /// ни UI-обработчик кнопки. Не привязана (тесты, headless) — режимы
+  /// деградируют до `none`: ноды на диске свежие, обычный путь догонит.
+  Future<void> applyReaction({required bool reload}) async {
+    final react = _onUpdateReaction;
+    if (react == null) {
+      AppLog.I.debug('AutoUpdater: no reaction bound — skip (acts as none)');
+      return;
+    }
+    AppLog.I.info('AutoUpdater: reaction rebuild${reload ? ' + reload' : ''}');
+    try {
+      await react(reload: reload);
+    } catch (e) {
+      AppLog.I.warning('AutoUpdater: reaction failed: $e');
     }
   }
 

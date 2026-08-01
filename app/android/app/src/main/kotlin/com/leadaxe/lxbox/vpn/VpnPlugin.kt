@@ -814,24 +814,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccGetRunningConfig" -> {
                 val cc = BoxService.commandClient
                 pluginScope.launch {
-                    // §324 — `.content()` ОБЯЗАТЕЛЕН: с lx.17-rc.1 (kernel SPEC
-                    // 038) метод возвращает не строку, а `RunningConfig`-объект
-                    // (голая строка роняла ядро на android/arm64 в
-                    // `bulkBarrierPreWrite` — cgo-фрейм выравнивал слот
-                    // результата на 4 байта вместо 8). Без `.content()`
-                    // `result.success` отдавал во Flutter Java-объект, который
-                    // MethodChannel сериализовать не умеет → Dart молча получал
-                    // null, и §311 был мёртв целиком.
-                    val r = withContext(Dispatchers.IO) {
-                        try {
-                            cc?.getRunningConfig()?.content()
-                        } catch (t: Throwable) {
-                            // Ядро не STARTED / attached-путь / RPC-ошибка —
-                            // ожидаемо, контракт §311: null = недоступен.
-                            Log.d(TAG, "ccGetRunningConfig failed: ${t.message}")
-                            null
-                        }
-                    }
+                    val r = withContext(Dispatchers.IO) { cc?.getRunningConfig() }
                     result.success(r)
                 }
             }

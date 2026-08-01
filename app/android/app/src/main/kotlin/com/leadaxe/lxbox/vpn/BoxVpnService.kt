@@ -416,7 +416,19 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         // порогом logcat, ничего не надо помнить про фильтр при разборе случая.
         Log.w(TAG, "[fd §329] openTun fd=${pfd.fd} at=${SystemClock.elapsedRealtime()}ms")
         // **§049 F1**: state живёт в BoxService — храним там.
-        service.fileDescriptor.set(pfd)
+        // §329 — ЗАКРЫТЬ предыдущий PFD, а не просто затереть ссылку. Reload идёт
+        // мимо путей остановки (`closeFileDescriptor` зовётся только из
+        // doStop/doForceStop/onRevoke/onDestroy): ядро в `StartOrReloadService`
+        // само закрывает старый instance и сразу зовёт `openTun` заново. При
+        // простом `set` старый PFD осиротевал незакрытым, и его закрывал
+        // CloseGuard-финализатор при GC — по номеру и в произвольный момент,
+        // когда номер уже принадлежит листенеру НОВОГО стека (§047: листенер
+        // умирает, `accept4` → EINVAL, весь новый TCP получает RST). Плюс это
+        // была утечка fd на каждом reload. Паттерн — как в `closeFileDescriptor`
+        // (§049 F2): порядок безопасен, `oldInstance.Close()` завершается
+        // синхронно до `openTun`, т.е. ядро свой dup уже отпустило.
+        service.fileDescriptor.getAndSet(pfd)?.runCatching { close() }
+            ?.onFailure { Log.w(TAG, "[fd §329] stale pfd close failed: ${it.message}") }
         return pfd.fd
     }
 
