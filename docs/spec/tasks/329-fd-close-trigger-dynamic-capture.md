@@ -1,8 +1,8 @@
-# §329 — Динамическая поимка триггера §047 (кто разлушивает сокет листенера)
+# §329 — Поимка триггера §047 (кто закрывает fd листенера)
 
 | | |
 |---|---|
-| Статус | 🔎 Механизм уточнён на устройстве: жертву **не закрывают** (`EINVAL`, не `EBADF`) — искать `shutdown` в reload-пути; триггер `reload` подтверждён |
+| Статус | 🎯 Кандидат №1 найден статикой: `openTun` делает `fileDescriptor.set(pfd)` — на reload старый PFD осиротевает незакрытым, финализатор закрывает номер позже, уже переиспользованный. Объясняет `EINVAL` и «не каждый reload». Фикс однострочный (`getAndSet+close`), device-подтверждение pending |
 | Дата | 2026-07-31 (план) · 2026-08-01 (инструментировка · находка `EINVAL` с устройства) |
 | Связанные | [`047 tun TCP deterioration`](047-tun-tcp-deterioration-diagnosis.md) — клиентский симптом; [`049 sing-box wrapper audit`](049-singbox-wrapper-deep-audit/spec.md); kernel `SPECS/TASKS/040-SINGTUN_ACCEPTLOOP_SELFHEAL` в `sing-box-lx` — ядровая половина |
 | Затронутые файлы | [`BoxVpnService.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt) (лог `openTun`), [`BoxService.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt) (`closeFileDescriptor(reason)`), [`scripts/lxbox-fd-repro.sh`](../../../scripts/lxbox-fd-repro.sh) (новый; под модель rc.3 — требует переключения на `reload`) |
@@ -175,6 +175,65 @@ Practical: воспроизведение теперь дешёвое — сер
 (`PUT /settings/core_logs_enabled {"enabled":true}` + force-stop приложения,
 `Libbox.setup` одноразовый). Признак поимки — warn `accept failed` с errno
 и следом `listener recreated`.
+
+## Кандидат №1 найден статикой: осиротевший PFD при reload (`set` вместо `getAndSet+close`)
+
+> ⚠️ Поправка к пункту 1 выше: pivot «искать `shutdown`, а не `close`» был
+> **преждевременным**. `EINVAL` совместим с close-версией в одном конкретном
+> варианте — номер освобождён и **переиспользован под другой сокет** (не
+> listening). `EBADF` был бы, останься номер свободен; `ENOTSOCK` — займи его
+> не-сокет; а сокет из шторма dial'ов после reload даёт ровно `EINVAL`.
+> Поэтому `grep shutdown` и не находит ничего: `shutdown` никто не зовёт.
+
+[`BoxVpnService.openTun`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt)
+завершается строкой
+
+```kotlin
+service.fileDescriptor.set(pfd)   // ← простой set: предыдущий PFD не закрыт
+```
+
+Это **единственная** запись в `fileDescriptor`; единственный
+`getAndSet(null)` живёт в [`BoxService.kt:313`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt)
+(`closeFileDescriptor`) и вызывается только из путей **остановки**
+(`doStop`/`doForceStop`/`onRevoke`/`onDestroy`). Reload идёт мимо них: ядро в
+`StartOrReloadService` само закрывает старый instance и тут же зовёт `openTun`
+заново. `detachFd`/`close` в openTun-пути нет.
+
+Итог: **на каждом reload один `ParcelFileDescriptor` осиротевает незакрытым**.
+Его закроет `CloseGuard`-финализатор при GC — по номеру и в произвольный момент.
+
+Цепочка, объясняющая все наблюдения:
+
+1. reload → `openTun` → старый PFD (номер `N`) осиротел;
+2. ядро закрывает старый instance → закрывается его `dup` номера `N`;
+3. новый стек стартует, `listenTCP` берёт свободный номер — с заметной
+   вероятностью тот самый `N`;
+4. GC добирается до осиротевшего PFD → финализатор делает `close(N)` —
+   **закрывает listener нового стека**;
+5. `N` освобождается и мгновенно переиспользуется сокетом из шторма dial'ов
+   (urltest нового instance + mass-ping, 162 ноды / concurrency 10);
+6. Go-поллер всё ещё держит `N` в epoll; активность нового сокета будит
+   `acceptLoop` → `accept4(N)` на не-listening сокете → **`EINVAL`**.
+
+Пункт 6 попутно снимает возражение «голый close не будит горутину в netpoll»:
+будит не close, а **активность переиспользовавшего номер сокета**.
+
+Почему «убивает не каждый reload»: нужно совпадение момента GC-финализации с
+попаданием номера в новый listener — отсюда плавающесть §047 с мая.
+
+**Фикс** (однострочный, он же чинит утечку fd на каждом reload):
+
+```kotlin
+service.fileDescriptor.getAndSet(pfd)?.runCatching { close() }
+```
+
+Тот же атомарный паттерн, что уже используется в `closeFileDescriptor` (§049 F2).
+
+**Статус гипотезы:** доказана статикой (код прочитан, все точки записи
+проверены), но **не подтверждена на устройстве**. Подтверждение: fd-логи §329
+уже пишут `openTun fd=N` — при срабатывании сверить `N` из старого `openTun`
+с портом/номером умершего listener'а; либо снять до/после фикса серию
+`reload-vpn` и сравнить частоту warn'ов ядра.
 
 ## План
 
