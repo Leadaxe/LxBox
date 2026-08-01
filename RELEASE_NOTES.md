@@ -3,13 +3,15 @@
 Subscriptions that pack a whole pool into a single entry now arrive as a
 single node instead of a dozen look-alike rows — and you can build your own
 such node inside a folder. Subscription rules learned to switch nodes back
-**on**, not only off. Plus Xray subscriptions stopped losing everything that
-isn't VLESS.
+**on**, not only off. Xray subscriptions stopped losing everything that
+isn't VLESS. And the config editor stopped choking — and crashing — on
+1000-node configs.
 
 Подписки, упаковывающие целый пул в один пункт, теперь приезжают одним узлом,
 а не десятком похожих строк — и такой узел можно собрать самому внутри папки.
 Правила подписок научились **включать** узлы обратно, а не только выключать.
-Плюс Xray-подписки перестали терять всё, что не VLESS.
+Xray-подписки перестали терять всё, что не VLESS. А редактор конфига
+перестал давиться — и падать — на конфигах в тысячу узлов.
 
 Core / Ядро: **sing-box-lx `v1.14.0-lx.17-rc.5`**.
 
@@ -89,6 +91,27 @@ create a twin. On Liberty 64 records fold into 43 nodes.
 
 ## 🐛 Fixed
 
+### 🗒️ The config editor survives huge configs
+
+With ~1000 nodes the editor burned 100% CPU on every keystroke, and
+eventually the system killed the app — leaving an empty crash report. The
+whole config lived in one text field: each keystroke re-laid-out hundreds of
+kilobytes and synced all of them to the keyboard app. The editor is now
+line-based: only visible lines get laid out, only the line under the cursor
+talks to the keyboard — and it gained line numbers along the way. JSON
+parsing and formatting moved off the UI thread, so opening the screen,
+saving, and subscription refreshes no longer stutter. Configs over 1 MB open
+read-only with a hint: Share → edit externally → Load from file.
+
+The same line-based scheme now renders the subscription **Source** tab and
+the crash/OOM report viewers — a multi-hundred-KB body is no longer glued
+into a single text block — and reports got a **Copy** button. The paste
+fields in the add-server wizard switched over too.
+
+Two bonus fixes while there: a JSON5 syntax error on Save now shows up with
+its line and column (it used to disappear silently), and loading a file with
+non-Latin characters in comments no longer garbles them.
+
 ### 📶 Ping testing no longer wipes the other channels
 
 Latency was kept in one map shared by the whole app, while a mass test only
@@ -132,9 +155,25 @@ hour for nothing. A successful "Reload core" now clears it too.
 
 Refreshing a subscription no longer raises it either. Any settings write used
 to set the flag, and a refresh always writes something — at minimum the time of
-the last attempt. A subscription returning the very same list was offering to
-rebuild a config with nothing to change. Now the node list is compared instead.
-Real unsaved changes from before a refresh are still kept.
+the last attempt. So the banner appeared both when a subscription returned the
+very same list and when the refresh failed outright (provider down, airplane
+mode) — every hour, over a config nobody had touched. Now the node composition
+is compared instead, and bookkeeping writes don't touch the flag at all. Real
+unsaved changes are kept, including ones made during the refresh itself.
+
+The banner also stopped guessing. Comparing two *saved* configs answers "did
+the file change", while the banner claims "the running core is out of date" —
+and there were plenty of false reasons for the first: the provider reordering
+nodes, suffixes of same-named entries shifting, and with mixed-case SNI enabled
+every rebuild produced different text, so the banner never cleared at all. The
+app now asks the core: the saved and the running config are reduced to one
+canonical form **inside the core** — same parser, same serializer — and those
+are compared. Differences in field order and other formatting stop counting as
+a change. The verdict can only remove a needless banner, never raise one; if
+the core can't answer, the banner stays, as before.
+
+A subscription whose composition really did change still gets you the banner —
+and with "On update" set to reload, it applies straight away.
 
 ### 📁 Test results in a folder no longer shift when a server is deleted
 
@@ -189,9 +228,12 @@ only).
 The setting is called "On update", not "On auto-update" — and now it behaves
 that way: manual ⟳ obeys it too. It used to fire only on the timer, so
 "Rebuild and reload" did nothing at all when you pressed the button yourself.
-On a manual refresh the reaction only fires if the node list really changed —
-pressing ⟳ on an unchanged subscription no longer costs you a few seconds of
-connection.
+
+Either way the reaction only fires if the node list really changed. Pressing ⟳
+on an unchanged subscription doesn't cost you a few seconds of connection, and
+neither does the hourly timer on a provider that keeps returning the same list.
+Several subscriptions refreshing in one pass share a single reload rather than
+taking one each.
 
 ## 🧩 Core
 
@@ -307,6 +349,27 @@ keeps serving. A deliberate shutdown stays silent as before.
 
 ## 🐛 Исправлено
 
+### 🗒️ Редактор конфига переваривает огромные конфиги
+
+При ~1000 узлов редактор съедал 100% CPU на каждое нажатие клавиши, а затем
+система убивала приложение — с пустым краш-репортом. Весь конфиг лежал в
+одном текстовом поле: каждое нажатие заново размечало сотни килобайт и
+целиком синхронизировало их с клавиатурой. Теперь редактор построчный:
+размечаются только видимые строки, с клавиатурой общается только строка под
+курсором — заодно появились номера строк. Разбор и форматирование JSON ушли
+с UI-потока: открытие экрана, сохранение и обновления подписок больше не
+подтормаживают. Конфиги больше 1 МБ открываются только для чтения с
+подсказкой: Поделиться → править во внешнем редакторе → Загрузить из файла.
+
+Та же построчная схема теперь рисует вкладку **Source** у подписки и
+просмотр краш/OOM-репортов — тело на сотни килобайт больше не склеивается в
+один текстовый блок, а у репортов появилась кнопка **Копировать**. Поля
+вставки в мастере добавления сервера тоже переехали.
+
+Два фикса по пути: синтаксическая ошибка JSON5 при сохранении теперь
+показывается со строкой и колонкой (раньше молча исчезала), а загрузка
+файла с кириллицей в комментариях больше не превращает её в кракозябры.
+
 ### 📶 Тест пинга больше не стирает результаты остальных каналов
 
 Задержки хранились одной картой на всё приложение, а массовый тест перебирает
@@ -349,9 +412,25 @@ keeps serving. A deliberate shutdown stays silent as before.
 
 Обновление подписки её тоже больше не поднимает. Флаг вставал на любую запись
 настроек, а обновление пишет их всегда — хотя бы отметку времени последней
-попытки. Подписка, вернувшая ровно тот же список, предлагала пересобрать
-конфиг, которому нечего менять. Теперь сравнивается состав узлов. Настоящие
-несохранённые изменения, сделанные до обновления, при этом не гасятся.
+попытки. Поэтому плашка вылезала и когда подписка вернула ровно тот же список,
+и когда обновление вообще не удалось (провайдер недоступен, авиарежим) — раз в
+час, на конфиге, который никто не трогал. Теперь сравнивается состав узлов, а
+служебные записи флаг не трогают вовсе. Настоящие несохранённые изменения
+сохраняются, в том числе сделанные прямо во время обновления.
+
+И она перестала гадать. Сравнение двух **сохранённых** конфигов отвечает на
+вопрос «изменился ли файл», тогда как плашка утверждает «работающее ядро
+устарело» — а ложных поводов для первого хватало: провайдер переставил узлы,
+сместились суффиксы одинаковых имён, а при включённой маскировке SNI каждая
+пересборка вообще давала другой текст, и плашка не гасла никогда. Теперь
+приложение спрашивает ядро: сохранённый и работающий конфиги приводятся к одной
+канонической форме **внутри ядра** — один парсер, один сериализатор, — и
+сравниваются уже они. Различия в порядке полей и прочем оформлении перестают
+считаться изменением. Вердикт умеет только убрать лишнюю плашку, показать её он
+не может; если ядро ответить не смогло, плашка остаётся, как и прежде.
+
+Подписка, у которой состав действительно изменился, плашку по-прежнему даёт — а
+с настройкой «При обновлении» в режиме перезагрузки применяет сразу.
 
 ### 📁 В папке результаты теста больше не съезжают при удалении сервера
 
@@ -406,9 +485,13 @@ keeps serving. A deliberate shutdown stays silent as before.
 Настройка называется «При обновлении», а не «При автообновлении» — теперь так
 и работает: ручное ⟳ ей тоже подчиняется. Раньше она срабатывала только по
 таймеру, и режим «Пересобрать и перезагрузить» на нажатие кнопки не делал
-ничего. На ручном обновлении реакция срабатывает, только если состав узлов
-действительно изменился: жать ⟳ на неизменившейся подписке больше не значит
-потерять несколько секунд соединения.
+ничего.
+
+В любом случае реакция срабатывает, только если состав узлов действительно
+изменился. Жать ⟳ на неизменившейся подписке больше не значит потерять
+несколько секунд соединения — как и часовой таймер на провайдере, который
+отдаёт один и тот же список. Несколько подписок, обновившихся за один проход,
+делят одну перезагрузку, а не берут по своей.
 
 ## 🧩 Ядро
 
