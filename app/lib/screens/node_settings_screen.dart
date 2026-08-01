@@ -335,6 +335,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
             ),
           ),
         ),
+        // §322 — у узла автовыбора detour'а нет: он не соединение, а правило
+        // выбора среди членов. Блок не рисуем вовсе (не «серым»).
+        if (_member?.node?.isGroup != true) ...[
         const SizedBox(height: 16),
         _sectionHeader(
             getLocalText.s("Detour"), getLocalText.s("Route through another server first"), theme),
@@ -360,6 +363,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         ),
+        ], // §322 — конец гейта detour-блока
       ],
     );
   }

@@ -320,8 +320,14 @@ class SettingsStorage {
   /// One-shot миграция enabled_groups[] → channels[] (seed из template).
   /// §267 — сид из `template.groupTemplates` (default_channels + channel-шаблон).
   /// Идемпотентна. Зовётся из main() init до первого билда.
-  static Future<void> migrateChannelsIfNeeded(GroupTemplates gt) =>
-      _migrateChannelsIfNeeded(gt);
+  /// §327 — `varDefaults` (имя var → `default_value`) резолвит `@urltest_*`
+  /// в `group_templates.auto.options`: на этом этапе var-substitution ещё не
+  /// отработала, а дефолт обязан быть один — шаблонный.
+  static Future<void> migrateChannelsIfNeeded(
+    GroupTemplates gt, {
+    Map<String, String> varDefaults = const {},
+  }) =>
+      _migrateChannelsIfNeeded(gt, varDefaults: varDefaults);
 
   // ---------------------------------------------------------------------------
   // Last global update timestamp

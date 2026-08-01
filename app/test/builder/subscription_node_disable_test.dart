@@ -15,6 +15,10 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// `nodes` для UI), её warnings не сыпятся в emitWarnings; хеш-фильтр
 /// переживает reparse (свежие инстансы NodeSpec).
 class _FakeCtx implements EmitContext {
+  // §272/§322 — глобальный passive_check; этим тестам он не важен.
+  @override
+  bool get passiveCheck => false;
+
   final entries = <SingboxEntry>[];
   final selectorTags = <String>[];
   final autoTags = <String>[];

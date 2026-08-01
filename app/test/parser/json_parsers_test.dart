@@ -247,8 +247,14 @@ void main() {
       expect(nodes.length, 3, reason: 'резервные ноды больше не теряются');
       expect(nodes.map((n) => n.server),
           ['node1.example', 'node3.example', 'node2n.example']);
-      expect(nodes.map((n) => n.label),
-          ['Main Server', 'Main Server proxy-2', 'Main Server proxy-3']);
+      // §322 — `remarks` без добавки положен ровно одной сущности элемента.
+      // Узлов несколько → тег получают ВСЕ, включая первый (раньше он брал
+      // чистый `remarks` и дрался за имя с группой автовыбора).
+      expect(nodes.map((n) => n.label), [
+        'Main Server proxy',
+        'Main Server proxy-2',
+        'Main Server proxy-3',
+      ]);
       expect(nodes.map((n) => n.label).toSet().length, 3,
           reason: 'в списке узлов не должно быть одинаковых строк');
     });

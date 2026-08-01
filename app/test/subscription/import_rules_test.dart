@@ -89,8 +89,9 @@ void main() {
       );
       expect(applyRulesToNode(fpNode('chrome', name: 'NL-01'), [rule]).disabled,
           isTrue);
+      // §332 — тристейт: «не тронут» = null (false зарезервирован за Enable).
       expect(applyRulesToNode(fpNode('chrome', name: 'DE-01'), [rule]).disabled,
-          isFalse);
+          isNull);
     });
 
     test('caseSensitive различает регистр', () {
@@ -101,7 +102,7 @@ void main() {
         action: ImportRuleAction.disable,
       );
       expect(applyRulesToNode(fpNode('chrome', name: 'NL'), [rule]).disabled,
-          isFalse);
+          isNull);
       expect(applyRulesToNode(fpNode('chrome', name: 'nl'), [rule]).disabled,
           isTrue);
     });
@@ -114,7 +115,7 @@ void main() {
       expect(applyRulesToNode(fpNode('chrome', name: 'NL'), [rule]).disabled,
           isTrue);
       expect(applyRulesToNode(fpNode('chrome', name: 'NL-01'), [rule]).disabled,
-          isFalse);
+          isNull);
     });
 
     test('negate инвертирует — и ловит отсутствие поля', () {
@@ -126,7 +127,7 @@ void main() {
         action: ImportRuleAction.disable,
       );
       // fp=chrome → условие с negate ложно, узел не трогаем.
-      expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isFalse);
+      expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isNull);
       // fp=firefox → negate истинно.
       expect(applyRulesToNode(fpNode('firefox'), [rule]).disabled, isTrue);
       // поля нет вовсе (без TLS) → negate тоже истинно.
@@ -148,7 +149,7 @@ void main() {
           matchMode: ImportRuleMatchMode.any,
           action: ImportRuleAction.disable);
       final n = fpNode('chrome', name: 'NL');
-      expect(applyRulesToNode(n, [and]).disabled, isFalse,
+      expect(applyRulesToNode(n, [and]).disabled, isNull,
           reason: 'server не содержит zzz');
       expect(applyRulesToNode(n, [or]).disabled, isTrue,
           reason: 'tag содержит NL');
@@ -165,7 +166,7 @@ void main() {
       expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isTrue);
       // Значения нет нигде в узле.
       final other = node('vless://u@other.net:443#A');
-      expect(applyRulesToNode(other, [rule]).disabled, isFalse);
+      expect(applyRulesToNode(other, [rule]).disabled, isNull);
     });
 
     test('пустой путь ловит значение в глубоком поле', () {
@@ -175,7 +176,7 @@ void main() {
         action: ImportRuleAction.disable,
       );
       expect(applyRulesToNode(fpNode('firefox'), [rule]).disabled, isTrue);
-      expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isFalse);
+      expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isNull);
     });
 
     test('Replace(set) с пустой целью непригоден (узел не затирается)', () {
@@ -195,7 +196,7 @@ void main() {
         action: ImportRuleAction.disable,
       );
       expect(rule.isUsable, isFalse);
-      expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isFalse);
+      expect(applyRulesToNode(fpNode('chrome'), [rule]).disabled, isNull);
     });
   });
 
@@ -531,6 +532,89 @@ void main() {
       ];
       final out = applyRulesToNode(fpNode('chrome', name: 'raw'), rules);
       expect(readJsonPath(out.patchedJson!, 'tag'), 'stage2');
+    });
+  });
+
+  group('§332 Enable', () {
+    // Идиома «match all»: пустой путь сериализует весь JSON узла (всегда
+    // непустой) + matches .* — правило срабатывает на каждом узле.
+    final matchAll = cond('', ImportRuleOperator.matches, '.*');
+
+    test('enable даёт disabled=false, узел «затронут»', () {
+      final rule = ImportRule(
+        conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
+        action: ImportRuleAction.enable,
+      );
+      final out = applyRulesToNode(fpNode('chrome', name: 'NL'), [rule]);
+      expect(out.disabled, isFalse);
+      expect(out.changed, isTrue);
+      expect(
+          applyRulesToNode(fpNode('chrome', name: 'DE'), [rule]).disabled,
+          isNull);
+    });
+
+    test('последнее сработавшее правило побеждает: enable-all → disable FI',
+        () {
+      // Сценарий 4PDA: сброс прошлых отключений + новый фильтр.
+      final rules = [
+        ImportRule(conditions: [matchAll], action: ImportRuleAction.enable),
+        ImportRule(
+          conditions: [cond('tag', ImportRuleOperator.contains, 'FI')],
+          action: ImportRuleAction.disable,
+        ),
+      ];
+      expect(applyRulesToNode(fpNode('chrome', name: 'FI-1'), rules).disabled,
+          isTrue);
+      expect(applyRulesToNode(fpNode('chrome', name: 'NL-1'), rules).disabled,
+          isFalse, reason: 'enable-all снял бы старую отметку');
+    });
+
+    test('whitelist: disable-all → enable NL', () {
+      final rules = [
+        ImportRule(conditions: [matchAll], action: ImportRuleAction.disable),
+        ImportRule(
+          conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
+          action: ImportRuleAction.enable,
+        ),
+      ];
+      expect(applyRulesToNode(fpNode('chrome', name: 'NL-1'), rules).disabled,
+          isFalse);
+      expect(applyRulesToNode(fpNode('chrome', name: 'DE-1'), rules).disabled,
+          isTrue);
+    });
+
+    test('applyImportRules разводит индексы по наборам', () {
+      final nodes = [
+        fpNode('chrome', name: 'NL-1'),
+        fpNode('chrome', name: 'FI-1'),
+      ];
+      final rules = [
+        ImportRule(conditions: [matchAll], action: ImportRuleAction.enable),
+        ImportRule(
+          conditions: [cond('tag', ImportRuleOperator.contains, 'FI')],
+          action: ImportRuleAction.disable,
+        ),
+      ];
+      final res = applyImportRules(nodes, rules);
+      expect(res.enabledIndexes, {0});
+      expect(res.disabledIndexes, {1});
+    });
+
+    test('сериализация: enable переживает round-trip', () {
+      final rule = ImportRule(
+        conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
+        action: ImportRuleAction.enable,
+      );
+      expect(ImportRule.fromJson(rule.toJson()), rule);
+      expect(ImportRuleAction.fromName('enable'), ImportRuleAction.enable);
+    });
+
+    test('summary показывает Enable', () {
+      final rule = ImportRule(
+        conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
+        action: ImportRuleAction.enable,
+      );
+      expect(rule.summary, endsWith('→ Enable'));
     });
   });
 

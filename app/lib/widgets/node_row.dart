@@ -51,32 +51,52 @@ class NodeRow extends StatelessWidget {
   final VoidCallback? onViewPool;
 
   /// Right-side delay label (или PING… / ERR), цвет по latency.
+  ///
+  /// §325 — префикс `~` («приблизительно») у замера из другого канала: число
+  /// показано как ориентир, но получено чужим тестом (ping-URL и таймаут
+  /// резолвятся per-group, §040). Значок текстовый и однознаковый намеренно —
+  /// бейдж узкий и моноширинный, иконка сломала бы выравнивание колонки.
   String get _delayLabel {
     if (item.pingBusy) return 'PING…';
     final delay = item.delay;
     if (delay == null) return '';
-    return delay < 0 ? 'ERR' : '${delay}MS';
+    final prefix = item.delayIsForeign ? '~' : '';
+    return delay < 0 ? '${prefix}ERR' : '$prefix${delay}MS';
   }
 
   Color? _delayColor(BuildContext context) {
     final delay = item.delay;
     if (delay == null || item.pingBusy) return null;
-    if (delay < 0) return Theme.of(context).colorScheme.error;
-    if (delay < 200) return Colors.green;
-    if (delay < 500) return Colors.orange;
-    return Theme.of(context).colorScheme.error;
+    final Color base;
+    if (delay < 0) {
+      base = Theme.of(context).colorScheme.error;
+    } else if (delay < 200) {
+      base = Colors.green;
+    } else if (delay < 500) {
+      base = Colors.orange;
+    } else {
+      base = Theme.of(context).colorScheme.error;
+    }
+    // §325 — чужой замер приглушаем: цветовая шкала остаётся читаемой (видно,
+    // что «зелёный»), но бейдж не спорит за внимание со своими, актуальными.
+    return item.delayIsForeign ? base.withValues(alpha: 0.55) : base;
   }
 
   /// `[ACTIVE] [protocol]              [50MS]` — left part flex, ping right-aligned.
   Widget _buildSubtitleRow(BuildContext context, ColorScheme cs) {
     final hasActive = item.active;
     final hasArrow = item.urltestNow != null && item.urltestNow!.isNotEmpty;
-    final hasProto =
-        item.protocolLabel != null && item.protocolLabel!.isNotEmpty;
+    // §322 — у группы автовыбора вместо протокола метка режима, и живёт она
+    // слева от стрелки: «🔀 [15/7] → 🇩🇪 Германия».
+    final auto = item.autoGroupLabel;
+    final hasAuto = auto != null && auto.isNotEmpty;
+    final hasProto = !hasAuto &&
+        item.protocolLabel != null &&
+        item.protocolLabel!.isNotEmpty;
     // §201 — у block нет осмысленного delay (всегда ERR): бейдж не рисуем.
     final dl = _isBlock ? '' : _delayLabel;
 
-    if (!hasActive && !hasArrow && !hasProto && dl.isEmpty) {
+    if (!hasActive && !hasArrow && !hasProto && !hasAuto && dl.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -99,9 +119,12 @@ class NodeRow extends StatelessWidget {
           )
         : null;
 
-    final Widget? arrow = hasArrow
+    final Widget? arrow = (hasArrow || hasAuto)
         ? Text(
-            '→ ${item.urltestNow}',
+            [
+              if (hasAuto) auto,
+              if (hasArrow) '→ ${item.urltestNow}',
+            ].join(' '),
             maxLines: 1,
             softWrap: false,
             overflow: TextOverflow.ellipsis,
@@ -187,7 +210,17 @@ class NodeRow extends StatelessWidget {
   }
 
   // §125 — служебная нода (direct/auto): по типу из конфига, не по маске имени.
-  bool get _isSpecial => specialNodeDisplayForType(item.outboundType) != null;
+  /// §125/§322 — служебная нода (direct/auto-двойник/block): подменённое имя
+  /// и иконка. urltest-группа §322 сюда НЕ входит — она показывает своё имя,
+  /// хотя тип у неё тот же `urltest` (различитель — тег канала, `isChannelAuto`).
+  bool get _isSpecial => _special != null;
+
+  SpecialNodeDisplay? get _special {
+    final s = specialNodeDisplayForType(item.outboundType);
+    if (s == null) return null;
+    if (item.outboundType == 'urltest' && !item.isChannelAuto) return null;
+    return s;
+  }
 
   // §201 — block: дропает трафик, urltest всегда ERR. Не пингуем и не
   // показываем delay-бейдж (был бы всегда «ERR»).
@@ -197,7 +230,11 @@ class NodeRow extends StatelessWidget {
     // §201 — block не пингуется (всегда ERR): пункт Ping disabled.
     final canPing = item.tunnelUp && !item.busy && !item.pingBusy && !_isBlock;
     final canActivate = item.tunnelUp && !item.busy && !item.active;
-    final showCopy = !_isSpecial;
+    // §322 — у группы автовыбора ссылки для копирования нет: `autogroup://`
+    // существует ради хранения и осмыслен только внутри своей папки (в чужой
+    // соберёт её узлы). Гейт по ТИПУ, а не по `_isSpecial`: группа §322 из
+    // «спец»-категории выведена намеренно (своё имя, своё место в списке).
+    final showCopy = !_isSpecial && item.outboundType != 'urltest';
     final box = context.findRenderObject() as RenderBox?;
     final overlay =
         Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
@@ -363,8 +400,7 @@ class NodeRow extends StatelessWidget {
                       // §125 — служебные ноды (direct/auto) показываем
                       // подменённым label'ом + иконкой; тип берём ТОЧНО из
                       // конфига (item.outboundType), не по маске имени.
-                      final special =
-                          specialNodeDisplayForType(item.outboundType);
+                      final special = _special;
                       final displayText = special?.label ?? item.tag;
                       return Row(
                         children: [

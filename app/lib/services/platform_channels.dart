@@ -12,7 +12,13 @@
 class PlatformChannels {
   const PlatformChannels._();
 
-  static const _ns = 'com.leadaxe.lxbox';
+  /// §324 — он же package name приложения: `OverrideOptions.includePackage`
+  /// native кладёт именно его (`service.packageName` в `buildOverrideOptions`),
+  /// и зеркало override сравнивает по этой строке. Публичный, чтобы литерал не
+  /// расползался третьей копией.
+  static const packageName = 'com.leadaxe.lxbox';
+
+  static const _ns = packageName;
 
   /// Основной двусторонний канал: config/VPN lifecycle/notification/system-proxy
   /// и пр. (`VpnPlugin.kt handleMethodCall`).

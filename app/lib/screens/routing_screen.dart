@@ -146,7 +146,6 @@ class _RoutingScreenState extends State<RoutingScreen>
   @override
   void _markDirty() => markDirty();
 
-
   /// См. [RoutingHelpers.remoteRuleSetsOf].
   @override
   List<PresetRemoteRuleSet> _remoteRuleSetsOf(

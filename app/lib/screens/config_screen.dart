@@ -1,16 +1,28 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:re_editor/re_editor.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../config/config_parse.dart';
 import '../controllers/home_controller.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/lx_code_editor.dart';
+
+/// §333 — страховочный порог: выше него редактор открывается read-only.
+/// Даже построчному редактору многомегабайтный конфиг на слабом устройстве
+/// даётся плохо, а правка такого объёма на телефоне — не сценарий: Share →
+/// внешний редактор → Load from file. Порог в символах `configRaw`
+/// (конфиг — практически ASCII, так что символы ≈ байты).
+const int kConfigEditMaxChars = 1024 * 1024;
+
+bool configTooLargeToEdit(String raw) => raw.length > kConfigEditMaxChars;
 
 class ConfigScreen extends StatefulWidget {
   const ConfigScreen({super.key, required this.controller});
@@ -22,14 +34,25 @@ class ConfigScreen extends StatefulWidget {
 }
 
 class _ConfigScreenState extends State<ConfigScreen> {
-  late final TextEditingController _textController;
+  final CodeLineEditingController _textController = CodeLineEditingController();
+  late final bool _readOnly;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _textController = TextEditingController(
-      text: prettyJsonForDisplay(widget.controller.state.configRaw),
-    );
+    final raw = widget.controller.state.configRaw;
+    _readOnly = configTooLargeToEdit(raw);
+    unawaited(_initLoad(raw));
+  }
+
+  /// §333 — pretty-print в изоляте: json5-парс сотен КБ в main isolate
+  /// фризил открытие экрана.
+  Future<void> _initLoad(String raw) async {
+    final pretty = await prettyJsonForDisplayAsync(raw);
+    if (!mounted) return;
+    _textController.textAsync = pretty;
+    setState(() => _loading = false);
   }
 
   @override
@@ -76,12 +99,12 @@ class _ConfigScreenState extends State<ConfigScreen> {
       }
       return;
     }
-    _textController.text = prettyJsonForDisplay(text);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(getLocalText.s("Pasted from clipboard"))),
-      );
-    }
+    final pretty = await prettyJsonForDisplayAsync(text);
+    if (!mounted) return;
+    _textController.text = pretty;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(getLocalText.s("Pasted from clipboard"))),
+    );
   }
 
   Future<void> _loadFromFile() async {
@@ -91,18 +114,20 @@ class _ConfigScreenState extends State<ConfigScreen> {
       final file = result.files.single;
       String text;
       if (file.bytes != null && file.bytes!.isNotEmpty) {
-        text = String.fromCharCodes(file.bytes!);
+        // §333 — utf8, не fromCharCodes: тот трактовал байты как UTF-16
+        // code units и превращал кириллицу в JSON5-комментариях в мусор.
+        text = utf8.decode(file.bytes!, allowMalformed: true);
       } else if (file.path != null) {
         text = await File(file.path!).readAsString();
       } else {
         return;
       }
-      _textController.text = prettyJsonForDisplay(text.trim());
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(getLocalText.s("Loaded from file"))),
-        );
-      }
+      final pretty = await prettyJsonForDisplayAsync(text.trim());
+      if (!mounted) return;
+      _textController.text = pretty;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(getLocalText.s("Loaded from file"))),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -130,12 +155,13 @@ class _ConfigScreenState extends State<ConfigScreen> {
       animation: widget.controller,
       builder: (context, _) {
         final busy = widget.controller.state.busy;
+        final cs = Theme.of(context).colorScheme;
         return Scaffold(
           appBar: AppBar(
             title: Text(getLocalText.s("Config")),
             actions: [
               TextButton(
-                onPressed: busy ? null : _save,
+                onPressed: (busy || _readOnly) ? null : _save,
                 child: Text(getLocalText.s("Save")),
               ),
               PopupMenuButton<String>(
@@ -166,39 +192,53 @@ class _ConfigScreenState extends State<ConfigScreen> {
           ),
           body: Padding(
             padding: const EdgeInsets.all(12),
-            child: Stack(
+            child: Column(
               children: [
-                TextField(
-                  controller: _textController,
-                  maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  keyboardType: TextInputType.multiline,
-                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    hintText: getLocalText.s("JSON or JSON5 (// and /* */ comments)"),
-                    alignLabelWithHint: true,
-                    contentPadding: const EdgeInsets.fromLTRB(12, 12, 40, 12),
+                if (_readOnly)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      getLocalText.s(
+                          "File is too large to edit on device. Share it, edit externally, then load it back."),
+                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                    ),
                   ),
-                ),
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: IconButton(
-                    icon: const Icon(Icons.copy, size: 16),
-                    tooltip: getLocalText.s("Copy"),
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () async {
-                      // §219 — await + mounted перед snackbar (как _copy():40),
-                      // иначе гонка Future/context.
-                      await Clipboard.setData(
-                          ClipboardData(text: _textController.text));
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(getLocalText.s("Config copied"))),
-                      );
-                    },
+                if (_loading) const LinearProgressIndicator(),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      LxCodeEditor(
+                        controller: _textController,
+                        readOnly: _readOnly,
+                        hint: getLocalText.s("JSON or JSON5 (// and /* */ comments)"),
+                        showLineNumbers: true,
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: IconButton(
+                          icon: const Icon(Icons.copy, size: 16),
+                          tooltip: getLocalText.s("Copy"),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () async {
+                            // §219 — await + mounted перед snackbar (как _copy():40),
+                            // иначе гонка Future/context.
+                            await Clipboard.setData(
+                                ClipboardData(text: _textController.text));
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(getLocalText.s("Config copied"))),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

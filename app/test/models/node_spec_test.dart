@@ -120,6 +120,9 @@ void main() {
         AnyTlsSpec(
             id: '13', tag: 't', label: 'l', server: 's', port: 443, rawUri: 'u',
             password: 'p'),
+        // §322 — узел-группа: без server/port, отсюда отдельный конструктор.
+        AutoSelectSpec(
+            id: '14', tag: 't', label: 'l'),
       ];
 
       for (final s in specs) {
@@ -137,6 +140,7 @@ void main() {
           NaiveSpec() => 'naive',
           MasqueSpec() => 'masque',
           AnyTlsSpec() => 'anytls',
+          AutoSelectSpec() => 'urltest',
         };
         expect(p, s.protocol);
       }

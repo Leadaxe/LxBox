@@ -818,6 +818,37 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
+            // §324 — каноническая форма конфига: `Libbox.formatConfig()` прогоняет
+            // текст через ТОТ ЖЕ парсер и энкодер, которым ядро делает снапшот
+            // работающего конфига (kernel SPEC 037 §3). Даёт сравнимые формы без
+            // клиентского списка «различий, которые игнорируем».
+            //
+            // Статический Go-метод: НЕ требует живого сервиса и libbox.setup —
+            // safe в любой момент (как getCoreVersion выше). На Dispatchers.IO:
+            // парс большого конфига на main = ANR (§122).
+            //
+            // КОНТРАКТ: null = ядро не смогло (невалидный конфиг, метод
+            // отсутствует в старом .aar, любой throw). Caller деградирует
+            // консервативно — «изменилось» (§324).
+            "formatConfig" -> {
+                val text = call.argument<String>("config") ?: ""
+                if (text.isBlank()) {
+                    result.success(null)
+                } else {
+                    pluginScope.launch {
+                        val r = withContext(Dispatchers.IO) {
+                            try {
+                                io.nekohasekai.libbox.Libbox.formatConfig(text)?.value
+                            } catch (t: Throwable) {
+                                // Невалидный конфиг — ожидаемый случай, не шумим error'ом.
+                                Log.d(TAG, "formatConfig failed: ${t.message}")
+                                null
+                            }
+                        }
+                        result.success(r)
+                    }
+                }
+            }
             // §208/§209 — unary снапшот пула round_robin-группы. На Dispatchers.IO
             // (RPC может блокировать). КОНТРАКТ: null = клиент недоступен (сервис
             // down / pingClient не поднялся) → Dart рендерит «Pool unavailable» /

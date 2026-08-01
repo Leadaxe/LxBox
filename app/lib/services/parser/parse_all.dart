@@ -47,15 +47,43 @@ String? _indexedHint(String? hint, int i) {
   return i == 0 ? h : '$h ${i + 1}';
 }
 
+/// §321 P2 — сколько payload-серверов описывает элемент. Служебные
+/// (`freedom`/`blackhole`/`dns`) не в счёт: они есть в каждом элементе и
+/// сортировку бы обнулили.
+int _payloadCount(Map<String, dynamic> element) {
+  final obs = element['outbounds'];
+  if (obs is! List) return 0;
+  const service = {'freedom', 'blackhole', 'dns', 'loopback'};
+  return obs
+      .whereType<Map<String, dynamic>>()
+      .where((o) => !service.contains(o['protocol']?.toString() ?? ''))
+      .length;
+}
+
 List<NodeSpec> _parseJson(JsonConfig j) {
   switch (j.flavor) {
     case JsonFlavor.xrayArray:
       if (j.value is! List) return const [];
-      // §310 — элемент массива даёт N узлов (все VLESS, кроме dialer-целей),
-      // а не один «main». Порядок узлов внутри элемента задаёт парсер.
-      return (j.value as List)
-          .whereType<Map<String, dynamic>>()
-          .expand(parseXrayElement)
+      // §310 — элемент массива даёт N узлов (кроме dialer-целей), а не один
+      // «main». Порядок узлов внутри элемента задаёт парсер.
+      //
+      // §321 P2 — элементы обрабатываем от одиночных к многоузловым. Первый
+      // увидевший сервер даёт ему имя (P4-дедуп ниже), а осмысленное имя — у
+      // одиночного элемента («🇩🇪⚡Германия»), не у пула («Лучший сервер
+      // proxy-154-222-9-195-direct»). Сортировка стабильная: внутри одной
+      // длины порядок файла сохраняется.
+      final elements = (j.value as List).whereType<Map<String, dynamic>>().toList()
+        ..sort((a, b) => _payloadCount(a).compareTo(_payloadCount(b)));
+      // §321 P4 — накопитель идентичностей на всю подписку. Между подписками
+      // дедуп НЕ работает намеренно: разные источники = разные
+      // tag_prefix/detour_policy, схлопывать их нельзя.
+      final seen = <String>{};
+      // §321 P6 — таблица синонимов копится по ВСЕЙ подписке: тег провайдера
+      // → идентичность. §322 резолвит по ней состав пула, написанный на чужих
+      // тегах (`selector: ["proxy"]`).
+      final synonyms = <String, String>{};
+      return elements
+          .expand((e) => parseXrayElement(e, seen: seen, synonyms: synonyms))
           .toList();
     case JsonFlavor.singboxOutbound:
       if (j.value is! Map<String, dynamic>) return const [];

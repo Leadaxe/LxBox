@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../models/auto_select.dart';
+import '../../models/channel.dart' show UrltestMode;
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
@@ -19,19 +21,35 @@ import 'utls_fingerprint.dart';
 /// приезжают как detour-звено (`⚙ <tag>`) своего владельца и самостоятельным
 /// узлом НЕ дублируются (контракт §018 detour-chain не меняется).
 ///
-/// Упрощённая версия — поддерживает VLESS + SOCKS для detour-chain.
-List<NodeSpec> parseXrayElement(Map<String, dynamic> element) {
+/// §321 — все поддерживаемые protocol'ы, не только VLESS. Служебные
+/// (`freedom`/`blackhole`/`dns`) узлами не становятся; SOCKS — только
+/// detour-звено.
+///
+/// [seen] — накопитель §321 P4 (дедуп по `(protocol, server, port, credential)`)
+/// на весь массив подписки. Узел, уже виденный в этом проходе, пропускается.
+/// `null` — дедуп выключен (одиночный элемент вне массива).
+List<NodeSpec> parseXrayElement(
+  Map<String, dynamic> element, {
+  Set<String>? seen,
+  Map<String, String>? synonyms,
+}) {
   final outbounds = element['outbounds'];
   if (outbounds is! List) return const [];
 
-  final vlessAll =
-      outbounds.whereType<Map<String, dynamic>>().where((o) => o['protocol'] == 'vless').toList();
-  if (vlessAll.isEmpty) return const [];
+  // §321 P1 — payload = всё, кроме служебных. Неподдерживаемый protocol
+  // отсеется позже в _xrayToSpec (с warning), но в payloadCount он учтён:
+  // сортировка P2 считает намерение провайдера, а не наши возможности.
+  final payloadAll = outbounds
+      .whereType<Map<String, dynamic>>()
+      .where((o) =>
+          !_kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''))
+      .toList();
+  if (payloadAll.isEmpty) return const [];
 
   // dialerProxy-ссылки: цели исключаются из самостоятельных узлов.
   final dialerRefOf = <Map<String, dynamic>, String>{};
   final dialerTargets = <String>{};
-  for (final ob in vlessAll) {
+  for (final ob in payloadAll) {
     final sockopt = (ob['streamSettings']?['sockopt']) as Map?;
     final ref = sockopt?['dialerProxy']?.toString();
     if (ref != null && ref.isNotEmpty) {
@@ -42,7 +60,7 @@ List<NodeSpec> parseXrayElement(Map<String, dynamic> element) {
 
   // Порядок: «main» первым (dialerProxy → тег `proxy` → первый), чтобы у
   // существующих подписок первый узел остался тем же, что и до §310.
-  final candidates = vlessAll
+  final candidates = payloadAll
       .where((o) => !dialerTargets.contains(o['tag']?.toString()))
       .toList();
   if (candidates.isEmpty) return const [];
@@ -60,14 +78,71 @@ List<NodeSpec> parseXrayElement(Map<String, dynamic> element) {
   final remarks = element['remarks']?.toString() ?? '';
   final extended = _prettyJson(element);
 
+  // §322 — схема имён зависит от того, что в элементе. `remarks` без добавки
+  // достаётся ровно ОДНОЙ сущности: группе, если она есть; иначе —
+  // единственному узлу. При нескольких узлах без группы `remarks` не получает
+  // никто, все идут с тегом (раньше — с индексом, §310).
+  // `is`-проверки, не касты: `routing` мог приехать строкой, а `balancers` —
+  // объектом. Каст уронил бы парсинг всей подписки (см. _xrayAutoSelect).
+  final elRouting = element['routing'];
+  final elBalancers = elRouting is Map ? elRouting['balancers'] : null;
+  final hasBalancer = elBalancers is List && elBalancers.isNotEmpty;
+  // `solo` — по ИСХОДНОМУ числу узлов, не по выжившим после дедупа (§321 P3):
+  // если провайдер положил в элемент несколько серверов, `remarks` описывает
+  // весь набор, а не того одного, кто случайно уцелел. Иначе имя элемента
+  // достаётся произвольному выжившему и уезжает при следующем обновлении.
+  final soloNode = !hasBalancer && ordered.length == 1;
+  // Теги, встречающиеся в элементе больше одного раза: `remarks <tag>` их не
+  // разведёт, нужен индекс (провайдер зовёт все узлы `proxy` — случай §310).
+  final tagUses = <String, int>{};
+  for (final ob in ordered) {
+    final t = ob['tag']?.toString().trim() ?? '';
+    if (t.isNotEmpty) tagUses[t] = (tagUses[t] ?? 0) + 1;
+  }
+
   final result = <NodeSpec>[];
+  // §321 P5 — протоколы элемента, которые мы не умеем: висят на первом
+  // выжившем узле, чтобы пользователь видел, что провайдер прислал больше.
+  final unsupported = <String>{};
   for (var i = 0; i < ordered.length; i++) {
     final ob = ordered[i];
+
+    // §321 P4 — дедуп ДО конвертации. Индекс `i` для имени берётся из
+    // `ordered` (до дедупа): иначе имена поедут — второй выживший получил бы
+    // i=0 и назвался как `remarks` без суффикса.
+    final identity = _xrayIdentity(ob);
+    // §321 P6 — тег провайдера → идентичность. Копим ДО пропуска дубля:
+    // именно у дублей теги и различаются («Испания» = `proxy`, «Лучший» =
+    // `proxy-45-196-208-40-direct`), а §322 резолвит пул по чужим тегам.
+    final obTag = ob['tag']?.toString() ?? '';
+    if (identity != null && obTag.isNotEmpty) synonyms?[obTag] = identity;
+    if (identity != null && seen != null) {
+      if (seen.contains(identity)) continue;
+      seen.add(identity);
+    }
+
     // §310 — имя разводим на парсинге: `allocateTag` уникализирует теги лишь
     // на build'е (суффикс `-N`), а в списке узлов пользователь иначе увидит
     // несколько одинаковых строк. Одиночный узел — имя ровно как до §310.
-    final spec = _xrayVlessToSpec(ob, _elementLabel(remarks, ob, i));
-    if (spec == null) continue;
+    final spec = _xrayToSpec(
+      ob,
+      _elementLabel(
+        remarks: remarks,
+        ob: ob,
+        index: i,
+        solo: soloNode,
+        tagUses: tagUses,
+      ),
+    );
+    // §321 P5 — неподдержанный protocol не исчезает молча: узел не собрался,
+    // но провайдер его прислал. Warning вешаем на СОСЕДА по элементу (у
+    // NodeWarning нет носителя без узла); если соседей нет — элемент пуст, и
+    // об этом говорит `elementDropped` ниже.
+    if (spec == null) {
+      final proto = ob['protocol']?.toString() ?? '';
+      if (proto.isNotEmpty) unsupported.add(proto);
+      continue;
+    }
 
     // §302 — исходник узла для UI («Source» на экране узла) и для правил по
     // JSON-телам: compact = сам outbound, extended = весь элемент как пришёл
@@ -84,27 +159,167 @@ List<NodeSpec> parseXrayElement(Map<String, dynamic> element) {
       if (detour.isNotEmpty) chained = _xrayDetourToSpec(detour);
     }
 
-    final node = chained == null
-        ? spec
-        : VlessSpec(
-            id: spec.id,
-            tag: spec.tag,
-            label: spec.label,
-            server: spec.server,
-            port: spec.port,
-            rawUri: spec.rawUri,
-            uuid: spec.uuid,
-            flow: spec.flow,
-            tls: spec.tls,
-            transport: spec.transport,
-            chained: chained,
-            warnings: spec.warnings,
-          );
+    // §321 — detour-звено прикладываем только к тем типам, что умеют chained
+    // из Xray. `dialerProxy` в Xray живёт в `streamSettings.sockopt`, то есть
+    // технически возможен у любого протокола; на практике встречается у
+    // VLESS/Trojan. Для остальных узел отдаём без звена (терять сам узел
+    // из-за неподдержанной цепочки нельзя).
+    final node = chained == null ? spec : _withChain(spec, chained);
     result.add(node
       ..sourceCompact = compact
       ..sourceExtended = extended == compact ? null : extended);
   }
+
+  // §321 P5 — развешиваем накопленное: по одному warning на протокол,
+  // на первом узле элемента (не на каждом — иначе N копий одного сообщения).
+  if (unsupported.isNotEmpty && result.isNotEmpty) {
+    for (final proto in unsupported) {
+      result.first.warnings.add(UnsupportedProtocolWarning(proto));
+    }
+  }
+
+  // §322 — балансировщик элемента → узел автовыбора. Ставим ПОСЛЕ узлов:
+  // порядок списка = порядок появления, группа логично идёт за своими членами.
+  // Синонимы отдаём ТОЛЬКО по тегам этого элемента: `selector: ["proxy"]`
+  // написан в границах своего конфига, а тег `proxy` встречается ещё в 30
+  // соседних элементах Liberty — общая таблица растащила бы в пул всё подряд.
+  final localSyn = <String, String>{};
+  for (final o in payloadAll) {
+    final t = o['tag']?.toString() ?? '';
+    final k = _xrayIdentity(o);
+    if (t.isNotEmpty && k != null) localSyn[t] = k;
+  }
+  final auto = _xrayAutoSelect(element, remarks, localSyn);
+  if (auto != null) result.add(auto..sourceExtended = extended);
+
   return result;
+}
+
+/// §322 — `routing.balancers[0]` + `burstObservatory` → узел автовыбора.
+///
+/// `null`, если балансировщика нет. Несколько балансировщиков в элементе —
+/// схема допускает, у Liberty всегда один: берём первый, остальные молча
+/// игнорируем.
+AutoSelectSpec? _xrayAutoSelect(
+  Map<String, dynamic> element,
+  String remarks,
+  Map<String, String>? synonyms,
+) {
+  final routing = element['routing'];
+  final balancers = routing is Map ? routing['balancers'] : null;
+  if (balancers is! List || balancers.isEmpty) return null;
+  final b = balancers.first;
+  if (b is! Map) return null;
+
+  // Всё ниже — `is`-проверки, не `as`: подписку пишет провайдер, и любое поле
+  // может приехать другого типа. Каст бросил бы и уронил парсинг ВСЕЙ
+  // подписки, а не только этого пункта (проверено на крайних формах).
+  final rawSel = b['selector'];
+  final selector =
+      rawSel is List ? rawSel.map((e) => '$e').toList() : const <String>[];
+  final strategy = b['strategy'];
+  final strategyMap = strategy is Map ? strategy : const {};
+  final rawSettings = strategyMap['settings'];
+  final settings = rawSettings is Map ? rawSettings : const {};
+  final rawPing = element['burstObservatory'] is Map
+      ? (element['burstObservatory'] as Map)['pingConfig']
+      : null;
+  final ping = rawPing is Map ? rawPing : const {};
+
+  // Стратегия → режим. Xray знает ЧЕТЫРЕ (app/router/config.pb.go,
+  // BalancingRule.Strategy): `random` (дефолт), `roundRobin`, `leastPing`,
+  // `leastLoad`. `settings` есть только у `leastLoad`.
+  //
+  // | Xray | наш режим | pool |
+  // |---|---|---|
+  // | `leastPing` | least_test | — |
+  // | `leastLoad`, expected ≤ 1 | least_test | — |
+  // | `leastLoad`, expected > 1 | round_robin | expected |
+  // | `roundRobin` | round_robin | весь набор |
+  // | `random` / нет поля | round_robin | весь набор |
+  //
+  // `leastPing` → least_test: семантика совпадает («самый быстрый по замерам»).
+  //
+  // `expected: 1` — «держи ОДНОГО живого», а не «раздавай по пулу»: это тоже
+  // наш least_test, балансировщику с пулом из одного нечего балансировать
+  // (у Liberty так настроены все шесть «БС»-групп).
+  //
+  // `leastLoad` с expected > 1 → round_robin — приближение: Xray отбирает по
+  // СТАБИЛЬНОСТИ задержки (baselines = допустимое СКО), мы по здоровью и окну
+  // от лучшего. Общее — пул из N с раздачей по нему.
+  //
+  // `random`/`roundRobin` раскладывают по ВСЕМУ набору, размера пула у них
+  // нет — берём число членов (0 = «весь набор», см. AutoSelectParams.pool).
+  final type = strategyMap['type']?.toString();
+  final expected = _asInt(settings['expected']);
+  final spreadAll = type == null || type == 'random' || type == 'roundRobin';
+  final mode = switch (type) {
+    'leastPing' => UrltestMode.leastTest,
+    'leastLoad' when expected != null && expected <= 1 =>
+      UrltestMode.leastTest,
+    _ => UrltestMode.roundRobin,
+  };
+
+  final d = const AutoSelectParams();
+  final params = AutoSelectParams(
+    url: ping['destination']?.toString() ?? d.url,
+    interval: ping['interval']?.toString() ?? d.interval,
+    idleTimeout: d.idleTimeout,
+    mode: mode,
+    // §322 — у `random`/`roundRobin` размера пула нет: раскладка по всему
+    // набору. Считаем членов элемента — ровно столько, сколько отберёт
+    // `selector`; для leastLoad берём `expected` как есть.
+    pool: spreadAll ? _payloadCount(element) : (expected ?? d.pool),
+    // maxRTT — АБСОЛЮТНЫЙ потолок у Xray, а pool_tolerance — окно от лучшего.
+    // Числа переносим 1:1 (решение юзера 30.07.2026): пересчитать точнее
+    // нельзя, минимум по пулу на парсинге неизвестен.
+    poolTolerance: clampPoolTolerance(_goDurationMs(settings['maxRTT']) ?? d.poolTolerance),
+  );
+
+  final label = remarks.isNotEmpty ? remarks : (b['tag']?.toString() ?? 'auto');
+  return AutoSelectSpec(
+    id: newUuidV4(),
+    tag: tagFromLabel(label, 'urltest', 'auto', 0),
+    label: label,
+    membership: RuleMembers.fromXraySelector(selector),
+    params: params,
+    tagSynonyms: synonyms == null ? const {} : Map.of(synonyms),
+  );
+}
+
+/// §322 — сколько прокси-outbound'ов в элементе. Это и есть размер пула для
+/// `random`/`roundRobin`: у них своего размера нет, раскладка идёт по всему
+/// набору, который отобрал `selector`.
+int _payloadCount(Map<String, dynamic> element) {
+  final obs = element['outbounds'];
+  if (obs is! List) return 0;
+  return obs
+      .whereType<Map<String, dynamic>>()
+      .where((o) =>
+          !_kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''))
+      .length;
+}
+
+/// §322 — число из значения провайдера: `7`, `7.0` или `"7"`. Не число и не
+/// разбираемая строка → `null` (потребитель подставит дефолт).
+int? _asInt(Object? v) => switch (v) {
+      final num n => n.toInt(),
+      final String str => int.tryParse(str.trim()),
+      _ => null,
+    };
+
+/// Go-duration в миллисекунды: `"1500ms"`, `"3s"`, `"2m"`. `null` — не разобрали.
+int? _goDurationMs(Object? raw) {
+  final s = raw?.toString().trim() ?? '';
+  final m = RegExp(r'^(\d+(?:\.\d+)?)(ms|s|m|h)$').firstMatch(s);
+  if (m == null) return null;
+  final v = double.parse(m.group(1)!);
+  return switch (m.group(2)) {
+    'ms' => v.round(),
+    's' => (v * 1000).round(),
+    'm' => (v * 60000).round(),
+    _ => (v * 3600000).round(),
+  };
 }
 
 /// Первый («main») узел элемента или `null`. Совместимость с вызовами,
@@ -114,16 +329,74 @@ NodeSpec? parseXrayOutbound(Map<String, dynamic> element) {
   return nodes.isEmpty ? null : nodes.first;
 }
 
-/// §310 — метка узла внутри элемента. Первый узел (`i == 0`) — `remarks` как
-/// есть (обратная совместимость: элемент с одним VLESS даёт то же имя, что и
-/// до таски). Последующие — `remarks` + тег outbound'а, а если тега нет —
-/// индексный суффикс (` 2`, ` 3`, …), как `_indexedHint` в §243.
-String _elementLabel(String remarks, Map<String, dynamic> ob, int i) {
-  if (i == 0) return remarks;
+/// §310/§322 — имя узла внутри элемента подписки.
+///
+/// `remarks` без добавки достаётся ровно ОДНОЙ сущности элемента:
+///
+/// | что в элементе | группа | узлы |
+/// |---|---|---|
+/// | 1 узел | — | `remarks` |
+/// | N узлов (даже если выживет один) | — | `remarks <тег>` |
+/// | N узлов + балансировщик | `remarks` | `remarks <тег>` |
+///
+/// До §322 первый узел (`i == 0`) всегда брал чистый `remarks` — и когда у
+/// элемента был балансировщик, узел с группой дрались за одно имя (Liberty:
+/// «Лучший сервер» и «Лучший сервер-1» в списке).
+///
+/// [solo] — элемент даёт ровно один узел и группы нет.
+/// [index] — позиция в ИСХОДНОМ порядке элемента (§321 P3): при пропуске
+/// дубля имена не съезжают, второй выживший не занимает имя первого.
+/// [tagUses] — сколько раз тег встречается у выживших; при повторе `remarks
+/// <тег>` не разводит узлы, и мы падаем на индекс (провайдер зовёт все узлы
+/// `proxy` — исходный случай §310).
+String _elementLabel({
+  required String remarks,
+  required Map<String, dynamic> ob,
+  required int index,
+  required bool solo,
+  required Map<String, int> tagUses,
+}) {
+  if (solo) return remarks;
   final tag = ob['tag']?.toString().trim() ?? '';
-  if (remarks.isEmpty) return tag;
-  return tag.isNotEmpty ? '$remarks $tag' : '$remarks ${i + 1}';
+  if (remarks.isEmpty) return tag.isNotEmpty ? tag : '${index + 1}';
+  // Пустой или неуникальный тег именем не служит — индексный фолбэк §310.
+  if (tag.isEmpty || (tagUses[tag] ?? 0) > 1) return '$remarks ${index + 1}';
+  return '$remarks $tag';
 }
+
+/// §321 — пересборка узла с detour-звеном. NodeSpec иммутабелен и `copyWith`
+/// в базе нет, поэтому ветвим по типу. Неподдержанный тип → узел как есть.
+NodeSpec _withChain(NodeSpec spec, NodeSpec chained) => switch (spec) {
+      VlessSpec s => VlessSpec(
+          id: s.id,
+          tag: s.tag,
+          label: s.label,
+          server: s.server,
+          port: s.port,
+          rawUri: s.rawUri,
+          uuid: s.uuid,
+          flow: s.flow,
+          tls: s.tls,
+          transport: s.transport,
+          packetEncoding: s.packetEncoding,
+          chained: chained,
+          warnings: s.warnings,
+        ),
+      TrojanSpec s => TrojanSpec(
+          id: s.id,
+          tag: s.tag,
+          label: s.label,
+          server: s.server,
+          port: s.port,
+          rawUri: s.rawUri,
+          password: s.password,
+          tls: s.tls,
+          transport: s.transport,
+          chained: chained,
+          warnings: s.warnings,
+        ),
+      _ => spec,
+    };
 
 /// §302 — стабильный отступ для показа фрагмента подписки пользователю.
 String _prettyJson(Object? value) {
@@ -185,6 +458,190 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
     tls: tls,
     transport: transport,
     packetEncoding: packetEncoding,
+    warnings: warnings,
+  );
+}
+
+/// §321 — служебные outbound'ы Xray: не серверы, узлами не становятся.
+const _kXrayServiceProtocols = {'freedom', 'blackhole', 'dns', 'loopback'};
+
+/// §321 P4 — идентичность узла: `(protocol, server, port, credential)`.
+/// Транспорт и TLS в ключ НЕ входят (решение юзера 30.07.2026): один сервер с
+/// двумя разными SNI схлопывается в один узел — берётся первый по порядку P2.
+String? _xrayIdentity(Map<String, dynamic> o) {
+  final protocol = o['protocol']?.toString() ?? '';
+  final s = o['settings'] as Map? ?? const {};
+  String server;
+  int port;
+  String cred;
+
+  switch (protocol) {
+    case 'vless':
+    case 'vmess':
+      final vnext = (s['vnext'] as List?)?.cast<Map>();
+      if (vnext == null || vnext.isEmpty) return null;
+      final v = vnext.first;
+      server = v['address']?.toString() ?? '';
+      port = (v['port'] as num?)?.toInt() ?? 0;
+      final users = (v['users'] as List?)?.cast<Map>() ?? const [];
+      cred = users.isEmpty ? '' : (users.first['id']?.toString() ?? '');
+    case 'trojan':
+    case 'shadowsocks':
+      final servers = (s['servers'] as List?)?.cast<Map>();
+      if (servers == null || servers.isEmpty) return null;
+      final v = servers.first;
+      server = v['address']?.toString() ?? '';
+      port = (v['port'] as num?)?.toInt() ?? 0;
+      cred = v['password']?.toString() ?? '';
+    case 'hysteria':
+      server = s['address']?.toString() ?? '';
+      port = (s['port'] as num?)?.toInt() ?? 0;
+      cred = (o['streamSettings']?['hysteriaSettings']?['auth'])?.toString() ?? '';
+    default:
+      return null;
+  }
+  if (server.isEmpty) return null;
+  return '$protocol|$server|$port|$cred';
+}
+
+/// §321 — диспетчер по `protocol`. Xray-схема ≠ sing-box-схема
+/// (`settings.vnext`/`streamSettings` против плоских полей), поэтому
+/// `parseSingboxEntry` не переиспользуется — на каждый протокол свой конвертер.
+NodeSpec? _xrayToSpec(Map<String, dynamic> o, String remarks) {
+  switch (o['protocol']?.toString()) {
+    case 'vless':
+      return _xrayVlessToSpec(o, remarks);
+    case 'trojan':
+      return _xrayTrojanToSpec(o, remarks);
+    case 'vmess':
+      return _xrayVmessToSpec(o, remarks);
+    case 'shadowsocks':
+      return _xraySsToSpec(o, remarks);
+    case 'hysteria':
+      return _xrayHy2ToSpec(o, remarks);
+    default:
+      return null;
+  }
+}
+
+TrojanSpec? _xrayTrojanToSpec(Map<String, dynamic> o, String remarks) {
+  final servers = (o['settings']?['servers'] as List?)?.cast<Map>();
+  if (servers == null || servers.isEmpty) return null;
+  final v = servers.first;
+  final server = v['address']?.toString() ?? '';
+  final port = (v['port'] as num?)?.toInt() ?? 443;
+  final password = v['password']?.toString() ?? '';
+  if (server.isEmpty || password.isEmpty) return null;
+
+  final stream = o['streamSettings'] as Map? ?? const {};
+  final warnings = <NodeWarning>[];
+  final tls =
+      normalizeTlsFingerprint(_xrayTlsFromStream(stream, server), warnings);
+  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
+
+  return TrojanSpec(
+    id: newUuidV4(),
+    tag: tagFromLabel(label, 'trojan', server, port),
+    label: label,
+    server: server,
+    port: port,
+    rawUri: 'xray://${o['tag'] ?? 'proxy'}',
+    password: password,
+    tls: tls,
+    transport: _xrayTransportFromStream(stream),
+    warnings: warnings,
+  );
+}
+
+VmessSpec? _xrayVmessToSpec(Map<String, dynamic> o, String remarks) {
+  final vnext = (o['settings']?['vnext'] as List?)?.cast<Map>();
+  if (vnext == null || vnext.isEmpty) return null;
+  final v = vnext.first;
+  final server = v['address']?.toString() ?? '';
+  final port = (v['port'] as num?)?.toInt() ?? 443;
+  final users = (v['users'] as List?)?.cast<Map>() ?? const [];
+  final user = users.isEmpty ? const {} : users.first;
+  final uuid = user['id']?.toString() ?? '';
+  if (server.isEmpty || uuid.isEmpty) return null;
+
+  final stream = o['streamSettings'] as Map? ?? const {};
+  final warnings = <NodeWarning>[];
+  final tls =
+      normalizeTlsFingerprint(_xrayTlsFromStream(stream, server), warnings);
+  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
+  final security = user['security']?.toString() ?? 'auto';
+
+  return VmessSpec(
+    id: newUuidV4(),
+    tag: tagFromLabel(label, 'vmess', server, port),
+    label: label,
+    server: server,
+    port: port,
+    rawUri: 'xray://${o['tag'] ?? 'proxy'}',
+    uuid: uuid,
+    alterId: (user['alterId'] as num?)?.toInt() ?? 0,
+    security: security.isEmpty ? 'auto' : security,
+    tls: tls,
+    transport: _xrayTransportFromStream(stream),
+    warnings: warnings,
+  );
+}
+
+ShadowsocksSpec? _xraySsToSpec(Map<String, dynamic> o, String remarks) {
+  final servers = (o['settings']?['servers'] as List?)?.cast<Map>();
+  if (servers == null || servers.isEmpty) return null;
+  final v = servers.first;
+  final server = v['address']?.toString() ?? '';
+  final port = (v['port'] as num?)?.toInt() ?? 0;
+  final method = v['method']?.toString() ?? '';
+  final password = v['password']?.toString() ?? '';
+  if (server.isEmpty || method.isEmpty || port == 0) return null;
+
+  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
+  return ShadowsocksSpec(
+    id: newUuidV4(),
+    tag: tagFromLabel(label, 'ss', server, port),
+    label: label,
+    server: server,
+    port: port,
+    rawUri: 'xray://${o['tag'] ?? 'proxy'}',
+    method: method,
+    password: password,
+  );
+}
+
+/// §321 — `protocol: "hysteria"` с `version: 2` — форма форка Xray (апстрим
+/// hysteria2 не поддерживает вовсе). `finalmask.quicParams` НЕ переносим: у
+/// sing-box нет соответствия, а unknown field валит весь конфиг.
+Hysteria2Spec? _xrayHy2ToSpec(Map<String, dynamic> o, String remarks) {
+  final s = o['settings'] as Map? ?? const {};
+  final stream = o['streamSettings'] as Map? ?? const {};
+  final hy = stream['hysteriaSettings'] as Map? ?? const {};
+
+  final version = (hy['version'] as num?)?.toInt() ??
+      (s['version'] as num?)?.toInt() ??
+      2;
+  if (version != 2) return null; // hysteria v1 — своего Spec у нас нет
+
+  final server = s['address']?.toString() ?? '';
+  final port = (s['port'] as num?)?.toInt() ?? 443;
+  final auth = hy['auth']?.toString() ?? '';
+  if (server.isEmpty) return null;
+
+  final warnings = <NodeWarning>[];
+  final tls =
+      normalizeTlsFingerprint(_xrayTlsFromStream(stream, server), warnings);
+  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
+
+  return Hysteria2Spec(
+    id: newUuidV4(),
+    tag: tagFromLabel(label, 'hy2', server, port),
+    label: label,
+    server: server,
+    port: port,
+    rawUri: 'xray://${o['tag'] ?? 'proxy'}',
+    password: auth,
+    tls: tls.enabled ? tls : const TlsSpec(enabled: true),
     warnings: warnings,
   );
 }

@@ -393,6 +393,9 @@
   "%s detour reference(s) reset to None": {
     "value": "detour-ссылок сброшено в None: %s"
   },
+  "%s of %s servers": {
+    "value": "%s из %s серверов"
+  },
   "%s rule reference(s) switched to vpn-1": {
     "value": "ссылок в правилах переключено на vpn-1: %s"
   },
@@ -554,6 +557,9 @@
   },
   "Add at least one condition": {
     "value": "Добавьте хотя бы одно условие"
+  },
+  "Add auto node…": {
+    "value": "Добавить авто-узел…"
   },
   "Add by URL…": {
     "value": "Добавить по URL…"
@@ -753,6 +759,9 @@
   "Apps may use ConnectivityManager to bypass tun.": {
     "value": "Приложения могут обходить туннель через ConnectivityManager."
   },
+  "Auto": {
+    "value": "Авто"
+  },
   "Auto (recommended)": {
     "value": "Авто (рекомендуется)"
   },
@@ -800,6 +809,9 @@
   },
   "Backup exported (%d bytes)": {
     "value": "Резервная копия экспортирована (%d байт)"
+  },
+  "Badge in list (regex)": {
+    "value": "Значок в списке (regex)"
   },
   "Based on preset": {
     "value": "На основе пресета"
@@ -1182,6 +1194,9 @@
   "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH.": {
     "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH."
   },
+  "Cut": {
+    "value": "Вырезать"
+  },
   "DNS / router events off": {
     "value": "События DNS и роутера выключены"
   },
@@ -1242,8 +1257,8 @@
   "Default Domain Resolver": {
     "value": "Резолвер доменов по умолчанию"
   },
-  "Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private.": {
-    "value": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом выше. Сюда попадает каждый запрос приложений, не направленный правилом.\n\nРекомендуется:\n  • google_doh — шифрованный (DoH)\n  • cloudflare_dot / google_dot — шифрованные (DoT)\n  • cloudflare_udp / google_udp — быстрый обычный UDP\n\nlocal_dns_resolver работает, но раскрывает запросы вашему провайдеру. Шифрованные варианты сохраняют их приватность."
+  "Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private.": {
+    "value": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом выше. Сюда попадает каждый запрос приложений, не направленный правилом.\n\nРекомендуется:\n  • dns_shield — по умолчанию; опрашивает 9 провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh — шифрованный (DoH)\n  • cloudflare_dot / google_dot — шифрованные (DoT)\n  • cloudflare_udp / google_udp — быстрый обычный UDP\n\nlocal_dns_resolver работает, но раскрывает запросы вашему провайдеру. Шифрованные варианты сохраняют их приватность."
   },
   "Default traffic": {
     "value": "Трафик по умолчанию"
@@ -1265,6 +1280,9 @@
   },
   "Delete all OOM reports?": {
     "value": "Удалить все отчёты OOM?"
+  },
+  "Delete auto node?": {
+    "value": "Удалить авто-узел?"
   },
   "Delete channel": {
     "value": "Удалить канал"
@@ -1347,6 +1365,9 @@
   "Disable": {
     "value": "Выключить"
   },
+  "Disable all": {
+    "value": "Выключить все"
+  },
   "Disable battery restrictions": {
     "value": "Отключить ограничения батареи"
   },
@@ -1393,6 +1414,12 @@
   },
   "Display name in node list": {
     "value": "Отображаемое имя в списке узлов"
+  },
+  "Do nothing": {
+    "value": "Ничего не делать"
+  },
+  "Do nothing — apply on next rebuild": {
+    "value": "Ничего не делать — применится при следующей пересборке"
   },
   "Documentation and Tasker recipes": {
     "value": "Документация и рецепты для Tasker"
@@ -1456,6 +1483,9 @@
   "Edit DNS Server": {
     "value": "Изменить DNS-сервер"
   },
+  "Edit auto node": {
+    "value": "Настройка авто-узла"
+  },
   "Edit channel · %s": {
     "value": "Изменить канал · %s"
   },
@@ -1488,6 +1518,9 @@
   },
   "Enable": {
     "value": "Включить"
+  },
+  "Enable all": {
+    "value": "Включить все"
   },
   "Enable FakeIP": {
     "value": "Включить FakeIP"
@@ -1528,6 +1561,9 @@
   },
   "Events with no owning app": {
     "value": "События, у которых не определено приложение"
+  },
+  "Exclude (regex)": {
+    "value": "Исключить (regex)"
   },
   "Exclude matching (invert)": {
     "value": "Исключить совпадающие (инверсия)"
@@ -1645,6 +1681,9 @@
   "File is empty": {
     "value": "Файл пуст"
   },
+  "File is too large to edit on device. Share it, edit externally, then load it back.": {
+    "value": "Файл слишком большой для правки на устройстве. Поделитесь им, отредактируйте во внешнем редакторе и загрузите обратно."
+  },
   "Fill missing": {
     "value": "Дополнить недостающие"
   },
@@ -1694,6 +1733,9 @@
       "many": "В папке «%2$s» %1$d серверов.",
       "other": "В папке «%2$s» %1$d сервера."
     }
+  },
+  "Folder has no servers yet": {
+    "value": "В папке пока нет серверов"
   },
   "Folder is empty": {
     "value": "Папка пуста"
@@ -1915,6 +1957,9 @@
   },
   "In the next screen (system App info) look for:\n\n• Autostart / Startup manager — allow\n• Background activity / Allow in background — allow\n• Battery / Power usage → \"Don't optimize\" or \"No restrictions\"\n• Battery saver exceptions — add L×Box\n\nLocation of these toggles varies by OEM (Xiaomi/MIUI, Samsung/One UI, Oppo/ColorOS, Huawei, Google Pixel). Some are under Battery, others under App permissions.": {
     "value": "На следующем экране (системный «О приложении») найдите:\n\n• Автозапуск / Startup manager — разрешить\n• Фоновая активность / Разрешить в фоне — разрешить\n• Батарея / Энергопотребление → «Не оптимизировать» или «Без ограничений»\n• Исключения энергосбережения — добавьте L×Box\n\nРасположение зависит от производителя (Xiaomi/MIUI, Samsung/One UI, Oppo/ColorOS, Huawei, Google Pixel): что-то в разделе «Батарея», что-то в «Разрешениях приложений»."
+  },
+  "Include (regex)": {
+    "value": "Включить (regex)"
   },
   "Include auto (urltest)": {
     "value": "Добавлять auto (urltest)"
@@ -2248,11 +2293,20 @@
   "Never updated": {
     "value": "Ещё не обновлялась"
   },
+  "New auto node": {
+    "value": "Новый авто-узел"
+  },
   "New folder": {
     "value": "Новая папка"
   },
   "New folder…": {
     "value": "Новая папка…"
+  },
+  "New nodes apply at once; the connection drops for a few seconds": {
+    "value": "Новые узлы применяются сразу; соединение прервётся на несколько секунд"
+  },
+  "New nodes go into the config; apply the change yourself": {
+    "value": "Новые узлы попадут в конфиг; применить изменение нужно вручную"
   },
   "New value": {
     "value": "Новое значение"
@@ -2399,6 +2453,9 @@
   "Nodes connect through detour servers": {
     "value": "Узлы подключаются через detour-серверы"
   },
+  "Nodes update in the list only; the config waits for the next rebuild": {
+    "value": "Узлы обновятся только в списке; конфиг дождётся следующей пересборки"
+  },
   "Nodes with their own detour keep it; this outbound is set only where none is defined": {
     "value": "Узлы со своим detour сохраняют его; этот исходящий канал назначается только там, где detour не задан"
   },
@@ -2475,6 +2532,9 @@
   },
   "Off. Pick saved is populated only by Add current / Manual.": {
     "value": "Выключено. «Pick saved» пополняется только через Add current / Manual."
+  },
+  "On update": {
+    "value": "При обновлении"
   },
   "One node routes traffic back into its own chain. Tap it to open its source, change or remove its detour, then start again.": {
     "value": "Один узел ведёт трафик обратно в собственную цепочку. Нажмите на него, чтобы открыть источник, измените или уберите его detour, затем запустите снова."
@@ -2590,6 +2650,9 @@
   },
   "Phone → %s → Nodes → Internet": {
     "value": "Телефон → %s → Узлы → Интернет"
+  },
+  "Pick": {
+    "value": "Выбор"
   },
   "Pick another random IP:port": {
     "value": "Подставить другой случайный IP:port"
@@ -2786,8 +2849,20 @@
   "Ready-made rules you can copy into Rules, then edit freely.": {
     "value": "Готовые правила: скопируйте в «Правила» и свободно редактируйте."
   },
+  "Rebuild and reload core": {
+    "value": "Пересобрать и перезагрузить ядро"
+  },
+  "Rebuild and reload core — brief connection drop": {
+    "value": "Пересобрать и перезагрузить ядро — короткий обрыв соединения"
+  },
+  "Rebuild config": {
+    "value": "Пересобрать конфиг"
+  },
   "Rebuild config only": {
     "value": "Только пересобрать конфиг"
+  },
+  "Rebuild config — apply manually": {
+    "value": "Пересобрать конфиг — применить вручную"
   },
   "Recommended. Protects the local proxy port.": {
     "value": "Рекомендуется. Защищает локальный порт прокси."
@@ -2891,6 +2966,9 @@
   },
   "Remove from history": {
     "value": "Убрать из истории"
+  },
+  "Re-enables matching nodes, clearing disable marks from rules and manual toggles. Later rules can still disable them.": {
+    "value": "Включает совпавшие узлы обратно, снимая отметки выключения — и от правил, и ручные. Правила ниже по списку могут снова их выключить."
   },
   "Rename": {
     "value": "Переименовать"
@@ -3178,6 +3256,9 @@
   "Servers can't be tested while the VPN is on — the test needs its own core session, which can't run alongside the active tunnel. Stop the VPN to test the servers.": {
     "value": "Серверы нельзя протестировать при включённом VPN — тесту нужна собственная сессия ядра, а она не может работать одновременно с активным туннелем. Остановите VPN, чтобы проверить серверы."
   },
+  "Servers in the pool": {
+    "value": "Серверы в пуле"
+  },
   "Servers in this folder have no detours yet. You can still route all of them through one of your servers, or set personal detours per server (tap a server on the Servers tab).": {
     "value": "У серверов этой папки пока нет detour. Тем не менее можно направить их все через один из ваших серверов или задать каждому личный detour (нажмите на сервер на вкладке «Серверы»)."
   },
@@ -3438,6 +3519,9 @@
   "Switch to cloudflare_udp": {
     "value": "Переключить на cloudflare_udp"
   },
+  "Switch tolerance (ms)": {
+    "value": "Порог переключения (мс)"
+  },
   "Switchable detour channel": {
     "value": "Переключаемый detour-канал"
   },
@@ -3554,6 +3638,9 @@
   },
   "The core has not panicked. Note that this channel only covers Go panics — native crashes and kills by the system are not recorded here.": {
     "value": "Ядро не паниковало. Учтите: сюда попадают только паники Go — нативные падения и убийства системой здесь не фиксируются."
+  },
+  "The servers it selects from stay in the folder.": {
+    "value": "Серверы, из которых он выбирает, останутся в папке."
   },
   "The whole element as the provider sent it": {
     "value": "Элемент целиком, как прислал провайдер"
@@ -3729,8 +3816,8 @@
   "Use this node": {
     "value": "Использовать этот узел"
   },
-  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
-    "value": "Используется движком маршрутизации для внутреннего резолва имён (адреса исходящих серверов, правила маршрутизации). Это не резолвер приложений.\n\nРекомендуется:\n  • cloudflare_udp — UDP к 1.1.1.1 (быстро)\n  • google_udp — UDP к 8.8.8.8 (быстро)\n  • google_doh — шифрованный\n\n⚠ local_dns_resolver здесь сливает запросы провайдеру — системный DNS идёт мимо VPN."
+  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
+    "value": "Используется движком маршрутизации для внутреннего резолва имён (адреса исходящих серверов, правила маршрутизации). Это не резолвер приложений.\n\nРекомендуется:\n  • dns_shield — по умолчанию; опрашивает 9 провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • cloudflare_udp — UDP к 1.1.1.1 (быстро)\n  • google_udp — UDP к 8.8.8.8 (быстро)\n  • google_doh — шифрованный\n\n⚠ local_dns_resolver здесь сливает запросы провайдеру — системный DNS идёт мимо VPN."
   },
   "User": {
     "value": "Свой"
@@ -3824,6 +3911,9 @@
   "Will be disabled": {
     "value": "Будет выключен"
   },
+  "Will be enabled": {
+    "value": "Будет включён"
+  },
   "Win TTL": "TTL победы",
   "Wipes existing data in selected categories.": {
     "value": "Стирает текущие данные в выбранных категориях."
@@ -3849,6 +3939,9 @@
   "You're up to date": {
     "value": "У вас последняя версия"
   },
+  "applied after include": {
+    "value": "применяется после «включить»"
+  },
   "auto-start, keep on exit, background mode, allow bypass": {
     "value": "автозапуск, сохранение при выходе, фоновый режим, обход VPN"
   },
@@ -3866,6 +3959,9 @@
   },
   "connect to see the full path": {
     "value": "подключитесь, чтобы увидеть весь путь"
+  },
+  "connections with the same key keep one server": {
+    "value": "соединения с одним ключом держатся одного сервера"
   },
   "contains": {
     "value": "содержит"
@@ -3888,11 +3984,20 @@
   "e.g. 1.2.3.0/24, empty = off": {
     "value": "например 1.2.3.0/24, пусто = выключено"
   },
+  "e.g. 15m": {
+    "value": "например, 15m"
+  },
+  "e.g. 30m": {
+    "value": "например, 30m"
+  },
   "e.g. 5s, empty = default": {
     "value": "например 5s, пусто = по умолчанию"
   },
   "e.g. 🇩🇪|🇳🇱 — empty = all nodes": {
     "value": "например 🇩🇪|🇳🇱 — пусто = все узлы"
+  },
+  "empty = all servers": {
+    "value": "пусто = все серверы"
   },
   "empty = core default": {
     "value": "пусто = значение ядра по умолчанию"
@@ -3921,6 +4026,9 @@
   "host:port of the Cloudflare peer. With obfuscation a random working IP:port is filled in — tap the dice to reroll, or type your own to pin a specific one.": {
     "value": "host:port пира Cloudflare. При обфускации подставляется случайный рабочий IP:port — нажмите на кубик, чтобы сменить, или впишите свой, чтобы закрепить конкретный."
   },
+  "how much faster a rival must be to win": {
+    "value": "насколько быстрее должен быть соперник, чтобы победить"
+  },
   "invalid": {
     "value": "некорректный"
   },
@@ -3942,6 +4050,9 @@
   "never": {
     "value": "никогда"
   },
+  "no stickiness — every connection re-picks": {
+    "value": "без липкости — каждое соединение выбирает заново"
+  },
   "of %d nodes": {
     "value": {
       "one": "из %d узла",
@@ -3949,6 +4060,9 @@
       "many": "из %d узлов",
       "other": "из %d узла"
     }
+  },
+  "off: open connections finish on the old server": {
+    "value": "выкл: открытые соединения доживают на прежнем сервере"
   },
   "platform error: %s": {
     "value": "ошибка платформы: %s"
@@ -3992,14 +4106,23 @@
   "sing-box server preview (read-only)": {
     "value": "превью сервера sing-box (только чтение)"
   },
+  "single best server by latency": {
+    "value": "один лучший сервер по задержке"
+  },
   "slot %d": {
     "value": "слот %d"
+  },
+  "spread connections across a pool of servers": {
+    "value": "распределяет соединения по пулу серверов"
   },
   "srs": {
     "value": "srs"
   },
   "storage shape (lxbox_settings.json)": {
     "value": "формат хранения (lxbox_settings.json)"
+  },
+  "taken from member names; empty = no badges. Display only — not sent to the core": {
+    "value": "берётся из имён участников; пусто = без значков. Только для вида — в ядро не уходит"
   },
   "template": {
     "value": "шаблон"

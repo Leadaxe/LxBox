@@ -8,7 +8,6 @@ import '../services/version_info.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/l10n/locale_controller.dart';
 
-
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 

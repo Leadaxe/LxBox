@@ -92,3 +92,22 @@ Map<String, DateTime> gcDisabledHashes(
   });
   return next;
 }
+
+/// §332 — накладывает итог enable/disable-правил на карту отметок (после GC):
+/// ENABLE снимает отметку (в том числе ручную §283 — правило-источник истины,
+/// когда матчится), DISABLE ставит со свежим lastSeen. Наборы по построению
+/// не пересекаются (итог по узлу один — движок §302 разрешает конфликт
+/// «последнее правило побеждает» ещё per-node).
+Map<String, DateTime> applyRuleMarks(
+  Map<String, DateTime> base, {
+  required Set<String> enable,
+  required Set<String> disable,
+  required DateTime now,
+}) {
+  if (enable.isEmpty && disable.isEmpty) return base;
+  return {
+    for (final e in base.entries)
+      if (!enable.contains(e.key)) e.key: e.value,
+    for (final h in disable) h: now,
+  };
+}

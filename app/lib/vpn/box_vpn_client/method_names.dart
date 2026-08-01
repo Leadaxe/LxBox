@@ -91,6 +91,11 @@ class _Methods {
   static const getCoreVersion = 'getCoreVersion';
   static const getMemoryInfo = 'getMemoryInfo';
 
+  /// §324 — каноническая форма конфига через `Libbox.formatConfig()`: тот же
+  /// парсер и энкодер, которыми ядро делает снапшот работающего конфига
+  /// (kernel SPEC 037 §3). Статический метод, живой сервис не нужен.
+  static const formatConfig = 'formatConfig';
+
   // Recovery actions (specs 030, 031)
   static const reloadVPN = 'reloadVPN';
   static const resetNetwork = 'resetNetwork';

@@ -39,6 +39,21 @@ class AutoUpdater {
   AutoUpdater(this._subController);
   final SubscriptionController _subController;
 
+  /// §323 — реакция на успешное авто-обновление. Ставит `home_screen`
+  /// (`bindOnUpdateReaction`), потому что AutoUpdater создаётся ДО
+  /// `HomeController` и прямой ссылки на него иметь не может.
+  ///
+  /// `reload = true` → после пересборки дёрнуть in-place reload ядра.
+  /// Контракт: реализация сама решает, поднят ли туннель, и сама молчит, если
+  /// пересборка дала конфиг, идентичный работающему (гейт §323 в
+  /// `saveParsedConfig`). Не задан (тесты, headless) — режимы деградируют до
+  /// `none`: ноды обновлены, `configDirty` стоит, применится обычным путём.
+  Future<void> Function({required bool reload})? _onUpdateReaction;
+
+  void bindOnUpdateReaction(Future<void> Function({required bool reload}) fn) {
+    _onUpdateReaction = fn;
+  }
+
   static const Duration minRetryInterval = Duration(minutes: 15);
   static const int maxFailsPerSession = 5;
   static const Duration perSubscriptionDelay = Duration(seconds: 10);
@@ -126,17 +141,41 @@ class AutoUpdater {
       }
       AppLog.I.info('AutoUpdater: ${candidates.length} to refresh');
 
+      // §323 — реакции копим за весь проход и применяем ОДИН раз в конце.
+      // Иначе три обновившиеся подписки дали бы три пересборки (и до трёх
+      // reload'ов) подряд, каждый со своим 3-секундным разрывом туннеля.
+      // `reload` побеждает `rebuild`: если хотя бы одна подписка просит
+      // применить немедленно, применяем — она всё равно уже в общем конфиге.
+      var needRebuild = false;
+      var needReload = false;
+
       for (var i = 0; i < candidates.length; i++) {
         final entry = candidates[i];
         final url = (entry.list as SubscriptionServers).url;
         if (_inFlight.contains(url)) continue;
         _inFlight.add(url);
         try {
-          await _subController.refreshEntry(entry, trigger: trigger);
+          final compositionChanged =
+              await _subController.refreshEntry(entry, trigger: trigger);
           final fresh = entry.list;
           if (fresh is SubscriptionServers &&
               fresh.lastUpdateStatus == UpdateStatus.ok) {
             _failCounts.remove(url);
+            // §331 (ревью) — реакция ТОЛЬКО при изменившемся составе, как на
+            // ручном пути. Без гейта подписка, отдающая тот же список раз в
+            // час, гоняла бы пересборку (а в режиме reload — и reload-попытку)
+            // на каждом тике впустую.
+            if (compositionChanged) {
+              switch (fresh.onUpdateAction) {
+                case SubscriptionOnUpdateAction.reload:
+                  needReload = true;
+                  needRebuild = true;
+                case SubscriptionOnUpdateAction.rebuild:
+                  needRebuild = true;
+                case SubscriptionOnUpdateAction.none:
+                  break;
+              }
+            }
           } else {
             _failCounts[url] = (_failCounts[url] ?? 0) + 1;
           }
@@ -154,8 +193,35 @@ class AutoUpdater {
               perSubscriptionDelay + Duration(milliseconds: jitter));
         }
       }
+
+      // §331 — ручной ⟳ больше НЕ исключён. Прежняя логика («юзер сам на
+      // экране, сам применит») на практике читалась как сломанная настройка:
+      // выбрал «пересобрать и перезагрузить», нажал ⟳ — ничего. Настройка
+      // называется «При обновлении», а не «При автообновлении».
+      if (needRebuild) await applyReaction(reload: needReload);
     } finally {
       _running = false;
+    }
+  }
+
+  /// §331 — применить реакцию подписки (см. [SubscriptionOnUpdateAction]).
+  /// Публичный: ручной ⟳ идёт через `SubscriptionController.updateAt` →
+  /// `_fetchEntryByRef`, минуя `maybeUpdateAll`, и зовёт этот метод напрямую.
+  ///
+  /// No-throw: реакция не должна ронять ни проход апдейтера (он в `unawaited`),
+  /// ни UI-обработчик кнопки. Не привязана (тесты, headless) — режимы
+  /// деградируют до `none`: ноды на диске свежие, обычный путь догонит.
+  Future<void> applyReaction({required bool reload}) async {
+    final react = _onUpdateReaction;
+    if (react == null) {
+      AppLog.I.debug('AutoUpdater: no reaction bound — skip (acts as none)');
+      return;
+    }
+    AppLog.I.info('AutoUpdater: reaction rebuild${reload ? ' + reload' : ''}');
+    try {
+      await react(reload: reload);
+    } catch (e) {
+      AppLog.I.warning('AutoUpdater: reaction failed: $e');
     }
   }
 

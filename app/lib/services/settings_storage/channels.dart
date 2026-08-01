@@ -181,7 +181,10 @@ Future<int> _healDetourChannelRefs(String tag) async {
 // теперь auto больше не «канал в списке», костыль-скип ушёл.
 // ---------------------------------------------------------------------------
 
-Future<void> _migrateChannelsIfNeeded(GroupTemplates gt) async {
+Future<void> _migrateChannelsIfNeeded(
+  GroupTemplates gt, {
+  Map<String, String> varDefaults = const {},
+}) async {
   final data = await _load();
   if (data['channels'] is List) return; // уже есть — не трогаем
   if (data['channels_migrated'] == true) return; // мигрировано (пусто) — не пересеивать
@@ -193,7 +196,9 @@ Future<void> _migrateChannelsIfNeeded(GroupTemplates gt) async {
     final isEnabled = dc.tag == 'vpn-1'
         ? true // vpn-1 форсим (продуктовый инвариант)
         : (enabled.isEmpty ? dc.defaultEnabled : enabled.contains(dc.tag));
-    final auto = hasAuto ? _seedAutoFromTemplate(gt.auto) : null;
+    final auto = hasAuto
+        ? _seedAutoFromTemplate(gt.auto, varDefaults: varDefaults)
+        : null;
     channels.add(
         Channel.seedFromDefault(dc, gt.channel, enabled: isEnabled, auto: auto));
   }
@@ -208,10 +213,25 @@ Future<void> _migrateChannelsIfNeeded(GroupTemplates gt) async {
 /// здесь — СЫРОЙ template (`@urltest_*`-плейсхолдеры НЕ резолвены — var-
 /// substitution идёт позже, в билдере). Поэтому значения могут быть
 /// `"@urltest_tolerance"`-строкой, числом ИЛИ числом-в-строке. Парсим терпимо:
-/// нерезолвенный `@`-плейсхолдер или мусор → дефолт. idle_timeout="30m",
-/// interrupt=false (мягкий urltest).
-ChannelAuto _seedAutoFromTemplate(AutoTemplate at) {
+/// нерезолвенный `@`-плейсхолдер или мусор → [varDefaults] той же переменной.
+///
+/// §327 — на плейсхолдере раньше срабатывали литералы в коде (`50`, `'5m'`), и
+/// в каналы на чистой установке садились значения, расходившиеся с шаблоном
+/// (`urltest_tolerance: 30`, `urltest_interval: 15m`). Теперь `@var` резолвится
+/// по `default_value` — единственному источнику дефолта.
+/// idle_timeout="30m", interrupt=false (мягкий urltest) — своих var не имеют.
+ChannelAuto _seedAutoFromTemplate(
+  AutoTemplate at, {
+  Map<String, String> varDefaults = const {},
+}) {
   final opts = at.options;
+
+  /// `"@urltest_x"` → `default_value` этой var (или null, если её нет).
+  String? fromVar(Object? v) {
+    if (v is! String || !v.startsWith('@')) return null;
+    final d = varDefaults[v.substring(1)];
+    return (d != null && d.isNotEmpty) ? d : null;
+  }
 
   // Строка-значение, но не нерезолвенный `@var`-плейсхолдер.
   String? str(Object? v) {
@@ -226,11 +246,16 @@ ChannelAuto _seedAutoFromTemplate(AutoTemplate at) {
     return null;
   }
 
+  // Порядок: значение из template.options → default_value его `@var` →
+  // дефолт `ChannelAuto` (последний рубеж, если var из шаблона исчезла).
+  const fallback = ChannelAuto();
   return ChannelAuto(
-    url: str(opts['url']) ?? 'https://cp.cloudflare.com/generate_204',
-    interval: str(opts['interval']) ?? '5m',
-    tolerance: toInt(opts['tolerance']) ?? 50,
-    idleTimeout: '30m',
-    interruptExistConnections: false,
+    url: str(opts['url']) ?? fromVar(opts['url']) ?? fallback.url,
+    interval: str(opts['interval']) ?? fromVar(opts['interval']) ?? fallback.interval,
+    tolerance: toInt(opts['tolerance']) ??
+        int.tryParse(fromVar(opts['tolerance']) ?? '') ??
+        fallback.tolerance,
+    idleTimeout: fallback.idleTimeout,
+    interruptExistConnections: fallback.interruptExistConnections,
   );
 }

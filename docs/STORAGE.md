@@ -40,12 +40,17 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ last_update_attempt   ISO-8601?     любая попытка
 │       ├─ last_update_status    "never"|"ok"|"failed"|"inProgress"
 │       ├─ update_interval_hours int           default 24; §129 спец: -1=никогда, 0=respect server, N>0=каждые N ч
+│       ├─ on_update_action      string?       §323 — реакция на АВТО-обновление: "rebuild" (default,
+│       │                                      ключ не пишется) | "reload" | "none"
 │       ├─ last_node_count       int
 │       ├─ consecutive_fails     int           для UI "(N fails)"
 │       ├─ disabled_hashes       map?          §283 — {identity-хеш ноды: ISO-8601 lastSeen}; per-node disable
+│       │                                      (§332: одна карта на ручные и правило-отметки; Enable-правило
+│       │                                       и кнопка «Enable all» снимают их не различая)
 │       ├─ identity              object?       §289 — per-sub override идентичности фетча (null=глоб.);
 │       │                                      {user_agent?, send_hwid, hwid?, device_os?, ver_os?, device_model?}
-│       ├─ import_rules           list?         §302 — правила над emit-JSON узла (условия → Disable/Replace);
+│       ├─ import_rules           list?         §302 — правила над emit-JSON узла (условия → Disable/Replace/
+│       │                                      Enable §332; последнее сработавшее enable/disable побеждает);
 │       │                                      [{conditions[], match?, action, target_path?, replacement?,
 │       │                                        replace_mode?, substitute?, enabled?}]; conditions[] =
 │       │                                      [{path, op, pattern, negate?, case_sensitive?}]; legacy-плоское
@@ -313,6 +318,14 @@ Sealed по полю `type`:
                                                // расписанию, но серверный интервал
                                                // принимаем, N>0 = каждые N ч.
                                                // AutoUpdater пропускает interval ≤ 0.
+  "on_update_action":      "reload"?,          // §323 — что делать после УСПЕШНОГО
+                                               // авто-обновления: "rebuild" (default —
+                                               // пересобрать конфиг, применяет юзер),
+                                               // "reload" (+ in-place reload ядра, разрыв
+                                               // ~3с), "none" (только список узлов).
+                                               // Ключ пишется ТОЛЬКО для не-дефолта;
+                                               // отсутствие/мусор → rebuild. Ручной ⟳
+                                               // режимом не управляется.
   "last_node_count":       0,
   "consecutive_fails":     0,                 // для UI "(N fails)"; freezing — in-memory
   "disabled_hashes": {                        // §283 — per-node disable (опционален,
@@ -338,7 +351,7 @@ Sealed по полю `type`:
           "pattern": "^hello(chrome)_\\d+$"   // {contains|equals|matches}; negate?/case_sensitive?
         }                                     // пишутся только когда true. match ∈ {all|any}
       ],                                      // (дефолт all=AND, пишется только any).
-      "action": "replace",                    // action ∈ {replace, disable}.
+      "action": "replace",                    // action ∈ {replace, disable, enable}.
       "target_path": "tls.utls.fingerprint",  // REPLACE: target_path обязателен (пустой нельзя);
       "replacement": "$1"                     // replacement с карманами $1..$9 из matches-условия.
     },                                        // replace_mode ∈ {set|substitute} (пишется только
@@ -347,8 +360,18 @@ Sealed по полю `type`:
         {"path": "tag", "op": "contains", "pattern": "⚡"}
       ],
       "action": "disable"                     // DISABLE помечает узел → его identity-хеш (от
-    }                                         // ИТОГОВОГО вида, после патчей) ставится в
-  ],                                          // disabled_hashes на каждом refresh (правило > TTL-GC).
+    },                                        // ИТОГОВОГО вида, после патчей) ставится в
+    {                                         // disabled_hashes на каждом refresh (правило > TTL-GC).
+      "conditions": [
+        {"path": "", "op": "matches", "pattern": ".*"}
+      ],                                      // §332 — ENABLE снимает отметку из disabled_hashes,
+      "action": "enable"                      // ВКЛЮЧАЯ ручную (§283). Порядок значим: последнее
+    }                                         // сработавшее enable/disable побеждает, поэтому
+  ],                                          // enable-«всё» первым = сброс перед новыми фильтрами,
+                                              // а disable-«всё» + enable-NL = белый список.
+                                              // Старая версия приложения читает "enable" как
+                                              // replace без цели → правило непригодно и молча
+                                              // пропускается (узлы не портятся).
                                               // Legacy-плоское {action, pattern, is_regex?, ...}
                                               // читается миграцией как условие по tag (replace
                                               // получает substitute-семантику); при первом

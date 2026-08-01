@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:re_editor/re_editor.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../models/node_spec.dart';
@@ -12,6 +13,7 @@ import '../models/tls_spec.dart';
 import '../services/parser/uri_utils.dart' show newUuidV4;
 import '../services/ui_helpers.dart';
 import '../widgets/emoji_picker_button.dart';
+import '../widgets/lx_code_editor.dart';
 import '../services/l10n/locale_controller.dart';
 
 // SocksSpec.emit() требует TemplateVars — для wizard-created SOCKS5 без
@@ -77,11 +79,12 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   final _httpFormKey = GlobalKey<FormState>();
   bool _httpTls = false;
 
-  // Paste URI tab controller (multi-line text area).
-  final _uriCtrl = TextEditingController();
+  // Paste URI tab controller (multi-line text area). §333 — построчный
+  // редактор: сюда вставляют и простыни на тысячи ссылок.
+  final _uriCtrl = CodeLineEditingController();
 
   // Paste JSON tab controller.
-  final _jsonCtrl = TextEditingController();
+  final _jsonCtrl = CodeLineEditingController();
 
   bool _busy = false;
 
@@ -488,14 +491,11 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
         children: [
           _label(getLocalText.s("Paste a proxy URL")),
           Expanded(
-            child: TextField(
+            child: LxCodeEditor(
               controller: _uriCtrl,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              decoration: _input(
-                  'vless://… / vmess://… / trojan://… / socks5://… / proxy-http://… / wireguard://…'),
-              style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+              fontSize: 13,
+              hint:
+                  'vless://… / vmess://… / trojan://… / socks5://… / proxy-http://… / wireguard://…',
             ),
           ),
           const SizedBox(height: 8),
@@ -518,13 +518,10 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
         children: [
           _label(getLocalText.s("Paste a sing-box outbound JSON")),
           Expanded(
-            child: TextField(
+            child: LxCodeEditor(
               controller: _jsonCtrl,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              decoration: _input('{"type": "vless", "tag": "…", …}'),
-              style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+              fontSize: 13,
+              hint: '{"type": "vless", "tag": "…", …}',
             ),
           ),
           const SizedBox(height: 8),

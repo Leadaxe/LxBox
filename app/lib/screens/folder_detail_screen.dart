@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import '../models/node_spec.dart';
+import '../services/node_identity.dart';
+import 'auto_group_edit_screen.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -53,7 +56,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   late TextEditingController _nameCtrl;
 
   // §236 — состояние Test servers. Результаты эфемерны (не персистятся).
-  final Map<int, ProbeResult> _probe = {};
+  // §326 — ключ = идентичность узла (`ProbeController.probeKeys`), НЕ позиция:
+  // удаление/вставка члена больше не сдвигает замеры соседей. Проекцию на
+  // индексы для позиционных bulk-хелперов даёт `_probeByIndex()`.
+  final Map<String, ProbeResult> _probe = {};
   ProbeRunner? _runner;
   // §286 — коалесцированный ребилд результатов пробы: onResult пишет в _probe
   // без setState-на-члена (у «WARP GENERATOR» ~100 членов → ~100 ребилдов
@@ -250,13 +256,17 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       overrideTimeoutMs: _folder.pingTimeoutMs,
     );
     if (!mounted) return;
+    // §326 — снимок ключей на старте прогона: onResult отдаёт позицию (runner
+    // работает над плоским списком нод и о папках не знает, §296), переводим
+    // её в ключ по этому снимку.
+    final probeKeys = _memberProbeKeys();
     setState(() {
       _testing = true;
       _probe
         ..clear()
         ..addEntries([
-          for (var i = 0; i < _folder.members.length; i++)
-            MapEntry(i, const ProbeResult(ProbeStatus.pending)),
+          for (final k in probeKeys)
+            MapEntry(k, const ProbeResult(ProbeStatus.pending)),
         ]);
     });
     final runner = ProbeRunner();
@@ -273,7 +283,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         // §286 — накапливаем без setState-на-члена; throttle сольёт в один
         // ребилд (~120мс). Иначе «WARP GENERATOR» (~100 членов) даёт ~100
         // setState пачкой → главный поток лагает.
-        _probe[i] = r;
+        if (i < probeKeys.length) _probe[probeKeys[i]] = r;
         _scheduleProbeFlush();
       },
     );
@@ -425,7 +435,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     );
     ctl.dispose();
     if (ms == null || !mounted) return;
-    final slow = ProbeController.slowerThan(_probe, ms);
+    final slow = ProbeController.slowerThan(_probeByIndex(), ms);
     if (slow.isEmpty) {
       await _showError(getLocalText.s("No tested servers slower than %d ms", ms));
       return;
@@ -440,11 +450,39 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     setState(() {});
   }
 
+  /// §326 — кеш `probeKeys` текущего состава: ключ — sha256 по emit-map узла,
+  /// считать его на каждый ребилд каждой строки (itemBuilder) дорого. Инвалидация
+  /// по самому списку членов: `SubscriptionController` отдаёт новый `List` на
+  /// любую мутацию состава, а правка члена меняет `raw` → identical() ложно.
+  List<FolderMember>? _probeKeysFor;
+  List<String> _probeKeysCache = const [];
+  List<String> _memberProbeKeys() {
+    final members = _folder.members;
+    if (!identical(_probeKeysFor, members)) {
+      _probeKeysFor = members;
+      _probeKeysCache = ProbeController.probeKeys(members);
+    }
+    return _probeKeysCache;
+  }
+
+  /// §326 — проекция результатов на текущие позиции членов. Bulk-решения
+  /// (`unreachableIndexes`/`slowerThan`/`pingSortOrder`) остаются индексными:
+  /// их выход скармливается позиционным мутаторам контроллера
+  /// (`setMembersEnabled`/`removeMembersAt`/`applyMembersOrder`). Граница
+  /// «ключ → индекс» ровно здесь.
+  Map<int, ProbeResult> _probeByIndex() {
+    final keys = _memberProbeKeys();
+    return {
+      for (var i = 0; i < keys.length; i++) i: ?_probe[keys[i]],
+    };
+  }
+
   /// §284/§296 — индексы членов, не прошедших последний тест (общий хелпер).
-  Set<int> _unreachableIndexes() => ProbeController.unreachableIndexes(_probe);
+  Set<int> _unreachableIndexes() =>
+      ProbeController.unreachableIndexes(_probeByIndex());
 
   /// §284 — выключить (не удалять) недоступные по последнему тесту. Узлы
-  /// остаются в папке серыми; результаты теста сохраняются (индексы не съезжают).
+  /// остаются в папке серыми; результаты теста сохраняются.
   Future<void> _disableUnreachable() async {
     final dead = _unreachableIndexes();
     if (dead.isEmpty) {
@@ -486,24 +524,20 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     if (idx < 0) return;
     await widget.controller.removeMembersAt(idx, dead);
     if (!mounted) return;
-    // Индексы съехали — результаты по оставшимся неатрибутируемы. Сброс.
-    setState(() => _probe.clear());
+    // §326 — результаты выживших остаются валидными: ключ = идентичность узла,
+    // а не позиция. До §326 здесь стоял `_probe.clear()` (индексы съезжали).
+    setState(() {});
   }
 
   Future<void> _sortByPing() async {
     final idx = _index;
     if (idx < 0) return;
     final order =
-        ProbeController.pingSortOrder(_probe, _folder.members.length);
+        ProbeController.pingSortOrder(_probeByIndex(), _folder.members.length);
     await widget.controller.applyMembersOrder(idx, order);
     if (!mounted) return;
-    // Перепривязка результатов к новым индексам.
-    final remapped = ProbeController.remapAfterReorder(_probe, order);
-    setState(() {
-      _probe
-        ..clear()
-        ..addAll(remapped);
-    });
+    // §326 — перепривязка не нужна: ключи едут вместе с членами.
+    setState(() {});
   }
 
   Future<void> _editThresholds() async {
@@ -702,6 +736,87 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     }
   }
 
+  /// §322 — создать узел автовыбора в этой папке. Кандидаты в пул — её же
+  /// члены: группа не выходит за границы контейнера.
+  Future<void> _addAutoNode() async {
+    final idx = _index;
+    if (idx < 0) return;
+    final folder = widget.controller.entries[idx].list;
+    if (folder is! FolderServers) return;
+
+    final candidates = _poolCandidates(folder);
+    final res = await Navigator.of(context).push<AutoGroupEditResult>(
+      MaterialPageRoute(
+        builder: (_) => AutoGroupEditScreen(
+          initial: null,
+          candidates: candidates,
+          canDelete: false,
+        ),
+      ),
+    );
+    if (!mounted || res is! AutoGroupSaved) return;
+
+    // Храним как обычного члена: `autogroup://`-URI парсится обратно при
+    // загрузке (§322 §7), отдельной ветки в модели папки не нужно.
+    final err = await widget.controller
+        .addMembersToFolder(idx, res.spec.toUri());
+    if (!mounted) return;
+    if (err != null) {
+      await _showError(err.render());
+      return;
+    }
+    setState(() {});
+  }
+
+  /// §322 — правка существующего узла автовыбора. Кандидаты считаем без
+  /// него самого: группа не может взять в пул саму себя.
+  Future<void> _editAutoNode(int memberIndex, AutoSelectSpec node) async {
+    final idx = _index;
+    if (idx < 0) return;
+    final folder = widget.controller.entries[idx].list;
+    if (folder is! FolderServers) return;
+
+    final res = await Navigator.of(context).push<AutoGroupEditResult>(
+      MaterialPageRoute(
+        builder: (_) => AutoGroupEditScreen(
+          initial: node,
+          candidates: _poolCandidates(folder),
+          canDelete: true,
+        ),
+      ),
+    );
+    if (!mounted || res == null) return;
+
+    switch (res) {
+      case AutoGroupSaved(:final spec):
+        final err = await widget.controller
+            .updateMemberAt(idx, memberIndex, spec.toUri());
+        if (!mounted) return;
+        if (err != null) {
+          await _showError(err.render());
+          return;
+        }
+      case AutoGroupDeleted():
+        await widget.controller.removeMemberAt(idx, memberIndex);
+        if (!mounted) return;
+    }
+    setState(() {});
+  }
+
+  /// Члены папки, которые могут попасть в пул: обычные узлы, без групп
+  /// (вложенность urltest в urltest бессмысленна) и без нечитаемых raw.
+  List<({String key, String label})> _poolCandidates(FolderServers folder) {
+    final out = <({String key, String label})>[];
+    for (final m in folder.members) {
+      final n = m.node;
+      if (n == null || n.isGroup) continue;
+      final k = nodeIdentityKey(n);
+      if (k == null) continue;
+      out.add((key: k, label: n.label.isEmpty ? n.tag : n.label));
+    }
+    return out;
+  }
+
   Future<void> _addFromUrl() async {
     final ctl = TextEditingController();
     final url = await showDialog<String>(
@@ -767,6 +882,15 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     // геттер context бросит на первой же строке (showDialog).
     if (!mounted) return;
     final member = _folder.members[memberIndex];
+
+    // §322 — у узла автовыбора свой редактор: сырой `autogroup://`-URI
+    // пользователю показывать нельзя (правило в percent-encoding).
+    final node = member.node;
+    if (node is AutoSelectSpec) {
+      await _editAutoNode(memberIndex, node);
+      return;
+    }
+
     final ctl = TextEditingController(text: member.raw);
     final newRaw = await showDialog<String>(
       context: context,
@@ -966,6 +1090,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                 if (v == 'paste') unawaited(_addFromClipboard());
                 if (v == 'file') unawaited(_addFromFiles());
                 if (v == 'url') unawaited(_addFromUrl());
+                if (v == 'auto') unawaited(_addAutoNode());
               },
               itemBuilder: (menuCtx) => [
                 PopupMenuItem(
@@ -976,6 +1101,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                     child: Text(getLocalText.s("Import from files…"))),
                 PopupMenuItem(
                     value: 'url', child: Text(getLocalText.s("Add by URL…"))),
+                const PopupMenuDivider(),
+                // §322 — не сервер, а пул автовыбора среди членов ЭТОЙ папки.
+                PopupMenuItem(
+                    value: 'auto',
+                    child: Text(getLocalText.s("Add auto node…"))),
               ],
             ),
             IconButton(
@@ -1056,24 +1186,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           final idx = _index;
           if (idx < 0) return;
           unawaited(widget.controller.reorderMember(idx, oldIndex, newIndex));
-          // §236 — ручной drag во время/после теста: результаты по индексам,
-          // перепривязываем как в _sortByPing (иначе бейджи съедут).
-          if (_probe.isNotEmpty) {
-            final r = _probe.remove(oldIndex);
-            final shifted = <int, ProbeResult>{};
-            _probe.forEach((k, v) {
-              var nk = k;
-              if (k > oldIndex) nk--;
-              if (nk >= newIndex) nk++;
-              shifted[nk] = v;
-            });
-            if (r != null) shifted[newIndex] = r;
-            setState(() {
-              _probe
-                ..clear()
-                ..addAll(shifted);
-            });
-          }
+          // §326 — сдвиг ключей больше не нужен: результат привязан к узлу,
+          // а не к позиции, и едет вместе со строкой.
         },
         itemBuilder: (context, i) =>
             _memberTile(i, members[i], reorderable: true),
@@ -1092,6 +1206,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   Widget _memberTile(int i, FolderMember m, {required bool reorderable}) {
     final cs = Theme.of(context).colorScheme;
     final highlighted = _highlightedMember == i;
+    final keys = _memberProbeKeys();
+    final probe = i < keys.length ? _probe[keys[i]] : null; // §326
     // §255 — reorder-key top-level (KeyedSubtree); GlobalKey + вспышка на
     // внутреннем AnimatedContainer (навигация из detour-cycle sheet).
     return KeyedSubtree(
@@ -1113,7 +1229,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       dragIndex: i,
       reorderable: reorderable,
       folderEnabled: widget.entry.enabled,
-      probe: _probe[i],
+      probe: probe,
       thresholds: _thresholds,
       onToggle: () {
         final idx = _index;
@@ -1143,7 +1259,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               ).then((_) => mounted ? setState(() {}) : null);
             },
       onProbeBadgeTap: () {
-        final r = _probe[i];
+        final r = probe;
         if (r == null || r.message.isEmpty) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(r.message)),
@@ -1397,6 +1513,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       // (`entry.list is SubscriptionServers` false), no-op заглушки.
       onCopyUrl: () {},
       onShowIntervalPicker: () {},
+      onShowOnUpdateActionPicker: () {}, // §323
       onRefreshNow: () {},
       onEditSource: () {},
     );

@@ -60,11 +60,12 @@ class HomeState {
     this.ccGroups = const <CcGroup>[],
     this.groups = const <String>[],
     this.groupLabels = const <String, String>{},
+    this.channelAutoTags = const <String>{},
     this.selectedGroup,
     this.nodes = const <String>[],
     this.activeInGroup,
     this.highlightedNode,
-    this.lastDelay = const <String, int>{},
+    this.delayByChannel = const <String, Map<String, int>>{},
     this.pingBusy = const <String, String>{},
     this.debugEvents = const <DebugEntry>[],
     this.sortMode = NodeSortMode.latencyAsc,
@@ -148,6 +149,11 @@ class HomeState {
   /// человекочитаемого имени канала в home-dropdown вместо tag ('vpn-1').
   final Map<String, String> groupLabels;
 
+  /// §322 — auto-теги каналов (`vpn-N-auto`). Пин в верхнюю секцию положен
+  /// только им: у узла автовыбора подписки/папки тип тоже `urltest`, но он
+  /// обычная нода списка и своего места не покидает.
+  final Set<String> channelAutoTags;
+
   /// Человекочитаемое имя группы: label канала из storage, иначе сам tag.
   String groupLabelOf(String tag) => groupLabels[tag] ?? tag;
 
@@ -155,8 +161,58 @@ class HomeState {
   final List<String> nodes;
   final String? activeInGroup;
   final String? highlightedNode;
-  final Map<String, int> lastDelay;
+  /// §325 — замеры пинга **по каналам**: `канал → тег ноды → ms`.
+  ///
+  /// Раньше это была одна плоская карта на всё приложение, и mass-ping,
+  /// перебирающий ноды только текущего канала, чистил её целиком — пинги всех
+  /// прочих каналов пропадали (жалобы 4PDA #1289/#1290/#1376/#1381/#1382).
+  /// Теперь каждый канал ведёт свои замеры и чужие не трогает.
+  ///
+  /// Разделение нужно не только ради изоляции сброса: ping-URL и таймаут
+  /// резолвятся **per-group** (§040), поэтому «180мс» из канала с быстрым
+  /// endpoint'ом и из канала с медленным — разные величины, и складывать их
+  /// в один ключ некорректно.
+  ///
+  /// Ключ канала — `selectedGroup`; замеры вне контекста канала (папки,
+  /// проба подписок) живут под [scratchChannel]. Прямо читать эту карту не
+  /// надо — см. [delayOf] / [delayIsForeign], они дают фоллбэк-семантику.
+  final Map<String, Map<String, int>> delayByChannel;
   final Map<String, String> pingBusy;
+
+  /// §325 — псевдо-канал для замеров, сделанных вне выбранного канала
+  /// (`selectedGroup == null`). Отдельный ключ, а не «сложить в текущий»:
+  /// иначе такие замеры присвоил бы себе случайный канал.
+  static const String scratchChannel = ' scratch';
+
+  /// §325 — ключ канала, в который пишутся новые замеры.
+  String get delayChannelKey => selectedGroup ?? scratchChannel;
+
+  /// §325 — замеры текущего канала (без фоллбэка). Источник истины для
+  /// «мерили ли ноду именно здесь».
+  Map<String, int> get _ownDelays =>
+      delayByChannel[delayChannelKey] ?? const <String, int>{};
+
+  /// §325 — пинг ноды для показа: свой замер канала, иначе последний известный
+  /// из любого другого (фоллбэк). `null` — ноду не мерили нигде.
+  ///
+  /// Фоллбэк намеренный: строгая изоляция чтения дала бы пустой список после
+  /// каждого переключения канала и вернула бы ровно ту ручную работу, на
+  /// которую жаловались (#1290). Чужой замер помечается в UI — [delayIsForeign].
+  int? delayOf(String tag) {
+    final own = _ownDelays[tag];
+    if (own != null) return own;
+    for (final entry in delayByChannel.entries) {
+      if (entry.key == delayChannelKey) continue;
+      final v = entry.value[tag];
+      if (v != null) return v;
+    }
+    return null;
+  }
+
+  /// §325 — показанный [delayOf] пришёл из ДРУГОГО канала (в текущем ноду не
+  /// мерили). UI рисует такой замер приглушённо и со значком-пометкой.
+  bool delayIsForeign(String tag) =>
+      !_ownDelays.containsKey(tag) && delayOf(tag) != null;
   final List<DebugEntry> debugEvents;
   final NodeSortMode sortMode;
   /// §070 — pin direct/auto в pinned section при non-default sort.
@@ -249,7 +305,7 @@ class HomeState {
 
   /// Memoized sort — вычисляется один раз на жизнь этого `HomeState`
   /// инстанса. Новый `copyWith` создаёт новый state → новый late-кэш;
-  /// если `nodes`/`sortMode`/`lastDelay` не поменялись между emit'ами,
+  /// если `nodes`/`sortMode`/`delayByChannel` не поменялись между emit'ами,
   /// HomeController всё равно создаст новый state — это отдельная
   /// оптимизация (batched emit). Здесь спасаем от повторного sort
   /// в пределах одного ребилд-цикла виджетов, который обращается к
@@ -277,13 +333,20 @@ class HomeState {
     final pinnedSet = <String>{
       for (final n in nodes)
         if ((pinDirect && model[n]?.type == 'direct') ||
-            (pinAuto && model[n]?.type == 'urltest') ||
+            // §322 — только auto-двойник КАНАЛА; группа автовыбора остаётся
+            // на своём месте в списке.
+            (pinAuto &&
+                model[n]?.type == 'urltest' &&
+                channelAutoTags.contains(n)) ||
             model[n]?.type == 'block') // §201 — block всегда сверху
           n,
     };
     final pinned = [
       ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'direct'),
-      ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'urltest'),
+      ...nodes.where((n) =>
+          pinnedSet.contains(n) &&
+          model[n]?.type == 'urltest' &&
+          channelAutoTags.contains(n)),
       ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'block'),
     ];
     // §196 — активная нода группы сразу ПОСЛЕ direct/auto, при ЛЮБОЙ сортировке
@@ -325,8 +388,11 @@ class HomeState {
   }
 
   int _compareLatency(String a, String b) {
-    final da = lastDelay[a];
-    final db = lastDelay[b];
+    // §325 — сортируем по тому же числу, что видит пользователь (вкл. фоллбэк
+    // из чужого канала): иначе нода с показанным «120MS» уезжала бы в хвост
+    // к неизмеренным.
+    final da = delayOf(a);
+    final db = delayOf(b);
     if (da == null && db == null) return 0;
     if (da == null) return 1;
     if (db == null) return -1;
@@ -348,11 +414,12 @@ class HomeState {
     List<CcGroup>? ccGroups,
     List<String>? groups,
     Map<String, String>? groupLabels,
+    Set<String>? channelAutoTags,
     Object? selectedGroup = _unset,
     List<String>? nodes,
     Object? activeInGroup = _unset,
     Object? highlightedNode = _unset,
-    Map<String, int>? lastDelay,
+    Map<String, Map<String, int>>? delayByChannel,
     Map<String, String>? pingBusy,
     List<DebugEntry>? debugEvents,
     NodeSortMode? sortMode,
@@ -398,6 +465,7 @@ class HomeState {
       ccGroups: ccGroups ?? this.ccGroups,
       groups: groups ?? this.groups,
       groupLabels: groupLabels ?? this.groupLabels,
+      channelAutoTags: channelAutoTags ?? this.channelAutoTags,
       selectedGroup: identical(selectedGroup, _unset)
           ? this.selectedGroup
           : selectedGroup as String?,
@@ -408,7 +476,7 @@ class HomeState {
       highlightedNode: identical(highlightedNode, _unset)
           ? this.highlightedNode
           : highlightedNode as String?,
-      lastDelay: lastDelay ?? this.lastDelay,
+      delayByChannel: delayByChannel ?? this.delayByChannel,
       pingBusy: pingBusy ?? this.pingBusy,
       debugEvents: debugEvents ?? this.debugEvents,
       sortMode: sortMode ?? this.sortMode,

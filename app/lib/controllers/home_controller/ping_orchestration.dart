@@ -31,27 +31,51 @@ mixin _PingMixin on ChangeNotifier {
     try {
       final r = await _cc.urlTestOutbound(nodeTag, link: url, timeoutMs: timeoutMs);
       final ms = r.lastDelayValue; // ok → delay (вкл. 0мс); fail → -1
-      final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = ms;
+      final nextDelay = _delaysWith({nodeTag: ms});
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
       if (r.ok) {
-        _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+        _emit(_state.copyWith(delayByChannel: nextDelay, pingBusy: nextBusy));
         _addDebug(DebugSource.app, 'URLTest $nodeTag → $url: ${ms}ms');
       } else {
         final msg = ProbeErrorMsg(nodeTag, _probeHost(url), RawMsg(r.error));
         _emit(_state.copyWith(
-            lastDelay: nextDelay, pingBusy: nextBusy, lastError: msg));
+            delayByChannel: nextDelay, pingBusy: nextBusy, lastError: msg));
         _addDebug(DebugSource.app, msg.renderEn());
         _rescueGroupsSelecting(nodeTag);
       }
     } catch (e) {
-      final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = -1;
+      final nextDelay = _delaysWith({nodeTag: -1});
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
       final msg = _formatProbeError(nodeTag, url, e);
       _emit(_state.copyWith(
-          lastDelay: nextDelay, pingBusy: nextBusy, lastError: msg));
+          delayByChannel: nextDelay, pingBusy: nextBusy, lastError: msg));
       _addDebug(DebugSource.app, msg.renderEn());
       _rescueGroupsSelecting(nodeTag);
     }
+  }
+
+  /// §325 — записать замеры в карту одного канала, не трогая остальные.
+  /// `null`-значение = удалить ключ (используется при старте mass-ping, где
+  /// старое число на время прогона уступает место индикатору `pingBusy`).
+  /// [channel] по умолчанию — текущий канал; mass-ping передаёт снимок,
+  /// сделанный на старте прогона (переключение канала в середине не должно
+  /// уводить результаты в чужую карту).
+  Map<String, Map<String, int>> _delaysWith(
+    Map<String, int?> updates, {
+    String? channel,
+  }) {
+    final key = channel ?? _state.delayChannelKey;
+    final next = Map<String, Map<String, int>>.from(_state.delayByChannel);
+    final delays = Map<String, int>.from(next[key] ?? const <String, int>{});
+    updates.forEach((tag, ms) {
+      if (ms == null) {
+        delays.remove(tag);
+      } else {
+        delays[tag] = ms;
+      }
+    });
+    next[key] = delays;
+    return next;
   }
 
   /// §308 — фейл единичного пинга узла, который сейчас ВЫБРАН какой-то
@@ -255,18 +279,34 @@ mixin _PingMixin on ChangeNotifier {
     _massPingEpoch++;
     final epoch = _massPingEpoch;
 
-    final busyMap = {for (final tag in nodes) tag: '…'};
-    _emit(_state.copyWith(lastDelay: <String, int>{}, pingBusy: busyMap));
-    _addDebug(DebugSource.app, 'Mass ping started (${nodes.length} nodes, concurrency=$_pingConcurrency)');
-
-    // Parallel ping with limited concurrency
-    var index = 0;
     // §040: для всех нод текущей mass-ping сессии используем per-group
     // resolved url/timeout — снимок на старте сессии, чтобы все ноды
     // получили одинаковый test endpoint (юзер не сменит group в середине).
     final massPingGroup = _state.selectedGroup;
     final massPingUrl = pingUrlFor(massPingGroup);
     final massPingTimeout = pingTimeoutFor(massPingGroup);
+    // §325 — канал-получатель результатов фиксируем тем же снимком: юзер может
+    // переключить канал посреди прогона, и тогда замеры, сделанные URL'ом и
+    // таймаутом канала A, не должны осесть в канале B.
+    final massPingChannel = massPingGroup ?? HomeState.scratchChannel;
+
+    // §325 — сброс идёт ТОЛЬКО по этому каналу и только по нодам этого прогона.
+    // Раньше чистилась одна общая карта целиком, а заполнялась лишь нодами
+    // текущего канала: замеры всех прочих каналов пропадали («тест-пинг
+    // сбрасывает данные глобально, а тестит только текущий канал» — 4PDA
+    // #1289/#1290/#1376/#1381/#1382). Замеры пингуемых нод убираем, потому что
+    // на время прогона их место занимает индикатор `pingBusy: '…'`; результат
+    // ляжет точечно во flush ниже.
+    final busyMap = {for (final tag in nodes) tag: '…'};
+    final clearedDelay = _delaysWith(
+      {for (final tag in nodes) tag: null},
+      channel: massPingChannel,
+    );
+    _emit(_state.copyWith(delayByChannel: clearedDelay, pingBusy: busyMap));
+    _addDebug(DebugSource.app, 'Mass ping started (${nodes.length} nodes, concurrency=$_pingConcurrency)');
+
+    // Parallel ping with limited concurrency
+    var index = 0;
 
     // §286 — батчинг: воркеры пишут результат НЕ через _emit-на-ноду (это давало
     // ~150 полных ребилдов HomeScreen пачкой при 148 нодах — главный источник
@@ -277,13 +317,12 @@ mixin _PingMixin on ChangeNotifier {
     void flush() {
       if (_massPingEpoch != epoch) return;
       if (pendingDelay.isEmpty && pendingBusy.isEmpty) return;
-      final nextDelay = Map<String, int>.from(_state.lastDelay)
-        ..addAll(pendingDelay);
+      final nextDelay = _delaysWith(pendingDelay, channel: massPingChannel);
       final nextBusy = Map<String, String>.from(_state.pingBusy)
         ..addAll(pendingBusy);
       pendingDelay.clear();
       pendingBusy.clear();
-      _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+      _emit(_state.copyWith(delayByChannel: nextDelay, pingBusy: nextBusy));
     }
 
     final flushTimer =

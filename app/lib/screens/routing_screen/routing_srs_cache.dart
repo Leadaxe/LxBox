@@ -33,7 +33,12 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     // из template, чтобы экран не был пустым.
     final stored = await SettingsStorage.getChannels();
     if (stored.isEmpty) {
-      await SettingsStorage.migrateChannelsIfNeeded(template.groupTemplates);
+      await SettingsStorage.migrateChannelsIfNeeded(
+        template.groupTemplates,
+        varDefaults: {
+          for (final v in template.vars) v.name: v.defaultValue,
+        },
+      );
       _channels.addAll(await SettingsStorage.getChannels());
     } else {
       _channels.addAll(stored);

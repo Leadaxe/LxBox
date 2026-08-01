@@ -11,6 +11,7 @@ import '../../config/consts.dart';
 import '../../models/validation.dart';
 import '../json_clone.dart';
 import '../node_hash.dart';
+import '../safe_regex.dart';
 import '../rule_set_downloader.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
@@ -199,7 +200,8 @@ Future<BuildResult> buildConfig({
 
   // buildConfig — тонкий оркестратор. ServerList.build(ctx) сам решает
   // политику, аллоцирует теги через ctx, регистрирует в selector/auto.
-  final ctx = _BuildCtx(tvars, ruleSets);
+  final ctx =
+      _BuildCtx(tvars, ruleSets, passiveCheck: settings.passiveCheck); // §322
   for (final list in lists) {
     list.build(ctx);
   }
@@ -503,9 +505,11 @@ Future<BuildResult> buildConfig({
 /// Реализация `EmitContext`: vars + аллокатор уникальных тегов +
 /// аккумуляторы entries + RuleSetRegistry.
 class _BuildCtx implements EmitContext {
-  _BuildCtx(this._vars, this._ruleSets);
+  _BuildCtx(this._vars, this._ruleSets, {bool passiveCheck = false})
+      : _passiveCheck = passiveCheck;
   final TemplateVars _vars;
   final RuleSetRegistry _ruleSets;
+  final bool _passiveCheck;
   final _taken = <String>{kDirectOutboundTag, 'dns-out', 'block-out'};
 
   final outbounds = <Outbound>[];
@@ -518,6 +522,9 @@ class _BuildCtx implements EmitContext {
 
   @override
   RuleSetRegistry get ruleSets => _ruleSets;
+
+  @override
+  bool get passiveCheck => _passiveCheck; // §272/§322
 
   @override
   String allocateTag(String baseTag) {
@@ -581,7 +588,7 @@ List<Map<String, dynamic>> _buildChannelGroups({
   /// §197 — nodeFilterInvert инвертирует смысл: true → ноды, чей tag НЕ матчит.
   List<String> nodesFor(Channel c) {
     if (c.nodeFilter.isEmpty) return baseNodes;
-    final re = _tryCompileRegex(c.nodeFilter);
+    final re = tryCompileRegex(c.nodeFilter, caseSensitive: false);
     if (re == null) return baseNodes;
     return baseNodes
         .where((t) => re.hasMatch(t) != c.nodeFilterInvert)
@@ -592,12 +599,27 @@ List<Map<String, dynamic>> _buildChannelGroups({
   // §254 — детур-циклы билдер больше НЕ рвёт: детекция и минимальный набор
   // виновников — в validateConfig (fatal, конфиг не собирается).
   final memberSets = [for (final c in active) nodesFor(c)];
+  // §322 — узел автовыбора в urltest-двойник канала не идёт: urltest внутри
+  // urltest мерил бы уже выбранный внутренней группой узел, а не сервер.
+  // Тип берём из эмитированных entry (там же, откуда его читает AWG-advisory).
+  final groupTags = {
+    for (final e in nodeEntries)
+      if (e['type'] == 'urltest') e['tag'] as String,
+  };
+  final autoSets = [
+    for (final ms in memberSets)
+      [
+        for (final t in ms)
+          if (!groupTags.contains(t)) t,
+      ],
+  ];
 
   final result = <Map<String, dynamic>>[];
   for (var i = 0; i < active.length; i++) {
     final c = active[i];
     final nodes = memberSets[i];
-    final emitAuto = c.auto != null && nodes.isNotEmpty;
+    final autoNodes = autoSets[i]; // §322 — без узлов автовыбора
+    final emitAuto = c.auto != null && autoNodes.isNotEmpty;
 
     // selector outbounds: ноды + (direct?) + (block?) + (<tag>-auto если эмит)
     final selectorOutbounds = <String>[
@@ -648,7 +670,7 @@ List<Map<String, dynamic>> _buildChannelGroups({
     // §141 — default = первая нода канала, чей итоговый tag матчит defaultFilter.
     // Не матчит/пусто → default не выставляется (sing-box берёт первую опцию).
     if (c.defaultFilter.isNotEmpty) {
-      final re = _tryCompileRegex(c.defaultFilter);
+      final re = tryCompileRegex(c.defaultFilter, caseSensitive: false);
       final def = re == null ? null : _firstMatch(nodes, re);
       // Гейт-защита (§141 P1.8b): default обязан быть валидным членом outbounds.
       if (def != null && selectorOutbounds.contains(def)) {
@@ -664,7 +686,7 @@ List<Map<String, dynamic>> _buildChannelGroups({
       final urltest = <String, dynamic>{
         'tag': c.autoTag,
         'type': 'urltest',
-        'outbounds': nodes,
+        'outbounds': autoNodes,
         'url': a.url,
         'interval': a.interval,
         'tolerance': a.tolerance,
@@ -714,17 +736,20 @@ List<Channel> _channelsFromTemplate(
   Set<String> enabledGroupTags,
   VarResolver resolve,
 ) {
-  String s(String name, String fallback) {
-    final v = resolve(name);
-    return v == null ? fallback : v.toString();
-  }
+  // §327 — дефолты живут в шаблоне (`vars[].default_value`), и `resolve` их уже
+  // применил: `vars` в buildConfig наполнен `userVars[name] ?? defaultValue`.
+  // Прежние литералы (`'50'`, `'15m'`) были недостижимой копией шаблона и
+  // разошлись с ним (шаблон: 30). Здесь остаются только дефолты `ChannelAuto`
+  // — последний рубеж, если var из шаблона исчезнет.
+  const fallback = ChannelAuto();
+  String? s(String name) => resolve(name)?.toString();
 
   ChannelAuto seedAuto() => ChannelAuto(
-        url: s('urltest_url', 'https://cp.cloudflare.com/generate_204'),
-        interval: s('urltest_interval', '15m'), // §272 — батарея: см. channel.dart
-        tolerance: int.tryParse(s('urltest_tolerance', '50')) ?? 50,
-        idleTimeout: '30m',
-        interruptExistConnections: false,
+        url: s('urltest_url') ?? fallback.url,
+        interval: s('urltest_interval') ?? fallback.interval,
+        tolerance: int.tryParse(s('urltest_tolerance') ?? '') ?? fallback.tolerance,
+        idleTimeout: fallback.idleTimeout,
+        interruptExistConnections: fallback.interruptExistConnections,
       );
 
   final hasAuto = gt.channel.include.contains('auto');
@@ -744,16 +769,6 @@ List<Channel> _channelsFromTemplate(
 
 /// Компилирует regex, `null` при невалидном паттерне (caller → fallback на все
 /// ноды). Общий helper для билдера и live-превью редактора (§125 F4).
-RegExp? _tryCompileRegex(String pattern) {
-  try {
-    // §301 — node-filter регистронезависим (nodeFilter + defaultFilter). Тот
-    // же дефолт, что в основном окне поиска; здесь это решает, какие ноды
-    // реально попадают в канал в собранном конфиге, а не только в превью.
-    return RegExp(pattern, caseSensitive: false);
-  } catch (_) {
-    return null;
-  }
-}
 
 /// Первая нода (по порядку) из [tags], чей итоговый tag матчит [re]. `null` если
 /// нет совпадений.

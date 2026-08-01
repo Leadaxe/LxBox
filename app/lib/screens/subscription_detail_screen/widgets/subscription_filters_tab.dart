@@ -9,7 +9,8 @@ import '../../../models/server_list.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../../services/subscription/import_rules.dart';
 
-/// §302 — «Filters» tab: per-subscription import-rules (REPLACE + DISABLE),
+/// §302 — «Filters» tab: per-subscription import-rules (REPLACE + DISABLE +
+/// ENABLE §332),
 /// применяемые к телу подписки на импорте/обновлении. CRUD + drag-reorder +
 /// общий тумблер набора. Правила вступают в силу на следующем refresh —
 /// после каждой правки показываем snackbar с кнопкой Refresh, а редактор
@@ -333,6 +334,18 @@ class _SubscriptionFiltersTabState extends State<SubscriptionFiltersTab> {
     final invalid =
         rule.enabled && rule.conditions.isNotEmpty && !rule.isUsable;
     final isReplace = rule.action == ImportRuleAction.replace;
+    // Цвет бейджа действия: Replace — синий, Disable — оранжевый,
+    // Enable (§332) — зелёный.
+    final badgeColor = switch (rule.action) {
+      ImportRuleAction.replace => Colors.blue,
+      ImportRuleAction.disable => Colors.orange,
+      ImportRuleAction.enable => Colors.green,
+    };
+    final badgeText = switch (rule.action) {
+      ImportRuleAction.replace => getLocalText.s("Replace"),
+      ImportRuleAction.disable => getLocalText.s("Disable"),
+      ImportRuleAction.enable => getLocalText.s("Enable"),
+    };
     // Сводка условий: «tag contains ⚡», несколько — через AND/OR.
     final condText = rule.conditions.isEmpty
         ? getLocalText.s("(no conditions)")
@@ -354,18 +367,12 @@ class _SubscriptionFiltersTabState extends State<SubscriptionFiltersTab> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: (isReplace ? Colors.blue : Colors.orange)
-                  .withValues(alpha: 0.15),
+              color: badgeColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
-              isReplace
-                  ? getLocalText.s("Replace")
-                  : getLocalText.s("Disable"),
-              style: TextStyle(
-                fontSize: 10,
-                color: isReplace ? Colors.blue : Colors.orange,
-              ),
+              badgeText,
+              style: TextStyle(fontSize: 10, color: badgeColor),
             ),
           ),
           const SizedBox(width: 8),
@@ -633,6 +640,12 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
               label: Text(getLocalText.s("Disable")),
               icon: const Icon(Icons.block, size: 18),
             ),
+            // §332 — Enable: снять disable-отметку (включая ручную).
+            ButtonSegment(
+              value: ImportRuleAction.enable,
+              label: Text(getLocalText.s("Enable")),
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+            ),
             ButtonSegment(
               value: ImportRuleAction.replace,
               label: Text(getLocalText.s("Replace")),
@@ -644,10 +657,16 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          isReplace
-              ? getLocalText.s("Writes a new value into the matching nodes.")
-              : getLocalText
-                  .s("Hides matching nodes from routing. They stay visible, struck through."),
+          switch (_action) {
+            ImportRuleAction.replace =>
+              getLocalText.s("Writes a new value into the matching nodes."),
+            ImportRuleAction.disable => getLocalText.s(
+                "Hides matching nodes from routing. They stay visible, struck through."),
+            // §332 — правила последовательные: Enable первым в списке
+            // сбрасывает прошлые отключения перед новыми Disable-правилами.
+            ImportRuleAction.enable => getLocalText.s(
+                "Re-enables matching nodes, clearing disable marks from rules and manual toggles. Later rules can still disable them."),
+          },
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
@@ -950,30 +969,44 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
                     final (node, outcome) = hits[i];
                     final title =
                         node.label.isNotEmpty ? node.label : node.tag;
+                    // §332 — тристейт: true=Disable, false=Enable, null=Replace
+                    // (в превью одного правила ровно одно из трёх).
+                    final (icon, color, subtitle) = switch (outcome.disabled) {
+                      true => (
+                          Icons.block,
+                          Colors.orange,
+                          getLocalText.s("Will be disabled"),
+                        ),
+                      false => (
+                          Icons.check_circle_outline,
+                          Colors.green,
+                          getLocalText.s("Will be enabled"),
+                        ),
+                      null => (
+                          Icons.find_replace,
+                          Colors.blue,
+                          outcome.replacements.join('\n'),
+                        ),
+                    };
                     return ListTile(
                       dense: true,
-                      leading: Icon(
-                        outcome.disabled ? Icons.block : Icons.find_replace,
-                        size: 20,
-                        color: outcome.disabled ? Colors.orange : Colors.blue,
-                      ),
+                      leading: Icon(icon, size: 20, color: color),
                       title: Text(
                         title.isEmpty ? node.server : title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
-                        outcome.disabled
-                            ? getLocalText.s("Will be disabled")
-                            : outcome.replacements.join('\n'),
+                        subtitle,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontFamily: outcome.disabled ? null : 'monospace',
+                          fontFamily:
+                              outcome.disabled == null ? 'monospace' : null,
                           fontSize: 11,
-                          color: outcome.disabled
-                              ? Colors.orange
-                              : theme.colorScheme.onSurfaceVariant,
+                          color: outcome.disabled == null
+                              ? theme.colorScheme.onSurfaceVariant
+                              : color,
                         ),
                       ),
                     );

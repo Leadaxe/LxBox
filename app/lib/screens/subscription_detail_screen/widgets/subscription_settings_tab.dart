@@ -31,6 +31,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
     required this.onReplaceDetourChainChanged,
     required this.onCopyUrl,
     required this.onShowIntervalPicker,
+    required this.onShowOnUpdateActionPicker,
     required this.onRefreshNow,
     required this.onEditSource,
     // §289 — per-subscription fetch identity (nullable: папка не рисует секцию).
@@ -68,6 +69,9 @@ class SubscriptionSettingsTab extends StatelessWidget {
   final ValueChanged<bool> onReplaceDetourChainChanged;
   final VoidCallback onCopyUrl;
   final VoidCallback onShowIntervalPicker;
+
+  /// §323 — пикер реакции на авто-обновление.
+  final VoidCallback onShowOnUpdateActionPicker;
   final VoidCallback onRefreshNow;
   final VoidCallback onEditSource; // §129 — сменить источник (online↔file)
 
@@ -476,6 +480,22 @@ class SubscriptionSettingsTab extends StatelessWidget {
           }),
           trailing: const Icon(Icons.edit, size: 18),
           onTap: onShowIntervalPicker,
+        ),
+        // §323 — что делать после успешного АВТО-обновления. Ручной ⟳ ниже
+        // сюда не относится (там юзер сам решает, когда применить).
+        ListTile(
+          leading: const Icon(Icons.play_circle_outline, size: 20),
+          title: Text(getLocalText.s("On update")),
+          subtitle: Text(switch (list.onUpdateAction) {
+            SubscriptionOnUpdateAction.rebuild =>
+              getLocalText.s("Rebuild config — apply manually"),
+            SubscriptionOnUpdateAction.reload =>
+              getLocalText.s("Rebuild and reload core — brief connection drop"),
+            SubscriptionOnUpdateAction.none =>
+              getLocalText.s("Do nothing — apply on next rebuild"),
+          }),
+          trailing: const Icon(Icons.edit, size: 18),
+          onTap: onShowOnUpdateActionPicker,
         ),
         ListTile(
           leading: Icon(statusIcon(list), size: 20, color: color),

@@ -210,16 +210,33 @@ class DnsController {
     final availableTags = enabledServerTags(resolveDisplayedServers(
         resolvedServers, templateByTag, presetServersByTag,
         ruleRefsByTag: ruleRefsByTag));
-    var dnsFinal = vars['dns_final'] ?? '';
-    var defaultResolver = vars['dns_default_domain_resolver'] ?? '';
+    // §327 — единственный источник дефолта для DNS-var'ов: `default_value`
+    // шаблона. Раньше их было три (пусто на экране, `cloudflare_udp` в
+    // автосбросе, `dns_shield` в шаблоне) — экран показывал «выберите» на
+    // чистой установке, хотя билдер собирал конфиг с шаблонным дефолтом
+    // (`build_config.dart` — `userVars[name] ?? defaultValue`).
+    final templateDefaults = <String, String>{
+      for (final v in template.vars) v.name: v.defaultValue,
+    };
+    String defaultOf(String name) => templateDefaults[name] ?? '';
+
+    // Пустая строка (а не отсутствие ключа) — тоже «не задано»: `stage()`
+    // пишет все три var разом, поэтому в storage мог осесть `''`.
+    final storedFinal = vars['dns_final'] ?? '';
+    final storedResolver = vars['dns_default_domain_resolver'] ?? '';
+    var dnsFinal =
+        storedFinal.isNotEmpty ? storedFinal : defaultOf('dns_final');
+    var defaultResolver = storedResolver.isNotEmpty
+        ? storedResolver
+        : defaultOf('dns_default_domain_resolver');
     var resolverReset = false;
     if (dnsFinal.isNotEmpty && !availableTags.contains(dnsFinal)) {
-      dnsFinal = 'cloudflare_udp'; // template default_value
+      dnsFinal = defaultOf('dns_final');
       resolverReset = true;
     }
     if (defaultResolver.isNotEmpty &&
         !availableTags.contains(defaultResolver)) {
-      defaultResolver = 'cloudflare_udp';
+      defaultResolver = defaultOf('dns_default_domain_resolver');
       resolverReset = true;
     }
 
@@ -235,8 +252,10 @@ class DnsController {
       outboundOptions: outboundOptions,
       customRules: activeRules,
       dnsMirrorsByRuleId: dnsMirrorsByRuleId,
-      // Fallback = default_value шаблона (ipv4_only).
-      strategy: vars['dns_strategy'] ?? 'ipv4_only',
+      // §327 — fallback берётся из шаблона, не из литерала-копии.
+      strategy: (vars['dns_strategy']?.isNotEmpty ?? false)
+          ? vars['dns_strategy']!
+          : defaultOf('dns_strategy'),
       dnsFinal: dnsFinal,
       defaultResolver: defaultResolver,
       resolverReset: resolverReset,

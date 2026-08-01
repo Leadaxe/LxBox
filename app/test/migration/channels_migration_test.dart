@@ -149,10 +149,13 @@ void main() {
     final channels = await SettingsStorage.getChannels();
     final vpn1 = channels.firstWhere((c) => c.tag == 'vpn-1');
     expect(vpn1.auto, isNotNull); // двойник засеян, не упал
-    // плейсхолдеры → дефолты
-    expect(vpn1.auto!.url, 'https://cp.cloudflare.com/generate_204');
-    expect(vpn1.auto!.interval, '5m');
-    expect(vpn1.auto!.tolerance, 50);
+    // §327 — плейсхолдеры → дефолты `ChannelAuto` (varDefaults здесь не
+    // передан). Раньше тут стояли литералы из кода seed'а (5m/50), которые
+    // разошлись с шаблоном; теперь единственный источник — сам класс.
+    const fallback = ChannelAuto();
+    expect(vpn1.auto!.url, fallback.url);
+    expect(vpn1.auto!.interval, fallback.interval);
+    expect(vpn1.auto!.tolerance, fallback.tolerance);
   });
 
   test('✨auto с tolerance числом-в-строке → парсится', () async {
@@ -233,6 +236,75 @@ void main() {
     test('updateChannel — несуществующий tag throws', () async {
       const ghost = Channel(tag: 'vpn-9', label: 'ghost');
       expect(() => SettingsStorage.updateChannel(ghost), throwsStateError);
+    });
+  });
+
+  // §327 — в РЕАЛЬНОМ шаблоне `group_templates.auto.options` несёт
+  // `@urltest_*`-плейсхолдеры (var-substitution идёт позже, в билдере). Раньше
+  // на них срабатывали литералы в коде, и в каналы садились 50/5m вместо
+  // шаблонных 30/15m. Дефолт обязан быть один — из `vars[].default_value`.
+  group('§327 seed auto-канала по @var-плейсхолдерам', () {
+    GroupTemplates placeholderTemplate() => GroupTemplates(
+          channel: ChannelTemplate(
+            include: const ['direct', 'auto'],
+            options: const {'interrupt_exist_connections': true},
+          ),
+          auto: AutoTemplate(
+            options: const {
+              'url': '@urltest_url',
+              'interval': '@urltest_interval',
+              'tolerance': '@urltest_tolerance',
+            },
+          ),
+          defaultChannels: [
+            DefaultChannel(tag: 'vpn-1', label: 'Main', defaultEnabled: true),
+          ],
+        );
+
+    const varDefaults = {
+      'urltest_url': 'https://example.test/generate_204',
+      'urltest_interval': '15m',
+      'urltest_tolerance': '30',
+    };
+
+    test('плейсхолдеры резолвятся в default_value шаблона', () async {
+      await SettingsStorage.migrateChannelsIfNeeded(
+        placeholderTemplate(),
+        varDefaults: varDefaults,
+      );
+      final auto = (await SettingsStorage.getChannels()).first.auto!;
+
+      expect(auto.tolerance, 30); // было 50 из литерала
+      expect(auto.interval, '15m'); // было '5m'
+      expect(auto.url, 'https://example.test/generate_204');
+    });
+
+    test('без varDefaults — дефолты ChannelAuto, а не литералы', () async {
+      // Var исчезла из шаблона: последний рубеж — дефолт самого класса.
+      await SettingsStorage.migrateChannelsIfNeeded(placeholderTemplate());
+      final auto = (await SettingsStorage.getChannels()).first.auto!;
+      const fallback = ChannelAuto();
+
+      expect(auto.tolerance, fallback.tolerance);
+      expect(auto.interval, fallback.interval);
+      expect(auto.url, fallback.url);
+    });
+
+    test('явное значение в options побеждает default_value', () async {
+      await SettingsStorage.migrateChannelsIfNeeded(
+        GroupTemplates(
+          channel: ChannelTemplate(include: const ['direct', 'auto']),
+          auto: AutoTemplate(
+            options: const {'interval': '3m', 'tolerance': 77},
+          ),
+          defaultChannels: [DefaultChannel(tag: 'vpn-1', defaultEnabled: true)],
+        ),
+        varDefaults: varDefaults,
+      );
+      final auto = (await SettingsStorage.getChannels()).first.auto!;
+
+      expect(auto.tolerance, 77);
+      expect(auto.interval, '3m');
     });
   });
 }

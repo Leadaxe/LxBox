@@ -109,7 +109,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// (тумблера нет, DNS-блок жив пока routing on).
   Map<String, bool> _presetDnsEnable = const {};
 
-
   bool _loading = true;
   // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
 
@@ -647,7 +646,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             value: _dnsFinal,
             serverTags: serverTags,
             onChanged: (v) => setState(() { _dnsFinal = v; _markDirty(); }),
-            tooltip: getLocalText.s("Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private."),
+            tooltip: getLocalText.s("Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private."),
             warnIfLocal: false,
           ),
 
@@ -664,7 +663,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             value: _defaultResolver,
             serverTags: serverTags,
             onChanged: (v) => setState(() { _defaultResolver = v; _markDirty(); }),
-            tooltip: getLocalText.s("Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."),
+            tooltip: getLocalText.s("Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."),
             warnIfLocal: true,
           ),
           if (_defaultResolver == 'local_dns_resolver')

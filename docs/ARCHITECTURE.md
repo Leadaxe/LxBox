@@ -686,7 +686,14 @@ _persist() — writes to lxbox_settings.json
 _regenerateAndSave() — auto (v1.3.1+)
   ├─ generateConfig() — no HTTP, local assembly only
   └─ homeController.saveParsedConfig(config)
-        └─ state.configChangedNeedRestart = tunnelUp  (sticky flag)
+        ├─ changed = canonical(new) != canonical(state.configRaw)   (§116 text diff)
+        ├─ needRestart = changed && (tunnelUp || prev)              (§323 — no longer sticky
+        │                                                            when changed == false)
+        └─ if (needRestart && tunnelUp): ask the core                (§324)
+              formatConfig(saved + OverrideOptions) vs runningConfigRaw
+                fresh   → needRestart = false   (cosmetic-only difference)
+                stale   → keep
+                unknown → keep (conservative: core could not answer)
   ↓
 UI refreshes row (subtitle: "<PROTOCOL> server") + snackbar
   ↓
@@ -1381,6 +1388,11 @@ OS/ядра (passthrough `RawMsg.detail`). Единицы (`B/KB/MB`, `Mbps`, `m
 Pattern: `ChangeNotifier` + `AnimatedBuilder`. `HomeState` is immutable with `copyWith` (sentinel `_unset` for nullable fields).
 
 `_needsRestart` in HomeScreen is a derived getter — returns `true` when `_subController.configDirty || (state.tunnelUp && state.configChangedNeedRestart)`. **§076 update**: `configDirty` branch is no longer gated on `tunnelUp` — settings-changed banner shows whenever there are pending changes, independent of tunnel state. Two banners mutually exclusive: blue «Settings changed» for `configDirty`, pink «Restart VPN» for `tunnelUp && configChangedNeedRestart && !configDirty`. Sticky until tunnel up↔down transition (see spec 003 §8a).
+
+**§323/§324 update — the pink banner is no longer purely sticky.** Two things clear it early:
+
+- **§323** — an identical rebuild (`changed == false`) *clears* the flag instead of preserving it. Rationale: if the saved config matches the previous one byte-for-byte, the running instance cannot be stale, regardless of flag history. A successful `reloadVpn()` also clears it (the core re-read the file, so running == saved).
+- **§324** — a text diff answers "did the file change", not "is the running instance stale". When the diff says *changed* and the tunnel is up, the core is asked instead: `formatConfig(saved + OverrideOptions)` vs `runningConfigRaw` (§311 snapshot). Both sides pass through the same core parser+encoder (kernel SPEC 037 §3), so field order / `omitempty` / `[] → null` collapse **inside the core** — no client-side list of "differences to ignore". The verdict can only *clear* a false banner, never raise one; `unknown` (core unreachable, snapshot absent, old kernel) keeps the banner. See `services/config_staleness.dart` — it mirrors `OverrideOptions` because `formatConfig` does not apply them while the snapshot is post-override.
 
 ---
 

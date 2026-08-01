@@ -19,6 +19,7 @@ import '../services/parse_hints.dart';
 import '../services/relative_time.dart';
 import '../services/node_emoji.dart';
 import '../services/node_hash.dart';
+import '../services/node_identity.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
 import '../services/parser/body_decoder.dart';
@@ -152,7 +153,11 @@ class SubscriptionController extends ChangeNotifier {
         swept = true;
       }
     }
-    if (swept) await _persist();
+    // §331 (ревью) — keepDirtyFlag: sweep inProgress→failed — метаданные.
+    // Иначе после крэша во время фетча каждый старт app начинался бы с синей
+    // плашки. `configDirty` на init и так восстановлен mtime-сравнением выше —
+    // sweep не должен его перебивать.
+    if (swept) await _persist(keepDirtyFlag: true);
     notifyListeners();
     // Восстанавливаем узлы из кэша тел HTTP-подписок — офлайн доступ.
     // Без этого после перезапуска app узлы пропадали, пока пользователь
@@ -222,13 +227,15 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
-  /// §302 — применяет import-rules к разобранным узлам и возвращает набор
-  /// identity-хешей узлов, помеченных к выключению.
+  /// §302 — применяет import-rules к разобранным узлам и возвращает
+  /// identity-хеши узлов, помеченных к выключению (Disable) и к
+  /// принудительному включению (Enable, §332).
   ///
   /// REPLACE патчит `NodeSpec.patchedJson` (узел эмитится из него), поэтому
   /// хеш считаем ПОСЛЕ применения — выключение и роутинг работают с итоговым
   /// видом узла, как его увидит билдер.
-  Set<String> _applyRulesToNodes(List<NodeSpec> nodes, List<ImportRule> rules) {
+  ({Set<String> disable, Set<String> enable}) _applyRulesToNodes(
+      List<NodeSpec> nodes, List<ImportRule> rules) {
     // §307 — правила НЕ инкрементальны: каждый прогон стартует с чистого
     // узла (движок читает `emitRaw`), поэтому прошлый патч всегда сбрасываем.
     // Сегодня узлы в обоих call-site'ах свежераспарсенные и сброс — no-op,
@@ -237,11 +244,12 @@ class SubscriptionController extends ChangeNotifier {
       n.patchedJson = null;
       n.ruleTrail = const [];
     }
-    if (rules.isEmpty || nodes.isEmpty) return const {};
+    if (rules.isEmpty || nodes.isEmpty) return (disable: const {}, enable: const {});
     final result = applyImportRules(nodes, rules);
-    if (result.isEmpty) return const {};
+    if (result.isEmpty) return (disable: const {}, enable: const {});
 
-    final hashes = <String>{};
+    final disable = <String>{};
+    final enable = <String>{};
     result.outcomes.forEach((i, outcome) {
       if (i < 0 || i >= nodes.length) return;
       final node = nodes[i];
@@ -249,9 +257,41 @@ class SubscriptionController extends ChangeNotifier {
         node.patchedJson = outcome.patchedJson;
         node.ruleTrail = outcome.replacements;
       }
-      if (outcome.disabled) hashes.add(nodeIdentityHash(node));
+      if (outcome.disabled == true) disable.add(nodeIdentityHash(node));
+      if (outcome.disabled == false) enable.add(nodeIdentityHash(node));
     });
-    return hashes;
+
+    // §322 — правила могли переписать `server`/`uuid`, и тогда идентичность
+    // узла другая, а синонимы группы указывают на прежнюю. Пересобираем
+    // таблицу по патченым узлам: тег провайдера тот же, ключ новый.
+    _remapAutoSelectSynonyms(nodes);
+    return (disable: disable, enable: enable);
+  }
+
+  /// §322 — пересчёт таблицы синонимов после §302-правил. Тег провайдера
+  /// (ключ таблицы) правила не трогают — меняется только идентичность, на
+  /// которую он указывает.
+  void _remapAutoSelectSynonyms(List<NodeSpec> nodes) {
+    final autos = nodes.whereType<AutoSelectSpec>().toList();
+    if (autos.isEmpty) return;
+    // Старая идентичность → новая. Считаем по узлам, которые правила задели.
+    final moved = <String, String>{};
+    for (final n in nodes) {
+      if (n.patchedJson == null) continue;
+      final before = nodeIdentityKeyRaw(n);
+      final after = nodeIdentityKey(n);
+      if (before != null && after != null && before != after) {
+        moved[before] = after;
+      }
+    }
+    if (moved.isEmpty) return;
+    for (var i = 0; i < nodes.length; i++) {
+      final a = nodes[i];
+      if (a is! AutoSelectSpec || a.tagSynonyms.isEmpty) continue;
+      nodes[i] = a.copyWith(tagSynonyms: {
+        for (final e in a.tagSynonyms.entries) e.key: moved[e.value] ?? e.value,
+      });
+    }
   }
 
   /// §074 — add a fully-constructed UserServer (used by Add server wizard
@@ -1284,6 +1324,36 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// §332 — вкл/выкл ВСЕХ нод подписки разом (кнопка на вкладке Nodes).
+  ///
+  /// enable: карта отметок очищается целиком — ручные (§283),
+  /// правило-отметки (§302) и TTL-хвосты ушедших узлов. DISABLE-правила при
+  /// следующем refresh поставят свои отметки заново (правило — источник
+  /// истины). disable: merge поверх существующих — TTL-отметки временно
+  /// отсутствующих узлов не теряются, GC доделает своё.
+  Future<void> setAllSubscriptionNodes(int index,
+      {required bool enabled}) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final list = entry.list;
+    if (list is! SubscriptionServers) return;
+    final Map<String, DateTime> next;
+    if (enabled) {
+      if (list.disabledHashes.isEmpty) return;
+      next = const {};
+    } else {
+      if (list.nodes.isEmpty) return;
+      final now = DateTime.now();
+      next = {
+        ...list.disabledHashes,
+        for (final n in list.nodes) nodeIdentityHash(n): now,
+      };
+    }
+    entry._replaceList(list.copyWith(disabledHashes: next));
+    await _persist();
+    notifyListeners();
+  }
+
   /// Вкл/выкл одного члена папки.
   Future<void> toggleMemberAt(int index, int memberIndex) async {
     if (index < 0 || index >= _entries.length) return;
@@ -1571,10 +1641,16 @@ class SubscriptionController extends ChangeNotifier {
   /// Публичный refresh для AutoUpdater. Помечает попытку
   /// (`lastUpdateAttempt` + `lastUpdateStatus`) и персистит, чтобы триггер #1
   /// (app start) после рестарта мог принять решение.
-  Future<void> refreshEntry(SubscriptionEntry entry,
-      {UpdateTrigger? trigger}) async {
-    await _fetchEntryByRef(entry, trigger: trigger);
-  }
+  ///
+  /// §331 (ревью) — возвращает «состав узлов изменился» (true только при
+  /// успешном фетче с реально новым составом). AutoUpdater по этому значению
+  /// гейтит реакцию `onUpdateAction`: без гейта подписка с тем же списком нод
+  /// запускала бы пересборку (а в режиме reload — и попытку reload) на каждом
+  /// часовом тике. Ручной путь (⟳ → `_fetchEntryByRef`) гейтится тем же
+  /// `sameComposition` внутри.
+  Future<bool> refreshEntry(SubscriptionEntry entry,
+      {UpdateTrigger? trigger}) =>
+      _fetchEntryByRef(entry, trigger: trigger);
 
   Future<void> toggleAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
@@ -1695,9 +1771,9 @@ class SubscriptionController extends ChangeNotifier {
     return result.configJson;
   }
 
-  Future<void> _fetchEntry(int index, {UpdateTrigger? trigger}) async {
-    if (index < 0 || index >= _entries.length) return;
-    await _fetchEntryByRef(_entries[index], trigger: trigger);
+  Future<bool> _fetchEntry(int index, {UpdateTrigger? trigger}) async {
+    if (index < 0 || index >= _entries.length) return false;
+    return _fetchEntryByRef(_entries[index], trigger: trigger);
   }
 
   /// Fetch по ссылке на entry, а не индексу. Защищает от race conditions:
@@ -1707,10 +1783,14 @@ class SubscriptionController extends ChangeNotifier {
   /// Записывает `lastUpdateAttempt` (всегда) и `lastUpdateStatus` (ok|failed)
   /// в `SubscriptionServers` и сразу персистит — чтобы AutoUpdater после
   /// рестарта app не пытался обновить ту же подписку через 5 секунд.
-  Future<void> _fetchEntryByRef(SubscriptionEntry entry,
+  ///
+  /// §331 (ревью) — возвращает «состав узлов изменился»: true ТОЛЬКО при
+  /// успешном фетче с новым составом (см. `_compositionKey`). Скипы, фейлы и
+  /// «тот же список» → false. Контракт для гейта реакции в AutoUpdater.
+  Future<bool> _fetchEntryByRef(SubscriptionEntry entry,
       {UpdateTrigger? trigger}) async {
     final list = entry.list;
-    if (list is! SubscriptionServers) return;
+    if (list is! SubscriptionServers) return false;
 
     // §129 — файловая подписка: источник локальный, снапшот живёт в HttpCache.
     // Автоматически перечитать файл нельзя (Вариант Б: доступ между сессиями не
@@ -1719,7 +1799,7 @@ class SubscriptionController extends ChangeNotifier {
     // файловой — только вручную через Edit source → Choose file (updateSourceAt).
     if (isFileSubscription(list.url)) {
       AppLog.I.debug('Skip fetch (file subscription): keeping cached nodes');
-      return;
+      return false;
     }
 
     // Дедупликация: если предыдущий fetch этой же подписки ещё идёт
@@ -1730,7 +1810,7 @@ class SubscriptionController extends ChangeNotifier {
     if (list.lastUpdateStatus == UpdateStatus.inProgress) {
       AppLog.I.debug(
           'Fetch skipped — already inProgress: ${maskSubscriptionUrl(list.url)}');
-      return;
+      return false;
     }
 
     // Масированный URL (T2-3): char-truncation раньше мог оставить токен
@@ -1740,15 +1820,23 @@ class SubscriptionController extends ChangeNotifier {
     final triggerName = trigger?.name ?? 'manual';
     AppLog.I.info('Fetching subscription [$triggerName]: $shortUrl');
     final attemptAt = DateTime.now();
+    var compositionChanged = false;
     try {
       entry.status = const SubStatusFetching();
       // Помечаем попытку до начала fetch'а, чтобы при крэше app
       // (или kill процесса) AutoUpdater всё равно увидел, что мы пробовали.
+      //
+      // §331 (ревью) — keepDirtyFlag: пометка попытки — чистые метаданные
+      // (`lastUpdateAttempt`, `inProgress`), билдер их не читает, пересобирать
+      // не из чего. Ранний вариант поднимал здесь флаг и «восстанавливал» его
+      // после fetch'а — с гонкой: реальная правка юзера, сделанная ВО ВРЕМЯ
+      // fetch'а (сетевые секунды), затиралась восстановлением. Не поднимаем —
+      // и восстанавливать нечего, гонка исчезает по построению.
       entry._replaceList(list.copyWith(
         lastUpdateAttempt: attemptAt,
         lastUpdateStatus: UpdateStatus.inProgress,
       ));
-      await _persist();
+      await _persist(keepDirtyFlag: true);
       notifyListeners();
 
       // §289 — per-subscription идентичность (null → глобальная).
@@ -1780,7 +1868,11 @@ class SubscriptionController extends ChangeNotifier {
           consecutiveFails: current.consecutiveFails + 1,
         ));
         try {
-          await _persist();
+          // §331 (ревью) — keepDirtyFlag: фейл-статус — метаданные, состав
+          // узлов не менялся. Без гейта каждый неудачный фетч (провайдер лёг,
+          // авиарежим) поднимал синюю плашку «Settings changed» — раз в час,
+          // на конфиге, который никто не трогал.
+          await _persist(keepDirtyFlag: true);
         } catch (e) {
           // §101 review: persist-фейл не должен уйти в общий catch — там
           // consecutiveFails инкрементится повторно и haptic дублируется.
@@ -1793,7 +1885,7 @@ class SubscriptionController extends ChangeNotifier {
         AutomationEventEmitter.I
             .emitSubRefreshFailed(shortUrl, '0 nodes parsed');
         notifyListeners();
-        return;
+        return false;
       }
 
       // Кешируем сырое тело и заголовки на диск для офлайн-реактивации после
@@ -1833,7 +1925,7 @@ class SubscriptionController extends ChangeNotifier {
       // `nodeIdentityHash` того же инстанса), поэтому пометка гарантированно
       // совпадает с узлом, который билдер увидит.
       final ruleNow = DateTime.now();
-      final ruleHashes =
+      final ruleMarks =
           _applyRulesToNodes(result.nodes, current.activeImportRules);
 
       // §283 — GC отметок disable ТОЛЬКО здесь (успешный сетевой fetch =
@@ -1841,21 +1933,23 @@ class SubscriptionController extends ChangeNotifier {
       // регидрация из кэша состав не проясняют, file:-подписки сюда не
       // доходят — guard выше). Хеш свежих нод считаем лишь когда есть что
       // чистить.
-      final baseDisabled = current.disabledHashes.isEmpty && ruleHashes.isEmpty
-          ? current.disabledHashes
-          : gcDisabledHashes(
-              current.disabledHashes,
-              {for (final n in result.nodes) nodeIdentityHash(n)},
-              updateIntervalHours: nextInterval,
-              now: ruleNow,
-            );
-      // Наложить хеши от DISABLE-правил поверх результата GC (правило > GC).
-      final nextDisabled = ruleHashes.isEmpty
-          ? baseDisabled
-          : {
-              ...baseDisabled,
-              for (final h in ruleHashes) h: ruleNow,
-            };
+      final baseDisabled =
+          current.disabledHashes.isEmpty && ruleMarks.disable.isEmpty
+              ? current.disabledHashes
+              : gcDisabledHashes(
+                  current.disabledHashes,
+                  {for (final n in result.nodes) nodeIdentityHash(n)},
+                  updateIntervalHours: nextInterval,
+                  now: ruleNow,
+                );
+      // §332 — итог правил поверх GC (правило > GC): ENABLE снимает отметки
+      // (включая ручные §283), DISABLE ставит.
+      final nextDisabled = applyRuleMarks(
+        baseDisabled,
+        enable: ruleMarks.enable,
+        disable: ruleMarks.disable,
+        now: ruleNow,
+      );
       final next = current.copyWith(
         name: nextName,
         meta: result.meta,
@@ -1869,7 +1963,45 @@ class SubscriptionController extends ChangeNotifier {
         nodes: result.nodes,
       );
       entry._replaceList(next);
-      await _persist();
+      // §331 — состав узлов тот же ⇒ пересобирать конфиг не из чего, синюю
+      // плашку «Settings changed» не поднимаем. На диск пишем всё равно:
+      // last_updated / last_update_attempt / GC-отметки обновиться должны.
+      //
+      // Что входит в «состав» — ровно то, что видит билдер: identity-хеши
+      // узлов В ПОРЯДКЕ следования (порядок значим — от него зависят
+      // suffixes allocateTag и порядок в пулах) плюс набор disable-отметок
+      // (§283: снятая/поставленная отметка меняет, что эмитится, при том же
+      // списке узлов). Всё прочее в подписке — метаданные, конфиг от них не
+      // зависит.
+      final sameComposition = _compositionKey(current.nodes, current.disabledHashes.keys) ==
+          _compositionKey(result.nodes, nextDisabled.keys);
+      // Единственный persist фетч-пути, которому ПОЗВОЛЕНО поднять флаг — и
+      // только при реально изменившемся составе. Все остальные (попытка,
+      // фейлы, sweep) — метаданные с keepDirtyFlag: true, поэтому никакого
+      // «запомнить и восстановить» здесь больше нет (см. историю §331: у
+      // restore-варианта была гонка с правками юзера во время fetch'а).
+      await _persist(keepDirtyFlag: sameComposition);
+      compositionChanged = !sameComposition;
+      if (sameComposition) {
+        AppLog.I.debug('§331: composition unchanged for $shortUrl');
+      }
+      // §331 — ручной ⟳ идёт сюда, минуя `AutoUpdater.maybeUpdateAll`, поэтому
+      // реакцию подписки (`onUpdateAction`) применяем здесь сами. Только при
+      // РЕАЛЬНО изменившемся составе: иначе кнопка «обновить» на неизменной
+      // подписке рвала бы туннель на 3 секунды ни за что.
+      //
+      // Авто-триггеры реакцию получают в `maybeUpdateAll` — там она
+      // агрегируется за весь проход (один reload на N подписок, а не N).
+      if (trigger == UpdateTrigger.manual && !sameComposition) {
+        switch (next.onUpdateAction) {
+          case SubscriptionOnUpdateAction.reload:
+            await _autoUpdater?.applyReaction(reload: true);
+          case SubscriptionOnUpdateAction.rebuild:
+            await _autoUpdater?.applyReaction(reload: false);
+          case SubscriptionOnUpdateAction.none:
+            break;
+        }
+      }
       // Haptic только на user-инициированные fetch'и — auto/periodic тихие.
       if (trigger == UpdateTrigger.manual) HapticService.I.onFetchSuccess();
       // §047 — outgoing subscription event (gated, default OFF). delta =
@@ -1895,7 +2027,9 @@ class SubscriptionController extends ChangeNotifier {
           lastUpdateStatus: UpdateStatus.failed,
           consecutiveFails: current.consecutiveFails + 1,
         ));
-        await _persist();
+        // §331 (ревью) — keepDirtyFlag: как в empty-parse ветке выше — фейл
+        // пишет только метаданные, синяя плашка от него не законна.
+        await _persist(keepDirtyFlag: true);
       }
       if (trigger == UpdateTrigger.manual) HapticService.I.onFetchError();
       // §047 — outgoing subscription event (gated, default OFF; throttled
@@ -1904,6 +2038,7 @@ class SubscriptionController extends ChangeNotifier {
           .emitSubRefreshFailed(shortUrl, humanizeError(e).renderEn());
     }
     notifyListeners();
+    return compositionChanged;
   }
 
   Future<void> persistSources() async {
@@ -1936,8 +2071,56 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _persist() async {
-    if (!_busy) configDirty = true;
+  /// §331 — отпечаток «состава» подписки: то и только то, от чего зависит
+  /// собранный конфиг. Одинаковый отпечаток ⇒ пересборка дала бы тот же
+  /// результат ⇒ поднимать `configDirty` не за что.
+  ///
+  /// Что входит:
+  /// - identity-хеши узлов **в порядке следования** — порядок значим: от него
+  ///   зависят суффиксы `allocateTag` (`X` / `X-1`) и порядок внутри пулов
+  ///   `urltest`/`selector`. Провайдер переставил узлы — это изменение;
+  /// - набор disable-отметок (§283) — при том же списке узлов снятая или
+  ///   поставленная отметка меняет, что билдер эмитит. Сортируем: порядок
+  ///   ключей map'а сам по себе ничего не значит.
+  ///
+  /// Что НЕ входит и не должно: `last_updated`, `last_update_attempt`,
+  /// `lastUpdateStatus`, `meta` (HTTP-заголовки, трафик, срок), `name`,
+  /// `consecutiveFails`, `updateIntervalHours` — билдер их не читает.
+  ///
+  /// Хеши считаются от УЖЕ пропатченных §302-правилами узлов (метод зовётся
+  /// после `_applyRulesToNodes`), тем же `nodeIdentityHash`, что у билдера.
+  @visibleForTesting
+  static String compositionKeyForTesting(
+    List<NodeSpec> nodes,
+    Iterable<String> disabledHashes,
+  ) =>
+      _compositionKey(nodes, disabledHashes);
+
+  static String _compositionKey(
+    List<NodeSpec> nodes,
+    Iterable<String> disabledHashes,
+  ) {
+    // Длина каждого элемента в префиксе — иначе конкатенация склеивается
+    // неоднозначно: две отметки `x`,`y` дали бы то же, что одна `x,y` (тест
+    // §331 «разделитель не даёт коллизии»). Хеши узлов фиксированной длины, но
+    // отметки приходят из storage и гарантий не дают.
+    String lenPrefixed(Iterable<String> items) =>
+        items.map((s) => '${s.length}:$s').join();
+    final tags = lenPrefixed(nodes.map(nodeIdentityHash));
+    final disabled = lenPrefixed(disabledHashes.toList()..sort());
+    return '$tags|$disabled';
+  }
+
+  /// [keepDirtyFlag] — §331: записать на диск, НЕ поднимая `configDirty`.
+  /// Единственный законный случай: успешный fetch, в котором состав узлов
+  /// оказался тем же. На диск писать всё равно надо (`last_updated`,
+  /// `last_update_attempt`, GC-отметки), но пересобирать конфиг не из чего —
+  /// а синяя плашка «Settings changed» именно это и предлагала, раз в час, на
+  /// подписке, которая не менялась.
+  ///
+  /// Для всех прочих вызовов дефолт неизменен: любая запись = pending changes.
+  Future<void> _persist({bool keepDirtyFlag = false}) async {
+    if (!_busy && !keepDirtyFlag) configDirty = true;
     await SettingsStorage.saveServerLists(_entries.map((e) => e.list).toList());
   }
 

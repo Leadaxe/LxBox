@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
+import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
@@ -46,6 +48,27 @@ void main() {
       origin: UserSource.paste,
       createdAt: DateTime.now(),
       nodes: specs,
+    );
+  }
+
+  /// §322 — те же узлы + узел автовыбора (`autogroup://`) в том же списке.
+  Future<UserServer> nodesWithAutoGroup() async {
+    final base = await nodes();
+    final auto = AutoSelectSpec(
+      id: 'ag',
+      tag: 'Auto DE',
+      label: 'Auto DE',
+      membership: const RuleMembers(include: '🇩🇪'),
+    );
+    return UserServer(
+      id: base.id,
+      name: base.name,
+      enabled: base.enabled,
+      tagPrefix: base.tagPrefix,
+      detourPolicy: base.detourPolicy,
+      origin: UserSource.paste,
+      createdAt: DateTime.now(),
+      nodes: [...base.nodes, auto],
     );
   }
 
@@ -123,6 +146,30 @@ void main() {
   });
 
   group('F1 — auto-двойник', () {
+    test('§322 — узел автовыбора в selector канала есть, в двойнике нет',
+        () async {
+      // urltest внутри urltest мерил бы уже выбранный группой узел.
+      final r = await buildConfig(
+        lists: [await nodesWithAutoGroup()],
+        template: template(),
+        settings: const BuildSettings(channels: [
+          Channel(tag: 'vpn-1', label: 'X', auto: ChannelAuto()),
+        ]),
+      );
+      expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
+      final outs = (r.config['outbounds'] as List).cast<Map<String, dynamic>>();
+
+      // Группа собралась и попала в selector — выбрать её руками можно.
+      expect(outs.any((o) => o['tag'] == 'Auto DE'), isTrue);
+      expect(byTag(outs, 'vpn-1')['outbounds'], contains('Auto DE'));
+
+      // …но НЕ в urltest-двойник канала.
+      expect(byTag(outs, 'vpn-1-auto')['outbounds'],
+          isNot(contains('Auto DE')));
+      // Обычные узлы в двойнике остались.
+      expect(byTag(outs, 'vpn-1-auto')['outbounds'], contains('🇩🇪 Berlin'));
+    });
+
     test('auto != null → эмит <tag>-auto urltest по нодам канала', () async {
       final outs = await build([
         const Channel(
