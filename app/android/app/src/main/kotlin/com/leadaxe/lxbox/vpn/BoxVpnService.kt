@@ -412,10 +412,9 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         // (`libbox/service.go` dup) и раздаёт номера дальше; при переиспользовании
         // номера чужой close бьёт в Go-сокет листенера sing-tun (§047). Пара
         // «выдан / закрыт» по номеру и времени — единственный способ это увидеть:
-        // fdsan молчит, жертва нетегирована. Уровень `i`: при дефолтном пороге
-        // logcat (`w`) не шумит в проде, но остаётся в сборке — снимается на
-        // требование через `adb logcat '*:I'`, поэтому живёт и в релизе.
-        Log.i(TAG, "[fd §329] openTun fd=${pfd.fd} at=${SystemClock.elapsedRealtime()}ms")
+        // fdsan молчит, жертва нетегирована. Уровень `w`: виден под дефолтным
+        // порогом logcat, ничего не надо помнить про фильтр при разборе случая.
+        Log.w(TAG, "[fd §329] openTun fd=${pfd.fd} at=${SystemClock.elapsedRealtime()}ms")
         // **§049 F1**: state живёт в BoxService — храним там.
         service.fileDescriptor.set(pfd)
         return pfd.fd

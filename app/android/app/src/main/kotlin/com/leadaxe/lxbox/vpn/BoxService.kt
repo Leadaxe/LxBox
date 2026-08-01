@@ -315,9 +315,8 @@ class BoxService(
         // no-op (уже закрыт другим потоком) логируем тоже: он говорит, что
         // этот путь пришёл вторым, и называет победителя гонки по времени.
         val fd = pfd?.runCatching { fd }?.getOrNull()
-        // Уровень `i` — см. парный лог в `BoxVpnService.openTun`: не шумит при
-        // дефолтном пороге logcat, но остаётся в релизной сборке.
-        Log.i(TAG, "[fd §329] close($reason) fd=${fd ?: "already-closed"} at=${SystemClock.elapsedRealtime()}ms")
+        // Уровень `w` — см. парный лог в `BoxVpnService.openTun`.
+        Log.w(TAG, "[fd §329] close($reason) fd=${fd ?: "already-closed"} at=${SystemClock.elapsedRealtime()}ms")
         pfd?.runCatching { close() }
             ?.onFailure { Log.w(TAG, "closeFileDescriptor($reason): close failed: ${it.message}") }
     }
