@@ -401,6 +401,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         case ProbeStatus.invalid:
           broken++;
         case ProbeStatus.pending:
+        case ProbeStatus.group: // §336 — не тестируется, в сводке не считаем
           break;
       }
     }
@@ -1627,6 +1628,11 @@ class _MemberTile extends StatelessWidget {
       ProbeStatus.invalid => (
           getLocalText.s("invalid"),
           theme.colorScheme.error
+        ),
+      // §336 — группа не тестируется: нейтральный бейдж, не ошибка.
+      ProbeStatus.group => (
+          getLocalText.s("auto"),
+          theme.colorScheme.onSurfaceVariant
         ),
     };
     return GestureDetector(

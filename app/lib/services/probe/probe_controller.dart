@@ -129,6 +129,8 @@ class ProbeController {
   // ─── Чистые bulk-решения (доменно-агностичны; экран применяет к мутатору) ────
 
   /// Индексы нод, не прошедших последний тест (failed/broken/invalid).
+  /// §336 — `group` сюда НЕ входит: «Disable unreachable» не должен выключать
+  /// автоузел, который просто не тестируется.
   static Set<int> unreachableIndexes(Map<int, ProbeResult> probe) => {
         for (final e in probe.entries)
           if (e.value.status == ProbeStatus.failed ||
@@ -152,7 +154,8 @@ class ProbeController {
       if (r == null) return 1 << 30;
       return switch (r.status) {
         ProbeStatus.ok => r.delayMs,
-        ProbeStatus.pending => 1 << 30,
+        // §336 — группа = «не тестировалась», корзина pending, не err.
+        ProbeStatus.pending || ProbeStatus.group => 1 << 30,
         ProbeStatus.failed ||
         ProbeStatus.broken ||
         ProbeStatus.invalid =>

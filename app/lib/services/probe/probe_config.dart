@@ -30,7 +30,8 @@ class ProbeConfig {
   final Map<int, String> tagByIndex;
 
   /// index → причина, почему нода НЕ попала в конфиг:
-  /// 'broken' (null-слот / raw не парсится) | 'invalid: …' (emit бросил).
+  /// 'broken' (null-слот / raw не парсится) | 'group' (узел-группа §322/§336,
+  /// не тестируется) | 'invalid: …' (emit бросил).
   final Map<int, String> brokenByIndex;
 }
 
@@ -59,6 +60,14 @@ ProbeConfig buildProbeConfig(List<NodeSpec?> nodes) {
     final node = nodes[i];
     if (node == null) {
       brokenByIndex[i] = 'broken';
+      continue;
+    }
+    // §336 — группа (§322) не тестируется: её emitRaw — заготовка urltest с
+    // пустым outbounds (члены дописывает только боевой билдер), ядро валит
+    // на ней ВЕСЬ probe-конфиг «missing tags». Члены группы лежат в том же
+    // контейнере и тестируются поштучно.
+    if (node.isGroup) {
+      brokenByIndex[i] = 'group';
       continue;
     }
     try {

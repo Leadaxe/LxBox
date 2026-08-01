@@ -27,6 +27,10 @@ enum ProbeStatus {
 
   /// emit ноды упал — конфиг из неё не собрать.
   invalid,
+
+  /// §336 — узел-группа (§322): своего замера нет, члены тестируются
+  /// поштучно. Не ошибка — нейтральный вердикт.
+  group,
 }
 
 class ProbeResult {
@@ -79,12 +83,16 @@ class ProbeRunner {
     try {
       final cfg = buildProbeConfig(nodes);
 
-      // Битые/несобираемые — вердикт сразу, без ядра.
+      // Битые/несобираемые/группы — вердикт сразу, без ядра.
       cfg.brokenByIndex.forEach((i, why) {
         onResult(
             i,
             ProbeResult(
-              why == 'broken' ? ProbeStatus.broken : ProbeStatus.invalid,
+              switch (why) {
+                'broken' => ProbeStatus.broken,
+                'group' => ProbeStatus.group, // §336
+                _ => ProbeStatus.invalid,
+              },
               message: why,
             ));
       });

@@ -3942,6 +3942,9 @@
   "applied after include": {
     "value": "применяется после «включить»"
   },
+  "auto": {
+    "value": "авто"
+  },
   "auto-start, keep on exit, background mode, allow bypass": {
     "value": "автозапуск, сохранение при выходе, фоновый режим, обход VPN"
   },

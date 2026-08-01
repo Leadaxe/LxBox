@@ -10,15 +10,18 @@ void main() {
   const failed = ProbeResult(ProbeStatus.failed);
   const broken = ProbeResult(ProbeStatus.broken);
   const pending = ProbeResult(ProbeStatus.pending);
+  const groupNode = ProbeResult(ProbeStatus.group);
 
   group('unreachableIndexes', () {
-    test('failed/broken/invalid → в наборе; ok/pending → нет', () {
+    test('failed/broken/invalid → в наборе; ok/pending/group → нет', () {
       final probe = {
         0: ok(100),
         1: failed,
         2: broken,
         3: const ProbeResult(ProbeStatus.invalid),
         4: pending,
+        // §336 — автоузел не тестируется; «Disable unreachable» его не трогает.
+        5: groupNode,
       };
       expect(ProbeController.unreachableIndexes(probe), {1, 2, 3});
     });
@@ -51,6 +54,11 @@ void main() {
     test('стабильность: равный ранг → по исходному индексу', () {
       final probe = {0: ok(100), 1: ok(100)};
       expect(ProbeController.pingSortOrder(probe, 2), [0, 1]);
+    });
+    test('§336: group — корзина «не тестировалась» (с pending), перед err', () {
+      final probe = {0: failed, 1: groupNode, 2: ok(50), 3: pending};
+      // ok idx2 → нетестированные idx1(group), idx3(pending) → failed idx0.
+      expect(ProbeController.pingSortOrder(probe, 4), [2, 1, 3, 0]);
     });
   });
 
