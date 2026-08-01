@@ -606,6 +606,8 @@ vpn/BoxVpnService.kt         # Android VpnService + PlatformInterface side (§04
 vpn/BoxService.kt            # CommandServerHandler — владеет libbox runtime (fileDescriptor/commandServer
                              #   AtomicReference, serviceScope); startSingbox/doStop/serviceReload; setStatus broadcast
 vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singleton wifiObserver
+vpn/CrashRecovery.kt         # §334 — «прошлый запуск упал» (непустой CrashReport-lxbox.log) → сброс cache.db +
+                             #   tempPath. Детект СТРОГО до Libbox.setup: тот архивирует репорт и затирает файл
 vpn/PlatformInterfaceWrapper.kt # libbox PlatformInterface: localDNS→LocalResolver, findConnectionOwner, readWIFIState
 vpn/PProfClient.kt           # §207 — libbox PProfServer (goroutine/CPU dump, порт 6060..6065; loopback-only)
 vpn/DefaultNetworkMonitor.kt # §087: detect genuine iface switch (prev!=new), debounce 1500ms → resetNetwork
@@ -1026,9 +1028,12 @@ late final Stream<TunnelStatusEvent> onStatusChanged = _events
 ┌─────────────────────────────────────────┐  ┌────────────────────────────────────┐
 │ BoxApplication : Application            │  │ VpnPlugin : MethodCallHandler      │
 │  • onCreate (registered in Manifest)    │  │  • setMethodCallHandler            │
-│  • Libbox.setup(SetupOptions) async     │  │  • EventChannel sinks (status/log) │
-│  • libboxReady : CompletableDeferred    │  │  • static currentStatus mirror     │
-│  • Singleton WifiNetworkObserver        │  │     (sync read by HomeController)  │
+│  • §334 CrashRecovery ← СТРОГО ДО setup │  │  • EventChannel sinks (status/log) │
+│    событие + 2 подписчика: чистка здесь,│  │  • static currentStatus mirror     │
+│    баннер §316 — в Dart, от архива      │  │     (sync read by HomeController)  │
+│  • Libbox.setup(SetupOptions) async     │  │                                    │
+│  • libboxReady : CompletableDeferred    │  │                                    │
+│  • Singleton WifiNetworkObserver        │  │                                    │
 └─────────────────────────────────────────┘  └────────────────────────────────────┘
                                                            │ start/stop intent
                                                            ▼

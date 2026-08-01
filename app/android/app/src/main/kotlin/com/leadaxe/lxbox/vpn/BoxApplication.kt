@@ -113,6 +113,14 @@ class BoxApplication : Application() {
             // stderr-диагностику §038, потерянную с удалением redirectStderr в 1.14.
             crashReportSource = "lxbox"
         }
+        // §334 — событие «прошлый запуск упал»: непустой CrashReport-lxbox.log.
+        // СТРОГО до Libbox.setup — тот архивирует репорт и затирает файл
+        // (`redirectStderr`, log.go:69-77), а cache.db здесь ещё никем не
+        // открыт, поэтому удаление безопасно. Затирание же даёт дедуп даром:
+        // на следующем запуске файл пуст, второй раз не сработает.
+        if (CrashRecovery.crashedOnPreviousLaunch(workingDir)) {
+            CrashRecovery.resetKernelCaches(tempDir)
+        }
         Libbox.setup(opts)
     }
 
