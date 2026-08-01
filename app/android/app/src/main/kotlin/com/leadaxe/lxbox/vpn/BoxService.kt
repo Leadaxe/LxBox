@@ -328,12 +328,35 @@ class BoxService(
             .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): commandClient shutdown failed: ${it.message}") }
         commandClient = null
         val cs = commandServer.getAndSet(null) ?: return
+
+        // §330 — `close()` идёт ПЕРЕД `closeService()`, а не после. Причина: на
+        // force-пути `closeService()` под `withTimeout(2с)`, а этот таймаут
+        // кооперативен — блокирующий JNI-вызов он НЕ прерывает, только отпускает
+        // корутину. При старом порядке залипший `closeService()` (10-17с на
+        // конфигах с многими WG, §287) не отдавал управление следующей строке, и
+        // `close()` не вызывался вовсе — слушающий сокет (Clash-порт 63130 +
+        // command.sock) оставался занят на всё это время, хотя `stopSelf()` уже
+        // прошёл. Отсюда жалобы «порт не освобождается, другая программа его
+        // открыть не может» (§287 отпустила это как «WG биндит эфемерные сокеты» —
+        // верно для WG, но не для фиксированного 63130).
+        //
+        // Развязка безопасна — проверено по ядру (v1.14.0-lx.17-rc.4):
+        // `CommandServer.Close()` (command_server.go:180) трогает только
+        // grpcServer/listener/subscriber'ы и НЕ берёт `serviceAccess`, тогда как
+        // `CloseService()` (daemon/started_service.go:245) держит этот мьютекс на
+        // всё время `instance.Close()`. Общего состояния нет, порядок между ними
+        // ядру безразличен.
+        //
+        // Обратный порядок ничего не ломает и на штатном `doStop`: `closeService()`
+        // не ходит в gRPC-транспорт, а CommandClient-канал уже разорван выше.
+        runCatching { cs.close() }
+            .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): close failed: ${it.message}") }
+        Log.w(TAG, "[fd §330] listener closed($reason) at=${SystemClock.elapsedRealtime()}ms")
+
         runCatching { cs.closeService() }.onFailure {
             Log.e(TAG, "closeCommandServerAtomic($reason): closeService failed", it)
             runCatching { cs.setError("android: $reason close service: ${it.message}") }
         }
-        runCatching { cs.close() }
-            .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): close failed: ${it.message}") }
     }
 
     private suspend fun startSingbox() {
