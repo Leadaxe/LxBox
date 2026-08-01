@@ -119,7 +119,13 @@ UI ([subscription_meta.dart](../../../app/lib/screens/subscription_detail_screen
 
 ## Docs to update
 
-- `CHANGELOG.md` → Unreleased: enable-действие правил + bulk-кнопка.
+- [x] `CHANGELOG.md` → Unreleased: enable-действие правил + bulk-кнопка.
+- [x] `docs/STORAGE.md`: `action ∈ {replace, disable, enable}` + пример
+      enable-правила, поведение при чтении старой версией; пометка у
+      `disabled_hashes`, что карта одна на ручные и правило-отметки.
+- [x] `docs/releases/v2.19.0.md` + `RELEASE_NOTES.md` (EN + RU, обе полные).
+- `docs/ARCHITECTURE.md` — правок не требует: контракт «правила над emit-JSON»
+      не изменился, добавилось значение перечисления.
 
 ## Проверка
 

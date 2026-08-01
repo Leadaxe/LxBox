@@ -2,15 +2,16 @@
 
 Subscriptions that pack a whole pool into a single entry now arrive as a
 single node instead of a dozen look-alike rows — and you can build your own
-such node inside a folder. Plus Xray subscriptions stopped losing everything
-that isn't VLESS.
+such node inside a folder. Subscription rules learned to switch nodes back
+**on**, not only off. Plus Xray subscriptions stopped losing everything that
+isn't VLESS.
 
 Подписки, упаковывающие целый пул в один пункт, теперь приезжают одним узлом,
 а не десятком похожих строк — и такой узел можно собрать самому внутри папки.
+Правила подписок научились **включать** узлы обратно, а не только выключать.
 Плюс Xray-подписки перестали терять всё, что не VLESS.
 
-Core / Ядро: **sing-box-lx `v1.14.0-lx.17-rc.4`** — two self-healing fixes,
-see the Core section / два самолечащихся фикса, см. секцию «Ядро».
+Core / Ядро: **sing-box-lx `v1.14.0-lx.17-rc.4`**.
 
 ---
 
@@ -59,6 +60,26 @@ size, session stickiness, and whether switching should cut live connections.
 
 An entry containing trojan, vmess, shadowsocks or hysteria2 was dropped
 whole — silently. Liberty lost three paid GAMING servers this way.
+
+### ✅ Subscription rules can now enable nodes, not just disable them
+
+A rule could only ever switch nodes off. Change the criterion — the filter said
+"FI", now it says "NL" — and the old marks stayed: FI and NL both ended up off,
+with nothing to switch them back on.
+
+Rules now have a third action, **Enable**, which clears the disable mark —
+including one you set by hand. Rules run in order and the last one to match
+wins, so two idioms fall out of it:
+
+| first rule | then | result |
+|---|---|---|
+| Enable everything | Disable "FI" | old marks reset, only FI off |
+| Disable everything | Enable "NL" | allow-list: only NL stays on |
+
+"Everything" is a condition with an empty path, `matches`, `.*`.
+
+The Nodes tab also gained an **Enable all / Disable all** button — a way out of
+any accumulated state without touching the rules at all.
 
 ### 🧹 Duplicate servers are folded together
 
@@ -109,55 +130,103 @@ sticky: a rebuild producing a config identical to the running one didn't clear
 it. An hourly subscription returning the same list showed the banner every
 hour for nothing. A successful "Reload core" now clears it too.
 
-### 🔌 A stuck "Stopping" no longer leaves the port occupied
+Refreshing a subscription no longer raises it either. Any settings write used
+to set the flag, and a refresh always writes something — at minimum the time of
+the last attempt. A subscription returning the very same list was offering to
+rebuild a config with nothing to change. Now the node list is compared instead.
+Real unsaved changes from before a refresh are still kept.
 
-After the tunnel hung on stopping and the app force-stopped it, the local
-control port stayed taken for another 8–15 seconds — long after the screen
-already said "disconnected". Another program couldn't open it, and starting
-the VPN again in that window failed; a second stop-start fixed it.
+### 📁 Test results in a folder no longer shift when a server is deleted
 
-The teardown released the port only **after** shutting the core down, and on
-configs with many WireGuard nodes that shutdown takes 10–17 seconds. The
-force-stop path gives up waiting after 2 — so the release never happened. Now
-the port is freed first and the core shuts down after it, at its own pace.
+Measurements inside a folder were tied to the row number rather than the
+server. As long as the list stayed put everything lined up; delete one server
+from the middle and every value below it moved up a row, showing figures that
+belonged to someone else. It showed most after testing a large folder from the
+WARP generator, where dead nodes get deleted one at a time — reordering
+(dragging, sorting by latency) accounted for the shift, deleting didn't.
+
+The measurement now belongs to the server itself: delete, drag and sort in any
+order, the numbers stay with their rows. Editing a server (port, address, keys)
+clears its measurement — that's a different server now. Two identical servers
+in one folder are counted independently.
+
+### 🛑 A stuck stop no longer leaves the port occupied
+
+When the tunnel hung on shutdown the app force-kills it — and after that the
+local control port stayed busy for another 8–15 seconds, well after the screen
+said "disconnected". Nothing else could open it, starting the VPN in that
+window failed, and a second start-stop was the cure.
+
+It was an ordering problem: the port was only released **after** the core shut
+down, and on configs with many WireGuard nodes that shutdown takes 10–17
+seconds. The force-stop waits 2 seconds and moves on — so releasing the port
+never happened at all. The port is now handed back first and the core shuts
+down after it, at its own pace.
+
+### 🏠 With zero servers, the home screen points to Servers again
+
+The "Add a server" guide only showed while no config file existed. But a config
+gets created without a single server: a subscription returning an empty list,
+Apply in settings, or deleting all servers is enough — after which the guide
+was gone for good, the screen looked functional, and the VPN would even start
+with nothing to connect through.
+
+The guide is now tied to what actually matters: no servers means a full-screen
+guide with a link to Servers and restore-from-backup, and no Start button. Add
+one server — including by importing a ready config — and the screen goes back
+to normal. States with the VPN running are untouched; they have their own
+messages.
 
 ## ⚙️ Changed
 
-### 🔄 Subscriptions decide what happens after an auto-update
+### 🔄 Subscriptions decide what happens after an update
 
 A new **"On update"** setting per subscription: *Rebuild config* (the old
 behaviour — you apply it), *Rebuild and reload core* (applied at once, the
 connection drops for a few seconds) or *Do nothing* (nodes refresh in the list
-only). Manual ⟳ still leaves the decision to you.
+only).
 
-## 🧬 Core — sing-box-lx `v1.14.0-lx.17-rc.4`
+The setting is called "On update", not "On auto-update" — and now it behaves
+that way: manual ⟳ obeys it too. It used to fire only on the timer, so
+"Rebuild and reload" did nothing at all when you pressed the button yourself.
+On a manual refresh the reaction only fires if the node list really changed —
+pressing ⟳ on an unchanged subscription no longer costs you a few seconds of
+connection.
 
-### 🌐 "Browser dead, YouTube alive" is fixed — new TCP connections can no longer die forever
+## 🧩 Core
 
-A rare floating race (it had been haunting us since spring as §047): something
-in the shared Android process could close a file descriptor right out from
-under the core's internal TCP forwarder. The forwarder's accept loop treated
-that as fatal and silently gave up — from that moment **every new TCP
-connection got an instant "connection refused"**, while UDP, QUIC and DNS kept
-working. That's exactly the "YouTube and Instagram work, but the browser won't
-open anything" state, curable only by restarting the VPN. Reproduced roughly
-once per 8–36 fast VPN restarts.
+Kernel bumped to **`v1.14.0-lx.17-rc.4`**, which brings two self-healing fixes.
 
-The core now notices the death, logs the errno (which names the killer path —
-the hunt for the trigger continues with fdsan instrumentation on the app
-side), recreates the listener on the same address within milliseconds and
-keeps serving. A deliberate shutdown stays silent; a recovery counter is kept
-as telemetry.
+### 💤 WireGuard endpoints recover on their own after the phone sleeps
 
-### 📡 WG/AWG nodes heal themselves after device sleep
+While the phone sleeps, the tunnel's UDP flow dies on the path — the NAT
+mapping expires, or a DPI flow entry goes stale. The upstream implementation
+then retried handshakes into that same dead socket forever: same source port,
+same dead flow, no replies. Reconnecting "fixed" it only because it opened a
+new socket with a fresh port.
 
-While the phone sleeps, the tunnel's UDP path state dies (the NAT mapping
-expires, a DPI flow entry goes stale). Upstream WireGuard would retry
-handshakes into the same dead socket forever — the node sat in ERR until you
-reconnected manually. Now, when a full handshake cycle gives up, the core
-recreates the socket binding once — with a fresh source port when
-`listen_port` isn't pinned — and retries immediately. Zero cost when healthy,
-asleep or closed.
+The core now does that itself: when a peer's handshake retries run out
+(~90 seconds of silence, and only under actual traffic demand), it reopens the
+socket on a fresh port and starts a new handshake. Masquerade profiles send
+their decoy along with it, re-opening the flow on the DPI. If you pinned
+`listen_port` yourself it is preserved, and self-healing by port change is then
+unavailable by design. Costs nothing while healthy or asleep — no timers, no
+traffic — so it doesn't fight idle-suspend.
+
+### 🔌 System stack: TCP no longer dies until a restart
+
+With the system TCP stack every new connection out of the tunnel is routed
+through a local forwarder. Its accept loop treated **any** error as terminal
+and quietly gave up — so if something else in the shared Android process closed
+that socket, the stack kept routing every new connection to a dead port. The
+system answered each with an instant refusal: every app got "connection
+refused" in about 16 ms until the VPN was restarted, while UDP, QUIC and DNS
+went on working. On a device it reproduced about once in 8–36 rapid VPN
+restarts, which is why it stayed uncaught for months.
+
+The loop now logs the error with the system code that names the culprit,
+recreates the listener on the same address, republishes the port atomically and
+keeps serving. A deliberate shutdown stays silent as before.
 
 </details>
 
@@ -208,6 +277,26 @@ asleep or closed.
 Пункт с trojan, vmess, shadowsocks или hysteria2 отбрасывался целиком — и
 молча. У Liberty так терялись три платных GAMING-сервера.
 
+### ✅ Правила подписки научились включать узлы, а не только выключать
+
+Правило умело одно — выключать. Сменил критерий (был фильтр «FI», стал «NL») —
+старые отметки остались: выключенными оказывались и FI, и NL, а включить
+обратно было нечем.
+
+Теперь у правила есть третье действие — **Enable**: оно снимает отметку
+выключения, в том числе поставленную вручную. Правила применяются по порядку,
+последнее сработавшее побеждает, отсюда две связки:
+
+| первое правило | дальше | что выйдет |
+|---|---|---|
+| Включить всё | Выключить «FI» | старые отметки сброшены, выключены только FI |
+| Выключить всё | Включить «NL» | белый список: включены только NL |
+
+«Всё» — это условие с пустым путём, `matches`, `.*`.
+
+На вкладке Nodes появилась кнопка **«Включить все / Выключить все»** — выход из
+любого накопившегося состояния, не трогая правила вовсе.
+
 ### 🧹 Дубли серверов схлопываются
 
 Один сервер, перечисленный в нескольких пунктах, становится одним узлом. Ключ
@@ -256,55 +345,103 @@ asleep or closed.
 Подписка с интервалом в час, отдающая один и тот же список, показывала её
 каждый час без причины. Успешный «Reload core» теперь тоже её снимает.
 
-### 🔌 Зависшая остановка больше не оставляет порт занятым
+Обновление подписки её тоже больше не поднимает. Флаг вставал на любую запись
+настроек, а обновление пишет их всегда — хотя бы отметку времени последней
+попытки. Подписка, вернувшая ровно тот же список, предлагала пересобрать
+конфиг, которому нечего менять. Теперь сравнивается состав узлов. Настоящие
+несохранённые изменения, сделанные до обновления, при этом не гасятся.
 
-После того как туннель завис на остановке и приложение прибило его принудительно,
-локальный управляющий порт оставался занят ещё 8–15 секунд — уже после того, как
-на экране написано «отключено». Другая программа его открыть не могла, а запуск
-VPN в этом окне падал; помогал повторный старт-стоп.
+### 📁 В папке результаты теста больше не съезжают при удалении сервера
 
-Порт освобождался только **после** выключения ядра, а на конфигах с большим
-числом WireGuard-узлов это выключение занимает 10–17 секунд. Принудительная
-остановка ждёт его 2 секунды — до освобождения дело не доходило вовсе. Теперь
-порт отдаётся первым, а ядро выключается после него, в своём темпе.
+Замеры внутри папки привязывались к номеру строки, а не к самому серверу. Пока
+список не менялся, всё сходилось; стоило удалить один сервер из середины — и
+все значения ниже поднимались на строку вверх, показывая чужие числа. Заметнее
+всего это было после теста большой папки от генератора WARP, где мёртвые узлы
+удаляют по одному: перестановки (перетаскивание, сортировка по задержке) сдвиг
+учитывали, а удаление — нет.
+
+Теперь замер привязан к самому серверу: удаляйте, перетаскивайте и сортируйте
+в любом порядке — числа остаются при своих строках. Правка сервера (порт,
+адрес, ключи) сбрасывает его замер: это уже другой сервер. Два одинаковых
+сервера в одной папке считаются независимо.
+
+### 🛑 После зависшей остановки порт больше не остаётся занятым
+
+Когда туннель завис на остановке, приложение прибивает его принудительно — и
+после этого локальный управляющий порт оставался занят ещё 8–15 секунд, уже
+когда на экране написано «отключено». Другая программа его открыть не могла,
+запуск VPN в этом окне падал, помогал повторный старт-стоп.
+
+Дело в порядке действий: порт освобождался только **после** выключения ядра, а
+на конфигах с большим числом WireGuard-узлов оно занимает 10–17 секунд.
+Принудительная остановка ждёт 2 секунды и идёт дальше — то есть до
+освобождения порта дело не доходило вовсе. Теперь порт отдаётся первым, ядро
+выключается после него и в своём темпе.
+
+### 🏠 При нуле серверов главный экран снова зовёт в Servers
+
+Подсказка «Add a server» показывалась, только пока не существует файл конфига.
+Но конфиг создаётся и без единого сервера: достаточно подписки, отдавшей
+пустой список, нажатия Apply в настройках или удаления всех серверов — после
+этого подсказка пропадала навсегда, экран выглядел рабочим, и VPN даже
+запускался, хотя подключаться не через что.
+
+Теперь подсказка привязана к сути: серверов нет — полноэкранный гайд со
+ссылкой в Servers и восстановлением из бэкапа, кнопка Start не рисуется.
+Появился хотя бы один сервер (в том числе импортом готового конфига) — экран
+возвращается к обычному виду. Состояния при работающем VPN не тронуты: у них
+свои сообщения.
 
 ## ⚙️ Изменено
 
-### 🔄 Подписка решает, что делать после автообновления
+### 🔄 Подписка решает, что делать после обновления
 
 Новая настройка **«При обновлении»** у каждой подписки: *Пересобрать конфиг*
 (как было — применяете вы), *Пересобрать и перезагрузить ядро* (применяется
 сразу, соединение обрывается на несколько секунд) или *Ничего не делать*
-(узлы обновляются только в списке). Ручное ⟳ по-прежнему оставляет решение
-за вами.
+(узлы обновляются только в списке).
 
-## 🧬 Ядро — sing-box-lx `v1.14.0-lx.17-rc.4`
+Настройка называется «При обновлении», а не «При автообновлении» — теперь так
+и работает: ручное ⟳ ей тоже подчиняется. Раньше она срабатывала только по
+таймеру, и режим «Пересобрать и перезагрузить» на нажатие кнопки не делал
+ничего. На ручном обновлении реакция срабатывает, только если состав узлов
+действительно изменился: жать ⟳ на неизменившейся подписке больше не значит
+потерять несколько секунд соединения.
 
-### 🌐 «Браузер мёртв, YouTube жив» исправлен — новые TCP-соединения больше не умирают навсегда
+## 🧩 Ядро
 
-Редкая плавающая гонка (преследовала нас с весны как §047): кто-то в общем
-Android-процессе мог закрыть файловый дескриптор прямо из-под внутреннего
-TCP-форвардера ядра. Его accept-петля считала это фатальным и молча
-сдавалась — с этого момента **каждое новое TCP-соединение получало мгновенный
-«connection refused»**, при живых UDP, QUIC и DNS. Это ровно то состояние
-«YouTube и Instagram работают, а браузер ничего не открывает», лечившееся
-только рестартом VPN. Воспроизводилось примерно раз на 8–36 быстрых
-рестартов VPN.
+Ядро обновлено до **`v1.14.0-lx.17-rc.4`** — два самолечащихся фикса.
 
-Теперь ядро замечает смерть петли, пишет в лог errno (он называет путь
-убийства — охота на сам триггер продолжается fdsan-инструментировкой на
-стороне приложения), за миллисекунды пересоздаёт listener на том же адресе
-и продолжает работать. Штатная остановка остаётся тихой; счётчик
-восстановлений сохраняется как телеметрия.
+### 💤 WireGuard-узлы сами восстанавливаются после сна телефона
 
-### 📡 WG/AWG-узлы сами лечатся после сна устройства
+Пока телефон спит, UDP-поток туннеля умирает по дороге: истекает NAT-запись
+или протухает запись потока у DPI. Дальше реализация бесконечно повторяла
+рукопожатия в тот же мёртвый сокет — тот же исходящий порт, тот же мёртвый
+поток, ноль ответов. Переподключение «чинило» это ровно потому, что открывало
+новый сокет со свежим портом.
 
-Пока телефон спит, состояние UDP-пути туннеля умирает (истекает NAT-маппинг,
-протухает запись DPI). Апстримный WireGuard вечно ретраил рукопожатия в тот
-же мёртвый сокет — узел висел в ERR до ручного реконнекта. Теперь по провалу
-полного цикла рукопожатий ядро один раз пересоздаёт сокет — со свежим
-исходящим портом, если `listen_port` не пинован, — и сразу повторяет
-рукопожатие. В здоровом, спящем и закрытом состоянии цена нулевая.
+Теперь ядро делает это само: когда попытки рукопожатия у пира заканчиваются
+(~90 секунд молчания, и только если есть что передавать), сокет открывается
+заново на свежем порту и рукопожатие начинается сразу. Профили с маскировкой
+отправляют вместе с ним свой decoy, заново открывая поток на DPI. Если
+`listen_port` задан вручную, он сохраняется — самолечение сменой порта тогда
+недоступно, так задумано. В исправном состоянии и во сне не стоит ничего: ни
+таймеров, ни трафика, поэтому с idle-suspend оно не конфликтует.
+
+### 🔌 Системный стек: TCP больше не умирает до перезапуска
+
+При системном TCP-стеке каждое новое соединение из туннеля идёт через
+локальный форвардер. Его цикл приёма считал **любую** ошибку фатальной и тихо
+завершался — и если что-то ещё в общем процессе Android закрывало этот сокет,
+стек продолжал работать и отправлять каждое новое соединение на мёртвый порт.
+Система мгновенно отвечала отказом: любое приложение получало «connection
+refused» примерно за 16 мс, пока VPN не перезапустят, — при этом UDP, QUIC и
+DNS работали. На устройстве воспроизводилось примерно раз на 8–36 быстрых
+перезапусков VPN, поэтому месяцами оставалось незамеченным.
+
+Теперь цикл пишет в лог ошибку с системным кодом, который называет виновника,
+пересоздаёт слушателя на том же адресе, атомарно переопубликовывает порт и
+продолжает работать. Намеренное выключение по-прежнему проходит молча.
 
 </details>
 
