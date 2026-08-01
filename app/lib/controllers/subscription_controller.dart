@@ -153,7 +153,11 @@ class SubscriptionController extends ChangeNotifier {
         swept = true;
       }
     }
-    if (swept) await _persist();
+    // §331 (ревью) — keepDirtyFlag: sweep inProgress→failed — метаданные.
+    // Иначе после крэша во время фетча каждый старт app начинался бы с синей
+    // плашки. `configDirty` на init и так восстановлен mtime-сравнением выше —
+    // sweep не должен его перебивать.
+    if (swept) await _persist(keepDirtyFlag: true);
     notifyListeners();
     // Восстанавливаем узлы из кэша тел HTTP-подписок — офлайн доступ.
     // Без этого после перезапуска app узлы пропадали, пока пользователь
@@ -1637,10 +1641,16 @@ class SubscriptionController extends ChangeNotifier {
   /// Публичный refresh для AutoUpdater. Помечает попытку
   /// (`lastUpdateAttempt` + `lastUpdateStatus`) и персистит, чтобы триггер #1
   /// (app start) после рестарта мог принять решение.
-  Future<void> refreshEntry(SubscriptionEntry entry,
-      {UpdateTrigger? trigger}) async {
-    await _fetchEntryByRef(entry, trigger: trigger);
-  }
+  ///
+  /// §331 (ревью) — возвращает «состав узлов изменился» (true только при
+  /// успешном фетче с реально новым составом). AutoUpdater по этому значению
+  /// гейтит реакцию `onUpdateAction`: без гейта подписка с тем же списком нод
+  /// запускала бы пересборку (а в режиме reload — и попытку reload) на каждом
+  /// часовом тике. Ручной путь (⟳ → `_fetchEntryByRef`) гейтится тем же
+  /// `sameComposition` внутри.
+  Future<bool> refreshEntry(SubscriptionEntry entry,
+      {UpdateTrigger? trigger}) =>
+      _fetchEntryByRef(entry, trigger: trigger);
 
   Future<void> toggleAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
@@ -1761,9 +1771,9 @@ class SubscriptionController extends ChangeNotifier {
     return result.configJson;
   }
 
-  Future<void> _fetchEntry(int index, {UpdateTrigger? trigger}) async {
-    if (index < 0 || index >= _entries.length) return;
-    await _fetchEntryByRef(_entries[index], trigger: trigger);
+  Future<bool> _fetchEntry(int index, {UpdateTrigger? trigger}) async {
+    if (index < 0 || index >= _entries.length) return false;
+    return _fetchEntryByRef(_entries[index], trigger: trigger);
   }
 
   /// Fetch по ссылке на entry, а не индексу. Защищает от race conditions:
@@ -1773,10 +1783,14 @@ class SubscriptionController extends ChangeNotifier {
   /// Записывает `lastUpdateAttempt` (всегда) и `lastUpdateStatus` (ok|failed)
   /// в `SubscriptionServers` и сразу персистит — чтобы AutoUpdater после
   /// рестарта app не пытался обновить ту же подписку через 5 секунд.
-  Future<void> _fetchEntryByRef(SubscriptionEntry entry,
+  ///
+  /// §331 (ревью) — возвращает «состав узлов изменился»: true ТОЛЬКО при
+  /// успешном фетче с новым составом (см. `_compositionKey`). Скипы, фейлы и
+  /// «тот же список» → false. Контракт для гейта реакции в AutoUpdater.
+  Future<bool> _fetchEntryByRef(SubscriptionEntry entry,
       {UpdateTrigger? trigger}) async {
     final list = entry.list;
-    if (list is! SubscriptionServers) return;
+    if (list is! SubscriptionServers) return false;
 
     // §129 — файловая подписка: источник локальный, снапшот живёт в HttpCache.
     // Автоматически перечитать файл нельзя (Вариант Б: доступ между сессиями не
@@ -1785,7 +1799,7 @@ class SubscriptionController extends ChangeNotifier {
     // файловой — только вручную через Edit source → Choose file (updateSourceAt).
     if (isFileSubscription(list.url)) {
       AppLog.I.debug('Skip fetch (file subscription): keeping cached nodes');
-      return;
+      return false;
     }
 
     // Дедупликация: если предыдущий fetch этой же подписки ещё идёт
@@ -1796,7 +1810,7 @@ class SubscriptionController extends ChangeNotifier {
     if (list.lastUpdateStatus == UpdateStatus.inProgress) {
       AppLog.I.debug(
           'Fetch skipped — already inProgress: ${maskSubscriptionUrl(list.url)}');
-      return;
+      return false;
     }
 
     // Масированный URL (T2-3): char-truncation раньше мог оставить токен
@@ -1806,22 +1820,23 @@ class SubscriptionController extends ChangeNotifier {
     final triggerName = trigger?.name ?? 'manual';
     AppLog.I.info('Fetching subscription [$triggerName]: $shortUrl');
     final attemptAt = DateTime.now();
-    // §331 — состояние флага ДО fetch'а. `_persist` ниже (пометка попытки)
-    // поднимет `configDirty` раньше, чем мы узнаем состав; если состав окажется
-    // тем же, флаг надо вернуть в исходное, а не просто «не поднимать».
-    // Восстанавливаем именно прежнее значение, а не false: до fetch'а могли
-    // быть настоящие pending-изменения (правка настроек, другая подписка) —
-    // их гасить нельзя.
-    final dirtyBeforeFetch = configDirty;
+    var compositionChanged = false;
     try {
       entry.status = const SubStatusFetching();
       // Помечаем попытку до начала fetch'а, чтобы при крэше app
       // (или kill процесса) AutoUpdater всё равно увидел, что мы пробовали.
+      //
+      // §331 (ревью) — keepDirtyFlag: пометка попытки — чистые метаданные
+      // (`lastUpdateAttempt`, `inProgress`), билдер их не читает, пересобирать
+      // не из чего. Ранний вариант поднимал здесь флаг и «восстанавливал» его
+      // после fetch'а — с гонкой: реальная правка юзера, сделанная ВО ВРЕМЯ
+      // fetch'а (сетевые секунды), затиралась восстановлением. Не поднимаем —
+      // и восстанавливать нечего, гонка исчезает по построению.
       entry._replaceList(list.copyWith(
         lastUpdateAttempt: attemptAt,
         lastUpdateStatus: UpdateStatus.inProgress,
       ));
-      await _persist();
+      await _persist(keepDirtyFlag: true);
       notifyListeners();
 
       // §289 — per-subscription идентичность (null → глобальная).
@@ -1853,7 +1868,11 @@ class SubscriptionController extends ChangeNotifier {
           consecutiveFails: current.consecutiveFails + 1,
         ));
         try {
-          await _persist();
+          // §331 (ревью) — keepDirtyFlag: фейл-статус — метаданные, состав
+          // узлов не менялся. Без гейта каждый неудачный фетч (провайдер лёг,
+          // авиарежим) поднимал синюю плашку «Settings changed» — раз в час,
+          // на конфиге, который никто не трогал.
+          await _persist(keepDirtyFlag: true);
         } catch (e) {
           // §101 review: persist-фейл не должен уйти в общий catch — там
           // consecutiveFails инкрементится повторно и haptic дублируется.
@@ -1866,7 +1885,7 @@ class SubscriptionController extends ChangeNotifier {
         AutomationEventEmitter.I
             .emitSubRefreshFailed(shortUrl, '0 nodes parsed');
         notifyListeners();
-        return;
+        return false;
       }
 
       // Кешируем сырое тело и заголовки на диск для офлайн-реактивации после
@@ -1956,13 +1975,15 @@ class SubscriptionController extends ChangeNotifier {
       // зависит.
       final sameComposition = _compositionKey(current.nodes, current.disabledHashes.keys) ==
           _compositionKey(result.nodes, nextDisabled.keys);
+      // Единственный persist фетч-пути, которому ПОЗВОЛЕНО поднять флаг — и
+      // только при реально изменившемся составе. Все остальные (попытка,
+      // фейлы, sweep) — метаданные с keepDirtyFlag: true, поэтому никакого
+      // «запомнить и восстановить» здесь больше нет (см. историю §331: у
+      // restore-варианта была гонка с правками юзера во время fetch'а).
       await _persist(keepDirtyFlag: sameComposition);
+      compositionChanged = !sameComposition;
       if (sameComposition) {
-        // Пометка попытки выше (status=inProgress) уже подняла флаг — возвращаем
-        // ровно прежнее значение, чтобы не погасить чужие pending-изменения.
-        configDirty = dirtyBeforeFetch;
-        AppLog.I.debug('§331: composition unchanged for $shortUrl → '
-            'configDirty restored to $dirtyBeforeFetch');
+        AppLog.I.debug('§331: composition unchanged for $shortUrl');
       }
       // §331 — ручной ⟳ идёт сюда, минуя `AutoUpdater.maybeUpdateAll`, поэтому
       // реакцию подписки (`onUpdateAction`) применяем здесь сами. Только при
@@ -2006,7 +2027,9 @@ class SubscriptionController extends ChangeNotifier {
           lastUpdateStatus: UpdateStatus.failed,
           consecutiveFails: current.consecutiveFails + 1,
         ));
-        await _persist();
+        // §331 (ревью) — keepDirtyFlag: как в empty-parse ветке выше — фейл
+        // пишет только метаданные, синяя плашка от него не законна.
+        await _persist(keepDirtyFlag: true);
       }
       if (trigger == UpdateTrigger.manual) HapticService.I.onFetchError();
       // §047 — outgoing subscription event (gated, default OFF; throttled
@@ -2015,6 +2038,7 @@ class SubscriptionController extends ChangeNotifier {
           .emitSubRefreshFailed(shortUrl, humanizeError(e).renderEn());
     }
     notifyListeners();
+    return compositionChanged;
   }
 
   Future<void> persistSources() async {

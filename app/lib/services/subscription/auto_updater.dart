@@ -155,19 +155,26 @@ class AutoUpdater {
         if (_inFlight.contains(url)) continue;
         _inFlight.add(url);
         try {
-          await _subController.refreshEntry(entry, trigger: trigger);
+          final compositionChanged =
+              await _subController.refreshEntry(entry, trigger: trigger);
           final fresh = entry.list;
           if (fresh is SubscriptionServers &&
               fresh.lastUpdateStatus == UpdateStatus.ok) {
             _failCounts.remove(url);
-            switch (fresh.onUpdateAction) {
-              case SubscriptionOnUpdateAction.reload:
-                needReload = true;
-                needRebuild = true;
-              case SubscriptionOnUpdateAction.rebuild:
-                needRebuild = true;
-              case SubscriptionOnUpdateAction.none:
-                break;
+            // §331 (ревью) — реакция ТОЛЬКО при изменившемся составе, как на
+            // ручном пути. Без гейта подписка, отдающая тот же список раз в
+            // час, гоняла бы пересборку (а в режиме reload — и reload-попытку)
+            // на каждом тике впустую.
+            if (compositionChanged) {
+              switch (fresh.onUpdateAction) {
+                case SubscriptionOnUpdateAction.reload:
+                  needReload = true;
+                  needRebuild = true;
+                case SubscriptionOnUpdateAction.rebuild:
+                  needRebuild = true;
+                case SubscriptionOnUpdateAction.none:
+                  break;
+              }
             }
           } else {
             _failCounts[url] = (_failCounts[url] ?? 0) + 1;

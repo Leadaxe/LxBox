@@ -808,15 +808,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Future<void> _reactToSubscriptionUpdate({required bool reload}) async {
     if (!mounted) return;
     // Пересборка `silent`: юзер ничего не нажимал, snackbar был бы шумом.
-    // Ждём чужую пересборку, если она в полёте — своей не дублируем.
+    //
+    // §331 (ревью) — чужую пересборку в полёте ждём, но своей НЕ пропускаем.
+    // Чужая могла прочитать storage ДО того, как фетч записал новые ноды:
+    // её generateConfig собрал старый состав и по завершении сбросил
+    // configDirty — изменение подписки молча терялось, а reload ниже толкнул
+    // бы ядру устаревший конфиг. Проверить это по configDirty после await
+    // нельзя (сброс идёт ПОСЛЕ генерации — флаг уже чист), поэтому просто
+    // пересобираем сами: если чужая всё же успела взять свежие ноды, наша
+    // даст changed=false и обойдётся без побочных эффектов.
     final inFlight = _rebuildInFlight;
     if (inFlight != null) {
       await inFlight;
       if (!mounted) return;
-    } else {
-      await _rebuildAndClearDirty(silent: true);
-      if (!mounted) return;
     }
+    await _rebuildAndClearDirty(silent: true);
+    if (!mounted) return;
     if (!reload) return;
     // Туннель не поднят — reload'ить нечего, конфиг подхватится на Start.
     if (!_controller.state.tunnelUp) return;
