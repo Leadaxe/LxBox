@@ -9,7 +9,8 @@ that isn't VLESS.
 а не десятком похожих строк — и такой узел можно собрать самому внутри папки.
 Плюс Xray-подписки перестали терять всё, что не VLESS.
 
-Core / Ядро: **sing-box-lx `v1.14.0-lx.17-rc.3`** (unchanged / без изменений).
+Core / Ядро: **sing-box-lx `v1.14.0-lx.17-rc.4`** — two self-healing fixes,
+see the Core section / два самолечащихся фикса, см. секцию «Ядро».
 
 ---
 
@@ -108,6 +109,18 @@ sticky: a rebuild producing a config identical to the running one didn't clear
 it. An hourly subscription returning the same list showed the banner every
 hour for nothing. A successful "Reload core" now clears it too.
 
+### 🔌 A stuck "Stopping" no longer leaves the port occupied
+
+After the tunnel hung on stopping and the app force-stopped it, the local
+control port stayed taken for another 8–15 seconds — long after the screen
+already said "disconnected". Another program couldn't open it, and starting
+the VPN again in that window failed; a second stop-start fixed it.
+
+The teardown released the port only **after** shutting the core down, and on
+configs with many WireGuard nodes that shutdown takes 10–17 seconds. The
+force-stop path gives up waiting after 2 — so the release never happened. Now
+the port is freed first and the core shuts down after it, at its own pace.
+
 ## ⚙️ Changed
 
 ### 🔄 Subscriptions decide what happens after an auto-update
@@ -116,6 +129,35 @@ A new **"On update"** setting per subscription: *Rebuild config* (the old
 behaviour — you apply it), *Rebuild and reload core* (applied at once, the
 connection drops for a few seconds) or *Do nothing* (nodes refresh in the list
 only). Manual ⟳ still leaves the decision to you.
+
+## 🧬 Core — sing-box-lx `v1.14.0-lx.17-rc.4`
+
+### 🌐 "Browser dead, YouTube alive" is fixed — new TCP connections can no longer die forever
+
+A rare floating race (it had been haunting us since spring as §047): something
+in the shared Android process could close a file descriptor right out from
+under the core's internal TCP forwarder. The forwarder's accept loop treated
+that as fatal and silently gave up — from that moment **every new TCP
+connection got an instant "connection refused"**, while UDP, QUIC and DNS kept
+working. That's exactly the "YouTube and Instagram work, but the browser won't
+open anything" state, curable only by restarting the VPN. Reproduced roughly
+once per 8–36 fast VPN restarts.
+
+The core now notices the death, logs the errno (which names the killer path —
+the hunt for the trigger continues with fdsan instrumentation on the app
+side), recreates the listener on the same address within milliseconds and
+keeps serving. A deliberate shutdown stays silent; a recovery counter is kept
+as telemetry.
+
+### 📡 WG/AWG nodes heal themselves after device sleep
+
+While the phone sleeps, the tunnel's UDP path state dies (the NAT mapping
+expires, a DPI flow entry goes stale). Upstream WireGuard would retry
+handshakes into the same dead socket forever — the node sat in ERR until you
+reconnected manually. Now, when a full handshake cycle gives up, the core
+recreates the socket binding once — with a fresh source port when
+`listen_port` isn't pinned — and retries immediately. Zero cost when healthy,
+asleep or closed.
 
 </details>
 
@@ -214,6 +256,18 @@ only). Manual ⟳ still leaves the decision to you.
 Подписка с интервалом в час, отдающая один и тот же список, показывала её
 каждый час без причины. Успешный «Reload core» теперь тоже её снимает.
 
+### 🔌 Зависшая остановка больше не оставляет порт занятым
+
+После того как туннель завис на остановке и приложение прибило его принудительно,
+локальный управляющий порт оставался занят ещё 8–15 секунд — уже после того, как
+на экране написано «отключено». Другая программа его открыть не могла, а запуск
+VPN в этом окне падал; помогал повторный старт-стоп.
+
+Порт освобождался только **после** выключения ядра, а на конфигах с большим
+числом WireGuard-узлов это выключение занимает 10–17 секунд. Принудительная
+остановка ждёт его 2 секунды — до освобождения дело не доходило вовсе. Теперь
+порт отдаётся первым, а ядро выключается после него, в своём темпе.
+
 ## ⚙️ Изменено
 
 ### 🔄 Подписка решает, что делать после автообновления
@@ -223,6 +277,34 @@ only). Manual ⟳ still leaves the decision to you.
 сразу, соединение обрывается на несколько секунд) или *Ничего не делать*
 (узлы обновляются только в списке). Ручное ⟳ по-прежнему оставляет решение
 за вами.
+
+## 🧬 Ядро — sing-box-lx `v1.14.0-lx.17-rc.4`
+
+### 🌐 «Браузер мёртв, YouTube жив» исправлен — новые TCP-соединения больше не умирают навсегда
+
+Редкая плавающая гонка (преследовала нас с весны как §047): кто-то в общем
+Android-процессе мог закрыть файловый дескриптор прямо из-под внутреннего
+TCP-форвардера ядра. Его accept-петля считала это фатальным и молча
+сдавалась — с этого момента **каждое новое TCP-соединение получало мгновенный
+«connection refused»**, при живых UDP, QUIC и DNS. Это ровно то состояние
+«YouTube и Instagram работают, а браузер ничего не открывает», лечившееся
+только рестартом VPN. Воспроизводилось примерно раз на 8–36 быстрых
+рестартов VPN.
+
+Теперь ядро замечает смерть петли, пишет в лог errno (он называет путь
+убийства — охота на сам триггер продолжается fdsan-инструментировкой на
+стороне приложения), за миллисекунды пересоздаёт listener на том же адресе
+и продолжает работать. Штатная остановка остаётся тихой; счётчик
+восстановлений сохраняется как телеметрия.
+
+### 📡 WG/AWG-узлы сами лечатся после сна устройства
+
+Пока телефон спит, состояние UDP-пути туннеля умирает (истекает NAT-маппинг,
+протухает запись DPI). Апстримный WireGuard вечно ретраил рукопожатия в тот
+же мёртвый сокет — узел висел в ERR до ручного реконнекта. Теперь по провалу
+полного цикла рукопожатий ядро один раз пересоздаёт сокет — со свежим
+исходящим портом, если `listen_port` не пинован, — и сразу повторяет
+рукопожатие. В здоровом, спящем и закрытом состоянии цена нулевая.
 
 </details>
 
