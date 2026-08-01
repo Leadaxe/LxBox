@@ -6,9 +6,10 @@
 ## Что это
 
 Ядро — наш форк [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)
-(ветка `lx-1.14`, база upstream — см. «Текущий пин» ниже): upstream sing-box +
-AmneziaWG 2.0 + нативный XHTTP + LxBox-специфичные фичи (idle-suspend,
-round-robin balancer, XHTTP full params, DNS-стрим и др.).
+(рабочая и релизная ветка `lx`; `lx-1.14` — архивный якорь завершённой миграции
+на 1.14; база upstream — см. «Текущий пин» ниже): upstream sing-box +
+AmneziaWG 2.0 + нативный XHTTP + VLESS encryption (PQ-слой) + LxBox-специфичные
+фичи (idle-suspend, round-robin balancer, DNS-группа, DNS-стрим и др.).
 
 Управление — через **libbox CommandClient** (§122; Clash HTTP-server выпилен).
 
@@ -21,7 +22,30 @@ round-robin balancer, XHTTP full params, DNS-стрим и др.).
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.17-rc.5`** (v2.19.0, см. `app/android/libbox.version`)
+**Текущий пин: `v1.14.0-lx.18`** (v2.19.1, §335, см. `app/android/libbox.version`)
+— VLESS `encryption` (SPEC 032, feature VLESS_ENCRYPTION): пост-квантовый слой
+`mlkem768x25519plus` **внутри** VLESS (работает вместо TLS — такие узлы приезжают
+с `security=none`; не путать с REALITY). Раньше поля не было в схеме ядра, и
+узлы с ним были молча мертвы: транспорт поднимался (WS `101`, gRPC SETTINGS),
+дальше сервер рвал соединение без единой строки в логе. Клиентская половина —
+§335: билдер переносит поле из `vless://`-ссылок (query) и Xray-JSON
+(`users[0].encryption`) в плоское поле аутбаунда рядом с `uuid`, эмитит только
+непустое/не-`none`, плюс обратная запись в `toUriVless` (иначе терялось бы на
+round-trip §302-правил). Замер на устройстве: 12 настоящих узлов ожили (ws 7/8,
+grpc 5/5), итог по подписке 42 → 53 из 76. Java-поверхность libbox не меняется —
+это конфиг-поле, не API. ⚠️ Обратная сторона — ловушка 2: ядро старше lx.18
+отвергает конфиг с `encryption` **целиком**, поэтому бамп пина и включение
+эмита — один атомарный шаг.
+
+По пути пин проехал стабильный **`v1.14.0-lx.17`** — промоут rc-линии
+rc.1–rc.5 плюс XHTTP-фиксы, не выходившие в rc: SPEC 042 (Content-Type
+`application/grpc` на потоковых запросах — паритет с Xray) и SPEC 043 (корень
+жалобы «XHTTP-ноды подписки мертвы» — `stream-one` слал путь без завершающего
+слэша, сервер 404-ил, соединение висело до таймаута; `auto`+REALITY уходит в
+`stream-one`, отсюда ложный след «сломан auto»). Девайс-верифицировано: XHTTP-
+ноды подписки ожили. Оба фикса внутри ядра, клиентских правок нет.
+
+**Предыдущий пин: `v1.14.0-lx.17-rc.5`** (v2.19.0)
 — два самолечащихся фикса поверх rc.3 (rc.4, ниже) плюс апстрим-синк 01.08 в
 rc.5: naiveproxy v150, гонка DNS-правил (завершённое правило блокировалось ранее
 взведённым), WireGuard system-device не конфигурил DNS интерфейса, TLS-фрагмент
@@ -92,8 +116,10 @@ Java-поверхности не касаются — клиентских пр�
 кодирует Go-строку в `nstring{void*, len}`, cgo кладёт её в `__packed__`-фрейм,
 тот теряет 8-выравнивание, и присваивание слота с указателем идёт через
 `runtime.wbMove` → `bulkBarrierPreWrite` → `throw: unaligned arguments`. Это
-не паника, а fatal throw — туннель падал без шанса. Дефект внесён SPEC 036,
-поэтому §311 был неработоспособен и в rc.3, и в stable `lx.16`; именно так
+не паника, а fatal throw — туннель падал без шанса. Дефект внесён SPEC 037
+(GetRunningConfig; в ранних записях фигурировал как «SPEC 036» — этот номер в
+ядре позже освобождён и значит другое), поэтому §311 был неработоспособен и в
+rc.3, и в stable `lx.16`; именно так
 падало ядро 26.07 (найдено каналом §316). **javap-diff lx.16 → lx.17-rc.1:**
 единственное изменение — `getRunningConfig()` сменил возврат
 `String` → `RunningConfig`; `PlatformInterface` / `CommandClientHandler` /
@@ -101,7 +127,7 @@ Java-поверхности не касаются — клиентских пр�
 зовёт `.content()`. Device-verified 27.07.2026 (CPH2411): 6 вызовов подряд при
 живом туннеле → 200, ядро живо, новых крашей нет.
 
-**Предыдущий пин: `v1.14.0-lx.16`** (стабильный) — SPEC 036: `CommandClient.GetRunningConfig`
+**Предыдущий пин: `v1.14.0-lx.16`** (стабильный) — SPEC 037: `CommandClient.GetRunningConfig`
 — канонический снапшот конфига РАБОТАЮЩЕГО ядра (захват один раз на старте в
 `newInstance`, post-override, re-marshal; отдача — копия строки). Клиентская
 половина — §311 LxBox (`activeModel`, `GET /config/running`): закрывает окно
@@ -154,10 +180,13 @@ gh run download <run-id> --repo Leadaxe/sing-box-lx --name dist-android
 
 ```
 with_gvisor, with_quic, with_wireguard, with_utls, with_naive_outbound,
+badlinkname, tfogo_checklinkname0,
 with_xhttp, with_awg, with_lx_command, with_lx_idle_suspend
 ```
 
-`with_clash_api` намеренно убран (§122 — CommandClient вместо Clash HTTP).
+`with_clash_api` намеренно убран (§122 — CommandClient вместо Clash HTTP);
+также намеренно опущены `with_usbip`, `with_openvpn`/`with_openconnect`
+(серверные/вне клиентского скоупа — см. комментарии в `build_libbox`).
 
 ## ⚠️ Ловушки при бампе версии
 
@@ -232,8 +261,10 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.14** (стабильный) | SPEC 030 — Stop не виснет 10+ сек при многих WG/AWG-эндпоинтах (глушение тика + upfront-закрытие UDP-сокетов + abort in-flight wake + конкурентный close). Ядровая половина §287. База upstream `alpha.47`. Build-теги AAR без изменений. (Промежуточные lx.12/lx.13 — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.15** (стабильный) | SPEC 002 — XHTTP за reverse-proxy: `path` сохраняется как есть, trailing slash срезается только на bare-path запросе stream-one. + merge upstream `testing` (async DNS refactor, WG detour fix, OpenConnect auth-challenge). База upstream `alpha.48`. Build-теги AAR без изменений. Device-verified на CPH2411 (2026-07-21) |
-| **v1.14.0-lx.17-rc.5** (текущий пин, v2.19.0) | Апстрим-синк 01.08 поверх rc.4: naiveproxy v150, гонка DNS-правил (завершённое правило блокировалось ранее взведённым), WireGuard system-device не конфигурил DNS интерфейса, TLS-фрагмент на Windows без TCP estats, routing loop на darwin. + device-верификация SPEC 040. Java-поверхности не касается |
+| **v1.14.0-lx.18** (текущий пин, v2.19.1) | SPEC 032 — VLESS `encryption` (`mlkem768x25519plus`, PQ-слой внутри VLESS): поле появилось в схеме ядра, узлы `security=none` с шифрослоем ожили. Клиент — §335 (перенос поля подписка→конфиг + round-trip в URI). Device-замер: +12 настоящих узлов (ws 7/8, grpc 5/5), подписка 42 → 53 из 76. Конфиг-фича, Java-поверхность без изменений. ⚠️ ядро < lx.18 отвергает конфиг с полем целиком |
+| **v1.14.0-lx.17** (стабильный) | Промоут rc.1–rc.5 + XHTTP-фиксы вне rc: SPEC 042 (gRPC Content-Type на потоковых запросах, паритет с Xray) и SPEC 043 (завершающий слэш пути `stream-one` — корень «XHTTP-ноды подписки мертвы», 404 → зависание). Девайс-верифицировано, клиентских правок нет |
+| **v1.14.0-lx.17-rc.5** (v2.19.0) | Апстрим-синк 01.08 поверх rc.4: naiveproxy v150, гонка DNS-правил (завершённое правило блокировалось ранее взведённым), WireGuard system-device не конфигурил DNS интерфейса, TLS-фрагмент на Windows без TCP estats, routing loop на darwin. + device-верификация SPEC 040. Java-поверхности не касается |
 | **v1.14.0-lx.17-rc.4** (в составе v2.19.0) | SPEC 041 — WG/AWG-эндпоинты самолечатся после сна устройства (rebind со свежим портом по исчерпании handshake-повторов, ~90 с; `listen_port` вручную = самолечение отключено). SPEC 040 — system-стек TCP: accept-цикл пересоздаёт убитый listener вместо молчаливого выхода (sing-tun как fork-сабмодуль); закрывает отказ §047 «браузер мёртв, QUIC жив», errno на устройстве = `EINVAL` (§329). Оба фикса внутри ядра, Java-поверхности не касаются — клиентских правок нет |
 | **v1.14.0-lx.17-rc.3** (v2.18.2) | SPEC 039 (rc.2) — ротация архива OOM/crash-отчётов: 32 каталога / 64 МБ, удаление по mtime (на устройстве было 575 каталогов / 427 МБ за 19 дней). + **240 upstream-коммитов** (URLTest требует history storage в контексте). rc.3 — `Endpoint.Close()` снова возвращает ошибку закрытия tun-устройства. **javap-diff rc.1 → rc.3: изменений нет**, клиентских правок не потребовалось |
-| **v1.14.0-lx.17-rc.1** | SPEC 038 — фикс fatal throw в `GetRunningConfig` (возврат `RunningConfig` вместо голой строки; см. блок «Текущий пин»). **API-брейк:** сигнатура метода изменилась, клиент обязан звать `.content()` |
-| **v1.14.0-lx.16** (стабильный) | SPEC 036 — `GetRunningConfig`: снапшот работающего конфига по CommandClient (клиент — §311 LxBox); SPEC 033/035 — DNS_GROUP и его observability (клиенты — §312/§315). rc.1…rc.3 — промежуточные сборки той же ветки, метод появился в rc.3. `PlatformInterface` без изменений. Подробности — в блоке «Текущий пин» выше |
+| **v1.14.0-lx.17-rc.1** | SPEC 038 — фикс fatal throw в `GetRunningConfig` (возврат `RunningConfig` вместо голой строки; см. блок пинов выше). **API-брейк:** сигнатура метода изменилась, клиент обязан звать `.content()` |
+| **v1.14.0-lx.16** (стабильный) | SPEC 037 — `GetRunningConfig`: снапшот работающего конфига по CommandClient (клиент — §311 LxBox); SPEC 033/035 — DNS_GROUP и его observability (клиенты — §312/§315). rc.1…rc.3 — промежуточные сборки той же ветки, метод появился в rc.3. `PlatformInterface` без изменений. Подробности — в блоке пинов выше |
