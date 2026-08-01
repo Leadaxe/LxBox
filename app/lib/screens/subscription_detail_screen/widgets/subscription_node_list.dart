@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/ui_msg.dart';
+import '../../../services/probe/probe_runner.dart';
+import '../../../widgets/probe_badge.dart';
 import 'node_warning_row.dart';
 import '../node_inspect_screen.dart';
 import '../../../services/l10n/locale_controller.dart';
@@ -20,6 +22,8 @@ class SubscriptionNodeList extends StatelessWidget {
     this.togglableNodes = const {},
     this.disabledNodes = const {},
     this.onToggleNode,
+    this.probe = const {},
+    this.probeThresholds = ProbeThresholds.defaults,
   });
 
   final List<NodeSpec>? nodes;
@@ -37,6 +41,11 @@ class SubscriptionNodeList extends StatelessWidget {
   final Set<NodeSpec> disabledNodes;
 
   final void Function(NodeSpec node)? onToggleNode;
+
+  /// §339 — результаты Test servers (identity-map по инстансам top-level
+  /// нод; chained-дети без бейджа). Пусто = теста не было.
+  final Map<NodeSpec, ProbeResult> probe;
+  final ProbeThresholds probeThresholds;
 
   @override
   Widget build(BuildContext context) {
@@ -112,6 +121,7 @@ class SubscriptionNodeList extends StatelessWidget {
         final togglable =
             onToggleNode != null && togglableNodes.contains(node);
         final disabled = disabledNodes.contains(node);
+        final probeResult = probe[node]; // §339
         return ListTile(
           contentPadding: EdgeInsets.zero,
           // §283 — Switch слева, как per-member toggle папок (§234). Иконки
@@ -168,6 +178,19 @@ class SubscriptionNodeList extends StatelessWidget {
               if (node.warnings.isNotEmpty) NodeWarningRow(node.warnings),
             ],
           ),
+          // §339 — бейдж результата теста; тап по err — текст ошибки.
+          trailing: probeResult == null
+              ? null
+              : ProbeBadge(
+                  result: probeResult,
+                  thresholds: probeThresholds,
+                  onTap: () {
+                    if (probeResult.message.isEmpty) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(probeResult.message)),
+                    );
+                  },
+                ),
           dense: true,
           // §302 — короткий тап открывает разбор ноды (JSON + исходник):
           // самое частое действие, ради него не надо лезть в меню. Включение/

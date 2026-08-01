@@ -62,6 +62,28 @@ void main() {
     });
   });
 
+  // §339 — те же identity-ключи от списка нод (подписка/сервер).
+  group('probeKeysForNodes', () {
+    NodeSpec? node(String raw) => FolderMember(raw: raw).node;
+    const uriA = 'vless://u1@h1.example:443?type=ws&security=tls#Alpha';
+    const uriB = 'vless://u2@h2.example:443?type=ws&security=tls#Beta';
+
+    test('хеш-ключи, дубли с суффиксом, null-слот по позиции', () {
+      final keys = ProbeController.probeKeysForNodes(
+          [node(uriA), node(uriB), node(uriA), null]);
+      expect(keys, hasLength(4));
+      expect(keys[2], '${keys[0]}#2'); // дубль того же сервера
+      expect(keys[3], 'slot:3');
+      expect(keys.toSet(), hasLength(4)); // все уникальны
+    });
+
+    test('ключ — функция идентичности: re-parse даёт тот же ключ', () {
+      final k1 = ProbeController.probeKeysForNodes([node(uriA)]);
+      final k2 = ProbeController.probeKeysForNodes([node(uriA)]);
+      expect(k1, k2);
+    });
+  });
+
   // §326 — ключ результата = идентичность узла, не позиция. `remapAfterReorder`
   // снят вместе с позиционным хранением (перепривязывать больше нечего).
   group('probeKeys', () {

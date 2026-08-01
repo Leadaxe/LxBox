@@ -190,12 +190,23 @@ class ProbeController {
   /// Ключ остаётся функцией состава, а не позиции: удаление члена в середине
   /// ключи остальных не меняет, сдвигаются лишь сами дубли — неразличимые по
   /// определению.
-  static List<String> probeKeys(List<FolderMember> members) {
+  static List<String> probeKeys(List<FolderMember> members) => _dedupKeys([
+        for (final m in members)
+          m.node == null ? 'raw:${m.raw}' : nodeIdentityHash(m.node!),
+      ]);
+
+  /// §339 — те же identity-ключи для списка нод (подписка/сервер: у них нет
+  /// raw-члена, null-слот — по позиции). Хеш переживает refresh подписки
+  /// (инстансы подменяются, идентичность — нет).
+  static List<String> probeKeysForNodes(List<NodeSpec?> nodes) => _dedupKeys([
+        for (final (i, n) in nodes.indexed)
+          n == null ? 'slot:$i' : nodeIdentityHash(n),
+      ]);
+
+  static List<String> _dedupKeys(List<String> bases) {
     final seen = <String, int>{};
     final keys = <String>[];
-    for (final m in members) {
-      final node = m.node;
-      final base = node == null ? 'raw:${m.raw}' : nodeIdentityHash(node);
+    for (final base in bases) {
       final n = (seen[base] ?? 0) + 1;
       seen[base] = n;
       keys.add(n == 1 ? base : '$base#$n');
