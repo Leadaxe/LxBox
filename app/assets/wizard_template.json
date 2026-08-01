@@ -381,7 +381,10 @@
         "path": "cache.db",
         "store_fakeip": true
       }
-    }
+    },
+    "services": [
+      {"type": "oom-killer"}
+    ]
   },
   "selectable_rules": [
     {
