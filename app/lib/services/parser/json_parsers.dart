@@ -417,6 +417,9 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
   final user = users.isEmpty ? const {} : users.first;
   final uuid = user['id']?.toString() ?? '';
   var flow = user['flow']?.toString() ?? '';
+  // §335 — постквантовый слой VLESS (ядро: SPEC 032). В Xray-JSON лежит внутри
+  // users[0], в конфиге ядра — плоским полем рядом с uuid. Берём как есть.
+  final encryption = user['encryption']?.toString().trim() ?? '';
   if (server.isEmpty || uuid.isEmpty) return null;
 
   var port2 = port;
@@ -458,6 +461,7 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
     tls: tls,
     transport: transport,
     packetEncoding: packetEncoding,
+    encryption: encryption,
     warnings: warnings,
   );
 }

@@ -183,6 +183,12 @@ final class VlessSpec extends NodeSpec {
   final TransportSpec? transport;
   final String packetEncoding;
 
+  /// §335 — постквантовый слой шифрования VLESS (ядро: SPEC 032). Спек-строка
+  /// вида `mlkem768x25519plus.МЕТОД.RTT[.ПАДДИНГ].КЛЮЧ`; живёт внутри VLESS,
+  /// независимо от TLS (узлы с ним ходят с `security=none`). Переносится как
+  /// есть — валидирует ядро.
+  final String encryption;
+
   VlessSpec({
     required super.id,
     required super.tag,
@@ -195,6 +201,7 @@ final class VlessSpec extends NodeSpec {
     this.tls = TlsSpec.disabled,
     this.transport,
     this.packetEncoding = '',
+    this.encryption = '',
     super.chained,
     super.warnings,
   });

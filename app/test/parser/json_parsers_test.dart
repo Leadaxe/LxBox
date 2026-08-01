@@ -182,6 +182,63 @@ void main() {
       expect(spec.tls.reality?.publicKey, isNotEmpty);
     });
 
+    test('§335: Xray users[0].encryption → плоское поле рядом с uuid', () {
+      const enc = 'mlkem768x25519plus.native.0rtt.AbCd-EfGh_IjKl0123456789';
+      final spec = parseXrayOutbound({
+        'outbounds': [
+          {
+            'tag': 'proxy',
+            'protocol': 'vless',
+            'settings': {
+              'vnext': [
+                {
+                  'address': 'h.example',
+                  'port': 1080,
+                  'users': [
+                    {
+                      'id': '11111111-2222-3333-4444-555555555555',
+                      'flow': '',
+                      'encryption': enc,
+                    }
+                  ],
+                }
+              ],
+            },
+            'streamSettings': {'network': 'ws', 'wsSettings': {'path': '/ws'}},
+          }
+        ],
+      }) as VlessSpec;
+      expect(spec.encryption, enc, reason: 'вложено в users[0], берём оттуда');
+      // В конфиге ядра уровень вложенности другой — плоское поле аутбаунда.
+      expect(spec.emit(TemplateVars.empty).map['encryption'], enc);
+    });
+
+    test('§335: Xray без encryption → поля в конфиге нет', () {
+      final spec = parseXrayOutbound({
+        'outbounds': [
+          {
+            'tag': 'proxy',
+            'protocol': 'vless',
+            'settings': {
+              'vnext': [
+                {
+                  'address': 'h.example',
+                  'port': 443,
+                  'users': [
+                    {'id': '11111111-2222-3333-4444-555555555555'}
+                  ],
+                }
+              ],
+            },
+            'streamSettings': {'network': 'tcp'},
+          }
+        ],
+      }) as VlessSpec;
+      expect(spec.encryption, isEmpty);
+      expect(spec.emit(TemplateVars.empty).map.containsKey('encryption'),
+          isFalse);
+    });
+
     test('§169: Xray reality + битый publicKey → plain TLS, без reality', () {
       final spec = parseXrayOutbound({
         'outbounds': [

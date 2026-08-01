@@ -52,6 +52,12 @@ VlessSpec? parseVless(String uri) {
 
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
+  // §335 — постквантовый слой VLESS (ядро: SPEC 032). Берём как есть, без
+  // нормализации и валидации: ключ — base64url до ~1600 символов, любую
+  // порчу строки ядро отвергнет само. `none` = слой выключен, эквивалент
+  // пустого значения (эмит его не пишет).
+  final encryption = (q['encryption'] ?? '').trim();
+
   return VlessSpec(
     id: newUuidV4(),
     tag: tag,
@@ -64,6 +70,7 @@ VlessSpec? parseVless(String uri) {
     tls: tls,
     transport: transport,
     packetEncoding: packetEncoding,
+    encryption: encryption,
     warnings: warnings,
   );
 }

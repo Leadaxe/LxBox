@@ -271,4 +271,59 @@ void main() {
       expect(spec.tls.reality!.shortId, 'abcd');
     });
   });
+
+  // §335 — постквантовый слой VLESS (ядро: SPEC 032). Поле теряется на входе →
+  // узлы с ним не подключаются. Переносим как есть, без нормализации.
+  group('§335 encryption (VLESS post-quantum)', () {
+    // Синтетический ключ длины реального (~1600 символов base64url). Важен
+    // не состав, а то, что значение проходит парсер и round-trip посимвольно:
+    // алфавит base64url включает `-` и `_`, которые query-кодировщик обязан
+    // оставить нетронутыми.
+    final longKey = 'AbCd-EfGh_IjKl0123456789MnOpQrStUvWxYz'
+        '${'Ab3-Zx_9' * 195}';
+    late final String encValue = 'mlkem768x25519plus.native.0rtt.$longKey';
+
+    test('URI с encryption → поле в спеке, значение как есть', () {
+      final spec = parseVless('vless://u@h:1080?type=ws&path=/ws&'
+          'security=none&encryption=$encValue#L');
+      expect(spec, isNotNull);
+      expect(spec!.encryption, encValue);
+      expect(spec.encryption.length, encValue.length,
+          reason: 'длинный ключ не обрезается');
+    });
+
+    test('URI без encryption → пустая строка', () {
+      final spec = parseVless('vless://u@h:443?type=tcp#L');
+      expect(spec!.encryption, isEmpty);
+    });
+
+    test('непустое encryption → эмитится плоским полем рядом с uuid', () {
+      final spec = parseVless('vless://u@h:1080?type=ws&path=/ws&'
+          'security=none&encryption=$encValue#L')!;
+      final map = spec.emit(TemplateVars.empty).map;
+      expect(map['encryption'], encValue);
+      expect(map['uuid'], isNotNull, reason: 'соседствует с uuid');
+    });
+
+    test('без encryption → ключа в конфиге нет вовсе', () {
+      final spec = parseVless('vless://u@h:443?type=tcp#L')!;
+      expect(spec.emit(TemplateVars.empty).map.containsKey('encryption'),
+          isFalse);
+    });
+
+    test('encryption=none → слой выключен, поле не эмитится', () {
+      final spec = parseVless('vless://u@h:443?type=tcp&encryption=none#L')!;
+      expect(spec.emit(TemplateVars.empty).map.containsKey('encryption'),
+          isFalse);
+    });
+
+    test('round-trip parse → toUri → parse сохраняет значение', () {
+      final spec = parseVless('vless://u@h:1080?type=ws&path=/ws&'
+          'security=none&encryption=$encValue#L')!;
+      final reparsed = parseVless(spec.toUri());
+      expect(reparsed, isNotNull);
+      expect(reparsed!.encryption, encValue,
+          reason: '§302-правила ходят через эмит-URI: потеря = мёртвый узел');
+    });
+  });
 }
