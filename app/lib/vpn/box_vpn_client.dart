@@ -748,6 +748,22 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §341 — диагностическая env-ручка quic-go: `knob` = `gso` | `ecn`,
+  /// `disabled=true` — принудительно выключить offload/маркировку,
+  /// `false` — вернуть авто-детект библиотеки. Static Libbox-вызов
+  /// (Go-side os.Setenv), применяется к НОВЫМ QUIC-сокетам — после
+  /// переключения нужен reconnect QUIC-аутбаундов (reload/reset-network
+  /// или повторный dial после фейла). `false` = старый AAR без экспорта.
+  Future<bool> setQuicKnob(String knob, {required bool disabled}) async {
+    final ok = await _invoke<bool>(
+      _Methods.setQuicKnob,
+      args: {'knob': knob, 'disabled': disabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   /// §263 — сбросить DNS-кэш ядра: удалить `cache.db` (FakeIP-аллокации +
   /// DNS RDRC). При работающем туннеле native затем reload'ит рантайм
   /// (`serviceReload` → ядро пересоздаёт чистый cache.db, тоннель дропается

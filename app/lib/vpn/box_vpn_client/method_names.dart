@@ -99,6 +99,8 @@ class _Methods {
   // Recovery actions (specs 030, 031)
   static const reloadVPN = 'reloadVPN';
   static const resetNetwork = 'resetNetwork';
+  // §341 — диагностические env-ручки quic-go (GSO/ECN) через static Libbox.
+  static const setQuicKnob = 'setQuicKnob';
   // §263 — сброс DNS-кэша ядра (cache.db: FakeIP-аллокации + DNS RDRC).
   static const clearDnsCache = 'clearDnsCache';
 

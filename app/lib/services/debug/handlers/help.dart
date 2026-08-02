@@ -126,6 +126,11 @@ POST /action/clear-error                       Dismiss the lastError banner
 POST /action/reset-network                     Light recovery: closeAllConnections + DNS flush + dialer
                                                   rebind. WITHOUT recreating box/Service/TUN. Spec 031.
                                                   Requires tunnel up. → {"ok":true,"action":"reset-network","native_ok":<bool>}
+POST /action/quic-knobs?gso=on|off&ecn=on|off  §341: quic-go env knobs (QUIC_GO_DISABLE_GSO/ECN) via static
+                                                  Libbox call. off = force-disable offload/marking, on = library
+                                                  auto-detect. Affects NEW QUIC sockets only — follow with
+                                                  reload-vpn / reset-network. At least one param.
+                                                  native_ok=false per knob = AAR older than §341.
 POST /action/urltest?tag=<node>                Single-node URLTest (CommandClient urlTestOutbound)
 POST /action/urltest?group=<group>             Group URLTest (CommandClient, requires tunnel)
 POST /action/urltest?all=true                  Mass URLTest of all nodes in the active group (concurrency 10)
@@ -448,6 +453,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/force-stop-vpn', 'description': 'Hard force-stop (doForceStop path): teardown→stopSelf, frees CommandServer port 63130. fire-and-forget.'},
     {'method': 'POST', 'path': '/action/set-transient-timeout', 'params': {'connecting': 'ms (optional)', 'stopping': 'ms (optional)'}, 'description': 'Override transient-timeout thresholds (ms) for on-device force-stop test. At least one param.'},
     {'method': 'POST', 'path': '/action/reset-network', 'description': 'Light recovery: closeAll + DNS flush + dialer rebind (spec 031). Requires tunnel up.'},
+    {'method': 'POST', 'path': '/action/quic-knobs', 'params': {'gso': 'on|off (optional)', 'ecn': 'on|off (optional)'}, 'description': '§341: quic-go env knobs (GSO/ECN) via static Libbox call; affects new QUIC sockets, follow with reload-vpn/reset-network. At least one param.'},
     {'method': 'POST', 'path': '/action/urltest', 'params': {'tag': 'node tag (single)', 'group': 'group tag (group urltest, URL-encode emoji)', 'all': 'true (mass urltest)', 'cancel': '1 (abort in-flight mass urltest)'}, 'description': 'URLTest dispatch by query: one of tag/group/all/cancel'},
     {'method': 'POST', 'path': '/action/switch-node', 'params': {'tag': 'node tag'}, 'description': 'Selector switch via HomeController'},
     {'method': 'POST', 'path': '/action/set-group', 'params': {'group': 'group tag'}, 'description': 'Change active group'},

@@ -49,6 +49,7 @@ Future<DebugResponse> actionHandler(
     '/action/force-stop-vpn' => _forceStopVpn(ctx),
     '/action/set-transient-timeout' => _setTransientTimeout(req, ctx),
     '/action/reset-network' => _resetNetwork(ctx),
+    '/action/quic-knobs' => _quicKnobs(req),
     '/action/rebuild-config' => _rebuildConfig(ctx),
     '/action/refresh-subs' => _refreshSubs(req, ctx),
     '/action/download-srs' => _downloadSrs(req, ctx),
@@ -369,6 +370,35 @@ int? _parsePositiveMs(String? raw, String name) {
 Future<DebugResponse> _resetNetwork(DebugContext ctx) async {
   final ok = await automation.actionResetNetwork(ctx);
   return _ok('reset-network', {'native_ok': ok});
+}
+
+/// `POST /action/quic-knobs?gso=on|off[&ecn=on|off]` — §341: диагностические
+/// env-ручки quic-go (`QUIC_GO_DISABLE_GSO` / `QUIC_GO_DISABLE_ECN`) через
+/// static Libbox-вызов. `off` = выключить offload/маркировку (env=true),
+/// `on` = вернуть авто-детект библиотеки (env снят). Меняет поведение только
+/// НОВЫХ QUIC-сокетов — после переключения передёрни соединения
+/// (`/action/reload-vpn` или `/action/reset-network`), иначе живой клиент
+/// останется на старом сокете. Хотя бы один параметр обязателен.
+/// `native_ok=false` по ручке = AAR без экспорта (ядро старее §341).
+Future<DebugResponse> _quicKnobs(DebugRequest req) async {
+  final applied = <String, Object?>{};
+  var any = false;
+  for (final knob in const ['gso', 'ecn']) {
+    final raw = req.query[knob];
+    if (raw == null) continue;
+    final disabled = switch (raw) {
+      'off' => true,
+      'on' => false,
+      _ => throw BadRequest('$knob must be "on" or "off", got "$raw"'),
+    };
+    any = true;
+    final ok = await BoxVpnClient().setQuicKnob(knob, disabled: disabled);
+    applied[knob] = {'disabled': disabled, 'native_ok': ok};
+  }
+  if (!any) {
+    throw const BadRequest('pass at least one of gso=on|off, ecn=on|off');
+  }
+  return _ok('quic-knobs', applied);
 }
 
 Future<DebugResponse> _rebuildConfig(DebugContext ctx) async {
