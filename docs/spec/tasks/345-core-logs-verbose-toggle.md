@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Статус | В работе |
+| Статус | ✅ Device-verified (CPH2411, 02.08.2026): PUT `/settings/core_logs_verbose` → DEBUG/TRACE потекли в `/logs/core` без перезапуска (136 DEBUG + 107 TRACE в первом же снимке), выключение — тоже live. Этим режимом в тот же день поймано полевое срабатывание SPEC 041 v2 `trigger=early` |
 | Дата | 2026-08-02 |
 | Связанные | [`043 applog per-source quotas`](../features/043%20applog%20per-source%20quotas/spec.md) (фильтр и volume-модель), §189 (native_prefs JSON-зеркало), §221 (backup-симметрия), [`031 debug api`](../features/031%20debug%20api/spec.md), [`340`](340-user-present-rebind-stale-endpoints.md) (первый заказчик: device-верификация нуджа) |
 
