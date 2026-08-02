@@ -43,6 +43,15 @@ mixin LazyPersistMixin<T extends StatefulWidget>
     on State<T>, WidgetsBindingObserver {
   bool _lazyPending = false;
 
+  /// §338 — staging-future последней мутации. `_flush` ждёт ЕГО, а не зовёт
+  /// [stageChanges] заново: typed-саверы внутри staging зовут
+  /// `markConfigDirty`, и повторный вызов на dispose ПЕРЕподнимал флаг уже
+  /// после того, как rebuild на возврате к home его погасил. Гонка: быстрая
+  /// пересборка (< ~300мс exit-анимации) успевала сбросить флаг ДО flush'а —
+  /// и синяя плашка оставалась висеть при актуальном конфиге. Медленная —
+  /// затирала подъём, потому баг стрелял «иногда».
+  Future<void>? _stagingInFlight;
+
   /// True если есть не записанные на диск изменения (для тестов / условной
   /// логики).
   bool get hasPendingChanges => _lazyPending;
@@ -85,13 +94,18 @@ mixin LazyPersistMixin<T extends StatefulWidget>
   void markDirty() {
     _lazyPending = true;
     lazyController.configDirty = true; // sync — race-safe для home observer
-    unawaited(stageChanges());
+    _stagingInFlight = stageChanges();
+    unawaited(_stagingInFlight);
   }
 
   Future<void> _flush() async {
     if (!_lazyPending) return; // idempotent: already flushed
     _lazyPending = false;
-    await stageChanges(); // safety-net: буфер гарантированно в _cache
+    // §338 — дождаться последнего staging'а, НЕ перезапуская его: данные в
+    // `_cache` кладёт мутация, здесь нужна только гарантия завершения перед
+    // дисковым flush'ем. Повторный stageChanges() снова поднял бы configDirty
+    // через typed-саверы (см. поле [_stagingInFlight]).
+    await _stagingInFlight;
     await SettingsStorage.flushToDisk();
   }
 }

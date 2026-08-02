@@ -930,22 +930,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       // сделает `_maybeAutoReload` сразу после нас. Текст должен отчитаться о
       // применении, а не просить действия. `willAutoReload` — то же условие,
       // что в самом хуке (галка + туннель up + конфиг разошёлся с running).
-      final willAutoReload = autoReload &&
-          _controller.state.tunnelUp &&
-          _controller.state.configChangedNeedRestart;
+      //
+      // §338 (device-скрин 02.08) — «restart VPN to apply» показываем ТОЛЬКО
+      // при needRestart: до этого ветка (tunnelUp, !willAutoReload) звала
+      // перезапускать и при changed=false — конфиг идентичен работающему,
+      // применять нечего, текст врал. Ложь древняя (до §338 текст при живом
+      // туннеле был безусловным), галка её лишь высветила.
+      final needRestart = _controller.state.configChangedNeedRestart;
+      final willAutoReload =
+          autoReload && _controller.state.tunnelUp && needRestart;
       // configChangedNeedRestart выставляется внутри saveParsedConfig,
       // AnimatedBuilder переотрисует через _needsRestart getter.
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            switch ((_controller.state.tunnelUp, willAutoReload)) {
-              (true, true) => getLocalText.plural(
-                  "Config rebuilt: %d nodes — reloading VPN", nodeCount),
-              (true, false) => getLocalText.plural(
-                  "Config rebuilt: %d nodes — restart VPN to apply", nodeCount),
-              (false, _) =>
-                getLocalText.plural("Config rebuilt: %d nodes", nodeCount),
-            },
+            !_controller.state.tunnelUp || !needRestart
+                ? getLocalText.plural("Config rebuilt: %d nodes", nodeCount)
+                : willAutoReload
+                    ? getLocalText.plural(
+                        "Config rebuilt: %d nodes — reloading VPN", nodeCount)
+                    : getLocalText.plural(
+                        "Config rebuilt: %d nodes — restart VPN to apply",
+                        nodeCount),
           ),
         ),
       );
