@@ -40,10 +40,11 @@ void main() {
       'vless://uuid-2@h2.example:443?type=ws&security=tls#A2\n';
   const bodyB = 'vless://uuid-3@h3.example:443?type=ws&security=tls#B1\n';
 
-  SubscriptionServers sub(String url) => SubscriptionServers(
+  SubscriptionServers sub(String url, {bool enabled = true}) =>
+      SubscriptionServers(
         id: 's1',
         name: 's1',
-        enabled: true,
+        enabled: enabled,
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         url: url,
@@ -69,8 +70,8 @@ void main() {
     }
   });
 
-  Future<SubscriptionController> boot(String url) async {
-    await SettingsStorage.saveServerLists([sub(url)]);
+  Future<SubscriptionController> boot(String url, {bool enabled = true}) async {
+    await SettingsStorage.saveServerLists([sub(url, enabled: enabled)]);
     final c = SubscriptionController();
     await c.init();
     await c.rehydrationDone;
@@ -133,6 +134,27 @@ void main() {
       expect(changed, isTrue);
       expect(c.configDirty, isTrue);
       expect(c.entries.single.list.nodes, hasLength(2));
+    });
+
+    test('§349: выключенная подписка с новым составом → dirty остаётся false',
+        () async {
+      // §337 обновляет и выключенные, но билдер их не эмитит: состав на
+      // конфиг не влияет, плашке гореть не с чего. Раньше — ложная синяя
+      // плашка на каждом проходе с новым составом.
+      final c = await boot('http://x/a', enabled: false);
+      c.configDirty = false;
+      c.httpClientForTesting =
+          MockClient((req) async => http.Response(bodyA, 200));
+
+      final changed = await c.refreshEntry(c.entries.single);
+
+      expect(changed, isTrue,
+          reason: 'состав реально изменился — возврат честный, '
+              'auto_updater сам гейтит реакцию по enabled');
+      expect(c.configDirty, isFalse,
+          reason: 'выключенная подписка в конфиг не эмитится');
+      expect(c.entries.single.list.nodes, hasLength(2),
+          reason: 'сами узлы обновились — §337 ради этого и существует');
     });
 
     test('тот же состав повторно → dirty остаётся false, refreshEntry → false',

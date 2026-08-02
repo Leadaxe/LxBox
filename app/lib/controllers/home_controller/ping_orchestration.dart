@@ -28,10 +28,14 @@ mixin _PingMixin on ChangeNotifier {
     final group = _state.selectedGroup;
     final url = pingUrlFor(group);
     final timeoutMs = pingTimeoutFor(group);
+    // §349 — канал снимаем ДО await (как massPingChannel в §325): замер,
+    // снятый URL'ом канала A, не должен уехать в карту канала B, если юзер
+    // переключился за время висящего пинга (до 10с таймаута).
+    final channelKey = _state.delayChannelKey;
     try {
       final r = await _cc.urlTestOutbound(nodeTag, link: url, timeoutMs: timeoutMs);
       final ms = r.lastDelayValue; // ok → delay (вкл. 0мс); fail → -1
-      final nextDelay = _delaysWith({nodeTag: ms});
+      final nextDelay = _delaysWith({nodeTag: ms}, channel: channelKey);
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
       if (r.ok) {
         _emit(_state.copyWith(delayByChannel: nextDelay, pingBusy: nextBusy));
@@ -44,7 +48,7 @@ mixin _PingMixin on ChangeNotifier {
         _rescueGroupsSelecting(nodeTag);
       }
     } catch (e) {
-      final nextDelay = _delaysWith({nodeTag: -1});
+      final nextDelay = _delaysWith({nodeTag: -1}, channel: channelKey);
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
       final msg = _formatProbeError(nodeTag, url, e);
       _emit(_state.copyWith(
