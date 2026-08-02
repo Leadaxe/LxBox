@@ -81,7 +81,10 @@ String autoGroupToUri(
 
   switch (membership) {
     case ExplicitMembers(:final keys):
-      q['members'] = keys.join(',');
+      // §352 — ключ = `protocol|server|port|credential`, а credential может
+      // нести запятую (пароль ss/trojan) — сырой join(',') ломал раскрой на
+      // fromUri, член молча выпадал после рестарта. Экранируем per-key.
+      q['members'] = keys.map(_escapeMemberKey).join(',');
     case RuleMembers(:final include, :final exclude):
       if (include.isNotEmpty) q['include'] = include;
       if (exclude.isNotEmpty) q['exclude'] = exclude;
@@ -114,6 +117,18 @@ String autoGroupToUri(
   return '$kAutoGroupScheme://?$query$frag';
 }
 
+/// §352 — узкое экранирование ключа-члена для `members=`-списка: только
+/// разделитель `,` и сам escape-символ `%`. НЕ Uri.encodeComponent: полный
+/// percent-decode на fromUri бросал бы ArgumentError на легаси-ключах с
+/// голым `%` в credential. Старые URI с чистыми ключами (без `%`/`,`)
+/// проходят unescape как есть — миграция не нужна; ключи с запятой и до
+/// §352 были битыми (член выпадал), рабочих состояний не регрессируем.
+String _escapeMemberKey(String k) =>
+    k.replaceAll('%', '%25').replaceAll(',', '%2C');
+
+String _unescapeMemberKey(String k) =>
+    k.replaceAll('%2C', ',').replaceAll('%25', '%');
+
 /// Разбор `autogroup://`. `null` — не наша схема.
 ///
 /// Отсутствие `members` означает режим правила: пустые `include`/`exclude` —
@@ -136,7 +151,7 @@ String autoGroupToUri(
   final membership = rawMembers != null
       ? ExplicitMembers(rawMembers
           .split(',')
-          .map((e) => e.trim())
+          .map((e) => _unescapeMemberKey(e.trim()))
           .where((e) => e.isNotEmpty)
           .toList())
       : RuleMembers(
