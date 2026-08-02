@@ -3,13 +3,15 @@
 Hysteria2, TUIC and MASQUE-h3 are alive again on the devices where they were
 silently dead. A single broken node from a subscription no longer stops the
 whole VPN from starting. Xray subscriptions keep the order their author
-intended. Subscriptions got their own Test servers button, and disabled ones
-can now be kept fresh instead of going stale.
+intended. Settings changes can now apply themselves to a live tunnel, leaving
+no banners behind. Subscriptions got their own Test servers button, and
+disabled ones can now be kept fresh instead of going stale.
 
 Hysteria2, TUIC и MASQUE-h3 снова работают на устройствах, где были молча
 мертвы. Одна битая нода из подписки больше не мешает запуску всего VPN.
-Xray-подписки сохраняют порядок, задуманный автором. У подписок появилась своя
-кнопка Test servers, а выключенные больше не обязаны протухать.
+Xray-подписки сохраняют порядок, задуманный автором. Изменения настроек умеют
+применяться к живому туннелю сами, не оставляя плашек. У подписок появилась
+своя кнопка Test servers, а выключенные больше не обязаны протухать.
 
 Core / Ядро: **sing-box-lx `v1.14.0-lx.19-rc.3`** (было `v1.14.0-lx.18`).
 
@@ -29,6 +31,20 @@ are tested too — the test answers "is the server alive", not "is it in the
 config" — and auto-select nodes get a neutral "auto" badge instead of an
 error. Works for single servers as well. As before, the test needs the VPN
 switched off; with an active tunnel it offers to stop it.
+
+### ♻️ "Auto-restart VPN on settings change"
+
+Settings → General → Behavior: a checkbox that makes the app apply any config
+change to the live tunnel by itself — and then no banners are left at all,
+neither the blue "Settings changed" nor the pink "Config changed — restart
+VPN".
+
+A subscription update could already do this on its own, but the config is also
+changed from 25+ other places — editing a node, a detour, DNS, routing,
+per-app, the settings toggles — and there a banner was the only way forward.
+The restart only fires when there is something to apply, and only from a
+single place where every rebuild path converges, so a burst of edits doesn't
+turn into a burst of restarts. Off by default.
 
 ### 🔄 "Update disabled subscriptions"
 
@@ -55,6 +71,19 @@ live ones alone — the error window should shrink to a single handshake. If
 WARP still errors out right after unlocking, a report is worth sending: this
 one is hard to reproduce on demand, and field measurements help.
 
+### 🧭 Node details tell a pool apart from a single fastest server
+
+An auto-select node comes in two flavours that behave in opposite ways: pick
+the one fastest server, or spread the traffic across a pool of several. The
+details screen showed both as a plain `urltest` and drew a single "current
+pick" — which for a pool does not exist at all, so the row came out empty.
+
+Now the screen states the mode (Fastest / Load balance), the pool size and its
+tolerance, and `Members` opens into the actual list — with a tick and a latency
+next to the ones the core is really using right now. In the route, a pool is a
+single hop that unfolds into its slots, and it sits where the packet actually
+meets it: phone → group → pool → internet.
+
 ### 🔗 "Share URL" without the intermediate dialog
 
 Long-press a subscription → "Share URL…" now opens the system share sheet
@@ -65,6 +94,19 @@ loaded from a local file the item is hidden: a file subscription has no URL to
 share.
 
 ## 🐛 Fixed
+
+### 📌 The blue "Settings changed" banner could stick around with an up-to-date config
+
+A bug older than this release: the DNS/routing/per-app/vpn-mode screens write
+settings lazily, and a "safety-net" re-write on screen close re-raised the
+change flag after a fast rebuild on return-to-home had already cleared it. It
+raced the screen exit animation (~300ms) — hence "sometimes": a slow rebuild
+would luckily wipe the re-raise. As a side effect the flag also came back
+after an app restart (the settings file ended up written later than the
+config). The extra banner used to be silently tapped away; the new
+"auto-restart" checkbox, promising no banners at all, exposed it. The
+post-rebuild snackbar also stopped asking to "restart VPN" when the rebuilt
+config is identical to the running one and there is nothing to apply.
 
 ### 🎯 An auto-select node blocked Test servers for a folder or subscription
 
@@ -140,6 +182,14 @@ half an hour. It was built to investigate the hysteria2 case above and stays
 for future field diagnostics of that class. Development-only; it does not
 affect normal operation.
 
+### 🔊 Verbose core logs
+
+A sub-toggle under "Forward sing-box logs": it lifts the TRACE/DEBUG filter
+live, with no VPN restart. The filter itself is right — on real traffic a
+trace stream is a line per packet — but it used to be unconditional, which
+made any device check against the core's debug lines impossible. The default
+is unchanged; keep it off unless you are chasing something specific.
+
 </details>
 
 <details open>
@@ -156,6 +206,18 @@ affect normal operation.
 нейтральный бейдж «auto» вместо ошибки. Работает и для одиночных серверов. Как
 и раньше, тест требует выключенного VPN: при активном туннеле предложит его
 остановить.
+
+### ♻️ «Автоперезапуск VPN при смене настроек»
+
+Настройки → General → Behavior: галка, после которой приложение само применяет
+любое изменение конфига к живому туннелю — и плашек не остаётся вовсе: ни
+синей «Settings changed», ни розовой «Config changed — restart VPN».
+
+Обновление подписки так умело и раньше, но конфиг меняют и 25+ других мест:
+правка узла, detour, DNS, routing, per-app, тумблеры в настройках — там плашка
+оставалась единственным путём. Перезапуск срабатывает только когда есть что
+применять, и только в одной точке, где сходятся все пути пересборки, — так
+серия правок не превращается в серию перезапусков. Выключено по умолчанию.
 
 ### 🔄 «Обновлять выключенные подписки»
 
@@ -181,6 +243,19 @@ min-retry, ни заморозку после пяти фейлов.
 отдаёт ошибку сразу после разблокировки, сообщение будет кстати: воспроизвести
 это по заказу тяжело, полевые замеры помогают.
 
+### 🧭 Детали узла отличают пул от одного быстрейшего сервера
+
+Узел автовыбора бывает двух видов, ведущих себя противоположно: выбрать один
+самый быстрый сервер или размазать трафик по пулу из нескольких. Экран деталей
+показывал оба одинаково — просто `urltest` — и рисовал единственный «current
+pick», которого у пула нет в принципе, отчего строка выходила пустой.
+
+Теперь экран называет режим (Fastest / Load balance), размер пула и его допуск,
+а `Members` раскрывается в список участников — с галкой и задержкой у тех, кого
+ядро реально держит в работе. В маршруте пул стал одним звеном, которое
+разворачивается в слоты, и стоит там, где его встречает пакет: телефон →
+группа → пул → интернет.
+
 ### 🔗 «Поделиться URL» без промежуточного диалога
 
 Long-press на подписке → «Поделиться URL…» теперь сразу открывает системное
@@ -191,6 +266,19 @@ Long-press на подписке → «Поделиться URL…» тепер�
 делиться.
 
 ## 🐛 Исправлено
+
+### 📌 Синяя плашка «Настройки изменились» могла залипнуть при актуальном конфиге
+
+Баг старше этого релиза: экраны DNS/routing/per-app/vpn-mode пишут настройки
+отложенно, и «страховочная» повторная запись при закрытии экрана переподнимала
+флаг изменений уже после того, как быстрая пересборка на возврате его
+погасила. Гонка с exit-анимацией экрана (~300мс) — потому «иногда»: медленная
+пересборка везуче затирала ре-подъём. Побочный эффект — флаг воскресал и после
+перезапуска приложения (файл настроек оказывался записан позже конфига).
+Раньше лишнюю плашку молча гасили тапом; новая галка автоперезапуска,
+обещающая «плашек не будет вовсе», её высветила. Заодно всплывашка после
+пересборки перестала просить «перезапустите VPN», когда пересобранный конфиг
+совпал с работающим и применять нечего.
 
 ### 🎯 Узел автовыбора блокировал Test servers папки и подписки
 
@@ -259,6 +347,14 @@ ECN) прямо на устройстве, без пересборки — A/B-�
 вместо получаса. Сделана для расследования истории с hysteria2 выше и остаётся
 для будущих полевых диагнозов этого класса. Ручка для разработки, на обычную
 работу приложения не влияет.
+
+### 🔊 Подробные логи ядра
+
+Суб-тумблер под «Forward sing-box logs»: снимает фильтр TRACE/DEBUG на лету,
+без перезапуска VPN. Сам фильтр правильный — на живом трафике trace-поток это
+строка на пакет, — но был невыключаемым, и любая проверка на устройстве по
+debug-строкам ядра оказывалась невозможна. Дефолт не изменился; включать стоит
+только под конкретную задачу.
 
 </details>
 
