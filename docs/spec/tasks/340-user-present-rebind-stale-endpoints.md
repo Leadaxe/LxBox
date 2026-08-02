@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Статус | Спека готова — реализация после бампа AAR на ядро со SPEC 041 v2 |
+| Статус | Реализовано (AAR `v1.14.0-lx.19-rc.1`, сборка зелёная) — ждёт device-верификации на CPH2411 |
 | Дата | 2026-08-02 |
 | Связанные | ядро [SPEC 041 v2](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/041-WG_HANDSHAKE_GIVEUP_REBIND/SPEC.md) (сам механизм, все гейты там), [`086`](086-stale-connections-network-change-doze.md) (root-cause, failure mode 2), [`087`](087-network-change-force-reset.md) (сосед: failure mode 1), [`088`](088-wake-heal-escalation.md) (остаётся заморожен — эта таска реализует только его entry-событие), §304/§313 (keepalive — профилактика, пока телефон не спит) |
 | Жалоба | «варпы протухают со временем» (повторная, 4PDA); дамп `lxbox-dump-2026-08-01T18-49-34` |
