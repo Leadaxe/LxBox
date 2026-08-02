@@ -5,9 +5,15 @@
 
 > 2679 тестов зелёные, analyze чист (весь проект), 4 l10n-чекера 0 failures.
 >
-> **Device-проверка на CPH2411** (сборка 2.19.1-dev.23, узел «Europe | Game |
-> Auto», pool 2 из 8): Route = Phone → urltest → «2 nodes in pool» →
-> Internet; Members «8 · 2 in pool», галки у живых, задержки цветные.
+> **Device-проверка round_robin на CPH2411** (сборка 2.19.1-dev.23, узел
+> «Europe | Game | Auto», pool 2 из 8): Route = Phone → urltest → «2 nodes in
+> pool» → Internet; Members «8 · 2 in pool», галки у живых, задержки цветные.
+>
+> **Проверка least_test на эмуляторе** (`vpn-1-auto`, 3 узла WARP, `/pool`
+> отдаёт `slots:[]`): `Mode: Самый быстрый` без строк Pool/Pool tolerance,
+> `Members: 3` без «in pool», Route = Phone → WARP (MASQUE) `current pick` →
+> VPN ① `this node` → Internet, блока пула нет. Пункт «View pool» в меню
+> узла не появляется — `isRoundRobinAuto` для least_test даёт false.
 >
 > Первая реализация проверку НЕ прошла — три огреха, исправлены отдельным
 > коммитом (`59127614`):
