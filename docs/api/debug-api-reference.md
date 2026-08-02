@@ -76,6 +76,8 @@ auth), а не факт, что за границей всё открыто.
 - [Actions — триггеры](#actions--триггеры)
 - [Rules CRUD — `/rules/*`](#rules-crud--rules)
 - [Subscriptions CRUD — `/subs/*`](#subscriptions-crud--subs)
+  - [identity подписки (§289)](#346--identity-подписки-289)
+  - [Import rules CRUD — `/subs/{id}/rules`](#346--import-rules-crud--subsidrules)
 - [Channels CRUD — `/channels/*`](#channels-crud--channels)
 - [Folders CRUD — `/folders/*`](#folders-crud--folders)
 - [WARP — `/warp`](#warp--warp)
@@ -341,7 +343,7 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 | `/subs` | GET | `?reveal=true` — clear URLs |
 | `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` |
 | `/subs/{id}` | GET | — |
-| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url |
+| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity |
 | `/subs/{id}` | DELETE | — |
 | `/subs/{id}/refresh` | POST | trigger fetch. 409 для UserServer |
 | `/subs/reorder` | POST | `{"order":[id1,...]}` |
@@ -396,6 +398,94 @@ curl -s -H "$HDR" "$BASE/state/subs" | jq '.[] | select(.id=="<id>") | {title, n
 ```
 
 **Reorder:** то же что у rules.
+
+### §346 — identity подписки (§289)
+
+`identity` — **тристейт**, поэтому не `null`-как-обычно:
+
+| body | результат |
+|---|---|
+| ключ отсутствует | не трогаем |
+| `"identity": null` | Custom → Default (глобальная идентичность §118) |
+| `"identity": {...}` | Custom + наложение переданных полей **поверх слепка** |
+
+Объект — патч, а не полная замена: при переходе в Custom слепок сначала
+инициализируется копией глобальных значений, потом накладываются переданные
+ключи. Поля: `user_agent`, `send_hwid`, `hwid`, `device_os`, `ver_os`,
+`device_model`; неизвестный ключ → 400.
+
+```bash
+# Включить x-hwid ТОЛЬКО этой подписке (глобальные subscription_* не трогаются).
+# Типовой кейс: Remnawave-панель с HWID-гейтом отдаёт заглушку
+# `vless://0000…#App not supported` (§310), пока не увидит x-hwid.
+curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"identity":{"send_hwid":true,"hwid":"'$(uuidgen | tr A-Z a-z)'"}}' \
+  "$BASE/subs/<id>"
+curl -X POST -H "$HDR" "$BASE/subs/<id>/refresh" && sleep 5
+curl -s -H "$HDR" "$BASE/subs/<id>" | jq '{nodes_count,identity}'
+
+# Обратно на глобальную идентичность
+curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"identity":null}' "$BASE/subs/<id>"
+```
+
+`on_update_action` (§323) — `rebuild|reload|none`; в отличие от толерантного
+парса storage, мусор здесь → 400 (иначе опечатка молча дала бы дефолт).
+
+### §346 — Import rules CRUD — `/subs/{id}/rules`
+
+Правила обработки узлов на импорте (§302/§307/§332). Упорядоченная коллекция
+без id → адресация **позиционным индексом**, как у членов папки в §238: после
+`DELETE`/`reorder` индексы съезжают, следующий вызов строить по снапшоту
+`rules` из ответа (его возвращает каждый write). Не-подписка (UserServer /
+папка) → 409.
+
+| Endpoint | Метод | Body |
+|---|---|---|
+| `/subs/{id}/rules` | GET | — → `{import_rules_enabled, rules:[{index,usable,…}]}` |
+| `/subs/{id}/rules` | POST | shape правила; `?index=N` — вставка в позицию (default: в конец), 201 |
+| `/subs/{id}/rules/{idx}` | GET | — |
+| `/subs/{id}/rules/{idx}` | PATCH | subset полей правила |
+| `/subs/{id}/rules/{idx}` | DELETE | — |
+| `/subs/{id}/rules/reorder` | POST | `{"order":[старые индексы]}` — полная перестановка |
+
+Shape правила = `ImportRule.toJson()` (тот же, что в storage/backup):
+`conditions[]` (`path`, `op`: `contains|equals|matches`, `pattern`, `negate`,
+`case_sensitive`), `match`: `all|any`, `action`: `replace|disable|enable`,
+`target_path`, `replacement`, `replace_mode`: `set|substitute`, `substitute`,
+`enabled`. Enum'ы и имена полей проверяются строго → 400.
+
+```bash
+# «Все узлы с ⚡ в теге — выключить»
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"conditions":[{"path":"tag","op":"contains","pattern":"⚡"}],"action":"disable"}' \
+  "$BASE/subs/<id>/rules"
+# → 201 {"ok":true,"index":0,"usable":true,"rules":[…]}
+
+# Подменить SNI у всех узлов конкретного хоста
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"conditions":[{"path":"server","op":"equals","pattern":"bad.example"}],
+       "action":"replace","target_path":"tls.server_name","replacement":"good.example"}' \
+  "$BASE/subs/<id>/rules"
+
+curl -s -H "$HDR" "$BASE/subs/<id>/rules" | jq '.rules[] | {index,usable,action}'
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"order":[1,0]}' "$BASE/subs/<id>/rules/reorder"
+```
+
+**Порядок значим:** правила применяются последовательно, последнее сработавшее
+`enable`/`disable` побеждает (§332) — «выключить всё» первым правилом + точечные
+`enable` дальше = whitelist.
+
+`"usable": false` — правило распарсилось, но на импорте будет пропущено
+(например Replace без `target_path`). Это не ошибка: недособранное правило
+легально и в UI-редакторе.
+
+**Когда применятся:** на **следующем** refresh — существующие ноды на месте не
+переразбираются (поведение §302). Поэтому `?rebuild=true` на rules-write'ах
+почти бесполезен (конфиг соберётся из старых нод), хотя и принимается для
+единообразия. Порядок: правки правил → `POST /subs/{id}/refresh` → wait →
+`POST /action/rebuild-config`.
 
 **Quirks:**
 - `PATCH /subs/{id}` с `url` на UserServer молча игнорируется (у inline-серверов нет URL).

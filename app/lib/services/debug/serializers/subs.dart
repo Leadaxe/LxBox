@@ -1,4 +1,5 @@
 import '../../../controllers/subscription_controller.dart';
+import '../../../models/import_rule.dart';
 import '../../../models/server_list.dart';
 import '../../url_mask.dart';
 
@@ -37,8 +38,36 @@ Map<String, Object?> serializeSubEntry(
       'use_detour_servers': e.useDetourServers,
       'override_detour': e.overrideDetour,
     },
+    // §346 — настройки, живущие только у SubscriptionServers. У UserServer /
+    // FolderServers полей нет (их никто не фетчит) — ключи не кладём вовсе,
+    // чтобы `null` не читался как «Default identity» у записи, где режима нет.
+    if (list is SubscriptionServers) ...{
+      'on_update_action': list.onUpdateAction.name, // §323
+      // §289 — null = режим Default (глобальная идентичность §118).
+      // hwid не маскируем под reveal: это идентификатор устройства, а не
+      // секрет провайдера (симметрия со скраббером /state/storage).
+      'identity': list.identity?.toJson(),
+      'import_rules_enabled': list.importRulesEnabled, // §302
+      // Сам список — под-ресурс /subs/{id}/rules: у подписки правил может быть
+      // много, а это общий листинг.
+      'import_rules_count': list.importRules.length,
+    },
   };
 }
+
+/// §346 — одно import-правило (§302) для `/subs/{id}/rules`. Shape — канонный
+/// `ImportRule.toJson()` (через него же едут storage и backup), плюс два
+/// вычисляемых поля для клиента:
+///
+/// - `index` — позиционный адрес для write'ов (у ImportRule нет id, как у
+///   членов папки в §238); после DELETE/reorder съезжает.
+/// - `usable` — правило пройдёт применение (§302 `isUsable`). `false` — не
+///   ошибка: недособранное правило легально и в UI-редакторе.
+Map<String, Object?> serializeImportRule(ImportRule r, int index) => {
+      'index': index,
+      'usable': r.isUsable,
+      ...r.toJson(),
+    };
 
 /// §238 — folder-entry (§234) для `/folders/*`: базовый sub-entry shape +
 /// created_at и члены. `raw` члена несёт credentials (URI/ключи, симметрия
