@@ -3,13 +3,13 @@
 Hysteria2, TUIC and MASQUE-h3 are alive again on the devices where they were
 silently dead. A single broken node from a subscription no longer stops the
 whole VPN from starting. Xray subscriptions keep the order their author
-intended. And WARP nodes recover the moment you unlock the screen, instead of
-erroring out for the first half-minute.
+intended. Subscriptions got their own Test servers button, and disabled ones
+can now be kept fresh instead of going stale.
 
 Hysteria2, TUIC и MASQUE-h3 снова работают на устройствах, где были молча
 мертвы. Одна битая нода из подписки больше не мешает запуску всего VPN.
-Xray-подписки сохраняют порядок, задуманный автором. А узлы WARP оживают сразу
-после разблокировки экрана, а не отдают ошибку первые полминуты.
+Xray-подписки сохраняют порядок, задуманный автором. У подписок появилась своя
+кнопка Test servers, а выключенные больше не обязаны протухать.
 
 Core / Ядро: **sing-box-lx `v1.14.0-lx.19-rc.3`** (было `v1.14.0-lx.18`).
 
@@ -18,7 +18,67 @@ Core / Ядро: **sing-box-lx `v1.14.0-lx.19-rc.3`** (было `v1.14.0-lx.18`)
 <details open>
 <summary><h2>🇬🇧 English</h2></summary>
 
+## 🆕 What's new
+
+### 🧪 Test servers on the subscription screen
+
+The test button, already familiar from folders, is now on the subscription's
+Nodes tab: a summary bar with `N ok · N err`, latency badges on the rows
+coloured by threshold, and a tap on a failure showing its text. Disabled nodes
+are tested too — the test answers "is the server alive", not "is it in the
+config" — and auto-select nodes get a neutral "auto" badge instead of an
+error. Works for single servers as well. As before, the test needs the VPN
+switched off; with an active tunnel it offers to stop it.
+
+### 🔄 "Update disabled subscriptions"
+
+Settings → Subscriptions: a checkbox that lifts the ban on auto-updating
+disabled subscriptions. A disabled subscription used to never update at all,
+so its node list went stale — you enable it a month later and get dead
+addresses. Now the snapshot can be kept fresh, while the nodes of a disabled
+subscription still don't reach the config and its update doesn't restart the
+tunnel. Off by default; it overrides neither the subscription's own "don't
+update automatically", nor the min-retry interval, nor the freeze after five
+failures.
+
+## 🔧 Changed
+
+### ⏰ WARP nodes recover right after you unlock the screen
+
+Reported on 4PDA again: "WARPs go stale over time". After the device sleeps,
+the network state of every WG/AWG node dies. The core heals this on its own,
+but ping measurements taken 5–35 seconds after unlocking still showed errors.
+
+Unlocking the screen now serves as a "the device woke up" signal: the core
+walks the nodes and re-establishes only the provably dead sessions, leaving
+live ones alone — the error window should shrink to a single handshake. If
+WARP still errors out right after unlocking, a report is worth sending: this
+one is hard to reproduce on demand, and field measurements help.
+
+### 🔗 "Share URL" without the intermediate dialog
+
+Long-press a subscription → "Share URL…" now opens the system share sheet
+straight away with the full URL. There used to be a dialog offering "masked /
+full" first, which read as a pointless message — and the masked variant
+(`https://host/***`) was useless to the recipient anyway. For a subscription
+loaded from a local file the item is hidden: a file subscription has no URL to
+share.
+
 ## 🐛 Fixed
+
+### 🎯 An auto-select node blocked Test servers for a folder or subscription
+
+Reported on 4PDA (#1406/#1407): after adding an "auto server" the ping test
+failed with an error on every attempt, without checking a single node, and
+disabling that node didn't help — only deleting it or moving it out of the
+folder did. The reason: the group travelled into the probe config as a
+placeholder with an empty member list (the pool is filled in by the main
+builder only), and the core rejected the whole config (`missing tags`). Group
+nodes are no longer emitted into the probe at all: a group needs no
+measurement of its own — its members sit in the same folder and are tested
+one by one — and the row gets a neutral "auto" badge instead of an error.
+"Disable unreachable" leaves such a node alone, and sorting by ping keeps it
+with the untested ones rather than the failed ones.
 
 ### 🚀 Hysteria2, TUIC and MASQUE-h3 dead on some devices
 
@@ -70,18 +130,6 @@ the names, not for the order, and those two jobs are now separated.
 
 The core failed with an internal error when URL-testing such nodes.
 
-## 🔧 Changed
-
-### ⏰ WARP nodes recover right after you unlock the screen
-
-Reported on 4PDA again: "WARPs go stale over time". After the device sleeps,
-the network state of every WG/AWG node dies. The core heals this on its own,
-but ping measurements taken 5–35 seconds after unlocking still showed errors.
-
-Unlocking the screen now serves as a "the device woke up" signal: the core
-walks the nodes and re-establishes only the provably dead sessions, leaving
-live ones alone. The error window collapses to a single handshake.
-
 ## 🧰 Tools
 
 ### 🔬 Debug API `/action/quic-knobs`
@@ -97,7 +145,64 @@ affect normal operation.
 <details open>
 <summary><h2>🇷🇺 Русский</h2></summary>
 
+## 🆕 Что нового
+
+### 🧪 Test servers на экране подписки
+
+Кнопка теста, знакомая по папкам, появилась на вкладке Nodes подписки: полоса
+со сводкой `N ok · N err`, бейджи задержки у строк с цветом по порогам шкалы,
+тап по ошибке показывает её текст. Тестируются и выключенные узлы — тест
+отвечает «жив ли сервер», а не «в конфиге ли он», — а узлы автовыбора получают
+нейтральный бейдж «auto» вместо ошибки. Работает и для одиночных серверов. Как
+и раньше, тест требует выключенного VPN: при активном туннеле предложит его
+остановить.
+
+### 🔄 «Обновлять выключенные подписки»
+
+Настройки → Подписки: галка, снимающая запрет на авто-обновление выключенных
+подписок. Раньше выключенная подписка не обновлялась вовсе, и её список узлов
+тух — включаешь через месяц и получаешь мёртвые адреса. Теперь снапшот можно
+держать свежим, при этом узлы выключенной подписки в конфиг по-прежнему не
+попадают, а туннель из-за её обновления не перезагружается. Выключено по
+умолчанию; не отменяет ни «не обновлять автоматически» у самой подписки, ни
+min-retry, ни заморозку после пяти фейлов.
+
+## 🔧 Изменено
+
+### ⏰ Узлы WARP оживают сразу после разблокировки экрана
+
+Снова жалоба с 4PDA: «варпы протухают со временем». После сна устройства
+сетевое состояние всех WG/AWG-узлов умирает. Ядро лечит это само, но замеры
+пинга в первые 5–35 секунд после разблокировки всё равно показывали ошибку.
+
+Теперь разблокировка экрана служит сигналом «устройство проснулось»: ядро
+проходит по узлам и переустанавливает только доказуемо мёртвые сессии, живые не
+трогает — окно ошибок должно сжаться до одного рукопожатия. Если WARP всё ещё
+отдаёт ошибку сразу после разблокировки, сообщение будет кстати: воспроизвести
+это по заказу тяжело, полевые замеры помогают.
+
+### 🔗 «Поделиться URL» без промежуточного диалога
+
+Long-press на подписке → «Поделиться URL…» теперь сразу открывает системное
+окно шаринга с полным URL. Раньше сначала показывался диалог с выбором
+«маскированный / полный», который читался как бессмысленное сообщение, а
+маскированный вариант (`https://host/***`) получателю всё равно был бесполезен.
+Для подписки из локального файла пункт скрыт — файловой подписке нечем
+делиться.
+
 ## 🐛 Исправлено
+
+### 🎯 Узел автовыбора блокировал Test servers папки и подписки
+
+Жалобы 4PDA (#1406/#1407): после добавления «автосервера» тест пинга падал с
+ошибкой при каждой попытке, не проверив ни одной ноды; выключение узла не
+помогало — только удалить или вынести из папки. Причина: в probe-конфиг группа
+уезжала заготовкой с пустым списком членов (состав пула дописывает только
+боевой билдер), и ядро отвергало весь конфиг (`missing tags`). Теперь
+узлы-группы в probe не эмитятся вовсе: свой замер группе не нужен — её члены
+лежат в той же папке и тестируются поштучно, — а строка получает нейтральный
+бейдж «auto» вместо ошибки. «Disable unreachable» такой узел не трогает,
+сортировка по пингу держит его с нетестированными, а не с упавшими.
 
 ### 🚀 Hysteria2, TUIC и MASQUE-h3 были мертвы на части устройств
 
@@ -144,18 +249,6 @@ string`, туннель не поднимался вовсе — из-за од�
 ### 📶 Узлы Trojan и VLESS с выключенным TLS роняли тест пинга
 
 Ядро падало с внутренней ошибкой при URL-тесте таких узлов.
-
-## 🔧 Изменено
-
-### ⏰ Узлы WARP оживают сразу после разблокировки экрана
-
-Снова жалоба с 4PDA: «варпы протухают со временем». После сна устройства
-сетевое состояние всех WG/AWG-узлов умирает. Ядро лечит это само, но замеры
-пинга в первые 5–35 секунд после разблокировки всё равно показывали ошибку.
-
-Теперь разблокировка экрана служит сигналом «устройство проснулось»: ядро
-проходит по узлам и переустанавливает только доказуемо мёртвые сессии, живые не
-трогает. Окно ошибок схлопывается до одного рукопожатия.
 
 ## 🧰 Инструменты
 
