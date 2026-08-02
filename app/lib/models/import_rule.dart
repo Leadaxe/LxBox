@@ -401,10 +401,13 @@ String? readJsonPath(Map<String, dynamic> map, JsonPath path) {
 bool writeJsonPath(Map<String, dynamic> map, JsonPath path, String value) {
   if (path.isEmpty) return false;
   final segs = path.split('.');
+  // §350 — сегмент `//...` создал бы в emit-JSON узла ключ-комментарий, а
+  // strict-decode ядра на unknown-field роняет весь конфиг. Проверяем весь
+  // путь ДО мутаций — иначе промежуточные мапы успели бы создаться.
+  if (segs.any((s) => s.isEmpty || s.startsWith('//'))) return false;
   Map<String, dynamic> cur = map;
   for (var i = 0; i < segs.length - 1; i++) {
     final seg = segs[i];
-    if (seg.isEmpty) return false;
     final next = cur[seg];
     if (next is Map<String, dynamic>) {
       cur = next;
@@ -417,7 +420,6 @@ bool writeJsonPath(Map<String, dynamic> map, JsonPath path, String value) {
     }
   }
   final last = segs.last;
-  if (last.isEmpty) return false;
   cur[last] = coerceJsonLike(cur[last], value);
   return true;
 }

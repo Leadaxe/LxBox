@@ -790,14 +790,33 @@ List<String> _applyJsonSingle(CustomRuleJson cr, RuleSetRegistry registry) {
     return warnings;
   }
   if (decoded is Map<String, dynamic>) {
+    final dropped = _stripCommentKeys(decoded);
+    if (dropped > 0) {
+      warnings.add('Raw-JSON rule "$name": $dropped comment key(s) ("//...") '
+          'dropped — the core rejects unknown fields.');
+    }
+    if (decoded.isEmpty) {
+      warnings.add(
+          'Raw-JSON rule "$name" skipped: empty after dropping comment keys.');
+      return warnings;
+    }
     registry.addRule(decoded);
   } else if (decoded is List) {
     var added = 0;
+    var dropped = 0;
     for (final e in decoded) {
       if (e is Map<String, dynamic>) {
+        dropped += _stripCommentKeys(e);
+        // Правило целиком из комментариев → пустой объект в route.rules ядру
+        // тоже не нужен (нет ни матчеров, ни action) — пропускаем.
+        if (e.isEmpty) continue;
         registry.addRule(e);
         added++;
       }
+    }
+    if (dropped > 0) {
+      warnings.add('Raw-JSON rule "$name": $dropped comment key(s) ("//...") '
+          'dropped — the core rejects unknown fields.');
     }
     if (added == 0) {
       warnings.add(
@@ -808,4 +827,32 @@ List<String> _applyJsonSingle(CustomRuleJson cr, RuleSetRegistry registry) {
         'Raw-JSON rule "$name" skipped: expected an object or array of objects.');
   }
   return warnings;
+}
+
+/// §350 — рекурсивно снимает ключи-комментарии (`//...`) из тела raw-JSON
+/// правила. sing-box strict-decode на unknown-field роняет ВЕСЬ конфиг на
+/// старте, а `//`-ключ — распространённая конвенция комментариев в
+/// JSON-примерах (юзер копирует пример с комментариями → fatal). Прочие
+/// unknown-поля НЕ трогаем: их набор билдеру неизвестен, резать вслепую
+/// опаснее, чем отдать декодеру ядра. Рекурсия по всему телу безопасна:
+/// в route.rules нет free-form map'ов (все поля типизированы, вложенность —
+/// только logical-`rules`), заголовков и прочих произвольных ключей там нет.
+int _stripCommentKeys(Object? node) {
+  var removed = 0;
+  if (node is Map) {
+    final bad =
+        node.keys.where((k) => k is String && k.startsWith('//')).toList();
+    for (final k in bad) {
+      node.remove(k);
+      removed++;
+    }
+    for (final v in node.values) {
+      removed += _stripCommentKeys(v);
+    }
+  } else if (node is List) {
+    for (final v in node) {
+      removed += _stripCommentKeys(v);
+    }
+  }
+  return removed;
 }

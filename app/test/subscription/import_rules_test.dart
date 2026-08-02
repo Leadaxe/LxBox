@@ -79,6 +79,13 @@ void main() {
       expect(writeJsonPath(map, 'tag.deep', 'x'), isFalse);
       expect(map['tag'], 'A');
     });
+
+    test('§350: сегмент //... отвергается (unknown-field = fatal ядра)', () {
+      final map = <String, dynamic>{'tag': 'A'};
+      expect(writeJsonPath(map, '//note', 'x'), isFalse);
+      expect(writeJsonPath(map, 'tls.//c.enabled', 'true'), isFalse);
+      expect(map, {'tag': 'A'}, reason: 'ничего не создано по пути');
+    });
   });
 
   group('условия', () {
