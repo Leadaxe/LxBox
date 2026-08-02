@@ -59,8 +59,8 @@ Back-pressure не трогаем: `LOG_QUEUE_MAX=4096` + drop-newest со сч�
 
 ### Debug API
 
-`GET/PUT /settings/core-logs-verbose` — зеркало существующего
-`core-logs-enabled`, но note в ответе честный: «applies immediately».
+`GET/PUT /settings/core_logs_verbose` — зеркало существующего
+`core_logs_enabled`, но note в ответе честный: «applies immediately».
 
 ## Поведение и ограничения
 
