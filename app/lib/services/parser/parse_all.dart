@@ -66,14 +66,8 @@ List<NodeSpec> _parseJson(JsonConfig j) {
       if (j.value is! List) return const [];
       // §310 — элемент массива даёт N узлов (кроме dialer-целей), а не один
       // «main». Порядок узлов внутри элемента задаёт парсер.
-      //
-      // §321 P2 — элементы обрабатываем от одиночных к многоузловым. Первый
-      // увидевший сервер даёт ему имя (P4-дедуп ниже), а осмысленное имя — у
-      // одиночного элемента («🇩🇪⚡Германия»), не у пула («Лучший сервер
-      // proxy-154-222-9-195-direct»). Сортировка стабильная: внутри одной
-      // длины порядок файла сохраняется.
-      final elements = (j.value as List).whereType<Map<String, dynamic>>().toList()
-        ..sort((a, b) => _payloadCount(a).compareTo(_payloadCount(b)));
+      final elements =
+          (j.value as List).whereType<Map<String, dynamic>>().toList();
       // §321 P4 — накопитель идентичностей на всю подписку. Между подписками
       // дедуп НЕ работает намеренно: разные источники = разные
       // tag_prefix/detour_policy, схлопывать их нельзя.
@@ -82,8 +76,43 @@ List<NodeSpec> _parseJson(JsonConfig j) {
       // → идентичность. §322 резолвит по ней состав пула, написанный на чужих
       // тегах (`selector: ["proxy"]`).
       final synonyms = <String, String>{};
+
+      // §342 — ДВА прохода: «кто даёт узлу имя» и «в каком порядке узлы идут»
+      // — разные задачи, и раньше они решались одной сортировкой.
+      //
+      // Проход 1 (черновой, узлы выбрасываются) — элементы от одиночных к
+      // многоузловым, ровно как в §321 P2: право выпустить сервер достаётся
+      // элементу с осмысленным `remarks` («🇩🇪⚡Германия»), а не пулу («Лучший
+      // сервер» с техническими тегами). Здесь же копится таблица синонимов
+      // (§321 P6). Побочно узнаём владельца каждой идентичности — `owner`.
+      //
+      // Проход 2 (боевой) — элементы строго в порядке файла; элемент выпускает
+      // только те серверы, которые закреплены за ним в проходе 1. Имена те же,
+      // что и до §342, а позиции — авторские. Раньше сортировка была
+      // единственным проходом, и её побочный эффект переставлял подписку
+      // целиком (на боевой 37-элементной — все 37 позиций, «🚀Авто | Лучший
+      // сервер» уезжал с первого места в конец), хотя порядок часто осмыслен:
+      // автор ставит рекомендуемый узел первым.
+      final priming = elements.toList()
+        ..sort((a, b) => _payloadCount(a).compareTo(_payloadCount(b)));
+      final owner = <String, Map<String, dynamic>>{};
+      for (final e in priming) {
+        final before = seen.toSet();
+        parseXrayElement(e, seen: seen, synonyms: synonyms);
+        for (final id in seen.difference(before)) {
+          owner[id] = e;
+        }
+      }
       return elements
-          .expand((e) => parseXrayElement(e, seen: seen, synonyms: synonyms))
+          .expand((e) => parseXrayElement(
+                e,
+                // `seen` этого прохода — свой: общий накопитель уже полон, и
+                // дедуп-`continue` съел бы все узлы. Ownership из прохода 1
+                // передаём через `ownedBy`.
+                seen: <String>{},
+                synonyms: synonyms,
+                ownedBy: (id) => identical(owner[id], e),
+              ))
           .toList();
     case JsonFlavor.singboxOutbound:
       if (j.value is! Map<String, dynamic>) return const [];

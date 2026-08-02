@@ -28,10 +28,15 @@ import 'utls_fingerprint.dart';
 /// [seen] — накопитель §321 P4 (дедуп по `(protocol, server, port, credential)`)
 /// на весь массив подписки. Узел, уже виденный в этом проходе, пропускается.
 /// `null` — дедуп выключен (одиночный элемент вне массива).
+/// [ownedBy] — §342: фильтр «этот сервер закреплён за этим элементом».
+/// Заполняется черновым проходом `parse_all` (приоритет имён §321 P2) и
+/// позволяет боевому проходу идти в порядке файла, не теряя имена. `null` —
+/// владение не проверяется (одиночный элемент, тесты).
 List<NodeSpec> parseXrayElement(
   Map<String, dynamic> element, {
   Set<String>? seen,
   Map<String, String>? synonyms,
+  bool Function(String identity)? ownedBy,
 }) {
   final outbounds = element['outbounds'];
   if (outbounds is! List) return const [];
@@ -116,6 +121,10 @@ List<NodeSpec> parseXrayElement(
     // `proxy-45-196-208-40-direct`), а §322 резолвит пул по чужим тегам.
     final obTag = ob['tag']?.toString() ?? '';
     if (identity != null && obTag.isNotEmpty) synonyms?[obTag] = identity;
+    // §342 — чужой узел: право на него получил другой элемент (тот, чьё имя
+    // осмысленнее). Пропускаем ДО дедупа, чтобы `seen` этого прохода не
+    // «застолбил» идентичность за нами.
+    if (identity != null && ownedBy != null && !ownedBy(identity)) continue;
     if (identity != null && seen != null) {
       if (seen.contains(identity)) continue;
       seen.add(identity);
