@@ -8,6 +8,8 @@ import '../models/channel.dart';
 import '../models/config_node.dart';
 import '../services/runtime_chain.dart';
 import '../services/settings_storage.dart';
+import '../vpn/cc_channel.dart';
+import '../widgets/pool_view_dialog.dart';
 import 'owner_navigation.dart';
 import '../services/l10n/locale_controller.dart';
 
@@ -59,6 +61,21 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   List<Channel> _channels = const [];
   List<RuntimeHop> _hops = const [];
 
+  /// §344 — живой пул round_robin-группы (§208 `getPool`). `null` = ещё не
+  /// спросили / клиент недоступен (туннель down, §209) — НЕ пустой пул.
+  /// Снимается один раз при открытии: unary-RPC, дёргать на ребилд нельзя.
+  List<CcPoolSlot>? _pool;
+
+  /// §344 — режим группы (§322 §6.1: round_robin-канал или `balancer{}` в
+  /// конфиге). Не-группа — всегда false.
+  bool get _isBalancer =>
+      _isGroupNode && widget.homeController.isRoundRobinAuto(widget.tag);
+
+  bool get _isGroupNode {
+    final t = widget.config[widget.tag]?.type;
+    return t == 'urltest' || t == 'selector';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -80,12 +97,20 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       _channels = channels;
       _hops = runtimeChainOf(widget.tag, widget.config, channels: channels);
     });
+    // §344 — живой состав пула. Только для round_robin: у least_test пул
+    // пуст по контракту ядра, спрашивать нечего.
+    if (!_isBalancer) return;
+    final pool = await widget.homeController.getPool(widget.tag);
+    if (!mounted) return;
+    setState(() => _pool = pool);
   }
 
-  void _onHopTap(RuntimeHop hop) {
+  void _onHopTap(RuntimeHop hop) => _onTagTap(hop.tag);
+
+  void _onTagTap(String tag) {
     unawaited(openTagOwner(
       context,
-      hop.tag,
+      tag,
       subController: widget.subController,
       homeController: widget.homeController,
       channels: _channels,
@@ -226,6 +251,13 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     final members = raw['outbounds'];
     final typeLabel =
         node.kind == 'endpoint' ? '${node.type} · endpoint' : node.type;
+    // §344 — режим группы: least_test («один быстрейший») и round_robin
+    // («пул») ведут себя противоположно, а выглядели одинаково. Параметры
+    // балансировщика — из raw, они эмитятся только под round_robin (§208).
+    final balancer = raw['balancer'];
+    final pool = balancer is Map ? balancer['pool'] : null;
+    final poolTolerance =
+        balancer is Map ? balancer['pool_tolerance'] : null;
     return [
       _kvRow(context, 'Type', typeLabel),
       if (server is String && server.isNotEmpty)
@@ -234,8 +266,91 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         _kvRow(context, 'Transport', node.transportLabel!),
       if (node.securityLabel != null)
         _kvRow(context, 'Security', node.securityLabel!),
-      if (members is List) _kvRow(context, 'Members', '${members.length}'),
+      if (_isGroupNode)
+        _kvRow(
+            context,
+            'Mode',
+            _isBalancer
+                ? getLocalText.s("Load balance")
+                : getLocalText.s("Fastest")),
+      if (_isBalancer && pool != null) _kvRow(context, 'Pool', '$pool'),
+      if (_isBalancer && poolTolerance is int && poolTolerance > 0)
+        _kvRow(context, 'Pool tolerance', '$poolTolerance ms'),
+      if (members is List) _membersTile(context, members),
     ];
+  }
+
+  /// §344 — состав группы разворачиваемым списком (было мёртвое число).
+  ///
+  /// Источников ДВА и путать их нельзя (§322 §6.1): в конфиге весь состав,
+  /// а в работе у round_robin только `pool` штук. Показываем состав из
+  /// конфига и помечаем тех, кто сейчас в живом пуле (`getPool`) — показать
+  /// одно вместо другого было бы враньём.
+  Widget _membersTile(BuildContext context, List<dynamic> members) {
+    final cs = Theme.of(context).colorScheme;
+    final slots = _pool ?? const <CcPoolSlot>[];
+    final byTag = {for (final s in slots) s.tag: s};
+    return Theme(
+      // убираем разделители ExpansionTile — раздел плотный, kv-строки рядом
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(left: 8, bottom: 4),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 90,
+              child: Text(getLocalText.s("Members"),
+                  style:
+                      TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+            ),
+            Expanded(
+              child: Text(
+                // под балансировщиком — «состав · сколько в работе»
+                _isBalancer && slots.isNotEmpty
+                    ? '${members.length} · '
+                        '${getLocalText.plural("%d in pool", slots.length)}'
+                    : '${members.length}',
+                style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+              ),
+            ),
+          ],
+        ),
+        children: [
+          for (final m in members)
+            _memberRow(context, '$m', inPool: byTag['$m']),
+        ],
+      ),
+    );
+  }
+
+  /// Строка участника. В живом пуле → формат слота (`slot N · тег · delay`,
+  /// §208), иначе — просто тег. Клик ведёт на владельца, как и хопы Route.
+  Widget _memberRow(BuildContext context, String tag, {CcPoolSlot? inPool}) {
+    if (inPool != null) {
+      return poolSlotRow(context, inPool,
+          onTap: () => _onTagTap(tag));
+    }
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () => _onTagTap(tag),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            const SizedBox(width: 48),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(tag,
+                  style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _kvRow(BuildContext context, String k, String v) {
@@ -268,14 +383,60 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   /// хоп-строка сама говорит «not in config» (и §172 такие detour лечит ещё
   /// при сборке).
   List<Widget> _routeRows(BuildContext context) {
-    final truncated = _hops.isNotEmpty && _hops.first.isGroup;
+    // §344 — у балансировщика одного выбранного НЕТ (§322 §6.3), поэтому
+    // цепочка обрывается на самой группе, и это не «обрыв» в смысле §258:
+    // эллипсис «подключитесь» тут был бы враньём — путь известен, он просто
+    // не единственный. Вместо него — свёрнутый хоп пула.
+    final truncated =
+        !_isBalancer && _hops.isNotEmpty && _hops.first.isGroup;
     return [
       _endpointRow(context, Icons.smartphone, 'Phone'),
       if (truncated) _ellipsisRow(context),
+      if (_isBalancer) _poolHopTile(context),
       for (var i = 0; i < _hops.length; i++)
         _hopRow(context, _hops[i], isSelf: i == _hops.length - 1),
       _endpointRow(context, Icons.public, 'Internet'),
     ];
+  }
+
+  /// §344 — пул как ОДНО звено пути с раскрытием (решение юзера 02.08.2026).
+  ///
+  /// Ветками слоты не рисуем: раздел обещает «живой путь в порядке следования
+  /// пакета», а пакет идёт через ОДИН узел пула — ветвление ломало бы это
+  /// обещание. Плюс на пулах в 20–30 узлов ветки растянули бы раздел на
+  /// несколько экранов, а большие пулы — целевой сценарий §208.
+  Widget _poolHopTile(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final slots = _pool;
+    // Туннель down (§209 `null`) или пул пуст — состав неизвестен; звено
+    // всё равно показываем, оно часть пути.
+    final count = slots?.length ?? 0;
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(left: 28, bottom: 4),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        leading: Icon(Icons.account_tree_outlined,
+            size: 20, color: cs.onSurfaceVariant),
+        title: Text(
+          count > 0
+              ? getLocalText.plural("%d nodes in pool", count)
+              : getLocalText.s("Pool"),
+          style: const TextStyle(fontSize: 14),
+        ),
+        subtitle: Text(
+          slots == null
+              ? getLocalText.s("connect to see the live pool")
+              : getLocalText.s("traffic is spread across slots"),
+          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+        ),
+        children: [
+          for (final s in slots ?? const <CcPoolSlot>[])
+            poolSlotRow(context, s, onTap: () => _onTagTap(s.tag)),
+        ],
+      ),
+    );
   }
 
   Widget _endpointRow(BuildContext context, IconData icon, String label) {

@@ -88,6 +88,21 @@ void main() {
       expect(hops.first.isGroup, isTrue); // маркер обрыва для UI-эллипсиса
     });
 
+    test('§344 — пустой выбор (round_robin) → обрыв, без призрачного хопа', () {
+      // У балансировщика одного выбранного нет: ядро отдаёт selected==''.
+      // Пустая строка НЕ тег — иначе в цепочку попадал бы хоп с пустым
+      // заголовком и подписью «not in config · current pick».
+      final cfg = _cfg([
+        _ob('a', 'vless', detour: 'vpn-4'),
+        _ob('vpn-4', 'urltest', members: ['x', 'y']),
+      ]);
+      final hops = runtimeChainOf('a', cfg,
+          channels: channels, selectedOf: (_) => '');
+      expect(_tags(hops), ['vpn-4', 'a']);
+      expect(hops.any((h) => h.tag.isEmpty), isFalse);
+      expect(hops.first.isGroup, isTrue);
+    });
+
     test('выбор селектора продолжает цепочку (viaSelection)', () {
       final cfg = _cfg([
         _ob('a', 'vless', detour: 'vpn-4'),

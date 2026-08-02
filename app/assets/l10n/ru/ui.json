@@ -118,6 +118,14 @@
   "%d conns": {
     "value": "%d соед."
   },
+  "%d in pool": {
+    "value": {
+      "one": "%d в работе",
+      "few": "%d в работе",
+      "many": "%d в работе",
+      "other": "%d в работе"
+    }
+  },
   "%d days": {
     "value": {
       "one": "%d день",
@@ -231,6 +239,14 @@
       "few": "%d узла (обновление не удалось: разобрано 0)",
       "many": "%d узлов (обновление не удалось: разобрано 0)",
       "other": "%d узла (обновление не удалось: разобрано 0)"
+    }
+  },
+  "%d nodes in pool": {
+    "value": {
+      "one": "%d узел в пуле",
+      "few": "%d узла в пуле",
+      "many": "%d узлов в пуле",
+      "other": "%d узла в пуле"
     }
   },
   "%d nodes route traffic back into their own chain. Tap a node to open its source, change or remove its detour, then start again.": {
@@ -2693,6 +2709,9 @@
   "Plain UDP · port 53 · fast, unencrypted": {
     "value": "Обычный UDP · порт 53 · быстро, без шифрования"
   },
+  "Pool": {
+    "value": "Пул"
+  },
   "Pool is empty (not a load-balance group)": {
     "value": "Пул пуст (группа без балансировки)"
   },
@@ -3957,6 +3976,9 @@
   "connect to see the full path": {
     "value": "подключитесь, чтобы увидеть весь путь"
   },
+  "connect to see the live pool": {
+    "value": "подключитесь, чтобы увидеть живой пул"
+  },
   "connections with the same key keep one server": {
     "value": "соединения с одним ключом держатся одного сервера"
   },
@@ -4126,6 +4148,9 @@
   },
   "timeout %ss": {
     "value": "тайм-аут %ss"
+  },
+  "traffic is spread across slots": {
+    "value": "трафик распределяется по слотам"
   },
   "unknown": {
     "value": "неизвестно"

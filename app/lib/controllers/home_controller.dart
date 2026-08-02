@@ -1061,8 +1061,13 @@ class HomeController extends ChangeNotifier
     // §251 — снапшот «тег группы → её текущий выбор» для fold'а
     // «селектор (выбор)» в routing-строках и пикере detour. Все группы
     // (selector + urltest): detour-ссылка может указывать и на двойник.
+    // §344 — пустое `selected` НЕ выбор: у round_robin-группы (§208/§322)
+    // одного выбранного нет по определению, ядро отдаёт ''. Пропустив его,
+    // мы бы нарушили контракт `selectedOf` («null = выбор неизвестен») и
+    // цепочка §258 нарисовала бы хоп с пустым тегом.
     SelectorInfo.I.setGroups({
-      for (final g in ccGroups) g.tag: g.selected,
+      for (final g in ccGroups)
+        if (g.selected.isNotEmpty) g.tag: g.selected,
     });
     // Сначала фиксируем свежий снапшот в state, чтобы производные геттеры
     // (`selectorGroupTags`/`groupOf`) считали по новым данным.
