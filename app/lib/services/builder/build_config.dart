@@ -198,10 +198,38 @@ Future<BuildResult> buildConfig({
     initialRules: route['rules'] as List<dynamic>? ?? const [],
   );
 
+  // §125 — каналы из storage (source-of-truth). Если пусто (тесты без storage /
+  // первый билд до миграции) — синтезируем из template.groupTemplates через ту
+  // же seed-логику, что и one-shot миграция, чтобы билдер всегда работал с
+  // List<Channel> единообразно. autoTags больше не нужен: каждый канал делает
+  // свой urltest-двойник по своему node-set. Резолвится ДО эмита узлов:
+  // теги каналов резервируются в аллокаторе (§351).
+  final channels = settings.channels.isNotEmpty
+      ? settings.channels
+      : _channelsFromTemplate(
+          template.groupTemplates, settings.enabledGroups, resolve);
+
   // buildConfig — тонкий оркестратор. ServerList.build(ctx) сам решает
   // политику, аллоцирует теги через ctx, регистрирует в selector/auto.
-  final ctx =
-      _BuildCtx(tvars, ruleSets, passiveCheck: settings.passiveCheck); // §322
+  //
+  // §351 — теги каналов (селектор + auto-двойник) резервируются заранее:
+  // _buildChannelGroups эмитит их с фиксированным `c.tag` МИМО allocateTag,
+  // и узел подписки с меткой `vpn-1` дал бы дубль тега → отказ ядра на
+  // старте. С резервом такой узел получает суффикс `-N` штатным путём.
+  // Фильтр active — тот же, что в _buildChannelGroups (enabled || required);
+  // autoTag резервируем всегда, хотя эмитится он условно: пере-резерв лишь
+  // добавит суффикс узлу-тёзке, а обратная ошибка стоила бы старта.
+  final ctx = _BuildCtx(
+    tvars,
+    ruleSets,
+    passiveCheck: settings.passiveCheck, // §322
+    reservedTags: [
+      for (final c in channels.where((c) => c.enabled || c.isRequired)) ...[
+        c.tag,
+        c.autoTag,
+      ],
+    ],
+  );
   for (final list in lists) {
     list.build(ctx);
   }
@@ -231,16 +259,6 @@ Future<BuildResult> buildConfig({
 
   final selectorTags =
       ctx.selectorEntries.map((e) => e.tag).toList(growable: false);
-
-  // §125 — каналы из storage (source-of-truth). Если пусто (тесты без storage /
-  // первый билд до миграции) — синтезируем из template.groupTemplates через ту
-  // же seed-логику, что и one-shot миграция, чтобы билдер всегда работал с
-  // List<Channel> единообразно. autoTags больше не нужен: каждый канал делает
-  // свой urltest-двойник по своему node-set.
-  final channels = settings.channels.isNotEmpty
-      ? settings.channels
-      : _channelsFromTemplate(
-          template.groupTemplates, settings.enabledGroups, resolve);
 
   // §248/§254 — эмитированные узлы (те же map-объекты уходят в config ниже):
   // AWG-advisory читает типы. detour больше НЕ правится in-place (§254 —
@@ -519,8 +537,14 @@ Future<BuildResult> buildConfig({
 /// Реализация `EmitContext`: vars + аллокатор уникальных тегов +
 /// аккумуляторы entries + RuleSetRegistry.
 class _BuildCtx implements EmitContext {
-  _BuildCtx(this._vars, this._ruleSets, {bool passiveCheck = false})
-      : _passiveCheck = passiveCheck;
+  _BuildCtx(
+    this._vars,
+    this._ruleSets, {
+    bool passiveCheck = false,
+    Iterable<String> reservedTags = const [],
+  }) : _passiveCheck = passiveCheck {
+    _taken.addAll(reservedTags); // §351 — теги каналов, эмитятся мимо аллокатора
+  }
   final TemplateVars _vars;
   final RuleSetRegistry _ruleSets;
   final bool _passiveCheck;
