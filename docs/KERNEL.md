@@ -22,13 +22,21 @@ AmneziaWG 2.0 + нативный XHTTP + VLESS encryption (PQ-слой) + LxBox-
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.19-rc.3`** (v2.19.2, см. `app/android/libbox.version`)
+**Текущий пин: `v1.14.0-lx.20-rc.1`** (v2.19.3, см. `app/android/libbox.version`)
+— **изменений в Go-коде поверх lx.19 НЕТ**, меняется только тулчейн сборки: все
+двенадцать build-джобов форка пинятся на Go 1.25.x (upstream-паритет, SPEC 044),
+и Android-AAR при этом едет с 1.26.x **вниз** на ту же 1.25.x. Порог дефекта
+вендорских ядер — «>= 1.25», обе версии (1.25.5 и 1.26.5) device-verified, так
+что смена внутри проверенного диапазона. `go.mod` не тронут (там `go 1.24.7` —
+это language floor, а не выбор тулчейна). Клиентских правок не требует.
+
+Предыдущий пин — **`v1.14.0-lx.19-rc.3`** (v2.19.2)
 — три фикса поверх lx.18: SPEC 041 v2 (событийный нудж `RebindStaleEndpoints`,
 потребитель — §340), SPEC 044 (AAR, собранный Go 1.24, убивал ВСЕ quic-go-аутбаунды
 на вендорских ядрах — hysteria2/tuic/masque-h3; фикс = тулчейн Go 1.25, §341) и
 SPEC 045 (nil-паника trojan/vless с `tls.enabled:false` при URL-тесте).
 
-Предыдущий пин — **`v1.14.0-lx.18`** (v2.19.1, §335)
+Пин до него — **`v1.14.0-lx.18`** (v2.19.1, §335)
 — VLESS `encryption` (SPEC 032, feature VLESS_ENCRYPTION): пост-квантовый слой
 `mlkem768x25519plus` **внутри** VLESS (работает вместо TLS — такие узлы приезжают
 с `security=none`; не путать с REALITY). Раньше поля не было в схеме ядра, и

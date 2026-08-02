@@ -23,7 +23,11 @@ hysteria-узлы выпадали из пулов автовыбора, нас�
 восстановление из бэкапа, член группы с запятой в пароле исчезал после
 перезапуска.
 
-Core / Ядро: **sing-box-lx `v1.14.0-lx.19-rc.3`** (без изменений).
+Core / Ядро: **sing-box-lx `v1.14.0-lx.20-rc.1`** (was / было
+`v1.14.0-lx.19-rc.3`). No code changes in the core itself — that release is
+purely about the build environment: a single Go 1.25.x toolchain pin across
+every build job. / Изменений в коде ядра нет — тот релиз целиком про среду
+сборки: единый пин тулчейна Go 1.25.x во всех сборочных джобах.
 
 ---
 
