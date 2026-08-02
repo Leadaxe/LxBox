@@ -32,6 +32,7 @@ class HomeControls extends StatelessWidget {
     required this.startEnabled,
     required this.stopEnabled,
     required this.needsRestart,
+    this.autoApplying = false,
     required this.errorTimerOnDismiss,
     required this.onStartWithAutoRefresh,
     required this.onRebuildAndClearDirty,
@@ -50,6 +51,10 @@ class HomeControls extends StatelessWidget {
   final bool startEnabled;
   final bool stopEnabled;
   final bool needsRestart;
+
+  /// §338 — авто-применение в полёте (воронка пересборки при включённой
+  /// галке): розовая плашка подавляется на окно rebuild+reload.
+  final bool autoApplying;
 
   /// Cancel + clear lastError (раньше inline в `_buildControls`: отменял
   /// `_errorTimer` и звал `clearError`). Side-effect живёт в State.
@@ -124,6 +129,7 @@ class HomeControls extends StatelessWidget {
                 configDirty: subController.configDirty,
                 busy: subController.busy,
                 crashPending: CrashBannerState.I.pending != null,
+                autoApplying: autoApplying, // §338
                 actions: BannerActions(
                   onRebuild: () => unawaited(onRebuildAndClearDirty()),
                   // Не гасим restart на тап — если юзер отменит Stop-диалог,

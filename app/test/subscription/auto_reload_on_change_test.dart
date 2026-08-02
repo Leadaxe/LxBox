@@ -19,17 +19,21 @@ SubscriptionServers _sub(SubscriptionOnUpdateAction action) =>
       onUpdateAction: action,
     );
 
-/// Копия гейта из `home_screen._maybeAutoReload`.
+/// Копия гейта из `home_screen._maybeAutoReload` + `_rebuildAndClearDirty`.
 bool _shouldAutoReload({
   required bool autoReload,
   required bool tunnelUp,
   required bool needRestart,
   required bool rebuildOk,
+  bool canReload = true,
 }) {
   if (!rebuildOk) return false;
   if (!autoReload) return false;
   if (!tunnelUp) return false;
   if (!needRestart) return false;
+  // cooldown 3с / не-connected: скип с warning-логом, плашка остаётся
+  // честным fallback'ом после окна подавления.
+  if (!canReload) return false;
   return true;
 }
 
@@ -118,6 +122,18 @@ void main() {
             tunnelUp: true,
             needRestart: true,
             rebuildOk: false),
+        isFalse,
+      );
+    });
+
+    test('cooldown (canReload=false) → скип, плашка остаётся fallback\'ом', () {
+      expect(
+        _shouldAutoReload(
+            autoReload: true,
+            tunnelUp: true,
+            needRestart: true,
+            rebuildOk: true,
+            canReload: false),
         isFalse,
       );
     });

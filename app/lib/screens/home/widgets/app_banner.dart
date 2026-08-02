@@ -75,6 +75,7 @@ List<AppBanner> activeBanners(
   required bool busy,
   required BannerActions actions,
   bool crashPending = false,
+  bool autoApplying = false,
 }) {
   final a = actions;
   final out = <AppBanner>[];
@@ -103,7 +104,15 @@ List<AppBanner> activeBanners(
   }
   // §076: «restart» показываем только когда rebuild уже сделан
   // (configDirty=false) но running config устарел.
-  if (s.tunnelUp && s.configChangedNeedRestart && !configDirty) {
+  //
+  // §338 — `autoApplying`: между saveParsedConfig (ставит needRestart) и
+  // завершением авто-reload'а (~1–3с) флаг честно взведён — но звать юзера
+  // перезапускать VPN, который вот-вот перезапустится сам, нельзя: мигание
+  // читается как «плашка выскочила, галка не работает». Если reload
+  // сорвётся (cooldown/не-connected), окно закроется с невзятым флагом — и
+  // плашка честно вернётся как fallback.
+  if (s.tunnelUp && s.configChangedNeedRestart && !configDirty &&
+      !autoApplying) {
     out.add(AppBanner(
       key: 'restart',
       message: getLocalText.s("Config changed — restart VPN to apply"),

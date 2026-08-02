@@ -100,6 +100,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// повторные триггеры await'ят её вместо параллельного запуска второй.
   Future<void>? _rebuildInFlight;
 
+  /// §338 — авто-применение в полёте: воронка пересобирает при включённой
+  /// галке. На это окно (rebuild + reload, ~1–3с) розовая плашка подавляется —
+  /// иначе она честно мигает между saveParsedConfig (взвёл флаг) и
+  /// завершением reload'а (снял), что читается как «галка не работает».
+  bool _autoApplying = false;
+
   /// §107 (R3): one-shot listener «subController освободился — догнать
   /// pending rebuild», см. [_retryRebuildWhenIdle].
   VoidCallback? _idleRetryListener;
@@ -386,14 +392,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           // case A (нет конфига, туннель не поднят) или реальный dirty →
           // пересобрать. Дифф в saveParsedConfig снимет ложный «config changed»,
           // если конфиг совпал с работающим.
-          final config = await _subController.generateConfig();
-          if (config != null && mounted) {
-            // §107: generateConfig сбросил configDirty до записи на диск —
-            // при неудачном save восстанавливаем (конфиг на диске стар).
-            final ok = await _controller.saveParsedConfig(config);
-            if (!ok) _subController.configDirty = true;
-            setState(() {});
-          }
+          //
+          // §338 — через общую воронку, а не голый generate+save: VpnService
+          // переживает kill приложения, так что холодный старт с dirty при
+          // ЖИВОМ туннеле реален — и хук автоприменения должен сработать и
+          // здесь, иначе розовая плашка переживает включённую галку.
+          // Внутри тот же generateConfig + saveParsedConfig + §107-restore.
+          await _rebuildAndClearDirty(silent: true);
+          if (mounted) setState(() {});
         }
       }
     } catch (e) {
@@ -578,6 +584,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   controller: _controller,
                   subController: _subController,
                   presenter: _nodeList,
+                  autoApplying: _autoApplying, // §338
+
                   connectingAnimChild: StatusChip(
                     state: state,
                     isRevoked: state.tunnel == TunnelStatus.revoked,
@@ -757,15 +765,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         // «перезагружаю», а галку он снял между двумя чтениями).
         final autoReload = await SettingsStorage.getAutoReloadOnChange();
         if (!mounted) return;
+        // §338 — подавить розовую плашку на окно применения (см. поле).
+        if (autoReload) setState(() => _autoApplying = true);
         final ok = await _rebuildConfig(silent: silent, autoReload: autoReload);
         if (mounted) setState(() {});
         // §338 — единственная воронка всех путей пересборки (возврат на home
-        // §076, retry-when-idle §107, реакция подписки §323, гейт на Start).
-        // Хук здесь, а не на 25+ сайтах `configDirty = true`: тот флаг живёт
-        // статикой в SettingsStorage (§113) и notifyListeners не даёт.
+        // §076, retry-when-idle §107, реакция подписки §323, гейт на Start,
+        // bootstrap). Хук здесь, а не на 25+ сайтах `configDirty = true`: тот
+        // флаг живёт статикой в SettingsStorage (§113) и notifyListeners не
+        // даёт.
         if (ok && autoReload) await _maybeAutoReload();
       } finally {
         _rebuildInFlight = null;
+        if (_autoApplying && mounted) setState(() => _autoApplying = false);
+        _autoApplying = false;
       }
     }();
   }
@@ -784,6 +797,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (!state.tunnelUp) return;
     if (!state.configChangedNeedRestart) {
       AppLog.I.debug('§338: reload skipped — config identical to running');
+      return;
+    }
+    // §338 — cooldown-гейт reloadVpn (3с) молча глотает вызов; для авто-пути
+    // это значит «применение пропало без следа». Логируем причину явно —
+    // плашка, оставшаяся из-за скипа, перестаёт быть загадкой. Флаг остаётся
+    // взведённым, плашка после окна подавления — честный fallback.
+    if (!_controller.canReload) {
+      AppLog.I.warning(
+          '§338: reload skipped — cooldown/not-connected, banner stays');
       return;
     }
     AppLog.I.info('§338: auto-reload on settings change');
