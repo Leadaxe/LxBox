@@ -853,6 +853,9 @@
   "Blocked — Android may throttle the VPN service. Tap to allow.": {
     "value": "Заблокированы — Android может ограничивать VPN-сервис. Нажмите, чтобы разрешить."
   },
+  "Broken dependencies": {
+    "value": "Сломанные зависимости"
+  },
   "Building config...": {
     "value": "Сборка конфига…"
   },
@@ -1253,6 +1256,18 @@
   },
   "DNS server": {
     "value": "DNS-сервер"
+  },
+  "DNS server \"%1$s\" routes through dead node \"%2$s\" (selected in \"%3$s\").": {
+    "value": "DNS-сервер \"%1$s\" ходит через мёртвый узел \"%2$s\" (выбран в \"%3$s\")."
+  },
+  "DNS server \"%1$s\" routes through dead node \"%2$s\".": {
+    "value": "DNS-сервер \"%1$s\" ходит через мёртвый узел \"%2$s\"."
+  },
+  "DNS server — direct detour": {
+    "value": "DNS-сервер — прямой detour"
+  },
+  "DNS server — via \"%1$s\"": {
+    "value": "DNS-сервер — через \"%1$s\""
   },
   "DNS servers and rules": {
     "value": "DNS-серверы и правила"
@@ -2464,6 +2479,12 @@
   },
   "Node info copied": {
     "value": "Данные узла скопированы"
+  },
+  "Node — direct detour": {
+    "value": "Узел — прямой detour"
+  },
+  "Node — via \"%1$s\"": {
+    "value": "Узел — через \"%1$s\""
   },
   "Nodes": {
     "value": "Узлы"
@@ -3680,6 +3701,9 @@
   },
   "Theme, appearance": {
     "value": "Тема и внешний вид"
+  },
+  "These depend on dead node \"%1$s\" and are not working:": {
+    "value": "Они зависят от мёртвого узла \"%1$s\" и не работают:"
   },
   "These headers identify your device to the panel. Defaults come from the device — override any of them (empty = device default).": {
     "value": "По этим заголовкам панель опознаёт ваше устройство. Значения по умолчанию берутся с устройства — любое можно переопределить (пусто = как на устройстве)."

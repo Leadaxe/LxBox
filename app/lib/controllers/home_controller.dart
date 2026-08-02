@@ -1094,6 +1094,9 @@ class HomeController extends ChangeNotifier
     _emit(next.copyWith(
         groups: groups, groupLabels: _channelLabels, selectedGroup: initial));
     unawaited(applyGroup(initial));
+    // §355 — выбор групп сменился → пересчитать граф зависимостей (мёртвая
+    // нода могла стать/перестать быть корнем беды через выбор канала).
+    _recomputeDependencyHealth();
   }
 
   /// Переприменение после switchNode|groupUrltest. §122 — данные текут стримом;
@@ -1102,6 +1105,75 @@ class HomeController extends ChangeNotifier
   Future<void> reloadProxies() async {
     if (!_state.tunnelUp) return;
     _applyGroups(_state.ccGroups);
+  }
+
+  // §355 — граф detour-зависимостей активного конфига (parse-once дисциплина
+  // §091: пересоздаётся только на смену raw). Динамика (выбор групп, замеры)
+  // подаётся в computeSick аргументами из state.
+  DependencyGraph _depGraph = const DependencyGraph.empty();
+  String _depGraphRaw = '';
+
+  /// §355 — пересчёт «корней беды» (мёртвая нода → зависимые DNS/ноды).
+  /// Дёргается на двух событиях (новой диагностики нет by design): замер
+  /// пинга (см. ping_orchestration) и смена выбора групп (_applyGroups).
+  /// Эмитит только при фактическом изменении результата; баннер lastError —
+  /// только для DNS-ветки (решение юзера, spec §4.3) и только на НОВУЮ
+  /// dns-жертву; исчезновение всех dns-жертв снимает наш баннер (чужие
+  /// lastError не трогаем).
+  @override
+  void _recomputeDependencyHealth() {
+    final raw = _state.activeConfigRaw;
+    if (!identical(raw, _depGraphRaw) && raw != _depGraphRaw) {
+      _depGraphRaw = raw;
+      _depGraph = DependencyGraph.fromConfig(raw);
+    }
+    final selections = <String, String>{
+      for (final g in _state.ccGroups)
+        if (g.selectable && g.selected.isNotEmpty) g.tag: g.selected,
+    };
+    final sick = _depGraph.computeSick(
+      selections: selections,
+      delays: _state.delayByChannel,
+    );
+    if (_sickRootsEqual(sick, _state.sickRoots)) return;
+
+    final prevDnsVictims = <String>{
+      for (final list in _state.sickRoots.values)
+        for (final d in list)
+          if (d.isDns) d.tag,
+    };
+    DnsViaDeadNodeMsg? banner;
+    for (final e in sick.entries) {
+      for (final d in e.value) {
+        if (d.isDns && !prevDnsVictims.contains(d.tag)) {
+          banner = DnsViaDeadNodeMsg(d.tag, e.key, d.via ?? '');
+          break;
+        }
+      }
+      if (banner != null) break;
+    }
+    final hasDnsVictims =
+        sick.values.any((list) => list.any((d) => d.isDns));
+    if (banner != null) {
+      _addDebug(DebugSource.app, banner.renderEn());
+      _emit(_state.copyWith(sickRoots: sick, lastError: banner));
+    } else if (!hasDnsVictims && _state.lastError is DnsViaDeadNodeMsg) {
+      _emit(_state.copyWith(sickRoots: sick, lastError: null));
+    } else {
+      _emit(_state.copyWith(sickRoots: sick));
+    }
+  }
+
+  static bool _sickRootsEqual(
+    Map<String, List<DependentRef>> a,
+    Map<String, List<DependentRef>> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (final e in a.entries) {
+      final other = b[e.key];
+      if (other == null || !listEquals(e.value, other)) return false;
+    }
+    return true;
   }
 
   /// §122/SPEC015 — ручной pull-to-refresh (свайп вниз на списке нод). Тянет

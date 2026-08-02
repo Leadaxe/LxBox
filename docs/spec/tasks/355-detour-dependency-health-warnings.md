@@ -1,7 +1,7 @@
 # §355 — Граф detour-зависимостей: ⚠ на мёртвой ноде, от которой зависят другие
 
 **Тип:** таска
-**Статус:** спека (дизайн согласован 03.08.2026, реализация не начата)
+**Статус:** реализовано 03.08.2026 (юниты графа 10/10, виджет-тест метки, полный сьют 2743 зелёный; DEVICE-PENDING)
 **Связано:** kernel SPEC 046 (мёртвый DNS-detour морозил пакетный цикл — починено в ядре `v1.14.0-lx.20-rc.2`), §354 (ru-DNS через группу — смягчил DNS-кейс тремя путями), §312 (DNS-группы), §254 (detour-циклы: билдер уже обходит граф), §084 (DanglingDetourRef), §096 (`detourRefCount` в списке нод), §125 (каналы), §283 (detail-экран ноды), §308 (rescue urltest-групп)
 
 ---
@@ -97,11 +97,13 @@ sick(нода)  → …                 рекурсивно (каналы, гд
 1. **⚠-метка в списке нод** — на ноде, которая `dead` **и** от которой
    транзитивно зависят другие (DNS-серверы или ноды). Просто мёртвая нода без
    зависимых метку не получает — это фильтр от шума.
-2. **Detail-экран ноды** (§283) — секция «Dependents»: список DNS-серверов и
-   нод, которые от неё зависят, с путём зависимости
-   (`yandex_udp → via vpn-2`, `node X → direct detour`). Секция видна всегда,
-   когда зависимые есть (и на живой ноде — это полезная информация «кто через
-   меня ходит»), при `dead` — с предупреждающим тоном.
+2. **Sheet «Broken dependencies» по тапу на ⚠-метку** — список DNS-серверов
+   и нод, зависящих от корня, с путём зависимости (`yandex_udp — via vpn-2`,
+   `node X — direct detour`); DNS-жертвы сверху. *(Отступление от исходного
+   наброска «секция в detail-экране ноды»: выделенного detail-экрана у нод
+   Home нет — есть контекстное меню и sheet-паттерн §254 detour_cycle_sheet;
+   sheet по тапу на метку точнее по контексту и дешевле. `directDependents`
+   в модели оставлен для будущей секции «кто через меня» на живой ноде.)*
 3. **Баннер на Home — только для DNS-ветки** (решение юзера 03.08.2026):
    когда болен DNS-сервер, юзер не смотрит в список нод — у него «просто не
    работает интернет». Текст в духе:
@@ -113,17 +115,23 @@ sick(нода)  → …                 рекурсивно (каналы, гд
 
 ## 5. Скетч реализации
 
+Как реализовано (пути точные):
+
 | Слой | Что | Где |
 |---|---|---|
-| Модель | `DependencyGraph` (обратный индекс + BFS + health-правила §3.3–3.4), immutable, пересоздаётся билдером | новый `app/lib/models/dependency_graph.dart` |
-| Билдер | публикация графа рядом с parsed config (сбор рёбер там же, где §254-обход) | `app/lib/services/builder/` (validator/сосед), выдача через SubscriptionController |
-| Контроллер | пересчёт на событиях: `_delaysWith`-flush ([ping_orchestration.dart](../../../app/lib/controllers/home_controller/ping_orchestration.dart)) и `_applyGroups` (groups-стрим); результат — `Set<String> sickRoots` + `Map<root, List<Dependent>>` в HomeState | `home_controller` |
-| UI: метка | ⚠ в строке ноды по `sickRoots` | [node_list_presenter.dart](../../../app/lib/screens/home/node_list_presenter.dart) + виджет строки |
-| UI: detail | секция Dependents | detail-экран ноды (§283) |
-| UI: баннер | DNS-ветка → lastError-баннер | `home_controller` / home_screen |
+| Модель | `DependencyGraph.fromConfig(raw)` — обратный индекс + BFS + health-правила §3.3–3.4; `DependentRef {kind, tag, via}` | [dependency_graph.dart](../../../app/lib/models/dependency_graph.dart) |
+| Источник графа | НЕ билдер (отступление от наброска): граф парсит `HomeState.activeConfigRaw` сам — работает и для §311 running-снапшота, билдер не тронут; parse-once дисциплина §091 (пересоздание только на смену raw) | `HomeController._depGraph/_depGraphRaw` |
+| Контроллер | `_recomputeDependencyHealth()`: вызовы из `_applyGroups` (смена выбора), `flush()` mass-ping и хвоста `runNodeUrltest` ([ping_orchestration.dart](../../../app/lib/controllers/home_controller/ping_orchestration.dart)); гейт по изменению результата; selections — только `selectable`-группы | [home_controller.dart](../../../app/lib/controllers/home_controller.dart) |
+| Состояние | `HomeState.sickRoots: Map<String, List<DependentRef>>` | [home_state.dart](../../../app/lib/models/home_state.dart) |
+| UI: метка | `NodeViewItem.isSickRoot` → ⚠ у имени в `NodeRow`, тап → `onSickTap` | [node_view_item.dart](../../../app/lib/widgets/node_view_item.dart), [node_row.dart](../../../app/lib/widgets/node_row.dart), прокидка в [node_list.dart](../../../app/lib/screens/home/widgets/node_list.dart) |
+| UI: sheet | `showDependencySheet` (паттерн §254) | [dependency_sheet.dart](../../../app/lib/screens/home/widgets/dependency_sheet.dart) |
+| UI: баннер | `DnsViaDeadNodeMsg` (только DNS-ветка; авто-снятие при уходе всех dns-жертв, чужой lastError не трогается) | [ui_msg.dart](../../../app/lib/models/ui_msg.dart) + `_recomputeDependencyHealth` |
 
-Тесты: юниты на BFS/health-правила (включая: противоречивые замеры → alive;
-urltest-канал не болеет по выбору; цикл-guard), виджет-тест метки и секции.
+Тесты: [dependency_graph_test.dart](../../../app/test/models/dependency_graph_test.dart)
+(10 юнитов: репро инцидента, двухступенчатая цепочка, консервативное правило,
+unknown, urltest-исключение и полный мёртвый состав, malformed) +
+[node_row_sick_test.dart](../../../app/test/widgets/node_row_sick_test.dart)
+(метка и тап).
 
 ## 6. Критерии приёмки
 

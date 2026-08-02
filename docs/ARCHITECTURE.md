@@ -994,6 +994,27 @@ HomeController/UI                    Sing-box (Go goroutines)
 - `EventChannel.EventSink.success()` требует **main thread** — диспатчим через `coreLogMainHandler.post {...}`. Без этого openTun ловит `@UiThread` exception от Flutter, sing-box интерпретирует как "configure tun interface failed", VPN падает на старте.
 - Forwarding gate'нут флагом `Libbox.setup(SetupOptions{debug: ...})` (читается из `BootReceiver.isCoreLogsEnabled(context)` в `BoxApplication.initialize`). Default false, юзер opt-in'ит через UI или Debug API. Изменение применяется только после restart Service'а — `Libbox.setup` зовётся один раз.
 
+### 7. Граф detour-зависимостей (§355)
+
+```
+activeConfigRaw (смена) ──► DependencyGraph.fromConfig (models/dependency_graph.dart)
+                              статика: node/dns --detour--> node|канал; состав групп
+delayByChannel (замер)  ──┐
+groups-стрим (выбор)    ──┴─► HomeController._recomputeDependencyHealth()
+                              computeSick: dead-нода (все замеры ERR) → BFS вверх
+                              по обратным рёбрам (selector-выбор заражает канал;
+                              urltest болен только при мёртвом составе — §308
+                              самолечится)
+  ↓ (только при изменении результата)
+HomeState.sickRoots (корень → пострадавшие DNS/ноды с via-путём)
+  ├─ NodeRow: ⚠-метка у имени корня → тап → dependency_sheet
+  └─ DNS-жертва появилась → lastError = DnsViaDeadNodeMsg (баннер; уход всех
+     dns-жертв снимает его)
+```
+
+Никакой новой сетевой активности: только уже существующие события. Правила
+health и не-цели — в [спеке §355](spec/tasks/355-detour-dependency-health-warnings.md).
+
 ---
 
 ## Dart `BoxVpnClient` API surface

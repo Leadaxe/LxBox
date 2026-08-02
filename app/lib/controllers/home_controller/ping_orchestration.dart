@@ -15,6 +15,10 @@ mixin _PingMixin on ChangeNotifier {
   void _addDebug(DebugSource source, String message);
   Future<void> reloadProxies();
 
+  /// §355 — пересчёт графа detour-зависимостей после свежих замеров.
+  /// Реализация — HomeController; ping-пути дёргают после записи delay.
+  void _recomputeDependencyHealth();
+
   /// Single-node URLTest через CommandClient `urlTestOutbound` (§122, unary RPC).
   /// Использует per-group resolved url/timeout (§040) — контекст = `selectedGroup`.
   /// ИНВАРИАНТ результата (§4.6): `error` — единственный признак провала;
@@ -56,6 +60,8 @@ mixin _PingMixin on ChangeNotifier {
       _addDebug(DebugSource.app, msg.renderEn());
       _rescueGroupsSelecting(nodeTag);
     }
+    // §355 — одиночный замер мог убить/оживить корень беды.
+    _recomputeDependencyHealth();
   }
 
   /// §325 — записать замеры в карту одного канала, не трогая остальные.
@@ -327,6 +333,9 @@ mixin _PingMixin on ChangeNotifier {
       pendingDelay.clear();
       pendingBusy.clear();
       _emit(_state.copyWith(delayByChannel: nextDelay, pingBusy: nextBusy));
+      // §355 — batch свежих замеров применён: пересчёт корней беды (гейт по
+      // изменению результата внутри — лишние вызовы дёшевы).
+      _recomputeDependencyHealth();
     }
 
     final flushTimer =
