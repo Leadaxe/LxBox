@@ -28,6 +28,7 @@
 ```
                   ru-домены (.ru/.su/IDN + ru-services)
                                 │
+                                │  server: "dns_ru" — ЛИТЕРАЛ в правиле
                     ┌───────────▼───────────┐
                     │  dns_ru  (type=group) │
                     │  mode: fastest        │
@@ -38,13 +39,18 @@
          yandex_udp        yandex_dot       yandex_doh
          udp :53           tls :853         https :443
          @dns_ip           77.88.8.88       77.88.8.88
-         detour @outbound  detour direct    detour @dns_tunnel
-         (канал)           (НАПРЯМУЮ)       (vpn-1 по умолчанию)
+         detour @outbound  detour vpn-1     detour direct
+         (канал пресета)   (шифрован)       (шифрован)
                 │               │               │
           путь отказа 1   путь отказа 2   путь отказа 3
-          мёртвая нода    DPI режет 853   мёртвый vpn-1
-          в канале        у провайдера
+          мёртвая нода    мёртвый vpn-1   DPI/блок 443
+          в канале                        у провайдера
 ```
+
+**Контур безопасности** (решение юзера): DoT и DoH шифрованы — утечки нет,
+поэтому их можно вести мимо основного канала. Открытый UDP идёт туда же, куда
+и трафик пресета (`@outbound`): провайдер (оператор или VPN) и так видит, куда
+уходят соединения, так что открытый DNS по тому же пути ничего не добавляет.
 
 Мёртвая нода в канале убивает только первый член — два других отвечают,
 ru-сегмент жив. `fastest` отсекает мёртвого по гонке, `error_ttl: 5m` держит
@@ -61,25 +67,53 @@ ru-сегмент жив. `fastest` отсекает мёртвого по го�
 ru-direct недоступны. Группа решает ту же задачу лучше: fallback не статичный
 и покрывает все члены сразу.
 
+**Почему группа зашита литералом, а не выбирается var'ом.** Дропдаун
+«DNS server» предлагал выбор, который почти всегда неправильный: любой
+одиночный сервер = возврат к единственной точке отказа, то есть к исходному
+багу. Var убран целиком, `@dns_server` в правилах ru-direct заменён на литерал
+`dns_ru`.
+
+Литерал, а не `wizard_ui: hidden`: у hidden-var'а значение берётся из
+`default_value` ([preset_params_tab.dart:71](../../../app/lib/screens/custom_rule_edit/tabs/preset_params_tab.dart)),
+но `expandPreset` по-прежнему читает explicit из `varsValues` — кто уже трогал
+дропдаун, застрял бы на `yandex_udp` **без возможности переключиться** (поля
+нет). С литералом `varsValues['dns_server']` просто перестаёт на что-либо
+влиять — мёртвый ключ в storage, миграция не нужна по-настоящему.
+
+⚠️ Удалять var, оставив `@dns_server` в правилах, **нельзя**: у необъявленного
+имени [walk](../../../app/lib/services/builder/if_engine.dart) оставляет
+плейсхолдер строкой (`"server": "@dns_server"` → dangling-ссылка). Выпадение
+ключа (`Dropped`) бывает только у объявленной var'ы со значением `null`.
+
+Остаётся настраиваемым: `Outbound` (канал UDP-члена) и `dns_ip` (какой именно
+Яндекс-резолвер отвечает). Не решено: галки «какие члены включены» — члены
+preset-owned, а такие серверы залочены (§117,
+[merged_server_tile.dart:82](../../../app/lib/screens/dns_settings_screen/widgets/merged_server_tile.dart)
+— `onChanged: null`). Отдельная таска.
+
 ## 3. Блокер, найденный в коде
 
-[preset_expand.dart:413](../../../app/lib/services/builder/preset_expand.dart)
-фильтрует `dns_servers` **до одного** — с `tag == vars['dns_server']`.
+[preset_expand.dart:415](../../../app/lib/services/builder/preset_expand.dart)
+фильтровал `dns_servers` **до одного** — с `tag == vars['dns_server']`.
 Группа приехала бы в конфиг без членов → эмиссионный фильтр §312 выбросил бы
 все три тега как unknown → `EmptyDnsGroup` (fatal, сборка заблокирована).
+А после удаления var'а (§2) `selectedDns == null` не эмитило бы вообще ничего,
+и правило со ссылкой `dns_ru` повисло бы в пустоту.
 
-Правка — при выборе группы эмитить её вместе с членами:
+Фильтр стал двухрежимным:
 
 ```
-selected = varsMap['dns_server']
-emit = {selected}
-если body(selected).type == 'group':
-    emit ∪= body.servers            // одноуровнево
-для s in preset.dnsServers где s.tag ∈ emit:
+если у пресета НЕТ var'а dns_server:   // ru-direct — зашито литералом
+    эмитим ВСЕ preset.dns_servers
+иначе:                                  // fakeip и пр. — контракт §033
+    emit = {selected}
+    если body(selected).type == 'group':
+        emit ∪= body.servers            // одноуровнево
+для s in preset.dnsServers где s.tag ∈ emit (или все):
     substitute → normalizeDnsDetour → add
 ```
 
-Порядок: группа первой, члены следом. Дедуп по тегу уже делает
+Порядок: группа первой, члены следом (порядок шаблона). Дедуп по тегу делает
 `mergeFragments`. Вложенные группы внутри пресета не разворачиваются —
 в шаблоне их нет, а ядро вложенность поддерживает само.
 
@@ -90,35 +124,37 @@ emit = {selected}
 | тег | было | стало |
 |---|---|---|
 | `yandex_udp` | `detour: @outbound` | без изменений |
-| `yandex_dot` | `detour: vpn-1` (хардкод) | `detour: direct-out` — прямой путь |
-| `yandex_doh` | `detour: @outbound` | `detour: @dns_tunnel` |
+| `yandex_dot` | `detour: vpn-1` (хардкод) | `detour: vpn-1` — теперь осмысленно: шифрован, мимо `@outbound` |
+| `yandex_doh` | `detour: @outbound` | `detour: direct-out` — напрямую |
 | `dns_ru` | — | новый: `group`, `fastest`, три члена |
 
-Тег `yandex_dot` **сохранён** — переименование орфанило бы ссылки у тех, кто
-выбрал его вручную.
+Теги членов **сохранены** — переименование орфанило бы ссылки у тех, кто
+выбрал сервер вручную. Порядок в `dns_servers`: группа первой, затем члены в
+порядке UDP → DoT → DoH.
 
-Новая var:
+Удалены vars: `dns_server` (выбор вреден — см. §2) и `dns_tunnel`
+(промежуточный вариант, каналы теперь фиксированы). Остались `outbound` и
+`dns_ip`.
 
-```jsonc
-{"name": "dns_tunnel", "type": "outbound", "default_value": "vpn-1",
- "title": "DoH channel",
- "tooltip": "Channel that carries encrypted DoH queries. Keep it different from the main outbound so one dead node cannot stall Russian DNS."}
-```
+`rules` / `dns_rules`: `@dns_server` → литерал `dns_ru` (2 места — resolve под
+`#if @force_ipv4` и маршрут). Группа принимается везде, где ждут тег сервера
+(§312 §1), поэтому Force IPv4 и `action: resolve` работают как раньше.
+`rule_set` не тронут.
 
-`dns_server`: `default_value` `yandex_udp` → `dns_ru`.
+> `dns_server` есть и у пресета **fakeip** (`default_value: fakeip`,
+> `wizard_ui: hidden`) — это другой пресет, его не трогаем; двухрежимный фильтр
+> (§3) сохраняет для него контракт §033.
 
-`rules` / `dns_rules` / `rule_set` не трогаются — они ссылаются на
-`@dns_server`, а группа принимается везде, где ждут тег сервера (§312 §1).
-Force IPv4 и `action: resolve` продолжают работать через тот же `@dns_server`.
+## 5. Миграция — не нужна
 
-## 5. Миграция — не делаем (решение юзера)
+Var'а больше нет, поэтому `varsValues['dns_server']` ни на что не влияет:
+мёртвый ключ в storage, который не мешает. Все пользователи — и те, кто
+дропдаун не трогал, и те, у кого лежит explicit `"yandex_udp"`, — получают
+группу.
 
-По [preset_expand.dart:118](../../../app/lib/services/builder/preset_expand.dart)
-`default_value` применяется, только если ключа в `varsValues` нет. Кто дропдаун
-не трогал — получит `dns_ru` автоматом. У кого лежит explicit
-`"dns_server": "yandex_udp"` — останется старое поведение до ручного
-переключения в UI. Осознанный компромисс: миграция ради одного значения не
-оправдана.
+Это одна из причин выбрать литерал, а не `wizard_ui: hidden`: у hidden'а
+explicit-значение победило бы, и «трогавшие» застряли бы на одиночном сервере
+без поля для переключения.
 
 ## 6. Риски
 
@@ -131,17 +167,23 @@ Force IPv4 и `action: resolve` продолжают работать через
 ## 7. Критерии проверки
 
 Тесты — [preset_expand_test.dart](../../../app/test/services/builder/preset_expand_test.dart),
-группы «§354 dns_server == группа» и «§246 e2e» (на реальном шаблоне):
+группы «§354 пресет без var dns_server», «§354 пресет С var dns_server» и
+«§246 e2e» (на реальном шаблоне):
 
-1. ✅ `expandPreset` при `dns_server: dns_ru` → 4 сервера: группа + три члена.
-2. ✅ При `dns_server: yandex_udp` — по-прежнему ровно один (регрессия §033).
-3. ✅ У группы нет `detour` (§319); у `yandex_dot` detour снят (direct-out);
-   три пути: `vpn-2` / без detour / `vpn-1`.
-4. ✅ Сквозь эмиссионный фильтр §312: группа доезжает с тремя членами, дропов
-   и warning'ов нет (главный риск — пустая группа → `EmptyDnsGroup` fatal).
-5. ✅ `default_value` применяется, когда юзер не трогал дропдаун.
+1. ✅ `expandPreset` без var'а → 4 сервера: группа + три члена, порядок
+   шаблона.
+2. ✅ Правило ссылается на `dns_ru` литералом — без `@`-плейсхолдера.
+3. ✅ Три пути: UDP `vpn-2` / DoT `vpn-1` / DoH без detour (direct-out снят
+   §117). У группы нет `detour` (§319).
+4. ✅ Сквозь эмиссионный фильтр §312 на реальном шаблоне: группа доезжает с
+   тремя членами, дропов и warning'ов нет (главный риск — пустая группа →
+   `EmptyDnsGroup` fatal).
+5. ✅ Контракт §033 для пресетов с var'ом сохранён: одиночный едет один,
+   группа тянет членов, пустой выбор → серверов нет.
 6. ⏳ **Device:** ru-домен резолвится при мёртвой ноде в `@outbound`; в
    `getDNSGroups()` видно переключение `current` на живого члена.
 
-Пре-флайт: `flutter test` 2729 ✅, `flutter analyze` чисто, 4 l10n-чекера
-(`template_check` / `ui_check` / `hardcoded_check` / `kotlin_check`) — 0.
+Пре-флайт: `flutter test` 2741 ✅, `flutter analyze` чисто, l10n-чекеры
+`template_check` / `hardcoded_check` / `kotlin_check` — 0. `ui_check` показывает
+8 warning'ов, все из параллельной ветки «dead node / dependency graph»
+(`dependency_graph.dart`, `node_row.dart`) — к §354 отношения не имеют.

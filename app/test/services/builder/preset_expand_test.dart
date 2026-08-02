@@ -138,23 +138,23 @@ void main() {
       expect(f.dnsServers.first['tag'], 'yandex_safe');
     });
 
-    // §354 — выбранный сервер может быть группой (§312): члены обязаны ехать
-    // вместе с ней, иначе эмиссионный фильтр §312 выбросит их как unknown и
-    // validator упрётся в EmptyDnsGroup (fatal до старта ядра).
-    group('§354 dns_server == группа', () {
-      test('группа тянет своих членов', () {
+    // §354 — ru-direct БЕЗ var'а `dns_server`: группа зашита литералом в
+    // правилах, выбора нет. Эмитим все объявленные серверы — недоэмиссия
+    // оставила бы правило со ссылкой в пустоту, а пустая группа = EmptyDnsGroup
+    // (fatal до старта ядра).
+    group('§354 пресет без var dns_server → эмитим все', () {
+      test('группа + три члена, порядок шаблона', () {
         final f = expandPreset(
           CustomRulePreset(
             name: 'X',
             presetId: 'ru-direct',
-            varsValues: {'outbound': 'vpn-2', 'dns_server': 'dns_ru'},
+            varsValues: {'outbound': 'vpn-2'},
           ),
           _ruDirectWithDnsGroup(),
         );
 
-        // Группа первой (порядок шаблона), следом три члена.
         expect(f.dnsServers.map((s) => s['tag']),
-            ['dns_ru', 'yandex_udp', 'yandex_doh', 'yandex_dot']);
+            ['dns_ru', 'yandex_udp', 'yandex_dot', 'yandex_doh']);
         final grp = f.dnsServers.first;
         expect(grp['type'], 'group');
         expect(grp['servers'], ['yandex_udp', 'yandex_dot', 'yandex_doh']);
@@ -163,12 +163,12 @@ void main() {
         expect(grp.containsKey('detour'), isFalse);
       });
 
-      test('три независимых пути отказа: канал / direct / dns_tunnel', () {
+      test('три независимых пути: канал / vpn-1 / напрямую', () {
         final f = expandPreset(
           CustomRulePreset(
             name: 'X',
             presetId: 'ru-direct',
-            varsValues: {'outbound': 'vpn-2', 'dns_server': 'dns_ru'},
+            varsValues: {'outbound': 'vpn-2'},
           ),
           _ruDirectWithDnsGroup(),
         );
@@ -177,38 +177,69 @@ void main() {
 
         // UDP — по каналу пресета (ровно тот путь, что висел на мёртвой ноде).
         expect(byTag('yandex_udp')['detour'], 'vpn-2');
-        // DoT — напрямую: detour снят как direct-out (§117).
-        expect(byTag('yandex_dot').containsKey('detour'), isFalse);
-        // DoH — отдельным каналом, НЕ @outbound.
-        expect(byTag('yandex_doh')['detour'], 'vpn-1');
+        // DoT — через vpn-1, НЕ @outbound: шифрован, утечки нет.
+        expect(byTag('yandex_dot')['detour'], 'vpn-1');
+        // DoH — напрямую: detour снят как direct-out (§117).
+        expect(byTag('yandex_doh').containsKey('detour'), isFalse);
       });
 
-      test('одиночный сервер по-прежнему едет один (регрессия §033)', () {
+      test('правило ссылается на группу литералом, без @-плейсхолдера', () {
+        final f = expandPreset(
+          CustomRulePreset(
+            name: 'X',
+            presetId: 'ru-direct',
+            varsValues: {'outbound': 'vpn-2'},
+          ),
+          _ruDirectWithDnsGroup(),
+        );
+
+        expect(f.dnsRules.single['server'], 'dns_ru');
+      });
+    });
+
+    // Контракт §033 для пресетов, у которых var остался (fakeip и пр.):
+    // эмитится только выбранный + члены, если выбрана группа.
+    group('§354 пресет С var dns_server → только выбранный', () {
+      test('одиночный сервер едет один', () {
         final f = expandPreset(
           CustomRulePreset(
             name: 'X',
             presetId: 'ru-direct',
             varsValues: {'outbound': 'vpn-2', 'dns_server': 'yandex_udp'},
           ),
-          _ruDirectWithDnsGroup(),
+          _ruDirectWithDnsServerVar(),
         );
 
         expect(f.dnsServers.length, 1);
         expect(f.dnsServers.single['tag'], 'yandex_udp');
       });
 
-      test('default_value применяется когда юзер не трогал дропдаун', () {
+      test('выбрана группа → тянет своих членов', () {
         final f = expandPreset(
           CustomRulePreset(
             name: 'X',
             presetId: 'ru-direct',
-            varsValues: {'outbound': 'vpn-2'}, // dns_server не трогал
+            varsValues: {'outbound': 'vpn-2', 'dns_server': 'dns_ru'},
           ),
-          _ruDirectWithDnsGroup(),
+          _ruDirectWithDnsServerVar(),
         );
 
-        expect(f.dnsServers.first['tag'], 'dns_ru');
-        expect(f.dnsServers.length, 4);
+        expect(f.dnsServers.map((s) => s['tag']),
+            ['dns_ru', 'yandex_udp', 'yandex_dot', 'yandex_doh']);
+      });
+
+      test('dns_server не выбран → пресет не вносит DNS-серверов', () {
+        final preset = _ruDirectWithDnsServerVar();
+        final f = expandPreset(
+          CustomRulePreset(
+            name: 'X',
+            presetId: 'ru-direct',
+            varsValues: {'outbound': 'vpn-2', 'dns_server': ''},
+          ),
+          preset,
+        );
+
+        expect(f.dnsServers, isEmpty);
       });
     });
 
@@ -1023,7 +1054,7 @@ void main() {
       );
 
       expect(f.dnsServers.map((s) => s['tag']),
-          ['dns_ru', 'yandex_udp', 'yandex_doh', 'yandex_dot']);
+          ['dns_ru', 'yandex_udp', 'yandex_dot', 'yandex_doh']);
       Map<String, dynamic> byTag(String t) =>
           f.dnsServers.firstWhere((s) => s['tag'] == t);
 
@@ -1033,9 +1064,13 @@ void main() {
       expect(grp.containsKey('detour'), isFalse, reason: '§319');
 
       // Три НЕзависимых пути отказа — иначе одна мёртвая нода вешает ru-DNS.
+      // UDP — по каналу пресета (открытый, но идёт туда же, куда трафик);
+      // DoT — через vpn-1; DoH — напрямую. Оба шифрованных пути не зависят
+      // от @outbound, поэтому мёртвая нода в нём их не трогает.
       expect(byTag('yandex_udp')['detour'], 'vpn-2');
-      expect(byTag('yandex_dot').containsKey('detour'), isFalse);
-      expect(byTag('yandex_doh')['detour'], 'vpn-1');
+      expect(byTag('yandex_dot')['detour'], 'vpn-1');
+      expect(byTag('yandex_doh').containsKey('detour'), isFalse,
+          reason: 'direct-out → detour снят (§117)');
     });
 
     // §354 — сквозь ОБА слоя: expandPreset → эмиссионный фильтр §312. Именно
@@ -1416,10 +1451,46 @@ SelectableRule _ruDirect() => SelectableRule(
       ],
     );
 
-/// §354: реплика `ru-direct` из шаблона с DNS-группой — `dns_ru` объявлена
-/// перед членами, три члена по независимым путям отказа (канал / direct /
-/// отдельный dns_tunnel).
+/// §354: реплика `ru-direct` из шаблона — DNS-группа `dns_ru` зашита
+/// ЛИТЕРАЛОМ в правиле (var'а `dns_server` нет: выбор одиночного сервера
+/// вернул бы единственную точку отказа). Три члена по независимым путям:
+/// UDP через канал пресета, DoT через vpn-1, DoH напрямую.
 SelectableRule _ruDirectWithDnsGroup() => SelectableRule(
+      label: 'Russian domains & IPs',
+      presetId: 'ru-direct',
+      vars: [
+        WizardVar(
+          name: 'outbound',
+          type: 'outbound',
+          defaultValue: 'direct-out',
+          title: 'Outbound',
+        ),
+        WizardVar(
+          name: 'dns_ip',
+          type: 'enum',
+          defaultValue: '77.88.8.8',
+          title: 'UDP server IP',
+        ),
+      ],
+      ruleSets: [
+        {
+          'tag': 'ru-domains',
+          'type': 'inline',
+          'rules': [
+            {
+              'domain_suffix': ['ru']
+            }
+          ],
+        },
+      ],
+      dnsRule: const {'rule_set': 'ru-domains', 'server': 'dns_ru'},
+      rule: const {'rule_set': 'ru-domains', 'outbound': '@outbound'},
+      dnsServers: _ruDnsServers(),
+    );
+
+/// §354: та же реплика, но с var'ом `dns_server` — контракт §033 для
+/// пресетов, где выбор сервера остался (fakeip и пр.).
+SelectableRule _ruDirectWithDnsServerVar() => SelectableRule(
       label: 'Russian domains & IPs',
       presetId: 'ru-direct',
       vars: [
@@ -1435,12 +1506,6 @@ SelectableRule _ruDirectWithDnsGroup() => SelectableRule(
           defaultValue: 'dns_ru',
           required: false,
           title: 'DNS server',
-        ),
-        WizardVar(
-          name: 'dns_tunnel',
-          type: 'outbound',
-          defaultValue: 'vpn-1',
-          title: 'DoH channel',
         ),
         WizardVar(
           name: 'dns_ip',
@@ -1462,43 +1527,46 @@ SelectableRule _ruDirectWithDnsGroup() => SelectableRule(
       ],
       dnsRule: const {'rule_set': 'ru-domains', 'server': '@dns_server'},
       rule: const {'rule_set': 'ru-domains', 'outbound': '@outbound'},
-      dnsServers: [
-        {
-          'type': 'group',
-          'tag': 'dns_ru',
-          'servers': ['yandex_udp', 'yandex_dot', 'yandex_doh'],
-          'mode': 'fastest',
-          'error_ttl': '5m',
-          'win_ttl': '5m',
-          'description': 'RU DNS group',
-        },
-        {
-          'type': 'udp',
-          'tag': 'yandex_udp',
-          'server': '@dns_ip',
-          'server_port': 53,
-          'detour': '@outbound',
-          'description': 'Yandex UDP',
-        },
-        {
-          'type': 'https',
-          'tag': 'yandex_doh',
-          'server': '77.88.8.88',
-          'server_port': 443,
-          'path': '/dns-query',
-          'detour': '@dns_tunnel',
-          'description': 'Yandex Safe DoH',
-        },
-        {
-          'type': 'tls',
-          'tag': 'yandex_dot',
-          'server': '77.88.8.88',
-          'server_port': 853,
-          'detour': 'direct-out',
-          'description': 'Yandex Safe DoT (direct)',
-        },
-      ],
+      dnsServers: _ruDnsServers(),
     );
+
+/// §354: `dns_servers` пресета ru-direct — группа объявлена перед членами.
+List<Map<String, dynamic>> _ruDnsServers() => [
+      {
+        'type': 'group',
+        'tag': 'dns_ru',
+        'servers': ['yandex_udp', 'yandex_dot', 'yandex_doh'],
+        'mode': 'fastest',
+        'error_ttl': '5m',
+        'win_ttl': '5m',
+        'description': 'RU DNS group',
+      },
+      {
+        'type': 'udp',
+        'tag': 'yandex_udp',
+        'server': '@dns_ip',
+        'server_port': 53,
+        'detour': '@outbound',
+        'description': 'Yandex UDP',
+      },
+      {
+        'type': 'tls',
+        'tag': 'yandex_dot',
+        'server': '77.88.8.88',
+        'server_port': 853,
+        'detour': 'vpn-1',
+        'description': 'Yandex Safe DoT (via vpn-1)',
+      },
+      {
+        'type': 'https',
+        'tag': 'yandex_doh',
+        'server': '77.88.8.88',
+        'server_port': 443,
+        'path': '/dns-query',
+        'detour': 'direct-out',
+        'description': 'Yandex Safe DoH (direct)',
+      },
+    ];
 
 /// §045: фабрика — расширенный `ru-direct` с GeoIP fallback layer.
 /// Реплицирует template'ный shape v1.6.2: `geoip_enabled` bool var,

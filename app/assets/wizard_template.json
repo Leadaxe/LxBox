@@ -438,8 +438,6 @@
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route traffic for Russian domains and IPs"},
         {"name": "dns_enable", "type": "bool", "default_value": "true", "title": "DNS", "tooltip": "Send matched domains to this preset's DNS server and apply DNS-level options like Force IPv4. Turn off to keep routing without DNS changes."},
-        {"name": "dns_server", "type": "dns_servers", "required": false, "default_value": "dns_ru", "title": "DNS server", "tooltip": "Recommended: the RU group — races UDP, direct DoT and tunnelled DoH, so one dead path cannot stall Russian DNS. Single servers stay available below."},
-        {"name": "dns_tunnel", "type": "outbound", "default_value": "vpn-1", "title": "DoH channel", "tooltip": "Channel that carries encrypted DoH queries. Keep it different from the main outbound so one dead node cannot stall Russian DNS."},
         { "name": "dns_ip", "type": "enum", "title": "UDP server IP", "tooltip": "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.",
           "default_value": "77.88.8.8",
           "options": [
@@ -477,7 +475,7 @@
         {"#if": {"and": ["@force_ipv4"], "value": {
             "rule_set": ["ru-domains", "ru-services"],
             "action": "resolve",
-            "server": "@dns_server",
+            "server": "dns_ru",
             "strategy": "ipv4_only"
           }
         }},
@@ -485,13 +483,13 @@
       ],
       "dns_rules": [
         {"#if": {"and": ["@force_ipv4"], "value": {"rule_set": ["ru-domains", "ru-services"], "ip_version": 6, "action": "predefined", "rcode": "NOERROR"}}},
-        {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server", "action": "route"}
+        {"rule_set": ["ru-domains", "ru-services"], "server": "dns_ru", "action": "route"}
       ],
       "dns_servers": [
-        {"type": "group", "tag": "dns_ru", "servers": ["yandex_udp", "yandex_dot", "yandex_doh"], "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m", "description": "RU DNS group (UDP + direct DoT + tunnelled DoH)"},
+        {"type": "group", "tag": "dns_ru", "servers": ["yandex_udp", "yandex_dot", "yandex_doh"], "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m", "description": "RU DNS group (UDP via channel + DoT via vpn-1 + direct DoH)"},
         {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@outbound"},
-        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@dns_tunnel"},
-        {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT (direct)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "direct-out"}
+        {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT (via vpn-1)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "vpn-1"},
+        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH (direct)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "direct-out"}
       ]
     },
     {
