@@ -704,6 +704,11 @@ class TrafficProfiler extends ChangeNotifier {
 
         // Snapshot для closed-detection (emit'им tcpClose когда ядро убрало
         // connection из снапшота).
+        //
+        // §353 — startedAt по часам ЯДРА (`createdAt`, epoch ms; 0 =
+        // неизвестно → now). Короткий conn, открывшийся и закрывшийся между
+        // тиками, раньше получал startedAt = now → duration 0 и ложный
+        // tcpReset («<1с и 0 байт») для conn'а, реально жившего дольше.
         _connSnapshots[id] = _ConnSnapshot(
           id: id,
           host: host,
@@ -715,7 +720,7 @@ class TrafficProfiler extends ChangeNotifier {
           outboundType: c.outboundType.isNotEmpty ? c.outboundType : null, // §204
           upBytes: up,
           downBytes: down,
-          startedAt: now,
+          startedAt: _kernelTime(c.createdAt) ?? now,
           process: globalEv.process ?? '',
           confidence: globalEv.confidence,
           matchedVia: globalEv.matchedVia,
@@ -727,6 +732,14 @@ class TrafficProfiler extends ChangeNotifier {
         prev.upBytes = up;
         prev.downBytes = down;
       }
+      // §353 — kernel-closed дельта несёт момент закрытия по часам ядра;
+      // запоминаем для diff-блока ниже (duration и tcpReset-эвристика).
+      if (c.isClosed) {
+        final kernelClosed = _kernelTime(c.closedAt);
+        if (kernelClosed != null) {
+          _connSnapshots[id]?.kernelClosedAt = kernelClosed;
+        }
+      }
     }
 
     // Закрытые connections — те что были в _connSnapshots но не пришли в
@@ -736,8 +749,14 @@ class TrafficProfiler extends ChangeNotifier {
     for (final id in closed) {
       final snap = _connSnapshots.remove(id);
       if (snap == null) continue;
+      // §353 — момент закрытия по часам ядра, если kernel-closed дельта его
+      // принесла; diff-закрытие (исчез из снапшота) — по-прежнему now.
+      // Clamp: startedAt мог остаться app-часами (createdAt==0) — отрицательную
+      // длительность из расхождения часов не показываем.
+      final closeTs = snap.kernelClosedAt ?? now;
+      final dur = closeTs.difference(snap.startedAt);
       final closeEv = TrafficEvent(
-        ts: now,
+        ts: closeTs,
         kind: TrafficEventKind.tcpClose,
         domain: snap.host.isNotEmpty ? snap.host : null,
         ip: snap.ip.isNotEmpty ? snap.ip : null,
@@ -747,7 +766,7 @@ class TrafficProfiler extends ChangeNotifier {
         outboundType: snap.outboundType, // §204
         upBytes: snap.upBytes,
         downBytes: snap.downBytes,
-        duration: now.difference(snap.startedAt),
+        duration: dur.isNegative ? Duration.zero : dur,
         process: snap.process.isEmpty ? null : snap.process,
         processInferred: snap.confidence == ConfidenceLevel.inferred,
         network: snap.network,
@@ -755,7 +774,7 @@ class TrafficProfiler extends ChangeNotifier {
         rulePayload: snap.rulePayload.isEmpty ? null : snap.rulePayload,
         confidence: snap.confidence,
         matchedVia: snap.matchedVia,
-        issues: _classifyConnectionClose(snap, now),
+        issues: _classifyConnectionClose(snap, closeTs),
       );
       // §084 H5 — Global stream/buffer, симметрично tcpOpen (который пишется
       // выше). Lifecycle open/close полный в global buffer'е.
@@ -763,6 +782,13 @@ class TrafficProfiler extends ChangeNotifier {
       _emitGlobalStream({'event': 'traffic_event', 'data': closeEv.toJson()});
     }
   }
+
+  /// §353 — метка ядра (`createdAt`/`closedAt`, epoch ms) валидна, только если
+  /// похожа на реальное время (порог 2000-01-01): 0 и малые значения — это
+  /// сентинелы «нет данных» (isClosed-маркер шлёт и `1`).
+  static DateTime? _kernelTime(int epochMs) => epochMs > 946684800000
+      ? DateTime.fromMillisecondsSinceEpoch(epochMs)
+      : null;
 
   /// §168 — host-часть `destination` ("host:port"). IPv6-safe: режем по
   /// последнему ':'. Без ':' — вся строка.
@@ -797,6 +823,9 @@ class TrafficProfiler extends ChangeNotifier {
     final out = <ConnectionIssue>[];
     if (snap.network == 'tcp') {
       final dur = closedAt.difference(snap.startedAt);
+      // §353 — отрицательная длительность = расхождение часов (startedAt
+      // app-временем при createdAt==0, закрытие ядровым) — не судим.
+      if (dur.isNegative) return out;
       if (dur.inMilliseconds < 1000 &&
           snap.upBytes == 0 &&
           snap.downBytes == 0) {

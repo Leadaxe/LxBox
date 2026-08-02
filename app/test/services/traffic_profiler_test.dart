@@ -427,6 +427,88 @@ void main() {
           reason: 'close эмитнут');
     });
 
+    test('§353 — kernel-метки: duration от createdAt/closedAt, не от тиков',
+        () async {
+      // Conn открылся и закрылся МЕЖДУ тиками: приходит сразу закрытым с
+      // реальными epoch-ms метками ядра. Раньше startedAt=now → duration 0 и
+      // ложный tcpReset («<1с и 0 байт») для conn'а, жившего 4.2с.
+      TrafficProfiler.I.startGlobalRecording();
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      TrafficProfiler.I.ingestForTest([
+        CcConnection(
+          id: 'k1',
+          network: 'tcp',
+          domain: 'slowclose.example',
+          destination: '9.9.9.9:443',
+          rule: '',
+          uplink: 0,
+          downlink: 0,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: nowMs - 5000,
+          closedAt: nowMs - 800,
+        ),
+      ]);
+      final close = TrafficProfiler.I.globalRollingBuffer
+          .lastWhere((e) => e.kind == TrafficEventKind.tcpClose);
+      expect(close.duration, const Duration(milliseconds: 4200),
+          reason: 'длительность по часам ядра, детерминированная');
+      expect(close.issues, isEmpty,
+          reason: '4.2с с 0 байт — НЕ tcpReset (порог 1с)');
+    });
+
+    test('§353 — честный быстрый close с kernel-метками даёт tcpReset',
+        () async {
+      TrafficProfiler.I.startGlobalRecording();
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      TrafficProfiler.I.ingestForTest([
+        CcConnection(
+          id: 'k2',
+          network: 'tcp',
+          domain: 'fastclose.example',
+          destination: '9.9.9.10:443',
+          rule: '',
+          uplink: 0,
+          downlink: 0,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: nowMs - 500,
+          closedAt: nowMs - 100,
+        ),
+      ]);
+      final close = TrafficProfiler.I.globalRollingBuffer
+          .lastWhere((e) => e.kind == TrafficEventKind.tcpClose);
+      expect(close.duration, const Duration(milliseconds: 400));
+      expect(close.issues, isNotEmpty,
+          reason: '400мс с 0 байт — вероятный RST, эвристика остаётся');
+    });
+
+    test('§353 — сентинел closedAt=1 не превращается в 1970 год', () async {
+      // Тестовый/легаси сентинел «закрыт» (isClosed достаточно closedAt>0) —
+      // порог _kernelTime отбрасывает его, close идёт app-временем.
+      TrafficProfiler.I.startGlobalRecording();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'k3',
+          network: 'tcp',
+          domain: 'sentinel.example',
+          destination: '9.9.9.11:443',
+          rule: '',
+          uplink: 10,
+          downlink: 10,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 1,
+        ),
+      ]);
+      final close = TrafficProfiler.I.globalRollingBuffer
+          .lastWhere((e) => e.kind == TrafficEventKind.tcpClose);
+      expect(close.ts.year, greaterThan(2000));
+      expect(close.duration, isNotNull);
+      expect(close.duration!.isNegative, isFalse);
+    });
+
     test('§176 — тот же closed conn 2 тика → ОДИН close (анти-дубль)', () async {
       // Ядро держит closed в FilterState(All) до 5 мин → приходит каждый тик.
       // Guard _closedHandled обрабатывает РОВНО раз.
