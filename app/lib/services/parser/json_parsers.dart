@@ -46,8 +46,10 @@ List<NodeSpec> parseXrayElement(
   // сортировка P2 считает намерение провайдера, а не наши возможности.
   final payloadAll = outbounds
       .whereType<Map<String, dynamic>>()
-      .where((o) =>
-          !_kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''))
+      .where(
+        (o) =>
+            !_kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''),
+      )
       .toList();
   if (payloadAll.isEmpty) return const [];
 
@@ -55,8 +57,11 @@ List<NodeSpec> parseXrayElement(
   final dialerRefOf = <Map<String, dynamic>, String>{};
   final dialerTargets = <String>{};
   for (final ob in payloadAll) {
-    final sockopt = (ob['streamSettings']?['sockopt']) as Map?;
-    final ref = sockopt?['dialerProxy']?.toString();
+    // `is`-проверки, не касты: streamSettings может приехать строкой (см.
+    // комментарий у _xrayAutoSelect) — каст уронил бы парсинг всей подписки.
+    final stream = ob['streamSettings'];
+    final sockopt = stream is Map ? stream['sockopt'] : null;
+    final ref = sockopt is Map ? sockopt['dialerProxy']?.toString() : null;
     if (ref != null && ref.isNotEmpty) {
       dialerRefOf[ob] = ref;
       dialerTargets.add(ref);
@@ -72,8 +77,8 @@ List<NodeSpec> parseXrayElement(
   final mainIdx = candidates.indexWhere((o) => dialerRefOf.containsKey(o)) >= 0
       ? candidates.indexWhere((o) => dialerRefOf.containsKey(o))
       : (candidates.indexWhere((o) => o['tag'] == 'proxy') >= 0
-          ? candidates.indexWhere((o) => o['tag'] == 'proxy')
-          : 0);
+            ? candidates.indexWhere((o) => o['tag'] == 'proxy')
+            : 0);
   final ordered = [
     candidates[mainIdx],
     for (var i = 0; i < candidates.length; i++)
@@ -111,72 +116,84 @@ List<NodeSpec> parseXrayElement(
   final unsupported = <String>{};
   for (var i = 0; i < ordered.length; i++) {
     final ob = ordered[i];
+    try {
+      // §321 P4 — дедуп ДО конвертации. Индекс `i` для имени берётся из
+      // `ordered` (до дедупа): иначе имена поедут — второй выживший получил бы
+      // i=0 и назвался как `remarks` без суффикса.
+      final identity = _xrayIdentity(ob);
+      // §321 P6 — тег провайдера → идентичность. Копим ДО пропуска дубля:
+      // именно у дублей теги и различаются («Испания» = `proxy`, «Лучший» =
+      // `proxy-45-196-208-40-direct`), а §322 резолвит пул по чужим тегам.
+      final obTag = ob['tag']?.toString() ?? '';
+      if (identity != null && obTag.isNotEmpty) synonyms?[obTag] = identity;
+      // §342 — чужой узел: право на него получил другой элемент (тот, чьё имя
+      // осмысленнее). Пропускаем ДО дедупа, чтобы `seen` этого прохода не
+      // «застолбил» идентичность за нами.
+      if (identity != null && ownedBy != null && !ownedBy(identity)) continue;
+      if (identity != null && seen != null) {
+        if (seen.contains(identity)) continue;
+        seen.add(identity);
+      }
 
-    // §321 P4 — дедуп ДО конвертации. Индекс `i` для имени берётся из
-    // `ordered` (до дедупа): иначе имена поедут — второй выживший получил бы
-    // i=0 и назвался как `remarks` без суффикса.
-    final identity = _xrayIdentity(ob);
-    // §321 P6 — тег провайдера → идентичность. Копим ДО пропуска дубля:
-    // именно у дублей теги и различаются («Испания» = `proxy`, «Лучший» =
-    // `proxy-45-196-208-40-direct`), а §322 резолвит пул по чужим тегам.
-    final obTag = ob['tag']?.toString() ?? '';
-    if (identity != null && obTag.isNotEmpty) synonyms?[obTag] = identity;
-    // §342 — чужой узел: право на него получил другой элемент (тот, чьё имя
-    // осмысленнее). Пропускаем ДО дедупа, чтобы `seen` этого прохода не
-    // «застолбил» идентичность за нами.
-    if (identity != null && ownedBy != null && !ownedBy(identity)) continue;
-    if (identity != null && seen != null) {
-      if (seen.contains(identity)) continue;
-      seen.add(identity);
-    }
+      // §310 — имя разводим на парсинге: `allocateTag` уникализирует теги лишь
+      // на build'е (суффикс `-N`), а в списке узлов пользователь иначе увидит
+      // несколько одинаковых строк. Одиночный узел — имя ровно как до §310.
+      final spec = _xrayToSpec(
+        ob,
+        _elementLabel(
+          remarks: remarks,
+          ob: ob,
+          index: i,
+          solo: soloNode,
+          tagUses: tagUses,
+        ),
+      );
+      // §321 P5 — неподдержанный protocol не исчезает молча: узел не собрался,
+      // но провайдер его прислал. Warning вешаем на СОСЕДА по элементу (у
+      // NodeWarning нет носителя без узла); если соседей нет — элемент выпадает
+      // молча (документированное ограничение §321 P5, spec §Известные дыры).
+      if (spec == null) {
+        final proto = ob['protocol']?.toString() ?? '';
+        if (proto.isNotEmpty) unsupported.add(proto);
+        continue;
+      }
 
-    // §310 — имя разводим на парсинге: `allocateTag` уникализирует теги лишь
-    // на build'е (суффикс `-N`), а в списке узлов пользователь иначе увидит
-    // несколько одинаковых строк. Одиночный узел — имя ровно как до §310.
-    final spec = _xrayToSpec(
-      ob,
-      _elementLabel(
-        remarks: remarks,
-        ob: ob,
-        index: i,
-        solo: soloNode,
-        tagUses: tagUses,
-      ),
-    );
-    // §321 P5 — неподдержанный protocol не исчезает молча: узел не собрался,
-    // но провайдер его прислал. Warning вешаем на СОСЕДА по элементу (у
-    // NodeWarning нет носителя без узла); если соседей нет — элемент пуст, и
-    // об этом говорит `elementDropped` ниже.
-    if (spec == null) {
-      final proto = ob['protocol']?.toString() ?? '';
-      if (proto.isNotEmpty) unsupported.add(proto);
-      continue;
-    }
+      // §302 — исходник узла для UI («Source» на экране узла) и для правил по
+      // JSON-телам: compact = сам outbound, extended = весь элемент как пришёл
+      // от провайдера (dns/inbounds/routing соседи). rawUri для таких узлов —
+      // синтетическая заглушка `xray://<tag>`, источником служить не может.
+      final compact = _prettyJson(ob);
 
-    // §302 — исходник узла для UI («Source» на экране узла) и для правил по
-    // JSON-телам: compact = сам outbound, extended = весь элемент как пришёл
-    // от провайдера (dns/inbounds/routing соседи). rawUri для таких узлов —
-    // синтетическая заглушка `xray://<tag>`, источником служить не может.
-    final compact = _prettyJson(ob);
-
-    final ref = dialerRefOf[ob];
-    NodeSpec? chained;
-    if (ref != null) {
-      final detour = outbounds.whereType<Map<String, dynamic>>().firstWhere(
+      final ref = dialerRefOf[ob];
+      NodeSpec? chained;
+      if (ref != null) {
+        final detour = outbounds.whereType<Map<String, dynamic>>().firstWhere(
           (o) => o['tag'] == ref,
-          orElse: () => <String, dynamic>{});
-      if (detour.isNotEmpty) chained = _xrayDetourToSpec(detour);
-    }
+          orElse: () => <String, dynamic>{},
+        );
+        if (detour.isNotEmpty) chained = _xrayDetourToSpec(detour);
+      }
 
-    // §321 — detour-звено прикладываем только к тем типам, что умеют chained
-    // из Xray. `dialerProxy` в Xray живёт в `streamSettings.sockopt`, то есть
-    // технически возможен у любого протокола; на практике встречается у
-    // VLESS/Trojan. Для остальных узел отдаём без звена (терять сам узел
-    // из-за неподдержанной цепочки нельзя).
-    final node = chained == null ? spec : _withChain(spec, chained);
-    result.add(node
-      ..sourceCompact = compact
-      ..sourceExtended = extended == compact ? null : extended);
+      // §321 — detour-звено прикладываем только к тем типам, что умеют chained
+      // из Xray. `dialerProxy` в Xray живёт в `streamSettings.sockopt`, то есть
+      // технически возможен у любого протокола; на практике встречается у
+      // VLESS/Trojan. Для остальных узел отдаём без звена (терять сам узел
+      // из-за неподдержанной цепочки нельзя).
+      final node = chained == null ? spec : _withChain(spec, chained);
+      result.add(
+        node
+          ..sourceCompact = compact
+          ..sourceExtended = extended == compact ? null : extended,
+      );
+    } catch (_) {
+      // §322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА:
+      // мусорный тип поля (`streamSettings: "none"`, `settings: []`) бросает
+      // TypeError внутри конвертера — пропускаем этот outbound, соседи по
+      // элементу и остальная подписка живут. Протокол — в P5-warning, чтобы
+      // пропажа не была молчаливой.
+      final proto = ob['protocol']?.toString() ?? '';
+      unsupported.add(proto.isEmpty ? 'malformed' : proto);
+    }
   }
 
   // §321 P5 — развешиваем накопленное: по одному warning на протокол,
@@ -224,8 +241,9 @@ AutoSelectSpec? _xrayAutoSelect(
   // может приехать другого типа. Каст бросил бы и уронил парсинг ВСЕЙ
   // подписки, а не только этого пункта (проверено на крайних формах).
   final rawSel = b['selector'];
-  final selector =
-      rawSel is List ? rawSel.map((e) => '$e').toList() : const <String>[];
+  final selector = rawSel is List
+      ? rawSel.map((e) => '$e').toList()
+      : const <String>[];
   final strategy = b['strategy'];
   final strategyMap = strategy is Map ? strategy : const {};
   final rawSettings = strategyMap['settings'];
@@ -264,8 +282,7 @@ AutoSelectSpec? _xrayAutoSelect(
   final spreadAll = type == null || type == 'random' || type == 'roundRobin';
   final mode = switch (type) {
     'leastPing' => UrltestMode.leastTest,
-    'leastLoad' when expected != null && expected <= 1 =>
-      UrltestMode.leastTest,
+    'leastLoad' when expected != null && expected <= 1 => UrltestMode.leastTest,
     _ => UrltestMode.roundRobin,
   };
 
@@ -282,7 +299,9 @@ AutoSelectSpec? _xrayAutoSelect(
     // maxRTT — АБСОЛЮТНЫЙ потолок у Xray, а pool_tolerance — окно от лучшего.
     // Числа переносим 1:1 (решение юзера 30.07.2026): пересчитать точнее
     // нельзя, минимум по пулу на парсинге неизвестен.
-    poolTolerance: clampPoolTolerance(_goDurationMs(settings['maxRTT']) ?? d.poolTolerance),
+    poolTolerance: clampPoolTolerance(
+      _goDurationMs(settings['maxRTT']) ?? d.poolTolerance,
+    ),
   );
 
   final label = remarks.isNotEmpty ? remarks : (b['tag']?.toString() ?? 'auto');
@@ -304,18 +323,20 @@ int _payloadCount(Map<String, dynamic> element) {
   if (obs is! List) return 0;
   return obs
       .whereType<Map<String, dynamic>>()
-      .where((o) =>
-          !_kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''))
+      .where(
+        (o) =>
+            !_kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''),
+      )
       .length;
 }
 
 /// §322 — число из значения провайдера: `7`, `7.0` или `"7"`. Не число и не
 /// разбираемая строка → `null` (потребитель подставит дефолт).
 int? _asInt(Object? v) => switch (v) {
-      final num n => n.toInt(),
-      final String str => int.tryParse(str.trim()),
-      _ => null,
-    };
+  final num n => n.toInt(),
+  final String str => int.tryParse(str.trim()),
+  _ => null,
+};
 
 /// Go-duration в миллисекунды: `"1500ms"`, `"3s"`, `"2m"`. `null` — не разобрали.
 int? _goDurationMs(Object? raw) {
@@ -376,36 +397,37 @@ String _elementLabel({
 /// §321 — пересборка узла с detour-звеном. NodeSpec иммутабелен и `copyWith`
 /// в базе нет, поэтому ветвим по типу. Неподдержанный тип → узел как есть.
 NodeSpec _withChain(NodeSpec spec, NodeSpec chained) => switch (spec) {
-      VlessSpec s => VlessSpec(
-          id: s.id,
-          tag: s.tag,
-          label: s.label,
-          server: s.server,
-          port: s.port,
-          rawUri: s.rawUri,
-          uuid: s.uuid,
-          flow: s.flow,
-          tls: s.tls,
-          transport: s.transport,
-          packetEncoding: s.packetEncoding,
-          chained: chained,
-          warnings: s.warnings,
-        ),
-      TrojanSpec s => TrojanSpec(
-          id: s.id,
-          tag: s.tag,
-          label: s.label,
-          server: s.server,
-          port: s.port,
-          rawUri: s.rawUri,
-          password: s.password,
-          tls: s.tls,
-          transport: s.transport,
-          chained: chained,
-          warnings: s.warnings,
-        ),
-      _ => spec,
-    };
+  VlessSpec s => VlessSpec(
+    id: s.id,
+    tag: s.tag,
+    label: s.label,
+    server: s.server,
+    port: s.port,
+    rawUri: s.rawUri,
+    uuid: s.uuid,
+    flow: s.flow,
+    tls: s.tls,
+    transport: s.transport,
+    packetEncoding: s.packetEncoding,
+    encryption: s.encryption,
+    chained: chained,
+    warnings: s.warnings,
+  ),
+  TrojanSpec s => TrojanSpec(
+    id: s.id,
+    tag: s.tag,
+    label: s.label,
+    server: s.server,
+    port: s.port,
+    rawUri: s.rawUri,
+    password: s.password,
+    tls: s.tls,
+    transport: s.transport,
+    chained: chained,
+    warnings: s.warnings,
+  ),
+  _ => spec,
+};
 
 /// §302 — стабильный отступ для показа фрагмента подписки пользователю.
 String _prettyJson(Object? value) {
@@ -442,8 +464,10 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
 
   final stream = o['streamSettings'] as Map? ?? const {};
   // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
-  final tls =
-      normalizeTlsFingerprint(_xrayTlsFromStream(stream, server), warnings);
+  final tls = normalizeTlsFingerprint(
+    _xrayTlsFromStream(stream, server),
+    warnings,
+  );
   final transport = _xrayTransportFromStream(stream);
 
   // §115 — flow берём из конфига как есть (раньше REALITY+tcp без flow
@@ -451,7 +475,8 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
   // несовместим с транспортом → гасим flow + warning.
   if (flow == 'xtls-rprx-vision' && transport != null) {
     warnings.add(
-        VisionWithTransportWarning((stream['network'] ?? 'transport').toString()));
+      VisionWithTransportWarning((stream['network'] ?? 'transport').toString()),
+    );
     flow = '';
   }
 
@@ -481,6 +506,11 @@ const _kXrayServiceProtocols = {'freedom', 'blackhole', 'dns', 'loopback'};
 /// §321 P4 — идентичность узла: `(protocol, server, port, credential)`.
 /// Транспорт и TLS в ключ НЕ входят (решение юзера 30.07.2026): один сервер с
 /// двумя разными SNI схлопывается в один узел — берётся первый по порядку P2.
+///
+/// ИНВАРИАНТ: ключ обязан посимвольно совпадать с `nodeIdentityKey` готового
+/// NodeSpec — по нему §322 резолвит состав пула (`server_list_build`) и §302
+/// ремапит синонимы. Поэтому протокол, дефолт порта и port-quirk'и зеркалят
+/// конвертеры `_xray*ToSpec`, а не сырой JSON.
 String? _xrayIdentity(Map<String, dynamic> o) {
   final protocol = o['protocol']?.toString() ?? '';
   final s = o['settings'] as Map? ?? const {};
@@ -495,21 +525,34 @@ String? _xrayIdentity(Map<String, dynamic> o) {
       if (vnext == null || vnext.isEmpty) return null;
       final v = vnext.first;
       server = v['address']?.toString() ?? '';
-      port = (v['port'] as num?)?.toInt() ?? 0;
+      port = (v['port'] as num?)?.toInt() ?? 443;
       final users = (v['users'] as List?)?.cast<Map>() ?? const [];
       cred = users.isEmpty ? '' : (users.first['id']?.toString() ?? '');
+      // Зеркало quirk'а _xrayVlessToSpec: vision-udp443 переписывает порт
+      // узла на 443.
+      if (protocol == 'vless' &&
+          users.isNotEmpty &&
+          users.first['flow']?.toString() == 'xtls-rprx-vision-udp443') {
+        port = 443;
+      }
     case 'trojan':
     case 'shadowsocks':
       final servers = (s['servers'] as List?)?.cast<Map>();
       if (servers == null || servers.isEmpty) return null;
       final v = servers.first;
       server = v['address']?.toString() ?? '';
-      port = (v['port'] as num?)?.toInt() ?? 0;
+      // ss без порта конвертер отбрасывает (port == 0 → null) — ключ с |0|
+      // просто ни с чем не совпадёт, как и узла нет.
+      port = (v['port'] as num?)?.toInt() ?? (protocol == 'trojan' ? 443 : 0);
       cred = v['password']?.toString() ?? '';
     case 'hysteria':
+      // Конвертер отдаёт Hysteria2Spec → protocol в ключе 'hysteria2'.
+      final hy = (o['streamSettings'] as Map?)?['hysteriaSettings'];
       server = s['address']?.toString() ?? '';
-      port = (s['port'] as num?)?.toInt() ?? 0;
-      cred = (o['streamSettings']?['hysteriaSettings']?['auth'])?.toString() ?? '';
+      port = (s['port'] as num?)?.toInt() ?? 443;
+      cred = hy is Map ? (hy['auth']?.toString() ?? '') : '';
+      if (server.isEmpty) return null;
+      return 'hysteria2|$server|$port|$cred';
     default:
       return null;
   }
@@ -548,8 +591,10 @@ TrojanSpec? _xrayTrojanToSpec(Map<String, dynamic> o, String remarks) {
 
   final stream = o['streamSettings'] as Map? ?? const {};
   final warnings = <NodeWarning>[];
-  final tls =
-      normalizeTlsFingerprint(_xrayTlsFromStream(stream, server), warnings);
+  final tls = normalizeTlsFingerprint(
+    _xrayTlsFromStream(stream, server),
+    warnings,
+  );
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
 
   return TrojanSpec(
@@ -579,8 +624,10 @@ VmessSpec? _xrayVmessToSpec(Map<String, dynamic> o, String remarks) {
 
   final stream = o['streamSettings'] as Map? ?? const {};
   final warnings = <NodeWarning>[];
-  final tls =
-      normalizeTlsFingerprint(_xrayTlsFromStream(stream, server), warnings);
+  final tls = normalizeTlsFingerprint(
+    _xrayTlsFromStream(stream, server),
+    warnings,
+  );
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
   final security = user['security']?.toString() ?? 'auto';
 
@@ -631,9 +678,8 @@ Hysteria2Spec? _xrayHy2ToSpec(Map<String, dynamic> o, String remarks) {
   final stream = o['streamSettings'] as Map? ?? const {};
   final hy = stream['hysteriaSettings'] as Map? ?? const {};
 
-  final version = (hy['version'] as num?)?.toInt() ??
-      (s['version'] as num?)?.toInt() ??
-      2;
+  final version =
+      (hy['version'] as num?)?.toInt() ?? (s['version'] as num?)?.toInt() ?? 2;
   if (version != 2) return null; // hysteria v1 — своего Spec у нас нет
 
   final server = s['address']?.toString() ?? '';
@@ -642,8 +688,10 @@ Hysteria2Spec? _xrayHy2ToSpec(Map<String, dynamic> o, String remarks) {
   if (server.isEmpty) return null;
 
   final warnings = <NodeWarning>[];
-  final tls =
-      normalizeTlsFingerprint(_xrayTlsFromStream(stream, server), warnings);
+  final tls = normalizeTlsFingerprint(
+    _xrayTlsFromStream(stream, server),
+    warnings,
+  );
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
 
   return Hysteria2Spec(
@@ -734,13 +782,15 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
       final host = headers?['Host']?.toString() ?? '';
       // §303 — Xray кладёт early data хвостом пути (`/x?ed=2560`); в sing-box
       // это отдельное поле, а хвост в пути даёт 404.
-      final (path, edFromPath) =
-          splitEarlyDataPath(ws['path']?.toString() ?? '/');
+      final (path, edFromPath) = splitEarlyDataPath(
+        ws['path']?.toString() ?? '/',
+      );
       // §320 — Xray-конфиги также несут early data отдельными полями
       // `wsSettings.ed` / `.eh` (хвост пути в приоритете). `eh` без `ed`
       // игнорируем: режим ядро включает по `max_early_data > 0`.
       final edField = ws['ed'];
-      final ed = edFromPath ??
+      final ed =
+          edFromPath ??
           (edField is int && edField > 0
               ? edField
               : int.tryParse(edField?.toString().trim() ?? ''));
@@ -749,17 +799,18 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
         path: path,
         host: host,
         maxEarlyData: ed != null && ed > 0 ? ed : null,
-        earlyDataHeaderName:
-            (ed != null && ed > 0 && eh.isNotEmpty) ? eh : null,
+        earlyDataHeaderName: (ed != null && ed > 0 && eh.isNotEmpty)
+            ? eh
+            : null,
       );
     case 'grpc':
       final g = stream['grpcSettings'] as Map? ?? const {};
-      return GrpcTransport(
-          serviceName: g['serviceName']?.toString() ?? '');
+      return GrpcTransport(serviceName: g['serviceName']?.toString() ?? '');
     case 'http':
     case 'h2':
       final h = stream['httpSettings'] as Map? ?? const {};
-      final hosts = (h['host'] as List?)?.map((e) => e.toString()).toList() ??
+      final hosts =
+          (h['host'] as List?)?.map((e) => e.toString()).toList() ??
           const <String>[];
       return HttpTransport(path: h['path']?.toString() ?? '/', hosts: hosts);
     case 'xhttp': // §097 — Xray xhttpSettings → нативный xhttp
@@ -921,8 +972,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         rawUri: '',
         uuid: entry['uuid']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
-        congestionControl:
-            entry['congestion_control']?.toString() ?? 'cubic',
+        congestionControl: entry['congestion_control']?.toString() ?? 'cubic',
         udpRelayMode: entry['udp_relay_mode']?.toString() ?? 'native',
         zeroRtt: entry['zero_rtt_handshake'] == true,
         tls: _tlsFromSingbox(entry['tls'], server),
@@ -940,8 +990,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         user: entry['user']?.toString() ?? 'root',
         password: entry['password']?.toString() ?? '',
         privateKey: entry['private_key']?.toString() ?? '',
-        privateKeyPassphrase:
-            entry['private_key_passphrase']?.toString() ?? '',
+        privateKeyPassphrase: entry['private_key_passphrase']?.toString() ?? '',
         hostKey: hk is List ? hk.map((e) => e.toString()).toList() : const [],
       );
     case 'socks':
@@ -987,7 +1036,8 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       );
     case 'wireguard':
       // §106 — bare IP → CIDR (/32 | /128) для address и allowed_ips.
-      final addr = (entry['address'] as List?)
+      final addr =
+          (entry['address'] as List?)
               ?.map((e) => ensureCidr(e.toString()))
               .toList() ??
           const <String>[];
@@ -997,7 +1047,8 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       final peerServer = p['address']?.toString() ?? server;
       final peerPort = (p['port'] as num?)?.toInt() ?? port;
       if (peerServer.isEmpty) return null;
-      final allowedIps = (p['allowed_ips'] as List?)
+      final allowedIps =
+          (p['allowed_ips'] as List?)
               ?.map((e) => ensureCidr(e.toString()))
               .toList() ??
           const ['0.0.0.0/0', '::/0'];
@@ -1012,7 +1063,8 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       // `reserved` — массив из 3 байт `[b0,b1,b2]` (наш round-trip формат
       // эмиттера); `client_id` — base64-строка. Массив берём напрямую
       // (с валидацией 3×0..255), строку — через parseReserved.
-      final reserved = _reservedFromJson(p['reserved'] ?? entry['reserved']) ??
+      final reserved =
+          _reservedFromJson(p['reserved'] ?? entry['reserved']) ??
           (p['client_id'] is String
               ? parseReserved(p['client_id'] as String)
               : null);
@@ -1032,10 +1084,10 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
             endpointHost: peerServer,
             endpointPort: peerPort,
             allowedIps: allowedIps,
-            persistentKeepalive:
-                (p['persistent_keepalive_interval'] as num?)?.toInt(),
+            persistentKeepalive: (p['persistent_keepalive_interval'] as num?)
+                ?.toInt(),
             reserved: reserved,
-          )
+          ),
         ],
         mtu: awg != null ? awgClampMtu(rawMtu, wgTag) : (rawMtu ?? 1408),
         awg: awg,
@@ -1105,24 +1157,30 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
   // §281 — fp канонизируется молча (псевдонимы И мусор → словарь ядра):
   // у parseSingboxEntry нет warnings-аккумулятора, это power-user путь
   // JSON-редактора/Smart-Paste — итоговое значение видно в самом JSON.
-  return normalizeTlsFingerprint(TlsSpec(
-    enabled: true,
-    serverName: raw['server_name']?.toString() ?? server,
-    alpn: (raw['alpn'] as List?)?.map((e) => e.toString()).toList() ?? const [],
-    insecure: raw['insecure'] == true,
-    fingerprint: utls?['fingerprint']?.toString(),
-    // §169 — REALITY только при enabled И валидном X25519 public_key. Битый
-    // ключ → reality=null (нода остаётся plain TLS), а не отравляет config.
-    reality: reality == null ||
-            reality['enabled'] != true ||
-            !isValidRealityPublicKey(reality['public_key']?.toString() ?? '')
-        ? null
-        : RealitySpec(
-            publicKey: reality['public_key']!.toString(),
-            shortId:
-                normalizeRealityShortId(reality['short_id']?.toString() ?? ''),
-          ),
-  ), null);
+  return normalizeTlsFingerprint(
+    TlsSpec(
+      enabled: true,
+      serverName: raw['server_name']?.toString() ?? server,
+      alpn:
+          (raw['alpn'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      insecure: raw['insecure'] == true,
+      fingerprint: utls?['fingerprint']?.toString(),
+      // §169 — REALITY только при enabled И валидном X25519 public_key. Битый
+      // ключ → reality=null (нода остаётся plain TLS), а не отравляет config.
+      reality:
+          reality == null ||
+              reality['enabled'] != true ||
+              !isValidRealityPublicKey(reality['public_key']?.toString() ?? '')
+          ? null
+          : RealitySpec(
+              publicKey: reality['public_key']!.toString(),
+              shortId: normalizeRealityShortId(
+                reality['short_id']?.toString() ?? '',
+              ),
+            ),
+    ),
+    null,
+  );
 }
 
 TransportSpec? _transportFromSingbox(dynamic raw) {
@@ -1133,8 +1191,9 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
       final headers = (raw['headers'] as Map?)?.cast<String, dynamic>();
       // §303 — sing-box JSON обычно уже разделён (`max_early_data`), но в
       // редактор попадают и склеенные Xray-пути.
-      final (path, edFromPath) =
-          splitEarlyDataPath(raw['path']?.toString() ?? '/');
+      final (path, edFromPath) = splitEarlyDataPath(
+        raw['path']?.toString() ?? '/',
+      );
       final edField = raw['max_early_data'];
       return WsTransport(
         path: path,
@@ -1142,16 +1201,16 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
         maxEarlyData: edField is int ? edField : edFromPath,
         earlyDataHeaderName:
             (raw['early_data_header_name']?.toString().isNotEmpty ?? false)
-                ? raw['early_data_header_name'].toString()
-                : null,
+            ? raw['early_data_header_name'].toString()
+            : null,
       );
     case 'grpc':
-      return GrpcTransport(
-          serviceName: raw['service_name']?.toString() ?? '');
+      return GrpcTransport(serviceName: raw['service_name']?.toString() ?? '');
     case 'http':
       return HttpTransport(
         path: raw['path']?.toString() ?? '/',
-        hosts: (raw['host'] as List?)?.map((e) => e.toString()).toList() ??
+        hosts:
+            (raw['host'] as List?)?.map((e) => e.toString()).toList() ??
             const [],
       );
     case 'httpupgrade':
@@ -1168,8 +1227,10 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
         mode: raw['mode']?.toString() ?? '',
         xPaddingBytes: raw['x_padding_bytes']?.toString() ?? '',
         noGrpcHeader: raw['no_grpc_header'] == true,
-        headers: (raw['headers'] as Map?)
-                ?.map((k, v) => MapEntry(k.toString(), v.toString())) ??
+        headers:
+            (raw['headers'] as Map?)?.map(
+              (k, v) => MapEntry(k.toString(), v.toString()),
+            ) ??
             const {},
       );
     default:
