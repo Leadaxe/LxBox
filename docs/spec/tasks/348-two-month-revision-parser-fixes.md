@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Тип | bugfix (пачка по итогам code review) |
-| Статус | ✅ Реализовано, тесты зелёные |
+| Статус | ✅ Released v2.19.3 — тесты зелёные |
 | Дата | 2026-08-02 |
 | Связанные | [`321 xray-json`](../features/321%20xray-json-parsing/spec.md), [`322 balancer-node`](../features/322%20balancer-node/spec.md), [`335`](335-vless-encryption-passthrough.md), [`342`](342-xray-preserve-subscription-order.md), [`343`](343-reality-short-id-validation.md) |
 
@@ -74,15 +74,12 @@ strict-decode ядра. Фикс: не-строка → `''` + запись (о�
 переписан на фактическое поведение (молчаливый пропуск пустого элемента,
 документированное ограничение §321 P5).
 
-## Отложено (найдено, не фиксится здесь)
+## Вынесено в отдельные таски (сделано в том же релизе)
 
-- **P2-5 — `//`-ключи из raw-JSON правил доезжают до `route.rules`**
-  (`custom_rules.dart::_applyJsonSingle` кладёт тело как есть; unknown-field
-  у ядра = fatal). Просится strip `//`-ключей с warning — отдельной таской:
-  затрагивает и §302 Replace c произвольным `target_path`.
-- **P3-6 — `_taken` не резервирует теги каналов**: узел подписки с меткой
-  `vpn-1` даёт дубль тега с селектором канала → отказ ядра на старте.
-  Отдельной таской (нужно решение: резерв в `_taken` до эмита узлов).
-- **P3-8 — `autogroup://` теряет члена с запятой в credential**
-  (`auto_select.dart`: members join/split по `,`). Смена разделителя ломает
-  персистентные URI — нужна миграция, отдельной таской.
+- **P2-5 — `//`-ключи из raw-JSON правил доезжали до `route.rules`** →
+  [`350`](350-comment-keys-gate.md) (strip с warning + гейт `target_path`).
+- **P3-6 — `_taken` не резервировал теги каналов** (узел `vpn-1` → дубль
+  тега → отказ ядра) → [`351`](351-channel-tags-reserved-in-allocator.md).
+- **P3-8 — `autogroup://` терял члена с запятой в credential** →
+  [`352`](352-autogroup-member-key-escaping.md) (узкое экранирование
+  per-key; миграция не понадобилась).

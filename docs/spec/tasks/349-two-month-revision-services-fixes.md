@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Тип | bugfix (пачка по итогам code review) |
-| Статус | ✅ Реализовано, тесты зелёные |
+| Статус | ✅ Released v2.19.3 — тесты зелёные |
 | Дата | 2026-08-02 |
 | Связанные | [`348`](348-two-month-revision-parser-fixes.md) (parser/builder-половина той же ревизии), [`221`](221-backup-export-allowlist-asymmetry.md), [`331`](331-blue-banner-and-manual-refresh-reaction.md), [`337`](337-auto-update-disabled-subscriptions.md), [`325`](325-mass-ping-wipes-other-channels.md), [`238`](238-debug-api-channels-folders.md) |
 
@@ -45,11 +45,8 @@ probe_runner.dart) утекал в ответ `UpstreamError('probe failed to st
 __vpn_running__')`. Фикс: маппинг в `409 Conflict «VPN is running — stop it
 before probing»` (UI-путь и так мапит маркер в свой текст).
 
-## Отложено (найдено, не фиксится здесь)
+## Вынесено в отдельную таску (сделано в том же релизе)
 
-- **F5 (P3) — профайлер игнорирует `createdAt`/`closedAt` ядра** для
-  short-lived соединений: conn, открывшийся и закрывшийся между тиками, идёт
-  open-веткой со `startedAt = now` → `duration = 0`; на том же приближении
-  эвристика `tcpReset` («<1с и 0 байт») может дать ложный reset для
-  недлинного conn с 0 байт. Подсистема §264-266 device-verified — правка
-  таймингов отдельной таской с device-прогоном.
+- **F5 (P3) — профайлер игнорировал `createdAt`/`closedAt` ядра** для
+  short-lived соединений (`duration = 0` + ложный `tcpReset`) →
+  [`353`](353-profiler-kernel-timestamps.md).

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Тип | bugfix (fatal старта ядра) |
-| Статус | ✅ Реализовано, тесты зелёные |
+| Статус | ✅ Released v2.19.3 — тесты зелёные |
 | Дата | 2026-08-02 |
 | Связанные | [`348`](348-two-month-revision-parser-fixes.md) (находка P3-6 ревизии), [`125 configurable-channels`](../features/125%20configurable-channels/spec.md) |
 

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Тип | bugfix (точность данных профайлера) |
-| Статус | ✅ Реализовано, тесты зелёные · DEVICE-PENDING (живой прогон Live-журнала с реальным трафиком; юнитами покрыто) |
+| Статус | ✅ Released v2.19.3 — тесты зелёные · DEVICE-PENDING (живой прогон Live-журнала с реальным трафиком; юнитами покрыто) |
 | Дата | 2026-08-02 |
 | Связанные | [`349`](349-two-month-revision-services-fixes.md) (находка F5 ревизии), [`044 per-app traffic profiler`](../features/044%20per-app%20traffic%20profiler/spec.md), §176 (closed-дельта FilterState All), §168 (CC connections ingest) |
 

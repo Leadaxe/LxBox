@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Тип | bugfix (деградация вместо fatal) |
-| Статус | ✅ Реализовано, тесты зелёные |
+| Статус | ✅ Released v2.19.3 — тесты зелёные |
 | Дата | 2026-08-02 |
 | Связанные | [`348`](348-two-month-revision-parser-fixes.md) (находка P2-5 ревизии), [`302`](302-subscription-import-rewrite-rules.md) (`target_path`), §225 (raw-JSON правила), `docs/TEMPLATE.md` (unknown-field = fatal) |
 
