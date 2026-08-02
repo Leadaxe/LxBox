@@ -295,7 +295,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
         tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.only(left: 8, bottom: 4),
+        childrenPadding: const EdgeInsets.only(bottom: 4),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
         title: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,13 +326,12 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     );
   }
 
-  /// Строка участника. В живом пуле → формат слота (`slot N · тег · delay`,
-  /// §208), иначе — просто тег. Клик ведёт на владельца, как и хопы Route.
+  /// Строка участника: галка «сейчас в пуле» + тег + delay живого слота.
+  ///
+  /// Номера слотов здесь НЕ показываем (решение юзера 02.08.2026) — слот
+  /// это деталь ротации, она к месту в попапе «View pool», а в составе
+  /// группы важно лишь «в работе или нет». Клик ведёт на владельца.
   Widget _memberRow(BuildContext context, String tag, {CcPoolSlot? inPool}) {
-    if (inPool != null) {
-      return poolSlotRow(context, inPool,
-          onTap: () => _onTagTap(tag));
-    }
     final cs = Theme.of(context).colorScheme;
     return InkWell(
       onTap: () => _onTagTap(tag),
@@ -340,13 +339,28 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(
           children: [
-            const SizedBox(width: 48),
-            const SizedBox(width: 8),
+            SizedBox(
+              width: 24,
+              child: inPool == null
+                  ? null
+                  : Icon(Icons.check, size: 15, color: cs.onSurfaceVariant),
+            ),
             Expanded(
               child: Text(tag,
-                  style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                  style: TextStyle(
+                      fontSize: 13,
+                      color:
+                          inPool == null ? cs.onSurfaceVariant : cs.onSurface),
                   overflow: TextOverflow.ellipsis),
             ),
+            if (inPool != null && inPool.delay > 0) ...[
+              const SizedBox(width: 8),
+              Text('${inPool.delay} ms',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: poolDelayColor(context, inPool.delay))),
+            ],
           ],
         ),
       ),
@@ -387,14 +401,20 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     // цепочка обрывается на самой группе, и это не «обрыв» в смысле §258:
     // эллипсис «подключитесь» тут был бы враньём — путь известен, он просто
     // не единственный. Вместо него — свёрнутый хоп пула.
-    final truncated =
-        !_isBalancer && _hops.isNotEmpty && _hops.first.isGroup;
+    // §344 — под балансировщиком «выбранного» узла нет (§322 §6.3): хоп,
+    // добытый через выбор группы, из цепочки убираем — иначе экран говорит
+    // разом «трафик размазан по слотам» и «идёт вот через этот».
+    final hops = _isBalancer
+        ? [for (final h in _hops) if (!h.viaSelection) h]
+        : _hops;
+    final truncated = !_isBalancer && hops.isNotEmpty && hops.first.isGroup;
     return [
       _endpointRow(context, Icons.smartphone, 'Phone'),
       if (truncated) _ellipsisRow(context),
+      for (var i = 0; i < hops.length; i++)
+        _hopRow(context, hops[i], isSelf: i == hops.length - 1),
+      // Пул — ПОСЛЕ группы: пакет идёт Phone → группа → её пул → Internet.
       if (_isBalancer) _poolHopTile(context),
-      for (var i = 0; i < _hops.length; i++)
-        _hopRow(context, _hops[i], isSelf: i == _hops.length - 1),
       _endpointRow(context, Icons.public, 'Internet'),
     ];
   }
