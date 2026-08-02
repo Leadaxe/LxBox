@@ -405,6 +405,14 @@ config_node.dart             # §091 ConfigNode + ParsedConfig — структ�
                              #   конфига (type/section/detour/isMarkedDetour/detourRefCount/raw);
                              #   §102/§103 eager transportLabel/securityLabel (transport-слот +
                              #   TLS/Reality/+Vision, awg/awg2); parsed раз на смену configRaw
+channel.dart                 # §125 Channel — конфигурируемые каналы (vpn-1 неудаляем, N∈1..10)
+auto_select.dart             # §322 членство узла автовыбора (папки) + его параметры
+import_rule.dart             # §302 ImportRule — правила обработки узлов подписки на импорте
+dns_ref.dart                 # §294 typed model dns_options.servers[]/rules[] (kind-discriminated refs)
+memory_limit_setting.dart    # §271 memory limit ядра (SetupOptions.oomMemoryLimit)
+stop_reason.dart             # §279 типизированная причина аварийного стопа/revoke
+traffic_snapshot.dart        # снимок агрегатов трафика для главного экрана
+ui_msg.dart                  # UiMsg — пользовательское сообщение с ленивым рендером (l10n §279)
 ```
 
 #### `controllers/` — ChangeNotifier-брокеры состояния
@@ -455,15 +463,23 @@ subscription_detail_screen.dart # детали подписки (431, TabControl
 subscriptions_screen.dart    # список подписок (445) + widgets/ + helpers (clipboard/paste/share/context-menu)
 stats_screen.dart            # хост TabBarView: Overview + Connections + LiveEvents (§288 — PerAppTrace убран)
 stats_screen/overview_tab.dart  # Overview-таб + overview_models
+stats_screen/                   # §264-266 Traffic Processing: trace_explorer + profiler_filter(+_sheet,
+                             #   profiler_filters) + traffic_event_detail_sheet · aggregate_detail_sheet ·
+                             #   memory_detail_sheet · routing_section (детали — features/044)
 live_events_tab.dart         # Stats-субтаб «Profiler» (371): event_tile/recording_header/unattributed_banner
 tun_apps_tab.dart            # per-app VPN routing субтаб (384) — шарится Stats/Routing
 app_settings_screen.dart     # настройки приложения (516): General/Diagnostics табы + update_status_row
 backup_screen.dart           # export/import снапшота (229) + export_card/import_card/preview
 lazy_persist_mixin.dart      # LazyPersistMixin — отложенный persist на settings-экранах (flush на возврат)
 # монолитные одиночные экраны (без под-папки, 60–505): about · add_server_wizard ·
-#   app_picker · channel_edit (§125) · config · connections · debug · dns_server_edit ·
-#   node_settings · outbound_view · settings · speed_test · vpn_mode_tab (§119) ·
-#   warp_wizard (§130 WARP/MASQUE мастер)
+#   app_picker · auto_group_edit (§322 узел автовыбора) · channel_edit (§125) ·
+#   config · connections · crash_reports (§316 Go-паники ядра) · debug ·
+#   dns_server_edit · folder_detail (§234 папка серверов, зеркалит
+#   subscription_detail) · node_settings · oom_reports (§318 OOM-снимки ядра) ·
+#   outbound_view · settings · speed_test · vpn_mode_tab (§119) ·
+#   warp_experiment (§284 endpoint generator) · warp_wizard (§130 WARP/MASQUE мастер)
+# owner_navigation.dart            # §258 общий переход «config-тег → экран владельца»
+# probe_gate_mixin.dart            # §296 VPN-гейт probe: два CommandServer на процесс невозможны
 ```
 
 #### `services/` — сервисный слой
@@ -483,17 +499,23 @@ parser/                      # Parser v2 (text → NodeSpec)
 builder/                     # NodeSpec + template → sing-box config
   build_config.dart          #   buildConfig() orchestrator → BuildResult; _BuildCtx (EmitContext + tag allocator)
   server_list_build.dart     #   per-subscription emit: detour policy, tag allocation, selector/auto регистрация
+  if_engine.dart             #   §120 typed template engine: подстановка vars + #if-конструкт (общее ядро)
   preset_expand.dart         #   expandPreset (CustomRulePreset → fragments, @var) + mergeFragments (§033);
                              #   §265: param globalVars — ref-vars {"ref":…} берут значение из глобального userVars, не varsValues
+  normalize_pinned_presets.dart   #   §264 pinned-пресеты нормализуются в начало storage-order
   rule_set_registry.dart     #   реестр route.rule_set + route.rules; tag-уникальность
   validator.dart             #   validateConfig: dangling refs, empty urltest → ValidationResult
-  post_steps.dart            #   barrel (part): шесть post-обработок ниже
+  post_steps.dart            #   barrel (part): post-обработки ниже
   post_steps/tls_transforms.dart  #   applyMixedCaseSni + applyTlsFragment (§028)
-  post_steps/custom_rules.dart    #   applyAllCustomRules (preset/inline/srs в storage order, §062; pinned-пресеты §264 нормализуются в начало через normalize_pinned_presets)
+  post_steps/custom_rules.dart    #   applyAllCustomRules (preset/inline/srs в storage order, §062)
   post_steps/dns_rules.dart       #   applyCustomDns / resolveDnsRulesList (§061+§033)
   post_steps/dns_servers.dart     #   resolveDnsServersList/Bodies (§043+§044)
   post_steps/heal_dangling_detours.dart # §172 healDanglingDetours: detour∉allTags снимается (warning),
                              #   зовётся перед validateConfig — битый detour из подписки деградирует, не роняет конфиг
+  post_steps/heal_dangling_resolve_servers.dart # §247 деградация битых server-ссылок resolve-правил
+  post_steps/heal_legacy_dns_strategy.dart      # §246 hotfix: несовместимая пара в dns.rules
+  post_steps/heal_unknown_utls_fingerprints.dart# §281 страховка от неизвестного uTLS fingerprint
+  post_steps/heal_invalid_reality.dart          # §343 страховка от битого REALITY-блока (short_id)
   post_steps/tun_packages.dart    #   applyTunPackages — OS split-tunnel (§046, последний шаг)
 subscription/                # fetch/auto-update подписок
   sources.dart               #   sealed SubscriptionSource (Url/File/Clipboard/Inline/Qr) + fetch (3-try backoff);
@@ -509,6 +531,10 @@ settings_storage/vars.dart          #   vars-домен + Wi-Fi history (§051)
 settings_storage/sources_rules.dart #   server_lists (+v1 migration), rules/groups, custom_rules
 settings_storage/network.dart       #   route_final/excluded/dns/ping_options (§040/§061)
 settings_storage/backup_tun.dart    #   снапшот (§031) + tun-apps split-tunnel (§046)
+settings_storage/channels.dart      #   §125 каналы (Channel CRUD + seed vpn-1)
+settings_storage/native_prefs.dart  #   NativePrefsKeys — мост в SharedPreferences Kotlin-стороны
+settings_storage/vpn_mode.dart      #   §119 VPN mode (allow/deny списки per-app)
+settings_storage/warp.dart          #   §025/§130 WARP/MASQUE аккаунты + пул генератора
 traffic_profiler.dart        # TrafficProfiler singleton (1243, см. Обзор): сессии, rolling buffer, SSE
 traffic_profiler/models.dart        #   part: TrafficEvent/Session + enums + JSON
 traffic_profiler/internal.dart      #   part: _ConnSnapshot correlation-структура (§180 _DnsAccumulator/§044 _ConnMeta выпилены)
@@ -525,7 +551,8 @@ debug/                       # localhost HTTP Debug API (§031)
   transport/config.dart      #   DebugServerConfig (port/token/timeout/maxBody/unauth-paths)
   transport/middleware/      #   error_mapper · access_log · host_check · auth · timeout
   handlers/                  #   /state /settings /action /profiler /rules /subs /config /logs /device
-                             #     /files /diag /backup /wifi_history /help /ping /warp (+ _shared CRUD-хелперы)
+                             #     /files /diag /backup /wifi_history /help /ping /warp /channels (§275)
+                             #     /folders (§238) /pool (§208) (+ _shared CRUD-хелперы)
   serializers/               #   home_state · storage (denylist scrubber) · rules · subs (URL-маскинг)
 warp/                        # §025/§130 WARP + MASQUE-транспорт (питает warp_wizard_screen)
   warp_client.dart           #   регистрация в Cloudflare (POST /reg): X25519-приватник не покидает телефон
