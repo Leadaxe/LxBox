@@ -489,7 +489,7 @@
         {"type": "group", "tag": "dns_ru", "servers": ["yandex_udp", "yandex_dot", "yandex_doh"], "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m", "description": "RU DNS group (UDP via channel + DoT via vpn-1 + direct DoH)"},
         {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@outbound"},
         {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT (via vpn-1)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "vpn-1"},
-        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH (direct)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "direct-out"}
+        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH (direct)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}}
       ]
     },
     {

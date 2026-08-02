@@ -1557,13 +1557,16 @@ List<Map<String, dynamic>> _ruDnsServers() => [
         'detour': 'vpn-1',
         'description': 'Yandex Safe DoT (via vpn-1)',
       },
+      // §354: у прямого сервера ключа `detour` нет вовсе — конвенция шаблона
+      // (ср. opendns_udp / local_dns_resolver). `direct-out` дал бы тот же
+      // результат (normalizeDnsDetour его снимает), но лишний ключ в шаблоне
+      // не пишем.
       {
         'type': 'https',
         'tag': 'yandex_doh',
         'server': '77.88.8.88',
         'server_port': 443,
         'path': '/dns-query',
-        'detour': 'direct-out',
         'description': 'Yandex Safe DoH (direct)',
       },
     ];
