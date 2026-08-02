@@ -78,7 +78,9 @@ class BundleMerge {
 ///      `@var` удаляются из родительского Map).
 /// 2. Deep-copy и substitute `@var` в `rule_set` / `dns_rules` / `rule` /
 ///    `dns_servers` через [substituteVars].
-/// 3. Фильтр `dns_servers` до одного — с `tag == vars['dns_server']`.
+/// 3. Фильтр `dns_servers` до выбранного — с `tag == vars['dns_server']`.
+///    §354: если выбранный — группа (§312), вместе с ней едут её члены
+///    (одноуровнево), иначе группа приедет пустой → EmptyDnsGroup (fatal).
 ///    Если dns_server == null → пустой список (пресет не вносит DNS-сервер).
 /// 4. Если `detour == 'direct-out'` в DNS-сервере — удаляем ключ (direct
 ///    не требует detour).
@@ -413,8 +415,25 @@ PresetFragments expandPreset(
   final selectedDns = varsMap['dns_server'] as String?;
   final dnsServers = <Map<String, dynamic>>[];
   if (selectedDns != null && selectedDns.isNotEmpty) {
+    // §354: выбранный сервер может быть ГРУППОЙ (§312) — тогда одного тега
+    // мало: члены живут в том же `preset.dns_servers` и без них группа
+    // приедет пустой (эмиссионный фильтр §312 выкинет их как unknown, дальше
+    // validator упрётся в EmptyDnsGroup — fatal до старта ядра).
+    // Одноуровнево: вложенных групп в шаблоне нет, а ядро вложенность
+    // разворачивает само.
+    final wanted = <String>{selectedDns};
     for (final s in preset.dnsServers) {
       if (s['tag'] != selectedDns) continue;
+      if (s['type'] != 'group') break;
+      for (final m in (s['servers'] as List<dynamic>? ?? const [])) {
+        if (m is String && m.isNotEmpty) wanted.add(m);
+      }
+      break;
+    }
+    // Порядок как в шаблоне (группа объявлена перед членами); дедуп по тегу
+    // делает mergeFragments.
+    for (final s in preset.dnsServers) {
+      if (!wanted.contains(s['tag'])) continue;
       final copy = deepCopyJson(s);
       final result = substituteVars(copy, varsMap);
       if (result is! Map<String, dynamic>) continue;

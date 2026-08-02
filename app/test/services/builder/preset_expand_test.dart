@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
+import 'package:lxbox/services/builder/post_steps.dart'
+    show resolveDnsServersBodies;
 import 'package:lxbox/services/builder/preset_expand.dart';
 
 void main() {
@@ -134,6 +136,80 @@ void main() {
 
       expect(f.dnsServers.length, 1);
       expect(f.dnsServers.first['tag'], 'yandex_safe');
+    });
+
+    // §354 — выбранный сервер может быть группой (§312): члены обязаны ехать
+    // вместе с ней, иначе эмиссионный фильтр §312 выбросит их как unknown и
+    // validator упрётся в EmptyDnsGroup (fatal до старта ядра).
+    group('§354 dns_server == группа', () {
+      test('группа тянет своих членов', () {
+        final f = expandPreset(
+          CustomRulePreset(
+            name: 'X',
+            presetId: 'ru-direct',
+            varsValues: {'outbound': 'vpn-2', 'dns_server': 'dns_ru'},
+          ),
+          _ruDirectWithDnsGroup(),
+        );
+
+        // Группа первой (порядок шаблона), следом три члена.
+        expect(f.dnsServers.map((s) => s['tag']),
+            ['dns_ru', 'yandex_udp', 'yandex_doh', 'yandex_dot']);
+        final grp = f.dnsServers.first;
+        expect(grp['type'], 'group');
+        expect(grp['servers'], ['yandex_udp', 'yandex_dot', 'yandex_doh']);
+        expect(grp['mode'], 'fastest');
+        // §319: у группы не бывает detour'а.
+        expect(grp.containsKey('detour'), isFalse);
+      });
+
+      test('три независимых пути отказа: канал / direct / dns_tunnel', () {
+        final f = expandPreset(
+          CustomRulePreset(
+            name: 'X',
+            presetId: 'ru-direct',
+            varsValues: {'outbound': 'vpn-2', 'dns_server': 'dns_ru'},
+          ),
+          _ruDirectWithDnsGroup(),
+        );
+        Map<String, dynamic> byTag(String t) =>
+            f.dnsServers.firstWhere((s) => s['tag'] == t);
+
+        // UDP — по каналу пресета (ровно тот путь, что висел на мёртвой ноде).
+        expect(byTag('yandex_udp')['detour'], 'vpn-2');
+        // DoT — напрямую: detour снят как direct-out (§117).
+        expect(byTag('yandex_dot').containsKey('detour'), isFalse);
+        // DoH — отдельным каналом, НЕ @outbound.
+        expect(byTag('yandex_doh')['detour'], 'vpn-1');
+      });
+
+      test('одиночный сервер по-прежнему едет один (регрессия §033)', () {
+        final f = expandPreset(
+          CustomRulePreset(
+            name: 'X',
+            presetId: 'ru-direct',
+            varsValues: {'outbound': 'vpn-2', 'dns_server': 'yandex_udp'},
+          ),
+          _ruDirectWithDnsGroup(),
+        );
+
+        expect(f.dnsServers.length, 1);
+        expect(f.dnsServers.single['tag'], 'yandex_udp');
+      });
+
+      test('default_value применяется когда юзер не трогал дропдаун', () {
+        final f = expandPreset(
+          CustomRulePreset(
+            name: 'X',
+            presetId: 'ru-direct',
+            varsValues: {'outbound': 'vpn-2'}, // dns_server не трогал
+          ),
+          _ruDirectWithDnsGroup(),
+        );
+
+        expect(f.dnsServers.first['tag'], 'dns_ru');
+        expect(f.dnsServers.length, 4);
+      });
     });
 
     test('remote rule_set + cached path → заменяется на type: local, path',
@@ -900,9 +976,10 @@ void main() {
       final resolve = f.routingRules[0];
       expect(resolve['action'], 'resolve');
       expect(resolve['strategy'], 'ipv4_only');
-      expect(resolve['server'], 'yandex_udp',
-          reason: 'server из default dns_server (битую ссылку при '
-              'выключенном DNS-аспекте снимает healDanglingResolveServers)');
+      expect(resolve['server'], 'dns_ru',
+          reason: 'server из default dns_server — §354 группа (битую ссылку '
+              'при выключенном DNS-аспекте снимает '
+              'healDanglingResolveServers)');
       expect(resolve['rule_set'], ['ru-domains', 'ru-services']);
       final route = f.routingRules[1];
       expect(route['outbound'], 'direct-out');
@@ -924,12 +1001,76 @@ void main() {
           reason: 'serverless-действие — predefined отвечает сам');
       expect(gate.containsKey('strategy'), isFalse);
       final dnsRoute = f.dnsRules[1];
-      expect(dnsRoute['server'], 'yandex_udp');
+      expect(dnsRoute['server'], 'dns_ru');
       expect(dnsRoute.containsKey('ip_version'), isFalse,
           reason: 'маршрут безусловный — не-A/AAAA-запросы (HTTPS type 65) '
               'тоже должны идти в @dns_server');
       expect(dnsRoute.containsKey('strategy'), isFalse,
           reason: 'strategy в dns rule = fatal при включённом FakeIP');
+    });
+
+    // §354 — на РЕАЛЬНОМ шаблоне: дефолтная группа приезжает с членами.
+    // Пустая группа = EmptyDnsGroup (fatal), поэтому проверяем на живом JSON,
+    // а не только на фикстуре.
+    test('ru-direct (дефолты) → dns_ru + три члена по разным путям', () {
+      final f = expandPreset(
+        CustomRulePreset(
+          name: 'RU',
+          presetId: 'ru-direct',
+          varsValues: {'outbound': 'vpn-2'},
+        ),
+        realPreset('ru-direct'),
+      );
+
+      expect(f.dnsServers.map((s) => s['tag']),
+          ['dns_ru', 'yandex_udp', 'yandex_doh', 'yandex_dot']);
+      Map<String, dynamic> byTag(String t) =>
+          f.dnsServers.firstWhere((s) => s['tag'] == t);
+
+      final grp = byTag('dns_ru');
+      expect(grp['servers'], ['yandex_udp', 'yandex_dot', 'yandex_doh']);
+      expect(grp['mode'], 'fastest');
+      expect(grp.containsKey('detour'), isFalse, reason: '§319');
+
+      // Три НЕзависимых пути отказа — иначе одна мёртвая нода вешает ru-DNS.
+      expect(byTag('yandex_udp')['detour'], 'vpn-2');
+      expect(byTag('yandex_dot').containsKey('detour'), isFalse);
+      expect(byTag('yandex_doh')['detour'], 'vpn-1');
+    });
+
+    // §354 — сквозь ОБА слоя: expandPreset → эмиссионный фильтр §312. Именно
+    // здесь группа могла приехать пустой (члены выброшены как unknown →
+    // EmptyDnsGroup, fatal до старта ядра), а expandPreset в одиночку это не
+    // ловит.
+    test('ru-direct → эмиссия: группа доезжает с членами, без дропов', () {
+      final f = expandPreset(
+        CustomRulePreset(
+          name: 'RU',
+          presetId: 'ru-direct',
+          varsValues: {'outbound': 'vpn-2'},
+        ),
+        realPreset('ru-direct'),
+      );
+
+      final presetServersByTag = {
+        for (final s in f.dnsServers) s['tag'] as String: s,
+      };
+      final warnings = <String>[];
+      final emitted = resolveDnsServersBodies(
+        resolved: [
+          for (final s in f.dnsServers)
+            {'kind': 'preset', 'tag': s['tag'], 'enabled': true},
+        ],
+        templateByTag: const {},
+        presetServersByTag: presetServersByTag,
+        knownOutboundTags: {'vpn-1', 'vpn-2', 'direct-out'},
+        warningsOut: warnings,
+      );
+
+      final grp = emitted.firstWhere((s) => s['tag'] == 'dns_ru');
+      expect(grp['servers'], ['yandex_udp', 'yandex_dot', 'yandex_doh'],
+          reason: 'ни один член не выброшен фильтром §312');
+      expect(warnings, isEmpty, reason: 'дропов быть не должно');
     });
 
     test('ru-direct: force_ipv4=false → route без resolve, DNS без AAAA-гейта',
@@ -948,7 +1089,7 @@ void main() {
       expect(f.routingRules.single['outbound'], 'direct-out');
       // §253: AAAA-гейт выпал целиком (array-element #if), маршрут остался.
       expect(f.dnsRules.length, 1);
-      expect(f.dnsRules.single['server'], 'yandex_udp');
+      expect(f.dnsRules.single['server'], 'dns_ru');
       expect(f.dnsRules.single.containsKey('ip_version'), isFalse);
       expect(f.dnsRules.single.containsKey('strategy'), isFalse);
     });
@@ -1271,6 +1412,90 @@ SelectableRule _ruDirect() => SelectableRule(
           'server': '77.88.8.88',
           'detour': '@outbound',
           'description': 'Yandex Safe',
+        },
+      ],
+    );
+
+/// §354: реплика `ru-direct` из шаблона с DNS-группой — `dns_ru` объявлена
+/// перед членами, три члена по независимым путям отказа (канал / direct /
+/// отдельный dns_tunnel).
+SelectableRule _ruDirectWithDnsGroup() => SelectableRule(
+      label: 'Russian domains & IPs',
+      presetId: 'ru-direct',
+      vars: [
+        WizardVar(
+          name: 'outbound',
+          type: 'outbound',
+          defaultValue: 'direct-out',
+          title: 'Outbound',
+        ),
+        WizardVar(
+          name: 'dns_server',
+          type: 'dns_servers',
+          defaultValue: 'dns_ru',
+          required: false,
+          title: 'DNS server',
+        ),
+        WizardVar(
+          name: 'dns_tunnel',
+          type: 'outbound',
+          defaultValue: 'vpn-1',
+          title: 'DoH channel',
+        ),
+        WizardVar(
+          name: 'dns_ip',
+          type: 'enum',
+          defaultValue: '77.88.8.8',
+          title: 'UDP server IP',
+        ),
+      ],
+      ruleSets: [
+        {
+          'tag': 'ru-domains',
+          'type': 'inline',
+          'rules': [
+            {
+              'domain_suffix': ['ru']
+            }
+          ],
+        },
+      ],
+      dnsRule: const {'rule_set': 'ru-domains', 'server': '@dns_server'},
+      rule: const {'rule_set': 'ru-domains', 'outbound': '@outbound'},
+      dnsServers: [
+        {
+          'type': 'group',
+          'tag': 'dns_ru',
+          'servers': ['yandex_udp', 'yandex_dot', 'yandex_doh'],
+          'mode': 'fastest',
+          'error_ttl': '5m',
+          'win_ttl': '5m',
+          'description': 'RU DNS group',
+        },
+        {
+          'type': 'udp',
+          'tag': 'yandex_udp',
+          'server': '@dns_ip',
+          'server_port': 53,
+          'detour': '@outbound',
+          'description': 'Yandex UDP',
+        },
+        {
+          'type': 'https',
+          'tag': 'yandex_doh',
+          'server': '77.88.8.88',
+          'server_port': 443,
+          'path': '/dns-query',
+          'detour': '@dns_tunnel',
+          'description': 'Yandex Safe DoH',
+        },
+        {
+          'type': 'tls',
+          'tag': 'yandex_dot',
+          'server': '77.88.8.88',
+          'server_port': 853,
+          'detour': 'direct-out',
+          'description': 'Yandex Safe DoT (direct)',
         },
       ],
     );

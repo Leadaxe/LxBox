@@ -107,6 +107,9 @@
   "Block HTTPS records": {
     "value": "Блокировать HTTPS-записи"
   },
+  "Channel that carries encrypted DoH queries. Keep it different from the main outbound so one dead node cannot stall Russian DNS.": {
+    "value": "Канал, по которому идут зашифрованные DoH-запросы. Держите его отличным от основного канала — тогда одна мёртвая нода не подвесит российский DNS."
+  },
   "Cloudflare": {
     "value": "Cloudflare"
   },
@@ -163,6 +166,9 @@
   },
   "Direct": {
     "value": "Напрямую"
+  },
+  "DoH channel": {
+    "value": "Канал для DoH"
   },
   "DoH server IP": {
     "value": "IP-адрес DoH-сервера"
@@ -356,11 +362,14 @@
   "Quad9 · anti-malware": {
     "value": "Quad9 · защита от вредоносного ПО"
   },
+  "RU DNS group (UDP + direct DoT + tunnelled DoH)": {
+    "value": "Группа DNS для RU (UDP + прямой DoT + DoH через канал)"
+  },
   "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering": {
     "value": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). Обходит простой DPI с точным сравнением; бесполезно против фильтрации уровня GFW"
   },
-  "Recommended: Base/UDP — most stable. DoH/DoT may be filtered by ISPs.": {
-    "value": "Рекомендуется базовый UDP — самый стабильный. DoH/DoT могут фильтроваться провайдерами."
+  "Recommended: the RU group — races UDP, direct DoT and tunnelled DoH, so one dead path cannot stall Russian DNS. Single servers stay available below.": {
+    "value": "Рекомендуется группа RU — гонка UDP, прямого DoT и DoH через канал: один мёртвый путь не подвесит российский DNS. Отдельные серверы по-прежнему доступны ниже."
   },
   "Reject = drop. Or pick Direct to send it outside the VPN.": {
     "value": "Блокировка — трафик отбрасывается. Либо выберите «Напрямую», чтобы отправить его мимо VPN."
@@ -557,8 +566,8 @@
   "Yandex Safe DoH": {
     "value": "Яндекс DoH (безопасный)"
   },
-  "Yandex Safe DoT": {
-    "value": "Яндекс DoT (безопасный)"
+  "Yandex Safe DoT (direct)": {
+    "value": "Яндекс DoT (безопасный, напрямую)"
   },
   "Yandex UDP (IP from above)": {
     "value": "Яндекс UDP (IP из настройки выше)"
