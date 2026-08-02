@@ -177,15 +177,20 @@ class BoxService(
                     commandServer.get()?.pause()
                 }
                 Intent.ACTION_SCREEN_ON -> {
-                    Log.d(TAG, "[vpn] SCREEN_ON → wake")
-                    commandServer.get()?.wake()
-                }
-                Intent.ACTION_USER_PRESENT -> {
-                    // §340 — wake-нудж SPEC 041 v2: разблокировка = «устройство
-                    // проснулось»; ядро само ребиндит только доказуемо стухшие
-                    // WG/AWG-сессии (стале-предикат + общий дебаунс 90 с — в ядре,
-                    // вызов неблокирующий).
-                    Log.d(TAG, "[vpn] USER_PRESENT → rebindStaleEndpoints")
+                    // wake() — только в BG_MODE_ALWAYS: пара к SCREEN_OFF → pause
+                    // (§215). В прочих режимах pause не звучал, будить нечего.
+                    if (BootReceiver.getBackgroundMode(service) == BootReceiver.BG_MODE_ALWAYS) {
+                        Log.d(TAG, "[vpn] SCREEN_ON → wake")
+                        commandServer.get()?.wake()
+                    }
+                    // §340 — wake-нудж SPEC 041 v2: ядро ребиндит только доказуемо
+                    // стухшие WG/AWG-сессии (стале-предикат + дебаунс 90 с — в ядре,
+                    // вызов неблокирующий). Именно SCREEN_ON, а не USER_PRESENT:
+                    // приложения лезут в сеть сразу по включению экрана, и нудж
+                    // обязан успеть ДО первого спроса трафика — иначе ретраи
+                    // начинаются раньше и сессию чинит досрочный rebind ядра
+                    // (device-наблюдение 02.08: USER_PRESENT стабильно опаздывал).
+                    Log.d(TAG, "[vpn] SCREEN_ON → rebindStaleEndpoints")
                     runCatching { commandServer.get()?.rebindStaleEndpoints() }
                         .onFailure { Log.e(TAG, "rebindStaleEndpoints failed", it) }
                 }
@@ -236,7 +241,10 @@ class BoxService(
                 addAction(BoxVpnService.ACTION_RESET_NETWORK)
                 addAction(BoxVpnService.ACTION_CLEAR_DNS_CACHE)   // §263
                 addAction(BoxVpnService.ACTION_UPDATE_NOTIFICATION)   // §223
-                addAction(Intent.ACTION_USER_PRESENT)   // §340 — вне when(mode): нудж нужен в любом фоновом режиме
+                // §340 — вне when(mode): нудж на пробуждение экрана нужен в любом
+                // фоновом режиме (стухший NAT от энергорежима не зависит).
+                // SCREEN_OFF остаётся режимным — он пара к wake() из §215.
+                addAction(Intent.ACTION_SCREEN_ON)
 
                 when (mode) {
                     BootReceiver.BG_MODE_LAZY -> {
@@ -246,7 +254,6 @@ class BoxService(
                     }
                     BootReceiver.BG_MODE_ALWAYS -> {
                         addAction(Intent.ACTION_SCREEN_OFF)
-                        addAction(Intent.ACTION_SCREEN_ON)
                     }
                 }
             }, ContextCompat.RECEIVER_NOT_EXPORTED)
