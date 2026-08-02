@@ -6,6 +6,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/config_node.dart';
+import '../models/dependency_graph.dart';
 import '../services/runtime_chain.dart';
 import '../services/settings_storage.dart';
 import '../vpn/cc_channel.dart';
@@ -16,7 +17,10 @@ import '../services/l10n/locale_controller.dart';
 /// §258 — экран деталей outbound'а («View details» из меню ноды): вкладки
 /// **Overview** (основные параметры + рантайм-цепочка detour, хопы
 /// кликабельны → экран владельца) и **JSON** (прежний read-only дамп §099
-/// с Copy-аффордансом в AppBar).
+/// с Copy-аффордансом в AppBar). §355 — третья вкладка **Dependents**
+/// (кто зависит от этой ноды по detour/каналам) — видна только когда
+/// зависимые есть; ⚠-метка мёртвого корня в списке нод открывает экран
+/// сразу на ней ([openDependents]).
 class OutboundViewScreen extends StatefulWidget {
   const OutboundViewScreen({
     super.key,
@@ -28,7 +32,12 @@ class OutboundViewScreen extends StatefulWidget {
     required this.config,
     required this.subController,
     required this.homeController,
+    this.openDependents = false,
   });
+
+  /// §355 — открыть сразу вкладку Dependents (тап по ⚠-метке). Если
+  /// зависимых нет (вкладка скрыта) — обычный Overview.
+  final bool openDependents;
 
   final String tag;
   final String kind;
@@ -129,8 +138,17 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     final bothLabel = widget.detourCount > 1
         ? 'Copy server + detours(${widget.detourCount})'
         : 'Copy server + detour';
+    // §355 — вкладка Dependents: sick-срез (транзитивные жертвы мёртвого
+    // корня) приоритетнее статического «кто через меня ходит». Пусто → нет
+    // вкладки (не показываем пустую).
+    final sickDependents =
+        widget.homeController.state.sickRoots[widget.tag];
+    final dependents = sickDependents ??
+        widget.homeController.directDependentsOf(widget.tag);
+    final hasDependents = dependents.isNotEmpty;
     return DefaultTabController(
-      length: 2,
+      length: hasDependents ? 3 : 2,
+      initialIndex: (widget.openDependents && hasDependents) ? 2 : 0,
       child: Scaffold(
         appBar: AppBar(
           title: Text('${widget.kind} · ${widget.tag}',
@@ -140,6 +158,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
               Tab(text: getLocalText.s("Overview")),
               // l10n-exempt: acronym, same in all locales
               const Tab(text: 'JSON'),
+              if (hasDependents) Tab(text: getLocalText.s("Dependents")),
             ],
           ),
           actions: [
@@ -193,10 +212,96 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
             children: [
               _buildOverviewTab(context),
               _buildJsonTab(context),
+              if (hasDependents)
+                _buildDependentsTab(
+                    context, dependents, sick: sickDependents != null),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  // ─── Dependents (§355) ─────────────────────────────────────────────────
+
+  /// Список зависимых: при [sick] — транзитивные жертвы мёртвого корня
+  /// (warning-тон), иначе — статический срез «кто через меня ходит».
+  /// Тап по ноде — навигация к владельцу (как хопы Overview); DNS-серверы
+  /// не кликабельны (у них нет экрана-владельца).
+  Widget _buildDependentsTab(
+    BuildContext context,
+    List<DependentRef> dependents, {
+    required bool sick,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    // DNS-жертвы сверху — они самые коварные (§355: тихо не резолвятся).
+    final sorted = [...dependents]
+      ..sort((a, b) {
+        if (a.isDns != b.isDns) return a.isDns ? -1 : 1;
+        return a.tag.compareTo(b.tag);
+      });
+    String subtitleOf(DependentRef d) {
+      final via = d.via;
+      if (via == null) {
+        return d.isDns
+            ? getLocalText.s("DNS server — direct detour")
+            : getLocalText.s("Node — direct detour");
+      }
+      final label = _channels
+          .where((c) => c.tag == via)
+          .map((c) => c.label)
+          .firstOrNull ??
+          via;
+      return d.isDns
+          ? getLocalText.s('DNS server — via "%1\$s"', label)
+          : getLocalText.s('Node — via "%1\$s"', label);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Row(
+            children: [
+              Icon(
+                sick ? Icons.warning_amber_rounded : Icons.account_tree_outlined,
+                size: 20,
+                color: sick ? cs.error : cs.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  sick
+                      ? getLocalText.s(
+                          'These depend on dead node "%1\$s" and are not working:',
+                          widget.tag)
+                      : getLocalText.s("These route through this node:"),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        for (final d in sorted)
+          ListTile(
+            dense: true,
+            leading: Icon(
+              d.isDns ? Icons.dns_outlined : Icons.lan_outlined,
+              size: 20,
+              color: sick ? cs.error : cs.onSurfaceVariant,
+            ),
+            title:
+                Text(d.tag, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text(subtitleOf(d),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            onTap: d.isDns ? null : () => _onTagTap(d.tag),
+          ),
+      ],
     );
   }
 

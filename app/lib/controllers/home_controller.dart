@@ -1113,6 +1113,22 @@ class HomeController extends ChangeNotifier
   DependencyGraph _depGraph = const DependencyGraph.empty();
   String _depGraphRaw = '';
 
+  /// §355 — актуализировать граф под текущий activeConfigRaw (ленивая
+  /// parse-once инвалидация, общая для computeSick и UI-запросов).
+  DependencyGraph _ensureDepGraph() {
+    final raw = _state.activeConfigRaw;
+    if (raw != _depGraphRaw) {
+      _depGraphRaw = raw;
+      _depGraph = DependencyGraph.fromConfig(raw);
+    }
+    return _depGraph;
+  }
+
+  /// §355 — прямые зависимые ноды/канала (кто ссылается detour'ом): вкладка
+  /// «Dependents» в OutboundViewScreen. Статический срез графа, без health.
+  List<DependentRef> directDependentsOf(String tag) =>
+      _ensureDepGraph().directDependents(tag);
+
   /// §355 — пересчёт «корней беды» (мёртвая нода → зависимые DNS/ноды).
   /// Дёргается на двух событиях (новой диагностики нет by design): замер
   /// пинга (см. ping_orchestration) и смена выбора групп (_applyGroups).
@@ -1122,11 +1138,7 @@ class HomeController extends ChangeNotifier
   /// lastError не трогаем).
   @override
   void _recomputeDependencyHealth() {
-    final raw = _state.activeConfigRaw;
-    if (!identical(raw, _depGraphRaw) && raw != _depGraphRaw) {
-      _depGraphRaw = raw;
-      _depGraph = DependencyGraph.fromConfig(raw);
-    }
+    _ensureDepGraph();
     final selections = <String, String>{
       for (final g in _state.ccGroups)
         if (g.selectable && g.selected.isNotEmpty) g.tag: g.selected,

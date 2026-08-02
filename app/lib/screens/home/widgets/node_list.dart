@@ -19,7 +19,6 @@ import '../../../models/auto_select.dart';
 import '../../../models/node_spec.dart';
 import '../node_list_presenter.dart';
 import 'add_server_cta.dart';
-import 'dependency_sheet.dart';
 import 'filter_panel.dart';
 import '../../../services/l10n/locale_controller.dart';
 
@@ -363,14 +362,13 @@ class HomeNodeList extends StatelessWidget {
             onViewPool: (isUrltestGroup && controller.isRoundRobinAuto(tag))
                 ? () => onViewPool(tag)
                 : null,
-            // §355 — sheet «кто сломан этой мёртвой нодой».
+            // §355 — ⚠-тап: View details сразу на вкладке Dependents
+            // («кто сломан этой мёртвой нодой»).
             onSickTap: state.sickRoots.containsKey(tag)
-                ? () => unawaited(showDependencySheet(
-                      ctx,
-                      rootTag: tag,
-                      dependents: state.sickRoots[tag]!,
-                      groupLabelOf: state.groupLabelOf,
-                    ))
+                ? () => viewOutboundJson(ctx, tag, state,
+                    subController: subController,
+                    homeController: controller,
+                    openDependents: true)
                 : null,
           ),
         );

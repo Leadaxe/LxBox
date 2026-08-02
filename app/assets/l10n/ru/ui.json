@@ -853,9 +853,6 @@
   "Blocked — Android may throttle the VPN service. Tap to allow.": {
     "value": "Заблокированы — Android может ограничивать VPN-сервис. Нажмите, чтобы разрешить."
   },
-  "Broken dependencies": {
-    "value": "Сломанные зависимости"
-  },
   "Building config...": {
     "value": "Сборка конфига…"
   },
@@ -1256,6 +1253,9 @@
   },
   "DNS server": {
     "value": "DNS-сервер"
+  },
+  "Dependents": {
+    "value": "Зависимые"
   },
   "DNS server \"%1$s\" routes through dead node \"%2$s\" (selected in \"%3$s\").": {
     "value": "DNS-сервер \"%1$s\" ходит через мёртвый узел \"%2$s\" (выбран в \"%3$s\")."
@@ -3704,6 +3704,9 @@
   },
   "These depend on dead node \"%1$s\" and are not working:": {
     "value": "Они зависят от мёртвого узла \"%1$s\" и не работают:"
+  },
+  "These route through this node:": {
+    "value": "Через этот узел ходят:"
   },
   "These headers identify your device to the panel. Defaults come from the device — override any of them (empty = device default).": {
     "value": "По этим заголовкам панель опознаёт ваше устройство. Значения по умолчанию берутся с устройства — любое можно переопределить (пусто = как на устройстве)."

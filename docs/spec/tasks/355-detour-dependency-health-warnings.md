@@ -97,13 +97,14 @@ sick(нода)  → …                 рекурсивно (каналы, гд
 1. **⚠-метка в списке нод** — на ноде, которая `dead` **и** от которой
    транзитивно зависят другие (DNS-серверы или ноды). Просто мёртвая нода без
    зависимых метку не получает — это фильтр от шума.
-2. **Sheet «Broken dependencies» по тапу на ⚠-метку** — список DNS-серверов
-   и нод, зависящих от корня, с путём зависимости (`yandex_udp — via vpn-2`,
-   `node X — direct detour`); DNS-жертвы сверху. *(Отступление от исходного
-   наброска «секция в detail-экране ноды»: выделенного detail-экрана у нод
-   Home нет — есть контекстное меню и sheet-паттерн §254 detour_cycle_sheet;
-   sheet по тапу на метку точнее по контексту и дешевле. `directDependents`
-   в модели оставлен для будущей секции «кто через меня» на живой ноде.)*
+2. **Вкладка «Dependents» в View details** (v2, запрос юзера 03.08.2026 —
+   вместо первоначального bottom-sheet): третья вкладка OutboundViewScreen
+   (§258, Overview/JSON/Dependents), видна только когда зависимые есть.
+   ⚠-тап открывает экран сразу на ней (`openDependents`). Содержимое:
+   sick-срез (транзитивные жертвы мёртвого корня, warning-тон) либо — на
+   здоровой ноде — статический срез `directDependentsOf` («кто через меня
+   ходит»); DNS-жертвы сверху; ноды кликабельны (openTagOwner-навигация,
+   как хопы Overview), DNS-серверы — нет (нет экрана-владельца).
 3. **Баннер на Home — только для DNS-ветки** (решение юзера 03.08.2026):
    когда болен DNS-сервер, юзер не смотрит в список нод — у него «просто не
    работает интернет». Текст в духе:
@@ -124,7 +125,7 @@ sick(нода)  → …                 рекурсивно (каналы, гд
 | Контроллер | `_recomputeDependencyHealth()`: вызовы из `_applyGroups` (смена выбора), `flush()` mass-ping и хвоста `runNodeUrltest` ([ping_orchestration.dart](../../../app/lib/controllers/home_controller/ping_orchestration.dart)); гейт по изменению результата; selections — только `selectable`-группы | [home_controller.dart](../../../app/lib/controllers/home_controller.dart) |
 | Состояние | `HomeState.sickRoots: Map<String, List<DependentRef>>` | [home_state.dart](../../../app/lib/models/home_state.dart) |
 | UI: метка | `NodeViewItem.isSickRoot` → ⚠ у имени в `NodeRow`, тап → `onSickTap` | [node_view_item.dart](../../../app/lib/widgets/node_view_item.dart), [node_row.dart](../../../app/lib/widgets/node_row.dart), прокидка в [node_list.dart](../../../app/lib/screens/home/widgets/node_list.dart) |
-| UI: sheet | `showDependencySheet` (паттерн §254) | [dependency_sheet.dart](../../../app/lib/screens/home/widgets/dependency_sheet.dart) |
+| UI: вкладка | `_buildDependentsTab` в OutboundViewScreen (v2; sheet удалён) + `HomeController.directDependentsOf` | [outbound_view_screen.dart](../../../app/lib/screens/outbound_view_screen.dart) |
 | UI: баннер | `DnsViaDeadNodeMsg` (только DNS-ветка; авто-снятие при уходе всех dns-жертв, чужой lastError не трогается) | [ui_msg.dart](../../../app/lib/models/ui_msg.dart) + `_recomputeDependencyHealth` |
 
 Тесты: [dependency_graph_test.dart](../../../app/test/models/dependency_graph_test.dart)
