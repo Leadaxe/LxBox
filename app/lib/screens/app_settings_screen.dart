@@ -623,11 +623,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         setState(() => _autoUpdateDisabledSubs = val);
         unawaited(SettingsStorage.setAutoUpdateDisabledSubs(val));
       },
-      autoReloadOnChange: _autoReloadOnChange,
-      onAutoReloadOnChangeChanged: (val) {
-        setState(() => _autoReloadOnChange = val);
-        unawaited(SettingsStorage.setAutoReloadOnChange(val));
-      },
       userAgent: _userAgent,
       defaultUserAgent: resolveSubscriptionUserAgent(),
       onEditUserAgent: () => unawaited(_editUserAgent()),
@@ -653,6 +648,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       autoPing: _autoPing,
       haptic: _haptic,
       allowRotation: _allowRotation,
+      autoReloadOnChange: _autoReloadOnChange, // §338
       padding: _tabPadding(context),
       onAutoStartChanged: (val) {
         setState(() => _autoStart = val);
@@ -661,6 +657,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             SettingsStorage.setNativeBool(NativePrefsKeys.autoStart, val));
       },
       onAllowRotationChanged: (val) => unawaited(_toggleAllowRotation(val)),
+      // §338 — автоприменение изменений конфига (любой источник, не подписки).
+      onAutoReloadOnChangeChanged: (val) {
+        setState(() => _autoReloadOnChange = val);
+        unawaited(SettingsStorage.setAutoReloadOnChange(val));
+      },
       onAutoCheckUpdatesChanged: (val) {
         setState(() => _autoCheckUpdates = val);
         unawaited(SettingsStorage.setAutoCheckUpdates(val));

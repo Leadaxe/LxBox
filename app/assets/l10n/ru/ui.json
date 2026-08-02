@@ -1049,6 +1049,14 @@
       "other": "Конфиг пересобран: %d узла — перезапустите VPN, чтобы применить"
     }
   },
+  "Config rebuilt: %d nodes — reloading VPN": {
+    "value": {
+      "one": "Конфиг пересобран: %d узел — перезагружаю VPN",
+      "few": "Конфиг пересобран: %d узла — перезагружаю VPN",
+      "many": "Конфиг пересобран: %d узлов — перезагружаю VPN",
+      "other": "Конфиг пересобран: %d узла — перезагружаю VPN"
+    }
+  },
   "Config regenerated: %d nodes": {
     "value": {
       "one": "Конфиг пересобран: %d узел",
@@ -2903,9 +2911,6 @@
   },
   "Keep the node list of switched-off subscriptions fresh, so it is not stale when you switch one back on. Their nodes stay out of the config either way.": {
     "value": "Держать список узлов выключенных подписок свежим, чтобы он не устарел к моменту, когда вы их включите. В конфиг их узлы всё равно не попадают."
-  },
-  "Applying changes": {
-    "value": "Применение изменений"
   },
   "Auto-restart VPN on settings change": {
     "value": "Автоперезапуск VPN при смене настроек"

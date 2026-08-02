@@ -8,8 +8,9 @@
 
 ## Задача
 
-Галка в App Settings → Subscriptions: **«Auto-restart VPN on settings change»**,
-off по умолчанию. Включена — приложение само применяет любое изменение конфига к
+Галка в App Settings → **General → Behavior**: «Auto-restart VPN on settings
+change», off по умолчанию. Не в Subscriptions: источник изменения — любой (узел,
+detour, DNS, routing, per-app), подписка лишь один из них. Включена — приложение само применяет любое изменение конфига к
 живому туннелю, и **плашек не остаётся вовсе**: ни синей («Settings changed»),
 ни розовой («Config changed — restart VPN»).
 
@@ -74,6 +75,25 @@ retry-when-idle (§107 R3) ─────────────────�
 подписки и общий путь настроек дают одно поведение, а не два конкурирующих
 reload'а.
 
+## Тексты не должны врать
+
+Плашки при включённой галке не появляются (флаги гасятся), но **snackbar'ы
+живут своей жизнью** и до §338 звали юзера перезапускать VPN там, где reload
+уже едет сам:
+
+| Где | Было | Стало при галке |
+|---|---|---|
+| пересборка конфига (`_rebuildConfig`) | «Config rebuilt: N nodes — restart VPN to apply» | «Config rebuilt: N nodes — reloading VPN» |
+| правка канала (`node_list`) | второй snackbar «Restart VPN to apply changes» | не показывается — пересборка на возврате применит сама |
+
+Условие текста — то же, что у хука (галка + туннель up + конфиг разошёлся с
+running), поэтому «перезагружаю» не появится там, где reload не случится:
+`fresh`-вердикт (§324) даёт обычный текст без обещаний.
+
+Флаг читается **один раз** за пересборку, в `_rebuildAndClearDirty`, и уходит
+и в текст, и в хук. Иначе юзер, снявший галку между двумя чтениями, прочёл бы
+«перезагружаю» без перезагрузки.
+
 ## Что галка НЕ делает
 
 | | Почему |
@@ -99,8 +119,9 @@ reload'а.
 | Storage | `services/settings_storage.dart` | ключ `auto_reload_on_change` + `get/setAutoReloadOnChange`; в `_appFeatureFlagVars` (§221) |
 | Хук | `screens/home_screen.dart` | в `_rebuildAndClearDirty` после успешной пересборки — `_maybeAutoReload()`; флаг кэшируется в поле `_autoReloadOnChange` |
 | Подписки | `services/subscription/auto_updater.dart` | `effectiveOnUpdateAction` — при флаге `reload` для всех |
-| UI галки | `screens/app_settings_screen/widgets/subscriptions_tab.dart` | `SwitchListTile` + предупреждение про 3с |
+| UI галки | `screens/app_settings_screen/widgets/general_tab.dart` | `SwitchListTile` в блоке Behavior (под «Auto-start on boot») + предупреждение про 3с |
 | Скрытие | `screens/subscription_detail_screen/widgets/subscription_settings_tab.dart` | строка «On update» под `if (!autoReloadOnChange)` |
+| Текст | `screens/home_screen.dart` (`_rebuildConfig`), `screens/home/widgets/node_list.dart` | snackbar не обещает рестарт, когда reload едет сам |
 | Проводка | `screens/app_settings_screen.dart`, `screens/subscription_detail_screen.dart` | поле состояния + чтение + колбэк |
 
 Флаг читаем из storage (не из state-поля home_screen), потому что
