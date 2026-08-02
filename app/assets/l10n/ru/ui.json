@@ -2904,6 +2904,18 @@
   "Keep the node list of switched-off subscriptions fresh, so it is not stale when you switch one back on. Their nodes stay out of the config either way.": {
     "value": "Держать список узлов выключенных подписок свежим, чтобы он не устарел к моменту, когда вы их включите. В конфиг их узлы всё равно не попадают."
   },
+  "Applying changes": {
+    "value": "Применение изменений"
+  },
+  "Auto-restart VPN on settings change": {
+    "value": "Автоперезапуск VPN при смене настроек"
+  },
+  "Apply every config change to the running tunnel by itself, so no banner is left to tap. Each apply drops the tunnel for about 3 seconds and kills open connections.": {
+    "value": "Применять любое изменение конфига к работающему туннелю самостоятельно, чтобы не оставалось плашек. Каждое применение рвёт туннель примерно на 3 секунды и обрывает открытые соединения."
+  },
+  "While this is on, the per-subscription \"On update\" setting is hidden — everything is applied immediately. Turning it off brings each subscription's own choice back.": {
+    "value": "Пока включено, настройка «При обновлении» в подписках скрыта — всё применяется сразу. Выключите — вернётся собственный выбор каждой подписки."
+  },
   "Refresh rule-sets": {
     "value": "Обновить rule-set-файлы"
   },

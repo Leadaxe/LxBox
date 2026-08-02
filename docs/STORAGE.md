@@ -248,6 +248,7 @@ Per-key спеки и shape — в разделах ниже.
 |---|---|---|---|
 | `auto_update_subs` | `'true'` | [§027] | Global gate auto-refresh подписок. Manual всегда работает. |
 | `auto_update_disabled_subs` | `'false'` | §337 | Обновлять и выключенные подписки, чтобы их снапшот узлов не тух. Живёт внутри `auto_update_subs`. Не отменяет `updateIntervalHours ≤ 0`, min-retry и fail-cap. |
+| `auto_reload_on_change` | `'false'` | §338 | Автоперезапуск VPN при любом изменении конфига — плашек не остаётся. Перекрывает per-subscription `on_update_action` (само поле не переписывается). Reload только при поднятом туннеле и разошедшемся с running конфиге (§324). |
 | `auto_check_updates` | `'true'` | [§036] | GitHub Releases polling на старте. |
 | `last_update_check_at` | `''` | [§036] | UTC ISO-8601, last polling timestamp. |
 | `last_known_version` | `''` | [§036] | Закэшированный latest tag. |

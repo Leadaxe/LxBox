@@ -18,6 +18,8 @@ class SubscriptionsTab extends StatelessWidget {
     required this.onAutoUpdateSubsChanged,
     required this.autoUpdateDisabledSubs,
     required this.onAutoUpdateDisabledSubsChanged,
+    required this.autoReloadOnChange,
+    required this.onAutoReloadOnChangeChanged,
     required this.userAgent,
     required this.defaultUserAgent,
     required this.onEditUserAgent,
@@ -43,6 +45,12 @@ class SubscriptionsTab extends StatelessWidget {
   /// §337 — обновлять и выключенные подписки. Зависимая от [autoUpdateSubs].
   final bool autoUpdateDisabledSubs;
   final ValueChanged<bool> onAutoUpdateDisabledSubsChanged;
+
+  /// §338 — автоперезапуск VPN при любом изменении конфига (жизнь без плашек).
+  /// Не зависит от [autoUpdateSubs]: источник изменения — любой, не только
+  /// подписка.
+  final bool autoReloadOnChange;
+  final ValueChanged<bool> onAutoReloadOnChangeChanged;
 
   /// Пусто = дефолтный брендированный UA (показан как плейсхолдер).
   final String userAgent;
@@ -89,6 +97,24 @@ class SubscriptionsTab extends StatelessWidget {
           onChanged: loaded && autoUpdateSubs
               ? onAutoUpdateDisabledSubsChanged
               : null,
+        ),
+        const Divider(height: 32),
+        Text(getLocalText.s("Applying changes"),
+            style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          title: Text(getLocalText.s("Auto-restart VPN on settings change")),
+          subtitle: Text(getLocalText.s("Apply every config change to the running tunnel by itself, so no banner is left to tap. Each apply drops the tunnel for about 3 seconds and kills open connections.")),
+          secondary: const Icon(Icons.restart_alt),
+          value: autoReloadOnChange,
+          onChanged: loaded ? onAutoReloadOnChangeChanged : null,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            getLocalText.s("While this is on, the per-subscription \"On update\" setting is hidden — everything is applied immediately. Turning it off brings each subscription's own choice back."),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
         ),
         const Divider(height: 32),
         Text(getLocalText.s("Fetch identity"),

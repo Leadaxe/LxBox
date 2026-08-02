@@ -32,6 +32,7 @@ import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
 import '../services/nav/home_return_observer.dart';
+import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
@@ -751,12 +752,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Future<void> _rebuildAndClearDirty({bool silent = false}) {
     return _rebuildInFlight ??= () async {
       try {
-        await _rebuildConfig(silent: silent);
+        final ok = await _rebuildConfig(silent: silent);
         if (mounted) setState(() {});
+        // §338 — единственная воронка всех путей пересборки (возврат на home
+        // §076, retry-when-idle §107, реакция подписки §323, гейт на Start).
+        // Хук здесь, а не на 25+ сайтах `configDirty = true`: тот флаг живёт
+        // статикой в SettingsStorage (§113) и notifyListeners не даёт.
+        if (ok) await _maybeAutoReload();
       } finally {
         _rebuildInFlight = null;
       }
     }();
+  }
+
+  /// §338 — автоперезапуск VPN при смене настроек. Применяем ТОЛЬКО когда есть
+  /// что применять: галка включена, туннель поднят и §324-вердикт сказал, что
+  /// saved разошёлся с running (`fresh` → ядро уже на этом конфиге, рвать
+  /// незачем). Дальше `reloadVpn` со своим `canReload`: cooldown 3с, гейт на
+  /// не-connected и сброс `configChangedNeedRestart` при успехе (§323 fix).
+  Future<void> _maybeAutoReload() async {
+    if (!mounted) return;
+    if (!await SettingsStorage.getAutoReloadOnChange()) return;
+    if (!mounted) return;
+    final state = _controller.state;
+    // Туннель лежит — «перезапуск» ≠ «запуск»: конфиг подхватится на Start.
+    if (!state.tunnelUp) return;
+    if (!state.configChangedNeedRestart) {
+      AppLog.I.debug('§338: reload skipped — config identical to running');
+      return;
+    }
+    AppLog.I.info('§338: auto-reload on settings change');
+    await _controller.reloadVpn();
   }
 
   /// §076/§107: callback зарегистрированный в `homeReturnObserver`.
@@ -824,6 +850,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
     await _rebuildAndClearDirty(silent: true);
     if (!mounted) return;
+    // §338 — при включённой галке reload уже сделал хук внутри
+    // `_rebuildAndClearDirty` (и погасил флаг). Свой путь не нужен: гейт ниже
+    // всё равно отсеял бы его, но зависеть от порядка гашения не хочется.
     if (!reload) return;
     // Туннель не поднят — reload'ить нечего, конфиг подхватится на Start.
     if (!_controller.state.tunnelUp) return;

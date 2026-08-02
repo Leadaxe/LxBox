@@ -129,6 +129,9 @@ class AutoUpdater {
     // §337 — глобальная галка «обновлять выключенные подписки». Читаем один
     // раз за проход и передаём в pure-гейт параметром.
     final updateDisabled = await SettingsStorage.getAutoUpdateDisabledSubs();
+    // §338 — галка «автоперезапуск при смене настроек» перекрывает
+    // per-subscription выбор: всё применяем сразу.
+    final autoReload = await SettingsStorage.getAutoReloadOnChange();
     _running = true;
     AppLog.I.info('AutoUpdater: trigger=${trigger.name}${force ? ' force' : ''}');
 
@@ -174,7 +177,7 @@ class AutoUpdater {
             // в конфиг не попадает: её новый состав итоговый конфиг не меняет,
             // пересобирать и (в режиме reload) рвать туннель незачем.
             if (compositionChanged && fresh.enabled) {
-              switch (fresh.onUpdateAction) {
+              switch (effectiveOnUpdateAction(fresh, autoReload: autoReload)) {
                 case SubscriptionOnUpdateAction.reload:
                   needReload = true;
                   needRebuild = true;
@@ -232,6 +235,21 @@ class AutoUpdater {
       AppLog.I.warning('AutoUpdater: reaction failed: $e');
     }
   }
+
+  /// §338 — эффективное действие при обновлении подписки. Галка
+  /// «автоперезапуск при смене настроек» перекрывает per-subscription выбор
+  /// (§323): глобальное «применять всё сразу» строже любого из трёх режимов, и
+  /// при включённой галке строка «При обновлении» в подписке скрыта.
+  ///
+  /// Поле `list.onUpdateAction` при этом НЕ переписывается — выключение галки
+  /// возвращает сохранённый выбор юзера.
+  static SubscriptionOnUpdateAction effectiveOnUpdateAction(
+    SubscriptionServers list, {
+    required bool autoReload,
+  }) =>
+      autoReload
+          ? SubscriptionOnUpdateAction.reload
+          : list.onUpdateAction;
 
   bool _shouldUpdate(SubscriptionEntry entry,
       {required bool force, bool updateDisabled = false}) {

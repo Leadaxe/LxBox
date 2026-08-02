@@ -32,6 +32,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
     required this.onCopyUrl,
     required this.onShowIntervalPicker,
     required this.onShowOnUpdateActionPicker,
+    this.autoReloadOnChange = false,
     required this.onRefreshNow,
     required this.onEditSource,
     // §289 — per-subscription fetch identity (nullable: папка не рисует секцию).
@@ -46,6 +47,11 @@ class SubscriptionSettingsTab extends StatelessWidget {
   });
 
   final SubscriptionEntry entry;
+
+  /// §338 — глобальная галка «автоперезапуск при смене настроек» включена: она
+  /// перекрывает per-subscription выбор, строку «On update» не рисуем. Поле
+  /// подписки при этом не тронуто — выключение галки вернёт её значение.
+  final bool autoReloadOnChange;
 
   /// §239 — true для папки (§234): адаптированные detour-тексты («servers'
   /// own detours» вместо «subscription detour servers»).
@@ -481,22 +487,24 @@ class SubscriptionSettingsTab extends StatelessWidget {
           trailing: const Icon(Icons.edit, size: 18),
           onTap: onShowIntervalPicker,
         ),
-        // §323 — что делать после успешного АВТО-обновления. Ручной ⟳ ниже
-        // сюда не относится (там юзер сам решает, когда применить).
-        ListTile(
-          leading: const Icon(Icons.play_circle_outline, size: 20),
-          title: Text(getLocalText.s("On update")),
-          subtitle: Text(switch (list.onUpdateAction) {
-            SubscriptionOnUpdateAction.rebuild =>
-              getLocalText.s("Rebuild config — apply manually"),
-            SubscriptionOnUpdateAction.reload =>
-              getLocalText.s("Rebuild and reload core — brief connection drop"),
-            SubscriptionOnUpdateAction.none =>
-              getLocalText.s("Do nothing — apply on next rebuild"),
-          }),
-          trailing: const Icon(Icons.edit, size: 18),
-          onTap: onShowOnUpdateActionPicker,
-        ),
+        // §323 — что делать после обновления подписки.
+        // §338 — при включённой глобальной галке «автоперезапуск при смене
+        // настроек» выбор перекрыт (всё применяется сразу) → строку скрываем.
+        if (!autoReloadOnChange)
+          ListTile(
+            leading: const Icon(Icons.play_circle_outline, size: 20),
+            title: Text(getLocalText.s("On update")),
+            subtitle: Text(switch (list.onUpdateAction) {
+              SubscriptionOnUpdateAction.rebuild =>
+                getLocalText.s("Rebuild config — apply manually"),
+              SubscriptionOnUpdateAction.reload =>
+                getLocalText.s("Rebuild and reload core — brief connection drop"),
+              SubscriptionOnUpdateAction.none =>
+                getLocalText.s("Do nothing — apply on next rebuild"),
+            }),
+            trailing: const Icon(Icons.edit, size: 18),
+            onTap: onShowOnUpdateActionPicker,
+          ),
         ListTile(
           leading: Icon(statusIcon(list), size: 20, color: color),
           title: Text(label, style: TextStyle(color: color)),

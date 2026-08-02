@@ -75,6 +75,12 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   // канальной override-цели в Settings-вкладке.
   List<Channel> _channels = const [];
 
+  /// §338 — глобальная галка перекрывает per-subscription «On update»: строку
+  /// не рисуем. Читаем в `initState`: App Settings открываются с home, а не
+  /// отсюда, поэтому попасть сюда с несвежим значением можно только заново
+  /// зайдя на экран — и тогда `initState` отработает снова.
+  bool _autoReloadOnChange = false;
+
   // §283 — per-node disable. Хеш ноды считается лениво и кэшируется по
   // identity. Полный проход хеширования происходит ТОЛЬКО когда есть
   // выключенные отметки — подписка без них не платит ничего.
@@ -196,6 +202,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     unawaited(_loadNodes());
     unawaited(_loadChannels());
     unawaited(_loadProbeThresholds()); // §339
+    unawaited(_loadAutoReloadOnChange()); // §338
     // При первом заходе на Source — живой GET.
     _tabCtrl.addListener(() {
       if (_tabCtrl.index == 2 && !_sourceLoaded && !_sourceLoading) {
@@ -619,6 +626,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
       },
       onShowIntervalPicker: _showIntervalPicker,
       onShowOnUpdateActionPicker: _showOnUpdateActionPicker, // §323
+      autoReloadOnChange: _autoReloadOnChange, // §338 — перекрытие выбора
       onRefreshNow: _refreshNow,
       onEditSource: _editSource, // §129
       // §289 — per-subscription fetch identity (Default/Custom override).
@@ -854,6 +862,14 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     final channels = await SettingsStorage.getChannels();
     if (!mounted) return;
     setState(() => _channels = channels);
+  }
+
+  /// §338 — галка «автоперезапуск при смене настроек» (App Settings). Включена
+  /// → строка «On update» скрыта: выбор перекрыт глобально.
+  Future<void> _loadAutoReloadOnChange() async {
+    final v = await SettingsStorage.getAutoReloadOnChange();
+    if (!mounted || v == _autoReloadOnChange) return;
+    setState(() => _autoReloadOnChange = v);
   }
 
   Future<void> _showOverrideDetourPicker() async {

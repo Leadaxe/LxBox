@@ -147,6 +147,8 @@ class SettingsStorage {
     // Подписки (§027, §337)
     'auto_update_subs',
     'auto_update_disabled_subs',
+    // Автоприменение изменений конфига (§338)
+    'auto_reload_on_change',
     // Обновления приложения (§036)
     'auto_check_updates',
     'last_update_check_at',
@@ -541,6 +543,19 @@ class SettingsStorage {
 
   static Future<void> setAutoUpdateDisabledSubs(bool enabled) =>
       setVar('auto_update_disabled_subs', enabled ? 'true' : 'false');
+
+  /// §338 — автоперезапуск VPN при любом изменении конфига: приложение само
+  /// применяет правку к живому туннелю, плашек не остаётся вовсе. Off по
+  /// умолчанию — каждое применение стоит ~3с разрыва и всех in-flight TCP.
+  ///
+  /// Включена — перекрывает per-subscription `onUpdateAction` (§323): см.
+  /// `AutoUpdater.effectiveOnUpdateAction`. Само поле подписки не трогаем,
+  /// чтобы выключение галки вернуло сохранённый выбор юзера.
+  static Future<bool> getAutoReloadOnChange() async =>
+      (await getVar('auto_reload_on_change', 'false')) == 'true';
+
+  static Future<void> setAutoReloadOnChange(bool enabled) =>
+      setVar('auto_reload_on_change', enabled ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
   // §037: Config lock for Debug API. Когда true — `generateConfig()` возвращает
