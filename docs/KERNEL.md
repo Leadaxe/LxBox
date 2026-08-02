@@ -22,7 +22,13 @@ AmneziaWG 2.0 + нативный XHTTP + VLESS encryption (PQ-слой) + LxBox-
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.18`** (v2.19.1, §335, см. `app/android/libbox.version`)
+**Текущий пин: `v1.14.0-lx.19-rc.3`** (v2.19.2, см. `app/android/libbox.version`)
+— три фикса поверх lx.18: SPEC 041 v2 (событийный нудж `RebindStaleEndpoints`,
+потребитель — §340), SPEC 044 (AAR, собранный Go 1.24, убивал ВСЕ quic-go-аутбаунды
+на вендорских ядрах — hysteria2/tuic/masque-h3; фикс = тулчейн Go 1.25, §341) и
+SPEC 045 (nil-паника trojan/vless с `tls.enabled:false` при URL-тесте).
+
+Предыдущий пин — **`v1.14.0-lx.18`** (v2.19.1, §335)
 — VLESS `encryption` (SPEC 032, feature VLESS_ENCRYPTION): пост-квантовый слой
 `mlkem768x25519plus` **внутри** VLESS (работает вместо TLS — такие узлы приезжают
 с `security=none`; не путать с REALITY). Раньше поля не было в схеме ядра, и
@@ -261,7 +267,10 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.14** (стабильный) | SPEC 030 — Stop не виснет 10+ сек при многих WG/AWG-эндпоинтах (глушение тика + upfront-закрытие UDP-сокетов + abort in-flight wake + конкурентный close). Ядровая половина §287. База upstream `alpha.47`. Build-теги AAR без изменений. (Промежуточные lx.12/lx.13 — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.15** (стабильный) | SPEC 002 — XHTTP за reverse-proxy: `path` сохраняется как есть, trailing slash срезается только на bare-path запросе stream-one. + merge upstream `testing` (async DNS refactor, WG detour fix, OpenConnect auth-challenge). База upstream `alpha.48`. Build-теги AAR без изменений. Device-verified на CPH2411 (2026-07-21) |
-| **v1.14.0-lx.18** (текущий пин, v2.19.1) | SPEC 032 — VLESS `encryption` (`mlkem768x25519plus`, PQ-слой внутри VLESS): поле появилось в схеме ядра, узлы `security=none` с шифрослоем ожили. Клиент — §335 (перенос поля подписка→конфиг + round-trip в URI). Device-замер: +12 настоящих узлов (ws 7/8, grpc 5/5), подписка 42 → 53 из 76. Конфиг-фича, Java-поверхность без изменений. ⚠️ ядро < lx.18 отвергает конфиг с полем целиком |
+| **v1.14.0-lx.19-rc.3** (текущий пин, v2.19.2) | SPEC 045 — nil-паника при URL-тесте узлов trojan/vless с `tls.enabled:false` (тест пинга ронял ядро). Клиентских правок нет |
+| **v1.14.0-lx.19-rc.2** (в составе v2.19.2) | **SPEC 044** — AAR, собранный Go 1.24 (так делал CI), убивал ВСЕ quic-go-аутбаунды (hysteria2/tuic/masque-h3) на устройствах с вендорским ядром: каждый dial висел до `context deadline exceeded`, тест пинга вечно `-1`. Тот же исходник на Go 1.25 — работает. Фикс = смена тулчейна в CI ядра. Клиентская половина расследования — §341 (Debug API `/action/quic-knobs`). ⚠️ эмулятор с generic-ядром дефект НЕ воспроизводит |
+| **v1.14.0-lx.19-rc.1** (в составе v2.19.2) | SPEC 041 v2 — досрочный rebind (~15 с вместо ~90) + событийный нудж `CommandServer.RebindStaleEndpoints()`: ребиндит только доказуемо мёртвые сессии (нет keypair / handshake старше 180 с), остальным no-op. Потребитель — §340 (wake-нудж по `USER_PRESENT`). Новый экспорт в Java-поверхности |
+| **v1.14.0-lx.18** (v2.19.1) | SPEC 032 — VLESS `encryption` (`mlkem768x25519plus`, PQ-слой внутри VLESS): поле появилось в схеме ядра, узлы `security=none` с шифрослоем ожили. Клиент — §335 (перенос поля подписка→конфиг + round-trip в URI). Device-замер: +12 настоящих узлов (ws 7/8, grpc 5/5), подписка 42 → 53 из 76. Конфиг-фича, Java-поверхность без изменений. ⚠️ ядро < lx.18 отвергает конфиг с полем целиком |
 | **v1.14.0-lx.17** (стабильный) | Промоут rc.1–rc.5 + XHTTP-фиксы вне rc: SPEC 042 (gRPC Content-Type на потоковых запросах, паритет с Xray) и SPEC 043 (завершающий слэш пути `stream-one` — корень «XHTTP-ноды подписки мертвы», 404 → зависание). Девайс-верифицировано, клиентских правок нет |
 | **v1.14.0-lx.17-rc.5** (v2.19.0) | Апстрим-синк 01.08 поверх rc.4: naiveproxy v150, гонка DNS-правил (завершённое правило блокировалось ранее взведённым), WireGuard system-device не конфигурил DNS интерфейса, TLS-фрагмент на Windows без TCP estats, routing loop на darwin. + device-верификация SPEC 040. Java-поверхности не касается |
 | **v1.14.0-lx.17-rc.4** (в составе v2.19.0) | SPEC 041 — WG/AWG-эндпоинты самолечатся после сна устройства (rebind со свежим портом по исчерпании handshake-повторов, ~90 с; `listen_port` вручную = самолечение отключено). SPEC 040 — system-стек TCP: accept-цикл пересоздаёт убитый listener вместо молчаливого выхода (sing-tun как fork-сабмодуль); закрывает отказ §047 «браузер мёртв, QUIC жив», errno на устройстве = `EINVAL` (§329). Оба фикса внутри ядра, Java-поверхности не касаются — клиентских правок нет |
