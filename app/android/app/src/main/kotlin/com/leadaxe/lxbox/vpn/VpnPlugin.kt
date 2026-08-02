@@ -432,6 +432,18 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "getCoreLogsEnabled" -> {
                 result.success(BootReceiver.isCoreLogsEnabled(context))
             }
+            // §345 — verbose core-логи: persist + немедленное применение
+            // (volatile в BoxService читается на каждой строке writeDebugMessage,
+            // перезапуск VPN не нужен).
+            "setCoreLogsVerbose" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                BootReceiver.setCoreLogsVerbose(context, enabled)
+                BoxService.coreLogsVerbose = enabled
+                result.success(true)
+            }
+            "getCoreLogsVerbose" -> {
+                result.success(BootReceiver.isCoreLogsVerbose(context))
+            }
             // §049 F15 fix: allowBypass opt-in toggle (применяется при следующем
             // openTun → требует reload VPN после изменения).
             "setAllowBypass" -> {

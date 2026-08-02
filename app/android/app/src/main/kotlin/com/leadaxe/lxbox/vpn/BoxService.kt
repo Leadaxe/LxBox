@@ -57,6 +57,14 @@ class BoxService(
     companion object {
         private const val TAG = "BoxService"
 
+        /// §345 — live-режим verbose core-логов: true = TRACE/DEBUG-фильтр в
+        /// `writeDebugMessage` снят. Меняется на лету из VpnPlugin
+        /// (setCoreLogsVerbose) без перезапуска VPN; при старте сервиса
+        /// подтягивается из prefs (переживает рестарт процесса).
+        @Volatile
+        @JvmStatic
+        var coreLogsVerbose: Boolean = false
+
         /// §223 Часть B (#23) — задержка перед native-snapshot'ом подтекста
         /// уведомления при старте без UI. Даём ядру устаканить `selected` у
         /// selector'ов после Started, прежде чем читать getGroups().
@@ -213,6 +221,9 @@ class BoxService(
         }
         resetScope()
         setStatus(VpnStatus.Starting)
+        // §345 — подтянуть persist-значение verbose (live-изменения дальше
+        // приходят напрямую в volatile из VpnPlugin).
+        coreLogsVerbose = BootReceiver.isCoreLogsVerbose(service)
 
         if (!receiverRegistered) {
             val mode = BootReceiver.getBackgroundMode(service)
@@ -825,7 +836,9 @@ class BoxService(
         // выполнялись до этой проверки и работа выбрасывалась впустую.
         if (BoxVpnService.coreLogSink == null) return
         val plain = ansiEscapeRe.replace(message, "")
-        if (traceDebugRe.containsMatchIn(plain)) return
+        // §345 — в verbose-режиме TRACE/DEBUG проходят (диагностика on-demand);
+        // back-pressure ниже (LOG_QUEUE_MAX, drop newest) защищает от потопа.
+        if (!coreLogsVerbose && traceDebugRe.containsMatchIn(plain)) return
         // Back-pressure: drop newest, не блокируем sing-box producer thread.
         if (coreLogQueue.size >= LOG_QUEUE_MAX) {
             coreLogDrops.incrementAndGet()

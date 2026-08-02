@@ -757,6 +757,9 @@
   "Applies on next connect.": {
     "value": "Применится при следующем подключении."
   },
+  "Applies immediately. Very chatty on live traffic — enable, reproduce, grab the log, disable.": {
+    "value": "Применяется сразу. Очень многословно на живом трафике — включите, воспроизведите, снимите лог, выключите."
+  },
   "Apply": {
     "value": "Применить"
   },
@@ -3913,6 +3916,9 @@
   },
   "Visible in Debug → Core.": {
     "value": "Видны в Debug → Core."
+  },
+  "Verbose (TRACE/DEBUG)": {
+    "value": "Подробно (TRACE/DEBUG)"
   },
   "WARP registration failed": {
     "value": "Не удалось зарегистрировать WARP"

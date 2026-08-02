@@ -18,6 +18,8 @@ class BootReceiver : BroadcastReceiver() {
         /// Изменение применяется только после restart Service'а
         /// (Libbox.setup вызывается один раз).
         private const val KEY_CORE_LOGS = "core_logs_enabled"
+        // §345 — live-переключаемый verbose (снятие TRACE/DEBUG-фильтра)
+        private const val KEY_CORE_LOGS_VERBOSE = "core_logs_verbose"
 
         /// §049 F15 fix: разрешать app'ам обходить tun (Android `Builder.allowBypass()`).
         /// Default false — без bypass'а весь трафик уходит в tun (наша цель —
@@ -171,6 +173,19 @@ class BootReceiver : BroadcastReceiver() {
         fun isCoreLogsEnabled(context: Context): Boolean {
             return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
                 .getBoolean(KEY_CORE_LOGS, false)
+        }
+
+        /// §345: verbose-режим core-логов — снимает TRACE/DEBUG-фильтр в
+        /// `BoxService.writeDebugMessage`. Применяется на лету (volatile в
+        /// BoxService), здесь — только persist для переживания рестарта.
+        fun setCoreLogsVerbose(context: Context, enabled: Boolean) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_CORE_LOGS_VERBOSE, enabled).apply()
+        }
+
+        fun isCoreLogsVerbose(context: Context): Boolean {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_CORE_LOGS_VERBOSE, false)
         }
 
         /// §049 F15 fix: opt-in toggle для VPN bypass. Reference (`Settings.allowBypass`).

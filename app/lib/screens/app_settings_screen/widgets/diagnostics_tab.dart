@@ -273,6 +273,11 @@ class DiagnosticsTab extends StatelessWidget {
             onChanged: loaded ? onCoreLogsChanged : null,
           ),
         ),
+        // §345 — verbose: live-снятие TRACE/DEBUG-фильтра (см. BoxService.
+        // writeDebugMessage). Самодостаточный: сам читает/пишет storage,
+        // чтобы не раздувать state родителя. Активен только при включённом
+        // основном тумблере (при выключенном ядро не форвардит вообще).
+        _CoreLogsVerboseTile(enabled: loaded && coreLogsEnabled),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           child: Column(
@@ -321,6 +326,50 @@ class DiagnosticsTab extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// §345 — суб-тумблер verbose core-логов. Применяется на лету (volatile в
+/// BoxService), без перезапуска VPN — в отличие от родительского тумблера.
+class _CoreLogsVerboseTile extends StatefulWidget {
+  const _CoreLogsVerboseTile({required this.enabled});
+
+  /// false = основной тумблер выключен (или state не загружен) — verbose
+  /// бессилен, ядро не форвардит логи вообще.
+  final bool enabled;
+
+  @override
+  State<_CoreLogsVerboseTile> createState() => _CoreLogsVerboseTileState();
+}
+
+class _CoreLogsVerboseTileState extends State<_CoreLogsVerboseTile> {
+  bool _value = false;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    SettingsStorage.getNativeBool(NativePrefsKeys.coreLogsVerbose).then((v) {
+      if (mounted) setState(() { _value = v; _loaded = true; });
+    });
+  }
+
+  Future<void> _onChanged(bool v) async {
+    setState(() => _value = v);
+    await SettingsStorage.setNativeBool(NativePrefsKeys.coreLogsVerbose, v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      title: Text(getLocalText.s("Verbose (TRACE/DEBUG)")),
+      subtitle: Text(
+        getLocalText.s("Applies immediately. Very chatty on live traffic — enable, reproduce, grab the log, disable."),
+      ),
+      secondary: const SizedBox(width: 24),
+      value: _value,
+      onChanged: widget.enabled && _loaded ? _onChanged : null,
     );
   }
 }

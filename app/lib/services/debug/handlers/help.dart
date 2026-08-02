@@ -342,6 +342,10 @@ PUT    /settings/core_logs_enabled              body {"enabled":true|false}. Def
                                                  stays alive). Force-stop the app + relaunch, or use the UI button
                                                  "Quit & reopen app" in App Settings → Diagnostics or
                                                  Debug screen → Log tab.
+GET|PUT /settings/core_logs_verbose             §345: pass TRACE/DEBUG core lines through (default false —
+                                                 they are dropped for volume). body {"enabled":bool}. Applies
+                                                 IMMEDIATELY (no restarts); no effect while core_logs_enabled
+                                                 is off. Very chatty — enable, reproduce, grab /logs/core, disable.
 GET|PUT /settings/vpn/allow_bypass              VpnService.Builder.allowBypass(). body {"enabled":bool}.
                                                  Effect at next establish() — reload VPN.
 GET|PUT /settings/vpn/keep_on_exit              keep VPN running when app closed. body {"enabled":bool}.
@@ -543,6 +547,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PUT', 'path': '/settings/dns_options/rules', 'body': '{"rules":"<json-string>"}', 'description': 'Set DNS rules (legacy json-string shape)'},
     {'method': 'GET', 'path': '/settings/core_logs_enabled', 'description': 'Whether sing-box logs are forwarded into /logs/core'},
     {'method': 'PUT', 'path': '/settings/core_logs_enabled', 'body': '{"enabled":true|false}', 'description': 'Toggle core-log forwarding (default false)'},
+    {'method': 'GET', 'path': '/settings/core_logs_verbose', 'description': 'Whether TRACE/DEBUG core lines pass the volume filter'},
+    {'method': 'PUT', 'path': '/settings/core_logs_verbose', 'body': '{"enabled":true|false}', 'description': 'Live toggle for TRACE/DEBUG pass-through (no restart needed)'},
     {'method': 'PUT', 'path': '/settings/config_locked', 'body': '{"locked":true|false}', 'description': 'Toggle auto-rebuild lock — true pins config from UI rebuilds'},
     {'method': 'GET', 'path': '/settings/vpn/allow_bypass', 'description': 'VpnService.Builder.allowBypass() state'},
     {'method': 'PUT', 'path': '/settings/vpn/allow_bypass', 'body': '{"enabled":true|false}', 'description': 'Toggle allowBypass — apply on next establish()'},

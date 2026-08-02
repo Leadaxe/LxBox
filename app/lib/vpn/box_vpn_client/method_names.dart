@@ -43,6 +43,10 @@ class _Methods {
   // §043 core logs forwarding toggle
   static const setCoreLogsEnabled = 'setCoreLogsEnabled';
   static const getCoreLogsEnabled = 'getCoreLogsEnabled';
+
+  // §345 verbose core logs (live, снимает TRACE/DEBUG-фильтр)
+  static const setCoreLogsVerbose = 'setCoreLogsVerbose';
+  static const getCoreLogsVerbose = 'getCoreLogsVerbose';
   static const quitApp = 'quitApp';
 
   // §049 F15 — VPN bypass opt-in

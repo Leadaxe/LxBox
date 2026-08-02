@@ -307,6 +307,27 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §345: verbose core-логи — снятие TRACE/DEBUG-фильтра на лету
+  /// (volatile в BoxService, перезапуск VPN не нужен). Default false.
+  Future<bool> setCoreLogsVerbose(bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setCoreLogsVerbose,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  Future<bool> getCoreLogsVerbose() async {
+    final ok = await _invoke<bool>(
+      _Methods.getCoreLogsVerbose,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   /// §049 F15: разрешать app'ам обходить tun (`Builder.allowBypass()`).
   /// Default false (strict tunnel). Применяется при следующем старте VPN —
   /// после toggle нужен reload.
