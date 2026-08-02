@@ -355,6 +355,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
             ),
             if (inPool != null && inPool.delay > 0) ...[
               const SizedBox(width: 8),
+              // l10n-exempt: unit symbol, same in all locales
               Text('${inPool.delay} ms',
                   style: TextStyle(
                       fontSize: 12,

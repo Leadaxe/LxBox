@@ -42,7 +42,10 @@ void main() {
     state.markDirty();
     expect(state.hasPendingChanges, true);
     expect(ctrl.configDirty, true, reason: 'configDirty sync на markDirty');
-    await tester.pump();
+    // `configDirty=` пишет в AppLog, а тот throttl'ит notifyListeners
+    // 16-мс таймером (app_log.dart `_notifyWindow`). Голый pump() окно не
+    // закрывает → таймер переживает тест и роняет его на !timersPending.
+    await tester.pump(const Duration(milliseconds: 20));
     expect(staged, 1, reason: '§107: буфер staged в момент мутации');
   });
 
