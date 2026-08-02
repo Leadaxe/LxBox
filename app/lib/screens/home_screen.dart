@@ -32,6 +32,7 @@ import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
 import '../services/nav/home_return_observer.dart';
+import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
@@ -98,6 +99,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// §107 single-flight: текущая пересборка конфига. Гейт на Start и
   /// повторные триггеры await'ят её вместо параллельного запуска второй.
   Future<void>? _rebuildInFlight;
+
+  /// §338 — авто-применение в полёте: воронка пересобирает при включённой
+  /// галке. На это окно (rebuild + reload, ~1–3с) розовая плашка подавляется —
+  /// иначе она честно мигает между saveParsedConfig (взвёл флаг) и
+  /// завершением reload'а (снял), что читается как «галка не работает».
+  bool _autoApplying = false;
 
   /// §107 (R3): one-shot listener «subController освободился — догнать
   /// pending rebuild», см. [_retryRebuildWhenIdle].
@@ -385,14 +392,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           // case A (нет конфига, туннель не поднят) или реальный dirty →
           // пересобрать. Дифф в saveParsedConfig снимет ложный «config changed»,
           // если конфиг совпал с работающим.
-          final config = await _subController.generateConfig();
-          if (config != null && mounted) {
-            // §107: generateConfig сбросил configDirty до записи на диск —
-            // при неудачном save восстанавливаем (конфиг на диске стар).
-            final ok = await _controller.saveParsedConfig(config);
-            if (!ok) _subController.configDirty = true;
-            setState(() {});
-          }
+          //
+          // §338 — через общую воронку, а не голый generate+save: VpnService
+          // переживает kill приложения, так что холодный старт с dirty при
+          // ЖИВОМ туннеле реален — и хук автоприменения должен сработать и
+          // здесь, иначе розовая плашка переживает включённую галку.
+          // Внутри тот же generateConfig + saveParsedConfig + §107-restore.
+          await _rebuildAndClearDirty(silent: true);
+          if (mounted) setState(() {});
         }
       }
     } catch (e) {
@@ -577,6 +584,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   controller: _controller,
                   subController: _subController,
                   presenter: _nodeList,
+                  autoApplying: _autoApplying, // §338
+
                   connectingAnimChild: StatusChip(
                     state: state,
                     isRevoked: state.tunnel == TunnelStatus.revoked,
@@ -751,12 +760,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Future<void> _rebuildAndClearDirty({bool silent = false}) {
     return _rebuildInFlight ??= () async {
       try {
-        await _rebuildConfig(silent: silent);
+        // §338 — одно чтение флага на пересборку: и текст snackbar'а, и хук
+        // ниже должны судить по одному значению (иначе юзер прочтёт
+        // «перезагружаю», а галку он снял между двумя чтениями).
+        final autoReload = await SettingsStorage.getAutoReloadOnChange();
+        if (!mounted) return;
+        // §338 — подавить розовую плашку на окно применения (см. поле).
+        if (autoReload) setState(() => _autoApplying = true);
+        final ok = await _rebuildConfig(silent: silent, autoReload: autoReload);
         if (mounted) setState(() {});
+        // §338 — единственная воронка всех путей пересборки (возврат на home
+        // §076, retry-when-idle §107, реакция подписки §323, гейт на Start,
+        // bootstrap). Хук здесь, а не на 25+ сайтах `configDirty = true`: тот
+        // флаг живёт статикой в SettingsStorage (§113) и notifyListeners не
+        // даёт.
+        if (ok && autoReload) await _maybeAutoReload();
       } finally {
         _rebuildInFlight = null;
+        if (_autoApplying && mounted) setState(() => _autoApplying = false);
+        _autoApplying = false;
       }
     }();
+  }
+
+  /// §338 — автоперезапуск VPN при смене настроек. Применяем ТОЛЬКО когда есть
+  /// что применять: туннель поднят и §324-вердикт сказал, что saved разошёлся с
+  /// running (`fresh` → ядро уже на этом конфиге, рвать незачем). Саму галку
+  /// проверяет вызывающий (`_rebuildAndClearDirty`) — там же, откуда её значение
+  /// уходит в текст snackbar'а. Дальше `reloadVpn` со своим `canReload`:
+  /// cooldown 3с, гейт на не-connected и сброс `configChangedNeedRestart` при
+  /// успехе (§323 fix).
+  Future<void> _maybeAutoReload() async {
+    if (!mounted) return;
+    final state = _controller.state;
+    // Туннель лежит — «перезапуск» ≠ «запуск»: конфиг подхватится на Start.
+    if (!state.tunnelUp) return;
+    if (!state.configChangedNeedRestart) {
+      AppLog.I.debug('§338: reload skipped — config identical to running');
+      return;
+    }
+    // §338 — cooldown-гейт reloadVpn (3с) молча глотает вызов; для авто-пути
+    // это значит «применение пропало без следа». Логируем причину явно —
+    // плашка, оставшаяся из-за скипа, перестаёт быть загадкой. Флаг остаётся
+    // взведённым, плашка после окна подавления — честный fallback.
+    if (!_controller.canReload) {
+      AppLog.I.warning(
+          '§338: reload skipped — cooldown/not-connected, banner stays');
+      return;
+    }
+    AppLog.I.info('§338: auto-reload on settings change');
+    await _controller.reloadVpn();
   }
 
   /// §076/§107: callback зарегистрированный в `homeReturnObserver`.
@@ -824,6 +877,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
     await _rebuildAndClearDirty(silent: true);
     if (!mounted) return;
+    // §338 — при включённой галке reload уже сделал хук внутри
+    // `_rebuildAndClearDirty` (и погасил флаг). Свой путь не нужен: гейт ниже
+    // всё равно отсеял бы его, но зависеть от порядка гашения не хочется.
     if (!reload) return;
     // Туннель не поднят — reload'ить нечего, конфиг подхватится на Start.
     if (!_controller.state.tunnelUp) return;
@@ -848,7 +904,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// подписки в фоне). Snackbar «Config rebuilt: N nodes» в этом случае —
   /// шум: юзер ничего не нажимал, а всплывашка раз в час раздражает не
   /// меньше плашки, из-за которой §323 и затевался.
-  Future<bool> _rebuildConfig({bool silent = false}) async {
+  ///
+  /// §338 — `autoReload`: галка «автоперезапуск при смене настроек» включена.
+  /// Влияет только на ТЕКСТ snackbar'а: сам reload делает `_maybeAutoReload`
+  /// после нас. Читается вызывающим (одно чтение storage на пересборку), чтобы
+  /// текст и хук судили по одному значению.
+  Future<bool> _rebuildConfig({
+    bool silent = false,
+    bool autoReload = false,
+  }) async {
     final config = await _subController.generateConfig();
     if (config == null) return false;
     if (!mounted) {
@@ -862,14 +926,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
     if (mounted && !silent) {
       final nodeCount = ParsedConfig.parse(config).nodeCount;
+      // §338 — при включённой галке звать юзера перезапускать VPN нельзя: это
+      // сделает `_maybeAutoReload` сразу после нас. Текст должен отчитаться о
+      // применении, а не просить действия. `willAutoReload` — то же условие,
+      // что в самом хуке (галка + туннель up + конфиг разошёлся с running).
+      //
+      // §338 (device-скрин 02.08) — «restart VPN to apply» показываем ТОЛЬКО
+      // при needRestart: до этого ветка (tunnelUp, !willAutoReload) звала
+      // перезапускать и при changed=false — конфиг идентичен работающему,
+      // применять нечего, текст врал. Ложь древняя (до §338 текст при живом
+      // туннеле был безусловным), галка её лишь высветила.
+      final needRestart = _controller.state.configChangedNeedRestart;
+      final willAutoReload =
+          autoReload && _controller.state.tunnelUp && needRestart;
       // configChangedNeedRestart выставляется внутри saveParsedConfig,
       // AnimatedBuilder переотрисует через _needsRestart getter.
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _controller.state.tunnelUp
-                ? getLocalText.plural("Config rebuilt: %d nodes — restart VPN to apply", nodeCount)
-                : getLocalText.plural("Config rebuilt: %d nodes", nodeCount),
+            !_controller.state.tunnelUp || !needRestart
+                ? getLocalText.plural("Config rebuilt: %d nodes", nodeCount)
+                : willAutoReload
+                    ? getLocalText.plural(
+                        "Config rebuilt: %d nodes — reloading VPN", nodeCount)
+                    : getLocalText.plural(
+                        "Config rebuilt: %d nodes — restart VPN to apply",
+                        nodeCount),
           ),
         ),
       );

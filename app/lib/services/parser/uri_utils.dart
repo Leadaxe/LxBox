@@ -232,7 +232,16 @@ bool isValidRealityPublicKey(String pbk) {
   return bytes != null && bytes.length == 32;
 }
 
-/// Reality short-id canonical form: hex-чар (0-9a-f), max 16.
+/// Reality short-id canonical form: hex-чар (0-9a-f), чётной длины, max 16.
+///
+/// §343: ядро декодирует short_id как hex в `[8]byte` — нечётная длина или
+/// >16 символов = fatal ВСЕГО конфига на старте (`decode short_id:
+/// encoding/hex: odd length hex string`). Xray-core валидирует идентично,
+/// т.е. такой sid не работает нигде — мусор по определению. По принципу
+/// §169 битое значение отбрасывается целиком (`''`), НЕ подгоняется:
+/// обрезка/дополнение дали бы валидную форму с чужим идентификатором
+/// (тихая порча — сервер сверяет sid побайтово). Пустой short_id для
+/// REALITY легален (клиент шлёт нулевой `[8]byte`).
 String normalizeRealityShortId(String s) {
   final buf = StringBuffer();
   for (final r in s.trim().runes) {
@@ -245,7 +254,7 @@ String normalizeRealityShortId(String s) {
     }
   }
   final out = buf.toString();
-  return out.length > 16 ? out.substring(0, 16) : out;
+  return (out.length > 16 || out.length.isOdd) ? '' : out;
 }
 
 /// Нормализация VMess security/cipher к sing-box словарю.

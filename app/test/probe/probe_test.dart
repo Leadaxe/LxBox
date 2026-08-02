@@ -70,6 +70,32 @@ void main() {
       expect(cfg.brokenByIndex.length, 2);
     });
 
+    // §336 — автоузел (§322) в probe не тестируется: его emitRaw — заготовка
+    // urltest с пустым outbounds, ядро валило на ней ВЕСЬ probe-конфиг
+    // «missing tags» (4PDA #1406/#1407). Группа получает вердикт 'group'.
+    test('§336: узел-группа не эмитится, вердикт group, соседи целы', () {
+      final cfg = cfgOf(folder(members: [
+        FolderMember(raw: uriA),
+        FolderMember(raw: 'autogroup://#My%20auto'),
+      ]));
+      expect(cfg.tagByIndex, {0: 'Alpha'});
+      expect(cfg.brokenByIndex, {1: 'group'});
+      final config = jsonDecode(cfg.configJson!) as Map<String, dynamic>;
+      final types = (config['outbounds'] as List)
+          .map((o) => (o as Map)['type'] as String)
+          .toSet();
+      expect(types, isNot(contains('urltest')));
+    });
+
+    test('§336: папка из одних групп → configJson == null', () {
+      final cfg = cfgOf(folder(members: [
+        FolderMember(raw: 'autogroup://#A1'),
+        FolderMember(raw: 'autogroup://#A2'),
+      ]));
+      expect(cfg.configJson, isNull);
+      expect(cfg.brokenByIndex, {0: 'group', 1: 'group'});
+    });
+
     test('коллизия тегов членов уникализируется', () {
       final cfg = cfgOf(folder(members: [
         FolderMember(raw: uriA),
@@ -128,6 +154,22 @@ void main() {
       // Выключенный член тоже протестирован (probe-сессия).
       expect(results[1]!.status, ProbeStatus.failed);
       expect(calls.map((c) => c.method), contains('probeStop'));
+    });
+
+    test('§336: группа получает вердикт group; папка из одних групп не '
+        'поднимает сессию', () async {
+      final results = <int, ProbeResult>{};
+      final err = await ProbeRunner().run(
+        nodesOf(folder(members: [
+          FolderMember(raw: 'autogroup://#My%20auto'),
+        ])),
+        url: '',
+        timeoutMs: 0,
+        onResult: (i, r) => results[i] = r,
+      );
+      expect(err, isEmpty);
+      expect(results[0]!.status, ProbeStatus.group);
+      expect(calls.map((c) => c.method), isNot(contains('probeStart')));
     });
 
     test('битые члены получают вердикт до ядра', () async {

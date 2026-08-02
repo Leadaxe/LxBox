@@ -43,6 +43,10 @@ class _Methods {
   // §043 core logs forwarding toggle
   static const setCoreLogsEnabled = 'setCoreLogsEnabled';
   static const getCoreLogsEnabled = 'getCoreLogsEnabled';
+
+  // §345 verbose core logs (live, снимает TRACE/DEBUG-фильтр)
+  static const setCoreLogsVerbose = 'setCoreLogsVerbose';
+  static const getCoreLogsVerbose = 'getCoreLogsVerbose';
   static const quitApp = 'quitApp';
 
   // §049 F15 — VPN bypass opt-in
@@ -99,6 +103,8 @@ class _Methods {
   // Recovery actions (specs 030, 031)
   static const reloadVPN = 'reloadVPN';
   static const resetNetwork = 'resetNetwork';
+  // §341 — диагностические env-ручки quic-go (GSO/ECN) через static Libbox.
+  static const setQuicKnob = 'setQuicKnob';
   // §263 — сброс DNS-кэша ядра (cache.db: FakeIP-аллокации + DNS RDRC).
   static const clearDnsCache = 'clearDnsCache';
 

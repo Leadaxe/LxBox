@@ -16,6 +16,8 @@ class SubscriptionsTab extends StatelessWidget {
     required this.padding,
     required this.autoUpdateSubs,
     required this.onAutoUpdateSubsChanged,
+    required this.autoUpdateDisabledSubs,
+    required this.onAutoUpdateDisabledSubsChanged,
     required this.userAgent,
     required this.defaultUserAgent,
     required this.onEditUserAgent,
@@ -37,6 +39,10 @@ class SubscriptionsTab extends StatelessWidget {
 
   final bool autoUpdateSubs;
   final ValueChanged<bool> onAutoUpdateSubsChanged;
+
+  /// §337 — обновлять и выключенные подписки. Зависимая от [autoUpdateSubs].
+  final bool autoUpdateDisabledSubs;
+  final ValueChanged<bool> onAutoUpdateDisabledSubsChanged;
 
   /// Пусто = дефолтный брендированный UA (показан как плейсхолдер).
   final String userAgent;
@@ -74,6 +80,15 @@ class SubscriptionsTab extends StatelessWidget {
           secondary: const Icon(Icons.cloud_sync_outlined),
           value: autoUpdateSubs,
           onChanged: loaded ? onAutoUpdateSubsChanged : null,
+        ),
+        SwitchListTile(
+          title: Text(getLocalText.s("Update disabled subscriptions")),
+          subtitle: Text(getLocalText.s("Keep the node list of switched-off subscriptions fresh, so it is not stale when you switch one back on. Their nodes stay out of the config either way.")),
+          secondary: const Icon(Icons.cloud_off_outlined),
+          value: autoUpdateDisabledSubs,
+          onChanged: loaded && autoUpdateSubs
+              ? onAutoUpdateDisabledSubsChanged
+              : null,
         ),
         const Divider(height: 32),
         Text(getLocalText.s("Fetch identity"),

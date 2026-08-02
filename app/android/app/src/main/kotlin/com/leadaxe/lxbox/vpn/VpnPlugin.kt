@@ -359,6 +359,31 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 BoxVpnService.resetNetwork(context)
                 result.success(true)
             }
+            "setQuicKnob" -> {
+                // §341 — диагностические env-ручки quic-go (GSO/ECN offload).
+                // Статические Libbox-вызовы (Go-side os.Setenv), эффект — на
+                // следующем (ре)коннекте QUIC-аутбаундов; сервис не нужен.
+                val knob = call.argument<String>("knob")
+                val disabled = call.argument<Boolean>("disabled") ?: false
+                val ok = try {
+                    when (knob) {
+                        "gso" -> {
+                            io.nekohasekai.libbox.Libbox.setQuicGSODisabled(disabled)
+                            true
+                        }
+                        "ecn" -> {
+                            io.nekohasekai.libbox.Libbox.setQuicECNDisabled(disabled)
+                            true
+                        }
+                        else -> false
+                    }
+                } catch (t: Throwable) {
+                    // Старый AAR без экспорта — не роняем канал, отвечаем false.
+                    Log.e(TAG, "setQuicKnob($knob) failed", t)
+                    false
+                }
+                result.success(ok)
+            }
             "clearDnsCache" -> {
                 // §263 — удалить cache.db (FakeIP + DNS RDRC). Running → reload
                 // (ядро создаст чистый cache.db); off → только delete файла.
@@ -406,6 +431,18 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             "getCoreLogsEnabled" -> {
                 result.success(BootReceiver.isCoreLogsEnabled(context))
+            }
+            // §345 — verbose core-логи: persist + немедленное применение
+            // (volatile в BoxService читается на каждой строке writeDebugMessage,
+            // перезапуск VPN не нужен).
+            "setCoreLogsVerbose" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                BootReceiver.setCoreLogsVerbose(context, enabled)
+                BoxService.coreLogsVerbose = enabled
+                result.success(true)
+            }
+            "getCoreLogsVerbose" -> {
+                result.success(BootReceiver.isCoreLogsVerbose(context))
             }
             // §049 F15 fix: allowBypass opt-in toggle (применяется при следующем
             // openTun → требует reload VPN после изменения).

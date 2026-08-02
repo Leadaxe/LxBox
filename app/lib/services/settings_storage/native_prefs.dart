@@ -22,6 +22,7 @@ class NativePrefsKeys {
   static const keepOnExit = 'keep_on_exit';
   static const backgroundMode = 'background_mode'; // String (never/lazy/always)
   static const coreLogsEnabled = 'core_logs_enabled';
+  static const coreLogsVerbose = 'core_logs_verbose'; // §345 — live TRACE/DEBUG
   static const allowBypass = 'allow_bypass';
   static const autoRedirect = 'auto_redirect';
   static const memoryLimit = 'memory_limit'; // §271 — String (auto/off/МБ строкой)
@@ -30,6 +31,7 @@ class NativePrefsKeys {
     autoStart,
     keepOnExit,
     coreLogsEnabled,
+    coreLogsVerbose,
     allowBypass,
     autoRedirect,
   };
@@ -38,6 +40,7 @@ class NativePrefsKeys {
     keepOnExit,
     backgroundMode,
     coreLogsEnabled,
+    coreLogsVerbose,
     allowBypass,
     autoRedirect,
     memoryLimit,
@@ -52,6 +55,7 @@ const Map<String, Object> _nativePrefsDefaults = {
   NativePrefsKeys.keepOnExit: true, // §188 — дефолт ON
   NativePrefsKeys.backgroundMode: 'never',
   NativePrefsKeys.coreLogsEnabled: false,
+  NativePrefsKeys.coreLogsVerbose: false, // §345
   NativePrefsKeys.allowBypass: false,
   NativePrefsKeys.autoRedirect: false,
   NativePrefsKeys.memoryLimit: MemoryLimitSetting.auto, // §271
@@ -250,6 +254,9 @@ Future<void> _mirrorBoolToNative(String key, bool value) async {
     case NativePrefsKeys.coreLogsEnabled:
       await vpn.setCoreLogsEnabled(value);
       break;
+    case NativePrefsKeys.coreLogsVerbose: // §345
+      await vpn.setCoreLogsVerbose(value);
+      break;
     case NativePrefsKeys.allowBypass:
       await vpn.setAllowBypass(value);
       break;
@@ -267,6 +274,7 @@ Future<void> _bootstrapFromNative() async {
     NativePrefsKeys.keepOnExit: await vpn.getKeepOnExit(),
     NativePrefsKeys.backgroundMode: (await vpn.getBackgroundMode()).wireValue,
     NativePrefsKeys.coreLogsEnabled: await vpn.getCoreLogsEnabled(),
+    NativePrefsKeys.coreLogsVerbose: await vpn.getCoreLogsVerbose(), // §345
     NativePrefsKeys.allowBypass: await vpn.getAllowBypass(),
     NativePrefsKeys.autoRedirect: await vpn.getAutoRedirect(),
     NativePrefsKeys.memoryLimit: await vpn.getMemoryLimit(), // §271
@@ -311,6 +319,8 @@ Future<bool> _nativeGetBool(BoxVpnClient vpn, String key) async {
       return vpn.getKeepOnExit();
     case NativePrefsKeys.coreLogsEnabled:
       return vpn.getCoreLogsEnabled();
+    case NativePrefsKeys.coreLogsVerbose: // §345
+      return vpn.getCoreLogsVerbose();
     case NativePrefsKeys.allowBypass:
       return vpn.getAllowBypass();
     case NativePrefsKeys.autoRedirect:

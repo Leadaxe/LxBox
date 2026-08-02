@@ -80,7 +80,12 @@ List<RuntimeHop> runtimeChainOf(
   final seen = <String>{};
   String? cur = tag;
   var via = false;
-  while (cur != null && hops.length < kMaxRuntimeHops && seen.add(cur)) {
+  // §344 — пустой тег = выбора нет (round_robin-группа, §322): обрыв, как и
+  // на null. `selectedOf` инъектируется в тестах — контракт держим здесь.
+  while (cur != null &&
+      cur.isNotEmpty &&
+      hops.length < kMaxRuntimeHops &&
+      seen.add(cur)) {
     final node = config[cur];
     hops.add(RuntimeHop(
       tag: cur,

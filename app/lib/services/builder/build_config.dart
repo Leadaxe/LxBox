@@ -491,6 +491,20 @@ Future<BuildResult> buildConfig({
         'fingerprint "${h.original}" — using "chrome" instead.');
   }
 
+  // §343 — битый REALITY-блок (short_id нечётный/не-hex/>16, public_key не
+  // X25519) = fatal ВСЕГО конфига на старте ядра. Парсер гейтит на входе
+  // (§169/§343), этот post-step — страховка для путей мимо парсера (raw
+  // JSON, §302 import rules, vars). Битое значение отбрасывается, нода
+  // деградирует — VPN стартует.
+  final healedReality = healInvalidReality(config);
+  for (final h in healedReality) {
+    emitWarnings.add(h.field == 'short_id'
+        ? 'REALITY short_id cleared: outbound "${h.owner}" had invalid '
+            'hex "${h.original}" — kernel would reject the whole config.'
+        : 'REALITY removed: outbound "${h.owner}" had invalid public_key '
+            '"${h.original}" — node degraded to plain TLS.');
+  }
+
   final validation = validateConfig(config);
   return BuildResult(
     configJson: jsonEncode(config),

@@ -9,6 +9,61 @@ import '../services/l10n/locale_controller.dart';
 ///
 /// Слоты фиксированы по `slot`; нода в слоте может меняться при дотесте.
 /// `delay`==0 → нода мёртвая/не измерена («—»).
+/// §208 — цвет delay-бейджа: те же пороги, что у node_row (200/500 мс).
+/// `delay <= 0` — мёртвая/не измеренная нода.
+Color poolDelayColor(BuildContext context, int delay) {
+  final cs = Theme.of(context).colorScheme;
+  if (delay <= 0) return cs.onSurfaceVariant;
+  if (delay < 200) return Colors.green;
+  if (delay < 500) return Colors.orange;
+  return cs.error;
+}
+
+/// §208/§344 — строка слота пула (`slot N · тег · delay`). Общий рендер для
+/// попапа «View pool» и раздела Members/Route экрана деталей (§344): формат
+/// слотов один, второй копии не заводим.
+///
+/// [onTap] — §344: в списке экрана слот кликабелен (→ экран владельца);
+/// в попапе навигации нет, там null.
+Widget poolSlotRow(
+  BuildContext context,
+  CcPoolSlot slot, {
+  VoidCallback? onTap,
+}) {
+  final cs = Theme.of(context).colorScheme;
+  final delayText = slot.delay > 0 ? '${slot.delay} ms' : '—';
+  final row = Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      children: [
+        // фиксированный номер слота
+        SizedBox(
+          width: 48,
+          child: Text(getLocalText.s("slot %d", slot.slot),
+              style: TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: cs.onSurfaceVariant)),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(slot.tag,
+              style: const TextStyle(fontSize: 13),
+              overflow: TextOverflow.ellipsis),
+        ),
+        const SizedBox(width: 8),
+        Text(delayText,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: poolDelayColor(context, slot.delay))),
+      ],
+    ),
+  );
+  if (onTap == null) return row;
+  return InkWell(onTap: onTap, child: row);
+}
+
 Future<void> showPoolDialog(
   BuildContext context, {
   required String autoTag,
@@ -46,15 +101,6 @@ class _PoolDialogState extends State<_PoolDialog> {
   }
 
   void _refresh() => setState(() => _future = widget.fetch(widget.autoTag));
-
-  /// Те же пороги, что у delay-бейджа node_row (200/500 мс).
-  Color _delayColor(BuildContext context, int delay) {
-    final cs = Theme.of(context).colorScheme;
-    if (delay <= 0) return cs.onSurfaceVariant; // мёртвая/не измерена
-    if (delay < 200) return Colors.green;
-    if (delay < 500) return Colors.orange;
-    return cs.error;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +159,7 @@ class _PoolDialogState extends State<_PoolDialog> {
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                for (final s in slots) _slotRow(context, cs, s),
+                for (final s in slots) poolSlotRow(context, s),
               ],
             );
           },
@@ -128,35 +174,4 @@ class _PoolDialogState extends State<_PoolDialog> {
     );
   }
 
-  Widget _slotRow(BuildContext context, ColorScheme cs, CcPoolSlot s) {
-    final delayText = s.delay > 0 ? '${s.delay} ms' : '—';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          // фиксированный номер слота
-          SizedBox(
-            width: 48,
-            child: Text(getLocalText.s("slot %d", s.slot),
-                style: TextStyle(
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                    color: cs.onSurfaceVariant)),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(s.tag,
-                style: const TextStyle(fontSize: 13),
-                overflow: TextOverflow.ellipsis),
-          ),
-          const SizedBox(width: 8),
-          Text(delayText,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: _delayColor(context, s.delay))),
-        ],
-      ),
-    );
-  }
 }

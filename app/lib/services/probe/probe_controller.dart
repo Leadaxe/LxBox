@@ -129,6 +129,8 @@ class ProbeController {
   // ─── Чистые bulk-решения (доменно-агностичны; экран применяет к мутатору) ────
 
   /// Индексы нод, не прошедших последний тест (failed/broken/invalid).
+  /// §336 — `group` сюда НЕ входит: «Disable unreachable» не должен выключать
+  /// автоузел, который просто не тестируется.
   static Set<int> unreachableIndexes(Map<int, ProbeResult> probe) => {
         for (final e in probe.entries)
           if (e.value.status == ProbeStatus.failed ||
@@ -152,7 +154,8 @@ class ProbeController {
       if (r == null) return 1 << 30;
       return switch (r.status) {
         ProbeStatus.ok => r.delayMs,
-        ProbeStatus.pending => 1 << 30,
+        // §336 — группа = «не тестировалась», корзина pending, не err.
+        ProbeStatus.pending || ProbeStatus.group => 1 << 30,
         ProbeStatus.failed ||
         ProbeStatus.broken ||
         ProbeStatus.invalid =>
@@ -187,12 +190,23 @@ class ProbeController {
   /// Ключ остаётся функцией состава, а не позиции: удаление члена в середине
   /// ключи остальных не меняет, сдвигаются лишь сами дубли — неразличимые по
   /// определению.
-  static List<String> probeKeys(List<FolderMember> members) {
+  static List<String> probeKeys(List<FolderMember> members) => _dedupKeys([
+        for (final m in members)
+          m.node == null ? 'raw:${m.raw}' : nodeIdentityHash(m.node!),
+      ]);
+
+  /// §339 — те же identity-ключи для списка нод (подписка/сервер: у них нет
+  /// raw-члена, null-слот — по позиции). Хеш переживает refresh подписки
+  /// (инстансы подменяются, идентичность — нет).
+  static List<String> probeKeysForNodes(List<NodeSpec?> nodes) => _dedupKeys([
+        for (final (i, n) in nodes.indexed)
+          n == null ? 'slot:$i' : nodeIdentityHash(n),
+      ]);
+
+  static List<String> _dedupKeys(List<String> bases) {
     final seen = <String, int>{};
     final keys = <String>[];
-    for (final m in members) {
-      final node = m.node;
-      final base = node == null ? 'raw:${m.raw}' : nodeIdentityHash(node);
+    for (final base in bases) {
       final n = (seen[base] ?? 0) + 1;
       seen[base] = n;
       keys.add(n == 1 ? base : '$base#$n');

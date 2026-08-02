@@ -164,4 +164,94 @@ void main() {
       );
     });
   });
+
+  group('§337 — updateDisabled (обновлять выключенные подписки)', () {
+    test('выключенная: без галки skip, с галкой обновляется', () {
+      final list = _sub(enabled: false);
+      expect(
+        AutoUpdater.shouldUpdatePure(
+            list: list, force: false, fails: 0, now: now),
+        isFalse,
+        reason: 'дефолт (галка не передана) = прежнее поведение',
+      );
+      expect(
+        AutoUpdater.shouldUpdatePure(
+            list: list,
+            force: false,
+            fails: 0,
+            now: now,
+            updateDisabled: true),
+        isTrue,
+      );
+    });
+
+    test('галка НЕ отменяет §129 interval ≤ 0 (файловые подписки)', () {
+      expect(
+        AutoUpdater.shouldUpdatePure(
+          list: _sub(enabled: false, updateIntervalHours: -1),
+          force: false,
+          fails: 0,
+          now: now,
+          updateDisabled: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('галка НЕ отменяет min-retry', () {
+      expect(
+        AutoUpdater.shouldUpdatePure(
+          list: _sub(
+            enabled: false,
+            lastUpdateAttempt: now.subtract(const Duration(minutes: 5)),
+          ),
+          force: false,
+          fails: 0,
+          now: now,
+          updateDisabled: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('галка НЕ отменяет fail-cap', () {
+      expect(
+        AutoUpdater.shouldUpdatePure(
+          list: _sub(enabled: false),
+          force: false,
+          fails: AutoUpdater.maxFailsPerSession,
+          now: now,
+          updateDisabled: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('включённая подписка от галки не зависит', () {
+      for (final flag in [false, true]) {
+        expect(
+          AutoUpdater.shouldUpdatePure(
+            list: _sub(lastUpdated: now.subtract(const Duration(hours: 25))),
+            force: false,
+            fails: 0,
+            now: now,
+            updateDisabled: flag,
+          ),
+          isTrue,
+        );
+      }
+    });
+
+    test('force выключенную БЕЗ галки не размораживает', () {
+      expect(
+        AutoUpdater.shouldUpdatePure(
+          list: _sub(enabled: false),
+          force: true,
+          fails: 0,
+          now: now,
+        ),
+        isFalse,
+      );
+    });
+  });
 }

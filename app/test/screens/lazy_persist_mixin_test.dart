@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/screens/lazy_persist_mixin.dart';
+import 'package:lxbox/services/settings_storage.dart';
 
 /// §085 R4 / §107 — widget tests для LazyPersistMixin (staging core).
 ///
@@ -42,7 +43,10 @@ void main() {
     state.markDirty();
     expect(state.hasPendingChanges, true);
     expect(ctrl.configDirty, true, reason: 'configDirty sync на markDirty');
-    await tester.pump();
+    // `configDirty=` пишет в AppLog, а тот throttl'ит notifyListeners
+    // 16-мс таймером (app_log.dart `_notifyWindow`). Голый pump() окно не
+    // закрывает → таймер переживает тест и роняет его на !timersPending.
+    await tester.pump(const Duration(milliseconds: 20));
     expect(staged, 1, reason: '§107: буфер staged в момент мутации');
   });
 
@@ -72,11 +76,44 @@ void main() {
     ));
     tester.state<_ProbeState>(find.byType(_Probe)).markDirty();
 
-    // unmount → dispose → flush (stage ещё раз + flushToDisk)
+    // unmount → dispose → flush (await staging последней мутации + flushToDisk)
     await tester.pumpWidget(const MaterialApp(home: SizedBox()));
     await tester.pump();
-    expect(staged, 2,
-        reason: 'stage на markDirty + safety-net stage в dispose-flush');
+    // §338 — dispose-flush НЕ перезапускает stageChanges: typed-саверы внутри
+    // staging зовут markConfigDirty, и повторный вызов переподнимал флаг уже
+    // после того, как rebuild его погасил. Теперь просто await последнего.
+    expect(staged, 1, reason: 'stage только на markDirty, dispose лишь ждёт');
+  });
+
+  testWidgets('§338: dispose-flush НЕ переподнимает configDirty после rebuild',
+      (tester) async {
+    final ctrl = SubscriptionController();
+    ctrl.configDirty = false; // статик — сброс от соседних тестов
+    var staged = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: _Probe(
+          controller: ctrl,
+          // как настоящие stageChanges: typed-saver внутри зовёт markConfigDirty
+          onStage: () {
+            staged++;
+            SettingsStorage.markConfigDirty();
+          }),
+    ));
+    tester.state<_ProbeState>(find.byType(_Probe)).markDirty();
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(ctrl.configDirty, true);
+
+    // Быстрая пересборка на возврате к home погасила флаг ДО dispose экрана
+    // (exit-анимация ~300мс) — воспроизводим гонку.
+    ctrl.configDirty = false;
+
+    // dispose → flush. Раньше: повторный stageChanges → markConfigDirty →
+    // флаг снова true → вечная синяя плашка при актуальном конфиге.
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(ctrl.configDirty, false,
+        reason: 'dispose-flush не должен трогать флаг — rebuild уже всё съел');
+    expect(staged, 1);
   });
 
   testWidgets('НЕ flush на dispose если нет pending', (tester) async {
@@ -99,14 +136,17 @@ void main() {
     ));
     final state = tester.state<_ProbeState>(find.byType(_Probe));
     state.markDirty();
-    await tester.pump();
+    // 20мс — закрыть 16мс-окно AppLog-throttle (§338-трассер в configDirty=
+    // пишет лог; голый pump() оставил бы висящий таймер → !timersPending).
+    await tester.pump(const Duration(milliseconds: 20));
     expect(staged, 1);
     state.didChangeAppLifecycleState(AppLifecycleState.paused);
-    await tester.pump();
-    expect(staged, 2, reason: 'flush на paused (app backgrounded)');
+    await tester.pump(const Duration(milliseconds: 20));
+    // §338 — flush ждёт staging мутации, не перезапуская его (см. dispose-тест).
+    expect(staged, 1, reason: 'flush на paused не re-stage\'ит');
     // повторный paused — idempotent (pending уже сброшен)
     state.didChangeAppLifecycleState(AppLifecycleState.paused);
-    await tester.pump();
-    expect(staged, 2, reason: 'idempotent — второй paused не пишет');
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(staged, 1, reason: 'idempotent — второй paused не пишет');
   });
 }

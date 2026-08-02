@@ -307,6 +307,27 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §345: verbose core-логи — снятие TRACE/DEBUG-фильтра на лету
+  /// (volatile в BoxService, перезапуск VPN не нужен). Default false.
+  Future<bool> setCoreLogsVerbose(bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setCoreLogsVerbose,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  Future<bool> getCoreLogsVerbose() async {
+    final ok = await _invoke<bool>(
+      _Methods.getCoreLogsVerbose,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   /// §049 F15: разрешать app'ам обходить tun (`Builder.allowBypass()`).
   /// Default false (strict tunnel). Применяется при следующем старте VPN —
   /// после toggle нужен reload.
@@ -743,6 +764,22 @@ class BoxVpnClient {
     final ok = await _invoke<bool>(
       _Methods.resetNetwork,
       timeout: _Timeouts.resetNet,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// §341 — диагностическая env-ручка quic-go: `knob` = `gso` | `ecn`,
+  /// `disabled=true` — принудительно выключить offload/маркировку,
+  /// `false` — вернуть авто-детект библиотеки. Static Libbox-вызов
+  /// (Go-side os.Setenv), применяется к НОВЫМ QUIC-сокетам — после
+  /// переключения нужен reconnect QUIC-аутбаундов (reload/reset-network
+  /// или повторный dial после фейла). `false` = старый AAR без экспорта.
+  Future<bool> setQuicKnob(String knob, {required bool disabled}) async {
+    final ok = await _invoke<bool>(
+      _Methods.setQuicKnob,
+      args: {'knob': knob, 'disabled': disabled},
+      timeout: _Timeouts.settings,
       onTimeoutValue: false,
     );
     return ok ?? false;

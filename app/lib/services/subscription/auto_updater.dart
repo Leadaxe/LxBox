@@ -126,13 +126,21 @@ class AutoUpdater {
         return;
       }
     }
+    // §337 — глобальная галка «обновлять выключенные подписки». Читаем один
+    // раз за проход и передаём в pure-гейт параметром.
+    final updateDisabled = await SettingsStorage.getAutoUpdateDisabledSubs();
+    // §338 — галка «автоперезапуск при смене настроек» перекрывает
+    // per-subscription выбор: всё применяем сразу.
+    final autoReload = await SettingsStorage.getAutoReloadOnChange();
     _running = true;
     AppLog.I.info('AutoUpdater: trigger=${trigger.name}${force ? ' force' : ''}');
 
     try {
       final candidates = <SubscriptionEntry>[];
       for (final entry in _subController.entries) {
-        if (!_shouldUpdate(entry, force: force)) continue;
+        if (!_shouldUpdate(entry, force: force, updateDisabled: updateDisabled)) {
+          continue;
+        }
         candidates.add(entry);
       }
       if (candidates.isEmpty) {
@@ -165,8 +173,11 @@ class AutoUpdater {
             // ручном пути. Без гейта подписка, отдающая тот же список раз в
             // час, гоняла бы пересборку (а в режиме reload — и reload-попытку)
             // на каждом тике впустую.
-            if (compositionChanged) {
-              switch (fresh.onUpdateAction) {
+            // §337 — реакцию берём только с ВКЛЮЧЁННЫХ подписок. Выключенная
+            // в конфиг не попадает: её новый состав итоговый конфиг не меняет,
+            // пересобирать и (в режиме reload) рвать туннель незачем.
+            if (compositionChanged && fresh.enabled) {
+              switch (effectiveOnUpdateAction(fresh, autoReload: autoReload)) {
                 case SubscriptionOnUpdateAction.reload:
                   needReload = true;
                   needRebuild = true;
@@ -225,7 +236,23 @@ class AutoUpdater {
     }
   }
 
-  bool _shouldUpdate(SubscriptionEntry entry, {required bool force}) {
+  /// §338 — эффективное действие при обновлении подписки. Галка
+  /// «автоперезапуск при смене настроек» перекрывает per-subscription выбор
+  /// (§323): глобальное «применять всё сразу» строже любого из трёх режимов, и
+  /// при включённой галке строка «При обновлении» в подписке скрыта.
+  ///
+  /// Поле `list.onUpdateAction` при этом НЕ переписывается — выключение галки
+  /// возвращает сохранённый выбор юзера.
+  static SubscriptionOnUpdateAction effectiveOnUpdateAction(
+    SubscriptionServers list, {
+    required bool autoReload,
+  }) =>
+      autoReload
+          ? SubscriptionOnUpdateAction.reload
+          : list.onUpdateAction;
+
+  bool _shouldUpdate(SubscriptionEntry entry,
+      {required bool force, bool updateDisabled = false}) {
     final list = entry.list;
     if (list is! SubscriptionServers) return false;
     return shouldUpdatePure(
@@ -233,6 +260,7 @@ class AutoUpdater {
       force: force,
       fails: _failCounts[list.url] ?? 0,
       now: DateTime.now(),
+      updateDisabled: updateDisabled,
     );
   }
 
@@ -244,8 +272,13 @@ class AutoUpdater {
     required bool force,
     required int fails,
     required DateTime now,
+    bool updateDisabled = false,
   }) {
-    if (!list.enabled) return false;
+    // §337 — выключенная подписка обновляется только при снятой галке
+    // «Update disabled subscriptions». Гейт стоит ВЫШЕ `force` намеренно:
+    // restore-backup и «обновить все» не должны размораживать выключенные,
+    // если юзер галку не ставил.
+    if (!list.enabled && !updateDisabled) return false;
 
     // Fail-cap: после 5 фейлов подписка замораживается до следующего app start.
     if (!force && fails >= maxFailsPerSession) return false;

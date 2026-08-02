@@ -507,7 +507,10 @@ class HomeNodeList extends StatelessWidget {
               : getLocalText.s("Saved channel \"%1\$s\" — %2\$s", label,
                   healedParts.join('; ')))),
     );
-    if (state.tunnelUp && context.mounted) {
+    // §338 — при включённой галке пересборка на возврате на home применит
+    // правку сама: просить рестарт нельзя, это прямая ложь.
+    if (state.tunnelUp && !await SettingsStorage.getAutoReloadOnChange()) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("Restart VPN to apply changes"))),
       );

@@ -24,6 +24,7 @@ import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscriptions_screen/folder_picker.dart';
 import '../widgets/detour_target_picker.dart';
+import '../widgets/probe_badge.dart';
 import '../widgets/reorder_grab_strip.dart';
 import '../services/l10n/locale_controller.dart';
 
@@ -401,6 +402,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         case ProbeStatus.invalid:
           broken++;
         case ProbeStatus.pending:
+        case ProbeStatus.group: // §336 — не тестируется, в сводке не считаем
           break;
       }
     }
@@ -1604,43 +1606,11 @@ class _MemberTile extends StatelessWidget {
   final ProbeResult? probe;
   final ProbeThresholds thresholds;
 
-  /// §236 — бейдж результата теста. Цвет задержки — по порогам шкалы.
+  /// §236 — бейдж результата теста; общий виджет [ProbeBadge] (§339).
   Widget? _probeBadge(BuildContext context, ThemeData theme) {
     final r = probe;
     if (r == null) return null;
-    final (String text, Color color) = switch (r.status) {
-      ProbeStatus.pending => ('…', theme.colorScheme.onSurfaceVariant),
-      ProbeStatus.ok => (
-          '${r.delayMs} ms', // l10n-exempt: latency value + unit
-          switch (thresholds.bandOf(r.delayMs)) {
-            0 => Colors.green,
-            1 => Colors.amber.shade800,
-            2 => Colors.orange.shade800,
-            _ => theme.colorScheme.error,
-          }
-        ),
-      ProbeStatus.failed => (getLocalText.s("err"), theme.colorScheme.error),
-      ProbeStatus.broken => (
-          getLocalText.s("broken"),
-          theme.colorScheme.error
-        ),
-      ProbeStatus.invalid => (
-          getLocalText.s("invalid"),
-          theme.colorScheme.error
-        ),
-    };
-    return GestureDetector(
-      onTap: onProbeBadgeTap,
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: color,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
-      ),
-    );
+    return ProbeBadge(result: r, thresholds: thresholds, onTap: onProbeBadgeTap);
   }
 
   @override

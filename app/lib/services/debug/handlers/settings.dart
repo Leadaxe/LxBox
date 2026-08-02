@@ -78,6 +78,11 @@ Future<DebugResponse> settingsHandler(DebugRequest req, DebugContext ctx) async 
       if (req.method == 'PUT') return _putCoreLogsEnabled(req);
       throw _methodNotAllowed(req.method, path);
 
+    case '/settings/core_logs_verbose':
+      if (req.method == 'GET') return _getCoreLogsVerbose();
+      if (req.method == 'PUT') return _putCoreLogsVerbose(req);
+      throw _methodNotAllowed(req.method, path);
+
     case '/settings/ping_options':
       if (req.method == 'GET') return _getPingOptions();
       if (req.method == 'PUT') return _putPingOptions(req, ctx);
@@ -485,6 +490,34 @@ Future<DebugResponse> _putCoreLogsEnabled(DebugRequest req) async {
     'note':
         'saved; force-stop & reopen the app to apply (Libbox.setup is '
         'one-shot per process — stop/start VPN does NOT re-apply)',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// core_logs_verbose (§345) — live-снятие TRACE/DEBUG-фильтра. В отличие от
+// core_logs_enabled применяется мгновенно (volatile в BoxService); при
+// выключенном core_logs_enabled бессилен — ядро не форвардит логи вообще.
+// ---------------------------------------------------------------------------
+
+Future<DebugResponse> _getCoreLogsVerbose() async {
+  final enabled =
+      await SettingsStorage.getNativeBool(NativePrefsKeys.coreLogsVerbose);
+  return JsonResponse({'enabled': enabled});
+}
+
+Future<DebugResponse> _putCoreLogsVerbose(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final value = body['enabled'];
+  if (value is! bool) {
+    throw const BadRequest('body must be {"enabled": true|false}');
+  }
+  await SettingsStorage.setNativeBool(NativePrefsKeys.coreLogsVerbose, value);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-core-logs-verbose',
+    'enabled': value,
+    'note': 'applies immediately (no VPN restart); '
+        'no effect while core_logs_enabled is off',
   });
 }
 

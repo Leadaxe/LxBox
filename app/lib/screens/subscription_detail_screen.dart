@@ -11,11 +11,14 @@ import '../models/ui_msg.dart';
 import '../services/error_humanize.dart';
 import '../services/node_hash.dart';
 import '../services/parser/body_decoder.dart';
+import '../services/probe/probe_controller.dart';
+import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
 import '../widgets/detour_target_picker.dart';
 import '../services/url_launcher.dart';
+import 'probe_gate_mixin.dart';
 import 'subscriptions_screen/entry_context_menu.dart' show showEditSourceDialog;
 import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/subscription_detail_format.dart';
@@ -41,7 +44,8 @@ class SubscriptionDetailScreen extends StatefulWidget {
       _SubscriptionDetailScreenState();
 }
 
-class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> with SingleTickerProviderStateMixin {
+class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
+    with SingleTickerProviderStateMixin, ProbeGateMixin {
   late final TabController _tabCtrl;
   List<NodeSpec>? _nodes;
   bool _loading = true;
@@ -71,12 +75,38 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   // канальной override-цели в Settings-вкладке.
   List<Channel> _channels = const [];
 
+  /// §338 — глобальная галка перекрывает per-subscription «On update»: строку
+  /// не рисуем. Читаем в `initState`: App Settings открываются с home, а не
+  /// отсюда, поэтому попасть сюда с несвежим значением можно только заново
+  /// зайдя на экран — и тогда `initState` отработает снова.
+  bool _autoReloadOnChange = false;
+
   // §283 — per-node disable. Хеш ноды считается лениво и кэшируется по
   // identity. Полный проход хеширования происходит ТОЛЬКО когда есть
   // выключенные отметки — подписка без них не платит ничего.
   final Map<NodeSpec, String> _hashCache = Map.identity();
   Set<NodeSpec> _togglableNodes = Set.identity();
   Set<NodeSpec> _disabledNodes = Set.identity();
+
+  // ─── §339 — Test servers (зеркало папки §236, минус per-list опции) ───
+  // Результаты эфемерны; ключ = identity-хеш (§326: переживает refresh —
+  // инстансы нод подменяются, идентичность нет).
+  final Map<String, ProbeResult> _probe = {};
+  Timer? _probeFlushTimer;
+  bool _testing = false;
+  ProbeRunner? _probeRunner;
+  ProbeThresholds _probeThresholds = ProbeThresholds.defaults;
+
+  // §326-кэш ключей текущего состава нод (identity-маркер списка).
+  List<NodeSpec?>? _probeKeysFor;
+  List<String> _probeKeysCache = const [];
+  List<String> _nodeProbeKeys(List<NodeSpec?> nodes) {
+    if (!identical(_probeKeysFor, nodes)) {
+      _probeKeysFor = nodes;
+      _probeKeysCache = ProbeController.probeKeysForNodes(nodes);
+    }
+    return _probeKeysCache;
+  }
 
   // От какого List<NodeSpec> построены строки/кэш (identity-маркер):
   // refresh подменяет и список, и инстансы → кэш хешей протухает целиком;
@@ -171,6 +201,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     widget.entry.addListener(_onEntryChanged);
     unawaited(_loadNodes());
     unawaited(_loadChannels());
+    unawaited(_loadProbeThresholds()); // §339
+    unawaited(_loadAutoReloadOnChange()); // §338
     // При первом заходе на Source — живой GET.
     _tabCtrl.addListener(() {
       if (_tabCtrl.index == 2 && !_sourceLoaded && !_sourceLoading) {
@@ -182,9 +214,163 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   @override
   void dispose() {
     widget.entry.removeListener(_onEntryChanged); // §283
+    _probeFlushTimer?.cancel(); // §339/§286
+    _probeFlushTimer = null;
     _tabCtrl.dispose();
     _nameCtrl.dispose();
     super.dispose();
+  }
+
+  // ─────────────────────── §339 — Test servers ───────────────────────
+
+  Future<void> _loadProbeThresholds() async {
+    final t = await ProbeController.loadThresholds();
+    if (mounted) setState(() => _probeThresholds = t);
+  }
+
+  /// §286 — коалесцированный ребилд результатов (как в папке): onResult пишет
+  /// в [_probe], setState — не чаще раза в 120мс.
+  void _scheduleProbeFlush() {
+    if (_probeFlushTimer != null) return;
+    _probeFlushTimer = Timer(const Duration(milliseconds: 120), () {
+      _probeFlushTimer = null;
+      if (mounted) setState(() {});
+    });
+  }
+
+  Future<void> _toggleProbeTest() async {
+    if (_testing) {
+      _probeRunner?.cancel();
+      _probeFlushTimer?.cancel();
+      _probeFlushTimer = null;
+      setState(() => _testing = false);
+      return;
+    }
+    if (widget.entry.list.nodes.isEmpty) return;
+    // §296-гейт: probe-сессия не поднимается поверх живого туннеля.
+    if (await ensureVpnStoppedForProbe()) {
+      await _runProbe();
+    }
+  }
+
+  Future<void> _runProbe() async {
+    // §296 — top-level ноды как есть; выключенные (§283) тестируются тоже
+    // (probe отвечает «жив ли сервер», не «в конфиге ли он»), группы §322
+    // получают вердикт group (§336). Ping-опции — глобальные: per-list
+    // override'а у подписки нет.
+    final nodes = ProbeController.probeNodesOf(widget.entry.list);
+    if (nodes.isEmpty) return;
+    final (:url, :timeoutMs) = await ProbeController.resolvePingOptions();
+    if (!mounted) return;
+    final probeKeys = _nodeProbeKeys(nodes);
+    setState(() {
+      _testing = true;
+      _probe
+        ..clear()
+        ..addEntries([
+          for (final k in probeKeys)
+            MapEntry(k, const ProbeResult(ProbeStatus.pending)),
+        ]);
+    });
+    final runner = ProbeRunner();
+    _probeRunner = runner;
+    final err = await runner.run(
+      nodes,
+      url: url,
+      timeoutMs: timeoutMs,
+      onResult: (i, r) {
+        if (!mounted) return;
+        if (i < probeKeys.length) _probe[probeKeys[i]] = r;
+        _scheduleProbeFlush();
+      },
+    );
+    _probeFlushTimer?.cancel();
+    _probeFlushTimer = null;
+    if (!mounted) return;
+    setState(() => _testing = false);
+    // §236-гонка — VPN стартовал между гейтом и probeStart: тот же попап.
+    if (err == kProbeVpnRunning) {
+      if (mounted && await onProbeVpnRaceGate()) await _runProbe();
+      return;
+    }
+    if (err.isNotEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(err)));
+    }
+  }
+
+  /// Сводка завершённых тестов для контрол-бара (как в папке).
+  ({int ok, int dead, int broken}) _probeSummary() {
+    var ok = 0, dead = 0, broken = 0;
+    for (final r in _probe.values) {
+      switch (r.status) {
+        case ProbeStatus.ok:
+          ok++;
+        case ProbeStatus.failed:
+          dead++;
+        case ProbeStatus.broken:
+        case ProbeStatus.invalid:
+          broken++;
+        case ProbeStatus.pending:
+        case ProbeStatus.group: // §336 — не тестируется, не считаем
+          break;
+      }
+    }
+    return (ok: ok, dead: dead, broken: broken);
+  }
+
+  /// §339 — identity-map «нода → результат» для строк списка. Ключи считаны
+  /// от top-level нод (`probeNodesOf`); chained-дети в map не попадают.
+  Map<NodeSpec, ProbeResult> _probeByNode() {
+    if (_probe.isEmpty) return const {};
+    final nodes = ProbeController.probeNodesOf(widget.entry.list);
+    final keys = _nodeProbeKeys(nodes);
+    return {
+      for (var i = 0; i < keys.length; i++)
+        if (nodes[i] != null && _probe[keys[i]] != null)
+          nodes[i]!: _probe[keys[i]]!,
+    };
+  }
+
+  /// §339 — полоса теста над списком (паттерн `_buildControlBar` папки):
+  /// слева инфо, справа кнопка старт/отмена.
+  Widget _buildProbeBar(ThemeData theme) {
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final s = _probeSummary();
+    final String info;
+    if (_testing) {
+      info = getLocalText.s("Testing… %d done", s.ok + s.dead);
+    } else if (_probe.isNotEmpty) {
+      info = [
+        getLocalText.s("%d ok", s.ok),
+        getLocalText.plural("%d err", s.dead),
+        if (s.broken > 0) getLocalText.plural("%d broken", s.broken),
+      ].join(' · ');
+    } else {
+      info = getLocalText.s("Test servers");
+    }
+    final hasNodes = widget.entry.list.nodes.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 4, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(info, style: TextStyle(fontSize: 12, color: muted)),
+          ),
+          GestureDetector(
+            onTap: hasNodes ? () => unawaited(_toggleProbeTest()) : null,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                _testing ? Icons.stop_circle_outlined : Icons.speed,
+                size: 22,
+                color: hasNodes ? null : theme.disabledColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   List<MapEntry<String, String>> _filteredHeaders({required bool important}) {
@@ -365,6 +551,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                     ? _toggleAllNodes
                     : null,
               ),
+              _buildProbeBar(theme), // §339 — Test servers
               const Divider(height: 1),
               Expanded(
                 child: SubscriptionNodeList(
@@ -379,6 +566,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                   disabledNodes: _disabledNodes,
                   onToggleNode:
                       entry.list is SubscriptionServers ? _toggleNode : null,
+                  probe: _probeByNode(), // §339
+                  probeThresholds: _probeThresholds,
                 ),
               ),
             ],
@@ -437,6 +626,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       },
       onShowIntervalPicker: _showIntervalPicker,
       onShowOnUpdateActionPicker: _showOnUpdateActionPicker, // §323
+      autoReloadOnChange: _autoReloadOnChange, // §338 — перекрытие выбора
       onRefreshNow: _refreshNow,
       onEditSource: _editSource, // §129
       // §289 — per-subscription fetch identity (Default/Custom override).
@@ -672,6 +862,14 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final channels = await SettingsStorage.getChannels();
     if (!mounted) return;
     setState(() => _channels = channels);
+  }
+
+  /// §338 — галка «автоперезапуск при смене настроек» (App Settings). Включена
+  /// → строка «On update» скрыта: выбор перекрыт глобально.
+  Future<void> _loadAutoReloadOnChange() async {
+    final v = await SettingsStorage.getAutoReloadOnChange();
+    if (!mounted || v == _autoReloadOnChange) return;
+    setState(() => _autoReloadOnChange = v);
   }
 
   Future<void> _showOverrideDetourPicker() async {

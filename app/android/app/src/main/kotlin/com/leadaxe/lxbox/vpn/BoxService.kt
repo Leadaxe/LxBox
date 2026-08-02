@@ -57,6 +57,14 @@ class BoxService(
     companion object {
         private const val TAG = "BoxService"
 
+        /// §345 — live-режим verbose core-логов: true = TRACE/DEBUG-фильтр в
+        /// `writeDebugMessage` снят. Меняется на лету из VpnPlugin
+        /// (setCoreLogsVerbose) без перезапуска VPN; при старте сервиса
+        /// подтягивается из prefs (переживает рестарт процесса).
+        @Volatile
+        @JvmStatic
+        var coreLogsVerbose: Boolean = false
+
         /// §223 Часть B (#23) — задержка перед native-snapshot'ом подтекста
         /// уведомления при старте без UI. Даём ядру устаканить `selected` у
         /// selector'ов после Started, прежде чем читать getGroups().
@@ -172,6 +180,15 @@ class BoxService(
                     Log.d(TAG, "[vpn] SCREEN_ON → wake")
                     commandServer.get()?.wake()
                 }
+                Intent.ACTION_USER_PRESENT -> {
+                    // §340 — wake-нудж SPEC 041 v2: разблокировка = «устройство
+                    // проснулось»; ядро само ребиндит только доказуемо стухшие
+                    // WG/AWG-сессии (стале-предикат + общий дебаунс 90 с — в ядре,
+                    // вызов неблокирующий).
+                    Log.d(TAG, "[vpn] USER_PRESENT → rebindStaleEndpoints")
+                    runCatching { commandServer.get()?.rebindStaleEndpoints() }
+                        .onFailure { Log.e(TAG, "rebindStaleEndpoints failed", it) }
+                }
             }
         }
     }
@@ -204,6 +221,9 @@ class BoxService(
         }
         resetScope()
         setStatus(VpnStatus.Starting)
+        // §345 — подтянуть persist-значение verbose (live-изменения дальше
+        // приходят напрямую в volatile из VpnPlugin).
+        coreLogsVerbose = BootReceiver.isCoreLogsVerbose(service)
 
         if (!receiverRegistered) {
             val mode = BootReceiver.getBackgroundMode(service)
@@ -216,6 +236,7 @@ class BoxService(
                 addAction(BoxVpnService.ACTION_RESET_NETWORK)
                 addAction(BoxVpnService.ACTION_CLEAR_DNS_CACHE)   // §263
                 addAction(BoxVpnService.ACTION_UPDATE_NOTIFICATION)   // §223
+                addAction(Intent.ACTION_USER_PRESENT)   // §340 — вне when(mode): нудж нужен в любом фоновом режиме
 
                 when (mode) {
                     BootReceiver.BG_MODE_LAZY -> {
@@ -815,7 +836,9 @@ class BoxService(
         // выполнялись до этой проверки и работа выбрасывалась впустую.
         if (BoxVpnService.coreLogSink == null) return
         val plain = ansiEscapeRe.replace(message, "")
-        if (traceDebugRe.containsMatchIn(plain)) return
+        // §345 — в verbose-режиме TRACE/DEBUG проходят (диагностика on-demand);
+        // back-pressure ниже (LOG_QUEUE_MAX, drop newest) защищает от потопа.
+        if (!coreLogsVerbose && traceDebugRe.containsMatchIn(plain)) return
         // Back-pressure: drop newest, не блокируем sing-box producer thread.
         if (coreLogQueue.size >= LOG_QUEUE_MAX) {
             coreLogDrops.incrementAndGet()

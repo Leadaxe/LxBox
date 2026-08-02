@@ -19,12 +19,14 @@ class GeneralTab extends StatelessWidget {
     required this.autoPing,
     required this.haptic,
     required this.allowRotation,
+    required this.autoReloadOnChange,
     required this.padding,
     required this.onAutoStartChanged,
     required this.onAutoCheckUpdatesChanged,
     required this.onAutoPingChanged,
     required this.onHapticChanged,
     required this.onAllowRotationChanged,
+    required this.onAutoReloadOnChangeChanged,
     required this.onAddQuickSettingsTile,
     required this.onOpenBackup,
   });
@@ -35,6 +37,9 @@ class GeneralTab extends StatelessWidget {
   final bool autoPing;
   final bool haptic;
   final bool allowRotation;
+
+  /// §338 — автоперезапуск VPN при любом изменении конфига (жизнь без плашек).
+  final bool autoReloadOnChange;
   final EdgeInsets padding;
 
   final ValueChanged<bool> onAutoStartChanged;
@@ -42,6 +47,7 @@ class GeneralTab extends StatelessWidget {
   final ValueChanged<bool> onAutoPingChanged;
   final ValueChanged<bool> onHapticChanged;
   final ValueChanged<bool> onAllowRotationChanged;
+  final ValueChanged<bool> onAutoReloadOnChangeChanged;
   final VoidCallback onAddQuickSettingsTile;
   final VoidCallback onOpenBackup;
 
@@ -124,6 +130,26 @@ class GeneralTab extends StatelessWidget {
           secondary: const Icon(Icons.screen_rotation),
           value: allowRotation,
           onChanged: loaded ? onAllowRotationChanged : null,
+        ),
+        // §338 — автоприменение изменений конфига к живому туннелю. Настройка
+        // не про подписки: источник изменения любой (узел, detour, DNS,
+        // routing, per-app), поэтому живёт в Behavior, а не в Subscriptions.
+        SwitchListTile(
+          title: Text(getLocalText.s("Auto-restart VPN on settings change")),
+          subtitle: Text(getLocalText.s("Apply every config change to the running tunnel by itself, so no banner is left to tap. Each apply drops the tunnel for about 3 seconds and kills open connections.")),
+          secondary: const Icon(Icons.restart_alt),
+          value: autoReloadOnChange,
+          onChanged: loaded ? onAutoReloadOnChangeChanged : null,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            getLocalText.s("While this is on, the per-subscription \"On update\" setting is hidden — everything is applied immediately. Turning it off brings each subscription's own choice back."),
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ),
         const Divider(height: 32),
         Text(getLocalText.s("Quick connect"),
