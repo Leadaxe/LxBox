@@ -74,7 +74,25 @@ class SettingsStorage {
   /// Текущее значение config-dirty (sync). Читают home/контроллер/debug;
   /// пересборка ставит false; bootstrap mtime-compare и узловые правки — true.
   /// Config-значимые сейверы поднимают его через [markConfigDirty].
-  static bool configDirty = false;
+  static bool get configDirty => _configDirty;
+  static bool _configDirty = false;
+
+  /// §338 (инспекция) — переход false→true логируется с caller-фреймами:
+  /// 25+ сайтов поднимают флаг, и «кто зажёг синюю плашку» иначе не выяснить
+  /// на устройстве. Только переход (не каждый повторный set) и только на
+  /// правках настроек — StackTrace здесь дёшев.
+  static set configDirty(bool v) {
+    if (v && !_configDirty) {
+      final frames = StackTrace.current.toString().split('\n');
+      final caller = frames
+          .skip(1)
+          .take(3)
+          .map((f) => f.replaceAll(RegExp(r'\s+'), ' ').trim())
+          .join(' ← ');
+      AppLog.I.debug('configDirty ↑ $caller');
+    }
+    _configDirty = v;
+  }
 
   /// Помечает конфиг грязным. Зовётся из config-значимых сейверов.
   static void markConfigDirty() => configDirty = true;
