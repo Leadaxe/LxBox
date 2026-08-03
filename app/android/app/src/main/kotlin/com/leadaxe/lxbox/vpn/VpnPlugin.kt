@@ -1222,17 +1222,41 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     }
 
     /// true, если прямо сейчас активен VPN ДРУГОГО приложения. Наш сервис ещё
-    /// не поднят (мы только собираемся стартовать) → любая сеть с VPN-транспортом
-    /// = чужая. Если наш сервис уже не в Stopped — это мы сами, не чужой.
+    /// не поднят (мы только собираемся стартовать) → сеть с VPN-транспортом,
+    /// которой владеем НЕ мы, = чужая. Если наш сервис уже не в Stopped — это мы
+    /// сами, не чужой.
     /// Источник истины: ConnectivityManager + NetworkCapabilities.TRANSPORT_VPN
     /// (тот же приём, что DefaultNetworkMonitor.isVpn).
+    ///
+    /// §361 — владельца проверяем ЯВНО, а не выводим из статуса сервиса. Прежнее
+    /// допущение «наш сервис в Stopped ⇒ любой VPN чужой» ломается на осиротевшем
+    /// tun: VpnService умер, а его интерфейс остался в системе (в dumpsys —
+    /// `ni{VPN CONNECTED}` c нашим `OwnerUid`). Приложение видело собственный
+    /// брошенный туннель и на каждый Start предлагало «переключиться» с самого
+    /// себя. Всплыло это на §361-фиксе `stopAwait`: тот честно переводит статус в
+    /// Stopped, когда сервиса нет, — и ранний `return false` по статусу перестал
+    /// прикрывать дыру (раньше статус залипал в Started и метод выходил первой
+    /// строкой).
+    ///
+    /// `ownerUid` доступен с API 29; на 24-28 деталь недоступна, поэтому там
+    /// остаётся прежнее поведение (считаем чужим — консервативно: лишний вопрос
+    /// юзеру безопаснее молчаливого отзыва чужого туннеля).
     private fun isForeignVpnActive(): Boolean {
         if (BoxVpnService.currentStatus != VpnStatus.Stopped) return false
         val cm = BoxApplication.connectivity
+        val myUid = android.os.Process.myUid()
         return try {
             cm.allNetworks.any { n ->
-                cm.getNetworkCapabilities(n)
-                    ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+                val caps = cm.getNetworkCapabilities(n) ?: return@any false
+                if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@any false
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return@any true
+                val owner = caps.ownerUid
+                if (owner == myUid) {
+                    Log.d(TAG, "[vpn §361] skipping our own orphaned VPN network (uid=$owner)")
+                    false
+                } else {
+                    true
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "isForeignVpnActive: $e")

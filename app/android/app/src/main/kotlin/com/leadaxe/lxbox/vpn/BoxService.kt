@@ -28,7 +28,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -111,8 +113,17 @@ class BoxService(
     /// и из service main thread (`onStartCommand`/`onDestroy`/`doStop`/`doForceStop`).
     /// Без барьера видимости поток может прочитать устаревшее значение и дважды
     /// (un)register'нуть receiver.
+    /// §361 — зеркалим значение в companion (`BoxVpnService.stopReceiverAlive`):
+    /// `stopAwait` живёт там и должен знать, есть ли кому принять ACTION_STOP.
+    /// Зеркало в сеттере, а не на шести сайтах присваивания (register + пять
+    /// путей снятия: onDestroy/onRevoke/doStop/doForceStop/exit) — иначе
+    /// достаточно забыть один, чтобы страховка молча перестала работать.
     @Volatile
     private var receiverRegistered = false
+        set(value) {
+            field = value
+            BoxVpnService.setStopReceiverAlive(value)
+        }
     private var status = VpnStatus.Stopped
 
     private val notification: ServiceNotification by lazy { ServiceNotification(service) }
@@ -471,6 +482,28 @@ class BoxService(
             Log.d(TAG, "[vpn] sing-box uses WIFI state, all permissions granted: $needed")
         }
 
+        // §361 — старт мог быть отменён, пока мы висели в блокирующем
+        // `startOrReloadService` (нода не отвечает — вызов держит секунды, а то
+        // и до таймаута). `doForceStop`/`onDestroy` за это время сносят сервис и
+        // отменяют `serviceScope`, но JNI-вызов отмену не чувствует: корутина
+        // возвращается и идёт дальше по прямой. Без этой проверки она ставила
+        // `Started` НА УЖЕ МЁРТВОМ сервисе, перезаписывая `Stopped`, выставленный
+        // в `onDestroy` секундой раньше.
+        //
+        // Последствие было ровно такое: `currentStatus=Started` при снятом
+        // receiver'е → `stopAwait` шлёт ACTION_STOP принимать некому → 5с таймаут
+        // → `stopVPN` возвращает false. Кнопка «Стоп» мертва, UI держит
+        // «Подключено» с тикающим таймером, CommandClient стучится в отсутствующее
+        // ядро (`getGroups still unavailable`) — список узлов пуст.
+        //
+        // Проверяем контекст СВОЕЙ корутины, а не поле `serviceScope`: последнее
+        // пересоздаётся в `resetScope`, и новый (живой) scope соврал бы про нашу
+        // отменённую корутину. §122-дедуп здесь не помогает — там гасится повтор
+        // ОДНОГО статуса, а тут два разных (Stopped → Started).
+        if (!currentCoroutineContext().isActive) {
+            Log.w(TAG, "[vpn §361] start cancelled while blocked — skip setStatus(Started)")
+            return
+        }
         setStatus(VpnStatus.Started)
 
         // §122 Фаза 0 — поднять CommandClient-канал. ПОСЛЕ startCommandServer()
