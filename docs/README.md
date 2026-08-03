@@ -40,7 +40,8 @@ L×Box управляется **двумя** способами помимо с�
 | [BUILD.md](BUILD.md) | flutter build команды, CI, signing, local-build marker |
 | [RELEASE_PROCESS.md](RELEASE_PROCESS.md) | Версии, теги, GitHub Releases, post-flight |
 | [DIAGNOSTICS.md](DIAGNOSTICS.md) | Playbook диагностики на устройстве: Debug API + CommandClient/профайлер endpoints, анализ TCP/DNS, `scripts/lxbox-diag.sh` |
-| [USER_GUIDE_RU.md](USER_GUIDE_RU.md) | Пользовательское руководство (RU) — как это работает |
+| [USER_GUIDE_RU.md](USER_GUIDE_RU.md) | Пользовательское руководство (RU) — как это работает: ступени трафика, каналы, detour, DNS, рецепты, regex |
+| [USER_GUIDE.md](USER_GUIDE.md) | User guide (EN) — перевод USER_GUIDE_RU; правится вместе с ним |
 
 ## Справочники API
 
