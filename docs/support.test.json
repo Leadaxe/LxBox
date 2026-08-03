@@ -13,14 +13,20 @@
           "title": "Test message #1 (en)",
           "message": "First message of the test feed, fullscreen mode.\n\n«Got it» unlocks after 3 seconds, records the app version and advances the queue to #2. «Later» snoozes the whole feed (snooze is 0 here — next open shows again). The X in the corner closes without marking anything.",
           "links": [
-            { "label": "⭐ L×Box on GitHub", "url": "https://github.com/Leadaxe/LxBox" }
+            {
+              "label": "⭐ L×Box on GitHub",
+              "url": "https://github.com/Leadaxe/LxBox"
+            }
           ]
         },
         "ru": {
           "title": "Тестовое сообщение №1 (ru)",
           "message": "Первое сообщение тестовой ленты, полноэкранный режим.\n\n«Прочитал» разблокируется через 3 секунды, записывает версию приложения и двигает очередь к №2. «Позже» откладывает всю ленту (снуз тут 0 — при следующем открытии покажется снова). Крестик в углу закрывает без пометок.",
           "links": [
-            { "label": "⭐ L×Box на GitHub", "url": "https://github.com/Leadaxe/LxBox" }
+            {
+              "label": "⭐ L×Box на GitHub",
+              "url": "https://github.com/Leadaxe/LxBox"
+            }
           ]
         }
       }
@@ -34,22 +40,50 @@
       "i18n": {
         "en": {
           "title": "Test message #2 (en, lxbox:// buttons)",
-          "message": "Second message — deep-link buttons (§357).\n\n«Open profiler» jumps to Debug → Profiling and marks this message as read. «DNS settings» opens the DNS screen WITHOUT marking as read (mark_read: false — the message will come back). «Add my server» prefills the Servers input field — you press «+» yourself. The hidden button with a future action must NOT be visible.",
+          "message": "Second message — deep-link buttons.\n\n«Open profiler» jumps to Statistics → Profiler and marks this message as read. «DNS settings» opens the DNS screen WITHOUT marking as read (mark_read: false — the message will come back). «Add my server» prefills the Servers input field — you press «+» yourself. The hidden button with a future action must NOT be visible.",
           "links": [
-            { "label": "🔍 Open profiler", "url": "lxbox://route:profiler" },
-            { "label": "⚙️ DNS settings", "url": "lxbox://route:dns", "mark_read": false },
-            { "label": "➕ Add my server", "url": "lxbox://add:vless://c90f26f0-5a20-4573-a31a-c27b3c96933e@154.83.246.52:443?flow=xtls-rprx-vision&fp=firefox&pbk=pPi-WO8qQFFZ9UJWNLW9YClbjcoAAZWJQ2_FM3Kjhz8&security=reality&sid=500aec9e9e5e2212&sni=storage.yandex.net#%F0%9F%87%B3%F0%9F%87%B1%E2%9A%A1%D0%9D%D0%B8%D0%B4%D0%B5%D1%80%D0%BB%D0%B0%D0%BD%D0%B4%D1%8B", "mark_read": false },
-            { "label": "🙈 Hidden future action", "url": "lxbox://teleport:mars" }
+            {
+              "label": "🔍 Open profiler",
+              "url": "lxbox://route:profiler"
+            },
+            {
+              "label": "⚙️ DNS settings",
+              "url": "lxbox://route:dns",
+              "mark_read": false
+            },
+            {
+              "label": "➕ Add my server",
+              "url": "lxbox://add:vless://c90f26f0-5a20-4573-a31a-c27b3c96933e@154.83.246.52:443?flow=xtls-rprx-vision&fp=firefox&pbk=pPi-WO8qQFFZ9UJWNLW9YClbjcoAAZWJQ2_FM3Kjhz8&security=reality&sid=500aec9e9e5e2212&sni=storage.yandex.net#%F0%9F%87%B3%F0%9F%87%B1%E2%9A%A1%D0%9D%D0%B8%D0%B4%D0%B5%D1%80%D0%BB%D0%B0%D0%BD%D0%B4%D1%8B",
+              "mark_read": false
+            },
+            {
+              "label": "🙈 Hidden future action",
+              "url": "lxbox://teleport:mars"
+            }
           ]
         },
         "ru": {
           "title": "Тестовое сообщение №2 (ru, кнопки lxbox://)",
-          "message": "Второе сообщение — кнопки-переходы (§357).\n\n«Открыть профайлер» ведёт в Debug → Profiling и помечает сообщение прочитанным. «Настройки DNS» открывает экран DNS БЕЗ пометки (mark_read: false — сообщение вернётся). «Добавить сервер» подставляет ссылку в поле на Servers — «+» жмёшь сам. Скрытая кнопка с будущим действием НЕ должна быть видна.",
+          "message": "Второе сообщение — кнопки-переходы.\n\n«Открыть профайлер» ведёт в Статистику → Профайлер и помечает сообщение прочитанным. «Настройки DNS» открывает экран DNS БЕЗ пометки (mark_read: false — сообщение вернётся). «Добавить сервер» подставляет ссылку в поле на Servers — «+» жмёшь сам. Скрытая кнопка с будущим действием НЕ должна быть видна.",
           "links": [
-            { "label": "🔍 Открыть профайлер", "url": "lxbox://route:profiler" },
-            { "label": "⚙️ Настройки DNS", "url": "lxbox://route:dns", "mark_read": false },
-            { "label": "➕ Добавить сервер", "url": "lxbox://add:vless://c90f26f0-5a20-4573-a31a-c27b3c96933e@154.83.246.52:443?flow=xtls-rprx-vision&fp=firefox&pbk=pPi-WO8qQFFZ9UJWNLW9YClbjcoAAZWJQ2_FM3Kjhz8&security=reality&sid=500aec9e9e5e2212&sni=storage.yandex.net#%F0%9F%87%B3%F0%9F%87%B1%E2%9A%A1%D0%9D%D0%B8%D0%B4%D0%B5%D1%80%D0%BB%D0%B0%D0%BD%D0%B4%D1%8B", "mark_read": false },
-            { "label": "🙈 Скрытая будущая кнопка", "url": "lxbox://teleport:mars" }
+            {
+              "label": "🔍 Открыть профайлер",
+              "url": "lxbox://route:profiler"
+            },
+            {
+              "label": "⚙️ Настройки DNS",
+              "url": "lxbox://route:dns",
+              "mark_read": false
+            },
+            {
+              "label": "➕ Добавить сервер",
+              "url": "lxbox://add:vless://c90f26f0-5a20-4573-a31a-c27b3c96933e@154.83.246.52:443?flow=xtls-rprx-vision&fp=firefox&pbk=pPi-WO8qQFFZ9UJWNLW9YClbjcoAAZWJQ2_FM3Kjhz8&security=reality&sid=500aec9e9e5e2212&sni=storage.yandex.net#%F0%9F%87%B3%F0%9F%87%B1%E2%9A%A1%D0%9D%D0%B8%D0%B4%D0%B5%D1%80%D0%BB%D0%B0%D0%BD%D0%B4%D1%8B",
+              "mark_read": false
+            },
+            {
+              "label": "🙈 Скрытая будущая кнопка",
+              "url": "lxbox://teleport:mars"
+            }
           ]
         }
       }

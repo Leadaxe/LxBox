@@ -1,7 +1,7 @@
 # §357 — Support-лента v2.1: полноэкранный показ, псевдопротокол lxbox://, Debug API
 
 **Тип:** таска (расширение §356)
-**Статус:** реализовано 03.08.2026 (юниты; device-verify pending)
+**Статус:** реализовано и DEVICE-VERIFIED 03.08.2026 (эмулятор sdk_gphone64_arm64: полноэкранный показ, таймер «Прочитал (N)», скрытие незнакомого действия, route:dns/route:profiler→Stats-Live, add:vless→prefill поля Servers, mark_read в read; Debug API /support/state|reset|preview прогнаны curl'ом)
 **Связано:** §356 (support-лента — источник кнопок), §258 (`focusChannelTag` — прецедент открытия экрана «с прицелом»), §044/§316 (профайлер — вкладка Profiling на Debug-экране), §031/§238 (Debug API), `preview-empty-state` (прецедент UI-превью через Debug API)
 
 ## 0. Объём поверх §356 (решения юзера 03.08.2026)
