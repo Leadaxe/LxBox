@@ -314,10 +314,18 @@ String toUriShadowsocks(ShadowsocksSpec s) {
 Outbound emitHysteria2(Hysteria2Spec s, TemplateVars vars) {
   final out = _baseOutbound('hysteria2', s);
   if (s.password.isNotEmpty) out['password'] = s.password;
-  if (s.obfs == 'salamander') {
+  // §358 — оба типа из enum ядра. Тип и наличие пароля уже отвалидированы
+  // парсером (normalizeHysteria2Obfs): сюда доезжает только то, что ядро
+  // примет, иначе obfs отсутствует. Плоские min/max внутри `obfs` — так их
+  // кладёт badjson.MarshallObjects(_Hysteria2Obfs, Hysteria2ObfsGecko).
+  if (s.obfs == 'salamander' || s.obfs == 'gecko') {
     out['obfs'] = {
-      'type': 'salamander',
+      'type': s.obfs,
       if (s.obfsPassword.isNotEmpty) 'password': s.obfsPassword,
+      if (s.obfs == 'gecko') ...{
+        if (s.obfsMinPacketSize != null) 'min_packet_size': s.obfsMinPacketSize,
+        if (s.obfsMaxPacketSize != null) 'max_packet_size': s.obfsMaxPacketSize,
+      },
     };
   }
   if (s.upMbps != null) out['up_mbps'] = s.upMbps;
@@ -332,6 +340,16 @@ String toUriHysteria2(Hysteria2Spec s) {
   final q = <String, String>{};
   if (s.obfs.isNotEmpty) q['obfs'] = s.obfs;
   if (s.obfsPassword.isNotEmpty) q['obfs-password'] = s.obfsPassword;
+  // §358 — у hysteria2 нет де-факто URI-ключей для gecko (ядро читает его
+  // только из JSON); свои — симметрично obfs-password, parseHysteria2 читает
+  // их обратно. Пишем независимо от типа: смена salamander↔gecko в редакторе
+  // не должна терять уже разобранные значения.
+  if (s.obfsMinPacketSize != null) {
+    q['obfs-min-packet-size'] = s.obfsMinPacketSize.toString();
+  }
+  if (s.obfsMaxPacketSize != null) {
+    q['obfs-max-packet-size'] = s.obfsMaxPacketSize.toString();
+  }
   if (s.tls.serverName != null) q['sni'] = s.tls.serverName!;
   if (s.tls.insecure) q['insecure'] = '1';
   if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');

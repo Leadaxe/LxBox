@@ -1,6 +1,7 @@
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/tls_spec.dart';
+import '../hysteria2_obfs.dart';
 import '../uri_utils.dart';
 import '../utls_fingerprint.dart';
 
@@ -23,9 +24,6 @@ Hysteria2Spec? parseHysteria2(String uri) {
   final q = Map<String, String>.from(p.queryParameters);
   final label = decodeFragment(p.fragment);
   final tag = tagFromLabel(label, 'hysteria2', server, port);
-
-  final obfs = q['obfs'] ?? '';
-  final obfsPass = q['obfs-password'] ?? '';
 
   var sni = q['sni'] ?? '';
   if (sni.isEmpty || sni == '🔒' || (!sni.contains('.') && !sni.contains(':'))) {
@@ -52,6 +50,14 @@ Hysteria2Spec? parseHysteria2(String uri) {
 
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
+  // §358 — тип вне enum ядра или obfs без пароля = fatal всего конфига;
+  // нормализуем здесь, чтобы в спеку попало только принимаемое ядром.
+  final obfs = normalizeHysteria2Obfs(
+    q['obfs'] ?? '',
+    q['obfs-password'] ?? '',
+    warnings,
+  );
+
   // §084 H3: bandwidth hint'ы для round-trip с toUriHysteria2.
   final upMbps = int.tryParse(q['up_mbps'] ?? '');
   final downMbps = int.tryParse(q['down_mbps'] ?? '');
@@ -64,8 +70,10 @@ Hysteria2Spec? parseHysteria2(String uri) {
     port: port,
     rawUri: uri,
     password: password,
-    obfs: obfs,
-    obfsPassword: obfsPass,
+    obfs: obfs.type,
+    obfsPassword: obfs.password,
+    obfsMinPacketSize: int.tryParse(q['obfs-min-packet-size'] ?? ''),
+    obfsMaxPacketSize: int.tryParse(q['obfs-max-packet-size'] ?? ''),
     tls: tls,
     upMbps: upMbps,
     downMbps: downMbps,

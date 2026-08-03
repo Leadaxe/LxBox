@@ -2563,6 +2563,9 @@
   "OR": {
     "value": "ИЛИ"
   },
+  "Obfuscation \"%s\" has no password, so it was dropped (the core requires one and would otherwise break the whole config). The node connects without obfuscation.": {
+    "value": "Обфускация «%s» задана без пароля и отброшена (ядро требует пароль, иначе сломался бы весь конфиг). Узел подключится без обфускации."
+  },
   "Off": {
     "value": "Выключено"
   },
@@ -3824,6 +3827,9 @@
   },
   "Unknown format": {
     "value": "Неизвестный формат"
+  },
+  "Unknown obfuscation type \"%s\" was dropped (the core supports salamander and gecko only, and would otherwise break the whole config). The node connects without obfuscation.": {
+    "value": "Неизвестный тип обфускации «%s» отброшен (ядро знает только salamander и gecko, иначе сломался бы весь конфиг). Узел подключится без обфускации."
   },
   "Unknown uTLS fingerprint \"%s\" replaced with \"chrome\" (would otherwise break the whole config).": {
     "value": "Неизвестный uTLS fingerprint «%s» заменён на «chrome» (иначе сломался бы весь конфиг)."

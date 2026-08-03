@@ -6,6 +6,7 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
+import 'hysteria2_obfs.dart';
 import 'transport.dart';
 import 'uri_utils.dart';
 import 'utls_fingerprint.dart';
@@ -920,6 +921,14 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       if (server.isEmpty || port == 0) return null;
       // §219 — кастуем entry['obfs'] один раз (было дважды).
       final obfs = entry['obfs'] as Map?;
+      // §358 — тип/пароль канонизируются молча: у parseSingboxEntry нет
+      // warnings-аккумулятора (тот же power-user путь, что у fp выше), а
+      // отдать ядру неизвестный тип нельзя — это fatal всего конфига.
+      final obfsNorm = normalizeHysteria2Obfs(
+        obfs?['type']?.toString() ?? '',
+        obfs?['password']?.toString() ?? '',
+        null,
+      );
       return Hysteria2Spec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'hy2-$server-$port' : tag,
@@ -928,8 +937,10 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         port: port,
         rawUri: '',
         password: entry['password']?.toString() ?? '',
-        obfs: obfs?['type']?.toString() ?? '',
-        obfsPassword: obfs?['password']?.toString() ?? '',
+        obfs: obfsNorm.type,
+        obfsPassword: obfsNorm.password,
+        obfsMinPacketSize: (obfs?['min_packet_size'] as num?)?.toInt(),
+        obfsMaxPacketSize: (obfs?['max_packet_size'] as num?)?.toInt(),
         tls: _tlsFromSingbox(entry['tls'], server),
       );
     case 'naive':

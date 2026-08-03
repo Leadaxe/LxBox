@@ -124,6 +124,47 @@ void main() {
       expect(m.keepAlive, '45s');
     });
 
+    test('§358 — hysteria2 gecko round-trip: JSON → spec → JSON', () {
+      final spec = parseSingboxEntry({
+        'type': 'hysteria2',
+        'tag': 'hy2',
+        'server': 'h.example',
+        'server_port': 443,
+        'password': 'secret',
+        'obfs': {
+          'type': 'gecko',
+          'password': 'op',
+          'min_packet_size': 100,
+          'max_packet_size': 1200,
+        },
+      });
+      final hy = spec! as Hysteria2Spec;
+      expect(hy.obfs, 'gecko');
+      expect(hy.obfsPassword, 'op');
+      expect(hy.obfsMinPacketSize, 100);
+      expect(hy.obfsMaxPacketSize, 1200);
+
+      final back =
+          hy.emitRaw(TemplateVars.empty).map['obfs'] as Map<String, dynamic>;
+      expect(back['type'], 'gecko');
+      expect(back['min_packet_size'], 100);
+      expect(back['max_packet_size'], 1200);
+    });
+
+    test('§358 — hysteria2 с неизвестным obfs: тип отброшен, конфиг цел', () {
+      final spec = parseSingboxEntry({
+        'type': 'hysteria2',
+        'tag': 'hy2',
+        'server': 'h.example',
+        'server_port': 443,
+        'password': 'secret',
+        'obfs': {'type': 'xyz', 'password': 'op'},
+      });
+      final hy = spec! as Hysteria2Spec;
+      expect(hy.obfs, isEmpty);
+      expect(hy.emitRaw(TemplateVars.empty).map.containsKey('obfs'), isFalse);
+    });
+
     test('masque без ключей → null', () {
       expect(
         parseSingboxEntry(
