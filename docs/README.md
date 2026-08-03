@@ -41,7 +41,13 @@ L×Box управляется **двумя** способами помимо с�
 | [RELEASE_PROCESS.md](RELEASE_PROCESS.md) | Версии, теги, GitHub Releases, post-flight |
 | [DIAGNOSTICS.md](DIAGNOSTICS.md) | Playbook диагностики на устройстве: Debug API + CommandClient/профайлер endpoints, анализ TCP/DNS, `scripts/lxbox-diag.sh` |
 | [USER_GUIDE_RU.md](USER_GUIDE_RU.md) | Пользовательское руководство (RU) — как это работает: ступени трафика, каналы, detour, DNS, рецепты, regex |
-| [USER_GUIDE.md](USER_GUIDE.md) | User guide (EN) — перевод USER_GUIDE_RU; правится вместе с ним |
+| [USER_GUIDE.md](USER_GUIDE.md) | User guide (EN) — перевод USER_GUIDE_RU; правится вместе с ним (парность стережёт CI, см. ниже) |
+
+> **Парность RU/EN (§360).** README и USER_GUIDE ведутся парами. CI на каждом
+> push/PR сверяет скелет пары — число и уровни разделов, блоки кода, ссылки на
+> документы: раздел, дописанный в один язык, роняет шаг «Docs parity». Локально:
+> `dart run tool/docs/parity_check.dart --strict` из `app/`. Подробности —
+> [app/tool/docs/README.md](../app/tool/docs/README.md).
 
 ## Справочники API
 
