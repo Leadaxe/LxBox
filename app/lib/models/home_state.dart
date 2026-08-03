@@ -308,6 +308,24 @@ class HomeState {
     return activeModel[tag]?.isControl ?? false;
   }
 
+  /// §359 — control-узел, созданный ПРИЛОЖЕНИЕМ (шасси), а не пришедший
+  /// контентом из подписки/папки. Фильтр списка короткозамыкает в matching
+  /// только такие: узел автовыбора подписки (§322) — обычная нода списка и
+  /// фильтруется наравне со всеми (regex, чипы, пинг, detour-pool).
+  ///
+  /// Шасси = селектор канала (`vpn-N`, ключи `groupLabels` из storage
+  /// `channels[]`, §125) + его auto-двойник (`channelAutoTags`, §322).
+  /// `direct`/`block`/`dns` — по ТИПУ, не по тегу: подписка не может прислать
+  /// узел такого типа, а теги расходятся (`block` в `magic_nodes` шаблона vs
+  /// `block-out` в аллокаторе `build_config`) — литерал был бы ловушкой.
+  bool isSystemControlTag(String tag) {
+    if (groupLabels.containsKey(tag) || channelAutoTags.contains(tag)) {
+      return true;
+    }
+    final t = activeModel[tag]?.type;
+    return t == 'direct' || t == 'block' || t == 'dns';
+  }
+
   /// Все urltest-группы (для форс-URLTest после mass-ping, §070).
   Iterable<CcGroup> get urltestGroups =>
       ccGroups.where((g) => _isUrltest(g.type));

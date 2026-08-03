@@ -92,7 +92,7 @@ class _FilterPanelState extends State<FilterPanel>
     // §103 — transport/security чипы (тот же таб, что протоколы).
     for (final v in f.enabledVariants) {
       chips.add(InputChip(
-        label: Text('${neg(f.variantsInvert)}$v'),
+        label: Text('${neg(f.variantsInvert)}${autoModeLabel(v)}'), // §359
         onPressed: () => _tab.animateTo(1),
         onDeleted: () => f.toggleVariant(v),
       ));
@@ -237,7 +237,8 @@ class _FilterPanelState extends State<FilterPanel>
                     const SizedBox(height: 4),
                     MultiSelectChipsRow(
                       options: [
-                        for (final v in widget.availableVariants) (v, v),
+                        for (final v in widget.availableVariants)
+                          (v, autoModeLabel(v)), // §359
                       ],
                       enabled: f.enabledVariants,
                       onToggle: f.toggleVariant,

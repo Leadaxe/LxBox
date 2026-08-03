@@ -22,7 +22,18 @@ String protoLabel(String type) => switch (type) {
       'ssh' => 'SSH',
       'socks' => 'SOCKS',
       'http' => 'HTTP',
+      // §359 — узел автовыбора подписки (§322) как протокол в чипах фильтра.
+      // l10n-exempt: протокольный термин, латиница во всех локалях (как VLESS/Hy2).
+      'urltest' => 'Auto',
       _ => type.toUpperCase(),
+    };
+
+/// §359 — метка режима автовыбора для transport-чипа фильтра.
+/// l10n-exempt: протокольные термины, латиница во всех локалях.
+String autoModeLabel(String mode) => switch (mode) {
+      'least_test' => 'Fastest',
+      'round_robin' => 'Pool',
+      _ => mode,
     };
 
 /// §322 — метка узла автовыбора для подзаголовка (перед «→ выбранный»).
@@ -104,14 +115,36 @@ class NodeListPresenter {
   ({NodeSortMode mode, int gen, int nodesLen, bool pinD, bool pinA})?
       _cachedSortKey;
 
+  /// §359 — узел автовыбора подписки/папки (§322): тип `urltest`, но НЕ шасси
+  /// приложения. У него свой протокол (`urltest`) и свой транспорт (режим),
+  /// поэтому он фильтруется чипами как обычная нода.
+  bool _isUserAutoGroup(String tag, HomeState state) =>
+      !state.isSystemControlTag(tag) &&
+      (state.groupOf(tag)?.type == 'urltest' ||
+          state.activeModel[tag]?.type == 'urltest');
+
   /// Lookup protocol for tag — учитывает urltest group fallback (см. §048
   /// «Protocol detection»). Возвращает null если cache miss и urltest нет.
+  ///
+  /// §359 — у узла автовыбора подписки протокол СВОЙ (`urltest`), а не
+  /// унаследованный от выбранного члена: иначе он менялся бы под юзером при
+  /// каждом переключении и список «прыгал» бы сам по себе. Fallback на протокол
+  /// члена остаётся для селекторов каналов.
   String? protocolOfTag(String tag, HomeState state) {
     // §311 — activeModel: теги строк приходят из ядра (ccGroups).
     final model = state.activeModel;
+    if (_isUserAutoGroup(tag, state)) return 'urltest';
     final urltestNow = state.urltestNowOf(tag);
     return model.protocolOf(tag) ??
         (urltestNow != null ? model.protocolOf(urltestNow) : null);
+  }
+
+  /// §359/§208 — режим узла автовыбора как transport-слот фильтра. `balancer{}`
+  /// эмитится в конфиг только под round_robin (ядро SPEC 019, тот же критерий,
+  /// что у [autoGroupLabel]), поэтому его наличие и есть признак режима.
+  String autoModeOf(String tag, HomeState state) {
+    final raw = state.activeModel[tag]?.raw;
+    return (raw?['balancer'] is Map) ? 'round_robin' : 'least_test';
   }
 
   /// §103 — transport/security теги ноды для variant-фильтра. Тот же
@@ -119,6 +152,10 @@ class NodeListPresenter {
   /// даёт и теги). Пустой Set = unknown.
   Set<String> variantsOfTag(String tag, HomeState state) {
     final model = state.activeModel; // §311
+
+    // §359 — у узла автовыбора подписки transport-слот = его режим
+    // (least_test / round_robin), а не транспорт выбранного члена.
+    if (_isUserAutoGroup(tag, state)) return {autoModeOf(tag, state)};
 
     var n = model[tag];
     if (n == null || n.isControl || n.type.isEmpty) {
@@ -141,6 +178,8 @@ class NodeListPresenter {
     'tcp', 'ws', 'grpc', 'h2', 'h3', 'httpupgrade', 'quic', 'xhttp',
     'TLS', 'TLS+Vision', 'Reality', 'Reality+Vision',
     'awg', 'awg1.5', 'awg2',
+    // §359 — режимы узла автовыбора (§322): свой transport-слот, в конец ряда.
+    'least_test', 'round_robin',
   ];
 
   static int _variantRank(String v) {
@@ -188,14 +227,14 @@ class NodeListPresenter {
       List<String> sortedNodes, HomeState state) {
     final pool = sortedNodes
         .where((t) =>
-            state.isControlTag(t) ||
+            state.isSystemControlTag(t) || // §359
             filter.detourPoolPasses(state.activeModel[t]?.isDetour ?? false)) // §311
         .toList();
     final f = buildNodeFilter(state);
     final matching = <String>[];
     final nonMatching = <String>[];
     for (final tag in pool) {
-      if (state.isControlTag(tag) || f.passes(tag)) {
+      if (state.isSystemControlTag(tag) || f.passes(tag)) { // §359
         matching.add(tag);
       } else {
         nonMatching.add(tag);
@@ -255,7 +294,7 @@ class NodeListPresenter {
     final allTags = viewSortedNodes(state);
     final pool = allTags
         .where((t) =>
-            state.isControlTag(t) ||
+            state.isSystemControlTag(t) || // §359
             filter.detourPoolPasses(state.activeModel[t]?.isDetour ?? false)) // §311
         .toList();
 
