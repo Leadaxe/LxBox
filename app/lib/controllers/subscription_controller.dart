@@ -66,6 +66,11 @@ class SubscriptionController extends ChangeNotifier {
   bool _busy = false;
   bool get busy => _busy;
 
+  /// §360 — узкий флаг «сейчас идёт `generateConfig`». Нужен `_persist`, чтобы
+  /// не поднимать `configDirty` на собственных служебных записях пересборки, не
+  /// глуша при этом мутации от юзера (см. коммент в `_persist`).
+  bool _generating = false;
+
   /// §113 — флаг живёт в `SettingsStorage` (объект, где меняются настройки):
   /// config-значимые сейверы сами его поднимают. Здесь — делегат, чтобы все
   /// существующие read/write-сайты (home, debug, bootstrap) не менялись.
@@ -1692,13 +1697,26 @@ class SubscriptionController extends ChangeNotifier {
       return null;
     }
     _busy = true;
+    _generating = true;
     _lastError = null;
     _lastFatalIssues = const [];
     notifyListeners();
+    // §360 — снимок состава на момент, с которого `_generate` начнёт читать
+    // `_entries`. Мутация, прилетевшая из UI ПОКА мы генерируем (toggle
+    // подписки на экране Servers), в этот конфиг уже не попала: гасить по ней
+    // `configDirty` — значит молча выбросить изменение до следующей случайной
+    // мутации. Сравниваем снимок с составом на выходе и гасим флаг, только
+    // если под нами ничего не поменялось.
+    final before = _compositionSignature();
     try {
       final config = await _generate();
       _lastGeneratedConfig = config;
-      configDirty = false;
+      if (_compositionSignature() == before) {
+        configDirty = false;
+      } else {
+        AppLog.I.info(
+            '§360: entries changed during rebuild — configDirty kept');
+      }
       return config;
     } catch (e) {
       _lastError = humanizeError(e);
@@ -1707,6 +1725,7 @@ class SubscriptionController extends ChangeNotifier {
       return null;
     } finally {
       _busy = false;
+      _generating = false;
       _progressMessage = null;
       notifyListeners();
     }
@@ -2119,6 +2138,23 @@ class SubscriptionController extends ChangeNotifier {
     return '$tags|$disabled';
   }
 
+  /// §360 — отпечаток состава ВСЕХ entries: что увидит билдер, если собрать
+  /// конфиг прямо сейчас. Служит одной цели — понять, менялись ли `_entries`
+  /// под летящей пересборкой (см. `generateConfig`).
+  ///
+  /// В отличие от §331-`_compositionKey` (одна подписка, вопрос «фетч принёс
+  /// новое?») здесь входит и `enabled`: выключенная подписка отдаёт билдеру
+  /// пустой набор узлов, так что сам флаг — часть состава. Порядок entries
+  /// значим по той же причине, что и порядок узлов внутри списка.
+  String _compositionSignature() {
+    final parts = _entries.map((e) {
+      final l = e.list;
+      final nodes = l.nodes.map(nodeIdentityHash).join(',');
+      return '${l.id}:${l.enabled ? 1 : 0}:$nodes';
+    });
+    return parts.map((s) => '${s.length}:$s').join();
+  }
+
   /// [keepDirtyFlag] — §331: записать на диск, НЕ поднимая `configDirty`.
   /// Единственный законный случай: успешный fetch, в котором состав узлов
   /// оказался тем же. На диск писать всё равно надо (`last_updated`,
@@ -2127,8 +2163,19 @@ class SubscriptionController extends ChangeNotifier {
   /// подписке, которая не менялась.
   ///
   /// Для всех прочих вызовов дефолт неизменен: любая запись = pending changes.
+  ///
+  /// §360 — гейт здесь смотрит на `_generating`, а НЕ на `_busy`. `_busy`
+  /// поднимают ещё и `addUserServer`/`addFromInput`/fetch/`addMembersToFolder`
+  /// — операции, которые обязаны быть dirty; под общим гейтом они молча теряли
+  /// флаг. Хуже того, гейт ловил и мутации, пришедшие из UI ПОКА летит чужая
+  /// пересборка (toggle подписки сразу после возврата на home): изменение
+  /// применялось в `_entries`, но `configDirty` не вставал, а `generateConfig`
+  /// следом гасил его в false — новый состав нод не доезжал до конфига до
+  /// следующей случайной мутации. Самозагрязнение самой пересборки закрыто
+  /// явным `keepDirtyFlag: true` на её внутренних вызовах, отдельный гейт для
+  /// этого не нужен.
   Future<void> _persist({bool keepDirtyFlag = false}) async {
-    if (!_busy && !keepDirtyFlag) configDirty = true;
+    if (!_generating && !keepDirtyFlag) configDirty = true;
     await SettingsStorage.saveServerLists(_entries.map((e) => e.list).toList());
   }
 
