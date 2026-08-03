@@ -492,6 +492,8 @@ parser/                      # Parser v2 (text → NodeSpec)
   uri_parsers.dart           #   barrel + parseUri scheme-dispatcher
   uri_parsers/<proto>.dart   #   per-protocol URI→NodeSpec (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg/masque)
   json_parsers.dart          #   parseXrayElement + parseSingboxEntry (round-trip)
+  singbox_config.dart        #   §368: sing-box config/массив конфигов → узлы+группы+detour
+                             #   (паритет с Xray-веткой: 2 прохода, дедуп, синонимы тегов)
   ini_parser.dart            #   WireGuard INI → wg:// URI → WireguardSpec
   transport.dart             #   parseTransport (query→TransportSpec) + transportToQuery
   uri_utils.dart             #   shared: base64-safe decode, newUuidV4, tagFromLabel, packet-encoding

@@ -2,15 +2,14 @@ import '../../config/consts.dart' show kBlockOutboundTag, kDirectOutboundTag;
 import '../../models/channel.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../../models/preset_rule_set.dart';
 import '../../services/rule_display_names.dart';
 import '../../services/l10n/locale_controller.dart';
 
-/// Remote `rule_set` пресета (type=remote + url).
-class PresetRemoteRuleSet {
-  const PresetRemoteRuleSet({required this.tag, required this.url});
-  final String tag;
-  final String url;
-}
+// §366 — `PresetRemoteRuleSet` и `parseUpdateIntervalHours` переехали в
+// `models/preset_rule_set.dart` (нужны headless-сервису авто-обновления).
+// Реэкспорт — чтобы потребители экрана не меняли импорты.
+export '../../models/preset_rule_set.dart';
 
 /// Outbound-опция для селекторов на экране Routing.
 class RoutingOutboundOption {
@@ -66,56 +65,22 @@ class RoutingHelpers {
   /// `rule` опционален — если передан, фильтруются rule_set'ы выключенные
   /// через `enabled: "@var"` гейтинг (§045). Без `rule` — все remote
   /// rule_set'ы (для cleanup-операций когда хотим тронуть все cached files).
+  /// §366 — реализация переехала в `models/preset_rule_set.dart` (нужна
+  /// headless-сервису авто-обновления). Здесь — делегат, чтобы не менять
+  /// вызовы на экранах.
   static List<PresetRemoteRuleSet> remoteRuleSetsOf(
     SelectableRule preset, [
     CustomRulePreset? rule,
-  ]) {
-    final out = <PresetRemoteRuleSet>[];
-    for (final rs in preset.ruleSets) {
-      if (rs['type'] != 'remote') continue;
-      final tag = rs['tag'];
-      final url = rs['url'];
-      if (tag is! String || tag.isEmpty) continue;
-      if (url is! String || url.isEmpty) continue;
-      if (rule != null && !isRuleSetEnabled(rs, preset, rule)) continue;
-      out.add(PresetRemoteRuleSet(tag: tag, url: url));
-    }
-    return out;
-  }
+  ]) =>
+      remoteRuleSetsOfPreset(preset, rule);
 
-  /// Резолв `rule_set.enabled` (§045). Поле может быть string substitution
-  /// (`"@varname"`), bool literal, или отсутствовать (= always-on).
+  /// Резолв `rule_set.enabled` (§045). См. `models/preset_rule_set.dart`.
   static bool isRuleSetEnabled(
     Map<String, dynamic> rs,
     SelectableRule preset,
     CustomRulePreset rule,
-  ) {
-    final raw = rs['enabled'];
-    if (raw == null) return true;
-    if (raw is bool) return raw;
-    if (raw is String) {
-      String resolved = raw;
-      if (raw.startsWith('@')) {
-        final varName = raw.substring(1);
-        final v = preset.vars.firstWhere(
-          (x) => x.name == varName,
-          orElse: () => WizardVar(name: '', type: '', defaultValue: 'true'),
-        );
-        final def = v.defaultValue.isNotEmpty ? v.defaultValue : 'true';
-        // §265 — ref-var: значение в глобальном userVars, не в varsValues.
-        // Pure-хелпер userVars не читает → fallback на default (defensive:
-        // rule_set.enabled-гейты используют dns_enable-паттерн, не ref).
-        if (v.isRef) {
-          resolved = def;
-        } else {
-          final stored = rule.varsValues[varName];
-          resolved = (stored != null && stored.isNotEmpty) ? stored : def;
-        }
-      }
-      return resolved.toLowerCase() == 'true';
-    }
-    return true;
-  }
+  ) =>
+      isRuleSetEnabledFor(rs, preset, rule);
 
   /// Composite ключ для `_srsCached` / `_srsDownloading` у preset-rule_set'ов.
   /// У `CustomRuleSrs` там просто `rule.id`; у preset'ов — `<id>|<tag>`,

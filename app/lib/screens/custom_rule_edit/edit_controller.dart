@@ -5,7 +5,9 @@ import 'package:flutter/widgets.dart';
 
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../../services/l10n/locale_controller.dart';
 import '../../services/preset_on_change.dart';
+import '../../services/relative_time.dart';
 import '../../services/rule_set_downloader.dart';
 import '../../services/settings_storage.dart';
 import '../../services/template_loader.dart';
@@ -125,6 +127,13 @@ class CustomRuleEditController extends ChangeNotifier {
 
   Map<String, String> _presetSrsPaths = const {};
   SrsDownloadState _srsState = SrsDownloadState.none;
+
+  /// §366 — TTL кэша rule-set'а (часы, из [kSrsTtlChoicesHours]).
+  int _srsTtlHours = kDefaultSrsTtlHours;
+
+  /// §366 — готовая строка «когда обновлялся» под полем URL. Null пока
+  /// метаданные не прочитаны либо файла нет.
+  String? _srsLastUpdatedText;
   final Set<String> _boolVarDownloading = <String>{};
 
   bool _disposed = false;
@@ -157,6 +166,35 @@ class CustomRuleEditController extends ChangeNotifier {
   Map<String, String> get varsValues => _varsValues;
   Map<String, String> get presetSrsPaths => _presetSrsPaths;
   SrsDownloadState get srsState => _srsState;
+
+  /// §366 — строка «Updated 3d ago» / об ошибке последней попытки.
+  String? get srsLastUpdatedText => _srsLastUpdatedText;
+
+  /// §366 — читает sidecar-метаданные кэша для строки под полем URL.
+  Future<void> _loadSrsMeta(String id) async {
+    final meta = await RuleSetDownloader.readMeta(id);
+    if (_disposed) return;
+    final last = meta.lastUpdated;
+    if (meta.failing) {
+      _srsLastUpdatedText =
+          getLocalText.s("Update failed — using cached copy");
+    } else if (last != null) {
+      _srsLastUpdatedText =
+          getLocalText.s("Updated %s", relativeTime(DateTime.now(), last));
+    } else {
+      _srsLastUpdatedText = null;
+    }
+    notifyListeners();
+  }
+
+  /// §366 — выбранный TTL кэша rule-set'а в часах (`0` = не обновлять).
+  int get srsTtlHours => _srsTtlHours;
+
+  set srsTtlHours(int v) {
+    if (_srsTtlHours == v) return;
+    _srsTtlHours = v;
+    notifyListeners();
+  }
   Set<String> get boolVarDownloading => _boolVarDownloading;
 
   /// §117 задача 3 — DNS-опция правила (null = не настраивалась).
@@ -222,6 +260,9 @@ class CustomRuleEditController extends ChangeNotifier {
     portCtrl = TextEditingController(text: r.ports.join('\n'));
     portRangeCtrl = TextEditingController(text: r.portRanges.join('\n'));
     srsUrlCtrl = TextEditingController(text: r.srsUrl);
+    // §366 — TTL есть только у srs-правил; у прочих остаётся дефолт и в
+    // сохранение не идёт.
+    if (r is CustomRuleSrs) _srsTtlHours = r.updateIntervalHours;
     jsonCtrl = TextEditingController(text: r.json);
     _enabled = r.enabled;
     _ipIsPrivate = r.ipIsPrivate;
@@ -252,6 +293,7 @@ class CustomRuleEditController extends ChangeNotifier {
             cached ? SrsDownloadState.cached : SrsDownloadState.none;
         notifyListeners();
       });
+      unawaited(_loadSrsMeta(r.id)); // §366
     }
     if (r is CustomRulePreset && preset != null) {
       _resolvePresetSrsPaths(r, preset!);
@@ -552,6 +594,8 @@ class CustomRuleEditController extends ChangeNotifier {
     _srsState =
         path != null ? SrsDownloadState.cached : SrsDownloadState.error;
     notifyListeners();
+    // §366 — обновить строку «Updated …»: метаданные записал downloader.
+    unawaited(_loadSrsMeta(initial.id));
   }
 
   /// Cloud-menu «Clear cached file»: удаляет локальный `.srs`, не
@@ -562,6 +606,7 @@ class CustomRuleEditController extends ChangeNotifier {
     if (_disposed) return;
     _srsState = SrsDownloadState.none;
     _enabled = false;
+    _srsLastUpdatedText = null; // §366 — метаданные ушли вместе с файлом
     notifyListeners();
   }
 
@@ -692,6 +737,7 @@ class CustomRuleEditController extends ChangeNotifier {
           name: name,
           enabled: _enabled,
           srsUrl: srsUrlCtrl.text.trim(),
+          updateIntervalHours: _srsTtlHours, // §366
           ports: norm.normalizedPorts(portCtrl.text),
           portRanges: norm.normalizedPortRanges(portRangeCtrl.text),
           packages: List.of(_packages),

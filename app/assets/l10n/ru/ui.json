@@ -1,4 +1,7 @@
 {
+  "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.": {
+    "value": "«selector» импортирован как группа автовыбора: самый быстрый узел выбирается по замерам, а не вручную."
+  },
   "%1$d +%2$d⚙ nodes": {
     "value": {
       "one": "%1$d узел +%2$d⚙",
@@ -156,6 +159,14 @@
       "few": "%d сбоя",
       "many": "%d сбоев",
       "other": "%d сбоя"
+    }
+  },
+  "%d group members could not be imported and were left out.": {
+    "value": {
+      "one": "Не удалось импортировать %d участника группы — он не вошёл в состав.",
+      "few": "Не удалось импортировать %d участников группы — они не вошли в состав.",
+      "many": "Не удалось импортировать %d участников группы — они не вошли в состав.",
+      "other": "Не удалось импортировать %d участника группы — они не вошли в состав."
     }
   },
   "%d hours": {
@@ -646,6 +657,9 @@
   "Adds new items, keeps existing.": {
     "value": "Добавляет новое, сохраняет существующее."
   },
+  "Adds padding traffic so the WireGuard handshake carries no fixed size signature. Enable if the plain tunnel does not connect.": {
+    "value": "Добавляет паддинг-трафик, чтобы у handshake WireGuard не было фиксированной сигнатуры размера. Включите, если обычный туннель не подключается."
+  },
   "Advanced": {
     "value": "Дополнительно"
   },
@@ -898,6 +912,18 @@
   "Case-sensitive": {
     "value": "Учитывать регистр"
   },
+  "Chain is longer than %d hops and was truncated.": {
+    "value": "Цепочка длиннее %d звеньев — лишние отброшены."
+  },
+  "Chain target \"%s\" is a group, which cannot be used as a chain hop. The node connects directly.": {
+    "value": "Цель цепочки «%s» — группа, а группа звеном быть не может. Узел подключается напрямую."
+  },
+  "Chain target \"%s\" was not found in the config. The node connects directly.": {
+    "value": "Цель цепочки «%s» в конфиге не найдена. Узел подключается напрямую."
+  },
+  "Chain to \"%s\" would loop back on itself, so it was dropped. The node connects directly.": {
+    "value": "Цепочка на «%s» замкнулась бы в кольцо и была отброшена. Узел подключается напрямую."
+  },
   "Chains inside the folder get the folder detour appended": {
     "value": "К цепочкам внутри папки добавляется detour самой папки"
   },
@@ -921,6 +947,9 @@
   },
   "Check failed: %s": {
     "value": "Не удалось проверить: %s"
+  },
+  "Check for updates": {
+    "value": "Проверять обновления"
   },
   "Check for updates on launch": {
     "value": "Проверять обновления при запуске"
@@ -1595,6 +1624,27 @@
   "Error: %s": {
     "value": "Ошибка: %s"
   },
+  "Every %d h": {
+    "value": "Каждые %d ч"
+  },
+  "Every 2 weeks": {
+    "value": "Каждые 2 недели"
+  },
+  "Every 6 months": {
+    "value": "Каждые 6 месяцев"
+  },
+  "Every day": {
+    "value": "Каждый день"
+  },
+  "Every month": {
+    "value": "Каждый месяц"
+  },
+  "Every week": {
+    "value": "Каждую неделю"
+  },
+  "Every year": {
+    "value": "Каждый год"
+  },
   "Events with no owning app": {
     "value": "События, у которых не определено приложение"
   },
@@ -2223,14 +2273,11 @@
   "MASQUE registration failed": {
     "value": "Не удалось зарегистрировать MASQUE"
   },
-  "MASQUE tunnels IP over HTTP/3 (QUIC) to Cloudflare — it looks like ordinary HTTPS to DPI and often exits from a foreign IP.": {
-    "value": "MASQUE туннелирует IP поверх HTTP/3 (QUIC) в Cloudflare — для DPI это выглядит как обычный HTTPS, а выход часто идёт с зарубежного IP."
+  "MASQUE tunnels IP over HTTP/3 (QUIC) to Cloudflare — standard HTTPS transport, and the exit IP is often in another country.": {
+    "value": "MASQUE туннелирует IP поверх HTTP/3 (QUIC) в Cloudflare — стандартный транспорт HTTPS, а выходной IP часто находится в другой стране."
   },
   "Make experiment": {
     "value": "Провести эксперимент"
-  },
-  "Masks WireGuard from DPI by adding junk traffic. Enable if WARP is blocked.": {
-    "value": "Маскирует WireGuard от DPI, добавляя мусорный трафик. Включите, если WARP заблокирован."
   },
   "Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local": {
     "value": "Совпадает с RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local"
@@ -2322,6 +2369,9 @@
   },
   "Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.": {
     "value": "Сети, где вы находитесь ≥ 5 минут, появляются в редакторе правила маршрутизации → «Pick saved»."
+  },
+  "Never": {
+    "value": "Никогда"
   },
   "Never (respect server)": {
     "value": "Никогда (по указанию сервера)"
@@ -2533,6 +2583,9 @@
   },
   "Not found: %s": {
     "value": "Не найдено: %s"
+  },
+  "Not imported: %s": {
+    "value": "Не импортируется: %s"
   },
   "Not recording": {
     "value": "Запись не идёт"
@@ -3164,6 +3217,9 @@
   },
   "Routing": {
     "value": "Маршрутизация"
+  },
+  "Routing and DNS are configured in the app.": {
+    "value": "Маршрутизация и DNS настраиваются в приложении."
   },
   "Routing loop between groups: %s — fix group membership to start the VPN.": {
     "value": "Петля маршрутизации между группами: %s — исправьте состав групп, чтобы запустить VPN."
@@ -3849,11 +3905,20 @@
   "Update disabled subscriptions": {
     "value": "Обновлять выключенные подписки"
   },
+  "Update failed — using cached copy": {
+    "value": "Не удалось обновить — используется сохранённая копия"
+  },
   "Update interval": {
     "value": "Интервал обновления"
   },
+  "Update now": {
+    "value": "Обновить сейчас"
+  },
   "Update subscription to see nodes": {
     "value": "Обновите подписку, чтобы увидеть узлы"
+  },
+  "Updated %s": {
+    "value": "Обновлено %s"
   },
   "Updates": {
     "value": "Обновления"

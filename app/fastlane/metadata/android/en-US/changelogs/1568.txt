@@ -1,0 +1,5 @@
+Rule sets now refresh on their own schedule, with a per-rule update interval (daily to yearly) and a visible age indicator.
+
+Fixes for the "switched subscription" flow: a change could fail to reach the config, the tunnel could stick in Connected with a dead Stop button, and freshly added nodes could stay without latency measurements.
+
+Full changelog: https://github.com/Leadaxe/LxBox/blob/main/CHANGELOG.md

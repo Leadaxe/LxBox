@@ -23,6 +23,7 @@ import '../services/settings_storage.dart';
 import '../services/support/support_message.dart';
 import '../services/template_loader.dart';
 import '../services/haptic_service.dart';
+import '../services/rule_set_auto_updater.dart';
 import '../services/subscription/auto_updater.dart';
 
 part 'home_controller/config_io.dart';
@@ -31,11 +32,19 @@ part 'home_controller/ping_orchestration.dart';
 
 class HomeController extends ChangeNotifier
     with _ConfigIoMixin, _HeartbeatMixin, _PingMixin {
-  HomeController({AutoUpdater? autoUpdater}) : _autoUpdater = autoUpdater;
+  HomeController({
+    AutoUpdater? autoUpdater,
+    RuleSetAutoUpdater? ruleSetAutoUpdater,
+  })  : _autoUpdater = autoUpdater,
+        _ruleSetAutoUpdater = ruleSetAutoUpdater;
 
   @override
   final BoxVpnClient _vpn = BoxVpnClient();
   final AutoUpdater? _autoUpdater;
+
+  /// §366 — авто-обновление rule-set'ов. Опционален: тесты и headless-пути
+  /// живут без него.
+  final RuleSetAutoUpdater? _ruleSetAutoUpdater;
   StreamSubscription<TunnelStatusEvent>? _statusSub;
 
   /// §122 — единый канал данных от libbox CommandClient (заменил `ClashApiClient`
@@ -404,6 +413,8 @@ class HomeController extends ChangeNotifier
       HapticService.I.onVpnConnected();
       // AutoUpdater триггер #2: через 2 мин после connected.
       _autoUpdater?.onVpnConnected();
+      // §366 — проверка TTL rule-set'ов через 30с после connected.
+      _ruleSetAutoUpdater?.onVpnConnected();
       unawaited(_scheduleAutoPing());
       // §047 — outgoing lifecycle event (gated, default OFF).
       AutomationEventEmitter.I.emitVpnConnected();
@@ -743,6 +754,31 @@ class HomeController extends ChangeNotifier
     // STARTED со СТАРЫМ box'ом и честно отдаёт доreload'ный конфиг (ретрай
     // «по null» его не отсеет). Поэтому ждём ответ, ОТЛИЧНЫЙ от прежнего.
     unawaited(_captureRunningConfig(staleRaw: staleSnapshot));
+
+    // §367 — автопинг после in-place reload. Та же дыра, что у снапшота выше
+    // (§311) и у `_startGroupsPull` (§049 F4): `_scheduleAutoPing` висит на
+    // ПЕРЕХОДЕ в connected, а при reload перехода нет — статус остаётся
+    // connected. Симптом: сменил подписку с включённой галкой автоприменения,
+    // экран перерисовался новым составом узлов, но все они без задержек —
+    // пинга никто не запускал (при обычном старте он идёт сам).
+    //
+    // Состав узлов после reload другой, значит прежние `lastDelay` к ним не
+    // относятся. Тот же 5-секундный отложенный запуск, что на connect: ядру
+    // нужно время поднять новые outbound'ы. Гейты (галка `auto_ping_on_start`,
+    // tunnelUp, непустой список) — внутри `_scheduleAutoPing`.
+    //
+    // ВАЖНО: сначала подтянуть группы, потом планировать пинг. `_state.nodes`
+    // (по которому пингуем) наполняет `_applyGroups` из groups-стрима, а тот
+    // при in-place reload может не прийти вовсе — ровно то, о чём §311-коммент
+    // выше. Device-факт 03.08: reload отработал, снапшот захватился, а
+    // groups-push не пришёл — таймер срабатывал на пустом/устаревшем списке и
+    // тихо выходил по `nodes.isEmpty`. Пинга не было, хотя экран показывал
+    // новый состав (его рисует saved-конфиг, не ядро). Тот же unary-`getGroups`,
+    // что делает pull-to-refresh — им юзер и «чинил» это руками.
+    unawaited(() async {
+      await pullToRefresh();
+      await _scheduleAutoPing();
+    }());
 
     // Cooldown timer перерендерит canReload через 3s — назначаем future
     // notifyListeners (без heavy timer'а; achievable через delayed Future).

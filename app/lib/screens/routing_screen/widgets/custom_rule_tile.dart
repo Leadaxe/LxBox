@@ -59,6 +59,10 @@ class CustomRuleTile extends StatelessWidget {
   final bool locked;
 
   /// ☁-кнопка статуса (SRS либо preset) — null если правилу не нужен SRS.
+  ///
+  /// §366 — время последнего обновления в тайле намеренно НЕ показывается:
+  /// список правил про маршрутизацию, а не про состояние кэша. Дата и кнопка
+  /// обновления живут внутри правила, в редакторе.
   final Widget? statusButton;
 
   final VoidCallback onTap;

@@ -49,6 +49,11 @@ import '../services/warp/scan/scan_pool.dart';
 // (`_replaceList`, `_formatAgo`) к/между основным файлом и part'ом доступен.
 part 'subscription_controller/subscription_entry.dart';
 
+/// §368 — исход добавления JSON-формы. Три состояния, а не bool: «форму не
+/// узнали» и «форму узнали, но узлов не собралось» дают разные сообщения, и
+/// bool заставлял вызывающего затирать более точную ошибку общей.
+enum _JsonAdd { added, empty, notJson }
+
 /// Основной контроллер подписок. Владеет `List<ServerList>`, делает
 /// fetch/parse через `parseFromSource`, собирает конфиг через `buildConfig`.
 class SubscriptionController extends ChangeNotifier {
@@ -65,6 +70,11 @@ class SubscriptionController extends ChangeNotifier {
 
   bool _busy = false;
   bool get busy => _busy;
+
+  /// §360 — узкий флаг «сейчас идёт `generateConfig`». Нужен `_persist`, чтобы
+  /// не поднимать `configDirty` на собственных служебных записях пересборки, не
+  /// глуша при этом мутации от юзера (см. коммент в `_persist`).
+  bool _generating = false;
 
   /// §113 — флаг живёт в `SettingsStorage` (объект, где меняются настройки):
   /// config-значимые сейверы сами его поднимают. Здесь — делегат, чтобы все
@@ -792,10 +802,17 @@ class SubscriptionController extends ChangeNotifier {
         _entries.add(SubscriptionEntry(
             list: dlServer, nodeCount: dlServer.nodes.length));
         await _persist();
-      } else if (_isJsonOutbound(trimmed)) {
-        await _addJsonOutbounds(trimmed);
       } else {
-        _lastError = const ErrMsg(ErrKey.inputNotRecognized);
+        switch (await _addJsonNodes(trimmed)) {
+          case _JsonAdd.added:
+            await _persist();
+          case _JsonAdd.empty:
+            // Форму опознали, узлов не собралось — ошибку уже выставил
+            // `_addJsonNodes`, и она точнее, чем «не распознано».
+            break;
+          case _JsonAdd.notJson:
+            _lastError = const ErrMsg(ErrKey.inputNotRecognized);
+        }
       }
     } catch (e) {
       _lastError = humanizeError(e);
@@ -805,55 +822,80 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
-  bool _isJsonOutbound(String text) {
-    if (!text.startsWith('{') && !text.startsWith('[')) return false;
-    if (!text.contains('"type"')) return false;
-    try {
-      final parsed = jsonDecode(text);
-      if (parsed is Map<String, dynamic>) {
-        return parsed.containsKey('type');
-      }
-      if (parsed is List && parsed.isNotEmpty) {
-        return parsed.first is Map<String, dynamic> &&
-            (parsed.first as Map).containsKey('type');
-      }
-    } catch (_) {}
-    return false;
-  }
-
-  Future<void> _addJsonOutbounds(String text) async {
-    final parsed = jsonDecode(text);
-    final outbounds = <Map<String, dynamic>>[];
-    if (parsed is Map<String, dynamic>) {
-      outbounds.add(parsed);
-    } else if (parsed is List) {
-      outbounds.addAll(parsed.whereType<Map<String, dynamic>>());
+  /// §368 — JSON любой из четырёх форм (одиночный outbound, массив
+  /// outbound'ов, полный конфиг, массив конфигов) → одна запись.
+  ///
+  /// Гейт один — `decode` + flavor; своей эвристики («начинается с `{` и
+  /// содержит `"type"`») здесь больше нет: она была третьей по счёту и
+  /// разошлась с превью (§368 §1).
+  ///
+  /// Одна запись, а не N: раньше массив outbound'ов раскладывался по одной
+  /// записи на элемент («v1 behavior parity»). Вставленный файл — один
+  /// источник, и обновляться он должен целиком.
+  Future<_JsonAdd> _addJsonNodes(String text) async {
+    final decoded = decode(text);
+    if (decoded is! JsonConfig) return _JsonAdd.notJson;
+    switch (decoded.flavor) {
+      case JsonFlavor.singboxOutbound:
+      case JsonFlavor.singboxArray:
+      case JsonFlavor.singboxConfig:
+      case JsonFlavor.singboxMulti:
+      case JsonFlavor.xrayArray:
+        break;
+      case JsonFlavor.clashYaml:
+      case JsonFlavor.unknown:
+        return _JsonAdd.notJson;
     }
-    if (outbounds.isEmpty) {
+
+    final nodes = parseAll(decoded);
+    if (nodes.isEmpty) {
       _lastError = const ErrMsg(ErrKey.noValidOutboundsInJson);
-      return;
+      return _JsonAdd.empty;
     }
 
-    // Each JSON outbound → own UserServer entry (v1 behavior parity).
-    for (final ob in outbounds) {
-      final decoded = decode(jsonEncode(ob));
-      final nodes = parseAll(decoded);
-      if (nodes.isEmpty) continue;
-      final jsonServer = _autoEmoji(UserServer(
+    // §368 — контейнер по числу узлов, тем же порогом, что и файловый импорт
+    // (§129): один узел — это сервер, несколько — набор.
+    //
+    // `UserServer` устроен как «один сервер»: подпись в списке берётся от
+    // протокола первого узла, тап открывает экран одного узла, а операции над
+    // отдельными узлами (выключение §283, правила импорта §302) есть только у
+    // подписки. Конфиг sing-box на десяток узлов с группой в такой контейнер
+    // не помещается — он приезжает файловой подпиской (`file:<uuid>`,
+    // автообновление выключено), как импорт файла с >1 нодой.
+    if (nodes.length > 1) {
+      final url = 'file:${newUuidV4()}';
+      await HttpCache.save(url, text, const {});
+      final list = SubscriptionServers(
         id: newUuidV4(),
         name: '',
         enabled: true,
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
-        origin: UserSource.paste,
-        createdAt: DateTime.now(),
-        rawBody: jsonEncode(ob),
+        url: url,
+        lastUpdated: DateTime.now(),
+        lastUpdateStatus: UpdateStatus.ok,
+        lastNodeCount: nodes.length,
+        updateIntervalHours: -1, // §129 — файловая: авто-обновления нет
         nodes: nodes,
-      ));
-      _entries.add(SubscriptionEntry(
-          list: jsonServer, nodeCount: jsonServer.nodes.length));
+      );
+      _entries.add(SubscriptionEntry(list: list, nodeCount: nodes.length));
+      return _JsonAdd.added;
     }
-    await _persist();
+
+    final jsonServer = _autoEmoji(UserServer(
+      id: newUuidV4(),
+      name: '',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      origin: UserSource.paste,
+      createdAt: DateTime.now(),
+      rawBody: text,
+      nodes: nodes,
+    ));
+    _entries.add(SubscriptionEntry(
+        list: jsonServer, nodeCount: jsonServer.nodes.length));
+    return _JsonAdd.added;
   }
 
   Future<void> removeAt(int index) async {
@@ -1692,13 +1734,26 @@ class SubscriptionController extends ChangeNotifier {
       return null;
     }
     _busy = true;
+    _generating = true;
     _lastError = null;
     _lastFatalIssues = const [];
     notifyListeners();
+    // §360 — снимок состава на момент, с которого `_generate` начнёт читать
+    // `_entries`. Мутация, прилетевшая из UI ПОКА мы генерируем (toggle
+    // подписки на экране Servers), в этот конфиг уже не попала: гасить по ней
+    // `configDirty` — значит молча выбросить изменение до следующей случайной
+    // мутации. Сравниваем снимок с составом на выходе и гасим флаг, только
+    // если под нами ничего не поменялось.
+    final before = _compositionSignature();
     try {
       final config = await _generate();
       _lastGeneratedConfig = config;
-      configDirty = false;
+      if (_compositionSignature() == before) {
+        configDirty = false;
+      } else {
+        AppLog.I.info(
+            '§360: entries changed during rebuild — configDirty kept');
+      }
       return config;
     } catch (e) {
       _lastError = humanizeError(e);
@@ -1707,6 +1762,7 @@ class SubscriptionController extends ChangeNotifier {
       return null;
     } finally {
       _busy = false;
+      _generating = false;
       _progressMessage = null;
       notifyListeners();
     }
@@ -2119,6 +2175,23 @@ class SubscriptionController extends ChangeNotifier {
     return '$tags|$disabled';
   }
 
+  /// §360 — отпечаток состава ВСЕХ entries: что увидит билдер, если собрать
+  /// конфиг прямо сейчас. Служит одной цели — понять, менялись ли `_entries`
+  /// под летящей пересборкой (см. `generateConfig`).
+  ///
+  /// В отличие от §331-`_compositionKey` (одна подписка, вопрос «фетч принёс
+  /// новое?») здесь входит и `enabled`: выключенная подписка отдаёт билдеру
+  /// пустой набор узлов, так что сам флаг — часть состава. Порядок entries
+  /// значим по той же причине, что и порядок узлов внутри списка.
+  String _compositionSignature() {
+    final parts = _entries.map((e) {
+      final l = e.list;
+      final nodes = l.nodes.map(nodeIdentityHash).join(',');
+      return '${l.id}:${l.enabled ? 1 : 0}:$nodes';
+    });
+    return parts.map((s) => '${s.length}:$s').join();
+  }
+
   /// [keepDirtyFlag] — §331: записать на диск, НЕ поднимая `configDirty`.
   /// Единственный законный случай: успешный fetch, в котором состав узлов
   /// оказался тем же. На диск писать всё равно надо (`last_updated`,
@@ -2127,8 +2200,19 @@ class SubscriptionController extends ChangeNotifier {
   /// подписке, которая не менялась.
   ///
   /// Для всех прочих вызовов дефолт неизменен: любая запись = pending changes.
+  ///
+  /// §360 — гейт здесь смотрит на `_generating`, а НЕ на `_busy`. `_busy`
+  /// поднимают ещё и `addUserServer`/`addFromInput`/fetch/`addMembersToFolder`
+  /// — операции, которые обязаны быть dirty; под общим гейтом они молча теряли
+  /// флаг. Хуже того, гейт ловил и мутации, пришедшие из UI ПОКА летит чужая
+  /// пересборка (toggle подписки сразу после возврата на home): изменение
+  /// применялось в `_entries`, но `configDirty` не вставал, а `generateConfig`
+  /// следом гасил его в false — новый состав нод не доезжал до конфига до
+  /// следующей случайной мутации. Самозагрязнение самой пересборки закрыто
+  /// явным `keepDirtyFlag: true` на её внутренних вызовах, отдельный гейт для
+  /// этого не нужен.
   Future<void> _persist({bool keepDirtyFlag = false}) async {
-    if (!_busy && !keepDirtyFlag) configDirty = true;
+    if (!_generating && !keepDirtyFlag) configDirty = true;
     await SettingsStorage.saveServerLists(_entries.map((e) => e.list).toList());
   }
 

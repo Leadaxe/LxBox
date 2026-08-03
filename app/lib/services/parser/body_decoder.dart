@@ -44,7 +44,29 @@ final class DecodeFailure extends DecodedBody {
   const DecodeFailure(this.reason, [this.sample]);
 }
 
-enum JsonFlavor { xrayArray, singboxOutbound, clashYaml, unknown }
+/// §368 — формы JSON на входе. Четыре sing-box-варианта отличаются только
+/// обёрткой и сводятся к одному ядру (`parseSingboxConfigs`); flavor нужен,
+/// чтобы нормализовать вход и чтобы превью в UI читало тот же результат, что и
+/// импорт (раньше эвристик было три, и они разошлись — §368 §1).
+enum JsonFlavor {
+  /// Массив автономных Xray-конфигов (элементы с `outbounds` и `protocol`).
+  xrayArray,
+
+  /// Одиночный sing-box outbound: `{"type":"vless",…}`.
+  singboxOutbound,
+
+  /// Массив sing-box outbound'ов: `[{"type":"vless",…},…]`.
+  singboxArray,
+
+  /// Полный sing-box конфиг: `{"log":…,"outbounds":[…],"route":…}`.
+  singboxConfig,
+
+  /// Массив автономных sing-box конфигов (подписка пер-узел).
+  singboxMulti,
+
+  clashYaml,
+  unknown,
+}
 
 /// Декодирует body подписки. Не throws.
 ///
@@ -160,13 +182,43 @@ JsonFlavor _detectFlavor(Object v) {
   if (v is List && v.isNotEmpty) {
     final first = v.first;
     if (first is Map && first['outbounds'] is List) {
-      return JsonFlavor.xrayArray;
+      // §368 §7.1 — массив конфигов бывает и Xray, и sing-box: обе формы это
+      // List элементов с `outbounds`. Различаем по содержимому массива —
+      // элементы Xray несут `protocol`, sing-box `type`.
+      return _looksLikeSingboxOutbounds(first['outbounds'] as List)
+          ? JsonFlavor.singboxMulti
+          : JsonFlavor.xrayArray;
     }
+    // §368 — массив sing-box outbound'ов. Раньше падал в `unknown` (0 узлов на
+    // всех путях, кроме вставки из буфера, где контроллер разбирал его сам).
+    if (first is Map && first['type'] is String) return JsonFlavor.singboxArray;
     return JsonFlavor.unknown;
   }
   if (v is Map) {
+    // `type` проверяем ПЕРВЫМ: одиночный `selector` несёт и `type`, и
+    // `outbounds` — он outbound, а не конфиг.
     if (v['type'] is String) return JsonFlavor.singboxOutbound;
     if (v['proxies'] is List) return JsonFlavor.clashYaml;
+    // §368 — полный конфиг. `endpoints` (sing-box ≥1.11) равноправен: конфиг
+    // может состоять из одних WireGuard-узлов.
+    if (v['outbounds'] is List || v['endpoints'] is List) {
+      return JsonFlavor.singboxConfig;
+    }
   }
   return JsonFlavor.unknown;
+}
+
+/// §368 §7.1 — чей это `outbounds[]`. Смотрим первый элемент-объект: `type` —
+/// sing-box, `protocol` — Xray.
+///
+/// Ни того ни другого (или пустой массив) → **не** sing-box: ветка `xrayArray`
+/// существует и работает, и менять её классификацию по неоднозначному входу
+/// нельзя.
+bool _looksLikeSingboxOutbounds(List outbounds) {
+  for (final o in outbounds) {
+    if (o is! Map) continue;
+    if (o['type'] is String) return true;
+    if (o['protocol'] is String) return false;
+  }
+  return false;
 }

@@ -2,6 +2,7 @@ import '../../models/node_spec.dart';
 import 'body_decoder.dart';
 import 'ini_parser.dart';
 import 'json_parsers.dart';
+import 'singbox_config.dart';
 import 'uri_parsers.dart';
 
 /// Парсинг декодированного тела в список узлов (§3.3).
@@ -123,10 +124,31 @@ List<NodeSpec> _parseJson(JsonConfig j) {
                 ownedBy: (id) => identical(owner[id], e),
               ))
           .toList();
+    // §368 — четыре sing-box-формы отличаются только обёрткой; нормализуем к
+    // «массиву конфигов» и отдаём одному ядру. Одиночный outbound больше не
+    // ходит в `parseSingboxEntry` напрямую: общий путь даёт ему то же, что
+    // остальным (detour, warning'и), а массив из одного элемента вырождает
+    // сортировку §342 и дедуп P4.
     case JsonFlavor.singboxOutbound:
       if (j.value is! Map<String, dynamic>) return const [];
-      final spec = parseSingboxEntry(j.value as Map<String, dynamic>);
-      return spec == null ? const [] : [spec];
+      return parseSingboxConfigs([
+        {
+          'outbounds': [j.value],
+        },
+      ]);
+    case JsonFlavor.singboxArray:
+      if (j.value is! List) return const [];
+      return parseSingboxConfigs([
+        {'outbounds': j.value},
+      ]);
+    case JsonFlavor.singboxConfig:
+      if (j.value is! Map<String, dynamic>) return const [];
+      return parseSingboxConfigs([j.value as Map<String, dynamic>]);
+    case JsonFlavor.singboxMulti:
+      if (j.value is! List) return const [];
+      return parseSingboxConfigs(
+        (j.value as List).whereType<Map<String, dynamic>>().toList(),
+      );
     case JsonFlavor.clashYaml:
     case JsonFlavor.unknown:
       return const [];

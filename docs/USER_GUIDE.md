@@ -367,7 +367,7 @@ grouped into sections:
 | **Network & Protocol** | traffic type **TCP / UDP / ICMP** and the application protocol detected by sniffing (tls, quic, bittorrent, dns, …) |
 | **Inbound** | which entrance the packet came through: the VPN tunnel or the local proxy (visible in proxy modes) |
 | **Wi-Fi** | the name (SSID) or BSSID of the current Wi-Fi network — "at home → direct" |
-| **Rule set** | an external domain/IP list in `.srs` format (downloaded manually, used locally) |
+| **Rule set** | an external domain/IP list in `.srs` format (downloaded by the app, used locally; re-checked on its own expiry, see the rule editor) |
 
 Within one category it's OR, across categories it's AND (as in sing-box): a rule
 "app Chrome AND domain `*.youtube.com` AND network UDP" fires only when all three

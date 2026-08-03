@@ -110,6 +110,19 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
             }
         }
 
+        /// §361 — жив ли ACTION_STOP-приёмник (ведёт `BoxService` в паре с своим
+        /// `receiverRegistered`). `stopAwait` шлёт стоп широковещательно, и без
+        /// этого признака у него нет способа отличить «сервис работает, сейчас
+        /// остановится» от «принимать некому» — во втором случае он честно ждал
+        /// свои 5 секунд и возвращал false.
+        @Volatile
+        var stopReceiverAlive: Boolean = false
+            private set
+
+        internal fun setStopReceiverAlive(alive: Boolean) {
+            stopReceiverAlive = alive
+        }
+
         /// Completer для `stopAwait` — completes когда `setStatus(Stopped)`
         /// отработал, т.е. все cleanup стадии завершились.
         @Volatile
@@ -222,6 +235,25 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         fun stopAwait(context: Context): Deferred<Unit> {
             Log.d(TAG, "[vpn] companion.stopAwait() current status=${currentStatus.name}")
             if (currentStatus == VpnStatus.Stopped) {
+                return CompletableDeferred(Unit)
+            }
+            // §361 — статус не Stopped, но принимать ACTION_STOP некому: сервис
+            // уже уничтожен, а статус остался «живым» (запоздавший setStatus от
+            // отменённого старта — корень закрыт в BoxService, это второй эшелон
+            // на случай другого пути рассинхрона). Broadcast ушёл бы в пустоту, а
+            // вызывающий висел бы 5 секунд ради `false` и мёртвой кнопки «Стоп».
+            // Приводим companion-состояние к правде и отвечаем сразу.
+            if (!stopReceiverAlive) {
+                Log.w(TAG, "[vpn §361] stopAwait: no live receiver (status=${currentStatus.name}) — force Stopped")
+                setCurrentStatus(VpnStatus.Stopped)
+                runCatching {
+                    context.sendBroadcast(
+                        Intent(BROADCAST_STATUS)
+                            .setPackage(context.packageName)
+                            .putExtra(EXTRA_STATUS, VpnStatus.Stopped.name)
+                    )
+                }
+                completeStopIfWaiting()
                 return CompletableDeferred(Unit)
             }
             val completer = CompletableDeferred<Unit>()

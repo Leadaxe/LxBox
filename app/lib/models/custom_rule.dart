@@ -20,6 +20,24 @@ import '../services/l10n/locale_controller.dart';
 /// `kind` — дискриминатор для JSON-сериализации (читается `fromJson`-ом
 /// и выбирает правильный подкласс). В рантайме предпочтительнее
 /// pattern-match `switch(cr)` — даёт exhaustive-проверку от компилятора.
+
+/// §366 — TTL кэша rule-set'а по умолчанию: неделя. Списки блокировок и
+/// geosite меняются медленно, чаще раза в неделю ходить в сеть незачем.
+const int kDefaultSrsTtlHours = 168;
+
+/// §366 — вшитый список вариантов TTL для выпадающего списка в редакторе
+/// правила (часы). `0` = никогда не обновлять автоматически. Свободного
+/// ввода нет: набор фиксирован, опечатки в «168h» никому не нужны.
+const List<int> kSrsTtlChoicesHours = [
+  0, // Never
+  24, // 1 day
+  168, // 1 week (default)
+  336, // 2 weeks
+  720, // 1 month
+  4320, // 6 months
+  8760, // 1 year
+];
+
 sealed class CustomRule {
   CustomRule({
     String? id,
@@ -721,10 +739,17 @@ class CustomRuleSrs extends CustomRule {
     this.outbound = kDirectOutboundTag,
     this.dns,
     this.resolve,
+    this.updateIntervalHours = kDefaultSrsTtlHours,
   }) : wifiBssids = _normalizeBssids(wifiBssids);
 
   @override
   String srsUrl;
+
+  /// §366 — через сколько часов кэш считается протухшим. Авто-обновление
+  /// (`RuleSetAutoUpdater`) берёт TTL отсюда; `0` = не обновлять
+  /// автоматически (ручной ⟳ работает всегда). Значения — из
+  /// [kSrsTtlChoicesHours], в UI выпадающий список.
+  int updateIntervalHours;
 
   /// Доп-фильтры на routing-rule level (AND с `.srs`-match внутри rule_set).
   /// Используются когда remote `.srs` слишком широкий: например, «только
@@ -804,6 +829,11 @@ class CustomRuleSrs extends CustomRule {
         'outbound': outbound,
         if (dns != null) 'dns': dns!.toJson(),
         if (resolve != null) 'resolve': resolve!.toJson(),
+        // §366 — дефолт не пишем: старые правила без ключа читаются как
+        // «неделя», и JSON не растёт на каждом правиле ради значения,
+        // которое и так подразумевается.
+        if (updateIntervalHours != kDefaultSrsTtlHours)
+          'updateIntervalHours': updateIntervalHours,
       };
 
   factory CustomRuleSrs.fromJson(Map<String, dynamic> j) => CustomRuleSrs(
@@ -825,7 +855,16 @@ class CustomRuleSrs extends CustomRule {
         outbound: _outbound(j),
         dns: RuleDns.fromJson(j['dns']),
         resolve: RuleResolve.fromJson(j['resolve']),
+        updateIntervalHours: _srsTtl(j['updateIntervalHours']),
       );
+
+  /// §366 — TTL из JSON. Отсутствие, мусор и отрицательные значения → дефолт;
+  /// `0` (Never) сохраняем как есть, это осознанный выбор юзера.
+  static int _srsTtl(dynamic v) {
+    final n = v is num ? v.toInt() : null;
+    if (n == null || n < 0) return kDefaultSrsTtlHours;
+    return n;
+  }
 
   CustomRuleSrs copyWith({
     String? name,
@@ -846,6 +885,7 @@ class CustomRuleSrs extends CustomRule {
     RuleDns? dns,
     bool clearDns = false, // §257 — см. CustomRuleInline.copyWith
     RuleResolve? resolve,
+    int? updateIntervalHours,
   }) =>
       CustomRuleSrs(
         id: id,
@@ -866,6 +906,8 @@ class CustomRuleSrs extends CustomRule {
         outbound: outbound ?? this.outbound,
         dns: clearDns ? null : (dns ?? this.dns),
         resolve: resolve ?? this.resolve,
+        updateIntervalHours:
+            updateIntervalHours ?? this.updateIntervalHours,
       );
 
   @override
