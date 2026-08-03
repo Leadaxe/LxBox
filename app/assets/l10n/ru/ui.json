@@ -1845,6 +1845,9 @@
   "Got it": {
     "value": "Прочитал"
   },
+  "Got it (%d)": {
+    "value": "Прочитал (%d)"
+  },
   "Granted — real SSID/BSSID accessible": {
     "value": "Выдано — доступны настоящие SSID/BSSID"
   },

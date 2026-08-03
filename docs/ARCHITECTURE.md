@@ -591,8 +591,9 @@ l10n/                        # §279/§285 подсистема локализа
   template_overlay.dart      #   TemplateOverlay.apply/extract — pre-parse оверлей шаблона
   app_language_reconcile.dart#   трёхсторонний reconciliation LocaleManager↔storage (Android 13+)
   template_aware_state.dart  #   mixin: перечитывание шаблона в didChangeDependencies по локали
-support/                     # §105/§356 support-лента + активное время
-  support_message.dart       #   модели ленты (i18n/since_version) + выбор/markRead/snooze (§356)
+support/                     # §105/§356/§357 support-лента + активное время
+  support_message.dart       #   модели ленты (i18n/since_version/mark_read) + выбор/markRead/snooze
+  support_nav.dart           #   §357 псевдопротокол lxbox://action:payload (route:/add:)
   support_state.dart         #   персист support-стейта (SupportState.I): read/baseline/снуз
   active_time_tracker.dart   #   счётчик наработки: нативный аптайм §187 + legacy wall-clock
 platform_channels.dart       # §141 — имена MethodChannel/EventChannel (single source: Dart↔Kotlin)

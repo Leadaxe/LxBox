@@ -20,6 +20,7 @@ import '../services/probe/probe_lifecycle.dart';
 import '../services/rule_name_resolver.dart';
 import '../services/selector_info.dart';
 import '../services/settings_storage.dart';
+import '../services/support/support_message.dart';
 import '../services/template_loader.dart';
 import '../services/haptic_service.dart';
 import '../services/subscription/auto_updater.dart';
@@ -90,6 +91,22 @@ class HomeController extends ChangeNotifier
     if (_previewEmpty == on) return;
     _previewEmpty = on;
     notifyListeners();
+  }
+
+  /// §357 — одноразовый запрос показа support-сообщения от Debug API
+  /// (`POST /support/preview`). Паттерн preview-empty-state: handler кладёт
+  /// запрос + notify, home_screen забирает через [takeSupportPreview] и
+  /// пушит полноэкранный SupportMessageScreen вне гейтов ленты.
+  SupportPreviewRequest? _supportPreview;
+  void requestSupportPreview(SupportPreviewRequest req) {
+    _supportPreview = req;
+    notifyListeners();
+  }
+
+  SupportPreviewRequest? takeSupportPreview() {
+    final r = _supportPreview;
+    _supportPreview = null;
+    return r;
   }
 
   /// Cooldown timestamps для recovery actions (reloadVpn / resetNetwork) —

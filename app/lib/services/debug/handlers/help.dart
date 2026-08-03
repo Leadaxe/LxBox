@@ -334,6 +334,14 @@ GET    /profiler/live/stream                   SSE — all system-wide events li
 GET    /profiler/live/unattributed             Recent unattributed ring (DNS-fail without owner / TCP without
                                                  process attribution). Used for banner detection.
 
+=== Support feed (§356/§357) ===
+
+GET  /support/state                            Raw support_state.json (read/baseline/snooze/active) + app_version + total_active_seconds.
+POST /support/reset                            Wipe read/baseline/snooze/cache — feed starts over. ?keep_active=false also zeroes the activity counter.
+POST /support/preview                          Body = ONE feed-format message object → immediate fullscreen show, ALL gates bypassed.
+                                                 ?dry=true (default) — buttons work but markRead/snooze are NOT persisted; ?dry=false — persisted.
+                                                 ?snooze_hours=N — snooze_active_hours of the synthetic feed (default 10). Requires UI process (409 otherwise).
+
 === Diagnostics ===
 
 GET /diag/dump                                 Full JSON pack from DumpBuilder.build (config + vars + subs + log + stderr + exit_info + logcat).
@@ -559,6 +567,10 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/profiler/live', 'params': {'seconds': 'window (default 60)'}, 'description': 'Global rolling buffer snapshot — TCP/UDP open/close + DNS resolves of all packages.'},
     {'method': 'GET', 'path': '/profiler/live/stream', 'description': 'SSE — system-wide events live.'},
     {'method': 'GET', 'path': '/profiler/live/unattributed', 'description': 'Recent unattributed ring (DNS-fail / TCP without attribution).'},
+    // Support feed (§356/§357)
+    {'method': 'GET', 'path': '/support/state', 'description': 'support_state.json (read/baseline/snooze/active) + app_version + total_active_seconds'},
+    {'method': 'POST', 'path': '/support/reset', 'params': {'keep_active': 'true|false'}, 'description': 'Wipe read/baseline/snooze/cache; keep_active=false also zeroes the activity counter'},
+    {'method': 'POST', 'path': '/support/preview', 'params': {'dry': 'true|false', 'snooze_hours': 'N'}, 'description': 'Body = one feed-format message → immediate fullscreen show, gates bypassed; dry=true (default) does not persist markRead/snooze'},
     // Diagnostics
     {'method': 'GET', 'path': '/diag/dump', 'description': 'Full DumpBuilder JSON-pack'},
     {'method': 'GET', 'path': '/diag/exit-info', 'description': 'ApplicationExitInfo entries (API 30+; empty on lower)'},

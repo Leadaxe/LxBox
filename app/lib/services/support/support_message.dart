@@ -20,6 +20,20 @@ import 'support_state.dart';
 /// v2 (§356): вместо одной кампании — очередь сообщений с локалями
 /// (`i18n`, en — обязательный фолбэк) и версионным повторным показом
 /// (`since_version`). Подробности выбора — [SupportMessageService.pick].
+/// §357 — кнопка сообщения. [markRead] действует только для lxbox-кнопок
+/// (`lxbox://route:…`/`add:…`): тап закрывает сообщение и по умолчанию
+/// помечает его прочитанным; `"mark_read": false` — не помечать (придёт
+/// снова). Для обычных https-кнопок флаг не используется (они не закрывают
+/// сообщение).
+@immutable
+class SupportLinkSpec {
+  const SupportLinkSpec(this.label, this.url, {this.markRead = true});
+
+  final String label;
+  final String url;
+  final bool markRead;
+}
+
 @immutable
 class SupportContent {
   const SupportContent({
@@ -31,22 +45,22 @@ class SupportContent {
   final String title;
   final String message;
 
-  /// `(label, url)` — кнопки в порядке списка. У каждой локали свои
-  /// (en может вести на README.md, ru — на README_RU.md).
-  final List<(String, String)> links;
+  /// Кнопки в порядке списка. У каждой локали свои (en может вести на
+  /// USER_GUIDE.md, ru — на USER_GUIDE_RU.md).
+  final List<SupportLinkSpec> links;
 
   static SupportContent? fromJson(Object? raw) {
     if (raw is! Map) return null;
     final title = raw['title'] as String? ?? '';
     final message = raw['message'] as String? ?? '';
     if (title.isEmpty || message.isEmpty) return null;
-    final links = <(String, String)>[];
+    final links = <SupportLinkSpec>[];
     for (final l in raw['links'] as List? ?? const []) {
       if (l is! Map) continue;
       final label = l['label'] as String? ?? '';
       final url = l['url'] as String? ?? '';
       if (label.isEmpty || url.isEmpty) continue;
-      links.add((label, url));
+      links.add(SupportLinkSpec(label, url, markRead: l['mark_read'] != false));
     }
     return SupportContent(title: title, message: message, links: links);
   }
@@ -61,6 +75,7 @@ class SupportMessage {
     required this.minActiveHours,
     required this.minSessionMinutes,
     required this.i18n,
+    this.readDelaySeconds = 10,
   });
 
   /// Постоянный ключ сообщения — по нему хранится «прочитано».
@@ -82,6 +97,10 @@ class SupportMessage {
   /// Минимум для ТЕКУЩЕЙ сессии туннеля: показываем только когда юзер
   /// реально пользуется VPN прямо сейчас (не дёргаем в момент подключения).
   final int minSessionMinutes;
+
+  /// §357 — кнопка «Got it» первые N секунд неактивна и тикает обратный
+  /// отсчёт: защита от смахивания не глядя. «Later» и ссылки активны сразу.
+  final int readDelaySeconds;
 
   /// Локаль → контент. `en` гарантирован парсером ([fromJson] отбрасывает
   /// сообщение без валидного en-блока).
@@ -109,6 +128,7 @@ class SupportMessage {
       skip: raw['skip'] == true,
       minActiveHours: (raw['min_active_hours'] as num?)?.toInt() ?? 3,
       minSessionMinutes: (raw['min_session_minutes'] as num?)?.toInt() ?? 5,
+      readDelaySeconds: (raw['read_delay_seconds'] as num?)?.toInt() ?? 10,
       i18n: i18n,
     );
   }
@@ -138,6 +158,22 @@ class SupportFeed {
       messages: messages,
     );
   }
+}
+
+/// §357 — одноразовый запрос показа сообщения от Debug API
+/// (`POST /support/preview`): сообщение вне гейтов ленты; [dryRun] —
+/// кнопки работают, но `markRead`/`snooze` не пишутся в state.
+@immutable
+class SupportPreviewRequest {
+  const SupportPreviewRequest({
+    required this.feed,
+    required this.message,
+    required this.dryRun,
+  });
+
+  final SupportFeed feed;
+  final SupportMessage message;
+  final bool dryRun;
 }
 
 class SupportMessageService {

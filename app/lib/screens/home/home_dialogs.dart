@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../controllers/home_controller.dart';
 import '../../models/home_state.dart';
 import '../../services/settings_storage.dart';
-import '../../services/support/support_message.dart';
 import '../../services/update_checker.dart';
 import '../../services/url_launcher.dart' as ul;
 import '../../services/version_info.dart';
@@ -287,58 +286,6 @@ Future<void> maybeShowAddTilePrompt(BuildContext context, BoxVpnClient vpn) asyn
   await vpn.requestAddTile();
 }
 
-/// §105/§356 — диалог ленты «поддержи автора». Чистый показ готового
-/// сообщения [m] из [feed]; выбор (очередь, пороги, baseline, fetch) — на
-/// стороне `home_screen` (см. `_maybeShowSupport`). Локаль резолвится ЗДЕСЬ,
-/// в момент показа (не при fetch — кэш один на все языки, смена языка не
-/// протухает): `effectiveTag` → `i18n`, фолбэк en. Кнопки-ссылки диалог НЕ
-/// закрывают (юзер может пройтись по нескольким); закрытие — «Later» (вся
-/// лента молчит ещё `snooze_active_hours` наработки) или «Got it» (прочитано:
-/// версия в `read`, сдвиг baseline → следующее сообщение очереди ждёт свои
-/// `min_active_hours`).
-Future<void> showSupportDialog(
-  BuildContext context,
-  SupportFeed feed,
-  SupportMessage m,
-) async {
-  final c = m.contentFor(LocaleController.I.effectiveTag);
-  await showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog.adaptive(
-      title: Text(c.title),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(c.message),
-            const SizedBox(height: 16),
-            for (final (label, url) in c.links) ...[
-              FilledButton.tonal(
-                onPressed: () => ul.UrlLauncher.open(url),
-                child: Text(label),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () async {
-            Navigator.of(ctx).pop();
-            await SupportMessageService.I.snooze(feed);
-          },
-          child: Text(getLocalText.s("Later")),
-        ),
-        FilledButton(
-          onPressed: () async {
-            Navigator.of(ctx).pop();
-            await SupportMessageService.I.markRead(m);
-          },
-          child: Text(getLocalText.s("Got it")),
-        ),
-      ],
-    ),
-  );
-}
+// §357 — показ support-сообщения переехал в полноэкранный
+// `screens/home/support_message_screen.dart` (SupportMessageScreen);
+// прежний AlertDialog-вариант удалён.

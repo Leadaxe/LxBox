@@ -217,9 +217,43 @@ void main() {
       })!;
       final m = f.messages.first;
       expect(m.contentFor('ru').title, 'т-ру');
-      expect(m.contentFor('ru').links.single, ('кнопка', 'https://ru'));
+      final link = m.contentFor('ru').links.single;
+      expect((link.label, link.url), ('кнопка', 'https://ru'));
+      expect(link.markRead, true, reason: 'дефолт mark_read');
       expect(m.contentFor('en').title, 't-en');
       expect(m.contentFor('de').title, 't-en', reason: 'фолбэк en');
+    });
+
+    test('§357: mark_read и read_delay_seconds парсятся, дефолты живут', () {
+      final f = SupportFeed.fromJson({
+        'messages': [
+          {
+            'id': 'a',
+            'read_delay_seconds': 3,
+            'i18n': {
+              'en': {
+                'title': 't',
+                'message': 'm',
+                'links': [
+                  {'label': 'nav', 'url': 'lxbox://route:dns', 'mark_read': false},
+                  {'label': 'ext', 'url': 'https://x'},
+                ],
+              },
+            },
+          },
+          {
+            'id': 'b',
+            'i18n': {
+              'en': {'title': 't', 'message': 'm'},
+            },
+          },
+        ],
+      })!;
+      final a = f.messages.first;
+      expect(a.readDelaySeconds, 3);
+      expect(a.i18n['en']!.links[0].markRead, false);
+      expect(a.i18n['en']!.links[1].markRead, true);
+      expect(f.messages[1].readDelaySeconds, 10, reason: 'дефолт таймера');
     });
 
     test('битые links скипаются; malformed → null, не падает', () {

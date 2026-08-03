@@ -35,6 +35,7 @@ class SubscriptionsScreen extends StatefulWidget {
     required this.homeController,
     required this.autoUpdater,
     this.focusEntryId,
+    this.initialInput,
   });
 
   final SubscriptionController subController;
@@ -44,6 +45,11 @@ class SubscriptionsScreen extends StatefulWidget {
   /// §255 — при открытии проскроллить к этому entry и мигнуть его строкой
   /// (навигация из detour-cycle sheet к владельцу ноды-виновника). null = нет.
   final String? focusEntryId;
+
+  /// §357 — предзаполнить поле «URL подписки или proxy-ссылка» (lxbox-кнопка
+  /// `add:<uri>` support-ленты). Только prefill: добавление подтверждает сам
+  /// юзер кнопкой «+». null = пустое поле.
+  final String? initialInput;
 
   @override
   State<SubscriptionsScreen> createState() => _SubscriptionsScreenState();
@@ -67,6 +73,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   void initState() {
     super.initState();
     unawaited(_loadAutoUpdateFlag());
+    // §357 — prefill поля ввода из lxbox-кнопки `add:<uri>` support-ленты.
+    final prefill = widget.initialInput;
+    if (prefill != null && prefill.trim().isNotEmpty) {
+      _inputController.text = prefill.trim();
+    }
     final focus = widget.focusEntryId;
     if (focus != null) {
       WidgetsBinding.instance
