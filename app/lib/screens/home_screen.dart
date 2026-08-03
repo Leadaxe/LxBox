@@ -501,7 +501,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   // §105/§356 — состояние показа support-ленты (за процесс).
   AppLifecycleState _lifecycle = AppLifecycleState.resumed;
   SupportFeed? _supportFeed;
-  bool _supportFetchTried = false;
+  DateTime? _supportNextFetchAt;
   bool _supportShown = false;
   bool _supportInFlight = false;
 
@@ -520,8 +520,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (since == null) return; // туннель не активен — гейт «пользуется сейчас»
     _supportInFlight = true;
     try {
-      if (!_supportFetchTried) {
-        _supportFetchTried = true; // одна попытка fetch за процесс
+      // §356 — fetch до первого успеха, с бэкоффом 30с. Одна попытка за
+      // процесс сгорала бы ровно в самый ненадёжный момент: первый тик
+      // connected, когда туннель поднят, но нода ещё не пропускает трафик
+      // (device-verified на эмуляторе) — и лента молчала до перезапуска.
+      if (_supportFeed == null) {
+        final next = _supportNextFetchAt;
+        if (next != null && DateTime.now().isBefore(next)) return;
+        _supportNextFetchAt =
+            DateTime.now().add(const Duration(seconds: 30));
         _supportFeed = await SupportMessageService.I.fetchOrCached();
       }
       final feed = _supportFeed;
