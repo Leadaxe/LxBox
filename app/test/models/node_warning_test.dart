@@ -80,6 +80,13 @@ void main() {
         EchIgnoredWarning() => 'ech_ignored',
         UnknownObfsWarning() => 'obfs_unknown',
         MissingObfsPasswordWarning() => 'obfs_no_password',
+        // §368 — импорт sing-box JSON
+        DetourCycleBrokenWarning() => 'detour_cycle',
+        DetourTargetMissingWarning() => 'detour_missing',
+        DetourToGroupWarning() => 'detour_group',
+        DetourChainTooDeepWarning() => 'detour_deep',
+        SelectorAsAutoWarning() => 'selector_as_auto',
+        GroupMemberMissingWarning() => 'group_member_missing',
       };
       expect(label, 'transport');
     });

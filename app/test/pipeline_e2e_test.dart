@@ -156,4 +156,81 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
     expect(tr['mode'], 'stream-one');
     expect(tr['x_padding_bytes'], '100-1000');
   });
+
+  test('§368 — sing-box config body → nodes, group and detour chain', () async {
+    // Полный конфиг, как его переносит пользователь с sing-box: секции
+    // route/dns/inbounds присутствуют и должны быть проигнорированы.
+    const body = '''
+{
+  "log": {"level": "info"},
+  "dns": {"servers": [{"tag": "google", "address": "8.8.8.8"}]},
+  "inbounds": [{"type": "tun", "tag": "tun-in"}],
+  "outbounds": [
+    {"type": "vless", "tag": "DE", "server": "de.example", "server_port": 443,
+     "uuid": "uuid-de", "detour": "jump"},
+    {"type": "trojan", "tag": "NL", "server": "nl.example", "server_port": 443,
+     "password": "pass-nl"},
+    {"type": "shadowsocks", "tag": "jump", "server": "jump.example",
+     "server_port": 8388, "method": "aes-256-gcm", "password": "pass-jump"},
+    {"type": "urltest", "tag": "Fastest", "outbounds": ["DE", "NL"],
+     "interval": "5m", "tolerance": 100},
+    {"type": "direct", "tag": "direct"},
+    {"type": "block", "tag": "block"}
+  ],
+  "route": {"rules": [{"protocol": "dns", "outbound": "dns-out"}]}
+}
+''';
+
+    final r = await parseFromSource(const InlineSource(body));
+    // DE + NL + группа. `jump` — звено DE, служебные не в счёт.
+    expect(r.nodes, hasLength(3));
+    final de = r.nodes.firstWhere((n) => n.label == 'DE');
+    expect(de.chained?.server, 'jump.example');
+
+    final list = UserServer(
+      id: 'sb',
+      name: 'SB',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      origin: UserSource.paste,
+      createdAt: DateTime.now(),
+      rawBody: body,
+      nodes: r.nodes,
+    );
+
+    final result = await buildConfig(
+      lists: [list],
+      template: template,
+      settings: const BuildSettings(
+        userVars: {'clash_api': '127.0.0.1:9090'},
+        enabledGroups: {'vpn-1', kAutoOutboundTag},
+      ),
+    );
+
+    expect(result.validation.isOk, true,
+        reason: result.validation.issues.join('\n'));
+
+    final outs = result.config['outbounds'] as List;
+    final tags = outs.map((o) => (o as Map)['tag']).toSet();
+    expect(tags, containsAll(['DE', 'NL', 'Fastest']));
+
+    // Цепочка развернулась обратно в `detour`-поле, звено эмитится отдельным
+    // outbound'ом (§018 round-trip).
+    final deOut = outs.firstWhere((o) => (o as Map)['tag'] == 'DE') as Map;
+    expect(deOut['detour'], isNotNull);
+    expect(tags, contains(deOut['detour']));
+
+    // Группа импортировалась как urltest и ссылается на существующие теги.
+    final group = outs.firstWhere((o) => (o as Map)['tag'] == 'Fastest') as Map;
+    expect(group['type'], 'urltest');
+    expect(group['outbounds'], containsAll(['DE', 'NL']));
+    expect(group['interval'], '5m');
+    expect(group['tolerance'], 100);
+
+    // Секции чужого конфига не переехали: маршруты/DNS наши.
+    final route = result.config['route'] as Map;
+    final rules = route['rules'] as List;
+    expect(rules.any((r) => (r as Map)['outbound'] == 'dns-out'), isFalse);
+  });
 }

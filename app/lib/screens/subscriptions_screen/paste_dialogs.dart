@@ -57,6 +57,26 @@ Future<bool?> showConfirmAddDialog(
             const SizedBox(height: 4),
             Text(analysis.subtitle, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
+          // §368 §8 — полный конфиг несёт больше, чем мы переносим. Молча взять
+          // узлы и выбросить маршрутизацию нельзя: пользователь не должен
+          // узнать о потере своих правил по факту.
+          if (analysis.notImported.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              getLocalText.s(
+                  "Not imported: %s", analysis.notImported.join(', ')),
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              getLocalText.s("Routing and DNS are configured in the app."),
+              style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ],
         ],
       ),
       actions: [

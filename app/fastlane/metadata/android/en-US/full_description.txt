@@ -1,4 +1,6 @@
-L×Box is an Android proxy client built on sing-box-lx, a sing-box fork with AmneziaWG 2.0 and native XHTTP support. It manages multiple subscriptions, routes traffic by rules you control, and measures node latency without leaving the app.
+L×Box is an Android VPN and proxy client built on sing-box-lx, a sing-box fork with AmneziaWG 2.0 and native XHTTP support. It manages multiple subscriptions, routes traffic by rules you control, and measures node latency without leaving the app.
+
+L×Box uses Android's VpnService to create a local tunnel interface, so traffic can be routed according to your own rules. It is a client only: you supply the servers. The app does not operate a server network and does not include any servers of its own.
 
 Everything runs on device. There is no account, no telemetry and no analytics: the app talks only to the servers you add and to the update endpoints you configure.
 

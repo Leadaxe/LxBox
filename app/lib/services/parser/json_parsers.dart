@@ -175,12 +175,11 @@ List<NodeSpec> parseXrayElement(
         if (detour.isNotEmpty) chained = _xrayDetourToSpec(detour);
       }
 
-      // §321 — detour-звено прикладываем только к тем типам, что умеют chained
-      // из Xray. `dialerProxy` в Xray живёт в `streamSettings.sockopt`, то есть
-      // технически возможен у любого протокола; на практике встречается у
-      // VLESS/Trojan. Для остальных узел отдаём без звена (терять сам узел
-      // из-за неподдержанной цепочки нельзя).
-      final node = chained == null ? spec : _withChain(spec, chained);
+      // §321/§368 — detour-звено. `dialerProxy` в Xray живёт в
+      // `streamSettings.sockopt`, то есть технически возможен у любого
+      // протокола (на практике встречается у VLESS/Trojan); `withChained`
+      // покрывает все типы, кроме группы — та цепочку не несёт.
+      final node = chained == null ? spec : withChained(spec, chained);
       result.add(
         node
           ..sourceCompact = compact
@@ -394,41 +393,6 @@ String _elementLabel({
   if (tag.isEmpty || (tagUses[tag] ?? 0) > 1) return '$remarks ${index + 1}';
   return '$remarks $tag';
 }
-
-/// §321 — пересборка узла с detour-звеном. NodeSpec иммутабелен и `copyWith`
-/// в базе нет, поэтому ветвим по типу. Неподдержанный тип → узел как есть.
-NodeSpec _withChain(NodeSpec spec, NodeSpec chained) => switch (spec) {
-  VlessSpec s => VlessSpec(
-    id: s.id,
-    tag: s.tag,
-    label: s.label,
-    server: s.server,
-    port: s.port,
-    rawUri: s.rawUri,
-    uuid: s.uuid,
-    flow: s.flow,
-    tls: s.tls,
-    transport: s.transport,
-    packetEncoding: s.packetEncoding,
-    encryption: s.encryption,
-    chained: chained,
-    warnings: s.warnings,
-  ),
-  TrojanSpec s => TrojanSpec(
-    id: s.id,
-    tag: s.tag,
-    label: s.label,
-    server: s.server,
-    port: s.port,
-    rawUri: s.rawUri,
-    password: s.password,
-    tls: s.tls,
-    transport: s.transport,
-    chained: chained,
-    warnings: s.warnings,
-  ),
-  _ => spec,
-};
 
 /// §302 — стабильный отступ для показа фрагмента подписки пользователю.
 String _prettyJson(Object? value) {

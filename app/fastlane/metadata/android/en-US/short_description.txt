@@ -1,1 +1,1 @@
-Proxy client powered by sing-box: subscriptions, smart routing, speed test
+VPN client powered by sing-box: subscriptions, smart routing, speed test

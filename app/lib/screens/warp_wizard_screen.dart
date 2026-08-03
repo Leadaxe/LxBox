@@ -463,7 +463,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        getLocalText.s("MASQUE tunnels IP over HTTP/3 (QUIC) to Cloudflare — it looks like ordinary HTTPS to DPI and often exits from a foreign IP."),
+                        getLocalText.s("MASQUE tunnels IP over HTTP/3 (QUIC) to Cloudflare — standard HTTPS transport, and the exit IP is often in another country."),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -687,7 +687,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                             }
                           },
                     title: Text(getLocalText.s("Add Amnezia obfuscation")),
-                    subtitle: Text(getLocalText.s("Masks WireGuard from DPI by adding junk traffic. Enable if WARP is blocked.")),
+                    subtitle: Text(getLocalText.s("Adds padding traffic so the WireGuard handshake carries no fixed size signature. Enable if the plain tunnel does not connect.")),
                   ),
                   // §143 — masquerade под выбранный протокол (id/ip/ib, ядро
                   // 009 генерит i1). Протокол/домен/браузер — в Advanced.

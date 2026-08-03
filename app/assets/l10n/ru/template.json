@@ -146,9 +146,6 @@
   "DNS-over-TLS with built-in blocking: malware (Quad9), ads (AdGuard), or ads + adult (AdGuard Family).": {
     "value": "DNS-over-TLS со встроенной блокировкой: вредоносное ПО (Quad9), реклама (AdGuard) или реклама и контент 18+ (AdGuard Family)."
   },
-  "DPI Bypass": {
-    "value": "Обход DPI"
-  },
   "Default domain resolver": {
     "value": "Резолвер доменов по умолчанию"
   },
@@ -356,8 +353,8 @@
   "RU DNS group (UDP via channel + DoT via vpn-1 + direct DoH)": {
     "value": "Группа DNS для RU (UDP через канал + DoT через vpn-1 + прямой DoH)"
   },
-  "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering. Skipped on REALITY nodes — their SNI must stay byte-exact": {
-    "value": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). Обходит простой DPI с точным сравнением; бесполезно против фильтрации уровня GFW. На узлах REALITY не применяется — их SNI должен оставаться неизменным"
+  "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact": {
+    "value": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). По RFC 6066 поле нечувствительно к регистру, поэтому серверы принимают любую запись; помогает только против наивного сравнения на точное совпадение. Не применяется к узлам REALITY — их SNI должен оставаться байт-в-байт."
   },
   "Reject = drop. Or pick Direct to send it outside the VPN.": {
     "value": "Блокировка — трафик отбрасывается. Либо выберите «Напрямую», чтобы отправить его мимо VPN."
@@ -437,6 +434,9 @@
   "Split handshake into multiple TLS records (try this first)": {
     "value": "Разбивать рукопожатие на несколько TLS-записей (попробуйте сначала это)"
   },
+  "Splits the TLS handshake so it carries no single-packet signature": {
+    "value": "Разбивает handshake TLS, чтобы он не укладывался в один пакет с узнаваемой сигнатурой"
+  },
   "Stack": {
     "value": "Стек"
   },
@@ -449,11 +449,11 @@
   "TLS Fragment": {
     "value": "Фрагментация TLS"
   },
+  "TLS Fragmentation": {
+    "value": "Фрагментация TLS"
+  },
   "TLS Record Fragment": {
     "value": "Фрагментация TLS-записей"
-  },
-  "TLS fragmentation to bypass censorship": {
-    "value": "Фрагментация TLS для обхода блокировок"
   },
   "TUN": {
     "value": "TUN"

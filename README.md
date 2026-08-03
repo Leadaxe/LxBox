@@ -36,10 +36,10 @@ Android VPN client powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-
 <details>
 <summary><strong>Servers & Subscriptions</strong> — every proxy source in one place</summary>
 
-Add servers by subscription URL, direct proxy link, WireGuard URI/INI, Amnezia `vpn://` link, raw sing-box JSON outbound, or **Import from file…** (a local `.txt`/`.json`; a file with more than one node becomes a file-backed subscription, §129). The smart-paste dialog auto-detects the format and previews the content. Enable/disable subscriptions without deleting them. Offline rehydrate — nodes are restored from the body cache on app restart.
+Add servers by subscription URL, direct proxy link, WireGuard URI/INI, Amnezia `vpn://` link, raw sing-box JSON — a single outbound or a **whole config**, from which nodes, auto-select groups and detour chains are imported (§368) — or **Import from file…** (a local `.txt`/`.json`; a file with more than one node becomes a file-backed subscription, §129). The smart-paste dialog auto-detects the format and previews the content. Enable/disable subscriptions without deleting them. Offline rehydrate — nodes are restored from the body cache on app restart.
 
 - **12 protocols**: VLESS (incl. post-quantum ML-KEM-768 encryption, §335), VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, **AnyTLS** (§269), SSH, SOCKS, WireGuard (incl. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://` links**, JSON), **MASQUE** (Cloudflare WARP — `masque://`, QUIC/HTTP-3)
-- Formats: Base64, Xray JSON Array (incl. dialerProxy chains and every protocol in the array, §321), plain text, raw sing-box JSON
+- Formats: Base64, Xray JSON Array (incl. dialerProxy chains and every protocol in the array, §321), plain text, sing-box JSON — outbound, array, whole config or array of configs, with groups and `detour` chains (§368)
 - **Node deduplication** (§321) — one server listed several times across a subscription collapses into a single node
 - **Auto nodes** (§322) — a provider's "Auto | Best server" entry arrives as one node with a pool inside: the row shows mode and contents (`🔀 [15/7]` — load balance, `🎯 [3]` — single fastest). You can build your own inside a folder: "Add auto node…" — membership by regex rule, by checkbox list, or "all servers in this folder"
 - **Disable individual nodes** (§283) — a switch on every subscription node; the choice is bound to a stable node hash, so it survives updates, restarts and provider-side renames

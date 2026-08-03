@@ -316,14 +316,14 @@
     },
     {
       "id": "dpi-bypass",
-      "name": "DPI Bypass",
+      "name": "TLS Fragmentation",
       "chapter": "core",
-      "description": "TLS fragmentation to bypass censorship",
+      "description": "Splits the TLS handshake so it carries no single-packet signature",
       "vars": [
         {"name": "tls_fragment", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "TLS Fragment", "tooltip": "Split TLS ClientHello into small TCP segments"},
         {"name": "tls_record_fragment", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "TLS Record Fragment", "tooltip": "Split handshake into multiple TLS records (try this first)"},
         {"name": "tls_fragment_fallback_delay", "type": "text", "default_value": "500ms", "wizard_ui": "edit", "title": "Fallback delay", "tooltip": "Wait time when automatic detection fails"},
-        {"name": "tls_mixed_case_sni", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "Mixed-case SNI", "tooltip": "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering. Skipped on REALITY nodes — their SNI must stay byte-exact"}
+        {"name": "tls_mixed_case_sni", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "Mixed-case SNI", "tooltip": "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact"}
       ]
     }
   ],

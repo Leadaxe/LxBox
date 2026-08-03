@@ -294,3 +294,120 @@ final class MissingObfsPasswordWarning extends NodeWarning {
   @override
   WarningSeverity get severity => WarningSeverity.warning;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// §368 — импорт sing-box JSON
+// ════════════════════════════════════════════════════════════════════════════
+
+/// §368 §4 P3 — `detour`-кольцо в импортируемом конфиге разорвано.
+///
+/// Расхождение с §254 намеренное: там судят конфиг ПОЛЬЗОВАТЕЛЯ (виновника надо
+/// показать, чтобы он развязал), здесь кольцо приехало из чужого файла — узлов
+/// ещё нет, развязывать нечего. Рвём замыкающее ребро, узел остаётся рабочим
+/// без цепочки.
+final class DetourCycleBrokenWarning extends NodeWarning {
+  /// Тег, на который вело замыкающее ребро.
+  final String target;
+
+  const DetourCycleBrokenWarning(this.target);
+
+  @override
+  List<Object?> get props => [target];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "Chain to \"%s\" would loop back on itself, so it was dropped. The node connects directly.",
+      target);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// §368 §4 P4 — `detour` указывает на тег, которого в конфиге нет.
+/// Узел не теряем (§169: отброс негодной части, не целого).
+final class DetourTargetMissingWarning extends NodeWarning {
+  final String target;
+
+  const DetourTargetMissingWarning(this.target);
+
+  @override
+  List<Object?> get props => [target];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "Chain target \"%s\" was not found in the config. The node connects directly.",
+      target);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// §368 §4 P5 — `detour` на группу (`urltest`/`selector`). Типово выразимо, но
+/// `getEntries` развернёт группу в detour-список, где её членов нет.
+final class DetourToGroupWarning extends NodeWarning {
+  final String target;
+
+  const DetourToGroupWarning(this.target);
+
+  @override
+  List<Object?> get props => [target];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "Chain target \"%s\" is a group, which cannot be used as a chain hop. The node connects directly.",
+      target);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// §368 §4 P2 — цепочка длиннее лимита обрезана. Реальные конфиги — 2–3 звена;
+/// лимит защищает от рекурсии по данным провайдера.
+final class DetourChainTooDeepWarning extends NodeWarning {
+  final int limit;
+
+  const DetourChainTooDeepWarning(this.limit);
+
+  @override
+  List<Object?> get props => [limit];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "Chain is longer than %d hops and was truncated.", limit);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// §368 §5.1 — `type: selector` (ручной выбор) импортирован как автовыбор:
+/// своего типа узла у нас нет, а терять собранный руками состав хуже, чем
+/// сменить режим отбора.
+final class SelectorAsAutoWarning extends NodeWarning {
+  const SelectorAsAutoWarning();
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.");
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
+/// §368 §5.3 — член группы не доехал: тег не дал узла (служебный/битый
+/// outbound) либо это вложенная группа, а группа членом пула быть не может.
+final class GroupMemberMissingWarning extends NodeWarning {
+  /// Сколько членов выпало.
+  final int count;
+
+  const GroupMemberMissingWarning(this.count);
+
+  @override
+  List<Object?> get props => [count];
+
+  @override
+  String messageWith(GetLocalText t) =>
+      t.plural("%d group members could not be imported and were left out.", count);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
