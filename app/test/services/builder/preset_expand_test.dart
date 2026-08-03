@@ -1157,6 +1157,99 @@ void main() {
           reason: 'ru-inside resolve без server — резолв через DNS-роутинг');
       expect(f.routingRules[1]['outbound'], 'direct-out');
     });
+
+    // §364 — FCM bypass. Внешний `and` + вложенный `or` из четырёх ветвей
+    // (точные хосты / суффиксы googleapis / alt-регэксп / порты 5228-5230) —
+    // это ветви одного механизма, а не опции.
+    //
+    // ⚠ Инвариант формы, НЕ косметика. `package_name` рядом с `mode`/`rules`
+    // в logical-правиле — `unknown field` для strict-декодера ядра
+    // (badjson.UnmarshallExcluded → UnmarshalContextDisallowUnknownFields):
+    // конфиг не декодируется ЦЕЛИКОМ, ядро не стартует. Проверено на ядре:
+    // верхнеуровневый вариант даёт
+    // `package_name: json: unknown field "package_name"`.
+    // Сужение (И) в sing-box выражается ТОЛЬКО вложенностью — поэтому
+    // `gms_only` добавляет ВЕТВЬ во внешний `and`, а не поле в правило.
+    test('fcm-push (дефолты) → and из одной ветви, без package_name', () {
+      final f = expandPreset(
+        CustomRulePreset(name: 'FCM', presetId: 'fcm-push'),
+        realPreset('fcm-push'),
+      );
+
+      expect(f.warnings, isEmpty);
+      expect(f.routingRules.length, 1);
+
+      final r = f.routingRules.single;
+      expect(r['type'], 'logical');
+      expect(r['mode'], 'and');
+      expect(r['outbound'], 'direct-out');
+      expect(r.containsKey('package_name'), isFalse,
+          reason: 'gms_only=false → ветвь выпала целиком (Dropped), '
+              'пустого {} в rules не остаётся');
+
+      // Одна ветвь: `and` по одному элементу = результат этого элемента
+      // (rule_abstract.go:205) — вырождения в «матчит всё» нет.
+      final branches = (r['rules'] as List).cast<Map<String, dynamic>>();
+      expect(branches.length, 1);
+
+      final inner = branches.single;
+      expect(inner['type'], 'logical');
+      expect(inner['mode'], 'or');
+      expect(inner.containsKey('outbound'), isFalse,
+          reason: 'действие только на внешнем правиле');
+
+      final or = (inner['rules'] as List).cast<Map<String, dynamic>>();
+      expect(or.length, 4);
+      expect(or[0]['domain'], contains('mtalk.google.com'));
+      expect(or[1]['domain_suffix'],
+          contains('firebaseinstallations.googleapis.com'));
+      // alt1..alt8 (и будущие alt9+) — регэкспом, а не перечислением.
+      expect(or[2]['domain_regex'], [r'^alt\d+-mtalk\.google\.com$']);
+      expect(or[3]['port_range'], ['5228:5230']);
+
+      // Пресет чисто маршрутный: ни rule_set, ни DNS-слоя.
+      expect(f.ruleSets, isEmpty);
+      expect(f.dnsRules, isEmpty);
+      expect(f.dnsServers, isEmpty);
+    });
+
+    test('fcm-push: gms_only=true → package_name отдельной ветвью and, '
+        'вложенный or не тронут', () {
+      final f = expandPreset(
+        CustomRulePreset(
+          name: 'FCM',
+          presetId: 'fcm-push',
+          varsValues: {'gms_only': 'true'},
+        ),
+        realPreset('fcm-push'),
+      );
+
+      final r = f.routingRules.single;
+      expect(r['mode'], 'and', reason: 'сужение = И, а И = вложенность');
+      expect(r.containsKey('package_name'), isFalse,
+          reason: 'на верхнем уровне logical это unknown field → ядро '
+              'не декодирует конфиг и не стартует');
+
+      final branches = (r['rules'] as List).cast<Map<String, dynamic>>();
+      expect(branches.length, 2);
+      expect(branches[0]['package_name'], ['com.google.android.gms']);
+      expect(branches[1]['mode'], 'or',
+          reason: 'вторая ветвь — исходный OR целиком');
+      expect((branches[1]['rules'] as List).length, 4);
+    });
+
+    test('fcm-push: outbound=vpn-1 → подставляется в правило', () {
+      final f = expandPreset(
+        CustomRulePreset(
+          name: 'FCM',
+          presetId: 'fcm-push',
+          varsValues: {'outbound': 'vpn-1'},
+        ),
+        realPreset('fcm-push'),
+      );
+
+      expect(f.routingRules.single['outbound'], 'vpn-1');
+    });
   });
 
   // §253 — механика dns_rules-массива: валидность элементов + guards.
