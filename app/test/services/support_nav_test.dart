@@ -59,6 +59,20 @@ void main() {
           reason: 'forward-compat: будущие действия старые версии прячут');
     });
 
+    test('share: непустой payload резолвится и НЕ уводит с экрана', () {
+      final a = SupportLinkAction.parse('lxbox://share:Смотри — L×Box https://x')!;
+      expect(a.action, 'share');
+      expect(isResolvableSupportAction(a), true);
+      expect(isInPlaceSupportAction(a), true);
+      expect(
+          isResolvableSupportAction(SupportLinkAction.parse('lxbox://share:   ')!),
+          false);
+      // route/add — уводят (pushReplacement), не in-place.
+      expect(
+          isInPlaceSupportAction(SupportLinkAction.parse('lxbox://route:dns')!),
+          false);
+    });
+
     test('route: вкладка не влияет на резолвабельность', () {
       expect(
           isResolvableSupportAction(

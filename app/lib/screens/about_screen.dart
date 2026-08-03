@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/project_links.dart';
 import '../services/relative_time.dart';
 import '../services/update_checker.dart';
 import '../services/url_launcher.dart' as ul;
@@ -11,10 +12,12 @@ import '../services/l10n/locale_controller.dart';
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const _repoUrl = 'https://github.com/Leadaxe/LxBox';
-  static const _singboxUpstreamUrl = 'https://github.com/SagerNet/sing-box';
-  static const _singboxLauncherUrl =
-      'https://github.com/Leadaxe/singbox-launcher';
+  // §358 — адреса живут в общем слое `ProjectLinks` (единственный источник:
+  // раньше копии лежали здесь, в automation_tab и update_checker). Локальные
+  // алиасы оставлены для читаемости call-site'ов ниже.
+  static const _repoUrl = ProjectLinks.repo;
+  static const _singboxUpstreamUrl = ProjectLinks.singboxUpstream;
+  static const _singboxLauncherUrl = ProjectLinks.launcher;
 
   // §361 — руководство пользователя на языке интерфейса. Пара RU/EN держится
   // синхронной CI-проверкой парности (tool/docs/parity_check.dart), поэтому
@@ -26,15 +29,13 @@ class AboutScreen extends StatelessWidget {
   // §360-цикле и в main появится только со следующим релизом. Сборка этого
   // экрана из ветки, ещё не влитой в main, даст 404 по EN-ссылке — проверять
   // `curl -o /dev/null -w '%{http_code}'` по обоим URL перед выкладкой.
-  static const guideUrlEn =
-      'https://github.com/Leadaxe/LxBox/blob/main/docs/USER_GUIDE.md';
-  static const guideUrlRu =
-      'https://github.com/Leadaxe/LxBox/blob/main/docs/USER_GUIDE_RU.md';
+  static const guideUrlEn = ProjectLinks.guideEn;
+  static const guideUrlRu = ProjectLinks.guideRu;
 
   /// Ссылка на руководство под язык интерфейса. Незнакомый тег (язык, для
   /// которого гайда ещё нет) → английская версия, а не 404.
   @visibleForTesting
-  static String guideUrlFor(String tag) => tag == 'ru' ? guideUrlRu : guideUrlEn;
+  static String guideUrlFor(String tag) => ProjectLinks.guideFor(tag);
 
   /// Текущий язык интерфейса: `effectiveTag` уже разрешён до 'en'/'ru' и
   /// учитывает выбор System default.

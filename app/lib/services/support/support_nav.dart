@@ -10,7 +10,9 @@
 /// - `route:<screen>[/<tab>]` — открыть экран приложения (реестр ниже);
 /// - `add:<uri>` — открыть Servers с предзаполненным полем ввода (добавление
 ///   подтверждает сам юзер — авто-add запрещён: support.json приезжает с
-///   GitHub, компрометация канала не должна подсовывать юзерам чужой сервер).
+///   GitHub, компрометация канала не должна подсовывать юзерам чужой сервер);
+/// - `share:<текст>` — системный share-лист (кнопка «поделиться»); экран
+///   сообщения НЕ закрывается (юзер возвращается после отправки).
 ///
 /// Forward-compat: неизвестное действие/экран → кнопка НЕ показывается
 /// (см. [isResolvableSupportAction]) — новые действия в JSON не ломают
@@ -66,5 +68,10 @@ List<String> routeSegments(SupportLinkAction a) => a.payload.split('/');
 bool isResolvableSupportAction(SupportLinkAction a) => switch (a.action) {
       'route' => kSupportRouteScreens.contains(routeSegments(a).first),
       'add' => a.payload.trim().isNotEmpty,
+      'share' => a.payload.trim().isNotEmpty,
       _ => false,
     };
+
+/// §357 — действия, которые НЕ уводят с экрана сообщения (как https-кнопки:
+/// юзер может поделиться и остаться, потом нажать «Прочитал»).
+bool isInPlaceSupportAction(SupportLinkAction a) => a.action == 'share';

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../app_log.dart';
+import '../project_links.dart';
 import '../update_checker.dart' show isNewer;
 import '../version_info.dart';
 import 'active_time_tracker.dart';
@@ -48,6 +49,22 @@ class SupportContent {
   /// Кнопки в порядке списка. У каждой локали свои (en может вести на
   /// USER_GUIDE.md, ru — на USER_GUIDE_RU.md).
   final List<SupportLinkSpec> links;
+
+  /// §358 — подставить `@плейсхолдеры` ([ProjectLinks.expand]) во всех
+  /// текстовых полях. Зовётся в момент показа: `@guideLink` зависит от
+  /// текущей локали, `@appVersion` — от версии APK.
+  SupportContent expandLinks() => SupportContent(
+        title: ProjectLinks.expand(title),
+        message: ProjectLinks.expand(message),
+        links: [
+          for (final l in links)
+            SupportLinkSpec(
+              ProjectLinks.expand(l.label),
+              ProjectLinks.expand(l.url),
+              markRead: l.markRead,
+            ),
+        ],
+      );
 
   static SupportContent? fromJson(Object? raw) {
     if (raw is! Map) return null;

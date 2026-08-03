@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../services/l10n/locale_controller.dart';
 import '../../services/support/support_message.dart';
@@ -92,7 +93,10 @@ class _SupportMessageScreenState extends State<SupportMessageScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.message.contentFor(LocaleController.I.effectiveTag);
+    final raw = widget.message.contentFor(LocaleController.I.effectiveTag);
+    // §358 — `@плейсхолдеры` резолвятся В МОМЕНТ показа: `@guideLink` зависит
+    // от текущей локали, `@appVersion` — от версии APK.
+    final c = raw.expandLinks();
     final theme = Theme.of(context);
 
     // Кнопки: внешние — как есть; lxbox — только резолвящиеся (§357).
@@ -107,6 +111,14 @@ class _SupportMessageScreenState extends State<SupportMessageScreen> {
         continue;
       }
       if (!isResolvableSupportAction(action)) continue;
+      // `share:` — системный share-лист, экран НЕ закрываем (как https).
+      if (isInPlaceSupportAction(action)) {
+        buttons.add(FilledButton.tonal(
+          onPressed: () => unawaited(Share.share(action.payload)),
+          child: Text(spec.label),
+        ));
+        continue;
+      }
       final target = widget.buildScreen(action);
       if (target == null) continue;
       buttons.add(FilledButton.tonal(
