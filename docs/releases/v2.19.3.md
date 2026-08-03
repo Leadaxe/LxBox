@@ -31,6 +31,18 @@ hysteria-узлы выпадали из пулов автовыбора, нас�
 восстановление из бэкапа, член группы с запятой в пароле исчезал после
 перезапуска.
 
+New in the app itself: messages from the author are now a queue shown in your
+interface language and full screen, instead of a single Russian-only popup that
+"Don't show again" killed forever. And there is a ready-made rule that sends
+only Google push notifications around the VPN, so they arrive on time with the
+screen locked without resetting your Play region.
+
+Из нового в самом приложении: сообщения от автора стали очередью на языке
+интерфейса и во весь экран — вместо одного русскоязычного окна, которое кнопка
+«Не показывать» гасила навсегда. И появилось готовое правило, которое пускает
+мимо VPN только push-уведомления Google: они приходят вовремя при заблокированном
+экране, а регион Play не сбрасывается.
+
 Separately, for those who drive the app over the Debug API: a subscription can
 now be configured in full from there — fetch identity (including the `x-hwid`
 header some panels gate on), auto-update reaction, and import rules. /
@@ -134,6 +146,54 @@ rather than the first one in the file.
 The safety net added for broken REALITY blocks only looked at string values;
 a numeric one went through untouched and was rejected by the core.
 
+### 🔠 "Mixed-case SNI" silently killed REALITY nodes
+
+The anti-DPI setting that varies letter case in the server name applied to
+every node. Ordinary TLS does not mind — case in a hostname is not significant
+by the standard, which is the whole basis of the trick. REALITY is different:
+the server name takes part in the handshake byte for byte, the server compares
+it exactly, and one changed letter breaks the connection. Nodes stopped working
+with nothing on screen.
+
+The symptom was misleading: the ping in the server list passed (node testing
+takes its own path and never touches the name), while the VPN would not come up
+with those same nodes. It looked like a broken subscription — except the same
+nodes worked in other apps, which have no such setting.
+
+REALITY nodes are now left alone by it; for ordinary TLS it works as before.
+There was nothing to obfuscate there anyway — a REALITY server name is a decoy
+to begin with.
+
+### 🎭 Hysteria2 with `gecko` obfuscation connected to nothing
+
+The core knows two obfuscation types; the app only ever wrote `salamander` into
+the config. For a node using `gecko` the section was dropped entirely, the core
+brought up plain QUIC, and the server discards those packets. It looked like
+"connected, no traffic", without a single warning. Both types are now emitted
+along with their packet-size parameters, and links and sing-box JSON read and
+keep them.
+
+Two cases that would have brought down the **whole** config rather than one
+node are closed along the way: an unknown obfuscation type from a malformed
+subscription, and obfuscation without a password. Both are dropped during
+parsing with a warning on the node — the node stays in the list and connects
+without obfuscation. ([#53](https://github.com/Leadaxe/LxBox/issues/53))
+
+### 🔎 Auto-select nodes from subscriptions ignored the filter
+
+Name search and the protocol, transport and source chips let any service node
+through: under a `🇫🇮` filter the list still held `🇪🇺 Europe | Auto`,
+`Europe | Game | Auto` and "Block". The app told nodes apart by type rather
+than by origin, and an auto-select group from a subscription has the same type
+as the app's own service nodes.
+
+Only chassis nodes bypass the filter now: the channel selector with its "Auto"
+twin, "Direct" and "Block" — losing those to a filter would mean losing control
+of the channel. Auto-select groups from subscriptions and folders became
+ordinary rows: name search, the source chip and the ping filter all apply. Such
+a group reports `Auto` as its protocol and its mode as transport (`Fastest` or
+`Pool`), so matching chips appeared in the filter.
+
 ## 🎛 Fixed — false signals
 
 ### 🔵 A false "Settings changed" banner after updating a disabled subscription
@@ -187,6 +247,62 @@ The per-preset "DNS server" dropdown is gone. Every single-server option in it
 meant going back to one point of failure — the exact bug above. The traffic
 channel and the UDP resolver address are still yours to set. No migration is
 needed: the previously stored value simply stops having any effect.
+
+## 🔔 Added — a ready-made rule for Google push notifications
+
+Notifications used to arrive late and in a batch when you unlocked the screen:
+the long-lived connection Google delivers push over does not survive the device
+falling asleep inside a tunnel very well.
+
+The usual advice is to send all of `com.google.android.gms` around the VPN —
+which works, and resets your Google Play region along the way. The new
+**Google push (FCM)** preset matches only the push traffic instead: ports
+5228-5230, which is all FCM actually talks over, plus the Google hosts that
+serve notifications as a fallback for when a network blocks those ports and
+push falls back to 443. Everything else in Google Play stays in the tunnel, so
+the store region is untouched.
+
+The rule ships disabled and lands at the end of the rule list — move it above
+your proxy rules for it to take effect. An optional checkbox narrows it to
+Google Play Services alone; it is off by default, because app-based matching
+only works in VPN mode and does nothing in proxy mode.
+
+One caveat: the preset only handles routing. If your DNS goes through the
+tunnel, add a matching direct rule in DNS settings — otherwise the hosts
+resolve to the wrong region and push stays silent. The preset description says
+so too.
+
+Thanks to [@AVERO-m](https://github.com/Leadaxe/LxBox/issues/36) for the
+request, the exact ports and the reasoning about why bypassing all of GMS is
+the wrong tool.
+
+## 💬 Added — messages from the author: a queue, in your language, full screen
+
+The app shows an occasional message from the author — where the guide is, where
+the community is, how to help the project. That used to be a single popup in
+Russian only, and "Don't show again" killed it forever: an English-speaking
+user got Cyrillic, and there was no way to ever say anything new.
+
+It is a queue now. Each message arrives in your interface language, is shown
+full screen rather than in a cramped popup, and waits its turn: the next one
+appears only after the VPN has run its due hours since your last "Got it".
+Updating the app shifts the count, so a fresh install does not dump the whole
+feed at once.
+
+"Got it" is inactive for the first few seconds and counts down — a message
+cannot be swiped away unseen. "Later" postpones the whole feed; the cross
+closes it until the next launch without marking anything.
+
+Buttons inside a message can now lead into the app — opening the traffic
+profiler or DNS settings directly — offer a server for you to add (the link is
+filled into the field, you add it yourself), or share a link to the app through
+the system sheet. A button with an action an older build does not know is
+simply not shown.
+
+Uptime accounting became honest: it used to run only while the app was open, so
+for anyone who starts the VPN and swipes the app away it barely moved. The
+missing time is now topped up from the tunnel's own uptime, which the service
+tracks anyway.
 
 ## ⚠️ Added — a dead node now shows who depends on it
 
@@ -331,6 +447,53 @@ raw-JSON правила роутинга вычищаются от таких к
 Страховка, добавленная для битых REALITY-блоков, смотрела только на строковые
 значения; числовое проходило нетронутым и отвергалось ядром.
 
+### 🔠 «SNI в смешанном регистре» молча убивал узлы REALITY
+
+Настройка из раздела обхода DPI меняла регистр букв в имени сервера у всех
+узлов подряд. Обычному TLS это не мешает — регистр в имени по стандарту не
+важен, на чём приём и построен. У REALITY иначе: имя сервера участвует в
+рукопожатии побайтово, сервер сверяет его точным сравнением, и одна изменённая
+буква рушит подключение. Узлы переставали работать без ошибки на экране.
+
+Симптом был обманчивым: пинг в списке серверов проходил (проверка узла идёт
+своим путём и имя не трогает), а VPN с теми же узлами не поднимался. Со стороны
+выглядело как «подписка сломана», хотя в других приложениях — где такой
+настройки нет — те же узлы работали.
+
+Теперь узлы REALITY эта настройка обходит стороной; для обычного TLS она
+работает как раньше. Обфусцировать там было и нечего: имя сервера у REALITY и
+так подставное.
+
+### 🎭 Hysteria2 с обфускацией `gecko` подключался вхолостую
+
+Ядро знает два типа обфускации, приложение записывало в конфиг только
+`salamander`: у узла с `gecko` секция терялась целиком, ядро поднимало обычный
+QUIC, а сервер такие пакеты отбрасывает. Со стороны это выглядело как
+«подключено, трафика нет», без единого предупреждения. Теперь эмитятся оба типа
+вместе с параметрами размера пакета, а ссылки и sing-box JSON эти параметры
+читают и сохраняют.
+
+Попутно закрыты два случая, которые с рабочим `gecko` роняли бы **весь** конфиг,
+а не одну ноду: неизвестный тип обфускации из кривой подписки и обфускация без
+пароля. Оба отбрасываются при разборе с предупреждением на узле — узел остаётся
+в списке и подключается без обфускации.
+([#53](https://github.com/Leadaxe/LxBox/issues/53))
+
+### 🔎 Узлы автовыбора из подписок игнорировали фильтр
+
+Поиск по имени, чипы протокола, транспорта и источника пропускали мимо себя
+любой служебный узел — под фильтром `🇫🇮` в списке продолжали висеть
+`🇪🇺 Europe | Auto`, `Europe | Game | Auto` и «Блокировка». Приложение
+различало узлы по типу, а не по происхождению: группа автовыбора из подписки
+имеет тот же тип, что и служебные узлы самого приложения.
+
+Теперь фильтр обходят только узлы-шасси: селектор канала с его двойником
+«Авто», «Напрямую» и «Блокировка» — потерять их из-за фильтра значило бы
+потерять управление каналом. Группы автовыбора из подписок и папок стали
+обычными строками списка: их отбирают и поиск по имени, и чип источника, и
+фильтр по пингу. Протокол у такой группы — `Auto`, транспорт — её режим
+(`Fastest` либо `Pool`), так что в фильтре появились соответствующие чипы.
+
 ## 🎛 Исправлено — ложные сигналы
 
 ### 🔵 Ложная плашка «Настройки изменены» после обновления выключенной подписки
@@ -383,6 +546,60 @@ VPN) и так видит, куда уходят эти соединения, т
 возвращал единственную точку отказа — ровно тот баг, что описан выше. Канал
 трафика и адрес UDP-резолвера по-прежнему настраиваются. Миграция не нужна:
 прежнее сохранённое значение просто перестаёт на что-либо влиять.
+
+## 🔔 Добавлено — готовое правило для push-уведомлений Google
+
+Уведомления приходили с опозданием, пачкой при разблокировке экрана: постоянное
+соединение, по которому Google доставляет пуши, плохо переживает засыпание
+устройства внутри туннеля.
+
+Обычный совет — вывести из VPN весь `com.google.android.gms`. Он работает, но
+заодно сбрасывает регион Google Play. Новый пресет **Google push (FCM)** матчит
+только push-трафик: порты 5228-5230, по которым FCM только и ходит, плюс адреса
+Google, отвечающие за доставку уведомлений, — как страховка на случай, когда
+сеть режет эти порты и push уходит на 443. Остальной Google Play остаётся в
+туннеле, регион магазина не трогается.
+
+Правило добавляется выключенным и попадает в конец списка — чтобы оно
+заработало, поднимите его выше правил проксирования. Отдельная галка сужает его
+до «Сервисов Google Play»; она выключена по умолчанию, потому что отбор по
+приложению работает только в режиме VPN и в режиме прокси не действует.
+
+Одна оговорка: пресет отвечает только за маршрут. Если DNS идёт через туннель,
+добавьте такое же direct-правило в настройках DNS — иначе адреса придут из
+чужого региона и уведомления продолжат молчать. Об этом сказано и в описании
+пресета.
+
+Спасибо [@AVERO-m](https://github.com/Leadaxe/LxBox/issues/36) за запрос,
+точные порты и объяснение, почему обход всего GMS — неподходящий инструмент.
+
+## 💬 Добавлено — сообщения от автора: лента, на языке интерфейса, во весь экран
+
+Приложение изредка показывает сообщение от автора: где инструкция, где
+сообщество, чем помочь проекту. Раньше это было одно окно на русском языке, а
+кнопка «Не показывать» гасила его навсегда — англоязычный пользователь получал
+кириллицу, а сказать что-то новое было нельзя.
+
+Теперь это очередь. Каждое сообщение приходит на языке интерфейса, показывается
+во весь экран, а не тесной всплывашкой, и ждёт своей очереди: следующее
+появится, только когда VPN наработает положенные часы после предыдущего
+«Прочитал». Обновление приложения отсчёт сдвигает — после установки новой версии
+лента не вываливается разом.
+
+Кнопка «Прочитал» первые секунды неактивна и отсчитывает время: сообщение нельзя
+смахнуть, не увидев. «Позже» откладывает всю ленту, крестик закрывает до
+следующего запуска, ничего не помечая.
+
+Кнопки в сообщении умеют вести внутрь приложения — например, сразу открыть
+профайлер трафика или настройки DNS, — предлагать сервер к добавлению (ссылка
+подставляется в поле, добавляет пользователь сам) и отправлять ссылку на
+приложение через системное «Поделиться». Кнопка с незнакомым действием на старой
+версии приложения просто не показывается.
+
+Счёт времени работы стал честным: раньше он шёл, только пока приложение открыто,
+и у тех, кто включает VPN и убирает приложение из недавних, почти не двигался.
+Теперь недостающее доливается из времени работы туннеля, которое ведёт сама
+служба.
 
 ## ⚠️ Добавлено — мёртвая нода показывает, кто от неё зависит
 
