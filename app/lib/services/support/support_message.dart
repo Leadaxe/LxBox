@@ -50,7 +50,7 @@ class SupportContent {
   /// USER_GUIDE.md, ru — на USER_GUIDE_RU.md).
   final List<SupportLinkSpec> links;
 
-  /// §358 — подставить `@плейсхолдеры` ([ProjectLinks.expand]) во всех
+  /// §362 — подставить `@плейсхолдеры` ([ProjectLinks.expand]) во всех
   /// текстовых полях. Зовётся в момент показа: `@guideLink` зависит от
   /// текущей локали, `@appVersion` — от версии APK.
   SupportContent expandLinks() => SupportContent(

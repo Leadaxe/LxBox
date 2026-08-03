@@ -12,7 +12,7 @@ import '../services/l10n/locale_controller.dart';
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  // §358 — адреса живут в общем слое `ProjectLinks` (единственный источник:
+  // §362 — адреса живут в общем слое `ProjectLinks` (единственный источник:
   // раньше копии лежали здесь, в automation_tab и update_checker). Локальные
   // алиасы оставлены для читаемости call-site'ов ниже.
   static const _repoUrl = ProjectLinks.repo;

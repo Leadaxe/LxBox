@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/project_links.dart';
 
-/// §358 — общий слой ссылок + подстановка `@плейсхолдеров` remote-контента.
+/// §362 — общий слой ссылок + подстановка `@плейсхолдеров` remote-контента.
 void main() {
   test('известные плейсхолдеры подставляются', () {
     expect(ProjectLinks.expand('@selfLink'), ProjectLinks.latestRelease);

@@ -94,7 +94,7 @@ class _SupportMessageScreenState extends State<SupportMessageScreen> {
   @override
   Widget build(BuildContext context) {
     final raw = widget.message.contentFor(LocaleController.I.effectiveTag);
-    // §358 — `@плейсхолдеры` резолвятся В МОМЕНТ показа: `@guideLink` зависит
+    // §362 — `@плейсхолдеры` резолвятся В МОМЕНТ показа: `@guideLink` зависит
     // от текущей локали, `@appVersion` — от версии APK.
     final c = raw.expandLinks();
     final theme = Theme.of(context);
