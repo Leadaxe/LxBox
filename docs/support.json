@@ -1,5 +1,5 @@
 {
-  "$schema_comment": "§356/§357/§362 — remote-managed лента сообщений «поддержи автора». Раздаётся через raw.githubusercontent.com, app кэширует последнее удачное. Правки текстов/ссылок/порогов/очереди НЕ требуют релиза. Порядок массива = очередь показа. min_active_hours — интервал наработки туннеля ПОСЛЕ предыдущего «Прочитал» (или обновления приложения). since_version: бамп выше прочитанной версии = повторный показ обновившимся. skip: true = вывести из ротации. read_delay_seconds — задержка кнопки «Прочитал» (по умолчанию 10). en-блок обязателен (фолбэк), у каждой локали свои ссылки. @плейсхолдеры (ProjectLinks): @selfLink @repoLink @coreLink @launcherLink @tgLink @donateLink @issuesLink @boostyLink @donatePage @guideLink @appVersion — резолвятся в момент показа (@guideLink зависит от локали). Кнопки lxbox://<action>:<payload> — route:<экран>[/<вкладка>] (в т.ч. route:donate — попап способов поддержки), add:<uri> (prefill поля Servers), share:<текст> (системный share-лист); mark_read: false — не помечать сообщение прочитанным при тапе.",
+  "$schema_comment": "§356/§357/§362 — remote-managed лента сообщений «поддержи автора». Раздаётся через raw.githubusercontent.com, app кэширует последнее удачное. Правки текстов/ссылок/порогов/очереди НЕ требуют релиза. Порядок массива = очередь показа. min_active_hours — интервал наработки туннеля ПОСЛЕ предыдущего «Прочитал» (или обновления приложения). since_version: бамп выше прочитанной версии = повторный показ обновившимся. skip: true = вывести из ротации. read_delay_seconds — задержка кнопки «Прочитал» (по умолчанию 10). en-блок обязателен (фолбэк), у каждой локали свои ссылки. @плейсхолдеры (ProjectLinks): @selfLink @repoLink @coreLink @launcherLink @tgLink @donateLink @issuesLink @boostyLink @donatePage @guideLink @appVersion — резолвятся в момент показа (@guideLink зависит от локали). Кнопки lxbox://<action>:<payload> — route:<экран>[/<вкладка>] (в т.ч. route:about/donate — попап способов поддержки), add:<uri> (prefill поля Servers), share:<текст> (системный share-лист); mark_read: false — не помечать сообщение прочитанным при тапе.",
   "snooze_active_hours": 10,
   "messages": [
     {
@@ -90,7 +90,7 @@
             },
             {
               "label": "💰 Support the project",
-              "url": "lxbox://route:donate"
+              "url": "lxbox://route:about/donate"
             }
           ]
         },
@@ -104,7 +104,7 @@
             },
             {
               "label": "💰 Поддержать проект",
-              "url": "lxbox://route:donate"
+              "url": "lxbox://route:about/donate"
             }
           ]
         }
@@ -162,7 +162,7 @@
             },
             {
               "label": "💰 Support the project",
-              "url": "lxbox://route:donate"
+              "url": "lxbox://route:about/donate"
             }
           ]
         },
@@ -176,7 +176,7 @@
             },
             {
               "label": "💰 Поддержать проект",
-              "url": "lxbox://route:donate"
+              "url": "lxbox://route:about/donate"
             }
           ]
         }
@@ -266,7 +266,7 @@
           "links": [
             {
               "label": "💰 Support the project",
-              "url": "lxbox://route:donate"
+              "url": "lxbox://route:about/donate"
             },
             {
               "label": "⭐ Star, if you haven't yet",
@@ -280,7 +280,7 @@
           "links": [
             {
               "label": "💰 Поддержать проект",
-              "url": "lxbox://route:donate"
+              "url": "lxbox://route:about/donate"
             },
             {
               "label": "⭐ Звезда, если ещё нет",

@@ -73,6 +73,16 @@ void main() {
           false);
     });
 
+    test('route:about/donate — донат вкладкой, отдельного слага нет', () {
+      final a = SupportLinkAction.parse('lxbox://route:about/donate')!;
+      expect(routeSegments(a), ['about', 'donate']);
+      expect(isResolvableSupportAction(a), true);
+      expect(
+          isResolvableSupportAction(SupportLinkAction.parse('lxbox://route:donate')!),
+          false,
+          reason: 'донат — состояние About, а не самостоятельный экран');
+    });
+
     test('route: вкладка не влияет на резолвабельность', () {
       expect(
           isResolvableSupportAction(

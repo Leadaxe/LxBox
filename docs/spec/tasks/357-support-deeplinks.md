@@ -74,7 +74,7 @@ v1 реализует единственное действие — `route:<scre
 | `route:stats` | StatsScreen | `overview`/`connections`/`live` → `initialTab` (гейт: туннель поднят, иначе кнопка скрыта — как пункт drawer) |
 | `route:config` | ConfigScreen | — |
 | `route:debug` | DebugScreen | `log`/`crashes`/`oom`/`profiling` → `initialTab` 0–3 (**new** параметр) |
-| `route:about` | AboutScreen | — |
+| `route:about` | AboutScreen | `donate` (сразу открыть попап способов поддержки, §362) |
 | `route:profiler` | **семантический алиас** = `stats/live` (гейт туннеля) | — |
 
 `profiler` — алиас по назначению, а не по месту в UI: слаг в опубликованных

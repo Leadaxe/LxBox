@@ -87,9 +87,11 @@ call-site'ов; публичные `guideUrlEn/guideUrlRu/guideUrlFor` — пр�
 - Попап перестроен на `DonateMethods` (`app/lib/services/donate_methods.dart`)
   — прежняя таблица адресов, вшитая в разметку, удалена; внизу кнопка «Все
   способы поддержки» на веб-страницу по локали.
-- **Маршрут `route:donate`** (§357-реестр) — кнопки поддержки в support-ленте
-  ведут в этот попап ВНУТРИ приложения, а не на внешнюю страницу
-  (`AboutScreen(openDonate: true)` открывает его post-frame).
+- **Маршрут `route:about/donate`** — кнопки поддержки в support-ленте ведут в
+  этот попап ВНУТРИ приложения, а не на внешнюю страницу
+  (`AboutScreen(openDonate: true)` открывает его post-frame). Отдельного слага
+  нет: донат — состояние экрана About, а не самостоятельный экран, поэтому
+  вкладкой-суффиксом, как `debug/profiling` и `app-settings/subscriptions`.
 
 ## 8. Не сделано (отложено юзером)
 
