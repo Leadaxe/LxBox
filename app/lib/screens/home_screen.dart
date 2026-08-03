@@ -44,6 +44,7 @@ import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
 import '../services/nav/home_return_observer.dart';
 import '../services/settings_storage.dart';
+import '../services/rule_set_auto_updater.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
@@ -60,6 +61,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final HomeController _controller;
   late final SubscriptionController _subController;
   late final AutoUpdater _autoUpdater;
+
+  /// §366 — авто-обновление кэшированных rule-set'ов по TTL.
+  late final RuleSetAutoUpdater _ruleSetAutoUpdater;
 
   /// §203 — per-tag GlobalKey'и строк node-list'а для `Scrollable.ensureVisible`
   /// («Select server» в меню auto-ноды скроллит к выбранному urltest-серверу).
@@ -165,7 +169,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _subController = SubscriptionController();
     _autoUpdater = AutoUpdater(_subController);
     _subController.bindAutoUpdater(_autoUpdater);
-    _controller = HomeController(autoUpdater: _autoUpdater);
+    // §366 — авто-обновление rule-set'ов. Создаём до HomeController: он
+    // держит ссылку и дёргает `onVpnConnected` на transition.
+    _ruleSetAutoUpdater = RuleSetAutoUpdater();
+    _controller = HomeController(
+      autoUpdater: _autoUpdater,
+      ruleSetAutoUpdater: _ruleSetAutoUpdater,
+    );
+    // §366 — обновившийся `.srs` меняет содержимое конфига (путь тот же, но
+    // ядро читает файл при старте) → пересобрать. Без reload: рвать рабочий
+    // туннель ради обновлённого списка блокировок не стоит, новый файл
+    // подхватится на ближайшем старте.
+    _ruleSetAutoUpdater.bindOnChanged(
+        () => _reactToSubscriptionUpdate(reload: false));
     // §323 — реакция на авто-обновление подписки. Привязываем ПОСЛЕ создания
     // HomeController (замыкание держит `_controller`, до этой строки его нет).
     _autoUpdater.bindOnUpdateReaction(_reactToSubscriptionUpdate);
@@ -197,6 +213,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _controllerInit = _controller.init();
     unawaited(_controllerInit);
     unawaited(_initSubsAndAutoUpdate());
+    // §366 — первая проверка TTL rule-set'ов через 30с после старта.
+    _ruleSetAutoUpdater.start();
     unawaited(_loadHapticPref());
     // Track tunnel transitions для side-effect'ов (SnackBar при revoke,
     // animation для connecting, auto-dismiss timer для lastError).
@@ -468,6 +486,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     WidgetsBinding.instance.removeObserver(this);
     homeReturnObserver.clearHandler();
     _autoUpdater.dispose();
+    _ruleSetAutoUpdater.dispose();
     // Ownership contract: HomeScreen владеет controller'ами + анимацией.
     // Раньше dispose пропускался — на проде ОС гасит процесс, но в
     // тестах / hot reload / будущем смене root widget'а получали бы
@@ -488,6 +507,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _lifecycle = state;
     if (state == AppLifecycleState.resumed) {
       _controller.onAppResumed();
+      _ruleSetAutoUpdater.onAppResumed(); // §366
       // §291 — досмотреть подписки на возврате из фона: periodic-таймер спит
       // вместе с замороженным процессом (свёрнут + VPN off), так что вечером
       // «обновлено 14ч назад». Не блокирует resync; `_running`/min-retry сами
@@ -502,6 +522,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       // переходы (шторка, звонок, app-switcher preview), не настоящий фон.
       _pausedAt = DateTime.now(); // §216
       _controller.onAppPaused();
+      // §366 — в фоне rule-set'ы не качаем: отменяем запланированную проверку.
+      _ruleSetAutoUpdater.onAppPaused();
     }
   }
 

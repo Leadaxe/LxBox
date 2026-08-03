@@ -23,6 +23,7 @@ import '../services/settings_storage.dart';
 import '../services/support/support_message.dart';
 import '../services/template_loader.dart';
 import '../services/haptic_service.dart';
+import '../services/rule_set_auto_updater.dart';
 import '../services/subscription/auto_updater.dart';
 
 part 'home_controller/config_io.dart';
@@ -31,11 +32,19 @@ part 'home_controller/ping_orchestration.dart';
 
 class HomeController extends ChangeNotifier
     with _ConfigIoMixin, _HeartbeatMixin, _PingMixin {
-  HomeController({AutoUpdater? autoUpdater}) : _autoUpdater = autoUpdater;
+  HomeController({
+    AutoUpdater? autoUpdater,
+    RuleSetAutoUpdater? ruleSetAutoUpdater,
+  })  : _autoUpdater = autoUpdater,
+        _ruleSetAutoUpdater = ruleSetAutoUpdater;
 
   @override
   final BoxVpnClient _vpn = BoxVpnClient();
   final AutoUpdater? _autoUpdater;
+
+  /// §366 — авто-обновление rule-set'ов. Опционален: тесты и headless-пути
+  /// живут без него.
+  final RuleSetAutoUpdater? _ruleSetAutoUpdater;
   StreamSubscription<TunnelStatusEvent>? _statusSub;
 
   /// §122 — единый канал данных от libbox CommandClient (заменил `ClashApiClient`
@@ -404,6 +413,8 @@ class HomeController extends ChangeNotifier
       HapticService.I.onVpnConnected();
       // AutoUpdater триггер #2: через 2 мин после connected.
       _autoUpdater?.onVpnConnected();
+      // §366 — проверка TTL rule-set'ов через 30с после connected.
+      _ruleSetAutoUpdater?.onVpnConnected();
       unawaited(_scheduleAutoPing());
       // §047 — outgoing lifecycle event (gated, default OFF).
       AutomationEventEmitter.I.emitVpnConnected();

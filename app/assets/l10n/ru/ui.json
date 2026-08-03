@@ -922,6 +922,9 @@
   "Check failed: %s": {
     "value": "Не удалось проверить: %s"
   },
+  "Check for updates": {
+    "value": "Проверять обновления"
+  },
   "Check for updates on launch": {
     "value": "Проверять обновления при запуске"
   },
@@ -1594,6 +1597,27 @@
   "Error TTL": "TTL ошибки",
   "Error: %s": {
     "value": "Ошибка: %s"
+  },
+  "Every %d h": {
+    "value": "Каждые %d ч"
+  },
+  "Every 2 weeks": {
+    "value": "Каждые 2 недели"
+  },
+  "Every 6 months": {
+    "value": "Каждые 6 месяцев"
+  },
+  "Every day": {
+    "value": "Каждый день"
+  },
+  "Every month": {
+    "value": "Каждый месяц"
+  },
+  "Every week": {
+    "value": "Каждую неделю"
+  },
+  "Every year": {
+    "value": "Каждый год"
   },
   "Events with no owning app": {
     "value": "События, у которых не определено приложение"
@@ -2322,6 +2346,9 @@
   },
   "Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.": {
     "value": "Сети, где вы находитесь ≥ 5 минут, появляются в редакторе правила маршрутизации → «Pick saved»."
+  },
+  "Never": {
+    "value": "Никогда"
   },
   "Never (respect server)": {
     "value": "Никогда (по указанию сервера)"
@@ -3849,11 +3876,20 @@
   "Update disabled subscriptions": {
     "value": "Обновлять выключенные подписки"
   },
+  "Update failed — using cached copy": {
+    "value": "Не удалось обновить — используется сохранённая копия"
+  },
   "Update interval": {
     "value": "Интервал обновления"
   },
   "Update subscription to see nodes": {
     "value": "Обновите подписку, чтобы увидеть узлы"
+  },
+  "Update time unknown": {
+    "value": "Время обновления неизвестно"
+  },
+  "Updated %s": {
+    "value": "Обновлено %s"
   },
   "Updates": {
     "value": "Обновления"

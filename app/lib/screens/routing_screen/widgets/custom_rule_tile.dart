@@ -5,6 +5,17 @@ import '../../../widgets/outbound_picker.dart';
 import '../../../widgets/reorder_grab_strip.dart';
 import '../routing_screen_helpers.dart';
 
+/// §366 — свежесть кэшированного rule-set'а для строки под правилом.
+class SrsFreshness {
+  const SrsFreshness({required this.text, this.failed = false});
+
+  /// Готовая строка: «Updated 3d ago» / «Never updated» / «Update failed».
+  final String text;
+
+  /// Последняя попытка обновления не удалась — рисуем цветом ошибки.
+  final bool failed;
+}
+
 /// Один tile custom-rule на табе Rules (spec §030): drag-handle, switch,
 /// имя, ☁-статус (опционально), outbound-picker и subtitle. Вся state-логика
 /// (download/enable/reorder/edit/delete) живёт в экране и приходит сюда
@@ -23,6 +34,7 @@ class CustomRuleTile extends StatelessWidget {
     this.touchesDns = false,
     this.locked = false,
     required this.statusButton,
+    this.freshness,
     required this.onTap,
     required this.onLongPressStart,
     required this.onSwitchChanged,
@@ -60,6 +72,10 @@ class CustomRuleTile extends StatelessWidget {
 
   /// ☁-кнопка статуса (SRS либо preset) — null если правилу не нужен SRS.
   final Widget? statusButton;
+
+  /// §366 — статус свежести кэша: «Updated 3d ago» либо пометка о неудачной
+  /// последней попытке. Null — правилу нечего обновлять (не SRS / не скачано).
+  final SrsFreshness? freshness;
 
   final VoidCallback onTap;
   final ValueChanged<Offset> onLongPressStart;
@@ -148,6 +164,38 @@ class CustomRuleTile extends StatelessWidget {
                 ],
               ),
             ),
+            // §366 — когда rule-set обновлялся. Отдельной строкой под
+            // subtitle: в самом subtitle уже тесно (URL/сводка правила).
+            if (freshness != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 64, right: 8, bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      freshness!.failed
+                          ? Icons.error_outline
+                          : Icons.update,
+                      size: 11,
+                      color: freshness!.failed
+                          ? cs.error
+                          : cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        freshness!.text,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: freshness!.failed
+                              ? cs.error
+                              : cs.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),

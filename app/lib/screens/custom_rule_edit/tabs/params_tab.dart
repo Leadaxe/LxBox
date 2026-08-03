@@ -190,6 +190,10 @@ class ParamsTab extends StatelessWidget {
             onDownload: c.downloadSrs,
             onShowCloudMenu: actions.onShowCloudMenu,
             onUrlChanged: c.resetSrsErrorIfAny,
+            // §366 — TTL кэша и время последней проверки.
+            ttlHours: c.srsTtlHours,
+            onTtlChanged: (v) => c.srsTtlHours = v,
+            lastUpdatedText: c.srsLastUpdatedText,
           ),
         // §225 — match-фильтры (port/protocol/wifi/inbound/dns) не применимы
         // к raw-JSON правилу: всё выражается в самом теле.

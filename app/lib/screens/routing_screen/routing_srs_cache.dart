@@ -8,6 +8,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   // поверхность абстрактно.
   Set<String> get _srsCached;
   Set<String> get _srsDownloading;
+  Map<String, RuleSetMeta> get _srsMeta; // §366
   List<CustomRule> get _customRules;
   List<Channel> get _channels; // §125
   void _invalidateOutboundOptions(); // §219 — сброс кэша опций outbound
@@ -111,6 +112,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   /// - `CustomRulePreset` — все remote rule_set'ы пресета (`preset__<presetId>__<tag>`).
   Future<void> _refreshSrsCache() async {
     _srsCached.clear();
+    _srsMeta.clear(); // §366
     var changed = false;
     // Set известных disk-cache ID'шников. Нужен для `pruneOrphans`
     // ниже — disk-ID отличается от `_srsCached` композитного ключа
@@ -124,7 +126,10 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
         // того, скачан файл или нет — чтобы prune не удалил ещё-не-скачанный.
         activeDiskIds.add(r.id);
         final cached = await RuleSetDownloader.isCached(r.id);
-        if (cached) _srsCached.add(r.id);
+        if (cached) {
+          _srsCached.add(r.id);
+          _srsMeta[r.id] = await RuleSetDownloader.readMeta(r.id); // §366
+        }
         if (!cached && r.enabled) {
           _customRules[i] = r.withEnabled(false);
           changed = true;
@@ -142,6 +147,13 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
               null;
           if (cached) {
             _srsCached.add(_presetSrsKey(r, rs.tag));
+            // §366 — агрегируем метаданные пресета: время = самое старое из
+            // его rule_set'ов, ошибка = любая (правило актуально настолько,
+            // насколько актуален отстающий файл).
+            final m =
+                await RuleSetDownloader.readMetaForPreset(r.presetId, rs.tag);
+            final prev = _srsMeta[r.id];
+            _srsMeta[r.id] = prev == null ? m : _olderMeta(prev, m);
           } else {
             allCached = false;
           }
@@ -156,6 +168,26 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     // Не критично по времени, не влияет на UI — unawaited'им.
     unawaited(RuleSetDownloader.pruneOrphans(activeDiskIds));
     if (changed) _markDirty();
+  }
+
+  /// §366 — свёртка метаданных нескольких rule_set'ов одного пресета в одну
+  /// строку статуса: берём более старое время (отстающий файл определяет
+  /// свежесть правила) и любую ошибку (одна неудача — правило неполное).
+  RuleSetMeta _olderMeta(RuleSetMeta a, RuleSetMeta b) {
+    final at = a.lastUpdated;
+    final bt = b.lastUpdated;
+    // null = «никогда не обновлялось», это старше любой даты.
+    final DateTime? oldest;
+    if (at == null || bt == null) {
+      oldest = null;
+    } else {
+      oldest = at.isBefore(bt) ? at : bt;
+    }
+    return RuleSetMeta(
+      lastUpdated: oldest,
+      lastAttempt: a.lastAttempt ?? b.lastAttempt,
+      lastError: a.lastError ?? b.lastError,
+    );
   }
 
   /// §264 — совпадают ли два списка правил по порядку и составу (по `id`).
@@ -231,10 +263,14 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     }
     setState(() => _srsDownloading.add(rule.id));
     final path = await RuleSetDownloader.download(rule.id, rule.srsUrl.trim());
+    // §366 — метаданные пишет сам downloader; перечитываем, чтобы строка
+    // «обновлено …» под правилом обновилась сразу, без перезахода на экран.
+    final meta = await RuleSetDownloader.readMeta(rule.id);
     if (!mounted) return;
     setState(() {
       _srsDownloading.remove(rule.id);
       if (path != null) _srsCached.add(rule.id);
+      _srsMeta[rule.id] = meta;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -262,9 +298,13 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     setState(() => _srsDownloading.add(rule.id));
     var ok = 0;
     var failed = 0;
+    RuleSetMeta? agg; // §366 — свёртка метаданных по всем rule_set'ам пресета
     for (final rs in remotes) {
       final path = await RuleSetDownloader.downloadForPreset(
           rule.presetId, rs.tag, rs.url);
+      final m =
+          await RuleSetDownloader.readMetaForPreset(rule.presetId, rs.tag);
+      agg = agg == null ? m : _olderMeta(agg, m);
       if (!mounted) return;
       if (path != null) {
         _srsCached.add(_presetSrsKey(rule, rs.tag));
@@ -274,7 +314,10 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
       }
     }
     if (!mounted) return;
-    setState(() => _srsDownloading.remove(rule.id));
+    setState(() {
+      _srsDownloading.remove(rule.id);
+      if (agg != null) _srsMeta[rule.id] = agg;
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(failed == 0

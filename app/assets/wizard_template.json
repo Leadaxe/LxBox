@@ -426,7 +426,7 @@
       "preset_id": "block-ads",
       "ui": {"label": "Block Ads", "description": "Reject ad-related connections. Downloads rule set (~1 MB).", "default": false},
       "rule_set": [
-        { "tag": "ads-all", "type": "remote", "format": "binary",
+        { "tag": "ads-all", "type": "remote", "format": "binary", "update_interval": "168h",
           "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-category-ads-all.srs"
         }
       ],
@@ -527,7 +527,7 @@
         {"name": "force_ipv4", "type": "bool", "default_value": "true", "title": "Force IPv4", "tooltip": "Resolve these domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Turn off if your network has functional IPv6."}
       ],
       "rule_set": [
-        { "tag": "ru-inside", "type": "remote", "format": "binary",
+        { "tag": "ru-inside", "type": "remote", "format": "binary", "update_interval": "168h",
           "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-ru-available-only-inside.srs"
         }
       ],
