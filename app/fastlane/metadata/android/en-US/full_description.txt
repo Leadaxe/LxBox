@@ -1,0 +1,37 @@
+L×Box is an Android proxy client built on sing-box-lx, a sing-box fork with AmneziaWG 2.0 and native XHTTP support. It manages multiple subscriptions, routes traffic by rules you control, and measures node latency without leaving the app.
+
+Everything runs on device. There is no account, no telemetry and no analytics: the app talks only to the servers you add and to the update endpoints you configure.
+
+Servers and subscriptions
+
+* 12 protocols: VLESS (including ML-KEM-768 post-quantum encryption), VMess, Trojan, Shadowsocks, Hysteria2, TUIC v5, NaiveProxy, AnyTLS, SSH, SOCKS, WireGuard (including AmneziaWG 2.0) and MASQUE over QUIC/HTTP-3
+* Import by subscription URL, proxy link, WireGuard URI or INI, Amnezia vpn:// link, raw sing-box JSON, or a local file
+* Formats: Base64, Xray JSON array, plain text, raw sing-box JSON
+* Duplicate nodes across a subscription collapse into one entry
+* Individual nodes can be disabled; the choice is bound to a stable node hash and survives updates and provider-side renames
+* Processing rules rewrite or disable nodes on import and on every update, with a preview of what a rule will match before you save it
+* Background auto-update with rate limits, retry gates and per-subscription intervals
+
+Routing
+
+* Rule-based routing by domain, IP, port, protocol, process and network type
+* Per-app routing: choose which applications go through the tunnel
+* Rule sets with automatic updates
+* Full DNS control: multiple resolvers, DNS rules, FakeIP, per-rule resolver selection
+* Built-in configuration editor with syntax highlighting for anything the UI does not cover
+
+Diagnostics
+
+* Speed test and latency measurement for a single node, a folder or a whole subscription, with or without the tunnel running
+* Live connection list, per-connection traffic and per-app traffic breakdown
+* Traffic statistics and an in-app log viewer
+
+Cloudflare WARP
+
+One tap registers a WARP tunnel and adds it as a node. The private key is generated on device and never leaves it; only the public key is sent to Cloudflare. WireGuard and MASQUE transports are both supported, with optional AmneziaWG obfuscation.
+
+Interface
+
+English and Russian, light and dark themes.
+
+L×Box is free software under the GNU General Public License v3.
