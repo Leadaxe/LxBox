@@ -502,20 +502,26 @@ class _RoutingScreenState extends State<RoutingScreen>
     });
   }
 
-  /// §264 — сколько правил в начале списка являются locked/pinned пресетами
+  /// §264 — сколько правил в начале списка являются pinned-пресетами
   /// (держатся сверху, не двигаются). Нормализация билдера ставит их первыми,
   /// экран поддерживает инвариант при reorder.
+  ///
+  /// Считаем ВСЕ pinned-правила, а не префикс от начала: storage мог приехать
+  /// испорченным (backup-restore, Debug API, старый баг вставки), и тогда
+  /// префиксный счётчик натыкался на чужое правило первым, возвращал 0 и
+  /// снимал защиту целиком. Порядок такого storage чинит `normalizePinnedPresets`
+  /// в `_load()`, так что счётчик описывает уже нормализованный список.
+  ///
+  /// Критерий — `isPinned` (как в `normalizePinnedPresets`), а не `locked`:
+  /// это два разных флага `ui`, и расхождение критериев между билдером и
+  /// экраном уже приводило к разъезду порядка.
   int _pinnedRuleCount() {
     var n = 0;
     for (final rule in _customRules) {
       final preset = rule.kind == CustomRuleKind.preset
           ? _presetFor(rule.presetId)
           : null;
-      if (preset?.locked == true) {
-        n++;
-      } else {
-        break;
-      }
+      if (preset?.isPinned == true) n++;
     }
     return n;
   }
@@ -825,21 +831,28 @@ class _RoutingScreenState extends State<RoutingScreen>
   }
 
   /// Индекс куда вставить новое правило, чтобы сохранить "specific-first"
-  /// порядок: reject-блок ─ direct-блок ─ всё остальное.
+  /// порядок: pinned-шапка ─ reject-блок ─ direct-блок ─ всё остальное.
   ///
-  /// - Новое правило с effective outbound `reject` → самый верх (index 0)
+  /// - Новое правило с effective outbound `reject` → сразу под pinned-шапкой
   /// - Новое правило с effective outbound `direct-out` → сразу после
   ///   последнего reject (пропускает reject-блок)
   /// - Новое правило с любым другим outbound → в хвост
+  ///
+  /// §264 — ни один из вариантов не поднимается выше pinned-шапки:
+  /// `traffic-processing` несёт `sniff`, который обязан быть первым. Без этого
+  /// пресет с `direct-out` (напр. `fcm-push`) при пустом reject-блоке садился
+  /// на index 0 и выдавливал шапку вниз — а `_pinnedRuleCount`, считающий
+  /// префикс от начала списка, после этого возвращал 0 и снимал защиту drag'а.
   ///
   /// Внутри одного типа порядок добавления сохраняется (новый direct
   /// ложится за уже существующими direct'ами). Юзер может переставить
   /// drag'ом — это лишь initial-insert.
   int _computeInsertIndex(CustomRule newRule) {
+    final pinnedCount = _pinnedRuleCount();
     final outbound = _effectiveOutboundOf(newRule);
-    if (outbound == kOutboundReject) return 0;
+    if (outbound == kOutboundReject) return pinnedCount;
     if (outbound == kDirectOutboundTag) {
-      var i = 0;
+      var i = pinnedCount;
       while (i < _customRules.length &&
           _effectiveOutboundOf(_customRules[i]) == kOutboundReject) {
         i++;
