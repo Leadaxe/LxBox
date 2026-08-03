@@ -16,6 +16,31 @@ class AboutScreen extends StatelessWidget {
   static const _singboxLauncherUrl =
       'https://github.com/Leadaxe/singbox-launcher';
 
+  // §361 — руководство пользователя на языке интерфейса. Пара RU/EN держится
+  // синхронной CI-проверкой парности (tool/docs/parity_check.dart), поэтому
+  // разделы в обеих версиях одни и те же. Ветка `main` (как у AUTOMATION.md в
+  // automation_tab): в APK попадает релизный код, а релиз — это merge в main,
+  // который принесёт туда и оба файла гайда.
+  //
+  // ВАЖНО при бэкпорте/hotfix-сборке из develop: USER_GUIDE.md (EN) создан в
+  // §360-цикле и в main появится только со следующим релизом. Сборка этого
+  // экрана из ветки, ещё не влитой в main, даст 404 по EN-ссылке — проверять
+  // `curl -o /dev/null -w '%{http_code}'` по обоим URL перед выкладкой.
+  static const guideUrlEn =
+      'https://github.com/Leadaxe/LxBox/blob/main/docs/USER_GUIDE.md';
+  static const guideUrlRu =
+      'https://github.com/Leadaxe/LxBox/blob/main/docs/USER_GUIDE_RU.md';
+
+  /// Ссылка на руководство под язык интерфейса. Незнакомый тег (язык, для
+  /// которого гайда ещё нет) → английская версия, а не 404.
+  @visibleForTesting
+  static String guideUrlFor(String tag) => tag == 'ru' ? guideUrlRu : guideUrlEn;
+
+  /// Текущий язык интерфейса: `effectiveTag` уже разрешён до 'en'/'ru' и
+  /// учитывает выбор System default.
+  static String get _guideUrl =>
+      guideUrlFor(LocaleController.I.effectiveTag);
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -60,6 +85,15 @@ class AboutScreen extends StatelessWidget {
           Card(
             child: Column(
               children: [
+                ListTile(
+                  leading: const Icon(Icons.menu_book_outlined),
+                  title: Text(getLocalText.s("User guide")),
+                  subtitle: Text(getLocalText.s(
+                      "How it works: channels, rules, DNS, detour, recipes")),
+                  trailing: const Icon(Icons.open_in_new, size: 18),
+                  onTap: () => ul.UrlLauncher.open(_guideUrl),
+                ),
+                const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.code),
                   title: Text(getLocalText.s("Source Code")),

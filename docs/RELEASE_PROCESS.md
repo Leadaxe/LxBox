@@ -214,6 +214,15 @@ curl -sL https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json |
 ```
 
 - APK качается из release-страницы, `scripts/install-apk.sh` ставит его поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (значит подпись — release).
+- Ссылки из приложения на документы в `main` отдают 200 (в APK они зашиты на `blob/main`, а файл попадает туда только с merge — §361):
+
+  ```bash
+  for u in docs/USER_GUIDE.md docs/USER_GUIDE_RU.md docs/AUTOMATION.md; do
+    printf '%s → ' "$u"
+    curl -s -o /dev/null -w '%{http_code}\n' "https://github.com/Leadaxe/LxBox/blob/main/$u"
+  done
+  # → все 200; 404 = документ не влит в main, кнопка в About/Automation ведёт в никуда
+  ```
 - В установленном из релиза APK версия ядра (About/Debug, `Libbox.version()`) содержит суффикс `-lx` и совпадает с пином `app/android/libbox.version` на теге (сейчас `v1.14.0-lx.1`), **не** стоковое `1.13.11`: гарантия, что CI собрал fork-ядро и AWG/XHTTP/MASQUE-конфиги работают.
 - На устройстве с предыдущей версией L×Box UpdateChecker показывает SnackBar с новым релизом.
 

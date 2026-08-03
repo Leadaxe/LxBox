@@ -1939,6 +1939,9 @@
   "Hostnames sing-box resolves internally (your VPN server addresses, custom outbound endpoints) will go through your ISP's DNS, bypassing the VPN tunnel. Pick a regular DNS server for full privacy.": {
     "value": "Имена, которые sing-box резолвит сам (адреса ваших VPN-серверов и других исходящих подключений), пойдут через DNS провайдера мимо туннеля VPN. Для полной приватности выберите обычный DNS-сервер."
   },
+  "How it works: channels, rules, DNS, detour, recipes": {
+    "value": "Как это работает: каналы, правила, DNS, detour, рецепты"
+  },
   "How this rule directs and resolves matched traffic.": {
     "value": "Как правило направляет и резолвит совпавший трафик."
   },
@@ -3872,6 +3875,9 @@
   },
   "Use as detour": {
     "value": "Использовать как detour"
+  },
+  "User guide": {
+    "value": "Руководство пользователя"
   },
   "Use node": {
     "value": "Использовать узел"
