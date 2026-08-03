@@ -171,6 +171,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       vsync: this,
       duration: const Duration(seconds: 2),
     );
+    // §356 — нативный аптайм туннеля как источник счётчика наработки:
+    // переживает смахивание приложения, недостающее доливается при возврате.
+    ActiveTimeTracker.I.uptimeMsProvider = _vpn.getTunnelUptimeMs;
     // §031 Debug API: публикуем контроллеры в реестр и, если пользователь
     // включал Debug API раньше, поднимаем сервер на старте.
     DebugRegistry.I.home = _controller;
@@ -495,18 +498,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     );
   }
 
-  // §105 — состояние показа support-диалога (за процесс).
+  // §105/§356 — состояние показа support-ленты (за процесс).
   AppLifecycleState _lifecycle = AppLifecycleState.resumed;
-  SupportMessage? _supportMsg;
+  SupportFeed? _supportFeed;
   bool _supportFetchTried = false;
   bool _supportShown = false;
   bool _supportInFlight = false;
 
-  /// §105 — показ «поддержи автора» при открытии HOME, когда пользователь
-  /// реально пользуется: app на переднем плане, туннель активен, текущая
-  /// сессия (`now − connectedSince`) ≥ `min_session_minutes` И суммарное
-  /// время ≥ `min_active_hours`. Вызывается из app-resume и из
-  /// `_onControllerChange` (тикает ~раз/сек при connected) — гейт ловит
+  /// §105/§356 — показ очередного сообщения ленты «поддержи автора» при
+  /// открытии HOME, когда пользователь реально пользуется: app на переднем
+  /// плане, туннель активен, текущая сессия (`now − connectedSince`) ≥
+  /// `min_session_minutes` И наработка от baseline ≥ `min_active_hours`
+  /// (выбор — `SupportMessageService.nextToShow`). Вызывается из app-resume
+  /// и из `_onControllerChange` (тикает ~раз/сек при connected) — гейт ловит
   /// момент, когда сессия дорастает до порога, пока экран открыт.
   /// Терминальный (`_supportShown`) — один показ за процесс; fetch — однократ.
   Future<void> _maybeShowSupport() async {
@@ -518,16 +522,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     try {
       if (!_supportFetchTried) {
         _supportFetchTried = true; // одна попытка fetch за процесс
-        _supportMsg = await SupportMessageService.I.fetchOrCached();
+        _supportFeed = await SupportMessageService.I.fetchOrCached();
       }
-      final m = _supportMsg;
-      if (m == null || !mounted) return;
+      final feed = _supportFeed;
+      if (feed == null || !mounted) return;
       final session = DateTime.now().difference(since).inSeconds;
-      final ok = await SupportMessageService.I
-          .shouldShow(m, currentSessionSeconds: session);
-      if (!ok || _supportShown || !mounted) return;
+      final m = await SupportMessageService.I
+          .nextToShow(feed, currentSessionSeconds: session);
+      if (m == null || _supportShown || !mounted) return;
       _supportShown = true;
-      await showSupportDialog(context, m);
+      await showSupportDialog(context, feed, m);
     } finally {
       _supportInFlight = false;
     }

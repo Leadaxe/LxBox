@@ -591,10 +591,10 @@ l10n/                        # §279/§285 подсистема локализа
   template_overlay.dart      #   TemplateOverlay.apply/extract — pre-parse оверлей шаблона
   app_language_reconcile.dart#   трёхсторонний reconciliation LocaleManager↔storage (Android 13+)
   template_aware_state.dart  #   mixin: перечитывание шаблона в didChangeDependencies по локали
-support/                     # §105 support-message + активное время
-  support_message.dart       #   fetch+cache support-сообщения (баннер)
-  support_state.dart         #   персист support-стейта (SupportState.I)
-  active_time_tracker.dart   #   накопление активного времени сессий (монотонно, §219)
+support/                     # §105/§356 support-лента + активное время
+  support_message.dart       #   модели ленты (i18n/since_version) + выбор/markRead/snooze (§356)
+  support_state.dart         #   персист support-стейта (SupportState.I): read/baseline/снуз
+  active_time_tracker.dart   #   счётчик наработки: нативный аптайм §187 + legacy wall-clock
 platform_channels.dart       # §141 — имена MethodChannel/EventChannel (single source: Dart↔Kotlin)
 process_name.dart            # §154 — резолв package→имя процесса (профайлер-атрибуция)
 profile_dump_writer.dart     # §207 — сериализация pprof-дампа (goroutine/CPU) на диск

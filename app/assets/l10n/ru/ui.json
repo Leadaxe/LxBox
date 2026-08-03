@@ -1481,9 +1481,6 @@
   "Don't auto-update (manual only)": {
     "value": "Не обновлять автоматически (только вручную)"
   },
-  "Don't show again": {
-    "value": "Не показывать"
-  },
   "Don't use detour servers": {
     "value": "Не использовать detour-серверы"
   },
@@ -1844,6 +1841,9 @@
   },
   "Goroutines": {
     "value": "Горутины"
+  },
+  "Got it": {
+    "value": "Прочитал"
   },
   "Granted — real SSID/BSSID accessible": {
     "value": "Выдано — доступны настоящие SSID/BSSID"

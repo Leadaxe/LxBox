@@ -1,16 +1,46 @@
 {
-  "$schema_comment": "§105 — ТЕСТОВЫЙ стенд support-message (порог 0 → показ сразу). Прод-канал — docs/support.json на main. Сборка с этим каналом: ./scripts/build-local-apk.sh --dart-define=LXBOX_SUPPORT_URL=https://raw.githubusercontent.com/Leadaxe/LxBox/develop/docs/support.test.json",
-  "id": "support-test",
-  "min_active_hours": 0,
-  "min_session_minutes": 0,
+  "$schema_comment": "§356 — ТЕСТОВЫЙ стенд support-ленты (пороги 0 → показ сразу, два сообщения для проверки очереди/markRead). Прод-канал — docs/support.json на main. Сборка с этим каналом: ./scripts/build-local-apk.sh --dart-define=LXBOX_SUPPORT_URL=https://raw.githubusercontent.com/Leadaxe/LxBox/develop/docs/support.test.json",
   "snooze_active_hours": 0,
-  "title": "Привет! Я автор этого приложения",
-  "message": "Чтобы L×Box заработал, было потрачено множество времени и сил — собственное ядро, обфускация, и всё это бесплатно и без рекламы.\n\nЯ вижу, что приложение приносит тебе пользу (VPN отработал уже больше 3 часов 🎉). Поддержи проект, пожалуйста — это занимает минуту:\n\n⭐ Отметь звездой репозитории на GitHub\n💬 Отпишись в теме на 4PDA\n💰 Или поддержи деньгами\n\nНе оставайся безучастным — каждая звезда и каждый отзыв реально помогают проекту жить!",
-  "links": [
-    { "label": "⭐ LxBox — Android-клиент", "url": "https://github.com/Leadaxe/LxBox" },
-    { "label": "⭐ sing-box-lx — ядро", "url": "https://github.com/Leadaxe/sing-box-lx" },
-    { "label": "💬 Тема на 4PDA", "url": "https://4pda.to/forum/index.php?showtopic=1122662" },
-    { "label": "👥 Группа поддержки в Telegram", "url": "https://t.me/singbox_launcher/" },
-    { "label": "💰 Поддержать деньгами", "url": "https://t.me/singbox_launcher/340/3621" }
+  "messages": [
+    {
+      "id": "test-01",
+      "since_version": "2.0.0",
+      "min_active_hours": 0,
+      "min_session_minutes": 0,
+      "i18n": {
+        "en": {
+          "title": "Test message #1 (en)",
+          "message": "First message of the test feed.\n\n«Got it» records the app version and advances the queue to #2. «Later» snoozes the whole feed (snooze is 0 here — next open shows again).",
+          "links": [
+            { "label": "⭐ L×Box on GitHub", "url": "https://github.com/Leadaxe/LxBox" }
+          ]
+        },
+        "ru": {
+          "title": "Тестовое сообщение №1 (ru)",
+          "message": "Первое сообщение тестовой ленты.\n\n«Прочитал» записывает версию приложения и двигает очередь к №2. «Позже» откладывает всю ленту (снуз тут 0 — при следующем открытии покажется снова).",
+          "links": [
+            { "label": "⭐ L×Box на GitHub", "url": "https://github.com/Leadaxe/LxBox" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "test-02",
+      "since_version": "2.0.0",
+      "min_active_hours": 0,
+      "min_session_minutes": 0,
+      "i18n": {
+        "en": {
+          "title": "Test message #2 (en, fallback check)",
+          "message": "Second message. Shown only after #1 is marked as read. Switch the app language to Russian and reopen — the ru block must appear.",
+          "links": []
+        },
+        "ru": {
+          "title": "Тестовое сообщение №2 (ru)",
+          "message": "Второе сообщение. Показывается только после «Прочитал» на №1. Переключи язык приложения на английский и переоткрой — должен появиться en-блок.",
+          "links": []
+        }
+      }
+    }
   ]
 }

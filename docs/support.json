@@ -1,16 +1,226 @@
 {
-  "$schema_comment": "§105 — remote-managed сообщение «поддержи автора». Раздаётся через raw.githubusercontent.com, app кэширует последнее удачное. Правки текста/ссылок/порогов НЕ требуют релиза. Смена id = новая кампания (покажется даже тем, кто нажал «Не показывать»).",
-  "id": "support-2026-06",
-  "min_active_hours": 3,
-  "min_session_minutes": 5,
+  "$schema_comment": "§356 — remote-managed лента сообщений «поддержи автора». Раздаётся через raw.githubusercontent.com, app кэширует последнее удачное. Правки текстов/ссылок/порогов/очереди НЕ требуют релиза. Порядок массива = очередь показа. min_active_hours — интервал наработки туннеля ПОСЛЕ предыдущего «Прочитал» (или обновления приложения). since_version: бамп выше прочитанной версии = повторный показ обновившимся. skip: true = вывести из ротации. en-блок обязателен (фолбэк), ссылки свои у каждой локали. Формат v1 (плоский) не поддерживается приложениями ≥ версии §356; старые клиенты этот файл не парсят и доживают на своём кэше.",
   "snooze_active_hours": 10,
-  "title": "Привет! Я автор этого приложения",
-  "message": "Чтобы L×Box заработал, было потрачено множество времени и сил — собственное ядро, обфускация, и всё это бесплатно и без рекламы.\n\nЯ вижу, что приложение приносит тебе пользу (VPN отработал уже больше 3 часов 🎉). Поддержи проект, пожалуйста — это занимает минуту:\n\n⭐ Отметь звездой репозитории на GitHub\n💬 Отпишись в теме на 4PDA\n💰 Или поддержи деньгами\n\nНе оставайся безучастным — каждая звезда и каждый отзыв реально помогают проекту жить!",
-  "links": [
-    { "label": "⭐ LxBox — Android-клиент", "url": "https://github.com/Leadaxe/LxBox" },
-    { "label": "⭐ sing-box-lx — ядро", "url": "https://github.com/Leadaxe/sing-box-lx" },
-    { "label": "💬 Тема на 4PDA", "url": "https://4pda.to/forum/index.php?showtopic=1122662" },
-    { "label": "👥 Группа поддержки в Telegram", "url": "https://t.me/singbox_launcher/" },
-    { "label": "💰 Поддержать деньгами", "url": "https://t.me/singbox_launcher/340/3621" }
+  "messages": [
+    {
+      "id": "01-thanks-star",
+      "since_version": "2.0.0",
+      "min_active_hours": 3,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Thank you for using L×Box!",
+          "message": "Hi! I'm the author of L×Box. The app is free, open-source and ad-free — it lives on nothing but its community.\n\nYour VPN has already clocked over 3 hours of work — looks like L×Box is doing its job 🎉\n\nIf you have one spare minute, give the project a star on GitHub. Stars are the main currency of open source: they make the project visible and keep it alive.",
+          "links": [
+            { "label": "⭐ Star L×Box on GitHub", "url": "https://github.com/Leadaxe/LxBox" }
+          ]
+        },
+        "ru": {
+          "title": "Спасибо, что пользуешься L×Box!",
+          "message": "Привет! Я автор L×Box. Приложение бесплатное, с открытым кодом и без рекламы — оно живёт только благодаря сообществу.\n\nТвой VPN уже наработал больше 3 часов — похоже, L×Box приносит пользу 🎉\n\nЕсли найдётся свободная минута — поставь проекту звезду на GitHub. Звёзды — главная валюта open source: они делают проект заметным и помогают ему жить.",
+          "links": [
+            { "label": "⭐ Звезда L×Box на GitHub", "url": "https://github.com/Leadaxe/LxBox" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "02-warp-guide",
+      "since_version": "2.0.0",
+      "min_active_hours": 12,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Free WARP inside — have you tried it?",
+          "message": "L×Box can register Cloudflare WARP right on your device: Servers → menu → Get WARP. One tap — and you get a working WireGuard node, with keys generated locally, no configs from shady generator sites.\n\nGetting blocked or throttled? Add Amnezia obfuscation — it disguises the WARP handshake from DPI.\n\nThe user guide covers this and much more. Five minutes of reading that pay off.",
+          "links": [
+            { "label": "📖 Open the user guide", "url": "https://github.com/Leadaxe/LxBox/blob/main/README.md" }
+          ]
+        },
+        "ru": {
+          "title": "Внутри есть бесплатный WARP — пробовал?",
+          "message": "L×Box умеет регистрировать Cloudflare WARP прямо на устройстве: Servers → меню → Get WARP. Один тап — и у тебя рабочий WireGuard-узел с ключами, сгенерированными локально, без конфигов с сомнительных сайтов-генераторов.\n\nРежут или троттлят? Включи обфускацию Amnezia — она маскирует WARP-handshake от DPI.\n\nВ пользовательской инструкции про это и многое другое. Пять минут чтения, которые окупаются.",
+          "links": [
+            { "label": "📖 Открыть инструкцию", "url": "https://github.com/Leadaxe/LxBox/blob/main/README_RU.md" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "03-tell-friends",
+      "since_version": "2.0.0",
+      "min_active_hours": 24,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Know someone who needs a working VPN?",
+          "message": "The best thing you can do for a free project costs nothing: tell a friend.\n\nIf L×Box got you through blocked networks, chances are someone around you is still fighting theirs. Share the app — the fresh APK is always on GitHub Releases, no stores needed.",
+          "links": [
+            { "label": "📦 Latest release", "url": "https://github.com/Leadaxe/LxBox/releases/latest" }
+          ]
+        },
+        "ru": {
+          "title": "Есть кому посоветовать рабочий VPN?",
+          "message": "Лучшее, что можно сделать для бесплатного проекта, не стоит ничего: расскажи другу.\n\nЕсли L×Box помог тебе пробиться через блокировки — рядом наверняка есть кто-то, кто всё ещё воюет со своими. Поделись приложением — свежий APK всегда лежит на GitHub Releases, без всяких сторов.",
+          "links": [
+            { "label": "📦 Свежий релиз", "url": "https://github.com/Leadaxe/LxBox/releases/latest" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "04-ecosystem",
+      "since_version": "2.0.0",
+      "min_active_hours": 24,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "L×Box is bigger than one app",
+          "message": "Under the hood runs sing-box-lx — a custom fork of the sing-box core built for this project: AWG obfuscation, battery-friendly idle-suspend and dozens of fixes.\n\nAnd for desktop there's Singbox Launcher by the same author.\n\nSame philosophy everywhere: free, open, no ads.",
+          "links": [
+            { "label": "⚙️ sing-box-lx — the core", "url": "https://github.com/Leadaxe/sing-box-lx" },
+            { "label": "🖥 Singbox Launcher — desktop", "url": "https://github.com/Leadaxe/singbox-launcher" }
+          ]
+        },
+        "ru": {
+          "title": "L×Box — больше, чем одно приложение",
+          "message": "Под капотом работает sing-box-lx — собственный форк ядра sing-box, созданный для этого проекта: обфускация AWG, экономящий батарею idle-suspend и десятки фиксов.\n\nА для компьютера есть Singbox Launcher от того же автора.\n\nФилософия одна: бесплатно, открыто, без рекламы.",
+          "links": [
+            { "label": "⚙️ sing-box-lx — ядро", "url": "https://github.com/Leadaxe/sing-box-lx" },
+            { "label": "🖥 Singbox Launcher — для компьютера", "url": "https://github.com/Leadaxe/singbox-launcher" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "05-donate-crypto",
+      "since_version": "2.0.0",
+      "min_active_hours": 36,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Fuel the project — crypto works too",
+          "message": "L×Box has no subscriptions, no ads and no investors — development runs on donations alone.\n\nIf the app saves you time and nerves, you can send a coffee's worth of crypto: the USDT (TRON) address is on the About screen, other options are behind the button below.\n\nAny amount counts. It's less about the sum and more about knowing this work matters to someone.",
+          "links": [
+            { "label": "💰 Donation options", "url": "https://t.me/singbox_launcher/340/3621" }
+          ]
+        },
+        "ru": {
+          "title": "Поддержи проект — можно криптой",
+          "message": "В L×Box нет подписок, рекламы и инвесторов — разработка живёт только на донаты.\n\nЕсли приложение экономит тебе время и нервы, можно отправить «на кофе» криптой: адрес USDT (TRON) есть на экране About, другие варианты — за кнопкой ниже.\n\nВажна не сумма, а сам факт: он показывает, что эта работа кому-то нужна.",
+          "links": [
+            { "label": "💰 Варианты поддержки", "url": "https://t.me/singbox_launcher/340/3621" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "06-tg-group",
+      "since_version": "2.0.0",
+      "min_active_hours": 36,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Join the L×Box community on Telegram",
+          "message": "Questions, configs, node tips, fresh builds and direct contact with the author — it all happens in the Telegram group.\n\nDrop in and say hi: real users, real answers.",
+          "links": [
+            { "label": "👥 Open the Telegram group", "url": "https://t.me/singbox_launcher/4317" }
+          ]
+        },
+        "ru": {
+          "title": "Заглядывай в Telegram-группу L×Box",
+          "message": "Вопросы, конфиги, советы по узлам, свежие сборки и прямой контакт с автором — всё это в Telegram-группе.\n\nЗаходи и присоединяйся: живые люди, живые ответы.",
+          "links": [
+            { "label": "👥 Открыть Telegram-группу", "url": "https://t.me/singbox_launcher/4317" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "07-review",
+      "since_version": "2.0.0",
+      "min_active_hours": 48,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Your review helps more than you think",
+          "message": "New users pick apps by what others say about them. Two honest sentences about your experience — what worked, what didn't — help the project more than any advertising (which L×Box doesn't have anyway).\n\nShare your experience on GitHub or in the Telegram group.",
+          "links": [
+            { "label": "✍️ GitHub — share feedback", "url": "https://github.com/Leadaxe/LxBox/issues" },
+            { "label": "👥 Telegram group", "url": "https://t.me/singbox_launcher/4317" }
+          ]
+        },
+        "ru": {
+          "title": "Твой отзыв значит больше, чем кажется",
+          "message": "Новые пользователи выбирают приложения по отзывам. Два честных предложения о твоём опыте — что заработало, что нет — помогают проекту сильнее любой рекламы (которой у L×Box и так нет).\n\nОтпишись в теме на 4PDA или в Telegram-группе.",
+          "links": [
+            { "label": "✍️ Тема на 4PDA", "url": "https://4pda.to/forum/index.php?showtopic=1122662" },
+            { "label": "👥 Telegram-группа", "url": "https://t.me/singbox_launcher/4317" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "08-profiler",
+      "since_version": "2.0.0",
+      "min_active_hours": 48,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Want to know where your apps really connect?",
+          "message": "L×Box has a built-in traffic profiler: pick any installed app and watch in real time every domain and IP it talks to — DNS queries, connections, traffic per destination.\n\nGreat for catching chatty trackers or debugging that one app that refuses to work through VPN.\n\nTap the traffic bar on the home screen → Per-app tab → record. Try it on your messenger — the results may surprise you.",
+          "links": []
+        },
+        "ru": {
+          "title": "Хочешь знать, куда ходят твои приложения?",
+          "message": "В L×Box встроен профайлер трафика: выбери любое установленное приложение и смотри в реальном времени все домены и IP, к которым оно обращается — DNS-запросы, соединения, трафик по адресатам.\n\nУдобно ловить болтливые трекеры и разбираться, почему какое-то приложение отказывается работать через VPN.\n\nТапни строку трафика на главном экране → вкладка Per-app → запись. Попробуй на своём мессенджере — результат может удивить.",
+          "links": []
+        }
+      }
+    },
+    {
+      "id": "09-core-star",
+      "since_version": "2.0.0",
+      "min_active_hours": 72,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "The engine is open too — sing-box-lx",
+          "message": "Everything L×Box does rests on sing-box-lx — an open fork of the sing-box core maintained for this project: AWG 2.0 obfuscation, battery-friendly idle-suspend, DNS multiplexing and a long tail of fixes.\n\nAll of it is public on GitHub. If you appreciate what's under the hood — a star for the core repo means a lot.",
+          "links": [
+            { "label": "⭐ Star sing-box-lx", "url": "https://github.com/Leadaxe/sing-box-lx" }
+          ]
+        },
+        "ru": {
+          "title": "Движок тоже открыт — sing-box-lx",
+          "message": "Всё, что умеет L×Box, держится на sing-box-lx — открытом форке ядра sing-box, который развивается ради этого проекта: обфускация AWG 2.0, экономящий батарею idle-suspend, DNS-мультиплексирование и длинный хвост фиксов.\n\nВсё это публично на GitHub. Ценишь то, что под капотом, — поставь звезду и ядру.",
+          "links": [
+            { "label": "⭐ Звезда sing-box-lx", "url": "https://github.com/Leadaxe/sing-box-lx" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "10-donate",
+      "since_version": "2.0.0",
+      "min_active_hours": 72,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "One last ask — help L×Box keep going",
+          "message": "You've read this far and you're still here — thank you, seriously.\n\nDevelopment takes evenings, weekends and infrastructure bills. If L×Box has become part of your daily life, back it with a donation — one-time, any size.\n\nThis is the last message in the feed. From here on — only updates. 🚀",
+          "links": [
+            { "label": "💰 Support the project", "url": "https://t.me/singbox_launcher/340/3621" }
+          ]
+        },
+        "ru": {
+          "title": "Последняя просьба — помоги L×Box двигаться дальше",
+          "message": "Ты дочитал до этого сообщения и всё ещё здесь — спасибо, серьёзно.\n\nРазработка — это вечера, выходные и счета за инфраструктуру. Если L×Box стал частью твоей повседневности, поддержи его донатом — разовым, любого размера.\n\nЭто последнее сообщение в ленте. Дальше — только обновления. 🚀",
+          "links": [
+            { "label": "💰 Поддержать проект", "url": "https://t.me/singbox_launcher/340/3621" }
+          ]
+        }
+      }
+    }
   ]
 }

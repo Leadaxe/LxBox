@@ -287,24 +287,33 @@ Future<void> maybeShowAddTilePrompt(BuildContext context, BoxVpnClient vpn) asyn
   await vpn.requestAddTile();
 }
 
-/// §105 — диалог «поддержи автора». Чистый показ готового [m]; решение о
-/// показе (пороги, сессия, fetch) — на стороне `home_screen` (см.
-/// `_maybeShowSupport`). Кнопки-ссылки диалог НЕ закрывают (юзер может
-/// пройтись по нескольким); закрытие — «Позже» (повтор через +N часов
-/// активного времени) или «Не показывать» (навсегда для кампании).
-Future<void> showSupportDialog(BuildContext context, SupportMessage m) async {
+/// §105/§356 — диалог ленты «поддержи автора». Чистый показ готового
+/// сообщения [m] из [feed]; выбор (очередь, пороги, baseline, fetch) — на
+/// стороне `home_screen` (см. `_maybeShowSupport`). Локаль резолвится ЗДЕСЬ,
+/// в момент показа (не при fetch — кэш один на все языки, смена языка не
+/// протухает): `effectiveTag` → `i18n`, фолбэк en. Кнопки-ссылки диалог НЕ
+/// закрывают (юзер может пройтись по нескольким); закрытие — «Later» (вся
+/// лента молчит ещё `snooze_active_hours` наработки) или «Got it» (прочитано:
+/// версия в `read`, сдвиг baseline → следующее сообщение очереди ждёт свои
+/// `min_active_hours`).
+Future<void> showSupportDialog(
+  BuildContext context,
+  SupportFeed feed,
+  SupportMessage m,
+) async {
+  final c = m.contentFor(LocaleController.I.effectiveTag);
   await showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog.adaptive(
-      title: Text(m.title),
+      title: Text(c.title),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(m.message),
+            Text(c.message),
             const SizedBox(height: 16),
-            for (final (label, url) in m.links) ...[
+            for (final (label, url) in c.links) ...[
               FilledButton.tonal(
                 onPressed: () => ul.UrlLauncher.open(url),
                 child: Text(label),
@@ -318,16 +327,16 @@ Future<void> showSupportDialog(BuildContext context, SupportMessage m) async {
         TextButton(
           onPressed: () async {
             Navigator.of(ctx).pop();
-            await SupportMessageService.I.dismissForever(m);
+            await SupportMessageService.I.snooze(feed);
           },
-          child: Text(getLocalText.s("Don't show again")),
+          child: Text(getLocalText.s("Later")),
         ),
         FilledButton(
           onPressed: () async {
             Navigator.of(ctx).pop();
-            await SupportMessageService.I.snooze(m);
+            await SupportMessageService.I.markRead(m);
           },
-          child: Text(getLocalText.s("Later")),
+          child: Text(getLocalText.s("Got it")),
         ),
       ],
     ),
