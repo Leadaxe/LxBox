@@ -755,6 +755,31 @@ class HomeController extends ChangeNotifier
     // «по null» его не отсеет). Поэтому ждём ответ, ОТЛИЧНЫЙ от прежнего.
     unawaited(_captureRunningConfig(staleRaw: staleSnapshot));
 
+    // §367 — автопинг после in-place reload. Та же дыра, что у снапшота выше
+    // (§311) и у `_startGroupsPull` (§049 F4): `_scheduleAutoPing` висит на
+    // ПЕРЕХОДЕ в connected, а при reload перехода нет — статус остаётся
+    // connected. Симптом: сменил подписку с включённой галкой автоприменения,
+    // экран перерисовался новым составом узлов, но все они без задержек —
+    // пинга никто не запускал (при обычном старте он идёт сам).
+    //
+    // Состав узлов после reload другой, значит прежние `lastDelay` к ним не
+    // относятся. Тот же 5-секундный отложенный запуск, что на connect: ядру
+    // нужно время поднять новые outbound'ы. Гейты (галка `auto_ping_on_start`,
+    // tunnelUp, непустой список) — внутри `_scheduleAutoPing`.
+    //
+    // ВАЖНО: сначала подтянуть группы, потом планировать пинг. `_state.nodes`
+    // (по которому пингуем) наполняет `_applyGroups` из groups-стрима, а тот
+    // при in-place reload может не прийти вовсе — ровно то, о чём §311-коммент
+    // выше. Device-факт 03.08: reload отработал, снапшот захватился, а
+    // groups-push не пришёл — таймер срабатывал на пустом/устаревшем списке и
+    // тихо выходил по `nodes.isEmpty`. Пинга не было, хотя экран показывал
+    // новый состав (его рисует saved-конфиг, не ядро). Тот же unary-`getGroups`,
+    // что делает pull-to-refresh — им юзер и «чинил» это руками.
+    unawaited(() async {
+      await pullToRefresh();
+      await _scheduleAutoPing();
+    }());
+
     // Cooldown timer перерендерит canReload через 3s — назначаем future
     // notifyListeners (без heavy timer'а; achievable через delayed Future).
     // §141 P1.9a — гейт `_disposed`: контроллер мог умереть за время cooldown.

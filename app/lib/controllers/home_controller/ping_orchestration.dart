@@ -233,6 +233,12 @@ mixin _PingMixin on ChangeNotifier {
     });
   }
 
+  /// §367 — «автопинг запланирован»: замер отложен на 5с, ждать их в тестах
+  /// нечестно (реальное время) и хрупко. Состояния не добавляет — читает сам
+  /// таймер.
+  @visibleForTesting
+  bool get autoPingScheduledForTesting => _autoPingTimer?.isActive ?? false;
+
   /// Форсит URLTest на группе через групповой RPC `urlTestGroup` (§308):
   /// ядро force-тестит ВСЕХ членов конфиг-URL'ом группы и само делает
   /// переселект на живой узел (+interrupt зависших соединений группы).
