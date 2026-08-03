@@ -12,7 +12,6 @@ import '../services/builder/normalize_pinned_presets.dart';
 import '../services/channel_mutations.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/preset_on_change.dart';
-import '../services/relative_time.dart';
 import '../services/rule_display_names.dart';
 import '../services/rule_set_downloader.dart';
 import '../services/selectable_to_custom.dart';
@@ -81,12 +80,6 @@ class _RoutingScreenState extends State<RoutingScreen>
   final _srsCached = <String>{};      // rule.id → файл есть в кэше
   @override
   final _srsDownloading = <String>{}; // rule.id → идёт загрузка
-  @override
-  /// §366 — метаданные обновления по rule.id: время последней проверки и
-  /// ошибка последней попытки. Для preset-правил берётся самый СТАРЫЙ из его
-  /// rule_set'ов (правило свежо настолько, насколько свеж отстающий) и любая
-  /// ошибка помечает всё правило.
-  final _srsMeta = <String, RuleSetMeta>{};
   @override
   bool _loading = true;
   // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
@@ -575,7 +568,6 @@ class _RoutingScreenState extends State<RoutingScreen>
       touchesDns: touchesDns,
       locked: preset?.locked ?? false,
       statusButton: statusButton,
-      freshness: _srsFreshness(rule),
       onTap: () => _openCustomRuleEditor(index),
       onLongPressStart: (pos) => _showRuleContextMenu(index, pos),
       onSwitchChanged: (v) {
@@ -607,35 +599,6 @@ class _RoutingScreenState extends State<RoutingScreen>
           _markDirty();
         });
       },
-    );
-  }
-
-  /// §366 — строка «когда обновлялся rule-set» под правилом. Null, если
-  /// правилу нечего обновлять: не SRS-правило, либо файл ещё не скачан (тогда
-  /// говорит сама ☁-иконка, дублировать её текстом незачем).
-  SrsFreshness? _srsFreshness(CustomRule rule) {
-    final needsSrs = rule is CustomRuleSrs ||
-        (rule is CustomRulePreset &&
-            _presetFor(rule.presetId) != null &&
-            _remoteRuleSetsOf(_presetFor(rule.presetId)!, rule).isNotEmpty);
-    if (!needsSrs) return null;
-    final meta = _srsMeta[rule.id];
-    if (meta == null) return null; // не скачано — статус даёт ☁
-    if (meta.failing) {
-      return SrsFreshness(
-        text: getLocalText.s("Update failed — using cached copy"),
-        failed: true,
-      );
-    }
-    final last = meta.lastUpdated;
-    if (last == null) {
-      // Файл есть, но метаданных нет: скачан до §366. Первая же авто-проверка
-      // их заведёт — до тех пор честно говорим, что время неизвестно.
-      return SrsFreshness(text: getLocalText.s("Update time unknown"));
-    }
-    return SrsFreshness(
-      text: getLocalText.s(
-          "Updated %s", relativeTime(DateTime.now(), last)),
     );
   }
 

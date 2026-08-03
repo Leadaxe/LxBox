@@ -3888,9 +3888,6 @@
   "Update subscription to see nodes": {
     "value": "Обновите подписку, чтобы увидеть узлы"
   },
-  "Update time unknown": {
-    "value": "Время обновления неизвестно"
-  },
   "Updated %s": {
     "value": "Обновлено %s"
   },
