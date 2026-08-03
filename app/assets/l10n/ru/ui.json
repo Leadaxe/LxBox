@@ -118,14 +118,6 @@
   "%d conns": {
     "value": "%d соед."
   },
-  "%d in pool": {
-    "value": {
-      "one": "%d в работе",
-      "few": "%d в работе",
-      "many": "%d в работе",
-      "other": "%d в работе"
-    }
-  },
   "%d days": {
     "value": {
       "one": "%d день",
@@ -184,6 +176,14 @@
   },
   "%d in": {
     "value": "%d inbound"
+  },
+  "%d in pool": {
+    "value": {
+      "one": "%d в работе",
+      "few": "%d в работе",
+      "many": "%d в работе",
+      "other": "%d в работе"
+    }
   },
   "%d keywords": {
     "value": {
@@ -664,6 +664,9 @@
   "All channels": {
     "value": "Все каналы"
   },
+  "All ways to support": {
+    "value": "Все способы поддержки"
+  },
   "Allocated in total": {
     "value": "Выделено всего"
   },
@@ -754,14 +757,17 @@
   "Applied.": {
     "value": "Применено."
   },
-  "Applies on next connect.": {
-    "value": "Применится при следующем подключении."
-  },
   "Applies immediately. Very chatty on live traffic — enable, reproduce, grab the log, disable.": {
     "value": "Применяется сразу. Очень многословно на живом трафике — включите, воспроизведите, снимите лог, выключите."
   },
+  "Applies on next connect.": {
+    "value": "Применится при следующем подключении."
+  },
   "Apply": {
     "value": "Применить"
+  },
+  "Apply every config change to the running tunnel by itself, so no banner is left to tap. Each apply drops the tunnel for about 3 seconds and kills open connections.": {
+    "value": "Применять любое изменение конфига к работающему туннелю самостоятельно, чтобы не оставалось плашек. Каждое применение рвёт туннель примерно на 3 секунды и обрывает открытые соединения."
   },
   "Apply rules": {
     "value": "Применить правила"
@@ -798,6 +804,9 @@
   },
   "Auto-record visited Wi-Fi networks": {
     "value": "Запоминать посещённые сети Wi-Fi"
+  },
+  "Auto-restart VPN on settings change": {
+    "value": "Автоперезапуск VPN при смене настроек"
   },
   "Auto-start on boot": {
     "value": "Автозапуск при загрузке"
@@ -972,9 +981,6 @@
   "Closed kept 30s (tap to keep all)": {
     "value": "Закрытые хранятся 30 с (нажмите, чтобы хранить все)"
   },
-  "Coming soon": {
-    "value": "Скоро"
-  },
   "Command": {
     "value": "Команда"
   },
@@ -1044,20 +1050,20 @@
       "other": "Конфиг пересобран: %d узла"
     }
   },
-  "Config rebuilt: %d nodes — restart VPN to apply": {
-    "value": {
-      "one": "Конфиг пересобран: %d узел — перезапустите VPN, чтобы применить",
-      "few": "Конфиг пересобран: %d узла — перезапустите VPN, чтобы применить",
-      "many": "Конфиг пересобран: %d узлов — перезапустите VPN, чтобы применить",
-      "other": "Конфиг пересобран: %d узла — перезапустите VPN, чтобы применить"
-    }
-  },
   "Config rebuilt: %d nodes — reloading VPN": {
     "value": {
       "one": "Конфиг пересобран: %d узел — перезагружаю VPN",
       "few": "Конфиг пересобран: %d узла — перезагружаю VPN",
       "many": "Конфиг пересобран: %d узлов — перезагружаю VPN",
       "other": "Конфиг пересобран: %d узла — перезагружаю VPN"
+    }
+  },
+  "Config rebuilt: %d nodes — restart VPN to apply": {
+    "value": {
+      "one": "Конфиг пересобран: %d узел — перезапустите VPN, чтобы применить",
+      "few": "Конфиг пересобран: %d узла — перезапустите VPN, чтобы применить",
+      "many": "Конфиг пересобран: %d узлов — перезапустите VPN, чтобы применить",
+      "other": "Конфиг пересобран: %d узла — перезапустите VPN, чтобы применить"
     }
   },
   "Config regenerated: %d nodes": {
@@ -1119,17 +1125,11 @@
   "Copy": {
     "value": "Копировать"
   },
-  "Copy ERC20": {
-    "value": "Копировать ERC20"
-  },
   "Copy JSON": {
     "value": "Копировать JSON"
   },
   "Copy JSON to clipboard": {
     "value": "Копировать JSON в буфер обмена"
-  },
-  "Copy TRC20": {
-    "value": "Копировать TRC20"
   },
   "Copy URI": {
     "value": "Копировать URI"
@@ -1203,9 +1203,6 @@
   "Credits": {
     "value": "Благодарности"
   },
-  "Crypto": {
-    "value": "Крипто"
-  },
   "Custom": {
     "value": "Вручную"
   },
@@ -1253,9 +1250,6 @@
   },
   "DNS server": {
     "value": "DNS-сервер"
-  },
-  "Dependents": {
-    "value": "Зависимые"
   },
   "DNS server \"%1$s\" routes through dead node \"%2$s\" (selected in \"%3$s\").": {
     "value": "DNS-сервер \"%1$s\" ходит через мёртвый узел \"%2$s\" (выбран в \"%3$s\")."
@@ -1367,6 +1361,9 @@
   },
   "Deny-list": {
     "value": "Чёрный список"
+  },
+  "Dependents": {
+    "value": "Зависимые"
   },
   "Description": {
     "value": "Описание"
@@ -1558,11 +1555,11 @@
   "Enable": {
     "value": "Включить"
   },
-  "Enable all": {
-    "value": "Включить все"
-  },
   "Enable FakeIP": {
     "value": "Включить FakeIP"
+  },
+  "Enable all": {
+    "value": "Включить все"
   },
   "Enable command receiver?": {
     "value": "Включить приём команд?"
@@ -2121,6 +2118,9 @@
   "Keep servers": {
     "value": "Оставить серверы"
   },
+  "Keep the node list of switched-off subscriptions fresh, so it is not stale when you switch one back on. Their nodes stay out of the config either way.": {
+    "value": "Держать список узлов выключенных подписок свежим, чтобы он не устарел к моменту, когда вы их включите. В конфиг их узлы всё равно не попадают."
+  },
   "Keep-alive (sec)": {
     "value": "Keep-alive (сек)"
   },
@@ -2602,6 +2602,9 @@
   "Only single servers can be moved": {
     "value": "Переносить можно только одиночные серверы"
   },
+  "Open": {
+    "value": "Открыть"
+  },
   "Open DNS settings": {
     "value": "Открыть настройки DNS"
   },
@@ -2695,6 +2698,9 @@
   },
   "Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until unlock.": {
     "value": "Приостанавливать туннель при каждом выключении экрана. Максимальная экономия, но push-уведомления, входящие звонки и фоновая синхронизация не работают до разблокировки."
+  },
+  "Pay": {
+    "value": "Оплатить"
   },
   "Phone → %1$s → %2$s → Internet": {
     "value": "Телефон → %1$s → %2$s → Интернет"
@@ -2885,6 +2891,9 @@
   "Raw response": {
     "value": "Сырой ответ"
   },
+  "Re-enables matching nodes, clearing disable marks from rules and manual toggles. Later rules can still disable them.": {
+    "value": "Включает совпавшие узлы обратно, снимая отметки выключения — и от правил, и ручные. Правила ниже по списку могут снова их выключить."
+  },
   "Re-fetch live": {
     "value": "Запросить с сервера заново"
   },
@@ -2938,21 +2947,6 @@
   },
   "Refresh on app start, after VPN connects, and periodically. Manual ⟳ works regardless.": {
     "value": "Обновлять при запуске приложения, после подключения VPN и периодически. Ручное ⟳ работает всегда."
-  },
-  "Update disabled subscriptions": {
-    "value": "Обновлять выключенные подписки"
-  },
-  "Keep the node list of switched-off subscriptions fresh, so it is not stale when you switch one back on. Their nodes stay out of the config either way.": {
-    "value": "Держать список узлов выключенных подписок свежим, чтобы он не устарел к моменту, когда вы их включите. В конфиг их узлы всё равно не попадают."
-  },
-  "Auto-restart VPN on settings change": {
-    "value": "Автоперезапуск VPN при смене настроек"
-  },
-  "Apply every config change to the running tunnel by itself, so no banner is left to tap. Each apply drops the tunnel for about 3 seconds and kills open connections.": {
-    "value": "Применять любое изменение конфига к работающему туннелю самостоятельно, чтобы не оставалось плашек. Каждое применение рвёт туннель примерно на 3 секунды и обрывает открытые соединения."
-  },
-  "While this is on, the per-subscription \"On update\" setting is hidden — everything is applied immediately. Turning it off brings each subscription's own choice back.": {
-    "value": "Пока включено, настройка «При обновлении» в подписках скрыта — всё применяется сразу. Выключите — вернётся собственный выбор каждой подписки."
   },
   "Refresh rule-sets": {
     "value": "Обновить rule-set-файлы"
@@ -3035,9 +3029,6 @@
   },
   "Remove from history": {
     "value": "Убрать из истории"
-  },
-  "Re-enables matching nodes, clearing disable marks from rules and manual toggles. Later rules can still disable them.": {
-    "value": "Включает совпавшие узлы обратно, снимая отметки выключения — и от правил, и ручные. Правила ниже по списку могут снова их выключить."
   },
   "Rename": {
     "value": "Переименовать"
@@ -3714,11 +3705,11 @@
   "These depend on dead node \"%1$s\" and are not working:": {
     "value": "Они зависят от мёртвого узла \"%1$s\" и не работают:"
   },
-  "These route through this node:": {
-    "value": "Через этот узел ходят:"
-  },
   "These headers identify your device to the panel. Defaults come from the device — override any of them (empty = device default).": {
     "value": "По этим заголовкам панель опознаёт ваше устройство. Значения по умолчанию берутся с устройства — любое можно переопределить (пусто = как на устройстве)."
+  },
+  "These route through this node:": {
+    "value": "Через этот узел ходят:"
   },
   "This deletes the DNS cache (FakeIP allocations and cached responses).\n\n%s": {
     "value": "Кэш DNS будет удалён (выделения FakeIP и закэшированные ответы).\n\n%s"
@@ -3855,6 +3846,9 @@
   "Update all & generate": {
     "value": "Обновить всё и собрать конфиг"
   },
+  "Update disabled subscriptions": {
+    "value": "Обновлять выключенные подписки"
+  },
   "Update interval": {
     "value": "Интервал обновления"
   },
@@ -3876,9 +3870,6 @@
   "Use as detour": {
     "value": "Использовать как detour"
   },
-  "User guide": {
-    "value": "Руководство пользователя"
-  },
   "Use node": {
     "value": "Использовать узел"
   },
@@ -3896,6 +3887,9 @@
   },
   "User": {
     "value": "Свой"
+  },
+  "User guide": {
+    "value": "Руководство пользователя"
   },
   "Username (optional)": {
     "value": "Имя пользователя (необязательно)"
@@ -3926,6 +3920,9 @@
   },
   "Value": {
     "value": "Значение"
+  },
+  "Verbose (TRACE/DEBUG)": {
+    "value": "Подробно (TRACE/DEBUG)"
   },
   "Via: %s": {
     "value": "Через: %s"
@@ -3959,9 +3956,6 @@
   "Visible in Debug → Core.": {
     "value": "Видны в Debug → Core."
   },
-  "Verbose (TRACE/DEBUG)": {
-    "value": "Подробно (TRACE/DEBUG)"
-  },
   "WARP registration failed": {
     "value": "Не удалось зарегистрировать WARP"
   },
@@ -3976,6 +3970,9 @@
   },
   "Which channel carries DNS queries to this server. Direct — no detour key in the config.": {
     "value": "Какой канал несёт DNS-запросы к этому серверу. «Напрямую» — без ключа detour в конфиге."
+  },
+  "While this is on, the per-subscription \"On update\" setting is hidden — everything is applied immediately. Turning it off brings each subscription's own choice back.": {
+    "value": "Пока включено, настройка «При обновлении» в подписках скрыта — всё применяется сразу. Выключите — вернётся собственный выбор каждой подписки."
   },
   "Whitelisted — VPN can run in background": {
     "value": "В белом списке — VPN может работать в фоне"

@@ -664,6 +664,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         );
       case 'about':
         return const AboutScreen();
+      case 'donate':
+        // Способы поддержки — попап поверх About, не внешняя страница.
+        return const AboutScreen(openDonate: true);
       case 'profiler':
         // Семантический алиас: трафик-профайлер («куда ходят приложения») —
         // вкладка Live на Statistics (§264-266). НЕ Debug/Profiling: там

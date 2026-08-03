@@ -58,6 +58,7 @@ const kSupportRouteScreens = <String>{
   'debug',
   'about',
   'profiler',
+  'donate',
 };
 
 /// `route:<screen>[/<tab>[/…]]` → сегменты payload'а.

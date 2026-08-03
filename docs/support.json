@@ -1,5 +1,5 @@
 {
-  "$schema_comment": "§356/§357/§362 — remote-managed лента сообщений «поддержи автора». Раздаётся через raw.githubusercontent.com, app кэширует последнее удачное. Правки текстов/ссылок/порогов/очереди НЕ требуют релиза. Порядок массива = очередь показа. min_active_hours — интервал наработки туннеля ПОСЛЕ предыдущего «Прочитал» (или обновления приложения). since_version: бамп выше прочитанной версии = повторный показ обновившимся. skip: true = вывести из ротации. read_delay_seconds — задержка кнопки «Прочитал» (по умолчанию 10). en-блок обязателен (фолбэк), у каждой локали свои ссылки. @плейсхолдеры (ProjectLinks): @selfLink @repoLink @coreLink @launcherLink @tgLink @donateLink @issuesLink @pdaLink @guideLink @appVersion — резолвятся в момент показа (@guideLink зависит от локали). Кнопки lxbox://<action>:<payload> — route:<экран>[/<вкладка>], add:<uri> (prefill поля Servers), share:<текст> (системный share-лист); mark_read: false — не помечать сообщение прочитанным при тапе.",
+  "$schema_comment": "§356/§357/§362 — remote-managed лента сообщений «поддержи автора». Раздаётся через raw.githubusercontent.com, app кэширует последнее удачное. Правки текстов/ссылок/порогов/очереди НЕ требуют релиза. Порядок массива = очередь показа. min_active_hours — интервал наработки туннеля ПОСЛЕ предыдущего «Прочитал» (или обновления приложения). since_version: бамп выше прочитанной версии = повторный показ обновившимся. skip: true = вывести из ротации. read_delay_seconds — задержка кнопки «Прочитал» (по умолчанию 10). en-блок обязателен (фолбэк), у каждой локали свои ссылки. @плейсхолдеры (ProjectLinks): @selfLink @repoLink @coreLink @launcherLink @tgLink @donateLink @issuesLink @boostyLink @donatePage @guideLink @appVersion — резолвятся в момент показа (@guideLink зависит от локали). Кнопки lxbox://<action>:<payload> — route:<экран>[/<вкладка>] (в т.ч. route:donate — попап способов поддержки), add:<uri> (prefill поля Servers), share:<текст> (системный share-лист); mark_read: false — не помечать сообщение прочитанным при тапе.",
   "snooze_active_hours": 10,
   "messages": [
     {
@@ -90,7 +90,7 @@
             },
             {
               "label": "💰 Support the project",
-              "url": "@donateLink"
+              "url": "lxbox://route:donate"
             }
           ]
         },
@@ -104,7 +104,7 @@
             },
             {
               "label": "💰 Поддержать проект",
-              "url": "@donateLink"
+              "url": "lxbox://route:donate"
             }
           ]
         }
@@ -162,7 +162,7 @@
             },
             {
               "label": "💰 Support the project",
-              "url": "@donateLink"
+              "url": "lxbox://route:donate"
             }
           ]
         },
@@ -176,7 +176,7 @@
             },
             {
               "label": "💰 Поддержать проект",
-              "url": "@donateLink"
+              "url": "lxbox://route:donate"
             }
           ]
         }
@@ -226,29 +226,29 @@
       "i18n": {
         "en": {
           "title": "Write a few lines about your experience",
-          "message": "People choose apps by what others say — your two or three honest sentences will help someone decide.\n\nWhat works, what doesn't, which carrier, which nodes — any specifics are valuable. Criticism too: that's what I fix by.",
+          "message": "People choose apps by what others say — your two or three honest sentences will help someone decide.\n\nWhat works, what doesn't, which carrier, which nodes — any specifics are valuable. Found a bug? Open an issue on GitHub: a detailed description saves weeks of guesswork.",
           "links": [
-            {
-              "label": "✍️ Share feedback on GitHub",
-              "url": "@issuesLink"
-            },
             {
               "label": "👥 Telegram group",
               "url": "@tgLink"
+            },
+            {
+              "label": "🐞 Report an issue",
+              "url": "@issuesLink"
             }
           ]
         },
         "ru": {
           "title": "Напиши пару строк о своём опыте",
-          "message": "Люди выбирают приложения по отзывам — твои два-три честных предложения помогут кому-то решиться.\n\nЧто работает, что нет, на каком операторе, какие узлы — любая конкретика ценна. Критика тоже: по ней я чиню.",
+          "message": "Люди выбирают приложения по отзывам — твои два-три честных предложения помогут кому-то решиться.\n\nЧто работает, что нет, на каком операторе, какие узлы — любая конкретика ценна. Нашёл проблему — заводи issue на GitHub: подробное описание экономит недели догадок.",
           "links": [
-            {
-              "label": "✍️ Тема на 4PDA",
-              "url": "@pdaLink"
-            },
             {
               "label": "👥 Telegram-группа",
               "url": "@tgLink"
+            },
+            {
+              "label": "🐞 Сообщить о проблеме",
+              "url": "@issuesLink"
             }
           ]
         }
@@ -266,7 +266,7 @@
           "links": [
             {
               "label": "💰 Support the project",
-              "url": "@donateLink"
+              "url": "lxbox://route:donate"
             },
             {
               "label": "⭐ Star, if you haven't yet",
@@ -280,7 +280,7 @@
           "links": [
             {
               "label": "💰 Поддержать проект",
-              "url": "@donateLink"
+              "url": "lxbox://route:donate"
             },
             {
               "label": "⭐ Звезда, если ещё нет",

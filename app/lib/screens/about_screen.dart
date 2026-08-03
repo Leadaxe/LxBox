@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/donate_methods.dart';
 import '../services/project_links.dart';
 import '../services/relative_time.dart';
 import '../services/update_checker.dart';
@@ -10,7 +11,12 @@ import '../vpn/box_vpn_client.dart';
 import '../services/l10n/locale_controller.dart';
 
 class AboutScreen extends StatelessWidget {
-  const AboutScreen({super.key});
+  const AboutScreen({super.key, this.openDonate = false});
+
+  /// §362 — открыть донат-попап сразу после первого кадра: кнопка
+  /// `lxbox://route:donate` в support-ленте ведёт к способам поддержки
+  /// ВНУТРИ приложения, а не на внешнюю страницу.
+  final bool openDonate;
 
   // §362 — адреса живут в общем слое `ProjectLinks` (единственный источник:
   // раньше копии лежали здесь, в automation_tab и update_checker). Локальные
@@ -45,6 +51,11 @@ class AboutScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    if (openDonate) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) _showDonateDialog(context);
+      });
+    }
     return Scaffold(
       appBar: AppBar(title: Text(getLocalText.s("About"))),
       body: ListView(
@@ -188,79 +199,52 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
+  /// §362 — попап поддержки строится из `assets/donate.json`
+  /// ([DonateMethods]), а не из вшитой в разметку таблицы адресов: добавить
+  /// сеть = дописать запись в JSON. Пустой/битый файл → в попапе остаётся
+  /// ссылка на веб-страницу поддержки, а не пустота.
   void _showDonateDialog(BuildContext context) {
-    showDialog(
+    showDialog<void>(
       context: context,
-      builder: (ctx) => DefaultTabController(
-        length: 2,
-        child: AlertDialog(
-          title: Text(getLocalText.s("Support L×Box")),
-          contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 300,
-            child: Column(
-              children: [
-                TabBar(
-                  tabs: [
-                    Tab(text: getLocalText.s("Crypto")),
-                    // l10n-exempt: brand name
-                    const Tab(text: 'Boosty'),
+      builder: (ctx) => AlertDialog(
+        title: Text(getLocalText.s("Support L×Box")),
+        contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: FutureBuilder<List<DonateMethod>>(
+            future: DonateMethods.I.load(),
+            builder: (_, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final methods = snap.data ?? const <DonateMethod>[];
+              return ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final m in methods) ...[
+                    _DonateTile(method: m, onCopy: _copyToClipboard),
+                    const Divider(height: 20),
                   ],
-                ),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      // Crypto tab
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: ListView(
-                          children: [
-                            // l10n-exempt: currency/network name
-                            const Text('USDT (ERC20)', style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            GestureDetector(
-                              onTap: () => _copyToClipboard(ctx, '0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea'),
-                              // l10n-exempt: wallet address
-                              child: const Text('0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea', style: TextStyle(fontSize: 11)),
-                            ),
-                            TextButton.icon(
-                              onPressed: () => _copyToClipboard(ctx, '0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea'),
-                              icon: const Icon(Icons.copy, size: 14),
-                              label: Text(getLocalText.s("Copy ERC20"), style: const TextStyle(fontSize: 12)),
-                            ),
-                            const SizedBox(height: 12),
-                            // l10n-exempt: currency/network name
-                            const Text('USDT (TRC20)', style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            GestureDetector(
-                              onTap: () => _copyToClipboard(ctx, 'TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun'),
-                              // l10n-exempt: wallet address
-                              child: const Text('TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun', style: TextStyle(fontSize: 11)),
-                            ),
-                            TextButton.icon(
-                              onPressed: () => _copyToClipboard(ctx, 'TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun'),
-                              icon: const Icon(Icons.copy, size: 14),
-                              label: Text(getLocalText.s("Copy TRC20"), style: const TextStyle(fontSize: 12)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Boosty tab
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Center(child: Text(getLocalText.s("Coming soon"))),
-                      ),
-                    ],
+                  TextButton.icon(
+                    onPressed: () => ul.UrlLauncher.open(
+                        ProjectLinks.donatePageFor(
+                            LocaleController.I.effectiveTag)),
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: Text(getLocalText.s("All ways to support")),
                   ),
-                ),
-              ],
-            ),
+                ],
+              );
+            },
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(getLocalText.s("Close"))),
-          ],
         ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(getLocalText.s("Close"))),
+        ],
       ),
     );
   }
@@ -269,6 +253,66 @@ class AboutScreen extends StatelessWidget {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(getLocalText.s("Copied: %s", text))),
+    );
+  }
+}
+
+/// §362 — строка способа поддержки в попапе. `crypto`: название, адрес
+/// моноширинным (тап/кнопка — копирование) и кнопка оплаты (deeplink
+/// кошелька). `link`: одна кнопка. `note` необязателен.
+class _DonateTile extends StatelessWidget {
+  const _DonateTile({required this.method, required this.onCopy});
+
+  final DonateMethod method;
+  final void Function(BuildContext, String) onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final note = method.note;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // l10n-exempt: network / brand name
+        Text(method.title,
+            style: const TextStyle(fontWeight: FontWeight.bold)),
+        if (note != null && note.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(note,
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+        ],
+        if (method.isCrypto) ...[
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: () => onCopy(context, method.address!),
+            // l10n-exempt: wallet address
+            child: Text(method.address!,
+                style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+          ),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: () => onCopy(context, method.address!),
+                icon: const Icon(Icons.copy, size: 14),
+                label: Text(getLocalText.s("Copy"),
+                    style: const TextStyle(fontSize: 12)),
+              ),
+              TextButton.icon(
+                onPressed: () => ul.UrlLauncher.open(method.url),
+                icon: const Icon(Icons.account_balance_wallet_outlined, size: 14),
+                label: Text(getLocalText.s("Pay"),
+                    style: const TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+        ] else ...[
+          const SizedBox(height: 4),
+          FilledButton.tonal(
+            onPressed: () => ul.UrlLauncher.open(method.url),
+            child: Text(getLocalText.s("Open")),
+          ),
+        ],
+      ],
     );
   }
 }

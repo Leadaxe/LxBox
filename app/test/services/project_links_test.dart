@@ -28,6 +28,12 @@ void main() {
     expect(ProjectLinks.guideFor('de'), ProjectLinks.guideEn);
   });
 
+  test('donatePageFor: ru → RU-страница, прочие → EN', () {
+    expect(ProjectLinks.donatePageFor('ru'), ProjectLinks.donatePageRu);
+    expect(ProjectLinks.donatePageFor('en'), ProjectLinks.donatePage);
+    expect(ProjectLinks.donatePageFor('de'), ProjectLinks.donatePage);
+  });
+
   test('releaseTag строит адрес релиза по тегу', () {
     expect(ProjectLinks.releaseTag('v2.19.4'),
         'https://github.com/Leadaxe/LxBox/releases/tag/v2.19.4');

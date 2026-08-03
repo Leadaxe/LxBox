@@ -7,7 +7,7 @@
 
 Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — форке [sing-box](https://sing-box.sagernet.org/) с AmneziaWG 2.0 и нативным XHTTP — для гибкой маршрутизации сетевого трафика. Мульти-подписки, умные правила, встроенный тест скорости. Интерфейс на русском и английском.
 
-**[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)** | **[English README](README.md)** | **[Руководство пользователя](docs/USER_GUIDE_RU.md)**
+**[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)** | **[English README](README.md)** | **[Руководство пользователя](docs/USER_GUIDE_RU.md)** | **[Поддержать проект](docs/DONATE_RU.md)**
 
 ---
 
@@ -335,6 +335,7 @@ Spec-driven development — спецификации документируют 
 | Документ                                     | Описание                                                  |
 | -------------------------------------------- | --------------------------------------------------------- |
 | [Индекс документации](docs/README.md)        | Карта всех доков — начинать отсюда                        |
+| [Поддержать проект](docs/DONATE_RU.md)      | Способы поддержки: криптовалюта, Boosty, и как помочь не деньгами |
 | [Руководство пользователя](docs/USER_GUIDE_RU.md) | Как это работает: ступени трафика, каналы, detour, DNS — не про код, про логику. Плюс рецепты: раздача VPN по Wi-Fi через прокси, связка с ByeDPI |
 | [Автоматизация](docs/AUTOMATION.md)          | Управление L×Box из Tasker / MacroDroid через Public Intent API (команды + события, Wi-Fi-триггеры) |
 | [Debug API](docs/api/debug-api-reference.md) | HTTP-поверхность управления и диагностики (CRUD подписок и правил, start/stop, конфиг, логи, профайлер) |

@@ -17,7 +17,7 @@
 ## 2. `ProjectLinks` — единственный источник
 
 `app/lib/services/project_links.dart`: repo · latestRelease · core · launcher ·
-singboxUpstream · telegram · donate · issues · forum4pda · automationDoc ·
+singboxUpstream · telegram · donate · issues · automationDoc ·
 guideEn/guideRu + `guideFor(tag)` (незнакомый тег → EN, не 404) +
 `releaseTag(tag)`.
 
@@ -33,7 +33,7 @@ call-site'ов; публичные `guideUrlEn/guideUrlRu/guideUrlFor` — пр�
 |---|---|
 | `@selfLink` | latestRelease |
 | `@repoLink` · `@coreLink` · `@launcherLink` | репозитории |
-| `@tgLink` · `@donateLink` · `@issuesLink` · `@pdaLink` | сообщество/донат/фидбэк |
+| `@tgLink` · `@donateLink` · `@issuesLink` | сообщество/донат/фидбэк |
 | `@guideLink` | гайд **по текущей локали** |
 | `@appVersion` | версия APK |
 
@@ -61,8 +61,8 @@ call-site'ов; публичные `guideUrlEn/guideUrlRu/guideUrlFor` — пр�
 Восемь сообщений (ru+en), интервалы = наработка туннеля ПОСЛЕ предыдущего
 «Прочитал»: 001-welcome-guide 3ч · 002-telegram 12ч · 003-star 24ч ·
 004-share 24ч · 005-profiler 36ч · 006-under-the-hood 36ч · 007-review 48ч ·
-008-donate 72ч. Все URL — через `@плейсхолдеры`; 4PDA только в ru-блоке
-(en → GitHub issues); в 004 — кнопка `share:`, в 005 — `route:profiler`.
+008-donate 72ч. Все URL — через `@плейсхолдеры`; отзыв ведёт в Telegram
+и GitHub issues; в 004 — кнопка `share:`, в 005 — `route:profiler`.
 
 ## 6. Тесты
 
@@ -71,11 +71,30 @@ call-site'ов; публичные `guideUrlEn/guideUrlRu/guideUrlFor` — пр�
 `guideFor` фолбэк, `releaseTag`. `support_nav_test`: `share:` резолвится и
 `isInPlaceSupportAction` = true (route/add — false).
 
-## 7. Не сделано (отложено юзером)
+## 7. Страница поддержки и донат-попап
+
+- `docs/DONATE.md` / `docs/DONATE_RU.md` — веб-страница поддержки (пара RU/EN
+  как гайд): четыре крипто-адреса с deeplink'ами Trust Wallet, Boosty, раздел
+  «как помочь не деньгами». Ссылки добавлены в шапку и таблицу доков обоих
+  README.
+- `docs/donate.json` — источник донат-попапа приложения (About → «Поддержать
+  проект»). Раздаётся через raw.githubusercontent (паттерн §356): правка
+  адресов НЕ требует релиза. Порядок загрузки: сеть → `donate_cache_json` в
+  SettingsStorage → bundled `app/assets/donate.json` (первый запуск офлайн).
+  `kind: crypto` — адрес + «Копировать» + «Оплатить» (deeplink); `kind: link` —
+  одна кнопка; `note` опционален; `title`/`note` не переводятся (названия сетей
+  и брендов).
+- Попап перестроен на `DonateMethods` (`app/lib/services/donate_methods.dart`)
+  — прежняя таблица адресов, вшитая в разметку, удалена; внизу кнопка «Все
+  способы поддержки» на веб-страницу по локали.
+- **Маршрут `route:donate`** (§357-реестр) — кнопки поддержки в support-ленте
+  ведут в этот попап ВНУТРИ приложения, а не на внешнюю страницу
+  (`AboutScreen(openDonate: true)` открывает его post-frame).
+
+## 8. Не сделано (отложено юзером)
 
 **Проверка ссылок из remote-контента.** support.json приезжает с GitHub:
 компрометация репозитория/канала позволит подставить произвольный URL в
 кнопку (в т.ч. в `share:`, который юзер разошлёт своим именем). Кандидаты:
-вайтлист хостов в приложении (github.com/Leadaxe/*, t.me/singbox_launcher*,
-4pda.to) — простое и покрывает и `share:`, и обычные https-кнопки; либо
+вайтлист хостов в приложении (github.com/Leadaxe/*, t.me/singbox_launcher*) — простое и покрывает и `share:`, и обычные https-кнопки; либо
 подпись файла (ed25519, публичный ключ в APK). Решение отложено.

@@ -20,7 +20,15 @@ class ProjectLinks {
   static const telegram = 'https://t.me/singbox_launcher/4317';
   static const donate = 'https://t.me/singbox_launcher/340/3621';
   static const issues = 'https://github.com/Leadaxe/LxBox/issues';
-  static const forum4pda = 'https://4pda.to/forum/index.php?showtopic=1122662';
+  static const boosty = 'https://boosty.to/lxbox/donate';
+  static const donatePage =
+      'https://github.com/Leadaxe/LxBox/blob/main/docs/DONATE.md';
+  static const donatePageRu =
+      'https://github.com/Leadaxe/LxBox/blob/main/docs/DONATE_RU.md';
+
+  /// Страница поддержки на языке интерфейса (пара RU/EN, как гайд).
+  static String donatePageFor(String tag) =>
+      tag == 'ru' ? donatePageRu : donatePage;
   static const automationDoc =
       'https://github.com/Leadaxe/LxBox/blob/main/docs/AUTOMATION.md';
 
@@ -48,7 +56,8 @@ class ProjectLinks {
         '@tgLink': telegram,
         '@donateLink': donate,
         '@issuesLink': issues,
-        '@pdaLink': forum4pda,
+        '@boostyLink': boosty,
+        '@donatePage': donatePageFor(LocaleController.I.effectiveTag),
         '@guideLink': guideFor(LocaleController.I.effectiveTag),
         '@appVersion': VersionInfo.I.version,
       };

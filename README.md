@@ -7,7 +7,7 @@
 
 Android VPN client powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — a [sing-box](https://sing-box.sagernet.org/) fork with AmneziaWG 2.0 and native XHTTP. Multi-subscription, smart routing, built-in speed test. English and Russian UI.
 
-**[Download latest release](https://github.com/Leadaxe/LxBox/releases/latest)** | **[Документация на русском](README_RU.md)** | **[User Guide](docs/USER_GUIDE.md)**
+**[Download latest release](https://github.com/Leadaxe/LxBox/releases/latest)** | **[Документация на русском](README_RU.md)** | **[User Guide](docs/USER_GUIDE.md)** | **[Support the project](docs/DONATE.md)**
 
 ---
 
@@ -335,6 +335,7 @@ Full documentation map: **[docs/README.md](docs/README.md)**.
 | Document | Description |
 |----------|-------------|
 | [Documentation index](docs/README.md) | Full map of all docs — start here |
+| [Support the project](docs/DONATE.md) | Ways to support: cryptocurrency, Boosty, and how to help without money |
 | [User Guide](docs/USER_GUIDE.md) | How it works: traffic stages, channels, detour, DNS — not about code, about the logic. Plus recipes: sharing the VPN over Wi-Fi via proxy, pairing with ByeDPI, and a regex reference |
 | [Automation](docs/AUTOMATION.md) | Automate L×Box from Tasker / MacroDroid via the Public Intent API (broadcast commands + events, Wi-Fi triggers) |
 | [Debug API](docs/api/debug-api-reference.md) | Full HTTP control/diagnostics surface (subscriptions & rules CRUD, start/stop, config, logs, profiler) |
