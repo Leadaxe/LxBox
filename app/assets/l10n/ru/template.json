@@ -356,8 +356,8 @@
   "RU DNS group (UDP via channel + DoT via vpn-1 + direct DoH)": {
     "value": "Группа DNS для RU (UDP через канал + DoT через vpn-1 + прямой DoH)"
   },
-  "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering": {
-    "value": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). Обходит простой DPI с точным сравнением; бесполезно против фильтрации уровня GFW"
+  "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering. Skipped on REALITY nodes — their SNI must stay byte-exact": {
+    "value": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). Обходит простой DPI с точным сравнением; бесполезно против фильтрации уровня GFW. На узлах REALITY не применяется — их SNI должен оставаться неизменным"
   },
   "Reject = drop. Or pick Direct to send it outside the VPN.": {
     "value": "Блокировка — трафик отбрасывается. Либо выберите «Напрямую», чтобы отправить его мимо VPN."

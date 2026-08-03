@@ -6,6 +6,7 @@ Map<String, dynamic> _outbound({
   required String serverName,
   bool tlsEnabled = true,
   bool isDetour = false,
+  bool? reality,
 }) =>
     {
       'tag': 'test',
@@ -14,6 +15,12 @@ Map<String, dynamic> _outbound({
       'tls': {
         'enabled': tlsEnabled,
         'server_name': serverName,
+        if (reality != null)
+          'reality': {
+            'enabled': reality,
+            'public_key': 'HYmfuVfjxEcHl6AkNr3WV1C0GfeAEXnBkIBJ31PYvXc',
+            'short_id': 'a1b2c3d4',
+          },
       },
     };
 
@@ -140,6 +147,80 @@ void main() {
       expect(foundDifferent, isTrue,
           reason: 'Two outbounds with same server_name produced identical '
               'randomization 5 times — likely shared RNG state bug');
+    });
+
+    // §363 — REALITY: SNI входит в AAD хендшейка, сервер матчит имя по map с
+    // точным ключом без нормализации регистра. Рандомизация = мёртвый узел.
+    group('§363 REALITY', () {
+      test('reality outbound NOT touched', () {
+        final cfg = _config([
+          _outbound(serverName: 'ya.ru', reality: true),
+        ]);
+        applyMixedCaseSni(cfg, {'tls_mixed_case_sni': 'true'});
+        expect(
+          ((cfg['outbounds'] as List)[0] as Map)['tls']['server_name'],
+          'ya.ru',
+          reason: 'REALITY server_name must stay byte-identical',
+        );
+      });
+
+      test('reality disabled → randomized as plain TLS', () {
+        // Гейт по флагу reality.enabled, а не по наличию ключа reality.
+        var hadVariation = false;
+        for (var i = 0; i < 5; i++) {
+          final cfg = _config([
+            _outbound(serverName: 'www.example.com', reality: false),
+          ]);
+          applyMixedCaseSni(cfg, {'tls_mixed_case_sni': 'true'});
+          final s =
+              ((cfg['outbounds'] as List)[0] as Map)['tls']['server_name']
+                  as String;
+          expect(s.toLowerCase(), 'www.example.com');
+          if (s != s.toLowerCase() && s != s.toUpperCase()) {
+            hadVariation = true;
+            break;
+          }
+        }
+        expect(hadVariation, isTrue,
+            reason: 'reality.enabled=false must not gate randomization');
+      });
+
+      test('gate is per-outbound: plain TLS neighbour still randomized', () {
+        var hadVariation = false;
+        for (var i = 0; i < 5; i++) {
+          final cfg = _config([
+            _outbound(serverName: 'ya.ru', reality: true),
+            _outbound(serverName: 'www.example.com'),
+          ]);
+          applyMixedCaseSni(cfg, {'tls_mixed_case_sni': 'true'});
+          final obs = cfg['outbounds'] as List;
+          expect((obs[0] as Map)['tls']['server_name'], 'ya.ru');
+          final plain = (obs[1] as Map)['tls']['server_name'] as String;
+          expect(plain.toLowerCase(), 'www.example.com');
+          if (plain != plain.toLowerCase() && plain != plain.toUpperCase()) {
+            hadVariation = true;
+            break;
+          }
+        }
+        expect(hadVariation, isTrue,
+            reason: 'REALITY outbound must not disable the whole post-step');
+      });
+
+      test('reality without server_name does not throw', () {
+        final cfg = _config([
+          {
+            'tag': 'a',
+            'type': 'vless',
+            'tls': {
+              'enabled': true,
+              'reality': {'enabled': true},
+            },
+          },
+          _outbound(serverName: '', reality: true),
+        ]);
+        applyMixedCaseSni(cfg, {'tls_mixed_case_sni': 'true'});
+        expect(((cfg['outbounds'] as List)[1] as Map)['tls']['server_name'], '');
+      });
     });
   });
 }

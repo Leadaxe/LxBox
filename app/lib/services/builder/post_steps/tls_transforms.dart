@@ -17,6 +17,13 @@ void applyMixedCaseSni(Map<String, dynamic> config, Map<String, String> vars) {
     if (ob.containsKey('detour')) continue;
     final tls = ob['tls'];
     if (tls is! Map<String, dynamic>) continue;
+    // §363 — REALITY: SNI входит в AAD хендшейка (клиент шифрует SessionId с
+    // hello.Raw целиком), а сервер матчит имя по map с точным строковым ключом
+    // и БЕЗ нормализации регистра. Любая изменённая буква → промах по map →
+    // молчаливый fallback на маскировочный сайт, узел не поднимается.
+    // Обфусцировать тут и нечего: SNI у REALITY и так фиктивный.
+    final reality = tls['reality'];
+    if (reality is Map<String, dynamic> && reality['enabled'] == true) continue;
     final sn = tls['server_name'];
     if (sn is! String || sn.isEmpty) continue;
     tls['server_name'] = _randomizeHostCase(sn, rng);
