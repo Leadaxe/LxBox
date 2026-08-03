@@ -21,11 +21,15 @@ import '../l10n/src/check_common.dart';
 //    раздел вставлен не туда или потерян.
 // 3. Кодовые блоки (```) сбалансированы и их поровну — примеры кода/шаблонов
 //    в переводе не теряются.
-// 4. Ссылки на спеки и внутренние документы совпадают множеством: перевод
-//    ведёт на те же файлы. Расхождение — warning (ссылка может осмысленно
-//    отличаться, напр. RU/EN-версии MDN), под --strict фатально.
 //
 // Заголовки НЕ сравниваются по тексту: «## Recipes» и «## Рецепты» — норма.
+//
+// Ссылки НЕ сверяются намеренно. Перевод законно ведёт на другие адреса:
+// внешние — на локализованную версию (MDN `/ru/` против `/en-US/`),
+// внутренние — на документ своего языка, если у него появится пара. Такая
+// проверка падала бы на КОРРЕКТНОЙ документации и требовала бы дописывать
+// исключения при каждой новой паре. На реальном дереве она к тому же не
+// находила ничего: расхождение состава ссылок ловится числом разделов.
 //
 // Запуск: dart run tool/docs/parity_check.dart [--strict]  (из app/)
 
@@ -60,16 +64,14 @@ void main(List<String> args) {
 
     _compareHeadings(r, en, ru);
     _compareFences(r, en, ru);
-    _compareLocalLinks(r, en, ru);
   }
 
   exit(r.finish(extraRows: [MapEntry('pairs', '$pairsChecked')]));
 }
 
-/// Разобранный markdown-документ: скелет заголовков, число кодовых блоков,
-/// множество локальных ссылок.
+/// Разобранный markdown-документ: скелет заголовков и число кодовых блоков.
 class _Doc {
-  _Doc(this.path, this.headings, this.fenceCount, this.localLinks);
+  _Doc(this.path, this.headings, this.fenceCount);
 
   final String path;
 
@@ -79,21 +81,16 @@ class _Doc {
 
   final int fenceCount;
 
-  /// Ссылки на файлы репозитория (без http/mailto/якорей).
-  final Set<String> localLinks;
-
   static final _headingRe = RegExp(r'^(#{2,6})\s+\S');
-  static final _linkRe = RegExp(r'\[[^\]]*\]\(([^)\s]+)\)');
 
   static _Doc parse(String content, String path) {
     final headings = <int>[];
-    final localLinks = <String>{};
     var fences = 0;
     var inFence = false;
 
     for (final line in content.split('\n')) {
-      // Заборы ```: внутри них markdown не действует — заголовки и ссылки
-      // в примерах кода не считаем.
+      // Заборы ```: внутри них markdown не действует — заголовки в примерах
+      // кода не считаем.
       if (line.trimLeft().startsWith('```')) {
         fences++;
         inFence = !inFence;
@@ -103,17 +100,6 @@ class _Doc {
 
       final h = _headingRe.firstMatch(line);
       if (h != null) headings.add(h.group(1)!.length);
-
-      for (final m in _linkRe.allMatches(line)) {
-        final target = m.group(1)!;
-        if (target.startsWith('http') ||
-            target.startsWith('mailto:') ||
-            target.startsWith('#')) {
-          continue;
-        }
-        // Отбрасываем якорь: ссылка на файл — это файл.
-        localLinks.add(target.split('#').first);
-      }
     }
 
     if (inFence) {
@@ -121,7 +107,7 @@ class _Doc {
       // отрендерится как код.
       stdout.writeln('warn: $path: незакрытый блок ``` (нечётное число заборов)');
     }
-    return _Doc(path, headings, fences ~/ 2, localLinks);
+    return _Doc(path, headings, fences ~/ 2);
   }
 }
 
@@ -153,27 +139,5 @@ void _compareFences(CheckReporter r, _Doc en, _Doc ru) {
     r.fail('${en.path} ↔ ${ru.path}: разное число блоков кода '
         '(${en.path}: ${en.fenceCount}, ${ru.path}: ${ru.fenceCount}) — '
         'пример/схема потеряна при переводе.');
-  }
-}
-
-void _compareLocalLinks(CheckReporter r, _Doc en, _Doc ru) {
-  // Пути RU→EN отличаются самими файлами пары (README ссылается на README_RU
-  // и наоборот) — их из сравнения исключаем.
-  const pairFiles = {
-    'README.md',
-    'README_RU.md',
-    'docs/USER_GUIDE.md',
-    'docs/USER_GUIDE_RU.md',
-    'USER_GUIDE.md',
-    'USER_GUIDE_RU.md',
-  };
-  final enLinks = en.localLinks.difference(pairFiles);
-  final ruLinks = ru.localLinks.difference(pairFiles);
-
-  for (final missing in enLinks.difference(ruLinks)) {
-    r.warn('${ru.path}: нет ссылки на `$missing`, которая есть в ${en.path}');
-  }
-  for (final missing in ruLinks.difference(enLinks)) {
-    r.warn('${en.path}: нет ссылки на `$missing`, которая есть в ${ru.path}');
   }
 }
