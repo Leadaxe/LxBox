@@ -75,10 +75,11 @@ v1 реализует единственное действие — `route:<scre
 | `route:config` | ConfigScreen | — |
 | `route:debug` | DebugScreen | `log`/`crashes`/`oom`/`profiling` → `initialTab` 0–3 (**new** параметр) |
 | `route:about` | AboutScreen | — |
-| `route:profiler` | **семантический алиас** = `debug/profiling` | — |
+| `route:profiler` | **семантический алиас** = `stats/live` (гейт туннеля) | — |
 
-`profiler` — алиас по назначению, а не по месту в UI: если профайлер переедет
-с Debug-экрана, слаг в опубликованных JSON останется живым.
+`profiler` — алиас по назначению, а не по месту в UI: слаг в опубликованных
+JSON переживёт переезд фичи. Сегодня «куда ходят приложения» — вкладка Live
+на Statistics (§264-266); Debug/Profiling — это pprof-слепки ядра, НЕ то.
 
 ## 4. Реализация
 

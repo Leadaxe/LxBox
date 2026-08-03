@@ -665,8 +665,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       case 'about':
         return const AboutScreen();
       case 'profiler':
-        // Семантический алиас: сегодня профайлер — вкладка Profiling на Debug.
-        return const DebugScreen(initialTab: 3);
+        // Семантический алиас: трафик-профайлер («куда ходят приложения») —
+        // вкладка Live на Statistics (§264-266). НЕ Debug/Profiling: там
+        // pprof-слепки ядра, другая фича. Гейт как у stats.
+        if (!_controller.state.tunnelUp) return null;
+        return StatsScreen(
+          configRaw: _controller.state.activeConfigRaw,
+          subController: _subController,
+          homeController: _controller,
+          initialTab: StatsTab.live,
+        );
     }
     return null;
   }
