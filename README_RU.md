@@ -5,257 +5,291 @@
 [![Version](https://img.shields.io/github/v/release/Leadaxe/LxBox?label=version)](https://github.com/Leadaxe/LxBox/releases)
 [![Dart](https://img.shields.io/badge/Dart-3.11%2B-blue)](https://dart.dev/)
 
-Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — форке [sing-box](https://sing-box.sagernet.org/) с AmneziaWG 2.0 и нативным XHTTP — для гибкой маршрутизации сетевого трафика, предназначенный для сетевых специалистов различного уровня подготовки. Мульти-подписки, умные правила, встроенный тест скорости.
+Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — форке [sing-box](https://sing-box.sagernet.org/) с AmneziaWG 2.0 и нативным XHTTP — для гибкой маршрутизации сетевого трафика. Мульти-подписки, умные правила, встроенный тест скорости. Интерфейс на русском и английском.
 
-**[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)** | **[English README](README.md)**
+**[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)** | **[English README](README.md)** | **[Руководство пользователя](docs/USER_GUIDE_RU.md)**
 
 ---
 
 ## Скриншоты
 
-
-
-
-
-
+<p align="center">
+<img src="docs/screenshots/home.jpg" width="240" alt="Главный экран"/>
+<img src="docs/screenshots/routing.jpg" width="240" alt="Маршрутизация"/>
+<img src="docs/screenshots/statistics.jpg" width="240" alt="Статистика"/>
+</p>
+<p align="center">
+<img src="docs/screenshots/speed_test.jpg" width="240" alt="Тест скорости"/>
+<img src="docs/screenshots/dns_settings.jpg" width="240" alt="Настройки DNS"/>
+<img src="docs/screenshots/vpn_settings.jpg" width="240" alt="Настройки VPN"/>
+</p>
+<p align="center">
+<img src="docs/screenshots/routing_rules.jpg" width="240" alt="Правила маршрутизации"/>
+<img src="docs/screenshots/app_picker.jpg" width="240" alt="Выбор приложений"/>
+<img src="docs/screenshots/app_settings.jpg" width="240" alt="Настройки приложения"/>
+</p>
 
 ---
 
 ## Возможности
 
-**Серверы и подписки** — управление источниками прокси
+<details>
+<summary><strong>Серверы и подписки</strong> — все источники прокси в одном месте</summary>
 
-Добавляйте серверы по URL подписки, прямой ссылке, WireGuard URI/INI, Amnezia `vpn://`-ссылке, raw sing-box JSON outbound или через **Import from file…** (локальный `.txt`/`.json`; файл более чем с одной нодой становится файловой подпиской, §129). Умный диалог вставки определяет формат автоматически и показывает превью. Включение/отключение подписок без удаления. Офлайн-rehydrate — ноды восстанавливаются из кеша тела при старте app. Per-subscription настройки detour серверов.
+Добавляйте серверы по URL подписки, прямой ссылке, WireGuard URI/INI, Amnezia `vpn://`-ссылке, raw sing-box JSON outbound или через **Import from file…** (локальный `.txt`/`.json`; файл более чем с одной нодой становится файловой подпиской, §129). Умный диалог вставки определяет формат автоматически и показывает превью. Включение/отключение подписок без удаления. Офлайн-rehydrate — ноды восстанавливаются из кеша тела при старте приложения.
 
-- **Файловая подписка и редактируемый источник** (§129, v2.8.2) — файл с несколькими нодами становится подпиской с бейджем `file`, живущей из снапшота `HttpCache`; **Edit source…** меняет URL подписки или переключает online↔file транзакционно, без пересоздания (давняя просьба пользователей)
+- **12 протоколов**: VLESS (вкл. постквантовое шифрование ML-KEM-768, §335), VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, **AnyTLS** (§269), SSH, SOCKS, WireGuard (вкл. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://`-ссылки**, JSON), **MASQUE** (Cloudflare WARP — `masque://`, QUIC/HTTP-3)
+- Форматы: Base64, Xray JSON Array (вкл. цепочки dialerProxy и все протоколы массива, §321), plain text, raw sing-box JSON
+- **Дедупликация узлов** (§321) — один сервер, перечисленный в подписке несколько раз, становится одним узлом
+- **Авто-узлы** (§322) — провайдерский пункт «Авто | Лучший сервер» приезжает одним узлом с пулом внутри: в строке виден режим и состав (`🔀 [15/7]` — балансировка, `🎯 [3]` — один быстрейший). Свой авто-узел можно собрать в папке: «Add auto node…» — членство по regex-правилу, списку галочками или «все серверы папки»
+- **Отключение отдельных узлов** (§283) — переключатель у каждого узла подписки; выбор привязан к устойчивому хешу узла и переживает обновления, перезапуски и переименования у провайдера
+- **Filters — правила обработки подписки** (§302) — применяются при импорте и каждом обновлении: условия `путь оператор значение` (contains/equals/regex, Not, AND/OR), действия **Disable** / **Enable** (§332; последнее сработавшее правило побеждает — связка «выключить всё → включить NL» работает как белый список) / **Replace** (замена значения по пути, с карманами `$1`,`$2`… из regex-групп). Вкладка **Matches** показывает эффект правила до сохранения
+- **Inspect node** (§302) — тап по узлу подписки: вкладка JSON (как узел уходит в конфиг) и Source (исходный фрагмент подписки); у Source галка **Decode base64** для закодированных тел
+- **Fetch identity** (§289) — User-Agent / HWID / device-заголовки настраиваются per-подписка (Default = глобальные, Custom = свой набор); панели с HWID-гейтом вместо заглушки «App not supported» отдают реальные узлы (§310)
+- **«При обновлении»** (§323/§331) — реакция на новый состав узлов: только пересобрать конфиг (по умолчанию), пересобрать и перезагрузить ядро, или ничего не делать; срабатывает лишь когда состав действительно изменился
+- **Test servers** (§339) — пинг узлов подписки или папки без запуска VPN; при работающем VPN — явный гейт «Stop VPN / Cancel» вместо вранья поверх туннеля (§236)
+- **Файловая подписка** (§129) — многоузловой локальный файл живёт как подписка с бейджем `file`; **Edit source…** меняет URL или переключает online↔file без пересоздания
+- Per-subscription интервал обновления (1–168 ч), заголовок `profile-update-interval` уважается; опция «обновлять и выключенные подписки» (§337)
+- Subtitle строки подписки: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`; имя из `Content-Disposition` (RFC 5987)
+- **Get WARP** — Cloudflare WARP в один тап (WireGuard или MASQUE), см. ниже
+</details>
 
-- **11 протоколов**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard (вкл. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://`-ссылки** (v2.0.3), JSON), **MASQUE** (Cloudflare WARP — `masque://`, QUIC/HTTP-3, v2.9.0)
-- Форматы: Base64, Xray JSON Array (chained proxy), plain text, raw sing-box JSON
-- Per-subscription picker **Update interval** (1/3/6/12/24/48/72/168h), учитывает заголовок `profile-update-interval`
-- Subtitle в строке подписки: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`
-- Fallback имени из `Content-Disposition: filename=...` (RFC 5987)
-- Быстрый старт с комьюнити-курируемой подборкой тестовых серверов
-- **Get WARP** — Cloudflare WARP в один тап: регистрирует устройство в Cloudflare и добавляет готовый WireGuard-узел
+<details>
+<summary><strong>Get WARP</strong> — Cloudflare WARP в один тап, ключи генерятся на устройстве</summary>
 
-**Get WARP** — Cloudflare WARP в один тап, ключи генерятся на устройстве
+Пункт **Get WARP** на экране серверов → регистрируется туннель к Cloudflare и добавляется как узел. Без копипасты конфигов с чужих сайтов-генераторов.
 
-Пункт **Get WARP** в overflow-меню Servers → регистрируется WireGuard-туннель к Cloudflare и добавляется как узел. Без копипасты конфигов с чужих сайтов-генераторов.
-
-- **Регистрация на устройстве**: приватный X25519-ключ генерится на телефоне и НЕ покидает его — в Cloudflare (`api.cloudflareclient.com`) уходит только публичный ключ. Не используем чужие воркеры-генераторы (они отдают приватник, сгенерированный на их сервере).
-- **Add Amnezia obfuscation** (транспорт WireGuard): маскирует WARP-handshake от DPI, подмешивая junk-трафик, имитирующий QUIC-Initial (по умолчанию) или SIP-шаблон; SNI, level и Jc/Jmin/Jmax под *Advanced*. Включайте, когда обычный WARP режут или троттлят.
-- **WARP+** (опционально): вставьте license key под *Advanced* для привязки WARP+ (Argo Smart Routing). Пусто = free WARP.
-- **Идемпотентность**: повторный тап переиспользует закешированный аккаунт, а не плодит регистрации; *Re-register* создаёт новый.
-- Кастомный endpoint под *Advanced* (рабочий `IP:port`, если дефолтный заблокирован).
+- **Транспорт**: **WireGuard** (по умолчанию) или **MASQUE** (CONNECT-IP поверх QUIC/HTTP-3, fallback HTTP/2 — часто выходит с заграничного IP и выглядит для DPI как обычный HTTPS). Для MASQUE выбираются h3/h2, SNI, idle/keep-alive.
+- **Регистрация на устройстве**: приватный ключ генерится на телефоне и не покидает его — в Cloudflare (`api.cloudflareclient.com`) уходит только публичный (WireGuard — X25519, MASQUE — ECDSA P-256). Чужие воркеры-генераторы не используются: они отдают приватник, сгенерированный на их сервере.
+- **Add Amnezia obfuscation** (транспорт WireGuard): маскирует WARP-handshake от DPI junk-трафиком, имитирующим QUIC-Initial (по умолчанию) или SIP; SNI, level и Jc/Jmin/Jmax — под *Advanced*. Включайте, когда чистый WARP режут или троттлят.
+- **Persistent keepalive** (§304) — поле в *Advanced* (по умолчанию 25 с): без него оператор закрывает UDP-маппинг NAT при простое, и узел молча отваливается.
+- **Свой endpoint** — ручной `IP:port` под *Advanced*; у MASQUE — выбор порта из проверенных рабочих (§305).
+- **SCAN WARP** (§284) — папка-эксперимент: кнопка **Make experiment** генерирует пул WARP-вариантов (WireGuard / AWG / MASQUE h2/h3) по диапазонам адресов Cloudflare и прогоняет пингом; мёртвые узлы выключаются сами. Поиск рабочего эндпоинта на конкретной сети без ручного перебора.
+- **WARP+** (опционально): license key под *Advanced* привязывает WARP+ (Argo Smart Routing). Пусто = бесплатный WARP.
+- **Идемпотентность**: повторный тап переиспользует закешированный аккаунт; *Re-register* создаёт новый.
 - См. [спека 025](docs/spec/features/025%20warp%20integration/spec.md)
+</details>
 
-**Автообновление подписок** — 4 триггера, жёсткие гейты против спама
+<details>
+<summary><strong>Автообновление подписок</strong> — 6 триггеров, жёсткие гейты против спама</summary>
 
 Подписки обновляются в фоне без спама провайдерам. Каждый запрос зажат в рамки, процессов в свободном полёте нет.
 
-- **Триггеры**: запуск app · через 2 мин после активации туннеля · раз в час · сразу по остановке туннеля · manual ⟳ (force)
-- **Gates**: `minRetryInterval=15min` (persisted через `lastUpdateAttempt`), `maxFailsPerSession=5` (in-memory, размораживается на рестарт app), `10s ± 2s` между подписками, `_running`/`_inFlight` dedup-флаги, `inProgress` guard от двойных кликов
+- **Триггеры**: запуск приложения · возврат из фона (§291) · через 2 мин после активации туннеля · раз в час · сразу по остановке туннеля · ручной ⟳ (force)
+- **Гейты**: `minRetryInterval=15min` (переживает рестарт через `lastUpdateAttempt`), `maxFailsPerSession=5`, `10s ± 2s` между подписками, dedup-флаги от параллельных прогонов и двойных кликов
 - Crash-safe init sweep: зависший `inProgress` на диске сбрасывается в `failed`
-- Rebuild config **никогда** не триггерит HTTP — только локальная сборка из загруженных nodes
+- Пересборка конфига **никогда** не ходит в сеть — только локальная сборка из загруженных узлов
 - См. [спека 027](docs/spec/features/027%20subscription%20auto%20update/spec.md)
+</details>
 
-**Главный экран** — подключение и управление нодами
+<details>
+<summary><strong>Главный экран</strong> — подключение и управление узлами</summary>
 
-Запуск/остановка туннеля одним нажатием с анимированным статусом. Выбор группы прокси, сортировка нод по пингу/имени/вручную, массовый пинг. Панель трафика с реалтайм скоростью, соединениями и аптаймом.
+Запуск/остановка туннеля одним нажатием с анимированным статусом. Выбор канала, сортировка узлов по пингу/имени/вручную, массовый пинг. Панель трафика с реалтайм-скоростью, числом соединений и аптаймом.
 
-- **Разметка строки ноды** (v1.3.1+): `[ACTIVE зелёная] ПРОТОКОЛ · · · 50MS →` — лейбл протокола (VLESS/Hy2/WG/TUIC/SS) из типа outbound'а, ping справа с цветом по latency
-- **Подзаголовок ноды `ПРОТОКОЛ · транспорт · security`** (v2.0.0): `VLESS·xhttp·TLS`, `VLESS·tcp·Reality+Vision`, `WG·awg2` — видно, что внутри ноды, не открывая JSON
-- **Filter workspace** (v2.0.0): фильтр-панель с табами **Regex · Protocol · Subscribes · Settings** + сводка активных фильтров чипами; у каждой категории своя `!`-инверсия (NOT); строка чипов по транспорту/безопасности (`tcp`/`ws`/`grpc`/`h2`/`httpupgrade`/`quic`/`xhttp` + `TLS`/`Reality`/`+Vision`/`awg`/`awg2`); фильтры запоминаются per-channel
-- **Detour-фильтр — tri-state** (v2.0.0): показать всё / скрыть detour / **только detour** (чистый список релеев для диагностики)
-- **Персистентная сортировка Custom** (v2.0.0): ручной порядок выбирается из меню сортировок и tap-карусели (Default → Ping → A-Z → Custom), переживает рестарт; подписки перетаскиваются за grab-strip
-- **Настраиваемые каналы** (§125, v2.6.0) — группы прокси задаются пользователем (add / rename / delete до 10; `vpn-1` неудаляем). У каждого канала regex-фильтр нод с `!`-инверсией, опциональный **Include auto**-двойник (`<tag>-auto`, Fastest или Load balance) и опциональный **Include block**; фильтр в ноль показывает warning. Битые ссылки на каналы деградируют в `vpn-1`.
-- Фильтр нод: выбор участников автоподбора
-- Sticky restart warning под Stop — не пропадает при отмене Stop-диалога
-- Long-press: Ping · Use this node · View JSON · **Copy URI** (vless://, awg://, …) — действия Copy-JSON живут внутри диалога View JSON (Copy server / Copy detour / Copy server + detours(N))
+- **Строка узла**: `[ACTIVE] ПРОТОКОЛ · · · 50MS` — лейбл протокола из типа outbound, пинг справа с цветом по задержке; подзаголовок `ПРОТОКОЛ · транспорт · security` (`VLESS·xhttp·TLS`, `WG·awg2`) — видно, что внутри узла, не открывая JSON
+- **Авто-узлы в списке** (§322/§344) — строка показывает режим и живой состав пула (`🔀 [15/7]` с флагами стран); экран деталей узла знает про режимы urltest
+- **⚠-граф зависимостей** (§355) — если узел с пингом ERR является detour'ом для других узлов или DNS-серверов, у имени появляется ⚠; тап открывает список пострадавших с путём зависимости, для DNS-ветки — баннер
+- **Пинг per-канал** (§325) — у каждого канала свои замеры (адрес/таймаут проверки настраиваются per-канал); непроверенный в этом канале узел показывает замер из другого — приглушённо и со значком `~`
+- **Filter workspace**: фильтр-панель **Regex · Protocol · Subscribes · Settings** + сводка чипами; у каждой категории своя `!`-инверсия; чипы по транспорту/безопасности (`tcp`/`ws`/`grpc`/`quic`/`xhttp` + `TLS`/`Reality`/`awg`…); фильтры запоминаются per-канал; regex регистронезависим во всех точках (§301)
+- **Detour-фильтр tri-state**: показать всё / скрыть detour / только detour
+- **Настраиваемые каналы** (§125) — до 10 каналов-групп (add/rename/delete; `vpn-1` неудаляем), у каждого regex-фильтр узлов, опциональный auto-двойник (`<tag>-auto`, Fastest или Load balance) и Include block
+- **Пустое состояние** (§328) — при нуле серверов главный экран показывает полноэкранный гайд со ссылкой в Servers и восстановлением из бэкапа вместо мёртвой кнопки Start
+- Сортировка Custom с ручным порядком переживает рестарт; long-press: Ping · Use this node · View JSON · Copy URI; «Поделиться URL» без промежуточного диалога (§347)
+</details>
 
-**Quick Connect** — toggle VPN без открытия app'а (v1.5.0)
+<details>
+<summary><strong>Quick Connect</strong> — VPN без открытия приложения</summary>
 
-Два пути включить/выключить VPN не открывая приложение:
+- **Плитка в шторке** — тап = вкл/выкл, живой статус (`Connected` / `Connecting…` / …). Добавление через App Settings → General → Quick connect (на Android 13+ системный промпт).
+- **Long-press по иконке** на рабочем столе → **Toggle VPN**.
+- **Кнопки в уведомлении** (§182) — **Stop** / **Reconnect** прямо в постоянном уведомлении; работают даже при убитом UI-процессе.
+- Первый запуск коротко показывает приложение ради системного VPN-диалога (требование Android); дальше — без вспышек UI. Плитка переживает OOM-kill сервиса и не врёт «Connected».
+</details>
 
-- **Плитка в шторке** — потяни статус-бар → редактирование → перетащи **L×Box**. Тап = on/off, плитка показывает live-статус (`Connected` / `Disconnected` / `Connecting…` / `Stopping…`). Добавить через App Settings → General → Quick connect → `Add` (на Android 13+ системный prompt, на старых — текстовая инструкция).
-- **Long-press на иконку app'а** на хоум-скрине → пункт **Toggle VPN**.
-- Первый раз tile/shortcut коротко открывает приложение ради системного VPN consent-диалога (`VpnService.prepare(...)` — Activity-only API). Toast объясняет почему. После consent activity закрывается сама — обычный flow без UI-вспышки.
-- Tile переживает OOM-kill сервиса: `currentStatus` сбрасывается в `onDestroy` чтобы не показывать «Connected» когда сервиса больше нет.
-- **Кнопки в уведомлении** (§182) — **Stop** / **Reconnect** прямо в постоянном уведомлении; полностью нативные (Reconnect гоняет `stop`→`start` на companion-scope), работают даже при убитом UI-процессе.
+<details>
+<summary><strong>Маршрутизация</strong> — единая модель правил</summary>
 
-**Маршрутизация** — единая модель правил (v1.4.0)
+Блокировка рекламы, прямая маршрутизация .ru-доменов, BitTorrent через выбранный канал, per-app, приватные подсети. Каждое пользовательское правило — единая модель со всеми match-полями параллельно (ИЛИ внутри категории, И между — формула sing-box).
 
-Блокировка рекламы, прямая маршрутизация для .ru доменов, BitTorrent через прокси, per-app, матчинг приватных IP. Все пользовательские правила — единый `CustomRule` со всеми match-полями параллельно (OR внутри категории, AND между — per sing-box default rule formula).
-
-- **4 вкладки**: Channels (proxy groups) · Presets (read-only каталог → Copy to Rules) · Rules (твой реестр) · Tunnel apps (split-tunneling на уровне ОС)
-- **Match-поля**: domain, domain_suffix, domain_keyword, ip_cidr, port, port_range, packages (per-app), protocols (tls/quic/bittorrent/…), ip_is_private, **wifi_ssid / wifi_bssid** (v1.7.3), remote .srs rule-set
-- **SRS только локально** — никаких авто-обновлений, ручное скачивание через ☁, правило заблокировано пока нет кэша
-- **Drag-reorder** + **long-press → Delete с подтверждением**
-- **Params / View табы** в редакторе — View показывает готовый sing-box-фрагмент конфига
-- **Action & Resolve** (v2.12.0) — шестерёнка у Action-пикера: резолв домена перед роутингом с принудительным семейством адресов (например IPv4-only для прямых маршрутов на сетях без рабочего IPv6) или advanced-режим «только резолв»; полный набор resolve-опций sing-box (strategy, DNS-сервер, кэш, TTL, таймаут, client subnet)
-- **Dirty-aware save** — back с несохранёнными → диалог "Discard changes?"
-- Fallback для нераспознанного трафика (`route.final`)
+- **4 вкладки**: Channels (каналы) · Presets (read-only каталог → Copy to Rules) · Rules (ваш реестр) · Tunnel apps (split-tunneling уровня ОС)
+- **Match-поля**: domain / domain_suffix / domain_keyword, ip_cidr, порты и диапазоны, packages (per-app), протоколы приложений (tls/quic/bittorrent/…), **тип трафика tcp/udp/icmp** (§240 — например, UDP напрямую, TCP через туннель), ip_is_private, **wifi_ssid / wifi_bssid**, remote .srs rule-set
+- **Traffic Processing** (§264) — закреплённый пресет предобработки первым в списке: sniff, Hijack DNS, резолв адресатов и их настройки в одном месте; выключить/удалить/подвинуть нельзя — на нём держится остальная маршрутизация
+- **Action & Resolve** — шестерёнка у Action: резолв домена перед роутингом с принудительным семейством адресов (**Force IPv4**, §256 — спасение для сетей с полумёртвым IPv6) или advanced-режим «только резолв»; полный набор resolve-опций sing-box
+- **DNS-блок правила** (§257) — правило маршрутизации может само завести парное DNS-правило (тумблер DNS в редакторе)
+- **SRS только локально** — без авто-обновлений, ручное скачивание через ☁, правило заблокировано, пока нет кэша
+- Drag-reorder, long-press → Delete с подтверждением, dirty-aware save («Discard changes?»), вкладка View с готовым sing-box-фрагментом
+- Fallback для несматченного трафика (`route.final`)
 - См. [спека 030](docs/spec/features/030%20custom%20routing%20rules/spec.md), [спека 011](docs/spec/features/011%20local%20ruleset%20cache/spec.md)
+</details>
 
-**Балансировка нагрузки** — раскидать трафик по пулу серверов (v2.7.0)
+<details>
+<summary><strong>Балансировка нагрузки</strong> — трафик по пулу серверов</summary>
 
-Auto-группа канала умеет не только выбирать один быстрейший узел, но и **раскидывать соединения по пулу** из N серверов (round-robin), сохраняя при этом липкость сессий — TLS/авторизация не прыгают между IP.
+Auto-группа канала умеет не только выбирать один быстрейший узел, но и **раскидывать соединения по пулу** из N серверов (round-robin), сохраняя липкость сессий — TLS/авторизация не прыгают между IP.
 
-- **Два режима** в редакторе канала → *Include auto*:
-  - **Fastest** (`least_test`) — один лучший узел по latency, весь трафик через него (классика)
-  - **Load balance** (`round_robin`) — соединения ротируются по пулу фиксированного размера из живых узлов
-- **Pool size** — сколько узлов в пуле одновременно; **Pool tolerance** — `0` держать пул живых (скорость неважна), `>0` вытеснять медленные в пользу быстрых
-- **Sticky session by** — ряд чипов (`process` / `domain` / `source ip` / `dest ip` / `dest port`); ключ вроде `process + domain` сажает все соединения одного приложения к одному сайту на **тот же** сервер пула (ноль реконнектов пока узел жив). Снять все чипы → чистая ротация без липкости
-- **View pool** — long-press по auto-ноде → попап с живым пулом: фиксированные `слот · узел · delay`, видно какие именно N серверов сейчас тянут трафик
-- На базе sing-box-lx **SPEC 019** (фиксированные слоты, ленивый health-check, slot-hash липкость — без per-connection состояния). Билдер пишет блок `balancer{}` только под round_robin; Fastest остаётся бит-в-бит апстримом
+- **Два режима** в редакторе канала → *Include auto*: **Fastest** (`least_test`) — один лучший узел по задержке; **Load balance** (`round_robin`) — соединения ротируются по пулу живых узлов
+- **Pool size** — размер пула; **Pool tolerance** — `0` держать пул полным (скорость неважна), `>0` вытеснять медленные в пользу быстрых
+- **Sticky session by** — чипы `process` / `domain` / `source ip` / `dest ip` / `dest port`; ключ `process + domain` сажает все соединения одного приложения к одному сайту на тот же сервер пула. Без чипов — чистая ротация
+- **View pool** — long-press по auto-узлу → живой пул: `слот · узел · delay`
+- На базе sing-box-lx SPEC 019 (фиксированные слоты, ленивый health-check, slot-hash-липкость)
 - См. [§208 spec](docs/spec/tasks/208-urltest-balancer-round-robin.md)
+</details>
 
-**Detour серверы** — цепочки прокси для приватности
+<details>
+<summary><strong>Wi-Fi-зависимая маршрутизация</strong> — разные правила в разных сетях</summary>
 
-Multi-hop цепочки: трафик идёт через промежуточный сервер перед финальным прокси. Полезно при работе в сетях с гео-ограничениями на уровне провайдера или локали: поставьте домашний WireGuard как detour → заграничный мобильный интернет превращается в тоннель к дому.
+Правила вида «в этой Wi-Fi-сети → напрямую» задаются постоянно, без временных хаков. Поля `wifi_ssid` / `wifi_bssid` объединяются по И с остальными условиями правила:
 
-- Добавил свой сервер (paste URI / paste JSON / WG INI) — он становится кандидатом для detour
-- **Mark as detour server** switch в Node Settings — добавляет префикс `⚙` 
-- **Override detour** per-subscription: маршрутизирует все её ноды через ваш сервер
-- Register / Use toggles для detour-серверов из подписок
-- Detour dropdown в Node Settings persist'ит через `overrideDetour` (без JSON roundtrip drift'а)
+- `wifi_ssid: [HomeWiFi] → direct` — дома мимо VPN
+- `wifi_ssid: [OfficeWiFi] AND domain: [*.bank.com] → direct` — банкинг напрямую только в офисной сети
+- `rule_set: [geosite-ru] AND wifi_ssid: [HomeWiFi] → ru-direct` — гео-маршрутизация per-Wi-Fi
 
-**Настройки DNS** — полный контроль резолвинга
+В редакторе — чипы **Add current** (текущая сеть), **Pick saved** (история посещённых), **Manual**; гейты разрешений Android учтены. История сетей пишется только при явном opt-in (App Settings → Diagnostics), сеть попадает в неё после ≥5 минут на ней, максимум 50 записей.
 
-16 пресетов DNS (Cloudflare, Google, Yandex, Quad9, AdGuard) с UDP/DoT/DoH вариантами. Кастомные серверы через JSON. Стратегия, кэш, правила.
+- См. [спека 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [обзор фичи](docs/features/wifi-aware-routing.md)
+</details>
 
-- Включение/отключение серверов переключателями
-- Стратегия DNS: prefer_ipv4 / prefer_ipv6 / ipv4_only / ipv6_only
-- Редактор правил DNS, DNS Final, Default Domain Resolver
-- Bundle-пресет "Russian domains direct" (spec 033) — self-contained правило `.ru/.su/.рф/.рус/.москва/.moscow/.tatar/.дети/.онлайн/.сайт/.орг/.ком` + свои Yandex DNS-серверы + переменные `@out`/`@dns_server`
+<details>
+<summary><strong>Detour</strong> — цепочки серверов («ходить через»)</summary>
 
-**Устойчивость соединений** — совместимость с packet inspection
+Один сервер выходит в интернет через другой: `вы → A → B → интернет`. Зачем: выйти с IP нужной страны через быстрый ближний сервер, пробить блокировку самого сервера или сделать двойной прыжок ради приватности.
 
-Три ортогональных параметра тюнинга TLS-handshake — комбинируются на одном outbound.
+- **Единый пикер целей** — detour назначается одному серверу (Node Settings), всей подписке или папке (вкладка Settings), отдельному члену папки; цель — другой сервер, член той же папки или **канал**
+- **Detour-каналы** (§248/§274) — галка «Use as detour» делает канал переключаемой прослойкой: какой именно сервер внутри канала будет использоваться, решает ядро; канал при этом остаётся доступен правилам и route final (⚙ в имени)
+- **Цепочки** — A через B, B через C; внутри папки цепочки строятся прямо между членами; превью цепочки показывается в настройках подписок и папок (§252)
+- **Детектор циклов** (§254/§255) — замкнутое кольцо останавливает сборку конфига с перечислением виновников; тап по виновнику ведёт к владельцу узла
+- **⚠-граф зависимостей** (§355) — мёртвый узел, через который ходят другие, помечается на главном экране (см. Главный экран)
+- **AmneziaWG поверх WireGuard-детура** работает (§130; ядровый guard снят после end-to-end проверки)
+- Вся цепочка живёт внутри одного туннеля L×Box — это не VPN-поверх-VPN на уровне ОС и дешевле по ресурсам
+</details>
+
+<details>
+<summary><strong>DNS</strong> — группы серверов, отказоустойчивый резолв</summary>
+
+Каталог DNS-серверов (Cloudflare, Google, Yandex, Quad9, AdGuard, OpenDNS — UDP/DoT/DoH) плюс кастомные через JSON. У каждого сервера выбирается канал (**Outbound/detour**): DNS может ходить и напрямую, и через туннель.
+
+- **DNS-группы** (§312) — несколько серверов под одним тегом со стратегией выбора: **Stable** (держится за рабочий), **Fastest** (гонка, липнет к победителю), **Parallel** (каждый запрос гонкой). Ошибки участников помнятся с TTL — оживший путь сам возвращается в строй; при поднятом туннеле видно текущую цель и состояние участников. Группа ставится всюду, где ставится сервер: дефолтный резолвер, цель DNS-правила
+- **Shield DNS** (§314) — дефолт свежей установки: группа `dns_shield` из пяти провайдеров, трёх транспортов (UDP/DoT/DoH) и двух путей (напрямую и через VPN) — ни один единичный отказ не выносит резолв целиком
+- **ru-DNS тремя путями** (§354) — пресет «Russian domains & IPs» резолвит ru-домены группой `dns_ru` (UDP через канал пресета, DoT через `vpn-1`, DoH напрямую): мёртвая нода в канале не подвешивает ru-сайты
+- **Трасса групп в профайлере** (§315) — у DNS-события видно, через какую группу шёл запрос, кто из участников ответил и с каким RTT
+- DNS Rules, DNS Final, Default Domain Resolver; правило маршрутизации может завести парное DNS-правило (§257)
+</details>
+
+<details>
+<summary><strong>Обход DPI</strong> — приёмы против блокировок</summary>
+
+Три ортогональных приёма — комбинируются на одном outbound.
 
 - **TLS Fragment** — разбивает ClientHello по TCP-сегментам
 - **TLS Record Fragment** — разбивает handshake на несколько TLS-записей
-- **Mixed-case SNI** (v1.3.0+) — рандомизирует регистр `server_name` (`WwW.gOoGle.CoM`). Повышает совместимость с системами инспекции пакетов, использующими exact-match по SNI. По RFC 6066 поле case-insensitive — сервер обрабатывает любой регистр без изменения поведения. Менее эффективно против систем с нормализацией.
-- Все параметры применяются только к первому хопу (внутренние хопы идут внутри туннеля и не требуют дополнительной обработки).
+- **Mixed-case SNI** — рандомизирует регистр `server_name` (`WwW.gOoGle.CoM`); обходит наивный exact-match DPI региональных провайдеров (по RFC 6066 поле case-insensitive, поведение сервера не меняется). Против фильтрации класса GFW неэффективен
+- Все приёмы применяются только к первому хопу (внутренние хопы идут внутри туннеля, локальный DPI их не видит)
+- См. [спека 020](docs/spec/features/020%20security%20and%20dpi%20bypass/spec.md), [спека 028](docs/spec/features/028%20antidpi%20sni%20obfuscation/spec.md)
+</details>
 
-**Haptic feedback** — вибро на события туннеля
+<details>
+<summary><strong>Haptic feedback</strong> — вибро на события туннеля</summary>
 
-Короткая вибрация на состояниях туннеля, ошибках и тапах. Респектит системную настройку Android Touch feedback.
+Короткая вибрация на переходах VPN, ошибках и тапах. Уважает системную настройку Android Touch feedback.
 
-- Tap Start/Stop → лёгкий tick
-- Туннель активирован → средний impact; user disconnect → лёгкий
-- Revoked / heartbeat fail (только **первый**, не на каждый tick) → тяжёлый
-- Manual subscription fetch success/fail → лёгкий/средний
+- Tap Start/Stop → лёгкий tick; подключение → средний impact; отключение пользователем → лёгкий
+- Revoke / heartbeat-fail (только первый, не на каждый тик) → тяжёлый
 - Авто-триггеры не вибрируют; throttle 100 мс защищает от спама
-- Toggle в App Settings → Feedback (default **on**)
-- См. [спека 029](docs/spec/features/029%20haptic%20feedback/spec.md)
+- Тумблер в App Settings → Feedback (по умолчанию on)
+</details>
 
-**Тест скорости** — измерение соединения
+<details>
+<summary><strong>Тест скорости</strong> — измерение соединения</summary>
 
-Встроенный тест скорости с 10 серверами по всему миру. Per-server пинг к конкретному серверу скачивания. Параллельные потоки, upload тест, история за сессию.
+Встроенный тест скорости с 10 серверами по миру. Per-server пинг меряет задержку до конкретного сервера скачивания. Параллельные потоки загрузки, upload-тест, история за сессию.
 
 - Серверы: Cloudflare, Hostkey (5 городов), Selectel, Tele2, OVH, ThinkBroadband
-- Настраиваемые потоки (1/4/10), upload method per server
+- Настраиваемые потоки (1/4/10), метод upload per-server
 - История с именем сервера
+</details>
 
-**Статистика и соединения** — что происходит
+<details>
+<summary><strong>Статистика и соединения</strong> — что происходит в туннеле</summary>
 
-Реалтайм трафик по outbound с раскрывающимися карточками. Каждое соединение: хост, протокол, правило, трафик, длительность, цепочка прокси, имя приложения. Закрытие отдельных соединений.
+Три вкладки: **Stats** (реалтайм-трафик по каналам с раскрывающимися карточками) · **Conns** (живые соединения) · **Profiler** (запись всех соединений и DNS-резолвов).
 
-- **Detail sheet соединения** (§152) — тап по соединению → bottom sheet со всеми метаданными (source/dest IP:port, цепочка прокси, правило, точные байты, длительность), **Copy JSON** для баг-репортов и Close из шторки
-- **Зависшие однобокие соединения** (§153) — TCP с трафиком только в одну сторону (↑>0, ↓0) подсвечиваются розовым с бейджем **One-way**
-- **Иконки приложений** (§154) — в каждой строке соединения launcher-иконка приложения-владельца
+- Каждое соединение: хост, протокол, правило, трафик, длительность, цепочка прокси, приложение-владелец с launcher-иконкой (§154); закрытие отдельных соединений
+- **Detail sheet** (§152) — тап по соединению → все метаданные + Copy JSON для баг-репортов
+- **Однобокие соединения** (§153) — TCP с трафиком только в одну сторону (↑>0, ↓0) подсвечены с бейджем One-way — признак блокировки
+- **Profiler** — system-wide запись: каждый TCP/UDP-open и DNS-резолв на устройстве в реальном времени; фильтры по типу события / приложению / домену-IP; агрегация по домену или IP с CNAME-цепочками, outbound'ами и байтами; детектор проблем (`dnsTimeout`, `tcpReset`); длительность коротких соединений — по меткам ядра (§353)
+- **Детектор здоровья DNS** (§262) — постоянный монитор долей ошибок резолва с баннером решений
+- Трасса DNS-групп в деталях DNS-события (§315)
+</details>
 
+<details>
+<summary><strong>Диагностика</strong> — экран Debug, краш-репорты, pprof</summary>
 
+Боковое меню → **Debug**: четыре вкладки.
 
-**Per-app traffic profiler** — трассировка сети любого приложения в реальном времени (v1.7.0)
+- **Log** — журнал приложения и ядра; live-тумблер verbose снимает фильтр TRACE/DEBUG без перезапуска (§345)
+- **Crashes** (§316) — отчёты о падениях ядра: Go-трейс сохраняется файлом (в logcat он не попадает — stderr на Android уходит в `/dev/null`), после падения на главном экране появляется плашка; архив уезжает в «Share dump»
+- **OOM** (§318) — снимки сторожа памяти ядра: memstats, лог и конфиг на момент срабатывания; просмотр, отправка, очистка
+- **Profiling** (§207) — Go-pprof с живого ядра прямо на устройстве: CPU (10 с), Heap inuse, Allocations, Goroutines; `.pb`-файлы открываются `go tool pprof`
+- **Самовосстановление** (§334) — если прошлый запуск кончился падением ядра, приложение сбрасывает служебные кэши ядра до старта (битый `cache.db` — частая причина «падает сразу»); конфиги и настройки не трогаются
+- Причина неудачного старта — в `last_start_error` (§250, Debug API)
+- Для скриптовой диагностики — [Debug API](docs/api/debug-api-reference.md): HTTP-поверхность управления (CRUD подписок и правил, start/stop, конфиг, логи, профайлер)
+</details>
 
-Выбираете app, тапаете ▶ Record — видите все домены, IP и решения роутинга: какой CDN использует ваш банк, через какую ноду уходит, не утекает ли трафик через «не тот» VPN. Встроенный anomaly-detection помечает подозрительные geo-mismatch'ы.
+<details>
+<summary><strong>Настройки VPN</strong> — тюнинг движка</summary>
 
-- **Stats → Per-app tab**: app picker, [▶ START] / [⏹ STOP], строка статуса `Recording 02:34 · 47 doms · 53 ips · 287 ev`
-- **Единый TraceExplorer, два режима просмотра** (§160, v2.4.1 — заменил прежние саб-табы Live/Domains/IPs/Connections):
-  - **Event stream** — newest events first (DNS resolves с CNAME chain'ом · TCP/UDP open/close); тап по строке → detail sheet события
-  - **Aggregated** — Group by Domain или by IP; строки показывают CNAME targets, все resolved IP, outbounds, conn count, bytes, issues; тап по строке → detail sheet агрегата с drill-down
-  - **Общий фильтр** для обоих режимов — search-поле (матчит `domain` || `ip` || `cname target`, cross-domain CDN-аудит) + чипы по типу события
-  - Drill-down: detail sheet предлагает **View in Aggregated** — прыжок от события к его агрегированной строке
-- **Connection-issue detection (2 locale-агностичных типа)**: `dnsTimeout` (sing-box `dns: exchange failed` log — прямой engine-сигнал, не heuristic), `tcpReset` (TCP closed в течение 1s с 0 bytes — firewall RST / unreachable). ⚠ icon на Live row + Domain expanded view с описанием
-- **Process inference** — когда sing-box `find_process` мисс'нул (rare, для WebView/system processes), profiler attribut'ит conn по resolved IP в окне 10s post-DNS; rows помечены `〽 inferred from prior DNS`
-- **Recording indicators**:
-  - HomeScreen `_buildTrafficBar` chip `⚡ <pkg>` рядом с traffic stats; тап по строке → `StatsScreen(initialTab: perApp)`
-  - В StatsScreen у `Per-app` tab title красная иконка `⚡` пока идёт запись
-- **Overflow menu (⋮)** в Per-app tab'е: Verbose core logs (debug-level, применяется на следующей session), Copy session JSON, Share, Clear all sessions, Help
-- **In-memory only** — последние 5 finished sessions + 1 active. 3h sliding window на session + 50k events fallback cap. `force-stop` / kill app'а стирает всё (persist'а нет by design — diagnostic-only)
-- **Debug API** (Bearer-auth, порт 9269): `POST /profiler/start {package, verbose?}` · `POST /profiler/stop` · `GET /profiler/active` · `GET /profiler/sessions` · `GET /profiler/session/<id>?include=events,domains,ips` · `DELETE /profiler/session/<id>` · `DELETE /profiler/sessions` · `GET /profiler/stream` (SSE, fire-and-forget)
-- **Документация**: [user guide с use cases и curl-рецептами](docs/features/per-app-trace.md) · [§044 spec](docs/spec/features/044%20per-app%20traffic%20profiler/spec.md)
+Две вкладки:
 
+- **System** — тумблеры Android-стороны: `Allow VPN bypass` (приложения, явно просящие систему о физической сети, могут обойти tun), `Keep VPN on exit`, `Tunnel sleep mode` (`never` / `lazy` только в Doze / `always` при выключенном экране — компромисс батарея↔надёжность)
+- **WireGuard connections** (§272) — усыпление простаивающих туннелей: Suspend idle tunnels (30 с) / Suspend active-route tunnels (5 мин); спящие WG/AWG-эндпоинты освобождают память и просыпаются на первом дозвоне (A/B на устройстве — крупное снижение RAM)
+- **Passive health check** (§272) — пробы urltest молчат, пока живой трафик подтверждает сервер
+- **Memory limit** (§271) — лимит памяти ядра: Auto (по RAM устройства: 200/384/512 MB) / Off / вручную 200–768 MB; применяется к работающему ядру мгновенно. Лечит GC-шторм и перегрев CPU на конфигах с большими пулами WireGuard
+- **Core** — переменные движка sing-box (`mtu`, `log_level` и т.д.); routing- и DNS-переменные живут на своих экранах
 
+Все изменения автосохраняются. Параметры URLTest для авто-выбора узла. Блок разрешений (Battery / Notifications / Location / Wi-Fi) — в App Settings → Diagnostics.
+</details>
 
-**Профилирование ядра (pprof)** — ловить нагрев CPU и утечки памяти (v2.7.0)
+<details>
+<summary><strong>Редактор конфига</strong> — для продвинутых</summary>
 
-Когда ядро греется или течёт по памяти, снимите настоящий Go-**pprof** слепок прямо с устройства — без десктопа и пересборки. **App Settings → Diagnostics → Profiling**: каждая кнопка тянет профиль с живого ядра sing-box и открывает системный Share.
+Просмотр и правка raw sing-box JSON. Построчный редактор (§333): подсветка только видимых строк, номера строк, конфиги на сотни килобайт не вешают UI и клавиатуру; ошибки JSON5 при сохранении показываются с координатами. Конфиги свыше 1 МБ открываются read-only с подсказкой (Share → внешний редактор → Load from file). Сохранение, вставка из буфера, загрузка из файла, шаринг.
+</details>
 
-| Профиль | Что ловит |
-|---|---|
-| **CPU profile (10s)** | нагрев / 100 % CPU — busy-spin в tight-loop |
-| **Heap (inuse_space)** | что реально держит память сейчас (GC форсится перед снимком → только живые объекты) |
-| **Allocations** | что аллоцирует память (источник давления на GC) |
-| **Goroutines** (summary / full stacks) | счётчик и полные стеки горутин — утечки горутин |
+<details>
+<summary><strong>Настройки приложения</strong></summary>
 
-- `.pb`-файлы открываются `go tool pprof` (CPU/heap/allocs); `goroutine?debug=*` — текст. Heap inuse: `go tool pprof -inuse_space heap.pb`
-- Реализовано целиком на стороне оболочки через встроенный в libbox `PProfServer` (Go `net/http/pprof`) — **ядро не правилось**. Сервер поднимается на loopback-порту по тапу, отдаёт один GET и гасится в `finally` (в проде listener не висит)
-- Также через Debug API: `GET /diag/pprof?profile=heap|profile|allocs|goroutine&query=...` (нужен поднятый туннель)
-- См. [§207 spec](docs/spec/tasks/207-goroutine-cpu-dump.md)
-
-
-
-**Настройки ядра** — конфигурация маршрутизации
-
-Организованы по секциям: General, Network, Include Auto, DNS, TUN, Connection Resilience. URLTest параметры для авто-подбора прокси. Все изменения автосохраняются.
-
-
-
-**Редактор конфига** — для продвинутых
-
-Просмотр и редактирование raw JSON конфига sing-box. Форматированное отображение с кнопкой копирования. Сохранение, вставка, загрузка, шаринг.
-
-
-
-**Настройки приложения**
-
-- Тема: Системная / Светлая / Тёмная
-- Автозапуск туннеля при загрузке
-- Туннель остаётся при закрытии приложения
-- Авто-пересборка конфига при изменениях
-- **Battery optimization** tile — статус + shortcut в системный whitelist (v1.4.0)
-- **App info (OEM power settings)** с hint-диалогом для Autostart / Background activity (v1.4.0)
-- **Auto-ping after connect** — пинг активной группы через 5s после подключения VPN (по умолчанию ON, v1.4.0)
-- **First-run wizard** (§126, v2.8.0) — последовательный онбординг (уведомления → battery optimization → плитка Quick Settings)
-- **System** — тумблеры Android-стороны `VpnService.Builder`: `Allow VPN bypass` (приложения через `ConnectivityManager` могут обойти tun), `Keep VPN on exit` (туннель переживает закрытие приложения), `Tunnel sleep mode` (`never` / `lazy` только в Doze / `always` при выключенном экране — компромисс батарея↔надёжность).
-- **Suspend idle tunnels** (`route_idle_suspend`, по умолчанию `30s` с v2.8.2; пусто = off) — усыпляет недостижимые WireGuard/AmneziaWG-туннели, простаивавшие без трафика, освобождая память и экономя батарею (A/B на устройстве дал крупное снижение RAM). Затрагивает только туннели не на активном маршруте; просыпаются мгновенно при следующем дозвоне.
-- **Interrupt connections on switch** (§143) — при смене узла канала сбрасывает активные соединения этой группы, чтобы трафик сразу перешёл на новый узел (по умолчанию off; есть и в редакторе канала)
-- Haptic feedback toggle
-- См. [спека 022](docs/spec/features/022%20app%20settings/spec.md)
+- **Язык** (§279) — System default / English / Русский; переключается на лету, переведены и нативные поверхности (шторка, плитка, ярлыки). Технические поверхности (логи, Debug API, automation-события) намеренно английские
+- Тема: системная / светлая / тёмная
+- Автозапуск туннеля при загрузке; туннель переживает закрытие приложения
+- **Автоперезапуск VPN при смене настроек** (§338) — не жать «Restart» руками; плашка «перезапустите VPN» сверяется с работающим ядром и не появляется, если применять нечего (§324)
+- **First-run wizard** (§126) — онбординг: уведомления → battery optimization → плитка Quick Settings
+- **Battery optimization** и **App info (OEM power settings)** — статус + шорткаты в системные вайтлисты
+- **Auto-ping after connect** — пинг активного канала через 5 с после подключения
+- **Interrupt connections on switch** (§143) — при смене узла рвать соединения группы, чтобы трафик сразу перешёл (по умолчанию off); повторный выбор уже активного узла — no-op (§290)
+- Haptic feedback, Quick connect, Backup & restore (снапшот подписок, каналов, правил и настроек с предпросмотром перед восстановлением)
+</details>
 
 ---
 
 ## Поддерживаемые протоколы
 
-
 | Протокол    | URI-схема                          | Транспорт                                      |
 | ----------- | ---------------------------------- | ---------------------------------------------- |
-| VLESS       | `vless://`                         | TCP, WebSocket, gRPC, H2, HTTPUpgrade, **XHTTP**, REALITY |
+| VLESS       | `vless://`                         | TCP, WebSocket, gRPC, H2, HTTPUpgrade, **XHTTP**, REALITY; постквантовое шифрование **ML-KEM-768** (`mlkem768x25519plus`, §335) |
 | VMess       | `vmess://` (v2rayN base64)         | TCP, WebSocket, gRPC, H2, HTTPUpgrade, **XHTTP** |
 | Trojan      | `trojan://`                        | TCP, WebSocket, gRPC                           |
 | Shadowsocks | `ss://` (SIP002 + legacy + SS2022) | TCP, UDP, SIP003-плагины                       |
 | Hysteria2   | `hy2://` / `hysteria2://`          | QUIC, Salamander obfs                          |
 | **TUIC v5** | `tuic://`                          | QUIC, BBR/CUBIC/NewReno, zero-RTT              |
 | **NaïveProxy** | `naive+https://`                | Настоящий Chrome TLS через cronet, `extra-headers` |
+| **AnyTLS**  | `anytls://` (§269)                 | TLS (вкл. REALITY, uTLS, ALPN), idle-сессии    |
 | SSH         | `ssh://`                           | TCP, host key / password / private key         |
 | SOCKS       | `socks://` / `socks5://`           | TCP, auth                                      |
 | WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf`, **Amnezia `vpn://`** | UDP, multi-peer, **обфускация AWG 1.x/2.0** (jc/jmin/jmax, s1–s4, h1–h4 вкл. **диапазоны `N-M`**, i1–i5), авто-MTU 1280 |
 | **MASQUE** (Cloudflare WARP) | `masque://` | QUIC / HTTP-3 (RFC 9484 CONNECT-IP), fallback HTTP/2, pinning ECDSA P-256 |
 
-
-**XHTTP** — нативный транспорт с v2.0.0 (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one). С **v2.8.0** парсер ссылок поддерживает **полный клиентский набор полей**: настраиваемые placement'ы session/seq/uplink (path/query/header/cookie), ключи, метод upload, **X-Padding obfs-режим** (`repeat-x`/`tokenish`) и packet-up tuning — читаются из плоских query-параметров и из параметра `extra` (URL-encoded JSON). Работает с TLS и Reality, несовместим с XTLS-Vision (ограничение протокола).
+**XHTTP** — нативный транспорт (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one) с полным клиентским набором полей: placement'ы session/seq/uplink (path/query/header/cookie), ключи, метод upload, X-Padding obfs-режим (`repeat-x`/`tokenish`) и packet-up-tuning — читаются из плоских query-параметров и из `extra` (URL-encoded JSON). Работает с TLS и Reality, несовместим с XTLS-Vision (ограничение протокола).
 
 Подробная документация: [docs/PROTOCOLS.md](docs/PROTOCOLS.md)
 
@@ -263,7 +297,7 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 
 ## Архитектура
 
-L×Box построен вокруг **3-слойного parser/builder pipeline** (спека 026, v1.3.0+):
+L×Box построен вокруг **3-слойного parser/builder pipeline** (спека 026):
 
 ```
 UI / Controller
@@ -275,17 +309,16 @@ parseFromSource(source)  ← HTTP fetch + body_decoder + типизирован�
 ServerList (sealed)      ← SubscriptionServers | UserServer
   │ .build(ctx)            применяет tagPrefix, detour policy, allocateTag
   ▼
-buildConfig(lists, settings)  ← template + post-steps (resilience, DNS, rules)
+buildConfig(lists, settings)  ← template + post-steps (DPI, DNS, rules)
   │                              returns: BuildResult{ config, validation, warnings }
   ▼
 sing-box JSON
 ```
 
-- **Bundled-ядро** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **`v1.14.0-lx.1`** (первый полный стабильный релиз ветки 1.14-lx): форк sing-box 1.14, собранный с тегами `with_awg` / `with_xhttp` / `with_lx_command` / `with_lx_idle_suspend`; управляющий канал — libbox `CommandClient` (без Clash API). Добавлен round-robin **балансировщик** (SPEC 019) + RPC `GetPool`, полный клиентский набор полей XHTTP (SPEC 002 v2), idle-suspend недостижимых туннелей (SPEC 020) и **MASQUE / CONNECT-IP** outbound (SPEC 021). Версия пинится в `app/android/libbox.version`, AAR скачивается из GitHub Releases форка скриптом `scripts/fetch-libbox.sh` с проверкой SHA256
-- **Sealed `NodeSpec`** — 11 протоколов, полиморфный `emit(vars)` / `toUri()` (round-trip инвариант)
-- `**EmitContext**` — пробрасывает шаблонные vars в per-node emit
-- `**NodeEntries{main, detours[]}**` — именованный struct для chain-результатов
-- `**ValidationResult**` — типизированные issues: dangling refs, empty urltest, invalid selector default
+- **Bundled-ядро** — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx), форк sing-box ветки 1.14 с собственными расширениями: AmneziaWG 2.0, нативный XHTTP, round-robin-балансировщик, idle-suspend простаивающих туннелей, MASQUE / CONNECT-IP outbound, DNS-группы, доступ к конфигу работающего ядра, краш- и OOM-репорты. Управляющий канал — libbox `CommandClient` (без Clash API, без открытого порта). Точная версия пинится в [`app/android/libbox.version`](app/android/libbox.version); AAR скачивается из GitHub Releases форка скриптом `scripts/fetch-libbox.sh` с проверкой SHA256
+- **Sealed `NodeSpec`** — 12 протоколов, полиморфный `emit(vars)` / `toUri()` (round-trip-инвариант)
+- **`EmitContext`** — пробрасывает шаблонные vars в per-node emit
+- **`ValidationResult`** — типизированные проблемы: dangling refs, пустой urltest, невалидный selector default
 
 Полная картина: [Архитектура](docs/ARCHITECTURE.md).
 
@@ -293,19 +326,22 @@ sing-box JSON
 
 ## Разработка
 
-Spec-driven development — спецификации фич в [docs/spec/features/](docs/spec/features/) документируют каждую возможность.
-
+Spec-driven development — спецификации документируют каждую возможность.
+Полная карта документации: **[docs/README.md](docs/README.md)**.
 
 | Документ                                     | Описание                                                  |
 | -------------------------------------------- | --------------------------------------------------------- |
-| [Безопасность](docs/SECURITY.md)             | Модель угроз — защита от утечек (Unknown traffic / kill-switch), локальная поверхность атаки, секреты на устройстве |
-| [Документация протоколов](docs/PROTOCOLS.md) | URI форматы, параметры, маппинг в sing-box                |
+| [Индекс документации](docs/README.md)        | Карта всех доков — начинать отсюда                        |
+| [Руководство пользователя](docs/USER_GUIDE_RU.md) | Как это работает: ступени трафика, каналы, detour, DNS — не про код, про логику |
+| [Автоматизация](docs/AUTOMATION.md)          | Управление L×Box из Tasker / MacroDroid через Public Intent API (команды + события, Wi-Fi-триггеры) |
+| [Debug API](docs/api/debug-api-reference.md) | HTTP-поверхность управления и диагностики (CRUD подписок и правил, start/stop, конфиг, логи, профайлер) |
+| [Безопасность](docs/SECURITY.md)             | Модель угроз — защита от утечек, локальная поверхность атаки, секреты на устройстве |
+| [Документация протоколов](docs/PROTOCOLS.md) | URI-форматы, параметры, маппинг в sing-box                |
 | [Архитектура](docs/ARCHITECTURE.md)          | 3-слойный pipeline, потоки данных, нативный bridge        |
 | [Сборка](docs/BUILD.md)                      | Инструкции по сборке, CI, подпись APK, local-build marker |
-| [Руководство](docs/DEVELOPMENT_GUIDE.md)     | Принципы, тестирование, организация спек                  |
+| [Руководство разработчика](docs/DEVELOPMENT_GUIDE.md) | Принципы, тестирование, организация спек        |
 | [Список изменений](CHANGELOG.md)             | История релизов                                           |
 | [Release notes](docs/releases/)              | Подробные заметки per-версия (EN + RU)                    |
-
 
 ### Локальная сборка
 
@@ -313,16 +349,16 @@ Spec-driven development — спецификации фич в [docs/spec/featur
 ./scripts/build-local-apk.sh
 ```
 
-Скрипт оборачивает `flutter build apk --release` с `--dart-define`'ами, которые подмешивают git describe. About screen показывает розовую плашку **🧪 LOCAL BUILD · N commits since vX.Y.Z** — чтобы отличать от CI-билдов.
+Скрипт оборачивает `flutter build apk --release` с `--dart-define`'ами, которые подмешивают git describe. About-экран показывает розовую плашку **🧪 LOCAL BUILD · N commits since vX.Y.Z** — чтобы отличать от CI-билдов.
 
 ---
 
 ## Безопасность
 
-- **Только TUN inbound** — нет SOCKS5/HTTP прокси на localhost (защита от утечки IP)
+- **Только TUN inbound** — по умолчанию нет SOCKS5/HTTP-прокси на localhost (защита от утечки IP)
 - **Управляющий канал** — libbox `CommandClient` внутри процесса (без сетевого Clash API, без открытого порта/секрета)
 - **VPN Service** не экспортирован (`android:exported="false"`)
-- **Геомаршрутизация**: российские домены → direct (не через прокси)
+- Подробнее — [SECURITY.md](docs/SECURITY.md)
 
 ---
 
