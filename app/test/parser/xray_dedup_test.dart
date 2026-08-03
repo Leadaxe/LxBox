@@ -116,6 +116,20 @@ void main() {
       ]);
       expect(labels, ['первый', 'второй', 'третий']);
     });
+
+    test('сортировка стабильна и за порогом quicksort (>32 элементов)', () {
+      // List.sort в Dart стабилен лишь до ~32 элементов (insertion sort),
+      // дальше dual-pivot quicksort перемешивает связки — а спека §321 требует
+      // стабильность (боевая подписка §342 — 37 элементов). Пары ниже
+      // описывают один сервер дважды: имя обязано достаться ПЕРВОМУ по файлу.
+      final els = <Map<String, dynamic>>[];
+      for (var i = 0; i < 18; i++) {
+        els.add(element('first-$i', [vless('10.0.0.$i')]));
+        els.add(element('second-$i', [vless('10.0.0.$i', tag: 'proxy-alt')]));
+      }
+      final labels = labelsOf(els);
+      expect(labels, [for (var i = 0; i < 18; i++) 'first-$i']);
+    });
   });
 
   group('§342 — порядок файла сохраняется', () {

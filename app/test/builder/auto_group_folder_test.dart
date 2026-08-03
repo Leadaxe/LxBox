@@ -218,5 +218,34 @@ void main() {
       expect((n as AutoSelectSpec).membership,
           isA<RuleMembers>().having((r) => r.include, 'include', '🇩🇪|🇳🇱'));
     });
+
+    test('§352: запятая и % в credential переживают URI round-trip', () {
+      // Ключ = protocol|server|port|credential; пароль ss/trojan может нести
+      // запятую — до §352 сырой join(',') рвал такой ключ на fromUri.
+      const keys = [
+        'trojan|h1.com|443|pa,ss,word',
+        'ss|h2.com|8388|раз%2Cдва',
+        'vless|h3.com|443|clean-uuid',
+      ];
+      final auto = AutoSelectSpec(
+        id: 'a',
+        tag: 'auto',
+        label: 'CSV',
+        membership: const ExplicitMembers(keys),
+      );
+      final parsed = autoGroupFromUri(auto.toUri());
+      expect(parsed, isNotNull);
+      expect((parsed!.membership as ExplicitMembers).keys, keys);
+    });
+
+    test('§352: легаси-URI с чистыми ключами читается как раньше', () {
+      const legacy = 'autogroup://?members=vless%7C1.1.1.1%7C443%7Cu1'
+          '%2Ctrojan%7C2.2.2.2%7C443%7Cpw#Old';
+      final parsed = autoGroupFromUri(legacy);
+      expect((parsed!.membership as ExplicitMembers).keys, [
+        'vless|1.1.1.1|443|u1',
+        'trojan|2.2.2.2|443|pw',
+      ]);
+    });
   });
 }

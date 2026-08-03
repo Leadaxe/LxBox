@@ -418,6 +418,12 @@ Future<DebugResponse> _probe(String id, DebugRequest req, DebugContext ctx) asyn
     timeoutMs: timeoutMs,
     onResult: (i, r) => results[i] = r,
   );
+  // §349 — kProbeVpnRunning: внутренний маркер (UI мапит его в свой текст,
+  // probe_runner.dart:12 «наружу как сообщение не идёт») — Debug API обязан
+  // отдать внятный 409, а не '__vpn_running__'.
+  if (err == kProbeVpnRunning) {
+    throw const Conflict('VPN is running — stop it before probing');
+  }
   if (err.isNotEmpty) throw UpstreamError('probe failed to start: $err');
 
   final summary = <String, int>{};

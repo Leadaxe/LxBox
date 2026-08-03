@@ -251,3 +251,46 @@ final class EchIgnoredWarning extends NodeWarning {
   @override
   WarningSeverity get severity => WarningSeverity.info;
 }
+
+/// §358 — тип hysteria2-обфускации вне словаря ядра (`salamander`, `gecko`)
+/// отброшен. Оставить его нельзя: ядро отказывается сериализовать неизвестный
+/// тип («unknown obfs type») и не собирает ВЕСЬ конфиг, а не одну ноду.
+/// Узел подключится без обфускации — если сервер её требует, трафика не будет.
+final class UnknownObfsWarning extends NodeWarning {
+  /// Значение, как его написал провайдер.
+  final String value;
+
+  const UnknownObfsWarning(this.value);
+
+  @override
+  List<Object?> get props => [value];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "Unknown obfuscation type \"%s\" was dropped (the core supports salamander and gecko only, and would otherwise break the whole config). The node connects without obfuscation.",
+      value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// §358 — обфускация задана без пароля. Ядро требует непустой пароль для
+/// любого типа («missing obfs password») и роняет весь конфиг, поэтому
+/// обфускация снимается целиком.
+final class MissingObfsPasswordWarning extends NodeWarning {
+  /// Тип, который был указан в ссылке.
+  final String type;
+
+  const MissingObfsPasswordWarning(this.type);
+
+  @override
+  List<Object?> get props => [type];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "Obfuscation \"%s\" has no password, so it was dropped (the core requires one and would otherwise break the whole config). The node connects without obfuscation.",
+      type);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}

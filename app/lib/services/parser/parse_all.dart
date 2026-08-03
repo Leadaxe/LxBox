@@ -93,8 +93,17 @@ List<NodeSpec> _parseJson(JsonConfig j) {
       // целиком (на боевой 37-элементной — все 37 позиций, «🚀Авто | Лучший
       // сервер» уезжал с первого места в конец), хотя порядок часто осмыслен:
       // автор ставит рекомендуемый узел первым.
-      final priming = elements.toList()
-        ..sort((a, b) => _payloadCount(a).compareTo(_payloadCount(b)));
+      // Сортировка обязана быть СТАБИЛЬНОЙ (спека §321: связки — в порядке
+      // файла), а List.sort в Dart стабилен только до ~32 элементов (дальше
+      // quicksort). Индекс в компараторе делает порядок связок детерминированно
+      // авторским на подписке любого размера (боевой кейс §342 — 37 элементов).
+      final indexed = elements.asMap().entries.toList()
+        ..sort((a, b) {
+          final byPayload =
+              _payloadCount(a.value).compareTo(_payloadCount(b.value));
+          return byPayload != 0 ? byPayload : a.key.compareTo(b.key);
+        });
+      final priming = [for (final e in indexed) e.value];
       final owner = <String, Map<String, dynamic>>{};
       for (final e in priming) {
         final before = seen.toSet();

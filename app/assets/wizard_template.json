@@ -323,7 +323,7 @@
         {"name": "tls_fragment", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "TLS Fragment", "tooltip": "Split TLS ClientHello into small TCP segments"},
         {"name": "tls_record_fragment", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "TLS Record Fragment", "tooltip": "Split handshake into multiple TLS records (try this first)"},
         {"name": "tls_fragment_fallback_delay", "type": "text", "default_value": "500ms", "wizard_ui": "edit", "title": "Fallback delay", "tooltip": "Wait time when automatic detection fails"},
-        {"name": "tls_mixed_case_sni", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "Mixed-case SNI", "tooltip": "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering"}
+        {"name": "tls_mixed_case_sni", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "Mixed-case SNI", "tooltip": "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering. Skipped on REALITY nodes — their SNI must stay byte-exact"}
       ]
     }
   ],
@@ -438,7 +438,6 @@
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route traffic for Russian domains and IPs"},
         {"name": "dns_enable", "type": "bool", "default_value": "true", "title": "DNS", "tooltip": "Send matched domains to this preset's DNS server and apply DNS-level options like Force IPv4. Turn off to keep routing without DNS changes."},
-        {"name": "dns_server", "type": "dns_servers", "required": false, "default_value": "yandex_udp", "title": "DNS server", "tooltip": "Recommended: Base/UDP — most stable. DoH/DoT may be filtered by ISPs."},
         { "name": "dns_ip", "type": "enum", "title": "UDP server IP", "tooltip": "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.",
           "default_value": "77.88.8.8",
           "options": [
@@ -476,7 +475,7 @@
         {"#if": {"and": ["@force_ipv4"], "value": {
             "rule_set": ["ru-domains", "ru-services"],
             "action": "resolve",
-            "server": "@dns_server",
+            "server": "dns_ru",
             "strategy": "ipv4_only"
           }
         }},
@@ -484,12 +483,13 @@
       ],
       "dns_rules": [
         {"#if": {"and": ["@force_ipv4"], "value": {"rule_set": ["ru-domains", "ru-services"], "ip_version": 6, "action": "predefined", "rcode": "NOERROR"}}},
-        {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server", "action": "route"}
+        {"rule_set": ["ru-domains", "ru-services"], "server": "dns_ru", "action": "route"}
       ],
       "dns_servers": [
+        {"type": "group", "tag": "dns_ru", "servers": ["yandex_udp", "yandex_dot", "yandex_doh"], "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m", "description": "RU DNS group (UDP via channel + DoT via vpn-1 + direct DoH)"},
         {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@outbound"},
-        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@outbound"},
-        {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "vpn-1"}
+        {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT (via vpn-1)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "vpn-1"},
+        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH (direct)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}}
       ]
     },
     {
@@ -566,6 +566,28 @@
         }
       ],
       "rule": {"rule_set": ["unknown-apps"], "outbound": "@outbound"}
+    },
+    {
+      "preset_id": "fcm-push",
+      "ui": {"label": "Google push (FCM)", "description": "Send only Google push traffic (FCM ports 5228-5230 and FCM hosts) outside the VPN, so notifications arrive on time with the screen off. Does not touch the rest of Google Play, so your Play region stays intact. Move this rule above your proxy rules for it to take effect. If your DNS goes through the tunnel, add a matching direct rule in DNS settings — otherwise the hosts resolve to the wrong region and push stays silent.", "default": false},
+      "vars": [
+        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to send push traffic. Direct keeps it off the VPN — that is the point of this preset."},
+        {"name": "gms_only", "type": "bool", "default_value": "false", "title": "Limit to Google Play Services", "tooltip": "Match only traffic from com.google.android.gms instead of any app. Narrower, but app matching works in VPN mode only — leave off if you use proxy mode."}
+      ],
+      "rule": {
+        "type": "logical",
+        "mode": "and",
+        "rules": [
+          {"#if": {"and": ["@gms_only"], "value": {"package_name": ["com.google.android.gms"]}}},
+          {"type": "logical", "mode": "or", "rules": [
+            {"domain": ["mtalk.google.com", "mtalk4.google.com", "android.apis.google.com"]},
+            {"domain_suffix": ["firebaseinstallations.googleapis.com", "device-provisioning.googleapis.com", "iid.googleapis.com"]},
+            {"domain_regex": ["^alt\\d+-mtalk\\.google\\.com$"]},
+            {"port_range": ["5228:5230"]}
+          ]}
+        ],
+        "outbound": "@outbound"
+      }
     }
   ]
 }

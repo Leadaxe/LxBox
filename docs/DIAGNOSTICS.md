@@ -64,6 +64,7 @@ Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token с�
 | `GET /config/running` | §311 — снапшот конфига **работающего ядра** (kernel SPEC 036, захват на старте). Re-marshal — сравнивать с `/config` только семантически. `409` = туннель down / ядро < lx.16-rc.3 / ещё не подтянут. Расхождение running↔saved видно по `running_config_length` vs `config_length` в `/state`. **§324** — «семантически» = привести обе стороны к канонической форме силами ядра: `/config` → `formatConfig` (плюс наложить `OverrideOptions`, их `formatConfig` не применяет, а снапшот post-override), затем сравнить с `/config/running` побайтово. Разница длин сама по себе НЕ означает расхождения: re-marshal меняет порядок полей и выкидывает дефолты |
 | `GET /pool?tag=vpn-1-auto` | §208 — снапшот пула round_robin-группы: `{tag, count, slots:[{slot, tag, delay, alive}]}`. Какие N серверов в слотах сейчас + их пинг. Не-round_robin → `200 slots:[]`; туннель down → `409` (не пустой ответ — §209) |
 | `GET /logs?source=core&limit=500` | Sing-box internal logs (требует `core_logs_enabled=true`) |
+| `GET/PUT /settings/core_logs_verbose` | §345 — live-снятие TRACE/DEBUG-фильтра ядра, без рестарта VPN. Буфер (500 строк) на живом трафике живёт секунды — включать точечно, снимать `/logs?source=core` сразу |
 | `GET /files/crash/list` | §316 — **краши ядра**: архив Go-паник `[{name,size,mtime}]`, новые первыми. `[]` = крашей не было |
 | `GET /files/local?name=CrashReport-lxbox.log` | §316 — ТЕКУЩИЙ краш-репорт ядра (Go-паника с трейсом); `.old` — предыдущий |
 | `GET /files/oom/list` | §318 — **OOM-снимки ядра**: `[{name,size,mtime,memory_usage,heap_inuse,num_goroutine}]`, новые первыми. `size` — весь каталог (вес несут pprof-профили). `[]` = oom-killer не срабатывал |
@@ -79,7 +80,7 @@ Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token с�
 | `GET /profiler/live/unattributed` | §177 — недавние unattributed события (DNS fail без owner-UID и т.п.) |
 | `GET /profiler/live/state` | `{recording, started_at, buffer_count, unattributed_count, banner_active}`. `buffer_count=0` при `recording=true` — события не приходят (профайлер пишет, но пусто) |
 
-**Read-only safe.** Все остальные endpoints (`POST /action/*`, `PUT /config`, `PUT /settings/*`) — destructive, см. ниже.
+**Read-only safe.** Исключение в таблице — `PUT /settings/core_logs_verbose`: меняет только фильтр логов (SharedPreferences, не `lxbox_settings.json`), rebuild не триггерит, evidence не портит. Все остальные write-endpoints (`POST /action/*`, `PUT /config`, `PUT /settings/*`) — destructive, см. ниже.
 
 ### ~~Clash API~~ — УДАЛЁН (§122)
 
@@ -461,6 +462,7 @@ Android держит **ОДИН** VPN-слот. Этот текст (§224/§276
 - **Sing-box debug-level** — `vars.log_level = debug` + force-stop. Печатает каждое routing decision и dial event. Сильно увеличивает log volume.
 - **Per-app routing testing** — `adb shell am start -n <activity>` запустить целевое приложение по щелчку, в момент запуска снимать ss + `/profiler/live`.
 - **`adb shell ping`** — обычно blocked без рута. Используй `POST /action/urltest` (urltest нод/групп через ядро) вместо.
+- **QUIC-ручки GSO/ECN (§341)** — `POST /action/quic-knobs?gso=on|off[&ecn=on|off]`: A/B-проверка offload-гипотез quic-go (hysteria2/tuic/masque-h3 мертвы на вендорском ядре) без пересборки. `off` = env `QUIC_GO_DISABLE_*`, `on` = вернуть авто-детект. Действует только на НОВЫЕ QUIC-сокеты — после переключения `reload-vpn`/`reset-network`. `native_ok=false` = AAR старее SPEC 044.
 - **pprof — нагрев CPU / утечки памяти ядра (§207)** — для deep-диагностики runtime'а sing-box. Туннель должен быть up.
   ```bash
   TOKEN=...   # forward 9269 на телефон

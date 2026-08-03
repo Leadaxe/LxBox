@@ -78,6 +78,8 @@ void main() {
         XhttpParamResetWarning() => 'xhttp_reset',
         UnknownFingerprintWarning() => 'fingerprint',
         EchIgnoredWarning() => 'ech_ignored',
+        UnknownObfsWarning() => 'obfs_unknown',
+        MissingObfsPasswordWarning() => 'obfs_no_password',
       };
       expect(label, 'transport');
     });

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/node_identity.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 
 void main() {
@@ -121,6 +122,47 @@ void main() {
       expect(m.localAddresses, containsAll(orig.localAddresses));
       expect(m.idleTimeout, '10m');
       expect(m.keepAlive, '45s');
+    });
+
+    test('§358 — hysteria2 gecko round-trip: JSON → spec → JSON', () {
+      final spec = parseSingboxEntry({
+        'type': 'hysteria2',
+        'tag': 'hy2',
+        'server': 'h.example',
+        'server_port': 443,
+        'password': 'secret',
+        'obfs': {
+          'type': 'gecko',
+          'password': 'op',
+          'min_packet_size': 100,
+          'max_packet_size': 1200,
+        },
+      });
+      final hy = spec! as Hysteria2Spec;
+      expect(hy.obfs, 'gecko');
+      expect(hy.obfsPassword, 'op');
+      expect(hy.obfsMinPacketSize, 100);
+      expect(hy.obfsMaxPacketSize, 1200);
+
+      final back =
+          hy.emitRaw(TemplateVars.empty).map['obfs'] as Map<String, dynamic>;
+      expect(back['type'], 'gecko');
+      expect(back['min_packet_size'], 100);
+      expect(back['max_packet_size'], 1200);
+    });
+
+    test('§358 — hysteria2 с неизвестным obfs: тип отброшен, конфиг цел', () {
+      final spec = parseSingboxEntry({
+        'type': 'hysteria2',
+        'tag': 'hy2',
+        'server': 'h.example',
+        'server_port': 443,
+        'password': 'secret',
+        'obfs': {'type': 'xyz', 'password': 'op'},
+      });
+      final hy = spec! as Hysteria2Spec;
+      expect(hy.obfs, isEmpty);
+      expect(hy.emitRaw(TemplateVars.empty).map.containsKey('obfs'), isFalse);
     });
 
     test('masque без ключей → null', () {
@@ -339,6 +381,35 @@ void main() {
       expect(nodes.single.chained!.server, 'jump.example');
     });
 
+    test('§335+§321: dialerProxy не теряет encryption (регрессия _withChain)', () {
+      const enc = 'mlkem768x25519plus.native.0rtt.AbCd-EfGh_IjKl0123456789';
+      final main = vless('proxy', 'main.example');
+      (main['streamSettings'] as Map)['sockopt'] = {'dialerProxy': 'jump'};
+      (((main['settings'] as Map)['vnext'] as List).first['users'] as List)
+          .first['encryption'] = enc;
+      final nodes = parseXrayElement({
+        'remarks': 'Chained',
+        'outbounds': [main, vless('jump', 'jump.example')],
+      });
+      final spec = nodes.single as VlessSpec;
+      expect(spec.chained, isNotNull, reason: 'цепочка сохранена');
+      expect(spec.encryption, enc,
+          reason: '_withChain пересобирает Spec и обязан пронести §335-слой');
+    });
+
+    test('§322: мусорный streamSettings строкой → пропуск узла, сосед жив', () {
+      final broken = vless('proxy-bad', 'bad.example');
+      broken['streamSettings'] = 'none';
+      final nodes = parseXrayElement({
+        'remarks': 'Mixed',
+        'outbounds': [broken, vless('proxy-ok', 'ok.example')],
+      });
+      expect(nodes.map((n) => n.server), ['ok.example'],
+          reason: 'битый outbound не роняет соседей по элементу');
+      expect(nodes.single.warnings, isNotEmpty,
+          reason: 'пропажа не молчаливая — P5-warning на выжившем');
+    });
+
     test('main-приоритет: тег proxy идёт первым независимо от порядка', () {
       final nodes = parseXrayElement({
         'remarks': 'R',
@@ -355,6 +426,98 @@ void main() {
       });
       expect(nodes.length, 2);
       expect(nodes[1].label, 'backup');
+    });
+  });
+
+  // §321 P4/§322 — ИНВАРИАНТ: ключ идентичности, посчитанный парсером по
+  // сырому Xray-JSON (tagSynonyms), обязан посимвольно совпадать с
+  // nodeIdentityKey готового NodeSpec — иначе резолв пула на билде
+  // (server_list_build) молча выкидывает члена.
+  group('идентичность parser ↔ builder', () {
+    Map<String, dynamic> balancer(List<String> selector) => {
+          'balancers': [
+            {
+              'tag': 'auto',
+              'selector': selector,
+              'strategy': {'type': 'leastPing'},
+            }
+          ],
+        };
+
+    test('hysteria (форма форка) → ключ hysteria2|…, порт как у конвертера',
+        () {
+      final nodes = parseXrayElement({
+        'remarks': 'HY',
+        'outbounds': [
+          {
+            'tag': 'hy-1',
+            'protocol': 'hysteria',
+            'settings': {'address': 'hy.example', 'port': 8443, 'version': 2},
+            'streamSettings': {
+              'network': 'hysteria',
+              'hysteriaSettings': {'auth': 'secret', 'version': 2},
+            },
+          },
+        ],
+        'routing': balancer(['hy-1']),
+      });
+      final hy = nodes.whereType<Hysteria2Spec>().single;
+      final auto = nodes.whereType<AutoSelectSpec>().single;
+      final syn = auto.tagSynonyms['hy-1'];
+      expect(syn, startsWith('hysteria2|'),
+          reason: 'Spec-протокол hysteria2, не сырой "hysteria"');
+      expect(syn, nodeIdentityKeyRaw(hy));
+    });
+
+    test('vless без порта и с vision-udp443 → порт ключа как у конвертера',
+        () {
+      final nodes = parseXrayElement({
+        'remarks': 'V',
+        'outbounds': [
+          {
+            'tag': 'no-port',
+            'protocol': 'vless',
+            'settings': {
+              'vnext': [
+                {
+                  'address': 'a.example',
+                  'users': [
+                    {'id': 'u-1'}
+                  ],
+                }
+              ],
+            },
+            'streamSettings': {'network': 'tcp'},
+          },
+          {
+            'tag': 'udp443',
+            'protocol': 'vless',
+            'settings': {
+              'vnext': [
+                {
+                  'address': 'b.example',
+                  'port': 8443,
+                  'users': [
+                    {'id': 'u-2', 'flow': 'xtls-rprx-vision-udp443'}
+                  ],
+                }
+              ],
+            },
+            'streamSettings': {'network': 'tcp'},
+          },
+        ],
+        'routing': balancer(['no-port', 'udp443']),
+      });
+      final auto = nodes.whereType<AutoSelectSpec>().single;
+      final byServer = {
+        for (final n in nodes.whereType<VlessSpec>()) n.server: n,
+      };
+      expect(auto.tagSynonyms['no-port'],
+          nodeIdentityKeyRaw(byServer['a.example']!),
+          reason: 'дефолт порта — 443, как в _xrayVlessToSpec');
+      expect(auto.tagSynonyms['udp443'],
+          nodeIdentityKeyRaw(byServer['b.example']!),
+          reason: 'vision-udp443 переписывает порт узла на 443 — и ключа тоже');
     });
   });
 

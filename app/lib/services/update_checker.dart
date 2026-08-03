@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'app_log.dart';
+import 'project_links.dart';
 import 'automation/event_emitter.dart';
 import 'settings_storage.dart';
 
@@ -58,7 +59,7 @@ class UpdateChecker {
     latest.value = UpdateInfo(
       tag: tag,
       name: tag,
-      htmlUrl: 'https://github.com/Leadaxe/LxBox/releases/tag/$tag',
+      htmlUrl: ProjectLinks.releaseTag(tag),
       publishedAt: null,
     );
   }
@@ -155,7 +156,7 @@ class UpdateChecker {
       if (tag.isEmpty) return null;
       final name = (json['name'] as String?) ?? tag;
       final htmlUrl = (json['html_url'] as String?) ??
-          'https://github.com/Leadaxe/LxBox/releases/tag/$tag';
+          ProjectLinks.releaseTag(tag);
       final publishedRaw = json['published_at'] as String?;
       final publishedAt =
           publishedRaw != null ? DateTime.tryParse(publishedRaw) : null;
@@ -195,7 +196,7 @@ class UpdateChecker {
       if (tag.isEmpty) return null;
       final name = (json['name'] as String?) ?? tag;
       final htmlUrl = (json['html_url'] as String?) ??
-          'https://github.com/Leadaxe/LxBox/releases/tag/$tag';
+          ProjectLinks.releaseTag(tag);
       final publishedRaw = json['published_at'] as String?;
       final publishedAt =
           publishedRaw != null ? DateTime.tryParse(publishedRaw) : null;

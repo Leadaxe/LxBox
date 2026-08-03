@@ -78,8 +78,11 @@ class BundleMerge {
 ///      `@var` удаляются из родительского Map).
 /// 2. Deep-copy и substitute `@var` в `rule_set` / `dns_rules` / `rule` /
 ///    `dns_servers` через [substituteVars].
-/// 3. Фильтр `dns_servers` до одного — с `tag == vars['dns_server']`.
-///    Если dns_server == null → пустой список (пресет не вносит DNS-сервер).
+/// 3. Фильтр `dns_servers`: пресет БЕЗ var'а `dns_server` (§354 — сервер
+///    зашит литералом в правилах) эмитит ВСЕ объявленные; пресет С var'ом —
+///    только выбранный (`dns_server == null` → пустой список). §354: если
+///    выбранный — группа (§312), вместе с ней едут её члены (одноуровнево),
+///    иначе группа приедет пустой → EmptyDnsGroup (fatal).
 /// 4. Если `detour == 'direct-out'` в DNS-сервере — удаляем ключ (direct
 ///    не требует detour).
 /// 5. Валидация критичных полей — если после substitute у `rule` нет
@@ -410,18 +413,46 @@ PresetFragments expandPreset(
     }
   }
 
+  // Какие из `preset.dns_servers` эмитим.
+  //
+  // Пресет БЕЗ var'а `dns_server` (§354: ru-direct — группа зашита литералом
+  // в правилах) → эмитим ВСЕ объявленные: выбирать нечего, а недоэмиссия
+  // оставила бы правило со ссылкой в пустоту.
+  //
+  // Пресет С var'ом (fakeip и пр.) → только выбранный (контракт §033). Если
+  // выбранный — ГРУППА (§312), вместе с ней едут её члены: без них группа
+  // приедет пустой (эмиссионный фильтр §312 выкинет их как unknown, дальше
+  // validator упрётся в EmptyDnsGroup — fatal до старта ядра). Одноуровнево:
+  // вложенных групп в шаблоне нет, а ядро вложенность разворачивает само.
+  final hasDnsServerVar = preset.vars.any((v) => v.name == 'dns_server');
   final selectedDns = varsMap['dns_server'] as String?;
-  final dnsServers = <Map<String, dynamic>>[];
-  if (selectedDns != null && selectedDns.isNotEmpty) {
-    for (final s in preset.dnsServers) {
-      if (s['tag'] != selectedDns) continue;
-      final copy = deepCopyJson(s);
-      final result = substituteVars(copy, varsMap);
-      if (result is! Map<String, dynamic>) continue;
-      if (result['tag'] is! String) continue;
-      normalizeDnsDetour(result);
-      dnsServers.add(result);
+  Set<String>? wanted; // null = без фильтра (эмитим все)
+  if (hasDnsServerVar) {
+    wanted = {};
+    if (selectedDns != null && selectedDns.isNotEmpty) {
+      wanted.add(selectedDns);
+      for (final s in preset.dnsServers) {
+        if (s['tag'] != selectedDns) continue;
+        if (s['type'] != 'group') break;
+        for (final m in (s['servers'] as List<dynamic>? ?? const [])) {
+          if (m is String && m.isNotEmpty) wanted.add(m);
+        }
+        break;
+      }
     }
+  }
+
+  // Порядок как в шаблоне (группа объявлена перед членами); дедуп по тегу
+  // делает mergeFragments.
+  final dnsServers = <Map<String, dynamic>>[];
+  for (final s in preset.dnsServers) {
+    if (wanted != null && !wanted.contains(s['tag'])) continue;
+    final copy = deepCopyJson(s);
+    final result = substituteVars(copy, varsMap);
+    if (result is! Map<String, dynamic>) continue;
+    if (result['tag'] is! String) continue;
+    normalizeDnsDetour(result);
+    dnsServers.add(result);
   }
 
   return PresetFragments(

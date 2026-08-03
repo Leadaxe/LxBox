@@ -187,6 +187,9 @@ class SettingsStorage {
     'probe_ms_green',
     'probe_ms_yellow',
     'probe_ms_orange',
+    // Автопинг при старте (App Settings; §349 — был сиротой: экспорт клал,
+    // default-deny импорта отбрасывал → терялся при restore, §221)
+    'auto_ping_on_start',
     // Automation API (§047)
     'automation_receive_enabled',
     'automation_emit_lifecycle',

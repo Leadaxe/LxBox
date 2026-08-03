@@ -33,6 +33,7 @@ void viewOutboundJson(
   HomeState state, {
   required SubscriptionController subController,
   required HomeController homeController,
+  bool openDependents = false, // §355 — сразу вкладка Dependents (⚠-тап)
 }) {
   // §311 — конфига нет вовсе (ни файла, ни снапшота): молча выходить нельзя
   // (§277/§278) — сообщение то же, причина для юзера одна «данных по тегу нет».
@@ -62,6 +63,7 @@ void viewOutboundJson(
       config: intro,
       subController: subController,
       homeController: homeController,
+      openDependents: openDependents, // §355
       // §099 — copy-варианты JSON перенесены из контекстного меню сюда.
       onCopy: (mode) => copyNodeJson(context, tag, state, mode),
     ),

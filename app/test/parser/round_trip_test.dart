@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_warning.dart';
+import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// Round-trip §4 спеки 026: `parseUri(spec.toUri()) ≈ spec`. Сравнение без
@@ -87,6 +89,76 @@ void main() {
       final b = parseHysteria2(a.toUri())!;
       expect(b.upMbps, isNull);
       expect(b.downMbps, isNull);
+    });
+
+    // §358 — obfs=gecko молча терялся на эмите: URI-round-trip его сохранял,
+    // а emitRaw писал секцию только для salamander. Инвариант ниже —
+    // parse → emitRaw, а не только parse → toUri → parse.
+    test('§358 — Hysteria2 gecko: тип и размеры пакета доезжают до JSON', () {
+      final a = parseHysteria2(
+        'hysteria2://secret@h:443?obfs=gecko&obfs-password=op'
+        '&obfs-min-packet-size=100&obfs-max-packet-size=1200&sni=h#H',
+      )!;
+      expect(a.obfs, 'gecko');
+      expect(a.obfsMinPacketSize, 100);
+      expect(a.obfsMaxPacketSize, 1200);
+
+      final obfs =
+          a.emitRaw(const TemplateVars()).map['obfs'] as Map<String, dynamic>;
+      expect(obfs['type'], 'gecko');
+      expect(obfs['password'], 'op');
+      expect(obfs['min_packet_size'], 100);
+      expect(obfs['max_packet_size'], 1200);
+    });
+
+    test('§358 — Hysteria2 gecko: round-trip через URI', () {
+      final a = parseHysteria2(
+        'hysteria2://secret@h:443?obfs=gecko&obfs-password=op'
+        '&obfs-min-packet-size=100&obfs-max-packet-size=1200&sni=h#H',
+      )!;
+      final b = parseHysteria2(a.toUri())!;
+      expect(b.obfs, 'gecko');
+      expect(b.obfsPassword, 'op');
+      expect(b.obfsMinPacketSize, 100);
+      expect(b.obfsMaxPacketSize, 1200);
+    });
+
+    test('§358 — salamander: gecko-размеры в JSON не попадают', () {
+      final a = parseHysteria2(
+        'hysteria2://secret@h:443?obfs=salamander&obfs-password=op'
+        '&obfs-min-packet-size=100&sni=h#H',
+      )!;
+      final obfs =
+          a.emitRaw(const TemplateVars()).map['obfs'] as Map<String, dynamic>;
+      expect(obfs['type'], 'salamander');
+      expect(obfs.containsKey('min_packet_size'), isFalse);
+      expect(obfs.containsKey('max_packet_size'), isFalse);
+    });
+
+    test('§358 — неизвестный тип отброшен: варнинг, в JSON нет obfs', () {
+      final a = parseHysteria2(
+        'hysteria2://secret@h:443?obfs=xyz&obfs-password=op&sni=h#H',
+      )!;
+      expect(a.obfs, isEmpty);
+      expect(a.warnings.whereType<UnknownObfsWarning>(), hasLength(1));
+      expect(
+        a.emitRaw(const TemplateVars()).map.containsKey('obfs'),
+        isFalse,
+        reason: 'unknown obfs type = fatal ВСЕГО конфига при старте ядра',
+      );
+    });
+
+    test('§358 — obfs без пароля отброшен: варнинг, в JSON нет obfs', () {
+      final a = parseHysteria2(
+        'hysteria2://secret@h:443?obfs=gecko&sni=h#H',
+      )!;
+      expect(a.obfs, isEmpty);
+      expect(a.warnings.whereType<MissingObfsPasswordWarning>(), hasLength(1));
+      expect(
+        a.emitRaw(const TemplateVars()).map.containsKey('obfs'),
+        isFalse,
+        reason: 'missing obfs password = fatal ВСЕГО конфига при старте ядра',
+      );
     });
 
     test('TUIC: all core fields preserved', () {

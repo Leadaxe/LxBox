@@ -561,4 +561,45 @@ void main() {
       expect((cfg['route'] as Map)['final'], 'direct-out');
     });
   });
+
+  group('§351 — теги каналов зарезервированы в аллокаторе', () {
+    test('узлы-тёзки vpn-1 / vpn-1-auto получают суффикс, дублей нет',
+        () async {
+      // До §351 селектор канала эмитился с фиксированным `c.tag` МИМО
+      // allocateTag — узел подписки с меткой `vpn-1` давал два outbound
+      // с одним тегом → отказ ядра на старте.
+      final specs = [
+        parseUri('vless://u9@h9.com:443?type=ws&security=tls#vpn-1')!,
+        parseUri('vless://u8@h8.com:443?type=ws&security=tls#vpn-1-auto')!,
+      ];
+      final list = UserServer(
+        id: 'u2',
+        name: 'N2',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: specs,
+      );
+      final r = await buildConfig(
+        lists: [list],
+        template: template(),
+        settings: BuildSettings(
+          channels: [const Channel(tag: 'vpn-1', label: 'X')],
+        ),
+      );
+      expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
+      final outs = (r.config['outbounds'] as List).cast<Map<String, dynamic>>();
+      final tags = outs.map((o) => o['tag']).toList();
+      expect(tags.toSet().length, tags.length,
+          reason: 'дубль тега = отказ ядра на старте: $tags');
+      expect(byTag(outs, 'vpn-1')['type'], 'selector',
+          reason: 'vpn-1 — канал, не узел');
+      expect(tags, contains('vpn-1-1'),
+          reason: 'узел-тёзка селектора переехал на суффикс');
+      expect(tags, contains('vpn-1-auto-1'),
+          reason: 'autoTag зарезервирован даже без эмита двойника');
+    });
+  });
 }

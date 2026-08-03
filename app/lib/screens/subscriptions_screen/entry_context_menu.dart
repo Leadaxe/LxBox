@@ -53,7 +53,7 @@ void showEntryContextMenu(
               Navigator.pop(ctx);
             },
           ),
-          // §338 — сразу системный share-sheet с полным URL, без
+          // §347 — сразу системный share-sheet с полным URL, без
           // промежуточного диалога masked/full. Для file-подписки (§129)
           // пункт скрыт: `file:<uuid>` — локальный ключ кэша, шарить нечего.
           if (entry.url.isNotEmpty && !isFileSubscription(entry.url))

@@ -15,6 +15,10 @@ mixin _PingMixin on ChangeNotifier {
   void _addDebug(DebugSource source, String message);
   Future<void> reloadProxies();
 
+  /// §355 — пересчёт графа detour-зависимостей после свежих замеров.
+  /// Реализация — HomeController; ping-пути дёргают после записи delay.
+  void _recomputeDependencyHealth();
+
   /// Single-node URLTest через CommandClient `urlTestOutbound` (§122, unary RPC).
   /// Использует per-group resolved url/timeout (§040) — контекст = `selectedGroup`.
   /// ИНВАРИАНТ результата (§4.6): `error` — единственный признак провала;
@@ -28,10 +32,14 @@ mixin _PingMixin on ChangeNotifier {
     final group = _state.selectedGroup;
     final url = pingUrlFor(group);
     final timeoutMs = pingTimeoutFor(group);
+    // §349 — канал снимаем ДО await (как massPingChannel в §325): замер,
+    // снятый URL'ом канала A, не должен уехать в карту канала B, если юзер
+    // переключился за время висящего пинга (до 10с таймаута).
+    final channelKey = _state.delayChannelKey;
     try {
       final r = await _cc.urlTestOutbound(nodeTag, link: url, timeoutMs: timeoutMs);
       final ms = r.lastDelayValue; // ok → delay (вкл. 0мс); fail → -1
-      final nextDelay = _delaysWith({nodeTag: ms});
+      final nextDelay = _delaysWith({nodeTag: ms}, channel: channelKey);
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
       if (r.ok) {
         _emit(_state.copyWith(delayByChannel: nextDelay, pingBusy: nextBusy));
@@ -44,7 +52,7 @@ mixin _PingMixin on ChangeNotifier {
         _rescueGroupsSelecting(nodeTag);
       }
     } catch (e) {
-      final nextDelay = _delaysWith({nodeTag: -1});
+      final nextDelay = _delaysWith({nodeTag: -1}, channel: channelKey);
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
       final msg = _formatProbeError(nodeTag, url, e);
       _emit(_state.copyWith(
@@ -52,6 +60,8 @@ mixin _PingMixin on ChangeNotifier {
       _addDebug(DebugSource.app, msg.renderEn());
       _rescueGroupsSelecting(nodeTag);
     }
+    // §355 — одиночный замер мог убить/оживить корень беды.
+    _recomputeDependencyHealth();
   }
 
   /// §325 — записать замеры в карту одного канала, не трогая остальные.
@@ -323,6 +333,9 @@ mixin _PingMixin on ChangeNotifier {
       pendingDelay.clear();
       pendingBusy.clear();
       _emit(_state.copyWith(delayByChannel: nextDelay, pingBusy: nextBusy));
+      // §355 — batch свежих замеров применён: пересчёт корней беды (гейт по
+      // изменению результата внутри — лишние вызовы дёшевы).
+      _recomputeDependencyHealth();
     }
 
     final flushTimer =

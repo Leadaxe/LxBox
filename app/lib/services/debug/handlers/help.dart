@@ -184,11 +184,38 @@ POST   /subs[?rebuild=true]                    Create. Body {"input":"<url|URI|W
                                                  JSON with multiple outbounds may create several entries.
 PATCH  /subs/{id}[?rebuild=true][?reveal=true] Update meta, any subset: {enabled,name,url,tag_prefix,
                                                  update_interval_hours,override_detour,register_detour_servers,
-                                                 register_detour_in_auto,use_detour_servers,replace_detour_chain}.
+                                                 register_detour_in_auto,use_detour_servers,replace_detour_chain,
+                                                 on_update_action,import_rules_enabled,identity}.
                                                  url applies to SubscriptionServers only (no-op for UserServer).
+                                                 on_update_action: rebuild|reload|none.
+                                                 identity is a tristate: omit = keep, null = Default (global
+                                                 identity), object = Custom. The object is a PATCH over the
+                                                 snapshot (initialised from globals when switching to Custom):
+                                                 {user_agent,send_hwid,hwid,device_os,ver_os,device_model}.
+                                                 So {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables
+                                                 HWID for this subscription only, leaving globals untouched.
 DELETE /subs/{id}[?rebuild=true]               Remove
 POST   /subs/{id}/refresh                      Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.
 POST   /subs/reorder                           Body {"order":[id1,id2,...]} — exactly the current ids
+
+Import rules (per subscription, applied to parsed nodes on the NEXT refresh —
+existing nodes are not re-parsed in place). Ordered collection without ids:
+addressed by position, like folder members. Indexes shift after DELETE/reorder —
+build the next call from the snapshot returned in "rules". Non-subscription
+entries → 409.
+
+GET    /subs/{id}/rules                        List: {import_rules_enabled, rules:[{index,usable,...}]}
+POST   /subs/{id}/rules[?index=N]              Create (201). ImportRule shape:
+                                                 {conditions:[{path,op,pattern,negate,case_sensitive}],
+                                                 match:all|any, action:replace|disable|enable, target_path,
+                                                 replacement, replace_mode:set|substitute, substitute, enabled}.
+                                                 op: contains|equals|matches. index inserts at position
+                                                 (default: append). "usable":false = rule parses but will be
+                                                 skipped on apply (e.g. Replace without target_path) — allowed.
+GET    /subs/{id}/rules/{idx}                  Single rule
+PATCH  /subs/{id}/rules/{idx}                  Partial update, same field subset
+DELETE /subs/{id}/rules/{idx}                  Remove rule
+POST   /subs/{id}/rules/reorder                Body {"order":[old indexes in new order]} — full permutation
 
 `?rebuild=true` on any write → auto rebuild-config. Writes go through
 SubscriptionController (fetch-state machine + UI notify), not SettingsStorage directly.
@@ -306,6 +333,14 @@ GET    /profiler/live/stream                   SSE — all system-wide events li
                                                  TCP/UDP open/close across all packages).
 GET    /profiler/live/unattributed             Recent unattributed ring (DNS-fail without owner / TCP without
                                                  process attribution). Used for banner detection.
+
+=== Support feed (§356/§357) ===
+
+GET  /support/state                            Raw support_state.json (read/baseline/snooze/active) + app_version + total_active_seconds.
+POST /support/reset                            Wipe read/baseline/snooze/cache — feed starts over. ?keep_active=false also zeroes the activity counter.
+POST /support/preview                          Body = ONE feed-format message object → immediate fullscreen show, ALL gates bypassed.
+                                                 ?dry=true (default) — buttons work but markRead/snooze are NOT persisted; ?dry=false — persisted.
+                                                 ?snooze_hours=N — snooze_active_hours of the synthetic feed (default 10). Requires UI process (409 otherwise).
 
 === Diagnostics ===
 
@@ -481,10 +516,17 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Alias /state/subs'},
     {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false'}, 'description': 'Single entry'},
     {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries)'},
-    {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain}', 'description': 'Update meta. url is SubscriptionServers-only (no-op for UserServer).'},
+    {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity}', 'description': 'Update meta. url is SubscriptionServers-only (no-op for UserServer). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
     {'method': 'DELETE', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove entry'},
     {'method': 'POST', 'path': '/subs/{id}/refresh', 'description': 'Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.'},
     {'method': 'POST', 'path': '/subs/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (exactly the current ids)'},
+    // Import rules CRUD (per subscription)
+    {'method': 'GET', 'path': '/subs/{id}/rules', 'description': 'List import rules: {import_rules_enabled, rules:[{index,usable,...}]}. Non-subscription entry → 409.'},
+    {'method': 'POST', 'path': '/subs/{id}/rules', 'params': {'index': 'insert position (default: append)', 'rebuild': 'true|false'}, 'body': '{conditions:[{path,op:contains|equals|matches,pattern,negate,case_sensitive}],match:all|any,action:replace|disable|enable,target_path,replacement,replace_mode:set|substitute,substitute,enabled}', 'description': 'Create rule (201). Applied on the NEXT refresh — existing nodes are not re-parsed. "usable":false = parses but will be skipped on apply (allowed, e.g. Replace without target_path).'},
+    {'method': 'GET', 'path': '/subs/{id}/rules/{idx}', 'description': 'Single rule by position'},
+    {'method': 'PATCH', 'path': '/subs/{id}/rules/{idx}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset of the rule shape', 'description': 'Partial update of one rule'},
+    {'method': 'DELETE', 'path': '/subs/{id}/rules/{idx}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove rule. Indexes shift — rebuild the next call from the returned "rules".'},
+    {'method': 'POST', 'path': '/subs/{id}/rules/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder (full permutation of 0..n-1). Order matters: rules apply sequentially, last enable/disable wins.'},
     // Channels CRUD (routing channels vpn-1..vpn-10)
     {'method': 'GET', 'path': '/channels', 'description': 'List routing channels (storage shape, snake_case)'},
     {'method': 'GET', 'path': '/channels/{tag}', 'description': 'Single channel (tag = vpn-1..vpn-10)'},
@@ -525,6 +567,10 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/profiler/live', 'params': {'seconds': 'window (default 60)'}, 'description': 'Global rolling buffer snapshot — TCP/UDP open/close + DNS resolves of all packages.'},
     {'method': 'GET', 'path': '/profiler/live/stream', 'description': 'SSE — system-wide events live.'},
     {'method': 'GET', 'path': '/profiler/live/unattributed', 'description': 'Recent unattributed ring (DNS-fail / TCP without attribution).'},
+    // Support feed (§356/§357)
+    {'method': 'GET', 'path': '/support/state', 'description': 'support_state.json (read/baseline/snooze/active) + app_version + total_active_seconds'},
+    {'method': 'POST', 'path': '/support/reset', 'params': {'keep_active': 'true|false'}, 'description': 'Wipe read/baseline/snooze/cache; keep_active=false also zeroes the activity counter'},
+    {'method': 'POST', 'path': '/support/preview', 'params': {'dry': 'true|false', 'snooze_hours': 'N'}, 'description': 'Body = one feed-format message → immediate fullscreen show, gates bypassed; dry=true (default) does not persist markRead/snooze'},
     // Diagnostics
     {'method': 'GET', 'path': '/diag/dump', 'description': 'Full DumpBuilder JSON-pack'},
     {'method': 'GET', 'path': '/diag/exit-info', 'description': 'ApplicationExitInfo entries (API 30+; empty on lower)'},

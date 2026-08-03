@@ -9,10 +9,14 @@ import 'package:path_provider/path_provider.dart';
 /// mtime settings-файла участвует в §076 configDirty-сравнении — писали бы
 /// мы туда, каждый старт дирявил бы конфиг и гонял лишний rebuild.
 ///
-/// Поля: `active_seconds` (суммарное tunnel-up время), `dismissed_id`
-/// («не показывать» для кампании), `snooze_after_seconds` («позже» —
-/// порог активного времени для повтора), `cache_json` (последний удачно
-/// скачанный support.json — офлайн-показ).
+/// Поля (§356): `active_seconds` (суммарное tunnel-up время),
+/// `session_credited` (сколько секунд текущей сессии туннеля уже зачислено —
+/// нативный учёт), `read` (`{id сообщения → версия приложения при
+/// «Прочитал»}`), `baseline_seconds`/`baseline_version` (точка отсчёта
+/// `min_active_hours`; двигается при смене версии и «Прочитал»),
+/// `snooze_after_seconds` («Later» — порог активного времени для повтора),
+/// `cache_json` (последний удачно скачанный support.json — офлайн-показ).
+/// v1-ключ `dismissed_id` мёртв — игнорируется, не мигрируется.
 class SupportState {
   SupportState._();
   static final SupportState I = SupportState._();
@@ -54,8 +58,22 @@ class SupportState {
   Future<String> getString(String key) async =>
       (await _load())[key] as String? ?? '';
 
+  /// §356 — строковая карта (ключ `read`). Не-map / битое → пустая.
+  Future<Map<String, String>> getStringMap(String key) async {
+    final v = (await _load())[key];
+    if (v is! Map) return <String, String>{};
+    return v.map((k, val) => MapEntry(k.toString(), val.toString()));
+  }
+
   Future<void> set(String key, Object value) async {
     (await _load())[key] = value;
+    await _save();
+  }
+
+  /// §356 — несколько ключей одной записью на диск (атомарность пары
+  /// baseline_seconds/baseline_version и read/baseline при «Прочитал»).
+  Future<void> setAll(Map<String, Object> values) async {
+    (await _load()).addAll(values);
     await _save();
   }
 

@@ -1975,12 +1975,18 @@ class SubscriptionController extends ChangeNotifier {
       // зависит.
       final sameComposition = _compositionKey(current.nodes, current.disabledHashes.keys) ==
           _compositionKey(result.nodes, nextDisabled.keys);
+      // §349 — выключенная подписка в конфиг не эмитится (билдер пропускает
+      // `!list.enabled`): её состав на конфиг не влияет, флаг не поднимаем.
+      // Иначе §337 («обновлять выключенные») давал ложную синюю плашку на
+      // каждом проходе с новым составом — пересборке нечего менять. При
+      // включении подписки dirty поднимет сам тоггл enabled.
+      final affectsConfig = current.enabled;
       // Единственный persist фетч-пути, которому ПОЗВОЛЕНО поднять флаг — и
       // только при реально изменившемся составе. Все остальные (попытка,
       // фейлы, sweep) — метаданные с keepDirtyFlag: true, поэтому никакого
       // «запомнить и восстановить» здесь больше нет (см. историю §331: у
       // restore-варианта была гонка с правками юзера во время fetch'а).
-      await _persist(keepDirtyFlag: sameComposition);
+      await _persist(keepDirtyFlag: sameComposition || !affectsConfig);
       compositionChanged = !sameComposition;
       if (sameComposition) {
         AppLog.I.debug('§331: composition unchanged for $shortUrl');
@@ -1992,7 +1998,9 @@ class SubscriptionController extends ChangeNotifier {
       //
       // Авто-триггеры реакцию получают в `maybeUpdateAll` — там она
       // агрегируется за весь проход (один reload на N подписок, а не N).
-      if (trigger == UpdateTrigger.manual && !sameComposition) {
+      // §349 — и реакция только для включённой: выключенная не в конфиге,
+      // пересборка/reload ей нечего применять (зеркало гейта auto_updater).
+      if (trigger == UpdateTrigger.manual && !sameComposition && affectsConfig) {
         switch (next.onUpdateAction) {
           case SubscriptionOnUpdateAction.reload:
             await _autoUpdater?.applyReaction(reload: true);

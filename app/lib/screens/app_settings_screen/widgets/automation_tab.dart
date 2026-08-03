@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../services/automation/event_emitter.dart';
+import '../../../services/project_links.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/url_launcher.dart' as ul;
 import '../../../vpn/box_vpn_client.dart';
@@ -30,7 +31,7 @@ class AutomationTab extends StatefulWidget {
 
 class _AutomationTabState extends State<AutomationTab> {
   static const _docsUrl =
-      'https://github.com/Leadaxe/LxBox/blob/main/docs/AUTOMATION.md';
+      ProjectLinks.automationDoc;
 
   /// (action-строка, подпись с extras) для UI-списка команд.
   static const _commands = <(String, String)>[

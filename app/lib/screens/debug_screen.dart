@@ -16,7 +16,12 @@ import 'debug/profiling_tab.dart';
 import '../services/l10n/locale_controller.dart';
 
 class DebugScreen extends StatefulWidget {
-  const DebugScreen({super.key});
+  const DebugScreen({super.key, this.initialTab = 0});
+
+  /// §357 — стартовая вкладка (0 Log · 1 Crashes · 2 OOM · 3 Profiling),
+  /// паттерн `AppSettingsScreen.initialTab`. Используется lxbox-навигацией
+  /// support-ленты (`route:debug/<tab>`, `route:profiler`).
+  final int initialTab;
 
   @override
   State<DebugScreen> createState() => _DebugScreenState();
@@ -97,6 +102,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 4,
+      initialIndex: widget.initialTab.clamp(0, 3),
       child: AnimatedBuilder(
         animation: AppLog.I,
         builder: (context, _) {

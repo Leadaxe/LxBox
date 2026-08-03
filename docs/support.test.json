@@ -1,16 +1,92 @@
 {
-  "$schema_comment": "§105 — ТЕСТОВЫЙ стенд support-message (порог 0 → показ сразу). Прод-канал — docs/support.json на main. Сборка с этим каналом: ./scripts/build-local-apk.sh --dart-define=LXBOX_SUPPORT_URL=https://raw.githubusercontent.com/Leadaxe/LxBox/develop/docs/support.test.json",
-  "id": "support-test",
-  "min_active_hours": 0,
-  "min_session_minutes": 0,
+  "$schema_comment": "§356/§357 — ТЕСТОВЫЙ стенд support-ленты (пороги 0 → показ сразу; №2 — кнопки lxbox://). Прод-канал — docs/support.json на main. Сборка с этим каналом: ./scripts/build-local-apk.sh --dart-define=LXBOX_SUPPORT_URL=https://raw.githubusercontent.com/Leadaxe/LxBox/develop/docs/support.test.json",
   "snooze_active_hours": 0,
-  "title": "Привет! Я автор этого приложения",
-  "message": "Чтобы L×Box заработал, было потрачено множество времени и сил — собственное ядро, обфускация, и всё это бесплатно и без рекламы.\n\nЯ вижу, что приложение приносит тебе пользу (VPN отработал уже больше 3 часов 🎉). Поддержи проект, пожалуйста — это занимает минуту:\n\n⭐ Отметь звездой репозитории на GitHub\n💬 Отпишись в теме на 4PDA\n💰 Или поддержи деньгами\n\nНе оставайся безучастным — каждая звезда и каждый отзыв реально помогают проекту жить!",
-  "links": [
-    { "label": "⭐ LxBox — Android-клиент", "url": "https://github.com/Leadaxe/LxBox" },
-    { "label": "⭐ sing-box-lx — ядро", "url": "https://github.com/Leadaxe/sing-box-lx" },
-    { "label": "💬 Тема на 4PDA", "url": "https://4pda.to/forum/index.php?showtopic=1122662" },
-    { "label": "👥 Группа поддержки в Telegram", "url": "https://t.me/singbox_launcher/" },
-    { "label": "💰 Поддержать деньгами", "url": "https://t.me/singbox_launcher/340/3621" }
+  "messages": [
+    {
+      "id": "test-001",
+      "since_version": "2.0.0",
+      "min_active_hours": 0,
+      "min_session_minutes": 0,
+      "read_delay_seconds": 3,
+      "i18n": {
+        "en": {
+          "title": "Test message #1 (en)",
+          "message": "First message of the test feed, fullscreen mode.\n\n«Got it» unlocks after 3 seconds, records the app version and advances the queue to #2. «Later» snoozes the whole feed (snooze is 0 here — next open shows again). The X in the corner closes without marking anything.",
+          "links": [
+            {
+              "label": "⭐ L×Box on GitHub",
+              "url": "https://github.com/Leadaxe/LxBox"
+            }
+          ]
+        },
+        "ru": {
+          "title": "Тестовое сообщение №1 (ru)",
+          "message": "Первое сообщение тестовой ленты, полноэкранный режим.\n\n«Прочитал» разблокируется через 3 секунды, записывает версию приложения и двигает очередь к №2. «Позже» откладывает всю ленту (снуз тут 0 — при следующем открытии покажется снова). Крестик в углу закрывает без пометок.",
+          "links": [
+            {
+              "label": "⭐ L×Box на GitHub",
+              "url": "https://github.com/Leadaxe/LxBox"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "test-002",
+      "since_version": "2.0.0",
+      "min_active_hours": 0,
+      "min_session_minutes": 0,
+      "read_delay_seconds": 5,
+      "i18n": {
+        "en": {
+          "title": "Test message #2 (en, lxbox:// buttons)",
+          "message": "Second message — deep-link buttons.\n\n«Open profiler» jumps to Statistics → Profiler and marks this message as read. «DNS settings» opens the DNS screen WITHOUT marking as read (mark_read: false — the message will come back). «Add my server» prefills the Servers input field — you press «+» yourself. The hidden button with a future action must NOT be visible.",
+          "links": [
+            {
+              "label": "🔍 Open profiler",
+              "url": "lxbox://route:profiler"
+            },
+            {
+              "label": "⚙️ DNS settings",
+              "url": "lxbox://route:dns",
+              "mark_read": false
+            },
+            {
+              "label": "➕ Add my server",
+              "url": "lxbox://add:vless://c90f26f0-5a20-4573-a31a-c27b3c96933e@154.83.246.52:443?flow=xtls-rprx-vision&fp=firefox&pbk=pPi-WO8qQFFZ9UJWNLW9YClbjcoAAZWJQ2_FM3Kjhz8&security=reality&sid=500aec9e9e5e2212&sni=storage.yandex.net#%F0%9F%87%B3%F0%9F%87%B1%E2%9A%A1%D0%9D%D0%B8%D0%B4%D0%B5%D1%80%D0%BB%D0%B0%D0%BD%D0%B4%D1%8B",
+              "mark_read": false
+            },
+            {
+              "label": "🙈 Hidden future action",
+              "url": "lxbox://teleport:mars"
+            }
+          ]
+        },
+        "ru": {
+          "title": "Тестовое сообщение №2 (ru, кнопки lxbox://)",
+          "message": "Второе сообщение — кнопки-переходы.\n\n«Открыть профайлер» ведёт в Статистику → Профайлер и помечает сообщение прочитанным. «Настройки DNS» открывает экран DNS БЕЗ пометки (mark_read: false — сообщение вернётся). «Добавить сервер» подставляет ссылку в поле на Servers — «+» жмёшь сам. Скрытая кнопка с будущим действием НЕ должна быть видна.",
+          "links": [
+            {
+              "label": "🔍 Открыть профайлер",
+              "url": "lxbox://route:profiler"
+            },
+            {
+              "label": "⚙️ Настройки DNS",
+              "url": "lxbox://route:dns",
+              "mark_read": false
+            },
+            {
+              "label": "➕ Добавить сервер",
+              "url": "lxbox://add:vless://c90f26f0-5a20-4573-a31a-c27b3c96933e@154.83.246.52:443?flow=xtls-rprx-vision&fp=firefox&pbk=pPi-WO8qQFFZ9UJWNLW9YClbjcoAAZWJQ2_FM3Kjhz8&security=reality&sid=500aec9e9e5e2212&sni=storage.yandex.net#%F0%9F%87%B3%F0%9F%87%B1%E2%9A%A1%D0%9D%D0%B8%D0%B4%D0%B5%D1%80%D0%BB%D0%B0%D0%BD%D0%B4%D1%8B",
+              "mark_read": false
+            },
+            {
+              "label": "🙈 Скрытая будущая кнопка",
+              "url": "lxbox://teleport:mars"
+            }
+          ]
+        }
+      }
+    }
   ]
 }

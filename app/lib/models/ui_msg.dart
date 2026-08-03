@@ -308,6 +308,31 @@ final class StopReasonMsg extends UiMsg {
   String renderWith(GetLocalText t) => reason.messageWith(t);
 }
 
+/// §355 — DNS-сервер зависит от мёртвой ноды (через detour напрямую или
+/// через канал, где она выбрана): его домены тихо не резолвятся. Баннер
+/// показывается ТОЛЬКО для DNS-ветки графа зависимостей (решение юзера
+/// 03.08.2026); больные ноды обходятся ⚠-меткой в списке.
+/// dns/root/via — wire-теги конфига, не переводятся.
+final class DnsViaDeadNodeMsg extends UiMsg {
+  final String dnsTag;
+  final String rootTag;
+  final String via; // '' → прямой detour (без части "selected in …")
+  const DnsViaDeadNodeMsg(this.dnsTag, this.rootTag, this.via);
+
+  @override
+  List<Object?> get props => [dnsTag, rootTag, via];
+
+  @override
+  String renderWith(GetLocalText t) => via.isEmpty
+      ? t.s('DNS server "%1\$s" routes through dead node "%2\$s".', dnsTag,
+          rootTag)
+      : t.s(
+          'DNS server "%1\$s" routes through dead node "%2\$s" (selected in "%3\$s").',
+          dnsTag,
+          rootTag,
+          via);
+}
+
 /// Ошибка ping/URLTest: `<target> → <host> — <reason>` (или без host).
 /// target/host — wire-значения (тег ноды, хост URL), не переводятся;
 /// джойнеры — пунктуация (spec §4.6).

@@ -10,7 +10,18 @@ import '../services/app_log.dart';
 import '../services/error_humanize.dart';
 import '../services/support/active_time_tracker.dart';
 import '../services/support/support_message.dart';
+import '../services/support/support_nav.dart';
 import '../services/version_info.dart';
+import 'about_screen.dart';
+import 'app_settings_screen.dart';
+import 'config_screen.dart';
+import 'debug_screen.dart';
+import 'dns_settings_screen.dart';
+import 'home/support_message_screen.dart';
+import 'routing_screen.dart';
+import 'settings_screen.dart';
+import 'speed_test_screen.dart';
+import 'stats_screen.dart';
 import 'home/widgets/detour_cycle_sheet.dart';
 import 'home/widgets/traffic_bar.dart';
 import 'owner_navigation.dart';
@@ -171,6 +182,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       vsync: this,
       duration: const Duration(seconds: 2),
     );
+    // §356 — нативный аптайм туннеля как источник счётчика наработки:
+    // переживает смахивание приложения, недостающее доливается при возврате.
+    ActiveTimeTracker.I.uptimeMsProvider = _vpn.getTunnelUptimeMs;
     // §031 Debug API: публикуем контроллеры в реестр и, если пользователь
     // включал Debug API раньше, поднимаем сервер на старте.
     DebugRegistry.I.home = _controller;
@@ -345,6 +359,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // (gate внутри: foreground + сессия ≥5мин + суммарно ≥3ч). Терминальный.
     if (isUp) unawaited(_maybeShowSupport());
 
+    // §357 — Debug API `/support/preview`: одноразовый запрос немедленного
+    // показа сообщения вне гейтов ленты (пороги/очередь/туннель не важны).
+    final preview = _controller.takeSupportPreview();
+    if (preview != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(_pushSupportMessage(
+          preview.feed,
+          preview.message,
+          dryRun: preview.dryRun,
+        ));
+      });
+    }
+
     _prevTunnel = now;
     _prevError = nowError;
   }
@@ -495,18 +523,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     );
   }
 
-  // §105 — состояние показа support-диалога (за процесс).
+  // §105/§356 — состояние показа support-ленты (за процесс).
   AppLifecycleState _lifecycle = AppLifecycleState.resumed;
-  SupportMessage? _supportMsg;
-  bool _supportFetchTried = false;
+  SupportFeed? _supportFeed;
+  DateTime? _supportNextFetchAt;
   bool _supportShown = false;
   bool _supportInFlight = false;
 
-  /// §105 — показ «поддержи автора» при открытии HOME, когда пользователь
-  /// реально пользуется: app на переднем плане, туннель активен, текущая
-  /// сессия (`now − connectedSince`) ≥ `min_session_minutes` И суммарное
-  /// время ≥ `min_active_hours`. Вызывается из app-resume и из
-  /// `_onControllerChange` (тикает ~раз/сек при connected) — гейт ловит
+  /// §105/§356 — показ очередного сообщения ленты «поддержи автора» при
+  /// открытии HOME, когда пользователь реально пользуется: app на переднем
+  /// плане, туннель активен, текущая сессия (`now − connectedSince`) ≥
+  /// `min_session_minutes` И наработка от baseline ≥ `min_active_hours`
+  /// (выбор — `SupportMessageService.nextToShow`). Вызывается из app-resume
+  /// и из `_onControllerChange` (тикает ~раз/сек при connected) — гейт ловит
   /// момент, когда сессия дорастает до порога, пока экран открыт.
   /// Терминальный (`_supportShown`) — один показ за процесс; fetch — однократ.
   Future<void> _maybeShowSupport() async {
@@ -516,21 +545,140 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (since == null) return; // туннель не активен — гейт «пользуется сейчас»
     _supportInFlight = true;
     try {
-      if (!_supportFetchTried) {
-        _supportFetchTried = true; // одна попытка fetch за процесс
-        _supportMsg = await SupportMessageService.I.fetchOrCached();
+      // §356 — fetch до первого успеха, с бэкоффом 30с. Одна попытка за
+      // процесс сгорала бы ровно в самый ненадёжный момент: первый тик
+      // connected, когда туннель поднят, но нода ещё не пропускает трафик
+      // (device-verified на эмуляторе) — и лента молчала до перезапуска.
+      if (_supportFeed == null) {
+        final next = _supportNextFetchAt;
+        if (next != null && DateTime.now().isBefore(next)) return;
+        _supportNextFetchAt =
+            DateTime.now().add(const Duration(seconds: 30));
+        _supportFeed = await SupportMessageService.I.fetchOrCached();
       }
-      final m = _supportMsg;
-      if (m == null || !mounted) return;
+      final feed = _supportFeed;
+      if (feed == null || !mounted) return;
       final session = DateTime.now().difference(since).inSeconds;
-      final ok = await SupportMessageService.I
-          .shouldShow(m, currentSessionSeconds: session);
-      if (!ok || _supportShown || !mounted) return;
+      final m = await SupportMessageService.I
+          .nextToShow(feed, currentSessionSeconds: session);
+      if (m == null || _supportShown || !mounted) return;
       _supportShown = true;
-      await showSupportDialog(context, m);
+      await _pushSupportMessage(feed, m);
     } finally {
       _supportInFlight = false;
     }
+  }
+
+  /// §357 — полноэкранный показ сообщения ленты (вместо AlertDialog).
+  Future<void> _pushSupportMessage(
+    SupportFeed feed,
+    SupportMessage m, {
+    bool dryRun = false,
+  }) {
+    return Navigator.of(context).push(MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => SupportMessageScreen(
+        feed: feed,
+        message: m,
+        dryRun: dryRun,
+        buildScreen: _buildSupportScreen,
+      ),
+    ));
+  }
+
+  /// §357 — резолв lxbox-действия в экран приложения. null → кнопка
+  /// скрывается (незнакомый маршрут у старой версии / гейт не прошёл).
+  /// Контроллеры живут здесь — по той же причине, по которой экраны строит
+  /// HomeDrawer.
+  Widget? _buildSupportScreen(SupportLinkAction a) {
+    if (a.action == 'add') {
+      // Prefill поля ввода — добавление подтверждает сам юзер (§357: без
+      // авто-add, support.json приезжает с GitHub).
+      return SubscriptionsScreen(
+        subController: _subController,
+        homeController: _controller,
+        autoUpdater: _autoUpdater,
+        initialInput: a.payload,
+      );
+    }
+    if (a.action != 'route') return null;
+    final segs = routeSegments(a);
+    final tab = segs.length > 1 ? segs[1] : null;
+    switch (segs.first) {
+      case 'servers':
+        return SubscriptionsScreen(
+          subController: _subController,
+          homeController: _controller,
+          autoUpdater: _autoUpdater,
+        );
+      case 'routing':
+        return RoutingScreen(
+          subController: _subController,
+          homeController: _controller,
+          initialPresetsTab: tab == 'presets',
+        );
+      case 'dns':
+        return DnsSettingsScreen(
+          subController: _subController,
+          homeController: _controller,
+        );
+      case 'vpn-settings':
+        return SettingsScreen(
+          subController: _subController,
+          homeController: _controller,
+        );
+      case 'app-settings':
+        return AppSettingsScreen(
+          initialTab: switch (tab) {
+            'subscriptions' => 1,
+            'diagnostics' => 2,
+            'automation' => 3,
+            _ => 0,
+          },
+        );
+      case 'speedtest':
+        return SpeedTestScreen(homeController: _controller);
+      case 'stats':
+        // Как пункт drawer: без поднятого туннеля данных нет — кнопку прячем.
+        if (!_controller.state.tunnelUp) return null;
+        return StatsScreen(
+          configRaw: _controller.state.activeConfigRaw,
+          subController: _subController,
+          homeController: _controller,
+          initialTab: switch (tab) {
+            'connections' => StatsTab.connections,
+            'live' => StatsTab.live,
+            _ => StatsTab.overview,
+          },
+        );
+      case 'config':
+        return ConfigScreen(controller: _controller);
+      case 'debug':
+        return DebugScreen(
+          initialTab: switch (tab) {
+            'crashes' => 1,
+            'oom' => 2,
+            'profiling' => 3,
+            _ => 0,
+          },
+        );
+      case 'about':
+        // `about/donate` — экран About с сразу открытым попапом способов
+        // поддержки (донат — состояние экрана, а не отдельный экран).
+        return AboutScreen(openDonate: tab == 'donate');
+      case 'profiler':
+        // Семантический алиас: трафик-профайлер («куда ходят приложения») —
+        // вкладка Live на Statistics (§264-266). НЕ Debug/Profiling: там
+        // pprof-слепки ядра, другая фича. Гейт как у stats.
+        if (!_controller.state.tunnelUp) return null;
+        return StatsScreen(
+          configRaw: _controller.state.activeConfigRaw,
+          subController: _subController,
+          homeController: _controller,
+          initialTab: StatsTab.live,
+        );
+    }
+    return null;
   }
 
   /// §085 R3 — rebuild при изменении фильтров (NodeFilterViewModel notify).

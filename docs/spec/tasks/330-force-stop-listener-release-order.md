@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Тип | bug |
-| Статус | 🔧 Правка внесена, `compileDebugKotlin` BUILD SUCCESSFUL · DEVICE-PENDING |
+| Статус | ✅ Реализовано (`6fd2b5fb`), вошло в v2.19.0 · DEVICE-PENDING (полевое подтверждение по жалобам 4PDA #1355/#1360/#1364 не собрано) |
 | Дата | 2026-08-01 |
 | Связанные | [`287 stop latency`](287-stop-latency-mass-ping-wg-teardown.md) — вскрыла симптом порогом 3с; [`140`](#) — фикс порядка `stopSelf` vs teardown, который здесь восстанавливается по факту; [`129`](#) — замысел force-пути |
 | Затронутые файлы | [`BoxService.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt) (`closeCommandServerAtomic`) |

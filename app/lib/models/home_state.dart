@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../vpn/cc_channel.dart';
 import 'config_node.dart';
 import 'debug_entry.dart';
+import 'dependency_graph.dart';
 import 'stop_reason.dart';
 import 'traffic_snapshot.dart';
 import 'tunnel_status.dart';
@@ -10,6 +11,7 @@ import 'ui_msg.dart';
 import '../services/l10n/locale_controller.dart';
 
 export 'config_node.dart';
+export 'dependency_graph.dart';
 export 'stop_reason.dart';
 export 'traffic_snapshot.dart';
 export 'ui_msg.dart';
@@ -67,6 +69,7 @@ class HomeState {
     this.highlightedNode,
     this.delayByChannel = const <String, Map<String, int>>{},
     this.pingBusy = const <String, String>{},
+    this.sickRoots = const <String, List<DependentRef>>{},
     this.debugEvents = const <DebugEntry>[],
     this.sortMode = NodeSortMode.latencyAsc,
     // §070 — sort options (per-session, defaults = old behaviour bit-exact).
@@ -178,6 +181,12 @@ class HomeState {
   /// надо — см. [delayOf] / [delayIsForeign], они дают фоллбэк-семантику.
   final Map<String, Map<String, int>> delayByChannel;
   final Map<String, String> pingBusy;
+
+  /// §355 — «корни беды»: мёртвая нода → её транзитивные пострадавшие (DNS и
+  /// ноды, зависящие через detour/каналы). Пересчитывается HomeController'ом
+  /// на замерах пинга и смене выбора групп ([DependencyGraph.computeSick]);
+  /// пустая map = тревог нет. UI: ⚠-метка на корне + sheet со списком.
+  final Map<String, List<DependentRef>> sickRoots;
 
   /// §325 — псевдо-канал для замеров, сделанных вне выбранного канала
   /// (`selectedGroup == null`). Отдельный ключ, а не «сложить в текущий»:
@@ -297,6 +306,24 @@ class HomeState {
     final g = groupOf(tag);
     if (g != null && (_isSelector(g.type) || _isUrltest(g.type))) return true;
     return activeModel[tag]?.isControl ?? false;
+  }
+
+  /// §359 — control-узел, созданный ПРИЛОЖЕНИЕМ (шасси), а не пришедший
+  /// контентом из подписки/папки. Фильтр списка короткозамыкает в matching
+  /// только такие: узел автовыбора подписки (§322) — обычная нода списка и
+  /// фильтруется наравне со всеми (regex, чипы, пинг, detour-pool).
+  ///
+  /// Шасси = селектор канала (`vpn-N`, ключи `groupLabels` из storage
+  /// `channels[]`, §125) + его auto-двойник (`channelAutoTags`, §322).
+  /// `direct`/`block`/`dns` — по ТИПУ, не по тегу: подписка не может прислать
+  /// узел такого типа, а теги расходятся (`block` в `magic_nodes` шаблона vs
+  /// `block-out` в аллокаторе `build_config`) — литерал был бы ловушкой.
+  bool isSystemControlTag(String tag) {
+    if (groupLabels.containsKey(tag) || channelAutoTags.contains(tag)) {
+      return true;
+    }
+    final t = activeModel[tag]?.type;
+    return t == 'direct' || t == 'block' || t == 'dns';
   }
 
   /// Все urltest-группы (для форс-URLTest после mass-ping, §070).
@@ -421,6 +448,7 @@ class HomeState {
     Object? highlightedNode = _unset,
     Map<String, Map<String, int>>? delayByChannel,
     Map<String, String>? pingBusy,
+    Map<String, List<DependentRef>>? sickRoots,
     List<DebugEntry>? debugEvents,
     NodeSortMode? sortMode,
     bool? pinDirect,
@@ -478,6 +506,7 @@ class HomeState {
           : highlightedNode as String?,
       delayByChannel: delayByChannel ?? this.delayByChannel,
       pingBusy: pingBusy ?? this.pingBusy,
+      sickRoots: sickRoots ?? this.sickRoots,
       debugEvents: debugEvents ?? this.debugEvents,
       sortMode: sortMode ?? this.sortMode,
       pinDirect: pinDirect ?? this.pinDirect,

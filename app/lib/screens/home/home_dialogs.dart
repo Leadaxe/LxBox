@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../controllers/home_controller.dart';
 import '../../models/home_state.dart';
 import '../../services/settings_storage.dart';
-import '../../services/support/support_message.dart';
 import '../../services/update_checker.dart';
 import '../../services/url_launcher.dart' as ul;
 import '../../services/version_info.dart';
@@ -287,49 +286,6 @@ Future<void> maybeShowAddTilePrompt(BuildContext context, BoxVpnClient vpn) asyn
   await vpn.requestAddTile();
 }
 
-/// §105 — диалог «поддержи автора». Чистый показ готового [m]; решение о
-/// показе (пороги, сессия, fetch) — на стороне `home_screen` (см.
-/// `_maybeShowSupport`). Кнопки-ссылки диалог НЕ закрывают (юзер может
-/// пройтись по нескольким); закрытие — «Позже» (повтор через +N часов
-/// активного времени) или «Не показывать» (навсегда для кампании).
-Future<void> showSupportDialog(BuildContext context, SupportMessage m) async {
-  await showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog.adaptive(
-      title: Text(m.title),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(m.message),
-            const SizedBox(height: 16),
-            for (final (label, url) in m.links) ...[
-              FilledButton.tonal(
-                onPressed: () => ul.UrlLauncher.open(url),
-                child: Text(label),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () async {
-            Navigator.of(ctx).pop();
-            await SupportMessageService.I.dismissForever(m);
-          },
-          child: Text(getLocalText.s("Don't show again")),
-        ),
-        FilledButton(
-          onPressed: () async {
-            Navigator.of(ctx).pop();
-            await SupportMessageService.I.snooze(m);
-          },
-          child: Text(getLocalText.s("Later")),
-        ),
-      ],
-    ),
-  );
-}
+// §357 — показ support-сообщения переехал в полноэкранный
+// `screens/home/support_message_screen.dart` (SupportMessageScreen);
+// прежний AlertDialog-вариант удалён.

@@ -40,7 +40,12 @@ List<({String owner, String field, String original})> healInvalidReality(
     }
 
     final sid = reality['short_id'];
-    if (sid is String && sid.isNotEmpty && !_isValidRealityShortId(sid)) {
+    if (sid != null && sid is! String) {
+      // Не-строковый short_id (число из raw-JSON узла / §302-патча) ядро
+      // тоже не декодирует — тот же fatal. Отброс, не подгон (§169).
+      reality['short_id'] = '';
+      healed.add((owner: tag, field: 'short_id', original: '$sid'));
+    } else if (sid is String && sid.isNotEmpty && !_isValidRealityShortId(sid)) {
       reality['short_id'] = '';
       healed.add((owner: tag, field: 'short_id', original: sid));
     }

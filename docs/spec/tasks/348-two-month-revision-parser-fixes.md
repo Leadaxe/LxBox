@@ -1,0 +1,85 @@
+# §348 — Ревизия кода за два месяца: фиксы parser/builder
+
+| | |
+|---|---|
+| Тип | bugfix (пачка по итогам code review) |
+| Статус | ✅ Released v2.19.3 — тесты зелёные |
+| Дата | 2026-08-02 |
+| Связанные | [`321 xray-json`](../features/321%20xray-json-parsing/spec.md), [`322 balancer-node`](../features/322%20balancer-node/spec.md), [`335`](335-vless-encryption-passthrough.md), [`342`](342-xray-preserve-subscription-order.md), [`343`](343-reality-short-id-validation.md) |
+
+## Контекст
+
+Ревизия суммарного диффа за окно 2026-06-02..2026-08-02 (§068→§346, ~171k
+строк) с адверсариальным ревью зон parser/builder и controllers/services.
+Этот файл — фиксы parser/builder; фиксы controllers/services — §349.
+
+## Находки и фиксы
+
+### P1-1 — `_withChain` терял `encryption` (§335) у VLESS с dialerProxy
+
+`json_parsers.dart::_withChain` пересобирает VlessSpec для присоединения
+detour-звена, перечисляя поля вручную, и §335-поле `encryption` в списке
+отсутствовало — узел с постквантовым слоем И цепочкой приезжал без слоя,
+сервер молча не отвечал. Фикс: поле проносится. Регрессионный тест —
+`json_parsers_test.dart` «dialerProxy не теряет encryption».
+
+### P1-2 — идентичность узла из сырого Xray-JSON расходилась с NodeSpec
+
+`_xrayIdentity` (ключ `protocol|server|port|cred` для synonyms/дедупа §321
+P4/P6) считался по сырому JSON и расходился с `nodeIdentityKey` готового
+Spec в трёх местах:
+
+| расхождение | сырой JSON | NodeSpec |
+|---|---|---|
+| протокол формы форка | `hysteria\|…` | `hysteria2\|…` |
+| порт по умолчанию | `\|0\|` | `\|443\|` |
+| quirk `xtls-rprx-vision-udp443` | исходный порт | 443 |
+
+Следствие: член пула §322 (резолв в `server_list_build` по
+`ownKeys.contains(nodeIdentityKey(spec))`) молча выпадал — для
+hysteria-узлов всегда, для остальных при отсутствующем порте/quirk'е.
+Фикс: `_xrayIdentity` зеркалит конвертеры (инвариант закреплён комментарием
+и тестами «идентичность parser ↔ builder»). Старые ключи в персистентных
+`autogroup://` никогда и не совпадали — совместимость не пострадала,
+обновление подписки пересчитывает.
+
+### P2-3 — мусорный тип поля ронял парсинг всей подписки
+
+`streamSettings: "none"` (строкой) или `settings: []` бросали
+TypeError/NoSuchMethodError внутри конвертера; try/catch не было ни в
+`_parseJson`, ни выше (`sources.dart`) — один битый элемент валил
+импорт/обновление целиком, вопреки §322 «битые формы не роняют парсинг».
+Фикс: is-проверки на pre-loop путях (`sockopt`), throw-free `_xrayIdentity`,
+per-outbound try/catch в `parseXrayElement` — пропуск ровно одного узла с
+P5-warning (`malformed`/protocol) на выжившем соседе.
+
+### P2-4 — priming-сортировка §342 нестабильна на подписках >32 элементов
+
+`List.sort` в Dart стабилен только до порога insertion sort (~32), дальше —
+dual-pivot quicksort, перемешивающий связки (проверено эмпирически: n=36 из
+равных ключей перемешивается). Спека §321 требует стабильность; боевой кейс
+§342 — 37 элементов. Владельцем идентичности (⇒ имя и позиция узла) мог
+стать произвольный элемент связки. Фикс: компаратор
+`(payloadCount, исходный индекс)`. Тест — пары-дубли за порогом.
+
+### P3-7 — heal §343 пропускал не-строковый `short_id`
+
+`heal_invalid_reality.dart`: `sid is String && …` — числовой
+`short_id: 12` (raw-JSON узел, §302-патч) проходил heal нетронутым и валил
+strict-decode ядра. Фикс: не-строка → `''` + запись (отброс-не-подгон §169).
+
+### P3-9 — комментарий-фантом `elementDropped`
+
+Комментарий в `parseXrayElement` ссылался на несуществующий механизм —
+переписан на фактическое поведение (молчаливый пропуск пустого элемента,
+документированное ограничение §321 P5).
+
+## Вынесено в отдельные таски (сделано в том же релизе)
+
+- **P2-5 — `//`-ключи из raw-JSON правил доезжали до `route.rules`** →
+  [`350`](350-comment-keys-gate.md) (strip с warning + гейт `target_path`).
+- **P3-6 — `_taken` не резервировал теги каналов** (узел `vpn-1` → дубль
+  тега → отказ ядра) → [`351`](351-channel-tags-reserved-in-allocator.md).
+- **P3-8 — `autogroup://` терял члена с запятой в credential** →
+  [`352`](352-autogroup-member-key-escaping.md) (узкое экранирование
+  per-key; миграция не понадобилась).

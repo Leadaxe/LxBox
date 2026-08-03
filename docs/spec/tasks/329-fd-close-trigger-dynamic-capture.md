@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Статус | 🎯 Кандидат №1 найден статикой: `openTun` делает `fileDescriptor.set(pfd)` — на reload старый PFD осиротевает незакрытым, финализатор закрывает номер позже, уже переиспользованный. Объясняет `EINVAL` и «не каждый reload». Фикс однострочный (`getAndSet+close`), device-подтверждение pending |
+| Статус | 🎯 Кандидат №1 найден статикой: `openTun` делает `fileDescriptor.set(pfd)` — на reload старый PFD осиротевает незакрытым, финализатор закрывает номер позже, уже переиспользованный. Объясняет `EINVAL` и «не каждый reload». Фикс (`getAndSet+close`, `794697dc`) вошёл в v2.19.0; полевое подтверждение исчезновения §047 — pending (нужен длительный прогон с reload'ами) |
 | Дата | 2026-07-31 (план) · 2026-08-01 (инструментировка · находка `EINVAL` с устройства) |
 | Связанные | [`047 tun TCP deterioration`](047-tun-tcp-deterioration-diagnosis.md) — клиентский симптом; [`049 sing-box wrapper audit`](049-singbox-wrapper-deep-audit/spec.md); kernel `SPECS/TASKS/040-SINGTUN_ACCEPTLOOP_SELFHEAL` в `sing-box-lx` — ядровая половина |
 | Затронутые файлы | [`BoxVpnService.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt) (лог `openTun`), [`BoxService.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt) (`closeFileDescriptor(reason)`), [`scripts/lxbox-fd-repro.sh`](../../../scripts/lxbox-fd-repro.sh) (новый; под модель rc.3 — требует переключения на `reload`) |

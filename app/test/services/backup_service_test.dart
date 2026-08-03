@@ -254,6 +254,17 @@ void main() {
               '(backup_service.dart): $missing');
     });
 
+    // §349 — auto_ping_on_start был единственным var-сиротой: писался через
+    // setVar, но не входил ни в allowlist, ни в template → export клал,
+    // default-deny импорта дропал («1 unknown keys skipped» на свой же бэкап).
+    test('§349 — auto_ping_on_start ∈ appFeatureFlagVars allowlist', () {
+      expect(
+          SettingsStorage.allowedVarKeys(const [])
+              .contains('auto_ping_on_start'),
+          isTrue,
+          reason: 'настройка обязана переживать restore (§221-симметрия)');
+    });
+
     // §279 — app_language: var-allowlist membership (иначе import дропает
     // неизвестный var → настройка не переживает restore).
     test('§279 — app_language ∈ appFeatureFlagVars allowlist', () {

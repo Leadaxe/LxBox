@@ -19,6 +19,7 @@ import '../handlers/help.dart';
 import '../handlers/ping.dart';
 import '../handlers/pool.dart';
 import '../handlers/profiler.dart';
+import '../handlers/support.dart';
 import '../handlers/rules.dart';
 import '../handlers/settings.dart';
 import '../handlers/state.dart';
@@ -183,7 +184,8 @@ class DebugServer {
       ..mount('/warp', warpHandler)
       ..mount('/settings', settingsHandler)
       ..mount('/wifi_history', wifiHistoryHandler)
-      ..mount('/profiler', profilerHandler);
+      ..mount('/profiler', profilerHandler)
+      ..mount('/support', supportHandler); // §357 — тест support-ленты
   }
 
   List<Middleware> _buildPipeline(DebugServerConfig config) {

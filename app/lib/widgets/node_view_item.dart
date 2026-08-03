@@ -26,6 +26,7 @@ class NodeViewItem {
     this.isChannelAuto = false,
     this.autoGroupLabel,
     this.matches = true,
+    this.isSickRoot = false,
   });
 
   /// Tag ноды или group selector (например `vpn-1`, `✨auto`).
@@ -90,4 +91,10 @@ class NodeViewItem {
   /// Default `true` — caller'ы без §048 filter поведения получают normal
   /// rendering без изменений.
   final bool matches;
+
+  /// §355 — нода мертва И от неё зависят другие (DNS-серверы/ноды через
+  /// detour/каналы): ⚠-метка у имени, тап по ней открывает sheet со списком
+  /// пострадавших (caller передаёт onSickTap). Просто мёртвая нода без
+  /// зависимых метку не получает — фильтр от шума.
+  final bool isSickRoot;
 }

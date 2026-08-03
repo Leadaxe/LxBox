@@ -39,6 +39,11 @@ class _ConnSnapshot {
   int upBytes;
   int downBytes;
   final DateTime startedAt;
+
+  /// §353 — момент закрытия по часам ЯДРА (`CcConnection.closedAt`, epoch ms).
+  /// Ставится при обработке kernel-closed дельты (§176); diff-закрытие
+  /// (conn исчез из снапшота) остаётся на `now` — у ядра метки нет.
+  DateTime? kernelClosedAt;
   final String process;
   final ConfidenceLevel confidence;
   final String? matchedVia;

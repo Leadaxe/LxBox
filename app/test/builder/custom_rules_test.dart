@@ -844,6 +844,56 @@ void main() {
       expect(warnings.single, contains('no rule objects'));
     });
 
+    test('§350: //-ключи вычищаются рекурсивно + warning', () {
+      final reg = RuleSetRegistry();
+      final warnings = applyCustomRules(reg, [
+        CustomRuleJson(
+          name: 'Commented',
+          json: '{"//": "матчер youtube", "domain_suffix": ["youtube.com"], '
+              '"//note": "и логика", '
+              '"rules": [{"//x": "вложенный", "protocol": "dns"}], '
+              '"action": "route", "outbound": "direct-out"}',
+        ),
+      ]);
+      expect(warnings.single, contains('comment key'));
+      expect(reg.getRules(), [
+        {
+          'domain_suffix': ['youtube.com'],
+          'rules': [
+            {'protocol': 'dns'},
+          ],
+          'action': 'route',
+          'outbound': 'direct-out',
+        },
+      ]);
+    });
+
+    test('§350: правило целиком из комментариев → skip, не пустой объект', () {
+      final reg = RuleSetRegistry();
+      final warnings = applyCustomRules(reg, [
+        CustomRuleJson(name: 'OnlyComment', json: '{"//": "todo"}'),
+      ]);
+      expect(reg.getRules(), isEmpty);
+      expect(warnings, hasLength(2),
+          reason: 'warning про drop + warning про skip');
+      expect(warnings.last, contains('empty after dropping'));
+    });
+
+    test('§350: в массиве комментарий-элемент выпадает, соседи живут', () {
+      final reg = RuleSetRegistry();
+      final warnings = applyCustomRules(reg, [
+        CustomRuleJson(
+          name: 'Mixed',
+          json: '[{"//": "только коммент"},'
+              '{"action":"sniff","//c":"tail"}]',
+        ),
+      ]);
+      expect(reg.getRules(), [
+        {'action': 'sniff'},
+      ]);
+      expect(warnings.single, contains('comment key'));
+    });
+
     test('disabled json-правило пропускается (skipDisabled)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [

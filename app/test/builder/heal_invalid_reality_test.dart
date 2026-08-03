@@ -61,6 +61,21 @@ void main() {
       }
     });
 
+    test('не-строковый short_id (число из raw-JSON/§302-патча) → очищен', () {
+      final config = {
+        'outbounds': [_vlessReality(tag: 'num', shortId: 12)],
+      };
+      final healed = healInvalidReality(config);
+
+      expect(healed, hasLength(1));
+      expect(healed.single.owner, 'num');
+      expect(healed.single.field, 'short_id');
+      final reality =
+          ((config['outbounds'] as List)[0] as Map)['tls']['reality'] as Map;
+      expect(reality['short_id'], '',
+          reason: 'тип-mismatch ядро тоже не декодирует — тот же fatal');
+    });
+
     test('валидный short_id (чётный, ≤16, upper-case тоже) → НЕ трогаем', () {
       final config = {
         'outbounds': [

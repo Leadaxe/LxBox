@@ -340,6 +340,9 @@ class HomeNodeList extends StatelessWidget {
                       ?security,
                     ].join('·'),
               matches: matchingSet.contains(tag),
+              // §355 — мёртвая нода с зависимыми (DNS/ноды через detour):
+              // ⚠-метка, тап по ней — sheet со списком пострадавших.
+              isSickRoot: state.sickRoots.containsKey(tag),
             ),
             onHighlight: () => controller.setHighlightedNode(tag),
             onActivate: () => unawaited(controller.switchNode(tag)),
@@ -358,6 +361,14 @@ class HomeNodeList extends StatelessWidget {
             // (у least_test пула нет). tag здесь = auto-тег группы.
             onViewPool: (isUrltestGroup && controller.isRoundRobinAuto(tag))
                 ? () => onViewPool(tag)
+                : null,
+            // §355 — ⚠-тап: View details сразу на вкладке Dependents
+            // («кто сломан этой мёртвой нодой»).
+            onSickTap: state.sickRoots.containsKey(tag)
+                ? () => viewOutboundJson(ctx, tag, state,
+                    subController: subController,
+                    homeController: controller,
+                    openDependents: true)
                 : null,
           ),
         );

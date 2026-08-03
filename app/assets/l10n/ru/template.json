@@ -140,9 +140,6 @@
   "DNS resolution strategy": {
     "value": "Стратегия резолва DNS"
   },
-  "DNS server": {
-    "value": "DNS-сервер"
-  },
   "DNS server used to resolve the Safe DNS hostname itself (AdGuard profiles use a domain address).": {
     "value": "DNS-сервер, который резолвит сам домен безопасного DNS (профили AdGuard используют доменный адрес)."
   },
@@ -356,11 +353,11 @@
   "Quad9 · anti-malware": {
     "value": "Quad9 · защита от вредоносного ПО"
   },
-  "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering": {
-    "value": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). Обходит простой DPI с точным сравнением; бесполезно против фильтрации уровня GFW"
+  "RU DNS group (UDP via channel + DoT via vpn-1 + direct DoH)": {
+    "value": "Группа DNS для RU (UDP через канал + DoT через vpn-1 + прямой DoH)"
   },
-  "Recommended: Base/UDP — most stable. DoH/DoT may be filtered by ISPs.": {
-    "value": "Рекомендуется базовый UDP — самый стабильный. DoH/DoT могут фильтроваться провайдерами."
+  "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering. Skipped on REALITY nodes — their SNI must stay byte-exact": {
+    "value": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). Обходит простой DPI с точным сравнением; бесполезно против фильтрации уровня GFW. На узлах REALITY не применяется — их SNI должен оставаться неизменным"
   },
   "Reject = drop. Or pick Direct to send it outside the VPN.": {
     "value": "Блокировка — трафик отбрасывается. Либо выберите «Напрямую», чтобы отправить его мимо VPN."
@@ -554,11 +551,11 @@
   "Yandex": {
     "value": "Яндекс"
   },
-  "Yandex Safe DoH": {
-    "value": "Яндекс DoH (безопасный)"
+  "Yandex Safe DoH (direct)": {
+    "value": "Яндекс DoH (безопасный, напрямую)"
   },
-  "Yandex Safe DoT": {
-    "value": "Яндекс DoT (безопасный)"
+  "Yandex Safe DoT (via vpn-1)": {
+    "value": "Яндекс DoT (безопасный, через vpn-1)"
   },
   "Yandex UDP (IP from above)": {
     "value": "Яндекс UDP (IP из настройки выше)"
@@ -580,5 +577,20 @@
   },
   "Quad9 DoH (via VPN, anti-malware)": {
     "value": "Quad9 DoH (через VPN, антивредонос)"
+  },
+  "Google push (FCM)": {
+    "value": "Google-пуши (FCM)"
+  },
+  "Send only Google push traffic (FCM ports 5228-5230 and FCM hosts) outside the VPN, so notifications arrive on time with the screen off. Does not touch the rest of Google Play, so your Play region stays intact. Move this rule above your proxy rules for it to take effect. If your DNS goes through the tunnel, add a matching direct rule in DNS settings — otherwise the hosts resolve to the wrong region and push stays silent.": {
+    "value": "Пускает мимо VPN только трафик Google-пушей (порты FCM 5228-5230 и хосты FCM), чтобы уведомления приходили вовремя при выключенном экране. Остальной Google Play не затрагивается — регион Play сохраняется. Чтобы правило заработало, поднимите его выше правил проксирования. Если DNS идёт через туннель, добавьте такое же direct-правило в настройках DNS — иначе хосты разрешатся в чужом регионе и пуши останутся молчать."
+  },
+  "Where to send push traffic. Direct keeps it off the VPN — that is the point of this preset.": {
+    "value": "Куда направить трафик пушей. «Напрямую» уводит его мимо VPN — ради этого пресет и нужен."
+  },
+  "Limit to Google Play Services": {
+    "value": "Только сервисы Google Play"
+  },
+  "Match only traffic from com.google.android.gms instead of any app. Narrower, but app matching works in VPN mode only — leave off if you use proxy mode.": {
+    "value": "Матчить только трафик com.google.android.gms, а не любого приложения. Точнее, но матчинг по приложению работает лишь в режиме VPN — при режиме прокси оставьте выключенным."
   }
 }

@@ -26,6 +26,7 @@ class NodeRow extends StatelessWidget {
     this.onRunUrltest,
     this.onSelectServer,
     this.onViewPool,
+    this.onSickTap,
   });
 
   final NodeViewItem item;
@@ -49,6 +50,10 @@ class NodeRow extends StatelessWidget {
   /// §208 — non-null только для auto-ноды round_robin-канала: «View pool» в меню
   /// → попап с текущим составом пула (getPool). Иначе null → пункт скрыт.
   final VoidCallback? onViewPool;
+
+  /// §355 — тап по ⚠-метке корня беды ([NodeViewItem.isSickRoot]) — caller
+  /// открывает sheet со списком пострадавших. null при isSickRoot=false.
+  final VoidCallback? onSickTap;
 
   /// Right-side delay label (или PING… / ERR), цвет по latency.
   ///
@@ -424,6 +429,16 @@ class NodeRow extends StatelessWidget {
                                   ),
                             ),
                           ),
+                          // §355 — корень беды: мёртвая нода, от которой
+                          // зависят DNS/ноды. Тап → sheet со списком.
+                          if (item.isSickRoot) ...[
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: onSickTap,
+                              child: Icon(Icons.warning_amber_rounded,
+                                  size: 18, color: colorScheme.error),
+                            ),
+                          ],
                         ],
                       );
                     }),

@@ -369,8 +369,18 @@ final class ShadowsocksSpec extends NodeSpec {
 
 final class Hysteria2Spec extends NodeSpec {
   final String password;
-  final String obfs; // '' | 'salamander'
+
+  /// §358 — `'' | 'salamander' | 'gecko'` ([kHysteria2ObfsTypes]). Значение
+  /// нормализуют парсеры: тип вне словаря ядра или без пароля роняет ВЕСЬ
+  /// конфиг (`Hysteria2Obfs.MarshalJSON` → «unknown obfs type», outbound.go
+  /// → «missing obfs password»), поэтому в спеку он не попадает.
+  final String obfs;
   final String obfsPassword;
+
+  /// §358 — параметры `gecko` (`Hysteria2ObfsGecko`). Эмитятся только при
+  /// `obfs == 'gecko'`; при salamander хранятся, но в JSON не идут.
+  final int? obfsMinPacketSize;
+  final int? obfsMaxPacketSize;
   final TlsSpec tls;
   final int? upMbps;
   final int? downMbps;
@@ -385,6 +395,8 @@ final class Hysteria2Spec extends NodeSpec {
     required this.password,
     this.obfs = '',
     this.obfsPassword = '',
+    this.obfsMinPacketSize,
+    this.obfsMaxPacketSize,
     this.tls = TlsSpec.disabled,
     this.upMbps,
     this.downMbps,
