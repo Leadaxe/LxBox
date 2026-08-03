@@ -6,9 +6,9 @@ import '../../../models/parser_config.dart';
 /// ☁-кнопка статуса SRS для `CustomRuleSrs`-правила. Показывает спиннер при
 /// загрузке, ✅ если файл закэширован, ☁ если нет.
 ///
-/// §366 — когда файл уже скачан, рядом появляется кнопка ⟳ (ручное
-/// обновление). ☁ остаётся индикатором «скачано / не скачано»: пока файла
-/// нет, обновлять нечего и ⟳ не показывается.
+/// §366 — отдельной кнопки ⟳ здесь намеренно нет: тап по ☁ и так перекачивает
+/// файл, вторая иконка в тесном ряду тайла только дублировала бы её. Явная
+/// кнопка обновления живёт в редакторе правила.
 class SrsStatusButton extends StatelessWidget {
   const SrsStatusButton({
     super.key,
@@ -16,17 +16,12 @@ class SrsStatusButton extends StatelessWidget {
     required this.downloading,
     required this.cached,
     required this.onPressed,
-    this.onRefresh,
   });
 
   final CustomRule rule;
   final bool downloading;
   final bool cached;
   final VoidCallback onPressed;
-
-  /// §366 — ручное обновление уже скачанного `.srs`. Null → кнопка ⟳ не
-  /// рисуется (напр. на экранах, где обновление не предусмотрено).
-  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +41,7 @@ class SrsStatusButton extends StatelessWidget {
     }
     // NB: без tooltip — иначе long-press на иконке показывает тултип и
     // перехватывает контекст-меню родительского GestureDetector.
-    final cloud = IconButton(
+    return IconButton(
       iconSize: 18,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -55,21 +50,6 @@ class SrsStatusButton extends StatelessWidget {
         color: cached ? Colors.green : cs.onSurfaceVariant,
       ),
       onPressed: onPressed,
-    );
-    final refresh = onRefresh;
-    if (!cached || refresh == null) return cloud;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        cloud,
-        IconButton(
-          iconSize: 18,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          icon: Icon(Icons.update, color: cs.onSurfaceVariant),
-          onPressed: refresh,
-        ),
-      ],
     );
   }
 }
@@ -86,7 +66,6 @@ class PresetSrsStatusButton extends StatelessWidget {
     required this.cached,
     required this.onTap,
     required this.onLongPress,
-    this.onRefresh,
   });
 
   final CustomRulePreset rule;
@@ -95,10 +74,6 @@ class PresetSrsStatusButton extends StatelessWidget {
   final bool cached;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
-
-  /// §366 — ручное обновление всех скачанных rule-set'ов пресета. Дублирует
-  /// пункт long-press меню явной кнопкой: меню не находят.
-  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +94,7 @@ class PresetSrsStatusButton extends StatelessWidget {
     // Намеренно InkWell, а не IconButton внутри GestureDetector — GestureDetector
     // с HitTestBehavior.opaque перехватывал tap ДО IconButton.onPressed. InkWell
     // получает и tap, и long-press одним нодом.
-    final cloud = SizedBox(
+    return SizedBox(
       width: 32,
       height: 32,
       child: InkWell(
@@ -132,24 +107,6 @@ class PresetSrsStatusButton extends StatelessWidget {
           color: cached ? Colors.green : cs.onSurfaceVariant,
         ),
       ),
-    );
-    final refresh = onRefresh;
-    if (!cached || refresh == null) return cloud;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        cloud,
-        SizedBox(
-          width: 32,
-          height: 32,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: refresh,
-            child: Icon(Icons.update,
-                size: 18, color: cs.onSurfaceVariant),
-          ),
-        ),
-      ],
     );
   }
 }

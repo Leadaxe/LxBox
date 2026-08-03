@@ -3882,6 +3882,9 @@
   "Update interval": {
     "value": "Интервал обновления"
   },
+  "Update now": {
+    "value": "Обновить сейчас"
+  },
   "Update subscription to see nodes": {
     "value": "Обновите подписку, чтобы увидеть узлы"
   },

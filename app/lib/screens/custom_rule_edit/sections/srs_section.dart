@@ -202,10 +202,31 @@ class _SrsSectionState extends State<SrsSection> {
         if (widget.lastUpdatedText != null)
           Padding(
             padding: const EdgeInsets.only(top: 2, bottom: 2),
-            child: Text(
-              widget.lastUpdatedText!,
-              style: TextStyle(
-                  fontSize: 11, color: t.colorScheme.onSurfaceVariant),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.lastUpdatedText!,
+                    style: TextStyle(
+                        fontSize: 11, color: t.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+                // §366 — ручное обновление уже скачанного файла. Качает
+                // безусловно: юзер нажал «обновить», совпадение ETag его
+                // останавливать не должно.
+                TextButton.icon(
+                  icon: const Icon(Icons.update, size: 14),
+                  label: Text(getLocalText.s("Update now"),
+                      style: const TextStyle(fontSize: 12)),
+                  onPressed: widget.state == SrsDownloadState.loading
+                      ? null
+                      : widget.onDownload,
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 28),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+              ],
             ),
           ),
         const SizedBox(height: 4),

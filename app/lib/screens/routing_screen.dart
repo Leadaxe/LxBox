@@ -645,9 +645,6 @@ class _RoutingScreenState extends State<RoutingScreen>
       downloading: _srsDownloading.contains(rule.id),
       cached: _srsCached.contains(rule.id),
       onPressed: () => unawaited(_downloadSrs(rule)),
-      // §366 — ⟳ перекачивает уже скачанный файл (безусловный GET: юзер
-      // нажал «обновить», ETag-совпадение его не должно останавливать).
-      onRefresh: () => unawaited(_downloadSrs(rule)),
     );
   }
 
@@ -666,8 +663,6 @@ class _RoutingScreenState extends State<RoutingScreen>
         if (!mounted) return;
         _showPresetCloudMenu(rule, preset, pos);
       },
-      // §366 — то же, что пункт Refresh в long-press меню, но видимой кнопкой.
-      onRefresh: () => unawaited(_downloadSrsForPresetRule(rule)),
     );
   }
 
