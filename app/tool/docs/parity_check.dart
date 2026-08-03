@@ -37,6 +37,7 @@ import '../l10n/src/check_common.dart';
 const _pairs = <({String en, String ru})>[
   (en: 'README.md', ru: 'README_RU.md'),
   (en: 'docs/USER_GUIDE.md', ru: 'docs/USER_GUIDE_RU.md'),
+  (en: 'docs/DONATE.md', ru: 'docs/DONATE_RU.md'),
 ];
 
 void main(List<String> args) {
