@@ -12,6 +12,7 @@ import 'logcat_reader.dart';
 import 'oom_reports.dart';
 import 'settings_storage.dart';
 import 'stderr_reader.dart';
+import 'version_info.dart';
 import '../vpn/box_vpn_client.dart';
 
 /// Собирает единый файл-дамп для репорта: конфиг + логи + подписки +
@@ -27,6 +28,16 @@ class DumpBuilder {
     try {
       final raw = await BoxVpnClient().getConfig();
       if (raw.isNotEmpty && raw != '{}') config = raw;
+    } catch (_) {}
+
+    // §378 — версия ядра. До §378 она попадала в пак только случайно: полем
+    // внутри oom/crash-снимков. Нет снимков — нечем отличить репорт на старом
+    // ядре от репорта на текущем. `Libbox.version()` статический, туннель для
+    // него поднимать не нужно; null остаётся только если канал не ответил.
+    String? coreVersion;
+    try {
+      final v = await BoxVpnClient().getCoreVersion();
+      if (v.isNotEmpty) coreVersion = v;
     } catch (_) {}
 
     // §207 — goroutine stack-дамп встраиваем в пак ТОЛЬКО при активном
@@ -78,6 +89,12 @@ class DumpBuilder {
     final dump = <String, dynamic>{
       'generated_at': now.toIso8601String(),
       'app': 'lxbox',
+      // §378 — чем собран пак. `app_version` — versionName (`X.Y.Z`),
+      // `app_build` — versionCode: при `--split-per-abi` он кодирует ещё и ABI
+      // (см. docs/FDROID.md), то есть отвечает на «какой именно APK стоит».
+      'app_version': VersionInfo.I.version,
+      'app_build': VersionInfo.I.buildNumber,
+      'core_version': coreVersion,
       'vars': vars,
       'server_lists': lists.map(_sanitizeList).toList(),
       'config': config == null ? null : _tryDecode(config),
