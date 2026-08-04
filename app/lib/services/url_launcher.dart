@@ -85,6 +85,23 @@ class UrlLauncher {
     }
   }
 
+  /// §375 — есть ли на устройстве камера (для QR-сканера).
+  ///
+  /// false на Android TV: камеры нет, пункт «Scan QR code» там прячется.
+  /// В отличие от импорта файла (§372), у сканирования нет равноценной
+  /// альтернативы, поэтому показывается не подсказка, а ничего.
+  ///
+  /// При недоступности канала возвращает true — не прячем пункт там, где не
+  /// смогли проверить (телефон без камеры практически не встречается).
+  static Future<bool> hasCamera() async {
+    try {
+      final ok = await _channel.invokeMethod<bool>('hasCamera');
+      return ok ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Checks if POST_NOTIFICATIONS is granted (always true on API < 33).
   static Future<bool> checkNotificationPermission() async {
     try {

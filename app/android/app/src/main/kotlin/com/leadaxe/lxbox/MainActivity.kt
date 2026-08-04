@@ -112,6 +112,10 @@ class MainActivity : FlutterActivity() {
                         // §372 — есть ли на устройстве НАСТОЯЩИЙ файловый пикер.
                         result.success(hasRealFilePicker())
                     }
+                    "hasCamera" -> {
+                        // §375 — есть ли камера (для QR-сканера).
+                        result.success(hasCamera())
+                    }
                     "canSaveToDownloads" -> {
                         // §374 — MediaStore-запись в Downloads без разрешений
                         // доступна с API 29 (scoped storage).
@@ -313,6 +317,14 @@ class MainActivity : FlutterActivity() {
         val candidates = packageManager.queryIntentActivities(intent, 0)
         return candidates.any { !isStubHandler(it.activityInfo?.packageName) }
     }
+
+    /// §375 — есть ли на устройстве камера, пригодная для сканирования QR.
+    ///
+    /// FEATURE_CAMERA_ANY (API 17+) покрывает заднюю, фронтальную и внешнюю
+    /// USB-камеру. На Android TV — false (камеры нет, пункт меню прячем);
+    /// на приставке с подключённой веб-камерой — true, и сканер там работает.
+    private fun hasCamera(): Boolean =
+        packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)
 
     /// Пакеты-заглушки, которыми TV-framework затыкает отсутствующие
     /// системные приложения. Матчим по префиксу — имя различается между

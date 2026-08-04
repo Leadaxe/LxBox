@@ -46,6 +46,18 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
+    <!-- §375 QR-сканер. `required="false"` обязателен: иначе приложение
+         станет формально несовместимым с устройствами без камеры — а §372
+         декларирует Android TV как поддерживаемый (best-effort) таргет.
+         Там пункт «Scan QR code» прячется по hasCamera(). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false" />
+
     <application
         android:label="@string/app_name"
         android:name=".vpn.BoxApplication"
