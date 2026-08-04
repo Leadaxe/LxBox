@@ -26,21 +26,39 @@ APK ставится — `minSdk = 24` (§233) ниже API 25, установк
 
 ## Root cause
 
-### 1. Импорт: на Android TV нет DocumentsUI
+### 1. Импорт: на Android TV нет DocumentsUI — но intent НЕ остаётся без обработчика
 
-`file_picker` 11.0.2 (`FileUtils.kt:202-216`) собирает
-`Intent(ACTION_OPEN_DOCUMENT)` и запускает его **только** если
-`intent.resolveActivity(packageManager) != null`. В прошивках Android TV
-системный документ-пикер (DocumentsUI) как правило отсутствует, так что
-`resolveActivity` возвращает `null`, плагин уходит в ветку:
+> **Уточнено device-verification'ом (эмулятор Android TV, API 31).**
+> Первоначальная гипотеза — «`resolveActivity` вернёт null, плагин отдаст
+> `invalid_format_type`» — **неверна**. Реальность хуже: framework TV
+> подкладывает заглушку.
 
-```kotlin
-finishWithError("invalid_format_type", "Can't handle the provided file type.")
+В прошивках Android TV нет DocumentsUI, но `OPEN_DOCUMENT` /
+`GET_CONTENT` / `CREATE_DOCUMENT` перехватывает системная заглушка
+`com.android.tv.frameworkpackagestubs/.Stubs$DocumentsStub` (проверено:
+`cmd package query-activities` на TV отдаёт её и только её; на телефоне и
+на CPH2411 — `com.google.android.documentsui`).
+
+Последствия по шагам, из живого logcat на TV:
+
+```
+FilePickerUtils: Custom file types are [json] …
+ActivityTaskManager: START … cmp=com.android.tv.frameworkpackagestubs/.Stubs$DocumentsStub
+NotificationService: Toast already killed. pkg=com.android.tv.frameworkpackagestubs
+flutter : AutoUpdater: trigger=resumed        ← вернулись в app, результата пика НЕТ
 ```
 
-То есть плагин **не молчит** — на Dart-сторону прилетает
-`PlatformException(invalid_format_type)`. Но до пользователя это не
-доходит внятно:
+Заглушка показывает тост и сразу finish'ится с `RESULT_CANCELED`.
+Для приложения это **неотличимо от «юзер передумал»**: `resolveActivity`
+находит обработчика, `invalid_format_type` не возникает, `pickFiles`
+возвращает `null`. Кнопка импорта немая — ровно жалоба 4PDA.
+
+Поэтому детект не может опираться на ошибку плагина: нужно спрашивать
+платформу **до** запуска пика, есть ли обработчик, не являющийся
+заглушкой (`§372 hasRealFilePicker`, см. ниже).
+
+Вторично — даже когда ошибка всё же возникает (устройство вообще без
+обработчика), до пользователя она не доходила внятно:
 
 | Место вызова | Что видит юзер на TV |
 |---|---|
@@ -152,9 +170,20 @@ String? pickProblemText(PickOutcome);  // текст снекбара, null дл
 
 Правила разбора:
 
-- `PlatformException` с `code == 'invalid_format_type'` → `PickNoPicker`;
+- **до пика** — `UrlLauncher.hasRealFilePicker()` (нативный метод канала
+  `com.leadaxe.lxbox/utils`, реализация в
+  [`MainActivity.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt)):
+  `queryIntentActivities(OPEN_DOCUMENT)` и отбрасываем кандидатов, чьё имя
+  пакета содержит `frameworkpackagestubs`. Пусто → `PickNoPicker`, пикер
+  вообще не запускается (заглушка даже не мигает тостом). Канал недоступен
+  → `true` (не запрещаем пик там, где не смогли проверить);
+- `PlatformException` с `code == 'invalid_format_type'` → `PickNoPicker`
+  (устройство вообще без обработчика — страховка второго уровня);
 - `result == null` / пустой список → `PickCancelled` (не ошибка, молчим);
 - прочее → `PickFailed(error)`.
+
+Матч по подстроке, а не по полному имени: пакет-заглушка различается между
+Android TV и Google TV сборками.
 
 Все **8** мест вызова переведены на обёртку. Текст подсказки — ключ
 `ErrKey.noFileManager` в [`ui_msg.dart`](../../../app/lib/models/ui_msg.dart)
@@ -193,26 +222,35 @@ Enter) работает без дополнительного кода — `Focu
 
 ## Приёмка
 
+Стенд device-verification: **эмулятор Android TV, API 31, arm64**
+(`system-images;android-31;android-tv;arm64-v8a`, AVD `LxBox_TV31`,
+device-профиль `tv_1080p`). API 25 взять не вышло: TV-образ 25 существует
+только под x86, а эмулятор на Apple Silicon его не запускает —
+`FATAL | Avd's CPU Architecture 'x86' is not supported by the QEMU2
+emulator on aarch64 host`. Проверяемые свойства (отсутствие DocumentsUI,
+D-pad, leanback-лаунчер) — свойства TV-образа, а не версии API.
+
 | # | Проверка | Статус |
 |---|---|---|
-| 1 | `uses-feature` (обе, `required="false"`) + `LEANBACK_LAUNCHER` в merged-манифесте | ✅ `processDebugMainManifest`, проверено грепом по итоговому XML |
+| 1 | `uses-feature` (обе, `required="false"`) + `LEANBACK_LAUNCHER` в merged-манифесте | ✅ грепом по итоговому XML |
 | 2 | `flutter analyze` — весь проект | ✅ No issues found |
 | 3 | `flutter test` | ✅ 2937 passed |
 | 4 | 4 l10n-чекера с `--strict` | ✅ 0 failures / 0 warnings |
-| 5 | Иконка в лаунчере Android TV | ⏳ DEVICE-PENDING |
-| 6 | Импорт без пикера → подсказка про буфер/URL | ⏳ DEVICE-PENDING |
-| 7 | С пульта достижимы: Start, масс-пинг, импорт | ⏳ DEVICE-PENDING |
-| 8 | На телефоне пикер работает как раньше (регресс) | ⏳ DEVICE-PENDING (CPH2411) |
+| 5 | **L×Box в лаунчере Android TV** | ✅ DEVICE-VERIFIED — виден в «Select app» с иконкой |
+| 6 | Приложение запускается и рисует UI на TV | ✅ DEVICE-VERIFIED — экран «Add a server» |
+| 7 | **Импорт без пикера → подсказка про буфер/URL** | ✅ DEVICE-VERIFIED — снекбар на экране; в logcat `[pick] no real file manager (TV stub only)`, заглушка НЕ запускается |
+| 8 | На телефоне пикер не сломан | ✅ обработчик `com.google.android.documentsui` (CPH2411 + эмулятор API 34) → `hasRealFilePicker`=true, путь прежний |
+| 9 | С пульта достижимы Start / масс-пинг | ⏳ DEVICE-PENDING |
+| 10 | Поведение на реальном Android 7.1.1 | ⏳ PENDING — у пользователя 4PDA |
 
-Пункты 5-8 — **DEVICE-PENDING**: физического Android TV у разработчика
-нет. Проверка — эмулятор Android TV (API 25); финальное подтверждение —
-у пользователя с 4PDA на реальном 7.1.1.
+Пункт 9 не проверен: на TV-эмуляторе тест шёл тапами (`input tap`), а не
+D-pad-навигацией. Пункт 10 непроверяем в принципе на доступном стенде —
+специфика 7.1.1 (старый trust store, `fixAndroidStack`, поведение
+VPN-стека на N_MR1) требует реального устройства.
 
-Пункты 1-4 подтверждают, что сборка корректна и регрессий в существующей
-логике нет, но **не** доказывают работоспособность на TV: главное
-(`PickNoPicker` реально возникает на устройстве без DocumentsUI)
-проверяется только на TV — код-путь выведен из исходников
-`file_picker` 11.0.2, а не наблюдался вживую.
+Замечание вне скоупа, замечено при проверке: на 1920×1080 UI рисуется
+узкой колонкой по центру (вёрстка под телефонный портрет). Не блокирует,
+но на TV выглядит непривычно — кандидат в отдельную таску.
 
 ## Docs to update
 

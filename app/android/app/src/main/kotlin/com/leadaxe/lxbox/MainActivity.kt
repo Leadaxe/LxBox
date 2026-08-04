@@ -105,6 +105,10 @@ class MainActivity : FlutterActivity() {
                         val opened = openAppPermissions()
                         result.success(opened)
                     }
+                    "hasRealFilePicker" -> {
+                        // §372 — есть ли на устройстве НАСТОЯЩИЙ файловый пикер.
+                        result.success(hasRealFilePicker())
+                    }
                     "checkNotificationPermission" -> {
                         // POST_NOTIFICATIONS — runtime permission на API 33+.
                         // На pre-33 концепта не было → implicit grant.
@@ -269,6 +273,35 @@ class MainActivity : FlutterActivity() {
     /// PermissionController to show the permissions UI for a specific app.
     /// If that fails (very old OEMs without PermissionController), fall back
     /// to the generic App info page.
+    /// §372 — есть ли на устройстве настоящий файловый менеджер.
+    ///
+    /// На Android TV DocumentsUI не ставится, но intent НЕ остаётся без
+    /// обработчика: framework подкладывает заглушку
+    /// `com.android.tv.frameworkpackagestubs/.Stubs$DocumentsStub` на
+    /// OPEN_DOCUMENT / GET_CONTENT / CREATE_DOCUMENT. Она показывает тост и
+    /// сразу finish'ится с RESULT_CANCELED — для приложения неотличимо от
+    /// «юзер передумал», поэтому импорт выглядел как немая кнопка
+    /// (жалоба 4PDA). `resolveActivity` тут не помогает: он находит заглушку
+    /// и возвращает не-null.
+    ///
+    /// Поэтому проверяем не «есть ли обработчик», а «есть ли обработчик,
+    /// который не является заглушкой». Устройство-verified на эмуляторе
+    /// Android TV (API 31): единственный кандидат — frameworkpackagestubs;
+    /// на телефоне — com.google.android.documentsui.
+    private fun hasRealFilePicker(): Boolean {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("*/*")
+        val candidates = packageManager.queryIntentActivities(intent, 0)
+        return candidates.any { !isStubHandler(it.activityInfo?.packageName) }
+    }
+
+    /// Пакеты-заглушки, которыми TV-framework затыкает отсутствующие
+    /// системные приложения. Матчим по префиксу — имя различается между
+    /// Android TV и Google TV сборками.
+    private fun isStubHandler(pkg: String?): Boolean =
+        pkg != null && pkg.contains("frameworkpackagestubs")
+
     private fun openAppPermissions(): Boolean {
         // Strategy 1: direct permissions UI
         val direct = Intent("android.intent.action.MANAGE_APP_PERMISSIONS")
