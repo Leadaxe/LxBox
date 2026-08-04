@@ -464,7 +464,8 @@
         },
         { "tag": "ru-services", "type": "inline",
           "rules": [
-            {"domain_suffix": ["userapi.com", "avito.st", "yandex.net", "yandex.com", "yastatic.net", "2gis.com", "okko.tv", "premier.one", "lenta.com", "vk.com", "vk-portal.net", "gismeteo.com", "lmru.tech", "mradx.net", "wbstatic.net", "wildberries.by", "trbcdn.net", "sberbank.com"]}
+            {"domain_suffix": ["userapi.com", "avito.st", "yandex.net", "yandex.com", "yastatic.net", "2gis.com", "okko.tv", "premier.one", "lenta.com", "vk.com", "vk-portal.net", "gismeteo.com", "lmru.tech", "mradx.net", "wbstatic.net", "wildberries.by", "trbcdn.net", "sberbank.com",
+      "mcc250.pub.3gppnetwork.org"]}
           ]
         },
         { "tag": "geoip-ru", "enabled": "@geoip_enabled", "type": "remote", "format": "binary", "update_interval": "168h",
@@ -568,8 +569,23 @@
       "rule": {"rule_set": ["unknown-apps"], "outbound": "@outbound"}
     },
     {
+      "preset_id": "vowifi",
+      "ui": {"label": "VoWiFi (carrier calling)", "description": "Keep Wi-Fi Calling off the VPN. Phones reach the carrier's IMS gateway (ePDG) under the 3GPP service domain, and an IKEv2/IPsec tunnel carries the calls. Routed through a VPN the voice picks up delay and jitter, and the carrier sees the IMS registration coming from a foreign address. Direct keeps calls on the home network.", "default": true, "num": 990, "isSortable": true},
+      "vars": [
+        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to send VoWiFi traffic. Direct keeps it off the VPN — that is the point of this preset."},
+        {"name": "ike_ports", "type": "bool", "default_value": "true", "title": "Match IKE ports (500/4500)", "tooltip": "Also route UDP 500/4500 directly. Some modems get the gateway address from the carrier network and never send a DNS query, so the domain rule alone misses them. Those ports carry nothing but IPsec key exchange."}
+      ],
+      "rule_set": [
+        {"tag": "vowifi-epdg", "type": "inline", "rules": [{"domain_suffix": ["pub.3gppnetwork.org"]}]}
+      ],
+      "rules": [
+        {"rule_set": ["vowifi-epdg"], "outbound": "@outbound"},
+        {"#if": {"and": ["@ike_ports"], "value": {"network": ["udp"], "port": [500, 4500], "outbound": "@outbound"}}}
+      ]
+    },
+    {
       "preset_id": "fcm-push",
-      "ui": {"label": "Google push (FCM)", "description": "Send only Google push traffic (FCM ports 5228-5230 and FCM hosts) outside the VPN, so notifications arrive on time with the screen off. Does not touch the rest of Google Play, so your Play region stays intact. Move this rule above your proxy rules for it to take effect. If your DNS goes through the tunnel, add a matching direct rule in DNS settings — otherwise the hosts resolve to the wrong region and push stays silent.", "default": false, "num": 970, "isSortable": true},
+      "ui": {"label": "Google push (FCM)", "description": "Send only Google push traffic (FCM ports 5228-5230 and FCM hosts) outside the VPN, so notifications arrive on time with the screen off. Does not touch the rest of Google Play, so your Play region stays intact. If your DNS goes through the tunnel, add a matching direct rule in DNS settings — otherwise the hosts resolve to the wrong region and push stays silent.", "default": false, "num": 970, "isSortable": true},
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to send push traffic. Direct keeps it off the VPN — that is the point of this preset."},
         {"name": "gms_only", "type": "bool", "default_value": "false", "title": "Limit to Google Play Services", "tooltip": "Match only traffic from com.google.android.gms instead of any app. Narrower, but app matching works in VPN mode only — leave off if you use proxy mode."}
