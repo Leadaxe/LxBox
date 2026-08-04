@@ -1,3 +1,7 @@
+Packaging only: the store metadata moved to the repository root so F-Droid can find it, and the Gradle wrapper now verifies the checksum of the distribution it downloads. The app itself is unchanged since 2.19.5.
+
+Recent app changes, from 2.19.4 and 2.19.5:
+
 A whole sing-box config now imports at once — nodes, auto-select groups and detour chains — so moving over from sing-box no longer means setting everything up by hand.
 
 Rule sets refresh on their own schedule, with a per-rule update interval (daily to yearly) and a visible age indicator.
