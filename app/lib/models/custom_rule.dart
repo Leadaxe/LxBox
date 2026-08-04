@@ -43,11 +43,21 @@ sealed class CustomRule {
     String? id,
     required this.name,
     required this.enabled,
+    this.orderNum,
   }) : id = id ?? newUuidV4();
 
   final String id;
   String name;
   bool enabled;
+
+  /// §370 — позиция на разреженной оси порядка правил (см. `parser_config.dart`
+  /// `kUserRuleNumStart`). В JSON — ключ `num`; в Dart поле названо `orderNum`,
+  /// потому что `num` — встроенный тип и линтер ругается на такое имя.
+  ///
+  /// `null` = правило ещё не размечено: так приезжает storage, записанный до
+  /// §370. Разметка (`markRuleOrder`) проставляет номер при первой загрузке —
+  /// отдельного версионированного шага миграции нет.
+  int? orderNum;
 
   /// Enum-дискриминатор для JSON. Значения совпадают с именами подклассов
   /// по convention (inline/srs/preset).
@@ -493,6 +503,7 @@ class CustomRuleInline extends CustomRule {
     super.id,
     required super.name,
     super.enabled = true,
+    super.orderNum,
     this.domains = const [],
     this.domainSuffixes = const [],
     this.domainKeywords = const [],
@@ -612,6 +623,7 @@ class CustomRuleInline extends CustomRule {
         'name': name,
         'enabled': enabled,
         'kind': kind.name,
+        if (orderNum != null) 'num': orderNum,
         if (domains.isNotEmpty) 'domains': domains,
         if (domainSuffixes.isNotEmpty) 'domainSuffixes': domainSuffixes,
         if (domainKeywords.isNotEmpty) 'domainKeywords': domainKeywords,
@@ -636,6 +648,7 @@ class CustomRuleInline extends CustomRule {
         id: _id(j),
         name: (j['name'] as String?) ?? '',
         enabled: (j['enabled'] as bool?) ?? true,
+        orderNum: j['num'] as int?,
         domains: _stringList(j['domains']),
         domainSuffixes: _stringList(j['domainSuffixes']),
         domainKeywords: _stringList(j['domainKeywords']),
@@ -659,6 +672,7 @@ class CustomRuleInline extends CustomRule {
   CustomRuleInline copyWith({
     String? name,
     bool? enabled,
+    int? orderNum,
     List<String>? domains,
     List<String>? domainSuffixes,
     List<String>? domainKeywords,
@@ -686,6 +700,7 @@ class CustomRuleInline extends CustomRule {
         id: id,
         name: name ?? this.name,
         enabled: enabled ?? this.enabled,
+        orderNum: orderNum ?? this.orderNum,
         domains: domains ?? this.domains,
         domainSuffixes: domainSuffixes ?? this.domainSuffixes,
         domainKeywords: domainKeywords ?? this.domainKeywords,
@@ -724,6 +739,7 @@ class CustomRuleSrs extends CustomRule {
     super.id,
     required super.name,
     super.enabled = true,
+    super.orderNum,
     this.srsUrl = '',
     this.ports = const [],
     this.portRanges = const [],
@@ -814,6 +830,7 @@ class CustomRuleSrs extends CustomRule {
         'name': name,
         'enabled': enabled,
         'kind': kind.name,
+        if (orderNum != null) 'num': orderNum,
         if (srsUrl.isNotEmpty) 'srsUrl': srsUrl,
         if (ports.isNotEmpty) 'ports': ports,
         if (portRanges.isNotEmpty) 'portRanges': portRanges,
@@ -840,6 +857,7 @@ class CustomRuleSrs extends CustomRule {
         id: _id(j),
         name: (j['name'] as String?) ?? '',
         enabled: (j['enabled'] as bool?) ?? true,
+        orderNum: j['num'] as int?,
         srsUrl: (j['srsUrl'] as String?) ?? '',
         ports: _stringList(j['ports']),
         portRanges: _stringList(j['portRanges']),
@@ -869,6 +887,7 @@ class CustomRuleSrs extends CustomRule {
   CustomRuleSrs copyWith({
     String? name,
     bool? enabled,
+    int? orderNum,
     String? srsUrl,
     List<String>? ports,
     List<String>? portRanges,
@@ -891,6 +910,7 @@ class CustomRuleSrs extends CustomRule {
         id: id,
         name: name ?? this.name,
         enabled: enabled ?? this.enabled,
+        orderNum: orderNum ?? this.orderNum,
         srsUrl: srsUrl ?? this.srsUrl,
         ports: ports ?? this.ports,
         portRanges: portRanges ?? this.portRanges,
@@ -936,6 +956,7 @@ class CustomRulePreset extends CustomRule {
     super.id,
     required super.name,
     super.enabled = true,
+    super.orderNum,
     required this.presetId,
     Map<String, String>? varsValues,
   }) : varsValues = Map<String, String>.from(varsValues ?? const {});
@@ -978,6 +999,7 @@ class CustomRulePreset extends CustomRule {
         'name': name,
         'enabled': enabled,
         'kind': kind.name,
+        if (orderNum != null) 'num': orderNum,
         'presetId': presetId,
         if (varsValues.isNotEmpty) 'varsValues': varsValues,
       };
@@ -986,6 +1008,7 @@ class CustomRulePreset extends CustomRule {
         id: _id(j),
         name: (j['name'] as String?) ?? '',
         enabled: (j['enabled'] as bool?) ?? true,
+        orderNum: j['num'] as int?,
         presetId: (j['presetId'] as String?) ?? '',
         varsValues: _stringMap(j['varsValues']),
       );
@@ -993,6 +1016,7 @@ class CustomRulePreset extends CustomRule {
   CustomRulePreset copyWith({
     String? name,
     bool? enabled,
+    int? orderNum,
     String? presetId,
     Map<String, String>? varsValues,
   }) =>
@@ -1000,6 +1024,7 @@ class CustomRulePreset extends CustomRule {
         id: id,
         name: name ?? this.name,
         enabled: enabled ?? this.enabled,
+        orderNum: orderNum ?? this.orderNum,
         presetId: presetId ?? this.presetId,
         varsValues: varsValues ?? this.varsValues,
       );
@@ -1040,6 +1065,7 @@ class CustomRuleJson extends CustomRule {
     super.id,
     required super.name,
     super.enabled = true,
+    super.orderNum,
     this.json = '',
   });
 
@@ -1064,6 +1090,7 @@ class CustomRuleJson extends CustomRule {
         'name': name,
         'enabled': enabled,
         'kind': kind.name,
+        if (orderNum != null) 'num': orderNum,
         'json': json,
       };
 
@@ -1071,14 +1098,16 @@ class CustomRuleJson extends CustomRule {
         id: _id(j),
         name: (j['name'] as String?) ?? '',
         enabled: (j['enabled'] as bool?) ?? true,
+        orderNum: j['num'] as int?,
         json: (j['json'] as String?) ?? '',
       );
 
-  CustomRuleJson copyWith({String? name, bool? enabled, String? json}) =>
+  CustomRuleJson copyWith({String? name, bool? enabled, int? orderNum, String? json}) =>
       CustomRuleJson(
         id: id,
         name: name ?? this.name,
         enabled: enabled ?? this.enabled,
+        orderNum: orderNum ?? this.orderNum,
         json: json ?? this.json,
       );
 

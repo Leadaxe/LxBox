@@ -16,7 +16,7 @@ import '../rule_set_downloader.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
 import 'if_engine.dart';
-import 'normalize_pinned_presets.dart';
+import 'rule_order.dart';
 import 'post_steps.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
@@ -294,12 +294,13 @@ Future<BuildResult> buildConfig({
     ];
   }
 
-  // §264 — нормализация pinned-пресетов: гарантирует, что locked+pinned
-  // пресет (traffic-processing) присутствует и стоит первым, независимо от
+  // §370 — нормализация порядка по оси `num`: seed обязательного пресета
+  // (traffic-processing) + разметка неразмеченных + сортировка. Гарантирует,
+  // что несортируемый пресет присутствует и стоит первым, независимо от
   // storage (fresh/restore/upgrade). Критично для порядка route.rules (sniff
   // первым). Одноразово здесь → все нижеследующие проходы видят нормализованный
   // список.
-  final customRules = normalizePinnedPresets(
+  final customRules = normalizeRuleOrder(
     settings.customRules,
     template.selectableRules,
     template,

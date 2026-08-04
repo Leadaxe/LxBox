@@ -615,6 +615,17 @@ class VarSection {
   final String chapter;
 }
 
+/// §370 — границы зоны пользовательских правил на оси `num`.
+///
+/// Ось разреженная: шаблонные пресеты стоят по краям с шагом 10 (зазор под
+/// будущие вставки), между ними — сто слотов под правила юзера. Полная
+/// раскладка в `docs/spec/tasks/370-rule-order-num-axis.md` §2.
+const int kUserRuleNumStart = 1000;
+const int kUserRuleNumEnd = 1100;
+
+/// §370 — дефолт для правила без явного `num` (середина пользовательской зоны).
+const int kDefaultRuleNum = kUserRuleNumStart;
+
 /// A selectable routing rule from the wizard template.
 ///
 /// Bundle-режим (spec §033): пресет self-contained — несёт rule_set +
@@ -630,7 +641,8 @@ class SelectableRule {
     this.description = '',
     this.defaultEnabled = false,
     this.locked = false,
-    this.pinned,
+    this.num = kDefaultRuleNum,
+    this.isSortable = true,
     this.ruleSets = const [],
     dynamic rule,
     this.vars = const [],
@@ -647,13 +659,23 @@ class SelectableRule {
   /// нет delete, drag off). Продуктовый инвариант (как `vpn-1` §125).
   final bool locked;
 
-  /// §264 — pinned: фиксированная позиция в списке правил и в `route.rules`.
-  /// `0` = всегда первый (критично для traffic-processing: `sniff` обязан быть
-  /// первым правилом). `null` = не пиннится (обычный пресет, порядок свободный).
-  final int? pinned;
+  /// §370 — позиция на разреженной оси порядка правил. Это СТАРТОВАЯ позиция,
+  /// а не забитая навсегда сортировка: юзер двигает правило drag'ом, `num`
+  /// пересчитывается (см. §370 §4).
+  ///
+  /// Раскладка: `0` — голова (traffic-processing), `950..980` — специфичные
+  /// пресеты, `1000..1100` — зона пользовательских правил, `1110..1150` —
+  /// широкие перехватчики. Шаг 10 между шаблонными оставлен намеренно: в
+  /// зазор можно вписать новый пресет, не переделывая раскладку.
+  final int num;
 
-  /// §264 — пресет закреплён на фиксированной позиции (pinned != null).
-  bool get isPinned => pinned != null;
+  /// §370 — можно ли двигать правило drag'ом. `false` = позиция закреплена
+  /// (`traffic-processing`: `sniff` обязан быть первым правилом `route.rules`).
+  ///
+  /// Ортогонально [locked]: `locked` — про «нельзя выключить/удалить»,
+  /// `isSortable` — про «нельзя двигать». У traffic-processing истинны оба,
+  /// но это разные инварианты (§370 §1).
+  final bool isSortable;
 
   final List<Map<String, dynamic>> ruleSets;
 
@@ -737,16 +759,17 @@ class SelectableRule {
       );
     }
     // §264 — метаданные пресета живут ТОЛЬКО в объекте `ui`
-    // (label/description/default/locked/pinned). Плоские поля больше не
-    // читаются — все пресеты шаблона переведены на `ui`. Отсутствие `ui` →
-    // пустые дефолты (пресет без имени = баг шаблона, поймает тест).
+    // (label/description/default/locked + §370 num/isSortable). Плоские поля
+    // больше не читаются — все пресеты шаблона переведены на `ui`. Отсутствие
+    // `ui` → пустые дефолты (пресет без имени = баг шаблона, поймает тест).
     final ui = json['ui'] as Map<String, dynamic>? ?? const {};
     return SelectableRule(
       label: ui['label'] as String? ?? '',
       description: ui['description'] as String? ?? '',
       defaultEnabled: ui['default'] as bool? ?? false,
       locked: ui['locked'] as bool? ?? false,
-      pinned: ui['pinned'] as int?,
+      num: ui['num'] as int? ?? kDefaultRuleNum,
+      isSortable: ui['isSortable'] as bool? ?? true,
       ruleSets: (json['rule_set'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
