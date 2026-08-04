@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Тип | bugfix (ANR, «Приложение не отвечает») |
-| Статус | 🔧 Исправлено — DEVICE-PENDING |
+| Статус | 🔧 Исправлено — DEVICE-PENDING (релиз v2.19.8) |
 | Дата | 2026-08-04 |
 | Связанные | [`122 commandclient-migration`](../features/122%20commandclient-migration/spec.md) (инвариант: unary-RPC на main = ANR), [`361`](361-late-started-status-after-service-destroy.md) (тот же блокирующий `startOrReloadService`, другой симптом), [`263`](../features/) (`ACTION_CLEAR_DNS_CACHE` — второй пострадавший обработчик), [`182`](182-notification-action-buttons.md) (образец ухода с main через отдельный scope) |
 
