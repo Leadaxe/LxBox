@@ -238,12 +238,30 @@ mixin _ConfigIoMixin on ChangeNotifier {
   Future<bool> readFromFile() async {
     _emit(_state.copyWith(busy: true, lastError: null));
     try {
-      final result = await FilePicker.pickFiles(withData: true, allowMultiple: false);
-      if (result == null || result.files.isEmpty) {
-        _emit(_state.copyWith(busy: false));
+      // §372 — pickFileSafely вместо FilePicker: на Android TV пикера нет,
+      // и прямой вызов оборачивался общим catch'ем ниже в «File error»,
+      // не подсказывая юзеру рабочую альтернативу (буфер / URL).
+      final outcome = await pickFileSafely();
+      if (outcome is! PickedFiles) {
+        switch (outcome) {
+          case PickCancelled():
+            _emit(_state.copyWith(busy: false));
+          case PickNoPicker():
+            _emit(_state.copyWith(
+                lastError: const ErrMsg(ErrKey.noFileManager), busy: false));
+            _addDebug(DebugSource.app, 'File pick: no file manager on device');
+          case PickFailed(:final error):
+            _emit(_state.copyWith(
+                lastError:
+                    PrefixedMsg(ErrPrefix.fileError, formatUserError(error)),
+                busy: false));
+            _addDebug(DebugSource.app, 'File pick failed: $error');
+          case PickedFiles():
+            break; // недостижимо — отсечено выше
+        }
         return false;
       }
-      final file = result.files.single;
+      final file = outcome.single;
       final bytes = file.bytes;
       final path = file.path;
       late final String text;

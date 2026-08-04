@@ -1767,6 +1767,9 @@
   "File is empty": {
     "value": "Файл пуст"
   },
+  "No file manager on this device. Paste from the clipboard or add by URL instead.": {
+    "value": "На этом устройстве нет файлового менеджера. Вставьте из буфера обмена или добавьте по ссылке."
+  },
   "File is too large to edit on device. Share it, edit externally, then load it back.": {
     "value": "Файл слишком большой для правки на устройстве. Поделитесь им, отредактируйте во внешнем редакторе и загрузите обратно."
   },

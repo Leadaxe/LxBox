@@ -4,7 +4,6 @@ import '../models/node_spec.dart';
 import '../services/node_identity.dart';
 import 'auto_group_edit_screen.dart';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -27,6 +26,7 @@ import '../widgets/detour_target_picker.dart';
 import '../widgets/probe_badge.dart';
 import '../widgets/reorder_grab_strip.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/file_import.dart';
 
 /// §234 — экран папки серверов. Зеркалит SubscriptionDetailScreen: вкладка
 /// членов (per-member toggle, drag-reorder, long-press меню) + Settings
@@ -695,12 +695,19 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
 
   Future<void> _addFromFiles() async {
     try {
-      final result =
-          await FilePicker.pickFiles(withData: true, allowMultiple: true);
-      if (result == null || result.files.isEmpty) return;
+      // §372 — Android TV без файлового менеджера: подсказка вместо тупика.
+      final outcome = await pickFileSafely(allowMultiple: true);
+      if (outcome is! PickedFiles) {
+        final problem = pickProblemText(outcome);
+        if (problem != null && mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(problem)));
+        }
+        return;
+      }
       var added = 0;
       final errors = <String>[];
-      for (final file in result.files) {
+      for (final file in outcome.files) {
         String text;
         if (file.bytes != null && file.bytes!.isNotEmpty) {
           text = String.fromCharCodes(file.bytes!);

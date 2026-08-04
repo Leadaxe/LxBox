@@ -91,6 +91,10 @@ class HomeControls extends StatelessWidget {
           Row(
             children: [
               FilledButton.icon(
+                // §372 — D-pad: на Android TV фокус при открытии экрана должен
+                // стоять на главном действии, иначе первое нажатие пульта
+                // уходит в никуда и выглядит как «кнопки не работают».
+                autofocus: true,
                 onPressed: toggleEnabled
                     ? () {
                         HapticService.I.onConnectTap();
@@ -180,7 +184,12 @@ class HomeControls extends StatelessWidget {
                   ),
                 ),
               ),
-              GestureDetector(
+              // §372 — InkWell, не GestureDetector: у последнего нет фокусного
+              // узла, и на Android TV кнопка была недостижима с пульта
+              // (D-pad её просто пропускал). InkWell фокусируется и
+              // подсвечивается, поведение тапа/long-press то же.
+              InkWell(
+                borderRadius: BorderRadius.circular(20),
                 onTap: (!state.tunnelUp || state.busy || state.nodes.isEmpty)
                     ? null
                     : () {

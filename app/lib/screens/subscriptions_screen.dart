@@ -27,6 +27,7 @@ import 'subscriptions_screen/widgets/add_icon_button.dart';
 import 'subscriptions_screen/widgets/subscription_entry_tile.dart';
 import 'subscriptions_screen/widgets/subscriptions_empty_state.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/file_import.dart';
 
 class SubscriptionsScreen extends StatefulWidget {
   const SubscriptionsScreen({
@@ -282,14 +283,21 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   /// file-подписка при >1 ноды / одиночный сервер).
   Future<void> _importFromFile() async {
     try {
-      final result =
-          await FilePicker.pickFiles(withData: true, allowMultiple: true);
-      if (result == null || result.files.isEmpty) return;
-      if (result.files.length > 1) {
-        await _importFilesIntoFolder(result.files);
+      // §372 — Android TV без файлового менеджера: подсказка вместо тупика.
+      final outcome = await pickFileSafely(allowMultiple: true);
+      if (outcome is! PickedFiles) {
+        final problem = pickProblemText(outcome);
+        if (problem != null && mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(problem)));
+        }
         return;
       }
-      final file = result.files.single;
+      if (outcome.files.length > 1) {
+        await _importFilesIntoFolder(outcome.files);
+        return;
+      }
+      final file = outcome.single;
       final text = (await _readPickedFile(file))?.trim() ?? '';
       if (text.isEmpty) {
         if (mounted) {

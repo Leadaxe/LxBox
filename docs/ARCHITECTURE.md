@@ -24,6 +24,19 @@
 | **Best-effort** | 7.0–10 (API 24–29) | Compile OK, install OK, базовый VPN-функционал должен работать. Фичи требующие новых API (например, silent-kill detection через `getHistoricalProcessExitReasons`, API 30+) деградируют к no-op за `SDK_INT`-гейтами. Не тестируется регулярно; жалобы принимаются, но fix'ы на best-effort основе. На 7.x дополнительно: старый системный trust store — на 7.0 нет корня ISRG Root X1, HTTPS-подписки с Let's Encrypt-сертификатами не валидируются (на 7.1.1+ корень есть). |
 | **Unsupported** | <7 (API <24) | Установка заблокирована `minSdk=24`; ниже 24 не пускает сам Flutter (пол движка) |
 
+> **Android TV (§372).** Приложение объявлено совместимым с TV
+> (`uses-feature leanback` / `touchscreen` — обе `required="false"`,
+> `LEANBACK_LAUNCHER` в intent-filter), но остаётся **best-effort**:
+> UI рассчитан на касание, отдельного leanback-интерфейса нет. Две
+> особенности платформы, которые надо помнить при правках:
+> в прошивках TV, как правило, **нет DocumentsUI** — любой выбор файла
+> через `file_picker` невозможен, поэтому все пики идут через
+> [`services/file_import.dart`](../app/lib/services/file_import.dart), который
+> подсказывает буфер обмена / URL; и управление идёт с **D-pad** — виджеты
+> без фокусного узла (`GestureDetector`) с пульта недостижимы, для кликабельных
+> элементов на пути подключения нужен `InkWell`/кнопка. Подробности —
+> [§372](spec/tasks/372-android-tv-support.md).
+
 > **Рендерер (§131).** На `Build.VERSION.SDK_INT < 31` (Android ≤11) Flutter
 > принудительно переключается с Impeller на **Skia** (`getFlutterShellArgs` →
 > `--enable-impeller=false` в [`MainActivity`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt)).
