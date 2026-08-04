@@ -64,16 +64,22 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
         stripRefVarsFromVarsValues(_customRules, template.selectableRules);
     final strippedChanged = !identical(stripped, _customRules);
 
-    // §264 — нормализация pinned-пресетов на UI/storage-уровне. `_seedDefaultPresets`
-    // сидит дефолты только при первой установке (`hasDefaultsSeeded` guard); у
-    // существующих юзеров новый locked+pinned пресет (traffic-processing) НЕ
-    // засеется и не появится в списке правил, хотя билдер добавляет его правила
-    // в route.rules на лету. Нормализуем здесь: докидываем недостающий pinned +
-    // ставим первым; если список изменился — персистим (закрепляем в storage,
-    // чтобы пресет видели все потребители: Routing UI, Debug API /rules, DNS-экран).
+    // §370 — нормализация порядка по оси `num` на UI/storage-уровне.
+    // `_seedDefaultPresets` сидит дефолты только при первой установке
+    // (`hasDefaultsSeeded` guard); у существующих юзеров обязательный пресет
+    // (traffic-processing) НЕ засеется и не появится в списке правил, хотя
+    // билдер добавляет его правила в route.rules на лету. Здесь же случается
+    // разметка storage, записанного до §370 (`num` отсутствует) — отдельного
+    // версионированного шага миграции нет. Если список изменился — персистим,
+    // чтобы номера видели все потребители: Routing UI, Debug API /rules,
+    // DNS-экран.
+    // Неразмеченные правила ловим ДО нормализации: `markRuleOrder` мутирует
+    // `orderNum` на месте, после неё разницы «было/стало» уже не видно.
+    final needsMarking = stripped.any((r) => r.orderNum == null);
     final normalized =
-        normalizePinnedPresets(stripped, template.selectableRules, template);
-    final orderChanged = !_sameRuleOrder(normalized, _customRules);
+        normalizeRuleOrder(stripped, template.selectableRules, template);
+    final orderChanged =
+        needsMarking || !_sameRuleOrder(normalized, _customRules);
     if (strippedChanged || orderChanged) {
       _customRules
         ..clear()

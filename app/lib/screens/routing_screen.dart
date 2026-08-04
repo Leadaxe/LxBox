@@ -2,13 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../config/consts.dart' show kDirectOutboundTag;
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
-import '../services/builder/normalize_pinned_presets.dart';
+import '../services/builder/rule_order.dart';
 import '../services/channel_mutations.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/preset_on_change.dart';
@@ -448,9 +447,15 @@ class _RoutingScreenState extends State<RoutingScreen>
             _remoteRuleSetsOf(rule, cr).isNotEmpty);
     if (needsSrs) cr = cr.withEnabled(false);
 
-    final insertAt = _computeInsertIndex(cr);
+    // §370 — пресет из каталога садится на свой шаблонный `num`; если тот
+    // занят, соседи сдвигаются лениво. Позиция в списке — производная от оси.
+    cr.orderNum = rule.num;
     setState(() {
-      _customRules.insert(insertAt, cr);
+      _customRules.add(cr);
+      final sorted = sortRulesByNum(_customRules);
+      _customRules
+        ..clear()
+        ..addAll(sorted);
       _markDirty();
     });
     // §266 — при создании пресета применяем on_change по начальному состоянию
@@ -483,47 +488,40 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   // ─── Custom Rules (Routing, spec §030) ───
 
+  /// §370 — drag: правило встаёт СРАЗУ ЗА тем, на чьё место его бросили,
+  /// и получает `num = target.num + 1` (ленивый сдвиг соседей, см.
+  /// `placeRuleAfter`). Порядок в списке — производная от оси, поэтому после
+  /// пересчёта номеров список пересортировывается, а не переставляется руками.
   void _onReorderCustomRule(int oldIndex, int newIndex) {
     setState(() {
       // ReorderableListView передаёт newIndex сдвинутым на 1 если move вниз.
       if (newIndex > oldIndex) newIndex -= 1;
-      // §264 — pinned-инвариант: locked/pinned пресеты (traffic-processing)
-      // держатся в начале списка. Число таких «шапочных» правил = pinnedCount.
-      final pinnedCount = _pinnedRuleCount();
-      // Нельзя двигать сам pinned-пресет (drag-handle у него скрыт, но защита
-      // на случай программного вызова).
-      if (oldIndex < pinnedCount) return;
-      // Нельзя вставить обычное правило ВЫШЕ pinned-шапки — clamp к первой
-      // свободной позиции.
-      if (newIndex < pinnedCount) newIndex = pinnedCount;
-      final moved = _customRules.removeAt(oldIndex);
-      _customRules.insert(newIndex, moved);
+      final moved = _customRules[oldIndex];
+      if (!_isSortable(moved)) return; // несортируемое не двигаем
+      // Цель — правило, ЗА которым встаём, в списке БЕЗ самого moved:
+      // после удаления moved индексы ниже него смещаются, и брать цель из
+      // исходного списка нельзя (иначе при движении вниз целью становится
+      // элемент, который сам сдвинется). Бросок в начало (newIndex 0) —
+      // «перед первым»: target = null, `placeRuleAfter` уводит в начало
+      // сортируемой части, несортируемая шапка при этом не двигается.
+      final rest = [..._customRules]..removeAt(oldIndex);
+      final target = newIndex == 0 ? null : rest[newIndex - 1];
+      placeRuleAfter(_customRules, moved, target, isSortable: _isSortable);
+      final sorted = sortRulesByNum(_customRules);
+      _customRules
+        ..clear()
+        ..addAll(sorted);
       _markDirty();
     });
   }
 
-  /// §264 — сколько правил в начале списка являются pinned-пресетами
-  /// (держатся сверху, не двигаются). Нормализация билдера ставит их первыми,
-  /// экран поддерживает инвариант при reorder.
-  ///
-  /// Считаем ВСЕ pinned-правила, а не префикс от начала: storage мог приехать
-  /// испорченным (backup-restore, Debug API, старый баг вставки), и тогда
-  /// префиксный счётчик натыкался на чужое правило первым, возвращал 0 и
-  /// снимал защиту целиком. Порядок такого storage чинит `normalizePinnedPresets`
-  /// в `_load()`, так что счётчик описывает уже нормализованный список.
-  ///
-  /// Критерий — `isPinned` (как в `normalizePinnedPresets`), а не `locked`:
-  /// это два разных флага `ui`, и расхождение критериев между билдером и
-  /// экраном уже приводило к разъезду порядка.
-  int _pinnedRuleCount() {
-    var n = 0;
-    for (final rule in _customRules) {
-      final preset = rule.kind == CustomRuleKind.preset
-          ? _presetFor(rule.presetId)
-          : null;
-      if (preset?.isPinned == true) n++;
-    }
-    return n;
+  /// §370 — можно ли двигать правило drag'ом. Несортируемые
+  /// (`traffic-processing`) держат позицию: они несут `sniff`, который обязан
+  /// быть первым правилом `route.rules`. Правило, которого нет в шаблоне
+  /// (пользовательское inline/srs/json), сортируемо всегда.
+  bool _isSortable(CustomRule rule) {
+    if (rule.kind != CustomRuleKind.preset) return true;
+    return _presetFor(rule.presetId)?.isSortable ?? true;
   }
 
   Widget _buildCustomRuleTile(int index) {
@@ -573,6 +571,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       showOutbound: showOutbound,
       touchesDns: touchesDns,
       locked: preset?.locked ?? false,
+      sortable: _isSortable(rule),
       statusButton: statusButton,
       onTap: () => _openCustomRuleEditor(index),
       onLongPressStart: (pos) => _showRuleContextMenu(index, pos),
@@ -732,9 +731,15 @@ class _RoutingScreenState extends State<RoutingScreen>
     if (result.wasDeleted) return; // нечего удалять — только что создали
     if (result.saved != null && mounted) {
       final saved = result.saved!;
-      final insertAt = _computeInsertIndex(saved);
+      // §370 — новое пользовательское правило уезжает в конец занятой части
+      // зоны 1000..1100 (см. `nextUserRuleNum`).
+      saved.orderNum = nextUserRuleNum(_customRules);
       setState(() {
-        _customRules.insert(insertAt, saved);
+        _customRules.add(saved);
+        final sorted = sortRulesByNum(_customRules);
+        _customRules
+          ..clear()
+          ..addAll(sorted);
         _markDirty();
       });
     }
@@ -815,52 +820,6 @@ class _RoutingScreenState extends State<RoutingScreen>
   ///    `direct-out`).
   /// 5. Fallback `'direct-out'`.
   ///
-  /// `preset_expand` использует override из шага 1 чтобы полностью заменить
-  /// template-решение на любой канал: юзер может сменить Block Ads с reject
-  /// на vpn-1, и обратно. Template-форма (action vs outbound vs `@outbound`)
-  /// — лишь default, не ограничение.
-  /// Effective outbound любого правила — для inline/srs берёт поле, для
-  /// preset делегирует в [_presetOut] через fallback-chain. Используется
-  /// при insertion-sort'е нового preset'а: reject → верх, direct-out → после
-  /// reject-блока, остальное → в хвост.
-  String _effectiveOutboundOf(CustomRule rule) {
-    if (rule is CustomRulePreset) {
-      return _presetOut(rule, _presetFor(rule.presetId));
-    }
-    return rule.outbound;
-  }
-
-  /// Индекс куда вставить новое правило, чтобы сохранить "specific-first"
-  /// порядок: pinned-шапка ─ reject-блок ─ direct-блок ─ всё остальное.
-  ///
-  /// - Новое правило с effective outbound `reject` → сразу под pinned-шапкой
-  /// - Новое правило с effective outbound `direct-out` → сразу после
-  ///   последнего reject (пропускает reject-блок)
-  /// - Новое правило с любым другим outbound → в хвост
-  ///
-  /// §264 — ни один из вариантов не поднимается выше pinned-шапки:
-  /// `traffic-processing` несёт `sniff`, который обязан быть первым. Без этого
-  /// пресет с `direct-out` (напр. `fcm-push`) при пустом reject-блоке садился
-  /// на index 0 и выдавливал шапку вниз — а `_pinnedRuleCount`, считающий
-  /// префикс от начала списка, после этого возвращал 0 и снимал защиту drag'а.
-  ///
-  /// Внутри одного типа порядок добавления сохраняется (новый direct
-  /// ложится за уже существующими direct'ами). Юзер может переставить
-  /// drag'ом — это лишь initial-insert.
-  int _computeInsertIndex(CustomRule newRule) {
-    final pinnedCount = _pinnedRuleCount();
-    final outbound = _effectiveOutboundOf(newRule);
-    if (outbound == kOutboundReject) return pinnedCount;
-    if (outbound == kDirectOutboundTag) {
-      var i = pinnedCount;
-      while (i < _customRules.length &&
-          _effectiveOutboundOf(_customRules[i]) == kOutboundReject) {
-        i++;
-      }
-      return i;
-    }
-    return _customRules.length;
-  }
 
   String _presetOut(CustomRule rule, SelectableRule? preset) =>
       RoutingHelpers.presetOut(rule, preset);

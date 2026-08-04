@@ -130,7 +130,7 @@ wizard_template.json
 │   │   ├─ default_domain_resolver "@dns_default_domain_resolver"
 │   │   ├─ rules[]                 list[0]       [] — §264: sniff/hijack-dns/resolve
 │   │   │                                         ПЕРЕЕХАЛИ в locked-пресет traffic-processing
-│   │   │                                         (pinned:0 → первые в route.rules).
+│   │   │                                         (num:0 → первые в route.rules).
 │   │   │                                         В шаблоне route.rules пуст.
 │   │   ├─ rule_set[]              list          (в шаблоне ключа НЕТ — создаётся билдером
 │   │   │                                         из selectable_rules[].rule_set)
@@ -148,8 +148,9 @@ wizard_template.json
         │   ├─ label               string        UI display                label/description/
         │   ├─ description         string        тултип                     default УБРАНЫ,
         │   ├─ default             bool?         вкл у новых юзеров?         fallback СНЯТ):
-        │   ├─ locked              bool?         §264 — нельзя выкл/удалить/двигать
-        │   └─ pinned              int?          §264 — фикс-позиция в списке и route.rules
+        │   ├─ locked              bool?         §264 — нельзя выкл/удалить
+        │   ├─ num                 int?          §370 — позиция на оси порядка правил
+        │   └─ isSortable          bool?         §370 — можно ли двигать drag'ом
         ├─ vars[]                  list?         переменные видимые когда preset enabled
         │                                        (тот же shape что sections[*].vars[*];
         │                                         §265: элемент может быть {"ref":"<global>"})
@@ -698,7 +699,7 @@ FakeIP он должен молчать, §263):
     "rules": [
       // §264: route.rules в шаблоне ПУСТ. Базовые sniff/hijack-dns/resolve
       // ПЕРЕЕХАЛИ в locked-пресет traffic-processing (первый в selectable_rules,
-      // pinned:0 → билдер ставит его правила первыми в финальном route.rules).
+      // num:0 → билдер ставит его правила первыми в финальном route.rules).
       // Порядок (sniff ПЕРЕД resolve) критичен для FakeIP: sniff извлекает домен
       // до resolve (resolve по фейк-IP 198.18.x.x бессмыслен). Каждое из трёх
       // правил обёрнуто в #if внутри пресета: @sniff_enabled / (протокол dns —
@@ -742,7 +743,8 @@ FakeIP он должен молчать, §263):
     "description": "<тултип>",          //   top-level УБРАНЫ; fallback в
     "default":     <bool>?,             //   SelectableRule.fromJson СНЯТ — читается
     "locked":      <bool>?,             //   ТОЛЬКО ui.
-    "pinned":      <int>?               //   locked/pinned — см. ниже.
+    "num":         <int>?,              //   §370 — ось порядка, см. ниже.
+    "isSortable":  <bool>?              //
   },
   "vars": [ <Var> | {"ref":"<global>"}, … ]?, // vars видимые только при включении preset'а;
                                         //   §265: элемент-ссылка {"ref":"<имя глобали>"}
@@ -757,7 +759,8 @@ FakeIP он должен молчать, §263):
 
 ### `ui` — метаданные пресета (§264)
 
-С §264 label/description/default/locked/pinned живут в объекте `ui` (**ОБЯЗАТЕЛЕН**;
+С §264 label/description/default/locked (+ §370 num/isSortable) живут в объекте
+`ui` (**ОБЯЗАТЕЛЕН**;
 плоские top-level `label`/`description`/`default` из шаблона убраны, fallback в
 `SelectableRule.fromJson` снят — читается только `ui`). Все 8 пресетов переведены на `ui`.
 
@@ -766,15 +769,17 @@ FakeIP он должен молчать, §263):
 | `label` | string | UI display. |
 | `description` | string | Тултип. |
 | `default` | bool? | default true → включён в новой установке. |
-| `locked` | bool? | §264 — пресет **нельзя выключить** (свич disabled), **нельзя удалить**, **нельзя двигать** (нет drag-handle). Единственный locked-пресет — `traffic-processing`. |
-| `pinned` | int? | §264 — **фиксированная позиция** в списке пресетов И в финальном `config.route.rules`. `pinned:0` = всегда позиция 0 (критично: sniff обязан быть первым). Нормализация `normalize_pinned_presets.dart` гарантирует наличие+позицию pinned-пресета (fresh/restore/upgrade-safe). Debug API (`serializers/rules.dart`) сериализует `locked`/`pinned`. |
+| `locked` | bool? | §264 — пресет **нельзя выключить** (свич disabled) и **нельзя удалить**. Ортогонален `isSortable` (тот про drag). Единственный locked-пресет — `traffic-processing`. |
+| `num` | int? | §370 — позиция на **разреженной оси порядка правил**. Раскладка: `0` голова (traffic-processing), `950..990` специфичные пресеты, `1000..1100` зона пользовательских правил, `1110..1150` широкие перехватчики. Шаг 10 между шаблонными — зазор под будущие вставки. Это **стартовая** позиция: юзер двигает drag'ом, `num` пересчитывается и живёт в storage (`custom_rules[].num`). Дефолт при отсутствии — `1000`. |
+| `isSortable` | bool? | §370 — можно ли двигать правило drag'ом. `false` = позиция закреплена, drag-handle скрыт; такой пресет ещё и **сидится принудительно** (`seedRequiredPresets`), т.к. его присутствие — продуктовый инвариант. Единственный несортируемый — `traffic-processing` (`num:0`): он несёт `sniff`, который обязан быть первым правилом `route.rules`. Дефолт — `true`. |
 
 ### Полевая матрица текущих 8 preset'ов
 
-Метаданные — из `ui.*` (§264): `default`/`locked`/`pinned`. `traffic-processing` —
-первый в каталоге (locked, pinned:0), несёт базовые sniff/hijack-dns/resolve.
+Метаданные — из `ui.*` (§264/§370): `default`/`locked`/`num`/`isSortable`.
+`traffic-processing` — первый в каталоге (locked, num:0, isSortable:false), несёт
+базовые sniff/hijack-dns/resolve.
 
-| `preset_id` | `ui.default` | `ui.locked` | `ui.pinned` | `vars` | `rule_set` | `rule(s)` | `dns_rule(s)` | `dns_servers` |
+| `preset_id` | `ui.default` | `ui.locked` | `ui.num` | `vars` | `rule_set` | `rule(s)` | `dns_rule(s)` | `dns_servers` |
 |---|---|---|---|---|---|---|---|---|
 | `traffic-processing` | true | true | 0 | ✓ (sniff_enabled, sniff_timeout §264 enum 100ms/300ms/500ms/1s/3s, hijack_dns_enabled §264 bool WARNING-тултип, `{"ref":"resolve_enabled"}` + `{"ref":"resolve_strategy"}` §265 — обе ref на секцию `internal`) | — | ✓ массив: `[sniff #if @sniff_enabled, hijack-dns, resolve strategy:@resolve_strategy #if @resolve_enabled]` | — | — |
 | `block-ads` | false | — | — | — | ✓ (remote ads-all) | ✓ (action: reject) | — | — |
@@ -785,7 +790,7 @@ FakeIP он должен молчать, §263):
 | `private-ip` | (false) | — | — | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
 | `unknown-traffic` | false | — | — | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
 
-**`traffic-processing` (§264)** — locked/pinned пресет, ПЕРВЫЙ в `selectable_rules`. Несёт базовые route-правила `sniff` / `hijack-dns` / `resolve`, которые до §264 жили прямо в `config.route.rules` (теперь пуст). `pinned:0` гарантирует, что его правила идут первыми в финальном `config.route.rules` (sniff обязан быть первым — извлекает домен до resolve, критично для FakeIP). `locked:true` — свич disabled, нельзя удалить/двигать. Каждое из трёх правил гейтится собственным `#if` (array-element form): `sniff #if @sniff_enabled` / `hijack-dns` (безусловно) / `resolve #if @resolve_enabled`. Vars пресета: `sniff_enabled` (bool), `sniff_timeout` (enum 100ms/300ms/500ms/1s/3s — НОВАЯ, дефолт `300ms`, раньше был хардкод `timeout:"1s"`), `hijack_dns_enabled` (bool — НОВАЯ, WARNING-тултип: off ломает FakeIP), `{"ref":"resolve_enabled"}` + `{"ref":"resolve_strategy"}` (§265 ref-vars — значение и метаданные из глобалей `resolve_enabled`/`resolve_strategy`, обе живут в секции `internal`, редактируются прямо здесь). Отключение `hijack_dns_enabled` убирает hijack-dns-правило; ⚠ без hijack-dns DNS-запросы не перехватываются → FakeIP не работает. `resolve_enabled=false` нужен для FakeIP (real-lookup идёт мимо FakeIP через `default_domain_resolver`, §263) — при включении FakeIP этот флаг гасится **автоматически** через on_change пресета `fakeip` (§266, см. «`on_change` пресета» выше). Нормализация `normalize_pinned_presets.dart` держит пресет в наличии и на позиции 0 при fresh install / restore / upgrade.
+**`traffic-processing` (§264/§370)** — locked + несортируемый пресет, ПЕРВЫЙ в `selectable_rules`. Несёт базовые route-правила `sniff` / `hijack-dns` / `resolve`, которые до §264 жили прямо в `config.route.rules` (теперь пуст). `num:0` + `isSortable:false` гарантируют, что его правила идут первыми в финальном `config.route.rules` (sniff обязан быть первым — извлекает домен до resolve, критично для FakeIP). `locked:true` — свич disabled, нельзя удалить; `isSortable:false` — нельзя двигать. Каждое из трёх правил гейтится собственным `#if` (array-element form): `sniff #if @sniff_enabled` / `hijack-dns` (безусловно) / `resolve #if @resolve_enabled`. Vars пресета: `sniff_enabled` (bool), `sniff_timeout` (enum 100ms/300ms/500ms/1s/3s — НОВАЯ, дефолт `300ms`, раньше был хардкод `timeout:"1s"`), `hijack_dns_enabled` (bool — НОВАЯ, WARNING-тултип: off ломает FakeIP), `{"ref":"resolve_enabled"}` + `{"ref":"resolve_strategy"}` (§265 ref-vars — значение и метаданные из глобалей `resolve_enabled`/`resolve_strategy`, обе живут в секции `internal`, редактируются прямо здесь). Отключение `hijack_dns_enabled` убирает hijack-dns-правило; ⚠ без hijack-dns DNS-запросы не перехватываются → FakeIP не работает. `resolve_enabled=false` нужен для FakeIP (real-lookup идёт мимо FakeIP через `default_domain_resolver`, §263) — при включении FakeIP этот флаг гасится **автоматически** через on_change пресета `fakeip` (§266, см. «`on_change` пресета» выше). Нормализация `rule_order.dart` (§370) держит пресет в наличии и на позиции 0 при fresh install / restore / upgrade.
 
 `unknown-traffic` — reject/direct для трафика в туннеле, не атрибутированного ни одному установленному приложению (фоновые/чужие процессы). Инлайн `rule_set` `unknown-apps` матчит «всё, что НЕ приложение» через `invert: true` + `package_name_regex: "^"`.
 
@@ -812,7 +817,7 @@ FakeIP он должен молчать, §263):
 > `userVars`; если оно осело в `varsValues` пресета (миграция, старый storage) —
 > это «застрявшая» копия, которая расходится с глобалью (subtitle показывал
 > `resolve_enabled: true`, когда глобаль уже `false`). `stripRefVarsFromVarsValues`
-> (`normalize_pinned_presets.dart`) вычищает ref-ключи из `varsValues` на загрузке
+> (`rule_order.dart`) вычищает ref-ключи из `varsValues` на загрузке
 > Routing-экрана; все читатели `varsValues` по имени var **обязаны** пропускать
 > `v.isRef` (subtitle, Debug-сериализатор, rule_set.enabled-гейт — см. `366beec`).
 
@@ -989,12 +994,13 @@ Editorial-конвенции для **бандл**-шаблона (`app/assets/w
 
 ### `ui`-объект пресета (§264)
 
-Метаданные пресета (`label`/`description`/`default`/`locked`/`pinned`) — **одна строка**,
-если влезает; иначе `label`/`description` на строке 1, флаги (`default`/`locked`/`pinned`) —
-строкой ниже. Флаги-`false`/`pinned:null` НЕ пишем (дефолты модели).
+Метаданные пресета (`label`/`description`/`default`/`locked`/`num`/`isSortable`) —
+**одна строка**, если влезает; иначе `label`/`description` на строке 1, флаги —
+строкой ниже. Флаги-`false` и `isSortable:true` НЕ пишем (дефолты модели); `num`
+пишем всегда — это часть раскладки оси.
 
 ```jsonc
-"ui": {"label": "Traffic Processing", "description": "...", "default": true, "locked": true, "pinned": 0}
+"ui": {"label": "Traffic Processing", "description": "...", "default": true, "locked": true, "num": 0, "isSortable": false}
 ```
 
 ### JSON payload (`config`, `dns_servers`, `rule_set`)
@@ -1136,7 +1142,7 @@ Update var.type таблицу в этом файле + добавить рен�
 
 ### Меняем `config.route.rules` базовые правила
 
-С §264 базовых правил в `config.route.rules` **больше нет** (ключ пуст) — sniff/hijack-dns/resolve переехали в locked-пресет `traffic-processing` (`pinned:0`). Правь их **там**, не в `config.route.rules`. Порядок первых правил критичен (sniff первым) — `pinned:0` + `normalize_pinned_presets.dart` держат пресет на позиции 0. Любое новое базовое route-правило для всех юзеров либо кладётся в этот пресет, либо (если условное) — как preset-rule. Может сломать routing для существующих юзеров — **проверять** порядок относительно auto-discovery preset-rules. См. order matters в [§030].
+С §264 базовых правил в `config.route.rules` **больше нет** (ключ пуст) — sniff/hijack-dns/resolve переехали в locked-пресет `traffic-processing` (`num:0`). Правь их **там**, не в `config.route.rules`. Порядок первых правил критичен (sniff первым) — `num:0` + `isSortable:false` + `rule_order.dart` держат пресет на позиции 0. Любое новое базовое route-правило для всех юзеров либо кладётся в этот пресет, либо (если условное) — как preset-rule. Может сломать routing для существующих юзеров — **проверять** порядок относительно auto-discovery preset-rules. См. order matters в [§030].
 
 ### Добавляем ref-var в пресет (§265)
 

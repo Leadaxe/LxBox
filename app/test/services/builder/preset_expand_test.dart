@@ -991,6 +991,60 @@ void main() {
       return SelectableRule.fromJson(found);
     }
 
+    // §371 — VoWiFi: домен ePDG + опциональные IKE-порты.
+    test('vowifi (дефолты: ike_ports=true) → route по домену + route по портам',
+        () {
+      final preset = realPreset('vowifi');
+      final f = expandPreset(
+        CustomRulePreset(name: 'VoWiFi', presetId: 'vowifi'),
+        preset,
+      );
+
+      expect(f.routingRules.length, 2,
+          reason: 'домен + IKE-порты; 1 = #if-ветка портов потеряна');
+      final byDomain = f.routingRules[0];
+      // Одноэлементный rule_set движок сворачивает в строку.
+      expect(byDomain['rule_set'], 'vowifi-epdg');
+      expect(byDomain['outbound'], 'direct-out');
+
+      final byPort = f.routingRules[1];
+      expect(byPort['network'], ['udp']);
+      expect(byPort['port'], [500, 4500]);
+      expect(byPort['outbound'], 'direct-out');
+
+      // Домен ePDG — весь 3GPP-суффикс, не только РФ: иностранная SIM
+      // тоже должна звонить мимо туннеля.
+      final rs = f.ruleSets.single;
+      expect(rs['tag'], 'vowifi-epdg');
+      expect((rs['rules'] as List).first['domain_suffix'],
+          ['pub.3gppnetwork.org']);
+    });
+
+    test('vowifi с ike_ports=false → остаётся только доменное правило', () {
+      final preset = realPreset('vowifi');
+      final f = expandPreset(
+        CustomRulePreset(
+          name: 'VoWiFi',
+          presetId: 'vowifi',
+          varsValues: const {'ike_ports': 'false'},
+        ),
+        preset,
+      );
+
+      expect(f.routingRules.length, 1);
+      expect(f.routingRules.single['rule_set'], 'vowifi-epdg');
+    });
+
+    test('ru-direct несёт mcc250-суффикс ePDG (РФ-операторы)', () {
+      final preset = realPreset('ru-direct');
+      final services = preset.ruleSets
+          .firstWhere((rs) => rs['tag'] == 'ru-services');
+      final suffixes =
+          (services['rules'] as List).first['domain_suffix'] as List;
+
+      expect(suffixes, contains('mcc250.pub.3gppnetwork.org'));
+    });
+
     test('ru-direct (дефолты: force_ipv4=true) → пара resolve+route; '
         'dns_rule БЕЗ strategy', () {
       final preset = realPreset('ru-direct');

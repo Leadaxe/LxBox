@@ -19,6 +19,9 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
     'name': r.name,
     'enabled': r.enabled,
     'kind': r.kind.name,
+    // §370 — позиция на оси порядка. null = правило ещё не размечено
+    // (storage до §370); разметка случается на загрузке экрана Routing.
+    'num': r.orderNum,
   };
   switch (r) {
     case CustomRuleInline():
@@ -128,9 +131,10 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
             'label': preset.label,
             'description': preset.description,
             'default_enabled': preset.defaultEnabled,
-            // §264 — locked/pinned метаданные (симметрия Debug API).
+            // §264/§370 — locked + ось порядка (симметрия Debug API).
             'locked': preset.locked,
-            if (preset.isPinned) 'pinned': preset.pinned,
+            'num': preset.num,
+            'is_sortable': preset.isSortable,
             'inline_rule_sets': inlineCount,
             'remote_rule_sets': remoteRuleSets,
             'has_dns_rule': preset.dnsRules.isNotEmpty,

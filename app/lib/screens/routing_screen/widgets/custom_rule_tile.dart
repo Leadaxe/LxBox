@@ -22,6 +22,7 @@ class CustomRuleTile extends StatelessWidget {
     this.showOutbound = true,
     this.touchesDns = false,
     this.locked = false,
+    this.sortable = true,
     required this.statusButton,
     required this.onTap,
     required this.onLongPressStart,
@@ -54,9 +55,14 @@ class CustomRuleTile extends StatelessWidget {
   final bool touchesDns;
 
   /// §264 — locked-пресет (traffic-processing): свич disabled, контекст-меню
-  /// (delete/reorder) недоступно. Продуктовый инвариант — правило нельзя
-  /// выключить/удалить/подвинуть.
+  /// (delete) недоступно. Продуктовый инвариант — правило нельзя
+  /// выключить/удалить.
   final bool locked;
+
+  /// §370 — можно ли двигать правило drag'ом (`ui.isSortable`). Ортогонально
+  /// [locked]: `locked` про «нельзя выключить/удалить», `sortable` про
+  /// «нельзя двигать». У traffic-processing false оба, но флага два.
+  final bool sortable;
 
   /// ☁-кнопка статуса (SRS либо preset) — null если правилу не нужен SRS.
   ///
@@ -161,9 +167,9 @@ class CustomRuleTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // §264 — locked-пресет не двигается: вместо grab-strip пустой отступ
-          // (ширина = 18 + margin 6×2, выравнивание с остальными tile).
-          if (locked)
+          // §370 — несортируемое правило не двигается: вместо grab-strip
+          // пустой отступ (ширина = 18 + margin 6×2, выравнивание с tile).
+          if (!sortable)
             const SizedBox(width: 30)
           else
             ReorderGrabStrip(index: index),

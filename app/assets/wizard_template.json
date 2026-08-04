@@ -389,7 +389,7 @@
   "selectable_rules": [
     {
       "preset_id": "traffic-processing",
-      "ui": {"label": "Traffic Processing", "description": "Core packet handling: sniff the domain, hijack DNS into the tunnel, resolve destinations for routing. Applied first, before all other rules.", "default": true, "locked": true, "pinned": 0},
+      "ui": {"label": "Traffic Processing", "description": "Core packet handling: sniff the domain, hijack DNS into the tunnel, resolve destinations for routing. Applied first, before all other rules.", "default": true, "locked": true, "num": 0, "isSortable": false},
       "vars": [
         {"name": "sniff_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Packet sniffing", "tooltip": "Detect protocol and domain from packets for accurate routing.\n⚠️ WARNING: turning this off stops protocol matching (e.g. BitTorrent, TLS, QUIC), and domain matching too unless FakeIP is on."},
         { "name": "sniff_timeout", "type": "enum", "wizard_ui": "edit", "title": "Sniff timeout", "tooltip": "How long to wait for the domain to appear in the packet before giving up.",
@@ -424,7 +424,7 @@
     },
     {
       "preset_id": "block-ads",
-      "ui": {"label": "Block Ads", "description": "Reject ad-related connections. Downloads rule set (~1 MB).", "default": false},
+      "ui": {"label": "Block Ads", "description": "Reject ad-related connections. Downloads rule set (~1 MB).", "default": false, "num": 960, "isSortable": true},
       "rule_set": [
         { "tag": "ads-all", "type": "remote", "format": "binary", "update_interval": "168h",
           "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-category-ads-all.srs"
@@ -434,7 +434,7 @@
     },
     {
       "preset_id": "ru-direct",
-      "ui": {"label": "Russian domains & IPs", "description": "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc) and Russian IP ranges directly.", "default": true},
+      "ui": {"label": "Russian domains & IPs", "description": "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc) and Russian IP ranges directly.", "default": true, "num": 1120, "isSortable": true},
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route traffic for Russian domains and IPs"},
         {"name": "dns_enable", "type": "bool", "default_value": "true", "title": "DNS", "tooltip": "Send matched domains to this preset's DNS server and apply DNS-level options like Force IPv4. Turn off to keep routing without DNS changes."},
@@ -464,7 +464,8 @@
         },
         { "tag": "ru-services", "type": "inline",
           "rules": [
-            {"domain_suffix": ["userapi.com", "avito.st", "yandex.net", "yandex.com", "yastatic.net", "2gis.com", "okko.tv", "premier.one", "lenta.com", "vk.com", "vk-portal.net", "gismeteo.com", "lmru.tech", "mradx.net", "wbstatic.net", "wildberries.by", "trbcdn.net", "sberbank.com"]}
+            {"domain_suffix": ["userapi.com", "avito.st", "yandex.net", "yandex.com", "yastatic.net", "2gis.com", "okko.tv", "premier.one", "lenta.com", "vk.com", "vk-portal.net", "gismeteo.com", "lmru.tech", "mradx.net", "wbstatic.net", "wildberries.by", "trbcdn.net", "sberbank.com",
+      "mcc250.pub.3gppnetwork.org"]}
           ]
         },
         { "tag": "geoip-ru", "enabled": "@geoip_enabled", "type": "remote", "format": "binary", "update_interval": "168h",
@@ -494,7 +495,7 @@
     },
     {
       "preset_id": "fakeip",
-      "ui": {"label": "FakeIP", "description": "Instant DNS via placeholder IPs; real names resolve inside the tunnel. Speeds up DNS and prevents pre-tunnel DNS leaks. Not a DPI bypass. Enable below special domains so GeoIP direct routing still works.", "default": false},
+      "ui": {"label": "FakeIP", "description": "Instant DNS via placeholder IPs; real names resolve inside the tunnel. Speeds up DNS and prevents pre-tunnel DNS leaks. Not a DPI bypass. Enable below special domains so GeoIP direct routing still works.", "default": false, "num": 1130, "isSortable": true},
       "vars": [
         { "name": "rule_enable", "type": "bool", "wizard_ui": "hidden", "required": false,
           "default_value": "true",
@@ -521,7 +522,7 @@
     },
     {
       "preset_id": "ru-inside",
-      "ui": {"label": "Russia-only services", "description": "Services available only inside Russia. Direct by default, or route via a channel to reach them from abroad."},
+      "ui": {"label": "Russia-only services", "description": "Services available only inside Russia. Direct by default, or route via a channel to reach them from abroad.", "num": 1110, "isSortable": true},
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route Russia-only services. Direct on a Russian network; pick a Russian channel to reach them from abroad."},
         {"name": "force_ipv4", "type": "bool", "default_value": "true", "title": "Force IPv4", "tooltip": "Resolve these domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Turn off if your network has functional IPv6."}
@@ -538,7 +539,7 @@
     },
     {
       "preset_id": "bittorrent",
-      "ui": {"label": "BitTorrent", "description": "Route BitTorrent traffic. Direct by default, or send it to a separate channel.", "default": true},
+      "ui": {"label": "BitTorrent", "description": "Route BitTorrent traffic. Direct by default, or send it to a separate channel.", "default": true, "num": 980, "isSortable": true},
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route BitTorrent. Direct to keep it off the VPN, or pick a channel to tunnel it."}
       ],
@@ -546,7 +547,7 @@
     },
     {
       "preset_id": "private-ip",
-      "ui": {"label": "Private IPs", "description": "Route private IP ranges (LAN). Direct by default, or send to a channel to reach routers/devices over a local VPN."},
+      "ui": {"label": "Private IPs", "description": "Route private IP ranges (LAN). Direct by default, or send to a channel to reach routers/devices over a local VPN.", "num": 950, "isSortable": true},
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route private/LAN IPs. Direct for local access, or a channel to reach a remote LAN over VPN."}
       ],
@@ -554,7 +555,7 @@
     },
     {
       "preset_id": "unknown-traffic",
-      "ui": {"label": "Unknown traffic", "description": "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.", "default": false},
+      "ui": {"label": "Unknown traffic", "description": "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.", "default": false, "num": 1150, "isSortable": true},
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "reject", "title": "outbound", "tooltip": "Reject = drop. Or pick Direct to send it outside the VPN."}
       ],
@@ -568,8 +569,23 @@
       "rule": {"rule_set": ["unknown-apps"], "outbound": "@outbound"}
     },
     {
+      "preset_id": "vowifi",
+      "ui": {"label": "VoWiFi (carrier calling)", "description": "Keep Wi-Fi Calling off the VPN. Phones reach the carrier's IMS gateway (ePDG) under the 3GPP service domain, and an IKEv2/IPsec tunnel carries the calls. Routed through a VPN the voice picks up delay and jitter, and the carrier sees the IMS registration coming from a foreign address. Direct keeps calls on the home network.", "default": true, "num": 990, "isSortable": true},
+      "vars": [
+        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to send VoWiFi traffic. Direct keeps it off the VPN — that is the point of this preset."},
+        {"name": "ike_ports", "type": "bool", "default_value": "true", "title": "Match IKE ports (500/4500)", "tooltip": "Also route UDP 500/4500 directly. Some modems get the gateway address from the carrier network and never send a DNS query, so the domain rule alone misses them. Those ports carry nothing but IPsec key exchange."}
+      ],
+      "rule_set": [
+        {"tag": "vowifi-epdg", "type": "inline", "rules": [{"domain_suffix": ["pub.3gppnetwork.org"]}]}
+      ],
+      "rules": [
+        {"rule_set": ["vowifi-epdg"], "outbound": "@outbound"},
+        {"#if": {"and": ["@ike_ports"], "value": {"network": ["udp"], "port": [500, 4500], "outbound": "@outbound"}}}
+      ]
+    },
+    {
       "preset_id": "fcm-push",
-      "ui": {"label": "Google push (FCM)", "description": "Send only Google push traffic (FCM ports 5228-5230 and FCM hosts) outside the VPN, so notifications arrive on time with the screen off. Does not touch the rest of Google Play, so your Play region stays intact. Move this rule above your proxy rules for it to take effect. If your DNS goes through the tunnel, add a matching direct rule in DNS settings — otherwise the hosts resolve to the wrong region and push stays silent.", "default": false},
+      "ui": {"label": "Google push (FCM)", "description": "Send only Google push traffic (FCM ports 5228-5230 and FCM hosts) outside the VPN, so notifications arrive on time with the screen off. Does not touch the rest of Google Play, so your Play region stays intact. If your DNS goes through the tunnel, add a matching direct rule in DNS settings — otherwise the hosts resolve to the wrong region and push stays silent.", "default": false, "num": 970, "isSortable": true},
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to send push traffic. Direct keeps it off the VPN — that is the point of this preset."},
         {"name": "gms_only", "type": "bool", "default_value": "false", "title": "Limit to Google Play Services", "tooltip": "Match only traffic from com.google.android.gms instead of any app. Narrower, but app matching works in VPN mode only — leave off if you use proxy mode."}

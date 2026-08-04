@@ -171,7 +171,10 @@ GET    /rules/{id}                             Single rule
 POST   /rules[?rebuild=true]                   Create. Body: CustomRule JSON, kind=inline|srs|preset
 PATCH  /rules/{id}[?rebuild=true]              Partial update (any subset of fields)
 DELETE /rules/{id}[?rebuild=true]              Delete
-POST   /rules/reorder                          Body: {"order":[id1,id2,...]} — all ids required
+POST   /rules/reorder                          Body: {"order":[id1,id2,...]} — all ids required; renumbers the num axis
+POST   /rules/move                             Body: {"id":"<uuid>","after":"<uuid>"|null} — §370 mirror of the UI drag:
+                                                 rule takes target.num+1, neighbours shift only if that number is taken
+                                                 (after:null = start of the user zone). Pinned rules refuse to move.
 
 `?rebuild=true` on any write method → automatically triggers rebuild-config.
 
@@ -511,7 +514,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/rules', 'params': {'rebuild': 'true|false'}, 'body': 'CustomRule JSON (kind: inline|srs|preset)', 'description': 'Create'},
     {'method': 'PATCH', 'path': '/rules/{id}', 'params': {'rebuild': 'true|false'}, 'body': 'Partial CustomRule', 'description': 'Update'},
     {'method': 'DELETE', 'path': '/rules/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Delete'},
-    {'method': 'POST', 'path': '/rules/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (all ids required)'},
+    {'method': 'POST', 'path': '/rules/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (all ids required). Renumbers the num axis so the order survives a reload.'},
+    {'method': 'POST', 'path': '/rules/move', 'body': '{"id":"<uuid>","after":"<uuid>"|null}', 'description': '§370 — move one rule along the num axis; mirrors the UI drag (lazy neighbour shift, pinned rules refuse).'},
     // Subscriptions CRUD (user servers + subscriptions)
     {'method': 'GET', 'path': '/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Alias /state/subs'},
     {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false'}, 'description': 'Single entry'},

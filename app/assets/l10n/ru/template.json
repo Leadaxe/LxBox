@@ -581,9 +581,6 @@
   "Google push (FCM)": {
     "value": "Google-пуши (FCM)"
   },
-  "Send only Google push traffic (FCM ports 5228-5230 and FCM hosts) outside the VPN, so notifications arrive on time with the screen off. Does not touch the rest of Google Play, so your Play region stays intact. Move this rule above your proxy rules for it to take effect. If your DNS goes through the tunnel, add a matching direct rule in DNS settings — otherwise the hosts resolve to the wrong region and push stays silent.": {
-    "value": "Пускает мимо VPN только трафик Google-пушей (порты FCM 5228-5230 и хосты FCM), чтобы уведомления приходили вовремя при выключенном экране. Остальной Google Play не затрагивается — регион Play сохраняется. Чтобы правило заработало, поднимите его выше правил проксирования. Если DNS идёт через туннель, добавьте такое же direct-правило в настройках DNS — иначе хосты разрешатся в чужом регионе и пуши останутся молчать."
-  },
   "Where to send push traffic. Direct keeps it off the VPN — that is the point of this preset.": {
     "value": "Куда направить трафик пушей. «Напрямую» уводит его мимо VPN — ради этого пресет и нужен."
   },
@@ -592,5 +589,23 @@
   },
   "Match only traffic from com.google.android.gms instead of any app. Narrower, but app matching works in VPN mode only — leave off if you use proxy mode.": {
     "value": "Матчить только трафик com.google.android.gms, а не любого приложения. Точнее, но матчинг по приложению работает лишь в режиме VPN — при режиме прокси оставьте выключенным."
+  },
+  "Send only Google push traffic (FCM ports 5228-5230 and FCM hosts) outside the VPN, so notifications arrive on time with the screen off. Does not touch the rest of Google Play, so your Play region stays intact. If your DNS goes through the tunnel, add a matching direct rule in DNS settings — otherwise the hosts resolve to the wrong region and push stays silent.": {
+    "value": "Пускает мимо VPN только трафик Google-пушей (порты FCM 5228-5230 и хосты FCM), чтобы уведомления приходили вовремя при выключенном экране. Остальной Google Play не затрагивается — регион Play сохраняется. Если DNS идёт через туннель, добавьте такое же direct-правило в настройках DNS — иначе хосты разрешатся в чужом регионе и пуши останутся молчать."
+  },
+  "VoWiFi (carrier calling)": {
+    "value": "VoWiFi (звонки оператора)"
+  },
+  "Keep Wi-Fi Calling off the VPN. Phones reach the carrier's IMS gateway (ePDG) under the 3GPP service domain, and an IKEv2/IPsec tunnel carries the calls. Routed through a VPN the voice picks up delay and jitter, and the carrier sees the IMS registration coming from a foreign address. Direct keeps calls on the home network.": {
+    "value": "Пускает звонки по Wi-Fi мимо VPN. Телефон находит шлюз оператора (ePDG) по служебному домену 3GPP и поднимает до него туннель IKEv2/IPsec. Через VPN голос получает задержку и джиттер, а оператор видит регистрацию IMS с иностранного адреса. Напрямую звонки остаются в домашней сети."
+  },
+  "Where to send VoWiFi traffic. Direct keeps it off the VPN — that is the point of this preset.": {
+    "value": "Куда направлять трафик VoWiFi. Напрямую — мимо VPN, ради этого пресет и нужен."
+  },
+  "Match IKE ports (500/4500)": {
+    "value": "Ловить порты IKE (500/4500)"
+  },
+  "Also route UDP 500/4500 directly. Some modems get the gateway address from the carrier network and never send a DNS query, so the domain rule alone misses them. Those ports carry nothing but IPsec key exchange.": {
+    "value": "Направлять напрямую и UDP 500/4500. Часть модемов получает адрес шлюза от сети оператора и не делает DNS-запрос — доменное правило их не поймает. На этих портах нет ничего кроме обмена ключами IPsec."
   }
 }
