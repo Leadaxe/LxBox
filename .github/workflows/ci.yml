@@ -96,11 +96,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Flutter version pin
+        id: flutter_pin
+        run: echo "version=$(tr -d '[:space:]' < android/flutter.version)" >> "$GITHUB_OUTPUT"
+
       - name: Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: "3.41.6"
+          flutter-version: ${{ steps.flutter_pin.outputs.version }}
           cache: true
 
       - name: Dependencies
@@ -185,11 +189,15 @@ jobs:
         working-directory: .
         run: ./scripts/fetch-libbox.sh
 
+      - name: Flutter version pin
+        id: flutter_pin
+        run: echo "version=$(tr -d '[:space:]' < android/flutter.version)" >> "$GITHUB_OUTPUT"
+
       - name: Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: "3.41.6"
+          flutter-version: ${{ steps.flutter_pin.outputs.version }}
           cache: true
 
       - name: Inject release version from tag
