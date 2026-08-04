@@ -468,11 +468,17 @@ Future<BuildResult> buildConfig({
   // несуществующий outbound (напр. отключённый WARP-target из подписки) →
   // снимаем поле, нода работает напрямую, а не роняет весь конфиг (как §169
   // с REALITY). Снятые detour'ы добавляем в emitWarnings (видно юзеру).
+  // §377 — одна строка на отсутствующий target, а не на каждую ноду: один
+  // выключенный WARP-пресет из подписки давал 138 идентичных warning'ов на
+  // сборку (по 276 на два прохода в дампе 4PDA), вытесняя из лога всё
+  // остальное. Имена нод нужны для диагностики, но не все — первые пять.
   final healedDetours = healDanglingDetours(config);
+  final ownersByTarget = <String, List<String>>{};
   for (final h in healedDetours) {
-    emitWarnings.add(
-        'Detour removed: outbound "${h.owner}" referenced missing '
-        '"${h.target}" — node works directly.');
+    (ownersByTarget[h.target] ??= []).add(h.owner);
+  }
+  for (final e in ownersByTarget.entries) {
+    emitWarnings.add(_detourRemovedLine(e.key, e.value));
   }
 
   // §247 — деградация битых `server`-ссылок у resolve-правил (симметрично
@@ -596,6 +602,21 @@ class _BuildCtx implements EmitContext {
 
   @override
   void addToAutoList(SingboxEntry entry) => autoEntries.add(entry);
+}
+
+/// §377 — одна агрегированная строка про снятые detour'ы на отсутствующий
+/// [target]. Имена первых пяти нод — чтобы понять, какая подписка их принесла;
+/// остаток счётчиком. Единственная нода печатается как раньше (без «and 0 more»
+/// и без счётчика: «1 outbound» читается хуже, чем само имя).
+String _detourRemovedLine(String target, List<String> owners) {
+  const shown = 5;
+  final head = owners.take(shown).map((o) => '"$o"').join(', ');
+  final rest = owners.length - shown;
+  final subject = owners.length == 1
+      ? 'outbound $head'
+      : '${owners.length} outbounds ($head${rest > 0 ? ', and $rest more' : ''})';
+  return 'Detour removed: $subject referenced missing "$target" — '
+      '${owners.length == 1 ? 'node works' : 'nodes work'} directly.';
 }
 
 /// Собирает channel-группы (vpn-1..vpn-10 + их auto-двойники). Приватный
