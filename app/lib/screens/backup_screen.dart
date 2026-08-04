@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -118,6 +119,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
 
       final json = await _service.buildExport(include: include);
       final filename = await BackupService.suggestedFilename();
+      // Размер в БАЙТАХ, а не в code units: String.length считает UTF-16, и на
+      // кириллице в именах узлов снекбар занижал цифру против файла на диске.
+      final bytes = utf8.encode(json).length;
 
       final SaveOutcome outcome;
       switch (action) {
@@ -137,7 +141,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
             subject: 'LxBox backup',
           );
           if (!mounted) return;
-          showSnack(getLocalText.s("Backup exported (%d bytes)", json.length));
+          showSnack(getLocalText.s("Backup exported (%d bytes)", bytes));
           return;
       }
 
@@ -149,11 +153,10 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       }
       switch (outcome) {
         case SavedToFile(:final name):
-          showSnack(getLocalText.s(
-              "Saved as %s (%d bytes)", name, json.length));
+          showSnack(getLocalText.s("Saved as %s (%d bytes)", name, bytes));
         case SavedToDownloads(:final name):
-          showSnack(getLocalText.s(
-              "Saved to Downloads: %s (%d bytes)", name, json.length));
+          showSnack(
+              getLocalText.s("Saved to Downloads: %s (%d bytes)", name, bytes));
         case SaveCancelled():
           break; // юзер закрыл диалог сохранения — молчим
         case SaveNoTarget() || SaveFailed():
