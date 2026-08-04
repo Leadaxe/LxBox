@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -14,6 +13,7 @@ import '../controllers/home_controller.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/lx_code_editor.dart';
+import '../services/file_import.dart';
 
 /// §333 — страховочный порог: выше него редактор открывается read-only.
 /// Даже построчному редактору многомегабайтный конфиг на слабом устройстве
@@ -109,9 +109,18 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
   Future<void> _loadFromFile() async {
     try {
-      final result = await FilePicker.pickFiles(withData: true, allowMultiple: false);
-      if (result == null || result.files.isEmpty) return;
-      final file = result.files.single;
+      // §372 — на устройстве без файлового менеджера (Android TV) подсказываем
+      // буфер/URL вместо технической ошибки пикера.
+      final outcome = await pickFileSafely();
+      if (outcome is! PickedFiles) {
+        final problem = pickProblemText(outcome);
+        if (problem != null && mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(problem)));
+        }
+        return;
+      }
+      final file = outcome.single;
       String text;
       if (file.bytes != null && file.bytes!.isNotEmpty) {
         // §333 — utf8, не fromCharCodes: тот трактовал байты как UTF-16

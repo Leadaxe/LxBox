@@ -159,6 +159,7 @@ enum ErrKey {
   failedToParseConfig,
   failedToReadFile,
   fileIsEmpty,
+  noFileManager,
   // ── subscription_controller add-пути ──
   invalidMasqueConfig,
   invalidWarpConfigObfuscated,
@@ -208,6 +209,9 @@ final class ErrMsg extends UiMsg {
         ErrKey.failedToParseConfig => t.s("Failed to parse config"),
         ErrKey.failedToReadFile => t.s("Failed to read file"),
         ErrKey.fileIsEmpty => t.s("File is empty"),
+        // §372 — на устройстве нет файлового менеджера (Android TV).
+        ErrKey.noFileManager => t.s(
+            "No file manager on this device. Paste from the clipboard or add by URL instead."),
         ErrKey.invalidMasqueConfig => t.s("Invalid MASQUE config"),
         ErrKey.invalidWarpConfigObfuscated => t.s("Invalid WARP config (obfuscated)"),
         ErrKey.invalidWarpConfig => t.s("Invalid WARP config"),

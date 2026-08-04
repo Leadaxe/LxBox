@@ -15,6 +15,7 @@ import 'backup_screen/export_card.dart';
 import 'backup_screen/import_card.dart';
 import 'backup_screen/import_preview_dialog.dart';
 import 'backup_screen/utf8_decode.dart';
+import '../services/file_import.dart';
 
 export 'backup_screen/utf8_decode.dart' show utf8DecodeOrNull;
 
@@ -121,15 +122,17 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   Future<void> _onImport() async {
     setState(() => _busy = true);
     try {
-      final picked = await FilePicker.pickFiles(
+      // §372 — см. pickFileSafely: Android TV без DocumentsUI.
+      final outcome = await pickFileSafely(
         type: FileType.custom,
         allowedExtensions: ['json'],
-        withData: true,
       );
-      if (picked == null || picked.files.isEmpty) {
-        return; // user cancelled
+      if (outcome is! PickedFiles) {
+        final problem = pickProblemText(outcome);
+        if (problem != null && mounted) showSnack(problem);
+        return; // cancelled / нет пикера / сбой
       }
-      final file = picked.files.single;
+      final file = outcome.single;
       final bytes = file.bytes;
       String? raw;
       if (bytes != null) {

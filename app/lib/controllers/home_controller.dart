@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show File, FileSystemException;
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -16,6 +15,7 @@ import '../services/app_log.dart';
 import '../services/automation/event_emitter.dart';
 import '../services/config_staleness.dart';
 import '../services/error_format.dart';
+import '../services/file_import.dart';
 import '../services/probe/probe_lifecycle.dart';
 import '../services/rule_name_resolver.dart';
 import '../services/selector_info.dart';

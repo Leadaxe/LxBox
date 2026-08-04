@@ -32,6 +32,23 @@ class UrlLauncher {
     }
   }
 
+  /// §372 — есть ли на устройстве настоящий файловый менеджер.
+  ///
+  /// false на Android TV: DocumentsUI там нет, а intent перехватывает
+  /// системная заглушка `frameworkpackagestubs`, которая молча отменяет
+  /// выбор. Нативная сторона отличает заглушку от реального пикера.
+  ///
+  /// При недоступности канала возвращает true — не запрещаем пик там, где
+  /// не смогли проверить (на телефонах пикер есть практически всегда).
+  static Future<bool> hasRealFilePicker() async {
+    try {
+      final ok = await _channel.invokeMethod<bool>('hasRealFilePicker');
+      return ok ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Checks if POST_NOTIFICATIONS is granted (always true on API < 33).
   static Future<bool> checkNotificationPermission() async {
     try {

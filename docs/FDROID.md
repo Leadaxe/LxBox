@@ -44,17 +44,24 @@ F-Droid не берёт готовый APK из GitHub Release. Их сборщ�
 Автоподхват новых версий отключён (`UpdateCheckMode: None`, почему — §4), поэтому
 на каждую версию нужен небольшой MR: меняются только номер версии и тег.
 
-### 1.1. Узнать фактический versionCode
+### 1.1. Узнать versionCode
 
-**Не угадывать.** Значение берётся из собранного APK, а не из `pubspec.yaml`:
+Сборка F-Droid идёт **без** `--split-per-abi`, поэтому ABI-множителя там нет и
+versionCode равен числу коммитов на релизном коммите:
 
 ```bash
-gh release download vX.Y.Z --repo Leadaxe/LxBox -p "*arm64-v8a.apk" -D /tmp && apkanalyzer manifest print /tmp/LxBox-vX.Y.Z-arm64-v8a.apk | grep versionCode
+git rev-list --count vX.Y.Z
 ```
 
-Почему так — см. §4 «versionCode ≠ число коммитов».
+⚠ У APK с GitHub значение **другое** — там `--split-per-abi` остался, и Flutter
+домножает ABI (arm64: `2*1000 + code`). Не путать: в метаданные F-Droid идёт
+число из команды выше, а не из GitHub-APK. Подробности — §4.
 
 ### 1.2. Поправить метаданные
+
+⚠ **Если в релизе бампнулось ядро** (`app/android/libbox.version`), поправить
+ещё и пин srclib в билд-блоке: `sing-box-lx@<та же версия>`. Сборка сверяет
+эти два значения и падает при расхождении — молча разъехаться они не могут.
 
 В `metadata/com.leadaxe.lxbox.yml` меняются **шесть** мест:
 

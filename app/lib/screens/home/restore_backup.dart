@@ -11,6 +11,7 @@ import '../../services/backup_service.dart';
 import '../../services/error_format.dart';
 import '../../services/subscription/auto_updater.dart';
 import '../../services/l10n/locale_controller.dart';
+import '../../services/file_import.dart';
 
 /// Empty-state quick-restore flow.
 ///
@@ -25,13 +26,20 @@ Future<void> restoreFromBackup(
   AutoUpdater autoUpdater,
 ) async {
   try {
-    final picked = await FilePicker.pickFiles(
+    // §372 — Android TV без DocumentsUI: подсказка вместо тихого выхода.
+    final outcome = await pickFileSafely(
       type: FileType.custom,
       allowedExtensions: ['json'],
-      withData: true,
     );
-    if (picked == null || picked.files.isEmpty) return;
-    final file = picked.files.single;
+    if (outcome is! PickedFiles) {
+      final problem = pickProblemText(outcome);
+      if (problem != null && context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(problem)));
+      }
+      return;
+    }
+    final file = outcome.single;
     String? raw;
     if (file.bytes != null) {
       try {

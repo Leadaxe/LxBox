@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -13,6 +12,7 @@ import '../../services/subscription/auto_updater.dart';
 import '../../services/subscription/input_helpers.dart';
 import 'folder_picker.dart';
 import '../../services/l10n/locale_controller.dart';
+import '../../services/file_import.dart';
 
 /// Long-press bottom-sheet для записи подписки/сервера. Поведение 1:1 с
 /// прежним `_showContextMenu` — копировать URL, share, update,
@@ -302,10 +302,18 @@ Future<void> showEditSourceDialog(
                   ),
                   TextButton(
                     onPressed: () async {
-                      final res = await FilePicker.pickFiles(
-                          withData: true, allowMultiple: false);
-                      if (res == null || res.files.isEmpty) return;
-                      final f = res.files.single;
+                      // §372 — нет пикера (Android TV): подсказываем перейти
+                      // в режим «Online URL», он тут же в диалоге.
+                      final outcome = await pickFileSafely();
+                      if (outcome is! PickedFiles) {
+                        final problem = pickProblemText(outcome);
+                        if (problem != null && dCtx.mounted) {
+                          ScaffoldMessenger.of(dCtx)
+                              .showSnackBar(SnackBar(content: Text(problem)));
+                        }
+                        return;
+                      }
+                      final f = outcome.single;
                       String text;
                       if (f.bytes != null && f.bytes!.isNotEmpty) {
                         text = String.fromCharCodes(f.bytes!);
