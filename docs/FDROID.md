@@ -81,13 +81,20 @@ CurrentVersionCode: <из §1.1>   # 4b
 
 ⚠ `commit:` — **полный хеш**, не тег: рецензент просил именно так.
 
+⚠ Блоков **три** — по одному на ABI (armv7/arm64/x86_64). Правки нужны в каждом:
+`versionName`, `versionCode` (своя ABI-цифра), `commit`. Проще сгенерировать
+скриптом из одного блока, чем править руками.
+
 Проверить локально (`fdroidserver` ставится через `pip install`):
 
 ```bash
 fdroid lint com.leadaxe.lxbox && fdroid rewritemeta com.leadaxe.lxbox && git diff --quiet metadata/com.leadaxe.lxbox.yml && echo "формат канонический"
 ```
 
-`rewritemeta` не должен ничего менять — иначе их CI отвергнет форматирование.
+⚠ **Гонять оба, не только lint.** Lint пропускает слишком длинные строки, а
+`rewritemeta` их переносит — и в их CI это отдельный джоб, который падает.
+После правки метаданных всегда сверять, что повторный `rewritemeta` ничего
+не меняет.
 
 ### 1.3. Запушить в форк
 
@@ -150,7 +157,7 @@ adb exec-out screencap -p > shot.png
 |---|---|
 | `libbox.aar` собирается из исходников | prebuilt-бинарники запрещены; апстрим sing-box пакуется так же |
 | **naive отключён** | тянет `cronet-go` с готовым `libcronet.a` |
-| Собирается только arm64 | `--target-platform=android-arm64` + `LXBOX_ABI_FILTER` |
+| Три отдельных APK по ABI | три build-блока, у каждого свои `--target-platform` и `LXBOX_ABI_FILTER` |
 | Проверка JDK 17 в ядре вырезана | в их Debian trixie стоит JDK 21, пакета `openjdk-17` нет |
 | legacy-вариант AAR вырезан | gomobile требует SDK platform под каждый вариант |
 
@@ -176,6 +183,14 @@ adb exec-out screencap -p > shot.png
 4. Git-протокол к GitLab периодически отваливается (`Connection reset`), а REST
    API при этом жив. Обход — коммит файла через
    `POST /projects/:id/repository/commits`.
+5. `git -C $$srclib$$ checkout` **обязательно с `-f`**: fdroidserver сразу после
+   клона чистит keysigning-конфиги в `examples/` и `dev/` клона Flutter, дерево
+   становится грязным, и обычный checkout отказывается переключаться. Эти файлы
+   в нашей сборке не участвуют.
+6. Сабмодулей ядра нужно **три**: `sing-tun`, `wireguard-go` и `gvisor`.
+   Смотреть не в `.gitmodules` (там ещё три клиентских, тяжёлых и ненужных), а
+   в `go.mod` ядра — `grep -A15 '^replace' go.mod | grep '=> \./'` показывает
+   ровно те, что заменены локальными путями.
 
 ---
 
@@ -218,11 +233,11 @@ ABI впереди x86_64-сборка старого релиза оказыв�
 versionCode обязан только расти, иначе Android откажет в обновлении.
 Отдельной таской, после включения в каталог.
 
-### Долг: остальные ABI
+### Три ABI: цена вопроса
 
-Сейчас собирается только arm64. armv7 и x86_64 добавляются отдельными
-build-блоками с тем же `versionName`, но своими `versionCode`
-(цифры `…1` и `…4`) и своими `LXBOX_ABI_FILTER` / `--target-platform`.
-Каждый ABI — отдельная ~20-минутная сборка ядра на их раннерах.
+Собираются все три (armv7 / arm64 / x86_64) — тремя build-блоками с общим
+`versionName` и разными `versionCode`. Каждый блок компилирует Go из
+исходников и ядро заново: кэша между блоками нет, поэтому полный прогон
+занимает около часа против ~20 минут на один ABI.
 
 [fastlane-docs]: https://f-droid.org/en/docs/All_About_Descriptions_Graphics_and_Screenshots/
