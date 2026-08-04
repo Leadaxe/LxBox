@@ -1,6 +1,9 @@
 import '../../../config/consts.dart' show kDirectOutboundTag;
 import '../../../models/custom_rule.dart';
+import '../../../models/parser_config.dart' show kUserRuleNumStart;
+import '../../builder/rule_order.dart';
 import '../../settings_storage.dart';
+import '../../template_loader.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../serializers/rules.dart';
@@ -26,6 +29,8 @@ CustomRule ruleFromJsonStrictForTest(Map<String, dynamic> j) =>
 /// - `GET    /rules/{id}`        → single
 /// - `PATCH  /rules/{id}`        → partial update
 /// - `DELETE /rules/{id}`        → remove
+/// - `POST /rules/move`          → §370 переставить одно правило по оси `num`
+///                                  (зеркало drag'а: `{id, after}`)
 ///
 /// Любой write принимает `?rebuild=true` — после успешного write'а
 /// регенерирует sing-box конфиг (см. [maybeRebuild]).
@@ -45,6 +50,14 @@ Future<DebugResponse> rulesHandler(DebugRequest req, DebugContext ctx) async {
       throw BadRequest('reorder requires POST, got ${req.method}');
     }
     return _reorder(req);
+  }
+
+  // §370 — точечный move (зеркало drag'а в UI).
+  if (path == '/rules/move') {
+    if (req.method != 'POST') {
+      throw BadRequest('move requires POST, got ${req.method}');
+    }
+    return _move(req);
   }
 
   if (path.startsWith('/rules/')) {
@@ -85,8 +98,14 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   final stripped = Map<String, dynamic>.from(body)..remove('id');
   final rule = _ruleFromJsonStrict(stripped);
   final rules = await SettingsStorage.getCustomRules();
+  // §370 — тот же путь, что UI (`_addCustomRule`): пресет садится на свой
+  // шаблонный `num`, пользовательское правило — в конец занятой части зоны.
+  // Явный `num` в body уважаем: он нужен, чтобы гонять раскладку из тестов.
+  rule.orderNum ??= rule.kind == CustomRuleKind.preset
+      ? (await _templateNumFor(rule.presetId)) ?? nextUserRuleNum(rules)
+      : nextUserRuleNum(rules);
   rules.add(rule);
-  await SettingsStorage.saveCustomRules(rules);
+  await SettingsStorage.saveCustomRules(sortRulesByNum(rules));
   final extras = await maybeRebuild(req, ctx);
   final serialized = await serializeCustomRule(rule);
   return JsonResponse({...serialized, ...extras}, status: 201);
@@ -207,12 +226,120 @@ Future<DebugResponse> _reorder(DebugRequest req) async {
     );
   }
   final reordered = order.map((id) => byId[id]!).toList();
-  await SettingsStorage.saveCustomRules(reordered);
+  // §370 — порядок задаёт ось `num`, а не позиция в массиве: без пересчёта
+  // перестановка молча откатывалась бы при следующей загрузке (sortRulesByNum
+  // вернул бы всё по старым номерам). Несортируемые держат свой номер, поэтому
+  // они обязаны остаться на своих местах — иначе запрос противоречит инварианту.
+  final sortable = await _sortablePredicate();
+  var cursor = kUserRuleNumStart;
+  for (final r in reordered) {
+    if (!sortable(r)) continue;
+    cursor++;
+    r.orderNum = cursor;
+  }
+  final result = sortRulesByNum(reordered);
+  if (!_sameIds(result, reordered)) {
+    throw const BadRequest(
+      'requested order conflicts with pinned rules (isSortable:false must '
+      'keep their template position)',
+    );
+  }
+  await SettingsStorage.saveCustomRules(result);
   return JsonResponse({
     'ok': true,
     'action': 'rules-reorder',
-    'count': reordered.length,
+    'count': result.length,
+    'nums': {for (final r in result) r.id: r.orderNum},
   });
+}
+
+/// §370 — переставить ОДНО правило: точное зеркало drag'а в UI
+/// (`_onReorderCustomRule` → `placeRuleAfter`). Тело:
+/// `{"id": "<uuid>", "after": "<uuid>"|null}` — `after: null` = в начало
+/// сортируемой части.
+///
+/// Существует ради тестируемости: без него порядок можно было проверить
+/// только тапами по экрану, а `/rules/reorder` задаёт список целиком и не
+/// проверяет ленивый сдвиг (сохранение зазоров и шаблонных якорей).
+Future<DebugResponse> _move(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final id = fieldString(body, 'id');
+  if (id == null || id.isEmpty) {
+    throw const BadRequest('body must contain "id": "<rule uuid>"');
+  }
+  if (!body.containsKey('after')) {
+    throw const BadRequest('body must contain "after": "<rule uuid>" or null');
+  }
+  final afterRaw = body['after'];
+  if (afterRaw != null && afterRaw is! String) {
+    throw const BadRequest('field "after" must be string or null');
+  }
+
+  final rules = await SettingsStorage.getCustomRules();
+  final moved = rules.where((r) => r.id == id).firstOrNull;
+  if (moved == null) throw NotFound('rule: $id');
+
+  CustomRule? target;
+  if (afterRaw is String) {
+    target = rules.where((r) => r.id == afterRaw).firstOrNull;
+    if (target == null) throw NotFound('rule (after): $afterRaw');
+    if (identical(target, moved)) {
+      throw const BadRequest('"after" must differ from "id"');
+    }
+  }
+
+  final sortable = await _sortablePredicate();
+  if (!sortable(moved)) {
+    throw const BadRequest('rule is not sortable (isSortable:false)');
+  }
+
+  // Разметка на случай storage до §370 — иначе `num` null и сдвиг некорректен.
+  final template = await TemplateLoader.load();
+  markRuleOrder(rules, template.selectableRules);
+
+  placeRuleAfter(rules, moved, target, isSortable: sortable);
+  final result = sortRulesByNum(rules);
+  await SettingsStorage.saveCustomRules(result);
+  return JsonResponse({
+    'ok': true,
+    'action': 'rules-move',
+    'id': id,
+    'after': afterRaw,
+    'num': moved.orderNum,
+    'order': [
+      for (final r in result)
+        {'id': r.id, 'name': r.name, 'preset_id': r.presetId, 'num': r.orderNum}
+    ],
+  });
+}
+
+/// §370 — предикат «правило можно двигать», построенный по шаблону.
+/// Общий источник с UI (`_isSortable`): правило вне шаблона сортируемо.
+Future<bool Function(CustomRule)> _sortablePredicate() async {
+  final template = await TemplateLoader.load();
+  final byId = {for (final sr in template.selectableRules) sr.presetId: sr};
+  return (CustomRule r) {
+    if (r.kind != CustomRuleKind.preset) return true;
+    return byId[r.presetId]?.isSortable ?? true;
+  };
+}
+
+/// §370 — шаблонный `num` пресета (null, если пресета в шаблоне нет).
+Future<int?> _templateNumFor(String presetId) async {
+  if (presetId.isEmpty) return null;
+  final template = await TemplateLoader.load();
+  for (final sr in template.selectableRules) {
+    if (sr.presetId == presetId) return sr.num;
+  }
+  return null;
+}
+
+bool _sameIds(List<CustomRule> a, List<CustomRule> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i].id != b[i].id) return false;
+  }
+  return true;
 }
 
 CustomRuleKind? _fieldKind(Map<String, dynamic> m, String key) {

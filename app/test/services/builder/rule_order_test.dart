@@ -113,6 +113,25 @@ void main() {
           reason: 'весь смысл ленивого сдвига — якорь на месте');
     });
 
+    test('каскад останавливается на первой дырке — якорь за ней не двигается',
+        () {
+      final a = _inline('a')..orderNum = 1000;
+      final b = _inline('b')..orderNum = 1001; // занимает want
+      final c = _inline('c')..orderNum = 1002; // сплошной блок
+      final gap = _preset('ru-direct')..orderNum = 1120; // за дыркой
+      final moved = _inline('moved')..orderNum = 1090;
+      final rules = [a, b, c, gap, moved];
+
+      placeRuleAfter(rules, moved, a, isSortable: (_) => true);
+
+      expect(moved.orderNum, 1001);
+      expect(b.orderNum, 1002, reason: 'сплошной блок сдвигается');
+      expect(c.orderNum, 1003);
+      expect(gap.orderNum, 1120,
+          reason: 'между блоком и якорем ДЫРКА — вытеснять некуда; '
+              'сдвиг всех >= want уводил якорь на 1121 (баг на устройстве)');
+    });
+
     test('несортируемое правило не двигается и не сдвигается', () {
       final head = _preset('traffic-processing')..orderNum = 0;
       final a = _inline('a')..orderNum = 1000;

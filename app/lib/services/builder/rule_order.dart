@@ -147,7 +147,8 @@ int nextUserRuleNum(List<CustomRule> customRules) {
 /// ```
 /// want = target.num + 1
 /// want свободен → moved.num = want            (соседи не трогаются)
-/// want занят    → всем с num >= want: num += 1; moved.num = want
+/// want занят    → сдвигаем СПЛОШНОЙ занятый блок от want вверх на +1,
+///                 останавливаясь на первой дырке; moved.num = want
 /// ```
 ///
 /// **Почему сдвиг ленивый, а не безусловный (не переизобретать):** каскад +1 на
@@ -157,6 +158,12 @@ int nextUserRuleNum(List<CustomRule> customRules) {
 /// сдвиге уплотнение локально (только в точке перетаскивания), вся ось ниже
 /// стоит на месте. Перенумерация зон намеренно НЕ делается — она ломала бы
 /// ровно эти якоря.
+///
+/// **Каскад обязан останавливаться на первой дырке.** Сдвигать всех с
+/// `num >= want` недостаточно лениво: правило на 1001 вытесняется законно
+/// (номер занят), но якорь на 1120 за сотней свободных номеров вытеснять
+/// некуда — а он всё равно уезжал на 1121 (наблюдалось на устройстве при
+/// drag'е в занятую точку). Двигаем только сплошной занятый блок.
 ///
 /// Несортируемые (`isSortable: false`) не двигаются и не сдвигаются: их номера
 /// — часть инварианта (`traffic-processing` = 0).
@@ -172,14 +179,24 @@ void placeRuleAfter(
       ? kUserRuleNumStart
       : (target.orderNum ?? kDefaultRuleNum) + 1;
 
-  final occupied = customRules.any((cr) =>
-      !identical(cr, moved) && cr.orderNum == want && isSortable(cr));
-  if (occupied) {
-    for (final cr in customRules) {
-      if (identical(cr, moved) || !isSortable(cr)) continue;
-      final n = cr.orderNum;
-      if (n != null && n >= want) cr.orderNum = n + 1;
-    }
+  // Занятые номера от `want` вверх — без самого moved и без несортируемых
+  // (их номера часть инварианта, вытеснять их нельзя).
+  final occupied = <int, List<CustomRule>>{};
+  for (final cr in customRules) {
+    if (identical(cr, moved) || !isSortable(cr)) continue;
+    final n = cr.orderNum;
+    if (n != null && n >= want) (occupied[n] ??= []).add(cr);
+  }
+
+  // Сплошной занятый блок от `want`: 1001,1002,1003 — сдвигаем; на первой
+  // дырке останавливаемся, всё что ниже неё (включая якоря) не трогаем.
+  final block = <CustomRule>[];
+  for (var n = want; occupied.containsKey(n); n++) {
+    block.addAll(occupied[n]!);
+  }
+  // Сдвигаем сверху вниз — иначе +1 наложился бы на ещё не сдвинутого соседа.
+  for (final cr in block.reversed) {
+    cr.orderNum = cr.orderNum! + 1;
   }
   moved.orderNum = want;
 }
