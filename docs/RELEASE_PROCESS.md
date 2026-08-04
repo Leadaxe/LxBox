@@ -7,6 +7,7 @@
 - **`AGENTS.md`** — общий scope агента, правила работы с git / ветками.
 - **`RELEASE_NOTES.md`** — тело релиза (корень репо), которое CI загружает в `body_path` GitHub Release.
 - **`docs/releases/vX.Y.Z.md`** — архив per-version release notes.
+- **[`FDROID.md`](FDROID.md)** — публикация в F-Droid: что делать в каталоге после выпуска релиза (отдельный MR на GitLab; скриншоты и описания читаются из коммита тега, а не из ветки).
 
 ---
 
