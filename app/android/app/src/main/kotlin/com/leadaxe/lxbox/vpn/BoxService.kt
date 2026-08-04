@@ -129,6 +129,35 @@ class BoxService(
     private val notification: ServiceNotification by lazy { ServiceNotification(service) }
 
     private val receiver = object : BroadcastReceiver() {
+        /// §373 — увести тело обработчика с main-потока.
+        ///
+        /// `onReceive` Android исполняет на main. Всё, что доходит до
+        /// `cs.startOrReloadService` / unary-RPC в ядро, блокирует его на время
+        /// вызова: reload пересобирает весь box-инстанс (на подписке в ~700
+        /// outbound'ов — секунды), и при превышении 5с прилетает ANR по вводу.
+        ///
+        /// `goAsync()` — а не «просто launch»: без него Android считает broadcast
+        /// обработанным сразу по возврату из `onReceive` и вправе понизить
+        /// приоритет процесса ровно посреди reload'а. `PendingResult.finish()`
+        /// строго в `finally`, иначе утечка (и ANR самого broadcast'а по таймауту).
+        ///
+        /// Тело — `serviceScope` (`Dispatchers.IO`): вместе с сервисом умирает и
+        /// работа. Отмена scope НЕ прерывает уже начатый JNI-вызов (см. §361), но
+        /// `finish()` в `finally` отработает в любом случае.
+        private fun offloadFromMain(action: String, block: () -> Unit) {
+            val pending = goAsync()
+            serviceScope.launch {
+                try {
+                    block()
+                } catch (t: Throwable) {
+                    Log.e(TAG, "$action failed", t)
+                } finally {
+                    runCatching { pending.finish() }
+                        .onFailure { Log.e(TAG, "$action: finish() failed", it) }
+                }
+            }
+        }
+
         override fun onReceive(context: Context, intent: Intent) {
             Log.d(TAG, "[vpn] service.receiver.onReceive action=${intent.action} status=${status.name} registered=$receiverRegistered")
             when (intent.action) {
@@ -142,14 +171,19 @@ class BoxService(
                         .onFailure { Log.e(TAG, "ACTION_RECONNECT failed", it) }
                 }
                 BoxVpnService.ACTION_RELOAD -> {
-                    Log.d(TAG, "[vpn] receiver: ACTION_RELOAD → serviceReload()")
-                    runCatching { serviceReload() }
-                        .onFailure { Log.e(TAG, "ACTION_RELOAD failed", it) }
+                    // §373 — СТРОГО off-main: `onReceive` крутится на main-потоке, а
+                    // `serviceReload` упирается в блокирующий `startOrReloadService`
+                    // (пересборка всех outbound'ов). На большой подписке это уходит
+                    // за 5с = ANR «Приложение не отвечает».
+                    Log.d(TAG, "[vpn] receiver: ACTION_RELOAD → serviceReload() (off-main)")
+                    offloadFromMain("ACTION_RELOAD") { serviceReload() }
                 }
                 BoxVpnService.ACTION_RESET_NETWORK -> {
-                    Log.d(TAG, "[vpn] receiver: ACTION_RESET_NETWORK → cs.resetNetwork()")
-                    runCatching { commandServer.get()?.resetNetwork() }
-                        .onFailure { Log.e(TAG, "ACTION_RESET_NETWORK failed", it) }
+                    // §373 — unary-RPC в ядро, тоже не на main (см. ACTION_RELOAD).
+                    Log.d(TAG, "[vpn] receiver: ACTION_RESET_NETWORK → cs.resetNetwork() (off-main)")
+                    offloadFromMain("ACTION_RESET_NETWORK") {
+                        commandServer.get()?.resetNetwork()
+                    }
                 }
                 BoxVpnService.ACTION_CLEAR_DNS_CACHE -> {
                     // §263 — удалить cache.db, затем serviceReload: startOrReloadService
@@ -157,11 +191,14 @@ class BoxService(
                     // поднимает новый, который создаёт чистый cache.db. Delete
                     // перед reload — старый инстанс ещё держит unlink'нутый inode,
                     // новый пишет в свежий файл. Тоннель дропается ~3с (как reload).
-                    Log.d(TAG, "[vpn] receiver: ACTION_CLEAR_DNS_CACHE → delete cache.db + serviceReload()")
-                    runCatching {
+                    //
+                    // §373 — весь блок off-main: тот же reload внутри. Delete едет в
+                    // ту же корутину, чтобы порядок delete→reload не разъехался.
+                    Log.d(TAG, "[vpn] receiver: ACTION_CLEAR_DNS_CACHE → delete cache.db + serviceReload() (off-main)")
+                    offloadFromMain("ACTION_CLEAR_DNS_CACHE") {
                         BoxVpnService.deleteCacheDbFile()
                         serviceReload()
-                    }.onFailure { Log.e(TAG, "ACTION_CLEAR_DNS_CACHE failed", it) }
+                    }
                 }
                 BoxVpnService.ACTION_UPDATE_NOTIFICATION -> {
                     // §223 — live-перерисовка лейблов (#20) тем же show()-путём,
