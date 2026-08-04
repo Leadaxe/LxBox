@@ -119,7 +119,7 @@ class ExportCard extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: FilledButton.icon(
                 onPressed: busy ? null : onExport,
-                icon: const Icon(Icons.share),
+                icon: const Icon(Icons.save_alt),
                 label: Text(getLocalText.s("Export...")),
               ),
             ),
