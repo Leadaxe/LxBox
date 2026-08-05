@@ -1,137 +1,274 @@
-# L×Box v2.19.7
+# L×Box v2.20.0
 
-Two crashes are gone from the core, and the app takes its first steps on
-Android TV. The TV work is best-effort: the app now appears in the TV
-launcher and the two places that were outright broken there are fixed, but
-the layout is still designed for a phone.
+Two things you can now do that you couldn't before: import a config by
+scanning a QR code with the camera, and save a backup as a file instead of
+only sending it through the share sheet. The app no longer freezes with
+"isn't responding" while reloading a large config. And the diagnostic report
+you send us is now readable and says which build it came from.
 
-Из ядра ушли два краша, а приложение сделало первые шаги на Android TV.
-Поддержка TV — best-effort: приложение появляется в телевизионном лаунчере
-и два нерабочих там места починены, но вёрстка по-прежнему рассчитана на
-телефон.
+Два новых действия: импорт конфига сканированием QR-кода камерой и сохранение
+бэкапа файлом, а не только через «поделиться». Приложение больше не зависает
+с «не отвечает» при перезагрузке большого конфига. А диагностический отчёт,
+который вы нам присылаете, стал читаемым и теперь сообщает, на какой сборке
+снят.
 
 <details open>
 <summary><h2>🇬🇧 English</h2></summary>
 
-## 💥 Fixed — the core no longer dies on a network switch during startup
+## 📷 Added — import by scanning a QR code
 
-Switching WiFi↔LTE at the exact moment the tunnel was starting killed the
-whole process with a nil-pointer panic. The crash came from a real user
-report with a crash dump.
+"Scan QR code" in the ⋮ menu on the servers screen used to answer with "QR
+scanner coming soon". It now opens the camera.
 
-The core gates early remote calls by "is the box object there", but the box
-is published the moment it is *created* — while it is still starting, its
-network fields are not filled in yet. A network switch landing in that
-window reached those empty fields. The app registers the network monitor
-before starting the tunnel, so the overlap was a normal thing to hit, not an
-exotic one.
+QR is how most providers hand out configs — a code on the panel page, a
+screenshot in a support chat. Until now you had to decode it with another
+app and paste the result.
 
-The gate now checks that the service actually reached the started state, and
-the reset path has its own guard on top.
+Whatever the code contains goes through the same import as a paste: a single
+proxy link or a subscription URL, both work. Before anything is added you
+get a confirmation dialog showing what actually arrived — a QR code is
+untrusted input, and nothing is imported silently.
 
-## 💥 Fixed — a TCP connection to an unreachable node killed the process
+Nodes added this way are marked with source `qr`. Devices without a camera
+(Android TV) don't show the menu item at all: unlike file import, where the
+clipboard and a URL remain as alternatives, scanning has no fallback.
 
-A connection that never got established took the whole process down instead
-of simply timing out. Inside the network stack, a failed handshake cleared
-its own state and released the lock before closing the endpoint; a packet
-arriving in that window found a half-cleared handshake and dereferenced it.
+The APK grew by 3.8 MB — that's the ML Kit barcode scanner and CameraX.
 
-## 📺 Added — the app shows up in the Android TV launcher
+## 💾 Added — backup export can save a file
 
-The manifest now declares `leanback` and `touchscreen` (both
-`required="false"`) plus the `LEANBACK_LAUNCHER` category. Before that a TV
-did not show the icon at all, and the missing explicit
-`touchscreen required="false"` made the app formally incompatible with
-devices that have no touchscreen. Nothing changes on phones and tablets.
+Export now asks how you want it:
 
-## 📺 Fixed — importing from a file on devices without a file manager
+- **Save to file** — the system save dialog, you choose the folder.
+- **Save to Downloads** — writes straight to the public Downloads folder
+  (Android 10+).
+- **Share** — the previous behaviour.
 
-Android TV has no system document picker, and the request is intercepted by
-a system stub: it flashed a toast and silently cancelled the selection, so
-the "import from file" button looked broken. The app now checks for a real
-file manager up front and points to a working alternative — pasting from the
-clipboard or adding by link.
+This came from a user report: "on some devices without a third-party file
+manager there's no way to save the backup". Export only ever opened the
+share sheet, and the file itself lived in the app cache — where it went was
+whatever you picked in the sheet, and the cache gets cleared eventually. With
+no file manager installed there was often no "save to files" target in the
+sheet at all.
 
-## 📺 Fixed — the mass-ping button could not be reached with a remote
+Options your device can't do aren't shown.
 
-It was a `GestureDetector`, which has no focus node, so D-pad navigation
-skipped straight past it. It is now an `InkWell`, and the main Start/Stop
-button takes focus when the screen opens.
+## 💥 Fixed — the app froze with "isn't responding" while reloading the config
 
-## 🔧 Process — the Flutter pin lives in the repository
+Applying a config change to a running tunnel could freeze the interface for
+long enough that Android offered to close the app. The fix came from a user
+report with a diagnostic dump.
 
-The Flutter version used for builds is now read from
-`app/android/flutter.version` instead of being hardcoded twice in CI. This
-came out of the F-Droid review: the build should read that number from our
-code rather than keep its own copy in packaging metadata.
+Reloading rebuilds the whole core instance — parsing the config and
+assembling every outbound, DNS and routing. That work was running on the UI
+thread, so nothing was drawn and no taps were handled until it finished. On
+a typical config it takes a fraction of a second and passes unnoticed; on a
+subscription with several hundred nodes it went past the five-second mark
+where Android declares the app unresponsive.
+
+The reload now runs off the UI thread, so the interface stays responsive
+regardless of how large the config is. The tunnel still drops and comes back
+during a reload, as before.
+
+Two neighbouring actions went the same way, for the same reason: clearing
+the DNS cache (it reloads too) and the network reset.
+
+This was not a core problem — the core was doing its normal work, it was
+simply being called from the wrong thread.
+
+## 🔎 Fixed — the diagnostic report drowned in its own noise
+
+When a subscription points nodes at a relay that isn't currently built — a
+disabled WARP preset is the usual case — the app drops the broken link and
+warns about it. It used to warn once per node: 138 nodes meant 138 identical
+lines per rebuild.
+
+In one user's dump that came to 276 lines out of 305. Everything else had
+been pushed out of the log, including the events we needed to read.
+
+It's now one line per missing relay: how many nodes referenced it, the names
+of the first five, and a count of the rest.
+
+## 🏷 Fixed — the diagnostic report now says which build it came from
+
+`Share dump` writes `app_version`, `app_build` and `core_version` at the top
+of the file.
+
+Before this, the core version reached the report only by accident — as a
+field inside crash or OOM snapshots, because the core puts it there itself.
+No snapshots, no version. The app's own version was never in the report at
+all. First question on any report is which build to reproduce on, and the
+report couldn't answer it.
+
+## 🔧 Process — the version code is derived from the version
+
+Nothing changes for you: updates install as before. This is about how builds
+are numbered.
+
+Android orders updates by an integer `versionCode`. Until now ours was the
+number of commits in history — a value that says how often someone committed,
+not which version this is. That made the version impossible to read from the
+sources, which is what F-Droid's update checker does. Automatic updates in
+their catalogue were therefore off, and every version needed a manual merge
+request.
+
+The number is now derived from the version itself: `2.20.0` on arm64 becomes
+`22000502`, where the digits carry major, minor, patch, the stage
+(release candidate, release, hotfix) and the architecture. The architecture
+is the last digit on purpose — F-Droid sorts by this number, and with the
+architecture in the leading digits an old x86_64 build outranks a new armv7
+one, scrambling the version list.
+
+Your installed build carries a much smaller number (3606 on arm64), so the
+new scheme is far above it and updates keep working. Verified on a device.
 
 ## ✅ Tests
 
-`flutter analyze` clean, 2937 tests pass, all four l10n checkers green.
-The TV changes were verified on an Android TV emulator; behaviour on a real
-television is not confirmed yet.
+2941 tests green, analyzer clean, all four localization checkers at zero.
+
+QR scanning and backup export are both device-verified (04.08.2026): a phone
+emulator on API 34 and an Android TV emulator on API 31. The version fields
+are device-verified too (05.08.2026, on a phone). The aggregated warning has
+four tests of its own.
+
+The version-code change is device-verified (05.08.2026, arm64 emulator on
+Android 14): a build carrying the old number installs over with the new one
+without uninstalling, and an equal number still installs — the property local
+dev builds depend on.
+
+The freeze fix has not been verified on a device: reproducing it needs a
+subscription of several hundred nodes, since a normal config never reaches
+the freeze threshold. Kotlin compiles clean.
 
 </details>
 
 <details open>
 <summary><h2>🇷🇺 Русский</h2></summary>
 
-## 💥 Исправлено — ядро больше не умирает при смене сети на старте
+## 📷 Добавлено — импорт сканированием QR-кода
 
-Переключение WiFi↔LTE ровно в момент запуска туннеля убивало весь процесс
-nil-паникой. Краш пришёл из реальной жалобы вместе с крашдампом.
+Пункт «Scan QR code» в меню ⋮ на экране серверов раньше отвечал «QR scanner
+coming soon». Теперь он открывает камеру.
 
-Ядро гейтило ранние вызовы по принципу «объект box существует», но box
-публикуется в момент *создания* — пока он ещё стартует, его сетевые поля не
-заполнены. Смена сети, попавшая в это окно, добиралась до пустых полей.
-Приложение регистрирует монитор сети до запуска туннеля, поэтому совпадение
-было штатным, а не экзотическим.
+QR — основной способ раздачи конфигов: код на странице панели, скриншот в
+чате поддержки. До сих пор его приходилось распознавать сторонним
+приложением и вставлять результат вручную.
 
-Теперь гейт проверяет, что сервис действительно дошёл до состояния
-«запущен», а на самом пути сброса стоит отдельная защита.
+Содержимое кода уходит в тот же разбор, что и вставка из буфера: работает и
+одиночная proxy-ссылка, и ссылка на подписку. Перед добавлением показывается
+диалог подтверждения с тем, что реально приехало в коде — QR недоверенный
+ввод, молча ничего не добавляется.
 
-## 💥 Исправлено — TCP-соединение до недостижимого узла роняло процесс
+Узлы, добавленные сканером, помечаются источником `qr`. На устройствах без
+камеры (Android TV) пункт меню не показывается вовсе: в отличие от импорта
+файла, где остаются буфер обмена и ссылка, у сканирования замены нет.
 
-Соединение, так и не дошедшее до установленного состояния, убивало весь
-процесс вместо того, чтобы просто отвалиться по таймауту. Внутри сетевого
-стека неудачное рукопожатие занулило собственное состояние и отпустило
-блокировку до закрытия точки соединения; пришедший в это окно пакет нашёл
-наполовину зачищенное рукопожатие и разыменовал его.
+APK вырос на 3.8 МБ — это сканер штрихкодов ML Kit и CameraX.
 
-## 📺 Добавлено — приложение видно в лаунчере Android TV
+## 💾 Добавлено — экспорт бэкапа умеет сохранять файл
 
-В манифест добавлены `leanback` и `touchscreen` (обе `required="false"`) и
-категория `LEANBACK_LAUNCHER`. Раньше телевизор не показывал иконку вообще,
-а отсутствие явного `touchscreen required="false"` делало приложение
-формально несовместимым с устройствами без сенсорного экрана. На телефонах
-и планшетах ничего не меняется.
+Экспорт теперь спрашивает способ:
 
-## 📺 Исправлено — импорт из файла на устройствах без файлового менеджера
+- **Сохранить в файл** — системный диалог сохранения, папку выбираете вы.
+- **Сохранить в Загрузки** — пишет прямо в публичную папку «Загрузки»
+  (Android 10+).
+- **Поделиться** — прежнее поведение.
 
-На Android TV системного документ-пикера нет, а запрос перехватывает
-системная заглушка: она мигала тостом и молча отменяла выбор, поэтому
-кнопка «импорт из файла» выглядела неработающей. Теперь приложение проверяет
-наличие настоящего файлового менеджера заранее и подсказывает рабочую
-альтернативу — вставку из буфера обмена или добавление по ссылке.
+Пришло из жалобы: «бэкап на некоторых устройствах без стороннего файлового
+менеджера не сохранить». Экспорт открывал только share-sheet, а сам файл
+лежал в кэше приложения — куда он попадёт, решал выбор в шите, а кэш рано
+или поздно вычищается системой. Без файлового менеджера пункта «сохранить в
+файлы» в шите часто не было вообще.
 
-## 📺 Исправлено — кнопка массового пинга недостижима с пульта
+Способы, недоступные на конкретном устройстве, в списке не показываются.
 
-Была `GestureDetector`, у которого нет фокусного узла, — навигация по D-pad
-просто пропускала её. Заменена на `InkWell`; главная кнопка Start/Stop
-получает фокус при открытии экрана.
+## 💥 Исправлено — приложение зависало с «не отвечает» при перезагрузке конфига
 
-## 🔧 Процесс — пин Flutter лежит в репозитории
+Применение изменений конфига к работающему туннелю могло заморозить
+интерфейс настолько, что Android предлагал закрыть приложение. Исправление
+пришло из жалобы пользователя вместе с диагностическим дампом.
 
-Версия Flutter, которой идёт сборка, теперь читается из
-`app/android/flutter.version`, а не хардкодится в CI двумя местами. Это
-пришло из ревью F-Droid: сборка должна брать это число из нашего кода, а не
-держать собственную копию в метаданных упаковки.
+Перезагрузка пересобирает весь инстанс ядра — разбирает конфиг и заново
+строит все узлы, DNS и маршрутизацию. Эта работа шла на потоке интерфейса,
+поэтому до её завершения ничего не отрисовывалось и нажатия не
+обрабатывались. На обычном конфиге она занимает доли секунды и проходит
+незаметно; на подписке в несколько сотен узлов выходила за пять секунд —
+порог, после которого Android считает приложение зависшим.
+
+Теперь перезагрузка идёт вне потока интерфейса, и он остаётся отзывчивым при
+любом размере конфига. Туннель во время перезагрузки по-прежнему отваливается
+и поднимается заново — это не изменилось.
+
+Тем же путём отправились два соседних действия по той же причине: сброс
+DNS-кэша (он тоже делает перезагрузку) и сброс сети.
+
+Проблема была не в ядре — ядро делало свою обычную работу, его просто звали
+не с того потока.
+
+## 🔎 Исправлено — диагностический отчёт тонул в собственном шуме
+
+Когда подписка направляет узлы через посредника, которого сейчас в конфиге
+нет (типовой случай — выключенный WARP-пресет), приложение снимает битую
+ссылку и предупреждает об этом. Предупреждение писалось на каждый узел: 138
+узлов давали 138 одинаковых строк за одну пересборку.
+
+В дампе одного из пользователей это дало 276 строк из 305. Всё остальное из
+лога вытеснилось, включая события, которые и надо было прочитать.
+
+Теперь строка одна на каждого недостающего посредника: сколько узлов на него
+ссылались, имена первых пяти и счётчик остальных.
+
+## 🏷 Исправлено — по отчёту видно, на какой сборке он снят
+
+`Share dump` пишет в начало файла `app_version`, `app_build` и
+`core_version`.
+
+Раньше версия ядра попадала в отчёт случайно — полем внутри снимков крашей
+или OOM, потому что их кладёт туда само ядро. Нет снимков — нет и версии.
+Версии самого приложения в отчёте не было никогда. При этом первый вопрос по
+любому отчёту — на какой сборке воспроизводить, и ответить на него отчёт не
+мог.
+
+## 🔧 Процесс — код версии выводится из самой версии
+
+Для вас ничего не меняется: обновления ставятся как раньше. Речь о том, как
+нумеруются сборки.
+
+Android упорядочивает обновления по целому числу `versionCode`. До сих пор им
+было число коммитов в истории — величина, которая говорит, сколько раз
+кто-то закоммитил, а не какая это версия. Из-за этого версию нельзя было
+прочитать из исходников, а именно так её ищет F-Droid. Автообновление в их
+каталоге поэтому было выключено, и каждая версия требовала ручного
+merge request.
+
+Теперь число выводится из самой версии: `2.20.0` для arm64 даёт `22000502`,
+где разряды несут major, minor, patch, стадию (кандидат, релиз, заплатка) и
+архитектуру. Архитектура стоит последней цифрой намеренно — F-Droid
+сортирует по этому числу, и когда архитектура попадает в старшие разряды,
+старая сборка под x86_64 оказывается «новее» новой под armv7, а список версий
+едет вперемешку.
+
+У установленной у вас сборки число намного меньше (3606 для arm64), новая
+схема заведомо выше — обновления продолжают работать. Проверено на
+устройстве.
 
 ## ✅ Тесты
 
-`flutter analyze` чистый, 2937 тестов проходят, все четыре l10n-чекера
-зелёные. Изменения для TV проверены на эмуляторе Android TV; поведение на
-реальном телевизоре пока не подтверждено.
+2941 тест зелёный, анализатор чист, все четыре чекера локализации по нулям.
+
+Сканирование QR и экспорт бэкапа проверены на устройствах (04.08.2026):
+эмулятор телефона API 34 и эмулятор Android TV API 31. Поля с версиями тоже
+проверены на устройстве (05.08.2026, телефон). У агрегированного
+предупреждения — четыре собственных теста.
+
+Смена схемы versionCode проверена на устройстве (05.08.2026, эмулятор arm64
+на Android 14): сборка со старым числом обновляется на новое без удаления, а
+равное число по-прежнему ставится — на это свойство опираются локальные
+dev-сборки.
+
+Исправление зависания на устройстве не проверено: для воспроизведения нужна
+подписка в несколько сотен узлов, обычный конфиг до порога зависания не
+доходит. Kotlin компилируется чисто.
 
 </details>
 
@@ -140,7 +277,7 @@ nil-паникой. Краш пришёл из реальной жалобы в�
 ## 📲 Install
 
 ```bash
-adb install -r LxBox-v2.19.7-arm64-v8a.apk
+adb install -r LxBox-v2.20.0-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
@@ -150,4 +287,4 @@ subscriptions are preserved.
 
 ---
 
-Previous release / Предыдущий релиз: [v2.19.6](docs/releases/v2.19.6.md).
+Previous release / Предыдущий релиз: [v2.19.7](docs/releases/v2.19.7.md).
