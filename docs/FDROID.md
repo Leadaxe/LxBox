@@ -44,40 +44,46 @@ F-Droid не берёт готовый APK из GitHub Release. Их сборщ�
 Автоподхват новых версий отключён (`UpdateCheckMode: None`, почему — §4), поэтому
 на каждую версию нужен небольшой MR: меняются только номер версии и тег.
 
-### 1.1. Узнать versionCode
+### 1.1. Посчитать versionCode
 
-Сборка F-Droid идёт **без** `--split-per-abi`, поэтому ABI-множителя там нет и
-versionCode равен числу коммитов на релизном коммите:
+§379 — код считается из **версии**, одинаково для F-Droid и GitHub:
 
 ```bash
-git rev-list --count vX.Y.Z
+scripts/version-code.sh 2.19.8 arm64-v8a   # 21908502
 ```
 
-⚠ У APK с GitHub значение **другое** — там `--split-per-abi` остался, и Flutter
-домножает ABI (arm64: `2*1000 + code`). Не путать: в метаданные F-Droid идёт
-число из команды выше, а не из GitHub-APK. Подробности — §4.
+ABI-цифры: `0` universal, `1` armv7, `2` arm64, `4` x86_64 — последней, иначе
+список версий в каталоге сортируется вперемешку (требование рецензента,
+MR!44731).
+
+Раскладка кода и правила стадий (`-rc.N` / релиз / `-hotfixN`) — в
+[§379](spec/tasks/379-version-code-from-version.md). Схема больше не зависит от
+числа коммитов, поэтому значение можно посчитать по одному имени тега.
 
 ### 1.2. Поправить метаданные
 
-⚠ **Если в релизе бампнулось ядро** (`app/android/libbox.version`), поправить
-ещё и пин srclib в билд-блоке: `sing-box-lx@<та же версия>`. Сборка сверяет
-эти два значения и падает при расхождении — молча разъехаться они не могут.
+Версии тулчейнов править **не нужно** — они читаются из исходников
+(`android/flutter.version`, `go.version` ядра, `android/libbox.version`),
+а `srclibs` пинятся ветками. Это и была суть замечаний рецензента: в
+метаданных F-Droid не должно остаться ни одной захардкоженной версии.
 
-В `metadata/com.leadaxe.lxbox.yml` меняются **шесть** мест:
+В `metadata/com.leadaxe.lxbox.yml` меняются **четыре** места:
 
 ```yaml
 Builds:
   - versionName: X.Y.Z          # 1
-    versionCode: <из APK>       # 2 — например 3582
-    commit: vX.Y.Z              # 3
-    ...
-    prebuild:
-      - "sed -i -e 's/^version: .*/version: X.Y.Z+<базовый>/' pubspec.yaml"   # 4
-                                # базовый = versionCode из APK минус 2000
+    versionCode: <из §1.1>      # 2 — например 16042
+    commit: <полный хеш>        # 3 — git rev-parse vX.Y.Z^{commit}
 
-CurrentVersion: X.Y.Z           # 5
-CurrentVersionCode: <из APK>    # 6
+CurrentVersion: X.Y.Z           # 4a
+CurrentVersionCode: <из §1.1>   # 4b
 ```
+
+⚠ `commit:` — **полный хеш**, не тег: рецензент просил именно так.
+
+⚠ Блоков **три** — по одному на ABI (armv7/arm64/x86_64). Правки нужны в каждом:
+`versionName`, `versionCode` (своя ABI-цифра), `commit`. Проще сгенерировать
+скриптом из одного блока, чем править руками.
 
 Проверить локально (`fdroidserver` ставится через `pip install`):
 
@@ -85,7 +91,10 @@ CurrentVersionCode: <из APK>    # 6
 fdroid lint com.leadaxe.lxbox && fdroid rewritemeta com.leadaxe.lxbox && git diff --quiet metadata/com.leadaxe.lxbox.yml && echo "формат канонический"
 ```
 
-`rewritemeta` не должен ничего менять — иначе их CI отвергнет форматирование.
+⚠ **Гонять оба, не только lint.** Lint пропускает слишком длинные строки, а
+`rewritemeta` их переносит — и в их CI это отдельный джоб, который падает.
+После правки метаданных всегда сверять, что повторный `rewritemeta` ничего
+не меняет.
 
 ### 1.3. Запушить в форк
 
@@ -128,8 +137,8 @@ fdroidserver checkout'ит последнюю версию и сканирует
 | Скриншоты | `images/phoneScreenshots/N.png` — нумерация задаёт порядок |
 | Changelog | `changelogs/<versionCode>.txt` — имя = код из APK |
 
-⚠ **Имя changelog'а — итоговый versionCode** (3582), а не базовый. Не совпадёт —
-changelog версии просто не покажут.
+⚠ **Имя changelog'а — тот же versionCode, что в метаданных** (см. §1.1, схема
+`rev-list * 10 + ABI`). Не совпадёт — changelog версии просто не покажут.
 
 ### Съёмка скриншотов
 
@@ -148,64 +157,92 @@ adb exec-out screencap -p > shot.png
 |---|---|
 | `libbox.aar` собирается из исходников | prebuilt-бинарники запрещены; апстрим sing-box пакуется так же |
 | **naive отключён** | тянет `cronet-go` с готовым `libcronet.a` |
-| Собирается только arm64 | `--split-per-abi --target-platform=android-arm64` |
+| Три отдельных APK по ABI | три build-блока, у каждого свои `--target-platform` и `LXBOX_ABI_FILTER` |
 | Проверка JDK 17 в ядре вырезана | в их Debian trixie стоит JDK 21, пакета `openjdk-17` нет |
 | legacy-вариант AAR вырезан | gomobile требует SDK platform под каждый вариант |
 
-На сборки с GitHub это не влияет — там naive остаётся.
+На сборки с GitHub это не влияет — там naive остаётся и собираются все ABI.
+
+⚠ **`--target-platform` НЕ фильтрует нативный код ядра.** Он сужает только
+движок Flutter и Dart AOT, а `.so` внутри AAR (все три ABI) попадают в APK как
+есть — без фильтра APK раздувается 31 → 71 МБ. Отсюда `LXBOX_ABI_FILTER`
+([build.gradle.kts](../app/android/app/build.gradle.kts)): он чистит
+`ndk.abiFilters` и выкидывает чужие ABI из AAR через `packaging.jniLibs.excludes`.
 
 ### Грабли их buildserver
 
 Выявлены прогонами CI, все учтены в метаданных:
 
 1. `make.bash` требует bootstrap-Go → `apt-get install golang-go` + `GOROOT_BOOTSTRAP`.
-2. Go-модкэш read-only, внутри бинарный fuzz-корпус protobuf → **`scanignore`**,
-   не `scandelete` (тот пытается удалять и падает с `PermissionError`).
-3. Сканер отвергает **любой** `.aar` → `scanignore` на `libbox.aar` (он собирается
-   тут же, в prebuild, и в репозитории отсутствует).
-4. Первый запуск CI на GitLab требует верификации аккаунта (телефон/карта), иначе
+2. **Сканер работает МЕЖДУ `prebuild:` и `build:`.** Всё, что собрано в
+   `prebuild`, он видит как подозрительные бинарники и требует `scanignore`.
+   Сборка ядра живёт в `build:` — тогда сканер видит только исходники, и
+   `scanignore` не нужен вовсе (ни на AAR, ни на Go-модкэш с его fuzz-корпусом).
+3. Первый запуск CI на GitLab требует верификации аккаунта (телефон/карта), иначе
    пайплайн падает как «yaml invalid» с нулём джобов.
+4. Git-протокол к GitLab периодически отваливается (`Connection reset`), а REST
+   API при этом жив. Обход — коммит файла через
+   `POST /projects/:id/repository/commits`.
+5. `git -C $$srclib$$ checkout` **обязательно с `-f`**: fdroidserver сразу после
+   клона чистит keysigning-конфиги в `examples/` и `dev/` клона Flutter, дерево
+   становится грязным, и обычный checkout отказывается переключаться. Эти файлы
+   в нашей сборке не участвуют.
+6. Сабмодулей ядра нужно **три**: `sing-tun`, `wireguard-go` и `gvisor`.
+   Смотреть не в `.gitmodules` (там ещё три клиентских, тяжёлых и ненужных), а
+   в `go.mod` ядра — `grep -A15 '^replace' go.mod | grep '=> \./'` показывает
+   ровно те, что заменены локальными путями.
 
 ---
 
-## 4. versionCode ≠ число коммитов
+## 4. Схема versionCode
 
-При `--split-per-abi` Flutter домножает ABI:
+§379 — одна формула на оба канала, ABI сзади:
 
 ```
-versionCodeOverride = ABI_VERSION[abi] * 1000 + versionCode
+versionCode = ((major × 10000 + minor × 100 + patch) × 100 + PRE) × 10 + ABI
 ```
 
-(`FlutterPlugin.kt`; arm32 = 1, arm64 = 2, x86_64 = 4.)
+`PRE`: `01-49` = `-rc.N`, `50` = релиз, `51-98` = `-hotfixN`.
+`ABI`: `0` universal, `1` armv7, `2` arm64, `4` x86_64.
+Считает [`scripts/version-code.sh`](../scripts/version-code.sh) — единственный
+источник формулы, дублировать арифметику нельзя.
 
-Для v2.19.5: `git rev-list --count` даёт **1582**, а arm64-APK несёт **3582**.
+Почему ABI сзади: каталог F-Droid **сортирует версии по versionCode**. С ABI
+впереди (как делает Flutter при `--split-per-abi`: `ABI * 1000 + code`)
+x86_64-сборка старого релиза оказывается «новее» armv7-сборки нового, и список
+едет вперемешку. Прямое требование рецензента (MR!44731).
 
-Отсюда два следствия:
+Поэтому на GitHub `--split-per-abi` **убран** — иначе Flutter домножил бы ABI
+поверх нашего числа. Вместо одного прогона со сплитом — по прогону на таргет.
+Числа для одного релиза теперь **совпадают** между GitHub и F-Droid.
 
-- в `versionCode:` и в имени changelog'а пишется **итоговое** значение (3582);
-- `sed` в prebuild кладёт в pubspec **базовое** (1582) — множитель добавит gradle.
+### Автообновление
 
-### Почему UpdateCheckMode: None
+До §379 `checkupdates` не мог прочитать версию (`pubspec.yaml` держал
+placeholder, а `versionCode` = число коммитов — не функция от тега), поэтому
+стоял `UpdateCheckMode: None` и каждая версия требовала ручного MR.
 
-Их `checkupdates` не может прочитать версию:
+Теперь версия коммитится в `pubspec.yaml` при релизе и код выводится из тега:
 
-- в git `pubspec.yaml` держит placeholder, реальная версия вычисляется из тега
-  на сборке (см. [`RELEASE_PROCESS.md` §2.2](RELEASE_PROCESS.md));
-- из имени тега `versionCode` не выводится: 3582 никак не следует из `v2.19.5`.
+```yaml
+UpdateCheckMode: Tags
+UpdateCheckData: app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
+VercodeOperation:
+  - '%c * 10 + 1'
+  - '%c * 10 + 2'
+  - '%c * 10 + 4'
+AutoUpdateMode: Version v%v
+```
 
-### Идея на будущее: научить CI писать версию в pubspec
+`UpdateCheckData` читает базу кода (ABI=0) из pubspec, `VercodeOperation`
+добавляет цифру ABI на каждый build-блок. Прецедент в их каталоге —
+`app.atrium`: Flutter, `%c * 10 + ABI`, читает `app/pubspec.yaml`.
 
-Обсуждалась, **отложена до вливания MR**. Разобранные варианты:
+### Три ABI: цена вопроса
 
-| Вариант | Проблема |
-|---|---|
-| pre-commit хук пишет `rev-list --count + 1` | Угадывание. Тег ставится на тот же коммит; любая доп. правка (заметки, опечатка) снова ломает число. И главное — в pubspec попадёт базовый код, а APK несёт умноженный, так что `checkupdates` всё равно споткнётся |
-| Детерминированный код из версии (`2.19.5` → `21905`) | Работает, но это смена схемы версионирования. Нужна проверка монотонности на устройстве: код обязан только расти, иначе Android откажет в обновлении |
-| Собирать universal вместо split-per-abi | Множителя нет, код равен базовому. Но APK ~105 МБ вместо 31 МБ |
-
-Корень проблемы не в «неактуальном pubspec», а в том, что при `--split-per-abi`
-в pubspec **в принципе не может лежать то число, которое окажется в APK**.
-
-Браться за это стоит отдельной таской после того, как заявку примут.
+Собираются все три (armv7 / arm64 / x86_64) — тремя build-блоками с общим
+`versionName` и разными `versionCode`. Каждый блок компилирует Go из
+исходников и ядро заново: кэша между блоками нет, поэтому полный прогон
+занимает около часа против ~20 минут на один ABI.
 
 [fastlane-docs]: https://f-droid.org/en/docs/All_About_Descriptions_Graphics_and_Screenshots/

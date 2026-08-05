@@ -1,11 +1,14 @@
 package com.leadaxe.lxbox
 
 import android.app.Activity
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
 import com.leadaxe.lxbox.vpn.BootReceiver
@@ -108,6 +111,25 @@ class MainActivity : FlutterActivity() {
                     "hasRealFilePicker" -> {
                         // §372 — есть ли на устройстве НАСТОЯЩИЙ файловый пикер.
                         result.success(hasRealFilePicker())
+                    }
+                    "hasCamera" -> {
+                        // §375 — есть ли камера (для QR-сканера).
+                        result.success(hasCamera())
+                    }
+                    "canSaveToDownloads" -> {
+                        // §374 — MediaStore-запись в Downloads без разрешений
+                        // доступна с API 29 (scoped storage).
+                        result.success(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                    }
+                    "saveToDownloads" -> {
+                        // §374 — fallback экспорта там, где нет SAF-диалога.
+                        val name = call.argument<String>("fileName")
+                        val content = call.argument<String>("content")
+                        if (name.isNullOrEmpty() || content == null) {
+                            result.error("INVALID_ARGS", "fileName/content is null", null)
+                        } else {
+                            result.success(saveToDownloads(name, content))
+                        }
                     }
                     "checkNotificationPermission" -> {
                         // POST_NOTIFICATIONS — runtime permission на API 33+.
@@ -296,11 +318,68 @@ class MainActivity : FlutterActivity() {
         return candidates.any { !isStubHandler(it.activityInfo?.packageName) }
     }
 
+    /// §375 — есть ли на устройстве камера, пригодная для сканирования QR.
+    ///
+    /// FEATURE_CAMERA_ANY (API 17+) покрывает заднюю, фронтальную и внешнюю
+    /// USB-камеру. На Android TV — false (камеры нет, пункт меню прячем);
+    /// на приставке с подключённой веб-камерой — true, и сканер там работает.
+    private fun hasCamera(): Boolean =
+        packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)
+
     /// Пакеты-заглушки, которыми TV-framework затыкает отсутствующие
     /// системные приложения. Матчим по префиксу — имя различается между
     /// Android TV и Google TV сборками.
     private fun isStubHandler(pkg: String?): Boolean =
         pkg != null && pkg.contains("frameworkpackagestubs")
+
+    /// §374 — пишет текст в публичную папку Downloads через MediaStore.
+    ///
+    /// Fallback экспорта бэкапа для устройств, где системного диалога
+    /// сохранения (SAF `ACTION_CREATE_DOCUMENT`) нет — на Android TV его
+    /// перехватывает та же заглушка, что и пикер (§372).
+    ///
+    /// Только API 29+: до scoped storage запись в public Downloads требует
+    /// WRITE_EXTERNAL_STORAGE, которое приложение сознательно не просит.
+    /// Гейт — в `canSaveToDownloads`; здесь дублируется ранним возвратом.
+    ///
+    /// Возвращает фактическое DISPLAY_NAME сохранённого файла — MediaStore
+    /// сам разводит коллизии, дописывая ` (1)` к имени, и юзеру в снекбаре
+    /// надо показать то имя, которое он реально найдёт в папке.
+    /// null — любой сбой (места нет, запись отклонена).
+    private fun saveToDownloads(fileName: String, content: String): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        return try {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+            val resolver = contentResolver
+            val uri = resolver.insert(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI, values,
+            ) ?: return null
+            resolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) }
+                ?: run {
+                    resolver.delete(uri, null, null)
+                    return null
+                }
+            // Снимаем IS_PENDING — до этого файл не виден другим приложениям.
+            resolver.update(
+                uri,
+                ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) },
+                null, null,
+            )
+            resolver.query(
+                uri, arrayOf(MediaStore.Downloads.DISPLAY_NAME), null, null, null,
+            )?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else fileName
+            } ?: fileName
+        } catch (t: Throwable) {
+            Log.w(TAG, "saveToDownloads failed: ${t.message}")
+            null
+        }
+    }
 
     private fun openAppPermissions(): Boolean {
         // Strategy 1: direct permissions UI

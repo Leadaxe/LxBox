@@ -16,6 +16,7 @@ import 'add_server_wizard_screen.dart';
 import 'app_settings_screen.dart';
 import 'folder_detail_screen.dart';
 import 'node_settings_screen.dart';
+import 'qr_scan_screen.dart';
 import 'subscription_detail_screen.dart';
 import 'warp_wizard_screen.dart';
 import 'subscriptions_screen/clipboard_analysis.dart';
@@ -60,6 +61,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _inputController = TextEditingController();
   bool _autoUpdateEnabled = true;
 
+  /// §375 — есть ли камера. null = ещё не ответил канал; до ответа пункт
+  /// «Scan QR code» показываем (проверка мгновенная, на телефоне камера есть
+  /// практически всегда). На Android TV — false, пункт прячется.
+  bool? _hasCamera;
+
   // §255 — прокрутка к владельцу + вспышка строки (навигация из detour-cycle
   // sheet). Локальная (в этом экране нет HomeState для персистентного кольца) —
   // таймер-вспышка, гаснет сама.
@@ -74,6 +80,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   void initState() {
     super.initState();
     unawaited(_loadAutoUpdateFlag());
+    unawaited(_loadCameraAvailability());
     // §357 — prefill поля ввода из lxbox-кнопки `add:<uri>` support-ленты.
     final prefill = widget.initialInput;
     if (prefill != null && prefill.trim().isNotEmpty) {
@@ -120,6 +127,15 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final v = await SettingsStorage.getAutoUpdateSubs();
     if (!mounted) return;
     setState(() => _autoUpdateEnabled = v);
+  }
+
+  /// §375 — спрашиваем платформу о камере один раз при открытии экрана:
+  /// меню строится синхронно в itemBuilder, асинхронную проверку туда не
+  /// вставить.
+  Future<void> _loadCameraAvailability() async {
+    final v = await UrlLauncher.hasCamera();
+    if (!mounted) return;
+    setState(() => _hasCamera = v);
   }
 
   Future<void> _toggleAutoUpdate() async {
@@ -258,10 +274,48 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
   }
 
+  /// §375 — импорт по QR-коду с камеры. Сканер только поставляет строку:
+  /// разбор формата и подтверждение — тот же путь, что у буфера обмена, так
+  /// что юзер видит, что именно приехало в коде, до записи в конфиг (QR —
+  /// недоверенный ввод из внешнего мира).
   Future<void> _scanQrCode() async {
-    if (mounted) {
+    final outcome = await Navigator.of(context).push<ScanOutcome>(
+      MaterialPageRoute(builder: (_) => const QrScanScreen()),
+    );
+    if (!mounted) return;
+
+    // Уход системной кнопкой «назад» — pop без значения.
+    if (outcome is! ScannedCode) {
+      final problem =
+          outcome == null ? null : scanProblemText(outcome);
+      if (problem != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(problem)),
+        );
+      }
+      return;
+    }
+
+    final text = outcome.value;
+    final analysis = analyzeClipboard(text);
+    if (!mounted) return;
+
+    if (analysis.type == 'unknown') {
+      showUnknownFormatDialog(context, text);
+      return;
+    }
+
+    final confirmed = await showConfirmAddDialog(context, analysis);
+    if (confirmed != true || !mounted) return;
+
+    await widget.subController
+        .addFromInput(text, origin: UserSource.qr);
+    final addErr = widget.subController.lastError;
+    if (addErr == null) {
+      await _regenerateAndSave();
+    } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(getLocalText.s("QR scanner coming soon"))),
+        SnackBar(content: Text(addErr.render())),
       );
     }
   }
@@ -462,7 +516,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     PopupMenuItem(value: 'warp', child: Text(getLocalText.s("Get WARP"))),
                     const PopupMenuDivider(),
                     PopupMenuItem(value: 'paste', child: Text(getLocalText.s("Paste from clipboard"))),
-                    PopupMenuItem(value: 'qr', child: Text(getLocalText.s("Scan QR code"))),
+                    // §375 — на устройстве без камеры (Android TV) пункта нет:
+                    // альтернативы у сканирования не существует, и пункт,
+                    // который всегда отвечает «нельзя», — мусор в меню.
+                    if (_hasCamera ?? true)
+                      PopupMenuItem(value: 'qr', child: Text(getLocalText.s("Scan QR code"))),
                     PopupMenuItem(value: 'file', child: Text(getLocalText.s("Import from file…"))),
                     PopupMenuItem(value: 'folder', child: Text(getLocalText.s("New folder…"))),
                     const PopupMenuDivider(),

@@ -49,6 +49,59 @@ class UrlLauncher {
     }
   }
 
+  /// §374 — доступна ли запись в публичную папку Downloads.
+  ///
+  /// true только на API 29+ (scoped storage): до него public Downloads
+  /// требует WRITE_EXTERNAL_STORAGE, которое приложение не просит.
+  ///
+  /// При недоступности канала возвращает false — в отличие от
+  /// [hasRealFilePicker], здесь непроверенное «да» обещало бы юзеру
+  /// работающий пункт меню, который затем молча ничего не сделает.
+  static Future<bool> canSaveToDownloads() async {
+    try {
+      final ok = await _channel.invokeMethod<bool>('canSaveToDownloads');
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// §374 — пишет [content] в публичную папку Downloads через MediaStore.
+  ///
+  /// Возвращает фактическое имя сохранённого файла: MediaStore разводит
+  /// коллизии, дописывая ` (1)`, и юзеру надо показать то имя, которое он
+  /// реально найдёт. null — сбой записи или API < 29.
+  static Future<String?> saveToDownloads({
+    required String fileName,
+    required String content,
+  }) async {
+    try {
+      return await _channel.invokeMethod<String>(
+        'saveToDownloads',
+        {'fileName': fileName, 'content': content},
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// §375 — есть ли на устройстве камера (для QR-сканера).
+  ///
+  /// false на Android TV: камеры нет, пункт «Scan QR code» там прячется.
+  /// В отличие от импорта файла (§372), у сканирования нет равноценной
+  /// альтернативы, поэтому показывается не подсказка, а ничего.
+  ///
+  /// При недоступности канала возвращает true — не прячем пункт там, где не
+  /// смогли проверить (телефон без камеры практически не встречается).
+  static Future<bool> hasCamera() async {
+    try {
+      final ok = await _channel.invokeMethod<bool>('hasCamera');
+      return ok ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Checks if POST_NOTIFICATIONS is granted (always true on API < 33).
   static Future<bool> checkNotificationPermission() async {
     try {

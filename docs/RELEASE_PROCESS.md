@@ -91,16 +91,24 @@ CI (`.github/workflows/ci.yml`) триггерится на:
 новые фичи. Minor/major — только по явному решению мейнтейнера. Не додумывать
 «тут же фичи, значит minor» — по умолчанию всегда следующий patch.
 
-Версия **не правится вручную нигде** и **не хранится в git** — `app/pubspec.yaml` держит фиксированный placeholder `0.0.0+1`, а реальная версия вычисляется из git-состояния **в момент сборки**:
+**versionCode считается из версии** ([§379](spec/tasks/379-version-code-from-version.md)), а не из числа коммитов:
 
-- **`app/pubspec.yaml`** в репо всегда `version: 0.0.0+1` (placeholder, не бампится, не участвует в diff'ах / merge-конфликтах).
+```
+versionCode = ((major × 10000 + minor × 100 + patch) × 100 + PRE) × 10 + ABI
+```
+
+`PRE`: `01-49` = `-rc.N`, `50` = релиз, `51-98` = `-hotfixN`. `ABI`: `0` universal, `1` armv7, `2` arm64, `4` x86_64. Считает [`scripts/version-code.sh`](../scripts/version-code.sh) — единственный источник формулы; CI и локальный скрипт обязаны звать именно его, иначе коды разойдутся и `install -r` сломается.
+
+`v2.19.8` → arm64 `21908502`, а `v2.19.8-rc.1` → `21908012`. Строго возрастает по мере выпусков.
+
+- **`app/pubspec.yaml`** в `develop` держит placeholder — при релизе туда **коммитится реальная версия** (§2.4), иначе F-Droid `checkupdates` не может её прочитать и автообновление в каталоге не работает. Тег встаёт на этот коммит.
 - **CI release** переписывает pubspec из tag перед `flutter build`:
   - `versionName` = `${tag#v}` (чистая `X.Y.Z` без `-dev` суффикса в production APK).
-  - `versionCode` = `git rev-list --count HEAD`.
+  - `versionCode` — по формуле выше, своя цифра ABI на каждый из 4 прогонов сборки.
 - **Локальная сборка** ([`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh)) переписывает pubspec перед `flutter build`:
   - `versionName` = `${tag#v}` на теге, иначе `${tag#v}-dev.${commits_since_tag}` (например `1.8.2-dev.3`).
-  - `versionCode`-база = `git rev-list --count <last_tag>` (пин к тегу, §186 — против downgrade-блока при установке релиза поверх dev-сборки).
-- **About screen / UpdateChecker** читают версию через `VersionInfo.I.version` (load из `PackageInfo.fromPlatform()` в `main()` перед `runApp`) — то есть из APK-манифеста, а не из pubspec-файла. Потому placeholder в git безвреден.
+  - `versionCode` = код **последнего релизного тега** для arm64 (пин к тегу, §186 — против downgrade-блока при установке релиза поверх dev-сборки; хвост `-dev.N` формула срезает).
+- **About screen / UpdateChecker** читают версию через `VersionInfo.I.version` (load из `PackageInfo.fromPlatform()` в `main()` перед `runApp`) — то есть из APK-манифеста, а не из pubspec-файла.
 - **UpdateChecker skip для `-dev` versions** — dev builds не получают snackbar «X.Y.Z available» (всегда выглядит как «обновитесь до latest»).
 
 ### Setup для нового clone
@@ -113,6 +121,7 @@ CI (`.github/workflows/ci.yml`) триггерится на:
 - v1.8.2 ([§065](spec/tasks/065-version-from-tag.md)): убрана hardcoded const, pubspec → placeholder, CI/local-script инжектят. Но требовался manual `scripts/build-local-apk.sh` для realistic version при dev sessions.
 - v1.8.3 ([§066](spec/tasks/066-pubspec-sync-hook.md)): pre-commit hook делал sync автоматом на каждый commit.
 - v2.11.x: pre-commit hook **удалён** (`.githooks/`, `setup-hooks.sh`, `sync-pubspec-version.sh`). Хук лишь бампил закоммиченный pubspec, но обе сборки (local + CI) всё равно переписывают версию перед `flutter build`, а runtime читает её из APK-манифеста — значение хука до APK не доживало. Взамен pubspec заморожен на `0.0.0+1`, версия вычисляется только на сборке. Выгода: конец «дрожанию» pubspec и merge-конфликтам по `version:`.
+- v2.19.x ([§379](spec/tasks/379-version-code-from-version.md)): versionCode переведён с `rev-list --count` на формулу от версии, `--split-per-abi` убран. Реальная версия снова коммитится — но ровно один раз, на merge-коммите в `main`, а не на каждый коммит в `develop` (это и была причина «дрожания»). Повод: F-Droid `checkupdates` читает версию из исходников на коммите тега; без этого автообновление в каталоге невозможно.
 
 ### 2.3. RELEASE_NOTES.md → архив
 
@@ -139,7 +148,7 @@ CI (`.github/workflows/ci.yml`) триггерится на:
    ```
    docs(release): vX.Y.Z notes
    ```
-   Запушить в `origin/develop`. **Никаких pubspec/about_screen изменений** — версия будет инжектиться CI.
+   Запушить в `origin/develop`. **Никаких pubspec/about_screen изменений в `develop`** — версия пишется в pubspec один раз, на merge-коммите в `main` (§2.4), чтобы не «дрожала» в ветке разработки.
 
 ### 2.4. Merge в main и тег
 
@@ -156,6 +165,16 @@ git pull --ff-only
 # двинулся), tag создастся на старом commit'е, CI соберёт устаревший
 # код. Always two-step.
 git merge --no-ff --no-commit develop
+
+# §379 — реальная версия в pubspec ДО коммита: тег встанет на этот коммит, а
+# F-Droid checkupdates читает версию именно с коммита тега. Без этого шага
+# в каталоге остаётся placeholder и автообновление не работает.
+# Число после `+` — база кода (ABI=0), цифру ABI добавляет VercodeOperation.
+CODE="$(scripts/version-code.sh X.Y.Z universal)"
+sed -i.bak -E "s/^version: .*/version: X.Y.Z+${CODE}/" app/pubspec.yaml
+rm -f app/pubspec.yaml.bak
+git add app/pubspec.yaml
+
 git commit -m "Merge branch 'develop' into main (vX.Y.Z)"
 git push origin main
 
@@ -314,7 +333,7 @@ git tag -d vX.Y.Z
 - [ ] `develop` зелёная (`cd app && flutter analyze && flutter test` **+ четыре `dart run tool/l10n/*_check.dart --strict`** — CI гоняет их шагом «L10n checks», см. §2.1 п.1), descendant от прошлого stable-тега.
 - [ ] **Ядро:** `app/android/app/build.gradle.kts` → `implementation(files("libs/libbox.aar"))` (активной Maven-строки стокового libbox нет); в `ci.yml` job `android` есть шаг `Fetch sing-box-lx core`, пин `app/android/libbox.version` = версии local smoke. Стоковое 1.13.11 отвергает AWG/XHTTP-конфиги — такой релиз не выпускать.
 - [ ] Релиз-доки синхронизированы: `CHANGELOG.md`, `ARCHITECTURE.md` / `DEVELOPMENT_REPORT.md` (если затронуты), `README.md` + `README_RU.md` (если фичи видимые), spec'и → `status: released`.
-- [ ] `app/pubspec.yaml` **не трогать** — там placeholder `0.0.0-dev+0`. Версия инжектится CI из tag (§065).
+- [ ] `app/pubspec.yaml` в `develop` **не трогать** — реальная версия пишется туда на merge-коммите в `main` (§2.4/§379), тег встаёт на этот коммит.
 - [ ] `RELEASE_NOTES.md` причёсан под финал, скопирован в `docs/releases/vX.Y.Z.md`. **Обе языковые версии (EN + RU) полные и синхронные**, каждая в своём `<details>`-спойлере (§2.3, образец — `v2.17.0`).
 - [ ] Local smoke: `scripts/build-local-apk.sh` (derive'ит версию из `git describe`, sed pubspec + revert trap) + `scripts/install-apk.sh` — ставится поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (при работе из worktree не забыть симлинки keystore).
 - [ ] Коммит `docs(release): vX.Y.Z notes` запушен в `develop` (только doc-изменения; никаких pubspec/code bump'ов).

@@ -2,17 +2,21 @@ name: lxbox
 description: L×Box — Android VPN client (sing-box / libbox CommandClient).
 publish_to: 'none'
 
-version: 2.19.2-dev.57+1491
-# ↑ ФИКСИРОВАННЫЙ placeholder. НЕ редактируется вручную и НЕ бампится в git.
-# Реальная версия вычисляется из git-состояния В МОМЕНТ СБОРКИ и переписывает
-# эту строку прямо перед `flutter build` (файл в репо остаётся 0.0.0+1):
-#   • CI release build (.github/workflows/ci.yml → "Inject release version") —
-#     `version: ${tag#v}+${git rev-list --count HEAD}`.
-#   • Локальная сборка (scripts/build-local-apk.sh) — `git describe --tags --abbrev=0`
-#     для versionName и `rev-list --count <TAG>` (пин к тегу, §186 — против
-#     downgrade-блока при установке релиза) для versionCode.
+version: 2.20.0+22000500
+# ↑ НЕ редактируется вручную. В `develop` здесь остаётся значение прошлого
+# релиза; реальная версия пишется сюда ОДИН РАЗ — на merge-коммите в `main`,
+# на который встаёт тег (§379, RELEASE_PROCESS.md §2.4). Так делается потому,
+# что F-Droid `checkupdates` читает версию из исходников на коммите тега;
+# на каждый коммит версию не бампим — от этого «дрожания» ушли в v2.11.x.
+#
+# Число после `+` — versionCode с ABI=0 (база). Обе сборки пересчитывают его
+# перед `flutter build` через scripts/version-code.sh, добавляя цифру ABI:
+#   • CI release (.github/workflows/ci.yml → "Inject release version") —
+#     по прогону на таргет: universal/armv7/arm64/x86_64.
+#   • Локальная сборка (scripts/build-local-apk.sh) — код последнего релизного
+#     тега для arm64 (пин к тегу, §186 — против downgrade-блока).
 # Runtime берёт версию из APK-манифеста через PackageInfo (lib/services/version_info.dart),
-# а не из этой строки — потому placeholder в git безвреден.
+# а не из этой строки.
 
 environment:
   sdk: ^3.11.4
@@ -41,6 +45,7 @@ dependencies:
   crypto: ^3.0.3 # §283 — sha256 для identity-хеша ноды подписки
   pointycastle: ^4.0.0 # §130 — ECDSA P-256 keygen (pure-Dart, работает на Android; cryptography P-256 keygen не реализует)
   re_editor: ^0.10.0
+  mobile_scanner: ^7.1.2 # §375 — QR-сканер (ML Kit barcode; +3.8 МБ к APK, arm64)
 
 dev_dependencies:
   flutter_test:

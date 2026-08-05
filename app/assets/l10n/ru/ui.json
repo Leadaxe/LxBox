@@ -885,6 +885,12 @@
   "CONNECTIONS (%d)": {
     "value": "СОЕДИНЕНИЯ (%d)"
   },
+  "Camera access denied": {
+    "value": "Нет доступа к камере"
+  },
+  "Camera error: %s": {
+    "value": "Ошибка камеры: %s"
+  },
   "Can't parse response (invalid format)": {
     "value": "Не удалось разобрать ответ (неверный формат)"
   },
@@ -2773,6 +2779,9 @@
   "Pick another random domain": {
     "value": "Подставить другой случайный домен"
   },
+  "Pick a folder on this device": {
+    "value": "Выбрать папку на устройстве"
+  },
   "Pick file...": {
     "value": "Выбрать файл…"
   },
@@ -2823,6 +2832,9 @@
   },
   "Pool tolerance (ms)": {
     "value": "Допуск пула (мс)"
+  },
+  "Point the camera at a QR code": {
+    "value": "Наведите камеру на QR-код"
   },
   "Pool unavailable — tunnel not connected": {
     "value": "Пул недоступен — туннель не подключён"
@@ -2907,9 +2919,6 @@
   },
   "Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route.": {
     "value": "Усыплять недоступные туннели WireGuard после простоя — это освобождает память и экономит батарею. При обращении туннель просыпается мгновенно. Касается только туннелей вне активного маршрута."
-  },
-  "QR scanner coming soon": {
-    "value": "Сканер QR-кодов скоро появится"
   },
   "QUIC/STUN decoy carries no hostname — the domain below is cosmetic for this protocol.": {
     "value": "Приманка QUIC/STUN не содержит имени хоста — домен ниже для этого протокола чисто косметический."
@@ -3286,11 +3295,23 @@
   "Save": {
     "value": "Сохранить"
   },
+  "Save to Downloads": {
+    "value": "Сохранить в «Загрузки»"
+  },
+  "Save to file": {
+    "value": "Сохранить в файл"
+  },
   "Save your subscriptions, routing setup and preferences as a JSON file.": {
     "value": "Сохраняет подписки, настройки маршрутизации и параметры в JSON-файл."
   },
   "Saved": {
     "value": "Сохранено"
+  },
+  "Saved as %s (%d bytes)": {
+    "value": "Сохранено как %s (%d байт)"
+  },
+  "Saved to Downloads: %s (%d bytes)": {
+    "value": "Сохранено в «Загрузки»: %s (%d байт)"
   },
   "Saved channel \"%1$s\" — %2$s": {
     "value": "Канал «%1$s» сохранён — %2$s"
@@ -3331,6 +3352,9 @@
   "Selection mode": "Режим выбора",
   "Selector \"%1$s\" default \"%2$s\" is not in the options list.": {
     "value": "У селектора «%1$s» значение по умолчанию «%2$s» отсутствует в списке вариантов."
+  },
+  "Send to another app": {
+    "value": "Отправить в другое приложение"
   },
   "Send DNS to dedicated server": {
     "value": "Отправлять DNS на выделенный сервер"
@@ -3539,6 +3563,9 @@
   },
   "Sticky session by": {
     "value": "Закреплять сессии по"
+  },
+  "Straight to the Downloads folder": {
+    "value": "Сразу в папку «Загрузки»"
   },
   "Stop": {
     "value": "Остановить"
@@ -3826,6 +3853,9 @@
   },
   "Tolerance (ms)": {
     "value": "Допуск (мс)"
+  },
+  "Torch": {
+    "value": "Фонарик"
   },
   "Traffic by Rule": {
     "value": "Трафик по правилам"

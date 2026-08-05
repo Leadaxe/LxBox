@@ -710,7 +710,10 @@ class SubscriptionController extends ChangeNotifier {
   /// URI, живёт в rawBody ⇒ переживает рестарт). Ветка `vpn://` hint
   /// сознательно НЕ получает: её rawBody = оригинальная ссылка, имя
   /// потерялось бы при ре-парсе после рестарта.
-  Future<void> addFromInput(String input, {String? nameHint}) async {
+  /// [origin] — откуда приехала строка. Дефолт `paste` сохраняет поведение
+  /// всех существующих вызовов; §375 (QR-сканер) передаёт `UserSource.qr`.
+  Future<void> addFromInput(String input,
+      {String? nameHint, UserSource origin = UserSource.paste}) async {
     final trimmed = input.trim();
     if (trimmed.isEmpty) return;
 
@@ -751,7 +754,7 @@ class SubscriptionController extends ChangeNotifier {
           enabled: true,
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
-          origin: UserSource.paste,
+          origin: origin,
           createdAt: DateTime.now(),
           rawBody: spec.rawUri,
           nodes: [spec],
@@ -774,7 +777,7 @@ class SubscriptionController extends ChangeNotifier {
           enabled: true,
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
-          origin: UserSource.paste,
+          origin: origin,
           createdAt: DateTime.now(),
           rawBody: trimmed,
           nodes: nodes,
@@ -794,7 +797,7 @@ class SubscriptionController extends ChangeNotifier {
           enabled: true,
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
-          origin: UserSource.paste,
+          origin: origin,
           createdAt: DateTime.now(),
           rawBody: trimmed,
           nodes: [spec],
@@ -803,7 +806,7 @@ class SubscriptionController extends ChangeNotifier {
             list: dlServer, nodeCount: dlServer.nodes.length));
         await _persist();
       } else {
-        switch (await _addJsonNodes(trimmed)) {
+        switch (await _addJsonNodes(trimmed, origin: origin)) {
           case _JsonAdd.added:
             await _persist();
           case _JsonAdd.empty:
@@ -832,7 +835,8 @@ class SubscriptionController extends ChangeNotifier {
   /// Одна запись, а не N: раньше массив outbound'ов раскладывался по одной
   /// записи на элемент («v1 behavior parity»). Вставленный файл — один
   /// источник, и обновляться он должен целиком.
-  Future<_JsonAdd> _addJsonNodes(String text) async {
+  Future<_JsonAdd> _addJsonNodes(String text,
+      {UserSource origin = UserSource.paste}) async {
     final decoded = decode(text);
     if (decoded is! JsonConfig) return _JsonAdd.notJson;
     switch (decoded.flavor) {
@@ -888,7 +892,7 @@ class SubscriptionController extends ChangeNotifier {
       enabled: true,
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
-      origin: UserSource.paste,
+      origin: origin,
       createdAt: DateTime.now(),
       rawBody: text,
       nodes: nodes,

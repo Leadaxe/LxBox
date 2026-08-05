@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -11,11 +12,14 @@ import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
 import '../vpn/box_vpn_client.dart';
+import 'backup_screen/export_action_sheet.dart';
 import 'backup_screen/export_card.dart';
 import 'backup_screen/import_card.dart';
 import 'backup_screen/import_preview_dialog.dart';
 import 'backup_screen/utf8_decode.dart';
+import '../services/file_export.dart';
 import '../services/file_import.dart';
+import '../services/url_launcher.dart';
 
 export 'backup_screen/utf8_decode.dart' show utf8DecodeOrNull;
 
@@ -98,19 +102,66 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
     }
     setState(() => _busy = true);
     try {
+      // §374 — доступные способы выясняем ДО построения JSON: если юзер
+      // закроет шит, зря работать не придётся. Обе проверки идут на
+      // платформу, поэтому параллельно.
+      final availability = await Future.wait([
+        UrlLauncher.hasRealFilePicker(),
+        UrlLauncher.canSaveToDownloads(),
+      ]);
+      if (!mounted) return;
+      final action = await showExportActionSheet(
+        context,
+        canSaveToFile: availability[0],
+        canSaveToDownloads: availability[1],
+      );
+      if (action == null) return; // юзер закрыл шит
+
       final json = await _service.buildExport(include: include);
       final filename = await BackupService.suggestedFilename();
+      // Размер в БАЙТАХ, а не в code units: String.length считает UTF-16, и на
+      // кириллице в именах узлов снекбар занижал цифру против файла на диске.
+      final bytes = utf8.encode(json).length;
 
-      final tmpDir = await getTemporaryDirectory();
-      final path = '${tmpDir.path}/$filename';
-      await File(path).writeAsString(json);
+      final SaveOutcome outcome;
+      switch (action) {
+        case ExportAction.saveToFile:
+          outcome = await saveFileSafely(fileName: filename, content: json);
+        case ExportAction.saveToDownloads:
+          outcome =
+              await saveToDownloadsSafely(fileName: filename, content: json);
+        case ExportAction.share:
+          // Share требует файл на диске: кэш подходит — получатель копирует
+          // его себе, а очистка кэша системой нам не важна.
+          final tmpDir = await getTemporaryDirectory();
+          final path = '${tmpDir.path}/$filename';
+          await File(path).writeAsString(json);
+          await Share.shareXFiles(
+            [XFile(path, mimeType: 'application/json', name: filename)],
+            subject: 'LxBox backup',
+          );
+          if (!mounted) return;
+          showSnack(getLocalText.s("Backup exported (%d bytes)", bytes));
+          return;
+      }
 
-      await Share.shareXFiles(
-        [XFile(path, mimeType: 'application/json', name: filename)],
-        subject: 'LxBox backup',
-      );
       if (!mounted) return;
-      showSnack(getLocalText.s("Backup exported (%d bytes)", json.length));
+      final problem = saveProblemText(outcome);
+      if (problem != null) {
+        showSnack(problem);
+        return;
+      }
+      switch (outcome) {
+        case SavedToFile(:final name):
+          showSnack(getLocalText.s("Saved as %s (%d bytes)", name, bytes));
+        case SavedToDownloads(:final name):
+          showSnack(
+              getLocalText.s("Saved to Downloads: %s (%d bytes)", name, bytes));
+        case SaveCancelled():
+          break; // юзер закрыл диалог сохранения — молчим
+        case SaveNoTarget() || SaveFailed():
+          break; // покрыто saveProblemText выше
+      }
     } catch (e) {
       if (!mounted) return;
       showSnack(getLocalText.s("Export failed: %s", formatUserError(e).render()));
