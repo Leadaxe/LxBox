@@ -225,14 +225,21 @@ placeholder, а `versionCode` = число коммитов — не функц�
 Теперь версия коммитится в `pubspec.yaml` при релизе и код выводится из тега:
 
 ```yaml
+AutoUpdateMode: Version
 UpdateCheckMode: Tags
-UpdateCheckData: app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
 VercodeOperation:
   - '%c + 1'
   - '%c + 2'
   - '%c + 4'
-AutoUpdateMode: Version
+UpdateCheckData: app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
+CurrentVersion: 2.20.0
+CurrentVersionCode: 22000504
 ```
+
+Порядок ключей именно такой: `fdroid rewritemeta` держит канонический
+порядок и требует `UpdateCheckData` **после** `VercodeOperation`. `fdroid lint`
+перестановку пропускает — это отдельная джоба, и роняет она пайплайн уже
+после валидации схемы.
 
 `AutoUpdateMode` — голое `Version`, без `v%v`. В режиме `Tags` реальный тег
 уже известен из проверки и подставляется в `commit:` как есть
