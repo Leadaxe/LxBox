@@ -309,6 +309,23 @@ def agpMajor = Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0] as int
 Для reproducible builds годится только (1): при (2) APK различаются
 функционалом и побайтово никогда не совпадут.
 
+**Кандидат на замену — `flutter_zxing`.** 38 упоминаний в fdroiddata, самый
+ходовой FOSS-сканер для Flutter (`business.braid.polycule`,
+`com.anywherelan.awl`, `com.reloado.auth`, `eu.heili.wormhole` и др.).
+
+⚠ Грабля, которую они уже решили за нас: `flutter_zxing` собирает нативную
+часть через CMake, и линкер вшивает уникальный **build-id** ⇒ байты
+расходятся между прогонами. Лечится строкой в prebuild:
+
+```
+sed -i -e '1a add_link_options("LINKER:--build-id=none")' \
+  $PUB_CACHE/hosted/pub.dev/flutter_zxing-*/*/CMakeLists.txt
+```
+
+Это ровно тот класс расхождений, ради которых §380 и затевался: пакет
+работает, приложение собирается, но воспроизводимость ломается на уровне
+линкера. При переходе на `flutter_zxing` строку надо взять сразу.
+
 ## Что меняется
 
 | Файл | Что |
