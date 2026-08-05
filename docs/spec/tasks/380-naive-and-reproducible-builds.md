@@ -244,6 +244,71 @@ buildserver'е F-Droid NDK ставится через `sdkmanager` в
 выдаст «reproducibility warning: using NDK version … instead of …».
 Проверить на первом прогоне `fdroid build`.
 
+✅ Пин подтверждён прогоном 05.08: в логе `fdroid build`
+`export NDK_VERSION=28.2.13676358` — рецепт вычитал ту же версию, что стоит
+в ядре.
+
+### Блокер: `mobile_scanner` не проходит в F-Droid (§375)
+
+Первый прогон рецепта с naive упал **не на cronet** — до него не дошло.
+Падает финальный `flutter build apk`:
+
+```
+A problem occurred configuring project ':mobile_scanner'.
+> Failed to notify project evaluation listener.
+   > java.lang.NullPointerException (no error message)
+```
+
+**Причина.** Сканер fdroidserver вырезает из
+`mobile_scanner-7.4.0/android/build.gradle` проприетарные зависимости:
+
+```
+Removing usual suspect 'com.google.android.gms(...)'
+Removing usual suspect 'com.google.mlkit'
+```
+
+`useUnbundled` по умолчанию `false` ⇒ плагин тянет
+`com.google.mlkit:barcode-scanning` — бандленный ML Kit. В F-Droid он
+запрещён при любых настройках, это не чинится флагами.
+
+Сам NPE, судя по коду плагина, бьёт на строке 32 его `build.gradle`:
+
+```groovy
+def agpMajor = Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0] as int
+```
+
+после вырезания `buildscript`-зависимостей `com.android.Version` не
+резолвится ⇒ `null.tokenize()`. Подтверждается прогоном с `--stacktrace`.
+
+⚠ **Ложный след, на который я потратил время:** Gradle после падения печатает
+блок «Flutter Fix» про AGP 9 и `android.newDsl`. Это эвристическая подсказка,
+которая выводится после ЛЮБОГО падения Gradle, а не диагноз — **версии AGP в
+логе нет вообще**. Диагностировать по ней нельзя; нужен `--stacktrace` и
+строка `What went wrong`.
+
+**Как это решают в каталоге** (прецеденты в fdroiddata):
+- `com.nfcarchiver.banana_split`: `sed -i -e '/mobile_scanner/d' pubspec.yaml`
+- `info.zverev.ilya.every_door`: то же самое через маркер `#f` в pubspec
+- `com.rogeriodocarmo.miroji`: патч, вырезающий ML Kit из expo-camera
+
+То есть все просто **выбрасывают пакет** из сборки F-Droid.
+
+**Наш случай.** У нас `mobile_scanner` импортируется ровно в одном месте —
+[`qr_scan_screen.dart`](../../../app/lib/screens/qr_scan_screen.dart) (182
+строки), наружу отдаётся `sealed class ScanOutcome`, единственная точка входа
+— кнопка в `subscriptions_screen.dart:283`. Границы чистые, подмена
+локальная.
+
+Варианты (решение за §375, не за §380):
+1. **FOSS-сканер** (ZXing-based) вместо ML Kit — одинаково в обеих сборках,
+   расхождений для RB нет. Правит приложение.
+2. **Выбросить пакет в рецепте F-Droid** по образцу каталога — но тогда нужна
+   заглушка экрана, иначе Dart не соберётся, и появляется расхождение сборок,
+   что противоречит цели §380.
+
+Для reproducible builds годится только (1): при (2) APK различаются
+функционалом и побайтово никогда не совпадут.
+
 ## Что меняется
 
 | Файл | Что |
@@ -307,21 +372,25 @@ reproducible builds не включить сразу, APK подпишут их 
    брать нельзя, ядро подключается как `srclibs`.
 3. ~~Эксперимент с детерминизмом AAR~~ — **сделано 05.08**, совпало
    побайтово (см. выше). gomobile детерминирован, `SOURCE_DATE_EPOCH` не нужен.
-4. Перевести рецепт fdroiddata на `srclibs: sing-box-lx@<sha>` вместо
-   скачивания AAR. Проверить, что сканер не бракует.
-   — пин NDK: **сведён 05.08** (`r28c` в ядре = `flutter.ndkVersion`), в
-     рецепте вычитывать из `build.gradle.kts` по образцу SFA;
-   — после пуша ядра прогнать `lx-build.yml` и сверить SHA256 с
-     `ad6438fc…` (собран на старом `r28`): **должен отличаться**, иначе
-     смена NDK не доехала.
-5. Вернуть naive: srclib `cronet-go` + блок сборки, **без** `Binaries`.
-   Замерить время сборки на всех ABI. Если укладывается — идти дальше.
-6. Свести остаток: sed-правки под флаг, четвёртый блок для universal.
-   Прогнать верификацию, разобрать diff.
-7. Только при совпадении — добавить `Binaries` + `AllowedAPKSigningKeys`,
+4. ~~Перевести рецепт fdroiddata на `srclibs`~~ — **уже было сделано** в
+   предыдущем раунде ревью: ядро подключено как `sing-box-lx@lx`, AAR
+   собирается в `build:` из исходников. Пин NDK **сведён 05.08** и
+   подтверждён прогоном (`NDK_VERSION=28.2.13676358`).
+5. **Убрать ML Kit из зависимостей приложения** — блокер, найден 05.08
+   первым же прогоном с naive. См. «Блокер: `mobile_scanner`». Пока он
+   на месте, `flutter build apk` падает до cronet, и рецепт непроверяем.
+   Решение за §375; для RB годится только замена на FOSS-сканер.
+6. ~~Вернуть naive в рецепт~~ — **написано 05.08**, коммит `fbbd05024` в
+   ветке `com.leadaxe.lxbox`: srclib `cronet-go@4185d471b2e4`, блок сборки
+   через `cmd/build-naive` + `diff` с prebuilt, `ninja-build`, `CPUS_MAX=16`,
+   четвёртый блок для universal (`%c + 0`). `fdroid lint` = 0, `rewritemeta`
+   идемпотентен. **Не проверено сборкой** — падает на шаге 5.
+7. Замерить время сборки на всех ABI, когда сборка дойдёт до cronet.
+8. Прогнать верификацию, разобрать diff.
+9. Только при совпадении — добавить `Binaries` + `AllowedAPKSigningKeys`,
    до мержа MR.
 
-Шаги 5 и 7 разделены намеренно: naive полезен сам по себе, даже если
+Шаги 6 и 9 разделены намеренно: naive полезен сам по себе, даже если
 reproducible builds не получатся.
 
 ## Проверка
