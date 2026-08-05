@@ -33,9 +33,9 @@ flutter run   # устройство или эмулятор Android
 
 | Что делает | Отметка |
 |------------|---------|
-| Версия в pubspec: build-number **запинен к последнему релизному тегу** (§186, см. ниже); versionName = `X.Y.Z` на теге, иначе `X.Y.Z-dev.<since>` | ✓ |
+| Версия в pubspec: versionCode **запинен к последнему релизному тегу** (§186, см. ниже); versionName = `X.Y.Z` на теге, иначе `X.Y.Z-dev.<since>` | ✓ |
 | `scripts/fetch-libbox.sh` — ядро sing-box-lx по пину `app/android/libbox.version`, идемпотентно (см. [«Ядро sing-box-lx»](#ядро-sing-box-lx-libbox)) | ✓ |
-| `--split-per-abi --target-platform android-arm64` — APK только под arm64 (выход `app-arm64-v8a-release.apk`) | ✓ |
+| `LXBOX_ABI_FILTER=arm64-v8a --target-platform android-arm64` — APK только под arm64; выход `app-release.apk` переименовывается в `app-arm64-v8a-release.apk` | ✓ |
 | `flutter build apk --release` (доп. аргументы — через `"$@"`) | ✓ |
 | `--dart-define`-маркеры (`BUILD_LOCAL`, `BUILD_GIT_DESC`, …) | ✗ убраны в §065/§066: версия живёт в pubspec, About читает `PackageInfo` |
 
@@ -57,18 +57,18 @@ flutter run   # устройство или эмулятор Android
 
 | Слой | Значение | Кто |
 |------|----------|-----|
-| `pubspec.yaml` `version: X.Y.Z+<build-number>` | build-number = **голый номер коммита** (`git rev-list --count`) | CI и локальный скрипт пишут это |
-| ABI-множитель `+abiCode×1000` (arm64=2 → **+2000**) | добавляет **сам Flutter** при `--split-per-abi` (из коробки, `flutter.gradle`) | автоматически, одинаково CI и локально |
-| Итог в манифесте APK | `versionCode = build-number + 2000` | — |
+| `pubspec.yaml` `version: X.Y.Z+<code>` | code = `((major×10000 + minor×100 + patch)×100 + PRE)×10 + ABI` (§379) | считает [`scripts/version-code.sh`](../scripts/version-code.sh), пишут CI и локальный скрипт |
+| ABI-множитель Flutter | **не применяется** — `--split-per-abi` убран (§379), иначе домножил бы `ABI×1000` поверх нашего числа | — |
+| Итог в манифесте APK | ровно то, что записано в pubspec | — |
 
-⚠ Поэтому ручной бамп `versionCode` НЕ нужен и НЕ применять — множитель Flutter общий для всех сборок.
+⚠ Ручной бамп `versionCode` НЕ нужен и НЕ применять — код детерминированно выводится из версии. Проверено на APK: `v2.19.7` + arm64 → `21907502`.
 
-**Почему пин к тегу (а не к HEAD):** релиз CI собирается на коммите тега → `build-number = count(tag)`. Локальная сборка на ветке разработки имеет коммитов БОЛЬШЕ → `count(HEAD) > count(tag)` → локальный vc обгонял бы релизный → релиз с интернета не вставал бы поверх (downgrade-блок, боль «не могу скачивать собственные релизы»). Скрипт пинит `build-number = git rev-list --count <last-vN.N.N-tag>` → локальный arm64 vc = **ровно релизный**. При равном vc `adb install -r` проходит в обе стороны (блок только на СТРОГО меньший vc).
+**Почему пин к тегу (а не к HEAD):** релиз CI собирается на коммите тега. Локальная сборка на ветке разработки ушла вперёд, но versionCode считается от **имени тега**, а хвост `-dev.N` формула срезает → локальный arm64 vc = **ровно релизный**. При равном vc `adb install -r` проходит в обе стороны (блок только на СТРОГО меньший vc).
 
-| Случай | build-number | Поведение |
-|--------|--------------|-----------|
-| На ветке есть тег `vN.N.N` | `count(<last-tag>)` | локальный vc = релизный → релиз ставится поверх локалки и наоборот |
-| Тега нет вовсе | `count(HEAD)` (fallback, `version: 0.0.0+<count>`) | downgrade-риск неактуален без релизов |
+| Случай | versionCode | Поведение |
+|--------|-------------|-----------|
+| На ветке есть тег `vN.N.N` | код этого тега для arm64 | локальный vc = релизный → релиз ставится поверх локалки и наоборот |
+| Тега нет вовсе | код от `0.0.0` → `502` (fallback, `version: 0.0.0+502`) | downgrade-риск неактуален без релизов |
 | После НОВОГО релиза (новый тег) | подтянется к новому тегу автоматически | самоподдерживается |
 
 ## Ядро sing-box-lx (libbox)
@@ -144,7 +144,7 @@ gh workflow run CI -f run_mode=checks   # ✓ analyze + test
 gh workflow run CI -f run_mode=build    # ○ + APK в artifacts
 ```
 
-Джоб `android` собирает **только release**-APK: universal (fat, все ABI) + 3 per-ABI через `--split-per-abi` (arm64-v8a / armeabi-v7a / x86_64). Debug-APK CI не собирает. Перед сборкой шаг `Fetch sing-box-lx core` скачивает fork-ядро по пину `app/android/libbox.version` (см. [«Ядро sing-box-lx»](#ядро-sing-box-lx-libbox)).
+Джоб `android` собирает **только release**-APK: universal (fat, все ABI) + 3 per-ABI — по прогону на таргет (§379: `--split-per-abi` убран, он ломал схему versionCode). Debug-APK CI не собирает. Перед сборкой шаг `Fetch sing-box-lx core` скачивает fork-ядро по пину `app/android/libbox.version` (см. [«Ядро sing-box-lx»](#ядро-sing-box-lx-libbox)).
 
 ### Локализация в сборке и CI (§279 / §285)
 

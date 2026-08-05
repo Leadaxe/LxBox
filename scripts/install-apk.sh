@@ -57,9 +57,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$APK" ]; then
-  # §125: build-local-apk.sh собирает release через `--split-per-abi` →
-  # выход `app-arm64-v8a-release.apk` (не `app-release.apk`). Debug-сборка
-  # (`flutter build apk --debug`, без split) пишет `app-debug.apk`.
+  # §379: build-local-apk.sh собирает без `--split-per-abi` и переименовывает
+  # выход в `app-arm64-v8a-release.apk` — имя сохранено намеренно, чтобы этот
+  # путь и мышечная память не менялись. Debug-сборка пишет `app-debug.apk`.
   if [ "$APK_KIND" = "release" ]; then
     APK="app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
   else

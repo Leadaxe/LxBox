@@ -173,7 +173,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          # Нужны полные refs для `git rev-list --count HEAD` (versionCode).
+          # §379 — versionCode считается из версии, история для него больше не
+          # нужна. Полные refs оставлены для git-зависимых шагов (describe).
           fetch-depth: 0
 
       - name: Java 17
@@ -201,11 +202,15 @@ jobs:
           cache: true
 
       - name: Inject release version from tag
-        # pubspec в репо — фиксированный placeholder `0.0.0+1`; версия
-        # вычисляется на сборке. Здесь переписываем на чистую `X.Y.Z` из тега.
-        # BUILD_NUMBER = `rev-list --count HEAD`. Отличается от build-local-apk.sh
-        # (`count(TAG)`, пин к тегу против downgrade, §186) — намеренно: локальная
-        # dev-сборка не должна обгонять релизный versionCode.
+        # §379 — versionCode считается ИЗ ВЕРСИИ (scripts/version-code.sh),
+        # а не из `rev-list --count`. Число коммитов не функция от тега, поэтому
+        # версию нельзя было прочитать из исходников — это блокировало
+        # автообновление в F-Droid (UpdateCheckMode: None).
+        #
+        # Здесь пишем в pubspec версию `X.Y.Z` и БАЗУ кода (ABI=0). Финальную
+        # цифру ABI подставляет шаг сборки: по прогону на таргет, каждый со
+        # своим `+<code>`. `--split-per-abi` убран — он домножал бы ABI×1000
+        # поверх нашего числа (FlutterPlugin.kt:623).
         shell: bash
         run: |
           set -euo pipefail
@@ -213,13 +218,23 @@ jobs:
           VERSION="${VERSION#v}"
           # run_mode=build (без тега) даёт 'dev-<sha>' — не semver, pub
           # отвергает. Префиксуем до валидного pre-release: 0.0.0-dev-<sha>.
+          # Такая сборка не публикуется; для кода берём 0.0.0 (→ 500), чтобы
+          # формула отработала и gradle не упал на нечисловом build-number.
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
             VERSION="0.0.0-${VERSION}"
+            CODE_VERSION="0.0.0"
+          else
+            CODE_VERSION="$VERSION"
           fi
-          BUILD_NUMBER=$(git rev-list --count HEAD)
+          # База (ABI=0) — реальный код per-ABI считает шаг сборки.
+          BUILD_NUMBER=$(../scripts/version-code.sh "$CODE_VERSION" universal)
           sed -i.bak -E "s/^version: .*/version: $VERSION+$BUILD_NUMBER/" pubspec.yaml
           rm -f pubspec.yaml.bak
-          echo "Injected: $VERSION+$BUILD_NUMBER"
+          echo "Injected: $VERSION+$BUILD_NUMBER (base, ABI=0)"
+          {
+            echo "VERSION_NAME=$VERSION"
+            echo "CODE_VERSION=$CODE_VERSION"
+          } >> "$GITHUB_ENV"
 
       - name: Dependencies
         run: flutter pub get
@@ -248,44 +263,56 @@ jobs:
             echo "storeFile=upload-keystore.jks"
           } > android/key.properties
 
-      - name: Build universal APK (fat, all ABIs)
-        # Fat APK с native libs для всех 3 ABI — fallback для юзеров которые
-        # не знают свою архитектуру (или для устройств где per-ABI APK не
-        # подходит). Размер ~75 MB.
+      - name: Build APKs (one run per target)
+        # §379 — `--split-per-abi` УБРАН: он переписывает versionCode как
+        # `ABI × 1000 + code` (FlutterPlugin.kt:623), затирая нашу схему.
+        # Вместо одного прогона со сплитом — по прогону на таргет, каждый со
+        # своим `--build-number` (последняя цифра = ABI).
         #
-        # Output: build/app/outputs/flutter-apk/app-release.apk
-        run: flutter build apk --release
-
-      - name: Rename universal APK
-        # Переименовываем pre-emptively чтобы split-per-abi build на следующем
-        # шаге не перетёр (split-per-abi не пишет в `app-release.apk`, но на
-        # всякий случай — defensive).
+        # ABI-цифры: 0=universal, 1=armeabi-v7a, 2=arm64-v8a, 4=x86_64.
         #
-        # Шаг бежит с `working-directory: app` (job-default), поэтому пути —
-        # относительные внутри `app/`, без `app/` префикса.
+        # Таргеты:
+        #   - universal:    fat APK, все 3 ABI (~75 MB) — fallback для тех, кто
+        #                   не знает свою архитектуру.
+        #   - arm64-v8a:    95%+ современных Android-устройств.
+        #   - armeabi-v7a:  старые / Android Go бюджет (Itel A48, Tecno Pop 5).
+        #   - x86_64:       эмуляторы / Chromebook с Android-runtime.
+        #
+        # LXBOX_ABI_FILTER сужает native libs из AAR (libbox 55-66 MB на ABI):
+        # `--target-platform` влияет только на flutter engine + Dart AOT, .so из
+        # Maven gradle подтягивает под все ABI и APK раздувается.
+        #
+        # Каждый прогон пишет `app-release.apk` — сразу переименовываем, иначе
+        # следующий таргет перетрёт.
+        shell: bash
         run: |
           set -euo pipefail
-          mv build/app/outputs/flutter-apk/app-release.apk \
-             build/app/outputs/flutter-apk/app-universal-release.apk
-
-      - name: Build per-ABI APKs (split-per-abi)
-        # `--split-per-abi` собирает по APK на ABI — каждый содержит свои
-        # native libs (libbox.so etc.) только для своей архитектуры. Итог:
-        # 3 файла, каждый ~32-35 MB.
-        #
-        # ABIs:
-        #   - arm64-v8a:    95%+ современных Android-устройств (default).
-        #   - armeabi-v7a:  старые / Android Go бюджет (Itel A48, Tecno Pop 5).
-        #   - x86_64:       эмуляторы / Chromebooks с Android-runtime'ом.
-        #
-        # Output paths:
-        #   build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-        #   build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-        #   build/app/outputs/flutter-apk/app-x86_64-release.apk
-        run: flutter build apk --release --split-per-abi
+          OUT=build/app/outputs/flutter-apk
+          build_one() {
+            local VARIANT="$1" PLATFORM="$2" ABI_FILTER="$3"
+            local CODE
+            CODE=$(../scripts/version-code.sh "$CODE_VERSION" "$VARIANT")
+            echo "::group::Build $VARIANT (versionCode=$CODE)"
+            if [ -n "$ABI_FILTER" ]; then
+              LXBOX_ABI_FILTER="$ABI_FILTER" \
+                flutter build apk --release \
+                  --target-platform "$PLATFORM" \
+                  --build-name "$VERSION_NAME" --build-number "$CODE"
+            else
+              flutter build apk --release \
+                --build-name "$VERSION_NAME" --build-number "$CODE"
+            fi
+            mv "$OUT/app-release.apk" "$OUT/app-${VARIANT}-release.apk"
+            echo "::endgroup::"
+          }
+          build_one universal   "android-arm,android-arm64,android-x64" ""
+          build_one armeabi-v7a android-arm                             armeabi-v7a
+          build_one arm64-v8a   android-arm64                           arm64-v8a
+          build_one x86_64      android-x64                             x86_64
+          ls -la "$OUT"/app-*-release.apk
 
       - name: Upload APKs (release)
-        # Загружаем все 4: 3 per-ABI + 1 universal.
+        # Все 4 таргета: universal + 3 per-ABI.
         uses: actions/upload-artifact@v4
         with:
           name: android-apks-release

@@ -90,8 +90,9 @@ class DumpBuilder {
       'generated_at': now.toIso8601String(),
       'app': 'lxbox',
       // §378 — чем собран пак. `app_version` — versionName (`X.Y.Z`),
-      // `app_build` — versionCode: при `--split-per-abi` он кодирует ещё и ABI
-      // (см. docs/FDROID.md), то есть отвечает на «какой именно APK стоит».
+      // `app_build` — versionCode: по §379 последняя цифра кодирует ABI
+      // (0/1/2/4, см. docs/FDROID.md), то есть отвечает на «какой именно APK
+      // стоит», а остальные разряды — версию и стадию (rc / релиз / hotfix).
       'app_version': VersionInfo.I.version,
       'app_build': VersionInfo.I.buildNumber,
       'core_version': coreVersion,

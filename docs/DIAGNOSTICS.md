@@ -254,9 +254,9 @@ RSS, тап открывает memstats + лог, share отдаёт катал�
 ### Чем собран пак (§378)
 
 Первое, что читается в чужом дампе, — на чём он снят. В корне JSON:
-`app_version` (versionName, `X.Y.Z`), `app_build` (versionCode — при
-`--split-per-abi` кодирует ещё и ABI, см. [FDROID.md](FDROID.md)),
-`core_version` (`Libbox.version()`).
+`app_version` (versionName, `X.Y.Z`), `app_build` (versionCode — по §379
+последняя цифра кодирует ABI, остальные разряды версию и стадию, см.
+[FDROID.md](FDROID.md)), `core_version` (`Libbox.version()`).
 
 До §378 версии приложения в паке не было вовсе, а версия ядра приезжала
 случайно — полем внутри `oom_reports`/`crash_archive`. Дамп без снимков не
