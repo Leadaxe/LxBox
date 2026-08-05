@@ -248,9 +248,52 @@ buildserver'е F-Droid NDK ставится через `sdkmanager` в
 `export NDK_VERSION=28.2.13676358` — рецепт вычитал ту же версию, что стоит
 в ядре.
 
+### Cronet СОБИРАЕТСЯ — проверено прогоном 05.08
+
+Главный технический риск §380 снят на практике. Прогон рецепта на
+buildserver'е F-Droid:
+
+```
+[3120/4975] CXX obj/base/base/...
+[build] Build complete!
+[build] Copied static library for android/arm
+[build] Package complete!
+```
+
+Chromium из исходников собрался для `android/arm`, `libcronet.a` получен.
+**~25 минут на одну ABI**, при четырёх ABI × четыре блока это часы — но
+собирается, и `CPUS_MAX=16` работает.
+
+**Две грабли, обе исправлены** (коммит `7554c981a`):
+
+1. **Glob не раскрылся.** Дословный перенос рецепта SFA дал
+   `diff: .../lib/android_arm@*/libcronet.a: No such file or directory` —
+   fdroidserver прогоняет команды так, что `*` остаётся буквальным.
+   Заменено на `find … -name "android_$arch@*" | head -1` + `cmp`, с
+   `test -f` на существование эталона.
+2. **Модуль с prebuilt ещё не скачан.** `$GOMODCACHE` заполняется в
+   `make lib_install`, а блок cronet идёт до него ⇒ сверять было не с чем.
+   Добавлен явный `go mod download` четырёх модулей `lib/android_*` перед
+   блоком cronet.
+
+**Третья грабля — лог.** Одна ABI генерирует столько вывода ninja, что
+пробивает лимит GitLab в 4 МБ:
+
+```
+Job's log exceeded limit of 4194304 bytes.
+Job execution will continue but no more output will be collected.
+```
+
+Обрезается ровно на месте падения — читать ошибку нечем. Вывод
+`build-naive` заглушен в `/dev/null`.
+
 ### Блокер: `mobile_scanner` не проходит в F-Droid (§375)
 
-Первый прогон рецепта с naive упал **не на cronet** — до него не дошло.
+⚠ Уточнение к порядку: этот блокер выявлен на прогоне **до** добавления
+cronet. В рецепте с cronet сборка падает раньше — на самом cronet-блоке, —
+поэтому до `flutter build apk` и `mobile_scanner` дело пока не доходит.
+Блокер никуда не делся, просто всплывёт следующим.
+
 Падает финальный `flutter build apk`:
 
 ```
