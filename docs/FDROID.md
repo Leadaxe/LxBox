@@ -231,8 +231,14 @@ VercodeOperation:
   - '%c + 1'
   - '%c + 2'
   - '%c + 4'
-AutoUpdateMode: Version v%v
+AutoUpdateMode: Version
 ```
+
+`AutoUpdateMode` — голое `Version`, без `v%v`. В режиме `Tags` реальный тег
+уже известен из проверки и подставляется в `commit:` как есть
+(`checkupdates.py`: `if tag: b.commit = tag`), поэтому префикс `v` в теге
+подхватывается сам. Шаблон с `%v` нужен другим режимам, где тега нет, и
+схема `fdroiddata` его в такой форме отвергает.
 
 `UpdateCheckData` читает из pubspec код с **ABI=0** (`2.20.0+22000500`),
 `VercodeOperation` заменяет последнюю цифру на ABI каждого build-блока:
