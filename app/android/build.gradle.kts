@@ -20,35 +20,17 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// §380 — детерминизм нативных .so (reproducible builds).
+// §380 — build-id нативных .so трогать НЕ нужно.
 //
-// Линкер по умолчанию штампует в каждую .so секцию `.note.gnu.build-id` —
-// уникальный отпечаток прогона. Два прогона одного исходника дают разные
-// байты, и побайтовая верификация F-Droid падает на ровном месте.
+// NDK сам передаёт `-Wl,--build-id=sha1` всем CMake-сборкам
+// (`build/cmake/flags.cmake:72`, безусловно — обход старого LLDB в Android
+// Studio). Отпечаток считается от содержимого, поэтому при одинаковом входе
+// он одинаков: `libdartjni.so` несёт один и тот же build-id начиная с
+// v2.19.7, задолго до появления этой заметки.
 //
-// Затрагивает пакеты, которые собирают native-часть через CMake:
-// `flutter_zxing` (ZXing-C++, §382) и `jni` (libdartjni.so).
-//
-// `sha1`, а не `none`: отпечаток считается из содержимого файла, поэтому
-// одинаковый вход даёт одинаковый build-id, а само поле остаётся на месте.
-// Оно системное — по нему символизируются тумбстоуны, работают crash-
-// репортеры и `debuginfod`; выбрасывать его ради верификации не стоит.
-//
-// Метаданные F-Droid должны задавать ту же схему (там сейчас `none`),
-// иначе стороны разойдутся уже на длине секции.
-subprojects {
-    plugins.withId("com.android.library") {
-        extensions.configure<com.android.build.api.dsl.LibraryExtension>("android") {
-            defaultConfig {
-                externalNativeBuild {
-                    cmake {
-                        arguments += "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--build-id=sha1"
-                    }
-                }
-            }
-        }
-    }
-}
+// Здесь был хук, дублировавший этот дефолт. Он ничего не менял и снят;
+// если расхождение build-id всплывёт снова, причина будет во ВХОДЕ
+// линковки (пути сборки, версия хостового clang), а не в алгоритме.
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)

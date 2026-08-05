@@ -1,68 +1,56 @@
 # L×Box v2.20.2
 
-A build-only release. Nothing changes for you — the app does exactly what
-v2.20.1 does. The native libraries now carry a build id derived from their
-contents instead of a random one, which is what lets an outside builder
-reproduce our APK byte for byte and confirm it came from the published source.
+An empty release — cut by mistake, changes nothing. The APK is functionally
+identical to v2.20.1: no reason to install it, no harm if you do.
 
-Релиз без изменений в приложении. Для вас ничего не меняется — работает ровно
-как v2.20.1. Нативные библиотеки теперь получают build id, вычисленный из
-содержимого, а не случайный: благодаря этому сторонний сборщик может
-воспроизвести наш APK байт в байт и убедиться, что он собран из
-опубликованных исходников.
+Пустой релиз — выпущен по ошибке и ничего не меняет. APK функционально
+идентичен v2.20.1: ставить незачем, но и вреда нет.
 
 <details open>
 <summary><h2>🇬🇧 English</h2></summary>
 
-## 🔧 Build — deterministic native libraries
+## What happened
 
-The linker stamps every `.so` with a `.note.gnu.build-id` section. By default
-that id is unique per run, so two builds of the same source never match and
-byte-for-byte verification fails before it starts.
+While working towards byte-for-byte reproducibility for F-Droid, two native
+libraries came out with different `.note.gnu.build-id` values on the two
+sides. The fix looked obvious: pass `--build-id=sha1` so the id is derived
+from the file contents instead of being assigned at random.
 
-The Android build now passes `--build-id=sha1` to every subproject that
-compiles native code through CMake — `flutter_zxing` and `jni`. The id is
-derived from the file contents, so identical input yields an identical id,
-and the section stays in place: it is what symbolicates tombstones and feeds
-crash reporters.
+That flag was already in place. The NDK sets it unconditionally for every
+CMake build (`build/cmake/flags.cmake`) and always has — `libdartjni.so` has
+carried the same build id since v2.19.7. The hook added in this release
+duplicated a default and changed nothing; it has been removed.
 
-This is the last piece needed for [reproducible builds](https://f-droid.org/docs/Reproducible_Builds/)
-in F-Droid. A catalogue build of this release should match the APK published
-here, which is what allows the same signing key on both channels — install
-one over the other without uninstalling.
+The differing ids therefore come from the input to the linker, not from the
+algorithm. That work continues.
 
-## 🧪 Tests
+## What this means for you
 
-Behaviour did not change, so no new tests. `flutter analyze` and the existing
-suite pass.
+Nothing. Same code, same behaviour as v2.20.1.
 
 </details>
 
 <details open>
 <summary><h2>🇷🇺 Русский</h2></summary>
 
-## 🔧 Сборка — детерминированные нативные библиотеки
+## Что произошло
 
-Линкер штампует в каждую `.so` секцию `.note.gnu.build-id`. По умолчанию этот
-идентификатор уникален для каждого прогона, поэтому две сборки одного
-исходника никогда не совпадают, и побайтовая верификация проваливается,
-не начавшись.
+В работе над побайтовой воспроизводимостью для F-Droid две нативные
+библиотеки давали разный `.note.gnu.build-id` на двух сторонах. Решение
+выглядело очевидным: передать `--build-id=sha1`, чтобы отпечаток считался от
+содержимого файла, а не назначался случайно.
 
-Android-сборка теперь передаёт `--build-id=sha1` всем подпроектам, которые
-компилируют нативный код через CMake — `flutter_zxing` и `jni`. Идентификатор
-вычисляется из содержимого файла, поэтому одинаковый вход даёт одинаковый
-результат, а сама секция остаётся на месте: по ней символизируются тумбстоуны
-и работают crash-репортеры.
+Этот флаг там уже стоял. NDK ставит его безусловно для любой CMake-сборки
+(`build/cmake/flags.cmake`) и делал это всегда — `libdartjni.so` несёт один и
+тот же build id начиная с v2.19.7. Хук, добавленный в этом релизе, дублировал
+дефолт и ничего не менял; он снят.
 
-Это последняя деталь, нужная для [воспроизводимых сборок](https://f-droid.org/docs/Reproducible_Builds/)
-в F-Droid. Каталожная сборка этого релиза должна совпасть с APK,
-опубликованным здесь, — а это позволяет подписывать оба канала одним ключом
-и ставить сборку из одного поверх другого без удаления приложения.
+Значит расхождение отпечатков идёт от входа линковки, а не от алгоритма.
+Работа над этим продолжается.
 
-## 🧪 Тесты
+## Что это значит для вас
 
-Поведение не менялось, новых тестов нет. `flutter analyze` и существующий
-набор проходят.
+Ничего. Тот же код, то же поведение, что в v2.20.1.
 
 </details>
 

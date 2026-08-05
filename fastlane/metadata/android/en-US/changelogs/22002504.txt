@@ -1,5 +1,5 @@
-A build-only release — the app works exactly as v2.20.1 does.
+An empty release — cut by mistake, changes nothing. The APK is functionally identical to v2.20.1.
 
-Native libraries now carry a build id derived from their contents instead of a random one. That is what lets an outside builder reproduce this APK byte for byte and confirm it came from the published source, which is the last piece needed for reproducible builds in F-Droid.
+A build-id hook was added here to help reproducible builds, but the NDK already sets the same flag by default, so the hook changed nothing and has been removed.
 
 Full changelog: https://github.com/Leadaxe/LxBox/blob/main/CHANGELOG.md
