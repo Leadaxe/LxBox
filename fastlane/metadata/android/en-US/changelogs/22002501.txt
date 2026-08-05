@@ -1,5 +1,0 @@
-An empty release — cut by mistake, changes nothing. The APK is functionally identical to v2.20.1.
-
-A build-id hook was added here to help reproducible builds, but the NDK already sets the same flag by default, so the hook changed nothing and has been removed.
-
-Full changelog: https://github.com/Leadaxe/LxBox/blob/main/CHANGELOG.md

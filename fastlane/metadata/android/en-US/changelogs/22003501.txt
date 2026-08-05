@@ -1,0 +1,5 @@
+Nothing changes for you — the app behaves exactly as before.
+
+Two native libraries no longer carry a build id that changed on every build. The linker's "sha1" id is derived from the input to the link step rather than the file itself, so it differed between builds that produced identical libraries — and that alone kept the F-Droid build from matching ours byte for byte.
+
+Full changelog: https://github.com/Leadaxe/LxBox/blob/main/CHANGELOG.md
