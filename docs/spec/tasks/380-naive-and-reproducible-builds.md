@@ -307,7 +307,45 @@ Job execution will continue but no more output will be collected.
 Обрезается ровно на месте падения — читать ошибку нечем. Вывод
 `build-naive` заглушен в `/dev/null`.
 
-### Блокер: `mobile_scanner` не проходит в F-Droid (§375)
+### Хвосты §382 в рецепте: build-id и NDK 27 против r28c
+
+Замена сканера на `flutter_zxing` ([§382](382-foss-qr-scanner.md)) снимает
+блокер ML Kit, но тянет в §380 две вещи.
+
+**1. Линкерный build-id — обязательная строка в рецепте** (коммит
+`27dbf8a14`). `flutter_zxing` собирает ZXing-C++ через CMake, линкер
+штампует в `.so` уникальный build-id, и два прогона одного исходника
+расходятся — верификация падала бы, не начавшись:
+
+```
+sed -i -e '1a add_link_options("LINKER:--build-id=none")' \
+  $PUB_CACHE/hosted/pub.dev/flutter_zxing-*/src/CMakeLists.txt
+```
+
+Путь сверен по [`android/build.gradle:34`](file:///Users/macbook/.pub-cache/hosted/pub.dev/flutter_zxing-2.3.0/android/build.gradle)
+пакета — `externalNativeBuild` указывает на `../src/CMakeLists.txt`. Та же
+строка стоит в 38 других рецептах каталога.
+
+Это единственный постоянный хвост сопровождения от §382: живёт **в
+метаданных**, не в репозитории, и при бампе пакета его надо помнить. Glob
+`flutter_zxing-*` написан ровно ради переживания обновлений.
+
+**2. NDK-расхождение — разрешается само, но проверить прогоном.**
+[`flutter_zxing-2.3.0/android/build.gradle:30`](file:///Users/macbook/.pub-cache/hosted/pub.dev/flutter_zxing-2.3.0/android/build.gradle)
+жёстко объявляет `ndkVersion "27.0.12077973"`, тогда как §380 свёл проект к
+`28.2.13676358` (r28c).
+
+Конфликта быть не должно: Flutter берёт **максимум** из версий проекта и
+всех плагинов и подставляет его всем
+([`FlutterPluginUtils.kt:516-547`](../../../../flutter-sdk/packages/flutter_tools/gradle/src/main/kotlin/FlutterPluginUtils.kt),
+`maxPluginNdkVersion`). `28.2.13676358` > `27.0.12077973`, побеждает наш.
+
+⚠ Но рецепт F-Droid ставит `sdkmanager`-ом **только** версию из
+`FlutterExtension.kt`. Если Gradle почему-либо попросит 27.0.x, на
+buildserver'е его не окажется и сборка упадёт. По логике `maxPluginNdkVersion`
+не попросит — проверяется первым прогоном со сканером.
+
+### Блокер: `mobile_scanner` не проходит в F-Droid (§375) — СНЯТ §382
 
 ⚠ Уточнение к порядку: этот блокер выявлен на прогоне **до** добавления
 cronet. В рецепте с cronet сборка падает раньше — на самом cronet-блоке, —
@@ -455,9 +493,9 @@ reproducible builds не включить сразу, APK подпишут их 
    предыдущем раунде ревью: ядро подключено как `sing-box-lx@lx`, AAR
    собирается в `build:` из исходников. Пин NDK **сведён 05.08** и
    подтверждён прогоном (`NDK_VERSION=28.2.13676358`).
-5. **Убрать ML Kit из зависимостей приложения** — блокер, найден 05.08
-   первым же прогоном с naive. См. «Блокер: `mobile_scanner`». Пока он
-   на месте, `flutter build apk` падает до cronet, и рецепт непроверяем.
+5. ~~Убрать ML Kit из зависимостей приложения~~ — **сделано §382**:
+   `mobile_scanner` заменён на `flutter_zxing`. В рецепт добавлена
+   обязательная строка `--build-id=none` (`27dbf8a14`).
    Решение за §375; для RB годится только замена на FOSS-сканер.
 6. ~~Вернуть naive в рецепт~~ — **написано 05.08**, коммит `fbbd05024` в
    ветке `com.leadaxe.lxbox`: srclib `cronet-go@4185d471b2e4`, блок сборки
