@@ -1,0 +1,5 @@
+A build-only release — the app works exactly as v2.20.1 does.
+
+Native libraries now carry a build id derived from their contents instead of a random one. That is what lets an outside builder reproduce this APK byte for byte and confirm it came from the published source, which is the last piece needed for reproducible builds in F-Droid.
+
+Full changelog: https://github.com/Leadaxe/LxBox/blob/main/CHANGELOG.md

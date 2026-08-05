@@ -1,7 +1,0 @@
-Two crashes are gone from the core: switching networks while the tunnel was starting, and a TCP connection to an unreachable node. Both came from user reports with crash dumps.
-
-First steps towards Android TV: the app now shows up in the TV launcher, and the two places that were outright broken there are fixed — importing from a file, and remote control navigation. There is no proper TV interface yet; the layout is still designed for a phone, so TV support stays best-effort.
-
-Core updated to v1.14.0-lx.20-rc.3.
-
-Full changelog: https://github.com/Leadaxe/LxBox/blob/main/CHANGELOG.md
