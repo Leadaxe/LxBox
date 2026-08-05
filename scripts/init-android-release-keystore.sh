@@ -20,6 +20,7 @@ usage() {
   echo "  ANDROID_SIGNING_PASSWORD — один пароль на store и key"
   echo "  ANDROID_KEY_ALIAS — alias (default: upload)"
   echo "  FORCE=1 — пересоздать, если .jks уже есть"
+  echo "  ASSUME_YES=1 — пропустить подтверждение создания НОВОГО ключа"
   echo
   echo "Then: ./scripts/setup-android-ci-secrets.sh   (gh auth login first)"
 }
@@ -65,6 +66,41 @@ if [[ -z "$STORE_PW" || -z "$KEY_PW" ]]; then
   echo "  $GEN" >&2
 fi
 
+# Скрипт генерирует НОВУЮ ключевую пару. Восстановить существующий релизный
+# ключ он не может — совпадающий -dname даёт другой сертификат и другой
+# отпечаток, потому что ключевая пара каждый раз случайная.
+cat >&2 <<'WARN'
+
+=============================== ВНИМАНИЕ ===============================
+Это создаст НОВЫЙ ключ, а не восстановит существующий.
+
+Релизный ключ LxBox (выпущен 14.04.2026):
+  SHA256 7987AEC41D6521B56BDEEC202E383EDCFF27963918B109B69791BF1F6636C1C4
+
+APK, подписанный новым ключом, НЕ установится поверх уже установленного
+(INSTALL_FAILED_UPDATE_INCOMPATIBLE) и разорвёт цепочку обновлений в
+F-Droid. Пользователям придётся удалять приложение с потерей данных.
+
+Единственный способ вернуть релизный ключ — восстановить upload-keystore.jks
+из бэкапа. Секрет ANDROID_KEYSTORE_BASE64 в GitHub Actions прочитать нельзя.
+
+Продолжайте только если поднимаете отдельную сборочную линию (форк, тестовая
+подпись) либо сознательно переходите на новый ключ.
+========================================================================
+
+WARN
+
+if [[ -t 0 && "${ASSUME_YES:-}" != "1" ]]; then
+  read -r -p "Type 'new key' to continue: " CONFIRM
+  if [[ "$CONFIRM" != "new key" ]]; then
+    echo "Aborted." >&2
+    exit 1
+  fi
+elif [[ "${ASSUME_YES:-}" != "1" ]]; then
+  echo "ERROR: non-interactive run. Set ASSUME_YES=1 to confirm new key creation." >&2
+  exit 1
+fi
+
 echo "Creating keystore: $KEYSTORE"
 keytool -genkeypair -v \
   -keystore "$KEYSTORE" \
@@ -73,7 +109,7 @@ keytool -genkeypair -v \
   -storetype JKS \
   -storepass "$STORE_PW" \
   -keypass "$KEY_PW" \
-  -dname "CN=LxBox Release, OU=Mobile, O=Leadaxe, L=Unknown, ST=Unknown, C=US"
+  -dname "CN=BoxVPN, OU=Dev, O=Leadaxe, L=Moscow, ST=Moscow, C=RU"
 
 umask 077
 cat >"$PROPS" <<EOF

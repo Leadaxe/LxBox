@@ -215,6 +215,13 @@ git fetch origin
 # ⚠ Тот же two-step quirk, что в §2.4: `merge --no-ff -m` падает с
 # «Пустое сообщение коммита» (ловили на v2.11.1) — всегда --no-commit + commit -m.
 git merge --no-ff --no-commit origin/main
+
+# ⚠ §379 — merge тянет из main реальную версию в pubspec. В develop должен
+# остаться placeholder, иначе версия снова начнёт «дрожать» в ветке разработки
+# (ровно от этого ушли в v2.11.x). Откатываем ДО коммита:
+git checkout HEAD -- app/pubspec.yaml
+git status --short   # ожидаем только docs/latest.json
+
 git commit -m "chore: merge main (vX.Y.Z tag) back into develop"
 git push origin develop
 

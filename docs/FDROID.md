@@ -225,18 +225,41 @@ placeholder, а `versionCode` = число коммитов — не функц�
 Теперь версия коммитится в `pubspec.yaml` при релизе и код выводится из тега:
 
 ```yaml
+AutoUpdateMode: Version
 UpdateCheckMode: Tags
-UpdateCheckData: app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
 VercodeOperation:
-  - '%c * 10 + 1'
-  - '%c * 10 + 2'
-  - '%c * 10 + 4'
-AutoUpdateMode: Version v%v
+  - '%c + 1'
+  - '%c + 2'
+  - '%c + 4'
+UpdateCheckData: app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
+CurrentVersion: 2.20.0
+CurrentVersionCode: 22000504
 ```
 
-`UpdateCheckData` читает базу кода (ABI=0) из pubspec, `VercodeOperation`
-добавляет цифру ABI на каждый build-блок. Прецедент в их каталоге —
-`app.atrium`: Flutter, `%c * 10 + ABI`, читает `app/pubspec.yaml`.
+Порядок ключей именно такой: `fdroid rewritemeta` держит канонический
+порядок и требует `UpdateCheckData` **после** `VercodeOperation`. `fdroid lint`
+перестановку пропускает — это отдельная джоба, и роняет она пайплайн уже
+после валидации схемы.
+
+`AutoUpdateMode` — голое `Version`, без `v%v`. В режиме `Tags` реальный тег
+уже известен из проверки и подставляется в `commit:` как есть
+(`checkupdates.py`: `if tag: b.commit = tag`), поэтому префикс `v` в теге
+подхватывается сам. Шаблон с `%v` нужен другим режимам, где тега нет, и
+схема `fdroiddata` его в такой форме отвергает.
+
+`UpdateCheckData` читает из pubspec код с **ABI=0** (`2.20.0+22000500`),
+`VercodeOperation` заменяет последнюю цифру на ABI каждого build-блока:
+`22000501` / `22000502` / `22000504`.
+
+⚠️ Операция — `%c + ABI`, **не** `%c * 10 + ABI`. Умножение на 10 уже сидит
+внутри формулы §379, и в pubspec попадает готовый код, а не база до сдвига.
+Лишнее умножение даёт `220005002` вместо `22000502` — на порядок больше, и
+откатить это нельзя: Android не принимает понижение `versionCode`.
+
+Прецедент в каталоге — `app.atrium`: Flutter, читает `app/pubspec.yaml`. Но у
+него в pubspec лежит код *без* ABI, поэтому там `%c * 10 + ABI`; сверять
+операцию нужно с тем, что реально коммитится в наш pubspec, а не с чужой
+метадатой.
 
 ### Три ABI: цена вопроса
 

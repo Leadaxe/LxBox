@@ -711,6 +711,14 @@ class CustomRuleEditController extends ChangeNotifier {
 
   /// Текущее состояние формы как `CustomRule`. Не валидирует name-
   /// collision (это делает `save` flow на screen State).
+  ///
+  /// §381 — `orderNum` (ось §370) переносится из `initial` во ВСЕ ветки:
+  /// редактор позицию правила не меняет, а потеря номера читалась как две
+  /// разные жалобы. Без него `isDirty()` (сравнение json'ов) видел разницу по
+  /// ключу `num` ещё до первой правки — «Save changes?» на пустом выходе; а
+  /// сохранённое правило уезжало в storage с `num == null` и при следующей
+  /// загрузке экрана размечалось `markRuleOrder` заново от `kUserRuleNumStart`,
+  /// то есть прыгало в начало пользовательской зоны.
   CustomRule snapshot() {
     final name = nameCtrl.text.trim();
     switch (_kind) {
@@ -719,6 +727,7 @@ class CustomRuleEditController extends ChangeNotifier {
           id: initial.id,
           name: name,
           enabled: _enabled,
+          orderNum: initial.orderNum,
           json: jsonCtrl.text,
         );
       case CustomRuleKind.preset:
@@ -727,6 +736,7 @@ class CustomRuleEditController extends ChangeNotifier {
           id: init.id,
           name: name,
           enabled: _enabled,
+          orderNum: init.orderNum,
           presetId: init is CustomRulePreset ? init.presetId : '',
           varsValues: Map<String, String>.from(_varsValues),
         );
@@ -736,6 +746,7 @@ class CustomRuleEditController extends ChangeNotifier {
           id: initial.id,
           name: name,
           enabled: _enabled,
+          orderNum: initial.orderNum,
           srsUrl: srsUrlCtrl.text.trim(),
           updateIntervalHours: _srsTtlHours, // §366
           ports: norm.normalizedPorts(portCtrl.text),
@@ -761,6 +772,7 @@ class CustomRuleEditController extends ChangeNotifier {
           id: initial.id,
           name: name,
           enabled: _enabled,
+          orderNum: initial.orderNum,
           domains: norm.normalizedDomains(domainCtrl.text),
           domainSuffixes: norm.normalizedDomains(
               domainSuffixCtrl.text,
