@@ -36,6 +36,18 @@ One side effect worth knowing: the scanner is 4 MB smaller. The proprietary
 component carried a 4.95 MB library plus three machine-learning models; the
 free one is a single 1.81 MB library.
 
+The first build of it felt worse than the old scanner — it searched inside a
+small part of the frame and did not always catch the code straight away. That
+was down to the widget's defaults rather than the decoder: the search area
+covered only a quarter of the frame, and the thorough decoding pass was off.
+The scanner now searches almost the whole frame, takes the slower and more
+careful pass, and retries roughly two to three times a second instead of once.
+
+There is also a small dot next to the hint at the bottom. It blinks on every
+decoding attempt, so you can tell the scanner is still working — there is no
+shutter button to press, and without it a scanner that is simply thinking
+looks identical to one that has frozen.
+
 ## 🐛 Fixed — a routing rule jumped position after being opened
 
 Opening a routing rule and closing it without touching anything could move
@@ -91,6 +103,17 @@ localisation checkers at zero findings in strict mode.
 Побочный эффект, о котором стоит знать: сканер стал легче на 4 МБ.
 Проприетарный компонент тянул библиотеку на 4.95 МБ плюс три
 модели машинного обучения; свободный — одна библиотека на 1.81 МБ.
+
+Первая сборка ощущалась хуже прежнего сканера: искала в маленьком куске
+кадра и не всегда сразу ловила код. Дело было в дефолтах виджета, а не в
+декодере — область поиска покрывала лишь четверть кадра, а тщательный проход
+распознавания был выключен. Теперь сканер ищет почти по всему кадру, делает
+более медленный и внимательный проход и повторяет попытки два-три раза в
+секунду вместо одного.
+
+Рядом с подсказкой внизу появилась точка. Она моргает на каждой попытке
+распознавания, чтобы было видно, что сканер работает: кнопки съёмки нет, а
+без такого признака думающий сканер выглядит точно так же, как зависший.
 
 ## 🐛 Исправлено — правило маршрутизации прыгало после открытия
 
