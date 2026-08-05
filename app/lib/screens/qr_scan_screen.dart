@@ -6,11 +6,15 @@
 //
 // Контракт исходов зеркалит `PickOutcome` из services/file_import.dart:
 // отмена — не ошибка (молчим), остальное — снекбар вызывающего.
+//
+// §382 — декодер `flutter_zxing` (ZXing-C++ через FFI) вместо ML Kit:
+// сборка F-Droid не принимает проприетарные блобы и требует побитовой
+// воспроизводимости. Контракт исходов при замене не менялся; камерой и
+// фонариком владеет сам `ReaderWidget`, своего контроллера у экрана нет.
 
-import 'dart:async';
-
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:flutter_zxing/flutter_zxing.dart';
 
 import '../services/app_log.dart';
 import '../services/error_format.dart';
@@ -69,22 +73,20 @@ class QrScanScreen extends StatefulWidget {
   State<QrScanScreen> createState() => _QrScanScreenState();
 }
 
-class _QrScanScreenState extends State<QrScanScreen> {
-  final _controller = MobileScannerController(
-    // Сужаем до QR: не ловим случайные EAN/штрихкоды с окружающих предметов.
-    formats: const [BarcodeFormat.qrCode],
-  );
+/// Коды `CameraException` от плагина `camera` при отказе в доступе. Ошибка
+/// приезжает строкой, а не enum, — сверяем по известным кодам. На Android
+/// приходит только `CameraAccessDenied`, остальные два iOS-only. Неизвестный
+/// код трактуем как [ScanFailed]: лучше показать текст ошибки, чем соврать
+/// про разрешения.
+bool _isPermissionDenied(String code) =>
+    code == 'CameraAccessDenied' ||
+    code == 'CameraAccessDeniedWithoutPrompt' ||
+    code == 'CameraAccessRestricted';
 
+class _QrScanScreenState extends State<QrScanScreen> {
   /// Детектор отдаёт кадры пачками — один и тот же код придёт несколько раз
   /// подряд. Без флага получаем повторные pop'ы уже закрытого экрана.
   bool _handled = false;
-
-  @override
-  void dispose() {
-    // Обязательно: иначе камера остаётся занятой после ухода с экрана.
-    unawaited(_controller.dispose());
-    super.dispose();
-  }
 
   void _finish(ScanOutcome outcome) {
     if (_handled || !mounted) return;
@@ -92,74 +94,47 @@ class _QrScanScreenState extends State<QrScanScreen> {
     Navigator.of(context).pop(outcome);
   }
 
-  void _onDetect(BarcodeCapture capture) {
+  void _onScan(Code code) {
     if (_handled) return;
-    for (final barcode in capture.barcodes) {
-      final value = barcode.rawValue?.trim();
-      if (value != null && value.isNotEmpty) {
-        AppLog.I.info('[qr] scanned ${value.length} chars');
-        _finish(ScannedCode(value));
-        return;
-      }
-    }
+    final value = code.text?.trim();
+    if (value == null || value.isEmpty) return;
+    AppLog.I.info('[qr] scanned ${value.length} chars');
+    _finish(ScannedCode(value));
   }
 
-  void _onError(MobileScannerException e) {
-    if (_handled) return;
-    AppLog.I.warning('[qr] scanner error: ${e.errorCode}');
-    _finish(e.errorCode == MobileScannerErrorCode.permissionDenied
+  /// Камера не поднялась. `ReaderWidget` отдаёт исход инициализации сюда:
+  /// `error == null` — контроллер жив, иначе экран закрываем.
+  void _onControllerCreated(CameraController? controller, Exception? error) {
+    if (error == null || _handled) return;
+    final code = error is CameraException ? error.code : null;
+    AppLog.I.warning('[qr] scanner error: ${code ?? error}');
+    _finish(code != null && _isPermissionDenied(code)
         ? const ScanDenied()
-        : ScanFailed(e));
+        : ScanFailed(error));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(getLocalText.s("Scan QR code")),
-        actions: [
-          IconButton(
-            tooltip: getLocalText.s("Torch"),
-            onPressed: () => _controller.toggleTorch(),
-            icon: ValueListenableBuilder(
-              valueListenable: _controller,
-              builder: (_, state, _) => Icon(
-                state.torchState == TorchState.on
-                    ? Icons.flash_on
-                    : Icons.flash_off,
-              ),
-            ),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(getLocalText.s("Scan QR code"))),
       body: Stack(
         fit: StackFit.expand,
         children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
-            errorBuilder: (_, error) {
-              // Ошибка приходит и сюда, и в onDetect-стрим: закрываем экран
-              // из одного места, а на кадре показываем текст, пока не ушли.
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _onError(error);
-              });
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    scanProblemText(
-                          error.errorCode ==
-                                  MobileScannerErrorCode.permissionDenied
-                              ? const ScanDenied()
-                              : ScanFailed(error),
-                        ) ??
-                        '',
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              );
-            },
+          ReaderWidget(
+            onScan: _onScan,
+            onControllerCreated: _onControllerCreated,
+            // Сужаем до QR: не ловим случайные EAN/штрихкоды с окружающих
+            // предметов.
+            codeFormat: Format.qrCode,
+            // Из встроенных кнопок оставляем только фонарик: галерея — нецель
+            // §375 (распознавание из файла), вторая камера для сканирования
+            // кода с экрана бесполезна.
+            showGallery: false,
+            showToggleCamera: false,
+            // Код с экрана панели — обычно мелкий и в центре кадра; поворот
+            // терпим, инверсию и апскейл не ищем, чтобы не жечь батарею.
+            tryInverted: false,
+            scanDelay: const Duration(milliseconds: 300),
           ),
           // Подсказка поверх превью — юзер видит, что от него хотят.
           Align(
