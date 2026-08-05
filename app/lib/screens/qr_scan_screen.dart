@@ -94,12 +94,22 @@ class _QrScanScreenState extends State<QrScanScreen> {
     Navigator.of(context).pop(outcome);
   }
 
+  /// Счётчик неудачных попыток — только чтобы моргнуть индикатором. Без него
+  /// экран выглядит мёртвым: кнопки съёмки нет, попытки идут сами, и юзеру
+  /// неоткуда узнать, смотрит сканер или завис.
+  int _attempts = 0;
+
   void _onScan(Code code) {
     if (_handled) return;
     final value = code.text?.trim();
     if (value == null || value.isEmpty) return;
     AppLog.I.info('[qr] scanned ${value.length} chars');
     _finish(ScannedCode(value));
+  }
+
+  void _onScanFailure(Code code) {
+    if (_handled || !mounted) return;
+    setState(() => _attempts++);
   }
 
   /// Камера не поднялась. `ReaderWidget` отдаёт исход инициализации сюда:
@@ -122,6 +132,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
         children: [
           ReaderWidget(
             onScan: _onScan,
+            onScanFailure: _onScanFailure,
             onControllerCreated: _onControllerCreated,
             // Сужаем до QR: не ловим случайные EAN/штрихкоды с окружающих
             // предметов.
@@ -131,10 +142,31 @@ class _QrScanScreenState extends State<QrScanScreen> {
             // кода с экрана бесполезна.
             showGallery: false,
             showToggleCamera: false,
-            // Код с экрана панели — обычно мелкий и в центре кадра; поворот
-            // терпим, инверсию и апскейл не ищем, чтобы не жечь батарею.
+            // Область поиска. Виджет отдаёт декодеру ровно тот квадрат, что
+            // рисует рамкой: `min(w,h) * cropPercent`. Дефолт 0.5 — это лишь
+            // четверть площади кадра, из-за чего код приходится ловить в
+            // маленькое окно. 0.9 берёт почти весь кадр по короткой стороне.
+            cropPercent: 0.9,
+            // ZXing-C++ без tryHarder делает один быстрый проход и сдаётся на
+            // неидеальном кадре (блик, наклон, расфокус). Здесь мы сканируем
+            // одиночный код по требованию юзера, а не потоково в фоне, —
+            // тщательный поиск важнее экономии батареи.
+            tryHarder: true,
+            // Крупный код с близкого расстояния декодер иначе не берёт:
+            // downscale даёт ему второй масштаб для поиска.
+            tryDownscale: true,
+            // Инверсию не ищем: инвертированные QR практически не встречаются,
+            // а лишний проход по каждому кадру заметен.
             tryInverted: false,
+            // Пауза ПОСЛЕ неудачной попытки (не между кадрами): пока она идёт,
+            // кадры с камеры выбрасываются. Дефолт 1000 мс = одна попытка в
+            // секунду, и юзер не понимает, в какой момент сканер вообще
+            // смотрит. 300 мс + время самого прохода (с tryHarder он не
+            // мгновенный) ⇒ порядка двух-трёх попыток в секунду.
             scanDelay: const Duration(milliseconds: 300),
+            // После успеха экран и так закрывается по _handled; держим паузу
+            // короткой, чтобы не залипал кадр перед закрытием.
+            scanDelaySuccess: const Duration(milliseconds: 300),
           ),
           // Подсказка поверх превью — юзер видит, что от него хотят.
           Align(
@@ -143,10 +175,30 @@ class _QrScanScreenState extends State<QrScanScreen> {
               width: double.infinity,
               color: Colors.black54,
               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-              child: Text(
-                getLocalText.s("Point the camera at a QR code"),
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Моргает на каждой попытке декодирования: видно, что сканер
+                  // работает, даже пока код не пойман.
+                  Container(
+                    width: 8,
+                    height: 8,
+                    margin: const EdgeInsets.only(right: 10),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _attempts.isEven
+                          ? Colors.white
+                          : Colors.white24,
+                    ),
+                  ),
+                  Flexible(
+                    child: Text(
+                      getLocalText.s("Point the camera at a QR code"),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
