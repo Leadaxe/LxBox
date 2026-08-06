@@ -56,6 +56,9 @@
   "%1$s references missing DNS server \"%2$s\".": {
     "value": "%1$s ссылается на несуществующий DNS-сервер «%2$s»."
   },
+  "%1$s cannot use \"%2$s\": a \"%3$s\" server is not allowed as a resolver.": {
+    "value": "%1$s не может использовать «%2$s»: сервер типа «%3$s» нельзя назначить резолвером."
+  },
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d соб."
   },
@@ -1775,6 +1778,12 @@
   },
   "No file manager on this device. Paste from the clipboard or add by URL instead.": {
     "value": "На этом устройстве нет файлового менеджера. Вставьте из буфера обмена или добавьте по ссылке."
+  },
+  "Cannot read the selected file": {
+    "value": "Не удалось прочитать выбранный файл"
+  },
+  "Select a %s file": {
+    "value": "Выберите файл %s"
   },
   "File is too large to edit on device. Share it, edit externally, then load it back.": {
     "value": "Файл слишком большой для правки на устройстве. Поделитесь им, отредактируйте во внешнем редакторе и загрузите обратно."

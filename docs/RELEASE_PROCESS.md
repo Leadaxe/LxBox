@@ -225,6 +225,11 @@ git status --short   # ожидаем только docs/latest.json
 git commit -m "chore: merge main (vX.Y.Z tag) back into develop"
 git push origin develop
 
+# Забыть этот откат — не страшно: job `checks` на push в develop падает шагом
+# «Pubspec version is a placeholder (develop only)» и называет лечение. Сборку
+# это не ломало никогда (обе сборки переписывают версию перед `flutter build`),
+# поэтому без guard'а ошибка проходила молча — тестами она не ловится.
+
 # Проверка:
 git describe --tags
 # Должно показать vX.Y.Z или vX.Y.Z-N-g<SHA>

@@ -32,6 +32,22 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    // §380 — AGP по умолчанию вшивает в APK блок `DEPENDENCY METADATA`: список
+    // зависимостей, зашифрованный публичным ключом Google. Читать его умеет
+    // только Play Console, поэтому сканер F-Droid считает его непрозрачными
+    // данными и отвергает APK целиком («Found extra signing block»).
+    //
+    // Лежит он в APK Signing Block — ВНЕ zip-структуры, поэтому пофайловое
+    // сравнение архивов его не видит: 455 файлов совпадали, а верификация
+    // всё равно падала (7185 байт, id 0x504b4453 в v2.20.4).
+    //
+    // Для AAB оставлено включённым — Google Play собирается из бандла, и там
+    // эти данные дают предупреждения об уязвимых библиотеках.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = true
+    }
+
     defaultConfig {
         applicationId = "com.leadaxe.lxbox"
         // Android 7.0 (API 24) minimum — §233. Это абсолютный пол: Flutter

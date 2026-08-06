@@ -296,6 +296,12 @@
   "Log level": {
     "value": "Уровень логирования"
   },
+  "Certificate store": {
+    "value": "Хранилище сертификатов"
+  },
+  "Root certificates used to verify TLS servers. On Android 7.x and older the system store is outdated — Let's Encrypt and other modern authorities are missing, so TLS nodes fail to connect. Switch to Mozilla or Chrome to use an up-to-date bundle shipped inside the app.": {
+    "value": "Корневые сертификаты для проверки TLS-серверов. На Android 7.x и старше системное хранилище устарело — в нём нет Let's Encrypt и других современных удостоверяющих центров, поэтому узлы с TLS не подключаются. Выберите Mozilla или Chrome, чтобы использовать актуальный набор, встроенный в приложение."
+  },
   "Logging and core settings": {
     "value": "Логирование и настройки ядра"
   },

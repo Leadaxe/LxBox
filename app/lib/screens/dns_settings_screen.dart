@@ -522,6 +522,17 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     // _customRules, _ruleMirrors, _ruleDisplayRows звались по 2-3 раза.
     final displayed = _displayedServers;
     final serverTags = enabledServerTags(displayed);
+    // §384 — опции DNS Final / Default Domain Resolver: ядро запрещает там
+    // fakeip/hosts (`default server cannot be fakeip` — фатально на старте),
+    // тот же запрет, что §312 держит для членов групп. Per-rule пикеры и
+    // прочие потребители `serverTags` не трогаем: в правиле fakeip законен.
+    final resolverTags = [
+      for (final s in displayed)
+        if (serverTags.contains(s.tag) &&
+            s.body['type'] != 'fakeip' &&
+            s.body['type'] != 'hosts')
+          s.tag,
+    ];
     final mirrors = _ruleMirrors;
     final rows = _ruleDisplayRows;
 
@@ -644,7 +655,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             title: getLocalText.s("DNS Final"),
             subtitle: getLocalText.s("For apps · default fallback when no DNS rule matches"),
             value: _dnsFinal,
-            serverTags: serverTags,
+            serverTags: resolverTags,
             onChanged: (v) => setState(() { _dnsFinal = v; _markDirty(); }),
             tooltip: getLocalText.s("Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private."),
             warnIfLocal: false,
@@ -661,7 +672,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             title: getLocalText.s("Default Domain Resolver"),
             subtitle: getLocalText.s("For routing · resolves hostnames inside sing-box (outbound endpoints, routing rules)"),
             value: _defaultResolver,
-            serverTags: serverTags,
+            serverTags: resolverTags,
             onChanged: (v) => setState(() { _defaultResolver = v; _markDirty(); }),
             tooltip: getLocalText.s("Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."),
             warnIfLocal: true,

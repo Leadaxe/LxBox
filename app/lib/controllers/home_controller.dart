@@ -963,6 +963,11 @@ class HomeController extends ChangeNotifier
       // не отсеивает (device-факт 26.07). Отсеиваем по содержимому: пока ответ
       // равен известному устаревшему снапшоту — ждём и спрашиваем снова.
       if (staleRaw != null) await Future<void>.delayed(_reloadCapturePause);
+      // §384 — последний непустой ответ, равный `staleRaw`. Нужен для
+      // fallback'а ниже: reload на байт-в-байт идентичный конфиг (типовой
+      // случай — подписка отдала тот же список нод) даёт ответ, вечно равный
+      // прежнему снапшоту, и цикл «ждём ОТЛИЧНЫЙ ответ» исчерпывает попытки.
+      String? echoedRaw;
       for (var attempt = 0; attempt < _groupsPullMaxAttempts; attempt++) {
         final raw = await _cc.getRunningConfig();
         // §219 — dispose/ушли из connected за await → не эмитим.
@@ -982,9 +987,20 @@ class HomeController extends ChangeNotifier
           return;
         }
         // null = ядро ещё не STARTED; == staleRaw = box ещё не подменён.
+        if (raw != null) echoedRaw = raw;
         await Future<void>.delayed(_groupsPullStep);
       }
-      if (!_disposed) {
+      // §384 — попытки исчерпаны, но ядро всё это время СТАБИЛЬНО отвечало тем
+      // же документом. Через ~5с после успешного reload'а это уже не «box ещё
+      // не подменён», а «новый box крутит идентичный конфиг» — законный ответ.
+      // Коммитим его: иначе снапшот залипает в null до конца сессии, §324
+      // теряет собеседника и отвечает `unknown` на каждое сохранение, а плашка
+      // «Config changed» становится неснимаемой (device-verified на эмуляторе).
+      if (echoedRaw != null && epoch == _runningConfigEpoch && !_disposed) {
+        _emit(_state.copyWith(runningConfigRaw: echoedRaw));
+        _addDebug(DebugSource.app,
+            '[cc] running config unchanged after reload (${echoedRaw.length} bytes)');
+      } else if (!_disposed) {
         _addDebug(DebugSource.app,
             '[cc] running config unavailable after $_groupsPullMaxAttempts attempts');
       }

@@ -22,8 +22,17 @@ AmneziaWG 2.0 + нативный XHTTP + VLESS encryption (PQ-слой) + LxBox-
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.20-rc.8`** (v2.20.4, см. `app/android/libbox.version`)
-— технический выпуск поверх rc.7, поведение не меняется. Убраны две ловушки
+**Текущий пин: `v1.14.0-lx.21`** (v2.20.5, см. `app/android/libbox.version`)
+— SPEC 052: connect-дедлайн 15 с на netstack-дайлах (WG/AWG-эндпоинт и делящие
+его per-conn-дайлы MASQUE, openvpn, openconnect, tailscale). До него это был
+единственный класс путей дайла без таймаута: `C.TCPConnectTimeout` живёт только
+в системном `net.Dialer`, netstack-пути обходят его структурно, и границей
+служил SYN-бэкофф gVisor — 6 ретрансмитов, ~127 с до ошибки, ×N адресов для
+домена. Java-поверхность не изменилась. Предыдущие пины — `v1.14.0-lx.20`
+(промоут ветки в стабильную, без изменений кода относительно rc.8) и
+`v1.14.0-lx.20-rc.8` (v2.20.4).
+
+Разбор rc.8 — технический выпуск поверх rc.7, поведение не меняется. Убраны две ловушки
 слияния: дважды подряд (235 коммитов и 217 в rc.7) одинаково ломались одни и те
 же два файла, причём поломка не видна при разборе слияния. Причина не в том, что
 upstream что-то удалял — этого кода у него просто нет; ломалась **форма** наших
@@ -336,7 +345,9 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.14** (стабильный) | SPEC 030 — Stop не виснет 10+ сек при многих WG/AWG-эндпоинтах (глушение тика + upfront-закрытие UDP-сокетов + abort in-flight wake + конкурентный close). Ядровая половина §287. База upstream `alpha.47`. Build-теги AAR без изменений. (Промежуточные lx.12/lx.13 — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.15** (стабильный) | SPEC 002 — XHTTP за reverse-proxy: `path` сохраняется как есть, trailing slash срезается только на bare-path запросе stream-one. + merge upstream `testing` (async DNS refactor, WG detour fix, OpenConnect auth-challenge). База upstream `alpha.48`. Build-теги AAR без изменений. Device-verified на CPH2411 (2026-07-21) |
-| **v1.14.0-lx.19-rc.3** (текущий пин, v2.19.2) | SPEC 045 — nil-паника при URL-тесте узлов trojan/vless с `tls.enabled:false` (тест пинга ронял ядро). Клиентских правок нет |
+| **v1.14.0-lx.21** (текущий пин, v2.20.5) | SPEC 052 — connect-дедлайн `C.TCPTimeout` (15 с) на netstack-дайлах: WG/AWG-эндпоинт (`DialTCPWithBind`, его stackDevice делят per-conn-дайлы MASQUE) + openvpn/openconnect/tailscale через сабмодульный `gonet.DialTCPWithBind`. Раньше единственной границей был SYN-бэкофф gVisor (1+2+4+8+16+32+64 = ~127 с; ручка `TCPSynRetriesOption` в нашем пине gVisor мертва), для домена — ×N адресов через `DialSerial`. Симптом: тихая чёрная дыра (Wi-Fi зарезал UDP к узлу, заснувшее радио) = «всё висит без ошибки», группе не на что реагировать. 15 с, а не 5 — общий бюджет с health-check группы: дедлайн ниже пробного дал бы вилку «узел проходит пробы, но все пользовательские дайлы через него падают». Замер: 2м07с → 15.05с. Java-поверхность без изменений, клиентских правок нет |
+| **v1.14.0-lx.20** (стабильный, v2.20.5) | Промоут ветки `lx.20` в стабильную: содержательно равен rc.8, кода не меняет. Состав ветки (SPEC 047 краш при смене сети на старте, SPEC 048 краш на соединении с мёртвой нодой, SPEC 050 залипшие проверки нод, SPEC 051 закрытие отставания от upstream — 217 коммитов на базе `v1.14.0-beta.8`) — см. запись v2.20.4 в CHANGELOG |
+| **v1.14.0-lx.19-rc.3** (v2.19.2) | SPEC 045 — nil-паника при URL-тесте узлов trojan/vless с `tls.enabled:false` (тест пинга ронял ядро). Клиентских правок нет |
 | **v1.14.0-lx.19-rc.2** (в составе v2.19.2) | **SPEC 044** — AAR, собранный Go 1.24 (так делал CI), убивал ВСЕ quic-go-аутбаунды (hysteria2/tuic/masque-h3) на устройствах с вендорским ядром: каждый dial висел до `context deadline exceeded`, тест пинга вечно `-1`. Тот же исходник на Go 1.25 — работает. Фикс = смена тулчейна в CI ядра. Клиентская половина расследования — §341 (Debug API `/action/quic-knobs`). ⚠️ эмулятор с generic-ядром дефект НЕ воспроизводит |
 | **v1.14.0-lx.19-rc.1** (в составе v2.19.2) | SPEC 041 v2 — досрочный rebind (~15 с вместо ~90) + событийный нудж `CommandServer.RebindStaleEndpoints()`: ребиндит только доказуемо мёртвые сессии (нет keypair / handshake старше 180 с), остальным no-op. Потребитель — §340 (wake-нудж по `USER_PRESENT`). Новый экспорт в Java-поверхности |
 | **v1.14.0-lx.18** (v2.19.1) | SPEC 032 — VLESS `encryption` (`mlkem768x25519plus`, PQ-слой внутри VLESS): поле появилось в схеме ядра, узлы `security=none` с шифрослоем ожили. Клиент — §335 (перенос поля подписка→конфиг + round-trip в URI). Device-замер: +12 настоящих узлов (ws 7/8, grpc 5/5), подписка 42 → 53 из 76. Конфиг-фича, Java-поверхность без изменений. ⚠️ ядро < lx.18 отвергает конфиг с полем целиком |
