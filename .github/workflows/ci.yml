@@ -136,8 +136,17 @@ jobs:
       - name: Pubspec version is a placeholder (develop only)
         if: ${{ github.ref == 'refs/heads/develop' || github.base_ref == 'develop' }}
         run: |
-          VERSION="$(grep -E '^version:' app/pubspec.yaml | head -1 | sed -E 's/^version:[[:space:]]*//')"
+          # Путь без префикса app/: у job `checks` defaults.run.working-directory
+          # = app, все run-шаги уже стартуют оттуда.
+          VERSION="$(grep -E '^version:' pubspec.yaml | head -1 | sed -E 's/^version:[[:space:]]*//')"
           echo "pubspec version: $VERSION"
+          # Пустое значение — это не «версия не та», а сломанная проверка
+          # (переехал файл, съехал working-directory). Своё сообщение, иначе
+          # guard соврёт про реальную версию, показав пустые кавычки.
+          if [ -z "$VERSION" ]; then
+            echo "::error file=app/pubspec.yaml::Не удалось прочитать version: из pubspec.yaml — проверьте путь и working-directory шага."
+            exit 1
+          fi
           # Placeholder опознаём по суффиксу `-dev.N` (текущая форма) либо по
           # версии 0.0.0 (историческая, v2.11.x–v2.19.x). Всё остальное, что
           # выглядит как X.Y.Z, — реальная версия, которой в develop не место.
