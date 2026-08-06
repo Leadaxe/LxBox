@@ -49,6 +49,52 @@ class UrlLauncher {
     }
   }
 
+  /// §383 — какой intent-action обслуживает реальный (не-заглушка) пикер.
+  ///
+  /// `'android.intent.action.OPEN_DOCUMENT'` — штатный путь через
+  /// `file_picker`; `'android.intent.action.GET_CONTENT'` — плагин так не
+  /// умеет (для `FileType.any` он жёстко строит OPEN_DOCUMENT), нужен
+  /// [pickFileViaGetContent]; null — пикера нет вовсе.
+  ///
+  /// При недоступности канала возвращает OPEN_DOCUMENT — тот же принцип, что
+  /// в [hasRealFilePicker]: где не смогли проверить, не запрещаем, а идём
+  /// прежним путём.
+  static Future<String?> filePickerAction() async {
+    try {
+      return await _channel.invokeMethod<String>('filePickerAction') ??
+          actionOpenDocument;
+    } catch (_) {
+      return actionOpenDocument;
+    }
+  }
+
+  /// §383 — значения, которые возвращает [filePickerAction].
+  static const actionOpenDocument = 'android.intent.action.OPEN_DOCUMENT';
+  static const actionGetContent = 'android.intent.action.GET_CONTENT';
+
+  /// §383 — свой `ACTION_GET_CONTENT`-пик для устройств, где OPEN_DOCUMENT
+  /// не обслуживается (старые файловые менеджеры вроде Total Commander).
+  ///
+  /// Возвращает список `{'name': String, 'bytes': Uint8List}` — по элементу на
+  /// файл, либо null/пустой список, если юзер отменил выбор. Бросает
+  /// [PlatformException] при сбое чтения.
+  ///
+  /// [allowMultiple] лишь просит менеджер о множественном выборе
+  /// (`EXTRA_ALLOW_MULTIPLE`): поддерживают его не все, и одиночный ответ —
+  /// не ошибка.
+  static Future<List<Map<String, Object?>>?> pickFilesViaGetContent({
+    bool allowMultiple = false,
+  }) async {
+    final picked = await _channel.invokeListMethod<Object?>(
+      'pickFileViaGetContent',
+      {'allowMultiple': allowMultiple},
+    );
+    return picked
+        ?.whereType<Map<Object?, Object?>>()
+        .map((m) => m.map((k, v) => MapEntry(k.toString(), v)))
+        .toList();
+  }
+
   /// §374 — доступна ли запись в публичную папку Downloads.
   ///
   /// true только на API 29+ (scoped storage): до него public Downloads

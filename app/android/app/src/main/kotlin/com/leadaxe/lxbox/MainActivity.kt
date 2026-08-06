@@ -33,6 +33,7 @@ class MainActivity : FlutterActivity() {
         private const val VPN_REQUEST_CODE_QUICK = 7032
         private const val NOTIFICATION_PERMISSION_REQUEST = 7033
         private const val NEARBY_WIFI_PERMISSION_REQUEST = 7034
+        private const val GET_CONTENT_REQUEST_CODE = 7035
 
         const val EXTRA_ACTION = "action"
 
@@ -45,6 +46,12 @@ class MainActivity : FlutterActivity() {
     /// после успешного consent'а закрываемся, чтобы юзер вернулся на хоум —
     /// он не просил открывать app, он просил подключить VPN.
     private var finishAfterConsent = false
+
+    /// §383 — `MethodChannel.Result` незавершённого GET_CONTENT-пика.
+    /// Ответ приходит асинхронно, в `onActivityResult`. Ненулевое значение =
+    /// пик уже идёт: второй запрос отклоняем, чтобы не потерять первый result
+    /// (Flutter падает на повторном ответе в один и тот же Result).
+    private var pendingPickResult: MethodChannel.Result? = null
 
     /// §131 — Impeller crash на старых GPU (Adreno 3xx, Android 10).
     ///
@@ -111,6 +118,20 @@ class MainActivity : FlutterActivity() {
                     "hasRealFilePicker" -> {
                         // §372 — есть ли на устройстве НАСТОЯЩИЙ файловый пикер.
                         result.success(hasRealFilePicker())
+                    }
+                    "filePickerAction" -> {
+                        // §383 — КАКОЙ action обслуживает реальный пикер:
+                        // "android.intent.action.OPEN_DOCUMENT" (штатный путь
+                        // через плагин), "…GET_CONTENT" (свой пик) или null.
+                        result.success(filePickerAction())
+                    }
+                    "pickFileViaGetContent" -> {
+                        // §383 — свой GET_CONTENT-пик для устройств, где
+                        // OPEN_DOCUMENT не обслуживается (плагин умеет только его).
+                        startGetContentPick(
+                            call.argument<Boolean>("allowMultiple") ?: false,
+                            result,
+                        )
                     }
                     "hasCamera" -> {
                         // §375 — есть ли камера (для QR-сканера).
@@ -310,12 +331,86 @@ class MainActivity : FlutterActivity() {
     /// который не является заглушкой». Устройство-verified на эмуляторе
     /// Android TV (API 31): единственный кандидат — frameworkpackagestubs;
     /// на телефоне — com.google.android.documentsui.
-    private fun hasRealFilePicker(): Boolean {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+    private fun hasRealFilePicker(): Boolean = filePickerAction() != null
+
+    /// §383 — какой intent-action обслуживает НАСТОЯЩИЙ (не-заглушка) пикер.
+    ///
+    /// §372 спрашивал только про `ACTION_OPEN_DOCUMENT` — это SAF, и
+    /// регистрируются на него DocumentsProvider-приложения. Файловые
+    /// менеджеры старой школы (Total Commander и аналоги, массовые на 7.x)
+    /// объявляют себя обработчиками `ACTION_GET_CONTENT` и на OPEN_DOCUMENT
+    /// не отвечают. На устройстве такого юзера детект возвращал «пикера нет»
+    /// при установленном менеджере (репорт 4PDA, Android TV 7.1.1) — и импорт
+    /// был закрыт наглухо, хотя рабочий обработчик в системе есть.
+    ///
+    /// Возвращает `ACTION_OPEN_DOCUMENT` (приоритет — постоянный доступ к Uri
+    /// и штатный путь через плагин), иначе `ACTION_GET_CONTENT`, иначе null.
+    /// Фильтр заглушек применяется к ОБОИМ спискам: TV-framework подкладывает
+    /// `frameworkpackagestubs` и на GET_CONTENT (`Stubs$MediaStub`), без
+    /// фильтра §372 сломался бы.
+    private fun filePickerAction(): String? {
+        for (action in listOf(Intent.ACTION_OPEN_DOCUMENT, Intent.ACTION_GET_CONTENT)) {
+            val intent = Intent(action)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("*/*")
+            val candidates = packageManager.queryIntentActivities(intent, 0)
+            if (candidates.any { !isStubHandler(it.activityInfo?.packageName) }) {
+                return action
+            }
+        }
+        return null
+    }
+
+    /// §383 — собственный `ACTION_GET_CONTENT`-пик.
+    ///
+    /// Нужен потому, что `file_picker` 11.0.2 для `FileType.any` жёстко
+    /// строит `ACTION_OPEN_DOCUMENT` (`FileUtils.kt:202`, ветка else), а
+    /// параметра для смены action у плагина нет: подбором аргументов
+    /// `pickFiles` этот случай не чинится.
+    ///
+    /// Результат приводим к тому, что уже ждёт `pickFileSafely`: имя + байты.
+    /// Читаем именно БАЙТЫ — у `content://` Uri реального пути, как правило,
+    /// нет, а все наши call-site'ы и так зовут пик с `withData: true`.
+    private fun startGetContentPick(allowMultiple: Boolean, result: MethodChannel.Result) {
+        if (pendingPickResult != null) {
+            result.error("PICK_IN_PROGRESS", "Another pick is already running", null)
+            return
+        }
+        val intent = Intent(Intent.ACTION_GET_CONTENT)
             .addCategory(Intent.CATEGORY_OPENABLE)
             .setType("*/*")
-        val candidates = packageManager.queryIntentActivities(intent, 0)
-        return candidates.any { !isStubHandler(it.activityInfo?.packageName) }
+            .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
+        try {
+            pendingPickResult = result
+            startActivityForResult(intent, GET_CONTENT_REQUEST_CODE)
+        } catch (e: Exception) {
+            pendingPickResult = null
+            Log.e(TAG, "startGetContentPick failed", e)
+            result.error("PICK_FAILED", e.message, null)
+        }
+    }
+
+    /// §383 — читает выбранный Uri в пару «имя + байты».
+    /// null — прочитать не удалось (провайдер отдал закрытый поток и т.п.).
+    private fun readPickedUri(uri: Uri): Map<String, Any>? {
+        return try {
+            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: return null
+            var name: String? = null
+            runCatching {
+                contentResolver.query(uri, null, null, null, null)?.use { c ->
+                    val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0 && c.moveToFirst()) name = c.getString(idx)
+                }
+            }
+            mapOf(
+                "name" to (name ?: uri.lastPathSegment ?: "config"),
+                "bytes" to bytes,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "readPickedUri failed", e)
+            null
+        }
     }
 
     /// §375 — есть ли на устройстве камера, пригодная для сканирования QR.
@@ -427,6 +522,40 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == GET_CONTENT_REQUEST_CODE) {
+            // §383 — результат своего GET_CONTENT-пика. Result забираем ДО
+            // ветвлений и обнуляем поле: любой выход обязан ответить ровно раз.
+            val pending = pendingPickResult ?: return
+            pendingPickResult = null
+            if (resultCode != Activity.RESULT_OK || data == null) {
+                // Отмена — не ошибка: Dart-сторона разберёт null как PickCancelled.
+                pending.success(null)
+                return
+            }
+            // Множественный выбор приходит в `clipData`, одиночный — в `data`.
+            // Менеджер может проигнорировать EXTRA_ALLOW_MULTIPLE и ответить
+            // одним файлом: это законный исход, а не ошибка.
+            val uris = mutableListOf<Uri>()
+            val clip = data.clipData
+            if (clip != null) {
+                for (i in 0 until clip.itemCount) {
+                    clip.getItemAt(i).uri?.let { uris.add(it) }
+                }
+            } else {
+                data.data?.let { uris.add(it) }
+            }
+            if (uris.isEmpty()) {
+                pending.success(null)
+                return
+            }
+            val picked = uris.mapNotNull { readPickedUri(it) }
+            if (picked.isEmpty()) {
+                pending.error("PICK_READ_FAILED", "Cannot read the selected file", null)
+            } else {
+                pending.success(picked)
+            }
+            return
+        }
         if (requestCode != VPN_REQUEST_CODE_QUICK) return
         if (resultCode == Activity.RESULT_OK) {
             BoxVpnService.start(applicationContext)
