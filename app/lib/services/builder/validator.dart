@@ -130,6 +130,22 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
       if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
         s['tag'] as String: s['type'] as String? ?? '',
   };
+  // §384 — тип сервера под resolver-ссылками. Проверка ссылок выше отвечает
+  // лишь на «тег существует»; ядро дополнительно запрещает тут fakeip/hosts
+  // (`default server cannot be fakeip`). Считаем здесь, где карта типов уже
+  // построена. Dangling-случай сюда не попадает — тега нет в карте.
+  for (final ref in <(String, Object?)>[
+    ('dns.final', dnsFinal),
+    ('route.default_domain_resolver', domainResolver),
+  ]) {
+    final (field, value) = ref;
+    if (value is! String || value.isEmpty) continue;
+    final type = dnsTypeByTag[value];
+    if (type == 'fakeip' || type == 'hosts') {
+      issues.add(BadResolverServerType(field, value, type!));
+    }
+  }
+
   final dnsGroupEdges = <String, List<String>>{};
   for (final s in dnsServerList) {
     if (s['type'] != 'group') continue;

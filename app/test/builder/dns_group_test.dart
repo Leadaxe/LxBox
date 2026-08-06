@@ -191,4 +191,64 @@ void main() {
       expect(r.issues.whereType<BadDnsGroupMember>(), isEmpty);
     });
   });
+
+  // §384 — тот же запрет ядра, но для resolver-ссылок: ядро отвечает
+  // `initialize DNS server: default server cannot be fakeip` (device-verified).
+  group('§384 resolver type gate', () {
+    Map<String, dynamic> cfg({
+      String? dnsFinal,
+      String? resolver,
+    }) => {
+          'outbounds': [
+            {'tag': 'vpn-1', 'type': 'selector', 'outbounds': ['direct-out']},
+            {'tag': 'direct-out', 'type': 'direct'},
+          ],
+          'route': {
+            'final': 'vpn-1',
+            if (resolver != null) 'default_domain_resolver': resolver,
+          },
+          'dns': {
+            if (dnsFinal != null) 'final': dnsFinal,
+            'servers': [
+              {'tag': 'fakeip', 'type': 'fakeip'},
+              {'tag': 'h', 'type': 'hosts'},
+              {'tag': 'a', 'type': 'udp', 'server': '1.1.1.1'},
+            ],
+          },
+        };
+
+    test('dns.final = fakeip → fatal', () {
+      final r = validateConfig(cfg(dnsFinal: 'fakeip'));
+      expect(
+          r.issues,
+          contains(
+              const BadResolverServerType('dns.final', 'fakeip', 'fakeip')));
+      expect(r.issues.first.severity, Severity.fatal);
+    });
+
+    test('default_domain_resolver = hosts → fatal', () {
+      final r = validateConfig(cfg(resolver: 'h'));
+      expect(
+          r.issues,
+          contains(const BadResolverServerType(
+              'route.default_domain_resolver', 'h', 'hosts')));
+    });
+
+    test('обычный сервер под обеими ссылками — чисто', () {
+      final r = validateConfig(cfg(dnsFinal: 'a', resolver: 'a'));
+      expect(r.issues.whereType<BadResolverServerType>(), isEmpty);
+    });
+
+    test('пустые/отсутствующие ссылки не репортятся', () {
+      final r = validateConfig(cfg(dnsFinal: '', resolver: null));
+      expect(r.issues.whereType<BadResolverServerType>(), isEmpty);
+    });
+
+    test('dangling-тег остаётся DanglingDnsServerRef, не тип-issue', () {
+      final r = validateConfig(cfg(dnsFinal: 'ghost'));
+      expect(r.issues.whereType<BadResolverServerType>(), isEmpty);
+      expect(r.issues,
+          contains(const DanglingDnsServerRef('dns.final', 'ghost')));
+    });
+  });
 }

@@ -109,6 +109,33 @@ final class DanglingDnsServerRef extends ValidationIssue {
       t.s("%1\$s references missing DNS server \"%2\$s\".", field, tag);
 }
 
+/// §384 — `dns.final` / `route.default_domain_resolver` указывает на сервер
+/// типа `fakeip` или `hosts`. Ядро реджектит такой конфиг на старте
+/// (`initialize DNS server: default server cannot be fakeip`) → fatal, падаем
+/// ДО старта (§254-принцип). Тот же запрет ядра, что ловит [BadDnsGroupMember]
+/// для членов групп, — но для resolver-ссылок его не проверял никто, и UI
+/// давал выбрать fakeip в обоих пикерах (device-verified на эмуляторе).
+final class BadResolverServerType extends ValidationIssue {
+  final String field; // 'dns.final' | 'route.default_domain_resolver'
+  final String tag;
+  final String serverType; // 'fakeip' | 'hosts'
+  const BadResolverServerType(this.field, this.tag, this.serverType);
+
+  @override
+  Severity get severity => Severity.fatal;
+
+  @override
+  List<Object?> get props => [field, tag, serverType];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+    "%1\$s cannot use \"%2\$s\": a \"%3\$s\" server is not allowed as a resolver.",
+    field,
+    tag,
+    serverType,
+  );
+}
+
 /// §312 — DNS-группа (kernel SPEC 033) осталась без единого члена: пуста в
 /// storage либо все члены выброшены эмиссионным фильтром (disabled/unknown/
 /// self/duplicate — см. `_filterDnsGroupMembers`). Ядро реджектит пустой
