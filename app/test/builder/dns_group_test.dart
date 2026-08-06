@@ -205,10 +205,10 @@ void main() {
           ],
           'route': {
             'final': 'vpn-1',
-            if (resolver != null) 'default_domain_resolver': resolver,
+            'default_domain_resolver': ?resolver,
           },
           'dns': {
-            if (dnsFinal != null) 'final': dnsFinal,
+            'final': ?dnsFinal,
             'servers': [
               {'tag': 'fakeip', 'type': 'fakeip'},
               {'tag': 'h', 'type': 'hosts'},
