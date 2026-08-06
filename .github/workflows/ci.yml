@@ -121,6 +121,33 @@ jobs:
       # hardcoded-ratchet, kotlin-guard. --strict безусловен на каждом push/PR:
       # baseline пуст, ru-словарь переведён на 100%, orphan'ов нет — warnings
       # фатальны везде (протухший src-hash, непереведённый/orphan ключ).
+      # §379 — в develop `version:` обязан оставаться placeholder'ом. Реальная
+      # версия пишется ровно один раз, на merge-коммите в main (RELEASE_PROCESS
+      # §2.4), и обратный merge-back (§2.6) её оттуда притаскивает — если забыть
+      # откатить, версия снова начнёт «дрожать» в ветке разработки (ровно от
+      # этого ушли в v2.11.x, удалив pre-commit хук). Глазами это не видно:
+      # merge проходит чисто, а сборка всё равно перепишет версию перед
+      # `flutter build` — то есть ни один тест не упадёт. Отсюда guard, а не
+      # автоматика: чинить надо `git checkout HEAD -- app/pubspec.yaml` до
+      # коммита merge-back'а.
+      #
+      # Только develop: на main и на теге версия обязана быть реальной (её
+      # читает F-Droid checkupdates с коммита тега).
+      - name: Pubspec version is a placeholder (develop only)
+        if: ${{ github.ref == 'refs/heads/develop' || github.base_ref == 'develop' }}
+        run: |
+          VERSION="$(grep -E '^version:' app/pubspec.yaml | head -1 | sed -E 's/^version:[[:space:]]*//')"
+          echo "pubspec version: $VERSION"
+          # Placeholder опознаём по суффиксу `-dev.N` (текущая форма) либо по
+          # версии 0.0.0 (историческая, v2.11.x–v2.19.x). Всё остальное, что
+          # выглядит как X.Y.Z, — реальная версия, которой в develop не место.
+          # Проверяем так, а не «релизным» шаблоном X.Y.Z+CODE: тогда `2.20.4`
+          # без кода сборки проскочил бы молча.
+          if ! printf '%s' "$VERSION" | grep -qE '(-dev\.[0-9]+|^0\.0\.0(\+|$))'; then
+            echo "::error file=app/pubspec.yaml::В develop попала реальная версия '$VERSION'. Ожидается placeholder с суффиксом -dev.N (RELEASE_PROCESS.md §2.6, §379). Лечение: git checkout HEAD -- app/pubspec.yaml до коммита merge-back'а."
+            exit 1
+          fi
+
       - name: L10n checks
         if: ${{ github.event.inputs.test_path == '' }}
         working-directory: app
