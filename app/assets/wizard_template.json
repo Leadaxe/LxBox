@@ -194,6 +194,10 @@
         { "name": "log_level", "type": "enum", "wizard_ui": "edit", "title": "Log level", "tooltip": "Verbosity of sing-box logs",
           "default_value": "warn",
           "options": ["trace", "debug", "info", "warn", "error", "fatal", "panic"]
+        },
+        { "name": "certificate_store", "type": "enum", "wizard_ui": "edit", "title": "Certificate store", "tooltip": "Root certificates used to verify TLS servers. On Android 7.x and older the system store is outdated — Let's Encrypt and other modern authorities are missing, so TLS nodes fail to connect. Switch to Mozilla or Chrome to use an up-to-date bundle shipped inside the app.",
+          "default_value": "system",
+          "options": ["system", "mozilla", "chrome"]
         }
       ]
     },
@@ -332,6 +336,7 @@
       "level": "@log_level",
       "timestamp": true
     },
+    "certificate": {"store": "@certificate_store"},
     "dns": {
       "servers": [],
       "rules": [],
