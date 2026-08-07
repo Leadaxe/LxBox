@@ -3547,7 +3547,7 @@
     "value": "Отдельные серверы"
   },
   "Start": {
-    "value": "Запустить"
+    "value": "Start"
   },
   "Start / Stop / Toggle / Switch / Refresh / … (default OFF)": {
     "value": "Start / Stop / Toggle / Switch / Refresh / … (по умолчанию выключено)"
@@ -3577,7 +3577,7 @@
     "value": "Сразу в папку «Загрузки»"
   },
   "Stop": {
-    "value": "Остановить"
+    "value": "Stop"
   },
   "Stop VPN": {
     "value": "Остановить VPN"
