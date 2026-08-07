@@ -81,8 +81,32 @@ jobs:
             echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
             echo "is_release=true" >> "$GITHUB_OUTPUT"
           else
-            SHORT_SHA="$(git rev-parse --short=7 HEAD)"
-            echo "version=dev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            # run_mode=build — сборка без тега. Версия пинится к ПОСЛЕДНЕМУ
+            # релизному тегу: `X.Y.Z-dev.<коммитов с тега>` (та же схема, что в
+            # scripts/build-local-apk.sh, §186). Раньше здесь был `dev-<sha>`,
+            # который не semver — шаг инъекции откатывался на `0.0.0`, и сборка
+            # уезжала как `0.0.0-dev-<sha>` с versionCode 500. В Play такой
+            # выпуск не опознать, а код 500 занимается в аккаунте навсегда.
+            #
+            # versionCode считается от версии ТЕГА (суффикс -dev.N формула
+            # срезает), поэтому dev-сборка получает ровно код своего релиза и не
+            # обгоняет его: `install -r` проходит в обе стороны.
+            #
+            # Тега может не быть (свежий форк, ветка без релизов) — тогда
+            # прежний фоллбэк на 0.0.0, чтобы прогон не падал.
+            TAG="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+            if [ -n "$TAG" ]; then
+              SINCE="$(git rev-list "${TAG}..HEAD" --count)"
+              VERSION="${TAG#v}-dev.${SINCE}"
+            else
+              # Отдаём именно `dev-<sha>` (не semver) — шаг инъекции сам
+              # префиксует его до 0.0.0-dev-<sha> и берёт для кода 0.0.0.
+              # Готовую `0.0.0-dev-<sha>` отдавать нельзя: она пройдёт как
+              # semver, и формула упадёт на суффиксе -dev-<sha>.
+              SHORT_SHA="$(git rev-parse --short=7 HEAD)"
+              VERSION="dev-${SHORT_SHA}"
+            fi
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
             echo "tag=" >> "$GITHUB_OUTPUT"
             echo "is_release=false" >> "$GITHUB_OUTPUT"
           fi
@@ -252,10 +276,15 @@ jobs:
           set -euo pipefail
           VERSION="${{ needs.meta.outputs.version }}"
           VERSION="${VERSION#v}"
-          # run_mode=build (без тега) даёт 'dev-<sha>' — не semver, pub
-          # отвергает. Префиксуем до валидного pre-release: 0.0.0-dev-<sha>.
-          # Такая сборка не публикуется; для кода берём 0.0.0 (→ 500), чтобы
-          # формула отработала и gradle не упал на нечисловом build-number.
+          # run_mode=build обычно даёт `X.Y.Z-dev.N` (job meta пинит к
+          # последнему тегу) — форма semver, дальше её обрабатывает ветка else,
+          # а суффикс -dev.N срезает сама формула version-code.sh: код выходит
+          # ровно тот же, что у релиза этого тега.
+          #
+          # Сюда попадает только фоллбэк `0.0.0-dev-<sha>` — когда тега в
+          # репозитории нет вообще (свежий форк). Он не semver, pub такое
+          # отвергает; префиксуем до валидного pre-release, для кода берём
+          # 0.0.0 (→ 500), чтобы gradle не упал на нечисловом build-number.
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
             VERSION="0.0.0-${VERSION}"
             CODE_VERSION="0.0.0"
