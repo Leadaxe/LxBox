@@ -356,6 +356,42 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 1 || 30 }}
 
+      - name: Build AAB (Google Play)
+        # Play принимает только AAB. Отдельный формат, отдельный канал:
+        # в GitHub Releases по-прежнему уходят APK (шаги выше), сюда не
+        # попадают — заливка в Play ручная, артефакт скачивается из прогона.
+        #
+        # versionCode = код universal (ABI=0), тот же, что у fat APK этой
+        # версии. Play требует уникальности кода в пределах СВОЕГО аккаунта, а
+        # GitHub-релизы он не видит — пересечение безопасно. Своя ABI-цифра не
+        # заводится намеренно: набор в version-code.sh закрытый (0/1/2/4), а
+        # per-ABI коды внутри Play генерирует сам из бандла.
+        #
+        # ABI не сужаем (нет LXBOX_ABI_FILTER): бандл обязан нести все ABI —
+        # раздачей под конкретное устройство занимается Play.
+        #
+        # Подпись: тем же upload-ключом, что и APK (шаг keystore выше). В Play
+        # он ТОЛЬКО пропуск на загрузку — пользователям приложение уходит
+        # подписанным ключом Google (Play App Signing). Поэтому Play-сборка и
+        # GitHub-сборка имеют РАЗНЫЕ подписи и не обновляют друг друга.
+        shell: bash
+        run: |
+          set -euo pipefail
+          CODE=$(../scripts/version-code.sh "$CODE_VERSION" universal)
+          echo "::group::Build AAB (versionCode=$CODE)"
+          flutter build appbundle --release \
+            --build-name "$VERSION_NAME" --build-number "$CODE"
+          echo "::endgroup::"
+          ls -la build/app/outputs/bundle/release/app-release.aab
+
+      - name: Upload AAB (release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab-release
+          path: app/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 1 || 30 }}
+
   release:
     name: Create Release
     needs: [meta, android]
