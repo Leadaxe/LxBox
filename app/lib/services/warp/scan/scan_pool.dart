@@ -21,6 +21,7 @@ class ScanPool {
   const ScanPool({
     required this.wgV4Cidr,
     required this.wgV6Cidr,
+    this.wgEndpointsPreset = const [],
     required this.wgPorts,
     required this.wgPortsExtra,
     required this.wgSniPool,
@@ -36,6 +37,12 @@ class ScanPool {
   // --- WireGuard / AWG ---
   final List<String> wgV4Cidr;
   final List<String> wgV6Cidr;
+
+  /// §386 — готовые `host:port` для combobox endpoint в визарде. Первый элемент
+  /// — рекомендуемый (официальный `engage.cloudflareclient.com:2408`), UI
+  /// помечает его суффиксом. Пусто (старый asset / JSON-override без ключа) →
+  /// combobox без пунктов, только свободный ввод + кубик.
+  final List<String> wgEndpointsPreset;
 
   /// Cloudflare-достоверные WG-порты (2408/500/1701/4500). Приоритетны.
   final List<int> wgPorts;
@@ -122,6 +129,7 @@ class ScanPool {
     final pool = ScanPool(
       wgV4Cidr: strs(wg, 'v4_cidr'),
       wgV6Cidr: strs(wg, 'v6_cidr'),
+      wgEndpointsPreset: strs(wg, 'endpoints_preset'),
       wgPorts: ints(wg, 'ports'),
       wgPortsExtra: ints(wg, 'ports_extra'),
       wgSniPool: strs(wg, 'sni_pool'),

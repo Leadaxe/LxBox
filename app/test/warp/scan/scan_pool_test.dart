@@ -81,6 +81,33 @@ void main() {
       expect(pool.masqueSniPool, ['b']);
     });
 
+    test('§386 — endpoints_preset парсится; отсутствие ключа → пусто', () {
+      final pool = ScanPool.fromFullJson({
+        'wireguard': {
+          'v4_cidr': ['162.159.192.0/24'],
+          'ports': [2408],
+          'endpoints_preset': [
+            'engage.cloudflareclient.com:2408',
+            '162.159.192.192:934',
+          ],
+        },
+      });
+      expect(pool!.wgEndpointsPreset, [
+        'engage.cloudflareclient.com:2408',
+        '162.159.192.192:934',
+      ]);
+      // Первый элемент — рекомендуемый (контракт UI-пометки).
+      expect(pool.wgEndpointsPreset.first, 'engage.cloudflareclient.com:2408');
+
+      final noKey = ScanPool.fromFullJson({
+        'wireguard': {
+          'v4_cidr': ['162.159.192.0/24'],
+          'ports': [2408],
+        },
+      });
+      expect(noKey!.wgEndpointsPreset, isEmpty);
+    });
+
     test('§305 — masquePortsFor разделяет h3/h2', () {
       final pool = ScanPool.fromFullJson({
         'masque': {

@@ -13,6 +13,28 @@ void main() {
     expect(p.sniPool, isNotEmpty);
   });
 
+  test('§386 endpointsPreset: непуст, первый — рекомендуемый engage:2408',
+      () async {
+    final p = await WarpEndpointPicker.load();
+    expect(p.endpointsPreset, isNotEmpty);
+    expect(p.endpointsPreset.first, 'engage.cloudflareclient.com:2408');
+    // Каждый пункт — host:port (порт числовой).
+    for (final e in p.endpointsPreset) {
+      final i = e.lastIndexOf(':');
+      expect(i, greaterThan(0), reason: e);
+      expect(int.tryParse(e.substring(i + 1)), isNotNull, reason: e);
+    }
+  });
+
+  test('§386 masqueHostsPreset: голые IP из h3_v4_cidr (/32 без маски)',
+      () async {
+    final p = await WarpEndpointPicker.load();
+    expect(p.masqueHostsPreset, isNotEmpty);
+    for (final h in p.masqueHostsPreset) {
+      expect(h.contains('/'), isFalse, reason: h);
+    }
+  });
+
   test('§305 randomEndpoint: host:port, порт валиден, v4/v6-хост', () async {
     final p = await WarpEndpointPicker.load();
     // v4: a.b.c.d:port; v6: [....]:port (полный рандом по CIDR, не только .1-.10).

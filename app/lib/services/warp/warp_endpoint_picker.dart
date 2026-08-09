@@ -73,6 +73,22 @@ class WarpEndpointPicker {
 
   List<String> get sniPool => List.unmodifiable(_scan?.wgSniPool ?? const []);
 
+  /// §386 — пресеты `host:port` для combobox WG-endpoint (первый —
+  /// рекомендуемый). Пусто, если ключа нет в asset/override.
+  List<String> get endpointsPreset =>
+      List.unmodifiable(_scan?.wgEndpointsPreset ?? const []);
+
+  /// §386 — хосты для combobox MASQUE-IP: узкие h3-CIDR (`/32` → голый IP,
+  /// device-verified живые адреса). Не-/32 записи пропускаем (диапазон в
+  /// выпадающий список не превратить). Живы и для h2 (подмножество блоков).
+  List<String> get masqueHostsPreset {
+    final out = <String>[];
+    for (final cidr in _scan?.masqueH3V4Cidr ?? const <String>[]) {
+      if (cidr.endsWith('/32')) out.add(cidr.substring(0, cidr.length - 3));
+    }
+    return List.unmodifiable(out);
+  }
+
   /// §130 — случайный SNI из MASQUE-пула. '' если пуст.
   String randomMasqueSni() {
     final p = _scan?.masqueSniPool ?? const [];

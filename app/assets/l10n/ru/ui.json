@@ -2782,6 +2782,9 @@
   "Pick": {
     "value": "Выбор"
   },
+  "(recommended)": {
+    "value": "(рекомендуется)"
+  },
   "Pick another random IP:port": {
     "value": "Подставить другой случайный IP:port"
   },
