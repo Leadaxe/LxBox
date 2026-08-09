@@ -130,6 +130,25 @@ Flutter и Dart AOT, а `.so` из AAR (все три ABI) попадают в A
    (`unable to read tree`). Лечится обновлением ядра: пин обязан совпадать с тем,
    что в `go.mod` ядра, а тот — быть достижим обычным клоном.
 
+### Треды в MR закрывать явно
+
+Замечания рецензентов живут в **тредах**, а не в общей ленте. Ответить текстом
+мало — тред остаётся открытым, пока кто-то не нажмёт **Resolve**, и MR висит с
+`blocking_discussions_resolved: false`. Для мейнтейнера это читается как «автор
+ещё не ответил»: метка `waiting-for-upstream` не снимается, очередь проходит
+мимо. На этом потеряли полтора суток — все замечания были закрыты делом, но
+пять тредов висели неотмеченными.
+
+Смотреть не ленту `notes`, а `discussions`:
+
+```bash
+curl -sS --header "PRIVATE-TOKEN: $(cat ~/.gitlab-token)" \
+  "https://gitlab.com/api/v4/projects/36528/merge_requests/44731/discussions?per_page=100" \
+  | python3 -c "import sys,json; print(sum(1 for d in json.load(sys.stdin) for n in d['notes'] if n.get('resolvable') and not n.get('resolved')), 'неразрешённых')"
+```
+
+Закрыть: `PUT .../discussions/<id>?resolved=true`.
+
 ## Воспроизводимость
 
 Режим **включён**: `Binaries` (URL релизного APK, свой на каждый блок) и
