@@ -81,7 +81,7 @@ void main() {
       expect(pool.masqueSniPool, ['b']);
     });
 
-    test('§386 — endpoints_preset парсится; отсутствие ключа → пусто', () {
+    test('§386 — endpoints_preset + recommended-ключи; отсутствие → пусто', () {
       final pool = ScanPool.fromFullJson({
         'wireguard': {
           'v4_cidr': ['162.159.192.0/24'],
@@ -90,14 +90,23 @@ void main() {
             'engage.cloudflareclient.com:2408',
             '162.159.192.192:934',
           ],
+          'recommended_endpoint': 'engage.cloudflareclient.com:2408',
+        },
+        'masque': {
+          'v4_cidr': ['162.159.198.0/24'],
+          'hosts_preset': ['consumer-masque.cloudflareclient.com'],
+          'recommended_host': 'consumer-masque.cloudflareclient.com',
         },
       });
       expect(pool!.wgEndpointsPreset, [
         'engage.cloudflareclient.com:2408',
         '162.159.192.192:934',
       ]);
-      // Первый элемент — рекомендуемый (контракт UI-пометки).
-      expect(pool.wgEndpointsPreset.first, 'engage.cloudflareclient.com:2408');
+      expect(pool.wgRecommendedEndpoint, 'engage.cloudflareclient.com:2408');
+      expect(pool.masqueHostsPreset,
+          ['consumer-masque.cloudflareclient.com']);
+      expect(pool.masqueRecommendedHost,
+          'consumer-masque.cloudflareclient.com');
 
       final noKey = ScanPool.fromFullJson({
         'wireguard': {
@@ -106,6 +115,9 @@ void main() {
         },
       });
       expect(noKey!.wgEndpointsPreset, isEmpty);
+      expect(noKey.wgRecommendedEndpoint, isEmpty);
+      expect(noKey.masqueHostsPreset, isEmpty);
+      expect(noKey.masqueRecommendedHost, isEmpty);
     });
 
     test('§305 — masquePortsFor разделяет h3/h2', () {

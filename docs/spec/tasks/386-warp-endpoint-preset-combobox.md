@@ -18,16 +18,19 @@ casino). Задача — привести к нему два оставшихс
 | Поле | Было | Стало |
 |---|---|---|
 | WG Endpoint (Advanced) | `TextField` + кубик в suffixIcon (виден при обфускации) | `DropdownMenu` (пункты из `endpoints_preset`) + кубик `IconButton` рядом (по-прежнему только при обфускации) |
-| MASQUE Endpoint IP | `TextField` + кубик в suffixIcon | `DropdownMenu` (пункты из `masque.hosts_preset`, первый — домен `consumer-masque.cloudflareclient.com` (recommended); фолбэк без ключа — /32-хосты `h3_v4_cidr`) + кубик рядом |
+| MASQUE Endpoint IP | `TextField` + кубик в suffixIcon | `DropdownMenu` (пункты из `masque.hosts_preset`; фолбэк без ключа — /32-хосты `h3_v4_cidr`) + кубик рядом |
 | WG masquerade domain | `DropdownMenu` + кубик | без изменений (эталон) |
 | MASQUE SNI | `DropdownMenu` + кубик | без изменений (эталон) |
 
 ## Данные: `assets/warp_endpoints.json` → `wireguard.endpoints_preset`
 
-Новый ключ — список строк `host:port`. **Первый элемент — рекомендуемый**
-(`engage.cloudflareclient.com:2408`, официальный дефолт Cloudflare) и в UI
-помечается суффиксом ` (recommended)`. Дальше — официальный хост на остальных
-достоверных портах и представители IP-блоков.
+Новый ключ — список строк `host:port`: официальный хост на достоверных портах
+и представители IP-блоков. Порядок семантики НЕ несёт. Рекомендуемое значение —
+ЯВНЫЙ соседний ключ `recommended_endpoint` (`engage.cloudflareclient.com:2408`,
+официальный дефолт Cloudflare); UI помечает суффиксом ` (recommended)` пункт
+списка с этим значением, на любой позиции. Для MASQUE симметрично:
+`masque.hosts_preset` + `masque.recommended_host`
+(`consumer-masque.cloudflareclient.com`). Нет ключа → нет пометки.
 
 Парс: `ScanPool.wgEndpointsPreset` (обычный `strs`, отсутствие ключа в старом /
 пользовательском JSON-override → пустой список → combobox без пунктов, поведение
@@ -51,8 +54,10 @@ listener снимет флаг на собственном же авто-填е).
 - Лейблы полей — в одну строку, без пометок «(optional)»: `Endpoint IP`,
   `SNI`, `WARP+ license key` (ключ `Endpoint IP (optional)` переименован в
   словаре).
-- MASQUE-пресеты — отдельный ключ `masque.hosts_preset`, первым — **домен**
-  `consumer-masque.cloudflareclient.com` (recommended), не фиксированный IP.
+- MASQUE-пресеты — отдельный ключ `masque.hosts_preset`, рекомендуемый —
+  **домен** `consumer-masque.cloudflareclient.com`, не фиксированный IP.
+- Пометка "(recommended)" — НЕ магия первого элемента: рекомендуемое значение
+  задаётся явными ключами `recommended_endpoint` / `recommended_host` в asset.
 
 ## Не делаем
 

@@ -73,14 +73,20 @@ class WarpEndpointPicker {
 
   List<String> get sniPool => List.unmodifiable(_scan?.wgSniPool ?? const []);
 
-  /// §386 — пресеты `host:port` для combobox WG-endpoint (первый —
-  /// рекомендуемый). Пусто, если ключа нет в asset/override.
+  /// §386 — пресеты `host:port` для combobox WG-endpoint. Пусто, если ключа
+  /// нет в asset/override.
   List<String> get endpointsPreset =>
       List.unmodifiable(_scan?.wgEndpointsPreset ?? const []);
 
+  /// §386 — рекомендуемый WG-endpoint (ключ `recommended_endpoint` asset'а).
+  /// UI помечает совпадающий пункт списка. '' → пометки нет.
+  String get recommendedEndpoint => _scan?.wgRecommendedEndpoint ?? '';
+
+  /// §386 — рекомендуемый MASQUE-хост (ключ `recommended_host` asset'а).
+  String get recommendedMasqueHost => _scan?.masqueRecommendedHost ?? '';
+
   /// §386 — хосты для combobox MASQUE-endpoint. Приоритет — явный
-  /// `masque.hosts_preset` из asset (первый — рекомендуемый официальный домен
-  /// `consumer-masque.cloudflareclient.com`). Фолбэк для старого asset/override
+  /// `masque.hosts_preset` из asset. Фолбэк для старого asset/override
   /// без ключа — узкие h3-CIDR (`/32` → голый IP, device-verified живые
   /// адреса; не-/32 записи пропускаем). Живы и для h2 (подмножество блоков).
   List<String> get masqueHostsPreset {

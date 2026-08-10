@@ -201,6 +201,17 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     });
   }
 
+  /// §386 — пункт combobox-пресетов. Пометку "(recommended)" получает пункт,
+  /// чьё значение равно ЯВНОМУ recommended-ключу asset'а (recommended_endpoint /
+  /// recommended_host) — на любой позиции. Пустой [recommended] → без пометок.
+  DropdownMenuEntry<String> _presetEntry(String value, String recommended) =>
+      DropdownMenuEntry(
+        value: value,
+        label: value == recommended
+            ? '$value ${getLocalText.s("(recommended)")}'
+            : value,
+      );
+
   /// true если в поле endpoint — дефолт/пусто/наш авто-рандом (не вписан юзером
   /// вручную → можно перезаписать).
   bool get _endpointReplaceable {
@@ -553,15 +564,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                                 label: Text(getLocalText.s("Endpoint IP")),
                                 hintText: _masqueRegServer,
                                 dropdownMenuEntries: [
-                                  for (var i = 0;
-                                      i < _masqueHostsPreset.length;
-                                      i++)
-                                    DropdownMenuEntry(
-                                      value: _masqueHostsPreset[i],
-                                      label: i == 0
-                                          ? '${_masqueHostsPreset[i]} ${getLocalText.s("(recommended)")}'
-                                          : _masqueHostsPreset[i],
-                                    ),
+                                  for (final h in _masqueHostsPreset)
+                                    _presetEntry(h,
+                                        _picker?.recommendedMasqueHost ?? ''),
                                 ],
                               ),
                             ),
@@ -788,15 +793,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                                   menuHeight: 280,
                                   hintText: WarpAccount.defaultEndpoint,
                                   dropdownMenuEntries: [
-                                    for (var i = 0;
-                                        i < _endpointsPreset.length;
-                                        i++)
-                                      DropdownMenuEntry(
-                                        value: _endpointsPreset[i],
-                                        label: i == 0
-                                            ? '${_endpointsPreset[i]} ${getLocalText.s("(recommended)")}'
-                                            : _endpointsPreset[i],
-                                      ),
+                                    for (final e in _endpointsPreset)
+                                      _presetEntry(e,
+                                          _picker?.recommendedEndpoint ?? ''),
                                   ],
                                 ),
                               ),

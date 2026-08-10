@@ -13,11 +13,12 @@ void main() {
     expect(p.sniPool, isNotEmpty);
   });
 
-  test('§386 endpointsPreset: непуст, первый — рекомендуемый engage:2408',
+  test('§386 endpointsPreset: непуст, recommended — явный ключ и есть в списке',
       () async {
     final p = await WarpEndpointPicker.load();
     expect(p.endpointsPreset, isNotEmpty);
-    expect(p.endpointsPreset.first, 'engage.cloudflareclient.com:2408');
+    expect(p.recommendedEndpoint, 'engage.cloudflareclient.com:2408');
+    expect(p.endpointsPreset, contains(p.recommendedEndpoint));
     // Каждый пункт — host:port (порт числовой).
     for (final e in p.endpointsPreset) {
       final i = e.lastIndexOf(':');
@@ -26,12 +27,13 @@ void main() {
     }
   });
 
-  test('§386 masqueHostsPreset: первый — рекомендуемый домен, без масок',
+  test('§386 masqueHostsPreset: recommended — явный ключ (домен), без масок',
       () async {
     final p = await WarpEndpointPicker.load();
     expect(p.masqueHostsPreset, isNotEmpty);
     expect(
-        p.masqueHostsPreset.first, 'consumer-masque.cloudflareclient.com');
+        p.recommendedMasqueHost, 'consumer-masque.cloudflareclient.com');
+    expect(p.masqueHostsPreset, contains(p.recommendedMasqueHost));
     for (final h in p.masqueHostsPreset) {
       expect(h.contains('/'), isFalse, reason: h);
     }

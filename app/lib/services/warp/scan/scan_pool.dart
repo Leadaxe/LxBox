@@ -22,12 +22,14 @@ class ScanPool {
     required this.wgV4Cidr,
     required this.wgV6Cidr,
     this.wgEndpointsPreset = const [],
+    this.wgRecommendedEndpoint = '',
     required this.wgPorts,
     required this.wgPortsExtra,
     required this.wgSniPool,
     required this.utlsFpPool,
     this.wgKeepalive = 0,
     this.masqueHostsPreset = const [],
+    this.masqueRecommendedHost = '',
     required this.masqueV4Cidr,
     required this.masqueH3V4Cidr,
     required this.masquePortsH3,
@@ -39,11 +41,16 @@ class ScanPool {
   final List<String> wgV4Cidr;
   final List<String> wgV6Cidr;
 
-  /// §386 — готовые `host:port` для combobox endpoint в визарде. Первый элемент
-  /// — рекомендуемый (официальный `engage.cloudflareclient.com:2408`), UI
-  /// помечает его суффиксом. Пусто (старый asset / JSON-override без ключа) →
-  /// combobox без пунктов, только свободный ввод + кубик.
+  /// §386 — готовые `host:port` для combobox endpoint в визарде. Пусто (старый
+  /// asset / JSON-override без ключа) → combobox без пунктов, только свободный
+  /// ввод + кубик.
   final List<String> wgEndpointsPreset;
+
+  /// §386 — рекомендуемое значение из [wgEndpointsPreset] (официальный
+  /// `engage.cloudflareclient.com:2408`). ЯВНЫЙ ключ `recommended_endpoint` —
+  /// UI помечает суффиксом пункт с этим значением, на любой позиции; порядок
+  /// списка семантики не несёт. '' (нет ключа) → пометки нет.
+  final String wgRecommendedEndpoint;
 
   /// Cloudflare-достоверные WG-порты (2408/500/1701/4500). Приоритетны.
   final List<int> wgPorts;
@@ -69,11 +76,15 @@ class ScanPool {
 
   // --- MASQUE ---
 
-  /// §386 — готовые хосты для combobox MASQUE-endpoint в визарде. Первый —
-  /// рекомендуемый (официальный домен `consumer-masque.cloudflareclient.com`),
-  /// дальше device-verified IP. Пусто (старый asset/override) → UI собирает
+  /// §386 — готовые хосты для combobox MASQUE-endpoint в визарде (официальный
+  /// домен + device-verified IP). Пусто (старый asset/override) → UI собирает
   /// фолбэк из /32-записей [masqueH3V4Cidr].
   final List<String> masqueHostsPreset;
+
+  /// §386 — рекомендуемый хост из [masqueHostsPreset] (официальный домен
+  /// `consumer-masque.cloudflareclient.com`). ЯВНЫЙ ключ `recommended_host`,
+  /// семантика как у [wgRecommendedEndpoint].
+  final String masqueRecommendedHost;
 
   /// §305 — CIDR-блоки для h2 (h2 живёт по всему блоку). h3 их НЕ использует.
   final List<String> masqueV4Cidr;
@@ -137,12 +148,14 @@ class ScanPool {
       wgV4Cidr: strs(wg, 'v4_cidr'),
       wgV6Cidr: strs(wg, 'v6_cidr'),
       wgEndpointsPreset: strs(wg, 'endpoints_preset'),
+      wgRecommendedEndpoint: (wg['recommended_endpoint'] as String?) ?? '',
       wgPorts: ints(wg, 'ports'),
       wgPortsExtra: ints(wg, 'ports_extra'),
       wgSniPool: strs(wg, 'sni_pool'),
       utlsFpPool: strs(wg, 'utls_fp_pool'),
       wgKeepalive: intOr0(wg, 'keepalive'),
       masqueHostsPreset: strs(mq, 'hosts_preset'),
+      masqueRecommendedHost: (mq['recommended_host'] as String?) ?? '',
       masqueV4Cidr: strs(mq, 'v4_cidr'),
       masqueH3V4Cidr: strs(mq, 'h3_v4_cidr'),
       masquePortsH3: ints(mq, 'ports_h3'),

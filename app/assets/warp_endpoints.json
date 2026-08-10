@@ -10,6 +10,7 @@
       "2606:4700:d0::/64",
       "2606:4700:d1::/64"
     ],
+    "recommended_endpoint": "engage.cloudflareclient.com:2408",
     "endpoints_preset": [
       "engage.cloudflareclient.com:2408",
       "engage.cloudflareclient.com:500",
@@ -40,6 +41,7 @@
       "162.159.198.0/24",
       "162.159.199.0/24"
     ],
+    "recommended_host": "consumer-masque.cloudflareclient.com",
     "hosts_preset": [
       "consumer-masque.cloudflareclient.com",
       "162.159.198.1",
