@@ -1617,8 +1617,8 @@
   "Enabling this category lets other apps receive L×Box events.\n\nEvents do NOT contain subscription / config secrets — only labels (node tags, group names, status).": {
     "value": "Если включить эту категорию, другие приложения смогут получать события L×Box.\n\nСобытия НЕ содержат секретов подписок и конфига — только метки (теги узлов, имена групп, статус)."
   },
-  "Endpoint IP (optional)": {
-    "value": "Endpoint IP (необязательно)"
+  "Endpoint IP": {
+    "value": "Endpoint IP"
   },
   "Endpoint pool (JSON) — IP blocks, ports and SNI the generator draws from. Edit to test your own ranges.": {
     "value": "Пул эндпоинтов (JSON) — блоки IP, порты и SNI, из которых генератор берёт узлы. Правьте, чтобы протестировать свои диапазоны."

@@ -78,10 +78,14 @@ class WarpEndpointPicker {
   List<String> get endpointsPreset =>
       List.unmodifiable(_scan?.wgEndpointsPreset ?? const []);
 
-  /// §386 — хосты для combobox MASQUE-IP: узкие h3-CIDR (`/32` → голый IP,
-  /// device-verified живые адреса). Не-/32 записи пропускаем (диапазон в
-  /// выпадающий список не превратить). Живы и для h2 (подмножество блоков).
+  /// §386 — хосты для combobox MASQUE-endpoint. Приоритет — явный
+  /// `masque.hosts_preset` из asset (первый — рекомендуемый официальный домен
+  /// `consumer-masque.cloudflareclient.com`). Фолбэк для старого asset/override
+  /// без ключа — узкие h3-CIDR (`/32` → голый IP, device-verified живые
+  /// адреса; не-/32 записи пропускаем). Живы и для h2 (подмножество блоков).
   List<String> get masqueHostsPreset {
+    final preset = _scan?.masqueHostsPreset ?? const <String>[];
+    if (preset.isNotEmpty) return List.unmodifiable(preset);
     final out = <String>[];
     for (final cidr in _scan?.masqueH3V4Cidr ?? const <String>[]) {
       if (cidr.endsWith('/32')) out.add(cidr.substring(0, cidr.length - 3));

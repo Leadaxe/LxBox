@@ -27,6 +27,7 @@ class ScanPool {
     required this.wgSniPool,
     required this.utlsFpPool,
     this.wgKeepalive = 0,
+    this.masqueHostsPreset = const [],
     required this.masqueV4Cidr,
     required this.masqueH3V4Cidr,
     required this.masquePortsH3,
@@ -67,6 +68,12 @@ class ScanPool {
   final int wgKeepalive;
 
   // --- MASQUE ---
+
+  /// §386 — готовые хосты для combobox MASQUE-endpoint в визарде. Первый —
+  /// рекомендуемый (официальный домен `consumer-masque.cloudflareclient.com`),
+  /// дальше device-verified IP. Пусто (старый asset/override) → UI собирает
+  /// фолбэк из /32-записей [masqueH3V4Cidr].
+  final List<String> masqueHostsPreset;
 
   /// §305 — CIDR-блоки для h2 (h2 живёт по всему блоку). h3 их НЕ использует.
   final List<String> masqueV4Cidr;
@@ -135,6 +142,7 @@ class ScanPool {
       wgSniPool: strs(wg, 'sni_pool'),
       utlsFpPool: strs(wg, 'utls_fp_pool'),
       wgKeepalive: intOr0(wg, 'keepalive'),
+      masqueHostsPreset: strs(mq, 'hosts_preset'),
       masqueV4Cidr: strs(mq, 'v4_cidr'),
       masqueH3V4Cidr: strs(mq, 'h3_v4_cidr'),
       masquePortsH3: ints(mq, 'ports_h3'),

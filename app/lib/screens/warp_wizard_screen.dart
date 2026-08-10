@@ -550,11 +550,18 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                                 width: c.maxWidth,
                                 requestFocusOnTap: true,
                                 menuHeight: 280,
-                                label: Text(getLocalText.s("Endpoint IP (optional)")),
+                                label: Text(getLocalText.s("Endpoint IP")),
                                 hintText: _masqueRegServer,
                                 dropdownMenuEntries: [
-                                  for (final h in _masqueHostsPreset)
-                                    DropdownMenuEntry(value: h, label: h),
+                                  for (var i = 0;
+                                      i < _masqueHostsPreset.length;
+                                      i++)
+                                    DropdownMenuEntry(
+                                      value: _masqueHostsPreset[i],
+                                      label: i == 0
+                                          ? '${_masqueHostsPreset[i]} ${getLocalText.s("(recommended)")}'
+                                          : _masqueHostsPreset[i],
+                                    ),
                                 ],
                               ),
                             ),
@@ -602,7 +609,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                             ),
                       ),
                       const SizedBox(height: 12),
-                      _label('SNI (optional)'),
+                      _label('SNI'),
                       // combo-box: пункты из sni_pool + свободный ввод. Пусто →
                       // дефолт ядра (consumer-masque.cloudflareclient.com).
                       // Кубик подставляет случайный домен из пула.
@@ -750,7 +757,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _label('WARP+ license key (optional)'),
+                        _label('WARP+ license key'),
                         TextField(
                           controller: _license,
                           enabled: !_busy,

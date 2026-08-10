@@ -18,7 +18,7 @@ casino). Задача — привести к нему два оставшихс
 | Поле | Было | Стало |
 |---|---|---|
 | WG Endpoint (Advanced) | `TextField` + кубик в suffixIcon (виден при обфускации) | `DropdownMenu` (пункты из `endpoints_preset`) + кубик `IconButton` рядом (по-прежнему только при обфускации) |
-| MASQUE Endpoint IP | `TextField` + кубик в suffixIcon | `DropdownMenu` (пункты = h3-хосты из `h3_v4_cidr`, /32 → голый IP) + кубик рядом |
+| MASQUE Endpoint IP | `TextField` + кубик в suffixIcon | `DropdownMenu` (пункты из `masque.hosts_preset`, первый — домен `consumer-masque.cloudflareclient.com` (recommended); фолбэк без ключа — /32-хосты `h3_v4_cidr`) + кубик рядом |
 | WG masquerade domain | `DropdownMenu` + кубик | без изменений (эталон) |
 | MASQUE SNI | `DropdownMenu` + кубик | без изменений (эталон) |
 
@@ -45,6 +45,14 @@ listener снимет флаг на собственном же авто-填е).
 ## l10n
 
 Новая строка `"(recommended)"` → `assets/l10n/ru/ui.json`.
+
+## Правки по фидбэку
+
+- Лейблы полей — в одну строку, без пометок «(optional)»: `Endpoint IP`,
+  `SNI`, `WARP+ license key` (ключ `Endpoint IP (optional)` переименован в
+  словаре).
+- MASQUE-пресеты — отдельный ключ `masque.hosts_preset`, первым — **домен**
+  `consumer-masque.cloudflareclient.com` (recommended), не фиксированный IP.
 
 ## Не делаем
 

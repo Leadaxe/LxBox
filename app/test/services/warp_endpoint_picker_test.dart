@@ -26,10 +26,12 @@ void main() {
     }
   });
 
-  test('§386 masqueHostsPreset: голые IP из h3_v4_cidr (/32 без маски)',
+  test('§386 masqueHostsPreset: первый — рекомендуемый домен, без масок',
       () async {
     final p = await WarpEndpointPicker.load();
     expect(p.masqueHostsPreset, isNotEmpty);
+    expect(
+        p.masqueHostsPreset.first, 'consumer-masque.cloudflareclient.com');
     for (final h in p.masqueHostsPreset) {
       expect(h.contains('/'), isFalse, reason: h);
     }
