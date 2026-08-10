@@ -1,39 +1,72 @@
-L×Box is an Android VPN and proxy client built on sing-box-lx, a sing-box fork with AmneziaWG 2.0 and native XHTTP support. It manages multiple subscriptions, routes traffic by rules you control, and measures node latency without leaving the app.
+L×Box is a high-performance proxy client with no compromises.
 
-L×Box uses Android's VpnService to create a local tunnel interface, so traffic can be routed according to your own rules. It is a client only: you supply the servers. The app does not operate a server network and does not include any servers of its own.
+You choose the servers. You set the rules. You control the traffic. L×Box does exactly what you told it to.
 
-Everything runs on device. There is no account, no telemetry and no analytics: the app talks only to the servers you add and to the update endpoints you configure.
+12+ protocols, advanced routing, full DNS control, detour chains, per-app split tunneling and built-in diagnostics. No account, no ads, no analytics. No server network of our own.
 
-Servers and subscriptions
+THE CORE IS OURS
 
-* 12 protocols: VLESS (including ML-KEM-768 post-quantum encryption), VMess, Trojan, Shadowsocks, Hysteria2, TUIC v5, NaiveProxy, AnyTLS, SSH, SOCKS, WireGuard (including AmneziaWG 2.0) and MASQUE over QUIC/HTTP-3
-* Import by subscription URL, proxy link, WireGuard URI or INI, Amnezia vpn:// link, raw sing-box JSON, or a local file
-* Formats: Base64, Xray JSON array, plain text, raw sing-box JSON
-* Duplicate nodes across a subscription collapse into one entry
-* Individual nodes can be disabled; the choice is bound to a stable node hash and survives updates and provider-side renames
-* Processing rules rewrite or disable nodes on import and on every update, with a preview of what a rule will match before you save it
-* Background auto-update with rate limits, retry gates and per-subscription intervals
+L×Box runs on sing-box-lx, our own fork of sing-box, developed together with the app. On top of stock sing-box the core adds:
 
-Routing
+• AmneziaWG 2.0 — obfuscated WireGuard;
+• XHTTP — Xray transport, including stream-one;
+• VLESS + ML-KEM-768 — post-quantum protection;
+• MASQUE — Cloudflare WARP as a full node and a chain link.
 
-* Rule-based routing by domain, IP, port, protocol, process and network type
-* Per-app routing: choose which applications go through the tunnel
-* Rule sets with automatic updates
-* Full DNS control: multiple resolvers, DNS rules, FakeIP, per-rule resolver selection
-* Built-in configuration editor with syntax highlighting for anything the UI does not cover
+And it is tuned for real life on a phone:
 
-Diagnostics
+• DNS groups — several resolvers with failover;
+• smart urltest — pools, sticky selection, lazy health checks;
+• load balancing — connections spread across the pool;
+• self-healing of stuck connections;
+• idle tunnel sleep — less memory, less battery;
+• observability — DNS, connections and chains visible from the app.
 
-* Speed test and latency measurement for a single node, a folder or a whole subscription, with or without the tunnel running
-* Live connection list, per-connection traffic and per-app traffic breakdown
-* Traffic statistics and an in-app log viewer
+The core stays in sync with upstream; changes are verified on real devices.
 
-Cloudflare WARP
+12+ PROTOCOLS
 
-One tap registers a WARP tunnel and adds it as a node. The private key is generated on device and never leaves it; only the public key is sent to Cloudflare. WireGuard and MASQUE transports are both supported, with optional AmneziaWG obfuscation.
+VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC v5, NaiveProxy, AnyTLS, SSH, SOCKS, WireGuard, AmneziaWG 2.0, MASQUE over QUIC/HTTP-3.
 
-Interface
+Cloudflare WARP in one tap: registration right in the app, the private key is generated on your device and never leaves it — Cloudflare receives only the public half. WireGuard or MASQUE, optional AmneziaWG obfuscation.
 
-English and Russian, light and dark themes.
+Import any familiar format: subscriptions and links, Base64, Xray arrays, WireGuard URI/INI, Amnezia vpn://, sing-box JSON configs, local files, plain text.
 
-L×Box is free software under the GNU General Public License v3.
+SUBSCRIPTIONS WITHOUT MANUAL WORK
+
+Add a subscription — L×Box parses it and creates nodes with no duplicates. Unwanted nodes can be switched off and stay off through every update, even if the provider renames them.
+
+Processing rules with regex and capture groups rename, rewrite or disable nodes on every refresh — and show in advance which nodes a rule will hit.
+
+Coming from another sing-box client? Import the whole config — with auto-select groups and detour chains.
+
+ROUTING YOU ACTUALLY CONTROL
+
+Shape your internet exit around your life. One device can host several environments at once: work, travel, safe browsing and acceleration, the open internet. Each with its own rules and its own route.
+
+Conditions: domain, IP and CIDR, port, protocol, app, network type.
+
+DNS UNDER YOUR CONTROL
+
+Several resolvers at once. A separate DNS per rule. FakeIP. You decide where every query goes.
+
+FULL DIAGNOSTICS ON BOARD
+
+Ping and speed-test a node, a folder or the whole subscription — with the tunnel up or down. One-way connections get flagged. Full log right in the app. In real time the built-in tools show: which app opened a connection, where to, how much it transferred, which DNS it used, which route it took. Speed and traffic per app and per connection.
+
+AUTOMATION
+
+Works with automation tools (such as Tasker or MacroDroid): start, stop, switch node, query state. Your phone reshapes the setup to your scenarios — at home, on the road, when Wi-Fi changes.
+
+WE SEND YOUR DATA NOWHERE
+
+No account. No ads, no analytics, no advertising ID, no crash reporters. L×Box connects only to the servers and update endpoints you configured. Full backup and restore moves your setup to a new device.
+
+A CLIENT, NOT A VPN SERVICE
+
+L×Box provides no servers and sells no access to anyone's network — you choose your servers and subscriptions.
+
+OPEN SOURCE
+
+Free software under GPLv3. English and Russian UI, light and dark themes.
+GitHub: github.com/Leadaxe/LxBox
