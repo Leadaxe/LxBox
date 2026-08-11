@@ -109,6 +109,9 @@ class WarpEndpointPicker {
   List<String> get masqueSniPool =>
       List.unmodifiable(_scan?.masqueSniPool ?? const []);
 
+  /// Рекомендуемый MASQUE SNI (ключ `recommended_sni`) — пометка пункта в UI.
+  String get recommendedMasqueSni => _scan?.masqueRecommendedSni ?? '';
+
   /// §284 — весь пул (null если asset отсутствует/битый).
   ScanPool? get scan => _scan;
 

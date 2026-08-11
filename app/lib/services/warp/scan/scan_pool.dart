@@ -35,6 +35,7 @@ class ScanPool {
     required this.masquePortsH3,
     required this.masquePortsH2,
     required this.masqueSniPool,
+    this.masqueRecommendedSni = '',
   });
 
   // --- WireGuard / AWG ---
@@ -58,7 +59,10 @@ class ScanPool {
   /// Empirical-порты — ниже приоритетом (§132: длинный список зарублен голосованием).
   final List<int> wgPortsExtra;
 
-  /// SNI-приманки для AWG-обфускации (junk, НЕ cloudflare-домены).
+  /// SNI-приманки для AWG-обфускации (junk, НЕ cloudflare-домены). В отличие от
+  /// [masqueSniPool] родной домен сюда НЕ кладём: здесь SNI лежит внутри
+  /// junk-приманки (§136, реального TLS нет) и cloudflare-* на device-замере
+  /// резался. `recommended_sni` у WG-секции поэтому нет.
   final List<String> wgSniPool;
 
   final List<String> utlsFpPool;
@@ -101,7 +105,13 @@ class ScanPool {
   final List<int> masquePortsH2;
 
   /// SNI для MASQUE (МОЖЕТ содержать cloudflare-домены — трафик и так идёт в CF).
+  /// Включает родной `consumer-masque.cloudflareclient.com` — см. [wgSniPool]
+  /// про DPI по несовпадению SNI; он же дефолт ядра при пустом поле.
   final List<String> masqueSniPool;
+
+  /// Рекомендуемый SNI из [masqueSniPool] (ключ `recommended_sni`). Семантика
+  /// как у [wgRecommendedSni] — пометка в UI, без веса в переборе.
+  final String masqueRecommendedSni;
 
   /// Пул пригоден, если валиден хотя бы один транспорт. WG требует портов
   /// (иначе пробу не собрать); MASQUE использует свои masque-порты.
@@ -161,6 +171,7 @@ class ScanPool {
       masquePortsH3: ints(mq, 'ports_h3'),
       masquePortsH2: ints(mq, 'ports_h2'),
       masqueSniPool: strs(mq, 'sni_pool'),
+      masqueRecommendedSni: (mq['recommended_sni'] as String?) ?? '',
     );
     return pool.hasData ? pool : null;
   }

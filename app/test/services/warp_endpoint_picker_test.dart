@@ -114,6 +114,22 @@ void main() {
     expect(p.masqueSniPool, contains(s));
   });
 
+  test('masque recommended_sni: родной домен первым в пуле и помечен', () async {
+    final p = await WarpEndpointPicker.load();
+    // DPI умеет резать по НЕсовпадению SNI с IP-блоком (§143), поэтому родной
+    // домен — полноправный кандидат перебора (в т.ч. для кубика), а не «палево».
+    // Он же дефолт ядра при пустом поле SNI.
+    expect(p.recommendedMasqueSni, 'consumer-masque.cloudflareclient.com');
+    expect(p.masqueSniPool.first, p.recommendedMasqueSni);
+  });
+
+  test('WG-пул recommended_sni НЕ имеет (cloudflare-домены там режутся)',
+      () async {
+    final p = await WarpEndpointPicker.load();
+    // Асимметрия с MASQUE намеренна: §136 — SNI внутри junk-приманки, не TLS.
+    expect(p.sniPool, isNot(contains('engage.cloudflareclient.com')));
+  });
+
   test('§130 новые чистые домены в обоих пулах (jsdelivr/aws — не cloudflare)',
       () async {
     final p = await WarpEndpointPicker.load();

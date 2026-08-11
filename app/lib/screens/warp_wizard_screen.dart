@@ -616,8 +616,10 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       const SizedBox(height: 12),
                       _label('SNI'),
                       // combo-box: пункты из sni_pool + свободный ввод. Пусто →
-                      // дефолт ядра (consumer-masque.cloudflareclient.com).
-                      // Кубик подставляет случайный домен из пула.
+                      // дефолт ядра (consumer-masque.cloudflareclient.com); он
+                      // же ПЕРВЫМ пунктом пула и помечен recommended — DPI
+                      // умеет резать по несовпадению SNI с блоком (§143), так
+                      // что родной домен перебирается наравне, включая кубик.
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -632,7 +634,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                                 hintText: getLocalText.s("Leave empty for the default SNI"),
                                 dropdownMenuEntries: [
                                   for (final s in _masqueSniPool)
-                                    DropdownMenuEntry(value: s, label: s),
+                                    _presetEntry(s,
+                                        _picker?.recommendedMasqueSni ?? ''),
                                 ],
                               ),
                             ),
@@ -903,6 +906,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                           _label('Masquerade domain (id)'),
                           // combo-box (пункты из sni_pool + свободный ввод) +
                           // свой кубик: реролл случайного домена из пула.
+                          // Cloudflare-доменов тут НЕТ намеренно: SNI живёт
+                          // внутри junk-приманки (не TLS), и на замере они
+                          // резались — в отличие от MASQUE-пула, см. §136.
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
