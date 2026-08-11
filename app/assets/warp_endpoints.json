@@ -57,7 +57,9 @@
     ],
     "ports_h3": [443, 500, 1701, 4500, 4443, 8443, 8095],
     "ports_h2": [443, 500, 1701, 4500, 4443, 8443, 8095],
+    "recommended_sni": "consumer-masque.cloudflareclient.com",
     "sni_pool": [
+      "consumer-masque.cloudflareclient.com",
       "www.cloudflare.com", "cdn.jsdelivr.net", "aws.amazon.com",
       "www.google.com", "www.microsoft.com", "www.bing.com", "www.apple.com",
       "www.wikipedia.org", "yandex.ru", "telemost.yandex.ru", "ozon.ru",
