@@ -507,25 +507,30 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
             ),
           ),
           // §388 — bulk-действия по результатам теста (паритет с меню папки;
-          // Delete/Sort не переносятся — см. spec). Виден при завершённых
-          // результатах, как в `_buildControlBar` папки.
-          if (_probe.isNotEmpty && !_testing)
-            PopupMenuButton<String>(
-              tooltip: getLocalText.s("Test actions"),
-              icon: const Icon(Icons.more_vert, size: 20),
-              onSelected: (v) {
-                if (v == 'disable_slow') unawaited(_disableSlowerThan());
-                if (v == 'disable_dead') unawaited(_disableUnreachable());
-              },
-              itemBuilder: (menuCtx) => [
+          // Delete/Sort не переносятся — см. spec).
+          // §389 — кнопка на месте ВСЕГДА; без завершённого теста пункты серые
+          // и некликабельные (то же и в `_buildControlBar` папки).
+          PopupMenuButton<String>(
+            tooltip: getLocalText.s("Test actions"),
+            icon: const Icon(Icons.more_vert, size: 20),
+            onSelected: (v) {
+              if (v == 'disable_slow') unawaited(_disableSlowerThan());
+              if (v == 'disable_dead') unawaited(_disableUnreachable());
+            },
+            itemBuilder: (menuCtx) {
+              final ready = _probe.isNotEmpty && !_testing;
+              return [
                 PopupMenuItem(
                     value: 'disable_slow',
+                    enabled: ready,
                     child: Text(getLocalText.s("Disable slower than…"))),
                 PopupMenuItem(
                     value: 'disable_dead',
+                    enabled: ready,
                     child: Text(getLocalText.s("Disable unreachable"))),
-              ],
-            ),
+              ];
+            },
+          ),
         ],
       ),
     );
