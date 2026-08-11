@@ -479,6 +479,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     };
   }
 
+  /// §389 — есть хотя бы один ЗАВЕРШЁННЫЙ вердикт теста (гейт пунктов меню
+  /// «Test actions»; семантика и мотивация — как в подписке).
+  bool get _hasProbeVerdict =>
+      _probe.values.any((r) => r.status != ProbeStatus.pending &&
+          r.status != ProbeStatus.group);
+
   /// §284/§296 — индексы членов, не прошедших последний тест (общий хелпер).
   Set<int> _unreachableIndexes() =>
       ProbeController.unreachableIndexes(_probeByIndex());
@@ -1378,7 +1384,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               if (v == 'sort') unawaited(_sortByPing());
             },
             itemBuilder: (menuCtx) {
-              final ready = _probe.isNotEmpty && !_testing;
+              final ready = _hasProbeVerdict;
               return [
                 PopupMenuItem(
                     value: 'disable_slow',

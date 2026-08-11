@@ -340,6 +340,14 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     ];
   }
 
+  /// §389 — есть хотя бы один ЗАВЕРШЁННЫЙ вердикт теста. Гейт пунктов меню
+  /// «Test actions»: разблокируем, как только пришёл первый результат, не
+  /// дожидаясь конца прогона (`pending`/`group` вердиктами не считаются —
+  /// первый ещё не тестировался, второй не тестируется вовсе, §336).
+  bool get _hasProbeVerdict =>
+      _probe.values.any((r) => r.status != ProbeStatus.pending &&
+          r.status != ProbeStatus.group);
+
   /// §388 — у подписки есть usable ENABLE-правило фильтров: следующий refresh
   /// снимет ручные отметки §283 (§332 — правило источник истины), поэтому
   /// bulk-действия предупреждают перед простановкой.
@@ -488,10 +496,28 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
       info = getLocalText.s("Test servers");
     }
     final hasNodes = widget.entry.list.nodes.isNotEmpty;
+    // §391 — bulk вкл/выкл всех нод: только подписки с загруженными узлами
+    // (у UserServer тогглов нет, без узлов выключать нечего).
+    final canToggleAll =
+        widget.entry.list is SubscriptionServers && hasNodes;
+    // §391 — ВСЕ ноды выключены = переключатель выключен. Раньше иконка
+    // выбиралась по будущему действию (`offCount > 0 ? toggle_on : …`) и
+    // читалась как состояние — получалась противофаза с тогглами строк:
+    // все ноды включены → серый «выключено».
+    final allOff = hasNodes && _disabledNodes.length >= _togglableNodes.length;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 4, 0),
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
       child: Row(
         children: [
+          // §391 — переехал сюда из мета-блока (решение юзера): рядом с
+          // «Test servers», в одной строке с прочими действиями над списком.
+          if (canToggleAll)
+            Switch(
+              value: !allOff,
+              onChanged: (v) => unawaited(_toggleAllNodes(v)),
+            )
+          else
+            const SizedBox(width: 12),
           Expanded(
             child: Text(info, style: TextStyle(fontSize: 12, color: muted)),
           ),
@@ -518,7 +544,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
               if (v == 'disable_dead') unawaited(_disableUnreachable());
             },
             itemBuilder: (menuCtx) {
-              final ready = _probe.isNotEmpty && !_testing;
+              final ready = _hasProbeVerdict;
               return [
                 PopupMenuItem(
                     value: 'disable_slow',
@@ -707,12 +733,6 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                 entry: entry,
                 onOpenUrl: _openUrl,
                 offCount: _disabledNodes.length, // §283
-                // §332 — bulk вкл/выкл: только подписки с загруженными узлами
-                // (у UserServer тогглов нет, без узлов выключать нечего).
-                onToggleAll: entry.list is SubscriptionServers &&
-                        entry.list.nodes.isNotEmpty
-                    ? _toggleAllNodes
-                    : null,
               ),
               _buildProbeBar(theme), // §339 — Test servers
               const Divider(height: 1),

@@ -1450,9 +1450,6 @@
       "other": "Выключить %d сервера, не прошедших тест?"
     }
   },
-  "Disable all": {
-    "value": "Выключить все"
-  },
   "Disable battery restrictions": {
     "value": "Отключить ограничения батареи"
   },
@@ -1603,9 +1600,6 @@
   },
   "Enable FakeIP": {
     "value": "Включить FakeIP"
-  },
-  "Enable all": {
-    "value": "Включить все"
   },
   "Enable command receiver?": {
     "value": "Включить приём команд?"

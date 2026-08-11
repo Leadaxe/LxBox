@@ -16,19 +16,15 @@ class SubscriptionMeta extends StatelessWidget {
     required this.entry,
     required this.onOpenUrl,
     this.offCount = 0,
-    this.onToggleAll,
   });
 
   final SubscriptionEntry entry;
   final Future<void> Function(String) onOpenUrl;
 
   /// §283 — сколько нод выключено per-node toggle'ом («M off» в счётчике).
+  /// §391 — сам bulk-переключатель переехал в строку «Test servers»
+  /// (`_buildProbeBar`), здесь остался только счётчик.
   final int offCount;
-
-  /// §332 — bulk-переключатель: есть выключенные → кнопка «Enable all»
-  /// (вызов с true), иначе «Disable all» (вызов с false). `null` — кнопки
-  /// нет (не подписка или узлы ещё не загружены).
-  final void Function(bool enable)? onToggleAll;
 
   @override
   Widget build(BuildContext context) {
@@ -95,24 +91,6 @@ class SubscriptionMeta extends StatelessWidget {
                   style: theme.textTheme.bodySmall,
                 ),
               ),
-              // §332 — bulk-переключатель, только иконка (надпись съедала
-              // строку счётчиков). Адаптивный: есть выключенные → включить
-              // все, иначе выключить все. Диалога нет — действие обратимо
-              // той же кнопкой; смысл раскрывает tooltip.
-              if (onToggleAll != null)
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  iconSize: 18,
-                  tooltip: offCount > 0
-                      ? getLocalText.s("Enable all")
-                      : getLocalText.s("Disable all"),
-                  icon: Icon(
-                    offCount > 0 ? Icons.toggle_on : Icons.toggle_off_outlined,
-                  ),
-                  onPressed: () => onToggleAll!(offCount > 0),
-                ),
             ],
           ),
           // Traffic quota
