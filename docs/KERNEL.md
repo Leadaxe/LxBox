@@ -22,7 +22,29 @@ AmneziaWG 2.0 + нативный XHTTP + VLESS encryption (PQ-слой) + LxBox-
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.22`** (v2.20.6, см. `app/android/libbox.version`)
+**Текущий пин: `v1.14.0-lx.24-rc.2`** (v2.20.7, см. `app/android/libbox.version`)
+— догон upstream и смена тулчейна, кода lx-слоя не меняет. Ветка снова на
+вершине `upstream/testing` (база `v1.14.0-beta.9`): из 19 новых апстрим-коммитов
+заметное — DNS-кеши локального транспорта партиционируются по сигнатуре
+интерфейса (смена сети больше не отдаёт чужой кеш); WireGuard-хендшейк резолвит
+**все** адреса домен-пира и гонит их наперегонки (`SetEndpointResolver`);
+hijacked-DNS получил process info; фиксы reset network, FakeIP async-save,
+Android process finder, unbounded-аллокаций на злом SRS и OOM-стаба.
+Сборочный тулчейн — go1.26.5 вслед за апстримом (принцип SPEC 044). Форк-
+сабмодули перебазированы до ядра: sing-tun (SPEC 040 сверху), wireguard-go
+(AWG2 + SPEC 041 сверху; `SendHandshakeInitiation` = AWG-паддинг/junk +
+апстримный fan-out). Java-поверхность не изменилась — `classes.jar` побайтово
+равен lx.22 (одинаковый SHA256), `javap`-diff не требуется.
+
+Промежуточные `lx.23` / `lx.24-rc.1` — про демон `lxd` (десктоп, SPEC 056/057):
+на Android-сборку не влияют, поэтому пин прыгает с lx.22 сразу на lx.24-rc.2.
+
+⚠️ Это **rc, не stable**: release notes ядра требуют девайс-прогона (туннель,
+DNS, URL-тест, WG/AWG — несколько раз) до промоута lx.24 в stable — из-за
+пере-базы сабмодулей (runbook §1.4) и смены тулчейна (SPEC 044, профиль
+hy2/quic).
+
+Предыдущий пин — **`v1.14.0-lx.22`** (v2.20.6)
 — две правки. **SPEC 054**: `least_test` реагирует на отказы боевых дайлов —
 штраф за отказ класса «путь мёртв» (таймаут дайла, `EHOSTUNREACH` /
 `ENETUNREACH` / `ETIMEDOUT`), один запасной дайл через лучшего кандидата (кап
@@ -39,7 +61,7 @@ v26.7.11 по умолчанию требует минимальную верс�
 молча отдаёт камуфляжный сайт вместо отказа. Java-поверхность не изменилась —
 226 классов, `javap`-diff 0 строк.
 
-Предыдущий пин — **`v1.14.0-lx.21`** (v2.20.5)
+До него — **`v1.14.0-lx.21`** (v2.20.5)
 — SPEC 052: connect-дедлайн 15 с на netstack-дайлах (WG/AWG-эндпоинт и делящие
 его per-conn-дайлы MASQUE, openvpn, openconnect, tailscale). До него это был
 единственный класс путей дайла без таймаута: `C.TCPConnectTimeout` живёт только
@@ -362,7 +384,9 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.14** (стабильный) | SPEC 030 — Stop не виснет 10+ сек при многих WG/AWG-эндпоинтах (глушение тика + upfront-закрытие UDP-сокетов + abort in-flight wake + конкурентный close). Ядровая половина §287. База upstream `alpha.47`. Build-теги AAR без изменений. (Промежуточные lx.12/lx.13 — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.15** (стабильный) | SPEC 002 — XHTTP за reverse-proxy: `path` сохраняется как есть, trailing slash срезается только на bare-path запросе stream-one. + merge upstream `testing` (async DNS refactor, WG detour fix, OpenConnect auth-challenge). База upstream `alpha.48`. Build-теги AAR без изменений. Device-verified на CPH2411 (2026-07-21) |
-| **v1.14.0-lx.21** (текущий пин, v2.20.5) | SPEC 052 — connect-дедлайн `C.TCPTimeout` (15 с) на netstack-дайлах: WG/AWG-эндпоинт (`DialTCPWithBind`, его stackDevice делят per-conn-дайлы MASQUE) + openvpn/openconnect/tailscale через сабмодульный `gonet.DialTCPWithBind`. Раньше единственной границей был SYN-бэкофф gVisor (1+2+4+8+16+32+64 = ~127 с; ручка `TCPSynRetriesOption` в нашем пине gVisor мертва), для домена — ×N адресов через `DialSerial`. Симптом: тихая чёрная дыра (Wi-Fi зарезал UDP к узлу, заснувшее радио) = «всё висит без ошибки», группе не на что реагировать. 15 с, а не 5 — общий бюджет с health-check группы: дедлайн ниже пробного дал бы вилку «узел проходит пробы, но все пользовательские дайлы через него падают». Замер: 2м07с → 15.05с. Java-поверхность без изменений, клиентских правок нет |
+| **v1.14.0-lx.24-rc.2** (текущий пин, v2.20.7) | Догон upstream (19 коммитов на базе `v1.14.0-beta.9`) + тулчейн go1.26.5 вслед за апстримом (SPEC 044). Кода lx-слоя не меняет. Из апстрим-хвоста: DNS-кеши локального транспорта партиционируются по сигнатуре интерфейса; WG-хендшейк резолвит все адреса домен-пира и гонит наперегонки (`SetEndpointResolver`); hijacked-DNS с process info; фиксы reset network, FakeIP async-save, Android process finder, unbounded-аллокаций на злом SRS. Сабмодули перебазированы до ядра (sing-tun + SPEC 040, wireguard-go + AWG2/SPEC 041). Java-поверхность не изменилась — `classes.jar` побайтово равен lx.22. ⚠️ rc: release notes ядра требуют девайс-прогона (туннель/DNS/URL-тест/WG/AWG) до промоута lx.24 в stable. lx.23 и lx.24-rc.1 — про десктопный демон `lxd`, Android не затрагивают |
+| **v1.14.0-lx.22** (v2.20.6) | SPEC 054 — `least_test` реагирует на отказы боевых дайлов (штраф за «путь мёртв», запасной дайл через лучшего кандидата, аварийное ранжирование при 3 штрафах у лидера). SPEC 053 — REALITY объявляет `minClientVer` 26.3.27: Xray с v26.7.11 при несоответствии молча отдаёт камуфляжный сайт. Java-поверхность без изменений (226 классов, javap-diff 0 строк) |
+| **v1.14.0-lx.21** (v2.20.5) | SPEC 052 — connect-дедлайн `C.TCPTimeout` (15 с) на netstack-дайлах: WG/AWG-эндпоинт (`DialTCPWithBind`, его stackDevice делят per-conn-дайлы MASQUE) + openvpn/openconnect/tailscale через сабмодульный `gonet.DialTCPWithBind`. Раньше единственной границей был SYN-бэкофф gVisor (1+2+4+8+16+32+64 = ~127 с; ручка `TCPSynRetriesOption` в нашем пине gVisor мертва), для домена — ×N адресов через `DialSerial`. Симптом: тихая чёрная дыра (Wi-Fi зарезал UDP к узлу, заснувшее радио) = «всё висит без ошибки», группе не на что реагировать. 15 с, а не 5 — общий бюджет с health-check группы: дедлайн ниже пробного дал бы вилку «узел проходит пробы, но все пользовательские дайлы через него падают». Замер: 2м07с → 15.05с. Java-поверхность без изменений, клиентских правок нет |
 | **v1.14.0-lx.20** (стабильный, v2.20.5) | Промоут ветки `lx.20` в стабильную: содержательно равен rc.8, кода не меняет. Состав ветки (SPEC 047 краш при смене сети на старте, SPEC 048 краш на соединении с мёртвой нодой, SPEC 050 залипшие проверки нод, SPEC 051 закрытие отставания от upstream — 217 коммитов на базе `v1.14.0-beta.8`) — см. запись v2.20.4 в CHANGELOG |
 | **v1.14.0-lx.19-rc.3** (v2.19.2) | SPEC 045 — nil-паника при URL-тесте узлов trojan/vless с `tls.enabled:false` (тест пинга ронял ядро). Клиентских правок нет |
 | **v1.14.0-lx.19-rc.2** (в составе v2.19.2) | **SPEC 044** — AAR, собранный Go 1.24 (так делал CI), убивал ВСЕ quic-go-аутбаунды (hysteria2/tuic/masque-h3) на устройствах с вендорским ядром: каждый dial висел до `context deadline exceeded`, тест пинга вечно `-1`. Тот же исходник на Go 1.25 — работает. Фикс = смена тулчейна в CI ядра. Клиентская половина расследования — §341 (Debug API `/action/quic-knobs`). ⚠️ эмулятор с generic-ядром дефект НЕ воспроизводит |
