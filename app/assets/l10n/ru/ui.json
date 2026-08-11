@@ -1442,6 +1442,14 @@
   "Disable": {
     "value": "Выключить"
   },
+  "Disable %d servers that failed the test?": {
+    "value": {
+      "one": "Выключить %d сервер, не прошедший тест?",
+      "few": "Выключить %d сервера, не прошедших тест?",
+      "many": "Выключить %d серверов, не прошедших тест?",
+      "other": "Выключить %d сервера, не прошедших тест?"
+    }
+  },
   "Disable all": {
     "value": "Выключить все"
   },
@@ -1607,6 +1615,9 @@
   },
   "Enable it in Settings → Diagnostics to grow this list as you stay on Wi-Fi networks.": {
     "value": "Включите её в Настройки → Диагностика, чтобы список пополнялся, пока вы находитесь в сетях Wi-Fi."
+  },
+  "Enable rules in Filters will turn these nodes back on at the next update.": {
+    "value": "Enable-правила во вкладке Filters снова включат эти ноды при следующем обновлении."
   },
   "Enabled": {
     "value": "Включён"

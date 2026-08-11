@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
+import '../models/import_rule.dart'; // §388 — ImportRuleAction для варнинга
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/ui_msg.dart';
@@ -319,6 +320,143 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     return (ok: ok, dead: dead, broken: broken);
   }
 
+  /// §388 — проекция результатов на позиции top-level нод (граница
+  /// «ключ → индекс», паттерн `_probeByIndex` папки §326): bulk-решения
+  /// остаются чистыми index-хелперами `ProbeController`, их выход маппится
+  /// обратно в `NodeSpec` через [_nodesAtIndexes] для мутатора контроллера.
+  Map<int, ProbeResult> _probeByIndex() {
+    final nodes = ProbeController.probeNodesOf(widget.entry.list);
+    final keys = _nodeProbeKeys(nodes);
+    return {
+      for (var i = 0; i < keys.length; i++) i: ?_probe[keys[i]],
+    };
+  }
+
+  List<NodeSpec> _nodesAtIndexes(Set<int> indexes) {
+    final nodes = ProbeController.probeNodesOf(widget.entry.list);
+    return [
+      for (final i in indexes)
+        if (i < nodes.length && nodes[i] != null) nodes[i]!,
+    ];
+  }
+
+  /// §388 — у подписки есть usable ENABLE-правило фильтров: следующий refresh
+  /// снимет ручные отметки §283 (§332 — правило источник истины), поэтому
+  /// bulk-действия предупреждают перед простановкой.
+  bool get _hasEnableRules {
+    final list = widget.entry.list;
+    return list is SubscriptionServers &&
+        list.activeImportRules
+            .any((r) => r.action == ImportRuleAction.enable);
+  }
+
+  Future<void> _showProbeError(String err) async {
+    if (err.isEmpty || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+  }
+
+  /// §388 — выключить недоступные по последнему тесту (параллель
+  /// `_disableUnreachable` папки §284; вместо позиционного мутатора — отметки
+  /// §283). Без ENABLE-правил действие мгновенное, как в папке.
+  Future<void> _disableUnreachable() async {
+    final dead = ProbeController.unreachableIndexes(_probeByIndex());
+    if (dead.isEmpty) {
+      await _showProbeError(
+          getLocalText.s("No unreachable or broken servers in last test"));
+      return;
+    }
+    if (_hasEnableRules) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(getLocalText.s("Disable unreachable")),
+          content: Text([
+            getLocalText.plural(
+                "Disable %d servers that failed the test?", dead.length),
+            getLocalText.s(
+                "Enable rules in Filters will turn these nodes back on at the next update."),
+          ].join('\n\n')),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(getLocalText.s("Cancel"))),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(getLocalText.s("Disable")),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    final idx = widget.controller.entries.indexOf(widget.entry);
+    if (idx < 0) return;
+    await widget.controller
+        .setSubscriptionNodesEnabled(idx, _nodesAtIndexes(dead), enabled: false);
+    // Серые строки/каунтер перестроит listener entry (_onEntryChanged).
+  }
+
+  /// §388 — выключить медленнее порога (параллель `_disableSlowerThan` папки).
+  Future<void> _disableSlowerThan() async {
+    final ctl = TextEditingController(text: '${_probeThresholds.orangeMs}');
+    final ms = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(getLocalText.s("Disable slow servers")),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: ctl,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: getLocalText.s("Slower than, ms"),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            if (_hasEnableRules) ...[
+              const SizedBox(height: 12),
+              Text(
+                getLocalText.s(
+                    "Enable rules in Filters will turn these nodes back on at the next update."),
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(getLocalText.s("Cancel"))),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, int.tryParse(ctl.text.trim())),
+            child: Text(getLocalText.s("Disable")),
+          ),
+        ],
+      ),
+    );
+    ctl.dispose();
+    if (ms == null || !mounted) return;
+    final slow = ProbeController.slowerThan(_probeByIndex(), ms);
+    if (slow.isEmpty) {
+      await _showProbeError(
+          getLocalText.s("No tested servers slower than %d ms", ms));
+      return;
+    }
+    final idx = widget.controller.entries.indexOf(widget.entry);
+    if (idx < 0) return;
+    await widget.controller
+        .setSubscriptionNodesEnabled(idx, _nodesAtIndexes(slow), enabled: false);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(getLocalText.plural(
+              "Disabled %1\$d servers > %2\$d ms", slow.length, ms))),
+    );
+  }
+
   /// §339 — identity-map «нода → результат» для строк списка. Ключи считаны
   /// от top-level нод (`probeNodesOf`); chained-дети в map не попадают.
   Map<NodeSpec, ProbeResult> _probeByNode() {
@@ -368,6 +506,26 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
               ),
             ),
           ),
+          // §388 — bulk-действия по результатам теста (паритет с меню папки;
+          // Delete/Sort не переносятся — см. spec). Виден при завершённых
+          // результатах, как в `_buildControlBar` папки.
+          if (_probe.isNotEmpty && !_testing)
+            PopupMenuButton<String>(
+              tooltip: getLocalText.s("Test actions"),
+              icon: const Icon(Icons.more_vert, size: 20),
+              onSelected: (v) {
+                if (v == 'disable_slow') unawaited(_disableSlowerThan());
+                if (v == 'disable_dead') unawaited(_disableUnreachable());
+              },
+              itemBuilder: (menuCtx) => [
+                PopupMenuItem(
+                    value: 'disable_slow',
+                    child: Text(getLocalText.s("Disable slower than…"))),
+                PopupMenuItem(
+                    value: 'disable_dead',
+                    child: Text(getLocalText.s("Disable unreachable"))),
+              ],
+            ),
         ],
       ),
     );

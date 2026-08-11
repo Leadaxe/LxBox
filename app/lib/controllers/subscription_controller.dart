@@ -1400,6 +1400,32 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// §388 — вкл/выкл ПАЧКИ нод подписки (bulk-действия по результатам probe:
+  /// «Disable unreachable» / «Disable slower than…»). Отметки — та же карта
+  /// ручных §283 (identity-хеш, TTL + GC на успешном refresh); ENABLE-правила
+  /// фильтров при следующем refresh снимут их (§332 — правило источник
+  /// истины), экран предупреждает до действия.
+  Future<void> setSubscriptionNodesEnabled(int index, Iterable<NodeSpec> nodes,
+      {required bool enabled}) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final list = entry.list;
+    if (list is! SubscriptionServers) return;
+    final hashes = {for (final n in nodes) nodeIdentityHash(n)};
+    if (hashes.isEmpty) return;
+    final Map<String, DateTime> next;
+    if (enabled) {
+      next = Map<String, DateTime>.from(list.disabledHashes)
+        ..removeWhere((h, _) => hashes.contains(h));
+    } else {
+      final now = DateTime.now();
+      next = {...list.disabledHashes, for (final h in hashes) h: now};
+    }
+    entry._replaceList(list.copyWith(disabledHashes: next));
+    await _persist();
+    notifyListeners();
+  }
+
   /// Вкл/выкл одного члена папки.
   Future<void> toggleMemberAt(int index, int memberIndex) async {
     if (index < 0 || index >= _entries.length) return;
