@@ -87,14 +87,20 @@ adb exec-out screencap -p > shot.png
 | Три APK по ABI | три build-блока, у каждого свои `--target-platform` и `LXBOX_ABI_FILTER` |
 | Вырезана проверка JDK 17 | у них Debian trixie: JDK 21, пакета `openjdk-17` нет |
 | Вырезан legacy-вариант AAR | gomobile требует SDK platform под каждый вариант |
-| `--dart-define=LXBOX_DISTRIBUTION=fdroid` | §390 — уведомление о новой версии ведёт на `f-droid.org`, а не на GitHub: APK оттуда не встанет поверх (подписи разные). Флаг в **каждом** из трёх build-блоков |
+⚠ **§390: в рецепте НЕ должно быть `--dart-define=LXBOX_DISTRIBUTION`.**
 
-⚠ **Флаг `LXBOX_DISTRIBUTION` живёт в рецепте, а не в нашем репозитории.** Его
-правка — ручной MR в `fdroiddata` (автоподхват версии по тегу рецепт не
-меняет). При любом ручном редактировании метаданных проверить, что флаг на
-месте во всех трёх блоках: если потеряется, сборка не сломается — сработает
-рантайм-фолбэк по `installingPackageName` (`org.fdroid.fdroid` → тот же
-`fdroid`). То есть потеря флага тихая, ловится только глазами.
+Соблазн понятен — явно сказать сборке, что она F-Droid'овская. Но блоки несут
+`binary:` (сверка байтов с APK из GitHub Releases), а это и есть reproducible
+builds: F-Droid раздаёт приложение под **нашей** подписью вместо своей. Любой
+`--dart-define` попадает в скомпилированный Dart-код: GitHub-APK собран без
+флага, F-Droid-APK был бы с флагом — байты разойдутся и сверка упадёт.
+
+Поэтому канал у APK определяется **рантаймом** по `installingPackageName`:
+установка из клиента F-Droid → `org.fdroid.fdroid` → `fdroid`, sideload с
+GitHub → `null`/браузер → `github`. Обе ветки верны, флаг не нужен.
+
+Define остаётся только у AAB (Google Play): Play раздаёт отдельный артефакт,
+с ним `binary:` не сверяется.
 
 Обе правки ядра делает один `sed` по `cmd/internal/build_libbox/main.go`.
 

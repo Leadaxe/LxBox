@@ -358,18 +358,23 @@ jobs:
             local CODE
             CODE=$(../scripts/version-code.sh "$CODE_VERSION" "$VARIANT")
             echo "::group::Build $VARIANT (versionCode=$CODE)"
-            # §390 — канал установки зашивается в сборку: APK отсюда уходят в
-            # GitHub Releases, и обновляться им можно только оттуда же (у Play
-            # и F-Droid свои подписи, APK поверх них не встанет).
+            # §390 — БЕЗ `--dart-define=LXBOX_DISTRIBUTION`, намеренно.
+            # F-Droid собирает APK из этих же исходников и сверяет байты со
+            # своей сборкой (`binary:` в рецепте) — это даёт reproducible
+            # builds и подпись НАШИМ ключом вместо F-Droid'овского. Любой
+            # define попадает в скомпилированный Dart и ломает сверку.
+            # Поэтому канал у APK определяется рантаймом по установщику:
+            # GitHub-установка (файловый менеджер/браузер/adb) → github,
+            # установка из клиента F-Droid → fdroid. Обе ветки верны.
+            # Define остаётся только у AAB — Play раздаёт свой артефакт, с
+            # ним `binary:` не сверяется.
             if [ -n "$ABI_FILTER" ]; then
               LXBOX_ABI_FILTER="$ABI_FILTER" \
                 flutter build apk --release \
                   --target-platform "$PLATFORM" \
-                  --dart-define=LXBOX_DISTRIBUTION=github \
                   --build-name "$VERSION_NAME" --build-number "$CODE"
             else
               flutter build apk --release \
-                --dart-define=LXBOX_DISTRIBUTION=github \
                 --build-name "$VERSION_NAME" --build-number "$CODE"
             fi
             mv "$OUT/app-release.apk" "$OUT/app-${VARIANT}-release.apk"

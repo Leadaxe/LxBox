@@ -44,7 +44,13 @@ flutter run   # устройство или эмулятор Android
 
 | Флаг | Значения | Кто ставит | Зачем |
 |---|---|---|---|
-| `LXBOX_DISTRIBUTION` | `github` \| `play` \| `fdroid` | CI (github/play), рецепт fdroiddata (fdroid) | §390 — канал установки: куда вести юзера за новой версией. У каждого канала своя подпись, APK с GitHub не встанет поверх Play/F-Droid-сборки. Не задан → рантайм-фолбэк по `installingPackageName`, дефолт `github` |
+| `LXBOX_DISTRIBUTION` | `github` \| `play` \| `fdroid` | **только AAB-шаг CI** (`=play`) | §390 — канал установки: куда вести юзера за новой версией. У каждого канала своя подпись, APK с GitHub не встанет поверх Play/F-Droid-сборки. Не задан → рантайм-фолбэк по `installingPackageName`, дефолт `github` |
+
+⚠ **У APK флаг НЕ задаётся** — ни в CI, ни в рецепте F-Droid. F-Droid сверяет
+байты своей сборки с APK из GitHub Releases (`binary:` в рецепте — reproducible
+builds, подпись остаётся нашей), а любой `--dart-define` попадает в
+скомпилированный Dart и ломает сверку. Канал у APK определяется рантаймом по
+установщику. Подробнее — [`FDROID.md`](FDROID.md).
 | `LXBOX_SUPPORT_URL` | URL | вручную при отладке | §356 — подменить ленту поддержки на тестовую |
 | `DONATE_URL` | URL | вручную | источник `docs/donate.json` |
 
