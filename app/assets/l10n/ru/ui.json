@@ -4383,5 +4383,44 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
+  },
+  "Check": {
+    "value": "Проверка"
+  },
+  "Endpoint": {
+    "value": "Адрес"
+  },
+  "Request is sent through this node": {
+    "value": "Запрос уходит через этот узел"
+  },
+  "Run": {
+    "value": "Запустить"
+  },
+  "Running…": {
+    "value": "Выполняется…"
+  },
+  "Response": {
+    "value": "Ответ"
+  },
+  "Response was longer and got cut off.": {
+    "value": "Ответ был длиннее и обрезан."
+  },
+  "(empty response)": {
+    "value": "(пустой ответ)"
+  },
+  "Connected to %s from inside the tunnel": {
+    "value": "Соединение изнутри туннеля — с %s"
+  },
+  "Through this node in the running core — not through your current route": {
+    "value": "Через этот узел в работающем ядре — не через ваш текущий маршрут"
+  },
+  "Through this node in a temporary core session": {
+    "value": "Через этот узел во временной сессии ядра"
+  },
+  "This is an auto-select node — it has no connection of its own. Open a member to diagnose it.": {
+    "value": "Это узел автовыбора — своего соединения у него нет. Откройте участника, чтобы проверить его."
+  },
+  "Start the VPN to check this node from here, or open it from its subscription to check it with the VPN off.": {
+    "value": "Включите VPN, чтобы проверить узел отсюда, или откройте его из подписки — там проверка работает и с выключенным VPN."
   }
 }

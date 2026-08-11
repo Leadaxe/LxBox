@@ -96,6 +96,32 @@ object ProbeSession : CommandServerHandler {
         }
     }
 
+    /// §392 — диагностический HTTP GET через узел probe-сессии (kernel SPEC
+    /// 058). Тело ответа возвращается как есть; парсинг — сторона Dart.
+    ///
+    /// Провал обмена приезжает исключением (libbox-обёртка мапит payload-error
+    /// в Go-error), не-2xx — обычный результат со статусом. Форма Map зеркалит
+    /// [BoxCommandClient.getUrlViaOutbound]: у Dart один разбор на обе ветки.
+    fun getUrl(tag: String, link: String, timeoutMs: Int, maxBytes: Int): Map<String, Any> {
+        val cl = client.get()
+            ?: return mapOf("error" to "probe session not running")
+        return runCatching {
+            val r = cl.getURLViaOutbound(tag, link, timeoutMs, maxBytes, null)
+            // Геттеры без `get`-префикса — см. BoxCommandClient.getUrlViaOutbound.
+            mapOf(
+                "status" to r.status(),
+                "content" to r.content(),
+                "truncated" to r.truncated(),
+                "contentType" to r.contentType(),
+                "remoteAddr" to r.remoteAddr(),
+                "elapsedMs" to r.elapsedMs(),
+                "error" to "",
+            )
+        }.getOrElse {
+            mapOf("error" to (it.message ?: "getURLViaOutbound failed"))
+        }
+    }
+
     @Synchronized
     fun stop() = stopInternal()
 

@@ -24,7 +24,12 @@ class SubscriptionNodeList extends StatelessWidget {
     this.onToggleNode,
     this.probe = const {},
     this.probeThresholds = ProbeThresholds.defaults,
+    this.tagPrefix = '',
   });
+
+  /// §392 — префикс тегов контейнера, нужен экрану разбора: диагностика при
+  /// включённом VPN адресует узел его display-тегом из боевого конфига.
+  final String tagPrefix;
 
   final List<NodeSpec>? nodes;
   final bool loading;
@@ -197,7 +202,7 @@ class SubscriptionNodeList extends StatelessWidget {
           // выключение узла живёт на Switch слева, так что тап по строке
           // свободен. Долгий тап — меню (копирование, diff замен).
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => NodeInspectScreen(node: node),
+            builder: (_) => NodeInspectScreen(node: node, tagPrefix: tagPrefix),
           )),
           onLongPress: () => _showNodeMenu(context, node),
         );
@@ -255,7 +260,7 @@ class SubscriptionNodeList extends StatelessWidget {
               onTap: () {
                 Navigator.pop(ctx);
                 Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => NodeInspectScreen(node: node),
+                  builder: (_) => NodeInspectScreen(node: node, tagPrefix: tagPrefix),
                 ));
               },
             ),

@@ -13,6 +13,7 @@ import '../models/server_list.dart';
 import '../models/template_vars.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/emoji_picker_button.dart';
+import '../widgets/node_diagnostics_tab.dart';
 import '../services/l10n/locale_controller.dart';
 
 /// Настройки одиночного сервера (UserServer) ИЛИ члена папки (§237). Две
@@ -61,6 +62,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   // detour как «⚙ <label>».
   List<Channel> _channels = const [];
 
+  /// §392 — разобранный узел для вкладки Diagnostics (probe-ветка собирает
+  /// из него временный конфиг).
+  NodeSpec? _node;
+
   @override
   void initState() {
     super.initState();
@@ -100,6 +105,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
       if (nodes.isEmpty) return;
       node = nodes.first;
     }
+
+    _node = node; // §392 — источник probe-ветки диагностики
 
     // §130 — AWG-детект: WireguardSpec с непустыми obfuscation-полями.
     _isAwg = node is WireguardSpec && node.awg != null;
@@ -264,7 +271,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Text(_tagCtrl.text.isNotEmpty
@@ -282,6 +289,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
               Tab(text: getLocalText.s("Settings")),
               // l10n-exempt: format name, locale-invariant
               const Tab(text: 'JSON'),
+              Tab(text: getLocalText.s("Diagnostics")),
             ],
           ),
         ),
@@ -291,6 +299,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                 children: [
                   _buildSettingsTab(theme),
                   _buildJsonTab(theme),
+                  // §392 — узел распарсен: доступны обе ветки (probe при
+                  // выключенном VPN, боевое ядро при включённом).
+                  NodeDiagnosticsTab(
+                    node: _node,
+                    liveTag: TagResolver.displayTag(
+                        widget.entry.list.tagPrefix, _originalTag),
+                  ),
                 ],
               ),
       ),

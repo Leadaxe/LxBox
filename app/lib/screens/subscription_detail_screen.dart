@@ -762,6 +762,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                       entry.list is SubscriptionServers ? _toggleNode : null,
                   probe: _probeByNode(), // §339
                   probeThresholds: _probeThresholds,
+                  // §392 — экран разбора адресует узел display-тегом, когда
+                  // диагностика идёт через боевое ядро.
+                  tagPrefix: entry.tagPrefix,
                 ),
               ),
             ],
