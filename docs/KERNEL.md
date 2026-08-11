@@ -22,7 +22,42 @@ AmneziaWG 2.0 + нативный XHTTP + VLESS encryption (PQ-слой) + LxBox-
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.25-rc.1`** (см. `app/android/libbox.version`)
+**Текущий пин: `v1.14.0-lx.25-rc.3`** (см. `app/android/libbox.version`)
+— две правки поверх rc.1, обе про TLS-плечо под `detour`.
+
+**SPEC 060: `record_fragment` включается сам, когда outbound диалит через
+`detour`.** Симптом — цепочка вида `MASQUE detour VLESS` висела ~15 секунд и
+падала с `tls handshake: EOF`, по которому причину не восстановить. Причина не в
+ядре и не в SNI: нижнее плечо пересылает наш ClientHello от своего имени, и если
+PMTU за этим плечом меньше размера ClientHello, пакет теряется молча — ICMP
+«fragmentation needed» до клиента не доходит. Порог по размеру чистый (1488 B
+проходит, 1502 B исчезает) и принадлежит пути за плечом, а не протоколу: на
+других узлах те же байты идут насквозь. Воспроизводится голым `curl` без
+sing-box. Механизм в ядре был (`fragment` / `record_fragment`) — не хватало
+умолчания. Точка врезки одна — `NewClientWithOptions`, до выбора движка, поэтому
+STD, uTLS и REALITY получают одинаковый дефолт.
+
+⚠️ Дефолт меняет поведение **любого** outbound с `detour`, не только
+MASQUE-цепочек. Явный выбор пользователя всегда сильнее; `fragment: true` не
+апгрейдится добавлением record-split. Цена ограничена хендшейком — переписывается
+только первая TLS-запись, установившийся поток не трогается. Прямой путь (без
+`detour`) не затронут.
+
+**SPEC 021: MASQUE h2 переехал на общий `common/tls`.** Раньше это был
+единственный outbound мимо общего слоя: на h2 он вёл TLS голым
+`crypto/tls.Client` ради pinning'а по ECDSA-ключу endpoint'а — и вместе с этим
+не получал из общего слоя ничего (включая новый дефолт SPEC 060). Теперь h2
+ходит через общий клиент, pinning перенесён поверх него. h3 не тронут: QUIC не
+несёт TLS поверх TCP.
+
+Java-поверхность **не изменилась** — `classes.jar` побайтово равен rc.1
+(одинаковый SHA256), `javap`-diff не требуется, клиентских правок нет.
+
+⚠️ Это **rc**: девайс-прогон строить по detour-конфигам вообще, а не вокруг
+одной цепочки; отдельно проверить, что явный `fragment: true` не апгрейдится.
+Плюс не закрыт хвост rc.1 (ниже).
+
+Предыдущий пин — **`v1.14.0-lx.25-rc.1`** (см. историю)
 — **SPEC 058: `GetURLViaOutbound`** — диагностический HTTP GET через узел,
 адресуемый тегом, с возвратом ТЕЛА ответа. Закрывает класс вопросов, на которые
 `URLTestOutbound` не отвечает: не «жив ли узел», а «что видно через него»
@@ -46,7 +81,7 @@ exit-IP узла (тот несёт тело); `ElapsedMs` в историю url
 ⚠️ Это **rc**: полевая проверка с девайса (`cdn-cgi/trace` через WG-endpoint и
 через vless-outbound; HTTPS без кастомных корней) в критериях ядра не закрыта.
 
-Предыдущий пин — **`v1.14.0-lx.24-rc.2`** (v2.20.7)
+До него — **`v1.14.0-lx.24-rc.2`** (v2.20.7)
 — догон upstream и смена тулчейна, кода lx-слоя не меняет. Ветка снова на
 вершине `upstream/testing` (база `v1.14.0-beta.9`): из 19 новых апстрим-коммитов
 заметное — DNS-кеши локального транспорта партиционируются по сигнатуре
@@ -408,7 +443,8 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.14** (стабильный) | SPEC 030 — Stop не виснет 10+ сек при многих WG/AWG-эндпоинтах (глушение тика + upfront-закрытие UDP-сокетов + abort in-flight wake + конкурентный close). Ядровая половина §287. База upstream `alpha.47`. Build-теги AAR без изменений. (Промежуточные lx.12/lx.13 — см. `docs-lx/lx-changelog.md` в ядре) |
 | **v1.14.0-lx.15** (стабильный) | SPEC 002 — XHTTP за reverse-proxy: `path` сохраняется как есть, trailing slash срезается только на bare-path запросе stream-one. + merge upstream `testing` (async DNS refactor, WG detour fix, OpenConnect auth-challenge). База upstream `alpha.48`. Build-теги AAR без изменений. Device-verified на CPH2411 (2026-07-21) |
-| **v1.14.0-lx.25-rc.1** (текущий пин) | SPEC 058 — `GetURLViaOutbound`: диагностический HTTP GET через узел по тегу с возвратом ТЕЛА ответа (exit-IP/гео/`warp=`), активный selector не переключается. Потребитель — §392 (вкладка Diagnostics). Java-поверхность **изменилась**: `+GetURLResult`, `+HTTPHeaders`, `CommandClient.getURLViaOutbound`. ⚠️ ГРАБЛЯ: геттеры `GetURLResult` **без `get`-префикса** (`content()`, `status()`, `elapsedMs()`) — gomobile снимает префикс, когда Go-поле не начинается с `Get`. Только GET; `maxBytes` 0 → 256 KiB (потолок 1 MiB, обрезка = `Truncated`); не-2xx — результат, а не ошибка; `RemoteAddr` — адрес изнутри туннеля, не exit-IP; `ElapsedMs` не пишется в историю urltest. ⚠️ rc: полевая проверка с девайса в критериях ядра не закрыта |
+| **v1.14.0-lx.25-rc.3** (текущий пин) | SPEC 060 — `record_fragment` включается сам, когда outbound диалит через `detour`. Симптом: `MASQUE detour VLESS` висел ~15 с и падал с `tls handshake: EOF`. Причина — нижнее плечо шлёт наш ClientHello от своего имени, и при PMTU за плечом меньше размера ClientHello пакет теряется молча (ICMP «fragmentation needed» до клиента не доходит). Порог чистый по размеру (1488 B проходит, 1502 B нет), принадлежит пути, а не протоколу; воспроизводится голым `curl`. Точка врезки одна — `NewClientWithOptions` до выбора движка, поэтому STD/uTLS/REALITY получают одинаковый дефолт. ⚠️ Меняет поведение ЛЮБОГО outbound с `detour`, не только MASQUE. Явный выбор пользователя сильнее, `fragment: true` не апгрейдится; переписывается только первая TLS-запись; прямой путь не затронут. SPEC 021 — MASQUE h2 переехал на общий `common/tls` (был единственным outbound мимо общего слоя: голый `crypto/tls.Client` ради pinning'а по ECDSA-ключу endpoint'а), pinning перенесён поверх общего клиента; h3 не тронут. Java-поверхность не изменилась — `classes.jar` побайтово равен rc.1, `javap`-diff не требуется. ⚠️ rc: девайс-прогон по detour-конфигам вообще + проверка, что явный `fragment: true` не апгрейдится |
+| **v1.14.0-lx.25-rc.1** | SPEC 058 — `GetURLViaOutbound`: диагностический HTTP GET через узел по тегу с возвратом ТЕЛА ответа (exit-IP/гео/`warp=`), активный selector не переключается. Потребитель — §392 (вкладка Diagnostics). Java-поверхность **изменилась**: `+GetURLResult`, `+HTTPHeaders`, `CommandClient.getURLViaOutbound`. ⚠️ ГРАБЛЯ: геттеры `GetURLResult` **без `get`-префикса** (`content()`, `status()`, `elapsedMs()`) — gomobile снимает префикс, когда Go-поле не начинается с `Get`. Только GET; `maxBytes` 0 → 256 KiB (потолок 1 MiB, обрезка = `Truncated`); не-2xx — результат, а не ошибка; `RemoteAddr` — адрес изнутри туннеля, не exit-IP; `ElapsedMs` не пишется в историю urltest. ⚠️ rc: полевая проверка с девайса в критериях ядра не закрыта |
 | **v1.14.0-lx.24-rc.2** (v2.20.7) | Догон upstream (19 коммитов на базе `v1.14.0-beta.9`) + тулчейн go1.26.5 вслед за апстримом (SPEC 044). Кода lx-слоя не меняет. Из апстрим-хвоста: DNS-кеши локального транспорта партиционируются по сигнатуре интерфейса; WG-хендшейк резолвит все адреса домен-пира и гонит наперегонки (`SetEndpointResolver`); hijacked-DNS с process info; фиксы reset network, FakeIP async-save, Android process finder, unbounded-аллокаций на злом SRS. Сабмодули перебазированы до ядра (sing-tun + SPEC 040, wireguard-go + AWG2/SPEC 041). Java-поверхность не изменилась — `classes.jar` побайтово равен lx.22. ⚠️ rc: release notes ядра требуют девайс-прогона (туннель/DNS/URL-тест/WG/AWG) до промоута lx.24 в stable. lx.23 и lx.24-rc.1 — про десктопный демон `lxd`, Android не затрагивают |
 | **v1.14.0-lx.22** (v2.20.6) | SPEC 054 — `least_test` реагирует на отказы боевых дайлов (штраф за «путь мёртв», запасной дайл через лучшего кандидата, аварийное ранжирование при 3 штрафах у лидера). SPEC 053 — REALITY объявляет `minClientVer` 26.3.27: Xray с v26.7.11 при несоответствии молча отдаёт камуфляжный сайт. Java-поверхность без изменений (226 классов, javap-diff 0 строк) |
 | **v1.14.0-lx.21** (v2.20.5) | SPEC 052 — connect-дедлайн `C.TCPTimeout` (15 с) на netstack-дайлах: WG/AWG-эндпоинт (`DialTCPWithBind`, его stackDevice делят per-conn-дайлы MASQUE) + openvpn/openconnect/tailscale через сабмодульный `gonet.DialTCPWithBind`. Раньше единственной границей был SYN-бэкофф gVisor (1+2+4+8+16+32+64 = ~127 с; ручка `TCPSynRetriesOption` в нашем пине gVisor мертва), для домена — ×N адресов через `DialSerial`. Симптом: тихая чёрная дыра (Wi-Fi зарезал UDP к узлу, заснувшее радио) = «всё висит без ошибки», группе не на что реагировать. 15 с, а не 5 — общий бюджет с health-check группы: дедлайн ниже пробного дал бы вилку «узел проходит пробы, но все пользовательские дайлы через него падают». Замер: 2м07с → 15.05с. Java-поверхность без изменений, клиентских правок нет |
