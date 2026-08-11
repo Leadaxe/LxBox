@@ -14,6 +14,7 @@ import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/event_emitter.dart';
 import 'services/clash_log_pump.dart';
 import 'services/crash_banner_state.dart';
+import 'services/install_source.dart';
 import 'services/oom_reports.dart';
 import 'services/stderr_reader.dart';
 import 'services/subscription/subscription_identity.dart';
@@ -61,6 +62,10 @@ void main() async {
     // UpdateChecker (см. §066). Раньше версия дублировалась hardcoded const'ом
     // в AboutScreen — поднимать вручную легко забыть (произошло на v1.8.0).
     await VersionInfo.I.init();
+    // §390 — канал установки (GitHub / Play / F-Droid). До runApp: от него
+    // зависит адрес «где взять новую версию», а снек об апдейте показывается
+    // на первом кадре. Резолв дешёвый — dart-define, иначе один native-вызов.
+    await InstallSourceResolver.init();
     // §118 — идентичность фетча подписок (UA override + HWID + device-meta).
     // После VersionInfo (UA дефолт зависит от версии), до runApp — `_fetch`
     // читает значения синхронно.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/donate_methods.dart';
+import '../services/install_source.dart';
 import '../services/project_links.dart';
 import '../services/relative_time.dart';
 import '../services/update_checker.dart';
@@ -85,6 +86,16 @@ class AboutScreen extends StatelessWidget {
                   // l10n-exempt: version literal, no translatable words
                   'v${VersionInfo.I.version}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                // §390 — канал установки. Полезен в багрепортах: от него
+                // зависят и подпись APK, и адрес обновления.
+                Text(
+                  getLocalText.s(
+                      "Installed from %s", InstallSourceResolver.current.label),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
                 ),
@@ -411,11 +422,21 @@ class _UpdateBlockState extends State<_UpdateBlock> {
                   const SizedBox(height: 4),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () => ul.UrlLauncher.open(info.htmlUrl),
-                      icon: const Icon(Icons.open_in_new, size: 16),
-                      label: Text(getLocalText.s("View release")),
-                    ),
+                    child: Builder(builder: (context) {
+                      // §390 — ведём в СВОЙ канал: APK с GitHub не встанет
+                      // поверх Play/F-Droid-сборки (разные подписи).
+                      final source = InstallSourceResolver.current;
+                      return TextButton.icon(
+                        onPressed: () => ul.UrlLauncher.open(
+                          source.updateUrl(info.tag),
+                          fallbackUrl: source.updateUrlFallback,
+                        ),
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        label: Text(source == InstallSource.github
+                            ? getLocalText.s("View release")
+                            : getLocalText.s("Open in %s", source.label)),
+                      );
+                    }),
                   ),
                 ],
                 if (_statusLine != null) ...[

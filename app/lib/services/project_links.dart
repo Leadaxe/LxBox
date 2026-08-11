@@ -1,4 +1,5 @@
 import '../services/l10n/locale_controller.dart';
+import 'platform_channels.dart';
 import 'version_info.dart';
 
 /// §362 — единственный источник ссылок проекта. До этого адреса лежали
@@ -45,6 +46,19 @@ class ProjectLinks {
 
   static String releaseTag(String tag) =>
       'https://github.com/Leadaxe/LxBox/releases/tag/$tag';
+
+  /// §390 — страницы приложения в сторах. Куда вести за обновлением, решает
+  /// канал установки (`InstallSource.updateUrl`): APK с GitHub не встанет
+  /// поверх Play-сборки, подписи разные.
+  ///
+  /// `market://` открывает клиент Play напрямую. Если Play на устройстве нет —
+  /// intent не резолвится, native `openUrl` падает на [playPageWeb].
+  static const playPage =
+      'market://details?id=${PlatformChannels.packageName}';
+  static const playPageWeb =
+      'https://play.google.com/store/apps/details?id=${PlatformChannels.packageName}';
+  static const fdroidPage =
+      'https://f-droid.org/packages/${PlatformChannels.packageName}/';
 
   /// Плейсхолдеры remote-контента. Значения резолвятся В МОМЕНТ показа:
   /// `@guideLink` зависит от текущей локали, `@appVersion` — от версии APK.

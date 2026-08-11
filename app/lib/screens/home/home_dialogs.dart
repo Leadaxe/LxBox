@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/home_controller.dart';
 import '../../models/home_state.dart';
+import '../../services/install_source.dart';
 import '../../services/settings_storage.dart';
 import '../../services/update_checker.dart';
 import '../../services/url_launcher.dart' as ul;
@@ -100,9 +101,30 @@ Future<void> showLocationPermissionDialog(
   await WifiPermissionDialog.show(context, missing: missing);
 }
 
-/// §036 — SnackBar «новая версия доступна». Возвращает рано если юзер уже
-/// dismiss'нул эту версию. [onShown] вызывается ровно когда SnackBar реально
-/// показывается (State использует это чтобы выставить `_updateSnackbarShown`).
+/// §036 + §390 — SnackBar «новая версия доступна».
+///
+/// Показывается **только на старте** приложения, из кеша (`hydrate`), не чаще
+/// одного раза за запуск. Сетевой чек снек не поднимает: его результат ляжет в
+/// `last_known_version` и всплывёт на СЛЕДУЮЩЕМ запуске. Так уведомление
+/// никогда не выскакивает поверх работающего приложения.
+///
+/// Три способа увести снек:
+///
+/// | Действие | Персист | Вернётся |
+/// |---|---|---|
+/// | клик по телу | нет | при следующем запуске (+ переход в стор) |
+/// | «Later» | нет | при следующем запуске |
+/// | «Ignore» | `dismissed_update_version` | только для следующей версии |
+///
+/// «Later» персиста не требует: показ и так один за запуск — за это отвечает
+/// `_updateSnackbarShown` в `State`.
+///
+/// Куда ведёт переход, решает канал установки (§390): APK с GitHub не встанет
+/// поверх Play-сборки, подписи разные.
+///
+/// Возвращает рано, если юзер нажал «Ignore» для этой версии. [onShown]
+/// вызывается ровно когда SnackBar реально показывается (State использует это
+/// чтобы выставить `_updateSnackbarShown`).
 Future<void> maybeShowUpdateSnackbar(
   BuildContext context,
   UpdateInfo info, {
@@ -112,38 +134,95 @@ Future<void> maybeShowUpdateSnackbar(
   if (dismissed == info.tag) return;
   if (!context.mounted) return;
   onShown();
+  final source = InstallSourceResolver.current;
   final messenger = ScaffoldMessenger.of(context);
   messenger.clearSnackBars();
   messenger.showSnackBar(
     SnackBar(
-      duration: const Duration(seconds: 12),
-      content: Row(
-        children: [
-          Expanded(
-            child: Text(
-              getLocalText.s("L×Box %1\$s available (you have v%2\$s)", info.tag, VersionInfo.I.version),
-            ),
-          ),
-          // §090 G1 — «Later» persist'ит dismissed-версию → этот релиз больше
-          // не всплывёт (read-guard выше + в UpdateChecker.hydrate/maybeCheck);
-          // следующий (бОльший tag) всё равно покажется через isNewer.
-          TextButton(
-            onPressed: () {
-              messenger.hideCurrentSnackBar();
-              unawaited(UpdateChecker.I.dismissCurrent());
-            },
-            child: Text(getLocalText.s("Later")),
-          ),
-        ],
-      ),
-      action: SnackBarAction(
-        label: getLocalText.s("View"),
-        onPressed: () async {
-          await ul.UrlLauncher.open(info.htmlUrl);
+      duration: const Duration(seconds: 6),
+      behavior: SnackBarBehavior.floating,
+      content: _UpdateSnackContent(
+        info: info,
+        // Тап по телу = «Later» + переход в свой стор. Персиста нет
+        // сознательно: юзер пошёл обновляться, но мог и передумать —
+        // напомним при следующем запуске.
+        onTapBody: () {
+          messenger.hideCurrentSnackBar();
+          unawaited(ul.UrlLauncher.open(
+            source.updateUrl(info.tag),
+            fallbackUrl: source.updateUrlFallback,
+          ));
+        },
+        onLater: () => messenger.hideCurrentSnackBar(),
+        // §090 G1 — «Ignore» persist'ит dismissed-версию → этот релиз больше
+        // не всплывёт (read-guard выше + в UpdateChecker.hydrate/maybeCheck);
+        // следующий (бОльший tag) всё равно покажется через isNewer.
+        onIgnore: () {
+          messenger.hideCurrentSnackBar();
+          unawaited(UpdateChecker.I.dismissCurrent());
         },
       ),
     ),
   );
+}
+
+/// Тело update-снека: кликабельный текст + две кнопки.
+///
+/// Раскладка адаптивная — на узких экранах (360dp и меньше) текст и две кнопки
+/// в один ряд не помещаются, кнопки уезжают под текст. Порог 320dp подобран по
+/// ширине пары кнопок с локализованными подписями.
+class _UpdateSnackContent extends StatelessWidget {
+  const _UpdateSnackContent({
+    required this.info,
+    required this.onTapBody,
+    required this.onLater,
+    required this.onIgnore,
+  });
+
+  final UpdateInfo info;
+  final VoidCallback onTapBody;
+  final VoidCallback onLater;
+  final VoidCallback onIgnore;
+
+  @override
+  Widget build(BuildContext context) {
+    // Кнопки идут ПОСЛЕ тела в дереве — тап по ним не утекает в onTapBody.
+    final buttons = [
+      TextButton(onPressed: onLater, child: Text(getLocalText.s("Later"))),
+      TextButton(onPressed: onIgnore, child: Text(getLocalText.s("Ignore"))),
+    ];
+    // InkWell, а не GestureDetector: SnackBar рендерит content внутри
+    // собственного Material, и жест из GestureDetector проигрывает
+    // конкуренцию его ink-слою (тап уходит в _RenderInkFeatures). InkWell
+    // встраивается в тот же слой + даёт визуальный отклик на тап.
+    final text = InkWell(
+      onTap: onTapBody,
+      child: SizedBox(
+        // Явная ширина: Text занимает место по контенту, и без этого
+        // кликабельна была бы только строка глифов, а не вся область.
+        width: double.infinity,
+        child: Text(
+          getLocalText.s("L×Box %1\$s available (you have v%2\$s)", info.tag,
+              VersionInfo.I.version),
+        ),
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 320) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              text,
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: buttons),
+            ],
+          );
+        }
+        return Row(children: [Expanded(child: text), ...buttons]);
+      },
+    );
+  }
 }
 
 /// On Android 13+ (API 33+) `POST_NOTIFICATIONS` is a runtime permission.

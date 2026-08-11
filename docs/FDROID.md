@@ -87,6 +87,14 @@ adb exec-out screencap -p > shot.png
 | Три APK по ABI | три build-блока, у каждого свои `--target-platform` и `LXBOX_ABI_FILTER` |
 | Вырезана проверка JDK 17 | у них Debian trixie: JDK 21, пакета `openjdk-17` нет |
 | Вырезан legacy-вариант AAR | gomobile требует SDK platform под каждый вариант |
+| `--dart-define=LXBOX_DISTRIBUTION=fdroid` | §390 — уведомление о новой версии ведёт на `f-droid.org`, а не на GitHub: APK оттуда не встанет поверх (подписи разные). Флаг в **каждом** из трёх build-блоков |
+
+⚠ **Флаг `LXBOX_DISTRIBUTION` живёт в рецепте, а не в нашем репозитории.** Его
+правка — ручной MR в `fdroiddata` (автоподхват версии по тегу рецепт не
+меняет). При любом ручном редактировании метаданных проверить, что флаг на
+месте во всех трёх блоках: если потеряется, сборка не сломается — сработает
+рантайм-фолбэк по `installingPackageName` (`org.fdroid.fdroid` → тот же
+`fdroid`). То есть потеря флага тихая, ловится только глазами.
 
 Обе правки ядра делает один `sed` по `cmd/internal/build_libbox/main.go`.
 

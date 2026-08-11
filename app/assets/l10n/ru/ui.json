@@ -2030,6 +2030,9 @@
   "Idle timeout suspends the tunnel after inactivity to save battery (default 5 min). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults.": {
     "value": "Тайм-аут простоя приостанавливает туннель при неактивности ради экономии батареи (по умолчанию 5 мин). Keep-alive пингует QUIC-соединение (по умолчанию 30 сек, только HTTP/3). Оставьте поля пустыми для значений по умолчанию."
   },
+  "Ignore": {
+    "value": "Не напоминать"
+  },
   "Ignore the cached account and register a fresh one.": {
     "value": "Игнорировать сохранённый аккаунт и зарегистрировать новый."
   },
@@ -2108,6 +2111,9 @@
   },
   "Insert emoji": {
     "value": "Вставить эмодзи"
+  },
+  "Installed from %s": {
+    "value": "Установлено из %s"
   },
   "Inspect node": {
     "value": "Разобрать узел"
@@ -2686,6 +2692,9 @@
   },
   "Open Settings": {
     "value": "Открыть настройки"
+  },
+  "Open in %s": {
+    "value": "Открыть в %s"
   },
   "Open settings": {
     "value": "Открыть настройки"
