@@ -511,10 +511,21 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         children: [
           // §391 — переехал сюда из мета-блока (решение юзера): рядом с
           // «Test servers», в одной строке с прочими действиями над списком.
+          // Компактный (как прежняя иконка 18px, а не полноразмерный тоггл
+          // строки): `Transform.scale` вместо кастомного виджета — Switch
+          // остаётся настоящим (фаза, семантика, accessibility целы), сжат
+          // только рендер. `shrinkWrap`-таргет убирает 48dp-паддинг Material.
           if (canToggleAll)
-            Switch(
-              value: !allOff,
-              onChanged: (v) => unawaited(_toggleAllNodes(v)),
+            SizedBox(
+              width: 40,
+              child: Transform.scale(
+                scale: 0.7,
+                child: Switch(
+                  value: !allOff,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onChanged: (v) => unawaited(_toggleAllNodes(v)),
+                ),
+              ),
             )
           else
             const SizedBox(width: 12),
