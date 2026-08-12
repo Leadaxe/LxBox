@@ -3,14 +3,19 @@
 Mass actions on test results are now available on subscriptions, not just
 folders: after a run you can switch off everything that failed, or everything
 slower than a threshold you name, instead of tapping through hundreds of
-toggles. The core moves to a build that catches up with upstream. And an app
-that hung on "Connected" after a failed start no longer does.
+toggles. A Diagnostics tab now shows what the world actually sees through a
+node — exit IP, geo, `warp=` — without switching to it and cutting your live
+connections. The core fixes chains through a `detour` that used to die on a
+silent MTU wall. And an app that hung on "Connected" after a failed start no
+longer does.
 
 Массовые действия по результатам теста появились и на подписке — раньше они
 были только у папки. После прогона можно выключить всё, что не ответило, или
 всё, что медленнее заданного порога, вместо перещёлкивания сотен тумблеров.
-Ядро переезжает на сборку, догнавшую upstream. И приложение больше не залипает
-в «Подключено» после неудачного старта.
+Вкладка Diagnostics показывает, что на самом деле видно через узел — exit-IP,
+гео, `warp=` — не переключаясь на него и не обрывая живые соединения. Ядро
+чинит цепочки «через detour», которые раньше умирали о молчаливую стену MTU.
+И приложение больше не залипает в «Подключено» после неудачного старта.
 
 <details open>
 <summary><h2>🇬🇧 English</h2></summary>
@@ -39,6 +44,24 @@ the 🎲 button only ever gave a random value — nobody remembers working
 addresses by hand. The WG Endpoint and MASQUE Endpoint IP fields are now
 comboboxes: type freely, or pick from the known values, with the dice still
 next to them.
+
+**A Diagnostics tab: what the world sees through this node.** Node diagnostics
+stopped at a single number — the ping answers "alive, N ms" and throws the
+response body away. A whole class of complaints needs the body instead: "ping
+works but sites don't open", "the node is up but the geo is wrong", "WARP is
+connected yet `warp=off`". Checking that meant switching to the node and
+opening a browser — diagnosis at the price of cutting live connections.
+
+The core now offers `GetURLViaOutbound`: a GET through a node addressed by tag,
+returning the body, without touching the active selector. The tab is one shared
+widget across all three node-detail screens, with a dropdown of predefined
+checkers (`cdn-cgi/trace` by IP and by host, ip2location, ipinfo), a button,
+and the raw response in a field. The body is deliberately *not* parsed — if a
+third-party service changes its format, the tab keeps working. (§392)
+
+**The recommended MASQUE SNI is marked in the wizard.** `consumer-masque` now
+leads the SNI pool and carries an explicit "recommended" mark, so the value
+that actually works is the one you land on rather than a lucky guess.
 
 ## 🔧 Changed
 
@@ -77,40 +100,69 @@ the plain https form is used instead.
 
 ## 🔌 Core
 
-Core pin: `v1.14.0-lx.22` → `v1.14.0-lx.24-rc.2`. The release catches the
-branch up with upstream (19 new commits on base `v1.14.0-beta.9`) and moves the
-build toolchain to Go 1.26.5, following upstream; it changes no fork code.
+Core pin: `v1.14.0-lx.22` → `v1.14.0-lx.25-rc.3`, three steps in one release.
 
-From the upstream tail: DNS caches of the local transport are partitioned by
-interface signature, so a network change no longer serves a cache belonging to
-the other network; the WireGuard handshake resolves *all* addresses of a domain
-peer and races them; hijacked DNS gained process info; fixes landed for network
-reset, FakeIP async save, the Android process finder, and unbounded allocations
-on a hostile rule set.
+**Chains through a `detour` no longer fail silently (SPEC 060).** A chain like
+`MASQUE detour VLESS` would hang for about fifteen seconds and die with
+`tls handshake: EOF`, an error you cannot work backwards from. The cause is
+neither the core nor the SNI: the lower leg forwards our ClientHello under its
+own name, and if the PMTU beyond that leg is smaller than the ClientHello, the
+packet is dropped in silence — the ICMP "fragmentation needed" never reaches
+the client. Measurements on live nodes give a clean size threshold: 1488 B
+passes, 1502 B vanishes, and the threshold belongs to the path beyond the leg
+rather than to the protocol — on other nodes the very same bytes go straight
+through. It reproduces with plain `curl`, no sing-box involved.
 
-The AAR's Java surface is unchanged — `classes.jar` is byte-for-byte identical
-to the previous pin — so the bump required no client-side changes.
+The cure is fragmenting the first TLS record, and the mechanism was already in
+the core (`fragment` / `record_fragment`) — what was missing was a default.
+`record_fragment` now switches itself on when an outbound dials through a
+`detour`. Note this affects *any* outbound with a `detour`, not just MASQUE
+chains. An explicit choice always wins, and `fragment: true` is not upgraded by
+adding a record split. The cost is bounded to the handshake: only the first
+record is rewritten, an established stream is untouched. Direct paths, without
+a `detour`, are unaffected.
+
+**MASQUE over h2 moved onto the shared TLS layer (SPEC 021).** It was the last
+outbound bypassing `common/tls`: on h2 it ran TLS through a bare
+`crypto/tls.Client` for the sake of pinning the endpoint's ECDSA key, and in
+exchange got nothing from the shared layer. Pinning now sits on top of the
+shared client. h3 is untouched — QUIC does not carry TLS over TCP.
+
+The step before that (`lx.24-rc.2`) caught the branch up with upstream — 19
+commits on base `v1.14.0-beta.9` — and moved the toolchain to Go 1.26.5. From
+that tail: DNS caches of the local transport are partitioned by interface
+signature, so a network change no longer serves a cache belonging to the other
+network; the WireGuard handshake resolves *all* addresses of a domain peer and
+races them; hijacked DNS gained process info; fixes landed for network reset,
+FakeIP async save, the Android process finder, and unbounded allocations on a
+hostile rule set.
+
+Then `lx.25-rc.1` added `GetURLViaOutbound`, the core half of the Diagnostics
+tab above.
 
 ## 📦 Version
 
 `v1.14.0-lx.23` and `v1.14.0-lx.24-rc.1` concern the desktop `lxd` daemon and
 do not affect the Android build, which is why the pin jumps straight from
-lx.22 to lx.24-rc.2.
+lx.22 to lx.24-rc.2 and on to the lx.25 line.
+
+The AAR's Java surface did change once along the way: `lx.25-rc.1` added
+`GetURLResult`, `HTTPHeaders` and `CommandClient.getURLViaOutbound`, which the
+Diagnostics tab consumes. Between rc.1 and rc.3 `classes.jar` is byte-for-byte
+identical, so the final bump required no client-side changes.
 
 ## 🧪 Tests
 
-`flutter analyze` over the whole project and the full suite (2980 tests) are
-green, as are the four l10n checkers. The release APK was installed and run on
-an emulator: the core starts, the tunnel comes up, DNS resolves through it,
-node latency tests return, and the stop path tears everything down cleanly with
-no crashes.
+`flutter analyze` over the whole project and the full suite (3002 tests) are
+green, as are the four l10n checkers. The release APK was built, installed and
+run on a physical device as well as an emulator: the core starts, the tunnel
+comes up, DNS resolves through it, node latency tests return, and the stop path
+tears everything down cleanly with no crashes.
 
-This core is a release candidate, and its own notes ask for a run on real
-hardware — tunnel, DNS, URL test, WG/AWG, several times over — before the
-branch is promoted to stable, because submodules were rebased and the toolchain
-changed. That run is on physical devices, not the emulator. The app-side
-changes in this release (§386–§391) were verified by unit tests and have not
-had a device pass either.
+The core is still labelled a release candidate upstream in the fork, so the
+lx.25 line is not yet promoted to stable there. The new `record_fragment`
+default is the change to watch: it alters behaviour for every outbound that
+dials through a `detour`, not only the MASQUE chains it was written for.
 
 </details>
 
@@ -140,6 +192,24 @@ had a device pass either.
 кубик 🎲 давал только случайное значение — рабочие адреса руками никто не
 помнит. Поля WG Endpoint и MASQUE Endpoint IP стали комбобоксами: свободный
 ввод либо выбор из известных значений, кубик по-прежнему рядом.
+
+**Вкладка Diagnostics — что видно через узел.** Диагностика узла упиралась в
+одно число: пинг отвечает «жив, N мс» и выбрасывает тело ответа. Жалобы другого
+класса требуют как раз содержимого: «пинг есть, а сайты не открываются», «узел
+работает, но гео чужая», «WARP подключён, а `warp=off`». Проверить это можно
+было только переключившись на узел и открыв браузер — диагностика ценой обрыва
+живых соединений.
+
+Ядро дало `GetURLViaOutbound`: GET через узел по тегу с возвратом тела, при
+этом активный selector не трогается. Вкладка — общий виджет на всех трёх
+экранах деталей узла: выпадающий список предопределённых чекеров (`cdn-cgi/trace`
+по IP и по хосту, ip2location, ipinfo), кнопка и сырой ответ в поле. Тело
+намеренно **не** парсится: смена формата чужого сервиса вкладку не ломает.
+(§392)
+
+**Рекомендованный MASQUE SNI помечен в визарде.** `consumer-masque` теперь идёт
+в пуле SNI первым и несёт явную пометку «рекомендуется» — попадаешь на рабочее
+значение, а не угадываешь.
 
 ## 🔧 Изменено
 
@@ -177,36 +247,67 @@ had a device pass either.
 
 ## 🔌 Ядро
 
-Пин ядра: `v1.14.0-lx.22` → `v1.14.0-lx.24-rc.2`. Выпуск догоняет ветку до
-upstream (19 новых коммитов на базе `v1.14.0-beta.9`) и переводит сборочный
-тулчейн на Go 1.26.5 вслед за апстримом; кода форка он не меняет.
+Пин ядра: `v1.14.0-lx.22` → `v1.14.0-lx.25-rc.3`, три шага за один релиз.
 
-Из апстрим-хвоста: DNS-кеши локального транспорта партиционируются по сигнатуре
-интерфейса — смена сети больше не отдаёт кеш, принадлежащий другой сети;
-WireGuard-хендшейк резолвит **все** адреса домен-пира и гонит их наперегонки;
-hijacked-DNS получил process info; исправлены reset network, FakeIP async-save,
-Android process finder и неограниченные аллокации на злом наборе правил.
+**Цепочки «через detour» перестали молча не подниматься (SPEC 060).** Связка
+вида `MASQUE detour VLESS` висела около пятнадцати секунд и падала с
+`tls handshake: EOF` — по такой ошибке причину не восстановить. Дело не в ядре
+и не в SNI: нижнее плечо пересылает наш ClientHello от своего имени, и если
+PMTU за этим плечом меньше размера ClientHello, пакет теряется молча — ICMP
+«fragmentation needed» до клиента не доходит. Замер на живых узлах даёт чистый
+порог по размеру: 1488 B проходит, 1502 B исчезает, и порог принадлежит пути за
+плечом, а не протоколу — на других узлах те же самые байты идут насквозь.
+Воспроизводится голым `curl`, без sing-box.
 
-Java-поверхность AAR не изменилась — `classes.jar` побайтово совпадает с
-предыдущим пином, — поэтому бамп не потребовал клиентских правок.
+Лечится фрагментацией первой TLS-записи, и механизм в ядре уже был
+(`fragment` / `record_fragment`) — не хватало умолчания. Теперь
+`record_fragment` включается сам, когда outbound диалит через `detour`.
+Обратите внимание: это задевает **любой** outbound с `detour`, не только
+MASQUE-цепочки. Явный выбор пользователя всегда сильнее, а `fragment: true` не
+апгрейдится добавлением record-split. Цена ограничена хендшейком —
+переписывается только первая запись, установившийся поток не трогается. Прямой
+путь, без `detour`, не затронут.
+
+**MASQUE на h2 переехал на общий TLS-слой (SPEC 021).** Это был последний
+outbound мимо `common/tls`: на h2 он вёл TLS голым `crypto/tls.Client` ради
+pinning'а по ECDSA-ключу endpoint'а — и взамен не получал из общего слоя
+ничего. Теперь pinning лежит поверх общего клиента. h3 не тронут: QUIC не несёт
+TLS поверх TCP.
+
+Шаг до этого (`lx.24-rc.2`) догнал ветку до upstream — 19 коммитов на базе
+`v1.14.0-beta.9` — и перевёл тулчейн на Go 1.26.5. Из того хвоста: DNS-кеши
+локального транспорта партиционируются по сигнатуре интерфейса, смена сети
+больше не отдаёт кеш, принадлежащий другой сети; WireGuard-хендшейк резолвит
+**все** адреса домен-пира и гонит их наперегонки; hijacked-DNS получил process
+info; исправлены reset network, FakeIP async-save, Android process finder и
+неограниченные аллокации на злом наборе правил.
+
+Затем `lx.25-rc.1` добавил `GetURLViaOutbound` — ядровую половину вкладки
+Diagnostics выше.
 
 ## 📦 Версия
 
 `v1.14.0-lx.23` и `v1.14.0-lx.24-rc.1` касаются десктопного демона `lxd` и на
-Android-сборку не влияют — поэтому пин прыгает с lx.22 сразу на lx.24-rc.2.
+Android-сборку не влияют — поэтому пин прыгает с lx.22 сразу на lx.24-rc.2, а
+дальше на линию lx.25.
+
+Java-поверхность AAR по пути один раз изменилась: `lx.25-rc.1` добавил
+`GetURLResult`, `HTTPHeaders` и `CommandClient.getURLViaOutbound` — их и
+потребляет вкладка Diagnostics. Между rc.1 и rc.3 `classes.jar` побайтово
+совпадает, поэтому финальный бамп клиентских правок не потребовал.
 
 ## 🧪 Тесты
 
-`flutter analyze` по всему проекту и полный прогон (2980 тестов) зелёные, как и
-четыре l10n-чекера. Release-APK установлен и запущен на эмуляторе: ядро
-стартует, туннель поднимается, DNS через него резолвится, тесты задержки узлов
-отвечают, остановка сносит всё чисто и без крашей.
+`flutter analyze` по всему проекту и полный прогон (3002 теста) зелёные, как и
+четыре l10n-чекера. Release-APK собран, установлен и запущен и на физическом
+устройстве, и на эмуляторе: ядро стартует, туннель поднимается, DNS через него
+резолвится, тесты задержки узлов отвечают, остановка сносит всё чисто и без
+крашей.
 
-Это ядро — релиз-кандидат, и его собственные заметки требуют прогона на
-реальном железе (туннель, DNS, URL-тест, WG/AWG, несколько раз) до промоута
-ветки в stable: сабмодули перебазированы, тулчейн сменился. Такой прогон — на
-физических устройствах, не на эмуляторе. Клиентские изменения этого релиза
-(§386–§391) проверены юнит-тестами и девайс-прогона тоже не проходили.
+В самом форке линия lx.25 пока помечена как релиз-кандидат и в stable не
+промоучена. Главное, за чем стоит следить, — новое умолчание
+`record_fragment`: оно меняет поведение любого outbound'а, который диалит через
+`detour`, а не только тех MASQUE-цепочек, ради которых писалось.
 
 </details>
 
