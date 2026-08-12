@@ -1,7 +1,7 @@
 # §393 — MASQUE: переход на новую схему конфига ядра
 
 **Статус:** в работе
-**Ядро:** `v1.14.0-lx.25-rc.5` — ждём публикации ([SPEC 062](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/062-MASQUE_CONFIG_SCHEMA_MIGRATION/SPEC.md), [SPEC 021](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/021-MASQUE_CONNECT_IP_OUTBOUND/SPEC.md))
+**Ядро:** `v1.14.0-lx.25-rc.5` (запинен) ([SPEC 062](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/062-MASQUE_CONFIG_SCHEMA_MIGRATION/SPEC.md), [SPEC 021](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/021-MASQUE_CONNECT_IP_OUTBOUND/SPEC.md))
 **Связано:** [§130 MASQUE](../features/130%20masque/spec.md), §284/§305 (сканер), §386 (пресеты endpoint)
 
 ## Зачем
@@ -98,7 +98,7 @@ MASQUE хранится в двух несвязанных местах:
 | Сканер | `warp/scan/scan_node_builder.dart` | версия HTTP при сборке URI |
 | Лейбл узла | `models/config_node.dart` | `vhttp` — плоская строка, ветка до общей |
 | Билдер | `builder/post_steps/tls_transforms.dart` | `applyTlsFragment` для masque h2 |
-| Пин | `app/android/libbox.version`, `docs/KERNEL.md` | rc.3 → rc.5 |
+| Пин | `app/android/libbox.version`, `docs/KERNEL.md` | rc.3 → rc.5 ✅ |
 
 ### Решения по развилкам
 
@@ -130,6 +130,10 @@ UI-варнинга: глобальный тумблер не должен ру�
 
 ## Открыто
 
-Пин ядра ждёт публикации `rc.5` с `vhttp`. До неё эмит клиента и пин расходятся:
-запинен `rc.4`, знающий только `transport`, поэтому masque-узлы на этой связке не
-поднимутся. Бампить сразу по выходу тега.
+Пин закрыт: `rc.5` запинен, SHA256 AAR сверен, `vhttp` в ядре и в клиенте
+совпадают. Осталась девайс-проверка (см. «Проверка»).
+
+Побочное наблюдение при бампе, к §393 отношения не имеет: обещанное в rc.5 поле
+`Group.mode` (kernel SPEC 019) в Android-AAR отсутствует — `classes.jar`
+побайтово равен rc.4, `getMode()` в `OutboundGroup` нет, хотя нативная часть
+собрана из rc.5. Детали — в `docs/KERNEL.md`.

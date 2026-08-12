@@ -22,18 +22,33 @@ AmneziaWG 2.0 + нативный XHTTP + VLESS encryption (PQ-слой) + LxBox-
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.25-rc.4`** (см. `app/android/libbox.version`)
-— миграция схемы конфига `masque` (kernel SPEC 062) + смена дефолтного SNI
-(SPEC 021). Клиентская сторона — §393.
+**Текущий пин: `v1.14.0-lx.25-rc.5`** (см. `app/android/libbox.version`)
+— финальное имя ключа `masque` (`vhttp`) + режим urltest-группы в API.
+Клиентская сторона — §393.
 
-⚠️ **Пин отстаёт от кода.** Клиент уже эмитит финальное имя ключа `vhttp`
-(см. ниже), а `rc.4` знает только промежуточное `transport` — на этой связке
-masque-узлы не поднимутся. Бампить на `rc.5` сразу по выходу тега.
+**`transport` → `vhttp` (SPEC 062).** Имя из rc.4 убрано **без алиаса**: у
+vless/trojan/vmess `transport` — ключ V2Ray-транспорта, и он объект
+(`{"type":"ws"}`), а не строка. Одно имя с двумя смыслами и типами — та самая
+путаница, которую SPEC 062 и убирает. Промежуточное имя прожило один пререлиз;
+в клиенте оно не поддерживается вовсе (наружу не выходило — см. §393).
 
-**Схема `masque` переехала.** Версия HTTP из `network` → `vhttp` (в `rc.4`
-ключ назывался `transport`, в `rc.5` переименован: `transport` у остальных
-протоколов — это объект `{type: ws|grpc|…}`, совпадение путало), TLS-опции из
-плоского корня → во вложенный `tls{}` (`sni` → `tls.server_name`,
+`network` по-прежнему deprecated до `v1.14.0-lx.30`, как объявлено в rc.4.
+
+**`Group.mode` (SPEC 019)** — режим urltest-группы: `least_test` (обычный
+urltest, узел в `selected`) | `round_robin` (балансировка, состояние в
+`GetPool`) | пусто (не urltest). Обещан «в любой сборке», в отличие от `GetPool`
+за тегом `with_lx_command`.
+
+⚠️ **В Android-AAR rc.5 этого поля НЕТ.** `classes.jar` побайтово равен rc.4
+(SHA256 `23b2eb27…`), `javap io.nekohasekai.libbox.OutboundGroup` не показывает
+`getMode()`. Нативная часть при этом собрана из rc.5 (`strings libbox.so` →
+`1.14.0-lx.25-rc.5`, строки `least_test`/`round_robin` присутствуют) — то есть
+Go-код на месте, а gomobile-обвязка `OutboundGroup` не перегенерирована.
+На §393 не влияет (`vhttp` — парсинг конфига, не Java-поверхность), но
+потребителю `mode` ждать следующей сборки ядра.
+
+**Схема `masque` (введена в rc.4).** Версия HTTP из `network` → `vhttp`,
+TLS-опции из плоского корня → во вложенный `tls{}` (`sni` → `tls.server_name`,
 `skip_cert_verify` → `tls.insecure`, `fragment`/`record_fragment`/
 `fragment_fallback_delay` → под `tls`). Остальные поля (`server`, `server_port`,
 `profile`, `private_key`, `public_key`, `ip`, `ipv6`, `uri`, `mtu`,
@@ -68,10 +83,10 @@ JSON-импорт).
 `http3: parsing frame failed`, когда эндпоинт принял QUIC, но не ответил на
 CONNECT-IP. Исходная причина сохраняется в цепочке ошибок.
 
-Java-поверхность **не изменилась** — `classes.jar` побайтово равен rc.3
-(SHA256 `23b2eb27…`), `javap`-diff не требуется.
+Предыдущий пин — **`v1.14.0-lx.25-rc.4`** — та же схема конфига под именем
+`transport` (снято в rc.5) + смена дефолтного SNI. Java-поверхность равна rc.3.
 
-Предыдущий пин — **`v1.14.0-lx.25-rc.3`**
+До него — **`v1.14.0-lx.25-rc.3`**
 — две правки поверх rc.1, обе про TLS-плечо под `detour`.
 
 **SPEC 060: `record_fragment` включается сам, когда outbound диалит через
