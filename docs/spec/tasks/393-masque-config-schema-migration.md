@@ -1,6 +1,6 @@
 # §393 — MASQUE: переход на новую схему конфига ядра
 
-**Статус:** ✅ реализовано, device-verified (эмулятор)
+**Статус:** ✅ released (v2.20.8), device-verified (эмулятор)
 **Ядро:** `v1.14.0-lx.25-rc.5` (запинен) ([SPEC 062](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/062-MASQUE_CONFIG_SCHEMA_MIGRATION/SPEC.md), [SPEC 021](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/021-MASQUE_CONNECT_IP_OUTBOUND/SPEC.md))
 **Связано:** [§130 MASQUE](../features/130%20masque/spec.md), §284/§305 (сканер), §386 (пресеты endpoint)
 
