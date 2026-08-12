@@ -611,6 +611,8 @@ l10n/                        # §279/§285 подсистема локализа
   app_language_reconcile.dart#   трёхсторонний reconciliation LocaleManager↔storage (Android 13+)
   template_aware_state.dart  #   mixin: перечитывание шаблона в didChangeDependencies по локали
 project_links.dart           # §362 — единственный источник ссылок проекта + @плейсхолдеры
+install_source.dart          # §390 — канал установки (github/play/fdroid): dart-define, иначе
+                             #   по installingPackageName. Определяет updateUrl (куда за апдейтом)
 support/                     # §105/§356/§357 support-лента + активное время
   support_message.dart       #   модели ленты (i18n/since_version/mark_read) + выбор/markRead/snooze
   support_nav.dart           #   §357 псевдопротокол lxbox://action:payload (route:/add:)

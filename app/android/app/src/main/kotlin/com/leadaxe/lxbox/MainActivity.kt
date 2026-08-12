@@ -104,11 +104,24 @@ class MainActivity : FlutterActivity() {
                     "openUrl" -> {
                         val url = call.argument<String>("url")
                         if (url != null) {
-                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                            result.success(null)
+                            // §390 — `fallbackUrl` для custom-scheme ссылок:
+                            // `market://` не резолвится на устройствах без
+                            // Play (а это ровно наша аудитория) и роняет
+                            // startActivity. Тогда открываем https-форму.
+                            val fallback = call.argument<String>("fallbackUrl")
+                            if (openUrlOrFallback(url, fallback)) {
+                                result.success(null)
+                            } else {
+                                result.error("NO_ACTIVITY", "No handler for $url", null)
+                            }
                         } else {
                             result.error("INVALID_URL", "URL is null", null)
                         }
+                    }
+                    "installSource" -> {
+                        // §390 — package name установщика (сырой; маппинг в
+                        // канал живёт на Dart-стороне, одним местом).
+                        result.success(installerPackageName())
                     }
                     "openAppSettings" -> {
                         // §050 — open Android Settings directly to App permissions.
@@ -426,6 +439,48 @@ class MainActivity : FlutterActivity() {
     /// Android TV и Google TV сборками.
     private fun isStubHandler(pkg: String?): Boolean =
         pkg != null && pkg.contains("frameworkpackagestubs")
+
+    /// §390 — package name того, кто установил приложение
+    /// (`com.android.vending` для Play, `org.fdroid.fdroid` для F-Droid,
+    /// null/менеджер файлов/`com.android.shell` для sideload'а).
+    ///
+    /// Возвращаем СЫРОЕ значение: маппинг в канал живёт на Dart-стороне одним
+    /// местом и покрыт unit-тестами без device.
+    ///
+    /// minSdk проекта — 24, поэтому ветка с deprecated API обязательна:
+    /// `getInstallSourceInfo` появился только в API 30.
+    private fun installerPackageName(): String? = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            packageManager.getInstallSourceInfo(packageName).installingPackageName
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getInstallerPackageName(packageName)
+        }
+    } catch (e: Throwable) {
+        // NameNotFoundException и пр. — канал неизвестен, Dart уйдёт в дефолт.
+        Log.w("MainActivity", "installerPackageName failed", e)
+        null
+    }
+
+    /// §390 — открывает [url], при отсутствии обработчика пробует
+    /// [fallbackUrl]. Нужно для `market://`: на устройствах без Play intent не
+    /// резолвится и `startActivity` бросает ActivityNotFoundException.
+    ///
+    /// Возвращает false, если не открылось ничем — Dart-сторона тогда
+    /// копирует ссылку в буфер (существующий фолбэк `UrlLauncher.open`).
+    private fun openUrlOrFallback(url: String, fallbackUrl: String?): Boolean {
+        if (tryOpenUrl(url)) return true
+        if (fallbackUrl != null && tryOpenUrl(fallbackUrl)) return true
+        return false
+    }
+
+    private fun tryOpenUrl(url: String): Boolean = try {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        true
+    } catch (e: Throwable) {
+        Log.w("MainActivity", "openUrl failed for $url", e)
+        false
+    }
 
     /// §374 — пишет текст в публичную папку Downloads через MediaStore.
     ///

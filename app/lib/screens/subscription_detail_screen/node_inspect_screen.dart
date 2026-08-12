@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../../models/node_spec.dart';
 import '../../models/template_vars.dart';
 import '../../services/l10n/locale_controller.dart';
+import '../../services/tag_resolver.dart';
+import '../../widgets/node_diagnostics_tab.dart';
 
 /// §302 — экран разбора одной ноды подписки: две вкладки.
 ///
@@ -19,9 +21,18 @@ import '../../services/l10n/locale_controller.dart';
 /// Источник берём из `NodeSpec.sourceCompact/sourceExtended`, а НЕ из
 /// `rawUri`: у JSON-нод последний — синтетическая заглушка (`xray://<tag>`).
 class NodeInspectScreen extends StatefulWidget {
-  const NodeInspectScreen({super.key, required this.node});
+  const NodeInspectScreen({
+    super.key,
+    required this.node,
+    this.tagPrefix = '',
+  });
 
   final NodeSpec node;
+
+  /// §392 — префикс тегов контейнера: в БОЕВОМ конфиге узел живёт под
+  /// display-тегом («<префикс> <тег>»), и диагностика при включённом VPN
+  /// адресует его именно так. Пусто = узел без префикса.
+  final String tagPrefix;
 
   @override
   State<NodeInspectScreen> createState() => _NodeInspectScreenState();
@@ -57,17 +68,22 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
     final title = _node.label.isNotEmpty ? _node.label : _node.tag;
     final hasReplacements = _hasReplacements;
     return DefaultTabController(
-      length: hasReplacements ? 3 : 2,
+      length: hasReplacements ? 4 : 3,
       child: Scaffold(
         appBar: AppBar(
           title: Text(title.isEmpty ? _node.server : title,
               maxLines: 1, overflow: TextOverflow.ellipsis),
           bottom: TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: getLocalText.s("JSON")),
               Tab(text: getLocalText.s("Source")),
               if (hasReplacements)
                 Tab(text: getLocalText.s("Replacements")),
+              // §392 — узел здесь распарсен, поэтому доступны ОБЕ ветки:
+              // probe при выключенном VPN и боевое ядро при включённом.
+              Tab(text: getLocalText.s("Diagnostics")),
             ],
           ),
         ),
@@ -76,6 +92,10 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
             _monoBody(context, _json),
             _sourceTab(context),
             if (hasReplacements) _replacementsTab(context),
+            NodeDiagnosticsTab(
+              node: _node,
+              liveTag: TagResolver.displayTag(widget.tagPrefix, _node.tag),
+            ),
           ],
         ),
       ),

@@ -479,6 +479,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     };
   }
 
+  /// §389 — есть хотя бы один ЗАВЕРШЁННЫЙ вердикт теста (гейт пунктов меню
+  /// «Test actions»; семантика и мотивация — как в подписке).
+  bool get _hasProbeVerdict =>
+      _probe.values.any((r) => r.status != ProbeStatus.pending &&
+          r.status != ProbeStatus.group);
+
   /// §284/§296 — индексы членов, не прошедших последний тест (общий хелпер).
   Set<int> _unreachableIndexes() =>
       ProbeController.unreachableIndexes(_probeByIndex());
@@ -1364,30 +1370,41 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               ],
             ),
           ),
-          if (_probe.isNotEmpty && !_testing)
-            PopupMenuButton<String>(
-              tooltip: getLocalText.s("Test actions"),
-              icon: const Icon(Icons.more_vert, size: 20),
-              onSelected: (v) {
-                if (v == 'disable_slow') unawaited(_disableSlowerThan());
-                if (v == 'disable_dead') unawaited(_disableUnreachable());
-                if (v == 'delete_dead') unawaited(_deleteUnreachable());
-                if (v == 'sort') unawaited(_sortByPing());
-              },
-              itemBuilder: (menuCtx) => [
+          // §389 — кнопка на месте ВСЕГДА (не появляется/исчезает по наличию
+          // результатов): без завершённого теста пункты серые и некликабельные.
+          // `enabled: false` у PopupMenuItem даёт и серый текст, и отсутствие
+          // реакции на тап — отдельного стиля не нужно.
+          PopupMenuButton<String>(
+            tooltip: getLocalText.s("Test actions"),
+            icon: const Icon(Icons.more_vert, size: 20),
+            onSelected: (v) {
+              if (v == 'disable_slow') unawaited(_disableSlowerThan());
+              if (v == 'disable_dead') unawaited(_disableUnreachable());
+              if (v == 'delete_dead') unawaited(_deleteUnreachable());
+              if (v == 'sort') unawaited(_sortByPing());
+            },
+            itemBuilder: (menuCtx) {
+              final ready = _hasProbeVerdict;
+              return [
                 PopupMenuItem(
                     value: 'disable_slow',
+                    enabled: ready,
                     child: Text(getLocalText.s("Disable slower than…"))),
                 PopupMenuItem(
                     value: 'disable_dead',
+                    enabled: ready,
                     child: Text(getLocalText.s("Disable unreachable"))),
                 PopupMenuItem(
                     value: 'delete_dead',
+                    enabled: ready,
                     child: Text(getLocalText.s("Delete unreachable"))),
                 PopupMenuItem(
-                    value: 'sort', child: Text(getLocalText.s("Sort by ping"))),
-              ],
-            ),
+                    value: 'sort',
+                    enabled: ready,
+                    child: Text(getLocalText.s("Sort by ping"))),
+              ];
+            },
+          ),
         ],
       ),
     );

@@ -10,6 +10,17 @@
       "2606:4700:d0::/64",
       "2606:4700:d1::/64"
     ],
+    "recommended_endpoint": "engage.cloudflareclient.com:2408",
+    "endpoints_preset": [
+      "engage.cloudflareclient.com:2408",
+      "engage.cloudflareclient.com:500",
+      "engage.cloudflareclient.com:1701",
+      "engage.cloudflareclient.com:4500",
+      "162.159.192.192:934",
+      "162.159.192.1:2408",
+      "162.159.193.1:2408",
+      "188.114.96.1:2408"
+    ],
     "ports": [2408, 500, 1701, 4500],
     "keepalive": 25,
     "ports_extra": [
@@ -30,6 +41,14 @@
       "162.159.198.0/24",
       "162.159.199.0/24"
     ],
+    "recommended_host": "consumer-masque.cloudflareclient.com",
+    "hosts_preset": [
+      "consumer-masque.cloudflareclient.com",
+      "162.159.198.1",
+      "162.159.198.2",
+      "162.159.199.1",
+      "162.159.199.2"
+    ],
     "h3_v4_cidr": [
       "162.159.198.1/32",
       "162.159.198.2/32",
@@ -38,7 +57,9 @@
     ],
     "ports_h3": [443, 500, 1701, 4500, 4443, 8443, 8095],
     "ports_h2": [443, 500, 1701, 4500, 4443, 8443, 8095],
+    "recommended_sni": "consumer-masque.cloudflareclient.com",
     "sni_pool": [
+      "consumer-masque.cloudflareclient.com",
       "www.cloudflare.com", "cdn.jsdelivr.net", "aws.amazon.com",
       "www.google.com", "www.microsoft.com", "www.bing.com", "www.apple.com",
       "www.wikipedia.org", "yandex.ru", "telemost.yandex.ru", "ozon.ru",

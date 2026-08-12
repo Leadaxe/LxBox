@@ -777,6 +777,23 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
+            // §392 — диагностический GET через узел боевого ядра (kernel SPEC
+            // 058). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound:
+            // на main thread обмен с телом ответа = гарантированный ANR.
+            "ccGetUrlViaOutbound" -> {
+                val cc = BoxService.commandClient
+                if (cc == null) { result.success(mapOf("error" to "not connected")); return }
+                val tag = call.argument<String>("tag") ?: ""
+                val link = call.argument<String>("link") ?: ""
+                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
+                val maxBytes = call.argument<Int>("maxBytes") ?: 0
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) {
+                        cc.getUrlViaOutbound(tag, link, timeoutMs, maxBytes)
+                    }
+                    result.success(r)
+                }
+            }
             // §308 — групповой URLTest (force-тест всех членов + переселект в
             // ядре). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound.
             "ccUrlTestGroup" -> {
@@ -804,6 +821,20 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { ProbeSession.urlTest(tag, link, timeoutMs) }
+                    result.success(r)
+                }
+            }
+            // §392 — тот же диагностический GET, но в probe-сессии (VPN
+            // выключен). Форма результата идентична ccGetUrlViaOutbound.
+            "probeGetUrl" -> {
+                val tag = call.argument<String>("tag") ?: ""
+                val link = call.argument<String>("link") ?: ""
+                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
+                val maxBytes = call.argument<Int>("maxBytes") ?: 0
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) {
+                        ProbeSession.getUrl(tag, link, timeoutMs, maxBytes)
+                    }
                     result.success(r)
                 }
             }

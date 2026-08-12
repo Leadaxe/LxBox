@@ -37,7 +37,22 @@ flutter run   # устройство или эмулятор Android
 | `scripts/fetch-libbox.sh` — ядро sing-box-lx по пину `app/android/libbox.version`, идемпотентно (см. [«Ядро sing-box-lx»](#ядро-sing-box-lx-libbox)) | ✓ |
 | `LXBOX_ABI_FILTER=arm64-v8a --target-platform android-arm64` — APK только под arm64; выход `app-release.apk` переименовывается в `app-arm64-v8a-release.apk` | ✓ |
 | `flutter build apk --release` (доп. аргументы — через `"$@"`) | ✓ |
-| `--dart-define`-маркеры (`BUILD_LOCAL`, `BUILD_GIT_DESC`, …) | ✗ убраны в §065/§066: версия живёт в pubspec, About читает `PackageInfo` |
+| `--dart-define`-маркеры **версии** (`BUILD_LOCAL`, `BUILD_GIT_DESC`, …) | ✗ убраны в §065/§066: версия живёт в pubspec, About читает `PackageInfo`. Это про версию, НЕ запрет на define вообще — см. `LXBOX_DISTRIBUTION` ниже |
+| `--dart-define=LXBOX_DISTRIBUTION` | ✗ не задаётся → фолбэк по установщику даст `github`, что для локальной сборки верно |
+
+##### `--dart-define`-флаги
+
+| Флаг | Значения | Кто ставит | Зачем |
+|---|---|---|---|
+| `LXBOX_DISTRIBUTION` | `github` \| `play` \| `fdroid` | **только AAB-шаг CI** (`=play`) | §390 — канал установки: куда вести юзера за новой версией. У каждого канала своя подпись, APK с GitHub не встанет поверх Play/F-Droid-сборки. Не задан → рантайм-фолбэк по `installingPackageName`, дефолт `github` |
+
+⚠ **У APK флаг НЕ задаётся** — ни в CI, ни в рецепте F-Droid. F-Droid сверяет
+байты своей сборки с APK из GitHub Releases (`binary:` в рецепте — reproducible
+builds, подпись остаётся нашей), а любой `--dart-define` попадает в
+скомпилированный Dart и ломает сверку. Канал у APK определяется рантаймом по
+установщику. Подробнее — [`FDROID.md`](FDROID.md).
+| `LXBOX_SUPPORT_URL` | URL | вручную при отладке | §356 — подменить ленту поддержки на тестовую |
+| `DONATE_URL` | URL | вручную | источник `docs/donate.json` |
 
 Требует `git` и JDK (для gradle); ядро `app/android/app/libs/libbox.aar` скрипт скачивает сам.
 

@@ -85,6 +85,13 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
 
   WarpEndpointPicker? _picker; // §136 — для рандома endpoint/SNI
   bool _endpointAutoFilled = false; // §136 — endpoint в поле = наш авто-рандом
+  // §386 — значение последнего авто-рандома. Комбобокс не даёт onChanged, поэтому
+  // ручную правку/выбор из списка ловит listener на контроллере: текст ушёл от
+  // последнего авто-значения → это уже не наш рандом, флаг снимается.
+  String _lastAutoEndpoint = '';
+  // §386 — пресеты для combobox'ов (endpoint WG / IP MASQUE), из asset.
+  List<String> _endpointsPreset = const [];
+  List<String> _masqueHostsPreset = const [];
   // §305 — v6-endpoint подставляем только если в системе включён IPv6.
   bool _ipv6Enabled = false;
   // §305 — сервер из последней MASQUE-регистрации (placeholder пустого IP-поля,
@@ -95,6 +102,12 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   @override
   void initState() {
     super.initState();
+    // §386 — см. _lastAutoEndpoint. Заменяет прежний onChanged у TextField.
+    _endpoint.addListener(() {
+      if (_endpointAutoFilled && _endpoint.text != _lastAutoEndpoint) {
+        setState(() => _endpointAutoFilled = false);
+      }
+    });
     // §305 — читаем системный флаг IPv6 (гейтит v6-рандом endpoint).
     SettingsStorage.getVar('ipv6_enabled', 'false').then((v) {
       if (mounted) setState(() => _ipv6Enabled = v.toLowerCase() == 'true');
@@ -112,6 +125,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
         _picker = p;
         _sniPool = p.sniPool;
         _masqueSniPool = p.masqueSniPool;
+        _endpointsPreset = p.endpointsPreset; // §386
+        _masqueHostsPreset = p.masqueHostsPreset; // §386
         // SNI при открытии — конкретный случайный домен (не «Random»); юзер
         // может выбрать другой/вписать свой или рерольнуть кубиком.
         if (_sni.text.trim().isEmpty) _sni.text = p.randomSni();
@@ -135,6 +150,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     final ep = _picker?.randomEndpoint(allowV6: _ipv6Enabled);
     if (ep != null) {
       setState(() {
+        // §386 — сперва запоминаем авто-значение, потом пишем text: иначе
+        // listener контроллера примет собственный рандом за ручную правку.
+        _lastAutoEndpoint = ep;
         _endpoint.text = ep;
         _endpointAutoFilled = true;
       });
@@ -182,6 +200,17 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
       if (port != null) _masquePort.text = '$port';
     });
   }
+
+  /// §386 — пункт combobox-пресетов. Пометку "(recommended)" получает пункт,
+  /// чьё значение равно ЯВНОМУ recommended-ключу asset'а (recommended_endpoint /
+  /// recommended_host) — на любой позиции. Пустой [recommended] → без пометок.
+  DropdownMenuEntry<String> _presetEntry(String value, String recommended) =>
+      DropdownMenuEntry(
+        value: value,
+        label: value == recommended
+            ? '$value ${getLocalText.s("(recommended)")}'
+            : value,
+      );
 
   /// true если в поле endpoint — дефолт/пусто/наш авто-рандом (не вписан юзером
   /// вручную → можно перезаписать).
@@ -521,20 +550,31 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
+                          // §386 — combobox: device-verified h3-хосты + свободный
+                          // ввод; кубик рядом (рандом IP из блока + порт).
                           Expanded(
                             flex: 3,
-                            child: TextField(
-                              controller: _masqueIp,
-                              enabled: !_busy,
-                              decoration: _input(_masqueRegServer).copyWith(
-                                labelText: getLocalText.s("Endpoint IP (optional)"),
-                                suffixIcon: IconButton(
-                                  icon: const Icon(Icons.casino_outlined),
-                                  tooltip: getLocalText.s("Pick another random IP:port"),
-                                  onPressed: _busy ? null : _fillRandomMasqueIp,
-                                ),
+                            child: LayoutBuilder(
+                              builder: (ctx, c) => DropdownMenu<String>(
+                                controller: _masqueIp,
+                                enabled: !_busy,
+                                width: c.maxWidth,
+                                requestFocusOnTap: true,
+                                menuHeight: 280,
+                                label: Text(getLocalText.s("Endpoint IP")),
+                                hintText: _masqueRegServer,
+                                dropdownMenuEntries: [
+                                  for (final h in _masqueHostsPreset)
+                                    _presetEntry(h,
+                                        _picker?.recommendedMasqueHost ?? ''),
+                                ],
                               ),
                             ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.casino_outlined),
+                            tooltip: getLocalText.s("Pick another random IP:port"),
+                            onPressed: _busy ? null : _fillRandomMasqueIp,
                           ),
                           const SizedBox(width: 8),
                           // Порт — editable-combo той же высоты, что IP-поле
@@ -574,10 +614,12 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                             ),
                       ),
                       const SizedBox(height: 12),
-                      _label('SNI (optional)'),
+                      _label('SNI'),
                       // combo-box: пункты из sni_pool + свободный ввод. Пусто →
-                      // дефолт ядра (consumer-masque.cloudflareclient.com).
-                      // Кубик подставляет случайный домен из пула.
+                      // дефолт ядра (consumer-masque.cloudflareclient.com); он
+                      // же ПЕРВЫМ пунктом пула и помечен recommended — DPI
+                      // умеет резать по несовпадению SNI с блоком (§143), так
+                      // что родной домен перебирается наравне, включая кубик.
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -592,7 +634,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                                 hintText: getLocalText.s("Leave empty for the default SNI"),
                                 dropdownMenuEntries: [
                                   for (final s in _masqueSniPool)
-                                    DropdownMenuEntry(value: s, label: s),
+                                    _presetEntry(s,
+                                        _picker?.recommendedMasqueSni ?? ''),
                                 ],
                               ),
                             ),
@@ -722,7 +765,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _label('WARP+ license key (optional)'),
+                        _label('WARP+ license key'),
                         TextField(
                           controller: _license,
                           enabled: !_busy,
@@ -737,27 +780,38 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                         ),
                         const SizedBox(height: 12),
                         _label('Endpoint'),
-                        TextField(
-                          controller: _endpoint,
-                          enabled: !_busy,
-                          // Ручная правка → больше не считаем поле авто-рандомом.
-                          onChanged: (_) {
-                            if (_endpointAutoFilled) {
-                              setState(() => _endpointAutoFilled = false);
-                            }
-                          },
-                          decoration: _input(WarpAccount.defaultEndpoint).copyWith(
+                        // §386 — combobox: пункты из endpoints_preset (первый —
+                        // рекомендуемый) + свободный ввод. Ручную правку/выбор
+                        // ловит listener на _endpoint (initState).
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (ctx, c) => DropdownMenu<String>(
+                                  controller: _endpoint,
+                                  enabled: !_busy,
+                                  width: c.maxWidth,
+                                  requestFocusOnTap: true,
+                                  menuHeight: 280,
+                                  hintText: WarpAccount.defaultEndpoint,
+                                  dropdownMenuEntries: [
+                                    for (final e in _endpointsPreset)
+                                      _presetEntry(e,
+                                          _picker?.recommendedEndpoint ?? ''),
+                                  ],
+                                ),
+                              ),
+                            ),
                             // §136 — кубик: реролл рандомного endpoint (только
-                            // его). Видна при обфускации.
-                            suffixIcon: _obfuscate
-                                ? IconButton(
-                                    icon: const Icon(Icons.casino_outlined),
-                                    tooltip: getLocalText.s("Pick another random IP:port"),
-                                    onPressed:
-                                        _busy ? null : _fillRandomEndpoint,
-                                  )
-                                : null,
-                          ),
+                            // его). Виден при обфускации.
+                            if (_obfuscate)
+                              IconButton(
+                                icon: const Icon(Icons.casino_outlined),
+                                tooltip: getLocalText.s("Pick another random IP:port"),
+                                onPressed: _busy ? null : _fillRandomEndpoint,
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -852,6 +906,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                           _label('Masquerade domain (id)'),
                           // combo-box (пункты из sni_pool + свободный ввод) +
                           // свой кубик: реролл случайного домена из пула.
+                          // Cloudflare-доменов тут НЕТ намеренно: SNI живёт
+                          // внутри junk-приманки (не TLS), и на замере они
+                          // резались — в отличие от MASQUE-пула, см. §136.
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [

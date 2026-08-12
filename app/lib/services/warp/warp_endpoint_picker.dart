@@ -73,6 +73,32 @@ class WarpEndpointPicker {
 
   List<String> get sniPool => List.unmodifiable(_scan?.wgSniPool ?? const []);
 
+  /// §386 — пресеты `host:port` для combobox WG-endpoint. Пусто, если ключа
+  /// нет в asset/override.
+  List<String> get endpointsPreset =>
+      List.unmodifiable(_scan?.wgEndpointsPreset ?? const []);
+
+  /// §386 — рекомендуемый WG-endpoint (ключ `recommended_endpoint` asset'а).
+  /// UI помечает совпадающий пункт списка. '' → пометки нет.
+  String get recommendedEndpoint => _scan?.wgRecommendedEndpoint ?? '';
+
+  /// §386 — рекомендуемый MASQUE-хост (ключ `recommended_host` asset'а).
+  String get recommendedMasqueHost => _scan?.masqueRecommendedHost ?? '';
+
+  /// §386 — хосты для combobox MASQUE-endpoint. Приоритет — явный
+  /// `masque.hosts_preset` из asset. Фолбэк для старого asset/override
+  /// без ключа — узкие h3-CIDR (`/32` → голый IP, device-verified живые
+  /// адреса; не-/32 записи пропускаем). Живы и для h2 (подмножество блоков).
+  List<String> get masqueHostsPreset {
+    final preset = _scan?.masqueHostsPreset ?? const <String>[];
+    if (preset.isNotEmpty) return List.unmodifiable(preset);
+    final out = <String>[];
+    for (final cidr in _scan?.masqueH3V4Cidr ?? const <String>[]) {
+      if (cidr.endsWith('/32')) out.add(cidr.substring(0, cidr.length - 3));
+    }
+    return List.unmodifiable(out);
+  }
+
   /// §130 — случайный SNI из MASQUE-пула. '' если пуст.
   String randomMasqueSni() {
     final p = _scan?.masqueSniPool ?? const [];
@@ -82,6 +108,9 @@ class WarpEndpointPicker {
   /// §130 — MASQUE SNI-пул (может содержать cloudflare-домены).
   List<String> get masqueSniPool =>
       List.unmodifiable(_scan?.masqueSniPool ?? const []);
+
+  /// Рекомендуемый MASQUE SNI (ключ `recommended_sni`) — пометка пункта в UI.
+  String get recommendedMasqueSni => _scan?.masqueRecommendedSni ?? '';
 
   /// §284 — весь пул (null если asset отсутствует/битый).
   ScanPool? get scan => _scan;

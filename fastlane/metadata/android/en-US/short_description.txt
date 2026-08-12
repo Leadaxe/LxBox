@@ -1,1 +1,1 @@
-VPN client powered by sing-box: subscriptions, smart routing, speed test
+VPN client: 12+ protocols, subscriptions, app routing, balancing, traffic stats

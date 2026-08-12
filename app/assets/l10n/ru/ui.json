@@ -1442,8 +1442,13 @@
   "Disable": {
     "value": "Выключить"
   },
-  "Disable all": {
-    "value": "Выключить все"
+  "Disable %d servers that failed the test?": {
+    "value": {
+      "one": "Выключить %d сервер, не прошедший тест?",
+      "few": "Выключить %d сервера, не прошедших тест?",
+      "many": "Выключить %d серверов, не прошедших тест?",
+      "other": "Выключить %d сервера, не прошедших тест?"
+    }
   },
   "Disable battery restrictions": {
     "value": "Отключить ограничения батареи"
@@ -1596,9 +1601,6 @@
   "Enable FakeIP": {
     "value": "Включить FakeIP"
   },
-  "Enable all": {
-    "value": "Включить все"
-  },
   "Enable command receiver?": {
     "value": "Включить приём команд?"
   },
@@ -1607,6 +1609,9 @@
   },
   "Enable it in Settings → Diagnostics to grow this list as you stay on Wi-Fi networks.": {
     "value": "Включите её в Настройки → Диагностика, чтобы список пополнялся, пока вы находитесь в сетях Wi-Fi."
+  },
+  "Enable rules in Filters will turn these nodes back on at the next update.": {
+    "value": "Enable-правила во вкладке Filters снова включат эти ноды при следующем обновлении."
   },
   "Enabled": {
     "value": "Включён"
@@ -1617,8 +1622,8 @@
   "Enabling this category lets other apps receive L×Box events.\n\nEvents do NOT contain subscription / config secrets — only labels (node tags, group names, status).": {
     "value": "Если включить эту категорию, другие приложения смогут получать события L×Box.\n\nСобытия НЕ содержат секретов подписок и конфига — только метки (теги узлов, имена групп, статус)."
   },
-  "Endpoint IP (optional)": {
-    "value": "Endpoint IP (необязательно)"
+  "Endpoint IP": {
+    "value": "Endpoint IP"
   },
   "Endpoint pool (JSON) — IP blocks, ports and SNI the generator draws from. Edit to test your own ranges.": {
     "value": "Пул эндпоинтов (JSON) — блоки IP, порты и SNI, из которых генератор берёт узлы. Правьте, чтобы протестировать свои диапазоны."
@@ -2025,6 +2030,9 @@
   "Idle timeout suspends the tunnel after inactivity to save battery (default 5 min). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults.": {
     "value": "Тайм-аут простоя приостанавливает туннель при неактивности ради экономии батареи (по умолчанию 5 мин). Keep-alive пингует QUIC-соединение (по умолчанию 30 сек, только HTTP/3). Оставьте поля пустыми для значений по умолчанию."
   },
+  "Ignore": {
+    "value": "Не напоминать"
+  },
   "Ignore the cached account and register a fresh one.": {
     "value": "Игнорировать сохранённый аккаунт и зарегистрировать новый."
   },
@@ -2103,6 +2111,9 @@
   },
   "Insert emoji": {
     "value": "Вставить эмодзи"
+  },
+  "Installed from %s": {
+    "value": "Установлено из %s"
   },
   "Inspect node": {
     "value": "Разобрать узел"
@@ -2682,6 +2693,9 @@
   "Open Settings": {
     "value": "Открыть настройки"
   },
+  "Open in %s": {
+    "value": "Открыть в %s"
+  },
   "Open settings": {
     "value": "Открыть настройки"
   },
@@ -2781,6 +2795,9 @@
   },
   "Pick": {
     "value": "Выбор"
+  },
+  "(recommended)": {
+    "value": "(рекомендуется)"
   },
   "Pick another random IP:port": {
     "value": "Подставить другой случайный IP:port"
@@ -3547,7 +3564,7 @@
     "value": "Отдельные серверы"
   },
   "Start": {
-    "value": "Запустить"
+    "value": "Start"
   },
   "Start / Stop / Toggle / Switch / Refresh / … (default OFF)": {
     "value": "Start / Stop / Toggle / Switch / Refresh / … (по умолчанию выключено)"
@@ -3577,7 +3594,7 @@
     "value": "Сразу в папку «Загрузки»"
   },
   "Stop": {
-    "value": "Остановить"
+    "value": "Stop"
   },
   "Stop VPN": {
     "value": "Остановить VPN"
@@ -4366,5 +4383,44 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
+  },
+  "Check": {
+    "value": "Проверка"
+  },
+  "Endpoint": {
+    "value": "Адрес"
+  },
+  "Request is sent through this node": {
+    "value": "Запрос уходит через этот узел"
+  },
+  "Run": {
+    "value": "Запустить"
+  },
+  "Running…": {
+    "value": "Выполняется…"
+  },
+  "Response": {
+    "value": "Ответ"
+  },
+  "Response was longer and got cut off.": {
+    "value": "Ответ был длиннее и обрезан."
+  },
+  "(empty response)": {
+    "value": "(пустой ответ)"
+  },
+  "Connected to %s from inside the tunnel": {
+    "value": "Соединение изнутри туннеля — с %s"
+  },
+  "Through this node in the running core — not through your current route": {
+    "value": "Через этот узел в работающем ядре — не через ваш текущий маршрут"
+  },
+  "Through this node in a temporary core session": {
+    "value": "Через этот узел во временной сессии ядра"
+  },
+  "This is an auto-select node — it has no connection of its own. Open a member to diagnose it.": {
+    "value": "Это узел автовыбора — своего соединения у него нет. Откройте участника, чтобы проверить его."
+  },
+  "Start the VPN to check this node from here, or open it from its subscription to check it with the VPN off.": {
+    "value": "Включите VPN, чтобы проверить узел отсюда, или откройте его из подписки — там проверка работает и с выключенным VPN."
   }
 }

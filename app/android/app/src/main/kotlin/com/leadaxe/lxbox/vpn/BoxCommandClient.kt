@@ -10,6 +10,7 @@ import io.nekohasekai.libbox.CommandClientOptions
 import io.nekohasekai.libbox.ConnectionEvents
 import io.nekohasekai.libbox.Connections
 import io.nekohasekai.libbox.DnsQuery
+import io.nekohasekai.libbox.GetURLResult
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.LogIterator
 import io.nekohasekai.libbox.OutboundGroup
@@ -356,6 +357,47 @@ class BoxCommandClient {
             val r: URLTestOutboundResult = client.urlTestOutbound(tag, link, timeoutMs)
             mapOf("delay" to r.getDelay(), "error" to r.getError())
         }.getOrElse { mapOf("delay" to 0, "error" to (it.message ?: "urlTestOutbound failed")) }
+    }
+
+    /// §392 — диагностический HTTP GET через узел по тегу (kernel SPEC 058).
+    /// Не замер: возвращает ТЕЛО ответа, чтобы показать «что видно через этот
+    /// узел» (exit-IP, гео, `warp=`). Активный selector не трогается.
+    ///
+    /// Variant B наизнанку относительно `urlTestOutbound`: libbox-обёртка сама
+    /// мапит прикладную неудачу (`error != ""` в payload) в брошенное
+    /// исключение, поэтому провал ловится здесь catch'ем, а не полем ответа.
+    /// Не-2xx исключением НЕ является — это результат (403/429 от сервиса —
+    /// говорящие данные), приезжает со статусом и телом.
+    ///
+    /// Идёт через тот же pingClient, что и остальные unary RPC (§209):
+    /// lifecycle-независим, работает и когда приложение в фоне.
+    fun getUrlViaOutbound(
+        tag: String,
+        link: String,
+        timeoutMs: Int,
+        maxBytes: Int,
+    ): Map<String, Any> {
+        val client = ensurePingClient()
+            ?: return mapOf("error" to "command client not connected")
+        return runCatching {
+            // headers = null — легальный вызов «без заголовков» (в gomobile нет
+            // ни overload'ов, ни variadic; см. kernel SPEC 058 §2.3).
+            val r: GetURLResult = client.getURLViaOutbound(tag, link, timeoutMs, maxBytes, null)
+            // ГРАБЛЯ: у GetURLResult геттеры БЕЗ `get`-префикса (`content()`,
+            // `status()`), в отличие от URLTestOutboundResult.getDelay() —
+            // gomobile снимает префикс, когда имя поля не начинается с Get.
+            mapOf(
+                "status" to r.status(),
+                "content" to r.content(),
+                "truncated" to r.truncated(),
+                "contentType" to r.contentType(),
+                "remoteAddr" to r.remoteAddr(),
+                "elapsedMs" to r.elapsedMs(),
+                "error" to "",
+            )
+        }.getOrElse {
+            mapOf("error" to (it.message ?: "getURLViaOutbound failed"))
+        }
     }
 
     /// §308 — групповой URLTest: ядро force-тестит ВСЕХ членов группы её

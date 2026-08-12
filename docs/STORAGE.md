@@ -252,7 +252,7 @@ Per-key спеки и shape — в разделах ниже.
 | `auto_check_updates` | `'true'` | [§036] | GitHub Releases polling на старте. |
 | `last_update_check_at` | `''` | [§036] | UTC ISO-8601, last polling timestamp. |
 | `last_known_version` | `''` | [§036] | Закэшированный latest tag. |
-| `dismissed_update_version` | `''` | [§036] | Тег, который юзер закрыл — снэкбар не показываем пока не сменится. |
+| `dismissed_update_version` | `''` | [§036], §390 | Тег, который юзер закрыл кнопкой **Ignore** — снэкбар не показываем пока не сменится. ⚠ §390: «Later» сюда НЕ пишет (он значит «напомнить при следующем запуске», а показ и так один за запуск — хватает внутрипроцессного флага). |
 | `shown_crash_stamp` | `''` | §316 | `имя@mtime` краш-репорта ядра, про который плашка на главном уже показана. Привязка к КОНКРЕТНОМУ файлу, а не счётчик показов: повторный запуск молчит, новый краш — говорит. |
 | `config_locked_for_debug` | `'false'` | [§037] | `generateConfig()` возвращает null silently. Юзер пинит свой config через `PUT /config`. |
 | `debug_enabled` | `'false'` | [§031] | Debug API server runtime toggle. |

@@ -271,8 +271,44 @@ class CcChannel {
     return CcDelayResult.fromMap(_asMap(r ?? const {}));
   }
 
+  /// §392 — диагностический GET через узел в probe-сессии (VPN выключен).
+  /// Семантика результата — см. [getUrlViaOutbound].
+  Future<CcGetUrlResult> probeGetUrl(
+    String tag, {
+    required String link,
+    int timeoutMs = 0,
+    int maxBytes = 0,
+  }) async {
+    final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
+      'probeGetUrl',
+      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs, 'maxBytes': maxBytes},
+    );
+    return CcGetUrlResult.fromMap(_asMap(r ?? const {}));
+  }
+
   /// Гасит probe-сессию (идемпотентно).
   Future<void> probeStop() => _methods.invokeMethod<void>('probeStop');
+
+  /// §392 — диагностический HTTP GET через узел боевого ядра, адресуемый тегом
+  /// (kernel SPEC 058). В отличие от [urlTestOutbound] возвращает ТЕЛО ответа:
+  /// отвечает не на «жив ли узел», а на «что видно через него» (exit-IP, гео,
+  /// `warp=`). Активный selector не переключается.
+  ///
+  /// `maxBytes` 0 → дефолт ядра 256 KiB (потолок 1 MiB); `timeoutMs` 0 →
+  /// ограничен только вызовом. Реальный трафик через узел — зовётся ТОЛЬКО по
+  /// явному действию юзера, фоновые обходы списка запрещены (kernel SPEC 058 §5).
+  Future<CcGetUrlResult> getUrlViaOutbound(
+    String tag, {
+    required String link,
+    int timeoutMs = 0,
+    int maxBytes = 0,
+  }) async {
+    final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
+      'ccGetUrlViaOutbound',
+      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs, 'maxBytes': maxBytes},
+    );
+    return CcGetUrlResult.fromMap(_asMap(r ?? const {}));
+  }
 
   /// §4.7 — снапшот route+DNS правил (диагностика).
   Future<List<CcRule>> getRules() async {
@@ -850,6 +886,51 @@ class CcDelayResult {
 
   factory CcDelayResult.fromMap(Map<String, dynamic> m) => CcDelayResult(
     delay: _int(m['delay']),
+    error: m['error']?.toString() ?? '',
+  );
+}
+
+/// §392 — результат диагностического GET через узел (kernel SPEC 058).
+///
+/// ИНВАРИАНТ: `error` — единственный признак несостоявшегося обмена (тег не
+/// найден, dial/TLS, таймаут). **Не-2xx статус ошибкой НЕ является**: 403 от
+/// Cloudflare или 429 от гео-сервиса — ровно те данные, ради которых проба и
+/// существует, они приезжают с `error == ''` и заполненным телом.
+///
+/// [remoteAddr] — адрес, куда цель отрезолвилась ИЗНУТРИ туннеля, а НЕ exit-IP
+/// узла: exit-IP несёт тело ответа (строка `ip=` у cdn-cgi/trace).
+///
+/// [elapsedMs] — время всего обмена вместе с чтением тела; это не замер
+/// задержки, и в историю urltest ядро его не пишет.
+class CcGetUrlResult {
+  const CcGetUrlResult({
+    required this.status,
+    required this.content,
+    required this.truncated,
+    required this.contentType,
+    required this.remoteAddr,
+    required this.elapsedMs,
+    required this.error,
+  });
+
+  final int status;
+  final String content;
+  final bool truncated;
+  final String contentType;
+  final String remoteAddr;
+  final int elapsedMs;
+  final String error;
+
+  /// Обмен состоялся (ответ получен, любым статусом).
+  bool get ok => error.isEmpty;
+
+  factory CcGetUrlResult.fromMap(Map<String, dynamic> m) => CcGetUrlResult(
+    status: _int(m['status']),
+    content: m['content']?.toString() ?? '',
+    truncated: m['truncated'] == true,
+    contentType: m['contentType']?.toString() ?? '',
+    remoteAddr: m['remoteAddr']?.toString() ?? '',
+    elapsedMs: _int(m['elapsedMs']),
     error: m['error']?.toString() ?? '',
   );
 }

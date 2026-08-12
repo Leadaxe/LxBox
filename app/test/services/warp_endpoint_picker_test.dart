@@ -13,6 +13,32 @@ void main() {
     expect(p.sniPool, isNotEmpty);
   });
 
+  test('§386 endpointsPreset: непуст, recommended — явный ключ и есть в списке',
+      () async {
+    final p = await WarpEndpointPicker.load();
+    expect(p.endpointsPreset, isNotEmpty);
+    expect(p.recommendedEndpoint, 'engage.cloudflareclient.com:2408');
+    expect(p.endpointsPreset, contains(p.recommendedEndpoint));
+    // Каждый пункт — host:port (порт числовой).
+    for (final e in p.endpointsPreset) {
+      final i = e.lastIndexOf(':');
+      expect(i, greaterThan(0), reason: e);
+      expect(int.tryParse(e.substring(i + 1)), isNotNull, reason: e);
+    }
+  });
+
+  test('§386 masqueHostsPreset: recommended — явный ключ (домен), без масок',
+      () async {
+    final p = await WarpEndpointPicker.load();
+    expect(p.masqueHostsPreset, isNotEmpty);
+    expect(
+        p.recommendedMasqueHost, 'consumer-masque.cloudflareclient.com');
+    expect(p.masqueHostsPreset, contains(p.recommendedMasqueHost));
+    for (final h in p.masqueHostsPreset) {
+      expect(h.contains('/'), isFalse, reason: h);
+    }
+  });
+
   test('§305 randomEndpoint: host:port, порт валиден, v4/v6-хост', () async {
     final p = await WarpEndpointPicker.load();
     // v4: a.b.c.d:port; v6: [....]:port (полный рандом по CIDR, не только .1-.10).
@@ -86,6 +112,22 @@ void main() {
     final s = p.randomMasqueSni();
     expect(s, isNotEmpty);
     expect(p.masqueSniPool, contains(s));
+  });
+
+  test('masque recommended_sni: родной домен первым в пуле и помечен', () async {
+    final p = await WarpEndpointPicker.load();
+    // DPI умеет резать по НЕсовпадению SNI с IP-блоком (§143), поэтому родной
+    // домен — полноправный кандидат перебора (в т.ч. для кубика), а не «палево».
+    // Он же дефолт ядра при пустом поле SNI.
+    expect(p.recommendedMasqueSni, 'consumer-masque.cloudflareclient.com');
+    expect(p.masqueSniPool.first, p.recommendedMasqueSni);
+  });
+
+  test('WG-пул recommended_sni НЕ имеет (cloudflare-домены там режутся)',
+      () async {
+    final p = await WarpEndpointPicker.load();
+    // Асимметрия с MASQUE намеренна: §136 — SNI внутри junk-приманки, не TLS.
+    expect(p.sniPool, isNot(contains('engage.cloudflareclient.com')));
   });
 
   test('§130 новые чистые домены в обоих пулах (jsdelivr/aws — не cloudflare)',

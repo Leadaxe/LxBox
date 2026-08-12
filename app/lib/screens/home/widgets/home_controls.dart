@@ -114,7 +114,9 @@ class HomeControls extends StatelessWidget {
                     : getLocalText.s("Start")),
               ),
               const SizedBox(width: 8),
-              connectingAnimChild,
+              // Статус-чип отдаёт ширину первым: Start/Stop и reload имеют
+              // натуральный размер, а длинный статус сжимается с эллипсисом.
+              Flexible(child: connectingAnimChild),
               const SizedBox(width: 8),
               _buildReloadButton(context),
             ],

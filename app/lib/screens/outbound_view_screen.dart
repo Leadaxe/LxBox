@@ -10,6 +10,7 @@ import '../models/dependency_graph.dart';
 import '../services/runtime_chain.dart';
 import '../services/settings_storage.dart';
 import '../vpn/cc_channel.dart';
+import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/pool_view_dialog.dart';
 import 'owner_navigation.dart';
 import '../services/l10n/locale_controller.dart';
@@ -147,18 +148,23 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         widget.homeController.directDependentsOf(widget.tag);
     final hasDependents = dependents.isNotEmpty;
     return DefaultTabController(
-      length: hasDependents ? 3 : 2,
+      // §392 — +1 вкладка Diagnostics; Dependents по-прежнему условная, и
+      // индекс её открытия (openDependents) не меняется — она перед новой.
+      length: hasDependents ? 4 : 3,
       initialIndex: (widget.openDependents && hasDependents) ? 2 : 0,
       child: Scaffold(
         appBar: AppBar(
           title: Text('${widget.kind} · ${widget.tag}',
               overflow: TextOverflow.ellipsis),
           bottom: TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: getLocalText.s("Overview")),
               // l10n-exempt: acronym, same in all locales
               const Tab(text: 'JSON'),
               if (hasDependents) Tab(text: getLocalText.s("Dependents")),
+              Tab(text: getLocalText.s("Diagnostics")),
             ],
           ),
           actions: [
@@ -215,6 +221,10 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
               if (hasDependents)
                 _buildDependentsTab(
                     context, dependents, sick: sickDependents != null),
+              // §392 — экран знает узел ТОЛЬКО по тегу собранного конфига
+              // (NodeSpec тут нет), поэтому probe-ветка недоступна: при
+              // выключенном VPN вкладка объяснит, откуда проверять.
+              NodeDiagnosticsTab(liveTag: widget.tag),
             ],
           ),
         ),

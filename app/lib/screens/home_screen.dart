@@ -241,12 +241,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       // ловит _onControllerChange, когда придёт connected и сессия дорастёт.
       unawaited(_maybeShowSupport());
     });
-    // Update check (§036): hydrate cached "last known version" сразу,
-    // network fetch — через 5 сек чтобы не мешать запуску VPN. Throttled
-    // 24h в самом UpdateChecker. Listener подхватывает результат и
-    // показывает SnackBar если есть newer + не dismissed.
-    UpdateChecker.I.latest.addListener(_onLatestUpdateChanged);
-    unawaited(UpdateChecker.I.hydrate(localVersion: VersionInfo.I.version));
+    // Update check (§036 + §390): снек показываем ТОЛЬКО из кеша, на старте.
+    // Сетевой fetch (через 5 сек, throttled 24h) снек НЕ поднимает — его
+    // результат ложится в `last_known_version` и всплывёт на следующем
+    // запуске, где его подхватит hydrate(). Так уведомление никогда не
+    // выскакивает поверх работающего приложения.
+    unawaited(_hydrateAndMaybeNotify());
     _updateCheckTimer = Timer(const Duration(seconds: 5), () {
       if (!mounted) return;
       unawaited(
@@ -255,25 +255,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     });
   }
 
-  /// Reactive handler — UpdateChecker.latest изменился (hydrate / fetch).
-  /// Показываем SnackBar если есть newer + не dismissed для этой версии.
-  /// Вынесен в отдельный async-flow чтобы не блокировать notifier callback.
+  /// §390 — единственная точка показа update-снека: кеш `last_known_version`
+  /// на старте. `UpdateChecker.latest` при этом продолжает жить для About-блока
+  /// и §047-эмиттера, но слушателя-показывателя у него больше нет.
   bool _updateSnackbarShown = false;
-  void _onLatestUpdateChanged() {
+  Future<void> _hydrateAndMaybeNotify() async {
+    await UpdateChecker.I.hydrate(localVersion: VersionInfo.I.version);
     final info = UpdateChecker.I.latest.value;
-    if (info == null) {
-      _updateSnackbarShown = false;
-      return;
-    }
+    if (info == null) return;
     if (_updateSnackbarShown) return;
+    if (!mounted) return;
     // Флаг `_updateSnackbarShown` выставляется через `onShown` callback ровно
     // когда SnackBar реально показывается.
-    if (!mounted) return;
-    unawaited(maybeShowUpdateSnackbar(
+    await maybeShowUpdateSnackbar(
       context,
       info,
       onShown: () => _updateSnackbarShown = true,
-    ));
+    );
   }
 
   /// §274 — сборка конфига нашла каналы с фильтром-без-совпадений (канал
@@ -482,7 +480,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _filter.dispose();
     _controller.removeListener(_onControllerChange);
     _subController.removeListener(_onChannelsWithoutNodes);
-    UpdateChecker.I.latest.removeListener(_onLatestUpdateChanged);
     WidgetsBinding.instance.removeObserver(this);
     homeReturnObserver.clearHandler();
     _autoUpdater.dispose();

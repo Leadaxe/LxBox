@@ -48,8 +48,10 @@ class StatusChip extends StatelessWidget {
       );
     }
 
+    // Длинные локализованные статусы («Подключено») сжимаются вместо того,
+    // чтобы выдавливать соседей: ширину ограничивает Flexible в точке вызова.
     return Chip(
-      label: Text(label),
+      label: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
       avatar: iconWidget,
       backgroundColor: bgColor,
     );

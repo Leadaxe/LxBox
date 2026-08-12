@@ -10,12 +10,20 @@ class UrlLauncher {
   static const _channel = MethodChannel(PlatformChannels.utils);
 
   /// Returns true if opened, false if copied to clipboard as fallback.
-  static Future<bool> open(String url) async {
+  ///
+  /// §390 — [fallbackUrl] пробуется native-стороной, если основной URL некому
+  /// обработать. Нужно для custom-scheme ссылок (`market://` без Play), где
+  /// прежний код ронял `startActivity`. Клипборд-фолбэк ниже ловит уже случай
+  /// «не открылось ничем».
+  static Future<bool> open(String url, {String? fallbackUrl}) async {
     try {
-      await _channel.invokeMethod('openUrl', {'url': url});
+      await _channel.invokeMethod('openUrl', {
+        'url': url,
+        'fallbackUrl': ?fallbackUrl,
+      });
       return true;
     } catch (_) {
-      await Clipboard.setData(ClipboardData(text: url));
+      await Clipboard.setData(ClipboardData(text: fallbackUrl ?? url));
       return false;
     }
   }

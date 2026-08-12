@@ -541,6 +541,20 @@ class BoxService(
             Log.w(TAG, "[vpn §361] start cancelled while blocked — skip setStatus(Started)")
             return
         }
+        // §387 — парный к §361 guard для другого ordering'а: `doForceStop` успел
+        // пройти (setStatus(Stopped) уже разослан), но его teardown упёрся в тот
+        // же занятый ядром JNI-вызов → `stopSelf()`/`onDestroy` ещё не было и
+        // корутина НЕ отменена — §361 такой поздний return не ловит. Признак
+        // смерти сессии здесь — состояние: любой stop-путь (doStop/doForceStop/
+        // stopAndAlert/onRevoke) уводит `status` из Starting ДО teardown'а.
+        // Поздний `Started` поверх — зомби: Dart принял бы его за живой туннель
+        // (prev=disconnected), а сервис умирает → все RPC виснут, UI держит
+        // «Connected», стоп не работает. Добивать ядро не нужно — teardown
+        // stop-пути уже в полёте и разблокируется этим же возвратом из JNI.
+        if (status != VpnStatus.Starting) {
+            Log.w(TAG, "[vpn §387] status=${status.name} after start returned — skip setStatus(Started)")
+            return
+        }
         setStatus(VpnStatus.Started)
 
         // §122 Фаза 0 — поднять CommandClient-канал. ПОСЛЕ startCommandServer()

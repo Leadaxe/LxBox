@@ -21,21 +21,37 @@ class ScanPool {
   const ScanPool({
     required this.wgV4Cidr,
     required this.wgV6Cidr,
+    this.wgEndpointsPreset = const [],
+    this.wgRecommendedEndpoint = '',
     required this.wgPorts,
     required this.wgPortsExtra,
     required this.wgSniPool,
     required this.utlsFpPool,
     this.wgKeepalive = 0,
+    this.masqueHostsPreset = const [],
+    this.masqueRecommendedHost = '',
     required this.masqueV4Cidr,
     required this.masqueH3V4Cidr,
     required this.masquePortsH3,
     required this.masquePortsH2,
     required this.masqueSniPool,
+    this.masqueRecommendedSni = '',
   });
 
   // --- WireGuard / AWG ---
   final List<String> wgV4Cidr;
   final List<String> wgV6Cidr;
+
+  /// §386 — готовые `host:port` для combobox endpoint в визарде. Пусто (старый
+  /// asset / JSON-override без ключа) → combobox без пунктов, только свободный
+  /// ввод + кубик.
+  final List<String> wgEndpointsPreset;
+
+  /// §386 — рекомендуемое значение из [wgEndpointsPreset] (официальный
+  /// `engage.cloudflareclient.com:2408`). ЯВНЫЙ ключ `recommended_endpoint` —
+  /// UI помечает суффиксом пункт с этим значением, на любой позиции; порядок
+  /// списка семантики не несёт. '' (нет ключа) → пометки нет.
+  final String wgRecommendedEndpoint;
 
   /// Cloudflare-достоверные WG-порты (2408/500/1701/4500). Приоритетны.
   final List<int> wgPorts;
@@ -43,7 +59,10 @@ class ScanPool {
   /// Empirical-порты — ниже приоритетом (§132: длинный список зарублен голосованием).
   final List<int> wgPortsExtra;
 
-  /// SNI-приманки для AWG-обфускации (junk, НЕ cloudflare-домены).
+  /// SNI-приманки для AWG-обфускации (junk, НЕ cloudflare-домены). В отличие от
+  /// [masqueSniPool] родной домен сюда НЕ кладём: здесь SNI лежит внутри
+  /// junk-приманки (§136, реального TLS нет) и cloudflare-* на device-замере
+  /// резался. `recommended_sni` у WG-секции поэтому нет.
   final List<String> wgSniPool;
 
   final List<String> utlsFpPool;
@@ -61,6 +80,16 @@ class ScanPool {
 
   // --- MASQUE ---
 
+  /// §386 — готовые хосты для combobox MASQUE-endpoint в визарде (официальный
+  /// домен + device-verified IP). Пусто (старый asset/override) → UI собирает
+  /// фолбэк из /32-записей [masqueH3V4Cidr].
+  final List<String> masqueHostsPreset;
+
+  /// §386 — рекомендуемый хост из [masqueHostsPreset] (официальный домен
+  /// `consumer-masque.cloudflareclient.com`). ЯВНЫЙ ключ `recommended_host`,
+  /// семантика как у [wgRecommendedEndpoint].
+  final String masqueRecommendedHost;
+
   /// §305 — CIDR-блоки для h2 (h2 живёт по всему блоку). h3 их НЕ использует.
   final List<String> masqueV4Cidr;
 
@@ -76,7 +105,13 @@ class ScanPool {
   final List<int> masquePortsH2;
 
   /// SNI для MASQUE (МОЖЕТ содержать cloudflare-домены — трафик и так идёт в CF).
+  /// Включает родной `consumer-masque.cloudflareclient.com` — см. [wgSniPool]
+  /// про DPI по несовпадению SNI; он же дефолт ядра при пустом поле.
   final List<String> masqueSniPool;
+
+  /// Рекомендуемый SNI из [masqueSniPool] (ключ `recommended_sni`). Семантика
+  /// как у [wgRecommendedSni] — пометка в UI, без веса в переборе.
+  final String masqueRecommendedSni;
 
   /// Пул пригоден, если валиден хотя бы один транспорт. WG требует портов
   /// (иначе пробу не собрать); MASQUE использует свои masque-порты.
@@ -122,16 +157,21 @@ class ScanPool {
     final pool = ScanPool(
       wgV4Cidr: strs(wg, 'v4_cidr'),
       wgV6Cidr: strs(wg, 'v6_cidr'),
+      wgEndpointsPreset: strs(wg, 'endpoints_preset'),
+      wgRecommendedEndpoint: (wg['recommended_endpoint'] as String?) ?? '',
       wgPorts: ints(wg, 'ports'),
       wgPortsExtra: ints(wg, 'ports_extra'),
       wgSniPool: strs(wg, 'sni_pool'),
       utlsFpPool: strs(wg, 'utls_fp_pool'),
       wgKeepalive: intOr0(wg, 'keepalive'),
+      masqueHostsPreset: strs(mq, 'hosts_preset'),
+      masqueRecommendedHost: (mq['recommended_host'] as String?) ?? '',
       masqueV4Cidr: strs(mq, 'v4_cidr'),
       masqueH3V4Cidr: strs(mq, 'h3_v4_cidr'),
       masquePortsH3: ints(mq, 'ports_h3'),
       masquePortsH2: ints(mq, 'ports_h2'),
       masqueSniPool: strs(mq, 'sni_pool'),
+      masqueRecommendedSni: (mq['recommended_sni'] as String?) ?? '',
     );
     return pool.hasData ? pool : null;
   }
