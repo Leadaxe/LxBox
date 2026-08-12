@@ -1,21 +1,27 @@
 # §393 — MASQUE: переход на новую схему конфига ядра
 
 **Статус:** в работе
-**Ядро:** `v1.14.0-lx.25-rc.4` ([SPEC 062](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/062-MASQUE_CONFIG_SCHEMA_MIGRATION/SPEC.md), [SPEC 021](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/021-MASQUE_CONNECT_IP_OUTBOUND/SPEC.md))
+**Ядро:** `v1.14.0-lx.25-rc.5` — ждём публикации ([SPEC 062](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/062-MASQUE_CONFIG_SCHEMA_MIGRATION/SPEC.md), [SPEC 021](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/021-MASQUE_CONNECT_IP_OUTBOUND/SPEC.md))
 **Связано:** [§130 MASQUE](../features/130%20masque/spec.md), §284/§305 (сканер), §386 (пресеты endpoint)
 
 ## Зачем
 
-Ядро `lx.25-rc.4` переименовало поля outbound'а `masque`: транспорт и TLS-опции
-переехали из плоского корня в `transport` + вложенный `tls{}`. Старые имена ещё
-работают, но каждый такой outbound пишет предупреждение в лог, а в `lx.30`
-поддержка снимается. Плюс сменился дефолтный SNI.
+Ядро переименовало поля outbound'а `masque`: версия HTTP и TLS-опции переехали
+из плоского корня в `vhttp` + вложенный `tls{}`. Старые имена ещё работают, но
+каждый такой outbound пишет предупреждение в лог, а в `lx.30` поддержка
+снимается. Плюс сменился дефолтный SNI.
+
+**История имени.** В `rc.4` ключ назывался `transport`; в `rc.5` переименован в
+`vhttp` — `transport` у остальных протоколов означает объект `{type: ws|grpc|…}`,
+и совпадение путало. Промежуточное имя не выходило за пределы одного коммита в
+`develop`: ни релиза, ни пользовательских URI с ним нет, поэтому в клиенте оно
+не поддерживается вовсе — на входе живут только `vhttp` и legacy `network`.
 
 ## Что меняется в ядре
 
 | устарело | заменить на |
 |---|---|
-| `network: "h3"` / `"h2"` | `transport: "h3"` / `"h2"` |
+| `network: "h3"` / `"h2"` | `vhttp: "h3"` / `"h2"` |
 | `sni: "…"` | `tls.server_name: "…"` |
 | `skip_cert_verify: true` | `tls.insecure: true` |
 | `fragment: true` | `tls.fragment: true` |
@@ -39,20 +45,20 @@ fatal при старте. Одинаковые значения конфлик�
 
 Ядро теперь предупреждает (не падает) на неподдерживаемых для masque полях:
 `tls.alpn`, `tls.ech`, `tls.reality`, `tls.kernel_*`, а также на фрагментации
-при `transport: h3`.
+при `vhttp: h3`.
 
 ## Решение: где живёт знание о старых именах
 
-Пин ядра всегда один и он ≥ rc.4, поэтому **эмит знает только новую схему**.
+Пин ядра всегда один и он ≥ rc.5, поэтому **эмит знает только новую схему**.
 Обратная совместимость нужна исключительно на входе — чужие конфиги, старые
 бэкапы и уже сохранённые `masque://`-ссылки никуда не делись.
 
 ```
 вход (legacy ∪ new)              модель            выход (new only)
 ─────────────────────            ──────            ────────────────
-parseMasqueUri   ┐                                 emitMasque  → transport + tls{}
-                 ├→ MasqueSpec.transport ──────────┤
-nodeFromSingbox  ┘                                 toUriMasque → transport=
+parseMasqueUri   ┐                                 emitMasque  → vhttp + tls{}
+                 ├→ MasqueSpec.vhttp ─────────────┤
+nodeFromSingbox  ┘                                 toUriMasque → vhttp=
 ```
 
 Legacy-имена упоминаются ровно в двух парсерах. Ни билдер, ни модель, ни UI о
@@ -67,34 +73,38 @@ MASQUE хранится в двух несвязанных местах:
    в конфиг не попадает.
 2. Узлы — обычные `UserServer` в `server_lists`, строка `masque://…`.
 
-Ключ `network` внутри `masque_account` на диске **остаётся как есть**: это наш
-внутренний формат, а не конфиг ядра. Переименование потребовало бы миграции
-(§221: новый ключ одновременно в allowlist и export) без выигрыша. В Dart-модели
-поле называется `transport`, на диске — `network`, стык в `toJson`/`fromJson`
-с комментарием.
+Ключ `network` из `masque_account` **удалён совсем**: версия HTTP — свойство
+узла, а не регистрации (одни креды дают и h3-, и h2-узлы через `ScanNodeBuilder`,
+а визард выбирает её заново при каждом добавлении). Теперь она передаётся
+параметром `toMasqueUri(vhttp:)` и живёт только в URI узла.
+
+Миграции нет: старый ключ на диске не трогаем, при чтении он игнорируется и
+исчезает при следующей записи.
 
 Сохранённые URI с `network=` продолжат парситься; при следующем пересохранении
-узла перепишутся на `transport=`. Дрейф без data-loss.
+узла перепишутся на `vhttp=`. Дрейф без data-loss.
 
 ## Объём
 
 | Слой | Файл | Правка |
 |---|---|---|
-| Модель | `models/node_spec.dart` | `MasqueSpec.network` → `transport`; новое `disableSni` |
-| Эмит конфига | `models/node_spec_emit.dart` `emitMasque` | `transport` + `tls{}`; only-new |
-| Эмит URI | `models/node_spec_emit.dart` `toUriMasque` | `transport=`, `disable_sni=` |
-| URI-парсер | `parser/uri_parsers/masque_parser.dart` | `transport` ∪ legacy `network`; `tls_*`-ключи |
+| Модель | `models/node_spec.dart` | `MasqueSpec.network` → `vhttp`; новое `disableSni` |
+| Эмит конфига | `models/node_spec_emit.dart` `emitMasque` | `vhttp` + `tls{}`; only-new |
+| Эмит URI | `models/node_spec_emit.dart` `toUriMasque` | `vhttp=`, `disable_sni=` |
+| URI-парсер | `parser/uri_parsers/masque_parser.dart` | `vhttp` ∪ legacy `network` |
 | JSON-импорт | `parser/json_parsers.dart` | обе схемы, вложенный `tls{}` |
-| WARP-генератор | `warp/masque_account.dart` | поле `transport`, URI-ключ `transport=` |
-| Сканер | `warp/scan/scan_node_builder.dart` | конструктор `MasqueAccount` |
+| WARP-генератор | `warp/masque_account.dart` | `toMasqueUri(vhttp:)`, ключ `network` удалён |
+| Регистрация | `warp/warp_client.dart` | `registerMasque` без версии HTTP |
+| Сканер | `warp/scan/scan_node_builder.dart` | версия HTTP при сборке URI |
+| Лейбл узла | `models/config_node.dart` | `vhttp` — плоская строка, ветка до общей |
 | Билдер | `builder/post_steps/tls_transforms.dart` | `applyTlsFragment` для masque h2 |
-| Пин | `app/android/libbox.version`, `docs/KERNEL.md` | rc.3 → rc.4 |
+| Пин | `app/android/libbox.version`, `docs/KERNEL.md` | rc.3 → rc.5 |
 
 ### Решения по развилкам
 
 **Фрагментация.** `applyTlsFragment` сейчас требует `tls.enabled == true`, а у
 masque блока `tls` не было вовсе — глобальный `tls_fragment` его не касался.
-Теперь касается, но **только при `transport: h2`**. При h3 — пропуск молча, без
+Теперь касается, но **только при `vhttp: h2`**. При h3 — пропуск молча, без
 UI-варнинга: глобальный тумблер не должен ругаться на каждый неподходящий узел,
 и ядро само пишет предупреждение в лог. У masque нет `tls.enabled` (TLS всегда
 включён по природе транспорта), поэтому гейт для него отдельный.
@@ -117,3 +127,9 @@ UI-варнинга: глобальный тумблер не должен ру�
 - `applyTlsFragment`: h2 получает `tls.fragment`, h3 не получает;
 - девайс: бамп пина по регламенту `docs/KERNEL.md` (эмулятор, `strings libbox.so`,
   sha256 `classes.jar`), MASQUE h3 и h2 поднимаются, в логе нет deprecation-варнингов.
+
+## Открыто
+
+Пин ядра ждёт публикации `rc.5` с `vhttp`. До неё эмит клиента и пин расходятся:
+запинен `rc.4`, знающий только `transport`, поэтому masque-узлы на этой связке не
+поднимутся. Бампить сразу по выходу тега.

@@ -1081,12 +1081,12 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         if (ipv6.isNotEmpty) ensureCidr(ipv6),
       ];
       if (addrs.isEmpty) return null;
-      // §393 — схема ядра lx.25-rc.4 (`transport` + вложенный `tls{}`) и старая
-      // плоская (`network`/`sni`). Читаем обе: чужие конфиги и бэкапы, снятые до
+      // §393 — схема ядра (`vhttp` + вложенный `tls{}`) и старая плоская
+      // (`network`/`sni`). Читаем обе: чужие конфиги и бэкапы, снятые до
       // миграции, никуда не делись. Новое имя выигрывает.
       final masqueTls = entry['tls'];
       final tlsMap = masqueTls is Map ? masqueTls : const {};
-      final transportRaw = entry['transport']?.toString() ?? '';
+      final vhttpRaw = entry['vhttp']?.toString() ?? '';
       final sniRaw = tlsMap['server_name']?.toString() ??
           entry['sni']?.toString() ??
           '';
@@ -1101,8 +1101,8 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         publicKeyDer: pub,
         localAddresses: addrs,
         profile: entry['profile']?.toString() ?? 'cloudflare',
-        transport: transportRaw.isNotEmpty
-            ? transportRaw
+        vhttp: vhttpRaw.isNotEmpty
+            ? vhttpRaw
             : (entry['network']?.toString() ?? 'h3'),
         sni: sniRaw,
         disableSni: tlsMap['disable_sni'] == true,

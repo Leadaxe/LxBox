@@ -449,10 +449,10 @@ class SubscriptionController extends ChangeNotifier {
 
   /// §130 — регистрирует MASQUE-WARP и добавляет узел. Отдельный путь от
   /// [addWarp] (ECDSA-крипта, двухшаговый enroll, Outbound вместо Endpoint).
-  /// [transport] — `h3` (дефолт) или `h2`; §393: свойство узла, не аккаунта,
-  /// поэтому в кеш не пишется. Кеш переиспользуется как в §025.
+  /// [vhttp] — версия HTTP `h3` (дефолт) или `h2`; §393: свойство узла, не
+  /// аккаунта, поэтому в кеш не пишется. Кеш переиспользуется как в §025.
   Future<MasqueAccount?> addMasque({
-    String transport = 'h3',
+    String vhttp = 'h3',
     String? sni,
     String? idleTimeout,
     String? keepAlive,
@@ -481,7 +481,7 @@ class SubscriptionController extends ChangeNotifier {
       );
 
       // SNI/тюнинг — клиентские, применяем к кешу без ре-регистрации.
-      // Транспорт сюда не идёт (§393): он уходит прямо в URI узла.
+      // Версия HTTP сюда не идёт (§393): она уходит прямо в URI узла.
       account = account.copyWith(
         sni: sni,
         idleTimeout: idleTimeout,
@@ -514,7 +514,7 @@ class SubscriptionController extends ChangeNotifier {
       }
 
       final tag = _uniqueWarpTag(MasqueAccount.nodeTag());
-      await _addMasqueNode(account, tag, transport: transport);
+      await _addMasqueNode(account, tag, vhttp: vhttp);
       if (_lastError != null) return null;
       return account;
     } catch (e) {
@@ -530,8 +530,8 @@ class SubscriptionController extends ChangeNotifier {
 
   /// §130 — MASQUE-узел через `masque://` URI (аналог [_addWarpPlain]).
   Future<void> _addMasqueNode(MasqueAccount account, String tag,
-      {String transport = 'h3'}) async {
-    final spec = parseMasqueUri(account.toMasqueUri(transport: transport));
+      {String vhttp = 'h3'}) async {
+    final spec = parseMasqueUri(account.toMasqueUri(vhttp: vhttp));
     if (spec == null) {
       _lastError = const ErrMsg(ErrKey.invalidMasqueConfig);
       return;
@@ -547,7 +547,7 @@ class SubscriptionController extends ChangeNotifier {
       publicKeyDer: spec.publicKeyDer,
       localAddresses: spec.localAddresses,
       profile: spec.profile,
-      transport: spec.transport,
+      vhttp: spec.vhttp,
       sni: spec.sni,
       disableSni: spec.disableSni,
       mtu: spec.mtu,

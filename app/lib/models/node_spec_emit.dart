@@ -645,7 +645,7 @@ String toUriWireguard(WireguardSpec s) {
 
 /// §130 — MASQUE эмитится как **Outbound** (не Endpoint). Плоская структура
 /// по `option.MASQUEOutboundOptions` ядра: `ip`/`ipv6` берутся из
-/// [MasqueSpec.localAddresses] по признаку `:` (v6). `transport` = h3/h2.
+/// [MasqueSpec.localAddresses] по признаку `:` (v6). `vhttp` = версия HTTP h3/h2.
 Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
   String? ip, ipv6;
   for (final a in s.localAddresses) {
@@ -655,10 +655,10 @@ Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
       ip ??= a;
     }
   }
-  // §393 — схема ядра lx.25-rc.4: транспорт под ключом `transport`, TLS-опции
-  // во вложенном `tls{}`. Старые имена (`network`/`sni`) НЕ пишем: они ещё
-  // принимаются ядром, но дают deprecation-варнинг на каждый outbound, а
-  // одновременная запись старого и нового имени с разными значениями — fatal.
+  // §393 — схема ядра: версия HTTP под ключом `vhttp`, TLS-опции во вложенном
+  // `tls{}`. Старые имена (`network`/`sni`) НЕ пишем: они ещё принимаются
+  // ядром, но дают deprecation-варнинг на каждый outbound, а одновременная
+  // запись старого и нового имени с разными значениями — fatal.
   final tls = <String, dynamic>{
     if (s.sni.isNotEmpty) 'server_name': s.sni,
     if (s.disableSni) 'disable_sni': true,
@@ -669,7 +669,7 @@ Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
     'server': s.server,
     'server_port': s.port,
     'profile': s.profile,
-    'transport': s.transport,
+    'vhttp': s.vhttp,
     'private_key': s.privateKeyDer,
     'public_key': s.publicKeyDer,
     'ip': ?ip,
@@ -687,7 +687,7 @@ String toUriMasque(MasqueSpec s) {
     'publickey': s.publicKeyDer,
     if (s.localAddresses.isNotEmpty) 'address': s.localAddresses.join(','),
     'profile': s.profile,
-    'transport': s.transport,
+    'vhttp': s.vhttp,
     if (s.sni.isNotEmpty) 'sni': s.sni,
     if (s.disableSni) 'disable_sni': '1',
     if (s.mtu != null) 'mtu': s.mtu.toString(),

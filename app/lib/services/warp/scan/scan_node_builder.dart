@@ -65,7 +65,7 @@ class ScanNodeBuilder {
     return spec?.toUri();
   }
 
-  /// MASQUE-узел: те же креды, network (h3/h2) + IP:port + SNI из кандидата.
+  /// MASQUE-узел: те же креды, версия HTTP (h3/h2) + IP:port + SNI кандидата.
   ///
   /// §305 — h3 И h2 берут IP:port кандидата (разнообразие endpoint). Прошлый
   /// форсинг h3 на `acc.server` снят: вывод «h3 привязан к server» был артефактом
@@ -92,8 +92,8 @@ class ScanNodeBuilder {
       idleTimeout: acc.idleTimeout,
       keepAlive: acc.keepAlive,
     );
-    // §393 — транспорт задаётся при сборке URI (в аккаунте его больше нет).
-    final uri = tuned.toMasqueUri(transport: isH3 ? 'h3' : 'h2');
+    // §393 — версия HTTP задаётся при сборке URI (в аккаунте её больше нет).
+    final uri = tuned.toMasqueUri(vhttp: isH3 ? 'h3' : 'h2');
     final hash = uri.lastIndexOf('#');
     final base = hash < 0 ? uri : uri.substring(0, hash);
     return '$base#${Uri.encodeComponent(c.nodeTitle)}';

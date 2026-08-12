@@ -26,7 +26,13 @@ AmneziaWG 2.0 + нативный XHTTP + VLESS encryption (PQ-слой) + LxBox-
 — миграция схемы конфига `masque` (kernel SPEC 062) + смена дефолтного SNI
 (SPEC 021). Клиентская сторона — §393.
 
-**Схема `masque` переехала.** Транспорт из `network` → `transport`, TLS-опции из
+⚠️ **Пин отстаёт от кода.** Клиент уже эмитит финальное имя ключа `vhttp`
+(см. ниже), а `rc.4` знает только промежуточное `transport` — на этой связке
+masque-узлы не поднимутся. Бампить на `rc.5` сразу по выходу тега.
+
+**Схема `masque` переехала.** Версия HTTP из `network` → `vhttp` (в `rc.4`
+ключ назывался `transport`, в `rc.5` переименован: `transport` у остальных
+протоколов — это объект `{type: ws|grpc|…}`, совпадение путало), TLS-опции из
 плоского корня → во вложенный `tls{}` (`sni` → `tls.server_name`,
 `skip_cert_verify` → `tls.insecure`, `fragment`/`record_fragment`/
 `fragment_fallback_delay` → под `tls`). Остальные поля (`server`, `server_port`,
@@ -46,7 +52,7 @@ JSON-импорт).
 
 Ядро теперь **предупреждает** (раньше молчало) на неподдерживаемых для masque
 полях: `tls.alpn`, `tls.ech`, `tls.reality`, `tls.kernel_*`, а также на
-фрагментации при `transport: h3`.
+фрагментации при `vhttp: h3`.
 
 **Дефолтный SNI сменился:** `consumer-masque.cloudflareclient.com` →
 `www.cloudflare.com`. Затрагивает конфиги БЕЗ явного SNI; заданное значение

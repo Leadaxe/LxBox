@@ -55,12 +55,12 @@ void main() {
     expect(h3, startsWith('masque://'));
     expect(h3, contains('162.159.199.5:4443'), reason: 'h3 — IP:port кандидата');
     expect(h3, isNot(contains('162.159.198.1')), reason: 'НЕ server из аккаунта');
-    expect(h3, contains('transport=h3'));
+    expect(h3, contains('vhttp=h3'));
 
     final h2 = b.uriFor(
         cand(ScanProtocol.masqueH2, ip: '162.159.198.5', port: 8443));
     expect(h2, contains('162.159.198.5:8443'), reason: 'h2 — IP:port кандидата');
-    expect(h2, contains('transport=h2'));
+    expect(h2, contains('vhttp=h2'));
   });
 
   test('нет аккаунта для протокола → null (caller пропускает)', () {

@@ -7,11 +7,11 @@ import '../parser/uri_utils.dart' show ensureCidr;
 /// ([MasqueKeys]) и НЕ покидает телефон — в Cloudflare уходит только публичная
 /// часть (PATCH enroll).
 ///
-/// §393 — транспорта (h3/h2) здесь НЕТ и в хранилище он больше не пишется: это
-/// не свойство регистрации, а параметр конкретного узла. Одни и те же креды
-/// порождают и h3-, и h2-узлы (см. `ScanNodeBuilder`), а визард задаёт транспорт
-/// заново при каждом добавлении. Старые записи с ключом `network` не трогаем —
-/// он просто игнорируется при чтении.
+/// §393 — версии HTTP (h3/h2) здесь НЕТ и в хранилище она больше не пишется:
+/// это не свойство регистрации, а параметр конкретного узла. Одни и те же креды
+/// порождают и h3-, и h2-узлы (см. `ScanNodeBuilder`), а визард задаёт её заново
+/// при каждом добавлении. Старые записи с ключом `network` не трогаем — он
+/// просто игнорируется при чтении.
 class MasqueAccount {
   const MasqueAccount({
     required this.privKeyDer,
@@ -94,9 +94,9 @@ class MasqueAccount {
   /// Собирает `masque://` URI для добавления узла через стандартный
   /// `addFromInput` (аналог [WarpAccount.toWireguardUri]).
   ///
-  /// §393 — [transport] (`h3`/`h2`) приходит параметром: он принадлежит узлу,
-  /// а не аккаунту. В URI пишется новым ключом `transport=`.
-  String toMasqueUri({String transport = 'h3'}) {
+  /// §393 — [vhttp] (`h3`/`h2`) приходит параметром: версия HTTP принадлежит
+  /// узлу, а не аккаунту. В URI пишется ключом `vhttp=`.
+  String toMasqueUri({String vhttp = 'h3'}) {
     final addrs = [
       if (clientV4.isNotEmpty) ensureCidr(clientV4),
       if (clientV6.isNotEmpty) ensureCidr(clientV6),
@@ -105,7 +105,7 @@ class MasqueAccount {
       'publickey': serverPubDer,
       'address': addrs,
       'profile': 'cloudflare',
-      'transport': transport,
+      'vhttp': vhttp,
       'mtu': '1280',
       if (sni.isNotEmpty) 'sni': sni,
       if (idleTimeout.isNotEmpty) 'idle_timeout': idleTimeout,
@@ -128,7 +128,7 @@ class MasqueAccount {
         'device_id': deviceId,
         'token': token,
         'created_at': createdAt,
-        // §393 — ключа `network` здесь больше нет (транспорт принадлежит узлу).
+        // §393 — ключа `network` здесь больше нет (версия HTTP — свойство узла).
         // Старые записи с ним остаются на диске нетронутыми и игнорируются.
         'sni': sni,
         'idle_timeout': idleTimeout,

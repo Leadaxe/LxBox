@@ -172,10 +172,10 @@ void main() {
           'transport': {'type': 'http'},
         },
         {'tag': 'plain', 'type': 'trojan'},
-        // §130/§393 — MASQUE: транспорт из плоской строки `transport` (h3/h2),
-        // пусто → h3. Legacy-имя `network` тоже читается (конфиги до lx.25-rc.4).
-        {'tag': 'mq3', 'type': 'masque', 'transport': 'h3'},
-        {'tag': 'mq2', 'type': 'masque', 'transport': 'h2'},
+        // §130/§393 — MASQUE: версия HTTP из своего ключа `vhttp` (h3/h2),
+        // пусто → h3. Legacy-имя `network` тоже читается (конфиги до миграции).
+        {'tag': 'mq3', 'type': 'masque', 'vhttp': 'h3'},
+        {'tag': 'mq2', 'type': 'masque', 'vhttp': 'h2'},
         {'tag': 'mqlegacy', 'type': 'masque', 'network': 'h2'},
         {'tag': 'mqdef', 'type': 'masque'},
         {'tag': 'hy2', 'type': 'hysteria2', 'tls': {'enabled': true}},

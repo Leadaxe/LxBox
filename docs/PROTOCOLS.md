@@ -1132,7 +1132,7 @@ MASQUE-узлы создаются через **Get WARP**-визард (ECDSA P
 ### URI Format
 
 ```
-masque://<privKeyDer>@<host>:<port>?publickey=<serverPubDer>&address=<v4,v6>&profile=cloudflare&transport=h3[&sni=...][&disable_sni=1][&mtu=1280][&idle_timeout=5m][&keep_alive=30s]#<label>
+masque://<privKeyDer>@<host>:<port>?publickey=<serverPubDer>&address=<v4,v6>&profile=cloudflare&vhttp=h3[&sni=...][&disable_sni=1][&mtu=1280][&idle_timeout=5m][&keep_alive=30s]#<label>
 ```
 
 Ключи — base64(DER) ECDSA P-256: `userInfo` (до `@`) = наш приватник (SEC1),
@@ -1147,18 +1147,22 @@ masque://<privKeyDer>@<host>:<port>?publickey=<serverPubDer>&address=<v4,v6>&pro
 | `publickey` / `public_key` | base64(PKIX DER) серверного pubkey, обязателен |
 | `address` | CSV локальных адресов туннеля (`v4,v6`), обязателен; авто-CIDR (`/32`//`128`) |
 | `profile` | `cloudflare` (default) \| `standard` |
-| `transport` | `h3` — QUIC (default) \| `h2` — HTTP/2. §393; legacy-имя `network` принимается на входе |
+| `vhttp` | версия HTTP: `h3` — QUIC (default) \| `h2`. §393; legacy-имя `network` принимается на входе |
 | `sni` | TLS SNI; пусто = дефолт ядра (с lx.25-rc.4 — `www.cloudflare.com`) |
 | `disable_sni` | `1`/`true` → ClientHello без SNI. НЕ синоним пустого `sni` (тот подменяется дефолтом профиля). §393 |
 | `mtu` | int, default `1280` |
 | `idle_timeout` | Go-duration idle-suspend туннеля (пусто = дефолт ядра `5m`; отрицательное = выкл, §128) |
-| `keep_alive` | Go-duration QUIC keepalive (пусто = `30s`; только `transport=h3`) |
+| `keep_alive` | Go-duration QUIC keepalive (пусто = `30s`; только `vhttp=h3`) |
 
-**§393 — два поколения имён.** Эмит пишет только новые (`transport`, вложенный
+**§393 — два поколения имён.** Эмит пишет только новые (`vhttp`, вложенный
 `tls{}`); вход принимает и старые (`network`, плоский `sni`) — ими написаны
 URI, выпущенные до миграции, и чужие ссылки. При обоих именах сразу выигрывает
 новое. Ядро на такой паре с РАЗНЫМИ значениями падает, поэтому одновременно
 старое и новое имя мы не пишем никогда.
+
+Имя ключа — `vhttp`, а НЕ `transport`: у остальных протоколов `transport` это
+объект `{type: ws|grpc|…}`, совсем другая сущность. Здесь значение — версия
+HTTP (`h3`/`h2`) плоской строкой.
 
 ### sing-box Outbound Mapping
 
@@ -1167,8 +1171,8 @@ URI, выпущенные до миграции, и чужие ссылки. П�
 `keep_alive_period` пишутся только при непустых значениях; блок `tls{}`
 появляется, только если задан SNI или `disable_sni`.
 
-Схема ядра `lx.25-rc.4` (§393, kernel SPEC 062): транспорт под ключом
-`transport`, TLS-опции — во вложенном `tls{}`.
+Схема ядра (§393, kernel SPEC 062): версия HTTP под ключом `vhttp`,
+TLS-опции — во вложенном `tls{}`.
 
 ```json
 {
@@ -1177,7 +1181,7 @@ URI, выпущенные до миграции, и чужие ссылки. П�
   "server": "<host>",
   "server_port": 443,
   "profile": "cloudflare",
-  "transport": "h3",
+  "vhttp": "h3",
   "private_key": "<privKeyDer>",
   "public_key": "<serverPubDer>",
   "ip": "172.16.0.2/32",
@@ -1189,19 +1193,20 @@ URI, выпущенные до миграции, и чужие ссылки. П�
 }
 ```
 
-| устарело (до lx.25-rc.4) | сейчас |
+| устарело | сейчас |
 |---|---|
-| `network` | `transport` |
+| `network` | `vhttp` |
 | `sni` | `tls.server_name` |
 | `skip_cert_verify` | `tls.insecure` |
 | `fragment` / `record_fragment` | `tls.fragment` / `tls.record_fragment` |
 | `fragment_fallback_delay` | `tls.fragment_fallback_delay` |
 
 Старые имена ядро принимает до `v1.14.0-lx.30`, печатая по одному
-предупреждению на outbound.
+предупреждению на outbound. Промежуточное имя `transport` (одна rc ядра) в
+клиенте не поддерживается: наружу оно не выходило.
 
 **Фрагментация.** Глобальный `tls_fragment` (§270) накладывается на masque
-только при `transport: h2`: при h3 фрагментировать нечего (QUIC не несёт TLS
+только при `vhttp: h2`: при h3 фрагментировать нечего (QUIC не несёт TLS
 поверх TCP), ядро такие поля игнорирует с предупреждением — билдер пропускает
 h3-узлы молча.
 

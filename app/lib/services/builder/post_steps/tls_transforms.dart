@@ -70,11 +70,13 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
     if (ob['type'] == 'naive') continue;
     // §393 — masque: TLS всегда включён по природе транспорта, поля `enabled`
     // у него нет, а блок `tls{}` появляется только если задан SNI. Фрагментация
-    // осмысленна лишь на `transport: h2` (TCP+TLS); при h3 ядро пишет
-    // предупреждение и игнорирует её — пропускаем молча, глобальный тумблер не
-    // должен ругаться на каждый неподходящий узел.
+    // осмысленна лишь на `vhttp: h2` (TCP+TLS); при h3 ядро пишет предупреждение
+    // и игнорирует её — пропускаем молча, глобальный тумблер не должен ругаться
+    // на каждый неподходящий узел. Legacy-имя `network` читаем для конфигов,
+    // написанных до миграции (ручной редактор, чужой JSON).
     if (ob['type'] == 'masque') {
-      if (ob['transport'] == 'h3' || ob['transport'] == null) continue;
+      final v = ob['vhttp'] ?? ob['network'];
+      if (v != 'h2') continue;
       final mTls = (ob['tls'] ??= <String, dynamic>{}) as Map<String, dynamic>;
       if (fragment) mTls['fragment'] = true;
       if (recordFragment) mTls['record_fragment'] = true;

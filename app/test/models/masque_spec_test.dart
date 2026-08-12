@@ -16,7 +16,7 @@ void main() {
         privateKeyDer: 'PRIVDER==',
         publicKeyDer: 'PUBDER==',
         localAddresses: ['172.16.0.2/32', '2606:4700:110::2/128'],
-        transport: 'h3',
+        vhttp: 'h3',
         mtu: 1280,
         idleTimeout: '10m',
         keepAlive: '45s',
@@ -30,7 +30,7 @@ void main() {
     expect(m['server'], '162.159.198.1');
     expect(m['server_port'], 443);
     expect(m['profile'], 'cloudflare');
-    expect(m['transport'], 'h3');
+    expect(m['vhttp'], 'h3');
     // §393 — старые имена не пишем: они дают deprecation-варнинг, а вместе с
     // новым именем и другим значением роняют старт ядра.
     expect(m.containsKey('network'), isFalse);
@@ -58,7 +58,7 @@ void main() {
     expect(parsed.publicKeyDer, s.publicKeyDer);
     expect(parsed.server, s.server);
     expect(parsed.port, s.port);
-    expect(parsed.transport, s.transport);
+    expect(parsed.vhttp, s.vhttp);
     expect(parsed.localAddresses, containsAll(s.localAddresses));
     expect(parsed.idleTimeout, '10m');
     expect(parsed.keepAlive, '45s');
@@ -80,12 +80,12 @@ void main() {
       privateKeyDer: 'PRIVDER==',
       publicKeyDer: 'PUBDER==',
       localAddresses: ['172.16.0.2/32'],
-      transport: 'h2',
+      vhttp: 'h2',
       sni: 'www.cloudflare.com',
       disableSni: true,
     );
     final m = s.emit(TemplateVars.empty).map;
-    expect(m['transport'], 'h2');
+    expect(m['vhttp'], 'h2');
     expect(m['tls'], {'server_name': 'www.cloudflare.com', 'disable_sni': true});
     expect(m.containsKey('sni'), isFalse);
   });
@@ -95,18 +95,18 @@ void main() {
     expect(m.containsKey('tls'), isFalse);
   });
 
-  test('§393 — URI пишет transport=, но принимает legacy network=', () {
+  test('§393 — URI пишет vhttp=, но принимает legacy network=', () {
     final uri = spec().toUri();
-    expect(uri, contains('transport=h3'));
+    expect(uri, contains('vhttp=h3'));
     expect(uri, isNot(contains('network=')));
 
     // URI, выпущенный до миграции, продолжает парситься.
-    final legacy = uri.replaceAll('transport=h3', 'network=h2');
-    expect(parseMasqueUri(legacy)!.transport, 'h2');
+    final legacy = uri.replaceAll('vhttp=h3', 'network=h2');
+    expect(parseMasqueUri(legacy)!.vhttp, 'h2');
 
     // Оба имени сразу: новое сильнее (ядро на таком падает, мы — нет).
     final both = '$uri&network=h2';
-    expect(parseMasqueUri(both)!.transport, 'h3');
+    expect(parseMasqueUri(both)!.vhttp, 'h3');
   });
 
   test('§393 — disable_sni в URI round-trip', () {
