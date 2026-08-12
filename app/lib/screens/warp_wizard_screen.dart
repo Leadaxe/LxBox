@@ -367,7 +367,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     final sni = _masqueSni.text.trim();
     final ip = _masqueIp.text.trim();
     final account = await widget.subController.addMasque(
-      network: _masqueNetwork,
+      transport: _masqueNetwork,
       sni: sni.isEmpty ? null : sni,
       idleTimeout: _durationOrNull(_masqueIdle.text, 'm'),
       keepAlive: _durationOrNull(_masqueKeepAlive.text, 's'),

@@ -783,7 +783,7 @@ final class WireguardSpec extends NodeSpec {
 /// ядро sing-box-lx (SPEC 021) регистрирует `type:masque` через
 /// `outbound.Register`. Ключи — ECDSA P-256 в DER-base64 (см. [MasqueKeys]):
 /// [privateKeyDer] = наш приватник (SEC1), [publicKeyDer] = серверный pubkey
-/// (PKIX, для pinning). `network` — это ТРАНСПОРТ (`h3`/`h2`), не L4.
+/// (PKIX, для pinning). `transport` — это ТРАНСПОРТ (`h3`/`h2`), не L4.
 final class MasqueSpec extends NodeSpec {
   /// base64(SEC1 DER) нашего ECDSA-приватника. СЕКРЕТ.
   final String privateKeyDer;
@@ -797,11 +797,19 @@ final class MasqueSpec extends NodeSpec {
   /// `cloudflare` (дефолт) | `standard`.
   final String profile;
 
-  /// Транспорт: `h3` (QUIC, дефолт) | `h2` (HTTP/2).
-  final String network;
+  /// Транспорт: `h3` (QUIC, дефолт) | `h2` (HTTP/2). §393 — в конфиге ядра
+  /// ключ `transport`; старое имя `network` принимается только на входе.
+  final String transport;
 
-  /// TLS SNI; пусто = дефолт ядра (`consumer-masque.cloudflareclient.com`).
+  /// TLS SNI (`tls.server_name` в конфиге). Пусто = дефолт ядра, с lx.25-rc.4
+  /// это `www.cloudflare.com` (было `consumer-masque.cloudflareclient.com`).
+  /// Пустой SNI — НЕ то же самое, что [disableSni]: пустой подменяется дефолтом
+  /// профиля, а `disable_sni` убирает расширение из ClientHello совсем.
   final String sni;
+
+  /// §393 — `tls.disable_sni`: ClientHello без SNI. UI не выставляет, задаётся
+  /// через URI/JSON-импорт и редактор конфига.
+  final bool disableSni;
 
   final int? mtu;
 
@@ -810,7 +818,7 @@ final class MasqueSpec extends NodeSpec {
   final String idleTimeout;
 
   /// QUIC keepalive-период (Go-duration, напр. `30s`). Пусто = дефолт (30s);
-  /// отрицательное = выключить. Только для `network=h3`.
+  /// отрицательное = выключить. Только для `transport=h3`.
   final String keepAlive;
 
   MasqueSpec({
@@ -824,8 +832,9 @@ final class MasqueSpec extends NodeSpec {
     required this.publicKeyDer,
     required this.localAddresses,
     this.profile = 'cloudflare',
-    this.network = 'h3',
+    this.transport = 'h3',
     this.sni = '',
+    this.disableSni = false,
     this.mtu,
     this.idleTimeout = '',
     this.keepAlive = '',
@@ -1134,8 +1143,9 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           publicKeyDer: s.publicKeyDer,
           localAddresses: s.localAddresses,
           profile: s.profile,
-          network: s.network,
+          transport: s.transport,
           sni: s.sni,
+          disableSni: s.disableSni,
           mtu: s.mtu,
           idleTimeout: s.idleTimeout,
           keepAlive: s.keepAlive,

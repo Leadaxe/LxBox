@@ -22,7 +22,50 @@ AmneziaWG 2.0 + нативный XHTTP + VLESS encryption (PQ-слой) + LxBox-
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.25-rc.3`** (см. `app/android/libbox.version`)
+**Текущий пин: `v1.14.0-lx.25-rc.4`** (см. `app/android/libbox.version`)
+— миграция схемы конфига `masque` (kernel SPEC 062) + смена дефолтного SNI
+(SPEC 021). Клиентская сторона — §393.
+
+**Схема `masque` переехала.** Транспорт из `network` → `transport`, TLS-опции из
+плоского корня → во вложенный `tls{}` (`sni` → `tls.server_name`,
+`skip_cert_verify` → `tls.insecure`, `fragment`/`record_fragment`/
+`fragment_fallback_delay` → под `tls`). Остальные поля (`server`, `server_port`,
+`profile`, `private_key`, `public_key`, `ip`, `ipv6`, `uri`, `mtu`,
+`idle_timeout`, `keep_alive_period`, `network_list`) не менялись. Старые имена
+принимаются до **`v1.14.0-lx.30`**, каждый такой outbound печатает одно
+предупреждение в лог.
+
+⚠️ Одно и то же поле, заданное старым и новым именем **с разными значениями** —
+fatal при старте (ошибка называет оба поля). Одинаковые значения конфликтом не
+считаются. Отсюда клиентское правило §393: эмитим только новый набор имён,
+никогда оба сразу; legacy живёт исключительно на входе (URI-парсер и
+JSON-импорт).
+
+Новое поле `tls.disable_sni` — ClientHello без SNI. Пустой `sni` этого НЕ давал:
+он подменялся дефолтом профиля.
+
+Ядро теперь **предупреждает** (раньше молчало) на неподдерживаемых для masque
+полях: `tls.alpn`, `tls.ech`, `tls.reality`, `tls.kernel_*`, а также на
+фрагментации при `transport: h3`.
+
+**Дефолтный SNI сменился:** `consumer-masque.cloudflareclient.com` →
+`www.cloudflare.com`. Затрагивает конфиги БЕЗ явного SNI; заданное значение
+по-прежнему сильнее. Причина (замеры ядра на двух независимых РФ-каналах): с
+прежним именем h3-туннель к эндпоинту не поднимается. Имя некритично для
+аутентификации — эндпоинт проверяется пиннингом ECDSA-ключа.
+
+⚠️ Расходится с `assets/warp_endpoints.json`, где `recommended_sni` =
+`consumer-masque.cloudflareclient.com` (коммит 9d5629ba) — ровно то имя, что
+ядро признало нерабочим на h3. Пересмотр рекомендации вынесен из §393 отдельно.
+
+Диагностика: `masque: CONNECT-IP timed out` вместо простыни про
+`http3: parsing frame failed`, когда эндпоинт принял QUIC, но не ответил на
+CONNECT-IP. Исходная причина сохраняется в цепочке ошибок.
+
+Java-поверхность **не изменилась** — `classes.jar` побайтово равен rc.3
+(SHA256 `23b2eb27…`), `javap`-diff не требуется.
+
+Предыдущий пин — **`v1.14.0-lx.25-rc.3`**
 — две правки поверх rc.1, обе про TLS-плечо под `detour`.
 
 **SPEC 060: `record_fragment` включается сам, когда outbound диалит через
@@ -57,7 +100,7 @@ Java-поверхность **не изменилась** — `classes.jar` по
 одной цепочки; отдельно проверить, что явный `fragment: true` не апгрейдится.
 Плюс не закрыт хвост rc.1 (ниже).
 
-Предыдущий пин — **`v1.14.0-lx.25-rc.1`** (см. историю)
+До него — **`v1.14.0-lx.25-rc.1`** (см. историю)
 — **SPEC 058: `GetURLViaOutbound`** — диагностический HTTP GET через узел,
 адресуемый тегом, с возвратом ТЕЛА ответа. Закрывает класс вопросов, на которые
 `URLTestOutbound` не отвечает: не «жив ли узел», а «что видно через него»

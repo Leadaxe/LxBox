@@ -68,6 +68,19 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
     // (fatal «fragment is not supported on naive outbound»). naive принимает в
     // TLS только enabled/server_name — глобальный fragment ему не наложить.
     if (ob['type'] == 'naive') continue;
+    // §393 — masque: TLS всегда включён по природе транспорта, поля `enabled`
+    // у него нет, а блок `tls{}` появляется только если задан SNI. Фрагментация
+    // осмысленна лишь на `transport: h2` (TCP+TLS); при h3 ядро пишет
+    // предупреждение и игнорирует её — пропускаем молча, глобальный тумблер не
+    // должен ругаться на каждый неподходящий узел.
+    if (ob['type'] == 'masque') {
+      if (ob['transport'] == 'h3' || ob['transport'] == null) continue;
+      final mTls = (ob['tls'] ??= <String, dynamic>{}) as Map<String, dynamic>;
+      if (fragment) mTls['fragment'] = true;
+      if (recordFragment) mTls['record_fragment'] = true;
+      mTls['fragment_fallback_delay'] = fallbackDelay;
+      continue;
+    }
     final tls = ob['tls'];
     if (tls is! Map<String, dynamic>) continue;
     if (tls['enabled'] != true) continue;

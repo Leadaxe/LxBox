@@ -13,7 +13,6 @@ void main() {
         deviceId: 'dev123',
         token: 'secret-token',
         createdAt: '2026-07-02T00:00:00Z',
-        network: 'h3',
         idleTimeout: '10m',
         keepAlive: '45s',
       );
@@ -27,7 +26,6 @@ void main() {
     expect(b.clientV4, a.clientV4);
     expect(b.server, a.server);
     expect(b.port, a.port);
-    expect(b.network, a.network);
     expect(b.idleTimeout, a.idleTimeout);
     expect(b.keepAlive, a.keepAlive);
   });
@@ -50,8 +48,17 @@ void main() {
     final uri = sample().toMasqueUri();
     expect(uri, startsWith('masque://'));
     expect(uri, contains('publickey=PUBDER'));
-    expect(uri, contains('network=h3'));
+    expect(uri, contains('transport=h3'));
     expect(uri, contains('profile=cloudflare'));
     expect(uri, contains('162.159.198.1:443'));
+  });
+
+  test('§393 — транспорт задаётся при сборке URI, а не хранится в аккаунте', () {
+    expect(sample().toMasqueUri(transport: 'h2'), contains('transport=h2'));
+    // Ключа network в хранимом JSON больше нет; старая запись с ним читается.
+    expect(sample().toJson().containsKey('network'), isFalse);
+    final legacy = sample().toJson().cast<String, dynamic>()
+      ..['network'] = 'h2';
+    expect(MasqueAccount.fromJson(legacy), isNotNull);
   });
 }

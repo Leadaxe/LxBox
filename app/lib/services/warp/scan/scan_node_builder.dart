@@ -88,12 +88,12 @@ class ScanNodeBuilder {
       deviceId: acc.deviceId,
       token: acc.token,
       createdAt: acc.createdAt,
-      network: isH3 ? 'h3' : 'h2',
       sni: c.sni,
       idleTimeout: acc.idleTimeout,
       keepAlive: acc.keepAlive,
     );
-    final uri = tuned.toMasqueUri();
+    // §393 — транспорт задаётся при сборке URI (в аккаунте его больше нет).
+    final uri = tuned.toMasqueUri(transport: isH3 ? 'h3' : 'h2');
     final hash = uri.lastIndexOf('#');
     final base = hash < 0 ? uri : uri.substring(0, hash);
     return '$base#${Uri.encodeComponent(c.nodeTitle)}';

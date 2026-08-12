@@ -172,9 +172,11 @@ void main() {
           'transport': {'type': 'http'},
         },
         {'tag': 'plain', 'type': 'trojan'},
-        // §130 — MASQUE: транспорт из `network` (h3/h2), пусто → h3.
-        {'tag': 'mq3', 'type': 'masque', 'network': 'h3'},
-        {'tag': 'mq2', 'type': 'masque', 'network': 'h2'},
+        // §130/§393 — MASQUE: транспорт из плоской строки `transport` (h3/h2),
+        // пусто → h3. Legacy-имя `network` тоже читается (конфиги до lx.25-rc.4).
+        {'tag': 'mq3', 'type': 'masque', 'transport': 'h3'},
+        {'tag': 'mq2', 'type': 'masque', 'transport': 'h2'},
+        {'tag': 'mqlegacy', 'type': 'masque', 'network': 'h2'},
         {'tag': 'mqdef', 'type': 'masque'},
         {'tag': 'hy2', 'type': 'hysteria2', 'tls': {'enabled': true}},
         {
@@ -240,6 +242,7 @@ void main() {
     test('§130 transport: MASQUE network h3/h2, пусто → h3', () {
       expect(pc['mq3']?.transportLabel, 'h3');
       expect(pc['mq2']?.transportLabel, 'h2');
+      expect(pc['mqlegacy']?.transportLabel, 'h2');
       expect(pc['mqdef']?.transportLabel, 'h3');
     });
 

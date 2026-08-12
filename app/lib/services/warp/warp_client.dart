@@ -273,10 +273,11 @@ class WarpClient {
   ///      `tunnel_type=masque` → серверный pubkey + interface addresses + endpoint.
   ///
   /// Приватник ECDSA генерится на устройстве ([MasqueKeys]) и не покидает телефон.
-  /// [network] — `h3` (дефолт) или `h2`.
+  ///
+  /// §393 — транспорт (h3/h2) здесь не участвует: регистрация от него не зависит,
+  /// он выбирается при сборке узла.
   Future<MasqueAccount> registerMasque({
     required String nowIso8601,
-    String network = 'h3',
     String? sni,
     String? idleTimeout,
     String? keepAlive,
@@ -352,7 +353,6 @@ class WarpClient {
       deviceId: deviceId,
       token: token,
       createdAt: nowIso8601,
-      network: network,
       sni: sni ?? '',
       idleTimeout: idleTimeout ?? '',
       keepAlive: keepAlive ?? '',
@@ -367,7 +367,6 @@ class WarpClient {
     required String deviceId,
     required String token,
     required String createdAt,
-    required String network,
     required String sni,
     required String idleTimeout,
     required String keepAlive,
@@ -424,7 +423,6 @@ class WarpClient {
       deviceId: deviceId,
       token: token,
       createdAt: createdAt,
-      network: network,
       sni: sni,
       idleTimeout: idleTimeout,
       keepAlive: keepAlive,

@@ -1081,6 +1081,15 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         if (ipv6.isNotEmpty) ensureCidr(ipv6),
       ];
       if (addrs.isEmpty) return null;
+      // §393 — схема ядра lx.25-rc.4 (`transport` + вложенный `tls{}`) и старая
+      // плоская (`network`/`sni`). Читаем обе: чужие конфиги и бэкапы, снятые до
+      // миграции, никуда не делись. Новое имя выигрывает.
+      final masqueTls = entry['tls'];
+      final tlsMap = masqueTls is Map ? masqueTls : const {};
+      final transportRaw = entry['transport']?.toString() ?? '';
+      final sniRaw = tlsMap['server_name']?.toString() ??
+          entry['sni']?.toString() ??
+          '';
       return MasqueSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'masque-$server-$port' : tag,
@@ -1092,8 +1101,11 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         publicKeyDer: pub,
         localAddresses: addrs,
         profile: entry['profile']?.toString() ?? 'cloudflare',
-        network: entry['network']?.toString() ?? 'h3',
-        sni: entry['sni']?.toString() ?? '',
+        transport: transportRaw.isNotEmpty
+            ? transportRaw
+            : (entry['network']?.toString() ?? 'h3'),
+        sni: sniRaw,
+        disableSni: tlsMap['disable_sni'] == true,
         mtu: (entry['mtu'] as num?)?.toInt(),
         idleTimeout: entry['idle_timeout']?.toString() ?? '',
         keepAlive: entry['keep_alive_period']?.toString() ?? '',

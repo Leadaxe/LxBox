@@ -645,7 +645,7 @@ String toUriWireguard(WireguardSpec s) {
 
 /// §130 — MASQUE эмитится как **Outbound** (не Endpoint). Плоская структура
 /// по `option.MASQUEOutboundOptions` ядра: `ip`/`ipv6` берутся из
-/// [MasqueSpec.localAddresses] по признаку `:` (v6). `network` = транспорт h3/h2.
+/// [MasqueSpec.localAddresses] по признаку `:` (v6). `transport` = h3/h2.
 Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
   String? ip, ipv6;
   for (final a in s.localAddresses) {
@@ -655,18 +655,26 @@ Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
       ip ??= a;
     }
   }
+  // §393 — схема ядра lx.25-rc.4: транспорт под ключом `transport`, TLS-опции
+  // во вложенном `tls{}`. Старые имена (`network`/`sni`) НЕ пишем: они ещё
+  // принимаются ядром, но дают deprecation-варнинг на каждый outbound, а
+  // одновременная запись старого и нового имени с разными значениями — fatal.
+  final tls = <String, dynamic>{
+    if (s.sni.isNotEmpty) 'server_name': s.sni,
+    if (s.disableSni) 'disable_sni': true,
+  };
   final map = <String, dynamic>{
     'type': 'masque',
     'tag': s.tag,
     'server': s.server,
     'server_port': s.port,
     'profile': s.profile,
-    'network': s.network,
+    'transport': s.transport,
     'private_key': s.privateKeyDer,
     'public_key': s.publicKeyDer,
     'ip': ?ip,
     'ipv6': ?ipv6,
-    if (s.sni.isNotEmpty) 'sni': s.sni,
+    if (tls.isNotEmpty) 'tls': tls,
     if (s.mtu != null) 'mtu': s.mtu,
     if (s.idleTimeout.isNotEmpty) 'idle_timeout': s.idleTimeout,
     if (s.keepAlive.isNotEmpty) 'keep_alive_period': s.keepAlive,
@@ -679,8 +687,9 @@ String toUriMasque(MasqueSpec s) {
     'publickey': s.publicKeyDer,
     if (s.localAddresses.isNotEmpty) 'address': s.localAddresses.join(','),
     'profile': s.profile,
-    'network': s.network,
+    'transport': s.transport,
     if (s.sni.isNotEmpty) 'sni': s.sni,
+    if (s.disableSni) 'disable_sni': '1',
     if (s.mtu != null) 'mtu': s.mtu.toString(),
     if (s.idleTimeout.isNotEmpty) 'idle_timeout': s.idleTimeout,
     if (s.keepAlive.isNotEmpty) 'keep_alive': s.keepAlive,

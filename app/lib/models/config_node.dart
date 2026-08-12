@@ -76,10 +76,12 @@ class ConfigNode {
   final String? securityLabel;
 
   static String? _deriveTransport(String type, Map<String, dynamic> raw) {
-    // §130 — MASQUE ходит поверх QUIC(h3)/h2, транспорт задан полем `network`
-    // (не `transport`). Пусто → дефолт ядра h3.
+    // §130/§393 — MASQUE ходит поверх QUIC(h3)/h2. Транспорт — ПЛОСКАЯ строка
+    // `transport` (у остальных типов это объект `{type: …}`, поэтому ветка
+    // отдельная и идёт первой). Legacy-имя `network` читаем для конфигов,
+    // написанных до ядра lx.25-rc.4. Пусто → дефолт ядра h3.
     if (type == 'masque') {
-      final net = raw['network'];
+      final net = raw['transport'] ?? raw['network'];
       return (net is String && net.isNotEmpty) ? net : 'h3';
     }
     final tr = raw['transport'];

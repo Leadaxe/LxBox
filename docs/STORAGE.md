@@ -796,7 +796,6 @@ CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null = очистить).
   "device_id":     "…",
   "token":         "<bearer — СЕКРЕТ, не логировать>",
   "created_at":    "<ISO8601>",
-  "network":       "…",
   "sni":           "…",
   "idle_timeout":  "…",
   "keep_alive":    "…"
@@ -804,6 +803,8 @@ CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null = очистить).
 ```
 
 **Секреты.** `priv_key_der`/`token` — реальные секреты локального файла; в логах маскируются (`MasqueAccount.redacted()`).
+
+**§393 — ключа `network` здесь больше нет.** Транспорт (`h3`/`h2`) — свойство узла, а не регистрации: одни и те же креды порождают узлы обоих транспортов (сканер §284/§305), а визард выбирает транспорт заново при каждом добавлении. Теперь он передаётся параметром в `MasqueAccount.toMasqueUri(transport:)` и живёт только в URI узла. Миграции нет: ключ в старых записях просто игнорируется при чтении и исчезает при следующей записи.
 
 **Не config-significant** — MASQUE-узел попадает в конфиг через обычный `UserServer` (`type:masque` из `MasqueSpec`), не отсюда; при записи `markConfigDirty` не дёргается.
 

@@ -102,7 +102,7 @@ void main() {
         privateKeyDer: 'PRIVDER==',
         publicKeyDer: 'PUBDER==',
         localAddresses: ['172.16.0.2/32', '2606:4700:110::2/128'],
-        network: 'h2',
+        transport: 'h2',
         sni: '4pda.to',
         mtu: 1280,
         idleTimeout: '10m',
@@ -117,11 +117,48 @@ void main() {
       expect(m.publicKeyDer, orig.publicKeyDer);
       expect(m.server, orig.server);
       expect(m.port, orig.port);
-      expect(m.network, 'h2');
+      expect(m.transport, 'h2');
       expect(m.sni, '4pda.to');
       expect(m.localAddresses, containsAll(orig.localAddresses));
       expect(m.idleTimeout, '10m');
       expect(m.keepAlive, '45s');
+    });
+
+    test('§393 — masque: старая плоская схема ядра ещё читается', () {
+      final m = parseSingboxEntry({
+        'type': 'masque',
+        'tag': 'legacy',
+        'server': '162.159.198.2',
+        'server_port': 443,
+        'private_key': 'PRIVDER==',
+        'public_key': 'PUBDER==',
+        'ip': '172.16.0.2/32',
+        'network': 'h2',
+        'sni': '4pda.to',
+      }) as MasqueSpec?;
+      expect(m, isNotNull);
+      expect(m!.transport, 'h2');
+      expect(m.sni, '4pda.to');
+      expect(m.disableSni, isFalse);
+    });
+
+    test('§393 — masque: новое имя сильнее старого при обоих сразу', () {
+      final m = parseSingboxEntry({
+        'type': 'masque',
+        'tag': 'both',
+        'server': '162.159.198.2',
+        'server_port': 443,
+        'private_key': 'PRIVDER==',
+        'public_key': 'PUBDER==',
+        'ip': '172.16.0.2/32',
+        'network': 'h2',
+        'transport': 'h3',
+        'sni': 'old.example',
+        'tls': {'server_name': 'new.example', 'disable_sni': true},
+      }) as MasqueSpec?;
+      expect(m!.transport, 'h3');
+      expect(m.sni, 'new.example');
+      expect(m.disableSni, isTrue);
     });
 
     test('§358 — hysteria2 gecko round-trip: JSON → spec → JSON', () {
