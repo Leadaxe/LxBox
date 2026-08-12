@@ -3,9 +3,15 @@ import '../parser/uri_utils.dart' show ensureCidr;
 /// §130 — закешированный Cloudflare WARP-аккаунт для MASQUE-транспорта.
 ///
 /// Отдельная модель от [WarpAccount] (X25519/WireGuard): у MASQUE другая крипта
-/// (ECDSA P-256 DER), нет `reserved`/AWG, есть `network` (h3/h2). Приватник
-/// генерится на устройстве ([MasqueKeys]) и НЕ покидает телефон — в Cloudflare
-/// уходит только публичная часть (PATCH enroll).
+/// (ECDSA P-256 DER), нет `reserved`/AWG. Приватник генерится на устройстве
+/// ([MasqueKeys]) и НЕ покидает телефон — в Cloudflare уходит только публичная
+/// часть (PATCH enroll).
+///
+/// §393 — версии HTTP (h3/h2) здесь НЕТ и в хранилище она больше не пишется:
+/// это не свойство регистрации, а параметр конкретного узла. Одни и те же креды
+/// порождают и h3-, и h2-узлы (см. `ScanNodeBuilder`), а визард задаёт её заново
+/// при каждом добавлении. Старые записи с ключом `network` не трогаем — он
+/// просто игнорируется при чтении.
 class MasqueAccount {
   const MasqueAccount({
     required this.privKeyDer,
@@ -17,7 +23,6 @@ class MasqueAccount {
     required this.deviceId,
     required this.token,
     required this.createdAt,
-    this.network = 'h3',
     this.sni = '',
     this.idleTimeout = '',
     this.keepAlive = '',
@@ -49,10 +54,7 @@ class MasqueAccount {
   /// ISO8601 момента регистрации.
   final String createdAt;
 
-  /// Транспорт: `h3` (QUIC) | `h2` (HTTP/2).
-  final String network;
-
-  /// TLS SNI override; пусто = дефолт ядра.
+  /// TLS SNI override; пусто = дефолт ядра (§393: `www.cloudflare.com`).
   final String sni;
 
   /// idle-suspend (Go-duration, напр. `5m`); пусто = дефолт ядра.
@@ -70,7 +72,6 @@ class MasqueAccount {
   static String nodeTag() => '🔥🎭 WARP (MASQUE)';
 
   MasqueAccount copyWith({
-    String? network,
     String? sni,
     String? idleTimeout,
     String? keepAlive,
@@ -85,7 +86,6 @@ class MasqueAccount {
         deviceId: deviceId,
         token: token,
         createdAt: createdAt,
-        network: network ?? this.network,
         sni: sni ?? this.sni,
         idleTimeout: idleTimeout ?? this.idleTimeout,
         keepAlive: keepAlive ?? this.keepAlive,
@@ -93,7 +93,10 @@ class MasqueAccount {
 
   /// Собирает `masque://` URI для добавления узла через стандартный
   /// `addFromInput` (аналог [WarpAccount.toWireguardUri]).
-  String toMasqueUri() {
+  ///
+  /// §393 — [vhttp] (`h3`/`h2`) приходит параметром: версия HTTP принадлежит
+  /// узлу, а не аккаунту. В URI пишется ключом `vhttp=`.
+  String toMasqueUri({String vhttp = 'h3'}) {
     final addrs = [
       if (clientV4.isNotEmpty) ensureCidr(clientV4),
       if (clientV6.isNotEmpty) ensureCidr(clientV6),
@@ -102,7 +105,7 @@ class MasqueAccount {
       'publickey': serverPubDer,
       'address': addrs,
       'profile': 'cloudflare',
-      'network': network,
+      'vhttp': vhttp,
       'mtu': '1280',
       if (sni.isNotEmpty) 'sni': sni,
       if (idleTimeout.isNotEmpty) 'idle_timeout': idleTimeout,
@@ -125,7 +128,8 @@ class MasqueAccount {
         'device_id': deviceId,
         'token': token,
         'created_at': createdAt,
-        'network': network,
+        // §393 — ключа `network` здесь больше нет (версия HTTP — свойство узла).
+        // Старые записи с ним остаются на диске нетронутыми и игнорируются.
         'sni': sni,
         'idle_timeout': idleTimeout,
         'keep_alive': keepAlive,
@@ -147,7 +151,6 @@ class MasqueAccount {
       deviceId: (m['device_id'] as String?) ?? '',
       token: (m['token'] as String?) ?? '',
       createdAt: (m['created_at'] as String?) ?? '',
-      network: (m['network'] as String?) ?? 'h3',
       sni: (m['sni'] as String?) ?? '',
       idleTimeout: (m['idle_timeout'] as String?) ?? '',
       keepAlive: (m['keep_alive'] as String?) ?? '',
@@ -163,7 +166,6 @@ class MasqueAccount {
         'port': port,
         'device_id': deviceId,
         'created_at': createdAt,
-        'network': network,
         'priv_key_der': '<redacted>',
         'token': '<redacted>',
       };

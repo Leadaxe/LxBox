@@ -783,7 +783,8 @@ final class WireguardSpec extends NodeSpec {
 /// ядро sing-box-lx (SPEC 021) регистрирует `type:masque` через
 /// `outbound.Register`. Ключи — ECDSA P-256 в DER-base64 (см. [MasqueKeys]):
 /// [privateKeyDer] = наш приватник (SEC1), [publicKeyDer] = серверный pubkey
-/// (PKIX, для pinning). `network` — это ТРАНСПОРТ (`h3`/`h2`), не L4.
+/// (PKIX, для pinning). `vhttp` — это версия HTTP (`h3`/`h2`), не L4-сеть и не
+/// [TransportSpec] других протоколов (там `transport` — это ws/grpc/httpupgrade).
 final class MasqueSpec extends NodeSpec {
   /// base64(SEC1 DER) нашего ECDSA-приватника. СЕКРЕТ.
   final String privateKeyDer;
@@ -797,11 +798,22 @@ final class MasqueSpec extends NodeSpec {
   /// `cloudflare` (дефолт) | `standard`.
   final String profile;
 
-  /// Транспорт: `h3` (QUIC, дефолт) | `h2` (HTTP/2).
-  final String network;
+  /// Версия HTTP: `h3` (QUIC, дефолт) | `h2`. §393 — в конфиге ядра ключ
+  /// `vhttp`; старое имя `network` принимается только на входе.
+  ///
+  /// Имя поля НЕ `transport`: у остальных протоколов так называется
+  /// [TransportSpec] (ws/grpc/httpupgrade) — совсем другая сущность.
+  final String vhttp;
 
-  /// TLS SNI; пусто = дефолт ядра (`consumer-masque.cloudflareclient.com`).
+  /// TLS SNI (`tls.server_name` в конфиге). Пусто = дефолт ядра, с lx.25-rc.4
+  /// это `www.cloudflare.com` (было `consumer-masque.cloudflareclient.com`).
+  /// Пустой SNI — НЕ то же самое, что [disableSni]: пустой подменяется дефолтом
+  /// профиля, а `disable_sni` убирает расширение из ClientHello совсем.
   final String sni;
+
+  /// §393 — `tls.disable_sni`: ClientHello без SNI. UI не выставляет, задаётся
+  /// через URI/JSON-импорт и редактор конфига.
+  final bool disableSni;
 
   final int? mtu;
 
@@ -810,7 +822,7 @@ final class MasqueSpec extends NodeSpec {
   final String idleTimeout;
 
   /// QUIC keepalive-период (Go-duration, напр. `30s`). Пусто = дефолт (30s);
-  /// отрицательное = выключить. Только для `network=h3`.
+  /// отрицательное = выключить. Только для `vhttp=h3`.
   final String keepAlive;
 
   MasqueSpec({
@@ -824,8 +836,9 @@ final class MasqueSpec extends NodeSpec {
     required this.publicKeyDer,
     required this.localAddresses,
     this.profile = 'cloudflare',
-    this.network = 'h3',
+    this.vhttp = 'h3',
     this.sni = '',
+    this.disableSni = false,
     this.mtu,
     this.idleTimeout = '',
     this.keepAlive = '',
@@ -1134,8 +1147,9 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           publicKeyDer: s.publicKeyDer,
           localAddresses: s.localAddresses,
           profile: s.profile,
-          network: s.network,
+          vhttp: s.vhttp,
           sni: s.sni,
+          disableSni: s.disableSni,
           mtu: s.mtu,
           idleTimeout: s.idleTimeout,
           keepAlive: s.keepAlive,

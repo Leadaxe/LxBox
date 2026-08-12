@@ -76,10 +76,12 @@ class ConfigNode {
   final String? securityLabel;
 
   static String? _deriveTransport(String type, Map<String, dynamic> raw) {
-    // §130 — MASQUE ходит поверх QUIC(h3)/h2, транспорт задан полем `network`
-    // (не `transport`). Пусто → дефолт ядра h3.
+    // §130/§393 — MASQUE ходит поверх QUIC(h3)/h2. Версия HTTP лежит в СВОЁМ
+    // ключе `vhttp`, а не в `transport` (там у остальных типов объект
+    // `{type: …}` — ws/grpc/…). Legacy-имя `network` читаем для конфигов,
+    // написанных до миграции. Пусто → дефолт ядра h3.
     if (type == 'masque') {
-      final net = raw['network'];
+      final net = raw['vhttp'] ?? raw['network'];
       return (net is String && net.isNotEmpty) ? net : 'h3';
     }
     final tr = raw['transport'];

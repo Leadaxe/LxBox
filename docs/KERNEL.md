@@ -22,7 +22,71 @@ AmneziaWG 2.0 + нативный XHTTP + VLESS encryption (PQ-слой) + LxBox-
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.25-rc.3`** (см. `app/android/libbox.version`)
+**Текущий пин: `v1.14.0-lx.25-rc.5`** (см. `app/android/libbox.version`)
+— финальное имя ключа `masque` (`vhttp`) + режим urltest-группы в API.
+Клиентская сторона — §393.
+
+**`transport` → `vhttp` (SPEC 062).** Имя из rc.4 убрано **без алиаса**: у
+vless/trojan/vmess `transport` — ключ V2Ray-транспорта, и он объект
+(`{"type":"ws"}`), а не строка. Одно имя с двумя смыслами и типами — та самая
+путаница, которую SPEC 062 и убирает. Промежуточное имя прожило один пререлиз;
+в клиенте оно не поддерживается вовсе (наружу не выходило — см. §393).
+
+`network` по-прежнему deprecated до `v1.14.0-lx.30`, как объявлено в rc.4.
+
+**`Group.mode` (SPEC 019)** — режим urltest-группы: `least_test` (обычный
+urltest, узел в `selected`) | `round_robin` (балансировка, состояние в
+`GetPool`) | пусто (не urltest). Обещан «в любой сборке», в отличие от `GetPool`
+за тегом `with_lx_command`.
+
+⚠️ **В Android-AAR rc.5 этого поля НЕТ.** `classes.jar` побайтово равен rc.4
+(SHA256 `23b2eb27…`), `javap io.nekohasekai.libbox.OutboundGroup` не показывает
+`getMode()`. Нативная часть при этом собрана из rc.5 (`strings libbox.so` →
+`1.14.0-lx.25-rc.5`, строки `least_test`/`round_robin` присутствуют) — то есть
+Go-код на месте, а gomobile-обвязка `OutboundGroup` не перегенерирована.
+На §393 не влияет (`vhttp` — парсинг конфига, не Java-поверхность), но
+потребителю `mode` ждать следующей сборки ядра.
+
+**Схема `masque` (введена в rc.4).** Версия HTTP из `network` → `vhttp`,
+TLS-опции из плоского корня → во вложенный `tls{}` (`sni` → `tls.server_name`,
+`skip_cert_verify` → `tls.insecure`, `fragment`/`record_fragment`/
+`fragment_fallback_delay` → под `tls`). Остальные поля (`server`, `server_port`,
+`profile`, `private_key`, `public_key`, `ip`, `ipv6`, `uri`, `mtu`,
+`idle_timeout`, `keep_alive_period`, `network_list`) не менялись. Старые имена
+принимаются до **`v1.14.0-lx.30`**, каждый такой outbound печатает одно
+предупреждение в лог.
+
+⚠️ Одно и то же поле, заданное старым и новым именем **с разными значениями** —
+fatal при старте (ошибка называет оба поля). Одинаковые значения конфликтом не
+считаются. Отсюда клиентское правило §393: эмитим только новый набор имён,
+никогда оба сразу; legacy живёт исключительно на входе (URI-парсер и
+JSON-импорт).
+
+Новое поле `tls.disable_sni` — ClientHello без SNI. Пустой `sni` этого НЕ давал:
+он подменялся дефолтом профиля.
+
+Ядро теперь **предупреждает** (раньше молчало) на неподдерживаемых для masque
+полях: `tls.alpn`, `tls.ech`, `tls.reality`, `tls.kernel_*`, а также на
+фрагментации при `vhttp: h3`.
+
+**Дефолтный SNI сменился:** `consumer-masque.cloudflareclient.com` →
+`www.cloudflare.com`. Затрагивает конфиги БЕЗ явного SNI; заданное значение
+по-прежнему сильнее. Причина (замеры ядра на двух независимых РФ-каналах): с
+прежним именем h3-туннель к эндпоинту не поднимается. Имя некритично для
+аутентификации — эндпоинт проверяется пиннингом ECDSA-ключа.
+
+⚠️ Расходится с `assets/warp_endpoints.json`, где `recommended_sni` =
+`consumer-masque.cloudflareclient.com` (коммит 9d5629ba) — ровно то имя, что
+ядро признало нерабочим на h3. Пересмотр рекомендации вынесен из §393 отдельно.
+
+Диагностика: `masque: CONNECT-IP timed out` вместо простыни про
+`http3: parsing frame failed`, когда эндпоинт принял QUIC, но не ответил на
+CONNECT-IP. Исходная причина сохраняется в цепочке ошибок.
+
+Предыдущий пин — **`v1.14.0-lx.25-rc.4`** — та же схема конфига под именем
+`transport` (снято в rc.5) + смена дефолтного SNI. Java-поверхность равна rc.3.
+
+До него — **`v1.14.0-lx.25-rc.3`**
 — две правки поверх rc.1, обе про TLS-плечо под `detour`.
 
 **SPEC 060: `record_fragment` включается сам, когда outbound диалит через
@@ -57,7 +121,7 @@ Java-поверхность **не изменилась** — `classes.jar` по
 одной цепочки; отдельно проверить, что явный `fragment: true` не апгрейдится.
 Плюс не закрыт хвост rc.1 (ниже).
 
-Предыдущий пин — **`v1.14.0-lx.25-rc.1`** (см. историю)
+До него — **`v1.14.0-lx.25-rc.1`** (см. историю)
 — **SPEC 058: `GetURLViaOutbound`** — диагностический HTTP GET через узел,
 адресуемый тегом, с возвратом ТЕЛА ответа. Закрывает класс вопросов, на которые
 `URLTestOutbound` не отвечает: не «жив ли узел», а «что видно через него»

@@ -449,9 +449,10 @@ class SubscriptionController extends ChangeNotifier {
 
   /// §130 — регистрирует MASQUE-WARP и добавляет узел. Отдельный путь от
   /// [addWarp] (ECDSA-крипта, двухшаговый enroll, Outbound вместо Endpoint).
-  /// [network] — `h3` (дефолт) или `h2`. Кеш переиспользуется как в §025.
+  /// [vhttp] — версия HTTP `h3` (дефолт) или `h2`; §393: свойство узла, не
+  /// аккаунта, поэтому в кеш не пишется. Кеш переиспользуется как в §025.
   Future<MasqueAccount?> addMasque({
-    String network = 'h3',
+    String vhttp = 'h3',
     String? sni,
     String? idleTimeout,
     String? keepAlive,
@@ -474,15 +475,14 @@ class SubscriptionController extends ChangeNotifier {
 
       account ??= await warp.registerMasque(
         nowIso8601: DateTime.now().toUtc().toIso8601String(),
-        network: network,
         sni: sni,
         idleTimeout: idleTimeout,
         keepAlive: keepAlive,
       );
 
-      // Транспорт/SNI/тюнинг — клиентские, применяем к кешу без ре-регистрации.
+      // SNI/тюнинг — клиентские, применяем к кешу без ре-регистрации.
+      // Версия HTTP сюда не идёт (§393): она уходит прямо в URI узла.
       account = account.copyWith(
-        network: network,
         sni: sni,
         idleTimeout: idleTimeout,
         keepAlive: keepAlive,
@@ -507,7 +507,6 @@ class SubscriptionController extends ChangeNotifier {
           deviceId: account.deviceId,
           token: account.token,
           createdAt: account.createdAt,
-          network: account.network,
           sni: account.sni,
           idleTimeout: account.idleTimeout,
           keepAlive: account.keepAlive,
@@ -515,7 +514,7 @@ class SubscriptionController extends ChangeNotifier {
       }
 
       final tag = _uniqueWarpTag(MasqueAccount.nodeTag());
-      await _addMasqueNode(account, tag);
+      await _addMasqueNode(account, tag, vhttp: vhttp);
       if (_lastError != null) return null;
       return account;
     } catch (e) {
@@ -530,8 +529,9 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// §130 — MASQUE-узел через `masque://` URI (аналог [_addWarpPlain]).
-  Future<void> _addMasqueNode(MasqueAccount account, String tag) async {
-    final spec = parseMasqueUri(account.toMasqueUri());
+  Future<void> _addMasqueNode(MasqueAccount account, String tag,
+      {String vhttp = 'h3'}) async {
+    final spec = parseMasqueUri(account.toMasqueUri(vhttp: vhttp));
     if (spec == null) {
       _lastError = const ErrMsg(ErrKey.invalidMasqueConfig);
       return;
@@ -547,8 +547,9 @@ class SubscriptionController extends ChangeNotifier {
       publicKeyDer: spec.publicKeyDer,
       localAddresses: spec.localAddresses,
       profile: spec.profile,
-      network: spec.network,
+      vhttp: spec.vhttp,
       sni: spec.sni,
+      disableSni: spec.disableSni,
       mtu: spec.mtu,
       idleTimeout: spec.idleTimeout,
       keepAlive: spec.keepAlive,

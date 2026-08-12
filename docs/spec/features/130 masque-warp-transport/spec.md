@@ -8,6 +8,14 @@ Dart-регистрация WARP → эмит `type: masque` → живой пр
 другой транспорт (WireGuard ↔ MASQUE). Не путать с §143 masquerade (AmneziaWG anti-DPI — созвучие,
 другое).
 
+> ⚠️ **Схема конфига устарела.** Всё, что ниже описано как `network` / плоский
+> `sni`, теперь эмитится как `vhttp` и вложенный `tls{}`; в `masque_account`
+> версия HTTP больше не хранится вовсе.
+> Актуальная схема, таблица соответствий и правило «legacy только на входе» —
+> [§393](../../tasks/393-masque-config-schema-migration.md) и
+> [PROTOCOLS.md → MASQUE](../../../PROTOCOLS.md#96-masque-cloudflare-warp).
+> Текст ниже сохранён как история решений §130.
+
 ---
 
 ## Зачем

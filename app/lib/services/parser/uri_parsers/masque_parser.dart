@@ -6,10 +6,17 @@ import '../uri_utils.dart';
 // ════════════════════════════════════════════════════════════════════════════
 //
 // `masque://<privKeyDer>@<server>:<port>?publickey=<serverPubDer>&address=<v4,v6>
-//   &profile=cloudflare&network=h3[&sni=...][&mtu=1280]#<label>`
+//   &profile=cloudflare&vhttp=h3[&sni=...][&disable_sni=1][&mtu=1280]#<label>`
 //
 // Ключи — base64(DER), как в конфиге ядра. Отличие от WireGuard: нет reserved/
-// allowed_ips/psk/keepalive; есть profile/network/sni.
+// allowed_ips/psk/keepalive; есть profile/vhttp/sni.
+//
+// §393 — вход принимает ОБА поколения имён: `vhttp` (ядро) и legacy `network`
+// (наши URI, выпущенные до миграции, плюс чужие ссылки). Legacy-имена живут
+// только здесь и в JSON-импорте; модель и эмит знают одно имя.
+//
+// Промежуточного `transport` тут нет намеренно: имя прожило один коммит в
+// develop, ни в один релиз и ни в один пользовательский URI не попало.
 
 MasqueSpec? parseMasqueUri(String uri) {
   // §106 — сырой `/` в base64-ключе (userInfo) ломает Uri.tryParse.
@@ -39,8 +46,13 @@ MasqueSpec? parseMasqueUri(String uri) {
   if (localAddresses.isEmpty) return null;
 
   final profile = (q['profile'] ?? 'cloudflare').trim();
-  final network = (q['network'] ?? 'h3').trim();
-  final sni = (q['sni'] ?? '').trim();
+  // §393 — `vhttp` приоритетнее legacy `network`; ядро при обоих именах с
+  // разными значениями падает, у нас на входе просто выигрывает новое.
+  final vhttpRaw = (q['vhttp'] ?? '').trim();
+  final vhttp =
+      vhttpRaw.isNotEmpty ? vhttpRaw : (q['network'] ?? 'h3').trim();
+  final sni = (q['sni'] ?? q['server_name'] ?? '').trim();
+  final disableSni = q['disable_sni'] == '1' || q['disable_sni'] == 'true';
   final mtu = int.tryParse(q['mtu'] ?? '') ?? 1280;
   final idleTimeout = (q['idle_timeout'] ?? '').trim();
   final keepAlive = (q['keep_alive'] ?? '').trim();
@@ -59,8 +71,9 @@ MasqueSpec? parseMasqueUri(String uri) {
     publicKeyDer: publicKeyDer,
     localAddresses: localAddresses,
     profile: profile,
-    network: network,
+    vhttp: vhttp,
     sni: sni,
+    disableSni: disableSni,
     mtu: mtu,
     idleTimeout: idleTimeout,
     keepAlive: keepAlive,
