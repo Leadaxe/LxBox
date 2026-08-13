@@ -319,7 +319,7 @@ Defaults: `registerDetourServers=false`, `useDetourServers=true`, остальн
 
 | Зависимость | Версия | Где | Риск обновления |
 |------------|--------|-----|----------------|
-| sing-box-lx (fork, libbox) | v1.14.0-lx.1 | пин `app/android/libbox.version` + `libs/libbox.aar` (качает `scripts/fetch-libbox.sh` из GH Releases форка); Maven/JitPack-строка удалена | API может измениться, тестировать native код. Ловушки бампа версии — [`KERNEL.md`](KERNEL.md) |
+| sing-box-lx (fork, libbox) | см. `app/android/libbox.version` | пин `app/android/libbox.version` + `libs/libbox.aar` (качает `scripts/fetch-libbox.sh` из GH Releases форка); Maven/JitPack-строка удалена | API может измениться, тестировать native код. Ловушки бампа версии — [`KERNEL.md`](KERNEL.md) |
 | Flutter | 3.41.6 | SDK | Обычно безопасно, проверять deprecated |
 | Gradle | 8.14 | wrapper | Совместимость с AGP |
 | AGP | 8.11.1 | build.gradle.kts | Совместимость с Gradle и Flutter |

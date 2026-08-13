@@ -892,9 +892,10 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
 
 ---
 
-### 6.5. Per-app traffic profiler (§044)
+### 6.5. Traffic profiler (§044 / §048)
 
-`TrafficProfiler` — singleton ChangeNotifier, который держит **одну** active recording session + ring-buffer (cap=5) последних завершённых. Всё in-memory; persist принципиально не делается. Spec: [`docs/spec/features/044 per-app traffic profiler/spec.md`](./spec/features/044%20per-app%20traffic%20profiler/spec.md). User guide: [`docs/features/per-app-trace.md`](./features/per-app-trace.md).
+`TrafficProfiler` — singleton ChangeNotifier, который держит system-wide
+rolling buffer событий. Всё in-memory; persist принципиально не делается. Spec: [`docs/spec/features/044 per-app traffic profiler/spec.md`](./spec/features/044%20per-app%20traffic%20profiler/spec.md). Историческая справка по per-app-режиму: [`docs/features/per-app-trace.md`](./features/per-app-trace.md).
 
 ```
               ┌────────────────────────────────────────┐
@@ -918,35 +919,37 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
         + dnsServer/outbound(rc.10) chains §174, detours §178)
 
               ┌────────────────────────────────────────┐
-              │ Session.events  (append-only)           │
+              │ _globalRollingBuffer  (append-only)     │
               │  +  byDomain / byIp aggregates          │
               │     (computed on-demand)                │
               └────────────────────────────────────────┘
                      │
         ┌────────────┴───────────────────────────────────────────┐
         ▼                              ▼                         ▼
-  App + Profiler tabs       Debug API /profiler/*          SSE /profiler/stream
-  (TraceExplorer:           (start, stop, active,          (live-push для
-   поток/Aggregated +        session/<id>, sessions,        external clients)
-   фильтр-окно)              stream)
+  Profiler tab              Debug API /profiler/live*    SSE /profiler/live/stream
+  (TraceExplorer:           (start, stop, state,          (live-push для
+   поток/Aggregated +        live, unattributed)           external clients)
+   фильтр по приложениям)
 ```
+
+> Per-app session-слой снят в **§288**: вкладка `App`, класс `Session` и
+> роуты `/profiler/{start,stop,active,sessions,session/<id>,stream}` удалены.
+> Остался только system-wide режим; трафик одного приложения смотрят фильтром
+> по приложениям на вкладке Profiler.
 
 **Источники событий (§180/§044 — БЕЗ парсинга core-лога):**
 - **DNS-стрим (§180, ядро SPEC 018)** — `CcChannel.dnsQueries` (канал `lxbox/cc/dns`, `subscribeDNSQueries` на `profilerClient`). Каждый `CcDnsQuery` несёт `domain`/`queryType`/`rcode`/`source`/`failed`/`error`, атрибуцию к app **из ядра** (`processInfo.packageName`), `answers[]` (весь response.Answer → cnameChain из type==CNAME), и (rc.10) `dnsServer`/`dnsServerType`/`outbound`. `_ingestDnsQuery` эмитит `dnsResolve`/`dnsFail`. **Текстовый core-лог парсинг выпилен начисто** (§044): не было `_dnsRe`/`_DnsAccumulator`/`router: found package` regex'ов — всё структурно из ядра.
-- **Connections-стрим (§168)** — CommandClient `connections` push (`CcChannel.connections` через фоновый `profilerClient`, `connectProfiler()`) пока есть active session **или** global recording (§048). Снапшот diff'ается против `_connSnapshots`. TCP/UDP-атрибуция из ядра: `CcConnection.packageName` (UID-strip), `chains` (§174), `detours` (§178).
+- **Connections-стрим (§168)** — CommandClient `connections` push (`CcChannel.connections` через фоновый `profilerClient`, `connectProfiler()`) пока идёт global recording (§048). Снапшот diff'ается против `_connSnapshots`. TCP/UDP-атрибуция из ядра: `CcConnection.packageName` (UID-strip), `chains` (§174), `detours` (§178).
 - Connection-issue classifier: `dnsTimeout` (структурный `q.failed` из DNS-стрима) + `tcpReset` (heuristic: TCP закрылся <1с с 0 bytes).
 
-**Global / system-wide recording (§048).** Вкладка **Profiler** (бывш. Live) в Statistics — system-wide режим: `startGlobalRecording()` подключает оба стрима без active session. События в `_globalRollingBuffer` (окно **настраиваемое** 1m/10m/1h, §044 retention; hard cap 20000) и `globalLiveStream()` SSE. `_ingestCcConnections()` session-agnostic (session-блоки gated `if (s != null)`). `_maybeDetachCcConnections()` гасит `profilerClient` когда **оба** off.
+**Global / system-wide recording (§048).** Вкладка **Profiler** (бывш. Live) в Statistics — единственный режим профайлера: `startGlobalRecording()` подключает оба стрима. События в `_globalRollingBuffer` (окно **настраиваемое** 1m/10m/1h, §044 retention; hard cap 20000) и `globalLiveStream()` SSE. `_maybeDetachCcConnections()` гасит `profilerClient` когда recording off.
 
 **Memory bounds:**
-- `Session.events`: cap = 50000 events ИЛИ 3h sliding window. `eventsDropped` в meta.
-- `_completed`: ListQueue cap = 5 sessions, FIFO-evict.
 - `_globalRollingBuffer`: retention-окно (§044, default 10мин) + hard cap 20000.
 
 **UI plumbing (§160/§044):**
-- HomeScreen `_buildTrafficBar` ⚡-chip с short package name когда session active. Tap → Stats→App.
-- `StatsScreen` 4 вкладки: Stats / Conns / **App** (per-app session) / **Profiler** (system-wide, бывш. Live).
-- Общий движок `TraceExplorer` (App + Profiler): control-строка (пауза · retention · группировка · фильтр-окно) + тогл поток/Aggregated(by Domain/IP) + drill-down detail-sheet. Фильтр вынесен в `ProfilerFilterSheet` (Protocol + App оси). §181 `routingLine` строит читаемую трассировку события.
+- `StatsScreen` 3 вкладки: Stats / Conns / **Profiler** (system-wide, бывш. Live). Вкладка `App` снята в §288.
+- Движок `TraceExplorer`: control-строка (пауза · retention · группировка · фильтр-окно) + тогл поток/Aggregated(by Domain/IP) + drill-down detail-sheet. Фильтр вынесен в `ProfilerFilterSheet` (Protocol + App оси). §181 `routingLine` строит читаемую трассировку события.
 
 **Coupling (важно для extraction):**
 - **`CcChannel` (CommandClient) — единственный источник.** Профайлер слушает `CcChannel.connections` + `CcChannel.dnsQueries` через фоновый `profilerClient`. Привязан к жизни канала: события идут пока туннель жив и `profilerClient` поднят (`connectProfiler()`). **core-логи больше не нужны** — `CoreLogsHintBanner` оставлен как опциональная подсказка, но DNS/TCP атрибуция от него не зависит (всё из ядра, §180/§168).
@@ -1555,7 +1558,7 @@ HomeScreen
 | `path_provider` | Documents directory for persistent storage |
 | `shared_preferences` | Theme mode, haptic toggle |
 | `share_plus` | Config/log export via system share sheet |
-| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104; §122 — без `with_clash_api`). Пин — `app/android/libbox.version` (single source of truth; сейчас `v1.14.0-lx.1` — первый стабильный 1.14-lx, база upstream `v1.14.0-alpha.33`; при бампе версии сверяться с файлом и `KERNEL.md`, не с этой строкой); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового libbox удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
+| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104; §122 — без `with_clash_api`). Пин — `app/android/libbox.version` (single source of truth; при бампе версии сверяться с файлом и `KERNEL.md`, не с этой строкой); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового libbox удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
 
 ---
 

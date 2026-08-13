@@ -256,7 +256,7 @@ curl -sL https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json |
   # → все 200; 404 = документ не влит в main, кнопка в About/Automation ведёт в никуда.
   # Список берётся из ProjectLinks (§358) — новая doc-ссылка попадает в проверку сама.
   ```
-- В установленном из релиза APK версия ядра (About/Debug, `Libbox.version()`) содержит суффикс `-lx` и совпадает с пином `app/android/libbox.version` на теге (сейчас `v1.14.0-lx.1`), **не** стоковое `1.13.11`: гарантия, что CI собрал fork-ядро и AWG/XHTTP/MASQUE-конфиги работают.
+- В установленном из релиза APK версия ядра (About/Debug, `Libbox.version()`) содержит суффикс `-lx` и совпадает с пином `app/android/libbox.version` на теге (сверять с файлом, не по памяти), **не** стоковое `1.13.11`: гарантия, что CI собрал fork-ядро и AWG/XHTTP/MASQUE-конфиги работают.
 - На устройстве с предыдущей версией L×Box UpdateChecker показывает SnackBar с новым релизом (§390: снек виден **только при старте** приложения, не в процессе работы — если проверяете на живом приложении, перезапустите его).
 
 ### Google Play (AAB)
@@ -374,7 +374,7 @@ git tag -d vX.Y.Z
 - [ ] Local smoke: `scripts/build-local-apk.sh` (derive'ит версию из `git describe`, sed pubspec + revert trap) + `scripts/install-apk.sh` — ставится поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (при работе из worktree не забыть симлинки keystore).
 - [ ] Коммит `docs(release): vX.Y.Z notes` запушен в `develop` (только doc-изменения; никаких pubspec/code bump'ов).
 - [ ] `main` ← merge `--no-ff --no-commit develop` → `commit -m "Merge ..."` → push; тег `vX.Y.Z` запушен **отдельной командой**. **NB:** именно `--no-commit` + явный `commit -m`, не `--no-ff -m` — последнее ломается на «Пустое сообщение коммита» и tag оказывается на старом commit'е (см. memory `feedback_git_merge_no_ff_quirk`).
-- [ ] `gh run watch` зелёный; в релизе 4 APK `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, подпись — release; версия ядра в APK содержит суффикс `-lx` и совпадает с пином `app/android/libbox.version` на теге (сейчас `v1.14.0-lx.1`).
+- [ ] `gh run watch` зелёный; в релизе 4 APK `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, подпись — release; версия ядра в APK содержит суффикс `-lx` и совпадает с пином `app/android/libbox.version` на теге (сверять с файлом, не по памяти).
 - [ ] `publish-manifest` отработал — `docs/latest.json` обновлён на `main`.
 - [ ] `main` слит обратно в `develop` (§2.6), запушен.
 - [ ] `git describe` на `develop` показывает `vX.Y.Z`.
