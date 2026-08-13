@@ -1,55 +1,63 @@
-# Протокол выпуска релизов (L×Box)
+# Release protocol (L×Box)
 
-Документ описывает, как выпустить **stable-релиз** `vX.Y.Z`. Canonical-source для процедуры: если что-то в других документах противоречит — править здесь, остальное приводить в соответствие.
+This document describes how to ship a **stable release** `vX.Y.Z`. It is the
+canonical source for the procedure: if another document contradicts it, fix it
+here and bring the rest into line.
 
-Смежные документы:
-- **`.github/workflows/ci.yml`** — механика CI: триггеры, job'ы, версия, публикация релиза и `docs/latest.json`.
-- **`AGENTS.md`** — общий scope агента, правила работы с git / ветками.
-- **`RELEASE_NOTES.md`** — тело релиза (корень репо), которое CI загружает в `body_path` GitHub Release.
-- **`docs/releases/vX.Y.Z.md`** — архив per-version release notes.
-- **[`FDROID.md`](FDROID.md)** — публикация в F-Droid: что делать в каталоге после выпуска релиза (отдельный MR на GitLab; скриншоты и описания читаются из коммита тега, а не из ветки).
+Related documents:
+- **`.github/workflows/ci.yml`** — the CI mechanics: triggers, jobs, versioning, publishing the release and `docs/latest.json`.
+- **`AGENTS.md`** — the agent's general scope and the rules for working with git and branches.
+- **`RELEASE_NOTES.md`** — the release body (in the repo root) that CI uploads as `body_path` for the GitHub Release.
+- **`docs/releases/vX.Y.Z.md`** — the archive of per-version release notes.
+- **[`FDROID.md`](FDROID.md)** — publishing on F-Droid: what to do in the catalogue after shipping a release (a separate MR on GitLab; screenshots and descriptions are read from the tag's commit, not from the branch).
 
 ---
 
-## 0. Что меняет CI, что делаете вы
+## 0. What CI changes, and what you change
 
-CI (`.github/workflows/ci.yml`) триггерится на:
+CI (`.github/workflows/ci.yml`) triggers on:
 
-| Событие | Что запускается |
+| Event | What runs |
 |---|---|
-| push tag `v*` | `meta` + `checks` + `android` + `release` + `publish-manifest` (полный релиз) |
-| push в `develop` / `main` | `checks` (только analyze + tests) |
-| PR в `develop` / `main` | `checks` |
+| push of a `v*` tag | `meta` + `checks` + `android` + `release` + `publish-manifest` (a full release) |
+| push to `develop` / `main` | `checks` (analyze and tests only) |
+| PR into `develop` / `main` | `checks` |
 | `workflow_dispatch` + `run_mode=checks` | `checks` |
-| `workflow_dispatch` + `run_mode=build` | `checks` + `android` (APK в artifacts, без релиза) |
-| `workflow_dispatch` + `run_mode=release` | полный релиз (тег CI не создаёт — используется для экстренных перевыпусков) |
+| `workflow_dispatch` + `run_mode=build` | `checks` + `android` (APK in artifacts, no release) |
+| `workflow_dispatch` + `run_mode=release` | a full release (CI does not create the tag — used for emergency re-issues) |
 
-Тело релиза CI берёт из `RELEASE_NOTES.md` (sparse-checkout, шаг `Create GitHub Release`, `body_path: RELEASE_NOTES.md`). Перед тегированием убедитесь, что файл содержит **ровно** те заметки, которые должны попасть в этот релиз.
+CI takes the release body from `RELEASE_NOTES.md` (sparse checkout, the
+`Create GitHub Release` step, `body_path: RELEASE_NOTES.md`). Before tagging,
+make sure the file holds **exactly** the notes meant for this release.
 
-Бот-шаг `publish-manifest` после релиза пушит в `main` коммит `chore(release): update docs/latest.json ... [skip ci]`. Это единственный разрешённый автоматический коммит в `main` помимо merge-коммитов релиза.
-
----
-
-## 1. Модель веток
-
-- **`main`** — релизная ветка. Сюда пишем только **когда готовим релиз**: merge из `develop`, финальные правки `RELEASE_NOTES.md` / `app/pubspec.yaml` / tag-сопутствующие мелочи, тег `vX.Y.Z`, автоматический бот-коммит `docs/latest.json`. Feature-разработка в `main` — нет.
-- **`develop`** — основная ветка разработки. Сюда сливаются все feature/fix PR'ы.
-- **Feature-ветки** — ответвляются от `develop`, мержатся обратно в `develop`.
-- **Теги `vX.Y.Z`** — только на коммитах в `main` (типично — на merge-коммите из `develop`).
-
-После каждого релиза `main` сливается обратно в `develop` (§2.6), иначе бот-коммит `docs/latest.json` и merge-коммит релиза окажутся не-предками `develop`, и `git describe` на `develop` будет врать.
+After the release the bot step `publish-manifest` pushes a
+`chore(release): update docs/latest.json ... [skip ci]` commit to `main`. That is
+the only automatic commit allowed in `main` besides the release merge commits.
 
 ---
 
-## 2. Stable-релиз — `vX.Y.Z`
+## 1. The branch model
+
+- **`main`** — the release branch. We write here only **when preparing a release**: a merge from `develop`, final edits to `RELEASE_NOTES.md` / `app/pubspec.yaml` / tag-adjacent details, the `vX.Y.Z` tag, and the automatic `docs/latest.json` bot commit. No feature development in `main`.
+- **`develop`** — the main development branch. Every feature and fix PR lands here.
+- **Feature branches** — branch off `develop` and merge back into `develop`.
+- **`vX.Y.Z` tags** — only on commits in `main` (typically on the merge commit from `develop`).
+
+After every release, `main` is merged back into `develop` (§2.6); otherwise the
+`docs/latest.json` bot commit and the release merge commit are not ancestors of
+`develop`, and `git describe` on `develop` starts lying.
+
+---
+
+## 2. A stable release — `vX.Y.Z`
 
 ### 2.1. Pre-flight
 
-0. **Ядро — fork sing-box-lx, не сток.** Релиз с AWG/XHTTP (§097) валиден только на ядре fork'а (механика — [§104](spec/tasks/104-libbox-fork-ci-fetch.md)):
-   - в `app/android/app/build.gradle.kts` зависимость — `implementation(files("libs/libbox.aar"))`, активной Maven-строки `com.github.singbox-android:libbox` **нет**;
-   - в `ci.yml` (job `android`) есть шаг `Fetch sing-box-lx core (libbox.aar)`, а пин `app/android/libbox.version` = версия, которой прогнан local smoke (п. 4) — пин общий для local и CI, расходиться им не с чего;
-   - стоковое ядро 1.13.11 отвергает конфиги с AWG-полями (`jc`/`jmin`/…) и `type:"xhttp"` — релиз, собранный на нём, брак.
-1. На `develop` всё зелёное:
+0. **The core is the sing-box-lx fork, not stock.** A release with AWG/XHTTP (§097) is only valid on the fork's core (the mechanics are in [§104](spec/tasks/104-libbox-fork-ci-fetch.md)):
+   - in `app/android/app/build.gradle.kts` the dependency is `implementation(files("libs/libbox.aar"))`, with **no** active Maven line `com.github.singbox-android:libbox`;
+   - `ci.yml` (job `android`) has the step `Fetch sing-box-lx core (libbox.aar)`, and the pin `app/android/libbox.version` is the version the local smoke test ran on (step 4) — the pin is shared by local builds and CI, so they have nothing to diverge over;
+   - the stock 1.13.11 core rejects configs carrying AWG fields (`jc`/`jmin`/…) and `type:"xhttp"` — a release built on it is defective.
+1. Everything is green on `develop`:
    ```bash
    cd app
    flutter analyze && flutter test
@@ -57,119 +65,133 @@ CI (`.github/workflows/ci.yml`) триггерится на:
    dart run tool/l10n/ui_check.dart --strict
    dart run tool/l10n/hardcoded_check.dart --strict
    dart run tool/l10n/kotlin_check.dart --strict
+   dart run tool/docs/parity_check.dart --strict
    ```
-   ⚠ Именно `flutter analyze` **без аргумента** — CI анализирует **весь** проект, включая `test/`. Локальная привычка `flutter analyze lib/` пропускает ошибки в тестах (особенно `non_exhaustive_switch` после добавления подтипа в sealed-класс) — они всплывут в CI уже **после** пуша тега и уронят релиз (ловили на v2.8.2 / §217).
+   ⚠ It has to be `flutter analyze` **with no argument** — CI analyses the **whole** project, including `test/`. The local habit of `flutter analyze lib/` skips errors in the tests (especially `non_exhaustive_switch` after adding a subtype to a sealed class); they surface in CI **after** the tag is pushed and take the release down with them (this bit us on v2.8.2 / §217).
 
-   ⚠ Четыре l10n-чекера — **не опционально**: job `checks` гоняет их шагом «L10n checks», и падение любого роняет релиз ровно так же, как упавший тест. На v2.17.0 тег пришлось перевыпускать из-за `hardcoded_check`: два `hintText`-примера в §302 (`tls.utls.fingerprint`, `chrome`). Технические идентификаторы в UI (JSON-пути, значения протокольных полей) переводу не подлежат — лечение не «завести ключ в словаре», а аннотация `// l10n-exempt: <причина>` в конце строки (см. [l10n.md](l10n.md)).
-2. `develop` — прямой потомок последнего stable-тега:
+   ⚠ The l10n checkers are **not optional**: the `checks` job runs them as the “L10n checks” step, and any failure kills the release exactly like a failing test. On v2.17.0 the tag had to be re-issued because of `hardcoded_check`: two `hintText` examples in §302 (`tls.utls.fingerprint`, `chrome`). Technical identifiers in the UI (JSON paths, protocol field values) are not translatable — the cure is not “add a key to the dictionary” but a `// l10n-exempt: <reason>` annotation at the end of the line (see [l10n.md](l10n.md)).
+
+   ⚠ `parity_check` guards the six RU/EN pairs (README, USER_GUIDE, DONATE, PRIVACY_POLICY, SECURITY, AUTOMATION). A section added to one language only fails the “Docs parity” step.
+2. `develop` is a direct descendant of the last stable tag:
    ```bash
    git fetch --tags
    git describe --tags
-   # Должно быть vX.Y.Z-N-gSHA; если далеко — подумайте, всё ли включено в заметки
+   # Expect vX.Y.Z-N-gSHA; if it is far behind, consider whether the notes cover everything
    ```
-3. Все доки синхронизированы под релиз:
-   - `CHANGELOG.md` — добавлена запись `## vX.Y.Z`.
-   - `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT_REPORT.md` — если затронуты.
-   - `README.md`, `README.ru.md` — если видимые фичи поменялись.
-   - spec'и задач (`docs/spec/features/NNN*/spec.md`) — `status: released`.
-   - `docs/releases/vX.Y.Z.md` — черновик per-version архива (можно готовить по ходу разработки).
-4. **Local smoke-тест release APK** (рекомендуется перед тегированием):
+3. Every document is in sync for the release:
+   - `CHANGELOG.md` — a `## vX.Y.Z` entry has been added.
+   - `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT_REPORT.md` — if affected.
+   - `README.md`, `README.ru.md` — if user-visible features changed.
+   - Task specs (`docs/spec/features/NNN*/spec.md`) — `status: released`.
+   - `docs/releases/vX.Y.Z.md` — a draft of the per-version archive (it can be prepared as development goes).
+4. **A local smoke test of the release APK** (recommended before tagging):
    ```bash
-   scripts/build-local-apk.sh   # release + arm64-only, см. AGENTS-memory
-   scripts/install-apk.sh       # auto-detect устройство, install + launch
+   scripts/build-local-apk.sh   # release, arm64 only
+   scripts/install-apk.sh       # auto-detects the device, installs and launches
    ```
-   Это ловит debug-подпись, упавший build, несовместимый `versionCode` **до** того, как тег уедет на origin.
+   This catches a debug signature, a broken build and an incompatible `versionCode` **before** the tag reaches origin.
 
-   ⚠️ **Если собираете из worktree** (`.claude/worktrees/*`): `app/android/key.properties` и `upload-keystore.jks` в worktree **отсутствуют**. До первой release-сборки симлинкать их из основного checkout'а — иначе APK получит debug-подпись и не встанет поверх prod. См. memory `feedback_keystore_in_worktree`.
+   ⚠️ **If you build from a worktree** (`.claude/worktrees/*`): `app/android/key.properties` and `upload-keystore.jks` are **absent** there. Symlink them from the main checkout before the first release build — otherwise the APK gets a debug signature and will not install over prod.
 
-   ⚠️ **Ядро для smoke:** `app/android/app/libs/libbox.aar` — в `.gitignore`, в свежем clone/worktree его нет; `build-local-apk.sh` сам скачивает версию из пина `app/android/libbox.version` (`scripts/fetch-libbox.sh`, идемпотентно) — см. [BUILD.md → «Ядро sing-box-lx»](BUILD.md#ядро-sing-box-lx-libbox). CI использует тот же пин, так что smoke и релиз гарантированно на одной версии ядра; smoke на версии, отличной от пина (ручной override fetch-скрипта), не считается.
+   ⚠️ **The core for the smoke test:** `app/android/app/libs/libbox.aar` is in `.gitignore` and is missing in a fresh clone or worktree; `build-local-apk.sh` downloads the version from the pin `app/android/libbox.version` on its own (`scripts/fetch-libbox.sh`, idempotently) — see [BUILD.md](BUILD.md). CI uses the same pin, so the smoke test and the release are guaranteed to run the same core version; a smoke test on a version other than the pin (a manual override of the fetch script) does not count.
 
-### 2.2. Версия — git tag это единственный source of truth
+### 2.2. The version — the git tag is the only source of truth
 
-**Выбор номера версии: по умолчанию бампаем ТОЛЬКО patch (последнюю цифру).**
-`2.9.1 → 2.9.2 → 2.9.3`, а не улетать в minor `2.10.0`, даже если в релизе есть
-новые фичи. Minor/major — только по явному решению мейнтейнера. Не додумывать
-«тут же фичи, значит minor» — по умолчанию всегда следующий patch.
+**Choosing the number: by default bump ONLY the patch (the last digit).**
+`2.9.1 → 2.9.2 → 2.9.3`, rather than jumping to a minor `2.10.0` even when the
+release contains new features. Minor and major are only for an explicit
+maintainer decision. Do not reason your way into “there are features here, so it
+must be a minor” — the default is always the next patch.
 
-**versionCode считается из версии** ([§379](spec/tasks/379-version-code-from-version.md)), а не из числа коммитов:
+**The versionCode is computed from the version**
+([§379](spec/tasks/379-version-code-from-version.md)), not from a commit count:
 
 ```
 versionCode = ((major × 10000 + minor × 100 + patch) × 100 + PRE) × 10 + ABI
 ```
 
-`PRE`: `01-49` = `-rc.N`, `50` = релиз, `51-98` = `-hotfixN`. `ABI`: `0` universal, `1` armv7, `2` arm64, `4` x86_64. Считает [`scripts/version-code.sh`](../scripts/version-code.sh) — единственный источник формулы; CI и локальный скрипт обязаны звать именно его, иначе коды разойдутся и `install -r` сломается.
+`PRE`: `01-49` = `-rc.N`, `50` = release, `51-98` = `-hotfixN`. `ABI`: `0`
+universal, `1` armv7, `2` arm64, `4` x86_64. It is computed by
+[`scripts/version-code.sh`](../scripts/version-code.sh), the single home of the
+formula; CI and the local script must both call it, or the codes drift apart and
+`install -r` breaks.
 
-`v2.19.8` → arm64 `21908502`, а `v2.19.8-rc.1` → `21908012`. Строго возрастает по мере выпусков.
+`v2.19.8` → arm64 `21908502`, while `v2.19.8-rc.1` → `21908012`. The number
+increases strictly across releases.
 
-- **`app/pubspec.yaml`** в `develop` держит placeholder — при релизе туда **коммитится реальная версия** (§2.4), иначе F-Droid `checkupdates` не может её прочитать и автообновление в каталоге не работает. Тег встаёт на этот коммит.
-- **CI release** переписывает pubspec из tag перед `flutter build`:
-  - `versionName` = `${tag#v}` (чистая `X.Y.Z` без `-dev` суффикса в production APK).
-  - `versionCode` — по формуле выше, своя цифра ABI на каждый из 4 прогонов сборки.
-- **Локальная сборка** ([`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh)) переписывает pubspec перед `flutter build`:
-  - `versionName` = `${tag#v}` на теге, иначе `${tag#v}-dev.${commits_since_tag}` (например `1.8.2-dev.3`).
-  - `versionCode` = код **последнего релизного тега** для arm64 (пин к тегу, §186 — против downgrade-блока при установке релиза поверх dev-сборки; хвост `-dev.N` формула срезает).
-- **About screen / UpdateChecker** читают версию через `VersionInfo.I.version` (load из `PackageInfo.fromPlatform()` в `main()` перед `runApp`) — то есть из APK-манифеста, а не из pubspec-файла.
-- **UpdateChecker skip для `-dev` versions** — dev builds не получают snackbar «X.Y.Z available» (всегда выглядит как «обновитесь до latest»).
+- **`app/pubspec.yaml`** holds a placeholder on `develop` — at release time the **real version is committed** there (§2.4), because otherwise F-Droid's `checkupdates` cannot read it and catalogue auto-updates stop working. The tag goes on that commit.
+- **CI release** rewrites pubspec from the tag before `flutter build`:
+  - `versionName` = `${tag#v}` (a clean `X.Y.Z` with no `-dev` suffix in the production APK).
+  - `versionCode` — by the formula above, with its own ABI digit for each of the four build runs.
+- **A local build** ([`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh)) rewrites pubspec before `flutter build`:
+  - `versionName` = `${tag#v}` on a tag, otherwise `${tag#v}-dev.${commits_since_tag}` (for example `1.8.2-dev.3`).
+  - `versionCode` = the code of the **last release tag** for arm64 (pinned to the tag, §186 — to avoid the downgrade block when installing a release over a dev build; the formula strips the `-dev.N` tail).
+- **About screen / UpdateChecker** read the version through `VersionInfo.I.version` (loaded from `PackageInfo.fromPlatform()` in `main()` before `runApp`) — that is, from the APK manifest rather than from the pubspec file.
+- **UpdateChecker skips `-dev` versions** — dev builds never get the “X.Y.Z available” snackbar (it would always look like “update to latest”).
 
-### Setup для нового clone
+### Setup for a fresh clone
 
-Ничего не требуется — версионирование целиком вычисляется на сборке (`build-local-apk.sh` / CI). Git-хуки не используются.
+Nothing is required — versioning is computed entirely at build time
+(`build-local-apk.sh` or CI). No git hooks are used.
 
-### История
+### History
 
-- До v1.8.2 версия дублировалась в `pubspec.yaml` + `about_screen.dart _version` const. v1.8.0 ▼: расхождение, UI показал v1.7.0. v1.8.1 hotfix + CI consistency check как guard.
-- v1.8.2 ([§065](spec/tasks/065-version-from-tag.md)): убрана hardcoded const, pubspec → placeholder, CI/local-script инжектят. Но требовался manual `scripts/build-local-apk.sh` для realistic version при dev sessions.
-- v1.8.3 ([§066](spec/tasks/066-pubspec-sync-hook.md)): pre-commit hook делал sync автоматом на каждый commit.
-- v2.11.x: pre-commit hook **удалён** (`.githooks/`, `setup-hooks.sh`, `sync-pubspec-version.sh`). Хук лишь бампил закоммиченный pubspec, но обе сборки (local + CI) всё равно переписывают версию перед `flutter build`, а runtime читает её из APK-манифеста — значение хука до APK не доживало. Взамен pubspec заморожен на `0.0.0+1`, версия вычисляется только на сборке. Выгода: конец «дрожанию» pubspec и merge-конфликтам по `version:`.
-- v2.19.x ([§379](spec/tasks/379-version-code-from-version.md)): versionCode переведён с `rev-list --count` на формулу от версии, `--split-per-abi` убран. Реальная версия снова коммитится — но ровно один раз, на merge-коммите в `main`, а не на каждый коммит в `develop` (это и была причина «дрожания»). Повод: F-Droid `checkupdates` читает версию из исходников на коммите тега; без этого автообновление в каталоге невозможно.
+- Up to v1.8.2 the version was duplicated in `pubspec.yaml` and in the `about_screen.dart _version` const. v1.8.0 ▼: they diverged and the UI showed v1.7.0. v1.8.1 was a hotfix plus a CI consistency check as a guard.
+- v1.8.2 ([§065](spec/tasks/065-version-from-tag.md)): the hardcoded const was removed, pubspec became a placeholder, and CI and the local script inject the version. But a manual `scripts/build-local-apk.sh` was needed for a realistic version during dev sessions.
+- v1.8.3 ([§066](spec/tasks/066-pubspec-sync-hook.md)): a pre-commit hook did the sync automatically on every commit.
+- v2.11.x: the pre-commit hook was **removed** (`.githooks/`, `setup-hooks.sh`, `sync-pubspec-version.sh`). All it did was bump the committed pubspec, but both builds (local and CI) rewrite the version before `flutter build` anyway, and the runtime reads it from the APK manifest — so the hook's value never survived to the APK. Instead pubspec was frozen at `0.0.0+1` and the version computed only at build time. The payoff: an end to pubspec “jitter” and merge conflicts over `version:`.
+- v2.19.x ([§379](spec/tasks/379-version-code-from-version.md)): the versionCode moved from `rev-list --count` to a formula over the version, and `--split-per-abi` was dropped. The real version is committed again — but exactly once, on the merge commit into `main` rather than on every commit in `develop` (that was the cause of the jitter). The reason: F-Droid's `checkupdates` reads the version from the sources at the tag's commit, and without it catalogue auto-updates are impossible.
 
-### 2.3. RELEASE_NOTES.md → архив
+### 2.3. RELEASE_NOTES.md → the archive
 
-1. Причесать `RELEASE_NOTES.md` (корень репо) под финальный вид релиза — это тело, которое CI зальёт в body GitHub Release. Структура: вступление (оба языка) → английская секция → русская секция → Install → ссылка на предыдущий релиз.
+1. Tidy `RELEASE_NOTES.md` (in the repo root) into its final shape — this is the body CI uploads into the GitHub Release. The structure: an intro (both languages) → the English section → the Russian section → Install → a link to the previous release.
 
-   **Заметки всегда двуязычные — английский и русский, обе версии полные.** Не «основной язык + краткая выжимка на втором»: содержимое дублируется целиком, один в один по разделам. Каждая языковая секция заворачивается в спойлер, чтобы страница релиза не растягивалась вдвое:
+   **The notes are always bilingual — English and Russian, both versions complete.** Not “a main language plus a short summary in the second”: the content is duplicated in full, section for section. Each language section is wrapped in a spoiler so the release page does not grow twice as long:
 
    ```markdown
    <details open>
    <summary><h2>🇬🇧 English</h2></summary>
-   …полный текст…
+   …the full text…
    </details>
 
    <details open>
    <summary><h2>🇷🇺 Русский</h2></summary>
-   …полный текст…
+   …the full text…
    </details>
    ```
 
-   `v2.17.0` — образец формата. Внутри секций — как у предыдущих релизов: breaking → highlights → tools/process → tests. Разделы Install и ссылка на предыдущий релиз общие, вне спойлеров, продублированы двумя языками.
-2. Скопировать финальный файл в `docs/releases/vX.Y.Z.md` (архив per-version, пригождается для кросс-ссылок из будущих релизов и в spec'ах).
-3. Проверить, что внутри нет остатков прошлой версии: заголовок `# L×Box vX.Y.Z`, номер в команде `adb install`, предыдущая ссылка внизу `Previous release / Предыдущий релиз: [v...](docs/releases/v...md).` Плюс — обе языковые секции описывают один и тот же набор изменений (при правках легко обновить одну и забыть вторую).
-4. Один коммит в `develop`:
+   `v2.17.0` is the reference for the format. Inside the sections, follow the previous releases: breaking → highlights → tools/process → tests. The Install section and the link to the previous release are shared, outside the spoilers, and duplicated in both languages.
+2. Copy the finished file to `docs/releases/vX.Y.Z.md` (the per-version archive, useful for cross-links from future releases and from specs).
+3. Check that nothing is left over from the previous version: the `# L×Box vX.Y.Z` heading, the number in the `adb install` command, the link at the bottom `Previous release / Предыдущий релиз: [v...](docs/releases/v...md).` And make sure both language sections describe the same set of changes (during edits it is easy to update one and forget the other).
+4. One commit into `develop`:
    ```
    docs(release): vX.Y.Z notes
    ```
-   Запушить в `origin/develop`. **Никаких pubspec/about_screen изменений в `develop`** — версия пишется в pubspec один раз, на merge-коммите в `main` (§2.4), чтобы не «дрожала» в ветке разработки.
+   Push it to `origin/develop`. **No pubspec or about_screen changes in `develop`** — the version is written into pubspec once, on the merge commit into `main` (§2.4), so that it does not “jitter” in the development branch.
 
-### 2.4. Merge в main и тег
+### 2.4. Merging into main, and the tag
 
-CI запускает release job **только** на push тега, и тег нужен **отдельной** командой: `git push origin main --tags` GitHub обработает как push-event по ветке, и release job не стартует.
+CI runs the release job **only** on a tag push, and the tag needs a **separate**
+command: GitHub treats `git push origin main --tags` as a branch push event and
+the release job never starts.
 
 ```bash
 git checkout main
 git pull --ff-only
 
-# ⚠ Two-step merge: `--no-commit` + explicit `commit -m`.
-# `git merge --no-ff -m "..."` падает с "Пустое сообщение коммита"
-# несмотря на -m (git CLI quirk, ловили дважды на v1.8.1 + v1.8.2).
-# Если script продолжает после fail → push выдаст "up-to-date" (main не
-# двинулся), tag создастся на старом commit'е, CI соберёт устаревший
-# код. Always two-step.
+# ⚠ Two-step merge: `--no-commit` followed by an explicit `commit -m`.
+# `git merge --no-ff -m "..."` fails with "empty commit message" despite the -m
+# (a git CLI quirk; it caught us twice, on v1.8.1 and v1.8.2).
+# If a script carries on past the failure, the push reports "up-to-date" (main
+# never moved), the tag lands on the old commit, and CI builds stale code.
+# Always two-step.
 git merge --no-ff --no-commit develop
 
-# §379 — реальная версия в pubspec ДО коммита: тег встанет на этот коммит, а
-# F-Droid checkupdates читает версию именно с коммита тега. Без этого шага
-# в каталоге остаётся placeholder и автообновление не работает.
-# Число после `+` — база кода (ABI=0), цифру ABI добавляет VercodeOperation.
+# §379 — the real version goes into pubspec BEFORE the commit: the tag lands on
+# this commit, and F-Droid's checkupdates reads the version from exactly that
+# commit. Without this step the catalogue keeps the placeholder and auto-updates
+# do not work. The number after `+` is the base code (ABI=0); the ABI digit is
+# added by VercodeOperation.
 CODE="$(scripts/version-code.sh X.Y.Z universal)"
 sed -i.bak -E "s/^version: .*/version: X.Y.Z+${CODE}/" app/pubspec.yaml
 rm -f app/pubspec.yaml.bak
@@ -178,62 +200,74 @@ git add app/pubspec.yaml
 git commit -m "Merge branch 'develop' into main (vX.Y.Z)"
 git push origin main
 
-# Sanity: tag должен дотягиваться до hotfix commit'а
+# Sanity: the tag must reach the hotfix commit
 git merge-base --is-ancestor <hotfix-sha> main && echo OK || echo "❌ retag needed"
 
-# Отдельно — тег
+# The tag goes separately
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-> ⚠️ После этого тег сидит на merge-коммите в `main`, который **не предок** `develop`. §2.6 — обязательный шаг, иначе следующий релиз стартует с «отставшей» историей.
+> ⚠️ The tag now sits on a merge commit in `main` that is **not an ancestor** of
+> `develop`. §2.6 is mandatory, otherwise the next release starts from a history
+> that has fallen behind.
 
-### 2.5. Дождаться CI
+### 2.5. Wait for CI
 
 ```bash
 RUN_ID="$(gh run list --workflow=ci.yml --limit 1 --json databaseId -q '.[0].databaseId')"
 gh run watch "$RUN_ID" --exit-status
 ```
 
-На финише ожидаем:
-- Release опубликован (`draft=false`).
-- Приложены 4 APK: `LxBox-vX.Y.Z-arm64-v8a.apk` / `-armeabi-v7a` / `-x86_64` / `-universal` (подпись — **release**, не debug; иначе установка поверх prod отвалится).
-- Тело релиза = содержимое `RELEASE_NOTES.md` на момент тега.
-- `docs/latest.json` обновлён бот-коммитом в `main` (`[skip ci]`).
+At the finish line, expect:
+- The release is published (`draft=false`).
+- Four APKs are attached: `LxBox-vX.Y.Z-arm64-v8a.apk` / `-armeabi-v7a` / `-x86_64` / `-universal` (signed **release**, not debug; otherwise installing over prod fails).
+- The release body is the content of `RELEASE_NOTES.md` as of the tag.
+- `docs/latest.json` has been updated by the bot commit in `main` (`[skip ci]`).
 
-### 2.6. Post-flight: вернуть main в develop
+### 2.6. Post-flight: bring main back into develop
 
-После релиза в `main` два коммита, не-предки `develop`:
-1. Merge-коммит из §2.4.
-2. Бот-коммит `chore(release): update docs/latest.json → vX.Y.Z [skip ci]`.
+After a release there are two commits in `main` that are not ancestors of
+`develop`:
+1. The merge commit from §2.4.
+2. The bot commit `chore(release): update docs/latest.json → vX.Y.Z [skip ci]`.
 
-Слить обратно:
+Merge them back:
 
 ```bash
 git checkout develop
 git fetch origin
-# ⚠ Тот же two-step quirk, что в §2.4: `merge --no-ff -m` падает с
-# «Пустое сообщение коммита» (ловили на v2.11.1) — всегда --no-commit + commit -m.
+# ⚠ The same two-step quirk as in §2.4: `merge --no-ff -m` fails with
+# «empty commit message» (it caught us on v2.11.1) — always --no-commit + commit -m.
 git merge --no-ff --no-commit origin/main
 
-# ⚠ §379 — merge тянет из main реальную версию в pubspec. В develop должен
-# остаться placeholder, иначе версия снова начнёт «дрожать» в ветке разработки
-# (ровно от этого ушли в v2.11.x). Откатываем ДО коммита:
+# ⚠ §379 — the merge drags the real version out of main into pubspec. `develop`
+# must keep the placeholder, otherwise the version starts to "jitter" in the
+# development branch again (exactly what v2.11.x moved away from). Revert it
+# BEFORE committing:
 git checkout HEAD -- app/pubspec.yaml
-git status --short   # ожидаем только docs/latest.json
+git status --short   # expect only docs/latest.json
 
 git commit -m "chore: merge main (vX.Y.Z tag) back into develop"
 git push origin develop
 
-# Забыть этот откат — не страшно: job `checks` на push в develop падает шагом
-# «Pubspec version is a placeholder (develop only)» и называет лечение. Сборку
-# это не ломало никогда (обе сборки переписывают версию перед `flutter build`),
-# поэтому без guard'а ошибка проходила молча — тестами она не ловится.
+# Forgetting this revert is not fatal: the `checks` job on a push to develop
+# fails at the "Pubspec version is a placeholder (develop only)" step and names
+# the cure. It never broke a build (both builds rewrite the version before
+# `flutter build`), which is precisely why the mistake used to pass silently —
+# no test catches it.
 
-# Проверка:
+# Verify:
 git describe --tags
-# Должно показать vX.Y.Z или vX.Y.Z-N-g<SHA>
+# Should show vX.Y.Z or vX.Y.Z-N-g<SHA>
 ```
+
+⚠ **This step is skipped often.** It has already been repaired after the fact
+twice — `bc9d934d` after v2.20.6, and again after v2.20.8. The merge itself is
+clean and nothing in the build breaks, so the only signal is the CI guard on the
+*next* push to `develop`. If the guard does fire, the cure is the same: put the
+placeholder back (`X.Y.Z-dev.N+<code>`, where N is the number of commits since
+the tag) in a separate `fix(ci)` commit.
 
 ### 2.7. Verify
 
@@ -245,137 +279,160 @@ curl -sL https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json |
 # → "vX.Y.Z"
 ```
 
-- APK качается из release-страницы, `scripts/install-apk.sh` ставит его поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (значит подпись — release).
-- Ссылки из приложения на документы в `main` отдают 200 (в APK они зашиты на `blob/main`, а файл попадает туда только с merge — §361):
+- The APK downloads from the release page and `scripts/install-apk.sh` installs it over prod without `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (which proves the signature is release).
+- The links from the app to documents in `main` return 200 (the APK hardcodes them to `blob/main`, and a file only gets there through a merge — §361):
 
   ```bash
   grep -oE 'https://github\.com/Leadaxe/LxBox/blob/main/[^'"'"']+' app/lib/services/project_links.dart | sort -u | while read -r u; do
     printf '%s → ' "${u##*/}"
     curl -s -o /dev/null -w '%{http_code}\n' "$u"
   done
-  # → все 200; 404 = документ не влит в main, кнопка в About/Automation ведёт в никуда.
-  # Список берётся из ProjectLinks (§358) — новая doc-ссылка попадает в проверку сама.
+  # → all 200; a 404 means the document is not merged into main and the button in
+  # About/Automation leads nowhere.
+  # The list comes from ProjectLinks (§358), so a new doc link joins the check by itself.
   ```
-- В установленном из релиза APK версия ядра (About/Debug, `Libbox.version()`) содержит суффикс `-lx` и совпадает с пином `app/android/libbox.version` на теге (сверять с файлом, не по памяти), **не** стоковое `1.13.11`: гарантия, что CI собрал fork-ядро и AWG/XHTTP/MASQUE-конфиги работают.
-- На устройстве с предыдущей версией L×Box UpdateChecker показывает SnackBar с новым релизом (§390: снек виден **только при старте** приложения, не в процессе работы — если проверяете на живом приложении, перезапустите его).
+- In the APK installed from the release, the core version (About/Debug, `Libbox.version()`) carries the `-lx` suffix and matches the pin in `app/android/libbox.version` at the tag (check against the file, not from memory) — **not** the stock `1.13.11`: that is the guarantee that CI built the fork core and that AWG/XHTTP/MASQUE configs work.
+- On a device running the previous L×Box version, UpdateChecker shows a snackbar about the new release (§390: the snackbar appears **only at startup**, not while the app is running — if you are testing on a live app, restart it).
 
 ### Google Play (AAB)
 
-CI на каждом релизе собирает `.aab` (шаг «Build AAB (Google Play)») и кладёт в
-артефакты прогона. Заливка в Play Console — **ручная**: скачать артефакт
-`android-aab-release` и загрузить в нужный трек.
+For every release CI builds an `.aab` (the “Build AAB (Google Play)” step) and
+puts it in the run's artifacts. Uploading to the Play Console is **manual**:
+download the `android-aab-release` artifact and upload it to the right track.
 
-⚠ **Три канала — три несовместимые подписи.**
+⚠ **Three channels mean three incompatible signatures.**
 
-| Канал | Чем подписано | Обновляется |
+| Channel | Signed with | Updated by |
 |---|---|---|
-| GitHub Releases | наш ключ (`7987aec4/CN=BoxVPN`) | вручную, APK со страницы релиза |
-| Google Play | ключ Google (Play App Signing; наш — только upload-ключ) | самим Play |
-| F-Droid | ключ F-Droid | клиентом F-Droid |
+| GitHub Releases | our key (`7987aec4/CN=BoxVPN`) | manually, from the release page's APK |
+| Google Play | Google's key (Play App Signing; ours is only the upload key) | Play itself |
+| F-Droid | F-Droid's key | the F-Droid client |
 
-APK одного канала **не встанет** поверх другого — «signatures do not match».
-Поэтому §390: приложение знает свой канал и уведомление об апдейте ведёт в тот
-же магазин, откуда приложение пришло.
+An APK from one channel **will not install** over another — “signatures do not
+match”. Hence §390: the app knows its own channel and points its update notice at
+the same store it came from.
 
-⚠ Флаг `--dart-define=LXBOX_DISTRIBUTION=play` стоит **только на AAB-шаге**.
-APK собираются без него намеренно: F-Droid сверяет байты своей сборки с APK из
-GitHub Releases (reproducible builds — подпись остаётся нашей), а define попал
-бы в скомпилированный Dart и сверку сломал. У APK канал определяется рантаймом
-по установщику. При правке `ci.yml` флаг в APK-шаги не добавлять.
+⚠ The flag `--dart-define=LXBOX_DISTRIBUTION=play` is set **only on the AAB
+step**. APKs are deliberately built without it: F-Droid compares the bytes of its
+build against the APK from GitHub Releases (reproducible builds — the signature
+stays ours), and the define would end up in the compiled Dart and break the
+comparison. For APKs the channel is determined at runtime from the installer.
+When editing `ci.yml`, do not add the flag to the APK steps.
 
 ---
 
-## 3. Траблшутинг
+## 3. Troubleshooting
 
-### CI падает на release job — «No APK found»
+### CI fails on the release job — “No APK found”
 
-`android` job не отдал артефакт — смотреть его логи. Частая причина — `flutter build apk --release` упал из-за отсутствия keystore secrets. См. `scripts/bootstrap-android-signing-for-ci.sh` и `scripts/setup-android-ci-secrets.sh`.
+The `android` job produced no artifact — read its logs. A common cause is
+`flutter build apk --release` failing because the keystore secrets are missing.
+See `scripts/bootstrap-android-signing-for-ci.sh` and
+`scripts/setup-android-ci-secrets.sh`.
 
-### APK в релизе имеет debug-подпись
+### The APK in the release has a debug signature
 
-Значит `ANDROID_KEYSTORE_BASE64` / `..._PASSWORD` / `..._ALIAS` не проставлены в GitHub secrets. В логе шага `Android release keystore (optional)` будет:
+That means `ANDROID_KEYSTORE_BASE64` / `..._PASSWORD` / `..._ALIAS` are not set in
+the GitHub secrets. The log of the `Android release keystore (optional)` step will
+say:
 ```
 No ANDROID_KEYSTORE_BASE64 secret; release APK will use debug signing.
 ```
-Это **не** надо игнорировать — юзеры с prod-установкой не смогут обновиться. Заполнить secrets и перевыпустить (см. «Тег уже существует» ниже).
+This must **not** be ignored — users with a prod install will not be able to
+update. Fill in the secrets and re-issue (see “The tag already exists” below).
 
-### Релизный APK собран на стоковом ядре (AWG/XHTTP отвергаются)
+### The release APK was built on the stock core (AWG/XHTTP are rejected)
 
-Симптом: Start падает с ошибкой ядра на конфигах с AWG-полями (`jc`/`jmin`/…) или `type:"xhttp"`; версия ядра в About/Debug — `1.13.11` без `-lx`.
+The symptom: Start fails with a core error on configs carrying AWG fields
+(`jc`/`jmin`/…) or `type:"xhttp"`; the core version in About/Debug reads
+`1.13.11` with no `-lx`.
 
-Причина: CI собрал стоковый Maven-libbox — в `build.gradle.kts` вернулась Maven-строка, либо шаг `Fetch sing-box-lx core` в `ci.yml` убран/не отработал (или пин `app/android/libbox.version` указывает не туда).
+The cause: CI built the stock Maven libbox — either the Maven line came back into
+`build.gradle.kts`, or the `Fetch sing-box-lx core` step in `ci.yml` was removed
+or did not run (or the pin `app/android/libbox.version` points somewhere wrong).
 
-Это брак релиза. Чинить `ci.yml`/gradle/пин и перевыпускать тег (см. «Тег уже существует»). ⚠ **Не** подменять артефакт локально собранным APK через `gh release upload` — релизы только CI-built.
+This is a defective release. Fix `ci.yml`, gradle or the pin and re-issue the tag
+(see “The tag already exists”). ⚠ Do **not** substitute a locally built APK
+through `gh release upload` — releases are CI-built only.
 
-### Запушил `main` и тег одной командой — build не стартовал
+### I pushed `main` and the tag in one command, and no build started
 
-`git push origin main --tags` GitHub воспринимает как push по ветке, release не стартует. Перепушить тег отдельно:
+GitHub treats `git push origin main --tags` as a branch push and the release
+never starts. Push the tag separately:
 ```bash
 git push origin vX.Y.Z
 ```
 
-### Тело релиза не то / пустое
+### The release body is wrong or empty
 
-CI читает `RELEASE_NOTES.md` на момент тега. Если тег стоит на старом коммите — тело будет с прошлого релиза. Горячий фикс:
+CI reads `RELEASE_NOTES.md` as of the tag. If the tag sits on an old commit, the
+body comes from the previous release. The quick fix:
 ```bash
 gh release edit vX.Y.Z --notes-file RELEASE_NOTES.md
 ```
 
-### `git describe` на develop отстаёт
+### `git describe` on develop has fallen behind
 
-§2.6 не сделан. Делать сейчас:
+§2.6 was not done. Do it now:
 ```bash
 git checkout develop && git merge --no-ff origin/main && git push origin develop
 ```
 
-### Тег уже существует, нужно перевыпустить
+### The tag already exists and has to be re-issued
 
-Сначала определить, дошёл ли CI до создания Release — от этого зависит безопасность re-tag:
+First work out whether CI got as far as creating the Release — that decides how
+safe a re-tag is:
 
 ```bash
 gh release view vX.Y.Z --json isDraft,createdAt 2>/dev/null || echo "release not found"
 ```
 
-#### Случай (а): CI упал ДО `Create GitHub Release` (`release not found`)
+#### Case (a): CI failed BEFORE `Create GitHub Release` (`release not found`)
 
-Самый частый путь — `checks`/`analyze`/`android` упали раньше, чем job `release` создал релиз (например `flutter analyze` на `test/`, см. pre-flight п.1, или флаки-тест — так падал первый тег v2.8.2 и v2.9.0). GitHub Release и `docs/latest.json` **не тронуты**, поэтому re-tag безопасен:
+The most common path — `checks`/`analyze`/`android` failed before the `release`
+job created anything (for example `flutter analyze` on `test/`, see pre-flight
+step 1, or a flaky test — that is how the first v2.8.2 and v2.9.0 tags died). The
+GitHub Release and `docs/latest.json` are **untouched**, so a re-tag is safe:
 
 ```bash
-# gh release view выше должен сказать "release not found"
+# gh release view above should have said "release not found"
 git push --delete origin vX.Y.Z
 git tag -d vX.Y.Z
-# починить причину, перепройти §2.4 (тот же vX.Y.Z)
+# fix the cause, redo §2.4 with the same vX.Y.Z
 ```
 
-#### Случай (б): Release уже опубликован
+#### Case (b): the Release is already published
 
-Последняя мера. `docs/latest.json` уже обновлён бот-коммитом — при необходимости откатывать руками.
+A last resort. `docs/latest.json` has already been updated by the bot commit and
+may need to be rolled back by hand.
 
 ```bash
 gh release delete vX.Y.Z --yes
 git push --delete origin vX.Y.Z
 git tag -d vX.Y.Z
-# починить причину, перепройти §2.4
+# fix the cause, redo §2.4
 ```
 
-Если пользователи уже скачали плохой APK — придётся бампать `+build` и релизить `vX.Y.(Z+1)`, т.к. поверх установленной debug-сборки release-сборка не встанет без переустановки с нуля.
+If users have already downloaded the bad APK, you will have to bump `+build` and
+ship `vX.Y.(Z+1)`, because a release build will not install over an installed
+debug build without a clean reinstall.
 
 ---
 
-## 4. Чеклист для агента
+## 4. Checklist for the agent
 
 ### Stable vX.Y.Z
 
-- [ ] `develop` зелёная (`cd app && flutter analyze && flutter test` **+ четыре `dart run tool/l10n/*_check.dart --strict`** — CI гоняет их шагом «L10n checks», см. §2.1 п.1), descendant от прошлого stable-тега.
-- [ ] **Ядро:** `app/android/app/build.gradle.kts` → `implementation(files("libs/libbox.aar"))` (активной Maven-строки стокового libbox нет); в `ci.yml` job `android` есть шаг `Fetch sing-box-lx core`, пин `app/android/libbox.version` = версии local smoke. Стоковое 1.13.11 отвергает AWG/XHTTP-конфиги — такой релиз не выпускать.
-- [ ] Релиз-доки синхронизированы: `CHANGELOG.md`, `ARCHITECTURE.md` / `DEVELOPMENT_REPORT.md` (если затронуты), `README.md` + `README.ru.md` (если фичи видимые), spec'и → `status: released`.
-- [ ] `app/pubspec.yaml` в `develop` **не трогать** — реальная версия пишется туда на merge-коммите в `main` (§2.4/§379), тег встаёт на этот коммит.
-- [ ] `RELEASE_NOTES.md` причёсан под финал, скопирован в `docs/releases/vX.Y.Z.md`. **Обе языковые версии (EN + RU) полные и синхронные**, каждая в своём `<details>`-спойлере (§2.3, образец — `v2.17.0`).
-- [ ] Local smoke: `scripts/build-local-apk.sh` (derive'ит версию из `git describe`, sed pubspec + revert trap) + `scripts/install-apk.sh` — ставится поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (при работе из worktree не забыть симлинки keystore).
-- [ ] Коммит `docs(release): vX.Y.Z notes` запушен в `develop` (только doc-изменения; никаких pubspec/code bump'ов).
-- [ ] `main` ← merge `--no-ff --no-commit develop` → `commit -m "Merge ..."` → push; тег `vX.Y.Z` запушен **отдельной командой**. **NB:** именно `--no-commit` + явный `commit -m`, не `--no-ff -m` — последнее ломается на «Пустое сообщение коммита» и tag оказывается на старом commit'е (см. memory `feedback_git_merge_no_ff_quirk`).
-- [ ] `gh run watch` зелёный; в релизе 4 APK `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, подпись — release; версия ядра в APK содержит суффикс `-lx` и совпадает с пином `app/android/libbox.version` на теге (сверять с файлом, не по памяти).
-- [ ] `publish-manifest` отработал — `docs/latest.json` обновлён на `main`.
-- [ ] `main` слит обратно в `develop` (§2.6), запушен.
-- [ ] `git describe` на `develop` показывает `vX.Y.Z`.
+- [ ] `develop` is green (`cd app && flutter analyze && flutter test` **plus the four `dart run tool/l10n/*_check.dart --strict` and `parity_check`** — CI runs them as the “L10n checks” and “Docs parity” steps, see §2.1 step 1) and a descendant of the previous stable tag.
+- [ ] **The core:** `app/android/app/build.gradle.kts` → `implementation(files("libs/libbox.aar"))` (no active Maven line for the stock libbox); `ci.yml` job `android` has the `Fetch sing-box-lx core` step; the pin `app/android/libbox.version` is the version of the local smoke test. The stock 1.13.11 rejects AWG/XHTTP configs — do not ship such a release.
+- [ ] The release docs are in sync: `CHANGELOG.md`, `ARCHITECTURE.md` / `DEVELOPMENT_REPORT.md` (if affected), `README.md` + `README.ru.md` (if features are user-visible), specs → `status: released`.
+- [ ] `app/pubspec.yaml` in `develop` is **untouched** — the real version goes in on the merge commit into `main` (§2.4/§379), and the tag lands on that commit.
+- [ ] `RELEASE_NOTES.md` is polished into its final form and copied to `docs/releases/vX.Y.Z.md`. **Both language versions (EN + RU) are complete and in sync**, each inside its own `<details>` spoiler (§2.3, `v2.17.0` is the reference).
+- [ ] Local smoke: `scripts/build-local-apk.sh` plus `scripts/install-apk.sh` — it installs over prod without `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (when working from a worktree, do not forget the keystore symlinks).
+- [ ] The commit `docs(release): vX.Y.Z notes` is pushed to `develop` (doc changes only; no pubspec or code bumps).
+- [ ] `main` ← merge `--no-ff --no-commit develop` → `commit -m "Merge ..."` → push; the tag `vX.Y.Z` is pushed **as a separate command**. **NB:** it must be `--no-commit` plus an explicit `commit -m`, not `--no-ff -m` — the latter breaks on “empty commit message” and the tag ends up on the old commit.
+- [ ] `gh run watch` is green; the release holds four APKs `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, signed release; the core version in the APK carries the `-lx` suffix and matches the pin in `app/android/libbox.version` at the tag (check against the file, not from memory).
+- [ ] `publish-manifest` ran — `docs/latest.json` is updated in `main`.
+- [ ] `main` is merged back into `develop` (§2.6) and pushed — **including the `git checkout HEAD -- app/pubspec.yaml` revert before the commit**.
+- [ ] `git describe` on `develop` shows `vX.Y.Z`.
 - [ ] `gh release view vX.Y.Z --json isLatest` → `{"isLatest":true}`.
