@@ -33,9 +33,9 @@ RU/EN и соответствие содержания коду. Повод — 
 | `docs/USER_GUIDE.ru.md` | 90 | RU | пара ✓ |
 | `docs/DONATE.md` | 2.6 | EN | EN + пара ✓ |
 | `docs/DONATE.ru.md` | 3.6 | RU | пара ✓ |
-| `docs/PRIVACY_POLICY.md` | 5 | EN | нужна пара `.ru.md` |
-| `docs/SECURITY.md` | 13 | EN | нужна пара `.ru.md` |
-| `docs/AUTOMATION.md` | 19 | смешанный | перевести в EN + пара `.ru.md` |
+| `docs/PRIVACY_POLICY.md` | 5 | EN | EN + пара ✓ |
+| `docs/SECURITY.md` | 13 | EN | EN + пара ✓ |
+| `docs/AUTOMATION.md` | 19 | EN ✓ | EN + пара ✓ |
 | `docs/BUILD.md` | 16 | EN ✓ | только EN — сделано |
 | `docs/FDROID.md` | 19 | EN ✓ | только EN — сделано |
 | `docs/ARCHITECTURE.md` | 167 | смешанный | перевести в EN |
@@ -147,7 +147,8 @@ post-flight-чеклиста** — «версия ядра совпадает с
 3. ✓ Точечные фиксы расхождений 1–3 (`67cacbae`)
 4. ✓ `FDROID.md` → EN — попутно в таблицу fastlane добавлен `title.txt`,
    он есть на диске, но в списке файлов витрины отсутствовал
-5. Пары для `PRIVACY_POLICY`, `SECURITY`, `AUTOMATION`
+5. ✓ Пары для `PRIVACY_POLICY`, `SECURITY`, `AUTOMATION` — все внесены
+   в `parity_check.dart`, пар теперь шесть
 6. Перевод крупных dev-доков в EN
 
 Шаг 3 отделён намеренно: это правки фактов, они ценны сами по себе и не

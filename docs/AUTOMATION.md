@@ -1,164 +1,172 @@
 # L×Box Automation API
 
-Управление L×Box из **Tasker / MacroDroid / Llama / Automate** (§047 Public
-Intent API) — двумя способами:
+Controlling L×Box from **Tasker / MacroDroid / Llama / Automate** (§047 Public
+Intent API) — in two ways:
 
-- **Plugin** (рекомендуется) — L×Box виден в списке плагинов host'а, выбираешь
-  команду мышкой (Locale/Tasker-стандарт);
-- **Raw broadcast intents** — `am broadcast` / Send Intent с нашей action-строкой
-  (для shell / ADB / не-plugin приложений).
+- **Plugin** (recommended) — L×Box appears in the host's plugin list and you pick
+  a command by hand (the Locale/Tasker standard);
+- **Raw broadcast intents** — `am broadcast` / Send Intent with our action string
+  (for shell, ADB, and apps without plugin support).
 
-Фича **opt-in**: по умолчанию приём команд выключен, события наружу не шлются.
-Включается в **App Settings → Automation**.
+The feature is **opt-in**: accepting commands is off by default and no events are
+sent out. Turn it on in **App Settings → Automation**.
 
-> **Два канала автоматизации — не путать.** Этот документ описывает **Public
-> Intent API**: телефон автоматизирует сам себя по событиям (Tasker/MacroDroid,
-> Wi-Fi-триггеры) — без ПК, без USB, без токена. Если же нужно управлять L×Box
-> **снаружи скриптом** (CI, отладка, adb-forward с компьютера) — это **Debug
-> API** (HTTP, Bearer-токен, порт 9269, полный CRUD подписок/правил): см.
-> [api/debug-api-reference.md](api/debug-api-reference.md) и живой `GET /help`.
-> Общий обзор всех каналов управления — в [индексе документации](README.md).
+> Русская версия: [AUTOMATION.ru.md](AUTOMATION.ru.md)
+
+> **Two automation channels — do not mix them up.** This document covers the
+> **Public Intent API**: the phone automating itself from events
+> (Tasker/MacroDroid, Wi-Fi triggers) — no PC, no USB, no token. If instead you
+> need to drive L×Box **from the outside with a script** (CI, debugging,
+> adb-forward from a computer), that is the **Debug API** (HTTP, Bearer token,
+> port 9269, full CRUD over subscriptions and rules): see
+> [api/debug-api-reference.md](api/debug-api-reference.md) and the live
+> `GET /help`. An overview of every control channel is in the
+> [documentation index](README.md).
 
 ---
 
-## Быстрый старт
+## Quick start
 
-1. **L×Box → App Settings → Automation** → включить «Принимать команды
-   автоматизации» (подтвердить explainer). Пока этот toggle OFF, receiver'ы
-   `enabled=false` — команды не принимаются вообще. Это и есть барьер приёма
-   (отдельного per-app пропуска нет — см. §157).
-2. Включить нужные **Emit**-категории, если хотите получать события L×Box
-   наружу (Lifecycle / State / Subscription / Health).
-3. В host-приложении выбрать L×Box:
-   - **Plugin** (проще): Action / State → **Plugin → L×Box** → выбрать команду;
-   - **Raw**: **Send Intent** → Action = одна из команд ниже, Target =
+1. **L×Box → App Settings → Automation** → enable “Accept automation commands”
+   (confirm the explainer). While that toggle is OFF the receivers are
+   `enabled=false` and no command is accepted at all. That toggle is the
+   admission barrier — there is no separate per-app pass (see §157).
+2. Enable the **Emit** categories you want if you would like L×Box to send events
+   out (Lifecycle / State / Subscription / Health).
+3. In the host application, pick L×Box:
+   - **Plugin** (simpler): Action / State → **Plugin → L×Box** → choose a command;
+   - **Raw**: **Send Intent** → Action = one of the commands below, Target =
      **Broadcast Receiver**.
 
 ---
 
-## Два способа интеграции
+## Two ways to integrate
 
-L×Box поддерживает **оба** механизма — выбирайте по удобству:
+L×Box supports **both** mechanisms — choose whichever is more convenient:
 
-| | Plugin (рекомендуется) | Raw broadcast intents |
+| | Plugin (recommended) | Raw broadcast intents |
 |---|---|---|
-| Как | Host → **Action / State → Plugin → L×Box** | руками Send Intent + строка action |
-| Кому | большинству — кликаешь в списке плагинов | shell `am broadcast`, ADB, не-plugin apps |
-| Настройка | выбор из списка + селектор ноды/группы | вписать action и extras вручную |
+| How | Host → **Action / State → Plugin → L×Box** | Send Intent plus the action string, by hand |
+| For whom | most people — you click through a plugin list | shell `am broadcast`, ADB, apps without plugin support |
+| Setup | pick from a list, plus a node/group selector | type the action and extras yourself |
 
-Оба требуют включённого мастер-toggle в **App Settings → Automation**. Plugin-способ описан сразу ниже; raw-actions — в таблицах далее.
+Both require the master toggle in **App Settings → Automation**. The plugin route
+is described right below; the raw actions are in the tables further down.
 
-### Хосты
+### Hosts
 
-Plugin-стандарт (`twofortyfouram` Locale) понимают:
+These understand the plugin standard (`twofortyfouram` Locale):
 
-| Хост | Цена | Plugin-блок |
+| Host | Price | Plugin block |
 |---|---|---|
-| **MacroDroid** | бесплатно | ✅ доступен (проверено) |
-| **Tasker** | ~€3.5 разово | ✅ |
-| **Llama** | бесплатно | ✅ |
-| **Automate** (LlamaLab) | бесплатно | ⚠️ plugin-блок за premium; raw-actions через «Broadcast send» бесплатны |
+| **MacroDroid** | free | ✅ available (verified) |
+| **Tasker** | ~€3.5 one-off | ✅ |
+| **Llama** | free | ✅ |
+| **Automate** (LlamaLab) | free | ⚠️ the plugin block is premium; raw actions through “Broadcast send” are free |
 
-Raw-actions (Шаг 1) работают **откуда угодно** — Termux / shell / ADB через `am broadcast`, без host-приложения.
+Raw actions work **from anywhere** — Termux, a shell, or ADB through
+`am broadcast`, with no host application at all.
 
-### Plugin — действия (Setting)
+### Plugin — actions (Setting)
 
-В списке плагинов host'а L×Box даёт **4 строки**:
+In the host's plugin list L×Box offers **four entries**:
 
-| Строка плагина | Что делает |
+| Plugin entry | What it does |
 |---|---|
-| **L×Box: Start VPN** | one-tap — выбрал, готово, без экрана |
-| **L×Box: Stop VPN** | one-tap |
-| **L×Box: Toggle VPN** | one-tap |
-| **L×Box: Custom…** | открывает экран выбора остальных команд |
+| **L×Box: Start VPN** | one tap — select it and you are done, no screen |
+| **L×Box: Stop VPN** | one tap |
+| **L×Box: Toggle VPN** | one tap |
+| **L×Box: Custom…** | opens a screen for choosing the remaining commands |
 
-«Custom…» — список команд (Switch node · Set group · URL-test group · Refresh
-subscriptions · Rebuild config · Reset network). Для **Switch node** показывается
-**выпадающий список реальных нод** активной группы; для **Set group** /
-**URL-test group** — список реальных групп (подтягиваются из приложения — нужно
-один раз открыть L×Box после установки/смены подписки, чтобы список закешировался;
-иначе — ручной ввод тега).
+“Custom…” lists the commands (Switch node · Set group · URL-test group · Refresh
+subscriptions · Rebuild config · Reset network). **Switch node** shows a
+**dropdown of the real nodes** in the active group; **Set group** and
+**URL-test group** show the real groups. These are pulled from the app, so open
+L×Box once after installing or changing a subscription to let the list cache
+itself — otherwise you have to type the tag by hand.
 
-Пример (MacroDroid): Action → **Плагин Tasker/Locale** → **L×Box: Custom…** →
-выбрать «Switch node» → в Value выбрать ноду из списка → **Save**.
+Example (MacroDroid): Action → **Tasker/Locale plugin** → **L×Box: Custom…** →
+choose “Switch node” → pick a node from the list in Value → **Save**.
 
-### Plugin — условия (State)
+### Plugin — conditions (State)
 
-Host → State / Condition → Plugin → **L×Box** → выбрать проверку:
+Host → State / Condition → Plugin → **L×Box** → pick a check:
 
-| Условие | Значение |
+| Condition | Value |
 |---|---|
 | **VPN is up** | — |
-| **Active node =** | выбрать ноду |
-| **Active group =** | выбрать группу |
+| **Active node =** | choose a node |
+| **Active group =** | choose a group |
 
-Profile активируется, пока условие истинно. Host опрашивает периодически.
+The profile stays active while the condition holds. The host polls periodically.
 
-> **Как узнать текущую активную ноду.** Событий-«ответов» ждать не обязательно:
-> условие **Active node =** — это pull-проверка активной ноды прямо сейчас
-> (читает кеш, который L×Box обновляет при каждой смене). Ставите его в State
-> сценария и сравниваете с нужным тегом — истинно, пока эта нода активна. То же
-> для **Active group =**. Событие `ACTIVE_NODE_CHANGED` (ниже) — это push «нода
-> сменилась», а condition — pull «какая нода сейчас»; выбирайте по задаче.
+> **How to find out the current active node.** You do not have to wait for a
+> “reply” event: the **Active node =** condition is a pull check of the node
+> active right now (it reads the cache L×Box refreshes on every switch). Put it
+> in a scenario's State and compare it with the tag you want — it is true while
+> that node is active. The same goes for **Active group =**. The
+> `ACTIVE_NODE_CHANGED` event (below) is a push saying “the node changed”, while
+> the condition is a pull asking “which node is it now” — pick whichever fits.
 
-> Под капотом plugin использует стандарт
-> `com.twofortyfouram.locale.intent.action.FIRE_SETTING` / `QUERY_CONDITION` и
-> те же команды, что raw-actions ниже. UI плагина — на английском.
+> Under the hood the plugin uses the standard
+> `com.twofortyfouram.locale.intent.action.FIRE_SETTING` / `QUERY_CONDITION` and
+> the same commands as the raw actions below. The plugin's UI is in English.
 
 ---
 
-## Incoming actions (команды → L×Box)
+## Incoming actions (commands → L×Box)
 
-Все — broadcast intents. Префикс `com.leadaxe.lxbox.`.
+All of them are broadcast intents. The prefix is `com.leadaxe.lxbox.`.
 
-| Action | Extra | Эффект |
+| Action | Extra | Effect |
 |---|---|---|
-| `START_VPN` | — | Запустить VPN (идемпотентно: noop если уже up) |
-| `STOP_VPN` | — | Остановить VPN |
-| `TOGGLE_VPN` | — | Toggle относительно текущего статуса |
-| `SWITCH_NODE` | `tag` (String) | Переключить активную ноду в текущей группе |
-| `SET_GROUP` | `group` (String) | Сменить активную группу |
-| `REBUILD_CONFIG` | — | Пересобрать config из подписок (respects §037 lock) |
-| `REFRESH_SUBS` | `force` (Bool) | Обновить подписки |
-| `RESET_NETWORK` | — | closeAll + DNS flush + dialer rebind (нужен tunnel up) |
-| `URLTEST_GROUP` | `group` (String) | Форсировать URLTest группы (нужен tunnel up) |
+| `START_VPN` | — | Start the VPN (idempotent: a no-op if already up) |
+| `STOP_VPN` | — | Stop the VPN |
+| `TOGGLE_VPN` | — | Toggle relative to the current status |
+| `SWITCH_NODE` | `tag` (String) | Switch the active node inside the current group |
+| `SET_GROUP` | `group` (String) | Change the active group |
+| `REBUILD_CONFIG` | — | Rebuild the config from subscriptions (respects the §037 lock) |
+| `REFRESH_SUBS` | `force` (Bool) | Refresh subscriptions |
+| `RESET_NETWORK` | — | closeAll + DNS flush + dialer rebind (requires the tunnel up) |
+| `URLTEST_GROUP` | `group` (String) | Force a URL test of the group (requires the tunnel up) |
 
-> **`START_VPN` первый раз** требует системного VPN-consent — его можно дать
-> только из UI. Нажмите Connect в приложении один раз; дальше automation
-> работает без диалога.
+> **The first `START_VPN`** needs the system VPN consent, which can only be given
+> from the UI. Press Connect in the app once; after that automation works without
+> a dialog.
 
 ---
 
-## Outgoing events (L×Box → наружу)
+## Outgoing events (L×Box → outside)
 
-Префикс `com.leadaxe.lxbox.event.`. Эмитятся только если включена
-соответствующая категория в Emit-настройках.
+The prefix is `com.leadaxe.lxbox.event.`. They are emitted only if the
+corresponding category is enabled in the Emit settings.
 
-| Event | Extras | Категория | Когда |
+| Event | Extras | Category | When |
 |---|---|---|---|
-| `VPN_CONNECTED` | — | Lifecycle | Туннель поднят |
-| `VPN_DISCONNECTED` | `reason` (`user`/`error`/`revoked`) | Lifecycle | Туннель упал |
-| `VPN_ERROR` | `code`, `message` | Lifecycle | Любой error path / провал automation-команды. `code` = `tunnel_error` (аварийный обрыв туннеля) либо `conflict`/`bad_request`/`not_found`/… (провал команды) |
-| `VPN_REVOKED` | — | Lifecycle | Другая VPN-app перехватила туннель |
-| `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | Найдена новая версия |
-| `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | Сменилась активная нода |
-| `NODE_ALREADY_ACTIVE` | `tag`, `group` | State | `SWITCH_NODE` пришёл на уже активную ноду — нода **не** менялась (подтверждение вместо смены) |
-| `ACTIVE_GROUP_CHANGED` | `old_group`, `new_group`, `reason` | State | Сменилась активная группа |
-| `SUB_REFRESHED` | `sub_id`, `nodes_count`, `delta_count` | Subscription | Подписка обновилась |
-| `SUB_REFRESH_FAILED` | `sub_id`, `error` | Subscription | Подписка не обновилась (throttle 1/min на sub_id) |
+| `VPN_CONNECTED` | — | Lifecycle | The tunnel came up |
+| `VPN_DISCONNECTED` | `reason` (`user`/`error`/`revoked`) | Lifecycle | The tunnel went down |
+| `VPN_ERROR` | `code`, `message` | Lifecycle | Any error path, or a failed automation command. `code` is `tunnel_error` (the tunnel dropped) or `conflict`/`bad_request`/`not_found`/… (the command failed) |
+| `VPN_REVOKED` | — | Lifecycle | Another VPN app took over the tunnel |
+| `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | A newer version was found |
+| `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | The active node changed |
+| `NODE_ALREADY_ACTIVE` | `tag`, `group` | State | `SWITCH_NODE` arrived for the already-active node — nothing changed (a confirmation instead of a switch) |
+| `ACTIVE_GROUP_CHANGED` | `old_group`, `new_group`, `reason` | State | The active group changed |
+| `SUB_REFRESHED` | `sub_id`, `nodes_count`, `delta_count` | Subscription | A subscription refreshed |
+| `SUB_REFRESH_FAILED` | `sub_id`, `error` | Subscription | A subscription failed to refresh (throttled to 1/min per sub_id) |
 
-### Зарезервированные (namespace есть, источника пока нет)
+### Reserved (the namespace exists, the source does not yet)
 
-- `HEARTBEAT_FAILED` · `LATENCY_DEGRADED` · `UNATTRIBUTED_BURST` (категория
-  **Health**) — появятся вместе с §042 health watchdog. Категория в UI уже есть.
-- `PERMISSION_NEEDED` (`permission`, категория **Lifecycle**) — зарезервировано
-  под runtime-permission промпты; источника эмиссии пока нет.
+- `HEARTBEAT_FAILED` · `LATENCY_DEGRADED` · `UNATTRIBUTED_BURST` (category
+  **Health**) — these arrive together with the §042 health watchdog. The category
+  is already present in the UI.
+- `PERMISSION_NEEDED` (`permission`, category **Lifecycle**) — reserved for
+  runtime-permission prompts; nothing emits it yet.
 
 ---
 
 ## Symmetric request-response
 
-Главная сила outgoing-событий — Tasker может **wait'ать** на ответ:
+The real strength of outgoing events is that Tasker can **wait** for a reply:
 
 ```
 Task "Switch to Russia with confirmation":
@@ -166,119 +174,122 @@ Task "Switch to Russia with confirmation":
   2. Wait Event: ACTIVE_NODE_CHANGED (new_tag ~ "🇷🇺.*")
        OR  NODE_ALREADY_ACTIVE (tag ~ "🇷🇺.*")
        OR  VPN_ERROR                                        (timeout 10s)
-  3. If ACTIVE_NODE_CHANGED  → Vibrate + Notify "✅ переключено"
-     If NODE_ALREADY_ACTIVE  → Notify "✅ уже на этой ноде"
+  3. If ACTIVE_NODE_CHANGED  → Vibrate + Notify "✅ switched"
+     If NODE_ALREADY_ACTIVE  → Notify "✅ already on this node"
      If VPN_ERROR            → Notify "❌ %code: %message"
-     If timeout              → Notify "⚠️ нет ответа"
+     If timeout              → Notify "⚠️ no reply"
 ```
 
-При провале команды (нет группы, tunnel down, несуществующая нода/группа и т.п.)
-L×Box эмитит `VPN_ERROR` с `code` (`conflict` / `bad_request` / `not_found` / …)
-и `message` — ждущий Tasker узнаёт о провале вместо тихого fire-and-forget.
+When a command fails (no such group, the tunnel is down, a non-existent node or
+group, and so on) L×Box emits `VPN_ERROR` with a `code`
+(`conflict` / `bad_request` / `not_found` / …) and a `message` — so a waiting
+Tasker learns about the failure instead of a silent fire-and-forget.
 
-> **Важно: для request-response включите обе категории — `Lifecycle` и
-> `State`.** Успех переключения приходит в категории **State**
-> (`ACTIVE_NODE_CHANGED` / `NODE_ALREADY_ACTIVE`), а провал — как `VPN_ERROR` в
-> категории **Lifecycle**. Если включить только State, ждущий сценарий не
-> получит `VPN_ERROR` на ошибке и уйдёт в timeout вместо ветки ошибки.
-> (App Settings → Automation → Outbound events.)
+> **Important: enable both `Lifecycle` and `State` for request-response.** A
+> successful switch arrives in the **State** category (`ACTIVE_NODE_CHANGED` /
+> `NODE_ALREADY_ACTIVE`), while a failure arrives as `VPN_ERROR` in the
+> **Lifecycle** category. With only State enabled, a waiting scenario never
+> receives `VPN_ERROR` on an error and runs into a timeout instead of the error
+> branch. (App Settings → Automation → Outbound events.)
 
-**`SWITCH_NODE` на уже активную ноду** не рвёт соединения и не делает re-select
-(это была бы лишняя нагрузка), но всё равно шлёт `NODE_ALREADY_ACTIVE` —
-поэтому wait-сценарий получает детерминированный ответ, а не уходит в timeout.
-Если ждать только `ACTIVE_NODE_CHANGED`, повторная команда той же ноды повиснет
-до таймаута — добавляйте `NODE_ALREADY_ACTIVE` в Wait Event.
+**`SWITCH_NODE` aimed at the already-active node** does not tear down connections
+and does not re-select (that would be needless load), but it still sends
+`NODE_ALREADY_ACTIVE` — so a waiting scenario gets a deterministic answer instead
+of a timeout. If you wait only for `ACTIVE_NODE_CHANGED`, repeating the command
+for the same node will hang until the timeout — add `NODE_ALREADY_ACTIVE` to the
+Wait Event.
 
 ---
 
-## Безопасность
+## Security
 
-- **Default OFF.** Без мастер-toggle receiver disabled — никакая app не может
-  слать команды. **Это единственный барьер приёма.** Когда toggle ON, команды
-  принимаются от любого приложения на устройстве.
-- **Per-app пропуска нет** (§157). Прежняя галка «Требовать пропуск» удалена:
-  `checkCallingPermission` в broadcast-`onReceive` недетерминирован (broadcast
-  не несёт caller-identity), поэтому никакой реальной защиты не давал. Если
-  нужна модель «только доверенным приложениям» — это отдельная задача
-  (shared-secret токен / UID-allowlist на Android 14+).
-- **События не содержат секретов** подписок / config — только лейблы (теги,
-  имена групп, статус); outgoing-broadcast открыт всем подписчикам.
-- **Логи.** В App Settings → Diagnostics → log filter `automation` видны строки
-  `[automation] action <name> → ok / ERROR …` (обработанные команды) и
-  `[automation] emit <event> …` (исходящие события). Сам факт приёма broadcast'а
-  (включая прямые `START_VPN` / `STOP_VPN` / `TOGGLE_VPN`, которые вообще не доходят
-  до Dart) пишется только в logcat под тегом `LxBoxIntent`:
+- **Off by default.** Without the master toggle the receiver is disabled and no
+  app can send commands. **That is the only admission barrier.** Once the toggle
+  is ON, commands are accepted from any application on the device.
+- **There is no per-app pass** (§157). The former “Require a pass” checkbox was
+  removed: `checkCallingPermission` inside a broadcast `onReceive` is
+  non-deterministic (a broadcast carries no caller identity), so it provided no
+  real protection. A “trusted apps only” model would be a separate task (a
+  shared-secret token, or a UID allowlist on Android 14+).
+- **Events carry no secrets** from subscriptions or the config — only labels
+  (tags, group names, status); an outgoing broadcast is open to every subscriber.
+- **Logs.** In App Settings → Diagnostics, the `automation` log filter shows
+  `[automation] action <name> → ok / ERROR …` (handled commands) and
+  `[automation] emit <event> …` (outgoing events). The bare fact that a broadcast
+  arrived — including direct `START_VPN` / `STOP_VPN` / `TOGGLE_VPN`, which never
+  reach Dart at all — is written only to logcat under the `LxBoxIntent` tag:
   `adb logcat -s LxBoxIntent`.
 
 ---
 
-## Рецепты Tasker
+## Tasker recipes
 
-### 1. Auto-disable VPN на домашнем Wi-Fi
+### 1. Auto-disable the VPN on the home Wi-Fi
 - Profile: Wi-Fi connected = `MyHomeWiFi`
 - Task: Send Intent `com.leadaxe.lxbox.STOP_VPN` (Broadcast)
 
-### 2. Auto-enable на любом другом Wi-Fi
+### 2. Auto-enable on any other Wi-Fi
 - Profile: Wi-Fi connected = NOT `MyHomeWiFi`
 - Task: Send Intent `com.leadaxe.lxbox.START_VPN`
 
-### 3. Switch на Russia-node при запуске банка (с подтверждением)
+### 3. Switch to a Russia node when a bank app starts (with confirmation)
 - Profile: App launched = `ru.bank.app`
 - Task:
   1. Send Intent `SWITCH_NODE` extra `tag=🇷🇺Россия`
   2. Wait Event `ACTIVE_NODE_CHANGED` (new_tag ~ `🇷🇺.*`) OR `VPN_ERROR`, timeout 10s
-  3. If matched → Vibrate(50); else → Notify error
+  3. If matched → Vibrate(50); otherwise → Notify the error
 
-### 4. Уведомление при падении подписки
+### 4. Notification when a subscription fails
 - Profile: Event Received `com.leadaxe.lxbox.event.SUB_REFRESH_FAILED`
-- Task: Notify «📡 Sub %sub_id failed: %error»
+- Task: Notify “📡 Sub %sub_id failed: %error”
 
-### 5. Periodic mass-ping каждые 30 минут
+### 5. Periodic mass ping every 30 minutes
 - Profile: Time = every 30 min
 - Task: Send Intent `URLTEST_GROUP` extra `group=vpn-1`
 
-### 6. Auto reset-network при высоком ping
+### 6. Automatic reset-network on high ping
 - Profile: Variable `%CURR_PING > 1000` (set externally)
 - Task: Send Intent `RESET_NETWORK`
 
-### 7. Notification на часы при падении VPN
+### 7. Watch notification when the VPN drops
 - Profile: Event Received `com.leadaxe.lxbox.event.VPN_ERROR`
-- Task: Notify Wear «❌ VPN: %code — %message»
+- Task: Notify Wear “❌ VPN: %code — %message”
 
 ---
 
 ## Troubleshooting
 
-| Симптом | Причина | Решение |
+| Symptom | Cause | Fix |
 |---|---|---|
-| Команда не доходит | Мастер-toggle OFF | Включить в App Settings → Automation |
-| Тоже, но toggle ON | Неверный action / target не Broadcast Receiver / опечатка в `com.leadaxe.lxbox.…` | Сверить со списком команд; факт приёма — в logcat `adb logcat -s LxBoxIntent` (строка `received <action>`); результат команд — log filter `automation` |
-| **Событие не приходит** (напр. `ACTIVE_NODE_CHANGED` не ловится) | **Категория события OFF** — проверять первым | Включить нужную категорию (для `ACTIVE_NODE_CHANGED` / `NODE_ALREADY_ACTIVE` — **State**) в App Settings → Automation → Outbound events. Пока категория выключена, событие не эмитится вовсе |
-| Событие приходит, но переменные (`%new_tag` и пр.) пустые | Экстры не объявлены в Tasker | В `Event → System → Intent Received` вручную добавить имена переменных-экстр (см. ниже) — Tasker не подхватывает их автоматически |
-| `SWITCH_NODE` не выбирает ноду | tag не существует / typo | Проверить log filter `automation` |
-| В плагине «Custom…» вместо списка нод/групп — поле ввода | Кеш пуст (L×Box не открывался после установки/смены подписки) | Открыть L×Box, зайти в группу (список закешируется), переоткрыть плагин |
-| L×Box не виден в списке плагинов host'а | Host без plugin-блока (напр. бесплатный Automate) | Использовать MacroDroid (бесплатно) или raw `am broadcast` |
-| `START_VPN` не работает первый раз | VPN consent не давали | Один раз нажать Connect в app |
-| На MIUI / ColorOS receiver мёртв | OEM auto-start restriction | Добавить L×Box в «Автозапуск» системных настроек |
+| The command never arrives | The master toggle is OFF | Enable it in App Settings → Automation |
+| Same, but the toggle is ON | Wrong action, the target is not a Broadcast Receiver, or a typo in `com.leadaxe.lxbox.…` | Check against the command list; the fact of receipt is in logcat, `adb logcat -s LxBoxIntent` (the `received <action>` line); command results are under the `automation` log filter |
+| **An event never arrives** (for example `ACTIVE_NODE_CHANGED` is not caught) | **The event's category is OFF** — check this first | Enable the right category (for `ACTIVE_NODE_CHANGED` / `NODE_ALREADY_ACTIVE` that is **State**) in App Settings → Automation → Outbound events. While the category is off, the event is not emitted at all |
+| The event arrives but the variables (`%new_tag` and friends) are empty | The extras are not declared in Tasker | Add the extra variable names by hand in `Event → System → Intent Received` (see below) — Tasker does not pick them up automatically |
+| `SWITCH_NODE` does not select the node | The tag does not exist, or a typo | Check the `automation` log filter |
+| “Custom…” shows a text field instead of a node/group list | The cache is empty (L×Box has not been opened since installing or changing a subscription) | Open L×Box, enter the group (that caches the list), then reopen the plugin |
+| L×Box is missing from the host's plugin list | The host has no plugin block (for instance the free Automate) | Use MacroDroid (free) or raw `am broadcast` |
+| `START_VPN` does not work the first time | VPN consent was never granted | Press Connect in the app once |
+| The receiver is dead on MIUI / ColorOS | An OEM auto-start restriction | Add L×Box to “Autostart” in the system settings |
 
-> **Объявление экстр в Tasker.** Событие несёт данные в intent-экстрах, но
-> Tasker не создаёт из них переменные сам — имена нужно прописать вручную в
-> `Event → System → Intent Received` (фильтр action — полное имя события, напр.
-> `com.leadaxe.lxbox.event.ACTIVE_NODE_CHANGED`), после чего они доступны как
-> `%new_tag` и т.д. Ключи по событиям:
+> **Declaring the extras in Tasker.** An event carries its data in intent extras,
+> but Tasker does not turn them into variables by itself — the names have to be
+> written by hand in `Event → System → Intent Received` (the action filter is the
+> event's full name, for example
+> `com.leadaxe.lxbox.event.ACTIVE_NODE_CHANGED`), after which they are available
+> as `%new_tag` and so on. The keys, per event:
 > - `ACTIVE_NODE_CHANGED` — `old_tag`, `new_tag`, `group`, `reason`;
 > - `NODE_ALREADY_ACTIVE` — `tag`, `group`;
 > - `ACTIVE_GROUP_CHANGED` — `old_group`, `new_group`, `reason`.
 >
-> `old_tag` пуст на **первом** переключении после старта приложения (предыдущей
-> ноды ещё нет — экстра не кладётся); `new_tag` / `group` / `reason` заполнены
-> всегда. Это норма, не баг.
+> `old_tag` is empty on the **first** switch after the app starts (there is no
+> previous node yet, so the extra is not attached); `new_tag`, `group` and
+> `reason` are always filled in. That is normal, not a bug.
 
 ---
 
-## Ссылки
+## Links
 
 - [§047 — Public Intent API spec](spec/features/047%20public%20intent%20api/spec.md)
 - [Android BroadcastReceiver guide](https://developer.android.com/develop/background-work/background-tasks/broadcasts)
 - [Tasker — Send Intent](https://tasker.joaoapps.com/userguide/en/help/ah_send_intent.html)
-- [Locale plugin API (twofortyfouram)](https://github.com/twofortyfouram/android-plugin-api-for-locale) — стандарт plugin-способа (FIRE_SETTING / QUERY_CONDITION)
+- [Locale plugin API (twofortyfouram)](https://github.com/twofortyfouram/android-plugin-api-for-locale) — the standard behind the plugin route (FIRE_SETTING / QUERY_CONDITION)
