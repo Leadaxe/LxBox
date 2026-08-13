@@ -7,7 +7,7 @@
 
 Android VPN client powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — a [sing-box](https://sing-box.sagernet.org/) fork with AmneziaWG 2.0 and native XHTTP. Multi-subscription, smart routing, built-in speed test. English and Russian UI.
 
-**[Download latest release](https://github.com/Leadaxe/LxBox/releases/latest)** | **[Документация на русском](README_RU.md)** | **[User Guide](docs/USER_GUIDE.md)** | **[Support the project](docs/DONATE.md)**
+**[Download latest release](https://github.com/Leadaxe/LxBox/releases/latest)** | **[Документация на русском](README.ru.md)** | **[User Guide](docs/USER_GUIDE.md)** | **[Support the project](docs/DONATE.md)**
 
 ---
 

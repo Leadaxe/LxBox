@@ -135,7 +135,7 @@
 - `app/lib/main.dart` (entry point — только с explicit task)
 - `CHANGELOG.md`, `RELEASE_NOTES.md`, `docs/releases/*` (релиз-документы, меняются только при release-подготовке)
 - `LICENSE`
-- `README.md`, `README_RU.md` (обновления поверх — explicit task)
+- `README.md`, `README.ru.md` (обновления поверх — explicit task)
 - `.github/workflows/**` (CI)
 - `.gitignore` (минимум, и только по necessity для добавляемых файлов)
 

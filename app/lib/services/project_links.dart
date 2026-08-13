@@ -25,7 +25,7 @@ class ProjectLinks {
   static const donatePage =
       'https://github.com/Leadaxe/LxBox/blob/main/docs/DONATE.md';
   static const donatePageRu =
-      'https://github.com/Leadaxe/LxBox/blob/main/docs/DONATE_RU.md';
+      'https://github.com/Leadaxe/LxBox/blob/main/docs/DONATE.ru.md';
 
   /// Страница поддержки на языке интерфейса (пара RU/EN, как гайд).
   static String donatePageFor(String tag) =>
@@ -40,7 +40,7 @@ class ProjectLinks {
   static const guideEn =
       'https://github.com/Leadaxe/LxBox/blob/main/docs/USER_GUIDE.md';
   static const guideRu =
-      'https://github.com/Leadaxe/LxBox/blob/main/docs/USER_GUIDE_RU.md';
+      'https://github.com/Leadaxe/LxBox/blob/main/docs/USER_GUIDE.ru.md';
 
   static String guideFor(String tag) => tag == 'ru' ? guideRu : guideEn;
 

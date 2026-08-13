@@ -70,7 +70,7 @@ CI (`.github/workflows/ci.yml`) триггерится на:
 3. Все доки синхронизированы под релиз:
    - `CHANGELOG.md` — добавлена запись `## vX.Y.Z`.
    - `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT_REPORT.md` — если затронуты.
-   - `README.md`, `README_RU.md` — если видимые фичи поменялись.
+   - `README.md`, `README.ru.md` — если видимые фичи поменялись.
    - spec'и задач (`docs/spec/features/NNN*/spec.md`) — `status: released`.
    - `docs/releases/vX.Y.Z.md` — черновик per-version архива (можно готовить по ходу разработки).
 4. **Local smoke-тест release APK** (рекомендуется перед тегированием):
@@ -368,7 +368,7 @@ git tag -d vX.Y.Z
 
 - [ ] `develop` зелёная (`cd app && flutter analyze && flutter test` **+ четыре `dart run tool/l10n/*_check.dart --strict`** — CI гоняет их шагом «L10n checks», см. §2.1 п.1), descendant от прошлого stable-тега.
 - [ ] **Ядро:** `app/android/app/build.gradle.kts` → `implementation(files("libs/libbox.aar"))` (активной Maven-строки стокового libbox нет); в `ci.yml` job `android` есть шаг `Fetch sing-box-lx core`, пин `app/android/libbox.version` = версии local smoke. Стоковое 1.13.11 отвергает AWG/XHTTP-конфиги — такой релиз не выпускать.
-- [ ] Релиз-доки синхронизированы: `CHANGELOG.md`, `ARCHITECTURE.md` / `DEVELOPMENT_REPORT.md` (если затронуты), `README.md` + `README_RU.md` (если фичи видимые), spec'и → `status: released`.
+- [ ] Релиз-доки синхронизированы: `CHANGELOG.md`, `ARCHITECTURE.md` / `DEVELOPMENT_REPORT.md` (если затронуты), `README.md` + `README.ru.md` (если фичи видимые), spec'и → `status: released`.
 - [ ] `app/pubspec.yaml` в `develop` **не трогать** — реальная версия пишется туда на merge-коммите в `main` (§2.4/§379), тег встаёт на этот коммит.
 - [ ] `RELEASE_NOTES.md` причёсан под финал, скопирован в `docs/releases/vX.Y.Z.md`. **Обе языковые версии (EN + RU) полные и синхронные**, каждая в своём `<details>`-спойлере (§2.3, образец — `v2.17.0`).
 - [ ] Local smoke: `scripts/build-local-apk.sh` (derive'ит версию из `git describe`, sed pubspec + revert trap) + `scripts/install-apk.sh` — ставится поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (при работе из worktree не забыть симлинки keystore).

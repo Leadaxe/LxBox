@@ -14,8 +14,8 @@ dart run tool/docs/parity_check.dart [--strict]
 
 | EN | RU |
 |---|---|
-| `README.md` | `README_RU.md` |
-| `docs/USER_GUIDE.md` | `docs/USER_GUIDE_RU.md` |
+| `README.md` | `README.ru.md` |
+| `docs/USER_GUIDE.md` | `docs/USER_GUIDE.ru.md` |
 
 Рабочий порядок — «правим русский, потом переводим», поэтому типовое
 расхождение выглядит так: раздел дописали в один язык и забыли во второй. Глазами
@@ -52,8 +52,8 @@ dart run tool/docs/parity_check.dart [--strict]
 Сообщение называет пару файлов, числа и сторону расхождения, например:
 
 ```
-FAIL: docs/USER_GUIDE.md ↔ docs/USER_GUIDE_RU.md: разное число разделов
-(docs/USER_GUIDE.md: 44, docs/USER_GUIDE_RU.md: 43) — в docs/USER_GUIDE.md
+FAIL: docs/USER_GUIDE.md ↔ docs/USER_GUIDE.ru.md: разное число разделов
+(docs/USER_GUIDE.md: 44, docs/USER_GUIDE.ru.md: 43) — в docs/USER_GUIDE.md
 на 1 больше. Раздел добавлен в один язык и не перенесён во второй.
 ```
 

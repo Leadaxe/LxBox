@@ -3,7 +3,7 @@
 L×Box is free: no ads, no subscriptions, no data collection. Development happens
 in spare time and runs on user support — the project has no other income.
 
-> Русская версия: [DONATE_RU.md](DONATE_RU.md)
+> Русская версия: [DONATE.ru.md](DONATE.ru.md)
 
 Donating is entirely optional. The app works the same for everyone; there are no
 paid features and none are planned.

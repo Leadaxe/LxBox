@@ -4,8 +4,8 @@ import '../l10n/src/check_common.dart';
 
 // §360 — парность двуязычной документации.
 //
-// Документация ведётся парами RU/EN (README.md ↔ README_RU.md,
-// docs/USER_GUIDE.md ↔ docs/USER_GUIDE_RU.md). Реальный режим работы —
+// Документация ведётся парами RU/EN (README.md ↔ README.ru.md,
+// docs/USER_GUIDE.md ↔ docs/USER_GUIDE.ru.md). Реальный режим работы —
 // «правим русский, потом переводим», поэтому расхождение выглядит так: раздел
 // дописали в один язык и забыли во второй. Молча это не видно: оба файла
 // валидны сами по себе, а читатель второго языка просто не знает, что раздел
@@ -35,9 +35,9 @@ import '../l10n/src/check_common.dart';
 
 /// Пары «переведённый файл» ↔ «оригинал». Пути относительно корня репозитория.
 const _pairs = <({String en, String ru})>[
-  (en: 'README.md', ru: 'README_RU.md'),
-  (en: 'docs/USER_GUIDE.md', ru: 'docs/USER_GUIDE_RU.md'),
-  (en: 'docs/DONATE.md', ru: 'docs/DONATE_RU.md'),
+  (en: 'README.md', ru: 'README.ru.md'),
+  (en: 'docs/USER_GUIDE.md', ru: 'docs/USER_GUIDE.ru.md'),
+  (en: 'docs/DONATE.md', ru: 'docs/DONATE.ru.md'),
 ];
 
 void main(List<String> args) {
