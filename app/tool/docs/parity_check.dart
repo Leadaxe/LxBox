@@ -38,6 +38,8 @@ const _pairs = <({String en, String ru})>[
   (en: 'README.md', ru: 'README.ru.md'),
   (en: 'docs/USER_GUIDE.md', ru: 'docs/USER_GUIDE.ru.md'),
   (en: 'docs/DONATE.md', ru: 'docs/DONATE.ru.md'),
+  (en: 'docs/PRIVACY_POLICY.md', ru: 'docs/PRIVACY_POLICY.ru.md'),
+  (en: 'docs/SECURITY.md', ru: 'docs/SECURITY.ru.md'),
 ];
 
 void main(List<String> args) {

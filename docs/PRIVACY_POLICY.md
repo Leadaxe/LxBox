@@ -1,7 +1,9 @@
 # Privacy Policy
 
 **Application:** L×Box (`com.leadaxe.lxbox`)
-**Last updated:** 8 August 2026
+**Last updated:** 14 August 2026
+
+> Русская версия: [PRIVACY_POLICY.ru.md](PRIVACY_POLICY.ru.md)
 
 ## Summary
 
@@ -60,7 +62,20 @@ request reports a fixed placeholder device model (`PC`), the platform name
 and the installation and push-token fields are sent empty. Cloudflare's handling of this request is governed by the
 [Cloudflare Privacy Policy](https://www.cloudflare.com/privacypolicy/).
 
-**Rule-set downloads.** Files fetched from URLs you configure.
+**Rule-set downloads.** Files fetched from URLs you configure. These can also
+refresh on a schedule once you enable automatic updates for them.
+
+**Connectivity probes.** When automatic server selection is on, the core
+periodically requests a small test page (by default
+`cp.cloudflare.com/generate_204`, every 15 minutes) to find out which of your
+servers still responds. The probe travels **through the server being tested**,
+so the endpoint sees that server's address rather than yours. The URL and the
+interval are yours to change.
+
+**Node diagnostics.** The *Diagnostics* screen sends a single GET through a
+chosen server to a preset address (for example `ipinfo.io`) so you can see what
+that server's exit looks like from outside. It runs only when you press the
+button, and the response is shown to you verbatim.
 
 **Speed tests.** A test file is downloaded from the endpoint you select to
 measure throughput.
