@@ -1091,39 +1091,39 @@ display field (the same principle as the natural-key UI dictionary
 `TemplateOverlay.apply` walks the template's whitelist schema, reads a node's English value
 and swaps in the translation keyed by that text.
 
-- Английские ключи — базовый язык, в коде: коммитнутого/генерируемого en-файла
-  нет. `template_check` извлекает их живьём из `wizard_template.json` через
-  `TemplateOverlay.extract()` на каждом прогоне и валидирует каждый overlay
-  локали против этой экстракции. Повторяющийся один и тот же английский текст в
-  разных местах шаблона схлопывается в один ключ (фича, не конфликт).
-- `template.json` (и любой будущий `<lang>/template.json`) — тот же объектный shape, что
-  UI-словарь: `{ "<english>": { "value": "<перевод>" } }`:
+- The English keys are the base language and live in the code: there is no committed or
+  generated en file. `template_check` extracts them live from `wizard_template.json` through
+  `TemplateOverlay.extract()` on every run and validates each locale's overlay against that
+  extraction. The same English text repeated in different places of the template collapses
+  into a single key (a feature, not a conflict).
+- `template.json` (and any future `<lang>/template.json`) has the same object shape as the
+  UI dictionary: `{ "<english>": { "value": "<translation>" } }`:
 
   ```json
   "DNS server": { "value": "DNS-сервер" }
   ```
 
-  Изменился en-текст → сменился ключ: старая запись становится unknown-key (fail
-  `template_check`), новый английский ключ — missing (warn, strict→fail).
-  Workflow идентичен UI-строке: переименовать ключ, пересмотреть перевод.
+  When the English text changes the key changes with it: the old entry becomes an unknown
+  key (a `template_check` failure) and the new English key is missing (a warning; a failure
+  under strict). The workflow is identical to a UI string: rename the key and revisit the translation.
 
-**Схема обхода** (полная таблица — [§279 spec, §3.2](./spec/features/279%20localization/spec.md)):
-applier посещает display-поля секций, глобальных и rule-локальных vars, magic-нод,
-каналов, dns-серверов, ping/speed-пресетов. Не посещается (whitelist applier'а):
-всё под `config`/`parser_config`, `name`/`tag`/`value`/`default_value`/`preset_id`,
-bare-string enum-опции, `dns_options.rules[].name` (латентный identity-ключ) —
-поэтому эти строки в overlay не попадают.
+**The traversal schema** (the full table is in [the §279 spec, §3.2](./spec/features/279%20localization/spec.md)):
+the applier visits the display fields of sections, of global and rule-local vars, of magic nodes,
+of channels, of DNS servers and of the ping and speed presets. Not visited (the applier's
+whitelist): everything under `config` and `parser_config`, plus `name`, `tag`, `value`,
+`default_value`, `preset_id`, bare-string enum options and `dns_options.rules[].name` (a latent
+identity key) — so those strings never reach an overlay.
 
-**Load-bearing запреты**: перевод, начинающийся с `@`, был бы интерпретирован
-как var-ссылка (overlay применяется до `substituteVars`); `{` ломает parsing —
-оба запрещены `template_check` безусловно. Fallback per-key тихий (нет ключа →
-английское значение); отказ целого файла — громкий (`AppLog.error` +
-debug-assert + flutter-тест rootBundle-загрузки каждого overlay).
+**Load-bearing prohibitions**: a translation starting with `@` would be read as a var
+reference (the overlay is applied before `substituteVars`), and a `{` breaks parsing — both are
+forbidden unconditionally by `template_check`. The per-key fallback is quiet (a missing key
+yields the English value); the failure of a whole file is loud (`AppLog.error` plus a
+debug assert plus a Flutter test that loads every overlay from rootBundle).
 
-### Добавляем display-поле в шаблон
+### Adding a display field to the template
 
-Новое user-visible поле обязано попасть в **экстрактор + whitelist**
-`TemplateOverlay` (`template_overlay.dart`) — иначе оно тихо шипится
+A new user-visible field must be added to both the **extractor and the whitelist** of
+`TemplateOverlay` (`template_overlay.dart`) — otherwise it silently ships untranslated.
 английским во всех локалях. Self-check `template_check` следит, чтобы whitelist
 покрывал каждое display-поле экстрактора (английский ключ извлекается живьём из
 `wizard_template.json`, отдельного en-файла нет); после добавления — перевод в
