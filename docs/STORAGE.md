@@ -344,44 +344,45 @@ Sealed on the `type` field:
     "hwid": "550e8400-...",                   // An object means Custom mode: the fetch uses
     "device_os": "android",                   // ONLY these values. Empty strings (user_agent/
     "ver_os": "14",                           // hwid/device_*) are not serialized. Enabled
-    "device_model": "Pixel 7"                 // глобальных; отбрасывается при возврате в Default.
+    "device_model": "Pixel 7"                 // the global ones; discarded on return to Default.
   },
-  "import_rules": [                           // §302 — правила над emit-JSON узла (не над телом!).
-    {                                         // Применяются к УЖЕ РАЗОБРАННЫМ узлам, по порядку
-      "conditions": [                         // (drag-reorder); следующее правило видит патч
-        {                                     // предыдущего. Опционален (пустой не пишется).
-          "path": "tls.utls.fingerprint",     // Условие: path (точечная нотация по emit-JSON;
-          "op": "matches",                    // ПУСТОЙ path = поиск по всему узлу), op ∈
+  "import_rules": [                           // §302 — rules over a node's emit JSON (not the body!).
+    {                                         // Applied to ALREADY PARSED nodes, in order
+      "conditions": [                         // (drag-reorder); the next rule sees the previous
+        {                                     // one's patch. Optional (an empty list is not written).
+          "path": "tls.utls.fingerprint",     // A condition: path (dot notation over the emit JSON;
+          "op": "matches",                    // an EMPTY path searches the whole node), op ∈
           "pattern": "^hello(chrome)_\\d+$"   // {contains|equals|matches}; negate?/case_sensitive?
-        }                                     // пишутся только когда true. match ∈ {all|any}
-      ],                                      // (дефолт all=AND, пишется только any).
+        }                                     // are written only when true. match ∈ {all|any}
+      ],                                      // (the default all=AND; only any is written).
       "action": "replace",                    // action ∈ {replace, disable, enable}.
-      "target_path": "tls.utls.fingerprint",  // REPLACE: target_path обязателен (пустой нельзя);
-      "replacement": "$1"                     // replacement с карманами $1..$9 из matches-условия.
-    },                                        // replace_mode ∈ {set|substitute} (пишется только
-    {                                         // substitute); substitute? = что искать в значении.
+      "target_path": "tls.utls.fingerprint",  // REPLACE: target_path is required (never empty);
+      "replacement": "$1"                     // replacement takes $1..$9 from the matches condition.
+    },                                        // replace_mode ∈ {set|substitute} (only substitute
+    {                                         // is written); substitute? is what to find in the value.
       "conditions": [
         {"path": "tag", "op": "contains", "pattern": "⚡"}
       ],
-      "action": "disable"                     // DISABLE помечает узел → его identity-хеш (от
-    },                                        // ИТОГОВОГО вида, после патчей) ставится в
-    {                                         // disabled_hashes на каждом refresh (правило > TTL-GC).
+      "action": "disable"                     // DISABLE marks the node → its identity hash (of
+    },                                        // the FINAL form, after the patches) is put into
+    {                                         // disabled_hashes on every refresh (rule > TTL GC).
       "conditions": [
         {"path": "", "op": "matches", "pattern": ".*"}
-      ],                                      // §332 — ENABLE снимает отметку из disabled_hashes,
-      "action": "enable"                      // ВКЛЮЧАЯ ручную (§283). Порядок значим: последнее
-    }                                         // сработавшее enable/disable побеждает, поэтому
-  ],                                          // enable-«всё» первым = сброс перед новыми фильтрами,
-                                              // а disable-«всё» + enable-NL = белый список.
-                                              // Старая версия приложения читает "enable" как
-                                              // replace без цели → правило непригодно и молча
-                                              // пропускается (узлы не портятся).
-                                              // Legacy-плоское {action, pattern, is_regex?, ...}
-                                              // читается миграцией как условие по tag (replace
-                                              // получает substitute-семантику); при первом
-                                              // сохранении перезаписывается новым форматом.
-  "import_rules_enabled": false               // §302 — тумблер набора; пишется ТОЛЬКО когда
-                                              // false (дефолт true = набор активен).
+      ],                                      // §332 — ENABLE clears the mark from disabled_hashes,
+      "action": "enable"                      // INCLUDING a manual one (§283). Order matters: the
+    }                                         // last enable/disable that fires wins, so an
+  ],                                          // enable-everything first is a reset before new
+                                              // filters, while disable-everything plus enable-NL
+                                              // is an allowlist. An older app version reads
+                                              // "enable" as a replace with no target → the rule
+                                              // is unusable and is skipped silently (nodes are
+                                              // left intact).
+                                              // The legacy flat {action, pattern, is_regex?, ...}
+                                              // is read by a migration as a condition on tag
+                                              // (replace gains substitute semantics); the first
+                                              // save rewrites it in the new format.
+  "import_rules_enabled": false               // §302 — the set's toggle; written ONLY when
+                                              // false (the default, true, means the set is on).
 }
 ```
 
@@ -397,26 +398,26 @@ Sealed on the `type` field:
   "detour_policy": { … },
   "origin":        "paste|file|qr|manual",
   "created_at":    "ISO-8601",
-  "raw_body":      "<original input>"         // для reparse при багах
+  "raw_body":      "<original input>"         // kept for reparsing when something goes wrong
 }
 ```
 
 ### `type: "folder"` — `FolderServers` (§234)
 
-Папка ручных серверов: контейнер членов с общим toggle/`tag_prefix`/`detour_policy`.
-Подписка в папку не кладётся; вложенности нет.
+A folder of manual servers: a container of members sharing one toggle, `tag_prefix` and
+`detour_policy`. A subscription cannot be put into a folder, and there is no nesting.
 
 ```jsonc
 {
   "type":          "folder",
   "id":            "<uuid>",
   "name":          "<display>",
-  "enabled":       true,                        // toggle всей папки
+  "enabled":       true,                        // the toggle for the whole folder
   "tag_prefix":    "<str>",
   "detour_policy": { … },
   "created_at":    "ISO-8601",
-  "ping_url":         "<url>",                  // §284 — опц. override URL теста
-  "ping_timeout_ms":  3000,                     // §284 — опц. override таймаута
+  "ping_url":         "<url>",                  // §284 — an optional override of the test URL
+  "ping_timeout_ms":  3000,                     // §284 — an optional override of the timeout
   "members": [                                  // порядок = порядок в UI
     { "raw": "vless://…#Alpha", "enabled": true,
       "detour": "Jump" },                            // §237 — личный detour (опц.)
