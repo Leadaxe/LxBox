@@ -35,8 +35,8 @@ wizard_template.json
 │       └─ reload                  duration      auto-refresh subscriptions interval (Go-style "12h")
 │
 ├─ dns_options                     object{2 keys}       the default DNS shape for the builder
-│   ├─ servers[]                   list          template-level DNS servers (7 default'ов)
-│   │   └─ <DnsServerRef>          object          обёртка §117 (tag живёт в server.tag):
+│   ├─ servers[]                   list          template-level DNS servers (7 defaults)
+│   │   └─ <DnsServerRef>          object          the §117 wrapper (the tag lives in server.tag):
 │   │       ├─ description         string?       UI label
 │   │       ├─ enabled             bool?         default true (default-enabled for auto-discovery)
 │   │       ├─ vars[]              list?         the same definitions as preset vars (§033)
@@ -49,7 +49,7 @@ wizard_template.json
 │   │           ├─ tls             object?         {enabled, server_name}
 │   │           ├─ detour          tag?          which outbound to resolve through
 │   │           └─ domain_resolver tag?          which DNS resolves the server's own host
-│   └─ rules[]                     list          template-level DNS rules (§061, бывший feature §041), сейчас пусто
+│   └─ rules[]                     list          template-level DNS rules (§061, formerly feature §041); currently empty
 │
 ├─ ping_options                    object{3 keys}       (§040)
 │   ├─ url                         string        global default (e.g. gstatic.com/generate_204)
@@ -115,8 +115,8 @@ wizard_template.json
 │   │       ├─ type                "tun"
 │   │       ├─ tag                 "tun-in"
 │   │       ├─ interface_name      "@tun_name"
-│   │       ├─ address             ["@tun_address", {#if @ipv6_enabled → "@tun_address6"}]  §227/§232 — v6 за галкой (дефолт OFF)
-│   │       ├─ {#if @route_address_enable → route_address: ["0.0.0.0/1","128.0.0.0/1","::/1","8000::/1"]}  §232 — заворот v4+v6 opt-in (дефолт OFF → авто 0.0.0.0/0)
+│   │       ├─ address             ["@tun_address", {#if @ipv6_enabled → "@tun_address6"}]  §227/§232 — v6 behind a checkbox
+│   │       ├─ {#if @route_address_enable → route_address: ["0.0.0.0/1","128.0.0.0/1","::/1","8000::/1"]}  §232 — behind a checkbox
 │   │       ├─ mtu                 "@tun_mtu"
 │   │       ├─ auto_route          "@tun_auto_route"
 │   │       ├─ strict_route        "@tun_strict_route"
@@ -208,37 +208,37 @@ Every key is described in detail in the sections below.
 }
 ```
 
-| Ключ | Тип | Назначение |
+| Key | Type | Purpose |
 |---|---|---|
-| `version` | int | Версия parser-pipeline'а ([§026]). Bump'ится на breaking-changes parser'а. |
-| `parser.reload` | duration string | Periodic auto-refresh interval подписок ([§027]). Go-style: `12h`, `30m`, etc. Override per-subscription через `update_interval_hours` в `server_lists[]`. |
+| `version` | int | The parser pipeline's version ([§026]). It is bumped on breaking parser changes. |
+| `parser.reload` | a duration string | The periodic auto-refresh interval for subscriptions ([§027]). Go style: `12h`, `30m`, and so on. It is overridden per subscription. |
 
 ---
 
 ## `dns_options` — §043+§044 (servers) + §061 (rules)
 
-Default DNS-конфигурация для новой установки. Stockpiled в storage `dns_options` при первом запуске; auto-discovery в [`resolveDnsServersList`] заполняет storage из template'а на каждый rebuild.
+The default DNS configuration for a fresh install. It is stockpiled into the `dns_options` storage on the first launch.
 
 ```jsonc
 {
   "servers": [ <ServerRef>, … ],   // kind-refs (template-side: kind=template implicit)
-  "rules":   [ <RuleRef>, … ]      // template-defined DNS rules (если есть)
+  "rules":   [ <RuleRef>, … ]      // template-defined DNS rules (if any)
 }
 ```
 
-### `dns_options.servers[i]` — DNS-сервер catalog entry (§117)
+### `dns_options.servers[i]` — a DNS server catalog entry (§117)
 
-Обёртка `{description, enabled, vars?, server}` — `server` это sing-box body с
-`@var`-плейсхолдерами, `vars` — те же определения, что у preset-vars (§033).
-Tag живёт в `server.tag` (top-level `tag` больше нет — `templateDnsServerTag`).
-Builder (`resolveTemplateDnsServerBody`) подставляет vars значениями юзера
-(`varValues` из storage-ref'а) или `default_value`:
+The wrapper is `{description, enabled, vars?, server}`, where `server` is a sing-box body carrying
+`@var` placeholders, and `vars` holds the same definitions as preset vars (§033).
+The tag lives in `server.tag` (there is no top-level `tag` any more — see `templateDnsServerTag`).
+The builder (`resolveTemplateDnsServerBody`) substitutes the vars with the user's values
+(`varValues` from the storage ref) or with `default_value`:
 
 ```jsonc
 {
   "description": "Google DNS (direct)",
-  "enabled":     true,               // default-enabled для auto-discovery
-  "vars": [                          // optional (local_dns_resolver — без vars)
+  "enabled":     true,               // default-enabled for auto-discovery
+  "vars": [                          // optional (local_dns_resolver has none)
     {"name": "outbound", "type": "outbound", "default_value": "direct-out",
      "title": "Outbound", "tooltip": "Which channel carries DNS queries…"},
     {"name": "dns_ip", "type": "enum", "default_value": "8.8.8.8",
@@ -247,16 +247,16 @@ Builder (`resolveTemplateDnsServerBody`) подставляет vars значе�
   "server": {                        // sing-box DNS server body + @placeholders
     "type": "udp", "tag": "google_udp", "server_port": 53,
     "server": "@dns_ip",
-    "detour": "@outbound"            // direct-out / пропавший канал → ключ стирается
+    "detour": "@outbound"            // direct-out, or a vanished channel, erases the key
   }
 }
 ```
 
-Конвенции (§117):
+The conventions (§117):
 
-- `detour: "@outbound"` + var default `direct-out` → по умолчанию ключ
-  **не пишется** (normalizeDnsDetour: `direct-out`, пустой и неизвестный
-  builder'у канал → ключ стирается; «нет detour» = и дефолт, и fallback).
+- `detour: "@outbound"` with a var default of `direct-out` means the key is **not**
+  written by default (`normalizeDnsDetour`: `direct-out`, an empty value and a channel
+  unknown to the builder all erase the key; “no detour” is both the default and the fallback).
 - Доменные серверы (адрес = hostname): `domain_resolver: "@dom_resolver"` +
   var `{type: dns_servers, default_value: "google_udp"}` — чем резолвить имя
   самого DNS-сервера.
