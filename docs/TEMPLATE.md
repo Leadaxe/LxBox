@@ -627,7 +627,7 @@ from §232 is in the source and the sink:
 - `@dns_enable` = the §257 `presetDnsEnableVar` (the preset's DNS aspect — the master
   toggle of the DNS block).
 
-Обе несут **идентичную** on_change-формулу — любая из них триггерит пересчёт цели
+Both carry an **identical** on_change formula, so either of them triggers a recomputation
 of the targets (that way the formula fires both when the routing switch changes and when
 the DNS toggle does). Resolution happens in the namespace
 `{...userVars, rule_enable, dns_enable}` (the pseudo-vars shadow `userVars`, since their value is the live one), through the same `evalIfScalar`.
@@ -650,24 +650,26 @@ Read it as: “FakeIP is on (`@rule_enable`) AND its DNS aspect is on (`@dns_ena
 
 The semantics:
 
-- **Пишет в `userVars` сразу** (не in-memory) — цель `@resolve_enabled` живёт в
-  секции `internal` (глобальная var), её storage — `userVars`, не `varsValues`
-  пресета. Событийная, не декларативно-постоянная: срабатывает в момент смены,
-  юзер потом волен переопределить в правиле `traffic-processing`.
-- **Зовётся из ВСЕХ 5 точек** смены `rule_enable`/`dns_enable`: создание пресета
-  (`routing_screen._copyPreset`), toggle routing-свича (`routing_screen`
-  + редактор `edit_controller.onBoolVarToggle`), dns_enable-тумблер в редакторе
-  правила и **в DNS Settings** (`dns_settings_screen._togglePresetDnsEnable`).
-  Пропуск любой точки → цель не пересчитается при этом пути изменения.
-- **Идемпотентна** — `setVar` перезаписывает; повторный вызов с тем же состоянием
-  даёт то же значение.
+- **It writes into `userVars` immediately** (not in memory) — the target
+  `@resolve_enabled` lives in the `internal` section (a global var), and its storage is
+  `userVars` rather than the preset's `varsValues`. It is event-driven rather than
+  declaratively permanent: it fires at the moment of the change, and the user is then free
+  to override it inside the `traffic-processing` rule.
+- **It is called from ALL five places** where `rule_enable` / `dns_enable` change:
+  creating a preset (`routing_screen._copyPreset`), the routing switch toggle
+  (`routing_screen` plus the editor's `edit_controller.onBoolVarToggle`), the dns_enable
+  toggle in the rule editor, and the one **in DNS Settings**
+  (`dns_settings_screen._togglePresetDnsEnable`). Miss any of them and the target is not
+  recomputed along that path.
+- **It is idempotent** — `setVar` overwrites, so calling it again with the same state
+  yields the same value.
 
-> **Грабля §266 (ловил на устройстве).** Псевдо-var (`rule_enable`/`dns_enable`)
-> **обязана** иметь `default_value` + `required: false`. Var без `default_value` в
-> sing-box-схеме = **required**; при пустом значении `expandPreset` выходит рано
-> («required var … unset») и **весь DNS-блок пресета молча не эмитится** (FakeIP
-> не прописал `dns_rules` → DNS не заворачивался). Симптом тихий — пресет в UI на
-> месте, но не работает. См. `29fe61c`.
+> **A §266 gotcha (caught on a device).** A pseudo-var (`rule_enable` / `dns_enable`)
+> **must** carry a `default_value` plus `required: false`. In the sing-box schema a var
+> with no `default_value` is **required**; with an empty value `expandPreset` returns early
+> (“required var … unset”) and **the preset's entire DNS block is silently not emitted**
+> (FakeIP never wrote its `dns_rules`, so DNS was not intercepted). The symptom is quiet —
+> the preset is there in the UI but does nothing. See `29fe61c`.
 
 ---
 
