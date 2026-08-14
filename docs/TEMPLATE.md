@@ -470,48 +470,49 @@ How the template vars are grouped in the Wizard UI (App Settings → Configurati
 
 8 секций в текущем template'е: `General`, `Network`, `Internal`, `Auto Proxy`, `DNS`, `TUN`, `VPN Mode`, `DPI Bypass`. Расфасованы по **4 chapter'ам** (`core`, `routing`, `dns`, `internal`).
 
-`id` — стабильный kebab-case machine-id (§279): `general`, `network`, `internal`,
-`auto-proxy`, `dns`, `tun`, `vpn-mode`, `dpi-bypass`. Служит адресом l10n-overlay
-для display-полей (`name`/`description`). Внутренним join-ключом секция↔vars
-остаётся `name` (`parser_config.dart`, `settings_screen.dart`) — `id` его не заменяет.
+`id` is a stable kebab-case machine id (§279): `general`, `network`, `internal`,
+`auto-proxy`, `dns`, `tun`, `vpn-mode`, `dpi-bypass`. It serves as the l10n overlay's
+address for the display fields (`name` and `description`). The internal join key between
+a section and its vars remains `name` (`parser_config.dart`, `settings_screen.dart`) —
+`id` does not replace it.
 
-### `chapter` — кто рендерит секцию
+### `chapter` — who renders the section
 
-`chapter` — категория экрана-владельца. Экран запрашивает свои секции через
+`chapter` is the category of the owning screen. A screen requests its sections through
 `WizardTemplate.sectionsFor(chapter)` / `varsFor(chapter)` (`parser_config.dart`).
-Секция, чей chapter не запрашивает ни один экран, **в UI не появляется вообще**
-(но её vars остаются в `template.vars` — билдер и ref-резолв их видят).
+A section whose chapter no screen requests **never appears in the UI at all** (but its
+vars stay in `template.vars`, so the builder and the ref resolution still see them).
 
-| `chapter` | Рендерится на | Секции |
+| `chapter` | Rendered on | Sections |
 |---|---|---|
 | `core` | VPN Settings (App Settings → Configuration) | General, Network, TUN, VPN Mode, DPI Bypass |
 | `routing` | Routing screen | Auto Proxy |
 | `dns` | DNS Settings screen | DNS |
-| `internal` | **нигде** (§265) | Internal |
+| `internal` | **nowhere** (§265) | Internal |
 
-### `internal` — служебная секция (§265)
+### `internal` — the service section (§265)
 
-Секция `Internal` (chapter `internal`) — vars, которые **не должны** показываться
-в VPN Settings, но должны существовать глобально: билдер их подставляет, а
-пресеты ссылаются на них через **ref-var** `{"ref":"<name>"}` (§265, см. `selectable_rules`).
-Ни один экран не запрашивает chapter `internal` → секция в UI не рендерится; при
-этом vars лежат в `template.vars`, поэтому `@name`-подстановка и ref-резолв
-работают. Правит их юзер **через пресет-владелец** (напр. `resolve_enabled`/
-`resolve_strategy` — в правиле `traffic-processing`, куда они втянуты ref-vars).
+The `Internal` section (chapter `internal`) holds vars that **must not** be shown in VPN
+Settings but must exist globally: the builder substitutes them, and presets reference them
+through a **ref-var** `{"ref":"<name>"}` (§265, see `selectable_rules`). No screen requests
+the `internal` chapter, so the section is never rendered; meanwhile the vars sit in
+`template.vars`, so `@name` substitution and ref resolution work. The user edits them
+**through the owning preset** (for example `resolve_enabled` and `resolve_strategy` live in
+the `traffic-processing` rule, which pulls them in as ref-vars).
 
-| Var | Тип | Назначение |
+| Var | Type | Purpose |
 |---|---|---|
 | `resolve_enabled` | bool | §263 — гейт route-resolve-правила пресета `traffic-processing` (off для FakeIP). Меняется on_change-механикой §266 (см. ниже) и вручную в правиле пресета. |
 | `resolve_strategy` | enum | IP-версия для route-resolve (`ipv4_only`/`prefer_ipv4`/…). Пишется on_change тумблера IPv6 (§249). |
 
-> **Почему `internal`, а не `wizard_ui: hidden`.** `hidden` прячет var внутри
-> секции своего chapter'а, но секция всё равно принадлежит рендерящемуся экрану
-> (VPN Settings). `internal`-chapter выводит var из-под любого экрана целиком —
-> её единственная точка редактирования — пресет, который на неё ссылается.
+> **Why `internal` rather than `wizard_ui: hidden`.** `hidden` conceals a var inside its
+> chapter's section, but the section still belongs to a screen that renders (VPN
+> Settings). The `internal` chapter takes the var out from under every screen entirely —
+> its only editing point is the preset that references it.
 
 Секция `VPN Mode` — целиком `wizard_ui: hidden` (build-time vars, не показывается в UI). Её 7 переменных питают `#if`-гейтинг inbounds/route-rules (§119/§120), значения проставляются из `VpnModeConfig` на этапе сборки, а не редактируются юзером в Wizard:
 
-| Var | Тип | Назначение |
+| Var | Type | Purpose |
 |---|---|---|
 | `vpn_mode` | enum | `vpn` / `proxy` / `vpn_proxy` — какие inbounds поднимать |
 | `proxy_type` | enum | тип proxy-inbound (`mixed`/...) |
