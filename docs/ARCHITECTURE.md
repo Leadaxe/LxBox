@@ -356,64 +356,64 @@ In sing-box 1.12 a DNS server of type `https` or `tls` addressed by hostname req
 
 ## The source tree
 
-Структура после §089: тонкие экраны с под-папками `<screen>/`, контроллеры и
-крупные сервисы разнесены `part`'ами по ответственности. Per-file роли ниже.
+The structure after §089: thin screens with `<screen>/` subfolders, controllers split into
+parts, and the large services separated by responsibility through `part`s. The per-file roles follow.
 
 ### `app/lib/`
 
 ```
 main.dart                    # Entry point: ThemeNotifier, MaterialApp,
                              #   home: HomeScreen, navigatorObservers:[homeReturnObserver]
-                             #   (named routes нет — навигация императивная)
+                             #   (there are no named routes — navigation is imperative)
 ```
 
-#### `vpn/` — Dart-сторона native-моста
+#### `vpn/` — the Dart side of the native bridge
 
 ```
-box_vpn_client.dart          # BoxVpnClient.I — типизированная обёртка над
-                             #   MethodChannel/EventChannel; каждый вызов
+box_vpn_client.dart          # BoxVpnClient.I — a typed wrapper over the
+                             #   MethodChannel/EventChannel; every call is
                              #   timeout-wrapped + safe-default; onStatusChanged stream
-box_vpn_client/method_names.dart  # part: _Methods — зеркало when(call.method) из VpnPlugin.kt
+box_vpn_client/method_names.dart  # part: _Methods — a mirror of when(call.method) from VpnPlugin.kt
 box_vpn_client/timeouts.dart      # part: _Timeouts — per-method Duration (status 3s, start 30s…)
-cc_channel.dart              # §122 CcChannel.instance — Dart-клиент libbox CommandClient (заменил
-                             #   ClashApiClient): push-стримы status/outbounds/groups/connections/dns (§180)
-                             #   поверх EventChannel lxbox/cc/* + императивы (urlTestOutbound, getRules,
-                             #   getGroups unary-pull, selectOutbound, closeConnection); фан-аут через
-                             #   broadcast (ОДИН native sink на канал, §122 sink-leak-guard)
+cc_channel.dart              # §122 CcChannel.instance — the Dart client of the libbox CommandClient (it replaced
+                             #   ClashApiClient): push streams for status/outbounds/groups/connections/dns (§180)
+                             #   over the EventChannel lxbox/cc/* plus the imperatives (urlTestOutbound, getRules,
+                             #   the getGroups unary pull, selectOutbound, closeConnection); the fan-out goes through
+                             #   a broadcast (ONE native sink per channel, the §122 sink-leak guard)
 ```
 
 #### `config/`
 
 ```
-config_parse.dart            # JSON5/JSONC → canonical JSON (для libbox) + pretty-print (для editor)
-consts.dart                  # kAutoOutboundTag (✨auto), kDetourTagPrefix (⚙) — зеркало wizard_template
+config_parse.dart            # JSON5/JSONC → canonical JSON (for libbox) plus pretty-print (for the editor)
+consts.dart                  # kAutoOutboundTag (✨auto), kDetourTagPrefix (⚙) — a mirror of wizard_template
 ```
 
-#### `models/` — типизированные данные (sealed-иерархии, без I/O)
+#### `models/` — typed data (sealed hierarchies, no I/O)
 
 ```
 node_spec.dart               # sealed NodeSpec (11 вариантов: Vless/Vmess/Trojan/Shadowsocks/
                              #   Hysteria2/Naive/Tuic/Ssh/Socks + Wireguard + Masque §130); getEntries detour-chain;
-                             #   Awg value-object (§097): AWG/AWG2-поля WireguardSpec (jc/jmin/jmax/
-                             #   s1–s4/h1–h4/i1–i5), round-trip parse/emit; null = обычный WG
-node_spec_emit.dart          # emit()/toUri() impl на вариант (NodeSpec → SingboxEntry); parity-tested
+                             #   the Awg value object (§097): the AWG/AWG2 fields of WireguardSpec (jc/jmin/jmax/
+                             #   s1–s4/h1–h4/i1–i5), round-tripping parse/emit; null means ordinary WG
+node_spec_emit.dart          # the emit()/toUri() implementation per variant (NodeSpec → SingboxEntry); parity-tested
 singbox_entry.dart           # sealed SingboxEntry = Outbound | Endpoint (WireGuard → Endpoint)
-node_entries.dart            # NodeEntries{main, detours} — результат getEntries
-emit_context.dart            # abstract EmitContext: allocateTag/addEntry/selector+auto регистрация
-template_vars.dart           # TemplateVars — глобальные emit-флаги (tls_fragment/mux/sniOverride)
+node_entries.dart            # NodeEntries{main, detours} — the result of getEntries
+emit_context.dart            # the abstract EmitContext: allocateTag/addEntry plus selector and auto registration
+template_vars.dart           # TemplateVars — the global emit flags (tls_fragment/mux/sniOverride)
 tls_spec.dart                # TlsSpec + RealitySpec (utls/reality/alpn) → toSingbox()
-transport_spec.dart          # sealed TransportSpec (Ws/Grpc/Http/HttpUpgrade/Xhttp); XHTTP — нативный
-                             #   emit (§097, ядро with_xhttp: mode/x_padding_bytes/no_grpc_header)
+transport_spec.dart          # the sealed TransportSpec (Ws/Grpc/Http/HttpUpgrade/Xhttp); XHTTP is a native
+                             #   emit (§097, the core's with_xhttp: mode/x_padding_bytes/no_grpc_header)
 node_warning.dart            # sealed NodeWarning + WarningSeverity (parse/emit warnings)
 validation.dart              # sealed ValidationIssue + ValidationResult (dangling refs/empty urltest → fatal)
-parser_config.dart           # модели wizard_template.json: WizardTemplate/PresetGroup/SelectableRule/WizardVar
-custom_rule.dart             # sealed CustomRule = Inline|Srs|Preset (routing rules; →§090, см. Обзор)
+parser_config.dart           # the wizard_template.json models: WizardTemplate/PresetGroup/SelectableRule/WizardVar
+custom_rule.dart             # the sealed CustomRule = Inline|Srs|Preset (routing rules; →§090, see the Overview)
 server_list.dart             # sealed ServerList = SubscriptionServers | UserServer
-subscription_meta.dart       # SubscriptionMeta — userinfo-заголовки (traffic/expire/title/update-interval)
-app_info.dart                # AppInfo — метаданные установленных приложений (native getInstalledApps)
-background_mode.dart         # enum BackgroundMode (never|lazy|always) — Doze-поведение туннеля
+subscription_meta.dart       # SubscriptionMeta — the userinfo headers (traffic/expire/title/update-interval)
+app_info.dart                # AppInfo — the metadata of installed applications (fetched natively)
+background_mode.dart         # the BackgroundMode enum (never|lazy|always) — the tunnel's Doze behaviour
 tunnel_status.dart           # TunnelStatus enum + TunnelStatusEvent (native status mapping + errorReason)
-debug_entry.dart             # DebugEntry + DebugSource/Level/Filter (унифицированная лог-строка)
+debug_entry.dart             # DebugEntry plus DebugSource/Level/Filter (a unified log line)
 home_state.dart              # immutable HomeState + copyWith; configModel: ParsedConfig (§091,
                              #   re-parse на смену configRaw); NodeSortMode (default/latency/name/
                              #   manual — §100: manual в карусели и меню, mode + manual order
