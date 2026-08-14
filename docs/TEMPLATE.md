@@ -418,7 +418,7 @@ source of truth for the tags; the const mirrors `kAuto/Direct/BlockOutboundTag` 
 builder or the seed). The parameters go into every channel's `<tag>-auto` twin that has
 `channel.include ∋ auto`.
 
-### `default_channels[]` — сид каналов первого запуска
+### `default_channels[]` — the first-launch channel seed
 
 ```jsonc
 "default_channels": [
@@ -427,29 +427,29 @@ builder or the seed). The parameters go into every channel's `<tag>-auto` twin t
 ]
 ```
 
-В шаблоне только **2 seed-канала** (`vpn-1`, `vpn-2`). Дальнейшие каналы (до
-`vpn-10`, `kMaxChannels = 10`) юзер создаёт сам в storage (`channels[]`).
+The template holds only **two seed channels** (`vpn-1` and `vpn-2`). Further channels (up to
+`vpn-10`, `kMaxChannels = 10`) are created by the user in storage (`channels[]`).
 
 | Ключ | Тип | Назначение |
 |---|---|---|
-| `tag` | string | Immutable id канала (`vpn-1`..`vpn-10`). |
-| `label` | string | UI display name (пусто → `tag`). |
-| `default_enabled` | bool | Влияет только на seed первого запуска. После миграции включённость живёт в `channels[].enabled`, редактируется в Routing → Channels. |
+| `tag` | string | The channel's immutable id (`vpn-1`..`vpn-10`). |
+| `label` | string | The UI display name (empty falls back to `tag`). |
+| `default_enabled` | bool | Affects only the first-launch seed. After the migration, being enabled is decided by `channels[i].enabled` in storage. |
 
-Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `enabled_groups[]` **DEPRECATED** — читается только one-shot миграцией в `channels[]` и как fallback-seed при пустом `channels[]` (см. [STORAGE.md](STORAGE.md#channels--125-the-routing-channels-templatestorage) и callout выше).
+The storage source of truth is `channels[]` in `lxbox_settings.json` (§125). The legacy `enabled_groups[]` is **DEPRECATED** — it is read only by the one-shot migration into `channels[]` and as a fallback seed when `channels[]` is empty (see [STORAGE.md](STORAGE.md#channels--125-the-routing-channels-templatestorage) and the callout above).
 
 ---
 
 ## `sections[]` — Wizard UI chapters (§022)
 
-Группировка template-vars в Wizard UI (App Settings → Configuration). Каждая секция — отдельная карточка/экран с inputs.
+How the template vars are grouped in the Wizard UI (App Settings → Configuration). Each section is a separate card.
 
 ```jsonc
 [
   {
-    "id":          "general",               // stable machine-id (§279, адрес l10n)
+    "id":          "general",               // a stable machine id (§279, the l10n address)
     "name":        "General",
-    "chapter":     "core",                  // grouping тэг (UI tabs)
+    "chapter":     "core",                  // the grouping tag (the UI tabs)
     "description": "Logging and core settings",
     "vars": [
       {
