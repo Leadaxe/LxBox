@@ -898,40 +898,40 @@ mirrors into native over the method channel. Every writer — the UI
 / `applyNativePrefsBackup()`: the field set, the defaults and the types live in one
 place (`native_prefs.dart`). `backup_service` and the Debug handler delegate to it (they
 used to duplicate it). The wire keys are stable, so old backups still import. The derived
-`has_tun` (below) is **not** part of the backup block — it is a computed value, not
-настройка.
+`has_tun` (below) is **not** part of the backup block — it is a computed value, not a
+setting.
 
-> **`has_tun` ([§192]) — седьмой native-ключ, НЕ в JSON-секции.**
-> `boxvpn_boot.has_tun` (default `true`) — **производное** от [`vpn_mode`](#vpn_mode--119)
-> (§119): `vpn`/`vpn_proxy` → `true`, `proxy` → `false`. Зеркалится при смене
-> режима (`vpn_mode_tab._setMode` → `SettingsStorage.setNativeHasTun`) и на старте
-> (`bootstrapAndSyncNativePrefs`). Гейтит `VpnService.prepare()`: в proxy-режиме
-> `prepare` не зовётся (он зря забирает VPN-слот и отзывает чужой активный VPN).
-> Гейт стоит на 6 точках входа (`BootReceiver.hasTun(...)`-чек). Так как это
-> вычисляемое значение, оно живёт только в native (`boxvpn_boot.has_tun`) и **не**
-> хранится в JSON-секции `native_prefs` — пересчитывается из `vpn_mode`.
+> **`has_tun` ([§192]) — a seventh native key, NOT in the JSON section.**
+> `boxvpn_boot.has_tun` (default `true`) is **derived** from [`vpn_mode`](#vpn_mode--119)
+> (§119): `vpn` and `vpn_proxy` yield `true`, `proxy` yields `false`. It is mirrored when
+> the mode changes (`vpn_mode_tab._setMode` → `SettingsStorage.setNativeHasTun`) and at
+> startup (`bootstrapAndSyncNativePrefs`). It gates `VpnService.prepare()`: in proxy mode
+> `prepare` is never called (it would pointlessly claim the VPN slot and revoke whatever
+> VPN is active). The gate sits at six entry points (the `BootReceiver.hasTun(...)`
+> check). Being a computed value, it lives only in native (`boxvpn_boot.has_tun`) and is
+> **not** stored in the JSON `native_prefs` section — it is recomputed from `vpn_mode`.
 
-> **`app_language` + `last_pushed_locale` ([§279]) — ещё два native-ключа НЕ в
-> JSON-секции.** `boxvpn_boot.app_language` — derived cache var'а
-> [`vars.app_language`](#vars--template-vars--app-flags) (источник истины —
-> JSON-var, кэш пере-пушится `setAppLanguage` / `bootstrapAndSyncNativePrefs`);
-> нужен нативным поверхностям (шторка/QS-тайл/shortcuts) при мёртвом Flutter.
-> `boxvpn_boot.last_pushed_locale` — зеркало последнего значения, которое
-> приложение само запушило в `LocaleManager` (Android 13+), опора трёхстороннего
-> reconciliation «система против стораджа». Оба — документированное исключение
-> из состава `NativePrefsKeys`: членство экспортировало бы их в
-> `vpn_settings`-блок бэкапа вторым представлением одной настройки
-> (backup-дом `app_language` — только `vars`).
+> **`app_language` and `last_pushed_locale` ([§279]) — two more native keys NOT in the
+> JSON section.** `boxvpn_boot.app_language` is a derived cache of the
+> [`vars.app_language`](#vars--template-vars--app-flags) var (the JSON var is the source
+> of truth; the cache is re-pushed by `setAppLanguage` and
+> `bootstrapAndSyncNativePrefs`); the native surfaces (the notification shade, the QS
+> tile, the shortcuts) need it while Flutter is dead. `boxvpn_boot.last_pushed_locale`
+> mirrors the last value the app itself pushed into `LocaleManager` (Android 13+) and
+> anchors the three-way “system versus storage” reconciliation. Both are a documented
+> exception from `NativePrefsKeys`: membership would export them into the backup's
+> `vpn_settings` block as a second representation of one setting (the backup home of
+> `app_language` is `vars` alone).
 
 ---
 
-## `channels` — [§125] каналы роутинга (template→storage)
+## `channels` — [§125], the routing channels (template→storage)
 
-Каналы (`vpn-1..vpn-10`) переехали из статичного `wizard_template.json`
-(§267 — `group_templates` + `default_channels`; до §267 — `preset_groups[]`) в
-storage. Template стал **seed'ом** — значениями по умолчанию на первом запуске.
-После миграции состав каналов живёт в `channels[]` и редактируется юзером
-(Routing → таб Channels → редактор канала).
+The channels (`vpn-1..vpn-10`) moved out of the static `wizard_template.json`
+(§267 — `group_templates` plus `default_channels`; before §267 it was `preset_groups[]`)
+and into storage. The template became a **seed** — the defaults for the first launch.
+After the migration the set of channels lives in `channels[]` and is edited by the user
+(Routing → the Channels tab → the channel editor).
 
 - `tag` — **системный immutable** id (`vpn-1`..`vpn-10`), автогенерируется при
   создании (первый свободный `vpn-N`), юзер правит только `label`. Стабильный
