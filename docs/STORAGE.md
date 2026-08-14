@@ -55,14 +55,14 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       │                                        replace_mode?, substitute?, enabled?}]; conditions[] =
 │       │                                      [{path, op, pattern, negate?, case_sensitive?}]; the legacy flat
 │       │                                      {action, pattern, …} is read by a migration (a condition on tag)
-│       ├─ import_rules_enabled   bool?         §302 — тумблер набора (пишется только когда false; дефолт true)
+│       ├─ import_rules_enabled   bool?         §302 — the set's toggle (written only when false; the default is on)
 │       │                        — user only —
 │       ├─ origin                "paste"|"file"|"qr"|"manual"
 │       ├─ created_at            ISO-8601
 │       ├─ raw_body              string        the original, for reparsing
 │       │                        — folder only (§234) —
 │       ├─ created_at            ISO-8601
-│       └─ members[]             list          {raw, enabled, detour?} — по фрагменту на члена (member ↔ нода 1:1; §237 detour = личный тег)
+│       └─ members[]             list          {raw, enabled, detour?} — one fragment per member (member ↔ node 1:1; §237)
 │
 ├─ custom_rules[]                list          §030 — sealed (inline / srs / preset)
 │   └─ <CustomRule>              object          discriminator: kind
@@ -130,7 +130,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       ├─ node_filter_invert    bool          §197 — inverts node_filter (the nodes that do NOT match); default false
 │       ├─ default_filter        string        a regex; the first match becomes the default; '' means none
 │       ├─ interrupt_exist_connections  bool   selector.interrupt_exist_connections
-│       └─ auto                  object?       null = галка ВЫКЛ; object → urltest-двойник <tag>-auto (tag производный, не хранится)
+│       └─ auto                  object?       null = the checkbox is OFF; an object yields the urltest twin <tag>-auto (its tag is derived)
 │           ├─ url               string        urltest test endpoint
 │           ├─ interval          string        duration ("5m")
 │           ├─ tolerance         int           ms, uint16 (§161 — clamp 0..65535)
@@ -141,11 +141,11 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ channels_migrated             bool          §125 — the guard for the one-shot enabled_groups→channels migration
 ├─ last_global_update            ISO-8601      the timestamp of the last auto-refresh
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
-├─ preset_ids_remapped           bool          §228 legacy guard (ремап переименованных preset_id). Миграция удалена в §229; ключ сохранён — не переиспользовать имя, не считать мусором
-├─ interrupt_connections_on_switch  bool       §143 — tear down the switched group's connections when the node changes (default false, НЕ config-significant)
+├─ preset_ids_remapped           bool          §228 legacy guard (remapping renamed preset_id). The migration was removed in §229; the key is inert
+├─ interrupt_connections_on_switch  bool       §143 — tear down the switched group's connections when the node changes (default false, NOT config-significant)
 ├─ node_sort_mode                string        §100 — the chosen node sort mode ('' means the template default)
 ├─ node_manual_order[]           list          §100 — the manual order of node tags (for mode=manual)
-├─ profiler_retention_sec        int           §044 — окно Live-журнала профайлера, default 600 (10 мин); НЕ config-significant
+├─ profiler_retention_sec        int           §044 — the profiler's live-journal window, default 600 (10 min); NOT config-significant
 ├─ warp_account                  object?       §025 — the cached WARP account (see the section below)
 ├─ masque_account                object?       §130 — the cached MASQUE-WARP account (see the section below)
 ├─ tun_apps                      object        §046 — split tunneling (see the section below)
@@ -214,27 +214,27 @@ Android SharedPreferences:
   "ping_options":       { … },
   "route_final":        "<tag>",   // override route.final
   "route_idle_suspend": "30s",     // §215/§128 — idle-suspend threshold (default "30s"; "" = off)
-  "excluded_nodes":     [ … ],     // §125-cleanup DEPRECATED (глобальный node-filter удалён)
-  "enabled_groups":     [ … ],     // §125 DEPRECATED (читается только миграцией channels[])
-  "channels":           [ … ],     // §125 — каналы роутинга (template→storage)
-  "channels_migrated":  true,      // §125 — guard миграции enabled_groups→channels
-  "last_global_update": "ISO-8601",// последняя auto-refresh подписок
-  "presets_migrated":   true,      // §159 — guard «дефолты засеяны» (fresh-install seed)
-  "interrupt_connections_on_switch": false, // §143 — рвать conns группы при смене ноды (НЕ config-significant)
+  "excluded_nodes":     [ … ],     // §125 cleanup, DEPRECATED (the global node filter is gone)
+  "enabled_groups":     [ … ],     // §125 DEPRECATED (read only by the channels[] migration)
+  "channels":           [ … ],     // §125 — routing channels (template→storage)
+  "channels_migrated":  true,      // §125 — the guard for the enabled_groups→channels migration
+  "last_global_update": "ISO-8601",// the last auto-refresh of subscriptions
+  "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
+  "interrupt_connections_on_switch": false, // §143 — tear down the group's conns on a node switch (NOT config-significant)
   "node_sort_mode":     "",        // §100
   "node_manual_order":  [ … ],     // §100
-  "profiler_retention_sec": 600,   // §044 — окно Live-журнала профайлера (НЕ config-significant)
-  "warp_account":       { … },     // §025 — кеш WARP-аккаунта (секреты)
-  "masque_account":     { … },     // §130 — кеш MASQUE-WARP аккаунта (секреты)
+  "profiler_retention_sec": 600,   // §044 — the profiler's live-journal window (NOT config-significant)
+  "warp_account":       { … },     // §025 — the cached WARP account (secrets)
+  "masque_account":     { … },     // §130 — the cached MASQUE-WARP account (secrets)
   "tun_apps":           { … },     // §046 — split-tunneling
-  "vpn_mode":           { … },     // §119 — режим inbound
-  "native_prefs":       { … }      // §189 — зеркало boxvpn_boot.* (JSON = истина)
+  "vpn_mode":           { … },     // §119 — the inbound mode
+  "native_prefs":       { … }      // §189 — a mirror of boxvpn_boot.* (the JSON is the truth)
 }
 ```
 
-Кэш в памяти: `SettingsStorage._cache` (lazy-loaded). Запись atomic'ом через `JsonEncoder.withIndent('  ')`. §159 — на `_save()` ключи больше НЕ чистятся (DENY-`.remove()` удалён); единственная чистка мусора — allowlist на входе (`replaceRaw`).
+The in-memory cache is `SettingsStorage._cache` (lazily loaded). Writes are atomic through `JsonEncoder.withIndent('  ')`. §159 — on `_save()` nothing is removed any more: the DENY list and the migrations are gone, and the input filter is the allowlist on backup import.
 
-Per-key спеки и shape — в разделах ниже.
+The per-key specs and shapes are in the sections below.
 
 ---
 
@@ -302,47 +302,48 @@ Sealed on the `type` field:
 ```jsonc
 {
   "type":                  "subscription",
-  "id":                    "<uuid>",          // стабильный
+  "id":                    "<uuid>",          // stable
   "name":                  "<display>",
   "enabled":               true,
-  "tag_prefix":            "<str>",           // префикс для node tags при сборке
-  "detour_policy":         { … },             // см. ниже
-  "url":                   "https://…",       // online-подписка. §129: файловая
-                                              // подписка → "file:<uuid>" (снапшот
-                                              // нод в HttpCache по этому ключу;
-                                              // не путь к файлу, доступ не хранится)
+  "tag_prefix":            "<str>",           // the prefix for node tags at build time
+  "detour_policy":         { … },             // see below
+  "url":                   "https://…",       // an online subscription. §129: a file
+                                              // subscription becomes "file:<uuid>" (the
+                                              // node snapshot lives in HttpCache under
+                                              // that key; not a path, no access retained)
   "meta":                  { … }?,            // SubscriptionMeta — HTTP-headers
-  "last_updated":          "ISO-8601"?,       // успех
-  "last_update_attempt":   "ISO-8601"?,       // любая попытка
+  "last_updated":          "ISO-8601"?,       // on success
+  "last_update_attempt":   "ISO-8601"?,       // any attempt
   "last_update_status":    "never|ok|failed|inProgress",
-  "update_interval_hours": 24,                 // §129 спец-значения: -1 = никогда
-                                               // (игнор серверного header, ставится
-                                               // авто для file:-подписок), 0 = не по
-                                               // расписанию, но серверный интервал
-                                               // принимаем, N>0 = каждые N ч.
-                                               // AutoUpdater пропускает interval ≤ 0.
-  "on_update_action":      "reload"?,          // §323 — что делать после УСПЕШНОГО
-                                               // авто-обновления: "rebuild" (default —
-                                               // пересобрать конфиг, применяет юзер),
-                                               // "reload" (+ in-place reload ядра, разрыв
-                                               // ~3с), "none" (только список узлов).
-                                               // Ключ пишется ТОЛЬКО для не-дефолта;
-                                               // отсутствие/мусор → rebuild. Ручной ⟳
-                                               // режимом не управляется.
+  "update_interval_hours": 24,                 // §129 special values: -1 = never
+                                               // (ignore the server header; set
+                                               // automatically for file: subscriptions),
+                                               // 0 = not on a schedule, but the server's
+                                               // interval is honoured, N>0 = every N h.
+                                               // AutoUpdater skips an interval ≤ 0.
+  "on_update_action":      "reload"?,          // §323 — what to do after a SUCCESSFUL
+                                               // auto update: "rebuild" (the default —
+                                               // rebuild the config, the user applies it),
+                                               // "reload" (plus an in-place core reload,
+                                               // a ~3 s gap), "none" (the node list only).
+                                               // The key is written ONLY for a non-default;
+                                               // absent or malformed means rebuild. The
+                                               // manual ⟳ is not governed by this.
   "last_node_count":       0,
-  "consecutive_fails":     0,                 // для UI "(N fails)"; freezing — in-memory
-  "disabled_hashes": {                        // §283 — per-node disable (опционален,
-    "<sha256-hex>": "2026-07-18T10:00:00Z"    // пустой не пишется). Ключ = identity-хеш
-  },                                          // сути ноды (emit − tag − detour, см.
-                                              // services/node_hash.dart); значение =
-                                              // lastSeen для TTL-GC (clamp(3×interval,
-                                              // 24ч, месяц)) на успешном сетевом refresh.
-  "identity": {                               // §289 — per-sub override идентичности фетча.
-    "user_agent": "MyPanel/1.0",              // Опционален: null/отсутствует = режим Default
-    "send_hwid": true,                        // (глобальный SubscriptionIdentity). Объект =
-    "hwid": "550e8400-...",                   // режим Custom: фетч использует ТОЛЬКО эти
-    "device_os": "android",                   // значения. Пустые строки (user_agent/hwid/
-    "ver_os": "14",                           // device_*) не сериализуются. Включается копией
+  "consecutive_fails":     0,                 // for the UI's "(N fails)"; freezing is in-memory
+  "disabled_hashes": {                        // §283 — per-node disable (optional; an
+    "<sha256-hex>": "2026-07-18T10:00:00Z"    // empty map is not written). The key is the
+  },                                          // identity hash of the node's substance
+                                              // (emit − tag − detour, see
+                                              // services/node_hash.dart); the value is
+                                              // lastSeen for the TTL GC (clamp(3×interval,
+                                              // 24 h, a month)) on a successful refresh.
+  "identity": {                               // §289 — a per-sub override of the fetch
+    "user_agent": "MyPanel/1.0",              // identity. Optional: null or absent means
+    "send_hwid": true,                        // Default mode (the global SubscriptionIdentity).
+    "hwid": "550e8400-...",                   // An object means Custom mode: the fetch uses
+    "device_os": "android",                   // ONLY these values. Empty strings (user_agent/
+    "ver_os": "14",                           // hwid/device_*) are not serialized. Enabled
     "device_model": "Pixel 7"                 // глобальных; отбрасывается при возврате в Default.
   },
   "import_rules": [                           // §302 — правила над emit-JSON узла (не над телом!).
