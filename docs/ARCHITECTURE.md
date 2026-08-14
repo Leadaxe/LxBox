@@ -1558,7 +1558,7 @@ HomeScreen
 | `path_provider` | Documents directory for persistent storage |
 | `shared_preferences` | Theme mode, haptic toggle |
 | `share_plus` | Config/log export via system share sheet |
-| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104; §122 — без `with_clash_api`). Пин — `app/android/libbox.version` (single source of truth; при бампе версии сверяться с файлом и `KERNEL.md`, не с этой строкой); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового libbox удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
+| **libbox** (native) | The sing-box core — the [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) fork (`with_awg` + `with_xhttp`, §097/§104; §122 — no `with_clash_api`). The pin is `app/android/libbox.version` (the single source of truth; on a version bump check the file and `KERNEL.md`, not this line); the AAR is downloaded by `scripts/fetch-libbox.sh` from the fork's GH Releases (SHA256-verified) into a gitignored `libs/`. |
 
 ---
 
@@ -1637,27 +1637,27 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | 105 | The support message (the support and web URLs in a subscription's meta) |
 | 117 | DNS rework |
 | 118 | Subscription fetch identity (User-Agent / identity headers) |
-| 120 | Template engine — typed vars + `if` (общее ядро подстановки, §120) |
+| 120 | The template engine — typed vars plus `if` (the shared substitution core, §120) |
 | 119 | VPN mode (vpn / vpn_proxy / proxy — §119, has_tun) |
-| **121** | **libbox 1.14 adoption** (миграция обвязки на ядро 1.14) |
-| **122** | **CommandClient migration** (полный отказ от Clash HTTP API → libbox CommandClient) |
-| 123 | Subscription model (три CC-клиента: status/screen/profiler; §123/§164 энергомодель; notification text) |
-| 124 | Background mode — tunnel sleep (Doze-поведение туннеля) |
-| **125** | **Configurable channels** (CRUD-каналы поверх channels[]; enabled_groups DEPRECATED) |
+| **121** | **libbox 1.14 adoption** (migrating the bindings to the 1.14 core) |
+| **122** | **The CommandClient migration** (dropping the Clash HTTP API entirely for the libbox CommandClient) |
+| 123 | The subscription model (three CC clients: status/screen/profiler; the §123/§164 power model) |
+| 124 | Background mode — tunnel sleep (the tunnel's Doze behaviour) |
+| **125** | **Configurable channels** (CRUD channels over channels[]; enabled_groups is DEPRECATED) |
 | 126 | First-run wizard |
-| **127** | **XHTTP full URL params** (нативный XHTTP: mode/x_padding_bytes/no_grpc_header) |
-| **128** | **Idle-suspend** (`route.lx_idle_suspend`, ядро SPEC 020; default `30s`) |
-| **129** | **File subscription** (url=file:<uuid>, HttpCache-снапшот, транзакционная смена online↔file) |
-| **130** | **MASQUE WARP transport** (флагман v2.9.0 — MasqueSpec, Cloudflare QUIC/CONNECT-IP; services/warp/) |
-| **234** | **Server folders** (папки ручных серверов: FolderMember + per-member toggle + tag_prefix/detour-политика) |
-| 236 | Folder server testing (headless probe членов папки) |
-| **248** | **Detour channels** (каналы как detour-цели; §254 циклы → fatal с виновниками) |
-| **279** | **Localization** (en+ru: ARB + template-overlay + values-<lang>; §280 фазы 0-7) |
-| **283** | **Subscription node disable** (per-node toggle в подписке: identity-хеш сути узла + TTL-GC отметок) |
+| **127** | **XHTTP full URL params** (native XHTTP: mode/x_padding_bytes/no_grpc_header) |
+| **128** | **Idle-suspend** (`route.lx_idle_suspend`, the core's SPEC 020; default `30s`) |
+| **129** | **File subscriptions** (url=file:<uuid>, an HttpCache snapshot, a transactional source switch) |
+| **130** | **The MASQUE WARP transport** (the flagship of v2.9.0 — MasqueSpec, Cloudflare QUIC/CONNECT-IP) |
+| **234** | **Server folders** (folders of manual servers: FolderMember plus a per-member toggle and tag_prefix) |
+| 236 | Folder server testing (a headless probe of the folder's members) |
+| **248** | **Detour channels** (channels as detour targets; §254 turns cycles into a fatal with the culprit named) |
+| **279** | **Localization** (en plus ru: the dictionary, the template overlay and values-<lang>; §280 phases 0–7) |
+| **283** | **Subscription node disable** (a per-node toggle in a subscription, keyed by the node's identity hash) |
 
-**Демотированные (через §054) — теперь в `tasks/`:**
+**Demoted (through §054) — now in `tasks/`:**
 
-| Был | Теперь |
+| Was | Now |
 |-----|--------|
 | ~~001~~ Mobile stack | [`tasks/055-mobile-stack-decision/`](./spec/tasks/055-mobile-stack-decision/spec.md) — historical architectural decision |
 | ~~002~~ MVP scope | [`tasks/056-mvp-scope-historical/`](./spec/tasks/056-mvp-scope-historical/spec.md) — historical milestone |
@@ -1667,29 +1667,29 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | ~~039~~ libbox 1.13 migration | [`tasks/060-libbox-1-13-migration/`](./spec/tasks/060-libbox-1-13-migration/spec.md) — one-shot migration (Done) |
 | ~~041~~ DNS rules refactor | [`tasks/061-dns-rules-refactor/`](./spec/tasks/061-dns-rules-refactor/spec.md) — refactor, live spec — §014 |
 
-Освобождённые номера (001, 002, 004, 005, 013, 039, 041) **не переиспользуются** — archive-ссылки сохраняются.
+The freed numbers (001, 002, 004, 005, 013, 039, 041) are **never reused**.
 
-Дополнительно — летопись отдельных рабочих циклов (баги, рефакторинги): [`docs/spec/tasks/`](./spec/tasks/). Процессы (например, ночная работа): [`docs/spec/processes/`](./spec/processes/).
+In addition there is a chronicle of individual work cycles (bugs, refactors) in `tasks/`.
 
 ---
 
 ## Reusable layers (extraction targets)
 
-LxBox monolith — но архитектурно есть несколько self-contained слоёв, которые **в принципе** можно вынести в отдельные packages (Flutter pub.dev) или хотя бы в `packages/` подпапку monorepo. Этот раздел — чек-лист для будущей extraction'а: что reusable, что coupled с LxBox, что надо параметризовать перед публикацией.
+LxBox is a monolith, but architecturally it holds several self-contained layers that could be extracted.
 
 ### Layer 1 — Sing-box VPN engine (Kotlin + Dart channel)
 
-**Что:** Native обёртка над libbox + Dart MethodChannel client. Без UI, без opinion'ов о config-формате.
+**What:** a native wrapper over libbox plus a Dart MethodChannel client. No UI and no opinions about the config.
 
-| Файлы | Lines |
+| Files | Lines |
 |---|---|
 | `app/android/.../vpn/{BoxApplication, BoxVpnService, BoxService, PlatformInterfaceWrapper, VpnPlugin, ConfigManager, ServiceNotification, VpnStatus, DefaultNetworkMonitor, DefaultNetworkListener, LocalResolver, BootReceiver, Extensions}.kt` | ~3000 |
 | `app/lib/vpn/box_vpn_client.dart` | ~600 |
 | `app/lib/models/{tunnel_status, background_mode, app_info}.dart` | ~150 |
 
-**Public API surface:** `BoxVpnClient.I` (см. раздел [Dart `BoxVpnClient` API surface](#dart-boxvpnclient-api-surface)) + EventChannel'ы status/coreLog.
+**The public API surface:** `BoxVpnClient.I` (see the [Dart `BoxVpnClient` API surface](#dart-boxvpnclient-api-surface) section).
 
-**Coupling с LxBox (надо разорвать перед extraction):**
+**The coupling with LxBox (to be broken before extraction):**
 - **Channel names hardcoded** — `com.leadaxe.lxbox/methods`, `com.leadaxe.lxbox/status_events`, `lxbox/coreLog`. Параметризовать через plugin config.
 - **SharedPreferences keys hardcoded** — `boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode, core_logs_enabled}`. Префикс должен быть configurable или общий fallback.
 - **Notification icon / channel name** — `ServiceNotification.kt` ссылается на `R.drawable.ic_notification` + строки. Должно браться из host app.
