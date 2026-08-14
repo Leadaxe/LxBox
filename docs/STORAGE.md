@@ -418,26 +418,27 @@ A folder of manual servers: a container of members sharing one toggle, `tag_pref
   "created_at":    "ISO-8601",
   "ping_url":         "<url>",                  // §284 — an optional override of the test URL
   "ping_timeout_ms":  3000,                     // §284 — an optional override of the timeout
-  "members": [                                  // порядок = порядок в UI
+  "members": [                                  // the order here is the order in the UI
     { "raw": "vless://…#Alpha", "enabled": true,
-      "detour": "Jump" },                            // §237 — личный detour (опц.)
+      "detour": "Jump" },                            // §237 — a personal detour (optional)
     { "raw": "wg://…#Beta",     "enabled": false }   // per-member toggle
   ]
 }
 ```
 
-`ping_url` / `ping_timeout_ms` (§284) — **опции теста самой папки**, перекрывают
-глобальные `ping_options` при нажатии Test в папке. Отсутствуют → берётся
-глобальное значение. Хранятся в объекте папки (едут в backup автоматически).
-Папка «WARP GENERATOR» ставит сюда IP-URL (`1.1.1.1/cdn-cgi/trace`) — тест по IP
-без DNS.
+`ping_url` and `ping_timeout_ms` (§284) are **the folder's own test options**, and they
+override the global `ping_options` when Test is pressed inside the folder. When absent,
+the global value is used. They are stored in the folder object, so they travel with a
+backup automatically. The “WARP GENERATOR” folder puts an IP URL here
+(`1.1.1.1/cdn-cgi/trace`) — a test by IP, with no DNS.
 
-`raw` — самодостаточный парсируемый фрагмент (URI / WG-INI / outbound-JSON);
-ноды реконструируются re-parse'ом каждого `raw` при загрузке (как `raw_body`
-у user). `nodes` в памяти = только включённые члены — builder работает без
-folder-ветвлений. Битый `raw` → член без ноды (виден в UI, правится/удаляется).
+`raw` is a self-contained parseable fragment (a URI, a WG INI or an outbound JSON);
+the nodes are reconstructed by re-parsing each `raw` on load (just like `raw_body` for a
+user list). In memory `nodes` holds only the enabled members, so the builder needs no
+folder-specific branching. A malformed `raw` yields a member with no node (visible in the
+UI, and editable or removable).
 
-### `detour_policy` (общий)
+### `detour_policy` (shared)
 
 ```jsonc
 {
@@ -445,13 +446,13 @@ folder-ветвлений. Битый `raw` → член без ноды (вид
   "register_detour_in_auto":  false,
   "use_detour_servers":       true,
   "override_detour":          "",              // '' = no override
-  "replace_detour_chain":     false            // §178 — false=append override как tail, true=replace всей цепочки
+  "replace_detour_chain":     false            // §178 — false appends the override as a tail, true replaces the whole chain
 }
 ```
 
-### `meta` (опционально)
+### `meta` (optional)
 
-Из HTTP-headers подписки ([§027]):
+From the subscription's HTTP headers ([§027]):
 
 ```jsonc
 {
@@ -472,45 +473,46 @@ folder-ветвлений. Битый `raw` → член без ноды (вид
 
 ## `custom_rules` — [§030] sealed (inline / srs / preset)
 
-Дискриминатор `kind`. Backward-compat: если в JSON нет `kind`, читается как `inline`.
+The discriminator is `kind`. For backward compatibility, a JSON object without `kind` is read as `inline`.
 
-**Общее поле `num` ([§370])** — позиция правила на разреженной оси порядка. Есть у
-ВСЕХ четырёх видов (пишется рядом с `kind`). Раскладка: `0` голова
-(`traffic-processing`), `950..990` специфичные пресеты, `1000..1100` зона
-пользовательских правил, `1110..1150` широкие перехватчики; шаг 10 между
-шаблонными — зазор под будущие вставки (см. TEMPLATE.md `ui.num`).
+**The shared `num` field ([§370])** is the rule's position on a sparse ordering axis.
+All four kinds carry it (written next to `kind`). The layout: `0` is the head
+(`traffic-processing`), `950..990` are the specific presets, `1000..1100` is the
+user-rule zone, and `1110..1150` are the broad catch-alls; the step of 10 between
+template rules leaves room for future insertions (see `ui.num` in TEMPLATE.md).
 
-Ключ **отсутствует** → правило ещё не размечено (storage, записанный до §370).
-Разметка происходит при первой загрузке экрана Routing (`markRuleOrder`):
-пресет получает `num` по `presetId` из шаблона, всё остальное — подряд от `1000`
-в текущем порядке массива. Отдельного версионированного шага миграции НЕТ.
-Следствие: правила из старого storage садятся в начало пользовательской зоны и
-оказываются приоритетнее добавленных после обновления.
+When the key is **absent**, the rule has not been numbered yet (storage written
+before §370). Numbering happens on the first load of the Routing screen
+(`markRuleOrder`): a preset takes its `num` from the template by `presetId`, and
+everything else is numbered consecutively from `1000` in the array's current order.
+There is NO separate versioned migration step. The consequence: rules from older
+storage land at the start of the user zone and end up with a higher priority than
+anything added after the update.
 
-Порядок правил = сортировка по `num` (при равенстве — порядок в массиве). Drag в
-UI пересчитывает `num` перетащенного правила как `target.num + 1`, сдвигая соседей
-только если это значение занято (ленивый сдвиг — сохраняет зазоры и шаблонные
-якоря, см. `rule_order.dart`).
+The rule order is a sort by `num` (ties keep the array's order). Dragging in the UI
+recomputes the dragged rule's `num` as `target.num + 1`, shifting the neighbours only
+when that value is taken (a lazy shift — it preserves the gaps and the template
+anchors, see `rule_order.dart`).
 
 ### `kind: "inline"` — `CustomRuleInline`
 
 ```jsonc
 {
   "kind":           "inline",
-  "num":            1000?,         // §370 — позиция на оси порядка
+  "num":            1000?,         // §370 — the position on the ordering axis
   "id":             "<uuid>",
   "name":           "<display>",
   "enabled":        true,
-  "domains":        [ … ]?,        // OR-группа #1
+  "domains":        [ … ]?,        // OR group #1
   "domainSuffixes": [ … ]?,
   "domainKeywords": [ … ]?,
   "ipCidrs":        [ … ]?,
-  "ports":          [ … ]?,        // OR-группа #2: "443"
+  "ports":          [ … ]?,        // OR group #2: "443"
   "portRanges":     [ … ]?,        //              "8000:9000", ":3000", "4000:"
-  "packages":       [ … ]?,        // OR-группа #3
+  "packages":       [ … ]?,        // OR group #3
   "protocols":      [ … ]?,        // routing-rule level (subset of kKnownProtocols)
   "ipIsPrivate":    true?,         // routing-rule level
-  "outbound":       "<tag>",       // или "reject" (sentinel → action: reject)
+  "outbound":       "<tag>",       // or "reject" (a sentinel → action: reject)
   "dns":            { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 задача 3 + §256
   "resolve":        { "only": false, "strategy": "ipv4_only", "serverTag": ""?,
                       "disableCache": true?, "disableOptimisticCache": true?,
@@ -518,7 +520,7 @@ UI пересчитывает `num` перетащенного правила к
 }
 ```
 
-`name` — пользовательский, mutable.
+`name` is user-supplied and mutable.
 
 OR-семантика внутри category, AND между. `protocols` и `ipIsPrivate` не headless'ятся, выносятся в routing-rule level.
 
