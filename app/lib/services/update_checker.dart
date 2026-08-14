@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'app_log.dart';
-import 'install_source.dart';
 import 'project_links.dart';
 import 'automation/event_emitter.dart';
 import 'settings_storage.dart';
@@ -31,21 +30,6 @@ class UpdateChecker {
   static const _userAgent = 'LxBox';
   static const _httpTimeout = Duration(seconds: 10);
   static const _minCheckInterval = Duration(hours: 24);
-
-  /// §395 — фоновая проверка живёт только у sideload-сборок с GitHub.
-  ///
-  /// Из F-Droid и Google Play обновления приносит клиент магазина, а
-  /// самостоятельный поход в `api.github.com` рецензент F-Droid засчитывает
-  /// как anti-feature `Tracking` (MR!44731, andrewpozdnakov7, 14.08).
-  ///
-  /// Резолвится рантаймом, а НЕ через `--dart-define`: любой define попадает
-  /// в скомпилированный Dart-код, байты разошлись бы с APK из GitHub Releases
-  /// и `binary:`-сверка F-Droid упала бы (§390).
-  ///
-  /// Ручной `forceCheck` под флаг не попадает — это явное нажатие
-  /// пользователя, а не фоновый опрос.
-  static bool get autoCheckSupported =>
-      InstallSourceResolver.current == InstallSource.github;
 
   /// Latest release info, populated after [maybeCheck] / [forceCheck] success.
   /// Null until first successful check; null after dismiss (per spec — banner
@@ -81,13 +65,11 @@ class UpdateChecker {
   }
 
   /// Проверка с учётом throttle / toggle. Тихо пропускает если:
-  /// - установлено не из GitHub (§395 — см. [autoCheckSupported])
   /// - dev-build (`-dev.N`, `0.0.0-dev`)
   /// - `auto_check_updates` выключен
   /// - последний успешный check был < 24h назад
   /// - сеть недоступна / GitHub вернул не-200
   Future<void> maybeCheck({required String localVersion}) async {
-    if (!autoCheckSupported) return;
     if (_inFlight) return;
     if (_isDevBuild(localVersion)) return;
     final enabled = await SettingsStorage.getAutoCheckUpdates();

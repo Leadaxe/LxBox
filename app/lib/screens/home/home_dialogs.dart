@@ -365,6 +365,52 @@ Future<void> maybeShowAddTilePrompt(BuildContext context, BoxVpnClient vpn) asyn
   await vpn.requestAddTile();
 }
 
+/// §395 — first-run промпт про автопроверку обновлений.
+///
+/// Фоновый поход в `api.github.com` без ведома пользователя рецензент F-Droid
+/// засчитывает как anti-feature `Tracking` (MR!44731). Первым решением был
+/// гейт по `installingPackageName`, но клиентов каталога много — Neo Store,
+/// F-Droid Classic, Aurora и прочие, — и список пришлось бы вечно догонять
+/// (замечание linsui, 14.08). Явный вопрос закрывает это раз и навсегда:
+/// согласие есть — слежки нет, откуда бы приложение ни пришло.
+///
+/// Канал установки остаётся, но только как **подсказка для дефолта**: из
+/// каталога первой стоит «Skip», у sideload — «Enable». Ошибка в определении
+/// канала теперь безобидна, последнее слово за пользователем.
+const _updatePromptKey = 'wizard_update_check_v1';
+
+Future<void> maybeShowUpdateCheckPrompt(BuildContext context) async {
+  final asked = await SettingsStorage.getVar(_updatePromptKey, '0');
+  if (asked == '1') return;
+  // dev-сборка: чекер и так молчит (`_isDevBuild`), вопрос был бы шумом.
+  if (VersionInfo.I.version.contains('-dev.')) return;
+  await SettingsStorage.setVar(_updatePromptKey, '1');
+  if (!context.mounted) return;
+
+  final fromStore = InstallSourceResolver.current != InstallSource.github;
+  final enable = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog.adaptive(
+      title: Text(getLocalText.s("Check for updates?")),
+      content: Text(getLocalText.s("L×Box can ping github.com once a day to see whether a new version is out. Nothing installs by itself — you get a link to the release page.\n\nIf you installed from an app store, its client already handles updates and you can skip this.")),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: Text(getLocalText.s("Skip")),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: Text(getLocalText.s("Enable")),
+        ),
+      ],
+    ),
+  );
+  // Закрыли системной «назад» — берём дефолт канала, не навязываем проверку
+  // тем, у кого есть клиент магазина.
+  await SettingsStorage.setAutoCheckUpdates(enable ?? !fromStore);
+}
+
 // §357 — показ support-сообщения переехал в полноэкранный
 // `screens/home/support_message_screen.dart` (SupportMessageScreen);
 // прежний AlertDialog-вариант удалён.
