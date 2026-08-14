@@ -524,7 +524,7 @@ The `VPN Mode` section is entirely `wizard_ui: hidden` (build-time vars, not sho
 
 ### `vars[i]` — the description of a template variable
 
-| Ключ | Тип | Назначение |
+| Key | Type | Purpose |
 |---|---|---|
 | `name` | string | The variable's name. An `@name` inside the template's `config` block is replaced by its value. |
 | `type` | enum | The input type — it decides the UI control and the validation. See below. |
@@ -785,11 +785,11 @@ the base sniff/hijack-dns/resolve rules.
 
 | `preset_id` | `ui.default` | `ui.locked` | `ui.num` | `vars` | `rule_set` | `rule(s)` | `dns_rule(s)` | `dns_servers` |
 |---|---|---|---|---|---|---|---|---|
-| `traffic-processing` | true | true | 0 | ✓ (sniff_enabled, sniff_timeout §264 enum 100ms/300ms/500ms/1s/3s, hijack_dns_enabled §264 bool WARNING-тултип, `{"ref":"resolve_enabled"}` + `{"ref":"resolve_strategy"}` §265 — обе ref на секцию `internal`) | — | ✓ массив: `[sniff #if @sniff_enabled, hijack-dns, resolve strategy:@resolve_strategy #if @resolve_enabled]` | — | — |
+| `traffic-processing` | true | true | 0 | ✓ (sniff_enabled, sniff_timeout §264 enum 100ms/300ms/500ms/1s/3s, hijack_dns_enabled §264 bool with a WARNING tooltip, `{"ref":"resolve_enabled"}` + `{"ref":"resolve_strategy"}` §265 — both ref the `internal` section) | — | ✓ an array: `[sniff #if @sniff_enabled, hijack-dns, resolve strategy:@resolve_strategy #if @resolve_enabled]` | — | — |
 | `block-ads` | false | — | — | — | ✓ (remote ads-all) | ✓ (action: reject) | — | — |
-| `ru-direct` | true | — | — | ✓ (outbound, dns_enable §257, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ массив: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
-| `fakeip` | false | — | — | ✓ (rule_enable §266 псевдо + on_change, dns_enable §257 + on_change, dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
-| `ru-inside` | (false) | — | — | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
+| `ru-direct` | true | — | — | ✓ (outbound, dns_enable §257, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ an array: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
+| `fakeip` | false | — | — | ✓ (rule_enable §266 pseudo + on_change, dns_enable §257 + on_change, dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
+| `ru-inside` | (false) | — | — | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
 | `bittorrent` | true | — | — | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
 | `private-ip` | (false) | — | — | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
 | `unknown-traffic` | false | — | — | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
@@ -1124,63 +1124,63 @@ debug assert plus a Flutter test that loads every overlay from rootBundle).
 
 A new user-visible field must be added to both the **extractor and the whitelist** of
 `TemplateOverlay` (`template_overlay.dart`) — otherwise it silently ships untranslated.
-английским во всех локалях. Self-check `template_check` следит, чтобы whitelist
-покрывал каждое display-поле экстрактора (английский ключ извлекается живьём из
-`wizard_template.json`, отдельного en-файла нет); после добавления — перевод в
-`ru/template.json`, `flutter test` (applier-тесты).
+in English in every locale. The `template_check` self-check ensures the whitelist covers
+every display field of the extractor (the English key is extracted from
+`wizard_template.json`, since there is no separate en file); after adding one, put the
+translation in `ru/template.json` and run `flutter test` (the applier tests).
 
 ---
 
-## Когда что ломается
+## What breaks when
 
-### Добавляем новый top-level ключ
+### Adding a new top-level key
 
-Update этого файла (раздел top-level + новый section per-key) + добавляем читалку в builder/loader. Проверяем что `template_loader.dart` парсит без ошибок (текущий парсер permissive — игнорирует unknown keys).
+Update this file (the top-level section plus a new per-key section) and add a reader to the builder.
 
-### Меняем shape preset'а / vars
+### Changing the shape of a preset or its vars
 
-Если breaking — bump `parser_config.version` (это сигнал для миграционного кода). Описать миграцию в [§026 parser v2 spec](./spec/features/026%20parser%20v2/spec.md) или новой спеке.
+If it is breaking, bump `parser_config.version` (that is the signal for the migration code). Describe it here.
 
-### Добавляем var с новым `type`
+### Adding a var with a new `type`
 
-Update var.type таблицу в этом файле + добавить рендерер в `settings_screen.dart`.
+Update the var.type table in this file and add a renderer to `settings_screen.dart`.
 
-### Меняем `config.route.rules` базовые правила
+### Changing the base rules in `config.route.rules`
 
-С §264 базовых правил в `config.route.rules` **больше нет** (ключ пуст) — sniff/hijack-dns/resolve переехали в locked-пресет `traffic-processing` (`num:0`). Правь их **там**, не в `config.route.rules`. Порядок первых правил критичен (sniff первым) — `num:0` + `isSortable:false` + `rule_order.dart` держат пресет на позиции 0. Любое новое базовое route-правило для всех юзеров либо кладётся в этот пресет, либо (если условное) — как preset-rule. Может сломать routing для существующих юзеров — **проверять** порядок относительно auto-discovery preset-rules. См. order matters в [§030].
+Since §264 there are **no** base rules in `config.route.rules` any more (the key is empty) — sniff, hijack-dns and resolve live in the `traffic-processing` preset.
 
-### Добавляем ref-var в пресет (§265)
+### Adding a ref-var to a preset (§265)
 
-Кладёшь `{"ref":"<global>"}` в `vars[]` пресета. Целевая глобаль **обязана
-существовать** в какой-то секции (`WizardTemplate.globalVar` ищет по всем, вкл.
-`internal`) — иначе метаданные не резолвятся. Если var не должна светиться в VPN
-Settings — заводи её в секции `internal` (chapter не рендерится). Значение живёт
-в `userVars`; **не** дублируй его в `varsValues` (страгглер разойдётся с
-глобалью — см. `stripRefVarsFromVarsValues`). Все читатели `varsValues` по имени
-пропускают `v.isRef`.
+You put `{"ref":"<global>"}` into the preset's `vars[]`. The target global **must exist**
+in some section (`WizardTemplate.globalVar` searches all of them, including `internal`) —
+otherwise the metadata does not resolve. If the var must not show up in VPN Settings,
+declare it in the `internal` section (its chapter is never rendered). The value lives in
+`userVars`; do **not** duplicate it into `varsValues` (the straggler would diverge from the
+global — see `stripRefVarsFromVarsValues`). Every reader of `varsValues` by name skips
+`v.isRef`.
 
-### Добавляем on_change на пресет (§266)
+### Adding an on_change to a preset (§266)
 
-Магическая псевдо-var (`rule_enable`/`dns_enable`) несёт `on_change: {"set":{...}}`.
-Обязательно: (1) `default_value` + `required:false` на псевдо-var (иначе пресет
-молча не эмитится, грабля `29fe61c`); (2) цель — существующая глобаль (обычно в
-`internal`); (3) вызвать `applyPresetOnChange` из **всех** точек смены состояния
-пресета (routing-свич, dns-тумблер, редактор, DNS Settings — сейчас 5 мест). Если
-формула зависит и от routing-, и от dns-состояния — вешай **идентичный** on_change
-на обе псевдо-vars (`rule_enable` И `dns_enable`), чтобы срабатывало по любому пути.
+The magic pseudo-var (`rule_enable` / `dns_enable`) carries `on_change: {"set":{...}}`.
+Mandatory: (1) a `default_value` plus `required:false` on the pseudo-var (otherwise the preset
+silently fails to emit — the `29fe61c` gotcha); (2) the target is an existing global (usually in
+`internal`); (3) call `applyPresetOnChange` from **every** point where the preset's state
+changes (the routing switch, the DNS toggle, the editor, DNS Settings — five places today). If
+the formula depends on both the routing and the DNS state, hang an **identical** on_change
+on both pseudo-vars (`rule_enable` AND `dns_enable`), so it fires along either path.
 
 ---
 
-## Связанные документы
+## Related documents
 
-- [`STORAGE.md`](./STORAGE.md) — user-state в `lxbox_settings.json` (то что меняется юзером, в т.ч. override template-vars и `custom_rules[].presetId` ссылки на этот catalog)
-- [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution и expansion (бывший feature §005x, заменён §026)
+- [`STORAGE.md`](./STORAGE.md) — the user state in `lxbox_settings.json` (what the user changes, including the channels)
+- [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution and expansion (formerly feature §005x, superseded by §026)
 - [§026 parser v2](./spec/features/026%20parser%20v2/spec.md) — `parser_config.version`
-- [§033 preset bundles](./spec/features/033%20preset%20bundles/spec.md) — `selectable_rules[]` и expansion
+- [§033 preset bundles](./spec/features/033%20preset%20bundles/spec.md) — `selectable_rules[]` and expansion
 - [§030 custom routing rules](./spec/features/030%20custom%20routing%20rules/spec.md) — `selectable_rules[*].rule` shape, order matters
-- [§061 dns rules refactor](./spec/tasks/061-dns-rules-refactor/spec.md) — `dns_options.rules[]` (бывший feature §041)
-- [§043 dns servers refs by kind](./spec/tasks/043-dns-servers-refs-by-kind.md) + [§044 clean schema](./spec/tasks/044-dns-servers-clean-schema.md) — `dns_options.servers[]` и template-vs-storage отношения
+- [§061 dns rules refactor](./spec/tasks/061-dns-rules-refactor/spec.md) — `dns_options.rules[]` (formerly feature §041)
+- [§043 dns servers refs by kind](./spec/tasks/043-dns-servers-refs-by-kind.md) plus [§044 clean schema](./spec/tasks/044-dns-servers-clean-schema.md) — `dns_options.servers[]` and the template-versus-storage relationship
 - [§040 per-group ping settings](./spec/tasks/040-per-group-ping-test-settings.md) — `ping_options`
 - [§015 speed test](./spec/features/015%20speed%20test/spec.md) — `speed_test_options`
-- [§022 app settings](./spec/features/022%20app%20settings/spec.md) — Wizard UI и `sections[]`
-- [§279 localization](./spec/features/279%20localization/spec.md) — l10n-overlay display-текста шаблона; ключ overlay = сам английский текст (принцип `ui/`-словаря, `{value}`-формат, без адресов и `src`-hash — §285); translator-guide — [`l10n.md`](./l10n.md)
+- [§022 app settings](./spec/features/022%20app%20settings/spec.md) — the Wizard UI and `sections[]`
+- [§279 localization](./spec/features/279%20localization/spec.md) — the l10n overlay of the template's display text; the overlay key is the English text itself (the same principle as the `ui/` dictionary, the `{value}` format, with no addresses and no `src` hash — §285); the translator guide is [`l10n.md`](./l10n.md)
