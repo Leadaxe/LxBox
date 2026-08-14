@@ -616,28 +616,28 @@ from §232 is in the source and the sink:
 
 | | §232 (a section) | §266 (a preset) |
 |---|---|---|
-| **Триггер** | клик по var в Wizard-экране | смена состояния пресета (свич on/off, dns_enable-тумблер) |
-| **Источник** | значение самой var (`VarValuesModel`) | **состояние пресета** — псевдо-vars `@rule_enable`/`@dns_enable` |
+| **Trigger** | a click on a var in the Wizard screen | a change of the preset's state (the on/off switch, the dns_enable toggle) |
+| **Source** | the var's own value (`VarValuesModel`) | **the preset's state** — the pseudo-vars `@rule_enable` / `@dns_enable` |
 | **Sink** | the screen's in-memory `VarValuesModel` | **the global `userVars`** (`SettingsStorage.setVar` — straight to disk) |
-| **Движок** | `settings_screen._applyOnChange` | `preset_on_change.dart::applyPresetOnChange` |
+| **Engine** | `settings_screen._applyOnChange` | `preset_on_change.dart::applyPresetOnChange` |
 
-**Псевдо-vars пресета** (не хранятся — вычисляются из состояния):
+**The preset's pseudo-vars** (never stored — computed from its state):
 
-- `@rule_enable` = `cr.enabled` (пресет включён свичем).
-- `@dns_enable` = §257 `presetDnsEnableVar` (DNS-аспект пресета — мастер-тумблер
-  DNS-блока).
+- `@rule_enable` = `cr.enabled` (the preset is on, via the switch).
+- `@dns_enable` = the §257 `presetDnsEnableVar` (the preset's DNS aspect — the master
+  toggle of the DNS block).
 
 Обе несут **идентичную** on_change-формулу — любая из них триггерит пересчёт цели
-(так формула срабатывает и когда меняют routing-свич, и когда — dns-тумблер).
-Резолв идёт в namespace `{...userVars, rule_enable, dns_enable}` (псевдо перекрывают
-`userVars` — их значение «живое»), через тот же `evalIfScalar`.
+of the targets (that way the formula fires both when the routing switch changes and when
+the DNS toggle does). Resolution happens in the namespace
+`{...userVars, rule_enable, dns_enable}` (the pseudo-vars shadow `userVars`, since their value is the live one), through the same `evalIfScalar`.
 
-Пример — FakeIP-пресет глушит route-resolve, пока сам активен (route-resolve —
-это ВТОРОЙ резолвер мимо FakeIP через `default_domain_resolver`; при активном
-FakeIP он должен молчать, §263):
+An example — the FakeIP preset silences route-resolve while it is active (route-resolve is
+a SECOND resolver that bypasses FakeIP through `default_domain_resolver`; with FakeIP
+active it must stay quiet, §263):
 
 ```jsonc
-// оба var пресета fakeip несут это; @resolve_enabled — var секции internal
+// both vars of the fakeip preset carry this; @resolve_enabled is a var of the internal section
 "on_change": {
   "set": {
     "@resolve_enabled": {"#if": {"and": ["@rule_enable", "@dns_enable"], "value": "false", "else": "true"}}
@@ -645,8 +645,8 @@ FakeIP он должен молчать, §263):
 }
 ```
 
-Читается: «FakeIP включён (`@rule_enable`) И его DNS-аспект включён (`@dns_enable`)
-→ `resolve_enabled = false`; иначе `true`».
+Read it as: “FakeIP is on (`@rule_enable`) AND its DNS aspect is on (`@dns_enable`)
+→ `resolve_enabled = false`; otherwise `true`.”
 
 The semantics:
 
