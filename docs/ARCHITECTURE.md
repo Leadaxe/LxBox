@@ -1394,40 +1394,40 @@ On a `connected` event `HomeController` subscribes to the `status` and `groups` 
 - **An empty groups push over a live one** — the core can send an empty groups list.
 - **No external subscribers** — the command server listens on localhost; third-party Clash clients cannot attach.
 - **§193 — connections are single-shot with no pull (an asymmetry with groups).** The `connections` subscription is one-way.
-- **§194 — три счётчика соединений считают РАЗНОЕ.** Не путать:
-  - **Главный экран** ([`traffic_bar.dart`](../app/lib/screens/home/widgets/traffic_bar.dart)) — два раздельных чипа: `connectionsIn` (🔗 = `trafficManager.ConnectionsLen()` ядра = соединения **приложений**, ТЕ ЖЕ что в `CommandConnections`-списке = на Stats) и `connectionsOut` (🗄 = `connectionManager.Count()` = **физические** соединения наружу к серверам). Раньше шапка складывала In+Out в одно число — путало, т.к. не сходилось со списком на Stats.
-  - **Stats** — активные из списка (`closedAt==0`) ≈ `connectionsIn`.
-  - **Conns** — живые + closed-история, показывает «N active / M total».
+- **§194 — the three connection counters count DIFFERENT things.** Do not conflate them:
+  - **The home screen** ([`traffic_bar.dart`](../app/lib/screens/home/widgets/traffic_bar.dart)) shows the core's counter.
+  - **Stats** shows the active ones from the list (`closedAt==0`) ≈ `connectionsIn`.
+  - **Conns** shows the live ones plus the closed history, as “N active / M total”.
 
 ---
 
-## Локализация (l10n, §279 / §285)
+## Localization (l10n, §279 / §285)
 
-en (базовый) + ru; новый язык = один natural-key словарь + один
-template-overlay + один `values-<lang>/` без структурных изменений.
-Runtime-переключение без рестарта приложения, включая нативные поверхности при
-живом VPN-сервисе. С §285 UI-строки локализуются через **natural keys**
-(английский текст call-site'а И ЕСТЬ ключ; ARB/gen_l10n снесены). Полная
-архитектура — [спека §279](spec/features/279%20localization/spec.md) +
-[ревизия getLocalText](spec/features/279%20localization/getlocaltext.md);
+en (the base) plus ru; a new language is one natural-key dictionary plus one
+template overlay plus one `values-<lang>/`, with no structural changes.
+Switching at runtime needs no app restart, including the native surfaces on a
+live VPN service. Since §285 the UI strings are localized through **natural keys**
+(the English call-site text IS the key; ARB and gen_l10n are gone). The full
+architecture is in [the §279 spec](spec/features/279%20localization/spec.md) plus
+[the getLocalText review](spec/features/279%20localization/getlocaltext.md);
 translator-guide — [`l10n.md`](l10n.md).
 
-| Компонент | Роль |
+| Component | Role |
 |---|---|
-| `lib/services/l10n/get_local_text.dart` | `GetLocalText` — natural-key движок: `.s("en text", args)` / `.plural("%d en", n)`, printf `%s/%d/%1$s/%%`, форма-индекс, fallback = сам ключ; `GetLocalText.en` — пиненный английский рендерер |
-| `lib/services/l10n/plural_resolver.dart` | `PluralResolver` + `En`/`RuPluralResolver` (CLDR формы: ru one/few/many/other) — набор форм диктует shape plural-объекта в словаре |
-| `assets/l10n/ru/ui.json` | Natural-key словарь: `englishKey → { value: String\|pluralObj, special: {"N": {value}} }`. `en`-файла нет by design — английский базовый, в коде (fallback на сам ключ) |
-| `lib/services/l10n/locale_controller.dart` | `LocaleController` — **единственный владелец** смены локали + глобальный `getLocalText` getter (dict-reload в пайплайне); `didChangeLocales` ловит смену системного языка при `setting=='system'` |
-| `lib/services/l10n/template_overlay.dart` | Pre-parse оверлей display-текста `wizard_template.json` (адреса по machine-id, см. [TEMPLATE.md](TEMPLATE.md#localizing-the-display-text--the-l10n-overlay-279)) |
-| `lib/services/l10n/template_aware_state.dart` | Mixin: refetch template-derived состояния в `didChangeDependencies` по `Localizations.localeOf` (initState переживает rebuild — снапшот локали там запрещён checker'ом) |
-| `lib/services/l10n/app_language_reconcile.dart` | Трёхсторонний reconciliation `LocaleManager`↔storage на старте (Android 13+, зеркало `last_pushed_locale`) |
-| `lib/models/ui_msg.dart` | sealed `UiMsg` — хранимые ошибки/статусы как типизированные объекты; `render()` через ambient `getLocalText` в момент показа, `renderEn()` → `GetLocalText.en` — путь UiMsg→String на machine-поверхностях (automation/AppLog/notification) |
-| `app/tool/l10n/` | 4 CI-checker'а (`--strict` на каждом PR): ui_check (natural-key словарь↔код) / template_check / hardcoded_check (+ rendering-locality) / kotlin_check |
-| `android … L10n.kt` | Нативный резолвер: читает `boxvpn_boot.app_language`, `createConfigurationContext` **в момент рендера, без кэша** — работает в сервис-процессе при мёртвом Flutter |
+| `lib/services/l10n/get_local_text.dart` | `GetLocalText` — the natural-key engine: `.s("en text", args)` |
+| `lib/services/l10n/plural_resolver.dart` | `PluralResolver` plus `En`/`RuPluralResolver` (the CLDR forms) |
+| `assets/l10n/ru/ui.json` | The natural-key dictionary: `englishKey → { value: String\|pluralObj, special: … }` |
+| `lib/services/l10n/locale_controller.dart` | `LocaleController` — the **sole owner** of the locale-switch pipeline |
+| `lib/services/l10n/template_overlay.dart` | The pre-parse overlay of `wizard_template.json`'s display text (see [TEMPLATE.md](TEMPLATE.md#localizing-the-display-text--the-l10n-overlay-279)) |
+| `lib/services/l10n/template_aware_state.dart` | A mixin: it refetches template-derived state in `didChangeDependencies` |
+| `lib/services/l10n/app_language_reconcile.dart` | The three-way reconciliation with `LocaleManager` (Android 13+) |
+| `lib/models/ui_msg.dart` | The sealed `UiMsg` — stored errors and statuses as typed values |
+| `app/tool/l10n/` | Four CI checkers (`--strict` on every PR): ui_check, template_check, hardcoded_check, kotlin_check |
+| `android … L10n.kt` | The native resolver: it reads `boxvpn_boot.app_language` and calls `createConfigurationContext` |
 
-`MaterialApp.localizationsDelegates` несёт только Flutter-встроенные делегаты
-(Global Material/Widgets/Cupertino chrome); строки приложения идут через
-`getLocalText`, не через `Localizations`-делегат.
+`MaterialApp.localizationsDelegates` carries only Flutter's built-in delegates
+(the global Material/Widgets/Cupertino chrome); the app's own strings go through
+`getLocalText` rather than a `Localizations` delegate.
 
 **Пайплайн смены языка** (любой путь записи `app_language` — picker, Debug API
 side-effect hook, restore, смена системного языка — сходится в
