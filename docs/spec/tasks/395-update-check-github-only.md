@@ -92,8 +92,9 @@ gets their old preference back.
 - [x] Device: install from GitHub → toggle visible, check fires
 - [x] Device: install via F-Droid client → toggle absent, no request to
       `api.github.com` in the traffic log
-- [ ] Reproducibility holds: no new `--dart-define`, so `binary:` still matches
-      — confirmed by the next F-Droid run, not on device
+- [x] Reproducibility holds: no new `--dart-define`, so `binary:` still matches
+      — v2.20.9, [pipeline 2760776585](https://gitlab.com/leadaxe/fdroiddata/-/pipelines/2760776585),
+      380 files × 3 ABIs, zero differences
 
 ## Open question for the reviewer
 
