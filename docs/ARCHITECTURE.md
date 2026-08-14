@@ -1531,7 +1531,7 @@ HomeScreen
 | **AutoUpdater gates** (spec 027) | `minRetryInterval=15min`, `maxFailsPerSession=5`, `_running`/`_inFlight` dedup — subscriptions never spam providers |
 | **configChangedNeedRestart sticky flag** | Restart warning doesn't disappear on Stop-dialog cancel |
 | **TLS-insecure → info severity** | Providers set it intentionally (REALITY, self-signed); shouldn't crowd out genuine warnings |
-| **Shared `asBroadcastStream` for status events** (v1.4.0) | `BoxVpnClient.onStatusChanged` cached as `late final` — один native `onListen`, `statusSink` стабилен. Раньше каждый вызов getter'а перезаписывал sink и ломал основной listener после первого reconnect'а. См. tasks/001. |
+| **A shared `asBroadcastStream` for status events** (v1.4.0) | `BoxVpnClient.onStatusChanged` is cached as a `late final` |
 | **A blocking `stopVPN` through a Completer** (v1.4.0) | The method channel waits for `setStatus(Stopped)` natively |
 | **An intent-based sticky reset** (v1.4.0) | `configChangedNeedRestart=false` in `_stopInternal` and `_startInternal` |
 | **`TunnelStatus.unknown`** (v1.4.0) | The default for an unknown raw value, instead of `disconnected` |
@@ -1539,12 +1539,12 @@ HomeScreen
 | **`kDetourTagPrefix` as the single source of truth** (v1.4.0) | The `⚙ ` constant lives in `lib/config/consts.dart` |
 | **Two persist patterns: lazy versus eager** (v1.9.0, §076) | Editing screens with a toggle-flood UX (`tun_apps_tab`) persist lazily |
 | **A global `HomeReturnObserver`** (v1.9.0, §076) | A universal `NavigatorObserver` in `MaterialApp.navigatorObservers` |
-| **mtime-based bootstrap** (v1.9.0, §076; §113) | `ConfigDirtyCheck.isDirty()` сравнивает `lxbox_settings.json.mtime > singbox_config.json.mtime` (**секундная резолюция**, §113) на launch. Восстанавливает `configDirty` после kill mid-edit без persist'а флага. `subController.init` set'ит флаг, `home._initSubsAndAutoUpdate` триггерит тихий bootstrap rebuild. **§113**: после §107 порядок дисковых записей инвертирован (конфиг пишется на возврате к home, настройки — позже на `dispose`), из-за чего `settings>config` стало нормой → ложный «config changed» после kill. Фикс: (а) `configDirty` владеется `SettingsStorage` — config-значимые сейверы (typed + config-var allowlist, **не** `saveServerLists`) сами поднимают флаг (`SubscriptionController.configDirty` — делегат); (б) `_save()` при снятом флаге выравнивает mtime конфига к mtime настроек (`ConfigDirtyCheck.touchConfig`). |
-| **`markConfigChangedNeedRestart` external mark** (v1.9.0, §076) | `HomeController` method для настроек применяемых вне config pipeline. Native VPN-тогглы (allow_bypass / keep_on_exit / background_mode) — с §189 пишутся write-through через `SettingsStorage.setNativeBool`/`setNativeBackgroundMode` (JSON-истина + зеркало в native) — вызывают этот метод → home banner вместо локального snackbar'а. Gated на `tunnelUp`. |
-| **Cohesion over line-count + `part`/`mixin` декомпозиция** (§089) | Монстры (home_screen 2370, home_controller 1089, …) раздроблены не по числу строк, а по ответственности: тонкий экран + `<screen>/widgets/` + presenter/VM; контроллер + `part`-mixin'ы (та же библиотека → library-private доступ сохранён, поведение bit-identical). ~600 строк легитимны для cohesive-файла; крупные исключения задокументированы (см. [Обзор](#принцип-cohesion-over-line-count-089)). |
-| **`ConfigNode` структурная мета вместо reverse-parse тега** (§091, реализовано) | `config-tag == нода в Clash`; протокол/detour достаются из конфига по тегу без reverse-map. Один `ParsedConfig` (parsed раз на `configRaw`, поле `HomeState.configModel`) заменил `ConfigCache.protoByTag/detourTags` + `ConfigIntrospection` + reverse-map `subscriptionsOfTag` (теперь prefix-фильтр, `home/subscription_lookup.dart`). Класс багов §077/§079/§080 устранён структурно. §102/§103 — eager `transportLabel`/`securityLabel` для subtitle и variant-фильтра. +14 тестов. |
-| **`VarValuesModel` — per-key реактивная модель настроек** (§232) | Однонаправленный поток а-ля Vue («props down, events up»): значения template-vars экрана живут в `VarValuesModel` (`Map<String, ValueNotifier>` + dirty-set), каждое поле `TemplateVarListView` подписано `ValueListenableBuilder`'ом на СВОЙ ключ — программные изменения (`on_change`: галка ipv6 → стратегии) видны в UI мгновенно и точечно. Заменила ДВЕ рассинхронизирующиеся копии (`_varValues` в State + приватная `_values` виджета), из-за которых on_change-записи терялись. `model.set` — только память; storage пишет ЕДИНСТВЕННОЕ место — `_persist` на dispose/paused по `dirtyKeys` (уточнение lazy-паттерна §076: до выхода изменения нигде, кроме модели). Кросс-экранная доставка (dns_strategy на DNS Settings) — через cache при следующем `_load()` того экрана; app-global модель отвергнута (экраны не co-mounted). §161-edge: пустое required — `set(markDirty:false)`+`unstage`, до storage не доезжает. |
-| **`preset_on_change.dart` — on_change ПРЕСЕТА** (§266) | Отдельный от §232 движок: источник — не значение var, а **состояние пресета** (псевдо-vars `@rule_enable`=`cr.enabled`, `@dns_enable`=`presetDnsEnableVar`); приёмник — **глобальный `userVars`** (`SettingsStorage.setVar`, сразу на диск), не in-memory модель. `applyPresetOnChange(preset, cr)` собирает on_change со всех vars пресета, резолвит `#if`-цель в namespace `{...userVars, rule_enable, dns_enable}` через `evalIfScalar`, пишет каждую цель. Применение: FakeIP гасит `resolve_enabled` пока активен (`@rule_enable AND @dns_enable → false`). Зовётся из **5 точек** смены состояния (routing-свич/создание, редактор `onBoolVarToggle`, DNS Settings `_togglePresetDnsEnable`) — пропуск любой = цель не пересчитается на этом пути. Псевдо-var **обязана** нести `default_value`+`required:false`, иначе `expandPreset` выходит рано и DNS-блок пресета молча не эмитится (`29fe61c`). См. TEMPLATE.md § «on_change пресета». |
+| **An mtime-based bootstrap** (v1.9.0, §076; §113) | `ConfigDirtyCheck.isDirty()` compares the mtimes of `lxbox_settings.json` and the config |
+| **The external `markConfigChangedNeedRestart` mark** (v1.9.0, §076) | A `HomeController` method for the settings screens |
+| **Cohesion over line count, with `part`/`mixin` decomposition** (§089) | The monsters (home_screen and friends) were split by responsibility |
+| **`ConfigNode` structural metadata instead of reverse-parsing the tag** (§091, implemented) | It removed a whole class of UI bugs |
+| **`VarValuesModel` — a per-key reactive settings model** (§232) | One-way updates with no rebuild of the whole screen |
+| **`preset_on_change.dart` — a PRESET's on_change** (§266) | An engine separate from §232, writing into the global userVars |
 
 ---
 
@@ -1566,25 +1566,25 @@ HomeScreen
 
 ### Config Editor — one-way pipeline (issue [#3](https://github.com/Leadaxe/LxBox/issues/3))
 
-Source of truth для всех экранов настроек (Subscriptions, Routing, DNS, VPN settings, App settings) — **structured app state** (`SubscriptionEntry[]`, `NodeSpec`, `CustomRule[]`, `SettingsStorage`). [`buildConfig`](../app/lib/services/builder/build_config.dart) собирает sing-box JSON из этого состояния, поток односторонний:
+The source of truth for every settings screen (Subscriptions, Routing, DNS, VPN settings, App settings).
 
 ```
 state ──buildConfig──▶ configRaw ──save──▶ libbox
 ```
 
-Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`](../app/lib/controllers/home_controller.dart)) сохраняет введённый JSON в sing-box и в `state.configRaw`, но **не парсит его обратно в models**. Поэтому:
+The Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`](../app/lib/controllers/home_controller.dart)) writes the raw JSON.
 
-- Ручные правки в JSON не видны в menu screens — state о них не знает.
-- Любое изменение в UI вызывает `buildConfig` поверх state и затирает manual edits.
-- Connection statistics видят правки, потому что sing-box рантаймится с тем JSON'ом, что в editor'е сохранён.
+- Manual edits to the JSON are invisible to the menu screens — the state knows nothing about them.
+- Any change in the UI calls `buildConfig` over the state and overwrites the manual edits.
+- The connection statistics do see the edits, because sing-box runs with that very config.
 
-Полноценный round-trip требует sing-box JSON → state parser'а покрывающего все формы outbound'ов / routing rules / DNS servers / inbound configs. Это эффективно вторая product surface, в near-term roadmap не входит. Mitigations для пользователей: выражать кастомизацию через **Routing → Custom rules** (state-bound, выживают пересборку); хранить «чистый» JSON-конфиг отдельно и переподавать его через editor после auto-update подписок.
+A full round trip would require a sing-box JSON → state parser covering everything.
 
 ---
 
 ## Feature Specs
 
-Живут в [`docs/spec/features/`](./spec/features/). Каждая фича — папка `NNN name/spec.md`. Только **живые** продуктовые / архитектурные концепции; исторические / superseded / one-shot миграции — в [`docs/spec/tasks/`](./spec/tasks/) (см. [§054 spec reorg](./spec/tasks/054-spec-reorg-features-vs-tasks.md)).
+They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN name/spec.md` folder.
 
 | # | Feature |
 |---|---------|
@@ -1607,15 +1607,15 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | 022 | App settings |
 | 023 | Debug and logging |
 | 024 | Load balance — *Released* (§208 round-robin balancer, v2.7.0) |
-| 025 | WARP integration — *Released* (v2.3.0; §130 MASQUE-транспорт) |
+| 025 | WARP integration — *Released* (v2.3.0; the §130 MASQUE transport) |
 | **026** | **Parser v2** (sealed NodeSpec, 3-layer pipeline) |
 | **027** | **Subscription auto-update** (4 triggers, spam gates) |
 | **028** | **AntiDPI: mixed-case SNI** |
 | **029** | **Haptic feedback** |
 | 030 | Custom routing rules (unified `CustomRule` model: inline + local-only SRS) |
-| 031 | Debug API (localhost HTTP server для dev introspection) |
+| 031 | The Debug API (a localhost HTTP server for dev introspection) |
 | 032 | Quick Connect (QS tile + home shortcut) |
-| 033 | Preset bundles (selectable rules с `preset_id`, expansion + merge) |
+| 033 | Preset bundles (selectable rules with a `preset_id`, expansion plus merge) |
 | 034 | App icon |
 | 035 | MCP server — *Draft* |
 | 036 | Update check (GitHub Releases polling, sideload-flow) |
@@ -1625,16 +1625,16 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | 042 | Health watchdog (heartbeat metrics + auto-recovery) |
 | 043 | AppLog per-source quotas + diagnostics platform (Debug API + AppLog + Crash diagnostics) |
 | **044** | **Per-app traffic profiler** (recording per-app DNS/connections/routing chain — Live/Domains/IPs/Connections sub-tabs, connection-issue detection, Debug API + SSE) |
-| 045 | TLS ECH (Encrypted Client Hello) — anti-DPI extension прячущий SNI целиком — *Draft* |
-| 046 | Tunnel apps split-tunneling (per-app include/exclude через VpnService.Builder) |
-| 047 | Public Intent API (Tasker / Macrodroid automation через Android broadcast intents) — *Draft* |
-| 048 | Home node filters (двухфазная pool/match модель — фундамент Filter mode §095/§096/§103) |
-| 070 | Sort options (меню сортировки нод) |
-| 071 | Manual node reorder (drag; §100 — manual в карусели + персист) |
+| 045 | TLS ECH (Encrypted Client Hello) — an anti-DPI extension that hides the SNI entirely — *Draft* |
+| 046 | Tunnel apps split tunneling (a per-app include/exclude through VpnService.Builder) |
+| 047 | The Public Intent API (Tasker / MacroDroid automation through Android broadcast intents) — *Draft* |
+| 048 | The home node filters (a two-phase pool/match model — the foundation of Filter mode) |
+| 070 | Sort options (the node sorting menu) |
+| 071 | Manual node reordering (drag; §100 — manual in the carousel, with persistence) |
 | 074 | Add server wizard |
 | 076 | Settings & config lifecycle (lazy/eager persist, HomeReturnObserver, mtime-bootstrap) |
-| **097** | **AWG2 (AmneziaWG 2.0) + смена ядра на `sing-box-lx`** (`with_awg`/`with_xhttp`: AWG/AWG2 end-to-end, нативный XHTTP, MTU-кламп 1280; §104 — fork-ядро во всех сборках через `fetch-libbox.sh`) |
-| 105 | Support message (support/web URLs в meta подписки) |
+| **097** | **AWG2 (AmneziaWG 2.0) plus the move to the `sing-box-lx` core** (`with_awg` / `with_xhttp`) |
+| 105 | The support message (the support and web URLs in a subscription's meta) |
 | 117 | DNS rework |
 | 118 | Subscription fetch identity (User-Agent / identity headers) |
 | 120 | Template engine — typed vars + `if` (общее ядро подстановки, §120) |
