@@ -1000,7 +1000,7 @@ HomeController/UI                    Sing-box (Go goroutines)
 │                                                       │
 │  log(level, msg, source) — O(1) amortized insert      │
 │    + per-source trim                                  │
-│  entries — O(n×k) k-way merge на чтении (k=2)         │
+│  entries — an O(n×k) k-way merge on read (k=2)        │
 │  entriesForSource(s) — O(1) direct lookup             │
 │                                                       │
 │  Persistent (warn/error only):                        │
@@ -1016,46 +1016,46 @@ HomeController/UI                    Sing-box (Go goroutines)
 ```
 
 **Key design rules:**
-- `coreLogSink` (Volatile companion field в `BoxVpnService`) принимает sing-box callbacks из любого Go thread'а.
-- `EventChannel.EventSink.success()` требует **main thread** — диспатчим через `coreLogMainHandler.post {...}`. Без этого openTun ловит `@UiThread` exception от Flutter, sing-box интерпретирует как "configure tun interface failed", VPN падает на старте.
-- Forwarding gate'нут флагом `Libbox.setup(SetupOptions{debug: ...})` (читается из `BootReceiver.isCoreLogsEnabled(context)` в `BoxApplication.initialize`). Default false, юзер opt-in'ит через UI или Debug API. Изменение применяется только после restart Service'а — `Libbox.setup` зовётся один раз.
+- `coreLogSink` (a volatile companion field in `BoxVpnService`) receives the sing-box callbacks from any thread.
+- `EventChannel.EventSink.success()` requires the **main thread**, so we dispatch through `coreLogMainHandler`.
+- Forwarding is gated by the `Libbox.setup(SetupOptions{debug: ...})` flag (read from the `BootReceiver` prefs).
 
-### 7. Граф detour-зависимостей (§355)
+### 7. The detour dependency graph (§355)
 
 ```
-activeConfigRaw (смена) ──► DependencyGraph.fromConfig (models/dependency_graph.dart)
-                              статика: node/dns --detour--> node|канал; состав групп
-delayByChannel (замер)  ──┐
-groups-стрим (выбор)    ──┴─► HomeController._recomputeDependencyHealth()
-                              computeSick: dead-нода (все замеры ERR) → BFS вверх
-                              по обратным рёбрам (selector-выбор заражает канал;
-                              urltest болен только при мёртвом составе — §308
-                              самолечится)
-  ↓ (только при изменении результата)
-HomeState.sickRoots (корень → пострадавшие DNS/ноды с via-путём)
-  ├─ NodeRow: ⚠-метка у имени корня → тап → dependency_sheet
-  └─ DNS-жертва появилась → lastError = DnsViaDeadNodeMsg (баннер; уход всех
-     dns-жертв снимает его)
+activeConfigRaw (on change) ──► DependencyGraph.fromConfig (models/dependency_graph.dart)
+                              the statics: node/dns --detour--> node|channel; the group membership
+delayByChannel (measurements) ──┐
+groups stream (the selection) ──┴─► HomeController._recomputeDependencyHealth()
+                              computeSick: a dead node (every measurement is ERR) → a BFS upward
+                              along the reverse edges (a selector's choice infects the channel;
+                              a urltest is sick only when its whole membership is dead — §308
+                              heals itself)
+  ↓ (only when the result changes)
+HomeState.sickRoots (a root → the affected DNS entries and nodes, with the via path)
+  ├─ NodeRow: a ⚠ mark next to the root's name → tap → dependency_sheet
+  └─ a DNS victim appears → lastError = DnsViaDeadNodeMsg (a banner; it clears once every
+     DNS victim is gone)
 ```
 
-Никакой новой сетевой активности: только уже существующие события. Правила
-health и не-цели — в [спеке §355](spec/tasks/355-detour-dependency-health-warnings.md).
+No new network activity: only the events that already exist.
+The health model and the non-goals are in [the §355 spec](spec/tasks/355-detour-dependency-health-warnings.md).
 
 ---
 
 ## Dart `BoxVpnClient` API surface
 
-Тонкий клиент над тремя channel'ами (`com.leadaxe.lxbox/methods` + два EventChannel'а). Файл — [`app/lib/vpn/box_vpn_client.dart`](../app/lib/vpn/box_vpn_client.dart). Это **единственная** точка где Dart-side touches MethodChannel — все остальные вызовы идут через типизированный API клиента.
+A thin client over three channels (`com.leadaxe.lxbox/methods` plus two EventChannels).
 
 **Singleton + DI:**
-- Production — `BoxVpnClient.I` (или `BoxVpnClient()` — alias на singleton, оставлен для обратной совместимости).
+- In production it is `BoxVpnClient.I` (or `BoxVpnClient()`, an alias of the singleton kept for backward compatibility).
 - Tests — `BoxVpnClient.forTest(methods: mock, events: mock)`. `@visibleForTesting`.
 
-**Группы методов** (порядок повторяет `_Methods` constants):
+**The method groups** (in the same order as the `_Methods` constants):
 
-| Группа | Методы | Notes |
+| Group | Methods | Notes |
 |---|---|---|
-| Config | `saveConfig` / `getConfig` | `getConfig` fallback `'{}'` чтобы builder мог parse без null-checks |
+| Config | `saveConfig` / `getConfig` | `getConfig` falls back to `'{}'` so the builder can parse without a null check |
 | VPN lifecycle | `startVPN` / `stopVPN` / `reloadVPN` / `resetNetwork` / `getVpnStatus` / `getCoreVersion` / `quitApp` | `stopVPN` блокирующий native до `setStatus(Stopped)` — позволяет `await stop; await start` без race |
 | Settings (boot prefs / native toggles) | auto_start, keep_on_exit, core_logs_enabled, allow_bypass, auto_redirect, background_mode (+ has_tun §192) | §189 — native `SharedPreferences boxvpn_boot.*` теперь **зеркало** JSON-секции `native_prefs`; источник истины = `lxbox_settings.json` (write-through + sync на старте). Все писатели идут через `SettingsStorage.setNativeBool`/`setNativeBackgroundMode`. |
 | Per-app routing | `getInstalledApps` / `getAppIcon` / `getAppInfo` | Icons lazy — `getInstalledApps` без icons (тяжело), `getAppIcon` per-package по запросу |
