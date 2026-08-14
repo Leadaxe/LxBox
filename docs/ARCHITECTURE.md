@@ -685,9 +685,9 @@ automation/LocaleConditionEditActivity.kt # edit-экран условия (VPN 
 
 ---
 
-## Потоки данных
+## Data flows
 
-### 1. Запуск VPN
+### 1. Starting the VPN
 
 ```
 User tap Start (toggle button)
@@ -716,13 +716,13 @@ EventChannel → Dart: HomeController._handleStatusEvent()
   ├─ HapticService.onVpnConnected() — medium impact
   └─ AutoUpdater.onVpnConnected() — triggers refresh after 2 min
   ↓
-CommandClient: connectScreen() → groups push-стрим (selector only) +
-  getGroups() unary-pull (детерминированное наполнение, push дырявый)
+CommandClient: connectScreen() → the groups push stream (selectors only) plus
+  getGroups() as a unary pull (deterministic filling, since the push is leaky)
   ↓
 UI updates: group dropdown, node list, traffic bar
 ```
 
-### 2. Subscription добавление + авто-конфиг
+### 2. Adding a subscription and auto-config
 
 ```
 Paste/QR/file → SubscriptionsScreen._add() | _pasteFromClipboard()
