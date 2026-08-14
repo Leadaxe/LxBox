@@ -248,20 +248,20 @@ An asset template read once through `TemplateLoader.load()` (a singleton, deep-c
 
 | Section | Role | Example / where it is used |
 |---|---|---|
-| `parser_config` | sing-box `version` + reload interval | прямой emit в корень |
-| `dns_options.servers` | Canonical DNS-серверы (system/google/cloudflare/quad9/adguard). Storage хранит kind-refs `{enabled, kind: inline\|preset\|template, tag, description?, body?}` (§043 + §044). Body для kind:inline — partial sing-box shape **без** tag/description/enabled (они на ref-level; tag синтезируется на build-time). Резолвится в bodies через `resolveDnsServersBodies`. | `applyCustomDns` через `resolveDnsServersList` |
-| `dns_options.rules` | Дефолтные DNS-rules. Storage — kind-refs (§061 dns-rules-refactor, бывший feature §041) (`inline\|srs\|preset\|template`). Catch-all удалён в task §039 (empty-template-dns-rules) — fall-through идёт через `dns.final`. | `applyCustomDns`: bundle-rules через `resolveDnsRulesList` |
-| `ping_options`, `speed_test_options` | UI-фичи (HomeScreen, SpeedTest) | не попадают в sing-box конфиг |
-| `group_templates` + `default_channels` | §125/§267 — **SEED** для `channels[]` (на первом запуске). Билдер каналы читает из storage `channels[]`, НЕ из template. §267 заменил плоский `preset_groups`. | `_buildChannelGroups(channels)` в `build_config.dart` (бывш. `_buildPresetGroups`) |
-| `config` | База sing-box конфига: log, inbounds, route-skeleton | deep-copy'ится в начале `buildConfig` |
-| `sections[].vars[]` | Глобальные переменные UI — chapter: `core` / `routing` / `dns` | `TemplateVarListView` рендерит в SettingsScreen/RoutingScreen; `@name` подставляется в config через `_substituteVars` |
-| `selectable_rules` | Каталог пресет-правил (legacy inline + bundle — spec 033) | вкладка Presets в `RoutingScreen` |
+| `parser_config` | The sing-box `version` plus the reload interval | Emitted straight into the root |
+| `dns_options.servers` | The canonical DNS servers (system/google/cloudflare/quad9/adguard). Storage keeps kind refs. | Resolved into bodies by `resolveDnsServersBodies` |
+| `dns_options.rules` | The default DNS rules. Storage keeps kind refs (§061 dns-rules-refactor, formerly feature §041). | Resolved by `resolveDnsRulesList` |
+| `ping_options`, `speed_test_options` | UI features (HomeScreen, SpeedTest) | Never reach the sing-box config |
+| `group_templates` + `default_channels` | §125/§267 — the **SEED** for `channels[]` (on the first launch). The builder reads `channels[]` from storage. |
+| `config` | The base of the sing-box config: log, inbounds, the route skeleton | Deep-copied at the start of `buildConfig` |
+| `sections[].vars[]` | The UI's global variables — chapter `core` / `routing` / `dns` | Rendered by `TemplateVarListView` |
+| `selectable_rules` | The catalog of preset rules (legacy inline plus bundle — spec 033) | The Presets tab on the Routing screen |
 
-### Selectable rules — два режима
+### Selectable rules — two modes
 
-Пресет в `selectable_rules[]` работает в одном из двух режимов:
+A preset in `selectable_rules[]` works in one of two modes:
 
-**Legacy (до v1.4.x, без `preset_id`):**
+**Legacy (up to v1.4.x, with no `preset_id`):**
 ```json
 {
   "label": "BitTorrent direct",
@@ -269,9 +269,9 @@ An asset template read once through `TemplateLoader.load()` (a singleton, deep-c
   "rule": { "protocol": ["bittorrent"], "outbound": "direct-out" }
 }
 ```
-Копируется юзером в `CustomRule(kind: inline | srs)` через `selectableRuleToCustom` — содержимое копируется **по значению**, дальнейшие правки шаблона не влияют на уже скопированное правило.
+The user copies it into a `CustomRule(kind: inline | srs)` through `selectableRuleToCustom` — the contents are copied by value.
 
-**Bundle (v1.5+, `preset_id` задан) — spec 033:**
+**Bundle (v1.5+, with `preset_id` set) — spec 033:**
 ```json
 {
   "preset_id": "ru-direct",
@@ -295,9 +295,9 @@ An asset template read once through `TemplateLoader.load()` (a singleton, deep-c
   ]
 }
 ```
-`CustomRule(kind: preset)` хранит **тонкую ссылку** — только `{presetId, varsValues}`. Expansion (`preset_expand.dart`) на каждый билд:
-1. Резолвит переменные из `varsValues` (или `default_value` если ключ отсутствует; для `required: false` + отсутствие ключа + пустой default → `null` → фрагменты с `@var` выкидываются).
-2. Рекурсивно подставляет `@var` в `rule_set`/`dns_rule`/`rule`/`dns_servers`.
+`CustomRule(kind: preset)` stores a **thin reference** — just `{presetId, varsValues}`. The expansion (`preset_expand.dart`):
+1. Resolves the variables from `varsValues` (or from `default_value` when the key is absent; a `required` var with no value aborts the expansion).
+2. Recursively substitutes `@var` into `rule_set`, `dns_rule`, `rule` and `dns_servers`.
 3. Фильтрует `dns_servers` до одного с `tag == vars['dns_server']`.
 4. Если `@out` резолвится в `"direct-out"` — удаляет `detour` из DNS-серверов (direct не требует forwarding).
 
