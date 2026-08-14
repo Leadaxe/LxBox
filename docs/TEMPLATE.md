@@ -808,26 +808,27 @@ The names of preset vars are **not arbitrary**: several of them carry special se
 
 | Var (name / type) | Who looks at it | What it does | If you omit it → |
 |---|---|---|---|
-| `dns_server` (`type: dns_servers`) | `preset_expand.dart` | **Селектор** какой из `dns_servers[]` пресета влить в `config.dns.servers`. Билдер эмитит РОВНО ОДИН сервер — тот, чей `tag == varsValues['dns_server']` (или `default_value`). `dns_rules[*].server` ссылается на него через `@dns_server`. | `dns_servers[]` **не вливается вообще** (цикл гейтится наличием этой var). DNS-правило повиснет на несуществующий сервер → dangling → guard молча дропнет правило. Пресет ничего не делает для DNS. |
-| `outbound` (`type: outbound`) | `preset_expand.dart` + Routing UI | Значение для `@outbound` в `rule`/`dns_servers.detour`. UI рисует outbound-picker в строке пресета (см. `hasOutboundAffordance`). Дефолт `"reject"` → backstop-нормализация в `action:reject`. | Нет var:outbound И нет `rule` → `hasOutboundAffordance == false` → outbound-picker в строке **не рисуется** (DNS-only пресет — роутить нечего, picker был бы мёртвым). Это корректно, а не баг. |
-| `dns_enable` (`type: bool`) | `custom_rules.dart` (`presetDnsEnableVar`) + DNS Settings UI | §257: **мастер-тумблер DNS-блока** пресета (dns_servers + dns_rules + mirror-группа). Билдер гейтит DNS-аспект значением var (юзерский выбор → default_value → on); DNS Settings рисует свитч пресетной строки этим же предикатом и пишет var обратно. Заменил `isPresetDnsEnabled` из `dns_options.rules` (то поле `enabled` теперь мёртвое, запись — только позиционный якорь §117). | DNS-блок пресета **не тумблится** (всегда on, пока routing on); строка в DNS Settings — без свитча (нейтральная иконка). Норма для пресетов, которым тумблер не нужен. |
-| `rule_enable` (`type: bool`, псевдо) | `preset_on_change.dart` | §266: **псевдо-var** on_change-формулы. НЕ хранится — резолвер подставляет `cr.enabled` (пресет включён свичем). Носитель `on_change`, которая при вкл/выкл пишет цель в `userVars` (см. «`on_change` пресета» выше). У FakeIP: `@rule_enable AND @dns_enable → resolve_enabled=false`. | ⚠ **`default_value` обязателен + `required:false`.** Без `default_value` var = required → `expandPreset` выходит рано → **весь DNS-блок пресета молча не эмитится** (грабля `29fe61c`). |
+| `dns_server` (`type: dns_servers`) | `preset_expand.dart` | **Selects** which of the preset's `dns_servers[]` is poured into `config.dns.servers`. The builder emits EXACTLY ONE server — the one whose `tag == varsValues['dns_server']` (or the `default_value`). | every server of the preset would be emitted |
+| `outbound` (`type: outbound`) | `preset_expand.dart` plus the Routing UI | The value for `@outbound` in `rule` and `dns_servers.detour`. The UI draws an outbound picker on the preset's row (see `hasOutboundAffordance`). A default of `"reject"` goes through the backstop normalisation. | the picker would vanish from the row |
+| `dns_enable` (`type: bool`) | `custom_rules.dart` (`presetDnsEnableVar`) plus the DNS Settings UI | §257: the **master toggle of the preset's DNS block** (dns_servers plus dns_rules plus the mirror group). The builder gates the DNS aspect on the var's value. | the DNS block could not be turned off separately |
+| `rule_enable` (`type: bool`, a pseudo-var) | `preset_on_change.dart` | §266: the **pseudo-var** of an on_change formula. It is never stored — the resolver substitutes `cr.enabled` (the preset is on, via the switch). It carries the `on_change`. | the formula would never fire |
 
 **§265 — ref-vars (`{"ref": "<global>"}`).** An element of a preset's `vars[]` may be a **reference** to a global var (one from a section, including `internal`).
 
 In the UI a ref-var **is rendered** in the rule editor (`preset_params_tab.dart`) with the metadata of the global it points at.
 
-> **§265 — data-cleanup: ref-var НЕ в `varsValues`.** Значение ref-var принадлежит
-> `userVars`; если оно осело в `varsValues` пресета (миграция, старый storage) —
-> это «застрявшая» копия, которая расходится с глобалью (subtitle показывал
-> `resolve_enabled: true`, когда глобаль уже `false`). `stripRefVarsFromVarsValues`
-> (`rule_order.dart`) вычищает ref-ключи из `varsValues` на загрузке
-> Routing-экрана; все читатели `varsValues` по имени var **обязаны** пропускать
-> `v.isRef` (subtitle, Debug-сериализатор, rule_set.enabled-гейт — см. `366beec`).
+> **§265 — a data cleanup: a ref-var does NOT belong in `varsValues`.** A ref-var's value
+> belongs to `userVars`; if it has settled into a preset's `varsValues` (through a
+> migration, or from old storage) it is a “stuck” copy that diverges from the global (the
+> subtitle showed `resolve_enabled: true` while the global was already `false`).
+> `stripRefVarsFromVarsValues` (`rule_order.dart`) clears the ref keys out of `varsValues`
+> when the Routing screen loads; every reader of `varsValues` by var name **must** skip
+> `v.isRef` (the subtitle, the Debug serializer, the rule_set.enabled gate — see
+> `366beec`).
 
-**§264 — новые vars пресета `traffic-processing`.** `sniff_timeout` (enum 100ms/300ms/500ms/1s/3s) заменил хардкод `timeout:"1s"` у sniff-правила. `hijack_dns_enabled` (bool) — тумблер hijack-dns-правила; ⚠ WARNING-тултип: выключение ломает FakeIP (DNS не перехватывается). Обе — обычные preset-vars (не «магические» — билдер только подставляет `@name` через `#if`), перечислены здесь для полноты каталога.
+**§264 — the new vars of the `traffic-processing` preset.** `sniff_timeout` (an enum of 100ms/300ms/500ms/1s/3s) replaced the hardcoded `timeout:"1s"` on the sniff rule. `hijack_dns_enabled` (a bool) toggles the hijack-dns rule; ⚠ its tooltip warns that turning it off lets DNS out past the tunnel.
 
-**Правила при добавлении пресета:**
+**Rules for adding a preset:**
 
 1. **Пресет несёт `dns_servers[]`** → обязателен var `dns_server` (`type: dns_servers`, `default_value` = tag нужного сервера), а `dns_rules[*].server` = `@dns_server`. Иначе сервер не эмитится (§228). Если сервер один и выбирать не из чего (как у FakeIP) — пометь var **`wizard_ui: "hidden"`**: значение всё равно придёт из `default_value`, но мёртвый dropdown-из-одного-пункта в редакторе не рисуется. (Редактор `preset_params_tab.dart` фильтрует hidden-vars; sections тоже.)
 2. **Пресет роутит трафик** (есть `rule` с `outbound`/`action` или var:outbound) → outbound-picker в строке появится автоматически. **DNS-only пресет** (только DNS-правила, как FakeIP) → picker сам скрывается через `hasOutboundAffordance`.
