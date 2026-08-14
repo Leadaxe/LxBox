@@ -659,7 +659,7 @@ is no migration — after an update every preset carrying the var has its DNS bl
 - v1.6.0 ([§061]): `dns_options.rules[]` — a structured list with `type` / `enabled` / `title` / `rule`.
 - v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — the first kind refs. Back then tag, description and enabled lived inside `body`.
 - v1.6.1 ([§044]): `dns_options.servers[]` — the clean schema. Tag, description and enabled were lifted to the ref level, and the underscore annotations (`_kind`, `_overrides`) were removed.
-- v1.7.x ([§117]): template servers inside the template became `{description, enabled, vars?, server}` wrappers, and the `kind: template` ref gained `varValues`. Миграции нет (не нужна): kind-ref'ы валидны как есть, удалённые из шаблона теги (`quad9_dot`, `adguard_dot`, `adguard_family`, `google_doh_vpn`) орфан-чистятся, vars применяют дефолты; inline-серверы юзера не трогаются.
+- v1.7.x ([§117]): template servers inside the template became `{description, enabled, vars?, server}` wrappers, and the `kind: template` ref gained `varValues`.
 - §228: remapping renamed `preset_id`s inside `custom_rules` — `bittorrent-direct`→`bittorrent`, `private-ip-direct`→`private-ip`, `block_unknown`→`unknown-traffic`.
   **The migration was removed in §229** (it shipped in v2.10.0 and was dropped during development after v2.17.0): everyone upgrading from those versions has already been remapped, and a fresh install never had the old ids.
 
@@ -841,32 +841,32 @@ A JSON-encoded array of the networks the user has actually visited, used by the 
 **Capped at 50 entries** (the `_wifiHistoryCap` constant). LRU eviction, newest first (inserted at index 0), and the oldest falls off the tail on overflow.
 
 **Where the entries come from:**
-1. **Auto-record** (`auto_record_wifi_history=true`) — native `WifiNetworkObserver` через `NetworkCallback` listener. Stickiness debounce: записывается только если юзер сидит на сети ≥5 минут (фильтр от random transitions home/office/coffeeshop).
-2. **Manual** — editor UI: `Add current` button (читает sing-box `readWIFIState` напрямую), `Pick saved` (выбирает из существующих записей).
-3. **Debug API** — `POST /wifi_history` (для test fixtures, restore, etc) — см. [Debug API reference](api/debug-api-reference.md#wi-fi-history--wifi_history).
+1. **Auto-record** (`auto_record_wifi_history=true`) — the native `WifiNetworkObserver` through a `NetworkCallback` listener. A stickiness debounce: the network is recorded only after more than 5 minutes on it.
+2. **Manual** — from the editor UI: the `Add current` button (which reads sing-box's `readWIFIState` directly) and `Pick saved` (which picks from existing entries).
+3. **The Debug API** — `POST /wifi_history` (for test fixtures, restores and the like) — see the [Debug API reference](api/debug-api-reference.md#wi-fi-history--wifi_history).
 
-CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHistory(ssid, bssid)` / `clearWifiHistory()` в `SettingsStorage`.
+CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHistory(ssid, bssid)` / `clearWifiHistory()` in `SettingsStorage`.
 
-**Privacy default** — `auto_record_wifi_history=false`. Юзер opt-in'ит в App Settings → Diagnostics. Silent network logging это privacy-след даже local-only.
+**A privacy default** — `auto_record_wifi_history=false`. The user opts in through App Settings → Diagnostics. Silent network logging would be a privacy smell.
 
-**В `/state/storage` exposed без scrubber'а** — SSID/BSSID не sensitive в контексте настроек (если уже видны в `WifiInfo` системного уровня).
+**Exposed in `/state/storage` with no scrubbing** — an SSID or BSSID is not sensitive in a settings context (if it is already visible in the rules, hiding it here would achieve nothing).
 
 ---
 
-## `native_prefs` — [§189] зеркало `boxvpn_boot.*`
+## `native_prefs` — [§189], a mirror of `boxvpn_boot.*`
 
-JSON-зеркало Android-prefs, которые исторически жили **только** в native
-`SharedPreferences` (`boxvpn_boot.*`). Реализация — `lib/services/settings_storage/native_prefs.dart`.
+A JSON mirror of the Android prefs that historically lived **only** in the native
+`SharedPreferences` (`boxvpn_boot.*`). The implementation is `lib/services/settings_storage/native_prefs.dart`.
 
 ```jsonc
 {
-  "auto_start":        false,    // auto-start VPN на boot
-  "keep_on_exit":      true,     // §188 — не глушить tun при swipe-kill (default ON)
-  "background_mode":   "never",  // never | lazy | always — Doze-поведение туннеля
-  "core_logs_enabled": false,    // forward sing-box-логов в Dart
+  "auto_start":        false,    // auto-start the VPN at boot
+  "keep_on_exit":      true,     // §188 — do not kill the tun on a swipe-kill (default ON)
+  "background_mode":   "never",  // never | lazy | always — the tunnel's Doze behaviour
+  "core_logs_enabled": false,    // forwarding of the sing-box logs into Dart
   "allow_bypass":      false,    // §069 — Allow VPN bypass
   "auto_redirect":     false,    // auto-redirect
-  "memory_limit":      "auto"    // §271 — лимит памяти ядра: auto | off | МБ строкой
+  "memory_limit":      "auto"    // §271 — the core's memory limit: auto | off | MB as a string
 }
 ```
 
