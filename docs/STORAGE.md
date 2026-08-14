@@ -744,52 +744,52 @@ The VPN's operating mode (how inbound traffic is treated): how the core captures
 - `proxy` yields only `mixed-in` (no `tun-in`); `vpn_proxy` yields `tun-in` plus `mixed-in`.
 - `mixed-in` = `{type:mixed, tag:mixed-in, listen, listen_port, users?}`.
 
-**Auth.** `users:[{username,password}]` пишется только при `effectiveAuth && password != ""`. Для любого **не-loopback** listen (не `127.x` — `0.0.0.0` или конкретный LAN-IP) auth **форсится on** (снять нельзя — `effectiveAuth` игнорирует `proxy_auth_enabled`); на loopback — опционально. Пароль/username в §120 идут через vars-подстановку (secret-тип держит строку — числовой/«true»-пароль не искажается). Пароль генерится в UI при первом включении auth (`generateProxyPassword`, 32-hex, образец `clash_secret`).
+**Auth.** `users:[{username,password}]` is written only when `effectiveAuth && password != ""`. For any **non-loopback** listen address the auth is forced on (§120): a proxy reachable from the LAN without a password would be an open relay.
 
-**Смена режима меняет inbounds → full VPN restart** (наследуется от config-dirty машинерии: home banner Apply/Restart). `markConfigChangedNeedRestart()` дёргается при touch'е.
+**Changing the mode changes the inbounds, so the VPN restarts fully** (inherited from the config-dirty machinery: the home banner's Apply, or a restart).
 
-**Default для existing юзеров:** ключ отсутствует → `mode=vpn` (= текущее поведение, `#if`-ветка отдаёт tun-only). **Миграция не нужна** — отсутствие ключа эквивалентно дефолту.
+**The default for existing users:** an absent key means `mode=vpn` (the current behaviour), so no migration is needed.
 
-CRUD: `getVpnMode()` / `setVpnMode()` (replace целиком).
+CRUD: `getVpnMode()` / `setVpnMode()` (a whole-object replace).
 
-**Native:** изменений в Kotlin нет — proxy-режим достигается чисто конфигом (foreground/`protect`/override tun-agnostic). См. [features/119](spec/features/119%20vpn-mode/spec.md).
+**Native:** nothing changed in Kotlin — the proxy mode is achieved purely through the config (the foreground service, `protect` and the overrides stay as they were).
 
 ---
 
 ## `warp_account` — [§025]
 
-Кеш зарегистрированного Cloudflare WARP-аккаунта (кнопка «Get WARP»). Приватный ключ генерится X25519 **на устройстве** и сюда же кешируется; в Cloudflare уходит только публичная часть.
+The cached registered Cloudflare WARP account (the “Get WARP” button). The private key is generated on the device and never leaves it.
 
 ```jsonc
 {
-  "priv_key": "<base64 X25519 — СЕКРЕТ, не логировать>",
+  "priv_key": "<base64 X25519 — A SECRET, never log it>",
   "peer_pub": "<base64 peer public key>",
   "client_v4": "172.16.0.2",
   "client_v6": "2606:4700:110::…",
-  "client_id": "<base64, 3 байта → WireGuard reserved>",
+  "client_id": "<base64, 3 bytes → the WireGuard reserved field>",
   "account_id": "…",
   "device_id": "…",
-  "token": "<bearer — СЕКРЕТ, не логировать>",
+  "token": "<bearer — A SECRET, never log it>",
   "endpoint": "engage.cloudflareclient.com:2408",
   "created_at": "<ISO8601>",
-  "license": "<WARP+ key или null>",
+  "license": "<a WARP+ key, or null>",
   "warp_plus": false
 }
 ```
 
-**Назначение — идемпотентность.** При повторном «Get WARP» (`reuse=true`, default) аккаунт переиспользуется вместо новой регистрации устройства в Cloudflare. «Re-register» (`forceNew`) чистит ключ → следующий вызов регистрирует заново. Сам WARP-узел в конфиг попадает **не** отсюда, а через обычный `UserServer` (собирается из `WarpAccount.toWireguardUri()` → `addFromInput` → endpoints[]). Поэтому ключ **не** config-significant: при его записи `markConfigDirty` не дёргается.
+**Its purpose is idempotency.** On a repeated “Get WARP” (`reuse=true`, the default) the account is reused instead of registering a new one; *Re-register* creates a fresh one.
 
-**Секреты.** `priv_key`/`token` — реальные секреты в локальном файле приложения. В логах маскируются (`WarpAccount.redacted()`). ВНИМАНИЕ: `GET /state/storage` сериализатор `warp_account` сейчас **не** скрабит (см. [Debug API exposure](#debug-api-exposure) — заведён долг). При добавлении новых diag-дампов — не включать сырой `warp_account`.
+**Secrets.** `priv_key` and `token` are real secrets inside the app's local file. They are masked in logs and scrubbed in `/state/storage`.
 
-**`reserved`.** `client_id` (base64, 3 байта) доносится до sing-box endpoint как per-peer `reserved: [b0,b1,b2]`. Без него WARP-handshake проходит, но трафик не идёт. Парсинг/emit — `parseReserved` (`uri_utils.dart`) + `WireguardPeer.reserved`.
+**`reserved`.** The `client_id` (base64, 3 bytes) is carried to the sing-box endpoint as a per-peer `reserved: [b0,b1,b2]`. Without it WARP drops the traffic.
 
-CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null = очистить). См. [features/025](spec/features/025%20warp%20integration/spec.md).
+CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null clears it). See [features/025](spec/features/025%20warp%20integration/spec.md).
 
 ---
 
 ## `masque_account` — [§130]
 
-Кеш зарегистрированного MASQUE-WARP аккаунта (Cloudflare QUIC/CONNECT-IP транспорт, флагман v2.9.0). **Отдельный** от `warp_account`: другая крипта (ECDSA-ключи в DER) и другой транспорт. `MasqueAccount` (`services/warp/masque_account.dart`).
+The cached registered MASQUE-WARP account (Cloudflare's QUIC/CONNECT-IP transport, the flagship of v2.9.0). **A separate key pair** from the WireGuard one.
 
 ```jsonc
 {
