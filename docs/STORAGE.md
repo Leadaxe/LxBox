@@ -513,7 +513,7 @@ anchors, see `rule_order.dart`).
   "protocols":      [ … ]?,        // routing-rule level (subset of kKnownProtocols)
   "ipIsPrivate":    true?,         // routing-rule level
   "outbound":       "<tag>",       // or "reject" (a sentinel → action: reject)
-  "dns":            { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 задача 3 + §256
+  "dns":            { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 task 3 + §256
   "resolve":        { "only": false, "strategy": "ipv4_only", "serverTag": ""?,
                       "disableCache": true?, "disableOptimisticCache": true?,
                       "rewriteTtl": 60?, "timeout": "5s"?, "clientSubnet": "…"? }?  // §247
@@ -545,7 +545,7 @@ OR semantics inside a category, AND between them. `protocols` and `ipIsPrivate` 
   "protocols":   [ … ]?,
   "ipIsPrivate": true?,
   "outbound":    "<tag>",
-  "dns":         { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 задача 3 + §256
+  "dns":         { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 task 3 + §256
   "resolve":     { "only": false, "strategy": "ipv4_only", … }?          // §247 (as for inline)
 }
 ```
@@ -581,9 +581,9 @@ The `.srs` binary itself lives separately in `rule_sets/<tag>.srs` (see the [fil
 
 ### Backward-compat
 
-- Поле `target` (до v1.4.1) → `outbound`. Читается обоими названиями.
-- `kind` отсутствует → `inline` (read-path).
-- Legacy-ключ `app_rules` (отдельная таба до v1.3.2) — §159 удалил миграцию `_absorbLegacyAppRules`; ключ игнорируется (отбрасывается allowlist'ом на импорте).
+- The `target` field (up to v1.4.1) became `outbound`. It is read under both names.
+- An absent `kind` means `inline` (on the read path).
+- The legacy `app_rules` key (a separate tab up to v1.3.2) — §159 removed the `_absorbLegacyAppRules` migration and the key is ignored (dropped by the allowlist on import).
 
 ---
 
@@ -597,13 +597,14 @@ The `.srs` binary itself lives separately in `rule_sets/<tag>.srs` (see the [fil
 }
 ```
 
-**§294 — типизация:** kind-ref'ы `servers[]`/`rules[]` типизированы моделью
+**§294 — typing:** the kind refs in `servers[]` and `rules[]` are typed by the model
 `lib/models/dns_ref.dart` (sealed `DnsServerRef` {inline·preset·template} +
-`DnsRuleRef` {inline·srs·preset·template}). **Форма на диске НЕ изменилась** —
-`toJson` байт-совместим (§221 backup); `fromJson` толерантен на чтение
-(legacy full-body / unknown-kind → null, дропаются как в резолвере). Строгий
-`fromJsonStrict` — только на Debug write-пути (`PUT /settings/dns_options/*` →
-400 на битую форму). Резолвер (`resolveDisplayedServers`, VIEW-слой) не тронут.
+`DnsRuleRef` {inline·srs·preset·template}). **The on-disk shape did NOT change** —
+`toJson` is byte-compatible (§221 backup); `fromJson` is tolerant on read (a legacy
+full body or an unknown kind becomes null and is dropped exactly as the resolver
+would). The strict `fromJsonStrict` is used only on the Debug write path
+(`PUT /settings/dns_options/*` → 400 on a malformed shape). The resolver
+(`resolveDisplayedServers`, the VIEW layer) is untouched.
 
 ### `dns_options.servers[i]` — kind-discriminated ref ([§044])
 
@@ -611,22 +612,22 @@ The `.srs` binary itself lives separately in `rule_sets/<tag>.srs` (see the [fil
 {
   "kind":        "template" | "preset" | "inline",
   "enabled":     <bool>,
-  "tag":         "<string>",        // SINGLE source of truth, не дублируется в body
-  "description": "<string>"?,        // optional override; для inline — primary
-  "body":        { … }?,             // только inline; partial sing-box server БЕЗ tag/description/enabled
-  "varValues":   { "<name>": "<value>", … }?  // §117, только template: выбранные значения vars
+  "tag":         "<string>",        // the SINGLE source of truth, not duplicated in body
+  "description": "<string>"?,        // an optional override; for inline it is primary
+  "body":        { … }?,             // inline only; a partial sing-box server WITHOUT tag/description/enabled
+  "varValues":   { "<name>": "<value>", … }?  // §117, template only: the chosen var values
 }
 ```
 
-**Семантика kind:**
+**What each kind means:**
 
-- `template` — ссылка на сервер из шаблона ([§117]: обёртка `{vars, server}`, tag в `server.tag`). Юзер может оверрайднуть `enabled` / `description` и выбрать значения vars (`varValues`: `outbound`-канал, IP-профиль, domain resolver — см. TEMPLATE.md); body резолвится из шаблона подстановкой `@var`'ов (`resolveTemplateDnsServerBody`).
-- `preset` — то же, но из активного preset-bundle (`server_lists` тут не при чём, имеется в виду template preset).
-- `inline` — пользовательский сервер. `body` обязателен. Если tag совпадает с template/preset И shape матчится → builder может схлопнуть в `template`/`preset` ref (см. `_serverShapesMatch`).
+- `template` — a reference to a server from the template ([§117]: a `{vars, server}` wrapper, with the tag in `server.tag`). The user can override `enabled` and `description` and choose var values (`varValues`: the `outbound` channel, the IP profile, the domain resolver — see TEMPLATE.md); the body is resolved from the template by substituting the `@var`s (`resolveTemplateDnsServerBody`).
+- `preset` — the same, but from the active preset bundle (`server_lists` has nothing to do with it; this means a template preset).
+- `inline` — a user-defined server. `body` is required. When the tag matches a template or preset one AND the shape matches, the builder may collapse it into a `template` or `preset` ref (see `_serverShapesMatch`).
 
-**Render order в UI:** `template` → `preset` → `inline` (сорт по `ServerKind.index`, stable внутри группы).
+**Render order in the UI:** `template` → `preset` → `inline` (sorted by `ServerKind.index`, stable within a group).
 
-**Builder** синтезирует `body.tag` обратно при сборке финального sing-box-конфига. В storage tag живёт **только** на ref-level.
+**The builder** synthesizes `body.tag` back when assembling the final sing-box config. In storage the tag lives **only** at the ref level.
 
 ### `dns_options.rules[i]` — [§061]
 
@@ -635,22 +636,22 @@ The `.srs` binary itself lives separately in `rule_sets/<tag>.srs` (see the [fil
   "enabled": <bool>,
   "type":    "user" | "template" | "rule",
   "title":   "<display>",
-  "rule":    { … }?                  // sing-box rule body, для type=user
+  "rule":    { … }?                  // the sing-box rule body, for type=user
 }
 ```
 
-`type` — origin-discriminator (предшественник [§044] `kind`, исторически другое слово).
+`type` is the origin discriminator (the predecessor of [§044]'s `kind` — historically a different word).
 
-`type: template/rule` — orphan-cleanup: title не нашёлся в активном шаблоне/пресете → выбрасывается в `resolveDnsRulesList`.
+`type: template/rule` — orphan cleanup: when the title is not found in the active template or preset, the entry is discarded in `resolveDnsRulesList`.
 
-⚠ §257: у записи `kind: preset` поле `enabled` — **мёртвое**: тумблер
-DNS-блока пресета переехал в магическую var `dns_enable`
-(`custom_rules[].varsValues`, см. TEMPLATE.md «Магические переменные»).
-Запись остаётся только **позиционным якорем** mirror-группы (§117) —
-определяет место DNS-правил пресета в `dns.rules`. Билдер и UI её
-`enabled` не читают; auto-discovery продолжает писать `enabled: true`
-(безвредно). Миграции нет — у всех пресетов с var DNS-блок после
-обновления включён (default true), «кто надо — сам вырубит».
+⚠ §257: on a `kind: preset` entry the `enabled` field is **dead**: the toggle for a
+preset's DNS block moved to the magic var `dns_enable`
+(`custom_rules[].varsValues`, see “Magic variables” in TEMPLATE.md). The entry
+remains only as a **positional anchor** for the mirror group (§117) — it decides
+where the preset's DNS rules sit inside `dns.rules`. Neither the builder nor the UI
+reads its `enabled`; auto-discovery keeps writing `enabled: true`, harmlessly. There
+is no migration — after an update every preset carrying the var has its DNS block on
+(the default is true), and anyone who wants it off can turn it off.
 
 ### Migration history
 
