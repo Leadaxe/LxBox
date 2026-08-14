@@ -3,8 +3,8 @@
 L×Box parses proxy URIs from subscriptions and converts them into [sing-box](https://sing-box.sagernet.org/) outbound (or endpoint) JSON. This document describes every supported protocol, its URI format, parsed parameters, and the resulting sing-box configuration.
 
 **Source code (Parser v2, spec 026):**
-- [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — URI-форматы всех 12 протоколов (vless, vmess, trojan, shadowsocks, hysteria2, naive, tuic, ssh, socks, http, wireguard/awg, masque)
-- [`app/lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart) — парсинг `TransportSpec`, нативный XHTTP (§097, полный набор параметров §127)
+- [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — the URI formats of all 12 protocols (vless, vmess, trojan, shadowsocks, hysteria2, naive, tuic, ssh, socks, http, wireguard/awg, masque)
+- [`app/lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart) — parsing `TransportSpec`, native XHTTP (§097, the full parameter set in §127)
 - [`app/lib/services/parser/json_parsers.dart`](../app/lib/services/parser/json_parsers.dart) — `parseSingboxEntry`, `parseXrayOutbound`
 - [`app/lib/services/parser/ini_parser.dart`](../app/lib/services/parser/ini_parser.dart) — WireGuard INI
 - [`app/lib/services/parser/parse_all.dart`](../app/lib/services/parser/parse_all.dart) — orchestrator
@@ -94,17 +94,17 @@ This is **cargo cult convention** — works because all clients parse identicall
 
 ### Implementation in L×Box
 
-Парсинг в [`app/lib/services/subscription/sources.dart`](../app/lib/services/subscription/sources.dart) (`_metaFromHeaders` + `_parseContentDispositionFilename`). После fetch'а заголовки превращаются в `SubscriptionMeta` и кладутся в `SubscriptionServers.meta`:
+Parsing lives in [`app/lib/services/subscription/sources.dart`](../app/lib/services/subscription/sources.dart) (`_metaFromHeaders` plus `_parseContentDispositionFilename`). After a fetch the headers become a `SubscriptionMeta` and are stored in `SubscriptionServers.meta`:
 
-- `SubscriptionServers.name` ← `profile-title` (с fallback на `content-disposition: filename=...`, v1.3.0+)
+- `SubscriptionServers.name` ← `profile-title` (falling back to `content-disposition: filename=...`, v1.3.0+)
 - `SubscriptionMeta.{totalBytes, uploadBytes, downloadBytes, expireTimestamp}` ← `subscription-userinfo`
 - `SubscriptionMeta.supportUrl` ← `support-url`
 - `SubscriptionMeta.webPageUrl` ← `profile-web-page-url`
-- `SubscriptionServers.updateIntervalHours` ← `profile-update-interval` (используется в [spec 027](./spec/features/027%20subscription%20auto%20update/spec.md))
+- `SubscriptionServers.updateIntervalHours` ← `profile-update-interval` (used by [spec 027](./spec/features/027%20subscription%20auto%20update/spec.md))
 
-User-Agent HTTP-запросов: `LxBox-android/<appVersion>` (напр. `LxBox-android/2.9.0`; бренд-токен с §114, ранее `LxBox Android subscription client` / `SubscriptionParserClient`). Переопределяется per-request через App Settings → Subscriptions → Custom User-Agent (§118). Панели маршрутизируют тело ответа по подстроке `LxBox` в UA (`user_agent.dart`, `resolveSubscriptionUserAgent`).
+The User-Agent of HTTP requests is `LxBox-android/<appVersion>` (for example `LxBox-android/2.9.0`; the brand token since §114, previously `LxBox Android subscription client` / `SubscriptionParserClient`). It can be overridden per request through App Settings → Subscriptions → Custom User-Agent (§118). Panels route the response body by the `LxBox` substring in the UA (`user_agent.dart`, `resolveSubscriptionUserAgent`).
 
-Displayed в subscription detail → **Source tab** → Headers section.
+Displayed in the subscription detail → **Source tab** → Headers section.
 
 ---
 
@@ -126,14 +126,14 @@ vless://UUID@host:port?query_params#label
 | SNI | `sni` or `peer` | TLS server name |
 | Fingerprint | `fp` or `fingerprint` | UTLS fingerprint (defaults to `random`) |
 | ALPN | `alpn` | Comma-separated ALPN values |
-| Public key | `pbk` | REALITY public key. REALITY активируется только при валидном X25519 (base64/base64url → 32 байта); мусор → plain TLS + warning (§169) |
+| Public key | `pbk` | The REALITY public key. REALITY is enabled only for a valid X25519 key (base64/base64url → 32 bytes); garbage falls back to plain TLS plus a warning (§169) |
 | Short ID | `sid` | REALITY short ID (hex, max 16 chars) |
 | Transport type | `type` | `tcp`, `ws`, `grpc`, `http`, `httpupgrade`, `xhttp`, `raw` |
 | Path | `path` | WebSocket/HTTP/HTTPUpgrade path |
 | Host | `host` | WebSocket Host header / HTTP host |
 | Service name | `serviceName` or `service_name` | gRPC service name |
 | Header type | `headerType` | When `http` with `type=tcp`/`raw`, creates HTTP transport |
-| Packet encoding | `packetEncoding` (case-insensitive) | Allow-list: `xudp` / `packetaddr`. xray-style `none` и любой мусор молча дропаются — sing-box `NewOutbound` принимает только эти два значения, любое другое → panic в libbox. |
+| Packet encoding | `packetEncoding` (case-insensitive) | An allow-list of `xudp` / `packetaddr`. The xray-style `none`, and any garbage, is dropped silently — sing-box `NewOutbound` accepts only those two values, and anything else panics inside libbox. |
 | Insecure | `insecure`, `allowInsecure` | Skip certificate verification |
 
 ### sing-box Outbound Mapping
@@ -172,19 +172,19 @@ vless://UUID@host:port?query_params#label
 |------|---------------|-------------------|
 | TCP (raw) | `tcp`, `raw`, empty | No transport block |
 | TCP + HTTP headers | `tcp`/`raw` + `headerType=http` | `{"type": "http", "path": ..., "host": [...]}` |
-| WebSocket | `ws` | `{"type": "ws", "path": ..., "headers": {"Host": ...}}` — `?ed=N` в пути → `max_early_data` (§303, см. заметку ниже) |
+| WebSocket | `ws` | `{"type": "ws", "path": ..., "headers": {"Host": ...}}` — a `?ed=N` in the path becomes `max_early_data` (§303, see the note below) |
 | gRPC | `grpc` | `{"type": "grpc", "service_name": ...}` |
 | HTTP/2 | `http` | `{"type": "http", "path": ..., "host": [...]}` |
 | HTTPUpgrade | `httpupgrade` | `{"type": "httpupgrade", "path": ..., "host": ...}` |
-| XHTTP | `xhttp` | `{"type": "xhttp", "path": ..., "host": ..., "mode": ...}` — нативный с §097, см. [XHTTP transport](#xhttp-transport) |
+| XHTTP | `xhttp` | `{"type": "xhttp", "path": ..., "host": ..., "mode": ...}` — native since §097, see [XHTTP transport](#xhttp-transport) |
 
-> **Note on WebSocket early data (§303).** Xray задаёт early data хвостом пути — `"path": "/api/v2/channel?ed=2560"`. В sing-box это отдельное поле транспорта, а хвост в `path` уходит в HTTP-запрос и даёт `404`. При импорте (URI, Xray JSON, sing-box JSON) хвост срезается, а `ed=N` становится `max_early_data: N`. Имя заголовка при этом **не** подставляется: пустой `early_data_header_name` = ядро шлёт early data в путь (`transport/v2raywebsocket/conn.go`), ровно как Xray для `?ed=`; подстановка `Sec-WebSocket-Protocol` переключила бы режим на header-based и сломала бы совместимость с сервером. Явный `Sec-WebSocket-Protocol` в `wsSettings.headers` по-прежнему читается как обычный заголовок. Для `httpupgrade` такого поля у транспорта нет — хвост срезается, `ed` отбрасывается. Обратный emit в URI склеивает `path?ed=N` назад, чтобы round-trip не терял параметр.
+> **Note on WebSocket early data (§303).** Xray specifies early data as a tail on the path — `"path": "/api/v2/channel?ed=2560"`. In sing-box that is a separate transport field, and a tail left in `path` goes into the HTTP request and produces a `404`. On import (from a URI, Xray JSON or sing-box JSON) the tail is stripped and `ed=N` becomes `max_early_data: N`. The header name is **not** filled in: an empty `early_data_header_name` means the core sends early data in the path (`transport/v2raywebsocket/conn.go`), exactly as Xray does for `?ed=`; filling in `Sec-WebSocket-Protocol` would switch to header-based mode and break compatibility with the server. An explicit `Sec-WebSocket-Protocol` in `wsSettings.headers` is still read as an ordinary header. `httpupgrade` has no such transport field, so the tail is stripped and `ed` is discarded. Emitting back to a URI glues `path?ed=N` together again so the round trip does not lose the parameter.
 >
-> **Вторая форма — плоские `ed`/`eh` (§320).** Часть генераторов кладёт те же параметры отдельными ключами: `?ed=2560&eh=Sec-WebSocket-Protocol` (в Xray JSON — `wsSettings.ed` / `.eh`). Здесь `eh` задан **явно**, то есть провайдер сам указывает header-режим, и тогда `early_data_header_name` эмитится — без этого ядро дописывало бы base64 в путь, а сервер ждал его в заголовке (`404`). Хвост пути имеет приоритет над плоским `ed`: он адресует конкретный путь, а не ссылку целиком. `eh` без `ed` игнорируется — режим early data включается по `max_early_data > 0`, имя заголовка без размера ничего не значит. Для `httpupgrade` плоские `ed`/`eh` не читаются вовсе.
+> **A second form — flat `ed`/`eh` (§320).** Some generators put the same parameters in separate keys: `?ed=2560&eh=Sec-WebSocket-Protocol` (in Xray JSON, `wsSettings.ed` / `.eh`). Here `eh` is given **explicitly**, meaning the provider is asking for header mode, so `early_data_header_name` is emitted — without it the core would append base64 to the path while the server waited for it in a header (`404`). A path tail takes priority over a flat `ed`: it addresses one specific path rather than the whole link. An `eh` with no `ed` is ignored — early data mode is enabled by `max_early_data > 0`, and a header name without a size means nothing. For `httpupgrade` the flat `ed`/`eh` are not read at all.
 >
-> **Двойное percent-кодирование пути (§320).** Агрегаторы отдают `path=%2F%252Fassignment`: `Uri.queryParameters` декодит ровно один раз, и в конфиг уезжало `/%2Fassignment` вместо `//assignment`. Остаток снимается (до 2 проходов) **до** срезки `?ed=`-хвоста, иначе дважды закодированный `%253Fed%253D2560` не распознаётся. Валидность пути при этом не проверяется — эмодзи, `//` и `@` легальны; путь без ведущего слэша ядро дополняет само (`client.go`).
+> **Double percent-encoding of the path (§320).** Aggregators hand out `path=%2F%252Fassignment`: `Uri.queryParameters` decodes exactly once, so `/%2Fassignment` used to reach the config instead of `//assignment`. The remainder is unwrapped (up to two passes) **before** the `?ed=` tail is stripped, otherwise a doubly-encoded `%253Fed%253D2560` is not recognised. The path itself is not validated — emoji, `//` and `@` are all legal, and the core prepends a leading slash itself when one is missing (`client.go`).
 
-> **Note on XHTTP.** С §097 (ядро = fork [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx), build-тег `with_xhttp`) XHTTP эмитится **нативно**: `{"type": "xhttp", ...}` без подмены wire-протокола. Прежний fallback на `httpupgrade` с `UnsupportedTransportWarning` (Parser v2, до v1.8.2 включительно) удалён. XHTTP-специфичные query-ключи — `mode`, `xPaddingBytes`/`x_padding_bytes`, `noGRPCHeader`/`no_grpc_header` (camelCase = Xray-URI, snake = sing-box). С `flow=xtls-rprx-vision` несовместим — Vision живёт только на голом TCP. Подробности: [XHTTP transport](#xhttp-transport).
+> **Note on XHTTP.** Since §097 (the core is the [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) fork with the `with_xhttp` build tag) XHTTP is emitted **natively**: `{"type": "xhttp", ...}` with no substitution of the wire protocol. The former fallback to `httpupgrade` with an `UnsupportedTransportWarning` (Parser v2, up to and including v1.8.2) has been removed. The XHTTP-specific query keys are `mode`, `xPaddingBytes`/`x_padding_bytes` and `noGRPCHeader`/`no_grpc_header` (camelCase is the Xray URI form, snake_case is sing-box). It is incompatible with `flow=xtls-rprx-vision` — Vision only lives on bare TCP. Details: [XHTTP transport](#xhttp-transport).
 
 ### TLS Behavior
 
@@ -194,20 +194,20 @@ vless://UUID@host:port?query_params#label
 - If `security=none`: no TLS block.
 - If port is a known plaintext port (80, 8080, 8880, 2052, 2082, 2086, 2095) and no explicit security: no TLS.
 - Otherwise: TLS enabled with UTLS fingerprint (defaults to `random`).
-- Special flow `xtls-rprx-vision-udp443`: normalized to `xtls-rprx-vision` + `packet_encoding: xudp` (в URI-парсере порт **не** меняется; `server_port: 443` форсится только в Xray-JSON-пути, секция 11).
+- Special flow `xtls-rprx-vision-udp443`: normalized to `xtls-rprx-vision` + `packet_encoding: xudp` (the URI parser does **not** change the port; `server_port: 443` is forced only on the Xray-JSON path, section 11).
 
 ### packet_encoding allow-list
 
-sing-box `vless.NewOutbound` принимает ровно три формы (см. [docs](https://sing-box.sagernet.org/configuration/outbound/vless/)):
+sing-box `vless.NewOutbound` accepts exactly three forms (see the [docs](https://sing-box.sagernet.org/configuration/outbound/vless/)):
 
-| Значение в URI | В outbound JSON | Семантика |
+| Value in the URI | In the outbound JSON | Meaning |
 |----------------|-----------------|-----------|
-| omitted, `""`, `none` | поле не emit'ится | sing-box default |
+| omitted, `""`, `none` | the field is not emitted | the sing-box default |
 | `xudp` / `XUDP` / `Xudp` | `"packet_encoding": "xudp"` | XUDP wrapper (xray) |
 | `packetaddr` / `PacketAddr` | `"packet_encoding": "packetaddr"` | packet-addr (v2ray 5+) |
-| любое другое | поле не emit'ится + warning в лог | защита от libbox panic |
+| anything else | the field is not emitted, plus a warning in the log | protection against a libbox panic |
 
-Xray-style подписки (xray-knife и др.) кладут `packetEncoding=none` имея в виду «без encoding». sing-box эту строку не понимает и панически падает в `format.ToString` при попытке отдать ошибку (`E.New` принимает указатель `*string` вместо разыменованной строки — апстрим-баг). L×Box фильтрует на входе по allow-list, чтобы наружу не уезжало невалидных значений.
+Xray-style subscriptions (xray-knife and others) put `packetEncoding=none` there meaning “no encoding”. sing-box does not understand that string and panics inside `format.ToString` while trying to report the error (`E.New` receives a `*string` pointer instead of a dereferenced string — an upstream bug). L×Box filters on input against the allow-list so that no invalid value ever leaves the app.
 
 ### Reference
 
@@ -292,7 +292,7 @@ Decoded as `method:uuid@host:port`. The method is normalized to a sing-box VMess
 | `h2` | `{"type": "http", "path": ..., "host": [...]}` (forces TLS) |
 | `http` | `{"type": "http", "path": ..., "host": [...]}` |
 | `httpupgrade` | `{"type": "httpupgrade", "path": ..., "host": ...}` |
-| `xhttp` | `{"type": "xhttp", "path": ..., "host": ...}` — нативный с §097, см. [XHTTP transport](#xhttp-transport) |
+| `xhttp` | `{"type": "xhttp", "path": ..., "host": ...}` — native since §097, see [XHTTP transport](#xhttp-transport) |
 
 ### sing-box Outbound Mapping
 
@@ -345,7 +345,7 @@ trojan://password@host:port?query_params#label
 | Fingerprint | `fp` | UTLS fingerprint |
 | ALPN | `alpn` | Comma-separated ALPN |
 | Insecure | `insecure`, `allowInsecure` | Skip cert verify |
-| Transport | `type` | `ws`, `grpc`, `http`, `httpupgrade`, `xhttp` (нативный с §097, см. [XHTTP transport](#xhttp-transport)) |
+| Transport | `type` | `ws`, `grpc`, `http`, `httpupgrade`, `xhttp` (native since §097, see [XHTTP transport](#xhttp-transport)) |
 | Path | `path` | Transport path |
 | Host | `host` | Transport host |
 | Service name | `serviceName` | gRPC service name |
@@ -411,12 +411,12 @@ Both formats are auto-detected. The base64 part before `@` is decoded first; if 
 
 ### SIP003 Plugins
 
-SIP002-URI query несёт SIP003-плагин:
+The SIP002 URI query carries the SIP003 plugin:
 
 | Query key | Format | Description |
 |-----------|--------|-------------|
-| `plugin` | `name;k=v;k=v…` | Имя плагина (до первого `;`) + опции (`obfs-local`, `v2ray-plugin`, …) |
-| `plugin_opts` | `k=v;k=v…` | Опции отдельно, если не переданы внутри `plugin` |
+| `plugin` | `name;k=v;k=v…` | The plugin name (up to the first `;`) plus its options (`obfs-local`, `v2ray-plugin`, …) |
+| `plugin_opts` | `k=v;k=v…` | The options on their own, when not passed inside `plugin` |
 
 ### sing-box Outbound Mapping
 
@@ -435,10 +435,10 @@ SIP002-URI query несёт SIP003-плагин:
 
 ### Notes
 
-- Shadowsocks handles its own encryption; TLS is not applicable. Transport-обфускация возможна только через SIP003-плагин (`plugin`/`plugin_opts` выше) — эмитятся в outbound, когда заданы.
+- Shadowsocks handles its own encryption; TLS is not applicable. Transport obfuscation is only possible through a SIP003 plugin (`plugin`/`plugin_opts` above) — those are emitted into the outbound when set.
 - Unsupported methods cause a parse error (node is skipped).
 - Base64 decoding tries both standard and URL-safe variants, with and without padding.
-- Round-trip: `plugin`/`plugin_opts` эмитятся в sing-box JSON, но share-URI (`toUri`) их **не** пишет — при экспорте в `ss://` плагин теряется.
+- Round-trip: `plugin`/`plugin_opts` are emitted into the sing-box JSON, but the share URI (`toUri`) does **not** write them — exporting to `ss://` loses the plugin.
 
 ### Reference
 
@@ -750,12 +750,12 @@ proxy-http://user:password@host:port?path=...&headers=...#label
 proxy-https://user:password@host:port?path=...&headers=...&sni=...&fp=...&alpn=...&allowInsecure=1#label
 ```
 
-Кастомные схемы вместо голых `http://`/`https://` (§222): голые схемы
-перехватываются `isSubscriptionUrl` **раньше** `isDirectLink` (вставленная
-ссылка стала бы «подпиской»), а в телах подписок промо-строки вида
-`https://t.me/...` превращались бы в мусорные узлы. Схема — дискриминатор
-TLS: `proxy-https://` → `tls.enabled=true`. Default port: **80** /
-**443** соответственно.
+Custom schemes are used instead of bare `http://` / `https://` (§222): the bare
+schemes are intercepted by `isSubscriptionUrl` **before** `isDirectLink` (a pasted
+link would become a “subscription”), and promotional lines like `https://t.me/...`
+inside subscription bodies would turn into junk nodes. The scheme is the TLS
+discriminator: `proxy-https://` → `tls.enabled=true`. The default ports are **80**
+and **443** respectively.
 
 ### Parsed Parameters
 
@@ -763,12 +763,12 @@ TLS: `proxy-https://` → `tls.enabled=true`. Default port: **80** /
 |-----------|--------|-------------|
 | Username | userinfo (before `:`) | Basic-auth username (`user`, `user:pass`, `:pass`) |
 | Password | userinfo (after `:`) | Basic-auth password |
-| Path | `path` | sing-box `path` (query-параметр, не URI-path — проще round-trip) |
-| Headers | `headers` | Сериализация как naive `extra-headers`: `Header1: V1\r\nHeader2: V2`, URL-encoded |
-| SNI | `sni` / `peer` / `host` | Только `proxy-https://`; default = host (конвенции trojan, `parseTrojanTls`) |
-| Fingerprint | `fp` | uTLS fingerprint (только `proxy-https://`) |
-| ALPN | `alpn` | Comma-separated (только `proxy-https://`) |
-| Insecure | `allowInsecure` и алиасы | `tls.insecure` → `InsecureTlsWarning` |
+| Path | `path` | The sing-box `path` (a query parameter rather than a URI path — it round-trips more easily) |
+| Headers | `headers` | Serialized like naive `extra-headers`: `Header1: V1\r\nHeader2: V2`, URL-encoded |
+| SNI | `sni` / `peer` / `host` | `proxy-https://` only; the default is the host (the trojan convention, `parseTrojanTls`) |
+| Fingerprint | `fp` | The uTLS fingerprint (`proxy-https://` only) |
+| ALPN | `alpn` | Comma-separated (`proxy-https://` only) |
+| Insecure | `allowInsecure` and its aliases | `tls.insecure` → `InsecureTlsWarning` |
 
 ### sing-box Outbound Mapping
 
@@ -788,12 +788,12 @@ TLS: `proxy-https://` → `tls.enabled=true`. Default port: **80** /
 
 ### Notes
 
-- Все поля кроме `server`/`server_port` опциональны — пустые не эмитятся.
-- JSON-путь (`parseSingboxEntry`) принимает listable-значения `headers`
-  (string | [string, ...]) — как naive `extra_headers`.
-- REALITY в URI не переносится (как у trojan) — JSON-путь сохраняет.
-- Wizard-таб `HTTP` (§222): Tag/Host/Port/Username/Password + switch
-  «HTTPS (TLS)»; тонкая настройка TLS — через JSON-редактор ноды.
+- Every field except `server` / `server_port` is optional — empty ones are not emitted.
+- The JSON path (`parseSingboxEntry`) accepts listable `headers` values
+  (string | [string, ...]) — just like naive `extra_headers`.
+- REALITY does not travel in the URI (as with trojan) — the JSON path preserves it.
+- The wizard's `HTTP` tab (§222): Tag/Host/Port/Username/Password plus an
+  “HTTPS (TLS)” switch; fine-grained TLS settings go through the node's JSON editor.
 
 ### Reference
 
@@ -811,7 +811,7 @@ wireguard://PRIVATE_KEY@host:port?publickey=...&address=...&...#label
 
 The private key is URL-encoded in the userinfo position. Default port: **51820**.
 
-Схемы-алиасы: `wireguard://`, `wg://`, `awg://` — все три парсятся одной endpoint-логикой (§097). Наличие AWG-полей в query (любой из схем) делает узел AmneziaWG — см. [секцию 8.5](#85-amneziawg-awg-awg2).
+Scheme aliases: `wireguard://`, `wg://` and `awg://` — all three are parsed by the same endpoint logic (§097). The presence of AWG fields in the query (under any of the schemes) makes the node an AmneziaWG one — see [section 8.5](#85-amneziawg-awg-awg2).
 
 ### Parsed Parameters
 
@@ -820,7 +820,7 @@ The private key is URL-encoded in the userinfo position. Default port: **51820**
 | Private key | userinfo | WireGuard private key |
 | Public key | `publickey` | Peer public key (required) |
 | Address | `address` | Comma-separated local addresses (required) |
-| MTU | `mtu` | MTU value (default: 1408; AWG-узлы — clamp `min(mtu, 1280)`, см. [8.5](#85-amneziawg-awg-awg2)) |
+| MTU | `mtu` | The MTU value (default 1408; AWG nodes are clamped to `min(mtu, 1280)`, see [8.5](#85-amneziawg-awg-awg2)) |
 | Pre-shared key | `presharedkey` | Peer pre-shared key |
 | Keepalive | `keepalive` | Persistent keepalive interval (seconds) |
 | Allowed IPs | `allowedips` | Peer allowed IPs (default: `0.0.0.0/0, ::/0`) |
@@ -865,9 +865,9 @@ The private key is URL-encoded in the userinfo position. Default port: **51820**
 
 ## 8.5 AmneziaWG (AWG, AWG2)
 
-Добавлено в §097 (спека [`097`](./spec/features/097%20awg2-amneziawg2/spec.md)) вместе со сменой bundled-ядра на fork [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (build-тег `with_awg`, `option.AmneziaWGOptions`; пин версии — `app/android/libbox.version`). AmneziaWG = WireGuard + обфускация: те же ключи/peers/handshake, плюс набор параметров, маскирующих WG-трафик от DPI.
+Added in §097 (the [`097`](./spec/features/097%20awg2-amneziawg2/spec.md) spec) together with the switch of the bundled core to the [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) fork (the `with_awg` build tag, `option.AmneziaWGOptions`; the version pin is `app/android/libbox.version`). AmneziaWG is WireGuard plus obfuscation: the same keys, peers and handshake, plus a set of parameters that disguise WG traffic from DPI.
 
-Все поля **config-only** — по сети не негоциируются и **должны совпадать у клиента и сервера**. Mismatch = тихий облом: handshake может пройти, данные не идут.
+Every field is **config-only** — nothing is negotiated over the wire, and the values **must match on the client and the server**. A mismatch fails silently: the handshake may succeed while no data flows.
 
 ### URI Format
 
@@ -875,45 +875,45 @@ The private key is URL-encoded in the userinfo position. Default port: **51820**
 awg://PRIVATE_KEY@host:port?publickey=...&address=...&jc=4&jmin=40&jmax=70&s1=0&s2=0&h1=...&i1=...#label
 ```
 
-`awg://` — схема-алиас той же endpoint-логики, что `wireguard://` / `wg://` (секция 8). AWG-поля распознаются в query **любой** из трёх схем: есть хотя бы одно поле → узел AmneziaWG (`WireguardSpec.awg != null`), нет ни одного → обычный WG (backward-compat, поведение не меняется).
+`awg://` is a scheme alias for the same endpoint logic as `wireguard://` / `wg://` (section 8). AWG fields are recognised in the query of **any** of the three schemes: with at least one field present the node is AmneziaWG (`WireguardSpec.awg != null`), and with none it is ordinary WG (backward compatible, with unchanged behaviour).
 
-### Поля
+### Fields
 
-| Ключ | Тип | Назначение | Уровень |
+| Key | Type | Purpose | Level |
 |------|-----|-----------|--------|
-| `jc`, `jmin`, `jmax` | int | junk-пакеты перед handshake: количество и границы размера | AWG 1.0 |
-| `s1`, `s2` | int | junk-prefix у init/response handshake-пакетов | AWG 1.0 |
-| `s3`, `s4` | int | junk-prefix у cookie-reply (`s3`) и transport/data-пакетов (`s4`) | AWG 2.0 |
-| `h1`–`h4` | int \| `"N-M"` | magic headers — подмена типов пакетов. Одиночное `N` = 1.0; диапазон `N-M` = ranged headers (§112) | AWG 1.0 / 2.0 |
-| `i1`–`i5` | string | CPS decoy-пакеты, тег-формат `<b 0xHEX><r N>…` | AWG 1.5 |
-| `id`, `ip`, `ib` | string | masquerade-sugar (WireSock-style) над `i1` — ядро само разворачивает в CPS-пакет `i1`. **Взаимоисключающи с явным `i1`** (оба сразу → ошибка старта ядра). §143 | AWG 1.5 |
+| `jc`, `jmin`, `jmax` | int | Junk packets before the handshake: the count and the size bounds | AWG 1.0 |
+| `s1`, `s2` | int | A junk prefix on the init and response handshake packets | AWG 1.0 |
+| `s3`, `s4` | int | A junk prefix on the cookie reply (`s3`) and on transport/data packets (`s4`) | AWG 2.0 |
+| `h1`–`h4` | int \| `"N-M"` | Magic headers — substituting the packet types. A single `N` is 1.0; a range `N-M` is ranged headers (§112) | AWG 1.0 / 2.0 |
+| `i1`–`i5` | string | CPS decoy packets, in the tag format `<b 0xHEX><r N>…` | AWG 1.5 |
+| `id`, `ip`, `ib` | string | Masquerade sugar (WireSock-style) over `i1` — the core expands it into an `i1` CPS packet itself. **Mutually exclusive with an explicit `i1`** (both at once is a core startup error). §143 | AWG 1.5 |
 
-- Числовые поля — uint32, эмитятся как JSON **number**.
-- `h1`–`h4` (§112): значение `N` → `int` (строка-число `"5"` нормализуется в `int 5`), диапазон `N-M` → `String`, эмитится JSON **string** (контракт ядра ≥ `lx.6`). Глубже не валидируем (start ≤ end, uint32, непересечение диапазонов) — это делает ядро с явной ошибкой на старте; молчаливый drop здесь дал бы тихо сломанный handshake.
-- `i1`–`i5` — строки, **регистр сохраняется** как есть (case-sensitive, менять нельзя).
-- Битое число в query → поле молча пропускается (forward-compat, как `mtu`/`keepalive`), парс узла не валится. Для `h*` «битое» = не подходящее под `N`/`N-M`.
+- The numeric fields are uint32 and are emitted as a JSON **number**.
+- `h1`–`h4` (§112): a value of `N` becomes an `int` (the numeric string `"5"` is normalised to `int 5`), while a range `N-M` becomes a `String` and is emitted as a JSON **string** (the core contract from `lx.6` onwards). We do not validate further (start ≤ end, uint32, non-overlapping ranges) — the core does that with an explicit startup error, and dropping silently here would produce a quietly broken handshake.
+- `i1`–`i5` are strings and **case is preserved** exactly (they are case-sensitive and must not be altered).
+- A malformed number in the query means the field is skipped silently (forward compatibility, as with `mtu` and `keepalive`) and parsing the node does not fail. For `h*`, “malformed” means it fits neither `N` nor `N-M`.
 
-> **`reserved` ≠ `reserved_zero[3]` — разные сущности на одних байтах.**
-> В терминологии LxBox `reserved` — это **Cloudflare WARP client_id**, 3 байта, эмитится **per-peer** (секция 8, `reserved: [b0,b1,b2]`).
-> В спеке WireGuard `reserved_zero[3]` — это байты `[1..3]` заголовка пакета, идущие сразу за message type `[0]`; magic headers `h1`–`h4` пишут во **все 4 байта** `[0..3]` целиком (uint32), то есть перезаписывают именно `reserved_zero`.
-> Байты физически одни и те же, смысл разный. Смешение уже приводило к реальному багу: безусловная очистка `b[1:4]` под WARP-client_id затирала ranged magic (фикс — ядро `lx.9`). При работе с любым из двух полей уточнять, о каком идёт речь.
+> **`reserved` ≠ `reserved_zero[3]` — different things sharing the same bytes.**
+> In LxBox terminology `reserved` is the **Cloudflare WARP client_id**, 3 bytes, emitted **per peer** (section 8, `reserved: [b0,b1,b2]`).
+> In the WireGuard spec `reserved_zero[3]` means bytes `[1..3]` of the packet header, right after the message type at `[0]`; the magic headers `h1`–`h4` write **all 4 bytes** `[0..3]` at once (as a uint32), which is to say they overwrite exactly that `reserved_zero`.
+> The bytes are physically the same; the meaning is not. Conflating them has already caused a real bug: unconditionally clearing `b[1:4]` for the WARP client_id wiped out ranged magic (fixed in core `lx.9`). When working with either field, be explicit about which one you mean.
 
-Модель: класс `Awg` в [`node_spec.dart`](../app/lib/models/node_spec.dart) (`WireguardSpec.awg`, `null` = обычный WG). Round-trip полный: URI / INI / sing-box JSON → `Awg` → `emit()` / `toUri()` без потерь.
+The model is the `Awg` class in [`node_spec.dart`](../app/lib/models/node_spec.dart) (`WireguardSpec.awg`, where `null` means ordinary WG). The round trip is complete: URI / INI / sing-box JSON → `Awg` → `emit()` / `toUri()` with no loss.
 
 ### MTU clamp
 
-Для AWG-узлов клиентский MTU **клампится: `min(mtu, 1280)`**; без явного `mtu` — дефолт **1280** (`awgClampMtu` в [`uri_utils.dart`](../app/lib/services/parser/uri_utils.dart)). Обычный WG не трогаем (дефолт 1408, как было).
+For AWG nodes the client MTU is **clamped to `min(mtu, 1280)`**; with no explicit `mtu` the default is **1280** (`awgClampMtu` in [`uri_utils.dart`](../app/lib/services/parser/uri_utils.dart)). Ordinary WG is left alone (the default stays 1408).
 
-Почему 1280:
-- рекомендованный клиентский MTU самой AmneziaWG и минимальный IPv6 MTU → безопасно на любом пути (PPPoE 1492, mobile, вложенные туннели);
-- «точный» потолок `1500 − 60 − max(s3, s4)` хрупок — предполагает path-MTU ровно 1500, чего у AWG-юзеров обычно нет;
-- асимметрия рисков: занижение лишь чуть мельчит пакеты, завышение — тихий облом (handshake есть, данных нет).
+Why 1280:
+- it is both AmneziaWG's own recommended client MTU and the minimum IPv6 MTU, so it is safe on any path (PPPoE 1492, mobile, nested tunnels);
+- the “exact” ceiling of `1500 − 60 − max(s3, s4)` is fragile — it assumes a path MTU of exactly 1500, which AWG users usually do not have;
+- the risks are asymmetric: setting it too low only makes packets slightly smaller, while setting it too high fails silently (the handshake works, no data flows).
 
-Явно заниженный MTU (≤ 1280) уважается как есть.
+An explicitly lower MTU (≤ 1280) is respected as given.
 
 ### INI
 
-AWG-поля читаются из `[Interface]`-секции стандартного WireGuard INI (см. секцию 9):
+AWG fields are read from the `[Interface]` section of a standard WireGuard INI (see section 9):
 
 ```ini
 [Interface]
@@ -931,11 +931,11 @@ I1 = <b 0xffffffff><r 16>
 ...
 ```
 
-Ключ case-insensitive (`Jc` ≙ `jc`), регистр **значения** сохраняется. При конвертации INI → URI поля прокидываются в query (`i*` URL-эскейпятся).
+Keys are case-insensitive (`Jc` ≙ `jc`), while the case of the **value** is preserved. Converting INI → URI passes the fields through into the query (`i*` are URL-escaped).
 
 ### sing-box-lx Endpoint Mapping
 
-Поля идут в **корень endpoint'а** (рядом с `mtu`/`address`/`private_key`, **не** per-peer):
+The fields go into the **root of the endpoint** (next to `mtu` / `address` / `private_key`, **not** per peer):
 
 ```jsonc
 {
@@ -944,7 +944,7 @@ I1 = <b 0xffffffff><r 16>
   "mtu": 1280,
   "address": ["10.8.1.2/32"],
   "private_key": "<private_key>",
-  "peers": [ /* как в секции 8 */ ],
+  "peers": [ /* as in section 8 */ ],
   "jc": 4, "jmin": 40, "jmax": 70,
   "s1": 0, "s2": 0,
   "h1": 1234567890, "h2": 1234567891, "h3": 1234567892, "h4": 1234567893,
@@ -952,45 +952,45 @@ I1 = <b 0xffffffff><r 16>
 }
 ```
 
-Ranged headers (§112) — диапазоны строками, одиночные числами, можно смешивать:
+Ranged headers (§112) — ranges as strings, single values as numbers, and the two can be mixed:
 
 ```jsonc
   "h1": "43613244-384550127", "h2": "826869626-2105069164",
   "h3": "2124774725-2141151992", "h4": "2144594503-2146278491",
 ```
 
-Обратный парс (JSON-редактор, Smart-Paste) собирает те же поля из корня entry (`Awg.fromJson` в `parseSingboxEntry`).
+Parsing back (the JSON editor, Smart-Paste) collects the same fields from the root of the entry (`Awg.fromJson` inside `parseSingboxEntry`).
 
-### Версии AmneziaWG: awg / awg1.5 / awg2 (§148)
+### AmneziaWG versions: awg / awg1.5 / awg2 (§148)
 
-Subtitle узла и variant-фильтр (§102/§103) различают **версию AmneziaWG** структурно — по наличию полей в конфиге ([`config_node.dart`](../app/lib/models/config_node.dart)). Соответствует официальному версионированию Amnezia (у них это явные версии формата конфига, с инструкцией миграции 1.0→1.5). База — по старшему присутствующему маркеру (приоритет сверху вниз):
+A node's subtitle and the variant filter (§102/§103) tell the **AmneziaWG version** apart structurally, by which fields are present in the config ([`config_node.dart`](../app/lib/models/config_node.dart)). This matches Amnezia's own versioning (they publish explicit config-format versions, with migration instructions for 1.0→1.5). The verdict comes from the highest marker present (priority top to bottom):
 
-| Лейбл | Версия | Что добавила версия | Маркер в конфиге |
+| Label | Version | What the version added | The marker in the config |
 |-------|--------|---------------------|------------------|
-| `awg2` | 2.0 | Динамика вместо статики: диапазоны заголовков, random-padding на transport-сообщения | ranged-заголовок `h1`–`h4` (`"N-M"`, §112) **или** `s3`/`s4` |
-| `awg1.5` | 1.5 | Signature-пакеты (CPS) — мимикрия под реальный протокол (hex-снимок, напр. QUIC Initial), шлётся до junk-цепочки | любой из `i1`–`i5` |
-| `awg` | 1.0 | Базовая обфускация поверх WireGuard | `jc`/`jmin`/`jmax` (junk), `s1`/`s2` (init-padding), одиночные `h1`–`h4` (magic-заголовки) |
-| — | — | обычный WG | ни одного AWG-поля → security-слот пуст |
+| `awg2` | 2.0 | Dynamics instead of static values: header ranges and random padding on transport messages | a ranged `h1`–`h4` header (`"N-M"`, §112) **or** `s3`/`s4` |
+| `awg1.5` | 1.5 | Signature packets (CPS) — mimicry of a real protocol (a hex snapshot, e.g. a QUIC Initial), sent before the junk chain | any of `i1`–`i5` |
+| `awg` | 1.0 | Basic obfuscation on top of WireGuard | `jc`/`jmin`/`jmax` (junk), `s1`/`s2` (init padding), single-valued `h1`–`h4` (magic headers) |
+| — | — | ordinary WG | no AWG field at all → the security slot is empty |
 
-**Водораздел 1.0→1.5** — появление `I1` (официальная инструкция Amnezia: «добавить `I1` после строки `H4`»). `I2`–`I5` — дополнительные signature-пакеты той же версии 1.5. **Водораздел 1.5→2.0** — переход со статичных `H1`–`H4` на динамические диапазоны (+ `s3`/`s4`-padding); реальный 2.0-экспорт может содержать одновременно ranged-H, `s3`/`s4` и `i*` — старший маркер (2.0) выигрывает.
+**The 1.0→1.5 watershed** is the appearance of `I1` (Amnezia's official instruction: “add `I1` after the `H4` line”). `I2`–`I5` are additional signature packets of that same 1.5. **The 1.5→2.0 watershed** is the move from static `H1`–`H4` to dynamic ranges (plus `s3`/`s4` padding); a real 2.0 export can carry ranged H, `s3`/`s4` and `i*` all at once — the highest marker (2.0) wins.
 
-Суффикс `+` ставится при наличии masquerade-sugar `ip`/`id`/`ib` (§143). Ядро 009 само разворачивает их в CPS-пакет `i1`, т.е. masquerade **сам по себе = версия 1.5**. Поэтому `awg+` невозможен:
+The `+` suffix is added when the masquerade sugar `ip`/`id`/`ib` is present (§143). Core 009 expands those into an `i1` CPS packet itself, which means masquerade **on its own equals version 1.5**. That is why `awg+` cannot exist:
 
-| База (до суффикса) | + masquerade |
+| Base (before the suffix) | + masquerade |
 |--------------------|--------------|
 | `awg2` (2.0) | `awg2+` |
-| `awg1.5` / `awg` / нет AWG-полей | `awg1.5+` |
+| `awg1.5` / `awg` / no AWG fields | `awg1.5+` |
 
-masquerade-поля взаимоисключающи с явным `i1` на уровне ядра (оба → ошибка старта), но лейбл считается по сырому JSON до валидации — потому суффикс проверяется независимо.
+The masquerade fields are mutually exclusive with an explicit `i1` at the core level (both at once is a startup error), but the label is derived from the raw JSON before validation — which is why the suffix is checked independently.
 
-### Требование к ядру
+### The core requirement
 
-Работает только на бандленном fork-ядре `sing-box-lx` (build-тег `with_awg`). Стоковый upstream sing-box этих полей не знает и **отвергает конфиг на load**. Ranged headers (`"h1": "N-M"` строкой) требуют ядро ≥ `v1.13.13-lx.6` — старое ядро падает на unmarshal такого конфига (поэтому §112 перепинивает [libbox.version](../app/android/libbox.version) в том же коммите).
+This only works on the bundled `sing-box-lx` fork core (the `with_awg` build tag). Stock upstream sing-box does not know these fields and **rejects the config at load time**. Ranged headers (`"h1": "N-M"` as a string) require a core of at least `v1.13.13-lx.6` — an older core dies unmarshalling such a config (which is why §112 re-pins [libbox.version](../app/android/libbox.version) in the same commit).
 
 ### Reference
 
 - AmneziaWG: https://docs.amnezia.org/documentation/amnezia-wg/
-- Fork ядра: https://github.com/Leadaxe/sing-box-lx
+- The core fork: https://github.com/Leadaxe/sing-box-lx
 
 ---
 
@@ -1022,7 +1022,7 @@ Auto-detected when input contains both `[Interface]` and `[Peer]` sections.
 
 The INI config is converted to a `wireguard://` URI internally using `wireGuardConfigToUri()`:
 
-1. Parse `[Interface]`: `PrivateKey`, `Address`, `MTU` + AWG-поля `Jc`/`Jmin`/`Jmax`/`S1`–`S4`/`H1`–`H4`/`I1`–`I5` (§097, см. [8.5](#85-amneziawg-awg-awg2); ключ case-insensitive, регистр значения сохраняется, `i*` URL-эскейпятся в query)
+1. Parse `[Interface]`: `PrivateKey`, `Address`, `MTU` plus the AWG fields `Jc`/`Jmin`/`Jmax`/`S1`–`S4`/`H1`–`H4`/`I1`–`I5` (§097, see [8.5](#85-amneziawg-awg-awg2); keys are case-insensitive, the case of the value is preserved, and `i*` are URL-escaped in the query)
 2. Parse `[Peer]`: `PublicKey`, `Endpoint` (host:port), `PresharedKey`, `PersistentKeepalive`, `Reserved`/`ClientId` (WARP client_id, §126)
 3. Construct: `wireguard://host:port?publickey=...&privatekey=...&address=...&...#WireGuard`
 4. The resulting URI is then parsed by the standard WireGuard parser (see section 8).
@@ -1039,7 +1039,7 @@ Missing any of these throws a `FormatException`.
 
 ## 9.2 Amnezia vpn:// Link
 
-Добавлено в §110 (task spec [`110`](./spec/tasks/110-amnezia-vpn-link-import.md)). Контейнерный share-формат Amnezia / awg2; `.vpn`-файл содержит ту же строку.
+Added in §110 (the task spec [`110`](./spec/tasks/110-amnezia-vpn-link-import.md)). This is Amnezia's container share format for awg2; a `.vpn` file holds the same string.
 
 ### Format
 
@@ -1047,24 +1047,24 @@ Missing any of these throws a `FormatException`.
 vpn://<base64url( qCompress(JSON, 8) )>
 ```
 
-- base64url **без padding** (алфавит `-_`, `Base64UrlEncoding | OmitTrailingEquals`); padded и standard-варианты тоже принимаются (`decodeBase64Safe`).
-- `qCompress` = 4 байта big-endian (длина распакованного) + стандартный zlib-поток. Несжатый payload (голый base64-JSON) — fallback, паритет с `importController` Amnezia.
-- В JSON: `containers[]` → под-объекты `awg` / `wireguard` → `last_config` (JSON-строка; защитно принимаем и объект) → `config` = готовый WG/AWG INI (секция 9). Плейсхолдеры `$PRIMARY_DNS`/`$SECONDARY_DNS` подставляются из корневых `dns1`/`dns2`.
+- base64url **without padding** (the `-_` alphabet, `Base64UrlEncoding | OmitTrailingEquals`); the padded and standard variants are accepted too (`decodeBase64Safe`).
+- `qCompress` is 4 big-endian bytes (the uncompressed length) followed by a standard zlib stream. An uncompressed payload (bare base64 JSON) is the fallback, matching Amnezia's `importController`.
+- Inside the JSON: `containers[]` → the `awg` / `wireguard` sub-objects → `last_config` (a JSON string; we defensively accept an object too) → `config`, a ready-made WG/AWG INI (section 9). The `$PRIMARY_DNS` / `$SECONDARY_DNS` placeholders are filled in from the root-level `dns1` / `dns2`.
 
 ### Detection / Flow
 
-Шаг 0 в `decode()` ([body_decoder.dart](../app/lib/services/parser/body_decoder.dart)): `startsWith('vpn://')` → [`amnezia_link.dart`](../app/lib/services/parser/amnezia_link.dart) → `AmneziaConfig(iniTexts)` → `parseAll` → каждый INI через `parseWireguardIni`. Все WG/AWG контейнеры ссылки становятся нодами **одного** `UserServer` (`rawBody` = оригинальная ссылка, персист ре-парсит тем же путём); прочие протоколы Amnezia (openvpn/xray/cloak/…) скипаются; нет ни одного WG/AWG → `DecodeFailure` с явной причиной.
+Step 0 in `decode()` ([body_decoder.dart](../app/lib/services/parser/body_decoder.dart)): `startsWith('vpn://')` → [`amnezia_link.dart`](../app/lib/services/parser/amnezia_link.dart) → `AmneziaConfig(iniTexts)` → `parseAll` → each INI through `parseWireguardIni`. Every WG/AWG container in the link becomes a node of **one** `UserServer` (`rawBody` is the original link, and persistence re-parses through the same path); Amnezia's other protocols (openvpn/xray/cloak/…) are skipped; if there is no WG/AWG at all the result is a `DecodeFailure` with an explicit reason.
 
 ### Limits
 
-- Ссылка ≤ 64 KiB (`maxURILength`), claimed uncompressed size ≤ 4 MiB — защита от zlib-бомб.
-- Reference: [config-decoder](https://github.com/amnezia-vpn/config-decoder) (эталон формата), `exportController.cpp` / `importController.cpp` в [amnezia-client](https://github.com/amnezia-vpn/amnezia-client).
+- The link must be ≤ 64 KiB (`maxURILength`) and the claimed uncompressed size ≤ 4 MiB — protection against zlib bombs.
+- Reference: [config-decoder](https://github.com/amnezia-vpn/config-decoder) (the reference implementation of the format), plus `exportController.cpp` / `importController.cpp` in [amnezia-client](https://github.com/amnezia-vpn/amnezia-client).
 
 ---
 
 ## 9.5 TUIC v5
 
-Добавлен в Parser v2 (спека [`026`](./spec/features/026%20parser%20v2/spec.md)). В v1 парсинг TUIC отсутствовал.
+Added in Parser v2 (the [`026`](./spec/features/026%20parser%20v2/spec.md) spec). v1 had no TUIC parsing at all.
 
 ### URI format
 
@@ -1072,17 +1072,17 @@ vpn://<base64url( qCompress(JSON, 8) )>
 tuic://<UUID>:<PASSWORD>@<host>:<port>?<params>#<label>
 ```
 
-### Параметры
+### Parameters
 
-| Ключ | Значение |
+| Key | Value |
 |------|---------|
 | `congestion_control` | `bbr` \| `cubic` \| `new_reno` (default `cubic`) |
 | `udp_relay_mode` | `native` \| `quic` (default `native`) |
-| `alpn` | CSV список (`h3`, `h3-29`) |
-| `sni` | SNI для TLS |
-| `allow_insecure` / `insecure` | `1` \| `true` — пропустить проверку сертификата |
-| `disable_sni` | `1` — не отправлять SNI |
-| `reduce_rtt` | `1` — включить 0-RTT / early data |
+| `alpn` | A CSV list (`h3`, `h3-29`) |
+| `sni` | The SNI for TLS |
+| `allow_insecure` / `insecure` | `1` \| `true` — skip certificate verification |
+| `disable_sni` | `1` — do not send an SNI |
+| `reduce_rtt` | `1` — enable 0-RTT / early data |
 
 ### sing-box outbound (emit)
 
@@ -1114,20 +1114,20 @@ tuic://<UUID>:<PASSWORD>@<host>:<port>?<params>#<label>
 
 ## 9.6 MASQUE (Cloudflare WARP)
 
-Транспорт WARP по **RFC 9484 (CONNECT-IP over MASQUE)** — IP-туннель поверх
-QUIC/HTTP-3, с fallback на HTTP/2. Добавлен в **v2.9.0** (§130; ядро sing-box-lx
-SPEC 021, `type: masque` через `outbound.Register`). Даёт другой пул выходных нод
-Cloudflare (часто иностранные IP) и для DPI выглядит как обычный HTTPS/QUIC к
-Cloudflare на 443.
+A WARP transport following **RFC 9484 (CONNECT-IP over MASQUE)** — an IP tunnel
+over QUIC/HTTP-3 with a fallback to HTTP/2. Added in **v2.9.0** (§130; sing-box-lx
+core SPEC 021, `type: masque` through `outbound.Register`). It gives access to a
+different pool of Cloudflare exit nodes (often foreign IPs) and looks to DPI like
+ordinary HTTPS/QUIC to Cloudflare on 443.
 
-MASQUE-узлы создаются через **Get WARP**-визард (ECDSA P-256 регистрируется
-на устройстве, `_addMasqueNode` → `account.toMasqueUri()` → `parseMasqueUri`),
-но имеют полноценный round-trip через `masque://` URI — парсятся из paste/подписки
-так же, как остальные протоколы.
+MASQUE nodes are created through the **Get WARP** wizard (an ECDSA P-256 key is
+registered on the device, `_addMasqueNode` → `account.toMasqueUri()` →
+`parseMasqueUri`), but they round-trip fully through a `masque://` URI — they are
+parsed from a paste or a subscription just like every other protocol.
 
-> **Импорт чужих Clash-YAML MASQUE-конфигов не поддерживается** — Clash YAML в
-> L×Box не парсится (для любых протоколов). MASQUE поднимается только своей
-> регистрацией или из `masque://` URI.
+> **Importing third-party Clash YAML MASQUE configs is not supported** — L×Box
+> does not parse Clash YAML at all (for any protocol). MASQUE comes up only
+> through our own registration or from a `masque://` URI.
 
 ### URI Format
 
@@ -1135,44 +1135,45 @@ MASQUE-узлы создаются через **Get WARP**-визард (ECDSA P
 masque://<privKeyDer>@<host>:<port>?publickey=<serverPubDer>&address=<v4,v6>&profile=cloudflare&vhttp=h3[&sni=...][&disable_sni=1][&mtu=1280][&idle_timeout=5m][&keep_alive=30s]#<label>
 ```
 
-Ключи — base64(DER) ECDSA P-256: `userInfo` (до `@`) = наш приватник (SEC1),
-`publickey` = серверный pubkey (PKIX, для pinning). Сырой `/` в base64
-экранируется (§106). Порт по умолчанию — `443`.
+The keys are base64(DER) ECDSA P-256: `userInfo` (before the `@`) is our private
+key (SEC1) and `publickey` is the server's public key (PKIX, used for pinning). A
+raw `/` inside the base64 is escaped (§106). The default port is `443`.
 
 ### Parsed Parameters
 
-| Ключ | Значение |
+| Key | Value |
 |------|----------|
-| userInfo / `privatekey` / `private_key` | base64(SEC1 DER) приватника (**секрет**), обязателен |
-| `publickey` / `public_key` | base64(PKIX DER) серверного pubkey, обязателен |
-| `address` | CSV локальных адресов туннеля (`v4,v6`), обязателен; авто-CIDR (`/32`//`128`) |
+| userInfo / `privatekey` / `private_key` | base64(SEC1 DER) of the private key (**a secret**), required |
+| `publickey` / `public_key` | base64(PKIX DER) of the server's public key, required |
+| `address` | A CSV of the tunnel's local addresses (`v4,v6`), required; the CIDR is added automatically (`/32` / `/128`) |
 | `profile` | `cloudflare` (default) \| `standard` |
-| `vhttp` | версия HTTP: `h3` — QUIC (default) \| `h2`. §393; legacy-имя `network` принимается на входе |
-| `sni` | TLS SNI; пусто = дефолт ядра (с lx.25-rc.4 — `www.cloudflare.com`) |
-| `disable_sni` | `1`/`true` → ClientHello без SNI. НЕ синоним пустого `sni` (тот подменяется дефолтом профиля). §393 |
+| `vhttp` | The HTTP version: `h3` for QUIC (the default) \| `h2`. §393; the legacy name `network` is still accepted on input |
+| `sni` | The TLS SNI; empty means the core's default (`www.cloudflare.com` since lx.25-rc.4) |
+| `disable_sni` | `1`/`true` produces a ClientHello with no SNI. NOT a synonym for an empty `sni` (which is replaced by the profile's default). §393 |
 | `mtu` | int, default `1280` |
-| `idle_timeout` | Go-duration idle-suspend туннеля (пусто = дефолт ядра `5m`; отрицательное = выкл, §128) |
-| `keep_alive` | Go-duration QUIC keepalive (пусто = `30s`; только `vhttp=h3`) |
+| `idle_timeout` | A Go duration for the tunnel's idle-suspend (empty means the core's default of `5m`; a negative value disables it, §128) |
+| `keep_alive` | A Go duration for the QUIC keepalive (empty means `30s`; `vhttp=h3` only) |
 
-**§393 — два поколения имён.** Эмит пишет только новые (`vhttp`, вложенный
-`tls{}`); вход принимает и старые (`network`, плоский `sni`) — ими написаны
-URI, выпущенные до миграции, и чужие ссылки. При обоих именах сразу выигрывает
-новое. Ядро на такой паре с РАЗНЫМИ значениями падает, поэтому одновременно
-старое и новое имя мы не пишем никогда.
+**§393 — two generations of names.** The emitter writes only the new ones
+(`vhttp`, a nested `tls{}`); the input side also accepts the old ones (`network`,
+a flat `sni`), because URIs issued before the migration and links from elsewhere
+are written that way. When both names are present, the new one wins. The core dies
+on such a pair when the values DIFFER, which is why we never write the old and the
+new name at the same time.
 
-Имя ключа — `vhttp`, а НЕ `transport`: у остальных протоколов `transport` это
-объект `{type: ws|grpc|…}`, совсем другая сущность. Здесь значение — версия
-HTTP (`h3`/`h2`) плоской строкой.
+The key is named `vhttp` and NOT `transport`: in every other protocol
+`transport` is an object `{type: ws|grpc|…}`, an entirely different thing. Here
+the value is the HTTP version (`h3`/`h2`) as a flat string.
 
 ### sing-box Outbound Mapping
 
-Эмитится как **Outbound** (не Endpoint, в отличие от WireGuard). `ip`/`ipv6`
-разбираются из `address` по признаку `:` (v6). `mtu`/`idle_timeout`/
-`keep_alive_period` пишутся только при непустых значениях; блок `tls{}`
-появляется, только если задан SNI или `disable_sni`.
+It is emitted as an **Outbound** (not an Endpoint, unlike WireGuard). `ip` and
+`ipv6` are split out of `address` by looking for a `:` (v6). `mtu`,
+`idle_timeout` and `keep_alive_period` are written only when non-empty; the
+`tls{}` block appears only when an SNI or `disable_sni` is set.
 
-Схема ядра (§393, kernel SPEC 062): версия HTTP под ключом `vhttp`,
-TLS-опции — во вложенном `tls{}`.
+The core's schema (§393, kernel SPEC 062): the HTTP version under the `vhttp`
+key, and the TLS options in a nested `tls{}`.
 
 ```json
 {
@@ -1193,7 +1194,7 @@ TLS-опции — во вложенном `tls{}`.
 }
 ```
 
-| устарело | сейчас |
+| deprecated | current |
 |---|---|
 | `network` | `vhttp` |
 | `sni` | `tls.server_name` |
@@ -1201,21 +1202,21 @@ TLS-опции — во вложенном `tls{}`.
 | `fragment` / `record_fragment` | `tls.fragment` / `tls.record_fragment` |
 | `fragment_fallback_delay` | `tls.fragment_fallback_delay` |
 
-Старые имена ядро принимает до `v1.14.0-lx.30`, печатая по одному
-предупреждению на outbound. Промежуточное имя `transport` (одна rc ядра) в
-клиенте не поддерживается: наружу оно не выходило.
+The core accepts the old names until `v1.14.0-lx.30`, printing one warning per
+outbound. The interim name `transport` (which lived for a single core rc) is not
+supported in the client: it never went out.
 
-**Фрагментация.** Глобальный `tls_fragment` (§270) накладывается на masque
-только при `vhttp: h2`: при h3 фрагментировать нечего (QUIC не несёт TLS
-поверх TCP), ядро такие поля игнорирует с предупреждением — билдер пропускает
-h3-узлы молча.
+**Fragmentation.** The global `tls_fragment` (§270) is applied to masque only
+when `vhttp: h2`: with h3 there is nothing to fragment (QUIC does not carry TLS
+over TCP), the core ignores such fields with a warning, and the builder skips h3
+nodes silently.
 
 ### Reference
 
 - RFC 9484 (CONNECT-IP over MASQUE)
 - §130 spec: [docs/spec/features/130 masque-warp-transport/spec.md](spec/features/130%20masque-warp-transport/spec.md)
-- §393 (миграция схемы): [docs/spec/tasks/393-masque-config-schema-migration.md](spec/tasks/393-masque-config-schema-migration.md)
-- Ядро sing-box-lx SPEC 021 (`type: masque`), SPEC 062 (схема конфига)
+- §393 (the schema migration): [docs/spec/tasks/393-masque-config-schema-migration.md](spec/tasks/393-masque-config-schema-migration.md)
+- The sing-box-lx core: SPEC 021 (`type: masque`), SPEC 062 (the config schema)
 - [WARP integration (§025)](spec/features/025%20warp%20integration/spec.md)
 
 ---
@@ -1407,7 +1408,7 @@ When `streamSettings.sockopt.dialerProxy` references another outbound tag:
 - `ws` -> `wsSettings` mapped to `{"type": "ws", "path": ..., "headers": {"Host": ...}}`
 - `grpc` -> `grpcSettings` mapped to `{"type": "grpc", "service_name": ...}`
 - `http`/`h2` -> `httpSettings` mapped to `{"type": "http", "path": ..., "host": [...]}`
-- `xhttp` -> `xhttpSettings` mapped to `{"type": "xhttp", "path": ..., "host": ..., "mode": ...}` (нативный, §097 — см. [XHTTP transport](#xhttp-transport))
+- `xhttp` -> `xhttpSettings` mapped to `{"type": "xhttp", "path": ..., "host": ..., "mode": ...}` (native, §097 — see [XHTTP transport](#xhttp-transport))
 - `tcp` or empty -> no transport block
 
 **SOCKS detour:**
@@ -1484,32 +1485,32 @@ Suitability cannot be checked before connecting: `public_name` is only visible a
 
 ## XHTTP transport
 
-**Контекст.** XHTTP — эволюция HTTP-транспорта в Xray (бывший `splithttp`, конец 2024): HTTP-стримы поверх TLS/Reality/h2c с раздельными режимами upload'а. В подписках — `type=xhttp` (VLESS, Trojan) или `net=xhttp` (VMess).
+**Context.** XHTTP is the evolution of Xray's HTTP transport (formerly `splithttp`, late 2024): HTTP streams over TLS/Reality/h2c with separate upload modes. In subscriptions it appears as `type=xhttp` (VLESS, Trojan) or `net=xhttp` (VMess).
 
-**Статус.** Upstream sing-box XHTTP **не поддерживает** (PR [SagerNet/sing-box#3879](https://github.com/SagerNet/sing-box/pull/3879) закрыт без мержа 2026-03-09). С §097 L×Box бандлит fork-ядро [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (build-тег `with_xhttp`, `option.V2RayXHTTPOptions`) и эмитит **нативный** `{"type": "xhttp", ...}`. Прежний fallback `xhttp → httpupgrade` + `UnsupportedTransportWarning` + оранжевый баннер в UI (Parser v2, до v1.8.2 включительно) **удалён** — узлы соединяются по настоящему wire-протоколу.
+**Status.** Upstream sing-box does **not** support XHTTP (PR [SagerNet/sing-box#3879](https://github.com/SagerNet/sing-box/pull/3879) was closed unmerged on 2026-03-09). Since §097 L×Box bundles the [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) fork core (the `with_xhttp` build tag, `option.V2RayXHTTPOptions`) and emits a **native** `{"type": "xhttp", ...}`. The former fallback of `xhttp → httpupgrade` plus an `UnsupportedTransportWarning` and an orange banner in the UI (Parser v2, up to and including v1.8.2) has been **removed** — nodes now connect over the real wire protocol.
 
-**Парсинг.** sealed `XhttpTransport` ([`models/transport_spec.dart`](../app/lib/models/transport_spec.dart)) собирается из трёх источников:
-- URI query — `parseTransport` в [`lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart); ключи читаются в обеих формах: camelCase (Xray-URI) и snake_case (sing-box);
+**Parsing.** The sealed `XhttpTransport` ([`models/transport_spec.dart`](../app/lib/models/transport_spec.dart)) is assembled from three sources:
+- the URI query — `parseTransport` in [`lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart); keys are read in both forms, camelCase (the Xray URI style) and snake_case (sing-box);
 - sing-box JSON (`transport.type = "xhttp"`) — `parseSingboxEntry`;
-- Xray JSON (`streamSettings.network = "xhttp"` + `xhttpSettings`) — см. секцию 11.
+- Xray JSON (`streamSettings.network = "xhttp"` plus `xhttpSettings`) — see section 11.
 
-С §127 поддержан **полный клиентский набор** Xray splithttp (SPEC 002 v2): кроме 6 базовых полей — настраиваемые placement'ы session/seq/uplink, ключи, метод upload, X-Padding obfs-режим и packet-up tuning. Источник полей в URI — плоские query-параметры **и** параметр `extra` (URL-encoded JSON, см. ниже).
+Since §127 the **full client-side set** of Xray splithttp is supported (SPEC 002 v2): beyond the six basic fields there are configurable session/seq/uplink placements, their keys, the upload method, the X-Padding obfuscation mode and packet-up tuning. In a URI these come from flat query parameters **and** from the `extra` parameter (URL-encoded JSON, see below).
 
-| Поле (snake_case JSON) | URI query (camelCase / snake) | Default |
+| Field (snake_case JSON) | URI query (camelCase / snake) | Default |
 |------|-----------|--------|
 | `path` | `path` | `/` |
-| `host` | `host` (fallback: `sni`) | пусто |
-| `mode` | `mode` | пусто — ядро решает (auto) |
-| `x_padding_bytes` | `xPaddingBytes` | пусто |
+| `host` | `host` (falls back to `sni`) | empty |
+| `mode` | `mode` | empty — the core decides (auto) |
+| `x_padding_bytes` | `xPaddingBytes` | empty |
 | `no_grpc_header` | `noGRPCHeader` | false |
-| `headers` | — (только JSON) | пусто |
+| `headers` | — (JSON only) | empty |
 | `session_placement` | `sessionPlacement` | `path` |
-| `session_key` | `sessionKey` | placement-зав. |
+| `session_key` | `sessionKey` | placement-dependent |
 | `seq_placement` | `seqPlacement` | `path` |
-| `seq_key` | `seqKey` | placement-зав. |
+| `seq_key` | `seqKey` | placement-dependent |
 | `uplink_data_placement` | `uplinkDataPlacement` | `auto` |
-| `uplink_data_key` | `uplinkDataKey` | placement-зав. |
-| `uplink_chunk_size` | `uplinkChunkSize` | placement-зав. |
+| `uplink_data_key` | `uplinkDataKey` | placement-dependent |
+| `uplink_chunk_size` | `uplinkChunkSize` | placement-dependent |
 | `uplink_http_method` | `uplinkHTTPMethod` | `POST` |
 | `x_padding_obfs_mode` | `xPaddingObfsMode` | false |
 | `x_padding_key` | `xPaddingKey` | `x_padding` |
@@ -1519,35 +1520,35 @@ Suitability cannot be checked before connecting: `public_name` is only visible a
 | `sc_max_each_post_bytes` | `scMaxEachPostBytes` | `1000000` |
 | `sc_min_posts_interval_ms` | `scMinPostsIntervalMs` | `30` |
 
-Все пустые/дефолтные поля **не эмитятся** (omitempty) — у ядра свои дефолты. NB: VMess (base64-JSON) несёт только `path`/`host`; расширенные поля доступны в URI-формах (VLESS/Trojan) и JSON.
+Every empty or default field is **not emitted** (omitempty) — the core has its own defaults. NB: VMess (base64 JSON) carries only `path` and `host`; the extended fields are available in the URI forms (VLESS/Trojan) and in JSON.
 
-**Параметр `extra` (URL-encoded JSON).** Реальные подписки часто упаковывают часть полей (особенно tuning `scMaxEachPostBytes`/`scMinPostsIntervalMs`) в один query-параметр `extra=<urlencoded-json>`. Парсер декодирует его и вливает ключи в transport (extra в приоритете для своих ключей). **Битый/обрезанный `extra` игнорируется** — ссылка остаётся рабочей на плоских параметрах. Числа из `extra` приводятся к строке (`30.0` → `"30"`); `path` с `?`-хвостом обрезается. Справочник маппинга — `SPECS/002-XHTTP_CLIENT_TRANSPORT/URL_PARSING.md` в репозитории ядра.
+**The `extra` parameter (URL-encoded JSON).** Real subscriptions often pack some of the fields (especially the `scMaxEachPostBytes` / `scMinPostsIntervalMs` tuning) into a single query parameter, `extra=<urlencoded-json>`. The parser decodes it and merges its keys into the transport (`extra` wins for its own keys). **A malformed or truncated `extra` is ignored** — the link keeps working on the flat parameters. Numbers from `extra` are coerced to strings (`30.0` → `"30"`), and a `path` with a `?` tail is trimmed. The mapping reference is `SPECS/002-XHTTP_CLIENT_TRANSPORT/URL_PARSING.md` in the core's repository.
 
-**Режимы (`mode`).**
+**The modes (`mode`).**
 
-| mode | Семантика |
+| mode | Meaning |
 |------|----------|
-| omitted / `auto` | ядро выбирает; в текущем sing-box-lx ≙ `packet-up` |
-| `packet-up` | uplink режется на отдельные POST-запросы (seq-номера), downlink — один GET-стрим |
-| `stream-up` | uplink — один потоковый POST, downlink — GET-стрим |
-| `stream-one` | один bidirectional стрим — всё в одном запросе |
+| omitted / `auto` | the core decides; in the current sing-box-lx that means `packet-up` |
+| `packet-up` | the uplink is cut into separate POST requests (with sequence numbers), the downlink is a single GET stream |
+| `stream-up` | the uplink is one streaming POST, the downlink a GET stream |
+| `stream-one` | a single bidirectional stream — everything in one request |
 
-**Placement (§127).** Куда транспорт кладёт служебные данные на каждом запросе — для демультиплексирования логических соединений поверх одного HTTP-origin:
-- `session_placement` / `seq_placement` — session id и номер пакета: `path` | `query` | `header` | `cookie` (default `path`);
-- `uplink_data_placement` — payload upload в packet-up: `body` | `auto` | `header` | `cookie` (default `auto`≈body);
-- `*_key` — имя ключа для не-path placement (дефолт зависит от placement: `X-Session`/`x_session` и т.п.).
+**Placement (§127).** Where the transport puts its bookkeeping data on each request, so that logical connections can be demultiplexed over a single HTTP origin:
+- `session_placement` / `seq_placement` — the session id and the packet number: `path` | `query` | `header` | `cookie` (default `path`);
+- `uplink_data_placement` — the payload upload in packet-up: `body` | `auto` | `header` | `cookie` (default `auto`, ≈ body);
+- `*_key` — the key name for a non-path placement (the default depends on the placement: `X-Session` / `x_session` and so on).
 
-**Обфускация:**
-- `x_padding_bytes` — диапазон случайного padding'а, напр. `"100-1000"`;
-- `no_grpc_header` — не слать gRPC-обёртку в `stream-up`;
-- `x_padding_obfs_mode` — переключатель configurable-obfs (вместо legacy padding в `Referer`); под ним `x_padding_placement` (`cookie`|`header`|`query`|`queryInHeader`) + `x_padding_method` (`repeat-x` | `tokenish` — HPACK-Huffman) + свои ключ/заголовок.
+**Obfuscation:**
+- `x_padding_bytes` — the range of random padding, for example `"100-1000"`;
+- `no_grpc_header` — do not send the gRPC wrapper in `stream-up`;
+- `x_padding_obfs_mode` — the switch for configurable obfuscation (instead of the legacy padding in `Referer`); under it sit `x_padding_placement` (`cookie`|`header`|`query`|`queryInHeader`), `x_padding_method` (`repeat-x` | `tokenish` — HPACK-Huffman) and their own key/header.
 
-**Нормализация (§217).** `parseTransport` читает поля дословно; проверку делает `toSingbox`. Значения вне enum-множеств ядро отвергает **fatal** (одна битая нода роняла бы весь конфиг на старте), поэтому такие поля **не эмитятся** и нода получает `XhttpParamResetWarning` (⚠️ в подписке + строка в AppLog):
+**Normalization (§217).** `parseTransport` reads the fields verbatim; `toSingbox` does the checking. The core rejects values outside the enum sets **fatally** (one malformed node would take the whole config down at startup), so such fields are **not emitted** and the node gets an `XhttpParamResetWarning` (a ⚠️ in the subscription plus a line in the AppLog):
 
-- allow-list'ы: `session_placement`/`seq_placement` ∈ {`path`,`query`,`header`,`cookie`}; `uplink_data_placement` ∈ {`body`,`auto`,`header`,`cookie`}; `x_padding_placement` ∈ {`cookie`,`header`,`query`,`queryInHeader`}; `x_padding_method` ∈ {`repeat-x`,`tokenish`};
-- mode-зависимые правила (только при `mode=packet-up`): `uplink_http_method=GET`, а также `uplink_data_placement` = `header`/`cookie`. Вне packet-up эти значения сбрасываются с warning.
+- the allow-lists: `session_placement`/`seq_placement` ∈ {`path`,`query`,`header`,`cookie`}; `uplink_data_placement` ∈ {`body`,`auto`,`header`,`cookie`}; `x_padding_placement` ∈ {`cookie`,`header`,`query`,`queryInHeader`}; `x_padding_method` ∈ {`repeat-x`,`tokenish`};
+- the mode-dependent rules (valid only with `mode=packet-up`): `uplink_http_method=GET`, and `uplink_data_placement` = `header`/`cookie`. Outside packet-up those values are reset with a warning.
 
-Битое значение не роняет конфиг — поле дропается, узел остаётся рабочим на дефолтах ядра.
+A malformed value never kills the config — the field is dropped and the node keeps working on the core's defaults.
 
 **Generated transport block:**
 
@@ -1567,10 +1568,10 @@ Suitability cannot be checked before connecting: `public_name` is only visible a
 }
 ```
 
-(Расширенные placement/obfs/tuning-поля — опциональны; в дефолте эмитятся только базовые 6.)
+(The extended placement, obfuscation and tuning fields are optional; by default only the six basic ones are emitted.)
 
-**Несовместимость с Vision.** `flow=xtls-rprx-vision` живёт только на «голом» TCP — с XHTTP (как и с ws/grpc/h2) комбинация невалидна по протоколу. Парсер auto-flow при наличии transport-блока не подставляет (см. TLS Behavior в секции 1); конфиг с явным `flow` + xhttp с сервером не заработает.
+**Incompatible with Vision.** `flow=xtls-rprx-vision` only lives on “bare” TCP — combined with XHTTP (as with ws/grpc/h2) it is invalid by protocol. The parser does not auto-fill `flow` when a transport block is present (see TLS Behavior in section 1); a config with an explicit `flow` plus xhttp will not work against a server.
 
-**Round-trip.** `XhttpTransport.toSingbox` → transport-map (пустые поля не эмитятся); `transportToQuery` → share-URI плоским **camelCase** (Xray-форма, интероп с v2rayN/Xray), и только **не-дефолтные** поля — URI не раздувается, инвариант `parseUri(toUri(spec)) ≈ spec` сохраняется (на входе пустое поле == дефолтное дают одну spec). `extra` на выходе не генерируется — поля разворачиваются плоско. `httpupgrade` остаётся **отдельным** транспортом — больше не «приёмник» для xhttp.
+**Round trip.** `XhttpTransport.toSingbox` produces the transport map (empty fields are not emitted); `transportToQuery` produces a share URI in flat **camelCase** (the Xray form, for interop with v2rayN and Xray), carrying only **non-default** fields — so the URI does not bloat and the invariant `parseUri(toUri(spec)) ≈ spec` holds (on input, an empty field and a default one yield the same spec). No `extra` is generated on output — the fields are expanded flat. `httpupgrade` remains a **separate** transport and is no longer a “receiver” for xhttp.
 
-**NB про стоковое ядро.** На upstream sing-box (без `with_xhttp`) конфиг с `"type": "xhttp"` отвергается на load (`unknown transport type`). Фича работает только на релизах с бандленным fork-ядром — как AWG (секция 8.5).
+**A note on the stock core.** On upstream sing-box (without `with_xhttp`) a config containing `"type": "xhttp"` is rejected at load time (`unknown transport type`). The feature works only on releases carrying the bundled fork core — just like AWG (section 8.5).
