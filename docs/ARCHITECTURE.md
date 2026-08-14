@@ -147,17 +147,17 @@ and Nodes are empty after a swipe” (see §185):
 
 | Channel | What it carries | Reliability / lifecycle |
 |---|---|---|
-| **VpnService status broadcast** (native `Stream<TunnelStatusEvent>` / `BROADCAST_STATUS`) | ТОЛЬКО **глобальный статус** туннеля (Connected/Stopped/Connecting/error) | **НАДЁЖНЫЙ, всегда есть.** Чисто native (Android Service), переживает смерть Flutter-движка (swipe-kill при keep-VPN). Единственный источник правды для статуса. UI обязан показывать статус из него. |
-| **CommandClient-стримы** (`lxbox/cc/*`: groups · connections · outbounds · status-tick) | **Данные для отображения на экране**: группы/ноды, соединения, трафик, per-app | **ЭФЕМЕРНЫЙ.** Привязан к Flutter-движку: подписки в Dart, refcount в native. Сервис/ядро живут независимо, но стримы существуют только пока жив движок-потребитель. Поэтому CommandClient **обязан пересинхронизироваться** при появлении нового потребителя (см. «три точки синхронизации» ниже): пере-подписка + `getGroups`-pull (детерминированный lifeline, §122). НЕ источник статуса — только данные для UI.
+| **The VpnService status broadcast** (the native `Stream<TunnelStatusEvent>` / `BROADCAST_STATUS`) | ONLY the tunnel's **global status** (Connected/Stopped/Connecting/error) | **RELIABLE, always present.** Purely native (an Android Service), it survives the death of the Flutter engine (a swipe-kill under keep-VPN). It is the single source of truth for the status. |
+| **The CommandClient streams** (`lxbox/cc/*`: groups · connections · outbounds · status-tick) | **The data shown on screen**: groups and nodes, connections, traffic, per-app | **EPHEMERAL.** Bound to the Flutter engine: the subscriptions live in Dart and the refcount in native. The service and the core live independently of them. |
 
-**keep-VPN-on-exit НЕ останавливает ядро** — это ВЕРНОЕ поведение (`BoxService.onTaskRemoved` при keep = no-op, ядро/CommandServer живут). Свайп убивает только UI-движок; статус продолжает идти broadcast'ом, а CommandClient-данные должны переподняться при следующем открытии UI. Не «чинить» keep-VPN, не дёргать `doStop` на swipe.
+**keep-VPN-on-exit does NOT stop the core** — that is the CORRECT behaviour (`BoxService.onTaskRemoved` under keep is a no-op, and the core plus the CommandServer keep running). A swipe kills only the UI engine; the status keeps arriving over the broadcast, while the CommandClient data must come back up on the next launch.
 
-**Lifecycle CommandClient-клиентов — ТРИ точки синхронизации native↔Dart:**
-1. **Уход в фон** (движок жив) — усыпить screen+status (`pauseScreen`/`pauseStatus`); профайлер НЕ трогаем (пишет в фоне, §164).
-2. **Возврат из фона** (движок жив) — поднять обратно, парно (`resumeScreen`/`resumeStatus`).
-3. **Cold-start Flutter** (новый движок) — native-состояние CommandClient привести в чистое (refcount=0, снять висячие подписки/sink'и), новый UI подключается с нуля. Надёжная точка — `onAttachedToEngine` (Dart мог умереть внезапно при swipe и не отписаться).
+**The lifecycle of the CommandClient clients — THREE native↔Dart synchronisation points:**
+1. **Going into the background** (the engine is alive) — put screen and status to sleep (`pauseScreen` / `pauseStatus`); leave the profiler alone (it keeps recording in the background, §164).
+2. **Returning from the background** (the engine is alive) — bring them back up, in pairs (`resumeScreen` / `resumeStatus`).
+3. **A cold start of Flutter** (a new engine) — reset the native CommandClient state to clean (refcount=0, drop the dangling subscriptions and sinks) and let the new UI connect from scratch. The reliable hook is `onAttachedToEngine` (Dart may have died abruptly on a swipe without unsubscribing).
 
-**Профайлер держит буфер в Dart** (`TrafficProfiler`), а его native `profilerClient` живёт в фоне (§164 не паузит). Следствие: запись существует только пока жив Flutter-движок — by design профайлер пишет, пока приложение открыто. На cold-start native-сторона профайлера приводится в чистое (осиротевший `profilerClient` от прошлого движка останавливается принудительно), буфер начинается пустым.
+**The profiler keeps its buffer in Dart** (`TrafficProfiler`), while its native `profilerClient` lives on in the background (§164 does not pause it). The consequence: a recording exists only while the Flutter engine is alive — by design the profiler records while the app is open. On a cold start the native side is reset.
 
 ### The “cohesion over line count” principle (§089)
 
