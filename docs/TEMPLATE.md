@@ -333,31 +333,32 @@ is keyed by it rather than by index; an unknown id falls back to the default (th
 
 ---
 
-## `group_templates` + `default_channels` — шаблоны сборки каналов (§267)
+## `group_templates` and `default_channels` — the channel assembly templates (§267)
 
-> **§125/§267 — каналы живут в storage, шаблон только сеет.** Каналы переехали
-> в storage (`channels[]`, см. [STORAGE.md](STORAGE.md#channels--125-the-routing-channels-templatestorage)). На первом
-> запуске one-shot миграция засевает `channels[]` из `default_channels` +
-> `group_templates.channel`; дальше состав каналов живёт в storage и редактируется
-> юзером. Билдер читает `channels[]`, а не шаблон. `auto` — не канал, а
-> подгруппа: каждый канал делает свой `<tag>-auto`-двойник (urltest), когда
-> `channel.include ∋ auto`.
+> **§125/§267 — the channels live in storage; the template only seeds them.** The
+> channels moved into storage (`channels[]`, see
+> [STORAGE.md](STORAGE.md#channels--125-the-routing-channels-templatestorage)). On the
+> first launch a one-shot migration seeds `channels[]` from `default_channels` plus
+> `group_templates.channel`; after that the set of channels lives in storage and is
+> edited by the user. The builder reads `channels[]`, not the template. `auto` is not a
+> channel but a subgroup: each channel produces its own `<tag>-auto` twin (a urltest)
+> whenever `channel.include ∋ auto`.
 >
-> **§267 заменил плоский `preset_groups[]`** (три разнородные записи + фейковая
-> переменная `@auto_proxy_tag`) на три части:
-> - `magic_nodes` — реестр служебных нод (auto/direct/block) по role-ключу;
-> - `channel`/`auto` — шаблоны сборки канала и его urltest-подгруппы;
-> - `default_channels` — плоский список каналов для сида.
+> **§267 replaced the flat `preset_groups[]`** (three heterogeneous entries plus the
+> fake variable `@auto_proxy_tag`) with three parts:
+> - `magic_nodes` — a registry of the service nodes (auto/direct/block), keyed by role;
+> - `channel` and `auto` — the templates for assembling a channel and its urltest subgroup;
+> - `default_channels` — a flat list of channels for the seed.
 >
-> **Маппинг seed → `channels[i]`** (one-shot миграция):
+> **The seed → `channels[i]` mapping** (the one-shot migration):
 >
-> | шаблон | channels[] |
+> | template | channels[] |
 > |---|---|
-> | `default_channels[i].tag` | `tag` (vpn-1 форсится `enabled=true`) |
-> | `default_channels[i].label` | `label` (пусто → `tag`) |
+> | `default_channels[i].tag` | `tag` (vpn-1 is forced to `enabled=true`) |
+> | `default_channels[i].label` | `label` (empty falls back to `tag`) |
 > | `default_channels[i].default_enabled` / legacy `enabled_groups[]` | `enabled` |
 > | `channel.include` ∋ `direct` | `include_direct` |
-> | `channel.include` ∋ `auto` | `auto` (ChannelAuto из `auto`-шаблона + `@urltest_*` vars) |
+> | `channel.include` ∋ `auto` | `auto` (a ChannelAuto built from the `auto` template plus the `@urltest_*` vars) |
 > | `channel.include` ∋ `block` | `include_block` (в дефолте нет → false) |
 > | `channel.options.interrupt_exist_connections` | `interrupt_exist_connections` |
 > | (не из template) | `node_filter`/`default_filter` = `''` |
