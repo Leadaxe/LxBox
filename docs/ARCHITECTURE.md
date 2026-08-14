@@ -298,63 +298,63 @@ The user copies it into a `CustomRule(kind: inline | srs)` through `selectableRu
 `CustomRule(kind: preset)` stores a **thin reference** — just `{presetId, varsValues}`. The expansion (`preset_expand.dart`):
 1. Resolves the variables from `varsValues` (or from `default_value` when the key is absent; a `required` var with no value aborts the expansion).
 2. Recursively substitutes `@var` into `rule_set`, `dns_rule`, `rule` and `dns_servers`.
-3. Фильтрует `dns_servers` до одного с `tag == vars['dns_server']`.
-4. Если `@out` резолвится в `"direct-out"` — удаляет `detour` из DNS-серверов (direct не требует forwarding).
+3. Filters `dns_servers` down to the single one whose `tag == vars['dns_server']`.
+4. If `@out` resolves to `"direct-out"`, removes `detour` from the DNS servers (direct needs none).
 
-Merge фрагментов от разных `CustomRule(kind: preset)` — identical-skip по tag + first-wins с warning для реальных конфликтов, детерминированный порядок по индексу в UI.
+Merging the fragments from different `CustomRule(kind: preset)` entries is an identical-skip by tag plus first-wins with a warning for real conflicts.
 
 ### Vars
 
-`WizardVar` едина для глобальных `sections[].vars[]` и preset-local `selectable_rules[i].vars[]`. Поддерживаемые типы (`type`):
+`WizardVar` is shared between the global `sections[].vars[]` and the preset-local `selectable_rules[i].vars[]`. The supported types:
 
 | `type` | UI | Substitution |
 |---|---|---|
 | `bool` | SwitchListTile | `"true"` / `"false"` → Dart bool |
-| `text` | TextField (+ combo-popup если есть `options`) | строка |
-| `enum` | Dropdown с `title → value` | строка (`value`) |
-| `secret` | TextField с eye-toggle + Generate | строка |
-| `outbound` (preset only) | OutboundPicker | строка (tag) |
-| `dns_servers` (preset only) | Dropdown по `preset.dns_servers[].tag` | строка (tag) |
+| `text` | A TextField (plus a combo popup when `options` exist) | a string |
+| `enum` | A dropdown mapping `title → value` | a string (the `value`) |
+| `secret` | A TextField with an eye toggle plus Generate | a string |
+| `outbound` (preset only) | An OutboundPicker | a string (a tag) |
+| `dns_servers` (preset only) | A dropdown over `preset.dns_servers[].tag` | a string (a tag) |
 
-**`options`** принимает два формата (legacy-совместимо): строка-литерал (`"foo"` ≡ `{title: "foo", value: "foo"}`) или объект `{"title": "...", "value": "..."}`. UI показывает `title`, expansion/storage — `value`.
+**`options`** accepts two formats (kept legacy-compatible): a string literal (`"foo"` ≡ `{title: "foo", value: "foo"}`) or an object.
 
-**`required: bool`** (default `true`) — для optional var в UI появляется пункт "— (none)"; при выборе → `varsValues[name] = ""`. Expansion отличает `containsKey=false` (юзер не трогал → применяется `default_value`) от `value=""` (юзер явно выбрал none → `null`).
+**`required: bool`** (default `true`) — an optional var gets a “— (none)” entry in the UI; choosing it clears the value.
 
-### Как связаны слои
+### How the layers connect
 
 ```
 wizard_template.json
-  │  load (TemplateLoader)  →  WizardTemplate (в памяти, shared)
+  │  load (TemplateLoader)  →  WizardTemplate (in memory, shared)
   │
   ├── config       ──► _substituteVars(@global vars)                          ──► base config
   ├── customRules (один список, mixed kind — preset/inline/srs)
-  │    │  applyAllCustomRules — единый проход в storage order
-  │    │  с dispatch по kind. Cross-preset rule_set dedup через
+  │    │  applyAllCustomRules — a single pass in storage order
+  │    │  dispatched by kind. Cross-preset rule_set dedup happens through
   │    │  RuleSetRegistry.tryRegisterRuleSet (identical-skip / first-wins).
-  │    │  (spec 062 — раньше preset/inline шли двумя проходами и cross-kind
+  │    │  (spec 062 — preset and inline used to run as two passes and the
   │    │  ordering между ними был потерян)
   │    ├── kind: preset
   │    │    └─ expandPreset (pure) ──► PresetFragments
   │    │       └─ register rule_sets in registry; routing rule (if route enabled);
   │    │           DNS aspect (if dns enabled) → UnifiedApplyResult.{dnsRules, dnsServers}
   │    ├── kind: inline
-  │    │    └─ headless rule_set с непустыми match-полями + routing rule
-  │    │       (auto-suffix tag через registry.addRuleSet) (spec 030)
+  │    │    └─ a headless rule_set with non-empty match fields plus a routing rule
+  │    │       (the tag auto-suffixed through registry.addRuleSet) (spec 030)
   │    └── kind: srs
-  │         └─ local rule_set по cached path + routing rule (spec 030)
+  │         └─ a local rule_set at the cached path plus a routing rule (spec 030)
   ├── dns_options  ──► applyCustomDns(template + extras)                      ──► config.dns
   └── channels[] (storage) ──► _buildChannelGroups(per-channel node_filter)  ──► config.outbounds
       (§125/§267: каналы из channels[], seed из group_templates+default_channels; +block/direct опции, auto-двойник)
 ```
 
-**Почему DoH/DoT в bundle хардкодят `server: "77.88.8.88"` + `tls.server_name`:**
-В sing-box 1.12 DNS-сервер типа `https`/`tls` с hostname-сервером требует `domain_resolver` (тег другого DNS-сервера для bootstrap resolve), иначе chicken-and-egg. Указывая IP напрямую + `tls.server_name` для SNI/cert verify — избавляемся от bootstrap dependency (не нужно ходить в 8.8.8.8 для резолва `safe.dot.dns.yandex.net`) и получаем Safe-профиль Yandex с корректной TLS проверкой.
+**Why DoH/DoT in a bundle hardcode `server: "77.88.8.88"` plus `tls.server_name`:**
+In sing-box 1.12 a DNS server of type `https` or `tls` addressed by hostname requires a `domain_resolver` (the tag of another server), otherwise the config does not load.
 
-`@dns_ip` применяется **только** к UDP-серверу — для DoH/DoT замена IP сломала бы TLS (cert mismatch с захардкоженным SNI). Для реально разных режимов Yandex (Safe/Base/Family) → отдельные пресеты, если понадобятся, чтобы не городить nested-lookup в substitution-движке.
+`@dns_ip` applies **only** to the UDP server — replacing the IP for DoH/DoT would break TLS (a certificate mismatch).
 
 ---
 
-## Дерево исходников
+## The source tree
 
 Структура после §089: тонкие экраны с под-папками `<screen>/`, контроллеры и
 крупные сервисы разнесены `part`'ами по ответственности. Per-file роли ниже.
