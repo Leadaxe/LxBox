@@ -924,36 +924,36 @@ Everywhere in the `config` block (and in preset expansion) only a **whole-string
 
 Inline substitution is **not supported**: `"prefix-@varname-suffix"` is not a `@var` string, so it is left as-is.
 
-Результат **типизирован по объявленному `var.type`** (§120): `bool`/`int` коэрсятся `coerceVarValue`, строковые типы (`text`/`secret`/`enum`/`outbound`/`dns_servers`) — дословно. Сам шаблон использует и типизированные `@var`: `"@tun_mtu"` (int), `"@tun_auto_route"` (bool).
+The result is **typed by the declared `var.type`** (§120): `bool` and `int` are coerced by `coerceVarValue`, while `text`, `enum` and `secret` stay strings.
 
-См. примеры:
-- `"final": "@dns_final"` — подставится `cloudflare_udp` или то что юзер выбрал
-- `"server": "@dns_ip"` (внутри ru-direct preset) — подставится IP выбранный в dropdown'е
+Examples:
+- `"final": "@dns_final"` becomes `cloudflare_udp`, or whatever the user chose
+- `"server": "@dns_ip"` (inside the ru-direct preset) becomes the IP picked in the dropdown
 
-См. реализацию в `app/lib/services/builder/build_config.dart` + `preset_expand.dart`. Общее ядро подстановки и `#if` — `app/lib/services/builder/if_engine.dart` (§120), используется обоими движками.
+See the implementation in `app/lib/services/builder/build_config.dart` and `preset_expand.dart`. The shared substitution core lives in `if_engine.dart`.
 
-## `#if`-конструкт (§120)
+## The `#if` construct (§120)
 
-Декларативная условность прямо в `config`/preset-телах. Резолвится в substitution-фазе (до post-steps). Дизайн заимствован у десктопного лаунчера (SPEC 067), подмножество v1.
+Declarative conditionals right inside the `config` and preset bodies. They are resolved during the substitution phase.
 
 ```jsonc
 "#if": {
-  "and":   [<predicate>, ...],   // взаимоисключающе с or; все true
-  "or":    [<predicate>, ...],   // хотя бы один true
-  "value": <any JSON>,           // then-ветка (обязательно)
-  "else":  <any JSON>            // else-ветка (опционально)
+  "and":   [<predicate>, ...],   // mutually exclusive with or; all must be true
+  "or":    [<predicate>, ...],   // at least one must be true
+  "value": <any JSON>,           // the then branch (required)
+  "else":  <any JSON>            // the else branch (optional)
 }
 ```
 
-**Два режима:**
-- **map-spread** — `#if` как ключ объекта: true → поля `value` (объект) мерджатся в родителя; false+else → поля `else`; false без else → ничего. Ключ `#if` снимается.
-- **array-element** — `#if` как единственный ключ элемента массива: true → элемент = `value`; false+else → `else`; false без else → элемент выпадает.
+**Two modes:**
+- **map-spread** — `#if` as a key of an object: when true, the fields of `value` (an object) are merged into the parent;
+- **array-element** — `#if` as the only key of an array element: when true the element becomes `value`, and when false with no else it is dropped.
 
-**Предикаты:** `"@var"` (bool), `{"@var":"literal"}` (equality), `{"@var":"#notEmpty"/"#isEmpty"}`, `{"@var":{"#in":[...]}}` / `{"#notIn":[...]}` / `{"#matches":"re"}`, `{"#not":predicate}`.
+**Predicates:** `"@var"` (a bool), `{"@var":"literal"}` (equality), `{"@var":"#notEmpty"/"#isEmpty"}`, `{"@var":{"#in":[...]}}`.
 
-**Naming:** `#` — конструкт/предикат; `@` — var-ref; bare — inner-ключи тела `#if`. Неизвестный `#*`-сиблинг **молча отбрасывается** (`if_engine.dart::_walkMap` делает `obj.remove(k)` без warning — forward-compat); неизвестный inner-ключ/предикат-оператор → ошибка (валидация на template-load).
+**Naming:** `#` marks a construct or predicate, `@` marks a var reference, and bare names are the inner keys of an `#if` body. An unknown key is an error.
 
-Пример (§119 inbounds, см. `wizard_template.json`):
+An example (the §119 inbounds, see `wizard_template.json`):
 ```jsonc
 {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": {
   "type": "@proxy_type", "tag": "mixed-in", "listen_port": "@proxy_port",
@@ -965,9 +965,9 @@ Inline substitution is **not supported**: `"prefix-@varname-suffix"` is not a `@
 
 ---
 
-## Formatting style (оформление `wizard_template.json`)
+## Formatting style (how `wizard_template.json` is laid out)
 
-Editorial-конвенции для **бандл**-шаблона (`app/assets/wizard_template.json`). Порядок
+The editorial conventions for the **bundled** template (`app/assets/wizard_template.json`). The ordering
 ключей и переносы **не влияют** на loader/билдер — это читаемость для maintainer'ов.
 Семантика (`#if`, magic-vars, порядок правил) обязательна; оформление — нет, но держим
 единообразно. Кастомные/импортированные шаблоны эту секцию могут игнорировать.
