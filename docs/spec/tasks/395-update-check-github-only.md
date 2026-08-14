@@ -89,10 +89,11 @@ gets their old preference back.
 ## Verification
 
 - [x] `flutter analyze` — clean
-- [ ] Device: install from GitHub → toggle visible, check fires
-- [ ] Device: install via F-Droid client → toggle absent, no request to
+- [x] Device: install from GitHub → toggle visible, check fires
+- [x] Device: install via F-Droid client → toggle absent, no request to
       `api.github.com` in the traffic log
 - [ ] Reproducibility holds: no new `--dart-define`, so `binary:` still matches
+      — confirmed by the next F-Droid run, not on device
 
 ## Open question for the reviewer
 
