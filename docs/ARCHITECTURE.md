@@ -169,32 +169,32 @@ access is preserved) or by extracting widget subtrees. The documented large exce
 
 | File | Lines | Why it stays whole |
 |---|---|---|
-| `services/traffic_profiler.dart` | 1243 | Монолитный stateful singleton: приём CC connections+DNS-стримов + diff-снапшоты + confidence + dual SSE fan-out — всё через общий private state и один `ChangeNotifier`-контракт. Core-лог **не** парсит (лог-питатель выпилен в §044/§180). Pure-типы (`models.dart`) и correlation-структуры (`internal.dart`) уже вынесены `part`'ом. |
-| `models/custom_rule.dart` | 618 | Уже sealed `Inline`/`Srs`/`Preset`; объём присущ трём структурно разным вариантам. Дальнейший split + SRS-cache у Preset (spec 011) — **behavior-changing** → отложен в §090. |
-| `android/.../VpnPlugin.kt` | 1084 | Единый `MethodCallHandler`-контракт; split разнёс бы channel-контракт по файлам. |
+| `services/traffic_profiler.dart` | 1243 | A monolithic stateful singleton: receiving the CC connections and DNS streams, diffing snapshots, confidence and the dual SSE fan-out — all through shared private state and one `ChangeNotifier` contract. |
+| `models/custom_rule.dart` | 618 | Already sealed into `Inline`/`Srs`/`Preset`; the size is inherent to three structurally different kinds. |
+| `android/.../VpnPlugin.kt` | 1084 | One `MethodCallHandler` contract; splitting it would scatter the channel contract across files. |
 
-### ConfigNode / ParsedConfig (§091 — реализовано)
+### ConfigNode / ParsedConfig (§091 — implemented)
 
 `ConfigCache` + `ConfigIntrospection` + reverse-map `subscriptionsOfTag`
-схлопнуты в `ParsedConfig` — `Map<tag, ConfigNode{tag, type, section, detour,
+are collapsed into `ParsedConfig` — a `Map<tag, ConfigNode{tag, type, section, detour,
 isMarkedDetour, detourRefCount, raw, transportLabel, securityLabel}>`,
-парсится один раз на смену `configRaw` (поле `HomeState.configModel`);
-пинги — отдельный динамик-слой, джойн на рендере (`NodeViewItem`).
-Принадлежность подписке — **prefix-фильтр** по эмитированному тегу
-(`home/subscription_lookup.dart`), без членства в node-списках. Убран целый
-класс багов «UI reverse-парсит display-тег» (§077/§079/§080).
+It is parsed once per change of `configRaw` (the `HomeState.configModel` field);
+the pings are a separate dynamic layer, joined at render time (`NodeViewItem`).
+Membership of a subscription is a **prefix filter** over the emitted tag
+(`home/subscription_lookup.dart`), with no membership in node lists. That removed a whole
+class of “the UI reverse-parses the display tag” bugs (§077/§079/§080).
 
-`transportLabel`/`securityLabel` (§102/§103) — eager-лейблы subtitle ноды
-(протокол · транспорт · security: `tcp`/`ws`/`grpc`/`h2`/`httpupgrade`/`quic`/`xhttp`;
-`TLS`/`Reality` + `+Vision` при `flow=xtls-rprx-vision`; для WireGuard —
-уровень обфускации `awg`/`awg2`) — вычисляются один раз в `ParsedConfig.parse`,
-не в getter'ах. См. [`spec/tasks/091`](./spec/tasks/091-config-node-model.md),
+`transportLabel` and `securityLabel` (§102/§103) are eager labels for a node's subtitle
+(protocol · transport · security: `tcp`/`ws`/`grpc`/`h2`/`httpupgrade`/`quic`/`xhttp`;
+`TLS`/`Reality` plus `+Vision` when `flow=xtls-rprx-vision`; for WireGuard, the
+obfuscation level `awg`/`awg2`). They are computed once inside `ParsedConfig.parse`,
+not in getters. See [`spec/tasks/091`](./spec/tasks/091-config-node-model.md),
 [`102`](./spec/tasks/102-subtitle-transport-variant.md),
 [`103`](./spec/tasks/103-variant-filter-chips.md).
 
 ---
 
-## 3-слойный Parser v2 pipeline
+## The three-layer Parser v2 pipeline
 
 ```
 UI / Controller
