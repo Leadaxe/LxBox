@@ -34,5 +34,11 @@ class StartupWizard {
     // 3. Add QS tile — на API 33+ системный промпт, на старых тихо no-op.
     if (!context.mounted) return;
     await maybeShowAddTilePrompt(context, vpn);
+
+    // 4. §395 — автопроверка обновлений: спрашиваем явно, потому что фоновый
+    //    запрос к github.com без согласия — anti-feature Tracking у F-Droid.
+    //    Последним: работе не мешает, в отличие от шагов выше.
+    if (!context.mounted) return;
+    await maybeShowUpdateCheckPrompt(context);
   }
 }

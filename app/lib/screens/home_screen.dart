@@ -247,14 +247,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // запуске, где его подхватит hydrate(). Так уведомление никогда не
     // выскакивает поверх работающего приложения.
     unawaited(_hydrateAndMaybeNotify());
-    if (UpdateChecker.autoCheckSupported) {
-      _updateCheckTimer = Timer(const Duration(seconds: 5), () {
-        if (!mounted) return;
-        unawaited(
-          UpdateChecker.I.maybeCheck(localVersion: VersionInfo.I.version),
-        );
-      });
-    }
+    _updateCheckTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      unawaited(
+        UpdateChecker.I.maybeCheck(localVersion: VersionInfo.I.version),
+      );
+    });
   }
 
   /// §390 — единственная точка показа update-снека: кеш `last_known_version`
@@ -262,9 +260,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// и §047-эмиттера, но слушателя-показывателя у него больше нет.
   bool _updateSnackbarShown = false;
   Future<void> _hydrateAndMaybeNotify() async {
-    // §395 — из каталогов про обновления сообщает клиент магазина. Кеш мог
-    // осесть от ручного «Check now», но всплывать сам он не должен.
-    if (!UpdateChecker.autoCheckSupported) return;
     await UpdateChecker.I.hydrate(localVersion: VersionInfo.I.version);
     final info = UpdateChecker.I.latest.value;
     if (info == null) return;

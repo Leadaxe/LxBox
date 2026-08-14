@@ -660,8 +660,12 @@ class SettingsStorage {
   // APK manually. No in-app installer.
   // ---------------------------------------------------------------------------
 
+  /// §395 — дефолт `false`: до ответа на first-run-промпт
+  /// (`maybeShowUpdateCheckPrompt`) приложение в сеть за релизами не ходит.
+  /// Фоновый запрос без явного согласия — anti-feature `Tracking` по правилам
+  /// F-Droid, а установка могла прийти из любого клиента каталога.
   static Future<bool> getAutoCheckUpdates() async =>
-      (await getVar('auto_check_updates', 'true')) != 'false';
+      (await getVar('auto_check_updates', 'false')) != 'false';
 
   static Future<void> setAutoCheckUpdates(bool enabled) =>
       setVar('auto_check_updates', enabled ? 'true' : 'false');

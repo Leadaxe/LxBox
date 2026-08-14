@@ -249,7 +249,7 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 | `auto_update_subs` | `'true'` | [§027] | The global gate for auto-refreshing subscriptions. Manual refresh always works. |
 | `auto_update_disabled_subs` | `'false'` | §337 | Also refresh disabled subscriptions, so their node snapshot does not go stale. It lives inside `auto_update_subs` and does not override `updateIntervalHours`. |
 | `auto_reload_on_change` | `'false'` | §338 | Restart the VPN automatically on any config change, so no banner is left behind. It overrides the per-subscription `on_update_action`. |
-| `auto_check_updates` | `'true'` | [§036] | Polls GitHub Releases at startup. |
+| `auto_check_updates` | `'false'` | [§036], §395 | Polls GitHub Releases at startup. Off until the first-run prompt is answered — an unprompted request is the `Tracking` anti-feature under F-Droid's rules. |
 | `last_update_check_at` | `''` | [§036] | The last polling timestamp, as UTC ISO-8601. |
 | `last_known_version` | `''` | [§036] | The cached latest tag. |
 | `dismissed_update_version` | `''` | [§036], §390 | The tag the user dismissed with **Ignore** — the snackbar is not shown for it again. |
@@ -279,6 +279,7 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 | `haptic_enabled` | `'true'` | §029 | Haptic feedback in the UI. It lives in `vars` (`HapticService.prefsKey`), NOT in SharedPreferences. |
 | `auto_ping_on_start` | `'true'` | — | Ping the nodes automatically once the tunnel comes up (App Settings). Read in `ping_orchestration.dart`. |
 | `notif_perm_prompted_v1` | `'false'` | §128 | One-shot: the notification permission prompt has been shown. |
+| `wizard_update_check_v1` | `'false'` | §395 | One-shot: the update-check consent prompt has been shown. Its answer is what writes `auto_check_updates`. |
 | `allow_rotation` | `'false'` | [§220] | Releases the portrait lock: `'true'` yields an empty preferred-orientations list (the system's auto-rotate decides). The default is a hard portrait lock. |
 | `resolve_enabled` | template | §263/§265 | The gate for the route-resolve rule of the `traffic-processing` preset. A var of the `internal` section (not visible in VPN Settings), edited inside the rule through a ref-var. |
 | `resolve_strategy` | template | §249/§265 | The IP version for route-resolve (`ipv4_only` / `prefer_ipv4` / …). A var of the `internal` section, used as a ref-var in `traffic-processing`. |

@@ -4422,5 +4422,11 @@
   },
   "Start the VPN to check this node from here, or open it from its subscription to check it with the VPN off.": {
     "value": "Включите VPN, чтобы проверить узел отсюда, или откройте его из подписки — там проверка работает и с выключенным VPN."
+  },
+  "Check for updates?": {
+    "value": "Проверять обновления?"
+  },
+  "L×Box can ping github.com once a day to see whether a new version is out. Nothing installs by itself — you get a link to the release page.\n\nIf you installed from an app store, its client already handles updates and you can skip this.": {
+    "value": "L×Box может раз в сутки обращаться к github.com и смотреть, не вышла ли новая версия. Само ничего не устанавливается — вы получите ссылку на страницу релиза.\n\nЕсли приложение установлено из магазина, его клиент уже следит за обновлениями, и этот пункт можно пропустить."
   }
 }
