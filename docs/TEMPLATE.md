@@ -277,13 +277,13 @@ The conventions (§117):
 
 Currently empty. После [§039](./spec/tasks/039-empty-template-dns-rules.md) — намеренно пусто, юзер строит DNS-rules через preset'ы (`selectable_rules[*].dns_rules`). Если template хочет пушнуть default DNS-rule, она пойдёт сюда.
 
-См. полный shape ref-уровня — [`STORAGE.md` § dns_options](./STORAGE.md#dns_options--§061-rules--§043043-dns--§044-servers).
+См. полный shape ref-уровня — [`STORAGE.md` § dns_options](./STORAGE.md#dns_options--061-rules--043043-dns--044-servers).
 
 ---
 
 ## `ping_options` — §040
 
-Default URL/timeout для ping/mass-URLTest. Storage может override через `ping_options` ([STORAGE.md §ping_options](./STORAGE.md#ping_options--§040)).
+Default URL/timeout для ping/mass-URLTest. Storage может override через `ping_options` ([STORAGE.md §ping_options](./STORAGE.md#ping_options--040)).
 
 ```jsonc
 {
@@ -336,7 +336,7 @@ Endpoints для speed-test screen. Не override'ится юзером (но ю
 ## `group_templates` + `default_channels` — шаблоны сборки каналов (§267)
 
 > **§125/§267 — каналы живут в storage, шаблон только сеет.** Каналы переехали
-> в storage (`channels[]`, см. [STORAGE.md](STORAGE.md#channels--125)). На первом
+> в storage (`channels[]`, см. [STORAGE.md](STORAGE.md#channels--125-the-routing-channels-templatestorage)). На первом
 > запуске one-shot миграция засевает `channels[]` из `default_channels` +
 > `group_templates.channel`; дальше состав каналов живёт в storage и редактируется
 > юзером. Билдер читает `channels[]`, а не шаблон. `auto` — не канал, а
@@ -435,7 +435,7 @@ source of truth для тегов; const-зеркала `kAuto/Direct/BlockOutbo
 | `label` | string | UI display name (пусто → `tag`). |
 | `default_enabled` | bool | Влияет только на seed первого запуска. После миграции включённость живёт в `channels[].enabled`, редактируется в Routing → Channels. |
 
-Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `enabled_groups[]` **DEPRECATED** — читается только one-shot миграцией в `channels[]` и как fallback-seed при пустом `channels[]` (см. [STORAGE.md](STORAGE.md#channels--125) и callout выше).
+Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `enabled_groups[]` **DEPRECATED** — читается только one-shot миграцией в `channels[]` и как fallback-seed при пустом `channels[]` (см. [STORAGE.md](STORAGE.md#channels--125-the-routing-channels-templatestorage) и callout выше).
 
 ---
 

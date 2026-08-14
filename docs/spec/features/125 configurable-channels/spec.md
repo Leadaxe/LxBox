@@ -3,7 +3,7 @@
 > **СТАТУС: РЕАЛИЗОВАНО (27.06.2026).** Все фазы F0→F4 + regex (F2) + default
 > (F3) реализованы в ветке `feat/configurable-channels-125`. План и трассировка
 > — [`plan.md`](plan.md). Числа/имена ключей storage финализированы (см.
-> [STORAGE.md → channels](../../../STORAGE.md#channels--125)). Все развилки
+> [STORAGE.md → channels](../../../STORAGE.md#channels--125-the-routing-channels-templatestorage)). Все развилки
 > решены (см. «Решения», бывшие open questions). Покрыто тестами
 > (`channel_test.dart`, `channels_migration_test.dart`, `channel_groups_test.dart`).
 >
