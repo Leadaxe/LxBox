@@ -1061,35 +1061,35 @@ defaults); `num` is always written — it is part of the axis layout.
 | ref-var `{"ref":...}` | ✓ | — |
 | A preset's `ui` object | ✓ (when it fits) | the flags below |
 | An `@` field in a payload | — | ✓ (per field) |
-| `#if` + object `value` | условие | тело |
-| `#if` + скаляр | ✓ | — |
-| литеральное правило пресета | ✓ | — |
+| `#if` plus an object `value` | the condition | the body |
+| `#if` plus a scalar | ✓ | — |
+| A preset's literal rule | ✓ | — |
 
-> **Грабля:** НЕ вставлять коммент-ключи (`"//": "..."`) в `config`-блок — sing-box
-> strict-decode их не знает → fatal старт ядра (§264). Пояснения — в этом файле или спеке,
-> не в JSON конфига. В мета-секциях (`vars`/`sections`/`ui`) можно любые поля — они не идут
-> в config.
+> **A gotcha:** do NOT put comment keys (`"//": "..."`) into the `config` block — sing-box's
+> strict decode does not know them and the core start is fatal (§264). Explanations belong in
+> this file, not in the config JSON. In the meta sections (`vars`, `sections`, `ui`) any field
+> is fine — they never reach the config.
 
 ---
 
-## Локализация display-текста — l10n overlay (§279)
+## Localizing the display text — the l10n overlay (§279)
 
-`wizard_template.json` остаётся **единственным структурным шаблоном** с
-английским display-текстом. Переводы не форкают структуру — это плоские
-overlay-файлы, патчащие декодированный JSON **до парсинга и до
-preset_expand-снапшотов** (`TemplateOverlay.apply`, зовётся из
-`TemplateLoader`; кэш loader'а ключуется тегом локали):
+`wizard_template.json` remains the **single structural template**, holding the English
+display text. Translations do not fork the structure — they are flat overlay files that patch
+the decoded JSON **before parsing and before the preset_expand snapshots**
+(`TemplateOverlay.apply`, called from `TemplateLoader`; the loader's cache is keyed by the
+locale tag):
 
 ```
-app/assets/l10n/ru/template.json   # ручной перевод (тот же shape, что UI-словарь)
+app/assets/l10n/ru/template.json   # a hand-written translation (the same shape as the UI dictionary)
 ```
 
-Английский display-текст живёт в самом `wizard_template.json` (базовый язык, в
-коде) — отдельного en-файла нет. Ключ overlay = **сам английский текст**
-display-поля (тот же принцип, что natural-key UI-словарь
-`assets/l10n/<tag>/ui.json`), а не структурный адрес.
-`TemplateOverlay.apply` ходит по whitelist-схеме шаблона, читает английское
-значение узла и подменяет его переводом по этому тексту.
+The English display text lives in `wizard_template.json` itself (the base language, in the
+code) — there is no separate en file. The overlay's key is **the English text itself** of the
+display field (the same principle as the natural-key UI dictionary
+`assets/l10n/<tag>/ui.json`), rather than a structural address.
+`TemplateOverlay.apply` walks the template's whitelist schema, reads a node's English value
+and swaps in the translation keyed by that text.
 
 - Английские ключи — базовый язык, в коде: коммитнутого/генерируемого en-файла
   нет. `template_check` извлекает их живьём из `wizard_template.json` через
