@@ -44,7 +44,7 @@ RU/EN и соответствие содержания коду. Повод — 
 | `docs/TEMPLATE.md` | 96 | смешанный | перевести в EN |
 | `docs/PROTOCOLS.md` | 82 | смешанный | перевести в EN |
 | `docs/KERNEL.md` | 58 | RU | перевести в EN |
-| `docs/DIAGNOSTICS.md` | 45 | смешанный | перевести в EN |
+| `docs/DIAGNOSTICS.md` | 45 | EN ✓ | только EN — сделано |
 | `docs/RELEASE_PROCESS.md` | 32 | EN ✓ | только EN — сделано |
 | `docs/DEVELOPMENT_GUIDE.md` | 25 | EN ✓ | только EN — сделано |
 | `docs/DEVELOPMENT_REPORT.md` | 38 | RU | **не переводим** — замороженный архив |
@@ -220,6 +220,7 @@ build`).
    - ✓ `docs/README.md` (индекс: имена пар, полный состав парных, добавлены
      FDROID/l10n/PRIVACY_POLICY, которых в индексе не было)
    - ✓ `RELEASE_PROCESS.md` (+ находка 10 ниже)
+   - ✓ `DIAGNOSTICS.md`
 
 **Грабля перевода: якоря на русские заголовки.** Ссылки вида
 `ARCHITECTURE.md#локализация-l10n-279` живы, пока целевой документ русский,
