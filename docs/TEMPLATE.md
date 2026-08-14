@@ -874,16 +874,16 @@ Downloading happens only by hand, through the **Download** button in the UI (`Ru
 }
 ```
 
-В template'е стандартный pattern: ссылка на `rule_set` + outbound. См. примеры в `selectable_rules[]` существующего template'а.
+The standard pattern in the template is a reference to a `rule_set` plus an outbound. See the examples in `selectable_rules[]`.
 
-**Массивная форма (§246, ключ `rules`).** Пресет может эмитить несколько route-правил — порядок элементов сохраняется в финальном `config.route.rules`. Семантика expansion (`preset_expand.dart`):
+**The array form (§246, the `rules` key).** A preset can emit several route rules at once.
 
-- элемент с `action ∈ {resolve, sniff, route-options}` — **промежуточный** (non-terminal): outbound-override юзера и reject-backstop к нему НЕ применяются; его присутствие в конфиге контролируется `#if`-гейтом (§120, array-element form: false без `else` → элемент выпадает);
-- остальные элементы — **терминальные**: override/backstop работают как для одиночного rule (к каждому);
-- dangling-rule_set guard — поэлементный: битый элемент дропается с warning, остальные живут;
-- substitute гоняется по массиву целиком (иначе array-element `#if` не сработал бы).
+- an element with `action ∈ {resolve, sniff, route-options}` is **intermediate** (non-terminal): the outbound override does not apply to it;
+- the remaining elements are **terminal**: the override and the backstop behave as they do for a single rule;
+- the dangling-rule_set guard is per element: a broken element is dropped with a warning and the rest survive;
+- the substitution runs over the whole array (otherwise an array-element `#if` would never fire).
 
-Мотивирующий пример — `ru-direct`: на устройствах без глобального IPv6 direct-трафик на AAAA-адреса умирает (`network is unreachable`), поэтому RU-домены резолвятся `ipv4_only`. Управляется bool-var `force_ipv4` (default `true`) — юзер может выключить, если у сети рабочий IPv6:
+The motivating example is `ru-direct`: on devices with no global IPv6, direct traffic needs a forced `ipv4_only` resolve before the terminal rule.
 
 ```jsonc
 "rules": [
@@ -894,35 +894,35 @@ Downloading happens only by hand, through the **Download** button in the UI (`Ru
 ]
 ```
 
-⚠ `server` в resolve-элементе ссылается на DNS-сервер, который эмитится **DNS-аспектом** пресета (галка DNS, §033/§121): при выключенном DNS-аспекте тег повиснет (dangling) → fatal у ядра. Использовать `server` в resolve только если пресет надёжно эмитит сервер, либо не указывать `server` вовсе (internal-резолв пойдёт через DNS-роутинг / `default_domain_resolver`).
+⚠ The `server` in a resolve element references a DNS server emitted by the preset's **DNS aspect**, so the two must stay in sync.
 
-Для UI outbound-picker'а дефолт берётся из **терминального** элемента (`SelectableRule.terminalRule` — последний не-промежуточный).
+For the UI's outbound picker the default comes from the **terminal** element (`SelectableRule.terminalRule`).
 
 ### `selectable_rules[*].dns_rule(s)` / `dns_servers`
 
-Аналогично routing rule, но для DNS pipeline. Канонический ключ — `dns_rules` (массив, §253); `dns_rule` (single Map) — legacy-форма (fakeip). Элемент направляет matched-domains на DNS-сервер из `dns_servers[]` (или ссылку на основной `dns_options.servers[]` сервер по tag), либо отвечает сам serverless-действием (`predefined`/`reject` — `server` не нужен).
+The same as a routing rule, but for the DNS pipeline. The canonical key is `dns_rules` (an array, §253); the legacy `dns_rule` is a single Map.
 
-Массивная форма поддерживает **array-element `#if`** (§246-механика): `#if` false без else → элемент выпадает из массива целиком. Пример из `ru-direct` (Force IPv4, §253): первым идёт `#if @force_ipv4`-гейт `{ip_version: 6, action: predefined, rcode: NOERROR}` (AAAA-запросы к RU-доменам получают пустой успешный ответ — приложение чисто берёт A; НЕ `reject`: он отвечает REFUSED и после 50 срабатываний/30с переходит в drop), вторым — безусловный маршрут `{server: @dns_server}`. **Порядок критичен:** гейт первым, маршрут безусловным — иначе не-A/AAAA-запросы (HTTPS type 65 и пр.) уйдут мимо `@dns_server` (`ip_version` матчит только A/AAAA; прочие типы не матчатся ни `4`, ни `6`).
+The array form supports an **array-element `#if`** (the §246 mechanism): an `#if` that is false with no else drops the element.
 
-⚠ Легаси `strategy` в DNS-правиле **запрещён** (deprecated в ядре 1.14 и несовместим с `query_type`/`ip_version` в том же конфиге — fatal на старте; билдер снимает его heal'ом, §246). Ограничение семейства адресов — только через `ip_version`-matcher + `predefined`.
+⚠ The legacy `strategy` inside a DNS rule is **forbidden** (deprecated in core 1.14 and incompatible with `query_type`).
 
-⚠ В отличие от `dns_options.servers[*]` (обёртка `{description, enabled, vars?, server}` §117), preset-`dns_servers[*]` — это **плоские sing-box-тела** (`{type, tag, detour, …}` без обёртки, tag на top-level). `preset_expand.dart` фильтрует их по top-level `s['tag']`. Пример из `ru-direct`: `{"type":"udp","tag":"yandex_udp","detour":"@outbound",…}`.
+⚠ Unlike `dns_options.servers[*]` (the `{description, enabled, vars?, server}` wrapper of §117), a preset's `dns_servers[*]` holds FLAT sing-box bodies with a top-level tag.
 
 ### `vars` substitution
 
-Vars, объявленные в preset'е, **видны только когда preset enabled**. UI рендерит их в Routing → preset detail. При expansion `@varname` в `rule(s)` / `dns_rule(s)` / `dns_servers` подставляется текущим значением (`varsValues[name]` из `CustomRulePreset` storage entry, fallback на `default_value`).
+The vars declared in a preset are **visible only while the preset is enabled**. The UI renders them on the Routing screen.
 
-Универсальный `outbound`-override (spec [§033] Expansion §5): если `varsValues['outbound']` задан непустой — заменяет любое template-решение (`@outbound`-substitution / hardcoded outbound / `action: reject`).
+The universal `outbound` override (spec [§033], Expansion §5): when `varsValues['outbound']` holds a non-empty value, it replaces the rule's outbound.
 
 ---
 
 ## Vars-substitution syntax
 
-Везде в `config` блоке (и в expansion preset'ов) подставляется **только whole-string** value вида `"@varname"` (строка целиком начинается с `@`, имя = всё после `@`) из:
-1. `lxbox_settings.json` `vars[varname]` (если override'нуто)
-2. `default_value` соответствующего var в `sections[*].vars[*]` или `selectable_rules[*].vars[*]`
+Everywhere in the `config` block (and in preset expansion) only a **whole-string** value of the form `"@varname"` is substituted. The value comes from:
+1. `lxbox_settings.json` `vars[varname]` (when overridden)
+2. the `default_value` of the matching var in `sections[*].vars[*]` or `selectable_rules[*].vars[*]`
 
-Inline-подстановка **не поддерживается**: `"prefix-@varname-suffix"` не строка-`@var`, поэтому остаётся литералом как есть (молча, без warning). А `"@varname-suffix"` будет искаться как var с именем `varname-suffix` — не тем, что ожидалось. Если var-имя не объявлено, плейсхолдер остаётся как есть (контракт `build_config`).
+Inline substitution is **not supported**: `"prefix-@varname-suffix"` is not a `@var` string, so it is left as-is.
 
 Результат **типизирован по объявленному `var.type`** (§120): `bool`/`int` коэрсятся `coerceVarValue`, строковые типы (`text`/`secret`/`enum`/`outbound`/`dns_servers`) — дословно. Сам шаблон использует и типизированные `@var`: `"@tun_mtu"` (int), `"@tun_auto_route"` (bool).
 
