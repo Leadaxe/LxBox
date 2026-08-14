@@ -1056,10 +1056,10 @@ A thin client over three channels (`com.leadaxe.lxbox/methods` plus two EventCha
 | Group | Methods | Notes |
 |---|---|---|
 | Config | `saveConfig` / `getConfig` | `getConfig` falls back to `'{}'` so the builder can parse without a null check |
-| VPN lifecycle | `startVPN` / `stopVPN` / `reloadVPN` / `resetNetwork` / `getVpnStatus` / `getCoreVersion` / `quitApp` | `stopVPN` блокирующий native до `setStatus(Stopped)` — позволяет `await stop; await start` без race |
-| Settings (boot prefs / native toggles) | auto_start, keep_on_exit, core_logs_enabled, allow_bypass, auto_redirect, background_mode (+ has_tun §192) | §189 — native `SharedPreferences boxvpn_boot.*` теперь **зеркало** JSON-секции `native_prefs`; источник истины = `lxbox_settings.json` (write-through + sync на старте). Все писатели идут через `SettingsStorage.setNativeBool`/`setNativeBackgroundMode`. |
+| VPN lifecycle | `startVPN` / `stopVPN` / `reloadVPN` / `resetNetwork` / `getVpnStatus` / `getCoreVersion` / `quitApp` | — |
+| Settings (the boot prefs and native toggles) | auto_start, keep_on_exit, core_logs_enabled, allow_bypass, auto_redirect | — |
 | Per-app routing | `getInstalledApps` / `getAppIcon` / `getAppInfo` | Icons are lazy — `getInstalledApps` returns none |
-| System helpers | `isIgnoringBatteryOptimizations` / `open*Settings` / `*NotificationPermission` / `*NearbyWifiPermission` / `showToast` | Permission `request*` — async, UI делает re-check через паренный `check*` |
+| System helpers | `isIgnoringBatteryOptimizations` / `open*Settings` / `*NotificationPermission` / `*NearbyWifiPermission` | — |
 | Quick Settings | `requestAddTile` | API 33+ |
 
 **Status stream design:**
@@ -1224,25 +1224,25 @@ The three Flutter–Android channels live in `VpnPlugin.kt`:
 | `ACCESS_BACKGROUND_LOCATION` | Required on API 29+ for `WifiManager.connectionInfo` from the background | through Settings |
 | `NEARBY_WIFI_DEVICES` (`neverForLocation`) | Required on API 33+ for a real SSID/BSSID; without it the SSID reads as unknown | at runtime |
 
-**`neverForLocation` flag** на `NEARBY_WIFI_DEVICES` декларирует Google Play, что permission используется **не для location tracking** — это снимает дополнительный compliance review. У нас он действительно нужен только для SSID/BSSID (sing-box wifi rules).
+**The `neverForLocation` flag** on `NEARBY_WIFI_DEVICES` declares to Google Play that the permission is not used to derive a location.
 
-**Permission gating в `BoxService.startSingbox`** ([BoxService.kt:267](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt:267)):
+**Permission gating in `BoxService.startSingbox`** ([BoxService.kt](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt)):
 
-После `startOrReloadService` (это парсит config) sing-box exposes `commandServer.needWIFIState()` — `true` если в активном config'е есть `wifi_ssid:`/`wifi_bssid:` правила. Если нужен и хоть один permission missing — `stopAndAlert("alert:permission_location:<comma-list>")`. Иначе sing-box падает с misleading `Unknown reference: 42` (real cause — unhandled `SecurityException` через JNI; см. §050).
+After `startOrReloadService` (which parses the config) sing-box exposes `commandServer.needWIFIState()`.
 
 Permission matrix:
 
-| API | Что нужно для `WifiInfo.ssid` |
+| API | What `WifiInfo.ssid` requires |
 |---|---|
 | API 28- | `ACCESS_FINE_LOCATION` |
 | API 29-32 | `ACCESS_BACKGROUND_LOCATION` |
-| API 33+ | `ACCESS_BACKGROUND_LOCATION` + `NEARBY_WIFI_DEVICES` (без NEARBY → `<unknown ssid>`) |
+| API 33+ | `ACCESS_BACKGROUND_LOCATION` plus `NEARBY_WIFI_DEVICES` (without NEARBY it reads `<unknown ssid>`) |
 
-**Defensive try/catch в `PlatformInterfaceWrapper.readWIFIState`** ([PlatformInterfaceWrapper.kt:139](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt:139)) — backup для случая когда permission grants drift'ует (например, Android revoke after long idle). `SecurityException` / `RuntimeException` → `return null`. Sing-box graceful'но получает null, не валит процесс через JNI.
+**A defensive try/catch in `PlatformInterfaceWrapper.readWIFIState`** ([PlatformInterfaceWrapper.kt](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt)):
 
-#### JNI no-throw инвариант (§050 · §151)
+#### The JNI no-throw invariant (§050 · §151)
 
-Кросс-каттинговое правило для **всех** Kotlin-колбэков, которые libbox зовёт через gomobile-биндинг (`PlatformInterfaceWrapper`, `BoxService`/`BoxCommandClient` итераторы и `write*`-колбэки): **unchecked exception, вылетевшее через JNI = `Runtime::Abort` всего процесса** (не ловится Dart'ом, крашит особенно старые API — Android 10). Уточнение §151: методы с Go-сигнатурой `... error` защищены самим биндингом (исключение конвертится в error-возврат) — реальная abort-поверхность это методы **без** error-возврата. Следствие для итераторов (`StringIterator.Next()`/`HasNext()`, `chain()`/`outbound()`): возвращать пустое значение вместо броска. Симптом такого abort исторически — misleading `Unknown reference: 42` (root cause = unhandled `SecurityException` через JNI, см. §050).
+A cross-cutting rule for **every** Kotlin callback that libbox invokes.
 
 **Runtime grant flow** (Flutter side):
 
@@ -1255,11 +1255,11 @@ stopAndAlert("alert:permission_location:<perms>")
    ↓
 HomeController.lastError = "Stopped: alert:permission_location:..."
    ↓
-home_screen._handleStatusEvent ловит prefix → AlertDialog
+home_screen._handleStatusEvent catches the prefix → an AlertDialog
    ↓
 [Allow Wi-Fi info]               [Open Settings]
 runtime prompt (NEARBY)          MANAGE_APP_PERMISSIONS intent
-                                 → 3 fallback стратегии:
+                                 → three fallback strategies:
                                    1. MANAGE_APP_PERMISSIONS
                                    2. MANAGE_PERMISSION_APPS
                                    3. ACTION_APPLICATION_DETAILS_SETTINGS
@@ -1267,37 +1267,37 @@ runtime prompt (NEARBY)          MANAGE_APP_PERMISSIONS intent
 re-check via checkNearbyWifiPermission → user re-Connect
 ```
 
-`POST_NOTIFICATIONS` идёт через **explainer flow** в `home_screen._maybeShowNotificationPermissionDialog` (вызывается из `init`): один раз на cold start показывается AlertDialog (пояснение "VPN runs as foreground service, system requires notification"), потом system runtime prompt. Persisted флаг `notif_perm_prompted_v1` — explainer не повторяется.
+`POST_NOTIFICATIONS` goes through an **explainer flow** in `home_screen._maybeShowNotificationPermissionDialog`.
 
 ---
 
 ### VPN Lifecycle & Status Sync
 
-Модель туннеля: **`BoxVpnService` — это Android foreground-service, живущий **отдельно от Flutter-процесса**. Это даёт три состояния проекта которые надо координировать:
+The tunnel's model: **`BoxVpnService` is an Android foreground service that lives separately from the Flutter process.**
 
-1. **Flutter-процесс живой, сервис живой** — нормальная работа. `setStatus(new)` в сервисе отправляет broadcast `BROADCAST_STATUS`, `VpnPlugin.statusReceiver` ловит и толкает в EventChannel sink → `HomeController._handleStatusEvent`. Всё в реальном времени.
+1. **The Flutter process is alive and so is the service** — normal operation.
 
-2. **Flutter-процесс умер, сервис жив** — случается при `keep-on-exit = true` + swipe из recents / OOM-kill / system trimming. Android завершает Flutter activity + engine, но foreground-service (START_STICKY для touch-like policy) продолжает крутить sing-box и гнать трафик. Юзер возвращается → новый процесс, новый `HomeController.init`, новый listener. Broadcast'ы идут только на **transition**, а сервис уже в steady-state — никто не шлёт "I'm Started" повторно.
+2. **The Flutter process died while the service lives on** — this happens with `keep-on-exit = true`.
 
-3. **Сервис умер системой** — OOM, краш libbox, revoked другим VPN. `setStatus(Stopped, error=...)` уходит в broadcast (если плагин ещё жив) или просто в `companion.currentStatus = Stopped` (если плагин мёртв вместе с процессом).
+3. **The system killed the service** — an OOM, a libbox crash, or a revoke by another VPN.
 
-#### Pull-sync механика
+#### The pull-sync mechanics
 
-Источник правды — `BoxVpnService.companion.currentStatus: VpnStatus` (`@Volatile`, обновляется в каждом `setStatus`). `VpnPlugin` выставляет его через MethodChannel `getVpnStatus`.
+The source of truth is `BoxVpnService.companion.currentStatus: VpnStatus` (`@Volatile`, updated on every change).
 
 ```
 HomeController.init()
   ├─ _loadSavedConfig()
-  ├─ _statusSub = _vpn.onStatusChanged.listen(_handleStatusEvent)  ← подписка на delta
-  └─ raw = await _vpn.getVpnStatus()                               ← pull текущего
-     └─ _handleStatusEvent({status: raw})  ← тот же handler, он сам решит что emit'ить
+  ├─ _statusSub = _vpn.onStatusChanged.listen(_handleStatusEvent)  ← subscribing to the deltas
+  └─ raw = await _vpn.getVpnStatus()                               ← pulling the current value
+     └─ _handleStatusEvent({status: raw})  ← the same handler; it decides what to emit
 ```
 
-Без `getVpnStatus`-pull'а кейс №2 ломался: UI вечно "Disconnected" пока не случится следующий transition (а его может и не случиться, пока юзер не нажмёт Stop).
+Without the `getVpnStatus` pull, case 2 broke: the UI stayed “Disconnected” forever until something happened.
 
-#### Broadcast vs pull — когда что
+#### Broadcast versus pull — which is used when
 
-| Событие | Механика |
+| Event | Mechanism |
 |---------|----------|
 | Транзит (`Starting` → `Started`) | broadcast → EventChannel |
 | App reattach (новый Flutter-процесс, сервис жив) | pull `getVpnStatus` в `init` |
