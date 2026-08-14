@@ -468,7 +468,7 @@ How the template vars are grouped in the Wizard UI (App Settings → Configurati
 ]
 ```
 
-8 секций в текущем template'е: `General`, `Network`, `Internal`, `Auto Proxy`, `DNS`, `TUN`, `VPN Mode`, `DPI Bypass`. Расфасованы по **4 chapter'ам** (`core`, `routing`, `dns`, `internal`).
+The current template has eight sections: `General`, `Network`, `Internal`, `Auto Proxy`, `DNS`, `TUN`, `VPN Mode` and `DPI Bypass`. How they are distributed across screens is described below.
 
 `id` is a stable kebab-case machine id (§279): `general`, `network`, `internal`,
 `auto-proxy`, `dns`, `tun`, `vpn-mode`, `dpi-bypass`. It serves as the l10n overlay's
@@ -502,8 +502,8 @@ the `traffic-processing` rule, which pulls them in as ref-vars).
 
 | Var | Type | Purpose |
 |---|---|---|
-| `resolve_enabled` | bool | §263 — гейт route-resolve-правила пресета `traffic-processing` (off для FakeIP). Меняется on_change-механикой §266 (см. ниже) и вручную в правиле пресета. |
-| `resolve_strategy` | enum | IP-версия для route-resolve (`ipv4_only`/`prefer_ipv4`/…). Пишется on_change тумблера IPv6 (§249). |
+| `resolve_enabled` | bool | §263 — the gate for the route-resolve rule of the `traffic-processing` preset (turn it off for FakeIP). Changed through the rule. |
+| `resolve_strategy` | enum | The IP version for route-resolve (`ipv4_only` / `prefer_ipv4` / …). Written by the toggle's on_change. |
 
 > **Why `internal` rather than `wizard_ui: hidden`.** `hidden` conceals a var inside its
 > chapter's section, but the section still belongs to a screen that renders (VPN
@@ -517,36 +517,36 @@ the `traffic-processing` rule, which pulls them in as ref-vars).
 | `vpn_mode` | enum | `vpn` / `proxy` / `vpn_proxy` — какие inbounds поднимать |
 | `proxy_type` | enum | тип proxy-inbound (`mixed`/...) |
 | `proxy_listen` | text | listen-адрес proxy |
-| `proxy_port` | int | listen-порт proxy |
-| `proxy_user` | text | имя пользователя (при auth) |
-| `proxy_pass` | secret | пароль (при auth; `secret` — никогда не коэрсится) |
-| `proxy_auth` | bool | включить `users[]` в proxy-inbound |
+| `proxy_port` | int | The proxy's listen port |
+| `proxy_user` | text | The username (when auth is on) |
+| `proxy_pass` | secret | The password (when auth is on; a `secret` is never coerced) |
+| `proxy_auth` | bool | Include `users[]` in the proxy inbound |
 
-### `vars[i]` — описание template-переменной
+### `vars[i]` — the description of a template variable
 
 | Ключ | Тип | Назначение |
 |---|---|---|
-| `name` | string | Имя переменной. `@name` в `config` блоке шаблона будет подставлено значением из storage `vars[name]` или `default_value`. |
-| `type` | enum | Тип input'а — определяет UI-control и валидацию. См. ниже. |
-| `default_value` | any | Default если юзер не override'нул через UI / `PUT /settings/vars/...`. |
-| `required` | bool? | Если true — пустое значение запрещено. |
-| `options[]` | list? | Для `enum` type'а — варианты. Может быть `[string,...]` или `[{title, value}, ...]`. |
-| `wizard_ui` | `"edit" \| "fix" \| "hidden"`? | Display mode в Wizard UI. `hidden` — internal var (not shown). `fix` — read-only display. `edit` (default) — editable. |
-| `title` | string? | Display label в UI. |
-| `tooltip` | string? | Help-text при tap на info-иконку. |
-| `on_change` | object? | §232 — декларативный side-effect при переключении var (in-memory, `VarValuesModel`). На **vars пресета** — §266-вариант (пишет глобальный `userVars`, триггер = вкл/выкл пресета). См. раздел ниже. |
+| `name` | string | The variable's name. An `@name` inside the template's `config` block is replaced by its value. |
+| `type` | enum | The input type — it decides the UI control and the validation. See below. |
+| `default_value` | any | The default when the user has not overridden it through the UI or `PUT /settings/vars/...`. |
+| `required` | bool? | When true, an empty value is forbidden. |
+| `options[]` | list? | For the `enum` type, the choices. Either `[string, ...]` or `[{title, value}, ...]`. |
+| `wizard_ui` | `"edit" \| "fix" \| "hidden"`? | The display mode in the Wizard UI. `hidden` is an internal var (not shown); `fix` is read-only. |
+| `title` | string? | The display label in the UI. |
+| `tooltip` | string? | The help text shown when the info icon is tapped. |
+| `on_change` | object? | §232 — a declarative side effect when the var is toggled (in memory, `VarValuesModel`). |
 
 ### `var.type` values
 
-Заметил в template'е:
+Seen in the template:
 
-| Type | Coerce в config (§120) | UI-control |
+| Type | Coerced into the config (§120) | UI control |
 |---|---|---|
-| `text` | **строка дословно** | TextField |
-| `int` | `int.tryParse` (не-число → строка) | TextField |
-| `bool` | `'true'`→true, иначе false | Switch |
-| `enum` | **строка** (∈ `options[]` — advisory) | Dropdown |
-| `secret` | **строка дословно** (никогда не коэрсить) | TextField (masked) |
+| `text` | **the string verbatim** | TextField |
+| `int` | `int.tryParse` (a non-number stays a string) | TextField |
+| `bool` | `'true'` becomes true, anything else false | Switch |
+| `enum` | **a string** (membership in `options[]` is advisory) | Dropdown |
+| `secret` | **the string verbatim** (never coerce it) | TextField (masked) |
 | `outbound` | **строка** (tag selector/node) | Dropdown заполняется runtime |
 | `dns_servers` | **строка** (tag из `dns_options.servers`) | Dropdown заполняется runtime |
 
