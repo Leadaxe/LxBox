@@ -87,7 +87,7 @@ wizard_template.json
 ├─ sections[]                      list[8]       Wizard UI chapters (§022)
 │   └─ <Section>                   object
 │       ├─ id                      string        stable machine-id, kebab-case (§279: "general", "auto-proxy", …)
-│       ├─ name                    string        "General", "DNS", "TUN", etc. — внутренний join-ключ vars↔section
+│       ├─ name                    string        "General", "DNS", "TUN", etc. — the internal join key between vars and sections
 │       ├─ chapter                 string        grouping ("core"|"routing"|"dns")
 │       ├─ description             string
 │       └─ vars[]                  list          the section's variables
@@ -257,7 +257,7 @@ The conventions (§117):
 - `detour: "@outbound"` with a var default of `direct-out` means the key is **not**
   written by default (`normalizeDnsDetour`: `direct-out`, an empty value and a channel
   unknown to the builder all erase the key; “no detour” is both the default and the fallback).
-- Доменные серверы (адрес = hostname): `domain_resolver: "@dom_resolver"` +
+- For domain-addressed servers (the address is a hostname): `domain_resolver: "@dom_resolver"` plus
   the var `{type: dns_servers, default_value: "google_udp"}` decides what resolves the
   DNS server's own hostname.
 
@@ -510,13 +510,13 @@ the `traffic-processing` rule, which pulls them in as ref-vars).
 > Settings). The `internal` chapter takes the var out from under every screen entirely —
 > its only editing point is the preset that references it.
 
-Секция `VPN Mode` — целиком `wizard_ui: hidden` (build-time vars, не показывается в UI). Её 7 переменных питают `#if`-гейтинг inbounds/route-rules (§119/§120), значения проставляются из `VpnModeConfig` на этапе сборки, а не редактируются юзером в Wizard:
+The `VPN Mode` section is entirely `wizard_ui: hidden` (build-time vars, not shown in the UI). Its seven variables are edited on their own screen (VPN Mode), not through the Wizard.
 
 | Var | Type | Purpose |
 |---|---|---|
-| `vpn_mode` | enum | `vpn` / `proxy` / `vpn_proxy` — какие inbounds поднимать |
-| `proxy_type` | enum | тип proxy-inbound (`mixed`/...) |
-| `proxy_listen` | text | listen-адрес proxy |
+| `vpn_mode` | enum | `vpn` / `proxy` / `vpn_proxy` — which inbounds to raise |
+| `proxy_type` | enum | The type of the proxy inbound (`mixed`, …) |
+| `proxy_listen` | text | The proxy's listen address |
 | `proxy_port` | int | The proxy's listen port |
 | `proxy_user` | text | The username (when auth is on) |
 | `proxy_pass` | secret | The password (when auth is on; a `secret` is never coerced) |
@@ -592,15 +592,15 @@ effect, not a lock).
 
 The semantics:
 
-- **Разовый эффект переключения, не форс** — целевые var записываются в момент
-  клика; юзер потом волен переопределить вручную.
-- **Только in-memory** — цели пишутся в реактивную `VarValuesModel` экрана
-  (per-key `ValueNotifier`; поля `TemplateVarListView` подписаны каждое на свой
+- **A one-off effect of the toggle, not a lock** — the target vars are written at the
+  moment of the click; afterwards the user is free to override them by hand.
+- **In memory only** — the targets are written into the screen's reactive `VarValuesModel`
+  (a per-key `ValueNotifier`; each `TemplateVarListView` field subscribes to its own key
   ключ и обновляются мгновенно). Storage трогается ТОЛЬКО общим write-on-exit
-  (`_persist` по `dirtyKeys`) — юзер, ушедший до выхода с экрана (force-kill),
-  ничего не «сохранил». См. ARCHITECTURE.md → «VarValuesModel».
-- **Цепочки** — если целевая var сама имеет `on_change`, он применяется
-  рекурсивно; fixpoint-guard: запись неизменившегося значения обрывает цикл.
+  (`_persist` over `dirtyKeys`) — a user who leaves before exiting the screen (a
+  force-kill) has saved nothing. See ARCHITECTURE.md → “VarValuesModel”.
+- **Chains** — if a target var has its own `on_change`, it is applied recursively; a
+  fixpoint guard breaks the cycle: writing an unchanged value stops it.
 - **Значения — литералы-строки.** `#if`-узел вычисляется движком через
   `evalIfScalar` (`if_engine.dart`) — НЕ через `walk` напрямую: bare-Map
   `{"#if":…}` в `walk` уходит в map-spread режим и схлопывает скаляр в `{}`.
