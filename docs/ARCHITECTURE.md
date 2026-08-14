@@ -29,16 +29,16 @@ The current parser and builder version is **v2** (spec 026, phase 5 completed in
 > `LEANBACK_LAUNCHER` intent filter), but it remains **best-effort**: the UI is
 > designed for touch and there is no separate leanback interface. Two platform
 > quirks to keep in mind when editing:
-> в прошивках TV **нет DocumentsUI**, но intent не остаётся без обработчика —
-> его перехватывает системная заглушка `frameworkpackagestubs`, которая молча
-> отменяет выбор (`resolveActivity` её находит, ошибки нет, результат пуст).
-> Поэтому все пики идут через
+> TV firmware has **no DocumentsUI**, yet the intent never goes unhandled —
+> the system stub `frameworkpackagestubs` intercepts it and silently cancels
+> the selection (`resolveActivity` finds it, there is no error, the result is empty).
+> That is why every picker goes through
 > [`services/file_import.dart`](../app/lib/services/file_import.dart): он
-> спрашивает платформу (`hasRealFilePicker`, отбрасывает заглушки по имени
-> пакета) **до** запуска пика и подсказывает буфер обмена / URL. Не полагаться
-> на код ошибки `file_picker` — на TV его не будет. И управление идёт с **D-pad** — виджеты
-> без фокусного узла (`GestureDetector`) с пульта недостижимы, для кликабельных
-> элементов на пути подключения нужен `InkWell`/кнопка. Подробности —
+> which asks the platform (`hasRealFilePicker`, rejecting the stubs by package
+> name) **before** launching the picker and suggests the clipboard or a URL.
+> Do not rely on a `file_picker` error code — on TV there will not be one.
+> Control comes from a **remote**: anything without a focusable node is
+> unreachable, so clickable elements need an `InkWell` or a button. Details:
 > [§372](spec/tasks/372-android-tv-support.md).
 
 > **The renderer (§131).** On `Build.VERSION.SDK_INT < 31` (Android ≤11) Flutter
