@@ -673,9 +673,9 @@ The semantics:
 
 ---
 
-## `config` — нативная sing-box-секция
+## `config` — the native sing-box section
 
-База финального sing-box config'а. Содержит `@var`-плейсхолдеры — substitution происходит на build time. После расширения `selectable_rules[*]` и каналы (`channels[]`, seeded из `group_templates`) мерджатся в эту базу.
+The base of the final sing-box config. It carries `@var` placeholders; the substitution happens at build time in `build_config.dart`.
 
 ```jsonc
 {
@@ -684,8 +684,8 @@ The semantics:
     "timestamp": true
   },
   "dns": {
-    "servers":  [],                              // пусто; заполняется из dns_options.servers + selectable_rules[].dns_servers
-    "rules":    [],                              // пусто; заполняется из dns_options.rules + selectable_rules[].dns_rules
+    "servers":  [],                              // empty; filled in from dns_options.servers plus selectable_rules[].dns_servers
+    "rules":    [],                              // empty; filled in from dns_options.rules plus selectable_rules[].dns_rules
     "final":    "@dns_final",
     "strategy": "@dns_strategy"
   },
@@ -695,29 +695,29 @@ The semantics:
   "endpoints": [],                               // wireguard endpoints (from server_lists user nodes)
   "outbounds": [
     {"type": "direct", "tag": "direct-out"},     // base
-    {"type": "block",  "tag": "block"}           // §201 drop-out; остальное добавляется builder'ом
+    {"type": "block",  "tag": "block"}           // the §201 drop-out; the rest is added by the builder
   ],
   "route": {
     "find_process":            true,
     "default_domain_resolver": "@dns_default_domain_resolver",
     "rules": [
-      // §264: route.rules в шаблоне ПУСТ. Базовые sniff/hijack-dns/resolve
-      // ПЕРЕЕХАЛИ в locked-пресет traffic-processing (первый в selectable_rules,
-      // num:0 → билдер ставит его правила первыми в финальном route.rules).
-      // Порядок (sniff ПЕРЕД resolve) критичен для FakeIP: sniff извлекает домен
-      // до resolve (resolve по фейк-IP 198.18.x.x бессмыслен). Каждое из трёх
-      // правил обёрнуто в #if внутри пресета: @sniff_enabled / (протокол dns —
-      // hijack-dns) / @resolve_enabled (off для FakeIP — real-lookup идёт мимо
-      // FakeIP через default_domain_resolver). См. § selectable_rules ниже.
+      // §264: route.rules is EMPTY in the template. The base sniff/hijack-dns/resolve
+      // rules MOVED into the locked traffic-processing preset (first in selectable_rules,
+      // num:0 → the builder puts its rules first in the final route.rules).
+      // The order (sniff BEFORE resolve) is critical for FakeIP: sniff extracts the domain
+      // before resolve (resolving a fake 198.18.x.x IP is meaningless). Each of the three
+      // rules is wrapped in an #if inside the preset: @sniff_enabled / (the dns protocol
+      // for hijack-dns) / @resolve_enabled (off for FakeIP — the real lookup bypasses
+      // FakeIP through default_domain_resolver). See the selectable_rules section below.
     ],
     "final":                  "vpn-1",
     "auto_detect_interface":  "@auto_detect_interface"
   },
   "experimental": {
-    // clash_api УДАЛЁН в §122 (CommandClient-миграция). Управление идёт через
-    // libbox CommandClient, а не HTTP Clash API. Ядро собрано БЕЗ with_clash_api:
-    // блок experimental.clash_api в кастомном шаблоне = ФАТАЛЬНЫЙ отказ старта
-    // ("clash api is not included in this build"). Не добавлять.
+    // clash_api was REMOVED in §122 (the CommandClient migration). Control goes through
+    // the libbox CommandClient, not an HTTP Clash API. The core is built WITHOUT
+    // with_clash_api: an experimental.clash_api block in a custom template is a FATAL
+    // startup failure ("clash api is not included in this build"). Do not add it.
     "cache_file": {"enabled": true, "path": "..."}
   }
 }
