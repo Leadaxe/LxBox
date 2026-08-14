@@ -1,8 +1,8 @@
-# Архитектура L×Box
+# L×Box architecture
 
-Документ описывает структуру Flutter-приложения L×Box, зоны ответственности, потоки данных и ключевые решения.
+This document describes the structure of the L×Box Flutter application, the boundaries of responsibility, the data flows and the native side.
 
-Текущая версия парсер/билдера — **v2** (spec 026, phase 5 completed в v1.3.0). Подробности см. в [spec/features/026 parser v2](./spec/features/026%20parser%20v2/spec.md).
+The current parser and builder version is **v2** (spec 026, phase 5 completed in v1.3.0). Details are in [spec/features/026 parser v2](./spec/features/026%20parser%20v2/spec.md).
 
 ---
 
@@ -63,26 +63,26 @@
 
 ---
 
-## Обзор
+## Overview
 
-L×Box — Android VPN-клиент на базе **sing-box** (через **libbox**). Полный цикл:
-подписки → парсинг → конфиг → VPN-туннель → управление через **libbox CommandClient**.
+L×Box is an Android VPN client built on **sing-box** (through **libbox**). The full cycle:
+subscriptions → parsing → config → the VPN tunnel → control through the **libbox CommandClient**.
 
-### Ядро: fork `sing-box-lx`
+### The core: the `sing-box-lx` fork
 
-VPN-ядро — наш форк [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)
-(upstream sing-box + AmneziaWG + XHTTP + LxBox-фичи), управление через libbox
-CommandClient. AAR качается `scripts/fetch-libbox.sh` из GitHub Releases форка,
-версия пинится в `app/android/libbox.version`.
+The VPN core is our fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)
+(upstream sing-box plus AmneziaWG, XHTTP and the LxBox features), controlled through the
+libbox CommandClient. The AAR is downloaded by `scripts/fetch-libbox.sh` from the fork's
+GitHub Releases, and the version is pinned in `app/android/libbox.version`.
 
-**Полностью — build-теги, ловушки при бампе версии, история rc — в
+**The full picture — the build tags, the gotchas of a version bump and the rc history — is in
 [`KERNEL.md`](KERNEL.md).**
 
-### Слои и зоны ответственности
+### The layers and their responsibilities
 
-Четыре слоя с однонаправленными зависимостями: **UI → State → Services →
-Platform** (никогда наоборот). Логика не живёт в `build()`; UI не дёргает
-Platform напрямую — только через контроллеры.
+Four layers with one-directional dependencies: **UI → State → Services → Platform**
+(never the other way round). Logic never lives in `build()`, and the UI never touches
+Platform directly — only through the controllers.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
