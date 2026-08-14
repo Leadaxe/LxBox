@@ -752,35 +752,35 @@ Each element is a bundle the user enables or disables on the Routing screen. On 
   },
   "vars": [ <Var> | {"ref":"<global>"}, … ]?, // vars visible only while the preset is on;
                                         //   §265: a reference element {"ref":"<global name>"}
-  "rule_set": [ <SingboxRuleSet>, … ]?, // rule_set'ы которые должны быть зарегистрированы
+  "rule_set": [ <SingboxRuleSet>, … ]?, // the rule sets that must be registered
   "rule":     <SingboxRoutingRule>?,    // routing rule — legacy single (Map)
-  "rules":    [ <SingboxRoutingRule>, … ]?, // §246: массив routing rules (канонический ключ; побеждает `rule`)
-  "dns_rule": <SingboxDnsRule>?,        // DNS-уровень rule — legacy single (Map)
-  "dns_rules": [ <SingboxDnsRule>, … ]?, // §253: массив DNS-rules (канонический ключ; побеждает `dns_rule`)
-  "dns_servers": [ <FlatDnsServer>, … ]?  // ПЛОСКИЕ sing-box DNS-тела (не обёртка §117; top-level tag)
+  "rules":    [ <SingboxRoutingRule>, … ]?, // §246: an array of routing rules (the canonical key; it beats `rule`)
+  "dns_rule": <SingboxDnsRule>?,        // a DNS-level rule — the legacy single form (a Map)
+  "dns_rules": [ <SingboxDnsRule>, … ]?, // §253: an array of DNS rules (the canonical key; it beats `dns_rule`)
+  "dns_servers": [ <FlatDnsServer>, … ]?  // FLAT sing-box DNS bodies (not the §117 wrapper; a top-level tag)
 }
 ```
 
-### `ui` — метаданные пресета (§264)
+### `ui` — the preset's metadata (§264)
 
-С §264 label/description/default/locked (+ §370 num/isSortable) живут в объекте
-`ui` (**ОБЯЗАТЕЛЕН**;
-плоские top-level `label`/`description`/`default` из шаблона убраны, fallback в
-`SelectableRule.fromJson` снят — читается только `ui`). Все 8 пресетов переведены на `ui`.
+Since §264, label/description/default/locked (plus §370's num/isSortable) live in the
+`ui` object (**REQUIRED**; the flat top-level `label` / `description` / `default` were
+removed from the template and the fallback in `SelectableRule.fromJson` is gone — only
+`ui` is read). All eight presets have been moved onto `ui`.
 
-| `ui.*` | Тип | Назначение |
+| `ui.*` | Type | Purpose |
 |---|---|---|
 | `label` | string | UI display. |
-| `description` | string | Тултип. |
-| `default` | bool? | default true → включён в новой установке. |
-| `locked` | bool? | §264 — пресет **нельзя выключить** (свич disabled) и **нельзя удалить**. Ортогонален `isSortable` (тот про drag). Единственный locked-пресет — `traffic-processing`. |
-| `num` | int? | §370 — позиция на **разреженной оси порядка правил**. Раскладка: `0` голова (traffic-processing), `950..990` специфичные пресеты, `1000..1100` зона пользовательских правил, `1110..1150` широкие перехватчики. Шаг 10 между шаблонными — зазор под будущие вставки. Это **стартовая** позиция: юзер двигает drag'ом, `num` пересчитывается и живёт в storage (`custom_rules[].num`). Дефолт при отсутствии — `1000`. |
-| `isSortable` | bool? | §370 — можно ли двигать правило drag'ом. `false` = позиция закреплена, drag-handle скрыт; такой пресет ещё и **сидится принудительно** (`seedRequiredPresets`), т.к. его присутствие — продуктовый инвариант. Единственный несортируемый — `traffic-processing` (`num:0`): он несёт `sniff`, который обязан быть первым правилом `route.rules`. Дефолт — `true`. |
+| `description` | string | The tooltip. |
+| `default` | bool? | When true, the preset is on in a fresh install. |
+| `locked` | bool? | §264 — the preset **cannot be turned off** (the switch is disabled) and **cannot be deleted**. |
+| `num` | int? | §370 — the position on the **sparse rule ordering axis**. |
+| `isSortable` | bool? | §370 — whether the rule can be dragged. `false` pins the position. |
 
-### Полевая матрица текущих 8 preset'ов
+### The field matrix of the current eight presets
 
-Метаданные — из `ui.*` (§264/§370): `default`/`locked`/`num`/`isSortable`.
-`traffic-processing` — первый в каталоге (locked, num:0, isSortable:false), несёт
+The metadata comes from `ui.*` (§264/§370): `default`, `locked`, `num`, `isSortable`.
+`traffic-processing` comes first in the catalog (locked, num:0, isSortable:false) and carries
 базовые sniff/hijack-dns/resolve.
 
 | `preset_id` | `ui.default` | `ui.locked` | `ui.num` | `vars` | `rule_set` | `rule(s)` | `dns_rule(s)` | `dns_servers` |
