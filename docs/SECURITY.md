@@ -144,7 +144,7 @@ Threat: another app on the same device abuses our local proxy or API (the class 
 
 Source and roadmap — [`020 — Security & DPI Bypass`](spec/features/020%20security%20and%20dpi%20bypass/spec.md).
 
-> **Automation caveat (§157).** Once the automation master toggle is ON, the receiver accepts its control commands from **any** caller on the device — a broadcast carries no caller identity, so there is no per-app authentication (`android:permission` is deliberately unset). The commands are control-only (start/stop/switch node/set group/rebuild/refresh/reset/urltest — no secret-exfiltration path), and outgoing automation events carry status labels only. See [`AUTOMATION.md`](AUTOMATION.md) "Безопасность".
+> **Automation caveat (§157).** Once the automation master toggle is ON, the receiver accepts its control commands from **any** caller on the device — a broadcast carries no caller identity, so there is no per-app authentication (`android:permission` is deliberately unset). The commands are control-only (start/stop/switch node/set group/rebuild/refresh/reset/urltest — no secret-exfiltration path), and outgoing automation events carry status labels only. See the “Security” section of [`AUTOMATION.md`](AUTOMATION.md).
 
 ---
 
