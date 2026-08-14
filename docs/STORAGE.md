@@ -8,58 +8,58 @@ User state lives in `lxbox_settings.json`; the catalog of presets, vars and sect
 
 > **Notation**:
 > - `object{N keys}` — an object with N keys
-> - `list[N]` — массив с N элементами; `list` без числа — массив переменной длины
-> - `<TypeName>` — element-type для массива (показано отдельно ниже)
-> - `?` после типа — поле опциональное
+> - `list[N]` — an array of N elements; a bare `list` is variable-length
+> - `<TypeName>` — the element type of an array (shown separately below)
+> - a `?` after the type means the field is optional
 
 ```
-lxbox_settings.json                          # SettingsStorage (Dart), главный файл state
+lxbox_settings.json                          # SettingsStorage (Dart), the main state file
 │
 ├─ vars                          object          template-vars override + app feature flags
-│   └─ <key>: string                           ─ напр. log_level, dns_final, debug_token,
+│   └─ <key>: string                           ─ e.g. log_level, dns_final, debug_token,
 │                                                auto_update_subs, last_known_version, ...
 │
 ├─ server_lists[]                list          §033 — sealed (subscription / user / folder §234)
 │   └─ <ServerList>              object          discriminator: type
 │       ├─ type                  "subscription"|"user"|"folder"
-│       ├─ id                    uuid          стабильный
+│       ├─ id                    uuid          stable
 │       ├─ name                  string        UI display
 │       ├─ enabled               bool
-│       ├─ tag_prefix            string        префикс для node tags
+│       ├─ tag_prefix            string        prefix for node tags
 │       ├─ detour_policy         object{5 keys}       {register_detour_servers, register_detour_in_auto,
 │       │                                       use_detour_servers, override_detour, replace_detour_chain}
 │       │                        — subscription only —
-│       ├─ url                   string?       подписочный URL
-│       ├─ meta                  object?         SubscriptionMeta из HTTP-headers (§027):
+│       ├─ url                   string?       the subscription URL
+│       ├─ meta                  object?         SubscriptionMeta from the HTTP headers (§027):
 │       │   ├─ upload_bytes / download_bytes / total_bytes  int?
 │       │   ├─ expire_timestamp  int?          unix seconds
 │       │   ├─ support_url / web_page_url      string?
 │       │   ├─ profile_title     string?
 │       │   └─ update_interval_hours           int?
-│       ├─ last_updated          ISO-8601?     успех
-│       ├─ last_update_attempt   ISO-8601?     любая попытка
+│       ├─ last_updated          ISO-8601?     on success
+│       ├─ last_update_attempt   ISO-8601?     any attempt
 │       ├─ last_update_status    "never"|"ok"|"failed"|"inProgress"
-│       ├─ update_interval_hours int           default 24; §129 спец: -1=никогда, 0=respect server, N>0=каждые N ч
-│       ├─ on_update_action      string?       §323 — реакция на АВТО-обновление: "rebuild" (default,
-│       │                                      ключ не пишется) | "reload" | "none"
+│       ├─ update_interval_hours int           default 24; §129 special: -1=never, 0=respect server, N>0=every N h
+│       ├─ on_update_action      string?       §323 — reaction to an AUTO update: "rebuild" (default,
+│       │                                      key not written) | "reload" | "none"
 │       ├─ last_node_count       int
-│       ├─ consecutive_fails     int           для UI "(N fails)"
-│       ├─ disabled_hashes       map?          §283 — {identity-хеш ноды: ISO-8601 lastSeen}; per-node disable
-│       │                                      (§332: одна карта на ручные и правило-отметки; Enable-правило
-│       │                                       и кнопка «Enable all» снимают их не различая)
-│       ├─ identity              object?       §289 — per-sub override идентичности фетча (null=глоб.);
+│       ├─ consecutive_fails     int           for the UI's "(N fails)"
+│       ├─ disabled_hashes       map?          §283 — {node identity hash: ISO-8601 lastSeen}; per-node disable
+│       │                                      (§332: one map for both manual and rule marks; Enable rules
+│       │                                       and the "Enable all" button clear them indiscriminately)
+│       ├─ identity              object?       §289 — per-sub override of the fetch identity (null=global);
 │       │                                      {user_agent?, send_hwid, hwid?, device_os?, ver_os?, device_model?}
-│       ├─ import_rules           list?         §302 — правила над emit-JSON узла (условия → Disable/Replace/
-│       │                                      Enable §332; последнее сработавшее enable/disable побеждает);
+│       ├─ import_rules           list?         §302 — rules over a node's emit JSON (conditions → Disable/Replace/
+│       │                                      Enable §332; the last enable/disable that fires wins);
 │       │                                      [{conditions[], match?, action, target_path?, replacement?,
 │       │                                        replace_mode?, substitute?, enabled?}]; conditions[] =
-│       │                                      [{path, op, pattern, negate?, case_sensitive?}]; legacy-плоское
-│       │                                      {action, pattern, …} читается миграцией (условие по tag)
+│       │                                      [{path, op, pattern, negate?, case_sensitive?}]; the legacy flat
+│       │                                      {action, pattern, …} is read by a migration (a condition on tag)
 │       ├─ import_rules_enabled   bool?         §302 — тумблер набора (пишется только когда false; дефолт true)
 │       │                        — user only —
 │       ├─ origin                "paste"|"file"|"qr"|"manual"
 │       ├─ created_at            ISO-8601
-│       ├─ raw_body              string        оригинал для reparse
+│       ├─ raw_body              string        the original, for reparsing
 │       │                        — folder only (§234) —
 │       ├─ created_at            ISO-8601
 │       └─ members[]             list          {raw, enabled, detour?} — по фрагменту на члена (member ↔ нода 1:1; §237 detour = личный тег)
@@ -68,43 +68,43 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │   └─ <CustomRule>              object          discriminator: kind
 │       ├─ kind                  "inline"|"srs"|"preset"
 │       ├─ id                    uuid
-│       ├─ name                  string        пользовательский (для preset — read-only snapshot)
+│       ├─ name                  string        user-supplied (for a preset, a read-only snapshot)
 │       ├─ enabled               bool
 │       │                        — inline (CustomRuleInline) —
-│       ├─ domains[]             list?         OR-группа #1: domain (full match)
-│       ├─ domainSuffixes[]      list?         OR-группа #1: ".ru" etc.
-│       ├─ domainKeywords[]      list?         OR-группа #1: substring match
-│       ├─ ipCidrs[]             list?         OR-группа #1: "10.0.0.0/8"
-│       ├─ ports[]               list?         OR-группа #2: "443"
-│       ├─ portRanges[]          list?         OR-группа #2: "8000:9000"
-│       ├─ packages[]            list?         OR-группа #3: package_name
+│       ├─ domains[]             list?         OR group #1: domain (full match)
+│       ├─ domainSuffixes[]      list?         OR group #1: ".ru" etc.
+│       ├─ domainKeywords[]      list?         OR group #1: substring match
+│       ├─ ipCidrs[]             list?         OR group #1: "10.0.0.0/8"
+│       ├─ ports[]               list?         OR group #2: "443"
+│       ├─ portRanges[]          list?         OR group #2: "8000:9000"
+│       ├─ packages[]            list?         OR group #3: package_name
 │       ├─ protocols[]           list?         routing-rule level: bittorrent/tls/http/...
 │       ├─ ipIsPrivate           bool?         routing-rule level
-│       ├─ outbound              tag           "<outbound-tag>" или "reject" sentinel
-│       ├─ dns                   object? {enabled, serverTag, forceIpv4?}  §117/§256 — mirror DNS-rule + AAAA-глушилка
-│       ├─ resolve               object? {only, strategy, …}   §247 — resolve-опция (route action resolve)
+│       ├─ outbound              tag           "<outbound-tag>" or the "reject" sentinel
+│       ├─ dns                   object? {enabled, serverTag, forceIpv4?}  §117/§256 — a mirror DNS rule plus the AAAA suppressor
+│       ├─ resolve               object? {only, strategy, …}   §247 — the resolve option (route action resolve)
 │       │                        — srs (CustomRuleSrs) —
-│       ├─ srsUrl                string        URL .srs-бинаря
+│       ├─ srsUrl                string        the URL of the .srs binary
 │       ├─ ports / portRanges / packages / protocols / ipIsPrivate / outbound / dns
 │       │                        — preset (CustomRulePreset) —
-│       ├─ presetId              string        ссылка на selectable_rules[].preset_id
-│       └─ varsValues            object          юзерские vars override (включая 'outbound')
+│       ├─ presetId              string        a reference to selectable_rules[].preset_id
+│       └─ varsValues            object          user vars overrides (including 'outbound')
 │
 ├─ dns_options                   object          §061 (rules) + §043+§044 (servers)
 │   ├─ servers[]                 list          §044 kind-discriminated refs:
 │   │   └─ <DnsServerRef>        object
 │   │       ├─ kind              "template"|"preset"|"inline"
 │   │       ├─ enabled           bool
-│   │       ├─ tag               string        single source of truth (НЕ дублируется в body)
-│   │       ├─ description       string?       optional override / для inline — primary
-│   │       └─ body              object?         только inline; partial sing-box server
-│   │                                          БЕЗ tag/description/enabled
+│   │       ├─ tag               string        single source of truth (NOT duplicated in body)
+│   │       ├─ description       string?       an optional override; for inline it is primary
+│   │       └─ body              object?         inline only; a partial sing-box server
+│   │                                          WITHOUT tag/description/enabled
 │   ├─ rules[]                   list          §061 origin-discriminated:
 │   │   └─ <DnsRuleRef>          object
 │   │       ├─ enabled           bool
 │   │       ├─ type              "user"|"template"|"rule"
 │   │       ├─ title             string        display
-│   │       └─ rule              object?         sing-box rule body (для type=user)
+│   │       └─ rule              object?         the sing-box rule body (for type=user)
 │   └─ rules_json                string        DEPRECATED legacy single-string (§061)
 │
 ├─ ping_options                  object          §040
@@ -116,19 +116,19 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │
 ├─ route_final                   string        override sing-box route.final
 ├─ route_idle_suspend            string        §215/§128 — idle-suspend threshold (route.lx_idle_suspend);
-│                                                duration ("30s"/"5m"), default "30s" (ВКЛючено), "" = off; config-significant
-├─ excluded_nodes[]              list          §125-cleanup DEPRECATED — глобальный node-filter (§048) удалён; safe-мусор
-├─ enabled_groups[]              list          §125 DEPRECATED — читается только миграцией channels[]. Safe-мусор.
-├─ channels[]                    list          §125 — каналы роутинга (template→storage). См. ниже.
+│                                                a duration ("30s"/"5m"), default "30s" (ENABLED), "" = off; config-significant
+├─ excluded_nodes[]              list          §125 cleanup, DEPRECATED — the global node filter (§048) is gone; safe debris
+├─ enabled_groups[]              list          §125 DEPRECATED — read only by the channels[] migration. Safe debris.
+├─ channels[]                    list          §125 — routing channels (template→storage). See below.
 │   └─ <item>                    object
-│       ├─ tag                   string        системный immutable id 'vpn-1'..'vpn-10' (автоген; vpn-1 неудаляем)
-│       ├─ label                 string        отображаемое имя (юзер вводит)
-│       ├─ enabled               bool          вкл/выкл (vpn-1 всегда true)
-│       ├─ include_direct        bool          direct-out опцией селектора
-│       ├─ include_block         bool          §201 — block (дроп трафика) опцией селектора; default false
-│       ├─ node_filter           string        regex по итоговому tag ноды; '' = все
-│       ├─ node_filter_invert    bool          §197 — инверсия node_filter (ноды НЕ матчащие); default false
-│       ├─ default_filter        string        regex; первая matched → default; '' = нет
+│       ├─ tag                   string        the system's immutable id 'vpn-1'..'vpn-10' (auto-generated; vpn-1 cannot be deleted)
+│       ├─ label                 string        the display name (entered by the user)
+│       ├─ enabled               bool          on/off (vpn-1 is always true)
+│       ├─ include_direct        bool          direct-out as a selector option
+│       ├─ include_block         bool          §201 — block (dropping traffic) as a selector option; default false
+│       ├─ node_filter           string        a regex over the node's final tag; '' means all
+│       ├─ node_filter_invert    bool          §197 — inverts node_filter (the nodes that do NOT match); default false
+│       ├─ default_filter        string        a regex; the first match becomes the default; '' means none
 │       ├─ interrupt_exist_connections  bool   selector.interrupt_exist_connections
 │       └─ auto                  object?       null = галка ВЫКЛ; object → urltest-двойник <tag>-auto (tag производный, не хранится)
 │           ├─ url               string        urltest test endpoint
@@ -138,28 +138,28 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │           ├─ interrupt_exist_connections  bool  urltest.interrupt_exist_connections
 │           ├─ mode              string        §208 — 'least_test' (default) | 'round_robin'
 │           └─ balancer          object{3 keys}  §208 — {pool, pool_tolerance, sticky_hash[]}
-├─ channels_migrated             bool          §125 — guard one-shot миграции enabled_groups→channels
-├─ last_global_update            ISO-8601      timestamp последнего auto-refresh
-├─ presets_migrated              bool          §159 — guard «дефолтные пресеты засеяны» (fresh-install seed)
+├─ channels_migrated             bool          §125 — the guard for the one-shot enabled_groups→channels migration
+├─ last_global_update            ISO-8601      the timestamp of the last auto-refresh
+├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
 ├─ preset_ids_remapped           bool          §228 legacy guard (ремап переименованных preset_id). Миграция удалена в §229; ключ сохранён — не переиспользовать имя, не считать мусором
-├─ interrupt_connections_on_switch  bool       §143 — рвать соединения переключаемой группы при смене ноды (default false, НЕ config-significant)
-├─ node_sort_mode                string        §100 — выбранный режим сортировки нод ('' = template-default)
-├─ node_manual_order[]           list          §100 — ручной порядок node tags (для mode=manual)
+├─ interrupt_connections_on_switch  bool       §143 — tear down the switched group's connections when the node changes (default false, НЕ config-significant)
+├─ node_sort_mode                string        §100 — the chosen node sort mode ('' means the template default)
+├─ node_manual_order[]           list          §100 — the manual order of node tags (for mode=manual)
 ├─ profiler_retention_sec        int           §044 — окно Live-журнала профайлера, default 600 (10 мин); НЕ config-significant
-├─ warp_account                  object?       §025 — кеш WARP-аккаунта (см. раздел ниже)
-├─ masque_account                object?       §130 — кеш MASQUE-WARP аккаунта (см. раздел ниже)
-├─ tun_apps                      object        §046 — split-tunneling (см. раздел ниже)
-├─ vpn_mode                      object?       §119 — режим inbound (см. раздел ниже)
-└─ native_prefs                  object        §189 — ЗЕРКАЛО Android-prefs (`boxvpn_boot.*`).
-    │                                            JSON = источник истины (диск); native = рабочая копия.
-    ├─ auto_start                bool          default false  — auto-start VPN на boot
-    ├─ keep_on_exit              bool          default true   — §188: не глушить tun при swipe-kill
-    ├─ background_mode           string        default "never" — never|lazy|always (Doze-поведение)
-    ├─ core_logs_enabled         bool          default false  — forward sing-box-логов
+├─ warp_account                  object?       §025 — the cached WARP account (see the section below)
+├─ masque_account                object?       §130 — the cached MASQUE-WARP account (see the section below)
+├─ tun_apps                      object        §046 — split tunneling (see the section below)
+├─ vpn_mode                      object?       §119 — the inbound mode (see the section below)
+└─ native_prefs                  object        §189 — a MIRROR of the Android prefs (`boxvpn_boot.*`).
+    │                                            The JSON is the source of truth (disk); native is the working copy.
+    ├─ auto_start                bool          default false  — auto-start the VPN at boot
+    ├─ keep_on_exit              bool          default true   — §188: do not kill the tun on a swipe-kill
+    ├─ background_mode           string        default "never" — never|lazy|always (Doze behaviour)
+    ├─ core_logs_enabled         bool          default false  — forwarding of the sing-box logs
     ├─ allow_bypass              bool          default false  — Allow VPN bypass (§069)
     ├─ auto_redirect             bool          default false  — auto-redirect
-    └─ memory_limit              string        default "auto" — §271: лимит памяти ядра
-                                                 (auto|off|"200"|"384"|"512"|"768" МБ)
+    └─ memory_limit              string        default "auto" — §271: the core's memory limit
+                                                 (auto|off|"200"|"384"|"512"|"768" MB)
 
 # §159 — none of the legacy keys (proxy_sources / app_rules / enabled_rules /
 # rule_outbounds / node_overrides / show_detour_servers / vars.auto_rebuild)
