@@ -104,7 +104,7 @@ The fork publishes artifacts in its own GitHub Releases (workflow `lx-release.ym
 
 | Artifact | Mark |
 |----------|---------|
-| `libbox-<ver>.aar` (modern: minSdk 23, 4 ABIs, ~73 MB) | ✓ the one we use |
+| `libbox-<ver>.aar` (modern: minSdk 23, 4 ABIs, ~110 MB as of lx.25) | ✓ the one we use |
 | `libbox-legacy-<ver>.aar` (minSdk 21) | ✗ unused — our minSdk is 24, so the modern AAR (minSdk 23) is enough |
 | `SHA256SUMS` | ✓ verification of the downloaded AAR |
 
@@ -112,7 +112,7 @@ The core version is reported by `Libbox.version()` (About/Debug) in the form `1.
 
 ### How the core reaches the build ([§104](spec/tasks/104-libbox-fork-ci-fetch.md))
 
-`app/android/app/libs/` is in `.gitignore` (a ~73 MB AAR is not committed); `app/android/app/build.gradle.kts` wires the core in as a file:
+`app/android/app/libs/` is in `.gitignore` (the AAR is ~110 MB and is not committed); `app/android/app/build.gradle.kts` wires the core in as a file:
 
 ```kotlin
 implementation(files("libs/libbox.aar"))
