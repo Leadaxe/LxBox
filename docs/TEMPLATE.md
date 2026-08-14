@@ -258,32 +258,32 @@ The conventions (§117):
   written by default (`normalizeDnsDetour`: `direct-out`, an empty value and a channel
   unknown to the builder all erase the key; “no detour” is both the default and the fallback).
 - Доменные серверы (адрес = hostname): `domain_resolver: "@dom_resolver"` +
-  var `{type: dns_servers, default_value: "google_udp"}` — чем резолвить имя
-  самого DNS-сервера.
+  the var `{type: dns_servers, default_value: "google_udp"}` decides what resolves the
+  DNS server's own hostname.
 
-7 default-серверов в текущем template'е:
+The seven default servers in the current template:
 
 | Tag | Type | Description |
 |---|---|---|
-| `local_dns_resolver` | local | System DNS (через Android getaddrinfo), без vars |
+| `local_dns_resolver` | local | The system DNS (through Android's getaddrinfo), with no vars |
 | `google_udp` | udp | 8.8.8.8:53 (`dns_ip` enum v4/v6) |
 | `google_dot` | tls | 8.8.8.8:853 |
-| `google_doh` | https | IP-based DoH, SNI пришпилен `dns.google` |
+| `google_doh` | https | IP-based DoH, with the SNI pinned to `dns.google` |
 | `cloudflare_udp` | udp | 1.1.1.1:53 |
 | `cloudflare_dot` | tls | 1.1.1.1:853 |
 | `safe_dns_dot` | tls | Safe DNS: Quad9 / AdGuard / AdGuard Family (`safe_profile` enum) + `dom_resolver` |
 
-### `dns_options.rules[]` — template DNS rules (опционально)
+### `dns_options.rules[]` — template DNS rules (optional)
 
-Currently empty. После [§039](./spec/tasks/039-empty-template-dns-rules.md) — намеренно пусто, юзер строит DNS-rules через preset'ы (`selectable_rules[*].dns_rules`). Если template хочет пушнуть default DNS-rule, она пойдёт сюда.
+Currently empty. Since [§039](./spec/tasks/039-empty-template-dns-rules.md) this is deliberate — the user builds their DNS rules themselves.
 
-См. полный shape ref-уровня — [`STORAGE.md` § dns_options](./STORAGE.md#dns_options--061-rules--043043-dns--044-servers).
+For the full ref-level shape see [`STORAGE.md` § dns_options](./STORAGE.md#dns_options--061-rules--043043-dns--044-servers).
 
 ---
 
 ## `ping_options` — §040
 
-Default URL/timeout для ping/mass-URLTest. Storage может override через `ping_options` ([STORAGE.md §ping_options](./STORAGE.md#ping_options--040)).
+The default URL and timeout for a ping or a mass URLTest. Storage can override them through `ping_options` ([STORAGE.md § ping_options](./STORAGE.md#ping_options--040)).
 
 ```jsonc
 {
@@ -297,17 +297,17 @@ Default URL/timeout для ping/mass-URLTest. Storage может override чер
 }
 ```
 
-| Ключ | Назначение |
+| Key | Purpose |
 |---|---|
-| `url` | Default endpoint для ping. Юзер может override globally / per-group. |
-| `timeout_ms` | Default timeout. Bump'ится для slow networks. |
-| `presets[]` | Pre-configured options в Ping Settings UI dropdown — `{id, name, url}`. `id` — стабильный machine-id (§279, адрес для l10n); display-поле — `name`. |
+| `url` | The default ping endpoint. The user can override it globally or per group. |
+| `timeout_ms` | The default timeout. Raise it for slow networks. |
+| `presets[]` | The pre-configured options in the Ping Settings dropdown — `{id, name, url}`. `id` is a stable machine id (§279, so that the name can be localized). |
 
 ---
 
 ## `speed_test_options` — §015
 
-Endpoints для speed-test screen. Не override'ится юзером (но юзер может переключить активный server).
+The endpoints for the speed-test screen. The user does not override them (though they can switch the active server).
 
 ```jsonc
 {
@@ -322,14 +322,14 @@ Endpoints для speed-test screen. Не override'ится юзером (но ю
     },
     …
   ],
-  "stream_options":  [1, 4, 10],   // parallel streams choices в UI
+  "stream_options":  [1, 4, 10],   // the parallel-stream choices in the UI
   "default_streams": 4
 }
 ```
 
-10 серверов в текущем template'е (Cloudflare, Selectel, Hetzner, OVH, etc.).
-`id` — стабильный machine-id (§279): runtime-выбор сервера на speed-test-экране
-ключуется по нему (не по индексу); неизвестный id → default (первый сервер).
+The current template holds ten servers (Cloudflare, Selectel, Hetzner, OVH and others).
+`id` is a stable machine id (§279): the runtime choice of server on the speed-test screen
+is keyed by it rather than by index; an unknown id falls back to the default (the first server).
 
 ---
 
