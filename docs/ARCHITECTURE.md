@@ -1429,28 +1429,28 @@ translator-guide — [`l10n.md`](l10n.md).
 (the global Material/Widgets/Cupertino chrome); the app's own strings go through
 `getLocalText` rather than a `Localizations` delegate.
 
-**Пайплайн смены языка** (любой путь записи `app_language` — picker, Debug API
-side-effect hook, restore, смена системного языка — сходится в
+**The language-switch pipeline** (every path that writes `app_language` — the picker, Debug,
+a side-effect hook, a restore, or a system language change — converges here):
 `LocaleController.set()` / `_applyLocale()`):
 
 ```
 LocaleController.set(v)
-  ├─ SettingsStorage.setAppLanguage(v)      # JSON-var (истина) + MethodChannel-зеркало
-  │     └─ native: BootReceiver pref → resubmit notification-канала →
+  ├─ SettingsStorage.setAppLanguage(v)      # the JSON var (the truth) plus the MethodChannel mirror
+  │     └─ native: the BootReceiver pref → resubmitting the notification channel →
   │        ServiceNotification.relabel → updateShortcuts (+onResume retry) →
   │        tile.requestListeningState → Libbox.setLocale → LocaleManager (33+)
   └─ _applyLocale(effective)
-        ├─ _text = GetLocalText(dict<tag>, resolver<tag>)  # natural-key словарь новой локали
-        ├─ await TemplateLoader.reload(tag)  # ПРОГРЕВ ДО notify (кэш ключуется тегом локали)
-        ├─ RuleNameResolver.relocalize(...)  # display-зеркала билдера без ребилда конфига
+        ├─ _text = GetLocalText(dict<tag>, resolver<tag>)  # the new locale's natural-key dictionary
+        ├─ await TemplateLoader.reload(tag)  # WARMED BEFORE notify (the cache is keyed by tag)
+        ├─ RuleNameResolver.relocalize(...)  # the builder's display mirrors, with no rebuild
         ├─ LazyPersistFlush.flushAll()
-        └─ notifyListeners()                 # merged Listenable с themeNotifier → rebuild MaterialApp
+        └─ notifyListeners()                 # a Listenable merged with themeNotifier → MaterialApp rebuilds
 ```
 
-**Границы** (английские навсегда): логи, Debug API-ответы, automation/Tasker-payload'ы,
-`emitWarnings`, wire-значения и теги, имена файлов, user data, payload
-OS/ядра (passthrough `RawMsg.detail`). Единицы (`B/KB/MB`, `Mbps`, `ms`) и
-суффиксы длительности — латиница в обеих локалях.
+**The boundaries** (English forever): the logs, the Debug API responses, the
+automation/Tasker payloads, `emitWarnings`, the wire values and tags, filenames,
+user data, and the OS/core payloads (the `RawMsg.detail` passthrough). The units
+(`B/KB/MB`, `Mbps`, `ms`) and the duration suffixes stay Latin in both locales.
 
 ---
 
@@ -1488,13 +1488,13 @@ HomeScreen
   │   ├─ DNS Settings → DnsSettingsScreen
   │   ├─ VPN Settings → SettingsScreen — 2 tabs (§052):
   │   │       • System — Tunnel sleep mode (`BackgroundMode`)
-  │   │                 (§188 — «Allow VPN bypass» и «Keep VPN on exit» переехали в Mode-вкладку)
+  │   │                 (§188 — “Allow VPN bypass” and “Keep VPN on exit” moved to the Mode tab)
   │   │       • Core   — sing-box engine vars (`chapter: core`, mtu / log_level / dns_final / …)
   │   ├─ App Settings → AppSettingsScreen — 2 tabs (§052 Phase 2):
   │   │       • General      — theme, autostart, haptic
   │   │       • Diagnostics  — system permissions block + verbose / share / wipe + Quit&reopen
-  │   │       (Background tab удалён; `keep_on_exit` + `background_mode` переехали в VPN Settings → System,
-  │   │        permissions block — в Diagnostics)
+  │   │       (the Background tab is gone; `keep_on_exit` and `background_mode` moved to VPN Settings)
+  │   │        the permissions block moved to Diagnostics)
   │   ├─ Speed Test → SpeedTestScreen
   │   ├─ Statistics → StatsScreen (via traffic bar tap)
   │   ├─ Config: Editor / File / Clipboard
@@ -1506,7 +1506,7 @@ HomeScreen
   └─ Node list:
        ├─ NodeRow layout: [ACTIVE pill] [PROTOCOL · transport · security (§102)] ... [ping →]
        └─ long-press: Ping · Use · View JSON · Copy URI
-          (§099 — copy-JSON варианты в dropdown внутри View JSON:
+          (§099 — the copy-JSON variants live in a dropdown inside View JSON)
            Copy node JSON / Copy server JSON / Copy server + detours(N))
 ```
 
@@ -1519,8 +1519,8 @@ HomeScreen
 | Native VPN service (no plugin) | flutter_singbox_vpn was unmaintained (0 stars), config in SharedPreferences |
 | File-based config storage | Large JSON configs don't belong in SharedPreferences |
 | serviceScope vs GlobalScope | Structured concurrency — coroutines die with service |
-| libbox CommandClient for management (§122) | Server-stream push вместо Timer-polling; Clash HTTP API выпилен (на 1.14 без `with_clash_api` он fatal). Нет localhost HTTP-порта → нет surface для port-scan |
-| 10 concurrent mass ping (`_pingConcurrency`) | Sequential was too slow for 50+ nodes; cap балансирует latency vs sing-box load |
+| libbox CommandClient for management (§122) | A server-stream push instead of Timer polling; the Clash HTTP API is gone |
+| 10 concurrent mass pings (`_pingConcurrency`) | Sequential was too slow for 50+ nodes; the cap balances speed against load |
 | SRS rules off by default | Require download, may fail offline |
 | App list caching | getInstalledApps (~5s) called once, reused |
 | profile-title from headers + content-disposition fallback | Auto-name subscriptions even without profile-title |
@@ -1532,13 +1532,13 @@ HomeScreen
 | **configChangedNeedRestart sticky flag** | Restart warning doesn't disappear on Stop-dialog cancel |
 | **TLS-insecure → info severity** | Providers set it intentionally (REALITY, self-signed); shouldn't crowd out genuine warnings |
 | **Shared `asBroadcastStream` for status events** (v1.4.0) | `BoxVpnClient.onStatusChanged` cached as `late final` — один native `onListen`, `statusSink` стабилен. Раньше каждый вызов getter'а перезаписывал sink и ломал основной listener после первого reconnect'а. См. tasks/001. |
-| **Blocking `stopVPN` через Completer** (v1.4.0) | Method channel ждёт `setStatus(Stopped)` на native (5с timeout) — caller получает control только после реального завершения. Убирает race в `onStartCommand` guard в reconnect'е. См. tasks/002. |
-| **Intent-based sticky reset** (v1.4.0) | `configChangedNeedRestart=false` в `_stopInternal`/`_startInternal` по факту применённого намерения, не только по transition event'у. Robust к Doze/OOM потерям broadcast'ов. |
-| **`TunnelStatus.unknown`** (v1.4.0) | Default для неизвестного raw вместо `disconnected` — убирает ложные срабатывания `firstWhere` predicate'ов на мусорных events. UI маппит в Disconnected label. |
-| **`ConfigCache` в HomeState** (v1.4.0; superseded §091 → `ParsedConfig`) | Outbound JSON парсился один раз при `saveParsedConfig`, не в itemBuilder'е. §091 заменил пару `protoByTag`/`detourTags` полноценной моделью `ConfigNode` (см. строку §091 ниже). |
-| **`kDetourTagPrefix` single source of truth** (v1.4.0) | Константа `⚙ ` в `lib/config/consts.dart` — used by node_settings UI, builder, home filter, node_filter screen. Раньше литералы дублировались. |
-| **Two persist patterns: Lazy vs Eager** (v1.9.0, §076) | Editing screens с toggle-flood UX (`tun_apps_tab`, `routing_screen`, `dns_settings_screen`, `settings_screen` Core) используют **lazy** — mutations in-memory + `_markDirty` (sync `configDirty=true`), flush on `dispose()` + `paused`, rebuild lazy на возврат к home. Discrete-event screens (`subscriptions`, `app_settings`, `custom_rule_edit`, `node_filter`) — **eager** immediate-write + snackbar. 1 settings + 1 config write per editing session вместо до 10 (per-toggle eager). |
-| **Global `HomeReturnObserver`** (v1.9.0, §076) | Universal `NavigatorObserver` в `MaterialApp.navigatorObservers`. Срабатывает при `previousRoute.isFirst == true` (home стал top). Покрывает все navigation пути — drawer, long-press, system back, swipe, programmatic pop, cross-nav. Раньше rebuild trigger был в `_pushRoute.then()` callback'е — терялся при опен screen через non-drawer пути. |
+| **A blocking `stopVPN` through a Completer** (v1.4.0) | The method channel waits for `setStatus(Stopped)` natively |
+| **An intent-based sticky reset** (v1.4.0) | `configChangedNeedRestart=false` in `_stopInternal` and `_startInternal` |
+| **`TunnelStatus.unknown`** (v1.4.0) | The default for an unknown raw value, instead of `disconnected` |
+| **`ConfigCache` in HomeState** (v1.4.0; superseded by §091 → `ParsedConfig`) | The outbound JSON used to be parsed on every build |
+| **`kDetourTagPrefix` as the single source of truth** (v1.4.0) | The `⚙ ` constant lives in `lib/config/consts.dart` |
+| **Two persist patterns: lazy versus eager** (v1.9.0, §076) | Editing screens with a toggle-flood UX (`tun_apps_tab`) persist lazily |
+| **A global `HomeReturnObserver`** (v1.9.0, §076) | A universal `NavigatorObserver` in `MaterialApp.navigatorObservers` |
 | **mtime-based bootstrap** (v1.9.0, §076; §113) | `ConfigDirtyCheck.isDirty()` сравнивает `lxbox_settings.json.mtime > singbox_config.json.mtime` (**секундная резолюция**, §113) на launch. Восстанавливает `configDirty` после kill mid-edit без persist'а флага. `subController.init` set'ит флаг, `home._initSubsAndAutoUpdate` триггерит тихий bootstrap rebuild. **§113**: после §107 порядок дисковых записей инвертирован (конфиг пишется на возврате к home, настройки — позже на `dispose`), из-за чего `settings>config` стало нормой → ложный «config changed» после kill. Фикс: (а) `configDirty` владеется `SettingsStorage` — config-значимые сейверы (typed + config-var allowlist, **не** `saveServerLists`) сами поднимают флаг (`SubscriptionController.configDirty` — делегат); (б) `_save()` при снятом флаге выравнивает mtime конфига к mtime настроек (`ConfigDirtyCheck.touchConfig`). |
 | **`markConfigChangedNeedRestart` external mark** (v1.9.0, §076) | `HomeController` method для настроек применяемых вне config pipeline. Native VPN-тогглы (allow_bypass / keep_on_exit / background_mode) — с §189 пишутся write-through через `SettingsStorage.setNativeBool`/`setNativeBackgroundMode` (JSON-истина + зеркало в native) — вызывают этот метод → home banner вместо локального snackbar'а. Gated на `tunnelUp`. |
 | **Cohesion over line-count + `part`/`mixin` декомпозиция** (§089) | Монстры (home_screen 2370, home_controller 1089, …) раздроблены не по числу строк, а по ответственности: тонкий экран + `<screen>/widgets/` + presenter/VM; контроллер + `part`-mixin'ы (та же библиотека → library-private доступ сохранён, поведение bit-identical). ~600 строк легитимны для cohesive-файла; крупные исключения задокументированы (см. [Обзор](#принцип-cohesion-over-line-count-089)). |
