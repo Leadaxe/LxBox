@@ -551,18 +551,18 @@ settings_storage/sources_rules.dart #   server_lists (+v1 migration), rules/grou
 settings_storage/network.dart       #   route_final/excluded/dns/ping_options (§040/§061)
 settings_storage/backup_tun.dart    #   the snapshot (§031) plus the tun-apps split tunnel (§046)
 settings_storage/channels.dart      #   §125 the channels (Channel CRUD plus the vpn-1 seed)
-settings_storage/native_prefs.dart  #   NativePrefsKeys — мост в SharedPreferences Kotlin-стороны
-settings_storage/vpn_mode.dart      #   §119 VPN mode (allow/deny списки per-app)
-settings_storage/warp.dart          #   §025/§130 WARP/MASQUE аккаунты + пул генератора
-traffic_profiler.dart        # TrafficProfiler singleton (1243, см. Обзор): сессии, rolling buffer, SSE
+settings_storage/native_prefs.dart  #   NativePrefsKeys — the bridge into the Kotlin side's SharedPreferences
+settings_storage/vpn_mode.dart      #   §119 the VPN mode (the per-app allow/deny lists)
+settings_storage/warp.dart          #   §025/§130 the WARP/MASQUE accounts plus the generator's pool
+traffic_profiler.dart        # the TrafficProfiler singleton (1243 lines, see the Overview): the rolling buffer and SSE
 traffic_profiler/models.dart        #   part: TrafficEvent/Session + enums + JSON
-traffic_profiler/internal.dart      #   part: _ConnSnapshot correlation-структура (§180 _DnsAccumulator/§044 _ConnMeta выпилены)
+traffic_profiler/internal.dart      #   part: the _ConnSnapshot correlation structure (§180's _DnsAccumulator and §044's _ConnMeta are gone)
 debug/                       # localhost HTTP Debug API (§031)
-  bootstrap.dart             #   applyDebugApiSettings — строит DebugContext, рестартит сервер
-  debug_registry.dart        #   нуллабельные refs на контроллеры (bind в HomeScreen.initState)
-  context.dart               #   DebugContext — per-handler инъекция (requireHome/Sub, clock, log, config)
+  bootstrap.dart             #   applyDebugApiSettings — builds the DebugContext and restarts the server
+  debug_registry.dart        #   nullable refs to the controllers (bound in HomeScreen.initState)
+  context.dart               #   DebugContext — per-handler injection (requireHome/Sub, clock, log, config)
   contract/errors.dart       #   sealed DebugError (NotFound/Unauthorized/Conflict/…) — transport-agnostic
-  transport/server.dart      #   DebugServer — HttpServer на 127.0.0.1, Router+pipeline, lifecycle
+  transport/server.dart      #   DebugServer — an HttpServer on 127.0.0.1, the Router plus pipeline, the lifecycle
   transport/request.dart     #   DebugRequest — immutable snapshot, body read once (maxBodyBytes)
   transport/response.dart    #   sealed DebugResponse (Json/RawJson/Bytes/Stream/Error)
   transport/router.dart      #   longest-prefix mount/resolve
@@ -571,30 +571,30 @@ debug/                       # localhost HTTP Debug API (§031)
   transport/middleware/      #   error_mapper · access_log · host_check · auth · timeout
   handlers/                  #   /state /settings /action /profiler /rules /subs /config /logs /device
                              #     /files /diag /backup /wifi_history /help /ping /warp /channels (§275)
-                             #     /folders (§238) /pool (§208) (+ _shared CRUD-хелперы)
-  serializers/               #   home_state · storage (denylist scrubber) · rules · subs (URL-маскинг)
-warp/                        # §025/§130 WARP + MASQUE-транспорт (питает warp_wizard_screen)
-  warp_client.dart           #   регистрация в Cloudflare (POST /reg): X25519-приватник не покидает телефон
-  warp_account.dart          #   WARP-аккаунт (client_id→reserved, ключи)
-  warp_endpoint_picker.dart  #   пул WARP-эндпоинтов + рандом endpoint/SNI (§148 курированные блоки; БЕЗ пробы)
-  scan/                      #   §284/§305 генератор нод: рандом-посев (IP × port × proto × SNI) → папка «WARP GENERATOR»; пул scan_pool.dart ← assets/warp_endpoints.json
-  masque_account.dart · masque_keys.dart · masquerade_params.dart  #   §130 MASQUE (Cloudflare QUIC/CONNECT-IP) — эмит MasqueSpec
+                             #     /folders (§238) /pool (§208) (plus the _shared CRUD helpers)
+  serializers/               #   home_state · storage (the denylist scrubber) · rules · subs (URL masking)
+warp/                        # §025/§130 WARP plus the MASQUE transport (it feeds warp_wizard_screen)
+  warp_client.dart           #   registration with Cloudflare (POST /reg): the X25519 private key never leaves the device
+  warp_account.dart          #   the WARP account (client_id→reserved, the keys)
+  warp_endpoint_picker.dart  #   the pool of WARP endpoints plus a random endpoint/SNI (§148, curated)
+  scan/                      #   the §284/§305 node generator: random seeding (IP × port × protocol)
+  masque_account.dart · masque_keys.dart · masquerade_params.dart  #   §130 MASQUE (Cloudflare QUIC/CONNECT-IP)
 migration/proxy_source_migration.dart  # one-shot v1 proxy_sources → v2 server_lists
-nav/home_return_observer.dart          # глобальный NavigatorObserver (§076): rebuild на возврат к home
+nav/home_return_observer.dart          # a global NavigatorObserver (§076): a rebuild on returning home
 app_log.dart                 # AppLog ChangeNotifier-singleton: per-source ring buffers + persistent warn/error (§043)
-app_info_cache.dart          # AppInfoCache — session-кэш AppInfo по package + revision ValueNotifier
-json_clone.dart              # deepCopyJson/deepCloneJson/deepEqualsJson (§089 P6 — общий для builder/backup)
-format_utils.dart            # formatBytes/formatDuration/formatTime (канонические форматтеры)
-relative_time.dart           # relativeTime(now, past) — "2h ago" (pure, тестируемый)
-url_mask.dart                # maskSubscriptionUrl — scheme://host/*** для логов/шеринга
-tag_resolver.dart            # §085 TagResolver — единый владелец display-тега (displayTag/isDetourMarker/strip)
-rule_name_resolver.dart      # §165 — маппинг ядровой rule.String() (лоссовая, обрезает списки >3) →
-                             #   custom_rules[].name для Stats→Traffic by Rule / Conns; нормализация + indexOf + кэш промахов
-template_loader.dart         # wizard_template.json loader (singleton, deep-copy на билд)
+app_info_cache.dart          # AppInfoCache — a session cache of AppInfo by package plus a revision ValueNotifier
+json_clone.dart              # deepCopyJson/deepCloneJson/deepEqualsJson (§089 P6 — shared by the builder and backup)
+format_utils.dart            # formatBytes/formatDuration/formatTime (the canonical formatters)
+relative_time.dart           # relativeTime(now, past) — "2h ago" (pure and testable)
+url_mask.dart                # maskSubscriptionUrl — scheme://host/*** for logs and sharing
+tag_resolver.dart            # §085 TagResolver — the single owner of the display tag (displayTag/isDetour)
+rule_name_resolver.dart      # §165 — mapping the core's rule.String() (lossy and truncated) onto
+                             #   custom_rules[].name for Stats → Traffic by Rule and Conns; with normalisation
+template_loader.dart         # the wizard_template.json loader (a singleton, deep-copied per build)
 rule_set_downloader.dart     # download+cache remote .srs (parallel, atomic tmp+rename, retry)
-backup_service.dart          # export/import полного снапшота настроек (§031)
-update_checker.dart          # GitHub-релиз check + dismissed-version guard (см. §090 по half-wired stub)
-node_emoji.dart              # §094 emoji-теги: палитра + protocol-default emoji + вставка в rawBody/tag
+backup_service.dart          # exporting and importing a full settings snapshot (§031)
+update_checker.dart          # the GitHub release check plus the dismissed-version guard (see §090 on the half-wired stub)
+node_emoji.dart              # §094 emoji tags: the palette, the protocol-default emoji and insertion into rawBody
 haptic_service.dart · community_servers_loader.dart · dump_builder.dart · url_launcher.dart ·
 config_dirty_check.dart · error_humanize.dart · error_format.dart · parse_hints.dart ·
 clash_log_pump.dart · logcat_reader.dart · stderr_reader.dart · exit_info_reader.dart ·
