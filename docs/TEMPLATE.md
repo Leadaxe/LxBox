@@ -359,19 +359,19 @@ is keyed by it rather than by index; an unknown id falls back to the default (th
 > | `default_channels[i].default_enabled` / legacy `enabled_groups[]` | `enabled` |
 > | `channel.include` ∋ `direct` | `include_direct` |
 > | `channel.include` ∋ `auto` | `auto` (a ChannelAuto built from the `auto` template plus the `@urltest_*` vars) |
-> | `channel.include` ∋ `block` | `include_block` (в дефолте нет → false) |
+> | `channel.include` ∋ `block` | `include_block` (absent from the default → false) |
 > | `channel.options.interrupt_exist_connections` | `interrupt_exist_connections` |
-> | (не из template) | `node_filter`/`default_filter` = `''` |
+> | (not from the template) | `node_filter` and `default_filter` are `''` |
 >
-> Все каналы собираются из **общего** `channel`-шаблона (единый `include`);
-> различаются только `tag`/`label`/`default_enabled` из `default_channels`.
+> Every channel is assembled from the **shared** `channel` template (one `include`);
+> they differ only in `tag`, `label` and `default_enabled` from `default_channels`.
 
-### `magic_nodes` — реестр служебных нод
+### `magic_nodes` — the registry of service nodes
 
-Служебные ноды (auto/direct/block) объявлены по role-ключу. `magic_nodes.*.tag` —
-source of truth для тегов; const-зеркала `kAuto/Direct/BlockOutboundTag` в
-`consts.dart` сверяются с ним на load (`assertMagicNodeMirrors` — расхождение =
-`StateError`, чтобы переименование tag в шаблоне не ломало роутинг молча).
+The service nodes (auto/direct/block) are declared by role key. `magic_nodes.*.tag` is the
+source of truth for the tags; the const mirrors `kAuto/Direct/BlockOutboundTag` in
+`consts.dart` are checked against it on load (`assertMagicNodeMirrors` — a divergence is a
+`StateError`, so that renaming a tag in the template cannot break routing silently).
 
 ```jsonc
 "magic_nodes": {
@@ -381,26 +381,26 @@ source of truth для тегов; const-зеркала `kAuto/Direct/BlockOutbo
 }
 ```
 
-| Ключ | Тип | Назначение |
+| Key | Type | Purpose |
 |---|---|---|
-| `title` | string | UI-label служебной ноды (Home → node display). |
-| `source` | `"generate"` \| `"preset"` | Как рождается нода: `generate` — билдер синтезирует per-channel (urltest, статического тега нет); `preset` — готовый объект уже в `config.outbounds`. |
-| `tag` | string? | (preset) ссылка на существующий outbound в `config.outbounds`. У `generate` отсутствует. |
-| `tpl` | string? | (generate) шаблон тега синтезируемой ноды. `{parent_tag}` → tag родительского канала (`vpn-1` → `vpn-1-auto`). У `preset` отсутствует. |
+| `title` | string | The UI label of the service node (the Home node display). |
+| `source` | `"generate"` \| `"preset"` | How the node comes into being: `generate` means the builder synthesizes one per channel, `preset` means it references an existing outbound. |
+| `tag` | string? | (preset) A reference to an existing outbound in `config.outbounds`. Absent for `generate`. |
+| `tpl` | string? | (generate) The tag template of the synthesized node. `{parent_tag}` expands to the parent channel's tag. |
 
-### `channel` — шаблон обычного канала (selector)
+### `channel` — the template of an ordinary channel (a selector)
 
 ```jsonc
 "channel": {
   "type": "selector",
-  "include": ["direct", "auto"],   // role-ключи magic_nodes, показываемые в selector
+  "include": ["direct", "auto"],   // the magic_nodes role keys shown in the selector
   "options": { "interrupt_exist_connections": true }
 }
 ```
 
-`include` — role-ключи `magic_nodes` (не теги!). `block` в дефолт не входит.
+`include` holds `magic_nodes` role keys, not tags. `block` is not part of the default.
 
-### `auto` — шаблон auto-подгруппы (urltest)
+### `auto` — the template of the auto subgroup (a urltest)
 
 ```jsonc
 "auto": {
@@ -414,8 +414,8 @@ source of truth для тегов; const-зеркала `kAuto/Direct/BlockOutbo
 }
 ```
 
-`options` — сырой template (`@urltest_*`-плейсхолдеры резолвятся позже, в
-билдере/seed'е). Параметры уходят в `<tag>-auto`-двойник каждого канала с
+`options` is a raw template (the `@urltest_*` placeholders are resolved later, in the
+builder or the seed). The parameters go into every channel's `<tag>-auto` twin that has
 `channel.include ∋ auto`.
 
 ### `default_channels[]` — сид каналов первого запуска
