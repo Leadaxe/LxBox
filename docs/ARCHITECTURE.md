@@ -933,46 +933,46 @@ rolling buffer of events. Everything is in memory; persistence is deliberately a
 ```
 
 > The per-app session layer was removed in **§288**: the `App` tab, the `Session` class and
-> роуты `/profiler/{start,stop,active,sessions,session/<id>,stream}` удалены.
-> Остался только system-wide режим; трафик одного приложения смотрят фильтром
-> по приложениям на вкладке Profiler.
+> the routes `/profiler/{start,stop,active,sessions,session/<id>,stream}` are gone.
+> Only the system-wide mode remains; one application's traffic is inspected through the
+> per-app filter on the Profiler tab.
 
-**Источники событий (§180/§044 — БЕЗ парсинга core-лога):**
-- **DNS-стрим (§180, ядро SPEC 018)** — `CcChannel.dnsQueries` (канал `lxbox/cc/dns`, `subscribeDNSQueries` на `profilerClient`). Каждый `CcDnsQuery` несёт `domain`/`queryType`/`rcode`/`source`/`failed`/`error`, атрибуцию к app **из ядра** (`processInfo.packageName`), `answers[]` (весь response.Answer → cnameChain из type==CNAME), и (rc.10) `dnsServer`/`dnsServerType`/`outbound`. `_ingestDnsQuery` эмитит `dnsResolve`/`dnsFail`. **Текстовый core-лог парсинг выпилен начисто** (§044): не было `_dnsRe`/`_DnsAccumulator`/`router: found package` regex'ов — всё структурно из ядра.
-- **Connections-стрим (§168)** — CommandClient `connections` push (`CcChannel.connections` через фоновый `profilerClient`, `connectProfiler()`) пока идёт global recording (§048). Снапшот diff'ается против `_connSnapshots`. TCP/UDP-атрибуция из ядра: `CcConnection.packageName` (UID-strip), `chains` (§174), `detours` (§178).
-- Connection-issue classifier: `dnsTimeout` (структурный `q.failed` из DNS-стрима) + `tcpReset` (heuristic: TCP закрылся <1с с 0 bytes).
+**The event sources (§180/§044 — with NO core-log parsing):**
+- **The DNS stream (§180, the core's SPEC 018)** — `CcChannel.dnsQueries` (the `lxbox/cc/dns` channel, `subscribeDNSQueries`), with the attribution coming from the core.
+- **The connections stream (§168)** — the CommandClient `connections` push (`CcChannel.connections` through the background `profilerClient`).
+- The connection-issue classifier: `dnsTimeout` (the structural `q.failed` from the DNS stream) plus `tcpReset` (a heuristic).
 
-**Global / system-wide recording (§048).** Вкладка **Profiler** (бывш. Live) в Statistics — единственный режим профайлера: `startGlobalRecording()` подключает оба стрима. События в `_globalRollingBuffer` (окно **настраиваемое** 1m/10m/1h, §044 retention; hard cap 20000) и `globalLiveStream()` SSE. `_maybeDetachCcConnections()` гасит `profilerClient` когда recording off.
+**Global, system-wide recording (§048).** The **Profiler** tab (formerly Live) in Statistics is the only mode.
 
 **Memory bounds:**
-- `_globalRollingBuffer`: retention-окно (§044, default 10мин) + hard cap 20000.
+- `_globalRollingBuffer`: a retention window (§044, 10 minutes by default) plus a hard cap of 20000.
 
 **UI plumbing (§160/§044):**
-- `StatsScreen` 3 вкладки: Stats / Conns / **Profiler** (system-wide, бывш. Live). Вкладка `App` снята в §288.
-- Движок `TraceExplorer`: control-строка (пауза · retention · группировка · фильтр-окно) + тогл поток/Aggregated(by Domain/IP) + drill-down detail-sheet. Фильтр вынесен в `ProfilerFilterSheet` (Protocol + App оси). §181 `routingLine` строит читаемую трассировку события.
+- `StatsScreen` has three tabs: Stats / Conns / **Profiler** (system-wide, formerly Live). The `App` tab was removed in §288.
+- The `TraceExplorer` engine: a control row (pause · retention · grouping · the filter window).
 
-**Coupling (важно для extraction):**
-- **`CcChannel` (CommandClient) — единственный источник.** Профайлер слушает `CcChannel.connections` + `CcChannel.dnsQueries` через фоновый `profilerClient`. Привязан к жизни канала: события идут пока туннель жив и `profilerClient` поднят (`connectProfiler()`). **core-логи больше не нужны** — `CoreLogsHintBanner` оставлен как опциональная подсказка, но DNS/TCP атрибуция от него не зависит (всё из ядра, §180/§168).
-- **Контракт ядра (SPEC 017/018).** Поля `chain()`/`detour()`/`DnsQuery.*` — нативные методы libbox AAR. При бампе ядра новые методы проверять `javap` ДО вызова в Kotlin (forward-compat: отсутствие метода = compile error, не runtime). Имена gomobile-стиля (напр. `getDNSServer`, не `getDnsServer`); итераторы (`chain()`/`outbound()` → `StringIterator`).
+**Coupling (important for extraction):**
+- **`CcChannel` (the CommandClient) is the only source.** The profiler listens to `CcChannel.connections` plus `CcChannel.dnsQueries`.
+- **The core's contract (SPEC 017/018).** The `chain()`, `detour()` and `DnsQuery.*` fields are native methods of the libbox AAR.
 
 ---
 
 ### 6.6. WARP / MASQUE (§025 · §130)
 
-Cloudflare WARP-интеграция (`services/warp/`, мастер `screens/warp_wizard_screen.dart`, storage `settings_storage/warp.dart`). Два транспорта:
+The Cloudflare WARP integration (`services/warp/`, the wizard `screens/warp_wizard_screen.dart`, storage in `settings_storage/warp.dart`):
 
-- **WARP-WireGuard (§025).** `WarpClient` регистрирует устройство сам (POST в Cloudflare) — приватный ключ **X25519 генерируется на телефоне и не покидает его**. `client_id` (3 байта из base64) → WireGuard `reserved`; default-пир `engage.cloudflareclient.com:2408`. `warp_endpoint_picker.dart` даёт пул диапазонов/портов и рандомит endpoint (без пробы). Эмитится как обычная WireGuard-нода.
-- **MASQUE (§130, флагман v2.9.0).** Отдельная крипта (`masque_keys.dart` — ECDSA P-256, не X25519), `masque_account.dart`, `masquerade_params.dart`. `MasqueSpec` ([`node_spec.dart`](../app/lib/models/node_spec.dart), `protocol='masque'`) эмитит sing-box outbound `type: masque` (Cloudflare QUIC / CONNECT-IP), `network` = `h3`/`h2`. Требует ядро с поддержкой masque-транспорта — см. `KERNEL.md`.
-- **Endpoint generator (§284/§305).** Кнопка **«Make experiment»** в мастере (`services/warp/scan/` + `SubscriptionController.generateWarp`) открывает экран `screens/warp_experiment_screen.dart`: число узлов (дефолт 20, клампится 1..200) + **редактируемый JSON пула** (дефолт — bundled `assets/warp_endpoints.json`, кнопка Reset возвращает исходный). Дальше: одна регистрация WARP/MASQUE (кешированные аккаунты переиспользуются) → N случайных узлов (IP × port × protocol{AWG, h3, h2} × SNI) поверх кредов (`ScanNodeBuilder`) → (пере)создаётся папка **«WARP GENERATOR»** (`kScanFolderName`), которая сразу открывается через `pushReplacement` (назад → Servers). Пробы генератор **не гоняет** и мёртвые не удаляет — пользователь тестирует штатной кнопкой Test в папке. **DNS-независимо**: url пробы папки — IP-литерал `https://1.1.1.1/cdn-cgi/trace`. Без изменений ядра.
-- **Пул эндпоинтов (§305, device-verified).** `assets/warp_endpoints.json` сгруппирован **по транспорту**; парсер — `ScanPool.fromFullJson` (один и тот же для bundled asset и для JSON-override окна эксперимента):
-  - `wireguard`: `v4_cidr` · `v6_cidr` · `ports` (2408/500/1701/4500 — достоверные) · `ports_extra` (empirical, §132 — ниже приоритетом) · `sni_pool` · `utls_fp_pool`;
+- **WARP over WireGuard (§025).** `WarpClient` registers the device itself (a POST to Cloudflare); the private key never leaves the phone.
+- **MASQUE (§130, the flagship of v2.9.0).** Separate cryptography (`masque_keys.dart` — ECDSA P-256, not the WireGuard keys).
+- **The endpoint generator (§284/§305).** The **“Make experiment”** button in the wizard (`services/warp/scan/`).
+- **The endpoint pool (§305, device-verified).** `assets/warp_endpoints.json` is grouped by transport:
+  - `wireguard`: `v4_cidr` · `v6_cidr` · `ports` (2408/500/1701/4500 — the verified ones) · `ports_extra`
   - `masque`: `v4_cidr` · **`h3_v4_cidr`** · `ports_h3` · `ports_h2` · `sni_pool`.
 
-  MASQUE-физика (боевой тест через рабочий туннель): **h2** живёт по всему блоку `162.159.198.0/24`+`162.159.199.0/24`, **h3 (QUIC) — только на 4 адресах** (`.198.1`, `.198.2`, `.199.1`, `.199.2`), поэтому для него отдельная секция `h3_v4_cidr` (рандом по /24 давал ~1% попаданий). Порты рабочие для обоих — все 7 (`443/500/1701/4500/4443/8443/8095`); SNI на h3 не влияет. Выбор источника — `ScanPool.masqueV4CidrFor(net)` / `masquePortsFor(net)`. v6-эндпоинты подставляются только при `ipv6_enabled`. Как **корректно мерить живость** узлов — см. [DIAGNOSTICS.md](DIAGNOSTICS.md) и [spec/tasks/305](spec/tasks/305-masque-endpoint-h2-pool-and-override.md).
+  The physics of MASQUE (tested for real through a working tunnel): **h2** works on every port.
 
 ### 6. AppLog (per-source ring buffers, §043)
 
-`AppLog` хранит in-memory кольцевые буферы **per source** — `app=300`, `core=500`. Sing-box (verbose, сотни строк/мин на busy traffic) не вытесняет наши собственные app-сообщения.
+`AppLog` keeps in-memory ring buffers **per source** — `app=300`, `core=500`.
 
 ```
 HomeController/UI                    Sing-box (Go goroutines)
