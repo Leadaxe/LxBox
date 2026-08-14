@@ -1058,7 +1058,7 @@ A thin client over three channels (`com.leadaxe.lxbox/methods` plus two EventCha
 | Config | `saveConfig` / `getConfig` | `getConfig` falls back to `'{}'` so the builder can parse without a null check |
 | VPN lifecycle | `startVPN` / `stopVPN` / `reloadVPN` / `resetNetwork` / `getVpnStatus` / `getCoreVersion` / `quitApp` | `stopVPN` блокирующий native до `setStatus(Stopped)` — позволяет `await stop; await start` без race |
 | Settings (boot prefs / native toggles) | auto_start, keep_on_exit, core_logs_enabled, allow_bypass, auto_redirect, background_mode (+ has_tun §192) | §189 — native `SharedPreferences boxvpn_boot.*` теперь **зеркало** JSON-секции `native_prefs`; источник истины = `lxbox_settings.json` (write-through + sync на старте). Все писатели идут через `SettingsStorage.setNativeBool`/`setNativeBackgroundMode`. |
-| Per-app routing | `getInstalledApps` / `getAppIcon` / `getAppInfo` | Icons lazy — `getInstalledApps` без icons (тяжело), `getAppIcon` per-package по запросу |
+| Per-app routing | `getInstalledApps` / `getAppIcon` / `getAppInfo` | Icons are lazy — `getInstalledApps` returns none |
 | System helpers | `isIgnoringBatteryOptimizations` / `open*Settings` / `*NotificationPermission` / `*NearbyWifiPermission` / `showToast` | Permission `request*` — async, UI делает re-check через паренный `check*` |
 | Quick Settings | `requestAddTile` | API 33+ |
 
@@ -1071,24 +1071,24 @@ late final Stream<TunnelStatusEvent> onStatusChanged = _events
     .asBroadcastStream();
 ```
 
-`late final` критично: до v1.4.0 каждый getter создавал новый stream, native `EventChannel.onListen` дёргался повторно, native перезаписывал `statusSink` — основной listener после первого reconnect ломался ([tasks/001](spec/tasks/001-reconnect-sink-leak.md)). Сейчас singleton broadcast stream — один native listener, любое количество Dart-подписчиков.
+`late final` matters: before v1.4.0 every getter created a new stream and the native `EventChannel` leaked sinks.
 
 **Timeout policy:**
 
-Каждый MethodChannel-вызов обёрнут в `.timeout()` с per-метода настроенным значением (см. `_Timeouts` constants):
+Every MethodChannel call is wrapped in a `.timeout()` with a per-method value.
 
-| Категория | Timeout | Почему |
+| Category | Timeout | Why |
 |---|---|---|
 | status / settings | 3s | Lightweight read/write of preferences |
 | config | 5s | File I/O |
 | app metadata (per-package) | 5s | One PackageManager query |
-| installed apps list | 15s | `PackageManager.getInstalledApplications` дорогой |
+| The installed-apps list | 15 s | `PackageManager.getInstalledApplications` is expensive |
 | startVPN | 30s | System dialog timing + libbox setup |
-| stopVPN | 10s | Blocking до `setStatus(Stopped)` |
+| stopVPN | 10 s | It blocks until `setStatus(Stopped)` |
 | reloadVPN / resetNetwork | 5-10s | Wait for `serviceReload` / `closeAll + DNS flush + dialer rebind` |
 | requestAddTile | 10s | System dialog confirmation |
 
-**На таймауте** — лог в `AppLog` + safe-default fallback (например `tunnel: disconnected` для `getVpnStatus`). Без таймаутов мы видели реальные deadlock'и где native не отвечал на запрос — Flutter UI блокировался без recovery path.
+**On a timeout** it logs into `AppLog` and falls back to a safe default (for example `tunnel: disconnected`).
 
 ---
 
@@ -1096,15 +1096,15 @@ late final Stream<TunnelStatusEvent> onStatusChanged = _events
 
 ### Class layout (§049 F1 split)
 
-В §049 audit'е мы port'нули pattern из reference SagerNet (`bg/BoxService.kt` commit 3b3883e, libbox 1.13.11) — разделили **Android Service лейер** от **libbox runtime лейера**:
+In the §049 audit we ported the pattern from the SagerNet reference (`bg/BoxService.kt`, commit 3b3883e, libbox 1.12).
 
 ```
 ┌─────────────────────────────────────────┐  ┌────────────────────────────────────┐
 │ BoxApplication : Application            │  │ VpnPlugin : MethodCallHandler      │
 │  • onCreate (registered in Manifest)    │  │  • setMethodCallHandler            │
-│  • §334 CrashRecovery ← СТРОГО ДО setup │  │  • EventChannel sinks (status/log) │
-│    событие + 2 подписчика: чистка здесь,│  │  • static currentStatus mirror     │
-│    баннер §316 — в Dart, от архива      │  │     (sync read by HomeController)  │
+│  • §334 CrashRecovery ← STRICTLY BEFORE setup │ • EventChannel sinks (status/log) │
+│    one event, two subscribers: the cleanup here, │ • the static currentStatus mirror │
+│    the §316 banner in Dart, from the archive │  (read synchronously by HomeController) │
 │  • Libbox.setup(SetupOptions) async     │  │                                    │
 │  • libboxReady : CompletableDeferred    │  │                                    │
 │  • Singleton WifiNetworkObserver        │  │                                    │
@@ -1115,7 +1115,7 @@ late final Stream<TunnelStatusEvent> onStatusChanged = _events
 │ BoxVpnService : VpnService, PlatformInterfaceWrapper                            │
 │  • Android lifecycle (onCreate/onStartCommand/onRevoke/onDestroy)               │
 │  • PlatformInterface impl: defaultNetwork / processInfo / readWIFIState         │
-│  • openTun()  ← libbox calls back через PlatformInterface                       │
+│  • openTun()  ← libbox calls back through PlatformInterface                     │
 │  • field: private val service = BoxService(this, this)  ← THIS line is the F1   │
 │  • forwards lifecycle: onStartCommand → service.startSingbox(intent), etc.      │
 └─────────────────────────────────────────────────────────────────────────────────┘
@@ -1134,7 +1134,7 @@ late final Stream<TunnelStatusEvent> onStatusChanged = _events
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Зачем split:** до §049 `BoxVpnService` имплементировал и `PlatformInterface`, и `CommandServerHandler` (один `this` передавался обоим libbox-сторонам). На стороне libbox это означало refcnt=2 на один `Seq.Ref` → расширенное окно gomobile refcount race (часть симптомов «refnum 42» в §050). После split два разных Java instance → libbox tracker'ы видят разные refnum'ы.
+**Why the split:** before §049 `BoxVpnService` implemented both `PlatformInterface` and `CommandServerHandler`.
 
 ### Structured Concurrency
 
