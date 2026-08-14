@@ -21,8 +21,8 @@ The current parser and builder version is **v2** (spec 026, phase 5 completed in
 | Tier | Android | Status |
 |------|---------|--------|
 | **Primary** | 11+ (API 30+) | Tested, every feature works, production-ready |
-| **Best-effort** | 7.0–10 (API 24–29) | It compiles, installs, and the basic VPN functionality should work |жен работать. Фичи требующие новых API (например, silent-kill detection через `getHistoricalProcessExitReasons`, API 30+) деградируют к no-op за `SDK_INT`-гейтами. Не тестируется регулярно; жалобы принимаются, но fix'ы на best-effort основе. На 7.x дополнительно: старый системный trust store — на 7.0 нет корня ISRG Root X1, HTTPS-подписки с Let's Encrypt-сертификатами не валидируются (на 7.1.1+ корень есть). |
-| **Unsupported** | <7 (API <24) | Installation is blocked by `minSdk=24`; below 24 Flutter itself refuses |скает сам Flutter (пол движка) |
+| **Best-effort** | 7.0–10 (API 24–29) | It compiles, installs, and the basic VPN functionality should work |
+| **Unsupported** | <7 (API <24) | Installation is blocked by `minSdk=24`; below 24 Flutter itself refuses (the engine's floor) |
 
 > **Android TV (§372).** The app declares itself TV-compatible
 > (`uses-feature leanback` / `touchscreen`, both `required="false"`, plus a
@@ -33,7 +33,7 @@ The current parser and builder version is **v2** (spec 026, phase 5 completed in
 > the system stub `frameworkpackagestubs` intercepts it and silently cancels
 > the selection (`resolveActivity` finds it, there is no error, the result is empty).
 > That is why every picker goes through
-> [`services/file_import.dart`](../app/lib/services/file_import.dart): он
+> [`services/file_import.dart`](../app/lib/services/file_import.dart),
 > which asks the platform (`hasRealFilePicker`, rejecting the stubs by package
 > name) **before** launching the picker and suggests the clipboard or a URL.
 > Do not rely on a `file_picker` error code — on TV there will not be one.
@@ -43,23 +43,23 @@ The current parser and builder version is **v2** (spec 026, phase 5 completed in
 
 > **The renderer (§131).** On `Build.VERSION.SDK_INT < 31` (Android ≤11) Flutter
 > is forced off Impeller and onto **Skia** (`getFlutterShellArgs` →
-> `--enable-impeller=false` в [`MainActivity`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt)).
+> `--enable-impeller=false` in [`MainActivity`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt)).
 > The Impeller shaders crash older GPU drivers (Adreno 3xx → a SIGSEGV in `libsc-a3xx.so`).
-> На Android 12+ Impeller сохранён. Гейт по версии ОС, не по GPU — у Flutter нет
-> чистого рантайм-детекта GPU. Подробности — [§131](spec/tasks/131-impeller-adreno-gpu-crash.md).
+> Impeller is kept on Android 12+. The gate is by OS version rather than by GPU, since
+> Flutter has no clean runtime GPU detection. Details: [§131](spec/tasks/131-impeller-adreno-crash.md).
 
-### Почему именно 24 как minSdk
+### Why 24 is the minSdk
 
-- **24 — абсолютный пол**: Flutter 3.41.x поддерживает минимум API 24 (`FlutterExtension.minSdkVersion = 24`), libbox.aar собран с `minSdkVersion=23`. Ниже 24 приложение не собрать в принципе.
-- Исторически с v1.4.0 стоял `minSdk=26` («Android 8.0+» из release notes 1.3.x); понижен до 24 в §233 по запросу пользователей со старыми устройствами — технических зависимостей от API 26 в коде не было (см. аудит в [spec/tasks/233](spec/tasks/233-minsdk-24.md)).
-- **VpnService API** (`setMetered`, `setUnderlyingNetworks`) доступны с API 29+, для старых есть fallback-пути (без setMetered — vpn работает нормально, просто не маркируется как non-metered).
-- **`ActivityManager.getHistoricalProcessExitReasons`** (API 30+) — нужен для silent-kill detection в task 007. В коде обёрнут в `if (Build.VERSION.SDK_INT >= 30)` — на старых просто не триггерит snackbar.
-- **`NotificationChannel`** (API 26+) — за `SDK_INT >= O`-гейтами; оба notification-билдера ставят `setPriority(...)`, так что на pre-O приоритет корректен без каналов. FGS стартует через `ContextCompat.startForegroundService` (на <26 — обычный `startService`, background-ограничений до Oreo нет).
-- **`BoxApplication.fixAndroidStack`** включается ровно на API 24–25 — воркараунд libbox под Android 7.x.
+- **24 is the absolute floor**: Flutter 3.41.x supports API 24 at the lowest (`FlutterExtension.minSdkVersion = 24`), and libbox.aar is built with `minSdkVersion=23`. Below 24 the app cannot be built at all.
+- Historically `minSdk=26` was in place from v1.4.0 (“Android 8.0+” in the 1.3.x release notes); it was lowered to 24 in §233 at users' request, since nothing in the code depended on API 26.
+- **The VpnService API** (`setMetered`, `setUnderlyingNetworks`) is available from API 29+, with fallbacks for older versions.
+- **`ActivityManager.getHistoricalProcessExitReasons`** (API 30+) is needed for silent-kill detection in diagnostics.
+- **`NotificationChannel`** (API 26+) sits behind `SDK_INT >= O` gates; both notification builders handle it.
+- **`BoxApplication.fixAndroidStack`** is enabled on exactly API 24–25 — a workaround for those versions.
 
-### `Build.VERSION.SDK_INT` проверки
+### The `Build.VERSION.SDK_INT` checks
 
-В Kotlin (DefaultNetworkMonitor, ServiceNotification, BoxApplication, etc.) version guards — рабочий механизм тиров: с `minSdk=24` ветки `>= N (24)` и выше снова достижимы. Гейты `>= M (23)` всегда true — можно упростить отдельным cleanup-pass'ом, но выигрыш минимален.
+In Kotlin (DefaultNetworkMonitor, ServiceNotification, BoxApplication and others) the version guards are the working tier mechanism.
 
 ---
 
@@ -327,12 +327,12 @@ wizard_template.json
   │  load (TemplateLoader)  →  WizardTemplate (in memory, shared)
   │
   ├── config       ──► _substituteVars(@global vars)                          ──► base config
-  ├── customRules (один список, mixed kind — preset/inline/srs)
+  ├── customRules (one list of mixed kinds — preset/inline/srs)
   │    │  applyAllCustomRules — a single pass in storage order
   │    │  dispatched by kind. Cross-preset rule_set dedup happens through
   │    │  RuleSetRegistry.tryRegisterRuleSet (identical-skip / first-wins).
   │    │  (spec 062 — preset and inline used to run as two passes and the
-  │    │  ordering между ними был потерян)
+  │    │   cross-kind ordering between them was lost)
   │    ├── kind: preset
   │    │    └─ expandPreset (pure) ──► PresetFragments
   │    │       └─ register rule_sets in registry; routing rule (if route enabled);
@@ -344,7 +344,7 @@ wizard_template.json
   │         └─ a local rule_set at the cached path plus a routing rule (spec 030)
   ├── dns_options  ──► applyCustomDns(template + extras)                      ──► config.dns
   └── channels[] (storage) ──► _buildChannelGroups(per-channel node_filter)  ──► config.outbounds
-      (§125/§267: каналы из channels[], seed из group_templates+default_channels; +block/direct опции, auto-двойник)
+      (§125/§267: the channels come from channels[], seeded from group_templates plus default_channels; with the block/direct options)
 ```
 
 **Why DoH/DoT in a bundle hardcode `server: "77.88.8.88"` plus `tls.server_name`:**
@@ -392,7 +392,7 @@ consts.dart                  # kAutoOutboundTag (✨auto), kDetourTagPrefix (⚙
 #### `models/` — typed data (sealed hierarchies, no I/O)
 
 ```
-node_spec.dart               # sealed NodeSpec (11 вариантов: Vless/Vmess/Trojan/Shadowsocks/
+node_spec.dart               # the sealed NodeSpec (11 variants: Vless/Vmess/Trojan/Shadowsocks/…)
                              #   Hysteria2/Naive/Tuic/Ssh/Socks + Wireguard + Masque §130); getEntries detour-chain;
                              #   the Awg value object (§097): the AWG/AWG2 fields of WireguardSpec (jc/jmin/jmax/
                              #   s1–s4/h1–h4/i1–i5), round-tripping parse/emit; null means ordinary WG
@@ -415,8 +415,8 @@ background_mode.dart         # the BackgroundMode enum (never|lazy|always) — t
 tunnel_status.dart           # TunnelStatus enum + TunnelStatusEvent (native status mapping + errorReason)
 debug_entry.dart             # DebugEntry plus DebugSource/Level/Filter (a unified log line)
 home_state.dart              # immutable HomeState + copyWith; configModel: ParsedConfig (§091,
-                             #   re-parse на смену configRaw); NodeSortMode (default/latency/name/
-                             #   manual — §100: manual в карусели и меню, mode + manual order
+                             #   re-parsed on a configRaw change); NodeSortMode (default/latency/name/
+                             #   manual — §100: manual in the carousel and the menu, the mode plus the manual order
                              #   persisted in settings_storage); memoized sortedNodes
 config_node.dart             # §091 ConfigNode plus ParsedConfig — the structural metadata of the assembled
                              #   config's nodes (type/section/detour/isMarkedDetour/detourRefCount/raw);
@@ -441,7 +441,7 @@ home_controller.dart         # the main VPN broker: _state/_vpn/_cc; the status 
 home_controller/config_io.dart          # part _ConfigIoMixin: load/saveParsedConfig, import, configChangedNeedRestart
 home_controller/heartbeat.dart          # part _HeartbeatMixin: a watchdog over the silence of the CommandClient status stream
                              #   (§122, with no HTTP polling) plus dead-tunnel detection
-home_controller/ping_orchestration.dart # part _PingMixin: single/group/mass URLTest, 10 worker'ов, epoch-cancel
+home_controller/ping_orchestration.dart # part _PingMixin: single/group/mass URLTest, ten workers, epoch cancellation
 subscription_controller.dart            # the subscriptions: List<ServerList>, add/remove/rename/toggle/move
                                         #   (§098 drag-reorder), fetch, buildConfig; §101 — rehydrationDone
                                         #   (fixing the startup race between rehydrate and bootstrap) plus an empty-fetch guard
@@ -543,7 +543,7 @@ subscription/                # fetching and auto-updating subscriptions
   auto_updater.dart          #   a five-trigger refresh plus a per-sub interval, retry/fail caps and dedup (§027)
   http_cache.dart            #   an on-disk cache of the last raw body plus headers (the offline rehydrate);
                              #   §101 — an atomic tmp→rename write (kill-safe under an unawaited save)
-  input_helpers.dart         #   isSubscriptionUrl/isDirectLink (вкл. awg://, §097)/isWireGuardConfig/isFileSubscription (§129) (paste UX)
+  input_helpers.dart         #   isSubscriptionUrl/isDirectLink (including awg://, §097)/isWireGuardConfig/isFileSubscription
 settings_storage.dart        # the facade over lxbox_settings.json — thin delegates into the part files
 settings_storage/io.dart            #   the atomic load/save/recovery (main→.bak→{}, §072)
 settings_storage/vars.dart          #   the vars domain plus the Wi-Fi history (§051)
@@ -679,8 +679,8 @@ automation/LocaleApi.kt              #   the twofortyfouram standard's constants
 automation/LocaleSettingReceiver.kt  #   FIRE_SETTING → the shared action handlers (start/stop/toggle directly)
 automation/LocaleConditionReceiver.kt#   QUERY_CONDITION → currentStatus and the active cache → a result code (SATISFIED)
 automation/LocaleQuickActionActivity.kt # a one-tap Start/Stop/Toggle (Theme.NoDisplay, a headless setResult plus finish)
-automation/LocaleSettingEditActivity.kt # «Custom…» edit-экран: RadioGroup команд + селектор нод/групп из native-кеша
-automation/LocaleConditionEditActivity.kt # edit-экран условия (VPN up / active node= / active group=)
+automation/LocaleSettingEditActivity.kt # the “Custom…” edit screen: a RadioGroup of commands plus a selector
+automation/LocaleConditionEditActivity.kt # the condition edit screen (VPN up / active node= / active group=)
 ```
 
 ---
@@ -878,7 +878,7 @@ the backup block nor in the `native_prefs` JSON section — it lives only in `bo
 
 #### Builder (template + user-state → final config)
 
-`build_config.dart` мерджит template `config`-секцию + `selectable_rules[*]` (через `expandPreset`) + `dns_options.{servers,rules}` (через resolvers §061/§044) + `channels[]` из storage (§125 — `_buildChannelGroups`: per-channel `node_filter`-regex по node-tag'ам из `server_lists`, опции direct/block, auto-двойник) + `vars`-substitution → пишет финальный `singbox_config.json` для libbox.
+`build_config.dart` merges the template's `config` section plus `selectable_rules[*]` (through `expandPreset`) and the storage state into the final config.
 
 **Idle-suspend (§128/§215, the core's SPEC 020).** Configuring the threshold (the storage key `route_idle_suspend`).
 
