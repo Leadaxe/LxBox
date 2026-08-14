@@ -1,235 +1,240 @@
-# Сборка L×Box
+# Building L×Box
 
-**Условные обозначения в этом файле**
+**Symbols used in this file**
 
-| Значок | Смысл |
+| Symbol | Meaning |
 |--------|--------|
-| ✓ | Есть / выполняется по умолчанию |
-| ○ | Опционально или только при явном включении |
-| ✗ | Нет / не делается по умолчанию |
-| ⚠ | Запрет или важное предупреждение |
+| ✓ | Present / happens by default |
+| ○ | Optional, or only when explicitly enabled |
+| ✗ | Absent / not done by default |
+| ⚠ | Prohibition or important warning |
 
 ---
 
-## Flutter-приложение
+## The Flutter app
 
-Каталог **`app/`** — проект L×Box. Зависимости подтягиваются через `flutter pub get`. Нативный VPN — `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/` (свой `BoxVpnService`, не Flutter plugin). libbox на Android — fork **[`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)** (ветка `lx-1.14`): AWG/AWG2 (AmneziaWG) + нативный XHTTP ([§097](spec/features/097%20awg2-amneziawg2/spec.md)) + MASQUE/idle-suspend/balancer. AAR подключается файлом `app/android/app/libs/libbox.aar` (в `build.gradle` — относительный `files("libs/libbox.aar")`), скачивание и пин версии — [§104](spec/tasks/104-libbox-fork-ci-fetch.md); см. раздел [«Ядро sing-box-lx (libbox)»](#ядро-sing-box-lx-libbox). История пина: стоковый `com.github.singbox-android:libbox:1.13.11` с JitPack ([task §060](spec/tasks/060-libbox-1-13-migration/spec.md)) ← `io.github.sagernet:libbox:1.12.12`.
+The **`app/`** directory is the L×Box project. Dependencies come from `flutter pub get`. The native VPN lives in `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/` (our own `BoxVpnService`, not a Flutter plugin). libbox on Android is the **[`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)** fork (branch `lx-1.14`): AWG/AWG2 (AmneziaWG) + native XHTTP ([§097](spec/features/097%20awg2-amneziawg2/spec.md)) + MASQUE / idle-suspend / balancer. The AAR is wired in as the file `app/android/app/libs/libbox.aar` (a relative `files("libs/libbox.aar")` in `build.gradle`); downloading it and pinning the version is [§104](spec/tasks/104-libbox-fork-ci-fetch.md) — see [“The sing-box-lx core (libbox)”](#the-sing-box-lx-core-libbox). Pin history: stock `com.github.singbox-android:libbox:1.13.11` from JitPack ([task §060](spec/tasks/060-libbox-1-13-migration/spec.md)) ← `io.github.sagernet:libbox:1.12.12`.
 
-Импорт конфига по кнопке **Read**: **JSON** или **JSON5/JSONC** (комментарии `//`, `/* */` — парсер `json5`), затем в ядро уходит канонический JSON; источник — буфер или системный диалог выбора файла.
+Config import via the **Read** button accepts **JSON** or **JSON5/JSONC** (`//` and `/* */` comments — the `json5` parser); canonical JSON is then handed to the core. The source is either the clipboard or the system file picker.
 
 ```bash
 cd app
 flutter pub get
-flutter run   # устройство или эмулятор Android
+flutter run   # Android device or emulator
 ```
 
-### Локальная release-сборка
+### Local release build
 
-Скрипт [`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh) — канонический способ собрать локальный release-APK (минимальный, arm64-only):
+The script [`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh) is the canonical way to produce a local release APK (minimal, arm64-only):
 
 ```bash
 ./scripts/build-local-apk.sh
 ```
 
-| Что делает | Отметка |
+| What it does | Mark |
 |------------|---------|
-| Версия в pubspec: versionCode **запинен к последнему релизному тегу** (§186, см. ниже); versionName = `X.Y.Z` на теге, иначе `X.Y.Z-dev.<since>` | ✓ |
-| `scripts/fetch-libbox.sh` — ядро sing-box-lx по пину `app/android/libbox.version`, идемпотентно (см. [«Ядро sing-box-lx»](#ядро-sing-box-lx-libbox)) | ✓ |
-| `LXBOX_ABI_FILTER=arm64-v8a --target-platform android-arm64` — APK только под arm64; выход `app-release.apk` переименовывается в `app-arm64-v8a-release.apk` | ✓ |
-| `flutter build apk --release` (доп. аргументы — через `"$@"`) | ✓ |
-| `--dart-define`-маркеры **версии** (`BUILD_LOCAL`, `BUILD_GIT_DESC`, …) | ✗ убраны в §065/§066: версия живёт в pubspec, About читает `PackageInfo`. Это про версию, НЕ запрет на define вообще — см. `LXBOX_DISTRIBUTION` ниже |
-| `--dart-define=LXBOX_DISTRIBUTION` | ✗ не задаётся → фолбэк по установщику даст `github`, что для локальной сборки верно |
+| Version in pubspec: versionCode **pinned to the latest release tag** (§186, see below); versionName is `X.Y.Z` on a tag, otherwise `X.Y.Z-dev.<since>` | ✓ |
+| `scripts/fetch-libbox.sh` — the sing-box-lx core at the pin in `app/android/libbox.version`, idempotent (see [“The sing-box-lx core”](#the-sing-box-lx-core-libbox)) | ✓ |
+| `LXBOX_ABI_FILTER=arm64-v8a --target-platform android-arm64` — APK for arm64 only; the resulting `app-release.apk` is renamed to `app-arm64-v8a-release.apk` | ✓ |
+| `flutter build apk --release` (extra arguments pass through `"$@"`) | ✓ |
+| `--dart-define` **version** markers (`BUILD_LOCAL`, `BUILD_GIT_DESC`, …) | ✗ removed in §065/§066: the version lives in pubspec, About reads `PackageInfo`. This concerns the version only — it is NOT a ban on defines in general, see `LXBOX_DISTRIBUTION` below |
+| `--dart-define=LXBOX_DISTRIBUTION` | ✗ not set → the installer-based fallback yields `github`, which is correct for a local build |
 
-##### `--dart-define`-флаги
+##### `--dart-define` flags
 
-| Флаг | Значения | Кто ставит | Зачем |
+| Flag | Values | Who sets it | Why |
 |---|---|---|---|
-| `LXBOX_DISTRIBUTION` | `github` \| `play` \| `fdroid` | **только AAB-шаг CI** (`=play`) | §390 — канал установки: куда вести юзера за новой версией. У каждого канала своя подпись, APK с GitHub не встанет поверх Play/F-Droid-сборки. Не задан → рантайм-фолбэк по `installingPackageName`, дефолт `github` |
+| `LXBOX_DISTRIBUTION` | `github` \| `play` \| `fdroid` | **the CI AAB step only** (`=play`) | §390 — the install channel: where to send the user for a new version. Each channel has its own signature; a GitHub APK will not install over a Play or F-Droid build. Unset → runtime fallback via `installingPackageName`, defaulting to `github` |
 
-⚠ **У APK флаг НЕ задаётся** — ни в CI, ни в рецепте F-Droid. F-Droid сверяет
-байты своей сборки с APK из GitHub Releases (`binary:` в рецепте — reproducible
-builds, подпись остаётся нашей), а любой `--dart-define` попадает в
-скомпилированный Dart и ломает сверку. Канал у APK определяется рантаймом по
-установщику. Подробнее — [`FDROID.md`](FDROID.md).
-| `LXBOX_SUPPORT_URL` | URL | вручную при отладке | §356 — подменить ленту поддержки на тестовую |
-| `DONATE_URL` | URL | вручную | источник `docs/donate.json` |
+⚠ **The flag is NOT set for APKs** — neither in CI nor in the F-Droid recipe.
+F-Droid compares the bytes of its own build against the APK from GitHub Releases
+(`binary:` in the recipe — reproducible builds, the signature stays ours), and any
+`--dart-define` ends up in the compiled Dart and breaks that comparison. For APKs
+the channel is determined at runtime from the installer. See
+[`FDROID.md`](FDROID.md).
 
-Требует `git` и JDK (для gradle); ядро `app/android/app/libs/libbox.aar` скрипт скачивает сам.
+| Flag | Values | Who sets it | Why |
+|---|---|---|---|
+| `LXBOX_SUPPORT_URL` | URL | manually, while debugging | §356 — point the support feed at a test source |
+| `DONATE_URL` | URL | manually | source for `docs/donate.json` |
 
-##### ⚠ Сборка виснет (CPU≈0) — memory-starvation stall
+Requires `git` and a JDK (for Gradle); the script downloads the core `app/android/app/libs/libbox.aar` itself.
 
-`app/android/gradle.properties` задаёт `org.gradle.jvmargs=-Xmx8G -XX:MaxMetaspaceSize=4G …`. На машине с 16 ГБ RAM Gradle heap + metaspace + Kotlin/dex-воркеры не влезают → процесс уходит в своп, `assembleRelease` зависает с CPU≈0 (не компиляция, а stall).
+##### ⚠ The build hangs (CPU≈0) — memory-starvation stall
+
+`app/android/gradle.properties` sets `org.gradle.jvmargs=-Xmx8G -XX:MaxMetaspaceSize=4G …`. On a 16 GB machine the Gradle heap plus metaspace plus the Kotlin/dex workers do not fit, the process starts swapping, and `assembleRelease` hangs at CPU≈0 — a stall, not compilation.
 
 | | |
 |---|---|
-| Симптом | `flutter build apk` стоит на `assembleRelease` минутами; `ps aux \| grep java` — CPU java-процессов <5% |
-| Фикс | освободить RAM (закрыть тяжёлые приложения), снести залипший daemon (`pkill -f gradle` или `rm -rf ~/.gradle/daemon`), пересобрать с ограничением: `GRADLE_OPTS='-Dorg.gradle.jvmargs=-Xmx5G' ./scripts/build-local-apk.sh --no-daemon` + при желании `--max-workers=4` |
-| Радикально | снизить `-Xmx` в `gradle.properties` под объём RAM машины |
+| Symptom | `flutter build apk` sits on `assembleRelease` for minutes; `ps aux \| grep java` shows the java processes below 5% CPU |
+| Fix | free up RAM (close heavy applications), kill the stuck daemon (`pkill -f gradle` or `rm -rf ~/.gradle/daemon`), rebuild with a cap: `GRADLE_OPTS='-Dorg.gradle.jvmargs=-Xmx5G' ./scripts/build-local-apk.sh --no-daemon`, optionally plus `--max-workers=4` |
+| Radical | lower `-Xmx` in `gradle.properties` to match the machine's RAM |
 
-#### versionCode — как считается и почему пинится к тегу ([§186](spec/tasks/186-local-build-vc-pin-to-tag.md))
+#### versionCode — how it is derived, and why it is pinned to the tag ([§186](spec/tasks/186-local-build-vc-pin-to-tag.md))
 
-**Кто что добавляет** (проверено `aapt dump badging` на собранном APK):
+**Who contributes what** (verified with `aapt dump badging` on a built APK):
 
-| Слой | Значение | Кто |
+| Layer | Value | Who |
 |------|----------|-----|
-| `pubspec.yaml` `version: X.Y.Z+<code>` | code = `((major×10000 + minor×100 + patch)×100 + PRE)×10 + ABI` (§379) | считает [`scripts/version-code.sh`](../scripts/version-code.sh), пишут CI и локальный скрипт |
-| ABI-множитель Flutter | **не применяется** — `--split-per-abi` убран (§379), иначе домножил бы `ABI×1000` поверх нашего числа | — |
-| Итог в манифесте APK | ровно то, что записано в pubspec | — |
+| `pubspec.yaml` `version: X.Y.Z+<code>` | code = `((major×10000 + minor×100 + patch)×100 + PRE)×10 + ABI` (§379) | computed by [`scripts/version-code.sh`](../scripts/version-code.sh), written by CI and by the local script |
+| Flutter's ABI multiplier | **not applied** — `--split-per-abi` was removed (§379); otherwise it would multiply our number by `ABI×1000` on top | — |
+| Final value in the APK manifest | exactly what pubspec says | — |
 
-⚠ Ручной бамп `versionCode` НЕ нужен и НЕ применять — код детерминированно выводится из версии. Проверено на APK: `v2.19.7` + arm64 → `21907502`.
+⚠ Bumping `versionCode` by hand is unnecessary and must NOT be done — the code is derived deterministically from the version. Verified on an APK: `v2.19.7` + arm64 → `21907502`.
 
-**Почему пин к тегу (а не к HEAD):** релиз CI собирается на коммите тега. Локальная сборка на ветке разработки ушла вперёд, но versionCode считается от **имени тега**, а хвост `-dev.N` формула срезает → локальный arm64 vc = **ровно релизный**. При равном vc `adb install -r` проходит в обе стороны (блок только на СТРОГО меньший vc).
+**Why pin to the tag and not to HEAD:** the release CI builds on the tag's commit. A local build on a development branch has moved ahead, but the versionCode is computed from the **tag name**, and the formula strips the `-dev.N` tail — so the local arm64 versionCode equals the release one exactly. With equal codes `adb install -r` works in both directions (only a strictly lower code is blocked).
 
-| Случай | versionCode | Поведение |
+| Case | versionCode | Behaviour |
 |--------|-------------|-----------|
-| На ветке есть тег `vN.N.N` | код этого тега для arm64 | локальный vc = релизный → релиз ставится поверх локалки и наоборот |
-| Тега нет вовсе | код от `0.0.0` → `502` (fallback, `version: 0.0.0+502`) | downgrade-риск неактуален без релизов |
-| После НОВОГО релиза (новый тег) | подтянется к новому тегу автоматически | самоподдерживается |
+| The branch has a tag `vN.N.N` | that tag's code for arm64 | local code = release code → the release installs over the local build and vice versa |
+| No tag at all | code derived from `0.0.0` → `502` (fallback, `version: 0.0.0+502`) | the downgrade risk does not apply without releases |
+| After a NEW release (new tag) | follows the new tag automatically | self-maintaining |
 
-## Ядро sing-box-lx (libbox)
+## The sing-box-lx core (libbox)
 
-С §097 ядро приложения — fork **[`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)** (ветка `lx-1.14`), не стоковый sing-box.
+Since §097 the app's core has been the **[`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)** fork (branch `lx-1.14`), not stock sing-box.
 
-| Что | Отметка |
+| What | Mark |
 |-----|---------|
-| AWG/AWG2 (AmneziaWG) поля в `wireguard`-endpoint'е | ✓ build-тег `with_awg` |
-| Нативный транспорт `type:"xhttp"` (Xray splithttp) | ✓ build-тег `with_xhttp` |
-| Релиз на стоковом `com.github.singbox-android:libbox:1.13.11` | ⚠ **невозможен** — стоковое ядро отвергает конфиги с AWG-полями и `xhttp` |
+| AWG/AWG2 (AmneziaWG) fields in the `wireguard` endpoint | ✓ build tag `with_awg` |
+| Native `type:"xhttp"` transport (Xray splithttp) | ✓ build tag `with_xhttp` |
+| A release on stock `com.github.singbox-android:libbox:1.13.11` | ⚠ **impossible** — the stock core rejects configs carrying AWG fields and `xhttp` |
 
-Fork публикует артефакты в своих GitHub Releases (workflow `lx-release.yml`):
+The fork publishes artifacts in its own GitHub Releases (workflow `lx-release.yml`):
 
-| Артефакт | Отметка |
+| Artifact | Mark |
 |----------|---------|
-| `libbox-<ver>.aar` (modern: minSdk 23, 4 ABI, ~73 MB) | ✓ наш вариант |
-| `libbox-legacy-<ver>.aar` (minSdk 21) | ✗ не используем — у нас minSdk 24, modern-AAR (minSdk 23) достаточно |
-| `SHA256SUMS` | ✓ верификация скачанного AAR |
+| `libbox-<ver>.aar` (modern: minSdk 23, 4 ABIs, ~110 MB as of lx.25) | ✓ the one we use |
+| `libbox-legacy-<ver>.aar` (minSdk 21) | ✗ unused — our minSdk is 24, so the modern AAR (minSdk 23) is enough |
+| `SHA256SUMS` | ✓ verification of the downloaded AAR |
 
-Версию ядра отдаёт `Libbox.version()` (About/Debug), формат `1.14.0-lx.N` (текущий пин — `v1.14.0-lx.1`).
+The core version is reported by `Libbox.version()` (About/Debug) in the form `1.14.0-lx.N`; the current pin is `v1.14.0-lx.27-rc.1`.
 
-### Как ядро попадает в сборку ([§104](spec/tasks/104-libbox-fork-ci-fetch.md))
+### How the core reaches the build ([§104](spec/tasks/104-libbox-fork-ci-fetch.md))
 
-`app/android/app/libs/` в `.gitignore` (AAR ~73 MB не коммитится); `app/android/app/build.gradle.kts` подключает ядро файлом:
+`app/android/app/libs/` is in `.gitignore` (the AAR is ~110 MB and is not committed); `app/android/app/build.gradle.kts` wires the core in as a file:
 
 ```kotlin
 implementation(files("libs/libbox.aar"))
 ```
 
-AAR кладёт [`scripts/fetch-libbox.sh`](../scripts/fetch-libbox.sh): скачивает `libbox-<ver>.aar` + `SHA256SUMS` из GH Releases fork'а, проверяет хеш и пишет маркер `.libbox.version` (повторный запуск той же версии — no-op). Пин версии — файл **`app/android/libbox.version`**, single source of truth для local и CI:
+[`scripts/fetch-libbox.sh`](../scripts/fetch-libbox.sh) puts the AAR in place: it downloads `libbox-<ver>.aar` plus `SHA256SUMS` from the fork's GitHub Releases, checks the hash, and writes the marker `.libbox.version` (re-running the same version is a no-op). The version pin is the file **`app/android/libbox.version`**, the single source of truth for both local builds and CI:
 
-| Кто вызывает fetch | Отметка |
+| Who calls fetch | Mark |
 |--------------------|---------|
-| `scripts/build-local-apk.sh` (локальная сборка) | ✓ автоматически |
-| `ci.yml` → job `android` → шаг `Fetch sing-box-lx core (libbox.aar)` | ✓ автоматически |
-| Вручную (свежий clone, `flutter build` без скрипта): `./scripts/fetch-libbox.sh`; override версии — `./scripts/fetch-libbox.sh v1.14.0-lx.N` | ○ |
+| `scripts/build-local-apk.sh` (local build) | ✓ automatically |
+| `ci.yml` → job `android` → step `Fetch sing-box-lx core (libbox.aar)` | ✓ automatically |
+| By hand (fresh clone, `flutter build` without the script): `./scripts/fetch-libbox.sh`; version override: `./scripts/fetch-libbox.sh v1.14.0-lx.N` | ○ |
 
-Джобу `checks` AAR не нужен (`flutter analyze`/`test` — pure Dart).
+The `checks` job does not need the AAR (`flutter analyze` / `test` are pure Dart).
 
-Отвергнутые альтернативы доставки ядра в CI:
+Rejected alternatives for delivering the core to CI:
 
-| Вариант | Отметка |
+| Option | Mark |
 |---------|---------|
-| **Скачивание из GH Releases fork'а + `files("libs/libbox.aar")`** | ✓ **выбранный путь**: репо публичный (curl без токена), `SHA256SUMS`-верификация, пин одним файлом `libbox.version` |
-| JitPack (`com.github.Leadaxe.sing-box-lx:libbox:<tag>`) | ✗ JitPack собирает из исходников — `gomobile bind` (Go + NDK) на его билдерах не работает, готовые AAR из Releases он не раздаёт |
-| GitHub Packages (Maven) | ✗ требует токен даже для public-пакетов (у каждого клона и в CI) + отдельный maven-publish шаг в `lx-release.yml` fork'а |
+| **Download from the fork's GH Releases + `files("libs/libbox.aar")`** | ✓ **the chosen path**: the repo is public (curl without a token), `SHA256SUMS` verification, pinned by the single file `libbox.version` |
+| JitPack (`com.github.Leadaxe.sing-box-lx:libbox:<tag>`) | ✗ JitPack builds from source — `gomobile bind` (Go + NDK) does not work on its builders, and it will not serve prebuilt AARs from Releases |
+| GitHub Packages (Maven) | ✗ requires a token even for public packages (in every clone and in CI), plus a separate maven-publish step in the fork's `lx-release.yml` |
 
-- ⚠ Обновление ядра = поднять пин в `app/android/libbox.version`, пересобрать локально (fetch сам перекачает AAR), прогнать smoke (Start/Stop, vless+wg+awg regression) и обновить раздел [«Версии»](#версии).
+- ⚠ Updating the core means raising the pin in `app/android/libbox.version`, rebuilding locally (fetch re-downloads the AAR on its own), running the smoke tests (Start/Stop, vless + wg + awg regression) and updating the [“Versions”](#versions) section.
 
-## Минимальный конфиг для проверки на телефоне
+## A minimal config for testing on a phone
 
-Файл **[`docs/examples/minimal_local_test.json`](examples/minimal_local_test.json)** — валидный sing-box JSON: только **tun** + **direct/block** в селекторе (без платного/чужого прокси). Подходит, чтобы убедиться, что **Read → Start** поднимает туннель и в UI появляются группа **proxy** и узлы **direct** / **block**. Интернет при этом идёт как обычно через direct (не «обход»).
+The file **[`docs/examples/minimal_local_test.json`](examples/minimal_local_test.json)** is valid sing-box JSON: just **tun** plus **direct/block** in the selector, with no paid or third-party proxy. It is enough to confirm that **Read → Start** brings the tunnel up and that the **proxy** group with the **direct** / **block** nodes appears in the UI. The internet keeps working as usual through direct — this is not a bypass.
 
-⚠ Управление ядром — через **libbox CommandClient**, не Clash HTTP (Clash API выпилен в §122). Блок `experimental.clash_api` в конфиге на нашем ядре (собрано без `with_clash_api`) даёт **фатальный отказ старта** (`clash api is not included in this build`) — в конфиг для проверки его класть **нельзя**.
+⚠ The core is controlled through the **libbox CommandClient**, not Clash HTTP (the Clash API was removed in §122). An `experimental.clash_api` block in a config is a **fatal startup failure** on our core (built without `with_clash_api`): `clash api is not included in this build`. Do not put it in a config you intend to test.
 
 ## CI (GitHub Actions)
 
-Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); полный протокол релиза — [RELEASE_PROCESS.md](RELEASE_PROCESS.md).
+Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); the full release protocol is in [RELEASE_PROCESS.md](RELEASE_PROCESS.md).
 
-| Событие | Что запускается |
+| Event | What runs |
 |---------|-----------------|
-| push / PR в `main`, `develop` | ✓ только `checks` (`flutter analyze`, L10n checks, `flutter test`) — без Java/Gradle |
-| push tag `v*` | ✓ `meta` + `checks` + `android` + `release` + `publish-manifest` (полный релиз) |
-| `workflow_dispatch`, `run_mode=checks` | ○ только `checks` |
-| `workflow_dispatch`, `run_mode=build` | ○ `checks` + `android` (APK в artifacts, без релиза) |
-| `workflow_dispatch`, `run_mode=release` | ○ полный релиз без тега (экстренные перевыпуски) |
+| push / PR to `main`, `develop` | ✓ `checks` only (`flutter analyze`, L10n checks, `flutter test`) — no Java or Gradle |
+| push of a `v*` tag | ✓ `meta` + `checks` + `android` + `release` + `publish-manifest` (a full release) |
+| `workflow_dispatch`, `run_mode=checks` | ○ `checks` only |
+| `workflow_dispatch`, `run_mode=build` | ○ `checks` + `android` (APK in artifacts, no release) |
+| `workflow_dispatch`, `run_mode=release` | ○ a full release without a tag (emergency re-issues) |
 
-Из терминала (`gh auth login`):
+From the terminal (`gh auth login`):
 
 ```bash
 gh workflow run CI -f run_mode=checks   # ✓ analyze + test
-gh workflow run CI -f run_mode=build    # ○ + APK в artifacts
+gh workflow run CI -f run_mode=build    # ○ + APK in artifacts
 ```
 
-Джоб `android` собирает **только release**-APK: universal (fat, все ABI) + 3 per-ABI — по прогону на таргет (§379: `--split-per-abi` убран, он ломал схему versionCode). Debug-APK CI не собирает. Перед сборкой шаг `Fetch sing-box-lx core` скачивает fork-ядро по пину `app/android/libbox.version` (см. [«Ядро sing-box-lx»](#ядро-sing-box-lx-libbox)).
+The `android` job builds **release** APKs only: universal (fat, all ABIs) plus three per-ABI ones, one run per target (§379: `--split-per-abi` was removed because it broke the versionCode scheme). CI does not build debug APKs. Before building, the `Fetch sing-box-lx core` step downloads the fork core at the pin in `app/android/libbox.version` (see [“The sing-box-lx core”](#the-sing-box-lx-core-libbox)).
 
-### Локализация в сборке и CI (§279 / §285)
+### Localization in the build and in CI (§279 / §285)
 
-- **Кодгена строк нет** (§285): UI локализуется через natural keys
-  (`getLocalText.s/.plural`, английский текст = ключ), словарь —
-  `assets/l10n/<tag>/ui.json` (asset, не кодген). ARB/gen_l10n/`l10n.yaml`
-  снесены; `flutter: generate` из pubspec убран. Отсутствие перевода → fallback
-  на английский ключ (под `--strict` = fail `ui_check`).
-- **Шаг `L10n checks`** в джобе `checks` — четыре guard-checker'а
+- **There is no string codegen** (§285): the UI is localized through natural keys
+  (`getLocalText.s/.plural`, the English text *is* the key), and the dictionary is
+  `assets/l10n/<tag>/ui.json` (an asset, not codegen). ARB / gen_l10n / `l10n.yaml`
+  are gone, and `flutter: generate` was removed from pubspec. A missing translation
+  falls back to the English key (under `--strict` that is an `ui_check` failure).
+- **The `L10n checks` step** in the `checks` job runs four guard checkers
   ([`app/tool/l10n/README.md`](../app/tool/l10n/README.md)): `ui_check`
-  (natural-key словарь ↔ обращения `getLocalText` в коде: missing/orphan/
-  shape/арность), `template_check` (unknown/missing-ключи overlay против
-  english-строк, извлечённых из `wizard_template.json`), `hardcoded_check` (ratchet против новых hardcoded display-строк +
-  rendering-locality), `kotlin_check` (нативные литералы Android + parity
-  `values/strings.xml` ↔ `values-ru/`). Все идут с `--strict` на каждом
-  push/PR — warnings фатальны.
+  (natural-key dictionary ↔ `getLocalText` call sites in the code:
+  missing/orphan/shape/arity), `template_check` (unknown and missing overlay keys
+  against the English strings extracted from `wizard_template.json`),
+  `hardcoded_check` (a ratchet against new hardcoded display strings, plus
+  rendering locality), and `kotlin_check` (native Android literals plus parity
+  between `values/strings.xml` and `values-ru/`). All run with `--strict` on every
+  push and PR — warnings are fatal.
 
-### Подпись release (один ключ между сборками)
+### Release signing (one key across builds)
 
-| Ситуация | Отметка |
+| Situation | Mark |
 |----------|---------|
-| Секреты **`ANDROID_*`** заданы в Actions | ✓ Один и тот же ключ между сборками CI, обновление APK «поверх» возможно |
-| Секретов нет | ○ Release подписан временным ключом раннера; «поверх» без переустановки обычно **нельзя** |
+| The **`ANDROID_*`** secrets are set in Actions | ✓ the same key across CI builds, so APKs can be updated in place |
+| No secrets | ○ the release is signed with the runner's temporary key; installing in place usually **fails** without uninstalling first |
 
-#### Сделать всё автоматически (рекомендуется)
+#### Do it all automatically (recommended)
 
-В корне клонированного репозитория (нужны **JDK** с `keytool`, **openssl**, **`gh auth login`**):
+From the root of the cloned repository (needs a **JDK** with `keytool`, **openssl**, and **`gh auth login`**):
 
 ```bash
 ./scripts/bootstrap-android-signing-for-ci.sh
 ```
 
-| Результат скрипта | Отметка |
+| What the script produces | Mark |
 |-------------------|---------|
-| `app/android/upload-keystore.jks` + `app/android/key.properties` | ✓ создаются при отсутствии (в [`.gitignore`](../app/android/.gitignore)) |
-| Секреты в GitHub | ✓ заливаются через `gh` |
-| Пароль в терминале при генерации | ○ сохраните в менеджер паролей (копия в локальном `key.properties`) |
+| `app/android/upload-keystore.jks` + `app/android/key.properties` | ✓ created if absent (both in [`.gitignore`](../app/android/.gitignore)) |
+| Secrets on GitHub | ✓ uploaded through `gh` |
+| The password printed during generation | ○ save it to a password manager (a copy lives in the local `key.properties`) |
 
-Отдельные шаги:
+Individual steps:
 
 ```bash
-./scripts/init-android-release-keystore.sh   # ✓ только keystore + key.properties
-./scripts/setup-android-ci-secrets.sh          # ✓ только gh (пароли из key.properties)
+./scripts/init-android-release-keystore.sh   # ✓ keystore + key.properties only
+./scripts/setup-android-ci-secrets.sh          # ✓ gh only (passwords from key.properties)
 ```
 
-- ○ Переопределить пароли при создании keystore: `ANDROID_SIGNING_PASSWORD='…' ./scripts/init-android-release-keystore.sh`
-- ○ Пересоздать ключ: `FORCE=1 ./scripts/init-android-release-keystore.sh`
+- ○ Override the passwords at keystore creation: `ANDROID_SIGNING_PASSWORD='…' ./scripts/init-android-release-keystore.sh`
+- ○ Recreate the key: `FORCE=1 ./scripts/init-android-release-keystore.sh`
 
-#### Секреты в GitHub (ручная настройка)
+#### GitHub secrets (manual setup)
 
-| Secret | Содержимое | Отметка |
+| Secret | Contents | Mark |
 |--------|------------|---------|
-| `ANDROID_KEYSTORE_BASE64` | `openssl base64 -A -in upload-keystore.jks` (одна строка) | ✓ обязателен для своей подписи |
-| `ANDROID_KEYSTORE_PASSWORD` | Пароль хранилища | ✓ |
-| `ANDROID_KEY_PASSWORD` | Пароль ключа | ✓ |
-| `ANDROID_KEY_ALIAS` | Alias (например `upload`) | ✓ |
+| `ANDROID_KEYSTORE_BASE64` | `openssl base64 -A -in upload-keystore.jks` (a single line) | ✓ required to use your own signature |
+| `ANDROID_KEYSTORE_PASSWORD` | Store password | ✓ |
+| `ANDROID_KEY_PASSWORD` | Key password | ✓ |
+| `ANDROID_KEY_ALIAS` | Alias (for example `upload`) | ✓ |
 
-Вручную через **`gh`** (если не используете скрипт выше):
+By hand through **`gh`** (if you are not using the script above):
 
 ```bash
 ./scripts/setup-android-ci-secrets.sh app/android/upload-keystore.jks
 ```
 
-- ○ Другой репозиторий: `GH_REPO=owner/L×Box ./scripts/setup-android-ci-secrets.sh`
+- ○ A different repository: `GH_REPO=owner/L×Box ./scripts/setup-android-ci-secrets.sh`
 
-Перед `flutter build apk --release` workflow на раннере создаёт временные `app/android/upload-keystore.jks` и `app/android/key.properties` из секретов. Локальный **`flutter build apk --release`** после bootstrap использует те же файлы в `app/android/`.
+Before `flutter build apk --release` the workflow recreates temporary `app/android/upload-keystore.jks` and `app/android/key.properties` on the runner from the secrets. A local **`flutter build apk --release`** after bootstrap uses those same files in `app/android/`.
 
-- ⚠ Файлы keystore и `key.properties` с секретами **не коммитить**.
+- ⚠ Never commit the keystore or the `key.properties` holding secrets.
 
-## Версии
+## Versions
 
-- В workflow зафиксированы **Flutter 3.41.6** и **JDK 17**; при обновлении — править `ci.yml` и этот файл.
-- Ядро — **sing-box-lx `v1.14.0-lx.1`** (ветка форка `lx-1.14`): пин в `app/android/libbox.version` (single source для local + CI, читает `scripts/fetch-libbox.sh`); локальный `app/android/app/libs/libbox.aar` должен совпадать с пином (fetch следит через маркер `.libbox.version`). Единственный источник правды по версии/build-тегам ядра — [KERNEL.md](KERNEL.md) + сам пин-файл. При обновлении — поднять пин, пересобрать локально, прогнать smoke и обновить эту строку.
+- **Flutter 3.41.6** is pinned in the file `app/android/flutter.version` — CI reads it in the `Flutter version pin` step, so upgrading means editing that file, not the workflow. **JDK 17** is set in `ci.yml` directly; when it changes, update `ci.yml` and this file.
+- The core is **sing-box-lx `v1.14.0-lx.27-rc.1`** (fork branch `lx`): pinned in `app/android/libbox.version` (the single source for local builds and CI, read by `scripts/fetch-libbox.sh`); the local `app/android/app/libs/libbox.aar` must match the pin (fetch tracks this through the `.libbox.version` marker). The single source of truth for the core version and its build tags is [KERNEL.md](KERNEL.md) plus the pin file itself. When updating: raise the pin, rebuild locally, run the smoke tests and update this line.

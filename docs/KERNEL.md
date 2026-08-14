@@ -1,428 +1,462 @@
-# Ядро — sing-box-lx (fork)
+# The core — sing-box-lx (fork)
 
-Всё про VPN-ядро L×Box: откуда берём, как пинится, какие build-теги, ловушки при
-бампе версии. ARCHITECTURE.md ссылается сюда.
+Everything about the L×Box VPN core: where we get it, how it is pinned, which
+build tags it carries, and the gotchas of a version bump. ARCHITECTURE.md links
+here.
 
-## Что это
+## What it is
 
-Ядро — наш форк [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)
-(рабочая и релизная ветка `lx`; `lx-1.14` — архивный якорь завершённой миграции
-на 1.14; база upstream — см. «Текущий пин» ниже): upstream sing-box +
-AmneziaWG 2.0 + нативный XHTTP + VLESS encryption (PQ-слой) + LxBox-специфичные
-фичи (idle-suspend, round-robin balancer, DNS-группа, DNS-стрим и др.).
+The core is our fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)
+(the working and release branch is `lx`; `lx-1.14` is an archived anchor for the
+finished migration to 1.14; for the upstream base see “The current pin” below):
+upstream sing-box plus AmneziaWG 2.0, native XHTTP, VLESS encryption (the PQ
+layer) and LxBox-specific features (idle-suspend, the round-robin balancer, DNS
+groups, the DNS stream and more).
 
-Управление — через **libbox CommandClient** (§122; Clash HTTP-server выпилен).
+Control goes through the **libbox CommandClient** (§122; the Clash HTTP server
+was removed).
 
-## Откуда берётся AAR
+## Where the AAR comes from
 
 | | |
 |---|---|
-| Пин версии | `app/android/libbox.version` — single source of truth (local + CI) |
-| Скачивание | `scripts/fetch-libbox.sh` → `libbox.aar` из GitHub Releases форка + SHA256-проверка; идемпотентен (маркер `.libbox.version`) |
-| Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
-| AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
+| Version pin | `app/android/libbox.version` — the single source of truth (local and CI) |
+| Download | `scripts/fetch-libbox.sh` → `libbox.aar` from the fork's GitHub Releases plus a SHA256 check; idempotent (the `.libbox.version` marker) |
+| Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
+| The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.25-rc.5`** (см. `app/android/libbox.version`)
-— финальное имя ключа `masque` (`vhttp`) + режим urltest-группы в API.
-Клиентская сторона — §393.
+**The current pin: `v1.14.0-lx.27-rc.1`** (see `app/android/libbox.version`) —
+a Windows-only WireGuard bind fix (SPEC 069: a v6 bind failure no longer kills
+the live v4 socket). The Java API is byte-identical to lx.25-rc.5, so nothing on
+the client side changes.
 
-**`transport` → `vhttp` (SPEC 062).** Имя из rc.4 убрано **без алиаса**: у
-vless/trojan/vmess `transport` — ключ V2Ray-транспорта, и он объект
-(`{"type":"ws"}`), а не строка. Одно имя с двумя смыслами и типами — та самая
-путаница, которую SPEC 062 и убирает. Промежуточное имя прожило один пререлиз;
-в клиенте оно не поддерживается вовсе (наружу не выходило — см. §393).
+Earlier in this line: the final name of the `masque` key (`vhttp`) plus the
+urltest group's mode in the API (lx.25-rc.5). The client side of that is §393.
 
-`network` по-прежнему deprecated до `v1.14.0-lx.30`, как объявлено в rc.4.
+**`transport` → `vhttp` (SPEC 062).** The name from rc.4 was removed **with no
+alias**: for vless/trojan/vmess `transport` is the V2Ray transport key, and it is
+an object (`{"type":"ws"}`), not a string. One name with two meanings and two
+types is exactly the confusion SPEC 062 removes. The interim name lived through a
+single prerelease; the client does not support it at all (it never went out — see
+§393).
 
-**`Group.mode` (SPEC 019)** — режим urltest-группы: `least_test` (обычный
-urltest, узел в `selected`) | `round_robin` (балансировка, состояние в
-`GetPool`) | пусто (не urltest). Обещан «в любой сборке», в отличие от `GetPool`
-за тегом `with_lx_command`.
+`network` remains deprecated until `v1.14.0-lx.30`, as announced in rc.4.
 
-⚠️ **В Android-AAR rc.5 этого поля НЕТ.** `classes.jar` побайтово равен rc.4
-(SHA256 `23b2eb27…`), `javap io.nekohasekai.libbox.OutboundGroup` не показывает
-`getMode()`. Нативная часть при этом собрана из rc.5 (`strings libbox.so` →
-`1.14.0-lx.25-rc.5`, строки `least_test`/`round_robin` присутствуют) — то есть
-Go-код на месте, а gomobile-обвязка `OutboundGroup` не перегенерирована.
-На §393 не влияет (`vhttp` — парсинг конфига, не Java-поверхность), но
-потребителю `mode` ждать следующей сборки ядра.
+**`Group.mode` (SPEC 019)** — the mode of a urltest group: `least_test` (an
+ordinary urltest, with the node in `selected`) | `round_robin` (balancing, with
+the state in `GetPool`) | empty (not a urltest). Promised “in any build”, unlike
+`GetPool`, which sits behind the `with_lx_command` tag.
 
-**Схема `masque` (введена в rc.4).** Версия HTTP из `network` → `vhttp`,
-TLS-опции из плоского корня → во вложенный `tls{}` (`sni` → `tls.server_name`,
-`skip_cert_verify` → `tls.insecure`, `fragment`/`record_fragment`/
-`fragment_fallback_delay` → под `tls`). Остальные поля (`server`, `server_port`,
-`profile`, `private_key`, `public_key`, `ip`, `ipv6`, `uri`, `mtu`,
-`idle_timeout`, `keep_alive_period`, `network_list`) не менялись. Старые имена
-принимаются до **`v1.14.0-lx.30`**, каждый такой outbound печатает одно
-предупреждение в лог.
+⚠️ **The Android AAR still does NOT have this field, up to and including
+lx.27-rc.1.** `javap io.nekohasekai.libbox.OutboundGroup` shows no `getMode()`,
+and the whole Java surface of lx.27-rc.1 diffs clean against lx.25-rc.5 (`javap`
+over all 228 classes — identical; `classes.jar` itself hashes differently,
+`23b2eb27…` → `c9cc31f7…`, so compare the API, not the jar). The native part *is*
+built from the pinned tag (`strings libbox.so` → `1.14.0-lx.27-rc.1`, and the
+`least_test` / `round_robin` strings are present) — so the Go code is there, but
+the gomobile binding for `OutboundGroup` has not been regenerated. This does not
+affect §393 (`vhttp` is config parsing, not a Java surface), but anyone who wants
+`mode` has to wait for a core build that regenerates the binding.
 
-⚠️ Одно и то же поле, заданное старым и новым именем **с разными значениями** —
-fatal при старте (ошибка называет оба поля). Одинаковые значения конфликтом не
-считаются. Отсюда клиентское правило §393: эмитим только новый набор имён,
-никогда оба сразу; legacy живёт исключительно на входе (URI-парсер и
-JSON-импорт).
+**The `masque` schema (introduced in rc.4).** The HTTP version moved from
+`network` to `vhttp`, and the TLS options moved from the flat root into a nested
+`tls{}` (`sni` → `tls.server_name`, `skip_cert_verify` → `tls.insecure`, and
+`fragment` / `record_fragment` / `fragment_fallback_delay` under `tls`). The
+remaining fields (`server`, `server_port`, `profile`, `private_key`,
+`public_key`, `ip`, `ipv6`, `uri`, `mtu`, `idle_timeout`, `keep_alive_period`,
+`network_list`) are unchanged. The old names are accepted until
+**`v1.14.0-lx.30`**, and every such outbound prints one warning to the log.
 
-Новое поле `tls.disable_sni` — ClientHello без SNI. Пустой `sni` этого НЕ давал:
-он подменялся дефолтом профиля.
+⚠️ The same field given under both the old and the new name **with different
+values** is fatal at startup (the error names both fields). Identical values are
+not treated as a conflict. Hence the client rule in §393: emit only the new set of
+names, never both at once; legacy lives strictly on the input side (the URI parser
+and the JSON import).
 
-Ядро теперь **предупреждает** (раньше молчало) на неподдерживаемых для masque
-полях: `tls.alpn`, `tls.ech`, `tls.reality`, `tls.kernel_*`, а также на
-фрагментации при `vhttp: h3`.
+The new field `tls.disable_sni` produces a ClientHello with no SNI. An empty `sni`
+did NOT do that — it was replaced by the profile's default.
 
-**Дефолтный SNI сменился:** `consumer-masque.cloudflareclient.com` →
-`www.cloudflare.com`. Затрагивает конфиги БЕЗ явного SNI; заданное значение
-по-прежнему сильнее. Причина (замеры ядра на двух независимых РФ-каналах): с
-прежним именем h3-туннель к эндпоинту не поднимается. Имя некритично для
-аутентификации — эндпоинт проверяется пиннингом ECDSA-ключа.
+The core now **warns** (it used to stay silent) about fields unsupported for
+masque: `tls.alpn`, `tls.ech`, `tls.reality`, `tls.kernel_*`, and about
+fragmentation when `vhttp: h3`.
 
-⚠️ Расходится с `assets/warp_endpoints.json`, где `recommended_sni` =
-`consumer-masque.cloudflareclient.com` (коммит 9d5629ba) — ровно то имя, что
-ядро признало нерабочим на h3. Пересмотр рекомендации вынесен из §393 отдельно.
+**The default SNI changed:** `consumer-masque.cloudflareclient.com` →
+`www.cloudflare.com`. This affects configs with NO explicit SNI; an explicit value
+still wins. The reason (core measurements on two independent Russian networks):
+with the previous name the h3 tunnel to the endpoint does not come up. The name is
+not critical for authentication — the endpoint is verified by pinning its ECDSA
+key.
 
-Диагностика: `masque: CONNECT-IP timed out` вместо простыни про
-`http3: parsing frame failed`, когда эндпоинт принял QUIC, но не ответил на
-CONNECT-IP. Исходная причина сохраняется в цепочке ошибок.
+⚠️ This diverges from `assets/warp_endpoints.json`, where `recommended_sni` is
+`consumer-masque.cloudflareclient.com` (commit 9d5629ba) — exactly the name the
+core found non-working on h3. Revisiting that recommendation was split out of
+§393.
 
-Предыдущий пин — **`v1.14.0-lx.25-rc.4`** — та же схема конфига под именем
-`transport` (снято в rc.5) + смена дефолтного SNI. Java-поверхность равна rc.3.
+Diagnostics: `masque: CONNECT-IP timed out` instead of a wall of
+`http3: parsing frame failed` when the endpoint accepted QUIC but never answered
+CONNECT-IP. The original cause is preserved in the error chain.
 
-До него — **`v1.14.0-lx.25-rc.3`**
-— две правки поверх rc.1, обе про TLS-плечо под `detour`.
+The previous pin — **`v1.14.0-lx.25-rc.4`** — carried the same config schema under
+the name `transport` (removed in rc.5) plus the default SNI change. Its Java
+surface equals rc.3.
 
-**SPEC 060: `record_fragment` включается сам, когда outbound диалит через
-`detour`.** Симптом — цепочка вида `MASQUE detour VLESS` висела ~15 секунд и
-падала с `tls handshake: EOF`, по которому причину не восстановить. Причина не в
-ядре и не в SNI: нижнее плечо пересылает наш ClientHello от своего имени, и если
-PMTU за этим плечом меньше размера ClientHello, пакет теряется молча — ICMP
-«fragmentation needed» до клиента не доходит. Порог по размеру чистый (1488 B
-проходит, 1502 B исчезает) и принадлежит пути за плечом, а не протоколу: на
-других узлах те же байты идут насквозь. Воспроизводится голым `curl` без
-sing-box. Механизм в ядре был (`fragment` / `record_fragment`) — не хватало
-умолчания. Точка врезки одна — `NewClientWithOptions`, до выбора движка, поэтому
-STD, uTLS и REALITY получают одинаковый дефолт.
+Before that — **`v1.14.0-lx.25-rc.3`** — two changes on top of rc.1, both about
+the TLS leg under `detour`.
 
-⚠️ Дефолт меняет поведение **любого** outbound с `detour`, не только
-MASQUE-цепочек. Явный выбор пользователя всегда сильнее; `fragment: true` не
-апгрейдится добавлением record-split. Цена ограничена хендшейком — переписывается
-только первая TLS-запись, установившийся поток не трогается. Прямой путь (без
-`detour`) не затронут.
+**SPEC 060: `record_fragment` turns itself on when an outbound dials through a
+`detour`.** The symptom: a chain like `MASQUE detour VLESS` hung for about 15
+seconds and died with `tls handshake: EOF`, from which the cause cannot be
+reconstructed. The cause is neither the core nor the SNI: the lower leg forwards
+our ClientHello under its own name, and if the PMTU beyond that leg is smaller
+than the ClientHello, the packet is lost silently — the ICMP “fragmentation
+needed” never reaches the client. The threshold is purely about size (1488 B gets
+through, 1502 B vanishes) and belongs to the path beyond the leg rather than to
+the protocol: on other nodes the same bytes pass straight through. It reproduces
+with bare `curl`, without sing-box. The mechanism already existed in the core
+(`fragment` / `record_fragment`) — what was missing was the default. There is a
+single injection point, `NewClientWithOptions`, before the engine is chosen, so
+STD, uTLS and REALITY all get the same default.
 
-**SPEC 021: MASQUE h2 переехал на общий `common/tls`.** Раньше это был
-единственный outbound мимо общего слоя: на h2 он вёл TLS голым
-`crypto/tls.Client` ради pinning'а по ECDSA-ключу endpoint'а — и вместе с этим
-не получал из общего слоя ничего (включая новый дефолт SPEC 060). Теперь h2
-ходит через общий клиент, pinning перенесён поверх него. h3 не тронут: QUIC не
-несёт TLS поверх TCP.
+⚠️ The default changes the behaviour of **any** outbound with a `detour`, not just
+MASQUE chains. An explicit user choice always wins; `fragment: true` is not
+upgraded by adding a record split. The cost is bounded by the handshake — only the
+first TLS record is rewritten, and an established stream is untouched. The direct
+path (with no `detour`) is unaffected.
 
-Java-поверхность **не изменилась** — `classes.jar` побайтово равен rc.1
-(одинаковый SHA256), `javap`-diff не требуется, клиентских правок нет.
+**SPEC 021: MASQUE h2 moved onto the shared `common/tls`.** It used to be the only
+outbound bypassing the shared layer: on h2 it drove TLS through a bare
+`crypto/tls.Client` for the sake of pinning the endpoint's ECDSA key — and in
+exchange it received nothing from the shared layer (including the new SPEC 060
+default). Now h2 goes through the shared client and the pinning sits on top of it.
+h3 is untouched: QUIC does not carry TLS over TCP.
 
-⚠️ Это **rc**: девайс-прогон строить по detour-конфигам вообще, а не вокруг
-одной цепочки; отдельно проверить, что явный `fragment: true` не апгрейдится.
-Плюс не закрыт хвост rc.1 (ниже).
+The Java surface **did not change** — `classes.jar` is byte-identical to rc.1 (the
+same SHA256), no `javap` diff is required and no client changes are needed.
 
-До него — **`v1.14.0-lx.25-rc.1`** (см. историю)
-— **SPEC 058: `GetURLViaOutbound`** — диагностический HTTP GET через узел,
-адресуемый тегом, с возвратом ТЕЛА ответа. Закрывает класс вопросов, на которые
-`URLTestOutbound` не отвечает: не «жив ли узел», а «что видно через него»
-(exit-IP, гео, `warp=`). Активный selector при этом не переключается — живые
-соединения целы. Потребитель — §392 (вкладка Diagnostics на экране узла).
+⚠️ This is an **rc**: build the device run around detour configs in general rather
+than around a single chain, and separately verify that an explicit
+`fragment: true` is not upgraded. The tail of rc.1 (below) is also still open.
 
-Java-поверхность **изменилась**: `+GetURLResult`, `+HTTPHeaders`,
+Before that — **`v1.14.0-lx.25-rc.1`** — **SPEC 058: `GetURLViaOutbound`**, a
+diagnostic HTTP GET through a node addressed by tag, returning the response BODY.
+It closes the class of questions `URLTestOutbound` cannot answer: not “is the node
+alive” but “what can be seen through it” (the exit IP, geo, `warp=`). The active
+selector does not switch, so live connections stay intact. The consumer is §392
+(the Diagnostics tab on the node screen).
+
+The Java surface **did change**: `+GetURLResult`, `+HTTPHeaders`,
 `CommandClient.getURLViaOutbound(String,String,int,int,HTTPHeaders)`.
-⚠️ ГРАБЛЯ: у `GetURLResult` геттеры **без `get`-префикса** — `content()`,
-`status()`, `truncated()`, `contentType()`, `remoteAddr()`, `elapsedMs()`
-(в отличие от `URLTestOutboundResult.getDelay()`): gomobile снимает префикс,
-когда имя Go-поля не начинается с `Get`. Обвязка зовёт именно короткие формы.
+⚠️ GOTCHA: the getters on `GetURLResult` carry **no `get` prefix** — `content()`,
+`status()`, `truncated()`, `contentType()`, `remoteAddr()`, `elapsedMs()` (unlike
+`URLTestOutboundResult.getDelay()`): gomobile strips the prefix when the Go field
+name does not start with `Get`. The binding calls exactly those short forms.
 
-Контракт вызова (детали — kernel SPEC 058): только GET; `maxBytes` 0 → 256 KiB,
-потолок 1 MiB, обрезка помечается `Truncated`; **не-2xx — это результат, а не
-ошибка** (403/429 приезжают с телом); `RemoteAddr` — адрес изнутри туннеля, НЕ
-exit-IP узла (тот несёт тело); `ElapsedMs` в историю urltest не пишется.
-Проба = реальный трафик и пробуждение спящих WG — только по явному действию
-пользователя, фоновые обходы списка запрещены на стороне клиента.
+The call contract (details in kernel SPEC 058): GET only; `maxBytes` 0 → 256 KiB
+with a 1 MiB ceiling, and truncation is flagged as `Truncated`; **a non-2xx is a
+result, not an error** (403 and 429 arrive with a body); `RemoteAddr` is the
+address from inside the tunnel, NOT the node's exit IP (the body carries that);
+`ElapsedMs` is not written into the urltest history. A probe is real traffic and
+wakes sleeping WG, so it happens only on an explicit user action — background
+sweeps over the list are forbidden on the client side.
 
-⚠️ Это **rc**: полевая проверка с девайса (`cdn-cgi/trace` через WG-endpoint и
-через vless-outbound; HTTPS без кастомных корней) в критериях ядра не закрыта.
+⚠️ This is an **rc**: the field check from a device (`cdn-cgi/trace` through a WG
+endpoint and through a vless outbound; HTTPS without custom roots) is not closed
+in the core's criteria.
 
-До него — **`v1.14.0-lx.24-rc.2`** (v2.20.7)
-— догон upstream и смена тулчейна, кода lx-слоя не меняет. Ветка снова на
-вершине `upstream/testing` (база `v1.14.0-beta.9`): из 19 новых апстрим-коммитов
-заметное — DNS-кеши локального транспорта партиционируются по сигнатуре
-интерфейса (смена сети больше не отдаёт чужой кеш); WireGuard-хендшейк резолвит
-**все** адреса домен-пира и гонит их наперегонки (`SetEndpointResolver`);
-hijacked-DNS получил process info; фиксы reset network, FakeIP async-save,
-Android process finder, unbounded-аллокаций на злом SRS и OOM-стаба.
-Сборочный тулчейн — go1.26.5 вслед за апстримом (принцип SPEC 044). Форк-
-сабмодули перебазированы до ядра: sing-tun (SPEC 040 сверху), wireguard-go
-(AWG2 + SPEC 041 сверху; `SendHandshakeInitiation` = AWG-паддинг/junk +
-апстримный fan-out). Java-поверхность не изменилась — `classes.jar` побайтово
-равен lx.22 (одинаковый SHA256), `javap`-diff не требуется.
+Before that — **`v1.14.0-lx.24-rc.2`** (v2.20.7) — catching up with upstream and a
+toolchain change, with no changes to the lx-layer code. The branch sits on top of
+`upstream/testing` again (base `v1.14.0-beta.9`): out of 19 new upstream commits
+the notable ones are that the local transport's DNS caches are partitioned by
+interface signature (a network change no longer serves someone else's cache); the
+WireGuard handshake resolves **every** address of a domain peer and races them
+(`SetEndpointResolver`); hijacked DNS gained process info; plus fixes to reset
+network, FakeIP async-save, the Android process finder, unbounded allocations on a
+malicious SRS and the OOM stub. The build toolchain is go1.26.5, following
+upstream (the SPEC 044 principle). The fork's submodules were rebased before the
+core: sing-tun (with SPEC 040 on top) and wireguard-go (AWG2 plus SPEC 041 on top;
+`SendHandshakeInitiation` = AWG padding/junk plus the upstream fan-out). The Java
+surface did not change — `classes.jar` is byte-identical to lx.22 (the same
+SHA256), so no `javap` diff is needed.
 
-Промежуточные `lx.23` / `lx.24-rc.1` — про демон `lxd` (десктоп, SPEC 056/057):
-на Android-сборку не влияют, поэтому пин прыгает с lx.22 сразу на lx.24-rc.2.
+The intermediate `lx.23` and `lx.24-rc.1` are about the `lxd` daemon (desktop,
+SPEC 056/057): they do not affect the Android build, which is why the pin jumps
+from lx.22 straight to lx.24-rc.2.
 
-⚠️ Это **rc, не stable**: release notes ядра требуют девайс-прогона (туннель,
-DNS, URL-тест, WG/AWG — несколько раз) до промоута lx.24 в stable — из-за
-пере-базы сабмодулей (runbook §1.4) и смены тулчейна (SPEC 044, профиль
-hy2/quic).
+⚠️ This is an **rc, not a stable**: the core's release notes require a device run
+(tunnel, DNS, URL test, WG/AWG — several times) before lx.24 is promoted to
+stable, because of the submodule rebase (runbook §1.4) and the toolchain change
+(SPEC 044, the hy2/quic profile).
 
-До него — **`v1.14.0-lx.22`** (v2.20.6)
-— две правки. **SPEC 054**: `least_test` реагирует на отказы боевых дайлов —
-штраф за отказ класса «путь мёртв» (таймаут дайла, `EHOSTUNREACH` /
-`ENETUNREACH` / `ETIMEDOUT`), один запасной дайл через лучшего кандидата (кап
-две попытки), перенос выбора группы при успехе запасного без разрыва живых
-соединений. `ECONNREFUSED` / `ECONNRESET` и `context.Canceled` штрафа не дают.
-При 3 штрафах у лидера — аварийный режим: ранжирование сначала по штрафам,
-затем по задержке; штраф снимается только доказательством жизни, сбросов по
-времени нет; если оштрафованы все — принудительный прогон проб не чаще раза в
-2 минуты, и на это время отключается пропуск проб по `passive_check`. Новых
-таймеров нет — дельты по метке времени, переживает сон и заморозку. Это прямое
-продолжение SPEC 052: тот дал быстрый сигнал об отказе, но потреблять его было
-некому. **SPEC 053**: REALITY объявляет `minClientVer` 26.3.27 — Xray с
-v26.7.11 по умолчанию требует минимальную версию клиента и при несоответствии
-молча отдаёт камуфляжный сайт вместо отказа. Java-поверхность не изменилась —
-226 классов, `javap`-diff 0 строк.
+Before that — **`v1.14.0-lx.22`** (v2.20.6) — two changes. **SPEC 054**:
+`least_test` reacts to failures of real dials — a penalty for a “the path is
+dead” class of failure (a dial timeout, `EHOSTUNREACH` / `ENETUNREACH` /
+`ETIMEDOUT`), one fallback dial through the best candidate (capped at two
+attempts), and moving the group's selection on a successful fallback without
+tearing down live connections. `ECONNREFUSED` / `ECONNRESET` and
+`context.Canceled` carry no penalty. At three penalties on the leader an emergency
+mode kicks in: ranking first by penalties, then by latency; a penalty is only
+lifted by proof of life, and nothing resets on a timer; if everything is
+penalised, probes are forced no more than once every two minutes and probe
+skipping via `passive_check` is disabled for that period. There are no new timers
+— deltas come from a timestamp, so it survives sleep and freezing. This is a
+direct continuation of SPEC 052: that one produced a fast failure signal, but
+nothing consumed it. **SPEC 053**: REALITY declares `minClientVer` 26.3.27 — Xray
+since v26.7.11 requires a minimum client version by default and silently serves
+the camouflage site instead of refusing when it does not match. The Java surface
+did not change — 226 classes, a 0-line `javap` diff.
 
-До него — **`v1.14.0-lx.21`** (v2.20.5)
-— SPEC 052: connect-дедлайн 15 с на netstack-дайлах (WG/AWG-эндпоинт и делящие
-его per-conn-дайлы MASQUE, openvpn, openconnect, tailscale). До него это был
-единственный класс путей дайла без таймаута: `C.TCPConnectTimeout` живёт только
-в системном `net.Dialer`, netstack-пути обходят его структурно, и границей
-служил SYN-бэкофф gVisor — 6 ретрансмитов, ~127 с до ошибки, ×N адресов для
-домена. Java-поверхность не изменилась. Предыдущие пины — `v1.14.0-lx.20`
-(промоут ветки в стабильную, без изменений кода относительно rc.8) и
-`v1.14.0-lx.20-rc.8` (v2.20.4).
+Before that — **`v1.14.0-lx.21`** (v2.20.5) — SPEC 052: a 15-second connect
+deadline on netstack dials (the WG/AWG endpoint and the per-connection dials of
+MASQUE, openvpn, openconnect and tailscale that share it). Until then this was the
+only class of dial paths with no timeout: `C.TCPConnectTimeout` lives only in the
+system `net.Dialer`, netstack paths bypass it structurally, and the only boundary
+was gVisor's SYN backoff — 6 retransmits, about 127 s to an error, times N
+addresses for a domain. The Java surface did not change. The pins before that were
+`v1.14.0-lx.20` (promoting the branch to stable, with no code changes relative to
+rc.8) and `v1.14.0-lx.20-rc.8` (v2.20.4).
 
-Разбор rc.8 — технический выпуск поверх rc.7, поведение не меняется. Убраны две ловушки
-слияния: дважды подряд (235 коммитов и 217 в rc.7) одинаково ломались одни и те
-же два файла, причём поломка не видна при разборе слияния. Причина не в том, что
-upstream что-то удалял — этого кода у него просто нет; ломалась **форма** наших
-добавок: обе сидели там, где дописывают обе стороны, и merge склеивал их в то,
-чего не писал никто, без конфликта. Лечение структурное, не заплаткой:
-интерфейсы idle-suspend вынесены в отдельный файл вместе со своим импортом (файл-
-источник стал побайтово равен upstream — склеивать там больше нечего), а проверка
-при освобождении спящего endpoint'а свёрнута в один вызов вместо блока рядом с
-закрывающей строкой upstream (наше отличие в функции теперь одна строка — будущее
-изменение upstream столкнётся с ней громко, а не поглотит молча). Дерево
-проверено на добавки той же формы — других нет.
+On rc.8 — a technical release on top of rc.7 that changes no behaviour. It removed
+two merge traps: twice in a row (235 commits, and 217 in rc.7) the same two files
+broke in the same way, and the breakage is invisible when reviewing the merge. The
+cause was not that upstream deleted something — it simply does not have that code;
+what broke was the **shape** of our additions: both sat where both sides append,
+and the merge glued them into something nobody wrote, without a conflict. The cure
+is structural rather than a patch: the idle-suspend interfaces were moved into
+their own file together with their import (the source file became byte-identical
+to upstream, so there is nothing left to glue there), and the check when releasing
+a sleeping endpoint was collapsed into a single call instead of a block next to
+upstream's closing line (our difference inside the function is now one line, so a
+future upstream change will collide with it loudly rather than swallow it
+silently). The tree was checked for additions of the same shape — there are no
+others.
 
-Содержательная часть приехала в **`v1.14.0-lx.20-rc.7`** — база форка
-переставлена на upstream `v1.14.0-beta.8`, перенесено 217 коммитов, все
-зависимости выставлены ровно на ревизии, которых ждёт upstream. Из заметного
-для клиента: дедлок диспетчера TUN, более стабильные результаты URLTest,
-наблюдатель состояния Tailscale (взят вариант upstream — он не блокирует и
-переживает обрыв шины уведомлений, наш этого не умел), обновлённые gvisor/QUIC.
-Фичи форка на месте целиком: detour-цепочка, поток DNS-запросов, пул URLTest,
-idle-suspend, AWG-обфускация и все восемь расширенных клиентских команд. Само
-слияние внесло два дефекта, оба пойманы до выпуска: строка upstream под нашей
-проверкой в пути освобождения спящего endpoint'а (use-after-free — поймал
-регрессионный тест idle-suspend, не сборка) и потерянный импорт интерфейса
-засыпания (поймала сборка).
+The substance arrived in **`v1.14.0-lx.20-rc.7`** — the fork's base was moved onto
+upstream `v1.14.0-beta.8`, 217 commits were carried over, and every dependency was
+set to exactly the revision upstream expects. Of note for the client: a TUN
+dispatcher deadlock, more stable URLTest results, a Tailscale state observer (the
+upstream variant was taken — it does not block and survives a broken notification
+bus, which ours did not), and updated gvisor/QUIC. The fork's features are all
+present: the detour chain, the DNS query stream, the URLTest pool, idle-suspend,
+AWG obfuscation and all eight extended client commands. The merge itself
+introduced two defects, both caught before release: an upstream line under our
+check in the path that releases a sleeping endpoint (a use-after-free — caught by
+the idle-suspend regression test, not by the build) and a lost import of the sleep
+interface (caught by the build).
 
-⚠️ Порядок при бампе зависимостей: **сначала зависимости, потом слияние.**
-Обратный порядок — причина сломанной сборки rc.5 (см. ниже).
+⚠️ The order when bumping dependencies: **dependencies first, then the merge.** The
+reverse order is what broke the rc.5 build (see below).
 
-Java-поверхность rc.6↔rc.7 не изменилась: 226 классов в обеих, javap-diff — **0
-строк расхождений**, клиентских правок не требует.
+The Java surface did not change between rc.6 and rc.7: 226 classes in both, a
+`javap` diff of **0 lines of difference**, and no client changes required.
 
-По пути пин проехал **`rc.6`** (фикс краша старта, внесённого rc.5: WireGuard-
-компонент там отстал на 14 коммитов, а взяты были только 3 — те, на которые
-ругался компилятор; среди оставшихся 11 — фиксы гонок и переработка блокировок,
-то есть сочетание, которого у upstream никогда не было. В rc.6 компонент взят
-целиком, наши правки положены сверху), **`rc.5`** (два месяца upstream, 235
-коммитов; OpenVPN/OpenConnect как типы подключения — полевого опыта нет,
-SPEC 051), **`rc.4`** (SPEC 050: проверки нод залипали навсегда на молчащем
-сервере и переживали остановку VPN, держа весь список нод — 2806 узлов от уже
-выгруженной подписки; группа ждёт все проверки перед публикацией, оттого пустая
-колонка пинга и рост памяти до отстрела приложения) и **`rc.3`** (SPEC 047 —
-краш при смене сети в момент старта туннеля: «сброс сети» пускали, как только
-появлялся объект ядра, а туннель ещё не собран; SPEC 048 — краш всего процесса
-на соединении с мёртвой нодой, состояние освобождалось раньше формального
-закрытия и опоздавший пакет попадал в освобождённое; SPEC 049 — версия
-Go-тулчейна записана в `go.version`, `go.mod` для этого не годится: там
-language floor 1.24, на котором отказывают все QUIC-протоколы).
+Along the way the pin passed through **`rc.6`** (a fix for the startup crash
+introduced by rc.5: the WireGuard component there had fallen 14 commits behind and
+only 3 were taken — the ones the compiler complained about; among the remaining 11
+were race fixes and a lock rework, i.e. a combination upstream never had. In rc.6
+the component was taken whole and our changes laid on top), **`rc.5`** (two months
+of upstream, 235 commits; OpenVPN/OpenConnect as connection types — no field
+experience, SPEC 051), **`rc.4`** (SPEC 050: node checks got stuck forever against
+a silent server and survived stopping the VPN, holding the entire node list — 2806
+nodes from an already-unloaded subscription; the group waits for every check before
+publishing, hence the empty ping column and the memory growth until the app was
+shot) and **`rc.3`** (SPEC 047 — a crash on a network change while the tunnel was
+starting: “reset network” was let through as soon as the core object existed, while
+the tunnel was not yet assembled; SPEC 048 — a whole-process crash on a connection
+to a dead node, where state was freed before the formal close and a late packet
+landed in freed memory; SPEC 049 — the Go toolchain version is recorded in
+`go.version`, and `go.mod` is no good for that: it holds the language floor 1.24,
+on which every QUIC protocol fails).
 
-Пин до них — **`v1.14.0-lx.20-rc.2`** (v2.19.3)
-— **SPEC 046**: hijack'нутые DNS-запросы уехали с пакетного цикла tun-стека.
-Раньше резолв шёл прямо в петле, а вызов резолвера блокирует вызывающего на
-время дозвона — DNS-сервер с `detour` на чёрнодырную ноду держал петлю весь
-DNS-таймаут, и сквозь туннель не шло НИЧЕГО (другие DNS, ICMP, новые
-соединения любого протокола). Фоновой струйки запросов хватало, чтобы держать
-туннель замороженным почти непрерывно. Теперь обмены идут вне петли, потолок
-256 одновременных (сверх — дроп, клиент ретраит: для UDP норма). Баг старше
-этого релиза и жил в обоих tun-стеках. Java-поверхность не изменилась
-(javap-diff rc.1↔rc.2 — 0 строк расхождений), клиентских правок не требует.
+The pin before those — **`v1.14.0-lx.20-rc.2`** (v2.19.3) — **SPEC 046**: hijacked
+DNS queries moved off the tun stack's packet loop. Resolution used to happen right
+in the loop, and calling the resolver blocks the caller for the duration of the
+lookup — so a DNS server with a `detour` onto a black-hole node held the loop for
+the entire DNS timeout, and NOTHING went through the tunnel (other DNS, ICMP, new
+connections of any protocol). A background trickle of queries was enough to keep
+the tunnel frozen almost continuously. Exchanges now happen outside the loop, with
+a ceiling of 256 concurrent ones (beyond that they are dropped and the client
+retries — normal for UDP). The bug is older than this release and lived in both tun
+stacks. The Java surface did not change (a `javap` diff rc.1↔rc.2 of 0 lines) and
+no client changes were needed.
 
-Поверх этого — то, что приехало ещё в **`v1.14.0-lx.20-rc.1`**: изменений в
-Go-коде поверх lx.19 там не было, менялся только тулчейн сборки — все двенадцать
-build-джобов форка пинятся на Go 1.25.x (upstream-паритет, SPEC 044), Android-AAR
-при этом едет с 1.26.x **вниз** на ту же 1.25.x. Порог дефекта вендорских ядер —
-«>= 1.25», обе версии (1.25.5 и 1.26.5) device-verified, так что смена внутри
-проверенного диапазона. `go.mod` не тронут (там `go 1.24.7` — это language floor,
-а не выбор тулчейна).
+On top of that came what had already arrived in **`v1.14.0-lx.20-rc.1`**: there
+were no Go code changes on top of lx.19 there, only the build toolchain — all
+twelve of the fork's build jobs are pinned to Go 1.25.x (upstream parity, SPEC
+044), while the Android AAR moves **down** from 1.26.x to that same 1.25.x. The
+defect threshold for vendor kernels is “>= 1.25”, and both versions (1.25.5 and
+1.26.5) are device-verified, so this is a change within a verified range. `go.mod`
+is untouched (it says `go 1.24.7`, which is a language floor rather than a
+toolchain choice).
 
-Пин до них — **`v1.14.0-lx.19-rc.3`** (v2.19.2)
-— три фикса поверх lx.18: SPEC 041 v2 (событийный нудж `RebindStaleEndpoints`,
-потребитель — §340), SPEC 044 (AAR, собранный Go 1.24, убивал ВСЕ quic-go-аутбаунды
-на вендорских ядрах — hysteria2/tuic/masque-h3; фикс = тулчейн Go 1.25, §341) и
-SPEC 045 (nil-паника trojan/vless с `tls.enabled:false` при URL-тесте).
+The pin before those — **`v1.14.0-lx.19-rc.3`** (v2.19.2) — three fixes on top of
+lx.18: SPEC 041 v2 (the event-driven nudge `RebindStaleEndpoints`, consumed by
+§340), SPEC 044 (an AAR built with Go 1.24 killed ALL quic-go outbounds on vendor
+kernels — hysteria2/tuic/masque-h3; the fix is the Go 1.25 toolchain, §341) and
+SPEC 045 (a nil panic on trojan/vless with `tls.enabled:false` during a URL test).
 
-Пин до него — **`v1.14.0-lx.18`** (v2.19.1, §335)
-— VLESS `encryption` (SPEC 032, feature VLESS_ENCRYPTION): пост-квантовый слой
-`mlkem768x25519plus` **внутри** VLESS (работает вместо TLS — такие узлы приезжают
-с `security=none`; не путать с REALITY). Раньше поля не было в схеме ядра, и
-узлы с ним были молча мертвы: транспорт поднимался (WS `101`, gRPC SETTINGS),
-дальше сервер рвал соединение без единой строки в логе. Клиентская половина —
-§335: билдер переносит поле из `vless://`-ссылок (query) и Xray-JSON
-(`users[0].encryption`) в плоское поле аутбаунда рядом с `uuid`, эмитит только
-непустое/не-`none`, плюс обратная запись в `toUriVless` (иначе терялось бы на
-round-trip §302-правил). Замер на устройстве: 12 настоящих узлов ожили (ws 7/8,
-grpc 5/5), итог по подписке 42 → 53 из 76. Java-поверхность libbox не меняется —
-это конфиг-поле, не API. ⚠️ Обратная сторона — ловушка 2: ядро старше lx.18
-отвергает конфиг с `encryption` **целиком**, поэтому бамп пина и включение
-эмита — один атомарный шаг.
+The pin before that — **`v1.14.0-lx.18`** (v2.19.1, §335) — VLESS `encryption`
+(SPEC 032, feature VLESS_ENCRYPTION): the post-quantum layer
+`mlkem768x25519plus` **inside** VLESS (it works instead of TLS — such nodes arrive
+with `security=none`; not to be confused with REALITY). The field did not exist in
+the core's schema before, so nodes carrying it were silently dead: the transport
+came up (WS `101`, gRPC SETTINGS) and then the server tore the connection down
+without a single line in the log. The client half is §335: the builder moves the
+field from `vless://` links (the query) and Xray JSON (`users[0].encryption`) into
+a flat field of the outbound next to `uuid`, emits it only when it is non-empty and
+not `none`, and writes it back in `toUriVless` (otherwise it would be lost on a
+round trip through §302 rules). Measured on a device: 12 genuine nodes came back to
+life (ws 7/8, grpc 5/5), taking the subscription from 42 to 53 out of 76. The
+libbox Java surface is unchanged — this is a config field, not an API. ⚠️ The flip
+side is gotcha 2: a core older than lx.18 rejects a config with `encryption`
+**entirely**, so bumping the pin and enabling the emit are one atomic step.
 
-По пути пин проехал стабильный **`v1.14.0-lx.17`** — промоут rc-линии
-rc.1–rc.5 плюс XHTTP-фиксы, не выходившие в rc: SPEC 042 (Content-Type
-`application/grpc` на потоковых запросах — паритет с Xray) и SPEC 043 (корень
-жалобы «XHTTP-ноды подписки мертвы» — `stream-one` слал путь без завершающего
-слэша, сервер 404-ил, соединение висело до таймаута; `auto`+REALITY уходит в
-`stream-one`, отсюда ложный след «сломан auto»). Девайс-верифицировано: XHTTP-
-ноды подписки ожили. Оба фикса внутри ядра, клиентских правок нет.
+Along the way the pin passed through the stable **`v1.14.0-lx.17`** — the promotion
+of the rc.1–rc.5 line plus XHTTP fixes that never shipped in an rc: SPEC 042 (the
+`application/grpc` Content-Type on streaming requests — parity with Xray) and SPEC
+043 (the root of the complaint “the subscription's XHTTP nodes are dead” —
+`stream-one` sent a path without a trailing slash, the server returned 404 and the
+connection hung until the timeout; `auto`+REALITY goes into `stream-one`, hence the
+false trail “auto is broken”). Device-verified: the subscription's XHTTP nodes came
+back. Both fixes are inside the core, with no client changes.
 
-**Предыдущий пин: `v1.14.0-lx.17-rc.5`** (v2.19.0)
-— два самолечащихся фикса поверх rc.3 (rc.4, ниже) плюс апстрим-синк 01.08 в
-rc.5: naiveproxy v150, гонка DNS-правил (завершённое правило блокировалось ранее
-взведённым), WireGuard system-device не конфигурил DNS интерфейса, TLS-фрагмент
-на Windows без TCP estats, routing loop на darwin. Клиентских правок не
-потребовал ни один.
+**The previous pin: `v1.14.0-lx.17-rc.5`** (v2.19.0) — two self-healing fixes on
+top of rc.3 (rc.4, below) plus the 01.08 upstream sync in rc.5: naiveproxy v150, a
+DNS rule race (a completed rule was blocked by one armed earlier), the WireGuard
+system device not configuring the interface's DNS, a TLS fragment on Windows
+without TCP estats, and a routing loop on darwin. None of them required client
+changes.
 
-**rc.4 / SPEC 041** (feature HOTFIXES) — WG/AWG-эндпоинты чинят себя после сна
-устройства вместо вечного ERR до ручного реконнекта. Пока телефон спит, UDP-
-5-tuple туннеля умирает на пути (истекает NAT-мэппинг и/или протухает
-flow-запись DPI), а upstream wireguard-go бесконечно повторяет handshake в тот
-же мёртвый сокет — тот же исходящий порт, тот же мёртвый 5-tuple. Реконнект
-«чинил» ровно тем, что открывал новый сокет со свежим эфемерным портом. Теперь
-это делает ядро: когда цикл повторов handshake у пира исчерпан (~90 с
-неотвеченных initiation — существующее give-up-событие, срабатывает только под
-спросом на трафик), bind переоткрывается один раз со свежим портом и сразу
-инициируется новый handshake. Для masquerade-профилей decoy `i1` уезжает с
-первой initiation нового 5-tuple, переоткрывая поток на DPI. Дебаунс — один
-rebind на give-up-цикл; явно закреплённый `listen_port` сохраняется
-(самолечение сменой порта тогда недоступно, by design); обе схемы bind (прямая
-и через `detour`) лечатся одним механизмом. В исправном состоянии, во сне и
-после закрытия не стоит ничего — ни таймеров, ни горутин, ни трафика: на
-спящем устройстве rebind вырождается в no-op и с idle-suspend (SPEC 020) не
-конфликтует.
+**rc.4 / SPEC 041** (feature HOTFIXES) — WG/AWG endpoints heal themselves after
+the device sleeps, instead of an eternal ERR until a manual reconnect. While the
+phone sleeps the tunnel's UDP 5-tuple dies along the path (the NAT mapping expires
+and/or the DPI flow record goes stale), and upstream wireguard-go retries the
+handshake into that same dead socket forever — the same source port, the same dead
+5-tuple. A reconnect “fixed” it purely by opening a new socket with a fresh
+ephemeral port. Now the core does that: when a peer's handshake retry cycle is
+exhausted (about 90 s of unanswered initiations — an existing give-up event that
+only fires under demand for traffic), the bind is reopened once with a fresh port
+and a new handshake starts immediately. For masquerade profiles the `i1` decoy
+leaves with the first initiation of the new 5-tuple, reopening the flow on the DPI.
+The debounce is one rebind per give-up cycle; an explicitly pinned `listen_port` is
+preserved (self-healing by changing the port is then unavailable, by design); and
+both bind schemes (direct and through a `detour`) are healed by the same mechanism.
+In a healthy state, while asleep and after closing it costs nothing — no timers, no
+goroutines, no traffic: on a sleeping device the rebind degenerates into a no-op and
+does not conflict with idle-suspend (SPEC 020).
 
-**rc.4 / SPEC 040** (feature HOTFIXES) — system-стек TCP больше не умирает
-навсегда, когда его listener убивают из-под ядра. При `stack: "system"` каждое
-новое TCP-соединение из TUN NAT-переписывается на локальный forwarder-listener.
-Его accept-цикл считал **любую** ошибку `Accept` терминальной и молча выходил —
-поэтому когда что-то ещё в общем Android-процессе закрывало fd этого listener'а
-(шальной close на переиспользованном номере дескриптора — тот самый отказ §047
-«браузер мёртв, QUIC жив»), стек продолжал работать и переписывать каждый новый
-SYN на мёртвый порт. ОС отвечала мгновенным RST: любое приложение получало
-`ECONNREFUSED` за ~16 мс до перезапуска VPN, при живых UDP/QUIC/DNS.
-Воспроизведение на устройстве: ~1 раз на 8–36 быстрых перезапусков VPN, хуже на
-«грязном» процессе — поэтому месяцами не ловилось. sing-tun теперь
-fork-сабмодуль (`submodules/sing-tun`, пин на точную upstream-ревизию из
-go.mod) с однофайловым патчем: неожиданная ошибка `Accept` логируется с errno
-(он называет виновника), listener пересоздаётся на том же адресе, порт
-форвардера переопубликовывается атомарно, цикл продолжает обслуживать.
-Намеренный `System.Close()` по-прежнему молчит. Счётчик восстановлений — как
-телеметрия: если тикает, клиентский триггер закрытия fd жив. Device-verified
-01.08.2026 (§329): два живых срабатывания, **errno = `EINVAL`**.
+**rc.4 / SPEC 040** (feature HOTFIXES) — the system TCP stack no longer dies
+permanently when its listener is killed out from under the core. With
+`stack: "system"` every new TCP connection from the TUN is NAT-rewritten onto a
+local forwarder listener. Its accept loop treated **any** `Accept` error as
+terminal and exited silently — so when something else in the shared Android process
+closed that listener's fd (a stray close on a reused descriptor number — the very
+§047 failure of “the browser is dead, QUIC is alive”), the stack kept running and
+kept rewriting every new SYN onto a dead port. The OS answered with an instant RST:
+any application got `ECONNREFUSED` in about 16 ms until the VPN was restarted, while
+UDP/QUIC/DNS stayed alive. Reproduction on a device: roughly once per 8–36 fast VPN
+restarts, worse on a “dirty” process — which is why it went uncaught for months.
+sing-tun is now a fork submodule (`submodules/sing-tun`, pinned to the exact
+upstream revision from go.mod) with a single-file patch: an unexpected `Accept`
+error is logged with its errno (which names the culprit), the listener is recreated
+on the same address, the forwarder port is republished atomically, and the loop
+keeps serving. A deliberate `System.Close()` still stays silent. The recovery
+counter doubles as telemetry: if it ticks, the client-side trigger closing the fd is
+still alive. Device-verified on 01.08.2026 (§329): two live occurrences, **errno =
+`EINVAL`**.
 
-**rc.2:** ротация архива отчётов (SPEC 039 / feature
-HOTFIXES) — каталоги `files/oom_reports` и `files/crash_reports` не чистились
-никогда, на устройстве накопилось **575 каталогов / 427 МБ за 19 дней**;
-теперь перед записью нового отчёта архив подрезается до **32 каталогов и 64 МБ**
-(что раньше сработает), удаление — по mtime, не по имени (суффиксы коллизий
-`-1`…`-1000` ломают лексикографический порядок). Плюс **240 upstream-коммитов**:
-из заметных для форка — URLTest теперь *требует* history storage в контексте
-вместо молчаливого создания. **rc.3:** `Endpoint.Close()` снова возвращает
-ошибку закрытия tun-устройства (nil-guard из SPEC 020 глотал её и рапортовал
-чистое завершение); nil-проверка осталась, изменилось только распространение
-ошибки. **javap-diff rc.1 → rc.3: изменений НЕТ** — `PlatformInterface`,
-`CommandClient`, `BoxService`, `Libbox` идентичны, состав классов совпадает
-(226 в обоих AAR). Device-verified 30.07.2026 (CPH2411): старт чистый,
-`last_start_error` пуст, 0 ошибок/fatal в логах, 54 живых замера.
+**rc.2:** rotation of the report archive (SPEC 039 / feature HOTFIXES) — the
+`files/oom_reports` and `files/crash_reports` directories were never cleaned, and
+**575 directories / 427 MB accumulated over 19 days** on the device; now, before
+writing a new report, the archive is trimmed to **32 directories and 64 MB**
+(whichever hits first), deleting by mtime rather than by name (the collision
+suffixes `-1`…`-1000` break lexicographic order). Plus **240 upstream commits**:
+notable for the fork is that URLTest now *requires* history storage in the context
+instead of silently creating it. **rc.3:** `Endpoint.Close()` returns the tun
+device's close error again (the nil guard from SPEC 020 swallowed it and reported a
+clean shutdown); the nil check stayed, only the error propagation changed. **The
+javap diff rc.1 → rc.3: NO changes** — `PlatformInterface`, `CommandClient`,
+`BoxService` and `Libbox` are identical, and the class set matches (226 in both
+AARs). Device-verified on 30.07.2026 (CPH2411): a clean start, an empty
+`last_start_error`, 0 errors or fatals in the logs, 54 live measurements.
 
-Внимание при бампе через rc.2: он несёт 240 upstream-коммитов, поэтому
-javap-diff обязателен даже когда release notes обещают «one-line fix» —
-проверять надо против **своего** пина, а не против предыдущего rc. Оба фикса
-rc.4 живут целиком внутри ядра (wireguard-go bind и sing-tun accept-цикл),
-Java-поверхности не касаются — клиентских правок не потребовалось.
+Take care when bumping through rc.2: it carries 240 upstream commits, so a javap
+diff is mandatory even when the release notes promise a “one-line fix” — and it has
+to be checked against **your** pin, not against the previous rc. Both rc.4 fixes
+live entirely inside the core (the wireguard-go bind and the sing-tun accept loop)
+and do not touch the Java surface, so no client changes were needed.
 
-**Предыдущий пин: `v1.14.0-lx.17-rc.1`** — SPEC 038: `GetRunningConfig` возвращает
-объект `RunningConfig` с геттером `content()` вместо голого `String`. Голая
-строка **убивала процесс ядра на android/arm64 при каждом вызове**: gomobile
-кодирует Go-строку в `nstring{void*, len}`, cgo кладёт её в `__packed__`-фрейм,
-тот теряет 8-выравнивание, и присваивание слота с указателем идёт через
-`runtime.wbMove` → `bulkBarrierPreWrite` → `throw: unaligned arguments`. Это
-не паника, а fatal throw — туннель падал без шанса. Дефект внесён SPEC 037
-(GetRunningConfig; в ранних записях фигурировал как «SPEC 036» — этот номер в
-ядре позже освобождён и значит другое), поэтому §311 был неработоспособен и в
-rc.3, и в stable `lx.16`; именно так
-падало ядро 26.07 (найдено каналом §316). **javap-diff lx.16 → lx.17-rc.1:**
-единственное изменение — `getRunningConfig()` сменил возврат
-`String` → `RunningConfig`; `PlatformInterface` / `CommandClientHandler` /
-`Libbox` без изменений. Клиентская правка — `BoxCommandClient.getRunningConfig()`
-зовёт `.content()`. Device-verified 27.07.2026 (CPH2411): 6 вызовов подряд при
-живом туннеле → 200, ядро живо, новых крашей нет.
+**The previous pin: `v1.14.0-lx.17-rc.1`** — SPEC 038: `GetRunningConfig` returns a
+`RunningConfig` object with a `content()` getter instead of a bare `String`. The
+bare string **killed the core process on android/arm64 on every call**: gomobile
+encodes a Go string as `nstring{void*, len}`, cgo puts it into a `__packed__`
+frame, that loses 8-byte alignment, and assigning a slot holding a pointer goes
+through `runtime.wbMove` → `bulkBarrierPreWrite` → `throw: unaligned arguments`.
+That is not a panic but a fatal throw — the tunnel died with no chance. The defect
+was introduced by SPEC 037 (GetRunningConfig; earlier notes called it “SPEC 036”,
+a number later freed in the core and now meaning something else), so §311 was
+inoperable both in rc.3 and in the stable `lx.16`; that is exactly how the core died
+on 26.07 (found through the §316 channel). **The javap diff lx.16 → lx.17-rc.1:**
+the only change is that `getRunningConfig()` returns `RunningConfig` instead of
+`String`; `PlatformInterface`, `CommandClientHandler` and `Libbox` are unchanged.
+The client change is that `BoxCommandClient.getRunningConfig()` calls `.content()`.
+Device-verified on 27.07.2026 (CPH2411): 6 consecutive calls with a live tunnel →
+200, the core alive, no new crashes.
 
-**Предыдущий пин: `v1.14.0-lx.16`** (стабильный) — SPEC 037: `CommandClient.GetRunningConfig`
-— канонический снапшот конфига РАБОТАЮЩЕГО ядра (захват один раз на старте в
-`newInstance`, post-override, re-marshal; отдача — копия строки). Клиентская
-половина — §311 LxBox (`activeModel`, `GET /config/running`): закрывает окно
-«пересборка при живом туннеле» и ложный «Not found» на видимую ноду. javap-diff
-против lx.15: `+ String getRunningConfig() throws` в `CommandClient`;
-`PlatformInterface` / `CommandClientHandler` БЕЗ изменений. Ошибки RPC:
-не-STARTED → `FailedPrecondition`, attached-путь/сбой захвата → `Unavailable`,
-без `with_lx_command` → `Unimplemented` — обвязка глотает всё в null.
+**The previous pin: `v1.14.0-lx.16`** (stable) — SPEC 037:
+`CommandClient.GetRunningConfig`, a canonical snapshot of the RUNNING core's config
+(captured once at start in `newInstance`, post-override, re-marshalled; a copy of
+the string is returned). The client half is §311 in LxBox (`activeModel`,
+`GET /config/running`): it closes the “a rebuild while the tunnel is live” window
+and the false “Not found” on a visible node. The javap diff against lx.15:
+`+ String getRunningConfig() throws` on `CommandClient`; `PlatformInterface` and
+`CommandClientHandler` UNCHANGED. RPC errors: not-STARTED → `FailedPrecondition`,
+an attached path or a capture failure → `Unavailable`, and without
+`with_lx_command` → `Unimplemented` — the binding swallows all of them into null.
 
-`lx.15` (предыдущий) — SPEC 002: XHTTP больше не ломается за
-reverse-proxy. VLESS+XHTTP через nginx/CDN с `mode: packet-up`, trailing-slash
-`path` (`/upload/`) и `session_placement: header` раньше падал с `unexpected
-download status: 301 Moved Permanently` (клиент безусловно срезал trailing slash
-для ВСЕХ mode; nginx `location /upload/ {}` отвечал 301-редиректом на bare-path,
-а download-запрос — raw HTTP/2 без follow-redirects — сюрфейсил это как dial
-error). Фикс: `path` сохраняется как есть, trailing slash срезается только на
-bare-path запросе stream-one. Дефолтные конфиги (session id в path) не
-затрагивались. Покрыто url_test-кейсом. + merge upstream `testing` (13 коммитов:
-async DNS refactor, WG detour fix сходится с SPEC 029, OpenConnect
-auth-challenge, прочие фиксы). База upstream `v1.14.0-alpha.48`. Build-теги AAR
-без изменений. **Device-verified** на CPH2411 (2026-07-21): старт без крашей,
-Debug API отвечает, VPN поднимается. История версий — в конце файла.
+`lx.15` (the one before) — SPEC 002: XHTTP no longer breaks behind a reverse proxy.
+VLESS+XHTTP through nginx or a CDN with `mode: packet-up`, a trailing-slash `path`
+(`/upload/`) and `session_placement: header` used to fail with
+`unexpected download status: 301 Moved Permanently` (the client unconditionally
+stripped the trailing slash for ALL modes; nginx `location /upload/ {}` answered
+with a 301 redirect to the bare path, and the download request — raw HTTP/2 with no
+redirect following — surfaced that as a dial error). The fix: `path` is preserved
+as-is, and the trailing slash is stripped only on the bare-path stream-one request.
+Default configs (a session id in the path) were never affected. Covered by a
+url_test case. Plus a merge of upstream `testing` (13 commits: the async DNS
+refactor, a WG detour fix that converges with SPEC 029, OpenConnect
+auth-challenge and other fixes). Upstream base `v1.14.0-alpha.48`. AAR build tags
+unchanged. **Device-verified** on CPH2411 (2026-07-21): a crash-free start, the
+Debug API answering, the VPN coming up. The version history is at the end of this
+file.
 
-`lx.14` — SPEC 030: остановка туннеля больше не виснет 10+ сек при
-многих WG/AWG-эндпоинтах (teardown в `box.Close()` ждал in-flight ping-wake;
-фикс — конкурентное закрытие эндпоинтов с прерыванием wake, ни один шаг teardown
-не пропущен). Ядровая половина §287.
+`lx.14` — SPEC 030: stopping the tunnel no longer hangs for 10+ seconds with many
+WG/AWG endpoints (the teardown in `box.Close()` waited for an in-flight ping wake;
+the fix is closing the endpoints concurrently while interrupting the wake, with no
+teardown step skipped). The core half of §287.
 
-### AAR до релиза ядра
+### The AAR before a core release
 
-Пока форк ещё не выпустил официальный релиз (работа на rc-цепочке), AAR берётся
-из artifact CI-прогона форка, НЕ из Releases:
+While the fork has not yet cut an official release (work on an rc chain), the AAR
+comes from the artifact of the fork's CI run, NOT from Releases:
 
 ```bash
 gh run download <run-id> --repo Leadaxe/sing-box-lx --name dist-android
 ```
 
-Скачанный `libbox.aar` кладётся вручную в `app/android/app/libs/` (маркер
-`.libbox.version` — под нужную rc, иначе `fetch-libbox.sh` перекачает). Так
-готовился §215 (rc.18) и предрелизные rc.21/rc.22 под v2.9.0 (MASQUE-символы
-сверялись `strings libbox.so`).
+The downloaded `libbox.aar` is placed into `app/android/app/libs/` by hand (with
+the `.libbox.version` marker set to the right rc, otherwise `fetch-libbox.sh` will
+re-download it). This is how §215 (rc.18) and the pre-release rc.21/rc.22 for
+v2.9.0 were prepared (MASQUE symbols were verified with `strings libbox.so`).
 
-- ⚠ `app/android/libbox.version` **НЕ коммитить до релиза ядра** — пин на
-  несуществующий в Releases тег сломает fetch у всех остальных и в CI.
-- ⚠ В проде — **только официальный релизный AAR** (см. ловушку 3).
+- ⚠ Do **NOT** commit `app/android/libbox.version` before the core is released — a
+  pin on a tag that does not exist in Releases breaks the fetch for everyone else
+  and in CI.
+- ⚠ In production, use **only the official release AAR** (see gotcha 3).
 
-## Build-теги AAR
+## AAR build tags
 
-Пекутся в `cmd/internal/build_libbox/main.go` (`sharedTags`), НЕ в клиенте:
+They are baked in `cmd/internal/build_libbox/main.go` (`sharedTags`), NOT in the
+client:
 
 ```
 with_gvisor, with_quic, with_wireguard, with_utls, with_naive_outbound,
@@ -430,96 +464,102 @@ badlinkname, tfogo_checklinkname0,
 with_xhttp, with_awg, with_lx_command, with_lx_idle_suspend
 ```
 
-`with_clash_api` намеренно убран (§122 — CommandClient вместо Clash HTTP);
-также намеренно опущены `with_usbip`, `with_openvpn`/`with_openconnect`
-(серверные/вне клиентского скоупа — см. комментарии в `build_libbox`).
+`with_clash_api` is deliberately absent (§122 — CommandClient instead of Clash
+HTTP); `with_usbip` and `with_openvpn` / `with_openconnect` are deliberately
+omitted too (server-side or outside the client's scope — see the comments in
+`build_libbox`).
 
-## ⚠️ Ловушки при бампе версии
+## ⚠️ Gotchas when bumping the version
 
-### 1. `with_lx_idle_suspend` (rc.19+) — idle-suspend за build-tag
+### 1. `with_lx_idle_suspend` (rc.19+) — idle-suspend behind a build tag
 
-Механика idle-suspend-тика (`route.lx_idle_suspend`, SPEC 020 / §128) компилируется
-**только** с тегом `with_lx_idle_suspend`. **Без него `route.lx_idle_suspend` в
-конфиге РОНЯЕТ старт ядра** (`rebuild with -tags with_lx_idle_suspend
-(mobile-only feature)`).
+The idle-suspend tick machinery (`route.lx_idle_suspend`, SPEC 020 / §128) is
+compiled **only** with the `with_lx_idle_suspend` tag. **Without it,
+`route.lx_idle_suspend` in a config KILLS the core's startup**
+(`rebuild with -tags with_lx_idle_suspend (mobile-only feature)`).
 
-- Мобильный **AAR** тег содержит (`build_libbox` sharedTags) → официальный
-  релизный AAR ОК.
-- Desktop/CLI `sing-box` (для `sing-box check`) — тега НЕТ по умолчанию. Валидация
-  конфига с `lx_idle_suspend` через desktop-бинарь упадёт без явного
-  `-tags with_lx_idle_suspend`.
+- The mobile **AAR** carries the tag (`build_libbox` sharedTags), so the official
+  release AAR is fine.
+- The desktop/CLI `sing-box` (for `sing-box check`) does NOT have the tag by
+  default. Validating a config containing `lx_idle_suspend` through the desktop
+  binary will fail without an explicit `-tags with_lx_idle_suspend`.
 
-### 2. Новое поле транспорта/route → «unknown field» роняет ВЕСЬ конфиг
+### 2. A new transport or route field → “unknown field” kills the WHOLE config
 
-Ядро строго декодит конфиг: если клиент эмитит поле, которого ядро (старая версия)
-не знает — падает **весь** конфиг на load, не только одна нода. Классический
-рассинхрон «парсер обогнал ядро»:
-- §214: rc.15 не знал `sc_max_each_post_bytes` (XHTTP SPEC 002 v2) → бамп rc.16.
-- Диагностика: `/device` core_version (§213) — реальная версия ядра в APK.
+The core decodes configs strictly: if the client emits a field an older core does
+not know, the **entire** config fails to load, not just the one node. The classic
+“the parser outran the core” desync:
+- §214: rc.15 did not know `sc_max_each_post_bytes` (XHTTP SPEC 002 v2) → bumped to rc.16.
+- Diagnosis: `/device` core_version (§213) — the real core version inside the APK.
 
-### 3. gomobile AAR не byte-reproducible
+### 3. A gomobile AAR is not byte-reproducible
 
-sha локальной сборки ≠ sha релизного AAR (пути/таймстампы в архиве). Функционально
-идентичны. `fetch-libbox.sh` сверяет sha скачанного против релизного `SHA256SUMS` —
-поэтому в проде **всегда официальный релизный AAR**, не локальный.
+The sha of a local build ≠ the sha of the release AAR (paths and timestamps inside
+the archive). They are functionally identical. `fetch-libbox.sh` verifies the sha
+of what it downloaded against the release `SHA256SUMS` — which is why production
+**always** uses the official release AAR rather than a local one.
 
-### 4. `Libbox.version()` не виден через `strings`
+### 4. `Libbox.version()` is not visible through `strings`
 
-gomobile-бинарь не отдаёт version-строку. Сверять версию ядра — только через
-`/device` core_version на устройстве (не выдиранием strings из AAR).
+A gomobile binary does not expose the version string. Verify the core version only
+through `/device` core_version on the device, not by pulling strings out of the
+AAR.
 
-### 5. Порядок в `redirectStderr` — от него зависит §334
+### 5. The order inside `redirectStderr` — §334 depends on it
 
-`experimental/libbox/log.go:69-77`: `Setup` сначала архивирует
-`CrashReport-<source>.log` в `crash_reports/`, и только потом `os.Create`
-затирает файл под новую сессию.
+`experimental/libbox/log.go:69-77`: `Setup` first archives
+`CrashReport-<source>.log` into `crash_reports/`, and only then does `os.Create`
+truncate the file for the new session.
 
-На этом порядке стоит §334 (`CrashRecovery`): детект «прошлый запуск упал»
-читает непустой репорт ДО `Libbox.setup()`, а затирание внутри `setup` служит
-дедупом «один краш — одна чистка». Если при бампе архивация уедет после
-`os.Create` — баннер §316 начнёт терять краши; если исчезнет затирание —
-кэш будет сбрасываться на каждом запуске после единственного падения.
+§334 (`CrashRecovery`) stands on that order: the “the previous run crashed”
+detection reads a non-empty report BEFORE `Libbox.setup()`, and the truncation
+inside `setup` serves as the “one crash, one cleanup” dedup. If a bump moves the
+archiving after `os.Create`, the §316 banner will start losing crashes; if the
+truncation disappears, the cache will be reset on every launch after a single
+crash.
 
-Проверять при бампе: `archiveCrashReport` вызывается раньше `os.Create`, и
-внутри неё сохранился ранний выход на `len(content) == 0` (`log.go:29`) —
-это тот же критерий «непустой = был краш», которым пользуется наш детект.
+To check on a bump: `archiveCrashReport` is called before `os.Create`, and the
+early return on `len(content) == 0` (`log.go:29`) is still inside it — that is the
+same “non-empty means there was a crash” criterion our detection uses.
 
-## Клиент ↔ ядро: где чинить баги конфига
+## Client versus core: which side to fix a config bug on
 
-Иногда баг «нода роняет конфиг» чинится с двух сторон (defense-in-depth):
-- **клиент** — не эмитить невалидное + показать ⚠️ юзеру (видимость). Пример: §217
-  (XHTTP `uplink_http_method=GET` вне packet-up → сброс + `XhttpParamResetWarning`).
-- **ядро** — soft-fallback вместо fatal. Пример: rc.20 `c0bbb1c5` — тот же GET→POST
-  fallback + WARN, чтобы одна кривая нода не валила весь конфиг.
+Sometimes a “this node kills the config” bug is fixed from both sides
+(defence in depth):
+- **the client** — do not emit anything invalid, and show the user a ⚠️
+  (visibility). Example: §217 (XHTTP `uplink_http_method=GET` outside packet-up →
+  reset plus `XhttpParamResetWarning`).
+- **the core** — a soft fallback instead of a fatal. Example: rc.20 `c0bbb1c5` —
+  the same GET→POST fallback plus a WARN, so that one malformed node does not take
+  the whole config down.
 
-Оба слоя полезны: клиент даёт видимость (⚠️ в подписке), ядро — страховку на
-случай, если клиент что-то пропустит.
+Both layers earn their keep: the client provides visibility (a ⚠️ in the
+subscription), the core provides insurance in case the client misses something.
 
-## История версий (LxBox-релевантное)
+## Version history (the LxBox-relevant parts)
 
-| rc | Что добавилось |
+| rc | What was added |
 |---|---|
-| rc.15 → rc.16 (§214) | XHTTP SPEC 002 v2 поля (иначе unknown-field роняет конфиг) |
+| rc.15 → rc.16 (§214) | XHTTP SPEC 002 v2 fields (otherwise an unknown field kills the config) |
 | rc.18 (§215) | SPEC 020 idle-suspend (`route.lx_idle_suspend`) |
-| rc.19 | idle-suspend за `with_lx_idle_suspend` (mobile-only, см. ловушку 1) |
-| rc.20 | XHTTP GET→POST soft-fallback (дублирует §217); udpnat2 buffer fix; upstream sync |
-| **v1.14.0-lx.1** (стабильный) | Первый стабильный релиз ветки `lx-1.14` (rc.16→rc.22): MASQUE outbound (§130), стабилизация; собран с LxBox v2.9.0 |
-| **v1.14.0-lx.11** (стабильный) | Снят guard AWG-over-WireGuard (SPEC 007) — AWG-over-AWG/WG теперь поднимается. Device-verified на CPH2411. (Промежуточные lx.2…lx.10: idle-suspend L3, balancer, Force IPv4, memory-limit, AWG padding/reserved-clear фиксы — см. `docs-lx/lx-changelog.md` в ядре) |
-| **v1.14.0-lx.14** (стабильный) | SPEC 030 — Stop не виснет 10+ сек при многих WG/AWG-эндпоинтах (глушение тика + upfront-закрытие UDP-сокетов + abort in-flight wake + конкурентный close). Ядровая половина §287. База upstream `alpha.47`. Build-теги AAR без изменений. (Промежуточные lx.12/lx.13 — см. `docs-lx/lx-changelog.md` в ядре) |
-| **v1.14.0-lx.15** (стабильный) | SPEC 002 — XHTTP за reverse-proxy: `path` сохраняется как есть, trailing slash срезается только на bare-path запросе stream-one. + merge upstream `testing` (async DNS refactor, WG detour fix, OpenConnect auth-challenge). База upstream `alpha.48`. Build-теги AAR без изменений. Device-verified на CPH2411 (2026-07-21) |
-| **v1.14.0-lx.25-rc.3** (текущий пин) | SPEC 060 — `record_fragment` включается сам, когда outbound диалит через `detour`. Симптом: `MASQUE detour VLESS` висел ~15 с и падал с `tls handshake: EOF`. Причина — нижнее плечо шлёт наш ClientHello от своего имени, и при PMTU за плечом меньше размера ClientHello пакет теряется молча (ICMP «fragmentation needed» до клиента не доходит). Порог чистый по размеру (1488 B проходит, 1502 B нет), принадлежит пути, а не протоколу; воспроизводится голым `curl`. Точка врезки одна — `NewClientWithOptions` до выбора движка, поэтому STD/uTLS/REALITY получают одинаковый дефолт. ⚠️ Меняет поведение ЛЮБОГО outbound с `detour`, не только MASQUE. Явный выбор пользователя сильнее, `fragment: true` не апгрейдится; переписывается только первая TLS-запись; прямой путь не затронут. SPEC 021 — MASQUE h2 переехал на общий `common/tls` (был единственным outbound мимо общего слоя: голый `crypto/tls.Client` ради pinning'а по ECDSA-ключу endpoint'а), pinning перенесён поверх общего клиента; h3 не тронут. Java-поверхность не изменилась — `classes.jar` побайтово равен rc.1, `javap`-diff не требуется. ⚠️ rc: девайс-прогон по detour-конфигам вообще + проверка, что явный `fragment: true` не апгрейдится |
-| **v1.14.0-lx.25-rc.1** | SPEC 058 — `GetURLViaOutbound`: диагностический HTTP GET через узел по тегу с возвратом ТЕЛА ответа (exit-IP/гео/`warp=`), активный selector не переключается. Потребитель — §392 (вкладка Diagnostics). Java-поверхность **изменилась**: `+GetURLResult`, `+HTTPHeaders`, `CommandClient.getURLViaOutbound`. ⚠️ ГРАБЛЯ: геттеры `GetURLResult` **без `get`-префикса** (`content()`, `status()`, `elapsedMs()`) — gomobile снимает префикс, когда Go-поле не начинается с `Get`. Только GET; `maxBytes` 0 → 256 KiB (потолок 1 MiB, обрезка = `Truncated`); не-2xx — результат, а не ошибка; `RemoteAddr` — адрес изнутри туннеля, не exit-IP; `ElapsedMs` не пишется в историю urltest. ⚠️ rc: полевая проверка с девайса в критериях ядра не закрыта |
-| **v1.14.0-lx.24-rc.2** (v2.20.7) | Догон upstream (19 коммитов на базе `v1.14.0-beta.9`) + тулчейн go1.26.5 вслед за апстримом (SPEC 044). Кода lx-слоя не меняет. Из апстрим-хвоста: DNS-кеши локального транспорта партиционируются по сигнатуре интерфейса; WG-хендшейк резолвит все адреса домен-пира и гонит наперегонки (`SetEndpointResolver`); hijacked-DNS с process info; фиксы reset network, FakeIP async-save, Android process finder, unbounded-аллокаций на злом SRS. Сабмодули перебазированы до ядра (sing-tun + SPEC 040, wireguard-go + AWG2/SPEC 041). Java-поверхность не изменилась — `classes.jar` побайтово равен lx.22. ⚠️ rc: release notes ядра требуют девайс-прогона (туннель/DNS/URL-тест/WG/AWG) до промоута lx.24 в stable. lx.23 и lx.24-rc.1 — про десктопный демон `lxd`, Android не затрагивают |
-| **v1.14.0-lx.22** (v2.20.6) | SPEC 054 — `least_test` реагирует на отказы боевых дайлов (штраф за «путь мёртв», запасной дайл через лучшего кандидата, аварийное ранжирование при 3 штрафах у лидера). SPEC 053 — REALITY объявляет `minClientVer` 26.3.27: Xray с v26.7.11 при несоответствии молча отдаёт камуфляжный сайт. Java-поверхность без изменений (226 классов, javap-diff 0 строк) |
-| **v1.14.0-lx.21** (v2.20.5) | SPEC 052 — connect-дедлайн `C.TCPTimeout` (15 с) на netstack-дайлах: WG/AWG-эндпоинт (`DialTCPWithBind`, его stackDevice делят per-conn-дайлы MASQUE) + openvpn/openconnect/tailscale через сабмодульный `gonet.DialTCPWithBind`. Раньше единственной границей был SYN-бэкофф gVisor (1+2+4+8+16+32+64 = ~127 с; ручка `TCPSynRetriesOption` в нашем пине gVisor мертва), для домена — ×N адресов через `DialSerial`. Симптом: тихая чёрная дыра (Wi-Fi зарезал UDP к узлу, заснувшее радио) = «всё висит без ошибки», группе не на что реагировать. 15 с, а не 5 — общий бюджет с health-check группы: дедлайн ниже пробного дал бы вилку «узел проходит пробы, но все пользовательские дайлы через него падают». Замер: 2м07с → 15.05с. Java-поверхность без изменений, клиентских правок нет |
-| **v1.14.0-lx.20** (стабильный, v2.20.5) | Промоут ветки `lx.20` в стабильную: содержательно равен rc.8, кода не меняет. Состав ветки (SPEC 047 краш при смене сети на старте, SPEC 048 краш на соединении с мёртвой нодой, SPEC 050 залипшие проверки нод, SPEC 051 закрытие отставания от upstream — 217 коммитов на базе `v1.14.0-beta.8`) — см. запись v2.20.4 в CHANGELOG |
-| **v1.14.0-lx.19-rc.3** (v2.19.2) | SPEC 045 — nil-паника при URL-тесте узлов trojan/vless с `tls.enabled:false` (тест пинга ронял ядро). Клиентских правок нет |
-| **v1.14.0-lx.19-rc.2** (в составе v2.19.2) | **SPEC 044** — AAR, собранный Go 1.24 (так делал CI), убивал ВСЕ quic-go-аутбаунды (hysteria2/tuic/masque-h3) на устройствах с вендорским ядром: каждый dial висел до `context deadline exceeded`, тест пинга вечно `-1`. Тот же исходник на Go 1.25 — работает. Фикс = смена тулчейна в CI ядра. Клиентская половина расследования — §341 (Debug API `/action/quic-knobs`). ⚠️ эмулятор с generic-ядром дефект НЕ воспроизводит |
-| **v1.14.0-lx.19-rc.1** (в составе v2.19.2) | SPEC 041 v2 — досрочный rebind (~15 с вместо ~90) + событийный нудж `CommandServer.RebindStaleEndpoints()`: ребиндит только доказуемо мёртвые сессии (нет keypair / handshake старше 180 с), остальным no-op. Потребитель — §340 (wake-нудж по `USER_PRESENT`). Новый экспорт в Java-поверхности |
-| **v1.14.0-lx.18** (v2.19.1) | SPEC 032 — VLESS `encryption` (`mlkem768x25519plus`, PQ-слой внутри VLESS): поле появилось в схеме ядра, узлы `security=none` с шифрослоем ожили. Клиент — §335 (перенос поля подписка→конфиг + round-trip в URI). Device-замер: +12 настоящих узлов (ws 7/8, grpc 5/5), подписка 42 → 53 из 76. Конфиг-фича, Java-поверхность без изменений. ⚠️ ядро < lx.18 отвергает конфиг с полем целиком |
-| **v1.14.0-lx.17** (стабильный) | Промоут rc.1–rc.5 + XHTTP-фиксы вне rc: SPEC 042 (gRPC Content-Type на потоковых запросах, паритет с Xray) и SPEC 043 (завершающий слэш пути `stream-one` — корень «XHTTP-ноды подписки мертвы», 404 → зависание). Девайс-верифицировано, клиентских правок нет |
-| **v1.14.0-lx.17-rc.5** (v2.19.0) | Апстрим-синк 01.08 поверх rc.4: naiveproxy v150, гонка DNS-правил (завершённое правило блокировалось ранее взведённым), WireGuard system-device не конфигурил DNS интерфейса, TLS-фрагмент на Windows без TCP estats, routing loop на darwin. + device-верификация SPEC 040. Java-поверхности не касается |
-| **v1.14.0-lx.17-rc.4** (в составе v2.19.0) | SPEC 041 — WG/AWG-эндпоинты самолечатся после сна устройства (rebind со свежим портом по исчерпании handshake-повторов, ~90 с; `listen_port` вручную = самолечение отключено). SPEC 040 — system-стек TCP: accept-цикл пересоздаёт убитый listener вместо молчаливого выхода (sing-tun как fork-сабмодуль); закрывает отказ §047 «браузер мёртв, QUIC жив», errno на устройстве = `EINVAL` (§329). Оба фикса внутри ядра, Java-поверхности не касаются — клиентских правок нет |
-| **v1.14.0-lx.17-rc.3** (v2.18.2) | SPEC 039 (rc.2) — ротация архива OOM/crash-отчётов: 32 каталога / 64 МБ, удаление по mtime (на устройстве было 575 каталогов / 427 МБ за 19 дней). + **240 upstream-коммитов** (URLTest требует history storage в контексте). rc.3 — `Endpoint.Close()` снова возвращает ошибку закрытия tun-устройства. **javap-diff rc.1 → rc.3: изменений нет**, клиентских правок не потребовалось |
-| **v1.14.0-lx.17-rc.1** | SPEC 038 — фикс fatal throw в `GetRunningConfig` (возврат `RunningConfig` вместо голой строки; см. блок пинов выше). **API-брейк:** сигнатура метода изменилась, клиент обязан звать `.content()` |
-| **v1.14.0-lx.16** (стабильный) | SPEC 037 — `GetRunningConfig`: снапшот работающего конфига по CommandClient (клиент — §311 LxBox); SPEC 033/035 — DNS_GROUP и его observability (клиенты — §312/§315). rc.1…rc.3 — промежуточные сборки той же ветки, метод появился в rc.3. `PlatformInterface` без изменений. Подробности — в блоке пинов выше |
+| rc.19 | idle-suspend behind `with_lx_idle_suspend` (mobile-only, see gotcha 1) |
+| rc.20 | The XHTTP GET→POST soft fallback (duplicating §217); a udpnat2 buffer fix; an upstream sync |
+| **v1.14.0-lx.1** (stable) | The first stable release of the `lx-1.14` branch (rc.16→rc.22): the MASQUE outbound (§130) and stabilisation; shipped with LxBox v2.9.0 |
+| **v1.14.0-lx.11** (stable) | The AWG-over-WireGuard guard was removed (SPEC 007) — AWG-over-AWG/WG now comes up. Device-verified on CPH2411. (The intermediate lx.2…lx.10: idle-suspend L3, the balancer, Force IPv4, the memory limit, AWG padding and reserved-clear fixes — see `docs-lx/lx-changelog.md` in the core) |
+| **v1.14.0-lx.14** (stable) | SPEC 030 — Stop no longer hangs for 10+ seconds with many WG/AWG endpoints (silencing the tick, closing UDP sockets upfront, aborting the in-flight wake, and a concurrent close). The core half of §287. Upstream base `alpha.47`. AAR build tags unchanged. (The intermediate lx.12/lx.13 — see `docs-lx/lx-changelog.md` in the core) |
+| **v1.14.0-lx.15** (stable) | SPEC 002 — XHTTP behind a reverse proxy: `path` is preserved as-is, and the trailing slash is stripped only on the bare-path stream-one request. Plus a merge of upstream `testing` (the async DNS refactor, a WG detour fix, OpenConnect auth-challenge). Upstream base `alpha.48`. AAR build tags unchanged. Device-verified on CPH2411 (2026-07-21) |
+| **v1.14.0-lx.25-rc.3** | SPEC 060 — `record_fragment` turns itself on when an outbound dials through a `detour`. The symptom: `MASQUE detour VLESS` hung for about 15 s and died with `tls handshake: EOF`. The cause is that the lower leg sends our ClientHello under its own name, and when the PMTU beyond that leg is smaller than the ClientHello the packet is lost silently (the ICMP “fragmentation needed” never reaches the client). The threshold is purely about size (1488 B gets through, 1502 B does not) and belongs to the path rather than the protocol; it reproduces with bare `curl`. There is a single injection point, `NewClientWithOptions`, before the engine is chosen, so STD/uTLS/REALITY get the same default. ⚠️ It changes the behaviour of ANY outbound with a `detour`, not just MASQUE. An explicit user choice wins and `fragment: true` is not upgraded; only the first TLS record is rewritten; the direct path is unaffected. SPEC 021 — MASQUE h2 moved onto the shared `common/tls` (it was the only outbound bypassing the shared layer: a bare `crypto/tls.Client` for the sake of pinning the endpoint's ECDSA key), with the pinning moved on top of the shared client; h3 untouched. The Java surface did not change — `classes.jar` is byte-identical to rc.1, no `javap` diff needed. ⚠️ rc: a device run over detour configs in general, plus a check that an explicit `fragment: true` is not upgraded |
+| **v1.14.0-lx.25-rc.1** | SPEC 058 — `GetURLViaOutbound`: a diagnostic HTTP GET through a node by tag, returning the response BODY (exit IP, geo, `warp=`), without switching the active selector. The consumer is §392 (the Diagnostics tab). The Java surface **did change**: `+GetURLResult`, `+HTTPHeaders`, `CommandClient.getURLViaOutbound`. ⚠️ GOTCHA: the getters on `GetURLResult` carry **no `get` prefix** (`content()`, `status()`, `elapsedMs()`) — gomobile strips it when the Go field does not start with `Get`. GET only; `maxBytes` 0 → 256 KiB (1 MiB ceiling, truncation = `Truncated`); a non-2xx is a result, not an error; `RemoteAddr` is the address from inside the tunnel, not the exit IP; `ElapsedMs` is not written into the urltest history. ⚠️ rc: the field check from a device is not closed in the core's criteria |
+| **v1.14.0-lx.24-rc.2** (v2.20.7) | Catching up with upstream (19 commits on the `v1.14.0-beta.9` base) plus the go1.26.5 toolchain, following upstream (SPEC 044). No changes to the lx-layer code. From the upstream tail: the local transport's DNS caches are partitioned by interface signature; the WG handshake resolves every address of a domain peer and races them (`SetEndpointResolver`); hijacked DNS carries process info; plus fixes to reset network, FakeIP async-save, the Android process finder and unbounded allocations on a malicious SRS. The submodules were rebased before the core (sing-tun plus SPEC 040, wireguard-go plus AWG2/SPEC 041). The Java surface did not change — `classes.jar` is byte-identical to lx.22. ⚠️ rc: the core's release notes require a device run (tunnel/DNS/URL test/WG/AWG) before lx.24 is promoted to stable. lx.23 and lx.24-rc.1 concern the desktop `lxd` daemon and do not affect Android |
+| **v1.14.0-lx.22** (v2.20.6) | SPEC 054 — `least_test` reacts to failures of real dials (a “the path is dead” penalty, a fallback dial through the best candidate, emergency ranking at three penalties on the leader). SPEC 053 — REALITY declares `minClientVer` 26.3.27: Xray since v26.7.11 silently serves the camouflage site on a mismatch. The Java surface is unchanged (226 classes, a 0-line javap diff) |
+| **v1.14.0-lx.21** (v2.20.5) | SPEC 052 — a `C.TCPTimeout` connect deadline (15 s) on netstack dials: the WG/AWG endpoint (`DialTCPWithBind`, whose stackDevice is shared by the per-connection dials of MASQUE) plus openvpn/openconnect/tailscale through the submodule's `gonet.DialTCPWithBind`. Previously the only boundary was gVisor's SYN backoff (1+2+4+8+16+32+64 = about 127 s; the `TCPSynRetriesOption` knob is dead in our gVisor pin), times N addresses for a domain via `DialSerial`. The symptom: a silent black hole (Wi-Fi cutting UDP to the node, a radio that has gone to sleep) reads as “everything hangs with no error”, leaving the group nothing to react to. 15 s rather than 5 because the budget is shared with the group's health check: a deadline below the probe's would give “the node passes probes but every user dial through it fails”. Measured: 2m07s → 15.05s. The Java surface is unchanged and no client changes are needed |
+| **v1.14.0-lx.20** (stable, v2.20.5) | Promoting the `lx.20` branch to stable: substantively equal to rc.8, no code changes. For the branch's contents (SPEC 047 a crash on a network change at startup, SPEC 048 a crash on a connection to a dead node, SPEC 050 stuck node checks, SPEC 051 closing the gap to upstream — 217 commits on the `v1.14.0-beta.8` base) see the v2.20.4 entry in CHANGELOG |
+| **v1.14.0-lx.19-rc.3** (v2.19.2) | SPEC 045 — a nil panic during a URL test of trojan/vless nodes with `tls.enabled:false` (the ping test killed the core). No client changes |
+| **v1.14.0-lx.19-rc.2** (part of v2.19.2) | **SPEC 044** — an AAR built with Go 1.24 (as the CI did) killed ALL quic-go outbounds (hysteria2/tuic/masque-h3) on devices with a vendor kernel: every dial hung until `context deadline exceeded` and the ping test was permanently `-1`. The same source on Go 1.25 works. The fix is a toolchain change in the core's CI. The client half of the investigation is §341 (the Debug API `/action/quic-knobs`). ⚠️ an emulator with a generic kernel does NOT reproduce the defect |
+| **v1.14.0-lx.19-rc.1** (part of v2.19.2) | SPEC 041 v2 — an early rebind (about 15 s instead of about 90) plus the event-driven nudge `CommandServer.RebindStaleEndpoints()`: it rebinds only provably dead sessions (no keypair, or a handshake older than 180 s) and is a no-op for the rest. The consumer is §340 (a wake nudge on `USER_PRESENT`). A new export on the Java surface |
+| **v1.14.0-lx.18** (v2.19.1) | SPEC 032 — VLESS `encryption` (`mlkem768x25519plus`, a PQ layer inside VLESS): the field appeared in the core's schema and `security=none` nodes with the crypto layer came back to life. The client side is §335 (moving the field from the subscription into the config, plus the URI round trip). Measured on a device: +12 genuine nodes (ws 7/8, grpc 5/5), the subscription going from 42 to 53 out of 76. A config feature, so the Java surface is unchanged. ⚠️ a core older than lx.18 rejects a config with the field entirely |
+| **v1.14.0-lx.17** (stable) | Promoting rc.1–rc.5 plus XHTTP fixes that never shipped in an rc: SPEC 042 (the gRPC Content-Type on streaming requests, parity with Xray) and SPEC 043 (the trailing slash of the `stream-one` path — the root of “the subscription's XHTTP nodes are dead”, a 404 turning into a hang). Device-verified, no client changes |
+| **v1.14.0-lx.17-rc.5** (v2.19.0) | The 01.08 upstream sync on top of rc.4: naiveproxy v150, a DNS rule race (a completed rule blocked by one armed earlier), the WireGuard system device not configuring the interface's DNS, a TLS fragment on Windows without TCP estats, a routing loop on darwin. Plus device verification of SPEC 040. Does not touch the Java surface |
+| **v1.14.0-lx.17-rc.4** (part of v2.19.0) | SPEC 041 — WG/AWG endpoints heal themselves after the device sleeps (a rebind with a fresh port once the handshake retries are exhausted, about 90 s; a manual `listen_port` disables the self-healing). SPEC 040 — the system TCP stack: the accept loop recreates a killed listener instead of exiting silently (sing-tun as a fork submodule); this closes the §047 failure of “the browser is dead, QUIC is alive”, with the errno on the device being `EINVAL` (§329). Both fixes are inside the core and do not touch the Java surface — no client changes |
+| **v1.14.0-lx.17-rc.3** (v2.18.2) | SPEC 039 (rc.2) — rotation of the OOM/crash report archive: 32 directories / 64 MB, deleting by mtime (the device had accumulated 575 directories / 427 MB over 19 days). Plus **240 upstream commits** (URLTest requires history storage in the context). rc.3 — `Endpoint.Close()` returns the tun device's close error again. **The javap diff rc.1 → rc.3: no changes**, and no client changes were needed |
+| **v1.14.0-lx.17-rc.1** | SPEC 038 — the fix for the fatal throw in `GetRunningConfig` (returning `RunningConfig` instead of a bare string; see the pin block above). **An API break:** the method's signature changed and the client must call `.content()` |

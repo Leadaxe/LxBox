@@ -1,110 +1,110 @@
 # Persistent Storage
 
-Полная схема того, что L×Box хранит на диске между запусками. Документ — источник правды для shape'а файлов и migration history. `ARCHITECTURE.md` ссылается сюда.
+The complete schema of what L×Box keeps on disk between launches. This document is the source of truth for the shape of those files and for the migration history. `ARCHITECTURE.md` links here.
 
-User-state живёт в `lxbox_settings.json`; catalog of presets/vars/sections — в template'е (см. [`TEMPLATE.md`](./TEMPLATE.md)).
+User state lives in `lxbox_settings.json`; the catalog of presets, vars and sections lives in the template (see [`TEMPLATE.md`](./TEMPLATE.md)).
 
 ## `lxbox_settings.json` — full tree
 
-> **Нотация**:
-> - `object{N keys}` — объект с N ключами
-> - `list[N]` — массив с N элементами; `list` без числа — массив переменной длины
-> - `<TypeName>` — element-type для массива (показано отдельно ниже)
-> - `?` после типа — поле опциональное
+> **Notation**:
+> - `object{N keys}` — an object with N keys
+> - `list[N]` — an array of N elements; a bare `list` is variable-length
+> - `<TypeName>` — the element type of an array (shown separately below)
+> - a `?` after the type means the field is optional
 
 ```
-lxbox_settings.json                          # SettingsStorage (Dart), главный файл state
+lxbox_settings.json                          # SettingsStorage (Dart), the main state file
 │
 ├─ vars                          object          template-vars override + app feature flags
-│   └─ <key>: string                           ─ напр. log_level, dns_final, debug_token,
+│   └─ <key>: string                           ─ e.g. log_level, dns_final, debug_token,
 │                                                auto_update_subs, last_known_version, ...
 │
 ├─ server_lists[]                list          §033 — sealed (subscription / user / folder §234)
 │   └─ <ServerList>              object          discriminator: type
 │       ├─ type                  "subscription"|"user"|"folder"
-│       ├─ id                    uuid          стабильный
+│       ├─ id                    uuid          stable
 │       ├─ name                  string        UI display
 │       ├─ enabled               bool
-│       ├─ tag_prefix            string        префикс для node tags
+│       ├─ tag_prefix            string        prefix for node tags
 │       ├─ detour_policy         object{5 keys}       {register_detour_servers, register_detour_in_auto,
 │       │                                       use_detour_servers, override_detour, replace_detour_chain}
 │       │                        — subscription only —
-│       ├─ url                   string?       подписочный URL
-│       ├─ meta                  object?         SubscriptionMeta из HTTP-headers (§027):
+│       ├─ url                   string?       the subscription URL
+│       ├─ meta                  object?         SubscriptionMeta from the HTTP headers (§027):
 │       │   ├─ upload_bytes / download_bytes / total_bytes  int?
 │       │   ├─ expire_timestamp  int?          unix seconds
 │       │   ├─ support_url / web_page_url      string?
 │       │   ├─ profile_title     string?
 │       │   └─ update_interval_hours           int?
-│       ├─ last_updated          ISO-8601?     успех
-│       ├─ last_update_attempt   ISO-8601?     любая попытка
+│       ├─ last_updated          ISO-8601?     on success
+│       ├─ last_update_attempt   ISO-8601?     any attempt
 │       ├─ last_update_status    "never"|"ok"|"failed"|"inProgress"
-│       ├─ update_interval_hours int           default 24; §129 спец: -1=никогда, 0=respect server, N>0=каждые N ч
-│       ├─ on_update_action      string?       §323 — реакция на АВТО-обновление: "rebuild" (default,
-│       │                                      ключ не пишется) | "reload" | "none"
+│       ├─ update_interval_hours int           default 24; §129 special: -1=never, 0=respect server, N>0=every N h
+│       ├─ on_update_action      string?       §323 — reaction to an AUTO update: "rebuild" (default,
+│       │                                      key not written) | "reload" | "none"
 │       ├─ last_node_count       int
-│       ├─ consecutive_fails     int           для UI "(N fails)"
-│       ├─ disabled_hashes       map?          §283 — {identity-хеш ноды: ISO-8601 lastSeen}; per-node disable
-│       │                                      (§332: одна карта на ручные и правило-отметки; Enable-правило
-│       │                                       и кнопка «Enable all» снимают их не различая)
-│       ├─ identity              object?       §289 — per-sub override идентичности фетча (null=глоб.);
+│       ├─ consecutive_fails     int           for the UI's "(N fails)"
+│       ├─ disabled_hashes       map?          §283 — {node identity hash: ISO-8601 lastSeen}; per-node disable
+│       │                                      (§332: one map for both manual and rule marks; Enable rules
+│       │                                       and the "Enable all" button clear them indiscriminately)
+│       ├─ identity              object?       §289 — per-sub override of the fetch identity (null=global);
 │       │                                      {user_agent?, send_hwid, hwid?, device_os?, ver_os?, device_model?}
-│       ├─ import_rules           list?         §302 — правила над emit-JSON узла (условия → Disable/Replace/
-│       │                                      Enable §332; последнее сработавшее enable/disable побеждает);
+│       ├─ import_rules           list?         §302 — rules over a node's emit JSON (conditions → Disable/Replace/
+│       │                                      Enable §332; the last enable/disable that fires wins);
 │       │                                      [{conditions[], match?, action, target_path?, replacement?,
 │       │                                        replace_mode?, substitute?, enabled?}]; conditions[] =
-│       │                                      [{path, op, pattern, negate?, case_sensitive?}]; legacy-плоское
-│       │                                      {action, pattern, …} читается миграцией (условие по tag)
-│       ├─ import_rules_enabled   bool?         §302 — тумблер набора (пишется только когда false; дефолт true)
+│       │                                      [{path, op, pattern, negate?, case_sensitive?}]; the legacy flat
+│       │                                      {action, pattern, …} is read by a migration (a condition on tag)
+│       ├─ import_rules_enabled   bool?         §302 — the set's toggle (written only when false; the default is on)
 │       │                        — user only —
 │       ├─ origin                "paste"|"file"|"qr"|"manual"
 │       ├─ created_at            ISO-8601
-│       ├─ raw_body              string        оригинал для reparse
+│       ├─ raw_body              string        the original, for reparsing
 │       │                        — folder only (§234) —
 │       ├─ created_at            ISO-8601
-│       └─ members[]             list          {raw, enabled, detour?} — по фрагменту на члена (member ↔ нода 1:1; §237 detour = личный тег)
+│       └─ members[]             list          {raw, enabled, detour?} — one fragment per member (member ↔ node 1:1; §237)
 │
 ├─ custom_rules[]                list          §030 — sealed (inline / srs / preset)
 │   └─ <CustomRule>              object          discriminator: kind
 │       ├─ kind                  "inline"|"srs"|"preset"
 │       ├─ id                    uuid
-│       ├─ name                  string        пользовательский (для preset — read-only snapshot)
+│       ├─ name                  string        user-supplied (for a preset, a read-only snapshot)
 │       ├─ enabled               bool
 │       │                        — inline (CustomRuleInline) —
-│       ├─ domains[]             list?         OR-группа #1: domain (full match)
-│       ├─ domainSuffixes[]      list?         OR-группа #1: ".ru" etc.
-│       ├─ domainKeywords[]      list?         OR-группа #1: substring match
-│       ├─ ipCidrs[]             list?         OR-группа #1: "10.0.0.0/8"
-│       ├─ ports[]               list?         OR-группа #2: "443"
-│       ├─ portRanges[]          list?         OR-группа #2: "8000:9000"
-│       ├─ packages[]            list?         OR-группа #3: package_name
+│       ├─ domains[]             list?         OR group #1: domain (full match)
+│       ├─ domainSuffixes[]      list?         OR group #1: ".ru" etc.
+│       ├─ domainKeywords[]      list?         OR group #1: substring match
+│       ├─ ipCidrs[]             list?         OR group #1: "10.0.0.0/8"
+│       ├─ ports[]               list?         OR group #2: "443"
+│       ├─ portRanges[]          list?         OR group #2: "8000:9000"
+│       ├─ packages[]            list?         OR group #3: package_name
 │       ├─ protocols[]           list?         routing-rule level: bittorrent/tls/http/...
 │       ├─ ipIsPrivate           bool?         routing-rule level
-│       ├─ outbound              tag           "<outbound-tag>" или "reject" sentinel
-│       ├─ dns                   object? {enabled, serverTag, forceIpv4?}  §117/§256 — mirror DNS-rule + AAAA-глушилка
-│       ├─ resolve               object? {only, strategy, …}   §247 — resolve-опция (route action resolve)
+│       ├─ outbound              tag           "<outbound-tag>" or the "reject" sentinel
+│       ├─ dns                   object? {enabled, serverTag, forceIpv4?}  §117/§256 — a mirror DNS rule plus the AAAA suppressor
+│       ├─ resolve               object? {only, strategy, …}   §247 — the resolve option (route action resolve)
 │       │                        — srs (CustomRuleSrs) —
-│       ├─ srsUrl                string        URL .srs-бинаря
+│       ├─ srsUrl                string        the URL of the .srs binary
 │       ├─ ports / portRanges / packages / protocols / ipIsPrivate / outbound / dns
 │       │                        — preset (CustomRulePreset) —
-│       ├─ presetId              string        ссылка на selectable_rules[].preset_id
-│       └─ varsValues            object          юзерские vars override (включая 'outbound')
+│       ├─ presetId              string        a reference to selectable_rules[].preset_id
+│       └─ varsValues            object          user vars overrides (including 'outbound')
 │
 ├─ dns_options                   object          §061 (rules) + §043+§044 (servers)
 │   ├─ servers[]                 list          §044 kind-discriminated refs:
 │   │   └─ <DnsServerRef>        object
 │   │       ├─ kind              "template"|"preset"|"inline"
 │   │       ├─ enabled           bool
-│   │       ├─ tag               string        single source of truth (НЕ дублируется в body)
-│   │       ├─ description       string?       optional override / для inline — primary
-│   │       └─ body              object?         только inline; partial sing-box server
-│   │                                          БЕЗ tag/description/enabled
+│   │       ├─ tag               string        single source of truth (NOT duplicated in body)
+│   │       ├─ description       string?       an optional override; for inline it is primary
+│   │       └─ body              object?         inline only; a partial sing-box server
+│   │                                          WITHOUT tag/description/enabled
 │   ├─ rules[]                   list          §061 origin-discriminated:
 │   │   └─ <DnsRuleRef>          object
 │   │       ├─ enabled           bool
 │   │       ├─ type              "user"|"template"|"rule"
 │   │       ├─ title             string        display
-│   │       └─ rule              object?         sing-box rule body (для type=user)
+│   │       └─ rule              object?         the sing-box rule body (for type=user)
 │   └─ rules_json                string        DEPRECATED legacy single-string (§061)
 │
 ├─ ping_options                  object          §040
@@ -116,21 +116,21 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │
 ├─ route_final                   string        override sing-box route.final
 ├─ route_idle_suspend            string        §215/§128 — idle-suspend threshold (route.lx_idle_suspend);
-│                                                duration ("30s"/"5m"), default "30s" (ВКЛючено), "" = off; config-significant
-├─ excluded_nodes[]              list          §125-cleanup DEPRECATED — глобальный node-filter (§048) удалён; safe-мусор
-├─ enabled_groups[]              list          §125 DEPRECATED — читается только миграцией channels[]. Safe-мусор.
-├─ channels[]                    list          §125 — каналы роутинга (template→storage). См. ниже.
+│                                                a duration ("30s"/"5m"), default "30s" (ENABLED), "" = off; config-significant
+├─ excluded_nodes[]              list          §125 cleanup, DEPRECATED — the global node filter (§048) is gone; safe debris
+├─ enabled_groups[]              list          §125 DEPRECATED — read only by the channels[] migration. Safe debris.
+├─ channels[]                    list          §125 — routing channels (template→storage). See below.
 │   └─ <item>                    object
-│       ├─ tag                   string        системный immutable id 'vpn-1'..'vpn-10' (автоген; vpn-1 неудаляем)
-│       ├─ label                 string        отображаемое имя (юзер вводит)
-│       ├─ enabled               bool          вкл/выкл (vpn-1 всегда true)
-│       ├─ include_direct        bool          direct-out опцией селектора
-│       ├─ include_block         bool          §201 — block (дроп трафика) опцией селектора; default false
-│       ├─ node_filter           string        regex по итоговому tag ноды; '' = все
-│       ├─ node_filter_invert    bool          §197 — инверсия node_filter (ноды НЕ матчащие); default false
-│       ├─ default_filter        string        regex; первая matched → default; '' = нет
+│       ├─ tag                   string        the system's immutable id 'vpn-1'..'vpn-10' (auto-generated; vpn-1 cannot be deleted)
+│       ├─ label                 string        the display name (entered by the user)
+│       ├─ enabled               bool          on/off (vpn-1 is always true)
+│       ├─ include_direct        bool          direct-out as a selector option
+│       ├─ include_block         bool          §201 — block (dropping traffic) as a selector option; default false
+│       ├─ node_filter           string        a regex over the node's final tag; '' means all
+│       ├─ node_filter_invert    bool          §197 — inverts node_filter (the nodes that do NOT match); default false
+│       ├─ default_filter        string        a regex; the first match becomes the default; '' means none
 │       ├─ interrupt_exist_connections  bool   selector.interrupt_exist_connections
-│       └─ auto                  object?       null = галка ВЫКЛ; object → urltest-двойник <tag>-auto (tag производный, не хранится)
+│       └─ auto                  object?       null = the checkbox is OFF; an object yields the urltest twin <tag>-auto (its tag is derived)
 │           ├─ url               string        urltest test endpoint
 │           ├─ interval          string        duration ("5m")
 │           ├─ tolerance         int           ms, uint16 (§161 — clamp 0..65535)
@@ -138,41 +138,41 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │           ├─ interrupt_exist_connections  bool  urltest.interrupt_exist_connections
 │           ├─ mode              string        §208 — 'least_test' (default) | 'round_robin'
 │           └─ balancer          object{3 keys}  §208 — {pool, pool_tolerance, sticky_hash[]}
-├─ channels_migrated             bool          §125 — guard one-shot миграции enabled_groups→channels
-├─ last_global_update            ISO-8601      timestamp последнего auto-refresh
-├─ presets_migrated              bool          §159 — guard «дефолтные пресеты засеяны» (fresh-install seed)
-├─ preset_ids_remapped           bool          §228 legacy guard (ремап переименованных preset_id). Миграция удалена в §229; ключ сохранён — не переиспользовать имя, не считать мусором
-├─ interrupt_connections_on_switch  bool       §143 — рвать соединения переключаемой группы при смене ноды (default false, НЕ config-significant)
-├─ node_sort_mode                string        §100 — выбранный режим сортировки нод ('' = template-default)
-├─ node_manual_order[]           list          §100 — ручной порядок node tags (для mode=manual)
-├─ profiler_retention_sec        int           §044 — окно Live-журнала профайлера, default 600 (10 мин); НЕ config-significant
-├─ warp_account                  object?       §025 — кеш WARP-аккаунта (см. раздел ниже)
-├─ masque_account                object?       §130 — кеш MASQUE-WARP аккаунта (см. раздел ниже)
-├─ tun_apps                      object        §046 — split-tunneling (см. раздел ниже)
-├─ vpn_mode                      object?       §119 — режим inbound (см. раздел ниже)
-└─ native_prefs                  object        §189 — ЗЕРКАЛО Android-prefs (`boxvpn_boot.*`).
-    │                                            JSON = источник истины (диск); native = рабочая копия.
-    ├─ auto_start                bool          default false  — auto-start VPN на boot
-    ├─ keep_on_exit              bool          default true   — §188: не глушить tun при swipe-kill
-    ├─ background_mode           string        default "never" — never|lazy|always (Doze-поведение)
-    ├─ core_logs_enabled         bool          default false  — forward sing-box-логов
+├─ channels_migrated             bool          §125 — the guard for the one-shot enabled_groups→channels migration
+├─ last_global_update            ISO-8601      the timestamp of the last auto-refresh
+├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
+├─ preset_ids_remapped           bool          §228 legacy guard (remapping renamed preset_id). The migration was removed in §229; the key is inert
+├─ interrupt_connections_on_switch  bool       §143 — tear down the switched group's connections when the node changes (default false, NOT config-significant)
+├─ node_sort_mode                string        §100 — the chosen node sort mode ('' means the template default)
+├─ node_manual_order[]           list          §100 — the manual order of node tags (for mode=manual)
+├─ profiler_retention_sec        int           §044 — the profiler's live-journal window, default 600 (10 min); NOT config-significant
+├─ warp_account                  object?       §025 — the cached WARP account (see the section below)
+├─ masque_account                object?       §130 — the cached MASQUE-WARP account (see the section below)
+├─ tun_apps                      object        §046 — split tunneling (see the section below)
+├─ vpn_mode                      object?       §119 — the inbound mode (see the section below)
+└─ native_prefs                  object        §189 — a MIRROR of the Android prefs (`boxvpn_boot.*`).
+    │                                            The JSON is the source of truth (disk); native is the working copy.
+    ├─ auto_start                bool          default false  — auto-start the VPN at boot
+    ├─ keep_on_exit              bool          default true   — §188: do not kill the tun on a swipe-kill
+    ├─ background_mode           string        default "never" — never|lazy|always (Doze behaviour)
+    ├─ core_logs_enabled         bool          default false  — forwarding of the sing-box logs
     ├─ allow_bypass              bool          default false  — Allow VPN bypass (§069)
     ├─ auto_redirect             bool          default false  — auto-redirect
-    └─ memory_limit              string        default "auto" — §271: лимит памяти ядра
-                                                 (auto|off|"200"|"384"|"512"|"768" МБ)
+    └─ memory_limit              string        default "auto" — §271: the core's memory limit
+                                                 (auto|off|"200"|"384"|"512"|"768" MB)
 
-# §159 — все legacy-ключи (proxy_sources / app_rules / enabled_rules /
+# §159 — none of the legacy keys (proxy_sources / app_rules / enabled_rules /
 # rule_outbounds / node_overrides / show_detour_servers / vars.auto_rebuild)
-# больше НЕ обрабатываются: миграции и DENY-`.remove()` удалены. Если такой
-# ключ ещё лежит на диске — он безвреден (никем не читается) и будет отброшен
-# allowlist'ом при первом импорте бэкапа.
+# are processed any more: both the migrations and the DENY `.remove()` calls are
+# gone. If such a key is still on disk it is harmless (nothing reads it) and will
+# be dropped by the allowlist on the first backup import.
 ```
 
-Каждый ключ описан подробно в разделах ниже.
+Every key is described in detail in the sections below.
 
 ## Disk layout
 
-Все пути — относительно **Android internal documents directory** (`getApplicationDocumentsDirectory()`). На устройстве этот каталог недоступен без root или Debug API (`GET /state/storage`).
+Every path is relative to the **Android internal documents directory** (`getApplicationDocumentsDirectory()`). On a device that directory is unreachable without root or the Debug API (`GET /state/storage`).
 
 ```
 getApplicationDocumentsDirectory()/
@@ -191,15 +191,15 @@ Android SharedPreferences:
 └── boxvpn_boot.*                # pre-Flutter boot flags
 ```
 
-| Файл / каталог | Кто пишет | Что внутри | Спека |
+| File / directory | Written by | What is inside | Spec |
 |---|---|---|---|
-| `lxbox_settings.json` | `SettingsStorage` (Dart) | App settings, vars, server lists, custom rules, DNS, ping. **Главный файл этого документа.** | — |
-| `singbox_config.json` | `ConfigManager` (Kotlin) | Финальный sing-box JSON, скармливаемый libbox. Перегенерируется на каждый `buildConfig`. Не входит в backup. | — |
-| `http_cache/<sha1(url)>.body` + `.headers` | `HttpCache` (Dart) | Сырое тело + headers подписки для offline-rehydrate на старте. | [§027] |
-| `rule_sets/<tag>.srs` | `RuleSetDownloader` (Dart) | Кэш бинарных `.srs` rule-set файлов. | [§011] |
-| `applog.txt` | `AppLog` (Dart) | App-side warn/error лог, JSON-lines, ring-buffer 200 строк / 64 KB. | [§038], [§043][043-applog] |
-| `corelog.txt` | `AppLog` (Dart) | Sing-box warn/error лог. Строки приходят из Kotlin через `EventChannel lxbox/coreLog` (`BoxService.coreLogDrainer`, батчи `List<String>`); `ClashLogPump` (легаси-имя, НЕ Clash API — тот выпилен в §122) их принимает и `AppLog.add(source: core)` пишет сюда тем же ring-buffer-механизмом, что и `applog.txt`. TRACE/DEBUG отфильтрованы на native-стороне. 200 строк / 64 KB. | [§043][043-applog] |
-| Android `SharedPreferences` | Kotlin (`BoxApplication`) + Flutter (`shared_preferences`) | Pre-Flutter boot flags + UI prefs. См. раздел [«SharedPreferences»](#sharedpreferences-android) ниже. | — |
+| `lxbox_settings.json` | `SettingsStorage` (Dart) | App settings, vars, server lists, custom rules, DNS, ping. **The main subject of this document.** | — |
+| `singbox_config.json` | `ConfigManager` (Kotlin) | The final sing-box JSON fed to libbox. Regenerated on every `buildConfig`. Not part of a backup. | — |
+| `http_cache/<sha1(url)>.body` + `.headers` | `HttpCache` (Dart) | The raw body and headers of a subscription, for the offline rehydrate at startup. | [§027] |
+| `rule_sets/<tag>.srs` | `RuleSetDownloader` (Dart) | A cache of binary `.srs` rule-set files. | [§011] |
+| `applog.txt` | `AppLog` (Dart) | The app-side warn/error log, JSON lines, a ring buffer of 200 lines / 64 KB. | [§038], [§043][043-applog] |
+| `corelog.txt` | `AppLog` (Dart) | The sing-box warn/error log. Lines arrive from Kotlin over `EventChannel lxbox/coreLog` (`BoxService.coreLogDrainer`, in `List<String>` batches); `ClashLogPump` (a legacy name — NOT the Clash API, which was removed in §122) receives them and `AppLog.add(source: core)` writes them here through the same ring-buffer mechanism as `applog.txt`. TRACE and DEBUG are filtered out on the native side. 200 lines / 64 KB. | [§043][043-applog] |
+| Android `SharedPreferences` | Kotlin (`BoxApplication`) plus Flutter (`shared_preferences`) | Pre-Flutter boot flags and UI prefs. See the [“SharedPreferences”](#sharedpreferences-android) section below. | — |
 
 ---
 
@@ -214,172 +214,175 @@ Android SharedPreferences:
   "ping_options":       { … },
   "route_final":        "<tag>",   // override route.final
   "route_idle_suspend": "30s",     // §215/§128 — idle-suspend threshold (default "30s"; "" = off)
-  "excluded_nodes":     [ … ],     // §125-cleanup DEPRECATED (глобальный node-filter удалён)
-  "enabled_groups":     [ … ],     // §125 DEPRECATED (читается только миграцией channels[])
-  "channels":           [ … ],     // §125 — каналы роутинга (template→storage)
-  "channels_migrated":  true,      // §125 — guard миграции enabled_groups→channels
-  "last_global_update": "ISO-8601",// последняя auto-refresh подписок
-  "presets_migrated":   true,      // §159 — guard «дефолты засеяны» (fresh-install seed)
-  "interrupt_connections_on_switch": false, // §143 — рвать conns группы при смене ноды (НЕ config-significant)
+  "excluded_nodes":     [ … ],     // §125 cleanup, DEPRECATED (the global node filter is gone)
+  "enabled_groups":     [ … ],     // §125 DEPRECATED (read only by the channels[] migration)
+  "channels":           [ … ],     // §125 — routing channels (template→storage)
+  "channels_migrated":  true,      // §125 — the guard for the enabled_groups→channels migration
+  "last_global_update": "ISO-8601",// the last auto-refresh of subscriptions
+  "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
+  "interrupt_connections_on_switch": false, // §143 — tear down the group's conns on a node switch (NOT config-significant)
   "node_sort_mode":     "",        // §100
   "node_manual_order":  [ … ],     // §100
-  "profiler_retention_sec": 600,   // §044 — окно Live-журнала профайлера (НЕ config-significant)
-  "warp_account":       { … },     // §025 — кеш WARP-аккаунта (секреты)
-  "masque_account":     { … },     // §130 — кеш MASQUE-WARP аккаунта (секреты)
+  "profiler_retention_sec": 600,   // §044 — the profiler's live-journal window (NOT config-significant)
+  "warp_account":       { … },     // §025 — the cached WARP account (secrets)
+  "masque_account":     { … },     // §130 — the cached MASQUE-WARP account (secrets)
   "tun_apps":           { … },     // §046 — split-tunneling
-  "vpn_mode":           { … },     // §119 — режим inbound
-  "native_prefs":       { … }      // §189 — зеркало boxvpn_boot.* (JSON = истина)
+  "vpn_mode":           { … },     // §119 — the inbound mode
+  "native_prefs":       { … }      // §189 — a mirror of boxvpn_boot.* (the JSON is the truth)
 }
 ```
 
-Кэш в памяти: `SettingsStorage._cache` (lazy-loaded). Запись atomic'ом через `JsonEncoder.withIndent('  ')`. §159 — на `_save()` ключи больше НЕ чистятся (DENY-`.remove()` удалён); единственная чистка мусора — allowlist на входе (`replaceRaw`).
+The in-memory cache is `SettingsStorage._cache` (lazily loaded). Writes are atomic through `JsonEncoder.withIndent('  ')`. §159 — on `_save()` nothing is removed any more: the DENY list and the migrations are gone, and the input filter is the allowlist on backup import.
 
-Per-key спеки и shape — в разделах ниже.
+The per-key specs and shapes are in the sections below.
 
 ---
 
 ## `vars` — template-vars + app flags
 
-Плоский `Map<String, String>` (значения toString'ятся при чтении). Используется и для **template-substitution** (любое `@name` в `wizard_template.json` подставляется отсюда), и для **app feature-flags** (debug/auto-update/UI).
+A flat `Map<String, String>` (values are stringified on read). It serves both **template substitution** (any `@name` in `wizard_template.json` is filled in from here) and app feature flags — the two live in the same map.
 
-### Известные ключи
+### Known keys
 
-| Ключ | Default | Спека | Что делает |
+| Key | Default | Spec | What it does |
 |---|---|---|---|
-| `auto_update_subs` | `'true'` | [§027] | Global gate auto-refresh подписок. Manual всегда работает. |
-| `auto_update_disabled_subs` | `'false'` | §337 | Обновлять и выключенные подписки, чтобы их снапшот узлов не тух. Живёт внутри `auto_update_subs`. Не отменяет `updateIntervalHours ≤ 0`, min-retry и fail-cap. |
-| `auto_reload_on_change` | `'false'` | §338 | Автоперезапуск VPN при любом изменении конфига — плашек не остаётся. Перекрывает per-subscription `on_update_action` (само поле не переписывается). Reload только при поднятом туннеле и разошедшемся с running конфиге (§324). |
-| `auto_check_updates` | `'true'` | [§036] | GitHub Releases polling на старте. |
-| `last_update_check_at` | `''` | [§036] | UTC ISO-8601, last polling timestamp. |
-| `last_known_version` | `''` | [§036] | Закэшированный latest tag. |
-| `dismissed_update_version` | `''` | [§036], §390 | Тег, который юзер закрыл кнопкой **Ignore** — снэкбар не показываем пока не сменится. ⚠ §390: «Later» сюда НЕ пишет (он значит «напомнить при следующем запуске», а показ и так один за запуск — хватает внутрипроцессного флага). |
-| `shown_crash_stamp` | `''` | §316 | `имя@mtime` краш-репорта ядра, про который плашка на главном уже показана. Привязка к КОНКРЕТНОМУ файлу, а не счётчик показов: повторный запуск молчит, новый краш — говорит. |
-| `config_locked_for_debug` | `'false'` | [§037] | `generateConfig()` возвращает null silently. Юзер пинит свой config через `PUT /config`. |
-| `debug_enabled` | `'false'` | [§031] | Debug API server runtime toggle. |
-| `debug_token` | `''` | [§031] | Bearer token для всех `/api/*`. |
-| `debug_port` | `'9269'` | [§031] | TCP-порт. Range 1024–49151. |
-| `dns_final` | template | [§043][043-dns] | Финальный DNS-резолвер (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp` / любой tag из `dns_options.servers`). |
-| `auto_record_wifi_history` | `'false'` | [§051] Phase 3 | Native `WifiNetworkObserver` пушит current SSID/BSSID в `wifi_history` если provel >5 минут на сети. Default off — privacy default. Toggle в App Settings → Diagnostics. |
-| `probe_ms_green` | `'250'` | §236 | Test servers (папки): верхняя граница «зелёной» задержки, мс. НЕ config-var (dirty не поднимает). |
-| `probe_ms_yellow` | `'500'` | §236 | Test servers: верхняя граница «жёлтой» задержки, мс. |
-| `probe_ms_orange` | `'700'` | §236 | Test servers: верхняя граница «оранжевой» задержки, мс; выше — красная. |
-| `wifi_history` | `'[]'` | [§051] Phase 3 | JSON-encoded `[{ssid, bssid, last_seen}]` (см. отдельный раздел ниже). |
-| `automation_receive_enabled` | `'false'` | §047 | Public Intent API: приём broadcast/Tasker. Default OFF. |
-| `automation_emit_lifecycle` | `'false'` | §047 | Эмит lifecycle-событий наружу. Default OFF. |
-| `automation_emit_state` | `'false'` | §047 | Эмит state-событий. Default OFF. |
-| `automation_emit_subs` | `'false'` | §047 | Эмит событий подписок. Default OFF. |
-| `automation_emit_health` | `'false'` | §047 | Эмит health-событий. Default OFF. |
-| `automation_explainer_shown_v1` | `'false'` | §047 | One-shot: explainer-диалог автоматизации показан. |
-| `subscription_user_agent` | — | identity headers | User-Agent для fetch подписок. |
-| `subscription_send_hwid` | — | identity headers | Слать ли hwid-заголовки при fetch. |
-| `subscription_hwid` | — | identity headers | HWID (потенциально идентифицирующий). |
-| `subscription_device_os` | — | identity headers | OS-заголовок подписки. |
-| `subscription_ver_os` | — | identity headers | Версия OS-заголовка. |
-| `subscription_device_model` | — | identity headers | Модель устройства-заголовок. |
-| `haptic_enabled` | `'true'` | §029 | Тактильный отклик UI. Живёт в `vars` (`HapticService.prefsKey`), НЕ в SharedPreferences. |
-| `notif_perm_prompted_v1` | `'false'` | §128 | One-shot: промпт разрешения уведомлений показан. |
-| `allow_rotation` | `'false'` | [§220] | Снятие портретной фиксации: `'true'` → пустой preferred-orientations (ориентацию решает системный auto-rotate). Default — жёсткий портрет. Toggle в App Settings → General → Behavior. |
-| `resolve_enabled` | template | §263/§265 | Гейт route-resolve-правила пресета `traffic-processing`. Var секции `internal` (в VPN Settings не видна), редактируется в правиле через ref-var. Гасится on_change при вкл. FakeIP (§266). |
-| `resolve_strategy` | template | §249/§265 | IP-версия route-resolve (`ipv4_only`/`prefer_ipv4`/…). Var секции `internal`, ref-var в `traffic-processing`. Пишется on_change тумблера IPv6. |
-| `app_language` | `'system'` | §279 | Язык приложения: `system` \| `en` \| `ru`. **Единственный источник истины** — эта var; неизвестное значение (hand-edited бэкап) валидируется в `system`. НЕ config-var (не грязнит sing-box-конфиг). Все пути записи сходятся в `LocaleController` (picker, Debug API side-effect hook, restore, смена системного языка) — голого `setVar` нет by construction. Копии `boxvpn_boot.app_language` + `boxvpn_boot.last_pushed_locale` — **derived cache** для Dart-less нативных поверхностей (шторка/тайл/shortcuts при мёртвом Flutter); пере-пушатся `setAppLanguage` и `bootstrapAndSyncNativePrefs`. **Явно НЕ член `NativePrefsKeys`** (§189): членство продублировало бы настройку в `vpn_settings`-блоке бэкапа — единственный backup-дом = `vars` (guard-тест рядом с §221-сьютом). |
-| `<custom>` | — | — | Любые юзерские template-vars, выставленные через UI / `PUT /settings/vars/<key>`. |
+| `auto_update_subs` | `'true'` | [§027] | The global gate for auto-refreshing subscriptions. Manual refresh always works. |
+| `auto_update_disabled_subs` | `'false'` | §337 | Also refresh disabled subscriptions, so their node snapshot does not go stale. It lives inside `auto_update_subs` and does not override `updateIntervalHours`. |
+| `auto_reload_on_change` | `'false'` | §338 | Restart the VPN automatically on any config change, so no banner is left behind. It overrides the per-subscription `on_update_action`. |
+| `auto_check_updates` | `'true'` | [§036] | Polls GitHub Releases at startup. |
+| `last_update_check_at` | `''` | [§036] | The last polling timestamp, as UTC ISO-8601. |
+| `last_known_version` | `''` | [§036] | The cached latest tag. |
+| `dismissed_update_version` | `''` | [§036], §390 | The tag the user dismissed with **Ignore** — the snackbar is not shown for it again. |
+| `shown_crash_stamp` | `''` | §316 | The `name@mtime` of the core crash report whose home-screen banner has already been shown. It binds to a SPECIFIC file rather than being a counter, so a new crash shows the banner again. |
+| `config_locked_for_debug` | `'false'` | [§037] | `generateConfig()` returns null silently. The user pins their own config through `PUT /config`. |
+| `debug_enabled` | `'false'` | [§031] | The runtime toggle for the Debug API server. |
+| `debug_token` | `''` | [§031] | The Bearer token for every `/api/*` call. |
+| `debug_port` | `'9269'` | [§031] | The TCP port. Range 1024–49151. |
+| `dns_final` | template | [§043][043-dns] | The final DNS resolver (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp`, or any tag from `dns_options.servers`). |
+| `auto_record_wifi_history` | `'false'` | [§051] Phase 3 | The native `WifiNetworkObserver` pushes the current SSID/BSSID into `wifi_history` after more than 5 minutes on a network. Off by default, as a privacy default. The toggle is in App Settings → Diagnostics. |
+| `probe_ms_green` | `'250'` | §236 | Test servers (folders): the upper bound of the “green” latency, in ms. NOT a config var (it does not mark the config dirty). |
+| `probe_ms_yellow` | `'500'` | §236 | Test servers: the upper bound of the “yellow” latency, in ms. |
+| `probe_ms_orange` | `'700'` | §236 | Test servers: the upper bound of the “orange” latency, in ms; anything above is red. |
+| `wifi_history` | `'[]'` | [§051] Phase 3 | A JSON-encoded `[{ssid, bssid, last_seen}]` (see its own section below). |
+| `automation_receive_enabled` | `'false'` | §047 | The Public Intent API: accepting broadcasts from Tasker and friends. Default OFF. |
+| `automation_emit_lifecycle` | `'false'` | §047 | Emitting lifecycle events outwards. Default OFF. |
+| `automation_emit_state` | `'false'` | §047 | Emitting state events. Default OFF. |
+| `automation_emit_subs` | `'false'` | §047 | Emitting subscription events. Default OFF. |
+| `automation_emit_health` | `'false'` | §047 | Emitting health events. Default OFF. |
+| `automation_explainer_shown_v1` | `'false'` | §047 | One-shot: the automation explainer dialog has been shown. |
+| `subscription_user_agent` | — | identity headers | The User-Agent used when fetching subscriptions. |
+| `subscription_send_hwid` | — | identity headers | Whether to send the hwid headers on a fetch. |
+| `subscription_hwid` | — | identity headers | The HWID (potentially identifying). |
+| `subscription_device_os` | — | identity headers | The subscription's OS header. |
+| `subscription_ver_os` | — | identity headers | The OS version header. |
+| `subscription_device_model` | — | identity headers | The device model header. |
+| `haptic_enabled` | `'true'` | §029 | Haptic feedback in the UI. It lives in `vars` (`HapticService.prefsKey`), NOT in SharedPreferences. |
+| `auto_ping_on_start` | `'true'` | — | Ping the nodes automatically once the tunnel comes up (App Settings). Read in `ping_orchestration.dart`. |
+| `notif_perm_prompted_v1` | `'false'` | §128 | One-shot: the notification permission prompt has been shown. |
+| `allow_rotation` | `'false'` | [§220] | Releases the portrait lock: `'true'` yields an empty preferred-orientations list (the system's auto-rotate decides). The default is a hard portrait lock. |
+| `resolve_enabled` | template | §263/§265 | The gate for the route-resolve rule of the `traffic-processing` preset. A var of the `internal` section (not visible in VPN Settings), edited inside the rule through a ref-var. |
+| `resolve_strategy` | template | §249/§265 | The IP version for route-resolve (`ipv4_only` / `prefer_ipv4` / …). A var of the `internal` section, used as a ref-var in `traffic-processing`. |
+| `app_language` | `'system'` | §279 | The app language: `system` \| `en` \| `ru`. **The single source of truth** — this var, not SharedPreferences. |
+| `<custom>` | — | — | Any user template vars set through the UI or `PUT /settings/vars/<key>`. |
 
-> Полный код-список app-флагов — `SettingsStorage._appFeatureFlagVars`; держать таблицу в синхроне с ним.
+> The authoritative list of app flags in code is `SettingsStorage._appFeatureFlagVars`; keep this table in sync with it.
 
-`removeVar(k)` ≠ `setVar(k, '')` — пустая строка может быть legitimate value, отсутствие ключа возвращает default.
+`removeVar(k)` is not the same as `setVar(k, '')` — an empty string can be a legitimate value, while an absent key falls back to the default.
 
 ---
 
 ## `server_lists` — [§033] (v2)
 
-Список источников нод. Был `proxy_sources` (v1) — §159 удалил миграцию; legacy-ключ игнорируется.
+The list of node sources. It used to be `proxy_sources` (v1); §159 removed the migration and the legacy key is ignored.
 
-Sealed по полю `type`:
+Sealed on the `type` field:
 
 ### `type: "subscription"` — `SubscriptionServers`
 
 ```jsonc
 {
   "type":                  "subscription",
-  "id":                    "<uuid>",          // стабильный
+  "id":                    "<uuid>",          // stable
   "name":                  "<display>",
   "enabled":               true,
-  "tag_prefix":            "<str>",           // префикс для node tags при сборке
-  "detour_policy":         { … },             // см. ниже
-  "url":                   "https://…",       // online-подписка. §129: файловая
-                                              // подписка → "file:<uuid>" (снапшот
-                                              // нод в HttpCache по этому ключу;
-                                              // не путь к файлу, доступ не хранится)
+  "tag_prefix":            "<str>",           // the prefix for node tags at build time
+  "detour_policy":         { … },             // see below
+  "url":                   "https://…",       // an online subscription. §129: a file
+                                              // subscription becomes "file:<uuid>" (the
+                                              // node snapshot lives in HttpCache under
+                                              // that key; not a path, no access retained)
   "meta":                  { … }?,            // SubscriptionMeta — HTTP-headers
-  "last_updated":          "ISO-8601"?,       // успех
-  "last_update_attempt":   "ISO-8601"?,       // любая попытка
+  "last_updated":          "ISO-8601"?,       // on success
+  "last_update_attempt":   "ISO-8601"?,       // any attempt
   "last_update_status":    "never|ok|failed|inProgress",
-  "update_interval_hours": 24,                 // §129 спец-значения: -1 = никогда
-                                               // (игнор серверного header, ставится
-                                               // авто для file:-подписок), 0 = не по
-                                               // расписанию, но серверный интервал
-                                               // принимаем, N>0 = каждые N ч.
-                                               // AutoUpdater пропускает interval ≤ 0.
-  "on_update_action":      "reload"?,          // §323 — что делать после УСПЕШНОГО
-                                               // авто-обновления: "rebuild" (default —
-                                               // пересобрать конфиг, применяет юзер),
-                                               // "reload" (+ in-place reload ядра, разрыв
-                                               // ~3с), "none" (только список узлов).
-                                               // Ключ пишется ТОЛЬКО для не-дефолта;
-                                               // отсутствие/мусор → rebuild. Ручной ⟳
-                                               // режимом не управляется.
+  "update_interval_hours": 24,                 // §129 special values: -1 = never
+                                               // (ignore the server header; set
+                                               // automatically for file: subscriptions),
+                                               // 0 = not on a schedule, but the server's
+                                               // interval is honoured, N>0 = every N h.
+                                               // AutoUpdater skips an interval ≤ 0.
+  "on_update_action":      "reload"?,          // §323 — what to do after a SUCCESSFUL
+                                               // auto update: "rebuild" (the default —
+                                               // rebuild the config, the user applies it),
+                                               // "reload" (plus an in-place core reload,
+                                               // a ~3 s gap), "none" (the node list only).
+                                               // The key is written ONLY for a non-default;
+                                               // absent or malformed means rebuild. The
+                                               // manual ⟳ is not governed by this.
   "last_node_count":       0,
-  "consecutive_fails":     0,                 // для UI "(N fails)"; freezing — in-memory
-  "disabled_hashes": {                        // §283 — per-node disable (опционален,
-    "<sha256-hex>": "2026-07-18T10:00:00Z"    // пустой не пишется). Ключ = identity-хеш
-  },                                          // сути ноды (emit − tag − detour, см.
-                                              // services/node_hash.dart); значение =
-                                              // lastSeen для TTL-GC (clamp(3×interval,
-                                              // 24ч, месяц)) на успешном сетевом refresh.
-  "identity": {                               // §289 — per-sub override идентичности фетча.
-    "user_agent": "MyPanel/1.0",              // Опционален: null/отсутствует = режим Default
-    "send_hwid": true,                        // (глобальный SubscriptionIdentity). Объект =
-    "hwid": "550e8400-...",                   // режим Custom: фетч использует ТОЛЬКО эти
-    "device_os": "android",                   // значения. Пустые строки (user_agent/hwid/
-    "ver_os": "14",                           // device_*) не сериализуются. Включается копией
-    "device_model": "Pixel 7"                 // глобальных; отбрасывается при возврате в Default.
+  "consecutive_fails":     0,                 // for the UI's "(N fails)"; freezing is in-memory
+  "disabled_hashes": {                        // §283 — per-node disable (optional; an
+    "<sha256-hex>": "2026-07-18T10:00:00Z"    // empty map is not written). The key is the
+  },                                          // identity hash of the node's substance
+                                              // (emit − tag − detour, see
+                                              // services/node_hash.dart); the value is
+                                              // lastSeen for the TTL GC (clamp(3×interval,
+                                              // 24 h, a month)) on a successful refresh.
+  "identity": {                               // §289 — a per-sub override of the fetch
+    "user_agent": "MyPanel/1.0",              // identity. Optional: null or absent means
+    "send_hwid": true,                        // Default mode (the global SubscriptionIdentity).
+    "hwid": "550e8400-...",                   // An object means Custom mode: the fetch uses
+    "device_os": "android",                   // ONLY these values. Empty strings (user_agent/
+    "ver_os": "14",                           // hwid/device_*) are not serialized. Enabled
+    "device_model": "Pixel 7"                 // the global ones; discarded on return to Default.
   },
-  "import_rules": [                           // §302 — правила над emit-JSON узла (не над телом!).
-    {                                         // Применяются к УЖЕ РАЗОБРАННЫМ узлам, по порядку
-      "conditions": [                         // (drag-reorder); следующее правило видит патч
-        {                                     // предыдущего. Опционален (пустой не пишется).
-          "path": "tls.utls.fingerprint",     // Условие: path (точечная нотация по emit-JSON;
-          "op": "matches",                    // ПУСТОЙ path = поиск по всему узлу), op ∈
+  "import_rules": [                           // §302 — rules over a node's emit JSON (not the body!).
+    {                                         // Applied to ALREADY PARSED nodes, in order
+      "conditions": [                         // (drag-reorder); the next rule sees the previous
+        {                                     // one's patch. Optional (an empty list is not written).
+          "path": "tls.utls.fingerprint",     // A condition: path (dot notation over the emit JSON;
+          "op": "matches",                    // an EMPTY path searches the whole node), op ∈
           "pattern": "^hello(chrome)_\\d+$"   // {contains|equals|matches}; negate?/case_sensitive?
-        }                                     // пишутся только когда true. match ∈ {all|any}
-      ],                                      // (дефолт all=AND, пишется только any).
+        }                                     // are written only when true. match ∈ {all|any}
+      ],                                      // (the default all=AND; only any is written).
       "action": "replace",                    // action ∈ {replace, disable, enable}.
-      "target_path": "tls.utls.fingerprint",  // REPLACE: target_path обязателен (пустой нельзя);
-      "replacement": "$1"                     // replacement с карманами $1..$9 из matches-условия.
-    },                                        // replace_mode ∈ {set|substitute} (пишется только
-    {                                         // substitute); substitute? = что искать в значении.
+      "target_path": "tls.utls.fingerprint",  // REPLACE: target_path is required (never empty);
+      "replacement": "$1"                     // replacement takes $1..$9 from the matches condition.
+    },                                        // replace_mode ∈ {set|substitute} (only substitute
+    {                                         // is written); substitute? is what to find in the value.
       "conditions": [
         {"path": "tag", "op": "contains", "pattern": "⚡"}
       ],
-      "action": "disable"                     // DISABLE помечает узел → его identity-хеш (от
-    },                                        // ИТОГОВОГО вида, после патчей) ставится в
-    {                                         // disabled_hashes на каждом refresh (правило > TTL-GC).
+      "action": "disable"                     // DISABLE marks the node → its identity hash (of
+    },                                        // the FINAL form, after the patches) is put into
+    {                                         // disabled_hashes on every refresh (rule > TTL GC).
       "conditions": [
         {"path": "", "op": "matches", "pattern": ".*"}
-      ],                                      // §332 — ENABLE снимает отметку из disabled_hashes,
-      "action": "enable"                      // ВКЛЮЧАЯ ручную (§283). Порядок значим: последнее
-    }                                         // сработавшее enable/disable побеждает, поэтому
-  ],                                          // enable-«всё» первым = сброс перед новыми фильтрами,
-                                              // а disable-«всё» + enable-NL = белый список.
-                                              // Старая версия приложения читает "enable" как
-                                              // replace без цели → правило непригодно и молча
-                                              // пропускается (узлы не портятся).
-                                              // Legacy-плоское {action, pattern, is_regex?, ...}
-                                              // читается миграцией как условие по tag (replace
-                                              // получает substitute-семантику); при первом
-                                              // сохранении перезаписывается новым форматом.
-  "import_rules_enabled": false               // §302 — тумблер набора; пишется ТОЛЬКО когда
-                                              // false (дефолт true = набор активен).
+      ],                                      // §332 — ENABLE clears the mark from disabled_hashes,
+      "action": "enable"                      // INCLUDING a manual one (§283). Order matters: the
+    }                                         // last enable/disable that fires wins, so an
+  ],                                          // enable-everything first is a reset before new
+                                              // filters, while disable-everything plus enable-NL
+                                              // is an allowlist. An older app version reads
+                                              // "enable" as a replace with no target → the rule
+                                              // is unusable and is skipped silently (nodes are
+                                              // left intact).
+                                              // The legacy flat {action, pattern, is_regex?, ...}
+                                              // is read by a migration as a condition on tag
+                                              // (replace gains substitute semantics); the first
+                                              // save rewrites it in the new format.
+  "import_rules_enabled": false               // §302 — the set's toggle; written ONLY when
+                                              // false (the default, true, means the set is on).
 }
 ```
 
@@ -395,46 +398,47 @@ Sealed по полю `type`:
   "detour_policy": { … },
   "origin":        "paste|file|qr|manual",
   "created_at":    "ISO-8601",
-  "raw_body":      "<original input>"         // для reparse при багах
+  "raw_body":      "<original input>"         // kept for reparsing when something goes wrong
 }
 ```
 
 ### `type: "folder"` — `FolderServers` (§234)
 
-Папка ручных серверов: контейнер членов с общим toggle/`tag_prefix`/`detour_policy`.
-Подписка в папку не кладётся; вложенности нет.
+A folder of manual servers: a container of members sharing one toggle, `tag_prefix` and
+`detour_policy`. A subscription cannot be put into a folder, and there is no nesting.
 
 ```jsonc
 {
   "type":          "folder",
   "id":            "<uuid>",
   "name":          "<display>",
-  "enabled":       true,                        // toggle всей папки
+  "enabled":       true,                        // the toggle for the whole folder
   "tag_prefix":    "<str>",
   "detour_policy": { … },
   "created_at":    "ISO-8601",
-  "ping_url":         "<url>",                  // §284 — опц. override URL теста
-  "ping_timeout_ms":  3000,                     // §284 — опц. override таймаута
-  "members": [                                  // порядок = порядок в UI
+  "ping_url":         "<url>",                  // §284 — an optional override of the test URL
+  "ping_timeout_ms":  3000,                     // §284 — an optional override of the timeout
+  "members": [                                  // the order here is the order in the UI
     { "raw": "vless://…#Alpha", "enabled": true,
-      "detour": "Jump" },                            // §237 — личный detour (опц.)
+      "detour": "Jump" },                            // §237 — a personal detour (optional)
     { "raw": "wg://…#Beta",     "enabled": false }   // per-member toggle
   ]
 }
 ```
 
-`ping_url` / `ping_timeout_ms` (§284) — **опции теста самой папки**, перекрывают
-глобальные `ping_options` при нажатии Test в папке. Отсутствуют → берётся
-глобальное значение. Хранятся в объекте папки (едут в backup автоматически).
-Папка «WARP GENERATOR» ставит сюда IP-URL (`1.1.1.1/cdn-cgi/trace`) — тест по IP
-без DNS.
+`ping_url` and `ping_timeout_ms` (§284) are **the folder's own test options**, and they
+override the global `ping_options` when Test is pressed inside the folder. When absent,
+the global value is used. They are stored in the folder object, so they travel with a
+backup automatically. The “WARP GENERATOR” folder puts an IP URL here
+(`1.1.1.1/cdn-cgi/trace`) — a test by IP, with no DNS.
 
-`raw` — самодостаточный парсируемый фрагмент (URI / WG-INI / outbound-JSON);
-ноды реконструируются re-parse'ом каждого `raw` при загрузке (как `raw_body`
-у user). `nodes` в памяти = только включённые члены — builder работает без
-folder-ветвлений. Битый `raw` → член без ноды (виден в UI, правится/удаляется).
+`raw` is a self-contained parseable fragment (a URI, a WG INI or an outbound JSON);
+the nodes are reconstructed by re-parsing each `raw` on load (just like `raw_body` for a
+user list). In memory `nodes` holds only the enabled members, so the builder needs no
+folder-specific branching. A malformed `raw` yields a member with no node (visible in the
+UI, and editable or removable).
 
-### `detour_policy` (общий)
+### `detour_policy` (shared)
 
 ```jsonc
 {
@@ -442,13 +446,13 @@ folder-ветвлений. Битый `raw` → член без ноды (вид
   "register_detour_in_auto":  false,
   "use_detour_servers":       true,
   "override_detour":          "",              // '' = no override
-  "replace_detour_chain":     false            // §178 — false=append override как tail, true=replace всей цепочки
+  "replace_detour_chain":     false            // §178 — false appends the override as a tail, true replaces the whole chain
 }
 ```
 
-### `meta` (опционально)
+### `meta` (optional)
 
-Из HTTP-headers подписки ([§027]):
+From the subscription's HTTP headers ([§027]):
 
 ```jsonc
 {
@@ -463,67 +467,68 @@ folder-ветвлений. Битый `raw` → член без ноды (вид
 }
 ```
 
-`nodes` массив **не хранится** — реконструируется из `raw_body` (для `user`) или из `http_cache/` (для `subscription`) на старте.
+The `nodes` array is **not stored** — it is reconstructed at startup from `raw_body` (for a `user` list) or from `http_cache/` (for a `subscription`).
 
 ---
 
 ## `custom_rules` — [§030] sealed (inline / srs / preset)
 
-Дискриминатор `kind`. Backward-compat: если в JSON нет `kind`, читается как `inline`.
+The discriminator is `kind`. For backward compatibility, a JSON object without `kind` is read as `inline`.
 
-**Общее поле `num` ([§370])** — позиция правила на разреженной оси порядка. Есть у
-ВСЕХ четырёх видов (пишется рядом с `kind`). Раскладка: `0` голова
-(`traffic-processing`), `950..990` специфичные пресеты, `1000..1100` зона
-пользовательских правил, `1110..1150` широкие перехватчики; шаг 10 между
-шаблонными — зазор под будущие вставки (см. TEMPLATE.md `ui.num`).
+**The shared `num` field ([§370])** is the rule's position on a sparse ordering axis.
+All four kinds carry it (written next to `kind`). The layout: `0` is the head
+(`traffic-processing`), `950..990` are the specific presets, `1000..1100` is the
+user-rule zone, and `1110..1150` are the broad catch-alls; the step of 10 between
+template rules leaves room for future insertions (see `ui.num` in TEMPLATE.md).
 
-Ключ **отсутствует** → правило ещё не размечено (storage, записанный до §370).
-Разметка происходит при первой загрузке экрана Routing (`markRuleOrder`):
-пресет получает `num` по `presetId` из шаблона, всё остальное — подряд от `1000`
-в текущем порядке массива. Отдельного версионированного шага миграции НЕТ.
-Следствие: правила из старого storage садятся в начало пользовательской зоны и
-оказываются приоритетнее добавленных после обновления.
+When the key is **absent**, the rule has not been numbered yet (storage written
+before §370). Numbering happens on the first load of the Routing screen
+(`markRuleOrder`): a preset takes its `num` from the template by `presetId`, and
+everything else is numbered consecutively from `1000` in the array's current order.
+There is NO separate versioned migration step. The consequence: rules from older
+storage land at the start of the user zone and end up with a higher priority than
+anything added after the update.
 
-Порядок правил = сортировка по `num` (при равенстве — порядок в массиве). Drag в
-UI пересчитывает `num` перетащенного правила как `target.num + 1`, сдвигая соседей
-только если это значение занято (ленивый сдвиг — сохраняет зазоры и шаблонные
-якоря, см. `rule_order.dart`).
+The rule order is a sort by `num` (ties keep the array's order). Dragging in the UI
+recomputes the dragged rule's `num` as `target.num + 1`, shifting the neighbours only
+when that value is taken (a lazy shift — it preserves the gaps and the template
+anchors, see `rule_order.dart`).
 
 ### `kind: "inline"` — `CustomRuleInline`
 
 ```jsonc
 {
   "kind":           "inline",
-  "num":            1000?,         // §370 — позиция на оси порядка
+  "num":            1000?,         // §370 — the position on the ordering axis
   "id":             "<uuid>",
   "name":           "<display>",
   "enabled":        true,
-  "domains":        [ … ]?,        // OR-группа #1
+  "domains":        [ … ]?,        // OR group #1
   "domainSuffixes": [ … ]?,
   "domainKeywords": [ … ]?,
   "ipCidrs":        [ … ]?,
-  "ports":          [ … ]?,        // OR-группа #2: "443"
+  "ports":          [ … ]?,        // OR group #2: "443"
   "portRanges":     [ … ]?,        //              "8000:9000", ":3000", "4000:"
-  "packages":       [ … ]?,        // OR-группа #3
+  "packages":       [ … ]?,        // OR group #3
   "protocols":      [ … ]?,        // routing-rule level (subset of kKnownProtocols)
   "ipIsPrivate":    true?,         // routing-rule level
-  "outbound":       "<tag>",       // или "reject" (sentinel → action: reject)
-  "dns":            { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 задача 3 + §256
+  "outbound":       "<tag>",       // or "reject" (a sentinel → action: reject)
+  "dns":            { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 task 3 + §256
   "resolve":        { "only": false, "strategy": "ipv4_only", "serverTag": ""?,
                       "disableCache": true?, "disableOptimisticCache": true?,
                       "rewriteTtl": 60?, "timeout": "5s"?, "clientSubnet": "…"? }?  // §247
 }
 ```
 
-`name` — пользовательский, mutable.
+`name` is user-supplied and mutable.
 
-OR-семантика внутри category, AND между. `protocols` и `ipIsPrivate` не headless'ятся, выносятся в routing-rule level.
+OR semantics inside a category, AND between them. `protocols` and `ipIsPrivate` are not made headless — they are lifted to the routing-rule level.
 
-`dns` ([§117] задача 3, «DNS follows the rule») — опционально: builder эмитит mirror DNS-rule `{rule_set: <тот же headless>, server: serverTag}` в атомарной mirror-группе (порядок = routing-правила). Отсутствует в старых записях → null → старое поведение. Гейт: при непустых `ports`/`protocols` mirror не эмитится.
+`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). It is absent in older records → null → the old behaviour. The gate: with non-empty `ports` or `protocols` the mirror is not emitted.
 
-`dns.forceIpv4` ([§256], Force IPv4) — опционально: гасит AAAA (IPv6) для матча правила serverless-правилом `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (приложение чисто берёт A). **Ортогонально** `enabled`/`serverTag` — глушилка отвечает локально, DNS-серверу не нужна: правило может нести только `forceIpv4` (`enabled: false`, `serverTag: ""`). Эмитится ПЕРЕД server-mirror'ом (порядок §253). Тот же port/protocol-гейт (DNS-слой слеп к порту/протоколу). Старые записи → false.
+`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order). The same port/protocol gate applies (the DNS layer is blind to port and protocol). Older records → false.
 
-`resolve` ([§247]) — опционально: builder эмитит нетерминальное route-правило `{rule_set: <тот же headless>, action: resolve, …}` ПЕРЕД терминальным route (`only: false`, флагман — форс `ipv4_only` для direct-веток) либо ВМЕСТО него (`only: true`, advanced — fall-through). Отсутствует в старых записях → null. Гейт: у inline эмитится только при непустой domain-группе (`resolveEligible`); srs — всегда (домены в `.srs` возможны).
+`resolve` ([§247]) is optional: the builder emits a non-terminal route rule `{rule_set: <the same headless one>, action: resolve, …}` either BEFORE the terminal route (`only: false`, the flagship case — forcing `ipv4_only` for direct branches) or INSTEAD of it (`only: true`, an advanced fall-through). It is absent in older records → null. The gate: for inline rules it is emitted only when the domain group is non-empty (`resolveEligible`); for srs it is always emitted, since a `.srs` may contain domains.
 
 ### `kind: "srs"` — `CustomRuleSrs`
 
@@ -534,20 +539,20 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
   "name":        "<display>",
   "enabled":     true,
   "srsUrl":      "https://…/something.srs",
-  "ports":       [ … ]?,          // routing-rule-level доп-фильтры
+  "ports":       [ … ]?,          // extra filters at the routing-rule level
   "portRanges":  [ … ]?,
   "packages":    [ … ]?,
   "protocols":   [ … ]?,
   "ipIsPrivate": true?,
   "outbound":    "<tag>",
-  "dns":         { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 задача 3 + §256
-  "resolve":     { "only": false, "strategy": "ipv4_only", … }?          // §247 (как у inline)
+  "dns":         { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 task 3 + §256
+  "resolve":     { "only": false, "strategy": "ipv4_only", … }?          // §247 (as for inline)
 }
 ```
 
-Сам бинарь `.srs` лежит отдельно в `rule_sets/<tag>.srs` (см. [таблицу файлов](#disk-layout) выше).
+The `.srs` binary itself lives separately in `rule_sets/<tag>.srs` (see the [file table](#disk-layout) above).
 
-`dns` ([§117] задача 3) — как у inline, но mirror ссылается на существующий `.srs`-тег + DNS-безопасные доп-фильтры (`packages`/wifi). Работает только если в rule-set есть домены (IP-only лист в DNS-контексте не матчит).
+`dns` ([§117] task 3) works as it does for inline, except the mirror references an existing `.srs` tag plus the DNS-safe extra filters (`packages` and wifi). It only works when the rule set contains domains — an IP-only list never matches in a DNS context.
 
 ### `kind: "preset"` — `CustomRulePreset`
 
@@ -562,23 +567,23 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 }
 ```
 
-`name` — read-only в UI (🔒), периодически синхронизируется с `preset.label` из шаблона. Содержимое разворачивается на каждом `buildConfig` через `expandPreset` ([§033]). `outbound` хранится в `varsValues['outbound']` как universal override ([§033] Expansion §5).
+`name` is read-only in the UI (🔒) and is periodically synced with `preset.label` from the template. The contents are expanded on every `buildConfig` through `expandPreset` ([§033]). `outbound` is kept in `varsValues['outbound']` as a universal override ([§033] Expansion §5).
 
-> **§265 — ref-var значения НЕ в `varsValues`.** Если пресет объявляет var как
-> `{"ref":"<global>"}` (напр. `traffic-processing` → `resolve_enabled`/
-> `resolve_strategy`), её значение живёт в **глобальном** `vars`
-> (top-level, `setVar`/`getAllVars`), а НЕ в `varsValues` пресета — единый
-> источник, чтобы правка в правиле и в секции-владельце не расходились.
-> `varsValues` не должен содержать ref-имён; `stripRefVarsFromVarsValues`
-> (`normalize_pinned_presets.dart`) вычищает застрявшие копии на загрузке Routing
-> (иначе subtitle/Debug показывали устаревшее значение — `366beec`). См.
-> TEMPLATE.md § «ref-vars».
+> **§265 — ref-var values do NOT live in `varsValues`.** When a preset declares a var
+> as `{"ref":"<global>"}` (for example `traffic-processing` → `resolve_enabled` /
+> `resolve_strategy`), its value lives in the **global** `vars` (top level,
+> `setVar` / `getAllVars`) and NOT in the preset's `varsValues` — one source, so that
+> editing it in the rule and in the owning section cannot diverge. `varsValues` must
+> not contain ref names; `stripRefVarsFromVarsValues`
+> (`normalize_pinned_presets.dart`) clears out stuck copies when Routing loads
+> (otherwise the subtitle and Debug showed a stale value — `366beec`). See the
+> “ref-vars” section of TEMPLATE.md.
 
 ### Backward-compat
 
-- Поле `target` (до v1.4.1) → `outbound`. Читается обоими названиями.
-- `kind` отсутствует → `inline` (read-path).
-- Legacy-ключ `app_rules` (отдельная таба до v1.3.2) — §159 удалил миграцию `_absorbLegacyAppRules`; ключ игнорируется (отбрасывается allowlist'ом на импорте).
+- The `target` field (up to v1.4.1) became `outbound`. It is read under both names.
+- An absent `kind` means `inline` (on the read path).
+- The legacy `app_rules` key (a separate tab up to v1.3.2) — §159 removed the `_absorbLegacyAppRules` migration and the key is ignored (dropped by the allowlist on import).
 
 ---
 
@@ -592,13 +597,14 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 }
 ```
 
-**§294 — типизация:** kind-ref'ы `servers[]`/`rules[]` типизированы моделью
+**§294 — typing:** the kind refs in `servers[]` and `rules[]` are typed by the model
 `lib/models/dns_ref.dart` (sealed `DnsServerRef` {inline·preset·template} +
-`DnsRuleRef` {inline·srs·preset·template}). **Форма на диске НЕ изменилась** —
-`toJson` байт-совместим (§221 backup); `fromJson` толерантен на чтение
-(legacy full-body / unknown-kind → null, дропаются как в резолвере). Строгий
-`fromJsonStrict` — только на Debug write-пути (`PUT /settings/dns_options/*` →
-400 на битую форму). Резолвер (`resolveDisplayedServers`, VIEW-слой) не тронут.
+`DnsRuleRef` {inline·srs·preset·template}). **The on-disk shape did NOT change** —
+`toJson` is byte-compatible (§221 backup); `fromJson` is tolerant on read (a legacy
+full body or an unknown kind becomes null and is dropped exactly as the resolver
+would). The strict `fromJsonStrict` is used only on the Debug write path
+(`PUT /settings/dns_options/*` → 400 on a malformed shape). The resolver
+(`resolveDisplayedServers`, the VIEW layer) is untouched.
 
 ### `dns_options.servers[i]` — kind-discriminated ref ([§044])
 
@@ -606,22 +612,22 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 {
   "kind":        "template" | "preset" | "inline",
   "enabled":     <bool>,
-  "tag":         "<string>",        // SINGLE source of truth, не дублируется в body
-  "description": "<string>"?,        // optional override; для inline — primary
-  "body":        { … }?,             // только inline; partial sing-box server БЕЗ tag/description/enabled
-  "varValues":   { "<name>": "<value>", … }?  // §117, только template: выбранные значения vars
+  "tag":         "<string>",        // the SINGLE source of truth, not duplicated in body
+  "description": "<string>"?,        // an optional override; for inline it is primary
+  "body":        { … }?,             // inline only; a partial sing-box server WITHOUT tag/description/enabled
+  "varValues":   { "<name>": "<value>", … }?  // §117, template only: the chosen var values
 }
 ```
 
-**Семантика kind:**
+**What each kind means:**
 
-- `template` — ссылка на сервер из шаблона ([§117]: обёртка `{vars, server}`, tag в `server.tag`). Юзер может оверрайднуть `enabled` / `description` и выбрать значения vars (`varValues`: `outbound`-канал, IP-профиль, domain resolver — см. TEMPLATE.md); body резолвится из шаблона подстановкой `@var`'ов (`resolveTemplateDnsServerBody`).
-- `preset` — то же, но из активного preset-bundle (`server_lists` тут не при чём, имеется в виду template preset).
-- `inline` — пользовательский сервер. `body` обязателен. Если tag совпадает с template/preset И shape матчится → builder может схлопнуть в `template`/`preset` ref (см. `_serverShapesMatch`).
+- `template` — a reference to a server from the template ([§117]: a `{vars, server}` wrapper, with the tag in `server.tag`). The user can override `enabled` and `description` and choose var values (`varValues`: the `outbound` channel, the IP profile, the domain resolver — see TEMPLATE.md); the body is resolved from the template by substituting the `@var`s (`resolveTemplateDnsServerBody`).
+- `preset` — the same, but from the active preset bundle (`server_lists` has nothing to do with it; this means a template preset).
+- `inline` — a user-defined server. `body` is required. When the tag matches a template or preset one AND the shape matches, the builder may collapse it into a `template` or `preset` ref (see `_serverShapesMatch`).
 
-**Render order в UI:** `template` → `preset` → `inline` (сорт по `ServerKind.index`, stable внутри группы).
+**Render order in the UI:** `template` → `preset` → `inline` (sorted by `ServerKind.index`, stable within a group).
 
-**Builder** синтезирует `body.tag` обратно при сборке финального sing-box-конфига. В storage tag живёт **только** на ref-level.
+**The builder** synthesizes `body.tag` back when assembling the final sing-box config. In storage the tag lives **only** at the ref level.
 
 ### `dns_options.rules[i]` — [§061]
 
@@ -630,32 +636,32 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
   "enabled": <bool>,
   "type":    "user" | "template" | "rule",
   "title":   "<display>",
-  "rule":    { … }?                  // sing-box rule body, для type=user
+  "rule":    { … }?                  // the sing-box rule body, for type=user
 }
 ```
 
-`type` — origin-discriminator (предшественник [§044] `kind`, исторически другое слово).
+`type` is the origin discriminator (the predecessor of [§044]'s `kind` — historically a different word).
 
-`type: template/rule` — orphan-cleanup: title не нашёлся в активном шаблоне/пресете → выбрасывается в `resolveDnsRulesList`.
+`type: template/rule` — orphan cleanup: when the title is not found in the active template or preset, the entry is discarded in `resolveDnsRulesList`.
 
-⚠ §257: у записи `kind: preset` поле `enabled` — **мёртвое**: тумблер
-DNS-блока пресета переехал в магическую var `dns_enable`
-(`custom_rules[].varsValues`, см. TEMPLATE.md «Магические переменные»).
-Запись остаётся только **позиционным якорем** mirror-группы (§117) —
-определяет место DNS-правил пресета в `dns.rules`. Билдер и UI её
-`enabled` не читают; auto-discovery продолжает писать `enabled: true`
-(безвредно). Миграции нет — у всех пресетов с var DNS-блок после
-обновления включён (default true), «кто надо — сам вырубит».
+⚠ §257: on a `kind: preset` entry the `enabled` field is **dead**: the toggle for a
+preset's DNS block moved to the magic var `dns_enable`
+(`custom_rules[].varsValues`, see “Magic variables” in TEMPLATE.md). The entry
+remains only as a **positional anchor** for the mirror group (§117) — it decides
+where the preset's DNS rules sit inside `dns.rules`. Neither the builder nor the UI
+reads its `enabled`; auto-discovery keeps writing `enabled: true`, harmlessly. There
+is no migration — after an update every preset carrying the var has its DNS block on
+(the default is true), and anyone who wants it off can turn it off.
 
 ### Migration history
 
-- v1.5.x: `dns_options.rules_json` — single JSON-string (`@Deprecated`). Сейчас игнорится; поле остаётся на диске для downgrade-friendliness.
-- v1.6.0 ([§061]): `dns_options.rules[]` — структурированный список с `type`/`enabled`/`title`/`rule`.
-- v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — kind-refs впервые. Tag/description/enabled тогда жили в `body`.
-- v1.6.1 ([§044]): `dns_options.servers[]` — clean schema. Tag/description/enabled подняты на ref-level. Underscore-аннотации (`_kind`, `_overrides`, `_origin`, `_preset_label`) удалены. Builder синтезирует tag в body. One-shot migration в `_migrateLegacyDnsServers`.
-- v1.7.x ([§117]): template-серверы в шаблоне — обёртки `{description, enabled, vars?, server}`; ref-запись `kind: template` получила `varValues`. Миграции нет (не нужна): kind-ref'ы валидны как есть, удалённые из шаблона теги (`quad9_dot`, `adguard_dot`, `adguard_family`, `google_doh_vpn`) орфан-чистятся, vars применяют дефолты; inline-серверы юзера не трогаются.
-- §228: ремап переименованных `preset_id` в `custom_rules` — `bittorrent-direct`→`bittorrent`, `private-ip-direct`→`private-ip`, `block_unknown`→`unknown-traffic` (сняли суффикс `-direct` т.к. outbound стал выбираемым + kebab-case). One-shot `_migrateRenamedPresetIds` (guard `preset_ids_remapped`), зовётся из `main.dart` до seed'а дефолтов. Переписывает ТОЛЬКО `presetId`; `varsValues` (выбранный юзером outbound) не трогается → выбор канала переживает ремап. Без миграции правила стали бы «Preset not found».
-  **Миграция удалена в §229** (вышла в v2.10.0, снята в разработке после v2.17.0): у всех, кто обновлялся с тех пор, storage отремаплен, код был мёртвым грузом. Guard-ключ `preset_ids_remapped` сохранён. Кто перепрыгнул с до-v2.10.0 сразу на новый релиз — получит «Preset not found» на трёх старых id (warning + дроп правила при сборке, конфиг не падает).
+- v1.5.x: `dns_options.rules_json` — a single JSON string (`@Deprecated`). It is ignored now; the field stays on disk for downgrade safety.
+- v1.6.0 ([§061]): `dns_options.rules[]` — a structured list with `type` / `enabled` / `title` / `rule`.
+- v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — the first kind refs. Back then tag, description and enabled lived inside `body`.
+- v1.6.1 ([§044]): `dns_options.servers[]` — the clean schema. Tag, description and enabled were lifted to the ref level, and the underscore annotations (`_kind`, `_overrides`) were removed.
+- v1.7.x ([§117]): template servers inside the template became `{description, enabled, vars?, server}` wrappers, and the `kind: template` ref gained `varValues`.
+- §228: remapping renamed `preset_id`s inside `custom_rules` — `bittorrent-direct`→`bittorrent`, `private-ip-direct`→`private-ip`, `block_unknown`→`unknown-traffic`.
+  **The migration was removed in §229** (it shipped in v2.10.0 and was dropped during development after v2.17.0): everyone upgrading from those versions has already been remapped, and a fresh install never had the old ids.
 
 ---
 
@@ -666,7 +672,7 @@ DNS-блока пресета переехал в магическую var `dns_
   "url":        "https://…",          // global default URL
   "timeout_ms": <int>,                 // global default timeout
   "presets":   [ … ],                  // pre-built URL-options (template-side)
-  "groups": {                          // per-group override (опционально)
+  "groups": {                          // a per-group override (optional)
     "<groupTag>": {
       "url":        "…"?,
       "timeout_ms": <int>?
@@ -675,15 +681,15 @@ DNS-блока пресета переехал в магическую var `dns_
 }
 ```
 
-Resolve chain в `HomeController`: `groups[tag]` → root → template default.
+The resolve chain in `HomeController`: `groups[tag]` → root → the template default.
 
-CRUD-helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clearGroupPing`. Все — sugared над `getPingOptions`/`savePingOptions` (которые перетирают целиком).
+CRUD helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clearGroupPing`. All of them are sugar over `getPingOptions` / `savePingOptions`, which read and write the whole object.
 
 ---
 
 ## `tun_apps` — [§046]
 
-OS-level split-tunneling: какие приложения идут через VPN-tun, а какие — direct через cellular/wifi (минуя sing-box полностью).
+OS-level split tunneling: which applications go through the VPN tun and which go direct over cellular or Wi-Fi (bypassing sing-box entirely).
 
 ```jsonc
 {
@@ -692,109 +698,109 @@ OS-level split-tunneling: какие приложения идут через VP
 }
 ```
 
-| `mode` | Что попадает в `inbound[type=tun]` финального config | Эффект |
+| `mode` | What lands in `inbound[type=tun]` of the final config | Effect |
 |---|---|---|
-| `"off"` | (ничего не пишем) | Все apps через tun (Android-default) |
-| `"allow"` | `"include_package": [...packages]` | Только перечисленные через tun. Остальные direct |
-| `"deny"`  | `"exclude_package": [...packages]` | Все КРОМЕ перечисленных через tun |
+| `"off"` | (nothing is written) | Every app goes through the tun (the Android default) |
+| `"allow"` | `"include_package": [...packages]` | Only the listed apps use the tun. The rest go direct |
+| `"deny"`  | `"exclude_package": [...packages]` | Everything EXCEPT the listed apps uses the tun |
 
-**Native слой** (`BoxVpnService.kt:557-560`) читает `options.includePackage` / `excludePackage` от libbox и зовёт `VpnService.Builder.addAllowedApplication` / `addDisallowedApplication`. Применяется на `builder.establish()` — на изменение нужен **full VPN restart**, light reload (`startOrReloadService`) не пересоздаёт tun.
+**The native layer** (`BoxVpnService.kt`) reads `options.includePackage` / `excludePackage` from libbox and calls `VpnService.Builder.addAllowedApplication` / `addDisallowedApplication`.
 
-**Default для existing юзеров:** `{mode: "off", packages: []}` — backward-compat. Migration unconditional на первом `_load()` после upgrade, без guard'а.
+**The default for existing users** is `{mode: "off", packages: []}`, for backward compatibility. The migration runs unconditionally on the first `_load()` after an upgrade.
 
-**В `/state/storage` exposed без scrubber'а** — package-names не sensitive.
+**Exposed in `/state/storage` with no scrubbing** — package names are not sensitive.
 
-CRUD: `getTunApps()` / `setTunApps()` (replace целиком). API: `GET/PUT /settings/tun_apps` ([Debug API reference](api/debug-api-reference.md)).
+CRUD: `getTunApps()` / `setTunApps()` (a whole-object replace). API: `GET/PUT /settings/tun_apps` ([the Debug API reference](api/debug-api-reference.md)).
 
-**Конфликт с `package_name` rules в custom_rules:** apps в `Allow-list` (или вне `Deny-list`) идут через tun → routing rules (rule_set / package_name match / etc) применяются нормально. Apps вне `Allow-list` (или внутри `Deny-list`) **не попадают в tun вообще** — sing-box их не видит, custom rules с `package_name` для них не сматчатся.
+**Interaction with `package_name` rules in custom_rules:** apps in the allow list (or outside the deny list) go through the tun and are then subject to the routing rules; apps outside the tun never reach sing-box at all, so no rule can affect them.
 
 ---
 
 ## `vpn_mode` — [§119]
 
-Режим работы VPN (inbound-трактовка): как ядро ловит трафик.
+The VPN's operating mode (how inbound traffic is treated): how the core captures traffic.
 
 ```jsonc
 {
   "mode": "vpn" | "proxy" | "vpn_proxy",
   "proxy_protocol": "mixed" | "http" | "socks",
   "proxy_port": 2080,
-  "proxy_listen": "127.0.0.1",           // любой валидный IPv4; невалид → 127.0.0.1
+  "proxy_listen": "127.0.0.1",           // any valid IPv4; anything invalid becomes 127.0.0.1
   "proxy_auth_enabled": true,
   "proxy_username": "user",
-  "proxy_password": "<32-hex или пусто>"
+  "proxy_password": "<32 hex chars, or empty>"
 }
 ```
 
-`proxy_protocol` = sing-box inbound `type` локального прокси: `mixed` (HTTP+SOCKS5 на одном порту, default), `http` (только HTTP, без UDP), `socks` (только SOCKS5). У всех трёх одинаковая auth-структура `users:[{username,password}]`; tag всегда `mixed-in` (от протокола не зависит).
+`proxy_protocol` is the sing-box inbound `type` of the local proxy: `mixed` (HTTP plus SOCKS5 on one port, the default), `http` (HTTP only) or `socks` (SOCKS5 only).
 
-| `mode` | inbound'ы финального config | `VpnService.establish()` | Эффект |
+| `mode` | The inbounds of the final config | `VpnService.establish()` | Effect |
 |---|---|---|---|
-| `"vpn"` | `tun-in` (auto_route) | да | весь трафик системы через tun (текущее поведение, **default**) |
-| `"proxy"` | `mixed-in` (без tun) | **нет** (libbox не зовёт `openTun`) | локальный HTTP+SOCKS-порт; приложения настраиваются вручную; нет иконки ключа VPN |
-| `"vpn_proxy"` | `tun-in` + `mixed-in` | да | системный перехват И локальный порт одновременно |
+| `"vpn"` | `tun-in` (auto_route) | yes | all system traffic goes through the tun (the current behaviour, **the default**) |
+| `"proxy"` | `mixed-in` (no tun) | **no** (libbox never calls `openTun`) | a local HTTP+SOCKS port; applications are configured manually |
+| `"vpn_proxy"` | `tun-in` + `mixed-in` | yes | system-wide capture AND a local port at the same time |
 
-**Builder** (§120). Императивный `applyVpnMode`/`post_steps/vpn_mode.dart` **удалён** — вся inbound-структура теперь декларативна в `wizard_template.json` (`tun-in`/`mixed-in`/route-rules гейтятся `#if`-конструкциями по `@vpn_mode`/`@proxy_*`). `build_config.dart` пробрасывает `VpnModeConfig` в плоские vars (`vpn_mode`, `proxy_port`, `proxy_listen`, `proxy_user`, `proxy_pass`, …) до substitution-фазы; `#if`-walker выбирает нужные inbound'ы и re-tag'ит resolve/sniff. К моменту `applyTunPackages` `inbounds[]` уже финальный.
-- `proxy` → только `mixed-in` (без `tun-in`); `vpn_proxy` → `tun-in` + `mixed-in`.
+**The builder** (§120). The imperative `applyVpnMode` / `post_steps/vpn_mode.dart` has been **removed** — the whole inbound structure is now assembled declaratively:
+- `proxy` yields only `mixed-in` (no `tun-in`); `vpn_proxy` yields `tun-in` plus `mixed-in`.
 - `mixed-in` = `{type:mixed, tag:mixed-in, listen, listen_port, users?}`.
 
-**Auth.** `users:[{username,password}]` пишется только при `effectiveAuth && password != ""`. Для любого **не-loopback** listen (не `127.x` — `0.0.0.0` или конкретный LAN-IP) auth **форсится on** (снять нельзя — `effectiveAuth` игнорирует `proxy_auth_enabled`); на loopback — опционально. Пароль/username в §120 идут через vars-подстановку (secret-тип держит строку — числовой/«true»-пароль не искажается). Пароль генерится в UI при первом включении auth (`generateProxyPassword`, 32-hex, образец `clash_secret`).
+**Auth.** `users:[{username,password}]` is written only when `effectiveAuth && password != ""`. For any **non-loopback** listen address the auth is forced on (§120): a proxy reachable from the LAN without a password would be an open relay.
 
-**Смена режима меняет inbounds → full VPN restart** (наследуется от config-dirty машинерии: home banner Apply/Restart). `markConfigChangedNeedRestart()` дёргается при touch'е.
+**Changing the mode changes the inbounds, so the VPN restarts fully** (inherited from the config-dirty machinery: the home banner's Apply, or a restart).
 
-**Default для existing юзеров:** ключ отсутствует → `mode=vpn` (= текущее поведение, `#if`-ветка отдаёт tun-only). **Миграция не нужна** — отсутствие ключа эквивалентно дефолту.
+**The default for existing users:** an absent key means `mode=vpn` (the current behaviour), so no migration is needed.
 
-CRUD: `getVpnMode()` / `setVpnMode()` (replace целиком).
+CRUD: `getVpnMode()` / `setVpnMode()` (a whole-object replace).
 
-**Native:** изменений в Kotlin нет — proxy-режим достигается чисто конфигом (foreground/`protect`/override tun-agnostic). См. [features/119](spec/features/119%20vpn-mode/spec.md).
+**Native:** nothing changed in Kotlin — the proxy mode is achieved purely through the config (the foreground service, `protect` and the overrides stay as they were).
 
 ---
 
 ## `warp_account` — [§025]
 
-Кеш зарегистрированного Cloudflare WARP-аккаунта (кнопка «Get WARP»). Приватный ключ генерится X25519 **на устройстве** и сюда же кешируется; в Cloudflare уходит только публичная часть.
+The cached registered Cloudflare WARP account (the “Get WARP” button). The private key is generated on the device and never leaves it.
 
 ```jsonc
 {
-  "priv_key": "<base64 X25519 — СЕКРЕТ, не логировать>",
+  "priv_key": "<base64 X25519 — A SECRET, never log it>",
   "peer_pub": "<base64 peer public key>",
   "client_v4": "172.16.0.2",
   "client_v6": "2606:4700:110::…",
-  "client_id": "<base64, 3 байта → WireGuard reserved>",
+  "client_id": "<base64, 3 bytes → the WireGuard reserved field>",
   "account_id": "…",
   "device_id": "…",
-  "token": "<bearer — СЕКРЕТ, не логировать>",
+  "token": "<bearer — A SECRET, never log it>",
   "endpoint": "engage.cloudflareclient.com:2408",
   "created_at": "<ISO8601>",
-  "license": "<WARP+ key или null>",
+  "license": "<a WARP+ key, or null>",
   "warp_plus": false
 }
 ```
 
-**Назначение — идемпотентность.** При повторном «Get WARP» (`reuse=true`, default) аккаунт переиспользуется вместо новой регистрации устройства в Cloudflare. «Re-register» (`forceNew`) чистит ключ → следующий вызов регистрирует заново. Сам WARP-узел в конфиг попадает **не** отсюда, а через обычный `UserServer` (собирается из `WarpAccount.toWireguardUri()` → `addFromInput` → endpoints[]). Поэтому ключ **не** config-significant: при его записи `markConfigDirty` не дёргается.
+**Its purpose is idempotency.** On a repeated “Get WARP” (`reuse=true`, the default) the account is reused instead of registering a new one; *Re-register* creates a fresh one.
 
-**Секреты.** `priv_key`/`token` — реальные секреты в локальном файле приложения. В логах маскируются (`WarpAccount.redacted()`). ВНИМАНИЕ: `GET /state/storage` сериализатор `warp_account` сейчас **не** скрабит (см. [Debug API exposure](#debug-api-exposure) — заведён долг). При добавлении новых diag-дампов — не включать сырой `warp_account`.
+**Secrets.** `priv_key` and `token` are real secrets inside the app's local file. They are masked in logs and in the UI, but deliberately **not** scrubbed in `/state/storage` — see [Debug API exposure](#debug-api-exposure).
 
-**`reserved`.** `client_id` (base64, 3 байта) доносится до sing-box endpoint как per-peer `reserved: [b0,b1,b2]`. Без него WARP-handshake проходит, но трафик не идёт. Парсинг/emit — `parseReserved` (`uri_utils.dart`) + `WireguardPeer.reserved`.
+**`reserved`.** The `client_id` (base64, 3 bytes) is carried to the sing-box endpoint as a per-peer `reserved: [b0,b1,b2]`. Without it WARP drops the traffic.
 
-CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null = очистить). См. [features/025](spec/features/025%20warp%20integration/spec.md).
+CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null clears it). See [features/025](spec/features/025%20warp%20integration/spec.md).
 
 ---
 
 ## `masque_account` — [§130]
 
-Кеш зарегистрированного MASQUE-WARP аккаунта (Cloudflare QUIC/CONNECT-IP транспорт, флагман v2.9.0). **Отдельный** от `warp_account`: другая крипта (ECDSA-ключи в DER) и другой транспорт. `MasqueAccount` (`services/warp/masque_account.dart`).
+The cached registered MASQUE-WARP account (Cloudflare's QUIC/CONNECT-IP transport, the flagship of v2.9.0). **A separate key pair** from the WireGuard one.
 
 ```jsonc
 {
-  "priv_key_der":  "<base64 DER — СЕКРЕТ, не логировать>",
+  "priv_key_der":  "<base64 DER — A SECRET, never log it>",
   "server_pub_der":"<base64 DER peer public>",
   "client_v4":     "…",
   "client_v6":     "…",
   "server":        "162.159.198.1",       // data-plane endpoint IP
   "port":          443,
   "device_id":     "…",
-  "token":         "<bearer — СЕКРЕТ, не логировать>",
+  "token":         "<bearer — A SECRET, never log it>",
   "created_at":    "<ISO8601>",
   "sni":           "…",
   "idle_timeout":  "…",
@@ -802,21 +808,21 @@ CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null = очистить).
 }
 ```
 
-**Секреты.** `priv_key_der`/`token` — реальные секреты локального файла; в логах маскируются (`MasqueAccount.redacted()`).
+**Secrets.** `priv_key_der` and `token` are real secrets in the local file; they are masked in logs (`AppLog`) and in the UI.
 
-**§393 — ключа `network` здесь больше нет.** Версия HTTP (`h3`/`h2`) — свойство узла, а не регистрации: одни и те же креды порождают узлы обеих версий (сканер §284/§305), а визард выбирает её заново при каждом добавлении. Теперь она передаётся параметром в `MasqueAccount.toMasqueUri(vhttp:)` и живёт только в URI узла. Миграции нет: ключ в старых записях просто игнорируется при чтении и исчезает при следующей записи.
+**§393 — the `network` key is gone from here.** The HTTP version (`h3`/`h2`) is a property of a node rather than of the registration, and it now lives in the node's `vhttp`.
 
-**Не config-significant** — MASQUE-узел попадает в конфиг через обычный `UserServer` (`type:masque` из `MasqueSpec`), не отсюда; при записи `markConfigDirty` не дёргается.
+**Not config-significant** — a MASQUE node reaches the config through an ordinary `UserServer` (a `type:masque` outbound from `MasqueSpec`), so the account itself does not mark the config dirty.
 
-CRUD: `getMasqueAccount()` / `setMasqueAccount(account?)` (null = очистить, `.remove('masque_account')`). Входит в backup-allowlist (`backup_service.dart`).
+CRUD: `getMasqueAccount()` / `setMasqueAccount(account?)` (null clears it, via `.remove('masque_account')`). It is part of the backup allowlist (`backup_service`).
 
-> **Долг кода (на момент правки дока):** `masque_account` присутствует в `backup_service`, но **отсутствовал** в `SettingsStorage.allowedTopLevelKeys` — при импорте бэкапа `replaceRaw` его отбрасывал. Также сериализатор `GET /state/storage` не скрабит секреты (см. [Debug API exposure](#debug-api-exposure)). Оба — заведены отдельными задачами.
+> **Both of the debts noted here have been settled (§219).** `masque_account` is now present in `SettingsStorage.allowedTopLevelKeys` as well as in `backup_service`, so a backup import no longer drops it. The fact that `GET /state/storage` does not scrub `warp_account` / `masque_account` is a **deliberate decision**, not an oversight: the Debug API grants root access to secrets by design (`GET /backup/export` returns `exportRaw()` verbatim), so masking here would protect nothing while making diagnosis harder. Do not add scrubbing for these keys as a “security fix” — see [Debug API exposure](#debug-api-exposure).
 
 ---
 
 ## `wifi_history` — [§051] Phase 3
 
-JSON-encoded array записей сетей которые юзер реально посетил — для editor'а custom rules (`Pick saved` picker когда пишешь правило с условием `wifi_ssid` / `wifi_bssid`). Хранится как **JSON-string** в `vars.wifi_history` (не отдельный top-level ключ — чтобы не плодить shape'ы), декодируется при чтении.
+A JSON-encoded array of the networks the user has actually visited, used by the custom-rule editor (`Pick saved` picker) so that Wi-Fi rules can be written without typing an SSID by hand.
 
 ```jsonc
 [
@@ -826,288 +832,294 @@ JSON-encoded array записей сетей которые юзер реаль�
 ]
 ```
 
-| Поле | Тип | Notes |
+| Field | Type | Notes |
 |---|---|---|
-| `ssid` | String | Required. Не нормализуется (case-sensitive — провайдеры могут так и эдак). |
-| `bssid` | String | Может быть пустым. При upsert нормализуется к **lower-case** + trim. Composite-key `(ssid, bssid)` — `Home/aa:bb:..` и `Home/AA:BB:..` это одна запись (после normalize), `Home/aa:bb` и `Home/cc:dd` — разные. |
-| `last_seen` | String (ISO-8601 UTC) | Время последнего observe. `addToWifiHistory` обновляет на upsert. |
+| `ssid` | String | Required. Not normalised (case-sensitive — providers do it both ways). |
+| `bssid` | String | May be empty. On upsert it is normalised to **lower case** and trimmed. The composite key is `(ssid, bssid)`. |
+| `last_seen` | String (ISO-8601 UTC) | When it was last observed. `addToWifiHistory` refreshes it on upsert. |
 
-**Cap 50 записей** (`_wifiHistoryCap` constant). LRU evict — newest-first (insert at index 0), oldest падает с tail при overflow.
+**Capped at 50 entries** (the `_wifiHistoryCap` constant). LRU eviction, newest first (inserted at index 0), and the oldest falls off the tail on overflow.
 
-**Источники наполнения:**
-1. **Auto-record** (`auto_record_wifi_history=true`) — native `WifiNetworkObserver` через `NetworkCallback` listener. Stickiness debounce: записывается только если юзер сидит на сети ≥5 минут (фильтр от random transitions home/office/coffeeshop).
-2. **Manual** — editor UI: `Add current` button (читает sing-box `readWIFIState` напрямую), `Pick saved` (выбирает из существующих записей).
-3. **Debug API** — `POST /wifi_history` (для test fixtures, restore, etc) — см. [Debug API reference](api/debug-api-reference.md#wi-fi-history--wifi_history).
+**Where the entries come from:**
+1. **Auto-record** (`auto_record_wifi_history=true`) — the native `WifiNetworkObserver` through a `NetworkCallback` listener. A stickiness debounce: the network is recorded only after more than 5 minutes on it.
+2. **Manual** — from the editor UI: the `Add current` button (which reads sing-box's `readWIFIState` directly) and `Pick saved` (which picks from existing entries).
+3. **The Debug API** — `POST /wifi_history` (for test fixtures, restores and the like) — see the [Debug API reference](api/debug-api-reference.md#wi-fi-history--wifi_history).
 
-CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHistory(ssid, bssid)` / `clearWifiHistory()` в `SettingsStorage`.
+CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHistory(ssid, bssid)` / `clearWifiHistory()` in `SettingsStorage`.
 
-**Privacy default** — `auto_record_wifi_history=false`. Юзер opt-in'ит в App Settings → Diagnostics. Silent network logging это privacy-след даже local-only.
+**A privacy default** — `auto_record_wifi_history=false`. The user opts in through App Settings → Diagnostics. Silent network logging would be a privacy smell.
 
-**В `/state/storage` exposed без scrubber'а** — SSID/BSSID не sensitive в контексте настроек (если уже видны в `WifiInfo` системного уровня).
+**Exposed in `/state/storage` with no scrubbing** — an SSID or BSSID is not sensitive in a settings context (if it is already visible in the rules, hiding it here would achieve nothing).
 
 ---
 
-## `native_prefs` — [§189] зеркало `boxvpn_boot.*`
+## `native_prefs` — [§189], a mirror of `boxvpn_boot.*`
 
-JSON-зеркало Android-prefs, которые исторически жили **только** в native
-`SharedPreferences` (`boxvpn_boot.*`). Реализация — `lib/services/settings_storage/native_prefs.dart`.
+A JSON mirror of the Android prefs that historically lived **only** in the native
+`SharedPreferences` (`boxvpn_boot.*`). The implementation is `lib/services/settings_storage/native_prefs.dart`.
 
 ```jsonc
 {
-  "auto_start":        false,    // auto-start VPN на boot
-  "keep_on_exit":      true,     // §188 — не глушить tun при swipe-kill (default ON)
-  "background_mode":   "never",  // never | lazy | always — Doze-поведение туннеля
-  "core_logs_enabled": false,    // forward sing-box-логов в Dart
+  "auto_start":        false,    // auto-start the VPN at boot
+  "keep_on_exit":      true,     // §188 — do not kill the tun on a swipe-kill (default ON)
+  "background_mode":   "never",  // never | lazy | always — the tunnel's Doze behaviour
+  "core_logs_enabled": false,    // forwarding of the sing-box logs into Dart
   "allow_bypass":      false,    // §069 — Allow VPN bypass
   "auto_redirect":     false,    // auto-redirect
-  "memory_limit":      "auto"    // §271 — лимит памяти ядра: auto | off | МБ строкой
+  "memory_limit":      "auto"    // §271 — the core's memory limit: auto | off | MB as a string
 }
 ```
 
-**Модель «диск = истина, оперативка = рабочая копия».** Эта секция в
-`lxbox_settings.json` — **источник истины** (диск). Native `SharedPreferences`
-(`boxvpn_boot.*`) — **рабочая копия в оперативке**, нужная для **Dart-less
-моментов**, когда Flutter-движок недоступен: `BOOT_COMPLETED` (`BootReceiver`),
-swipe `onTaskRemoved`, `openTun`/`establish`. native читает свою копию синхронно
-и **никогда не пишет JSON** (единственное исключение — bootstrap-seed, см. ниже).
+**The model is “disk is the truth, memory is a working copy”.** This section of
+`lxbox_settings.json` is the **source of truth** (the disk). The native
+`SharedPreferences` (`boxvpn_boot.*`) are a **working copy in memory**, needed for the
+**Dart-less moments** when the Flutter engine is unavailable: `BOOT_COMPLETED`
+(`BootReceiver`), a swipe `onTaskRemoved`, and `openTun` / `establish`. The native side
+reads its own copy synchronously and **never writes the JSON** (the single exception is
+the bootstrap seed, below).
 
-**Поток записи (write-through).** Любой `setX` → пишет в JSON (первично) →
-зеркалит в native через method-channel. Все писатели — UI
-(`vpn_mode_tab`/`settings_screen`/`app_settings_screen`), импорт (`backup_service`),
-Debug API handlers — идут через единую дверь `SettingsStorage.setNativeBool` /
-`setNativeBackgroundMode` / `setNativeMemoryLimit` (§271: native применяет
-лимит к работающему ядру немедленно через `Libbox.reloadSetupOptions`).
-Прямые native-записи в обход этого слоя эфемерны:
-старт-`sync` (ниже) откатит их на следующем запуске.
+**The write path is write-through.** Any `setX` writes to the JSON first and then
+mirrors into native over the method channel. Every writer — the UI
+(`vpn_mode_tab` / `settings_screen` / `app_settings_screen`), the import
+(`backup_service`) and the Debug API handlers — goes through the single door
+`SettingsStorage.setNativeBool` / `setNativeBackgroundMode` / `setNativeMemoryLimit`
+(§271: native applies the limit to the running core immediately through
+`Libbox.reloadSetupOptions`). Native writes that bypass this layer are ephemeral: the
+`sync` at startup (below) rolls them back on the next launch.
 
-**Старт** (`SettingsStorage.bootstrapAndSyncNativePrefs()`, зовётся из `main.dart`
-до UI):
-- секции `native_prefs` нет (первый старт после §189) → **bootstrap**: seed
-  native ⇒ JSON (единственный случай native⇒JSON-записи);
-- секция есть → **sync**: JSON ⇒ native, диск перезаливает оперативку для
-  расходящихся ключей — расхождение само чинится.
+**At startup** (`SettingsStorage.bootstrapAndSyncNativePrefs()`, called from
+`main.dart` before the UI):
+- if the `native_prefs` section is absent (the first launch after §189) → **bootstrap**:
+  seed native ⇒ JSON (the only case of a native⇒JSON write);
+- if it is present → **sync**: JSON ⇒ native, so the disk overwrites memory for any
+  diverging key and the divergence repairs itself.
 
-**Backup.** Единая сериализация блока — `SettingsStorage.exportNativePrefsBackup()`
-/ `applyNativePrefsBackup()`: состав/дефолты/типы в одном месте
-(`native_prefs.dart`). `backup_service` и Debug-handler делегируют сюда (раньше
-дублировали). Wire-ключи стабильны (старые бэкапы импортируются). Производный
-`has_tun` (см. ниже) **не** входит в backup-блок — это вычисляемое значение, не
-настройка.
+**Backup.** The block has one serializer — `SettingsStorage.exportNativePrefsBackup()`
+/ `applyNativePrefsBackup()`: the field set, the defaults and the types live in one
+place (`native_prefs.dart`). `backup_service` and the Debug handler delegate to it (they
+used to duplicate it). The wire keys are stable, so old backups still import. The derived
+`has_tun` (below) is **not** part of the backup block — it is a computed value, not a
+setting.
 
-> **`has_tun` ([§192]) — седьмой native-ключ, НЕ в JSON-секции.**
-> `boxvpn_boot.has_tun` (default `true`) — **производное** от [`vpn_mode`](#vpn_mode--119)
-> (§119): `vpn`/`vpn_proxy` → `true`, `proxy` → `false`. Зеркалится при смене
-> режима (`vpn_mode_tab._setMode` → `SettingsStorage.setNativeHasTun`) и на старте
-> (`bootstrapAndSyncNativePrefs`). Гейтит `VpnService.prepare()`: в proxy-режиме
-> `prepare` не зовётся (он зря забирает VPN-слот и отзывает чужой активный VPN).
-> Гейт стоит на 6 точках входа (`BootReceiver.hasTun(...)`-чек). Так как это
-> вычисляемое значение, оно живёт только в native (`boxvpn_boot.has_tun`) и **не**
-> хранится в JSON-секции `native_prefs` — пересчитывается из `vpn_mode`.
+> **`has_tun` ([§192]) — a seventh native key, NOT in the JSON section.**
+> `boxvpn_boot.has_tun` (default `true`) is **derived** from [`vpn_mode`](#vpn_mode--119)
+> (§119): `vpn` and `vpn_proxy` yield `true`, `proxy` yields `false`. It is mirrored when
+> the mode changes (`vpn_mode_tab._setMode` → `SettingsStorage.setNativeHasTun`) and at
+> startup (`bootstrapAndSyncNativePrefs`). It gates `VpnService.prepare()`: in proxy mode
+> `prepare` is never called (it would pointlessly claim the VPN slot and revoke whatever
+> VPN is active). The gate sits at six entry points (the `BootReceiver.hasTun(...)`
+> check). Being a computed value, it lives only in native (`boxvpn_boot.has_tun`) and is
+> **not** stored in the JSON `native_prefs` section — it is recomputed from `vpn_mode`.
 
-> **`app_language` + `last_pushed_locale` ([§279]) — ещё два native-ключа НЕ в
-> JSON-секции.** `boxvpn_boot.app_language` — derived cache var'а
-> [`vars.app_language`](#vars--template-vars--app-flags) (источник истины —
-> JSON-var, кэш пере-пушится `setAppLanguage` / `bootstrapAndSyncNativePrefs`);
-> нужен нативным поверхностям (шторка/QS-тайл/shortcuts) при мёртвом Flutter.
-> `boxvpn_boot.last_pushed_locale` — зеркало последнего значения, которое
-> приложение само запушило в `LocaleManager` (Android 13+), опора трёхстороннего
-> reconciliation «система против стораджа». Оба — документированное исключение
-> из состава `NativePrefsKeys`: членство экспортировало бы их в
-> `vpn_settings`-блок бэкапа вторым представлением одной настройки
-> (backup-дом `app_language` — только `vars`).
+> **`app_language` and `last_pushed_locale` ([§279]) — two more native keys NOT in the
+> JSON section.** `boxvpn_boot.app_language` is a derived cache of the
+> [`vars.app_language`](#vars--template-vars--app-flags) var (the JSON var is the source
+> of truth; the cache is re-pushed by `setAppLanguage` and
+> `bootstrapAndSyncNativePrefs`); the native surfaces (the notification shade, the QS
+> tile, the shortcuts) need it while Flutter is dead. `boxvpn_boot.last_pushed_locale`
+> mirrors the last value the app itself pushed into `LocaleManager` (Android 13+) and
+> anchors the three-way “system versus storage” reconciliation. Both are a documented
+> exception from `NativePrefsKeys`: membership would export them into the backup's
+> `vpn_settings` block as a second representation of one setting (the backup home of
+> `app_language` is `vars` alone).
 
 ---
 
-## `channels` — [§125] каналы роутинга (template→storage)
+## `channels` — [§125], the routing channels (template→storage)
 
-Каналы (`vpn-1..vpn-10`) переехали из статичного `wizard_template.json`
-(§267 — `group_templates` + `default_channels`; до §267 — `preset_groups[]`) в
-storage. Template стал **seed'ом** — значениями по умолчанию на первом запуске.
-После миграции состав каналов живёт в `channels[]` и редактируется юзером
-(Routing → таб Channels → редактор канала).
+The channels (`vpn-1..vpn-10`) moved out of the static `wizard_template.json`
+(§267 — `group_templates` plus `default_channels`; before §267 it was `preset_groups[]`)
+and into storage. The template became a **seed** — the defaults for the first launch.
+After the migration the set of channels lives in `channels[]` and is edited by the user
+(Routing → the Channels tab → the channel editor).
 
-- `tag` — **системный immutable** id (`vpn-1`..`vpn-10`), автогенерируется при
-  создании (первый свободный `vpn-N`), юзер правит только `label`. Стабильный
-  ключ ссылок (`route_final` / `ping_options` / custom-rule outbound / detour).
-  §274 — префикс `⚙ ` в `label` зарезервирован как маркер detour-канала (как
-  ⚙-метка в тегах detour-серверов): смена флага `detour` переименовывает канал
-  (set → `⚙ <label>`, unset → префикс срезается), нормализация — в
-  `Channel.copyWith`/`fromJson` (покрывает редактор, Debug API, restore).
-- `vpn-1` — продуктово-привилегированный: всегда `enabled`, неудаляем, дефолт
-  `route_final`. Лимит каналов — **10**.
-- `auto` (nullable) — параметры urltest-двойника. `null` = галка auto ВЫКЛ,
-  `<tag>-auto` не эмитится. `auto.tag` НЕ хранится (производный `${tag}-auto`).
-  Полный shape: `{url, interval, tolerance, idle_timeout,
+- `tag` is the **system's immutable** id (`vpn-1`..`vpn-10`), generated on creation
+  (the first free `vpn-N`); the user only edits `label`. It is the stable key for
+  references (`route_final`, `ping_options`, a custom rule's outbound, a detour).
+  §274 — the `⚙ ` prefix in `label` is reserved as the detour-channel marker (like the
+  ⚙ mark in detour server tags): flipping the `detour` flag renames the channel (set →
+  `⚙ <label>`, unset → the prefix is stripped), and the normalisation lives in
+  `Channel.copyWith` / `fromJson` (covering the editor, the Debug API and restores).
+- `vpn-1` is privileged by product decision: always `enabled`, undeletable, and the
+  default `route_final`. The channel limit is **10**.
+- `auto` (nullable) holds the urltest twin's parameters. `null` means the auto
+  checkbox is OFF and `<tag>-auto` is not emitted. `auto.tag` is NOT stored (it is
+  derived as `${tag}-auto`). The full shape: `{url, interval, tolerance, idle_timeout,
   interrupt_exist_connections, mode, balancer:{pool, pool_tolerance,
-  sticky_hash[]}}`. §208-поля `mode` (`least_test` default | `round_robin`) и
-  `balancer` (`pool` ≥1 default 3, `pool_tolerance` uint16 default 0,
-  `sticky_hash[]` из `process/domain/source_ip/dest_ip/dest_port`, default
-  `[process,domain]`, `[]` = липкость off) сериализуются в storage **всегда**,
-  но в config ядра билдер эмитит `mode`+`balancer` **только** при `round_robin`
-  (`balancer` без round-robin роняет старт ядра). Пустой `sticky_hash` уходит в
-  конфиг как sentinel `["none"]` (выключенная липкость, контракт ядра SPEC 019).
-- `detour` (bool, default `false` — отсутствие ключа читается как false,
-  миграции нет; §248/§274) — **разрешение** выбирать канал как detour-мишень
-  для серверов/папок/подписок (значение ссылки = `tag`; в пикере §239 —
-  только каналы с флагом). Роль в правилах ортогональна: канал с флагом
-  остаётся валидной целью `route_final` / custom-rule outbound (§274 снял
-  взаимоисключение ролей и инвариант `detour ⇒ include_block=false`).
-  Единственный инвариант: `vpn-1` не бывает detour (главный канал, дефолтная
-  мишень и heal-резерв) — принуждается при чтении (`Channel.fromJson`),
-  restore из backup и ручная правка файла его не обходят.
-- **Резолюция в билдере**: каждый включённый канал эмитит selector `<tag>` с
-  нодами после `node_filter` (regex по итоговому tag, §048-style) + опции
-  `direct-out`/`block` (по `include_direct`/`include_block`, §201); если `auto !=
-  null` и набор нод непуст — дополнительно urltest `<tag>-auto` (только ноды
-  канала, без direct/block/auto). `default` = первая нода, чей tag матчит
-  `default_filter`. Пустой/невалидный regex → все ноды.
-- **Инверсия `node_filter_invert`** (§197): `true` → в канал попадают ноды, чей
-  tag **НЕ** матчит `node_filter` (исключающий фильтр). Пустой `node_filter` →
-  инверсия игнорируется (все ноды). Пример: `node_filter:"bypass",
-  node_filter_invert:true` → все ноды кроме содержащих «bypass».
-- **Пустой набор после фильтра** (regex/инверсия отсекли всё) → fallback selector
-  `outbounds: ["block","direct-out"]`, `default: "block"` (§201 — безопаснее
-  блокировать, чем выпускать мимо VPN; direct остаётся опцией). Билдер при этом
-  пишет warning в баннер конфига (§200), если в подписке были ноды. `block`
-  всегда присутствует в `config.outbounds[]` как системный outbound и валиден
-  как `route_final`.
-- **Миграция** (one-shot, guard `channels_migrated`): seed из
-  `template.groupTemplates` (§267) — `default_channels[i].default_enabled` /
-  legacy `enabled_groups[]` → `enabled` (vpn-1 форсим true); `channel.include ∋
-  direct` → `include_direct`; `channel.include ∋ auto` → `auto` из auto-шаблона
-  (`@urltest_*` vars); `default_filter=''`.
-  Глобальный `✨auto`-preset **не** мигрируется (он больше не канал — каждый
-  канал делает свой двойник). `enabled_groups[]` после миграции депрекейтится.
-- **Деградация ссылок** (heal): канал перестал быть валидной мишенью данного
-  рода → ссылки этого рода лечатся сразу в storage, **необратимо** (§202
-  Решение B, расширено §248, скорректировано §274): rules-ссылки
-  (`route_final` / custom-rule outbound) → `vpn-1` при удалении / выключении
-  (установка detour-флага НЕ heal-триггер — §274: канал остаётся целью
-  правил); detour-ссылки (`override_detour` / `members[].detour`) → `''`
-  (None) при удалении / выключении / снятии detour-флага. Ссылка «на канал» = его `tag`
-  ИЛИ `<tag>-auto`; значение, совпадающее с bare-тегом члена той же папки, —
-  интра-ссылка, heal её не трогает. Restore из backup heal не ре-гоняет
-  (принятые деградации — билдер схлопывает dangling при сборке). Legacy
-  `✨auto`-ссылки попадают под то же правило. Подробно:
+  sticky_hash[]}}`. The §208 fields — `mode` (`least_test` by default, or
+  `round_robin`) and `balancer` (`pool` ≥ 1, default 3; `pool_tolerance`, a uint16,
+  default 0; `sticky_hash[]` drawn from `process` / `domain` / `source_ip` / `dest_ip` /
+  `dest_port`, default `[process,domain]`, with `[]` meaning stickiness off) — are
+  **always** serialized into storage, but the builder emits `mode` and `balancer` into
+  the core's config **only** for `round_robin` (a `balancer` without round-robin kills
+  the core's startup). An empty `sticky_hash` reaches the config as the sentinel
+  `["none"]` (stickiness disabled, per the core's SPEC 019 contract).
+- `detour` (a bool, default `false` — an absent key reads as false, and there is no
+  migration; §248/§274) is **permission** to pick the channel as a detour target for
+  servers, folders and subscriptions (the reference value is the `tag`; the §239 picker
+  offers only flagged channels). Its role in rules is orthogonal: a flagged channel
+  remains a valid target for `route_final` and for a custom rule's outbound (§274
+  removed both the mutual exclusion of the roles and the `detour ⇒ include_block=false`
+  invariant). The one invariant left: `vpn-1` is never a detour (it is the main channel,
+  the default target and the heal reserve) — enforced on read (`Channel.fromJson`), so
+  neither a backup restore nor hand-editing the file can get around it.
+- **Resolution in the builder**: every enabled channel emits a selector `<tag>` holding
+  the nodes that survive `node_filter` (a regex over the final tag, §048 style) plus the
+  `direct-out` and `block` options (per `include_direct` / `include_block`, §201); when
+  `auto != null` and the node set is non-empty it additionally emits the urltest
+  `<tag>-auto` (the channel's nodes only, with no direct/block/auto). `default` is the
+  first node whose tag matches `default_filter`. An empty or invalid regex means all
+  nodes.
+- **Inversion through `node_filter_invert`** (§197): `true` puts into the channel the
+  nodes whose tag does **NOT** match `node_filter` (an excluding filter). An empty
+  `node_filter` makes the inversion moot (all nodes). Example: `node_filter:"bypass"`
+  with `node_filter_invert:true` yields every node except those containing “bypass”.
+- **An empty set after filtering** (the regex or the inversion cut everything) yields
+  the fallback selector `outbounds: ["block","direct-out"]` with `default: "block"`
+  (§201 — blocking is safer than letting traffic out past the VPN; direct stays as an
+  option). The builder also writes a warning into the config banner (§200) when the
+  subscription did have nodes. `block` is always present in `config.outbounds[]` as a
+  system outbound and is valid as a `route_final`.
+- **The migration** (one-shot, guarded by `channels_migrated`) seeds from
+  `template.groupTemplates` (§267): `default_channels[i].default_enabled` or the legacy
+  `enabled_groups[]` become `enabled` (vpn-1 is forced to true); `channel.include ∋
+  direct` becomes `include_direct`; `channel.include ∋ auto` becomes `auto` from the
+  auto template (the `@urltest_*` vars); and `default_filter` is `''`. The global
+  `✨auto` preset is **not** migrated (it is no longer a channel — each channel makes
+  its own twin). `enabled_groups[]` is deprecated once the migration has run.
+- **Reference degradation** (healing): once a channel stops being a valid target of a
+  given kind, references of that kind are healed straight in storage, **irreversibly**
+  (§202 decision B, extended by §248 and adjusted by §274). Rule references
+  (`route_final`, a custom rule's outbound) become `vpn-1` on deletion or disabling
+  (setting the detour flag is NOT a heal trigger — per §274 the channel remains a rule
+  target); detour references (`override_detour`, `members[].detour`) become `''` (None)
+  on deletion, disabling or clearing the detour flag. A “reference to a channel” is its
+  `tag` OR `<tag>-auto`; a value that coincides with the bare tag of a member of the same
+  folder is an intra-reference and healing leaves it alone. A backup restore does not
+  re-run healing (the degradations are accepted — the builder collapses danglers at build
+  time). Legacy `✨auto` references fall under the same rule. Details:
   [`spec/features/248 detour-channels/`](spec/features/248%20detour-channels/).
-- CRUD: `getChannels` / `setChannels` / `addChannel` (throws при 10) /
-  `updateChannel` / `deleteChannel` (throws для vpn-1) / `migrateChannelsIfNeeded`.
-- ⚠ **Мутации — через `services/channel_mutations.dart`**, не напрямую (§275):
-  `ChannelMutations.add/update/delete` делают storage-heal и зеркальный ресинк
-  in-memory `_entries` контроллера одной операцией — иначе следующий `_persist()`
-  воскрешает вылеченные detour-ссылки. `addChannel`/`updateChannel`/`deleteChannel`
-  помечены `@visibleForTesting`: вызов из `lib/` мимо сервиса — ошибка analyze.
-  `setChannels` — сырой bulk-overwrite без heal'а (для persist'а списка целиком).
+- CRUD: `getChannels` / `setChannels` / `addChannel` (throws at 10) / `updateChannel` /
+  `deleteChannel` (throws for vpn-1) / `migrateChannelsIfNeeded`.
+- ⚠ **Mutate through `services/channel_mutations.dart`**, never directly (§275):
+  `ChannelMutations.add/update/delete` perform the storage heal and the mirroring resync
+  of the controller's in-memory `_entries` as one operation — otherwise the next
+  `_persist()` resurrects the healed detour references. `addChannel`, `updateChannel` and
+  `deleteChannel` are marked `@visibleForTesting`: calling them from `lib/` past the
+  service is an analyze error. `setChannels` is a raw bulk overwrite with no healing (for
+  persisting the whole list).
 
-Спеки: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/),
+Specs: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/),
 [`docs/spec/features/248 detour-channels/`](spec/features/248%20detour-channels/)
-(detour-прослойка).
+(the detour layer).
 
 ---
 
-## Прочие top-level ключи
+## Other top-level keys
 
-| Ключ | Тип | Назначение |
+| Key | Type | Purpose |
 |---|---|---|
-| `route_final` | `String` | Override `route.final` поверх template (выбранный default outbound). `''` = template-default. Dangling-ссылка (удалённый канал / legacy ✨auto) → `vpn-1` при сборке (§125). |
-| `route_idle_suspend` | `String` | §215/§128 — idle-suspend threshold (`route.lx_idle_suspend`, kernel SPEC 020). Duration-строка (`'30s'`/`'5m'`), **default `'30s'`** (включено с v2.8.2), `''` = off (поле не эмитится в route). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend`/`saveIdleSuspend`. |
-| `excluded_nodes` | `List<String>` | §125-cleanup **DEPRECATED** — глобальный node-filter (§048) удалён вместе с экраном. Ключ остаётся в allowlist (безвредный legacy-мусор); per-channel `node_filter` (§125) покрывает фильтрацию. |
-| `enabled_groups` | `List<String>` | §125 **DEPRECATED** — заменён на `channels[]`. Читается только one-shot миграцией; на диске остаётся безвредным мусором. |
-| `last_global_update` | `String` (ISO-8601) | Timestamp последнего успешного auto-refresh всех подписок. |
-| `presets_migrated` | `bool` | §159 — guard «дефолтные пресеты засеяны» (fresh-install seed). Имя ключа историческое (бывшая legacy-миграция); переиспользован, чтобы ранее мигрировавшие юзеры не получили повторный seed. `RoutingScreen._seedDefaultPresets` ставит true. |
-| `interrupt_connections_on_switch` | `bool` | §143 — рвать активные соединения переключаемой группы при смене ноды (default `false`, НЕ config-significant). См. `getInterruptOnSwitch`/`setInterruptOnSwitch`. |
-| `node_sort_mode` | `String` | §100 — выбранный режим сортировки нод. `''` = template-default. CRUD: `getNodeSort`/`setNodeSort` (пишутся парой с `node_manual_order`). |
-| `node_manual_order` | `List<String>` | §100 — ручной порядок node tags (актуален для режима manual). Пишется вместе с `node_sort_mode`. |
-| `profiler_retention_sec` | `int` | §044 — окно хранения Live-журнала профайлера (rolling buffer), в секундах. Default `600` (10 мин), опции UI 60/600/3600, валидные `> 0`. **НЕ** config-significant. CRUD: `getProfilerRetentionSec`/`setProfilerRetentionSec`. |
+| `route_final` | `String` | An override of `route.final` on top of the template (the chosen default outbound). `''` means the template default. A dangling reference (a deleted channel, or the legacy ✨auto) becomes `vpn-1` at build time (§125). |
+| `route_idle_suspend` | `String` | §215/§128 — the idle-suspend threshold (`route.lx_idle_suspend`, kernel SPEC 020). A duration string (`'30s'` / `'5m'`), **default `'30s'`** (enabled since v2.8.2); `''` means off (the field is not emitted into route). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend` / `saveIdleSuspend`. |
+| `excluded_nodes` | `List<String>` | §125 cleanup, **DEPRECATED** — the global node filter (§048) was removed along with its screen. The key stays in the allowlist (harmless legacy debris); the per-channel `node_filter` (§125) covers filtering now. |
+| `enabled_groups` | `List<String>` | §125, **DEPRECATED** — replaced by `channels[]`. Read only by the one-shot migration; on disk it is harmless debris. |
+| `last_global_update` | `String` (ISO-8601) | The timestamp of the last successful auto-refresh of all subscriptions. |
+| `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `RoutingScreen._seedDefaultPresets` sets it to true. |
+| `interrupt_connections_on_switch` | `bool` | §143 — tear down the switched group's active connections when the node changes (default `false`, NOT config-significant). See `getInterruptOnSwitch` / `setInterruptOnSwitch`. |
+| `node_sort_mode` | `String` | §100 — the chosen node sort mode. `''` means the template default. CRUD: `getNodeSort` / `setNodeSort` (written as a pair with `node_manual_order`). |
+| `node_manual_order` | `List<String>` | §100 — the manual order of node tags (relevant in manual mode). Written together with `node_sort_mode`. |
+| `profiler_retention_sec` | `int` | §044 — the retention window of the profiler's live journal (the rolling buffer), in seconds. Default `600` (10 minutes), the UI offers 60/600/3600, and valid values are `> 0`. **NOT** config-significant. CRUD: `getProfilerRetentionSec` / `setProfilerRetentionSec`. |
+| `route_idle_suspend_reachable` | `String` | §272 — the reachable idle window (`route.lx_idle_suspend_reachable`). A duration string, default `'5m'`. **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspendReachable` / `saveIdleSuspendReachable`. |
+| `urltest_passive_check` | `bool` | §272 — passive health checking (`urltest.passive_check`): skip probes while live traffic already proves the node is alive. Default `true`. **Config-significant**. CRUD: `getPassiveCheck` / `setPassiveCheck`. |
 
-> Отдельные структурные ключи описаны в собственных разделах выше: [`tun_apps`](#tun_apps--046), [`vpn_mode`](#vpn_mode--119), [`warp_account`](#warp_account--025), [`masque_account`](#masque_account--130). Это исчерпывающий список актуальных top-level ключей `lxbox_settings.json` (см. также §159 — реестр для allowlist-фильтра бэкапа: `SettingsStorage.allowedTopLevelKeys`).
+> The structural keys have their own sections above: [`tun_apps`](#tun_apps--046), [`vpn_mode`](#vpn_mode--119), [`warp_account`](#warp_account--025), [`masque_account`](#masque_account--130). Together with this table that is the exhaustive list of current top-level keys in `lxbox_settings.json`. The registry that must match it is `SettingsStorage.allowedTopLevelKeys` (§159 — the allowlist filter for backup import): **a new key belongs in both**, or it survives an export and is silently dropped on restore.
 
 ---
 
-## Legacy / удалённые ключи
+## Legacy and removed keys
 
-> **§159 — все миграции и DENY-`.remove()` удалены.** Ни один из перечисленных
-> ниже ключей больше не конвертируется и не вычищается на `_save()`. Если ключ
-> ещё лежит на диске у старого юзера — он безвреден (никем не читается) и будет
-> отброшен строгим allowlist'ом (`SettingsStorage.replaceRaw`) при первом
-> импорте бэкапа. Кто застрял на доисторической версии без миграции — перенесёт
-> настройки через экспорт/импорт или заново проставит галки.
+> **§159 — every migration and DENY `.remove()` is gone.** None of the keys below is
+> converted or cleaned up on `_save()` any more. If such a key is still on an older
+> user's disk it is harmless (nothing reads it) and will be dropped by the strict
+> allowlist (`SettingsStorage.replaceRaw`) on the first backup import. Anyone stuck on a
+> prehistoric version with no migration will carry their settings over through an
+> export/import, or simply tick the boxes again.
 
-| Ключ | Жил | Замена | Статус (§159) |
+| Key | Lived until | Replacement | Status (§159) |
 |---|---|---|---|
-| `proxy_sources` | до v1.3.x | `server_lists` ([§033]) | миграция удалена, ключ игнорируется. |
-| `app_rules` | до v1.3.2 | `custom_rules` (kind=inline, c `packages`) — [§030] | миграция удалена, ключ игнорируется. |
-| `enabled_rules` | до [§030] | `custom_rules` | миграция + API удалены, ключ игнорируется. |
-| `rule_outbounds` | до v1.3.2 | `custom_rules.outbound` (или `varsValues.outbound` для preset) | миграция + API удалены, ключ игнорируется. |
-| `dns_options.rules_json` | [§061] (intermediate) | `dns_options.rules[]` | поле остаётся для downgrade-friendliness, builder/UI не читают. |
-| `node_overrides` | удалённое | — | DENY-очистка удалена; игнорируется/отбрасывается на импорте. |
-| `show_detour_servers` | удалённое | — | DENY-очистка удалена; игнорируется/отбрасывается на импорте. |
-| `vars.auto_rebuild` | до §107 | — (rebuild всегда авто) | DENY-очистка удалена; отбрасывается на импорте. |
+| `proxy_sources` | up to v1.3.x | `server_lists` ([§033]) | the migration is gone; the key is ignored. |
+| `app_rules` | up to v1.3.2 | `custom_rules` (kind=inline, with `packages`) — [§030] | the migration is gone; the key is ignored. |
+| `enabled_rules` | up to [§030] | `custom_rules` | both the migration and the API are gone; the key is ignored. |
+| `rule_outbounds` | up to v1.3.2 | `custom_rules.outbound` (or `varsValues.outbound` for a preset) | both the migration and the API are gone; the key is ignored. |
+| `dns_options.rules_json` | [§061] (an intermediate step) | `dns_options.rules[]` | the field stays for downgrade friendliness; it is not read. |
+| `node_overrides` | removed | — | the DENY cleanup is gone; ignored, and dropped on import. |
+| `show_detour_servers` | removed | — | the DENY cleanup is gone; ignored, and dropped on import. |
+| `vars.auto_rebuild` | up to §107 | — (a rebuild is always automatic) | the DENY cleanup is gone; dropped on import. |
 
 ---
 
 ## SharedPreferences (Android)
 
-Не часть `lxbox_settings.json`. Используется для двух категорий: **pre-Flutter boot flags** (читаются в `BoxApplication.initialize()` / `BootReceiver` до того, как Flutter engine стартует) и **UI prefs** через `shared_preferences`-плагин.
+Not part of `lxbox_settings.json`. It serves two categories: **pre-Flutter boot flags** (read by Kotlin before the engine starts) and **UI preferences** (written by Flutter through `shared_preferences`).
 
-> **§189 — `boxvpn_boot.*` теперь ЗЕРКАЛО, не первоисточник.** Шесть native-prefs
+> **§189 — `boxvpn_boot.*` is now a MIRROR, not the original.** The six native prefs
 > (`auto_start` / `keep_vpn_on_exit` / `background_mode` / `core_logs_enabled` /
-> `allow_bypass` / `auto_redirect`) — **рабочая копия в оперативке** для Dart-less
-> моментов (boot / swipe `onTaskRemoved` / `openTun`). **Источник истины — секция
-> [`native_prefs`](#native_prefs--189-зеркало-boxvpn_boot) в `lxbox_settings.json`
-> (диск)**: все writes идут write-through (JSON первично → зеркало в native), а на
-> старте `sync` JSON⇒native выправляет расхождения. Единственное исключение —
-> вычисляемый `has_tun` ([§192]), который живёт только здесь (производное от
-> `vpn_mode`, в JSON не хранится).
+> `allow_bypass` / `auto_redirect`) are a **working copy in memory** for the Dart-less
+> moments (boot, a swipe `onTaskRemoved`, `openTun`). **The source of truth is the
+> [`native_prefs`](#native_prefs--189-a-mirror-of-boxvpn_boot) section of
+> `lxbox_settings.json` (the disk)**: every write is write-through (the JSON first, then
+> mirrored into native), and the `sync` at startup (JSON ⇒ native) straightens out any
+> divergence. The one exception is the computed `has_tun` ([§192]), which lives only here
+> (derived from `vpn_mode` and never stored in the JSON).
 
-> **Примечание (§159):** `haptic_enabled` ранее ошибочно числился здесь — по
-> факту он живёт в `vars` (`lxbox_settings.json`), читается/пишется через
-> `SettingsStorage.getVar/setVar` (см. `HapticService.prefsKey`). В разделе
-> [`vars`](#vars--template-vars--app-flags) он учтён как app feature-flag.
+> **A note (§159):** `haptic_enabled` used to be listed here by mistake — it actually
+> lives in `vars` (`lxbox_settings.json`) and is read and written through
+> `SettingsStorage.getVar` / `setVar` (see `HapticService.prefsKey`). It is accounted for
+> as an app feature flag in the [`vars`](#vars--template-vars--app-flags) section.
 
-| Ключ | Тип | Источник | Спека | Назначение |
+| Key | Type | Source | Spec | Purpose |
 |---|---|---|---|---|
 | `app_theme_mode` | `"system"` / `"light"` / `"dark"` | Flutter | — | UI theme. |
-| `boxvpn_boot.auto_start_vpn` | `Boolean` | Kotlin (зеркало JSON) | [§189] | Auto-start VPN на boot (если разрешено). Истина — `native_prefs.auto_start`. |
-| `boxvpn_boot.keep_vpn_on_exit` | `Boolean` | Kotlin (зеркало JSON) | [§189]/§188 | Не глушить tun при swipe-kill app. Истина — `native_prefs.keep_on_exit` (default ON, §188). |
-| `boxvpn_boot.background_mode` | `String` | Kotlin (зеркало JSON) | [§189] | Foreground-service режим (`never`/`lazy`/`always`). Истина — `native_prefs.background_mode`. |
-| `boxvpn_boot.core_logs_enabled` | `Boolean` | Kotlin (зеркало JSON) | [§189], [§043][043-applog] | Forward sing-box-логов. Читается в `BoxApplication.initialize()` ДО Flutter — поэтому нужна native-копия. Истина — `native_prefs.core_logs_enabled`. |
-| `boxvpn_boot.allow_bypass` | `Boolean` | Kotlin (зеркало JSON) | [§189]/§069 | Allow VPN bypass. Истина — `native_prefs.allow_bypass`. |
-| `boxvpn_boot.auto_redirect` | `Boolean` | Kotlin (зеркало JSON) | [§189] | Auto-redirect. Истина — `native_prefs.auto_redirect`. |
-| `boxvpn_boot.has_tun` | `Boolean` | Kotlin (зеркало `vpn_mode`) | [§192] | **Вычисляемое**, default `true`. Производное от `vpn_mode` (§119): proxy → `false`. Гейтит `VpnService.prepare()` (proxy не отзывает чужой VPN). **НЕ** в backup-блоке, **НЕ** в JSON-секции `native_prefs` — пересчитывается из `vpn_mode`. |
-| `boxvpn_boot.app_language` | `String` | Kotlin (зеркало `vars.app_language`) | [§279] | `system` \| `en` \| `ru`. Derived cache для Dart-less нативных поверхностей: `L10n.kt` оборачивает контекст в момент рендера (шторка/тайл/shortcuts при мёртвом Flutter). Истина — [`vars.app_language`](#vars--template-vars--app-flags); **НЕ** член `NativePrefsKeys`, **НЕ** в backup-блоке. |
-| `boxvpn_boot.last_pushed_locale` | `String` | Kotlin | [§279] | Последнее значение, которое приложение само запушило в `LocaleManager` (Android 13+; `""` = system). Опора трёхстороннего reconciliation на старте: смена в системных Settings побеждает сторадж, смена стораджа (restore/Debug API) пере-пушится в `LocaleManager`. **НЕ** в backup-блоке. |
+| `boxvpn_boot.auto_start_vpn` | `Boolean` | Kotlin (mirrors the JSON) | [§189] | Auto-start the VPN at boot (when it was running before). |
+| `boxvpn_boot.keep_vpn_on_exit` | `Boolean` | Kotlin (mirrors the JSON) | [§189]/§188 | Do not kill the tun on a swipe-kill. |
+| `boxvpn_boot.background_mode` | `String` | Kotlin (mirrors the JSON) | [§189] | The foreground-service mode (`never` / `lazy` / `always`). |
+| `boxvpn_boot.core_logs_enabled` | `Boolean` | Kotlin (mirrors the JSON) | [§189], [§043][043-applog] | Forward the sing-box logs into Dart. |
+| `boxvpn_boot.allow_bypass` | `Boolean` | Kotlin (mirrors the JSON) | [§189]/§069 | Allow VPN bypass. The truth lives in `native_prefs`. |
+| `boxvpn_boot.auto_redirect` | `Boolean` | Kotlin (mirrors the JSON) | [§189] | Auto-redirect. The truth lives in `native_prefs`. |
+| `boxvpn_boot.has_tun` | `Boolean` | Kotlin (mirrors `vpn_mode`) | [§192] | **Computed**, default `true`. Gates `VpnService.prepare()`; not stored in the JSON. |
+| `boxvpn_boot.app_language` | `String` | Kotlin (mirrors `vars.app_language`) | [§279] | `system` \| `en` \| `ru`. A derived cache for the native surfaces. |
+| `boxvpn_boot.last_pushed_locale` | `String` | Kotlin | [§279] | The last value the app itself pushed into `LocaleManager` (Android 13+). |
 
 ---
 
 ## Debug API exposure
 
-`SettingsStorage.dumpCache()` возвращает deep-copy всего `_cache`. `GET /state/storage` ([§031]) использует через сериализатор `services/debug/serializers/storage.dart`, который работает по **denylist**-модели (всё видно, скрабятся только секреты — см. §159-callout ниже). Реально скрабятся:
+`SettingsStorage.dumpCache()` returns a deep copy of the whole `_cache`. `GET /state/storage` ([§031]) uses it with a scrubber:
 
 - `vars.debug_token` → `'***'`
-- `server_lists[].url` → маскируется (`maskSubscriptionUrl`)
-- `server_lists[].nodes` → заменяется на `nodes_count` (могут нести credentials в UUID/password)
-- `server_lists[].rawBody` → заменяется на `raw_body_bytes` (длина)
-- `server_lists[].members` → заменяется на `members_count` (§234 — raw членов несёт credentials)
+- `server_lists[].url` is masked (`maskSubscriptionUrl`)
+- `server_lists[].nodes` is replaced by `nodes_count` (nodes can carry credentials in a UUID or password)
+- `server_lists[].rawBody` is replaced by `raw_body_bytes` (its length)
+- `server_lists[].members` is replaced by `members_count` (§234 — a member's raw carries credentials)
 
-Скраббер обрабатывает только ключи `vars` и `server_lists`; всё остальное (`meta.*`, `warp_account`, `masque_account`, …) проходит **как есть** через `default`-ветку. Любое новое sensitive-поле нужно явно добавлять в `_scrub`.
+The scrubber only handles the `vars` and `server_lists` keys; everything else (`meta.*`, `custom_rules`, `dns_options`, the accounts) is returned as-is.
 
-> **Долг:** `warp_account`/`masque_account` (`priv_key`/`token`/`priv_key_der`) и `meta.support_url`/`meta.web_page_url` в `GET /state/storage` сейчас **не** скрабятся (вопреки обещанию раздела `warp_account`, что секреты маскируются в diag-снапшотах). Заведено отдельной задачей.
+> **Deliberate, not a debt (§219):** `warp_account` / `masque_account` (`priv_key`, `token`, `priv_key_der`) and `meta.support_url` / `meta.web_page_url` are **not** scrubbed in `GET /state/storage`. The Debug API grants root access to secrets by design — `GET /backup/export` returns `exportRaw()` verbatim — so masking here would protect nothing while making diagnosis harder. Do not add it as a “security fix”.
 
-> **§159 — две РАЗНЫЕ модели фильтрации, не путать (намеренно):**
-> - **выход** (`GET /state/storage`, `serializers/storage.dart`) — **denylist**
->   со scrubber'ом: всё видно разработчику, прячем только секреты. Новый ключ
->   виден автоматически.
-> - **вход** (импорт бэкапа + Debug API `POST /backup/import`, через
->   `SettingsStorage.replaceRaw`) — **allowlist** default-deny: пишем только
->   известные ключи ([`allowedTopLevelKeys`] + app-флаги ∪ template-vars),
->   чужеродное отбрасывается. То же на `PUT /settings/ping_options` (strip
->   неизвестных subkeys).
+> **§159 — two DIFFERENT filtering models, deliberately not unified:**
+> - **output** (`GET /state/storage`, `serializers/storage.dart`) is a **denylist**
+>   with a scrubber: the developer sees everything and only secrets are hidden. A new
+>   key is visible automatically.
+> - **input** (a backup import, plus the Debug API `POST /backup/import`, through
+>   `SettingsStorage.replaceRaw`) is a default-deny **allowlist**: only known keys are
+>   written ([`allowedTopLevelKeys`] plus the app flags and the template vars), and
+>   anything foreign is dropped. The same applies to `PUT /settings/ping_options`,
+>   which strips unknown subkeys.
 >
-> Разные задачи (показать всё vs не пустить чужое) → разные модели. НЕ
-> «унифицировать» по ошибке.
+> Different jobs (show everything versus admit nothing foreign) call for different
+> models. Do NOT “unify” them by mistake.
 
-`PUT /settings/dns_options/servers` принимает три исторических формата (legacy pre-[§043][043-dns], [§043][043-dns] и [§044]) — миграция происходит на следующий `resolveDnsServersList`. См. [`api/debug-api-reference.md`](./api/debug-api-reference.md).
+`PUT /settings/dns_options/servers` accepts three historical formats (the pre-[§043][043-dns] legacy one, [§043][043-dns] and [§044]) — the migration happens on the next `resolveDnsServersList`. See [`api/debug-api-reference.md`](./api/debug-api-reference.md).
 
 ---
 

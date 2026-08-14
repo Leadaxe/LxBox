@@ -1,101 +1,123 @@
-# Руководство по разработке L×Box
+# L×Box development guide
 
-## Философия проекта
+## Project philosophy
 
-L×Box разрабатывается по методологии **spec-driven vibe coding** — каждая возможность сначала описывается как спецификация, затем реализуется. Это обеспечивает:
+L×Box is developed with **spec-driven vibe coding**: every capability is first
+written down as a specification and only then implemented. That buys us:
 
-- Прозрачность: любой разработчик видит что реализовано, что запланировано
-- Контроль качества: критерии приёмки в каждой спеке
-- Историю решений: почему сделано именно так
-- Возможность параллельной работы с AI-ассистентами (Claude Code)
+- Transparency: any developer can see what is implemented and what is planned
+- Quality control: acceptance criteria in every spec
+- A history of decisions: why something was done this particular way
+- The ability to work alongside AI assistants (Claude Code)
 
 ---
 
-## Структура документации
+## How the documentation is laid out
 
 ```
 docs/
   spec/
     features/
-      003 home screen/spec.md       # Каждая live фича — отдельная папка
-      006 servers ui/spec.md        # spec.md — основной документ
-      ...                           # plan.md, tasks.md — опционально
+      003 home screen/spec.md       # Every live feature is its own folder
+      006 servers ui/spec.md        # spec.md is the main document
+      ...                           # plan.md, tasks.md are optional
       047 public intent api/spec.md
     tasks/
-      README.md                     # Когда и как вести task-лог
-      NNN-kebab-title.md            # Конкретный рабочий цикл (баг, pass, рефакторинг)
-      055-mobile-stack-decision/    # Демотированные/исторические/superseded спеки тоже здесь
-      060-libbox-1-13-migration/    # (см. §054 spec reorg)
-  ARCHITECTURE.md                   # Архитектура проекта
-  BUILD.md                          # Инструкции по сборке
-  DEVELOPMENT_REPORT.md             # История разработки по этапам
-  DEVELOPMENT_GUIDE.md              # Этот документ
-  screenshots/                      # Скриншоты для README
-README.md                           # Главная документация
-CHANGELOG.md                        # Список изменений по версиям
+      README.md                     # When and how to keep a task log
+      NNN-kebab-title.md            # One work cycle (a bug, a pass, a refactor)
+      055-mobile-stack-decision/    # Demoted, historical and superseded specs live here too
+      060-libbox-1-13-migration/    # (see §054 spec reorg)
+  ARCHITECTURE.md                   # Project architecture
+  BUILD.md                          # Build instructions
+  DEVELOPMENT_REPORT.md             # Development history by stage
+  DEVELOPMENT_GUIDE.md              # This document
+  screenshots/                      # Screenshots for the README
+README.md                           # The main documentation
+CHANGELOG.md                        # Changes by version
 ```
 
-### Формат спецификации фичи
+### The shape of a feature spec
 
-Каждая спека содержит:
-1. **Статус**: Реализовано / Спека / В работе
-2. **Контекст**: зачем нужна фича, какую проблему решает
-3. **Реализация**: как сделано (архитектура, модели, UI)
-4. **Файлы**: таблица затронутых файлов
-5. **Критерии приёмки**: чеклист с галочками
+Every spec contains:
+1. **Status**: implemented / spec / in progress
+2. **Context**: why the feature is needed, what problem it solves
+3. **Implementation**: how it was done (architecture, models, UI)
+4. **Files**: a table of the files it touches
+5. **Acceptance criteria**: a checklist
 
-**Фичи vs задачи:** в `docs/spec/features/` — описание возможности («что это и как устроено»). В [`docs/spec/tasks/`](./spec/tasks/README.md) — журнал отдельных рабочих циклов: баг с нетривиальным root cause, perf-pass, рефакторинг с последствиями; формат и критерии — в `README` папки.
+**Features versus tasks:** `docs/spec/features/` describes a capability (“what
+this is and how it works”). [`docs/spec/tasks/`](./spec/tasks/README.md) is a log
+of individual work cycles: a bug with a non-trivial root cause, a performance
+pass, a refactor with consequences; the format and the criteria are in that
+folder's `README`.
 
-Актуальные спеки — `docs/spec/features/003 home screen/` … `130 masque-warp-transport/` (61 фича; полный индекс — в [`docs/spec/features/README.md`](spec/features/README.md), он не протухает). Демотированные/superseded спеки уехали в `docs/spec/tasks/055..061` через [§054 spec reorg](spec/tasks/054-spec-reorg-features-vs-tasks.md). Полный список с описаниями — в [`ARCHITECTURE.md → Feature Specs`](ARCHITECTURE.md#feature-specs). Крупные landmark'и:
-- **026** — Parser v2 (sealed `NodeSpec`, 3-слойный pipeline) — рефакторинг v1.3.0.
-- **027** — Subscription auto-update (4 триггера + hard gates против спама).
-- **033** — Preset bundles (selectable rules с `preset_id`, expansion + merge).
+The live specs run from `docs/spec/features/003 home screen/` to
+`130 masque-warp-transport/` and beyond — the full, never-stale index is
+[`docs/spec/features/README.md`](spec/features/README.md). Demoted and superseded
+specs moved to `docs/spec/tasks/055..061` through
+[§054 spec reorg](spec/tasks/054-spec-reorg-features-vs-tasks.md). The full list
+with descriptions is in
+[`ARCHITECTURE.md → Feature Specs`](ARCHITECTURE.md#feature-specs). The big
+landmarks:
+- **026** — Parser v2 (a sealed `NodeSpec`, a three-layer pipeline) — the v1.3.0 refactor.
+- **027** — Subscription auto-update (four triggers plus hard gates against spam).
+- **033** — Preset bundles (selectable rules with a `preset_id`, expansion and merge).
 - **039** — libbox 1.13 migration (1.12.12 → 1.13.11, single-CommandServer architecture).
 - **041** — DNS rules refactor (named/toggleable/multi-source, kind: user/template/preset/srs).
-- **042** — Health watchdog (heartbeat metrics + auto-recovery, *Draft*).
+- **042** — Health watchdog (heartbeat metrics plus auto-recovery, *draft*).
 
 ---
 
-## Архитектурные принципы
+## Architectural principles
 
-### 1. Единый источник настроек: wizard_template.json
+### 1. One source of settings: wizard_template.json
 
-**Все** базовые значения приложения определяются в `assets/wizard_template.json`:
+**Every** baseline value in the application is defined in
+`assets/wizard_template.json`:
 
-| Секция | Что хранит |
+| Section | What it holds |
 |--------|-----------|
-| `dns_options` | DNS серверы (16 пресетов) + правила |
-| `ping_options` | URL, timeout, пресеты для пинга |
-| `speed_test_options` | Серверы, потоки, ping URLs |
-| `group_templates` + `default_channels` | §125/§267 — SEED для `channels[]` (каналы живут в storage, не в template) |
-| `vars` | Все конфигурационные переменные |
-| `selectable_rules` | Правила маршрутизации с SRS |
-| `config` | Каркас sing-box конфига |
+| `dns_options` | DNS servers (16 presets) plus rules |
+| `ping_options` | URL, timeout, ping presets |
+| `speed_test_options` | Servers, streams, ping URLs |
+| `group_templates` + `default_channels` | §125/§267 — the SEED for `channels[]` (channels live in storage, not in the template) |
+| `vars` | Every configuration variable |
+| `selectable_rules` | Routing rules with SRS |
+| `config` | The skeleton of the sing-box config |
 
-**Правило**: если нужно добавить новый default — добавляй в wizard_template.json, не хардкодь в Dart.
+**The rule**: when you need a new default, add it to wizard_template.json — do
+not hardcode it in Dart.
 
-Пользовательские override хранятся в `lxbox_settings.json` (через SettingsStorage).
+User overrides are kept in `lxbox_settings.json` (through SettingsStorage).
 
-### 2. Autosave вместо Apply
+### 2. Autosave instead of Apply
 
-**Базовое правило:** на простых экранах настроек (списки переключателей, полей без «черновика») — debounce-таймер (500мс). При изменении:
-1. `_scheduleSave()` отменяет предыдущий таймер и ставит новый
-2. Через 500мс `_apply()` сохраняет в storage и пересобирает конфиг
-3. Если VPN активен — показывает "Restart VPN to apply changes"
+**The base rule:** on simple settings screens (lists of toggles, fields with no
+“draft” state) use a debounce timer of 500 ms. On a change:
+1. `_scheduleSave()` cancels the previous timer and starts a new one
+2. 500 ms later `_apply()` writes to storage and rebuilds the config
+3. If the VPN is running, it shows “Restart VPN to apply changes”
 
-**Исключение — сложные формы** (много взаимосвязанных полей, высокий риск случайных правок или половины заполненного состояния): делаем **явное сохранение** (кнопка Save / Apply в панели действий или внизу экрана) и **диалог при уходе назад**, если есть несохранённые изменения («сбросить / остаться»). Пример в коде: редактор пользовательского правила (`custom_rule_edit_screen.dart` — `PopScope` + «Discard changes?»).
+**The exception — complex forms** (many interdependent fields, a high risk of
+accidental edits or of a half-filled state): those get an **explicit save** (a
+Save / Apply button in the action bar or at the bottom of the screen) and a
+**dialog when navigating back** if there are unsaved changes (“discard / stay”).
+The example in the code is the custom-rule editor
+(`custom_rule_edit_screen.dart` — `PopScope` plus “Discard changes?”).
 
-На таких экранах **не** полагаемся на debounce-autosave для каждого поля — пользователь подтверждает готовый набор параметров одним действием.
+On such screens we do **not** rely on debounce autosave for each field — the user
+confirms a finished set of parameters with a single action.
 
 ### 3. Offline-first
 
-Приложение должно работать без интернета:
-- Подписки кэшируются на диск (`sub_cache/`)
-- Node filter читает из configRaw (уже сгенерированный конфиг)
-- Конфиг генерируется из кэша при сетевой ошибке
-- DNS серверы из шаблона доступны всегда
+The application has to work without the internet:
+- Subscriptions are cached to disk (`sub_cache/`)
+- The node filter reads from configRaw (the already-generated config)
+- The config is generated from cache when the network fails
+- DNS servers from the template are always available
 
-**Интернет нужен только для**: скачивания подписок (по кнопке refresh), SRS rule sets, speed test.
+**The internet is needed only for**: downloading subscriptions (via the refresh
+button), SRS rule sets, and the speed test.
 
 ### 4. Config generation pipeline (Parser v2)
 
@@ -110,7 +132,7 @@ buildConfig(lists, settings)  ─  spec 026
       └─ apply detour policy (register/use/override)
   3. Post-steps (ordered):
       ├─ applyPresetBundles     — expand `CustomRule(kind: preset)` → rule_set/dns/route (spec 033)
-      ├─ applyCustomRules       — inline + local-SRS правила пользователя (spec 030)
+      ├─ applyCustomRules       — user inline + local-SRS rules (spec 030)
       ├─ applyTlsFragment       — first-hop only, skip on detour
       ├─ applyMixedCaseSni      — randomise server_name case (spec 028)
       └─ applyCustomDns         — DNS-rules + servers (spec 041: `dns_options.rules` named/toggleable; multi-kind: user/template/preset/srs)
@@ -119,215 +141,283 @@ buildConfig(lists, settings)  ─  spec 026
   6. → BuildResult{ config, configJson, validation, emitWarnings }
 ```
 
-HTTP-fetch подписок **не** происходит в этом пайплайне — за это отвечает `AutoUpdater` (spec 027). Rebuild config — чисто локальная сборка из уже-загруженных nodes.
+Subscriptions are **not** fetched over HTTP inside this pipeline — that is
+`AutoUpdater`'s job (spec 027). Rebuilding the config is a purely local assembly
+from nodes that have already been downloaded.
 
-### 5. Язык интерфейса: English-only (до локализации)
+### 5. Interface language: English is the key
 
-**Базовый и единственный язык интерфейса — английский.** Вся разработка ведётся на нём: любой пользовательский текст — названия экранов, меню, кнопок, надписей, подсказок, диалогов, snackbar'ов, push-уведомлений, сообщений об ошибках, пустых состояний — пишется **только по-английски**.
+**English is the base language of the interface**, and since §285 the English
+text at a call site literally *is* the translation key. Every user-facing string
+— screen titles, menus, buttons, labels, hints, dialogs, snackbars, push
+notifications, error messages, empty states — is written **in English only**.
 
-**Правило:** новый UI-текст — на английском, литералом в коде или (предпочтительно) через будущий механизм локализации, но **никогда** на другом языке. Никаких русских (или иных) строк в продуктовых текстах приложения.
+**The rule:** new UI text goes in through `getLocalText.s("English text")`, never
+as a hardcoded literal in a display position (`hardcoded_check` fails the build
+on those) and never in another language. Translations live in
+`assets/l10n/<tag>/ui.json` keyed by that same English text.
 
-Другие языки появятся **только когда и если** будет вводиться полноценная локализация (i18n: ресурсные файлы, выбор языка, переводы). До этого момента второго языка в интерфейсе нет — ни «временно», ни «для своих».
+The full guide — adding a language, plurals, collisions, `// l10n-exempt` — is
+[`l10n.md`](l10n.md).
 
-> Это правило про **продуктовый текст в приложении**. Документация, спеки, комментарии в коде, сообщения коммитов и общение в чате — на русском, как и сейчас.
+> This rule is about **product text inside the application**. Documentation and
+> specs are in English; code comments, commit messages and chat can be in
+> Russian.
 
 ---
 
-## На что обращать внимание
+## What to watch out for
 
-### Критические риски
+### Critical risks
 
 #### 1. sing-box dependency resolution
-sing-box при старте проверяет что все outbound'ы, на которые ссылаются группы, существуют. Если `auto-proxy-out` пустой (или не создан потому что Include Auto off), а `vpn-1` на него ссылается — **краш**. Поэтому в `_buildPresetOutbounds` при пустой urltest-группе делается `continue`, а у selector-групп `default` удаляется, если указывает на несуществующий tag (`options.remove('default')`).
+At startup sing-box verifies that every outbound referenced by a group exists. If
+`auto-proxy-out` is empty (or was never created because Include Auto is off)
+while `vpn-1` points at it — **crash**. That is why `_buildPresetOutbounds` does
+a `continue` on an empty urltest group, and why selector groups drop `default`
+when it points at a non-existent tag (`options.remove('default')`).
 
-**Что делать:**
-- Пустые urltest группы не создавать (`continue`)
-- Selector группы при пустых нодах получают `direct-out` fallback
-- Валидировать `knownTags` перед добавлением в `addOutbounds`
-- Тестировать: отключить все подписки → запустить VPN → не должно падать
+**What to do:**
+- Never create empty urltest groups (`continue`)
+- Give selector groups a `direct-out` fallback when they have no nodes
+- Validate `knownTags` before adding to `addOutbounds`
+- Test it: disable every subscription → start the VPN → it must not crash
 
 #### 2. local.properties sdk.dir
-Flutter перезаписывает `sdk.dir` при каждом запуске. Нужно:
-- `ANDROID_HOME` и `ANDROID_SDK_ROOT` в `~/.zprofile`
-- Или `sed` перед сборкой: `sed -i '' 's|sdk.dir=.*|sdk.dir=/usr/local/share/android-commandlinetools|'`
+Flutter overwrites `sdk.dir` on every run. You need either:
+- `ANDROID_HOME` and `ANDROID_SDK_ROOT` in `~/.zprofile`, or
+- a `sed` before building: `sed -i '' 's|sdk.dir=.*|sdk.dir=/usr/local/share/android-commandlinetools|'`
 
-#### 3. Подпись APK
-Debug и release APK имеют разные подписи. `adb install -r` не сработает при смене подписи — нужен `adb uninstall` + `adb install`. При этом **теряются все настройки**.
+#### 3. APK signing
+Debug and release APKs carry different signatures. `adb install -r` will not work
+across a signature change — that needs `adb uninstall` followed by
+`adb install`, and **all settings are lost** in the process.
 
 #### 4. VPN permissions
-Android требует подтверждения VPN permission при первом запуске. Если пользователь отказал — `onRevoke` в VpnService. Нужно корректно обрабатывать этот случай.
+Android asks for VPN permission on first launch. If the user refuses, the
+VpnService gets `onRevoke`. That case has to be handled properly.
 
-#### 5. CommandClient, а не Clash API
-Clash API полностью выпилен в §122 (CommandClient-миграция): HTTP-порта нет, `experimental.clash_api` в конфиг **не** инжектится (его наличие = фатальный отказ старта ядра «clash api is not included in this build»). Управление и стримы (groups/status/connections/dns) идут через libbox CommandClient. Риск: три CC-клиента (status/screen/profiler) не сливать в один; EventSink пушить только с main thread — один native sink на канал, фан-аут через broadcast.
+#### 5. CommandClient, not the Clash API
+The Clash API was removed entirely in §122 (the CommandClient migration): there
+is no HTTP port, and `experimental.clash_api` is **not** injected into the config
+— its presence is a fatal startup failure (“clash api is not included in this
+build”). Control and the streams (groups/status/connections/dns) go through the
+libbox CommandClient. The risk: do not merge the three CC clients
+(status/screen/profiler) into one, and push to an EventSink only from the main
+thread — one native sink per channel, with fan-out through a broadcast.
 
-### Частые ошибки
+### Common mistakes
 
-| Ошибка | Причина | Решение |
+| Mistake | Cause | Fix |
 |--------|---------|---------|
-| `dependency not found for outbound` | Пустая группа или ссылка на несуществующий outbound | Валидация knownTags, fallback direct-out |
-| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | Смена debug/release | `adb uninstall` перед install |
-| `Failed to start service` | Старый libbox ресурс не очищен | Cleanup stale resources before start |
-| Бесконечный loading | `_loading = true` при initState без загрузки | Установить `_loading = false` или вызвать load |
-| Node filter пустой | configRaw пустой (первый запуск) | Показать "Generate config first" |
-| Подписка не обновляется | `enabled = false` | Проверять enabled перед fetch |
+| `dependency not found for outbound` | An empty group, or a reference to a non-existent outbound | Validate knownTags, fall back to direct-out |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | Switching between debug and release | `adb uninstall` before installing |
+| `Failed to start service` | A stale libbox resource was not cleaned up | Clean up stale resources before starting |
+| Endless loading | `_loading = true` in initState with no actual load | Set `_loading = false` or call load |
+| Empty node filter | configRaw is empty (first run) | Show “Generate config first” |
+| A subscription never updates | `enabled = false` | Check enabled before fetching |
 
-### Тестирование
+### Testing
 
-#### Обязательные сценарии перед релизом
-1. **Чистая установка**: uninstall → install → Get Free VPN → Start → работает
-2. **Обновление**: install -r (та же подпись) → настройки сохранились
-3. **Offline**: выключить интернет → открыть приложение → конфиг из кэша → node filter работает
-4. **Все подписки disabled**: отключить все → Start → не крашится (vpn-1 с direct-out fallback)
-5. **Все ноды excluded**: убрать все в node filter → auto-proxy-out не создаётся → vpn-1 работает
-5a. **Include Auto off**: выключить галку → секция `auto-proxy-out` не генерируется, `vpn-*` не содержат её в add_outbounds, default у vpn-1 сбрасывается
-6. **Speed test**: VPN включен → speed test → показывает прокси, результат > 0
-7. **DNS settings**: изменить серверы → перезапустить VPN → DNS резолвит
-8. **App routing**: создать группу → добавить приложения → трафик идёт через outbound
+#### Mandatory scenarios before a release
+1. **Clean install**: uninstall → install → Get Free VPN → Start → it works
+2. **Update**: install -r (same signature) → settings survived
+3. **Offline**: turn off the internet → open the app → config from cache → the node filter works
+4. **Every subscription disabled**: turn them all off → Start → no crash (vpn-1 with the direct-out fallback)
+5. **Every node excluded**: clear the node filter → `auto-proxy-out` is not created → vpn-1 still works
+5a. **Include Auto off**: untick it → the `auto-proxy-out` section is not generated, `vpn-*` do not carry it in add_outbounds, and vpn-1's default is cleared
+6. **Speed test**: VPN on → speed test → it shows the proxy and a result above 0
+7. **DNS settings**: change the servers → restart the VPN → DNS resolves
+8. **App routing**: create a group → add applications → their traffic goes through the outbound
 
-#### flutter analyze + tests
-Перед каждым коммитом:
+#### Pre-commit gates
+
+Before every commit:
 ```bash
-cd app && flutter analyze lib/ test/
+cd app && flutter analyze
 cd app && flutter test
 ```
-**0 issues** в analyze и **все тесты зелёные** — обязательно.
 
-Сейчас ~1400+ тест-кейсов в 112 файлах (cnt варьируется по мере добавления; источник правды — `flutter test` summary):
+⚠ Run `flutter analyze` **without a path argument**, exactly as CI does.
+Narrowing it to `flutter analyze lib/ test/` skips files outside those
+directories and lets errors through that CI will then catch.
+
+`flutter analyze` and `flutter test` are **not** the whole gate: the `checks` job
+also runs the four l10n checkers with `--strict`, and warnings there are fatal.
+Run them too before pushing:
+
+```bash
+cd app && dart run tool/l10n/ui_check.dart --strict
+cd app && dart run tool/l10n/template_check.dart --strict
+cd app && dart run tool/l10n/hardcoded_check.dart --strict
+cd app && dart run tool/l10n/kotlin_check.dart --strict
+cd app && dart run tool/docs/parity_check.dart --strict
+```
+
+**0 issues** in analyze, **all tests green** and **zero failures in the checkers**
+are all mandatory.
+
+There are roughly 3000 test cases across 227 files (the count moves as tests are
+added; the source of truth is the `flutter test` summary):
 - `test/models/` — sealed hierarchies (NodeSpec, NodeWarning, ServerList JSON, CustomRule)
-- `test/parser/` — URI/JSON/INI парсеры + round-trip (parseUri → toUri → parseUri)
+- `test/parser/` — URI/JSON/INI parsers plus round-trips (parseUri → toUri → parseUri)
 - `test/builder/` — build_config, validator, mixed-case SNI, preset_expand, applyCustomDns, dns_rules_resolver
 - `test/subscription/` — sources (UrlSource/InlineSource/QrSource/File), content-disposition, inline headers
-- `test/migration/` — proxy_sources → server_lists one-shot
-- `test/services/` — haptic_service, rule_set_downloader, и др.
-- `test/vpn/` — BoxVpnClient wrapper
+- `test/migration/` — proxy_sources → server_lists, one-shot
+- `test/services/` — haptic_service, rule_set_downloader and others
+- `test/vpn/` — the BoxVpnClient wrapper
 - `test/pipeline_e2e_test.dart` — full InlineSource → parseFromSource → buildConfig
 
 ---
 
-## Процесс разработки
+## The development process
 
 ### 1. Spec first
-Перед реализацией — создать `docs/spec/features/NNN name/spec.md`. Даже для мелких фич. Для нетривиальных багфиксов и одноразовых работ (без новой «фичи» в продуктовом смысле) — при необходимости завести отчёт в `docs/spec/tasks/NNN-title.md` по шаблону из [`docs/spec/tasks/README.md`](./spec/tasks/README.md). Это:
-- Фиксирует решение до написания кода
-- Даёт контекст для AI-ассистента
-- Служит документацией после реализации
+Before implementing, create `docs/spec/features/NNN name/spec.md` — even for
+small features. For non-trivial bug fixes and one-off work (with no new “feature”
+in the product sense) write a report in `docs/spec/tasks/NNN-title.md` from the
+template in [`docs/spec/tasks/README.md`](./spec/tasks/README.md) when it is
+warranted. This:
+- Pins the decision down before any code is written
+- Gives an AI assistant its context
+- Serves as documentation once the work is done
 
-### 2. Инкрементальные коммиты
-Каждый коммит — одна логическая единица:
-- `feat:` — новая фича
-- `fix:` — баг-фикс
-- `refactor:` — рефакторинг без изменения поведения
-- `docs:` — документация
+### 2. Incremental commits
+One commit is one logical unit:
+- `feat:` — a new feature
+- `fix:` — a bug fix
+- `refactor:` — refactoring with no behaviour change
+- `docs:` — documentation
 - `ci:` — CI/CD
-- `release:` — версия
+- `release:` — a version
 
-### 3. Сборка и деплой
+### 3. Building and deploying
 ```bash
-# Локальная релизная сборка (версия derive'ится из git describe; рекомендуется для dev)
+# Local release build (recommended for dev)
 ./scripts/build-local-apk.sh
 adb install -r app/build/app/outputs/flutter-apk/app-release.apk
 
-# Релизная сборка (как CI)
+# Release build (the way CI does it)
 cd app && flutter build apk --release
 ```
 
-### 4. Процесс релиза
+### 4. The release process
 
-Канонический протокол релиза — [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md) (single source of truth). Кратко: версия **не правится вручную нигде и не хранится в git** — `app/pubspec.yaml` = фиксированный placeholder `0.0.0+1`, а `versionName`/`versionCode` вычисляются из git-тега **в момент сборки** (CI и `build-local-apk.sh` переписывают pubspec перед `flutter build`); `static const _version` из `about_screen.dart` удалён. Модель веток develop→main→tag, обязательный post-flight merge main→develop. Все шаги, чек-лист и грабли — в RELEASE_PROCESS.md, дублировать их здесь не нужно.
+The canonical release protocol is [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md)
+— the single source of truth. In short: `app/pubspec.yaml` carries a placeholder
+on `develop`, but the **real version is committed** to it when a release is cut
+(§379) — without that, F-Droid's `checkupdates` cannot read the version and
+automatic updates in the catalogue stop working. The tag then goes on that
+commit. CI and `build-local-apk.sh` rewrite pubspec before `flutter build`, and
+About reads the version from the APK manifest through `PackageInfo`, not from the
+pubspec file. The branch model is develop → main → tag, with a mandatory
+post-flight merge of main back into develop. Every step, the checklist and the
+gotchas are in RELEASE_PROCESS.md and are not duplicated here.
 
-### 5. Версионирование
-- `pubspec.yaml`: `version: X.Y.Z+N`
+### 5. Versioning
+- `pubspec.yaml`: `version: X.Y.Z+<code>`
 - Git tag: `vX.Y.Z`
-- X — мажор (breaking changes)
-- Y — минор (новые фичи)
-- Z — патч (фиксы)
-- N — build number (инкремент)
+- X — major (breaking changes)
+- Y — minor (new features)
+- Z — patch (fixes)
+- The build code is derived from the version by
+  [`scripts/version-code.sh`](../scripts/version-code.sh) (§379) and is never
+  bumped by hand
 
 ---
 
-## Работа с AI-ассистентом (Claude Code)
+## Working with an AI assistant (Claude Code)
 
 ### CLAUDE.md
-Файл `app/CLAUDE.md` содержит контекст проекта для AI-сессий (build commands, paths, gradle quirks, spec layout). **В `.gitignore`** — каждый разработчик/агент поддерживает свою копию локально. В репозитории эталонного файла нет. Если нужен шаблон — смотри какой у других dev'ов через `@` or generate via `/init` в Claude Code.
+`app/CLAUDE.md` holds the project context for AI sessions (build commands, paths,
+gradle quirks, spec layout). It is **in `.gitignore`** — every developer or agent
+keeps their own local copy, and there is no reference file in the repository. If
+you need a template, ask another developer or generate one with `/init` in Claude
+Code.
 
 ### Memory
-Persistent memory в `~/.claude/projects/` хранит:
-- Настройки сборки (SDK paths, ADB)
-- Предпочтения (локальные сборки, не CI)
-- Контекст текущей сессии
+Persistent memory in `~/.claude/projects/` holds:
+- Build settings (SDK paths, ADB)
+- Preferences (local builds rather than CI)
+- The current session's context
 
-### Remote Control
-Для работы с телефона:
-```
-/remote-control
-```
-Открыть ссылку в браузере телефона — полный доступ к сессии.
-
-### Эффективные паттерны
-- Сборка в фоне (`run_in_background`) пока работаешь над другим
-- Мониторинг CI и локальной сборки параллельно
-- Автоустановка APK после сборки через ADB
-- `flutter analyze` перед каждым коммитом
-- Спеки создавать через Agent для параллельной записи
+### Effective patterns
+- Build in the background (`run_in_background`) while you work on something else
+- Watch CI and the local build in parallel
+- Auto-install the APK over ADB once it is built
+- Run the pre-commit gates above before every commit
+- Write specs through an Agent so they can be written in parallel
 
 ---
 
-## Detour Server Management
+## Detour server management
 
-Полная спецификация: [018 detour server management](./spec/features/018%20detour%20server%20management/spec.md).
+The full specification is
+[018 detour server management](./spec/features/018%20detour%20server%20management/spec.md).
 
-### Что такое detour-серверы
+### What detour servers are
 
-Detour-серверы — промежуточные (chained) прокси, через которые трафик идёт до конечного сервера. В UI отображаются с префиксом **⚙**. В Parser v2 это NodeSpec'и, привязанные через поле `chained` (полный вложенный spec) или через `overrideDetour` на уровне `ServerList.detourPolicy`.
+Detour servers are intermediate (chained) proxies that traffic passes through on
+its way to the final server. The UI marks them with a **⚙** prefix. In Parser v2
+they are NodeSpecs attached through the `chained` field (a full nested spec) or
+through `overrideDetour` at the `ServerList.detourPolicy` level.
 
 ### Per-subscription settings (`ServerList.detourPolicy`)
 
-| Настройка | Поле | Описание |
+| Setting | Field | Description |
 |-----------|------|----------|
-| **Register** | `registerDetourServers` | Добавить ⚙ ноды в selector-группы (видны в списке) |
-| **Register in Auto** | `registerDetourInAuto` | Добавить ⚙ ноды в auto-proxy-out urltest |
-| **Use** | `useDetourServers` | Использовать `chained` цепочки нод этой подписки; если off — detour удаляется |
-| **Override** | `overrideDetour` | Principиально назначить tag detour для всех нод подписки — перезаписывает main.map['detour'] |
+| **Register** | `registerDetourServers` | Add the ⚙ nodes to the selector groups (visible in the list) |
+| **Register in Auto** | `registerDetourInAuto` | Add the ⚙ nodes to the auto-proxy-out urltest |
+| **Use** | `useDetourServers` | Use this subscription's `chained` node chains; when off, the detour is removed |
+| **Override** | `overrideDetour` | Force a detour tag for every node of the subscription — overwrites main.map['detour'] |
 
-Defaults: `registerDetourServers=false`, `useDetourServers=true`, остальные false/empty (v1.3.0).
+Defaults: `registerDetourServers=false`, `useDetourServers=true`, the rest
+false/empty (v1.3.0).
 
-### Как builder обрабатывает detour (Parser v2)
+### How the builder handles detours (Parser v2)
 
-`ServerList.build(ctx)` в [`services/builder/server_list_build.dart`](../app/lib/services/builder/server_list_build.dart):
+`ServerList.build(ctx)` in
+[`services/builder/server_list_build.dart`](../app/lib/services/builder/server_list_build.dart):
 
 1. `skipDetour = !useDetourServers || overrideDetour.isNotEmpty`
-2. `server.getEntries(ctx, skipDetour)` — если skip, в `NodeEntries.detours` пусто.
-3. Детуры первыми (allocateTag с префиксом) → main.
-4. **Detour policy** на main:
+2. `server.getEntries(ctx, skipDetour)` — when skipping, `NodeEntries.detours` is empty.
+3. Detours go first (allocateTag with a prefix), then main.
+4. **Detour policy** on main:
    - `overrideDetour.isNotEmpty` → `main.map['detour'] = overrideDetour`
    - `!useDetourServers` → `main.map.remove('detour')`
    - `detours.isNotEmpty` → `main.map['detour'] = detours.first.tag`
-   - иначе — оставляем как emit'нулось (может быть из `NodeSpec.chained`).
-5. Регистрация: main → selector + auto; детуры — по `registerDetourServers` / `registerDetourInAuto`.
+   - otherwise leave it as emitted (it may come from `NodeSpec.chained`).
+5. Registration: main goes to the selector and auto; the detours follow
+   `registerDetourServers` / `registerDetourInAuto`.
 
-### Persistent detour reference для single-node UserServer
+### A persistent detour reference for a single-node UserServer
 
-Для `UserServer` (один добавленный сервер) detour задаётся через dropdown в `NodeSettingsScreen` → пишет в `entry.detourPolicy.overrideDetour` (не в JSON ноды!) → `persistSources` → builder применяет.
+For a `UserServer` (a single added server) the detour is set through a dropdown in
+`NodeSettingsScreen`, which writes to `entry.detourPolicy.overrideDetour` (not
+into the node's JSON), then `persistSources` runs and the builder applies it.
 
-Почему не в JSON: `parseSingboxEntry` не восстанавливает поле `detour` при save → reparse, оно бы терялось. Исправлено в v1.3.1.
+Why not into the JSON: `parseSingboxEntry` does not restore the `detour` field on
+save → reparse, so it would be lost. Fixed in v1.3.1.
 
 ---
 
-## Зависимости и обновления
+## Dependencies and updates
 
-### Критические зависимости
+### Critical dependencies
 
-| Зависимость | Версия | Где | Риск обновления |
+| Dependency | Version | Where | Risk of updating |
 |------------|--------|-----|----------------|
-| sing-box-lx (fork, libbox) | v1.14.0-lx.1 | пин `app/android/libbox.version` + `libs/libbox.aar` (качает `scripts/fetch-libbox.sh` из GH Releases форка); Maven/JitPack-строка удалена | API может измениться, тестировать native код. Ловушки бампа версии — [`KERNEL.md`](KERNEL.md) |
-| Flutter | 3.41.6 | SDK | Обычно безопасно, проверять deprecated |
-| Gradle | 8.14 | wrapper | Совместимость с AGP |
-| AGP | 8.11.1 | build.gradle.kts | Совместимость с Gradle и Flutter |
-| Java | 17 | Temurin | Не менять без причины |
+| sing-box-lx (fork, libbox) | see `app/android/libbox.version` | the pin in `app/android/libbox.version` plus `libs/libbox.aar` (downloaded from the fork's GH Releases by `scripts/fetch-libbox.sh`); the Maven/JitPack line is gone | The API can change — test the native code. The gotchas of a version bump are in [`KERNEL.md`](KERNEL.md) |
+| Flutter | see `app/android/flutter.version` (3.41.6 today) | the SDK; CI reads the pin file | Usually safe; watch for deprecations |
+| Gradle | 8.14 | wrapper | Compatibility with AGP |
+| AGP | 8.11.1 | settings.gradle.kts | Compatibility with Gradle and Flutter |
+| Java | 17 | Temurin | Do not change without a reason |
 
-### При обновлении libbox
-Ядро — форк sing-box-lx, подключается как `libs/libbox.aar` (не Maven). Процедура и ловушки build-тегов — в [`KERNEL.md → бамп версии`](KERNEL.md). Кратко:
-1. Проверить API changes в changelog форка
-2. Бампнуть пин `app/android/libbox.version` + подтянуть AAR через `scripts/fetch-libbox.sh`
-3. Проверить native код в `vpn/` — методы могут измениться
-4. Полное тестирование: start/stop, CommandClient-стримы (groups/status/connections)
+### When updating libbox
+The core is the sing-box-lx fork, wired in as `libs/libbox.aar` (not Maven). The
+procedure and the build-tag gotchas are in
+[`KERNEL.md`](KERNEL.md). In short:
+1. Check the API changes in the fork's changelog
+2. Bump the pin in `app/android/libbox.version` and pull the AAR through `scripts/fetch-libbox.sh`
+3. Check the native code in `vpn/` — the methods may have changed
+4. Test it fully: start/stop, the CommandClient streams (groups/status/connections)

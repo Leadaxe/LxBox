@@ -33,7 +33,7 @@ void main() {
         expect(url, endsWith('.md'));
       }
       expect(AboutScreen.guideUrlEn, contains('docs/USER_GUIDE.md'));
-      expect(AboutScreen.guideUrlRu, contains('docs/USER_GUIDE_RU.md'));
+      expect(AboutScreen.guideUrlRu, contains('docs/USER_GUIDE.ru.md'));
     });
   });
 }

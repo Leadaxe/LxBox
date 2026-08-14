@@ -3,7 +3,7 @@
 A user guide: what is what, and what each part is responsible for. Not about the
 code — about the **logic** and the order in which to set things up.
 
-> Русская версия: [USER_GUIDE_RU.md](USER_GUIDE_RU.md)
+> Русская версия: [USER_GUIDE.ru.md](USER_GUIDE.ru.md)
 
 ---
 

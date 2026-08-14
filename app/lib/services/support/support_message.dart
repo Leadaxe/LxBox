@@ -47,7 +47,7 @@ class SupportContent {
   final String message;
 
   /// Кнопки в порядке списка. У каждой локали свои (en может вести на
-  /// USER_GUIDE.md, ru — на USER_GUIDE_RU.md).
+  /// USER_GUIDE.md, ru — на USER_GUIDE.ru.md).
   final List<SupportLinkSpec> links;
 
   /// §362 — подставить `@плейсхолдеры` ([ProjectLinks.expand]) во всех

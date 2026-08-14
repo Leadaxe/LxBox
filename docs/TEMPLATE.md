@@ -1,60 +1,60 @@
 # Wizard Template
 
-Полная схема `app/assets/wizard_template.json` — единственного **catalog'а** L×Box: какие preset'ы, DNS-серверы, ping-настройки, секции Wizard UI и ноды роутинга существуют в приложении out-of-the-box. Документ — источник правды для shape'а файла и vars-substitution syntax. `ARCHITECTURE.md` ссылается сюда.
+The complete schema of `app/assets/wizard_template.json` — L×Box's single **catalog**: which presets, DNS servers, ping settings, Wizard UI sections and routing nodes exist in the app out of the box. This document is the source of truth for the file's shape and for the vars-substitution syntax. `ARCHITECTURE.md` links here.
 
-## Что это
+## What it is
 
-Файл `app/assets/wizard_template.json` bundled в APK через `flutter assets`. Загружается через `rootBundle.loadString` в `app/lib/services/template_loader.dart` (async singleton). Содержит **catalog** (что вообще существует), **defaults** (с какими значениями стартует новая установка) и **substitution shape** (нативная sing-box-секция с `@var`-плейсхолдерами).
+`app/assets/wizard_template.json` is bundled into the APK through `flutter assets`. It is loaded with `rootBundle.loadString` in `app/lib/services/template_loader.dart` (an async singleton). It holds the **catalog** (what exists at all), the **defaults** (the values a fresh install starts with) and the **substitution shape** (the native sing-box section with `@var` placeholders).
 
-В runtime билдер (`app/lib/services/builder/build_config.dart`) сливает:
-- `config` (нативная sing-box-секция шаблона) +
-- `selectable_rules[*]` (preset'ы выбранные юзером в `custom_rules`) +
-- `dns_options.{servers,rules}` (текущее состояние storage) +
-- `group_templates` + `default_channels` (шаблоны сборки каналов, §267) +
-- `vars` substitution (template-vars из storage)
+At runtime the builder (`app/lib/services/builder/build_config.dart`) merges:
+- `config` (the template's native sing-box section), plus
+- `selectable_rules[*]` (the presets the user picked in `custom_rules`), plus
+- `dns_options.{servers,rules}` (the current state of storage), plus
+- `group_templates` and `default_channels` (the channel assembly templates, §267), plus
+- the `vars` substitution (the template vars from storage)
 
-→ финальный `<docs>/singbox_config.json` для libbox.
+→ into the final `<docs>/singbox_config.json` for libbox.
 
-`wizard_template.json` НЕ модифицируется юзером — это catalog. Юзерский state живёт в `lxbox_settings.json` (см. [`STORAGE.md`](./STORAGE.md)).
+`wizard_template.json` is NEVER modified by the user — it is a catalog. The user's state lives in `lxbox_settings.json` (see [`STORAGE.md`](./STORAGE.md)).
 
 ## `wizard_template.json` — full tree
 
-> **Нотация**:
-> - `object{N keys}` — объект с N ключами
-> - `list[N]` — массив с N элементами; `list` без числа — массив переменной длины
-> - `<TypeName>` — element-type для массива (показано отдельно ниже)
-> - `?` после типа — поле опциональное
-> - `"@varname"` — substitution-плейсхолдер; на build-time подставляется значение из `vars`
+> **Notation**:
+> - `object{N keys}` — an object with N keys
+> - `list[N]` — an array of N elements; a bare `list` is variable-length
+> - `<TypeName>` — the element type of an array (shown separately below)
+> - a `?` after the type means the field is optional
+> - `"@varname"` — a substitution placeholder; at build time the value from `vars` is put in its place
 
 ```
 wizard_template.json
 │
 ├─ parser_config                   object{2 keys}
-│   ├─ version                     int           § схема parser-pipeline'а (§026)
+│   ├─ version                     int           the parser pipeline's schema (§026)
 │   └─ parser                      object{1 keys}
 │       └─ reload                  duration      auto-refresh subscriptions interval (Go-style "12h")
 │
-├─ dns_options                     object{2 keys}       default DNS shape для билдера
-│   ├─ servers[]                   list          template-level DNS servers (7 default'ов)
-│   │   └─ <DnsServerRef>          object          обёртка §117 (tag живёт в server.tag):
+├─ dns_options                     object{2 keys}       the default DNS shape for the builder
+│   ├─ servers[]                   list          template-level DNS servers (7 defaults)
+│   │   └─ <DnsServerRef>          object          the §117 wrapper (the tag lives in server.tag):
 │   │       ├─ description         string?       UI label
-│   │       ├─ enabled             bool?         default true (default-enabled для auto-discovery)
-│   │       ├─ vars[]              list?         те же определения, что preset-vars (§033)
+│   │       ├─ enabled             bool?         default true (default-enabled for auto-discovery)
+│   │       ├─ vars[]              list?         the same definitions as preset vars (§033)
 │   │       └─ server              object          sing-box DNS server body + @placeholders:
 │   │           ├─ type            "udp"|"https"|"tls"|"local"
-│   │           ├─ tag             string        unique id для ссылки
+│   │           ├─ tag             string        a unique id for references
 │   │           ├─ server          string?       IP/host (udp/tls/h3)
 │   │           ├─ server_port     int?
 │   │           ├─ path            string?       (https) "/dns-query"
 │   │           ├─ tls             object?         {enabled, server_name}
-│   │           ├─ detour          tag?          через какой outbound резолвить
-│   │           └─ domain_resolver tag?          какой DNS используется для host'а сервера
-│   └─ rules[]                     list          template-level DNS rules (§061, бывший feature §041), сейчас пусто
+│   │           ├─ detour          tag?          which outbound to resolve through
+│   │           └─ domain_resolver tag?          which DNS resolves the server's own host
+│   └─ rules[]                     list          template-level DNS rules (§061, formerly feature §041); currently empty
 │
 ├─ ping_options                    object{3 keys}       (§040)
 │   ├─ url                         string        global default (e.g. gstatic.com/generate_204)
 │   ├─ timeout_ms                  int           default 5000
-│   └─ presets[]                   list          dropdown options в Ping Settings UI
+│   └─ presets[]                   list          the dropdown options in the Ping Settings UI
 │       └─ {id, name, url}         object        id — stable machine-id (§279)
 │
 ├─ speed_test_options              object{3 keys}       (§015)
@@ -63,51 +63,51 @@ wizard_template.json
 │   ├─ stream_options              list[3]       parallel-streams choices (e.g. [1,4,10])
 │   └─ default_streams             int           default 4
 │
-├─ group_templates                 object        шаблоны сборки каналов (§267)
-│   ├─ magic_nodes                  object        реестр служебных нод по role-ключу
+├─ group_templates                 object        the channel assembly templates (§267)
+│   ├─ magic_nodes                  object        a registry of service nodes, keyed by role
 │   │   └─ <role>                   object        role ∈ {auto, direct, block}
 │   │       ├─ title                string        UI-label ("Auto"/"Direct"/"Block")
-│   │       ├─ source               "generate"|"preset"  как рождается нода
-│   │       ├─ tag                  string?       (preset) ссылка на config.outbounds
-│   │       └─ tpl                  string?       (generate) шаблон тега ("{parent_tag}-auto")
-│   ├─ channel                      object        шаблон обычного канала (selector)
+│   │       ├─ source               "generate"|"preset"  how the node comes into being
+│   │       ├─ tag                  string?       (preset) a reference into config.outbounds
+│   │       └─ tpl                  string?       (generate) the tag template ("{parent_tag}-auto")
+│   ├─ channel                      object        the template of an ordinary channel (a selector)
 │   │   ├─ type                     "selector"
-│   │   ├─ include[]                list[role]    role-ключи magic_nodes (["direct","auto"])
+│   │   ├─ include[]                list[role]    the role keys of magic_nodes (["direct","auto"])
 │   │   └─ options                  object          sing-box selector options (interrupt_exist_connections)
-│   └─ auto                         object        шаблон auto-подгруппы (urltest)
+│   └─ auto                         object        the template of the auto subgroup (a urltest)
 │       ├─ type                     "urltest"
-│       └─ options                  object          url / interval / tolerance (сырые @var)
+│       └─ options                  object          url / interval / tolerance (raw @vars)
 │
-├─ default_channels[]               list          сид каналов первого запуска (§267)
+├─ default_channels[]               list          the first-launch channel seed (§267)
 │   └─ <DefaultChannel>             object
 │       ├─ tag                      string        "vpn-1".."vpn-10"
 │       ├─ label                    string        UI display ("VPN ①")
-│       └─ default_enabled          bool          вкл в новой установке?
+│       └─ default_enabled          bool          enabled in a fresh install?
 │
 ├─ sections[]                      list[8]       Wizard UI chapters (§022)
 │   └─ <Section>                   object
 │       ├─ id                      string        stable machine-id, kebab-case (§279: "general", "auto-proxy", …)
-│       ├─ name                    string        "General", "DNS", "TUN", etc. — внутренний join-ключ vars↔section
+│       ├─ name                    string        "General", "DNS", "TUN", etc. — the internal join key between vars and sections
 │       ├─ chapter                 string        grouping ("core"|"routing"|"dns")
 │       ├─ description             string
-│       └─ vars[]                  list          переменные секции
+│       └─ vars[]                  list          the section's variables
 │           └─ <Var>               object
-│               ├─ name            string        @имя для substitution
+│               ├─ name            string        the @name used for substitution
 │               ├─ type            string        "text"|"int"|"bool"|"enum"|"secret"|"outbound"|"dns_servers"
 │               ├─ default_value   any
 │               ├─ required        bool?
-│               ├─ options[]       list?         для enum: ["a","b"] или [{title,value}, ...]
+│               ├─ options[]       list?         for an enum: ["a","b"] or [{title,value}, ...]
 │               ├─ wizard_ui       string?       "edit"|"fix"|"hidden"
 │               ├─ title           string?       UI label
 │               └─ tooltip         string?       help text
 │
-├─ config                          object{7 keys}       НАТИВНАЯ sing-box-секция; база финального config'а
+├─ config                          object{7 keys}       the NATIVE sing-box section; the base of the final config
 │   ├─ log                         object{2 keys}
 │   │   ├─ level                   "@log_level"
 │   │   └─ timestamp               bool
-│   ├─ dns                         object{4 keys}       пустой shell, заполняется builder'ом
-│   │   ├─ servers[]               list          [] — заполняется из dns_options + selectable_rules
-│   │   ├─ rules[]                 list          [] — то же
+│   ├─ dns                         object{4 keys}       an empty shell, filled in by the builder
+│   │   ├─ servers[]               list          [] — filled in from dns_options plus selectable_rules
+│   │   ├─ rules[]                 list          [] — the same
 │   │   ├─ final                   "@dns_final"
 │   │   └─ strategy                "@dns_strategy"
 │   ├─ inbounds[]                  list[1]       tun definition
@@ -115,69 +115,69 @@ wizard_template.json
 │   │       ├─ type                "tun"
 │   │       ├─ tag                 "tun-in"
 │   │       ├─ interface_name      "@tun_name"
-│   │       ├─ address             ["@tun_address", {#if @ipv6_enabled → "@tun_address6"}]  §227/§232 — v6 за галкой (дефолт OFF)
-│   │       ├─ {#if @route_address_enable → route_address: ["0.0.0.0/1","128.0.0.0/1","::/1","8000::/1"]}  §232 — заворот v4+v6 opt-in (дефолт OFF → авто 0.0.0.0/0)
+│   │       ├─ address             ["@tun_address", {#if @ipv6_enabled → "@tun_address6"}]  §227/§232 — v6 behind a checkbox
+│   │       ├─ {#if @route_address_enable → route_address: ["0.0.0.0/1","128.0.0.0/1","::/1","8000::/1"]}  §232 — behind a checkbox
 │   │       ├─ mtu                 "@tun_mtu"
 │   │       ├─ auto_route          "@tun_auto_route"
 │   │       ├─ strict_route        "@tun_strict_route"
 │   │       └─ stack               "@tun_stack"
-│   ├─ endpoints[]                 list          wireguard endpoints (заполняется из server_lists)
-│   ├─ outbounds[]                 list[2]       base — direct-out + block; остальное добавляется builder'ом
+│   ├─ endpoints[]                 list          the wireguard endpoints (filled in from server_lists)
+│   ├─ outbounds[]                 list[2]       the base — direct-out plus block; the rest is added by the builder
 │   │   ├─ {type:"direct", tag:"direct-out"}
-│   │   └─ {type:"block",  tag:"block"}        §201 — drop-out, опция селектора канала + route_final (красный)
+│   │   └─ {type:"block",  tag:"block"}        §201 — the drop-out; a channel selector option and a route_final
 │   ├─ route                       object{5 keys}
-│   │   ├─ find_process            bool          true → package_name detection включён
+│   │   ├─ find_process            bool          true enables package_name detection
 │   │   ├─ default_domain_resolver "@dns_default_domain_resolver"
 │   │   ├─ rules[]                 list[0]       [] — §264: sniff/hijack-dns/resolve
-│   │   │                                         ПЕРЕЕХАЛИ в locked-пресет traffic-processing
-│   │   │                                         (num:0 → первые в route.rules).
-│   │   │                                         В шаблоне route.rules пуст.
-│   │   ├─ rule_set[]              list          (в шаблоне ключа НЕТ — создаётся билдером
-│   │   │                                         из selectable_rules[].rule_set)
+│   │   │                                         MOVED into the locked traffic-processing preset
+│   │   │                                         (num:0 → first in route.rules).
+│   │   │                                         In the template route.rules is empty.
+│   │   ├─ rule_set[]              list          (the key is ABSENT from the template — the builder creates it
+│   │   │                                         from selectable_rules[].rule_set)
 │   │   ├─ final                   tag           default selector ("vpn-1")
 │   │   └─ auto_detect_interface   "@auto_detect_interface"
 │   └─ experimental                object{1 keys}
 │       └─ cache_file              object          {enabled:true, path:"cache.db"}
-│                                                  (clash_api УДАЛЁН в §122 — блок в кастомном шаблоне
-│                                                   роняет старт ядра: "clash api is not included in this build")
+│                                                  (clash_api was REMOVED in §122 — the block in a custom template
+│                                                   kills the core's startup: "clash api is not included in this build")
 │
-└─ selectable_rules[]              list[8]       КАТАЛОГ preset'ов
+└─ selectable_rules[]              list[8]       the preset CATALOG
     └─ <Preset>                    object
-        ├─ preset_id               string        id для ссылки из custom_rules (§030)
-        ├─ ui                      object          §264 — метаданные пресета (плоские
+        ├─ preset_id               string        the id referenced from custom_rules (§030)
+        ├─ ui                      object          §264 — the preset's metadata (the flat
         │   ├─ label               string        UI display                label/description/
-        │   ├─ description         string        тултип                     default УБРАНЫ,
-        │   ├─ default             bool?         вкл у новых юзеров?         fallback СНЯТ):
-        │   ├─ locked              bool?         §264 — нельзя выкл/удалить
-        │   ├─ num                 int?          §370 — позиция на оси порядка правил
-        │   └─ isSortable          bool?         §370 — можно ли двигать drag'ом
-        ├─ vars[]                  list?         переменные видимые когда preset enabled
-        │                                        (тот же shape что sections[*].vars[*];
-        │                                         §265: элемент может быть {"ref":"<global>"})
+        │   ├─ description         string        the tooltip            defaults were REMOVED,
+        │   ├─ default             bool?         on for new users?       the fallback is GONE):
+        │   ├─ locked              bool?         §264 — cannot be disabled or deleted
+        │   ├─ num                 int?          §370 — the position on the rule ordering axis
+        │   └─ isSortable          bool?         §370 — whether it can be dragged
+        ├─ vars[]                  list?         the variables visible while the preset is enabled
+        │                                        (the same shape as sections[*].vars[*];
+        │                                         §265: an element may be {"ref":"<global>"})
         ├─ rule_set[]              list?         sing-box rule-set definitions
         │   └─ <SingboxRuleSet>    object
         │       ├─ tag             string
         │       ├─ type            "inline"|"local"|"remote"
         │       ├─ format          "binary"|"source"?     (local/remote)
-        │       ├─ rules[]         list?                  (inline) match-условия
+        │       ├─ rules[]         list?                  (inline) the match conditions
         │       ├─ url             string?                (remote)
-        │       ├─ download_detour tag?                   (remote) обычно "direct-out"
+        │       ├─ download_detour tag?                   (remote) usually "direct-out"
         │       └─ update_interval duration?              (remote) "168h"
         ├─ rule                    object?         single routing rule:
         │   └─ <SingboxRoutingRule>                {rule_set?, domain[]?, domain_suffix[]?,
         │                                           ip_cidr[]?, ip_is_private?, port[]?,
         │                                           package_name[]?, protocol[]?,
         │                                           outbound:"@var"?, action:"reject"?}
-        ├─ dns_rule                object?         DNS-уровень rule — legacy single (Map)
-        ├─ dns_rules               list?           §253: массив DNS-rules (канонический
-        │                                          ключ; побеждает `dns_rule`)
-        └─ dns_servers[]           list?         DNS servers видимые когда preset enabled
-                                                 (ПЛОСКИЕ sing-box-тела, shape = внутренность
-                                                  `dns_options.servers[*].server`, БЕЗ обёртки;
-                                                  фильтруются по top-level `tag`)
+        ├─ dns_rule                object?         a DNS-level rule — the legacy single form (a Map)
+        ├─ dns_rules               list?           §253: an array of DNS rules (the canonical
+        │                                          key; it beats `dns_rule`)
+        └─ dns_servers[]           list?         the DNS servers visible while the preset is enabled
+                                                 (FLAT sing-box bodies, shaped like the inside of
+                                                  `dns_options.servers[*].server`, with NO wrapper;
+                                                  filtered by the top-level `tag`)
 ```
 
-Каждый ключ описан подробно в разделах ниже.
+Every key is described in detail in the sections below.
 
 ---
 
@@ -189,11 +189,11 @@ wizard_template.json
   "dns_options":         { … },     // §043+§044 (servers) + §061 (rules) — defaults
   "ping_options":        { … },     // §040 — ping/test URL + presets
   "speed_test_options":  { … },     // §015 — speed-test endpoints
-  "group_templates":     { … },     // §267 — magic_nodes реестр + channel/auto шаблоны
-  "default_channels":    [ … ],     // §267 — сид каналов первого запуска (vpn-1, vpn-2)
+  "group_templates":     { … },     // §267 — the magic_nodes registry plus the channel/auto templates
+  "default_channels":    [ … ],     // §267 — the first-launch channel seed (vpn-1, vpn-2)
   "sections":            [ … ],     // Wizard UI chapters (variables grouped by topic)
-  "config":              { … },     // нативные sing-box секции (log/dns/inbounds/outbounds/route/...)
-  "selectable_rules":    [ … ]      // §033 catalog of preset'ов
+  "config":              { … },     // the native sing-box sections (log/dns/inbounds/outbounds/route/...)
+  "selectable_rules":    [ … ]      // §033 — the preset catalog
 }
 ```
 
@@ -208,37 +208,37 @@ wizard_template.json
 }
 ```
 
-| Ключ | Тип | Назначение |
+| Key | Type | Purpose |
 |---|---|---|
-| `version` | int | Версия parser-pipeline'а ([§026]). Bump'ится на breaking-changes parser'а. |
-| `parser.reload` | duration string | Periodic auto-refresh interval подписок ([§027]). Go-style: `12h`, `30m`, etc. Override per-subscription через `update_interval_hours` в `server_lists[]`. |
+| `version` | int | The parser pipeline's version ([§026]). It is bumped on breaking parser changes. |
+| `parser.reload` | a duration string | The periodic auto-refresh interval for subscriptions ([§027]). Go style: `12h`, `30m`, and so on. It is overridden per subscription. |
 
 ---
 
 ## `dns_options` — §043+§044 (servers) + §061 (rules)
 
-Default DNS-конфигурация для новой установки. Stockpiled в storage `dns_options` при первом запуске; auto-discovery в [`resolveDnsServersList`] заполняет storage из template'а на каждый rebuild.
+The default DNS configuration for a fresh install. It is stockpiled into the `dns_options` storage on the first launch.
 
 ```jsonc
 {
   "servers": [ <ServerRef>, … ],   // kind-refs (template-side: kind=template implicit)
-  "rules":   [ <RuleRef>, … ]      // template-defined DNS rules (если есть)
+  "rules":   [ <RuleRef>, … ]      // template-defined DNS rules (if any)
 }
 ```
 
-### `dns_options.servers[i]` — DNS-сервер catalog entry (§117)
+### `dns_options.servers[i]` — a DNS server catalog entry (§117)
 
-Обёртка `{description, enabled, vars?, server}` — `server` это sing-box body с
-`@var`-плейсхолдерами, `vars` — те же определения, что у preset-vars (§033).
-Tag живёт в `server.tag` (top-level `tag` больше нет — `templateDnsServerTag`).
-Builder (`resolveTemplateDnsServerBody`) подставляет vars значениями юзера
-(`varValues` из storage-ref'а) или `default_value`:
+The wrapper is `{description, enabled, vars?, server}`, where `server` is a sing-box body carrying
+`@var` placeholders, and `vars` holds the same definitions as preset vars (§033).
+The tag lives in `server.tag` (there is no top-level `tag` any more — see `templateDnsServerTag`).
+The builder (`resolveTemplateDnsServerBody`) substitutes the vars with the user's values
+(`varValues` from the storage ref) or with `default_value`:
 
 ```jsonc
 {
   "description": "Google DNS (direct)",
-  "enabled":     true,               // default-enabled для auto-discovery
-  "vars": [                          // optional (local_dns_resolver — без vars)
+  "enabled":     true,               // default-enabled for auto-discovery
+  "vars": [                          // optional (local_dns_resolver has none)
     {"name": "outbound", "type": "outbound", "default_value": "direct-out",
      "title": "Outbound", "tooltip": "Which channel carries DNS queries…"},
     {"name": "dns_ip", "type": "enum", "default_value": "8.8.8.8",
@@ -247,43 +247,43 @@ Builder (`resolveTemplateDnsServerBody`) подставляет vars значе�
   "server": {                        // sing-box DNS server body + @placeholders
     "type": "udp", "tag": "google_udp", "server_port": 53,
     "server": "@dns_ip",
-    "detour": "@outbound"            // direct-out / пропавший канал → ключ стирается
+    "detour": "@outbound"            // direct-out, or a vanished channel, erases the key
   }
 }
 ```
 
-Конвенции (§117):
+The conventions (§117):
 
-- `detour: "@outbound"` + var default `direct-out` → по умолчанию ключ
-  **не пишется** (normalizeDnsDetour: `direct-out`, пустой и неизвестный
-  builder'у канал → ключ стирается; «нет detour» = и дефолт, и fallback).
-- Доменные серверы (адрес = hostname): `domain_resolver: "@dom_resolver"` +
-  var `{type: dns_servers, default_value: "google_udp"}` — чем резолвить имя
-  самого DNS-сервера.
+- `detour: "@outbound"` with a var default of `direct-out` means the key is **not**
+  written by default (`normalizeDnsDetour`: `direct-out`, an empty value and a channel
+  unknown to the builder all erase the key; “no detour” is both the default and the fallback).
+- For domain-addressed servers (the address is a hostname): `domain_resolver: "@dom_resolver"` plus
+  the var `{type: dns_servers, default_value: "google_udp"}` decides what resolves the
+  DNS server's own hostname.
 
-7 default-серверов в текущем template'е:
+The seven default servers in the current template:
 
 | Tag | Type | Description |
 |---|---|---|
-| `local_dns_resolver` | local | System DNS (через Android getaddrinfo), без vars |
+| `local_dns_resolver` | local | The system DNS (through Android's getaddrinfo), with no vars |
 | `google_udp` | udp | 8.8.8.8:53 (`dns_ip` enum v4/v6) |
 | `google_dot` | tls | 8.8.8.8:853 |
-| `google_doh` | https | IP-based DoH, SNI пришпилен `dns.google` |
+| `google_doh` | https | IP-based DoH, with the SNI pinned to `dns.google` |
 | `cloudflare_udp` | udp | 1.1.1.1:53 |
 | `cloudflare_dot` | tls | 1.1.1.1:853 |
 | `safe_dns_dot` | tls | Safe DNS: Quad9 / AdGuard / AdGuard Family (`safe_profile` enum) + `dom_resolver` |
 
-### `dns_options.rules[]` — template DNS rules (опционально)
+### `dns_options.rules[]` — template DNS rules (optional)
 
-Currently empty. После [§039](./spec/tasks/039-empty-template-dns-rules.md) — намеренно пусто, юзер строит DNS-rules через preset'ы (`selectable_rules[*].dns_rules`). Если template хочет пушнуть default DNS-rule, она пойдёт сюда.
+Currently empty. Since [§039](./spec/tasks/039-empty-template-dns-rules.md) this is deliberate — the user builds their DNS rules themselves.
 
-См. полный shape ref-уровня — [`STORAGE.md` § dns_options](./STORAGE.md#dns_options--§061-rules--§043043-dns--§044-servers).
+For the full ref-level shape see [`STORAGE.md` § dns_options](./STORAGE.md#dns_options--061-rules--043043-dns--044-servers).
 
 ---
 
 ## `ping_options` — §040
 
-Default URL/timeout для ping/mass-URLTest. Storage может override через `ping_options` ([STORAGE.md §ping_options](./STORAGE.md#ping_options--§040)).
+The default URL and timeout for a ping or a mass URLTest. Storage can override them through `ping_options` ([STORAGE.md § ping_options](./STORAGE.md#ping_options--040)).
 
 ```jsonc
 {
@@ -297,17 +297,17 @@ Default URL/timeout для ping/mass-URLTest. Storage может override чер
 }
 ```
 
-| Ключ | Назначение |
+| Key | Purpose |
 |---|---|
-| `url` | Default endpoint для ping. Юзер может override globally / per-group. |
-| `timeout_ms` | Default timeout. Bump'ится для slow networks. |
-| `presets[]` | Pre-configured options в Ping Settings UI dropdown — `{id, name, url}`. `id` — стабильный machine-id (§279, адрес для l10n); display-поле — `name`. |
+| `url` | The default ping endpoint. The user can override it globally or per group. |
+| `timeout_ms` | The default timeout. Raise it for slow networks. |
+| `presets[]` | The pre-configured options in the Ping Settings dropdown — `{id, name, url}`. `id` is a stable machine id (§279, so that the name can be localized). |
 
 ---
 
 ## `speed_test_options` — §015
 
-Endpoints для speed-test screen. Не override'ится юзером (но юзер может переключить активный server).
+The endpoints for the speed-test screen. The user does not override them (though they can switch the active server).
 
 ```jsonc
 {
@@ -322,55 +322,56 @@ Endpoints для speed-test screen. Не override'ится юзером (но ю
     },
     …
   ],
-  "stream_options":  [1, 4, 10],   // parallel streams choices в UI
+  "stream_options":  [1, 4, 10],   // the parallel-stream choices in the UI
   "default_streams": 4
 }
 ```
 
-10 серверов в текущем template'е (Cloudflare, Selectel, Hetzner, OVH, etc.).
-`id` — стабильный machine-id (§279): runtime-выбор сервера на speed-test-экране
-ключуется по нему (не по индексу); неизвестный id → default (первый сервер).
+The current template holds ten servers (Cloudflare, Selectel, Hetzner, OVH and others).
+`id` is a stable machine id (§279): the runtime choice of server on the speed-test screen
+is keyed by it rather than by index; an unknown id falls back to the default (the first server).
 
 ---
 
-## `group_templates` + `default_channels` — шаблоны сборки каналов (§267)
+## `group_templates` and `default_channels` — the channel assembly templates (§267)
 
-> **§125/§267 — каналы живут в storage, шаблон только сеет.** Каналы переехали
-> в storage (`channels[]`, см. [STORAGE.md](STORAGE.md#channels--125)). На первом
-> запуске one-shot миграция засевает `channels[]` из `default_channels` +
-> `group_templates.channel`; дальше состав каналов живёт в storage и редактируется
-> юзером. Билдер читает `channels[]`, а не шаблон. `auto` — не канал, а
-> подгруппа: каждый канал делает свой `<tag>-auto`-двойник (urltest), когда
-> `channel.include ∋ auto`.
+> **§125/§267 — the channels live in storage; the template only seeds them.** The
+> channels moved into storage (`channels[]`, see
+> [STORAGE.md](STORAGE.md#channels--125-the-routing-channels-templatestorage)). On the
+> first launch a one-shot migration seeds `channels[]` from `default_channels` plus
+> `group_templates.channel`; after that the set of channels lives in storage and is
+> edited by the user. The builder reads `channels[]`, not the template. `auto` is not a
+> channel but a subgroup: each channel produces its own `<tag>-auto` twin (a urltest)
+> whenever `channel.include ∋ auto`.
 >
-> **§267 заменил плоский `preset_groups[]`** (три разнородные записи + фейковая
-> переменная `@auto_proxy_tag`) на три части:
-> - `magic_nodes` — реестр служебных нод (auto/direct/block) по role-ключу;
-> - `channel`/`auto` — шаблоны сборки канала и его urltest-подгруппы;
-> - `default_channels` — плоский список каналов для сида.
+> **§267 replaced the flat `preset_groups[]`** (three heterogeneous entries plus the
+> fake variable `@auto_proxy_tag`) with three parts:
+> - `magic_nodes` — a registry of the service nodes (auto/direct/block), keyed by role;
+> - `channel` and `auto` — the templates for assembling a channel and its urltest subgroup;
+> - `default_channels` — a flat list of channels for the seed.
 >
-> **Маппинг seed → `channels[i]`** (one-shot миграция):
+> **The seed → `channels[i]` mapping** (the one-shot migration):
 >
-> | шаблон | channels[] |
+> | template | channels[] |
 > |---|---|
-> | `default_channels[i].tag` | `tag` (vpn-1 форсится `enabled=true`) |
-> | `default_channels[i].label` | `label` (пусто → `tag`) |
+> | `default_channels[i].tag` | `tag` (vpn-1 is forced to `enabled=true`) |
+> | `default_channels[i].label` | `label` (empty falls back to `tag`) |
 > | `default_channels[i].default_enabled` / legacy `enabled_groups[]` | `enabled` |
 > | `channel.include` ∋ `direct` | `include_direct` |
-> | `channel.include` ∋ `auto` | `auto` (ChannelAuto из `auto`-шаблона + `@urltest_*` vars) |
-> | `channel.include` ∋ `block` | `include_block` (в дефолте нет → false) |
+> | `channel.include` ∋ `auto` | `auto` (a ChannelAuto built from the `auto` template plus the `@urltest_*` vars) |
+> | `channel.include` ∋ `block` | `include_block` (absent from the default → false) |
 > | `channel.options.interrupt_exist_connections` | `interrupt_exist_connections` |
-> | (не из template) | `node_filter`/`default_filter` = `''` |
+> | (not from the template) | `node_filter` and `default_filter` are `''` |
 >
-> Все каналы собираются из **общего** `channel`-шаблона (единый `include`);
-> различаются только `tag`/`label`/`default_enabled` из `default_channels`.
+> Every channel is assembled from the **shared** `channel` template (one `include`);
+> they differ only in `tag`, `label` and `default_enabled` from `default_channels`.
 
-### `magic_nodes` — реестр служебных нод
+### `magic_nodes` — the registry of service nodes
 
-Служебные ноды (auto/direct/block) объявлены по role-ключу. `magic_nodes.*.tag` —
-source of truth для тегов; const-зеркала `kAuto/Direct/BlockOutboundTag` в
-`consts.dart` сверяются с ним на load (`assertMagicNodeMirrors` — расхождение =
-`StateError`, чтобы переименование tag в шаблоне не ломало роутинг молча).
+The service nodes (auto/direct/block) are declared by role key. `magic_nodes.*.tag` is the
+source of truth for the tags; the const mirrors `kAuto/Direct/BlockOutboundTag` in
+`consts.dart` are checked against it on load (`assertMagicNodeMirrors` — a divergence is a
+`StateError`, so that renaming a tag in the template cannot break routing silently).
 
 ```jsonc
 "magic_nodes": {
@@ -380,26 +381,26 @@ source of truth для тегов; const-зеркала `kAuto/Direct/BlockOutbo
 }
 ```
 
-| Ключ | Тип | Назначение |
+| Key | Type | Purpose |
 |---|---|---|
-| `title` | string | UI-label служебной ноды (Home → node display). |
-| `source` | `"generate"` \| `"preset"` | Как рождается нода: `generate` — билдер синтезирует per-channel (urltest, статического тега нет); `preset` — готовый объект уже в `config.outbounds`. |
-| `tag` | string? | (preset) ссылка на существующий outbound в `config.outbounds`. У `generate` отсутствует. |
-| `tpl` | string? | (generate) шаблон тега синтезируемой ноды. `{parent_tag}` → tag родительского канала (`vpn-1` → `vpn-1-auto`). У `preset` отсутствует. |
+| `title` | string | The UI label of the service node (the Home node display). |
+| `source` | `"generate"` \| `"preset"` | How the node comes into being: `generate` means the builder synthesizes one per channel, `preset` means it references an existing outbound. |
+| `tag` | string? | (preset) A reference to an existing outbound in `config.outbounds`. Absent for `generate`. |
+| `tpl` | string? | (generate) The tag template of the synthesized node. `{parent_tag}` expands to the parent channel's tag. |
 
-### `channel` — шаблон обычного канала (selector)
+### `channel` — the template of an ordinary channel (a selector)
 
 ```jsonc
 "channel": {
   "type": "selector",
-  "include": ["direct", "auto"],   // role-ключи magic_nodes, показываемые в selector
+  "include": ["direct", "auto"],   // the magic_nodes role keys shown in the selector
   "options": { "interrupt_exist_connections": true }
 }
 ```
 
-`include` — role-ключи `magic_nodes` (не теги!). `block` в дефолт не входит.
+`include` holds `magic_nodes` role keys, not tags. `block` is not part of the default.
 
-### `auto` — шаблон auto-подгруппы (urltest)
+### `auto` — the template of the auto subgroup (a urltest)
 
 ```jsonc
 "auto": {
@@ -413,11 +414,11 @@ source of truth для тегов; const-зеркала `kAuto/Direct/BlockOutbo
 }
 ```
 
-`options` — сырой template (`@urltest_*`-плейсхолдеры резолвятся позже, в
-билдере/seed'е). Параметры уходят в `<tag>-auto`-двойник каждого канала с
+`options` is a raw template (the `@urltest_*` placeholders are resolved later, in the
+builder or the seed). The parameters go into every channel's `<tag>-auto` twin that has
 `channel.include ∋ auto`.
 
-### `default_channels[]` — сид каналов первого запуска
+### `default_channels[]` — the first-launch channel seed
 
 ```jsonc
 "default_channels": [
@@ -426,29 +427,29 @@ source of truth для тегов; const-зеркала `kAuto/Direct/BlockOutbo
 ]
 ```
 
-В шаблоне только **2 seed-канала** (`vpn-1`, `vpn-2`). Дальнейшие каналы (до
-`vpn-10`, `kMaxChannels = 10`) юзер создаёт сам в storage (`channels[]`).
+The template holds only **two seed channels** (`vpn-1` and `vpn-2`). Further channels (up to
+`vpn-10`, `kMaxChannels = 10`) are created by the user in storage (`channels[]`).
 
-| Ключ | Тип | Назначение |
+| Key | Type | Purpose |
 |---|---|---|
-| `tag` | string | Immutable id канала (`vpn-1`..`vpn-10`). |
-| `label` | string | UI display name (пусто → `tag`). |
-| `default_enabled` | bool | Влияет только на seed первого запуска. После миграции включённость живёт в `channels[].enabled`, редактируется в Routing → Channels. |
+| `tag` | string | The channel's immutable id (`vpn-1`..`vpn-10`). |
+| `label` | string | The UI display name (empty falls back to `tag`). |
+| `default_enabled` | bool | Affects only the first-launch seed. After the migration, being enabled is decided by `channels[i].enabled` in storage. |
 
-Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `enabled_groups[]` **DEPRECATED** — читается только one-shot миграцией в `channels[]` и как fallback-seed при пустом `channels[]` (см. [STORAGE.md](STORAGE.md#channels--125) и callout выше).
+The storage source of truth is `channels[]` in `lxbox_settings.json` (§125). The legacy `enabled_groups[]` is **DEPRECATED** — it is read only by the one-shot migration into `channels[]` and as a fallback seed when `channels[]` is empty (see [STORAGE.md](STORAGE.md#channels--125-the-routing-channels-templatestorage) and the callout above).
 
 ---
 
 ## `sections[]` — Wizard UI chapters (§022)
 
-Группировка template-vars в Wizard UI (App Settings → Configuration). Каждая секция — отдельная карточка/экран с inputs.
+How the template vars are grouped in the Wizard UI (App Settings → Configuration). Each section is a separate card.
 
 ```jsonc
 [
   {
-    "id":          "general",               // stable machine-id (§279, адрес l10n)
+    "id":          "general",               // a stable machine id (§279, the l10n address)
     "name":        "General",
-    "chapter":     "core",                  // grouping тэг (UI tabs)
+    "chapter":     "core",                  // the grouping tag (the UI tabs)
     "description": "Logging and core settings",
     "vars": [
       {
@@ -467,97 +468,98 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 ]
 ```
 
-8 секций в текущем template'е: `General`, `Network`, `Internal`, `Auto Proxy`, `DNS`, `TUN`, `VPN Mode`, `DPI Bypass`. Расфасованы по **4 chapter'ам** (`core`, `routing`, `dns`, `internal`).
+The current template has eight sections: `General`, `Network`, `Internal`, `Auto Proxy`, `DNS`, `TUN`, `VPN Mode` and `DPI Bypass`. How they are distributed across screens is described below.
 
-`id` — стабильный kebab-case machine-id (§279): `general`, `network`, `internal`,
-`auto-proxy`, `dns`, `tun`, `vpn-mode`, `dpi-bypass`. Служит адресом l10n-overlay
-для display-полей (`name`/`description`). Внутренним join-ключом секция↔vars
-остаётся `name` (`parser_config.dart`, `settings_screen.dart`) — `id` его не заменяет.
+`id` is a stable kebab-case machine id (§279): `general`, `network`, `internal`,
+`auto-proxy`, `dns`, `tun`, `vpn-mode`, `dpi-bypass`. It serves as the l10n overlay's
+address for the display fields (`name` and `description`). The internal join key between
+a section and its vars remains `name` (`parser_config.dart`, `settings_screen.dart`) —
+`id` does not replace it.
 
-### `chapter` — кто рендерит секцию
+### `chapter` — who renders the section
 
-`chapter` — категория экрана-владельца. Экран запрашивает свои секции через
+`chapter` is the category of the owning screen. A screen requests its sections through
 `WizardTemplate.sectionsFor(chapter)` / `varsFor(chapter)` (`parser_config.dart`).
-Секция, чей chapter не запрашивает ни один экран, **в UI не появляется вообще**
-(но её vars остаются в `template.vars` — билдер и ref-резолв их видят).
+A section whose chapter no screen requests **never appears in the UI at all** (but its
+vars stay in `template.vars`, so the builder and the ref resolution still see them).
 
-| `chapter` | Рендерится на | Секции |
+| `chapter` | Rendered on | Sections |
 |---|---|---|
 | `core` | VPN Settings (App Settings → Configuration) | General, Network, TUN, VPN Mode, DPI Bypass |
 | `routing` | Routing screen | Auto Proxy |
 | `dns` | DNS Settings screen | DNS |
-| `internal` | **нигде** (§265) | Internal |
+| `internal` | **nowhere** (§265) | Internal |
 
-### `internal` — служебная секция (§265)
+### `internal` — the service section (§265)
 
-Секция `Internal` (chapter `internal`) — vars, которые **не должны** показываться
-в VPN Settings, но должны существовать глобально: билдер их подставляет, а
-пресеты ссылаются на них через **ref-var** `{"ref":"<name>"}` (§265, см. `selectable_rules`).
-Ни один экран не запрашивает chapter `internal` → секция в UI не рендерится; при
-этом vars лежат в `template.vars`, поэтому `@name`-подстановка и ref-резолв
-работают. Правит их юзер **через пресет-владелец** (напр. `resolve_enabled`/
-`resolve_strategy` — в правиле `traffic-processing`, куда они втянуты ref-vars).
+The `Internal` section (chapter `internal`) holds vars that **must not** be shown in VPN
+Settings but must exist globally: the builder substitutes them, and presets reference them
+through a **ref-var** `{"ref":"<name>"}` (§265, see `selectable_rules`). No screen requests
+the `internal` chapter, so the section is never rendered; meanwhile the vars sit in
+`template.vars`, so `@name` substitution and ref resolution work. The user edits them
+**through the owning preset** (for example `resolve_enabled` and `resolve_strategy` live in
+the `traffic-processing` rule, which pulls them in as ref-vars).
 
-| Var | Тип | Назначение |
+| Var | Type | Purpose |
 |---|---|---|
-| `resolve_enabled` | bool | §263 — гейт route-resolve-правила пресета `traffic-processing` (off для FakeIP). Меняется on_change-механикой §266 (см. ниже) и вручную в правиле пресета. |
-| `resolve_strategy` | enum | IP-версия для route-resolve (`ipv4_only`/`prefer_ipv4`/…). Пишется on_change тумблера IPv6 (§249). |
+| `resolve_enabled` | bool | §263 — the gate for the route-resolve rule of the `traffic-processing` preset (turn it off for FakeIP). Changed through the rule. |
+| `resolve_strategy` | enum | The IP version for route-resolve (`ipv4_only` / `prefer_ipv4` / …). Written by the toggle's on_change. |
 
-> **Почему `internal`, а не `wizard_ui: hidden`.** `hidden` прячет var внутри
-> секции своего chapter'а, но секция всё равно принадлежит рендерящемуся экрану
-> (VPN Settings). `internal`-chapter выводит var из-под любого экрана целиком —
-> её единственная точка редактирования — пресет, который на неё ссылается.
+> **Why `internal` rather than `wizard_ui: hidden`.** `hidden` conceals a var inside its
+> chapter's section, but the section still belongs to a screen that renders (VPN
+> Settings). The `internal` chapter takes the var out from under every screen entirely —
+> its only editing point is the preset that references it.
 
-Секция `VPN Mode` — целиком `wizard_ui: hidden` (build-time vars, не показывается в UI). Её 7 переменных питают `#if`-гейтинг inbounds/route-rules (§119/§120), значения проставляются из `VpnModeConfig` на этапе сборки, а не редактируются юзером в Wizard:
+The `VPN Mode` section is entirely `wizard_ui: hidden` (build-time vars, not shown in the UI). Its seven variables are edited on their own screen (VPN Mode), not through the Wizard.
 
-| Var | Тип | Назначение |
+| Var | Type | Purpose |
 |---|---|---|
-| `vpn_mode` | enum | `vpn` / `proxy` / `vpn_proxy` — какие inbounds поднимать |
-| `proxy_type` | enum | тип proxy-inbound (`mixed`/...) |
-| `proxy_listen` | text | listen-адрес proxy |
-| `proxy_port` | int | listen-порт proxy |
-| `proxy_user` | text | имя пользователя (при auth) |
-| `proxy_pass` | secret | пароль (при auth; `secret` — никогда не коэрсится) |
-| `proxy_auth` | bool | включить `users[]` в proxy-inbound |
+| `vpn_mode` | enum | `vpn` / `proxy` / `vpn_proxy` — which inbounds to raise |
+| `proxy_type` | enum | The type of the proxy inbound (`mixed`, …) |
+| `proxy_listen` | text | The proxy's listen address |
+| `proxy_port` | int | The proxy's listen port |
+| `proxy_user` | text | The username (when auth is on) |
+| `proxy_pass` | secret | The password (when auth is on; a `secret` is never coerced) |
+| `proxy_auth` | bool | Include `users[]` in the proxy inbound |
 
-### `vars[i]` — описание template-переменной
+### `vars[i]` — the description of a template variable
 
-| Ключ | Тип | Назначение |
+| Key | Type | Purpose |
 |---|---|---|
-| `name` | string | Имя переменной. `@name` в `config` блоке шаблона будет подставлено значением из storage `vars[name]` или `default_value`. |
-| `type` | enum | Тип input'а — определяет UI-control и валидацию. См. ниже. |
-| `default_value` | any | Default если юзер не override'нул через UI / `PUT /settings/vars/...`. |
-| `required` | bool? | Если true — пустое значение запрещено. |
-| `options[]` | list? | Для `enum` type'а — варианты. Может быть `[string,...]` или `[{title, value}, ...]`. |
-| `wizard_ui` | `"edit" \| "fix" \| "hidden"`? | Display mode в Wizard UI. `hidden` — internal var (not shown). `fix` — read-only display. `edit` (default) — editable. |
-| `title` | string? | Display label в UI. |
-| `tooltip` | string? | Help-text при tap на info-иконку. |
-| `on_change` | object? | §232 — декларативный side-effect при переключении var (in-memory, `VarValuesModel`). На **vars пресета** — §266-вариант (пишет глобальный `userVars`, триггер = вкл/выкл пресета). См. раздел ниже. |
+| `name` | string | The variable's name. An `@name` inside the template's `config` block is replaced by its value. |
+| `type` | enum | The input type — it decides the UI control and the validation. See below. |
+| `default_value` | any | The default when the user has not overridden it through the UI or `PUT /settings/vars/...`. |
+| `required` | bool? | When true, an empty value is forbidden. |
+| `options[]` | list? | For the `enum` type, the choices. Either `[string, ...]` or `[{title, value}, ...]`. |
+| `wizard_ui` | `"edit" \| "fix" \| "hidden"`? | The display mode in the Wizard UI. `hidden` is an internal var (not shown); `fix` is read-only. |
+| `title` | string? | The display label in the UI. |
+| `tooltip` | string? | The help text shown when the info icon is tapped. |
+| `on_change` | object? | §232 — a declarative side effect when the var is toggled (in memory, `VarValuesModel`). |
 
 ### `var.type` values
 
-Заметил в template'е:
+Seen in the template:
 
-| Type | Coerce в config (§120) | UI-control |
+| Type | Coerced into the config (§120) | UI control |
 |---|---|---|
-| `text` | **строка дословно** | TextField |
-| `int` | `int.tryParse` (не-число → строка) | TextField |
-| `bool` | `'true'`→true, иначе false | Switch |
-| `enum` | **строка** (∈ `options[]` — advisory) | Dropdown |
-| `secret` | **строка дословно** (никогда не коэрсить) | TextField (masked) |
-| `outbound` | **строка** (tag selector/node) | Dropdown заполняется runtime |
-| `dns_servers` | **строка** (tag из `dns_options.servers`) | Dropdown заполняется runtime |
+| `text` | **the string verbatim** | TextField |
+| `int` | `int.tryParse` (a non-number stays a string) | TextField |
+| `bool` | `'true'` becomes true, anything else false | Switch |
+| `enum` | **a string** (membership in `options[]` is advisory) | Dropdown |
+| `secret` | **the string verbatim** (never coerce it) | TextField (masked) |
+| `outbound` | **a string** (a selector or node tag) | A dropdown filled at runtime |
+| `dns_servers` | **a string** (a tag from `dns_options.servers`) | A dropdown filled at runtime |
 
-> **§120 — coerce по объявленному типу, НЕ по содержимому.** `if_engine.dart::coerceVarValue` коэрсит **только** `bool`/`int`, и только по `node.type`. Все строковые типы (`text`/`secret`/`enum`/`outbound`/`dns_servers`) остаются строкой, даже если значение выглядит как `123`/`true` — критично для паролей/секретов (`1234` не должен стать int). Var без объявленной ноды (legacy `clash_secret`, build-time `proxy_*`) → coerce как `text`.
+> **§120 — coercion follows the declared type, NOT the content.** `if_engine.dart::coerceVarValue` coerces a value by the `var.type` from the template; the string `"true"` in a `text` var stays a string, while `"1"` in an `int` var becomes a number. That way the value in the config is predictable from the declaration rather than from how it happens to look.
 
-При расширении (добавляешь новый type) — обновлять Wizard UI рендерер в `app/lib/screens/settings_screen.dart` и (если коэрсящийся) `coerceVarValue` в `app/lib/services/builder/if_engine.dart`.
+When extending it (adding a new type), update the Wizard UI renderer in `app/lib/screens/settings_screen.dart` and the coercion logic in `if_engine.dart`.
 
-### `on_change` — декларативный side-effect var'а (§232 / §266)
+### `on_change` — a var's declarative side effect (§232 / §266)
 
-Переключение var может ставить производные var'ы. Синтаксис — на существующем
-`#if` (value/else), условие видит УЖЕ НОВОЕ значение переключённой var. Ниже —
-секционный вариант (§232, in-memory); пресетный (§266, глобальный `userVars`) — в
-подразделе «`on_change` пресета».
+Toggling a var can set derived vars. The syntax reuses the existing `#if` (value/else),
+and the condition already sees the NEW value of the toggled var. What follows is the
+section-level variant (§232, in memory); the preset-level one (§266, the global
+`userVars`) is described under “A preset's `on_change`”.
 
 ```jsonc
 {
@@ -571,71 +573,71 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 }
 ```
 
-> **§264/§265 — `resolve_strategy` живёт глобально в секции `internal`**, но
-> route-resolve-правило переехало в locked-пресет `traffic-processing` (см.
-> §264 ниже). Пресет ссылается на неё через ref-var `{"ref": "resolve_strategy"}`
-> (§265): метаданные и значение — из этой глобали, `@resolve_strategy` в правиле
-> резолвится глобально. `on_change` выше (тумблер IPv6, chapter `core`) по-прежнему
-> пишет её глобально в `userVars`, эффект виден пресету. Var `sniff_enabled` стала
-> собственной var пресета `traffic-processing`; `resolve_enabled` переехала в
-> `internal` (§265) — её `§263`-тумблер редактируется в правиле пресета, а не в
-> `Network`.
+> **§264/§265 — `resolve_strategy` lives globally in the `internal` section**, while
+> the route-resolve rule moved into the locked `traffic-processing` preset (see §264
+> below). The preset references it through the ref-var `{"ref": "resolve_strategy"}`
+> (§265): both the metadata and the value come from that global, and `@resolve_strategy`
+> inside the rule resolves globally. The `on_change` above (the IPv6 toggle, chapter
+> `core`) still writes it globally into `userVars`, and the preset sees the effect. The
+> `sniff_enabled` var became a var of the `traffic-processing` preset itself, and
+> `resolve_enabled` moved into `internal` (§265) — its §263 toggle is edited inside the
+> preset's rule rather than in a section.
 
-Актуальная семантика тумблера IPv6 (§249): дефолт обеих strategy-vars —
-`ipv4_only` (IPv6 на tun выключен по умолчанию — AAAA приложениям не нужен);
-включение IPv6 переводит резолв в `prefer_ipv4` (v6 доступен, но v4-first —
-`prefer_ipv6` на сетях с полурабочим v6 давал мёртвые direct-коннекты, см.
-§246), выключение — форсит `ipv4_only`. Тонкая настройка — DNS Settings →
-Strategy (тумблер — разовый эффект, не форс).
+The current semantics of the IPv6 toggle (§249): both strategy vars default to
+`ipv4_only` (IPv6 on the tun is off by default — applications do not need AAAA); enabling
+IPv6 moves resolution to `prefer_ipv4` (v6 is available, but v4 first — on networks with
+half-working v6, `prefer_ipv6` produced dead direct connections, see §246); disabling it
+forces `ipv4_only`. Fine tuning lives in DNS Settings → Strategy (the toggle is a one-off
+effect, not a lock).
 
-Семантика:
+The semantics:
 
-- **Разовый эффект переключения, не форс** — целевые var записываются в момент
-  клика; юзер потом волен переопределить вручную.
-- **Только in-memory** — цели пишутся в реактивную `VarValuesModel` экрана
-  (per-key `ValueNotifier`; поля `TemplateVarListView` подписаны каждое на свой
-  ключ и обновляются мгновенно). Storage трогается ТОЛЬКО общим write-on-exit
-  (`_persist` по `dirtyKeys`) — юзер, ушедший до выхода с экрана (force-kill),
-  ничего не «сохранил». См. ARCHITECTURE.md → «VarValuesModel».
-- **Цепочки** — если целевая var сама имеет `on_change`, он применяется
-  рекурсивно; fixpoint-guard: запись неизменившегося значения обрывает цикл.
-- **Значения — литералы-строки.** `#if`-узел вычисляется движком через
-  `evalIfScalar` (`if_engine.dart`) — НЕ через `walk` напрямую: bare-Map
-  `{"#if":…}` в `walk` уходит в map-spread режим и схлопывает скаляр в `{}`.
-- **Кросс-экранные цели** (напр. `dns_strategy` — chapter `dns`, рендерится на
-  DNS Settings): live-обновления на другом экране НЕТ (модель — per-экран);
-  значение доедет через cache при следующем открытии того экрана. Экраны не
-  co-mounted → рассинхрон юзеру не виден.
+- **A one-off effect of the toggle, not a lock** — the target vars are written at the
+  moment of the click; afterwards the user is free to override them by hand.
+- **In memory only** — the targets are written into the screen's reactive `VarValuesModel`
+  (a per-key `ValueNotifier`; each `TemplateVarListView` field subscribes to its own key
+  and updates instantly). Storage is touched ONLY by the shared write-on-exit
+  (`_persist` over `dirtyKeys`) — a user who leaves before exiting the screen (a
+  force-kill) has saved nothing. See ARCHITECTURE.md → “VarValuesModel”.
+- **Chains** — if a target var has its own `on_change`, it is applied recursively; a
+  fixpoint guard breaks the cycle: writing an unchanged value stops it.
+- **The values are string literals.** An `#if` node is evaluated by the engine through
+  `evalIfScalar` (`if_engine.dart`) and NOT through `walk` directly: a bare map
+  `{"#if":…}` sent through `walk` falls into map-spread mode and collapses the scalar to `{}`.
+- **Cross-screen targets** (for example `dns_strategy`, chapter `dns`, rendered on the
+  DNS Settings screen): there is NO live update on the other screen (the model is
+  per-screen); the value arrives through the cache the next time that screen opens. The
+  screens are never co-mounted, so the user never sees the divergence.
 
-### `on_change` пресета — реакция на вкл/выкл (§266)
+### A preset's `on_change` — reacting to being enabled or disabled (§266)
 
-`on_change` живёт не только на секционных vars, но и на **vars пресета**. Отличие
-от §232 — в источнике и приёмнике:
+`on_change` lives not only on section vars but on a **preset's vars** too. The difference
+from §232 is in the source and the sink:
 
-| | §232 (секция) | §266 (пресет) |
+| | §232 (a section) | §266 (a preset) |
 |---|---|---|
-| **Триггер** | клик по var в Wizard-экране | смена состояния пресета (свич on/off, dns_enable-тумблер) |
-| **Источник** | значение самой var (`VarValuesModel`) | **состояние пресета** — псевдо-vars `@rule_enable`/`@dns_enable` |
-| **Приёмник** | in-memory `VarValuesModel` экрана | **глобальный `userVars`** (`SettingsStorage.setVar` — сразу на диск) |
-| **Движок** | `settings_screen._applyOnChange` | `preset_on_change.dart::applyPresetOnChange` |
+| **Trigger** | a click on a var in the Wizard screen | a change of the preset's state (the on/off switch, the dns_enable toggle) |
+| **Source** | the var's own value (`VarValuesModel`) | **the preset's state** — the pseudo-vars `@rule_enable` / `@dns_enable` |
+| **Sink** | the screen's in-memory `VarValuesModel` | **the global `userVars`** (`SettingsStorage.setVar` — straight to disk) |
+| **Engine** | `settings_screen._applyOnChange` | `preset_on_change.dart::applyPresetOnChange` |
 
-**Псевдо-vars пресета** (не хранятся — вычисляются из состояния):
+**The preset's pseudo-vars** (never stored — computed from its state):
 
-- `@rule_enable` = `cr.enabled` (пресет включён свичем).
-- `@dns_enable` = §257 `presetDnsEnableVar` (DNS-аспект пресета — мастер-тумблер
-  DNS-блока).
+- `@rule_enable` = `cr.enabled` (the preset is on, via the switch).
+- `@dns_enable` = the §257 `presetDnsEnableVar` (the preset's DNS aspect — the master
+  toggle of the DNS block).
 
-Обе несут **идентичную** on_change-формулу — любая из них триггерит пересчёт цели
-(так формула срабатывает и когда меняют routing-свич, и когда — dns-тумблер).
-Резолв идёт в namespace `{...userVars, rule_enable, dns_enable}` (псевдо перекрывают
-`userVars` — их значение «живое»), через тот же `evalIfScalar`.
+Both carry an **identical** on_change formula, so either of them triggers a recomputation
+of the targets (that way the formula fires both when the routing switch changes and when
+the DNS toggle does). Resolution happens in the namespace
+`{...userVars, rule_enable, dns_enable}` (the pseudo-vars shadow `userVars`, since their value is the live one), through the same `evalIfScalar`.
 
-Пример — FakeIP-пресет глушит route-resolve, пока сам активен (route-resolve —
-это ВТОРОЙ резолвер мимо FakeIP через `default_domain_resolver`; при активном
-FakeIP он должен молчать, §263):
+An example — the FakeIP preset silences route-resolve while it is active (route-resolve is
+a SECOND resolver that bypasses FakeIP through `default_domain_resolver`; with FakeIP
+active it must stay quiet, §263):
 
 ```jsonc
-// оба var пресета fakeip несут это; @resolve_enabled — var секции internal
+// both vars of the fakeip preset carry this; @resolve_enabled is a var of the internal section
 "on_change": {
   "set": {
     "@resolve_enabled": {"#if": {"and": ["@rule_enable", "@dns_enable"], "value": "false", "else": "true"}}
@@ -643,35 +645,37 @@ FakeIP он должен молчать, §263):
 }
 ```
 
-Читается: «FakeIP включён (`@rule_enable`) И его DNS-аспект включён (`@dns_enable`)
-→ `resolve_enabled = false`; иначе `true`».
+Read it as: “FakeIP is on (`@rule_enable`) AND its DNS aspect is on (`@dns_enable`)
+→ `resolve_enabled = false`; otherwise `true`.”
 
-Семантика:
+The semantics:
 
-- **Пишет в `userVars` сразу** (не in-memory) — цель `@resolve_enabled` живёт в
-  секции `internal` (глобальная var), её storage — `userVars`, не `varsValues`
-  пресета. Событийная, не декларативно-постоянная: срабатывает в момент смены,
-  юзер потом волен переопределить в правиле `traffic-processing`.
-- **Зовётся из ВСЕХ 5 точек** смены `rule_enable`/`dns_enable`: создание пресета
-  (`routing_screen._copyPreset`), toggle routing-свича (`routing_screen`
-  + редактор `edit_controller.onBoolVarToggle`), dns_enable-тумблер в редакторе
-  правила и **в DNS Settings** (`dns_settings_screen._togglePresetDnsEnable`).
-  Пропуск любой точки → цель не пересчитается при этом пути изменения.
-- **Идемпотентна** — `setVar` перезаписывает; повторный вызов с тем же состоянием
-  даёт то же значение.
+- **It writes into `userVars` immediately** (not in memory) — the target
+  `@resolve_enabled` lives in the `internal` section (a global var), and its storage is
+  `userVars` rather than the preset's `varsValues`. It is event-driven rather than
+  declaratively permanent: it fires at the moment of the change, and the user is then free
+  to override it inside the `traffic-processing` rule.
+- **It is called from ALL five places** where `rule_enable` / `dns_enable` change:
+  creating a preset (`routing_screen._copyPreset`), the routing switch toggle
+  (`routing_screen` plus the editor's `edit_controller.onBoolVarToggle`), the dns_enable
+  toggle in the rule editor, and the one **in DNS Settings**
+  (`dns_settings_screen._togglePresetDnsEnable`). Miss any of them and the target is not
+  recomputed along that path.
+- **It is idempotent** — `setVar` overwrites, so calling it again with the same state
+  yields the same value.
 
-> **Грабля §266 (ловил на устройстве).** Псевдо-var (`rule_enable`/`dns_enable`)
-> **обязана** иметь `default_value` + `required: false`. Var без `default_value` в
-> sing-box-схеме = **required**; при пустом значении `expandPreset` выходит рано
-> («required var … unset») и **весь DNS-блок пресета молча не эмитится** (FakeIP
-> не прописал `dns_rules` → DNS не заворачивался). Симптом тихий — пресет в UI на
-> месте, но не работает. См. `29fe61c`.
+> **A §266 gotcha (caught on a device).** A pseudo-var (`rule_enable` / `dns_enable`)
+> **must** carry a `default_value` plus `required: false`. In the sing-box schema a var
+> with no `default_value` is **required**; with an empty value `expandPreset` returns early
+> (“required var … unset”) and **the preset's entire DNS block is silently not emitted**
+> (FakeIP never wrote its `dns_rules`, so DNS was not intercepted). The symptom is quiet —
+> the preset is there in the UI but does nothing. See `29fe61c`.
 
 ---
 
-## `config` — нативная sing-box-секция
+## `config` — the native sing-box section
 
-База финального sing-box config'а. Содержит `@var`-плейсхолдеры — substitution происходит на build time. После расширения `selectable_rules[*]` и каналы (`channels[]`, seeded из `group_templates`) мерджатся в эту базу.
+The base of the final sing-box config. It carries `@var` placeholders; the substitution happens at build time in `build_config.dart`.
 
 ```jsonc
 {
@@ -680,8 +684,8 @@ FakeIP он должен молчать, §263):
     "timestamp": true
   },
   "dns": {
-    "servers":  [],                              // пусто; заполняется из dns_options.servers + selectable_rules[].dns_servers
-    "rules":    [],                              // пусто; заполняется из dns_options.rules + selectable_rules[].dns_rules
+    "servers":  [],                              // empty; filled in from dns_options.servers plus selectable_rules[].dns_servers
+    "rules":    [],                              // empty; filled in from dns_options.rules plus selectable_rules[].dns_rules
     "final":    "@dns_final",
     "strategy": "@dns_strategy"
   },
@@ -691,166 +695,167 @@ FakeIP он должен молчать, §263):
   "endpoints": [],                               // wireguard endpoints (from server_lists user nodes)
   "outbounds": [
     {"type": "direct", "tag": "direct-out"},     // base
-    {"type": "block",  "tag": "block"}           // §201 drop-out; остальное добавляется builder'ом
+    {"type": "block",  "tag": "block"}           // the §201 drop-out; the rest is added by the builder
   ],
   "route": {
     "find_process":            true,
     "default_domain_resolver": "@dns_default_domain_resolver",
     "rules": [
-      // §264: route.rules в шаблоне ПУСТ. Базовые sniff/hijack-dns/resolve
-      // ПЕРЕЕХАЛИ в locked-пресет traffic-processing (первый в selectable_rules,
-      // num:0 → билдер ставит его правила первыми в финальном route.rules).
-      // Порядок (sniff ПЕРЕД resolve) критичен для FakeIP: sniff извлекает домен
-      // до resolve (resolve по фейк-IP 198.18.x.x бессмыслен). Каждое из трёх
-      // правил обёрнуто в #if внутри пресета: @sniff_enabled / (протокол dns —
-      // hijack-dns) / @resolve_enabled (off для FakeIP — real-lookup идёт мимо
-      // FakeIP через default_domain_resolver). См. § selectable_rules ниже.
+      // §264: route.rules is EMPTY in the template. The base sniff/hijack-dns/resolve
+      // rules MOVED into the locked traffic-processing preset (first in selectable_rules,
+      // num:0 → the builder puts its rules first in the final route.rules).
+      // The order (sniff BEFORE resolve) is critical for FakeIP: sniff extracts the domain
+      // before resolve (resolving a fake 198.18.x.x IP is meaningless). Each of the three
+      // rules is wrapped in an #if inside the preset: @sniff_enabled / (the dns protocol
+      // for hijack-dns) / @resolve_enabled (off for FakeIP — the real lookup bypasses
+      // FakeIP through default_domain_resolver). See the selectable_rules section below.
     ],
     "final":                  "vpn-1",
     "auto_detect_interface":  "@auto_detect_interface"
   },
   "experimental": {
-    // clash_api УДАЛЁН в §122 (CommandClient-миграция). Управление идёт через
-    // libbox CommandClient, а не HTTP Clash API. Ядро собрано БЕЗ with_clash_api:
-    // блок experimental.clash_api в кастомном шаблоне = ФАТАЛЬНЫЙ отказ старта
-    // ("clash api is not included in this build"). Не добавлять.
+    // clash_api was REMOVED in §122 (the CommandClient migration). Control goes through
+    // the libbox CommandClient, not an HTTP Clash API. The core is built WITHOUT
+    // with_clash_api: an experimental.clash_api block in a custom template is a FATAL
+    // startup failure ("clash api is not included in this build"). Do not add it.
     "cache_file": {"enabled": true, "path": "..."}
   }
 }
 ```
 
-Что builder добавляет в эту базу:
-- `config.outbounds[+]` ← node-outbounds из enabled `server_lists[]`, плюс selector/urltest на каждый канал (`channels[]`, seeded из `group_templates`)
-- `config.dns.servers[+]` ← `dns_options.servers[*]` (resolved через [§044]) + `selectable_rules[*].dns_servers[*]`
+What the builder adds to this base:
+- `config.outbounds[+]` ← the node outbounds from the enabled `server_lists[]`, plus a selector and a urltest per channel (`channels[]`, §125)
+- `config.dns.servers[+]` ← `dns_options.servers[*]` (resolved through [§044]) plus `selectable_rules[*].dns_servers[*]`
 - `config.dns.rules[+]` ← `dns_options.rules[*]` ([§061]) + `selectable_rules[*].dns_rules`
-- `config.route.rules[+]` ← `selectable_rules[*].rule` (после `selectable_rules[*]` enabled-проверки) + `custom_rules[*]` user routing rules
-- `config.route.rule_set[+]` ← `selectable_rules[*].rule_set[*]` (см. § ниже)
-- `config.inbounds[*]` + route-rules `inbound` ← **декларативны через `#if`** ([§120]): `tun-in` и `mixed-in` — array-element `#if` по `@vpn_mode` (`vpn`/`proxy`/`vpn_proxy`); `users` внутри `mixed-in` — map-spread `#if` по `@proxy_auth`. `applyVpnMode` удалён. Значения (`@proxy_type`/`@proxy_port`/`@proxy_pass`/…) пробрасываются в `vars` из `VpnModeConfig` на этапе сборки. Раньше `mixed-in` строился императивно, т.к. подстановка коэрсила тип по содержимому (пароль `1234`→int); §120 ввёл coerce **по объявленному `node.type`** (`secret`/`text` — всегда строка), что и сделало `mixed-in`-в-шаблоне безопасным. `inbound` в route-rules теперь `Listable[string]`-массив (`["tun-in"]`/`["mixed-in"]`/`["tun-in","mixed-in"]`) — тождественно скаляру для sing-box.
+- `config.route.rules[+]` ← `selectable_rules[*].rule` (after the enabled check on `selectable_rules[*]`) plus `custom_rules[*]`
+- `config.route.rule_set[+]` ← `selectable_rules[*].rule_set[*]` (see the section below)
+- `config.inbounds[*]` and the `inbound` route rules are **declarative through `#if`** ([§120]): `tun-in` and `mixed-in` appear according to the mode
 
-`config.route.rule_set[]` в template **сам по себе пуст** — все rule-set'ы регистрируются через preset'ы. Если бы хотелось всем юзерам всегда одно rule-set'а — пишем сюда.
+`config.route.rule_set[]` is **empty on its own** in the template — every rule set is registered through the presets.
 
 ---
 
-## `selectable_rules[]` — catalog preset'ов (§033)
+## `selectable_rules[]` — the preset catalog (§033)
 
-Каждый элемент — bundle, который юзер включает/выключает в Routing screen. При expansion преобразуется в N изменений в финальном `config.route.{rules,rule_set}` + опционально `config.dns.{rules,servers}`.
+Each element is a bundle the user enables or disables on the Routing screen. On expansion its parts are merged into the config.
 
 ```jsonc
 {
   "preset_id":   "<unique-id>",        // referenced from custom_rules[].presetId
-  "ui": {                               // §264 — метаданные пресета. ОБЯЗАТЕЛЕН.
-    "label":       "<UI display>",      //   Плоские label/description/default на
-    "description": "<тултип>",          //   top-level УБРАНЫ; fallback в
-    "default":     <bool>?,             //   SelectableRule.fromJson СНЯТ — читается
-    "locked":      <bool>?,             //   ТОЛЬКО ui.
-    "num":         <int>?,              //   §370 — ось порядка, см. ниже.
+  "ui": {                               // §264 — the preset's metadata. REQUIRED.
+    "label":       "<UI display>",      //   The flat label/description/default at the
+    "description": "<tooltip>",         //   top level are GONE; the fallback in
+    "default":     <bool>?,             //   SelectableRule.fromJson is REMOVED — only
+    "locked":      <bool>?,             //   ui is read.
+    "num":         <int>?,              //   §370 — the ordering axis, see below.
     "isSortable":  <bool>?              //
   },
-  "vars": [ <Var> | {"ref":"<global>"}, … ]?, // vars видимые только при включении preset'а;
-                                        //   §265: элемент-ссылка {"ref":"<имя глобали>"}
-  "rule_set": [ <SingboxRuleSet>, … ]?, // rule_set'ы которые должны быть зарегистрированы
+  "vars": [ <Var> | {"ref":"<global>"}, … ]?, // vars visible only while the preset is on;
+                                        //   §265: a reference element {"ref":"<global name>"}
+  "rule_set": [ <SingboxRuleSet>, … ]?, // the rule sets that must be registered
   "rule":     <SingboxRoutingRule>?,    // routing rule — legacy single (Map)
-  "rules":    [ <SingboxRoutingRule>, … ]?, // §246: массив routing rules (канонический ключ; побеждает `rule`)
-  "dns_rule": <SingboxDnsRule>?,        // DNS-уровень rule — legacy single (Map)
-  "dns_rules": [ <SingboxDnsRule>, … ]?, // §253: массив DNS-rules (канонический ключ; побеждает `dns_rule`)
-  "dns_servers": [ <FlatDnsServer>, … ]?  // ПЛОСКИЕ sing-box DNS-тела (не обёртка §117; top-level tag)
+  "rules":    [ <SingboxRoutingRule>, … ]?, // §246: an array of routing rules (the canonical key; it beats `rule`)
+  "dns_rule": <SingboxDnsRule>?,        // a DNS-level rule — the legacy single form (a Map)
+  "dns_rules": [ <SingboxDnsRule>, … ]?, // §253: an array of DNS rules (the canonical key; it beats `dns_rule`)
+  "dns_servers": [ <FlatDnsServer>, … ]?  // FLAT sing-box DNS bodies (not the §117 wrapper; a top-level tag)
 }
 ```
 
-### `ui` — метаданные пресета (§264)
+### `ui` — the preset's metadata (§264)
 
-С §264 label/description/default/locked (+ §370 num/isSortable) живут в объекте
-`ui` (**ОБЯЗАТЕЛЕН**;
-плоские top-level `label`/`description`/`default` из шаблона убраны, fallback в
-`SelectableRule.fromJson` снят — читается только `ui`). Все 8 пресетов переведены на `ui`.
+Since §264, label/description/default/locked (plus §370's num/isSortable) live in the
+`ui` object (**REQUIRED**; the flat top-level `label` / `description` / `default` were
+removed from the template and the fallback in `SelectableRule.fromJson` is gone — only
+`ui` is read). All eight presets have been moved onto `ui`.
 
-| `ui.*` | Тип | Назначение |
+| `ui.*` | Type | Purpose |
 |---|---|---|
 | `label` | string | UI display. |
-| `description` | string | Тултип. |
-| `default` | bool? | default true → включён в новой установке. |
-| `locked` | bool? | §264 — пресет **нельзя выключить** (свич disabled) и **нельзя удалить**. Ортогонален `isSortable` (тот про drag). Единственный locked-пресет — `traffic-processing`. |
-| `num` | int? | §370 — позиция на **разреженной оси порядка правил**. Раскладка: `0` голова (traffic-processing), `950..990` специфичные пресеты, `1000..1100` зона пользовательских правил, `1110..1150` широкие перехватчики. Шаг 10 между шаблонными — зазор под будущие вставки. Это **стартовая** позиция: юзер двигает drag'ом, `num` пересчитывается и живёт в storage (`custom_rules[].num`). Дефолт при отсутствии — `1000`. |
-| `isSortable` | bool? | §370 — можно ли двигать правило drag'ом. `false` = позиция закреплена, drag-handle скрыт; такой пресет ещё и **сидится принудительно** (`seedRequiredPresets`), т.к. его присутствие — продуктовый инвариант. Единственный несортируемый — `traffic-processing` (`num:0`): он несёт `sniff`, который обязан быть первым правилом `route.rules`. Дефолт — `true`. |
+| `description` | string | The tooltip. |
+| `default` | bool? | When true, the preset is on in a fresh install. |
+| `locked` | bool? | §264 — the preset **cannot be turned off** (the switch is disabled) and **cannot be deleted**. |
+| `num` | int? | §370 — the position on the **sparse rule ordering axis**. |
+| `isSortable` | bool? | §370 — whether the rule can be dragged. `false` pins the position. |
 
-### Полевая матрица текущих 8 preset'ов
+### The field matrix of the current eight presets
 
-Метаданные — из `ui.*` (§264/§370): `default`/`locked`/`num`/`isSortable`.
-`traffic-processing` — первый в каталоге (locked, num:0, isSortable:false), несёт
-базовые sniff/hijack-dns/resolve.
+The metadata comes from `ui.*` (§264/§370): `default`, `locked`, `num`, `isSortable`.
+`traffic-processing` comes first in the catalog (locked, num:0, isSortable:false) and carries
+the base sniff/hijack-dns/resolve rules.
 
 | `preset_id` | `ui.default` | `ui.locked` | `ui.num` | `vars` | `rule_set` | `rule(s)` | `dns_rule(s)` | `dns_servers` |
 |---|---|---|---|---|---|---|---|---|
-| `traffic-processing` | true | true | 0 | ✓ (sniff_enabled, sniff_timeout §264 enum 100ms/300ms/500ms/1s/3s, hijack_dns_enabled §264 bool WARNING-тултип, `{"ref":"resolve_enabled"}` + `{"ref":"resolve_strategy"}` §265 — обе ref на секцию `internal`) | — | ✓ массив: `[sniff #if @sniff_enabled, hijack-dns, resolve strategy:@resolve_strategy #if @resolve_enabled]` | — | — |
+| `traffic-processing` | true | true | 0 | ✓ (sniff_enabled, sniff_timeout §264 enum 100ms/300ms/500ms/1s/3s, hijack_dns_enabled §264 bool with a WARNING tooltip, `{"ref":"resolve_enabled"}` + `{"ref":"resolve_strategy"}` §265 — both ref the `internal` section) | — | ✓ an array: `[sniff #if @sniff_enabled, hijack-dns, resolve strategy:@resolve_strategy #if @resolve_enabled]` | — | — |
 | `block-ads` | false | — | — | — | ✓ (remote ads-all) | ✓ (action: reject) | — | — |
-| `ru-direct` | true | — | — | ✓ (outbound, dns_enable §257, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ массив: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
-| `fakeip` | false | — | — | ✓ (rule_enable §266 псевдо + on_change, dns_enable §257 + on_change, dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
-| `ru-inside` | (false) | — | — | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
+| `ru-direct` | true | — | — | ✓ (outbound, dns_enable §257, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ an array: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
+| `fakeip` | false | — | — | ✓ (rule_enable §266 pseudo + on_change, dns_enable §257 + on_change, dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
+| `ru-inside` | (false) | — | — | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ an array: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
 | `bittorrent` | true | — | — | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
 | `private-ip` | (false) | — | — | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
 | `unknown-traffic` | false | — | — | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
 
-**`traffic-processing` (§264/§370)** — locked + несортируемый пресет, ПЕРВЫЙ в `selectable_rules`. Несёт базовые route-правила `sniff` / `hijack-dns` / `resolve`, которые до §264 жили прямо в `config.route.rules` (теперь пуст). `num:0` + `isSortable:false` гарантируют, что его правила идут первыми в финальном `config.route.rules` (sniff обязан быть первым — извлекает домен до resolve, критично для FakeIP). `locked:true` — свич disabled, нельзя удалить; `isSortable:false` — нельзя двигать. Каждое из трёх правил гейтится собственным `#if` (array-element form): `sniff #if @sniff_enabled` / `hijack-dns` (безусловно) / `resolve #if @resolve_enabled`. Vars пресета: `sniff_enabled` (bool), `sniff_timeout` (enum 100ms/300ms/500ms/1s/3s — НОВАЯ, дефолт `300ms`, раньше был хардкод `timeout:"1s"`), `hijack_dns_enabled` (bool — НОВАЯ, WARNING-тултип: off ломает FakeIP), `{"ref":"resolve_enabled"}` + `{"ref":"resolve_strategy"}` (§265 ref-vars — значение и метаданные из глобалей `resolve_enabled`/`resolve_strategy`, обе живут в секции `internal`, редактируются прямо здесь). Отключение `hijack_dns_enabled` убирает hijack-dns-правило; ⚠ без hijack-dns DNS-запросы не перехватываются → FakeIP не работает. `resolve_enabled=false` нужен для FakeIP (real-lookup идёт мимо FakeIP через `default_domain_resolver`, §263) — при включении FakeIP этот флаг гасится **автоматически** через on_change пресета `fakeip` (§266, см. «`on_change` пресета» выше). Нормализация `rule_order.dart` (§370) держит пресет в наличии и на позиции 0 при fresh install / restore / upgrade.
+**`traffic-processing` (§264/§370)** is a locked, unsortable preset and the FIRST in `selectable_rules`. It carries the base route rules `sniff`, `hijack-dns` and `resolve`, which before §264 lived directly in `config.route.rules` (now empty). `num:0` plus `isSortable:false` guarantee its rules come first.
 
-`unknown-traffic` — reject/direct для трафика в туннеле, не атрибутированного ни одному установленному приложению (фоновые/чужие процессы). Инлайн `rule_set` `unknown-apps` матчит «всё, что НЕ приложение» через `invert: true` + `package_name_regex: "^"`.
+`unknown-traffic` is reject or direct for traffic inside the tunnel that is attributed to no installed application (background or foreign processes). Its inline `rule_set` `unknown-apps` matches “everything that is NOT an application” through `invert: true` plus `package_name_regex: "^"`.
 
-**Backstop `reject`→`action`.** У `unknown-traffic` var-дефолт `outbound: "reject"`, и `rule.outbound: "@outbound"`. `reject` в sing-box — это `action`, а НЕ outbound-tag: литерал `{outbound: "reject"}` валидатор реджектит как dangling ref → fatal, ядро не стартует. Поэтому `preset_expand.dart` БЕЗУСЛОВНО нормализует финальный результат: `outbound == "reject"` → снять `outbound`, поставить `action: "reject"`. Это инвариант билдера (контракт sing-box), а не забота автора шаблона — работает и когда юзер выбрал reject явно в пикере, и когда просто включил пресет с дефолтом.
+**The `reject`→`action` backstop.** `unknown-traffic` has the var default `outbound: "reject"` and `rule.outbound: "@outbound"`. In sing-box `reject` is an `action`, NOT an outbound tag: the literal `{outbound: "reject"}` is rejected by the validator as a dangling ref and the core will not start. That is why `preset_expand.dart` normalises it UNCONDITIONALLY.
 
-**`fakeip` (§228)** — FakeIP-DNS: `dns_servers` даёт сервер `type: fakeip` (диапазоны 198.18.0.0/15 + fc00::/18), `dns_rule` заворачивает все `A`/`AAAA`-запросы на него. Приложение получает placeholder-IP мгновенно (0 latency, нет pre-tunnel DNS-утечки), реальный резолв доменов происходит внутри туннеля. **Порядок в каталоге критичен:** `fakeip` стоит ПОСЛЕ `ru-direct` — билдер сохраняет порядок пресетов в `dns.rules[]`, поэтому ru-dns-правило матчится раньше и русские домены резолвятся по-настоящему (иначе они ушли бы в fakeip и `geoip-ru` по фейк-IP не сматчил бы → RU-трафик через VPN). Сервер вливается через **hidden-var** `dns_server` (см. «Магические переменные» ниже — без неё сервер не эмитится). Персистентность фейк-маппинга между реконнектами — `experimental.cache_file.store_fakeip: true` в базовом config (не пресетом; статичный флаг). `dns.independent_cache` НЕ ставим — deprecated в sing-box 1.14.
+**`fakeip` (§228)** is FakeIP DNS: `dns_servers` supplies a server of `type: fakeip` (the ranges 198.18.0.0/15 and fc00::/18), and `dns_rule` routes every `A` and `AAAA` query to it. The application receives a placeholder IP instantly (zero latency, no pre-tunnel DNS leak), while the real domain resolution happens inside the tunnel.
 
-### Магические переменные пресетов (§033, §228, §257, §264, §265, §266)
+### The presets' magic variables (§033, §228, §257, §264, §265, §266)
 
-Имена preset-vars **не произвольны**: несколько имён имеют специальную семантику — билдер и UI смотрят на них по имени/типу, а не только подставляют `@name`. Пропуск нужной «магической» переменной приводит к тому, что часть пресета **молча не работает** (регрессия §228 с FakeIP — сервер не вливался, потому что не было var `dns_server`).
+The names of preset vars are **not arbitrary**: several of them carry special semantics.
 
-| Var (имя / тип) | Кто смотрит | Что делает | Пропустишь → |
+| Var (name / type) | Who looks at it | What it does | If you omit it → |
 |---|---|---|---|
-| `dns_server` (`type: dns_servers`) | `preset_expand.dart` | **Селектор** какой из `dns_servers[]` пресета влить в `config.dns.servers`. Билдер эмитит РОВНО ОДИН сервер — тот, чей `tag == varsValues['dns_server']` (или `default_value`). `dns_rules[*].server` ссылается на него через `@dns_server`. | `dns_servers[]` **не вливается вообще** (цикл гейтится наличием этой var). DNS-правило повиснет на несуществующий сервер → dangling → guard молча дропнет правило. Пресет ничего не делает для DNS. |
-| `outbound` (`type: outbound`) | `preset_expand.dart` + Routing UI | Значение для `@outbound` в `rule`/`dns_servers.detour`. UI рисует outbound-picker в строке пресета (см. `hasOutboundAffordance`). Дефолт `"reject"` → backstop-нормализация в `action:reject`. | Нет var:outbound И нет `rule` → `hasOutboundAffordance == false` → outbound-picker в строке **не рисуется** (DNS-only пресет — роутить нечего, picker был бы мёртвым). Это корректно, а не баг. |
-| `dns_enable` (`type: bool`) | `custom_rules.dart` (`presetDnsEnableVar`) + DNS Settings UI | §257: **мастер-тумблер DNS-блока** пресета (dns_servers + dns_rules + mirror-группа). Билдер гейтит DNS-аспект значением var (юзерский выбор → default_value → on); DNS Settings рисует свитч пресетной строки этим же предикатом и пишет var обратно. Заменил `isPresetDnsEnabled` из `dns_options.rules` (то поле `enabled` теперь мёртвое, запись — только позиционный якорь §117). | DNS-блок пресета **не тумблится** (всегда on, пока routing on); строка в DNS Settings — без свитча (нейтральная иконка). Норма для пресетов, которым тумблер не нужен. |
-| `rule_enable` (`type: bool`, псевдо) | `preset_on_change.dart` | §266: **псевдо-var** on_change-формулы. НЕ хранится — резолвер подставляет `cr.enabled` (пресет включён свичем). Носитель `on_change`, которая при вкл/выкл пишет цель в `userVars` (см. «`on_change` пресета» выше). У FakeIP: `@rule_enable AND @dns_enable → resolve_enabled=false`. | ⚠ **`default_value` обязателен + `required:false`.** Без `default_value` var = required → `expandPreset` выходит рано → **весь DNS-блок пресета молча не эмитится** (грабля `29fe61c`). |
+| `dns_server` (`type: dns_servers`) | `preset_expand.dart` | **Selects** which of the preset's `dns_servers[]` is poured into `config.dns.servers`. The builder emits EXACTLY ONE server — the one whose `tag == varsValues['dns_server']` (or the `default_value`). | every server of the preset would be emitted |
+| `outbound` (`type: outbound`) | `preset_expand.dart` plus the Routing UI | The value for `@outbound` in `rule` and `dns_servers.detour`. The UI draws an outbound picker on the preset's row (see `hasOutboundAffordance`). A default of `"reject"` goes through the backstop normalisation. | the picker would vanish from the row |
+| `dns_enable` (`type: bool`) | `custom_rules.dart` (`presetDnsEnableVar`) plus the DNS Settings UI | §257: the **master toggle of the preset's DNS block** (dns_servers plus dns_rules plus the mirror group). The builder gates the DNS aspect on the var's value. | the DNS block could not be turned off separately |
+| `rule_enable` (`type: bool`, a pseudo-var) | `preset_on_change.dart` | §266: the **pseudo-var** of an on_change formula. It is never stored — the resolver substitutes `cr.enabled` (the preset is on, via the switch). It carries the `on_change`. | the formula would never fire |
 
-**§265 — ref-vars (`{"ref": "<global>"}`).** Элемент `vars[]` пресета может быть **ссылкой** на глобальную var вместо декларации: `{"ref": "resolve_strategy"}`. Метаданные (`type`/`options`/`title`/`tooltip`/`default_value`) **не дублируются** — берутся из целевой глобали (`WizardTemplate.globalVar(name)`; ищется по всем секциям, включая `internal`). Значение живёт в **глобальном** `userVars` (не в `rule.varsValues` пресета) — единый источник; `@resolve_strategy` в теле пресета резолвится глобально. В модели: `WizardVar` получил поле `ref` + геттер `isRef`, `WizardVar.fromJson` парсит `{"ref":…}`. В билдере: `expandPreset` получил параметр `globalVars` — ref-vars пропускаются в `varsValues`-цикле и подмешиваются из `globalVars`.
+**§265 — ref-vars (`{"ref": "<global>"}`).** An element of a preset's `vars[]` may be a **reference** to a global var (one from a section, including `internal`).
 
-В UI: ref-var **рендерится** в редакторе правила (`preset_params_tab.dart`) с метаданными из глобали — но читает/пишет `userVars` (`edit_controller.setGlobalVar`), не `varsValues`. Применение (§264): `traffic-processing` ссылается на `resolve_strategy` и `resolve_enabled` (обе в секции `internal`) через `{"ref":"…"}` — так они правятся прямо в правиле, оставаясь скрытыми из VPN Settings.
+In the UI a ref-var **is rendered** in the rule editor (`preset_params_tab.dart`) with the metadata of the global it points at.
 
-> **§265 — data-cleanup: ref-var НЕ в `varsValues`.** Значение ref-var принадлежит
-> `userVars`; если оно осело в `varsValues` пресета (миграция, старый storage) —
-> это «застрявшая» копия, которая расходится с глобалью (subtitle показывал
-> `resolve_enabled: true`, когда глобаль уже `false`). `stripRefVarsFromVarsValues`
-> (`rule_order.dart`) вычищает ref-ключи из `varsValues` на загрузке
-> Routing-экрана; все читатели `varsValues` по имени var **обязаны** пропускать
-> `v.isRef` (subtitle, Debug-сериализатор, rule_set.enabled-гейт — см. `366beec`).
+> **§265 — a data cleanup: a ref-var does NOT belong in `varsValues`.** A ref-var's value
+> belongs to `userVars`; if it has settled into a preset's `varsValues` (through a
+> migration, or from old storage) it is a “stuck” copy that diverges from the global (the
+> subtitle showed `resolve_enabled: true` while the global was already `false`).
+> `stripRefVarsFromVarsValues` (`rule_order.dart`) clears the ref keys out of `varsValues`
+> when the Routing screen loads; every reader of `varsValues` by var name **must** skip
+> `v.isRef` (the subtitle, the Debug serializer, the rule_set.enabled gate — see
+> `366beec`).
 
-**§264 — новые vars пресета `traffic-processing`.** `sniff_timeout` (enum 100ms/300ms/500ms/1s/3s) заменил хардкод `timeout:"1s"` у sniff-правила. `hijack_dns_enabled` (bool) — тумблер hijack-dns-правила; ⚠ WARNING-тултип: выключение ломает FakeIP (DNS не перехватывается). Обе — обычные preset-vars (не «магические» — билдер только подставляет `@name` через `#if`), перечислены здесь для полноты каталога.
+**§264 — the new vars of the `traffic-processing` preset.** `sniff_timeout` (an enum of 100ms/300ms/500ms/1s/3s) replaced the hardcoded `timeout:"1s"` on the sniff rule. `hijack_dns_enabled` (a bool) toggles the hijack-dns rule; ⚠ its tooltip warns that turning it off lets DNS out past the tunnel.
 
-**Правила при добавлении пресета:**
+**Rules for adding a preset:**
 
-1. **Пресет несёт `dns_servers[]`** → обязателен var `dns_server` (`type: dns_servers`, `default_value` = tag нужного сервера), а `dns_rules[*].server` = `@dns_server`. Иначе сервер не эмитится (§228). Если сервер один и выбирать не из чего (как у FakeIP) — пометь var **`wizard_ui: "hidden"`**: значение всё равно придёт из `default_value`, но мёртвый dropdown-из-одного-пункта в редакторе не рисуется. (Редактор `preset_params_tab.dart` фильтрует hidden-vars; sections тоже.)
-2. **Пресет роутит трафик** (есть `rule` с `outbound`/`action` или var:outbound) → outbound-picker в строке появится автоматически. **DNS-only пресет** (только DNS-правила, как FakeIP) → picker сам скрывается через `hasOutboundAffordance`.
-3. `outbound`-var с дефолтом `reject` → билдер сам превратит `{outbound:reject}` в `{action:reject}` (backstop, см. `unknown-traffic` выше).
+1. **A preset carrying `dns_servers[]`** requires a `dns_server` var (`type: dns_servers`, with `default_value` set to the tag of the default server).
+2. **A preset that routes traffic** (it has a `rule` with an `outbound` or `action`, or an outbound var) gets an outbound picker on its row.
+3. An `outbound` var defaulting to `reject`: the builder itself turns `{outbound:reject}` into `{action:reject}`.
 
 ### `selectable_rules[*].rule_set[i]` — sing-box rule-set definition
 
 ```jsonc
 {
-  "tag":              "<string>",                // unique id внутри финального config.route.rule_set
+  "tag":              "<string>",                // a unique id inside the final config.route.rule_set
   "type":             "inline" | "local" | "remote",
-  "format":           "binary" | "source"?,       // для local/remote
-  "rules":            [ … ]?,                      // для inline — список match-условий
-  "url":              "https://..."?,              // для remote
-  "path":             "<filesystem>"?,             // для local — путь к .srs (в финальном config ставит билдер)
-  "download_detour":  "<outbound-tag>"?,           // декларативное поле каталога — стрипается билдером
-  "update_interval":  "<duration>"?                // декларативное поле каталога — стрипается билдером
+  "format":           "binary" | "source"?,       // for local and remote
+  "rules":            [ … ]?,                      // for inline — the list of match conditions
+  "url":              "https://..."?,              // for remote
+  "path":             "<filesystem>"?,             // for local — the path to the .srs (the builder fills it in)
+  "download_detour":  "<outbound-tag>"?,           // a declarative catalog field — stripped out
+  "update_interval":  "<duration>"?                // a declarative catalog field — stripped out
 }
 ```
 
-⚠ **sing-box сам НИЧЕГО не скачивает.** В финальный config `remote`-форма не попадает никогда: билдер (`preset_expand.dart`) подменяет `remote` → `{type: "local", path: <кэш>}` и стрипает `url`/`download_detour`/`update_interval`. Кэш = `<docs>/rule_sets/<id>.srs`, где `id` — `CustomRule.id` (UUID), а для пресетов — `cachedPathForPreset(presetId, tag)` (по id пресета/правила, НЕ по `tag`).
+⚠ **sing-box downloads NOTHING by itself.** The `remote` form never reaches the final config.
 
-Скачивание — только вручную через кнопку **Download** в UI (`RuleSetDownloader`). Если кэша нет, rule_set пропускается с warning («download first») — sing-box не увидит remote-URL и не полезет в сеть. `download_detour`/`update_interval` в текущем pipeline не используются (декларативные поля каталога).
+Downloading happens only by hand, through the **Download** button in the UI (`RuleSetDownloader`).
 
 ### `selectable_rules[*].rule` / `rules` — routing rule(s)
 
-`rule` — Map (один rule, legacy); `rules` — **массив** (§246, канонический ключ; при обоих ключах побеждает `rules`). Каждый rule — sing-box routing rule с support'ом всех его полей:
+`rule` is a Map (a single rule, legacy); `rules` is an **array** (§246, the canonical key; when both are present the array wins).
 
 ```jsonc
 {
@@ -864,21 +869,21 @@ FakeIP он должен молчать, §263):
   "package_name": ["..."]?,
   "protocol":    [ "bittorrent" | "tls" | "http" | ... ]?,
 
-  "outbound":    "<tag-or-@var>"?,    // куда роутить
-  "action":      "reject" | "..."?     // shorthand вместо outbound
+  "outbound":    "<tag-or-@var>"?,    // where to route
+  "action":      "reject" | "..."?     // a shorthand instead of outbound
 }
 ```
 
-В template'е стандартный pattern: ссылка на `rule_set` + outbound. См. примеры в `selectable_rules[]` существующего template'а.
+The standard pattern in the template is a reference to a `rule_set` plus an outbound. See the examples in `selectable_rules[]`.
 
-**Массивная форма (§246, ключ `rules`).** Пресет может эмитить несколько route-правил — порядок элементов сохраняется в финальном `config.route.rules`. Семантика expansion (`preset_expand.dart`):
+**The array form (§246, the `rules` key).** A preset can emit several route rules at once.
 
-- элемент с `action ∈ {resolve, sniff, route-options}` — **промежуточный** (non-terminal): outbound-override юзера и reject-backstop к нему НЕ применяются; его присутствие в конфиге контролируется `#if`-гейтом (§120, array-element form: false без `else` → элемент выпадает);
-- остальные элементы — **терминальные**: override/backstop работают как для одиночного rule (к каждому);
-- dangling-rule_set guard — поэлементный: битый элемент дропается с warning, остальные живут;
-- substitute гоняется по массиву целиком (иначе array-element `#if` не сработал бы).
+- an element with `action ∈ {resolve, sniff, route-options}` is **intermediate** (non-terminal): the outbound override does not apply to it;
+- the remaining elements are **terminal**: the override and the backstop behave as they do for a single rule;
+- the dangling-rule_set guard is per element: a broken element is dropped with a warning and the rest survive;
+- the substitution runs over the whole array (otherwise an array-element `#if` would never fire).
 
-Мотивирующий пример — `ru-direct`: на устройствах без глобального IPv6 direct-трафик на AAAA-адреса умирает (`network is unreachable`), поэтому RU-домены резолвятся `ipv4_only`. Управляется bool-var `force_ipv4` (default `true`) — юзер может выключить, если у сети рабочий IPv6:
+The motivating example is `ru-direct`: on devices with no global IPv6, direct traffic needs a forced `ipv4_only` resolve before the terminal rule.
 
 ```jsonc
 "rules": [
@@ -889,66 +894,66 @@ FakeIP он должен молчать, §263):
 ]
 ```
 
-⚠ `server` в resolve-элементе ссылается на DNS-сервер, который эмитится **DNS-аспектом** пресета (галка DNS, §033/§121): при выключенном DNS-аспекте тег повиснет (dangling) → fatal у ядра. Использовать `server` в resolve только если пресет надёжно эмитит сервер, либо не указывать `server` вовсе (internal-резолв пойдёт через DNS-роутинг / `default_domain_resolver`).
+⚠ The `server` in a resolve element references a DNS server emitted by the preset's **DNS aspect**, so the two must stay in sync.
 
-Для UI outbound-picker'а дефолт берётся из **терминального** элемента (`SelectableRule.terminalRule` — последний не-промежуточный).
+For the UI's outbound picker the default comes from the **terminal** element (`SelectableRule.terminalRule`).
 
 ### `selectable_rules[*].dns_rule(s)` / `dns_servers`
 
-Аналогично routing rule, но для DNS pipeline. Канонический ключ — `dns_rules` (массив, §253); `dns_rule` (single Map) — legacy-форма (fakeip). Элемент направляет matched-domains на DNS-сервер из `dns_servers[]` (или ссылку на основной `dns_options.servers[]` сервер по tag), либо отвечает сам serverless-действием (`predefined`/`reject` — `server` не нужен).
+The same as a routing rule, but for the DNS pipeline. The canonical key is `dns_rules` (an array, §253); the legacy `dns_rule` is a single Map.
 
-Массивная форма поддерживает **array-element `#if`** (§246-механика): `#if` false без else → элемент выпадает из массива целиком. Пример из `ru-direct` (Force IPv4, §253): первым идёт `#if @force_ipv4`-гейт `{ip_version: 6, action: predefined, rcode: NOERROR}` (AAAA-запросы к RU-доменам получают пустой успешный ответ — приложение чисто берёт A; НЕ `reject`: он отвечает REFUSED и после 50 срабатываний/30с переходит в drop), вторым — безусловный маршрут `{server: @dns_server}`. **Порядок критичен:** гейт первым, маршрут безусловным — иначе не-A/AAAA-запросы (HTTPS type 65 и пр.) уйдут мимо `@dns_server` (`ip_version` матчит только A/AAAA; прочие типы не матчатся ни `4`, ни `6`).
+The array form supports an **array-element `#if`** (the §246 mechanism): an `#if` that is false with no else drops the element.
 
-⚠ Легаси `strategy` в DNS-правиле **запрещён** (deprecated в ядре 1.14 и несовместим с `query_type`/`ip_version` в том же конфиге — fatal на старте; билдер снимает его heal'ом, §246). Ограничение семейства адресов — только через `ip_version`-matcher + `predefined`.
+⚠ The legacy `strategy` inside a DNS rule is **forbidden** (deprecated in core 1.14 and incompatible with `query_type`).
 
-⚠ В отличие от `dns_options.servers[*]` (обёртка `{description, enabled, vars?, server}` §117), preset-`dns_servers[*]` — это **плоские sing-box-тела** (`{type, tag, detour, …}` без обёртки, tag на top-level). `preset_expand.dart` фильтрует их по top-level `s['tag']`. Пример из `ru-direct`: `{"type":"udp","tag":"yandex_udp","detour":"@outbound",…}`.
+⚠ Unlike `dns_options.servers[*]` (the `{description, enabled, vars?, server}` wrapper of §117), a preset's `dns_servers[*]` holds FLAT sing-box bodies with a top-level tag.
 
 ### `vars` substitution
 
-Vars, объявленные в preset'е, **видны только когда preset enabled**. UI рендерит их в Routing → preset detail. При expansion `@varname` в `rule(s)` / `dns_rule(s)` / `dns_servers` подставляется текущим значением (`varsValues[name]` из `CustomRulePreset` storage entry, fallback на `default_value`).
+The vars declared in a preset are **visible only while the preset is enabled**. The UI renders them on the Routing screen.
 
-Универсальный `outbound`-override (spec [§033] Expansion §5): если `varsValues['outbound']` задан непустой — заменяет любое template-решение (`@outbound`-substitution / hardcoded outbound / `action: reject`).
+The universal `outbound` override (spec [§033], Expansion §5): when `varsValues['outbound']` holds a non-empty value, it replaces the rule's outbound.
 
 ---
 
 ## Vars-substitution syntax
 
-Везде в `config` блоке (и в expansion preset'ов) подставляется **только whole-string** value вида `"@varname"` (строка целиком начинается с `@`, имя = всё после `@`) из:
-1. `lxbox_settings.json` `vars[varname]` (если override'нуто)
-2. `default_value` соответствующего var в `sections[*].vars[*]` или `selectable_rules[*].vars[*]`
+Everywhere in the `config` block (and in preset expansion) only a **whole-string** value of the form `"@varname"` is substituted. The value comes from:
+1. `lxbox_settings.json` `vars[varname]` (when overridden)
+2. the `default_value` of the matching var in `sections[*].vars[*]` or `selectable_rules[*].vars[*]`
 
-Inline-подстановка **не поддерживается**: `"prefix-@varname-suffix"` не строка-`@var`, поэтому остаётся литералом как есть (молча, без warning). А `"@varname-suffix"` будет искаться как var с именем `varname-suffix` — не тем, что ожидалось. Если var-имя не объявлено, плейсхолдер остаётся как есть (контракт `build_config`).
+Inline substitution is **not supported**: `"prefix-@varname-suffix"` is not a `@var` string, so it is left as-is.
 
-Результат **типизирован по объявленному `var.type`** (§120): `bool`/`int` коэрсятся `coerceVarValue`, строковые типы (`text`/`secret`/`enum`/`outbound`/`dns_servers`) — дословно. Сам шаблон использует и типизированные `@var`: `"@tun_mtu"` (int), `"@tun_auto_route"` (bool).
+The result is **typed by the declared `var.type`** (§120): `bool` and `int` are coerced by `coerceVarValue`, while `text`, `enum` and `secret` stay strings.
 
-См. примеры:
-- `"final": "@dns_final"` — подставится `cloudflare_udp` или то что юзер выбрал
-- `"server": "@dns_ip"` (внутри ru-direct preset) — подставится IP выбранный в dropdown'е
+Examples:
+- `"final": "@dns_final"` becomes `cloudflare_udp`, or whatever the user chose
+- `"server": "@dns_ip"` (inside the ru-direct preset) becomes the IP picked in the dropdown
 
-См. реализацию в `app/lib/services/builder/build_config.dart` + `preset_expand.dart`. Общее ядро подстановки и `#if` — `app/lib/services/builder/if_engine.dart` (§120), используется обоими движками.
+See the implementation in `app/lib/services/builder/build_config.dart` and `preset_expand.dart`. The shared substitution core lives in `if_engine.dart`.
 
-## `#if`-конструкт (§120)
+## The `#if` construct (§120)
 
-Декларативная условность прямо в `config`/preset-телах. Резолвится в substitution-фазе (до post-steps). Дизайн заимствован у десктопного лаунчера (SPEC 067), подмножество v1.
+Declarative conditionals right inside the `config` and preset bodies. They are resolved during the substitution phase.
 
 ```jsonc
 "#if": {
-  "and":   [<predicate>, ...],   // взаимоисключающе с or; все true
-  "or":    [<predicate>, ...],   // хотя бы один true
-  "value": <any JSON>,           // then-ветка (обязательно)
-  "else":  <any JSON>            // else-ветка (опционально)
+  "and":   [<predicate>, ...],   // mutually exclusive with or; all must be true
+  "or":    [<predicate>, ...],   // at least one must be true
+  "value": <any JSON>,           // the then branch (required)
+  "else":  <any JSON>            // the else branch (optional)
 }
 ```
 
-**Два режима:**
-- **map-spread** — `#if` как ключ объекта: true → поля `value` (объект) мерджатся в родителя; false+else → поля `else`; false без else → ничего. Ключ `#if` снимается.
-- **array-element** — `#if` как единственный ключ элемента массива: true → элемент = `value`; false+else → `else`; false без else → элемент выпадает.
+**Two modes:**
+- **map-spread** — `#if` as a key of an object: when true, the fields of `value` (an object) are merged into the parent;
+- **array-element** — `#if` as the only key of an array element: when true the element becomes `value`, and when false with no else it is dropped.
 
-**Предикаты:** `"@var"` (bool), `{"@var":"literal"}` (equality), `{"@var":"#notEmpty"/"#isEmpty"}`, `{"@var":{"#in":[...]}}` / `{"#notIn":[...]}` / `{"#matches":"re"}`, `{"#not":predicate}`.
+**Predicates:** `"@var"` (a bool), `{"@var":"literal"}` (equality), `{"@var":"#notEmpty"/"#isEmpty"}`, `{"@var":{"#in":[...]}}`.
 
-**Naming:** `#` — конструкт/предикат; `@` — var-ref; bare — inner-ключи тела `#if`. Неизвестный `#*`-сиблинг **молча отбрасывается** (`if_engine.dart::_walkMap` делает `obj.remove(k)` без warning — forward-compat); неизвестный inner-ключ/предикат-оператор → ошибка (валидация на template-load).
+**Naming:** `#` marks a construct or predicate, `@` marks a var reference, and bare names are the inner keys of an `#if` body. An unknown key is an error.
 
-Пример (§119 inbounds, см. `wizard_template.json`):
+An example (the §119 inbounds, see `wizard_template.json`):
 ```jsonc
 {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": {
   "type": "@proxy_type", "tag": "mixed-in", "listen_port": "@proxy_port",
@@ -960,28 +965,28 @@ Inline-подстановка **не поддерживается**: `"prefix-@v
 
 ---
 
-## Formatting style (оформление `wizard_template.json`)
+## Formatting style (how `wizard_template.json` is laid out)
 
-Editorial-конвенции для **бандл**-шаблона (`app/assets/wizard_template.json`). Порядок
-ключей и переносы **не влияют** на loader/билдер — это читаемость для maintainer'ов.
-Семантика (`#if`, magic-vars, порядок правил) обязательна; оформление — нет, но держим
-единообразно. Кастомные/импортированные шаблоны эту секцию могут игнорировать.
+The editorial conventions for the **bundled** template (`app/assets/wizard_template.json`). The ordering
+of keys and the line breaks **do not affect** the loader or the builder — they are there for the maintainer's readability.
+The semantics (`#if`, the magic vars, the rule order) are mandatory; the formatting is not, but keep it
+uniform. Custom or imported templates may ignore this section.
 
-### Общий принцип
+### The general principle
 
-**Компактно** (одна строка) — литералы и мелкие metadata-объекты. **Развёрнуто**
-(multiline) — выражения (`@…`, `#if`) и длинные списки. Критерий: строка с `@`-плейсхолдером
-или вложенным `#if` разворачивается; чистые литералы можно жать.
+**Compact** (one line) for literals and small metadata objects. **Expanded**
+(multiline) for expressions (`@…`, `#if`) and long lists. The criterion: a line holding an `@`
+placeholder or a nested `#if` is expanded; pure literals may be squeezed.
 
-### Vars (`sections[*].vars[]` и `selectable_rules[*].vars[]`)
+### Vars (`sections[*].vars[]` and `selectable_rules[*].vars[]`)
 
-| Часть var | Оформление |
+| Part of a var | Layout |
 |---|---|
-| «Шапка» — `name`, `type`, `wizard_ui`, `title`, `tooltip` | **Строка 1** (вместе) |
-| `default_value` | **Отдельная строка** с отступом |
-| `options[]` | **Multiline** — каждый элемент на своей строке (`{title,value}` или голая строка) |
-| ref-var (§265) `{"ref": "<name>"}` | **Одна строка** целиком (метаданных не несёт) |
-| Простой bool-var без options | **Одна строка** целиком |
+| The “header” — `name`, `type`, `wizard_ui`, `title`, `tooltip` | **Line 1** (together) |
+| `default_value` | **Its own line**, indented |
+| `options[]` | **Multiline** — one element per line (`{title,value}` or a bare string) |
+| A ref-var (§265) `{"ref": "<name>"}` | **One line** in full (it carries no metadata) |
+| A simple bool var with no options | **One line** in full |
 
 ```jsonc
 { "name": "resolve_strategy", "type": "enum", "wizard_ui": "edit", "title": "Resolve strategy", "tooltip": "IP version preference for DNS resolution",
@@ -992,12 +997,12 @@ Editorial-конвенции для **бандл**-шаблона (`app/assets/w
 { "ref": "resolve_strategy" }
 ```
 
-### `ui`-объект пресета (§264)
+### A preset's `ui` object (§264)
 
-Метаданные пресета (`label`/`description`/`default`/`locked`/`num`/`isSortable`) —
-**одна строка**, если влезает; иначе `label`/`description` на строке 1, флаги —
-строкой ниже. Флаги-`false` и `isSortable:true` НЕ пишем (дефолты модели); `num`
-пишем всегда — это часть раскладки оси.
+A preset's metadata (`label`, `description`, `default`, `locked`, `num`, `isSortable`) goes on
+**one line** when it fits; otherwise `label` and `description` on line 1 and the flags on the
+line below. Flags that are `false`, and `isSortable:true`, are NOT written (they are the model's
+defaults); `num` is always written — it is part of the axis layout.
 
 ```jsonc
 "ui": {"label": "Traffic Processing", "description": "...", "default": true, "locked": true, "num": 0, "isSortable": false}
@@ -1005,20 +1010,20 @@ Editorial-конвенции для **бандл**-шаблона (`app/assets/w
 
 ### JSON payload (`config`, `dns_servers`, `rule_set`)
 
-| Контекст | Правило |
+| Context | Rule |
 |---|---|
-| Поля с `@`-плейсхолдером | **одно поле — одна строка** |
-| Литералы (`type`, `tag`, `auto_route`, `server_port`) | можно вместе на одной строке |
-| Мелкие struct'ы ≤2–3 литерала (`direct-out`, hijack-dns) | **одна строка** |
-| Крупные объекты (`dns_options.servers[]`, preset `dns_servers[]`) | **multiline** — одно поле на строку |
-| `options`/`filters` **без** `@` | **одна строка** |
+| Fields holding an `@` placeholder | **one field per line** |
+| Literals (`type`, `tag`, `auto_route`, `server_port`) | may share one line |
+| Small structs of two or three literals (`direct-out`, hijack-dns) | **one line** |
+| Large objects (`dns_options.servers[]`, a preset's `dns_servers[]`) | **multiline** — one field per line |
+| `options` and `filters` **without** an `@` | **one line** |
 
-### `#if`-конструкт (§120)
+### The `#if` construct (§120)
 
-| `value` / `else` | Оформление |
+| `value` / `else` | Layout |
 |---|---|
-| **Скаляр** | `{"#if": {"and": [...], "value": "..."}}` — одна строка |
-| **Объект** | условие + `"value": {` на строке 1; тело ниже; закрытие `}}}` |
+| **A scalar** | `{"#if": {"and": [...], "value": "..."}}` — one line |
+| **An object** | the condition plus `"value": {` on line 1; the body below; closing with `}}}` |
 
 ```jsonc
 {"#if": {"and": ["@force_ipv4"], "value": {
@@ -1027,15 +1032,15 @@ Editorial-конвенции для **бандл**-шаблона (`app/assets/w
 }}}
 ```
 
-### Правила пресета (`rule`/`rules`, `dns_rule`/`dns_rules`)
+### A preset's rules (`rule`/`rules`, `dns_rule`/`dns_rules`)
 
-| Случай | Оформление |
+| Case | Layout |
 |---|---|
-| Одиночное правило-литерал (без `#if`, без `@`) | **одна строка** |
-| Правило под `#if` со скаляром | одна строка |
-| Правило под `#if` с объектом-`value` | multiline (условие → тело → `}}}`) |
-| `rule_set[]` inline/remote | строка 1: metadata (`tag`/`type`/`format`); строка 2: `rules`/`url` |
-| Длинные inline-suffix списки | одна строка если влезает; иначе переносы в массиве |
+| A single literal rule (no `#if`, no `@`) | **one line** |
+| A rule under an `#if` with a scalar | one line |
+| A rule under an `#if` with an object `value` | multiline (condition → body → `}}}`) |
+| `rule_set[]`, inline or remote | line 1: the metadata (`tag`/`type`/`format`); line 2: `rules`/`url` |
+| Long inline suffix lists | one line when it fits; otherwise wrapped |
 
 ```jsonc
 "dns_rules": [
@@ -1046,136 +1051,136 @@ Editorial-конвенции для **бандл**-шаблона (`app/assets/w
 ]
 ```
 
-### Шпаргалка
+### Cheat sheet
 
-| | Одна строка | Multiline |
+| | One line | Multiline |
 |---|---|---|
-| var-шапка (`name`/`type`/`title`/`tooltip`) | ✓ | — |
+| A var header (`name`/`type`/`title`/`tooltip`) | ✓ | — |
 | `default_value` | — | ✓ |
-| `options[]` элементы | — | ✓ |
+| The elements of `options[]` | — | ✓ |
 | ref-var `{"ref":...}` | ✓ | — |
-| `ui`-объект пресета | ✓ (если влезает) | флаги ниже |
-| `@`-поле в payload | — | ✓ (по полю) |
-| `#if` + object `value` | условие | тело |
-| `#if` + скаляр | ✓ | — |
-| литеральное правило пресета | ✓ | — |
+| A preset's `ui` object | ✓ (when it fits) | the flags below |
+| An `@` field in a payload | — | ✓ (per field) |
+| `#if` plus an object `value` | the condition | the body |
+| `#if` plus a scalar | ✓ | — |
+| A preset's literal rule | ✓ | — |
 
-> **Грабля:** НЕ вставлять коммент-ключи (`"//": "..."`) в `config`-блок — sing-box
-> strict-decode их не знает → fatal старт ядра (§264). Пояснения — в этом файле или спеке,
-> не в JSON конфига. В мета-секциях (`vars`/`sections`/`ui`) можно любые поля — они не идут
-> в config.
+> **A gotcha:** do NOT put comment keys (`"//": "..."`) into the `config` block — sing-box's
+> strict decode does not know them and the core start is fatal (§264). Explanations belong in
+> this file, not in the config JSON. In the meta sections (`vars`, `sections`, `ui`) any field
+> is fine — they never reach the config.
 
 ---
 
-## Локализация display-текста — l10n overlay (§279)
+## Localizing the display text — the l10n overlay (§279)
 
-`wizard_template.json` остаётся **единственным структурным шаблоном** с
-английским display-текстом. Переводы не форкают структуру — это плоские
-overlay-файлы, патчащие декодированный JSON **до парсинга и до
-preset_expand-снапшотов** (`TemplateOverlay.apply`, зовётся из
-`TemplateLoader`; кэш loader'а ключуется тегом локали):
+`wizard_template.json` remains the **single structural template**, holding the English
+display text. Translations do not fork the structure — they are flat overlay files that patch
+the decoded JSON **before parsing and before the preset_expand snapshots**
+(`TemplateOverlay.apply`, called from `TemplateLoader`; the loader's cache is keyed by the
+locale tag):
 
 ```
-app/assets/l10n/ru/template.json   # ручной перевод (тот же shape, что UI-словарь)
+app/assets/l10n/ru/template.json   # a hand-written translation (the same shape as the UI dictionary)
 ```
 
-Английский display-текст живёт в самом `wizard_template.json` (базовый язык, в
-коде) — отдельного en-файла нет. Ключ overlay = **сам английский текст**
-display-поля (тот же принцип, что natural-key UI-словарь
-`assets/l10n/<tag>/ui.json`), а не структурный адрес.
-`TemplateOverlay.apply` ходит по whitelist-схеме шаблона, читает английское
-значение узла и подменяет его переводом по этому тексту.
+The English display text lives in `wizard_template.json` itself (the base language, in the
+code) — there is no separate en file. The overlay's key is **the English text itself** of the
+display field (the same principle as the natural-key UI dictionary
+`assets/l10n/<tag>/ui.json`), rather than a structural address.
+`TemplateOverlay.apply` walks the template's whitelist schema, reads a node's English value
+and swaps in the translation keyed by that text.
 
-- Английские ключи — базовый язык, в коде: коммитнутого/генерируемого en-файла
-  нет. `template_check` извлекает их живьём из `wizard_template.json` через
-  `TemplateOverlay.extract()` на каждом прогоне и валидирует каждый overlay
-  локали против этой экстракции. Повторяющийся один и тот же английский текст в
-  разных местах шаблона схлопывается в один ключ (фича, не конфликт).
-- `template.json` (и любой будущий `<lang>/template.json`) — тот же объектный shape, что
-  UI-словарь: `{ "<english>": { "value": "<перевод>" } }`:
+- The English keys are the base language and live in the code: there is no committed or
+  generated en file. `template_check` extracts them live from `wizard_template.json` through
+  `TemplateOverlay.extract()` on every run and validates each locale's overlay against that
+  extraction. The same English text repeated in different places of the template collapses
+  into a single key (a feature, not a conflict).
+- `template.json` (and any future `<lang>/template.json`) has the same object shape as the
+  UI dictionary: `{ "<english>": { "value": "<translation>" } }`:
 
   ```json
   "DNS server": { "value": "DNS-сервер" }
   ```
 
-  Изменился en-текст → сменился ключ: старая запись становится unknown-key (fail
-  `template_check`), новый английский ключ — missing (warn, strict→fail).
-  Workflow идентичен UI-строке: переименовать ключ, пересмотреть перевод.
+  When the English text changes the key changes with it: the old entry becomes an unknown
+  key (a `template_check` failure) and the new English key is missing (a warning; a failure
+  under strict). The workflow is identical to a UI string: rename the key and revisit the translation.
 
-**Схема обхода** (полная таблица — [§279 spec, §3.2](./spec/features/279%20localization/spec.md)):
-applier посещает display-поля секций, глобальных и rule-локальных vars, magic-нод,
-каналов, dns-серверов, ping/speed-пресетов. Не посещается (whitelist applier'а):
-всё под `config`/`parser_config`, `name`/`tag`/`value`/`default_value`/`preset_id`,
-bare-string enum-опции, `dns_options.rules[].name` (латентный identity-ключ) —
-поэтому эти строки в overlay не попадают.
+**The traversal schema** (the full table is in [the §279 spec, §3.2](./spec/features/279%20localization/spec.md)):
+the applier visits the display fields of sections, of global and rule-local vars, of magic nodes,
+of channels, of DNS servers and of the ping and speed presets. Not visited (the applier's
+whitelist): everything under `config` and `parser_config`, plus `name`, `tag`, `value`,
+`default_value`, `preset_id`, bare-string enum options and `dns_options.rules[].name` (a latent
+identity key) — so those strings never reach an overlay.
 
-**Load-bearing запреты**: перевод, начинающийся с `@`, был бы интерпретирован
-как var-ссылка (overlay применяется до `substituteVars`); `{` ломает parsing —
-оба запрещены `template_check` безусловно. Fallback per-key тихий (нет ключа →
-английское значение); отказ целого файла — громкий (`AppLog.error` +
-debug-assert + flutter-тест rootBundle-загрузки каждого overlay).
+**Load-bearing prohibitions**: a translation starting with `@` would be read as a var
+reference (the overlay is applied before `substituteVars`), and a `{` breaks parsing — both are
+forbidden unconditionally by `template_check`. The per-key fallback is quiet (a missing key
+yields the English value); the failure of a whole file is loud (`AppLog.error` plus a
+debug assert plus a Flutter test that loads every overlay from rootBundle).
 
-### Добавляем display-поле в шаблон
+### Adding a display field to the template
 
-Новое user-visible поле обязано попасть в **экстрактор + whitelist**
-`TemplateOverlay` (`template_overlay.dart`) — иначе оно тихо шипится
-английским во всех локалях. Self-check `template_check` следит, чтобы whitelist
-покрывал каждое display-поле экстрактора (английский ключ извлекается живьём из
-`wizard_template.json`, отдельного en-файла нет); после добавления — перевод в
-`ru/template.json`, `flutter test` (applier-тесты).
-
----
-
-## Когда что ломается
-
-### Добавляем новый top-level ключ
-
-Update этого файла (раздел top-level + новый section per-key) + добавляем читалку в builder/loader. Проверяем что `template_loader.dart` парсит без ошибок (текущий парсер permissive — игнорирует unknown keys).
-
-### Меняем shape preset'а / vars
-
-Если breaking — bump `parser_config.version` (это сигнал для миграционного кода). Описать миграцию в [§026 parser v2 spec](./spec/features/026%20parser%20v2/spec.md) или новой спеке.
-
-### Добавляем var с новым `type`
-
-Update var.type таблицу в этом файле + добавить рендерер в `settings_screen.dart`.
-
-### Меняем `config.route.rules` базовые правила
-
-С §264 базовых правил в `config.route.rules` **больше нет** (ключ пуст) — sniff/hijack-dns/resolve переехали в locked-пресет `traffic-processing` (`num:0`). Правь их **там**, не в `config.route.rules`. Порядок первых правил критичен (sniff первым) — `num:0` + `isSortable:false` + `rule_order.dart` держат пресет на позиции 0. Любое новое базовое route-правило для всех юзеров либо кладётся в этот пресет, либо (если условное) — как preset-rule. Может сломать routing для существующих юзеров — **проверять** порядок относительно auto-discovery preset-rules. См. order matters в [§030].
-
-### Добавляем ref-var в пресет (§265)
-
-Кладёшь `{"ref":"<global>"}` в `vars[]` пресета. Целевая глобаль **обязана
-существовать** в какой-то секции (`WizardTemplate.globalVar` ищет по всем, вкл.
-`internal`) — иначе метаданные не резолвятся. Если var не должна светиться в VPN
-Settings — заводи её в секции `internal` (chapter не рендерится). Значение живёт
-в `userVars`; **не** дублируй его в `varsValues` (страгглер разойдётся с
-глобалью — см. `stripRefVarsFromVarsValues`). Все читатели `varsValues` по имени
-пропускают `v.isRef`.
-
-### Добавляем on_change на пресет (§266)
-
-Магическая псевдо-var (`rule_enable`/`dns_enable`) несёт `on_change: {"set":{...}}`.
-Обязательно: (1) `default_value` + `required:false` на псевдо-var (иначе пресет
-молча не эмитится, грабля `29fe61c`); (2) цель — существующая глобаль (обычно в
-`internal`); (3) вызвать `applyPresetOnChange` из **всех** точек смены состояния
-пресета (routing-свич, dns-тумблер, редактор, DNS Settings — сейчас 5 мест). Если
-формула зависит и от routing-, и от dns-состояния — вешай **идентичный** on_change
-на обе псевдо-vars (`rule_enable` И `dns_enable`), чтобы срабатывало по любому пути.
+A new user-visible field must be added to both the **extractor and the whitelist** of
+`TemplateOverlay` (`template_overlay.dart`) — otherwise it silently ships untranslated.
+in English in every locale. The `template_check` self-check ensures the whitelist covers
+every display field of the extractor (the English key is extracted from
+`wizard_template.json`, since there is no separate en file); after adding one, put the
+translation in `ru/template.json` and run `flutter test` (the applier tests).
 
 ---
 
-## Связанные документы
+## What breaks when
 
-- [`STORAGE.md`](./STORAGE.md) — user-state в `lxbox_settings.json` (то что меняется юзером, в т.ч. override template-vars и `custom_rules[].presetId` ссылки на этот catalog)
-- [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution и expansion (бывший feature §005x, заменён §026)
+### Adding a new top-level key
+
+Update this file (the top-level section plus a new per-key section) and add a reader to the builder.
+
+### Changing the shape of a preset or its vars
+
+If it is breaking, bump `parser_config.version` (that is the signal for the migration code). Describe it here.
+
+### Adding a var with a new `type`
+
+Update the var.type table in this file and add a renderer to `settings_screen.dart`.
+
+### Changing the base rules in `config.route.rules`
+
+Since §264 there are **no** base rules in `config.route.rules` any more (the key is empty) — sniff, hijack-dns and resolve live in the `traffic-processing` preset.
+
+### Adding a ref-var to a preset (§265)
+
+You put `{"ref":"<global>"}` into the preset's `vars[]`. The target global **must exist**
+in some section (`WizardTemplate.globalVar` searches all of them, including `internal`) —
+otherwise the metadata does not resolve. If the var must not show up in VPN Settings,
+declare it in the `internal` section (its chapter is never rendered). The value lives in
+`userVars`; do **not** duplicate it into `varsValues` (the straggler would diverge from the
+global — see `stripRefVarsFromVarsValues`). Every reader of `varsValues` by name skips
+`v.isRef`.
+
+### Adding an on_change to a preset (§266)
+
+The magic pseudo-var (`rule_enable` / `dns_enable`) carries `on_change: {"set":{...}}`.
+Mandatory: (1) a `default_value` plus `required:false` on the pseudo-var (otherwise the preset
+silently fails to emit — the `29fe61c` gotcha); (2) the target is an existing global (usually in
+`internal`); (3) call `applyPresetOnChange` from **every** point where the preset's state
+changes (the routing switch, the DNS toggle, the editor, DNS Settings — five places today). If
+the formula depends on both the routing and the DNS state, hang an **identical** on_change
+on both pseudo-vars (`rule_enable` AND `dns_enable`), so it fires along either path.
+
+---
+
+## Related documents
+
+- [`STORAGE.md`](./STORAGE.md) — the user state in `lxbox_settings.json` (what the user changes, including the channels)
+- [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution and expansion (formerly feature §005x, superseded by §026)
 - [§026 parser v2](./spec/features/026%20parser%20v2/spec.md) — `parser_config.version`
-- [§033 preset bundles](./spec/features/033%20preset%20bundles/spec.md) — `selectable_rules[]` и expansion
+- [§033 preset bundles](./spec/features/033%20preset%20bundles/spec.md) — `selectable_rules[]` and expansion
 - [§030 custom routing rules](./spec/features/030%20custom%20routing%20rules/spec.md) — `selectable_rules[*].rule` shape, order matters
-- [§061 dns rules refactor](./spec/tasks/061-dns-rules-refactor/spec.md) — `dns_options.rules[]` (бывший feature §041)
-- [§043 dns servers refs by kind](./spec/tasks/043-dns-servers-refs-by-kind.md) + [§044 clean schema](./spec/tasks/044-dns-servers-clean-schema.md) — `dns_options.servers[]` и template-vs-storage отношения
+- [§061 dns rules refactor](./spec/tasks/061-dns-rules-refactor/spec.md) — `dns_options.rules[]` (formerly feature §041)
+- [§043 dns servers refs by kind](./spec/tasks/043-dns-servers-refs-by-kind.md) plus [§044 clean schema](./spec/tasks/044-dns-servers-clean-schema.md) — `dns_options.servers[]` and the template-versus-storage relationship
 - [§040 per-group ping settings](./spec/tasks/040-per-group-ping-test-settings.md) — `ping_options`
 - [§015 speed test](./spec/features/015%20speed%20test/spec.md) — `speed_test_options`
-- [§022 app settings](./spec/features/022%20app%20settings/spec.md) — Wizard UI и `sections[]`
-- [§279 localization](./spec/features/279%20localization/spec.md) — l10n-overlay display-текста шаблона; ключ overlay = сам английский текст (принцип `ui/`-словаря, `{value}`-формат, без адресов и `src`-hash — §285); translator-guide — [`l10n.md`](./l10n.md)
+- [§022 app settings](./spec/features/022%20app%20settings/spec.md) — the Wizard UI and `sections[]`
+- [§279 localization](./spec/features/279%20localization/spec.md) — the l10n overlay of the template's display text; the overlay key is the English text itself (the same principle as the `ui/` dictionary, the `{value}` format, with no addresses and no `src` hash — §285); the translator guide is [`l10n.md`](./l10n.md)

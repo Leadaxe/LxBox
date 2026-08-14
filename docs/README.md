@@ -1,77 +1,86 @@
-# L×Box — индекс документации
+# L×Box — documentation index
 
-Оглавление всей проектной документации. Точка входа для навигации: начните
-отсюда, а не с поиска по файлам.
+A table of contents for the whole project documentation. This is the entry point
+for navigation: start here rather than grepping through files.
 
-## Автоматизация и управление
+## Automation and control
 
-L×Box управляется **двумя** способами помимо самого UI. Выбор зависит от того,
-кто и откуда управляет:
+Beyond the UI itself, L×Box can be driven in **two** ways. Which one you want
+depends on who is in control and from where:
 
-| Канал | Для чего | Документ |
+| Channel | What for | Document |
 |---|---|---|
-| **Public Intent API** (§047) | Фоновая автоматизация на устройстве — Tasker / MacroDroid / Locale-plugin. Broadcast-команды и события (Wi-Fi-триггеры, авто-вкл/выкл, switch-node, реакция на падение подписки). Без root, без USB. | [AUTOMATION.md](AUTOMATION.md) |
-| **Debug API** (HTTP) | Программное / скриптовое управление и диагностика — полный CRUD подписок и правил, старт/стоп, конфиг, логи, профайлер. Bearer-токен, порт 9269, обычно через adb-forward или Wi-Fi. Для CI, отладки, автоматизации с ПК. | [api/debug-api-reference.md](api/debug-api-reference.md) · живой `GET /help` |
+| **Public Intent API** (§047) | Background automation on the device — Tasker / MacroDroid / a Locale plugin. Broadcast commands and events (Wi-Fi triggers, auto on/off, switch-node, reacting to a failed subscription). No root, no USB. | [AUTOMATION.md](AUTOMATION.md) · [RU](AUTOMATION.ru.md) |
+| **Debug API** (HTTP) | Programmatic or scripted control and diagnostics — full CRUD over subscriptions and rules, start/stop, config, logs, profiler. Bearer token, port 9269, usually over adb-forward or Wi-Fi. For CI, debugging, and automation from a computer. | [api/debug-api-reference.md](api/debug-api-reference.md) · the live `GET /help` |
 
-> **Clash API удалён (§122).** UI и диагностика ходят через libbox CommandClient
-> (push-стримы из ядра); ядро собрано без `with_clash_api`, `experimental.clash_api`
-> в конфиге роняет старт. См. историческую справку [api/clash-api-reference.md](api/clash-api-reference.md).
+> **The Clash API is gone (§122).** The UI and diagnostics go through the libbox
+> CommandClient (push streams out of the core); the core is built without
+> `with_clash_api`, and `experimental.clash_api` in a config kills the start. See
+> the historical note in [api/clash-api-reference.md](api/clash-api-reference.md).
 
-Разница коротко: **Public Intent** — «телефон сам себя автоматизирует» по
-событиям; **Debug API** — «управляю телефоном снаружи скриптом/руками». Оба
-описывают одни и те же операции, но с разных сторон.
+The difference in one line: **Public Intent** is “the phone automates itself” from
+events; **Debug API** is “I drive the phone from outside with a script or by
+hand”. Both describe the same operations from opposite sides.
 
-## Основная документация
+## Core documentation
 
-| Документ | Описание |
+| Document | Description |
 |---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Tech stack, поддерживаемые Android, дерево исходников, Parser v2 pipeline, потоки данных, native side (Kotlin) |
-| [STORAGE.md](STORAGE.md) | Полная схема `lxbox_settings.json` + per-key семантика + история миграций |
-| [TEMPLATE.md](TEMPLATE.md) | Схема `wizard_template.json` (пресеты/vars/секции) + синтаксис подстановки vars |
-| [PROTOCOLS.md](PROTOCOLS.md) | Детали VPN-протоколов (vless/vmess/trojan/…): URI-форматы, параметры, sing-box mapping |
-| [KERNEL.md](KERNEL.md) | sing-box-lx fork: build-теги, ловушки при бампе версии, история rc |
-| [SECURITY.md](SECURITY.md) | Threat model — защита от утечек трафика, локальная поверхность атаки, on-device secrets |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Tech stack, supported Android versions, source tree, the Parser v2 pipeline, data flows, the native side (Kotlin) |
+| [STORAGE.md](STORAGE.md) | The full `lxbox_settings.json` schema, per-key semantics, migration history |
+| [TEMPLATE.md](TEMPLATE.md) | The `wizard_template.json` schema (presets/vars/sections) plus the var substitution syntax |
+| [PROTOCOLS.md](PROTOCOLS.md) | VPN protocol details (vless/vmess/trojan/…): URI formats, parameters, sing-box mapping |
+| [KERNEL.md](KERNEL.md) | The sing-box-lx fork: build tags, the gotchas of a version bump, rc history |
+| [SECURITY.md](SECURITY.md) · [RU](SECURITY.ru.md) | Threat model — protection against traffic leaks, the local attack surface, on-device secrets |
+| [PRIVACY_POLICY.md](PRIVACY_POLICY.md) · [RU](PRIVACY_POLICY.ru.md) | What the app stores, which requests it makes on its own, and which permissions it needs |
 
-## Разработка и эксплуатация
+## Development and operations
 
-| Документ | Описание |
+| Document | Description |
 |---|---|
-| [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) | Философия, принципы, критические gotchas, организация spec'ов |
-| [BUILD.md](BUILD.md) | flutter build команды, CI, signing, local-build marker |
-| [RELEASE_PROCESS.md](RELEASE_PROCESS.md) | Версии, теги, GitHub Releases, post-flight |
-| [DIAGNOSTICS.md](DIAGNOSTICS.md) | Playbook диагностики на устройстве: Debug API + CommandClient/профайлер endpoints, анализ TCP/DNS, `scripts/lxbox-diag.sh` |
-| [USER_GUIDE_RU.md](USER_GUIDE_RU.md) | Пользовательское руководство (RU) — как это работает: ступени трафика, каналы, detour, DNS, рецепты, regex |
-| [USER_GUIDE.md](USER_GUIDE.md) | User guide (EN) — перевод USER_GUIDE_RU; правится вместе с ним (парность стережёт CI, см. ниже) |
-| [DONATE_RU.md](DONATE_RU.md) · [DONATE.md](DONATE.md) | Поддержка проекта (§362): криптовалюта, Boosty, помощь не деньгами. Источник попапа в приложении — `donate.json` |
+| [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) | Philosophy, principles, critical gotchas, how specs are organised |
+| [BUILD.md](BUILD.md) | flutter build commands, CI, signing, the local-build marker |
+| [RELEASE_PROCESS.md](RELEASE_PROCESS.md) | Versions, tags, GitHub Releases, post-flight |
+| [FDROID.md](FDROID.md) | Publishing in the F-Droid catalogue: metadata, reproducible builds, the versionCode scheme |
+| [DIAGNOSTICS.md](DIAGNOSTICS.md) | The on-device diagnostics playbook: Debug API plus CommandClient/profiler endpoints, TCP/DNS analysis, `scripts/lxbox-diag.sh` |
+| [l10n.md](l10n.md) | Localization (§279/§285): natural keys, the dictionary format, adding a language, the checkers |
+| [USER_GUIDE.md](USER_GUIDE.md) · [RU](USER_GUIDE.ru.md) | User guide — how it all works: the stages traffic goes through, channels, detour, DNS, recipes, regex |
+| [DONATE.md](DONATE.md) · [RU](DONATE.ru.md) | Supporting the project (§362): crypto, Boosty, and how to help without money. The in-app popup is sourced from `donate.json` |
 
-> **Парность RU/EN (§360).** README, USER_GUIDE и DONATE ведутся парами. CI на каждом
-> push/PR сверяет скелет пары — число и уровни разделов, блоки кода: раздел,
-> дописанный в один язык, роняет шаг «Docs parity». Локально:
-> `dart run tool/docs/parity_check.dart --strict` из `app/`. Подробности —
+> **RU/EN pairing (§360).** Six documents are kept as pairs: README, USER_GUIDE,
+> DONATE, PRIVACY_POLICY, SECURITY and AUTOMATION. The translation is named
+> `X.ru.md`. On every push and PR, CI compares the pair's skeleton — the number
+> and levels of sections, and the code blocks: a section added in one language
+> only fails the “Docs parity” step. Locally: `dart run
+> tool/docs/parity_check.dart --strict` from `app/`. Details in
 > [app/tool/docs/README.md](../app/tool/docs/README.md).
+>
+> Everything else is English-only. Development documentation changes together
+> with the code in almost every task, and a second language there would mean
+> doing the work twice — with the lagging side failing silently.
 
-## Справочники API
+## API references
 
-| Документ | Описание |
+| Document | Description |
 |---|---|
-| [api/debug-api-reference.md](api/debug-api-reference.md) | Debug API — полный список endpoint'ов (зеркалит живой `GET /help`) |
-| [api/clash-api-reference.md](api/clash-api-reference.md) | Clash API — **удалён в §122**, историческая справка по sing-box clash-api |
+| [api/debug-api-reference.md](api/debug-api-reference.md) | Debug API — the full endpoint list (mirrors the live `GET /help`) |
+| [api/clash-api-reference.md](api/clash-api-reference.md) | Clash API — **removed in §122**, kept as a historical note on the sing-box clash-api |
 
-## Спецификации
+## Specifications
 
-| Тип | Где |
+| Kind | Where |
 |---|---|
-| **Фичи** (крупные концепты, разделы приложения) | [spec/features/](spec/features/) — папки `NNN name/spec.md` |
-| **Таски** (мелкие изменения, bug-fix'ы, cleanup'ы) | [spec/tasks/](spec/tasks/) — `NNN-name.md` |
-| **Процессы** (ночная работа и т.п.) | [spec/processes/](spec/processes/) |
-| **Conventions** оформления spec'ов | [spec/README.md](spec/README.md) |
+| **Features** (large concepts, sections of the app) | [spec/features/](spec/features/) — folders named `NNN name/spec.md` |
+| **Tasks** (small changes, bug fixes, cleanups) | [spec/tasks/](spec/tasks/) — `NNN-name.md` |
+| **Processes** (night work and the like) | [spec/processes/](spec/processes/) |
+| **Conventions** for writing specs | [spec/README.md](spec/README.md) |
 
-## Прочее
+## Everything else
 
-| Каталог | Содержимое |
+| Directory | Contents |
 |---|---|
 | [releases/](releases/) | Per-version release notes (EN + RU) |
-| [features/](features/) | Deep-dive заметки по отдельным фичам (per-app-trace, wifi-aware-routing) |
-| [research/](research/) | Исследования (аудит кода, аудитория, 4pda-фидбэк) |
-| [examples/](examples/) | Примеры конфигов (`minimal_local_test.json`) |
-| [DEVELOPMENT_REPORT.md](DEVELOPMENT_REPORT.md) | Исторический отчёт хроники разработки (до v1.9.0) — не поддерживается |
+| [features/](features/) | Deep-dive notes on individual features (per-app-trace, wifi-aware-routing) |
+| [research/](research/) | Research (code audit, audience, 4pda feedback) |
+| [examples/](examples/) | Example configs (`minimal_local_test.json`) |
+| [DEVELOPMENT_REPORT.md](DEVELOPMENT_REPORT.md) | A historical chronicle of development (up to v1.9.0) — no longer maintained |

@@ -46,9 +46,9 @@ curl -s "$BASE/help?format=json" | jq   # machine-readable для auto-tooling
 
 - `GET /config` отдаёт **raw sing-box JSON as-is** — с `private_key`, `password`,
   UUID нод в открытом виде.
-- `GET /backup?include=storage` отдаёт весь `SettingsStorage.exportRaw()`.
+- `GET /backup/export?include=storage` отдаёт весь `SettingsStorage.exportRaw()`.
 - `GET /state/subs?reveal=true` отдаёт **полные URL подписок** (с секретами).
-- `PUT /config` / `PUT /backup` / все CRUD-роуты полностью перезаписывают состояние.
+- `PUT /config` / `POST /backup/import` / все CRUD-роуты полностью перезаписывают состояние.
 
 **Единственная граница безопасности:**
 1. **Bearer-токен** (`debug_token`, ротируемый через App Settings → Developer).
@@ -85,6 +85,7 @@ auth), а не факт, что за границей всё открыто.
 - [Settings writes — `/settings/*`](#settings-writes--settings)
 - [Wi-Fi history — `/wifi_history`](#wi-fi-history--wifi_history)
 - [Files](#files)
+- [Support feed — `/support/*`](#support-feed--support)
 - [Profiler — `/profiler/*`](#profiler--profiler)
 - [Common errors](#common-errors)
 
@@ -262,6 +263,12 @@ Custom routing rules (§030). `id` = UUID v4, генерится серверо�
 | `/rules/{id}` | PATCH | любой subset полей (strict type check) |
 | `/rules/{id}` | DELETE | — |
 | `/rules/reorder` | POST | `{"order":[id1,id2,...]}` — должен содержать все текущие ID |
+| `/rules/move` | POST | `{"id":"<uuid>","after":"<uuid>"\|null}` — §370, зеркало drag'n'drop в UI |
+
+`/rules/move` отличается от `reorder` тем, что не требует полного списка:
+правило встаёт на `target.num + 1`, соседи сдвигаются только если это число
+занято. `after: null` — в начало пользовательской зоны. Закреплённые правила
+двигать нельзя — запрос отклоняется.
 
 **Создать:**
 ```bash
@@ -939,6 +946,8 @@ Read-only file access.
 | `GET /files/external` | legacy alias for `/files/local`, ради обратной совместимости |
 | `GET /files/crash/list` | §316 — архив краш-репортов ядра: `[{name, size, mtime}]`, новые первыми; `[]` если крашей не было |
 | `GET /files/crash` | §316 — `name=<file>` → тело архивного репорта |
+| `GET /files/oom/list` | OOM-снапшоты ядра: `[{name, size, mtime, memory_usage, ...}]`, новые первыми |
+| `GET /files/oom` | `name=<snapshot>` → файл снапшота; по умолчанию `metadata.json`, иначе `&file=heap.pb\|allocs.pb\|goroutine.pb\|go.log\|configuration.json` |
 
 ```bash
 curl -s -H "$HDR" "$BASE/files/srs/list" | jq
@@ -946,6 +955,10 @@ curl -s -H "$HDR" "$BASE/files/srs?ruleId=abc-123" > /tmp/rule.srs
 
 # Native stderr log (sing-box core, internal app-scoped storage)
 curl -s -H "$HDR" "$BASE/files/local?name=stderr.log" | tail -30
+
+# OOM-снапшот: сначала список, потом heap-профиль конкретного
+curl -s -H "$HDR" "$BASE/files/oom/list" | jq
+curl -s -H "$HDR" "$BASE/files/oom?name=<snapshot>&file=heap.pb" > /tmp/heap.pb
 ```
 
 ---
@@ -1030,54 +1043,63 @@ curl -s -H "$HDR" "$BASE/diag/applog?prev=true" | jq
 
 ---
 
-## Profiler — `/profiler/*`
+## Support feed — `/support/*`
 
-Traffic profiler — **per-app** session (§044, один active в любой момент) или **system-wide** rolling buffer (§048, Live tab в Statistics). Источник событий (§168): parser sing-box core logs + connections-push от libbox **CommandClient** (`CcChannel.connections` через фоновый `profilerClient`, `connectProfiler()`). Clash `/connections` polling выпилен (§122 — Clash API dropped).
+Лента поддержки (§356/§357): показ сообщений из `support.json` по очереди, с
+гейтами по версии, времени активности и отложенному показу.
 
-### Per-app session
-
-| Endpoint | Метод | Body |
+| Endpoint | Метод | Что |
 |---|---|---|
-| `/profiler/start` | POST | `{"package":"<pkg>", "verbose":false, "secondary_packages":[...]}` |
-| `/profiler/stop` | POST | — |
-| `/profiler/active` | GET | — — `404` если ничего не active |
-| `/profiler/sessions` | GET | — — last 5 completed (FIFO ring) |
-| `/profiler/sessions` | DELETE | — — wipe completed |
-| `/profiler/session/{id}` | GET | — — `?include=events,domains,ips` |
-| `/profiler/session/{id}` | DELETE | — |
-| `/profiler/stream` | GET | — — SSE per-session (требует active) |
-| `/profiler/secondary-packages` | PATCH/POST | `{"secondary_packages":[...]}` |
+| `/support/state` | GET | сырой `support_state.json` (`read`/`baseline`/`snooze`/`active`) + `app_version` + `total_active_seconds` |
+| `/support/reset` | POST | стереть `read`/`baseline`/`snooze`/кэш — лента начинается заново. `?keep_active=false` обнуляет и счётчик активности |
+| `/support/preview` | POST | тело = **одно** сообщение в формате ленты → немедленный полноэкранный показ, **все гейты обходятся** |
+
+Параметры `/support/preview`:
+
+| Параметр | По умолчанию | Что делает |
+|---|---|---|
+| `dry` | `true` | кнопки работают, но `markRead`/`snooze` **не** сохраняются; `?dry=false` — сохраняются |
+| `snooze_hours` | `10` | `snooze_active_hours` синтетической ленты |
+
+⚠ `/support/preview` требует живого UI-процесса — иначе `409`.
 
 ```bash
-# Начать сессию для com.example.app, пометить webview-host'ы как secondary
+# Что лента думает о себе сейчас
+curl -s -H "$HDR" "$BASE/support/state" | jq
+
+# Показать сообщение на экране, ничего не записывая в состояние
 curl -X POST -H "$HDR" -H "Content-Type: application/json" \
-  -d '{"package":"com.example.app","verbose":false,"secondary_packages":["com.google.android.webview"]}' \
-  "$BASE/profiler/start"
-# → {id, target_package, started_at, ...} ИЛИ 409 {error:"already_active",active_session_id}
+  -d '{"id":"test-1","title":"Hi","message":"Preview"}' \
+  "$BASE/support/preview"
 
-# Текущая сессия (или 404)
-curl -s -H "$HDR" "$BASE/profiler/active" | jq
-
-# Stream live events (Ctrl-C завершает)
-curl -N -H "$HDR" "$BASE/profiler/stream"
-
-# Detail с full events
-curl -s -H "$HDR" "$BASE/profiler/session/<id>?include=events,domains" | jq
-
-# Stop
-curl -X POST -H "$HDR" "$BASE/profiler/stop"
+# Прогнать ленту с нуля
+curl -X POST -H "$HDR" "$BASE/support/reset"
 ```
+
+---
+
+## Profiler — `/profiler/*`
+
+Traffic profiler — **system-wide** rolling buffer (§048, вкладка Profiler в Statistics). Источник событий (§168): parser sing-box core logs + connections-push от libbox **CommandClient** (`CcChannel.connections` через фоновый `profilerClient`, `connectProfiler()`). Clash `/connections` polling выпилен (§122 — Clash API dropped).
+
+> **Per-app session удалена (§288).** Роуты `/profiler/{start,stop,active,
+> sessions,session/<id>,stream,secondary-packages}` сняты вместе с
+> session-слоем и вкладкой `Statistics → App`; запрос на любой из них вернёт
+> `404`. Живые роуты профайлера — только `/profiler/live*` (ниже). Разбор
+> трафика конкретного приложения делается фильтром по приложениям на вкладке
+> Profiler. Историческая справка по атрибуции §168/§180 —
+> [`../features/per-app-trace.md`](../features/per-app-trace.md).
 
 **Confidence levels** в каждом event: `verified` (router-package matched target) / `secondary` (matched secondary_packages) / `inferred` (post-DNS process inference, 10s window) / `unattributed` (нет owner). UI показывает легенду; для post-mortem analysis фильтровать по `confidence`.
 
-### System-wide (§048 Live tab)
+### System-wide (§048 Profiler tab)
 
-Idempotent toggle для recording, подключающего тот же connections-источник без active session. **Idle profiler ничего не делает** — recording on только при явном start.
+Idempotent toggle для recording. **Idle profiler ничего не делает** — recording on только при явном start.
 
 | Endpoint | Метод | Что |
 |---|---|---|
 | `/profiler/live/start` | POST | `startGlobalRecording` — attach AppLog listener + subscribe на CommandClient connections-push (§168) |
-| `/profiler/live/stop` | POST | `stopGlobalRecording` — detach (если нет per-app session) |
+| `/profiler/live/stop` | POST | `stopGlobalRecording` — detach |
 | `/profiler/live/state` | GET | `{recording, started_at, buffer_count, unattributed_count, banner_active}` |
 | `/profiler/live` | GET | `{window_seconds, count, events}` — global rolling buffer snapshot, `?seconds=60` (default) |
 | `/profiler/live/stream` | GET | SSE — все system-wide TrafficEvent'ы live |

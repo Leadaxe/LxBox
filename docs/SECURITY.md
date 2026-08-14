@@ -2,6 +2,8 @@
 
 This document describes the L×Box threat model and the concrete protection mechanisms: what we close off, how exactly, and why. The traffic-leak section is covered in the most detail, because it's the least obvious part.
 
+> Русская версия: [SECURITY.ru.md](SECURITY.ru.md)
+
 Related specs: [`020 — Security & DPI Bypass`](spec/features/020%20security%20and%20dpi%20bypass/spec.md), [`119 — VPN Mode`](spec/features/119%20vpn-mode/spec.md), [`124 — per-app allowlist`](spec/tasks/124-allowlist-self-package-investigation.md).
 
 ---
@@ -142,7 +144,7 @@ Threat: another app on the same device abuses our local proxy or API (the class 
 
 Source and roadmap — [`020 — Security & DPI Bypass`](spec/features/020%20security%20and%20dpi%20bypass/spec.md).
 
-> **Automation caveat (§157).** Once the automation master toggle is ON, the receiver accepts its control commands from **any** caller on the device — a broadcast carries no caller identity, so there is no per-app authentication (`android:permission` is deliberately unset). The commands are control-only (start/stop/switch node/set group/rebuild/refresh/reset/urltest — no secret-exfiltration path), and outgoing automation events carry status labels only. See [`AUTOMATION.md`](AUTOMATION.md) "Безопасность".
+> **Automation caveat (§157).** Once the automation master toggle is ON, the receiver accepts its control commands from **any** caller on the device — a broadcast carries no caller identity, so there is no per-app authentication (`android:permission` is deliberately unset). The commands are control-only (start/stop/switch node/set group/rebuild/refresh/reset/urltest — no secret-exfiltration path), and outgoing automation events carry status labels only. See the “Security” section of [`AUTOMATION.md`](AUTOMATION.md).
 
 ---
 
