@@ -430,7 +430,7 @@ builder or the seed). The parameters go into every channel's `<tag>-auto` twin t
 The template holds only **two seed channels** (`vpn-1` and `vpn-2`). Further channels (up to
 `vpn-10`, `kMaxChannels = 10`) are created by the user in storage (`channels[]`).
 
-| Ключ | Тип | Назначение |
+| Key | Type | Purpose |
 |---|---|---|
 | `tag` | string | The channel's immutable id (`vpn-1`..`vpn-10`). |
 | `label` | string | The UI display name (empty falls back to `tag`). |
@@ -596,29 +596,29 @@ The semantics:
   moment of the click; afterwards the user is free to override them by hand.
 - **In memory only** — the targets are written into the screen's reactive `VarValuesModel`
   (a per-key `ValueNotifier`; each `TemplateVarListView` field subscribes to its own key
-  ключ и обновляются мгновенно). Storage трогается ТОЛЬКО общим write-on-exit
+  and updates instantly). Storage is touched ONLY by the shared write-on-exit
   (`_persist` over `dirtyKeys`) — a user who leaves before exiting the screen (a
   force-kill) has saved nothing. See ARCHITECTURE.md → “VarValuesModel”.
 - **Chains** — if a target var has its own `on_change`, it is applied recursively; a
   fixpoint guard breaks the cycle: writing an unchanged value stops it.
-- **Значения — литералы-строки.** `#if`-узел вычисляется движком через
-  `evalIfScalar` (`if_engine.dart`) — НЕ через `walk` напрямую: bare-Map
-  `{"#if":…}` в `walk` уходит в map-spread режим и схлопывает скаляр в `{}`.
-- **Кросс-экранные цели** (напр. `dns_strategy` — chapter `dns`, рендерится на
-  DNS Settings): live-обновления на другом экране НЕТ (модель — per-экран);
-  значение доедет через cache при следующем открытии того экрана. Экраны не
-  co-mounted → рассинхрон юзеру не виден.
+- **The values are string literals.** An `#if` node is evaluated by the engine through
+  `evalIfScalar` (`if_engine.dart`) and NOT through `walk` directly: a bare map
+  `{"#if":…}` sent through `walk` falls into map-spread mode and collapses the scalar to `{}`.
+- **Cross-screen targets** (for example `dns_strategy`, chapter `dns`, rendered on the
+  DNS Settings screen): there is NO live update on the other screen (the model is
+  per-screen); the value arrives through the cache the next time that screen opens. The
+  screens are never co-mounted, so the user never sees the divergence.
 
-### `on_change` пресета — реакция на вкл/выкл (§266)
+### A preset's `on_change` — reacting to being enabled or disabled (§266)
 
-`on_change` живёт не только на секционных vars, но и на **vars пресета**. Отличие
-от §232 — в источнике и приёмнике:
+`on_change` lives not only on section vars but on a **preset's vars** too. The difference
+from §232 is in the source and the sink:
 
-| | §232 (секция) | §266 (пресет) |
+| | §232 (a section) | §266 (a preset) |
 |---|---|---|
 | **Триггер** | клик по var в Wizard-экране | смена состояния пресета (свич on/off, dns_enable-тумблер) |
 | **Источник** | значение самой var (`VarValuesModel`) | **состояние пресета** — псевдо-vars `@rule_enable`/`@dns_enable` |
-| **Приёмник** | in-memory `VarValuesModel` экрана | **глобальный `userVars`** (`SettingsStorage.setVar` — сразу на диск) |
+| **Sink** | the screen's in-memory `VarValuesModel` | **the global `userVars`** (`SettingsStorage.setVar` — straight to disk) |
 | **Движок** | `settings_screen._applyOnChange` | `preset_on_change.dart::applyPresetOnChange` |
 
 **Псевдо-vars пресета** (не хранятся — вычисляются из состояния):
