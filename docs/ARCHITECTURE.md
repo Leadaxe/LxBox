@@ -1299,58 +1299,58 @@ Without the `getVpnStatus` pull, case 2 broke: the UI stayed “Disconnected” 
 
 | Event | Mechanism |
 |---------|----------|
-| Транзит (`Starting` → `Started`) | broadcast → EventChannel |
-| App reattach (новый Flutter-процесс, сервис жив) | pull `getVpnStatus` в `init` |
-| Heartbeat failed (тишина CommandClient status-стрима > timeout) | `HomeController._onTunnelDead` → `TunnelStatus.revoked` |
-| Safety-timeout (застряли в Starting/Stopping 10s) | `Future.delayed` в `_handleStatusEvent` форс'ит disconnected |
+| A transition (`Starting` → `Started`) | broadcast → EventChannel |
+| An app reattach (a new Flutter process while the service lives) | a `getVpnStatus` pull in `init` |
+| A failed heartbeat (the CommandClient status stream stayed silent past the timeout) | `HomeController._onTunnelDead` |
+| A safety timeout (stuck in Starting/Stopping for 10 s) | a `Future.delayed` in `_handleStatusEvent` forces the state |
 
 #### Reconnect flow (v1.4.0+)
 
-`HomeController.reconnect()` — композиция `_stopInternal + _startInternal` с blocking семантикой на native:
+`HomeController.reconnect()` composes `_stopInternal` and `_startInternal` with blocking semantics.
 
 ```
-1. Если tunnel уже down — просто start() и выход.
+1. If the tunnel is already down, just start() and return.
 2. busy=true.
-3. _stopInternal: await _vpn.stopVPN() — native блокирует до
-   setStatus(Stopped) или 5с timeout. Intent-based reset sticky флага.
-4. Если stop timed out — abort, lastError="Stop timed out".
+3. _stopInternal: await _vpn.stopVPN() — native blocks until
+   setStatus(Stopped) or a 5 s timeout. An intent-based reset of the sticky flag.
+4. If the stop timed out, abort with lastError="Stop timed out".
 5. _startInternal: setNotificationTitle + startVPN + intent-based reset.
-6. busy=false в finally.
+6. busy=false in the finally block.
 ```
 
-Никакого `firstWhere`/timeout на Dart стороне. Blocking `stopVPN` на native через `BoxVpnService.stopAwait` (Completer, сompletes в `setStatus(Stopped)`) гарантирует `status=Stopped` до `startVPN` — race в `onStartCommand` guard исключён.
+No `firstWhere` or timeout on the Dart side. The blocking `stopVPN` lives natively.
 
-До v1.4.0 reconnect строился на Dart-side координации через `firstWhere(disconnected|revoked)` и был уязвим к sink-leak в `BoxVpnClient.onStatusChanged` (исправлен через `asBroadcastStream`). Детали — `docs/spec/tasks/001-reconnect-sink-leak.md`, `002-blocking-stopvpn-intent-reset.md`.
+Before v1.4.0 the reconnect was built on Dart-side coordination through `firstWhere(disconnected)`.
 
-#### Keep-on-exit настройка
+#### The keep-on-exit setting
 
-Toggle в **Mode-вкладке** (§188; до §188 — VPN Settings → System (§052); до §052 — App Settings → Background). Персистится через §189-слой: пишется в JSON-секцию `native_prefs.keep_on_exit` (источник истины), зеркалится в native `SharedPreferences` (`boxvpn_boot.keep_vpn_on_exit`) через `setKeepOnExit(bool)` — имя исторически от BootReceiver, но флаг используется и для keep-on-exit. Default ON (§188). Также экспонирован в Debug API: `GET|PUT /settings/vpn/keep_on_exit`.
+The toggle lives on the **Mode tab** (§188; before §188 it was VPN Settings → System, §052; before that, App Settings).
 
-При значении `true` и killе Flutter-процесса система не обязана останавливать foreground-service, а на `onTaskRemoved` service сам стоп не делает. Значение `false` → service слушает task-removed и вызывает `doStop()`.
+With `true`, killing the Flutter process does not oblige the system to stop the service.
 
-Pull-sync работает независимо от значения keep-on-exit: если сервис как-то пережил процесс, UI всё равно синхронизируется.
+The pull sync works regardless of keep-on-exit: if the service happens to be alive, the UI picks up its status.
 
-#### Deep-links между tab'ами и settings (§052)
+#### Deep links between the tabs and the settings (§052)
 
-Tab'ы которые depend на глобальном toggle в settings (core_logs_enabled / VPN settings vars) умеют open соответствующий screen с правильно открытым tab'ом. Реализация: `initialTab` parameter на `AppSettingsScreen` / `SettingsScreen`, `DefaultTabController.initialIndex: widget.initialTab.clamp(0, length-1)`.
+Tabs that depend on a global toggle in the settings (core_logs_enabled, the VPN settings vars) link to it.
 
-Два паттерна — **contextual banner** (state-зависимый hint) и **overflow item** (state-independent jump):
+Two patterns: a **contextual banner** (a state-dependent hint) and an **overflow item** (state-independent).
 
-- **Statistics → Live + Per-app → contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart)). Inline banner widget показывается **только когда `core_logs_enabled=false`**; self-hides при включении (auto-refresh на `AppLifecycleState.resumed`). Split hit-zone: левая зона (i + «DNS / router events off») → tooltip: баннер — опциональная подсказка для просмотра сырого core-лога; DNS/TCP-атрибуция от него **не** зависит (всё из ядра, §180/§168), см. секцию 6.5; правая («turn on Forward sing-box logs» + chevron) → deep-link в `AppSettingsScreen(initialTab: 1)` с auto-scroll и highlight нужного toggle'а. Это лучше чем PopupMenu overflow: явно виден когда нужен, исчезает когда не нужен.
-- **Routing → Tunnel apps → ⋮ → "VPN settings (Core)"** → `SettingsScreen(initialTab: 1)`. State-independent jump (всегда полезно ходить из Tunnel apps к Core vars), overflow PopupMenu уместен. Открывает Core а не System — юзер настраивает Tunnel apps mode и хочет рядом mtu / log_level / dns_final.
-- **Drawer → Debug → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)` — fast-path на Quit&reopen после toggle Forward sing-box logs.
+- **Statistics → Live and Per-app → the contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart))
+- **Routing → Tunnel apps → ⋮ → “VPN settings (Core)”** → `SettingsScreen(initialTab: 1)`. State-independent. |
+- **Drawer → Debug → ⋮ → “Diagnostics settings”** → `AppSettingsScreen(initialTab: 1)` — a fast path. |
 
 ---
 
 ## CommandClient (libbox)
 
-§122 — управляющий канал UI ↔ ядро. Clash HTTP API полностью выпилен (ядро собрано без `with_clash_api`, блок `experimental.clash_api` больше не инжектится в конфиг — на 1.14 без server'а он fatal). Вместо HTTP-петель — libbox **CommandClient**: ядро поднимает локальный command-server, клиент подписывается на server-stream push и шлёт unary-RPC. Файлы: нативный [`BoxCommandClient.kt`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxCommandClient.kt), Dart-клиент [`app/lib/vpn/cc_channel.dart`](../app/lib/vpn/cc_channel.dart) (`CcChannel.instance`).
+§122 — the UI↔core control channel. The Clash HTTP API was removed entirely.
 
-### Модель: push-стримы, не pull-снапшоты
+### The model: push streams, not pull snapshots
 
-Ядро эмитит изменения; UI подписывается. Старый поток из трёх Timer-polling'ов (Clash HTTP-петли `/proxies`, ~20s heartbeat `/traffic`, `/connections` 5s) заменён server-stream push'ем. Снапшоты приходят сами; точечный unary-pull остался только там, где стартовый push дырявый (`getGroups`).
+The core emits changes and the UI subscribes. The old flow of three pollers is gone.
 
-### Нативные клиенты (`BoxCommandClient.kt`)
+### The native clients (`BoxCommandClient.kt`)
 
 Четыре независимых `CommandClient` — развязка частоты обновления от состава данных и lifecycle:
 
