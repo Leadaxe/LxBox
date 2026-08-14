@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../main.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../../services/update_checker.dart';
 import 'update_status_row.dart';
 
 /// General tab для App Settings.
@@ -173,13 +174,17 @@ class GeneralTab extends StatelessWidget {
         Text(getLocalText.s("Updates"),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        SwitchListTile(
-          title: Text(getLocalText.s("Check for updates on launch")),
-          subtitle: Text(getLocalText.s("Pings github.com once a day to check for new releases. \"View\" opens the release page in browser; install is manual.")),
-          secondary: const Icon(Icons.system_update_alt),
-          value: autoCheckUpdates,
-          onChanged: loaded ? onAutoCheckUpdatesChanged : null,
-        ),
+        // §395 — переключатель только у sideload-сборок: из F-Droid и Play
+        // обновления приносит клиент магазина, фоновая проверка выключена
+        // насовсем. Кнопка «Check now» ниже остаётся везде — ручное действие.
+        if (UpdateChecker.autoCheckSupported)
+          SwitchListTile(
+            title: Text(getLocalText.s("Check for updates on launch")),
+            subtitle: Text(getLocalText.s("Pings github.com once a day to check for new releases. \"View\" opens the release page in browser; install is manual.")),
+            secondary: const Icon(Icons.system_update_alt),
+            value: autoCheckUpdates,
+            onChanged: loaded ? onAutoCheckUpdatesChanged : null,
+          ),
         const UpdateStatusRow(),
         const Divider(height: 32),
         Text(getLocalText.s("Feedback"),
