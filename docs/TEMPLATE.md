@@ -968,25 +968,25 @@ An example (the §119 inbounds, see `wizard_template.json`):
 ## Formatting style (how `wizard_template.json` is laid out)
 
 The editorial conventions for the **bundled** template (`app/assets/wizard_template.json`). The ordering
-ключей и переносы **не влияют** на loader/билдер — это читаемость для maintainer'ов.
-Семантика (`#if`, magic-vars, порядок правил) обязательна; оформление — нет, но держим
-единообразно. Кастомные/импортированные шаблоны эту секцию могут игнорировать.
+of keys and the line breaks **do not affect** the loader or the builder — they are there for the maintainer's readability.
+The semantics (`#if`, the magic vars, the rule order) are mandatory; the formatting is not, but keep it
+uniform. Custom or imported templates may ignore this section.
 
-### Общий принцип
+### The general principle
 
-**Компактно** (одна строка) — литералы и мелкие metadata-объекты. **Развёрнуто**
-(multiline) — выражения (`@…`, `#if`) и длинные списки. Критерий: строка с `@`-плейсхолдером
-или вложенным `#if` разворачивается; чистые литералы можно жать.
+**Compact** (one line) for literals and small metadata objects. **Expanded**
+(multiline) for expressions (`@…`, `#if`) and long lists. The criterion: a line holding an `@`
+placeholder or a nested `#if` is expanded; pure literals may be squeezed.
 
-### Vars (`sections[*].vars[]` и `selectable_rules[*].vars[]`)
+### Vars (`sections[*].vars[]` and `selectable_rules[*].vars[]`)
 
-| Часть var | Оформление |
+| Part of a var | Layout |
 |---|---|
-| «Шапка» — `name`, `type`, `wizard_ui`, `title`, `tooltip` | **Строка 1** (вместе) |
-| `default_value` | **Отдельная строка** с отступом |
-| `options[]` | **Multiline** — каждый элемент на своей строке (`{title,value}` или голая строка) |
-| ref-var (§265) `{"ref": "<name>"}` | **Одна строка** целиком (метаданных не несёт) |
-| Простой bool-var без options | **Одна строка** целиком |
+| The “header” — `name`, `type`, `wizard_ui`, `title`, `tooltip` | **Line 1** (together) |
+| `default_value` | **Its own line**, indented |
+| `options[]` | **Multiline** — one element per line (`{title,value}` or a bare string) |
+| A ref-var (§265) `{"ref": "<name>"}` | **One line** in full (it carries no metadata) |
+| A simple bool var with no options | **One line** in full |
 
 ```jsonc
 { "name": "resolve_strategy", "type": "enum", "wizard_ui": "edit", "title": "Resolve strategy", "tooltip": "IP version preference for DNS resolution",
@@ -997,12 +997,12 @@ The editorial conventions for the **bundled** template (`app/assets/wizard_templ
 { "ref": "resolve_strategy" }
 ```
 
-### `ui`-объект пресета (§264)
+### A preset's `ui` object (§264)
 
-Метаданные пресета (`label`/`description`/`default`/`locked`/`num`/`isSortable`) —
-**одна строка**, если влезает; иначе `label`/`description` на строке 1, флаги —
-строкой ниже. Флаги-`false` и `isSortable:true` НЕ пишем (дефолты модели); `num`
-пишем всегда — это часть раскладки оси.
+A preset's metadata (`label`, `description`, `default`, `locked`, `num`, `isSortable`) goes on
+**one line** when it fits; otherwise `label` and `description` on line 1 and the flags on the
+line below. Flags that are `false`, and `isSortable:true`, are NOT written (they are the model's
+defaults); `num` is always written — it is part of the axis layout.
 
 ```jsonc
 "ui": {"label": "Traffic Processing", "description": "...", "default": true, "locked": true, "num": 0, "isSortable": false}
@@ -1010,9 +1010,9 @@ The editorial conventions for the **bundled** template (`app/assets/wizard_templ
 
 ### JSON payload (`config`, `dns_servers`, `rule_set`)
 
-| Контекст | Правило |
+| Context | Rule |
 |---|---|
-| Поля с `@`-плейсхолдером | **одно поле — одна строка** |
+| Fields holding an `@` placeholder | **one field per line** |
 | Литералы (`type`, `tag`, `auto_route`, `server_port`) | можно вместе на одной строке |
 | Мелкие struct'ы ≤2–3 литерала (`direct-out`, hijack-dns) | **одна строка** |
 | Крупные объекты (`dns_options.servers[]`, preset `dns_servers[]`) | **multiline** — одно поле на строку |
