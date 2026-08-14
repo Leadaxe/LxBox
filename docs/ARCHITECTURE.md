@@ -1139,7 +1139,7 @@ In the §049 audit we ported the pattern from the SagerNet reference (`bg/BoxSer
 ### Structured Concurrency
 
 ```
-BoxService (per-instance, recreated с каждым new BoxVpnService)
+BoxService (per instance, recreated with every new BoxVpnService)
   └─ serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
        ├─ resetScope() in startSingbox (cancel is terminal)
        ├─ All coroutines tied to service lifecycle
@@ -1148,50 +1148,50 @@ BoxService (per-instance, recreated с каждым new BoxVpnService)
        └─ doStop() calls serviceScope.cancel() as safety net
 ```
 
-**`AtomicReference` для fileDescriptor / commandServer** (§049 F2/F3): `getAndSet(null)?.close()` гарантирует что только один поток выполнит close. Главный fix для §047 race condition на mutations `fileDescriptor` (5 call-site'ов могли double-close → kernel переиспользует fd-int → sing-box пишет в чужой fd → silent ENXIO → TCP перестаёт работать через 15-30 минут).
+**`AtomicReference` for fileDescriptor and commandServer** (§049 F2/F3): `getAndSet(null)?.close()` guarantees a single close.
 
 ### Channel Contract
 
-Three Flutter-Android channels live в `VpnPlugin.kt`:
+The three Flutter–Android channels live in `VpnPlugin.kt`:
 
 | Channel | Type | Direction |
 |---|---|---|
-| `com.leadaxe.lxbox/methods` | MethodChannel | bidirectional (Dart → Native; Dart ← Native для `wifi_history`-promotion от `WifiNetworkObserver`) |
+| `com.leadaxe.lxbox/methods` | MethodChannel | Bidirectional (Dart → Native; Dart ← Native for `wifi_history`) |
 | `com.leadaxe.lxbox/status_events` | EventChannel | Native → Dart (TunnelStatus broadcasts) |
 | `lxbox/coreLog` | EventChannel | Native → Dart (sing-box log lines) |
 
-**MethodChannel methods** (groups follow `_Methods` constants в `box_vpn_client.dart`):
+**The MethodChannel methods** (the groups follow the `_Methods` constants in `box_vpn_client.dart`):
 
 | Group | Method | Input | Output |
 |---|---|---|---|
 | **Config** | saveConfig | `config: String` | bool |
 | | getConfig | — | String |
 | **VPN lifecycle** | startVPN | — | bool (may trigger system VpnService dialog) |
-| | stopVPN | — | bool — **блокирующий** native до `setStatus(Stopped)`, чтобы caller мог делать `await stopVPN(); await startVPN()` без race |
-| | reloadVPN | — | bool — `box.serviceReload()` без status flap |
+| | stopVPN | — | bool — it **blocks** natively until `setStatus(Stopped)` so the caller can proceed safely |
+| | reloadVPN | — | bool — `box.serviceReload()` with no status flap |
 | | resetNetwork | — | bool — light recovery: `closeAllConnections + DNS flush + dialer rebind`. Tunnel must be up. |
 | | getVpnStatus | — | "Started" \| "Starting" \| "Stopped" \| "Stopping" \| "Unknown" |
 | | getCoreVersion | — | String — sing-box version + tags |
-| | quitApp | — | bool (returns immediately, process dies ~250ms) — `finishAffinity + Process.killProcess` для применения `Libbox.setup(debug=…)` |
+| | quitApp | — | bool (it returns immediately and the process dies in about 250 ms) — `finishAffinity` plus `Process.killProcess` |
 | **Settings (boot prefs / native toggles)** | getAutoStart / setAutoStart | bool | bool — auto-start VPN on boot (`BootReceiver`) |
-| | getKeepOnExit / setKeepOnExit | bool | bool — keep VPN running когда Flutter-процесс убит |
-| | getCoreLogsEnabled / setCoreLogsEnabled | bool | bool — §043 forward sing-box logs to Dart `AppLog`; требует full process restart |
-| | getAllowBypass / setAllowBypass | bool | bool — §049 F15 `VpnService.Builder.allowBypass()`; apply на следующем `establish()` |
+| | getKeepOnExit / setKeepOnExit | bool | bool — keep the VPN running when the Flutter process is killed |
+| | getCoreLogsEnabled / setCoreLogsEnabled | bool | bool — §043 forwards the sing-box logs into Dart's `AppLog`; it needs a restart |
+| | getAllowBypass / setAllowBypass | bool | bool — §049 F15 `VpnService.Builder.allowBypass()`; applied on the next start |
 | | getBackgroundMode / setBackgroundMode | "never" \| "lazy" \| "always" | bool — §052 foreground-service tunnel sleep mode |
-| **Notifications** | setNotificationTitle | `title: String` | bool — кастомный foreground notification title |
-| | setNotificationText | `text: String` | bool — §123 кастомный foreground notification text (`'<selector>: <node>'`; title = `'L×Box [final = <route.final>]'`), оба owned Dart'ом |
-| **Per-app routing helpers** | getInstalledApps | — | List<Map> (`package` / `appName` / `isSystemApp`) — без icons (тяжело) |
+| **Notifications** | setNotificationTitle | `title: String` | bool — a custom foreground notification title |
+| | setNotificationText | `text: String` | bool — §123 a custom foreground notification text |
+| **Per-app routing helpers** | getInstalledApps | — | A List<Map> (`package` / `appName` / `isSystemApp`) — icons excluded |
 | | getAppIcon | `packageName: String` | String (base64 PNG) |
-| | getAppInfo | `packageName: String` | Map (name+isSystem, **без icon** — §109) \| `{notFound: true}` (подтверждённо не установлен) \| error (retryable) |
+| | getAppInfo | `packageName: String` | A Map (name plus isSystem, **no icon** — §109) \| `{notFound: true}` |
 | **System helpers** | isIgnoringBatteryOptimizations | — | bool |
-| | openBatteryOptimizationSettings | — | bool — primary `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` prompt; fallback на список apps для OEM где direct prompt молча отбрасывается (ColorOS / MIUI / HyperOS) |
+| | openBatteryOptimizationSettings | — | bool — the primary `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` prompt, with a fallback |
 | | openAppDetailsSettings | — | bool |
-| | openAppSettings | — | bool — App Permissions screen (3-уровневый OEM fallback: `MANAGE_APP_PERMISSIONS` → `MANAGE_PERMISSION_APPS` → `ACTION_APPLICATION_DETAILS_SETTINGS`). Для permissions без runtime prompt (`ACCESS_BACKGROUND_LOCATION` API 30+) |
+| | openAppSettings | — | bool — the App Permissions screen (a three-level OEM fallback) |
 | | areNotificationsEnabled | — | bool |
 | | openNotificationSettings | — | bool |
-| | checkNotificationPermission | — | bool — `POST_NOTIFICATIONS` на API 33+, true на pre-33 |
-| | requestNotificationPermission | — | null — async; UI должен re-check через `checkNotificationPermission` |
-| | checkNearbyWifiPermission | — | bool — `NEARBY_WIFI_DEVICES` на API 33+, true на pre-33 |
+| | checkNotificationPermission | — | bool — `POST_NOTIFICATIONS` on API 33+, true before that |
+| | requestNotificationPermission | — | null — asynchronous; the UI must re-check through `checkNotificationPermission` |
+| | checkNearbyWifiPermission | — | bool — `NEARBY_WIFI_DEVICES` on API 33+, true before that |
 | | requestNearbyWifiPermission | — | null — async; re-check |
 | | showToast | `msg: String, duration: "short"\|"long"` | bool |
 | **Quick Settings tile** | requestAddTile | — | bool — `StatusBarManager.requestAddTileService` (API 33+) |
@@ -1203,7 +1203,7 @@ Three Flutter-Android channels live в `VpnPlugin.kt`:
 { "status": "Started" | "Starting" | "Stopped" | "Stopping", "error": "..." }
 ```
 
-**EventChannel `coreLog`** — sing-box log lines, по одной строке на event. Filter (skip TRACE/DEBUG) + ANSI-strip применяются в `BoxVpnService.writeDebugMessage` до отправки. Включается через `core_logs_enabled` toggle (`Libbox.setup(SetupOptions{debug: ...})`, читается в `BoxApplication.onCreate` один раз — изменение применяется только после restart процесса).
+**The `coreLog` EventChannel** carries the sing-box log lines, one line per event. The filter skips TRACE and DEBUG.
 
 ---
 
@@ -1211,18 +1211,18 @@ Three Flutter-Android channels live в `VpnPlugin.kt`:
 
 **Manifest declarations** ([AndroidManifest.xml](../app/android/app/src/main/AndroidManifest.xml)):
 
-| Permission | Зачем | Runtime grant? |
+| Permission | Why | Granted at runtime? |
 |---|---|---|
 | `INTERNET` | sing-box egress | install-time |
-| `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SYSTEM_EXEMPTED` | VPN service визибл foreground (FGS политика API 34+) | install-time |
+| `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SYSTEM_EXEMPTED` | The VPN service is a visible foreground service | no |
 | `RECEIVE_BOOT_COMPLETED` | auto-start on boot | install-time |
 | `POST_NOTIFICATIONS` | foreground service notification (API 33+) | runtime, default off |
 | `QUERY_ALL_PACKAGES` | per-app split-tunneling list, app-picker | install-time |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | one-tap battery whitelist prompt (API 23+) | install-time + system one-tap dialog |
 | `ACCESS_WIFI_STATE` | sing-box wifi rules / WifiInfo helpers | install-time |
-| `ACCESS_COARSE_LOCATION` / `ACCESS_FINE_LOCATION` | pre-API-29 fallback для WifiInfo SSID | runtime, default off |
-| `ACCESS_BACKGROUND_LOCATION` | API 29+ требование для `WifiManager.connectionInfo` из background (foreground service это и есть «background») | runtime, granted **только через Settings** на API 30+ |
-| `NEARBY_WIFI_DEVICES` (`neverForLocation`) | API 33+ обязательный для real SSID/BSSID; без него `WifiInfo.ssid` = `"<unknown ssid>"` | runtime, default off |
+| `ACCESS_COARSE_LOCATION` / `ACCESS_FINE_LOCATION` | A pre-API-29 fallback for the WifiInfo SSID | at runtime, off by default |
+| `ACCESS_BACKGROUND_LOCATION` | Required on API 29+ for `WifiManager.connectionInfo` from the background | through Settings |
+| `NEARBY_WIFI_DEVICES` (`neverForLocation`) | Required on API 33+ for a real SSID/BSSID; without it the SSID reads as unknown | at runtime |
 
 **`neverForLocation` flag** на `NEARBY_WIFI_DEVICES` декларирует Google Play, что permission используется **не для location tracking** — это снимает дополнительный compliance review. У нас он действительно нужен только для SSID/BSSID (sing-box wifi rules).
 
