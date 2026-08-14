@@ -25,9 +25,13 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.0-lx.25-rc.5`** (see `app/android/libbox.version`) —
-the final name of the `masque` key (`vhttp`) plus the urltest group's mode in the
-API. The client side is §393.
+**The current pin: `v1.14.0-lx.27-rc.1`** (see `app/android/libbox.version`) —
+a Windows-only WireGuard bind fix (SPEC 069: a v6 bind failure no longer kills
+the live v4 socket). The Java API is byte-identical to lx.25-rc.5, so nothing on
+the client side changes.
+
+Earlier in this line: the final name of the `masque` key (`vhttp`) plus the
+urltest group's mode in the API (lx.25-rc.5). The client side of that is §393.
 
 **`transport` → `vhttp` (SPEC 062).** The name from rc.4 was removed **with no
 alias**: for vless/trojan/vmess `transport` is the V2Ray transport key, and it is
@@ -43,14 +47,16 @@ ordinary urltest, with the node in `selected`) | `round_robin` (balancing, with
 the state in `GetPool`) | empty (not a urltest). Promised “in any build”, unlike
 `GetPool`, which sits behind the `with_lx_command` tag.
 
-⚠️ **The Android AAR of rc.5 does NOT have this field.** `classes.jar` is
-byte-identical to rc.4 (SHA256 `23b2eb27…`), and
-`javap io.nekohasekai.libbox.OutboundGroup` shows no `getMode()`. The native part
-*is* built from rc.5 (`strings libbox.so` → `1.14.0-lx.25-rc.5`, and the
+⚠️ **The Android AAR still does NOT have this field, up to and including
+lx.27-rc.1.** `javap io.nekohasekai.libbox.OutboundGroup` shows no `getMode()`,
+and the whole Java surface of lx.27-rc.1 diffs clean against lx.25-rc.5 (`javap`
+over all 228 classes — identical; `classes.jar` itself hashes differently,
+`23b2eb27…` → `c9cc31f7…`, so compare the API, not the jar). The native part *is*
+built from the pinned tag (`strings libbox.so` → `1.14.0-lx.27-rc.1`, and the
 `least_test` / `round_robin` strings are present) — so the Go code is there, but
-the gomobile binding for `OutboundGroup` was not regenerated. This does not affect
-§393 (`vhttp` is config parsing, not a Java surface), but anyone who wants `mode`
-has to wait for the next core build.
+the gomobile binding for `OutboundGroup` has not been regenerated. This does not
+affect §393 (`vhttp` is config parsing, not a Java surface), but anyone who wants
+`mode` has to wait for a core build that regenerates the binding.
 
 **The `masque` schema (introduced in rc.4).** The HTTP version moved from
 `network` to `vhttp`, and the TLS options moved from the flat root into a nested

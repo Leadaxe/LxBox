@@ -108,7 +108,7 @@ The fork publishes artifacts in its own GitHub Releases (workflow `lx-release.ym
 | `libbox-legacy-<ver>.aar` (minSdk 21) | ✗ unused — our minSdk is 24, so the modern AAR (minSdk 23) is enough |
 | `SHA256SUMS` | ✓ verification of the downloaded AAR |
 
-The core version is reported by `Libbox.version()` (About/Debug) in the form `1.14.0-lx.N`; the current pin is `v1.14.0-lx.25-rc.5`.
+The core version is reported by `Libbox.version()` (About/Debug) in the form `1.14.0-lx.N`; the current pin is `v1.14.0-lx.27-rc.1`.
 
 ### How the core reaches the build ([§104](spec/tasks/104-libbox-fork-ci-fetch.md))
 
@@ -237,4 +237,4 @@ Before `flutter build apk --release` the workflow recreates temporary `app/andro
 ## Versions
 
 - **Flutter 3.41.6** is pinned in the file `app/android/flutter.version` — CI reads it in the `Flutter version pin` step, so upgrading means editing that file, not the workflow. **JDK 17** is set in `ci.yml` directly; when it changes, update `ci.yml` and this file.
-- The core is **sing-box-lx `v1.14.0-lx.25-rc.5`** (fork branch `lx-1.14`): pinned in `app/android/libbox.version` (the single source for local builds and CI, read by `scripts/fetch-libbox.sh`); the local `app/android/app/libs/libbox.aar` must match the pin (fetch tracks this through the `.libbox.version` marker). The single source of truth for the core version and its build tags is [KERNEL.md](KERNEL.md) plus the pin file itself. When updating: raise the pin, rebuild locally, run the smoke tests and update this line.
+- The core is **sing-box-lx `v1.14.0-lx.27-rc.1`** (fork branch `lx`): pinned in `app/android/libbox.version` (the single source for local builds and CI, read by `scripts/fetch-libbox.sh`); the local `app/android/app/libs/libbox.aar` must match the pin (fetch tracks this through the `.libbox.version` marker). The single source of truth for the core version and its build tags is [KERNEL.md](KERNEL.md) plus the pin file itself. When updating: raise the pin, rebuild locally, run the smoke tests and update this line.
