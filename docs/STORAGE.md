@@ -870,34 +870,35 @@ A JSON mirror of the Android prefs that historically lived **only** in the nativ
 }
 ```
 
-**Модель «диск = истина, оперативка = рабочая копия».** Эта секция в
-`lxbox_settings.json` — **источник истины** (диск). Native `SharedPreferences`
-(`boxvpn_boot.*`) — **рабочая копия в оперативке**, нужная для **Dart-less
-моментов**, когда Flutter-движок недоступен: `BOOT_COMPLETED` (`BootReceiver`),
-swipe `onTaskRemoved`, `openTun`/`establish`. native читает свою копию синхронно
-и **никогда не пишет JSON** (единственное исключение — bootstrap-seed, см. ниже).
+**The model is “disk is the truth, memory is a working copy”.** This section of
+`lxbox_settings.json` is the **source of truth** (the disk). The native
+`SharedPreferences` (`boxvpn_boot.*`) are a **working copy in memory**, needed for the
+**Dart-less moments** when the Flutter engine is unavailable: `BOOT_COMPLETED`
+(`BootReceiver`), a swipe `onTaskRemoved`, and `openTun` / `establish`. The native side
+reads its own copy synchronously and **never writes the JSON** (the single exception is
+the bootstrap seed, below).
 
-**Поток записи (write-through).** Любой `setX` → пишет в JSON (первично) →
-зеркалит в native через method-channel. Все писатели — UI
-(`vpn_mode_tab`/`settings_screen`/`app_settings_screen`), импорт (`backup_service`),
-Debug API handlers — идут через единую дверь `SettingsStorage.setNativeBool` /
-`setNativeBackgroundMode` / `setNativeMemoryLimit` (§271: native применяет
-лимит к работающему ядру немедленно через `Libbox.reloadSetupOptions`).
-Прямые native-записи в обход этого слоя эфемерны:
-старт-`sync` (ниже) откатит их на следующем запуске.
+**The write path is write-through.** Any `setX` writes to the JSON first and then
+mirrors into native over the method channel. Every writer — the UI
+(`vpn_mode_tab` / `settings_screen` / `app_settings_screen`), the import
+(`backup_service`) and the Debug API handlers — goes through the single door
+`SettingsStorage.setNativeBool` / `setNativeBackgroundMode` / `setNativeMemoryLimit`
+(§271: native applies the limit to the running core immediately through
+`Libbox.reloadSetupOptions`). Native writes that bypass this layer are ephemeral: the
+`sync` at startup (below) rolls them back on the next launch.
 
-**Старт** (`SettingsStorage.bootstrapAndSyncNativePrefs()`, зовётся из `main.dart`
-до UI):
-- секции `native_prefs` нет (первый старт после §189) → **bootstrap**: seed
-  native ⇒ JSON (единственный случай native⇒JSON-записи);
-- секция есть → **sync**: JSON ⇒ native, диск перезаливает оперативку для
-  расходящихся ключей — расхождение само чинится.
+**At startup** (`SettingsStorage.bootstrapAndSyncNativePrefs()`, called from
+`main.dart` before the UI):
+- if the `native_prefs` section is absent (the first launch after §189) → **bootstrap**:
+  seed native ⇒ JSON (the only case of a native⇒JSON write);
+- if it is present → **sync**: JSON ⇒ native, so the disk overwrites memory for any
+  diverging key and the divergence repairs itself.
 
-**Backup.** Единая сериализация блока — `SettingsStorage.exportNativePrefsBackup()`
-/ `applyNativePrefsBackup()`: состав/дефолты/типы в одном месте
-(`native_prefs.dart`). `backup_service` и Debug-handler делегируют сюда (раньше
-дублировали). Wire-ключи стабильны (старые бэкапы импортируются). Производный
-`has_tun` (см. ниже) **не** входит в backup-блок — это вычисляемое значение, не
+**Backup.** The block has one serializer — `SettingsStorage.exportNativePrefsBackup()`
+/ `applyNativePrefsBackup()`: the field set, the defaults and the types live in one
+place (`native_prefs.dart`). `backup_service` and the Debug handler delegate to it (they
+used to duplicate it). The wire keys are stable, so old backups still import. The derived
+`has_tun` (below) is **not** part of the backup block — it is a computed value, not
 настройка.
 
 > **`has_tun` ([§192]) — седьмой native-ключ, НЕ в JSON-секции.**
