@@ -933,35 +933,36 @@ and into storage. The template became a **seed** — the defaults for the first 
 After the migration the set of channels lives in `channels[]` and is edited by the user
 (Routing → the Channels tab → the channel editor).
 
-- `tag` — **системный immutable** id (`vpn-1`..`vpn-10`), автогенерируется при
-  создании (первый свободный `vpn-N`), юзер правит только `label`. Стабильный
-  ключ ссылок (`route_final` / `ping_options` / custom-rule outbound / detour).
-  §274 — префикс `⚙ ` в `label` зарезервирован как маркер detour-канала (как
-  ⚙-метка в тегах detour-серверов): смена флага `detour` переименовывает канал
-  (set → `⚙ <label>`, unset → префикс срезается), нормализация — в
-  `Channel.copyWith`/`fromJson` (покрывает редактор, Debug API, restore).
-- `vpn-1` — продуктово-привилегированный: всегда `enabled`, неудаляем, дефолт
-  `route_final`. Лимит каналов — **10**.
-- `auto` (nullable) — параметры urltest-двойника. `null` = галка auto ВЫКЛ,
-  `<tag>-auto` не эмитится. `auto.tag` НЕ хранится (производный `${tag}-auto`).
-  Полный shape: `{url, interval, tolerance, idle_timeout,
+- `tag` is the **system's immutable** id (`vpn-1`..`vpn-10`), generated on creation
+  (the first free `vpn-N`); the user only edits `label`. It is the stable key for
+  references (`route_final`, `ping_options`, a custom rule's outbound, a detour).
+  §274 — the `⚙ ` prefix in `label` is reserved as the detour-channel marker (like the
+  ⚙ mark in detour server tags): flipping the `detour` flag renames the channel (set →
+  `⚙ <label>`, unset → the prefix is stripped), and the normalisation lives in
+  `Channel.copyWith` / `fromJson` (covering the editor, the Debug API and restores).
+- `vpn-1` is privileged by product decision: always `enabled`, undeletable, and the
+  default `route_final`. The channel limit is **10**.
+- `auto` (nullable) holds the urltest twin's parameters. `null` means the auto
+  checkbox is OFF and `<tag>-auto` is not emitted. `auto.tag` is NOT stored (it is
+  derived as `${tag}-auto`). The full shape: `{url, interval, tolerance, idle_timeout,
   interrupt_exist_connections, mode, balancer:{pool, pool_tolerance,
-  sticky_hash[]}}`. §208-поля `mode` (`least_test` default | `round_robin`) и
-  `balancer` (`pool` ≥1 default 3, `pool_tolerance` uint16 default 0,
-  `sticky_hash[]` из `process/domain/source_ip/dest_ip/dest_port`, default
-  `[process,domain]`, `[]` = липкость off) сериализуются в storage **всегда**,
-  но в config ядра билдер эмитит `mode`+`balancer` **только** при `round_robin`
-  (`balancer` без round-robin роняет старт ядра). Пустой `sticky_hash` уходит в
-  конфиг как sentinel `["none"]` (выключенная липкость, контракт ядра SPEC 019).
-- `detour` (bool, default `false` — отсутствие ключа читается как false,
-  миграции нет; §248/§274) — **разрешение** выбирать канал как detour-мишень
-  для серверов/папок/подписок (значение ссылки = `tag`; в пикере §239 —
-  только каналы с флагом). Роль в правилах ортогональна: канал с флагом
-  остаётся валидной целью `route_final` / custom-rule outbound (§274 снял
-  взаимоисключение ролей и инвариант `detour ⇒ include_block=false`).
-  Единственный инвариант: `vpn-1` не бывает detour (главный канал, дефолтная
-  мишень и heal-резерв) — принуждается при чтении (`Channel.fromJson`),
-  restore из backup и ручная правка файла его не обходят.
+  sticky_hash[]}}`. The §208 fields — `mode` (`least_test` by default, or
+  `round_robin`) and `balancer` (`pool` ≥ 1, default 3; `pool_tolerance`, a uint16,
+  default 0; `sticky_hash[]` drawn from `process` / `domain` / `source_ip` / `dest_ip` /
+  `dest_port`, default `[process,domain]`, with `[]` meaning stickiness off) — are
+  **always** serialized into storage, but the builder emits `mode` and `balancer` into
+  the core's config **only** for `round_robin` (a `balancer` without round-robin kills
+  the core's startup). An empty `sticky_hash` reaches the config as the sentinel
+  `["none"]` (stickiness disabled, per the core's SPEC 019 contract).
+- `detour` (a bool, default `false` — an absent key reads as false, and there is no
+  migration; §248/§274) is **permission** to pick the channel as a detour target for
+  servers, folders and subscriptions (the reference value is the `tag`; the §239 picker
+  offers only flagged channels). Its role in rules is orthogonal: a flagged channel
+  remains a valid target for `route_final` and for a custom rule's outbound (§274
+  removed both the mutual exclusion of the roles and the `detour ⇒ include_block=false`
+  invariant). The one invariant left: `vpn-1` is never a detour (it is the main channel,
+  the default target and the heal reserve) — enforced on read (`Channel.fromJson`), so
+  neither a backup restore nor hand-editing the file can get around it.
 - **Резолюция в билдере**: каждый включённый канал эмитит selector `<tag>` с
   нодами после `node_filter` (regex по итоговому tag, §048-style) + опции
   `direct-out`/`block` (по `include_direct`/`include_block`, §201); если `auto !=
