@@ -761,7 +761,7 @@ AutoUpdater.maybeUpdateAll(trigger, force)
   ├─ if _running → skip (dedup)
   ├─ candidates = entries.filter(_shouldUpdate)
   │   └─ _shouldUpdate: enabled ∧ !frozen(fails>=5) ∧ !minRetry(15min) ∧ (force ∨ interval elapsed)
-  │       (§129: подписки с url=file:<uuid> auto-updater пропускает — они читаются из HttpCache-снапшота, не из сети)
+  │       (§129: the auto-updater skips subscriptions with url=file:<uuid> — they are read from the cache)
   └─ for entry in candidates:
        ├─ _inFlight.contains(url) → skip
        ├─ refreshEntry(entry, trigger)  → _fetchEntryByRef
@@ -794,10 +794,10 @@ Displayed in:
 
 ### 5. Persistent storage
 
-Состояние L×Box живёт в двух местах с разной семантикой:
+L×Box's state lives in two places with different semantics:
 
-- **`wizard_template.json`** — **catalog**: что вообще существует (preset'ы, vars, sections, default DNS-серверы). Bundled в APK, меняется в коммите. Полная схема — [TEMPLATE.md](./TEMPLATE.md).
-- **`lxbox_settings.json`** — **user-state**: что юзер выбрал/настроил (vars override, custom_rules, enabled_groups). Меняется в runtime через UI / Debug API. Полная схема — [STORAGE.md](./STORAGE.md).
+- **`wizard_template.json`** is the **catalog**: what exists at all (the presets, vars, sections and defaults).
+- **`lxbox_settings.json`** is the **user state**: what the user chose and configured (the vars overrides, custom_rules, and so on).
 
 #### Catalog (template, bundled in APK)
 
@@ -807,59 +807,59 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 ├── dns_options             # §043+§044 — default DNS servers + rules
 ├── ping_options            # §040 — default URL + presets
 ├── speed_test_options      # §015 — speed-test endpoints
-├── group_templates         # §267 — magic_nodes реестр + channel/auto шаблоны (SEED для channels[])
-├── default_channels[]      # §267 — сид каналов (vpn-1..2); билдер читает channels[] из storage
-├── sections[]              # §022 — Wizard UI chapters (vars сгруппированы по темам)
-├── config                  # нативная sing-box-секция с @var-плейсхолдерами
+├── group_templates         # §267 — the magic_nodes registry plus the channel/auto templates (the SEED for channels)
+├── default_channels[]      # §267 — the channel seed (vpn-1..2); the builder reads channels[] from storage
+├── sections[]              # §022 — the Wizard UI chapters (the vars grouped by topic)
+├── config                  # the native sing-box section with @var placeholders
 │   ├── log / dns / inbounds / endpoints / outbounds / experimental
 │   └── route               #   rules[] / rule_set[] / final / default_domain_resolver
-└── selectable_rules[]      # §033 — catalog preset'ов: block-ads, ru-direct,
+└── selectable_rules[]      # §033 — the preset catalog: block-ads, ru-direct, and the rest
                             #   ru-inside, bittorrent-direct, private-ip-direct
 ```
 
-#### User-state (на устройстве)
+#### The user state (on the device)
 
 ```
 <getApplicationDocumentsDirectory>/
-├── lxbox_settings.json     # SettingsStorage (Dart) — главный файл состояния:
+├── lxbox_settings.json     # SettingsStorage (Dart) — the main state file:
 │                           #   vars / server_lists / custom_rules /
 │                           #   dns_options / ping_options /
 │                           #   route_final / channels[] (§125, replaces enabled_groups) /
 │                           #   excluded_nodes (§048 sandbox) / last_global_update /
 │                           #   presets_migrated / channels_migrated
-├── singbox_config.json     # ConfigManager (Kotlin) — финальный sing-box JSON
-├── http_cache/             # HttpCache — сырое тело + headers подписок
+├── singbox_config.json     # ConfigManager (Kotlin) — the final sing-box JSON
+├── http_cache/             # HttpCache — the raw body plus headers of the subscriptions
 │   └── <sha1(url)>.{body,headers}
-├── rule_sets/              # §011 — кэш бинарных .srs
+├── rule_sets/              # §011 — the cache of binary .srs files
 │   └── <tag>.srs
-├── applog.txt              # §038/§043 — JSON-lines, 200 строк / 64KB ring
-└── corelog.txt             # §043 — JSON-lines, 200 строк / 64KB ring
+├── applog.txt              # §038/§043 — JSON lines, a 200-line / 64 KB ring
+└── corelog.txt             # §043 — JSON lines, a 200-line / 64 KB ring
 
 SharedPreferences (Android):
 ├── app_theme_mode                       # Flutter UI prefs (haptic_enabled → vars, §159)
 └── boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode,
                  core_logs_enabled, allow_bypass, auto_redirect,
-                 has_tun}                # §189 — ЗЕРКАЛО JSON-секции native_prefs
-                                         # (рабочая копия в оперативке). Истина —
+                 has_tun}                # §189 — a MIRROR of the native_prefs JSON section
+                                         # (a working copy in memory). The truth lives in the
                                          # lxbox_settings.json. has_tun (§192) —
-                                         # вычисляемое из vpn_mode, только тут.
+                                         # JSON; has_tun is computed from vpn_mode and lives only here.
 ```
 
-##### Три уровня хранения native-prefs (§189 / §192)
+##### The three storage levels of the native prefs (§189 / §192)
 
-Шесть Android-настроек (`auto_start`/`keep_on_exit`/`background_mode`/
-`core_logs_enabled`/`allow_bypass`/`auto_redirect`) живут на трёх уровнях:
+Six Android settings (`auto_start`, `keep_on_exit`, `background_mode`,
+`core_logs_enabled`, `allow_bypass`, `auto_redirect`) live at three levels:
 
-| Уровень | Где | Роль |
+| Level | Where | Role |
 |---|---|---|
-| **диск / истина** | `lxbox_settings.json` → секция `native_prefs` | источник правды; backup; переживает всё |
-| **оперативка** | native `SharedPreferences` `boxvpn_boot.*` | рабочая копия для **Dart-less моментов** — когда Flutter-движка нет |
-| **in-memory** | `SettingsStorage._cache` | lazy-loaded кэш JSON в Dart-процессе |
+| **disk / the truth** | `lxbox_settings.json` → the `native_prefs` section | the source of truth |
+| **memory** | the native `SharedPreferences` `boxvpn_boot.*` | a working copy for the **Dart-less** moments |
+| **in-memory** | `SettingsStorage._cache` | a lazily loaded cache of the JSON inside the Dart process |
 
-**Зачем нужна native-копия:** часть кода исполняется когда Flutter-движок
-недоступен и JSON прочитать нечем — `BOOT_COMPLETED` (`BootReceiver` авто-старт),
-swipe `onTaskRemoved` (keep-on-exit решение), `openTun`/`establish` (allow_bypass,
-per-app). Эти точки читают native-копию **синхронно**.
+**Why a native copy is needed:** some code runs when the Flutter engine is
+unavailable and there is nothing to read the JSON with — `BOOT_COMPLETED` (the
+`BootReceiver` auto-start), a swipe `onTaskRemoved` (the keep-on-exit decision),
+and `openTun`/`establish` (allow_bypass, per-app). These points read the native copy **synchronously**.
 
 **Поток write-through + sync на старте:** любой `SettingsStorage.setNativeBool` /
 `setNativeBackgroundMode` пишет JSON (первично) → зеркалит в native (method-channel);
