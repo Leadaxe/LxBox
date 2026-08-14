@@ -87,47 +87,47 @@ Platform directly — only through the controllers.
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  UI   lib/screens · lib/widgets                                        │
-│  Тонкие экраны: композиция + lifecycle + setState; логика — в          │
-│  presenter/view-model. Паттерн: <screen>.dart (StatefulWidget, владеет │
-│  state + все Navigator.push) + <screen>/widgets|sections|tabs/ +       │
-│  presenter/VM. Подписка через AnimatedBuilder / ListenableBuilder.     │
+│  Thin screens: composition + lifecycle + setState; the logic lives in │
+│  a presenter/view-model. The pattern: <screen>.dart (a StatefulWidget │
+│  owning the state and every Navigator.push) + <screen>/widgets|tabs/ +│
+│  a presenter/VM. Subscribed through AnimatedBuilder/ListenableBuilder.│
 ├──────────────────────────────────────────────────────────────────────┤
-│  STATE   lib/controllers — ChangeNotifier-брокеры                      │
-│  HomeController  — VPN/CommandClient/nodes/ping/heartbeat (split на     │
-│                    part'ы: config_io · heartbeat · ping_orchestration)  │
+│  STATE   lib/controllers — ChangeNotifier brokers                     │
+│  HomeController  — VPN/CommandClient/nodes/ping/heartbeat (split into  │
+│                    parts: config_io · heartbeat · ping_orchestration)  │
 │  SubscriptionController — entries, fetch, generateConfig (+ part)       │
-│  view-model'и: NodeFilterViewModel · CustomRuleEditController           │
-│  Иммутабельный HomeState + copyWith (_unset sentinel) + ParsedConfig.   │
+│  view-models: NodeFilterViewModel · CustomRuleEditController           │
+│  An immutable HomeState + copyWith (the _unset sentinel) + ParsedConfig│
 ├──────────────────────────────────────────────────────────────────────┤
 │  SERVICES   lib/services · lib/models · lib/config                     │
 │  Parser v2 (parser/) · Builder (builder/) · subscription/ ·            │
 │  settings_storage/ · traffic_profiler/ · debug/ (HTTP Debug API) ·     │
 │  vpn/cc_channel (libbox CommandClient) · app_log ·                     │
-│  кэши (AppInfoCache·HttpCache) ·                                        │
+│  the caches (AppInfoCache·HttpCache) ·                                 │
 │  ConfigNode/ParsedConfig (§091).                                        │
-│  Sealed-модели: NodeSpec · SingboxEntry · CustomRule · ValidationIssue. │
+│  Sealed models: NodeSpec · SingboxEntry · CustomRule · ValidationIssue.│
 ├──────────────────────────────────────────────────────────────────────┤
 │  PLATFORM / NATIVE                                                      │
 │  Dart: vpn/box_vpn_client — MethodChannel + status/coreLog Stream.      │
-│  Kotlin: VpnPlugin (мост) → BoxVpnService (Android VpnService) +        │
+│  Kotlin: VpnPlugin (the bridge) → BoxVpnService (Android VpnService) + │
 │  BoxService (libbox runtime, §049-split) + DefaultNetworkMonitor        │
 │  (§087 network-reset) + LocalResolver + WifiInfoReader.                │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Инвариант фасадов (§291):** домен даёт наружу **фасад** и не знает
-потребителей (в сигнатурах нет `DebugContext`/виджетов/intent'ов); внешние
-адаптеры (Debug HTTP · Automation broadcast · UI) знают транспорт+безопасность,
-но не то, к чему дают доступ; общая операция объявлена один раз, все адаптеры
-сводятся к вызову фасада. Эталоны формы: `ChannelMutations` (атомарный
-heal+resync, сырые статики `@visibleForTesting`), `SubscriptionController`
-(владеет мутациями server-lists; Debug+Automation делегируют), `ProbeController`
-(`services/probe/` — общий probe над всей подсистемой ServerList: пороги/ping/
-чистые решения + `probeNodesOf`-адаптер; `ProbeGateMixin` — общий VPN-гейт),
-`DnsController` (`services/dns/` — `load()`→snapshot + `stage()` над DNS-секцией;
-экран тонкий), `VpnSettingsFacade` (`services/vpn_settings/` — `applyVpnMode`
-несёт инварианты password-gen/auth-force/`has_tun`-зеркало для UI **и** Debug).
-Типизированные storage-модели: sealed `DnsServerRef`/`DnsRuleRef` (§294).
+**The facade invariant (§291):** a domain exposes a **facade** and knows nothing about its
+consumers (no `DebugContext`, widgets or intents appear in its signatures); the external
+adapters (Debug HTTP, the Automation broadcast, the UI) know the transport and the security
+but not what they grant access to; a shared operation is declared once and every adapter
+reduces to calling the facade. The reference shapes: `ChannelMutations` (an atomic
+heal plus resync, with the raw statics `@visibleForTesting`), `SubscriptionController`
+(which owns the server-list mutations, with Debug and Automation delegating to it),
+`ProbeController` (`services/probe/` — a shared probe over the whole ServerList subsystem:
+the thresholds, the ping and the pure decisions, plus the `probeNodesOf` adapter;
+`ProbeGateMixin` is the shared VPN gate), `DnsController` (`services/dns/` — `load()` into a
+snapshot plus `stage()` over the DNS section, leaving the screen thin), and
+`VpnSettingsFacade` (`services/vpn_settings/` — `applyVpnMode` carries the password-gen,
+auth-force and `has_tun`-mirror invariants for the UI **and** for Debug). The typed storage models are the sealed `DnsServerRef` and `DnsRuleRef` (§294).
 Полный инвариант + план strangler — `docs/spec/features/291 layered-architecture-facades/`.
 
 **Брокеры событий (push, снизу вверх):** §122 — управляющий канал UI переведён
