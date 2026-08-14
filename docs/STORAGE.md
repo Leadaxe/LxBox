@@ -240,61 +240,62 @@ Per-key спеки и shape — в разделах ниже.
 
 ## `vars` — template-vars + app flags
 
-Плоский `Map<String, String>` (значения toString'ятся при чтении). Используется и для **template-substitution** (любое `@name` в `wizard_template.json` подставляется отсюда), и для **app feature-flags** (debug/auto-update/UI).
+A flat `Map<String, String>` (values are stringified on read). It serves both **template substitution** (any `@name` in `wizard_template.json` is filled in from here) and app feature flags — the two live in the same map.
 
-### Известные ключи
+### Known keys
 
-| Ключ | Default | Спека | Что делает |
+| Key | Default | Spec | What it does |
 |---|---|---|---|
-| `auto_update_subs` | `'true'` | [§027] | Global gate auto-refresh подписок. Manual всегда работает. |
-| `auto_update_disabled_subs` | `'false'` | §337 | Обновлять и выключенные подписки, чтобы их снапшот узлов не тух. Живёт внутри `auto_update_subs`. Не отменяет `updateIntervalHours ≤ 0`, min-retry и fail-cap. |
-| `auto_reload_on_change` | `'false'` | §338 | Автоперезапуск VPN при любом изменении конфига — плашек не остаётся. Перекрывает per-subscription `on_update_action` (само поле не переписывается). Reload только при поднятом туннеле и разошедшемся с running конфиге (§324). |
-| `auto_check_updates` | `'true'` | [§036] | GitHub Releases polling на старте. |
-| `last_update_check_at` | `''` | [§036] | UTC ISO-8601, last polling timestamp. |
-| `last_known_version` | `''` | [§036] | Закэшированный latest tag. |
-| `dismissed_update_version` | `''` | [§036], §390 | Тег, который юзер закрыл кнопкой **Ignore** — снэкбар не показываем пока не сменится. ⚠ §390: «Later» сюда НЕ пишет (он значит «напомнить при следующем запуске», а показ и так один за запуск — хватает внутрипроцессного флага). |
-| `shown_crash_stamp` | `''` | §316 | `имя@mtime` краш-репорта ядра, про который плашка на главном уже показана. Привязка к КОНКРЕТНОМУ файлу, а не счётчик показов: повторный запуск молчит, новый краш — говорит. |
-| `config_locked_for_debug` | `'false'` | [§037] | `generateConfig()` возвращает null silently. Юзер пинит свой config через `PUT /config`. |
-| `debug_enabled` | `'false'` | [§031] | Debug API server runtime toggle. |
-| `debug_token` | `''` | [§031] | Bearer token для всех `/api/*`. |
-| `debug_port` | `'9269'` | [§031] | TCP-порт. Range 1024–49151. |
-| `dns_final` | template | [§043][043-dns] | Финальный DNS-резолвер (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp` / любой tag из `dns_options.servers`). |
-| `auto_record_wifi_history` | `'false'` | [§051] Phase 3 | Native `WifiNetworkObserver` пушит current SSID/BSSID в `wifi_history` если provel >5 минут на сети. Default off — privacy default. Toggle в App Settings → Diagnostics. |
-| `probe_ms_green` | `'250'` | §236 | Test servers (папки): верхняя граница «зелёной» задержки, мс. НЕ config-var (dirty не поднимает). |
-| `probe_ms_yellow` | `'500'` | §236 | Test servers: верхняя граница «жёлтой» задержки, мс. |
-| `probe_ms_orange` | `'700'` | §236 | Test servers: верхняя граница «оранжевой» задержки, мс; выше — красная. |
-| `wifi_history` | `'[]'` | [§051] Phase 3 | JSON-encoded `[{ssid, bssid, last_seen}]` (см. отдельный раздел ниже). |
-| `automation_receive_enabled` | `'false'` | §047 | Public Intent API: приём broadcast/Tasker. Default OFF. |
-| `automation_emit_lifecycle` | `'false'` | §047 | Эмит lifecycle-событий наружу. Default OFF. |
-| `automation_emit_state` | `'false'` | §047 | Эмит state-событий. Default OFF. |
-| `automation_emit_subs` | `'false'` | §047 | Эмит событий подписок. Default OFF. |
-| `automation_emit_health` | `'false'` | §047 | Эмит health-событий. Default OFF. |
-| `automation_explainer_shown_v1` | `'false'` | §047 | One-shot: explainer-диалог автоматизации показан. |
-| `subscription_user_agent` | — | identity headers | User-Agent для fetch подписок. |
-| `subscription_send_hwid` | — | identity headers | Слать ли hwid-заголовки при fetch. |
-| `subscription_hwid` | — | identity headers | HWID (потенциально идентифицирующий). |
-| `subscription_device_os` | — | identity headers | OS-заголовок подписки. |
-| `subscription_ver_os` | — | identity headers | Версия OS-заголовка. |
-| `subscription_device_model` | — | identity headers | Модель устройства-заголовок. |
-| `haptic_enabled` | `'true'` | §029 | Тактильный отклик UI. Живёт в `vars` (`HapticService.prefsKey`), НЕ в SharedPreferences. |
-| `notif_perm_prompted_v1` | `'false'` | §128 | One-shot: промпт разрешения уведомлений показан. |
-| `allow_rotation` | `'false'` | [§220] | Снятие портретной фиксации: `'true'` → пустой preferred-orientations (ориентацию решает системный auto-rotate). Default — жёсткий портрет. Toggle в App Settings → General → Behavior. |
-| `resolve_enabled` | template | §263/§265 | Гейт route-resolve-правила пресета `traffic-processing`. Var секции `internal` (в VPN Settings не видна), редактируется в правиле через ref-var. Гасится on_change при вкл. FakeIP (§266). |
-| `resolve_strategy` | template | §249/§265 | IP-версия route-resolve (`ipv4_only`/`prefer_ipv4`/…). Var секции `internal`, ref-var в `traffic-processing`. Пишется on_change тумблера IPv6. |
-| `app_language` | `'system'` | §279 | Язык приложения: `system` \| `en` \| `ru`. **Единственный источник истины** — эта var; неизвестное значение (hand-edited бэкап) валидируется в `system`. НЕ config-var (не грязнит sing-box-конфиг). Все пути записи сходятся в `LocaleController` (picker, Debug API side-effect hook, restore, смена системного языка) — голого `setVar` нет by construction. Копии `boxvpn_boot.app_language` + `boxvpn_boot.last_pushed_locale` — **derived cache** для Dart-less нативных поверхностей (шторка/тайл/shortcuts при мёртвом Flutter); пере-пушатся `setAppLanguage` и `bootstrapAndSyncNativePrefs`. **Явно НЕ член `NativePrefsKeys`** (§189): членство продублировало бы настройку в `vpn_settings`-блоке бэкапа — единственный backup-дом = `vars` (guard-тест рядом с §221-сьютом). |
-| `<custom>` | — | — | Любые юзерские template-vars, выставленные через UI / `PUT /settings/vars/<key>`. |
+| `auto_update_subs` | `'true'` | [§027] | The global gate for auto-refreshing subscriptions. Manual refresh always works. |
+| `auto_update_disabled_subs` | `'false'` | §337 | Also refresh disabled subscriptions, so their node snapshot does not go stale. It lives inside `auto_update_subs` and does not override `updateIntervalHours`. |
+| `auto_reload_on_change` | `'false'` | §338 | Restart the VPN automatically on any config change, so no banner is left behind. It overrides the per-subscription `on_update_action`. |
+| `auto_check_updates` | `'true'` | [§036] | Polls GitHub Releases at startup. |
+| `last_update_check_at` | `''` | [§036] | The last polling timestamp, as UTC ISO-8601. |
+| `last_known_version` | `''` | [§036] | The cached latest tag. |
+| `dismissed_update_version` | `''` | [§036], §390 | The tag the user dismissed with **Ignore** — the snackbar is not shown for it again. |
+| `shown_crash_stamp` | `''` | §316 | The `name@mtime` of the core crash report whose home-screen banner has already been shown. It binds to a SPECIFIC file rather than being a counter, so a new crash shows the banner again. |
+| `config_locked_for_debug` | `'false'` | [§037] | `generateConfig()` returns null silently. The user pins their own config through `PUT /config`. |
+| `debug_enabled` | `'false'` | [§031] | The runtime toggle for the Debug API server. |
+| `debug_token` | `''` | [§031] | The Bearer token for every `/api/*` call. |
+| `debug_port` | `'9269'` | [§031] | The TCP port. Range 1024–49151. |
+| `dns_final` | template | [§043][043-dns] | The final DNS resolver (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp`, or any tag from `dns_options.servers`). |
+| `auto_record_wifi_history` | `'false'` | [§051] Phase 3 | The native `WifiNetworkObserver` pushes the current SSID/BSSID into `wifi_history` after more than 5 minutes on a network. Off by default, as a privacy default. The toggle is in App Settings → Diagnostics. |
+| `probe_ms_green` | `'250'` | §236 | Test servers (folders): the upper bound of the “green” latency, in ms. NOT a config var (it does not mark the config dirty). |
+| `probe_ms_yellow` | `'500'` | §236 | Test servers: the upper bound of the “yellow” latency, in ms. |
+| `probe_ms_orange` | `'700'` | §236 | Test servers: the upper bound of the “orange” latency, in ms; anything above is red. |
+| `wifi_history` | `'[]'` | [§051] Phase 3 | A JSON-encoded `[{ssid, bssid, last_seen}]` (see its own section below). |
+| `automation_receive_enabled` | `'false'` | §047 | The Public Intent API: accepting broadcasts from Tasker and friends. Default OFF. |
+| `automation_emit_lifecycle` | `'false'` | §047 | Emitting lifecycle events outwards. Default OFF. |
+| `automation_emit_state` | `'false'` | §047 | Emitting state events. Default OFF. |
+| `automation_emit_subs` | `'false'` | §047 | Emitting subscription events. Default OFF. |
+| `automation_emit_health` | `'false'` | §047 | Emitting health events. Default OFF. |
+| `automation_explainer_shown_v1` | `'false'` | §047 | One-shot: the automation explainer dialog has been shown. |
+| `subscription_user_agent` | — | identity headers | The User-Agent used when fetching subscriptions. |
+| `subscription_send_hwid` | — | identity headers | Whether to send the hwid headers on a fetch. |
+| `subscription_hwid` | — | identity headers | The HWID (potentially identifying). |
+| `subscription_device_os` | — | identity headers | The subscription's OS header. |
+| `subscription_ver_os` | — | identity headers | The OS version header. |
+| `subscription_device_model` | — | identity headers | The device model header. |
+| `haptic_enabled` | `'true'` | §029 | Haptic feedback in the UI. It lives in `vars` (`HapticService.prefsKey`), NOT in SharedPreferences. |
+| `auto_ping_on_start` | `'true'` | — | Ping the nodes automatically once the tunnel comes up (App Settings). Read in `ping_orchestration.dart`. |
+| `notif_perm_prompted_v1` | `'false'` | §128 | One-shot: the notification permission prompt has been shown. |
+| `allow_rotation` | `'false'` | [§220] | Releases the portrait lock: `'true'` yields an empty preferred-orientations list (the system's auto-rotate decides). The default is a hard portrait lock. |
+| `resolve_enabled` | template | §263/§265 | The gate for the route-resolve rule of the `traffic-processing` preset. A var of the `internal` section (not visible in VPN Settings), edited inside the rule through a ref-var. |
+| `resolve_strategy` | template | §249/§265 | The IP version for route-resolve (`ipv4_only` / `prefer_ipv4` / …). A var of the `internal` section, used as a ref-var in `traffic-processing`. |
+| `app_language` | `'system'` | §279 | The app language: `system` \| `en` \| `ru`. **The single source of truth** — this var, not SharedPreferences. |
+| `<custom>` | — | — | Any user template vars set through the UI or `PUT /settings/vars/<key>`. |
 
-> Полный код-список app-флагов — `SettingsStorage._appFeatureFlagVars`; держать таблицу в синхроне с ним.
+> The authoritative list of app flags in code is `SettingsStorage._appFeatureFlagVars`; keep this table in sync with it.
 
-`removeVar(k)` ≠ `setVar(k, '')` — пустая строка может быть legitimate value, отсутствие ключа возвращает default.
+`removeVar(k)` is not the same as `setVar(k, '')` — an empty string can be a legitimate value, while an absent key falls back to the default.
 
 ---
 
 ## `server_lists` — [§033] (v2)
 
-Список источников нод. Был `proxy_sources` (v1) — §159 удалил миграцию; legacy-ключ игнорируется.
+The list of node sources. It used to be `proxy_sources` (v1); §159 removed the migration and the legacy key is ignored.
 
-Sealed по полю `type`:
+Sealed on the `type` field:
 
 ### `type: "subscription"` — `SubscriptionServers`
 
