@@ -963,49 +963,51 @@ After the migration the set of channels lives in `channels[]` and is edited by t
   invariant). The one invariant left: `vpn-1` is never a detour (it is the main channel,
   the default target and the heal reserve) — enforced on read (`Channel.fromJson`), so
   neither a backup restore nor hand-editing the file can get around it.
-- **Резолюция в билдере**: каждый включённый канал эмитит selector `<tag>` с
-  нодами после `node_filter` (regex по итоговому tag, §048-style) + опции
-  `direct-out`/`block` (по `include_direct`/`include_block`, §201); если `auto !=
-  null` и набор нод непуст — дополнительно urltest `<tag>-auto` (только ноды
-  канала, без direct/block/auto). `default` = первая нода, чей tag матчит
-  `default_filter`. Пустой/невалидный regex → все ноды.
-- **Инверсия `node_filter_invert`** (§197): `true` → в канал попадают ноды, чей
-  tag **НЕ** матчит `node_filter` (исключающий фильтр). Пустой `node_filter` →
-  инверсия игнорируется (все ноды). Пример: `node_filter:"bypass",
-  node_filter_invert:true` → все ноды кроме содержащих «bypass».
-- **Пустой набор после фильтра** (regex/инверсия отсекли всё) → fallback selector
-  `outbounds: ["block","direct-out"]`, `default: "block"` (§201 — безопаснее
-  блокировать, чем выпускать мимо VPN; direct остаётся опцией). Билдер при этом
-  пишет warning в баннер конфига (§200), если в подписке были ноды. `block`
-  всегда присутствует в `config.outbounds[]` как системный outbound и валиден
-  как `route_final`.
-- **Миграция** (one-shot, guard `channels_migrated`): seed из
-  `template.groupTemplates` (§267) — `default_channels[i].default_enabled` /
-  legacy `enabled_groups[]` → `enabled` (vpn-1 форсим true); `channel.include ∋
-  direct` → `include_direct`; `channel.include ∋ auto` → `auto` из auto-шаблона
-  (`@urltest_*` vars); `default_filter=''`.
-  Глобальный `✨auto`-preset **не** мигрируется (он больше не канал — каждый
-  канал делает свой двойник). `enabled_groups[]` после миграции депрекейтится.
-- **Деградация ссылок** (heal): канал перестал быть валидной мишенью данного
-  рода → ссылки этого рода лечатся сразу в storage, **необратимо** (§202
-  Решение B, расширено §248, скорректировано §274): rules-ссылки
-  (`route_final` / custom-rule outbound) → `vpn-1` при удалении / выключении
-  (установка detour-флага НЕ heal-триггер — §274: канал остаётся целью
-  правил); detour-ссылки (`override_detour` / `members[].detour`) → `''`
-  (None) при удалении / выключении / снятии detour-флага. Ссылка «на канал» = его `tag`
-  ИЛИ `<tag>-auto`; значение, совпадающее с bare-тегом члена той же папки, —
-  интра-ссылка, heal её не трогает. Restore из backup heal не ре-гоняет
-  (принятые деградации — билдер схлопывает dangling при сборке). Legacy
-  `✨auto`-ссылки попадают под то же правило. Подробно:
+- **Resolution in the builder**: every enabled channel emits a selector `<tag>` holding
+  the nodes that survive `node_filter` (a regex over the final tag, §048 style) plus the
+  `direct-out` and `block` options (per `include_direct` / `include_block`, §201); when
+  `auto != null` and the node set is non-empty it additionally emits the urltest
+  `<tag>-auto` (the channel's nodes only, with no direct/block/auto). `default` is the
+  first node whose tag matches `default_filter`. An empty or invalid regex means all
+  nodes.
+- **Inversion through `node_filter_invert`** (§197): `true` puts into the channel the
+  nodes whose tag does **NOT** match `node_filter` (an excluding filter). An empty
+  `node_filter` makes the inversion moot (all nodes). Example: `node_filter:"bypass"`
+  with `node_filter_invert:true` yields every node except those containing “bypass”.
+- **An empty set after filtering** (the regex or the inversion cut everything) yields
+  the fallback selector `outbounds: ["block","direct-out"]` with `default: "block"`
+  (§201 — blocking is safer than letting traffic out past the VPN; direct stays as an
+  option). The builder also writes a warning into the config banner (§200) when the
+  subscription did have nodes. `block` is always present in `config.outbounds[]` as a
+  system outbound and is valid as a `route_final`.
+- **The migration** (one-shot, guarded by `channels_migrated`) seeds from
+  `template.groupTemplates` (§267): `default_channels[i].default_enabled` or the legacy
+  `enabled_groups[]` become `enabled` (vpn-1 is forced to true); `channel.include ∋
+  direct` becomes `include_direct`; `channel.include ∋ auto` becomes `auto` from the
+  auto template (the `@urltest_*` vars); and `default_filter` is `''`. The global
+  `✨auto` preset is **not** migrated (it is no longer a channel — each channel makes
+  its own twin). `enabled_groups[]` is deprecated once the migration has run.
+- **Reference degradation** (healing): once a channel stops being a valid target of a
+  given kind, references of that kind are healed straight in storage, **irreversibly**
+  (§202 decision B, extended by §248 and adjusted by §274). Rule references
+  (`route_final`, a custom rule's outbound) become `vpn-1` on deletion or disabling
+  (setting the detour flag is NOT a heal trigger — per §274 the channel remains a rule
+  target); detour references (`override_detour`, `members[].detour`) become `''` (None)
+  on deletion, disabling or clearing the detour flag. A “reference to a channel” is its
+  `tag` OR `<tag>-auto`; a value that coincides with the bare tag of a member of the same
+  folder is an intra-reference and healing leaves it alone. A backup restore does not
+  re-run healing (the degradations are accepted — the builder collapses danglers at build
+  time). Legacy `✨auto` references fall under the same rule. Details:
   [`spec/features/248 detour-channels/`](spec/features/248%20detour-channels/).
-- CRUD: `getChannels` / `setChannels` / `addChannel` (throws при 10) /
-  `updateChannel` / `deleteChannel` (throws для vpn-1) / `migrateChannelsIfNeeded`.
-- ⚠ **Мутации — через `services/channel_mutations.dart`**, не напрямую (§275):
-  `ChannelMutations.add/update/delete` делают storage-heal и зеркальный ресинк
-  in-memory `_entries` контроллера одной операцией — иначе следующий `_persist()`
-  воскрешает вылеченные detour-ссылки. `addChannel`/`updateChannel`/`deleteChannel`
-  помечены `@visibleForTesting`: вызов из `lib/` мимо сервиса — ошибка analyze.
-  `setChannels` — сырой bulk-overwrite без heal'а (для persist'а списка целиком).
+- CRUD: `getChannels` / `setChannels` / `addChannel` (throws at 10) / `updateChannel` /
+  `deleteChannel` (throws for vpn-1) / `migrateChannelsIfNeeded`.
+- ⚠ **Mutate through `services/channel_mutations.dart`**, never directly (§275):
+  `ChannelMutations.add/update/delete` perform the storage heal and the mirroring resync
+  of the controller's in-memory `_entries` as one operation — otherwise the next
+  `_persist()` resurrects the healed detour references. `addChannel`, `updateChannel` and
+  `deleteChannel` are marked `@visibleForTesting`: calling them from `lib/` past the
+  service is an analyze error. `setChannels` is a raw bulk overwrite with no healing (for
+  persisting the whole list).
 
 Спеки: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/),
 [`docs/spec/features/248 detour-channels/`](spec/features/248%20detour-channels/)
