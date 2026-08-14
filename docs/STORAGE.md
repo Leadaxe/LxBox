@@ -779,7 +779,7 @@ The cached registered Cloudflare WARP account (the “Get WARP” button). The p
 
 **Its purpose is idempotency.** On a repeated “Get WARP” (`reuse=true`, the default) the account is reused instead of registering a new one; *Re-register* creates a fresh one.
 
-**Secrets.** `priv_key` and `token` are real secrets inside the app's local file. They are masked in logs and scrubbed in `/state/storage`.
+**Secrets.** `priv_key` and `token` are real secrets inside the app's local file. They are masked in logs and in the UI, but deliberately **not** scrubbed in `/state/storage` — see [Debug API exposure](#debug-api-exposure).
 
 **`reserved`.** The `client_id` (base64, 3 bytes) is carried to the sing-box endpoint as a per-peer `reserved: [b0,b1,b2]`. Without it WARP drops the traffic.
 
@@ -1009,9 +1009,9 @@ After the migration the set of channels lives in `channels[]` and is edited by t
   service is an analyze error. `setChannels` is a raw bulk overwrite with no healing (for
   persisting the whole list).
 
-Спеки: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/),
+Specs: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/),
 [`docs/spec/features/248 detour-channels/`](spec/features/248%20detour-channels/)
-(detour-прослойка).
+(the detour layer).
 
 ---
 
@@ -1036,90 +1036,90 @@ After the migration the set of channels lives in `channels[]` and is edited by t
 
 ---
 
-## Legacy / удалённые ключи
+## Legacy and removed keys
 
-> **§159 — все миграции и DENY-`.remove()` удалены.** Ни один из перечисленных
-> ниже ключей больше не конвертируется и не вычищается на `_save()`. Если ключ
-> ещё лежит на диске у старого юзера — он безвреден (никем не читается) и будет
-> отброшен строгим allowlist'ом (`SettingsStorage.replaceRaw`) при первом
-> импорте бэкапа. Кто застрял на доисторической версии без миграции — перенесёт
-> настройки через экспорт/импорт или заново проставит галки.
+> **§159 — every migration and DENY `.remove()` is gone.** None of the keys below is
+> converted or cleaned up on `_save()` any more. If such a key is still on an older
+> user's disk it is harmless (nothing reads it) and will be dropped by the strict
+> allowlist (`SettingsStorage.replaceRaw`) on the first backup import. Anyone stuck on a
+> prehistoric version with no migration will carry their settings over through an
+> export/import, or simply tick the boxes again.
 
-| Ключ | Жил | Замена | Статус (§159) |
+| Key | Lived until | Replacement | Status (§159) |
 |---|---|---|---|
-| `proxy_sources` | до v1.3.x | `server_lists` ([§033]) | миграция удалена, ключ игнорируется. |
-| `app_rules` | до v1.3.2 | `custom_rules` (kind=inline, c `packages`) — [§030] | миграция удалена, ключ игнорируется. |
-| `enabled_rules` | до [§030] | `custom_rules` | миграция + API удалены, ключ игнорируется. |
-| `rule_outbounds` | до v1.3.2 | `custom_rules.outbound` (или `varsValues.outbound` для preset) | миграция + API удалены, ключ игнорируется. |
-| `dns_options.rules_json` | [§061] (intermediate) | `dns_options.rules[]` | поле остаётся для downgrade-friendliness, builder/UI не читают. |
-| `node_overrides` | удалённое | — | DENY-очистка удалена; игнорируется/отбрасывается на импорте. |
-| `show_detour_servers` | удалённое | — | DENY-очистка удалена; игнорируется/отбрасывается на импорте. |
-| `vars.auto_rebuild` | до §107 | — (rebuild всегда авто) | DENY-очистка удалена; отбрасывается на импорте. |
+| `proxy_sources` | up to v1.3.x | `server_lists` ([§033]) | the migration is gone; the key is ignored. |
+| `app_rules` | up to v1.3.2 | `custom_rules` (kind=inline, with `packages`) — [§030] | the migration is gone; the key is ignored. |
+| `enabled_rules` | up to [§030] | `custom_rules` | both the migration and the API are gone; the key is ignored. |
+| `rule_outbounds` | up to v1.3.2 | `custom_rules.outbound` (or `varsValues.outbound` for a preset) | both the migration and the API are gone; the key is ignored. |
+| `dns_options.rules_json` | [§061] (an intermediate step) | `dns_options.rules[]` | the field stays for downgrade friendliness; it is not read. |
+| `node_overrides` | removed | — | the DENY cleanup is gone; ignored, and dropped on import. |
+| `show_detour_servers` | removed | — | the DENY cleanup is gone; ignored, and dropped on import. |
+| `vars.auto_rebuild` | up to §107 | — (a rebuild is always automatic) | the DENY cleanup is gone; dropped on import. |
 
 ---
 
 ## SharedPreferences (Android)
 
-Не часть `lxbox_settings.json`. Используется для двух категорий: **pre-Flutter boot flags** (читаются в `BoxApplication.initialize()` / `BootReceiver` до того, как Flutter engine стартует) и **UI prefs** через `shared_preferences`-плагин.
+Not part of `lxbox_settings.json`. It serves two categories: **pre-Flutter boot flags** (read by Kotlin before the engine starts) and **UI preferences** (written by Flutter through `shared_preferences`).
 
-> **§189 — `boxvpn_boot.*` теперь ЗЕРКАЛО, не первоисточник.** Шесть native-prefs
+> **§189 — `boxvpn_boot.*` is now a MIRROR, not the original.** The six native prefs
 > (`auto_start` / `keep_vpn_on_exit` / `background_mode` / `core_logs_enabled` /
-> `allow_bypass` / `auto_redirect`) — **рабочая копия в оперативке** для Dart-less
-> моментов (boot / swipe `onTaskRemoved` / `openTun`). **Источник истины — секция
-> [`native_prefs`](#native_prefs--189-зеркало-boxvpn_boot) в `lxbox_settings.json`
-> (диск)**: все writes идут write-through (JSON первично → зеркало в native), а на
-> старте `sync` JSON⇒native выправляет расхождения. Единственное исключение —
-> вычисляемый `has_tun` ([§192]), который живёт только здесь (производное от
-> `vpn_mode`, в JSON не хранится).
+> `allow_bypass` / `auto_redirect`) are a **working copy in memory** for the Dart-less
+> moments (boot, a swipe `onTaskRemoved`, `openTun`). **The source of truth is the
+> [`native_prefs`](#native_prefs--189-a-mirror-of-boxvpn_boot) section of
+> `lxbox_settings.json` (the disk)**: every write is write-through (the JSON first, then
+> mirrored into native), and the `sync` at startup (JSON ⇒ native) straightens out any
+> divergence. The one exception is the computed `has_tun` ([§192]), which lives only here
+> (derived from `vpn_mode` and never stored in the JSON).
 
-> **Примечание (§159):** `haptic_enabled` ранее ошибочно числился здесь — по
-> факту он живёт в `vars` (`lxbox_settings.json`), читается/пишется через
-> `SettingsStorage.getVar/setVar` (см. `HapticService.prefsKey`). В разделе
-> [`vars`](#vars--template-vars--app-flags) он учтён как app feature-flag.
+> **A note (§159):** `haptic_enabled` used to be listed here by mistake — it actually
+> lives in `vars` (`lxbox_settings.json`) and is read and written through
+> `SettingsStorage.getVar` / `setVar` (see `HapticService.prefsKey`). It is accounted for
+> as an app feature flag in the [`vars`](#vars--template-vars--app-flags) section.
 
-| Ключ | Тип | Источник | Спека | Назначение |
+| Key | Type | Source | Spec | Purpose |
 |---|---|---|---|---|
 | `app_theme_mode` | `"system"` / `"light"` / `"dark"` | Flutter | — | UI theme. |
-| `boxvpn_boot.auto_start_vpn` | `Boolean` | Kotlin (зеркало JSON) | [§189] | Auto-start VPN на boot (если разрешено). Истина — `native_prefs.auto_start`. |
-| `boxvpn_boot.keep_vpn_on_exit` | `Boolean` | Kotlin (зеркало JSON) | [§189]/§188 | Не глушить tun при swipe-kill app. Истина — `native_prefs.keep_on_exit` (default ON, §188). |
-| `boxvpn_boot.background_mode` | `String` | Kotlin (зеркало JSON) | [§189] | Foreground-service режим (`never`/`lazy`/`always`). Истина — `native_prefs.background_mode`. |
-| `boxvpn_boot.core_logs_enabled` | `Boolean` | Kotlin (зеркало JSON) | [§189], [§043][043-applog] | Forward sing-box-логов. Читается в `BoxApplication.initialize()` ДО Flutter — поэтому нужна native-копия. Истина — `native_prefs.core_logs_enabled`. |
-| `boxvpn_boot.allow_bypass` | `Boolean` | Kotlin (зеркало JSON) | [§189]/§069 | Allow VPN bypass. Истина — `native_prefs.allow_bypass`. |
-| `boxvpn_boot.auto_redirect` | `Boolean` | Kotlin (зеркало JSON) | [§189] | Auto-redirect. Истина — `native_prefs.auto_redirect`. |
-| `boxvpn_boot.has_tun` | `Boolean` | Kotlin (зеркало `vpn_mode`) | [§192] | **Вычисляемое**, default `true`. Производное от `vpn_mode` (§119): proxy → `false`. Гейтит `VpnService.prepare()` (proxy не отзывает чужой VPN). **НЕ** в backup-блоке, **НЕ** в JSON-секции `native_prefs` — пересчитывается из `vpn_mode`. |
-| `boxvpn_boot.app_language` | `String` | Kotlin (зеркало `vars.app_language`) | [§279] | `system` \| `en` \| `ru`. Derived cache для Dart-less нативных поверхностей: `L10n.kt` оборачивает контекст в момент рендера (шторка/тайл/shortcuts при мёртвом Flutter). Истина — [`vars.app_language`](#vars--template-vars--app-flags); **НЕ** член `NativePrefsKeys`, **НЕ** в backup-блоке. |
-| `boxvpn_boot.last_pushed_locale` | `String` | Kotlin | [§279] | Последнее значение, которое приложение само запушило в `LocaleManager` (Android 13+; `""` = system). Опора трёхстороннего reconciliation на старте: смена в системных Settings побеждает сторадж, смена стораджа (restore/Debug API) пере-пушится в `LocaleManager`. **НЕ** в backup-блоке. |
+| `boxvpn_boot.auto_start_vpn` | `Boolean` | Kotlin (mirrors the JSON) | [§189] | Auto-start the VPN at boot (when it was running before). |
+| `boxvpn_boot.keep_vpn_on_exit` | `Boolean` | Kotlin (mirrors the JSON) | [§189]/§188 | Do not kill the tun on a swipe-kill. |
+| `boxvpn_boot.background_mode` | `String` | Kotlin (mirrors the JSON) | [§189] | The foreground-service mode (`never` / `lazy` / `always`). |
+| `boxvpn_boot.core_logs_enabled` | `Boolean` | Kotlin (mirrors the JSON) | [§189], [§043][043-applog] | Forward the sing-box logs into Dart. |
+| `boxvpn_boot.allow_bypass` | `Boolean` | Kotlin (mirrors the JSON) | [§189]/§069 | Allow VPN bypass. The truth lives in `native_prefs`. |
+| `boxvpn_boot.auto_redirect` | `Boolean` | Kotlin (mirrors the JSON) | [§189] | Auto-redirect. The truth lives in `native_prefs`. |
+| `boxvpn_boot.has_tun` | `Boolean` | Kotlin (mirrors `vpn_mode`) | [§192] | **Computed**, default `true`. Gates `VpnService.prepare()`; not stored in the JSON. |
+| `boxvpn_boot.app_language` | `String` | Kotlin (mirrors `vars.app_language`) | [§279] | `system` \| `en` \| `ru`. A derived cache for the native surfaces. |
+| `boxvpn_boot.last_pushed_locale` | `String` | Kotlin | [§279] | The last value the app itself pushed into `LocaleManager` (Android 13+). |
 
 ---
 
 ## Debug API exposure
 
-`SettingsStorage.dumpCache()` возвращает deep-copy всего `_cache`. `GET /state/storage` ([§031]) использует через сериализатор `services/debug/serializers/storage.dart`, который работает по **denylist**-модели (всё видно, скрабятся только секреты — см. §159-callout ниже). Реально скрабятся:
+`SettingsStorage.dumpCache()` returns a deep copy of the whole `_cache`. `GET /state/storage` ([§031]) uses it with a scrubber:
 
 - `vars.debug_token` → `'***'`
-- `server_lists[].url` → маскируется (`maskSubscriptionUrl`)
-- `server_lists[].nodes` → заменяется на `nodes_count` (могут нести credentials в UUID/password)
-- `server_lists[].rawBody` → заменяется на `raw_body_bytes` (длина)
-- `server_lists[].members` → заменяется на `members_count` (§234 — raw членов несёт credentials)
+- `server_lists[].url` is masked (`maskSubscriptionUrl`)
+- `server_lists[].nodes` is replaced by `nodes_count` (nodes can carry credentials in a UUID or password)
+- `server_lists[].rawBody` is replaced by `raw_body_bytes` (its length)
+- `server_lists[].members` is replaced by `members_count` (§234 — a member's raw carries credentials)
 
-Скраббер обрабатывает только ключи `vars` и `server_lists`; всё остальное (`meta.*`, `warp_account`, `masque_account`, …) проходит **как есть** через `default`-ветку. Любое новое sensitive-поле нужно явно добавлять в `_scrub`.
+The scrubber only handles the `vars` and `server_lists` keys; everything else (`meta.*`, `custom_rules`, `dns_options`, the accounts) is returned as-is.
 
-> **Долг:** `warp_account`/`masque_account` (`priv_key`/`token`/`priv_key_der`) и `meta.support_url`/`meta.web_page_url` в `GET /state/storage` сейчас **не** скрабятся (вопреки обещанию раздела `warp_account`, что секреты маскируются в diag-снапшотах). Заведено отдельной задачей.
+> **Deliberate, not a debt (§219):** `warp_account` / `masque_account` (`priv_key`, `token`, `priv_key_der`) and `meta.support_url` / `meta.web_page_url` are **not** scrubbed in `GET /state/storage`. The Debug API grants root access to secrets by design — `GET /backup/export` returns `exportRaw()` verbatim — so masking here would protect nothing while making diagnosis harder. Do not add it as a “security fix”.
 
-> **§159 — две РАЗНЫЕ модели фильтрации, не путать (намеренно):**
-> - **выход** (`GET /state/storage`, `serializers/storage.dart`) — **denylist**
->   со scrubber'ом: всё видно разработчику, прячем только секреты. Новый ключ
->   виден автоматически.
-> - **вход** (импорт бэкапа + Debug API `POST /backup/import`, через
->   `SettingsStorage.replaceRaw`) — **allowlist** default-deny: пишем только
->   известные ключи ([`allowedTopLevelKeys`] + app-флаги ∪ template-vars),
->   чужеродное отбрасывается. То же на `PUT /settings/ping_options` (strip
->   неизвестных subkeys).
+> **§159 — two DIFFERENT filtering models, deliberately not unified:**
+> - **output** (`GET /state/storage`, `serializers/storage.dart`) is a **denylist**
+>   with a scrubber: the developer sees everything and only secrets are hidden. A new
+>   key is visible automatically.
+> - **input** (a backup import, plus the Debug API `POST /backup/import`, through
+>   `SettingsStorage.replaceRaw`) is a default-deny **allowlist**: only known keys are
+>   written ([`allowedTopLevelKeys`] plus the app flags and the template vars), and
+>   anything foreign is dropped. The same applies to `PUT /settings/ping_options`,
+>   which strips unknown subkeys.
 >
-> Разные задачи (показать всё vs не пустить чужое) → разные модели. НЕ
-> «унифицировать» по ошибке.
+> Different jobs (show everything versus admit nothing foreign) call for different
+> models. Do NOT “unify” them by mistake.
 
-`PUT /settings/dns_options/servers` принимает три исторических формата (legacy pre-[§043][043-dns], [§043][043-dns] и [§044]) — миграция происходит на следующий `resolveDnsServersList`. См. [`api/debug-api-reference.md`](./api/debug-api-reference.md).
+`PUT /settings/dns_options/servers` accepts three historical formats (the pre-[§043][043-dns] legacy one, [§043][043-dns] and [§044]) — the migration happens on the next `resolveDnsServersList`. See [`api/debug-api-reference.md`](./api/debug-api-reference.md).
 
 ---
 
