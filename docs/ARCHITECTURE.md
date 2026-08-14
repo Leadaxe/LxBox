@@ -1352,48 +1352,48 @@ The core emits changes and the UI subscribes. The old flow of three pollers is g
 
 ### The native clients (`BoxCommandClient.kt`)
 
-Четыре независимых `CommandClient` — развязка частоты обновления от состава данных и lifecycle:
+Four independent `CommandClient`s decouple the update rates and the lifecycles.
 
-| Клиент | Команды | Lifecycle |
+| Client | Commands | Lifecycle |
 |---|---|---|
-| `statusClient` | `CommandStatus` (+ `setStatusInterval`) | always-on пока туннель жив; в фоне (`onAppPaused`) гасится (0 тиков/0 drain); §164 адаптивная частота NORMAL 0.5с (главный экран) / FAST 0.1с (Stats) — пересоздаётся с новым интервалом |
-| `screenClient` | `CommandOutbounds` + `CommandGroup` + `CommandConnections` | поднимается по `connectScreen()` (refs>0), гасится в фоне |
-| `profilerClient` | `CommandConnections` + `subscribeDNSQueries` (SPEC 018, §180) | поднимается по `connectProfiler()` для recording; §164 **не паузится** в фоне → recording живёт при свёрнутом app |
-| `pingClient` | голый `PingHandler`, без подписок — только unary RPC | §175/§209 — поднимается лениво, **lifecycle-независим** (`pauseClients` его НЕ трогает). Носитель ВСЕХ unary-снапшотов/действий (`urlTestOutbound` + `getPool`/`getGroups`/`getRules` + `selectOutbound`/`close*`). Дисконнект только в `cancelPing`/`resyncForReopen`/`shutdownAll`. Подписок нет → 0 нагрузки в покое. Следствие: снапшоты работают и при свёрнутом приложении |
+| `statusClient` | `CommandStatus` (plus `setStatusInterval`) | Always on while the tunnel lives; slowed down in the background |
+| `screenClient` | `CommandOutbounds` + `CommandGroup` + `CommandConnections` | Raised by `connectScreen`, paused in the background |
+| `profilerClient` | `CommandConnections` + `subscribeDNSQueries` (SPEC 018, §180) | Raised for recording and kept alive in the background |
+| `pingClient` | A bare `PingHandler` with no subscriptions — unary RPC only | §175/§209 — lifecycle-independent |
 
-Подписка в gomobile-фасаде = `CommandClientOptions.addCommand(int)` + колбэки `CommandClientHandler.write*` (прямых `subscribe*`-методов в AAR нет).
+A subscription in the gomobile facade is `CommandClientOptions.addCommand(int)` plus the `CommandClientHandler` callbacks.
 
-### Dart-слой (`CcChannel`)
+### The Dart layer (`CcChannel`)
 
-Push-стримы поверх EventChannel `lxbox/cc/*` (`status` · `outbounds` · `groups` · `connections` · `dns`). **§122 sink-leak-guard:** каждый EventChannel держит РОВНО ОДИН native sink; `CcChannel` делает один внутренний `listen` и фан-аутит через `StreamController.broadcast` (native sink ставится при первом Dart-подписчике, снимается при уходе последнего) — иначе cancel одного потребителя (dispose Stats) обнулял бы sink главного экрана → watchdog видел бы тишину → ложный dead-tunnel.
+Push streams over the `lxbox/cc/*` EventChannel (`status` · `outbounds` · `groups` · `connections` · `dns`):
 
-| Стрим / метод | Тип | Назначение |
+| Stream / method | Type | Purpose |
 |---|---|---|
-| `status` | push `Stream<CcStatus>` | up/down + traffic snapshot; питает heartbeat-watchdog |
-| `outbounds` | push `Stream<List<CcOutbound>>` | список outbound'ов |
-| `groups` | push `Stream<List<CcGroup>>` | selector/urltest группы + selected/active |
-| `connections` | push `Stream<List<CcConnection>>` | active TCP/UDP + bytes + packageName/processPath. **Pull нет** (см. §193 ниже) — ядро шлёт полный список ОДИН раз (reset-снапшот на подписку), дальше только дельты |
-| `dnsQueries` | push `Stream<List<CcDnsQuery>>` | §180 (SPEC 018) — DNS-запросы из ядра (domain/queryType/rcode/answers/cnameChain + dnsServer/outbound); `subscribeDNSQueries` на `profilerClient`; питает профайлер (`dnsResolve`/`dnsFail`) |
-| `getGroups()` | unary-pull `List<CcGroup>?` | детерминированный снапшот групп (lifeline на дыру стартового push'а; `null` = клиент недоступен, не трогать state) |
-| `getRules()` | unary-pull `List<CcRule>` | снапшот route+DNS правил (диагностика) |
-| `getPool(tag)` | unary-pull `List<CcPoolSlot>?` | §208/§209 — снапшот пула round_robin-группы (`slot/tag/delay`). `null` = клиент недоступен, `[]` = пул пуст (не round_robin). Питает UI «View pool» + Debug `/pool` |
-| `urlTestOutbound(tag)` | unary-RPC `CcDelayResult` | per-node delay. **Инвариант:** `error` — единственный признак провала; `delay==0 && error==''` = успех 0мс |
+| `status` | a push `Stream<CcStatus>` | up/down plus a traffic snapshot; it feeds the heartbeat watchdog |
+| `outbounds` | a push `Stream<List<CcOutbound>>` | the list of outbounds |
+| `groups` | a push `Stream<List<CcGroup>>` | the selector and urltest groups plus selected/active |
+| `connections` | a push `Stream<List<CcConnection>>` | the active TCP/UDP connections plus bytes and packageName/processPath |
+| `dnsQueries` | a push `Stream<List<CcDnsQuery>>` | §180 (SPEC 018) — the DNS queries from the core (domain, rcode, latency) |
+| `getGroups()` | a unary pull returning `List<CcGroup>?` | a deterministic snapshot of the groups |
+| `getRules()` | a unary pull returning `List<CcRule>` | a snapshot of the route and DNS rules (for diagnostics) |
+| `getPool(tag)` | a unary pull returning `List<CcPoolSlot>?` | §208/§209 — a snapshot of a round_robin group's pool |
+| `urlTestOutbound(tag)` | a unary RPC returning `CcDelayResult` | the per-node delay. **The invariant:** an `error` is the only signal of failure |
 | `selectOutbound(group, tag)` | unary-RPC | selector switch |
-| `closeConnection(id)` / `closeConnections()` | unary-RPC | закрыть одно/все соединения |
+| `closeConnection(id)` / `closeConnections()` | a unary RPC | close one connection or all of them |
 
-**§209 — все unary-методы выше идут через `pingClient`** (lifecycle-независим), не через `anyClient()` (status/screen/profiler паркуются в фоне §164). Поэтому снапшоты (`getPool`/`getGroups`/`getRules`) и действия работают и при свёрнутом приложении. Контракт ошибки: при недоступном клиенте List-снапшот возвращает `null` (не пустой список) — «нет клиента» отличимо от «нет данных»; действия возвращают честный `false`.
+**§209 — every unary method above goes through `pingClient`** (which is lifecycle-independent).
 
-Lifecycle-сигналы (`connectScreen`/`disconnectScreen`, `connectProfiler`/`disconnectProfiler`, `pauseClients`/`resumeClients`, `setStatusFast`) дёргают соответствующие native-клиенты.
+The lifecycle signals (`connectScreen`/`disconnectScreen`, `connectProfiler`/`disconnectProfiler`, `pauseClients`).
 
 ### Wiring
 
-`HomeController` на `connected` event подписывается на `status` + `groups`-стримы и поднимает `screenClient` (`connectScreen()`), затем делает unary `getGroups()`-pull (с короткими ретраями пока сервис не STARTED) для детерминированного наполнения дерева групп — на случай если стартовый groups-push потерялся в гонке `waitForStarted`. На disconnect — отписка + `disconnectScreen()` + сброс кэшей. Per-node delay и selector switch идут через `urlTestOutbound` / `selectOutbound`.
+On a `connected` event `HomeController` subscribes to the `status` and `groups` streams.
 
 ### Gotchas
 
-- **Empty groups-push поверх живого** — ядро может прислать пустой groups-push поверх непустого state; guard в `_onCcGroups` игнорит пустой push если `ccGroups` непуст. Детерминированный источник истины — `getGroups`-pull.
-- **No external subscribers** — командный server слушает localhost; сторонние Clash-дашборды (yacd / clash-meta) больше не поддерживаются в принципе (Clash API нет).
-- **§193 — connections single-shot, нет pull (асимметрия с groups).** `connections`-под-поток `screenClient`'а принципиально хрупче `groups`. Ядро (sing-box-lx) отдаёт полный список соединений **только один раз** — reset-снапшот при подписке (`SubscribeConnections`); дальше идут только дельты. У `groups` есть unary-pull `getGroups()` плюс повторные снапшоты на urlTest, у `connections` pull'а **нет** (`getConnections` в libbox отсутствует — javap rc.10 подтвердил). Поэтому при **повторном** открытии Stats (`screenClient` не пересоздаётся, refcount>0) нового reset-снапшота не приходит — UI остался бы пустым. Фикс §193: native-сторона при появлении нового connections-sink'а пере-эмитит накопленный `screenAccumulator` — [`BoxCommandClient.reEmitScreenConnections()`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxCommandClient.kt) зовётся из `VpnPlugin.onListen` connections-канала (идемпотентно: пустой/null acc → пустой list). Плюс `resyncForReopen` (§185, рвущий `screenClient`/`pingClient`) гейтнут до cold-start: флаг `_didColdStartResync` в [`home_controller.dart`](../app/lib/controllers/home_controller.dart) выполняет полный resync ровно один раз за жизнь движка, чтобы не рвать connections на каждом реконнекте. **Долг ядра:** добавить unary `GetConnections` симметрично `GetGroups`.
+- **An empty groups push over a live one** — the core can send an empty groups list.
+- **No external subscribers** — the command server listens on localhost; third-party Clash clients cannot attach.
+- **§193 — connections are single-shot with no pull (an asymmetry with groups).** The `connections` subscription is one-way.
 - **§194 — три счётчика соединений считают РАЗНОЕ.** Не путать:
   - **Главный экран** ([`traffic_bar.dart`](../app/lib/screens/home/widgets/traffic_bar.dart)) — два раздельных чипа: `connectionsIn` (🔗 = `trafficManager.ConnectionsLen()` ядра = соединения **приложений**, ТЕ ЖЕ что в `CommandConnections`-списке = на Stats) и `connectionsOut` (🗄 = `connectionManager.Count()` = **физические** соединения наружу к серверам). Раньше шапка складывала In+Out в одно число — путало, т.к. не сходилось со списком на Stats.
   - **Stats** — активные из списка (`closedAt==0`) ≈ `connectionsIn`.
