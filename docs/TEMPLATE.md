@@ -1013,17 +1013,17 @@ defaults); `num` is always written — it is part of the axis layout.
 | Context | Rule |
 |---|---|
 | Fields holding an `@` placeholder | **one field per line** |
-| Литералы (`type`, `tag`, `auto_route`, `server_port`) | можно вместе на одной строке |
-| Мелкие struct'ы ≤2–3 литерала (`direct-out`, hijack-dns) | **одна строка** |
-| Крупные объекты (`dns_options.servers[]`, preset `dns_servers[]`) | **multiline** — одно поле на строку |
-| `options`/`filters` **без** `@` | **одна строка** |
+| Literals (`type`, `tag`, `auto_route`, `server_port`) | may share one line |
+| Small structs of two or three literals (`direct-out`, hijack-dns) | **one line** |
+| Large objects (`dns_options.servers[]`, a preset's `dns_servers[]`) | **multiline** — one field per line |
+| `options` and `filters` **without** an `@` | **one line** |
 
-### `#if`-конструкт (§120)
+### The `#if` construct (§120)
 
-| `value` / `else` | Оформление |
+| `value` / `else` | Layout |
 |---|---|
-| **Скаляр** | `{"#if": {"and": [...], "value": "..."}}` — одна строка |
-| **Объект** | условие + `"value": {` на строке 1; тело ниже; закрытие `}}}` |
+| **A scalar** | `{"#if": {"and": [...], "value": "..."}}` — one line |
+| **An object** | the condition plus `"value": {` on line 1; the body below; closing with `}}}` |
 
 ```jsonc
 {"#if": {"and": ["@force_ipv4"], "value": {
@@ -1032,15 +1032,15 @@ defaults); `num` is always written — it is part of the axis layout.
 }}}
 ```
 
-### Правила пресета (`rule`/`rules`, `dns_rule`/`dns_rules`)
+### A preset's rules (`rule`/`rules`, `dns_rule`/`dns_rules`)
 
-| Случай | Оформление |
+| Case | Layout |
 |---|---|
-| Одиночное правило-литерал (без `#if`, без `@`) | **одна строка** |
-| Правило под `#if` со скаляром | одна строка |
-| Правило под `#if` с объектом-`value` | multiline (условие → тело → `}}}`) |
-| `rule_set[]` inline/remote | строка 1: metadata (`tag`/`type`/`format`); строка 2: `rules`/`url` |
-| Длинные inline-suffix списки | одна строка если влезает; иначе переносы в массиве |
+| A single literal rule (no `#if`, no `@`) | **one line** |
+| A rule under an `#if` with a scalar | one line |
+| A rule under an `#if` with an object `value` | multiline (condition → body → `}}}`) |
+| `rule_set[]`, inline or remote | line 1: the metadata (`tag`/`type`/`format`); line 2: `rules`/`url` |
+| Long inline suffix lists | one line when it fits; otherwise wrapped |
 
 ```jsonc
 "dns_rules": [
@@ -1051,16 +1051,16 @@ defaults); `num` is always written — it is part of the axis layout.
 ]
 ```
 
-### Шпаргалка
+### Cheat sheet
 
-| | Одна строка | Multiline |
+| | One line | Multiline |
 |---|---|---|
-| var-шапка (`name`/`type`/`title`/`tooltip`) | ✓ | — |
+| A var header (`name`/`type`/`title`/`tooltip`) | ✓ | — |
 | `default_value` | — | ✓ |
-| `options[]` элементы | — | ✓ |
+| The elements of `options[]` | — | ✓ |
 | ref-var `{"ref":...}` | ✓ | — |
-| `ui`-объект пресета | ✓ (если влезает) | флаги ниже |
-| `@`-поле в payload | — | ✓ (по полю) |
+| A preset's `ui` object | ✓ (when it fits) | the flags below |
+| An `@` field in a payload | — | ✓ (per field) |
 | `#if` + object `value` | условие | тело |
 | `#if` + скаляр | ✓ | — |
 | литеральное правило пресета | ✓ | — |
