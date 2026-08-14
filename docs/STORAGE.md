@@ -655,11 +655,11 @@ is no migration — after an update every preset carrying the var has its DNS bl
 
 ### Migration history
 
-- v1.5.x: `dns_options.rules_json` — single JSON-string (`@Deprecated`). Сейчас игнорится; поле остаётся на диске для downgrade-friendliness.
-- v1.6.0 ([§061]): `dns_options.rules[]` — структурированный список с `type`/`enabled`/`title`/`rule`.
-- v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — kind-refs впервые. Tag/description/enabled тогда жили в `body`.
-- v1.6.1 ([§044]): `dns_options.servers[]` — clean schema. Tag/description/enabled подняты на ref-level. Underscore-аннотации (`_kind`, `_overrides`, `_origin`, `_preset_label`) удалены. Builder синтезирует tag в body. One-shot migration в `_migrateLegacyDnsServers`.
-- v1.7.x ([§117]): template-серверы в шаблоне — обёртки `{description, enabled, vars?, server}`; ref-запись `kind: template` получила `varValues`. Миграции нет (не нужна): kind-ref'ы валидны как есть, удалённые из шаблона теги (`quad9_dot`, `adguard_dot`, `adguard_family`, `google_doh_vpn`) орфан-чистятся, vars применяют дефолты; inline-серверы юзера не трогаются.
+- v1.5.x: `dns_options.rules_json` — a single JSON string (`@Deprecated`). It is ignored now; the field stays on disk for downgrade safety.
+- v1.6.0 ([§061]): `dns_options.rules[]` — a structured list with `type` / `enabled` / `title` / `rule`.
+- v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — the first kind refs. Back then tag, description and enabled lived inside `body`.
+- v1.6.1 ([§044]): `dns_options.servers[]` — the clean schema. Tag, description and enabled were lifted to the ref level, and the underscore annotations (`_kind`, `_overrides`) were removed.
+- v1.7.x ([§117]): template servers inside the template became `{description, enabled, vars?, server}` wrappers, and the `kind: template` ref gained `varValues`. Миграции нет (не нужна): kind-ref'ы валидны как есть, удалённые из шаблона теги (`quad9_dot`, `adguard_dot`, `adguard_family`, `google_doh_vpn`) орфан-чистятся, vars применяют дефолты; inline-серверы юзера не трогаются.
 - §228: ремап переименованных `preset_id` в `custom_rules` — `bittorrent-direct`→`bittorrent`, `private-ip-direct`→`private-ip`, `block_unknown`→`unknown-traffic` (сняли суффикс `-direct` т.к. outbound стал выбираемым + kebab-case). One-shot `_migrateRenamedPresetIds` (guard `preset_ids_remapped`), зовётся из `main.dart` до seed'а дефолтов. Переписывает ТОЛЬКО `presetId`; `varsValues` (выбранный юзером outbound) не трогается → выбор канала переживает ремап. Без миграции правила стали бы «Preset not found».
   **Миграция удалена в §229** (вышла в v2.10.0, снята в разработке после v2.17.0): у всех, кто обновлялся с тех пор, storage отремаплен, код был мёртвым грузом. Guard-ключ `preset_ids_remapped` сохранён. Кто перепрыгнул с до-v2.10.0 сразу на новый релиз — получит «Preset not found» на трёх старых id (warning + дроп правила при сборке, конфиг не падает).
 
@@ -672,7 +672,7 @@ is no migration — after an update every preset carrying the var has its DNS bl
   "url":        "https://…",          // global default URL
   "timeout_ms": <int>,                 // global default timeout
   "presets":   [ … ],                  // pre-built URL-options (template-side)
-  "groups": {                          // per-group override (опционально)
+  "groups": {                          // a per-group override (optional)
     "<groupTag>": {
       "url":        "…"?,
       "timeout_ms": <int>?
@@ -681,7 +681,7 @@ is no migration — after an update every preset carrying the var has its DNS bl
 }
 ```
 
-Resolve chain в `HomeController`: `groups[tag]` → root → template default.
+The resolve chain in `HomeController`: `groups[tag]` → root → the template default.
 
 CRUD-helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clearGroupPing`. Все — sugared над `getPingOptions`/`savePingOptions` (которые перетирают целиком).
 
@@ -689,7 +689,7 @@ CRUD-helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clear
 
 ## `tun_apps` — [§046]
 
-OS-level split-tunneling: какие приложения идут через VPN-tun, а какие — direct через cellular/wifi (минуя sing-box полностью).
+OS-level split tunneling: which applications go through the VPN tun and which go direct over cellular or Wi-Fi (bypassing sing-box entirely).
 
 ```jsonc
 {
@@ -698,17 +698,17 @@ OS-level split-tunneling: какие приложения идут через VP
 }
 ```
 
-| `mode` | Что попадает в `inbound[type=tun]` финального config | Эффект |
+| `mode` | What lands in `inbound[type=tun]` of the final config | Effect |
 |---|---|---|
-| `"off"` | (ничего не пишем) | Все apps через tun (Android-default) |
-| `"allow"` | `"include_package": [...packages]` | Только перечисленные через tun. Остальные direct |
-| `"deny"`  | `"exclude_package": [...packages]` | Все КРОМЕ перечисленных через tun |
+| `"off"` | (nothing is written) | Every app goes through the tun (the Android default) |
+| `"allow"` | `"include_package": [...packages]` | Only the listed apps use the tun. The rest go direct |
+| `"deny"`  | `"exclude_package": [...packages]` | Everything EXCEPT the listed apps uses the tun |
 
 **Native слой** (`BoxVpnService.kt:557-560`) читает `options.includePackage` / `excludePackage` от libbox и зовёт `VpnService.Builder.addAllowedApplication` / `addDisallowedApplication`. Применяется на `builder.establish()` — на изменение нужен **full VPN restart**, light reload (`startOrReloadService`) не пересоздаёт tun.
 
-**Default для existing юзеров:** `{mode: "off", packages: []}` — backward-compat. Migration unconditional на первом `_load()` после upgrade, без guard'а.
+**The default for existing users** is `{mode: "off", packages: []}`, for backward compatibility. The migration runs unconditionally on the first `_load()` after an upgrade.
 
-**В `/state/storage` exposed без scrubber'а** — package-names не sensitive.
+**Exposed in `/state/storage` with no scrubbing** — package names are not sensitive.
 
 CRUD: `getTunApps()` / `setTunApps()` (replace целиком). API: `GET/PUT /settings/tun_apps` ([Debug API reference](api/debug-api-reference.md)).
 
