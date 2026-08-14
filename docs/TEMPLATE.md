@@ -723,35 +723,35 @@ The base of the final sing-box config. It carries `@var` placeholders; the subst
 }
 ```
 
-Что builder добавляет в эту базу:
-- `config.outbounds[+]` ← node-outbounds из enabled `server_lists[]`, плюс selector/urltest на каждый канал (`channels[]`, seeded из `group_templates`)
-- `config.dns.servers[+]` ← `dns_options.servers[*]` (resolved через [§044]) + `selectable_rules[*].dns_servers[*]`
+What the builder adds to this base:
+- `config.outbounds[+]` ← the node outbounds from the enabled `server_lists[]`, plus a selector and a urltest per channel (`channels[]`, §125)
+- `config.dns.servers[+]` ← `dns_options.servers[*]` (resolved through [§044]) plus `selectable_rules[*].dns_servers[*]`
 - `config.dns.rules[+]` ← `dns_options.rules[*]` ([§061]) + `selectable_rules[*].dns_rules`
-- `config.route.rules[+]` ← `selectable_rules[*].rule` (после `selectable_rules[*]` enabled-проверки) + `custom_rules[*]` user routing rules
-- `config.route.rule_set[+]` ← `selectable_rules[*].rule_set[*]` (см. § ниже)
-- `config.inbounds[*]` + route-rules `inbound` ← **декларативны через `#if`** ([§120]): `tun-in` и `mixed-in` — array-element `#if` по `@vpn_mode` (`vpn`/`proxy`/`vpn_proxy`); `users` внутри `mixed-in` — map-spread `#if` по `@proxy_auth`. `applyVpnMode` удалён. Значения (`@proxy_type`/`@proxy_port`/`@proxy_pass`/…) пробрасываются в `vars` из `VpnModeConfig` на этапе сборки. Раньше `mixed-in` строился императивно, т.к. подстановка коэрсила тип по содержимому (пароль `1234`→int); §120 ввёл coerce **по объявленному `node.type`** (`secret`/`text` — всегда строка), что и сделало `mixed-in`-в-шаблоне безопасным. `inbound` в route-rules теперь `Listable[string]`-массив (`["tun-in"]`/`["mixed-in"]`/`["tun-in","mixed-in"]`) — тождественно скаляру для sing-box.
+- `config.route.rules[+]` ← `selectable_rules[*].rule` (after the enabled check on `selectable_rules[*]`) plus `custom_rules[*]`
+- `config.route.rule_set[+]` ← `selectable_rules[*].rule_set[*]` (see the section below)
+- `config.inbounds[*]` and the `inbound` route rules are **declarative through `#if`** ([§120]): `tun-in` and `mixed-in` appear according to the mode
 
-`config.route.rule_set[]` в template **сам по себе пуст** — все rule-set'ы регистрируются через preset'ы. Если бы хотелось всем юзерам всегда одно rule-set'а — пишем сюда.
+`config.route.rule_set[]` is **empty on its own** in the template — every rule set is registered through the presets.
 
 ---
 
-## `selectable_rules[]` — catalog preset'ов (§033)
+## `selectable_rules[]` — the preset catalog (§033)
 
-Каждый элемент — bundle, который юзер включает/выключает в Routing screen. При expansion преобразуется в N изменений в финальном `config.route.{rules,rule_set}` + опционально `config.dns.{rules,servers}`.
+Each element is a bundle the user enables or disables on the Routing screen. On expansion its parts are merged into the config.
 
 ```jsonc
 {
   "preset_id":   "<unique-id>",        // referenced from custom_rules[].presetId
-  "ui": {                               // §264 — метаданные пресета. ОБЯЗАТЕЛЕН.
-    "label":       "<UI display>",      //   Плоские label/description/default на
-    "description": "<тултип>",          //   top-level УБРАНЫ; fallback в
-    "default":     <bool>?,             //   SelectableRule.fromJson СНЯТ — читается
-    "locked":      <bool>?,             //   ТОЛЬКО ui.
-    "num":         <int>?,              //   §370 — ось порядка, см. ниже.
+  "ui": {                               // §264 — the preset's metadata. REQUIRED.
+    "label":       "<UI display>",      //   The flat label/description/default at the
+    "description": "<tooltip>",         //   top level are GONE; the fallback in
+    "default":     <bool>?,             //   SelectableRule.fromJson is REMOVED — only
+    "locked":      <bool>?,             //   ui is read.
+    "num":         <int>?,              //   §370 — the ordering axis, see below.
     "isSortable":  <bool>?              //
   },
-  "vars": [ <Var> | {"ref":"<global>"}, … ]?, // vars видимые только при включении preset'а;
-                                        //   §265: элемент-ссылка {"ref":"<имя глобали>"}
+  "vars": [ <Var> | {"ref":"<global>"}, … ]?, // vars visible only while the preset is on;
+                                        //   §265: a reference element {"ref":"<global name>"}
   "rule_set": [ <SingboxRuleSet>, … ]?, // rule_set'ы которые должны быть зарегистрированы
   "rule":     <SingboxRoutingRule>?,    // routing rule — legacy single (Map)
   "rules":    [ <SingboxRoutingRule>, … ]?, // §246: массив routing rules (канонический ключ; побеждает `rule`)
