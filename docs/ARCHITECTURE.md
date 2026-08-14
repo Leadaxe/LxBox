@@ -214,16 +214,16 @@ ServerList (sealed)  —  SubscriptionServers | UserServer
   ▼
 buildConfig(lists, settings)
   │ template (assets/wizard_template.json)
-  │ post-steps (в порядке выполнения):
-  │   1. server_list_build   → outbounds/endpoints из ServerList
-  │   2. applyAllCustomRules → единый проход по customRules в storage order
-  │                            (dispatch по kind → preset/inline/srs handler);
-  │                            registry получает rule_sets и routing rules
-  │                            в порядке storage; DNS-аспекты — в UnifiedApplyResult
+  │ post-steps (in execution order):
+  │   1. server_list_build   → outbounds/endpoints from the ServerList
+  │   2. applyAllCustomRules → one pass over customRules in storage order
+  │                            (dispatched by kind → the preset/inline/srs handler);
+  │                            the registry receives the rule_sets and routing rules
+  │                            in storage order; the DNS aspects go into UnifiedApplyResult
   │                            (spec 030 + 033 + 062)
   │   3. flush registry      → config.route.{rule_set, rules}
-  │   4. applyTlsFragment, applyMixedCaseSni  → TLS-обфускация (spec 028)
-  │   5. applyCustomDns      → dns.servers/rules из template + bundle-extras
+  │   4. applyTlsFragment, applyMixedCaseSni  → TLS obfuscation (spec 028)
+  │   5. applyCustomDns      → dns.servers/rules from the template plus the bundle extras
   │   6. validator → ValidationResult{ fatal[], warnings[] }
   ▼
 BuildResult{ config, configJson, validation, emitWarnings, generatedVars }
@@ -236,17 +236,17 @@ HomeController.saveParsedConfig(configJson)  →  native VpnService
 - Each `NodeSpec` has round-trip `parseUri(spec.toUri()) ≈ spec`.
 - Polymorphic `emit(vars)` — WireGuard → Endpoint, others → Outbound.
 - `EmitContext.allocateTag(baseTag)` guarantees global uniqueness across all lists.
-- Warnings bubble up: parse-time → `NodeSpec.warnings`, emit-time → appended by emit. (XHTTP-фолбэк в `httpupgrade` убран в §097 — emit нативный, ядро `with_xhttp`.)
+- Warnings bubble up: at parse time into `NodeSpec.warnings`, at emit time appended by the emit. (The XHTTP fallback to `httpupgrade` was removed in §097 — the transport is now native.)
 
 ---
 
 ## Wizard template (`assets/wizard_template.json`)
 
-Asset-шаблон, который читается один раз через `TemplateLoader.load()` (синглтон, deep-copy на каждый билд). Определяет скелет sing-box конфига, глобальные переменные, preset-группы (VPN tiers) и selectable-правила (каталог routing-пресетов).
+An asset template read once through `TemplateLoader.load()` (a singleton, deep-copied on each read).
 
-### Секции шаблона
+### The template's sections
 
-| Секция | Роль | Пример / где используется |
+| Section | Role | Example / where it is used |
 |---|---|---|
 | `parser_config` | sing-box `version` + reload interval | прямой emit в корень |
 | `dns_options.servers` | Canonical DNS-серверы (system/google/cloudflare/quad9/adguard). Storage хранит kind-refs `{enabled, kind: inline\|preset\|template, tag, description?, body?}` (§043 + §044). Body для kind:inline — partial sing-box shape **без** tag/description/enabled (они на ref-level; tag синтезируется на build-time). Резолвится в bodies через `resolveDnsServersBodies`. | `applyCustomDns` через `resolveDnsServersList` |
