@@ -598,39 +598,39 @@ node_emoji.dart              # §094 emoji tags: the palette, the protocol-defau
 haptic_service.dart · community_servers_loader.dart · dump_builder.dart · url_launcher.dart ·
 config_dirty_check.dart · error_humanize.dart · error_format.dart · parse_hints.dart ·
 clash_log_pump.dart · logcat_reader.dart · stderr_reader.dart · exit_info_reader.dart ·
-selectable_to_custom.dart · version_info.dart · wifi_history_listener.dart  # вспомогательные
-automation/                  # §047 Dart-сторона automation (дополняет Kotlin Locale/Tasker plugin):
-  automation_dispatcher.dart #   диспетчер входящих команд (start/stop/toggle/select-node/…)
-  event_emitter.dart         #   исходящие события (VPN up/down, sub-refresh) с throttle (default OFF)
-  handlers.dart              #   обработчики команд поверх контроллеров
-l10n/                        # §279/§285 подсистема локализации (см. раздел «Локализация (l10n)»)
-  get_local_text.dart        #   GetLocalText (natural-key движок: .s/.plural, printf, fallback=ключ); GetLocalText.en
-  plural_resolver.dart       #   PluralResolver + En/RuPluralResolver (CLDR формы плюрала)
-  locale_controller.dart     #   LocaleController — владелец пайплайна смены локали + глобальный getLocalText
-  template_overlay.dart      #   TemplateOverlay.apply/extract — pre-parse оверлей шаблона
-  app_language_reconcile.dart#   трёхсторонний reconciliation LocaleManager↔storage (Android 13+)
-  template_aware_state.dart  #   mixin: перечитывание шаблона в didChangeDependencies по локали
-project_links.dart           # §362 — единственный источник ссылок проекта + @плейсхолдеры
-install_source.dart          # §390 — канал установки (github/play/fdroid): dart-define, иначе
-                             #   по installingPackageName. Определяет updateUrl (куда за апдейтом)
-support/                     # §105/§356/§357 support-лента + активное время
-  support_message.dart       #   модели ленты (i18n/since_version/mark_read) + выбор/markRead/snooze
-  support_nav.dart           #   §357 псевдопротокол lxbox://action:payload (route:/add:)
-  support_state.dart         #   персист support-стейта (SupportState.I): read/baseline/снуз
-  active_time_tracker.dart   #   счётчик наработки: нативный аптайм §187 + legacy wall-clock
-platform_channels.dart       # §141 — имена MethodChannel/EventChannel (single source: Dart↔Kotlin)
-process_name.dart            # §154 — резолв package→имя процесса (профайлер-атрибуция)
-profile_dump_writer.dart     # §207 — сериализация pprof-дампа (goroutine/CPU) на диск
+selectable_to_custom.dart · version_info.dart · wifi_history_listener.dart  # helpers
+automation/                  # the §047 Dart side of automation (complementing the Kotlin Locale/Tasker plugin):
+  automation_dispatcher.dart #   the dispatcher of incoming commands (start/stop/toggle/select-node/…)
+  event_emitter.dart         #   the outgoing events (VPN up/down, sub-refresh) with throttling (OFF by default)
+  handlers.dart              #   the command handlers on top of the controllers
+l10n/                        # the §279/§285 localization subsystem (see the Localization section)
+  get_local_text.dart        #   GetLocalText (the natural-key engine: .s/.plural, printf, fallback to the key); GetLocalText.en
+  plural_resolver.dart       #   PluralResolver plus En/RuPluralResolver (the CLDR plural forms)
+  locale_controller.dart     #   LocaleController — the owner of the locale-switch pipeline plus the dictionary
+  template_overlay.dart      #   TemplateOverlay.apply/extract — the pre-parse overlay of the template
+  app_language_reconcile.dart#   the three-way reconciliation between LocaleManager and storage (Android 13+)
+  template_aware_state.dart  #   a mixin: re-reading the template in didChangeDependencies on a locale change
+project_links.dart           # §362 — the single source of the project's links plus the @placeholders
+install_source.dart          # §390 — the install channel (github/play/fdroid): a dart-define, otherwise
+                             #   by installingPackageName. It decides the updateUrl (where to send the user for an update)
+support/                     # the §105/§356/§357 support feed plus the active-time counter
+  support_message.dart       #   the feed's models (i18n/since_version/mark_read) plus selection/markRead/snooze
+  support_nav.dart           #   the §357 pseudo-protocol lxbox://action:payload (route:/add:)
+  support_state.dart         #   persisting the support state (SupportState.I): read/baseline/snooze
+  active_time_tracker.dart   #   the usage counter: the §187 native uptime plus the legacy wall clock
+platform_channels.dart       # §141 — the MethodChannel/EventChannel names (a single source across Dart and Kotlin)
+process_name.dart            # §154 — resolving a package to a process name (the profiler's attribution)
+profile_dump_writer.dart     # §207 — serializing a pprof dump (goroutine/CPU) to disk
 ```
 
-#### `widgets/` — кросс-экранные
+#### `widgets/` — the cross-screen widgets
 
 ```
-node_row.dart                # строка ноды: ACTIVE pill + proto label + ping (принимает NodeViewItem, §068)
-node_view_item.dart          # NodeViewItem — immutable view-row (статик-мета + динамика, §068)
-emoji_picker_button.dart     # §094 — popup-палитра emoji (node_settings, add-server wizard)
-reorder_grab_strip.dart      # §098 — единый grab-strip для drag-reorder (routing/DNS rules ·
-                             #   subscriptions · node list в manual-sort mode §098/§100)
+node_row.dart                # a node's row: the ACTIVE pill, the protocol label and the ping (it takes a NodeViewItem)
+node_view_item.dart          # NodeViewItem — an immutable view row (static metadata plus the dynamics, §068)
+emoji_picker_button.dart     # §094 — the emoji palette popup (node_settings, the add-server wizard)
+reorder_grab_strip.dart      # §098 — one grab strip for drag-reorder (the routing and DNS rules ·
+                             #   subscriptions · the node list in manual-sort mode, §098/§100)
 outbound_picker.dart · template_var_list.dart · core_logs_hint_banner.dart ·
 wifi_entry.dart · wifi_manual_add_dialog.dart · wifi_permission_dialog.dart · wifi_saved_picker_sheet.dart
 ```
@@ -638,7 +638,7 @@ wifi_entry.dart · wifi_manual_add_dialog.dart · wifi_permission_dialog.dart ·
 ### `app/android/app/src/main/kotlin/com/leadaxe/lxbox/`
 
 ```
-MainActivity.kt              # FlutterActivity: регистрирует VpnPlugin; /utils + /wifi_history каналы;
+MainActivity.kt              # a FlutterActivity: it registers VpnPlugin; the /utils and /wifi_history channels
                              #   VPN-consent flow; QS-tile/shortcut quick actions
 vpn/VpnPlugin.kt             # Flutter-плагин (1084, см. Обзор): MethodCallHandler всех /methods;
                              #   status+coreLog EventChannel sinks; §122 cc-методы (ccConnectScreen/
