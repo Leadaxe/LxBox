@@ -46,7 +46,7 @@ The current parser and builder version is **v2** (spec 026, phase 5 completed in
 > `--enable-impeller=false` in [`MainActivity`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt)).
 > The Impeller shaders crash older GPU drivers (Adreno 3xx → a SIGSEGV in `libsc-a3xx.so`).
 > Impeller is kept on Android 12+. The gate is by OS version rather than by GPU, since
-> Flutter has no clean runtime GPU detection. Details: [§131](spec/tasks/131-impeller-adreno-crash.md).
+> Flutter has no clean runtime GPU detection. Details: [§131](spec/tasks/131-impeller-adreno-gpu-crash.md).
 
 ### Why 24 is the minSdk
 
@@ -1690,58 +1690,58 @@ LxBox is a monolith, but architecturally it holds several self-contained layers 
 **The public API surface:** `BoxVpnClient.I` (see the [Dart `BoxVpnClient` API surface](#dart-boxvpnclient-api-surface) section).
 
 **The coupling with LxBox (to be broken before extraction):**
-- **Channel names hardcoded** — `com.leadaxe.lxbox/methods`, `com.leadaxe.lxbox/status_events`, `lxbox/coreLog`. Параметризовать через plugin config.
-- **SharedPreferences keys hardcoded** — `boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode, core_logs_enabled}`. Префикс должен быть configurable или общий fallback.
-- **Notification icon / channel name** — `ServiceNotification.kt` ссылается на `R.drawable.ic_notification` + строки. Должно браться из host app.
-- **Manifest declarations** — package должен **документировать** требуемые permissions (location, NEARBY_WIFI_DEVICES, FGS, etc.) и intent-filters (BootReceiver, TileService) для host app.
-- **`WifiNetworkObserver` зависит от Dart-side `wifi_history` MethodChannel** — это §051 фича LxBox, не general-purpose. Извлекать **отдельно** или сделать optional.
+- **The channel names are hardcoded** — `com.leadaxe.lxbox/methods`, `com.leadaxe.lxbox/status_events`, `lxbox/coreLog`.
+- **The SharedPreferences keys are hardcoded** — `boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode, core_logs_enabled, …}`.
+- **The notification icon and channel name** — `ServiceNotification.kt` references `R.drawable.ic_notification`.
+- **The manifest declarations** — the package must **document** the permissions it requires.
+- **`WifiNetworkObserver` depends on the Dart-side `wifi_history` MethodChannel** — that is an LxBox feature (§051).
 
-**Quality gates пройдены:** §049 audit (atomic CAS, F1 split, F2-F26 fixes), §050 closeout (refnum 42 root cause = `SecurityException` через JNI). Wrapper зрелый.
+**The quality gates have been passed:** the §049 audit (atomic CAS, the F1 split, the F2–F26 fixes) and the §050 closeout.
 
-**iOS:** отсутствует. Для cross-platform package — отдельная задача (Network Extension + Packet Tunnel Provider + Swift bridges).
+**iOS:** absent. A cross-platform package would be a separate task (a Network Extension).
 
 ### Layer 2 — CommandClient channel
 
-**Что:** libbox `CommandClient`-канал управления (§122) — нативный `BoxCommandClient.kt` + Dart-клиент `CcChannel`.
+**What:** the libbox `CommandClient` control channel (§122) — the native `BoxCommandClient.kt` plus the Dart `CcChannel`.
 
-| Файлы | Lines |
+| Files | Lines |
 |---|---|
 | `app/android/.../BoxCommandClient.kt` | ~native |
 | `app/lib/vpn/cc_channel.dart` | ~700 |
 
-**Coupling с LxBox:** **средний**. Dart-сторона generic (push-стримы + unary-RPC поверх MethodChannel/EventChannel), но привязана к нативному `BoxCommandClient` (три клиента, §164-энергомодель) и именам каналов `lxbox/cc/*` — extraction идёт в паре с VPN-engine (Layer 1), не отдельно.
+**The coupling with LxBox:** **medium**. The Dart side is generic (push streams plus unary RPC over an EventChannel).
 
-**API surface:** см. раздел [CommandClient (libbox)](#commandclient-libbox) — status/outbounds/groups/connections push + `getGroups`/`getRules`/`urlTestOutbound`/`selectOutbound`/`closeConnection`.
+**The API surface:** see the [CommandClient (libbox)](#commandclient-libbox) section — status/outbounds/groups/connections.
 
-**Готовность к extraction:** **средняя**. Идёт вместе с Layer 1 (общий native command-server + channel names).
+**Readiness for extraction:** **medium**. It travels with Layer 1 (a shared native component).
 
 ### Layer 3 — Sing-box subscription parser / builder
 
-**Что:** Sealed `NodeSpec` (11 protocol variants, вкл. Masque §130) + URI/JSON/INI parsers + builder NodeSpec → sing-box config JSON.
+**What:** the sealed `NodeSpec` (11 protocol variants, including Masque §130) plus the URI/JSON/INI parsers and the builder.
 
-| Файлы | Lines |
+| Files | Lines |
 |---|---|
 | `app/lib/models/{node_spec, node_spec_emit, tls_spec, transport_spec, ...}.dart` | ~2000 |
 | `app/lib/services/parser/*.dart` | ~1500 |
 | `app/lib/services/builder/*.dart` | ~2000 |
 
-**Coupling с LxBox:** **высокий**. Builder зависит от `wizard_template.json` shape (наш формат preset'ов / vars / sections), `SettingsStorage` (server_lists, vars, custom_rules), и от наших sealed моделей (`ServerList`, `CustomRule`).
+**The coupling with LxBox:** **high**. The builder depends on the shape of `wizard_template.json` (our own format).
 
-**Готовность к extraction:** **низкая**. Нужен серьёзный refactor — отделить `NodeSpec` parser/emit (reusable) от builder pipeline (LxBox-specific). Имеет смысл только если есть конкретный re-use case.
+**Readiness for extraction:** **low**. It would need a serious refactor to separate the parser from the builder.
 
 ### Layer 4 — TrafficProfiler
 
-**Что:** Per-app + system-wide observer DNS/TCP/UDP events.
+**What:** a per-app and system-wide observer of DNS/TCP/UDP events.
 
-**Coupling:** **высокий** — см. coupling notes в [секции 6.5](#65-per-app-traffic-profiler-044). Зависит от `CcChannel` connections- и dnsQueries-стримов (core-лог **не** парсится, §044/§180). Расцеплять для extraction нужно через интерфейс connection/DNS source.
+**The coupling:** **high** — see the coupling notes in [section 6.5](#65-traffic-profiler-044--048).
 
-**Готовность:** низкая. Имеет смысл только если LxBox VPN engine уже extracted и кто-то строит на нём свой profiler.
+**Readiness:** low. It only makes sense once the LxBox VPN engine has been extracted.
 
-### Дорожная карта extraction (если решим идти)
+### The extraction roadmap (should we decide to go)
 
-1. **Phase 1** — Sing-box VPN engine + CommandClient-канал (Layer 1 + Layer 2) в `packages/flutter_singbox/` (path dependency monorepo). Refactor channel names (`lxbox/*`, `lxbox/cc/*`) + SharedPreferences keys + notification config. Не публикуем на pub.dev пока — верифицируем что LxBox работает.
-2. **Phase 2** — выделить из Layer 3 reusable `NodeSpec` parser/emit (без builder pipeline).
-3. **Phase 3** — Решение про публикацию: GPLv3 viral от libbox = main blocker. Если ОК с GPLv3-only userbase — публикуем.
-4. **Phase 4** — iOS support (если нужен).
+1. **Phase 1** — the sing-box VPN engine plus the CommandClient channel (Layers 1 and 2) into `packages/flutter_singbox/`.
+2. **Phase 2** — extract a reusable `NodeSpec` parser/emit from Layer 3 (without the builder pipeline).
+3. **Phase 3** — the publication decision: libbox's viral GPLv3 is the main blocker.
+4. **Phase 4** — iOS support (if it is wanted).
 
-**Текущий статус:** ничего не extracted. VPN-engine (Layer 1) + CommandClient-канал (Layer 2) — связка для первого extraction'а.
+**The current status:** nothing has been extracted. The VPN engine (Layer 1) and the CommandClient channel (Layer 2) are the closest candidates.
