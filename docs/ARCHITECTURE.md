@@ -640,45 +640,45 @@ wifi_entry.dart · wifi_manual_add_dialog.dart · wifi_permission_dialog.dart ·
 ```
 MainActivity.kt              # a FlutterActivity: it registers VpnPlugin; the /utils and /wifi_history channels
                              #   VPN-consent flow; QS-tile/shortcut quick actions
-vpn/VpnPlugin.kt             # Flutter-плагин (1084, см. Обзор): MethodCallHandler всех /methods;
-                             #   status+coreLog EventChannel sinks; §122 cc-методы (ccConnectScreen/
+vpn/VpnPlugin.kt             # the Flutter plugin (1084 lines, see the Overview): the MethodCallHandler for every /method;
+                             #   the status and coreLog EventChannel sinks; the §122 cc methods (ccConnectScreen/
                              #   ccUrlTestOutbound/ccGetGroups/…) + lxbox/cc/* EventChannel sinks;
-                             #   statusReceiver мост; app-icon encode
-vpn/BoxCommandClient.kt      # §122 — управляющий канал UI↔ядро через libbox CommandClient (три клиента:
-                             #   statusClient/screenClient/profilerClient; addCommand-подписка + write*-колбэки;
-                             #   §163/§164 setStatusInterval-энергомодель). Заменил Clash HTTP API.
-vpn/BoxVpnService.kt         # Android VpnService + PlatformInterface side (§049-split, тонкий):
-                             #   §122 — владеет cc*Sink (status/outbounds/groups/connections/dns §180 push в Dart);
-                             #   openTun (Builder.establish, allowBypass §069, per-app routes); forwards в BoxService
-                             #   §119: openTun зовётся libbox'ом ТОЛЬКО при наличии tun-inbound. Режим Proxy
-                             #   (vpn_mode=proxy, config без tun) → нет openTun → нет establish → нет VPN-туннеля.
-                             #   Foreground/protect/override tun-agnostic → proxy-режим = config-only, Kotlin не трогаем.
-vpn/BoxService.kt            # CommandServerHandler — владеет libbox runtime (fileDescriptor/commandServer
+                             #   the statusReceiver bridge; app-icon encoding
+vpn/BoxCommandClient.kt      # §122 — the UI↔core control channel through the libbox CommandClient:
+                             #   statusClient/screenClient/profilerClient; the addCommand subscription plus the write* commands
+                             #   (§163/§164, the setStatusInterval power model). It replaced Clash HTTP
+vpn/BoxVpnService.kt         # the Android VpnService plus the PlatformInterface side (the thin §049 split):
+                             #   §122 — it owns the cc*Sinks (status/outbounds/groups/connections/dns §180 push);
+                             #   openTun (Builder.establish, allowBypass §069, the per-app routes); it forwards into BoxService
+                             #   §119: libbox calls openTun ONLY when a tun inbound exists
+                             #   (with vpn_mode=proxy and a config without a tun there is no openTun, no establish and no VPN slot)
+                             #   The foreground/protect/override paths are tun-agnostic, so proxy mode is config-only and Kotlin is untouched
+vpn/BoxService.kt            # CommandServerHandler — it owns the libbox runtime (fileDescriptor/commandServer)
                              #   AtomicReference, serviceScope); startSingbox/doStop/serviceReload; setStatus broadcast
 vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singleton wifiObserver
-vpn/CrashRecovery.kt         # §334 — «прошлый запуск упал» (непустой CrashReport-lxbox.log) → сброс cache.db +
-                             #   tempPath. Детект СТРОГО до Libbox.setup: тот архивирует репорт и затирает файл
+vpn/CrashRecovery.kt         # §334 — “the previous run crashed” (a non-empty CrashReport-lxbox.log in
+                             #   tempPath). The detection must run STRICTLY before Libbox.setup, which archives it
 vpn/PlatformInterfaceWrapper.kt # libbox PlatformInterface: localDNS→LocalResolver, findConnectionOwner, readWIFIState
-vpn/PProfClient.kt           # §207 — libbox PProfServer (goroutine/CPU dump, порт 6060..6065; loopback-only)
+vpn/PProfClient.kt           # §207 — the libbox PProfServer (goroutine/CPU dumps, ports 6060..6065; loopback only)
 vpn/DefaultNetworkMonitor.kt # §087: detect genuine iface switch (prev!=new), debounce 1500ms → resetNetwork
-vpn/DefaultNetworkListener.kt# ConnectivityManager.NetworkCallback в coroutine-actor (порт SagerNet)
-vpn/LocalResolver.kt         # LocalDNSTransport — DNS-запросы bound к underlying network (не tun)
+vpn/DefaultNetworkListener.kt# a ConnectivityManager.NetworkCallback inside a coroutine actor (ported from SagerNet)
+vpn/LocalResolver.kt         # LocalDNSTransport — DNS queries bound to the underlying network (not the tun)
 vpn/ConfigManager.kt         # file-based config store (filesDir) + notificationTitle
-vpn/ServiceNotification.kt   # foreground-service notification (typed SPECIAL_USE на API34+); §182 action-кнопки Stop/Reconnect (broadcast ACTION_STOP / ACTION_RECONNECT)
-vpn/VpnStatus.kt             # enum Stopped/Starting/Started/Stopping (native-сторона статуса)
-vpn/BootReceiver.kt          # BOOT_COMPLETED auto-start + SharedPreferences native-тогглов
-vpn/LxBoxTileService.kt      # QS-tile toggle (§032) с оптимистичным рендером
+vpn/ServiceNotification.kt   # the foreground-service notification (typed SPECIAL_USE on API 34+); the §182 action buttons
+vpn/VpnStatus.kt             # the Stopped/Starting/Started/Stopping enum (the native side of the status)
+vpn/BootReceiver.kt          # the BOOT_COMPLETED auto-start plus the SharedPreferences native toggles
+vpn/LxBoxTileService.kt      # the QS tile toggle (§032) with optimistic rendering
 vpn/QuickShortcuts.kt        # dynamic launcher shortcuts (Connect/Disconnect)
-vpn/LxBoxIntentReceiver.kt   # §047 raw broadcast API: 9 incoming actions, опц. permission-gate, setEnabled
-vpn/WifiInfoReader.kt        # §051 единый источник Wi-Fi SSID/BSSID (permission preflight, sealed Result)
+vpn/LxBoxIntentReceiver.kt   # the §047 raw broadcast API: nine incoming actions, an optional permission gate, setEnabled
+vpn/WifiInfoReader.kt        # §051 the single source of the Wi-Fi SSID/BSSID (a permission preflight, a sealed Result)
 vpn/WifiNetworkObserver.kt   # §051 auto-record: NetworkCallback → WifiHistoryBridge → Dart onWifiSeen
-vpn/PermissionUtils.kt · Extensions.kt  # SDK-gated permission check; мелкие Kotlin-расширения
+vpn/PermissionUtils.kt · Extensions.kt  # the SDK-gated permission check; small Kotlin extensions
 
-automation/                  # §047 Locale/Tasker plugin (FIRE_SETTING/QUERY_CONDITION) — см. ../docs/AUTOMATION.md
-automation/LocaleApi.kt              #   константы стандарта twofortyfouram + JSON bundle (de)serialize + cachedNodes/Groups
-automation/LocaleSettingReceiver.kt  #   FIRE_SETTING → shared action-handlers (start/stop/toggle напрямую, остальное → VpnPlugin.handleAutomationAction)
-automation/LocaleConditionReceiver.kt#   QUERY_CONDITION → currentStatus/active-кеш → result code (SATISFIED/UNSATISFIED/UNKNOWN)
-automation/LocaleQuickActionActivity.kt # one-tap Start/Stop/Toggle (Theme.NoDisplay, headless setResult+finish; команда по alias)
+automation/                  # the §047 Locale/Tasker plugin (FIRE_SETTING/QUERY_CONDITION) — see ../docs/AUTOMATION.md
+automation/LocaleApi.kt              #   the twofortyfouram standard's constants plus JSON bundle (de)serialization
+automation/LocaleSettingReceiver.kt  #   FIRE_SETTING → the shared action handlers (start/stop/toggle directly)
+automation/LocaleConditionReceiver.kt#   QUERY_CONDITION → currentStatus and the active cache → a result code (SATISFIED)
+automation/LocaleQuickActionActivity.kt # a one-tap Start/Stop/Toggle (Theme.NoDisplay, a headless setResult plus finish)
 automation/LocaleSettingEditActivity.kt # «Custom…» edit-экран: RadioGroup команд + селектор нод/групп из native-кеша
 automation/LocaleConditionEditActivity.kt # edit-экран условия (VPN up / active node= / active group=)
 ```
