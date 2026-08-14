@@ -793,14 +793,14 @@ The cached registered MASQUE-WARP account (Cloudflare's QUIC/CONNECT-IP transpor
 
 ```jsonc
 {
-  "priv_key_der":  "<base64 DER — СЕКРЕТ, не логировать>",
+  "priv_key_der":  "<base64 DER — A SECRET, never log it>",
   "server_pub_der":"<base64 DER peer public>",
   "client_v4":     "…",
   "client_v6":     "…",
   "server":        "162.159.198.1",       // data-plane endpoint IP
   "port":          443,
   "device_id":     "…",
-  "token":         "<bearer — СЕКРЕТ, не логировать>",
+  "token":         "<bearer — A SECRET, never log it>",
   "created_at":    "<ISO8601>",
   "sni":           "…",
   "idle_timeout":  "…",
@@ -808,21 +808,21 @@ The cached registered MASQUE-WARP account (Cloudflare's QUIC/CONNECT-IP transpor
 }
 ```
 
-**Секреты.** `priv_key_der`/`token` — реальные секреты локального файла; в логах маскируются (`MasqueAccount.redacted()`).
+**Secrets.** `priv_key_der` and `token` are real secrets in the local file; they are masked in logs (`AppLog`) and in the UI.
 
-**§393 — ключа `network` здесь больше нет.** Версия HTTP (`h3`/`h2`) — свойство узла, а не регистрации: одни и те же креды порождают узлы обеих версий (сканер §284/§305), а визард выбирает её заново при каждом добавлении. Теперь она передаётся параметром в `MasqueAccount.toMasqueUri(vhttp:)` и живёт только в URI узла. Миграции нет: ключ в старых записях просто игнорируется при чтении и исчезает при следующей записи.
+**§393 — the `network` key is gone from here.** The HTTP version (`h3`/`h2`) is a property of a node rather than of the registration, and it now lives in the node's `vhttp`.
 
-**Не config-significant** — MASQUE-узел попадает в конфиг через обычный `UserServer` (`type:masque` из `MasqueSpec`), не отсюда; при записи `markConfigDirty` не дёргается.
+**Not config-significant** — a MASQUE node reaches the config through an ordinary `UserServer` (a `type:masque` outbound from `MasqueSpec`), so the account itself does not mark the config dirty.
 
-CRUD: `getMasqueAccount()` / `setMasqueAccount(account?)` (null = очистить, `.remove('masque_account')`). Входит в backup-allowlist (`backup_service.dart`).
+CRUD: `getMasqueAccount()` / `setMasqueAccount(account?)` (null clears it, via `.remove('masque_account')`). It is part of the backup allowlist (`backup_service`).
 
-> **Долг кода (на момент правки дока):** `masque_account` присутствует в `backup_service`, но **отсутствовал** в `SettingsStorage.allowedTopLevelKeys` — при импорте бэкапа `replaceRaw` его отбрасывал. Также сериализатор `GET /state/storage` не скрабит секреты (см. [Debug API exposure](#debug-api-exposure)). Оба — заведены отдельными задачами.
+> **Both of the debts noted here have been settled (§219).** `masque_account` is now present in `SettingsStorage.allowedTopLevelKeys` as well as in `backup_service`, so a backup import no longer drops it. The fact that `GET /state/storage` does not scrub `warp_account` / `masque_account` is a **deliberate decision**, not an oversight: the Debug API grants root access to secrets by design (`GET /backup/export` returns `exportRaw()` verbatim), so masking here would protect nothing while making diagnosis harder. Do not add scrubbing for these keys as a “security fix” — see [Debug API exposure](#debug-api-exposure).
 
 ---
 
 ## `wifi_history` — [§051] Phase 3
 
-JSON-encoded array записей сетей которые юзер реально посетил — для editor'а custom rules (`Pick saved` picker когда пишешь правило с условием `wifi_ssid` / `wifi_bssid`). Хранится как **JSON-string** в `vars.wifi_history` (не отдельный top-level ключ — чтобы не плодить shape'ы), декодируется при чтении.
+A JSON-encoded array of the networks the user has actually visited, used by the custom-rule editor (`Pick saved` picker) so that Wi-Fi rules can be written without typing an SSID by hand.
 
 ```jsonc
 [
@@ -832,15 +832,15 @@ JSON-encoded array записей сетей которые юзер реаль�
 ]
 ```
 
-| Поле | Тип | Notes |
+| Field | Type | Notes |
 |---|---|---|
-| `ssid` | String | Required. Не нормализуется (case-sensitive — провайдеры могут так и эдак). |
-| `bssid` | String | Может быть пустым. При upsert нормализуется к **lower-case** + trim. Composite-key `(ssid, bssid)` — `Home/aa:bb:..` и `Home/AA:BB:..` это одна запись (после normalize), `Home/aa:bb` и `Home/cc:dd` — разные. |
-| `last_seen` | String (ISO-8601 UTC) | Время последнего observe. `addToWifiHistory` обновляет на upsert. |
+| `ssid` | String | Required. Not normalised (case-sensitive — providers do it both ways). |
+| `bssid` | String | May be empty. On upsert it is normalised to **lower case** and trimmed. The composite key is `(ssid, bssid)`. |
+| `last_seen` | String (ISO-8601 UTC) | When it was last observed. `addToWifiHistory` refreshes it on upsert. |
 
-**Cap 50 записей** (`_wifiHistoryCap` constant). LRU evict — newest-first (insert at index 0), oldest падает с tail при overflow.
+**Capped at 50 entries** (the `_wifiHistoryCap` constant). LRU eviction, newest first (inserted at index 0), and the oldest falls off the tail on overflow.
 
-**Источники наполнения:**
+**Where the entries come from:**
 1. **Auto-record** (`auto_record_wifi_history=true`) — native `WifiNetworkObserver` через `NetworkCallback` listener. Stickiness debounce: записывается только если юзер сидит на сети ≥5 минут (фильтр от random transitions home/office/coffeeshop).
 2. **Manual** — editor UI: `Add current` button (читает sing-box `readWIFIState` напрямую), `Pick saved` (выбирает из существующих записей).
 3. **Debug API** — `POST /wifi_history` (для test fixtures, restore, etc) — см. [Debug API reference](api/debug-api-reference.md#wi-fi-history--wifi_history).
