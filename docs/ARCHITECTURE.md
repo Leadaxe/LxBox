@@ -128,24 +128,24 @@ the thresholds, the ping and the pure decisions, plus the `probeNodesOf` adapter
 snapshot plus `stage()` over the DNS section, leaving the screen thin), and
 `VpnSettingsFacade` (`services/vpn_settings/` — `applyVpnMode` carries the password-gen,
 auth-force and `has_tun`-mirror invariants for the UI **and** for Debug). The typed storage models are the sealed `DnsServerRef` and `DnsRuleRef` (§294).
-Полный инвариант + план strangler — `docs/spec/features/291 layered-architecture-facades/`.
+The full invariant plus the strangler plan is in `docs/spec/features/291 layered-architecture-facades/`.
 
-**Брокеры событий (push, снизу вверх):** §122 — управляющий канал UI переведён
-на libbox **CommandClient** (server-stream push вместо Timer-polling). Push-каналы:
-native статус-`Stream<TunnelStatusEvent>` (lifecycle туннеля), `lxbox/coreLog`-stream
-(→ `AppLog` → `TrafficProfiler`) и CommandClient-стримы поверх EventChannel
+**The event brokers (push, bottom-up):** §122 moved the UI's control channel onto the
+libbox **CommandClient** (a server-stream push instead of Timer polling). The push channels:
+the native status `Stream<TunnelStatusEvent>` (the tunnel's lifecycle), the `lxbox/coreLog`
+stream (→ `AppLog` → `TrafficProfiler`) and the CommandClient streams over an EventChannel.
 `lxbox/cc/*` (status · outbounds · groups · connections · dns — `vpn/cc_channel.dart`).
-Unary-pull остался точечно — `getGroups()` (lifeline там, где groups-push дырявый),
-плюс императивы сверху вниз (`urlTestOutbound` · `selectOutbound` · `closeConnection`).
-Heartbeat — watchdog по **тишине** status-стрима, без HTTP-poll'а. Подробные
-потоки — в разделе [Потоки данных](#потоки-данных).
+Unary pull survives in a couple of places — `getGroups()` (a lifeline where the groups push
+is leaky) — plus the top-down imperatives (`urlTestOutbound`, `selectOutbound`, `closeConnection`).
+The heartbeat is a watchdog over the **silence** of the status stream, with no HTTP polling.
+The detailed flows are in the [Data flows](#data-flows) section.
 
-### Инвариант: ДВА канала разной надёжности (статус vs данные) — НЕ путать
+### The invariant: TWO channels of differing reliability (status versus data) — do NOT mix them up
 
-Принципиальное разделение, нарушение которого = баги вида «Connected, но Channel/
-Nodes пустые после swipe» (см. §185):
+A fundamental separation; breaking it produces bugs of the form “Connected, but the Channel
+and Nodes are empty after a swipe” (see §185):
 
-| Канал | Что несёт | Надёжность / жизненный цикл |
+| Channel | What it carries | Reliability / lifecycle |
 |---|---|---|
 | **VpnService status broadcast** (native `Stream<TunnelStatusEvent>` / `BROADCAST_STATUS`) | ТОЛЬКО **глобальный статус** туннеля (Connected/Stopped/Connecting/error) | **НАДЁЖНЫЙ, всегда есть.** Чисто native (Android Service), переживает смерть Flutter-движка (swipe-kill при keep-VPN). Единственный источник правды для статуса. UI обязан показывать статус из него. |
 | **CommandClient-стримы** (`lxbox/cc/*`: groups · connections · outbounds · status-tick) | **Данные для отображения на экране**: группы/ноды, соединения, трафик, per-app | **ЭФЕМЕРНЫЙ.** Привязан к Flutter-движку: подписки в Dart, refcount в native. Сервис/ядро живут независимо, но стримы существуют только пока жив движок-потребитель. Поэтому CommandClient **обязан пересинхронизироваться** при появлении нового потребителя (см. «три точки синхронизации» ниже): пере-подписка + `getGroups`-pull (детерминированный lifeline, §122). НЕ источник статуса — только данные для UI.
@@ -159,15 +159,15 @@ Nodes пустые после swipe» (см. §185):
 
 **Профайлер держит буфер в Dart** (`TrafficProfiler`), а его native `profilerClient` живёт в фоне (§164 не паузит). Следствие: запись существует только пока жив Flutter-движок — by design профайлер пишет, пока приложение открыто. На cold-start native-сторона профайлера приводится в чистое (осиротевший `profilerClient` от прошлого движка останавливается принудительно), буфер начинается пустым.
 
-### Принцип «cohesion over line-count» (§089)
+### The “cohesion over line count” principle (§089)
 
-Цель структурного рефактора §089 — **единая ответственность + связность**, не
-число строк. ~600 строк легитимны, когда файл = одна cohesive ответственность.
-Декомпозиция крупных файлов — через `part`/`mixin` (та же библиотека →
-library-private доступ сохранён) либо вынос виджет-поддеревьев. Задокументированные
-крупные исключения (split дал бы риск без пользы):
+The goal of the §089 structural refactor was **a single responsibility plus cohesion**, not
+a line count. Six hundred lines are legitimate when the file is one cohesive responsibility.
+Large files are decomposed through `part` or `mixin` (the same library, so library-private
+access is preserved) or by extracting widget subtrees. The documented large exceptions
+(where a split would add risk without benefit):
 
-| Файл | Строк | Почему остаётся целым |
+| File | Lines | Why it stays whole |
 |---|---|---|
 | `services/traffic_profiler.dart` | 1243 | Монолитный stateful singleton: приём CC connections+DNS-стримов + diff-снапшоты + confidence + dual SSE fan-out — всё через общий private state и один `ChangeNotifier`-контракт. Core-лог **не** парсит (лог-питатель выпилен в §044/§180). Pure-типы (`models.dart`) и correlation-структуры (`internal.dart`) уже вынесены `part`'ом. |
 | `models/custom_rule.dart` | 618 | Уже sealed `Inline`/`Srs`/`Preset`; объём присущ трём структурно разным вариантам. Дальнейший split + SRS-cache у Preset (spec 011) — **behavior-changing** → отложен в §090. |
