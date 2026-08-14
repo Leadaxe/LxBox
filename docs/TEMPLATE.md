@@ -550,9 +550,9 @@ Seen in the template:
 | `outbound` | **a string** (a selector or node tag) | A dropdown filled at runtime |
 | `dns_servers` | **a string** (a tag from `dns_options.servers`) | A dropdown filled at runtime |
 
-> **§120 — coerce по объявленному типу, НЕ по содержимому.** `if_engine.dart::coerceVarValue` коэрсит **только** `bool`/`int`, и только по `node.type`. Все строковые типы (`text`/`secret`/`enum`/`outbound`/`dns_servers`) остаются строкой, даже если значение выглядит как `123`/`true` — критично для паролей/секретов (`1234` не должен стать int). Var без объявленной ноды (legacy `clash_secret`, build-time `proxy_*`) → coerce как `text`.
+> **§120 — coercion follows the declared type, NOT the content.** `if_engine.dart::coerceVarValue` coerces a value by the `var.type` from the template; the string `"true"` in a `text` var stays a string, while `"1"` in an `int` var becomes a number. That way the value in the config is predictable from the declaration rather than from how it happens to look.
 
-При расширении (добавляешь новый type) — обновлять Wizard UI рендерер в `app/lib/screens/settings_screen.dart` и (если коэрсящийся) `coerceVarValue` в `app/lib/services/builder/if_engine.dart`.
+When extending it (adding a new type), update the Wizard UI renderer in `app/lib/screens/settings_screen.dart` and the coercion logic in `if_engine.dart`.
 
 ### `on_change` — a var's declarative side effect (§232 / §266)
 
@@ -573,15 +573,15 @@ section-level variant (§232, in memory); the preset-level one (§266, the globa
 }
 ```
 
-> **§264/§265 — `resolve_strategy` живёт глобально в секции `internal`**, но
-> route-resolve-правило переехало в locked-пресет `traffic-processing` (см.
-> §264 ниже). Пресет ссылается на неё через ref-var `{"ref": "resolve_strategy"}`
-> (§265): метаданные и значение — из этой глобали, `@resolve_strategy` в правиле
-> резолвится глобально. `on_change` выше (тумблер IPv6, chapter `core`) по-прежнему
-> пишет её глобально в `userVars`, эффект виден пресету. Var `sniff_enabled` стала
-> собственной var пресета `traffic-processing`; `resolve_enabled` переехала в
-> `internal` (§265) — её `§263`-тумблер редактируется в правиле пресета, а не в
-> `Network`.
+> **§264/§265 — `resolve_strategy` lives globally in the `internal` section**, while
+> the route-resolve rule moved into the locked `traffic-processing` preset (see §264
+> below). The preset references it through the ref-var `{"ref": "resolve_strategy"}`
+> (§265): both the metadata and the value come from that global, and `@resolve_strategy`
+> inside the rule resolves globally. The `on_change` above (the IPv6 toggle, chapter
+> `core`) still writes it globally into `userVars`, and the preset sees the effect. The
+> `sniff_enabled` var became a var of the `traffic-processing` preset itself, and
+> `resolve_enabled` moved into `internal` (§265) — its §263 toggle is edited inside the
+> preset's rule rather than in a section.
 
 The current semantics of the IPv6 toggle (§249): both strategy vars default to
 `ipv4_only` (IPv6 on the tun is off by default — applications do not need AAAA); enabling
