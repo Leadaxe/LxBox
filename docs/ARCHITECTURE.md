@@ -8,27 +8,27 @@ The current parser and builder version is **v2** (spec 026, phase 5 completed in
 
 ## Supported platforms
 
-| Параметр | Значение |
+| Parameter | Value |
 |----------|----------|
 | Android minSdk | **24** (Android 7.0) |
-| Android targetSdk | `flutter.targetSdkVersion` (актуальная target, обычно API 34/35) |
+| Android targetSdk | `flutter.targetSdkVersion` (the current target, usually API 34/35) |
 | Android compileSdk | `flutter.compileSdkVersion` |
 | JVM | Java 17 |
 | NDK | 28.2.13676358 |
 
-### Поддержка по тирам
+### Support tiers
 
-| Tier | Android | Статус |
+| Tier | Android | Status |
 |------|---------|--------|
-| **Primary** | 11+ (API 30+) | Тестируется, все фичи работают, production-ready |
-| **Best-effort** | 7.0–10 (API 24–29) | Compile OK, install OK, базовый VPN-функционал должен работать. Фичи требующие новых API (например, silent-kill detection через `getHistoricalProcessExitReasons`, API 30+) деградируют к no-op за `SDK_INT`-гейтами. Не тестируется регулярно; жалобы принимаются, но fix'ы на best-effort основе. На 7.x дополнительно: старый системный trust store — на 7.0 нет корня ISRG Root X1, HTTPS-подписки с Let's Encrypt-сертификатами не валидируются (на 7.1.1+ корень есть). |
-| **Unsupported** | <7 (API <24) | Установка заблокирована `minSdk=24`; ниже 24 не пускает сам Flutter (пол движка) |
+| **Primary** | 11+ (API 30+) | Tested, every feature works, production-ready |
+| **Best-effort** | 7.0–10 (API 24–29) | It compiles, installs, and the basic VPN functionality should work |жен работать. Фичи требующие новых API (например, silent-kill detection через `getHistoricalProcessExitReasons`, API 30+) деградируют к no-op за `SDK_INT`-гейтами. Не тестируется регулярно; жалобы принимаются, но fix'ы на best-effort основе. На 7.x дополнительно: старый системный trust store — на 7.0 нет корня ISRG Root X1, HTTPS-подписки с Let's Encrypt-сертификатами не валидируются (на 7.1.1+ корень есть). |
+| **Unsupported** | <7 (API <24) | Installation is blocked by `minSdk=24`; below 24 Flutter itself refuses |скает сам Flutter (пол движка) |
 
-> **Android TV (§372).** Приложение объявлено совместимым с TV
-> (`uses-feature leanback` / `touchscreen` — обе `required="false"`,
-> `LEANBACK_LAUNCHER` в intent-filter), но остаётся **best-effort**:
-> UI рассчитан на касание, отдельного leanback-интерфейса нет. Две
-> особенности платформы, которые надо помнить при правках:
+> **Android TV (§372).** The app declares itself TV-compatible
+> (`uses-feature leanback` / `touchscreen`, both `required="false"`, plus a
+> `LEANBACK_LAUNCHER` intent filter), but it remains **best-effort**: the UI is
+> designed for touch and there is no separate leanback interface. Two platform
+> quirks to keep in mind when editing:
 > в прошивках TV **нет DocumentsUI**, но intent не остаётся без обработчика —
 > его перехватывает системная заглушка `frameworkpackagestubs`, которая молча
 > отменяет выбор (`resolveActivity` её находит, ошибки нет, результат пуст).
@@ -41,10 +41,10 @@ The current parser and builder version is **v2** (spec 026, phase 5 completed in
 > элементов на пути подключения нужен `InkWell`/кнопка. Подробности —
 > [§372](spec/tasks/372-android-tv-support.md).
 
-> **Рендерер (§131).** На `Build.VERSION.SDK_INT < 31` (Android ≤11) Flutter
-> принудительно переключается с Impeller на **Skia** (`getFlutterShellArgs` →
+> **The renderer (§131).** On `Build.VERSION.SDK_INT < 31` (Android ≤11) Flutter
+> is forced off Impeller and onto **Skia** (`getFlutterShellArgs` →
 > `--enable-impeller=false` в [`MainActivity`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt)).
-> Impeller-шейдеры валят старые GPU-драйверы (Adreno 3xx → SIGSEGV в `libsc-a3xx.so`).
+> The Impeller shaders crash older GPU drivers (Adreno 3xx → a SIGSEGV in `libsc-a3xx.so`).
 > На Android 12+ Impeller сохранён. Гейт по версии ОС, не по GPU — у Flutter нет
 > чистого рантайм-детекта GPU. Подробности — [§131](spec/tasks/131-impeller-adreno-gpu-crash.md).
 
