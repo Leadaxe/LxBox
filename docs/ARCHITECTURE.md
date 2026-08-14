@@ -459,47 +459,47 @@ home/node_filter_view_model.dart# a ChangeNotifier VM: the regex/protocol/varian
                                 #   one !-negate per category (§096) plus the detour tri-state (a checkbox,
                                 #   §096), plus the §083 per-channel memory
 home/node_filter.dart           # a pure NodeFilter helper (the match predicates plus the inverts) plus extractEmojis
-home/node_actions.dart          # long-press действия ноды; §099 — copy-JSON варианты (node / server /
-                                #   server+detours(N)) перенесены в dropdown внутри View JSON
+home/node_actions.dart          # the node's long-press actions; §099 — the copy-JSON variants (node /
+                                #   server+detours(N)) moved into a dropdown inside View JSON
 home/home_menus.dart            # showSortOptionsMenu (+ Custom/manual §100) + showPingSettings
-home/home_dialogs.dart          # top-level dialog/snackbar функции (update/permission/battery/revoked)
+home/home_dialogs.dart          # the top-level dialog and snackbar functions (update/permission/battery/revoked)
 home/restore_backup.dart        # empty-state quick-restore flow (SAF)
-home/subscription_lookup.dart   # §091 prefix-фильтр: нода принадлежит подписке ⇔ tag.startsWith
-                                #   ('$prefix '); заменил §077 reverse-map по node-спискам
-home/channel_filters.dart       # §083 immutable снимок match-фильтров канала (+ variants §103)
-home/filter_widgets.dart        # filter chip/row виджеты (viz-toggle чипы §095, NegateToggle §096)
-home/widgets/                   # node_list · home_controls · home_drawer (nav-хаб) · nodes_header ·
+home/subscription_lookup.dart   # the §091 prefix filter: a node belongs to a subscription ⇔ its tag
+                                #   starts with '$prefix '; it replaced the §077 reverse map over node lists
+home/channel_filters.dart       # §083 an immutable snapshot of a channel's match filters (plus the §103 variants)
+home/filter_widgets.dart        # the filter chip and row widgets (the §095 viz-toggle chips, the §096 NegateToggle)
+home/widgets/                   # node_list · home_controls · home_drawer (the nav hub) · nodes_header ·
                              #   traffic_bar · status_chip · progress_banner · filter_panel (§095
-                             #   Filter mode: табы Regex/Protocol/Subscribes/Settings + чипы-сводка)
+                             #   Filter mode: the Regex/Protocol/Subscribes/Settings tabs plus the summary chips)
                              #   · add_server_cta
-routing_screen.dart          # routing-конфиг (598) + LazyPersistMixin + _RoutingSrsCacheMixin (part)
+routing_screen.dart          # the routing config (598 lines) plus LazyPersistMixin and _RoutingSrsCacheMixin (a part)
 routing_screen/                 # widgets/ (custom_rule/preset_catalog/route_final/routing_group/srs_status) + menus
-dns_settings_screen.dart     # DNS-настройки (592) + editor-sheets + dns_server_resolver + widgets/
+dns_settings_screen.dart     # the DNS settings (592 lines) plus the editor sheets, dns_server_resolver and widgets/
 custom_rule_edit_screen.dart # CustomRule editor (456) + custom_rule_edit/ (edit_controller, tabs/, sections/, widgets/)
-subscription_detail_screen.dart # детали подписки (431, TabController) + widgets/ (settings/source/meta/node_list)
-subscriptions_screen.dart    # список подписок (445) + widgets/ + helpers (clipboard/paste/share/context-menu)
-stats_screen.dart            # хост TabBarView: Overview + Connections + LiveEvents (§288 — PerAppTrace убран)
-stats_screen/overview_tab.dart  # Overview-таб + overview_models
+subscription_detail_screen.dart # a subscription's details (431 lines, a TabController) plus widgets/ (settings/source/meta)
+subscriptions_screen.dart    # the subscription list (445 lines) plus widgets/ and the helpers (clipboard/paste/share/context)
+stats_screen.dart            # the TabBarView host: Overview + Connections + LiveEvents (§288 removed PerAppTrace)
+stats_screen/overview_tab.dart  # the Overview tab plus overview_models
 stats_screen/                   # §264-266 Traffic Processing: trace_explorer + profiler_filter(+_sheet,
                              #   profiler_filters) + traffic_event_detail_sheet · aggregate_detail_sheet ·
-                             #   memory_detail_sheet · routing_section (детали — features/044)
-live_events_tab.dart         # Stats-субтаб «Profiler» (371): event_tile/recording_header/unattributed_banner
-tun_apps_tab.dart            # per-app VPN routing субтаб (384) — шарится Stats/Routing
-app_settings_screen.dart     # настройки приложения (516): General/Diagnostics табы + update_status_row
-backup_screen.dart           # export/import снапшота (229) + export_card/import_card/preview
-lazy_persist_mixin.dart      # LazyPersistMixin — отложенный persist на settings-экранах (flush на возврат)
-# монолитные одиночные экраны (без под-папки, 60–505): about · add_server_wizard ·
-#   app_picker · auto_group_edit (§322 узел автовыбора) · channel_edit (§125) ·
-#   config · connections · crash_reports (§316 Go-паники ядра) · debug ·
-#   dns_server_edit · folder_detail (§234 папка серверов, зеркалит
-#   subscription_detail) · node_settings · oom_reports (§318 OOM-снимки ядра) ·
+                             #   memory_detail_sheet · routing_section (the details are in features/044)
+live_events_tab.dart         # the Stats “Profiler” subtab (371 lines): event_tile/recording_header/unattributed_banner
+tun_apps_tab.dart            # the per-app VPN routing subtab (384 lines) — shared by Stats and Routing
+app_settings_screen.dart     # the application settings (516 lines): the General and Diagnostics tabs plus update_section
+backup_screen.dart           # the snapshot export/import (229 lines) plus export_card/import_card/preview
+lazy_persist_mixin.dart      # LazyPersistMixin — deferred persistence on the settings screens (flushed on exit)
+# the monolithic single screens (no subfolder, 60–505 lines): about · add_server_wizard ·
+#   app_picker · auto_group_edit (§322, an auto-select node) · channel_edit (§125) ·
+#   config · connections · crash_reports (§316, the core's Go panics) · debug ·
+#   dns_server_edit · folder_detail (§234, a server folder mirroring
+#   subscription_detail) · node_settings · oom_reports (§318, the core's OOM snapshots) ·
 #   outbound_view · settings · speed_test · vpn_mode_tab (§119) ·
-#   warp_experiment (§284 endpoint generator) · warp_wizard (§130 WARP/MASQUE мастер)
-# owner_navigation.dart            # §258 общий переход «config-тег → экран владельца»
-# probe_gate_mixin.dart            # §296 VPN-гейт probe: два CommandServer на процесс невозможны
+#   warp_experiment (§284, the endpoint generator) · warp_wizard (§130, the WARP/MASQUE wizard)
+# owner_navigation.dart            # §258 the shared jump from a config tag to its owner screen
+# probe_gate_mixin.dart            # §296 the probe's VPN gate: two CommandServers per process are impossible
 ```
 
-#### `services/` — сервисный слой
+#### `services/` — the service layer
 
 ```
 parser/                      # Parser v2 (text → NodeSpec)
