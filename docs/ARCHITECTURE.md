@@ -417,48 +417,48 @@ debug_entry.dart             # DebugEntry plus DebugSource/Level/Filter (a unifi
 home_state.dart              # immutable HomeState + copyWith; configModel: ParsedConfig (§091,
                              #   re-parse на смену configRaw); NodeSortMode (default/latency/name/
                              #   manual — §100: manual в карусели и меню, mode + manual order
-                             #   персистятся в settings_storage); memoized sortedNodes
-config_node.dart             # §091 ConfigNode + ParsedConfig — структурная мета нод собранного
-                             #   конфига (type/section/detour/isMarkedDetour/detourRefCount/raw);
-                             #   §102/§103 eager transportLabel/securityLabel (transport-слот +
-                             #   TLS/Reality/+Vision, awg/awg2); parsed раз на смену configRaw
-channel.dart                 # §125 Channel — конфигурируемые каналы (vpn-1 неудаляем, N∈1..10)
-auto_select.dart             # §322 членство узла автовыбора (папки) + его параметры
-import_rule.dart             # §302 ImportRule — правила обработки узлов подписки на импорте
+                             #   persisted in settings_storage); memoized sortedNodes
+config_node.dart             # §091 ConfigNode plus ParsedConfig — the structural metadata of the assembled
+                             #   config's nodes (type/section/detour/isMarkedDetour/detourRefCount/raw);
+                             #   the §102/§103 eager transportLabel/securityLabel (the transport slot plus
+                             #   TLS/Reality/+Vision, awg/awg2); parsed once per change of configRaw
+channel.dart                 # §125 Channel — the configurable channels (vpn-1 cannot be deleted)
+auto_select.dart             # §322 the membership of an auto-select node (a folder) plus its parameters
+import_rule.dart             # §302 ImportRule — the rules applied to a subscription's nodes on import
 dns_ref.dart                 # §294 typed model dns_options.servers[]/rules[] (kind-discriminated refs)
-memory_limit_setting.dart    # §271 memory limit ядра (SetupOptions.oomMemoryLimit)
-stop_reason.dart             # §279 типизированная причина аварийного стопа/revoke
-traffic_snapshot.dart        # снимок агрегатов трафика для главного экрана
-ui_msg.dart                  # UiMsg — пользовательское сообщение с ленивым рендером (l10n §279)
+memory_limit_setting.dart    # §271 the core's memory limit (SetupOptions.oomMemoryLimit)
+stop_reason.dart             # §279 a typed reason for an emergency stop or a revoke
+traffic_snapshot.dart        # a snapshot of the traffic aggregates for the home screen
+ui_msg.dart                  # UiMsg — a user-facing message with lazy rendering
 ```
 
-#### `controllers/` — ChangeNotifier-брокеры состояния
+#### `controllers/` — the ChangeNotifier state brokers
 
 ```
-home_controller.dart         # главный VPN-брокер: _state/_vpn/_cc; статус-handler; start/stop/
+home_controller.dart         # the main VPN broker: _state/_vpn/_cc; the status handler; start/stop/
                              #   reconnect/reload; CommandClient groups (push + getGroups-pull);
-                             #   selection-сеттеры; lifecycle
+                             #   the selection setters; the lifecycle
 home_controller/config_io.dart          # part _ConfigIoMixin: load/saveParsedConfig, import, configChangedNeedRestart
-home_controller/heartbeat.dart          # part _HeartbeatMixin: watchdog по тишине CommandClient status-стрима
-                             #   (§122, без HTTP-poll'а) + dead-tunnel detection
+home_controller/heartbeat.dart          # part _HeartbeatMixin: a watchdog over the silence of the CommandClient status stream
+                             #   (§122, with no HTTP polling) plus dead-tunnel detection
 home_controller/ping_orchestration.dart # part _PingMixin: single/group/mass URLTest, 10 worker'ов, epoch-cancel
-subscription_controller.dart            # подписки: List<ServerList>, add/remove/rename/toggle/move
+subscription_controller.dart            # the subscriptions: List<ServerList>, add/remove/rename/toggle/move
                                         #   (§098 drag-reorder), fetch, buildConfig; §101 — rehydrationDone
-                                        #   (фикс стартовой гонки rehydrate↔bootstrap) + empty-fetch guard
-                                        #   (HTTP 200 с 0 нод не затирает кэшированные ноды)
-subscription_controller/subscription_entry.dart # part SubscriptionEntry: ChangeNotifier-обёртка над immutable ServerList
+                                        #   (fixing the startup race between rehydrate and bootstrap) plus an empty-fetch guard
+                                        #   (an HTTP 200 with 0 nodes does not wipe the cached ones)
+subscription_controller/subscription_entry.dart # part SubscriptionEntry: a ChangeNotifier wrapper over an immutable ServerList
 ```
 
-#### `screens/` — UI (тонкий экран + под-папка)
+#### `screens/` — the UI (a thin screen plus its subfolder)
 
 ```
-home_screen.dart             # композиционный корень (518): владеет брокерами, side-effects, rebuild/reconnect
-home/node_list_presenter.dart   # §089 presenter: §048 фильтр/split + §070 frozen-sort cache +
-                                #   chip-options; §103 variantsOfTag + канонич. порядок variant-чипов
-home/node_filter_view_model.dart# ChangeNotifier VM: regex/protocol/variants(§103)/sub/ping фильтры,
-                                #   единый !-negate на категорию (§096) + detour tri-state (чекбокс+!,
-                                #   §096), §083 per-channel память
-home/node_filter.dart           # pure NodeFilter helper (match-предикаты + inverts) + extractEmojis
+home_screen.dart             # the composition root (518 lines): it owns the brokers and the side effects
+home/node_list_presenter.dart   # the §089 presenter: the §048 filter/split plus the §070 frozen-sort cache plus
+                                #   the chip options; §103 variantsOfTag plus the canonical order of the variant chips
+home/node_filter_view_model.dart# a ChangeNotifier VM: the regex/protocol/variants(§103)/sub/ping filters,
+                                #   one !-negate per category (§096) plus the detour tri-state (a checkbox,
+                                #   §096), plus the §083 per-channel memory
+home/node_filter.dart           # a pure NodeFilter helper (the match predicates plus the inverts) plus extractEmojis
 home/node_actions.dart          # long-press действия ноды; §099 — copy-JSON варианты (node / server /
                                 #   server+detours(N)) перенесены в dropdown внутри View JSON
 home/home_menus.dart            # showSortOptionsMenu (+ Custom/manual §100) + showPingSettings
