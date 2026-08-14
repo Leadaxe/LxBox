@@ -660,8 +660,8 @@ is no migration — after an update every preset carrying the var has its DNS bl
 - v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — the first kind refs. Back then tag, description and enabled lived inside `body`.
 - v1.6.1 ([§044]): `dns_options.servers[]` — the clean schema. Tag, description and enabled were lifted to the ref level, and the underscore annotations (`_kind`, `_overrides`) were removed.
 - v1.7.x ([§117]): template servers inside the template became `{description, enabled, vars?, server}` wrappers, and the `kind: template` ref gained `varValues`. Миграции нет (не нужна): kind-ref'ы валидны как есть, удалённые из шаблона теги (`quad9_dot`, `adguard_dot`, `adguard_family`, `google_doh_vpn`) орфан-чистятся, vars применяют дефолты; inline-серверы юзера не трогаются.
-- §228: ремап переименованных `preset_id` в `custom_rules` — `bittorrent-direct`→`bittorrent`, `private-ip-direct`→`private-ip`, `block_unknown`→`unknown-traffic` (сняли суффикс `-direct` т.к. outbound стал выбираемым + kebab-case). One-shot `_migrateRenamedPresetIds` (guard `preset_ids_remapped`), зовётся из `main.dart` до seed'а дефолтов. Переписывает ТОЛЬКО `presetId`; `varsValues` (выбранный юзером outbound) не трогается → выбор канала переживает ремап. Без миграции правила стали бы «Preset not found».
-  **Миграция удалена в §229** (вышла в v2.10.0, снята в разработке после v2.17.0): у всех, кто обновлялся с тех пор, storage отремаплен, код был мёртвым грузом. Guard-ключ `preset_ids_remapped` сохранён. Кто перепрыгнул с до-v2.10.0 сразу на новый релиз — получит «Preset not found» на трёх старых id (warning + дроп правила при сборке, конфиг не падает).
+- §228: remapping renamed `preset_id`s inside `custom_rules` — `bittorrent-direct`→`bittorrent`, `private-ip-direct`→`private-ip`, `block_unknown`→`unknown-traffic`.
+  **The migration was removed in §229** (it shipped in v2.10.0 and was dropped during development after v2.17.0): everyone upgrading from those versions has already been remapped, and a fresh install never had the old ids.
 
 ---
 
@@ -683,7 +683,7 @@ is no migration — after an update every preset carrying the var has its DNS bl
 
 The resolve chain in `HomeController`: `groups[tag]` → root → the template default.
 
-CRUD-helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clearGroupPing`. Все — sugared над `getPingOptions`/`savePingOptions` (которые перетирают целиком).
+CRUD helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clearGroupPing`. All of them are sugar over `getPingOptions` / `savePingOptions`, which read and write the whole object.
 
 ---
 
@@ -704,44 +704,44 @@ OS-level split tunneling: which applications go through the VPN tun and which go
 | `"allow"` | `"include_package": [...packages]` | Only the listed apps use the tun. The rest go direct |
 | `"deny"`  | `"exclude_package": [...packages]` | Everything EXCEPT the listed apps uses the tun |
 
-**Native слой** (`BoxVpnService.kt:557-560`) читает `options.includePackage` / `excludePackage` от libbox и зовёт `VpnService.Builder.addAllowedApplication` / `addDisallowedApplication`. Применяется на `builder.establish()` — на изменение нужен **full VPN restart**, light reload (`startOrReloadService`) не пересоздаёт tun.
+**The native layer** (`BoxVpnService.kt`) reads `options.includePackage` / `excludePackage` from libbox and calls `VpnService.Builder.addAllowedApplication` / `addDisallowedApplication`.
 
 **The default for existing users** is `{mode: "off", packages: []}`, for backward compatibility. The migration runs unconditionally on the first `_load()` after an upgrade.
 
 **Exposed in `/state/storage` with no scrubbing** — package names are not sensitive.
 
-CRUD: `getTunApps()` / `setTunApps()` (replace целиком). API: `GET/PUT /settings/tun_apps` ([Debug API reference](api/debug-api-reference.md)).
+CRUD: `getTunApps()` / `setTunApps()` (a whole-object replace). API: `GET/PUT /settings/tun_apps` ([the Debug API reference](api/debug-api-reference.md)).
 
-**Конфликт с `package_name` rules в custom_rules:** apps в `Allow-list` (или вне `Deny-list`) идут через tun → routing rules (rule_set / package_name match / etc) применяются нормально. Apps вне `Allow-list` (или внутри `Deny-list`) **не попадают в tun вообще** — sing-box их не видит, custom rules с `package_name` для них не сматчатся.
+**Interaction with `package_name` rules in custom_rules:** apps in the allow list (or outside the deny list) go through the tun and are then subject to the routing rules; apps outside the tun never reach sing-box at all, so no rule can affect them.
 
 ---
 
 ## `vpn_mode` — [§119]
 
-Режим работы VPN (inbound-трактовка): как ядро ловит трафик.
+The VPN's operating mode (how inbound traffic is treated): how the core captures traffic.
 
 ```jsonc
 {
   "mode": "vpn" | "proxy" | "vpn_proxy",
   "proxy_protocol": "mixed" | "http" | "socks",
   "proxy_port": 2080,
-  "proxy_listen": "127.0.0.1",           // любой валидный IPv4; невалид → 127.0.0.1
+  "proxy_listen": "127.0.0.1",           // any valid IPv4; anything invalid becomes 127.0.0.1
   "proxy_auth_enabled": true,
   "proxy_username": "user",
-  "proxy_password": "<32-hex или пусто>"
+  "proxy_password": "<32 hex chars, or empty>"
 }
 ```
 
-`proxy_protocol` = sing-box inbound `type` локального прокси: `mixed` (HTTP+SOCKS5 на одном порту, default), `http` (только HTTP, без UDP), `socks` (только SOCKS5). У всех трёх одинаковая auth-структура `users:[{username,password}]`; tag всегда `mixed-in` (от протокола не зависит).
+`proxy_protocol` is the sing-box inbound `type` of the local proxy: `mixed` (HTTP plus SOCKS5 on one port, the default), `http` (HTTP only) or `socks` (SOCKS5 only).
 
-| `mode` | inbound'ы финального config | `VpnService.establish()` | Эффект |
+| `mode` | The inbounds of the final config | `VpnService.establish()` | Effect |
 |---|---|---|---|
-| `"vpn"` | `tun-in` (auto_route) | да | весь трафик системы через tun (текущее поведение, **default**) |
-| `"proxy"` | `mixed-in` (без tun) | **нет** (libbox не зовёт `openTun`) | локальный HTTP+SOCKS-порт; приложения настраиваются вручную; нет иконки ключа VPN |
-| `"vpn_proxy"` | `tun-in` + `mixed-in` | да | системный перехват И локальный порт одновременно |
+| `"vpn"` | `tun-in` (auto_route) | yes | all system traffic goes through the tun (the current behaviour, **the default**) |
+| `"proxy"` | `mixed-in` (no tun) | **no** (libbox never calls `openTun`) | a local HTTP+SOCKS port; applications are configured manually |
+| `"vpn_proxy"` | `tun-in` + `mixed-in` | yes | system-wide capture AND a local port at the same time |
 
-**Builder** (§120). Императивный `applyVpnMode`/`post_steps/vpn_mode.dart` **удалён** — вся inbound-структура теперь декларативна в `wizard_template.json` (`tun-in`/`mixed-in`/route-rules гейтятся `#if`-конструкциями по `@vpn_mode`/`@proxy_*`). `build_config.dart` пробрасывает `VpnModeConfig` в плоские vars (`vpn_mode`, `proxy_port`, `proxy_listen`, `proxy_user`, `proxy_pass`, …) до substitution-фазы; `#if`-walker выбирает нужные inbound'ы и re-tag'ит resolve/sniff. К моменту `applyTunPackages` `inbounds[]` уже финальный.
-- `proxy` → только `mixed-in` (без `tun-in`); `vpn_proxy` → `tun-in` + `mixed-in`.
+**The builder** (§120). The imperative `applyVpnMode` / `post_steps/vpn_mode.dart` has been **removed** — the whole inbound structure is now assembled declaratively:
+- `proxy` yields only `mixed-in` (no `tun-in`); `vpn_proxy` yields `tun-in` plus `mixed-in`.
 - `mixed-in` = `{type:mixed, tag:mixed-in, listen, listen_port, users?}`.
 
 **Auth.** `users:[{username,password}]` пишется только при `effectiveAuth && password != ""`. Для любого **не-loopback** listen (не `127.x` — `0.0.0.0` или конкретный LAN-IP) auth **форсится on** (снять нельзя — `effectiveAuth` игнорирует `proxy_auth_enabled`); на loopback — опционально. Пароль/username в §120 идут через vars-подстановку (secret-тип держит строку — числовой/«true»-пароль не искажается). Пароль генерится в UI при первом включении auth (`generateProxyPassword`, 32-hex, образец `clash_secret`).
