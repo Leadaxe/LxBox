@@ -78,11 +78,11 @@ wizard_template.json
 │       ├─ type                     "urltest"
 │       └─ options                  object          url / interval / tolerance (raw @vars)
 │
-├─ default_channels[]               list          сид каналов первого запуска (§267)
+├─ default_channels[]               list          the first-launch channel seed (§267)
 │   └─ <DefaultChannel>             object
 │       ├─ tag                      string        "vpn-1".."vpn-10"
 │       ├─ label                    string        UI display ("VPN ①")
-│       └─ default_enabled          bool          вкл в новой установке?
+│       └─ default_enabled          bool          enabled in a fresh install?
 │
 ├─ sections[]                      list[8]       Wizard UI chapters (§022)
 │   └─ <Section>                   object
@@ -90,24 +90,24 @@ wizard_template.json
 │       ├─ name                    string        "General", "DNS", "TUN", etc. — внутренний join-ключ vars↔section
 │       ├─ chapter                 string        grouping ("core"|"routing"|"dns")
 │       ├─ description             string
-│       └─ vars[]                  list          переменные секции
+│       └─ vars[]                  list          the section's variables
 │           └─ <Var>               object
-│               ├─ name            string        @имя для substitution
+│               ├─ name            string        the @name used for substitution
 │               ├─ type            string        "text"|"int"|"bool"|"enum"|"secret"|"outbound"|"dns_servers"
 │               ├─ default_value   any
 │               ├─ required        bool?
-│               ├─ options[]       list?         для enum: ["a","b"] или [{title,value}, ...]
+│               ├─ options[]       list?         for an enum: ["a","b"] or [{title,value}, ...]
 │               ├─ wizard_ui       string?       "edit"|"fix"|"hidden"
 │               ├─ title           string?       UI label
 │               └─ tooltip         string?       help text
 │
-├─ config                          object{7 keys}       НАТИВНАЯ sing-box-секция; база финального config'а
+├─ config                          object{7 keys}       the NATIVE sing-box section; the base of the final config
 │   ├─ log                         object{2 keys}
 │   │   ├─ level                   "@log_level"
 │   │   └─ timestamp               bool
-│   ├─ dns                         object{4 keys}       пустой shell, заполняется builder'ом
-│   │   ├─ servers[]               list          [] — заполняется из dns_options + selectable_rules
-│   │   ├─ rules[]                 list          [] — то же
+│   ├─ dns                         object{4 keys}       an empty shell, filled in by the builder
+│   │   ├─ servers[]               list          [] — filled in from dns_options plus selectable_rules
+│   │   ├─ rules[]                 list          [] — the same
 │   │   ├─ final                   "@dns_final"
 │   │   └─ strategy                "@dns_strategy"
 │   ├─ inbounds[]                  list[1]       tun definition
@@ -121,63 +121,63 @@ wizard_template.json
 │   │       ├─ auto_route          "@tun_auto_route"
 │   │       ├─ strict_route        "@tun_strict_route"
 │   │       └─ stack               "@tun_stack"
-│   ├─ endpoints[]                 list          wireguard endpoints (заполняется из server_lists)
-│   ├─ outbounds[]                 list[2]       base — direct-out + block; остальное добавляется builder'ом
+│   ├─ endpoints[]                 list          the wireguard endpoints (filled in from server_lists)
+│   ├─ outbounds[]                 list[2]       the base — direct-out plus block; the rest is added by the builder
 │   │   ├─ {type:"direct", tag:"direct-out"}
-│   │   └─ {type:"block",  tag:"block"}        §201 — drop-out, опция селектора канала + route_final (красный)
+│   │   └─ {type:"block",  tag:"block"}        §201 — the drop-out; a channel selector option and a route_final
 │   ├─ route                       object{5 keys}
-│   │   ├─ find_process            bool          true → package_name detection включён
+│   │   ├─ find_process            bool          true enables package_name detection
 │   │   ├─ default_domain_resolver "@dns_default_domain_resolver"
 │   │   ├─ rules[]                 list[0]       [] — §264: sniff/hijack-dns/resolve
-│   │   │                                         ПЕРЕЕХАЛИ в locked-пресет traffic-processing
-│   │   │                                         (num:0 → первые в route.rules).
-│   │   │                                         В шаблоне route.rules пуст.
-│   │   ├─ rule_set[]              list          (в шаблоне ключа НЕТ — создаётся билдером
-│   │   │                                         из selectable_rules[].rule_set)
+│   │   │                                         MOVED into the locked traffic-processing preset
+│   │   │                                         (num:0 → first in route.rules).
+│   │   │                                         In the template route.rules is empty.
+│   │   ├─ rule_set[]              list          (the key is ABSENT from the template — the builder creates it
+│   │   │                                         from selectable_rules[].rule_set)
 │   │   ├─ final                   tag           default selector ("vpn-1")
 │   │   └─ auto_detect_interface   "@auto_detect_interface"
 │   └─ experimental                object{1 keys}
 │       └─ cache_file              object          {enabled:true, path:"cache.db"}
-│                                                  (clash_api УДАЛЁН в §122 — блок в кастомном шаблоне
-│                                                   роняет старт ядра: "clash api is not included in this build")
+│                                                  (clash_api was REMOVED in §122 — the block in a custom template
+│                                                   kills the core's startup: "clash api is not included in this build")
 │
-└─ selectable_rules[]              list[8]       КАТАЛОГ preset'ов
+└─ selectable_rules[]              list[8]       the preset CATALOG
     └─ <Preset>                    object
-        ├─ preset_id               string        id для ссылки из custom_rules (§030)
-        ├─ ui                      object          §264 — метаданные пресета (плоские
+        ├─ preset_id               string        the id referenced from custom_rules (§030)
+        ├─ ui                      object          §264 — the preset's metadata (the flat
         │   ├─ label               string        UI display                label/description/
-        │   ├─ description         string        тултип                     default УБРАНЫ,
-        │   ├─ default             bool?         вкл у новых юзеров?         fallback СНЯТ):
-        │   ├─ locked              bool?         §264 — нельзя выкл/удалить
-        │   ├─ num                 int?          §370 — позиция на оси порядка правил
-        │   └─ isSortable          bool?         §370 — можно ли двигать drag'ом
-        ├─ vars[]                  list?         переменные видимые когда preset enabled
-        │                                        (тот же shape что sections[*].vars[*];
-        │                                         §265: элемент может быть {"ref":"<global>"})
+        │   ├─ description         string        the tooltip            defaults were REMOVED,
+        │   ├─ default             bool?         on for new users?       the fallback is GONE):
+        │   ├─ locked              bool?         §264 — cannot be disabled or deleted
+        │   ├─ num                 int?          §370 — the position on the rule ordering axis
+        │   └─ isSortable          bool?         §370 — whether it can be dragged
+        ├─ vars[]                  list?         the variables visible while the preset is enabled
+        │                                        (the same shape as sections[*].vars[*];
+        │                                         §265: an element may be {"ref":"<global>"})
         ├─ rule_set[]              list?         sing-box rule-set definitions
         │   └─ <SingboxRuleSet>    object
         │       ├─ tag             string
         │       ├─ type            "inline"|"local"|"remote"
         │       ├─ format          "binary"|"source"?     (local/remote)
-        │       ├─ rules[]         list?                  (inline) match-условия
+        │       ├─ rules[]         list?                  (inline) the match conditions
         │       ├─ url             string?                (remote)
-        │       ├─ download_detour tag?                   (remote) обычно "direct-out"
+        │       ├─ download_detour tag?                   (remote) usually "direct-out"
         │       └─ update_interval duration?              (remote) "168h"
         ├─ rule                    object?         single routing rule:
         │   └─ <SingboxRoutingRule>                {rule_set?, domain[]?, domain_suffix[]?,
         │                                           ip_cidr[]?, ip_is_private?, port[]?,
         │                                           package_name[]?, protocol[]?,
         │                                           outbound:"@var"?, action:"reject"?}
-        ├─ dns_rule                object?         DNS-уровень rule — legacy single (Map)
-        ├─ dns_rules               list?           §253: массив DNS-rules (канонический
-        │                                          ключ; побеждает `dns_rule`)
-        └─ dns_servers[]           list?         DNS servers видимые когда preset enabled
-                                                 (ПЛОСКИЕ sing-box-тела, shape = внутренность
-                                                  `dns_options.servers[*].server`, БЕЗ обёртки;
-                                                  фильтруются по top-level `tag`)
+        ├─ dns_rule                object?         a DNS-level rule — the legacy single form (a Map)
+        ├─ dns_rules               list?           §253: an array of DNS rules (the canonical
+        │                                          key; it beats `dns_rule`)
+        └─ dns_servers[]           list?         the DNS servers visible while the preset is enabled
+                                                 (FLAT sing-box bodies, shaped like the inside of
+                                                  `dns_options.servers[*].server`, with NO wrapper;
+                                                  filtered by the top-level `tag`)
 ```
 
-Каждый ключ описан подробно в разделах ниже.
+Every key is described in detail in the sections below.
 
 ---
 
@@ -189,11 +189,11 @@ wizard_template.json
   "dns_options":         { … },     // §043+§044 (servers) + §061 (rules) — defaults
   "ping_options":        { … },     // §040 — ping/test URL + presets
   "speed_test_options":  { … },     // §015 — speed-test endpoints
-  "group_templates":     { … },     // §267 — magic_nodes реестр + channel/auto шаблоны
-  "default_channels":    [ … ],     // §267 — сид каналов первого запуска (vpn-1, vpn-2)
+  "group_templates":     { … },     // §267 — the magic_nodes registry plus the channel/auto templates
+  "default_channels":    [ … ],     // §267 — the first-launch channel seed (vpn-1, vpn-2)
   "sections":            [ … ],     // Wizard UI chapters (variables grouped by topic)
-  "config":              { … },     // нативные sing-box секции (log/dns/inbounds/outbounds/route/...)
-  "selectable_rules":    [ … ]      // §033 catalog of preset'ов
+  "config":              { … },     // the native sing-box sections (log/dns/inbounds/outbounds/route/...)
+  "selectable_rules":    [ … ]      // §033 — the preset catalog
 }
 ```
 
