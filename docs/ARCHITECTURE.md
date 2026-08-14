@@ -861,41 +861,41 @@ unavailable and there is nothing to read the JSON with — `BOOT_COMPLETED` (the
 `BootReceiver` auto-start), a swipe `onTaskRemoved` (the keep-on-exit decision),
 and `openTun`/`establish` (allow_bypass, per-app). These points read the native copy **synchronously**.
 
-**Поток write-through + sync на старте:** любой `SettingsStorage.setNativeBool` /
-`setNativeBackgroundMode` пишет JSON (первично) → зеркалит в native (method-channel);
-native **никогда** не пишет JSON. На старте (`bootstrapAndSyncNativePrefs()` из
-`main.dart`): нет секции → bootstrap (native⇒JSON seed, единственный native⇒JSON);
-есть секция → sync (JSON⇒native, диск перезаливает оперативку — расхождение само
-чинится). Все писатели (UI, импорт `backup_service`, Debug API) обязаны идти через
-этот слой — прямые native-записи эфемерны (sync откатит). Реализация —
+**The write-through path plus the sync at startup:** any `SettingsStorage.setNativeBool` or
+`setNativeBackgroundMode` writes the JSON first and then mirrors into native (over the method
+channel); native **never** writes the JSON. At startup (`bootstrapAndSyncNativePrefs()` from
+`main.dart`): no section means bootstrap (a native⇒JSON seed, the only native⇒JSON write);
+a section present means sync (JSON⇒native, the disk overwrites memory and the divergence
+repairs itself). Every writer (the UI, the `backup_service` import, the Debug API) must go
+through this layer — direct native writes are ephemeral (the sync rolls them back).
 [`lib/services/settings_storage/native_prefs.dart`](../app/lib/services/settings_storage/native_prefs.dart).
 
-**`has_tun` (§192)** — седьмой native-ключ, **производное** от `vpn_mode` (§119):
-`vpn`/`vpn_proxy` → `true`, `proxy` → `false`. Зеркалится при смене режима и на
-старте; гейтит `VpnService.prepare()` (в proxy-режиме `prepare` не зовётся — он зря
-забрал бы VPN-слот и отозвал чужой активный VPN). Вычисляемое, потому **не** в
-backup-блоке и **не** в JSON-секции `native_prefs` — живёт только в `boxvpn_boot.has_tun`.
+**`has_tun` (§192)** is a seventh native key, **derived** from `vpn_mode` (§119):
+`vpn` and `vpn_proxy` yield `true`, `proxy` yields `false`. It is mirrored on a mode change and
+at startup; it gates `VpnService.prepare()` (in proxy mode `prepare` is never called — it would
+pointlessly claim the VPN slot and revoke another active VPN). Being computed, it is neither in
+the backup block nor in the `native_prefs` JSON section — it lives only in `boxvpn_boot.has_tun`.
 
 #### Builder (template + user-state → final config)
 
 `build_config.dart` мерджит template `config`-секцию + `selectable_rules[*]` (через `expandPreset`) + `dns_options.{servers,rules}` (через resolvers §061/§044) + `channels[]` из storage (§125 — `_buildChannelGroups`: per-channel `node_filter`-regex по node-tag'ам из `server_lists`, опции direct/block, auto-двойник) + `vars`-substitution → пишет финальный `singbox_config.json` для libbox.
 
-**Idle-suspend (§128/§215, ядро SPEC 020).** Настройка threshold'а (storage-ключ `route_idle_suspend`, default `30s`, `''` = off) прокидывается билдером в `route.lx_idle_suspend` финального конфига. Требует ядро с build-тегом `with_lx_idle_suspend` (в AAR он есть; при его отсутствии непустое `route.lx_idle_suspend` роняет старт — детали см. `KERNEL.md`). Управляется через сетевые настройки (`settings_storage/network.dart`).
+**Idle-suspend (§128/§215, the core's SPEC 020).** Configuring the threshold (the storage key `route_idle_suspend`).
 
-One-shot миграции (`SettingsStorage`):
-- `proxy_sources` → `server_lists` (v1 → v2, §033) — `migrateProxySources` на первом чтении.
-- `app_rules` → `custom_rules` с `packages` (до v1.3.2 → §030) — `_absorbLegacyAppRules`.
-- `enabled_rules + rule_outbounds` → `custom_rules` (до §030) — в `RoutingScreen._load`, гард `presets_migrated`.
-- `dns_options.servers[]` shape: pre-§043 → §043 → §044 — `_migrateLegacyDnsServers` в builder post-steps.
+The one-shot migrations (`SettingsStorage`):
+- `proxy_sources` → `server_lists` (v1 → v2, §033) — `migrateProxySources` on the first read.
+- `app_rules` → `custom_rules` with `packages` (up to v1.3.2 → §030) — `_absorbLegacyAppRules`.
+- `enabled_rules` plus `rule_outbounds` → `custom_rules` (up to §030) — inside `RoutingScreen._load`, guarded by `presets_migrated`.
+- The `dns_options.servers[]` shape: pre-§043 → §043 → §044 — `_migrateLegacyDnsServers` in the builder's post-steps.
 
-Sensitive-поля при `GET /state/storage` фильтруются allow-list'ом в `services/debug/serializers/storage.dart` (`debug_token`, subscription URLs, support/web URLs из `meta`). Подробности — STORAGE.md §"Debug API exposure".
+Sensitive fields are filtered on `GET /state/storage` by the denylist scrubber in `services/debug/serializers/storage.dart`.
 
 ---
 
 ### 6.5. Traffic profiler (§044 / §048)
 
-`TrafficProfiler` — singleton ChangeNotifier, который держит system-wide
-rolling buffer событий. Всё in-memory; persist принципиально не делается. Spec: [`docs/spec/features/044 per-app traffic profiler/spec.md`](./spec/features/044%20per-app%20traffic%20profiler/spec.md). Историческая справка по per-app-режиму: [`docs/features/per-app-trace.md`](./features/per-app-trace.md).
+`TrafficProfiler` is a singleton ChangeNotifier holding a system-wide
+rolling buffer of events. Everything is in memory; persistence is deliberately absent. Spec: [`docs/spec/features/044 per-app traffic profiler/spec.md`](./spec/features/044%20per-app%20traffic%20profiler/spec.md).
 
 ```
               ┌────────────────────────────────────────┐
@@ -906,7 +906,7 @@ rolling buffer событий. Всё in-memory; persist принципиаль�
                      │ events             │ events
                      │                    │
         ┌────────────┴────────┐  ┌────────┴──────────────────────┐
-        │ DNS-стрим (§180)    │  │ Connections push (§168)       │
+        │ DNS stream (§180)   │  │ Connections push (§168)       │
         │  CcChannel.dnsQueries│  │  CcChannel.connections        │
         │  (profilerClient,   │  │  (profilerClient,             │
         │   SPEC 018)         │  │   diff vs prev snapshot)      │
@@ -914,7 +914,7 @@ rolling buffer событий. Всё in-memory; persist принципиаль�
                      │                    │
                      ▼                    ▼
         dnsResolve/dnsFail         TCP/UDP open/close events
-        attribution ИЗ ЯДРА        attribution из ядра
+        attribution FROM THE CORE   attribution from the core
         (processInfo) + cnameChain (CcConnection.packageName,
         + dnsServer/outbound(rc.10) chains §174, detours §178)
 
@@ -927,12 +927,12 @@ rolling buffer событий. Всё in-memory; persist принципиаль�
         ┌────────────┴───────────────────────────────────────────┐
         ▼                              ▼                         ▼
   Profiler tab              Debug API /profiler/live*    SSE /profiler/live/stream
-  (TraceExplorer:           (start, stop, state,          (live-push для
-   поток/Aggregated +        live, unattributed)           external clients)
-   фильтр по приложениям)
+  (TraceExplorer:           (start, stop, state,          (a live push for
+   the stream/Aggregated +  live, unattributed)           external clients)
+   the per-app filter)
 ```
 
-> Per-app session-слой снят в **§288**: вкладка `App`, класс `Session` и
+> The per-app session layer was removed in **§288**: the `App` tab, the `Session` class and
 > роуты `/profiler/{start,stop,active,sessions,session/<id>,stream}` удалены.
 > Остался только system-wide режим; трафик одного приложения смотрят фильтром
 > по приложениям на вкладке Profiler.
