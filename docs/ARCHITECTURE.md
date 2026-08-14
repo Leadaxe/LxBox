@@ -504,53 +504,53 @@ lazy_persist_mixin.dart      # LazyPersistMixin — deferred persistence on the 
 ```
 parser/                      # Parser v2 (text → NodeSpec)
   body_decoder.dart          #   Layer-1: raw body → sealed DecodedBody (base64 sniff + JSON-flavor)
-  amnezia_link.dart          #   Amnezia vpn:// → WG/AWG INI-тексты (base64url+qCompress, §110)
+  amnezia_link.dart          #   an Amnezia vpn:// link → WG/AWG INI texts (base64url plus qCompress, §110)
   parse_all.dart             #   Layer-2: exhaustive switch DecodedBody → List<NodeSpec> (per-line null-skip)
   uri_parsers.dart           #   barrel + parseUri scheme-dispatcher
   uri_parsers/<proto>.dart   #   per-protocol URI→NodeSpec (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg/masque)
   json_parsers.dart          #   parseXrayElement + parseSingboxEntry (round-trip)
-  singbox_config.dart        #   §368: sing-box config/массив конфигов → узлы+группы+detour
-                             #   (паритет с Xray-веткой: 2 прохода, дедуп, синонимы тегов)
+  singbox_config.dart        #   §368: a sing-box config or an array of them → nodes, groups and detours
+                             #   (at parity with the Xray branch: two passes, dedup, synonyms)
   ini_parser.dart            #   WireGuard INI → wg:// URI → WireguardSpec
   transport.dart             #   parseTransport (query→TransportSpec) + transportToQuery
   uri_utils.dart             #   shared: base64-safe decode, newUuidV4, tagFromLabel, packet-encoding
-                             #   allow-list; awgClampMtu (§097 — клиентский MTU AWG-нод ≤1280)
+                             #   an allow-list; awgClampMtu (§097 — the client MTU of AWG nodes is ≤1280)
 builder/                     # NodeSpec + template → sing-box config
   build_config.dart          #   buildConfig() orchestrator → BuildResult; _BuildCtx (EmitContext + tag allocator)
-  server_list_build.dart     #   per-subscription emit: detour policy, tag allocation, selector/auto регистрация
-  if_engine.dart             #   §120 typed template engine: подстановка vars + #if-конструкт (общее ядро)
+  server_list_build.dart     #   the per-subscription emit: the detour policy, tag allocation, selector/auto registration
+  if_engine.dart             #   the §120 typed template engine: var substitution plus the #if construct
   preset_expand.dart         #   expandPreset (CustomRulePreset → fragments, @var) + mergeFragments (§033);
-                             #   §265: param globalVars — ref-vars {"ref":…} берут значение из глобального userVars, не varsValues
-  normalize_pinned_presets.dart   #   §264 pinned-пресеты нормализуются в начало storage-order
-  rule_set_registry.dart     #   реестр route.rule_set + route.rules; tag-уникальность
+                             #   §265: the globalVars parameter — ref-vars {"ref":…} take their value from the global scope
+  normalize_pinned_presets.dart   #   §264 the pinned presets are normalised to the start of the storage order
+  rule_set_registry.dart     #   the registry of route.rule_set plus route.rules; it enforces tag uniqueness
   validator.dart             #   validateConfig: dangling refs, empty urltest → ValidationResult
-  post_steps.dart            #   barrel (part): post-обработки ниже
+  post_steps.dart            #   a barrel (part): the post-processing steps below
   post_steps/tls_transforms.dart  #   applyMixedCaseSni + applyTlsFragment (§028)
-  post_steps/custom_rules.dart    #   applyAllCustomRules (preset/inline/srs в storage order, §062)
+  post_steps/custom_rules.dart    #   applyAllCustomRules (preset/inline/srs in storage order, §062)
   post_steps/dns_rules.dart       #   applyCustomDns / resolveDnsRulesList (§061+§033)
   post_steps/dns_servers.dart     #   resolveDnsServersList/Bodies (§043+§044)
-  post_steps/heal_dangling_detours.dart # §172 healDanglingDetours: detour∉allTags снимается (warning),
-                             #   зовётся перед validateConfig — битый detour из подписки деградирует, не роняет конфиг
-  post_steps/heal_dangling_resolve_servers.dart # §247 деградация битых server-ссылок resolve-правил
-  post_steps/heal_legacy_dns_strategy.dart      # §246 hotfix: несовместимая пара в dns.rules
-  post_steps/heal_unknown_utls_fingerprints.dart# §281 страховка от неизвестного uTLS fingerprint
-  post_steps/heal_invalid_reality.dart          # §343 страховка от битого REALITY-блока (short_id)
-  post_steps/tun_packages.dart    #   applyTunPackages — OS split-tunnel (§046, последний шаг)
-subscription/                # fetch/auto-update подписок
+  post_steps/heal_dangling_detours.dart # §172 healDanglingDetours: a detour outside allTags is dropped (with a warning),
+                             #   called before validateConfig — a broken detour from a subscription
+  post_steps/heal_dangling_resolve_servers.dart # §247 degrading broken server references in resolve rules
+  post_steps/heal_legacy_dns_strategy.dart      # §246 a hotfix for an incompatible pair in dns.rules
+  post_steps/heal_unknown_utls_fingerprints.dart# §281 insurance against an unknown uTLS fingerprint
+  post_steps/heal_invalid_reality.dart          # §343 insurance against a malformed REALITY block (short_id)
+  post_steps/tun_packages.dart    #   applyTunPackages — the OS split tunnel (§046, the last step)
+subscription/                # fetching and auto-updating subscriptions
   sources.dart               #   sealed SubscriptionSource (Url/File/Clipboard/Inline/Qr) + fetch (3-try backoff);
-                             #   §129 file-подписка: url=file:<uuid> (input_helpers.isFileSubscription) читается из HttpCache-снапшота
-                             #   (не сеть); смена источника online↔file транзакционна (updateSourceAt, старый снапшот держится до успеха)
-  auto_updater.dart          #   5-триггерный refresh + per-sub interval + retry/fail-caps + dedup (§027)
-  http_cache.dart            #   on-disk кэш последнего raw body + headers (offline rehydrate);
-                             #   §101 — атомарная запись tmp→rename (kill-safe при unawaited save)
+                             #   §129 a file subscription: url=file:<uuid> (input_helpers.isFileSubscription) reads
+                             #   from the cache, not the network; switching online↔file is transactional
+  auto_updater.dart          #   a five-trigger refresh plus a per-sub interval, retry/fail caps and dedup (§027)
+  http_cache.dart            #   an on-disk cache of the last raw body plus headers (the offline rehydrate);
+                             #   §101 — an atomic tmp→rename write (kill-safe under an unawaited save)
   input_helpers.dart         #   isSubscriptionUrl/isDirectLink (вкл. awg://, §097)/isWireGuardConfig/isFileSubscription (§129) (paste UX)
-settings_storage.dart        # фасад над lxbox_settings.json — тонкие делегаты в part-файлы:
-settings_storage/io.dart            #   атомарный load/save/recovery (main→.bak→{}, §072)
-settings_storage/vars.dart          #   vars-домен + Wi-Fi history (§051)
+settings_storage.dart        # the facade over lxbox_settings.json — thin delegates into the part files
+settings_storage/io.dart            #   the atomic load/save/recovery (main→.bak→{}, §072)
+settings_storage/vars.dart          #   the vars domain plus the Wi-Fi history (§051)
 settings_storage/sources_rules.dart #   server_lists (+v1 migration), rules/groups, custom_rules
 settings_storage/network.dart       #   route_final/excluded/dns/ping_options (§040/§061)
-settings_storage/backup_tun.dart    #   снапшот (§031) + tun-apps split-tunnel (§046)
-settings_storage/channels.dart      #   §125 каналы (Channel CRUD + seed vpn-1)
+settings_storage/backup_tun.dart    #   the snapshot (§031) plus the tun-apps split tunnel (§046)
+settings_storage/channels.dart      #   §125 the channels (Channel CRUD plus the vpn-1 seed)
 settings_storage/native_prefs.dart  #   NativePrefsKeys — мост в SharedPreferences Kotlin-стороны
 settings_storage/vpn_mode.dart      #   §119 VPN mode (allow/deny списки per-app)
 settings_storage/warp.dart          #   §025/§130 WARP/MASQUE аккаунты + пул генератора
