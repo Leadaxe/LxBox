@@ -467,7 +467,7 @@ From the subscription's HTTP headers ([§027]):
 }
 ```
 
-`nodes` массив **не хранится** — реконструируется из `raw_body` (для `user`) или из `http_cache/` (для `subscription`) на старте.
+The `nodes` array is **not stored** — it is reconstructed at startup from `raw_body` (for a `user` list) or from `http_cache/` (for a `subscription`).
 
 ---
 
@@ -522,13 +522,13 @@ anchors, see `rule_order.dart`).
 
 `name` is user-supplied and mutable.
 
-OR-семантика внутри category, AND между. `protocols` и `ipIsPrivate` не headless'ятся, выносятся в routing-rule level.
+OR semantics inside a category, AND between them. `protocols` and `ipIsPrivate` are not made headless — they are lifted to the routing-rule level.
 
-`dns` ([§117] задача 3, «DNS follows the rule») — опционально: builder эмитит mirror DNS-rule `{rule_set: <тот же headless>, server: serverTag}` в атомарной mirror-группе (порядок = routing-правила). Отсутствует в старых записях → null → старое поведение. Гейт: при непустых `ports`/`protocols` mirror не эмитится.
+`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). It is absent in older records → null → the old behaviour. The gate: with non-empty `ports` or `protocols` the mirror is not emitted.
 
-`dns.forceIpv4` ([§256], Force IPv4) — опционально: гасит AAAA (IPv6) для матча правила serverless-правилом `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (приложение чисто берёт A). **Ортогонально** `enabled`/`serverTag` — глушилка отвечает локально, DNS-серверу не нужна: правило может нести только `forceIpv4` (`enabled: false`, `serverTag: ""`). Эмитится ПЕРЕД server-mirror'ом (порядок §253). Тот же port/protocol-гейт (DNS-слой слеп к порту/протоколу). Старые записи → false.
+`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order). The same port/protocol gate applies (the DNS layer is blind to port and protocol). Older records → false.
 
-`resolve` ([§247]) — опционально: builder эмитит нетерминальное route-правило `{rule_set: <тот же headless>, action: resolve, …}` ПЕРЕД терминальным route (`only: false`, флагман — форс `ipv4_only` для direct-веток) либо ВМЕСТО него (`only: true`, advanced — fall-through). Отсутствует в старых записях → null. Гейт: у inline эмитится только при непустой domain-группе (`resolveEligible`); srs — всегда (домены в `.srs` возможны).
+`resolve` ([§247]) is optional: the builder emits a non-terminal route rule `{rule_set: <the same headless one>, action: resolve, …}` either BEFORE the terminal route (`only: false`, the flagship case — forcing `ipv4_only` for direct branches) or INSTEAD of it (`only: true`, an advanced fall-through). It is absent in older records → null. The gate: for inline rules it is emitted only when the domain group is non-empty (`resolveEligible`); for srs it is always emitted, since a `.srs` may contain domains.
 
 ### `kind: "srs"` — `CustomRuleSrs`
 
@@ -539,20 +539,20 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
   "name":        "<display>",
   "enabled":     true,
   "srsUrl":      "https://…/something.srs",
-  "ports":       [ … ]?,          // routing-rule-level доп-фильтры
+  "ports":       [ … ]?,          // extra filters at the routing-rule level
   "portRanges":  [ … ]?,
   "packages":    [ … ]?,
   "protocols":   [ … ]?,
   "ipIsPrivate": true?,
   "outbound":    "<tag>",
   "dns":         { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 задача 3 + §256
-  "resolve":     { "only": false, "strategy": "ipv4_only", … }?          // §247 (как у inline)
+  "resolve":     { "only": false, "strategy": "ipv4_only", … }?          // §247 (as for inline)
 }
 ```
 
-Сам бинарь `.srs` лежит отдельно в `rule_sets/<tag>.srs` (см. [таблицу файлов](#disk-layout) выше).
+The `.srs` binary itself lives separately in `rule_sets/<tag>.srs` (see the [file table](#disk-layout) above).
 
-`dns` ([§117] задача 3) — как у inline, но mirror ссылается на существующий `.srs`-тег + DNS-безопасные доп-фильтры (`packages`/wifi). Работает только если в rule-set есть домены (IP-only лист в DNS-контексте не матчит).
+`dns` ([§117] task 3) works as it does for inline, except the mirror references an existing `.srs` tag plus the DNS-safe extra filters (`packages` and wifi). It only works when the rule set contains domains — an IP-only list never matches in a DNS context.
 
 ### `kind: "preset"` — `CustomRulePreset`
 
@@ -567,17 +567,17 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 }
 ```
 
-`name` — read-only в UI (🔒), периодически синхронизируется с `preset.label` из шаблона. Содержимое разворачивается на каждом `buildConfig` через `expandPreset` ([§033]). `outbound` хранится в `varsValues['outbound']` как universal override ([§033] Expansion §5).
+`name` is read-only in the UI (🔒) and is periodically synced with `preset.label` from the template. The contents are expanded on every `buildConfig` through `expandPreset` ([§033]). `outbound` is kept in `varsValues['outbound']` as a universal override ([§033] Expansion §5).
 
-> **§265 — ref-var значения НЕ в `varsValues`.** Если пресет объявляет var как
-> `{"ref":"<global>"}` (напр. `traffic-processing` → `resolve_enabled`/
-> `resolve_strategy`), её значение живёт в **глобальном** `vars`
-> (top-level, `setVar`/`getAllVars`), а НЕ в `varsValues` пресета — единый
-> источник, чтобы правка в правиле и в секции-владельце не расходились.
-> `varsValues` не должен содержать ref-имён; `stripRefVarsFromVarsValues`
-> (`normalize_pinned_presets.dart`) вычищает застрявшие копии на загрузке Routing
-> (иначе subtitle/Debug показывали устаревшее значение — `366beec`). См.
-> TEMPLATE.md § «ref-vars».
+> **§265 — ref-var values do NOT live in `varsValues`.** When a preset declares a var
+> as `{"ref":"<global>"}` (for example `traffic-processing` → `resolve_enabled` /
+> `resolve_strategy`), its value lives in the **global** `vars` (top level,
+> `setVar` / `getAllVars`) and NOT in the preset's `varsValues` — one source, so that
+> editing it in the rule and in the owning section cannot diverge. `varsValues` must
+> not contain ref names; `stripRefVarsFromVarsValues`
+> (`normalize_pinned_presets.dart`) clears out stuck copies when Routing loads
+> (otherwise the subtitle and Debug showed a stale value — `366beec`). See the
+> “ref-vars” section of TEMPLATE.md.
 
 ### Backward-compat
 
