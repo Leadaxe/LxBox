@@ -1,60 +1,60 @@
 # Wizard Template
 
-Полная схема `app/assets/wizard_template.json` — единственного **catalog'а** L×Box: какие preset'ы, DNS-серверы, ping-настройки, секции Wizard UI и ноды роутинга существуют в приложении out-of-the-box. Документ — источник правды для shape'а файла и vars-substitution syntax. `ARCHITECTURE.md` ссылается сюда.
+The complete schema of `app/assets/wizard_template.json` — L×Box's single **catalog**: which presets, DNS servers, ping settings, Wizard UI sections and routing nodes exist in the app out of the box. This document is the source of truth for the file's shape and for the vars-substitution syntax. `ARCHITECTURE.md` links here.
 
-## Что это
+## What it is
 
-Файл `app/assets/wizard_template.json` bundled в APK через `flutter assets`. Загружается через `rootBundle.loadString` в `app/lib/services/template_loader.dart` (async singleton). Содержит **catalog** (что вообще существует), **defaults** (с какими значениями стартует новая установка) и **substitution shape** (нативная sing-box-секция с `@var`-плейсхолдерами).
+`app/assets/wizard_template.json` is bundled into the APK through `flutter assets`. It is loaded with `rootBundle.loadString` in `app/lib/services/template_loader.dart` (an async singleton). It holds the **catalog** (what exists at all), the **defaults** (the values a fresh install starts with) and the **substitution shape** (the native sing-box section with `@var` placeholders).
 
-В runtime билдер (`app/lib/services/builder/build_config.dart`) сливает:
-- `config` (нативная sing-box-секция шаблона) +
-- `selectable_rules[*]` (preset'ы выбранные юзером в `custom_rules`) +
-- `dns_options.{servers,rules}` (текущее состояние storage) +
-- `group_templates` + `default_channels` (шаблоны сборки каналов, §267) +
-- `vars` substitution (template-vars из storage)
+At runtime the builder (`app/lib/services/builder/build_config.dart`) merges:
+- `config` (the template's native sing-box section), plus
+- `selectable_rules[*]` (the presets the user picked in `custom_rules`), plus
+- `dns_options.{servers,rules}` (the current state of storage), plus
+- `group_templates` and `default_channels` (the channel assembly templates, §267), plus
+- the `vars` substitution (the template vars from storage)
 
-→ финальный `<docs>/singbox_config.json` для libbox.
+→ into the final `<docs>/singbox_config.json` for libbox.
 
-`wizard_template.json` НЕ модифицируется юзером — это catalog. Юзерский state живёт в `lxbox_settings.json` (см. [`STORAGE.md`](./STORAGE.md)).
+`wizard_template.json` is NEVER modified by the user — it is a catalog. The user's state lives in `lxbox_settings.json` (see [`STORAGE.md`](./STORAGE.md)).
 
 ## `wizard_template.json` — full tree
 
-> **Нотация**:
-> - `object{N keys}` — объект с N ключами
-> - `list[N]` — массив с N элементами; `list` без числа — массив переменной длины
-> - `<TypeName>` — element-type для массива (показано отдельно ниже)
-> - `?` после типа — поле опциональное
-> - `"@varname"` — substitution-плейсхолдер; на build-time подставляется значение из `vars`
+> **Notation**:
+> - `object{N keys}` — an object with N keys
+> - `list[N]` — an array of N elements; a bare `list` is variable-length
+> - `<TypeName>` — the element type of an array (shown separately below)
+> - a `?` after the type means the field is optional
+> - `"@varname"` — a substitution placeholder; at build time the value from `vars` is put in its place
 
 ```
 wizard_template.json
 │
 ├─ parser_config                   object{2 keys}
-│   ├─ version                     int           § схема parser-pipeline'а (§026)
+│   ├─ version                     int           the parser pipeline's schema (§026)
 │   └─ parser                      object{1 keys}
 │       └─ reload                  duration      auto-refresh subscriptions interval (Go-style "12h")
 │
-├─ dns_options                     object{2 keys}       default DNS shape для билдера
+├─ dns_options                     object{2 keys}       the default DNS shape for the builder
 │   ├─ servers[]                   list          template-level DNS servers (7 default'ов)
 │   │   └─ <DnsServerRef>          object          обёртка §117 (tag живёт в server.tag):
 │   │       ├─ description         string?       UI label
-│   │       ├─ enabled             bool?         default true (default-enabled для auto-discovery)
-│   │       ├─ vars[]              list?         те же определения, что preset-vars (§033)
+│   │       ├─ enabled             bool?         default true (default-enabled for auto-discovery)
+│   │       ├─ vars[]              list?         the same definitions as preset vars (§033)
 │   │       └─ server              object          sing-box DNS server body + @placeholders:
 │   │           ├─ type            "udp"|"https"|"tls"|"local"
-│   │           ├─ tag             string        unique id для ссылки
+│   │           ├─ tag             string        a unique id for references
 │   │           ├─ server          string?       IP/host (udp/tls/h3)
 │   │           ├─ server_port     int?
 │   │           ├─ path            string?       (https) "/dns-query"
 │   │           ├─ tls             object?         {enabled, server_name}
-│   │           ├─ detour          tag?          через какой outbound резолвить
-│   │           └─ domain_resolver tag?          какой DNS используется для host'а сервера
+│   │           ├─ detour          tag?          which outbound to resolve through
+│   │           └─ domain_resolver tag?          which DNS resolves the server's own host
 │   └─ rules[]                     list          template-level DNS rules (§061, бывший feature §041), сейчас пусто
 │
 ├─ ping_options                    object{3 keys}       (§040)
 │   ├─ url                         string        global default (e.g. gstatic.com/generate_204)
 │   ├─ timeout_ms                  int           default 5000
-│   └─ presets[]                   list          dropdown options в Ping Settings UI
+│   └─ presets[]                   list          the dropdown options in the Ping Settings UI
 │       └─ {id, name, url}         object        id — stable machine-id (§279)
 │
 ├─ speed_test_options              object{3 keys}       (§015)
@@ -63,20 +63,20 @@ wizard_template.json
 │   ├─ stream_options              list[3]       parallel-streams choices (e.g. [1,4,10])
 │   └─ default_streams             int           default 4
 │
-├─ group_templates                 object        шаблоны сборки каналов (§267)
-│   ├─ magic_nodes                  object        реестр служебных нод по role-ключу
+├─ group_templates                 object        the channel assembly templates (§267)
+│   ├─ magic_nodes                  object        a registry of service nodes, keyed by role
 │   │   └─ <role>                   object        role ∈ {auto, direct, block}
 │   │       ├─ title                string        UI-label ("Auto"/"Direct"/"Block")
-│   │       ├─ source               "generate"|"preset"  как рождается нода
-│   │       ├─ tag                  string?       (preset) ссылка на config.outbounds
-│   │       └─ tpl                  string?       (generate) шаблон тега ("{parent_tag}-auto")
-│   ├─ channel                      object        шаблон обычного канала (selector)
+│   │       ├─ source               "generate"|"preset"  how the node comes into being
+│   │       ├─ tag                  string?       (preset) a reference into config.outbounds
+│   │       └─ tpl                  string?       (generate) the tag template ("{parent_tag}-auto")
+│   ├─ channel                      object        the template of an ordinary channel (a selector)
 │   │   ├─ type                     "selector"
-│   │   ├─ include[]                list[role]    role-ключи magic_nodes (["direct","auto"])
+│   │   ├─ include[]                list[role]    the role keys of magic_nodes (["direct","auto"])
 │   │   └─ options                  object          sing-box selector options (interrupt_exist_connections)
-│   └─ auto                         object        шаблон auto-подгруппы (urltest)
+│   └─ auto                         object        the template of the auto subgroup (a urltest)
 │       ├─ type                     "urltest"
-│       └─ options                  object          url / interval / tolerance (сырые @var)
+│       └─ options                  object          url / interval / tolerance (raw @vars)
 │
 ├─ default_channels[]               list          сид каналов первого запуска (§267)
 │   └─ <DefaultChannel>             object
