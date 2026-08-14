@@ -830,32 +830,32 @@ In the UI a ref-var **is rendered** in the rule editor (`preset_params_tab.dart`
 
 **Rules for adding a preset:**
 
-1. **Пресет несёт `dns_servers[]`** → обязателен var `dns_server` (`type: dns_servers`, `default_value` = tag нужного сервера), а `dns_rules[*].server` = `@dns_server`. Иначе сервер не эмитится (§228). Если сервер один и выбирать не из чего (как у FakeIP) — пометь var **`wizard_ui: "hidden"`**: значение всё равно придёт из `default_value`, но мёртвый dropdown-из-одного-пункта в редакторе не рисуется. (Редактор `preset_params_tab.dart` фильтрует hidden-vars; sections тоже.)
-2. **Пресет роутит трафик** (есть `rule` с `outbound`/`action` или var:outbound) → outbound-picker в строке появится автоматически. **DNS-only пресет** (только DNS-правила, как FakeIP) → picker сам скрывается через `hasOutboundAffordance`.
-3. `outbound`-var с дефолтом `reject` → билдер сам превратит `{outbound:reject}` в `{action:reject}` (backstop, см. `unknown-traffic` выше).
+1. **A preset carrying `dns_servers[]`** requires a `dns_server` var (`type: dns_servers`, with `default_value` set to the tag of the default server).
+2. **A preset that routes traffic** (it has a `rule` with an `outbound` or `action`, or an outbound var) gets an outbound picker on its row.
+3. An `outbound` var defaulting to `reject`: the builder itself turns `{outbound:reject}` into `{action:reject}`.
 
 ### `selectable_rules[*].rule_set[i]` — sing-box rule-set definition
 
 ```jsonc
 {
-  "tag":              "<string>",                // unique id внутри финального config.route.rule_set
+  "tag":              "<string>",                // a unique id inside the final config.route.rule_set
   "type":             "inline" | "local" | "remote",
-  "format":           "binary" | "source"?,       // для local/remote
-  "rules":            [ … ]?,                      // для inline — список match-условий
-  "url":              "https://..."?,              // для remote
-  "path":             "<filesystem>"?,             // для local — путь к .srs (в финальном config ставит билдер)
-  "download_detour":  "<outbound-tag>"?,           // декларативное поле каталога — стрипается билдером
-  "update_interval":  "<duration>"?                // декларативное поле каталога — стрипается билдером
+  "format":           "binary" | "source"?,       // for local and remote
+  "rules":            [ … ]?,                      // for inline — the list of match conditions
+  "url":              "https://..."?,              // for remote
+  "path":             "<filesystem>"?,             // for local — the path to the .srs (the builder fills it in)
+  "download_detour":  "<outbound-tag>"?,           // a declarative catalog field — stripped out
+  "update_interval":  "<duration>"?                // a declarative catalog field — stripped out
 }
 ```
 
-⚠ **sing-box сам НИЧЕГО не скачивает.** В финальный config `remote`-форма не попадает никогда: билдер (`preset_expand.dart`) подменяет `remote` → `{type: "local", path: <кэш>}` и стрипает `url`/`download_detour`/`update_interval`. Кэш = `<docs>/rule_sets/<id>.srs`, где `id` — `CustomRule.id` (UUID), а для пресетов — `cachedPathForPreset(presetId, tag)` (по id пресета/правила, НЕ по `tag`).
+⚠ **sing-box downloads NOTHING by itself.** The `remote` form never reaches the final config.
 
-Скачивание — только вручную через кнопку **Download** в UI (`RuleSetDownloader`). Если кэша нет, rule_set пропускается с warning («download first») — sing-box не увидит remote-URL и не полезет в сеть. `download_detour`/`update_interval` в текущем pipeline не используются (декларативные поля каталога).
+Downloading happens only by hand, through the **Download** button in the UI (`RuleSetDownloader`).
 
 ### `selectable_rules[*].rule` / `rules` — routing rule(s)
 
-`rule` — Map (один rule, legacy); `rules` — **массив** (§246, канонический ключ; при обоих ключах побеждает `rules`). Каждый rule — sing-box routing rule с support'ом всех его полей:
+`rule` is a Map (a single rule, legacy); `rules` is an **array** (§246, the canonical key; when both are present the array wins).
 
 ```jsonc
 {
@@ -869,8 +869,8 @@ In the UI a ref-var **is rendered** in the rule editor (`preset_params_tab.dart`
   "package_name": ["..."]?,
   "protocol":    [ "bittorrent" | "tls" | "http" | ... ]?,
 
-  "outbound":    "<tag-or-@var>"?,    // куда роутить
-  "action":      "reject" | "..."?     // shorthand вместо outbound
+  "outbound":    "<tag-or-@var>"?,    // where to route
+  "action":      "reject" | "..."?     // a shorthand instead of outbound
 }
 ```
 
