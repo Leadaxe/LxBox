@@ -547,19 +547,19 @@ Seen in the template:
 | `bool` | `'true'` becomes true, anything else false | Switch |
 | `enum` | **a string** (membership in `options[]` is advisory) | Dropdown |
 | `secret` | **the string verbatim** (never coerce it) | TextField (masked) |
-| `outbound` | **строка** (tag selector/node) | Dropdown заполняется runtime |
-| `dns_servers` | **строка** (tag из `dns_options.servers`) | Dropdown заполняется runtime |
+| `outbound` | **a string** (a selector or node tag) | A dropdown filled at runtime |
+| `dns_servers` | **a string** (a tag from `dns_options.servers`) | A dropdown filled at runtime |
 
 > **§120 — coerce по объявленному типу, НЕ по содержимому.** `if_engine.dart::coerceVarValue` коэрсит **только** `bool`/`int`, и только по `node.type`. Все строковые типы (`text`/`secret`/`enum`/`outbound`/`dns_servers`) остаются строкой, даже если значение выглядит как `123`/`true` — критично для паролей/секретов (`1234` не должен стать int). Var без объявленной ноды (legacy `clash_secret`, build-time `proxy_*`) → coerce как `text`.
 
 При расширении (добавляешь новый type) — обновлять Wizard UI рендерер в `app/lib/screens/settings_screen.dart` и (если коэрсящийся) `coerceVarValue` в `app/lib/services/builder/if_engine.dart`.
 
-### `on_change` — декларативный side-effect var'а (§232 / §266)
+### `on_change` — a var's declarative side effect (§232 / §266)
 
-Переключение var может ставить производные var'ы. Синтаксис — на существующем
-`#if` (value/else), условие видит УЖЕ НОВОЕ значение переключённой var. Ниже —
-секционный вариант (§232, in-memory); пресетный (§266, глобальный `userVars`) — в
-подразделе «`on_change` пресета».
+Toggling a var can set derived vars. The syntax reuses the existing `#if` (value/else),
+and the condition already sees the NEW value of the toggled var. What follows is the
+section-level variant (§232, in memory); the preset-level one (§266, the global
+`userVars`) is described under “A preset's `on_change`”.
 
 ```jsonc
 {
@@ -583,14 +583,14 @@ Seen in the template:
 > `internal` (§265) — её `§263`-тумблер редактируется в правиле пресета, а не в
 > `Network`.
 
-Актуальная семантика тумблера IPv6 (§249): дефолт обеих strategy-vars —
-`ipv4_only` (IPv6 на tun выключен по умолчанию — AAAA приложениям не нужен);
-включение IPv6 переводит резолв в `prefer_ipv4` (v6 доступен, но v4-first —
-`prefer_ipv6` на сетях с полурабочим v6 давал мёртвые direct-коннекты, см.
-§246), выключение — форсит `ipv4_only`. Тонкая настройка — DNS Settings →
-Strategy (тумблер — разовый эффект, не форс).
+The current semantics of the IPv6 toggle (§249): both strategy vars default to
+`ipv4_only` (IPv6 on the tun is off by default — applications do not need AAAA); enabling
+IPv6 moves resolution to `prefer_ipv4` (v6 is available, but v4 first — on networks with
+half-working v6, `prefer_ipv6` produced dead direct connections, see §246); disabling it
+forces `ipv4_only`. Fine tuning lives in DNS Settings → Strategy (the toggle is a one-off
+effect, not a lock).
 
-Семантика:
+The semantics:
 
 - **Разовый эффект переключения, не форс** — целевые var записываются в момент
   клика; юзер потом волен переопределить вручную.
@@ -648,7 +648,7 @@ FakeIP он должен молчать, §263):
 Читается: «FakeIP включён (`@rule_enable`) И его DNS-аспект включён (`@dns_enable`)
 → `resolve_enabled = false`; иначе `true`».
 
-Семантика:
+The semantics:
 
 - **Пишет в `userVars` сразу** (не in-memory) — цель `@resolve_enabled` живёт в
   секции `internal` (глобальная var), её storage — `userVars`, не `varsValues`
