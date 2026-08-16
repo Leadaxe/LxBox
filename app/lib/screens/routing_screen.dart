@@ -535,12 +535,32 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   Future<void> _exportRules() async {
     if (_customRules.isEmpty) return; // пункт меню и так disabled
+    final template = _template;
+    if (template == null) return;
+    // Данные шага 2 (DNS): серверы без preset-refs (их резолвер §294
+    // порождает сам), правила — только пользовательские inline/srs.
+    final rawServers = await SettingsStorage.getDnsServers();
+    final dnsServers = [
+      for (final s in rawServers)
+        if (s['kind'] != 'preset') s
+    ];
+    final rawDnsRules = await SettingsStorage.getDnsRulesList();
+    final dnsRules = [
+      for (final r in rawDnsRules)
+        if (r['kind'] == 'inline' || r['kind'] == 'srs') r
+    ];
+    if (!mounted) return;
     final selected = await showRuleExportPicker(
       context,
       rules: List<CustomRule>.from(_customRules),
       displayNames: ruleDisplayNames(_customRules, _template),
+      dnsServers: dnsServers,
+      dnsRules: dnsRules,
+      templateServerTags: {
+        for (final s in template.dnsOptionsModel.servers) s.tag
+      },
     );
-    if (selected == null || selected.isEmpty || !mounted) return;
+    if (selected == null || selected.rules.isEmpty || !mounted) return;
 
     try {
       // §374 — доступные способы выясняем до шита; обе проверки платформенные,
@@ -564,7 +584,12 @@ class _RoutingScreenState extends State<RoutingScreen>
       } catch (_) {
         // PackageInfo может упасть в test environment — graceful skip.
       }
-      final json = buildRulesExport(selected, appVersion: appVersion);
+      final json = buildRulesExport(
+        selected.rules,
+        appVersion: appVersion,
+        dnsServers: selected.dnsServers,
+        dnsRules: selected.dnsRules,
+      );
       final filename = suggestedRulesFilename();
       // Размер в БАЙТАХ, а не code units (§374: String.length считает UTF-16,
       // на кириллице цифра расходилась с файлом на диске).
@@ -588,7 +613,8 @@ class _RoutingScreenState extends State<RoutingScreen>
           await Share.shareXFiles([
             XFile(path, mimeType: 'application/json', name: filename),
           ], subject: 'LxBox rules');
-          showSnack(getLocalText.plural("Exported %d rules", selected.length));
+          showSnack(
+              getLocalText.plural("Exported %d rules", selected.rules.length));
           return;
       }
 
@@ -655,12 +681,42 @@ class _RoutingScreenState extends State<RoutingScreen>
       // существующая механика §274/§277) + DNS-теги как в дропдауне §117
       // (`edit_controller._loadDnsServerTags`: storage-refs ∪ template).
       final channelTags = {for (final c in _channels) c.tag};
-      final dnsServerTags = <String>{};
-      for (final s in await SettingsStorage.getDnsServers()) {
-        final tag = s['tag']?.toString();
-        if (tag != null && tag.isNotEmpty) dnsServerTags.add(tag);
-      }
-      dnsServerTags.addAll(template.dnsOptionsModel.servers.map((s) => s.tag));
+      final existingServers = await SettingsStorage.getDnsServers();
+      final existingServerTags = <String>{
+        for (final s in existingServers)
+          if (s['tag']?.toString().isNotEmpty ?? false) s['tag'].toString(),
+      };
+      final existingDnsRules = await SettingsStorage.getDnsRulesList();
+      final templateServerTags = {
+        for (final s in template.dnsOptionsModel.servers) s.tag,
+      };
+
+      // §5.3a — DNS-секции файла санируются до превью.
+      final dnsServerItems = [
+        for (final entry in contents.rawDnsServers)
+          sanitizeImportedDnsServer(
+            entry,
+            existingTags: existingServerTags,
+            templateServerTags: templateServerTags,
+          ),
+      ];
+      final dnsRuleItems = [
+        for (final entry in contents.rawDnsRules)
+          sanitizeImportedDnsRule(
+            entry,
+            existingRules: existingDnsRules,
+            template: template,
+          ),
+      ];
+
+      // Правило и его сервер, приехавшие одним файлом, связываются без
+      // лечения: теги импортируемых серверов — валидные ссылки (§5.3a).
+      final dnsServerTags = <String>{
+        ...existingServerTags,
+        ...templateServerTags,
+        for (final it in dnsServerItems)
+          if (it.importable) it.item!['tag'].toString(),
+      };
 
       final items = [
         for (final entry in contents.rawRules)
@@ -675,14 +731,16 @@ class _RoutingScreenState extends State<RoutingScreen>
       final picked = await showRuleImportPreview(
         context,
         items: items,
+        dnsServers: dnsServerItems,
+        dnsRules: dnsRuleItems,
         createdAt: contents.createdAt,
         sourceAppVersion: contents.sourceAppVersion,
       );
-      if (picked == null || picked.isEmpty || !mounted) return;
+      if (picked == null || !mounted) return;
 
       final inserted = <CustomRule>[];
       var needsSrs = false;
-      for (final item in picked) {
+      for (final item in picked.rules) {
         final rule = item.rule;
         if (rule == null) continue;
         inserted.add(
@@ -690,29 +748,45 @@ class _RoutingScreenState extends State<RoutingScreen>
         );
         needsSrs = needsSrs || item.needsSrsDownload;
       }
-      if (inserted.isEmpty) return;
-      setState(() {
-        final sorted = sortRulesByNum(_customRules);
-        _customRules
-          ..clear()
-          ..addAll(sorted);
-        _markDirty();
-      });
-      // §266 — как _copyPreset: on_change по начальному состоянию пресета.
-      for (final cr in inserted) {
-        if (cr is CustomRulePreset) {
-          final preset = _presetFor(cr.presetId);
-          if (preset != null) unawaited(applyPresetOnChange(preset, cr));
+      final dnsCount = picked.dnsServers.length + picked.dnsRules.length;
+      if (inserted.isEmpty && dnsCount == 0) return;
+
+      // DNS-сущности — прямо в storage (append; форма провалидирована
+      // санацией через DnsServerRef/DnsRuleRef, как Debug write-путь §294).
+      if (picked.dnsServers.isNotEmpty) {
+        await SettingsStorage.saveDnsServers(
+            [...existingServers, ...picked.dnsServers]);
+      }
+      if (picked.dnsRules.isNotEmpty) {
+        await SettingsStorage.saveDnsRulesList(
+            [...existingDnsRules, ...picked.dnsRules]);
+      }
+      if (!mounted) return;
+
+      if (inserted.isNotEmpty) {
+        setState(() {
+          final sorted = sortRulesByNum(_customRules);
+          _customRules
+            ..clear()
+            ..addAll(sorted);
+          _markDirty();
+        });
+        // §266 — как _copyPreset: on_change по начальному состоянию пресета.
+        for (final cr in inserted) {
+          if (cr is CustomRulePreset) {
+            final preset = _presetFor(cr.presetId);
+            if (preset != null) unawaited(applyPresetOnChange(preset, cr));
+          }
         }
       }
-      showSnack(
-        needsSrs
-            ? getLocalText.plural(
-                "Imported %d rules — tap ☁ to download rule-sets, then enable",
-                inserted.length,
-              )
-            : getLocalText.plural("Imported %d rules", inserted.length),
-      );
+      showSnack(switch ((inserted.length, dnsCount)) {
+        (final n, 0) when needsSrs => getLocalText.plural(
+            "Imported %d rules — tap ☁ to download rule-sets, then enable", n),
+        (final n, 0) => getLocalText.plural("Imported %d rules", n),
+        (0, final m) => getLocalText.s("Imported %d DNS entries", m),
+        (final n, final m) => getLocalText.s(
+            "Imported %1\$d rules and %2\$d DNS entries", n, m),
+      });
     } catch (e) {
       showSnack(
         getLocalText.s("Import failed: %s", formatUserError(e).render()),

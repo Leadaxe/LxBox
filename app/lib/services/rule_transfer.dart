@@ -3,9 +3,11 @@ import 'dart:convert';
 import '../config/consts.dart'
     show kBlockOutboundTag, kDirectOutboundTag;
 import '../models/custom_rule.dart';
+import '../models/dns_ref.dart';
 import '../models/parser_config.dart';
 import '../models/preset_rule_set.dart' show remoteRuleSetsOfPreset;
 import 'builder/rule_order.dart' show nextUserRuleNum;
+import 'parser/uri_utils.dart' show newUuidV4;
 import 'rule_display_names.dart' show visibleRuleNames;
 
 /// §396 — обмен правилами роутинга файлом (export/import выбранных правил).
@@ -35,8 +37,14 @@ const int kRulesExportFormatVersion = 1;
 /// (`SettingsStorage.deleteChannel`, §202): основной канал, существует всегда.
 const String kImportOutboundFallback = 'vpn-1';
 
-/// Build JSON-строки экспорта для выбранных правил.
-String buildRulesExport(List<CustomRule> rules, {String? appVersion}) {
+/// Build JSON-строки экспорта для выбранных правил (+ опциональные
+/// DNS-секции второго экрана — сырые элементы storage as is).
+String buildRulesExport(
+  List<CustomRule> rules, {
+  String? appVersion,
+  List<Map<String, dynamic>> dnsServers = const [],
+  List<Map<String, dynamic>> dnsRules = const [],
+}) {
   final out = <String, dynamic>{
     'app': 'lxbox',
     'kind': 'rules',
@@ -45,6 +53,8 @@ String buildRulesExport(List<CustomRule> rules, {String? appVersion}) {
     if (appVersion != null && appVersion.isNotEmpty)
       'source_app_version': appVersion,
     'rules': [for (final r in rules) r.toJson()],
+    if (dnsServers.isNotEmpty) 'dns_servers': dnsServers,
+    if (dnsRules.isNotEmpty) 'dns_rules': dnsRules,
   };
   return const JsonEncoder.withIndent('  ').convert(out);
 }
@@ -67,11 +77,17 @@ class RulesImportContents {
     this.createdAt,
     this.sourceAppVersion,
     required this.rawRules,
+    this.rawDnsServers = const [],
+    this.rawDnsRules = const [],
   });
 
   final DateTime? createdAt;
   final String? sourceAppVersion;
   final List<dynamic> rawRules;
+
+  /// Опциональные DNS-секции конверта (`dns_servers[]` / `dns_rules[]`).
+  final List<dynamic> rawDnsServers;
+  final List<dynamic> rawDnsRules;
 }
 
 /// Parse + validate конверта. Throws [FormatException] на нечитаемый файл.
@@ -122,11 +138,29 @@ RulesImportContents parseRulesImport(String raw) {
     createdAt = DateTime.tryParse(createdRaw);
   }
 
+  final dnsServers = decoded['dns_servers'];
+  final dnsRules = decoded['dns_rules'];
+
   return RulesImportContents(
     createdAt: createdAt,
     sourceAppVersion: decoded['source_app_version']?.toString(),
     rawRules: rules,
+    rawDnsServers: dnsServers is List ? dnsServers : const [],
+    rawDnsRules: dnsRules is List ? dnsRules : const [],
   );
+}
+
+/// Теги DNS-серверов, на которые ссылаются правила (`dns.serverTag` +
+/// `resolve.serverTag`). Экспорт предотмечает ими секцию DNS servers.
+Set<String> referencedDnsServerTags(Iterable<CustomRule> rules) {
+  final tags = <String>{};
+  for (final r in rules) {
+    final dnsTag = r.dns?.serverTag;
+    if (dnsTag != null && dnsTag.isNotEmpty) tags.add(dnsTag);
+    final resolveTag = r.resolve?.serverTag;
+    if (resolveTag != null && resolveTag.isNotEmpty) tags.add(resolveTag);
+  }
+  return tags;
 }
 
 /// Типизированное предупреждение санации — текст рендерит UI через
@@ -361,6 +395,167 @@ CustomRule insertImportedRule(
 
   target.add(next);
   return next;
+}
+
+// ─── §396 DNS-секции: санация dns_servers[] / dns_rules[] ────────────────
+
+/// Почему элемент DNS-секции не будет импортирован (disabled в превью).
+enum ImportDnsSkipReason {
+  /// Не парсится (`DnsServerRef.fromJson`/`DnsRuleRef.fromJson` → null)
+  /// или сам элемент — не объект.
+  unsupportedEntry,
+
+  /// Сервер/правило с этим tag/именем/дублем уже есть у получателя —
+  /// его настройки НЕ перезаписываются чужим файлом.
+  alreadyExists,
+
+  /// template-сущность, которой нет в шаблоне этой версии приложения.
+  notAvailable,
+
+  /// `kind: preset` — такие refs резолвер §294 порождает и чистит сам
+  /// при включении routing-пресета; поштучно не переносятся.
+  managedByPresets,
+}
+
+/// Итог санации одного элемента DNS-секции. [item] — готовый к вставке
+/// raw-объект (для srs-правила `id` уже перегенерирован).
+class SanitizedImportDnsItem {
+  const SanitizedImportDnsItem({
+    this.item,
+    required this.label,
+    this.skipReason,
+  });
+
+  final Map<String, dynamic>? item;
+  final String label;
+  final ImportDnsSkipReason? skipReason;
+
+  bool get importable => item != null;
+}
+
+/// Санация элемента `dns_servers[]`.
+///
+/// [existingTags] — теги `dns_options.servers` получателя;
+/// [templateServerTags] — теги шаблонных серверов его версии приложения.
+SanitizedImportDnsItem sanitizeImportedDnsServer(
+  dynamic raw, {
+  required Set<String> existingTags,
+  required Set<String> templateServerTags,
+}) {
+  if (raw is! Map) {
+    return const SanitizedImportDnsItem(
+        label: '', skipReason: ImportDnsSkipReason.unsupportedEntry);
+  }
+  final map = raw.cast<String, dynamic>();
+  final ref = DnsServerRef.fromJson(map);
+  if (ref == null) {
+    return SanitizedImportDnsItem(
+      label: map['tag']?.toString() ?? '',
+      skipReason: ImportDnsSkipReason.unsupportedEntry,
+    );
+  }
+  final label = (ref.description?.isNotEmpty ?? false)
+      ? '${ref.description} (${ref.tag})'
+      : ref.tag;
+  if (ref is DnsServerPreset) {
+    return SanitizedImportDnsItem(
+        label: label, skipReason: ImportDnsSkipReason.managedByPresets);
+  }
+  if (existingTags.contains(ref.tag)) {
+    return SanitizedImportDnsItem(
+        label: label, skipReason: ImportDnsSkipReason.alreadyExists);
+  }
+  if (ref is DnsServerTemplate && !templateServerTags.contains(ref.tag)) {
+    return SanitizedImportDnsItem(
+        label: label, skipReason: ImportDnsSkipReason.notAvailable);
+  }
+  return SanitizedImportDnsItem(item: ref.toJson(), label: label);
+}
+
+/// Санация элемента `dns_rules[]`.
+///
+/// [existingRules] — сырые `dns_options.rules` получателя;
+/// [template] — для проверки preset/template-правил.
+SanitizedImportDnsItem sanitizeImportedDnsRule(
+  dynamic raw, {
+  required List<Map<String, dynamic>> existingRules,
+  required WizardTemplate template,
+}) {
+  if (raw is! Map) {
+    return const SanitizedImportDnsItem(
+        label: '', skipReason: ImportDnsSkipReason.unsupportedEntry);
+  }
+  final map = raw.cast<String, dynamic>();
+  final ref = DnsRuleRef.fromJson(map);
+  if (ref == null) {
+    return SanitizedImportDnsItem(
+      label: map['name']?.toString() ?? map['presetId']?.toString() ?? '',
+      skipReason: ImportDnsSkipReason.unsupportedEntry,
+    );
+  }
+
+  switch (ref) {
+    case DnsRulePreset():
+      final exists = existingRules.any(
+          (r) => r['kind'] == 'preset' && r['presetId'] == ref.presetId);
+      if (exists) {
+        return SanitizedImportDnsItem(
+            label: ref.presetId,
+            skipReason: ImportDnsSkipReason.alreadyExists);
+      }
+      final known =
+          template.selectableRules.any((sr) => sr.presetId == ref.presetId);
+      if (!known) {
+        return SanitizedImportDnsItem(
+            label: ref.presetId,
+            skipReason: ImportDnsSkipReason.notAvailable);
+      }
+      return SanitizedImportDnsItem(item: ref.toJson(), label: ref.presetId);
+
+    case DnsRuleTemplate():
+      final exists = existingRules
+          .any((r) => r['kind'] == 'template' && r['name'] == ref.name);
+      if (exists) {
+        return SanitizedImportDnsItem(
+            label: ref.name, skipReason: ImportDnsSkipReason.alreadyExists);
+      }
+      final known = (template.dnsOptions['rules'] as List<dynamic>? ??
+              const [])
+          .any((r) => r is Map && r['name'] == ref.name);
+      if (!known) {
+        return SanitizedImportDnsItem(
+            label: ref.name, skipReason: ImportDnsSkipReason.notAvailable);
+      }
+      return SanitizedImportDnsItem(item: ref.toJson(), label: ref.name);
+
+    case DnsRuleInline():
+      // Точный дубль (name + rule-body) → skip; иначе импортируем как есть.
+      final encoded = jsonEncode(ref.toJson());
+      final dup = existingRules.any((r) =>
+          r['kind'] == 'inline' &&
+          jsonEncode(DnsRuleRef.fromJson(r)?.toJson() ?? const {}) == encoded);
+      if (dup) {
+        return SanitizedImportDnsItem(
+            label: ref.name, skipReason: ImportDnsSkipReason.alreadyExists);
+      }
+      // `enabled` — вне типизированной модели (форма §294), но живёт в raw
+      // storage: переносим значение автора вместе с правилом.
+      final out = ref.toJson();
+      if (map['enabled'] is bool) out['enabled'] = map['enabled'];
+      return SanitizedImportDnsItem(item: out, label: ref.name);
+
+    case DnsRuleSrs():
+      final dup = existingRules
+          .any((r) => r['kind'] == 'srs' && r['name'] == ref.name);
+      if (dup) {
+        return SanitizedImportDnsItem(
+            label: ref.name, skipReason: ImportDnsSkipReason.alreadyExists);
+      }
+      // Кэш-файл `.srs` привязан к id — у получателя свой, id перегенерируем.
+      final out = ref.copyWith(id: newUuidV4()).toJson();
+      if (map['enabled'] is bool) out['enabled'] = map['enabled'];
+      return SanitizedImportDnsItem(item: out, label: ref.name);
+  }
 }
 
 // ─── helpers: type-preserving запись dns/resolve ─────────────────────────

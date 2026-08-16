@@ -4444,9 +4444,6 @@
   "Import rules": {
     "value": "Импорт правил"
   },
-  "Export (%d)": {
-    "value": "Экспорт (%d)"
-  },
   "Import (%d)": {
     "value": "Импорт (%d)"
   },
@@ -4491,5 +4488,32 @@
       "many": "Импортировано %d правил — нажмите ☁, чтобы скачать rule-set'ы, затем включите",
       "other": "Импортировано %d правила — нажмите ☁, чтобы скачать rule-set'ы, затем включите"
     }
+  },
+  "Include DNS": {
+    "value": "Добавить DNS"
+  },
+  "Optionally bundle DNS servers and DNS rules the recipient may be missing. Servers referenced by the selected rules are pre-checked.": {
+    "value": "При желании вложите в файл DNS-серверы и DNS-правила, которых может не быть у получателя. Серверы, на которые ссылаются выбранные правила, уже отмечены."
+  },
+  "Export (+%d DNS)": {
+    "value": "Экспорт (+%d DNS)"
+  },
+  "Export without DNS": {
+    "value": "Экспорт без DNS"
+  },
+  "Already on this device": {
+    "value": "Уже есть на этом устройстве"
+  },
+  "Not available in this app version": {
+    "value": "Недоступно в этой версии приложения"
+  },
+  "Managed by presets automatically": {
+    "value": "Управляется пресетами автоматически"
+  },
+  "Imported %d DNS entries": {
+    "value": "Импортировано DNS-записей: %d"
+  },
+  "Imported %1$d rules and %2$d DNS entries": {
+    "value": "Импортировано правил: %1$d, DNS-записей: %2$d"
   }
 }

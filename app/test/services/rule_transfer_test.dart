@@ -10,7 +10,16 @@ import 'package:lxbox/services/rule_transfer.dart';
 void main() {
   // Шаблон получателя: один пресет с remote rule_set (block-ads, num 960)
   // и один чисто-inline (private-ip, num 950) — хватает для preset-веток.
+  // dns_options — один шаблонный сервер google_udp (для DNS-санации §5.3a).
   final template = WizardTemplate.fromJson({
+    'dns_options': {
+      'servers': [
+        {
+          'enabled': true,
+          'server': {'tag': 'google_udp', 'type': 'udp'},
+        },
+      ],
+    },
     'selectable_rules': [
       {
         'preset_id': 'block-ads',
@@ -298,6 +307,146 @@ void main() {
       final second = insertImportedRule(target, s2.rule!, template: template);
       expect(second.name, 'My Rule (3)');
       expect(second.id, isNot(first.id));
+    });
+  });
+
+  group('DNS-секции конверта (§5.3a)', () {
+    test('buildRulesExport пишет dns_servers/dns_rules, parse их читает', () {
+      final json = buildRulesExport(
+        [CustomRuleInline(name: 'R', domains: ['a.com'])],
+        dnsServers: [
+          {'enabled': true, 'kind': 'inline', 'tag': 'my-doh', 'body': {'type': 'udp', 'server': '10.0.0.1'}},
+        ],
+        dnsRules: [
+          {'kind': 'inline', 'name': 'ntc', 'rule': {'domain': 'ntc.party'}},
+        ],
+      );
+      final contents = parseRulesImport(json);
+      expect(contents.rawDnsServers, hasLength(1));
+      expect(contents.rawDnsRules, hasLength(1));
+      // Файл без секций → пустые списки, не ошибка.
+      final bare = parseRulesImport(
+          buildRulesExport([CustomRuleInline(name: 'R')]));
+      expect(bare.rawDnsServers, isEmpty);
+      expect(bare.rawDnsRules, isEmpty);
+    });
+
+    test('referencedDnsServerTags собирает dns/resolve-теги', () {
+      final tags = referencedDnsServerTags([
+        CustomRuleInline(
+          name: 'A',
+          dns: const RuleDns(enabled: true, serverTag: 'x-doh'),
+        ),
+        CustomRuleInline(
+          name: 'B',
+          resolve: const RuleResolve(serverTag: 'y-udp'),
+        ),
+        CustomRuleInline(name: 'C'),
+      ]);
+      expect(tags, {'x-doh', 'y-udp'});
+    });
+
+    group('sanitizeImportedDnsServer', () {
+      SanitizedImportDnsItem srv(dynamic raw, {Set<String> existing = const {}}) =>
+          sanitizeImportedDnsServer(
+            raw,
+            existingTags: existing,
+            templateServerTags: {'google_udp'},
+          );
+
+      test('inline-сервер с новым tag → importable', () {
+        final s = srv({
+          'enabled': true,
+          'kind': 'inline',
+          'tag': 'my-doh',
+          'body': {'type': 'udp', 'server': '10.0.0.1'},
+          'description': 'Mine',
+        });
+        expect(s.importable, isTrue);
+        expect(s.item!['tag'], 'my-doh');
+        expect(s.label, 'Mine (my-doh)');
+      });
+
+      test('tag уже существует → alreadyExists, настройки не трогаются', () {
+        final s = srv(
+          {'enabled': true, 'kind': 'inline', 'tag': 'my-doh', 'body': {'type': 'udp', 'server': '1.2.3.4'}},
+          existing: {'my-doh'},
+        );
+        expect(s.importable, isFalse);
+        expect(s.skipReason, ImportDnsSkipReason.alreadyExists);
+      });
+
+      test('template-сервер: известный шаблону → importable, чужой → notAvailable', () {
+        final known = srv({'enabled': true, 'kind': 'template', 'tag': 'google_udp'});
+        expect(known.importable, isTrue);
+        final unknown = srv({'enabled': true, 'kind': 'template', 'tag': 'quantum_dns'});
+        expect(unknown.importable, isFalse);
+        expect(unknown.skipReason, ImportDnsSkipReason.notAvailable);
+      });
+
+      test('preset-сервер → managedByPresets; мусор → unsupportedEntry', () {
+        final preset = srv({'enabled': true, 'kind': 'preset', 'tag': 'fakeip'});
+        expect(preset.skipReason, ImportDnsSkipReason.managedByPresets);
+        expect(srv(42).skipReason, ImportDnsSkipReason.unsupportedEntry);
+        expect(srv({'kind': 'hologram', 'tag': 'x'}).skipReason,
+            ImportDnsSkipReason.unsupportedEntry);
+      });
+    });
+
+    group('sanitizeImportedDnsRule', () {
+      SanitizedImportDnsItem rule(dynamic raw,
+              {List<Map<String, dynamic>> existing = const []}) =>
+          sanitizeImportedDnsRule(raw,
+              existingRules: existing, template: template);
+
+      test('inline новое → importable, enabled автора переносится', () {
+        final s = rule({
+          'enabled': false,
+          'kind': 'inline',
+          'name': 'ntc',
+          'rule': {'domain': 'ntc.party', 'action': 'predefined'},
+        });
+        expect(s.importable, isTrue);
+        expect(s.item!['enabled'], isFalse);
+        expect(s.item!['name'], 'ntc');
+      });
+
+      test('inline точный дубль → alreadyExists', () {
+        final entry = {
+          'kind': 'inline',
+          'name': 'ntc',
+          'rule': {'domain': 'ntc.party'},
+        };
+        final s = rule(Map<String, dynamic>.from(entry),
+            existing: [Map<String, dynamic>.from(entry)]);
+        expect(s.skipReason, ImportDnsSkipReason.alreadyExists);
+      });
+
+      test('preset: есть → alreadyExists; неизвестен → notAvailable; известен → importable', () {
+        expect(
+          rule({'kind': 'preset', 'presetId': 'block-ads'},
+              existing: [{'kind': 'preset', 'presetId': 'block-ads'}]).skipReason,
+          ImportDnsSkipReason.alreadyExists,
+        );
+        expect(
+          rule({'kind': 'preset', 'presetId': 'from-the-future'}).skipReason,
+          ImportDnsSkipReason.notAvailable,
+        );
+        expect(rule({'kind': 'preset', 'presetId': 'block-ads'}).importable,
+            isTrue);
+      });
+
+      test('srs → id перегенерируется', () {
+        final s = rule({
+          'kind': 'srs',
+          'name': 'geo',
+          'id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          'body': {'rule_set': 'x'},
+        });
+        expect(s.importable, isTrue);
+        expect(s.item!['id'], isNot('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'));
+        expect(s.item!['name'], 'geo');
+      });
     });
   });
 }

@@ -80,9 +80,28 @@ merge/replace целых списков. Поштучного обмена не�
    суффиксы копий §279), subtitle — `summary()`. **По умолчанию ничего не
    выбрано**; над списком тумблер Select all / Deselect all. Кнопка
    `Export (N)` внизу, disabled при пустом выборе.
-2. `showExportActionSheet` §374 as is (переезд файла в `lib/widgets/`, см. §7).
-3. `buildRulesExport(selected)` → сохранение/шаринг через `file_export.dart`.
-   Снекбары исходов — те же, что у бэкапа (§374 таблица).
+2. **Второй экран «DNS»** (решение владельца, кейс правила Gemini:
+   `dns.serverTag` тянет сервер, которого у получателя нет): две секции
+   с чекбоксами.
+   - **DNS servers** — `dns_options.servers` юзера БЕЗ `kind: preset`
+     (preset-refs авто-порождаются/чистятся резолвером §294 при
+     включении routing-пресета — самостоятельной ценности не несут).
+     Предотмечены серверы, на которые ссылаются выбранные правила
+     (`dns.serverTag`/`resolve.serverTag`) и которых нет в шаблоне
+     получателя-автора (= inline'ы; шаблонные у получателя есть всегда).
+   - **DNS rules** — `dns_options.rules` юзера, только `inline`/`srs`
+     (preset/template — из каталога, у получателя есть). По умолчанию
+     сняты.
+   Кнопка Export внизу; back возвращает к выбору правил без потери
+   выбора.
+3. `showExportActionSheet` §374 as is (переезд файла в `lib/widgets/`, см. §7).
+4. `buildRulesExport(selected, dnsServers, dnsRules)` → сохранение/шаринг
+   через `file_export.dart`. Снекбары исходов — те же, что у бэкапа (§374
+   таблица).
+
+Конверт получает опциональные ключи `dns_servers[]` / `dns_rules[]` — сырые
+элементы storage as is. `format` остаётся 1: фича не зарелижена, читатель
+выходит тем же релизом.
 
 ### 4.3 Импорт
 
@@ -144,6 +163,27 @@ merge/replace целых списков. Поштучного обмена не�
 (backward-compat storage) — для импорта это неприемлемо (мусор станет пустым
 inline-правилом), поэтому парсер конверта проверяет `kind` **до** вызова
 `fromJson`.
+
+### 5.3a DNS-секции файла (`dns_servers[]` / `dns_rules[]`)
+
+Санация перед превью; вставка — `DnsServerRef.fromJsonStrict` /
+`DnsRuleRef.fromJsonStrict` → append → `saveDnsServers` /
+`saveDnsRulesList` (валидация та же, что у Debug write-пути §294;
+orphan-cleanup остаётся за резолвером).
+
+| Случай | Поведение |
+|---|---|
+| элемент не парсится (`DnsServerRef.fromJson`/`DnsRuleRef.fromJson` → null) | «Unsupported entry» (disabled) |
+| сервер: `tag` уже есть у получателя | «Already on this device» (disabled) — настройки получателя НЕ перезаписываются |
+| сервер `kind: template`: `tag` нет в шаблоне получателя | «Not available in this app version» (disabled) |
+| сервер `kind: preset` | «Managed by presets» (disabled) — см. §4.2 п.2 |
+| dns-правило `preset`/`template`: уже есть / нет в шаблоне | skip «already» / «not available» |
+| dns-правило `inline`/`srs`: точный дубль у получателя | «Already on this device» (disabled) |
+| dns-правило `srs` | `id` перегенерируется (кэш-файл `.srs` у получателя свой) |
+
+Теги серверов, отмеченных на импорт, добавляются в `validDnsServerTags`
+санации routing-правил (§5.2) — правило и его сервер, приехавшие одним
+файлом, связываются без лечения.
 
 ### 5.4 Прочее
 
