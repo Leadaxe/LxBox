@@ -233,3 +233,9 @@ Android TV API 31.
   `utils` существующий).
 - `docs/spec/tasks/372-android-tv-support.md` — перекрёстная ссылка сюда
   как на симметричный фикс экспорта.
+
+## Постскриптум
+
+§396 (экспорт/импорт правил) переиспользует этот механизм целиком:
+`export_action_sheet.dart` переехал из `screens/backup_screen/` в
+`lib/widgets/` и стал общим, `utf8_decode.dart` — в `lib/services/`.

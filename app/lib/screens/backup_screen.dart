@@ -12,16 +12,15 @@ import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
 import '../vpn/box_vpn_client.dart';
-import 'backup_screen/export_action_sheet.dart';
+import '../widgets/export_action_sheet.dart';
 import 'backup_screen/export_card.dart';
 import 'backup_screen/import_card.dart';
 import 'backup_screen/import_preview_dialog.dart';
-import 'backup_screen/utf8_decode.dart';
+import '../services/utf8_decode.dart';
 import '../services/file_export.dart';
 import '../services/file_import.dart';
 import '../services/url_launcher.dart';
 
-export 'backup_screen/utf8_decode.dart' show utf8DecodeOrNull;
 
 /// Backup & restore UI — спека [§040](../../docs/spec/features/040 backup
 /// restore ui/spec.md).

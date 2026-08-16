@@ -1,6 +1,12 @@
 import 'dart:async';
+import 'dart:convert' show utf8;
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart' show FileType;
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
@@ -9,19 +15,28 @@ import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/rule_order.dart';
 import '../services/channel_mutations.dart';
+import '../services/error_format.dart';
+import '../services/file_export.dart';
+import '../services/file_import.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/preset_on_change.dart';
 import '../services/rule_display_names.dart';
 import '../services/rule_set_downloader.dart';
+import '../services/rule_transfer.dart';
 import '../services/selectable_to_custom.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
+import '../services/ui_helpers.dart';
+import '../services/url_launcher.dart';
+import '../services/utf8_decode.dart';
+import '../widgets/export_action_sheet.dart';
 import '../widgets/outbound_picker.dart';
 import 'channel_edit_screen.dart';
 import 'custom_rule_edit_screen.dart';
 import 'lazy_persist_mixin.dart';
 import 'routing_screen/routing_screen_helpers.dart';
 import 'routing_screen/routing_screen_menus.dart';
+import 'routing_screen/rule_transfer_dialogs.dart';
 import 'routing_screen/widgets/custom_rule_tile.dart';
 import 'routing_screen/widgets/preset_catalog_tile.dart';
 import 'routing_screen/widgets/route_final_tile.dart';
@@ -62,7 +77,8 @@ class _RoutingScreenState extends State<RoutingScreen>
         WidgetsBindingObserver,
         LazyPersistMixin<RoutingScreen>,
         _RoutingSrsCacheMixin,
-        TemplateAwareState<RoutingScreen> {
+        TemplateAwareState<RoutingScreen>,
+        SnackHelper<RoutingScreen> {
   @override
   WizardTemplate? _template;
   @override
@@ -232,6 +248,8 @@ class _RoutingScreenState extends State<RoutingScreen>
               itemKey: (i) => ValueKey(_customRules[i].id),
               itemBuilder: _buildCustomRuleTile,
               onAdd: _addCustomRule,
+              onExport: _exportRules,
+              onImport: _importRules,
             ),
 
             // ─── Tunnel apps: §046 OS-level split-tunneling ───
@@ -471,6 +489,186 @@ class _RoutingScreenState extends State<RoutingScreen>
             : getLocalText.s("Added \"%s\" to Rules", rule.label)),
       ),
     );
+  }
+
+  // ─── §396 — экспорт/импорт правил файлом ───────────────────────────────
+
+  Future<void> _exportRules() async {
+    if (_customRules.isEmpty) return; // пункт меню и так disabled
+    final selected = await showRuleExportPicker(
+      context,
+      rules: List<CustomRule>.from(_customRules),
+      displayNames: ruleDisplayNames(_customRules, _template),
+    );
+    if (selected == null || selected.isEmpty || !mounted) return;
+
+    try {
+      // §374 — доступные способы выясняем до шита; обе проверки платформенные,
+      // поэтому параллельно.
+      final availability = await Future.wait([
+        UrlLauncher.hasRealFilePicker(),
+        UrlLauncher.canSaveToDownloads(),
+      ]);
+      if (!mounted) return;
+      final action = await showExportActionSheet(
+        context,
+        canSaveToFile: availability[0],
+        canSaveToDownloads: availability[1],
+      );
+      if (action == null) return; // юзер закрыл шит
+
+      String? appVersion;
+      try {
+        final info = await PackageInfo.fromPlatform();
+        appVersion = '${info.version}+${info.buildNumber}';
+      } catch (_) {
+        // PackageInfo может упасть в test environment — graceful skip.
+      }
+      final json = buildRulesExport(selected, appVersion: appVersion);
+      final filename = suggestedRulesFilename();
+      // Размер в БАЙТАХ, а не code units (§374: String.length считает UTF-16,
+      // на кириллице цифра расходилась с файлом на диске).
+      final bytes = utf8.encode(json).length;
+
+      final SaveOutcome outcome;
+      switch (action) {
+        case ExportAction.saveToFile:
+          outcome = await saveFileSafely(fileName: filename, content: json);
+        case ExportAction.saveToDownloads:
+          outcome =
+              await saveToDownloadsSafely(fileName: filename, content: json);
+        case ExportAction.share:
+          // Share требует файл на диске: кэш подходит — получатель копирует
+          // его себе, а очистка кэша системой нам не важна.
+          final tmpDir = await getTemporaryDirectory();
+          final path = '${tmpDir.path}/$filename';
+          await File(path).writeAsString(json);
+          await Share.shareXFiles(
+            [XFile(path, mimeType: 'application/json', name: filename)],
+            subject: 'LxBox rules',
+          );
+          showSnack(getLocalText.plural("Exported %d rules", selected.length));
+          return;
+      }
+
+      final problem = saveProblemText(outcome);
+      if (problem != null) {
+        showSnack(problem);
+        return;
+      }
+      switch (outcome) {
+        case SavedToFile(:final name):
+          showSnack(getLocalText.s("Saved as %s (%d bytes)", name, bytes));
+        case SavedToDownloads(:final name):
+          showSnack(
+              getLocalText.s("Saved to Downloads: %s (%d bytes)", name, bytes));
+        case SaveCancelled():
+          break; // юзер закрыл диалог сохранения — молчим
+        case SaveNoTarget() || SaveFailed():
+          break; // покрыто saveProblemText выше
+      }
+    } catch (e) {
+      showSnack(getLocalText.s("Export failed: %s", formatUserError(e).render()));
+    }
+  }
+
+  Future<void> _importRules() async {
+    final template = _template;
+    if (template == null) return;
+    try {
+      // §372 — см. pickFileSafely: Android TV без DocumentsUI.
+      final outcome = await pickFileSafely(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (outcome is! PickedFiles) {
+        final problem = pickProblemText(outcome);
+        if (problem != null) showSnack(problem);
+        return; // cancelled / нет пикера / сбой
+      }
+      final file = outcome.single;
+      final bytes = file.bytes;
+      String? raw;
+      if (bytes != null) {
+        raw = utf8DecodeOrNull(bytes);
+      } else if (file.path != null) {
+        raw = await File(file.path!).readAsString();
+      }
+      if (raw == null) {
+        showSnack(getLocalText.s("Could not read file."));
+        return;
+      }
+
+      final RulesImportContents contents;
+      try {
+        contents = parseRulesImport(raw);
+      } on FormatException catch (e) {
+        showSnack(e.message);
+        return;
+      }
+
+      // Контекст санации: теги ВСЕХ каналов (ссылку на выключенный лечит
+      // существующая механика §274/§277) + DNS-теги как в дропдауне §117
+      // (`edit_controller._loadDnsServerTags`: storage-refs ∪ template).
+      final channelTags = {for (final c in _channels) c.tag};
+      final dnsServerTags = <String>{};
+      for (final s in await SettingsStorage.getDnsServers()) {
+        final tag = s['tag']?.toString();
+        if (tag != null && tag.isNotEmpty) dnsServerTags.add(tag);
+      }
+      dnsServerTags
+          .addAll(template.dnsOptionsModel.servers.map((s) => s.tag));
+
+      final items = [
+        for (final entry in contents.rawRules)
+          sanitizeImportedRule(
+            entry,
+            channelTags: channelTags,
+            dnsServerTags: dnsServerTags,
+            template: template,
+          ),
+      ];
+      if (!mounted) return;
+      final picked = await showRuleImportPreview(
+        context,
+        items: items,
+        createdAt: contents.createdAt,
+        sourceAppVersion: contents.sourceAppVersion,
+      );
+      if (picked == null || picked.isEmpty || !mounted) return;
+
+      final inserted = <CustomRule>[];
+      var needsSrs = false;
+      for (final item in picked) {
+        final rule = item.rule;
+        if (rule == null) continue;
+        inserted.add(
+            insertImportedRule(_customRules, rule, template: template));
+        needsSrs = needsSrs || item.needsSrsDownload;
+      }
+      if (inserted.isEmpty) return;
+      setState(() {
+        final sorted = sortRulesByNum(_customRules);
+        _customRules
+          ..clear()
+          ..addAll(sorted);
+        _markDirty();
+      });
+      // §266 — как _copyPreset: on_change по начальному состоянию пресета.
+      for (final cr in inserted) {
+        if (cr is CustomRulePreset) {
+          final preset = _presetFor(cr.presetId);
+          if (preset != null) unawaited(applyPresetOnChange(preset, cr));
+        }
+      }
+      showSnack(needsSrs
+          ? getLocalText.plural(
+              "Imported %d rules — tap ☁ to download rule-sets, then enable",
+              inserted.length)
+          : getLocalText.plural("Imported %d rules", inserted.length));
+    } catch (e) {
+      showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
+    }
   }
 
   Widget _buildRouteFinalTile() {

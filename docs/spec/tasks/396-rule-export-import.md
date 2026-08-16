@@ -1,0 +1,230 @@
+# §396 — экспорт/импорт правил роутинга файлом
+
+**Статус:** СПЕКА (реализация в этой же таске)
+**Тип:** обмен правилами между устройствами/пользователями. Сервис + UI, storage-схема не меняется.
+**Зависит от:** §030 (Custom Rules), §370 (ось `num`), §372/§383 (импорт файла), §374 (экспорт файла), §266 (preset on_change)
+
+---
+
+## 0. Контекст
+
+Правила вкладки Rules живут только в `custom_rules` storage. Поделиться настроенным
+правилом (список доменов, srs-подборка, настроенный пресет) можно единственным путём —
+полным бэкапом (§221), который тащит все категории сразу и работает в режиме
+merge/replace целых списков. Поштучного обмена нет.
+
+Запрос владельца: «выбираю правило — экспортирую в файл; выбираю файл — загружаю
+правило к себе». Плюс: выбор **нескольких** правил в одном окне, вход через меню
+**⋮ сверху на вкладке Rules** (не long-press и не вторая кнопка).
+
+## 1. Цели
+
+- Экспорт выбранных правил (1..N) в JSON-файл через существующий шит §374
+  (Save to file / Save to Downloads / Share).
+- Импорт правил из такого файла с превью-выбором (галочки) и лечением ссылок,
+  которых у получателя нет.
+- Вход в оба сценария — меню ⋮ в шапке вкладки Rules.
+
+## 2. Нецели
+
+- Deep-link-шаринг (`lxbox://`) — правило с длинными списками в URL не влезает.
+- «Export all» как отдельный пункт — мультивыбор с дефолтом «все отмечены» это уже
+  покрывает.
+- Debug API ручки — §238 CRUD (`GET/POST /rules`) достаточно для тестов.
+- Изменение формата storage / бэкапа.
+
+## 3. Wire-format
+
+Симметрично конверту бэкапа (`backup_service.dart`):
+
+```json
+{
+  "app": "lxbox",
+  "kind": "rules",
+  "format": 1,
+  "created_at": "2026-08-16T12:00:00.000Z",
+  "source_app_version": "2.20.10+22010",
+  "rules": [ { ...CustomRule.toJson()... } ]
+}
+```
+
+- `kind: "rules"` — отличает от `kind: "backup"`; импорт бэкапа этот файл отвергает
+  и наоборот (взаимно понятные ошибки).
+- `format: 1` — версия схемы конверта. Читатель отвергает `format > 1`
+  («файл из более новой версии приложения»).
+- `rules[]` — сырые `toJson()` правил, включая `id`/`enabled`/`num` (санация — забота
+  импорта, не экспорта).
+- Имя файла: `lxbox-rules-{YYYYMMDD-HHMM}.json` (образец — `suggestedBackupFilename`).
+
+## 4. UI
+
+### 4.1 Вход — меню ⋮ на вкладке Rules
+
+`RoutingRulesTab` (`routing_tabs.dart`): интро-строка становится
+`Row(Expanded(интро), PopupMenuButton(⋮))`. AppBar не трогаем — он общий на
+4 таба, гейтить actions по активному табу дороже и не то, что просил владелец.
+
+| Пункт | Условие |
+|---|---|
+| Export rules... | правил > 0, иначе disabled |
+| Import rules... | всегда |
+
+### 4.2 Экспорт
+
+1. Диалог выбора: чекбокс-список всех правил (display-имена через
+   `ruleDisplayName` — live-label'ы пресетов, суффиксы копий §279), **все отмечены
+   по умолчанию**, subtitle — `summary()`. Кнопка `Export (N)` disabled при пустом
+   выборе.
+2. `showExportActionSheet` §374 as is (переезд файла в `lib/widgets/`, см. §7).
+3. `buildRulesExport(selected)` → сохранение/шаринг через `file_export.dart`.
+   Снекбары исходов — те же, что у бэкапа (§374 таблица).
+
+### 4.3 Импорт
+
+1. `pickFileSafely` (§372) → декод текста (`utf8_decode.dart`, как бэкап).
+2. `parseRulesImport` → конверт + список правил; ошибки формата — снекбар с
+   `FormatException.message`.
+3. Санация каждого правила (§5) → превью-диалог: шапка `Created` /
+   `App version` (как у бэкапа), чекбокс на правило (display-имя + kind + итог
+   санации мелким шрифтом под названием). Неимпортируемые (§5.3) — чекбокс
+   disabled + причина. По умолчанию отмечены все импортируемые.
+4. Добавление выбранных: `sortRulesByNum` + `markDirty` (LazyPersistMixin — тот же
+   путь, что `_addCustomRule`/`_copyPreset`); для пресетов — `applyPresetOnChange`
+   (§266, q2-инвариант `resolve_enabled`).
+5. Снекбар `Imported %d rules`; если среди добавленных есть требующие `.srs` —
+   вариант с хвостом «tap ☁ to download, then enable» (паттерн `_copyPreset`).
+
+## 5. Санация при импорте
+
+Правило приезжает с ссылками на сущности автора, которых у получателя нет.
+Лечим по образцу существующих механик (§202-дефолт, §370-разметка, `_copyPreset`).
+
+### 5.1 Идентичность и порядок
+
+| Поле | Действие |
+|---|---|
+| `id` | всегда новый UUID — повторный импорт того же файла не коллизирует |
+| `name` | inline/srs/json → `uniqueCustomRuleName` (суффикс копии); preset → не трогаем (display-слой §279 сам даёт live-label + суффикс) |
+| `num` | **из файла не берём** (чужая ось): preset → `num` из шаблона получателя (как `_copyPreset`); остальные → `nextUserRuleNum` последовательно |
+
+### 5.2 Ссылки
+
+Валидные outbound-теги получателя: теги всех `_channels` (включая выключенные —
+их лечит существующая механика §274/§277) + `direct-out` + `block` + `reject` +
+пустая строка (preset: «как в шаблоне»).
+
+| Ссылка | Нет у получателя → | Warning в превью |
+|---|---|---|
+| `outbound` (inline/srs) / `varsValues['outbound']` (preset) | `vpn-1` (дефолт лечения §202) **+ правило выключается** | да: `Channel "%s" not found — set to %s, rule disabled` |
+| `dns.serverTag` | `serverTag: ''`, `dns.enabled: false`; `forceIpv4` **сохраняем** (глушилке §256 сервер не нужен) | да: `DNS server "%s" not found — DNS option disabled` |
+| `resolve.serverTag` | `''` (= auto, §247) | да: `DNS server "%s" not found — resolver set to auto` |
+
+Выключение правила при подмене outbound — осознанное: включённое правило сразу
+погнало бы трафик не туда, куда задумал автор. Немых мутаций нет — причина
+названа в превью (инвариант §261 «кнопки не мутируют молча»).
+
+Список валидных DNS-тегов — union storage-refs ∪ template
+(`SettingsStorage.getDnsServers` + `template.dnsOptionsModel.servers`, тот же
+источник, что дропдаун §117 в `edit_controller._loadDnsServerTags`).
+
+### 5.3 Неимпортируемое
+
+| Случай | Поведение |
+|---|---|
+| элемент `rules[]` не объект / `kind` не из enum | строка в превью «Unsupported entry» с disabled-чекбоксом (файл от более новой версии с новым kind — остальное импортируемо) |
+| preset: `presetId` нет в шаблоне получателя | disabled-чекбокс + `Unknown preset (newer app version?)` — НЕ импортируем broken-card |
+| `format > 1` / не-`lxbox` / `kind != rules` | отказ всего файла (FormatException) |
+
+Замечание: `CustomRule.fromJson` без `kind` молча падает в inline
+(backward-compat storage) — для импорта это неприемлемо (мусор станет пустым
+inline-правилом), поэтому парсер конверта проверяет `kind` **до** вызова
+`fromJson`.
+
+### 5.4 Прочее
+
+| Поле | Действие |
+|---|---|
+| `enabled` | из файла, НО: `needsSrs` (CustomRuleSrs или preset с remote rule_set'ами — предикат `_copyPreset`) → `false`; подменённый outbound (§5.2) → `false` |
+| `wifiSsids`/`wifiBssids`, `packages` | как есть — это содержимое правила; что шарить, решает автор при выборе правил |
+| json-правило | тело как есть — оно и сейчас вне dangling-механик (`custom_rule.dart` §225) |
+
+## 6. Сервис
+
+Новый `app/lib/services/rule_transfer.dart` (симметрично `BackupService`, чистый
+Dart без BuildContext):
+
+```dart
+String buildRulesExport(List<CustomRule> rules, {String? appVersion});
+
+class RulesImportContents {           // parseRulesImport(String) — throws FormatException
+  DateTime? createdAt;
+  String? sourceAppVersion;
+  List<Map<String, dynamic>> rawRules;  // элементы rules[] как есть
+}
+
+class SanitizedImportRule {           // sanitizeImportedRule(raw, ctx) — per-element
+  CustomRule? rule;                   // null = неимпортируемо
+  List<ImportRuleWarning> warnings;   // typed; текст рендерит UI (l10n §285)
+  bool get importable;
+}
+```
+
+`ImportRuleWarning` — enum + payload (имя пропавшего тега), локализация на
+стороне UI через `getLocalText` (сервис строк не трогает — паттерн ErrKey §285).
+
+## 7. Файлы
+
+| Файл | Изменение |
+|---|---|
+| `app/lib/services/rule_transfer.dart` | **новый** — конверт, парс, санация |
+| `app/lib/widgets/export_action_sheet.dart` | **переезд** из `screens/backup_screen/` (шит §374 теперь общий) |
+| `app/lib/screens/backup_screen.dart` | импорт шита с нового пути |
+| `app/lib/screens/routing_screen/rule_transfer_dialogs.dart` | **новый** — диалог выбора на экспорт + превью импорта (чистая презентация, стиль `routing_screen_menus.dart`) |
+| `app/lib/screens/routing_screen/widgets/routing_tabs.dart` | `RoutingRulesTab`: интро-Row + ⋮ меню, коллбэки `onExport`/`onImport` |
+| `app/lib/screens/routing_screen.dart` | `_exportRules()` / `_importRules()` — сбор контекста санации, шит, снекбары |
+| `app/assets/l10n/ru/ui.json` | переводы новых строк |
+| `test/services/rule_transfer_test.dart` | **новый** |
+
+## 8. Тесты
+
+- round-trip всех четырёх kind (inline/srs/preset/json) — export → parse →
+  sanitize при полном наличии ссылок = эквивалентное правило, новый `id`;
+- конверт: `app`/`kind`/`format` пишутся; парс отвергает не-JSON, чужой `app`,
+  `kind: backup`, `format: 2`;
+- элемент без `kind` / с неизвестным `kind` → неимпортируем, остальные элементы
+  файла живы;
+- outbound-лечение: незнакомый тег → `vpn-1` + `enabled: false` + warning;
+  `reject`/`block`/`direct-out`/пустой — без изменений; preset-override в
+  `varsValues['outbound']` лечится так же;
+- dns-лечение: незнакомый `serverTag` → `enabled: false`, тег пуст, `forceIpv4`
+  выжил; resolve-лечение → `serverTag: ''`;
+- srs → `enabled: false` независимо от файла;
+- preset: неизвестный `presetId` → неимпортируем; известный → `num` из шаблона;
+- name-дедуп: импорт при существующем правиле с тем же именем → суффикс копии;
+- `nextUserRuleNum`-последовательность при мульти-импорте.
+
+## 9. Критерии приёмки
+
+1. ⋮ на вкладке Rules: Export disabled при пустом списке; Import работает всегда.
+2. Экспорт двух из трёх правил → файл содержит ровно два; шит §374 работает
+   (Save to file / Downloads / Share), снекбары как у бэкапа.
+3. Импорт того же файла на этом же устройстве → правила добавились копиями
+   (суффикс имени), не задев оригиналы; повторный импорт не конфликтует по id.
+4. Импорт файла с outbound-тегом несуществующего канала → правило появилось
+   выключенным с outbound `vpn-1`, в превью было предупреждение.
+5. Импорт srs-правила → выключено, ☁ качает, enable работает.
+6. Импорт preset-правила → садится на шаблонный `num`, on_change применён;
+   неизвестный `presetId` — отвергнут с внятной причиной.
+7. Бэкап-файл в импорте правил (и наоборот) отвергается с понятной ошибкой.
+
+## 10. Device-verification
+
+Эмулятор: экспорт в Downloads → `adb pull` → проверка JSON; импорт через
+файл-пикер; проверка порядка/enabled/лечения по `GET /rules` Debug API.
+
+## Docs to update
+
+- `CHANGELOG.md` — entry в `Unreleased` (user-visible).
+- `docs/STORAGE.md` — НЕ требуется (схема storage не меняется).
+- `docs/spec/tasks/374-backup-export-save-to-file.md` — перекрёстная ссылка:
+  шит переехал в `lib/widgets/` и стал общим.

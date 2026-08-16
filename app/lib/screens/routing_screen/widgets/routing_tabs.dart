@@ -96,6 +96,8 @@ class RoutingRulesTab extends StatelessWidget {
     required this.itemKey,
     required this.itemBuilder,
     required this.onAdd,
+    required this.onExport,
+    required this.onImport,
   });
 
   final double bottomPad;
@@ -105,18 +107,65 @@ class RoutingRulesTab extends StatelessWidget {
   final Widget Function(int index) itemBuilder;
   final VoidCallback onAdd;
 
+  /// §396 — экспорт/импорт правил файлом (меню ⋮ в шапке таба).
+  final VoidCallback onExport;
+  final VoidCallback onImport;
+
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: EdgeInsets.only(top: 12, bottom: bottomPad),
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            getLocalText.s("Route or block by app / domain / IP / port / protocol, or remote .srs rule-set."),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+          padding: const EdgeInsets.only(left: 12, right: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Padding(
+                  // Центр строки текста ~на оси кнопки ⋮ (48px hit-target).
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    getLocalText.s("Route or block by app / domain / IP / port / protocol, or remote .srs rule-set."),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
                 ),
+              ),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, size: 20),
+                tooltip: getLocalText.s("Rules menu"),
+                onSelected: (v) {
+                  if (v == 'export') onExport();
+                  if (v == 'import') onImport();
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem<String>(
+                    value: 'export',
+                    // §396 — экспортировать нечего → пункт серый (не прячем:
+                    // discoverability дороже).
+                    enabled: itemCount > 0,
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.upload_file_outlined, size: 20),
+                      title: Text(getLocalText.s("Export rules...")),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'import',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading:
+                          const Icon(Icons.file_open_outlined, size: 20),
+                      title: Text(getLocalText.s("Import rules...")),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),

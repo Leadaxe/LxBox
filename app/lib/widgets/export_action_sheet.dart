@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../models/ui_msg.dart';
-import '../../services/l10n/locale_controller.dart';
+import '../models/ui_msg.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §374 — что юзер выбрал в шите экспорта.
 enum ExportAction {
