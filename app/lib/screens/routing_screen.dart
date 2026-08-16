@@ -92,7 +92,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   @override
   final _customRules = <CustomRule>[];
   @override
-  final _srsCached = <String>{};      // rule.id → файл есть в кэше
+  final _srsCached = <String>{}; // rule.id → файл есть в кэше
   @override
   final _srsDownloading = <String>{}; // rule.id → идёт загрузка
   @override
@@ -145,10 +145,14 @@ class _RoutingScreenState extends State<RoutingScreen>
       setState(() => _highlightedChannelTag = tag);
       final ctx = _channelKeys[tag]?.currentContext;
       if (ctx != null) {
-        unawaited(Scrollable.ensureVisible(ctx,
+        unawaited(
+          Scrollable.ensureVisible(
+            ctx,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
-            alignment: 0.3));
+            alignment: 0.3,
+          ),
+        );
       }
       _channelHighlightTimer?.cancel();
       _channelHighlightTimer = Timer(const Duration(milliseconds: 2200), () {
@@ -166,8 +170,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   List<PresetRemoteRuleSet> _remoteRuleSetsOf(
     SelectableRule preset, [
     CustomRulePreset? rule,
-  ]) =>
-      RoutingHelpers.remoteRuleSetsOf(preset, rule);
+  ]) => RoutingHelpers.remoteRuleSetsOf(preset, rule);
 
   /// См. [RoutingHelpers.presetSrsKey].
   @override
@@ -206,58 +209,83 @@ class _RoutingScreenState extends State<RoutingScreen>
       length: 4,
       // §262 — таб Presets (index 1) первым при навигации из DNS-health листа.
       initialIndex: widget.initialPresetsTab ? 1 : 0,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(getLocalText.s("Routing")),
-          bottom: TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: [
-              Tab(text: getLocalText.s("Channels")),
-              Tab(text: getLocalText.s("Presets")),
-              Tab(text: getLocalText.s("Rules")),
-              Tab(text: getLocalText.s("Tunnel apps")),
+      child: Builder(
+        builder: (tabCtx) => Scaffold(
+          appBar: AppBar(
+            title: Text(getLocalText.s("Routing")),
+            actions: [
+              // §396 — меню экспорта/импорта правил. Живёт в AppBar (решение
+              // владельца: «⋮ на самом верху, напротив Routing»), но видно
+              // только на табе Rules (index 2) — на остальных табах меню про
+              // правила сбивало бы с толку. animation (а не index) — чтобы
+              // кнопка появлялась уже во время свайпа, а не по его завершении.
+              AnimatedBuilder(
+                animation: DefaultTabController.of(tabCtx).animation!,
+                builder: (_, _) {
+                  final onRulesTab =
+                      DefaultTabController.of(
+                        tabCtx,
+                      ).animation!.value.round() ==
+                      2;
+                  if (!onRulesTab) return const SizedBox.shrink();
+                  return RulesMenuButton(
+                    canExport: _customRules.isNotEmpty,
+                    onExport: _exportRules,
+                    onImport: _importRules,
+                  );
+                },
+              ),
+            ],
+            bottom: TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              tabs: [
+                Tab(text: getLocalText.s("Channels")),
+                Tab(text: getLocalText.s("Presets")),
+                Tab(text: getLocalText.s("Rules")),
+                Tab(text: getLocalText.s("Tunnel apps")),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: [
+              // ─── Channels: каналы (CRUD) + default fallback + Auto tuning ───
+              RoutingChannelsTab(
+                bottomPad: bottomPad,
+                groupTiles: _channels.map(_buildChannelTile).toList(),
+                channelCount: _channels.length,
+                maxChannels: kMaxChannels,
+                onAddChannel: _channels.length >= kMaxChannels
+                    ? null
+                    : _addChannel,
+                routeFinalTile: _buildRouteFinalTile(),
+              ),
+
+              // ─── Presets: catalog of pre-built rules to copy into Rules ───
+              RoutingPresetsTab(
+                bottomPad: bottomPad,
+                catalogTiles: template.selectableRules
+                    .map(_buildPresetCatalogTile)
+                    .toList(),
+              ),
+
+              // ─── Rules: unified custom routing (spec §030) ───
+              RoutingRulesTab(
+                bottomPad: bottomPad,
+                itemCount: _customRules.length,
+                onReorder: _onReorderCustomRule,
+                itemKey: (i) => ValueKey(_customRules[i].id),
+                itemBuilder: _buildCustomRuleTile,
+                onAdd: _addCustomRule,
+              ),
+
+              // ─── Tunnel apps: §046 OS-level split-tunneling ───
+              TunAppsTab(
+                homeController: widget.homeController,
+                subController: widget.subController,
+              ),
             ],
           ),
-        ),
-        body: TabBarView(
-          children: [
-            // ─── Channels: каналы (CRUD) + default fallback + Auto tuning ───
-            RoutingChannelsTab(
-              bottomPad: bottomPad,
-              groupTiles: _channels.map(_buildChannelTile).toList(),
-              channelCount: _channels.length,
-              maxChannels: kMaxChannels,
-              onAddChannel:
-                  _channels.length >= kMaxChannels ? null : _addChannel,
-              routeFinalTile: _buildRouteFinalTile(),
-            ),
-
-            // ─── Presets: catalog of pre-built rules to copy into Rules ───
-            RoutingPresetsTab(
-              bottomPad: bottomPad,
-              catalogTiles:
-                  template.selectableRules.map(_buildPresetCatalogTile).toList(),
-            ),
-
-            // ─── Rules: unified custom routing (spec §030) ───
-            RoutingRulesTab(
-              bottomPad: bottomPad,
-              itemCount: _customRules.length,
-              onReorder: _onReorderCustomRule,
-              itemKey: (i) => ValueKey(_customRules[i].id),
-              itemBuilder: _buildCustomRuleTile,
-              onAdd: _addCustomRule,
-              onExport: _exportRules,
-              onImport: _importRules,
-            ),
-
-            // ─── Tunnel apps: §046 OS-level split-tunneling ───
-            TunAppsTab(
-              homeController: widget.homeController,
-              subController: widget.subController,
-            ),
-          ],
         ),
       ),
     );
@@ -326,8 +354,11 @@ class _RoutingScreenState extends State<RoutingScreen>
   /// ссылок после мутации канала. [ruleLead] — вводная для rules-части
   /// («disabled» / «deleted»; §274 убрал flag-set-heal и его вводную).
   /// Оба счётчика ненулевые → один суммарный SnackBar. Нулевые → тишина.
-  void _notifyHealed(Channel channel, ChannelHealResult healed,
-      {required String ruleLead}) {
+  void _notifyHealed(
+    Channel channel,
+    ChannelHealResult healed, {
+    required String ruleLead,
+  }) {
     if (healed.rules == 0 && healed.detours == 0) return;
     final label = channel.label.isNotEmpty ? channel.label : channel.tag;
     final lead = healed.rules > 0
@@ -335,9 +366,9 @@ class _RoutingScreenState extends State<RoutingScreen>
         : getLocalText.s('Channel "%s" is no longer a detour target', label);
     // §292 — части сообщения из единого форматтера (общий с node_list).
     final parts = ChannelMutations.healMessageParts(healed);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$lead — ${parts.join(', ')}.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$lead — ${parts.join(', ')}.')));
   }
 
   /// Кол-во нод канала после regex-фильтра (для subtitle). -1 = снимок нод
@@ -358,8 +389,9 @@ class _RoutingScreenState extends State<RoutingScreen>
   /// Снимок всех node-тегов подписки из ccGroups (union по группам, без самих
   /// групп). Для live-превью фильтров в редакторе. Пусто = туннель не поднят.
   List<String> _allNodeTags() {
-    final groupTags =
-        widget.homeController.state.ccGroups.map((g) => g.tag).toSet();
+    final groupTags = widget.homeController.state.ccGroups
+        .map((g) => g.tag)
+        .toSet();
     final seen = <String>{};
     final out = <String>[];
     for (final g in widget.homeController.state.ccGroups) {
@@ -393,8 +425,10 @@ class _RoutingScreenState extends State<RoutingScreen>
     if (result.wasDeleted) {
       // deleteChannel в storage лечит ссылки: rules → vpn-1 (§202),
       // detour-ссылки → None (§248). Счётчики — в SnackBar ниже.
-      final healed =
-          await ChannelMutations.delete(channel.tag, widget.subController);
+      final healed = await ChannelMutations.delete(
+        channel.tag,
+        widget.subController,
+      );
       if (!mounted) return;
       await _resyncHealedRefs(healed);
       if (!mounted) return;
@@ -446,7 +480,8 @@ class _RoutingScreenState extends State<RoutingScreen>
     // `selectableRuleToCustom` (spec §033). Пресет без `preset_id` → в
     // каталоге всегда кнопка "Add to Rules" (дубли на совести юзера:
     // по label не матчим, т.к. юзер может переименовать).
-    final existing = rule.presetId.isNotEmpty &&
+    final existing =
+        rule.presetId.isNotEmpty &&
         _customRules.any((c) => c.presetId == rule.presetId);
     return PresetCatalogTile(
       rule: rule,
@@ -460,9 +495,9 @@ class _RoutingScreenState extends State<RoutingScreen>
     // Правила нуждающиеся в SRS-файле добавляются disabled — юзер сначала
     // качает через ☁, потом включает switch (или toggle-on сам auto-
     // download'ит и enable на успехе).
-    final needsSrs = cr is CustomRuleSrs ||
-        (cr is CustomRulePreset &&
-            _remoteRuleSetsOf(rule, cr).isNotEmpty);
+    final needsSrs =
+        cr is CustomRuleSrs ||
+        (cr is CustomRulePreset && _remoteRuleSetsOf(rule, cr).isNotEmpty);
     if (needsSrs) cr = cr.withEnabled(false);
 
     // §370 — пресет из каталога садится на свой шаблонный `num`; если тот
@@ -484,9 +519,14 @@ class _RoutingScreenState extends State<RoutingScreen>
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(needsSrs
-            ? getLocalText.s("Added \"%s\" — tap ☁ to download, then enable", rule.label)
-            : getLocalText.s("Added \"%s\" to Rules", rule.label)),
+        content: Text(
+          needsSrs
+              ? getLocalText.s(
+                  "Added \"%s\" — tap ☁ to download, then enable",
+                  rule.label,
+                )
+              : getLocalText.s("Added \"%s\" to Rules", rule.label),
+        ),
       ),
     );
   }
@@ -535,18 +575,19 @@ class _RoutingScreenState extends State<RoutingScreen>
         case ExportAction.saveToFile:
           outcome = await saveFileSafely(fileName: filename, content: json);
         case ExportAction.saveToDownloads:
-          outcome =
-              await saveToDownloadsSafely(fileName: filename, content: json);
+          outcome = await saveToDownloadsSafely(
+            fileName: filename,
+            content: json,
+          );
         case ExportAction.share:
           // Share требует файл на диске: кэш подходит — получатель копирует
           // его себе, а очистка кэша системой нам не важна.
           final tmpDir = await getTemporaryDirectory();
           final path = '${tmpDir.path}/$filename';
           await File(path).writeAsString(json);
-          await Share.shareXFiles(
-            [XFile(path, mimeType: 'application/json', name: filename)],
-            subject: 'LxBox rules',
-          );
+          await Share.shareXFiles([
+            XFile(path, mimeType: 'application/json', name: filename),
+          ], subject: 'LxBox rules');
           showSnack(getLocalText.plural("Exported %d rules", selected.length));
           return;
       }
@@ -561,14 +602,17 @@ class _RoutingScreenState extends State<RoutingScreen>
           showSnack(getLocalText.s("Saved as %s (%d bytes)", name, bytes));
         case SavedToDownloads(:final name):
           showSnack(
-              getLocalText.s("Saved to Downloads: %s (%d bytes)", name, bytes));
+            getLocalText.s("Saved to Downloads: %s (%d bytes)", name, bytes),
+          );
         case SaveCancelled():
           break; // юзер закрыл диалог сохранения — молчим
         case SaveNoTarget() || SaveFailed():
           break; // покрыто saveProblemText выше
       }
     } catch (e) {
-      showSnack(getLocalText.s("Export failed: %s", formatUserError(e).render()));
+      showSnack(
+        getLocalText.s("Export failed: %s", formatUserError(e).render()),
+      );
     }
   }
 
@@ -616,8 +660,7 @@ class _RoutingScreenState extends State<RoutingScreen>
         final tag = s['tag']?.toString();
         if (tag != null && tag.isNotEmpty) dnsServerTags.add(tag);
       }
-      dnsServerTags
-          .addAll(template.dnsOptionsModel.servers.map((s) => s.tag));
+      dnsServerTags.addAll(template.dnsOptionsModel.servers.map((s) => s.tag));
 
       final items = [
         for (final entry in contents.rawRules)
@@ -643,7 +686,8 @@ class _RoutingScreenState extends State<RoutingScreen>
         final rule = item.rule;
         if (rule == null) continue;
         inserted.add(
-            insertImportedRule(_customRules, rule, template: template));
+          insertImportedRule(_customRules, rule, template: template),
+        );
         needsSrs = needsSrs || item.needsSrsDownload;
       }
       if (inserted.isEmpty) return;
@@ -661,13 +705,18 @@ class _RoutingScreenState extends State<RoutingScreen>
           if (preset != null) unawaited(applyPresetOnChange(preset, cr));
         }
       }
-      showSnack(needsSrs
-          ? getLocalText.plural(
-              "Imported %d rules — tap ☁ to download rule-sets, then enable",
-              inserted.length)
-          : getLocalText.plural("Imported %d rules", inserted.length));
+      showSnack(
+        needsSrs
+            ? getLocalText.plural(
+                "Imported %d rules — tap ☁ to download rule-sets, then enable",
+                inserted.length,
+              )
+            : getLocalText.plural("Imported %d rules", inserted.length),
+      );
     } catch (e) {
-      showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
+      showSnack(
+        getLocalText.s("Import failed: %s", formatUserError(e).render()),
+      );
     }
   }
 
@@ -725,18 +774,20 @@ class _RoutingScreenState extends State<RoutingScreen>
   Widget _buildCustomRuleTile(int index) {
     final rule = _customRules[index];
     final options = _outboundOptions();
-    final preset =
-        rule.kind == CustomRuleKind.preset ? _presetFor(rule.presetId) : null;
+    final preset = rule.kind == CustomRuleKind.preset
+        ? _presetFor(rule.presetId)
+        : null;
     final subtitle = _ruleSubtitle(rule, preset);
-    final pickerValue =
-        rule.kind == CustomRuleKind.preset ? _presetOut(rule, preset) : rule.outbound;
-    final pickerDisabled =
-        rule.kind == CustomRuleKind.preset && preset == null;
+    final pickerValue = rule.kind == CustomRuleKind.preset
+        ? _presetOut(rule, preset)
+        : rule.outbound;
+    final pickerDisabled = rule.kind == CustomRuleKind.preset && preset == null;
     // DNS-only пресеты (FakeIP: только dns_rule, без routing rule и без
     // var:outbound) роутить нечего — outbound-picker был бы мёртвым.
     // Для user-rule и пресета «not found» picker оставляем (последний
     // рисует warning через pickerDisabled).
-    final showOutbound = rule.kind != CustomRuleKind.preset ||
+    final showOutbound =
+        rule.kind != CustomRuleKind.preset ||
         preset == null ||
         preset.hasOutboundAffordance;
     // §231 — трогает ли правило DNS (для чипа «DNS»). Пресет → touchesDns
@@ -774,12 +825,12 @@ class _RoutingScreenState extends State<RoutingScreen>
       onTap: () => _openCustomRuleEditor(index),
       onLongPressStart: (pos) => _showRuleContextMenu(index, pos),
       onSwitchChanged: (v) {
-        if (v && rule is CustomRuleSrs &&
-            !_srsCached.contains(rule.id)) {
+        if (v && rule is CustomRuleSrs && !_srsCached.contains(rule.id)) {
           unawaited(_enableAfterDownload(rule));
           return;
         }
-        if (v && rule is CustomRulePreset &&
+        if (v &&
+            rule is CustomRulePreset &&
             preset != null &&
             _presetNeedsDownload(rule, preset)) {
           unawaited(_enableAfterDownload(rule));
@@ -885,8 +936,11 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   Future<void> _confirmDeleteCustomRule(int index) async {
     final rule = _customRules[index];
-    final ok = await showDeleteCustomRuleDialog(context, rule,
-        displayName: ruleDisplayName(rule, _customRules, _template));
+    final ok = await showDeleteCustomRuleDialog(
+      context,
+      rule,
+      displayName: ruleDisplayName(rule, _customRules, _template),
+    );
     if (ok != true || !mounted) return;
     setState(() {
       _customRules.removeAt(index);
@@ -946,8 +1000,11 @@ class _RoutingScreenState extends State<RoutingScreen>
   Future<void> _openCustomRuleEditor(int index) async {
     final current = _customRules[index];
     // §279 — дедуп по видимым именам (live-label'ы пресетов + снапшоты).
-    final existing =
-        visibleRuleNames(_customRules, _template, excludeId: current.id);
+    final existing = visibleRuleNames(
+      _customRules,
+      _template,
+      excludeId: current.id,
+    );
     final result = await openCustomRuleEditor(
       context,
       initial: current,
@@ -972,13 +1029,16 @@ class _RoutingScreenState extends State<RoutingScreen>
       });
     } else if (result.saved != null) {
       final saved = result.saved!;
-      final urlChanged = current.kind == CustomRuleKind.srs &&
+      final urlChanged =
+          current.kind == CustomRuleKind.srs &&
           current.srsUrl.trim() != saved.srsUrl.trim();
       final kindChanged = current.kind != saved.kind;
       setState(() {
         // URL или kind поменялись → старый cached-файл невалидный, правило
         // выключаем до повторного Download.
-        final next = (urlChanged || kindChanged) ? saved.withEnabled(false) : saved;
+        final next = (urlChanged || kindChanged)
+            ? saved.withEnabled(false)
+            : saved;
         _customRules[index] = next;
         if (urlChanged || kindChanged) _srsCached.remove(current.id);
         _markDirty();
@@ -1027,5 +1087,9 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   String _uniqueCustomRuleName(String requested, String selfId) =>
       RoutingHelpers.uniqueCustomRuleName(
-          requested, selfId, _customRules, _template);
+        requested,
+        selfId,
+        _customRules,
+        _template,
+      );
 }

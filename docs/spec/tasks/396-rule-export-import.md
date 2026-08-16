@@ -58,23 +58,28 @@ merge/replace целых списков. Поштучного обмена не�
 
 ## 4. UI
 
-### 4.1 Вход — меню ⋮ на вкладке Rules
+### 4.1 Вход — меню ⋮ в AppBar, видно только на табе Rules
 
-`RoutingRulesTab` (`routing_tabs.dart`): интро-строка становится
-`Row(Expanded(интро), PopupMenuButton(⋮))`. AppBar не трогаем — он общий на
-4 таба, гейтить actions по активному табу дороже и не то, что просил владелец.
+`RulesMenuButton` (`routing_tabs.dart`) в `AppBar.actions` экрана Routing —
+решение владельца после первой итерации на эмуляторе: «⋮ на самом верху,
+напротив Routing» (первый вариант — в интро-строке таба — откатан). AppBar
+общий на 4 таба, поэтому кнопка гейтится по активному табу:
+`AnimatedBuilder` на `DefaultTabController.animation` (не `index` — чтобы
+кнопка появлялась уже во время свайпа), `value.round() == 2`.
 
 | Пункт | Условие |
 |---|---|
-| Export rules... | правил > 0, иначе disabled |
+| Export rules... | правил > 0, иначе disabled (не прячем: discoverability) |
 | Import rules... | всегда |
 
 ### 4.2 Экспорт
 
-1. Диалог выбора: чекбокс-список всех правил (display-имена через
-   `ruleDisplayName` — live-label'ы пресетов, суффиксы копий §279), **все отмечены
-   по умолчанию**, subtitle — `summary()`. Кнопка `Export (N)` disabled при пустом
-   выборе.
+1. **Полноэкранный** экран выбора (`MaterialPageRoute(fullscreenDialog:
+   true)` — решение владельца: попап для списка правил тесен): чекбокс-список
+   всех правил (display-имена через `ruleDisplayName` — live-label'ы пресетов,
+   суффиксы копий §279), subtitle — `summary()`. **По умолчанию ничего не
+   выбрано**; над списком тумблер Select all / Deselect all. Кнопка
+   `Export (N)` внизу, disabled при пустом выборе.
 2. `showExportActionSheet` §374 as is (переезд файла в `lib/widgets/`, см. §7).
 3. `buildRulesExport(selected)` → сохранение/шаринг через `file_export.dart`.
    Снекбары исходов — те же, что у бэкапа (§374 таблица).
@@ -179,8 +184,8 @@ class SanitizedImportRule {           // sanitizeImportedRule(raw, ctx) — per-
 | `app/lib/services/rule_transfer.dart` | **новый** — конверт, парс, санация |
 | `app/lib/widgets/export_action_sheet.dart` | **переезд** из `screens/backup_screen/` (шит §374 теперь общий) |
 | `app/lib/screens/backup_screen.dart` | импорт шита с нового пути |
-| `app/lib/screens/routing_screen/rule_transfer_dialogs.dart` | **новый** — диалог выбора на экспорт + превью импорта (чистая презентация, стиль `routing_screen_menus.dart`) |
-| `app/lib/screens/routing_screen/widgets/routing_tabs.dart` | `RoutingRulesTab`: интро-Row + ⋮ меню, коллбэки `onExport`/`onImport` |
+| `app/lib/screens/routing_screen/rule_transfer_dialogs.dart` | **новый** — полноэкранный выбор на экспорт + превью импорта (чистая презентация, стиль `routing_screen_menus.dart`) |
+| `app/lib/screens/routing_screen/widgets/routing_tabs.dart` | **новый виджет** `RulesMenuButton` (⋮ для AppBar) |
 | `app/lib/screens/routing_screen.dart` | `_exportRules()` / `_importRules()` — сбор контекста санации, шит, снекбары |
 | `app/assets/l10n/ru/ui.json` | переводы новых строк |
 | `test/services/rule_transfer_test.dart` | **новый** |

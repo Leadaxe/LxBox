@@ -32,10 +32,12 @@ class RoutingChannelsTab extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad),
       children: [
         Text(
-          getLocalText.s("Enabled channels appear in the selector on the home screen. Tap a channel to edit its nodes, filter and auto twin."),
+          getLocalText.s(
+            "Enabled channels appear in the selector on the home screen. Tap a channel to edit its nodes, filter and auto twin.",
+          ),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 8),
         ...groupTiles,
@@ -44,7 +46,13 @@ class RoutingChannelsTab extends StatelessWidget {
           child: TextButton.icon(
             onPressed: onAddChannel,
             icon: const Icon(Icons.add, size: 18),
-            label: Text(getLocalText.s("Add channel  (%1\$d/%2\$d)", channelCount, maxChannels)),
+            label: Text(
+              getLocalText.s(
+                "Add channel  (%1\$d/%2\$d)",
+                channelCount,
+                maxChannels,
+              ),
+            ),
           ),
         ),
         const Divider(height: 24),
@@ -71,10 +79,12 @@ class RoutingPresetsTab extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad),
       children: [
         Text(
-          getLocalText.s("Ready-made rules you can copy into Rules, then edit freely."),
+          getLocalText.s(
+            "Ready-made rules you can copy into Rules, then edit freely.",
+          ),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 8),
         ...catalogTiles,
@@ -96,8 +106,6 @@ class RoutingRulesTab extends StatelessWidget {
     required this.itemKey,
     required this.itemBuilder,
     required this.onAdd,
-    required this.onExport,
-    required this.onImport,
   });
 
   final double bottomPad;
@@ -107,65 +115,20 @@ class RoutingRulesTab extends StatelessWidget {
   final Widget Function(int index) itemBuilder;
   final VoidCallback onAdd;
 
-  /// §396 — экспорт/импорт правил файлом (меню ⋮ в шапке таба).
-  final VoidCallback onExport;
-  final VoidCallback onImport;
-
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: EdgeInsets.only(top: 12, bottom: bottomPad),
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 12, right: 4),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Padding(
-                  // Центр строки текста ~на оси кнопки ⋮ (48px hit-target).
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    getLocalText.s("Route or block by app / domain / IP / port / protocol, or remote .srs rule-set."),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ),
-              ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, size: 20),
-                tooltip: getLocalText.s("Rules menu"),
-                onSelected: (v) {
-                  if (v == 'export') onExport();
-                  if (v == 'import') onImport();
-                },
-                itemBuilder: (_) => [
-                  PopupMenuItem<String>(
-                    value: 'export',
-                    // §396 — экспортировать нечего → пункт серый (не прячем:
-                    // discoverability дороже).
-                    enabled: itemCount > 0,
-                    child: ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.upload_file_outlined, size: 20),
-                      title: Text(getLocalText.s("Export rules...")),
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: 'import',
-                    child: ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading:
-                          const Icon(Icons.file_open_outlined, size: 20),
-                      title: Text(getLocalText.s("Import rules...")),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            getLocalText.s(
+              "Route or block by app / domain / IP / port / protocol, or remote .srs rule-set.",
+            ),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -175,10 +138,8 @@ class RoutingRulesTab extends StatelessWidget {
           buildDefaultDragHandles: false,
           itemCount: itemCount,
           onReorder: onReorder,
-          itemBuilder: (ctx, i) => KeyedSubtree(
-            key: itemKey(i),
-            child: itemBuilder(i),
-          ),
+          itemBuilder: (ctx, i) =>
+              KeyedSubtree(key: itemKey(i), child: itemBuilder(i)),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -186,6 +147,58 @@ class RoutingRulesTab extends StatelessWidget {
             onPressed: onAdd,
             icon: const Icon(Icons.add, size: 18),
             label: Text(getLocalText.s("Add rule")),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// §396 — кнопка ⋮ в AppBar экрана Routing: экспорт/импорт правил файлом.
+/// Экран показывает её только на активном табе Rules (гейт по индексу таба
+/// в `routing_screen.dart`) — на Channels/Presets меню про правила сбивало бы
+/// с толку.
+class RulesMenuButton extends StatelessWidget {
+  const RulesMenuButton({
+    super.key,
+    required this.canExport,
+    required this.onExport,
+    required this.onImport,
+  });
+
+  /// false (правил нет) → пункт Export серый (не прячем: discoverability
+  /// дороже).
+  final bool canExport;
+  final VoidCallback onExport;
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert),
+      tooltip: getLocalText.s("Rules menu"),
+      onSelected: (v) {
+        if (v == 'export') onExport();
+        if (v == 'import') onImport();
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem<String>(
+          value: 'export',
+          enabled: canExport,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.upload_file_outlined, size: 20),
+            title: Text(getLocalText.s("Export rules...")),
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'import',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.file_open_outlined, size: 20),
+            title: Text(getLocalText.s("Import rules...")),
           ),
         ),
       ],

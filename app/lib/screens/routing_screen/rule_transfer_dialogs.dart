@@ -9,67 +9,119 @@ import '../../services/rule_transfer.dart';
 /// `routing_screen_menus.dart` / `import_preview_dialog.dart` бэкапа):
 /// показывают диалог и возвращают выбор, state-мутации остаются в экране.
 
-/// Диалог выбора правил на экспорт. [displayNames] позиционно выровнен с
-/// [rules] (live-label'ы пресетов — `ruleDisplayNames` §279). Все правила
-/// отмечены по умолчанию. Возвращает выбранные правила или null (отмена).
+/// Экран выбора правил на экспорт. [displayNames] позиционно выровнен с
+/// [rules] (live-label'ы пресетов — `ruleDisplayNames` §279). Полноэкранный
+/// (решение владельца: попап для списка правил тесен), по умолчанию НИЧЕГО
+/// не выбрано, над списком тумблер Select all / Deselect all. Возвращает
+/// выбранные правила или null (закрыт без экспорта).
 Future<List<CustomRule>?> showRuleExportPicker(
   BuildContext context, {
   required List<CustomRule> rules,
   required List<String> displayNames,
 }) {
-  final selected = <String>{for (final r in rules) r.id};
-  return showDialog<List<CustomRule>>(
-    context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, set) => AlertDialog(
-        title: Text(getLocalText.s("Export rules")),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: rules.length,
-            itemBuilder: (_, i) {
-              final rule = rules[i];
-              final summary = rule.summary();
-              return CheckboxListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                value: selected.contains(rule.id),
-                onChanged: (v) => set(() {
-                  if (v == true) {
-                    selected.add(rule.id);
-                  } else {
-                    selected.remove(rule.id);
-                  }
-                }),
-                title: Text(displayNames[i]),
-                subtitle: summary.isEmpty
-                    ? null
-                    : Text(summary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11)),
-              );
-            },
+  return Navigator.of(context).push<List<CustomRule>>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) =>
+          _RuleExportScreen(rules: rules, displayNames: displayNames),
+    ),
+  );
+}
+
+class _RuleExportScreen extends StatefulWidget {
+  const _RuleExportScreen({required this.rules, required this.displayNames});
+
+  final List<CustomRule> rules;
+  final List<String> displayNames;
+
+  @override
+  State<_RuleExportScreen> createState() => _RuleExportScreenState();
+}
+
+class _RuleExportScreenState extends State<_RuleExportScreen> {
+  // Решение владельца: стартуем с пустого выбора — экспорт осознанный,
+  // «отдать всё» это один тап по Select all.
+  final _selected = <String>{};
+
+  bool get _allSelected =>
+      widget.rules.isNotEmpty && _selected.length == widget.rules.length;
+
+  void _toggleAll() {
+    setState(() {
+      if (_allSelected) {
+        _selected.clear();
+      } else {
+        _selected.addAll(widget.rules.map((r) => r.id));
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(getLocalText.s("Export rules"))),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: TextButton.icon(
+              onPressed: _toggleAll,
+              icon: Icon(
+                _allSelected ? Icons.deselect : Icons.select_all,
+                size: 18,
+              ),
+              label: Text(_allSelected
+                  ? getLocalText.s("Deselect all")
+                  : getLocalText.s("Select all")),
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(getLocalText.s("Cancel")),
-          ),
-          FilledButton(
-            onPressed: selected.isEmpty
-                ? null
-                : () => Navigator.pop(ctx,
-                    [for (final r in rules) if (selected.contains(r.id)) r]),
-            child: Text(getLocalText.s("Export (%d)", selected.length)),
+          Expanded(
+            child: ListView.builder(
+              itemCount: widget.rules.length,
+              itemBuilder: (_, i) {
+                final rule = widget.rules[i];
+                final summary = rule.summary();
+                return CheckboxListTile(
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: _selected.contains(rule.id),
+                  onChanged: (v) => setState(() {
+                    if (v == true) {
+                      _selected.add(rule.id);
+                    } else {
+                      _selected.remove(rule.id);
+                    }
+                  }),
+                  title: Text(widget.displayNames[i]),
+                  subtitle: summary.isEmpty
+                      ? null
+                      : Text(summary,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11)),
+                );
+              },
+            ),
           ),
         ],
       ),
-    ),
-  );
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: FilledButton(
+            onPressed: _selected.isEmpty
+                ? null
+                : () => Navigator.pop(context, [
+                      for (final r in widget.rules)
+                        if (_selected.contains(r.id)) r
+                    ]),
+            child: Text(getLocalText.s("Export (%d)", _selected.length)),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Превью импорта: шапка (когда/чем создан) + чекбокс на правило с итогом
