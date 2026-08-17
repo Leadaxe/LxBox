@@ -4465,14 +4465,6 @@
   "DNS server \"%s\" not found — resolver set to auto": {
     "value": "DNS-сервер «%s» не найден — резолвер сброшен в авто"
   },
-  "Exported %d rules": {
-    "value": {
-      "one": "Экспортировано %d правило",
-      "few": "Экспортировано %d правила",
-      "many": "Экспортировано %d правил",
-      "other": "Экспортировано %d правила"
-    }
-  },
   "Imported %d rules": {
     "value": {
       "one": "Импортировано %d правило",
@@ -4515,5 +4507,14 @@
   },
   "Imported %1$d rules and %2$d DNS entries": {
     "value": "Импортировано правил: %1$d, DNS-записей: %2$d"
+  },
+  "Presets are not transferable — this app has its own": {
+    "value": "Пресеты не переносятся — они есть в самом приложении"
+  },
+  "No rules to export — presets stay with the app. You can still bundle DNS on the next step.": {
+    "value": "Экспортировать нечего: пресеты остаются в приложении. На следующем шаге можно вложить DNS."
+  },
+  "Rules exported": {
+    "value": "Правила экспортированы"
   }
 }

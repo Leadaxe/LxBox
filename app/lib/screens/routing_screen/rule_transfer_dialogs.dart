@@ -96,8 +96,10 @@ class _RuleExportScreenState extends State<_RuleExportScreen> {
       for (final r in widget.rules)
         if (_selected.contains(r.id)) r
     ];
-    // Нечего показывать на шаге 2 → сразу отдаём выбор правил.
+    // Нечего показывать на шаге 2 → сразу отдаём выбор правил. §398 — если
+    // и правил не выбрано, экспортировать нечего: остаёмся на месте.
     if (widget.dnsServers.isEmpty && widget.dnsRules.isEmpty) {
+      if (picked.isEmpty) return;
       Navigator.pop(context, RuleExportSelection(rules: picked));
       return;
     }
@@ -111,6 +113,7 @@ class _RuleExportScreenState extends State<_RuleExportScreen> {
           servers: widget.dnsServers,
           rules: widget.dnsRules,
           preselectedServerTags: referenced,
+          hasRules: picked.isNotEmpty,
         ),
       ),
     );
@@ -136,7 +139,7 @@ class _RuleExportScreenState extends State<_RuleExportScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: TextButton.icon(
-              onPressed: _toggleAll,
+              onPressed: widget.rules.isEmpty ? null : _toggleAll,
               icon: Icon(
                 _allSelected ? Icons.deselect : Icons.select_all,
                 size: 18,
@@ -146,6 +149,25 @@ class _RuleExportScreenState extends State<_RuleExportScreen> {
                   : getLocalText.s("Select all")),
             ),
           ),
+          if (widget.rules.isEmpty)
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    // §398 — пресеты в обмене не участвуют; если своих правил
+                    // нет, экспортировать можно только DNS (шаг 2).
+                    getLocalText.s(
+                        "No rules to export — presets stay with the app. You can still bundle DNS on the next step."),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
+              ),
+            )
+          else
           Expanded(
             child: ListView.builder(
               itemCount: widget.rules.length,
@@ -180,7 +202,9 @@ class _RuleExportScreenState extends State<_RuleExportScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: FilledButton(
-            onPressed: _selected.isEmpty ? null : _next,
+            // §398 — DNS-only экспорт: идти дальше можно и без выбранных
+            // правил, решение о содержимом файла принимается на шаге 2.
+            onPressed: _next,
             child: Text(getLocalText.s("Continue")),
           ),
         ),
@@ -196,11 +220,16 @@ class _DnsExportScreen extends StatefulWidget {
     required this.servers,
     required this.rules,
     required this.preselectedServerTags,
+    required this.hasRules,
   });
 
   final List<Map<String, dynamic>> servers;
   final List<Map<String, dynamic>> rules;
   final Set<String> preselectedServerTags;
+
+  /// §398 — выбраны ли правила на шаге 1. false + пустой DNS-выбор → кнопка
+  /// экспорта серая: пустой файл создавать незачем.
+  final bool hasRules;
 
   @override
   State<_DnsExportScreen> createState() => _DnsExportScreenState();
@@ -291,8 +320,12 @@ class _DnsExportScreenState extends State<_DnsExportScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: FilledButton(
-            onPressed: () =>
-                Navigator.pop(context, (_servers.toList()..sort(), _rules.toList()..sort())),
+            // §398 — экспортировать нечего (ни правил на шаге 1, ни DNS
+            // здесь) → кнопка серая, пустой файл не создаём.
+            onPressed: (total == 0 && !widget.hasRules)
+                ? null
+                : () => Navigator.pop(context,
+                    (_servers.toList()..sort(), _rules.toList()..sort())),
             child: Text(total > 0
                 ? getLocalText.s("Export (+%d DNS)", total)
                 : getLocalText.s("Export without DNS")),
@@ -546,4 +579,9 @@ String _rejectText(ImportRuleRejectReason r) => switch (r) {
         getLocalText.s("Unsupported entry — skipped"),
       ImportRuleRejectReason.unknownPreset =>
         getLocalText.s("Unknown preset (newer app version?)"),
+      // §398 — пресеты вне обмена.
+      ImportRuleRejectReason.presetNotTransferable =>
+        getLocalText.s("Presets are not transferable — this app has its own"),
+      ImportRuleRejectReason.nameExists =>
+        getLocalText.s("Already on this device"),
     };
