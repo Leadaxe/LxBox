@@ -1,121 +1,194 @@
-# L×Box v2.20.10
+# L×Box v2.20.11
 
-On first launch the app now asks whether it may check GitHub for new versions.
-Until you answer, it does not go online for that — no matter where you
-installed it from. Previous versions guessed by the installer package, and that
-guess was wrong for most F-Droid clients.
+Routing rules now travel between devices as a file: pick the rules, optionally
+bundle the DNS servers and DNS rules they depend on, save or share. On the
+receiving side a preview shows what will be added and what was healed. The
+diagnostic dump also grew teeth — OOM snapshots now carry their full bodies, so
+one upload is enough to open a heap profile.
 
-При первом запуске приложение спрашивает, можно ли проверять новые версии на
-GitHub. Пока вы не ответите, оно за ними в сеть не ходит — откуда бы ни было
-установлено. Прошлая версия угадывала по установщику, и для большинства
-клиентов F-Droid угадывала неверно.
+Правила роутинга теперь переносятся между устройствами файлом: выбираете
+правила, при желании вкладываете DNS-серверы и DNS-правила, от которых они
+зависят, — сохраняете или отправляете. На принимающей стороне превью
+показывает, что добавится и что было подлечено. Диагностический дамп заодно
+поумнел: OOM-снимки уезжают в него целиком, и одной выгрузки хватает, чтобы
+открыть heap-профиль.
 
 <details open>
 <summary><h2>🇬🇧 English</h2></summary>
 
+## ✨ Export and import routing rules
+
+Until now a single rule could not leave the device. A full backup carried
+everything at once and restored whole categories — useful for moving to a new
+phone, useless for "here, take my Gemini rule".
+
+The Routing screen's app bar grew a **⋮ menu**, visible on the Rules tab:
+
+| Item | What it does |
+|---|---|
+| **Export rules...** | full-screen picker → save or share one JSON file |
+| **Import rules...** | pick a file → preview with checkboxes → add the chosen ones |
+
+Export starts with nothing selected — one tap on **Select all** if you mean all
+of them. Saving reuses the sheet you know from backup: **Save to file** (system
+save dialog), **Save to Downloads**, or **Share**.
+
+### The second step: DNS
+
+A rule is often useless on its own. "Gemini via my own DNS" points at a DNS
+server the recipient has never heard of. So after picking the rules there is a
+second screen, **Include DNS**, with two sections — your DNS servers and your
+DNS rules. Servers referenced by the selected rules that are not part of the
+app's template are **pre-checked**: those are exactly the ones the recipient
+would be missing. Everything else is off by default.
+
+Preset-backed servers are deliberately absent from that list. The app creates
+and removes them itself when a preset is enabled, so they arrive with the
+preset, not with the file.
+
+### What happens on import
+
+The file is data from another device, so nothing is trusted blindly. The
+preview names every repair before you confirm:
+
+| In the file | On import |
+|---|---|
+| Channel that does not exist here | switched to `vpn-1`, **rule arrives disabled**, warning shown |
+| DNS server that does not exist here | DNS option turned off (Force IPv4 survives), warning shown |
+| Resolver that does not exist here | reset to auto |
+| `.srs` rule | arrives disabled — tap ☁ to download, then enable |
+| Preset unknown to this version | rejected with a reason, the rest still imports |
+| An entry of an unknown kind | skipped, the rest still imports |
+| DNS server/rule you already have | greyed out as "Already on this device" — **your settings are never overwritten** |
+
+Identity is regenerated on arrival, so importing the same file twice makes
+copies (` (2)` in the name) instead of colliding. A rule and the DNS server it
+needs, travelling in one file, are linked without any healing at all.
+
+A backup file offered to the rule importer (or a rules file offered to backup
+restore) is rejected with a message that says where it actually belongs.
+
 ## 🔧 Under the hood
 
-**The update check now asks instead of guessing.** v2.20.9 gated the background
-check on the installer package: if F-Droid had installed the app, the check
-never ran. F-Droid's maintainer pointed out the flaw the same day:
+**OOM snapshots now carry their bodies.** A field dump showed 514–552 MB RSS
+against a 136–178 MB Go heap — three quarters of the memory lived outside the
+heap, and the dump had nothing to say about where. The answer was sitting on
+the device the whole time, in files that only a per-snapshot manual share could
+reach. Asking a non-technical reporter for one more round-trip per snapshot
+does not work in practice.
 
-> There are many other F-Droid clients. You can add an onboarding screen for
-> the update checker.
+The five freshest snapshots now travel whole: `metadata.json`,
+`connections.json` and `configuration.json` verbatim, the **tail** of `go.log`
+capped at 64 KB (the OOM moment is at the end), and the pprof profiles as
+gzip + base64. Older snapshots keep the summary they always had.
 
-He was right. The gate recognised three packages — the official client, F-Droid
-Basic and Droid-ify. Neo Store, F-Droid Classic, Aurora and whatever ships next
-all fell through to "sideload" and switched the check back on. Keeping that list
-current forever is not a solution.
+Reading a profile back from a dump:
 
-So the guessing is gone. A prompt joins the first-run sequence, right after the
-notification, battery and quick-tile steps:
+```bash
+jq -r '.oom_reports[0].files["heap.pb"].data' dump.json | base64 -d | gunzip > heap.pb
+go tool pprof heap.pb
+```
 
-> **Check for updates?**
-> L×Box can ping github.com once a day to see whether a new version is out.
-> Nothing installs by itself — you get a link to the release page.
->
-> If you installed from an app store, its client already handles updates and
-> you can skip this.
-
-The stored default flipped to **off**, which is the part that actually matters:
-until the prompt is answered, the app makes no release request at all. Existing
-installs keep whatever they had — the setting is only written by the prompt.
-
-The install source survives as one thing only: which button reads as the
-default. From a store client the dialog leads with "Skip", from a sideload with
-"Enable". Getting that wrong is now harmless, since your answer decides either
-way.
-
-The "Check for updates on launch" switch in App Settings is visible on every
-channel again, and "Check now" was never affected — an explicit tap is not a
-background call home.
+The cost is about 1–1.3 MB of base64 on top of a ~2 MB dump. Files this version
+does not recognise are carried through binary-safe rather than dropped, so a
+future core bump cannot silently lose evidence.
 
 ## 🧪 Tests
 
-`flutter analyze`, 3016 tests and all four l10n checkers pass. Both branches of
-the prompt were checked on a device.
+`flutter analyze`, the full test suite and all four l10n checkers pass. The
+export/import flow was exercised on an emulator end to end: export with DNS
+bundled, the file inspected on disk, then re-imported — including the
+"already on this device" path.
 
 </details>
 
 <details open>
 <summary><h2>🇷🇺 Русский</h2></summary>
 
+## ✨ Экспорт и импорт правил роутинга
+
+До сих пор отдельное правило не могло покинуть устройство. Полный бэкап тащил
+всё сразу и восстанавливал целыми категориями — годится для переезда на новый
+телефон, но не для «на, забери моё правило для Gemini».
+
+В шапке экрана «Маршрутизация» появилось **меню ⋮**, видимое на вкладке
+«Правила»:
+
+| Пункт | Что делает |
+|---|---|
+| **Экспортировать правила…** | полноэкранный выбор → сохранение или отправка одного JSON-файла |
+| **Импортировать правила…** | выбор файла → превью с галочками → добавление выбранного |
+
+Экспорт стартует с пустым выбором — один тап по **«Выбрать все»**, если нужны
+все. Сохранение переиспользует знакомый по бэкапу шит: **«Сохранить в файл»**
+(системный диалог), **«В Загрузки»** или **«Поделиться»**.
+
+### Второй шаг: DNS
+
+Правило часто бесполезно само по себе. «Gemini через свой DNS» ссылается на
+DNS-сервер, о котором получатель никогда не слышал. Поэтому после выбора
+правил открывается второй экран — **«Добавить DNS»** — с двумя секциями: ваши
+DNS-серверы и ваши DNS-правила. Серверы, на которые ссылаются выбранные
+правила и которых нет в шаблоне приложения, **отмечены сразу**: именно их у
+получателя и не окажется. Остальное по умолчанию снято.
+
+Серверов, которые создают пресеты, в этом списке намеренно нет. Приложение
+заводит и убирает их само при включении пресета — они приедут вместе с
+пресетом, а не с файлом.
+
+### Что происходит при импорте
+
+Файл — данные с чужого устройства, поэтому на слово никому не верим. Превью
+называет каждую правку до подтверждения:
+
+| В файле | При импорте |
+|---|---|
+| Канал, которого здесь нет | заменяется на `vpn-1`, **правило приезжает выключенным**, показано предупреждение |
+| DNS-сервер, которого здесь нет | DNS-опция выключается (Force IPv4 переживает), показано предупреждение |
+| Резолвер, которого здесь нет | сбрасывается в авто |
+| Правило с `.srs` | приезжает выключенным — нажмите ☁, чтобы скачать, затем включите |
+| Пресет, неизвестный этой версии | отклоняется с причиной, остальное импортируется |
+| Запись неизвестного вида | пропускается, остальное импортируется |
+| DNS-сервер или правило, которые уже есть | серые, «Уже есть на этом устройстве» — **ваши настройки не перезаписываются** |
+
+Идентификатор при импорте выдаётся новый, поэтому повторный импорт того же
+файла создаёт копии (« (2)» в имени), а не конфликтует. Правило и нужный ему
+DNS-сервер, приехавшие одним файлом, связываются вообще без лечения.
+
+Файл бэкапа, скормленный импорту правил (и наоборот, файл правил —
+восстановлению бэкапа), отклоняется с сообщением, куда его нести на самом
+деле.
+
 ## 🔧 Под капотом
 
-**Проверка обновлений теперь спрашивает, а не угадывает.** В v2.20.9 фоновая
-проверка гасилась по пакету установщика: поставил F-Droid — проверка не идёт.
-Мейнтейнер F-Droid в тот же день указал на изъян:
+**OOM-снимки уезжают в дамп целиком.** Присланный дамп показывал 514–552 МБ
+RSS против 136–178 МБ Go-кучи — три четверти памяти жили вне кучи, и сказать,
+где именно, дампу было нечем. Ответ всё это время лежал на устройстве, в
+файлах, до которых можно было добраться только выгрузкой каждого снимка
+вручную. Просить нетехнического человека сделать ещё один заход на каждый
+снимок на практике не работает.
 
-> There are many other F-Droid clients. You can add an onboarding screen for
-> the update checker.
+Теперь пять свежайших снимков едут полностью: `metadata.json`,
+`connections.json` и `configuration.json` целиком, **хвост** `go.log` до
+64 КБ (момент OOM — в конце) и pprof-профили как gzip + base64. У более
+старых снимков остаётся прежняя сводка.
 
-Он прав. Гейт знал три пакета — официальный клиент, F-Droid Basic и Droid-ify.
-Neo Store, F-Droid Classic, Aurora и всё, что выйдет завтра, проваливались в
-«sideload» и включали проверку обратно. Вечно догонять этот список — не решение.
+Как прочитать профиль обратно:
 
-Поэтому угадывание убрано. В цепочку первого запуска добавился вопрос — сразу
-после шагов про уведомления, батарею и плитку:
+```bash
+jq -r '.oom_reports[0].files["heap.pb"].data' dump.json | base64 -d | gunzip > heap.pb
+go tool pprof heap.pb
+```
 
-> **Проверять обновления?**
-> L×Box может раз в сутки обращаться к github.com и смотреть, не вышла ли новая
-> версия. Само ничего не устанавливается — вы получите ссылку на страницу
-> релиза.
->
-> Если приложение установлено из магазина, его клиент уже следит за
-> обновлениями, и этот пункт можно пропустить.
-
-Дефолт настройки перевёрнут в **выключено** — и это главное: до ответа
-приложение вообще не делает запросов за релизами. У тех, кто уже пользуется
-приложением, значение сохраняется — настройку пишет только этот диалог.
-
-От канала установки осталось одно: какая кнопка выглядит основной. Из магазина
-диалог предлагает «Пропустить», при ручной установке — «Включить». Ошибка тут
-теперь безобидна, решает всё равно ваш ответ.
-
-Переключатель «Проверять обновления при запуске» в настройках снова виден на
-всех каналах, а «Check now» и не затрагивался — явное нажатие не фоновый поход
-в сеть.
+Цена — около 1–1,3 МБ base64 поверх дампа в ~2 МБ. Файлы, которых эта версия
+не знает, переносятся бинарно, а не отбрасываются: бамп ядра не должен молча
+терять улики.
 
 ## 🧪 Тесты
 
-`flutter analyze`, 3016 тестов и все четыре l10n-чекера проходят. Обе ветки
-диалога проверены на устройстве.
+`flutter analyze`, полный набор тестов и все четыре l10n-чекера проходят.
+Экспорт-импорт прогнан на эмуляторе от начала до конца: экспорт с вложенным
+DNS, осмотр файла на диске, обратный импорт — включая ветку «уже есть на
+этом устройстве».
 
 </details>
-
----
-
-## Install / Установка
-
-```bash
-adb install -r LxBox-v2.20.10-arm64-v8a.apk
-```
-
-Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
-
-No uninstall needed — install over the existing one. Settings and
-subscriptions are preserved.
-
----
-
-Previous release / Предыдущий релиз: [v2.20.9](docs/releases/v2.20.9.md).
