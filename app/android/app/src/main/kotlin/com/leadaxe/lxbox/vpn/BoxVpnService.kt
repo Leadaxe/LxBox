@@ -470,4 +470,9 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
     override fun sendNotification(notification: io.nekohasekai.libbox.Notification) {
         service.sendNotification(notification)
     }
+
+    /// `cancelNotification` — парный форвард (PlatformInterface ядра lx.27-rc.2).
+    override fun cancelNotification(identifier: String, typeID: Int) {
+        service.cancelNotification(identifier, typeID)
+    }
 }

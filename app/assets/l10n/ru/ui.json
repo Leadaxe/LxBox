@@ -4428,5 +4428,92 @@
   },
   "L×Box can ping github.com once a day to see whether a new version is out. Nothing installs by itself — you get a link to the release page.\n\nIf you installed from an app store, its client already handles updates and you can skip this.": {
     "value": "L×Box может раз в сутки обращаться к github.com и смотреть, не вышла ли новая версия. Само ничего не устанавливается — вы получите ссылку на страницу релиза.\n\nЕсли приложение установлено из магазина, его клиент уже следит за обновлениями, и этот пункт можно пропустить."
+  },
+  "Rules menu": {
+    "value": "Меню правил"
+  },
+  "Export rules...": {
+    "value": "Экспортировать правила…"
+  },
+  "Import rules...": {
+    "value": "Импортировать правила…"
+  },
+  "Export rules": {
+    "value": "Экспорт правил"
+  },
+  "Import rules": {
+    "value": "Импорт правил"
+  },
+  "Import (%d)": {
+    "value": "Импорт (%d)"
+  },
+  "Unsupported entry": {
+    "value": "Неподдерживаемая запись"
+  },
+  "Unsupported entry — skipped": {
+    "value": "Неподдерживаемая запись — пропущена"
+  },
+  "Unknown preset (newer app version?)": {
+    "value": "Неизвестный пресет (файл из более новой версии?)"
+  },
+  "Channel \"%s\" not found — set to %s, rule disabled": {
+    "value": "Канал «%s» не найден — заменён на %s, правило выключено"
+  },
+  "DNS server \"%s\" not found — DNS option disabled": {
+    "value": "DNS-сервер «%s» не найден — DNS-опция выключена"
+  },
+  "DNS server \"%s\" not found — resolver set to auto": {
+    "value": "DNS-сервер «%s» не найден — резолвер сброшен в авто"
+  },
+  "Exported %d rules": {
+    "value": {
+      "one": "Экспортировано %d правило",
+      "few": "Экспортировано %d правила",
+      "many": "Экспортировано %d правил",
+      "other": "Экспортировано %d правила"
+    }
+  },
+  "Imported %d rules": {
+    "value": {
+      "one": "Импортировано %d правило",
+      "few": "Импортировано %d правила",
+      "many": "Импортировано %d правил",
+      "other": "Импортировано %d правила"
+    }
+  },
+  "Imported %d rules — tap ☁ to download rule-sets, then enable": {
+    "value": {
+      "one": "Импортировано %d правило — нажмите ☁, чтобы скачать rule-set'ы, затем включите",
+      "few": "Импортировано %d правила — нажмите ☁, чтобы скачать rule-set'ы, затем включите",
+      "many": "Импортировано %d правил — нажмите ☁, чтобы скачать rule-set'ы, затем включите",
+      "other": "Импортировано %d правила — нажмите ☁, чтобы скачать rule-set'ы, затем включите"
+    }
+  },
+  "Include DNS": {
+    "value": "Добавить DNS"
+  },
+  "Optionally bundle DNS servers and DNS rules the recipient may be missing. Servers referenced by the selected rules are pre-checked.": {
+    "value": "При желании вложите в файл DNS-серверы и DNS-правила, которых может не быть у получателя. Серверы, на которые ссылаются выбранные правила, уже отмечены."
+  },
+  "Export (+%d DNS)": {
+    "value": "Экспорт (+%d DNS)"
+  },
+  "Export without DNS": {
+    "value": "Экспорт без DNS"
+  },
+  "Already on this device": {
+    "value": "Уже есть на этом устройстве"
+  },
+  "Not available in this app version": {
+    "value": "Недоступно в этой версии приложения"
+  },
+  "Managed by presets automatically": {
+    "value": "Управляется пресетами автоматически"
+  },
+  "Imported %d DNS entries": {
+    "value": "Импортировано DNS-записей: %d"
+  },
+  "Imported %1$d rules and %2$d DNS entries": {
+    "value": "Импортировано правил: %1$d, DNS-записей: %2$d"
   }
 }

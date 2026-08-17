@@ -25,13 +25,34 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.0-lx.27-rc.1`** (see `app/android/libbox.version`) —
-a Windows-only WireGuard bind fix (SPEC 069: a v6 bind failure no longer kills
-the live v4 socket). The Java API is byte-identical to lx.25-rc.5, so nothing on
-the client side changes.
+**The current pin: `v1.14.0-lx.27-rc.2`** (see `app/android/libbox.version`) —
+hotfixes SPEC 070/071 (a dead detour node no longer freezes the network
+machinery) plus an upstream sync to beta.15 and Go 1.26.6.
 
-Earlier in this line: the final name of the `masque` key (`vhttp`) plus the
-urltest group's mode in the API (lx.25-rc.5). The client side of that is §393.
+⚠️ **This bump is NOT API-neutral, unlike every lx.2x bump before it.**
+`PlatformInterface` gained a new abstract method:
+
+```java
+public abstract void cancelNotification(java.lang.String, int) throws java.lang.Exception;
+```
+
+An unimplemented abstract method is a **compile error**, not a silent
+degradation — so the wrapper must grow a default. Ours did:
+`PlatformInterfaceWrapper.cancelNotification` is a no-op default (a probe
+session posts no notifications), `BoxVpnService` forwards to
+`BoxService.cancelNotification`, and that one calls `nm.cancel(typeID)` — the
+same id `sendNotification` passes to `nm.notify`. The `identifier` argument is
+the channel id; on Android it takes no part in addressing.
+
+Everything else in the diff is **purely additive** — 17 new Taildrop classes
+from upstream beta.15, `Libbox.TaildropChunkSize`, `NetworkInterface.gateway`,
+and new fields on the status structs. A `javap` sweep over the 228 pre-existing
+classes shows **zero removals**, so no existing call-site changes.
+
+Earlier in this line: a Windows-only WireGuard bind fix (SPEC 069, lx.27-rc.1;
+a v6 bind failure no longer kills the live v4 socket), and before it the final
+name of the `masque` key (`vhttp`) plus the urltest group's mode in the API
+(lx.25-rc.5). The client side of that is §393.
 
 **`transport` → `vhttp` (SPEC 062).** The name from rc.4 was removed **with no
 alias**: for vless/trojan/vmess `transport` is the V2Ray transport key, and it is
@@ -48,11 +69,12 @@ the state in `GetPool`) | empty (not a urltest). Promised “in any build”, un
 `GetPool`, which sits behind the `with_lx_command` tag.
 
 ⚠️ **The Android AAR still does NOT have this field, up to and including
-lx.27-rc.1.** `javap io.nekohasekai.libbox.OutboundGroup` shows no `getMode()`,
-and the whole Java surface of lx.27-rc.1 diffs clean against lx.25-rc.5 (`javap`
-over all 228 classes — identical; `classes.jar` itself hashes differently,
-`23b2eb27…` → `c9cc31f7…`, so compare the API, not the jar). The native part *is*
-built from the pinned tag (`strings libbox.so` → `1.14.0-lx.27-rc.1`, and the
+lx.27-rc.2.** `javap io.nekohasekai.libbox.OutboundGroup` shows no `getMode()`
+in either build. Through lx.27-rc.1 the whole Java surface diffed clean against
+lx.25-rc.5 (`javap` over all 228 classes — identical; `classes.jar` itself
+hashes differently, `23b2eb27…` → `c9cc31f7…`, so compare the API, not the
+jar); rc.2 adds the surface listed above but still not `getMode()`. The native
+part *is* built from the pinned tag (`strings libbox.so` → the pinned version, and the
 `least_test` / `round_robin` strings are present) — so the Go code is there, but
 the gomobile binding for `OutboundGroup` has not been regenerated. This does not
 affect §393 (`vhttp` is config parsing, not a Java surface), but anyone who wants
