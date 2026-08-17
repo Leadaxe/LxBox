@@ -255,6 +255,14 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     /** Не используем platform-bridge — весь трафик через VpnService-TUN. */
     override fun usePlatformBridge(): Boolean = false
 
+    /// `cancelNotification` — новый метод PlatformInterface в ядре lx.27-rc.2
+    /// (пришёл из апстрима вместе с Taildrop). Дефолт — no-op: реализации без
+    /// собственных уведомлений (ProbeSession) не обязаны его переопределять,
+    /// а `BoxVpnService` форвардит в `BoxService.cancelNotification`.
+    /// Сигнатура с `throws` (§151 F1: бросать отсюда безопасно), но нам нечего
+    /// бросать — уведомлений мы не ставили.
+    override fun cancelNotification(identifier: String, typeID: Int) {}
+
     override fun createBridge(
         options: io.nekohasekai.libbox.BridgeOptions
     ): io.nekohasekai.libbox.BridgeSession =

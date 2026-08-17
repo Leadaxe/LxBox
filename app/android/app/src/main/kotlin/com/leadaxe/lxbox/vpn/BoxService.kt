@@ -1058,4 +1058,21 @@ class BoxService(
             "platform notification: ${notification.title} (${notification.openURL})",
         )
     }
+
+    /// `cancelNotification` — парный к [sendNotification] (появился в
+    /// PlatformInterface ядра lx.27-rc.2 вслед за апстримом). Снимаем ровно то
+    /// уведомление, которое поставил `sendNotification`: там `nm.notify` берёт
+    /// `typeID` как id, значит и отменяем по `typeID`. `identifier` (id канала)
+    /// ядро передаёт для платформ, где отмена адресуется иначе; на Android он
+    /// в адресации не участвует.
+    fun cancelNotification(identifier: String, typeID: Int) {
+        val context = service.applicationContext
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        runCatching {
+            nm.cancel(typeID)
+        }.onFailure {
+            Log.e(TAG, "cancelNotification failed", it)
+        }
+        Log.d(TAG, "Notification cancelled: $identifier/$typeID")
+    }
 }

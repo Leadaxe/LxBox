@@ -70,6 +70,17 @@ restore) is rejected with a message that says where it actually belongs.
 
 ## 🔧 Under the hood
 
+**Core updated to `sing-box-lx v1.14.0-lx.27-rc.2`.** The fix that matters:
+a dead detour node no longer freezes the network machinery (SPEC 070/071). Also
+an upstream sync to beta.15 and Go 1.26.6.
+
+This is the first lx.2x bump that is not API-neutral — `PlatformInterface`
+gained a `cancelNotification` method, so the Android side now implements it:
+cancelling addresses the same notification id that `sendNotification` posts.
+Everything else the core added is new surface (Taildrop bindings from upstream,
+an interface gateway field); a `javap` sweep over the 228 pre-existing classes
+shows zero removals, so nothing existing changed shape.
+
 **OOM snapshots now carry their bodies.** A field dump showed 514–552 MB RSS
 against a 136–178 MB Go heap — three quarters of the memory lived outside the
 heap, and the dump had nothing to say about where. The answer was sitting on
@@ -160,6 +171,18 @@ DNS-сервер, приехавшие одним файлом, связываю
 деле.
 
 ## 🔧 Под капотом
+
+**Ядро обновлено до `sing-box-lx v1.14.0-lx.27-rc.2`.** Главное в нём: мёртвый
+detour-узел больше не замораживает сетевую машинерию (SPEC 070/071). Плюс
+синхронизация с апстримом beta.15 и Go 1.26.6.
+
+Это первый бамп в линейке lx.2x, который не нейтрален к API: в
+`PlatformInterface` появился метод `cancelNotification`, и Android-сторона его
+теперь реализует — отмена адресуется тому же id уведомления, который ставит
+`sendNotification`. Остальное, что принесло ядро, — новая поверхность
+(Taildrop-биндинги из апстрима, поле шлюза у сетевого интерфейса); обход
+`javap` по 228 прежним классам показывает ноль удалений, так что ничего
+существующего не поменяло форму.
 
 **OOM-снимки уезжают в дамп целиком.** Присланный дамп показывал 514–552 МБ
 RSS против 136–178 МБ Go-кучи — три четверти памяти жили вне кучи, и сказать,
