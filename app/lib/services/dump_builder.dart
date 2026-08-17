@@ -84,7 +84,7 @@ class DumpBuilder {
     final crashArchive = await _crashArchive();
     // §318 — снимки oom-killer'а ядра. Второй автоматический канал улик по
     // памяти: снят самим ядром в момент проблемы, до §318 в пак не попадал.
-    final oomReports = await _oomReports();
+    final oomReports = await oomReportsSection();
 
     final dump = <String, dynamic>{
       'generated_at': now.toIso8601String(),
@@ -157,16 +157,22 @@ class DumpBuilder {
     }
   }
 
-  /// §318 — OOM-снимки ядра: ТОЛЬКО метаданные, без тел.
+  /// §397 — OOM-снимки ядра: сводка у всех, тела у [kOomKeep] свежайших.
   ///
-  /// Тела не кладём осознанно: вес снимка — бинарные pprof-профили, в JSON
-  /// им не место, а `go.log` снимка дублирует общий лог. Кому нужны профили
-  /// — share конкретного снимка со вкладки OOM. Здесь важно другое: сам
-  /// факт, что killer срабатывал, и цифры памяти в этот момент.
-  static Future<List<Map<String, Object?>>> _oomReports() async {
+  /// До §397 тут была только сводка, а профили предлагалось шарить со
+  /// вкладки OOM отдельной кнопкой — на практике этот второй шаг с полевым
+  /// пользователем не случается, и разбор OOM по дампу был невозможен.
+  /// Снимков в архиве может быть и больше [kOomKeep] (prune бежит лишь на
+  /// старте приложения) — хвост остаётся сводкой, чтобы дамп не рос без
+  /// потолка.
+  ///
+  /// Публичный (а не `_oomReports`): тестам нужен вход в секцию без
+  /// подъёма всего [build] с его каналами к ядру.
+  static Future<List<Map<String, Object?>>> oomReportsSection() async {
     try {
+      final reports = await OomReports.list();
       return [
-        for (final r in await OomReports.list())
+        for (final (i, r) in reports.indexed)
           {
             'name': r.name,
             'mtime': r.mtime.toUtc().toIso8601String(),
@@ -175,11 +181,68 @@ class DumpBuilder {
             if (r.memoryUsage != null) 'memory_usage': r.memoryUsage,
             if (r.heapInuse != null) 'heap_inuse': r.heapInuse,
             if (r.numGoroutine != null) 'num_goroutine': r.numGoroutine,
+            if (i < kOomKeep) ...await _oomReportBody(r.dirPath),
           },
       ];
     } catch (_) {
       return const [];
     }
+  }
+
+  /// §397 — тело одного снимка: все файлы каталога `oom_reports/<ts>/`.
+  ///
+  /// Текстовые файлы (metadata/connections/configuration/go.log/cmdline)
+  /// кладём читаемо, бинарные pprof-профили — gzip+base64: ядро пишет их
+  /// НЕсжатым protobuf (`oomprofile.WriteFile`, в отличие от stdlib
+  /// `pprof.WriteTo`), gzip ужимает их в разы ещё до +33% base64.
+  /// Незнакомое имя файла уходит в `files` тем же бинарным путём — бамп
+  /// ядра не должен молча терять улики. Развернуть обратно:
+  /// `jq -r '...data' | base64 -d | gunzip > heap.pb`.
+  static Future<Map<String, Object?>> _oomReportBody(String dirPath) async {
+    final body = <String, Object?>{};
+    final files = <String, Object?>{};
+    try {
+      await for (final e
+          in Directory(dirPath).list(followLinks: false)) {
+        if (e is! File) continue;
+        final name = e.uri.pathSegments.last;
+        try {
+          switch (name) {
+            case 'metadata.json':
+              body['metadata'] = _tryDecode(await e.readAsString());
+            case 'connections.json':
+              body['connections'] = _tryDecode(await e.readAsString());
+            case 'configuration.json':
+              body['configuration'] = _tryDecode(await e.readAsString());
+            case 'go.log':
+              // Хвост, а не голова: момент OOM — в конце лога (у крашей
+              // наоборот: паникующая горутина идёт первой).
+              final log = await e.readAsString();
+              final cut = log.length > _crashBodyLimit;
+              if (cut) body['go_log_truncated'] = true;
+              body['go_log'] =
+                  cut ? log.substring(log.length - _crashBodyLimit) : log;
+            case 'cmdline':
+              body['cmdline'] =
+                  (await e.readAsString()).replaceAll('\x00', ' ');
+            default:
+              final raw = await e.readAsBytes();
+              files[name] = {
+                'encoding': 'gzip+base64',
+                'raw_size': raw.length,
+                'data': base64Encode(gzip.encode(raw)),
+              };
+          }
+        } catch (_) {
+          // Файл исчез/не читается — пропускаем его, тело остальных
+          // файлов и сводка снимка всё ещё полезны.
+        }
+      }
+    } catch (_) {
+      // Каталог исчез между list() и обходом — остаётся сводка.
+    }
+    if (files.isNotEmpty) body['files'] = files;
+    return body;
   }
 
   /// `ServerList.toJson()` + node tags (без полного NodeSpec, чтобы файл
