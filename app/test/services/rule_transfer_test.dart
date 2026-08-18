@@ -141,12 +141,26 @@ void main() {
       expect(items[1].importable, isTrue);
     });
 
-    test('preset с неизвестным presetId → unknownPreset', () {
-      final s = sanitize(
-          CustomRulePreset(name: 'Ghost', presetId: 'from-the-future')
-              .toJson());
+    test('§398 — любой preset неимпортируем (и знакомый, и чужой)', () {
+      for (final pid in ['block-ads', 'private-ip', 'from-the-future']) {
+        final s = sanitize(
+            CustomRulePreset(name: 'P', presetId: pid).toJson());
+        expect(s.importable, isFalse, reason: pid);
+        expect(s.rejectReason, ImportRuleRejectReason.presetNotTransferable,
+            reason: pid);
+      }
+    });
+
+    test('§398 — правило с занятым именем неимпортируемо', () {
+      final s = sanitizeImportedRule(
+        CustomRuleInline(name: 'My Rule', domains: ['a.com']).toJson(),
+        channelTags: channelTags,
+        dnsServerTags: dnsTags,
+        template: template,
+        existingNames: {'My Rule'},
+      );
       expect(s.importable, isFalse);
-      expect(s.rejectReason, ImportRuleRejectReason.unknownPreset);
+      expect(s.rejectReason, ImportRuleRejectReason.nameExists);
     });
   });
 
@@ -176,25 +190,13 @@ void main() {
       }
     });
 
-    test('preset-override в varsValues лечится так же', () {
-      final s = sanitize(CustomRulePreset(
-        name: 'Private IP',
-        presetId: 'private-ip',
-        varsValues: {'outbound': 'vpn-9'},
-      ).toJson());
-      final rule = s.rule! as CustomRulePreset;
-      expect(rule.varsValues['outbound'], kImportOutboundFallback);
-      expect(rule.enabled, isFalse);
-      expect(s.warnings.single.kind, ImportRuleWarningKind.outboundMissing);
-    });
-
-    test('preset без override («как в шаблоне») — чисто', () {
+    test('json-правило: пустой outbound не лечится', () {
       final s = sanitize(
-          CustomRulePreset(name: 'Private IP', presetId: 'private-ip')
+          CustomRuleJson(name: 'J', json: '{"outbound":"direct-out"}')
               .toJson());
+      expect(s.importable, isTrue);
       expect(s.warnings, isEmpty);
       expect(s.rule!.enabled, isTrue);
-      expect(s.needsSrsDownload, isFalse); // inline-пресет, без remote srs
     });
   });
 
@@ -252,26 +254,16 @@ void main() {
       expect(s.warnings, isEmpty); // штатное поведение, не warning
     });
 
-    test('preset с remote rule_set → needsSrsDownload + выключен', () {
-      final s = sanitize(
-          CustomRulePreset(name: 'Block Ads', presetId: 'block-ads', enabled: true)
-              .toJson());
-      expect(s.rule!.enabled, isFalse);
-      expect(s.needsSrsDownload, isTrue);
-    });
   });
 
   group('вставка: имя и num', () {
-    test('preset садится на шаблонный num, чужой num из файла не переносится',
-        () {
+    test('чужой num из файла не переносится — правило садится в свою зону', () {
       final target = <CustomRule>[];
-      final raw =
-          CustomRulePreset(name: 'Block Ads', presetId: 'block-ads')
-              .toJson()
-            ..['num'] = 5; // чужая ось
+      final raw = CustomRuleInline(name: 'A', domains: ['a.com']).toJson()
+        ..['num'] = 5; // чужая ось
       final s = sanitize(raw);
       final inserted = insertImportedRule(target, s.rule!, template: template);
-      expect(inserted.orderNum, 960);
+      expect(inserted.orderNum, kUserRuleNumStart);
       expect(target, contains(inserted));
     });
 
@@ -292,21 +284,12 @@ void main() {
       expect(b.orderNum, kUserRuleNumStart + 1);
     });
 
-    test('коллизия имени → суффикс копии; повторный импорт не коллизирует',
-        () {
-      final target = <CustomRule>[
-        CustomRuleInline(name: 'My Rule', orderNum: 1000),
-      ];
+    test('§398 — имя при вставке не мутируется (суффиксов больше нет)', () {
+      final target = <CustomRule>[];
       final s =
           sanitize(CustomRuleInline(name: 'My Rule', domains: ['a.com']).toJson());
-      final first = insertImportedRule(target, s.rule!, template: template);
-      expect(first.name, 'My Rule (2)');
-
-      final s2 =
-          sanitize(CustomRuleInline(name: 'My Rule', domains: ['a.com']).toJson());
-      final second = insertImportedRule(target, s2.rule!, template: template);
-      expect(second.name, 'My Rule (3)');
-      expect(second.id, isNot(first.id));
+      final inserted = insertImportedRule(target, s.rule!, template: template);
+      expect(inserted.name, 'My Rule');
     });
   });
 

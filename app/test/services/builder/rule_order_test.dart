@@ -222,6 +222,43 @@ void main() {
       expect(head.varsValues['sniff_enabled'], 'false');
     });
 
+    test('§398: задвоенный пресет схлопывается, остаётся ПОСЛЕДНИЙ', () {
+      // Storage после импорта v2.20.11: две копии traffic-processing. Первая
+      // с дефолтными vars, вторая (приехавшая из файла) — с изменённым.
+      final rules = [
+        CustomRulePreset(
+          name: 'Traffic Processing',
+          presetId: 'traffic-processing',
+          varsValues: const {'sniff_enabled': 'true'},
+        ),
+        _inline('user'),
+        CustomRulePreset(
+          name: 'Traffic Processing',
+          presetId: 'traffic-processing',
+          varsValues: const {'sniff_enabled': 'false'},
+        ),
+      ];
+
+      final out = normalizeRuleOrder(rules, _catalog(), _template());
+
+      final heads =
+          out.where((r) => r.presetId == 'traffic-processing').toList();
+      expect(heads, hasLength(1), reason: 'дубль схлопнут');
+      expect((heads.single as CustomRulePreset).varsValues['sniff_enabled'],
+          'false',
+          reason: 'остался последний — более свежее намерение юзера');
+      expect(out.any((r) => r.name == 'user'), isTrue,
+          reason: 'непресетные правила не тронуты');
+    });
+
+    test('§398: дедуп не трогает список без повторов', () {
+      final rules = [_preset('fcm-push'), _preset('block-ads'), _inline('u')];
+
+      final out = dedupePresetRules(rules);
+
+      expect(identical(out, rules), isTrue, reason: 'список не пересобирается');
+    });
+
     test('регресс §369: пресет с direct-out не встаёт выше шапки', () {
       // fcm-push (970) добавлен в пустой список — шапка засевается на 0.
       final out =

@@ -110,6 +110,36 @@ List<CustomRule> seedRequiredPresets(
   return out;
 }
 
+/// §398 — схлопнуть повторы preset-правил: из группы с одинаковым `presetId`
+/// остаётся **последний** в порядке списка.
+///
+/// Откуда берутся повторы: импорт v2.20.11 позволял привезти пресет файлом, а
+/// `seedRequiredPresets` держит инвариант §264 по `presetId` — при двух копиях
+/// он доволен, и удаление одной ничего не меняло («удалить невозможно»).
+/// Импорт пресетов закрыт, но задвоенный storage надо починить у тех, кто уже
+/// успел; heal идёт в общем пути загрузки, отдельной миграции не нужно.
+///
+/// Почему последний, а не первый — решение владельца (17.08.2026): при импорте
+/// второй экземпляр приехал из файла, то есть отражает более свежее намерение.
+/// Возвращает новый список; порядок оставшихся элементов сохраняется.
+List<CustomRule> dedupePresetRules(List<CustomRule> customRules) {
+  final lastIndexByPresetId = <String, int>{};
+  for (var i = 0; i < customRules.length; i++) {
+    final cr = customRules[i];
+    if (cr.kind != CustomRuleKind.preset) continue;
+    lastIndexByPresetId[cr.presetId] = i;
+  }
+  if (lastIndexByPresetId.length == customRules.where((c) => c.kind == CustomRuleKind.preset).length) {
+    return customRules; // повторов нет — список не пересобираем
+  }
+  return [
+    for (var i = 0; i < customRules.length; i++)
+      if (customRules[i].kind != CustomRuleKind.preset ||
+          lastIndexByPresetId[customRules[i].presetId] == i)
+        customRules[i],
+  ];
+}
+
 /// §370 — полный проход: seed обязательных → разметка → сортировка.
 ///
 /// Идемпотентен: повторный вызов на нормализованном списке ничего не меняет.
@@ -120,7 +150,10 @@ List<CustomRule> normalizeRuleOrder(
   List<SelectableRule> selectableRules,
   WizardTemplate template,
 ) {
-  final seeded = seedRequiredPresets(customRules, selectableRules, template);
+  // §398 — дедуп ПЕРЕД seed'ом: seed проверяет наличие по presetId, и на
+  // задвоенном списке он молчал бы, оставив обе копии.
+  final deduped = dedupePresetRules(customRules);
+  final seeded = seedRequiredPresets(deduped, selectableRules, template);
   markRuleOrder(seeded, selectableRules);
   return sortRulesByNum(seeded);
 }

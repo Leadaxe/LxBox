@@ -229,7 +229,11 @@ class _RoutingScreenState extends State<RoutingScreen>
                       2;
                   if (!onRulesTab) return const SizedBox.shrink();
                   return RulesMenuButton(
-                    canExport: _customRules.isNotEmpty,
+                  // §398 — пресеты не экспортируются; при этом уйти на шаг
+                  // DNS можно и без правил, поэтому гейт снят до «есть хоть
+                  // какие-то настройки» (пустой storage — экран пуст в любом
+                  // случае).
+                  canExport: true,
                     onExport: _exportRules,
                     onImport: _importRules,
                   );
@@ -534,9 +538,15 @@ class _RoutingScreenState extends State<RoutingScreen>
   // ─── §396 — экспорт/импорт правил файлом ───────────────────────────────
 
   Future<void> _exportRules() async {
-    if (_customRules.isEmpty) return; // пункт меню и так disabled
     final template = _template;
     if (template == null) return;
+    // §398 — пресеты вне обмена: они есть у каждого получателя (из шаблона
+    // приложения), а вторая копия в списке ещё и неудаляема (seed §264
+    // держит инвариант по presetId).
+    final exportable = [
+      for (final r in _customRules)
+        if (r.kind != CustomRuleKind.preset) r,
+    ];
     // Данные шага 2 (DNS): серверы без preset-refs (их резолвер §294
     // порождает сам), правила — только пользовательские inline/srs.
     final rawServers = await SettingsStorage.getDnsServers();
@@ -552,15 +562,22 @@ class _RoutingScreenState extends State<RoutingScreen>
     if (!mounted) return;
     final selected = await showRuleExportPicker(
       context,
-      rules: List<CustomRule>.from(_customRules),
-      displayNames: ruleDisplayNames(_customRules, _template),
+      rules: exportable,
+      displayNames: ruleDisplayNames(exportable, _template),
       dnsServers: dnsServers,
       dnsRules: dnsRules,
       templateServerTags: {
         for (final s in template.dnsOptionsModel.servers) s.tag
       },
     );
-    if (selected == null || selected.rules.isEmpty || !mounted) return;
+    // §398 — DNS-only экспорт допустим: правил может не быть вовсе. Пусто
+    // целиком (ни правил, ни DNS) — выходим молча.
+    if (selected == null || !mounted) return;
+    if (selected.rules.isEmpty &&
+        selected.dnsServers.isEmpty &&
+        selected.dnsRules.isEmpty) {
+      return;
+    }
 
     try {
       // §374 — доступные способы выясняем до шита; обе проверки платформенные,
@@ -613,8 +630,7 @@ class _RoutingScreenState extends State<RoutingScreen>
           await Share.shareXFiles([
             XFile(path, mimeType: 'application/json', name: filename),
           ], subject: 'LxBox rules');
-          showSnack(
-              getLocalText.plural("Exported %d rules", selected.rules.length));
+          showSnack(getLocalText.s("Rules exported"));
           return;
       }
 
@@ -718,15 +734,22 @@ class _RoutingScreenState extends State<RoutingScreen>
           if (it.importable) it.item!['tag'].toString(),
       };
 
-      final items = [
-        for (final entry in contents.rawRules)
-          sanitizeImportedRule(
-            entry,
-            channelTags: channelTags,
-            dnsServerTags: dnsServerTags,
-            template: template,
-          ),
-      ];
+      // §398 — дедуп по видимому имени (§279): имена получателя плюс имена
+      // уже принятых элементов этого же файла (два одноимённых правила в
+      // одном файле не пройдут оба).
+      final takenNames = visibleRuleNames(_customRules, template);
+      final items = <SanitizedImportRule>[];
+      for (final entry in contents.rawRules) {
+        final item = sanitizeImportedRule(
+          entry,
+          channelTags: channelTags,
+          dnsServerTags: dnsServerTags,
+          template: template,
+          existingNames: takenNames,
+        );
+        if (item.importable) takenNames.add(item.rule!.name);
+        items.add(item);
+      }
       if (!mounted) return;
       final picked = await showRuleImportPreview(
         context,

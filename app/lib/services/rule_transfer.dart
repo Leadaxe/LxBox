@@ -5,10 +5,8 @@ import '../config/consts.dart'
 import '../models/custom_rule.dart';
 import '../models/dns_ref.dart';
 import '../models/parser_config.dart';
-import '../models/preset_rule_set.dart' show remoteRuleSetsOfPreset;
 import 'builder/rule_order.dart' show nextUserRuleNum;
 import 'parser/uri_utils.dart' show newUuidV4;
-import 'rule_display_names.dart' show visibleRuleNames;
 
 /// §396 — обмен правилами роутинга файлом (export/import выбранных правил).
 ///
@@ -195,6 +193,15 @@ enum ImportRuleRejectReason {
   /// новой версии с новым видом правил; остальные элементы живы).
   unsupportedEntry,
 
+  /// §398 — пресеты вне обмена: пресет есть у каждого получателя (он из
+  /// шаблона приложения), переносить нечего. Файлы v2.20.11 могли нести
+  /// пресет в `rules[]` — отвергаем на импорте.
+  presetNotTransferable,
+
+  /// §398 — правило с таким видимым именем у получателя уже есть. Дублей не
+  /// создаём: неотличимые по имени правила невозможно осмысленно удалять.
+  nameExists,
+
   /// preset: `presetId` отсутствует в шаблоне получателя.
   unknownPreset,
 }
@@ -233,13 +240,19 @@ class SanitizedImportRule {
 /// [channelTags] — теги ВСЕХ каналов получателя (включая выключенные: ссылку
 /// на выключенный канал лечит существующая механика варнингов §274/§277).
 /// [dnsServerTags] — union storage-refs ∪ template (источник дропдауна §117).
-/// Имя и `num` здесь НЕ трогаются — это забота [insertImportedRule] (им нужен
-/// список правил в момент вставки, включая ранее вставленные из этого файла).
+/// [existingNames] — §398: видимые имена правил получателя
+/// (`visibleRuleNames`, §279). Совпадение → элемент неимпортируем: дублей по
+/// имени не создаём, иначе их невозможно осмысленно различать и удалять.
+/// Вызывающий добавляет в набор имена уже вставленных элементов файла, чтобы
+/// два одноимённых правила в одном файле не прошли оба.
+///
+/// `num` здесь НЕ трогается — это забота [insertImportedRule].
 SanitizedImportRule sanitizeImportedRule(
   dynamic rawEntry, {
   required Set<String> channelTags,
   required Set<String> dnsServerTags,
   required WizardTemplate template,
+  Set<String> existingNames = const {},
 }) {
   if (rawEntry is! Map<String, dynamic>) {
     return const SanitizedImportRule(
@@ -275,22 +288,23 @@ SanitizedImportRule sanitizeImportedRule(
     );
   }
 
-  // preset: без пресета в шаблоне получателя правило нечем разворачивать —
-  // отвергаем с внятной причиной вместо broken-card.
-  SelectableRule? preset;
+  // §398 — пресеты вне обмена: пресет есть у каждого получателя (он из
+  // шаблона приложения). Файлы v2.20.11 могли нести его в `rules[]`, а
+  // вторая копия пресета в списке ещё и неудаляема (seed §264 держит
+  // инвариант по presetId) — отвергаем на входе.
   if (parsed.kind == CustomRuleKind.preset) {
-    for (final sr in template.selectableRules) {
-      if (sr.presetId == parsed.presetId) {
-        preset = sr;
-        break;
-      }
-    }
-    if (preset == null) {
-      return SanitizedImportRule(
-        displayLabel: label.isNotEmpty ? label : parsed.presetId,
-        rejectReason: ImportRuleRejectReason.unknownPreset,
-      );
-    }
+    return SanitizedImportRule(
+      displayLabel: label.isNotEmpty ? label : parsed.presetId,
+      rejectReason: ImportRuleRejectReason.presetNotTransferable,
+    );
+  }
+
+  // §398 — дубль по видимому имени не создаём.
+  if (existingNames.contains(parsed.name)) {
+    return SanitizedImportRule(
+      displayLabel: parsed.name,
+      rejectReason: ImportRuleRejectReason.nameExists,
+    );
   }
 
   final warnings = <ImportRuleWarning>[];
@@ -336,65 +350,37 @@ SanitizedImportRule sanitizeImportedRule(
   }
 
   // ── srs: кэша `.srs` у получателя нет — правило приезжает выключенным
-  // («tap ☁ to download, then enable», предикат `_copyPreset`).
-  final needsSrs = rule is CustomRuleSrs ||
-      (rule is CustomRulePreset &&
-          preset != null &&
-          remoteRuleSetsOfPreset(preset, rule).isNotEmpty);
+  // («tap ☁ to download, then enable», предикат `_copyPreset`). §398 —
+  // preset-ветки здесь больше нет: пресеты до этой точки не доходят.
+  final needsSrs = rule is CustomRuleSrs;
   if (needsSrs || forceDisable) {
     rule = rule.withEnabled(false);
   }
 
-  final display = rule.kind == CustomRuleKind.preset
-      ? (preset!.label.isNotEmpty ? preset.label : preset.presetId)
-      : rule.name;
   return SanitizedImportRule(
     rule: rule,
-    displayLabel: display,
+    displayLabel: rule.name,
     warnings: warnings,
     needsSrsDownload: needsSrs,
   );
 }
 
-/// Вставка санированного правила в список (мутирует [target]): дедуп имени,
-/// назначение `num` (§370), append. Сортировку по оси и персист делает
-/// вызывающий — один раз на весь импорт.
+/// Вставка санированного правила в список (мутирует [target]): назначение
+/// `num` (§370) + append. Сортировку по оси и персист делает вызывающий —
+/// один раз на весь импорт.
 ///
-/// - preset → `num` из шаблона получателя (как `_copyPreset`);
-/// - остальные → [nextUserRuleNum] — каждое следующее правило видит уже
-///   вставленные предыдущие, поэтому мульти-импорт нумеруется последовательно.
+/// §398 — имя НЕ мутируется: конфликтные по имени элементы отбраковываются
+/// санацией и сюда не доходят (дублей не создаём). Пресетов здесь тоже нет.
+/// `num` — [nextUserRuleNum]: каждое следующее правило видит уже вставленные
+/// предыдущие, поэтому мульти-импорт нумеруется последовательно.
 CustomRule insertImportedRule(
   List<CustomRule> target,
   CustomRule rule, {
   required WizardTemplate template,
 }) {
-  var next = rule;
-
-  if (next.kind == CustomRuleKind.preset) {
-    int? templateNum;
-    for (final sr in template.selectableRules) {
-      if (sr.presetId == next.presetId) {
-        templateNum = sr.num;
-        break;
-      }
-    }
-    next.orderNum = templateNum ?? nextUserRuleNum(target);
-    // Имя preset-правила не трогаем: display-слой §279 даёт live-label
-    // шаблона получателя + порядковый суффикс копии.
-  } else {
-    next.orderNum = nextUserRuleNum(target);
-    final existing = visibleRuleNames(target, template);
-    if (existing.contains(next.name)) {
-      var i = 2;
-      while (existing.contains('${next.name} ($i)')) {
-        i++;
-      }
-      next = next.withName('${next.name} ($i)');
-    }
-  }
-
-  target.add(next);
-  return next;
+  rule.orderNum = nextUserRuleNum(target);
+  target.add(rule);
+  return rule;
 }
 
 // ─── §396 DNS-секции: санация dns_servers[] / dns_rules[] ────────────────
