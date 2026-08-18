@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
+import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/transport.dart';
 
 /// §097 — XHTTP (Xray splithttp) нативный transport. По образцу
@@ -296,6 +298,235 @@ void main() {
       expect(q.containsKey('sessionPlacement'), false);
       expect(q.containsKey('uplinkHTTPMethod'), false);
       expect(q.containsKey('xPaddingObfsMode'), false);
+    });
+  });
+
+  // §399 — состав полей XHTTP общий для трёх веток парсера. До фикса Xray-JSON
+  // читала три поля (path/host/mode), sing-box-JSON — шесть, URI — все.
+  group('§399 XHTTP: общий состав полей в JSON-ветках', () {
+    /// Xray-элемент с одним VLESS-узлом на XHTTP.
+    Map<String, dynamic> xrayElement(Map<String, dynamic> xhttpSettings) => {
+          'remarks': 'x',
+          'outbounds': [
+            {
+              'tag': 'proxy',
+              'protocol': 'vless',
+              'settings': {
+                'vnext': [
+                  {
+                    'address': '1.2.3.4',
+                    'port': 443,
+                    'users': [
+                      {'id': 'u-1', 'encryption': 'none'}
+                    ],
+                  }
+                ],
+              },
+              'streamSettings': {
+                'network': 'xhttp',
+                'security': 'none',
+                'xhttpSettings': xhttpSettings,
+              },
+            },
+            {'tag': 'direct', 'protocol': 'freedom'},
+          ],
+        };
+
+    /// sing-box `transport`-объект → разобранный обратно XHTTP-транспорт.
+    XhttpTransport singboxTransport(Map<String, dynamic> transport) {
+      final node = parseSingboxEntry({
+        'type': 'vless',
+        'tag': 'n',
+        'server': '1.2.3.4',
+        'server_port': 443,
+        'uuid': 'u-1',
+        'transport': transport,
+      })! as VlessSpec;
+      return node.transport as XhttpTransport;
+    }
+
+    XhttpTransport xrayTransport(Map<String, dynamic> xhttpSettings) {
+      final nodes = parseXrayElement(xrayElement(xhttpSettings));
+      expect(nodes, hasLength(1));
+      return (nodes.single as VlessSpec).transport as XhttpTransport;
+    }
+
+    // Критерий 1 — узел 188.72.103.4 из SPEC 102-B: сервер ждёт uplink GET'ом,
+    // ядро без поля шлёт POST → `unexpected upload status: 400`.
+    test('extra.uplinkHTTPMethod=GET + packet-up доезжает до конфига', () {
+      final t = xrayTransport({
+        'path': '/x',
+        'mode': 'packet-up',
+        'extra': {
+          'uplinkHTTPMethod': 'GET',
+          'scMaxBufferedPosts': 30,
+          'scMaxEachPostBytes': '1000000',
+          'xPaddingBytes': '0-0',
+        },
+      });
+      final (m, w) = t.toSingbox(TemplateVars.empty);
+      expect(m['uplink_http_method'], 'GET');
+      expect(w, isEmpty);
+    });
+
+    // Критерий 2 — узлы 46.243.142.42 / 95.163.232.194: без x_padding_bytes
+    // ядро подставляет свой padding, которого сервер не ждёт → 400.
+    test('xPaddingBytes "50-150" и "0-0" доезжают дословно из обеих веток', () {
+      for (final v in ['50-150', '0-0']) {
+        expect(
+          xrayTransport({
+            'mode': 'stream-one',
+            'extra': {'xPaddingBytes': v},
+          }).xPaddingBytes,
+          v,
+        );
+        expect(
+          singboxTransport({'type': 'xhttp', 'x_padding_bytes': v})
+              .xPaddingBytes,
+          v,
+        );
+      }
+    });
+
+    // Критерий 3 — эмиттер кладёт значение в конфиг как есть; `1e+06` ядро
+    // не разберёт, а число вместо строки ломает схему транспорта.
+    test('числа из extra → строки, без экспоненциальной нотации', () {
+      final t = xrayTransport({
+        'mode': 'packet-up',
+        'extra': {
+          'scMaxEachPostBytes': 1000000,
+          'scMinPostsIntervalMs': 30.0,
+          'uplinkChunkSize': 0,
+        },
+      });
+      expect(t.scMaxEachPostBytes, '1000000');
+      expect(t.scMinPostsIntervalMs, '30');
+      expect(t.uplinkChunkSize, '0');
+      final (m, _) = t.toSingbox(TemplateVars.empty);
+      expect(m['sc_max_each_post_bytes'], '1000000');
+      expect(m['sc_max_each_post_bytes'], isA<String>());
+    });
+
+    // Критерий 4 — Xray допускает обе раскладки; при конфликте extra выигрывает.
+    test('плоское поле читается; одноимённое в extra его перекрывает', () {
+      expect(
+        xrayTransport({'xPaddingBytes': '10-20'}).xPaddingBytes,
+        '10-20',
+      );
+      expect(
+        xrayTransport({
+          'xPaddingBytes': '10-20',
+          'extra': {'xPaddingBytes': '50-150'},
+        }).xPaddingBytes,
+        '50-150',
+      );
+    });
+
+    // Критерий 5 — R6: деградация вместо поломки.
+    test('битый / не-объектный extra не роняет разбор узла', () {
+      for (final bad in <Object>['не-json', <Object>[], 5, true]) {
+        final t = xrayTransport({
+          'path': '/p',
+          'mode': 'packet-up',
+          'extra': bad,
+        });
+        expect(t.path, '/p');
+        expect(t.mode, 'packet-up');
+        expect(t.toSingbox(TemplateVars.empty).$2, isEmpty);
+      }
+    });
+
+    // Критерий 6 — round-trip через sing-box JSON. До фикса «открыл ноду в
+    // JSON-редакторе → сохранил» молча срезало 15 полей §127.
+    test('round-trip NodeSpec → sing-box JSON → NodeSpec не теряет полей', () {
+      const golden = XhttpTransport(
+        host: 'www.example.com',
+        path: '/xhttp',
+        mode: 'packet-up',
+        xPaddingBytes: '100-1000',
+        noGrpcHeader: true,
+        headers: {'User-Agent': 'x'},
+        sessionPlacement: 'header',
+        sessionKey: 'X-Session',
+        seqPlacement: 'query',
+        seqKey: 'x_seq',
+        uplinkDataPlacement: 'header',
+        uplinkDataKey: 'X-Data',
+        uplinkChunkSize: '3000-4000',
+        uplinkHttpMethod: 'GET',
+        xPaddingObfsMode: true,
+        xPaddingKey: 'x_padding',
+        xPaddingHeader: 'X-Padding',
+        xPaddingPlacement: 'header',
+        xPaddingMethod: 'tokenish',
+        scMaxEachPostBytes: '1000000',
+        scMinPostsIntervalMs: '30',
+      );
+      final node = VlessSpec(
+        id: 'id-1',
+        tag: 'n',
+        label: 'n',
+        server: '1.2.3.4',
+        port: 443,
+        rawUri: '',
+        uuid: 'u-1',
+        transport: golden,
+      );
+      final back = parseSingboxEntry(node.emit(TemplateVars.empty).map)!;
+      final backTransport = (back as VlessSpec).transport as XhttpTransport;
+      expect(
+        backTransport.toSingbox(TemplateVars.empty).$1,
+        golden.toSingbox(TemplateVars.empty).$1,
+      );
+    });
+
+    // Критерий 7 — расхождение схем между ветками. Тест падает, когда поле
+    // добавлено в модель/эмиттер, но какая-то ветка его не читает.
+    test('три ветки читают один и тот же набор ключей', () {
+      // Эталон — выхлоп эмиттера для ноды со всеми заполненными полями.
+      const golden = XhttpTransport(
+        host: 'h',
+        path: '/p',
+        mode: 'packet-up',
+        xPaddingBytes: '100-1000',
+        noGrpcHeader: true,
+        sessionPlacement: 'header',
+        sessionKey: 'X-Session',
+        seqPlacement: 'query',
+        seqKey: 'x_seq',
+        uplinkDataPlacement: 'header',
+        uplinkDataKey: 'X-Data',
+        uplinkChunkSize: '3000-4000',
+        uplinkHttpMethod: 'GET',
+        xPaddingObfsMode: true,
+        xPaddingKey: 'x_padding',
+        xPaddingHeader: 'X-Padding',
+        xPaddingPlacement: 'header',
+        xPaddingMethod: 'tokenish',
+        scMaxEachPostBytes: '1000000',
+        scMinPostsIntervalMs: '30',
+      );
+      final expected = golden.toSingbox(TemplateVars.empty).$1;
+
+      // Ветка 1 — URI (camelCase query).
+      final viaUri = parseTransport(transportToQuery(golden))!;
+      expect(viaUri.toSingbox(TemplateVars.empty).$1, expected,
+          reason: 'URI-ветка потеряла поле');
+
+      // Ветка 2 — Xray-JSON: те же значения, но snake_case ключами в extra.
+      final viaXray = xrayTransport({
+        'host': 'h',
+        'path': '/p',
+        'mode': 'packet-up',
+        'extra': Map<String, dynamic>.from(expected)..remove('type'),
+      });
+      expect(viaXray.toSingbox(TemplateVars.empty).$1, expected,
+          reason: 'Xray-JSON-ветка потеряла поле');
+
+      // Ветка 3 — sing-box JSON: выхлоп эмиттера, поданный обратно.
+      expect(singboxTransport(expected).toSingbox(TemplateVars.empty).$1,
+          expected,
+          reason: 'sing-box-JSON-ветка потеряла поле');
     });
   });
 }

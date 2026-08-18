@@ -780,10 +780,12 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
       return HttpTransport(path: h['path']?.toString() ?? '/', hosts: hosts);
     case 'xhttp': // §097 — Xray xhttpSettings → нативный xhttp
       final x = stream['xhttpSettings'] as Map? ?? const {};
-      return XhttpTransport(
-        path: x['path']?.toString() ?? '/',
-        host: x['host']?.toString() ?? '',
-        mode: x['mode']?.toString() ?? '',
+      // §399 — состав полей общий с URI-веткой. Xray допускает обе раскладки:
+      // плоско в `xhttpSettings` и вложенным объектом `extra`; при конфликте
+      // выигрывает `extra`. Битый/не-объектный `extra` игнорируется — узел
+      // собирается на плоских полях.
+      return xhttpFromMap(
+        mergeXhttpExtra(xhttpScalarsFromJson(x), raw: x['extra']),
       );
     default:
       return null;
@@ -1208,12 +1210,10 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
         host: raw['host']?.toString() ?? '',
       );
     case 'xhttp': // §097 — нативный xhttp из sing-box JSON
-      return XhttpTransport(
-        path: raw['path']?.toString() ?? '/',
-        host: raw['host']?.toString() ?? '',
-        mode: raw['mode']?.toString() ?? '',
-        xPaddingBytes: raw['x_padding_bytes']?.toString() ?? '',
-        noGrpcHeader: raw['no_grpc_header'] == true,
+      // §399 — состав полей общий с URI-веткой: round-trip через JSON-редактор
+      // не должен срезать расширенные поля §127. `headers` — Map, идёт отдельно.
+      return xhttpFromMap(
+        xhttpScalarsFromJson(raw),
         headers:
             (raw['headers'] as Map?)?.map(
               (k, v) => MapEntry(k.toString(), v.toString()),

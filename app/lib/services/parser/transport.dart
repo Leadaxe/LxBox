@@ -84,7 +84,8 @@ TransportSpec? parseTransport(
       // §097/§127 — нативный xhttp + расширенные поля Xray splithttp (SPEC 002
       // v2). Ключи читаем в обеих формах: camelCase (Xray URI) и snake_case
       // (sing-box). Плюс параметр `extra` (URL-encoded JSON) с доп. полями.
-      return _parseXhttp(q);
+      // §399 — состав полей общий с JSON-ветками (xhttpFromMap).
+      return xhttpFromMap(mergeXhttpExtra(q));
     case 'raw':
     case 'tcp':
     case '':
@@ -152,14 +153,26 @@ String? _nonEmpty(String? v) {
   return s.isEmpty ? null : s;
 }
 
-/// §127 — разбор `type=xhttp` со всеми клиентскими полями SPEC 002 v2.
+/// §399 — единственное место, где перечислены имена полей XHTTP.
 ///
-/// Источник полей — плоские query И параметр `extra` (URL-encoded JSON).
-/// extra сливается в копию query (его ключи в приоритете для своих); битый
-/// extra игнорируется — ссылка остаётся рабочей на плоских параметрах.
-XhttpTransport _parseXhttp(Map<String, String> q) {
-  final m = _mergeXhttpExtra(q);
-
+/// Принимает **уже слитую** карту (плоские ключи + `extra`, см.
+/// [mergeXhttpExtra]) и читает каждое поле в обеих формах: camelCase (Xray) и
+/// snake_case (sing-box), camelCase в приоритете.
+///
+/// Вызывается из трёх веток парсера — URI (`parseTransport`), Xray-JSON и
+/// sing-box-JSON (`json_parsers.dart`). Поле, добавленное сюда, появляется во
+/// всех трёх сразу; расхождение схем — дефект (§399 R1).
+///
+/// [headers] отдельным параметром: это `Map`, а не скаляр, и в карту полей не
+/// укладывается (в URI-ветке его нет вовсе).
+///
+/// §217 — поля читаются **дословно**. Нормализацию против правил ядра
+/// (`normalizeMeta`, `transport/v2rayxhttp/meta.go`) делает
+/// `XhttpTransport.toSingbox`, где есть канал NodeWarning для ⚠️ в подписке.
+XhttpTransport xhttpFromMap(
+  Map<String, String> m, {
+  Map<String, String> headers = const {},
+}) {
   // path: срезать `?…`-хвост (реальные ноды: path=/x?ed=2048 — хвост не путь).
   // §303 — общий хелпер; early data у xhttp нет, значение отбрасываем.
   final (path, _) = splitEarlyDataPath(m['path'] ?? '/');
@@ -167,15 +180,13 @@ XhttpTransport _parseXhttp(Map<String, String> q) {
   var host = (m['host'] ?? '').trim();
   if (host.isEmpty) host = (m['sni'] ?? '').trim();
 
-  // §217 — читаем поля дословно; нормализацию против правил ядра
-  // (normalizeMeta, transport/v2rayxhttp/meta.go) делает XhttpTransport.toSingbox,
-  // где есть канал NodeWarning для ⚠️ в подписке.
   return XhttpTransport(
     path: path,
     host: host,
     mode: (m['mode'] ?? '').trim(),
     xPaddingBytes: _pick(m, 'xPaddingBytes', 'x_padding_bytes'),
     noGrpcHeader: _truthy(m['noGRPCHeader'] ?? m['no_grpc_header']),
+    headers: headers,
     sessionPlacement: _pick(m, 'sessionPlacement', 'session_placement'),
     sessionKey: _pick(m, 'sessionKey', 'session_key'),
     seqPlacement: _pick(m, 'seqPlacement', 'seq_placement'),
@@ -197,28 +208,63 @@ XhttpTransport _parseXhttp(Map<String, String> q) {
   );
 }
 
-/// extra (URL-encoded JSON) → копия query со слитыми ключами. extra в приоритете
-/// для своих ключей (как Xray). Битый/обрезанный extra → возвращаем исходную
-/// query как есть (не роняем парсинг ссылки). extra-значения приводим к строке.
-Map<String, String> _mergeXhttpExtra(Map<String, String> q) {
-  final raw = q['extra'];
-  if (raw == null || raw.trim().isEmpty) return q;
-  try {
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map) return q;
-    final merged = Map<String, String>.from(q);
-    decoded.forEach((k, v) {
-      if (k is String && v != null) merged[k] = _scalarToString(v);
-    });
-    return merged;
-  } catch (_) {
-    // Битый extra — игнорируем, ссылка живёт на плоских параметрах.
-    return q;
+/// §399 — JSON-объект `xhttpSettings` / sing-box `transport` → плоская карта
+/// строк, пригодная для [xhttpFromMap].
+///
+/// Вложенные объекты и массивы отбрасываются: в карту полей укладываются только
+/// скаляры. `extra` и `headers` вызывающая сторона достаёт до этого вызова —
+/// у них своя обработка.
+Map<String, String> xhttpScalarsFromJson(Map raw) {
+  final out = <String, String>{};
+  raw.forEach((k, v) {
+    if (k is! String || v == null) return;
+    if (v is Map || v is List) return;
+    out[k] = _scalarToString(v);
+  });
+  return out;
+}
+
+/// §399 — слить `extra` в карту полей. `extra` в приоритете для своих ключей
+/// (поведение Xray и URI-ветки).
+///
+/// [raw] — источник `extra`: строка с JSON (URI-ветка, где значение уже
+/// percent-декодировано `Uri.queryParameters`) **или** уже распарсенный `Map`
+/// (JSON-ветки). Отсутствующий, битый, не-объектный `extra` игнорируется —
+/// узел остаётся рабочим на плоских полях (§399 R6).
+Map<String, String> mergeXhttpExtra(Map<String, String> q, {Object? raw}) {
+  final src = raw ?? q['extra'];
+  if (src == null) return q;
+
+  Map? decoded;
+  if (src is Map) {
+    decoded = src;
+  } else {
+    final s = src.toString().trim();
+    if (s.isEmpty) return q;
+    try {
+      final parsed = jsonDecode(s);
+      if (parsed is Map) decoded = parsed;
+    } catch (_) {
+      // Битый extra — игнорируем, узел живёт на плоских параметрах.
+      return q;
+    }
   }
+  if (decoded == null) return q;
+
+  final merged = Map<String, String>.from(q);
+  decoded.forEach((k, v) {
+    if (k is! String || v == null) return;
+    if (v is Map || v is List) return;
+    merged[k] = _scalarToString(v);
+  });
+  return merged;
 }
 
 /// JSON-скаляр → строка. `30.0` (double без дроби) → `"30"`; bool → `true`/
 /// `false`; число/строка как есть.
+///
+/// §399 — `1000000.0` обязано стать `"1000000"`, а не `1e+06`: эмиттер кладёт
+/// значение в конфиг как есть, и ядро не разберёт экспоненциальную запись.
 String _scalarToString(Object v) {
   if (v is bool) return v ? 'true' : 'false';
   if (v is double && v == v.truncateToDouble()) {
