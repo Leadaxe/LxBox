@@ -1,0 +1,367 @@
+<title>LxBox Tester Certificate</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+
+  :root {
+    --orange-light: #FB923C;
+    --orange-deep:  #EA580C;
+    --navy:         #0F172A;
+    --navy-soft:    #334155;
+    --muted:        #64748B;
+    --ivory:        #F8FAFC;
+    --hairline:     #E2E8F0;
+    --page:         #FFFFFF;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: #64748B;
+    font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+    color: var(--navy);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- Page: exact A4 landscape ---- */
+  .sheet {
+    position: relative;
+    width: 297mm;
+    height: 210mm;
+    margin: 8mm auto;
+    background: var(--page);
+    overflow: hidden;
+    box-shadow: 0 4mm 12mm rgba(15, 23, 42, .35);
+  }
+
+  @media print {
+    body { background: #fff; }
+    .sheet { margin: 0; box-shadow: none; page-break-after: always; }
+  }
+
+  /* ---- Left accent band, echoes the app icon gradient ---- */
+  .band {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 14mm;
+    background: linear-gradient(160deg, var(--orange-light), var(--orange-deep));
+  }
+  .band::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 1.6mm;
+    background: var(--navy);
+    opacity: .85;
+  }
+
+  /* ---- Watermark: the L-mark, very faint ---- */
+  .watermark {
+    position: absolute;
+    right: -20mm;
+    bottom: -26mm;
+    width: 140mm;
+    opacity: .04;
+    pointer-events: none;
+  }
+
+  /* ---- Content frame ---- */
+  .inner {
+    position: absolute;
+    inset: 14mm 18mm 13mm 32mm;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---- Header ---- */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10mm;
+    padding-bottom: 5.5mm;
+    border-bottom: .4mm solid var(--hairline);
+  }
+
+  .brand { display: flex; align-items: center; gap: 5mm; }
+  .brand svg { width: 15mm; height: 15mm; display: block; }
+
+  .brand-text .name {
+    font-size: 21pt;
+    font-weight: 700;
+    letter-spacing: .5pt;
+    line-height: 1;
+  }
+  .brand-text .tagline {
+    margin-top: 1.6mm;
+    font-size: 8pt;
+    letter-spacing: 1.5pt;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .program {
+    text-align: right;
+    font-size: 8.5pt;
+    line-height: 1.65;
+    color: var(--muted);
+    letter-spacing: .3pt;
+  }
+  .program strong {
+    display: block;
+    font-size: 10pt;
+    letter-spacing: 1.3pt;
+    text-transform: uppercase;
+    color: var(--navy);
+  }
+
+  /* ---- Body ---- */
+  .body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .kicker {
+    font-size: 10.5pt;
+    letter-spacing: 3.4pt;
+    text-transform: uppercase;
+    color: var(--orange-deep);
+    font-weight: 600;
+  }
+
+  .awarded {
+    margin-top: 9mm;
+    font-size: 9.5pt;
+    letter-spacing: 2pt;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .recipient {
+    margin-top: 3.5mm;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 46pt;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: .2pt;
+  }
+  .recipient-rule {
+    margin-top: 4.5mm;
+    width: 92mm;
+    height: 1.4mm;
+    background: linear-gradient(90deg, var(--orange-light), var(--orange-deep));
+    border-radius: 1mm;
+  }
+
+  .citation {
+    margin-top: 8mm;
+    max-width: 182mm;
+    font-size: 11pt;
+    line-height: 1.65;
+    color: var(--navy-soft);
+  }
+  .citation .ru {
+    display: block;
+    margin-top: 3mm;
+    font-size: 9.5pt;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  /* ---- Facts row ---- */
+  .facts {
+    display: flex;
+    gap: 14mm;
+    margin-top: 9mm;
+  }
+  .fact .label {
+    font-size: 7.5pt;
+    letter-spacing: 1.4pt;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .fact .value {
+    margin-top: 1.6mm;
+    font-size: 10.5pt;
+    font-weight: 600;
+    color: var(--navy);
+  }
+
+  /* ---- Footer ---- */
+  footer {
+    margin-top: auto;
+    padding-top: 5.5mm;
+    border-top: .4mm solid var(--hairline);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10mm;
+  }
+
+  .sig { width: 66mm; }
+  .sig-name {
+    font-size: 13pt;
+    font-weight: 600;
+    padding-bottom: 2mm;
+    border-bottom: .4mm solid var(--navy);
+  }
+  .sig-role {
+    margin-top: 2mm;
+    font-size: 8.5pt;
+    letter-spacing: .4pt;
+    color: var(--muted);
+  }
+
+  .store {
+    text-align: center;
+  }
+  .store img {
+    height: 13mm;
+    display: block;
+    margin: 0 auto;
+  }
+  .store .optin {
+    margin-top: 1.8mm;
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 7pt;
+    letter-spacing: .2pt;
+    color: var(--muted);
+  }
+  .store a { text-decoration: none; }
+
+  .meta {
+    text-align: right;
+    font-size: 8.5pt;
+    line-height: 1.75;
+    color: var(--muted);
+  }
+  .meta .id {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 9.5pt;
+    letter-spacing: .6pt;
+    color: var(--navy);
+  }
+</style>
+
+<!-- ============================================================
+     LxBox — closed testing certificate
+     Placeholders: {{NAME}} {{CERT_ID}} {{DATE}} {{VERSION}}
+     ============================================================ -->
+<div class="sheet">
+  <div class="band"></div>
+
+  <!-- faint L-mark watermark -->
+  <svg class="watermark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <g stroke="#0F172A" stroke-width="56" stroke-linecap="round" fill="none">
+      <line x1="67.8" y1="67.8" x2="67.8" y2="444.2"/>
+      <line x1="67.8" y1="444.2" x2="256" y2="444.2"/>
+      <line x1="67.8" y1="67.8" x2="413.1" y2="413.1"/>
+    </g>
+    <line x1="67.8" y1="444.2" x2="413" y2="99" stroke="#0F172A" stroke-width="56" stroke-linecap="round"/>
+    <path d="M 464 48 L 464 149.8 L 362.2 48 Z" fill="#0F172A"/>
+    <circle cx="67.8" cy="67.8" r="54" fill="#0F172A"/>
+    <circle cx="67.8" cy="444.2" r="54" fill="#0F172A"/>
+    <circle cx="256" cy="256" r="54" fill="#0F172A"/>
+  </svg>
+
+  <div class="inner">
+    <header>
+      <div class="brand">
+        <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#FB923C"/>
+              <stop offset="1" stop-color="#EA580C"/>
+            </linearGradient>
+            <clipPath id="boxClip"><rect width="512" height="512" rx="112"/></clipPath>
+          </defs>
+          <g clip-path="url(#boxClip)">
+            <rect width="512" height="512" fill="url(#bgGrad)"/>
+            <g stroke="#F8FAFC" stroke-width="56" stroke-linecap="round" fill="none">
+              <line x1="67.8" y1="67.8" x2="67.8" y2="444.2"/>
+              <line x1="67.8" y1="444.2" x2="256" y2="444.2"/>
+              <line x1="67.8" y1="67.8" x2="413.1" y2="413.1"/>
+            </g>
+            <path d="M 464 464 L 464 362.2 L 362.2 464 Z" fill="#F8FAFC"/>
+            <line x1="67.8" y1="444.2" x2="413" y2="99" stroke="#0F172A" stroke-width="56" stroke-linecap="round"/>
+            <path d="M 464 48 L 464 149.8 L 362.2 48 Z" fill="#0F172A"/>
+            <g stroke="#0F172A" stroke-width="18" stroke-linecap="round" stroke-dasharray="28 45" fill="none">
+              <line x1="67.8" y1="67.8" x2="67.8" y2="444.2"/>
+            </g>
+            <circle cx="67.8" cy="67.8" r="54" fill="#0F172A"/><circle cx="67.8" cy="67.8" r="18" fill="#F8FAFC"/>
+            <circle cx="67.8" cy="444.2" r="54" fill="#0F172A"/><circle cx="67.8" cy="444.2" r="18" fill="#F8FAFC"/>
+            <circle cx="256" cy="256" r="54" fill="#0F172A"/><circle cx="256" cy="256" r="18" fill="#F8FAFC"/>
+          </g>
+        </svg>
+        <div class="brand-text">
+          <div class="name">L×Box</div>
+          <div class="tagline">Android VPN client</div>
+        </div>
+      </div>
+
+      <div class="program">
+        <strong>Closed Testing Program</strong>
+        Google Play · Android<br>
+        Release track {{VERSION}}
+      </div>
+    </header>
+
+    <div class="body">
+      <div class="kicker">Certificate of Participation</div>
+
+      <div class="awarded">This certificate is awarded to</div>
+      <div class="recipient">{{NAME}}</div>
+      <div class="recipient-rule"></div>
+
+      <p class="citation">
+        for taking part in the closed testing of <strong>L×Box</strong> on Google Play —
+        installing the application, using it on a personal Android device throughout the
+        testing period, and reporting the observations that helped shape the public release.
+        <span class="ru">
+          Настоящий сертификат подтверждает участие в закрытом тестировании приложения
+          L×Box в Google Play и вклад в подготовку публичного релиза.
+        </span>
+      </p>
+
+      <div class="facts">
+        <div class="fact">
+          <div class="label">Platform</div>
+          <div class="value">Android · Google Play</div>
+        </div>
+        <div class="fact">
+          <div class="label">Distribution</div>
+          <div class="value">Closed testing (opt-in)</div>
+        </div>
+        <div class="fact">
+          <div class="label">Release track</div>
+          <div class="value">{{VERSION}}</div>
+        </div>
+        <div class="fact">
+          <div class="label">Issued</div>
+          <div class="value">{{DATE}}</div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="sig">
+        <div class="sig-name">Leadaxe</div>
+        <div class="sig-role">Author &amp; maintainer, L×Box</div>
+      </div>
+
+      <div class="store">
+        <a href="https://play.google.com/apps/testing/com.leadaxe.lxbox">
+          <img src="data:image/png;base64,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" alt="Get it on Google Play">
+          <div class="optin">play.google.com/apps/testing/com.leadaxe.lxbox</div>
+        </a>
+      </div>
+
+      <div class="meta">
+        Certificate no. <span class="id">{{CERT_ID}}</span><br>
+        github.com/leadaxe/LxBox
+      </div>
+    </footer>
+  </div>
+</div>
