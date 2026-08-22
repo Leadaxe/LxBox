@@ -46,3 +46,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# SPEC 103 — вендоренная копия контракта (tool/sync_contract.sh).
+# Источник правды — contract/ в репозитории singbox-launcher; здесь только
+# рабочая копия для конформанс-раннера, в git не идёт.
+/contract/
