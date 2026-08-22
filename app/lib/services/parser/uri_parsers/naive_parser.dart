@@ -10,18 +10,31 @@ import '../uri_utils.dart';
 /// Известные query-keys; всё остальное — log warning + ignore.
 const _naiveKnownQueryKeys = <String>{'extra-headers', 'padding'};
 
-NaiveSpec? parseNaive(String uri) {
+/// §103 §9.B1 — `naive+quic://` (в дополнение к `naive+https://`): суффикс
+/// схемы задаёт транспорт (HTTP/2 vs QUIC), Go запоминает его в
+/// `node.Query["quic"]` только по префиксу исходной схемы (не по
+/// query-параметру). Диспетчер (uri_parsers.dart) режет префикс перед
+/// вызовом и передаёт `isQuic` явно.
+NaiveSpec? parseNaive(String uri, {bool isQuic = false}) {
+  // §103 empty_host_rejected — Go валидирует непустой hostname только для
+  // vless/trojan/ssh/tuic/anytls (node_parser_core.go:321-329); naive в этот
+  // список не входит — `naive+https://` с пустым host остаётся живой нодой
+  // (server: "", tls.server_name опускается как пустая строка — TlsSpec
+  // уже это делает). Единственный настоящий reject — не-URI мусор
+  // (Uri.tryParse == null).
   final p = Uri.tryParse(uri);
-  if (p == null || p.host.isEmpty) return null;
+  if (p == null) return null;
 
-  // userinfo: только password (без `:`) → password=userinfo, username='';
-  // user:pass → split; пустой → both empty.
+  // SPEC 103 п.6 — userinfo без `:` это username, ПУСТОЙ password (зеркало
+  // Go: url.User.Username()/Password(), node_parser_core.go:378-386 —
+  // текст до опционального `:` всегда username; password появляется, только
+  // когда `:` реально был в userinfo). user:pass → split как обычно.
   String username = '';
   String password = '';
   if (p.userInfo.isNotEmpty) {
     final colon = p.userInfo.indexOf(':');
     if (colon < 0) {
-      password = Uri.decodeComponent(p.userInfo);
+      username = Uri.decodeComponent(p.userInfo);
     } else {
       username = Uri.decodeComponent(p.userInfo.substring(0, colon));
       password = Uri.decodeComponent(p.userInfo.substring(colon + 1));
@@ -66,6 +79,7 @@ NaiveSpec? parseNaive(String uri) {
     password: password,
     tls: tls,
     extraHeaders: headers,
+    quic: isQuic,
   );
 }
 

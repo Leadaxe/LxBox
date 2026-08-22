@@ -747,9 +747,13 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
       final host = headers?['Host']?.toString() ?? '';
       // §303 — Xray кладёт early data хвостом пути (`/x?ed=2560`); в sing-box
       // это отдельное поле, а хвост в пути даёт 404.
-      final (path, edFromPath) = splitEarlyDataPath(
-        ws['path']?.toString() ?? '/',
+      // §103 D-016(в) — ключ `path` отсутствовал в исходном JSON → '' (не
+      // эмитим); присутствовал (даже как "/") → пропускаем через сплиттер.
+      final wsHasPath = ws.containsKey('path');
+      final (splitPath, edFromPath) = splitEarlyDataPath(
+        ws['path']?.toString() ?? '',
       );
+      final path = wsHasPath ? splitPath : '';
       // §320 — Xray-конфиги также несут early data отдельными полями
       // `wsSettings.ed` / `.eh` (хвост пути в приоритете). `eh` без `ed`
       // игнорируем: режим ядро включает по `max_early_data > 0`.
@@ -759,10 +763,19 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
           (edField is int && edField > 0
               ? edField
               : int.tryParse(edField?.toString().trim() ?? ''));
-      final eh = ws['eh']?.toString().trim() ?? '';
+      var eh = ws['eh']?.toString().trim() ?? '';
+      // §103 D-008 — как и в URI-ветке: дефолт применим ТОЛЬКО когда early
+      // data взята из хвоста пути `?ed=N` (Go: applyWSEarlyData), не из
+      // плоских wsSettings.ed/eh (тех Go вообще не читает).
+      var ehImplicit = false;
+      if (eh.isEmpty && edFromPath != null) {
+        eh = 'Sec-WebSocket-Protocol';
+        ehImplicit = true;
+      }
       return WsTransport(
         path: path,
         host: host,
+        earlyDataHeaderImplicit: ehImplicit,
         maxEarlyData: ed != null && ed > 0 ? ed : null,
         earlyDataHeaderName: (ed != null && ed > 0 && eh.isNotEmpty)
             ? eh
@@ -866,9 +879,13 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         rawUri: '',
         password: entry['password']?.toString() ?? '',
         tls: anyTls,
-        idleSessionCheckInterval:
-            entry['idle_session_check_interval']?.toString() ?? '',
-        idleSessionTimeout: entry['idle_session_timeout']?.toString() ?? '',
+        // SPEC 103 D-024 — на всякий случай нормализуем и здесь: ручные
+        // правки JSON/smart-paste могут занести голое число (в т.ч. как JSON
+        // number, не строку) без единицы измерения.
+        idleSessionCheckInterval: normalizeSingboxDuration(
+            entry['idle_session_check_interval']?.toString() ?? ''),
+        idleSessionTimeout: normalizeSingboxDuration(
+            entry['idle_session_timeout']?.toString() ?? ''),
         minIdleSession: (entry['min_idle_session'] as num?)?.toInt(),
       );
     case 'shadowsocks':
@@ -949,10 +966,16 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         rawUri: '',
         uuid: entry['uuid']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
-        congestionControl: entry['congestion_control']?.toString() ?? 'cubic',
-        udpRelayMode: entry['udp_relay_mode']?.toString() ?? 'native',
+        // §103 D-016(в) — ключ отсутствует в исходном JSON ⇒ не задан явно;
+        // округлять до дефолта здесь нельзя, иначе эмиттер снова напишет его.
+        congestionControl: entry['congestion_control']?.toString(),
+        udpRelayMode: entry['udp_relay_mode']?.toString(),
         zeroRtt: entry['zero_rtt_handshake'] == true,
         tls: _tlsFromSingbox(entry['tls'], server),
+        // §103 D-024 — нормализуем на всякий случай (ручная правка JSON).
+        heartbeat: entry['heartbeat'] == null
+            ? null
+            : normalizeSingboxDuration(entry['heartbeat'].toString()),
       );
     case 'ssh':
       if (server.isEmpty || port == 0) return null;
@@ -1031,9 +1054,10 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
           const ['0.0.0.0/0', '::/0'];
       final awg = Awg.fromJson(entry); // §097 — AmneziaWG2 obfuscation params
       final wgTag = tag.isEmpty ? 'wg-$peerServer-$peerPort' : tag;
-      // §097 — AWG: клампим MTU до 1280. §219 — plain WG дефолтит 1408 как в
-      // URI-парсере (было null → зеркалим `wireguard_parser.dart`, чтобы модель
-      // не зависела от источника парсинга: JSON vs URI).
+      // §097/SPEC 103 D-026 — AWG: клампим MTU до 1280. Plain WG без mtu в
+      // источнике поле не эмитит вовсе (ядро само ставит 1408) — зеркалим
+      // `wireguard_parser.dart`, чтобы модель не зависела от источника
+      // парсинга: JSON vs URI.
       final rawMtu = (entry['mtu'] as num?)?.toInt();
       // §025/§126 — WARP client_id. §219 — раньше JSON-парсер не заполнял
       // `reserved` (WARP-handshake проходил, трафик не шёл). В sing-box JSON
@@ -1045,6 +1069,21 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
           (p['client_id'] is String
               ? parseReserved(p['client_id'] as String)
               : null);
+      // SPEC 103 D-023/D-030 — та же проверка ключей, что на URI/INI-путях:
+      // мусорный ключ из импортированного конфига валит `sing-box check`
+      // целиком, а неканоническая форма даёт другой identity-хеш той же ноде.
+      final wgPriv = normalizeWGKey(entry['private_key']?.toString() ?? '');
+      final wgPub = normalizeWGKey(p['public_key']?.toString() ?? '');
+      if (wgPriv == null || wgPub == null) return null;
+      final wgPskRaw = p['pre_shared_key']?.toString() ?? '';
+      final String wgPsk;
+      if (wgPskRaw.isEmpty) {
+        wgPsk = '';
+      } else {
+        final normalized = normalizeWGKey(wgPskRaw);
+        if (normalized == null) return null;
+        wgPsk = normalized;
+      }
       return WireguardSpec(
         id: newUuidV4(),
         tag: wgTag,
@@ -1052,12 +1091,12 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         server: peerServer,
         port: peerPort,
         rawUri: '',
-        privateKey: entry['private_key']?.toString() ?? '',
+        privateKey: wgPriv,
         localAddresses: addr,
         peers: [
           WireguardPeer(
-            publicKey: p['public_key']?.toString() ?? '',
-            preSharedKey: p['pre_shared_key']?.toString() ?? '',
+            publicKey: wgPub,
+            preSharedKey: wgPsk,
             endpointHost: peerServer,
             endpointPort: peerPort,
             allowedIps: allowedIps,
@@ -1066,7 +1105,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
             reserved: reserved,
           ),
         ],
-        mtu: awg != null ? awgClampMtu(rawMtu, wgTag) : (rawMtu ?? 1408),
+        mtu: awg != null ? awgClampMtu(rawMtu, wgTag) : rawMtu,
         awg: awg,
       );
     case 'masque':
@@ -1089,6 +1128,13 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       final masqueTls = entry['tls'];
       final tlsMap = masqueTls is Map ? masqueTls : const {};
       final vhttpRaw = entry['vhttp']?.toString() ?? '';
+      final vhttpPicked = vhttpRaw.isNotEmpty
+          ? vhttpRaw
+          : (entry['network']?.toString() ?? 'h3');
+      // SPEC 103 п.5 — как в URI-парсере: невалидное значение форсится в h3
+      // (node_parser_masque.go), а не пропускается как есть.
+      final vhttpJson =
+          (vhttpPicked == 'h3' || vhttpPicked == 'h2') ? vhttpPicked : 'h3';
       final sniRaw = tlsMap['server_name']?.toString() ??
           entry['sni']?.toString() ??
           '';
@@ -1103,9 +1149,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         publicKeyDer: pub,
         localAddresses: addrs,
         profile: entry['profile']?.toString() ?? 'cloudflare',
-        vhttp: vhttpRaw.isNotEmpty
-            ? vhttpRaw
-            : (entry['network']?.toString() ?? 'h3'),
+        vhttp: vhttpJson,
         sni: sniRaw,
         disableSni: tlsMap['disable_sni'] == true,
         mtu: (entry['mtu'] as num?)?.toInt(),
@@ -1180,9 +1224,14 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
       final headers = (raw['headers'] as Map?)?.cast<String, dynamic>();
       // §303 — sing-box JSON обычно уже разделён (`max_early_data`), но в
       // редактор попадают и склеенные Xray-пути.
-      final (path, edFromPath) = splitEarlyDataPath(
-        raw['path']?.toString() ?? '/',
+      // §103 D-016(в) — ключ отсутствует в исходном JSON → путь не задан
+      // явно, '' (не эмитим обратно); канонический sing-box JSON и так не
+      // пишет "path":"/" для дефолта (см. Go option/v2ray_transport.go).
+      final wsHasPath = raw.containsKey('path');
+      final (splitPath, edFromPath) = splitEarlyDataPath(
+        raw['path']?.toString() ?? '',
       );
+      final path = wsHasPath ? splitPath : '';
       final edField = raw['max_early_data'];
       return WsTransport(
         path: path,
@@ -1204,7 +1253,12 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
       );
     case 'httpupgrade':
       // §303 — early data у httpupgrade нет, но хвост пути всё равно чужой.
-      final (path, _) = splitEarlyDataPath(raw['path']?.toString() ?? '/');
+      // §103 D-016(в) — как и у ws: отсутствующий ключ → '' (не эмитим).
+      final huHasPath = raw.containsKey('path');
+      final (splitPath, _) = splitEarlyDataPath(
+        raw['path']?.toString() ?? '',
+      );
+      final path = huHasPath ? splitPath : '';
       return HttpUpgradeTransport(
         path: path,
         host: raw['host']?.toString() ?? '',

@@ -49,8 +49,13 @@ MasqueSpec? parseMasqueUri(String uri) {
   // §393 — `vhttp` приоритетнее legacy `network`; ядро при обоих именах с
   // разными значениями падает, у нас на входе просто выигрывает новое.
   final vhttpRaw = (q['vhttp'] ?? '').trim();
-  final vhttp =
+  final vhttpPicked =
       vhttpRaw.isNotEmpty ? vhttpRaw : (q['network'] ?? 'h3').trim();
+  // SPEC 103 п.5 — невалидное значение форсится в h3 (node_parser_masque.go:
+  // vhttp != "h3" && vhttp != "h2" → forcing h3), а не пропускается как есть.
+  final vhttp = (vhttpPicked == 'h3' || vhttpPicked == 'h2')
+      ? vhttpPicked
+      : 'h3';
   final sni = (q['sni'] ?? q['server_name'] ?? '').trim();
   final disableSni = q['disable_sni'] == '1' || q['disable_sni'] == 'true';
   final mtu = int.tryParse(q['mtu'] ?? '') ?? 1280;

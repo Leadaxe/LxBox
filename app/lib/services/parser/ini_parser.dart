@@ -38,6 +38,7 @@ String? _iniToUri(String config, String? nameHint) {
   String address = '';
   String publicKey = '';
   String endpoint = '';
+  String allowedIps = '';
   String presharedKey = '';
   String reserved = ''; // §126 — WARP client_id (reserved/client_id в [Peer])
   int mtu = 0;
@@ -64,6 +65,11 @@ String? _iniToUri(String config, String? nameHint) {
     } else if (section == '[peer]') {
       if (k == 'publickey') publicKey = v;
       if (k == 'endpoint') endpoint = v;
+      // §103 amnezia_vpn_plain_wg — раньше AllowedIPs из INI не читался
+      // вовсе, и wireguard_parser.dart:37 молча подставлял дефолт
+      // '0.0.0.0/0, ::/0' на любой INI (даже с явным одиночным
+      // '0.0.0.0/0') — IPv4-only INI получал лишний IPv6-дефолт-роут.
+      if (k == 'allowedips') allowedIps = v;
       if (k == 'presharedkey') presharedKey = v;
       if (k == 'persistentkeepalive') keepalive = int.tryParse(v) ?? 0;
       // §126 — WARP `client_id` → reserved. Amnezia-генератор кладёт его в
@@ -108,6 +114,7 @@ String? _iniToUri(String config, String? nameHint) {
     'privatekey': privateKey,
     'address': address,
   };
+  if (allowedIps.isNotEmpty) params['allowedips'] = allowedIps;
   if (mtu > 0) params['mtu'] = mtu.toString();
   if (presharedKey.isNotEmpty) params['presharedkey'] = presharedKey;
   if (keepalive > 0) params['keepalive'] = keepalive.toString();

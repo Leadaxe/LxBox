@@ -48,8 +48,12 @@ AnyTlsSpec? parseAnyTls(String uri) {
     rawUri: uri,
     password: password,
     tls: tls,
-    idleSessionCheckInterval: q['idle_session_check_interval'] ?? '',
-    idleSessionTimeout: q['idle_session_timeout'] ?? '',
+    // SPEC 103 D-024 — голое число (секунды) → duration-строка с суффиксом
+    // `s`; ядро (badoption.Duration) отвергает "30" без единицы измерения
+    // фаталом на весь конфиг (зеркало Go normalizeTuicHeartbeat).
+    idleSessionCheckInterval:
+        normalizeSingboxDuration(q['idle_session_check_interval'] ?? ''),
+    idleSessionTimeout: normalizeSingboxDuration(q['idle_session_timeout'] ?? ''),
     minIdleSession: int.tryParse(q['min_idle_session'] ?? ''),
     warnings: warnings,
   );
