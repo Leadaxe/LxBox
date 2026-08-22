@@ -26,7 +26,6 @@ const _contractRoot = 'contract';
 
 /// Коды warning'ов движка шаблонов (contract/registry/warnings.json).
 const _warnVarUndeclared = 'template_var_undeclared';
-const _warnUnknownDirective = 'template_unknown_directive';
 const _warnIntClamped = 'template_int_clamped';
 const _warnIntInvalid = 'template_int_invalid';
 

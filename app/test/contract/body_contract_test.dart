@@ -69,7 +69,7 @@ Object? _wgPeerPort(Map<String, dynamic> map) {
   return null;
 }
 
-/// Подписи узлов из ожиданий лаунчера (<case>.expected.json).
+/// Подписи узлов из ожиданий лаунчера (`<case>.expected.json`).
 List<String> _expectedSignatures(File expected) {
   final data = jsonDecode(expected.readAsStringSync()) as Map<String, dynamic>;
   final nodes = (data['nodes'] as List?) ?? const [];
