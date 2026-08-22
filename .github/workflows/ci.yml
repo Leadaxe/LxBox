@@ -201,6 +201,15 @@ jobs:
         working-directory: app
         run: dart run tool/docs/parity_check.dart --strict
 
+      # SPEC 103 фаза 5 — общий контракт с лаунчером. Источник живёт в его
+      # репозитории, здесь лежит копия; править её руками нельзя — правка
+      # потеряется при следующей синхронизации. Шаг это и ловит. Копии в CI
+      # обычно нет (git её игнорирует) — тогда шаг просто сообщает об этом.
+      - name: Contract lock
+        if: ${{ github.event.inputs.test_path == '' }}
+        working-directory: app
+        run: dart run tool/check_contract_lock.dart
+
       - name: Test
         run: |
           TEST_PATH="${{ github.event.inputs.test_path }}"
