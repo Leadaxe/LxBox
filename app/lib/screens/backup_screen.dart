@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
+import '../services/lx_backup.dart';
+import '../services/settings_storage.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
@@ -16,6 +18,7 @@ import '../widgets/export_action_sheet.dart';
 import 'backup_screen/export_card.dart';
 import 'backup_screen/import_card.dart';
 import 'backup_screen/import_preview_dialog.dart';
+import 'backup_screen/lx_transfer_card.dart';
 import '../services/utf8_decode.dart';
 import '../services/file_export.dart';
 import '../services/file_import.dart';
@@ -77,6 +80,15 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
           ImportCard(
             busy: _busy,
             onImport: _onImport,
+          ),
+          const SizedBox(height: 8),
+          // §103 фаза 4 — перенос на десктоп отдельной карточкой: обычный
+          // бэкап выше делает полный снимок ДЛЯ ЭТОЙ ЖЕ установки, а тут
+          // переносится общая часть в другое приложение.
+          LxTransferCard(
+            busy: _busy,
+            onExport: _onLxExport,
+            onImport: _onLxImport,
           ),
         ],
       ),
@@ -275,6 +287,190 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   }
 
   // §219 — _snack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
+
+  // ——— §103 фаза 4: перенос на десктоп (LX Backup) ———
+
+  /// Экспорт общей части настроек в переносимый формат.
+  ///
+  /// Переиспользует те же пути сохранения, что обычный бэкап: пользователю
+  /// незачем видеть два разных диалога сохранения в одном экране.
+  Future<void> _onLxExport() async {
+    setState(() => _busy = true);
+    try {
+      final availability = await Future.wait([
+        UrlLauncher.hasRealFilePicker(),
+        UrlLauncher.canSaveToDownloads(),
+      ]);
+      if (!mounted) return;
+      final action = await showExportActionSheet(
+        context,
+        canSaveToFile: availability[0],
+        canSaveToDownloads: availability[1],
+      );
+      if (action == null) return; // юзер закрыл шит
+
+      final lists = await SettingsStorage.getServerLists();
+      final rules = await SettingsStorage.getCustomRules();
+      final vars = await SettingsStorage.getAllVars();
+      final json = await buildLxBackup(
+        lists: lists,
+        rules: rules,
+        vars: vars,
+      );
+      const filename = 'lx-backup.json';
+      // Размер в БАЙТАХ, а не в code units: на кириллице в именах узлов
+      // String.length занижал бы цифру против файла на диске.
+      final bytes = utf8.encode(json).length;
+
+      final SaveOutcome outcome;
+      switch (action) {
+        case ExportAction.saveToFile:
+          outcome = await saveFileSafely(fileName: filename, content: json);
+        case ExportAction.saveToDownloads:
+          outcome =
+              await saveToDownloadsSafely(fileName: filename, content: json);
+        case ExportAction.share:
+          final tmpDir = await getTemporaryDirectory();
+          final path = '${tmpDir.path}/$filename';
+          await File(path).writeAsString(json);
+          await Share.shareXFiles(
+            [XFile(path, mimeType: 'application/json', name: filename)],
+            subject: 'LX Backup',
+          );
+          if (!mounted) return;
+          showSnack(getLocalText.s("Backup exported (%d bytes)", bytes));
+          return;
+      }
+
+      if (!mounted) return;
+      final problem = saveProblemText(outcome);
+      if (problem != null) {
+        showSnack(problem);
+        return;
+      }
+      switch (outcome) {
+        case SavedToFile(:final name):
+          showSnack(getLocalText.s("Saved as %s (%d bytes)", name, bytes));
+        case SavedToDownloads(:final name):
+          showSnack(
+              getLocalText.s("Saved to Downloads: %s (%d bytes)", name, bytes));
+        case SaveCancelled():
+          break;
+        case SaveNoTarget() || SaveFailed():
+          break;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showSnack(getLocalText.s("Export failed: %s", formatUserError(e).render()));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Импорт переносимого бэкапа.
+  ///
+  /// Показывает, что приедет, ДО применения: импорт заменяет правила целиком,
+  /// и спрашивать после было бы поздно.
+  Future<void> _onLxImport() async {
+    setState(() => _busy = true);
+    try {
+      final outcome = await pickFileSafely(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (outcome is! PickedFiles) {
+        final problem = pickProblemText(outcome);
+        if (problem != null && mounted) showSnack(problem);
+        return;
+      }
+      final file = outcome.single;
+      String? raw;
+      if (file.bytes != null) {
+        raw = utf8DecodeOrNull(file.bytes!);
+      } else if (file.path != null) {
+        raw = await File(file.path!).readAsString();
+      }
+      if (raw == null) {
+        if (!mounted) return;
+        showSnack(getLocalText.s("Could not read file."));
+        return;
+      }
+
+      final LxBackupFile parsed;
+      try {
+        // Цели, на которые правилу разрешено ссылаться. Пустой набор означал
+        // бы «проверять нечем», и все ссылки прошли бы без проверки.
+        final lists = await SettingsStorage.getServerLists();
+        final known = <String>{for (final l in lists) l.tagPrefix}
+          ..removeWhere((t) => t.isEmpty);
+        parsed = parseLxBackup(raw, knownOutbounds: known);
+      } on FormatException catch (e) {
+        if (!mounted) return;
+        _showError(getLocalText.s("Invalid backup"), e.message);
+        return;
+      }
+
+      if (!mounted) return;
+      final confirmed = await _confirmLxImport(parsed);
+      if (confirmed != true) return;
+
+      await SettingsStorage.saveCustomRules(parsed.rules);
+      if (!mounted) return;
+
+      final skipped = parsed.warnings.length;
+      // Счётное существительное — только через plural: по-русски иначе
+      // получится «Импортировано 2 правил».
+      showSnack(skipped == 0
+          ? getLocalText.plural("Imported %d rules", parsed.rules.length)
+          : getLocalText.s("Imported %d rule(s), %d items not applied",
+              parsed.rules.length, skipped));
+    } catch (e) {
+      if (!mounted) return;
+      showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Показывает состав файла и что не применится — до применения.
+  Future<bool?> _confirmLxImport(LxBackupFile parsed) {
+    final lines = <String>[
+      getLocalText.s("From %s %s", parsed.exportedByApp, parsed.exportedByVersion),
+      getLocalText.s("Rules: %d", parsed.rules.length),
+      getLocalText.s("Subscriptions: %d", parsed.subscriptions.length),
+      getLocalText.s("Variables: %d", parsed.vars.length),
+    ];
+    if (parsed.warnings.isNotEmpty) {
+      lines.add('');
+      lines.add(getLocalText.s("Not applied as-is:"));
+      for (final w in parsed.warnings.take(8)) {
+        lines.add('• ${w.detail}');
+      }
+      if (parsed.warnings.length > 8) {
+        lines.add('… +${parsed.warnings.length - 8}');
+      }
+    }
+    lines.add('');
+    lines.add(getLocalText.s("Importing replaces the current rules."));
+
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(getLocalText.s("Import backup")),
+        content: SingleChildScrollView(child: Text(lines.join('\n'))),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(getLocalText.s("Cancel")),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(getLocalText.s("Import")),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showError(String title, String message) {
     showDialog<void>(

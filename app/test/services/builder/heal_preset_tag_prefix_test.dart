@@ -19,7 +19,7 @@ Map<String, dynamic> _config({
       'dns': {
         'servers': dnsServers,
         'rules': dnsRules,
-        if (dnsFinal != null) 'final': dnsFinal,
+        'final': ?dnsFinal,
       },
       'route': {'rule_set': ruleSets, 'rules': routeRules},
     };

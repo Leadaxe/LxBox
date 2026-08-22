@@ -53,11 +53,11 @@
   "%1$s / %2$s used": {
     "value": "Израсходовано %1$s / %2$s"
   },
-  "%1$s references missing DNS server \"%2$s\".": {
-    "value": "%1$s ссылается на несуществующий DNS-сервер «%2$s»."
-  },
   "%1$s cannot use \"%2$s\": a \"%3$s\" server is not allowed as a resolver.": {
     "value": "%1$s не может использовать «%2$s»: сервер типа «%3$s» нельзя назначить резолвером."
+  },
+  "%1$s references missing DNS server \"%2$s\".": {
+    "value": "%1$s ссылается на несуществующий DNS-сервер «%2$s»."
   },
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d соб."
@@ -465,6 +465,9 @@
   "(content unavailable)": {
     "value": "(содержимое недоступно)"
   },
+  "(empty response)": {
+    "value": "(пустой ответ)"
+  },
   "(empty)": {
     "value": "(пусто)"
   },
@@ -479,6 +482,9 @@
   },
   "(no owner)": {
     "value": "(без владельца)"
+  },
+  "(recommended)": {
+    "value": "(рекомендуется)"
   },
   "(remove)": {
     "value": "(удалить)"
@@ -711,6 +717,9 @@
   "Allowed — foreground service shows VPN status": {
     "value": "Разрешены — foreground-сервис показывает статус VPN"
   },
+  "Already on this device": {
+    "value": "Уже есть на этом устройстве"
+  },
   "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the channels' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on.": {
     "value": "Усыплять и туннели активного маршрута (члены пула, выбранный узел) после долгого затишья — например, за ночь. Первое соединение после сна будет дольше примерно на один RTT. Держите значение не меньше тайм-аута простоя каналов (по умолчанию 30 минут). Требует включённой настройки «Усыплять неактивные туннели»."
   },
@@ -903,6 +912,9 @@
   "Cannot read Wi-Fi info — try toggling Wi-Fi off/on.": {
     "value": "Не удалось прочитать данные Wi-Fi — выключите и включите Wi-Fi."
   },
+  "Cannot read the selected file": {
+    "value": "Не удалось прочитать выбранный файл"
+  },
   "Caps the VPN core's memory. A cap that is too low keeps the processor busy with garbage collection and heats the phone. Auto sizes the cap to this device's RAM; Off removes the cap but keeps low-memory monitoring. Applies immediately.": {
     "value": "Ограничивает память ядра VPN. Слишком низкий лимит занимает процессор сборкой мусора и греет телефон. «Авто» подбирает лимит под объём памяти устройства; «Выключено» снимает лимит, но сохраняет контроль нехватки памяти. Применяется сразу."
   },
@@ -948,11 +960,17 @@
   "Channel \"%s\" matched no nodes — check its node filter.": {
     "value": "Канал «%s» не нашёл ни одного узла — проверьте его фильтр узлов."
   },
+  "Channel \"%s\" not found — set to %s, rule disabled": {
+    "value": "Канал «%s» не найден — заменён на %s, правило выключено"
+  },
   "Channels": {
     "value": "Каналы"
   },
   "Channels and routing rules": {
     "value": "Каналы и правила маршрутизации"
+  },
+  "Check": {
+    "value": "Проверка"
   },
   "Check failed: %s": {
     "value": "Не удалось проверить: %s"
@@ -962,6 +980,9 @@
   },
   "Check for updates on launch": {
     "value": "Проверять обновления при запуске"
+  },
+  "Check for updates?": {
+    "value": "Проверять обновления?"
   },
   "Check now": {
     "value": "Проверить сейчас"
@@ -1133,6 +1154,9 @@
   "Connected": {
     "value": "Подключено"
   },
+  "Connected to %s from inside the tunnel": {
+    "value": "Соединение изнутри туннеля — с %s"
+  },
   "Connecting…": {
     "value": "Подключение…"
   },
@@ -1294,6 +1318,12 @@
   },
   "DNS server \"%1$s\" routes through dead node \"%2$s\".": {
     "value": "DNS-сервер \"%1$s\" ходит через мёртвый узел \"%2$s\"."
+  },
+  "DNS server \"%s\" not found — DNS option disabled": {
+    "value": "DNS-сервер «%s» не найден — DNS-опция выключена"
+  },
+  "DNS server \"%s\" not found — resolver set to auto": {
+    "value": "DNS-сервер «%s» не найден — резолвер сброшен в авто"
   },
   "DNS server — direct detour": {
     "value": "DNS-сервер — прямой detour"
@@ -1622,6 +1652,9 @@
   "Enabling this category lets other apps receive L×Box events.\n\nEvents do NOT contain subscription / config secrets — only labels (node tags, group names, status).": {
     "value": "Если включить эту категорию, другие приложения смогут получать события L×Box.\n\nСобытия НЕ содержат секретов подписок и конфига — только метки (теги узлов, имена групп, статус)."
   },
+  "Endpoint": {
+    "value": "Адрес"
+  },
   "Endpoint IP": {
     "value": "Endpoint IP"
   },
@@ -1637,6 +1670,9 @@
   "Error TTL": "TTL ошибки",
   "Error: %s": {
     "value": "Ошибка: %s"
+  },
+  "Events with no owning app": {
+    "value": "События, у которых не определено приложение"
   },
   "Every %d h": {
     "value": "Каждые %d ч"
@@ -1659,9 +1695,6 @@
   "Every year": {
     "value": "Каждый год"
   },
-  "Events with no owning app": {
-    "value": "События, у которых не определено приложение"
-  },
   "Exclude (regex)": {
     "value": "Исключить (regex)"
   },
@@ -1677,6 +1710,9 @@
   "Export": {
     "value": "Экспорт"
   },
+  "Export (+%d DNS)": {
+    "value": "Экспорт (+%d DNS)"
+  },
   "Export JSON copied": {
     "value": "JSON экспорта скопирован"
   },
@@ -1686,11 +1722,20 @@
   "Export failed: %s": {
     "value": "Не удалось экспортировать: %s"
   },
+  "Export rules": {
+    "value": "Экспорт правил"
+  },
+  "Export rules...": {
+    "value": "Экспортировать правила…"
+  },
   "Export subscriptions, routing setup and preferences as JSON.": {
     "value": "Экспорт подписок, маршрутизации и настроек в JSON."
   },
   "Export to clipboard": {
     "value": "Экспорт в буфер обмена"
+  },
+  "Export without DNS": {
+    "value": "Экспорт без DNS"
   },
   "Export...": {
     "value": "Экспорт…"
@@ -1781,15 +1826,6 @@
   "File is empty": {
     "value": "Файл пуст"
   },
-  "No file manager on this device. Paste from the clipboard or add by URL instead.": {
-    "value": "На этом устройстве нет файлового менеджера. Вставьте из буфера обмена или добавьте по ссылке."
-  },
-  "Cannot read the selected file": {
-    "value": "Не удалось прочитать выбранный файл"
-  },
-  "Select a %s file": {
-    "value": "Выберите файл %s"
-  },
   "File is too large to edit on device. Share it, edit externally, then load it back.": {
     "value": "Файл слишком большой для правки на устройстве. Поделитесь им, отредактируйте во внешнем редакторе и загрузите обратно."
   },
@@ -1869,6 +1905,9 @@
   },
   "Forward sing-box logs": {
     "value": "Пересылать логи sing-box"
+  },
+  "From %s %s": {
+    "value": "Из %s %s"
   },
   "From routing rules · ordered as in Routing": {
     "value": "Из правил маршрутизации · порядок как в «Маршрутизации»"
@@ -2052,6 +2091,9 @@
       "other": "Импорт %d файла в папку"
     }
   },
+  "Import (%d)": {
+    "value": "Импорт (%d)"
+  },
   "Import backup": {
     "value": "Импорт резервной копии"
   },
@@ -2067,8 +2109,42 @@
   "Import from file…": {
     "value": "Импорт из файла…"
   },
+  "Import rules": {
+    "value": "Импорт правил"
+  },
   "Import rules changed this node. The JSON tab shows the result.": {
     "value": "Import-правила изменили этот узел. На вкладке JSON — итоговый вид."
+  },
+  "Import rules...": {
+    "value": "Импортировать правила…"
+  },
+  "Imported %1$d rules and %2$d DNS entries": {
+    "value": "Импортировано правил: %1$d, DNS-записей: %2$d"
+  },
+  "Imported %d DNS entries": {
+    "value": "Импортировано DNS-записей: %d"
+  },
+  "Imported %d rule(s), %d items not applied": {
+    "value": "Импортировано правил: %d; не применено: %d"
+  },
+  "Imported %d rules": {
+    "value": {
+      "one": "Импортировано %d правило",
+      "few": "Импортировано %d правила",
+      "many": "Импортировано %d правил",
+      "other": "Импортировано %d правила"
+    }
+  },
+  "Imported %d rules — tap ☁ to download rule-sets, then enable": {
+    "value": {
+      "one": "Импортировано %d правило — нажмите ☁, чтобы скачать rule-set'ы, затем включите",
+      "few": "Импортировано %d правила — нажмите ☁, чтобы скачать rule-set'ы, затем включите",
+      "many": "Импортировано %d правил — нажмите ☁, чтобы скачать rule-set'ы, затем включите",
+      "other": "Импортировано %d правила — нажмите ☁, чтобы скачать rule-set'ы, затем включите"
+    }
+  },
+  "Importing replaces the current rules.": {
+    "value": "Импорт заменит текущие правила."
   },
   "In Rules": {
     "value": "В правилах"
@@ -2078,6 +2154,9 @@
   },
   "Include (regex)": {
     "value": "Включить (regex)"
+  },
+  "Include DNS": {
+    "value": "Добавить DNS"
   },
   "Include auto (urltest)": {
     "value": "Добавлять auto (urltest)"
@@ -2112,11 +2191,11 @@
   "Insert emoji": {
     "value": "Вставить эмодзи"
   },
-  "Installed from %s": {
-    "value": "Установлено из %s"
-  },
   "Inspect node": {
     "value": "Разобрать узел"
+  },
+  "Installed from %s": {
+    "value": "Установлено из %s"
   },
   "Interrupt connections on switch": {
     "value": "Разрывать соединения при переключении"
@@ -2296,6 +2375,9 @@
   "L×Box %1$s available (you have v%2$s)": {
     "value": "Доступна L×Box %1$s (у вас v%2$s)"
   },
+  "L×Box can ping github.com once a day to see whether a new version is out. Nothing installs by itself — you get a link to the release page.\n\nIf you installed from an app store, its client already handles updates and you can skip this.": {
+    "value": "L×Box может раз в сутки обращаться к github.com и смотреть, не вышла ли новая версия. Само ничего не устанавливается — вы получите ссылку на страницу релиза.\n\nЕсли приложение установлено из магазина, его клиент уже следит за обновлениями, и этот пункт можно пропустить."
+  },
   "L×Box runs as a foreground service while VPN is active. A persistent notification is required by Android — it lets you see at a glance that VPN is on, and prevents the system from killing the tunnel in the background.\n\nNo promotional or alert notifications will be sent.": {
     "value": "Пока VPN активен, L×Box работает как foreground-сервис. Android требует для него постоянное уведомление — по нему видно, что VPN включён, и система не закрывает туннель в фоне.\n\nРекламных и прочих оповещений не будет."
   },
@@ -2307,6 +2389,9 @@
   },
   "Make experiment": {
     "value": "Провести эксперимент"
+  },
+  "Managed by presets automatically": {
+    "value": "Управляется пресетами автоматически"
   },
   "Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local": {
     "value": "Совпадает с RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local"
@@ -2359,6 +2444,9 @@
   },
   "Move out of folder": {
     "value": "Вынести из папки"
+  },
+  "Move subscriptions, servers, rules and settings between this app and the desktop launcher. Anything the other side has no place for travels along untouched and comes back intact.": {
+    "value": "Перенос подписок, серверов, правил и настроек между этим приложением и десктопным лаунчером. Всё, чему на другой стороне нет места, едет вместе с файлом нетронутым и возвращается целым."
   },
   "Move to folder": {
     "value": "Переместить в папку"
@@ -2492,6 +2580,9 @@
   "No file chosen": {
     "value": "Файл не выбран"
   },
+  "No file manager on this device. Paste from the clipboard or add by URL instead.": {
+    "value": "На этом устройстве нет файлового менеджера. Вставьте из буфера обмена или добавьте по ссылке."
+  },
   "No matches for \"%s\"": {
     "value": "Нет совпадений для «%s»"
   },
@@ -2522,6 +2613,9 @@
   },
   "No rules seen yet — traffic will populate this list.": {
     "value": "Правил пока нет — список заполнится по мере появления трафика."
+  },
+  "No rules to export — presets stay with the app. You can still bundle DNS on the next step.": {
+    "value": "Экспортировать нечего: пресеты остаются в приложении. На следующем шаге можно вложить DNS."
   },
   "No rules yet. Add one to fix broken params or hide nodes.": {
     "value": "Правил пока нет. Добавьте, чтобы починить параметры или скрыть узлы."
@@ -2603,6 +2697,12 @@
   },
   "Not a subscription": {
     "value": "Это не подписка"
+  },
+  "Not applied as-is:": {
+    "value": "Применено не полностью:"
+  },
+  "Not available in this app version": {
+    "value": "Недоступно в этой версии приложения"
   },
   "Not connected to Wi-Fi.": {
     "value": "Нет подключения к Wi-Fi."
@@ -2698,6 +2798,9 @@
   },
   "Open settings": {
     "value": "Открыть настройки"
+  },
+  "Optionally bundle DNS servers and DNS rules the recipient may be missing. Servers referenced by the selected rules are pre-checked.": {
+    "value": "При желании вложите в файл DNS-серверы и DNS-правила, которых может не быть у получателя. Серверы, на которые ссылаются выбранные правила, уже отмечены."
   },
   "Orange up to, ms": {
     "value": "Оранжевый до, мс"
@@ -2796,17 +2899,14 @@
   "Pick": {
     "value": "Выбор"
   },
-  "(recommended)": {
-    "value": "(рекомендуется)"
+  "Pick a folder on this device": {
+    "value": "Выбрать папку на устройстве"
   },
   "Pick another random IP:port": {
     "value": "Подставить другой случайный IP:port"
   },
   "Pick another random domain": {
     "value": "Подставить другой случайный домен"
-  },
-  "Pick a folder on this device": {
-    "value": "Выбрать папку на устройстве"
   },
   "Pick file...": {
     "value": "Выбрать файл…"
@@ -2847,6 +2947,9 @@
   "Plain UDP · port 53 · fast, unencrypted": {
     "value": "Обычный UDP · порт 53 · быстро, без шифрования"
   },
+  "Point the camera at a QR code": {
+    "value": "Наведите камеру на QR-код"
+  },
   "Pool": {
     "value": "Пул"
   },
@@ -2858,9 +2961,6 @@
   },
   "Pool tolerance (ms)": {
     "value": "Допуск пула (мс)"
-  },
-  "Point the camera at a QR code": {
-    "value": "Наведите камеру на QR-код"
   },
   "Pool unavailable — tunnel not connected": {
     "value": "Пул недоступен — туннель не подключён"
@@ -2903,6 +3003,9 @@
   },
   "Presets": {
     "value": "Пресеты"
+  },
+  "Presets are not transferable — this app has its own": {
+    "value": "Пресеты не переносятся — они есть в самом приложении"
   },
   "Preview (route.rules)": {
     "value": "Превью (route.rules)"
@@ -3154,6 +3257,9 @@
   "Replacements": {
     "value": "Замены"
   },
+  "Request is sent through this node": {
+    "value": "Запрос уходит через этот узел"
+  },
   "Request rejected (%d)": {
     "value": "Запрос отклонён (%d)"
   },
@@ -3208,8 +3314,14 @@
   "Resolves the server hostname itself": {
     "value": "Резолвит имя самого DNS-сервера"
   },
+  "Response": {
+    "value": "Ответ"
+  },
   "Response headers": {
     "value": "Заголовки ответа"
+  },
+  "Response was longer and got cut off.": {
+    "value": "Ответ был длиннее и обрезан."
   },
   "Restart VPN to apply changes": {
     "value": "Перезапустите VPN, чтобы применить изменения"
@@ -3291,11 +3403,26 @@
   "Rules changed. Refresh the subscription to apply them.": {
     "value": "Правила изменены. Обновите подписку, чтобы применить их."
   },
+  "Rules exported": {
+    "value": "Правила экспортированы"
+  },
+  "Rules menu": {
+    "value": "Меню правил"
+  },
   "Rules run when the subscription body is loaded. Tap Apply rules to reload it now.": {
     "value": "Правила срабатывают при загрузке тела подписки. Нажмите «Применить правила», чтобы перезагрузить его сейчас."
   },
+  "Rules: %d": {
+    "value": "Правил: %d"
+  },
+  "Run": {
+    "value": "Запустить"
+  },
   "Run URLTest": {
     "value": "Запустить URLTest"
+  },
+  "Running…": {
+    "value": "Выполняется…"
   },
   "Runtime HTTP server for adb-forwarded debugging.": {
     "value": "HTTP-сервер для отладки через adb forward."
@@ -3336,9 +3463,6 @@
   "Saved as %s (%d bytes)": {
     "value": "Сохранено как %s (%d байт)"
   },
-  "Saved to Downloads: %s (%d bytes)": {
-    "value": "Сохранено в «Загрузки»: %s (%d байт)"
-  },
   "Saved channel \"%1$s\" — %2$s": {
     "value": "Канал «%1$s» сохранён — %2$s"
   },
@@ -3347,6 +3471,9 @@
   },
   "Saved networks": {
     "value": "Сохранённые сети"
+  },
+  "Saved to Downloads: %s (%d bytes)": {
+    "value": "Сохранено в «Загрузки»: %s (%d байт)"
   },
   "Saved. Force-stop & reopen app to apply.": {
     "value": "Сохранено. Полностью закройте и снова откройте приложение, чтобы применить."
@@ -3362,6 +3489,9 @@
   },
   "Search domain / IP / app": {
     "value": "Поиск: домен / IP / приложение"
+  },
+  "Select a %s file": {
+    "value": "Выберите файл %s"
   },
   "Select all": {
     "value": "Выбрать все"
@@ -3379,9 +3509,6 @@
   "Selector \"%1$s\" default \"%2$s\" is not in the options list.": {
     "value": "У селектора «%1$s» значение по умолчанию «%2$s» отсутствует в списке вариантов."
   },
-  "Send to another app": {
-    "value": "Отправить в другое приложение"
-  },
   "Send DNS to dedicated server": {
     "value": "Отправлять DNS на выделенный сервер"
   },
@@ -3390,6 +3517,9 @@
   },
   "Send matched traffic to a channel.": {
     "value": "Отправлять совпавший трафик в канал."
+  },
+  "Send to another app": {
+    "value": "Отправить в другое приложение"
   },
   "Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). Off by default.": {
     "value": "Отправлять x-hwid и заголовки устройства при каждой загрузке подписки — для панелей с лимитом устройств по HWID (Remnawave). По умолчанию выключено."
@@ -3575,6 +3705,9 @@
   "Start VPN when device turns on": {
     "value": "Запускать VPN при включении устройства"
   },
+  "Start the VPN to check this node from here, or open it from its subscription to check it with the VPN off.": {
+    "value": "Включите VPN, чтобы проверить узел отсюда, или откройте его из подписки — там проверка работает и с выключенным VPN."
+  },
   "State": {
     "value": "Состояние"
   },
@@ -3589,9 +3722,6 @@
   },
   "Sticky session by": {
     "value": "Закреплять сессии по"
-  },
-  "Straight to the Downloads folder": {
-    "value": "Сразу в папку «Загрузки»"
   },
   "Stop": {
     "value": "Stop"
@@ -3616,6 +3746,9 @@
   },
   "Stored locally only. Existing entries persist when you turn this off — remove individually in Pick saved (long-press chip → Remove).": {
     "value": "Хранится только на устройстве. При выключении записи не удаляются — убирайте их по одной в «Pick saved» (долгое нажатие на чип → Remove)."
+  },
+  "Straight to the Downloads folder": {
+    "value": "Сразу в папку «Загрузки»"
   },
   "Strategy": {
     "value": "Стратегия"
@@ -3651,6 +3784,9 @@
   },
   "Subscriptions and custom servers": {
     "value": "Подписки и собственные серверы"
+  },
+  "Subscriptions: %d": {
+    "value": "Подписок: %d"
   },
   "Substitute part": {
     "value": "Заменить часть"
@@ -3835,6 +3971,9 @@
   "This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges require a full VPN restart to apply (Android creates the tun interface only at start).": {
     "value": "Это разделение туннеля на уровне ОС: оно определяет, какие приложения вообще видят VPN-туннель — пакеты исключённых приложений идут напрямую через мобильную сеть или Wi-Fi, минуя sing-box.\n\n• Выключено — все приложения используют VPN (по умолчанию)\n• Белый список — через VPN идут ТОЛЬКО перечисленные приложения, остальные в обход\n• Чёрный список — перечисленные приложения идут в обход VPN, остальные через туннель\n\nВажно: приложения из белого списка по-прежнему проходят через обычные правила маршрутизации. Приложения в обход туннеля для sing-box невидимы — правила с package_name их не поймают.\n\nИзменения требуют полного перезапуска VPN (Android создаёт tun-интерфейс только при старте)."
   },
+  "This is an auto-select node — it has no connection of its own. Open a member to diagnose it.": {
+    "value": "Это узел автовыбора — своего соединения у него нет. Откройте участника, чтобы проверить его."
+  },
   "This rule changes DNS settings — it adds a DNS server and/or a DNS rule. See DNS Settings.": {
     "value": "Правило меняет настройки DNS — добавляет DNS-сервер и/или DNS-правило. См. «Настройки DNS»."
   },
@@ -3849,6 +3988,12 @@
   },
   "This would create a detour loop inside the folder": {
     "value": "Это создало бы detour-петлю внутри папки"
+  },
+  "Through this node in a temporary core session": {
+    "value": "Через этот узел во временной сессии ядра"
+  },
+  "Through this node in the running core — not through your current route": {
+    "value": "Через этот узел в работающем ядре — не через ваш текущий маршрут"
   },
   "Timed out after %ds — server slow or unreachable": {
     "value": "Тайм-аут через %ds — сервер медленный или недоступен"
@@ -3888,6 +4033,9 @@
   },
   "Traffic goes directly to this server.": {
     "value": "Трафик идёт на этот сервер напрямую."
+  },
+  "Transfer to desktop": {
+    "value": "Перенос на десктоп"
   },
   "Transport \"%1$s\" is not supported by sing-box; using \"%2$s\" fallback (node may fail to connect).": {
     "value": "Транспорт «%1$s» не поддерживается sing-box; используется резервный «%2$s» (узел может не подключиться)."
@@ -3940,6 +4088,9 @@
   "Unknown obfuscation type \"%s\" was dropped (the core supports salamander and gecko only, and would otherwise break the whole config). The node connects without obfuscation.": {
     "value": "Неизвестный тип обфускации «%s» отброшен (ядро знает только salamander и gecko, иначе сломался бы весь конфиг). Узел подключится без обфускации."
   },
+  "Unknown preset (newer app version?)": {
+    "value": "Неизвестный пресет (файл из более новой версии?)"
+  },
   "Unknown uTLS fingerprint \"%s\" replaced with \"chrome\" (would otherwise break the whole config).": {
     "value": "Неизвестный uTLS fingerprint «%s» заменён на «chrome» (иначе сломался бы весь конфиг)."
   },
@@ -3951,6 +4102,12 @@
   },
   "Unsaved changes": {
     "value": "Несохранённые изменения"
+  },
+  "Unsupported entry": {
+    "value": "Неподдерживаемая запись"
+  },
+  "Unsupported entry — skipped": {
+    "value": "Неподдерживаемая запись — пропущена"
   },
   "Update": {
     "value": "Обновить"
@@ -4041,6 +4198,9 @@
   },
   "Value": {
     "value": "Значение"
+  },
+  "Variables: %d": {
+    "value": "Переменных: %d"
   },
   "Verbose (TRACE/DEBUG)": {
     "value": "Подробно (TRACE/DEBUG)"
@@ -4383,138 +4543,5 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
-  },
-  "Check": {
-    "value": "Проверка"
-  },
-  "Endpoint": {
-    "value": "Адрес"
-  },
-  "Request is sent through this node": {
-    "value": "Запрос уходит через этот узел"
-  },
-  "Run": {
-    "value": "Запустить"
-  },
-  "Running…": {
-    "value": "Выполняется…"
-  },
-  "Response": {
-    "value": "Ответ"
-  },
-  "Response was longer and got cut off.": {
-    "value": "Ответ был длиннее и обрезан."
-  },
-  "(empty response)": {
-    "value": "(пустой ответ)"
-  },
-  "Connected to %s from inside the tunnel": {
-    "value": "Соединение изнутри туннеля — с %s"
-  },
-  "Through this node in the running core — not through your current route": {
-    "value": "Через этот узел в работающем ядре — не через ваш текущий маршрут"
-  },
-  "Through this node in a temporary core session": {
-    "value": "Через этот узел во временной сессии ядра"
-  },
-  "This is an auto-select node — it has no connection of its own. Open a member to diagnose it.": {
-    "value": "Это узел автовыбора — своего соединения у него нет. Откройте участника, чтобы проверить его."
-  },
-  "Start the VPN to check this node from here, or open it from its subscription to check it with the VPN off.": {
-    "value": "Включите VPN, чтобы проверить узел отсюда, или откройте его из подписки — там проверка работает и с выключенным VPN."
-  },
-  "Check for updates?": {
-    "value": "Проверять обновления?"
-  },
-  "L×Box can ping github.com once a day to see whether a new version is out. Nothing installs by itself — you get a link to the release page.\n\nIf you installed from an app store, its client already handles updates and you can skip this.": {
-    "value": "L×Box может раз в сутки обращаться к github.com и смотреть, не вышла ли новая версия. Само ничего не устанавливается — вы получите ссылку на страницу релиза.\n\nЕсли приложение установлено из магазина, его клиент уже следит за обновлениями, и этот пункт можно пропустить."
-  },
-  "Rules menu": {
-    "value": "Меню правил"
-  },
-  "Export rules...": {
-    "value": "Экспортировать правила…"
-  },
-  "Import rules...": {
-    "value": "Импортировать правила…"
-  },
-  "Export rules": {
-    "value": "Экспорт правил"
-  },
-  "Import rules": {
-    "value": "Импорт правил"
-  },
-  "Import (%d)": {
-    "value": "Импорт (%d)"
-  },
-  "Unsupported entry": {
-    "value": "Неподдерживаемая запись"
-  },
-  "Unsupported entry — skipped": {
-    "value": "Неподдерживаемая запись — пропущена"
-  },
-  "Unknown preset (newer app version?)": {
-    "value": "Неизвестный пресет (файл из более новой версии?)"
-  },
-  "Channel \"%s\" not found — set to %s, rule disabled": {
-    "value": "Канал «%s» не найден — заменён на %s, правило выключено"
-  },
-  "DNS server \"%s\" not found — DNS option disabled": {
-    "value": "DNS-сервер «%s» не найден — DNS-опция выключена"
-  },
-  "DNS server \"%s\" not found — resolver set to auto": {
-    "value": "DNS-сервер «%s» не найден — резолвер сброшен в авто"
-  },
-  "Imported %d rules": {
-    "value": {
-      "one": "Импортировано %d правило",
-      "few": "Импортировано %d правила",
-      "many": "Импортировано %d правил",
-      "other": "Импортировано %d правила"
-    }
-  },
-  "Imported %d rules — tap ☁ to download rule-sets, then enable": {
-    "value": {
-      "one": "Импортировано %d правило — нажмите ☁, чтобы скачать rule-set'ы, затем включите",
-      "few": "Импортировано %d правила — нажмите ☁, чтобы скачать rule-set'ы, затем включите",
-      "many": "Импортировано %d правил — нажмите ☁, чтобы скачать rule-set'ы, затем включите",
-      "other": "Импортировано %d правила — нажмите ☁, чтобы скачать rule-set'ы, затем включите"
-    }
-  },
-  "Include DNS": {
-    "value": "Добавить DNS"
-  },
-  "Optionally bundle DNS servers and DNS rules the recipient may be missing. Servers referenced by the selected rules are pre-checked.": {
-    "value": "При желании вложите в файл DNS-серверы и DNS-правила, которых может не быть у получателя. Серверы, на которые ссылаются выбранные правила, уже отмечены."
-  },
-  "Export (+%d DNS)": {
-    "value": "Экспорт (+%d DNS)"
-  },
-  "Export without DNS": {
-    "value": "Экспорт без DNS"
-  },
-  "Already on this device": {
-    "value": "Уже есть на этом устройстве"
-  },
-  "Not available in this app version": {
-    "value": "Недоступно в этой версии приложения"
-  },
-  "Managed by presets automatically": {
-    "value": "Управляется пресетами автоматически"
-  },
-  "Imported %d DNS entries": {
-    "value": "Импортировано DNS-записей: %d"
-  },
-  "Imported %1$d rules and %2$d DNS entries": {
-    "value": "Импортировано правил: %1$d, DNS-записей: %2$d"
-  },
-  "Presets are not transferable — this app has its own": {
-    "value": "Пресеты не переносятся — они есть в самом приложении"
-  },
-  "No rules to export — presets stay with the app. You can still bundle DNS on the next step.": {
-    "value": "Экспортировать нечего: пресеты остаются в приложении. На следующем шаге можно вложить DNS."
-  },
-  "Rules exported": {
-    "value": "Правила экспортированы"
   }
 }
