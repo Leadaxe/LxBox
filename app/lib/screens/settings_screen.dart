@@ -260,7 +260,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     final template = _template;
     if (model == null || template == null) return;
     final node = template.vars.where((v) => v.name == name).firstOrNull;
-    final set = node?.onChange?['set'];
+    // Канон — помеченный `#set`; легаси `set` читается бессрочно (SPEC 107).
+    final set = node?.onChange?['#set'] ?? node?.onChange?['set'];
     if (set is! Map<String, dynamic>) return;
     final byName = {for (final v in template.vars) v.name: v};
     final resolve = makeResolver(model.snapshot, byName);

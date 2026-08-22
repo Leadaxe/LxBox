@@ -38,11 +38,15 @@ void main() {
       expect(spec.password, '');
     });
 
-    test('password-only userinfo (no colon)', () {
+    // SPEC 103 п.6 — canon = Go (url.User.Username()/Password(),
+    // node_parser_core.go:378-386): текст без `:` в userinfo это username,
+    // не password. Было закреплено обратное (password-only) — неканоничное
+    // поведение, тест обновлён.
+    test('username-only userinfo (no colon)', () {
       final spec = parseNaive('naive+https://onlypass@server.example.com');
       expect(spec, isNotNull);
-      expect(spec!.username, '');
-      expect(spec.password, 'onlypass');
+      expect(spec!.username, 'onlypass');
+      expect(spec.password, '');
     });
 
     test('anonymous (no userinfo)', () {
@@ -101,9 +105,23 @@ void main() {
       expect(spec!.label, '✅ DE');
     });
 
-    test('rejects empty host', () {
-      // Конструктивно невалидно — host пуст.
-      expect(parseNaive('naive+https://'), isNull);
+    test('empty host stays a live node (contract SPEC 103)', () {
+      // §103 empty_host_rejected — Go валидирует непустой hostname только
+      // для vless/trojan/ssh/tuic/anytls (node_parser_core.go:321-329);
+      // naive в этот список не входит, так что naive+https:// с пустым
+      // host остаётся живой нодой (server: "" — единственный настоящий
+      // reject тут — не-URI мусор). Раньше здесь ожидался null — это было
+      // расхождение с launcher-стороной контракта (contract/corpus/uri/
+      // naive/empty_host_rejected), приведено в соответствие.
+      final spec = parseNaive('naive+https://');
+      expect(spec, isNotNull);
+      expect(spec!.server, '');
+      expect(spec.port, 443);
+      expect(spec.tls.enabled, true);
+      // §103 — serverName хранит '' (= server); TlsSpec.toSingbox() уже
+      // опускает пустой server_name при эмите (entry-паритет с launcher,
+      // где Go тоже не пишет server_name для пустого host).
+      expect(spec.tls.serverName, '');
     });
 
     test('dispatcher handles naive+https via parseUri', () {

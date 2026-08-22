@@ -19,7 +19,7 @@ void main() {
           'client_id': clientId ?? base64.encode([12, 34, 56]),
           'peers': [
             {
-              'public_key': 'PEER_PUB=',
+              'public_key': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
               'endpoint': {
                 'v4': '162.159.192.1:2408',
                 'host': 'engage.cloudflareclient.com:2408',
@@ -53,7 +53,7 @@ void main() {
       nowIso8601: '2026-06-14T00:00:00Z',
     );
 
-    expect(acc.peerPub, 'PEER_PUB=');
+    expect(acc.peerPub, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=');
     expect(acc.clientV4, '172.16.0.2');
     expect(acc.clientV6, '2606:4700:110::2');
     expect(acc.accountId, 'acc-456');
@@ -139,7 +139,7 @@ void main() {
     final acc = await WarpClient(client: client)
         .register(licenseKey: 'BAD', nowIso8601: 'now');
     expect(acc.warpPlus, isFalse);
-    expect(acc.peerPub, 'PEER_PUB='); // регистрация всё равно прошла
+    expect(acc.peerPub, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA='); // регистрация всё равно прошла
   });
 
   test('toWireguardUri несёт reserved и парсится; §137 тег Cloudflare WARP',

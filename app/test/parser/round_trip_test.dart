@@ -71,14 +71,21 @@ void main() {
       expect(b.tls.alpn, a.tls.alpn);
     });
 
-    test('§084 H3 — Hysteria2 up_mbps/down_mbps round-trip', () {
+    // SPEC 103 D-016(в)/п.4 — канонический URI-ключ БЕЗ подчёркивания
+    // (`upmbps`/`downmbps`): единственная форма, которую понимает и читает,
+    // и пишет обратно референсный парсер (Go node_parser_hysteria2.go /
+    // shareuri_hysteria2.go — точное совпадение ключа, без queryGetFold).
+    // Было закреплено чтение `up_mbps` (с подчёркиванием) — то был неканоничный
+    // алиас: `up_mbps`/`down_mbps` это имя ПОЛЯ sing-box outbound JSON, не
+    // query-параметр URI; тест обновлён на канон.
+    test('§084 H3 — Hysteria2 upmbps/downmbps round-trip', () {
       final a = parseHysteria2(
-        'hysteria2://secret@h:443?up_mbps=100&down_mbps=200&sni=h#H',
+        'hysteria2://secret@h:443?upmbps=100&downmbps=200&sni=h#H',
       )!;
       expect(a.upMbps, 100);
       expect(a.downMbps, 200);
       final b = parseHysteria2(a.toUri())!;
-      expect(b.upMbps, 100, reason: 'up_mbps должен пережить toUri round-trip');
+      expect(b.upMbps, 100, reason: 'upmbps должен пережить toUri round-trip');
       expect(b.downMbps, 200);
     });
 
@@ -187,7 +194,7 @@ void main() {
 
     test('WireGuard: private key + peer preserved', () {
       final a = parseWireguardUri(
-        'wireguard://Privatekey==@h:51820?publickey=PublicKey&address=10.0.0.2%2F32&mtu=1420&keepalive=25#WG',
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420&keepalive=25#WG',
       )!;
       final b = parseWireguardUri(a.toUri())!;
       expect(b.privateKey, a.privateKey);

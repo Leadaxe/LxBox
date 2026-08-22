@@ -52,8 +52,9 @@ void main() {
     });
     test('§025 WARP (тег WARP) → 🔥☁️ (приоритет над WireguardSpec)', () {
       // Реальный путь: toWireguardUri даёт wireguard://…#WARP → parseUri.
-      final warp = parse('wireguard://k=@engage.cloudflareclient.com:2408'
-          '?publickey=PUB=&address=172.16.0.2/32&reserved=12,34,56#WARP');
+      final warp = parse(
+          'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@engage.cloudflareclient.com:2408'
+          '?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=172.16.0.2/32&reserved=12,34,56#WARP');
       expect(warp, isA<WireguardSpec>());
       expect(warp.tag, 'WARP');
       expect(defaultEmojiFor(warp), '🔥☁️');

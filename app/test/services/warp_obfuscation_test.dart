@@ -13,8 +13,8 @@ void main() {
   final clientId = base64.encode([1, 2, 3]);
 
   WarpAccount account({Awg? awg}) => WarpAccount(
-        privKey: 'PRIVKEYBASE64',
-        peerPub: 'PEERPUBBASE64',
+        privKey: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=',
+        peerPub: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
         clientV4: '172.16.0.2',
         clientV6: '2606:4700:110::1',
         clientId: clientId,
@@ -86,7 +86,10 @@ void main() {
       final conf = account().toWireguardConf();
       expect(conf.contains('[Interface]'), isTrue);
       expect(conf.contains('[Peer]'), isTrue);
-      expect(conf.contains('PrivateKey = PRIVKEYBASE64'), isTrue);
+      expect(
+          conf.contains(
+              'PrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA='),
+          isTrue);
       expect(conf.contains('Reserved = 1,2,3'), isTrue);
       expect(conf.contains('MTU = 1280'), isTrue);
       expect(conf.contains('Jc'), isFalse);

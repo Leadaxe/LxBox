@@ -170,39 +170,44 @@ void main() {
       expect(t.uplinkHttpMethod, 'GET');
     });
 
-    // §217 — нормализация в toSingbox против правил ядра (meta.go normalizeMeta):
-    // битые для ядра комбинации сбрасываются на дефолт + NodeWarning, чтобы одна
-    // нода не роняла весь конфиг fatal при старте.
-    test('§217 GET+не-packet-up → сброс+warning; GET+packet-up → сохраняется', () {
-      // GET без packet-up → в конфиг не пишем + warning.
+    // SPEC 103 vless/xhttp_uplink_get_without_packet_up_reset,
+    // xhttp_uplink_header_placement_reset, xhttp_placement_bogus_reset —
+    // session_placement/uplink_data_placement/uplink_http_method — pure
+    // passthrough, эталон Go (registry/warnings.json xhttp_param_reset:
+    // "go": null, Go пока не нормализует XHTTP-параметры — "normalization
+    // is left to the core", xhttpBuildTransport). Раньше Dart сбрасывал их
+    // на дефолт + warning; контрактный корпус показал расхождение с Go —
+    // выровнено на pass-through (core сам роняет мусор, не парсер).
+    test('session_placement/uplink_data_placement/uplink_http_method — pure passthrough (canon = Go)', () {
+      // GET без packet-up → пишем как есть, без warning (было: сброс).
       final t1 = parseTransport(
           {'type': 'xhttp', 'uplink_http_method': 'GET', 'mode': 'auto'})!;
       final (m1, w1) = t1.toSingbox(TemplateVars.empty);
-      expect(m1.containsKey('uplink_http_method'), false);
-      expect(w1.whereType<XhttpParamResetWarning>().length, 1);
+      expect(m1['uplink_http_method'], 'GET');
+      expect(w1.whereType<XhttpParamResetWarning>(), isEmpty);
 
-      // GET с packet-up → валидно, пишем, без warning.
+      // GET с packet-up → тоже пишем, без warning.
       final t2 = parseTransport(
           {'type': 'xhttp', 'uplink_http_method': 'GET', 'mode': 'packet-up'})!;
       final (m2, w2) = t2.toSingbox(TemplateVars.empty);
       expect(m2['uplink_http_method'], 'GET');
       expect(w2, isEmpty);
 
-      // header-placement без packet-up → сброс + warning (meta.go:98).
+      // header-placement без packet-up → пишем как есть, без warning.
       final t3 = parseTransport({
         'type': 'xhttp',
         'uplink_data_placement': 'header',
         'mode': 'stream-up',
       })!;
       final (m3, w3) = t3.toSingbox(TemplateVars.empty);
-      expect(m3.containsKey('uplink_data_placement'), false);
-      expect(w3.whereType<XhttpParamResetWarning>().length, 1);
+      expect(m3['uplink_data_placement'], 'header');
+      expect(w3.whereType<XhttpParamResetWarning>(), isEmpty);
 
-      // невалидный enum placement → сброс + warning (ядро бы упало).
+      // "невалидный" enum session_placement → тоже pure passthrough.
       final t4 = parseTransport({'type': 'xhttp', 'session_placement': 'bogus'})!;
       final (m4, w4) = t4.toSingbox(TemplateVars.empty);
-      expect(m4.containsKey('session_placement'), false);
-      expect(w4.whereType<XhttpParamResetWarning>().length, 1);
+      expect(m4['session_placement'], 'bogus');
+      expect(w4.whereType<XhttpParamResetWarning>(), isEmpty);
     });
 
     test('extra (URL-encoded JSON) вливается в transport', () {

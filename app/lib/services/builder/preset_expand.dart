@@ -168,26 +168,20 @@ PresetFragments expandPreset(
 
   final expandedRuleSets = <Map<String, dynamic>>[];
   for (final rs in preset.ruleSets) {
-    // §045: `enabled: "@var"` convention — фрагмент пропускается если
-    // var резолвится не в "true". Отсутствие поля = always-on.
-    final enabledRaw = rs['enabled'];
-    if (enabledRaw is String) {
-      final substituted = substituteVars(enabledRaw, varsMap);
-      if (substituted is! String || substituted.toLowerCase() != 'true') {
-        continue;
-      }
-    } else if (enabledRaw is bool && !enabledRaw) {
-      continue;
-    }
+    // SPEC 107: гейт фрагмента — #enable (канон) либо легаси
+    // `enabled: "@var"` (§045). Отсутствие обоих = always-on.
+    if (!fragmentGateSatisfied(rs, varsMap)) continue;
 
     final copy = deepCopyJson(rs);
     final result = substituteVars(copy, varsMap);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
     if (result['type'] is! String) continue;
-    // sing-box не знает поля `enabled` на rule_set entry — strip перед
-    // включением в финальный config (наша мета-конвенция, не sing-box).
-    result.remove('enabled');
+    // Служебные ключи гейта — прочь из результата. ВАЖНО: `enabled` снимается
+    // ТОЛЬКО в строковой форме "@var" (наша мета-конвенция). Булев `enabled`
+    // — настоящее поле sing-box (`tls.enabled`, `cache_file.enabled`), его
+    // удаление меняло бы конфиг (ловушка SPEC 107 §11.2).
+    stripFragmentGateKeys(result);
 
     // Remote rule_set — заменяем на local через кэш (spec §011 compliance,
     // task 011). Без path → skip + warning: правило будет частично рабочим
@@ -579,3 +573,57 @@ dynamic substituteVars(dynamic obj, Map<String, dynamic> vars) {
   });
 }
 
+
+
+/// SPEC 107 — гейт фрагмента пресета: `#enable` (канон) плюс легаси
+/// `enabled: "@var"` (§045). Оба присутствуют → and.
+///
+/// Значения подставляются перед вычислением: тело фрагмента может ссылаться
+/// на переменные пресета, которых нет в глобальном резолвере.
+bool fragmentGateSatisfied(
+  Map<String, dynamic> fragment,
+  Map<String, dynamic> varsMap,
+) {
+  final legacy = fragment['enabled'];
+  if (legacy is String) {
+    final substituted = substituteVars(legacy, varsMap);
+    if (substituted is! String || substituted.trim().toLowerCase() != 'true') {
+      return false;
+    }
+  } else if (legacy is bool && !legacy) {
+    // Булев `false` у rule_set — исторически «выключено» (не поле sing-box:
+    // у rule_set такого поля нет).
+    return false;
+  }
+
+  final gate = fragment[enableKey];
+  if (gate == null) return true;
+  final resolve = (String name) {
+    final v = varsMap[name];
+    if (v == null) return null;
+    return v is String ? coerceVarValue(v, _gateVarType(v)) : v;
+  };
+  return evalCond(gate, resolve);
+}
+
+/// Тип для коэрции значения в гейте: варианты пресета приезжают плоскими
+/// строками, объявления типов на этом пути нет. "true"/"false" трактуем как
+/// bool, остальное — текст (равенство сравнивает строки как есть).
+String _gateVarType(String raw) {
+  final t = raw.trim().toLowerCase();
+  return (t == 'true' || t == 'false') ? 'bool' : 'text';
+}
+
+/// Убирает служебные ключи гейта с ВЕРХНЕГО уровня фрагмента.
+///
+/// На верхнем уровне rule_set-фрагмента `enabled` — всегда наша
+/// мета-конвенция (§045): у sing-box такого поля у rule_set нет, обе формы
+/// (строка "@var" и bool) снимаются.
+///
+/// ВЛОЖЕННЫЕ объекты не трогаем: там `enabled` — настоящее поле sing-box
+/// (`tls.enabled`, `cache_file.enabled`), и его удаление меняло бы конфиг
+/// (ловушка SPEC 107 §11.2). Поэтому удаление точечное, а не обходом дерева.
+void stripFragmentGateKeys(Map<String, dynamic> fragment) {
+  fragment.remove(enableKey);
+  fragment.remove('enabled');
+}

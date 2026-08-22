@@ -554,6 +554,39 @@ Seen in the template:
 
 When extending it (adding a new type), update the Wizard UI renderer in `app/lib/screens/settings_screen.dart` and the coercion logic in `if_engine.dart`.
 
+### Keyword marking and `#enable` (SPEC 107)
+
+**One rule end to end:** `#` marks an engine keyword, `@` marks a variable
+reference, everything else is data.
+
+Canonical keywords: `#if`, `#enable`, `#and`, `#or`, `#not`, `#value`, `#else`,
+`#in`, `#notIn`, `#matches`, `#notEmpty`, `#isEmpty`, `#on_change`, `#set`.
+The unmarked spellings (`and`, `or`, `value`, `else`, `on_change`, `set`) are
+**read indefinitely** — existing templates keep working, and mixed spelling is
+valid.
+
+Conditions nest to any depth:
+
+```jsonc
+{"#enable": {"#or": ["@tun", {"#and": [{"@runtime.platform": "windows"}, "@proxy"]}]}}
+```
+
+`#enable` is a flat gate deciding whether a node exists at all — a preset
+fragment, a variable declaration, a `params` block. It replaces the former
+`enabled: "@var"` convention (§045), which is still accepted:
+
+```jsonc
+{"tag": "geoip", "type": "remote", "#enable": ["@geoip_enabled"], "url": "…"}
+```
+
+`false` drops the node entirely and its contents are not evaluated. Note that a
+**boolean** `enabled` inside a nested object (`tls.enabled`,
+`cache_file.enabled`) is a real sing-box field, never a gate — only the
+top-level rule_set form is our convention.
+
+The full normative specification is `contract/docs/TEMPLATE_LANG.md`; both apps
+are verified against the shared corpus `contract/corpus/template/`.
+
 ### `on_change` — a var's declarative side effect (§232 / §266)
 
 Toggling a var can set derived vars. The syntax reuses the existing `#if` (value/else),
@@ -564,10 +597,10 @@ section-level variant (§232, in memory); the preset-level one (§266, the globa
 ```jsonc
 {
   "name": "ipv6_enabled", "type": "bool", "default_value": "false",
-  "on_change": {
-    "set": {
-      "@dns_strategy":     {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}},
-      "@resolve_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}}
+  "#on_change": {
+    "#set": {
+      "@dns_strategy":     {"#if": {"#and": ["@ipv6_enabled"], "#value": "prefer_ipv4", "#else": "ipv4_only"}},
+      "@resolve_strategy": {"#if": {"#and": ["@ipv6_enabled"], "#value": "prefer_ipv4", "#else": "ipv4_only"}}
     }
   }
 }

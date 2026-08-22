@@ -79,7 +79,7 @@ void main() {
 
     test('WireGuard node → endpoints array, not outbounds', () async {
       final wg = parseWireguardUri(
-        'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
         id: 'u2',
@@ -226,7 +226,7 @@ void main() {
     // прокидывается в route только когда задан; пусто = omitempty (поля нет).
     test('§215 idleSuspend="30s" → route.lx_idle_suspend', () async {
       final wg = parseWireguardUri(
-        'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
         id: 'u5',
@@ -252,7 +252,7 @@ void main() {
 
     test('§215 idleSuspend="" (default) → нет route.lx_idle_suspend', () async {
       final wg = parseWireguardUri(
-        'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
         id: 'u6',
@@ -280,7 +280,7 @@ void main() {
     // вместе с базовым порогом: ядро отвергает reachable без lx_idle_suspend.
     test('§272 reachable пишется только при включённом idleSuspend', () async {
       final wg = parseWireguardUri(
-        'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
         id: 'u7',

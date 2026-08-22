@@ -134,13 +134,13 @@ void main() {
             {
               'type': 'wireguard',
               'tag': 'wg',
-              'private_key': 'priv',
+              'private_key': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=',
               'address': ['10.0.0.2/32'],
               'peers': [
                 {
                   'address': 'wg.example.com',
                   'port': 51820,
-                  'public_key': 'pub',
+                  'public_key': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
                   'allowed_ips': ['0.0.0.0/0'],
                 }
               ],

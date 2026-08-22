@@ -26,23 +26,28 @@ class _FakePathProvider extends PathProviderPlatform
 void main() {
   late Directory tempDir;
 
+  // SPEC 103 D-023/D-030 — normalizeWGKey требует РОВНО 32 байта base64;
+  // короткие плейсхолдеры вроде "pk"/"pubk" больше не парсятся (null-skip).
+  const _testPriv = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=';
+  const _testPub = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=';
+
   // Обычный WG-экспорт (Proton-стиль) и awg2-экспорт с обфускацией.
-  const wgIni = '[Interface]\n'
-      'PrivateKey = pk\n'
+  final wgIni = '[Interface]\n'
+      'PrivateKey = $_testPriv\n'
       'Address = 10.0.0.2/32\n'
       '\n'
       '[Peer]\n'
-      'PublicKey = pubk\n'
+      'PublicKey = $_testPub\n'
       'Endpoint = node.example.com:51820\n';
-  const awgIni = '[Interface]\n'
-      'PrivateKey = PRIV\n'
+  final awgIni = '[Interface]\n'
+      'PrivateKey = $_testPriv\n'
       'Address = 10.8.1.25/32\n'
       'Jc = 5\n'
       'Jmin = 10\n'
       'Jmax = 50\n'
       'I1 = <b 0x084481800001>\n'
       '[Peer]\n'
-      'PublicKey = PUB\n'
+      'PublicKey = $_testPub\n'
       'Endpoint = 64.188.69.128:44733\n';
 
   setUp(() async {

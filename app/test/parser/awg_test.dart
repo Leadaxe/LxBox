@@ -9,11 +9,19 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §097 Phase 1 — AmneziaWG2 (AWG) сквозной проход: URI/JSON/INI → Awg → emit →
 /// round-trip. По образцу singbox-launcher SPEC 073 (Фазы 1-4, 6).
+// SPEC 103 D-023/D-030 — normalizeWGKey требует РОВНО 32 байта; короткие
+// плейсхолдеры вроде "PRIV"/"PUB"/"K" больше не парсятся (null-skip).
+// Валидные 32-байтные base64-заглушки для фикстур (см. test/parser/
+// wireguard_edge_test.dart для канонического источника этой практики).
+const _testPriv = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=';
+const _testPub = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=';
+const _testPsk = 'ccccccccccccccccccccccccccccccccccccccccccA=';
+
 void main() {
   const i1 = '<b 0x000100002112a442><r 12>';
   const i3 = '<r 24>';
-  final fullUri = 'wireguard://PRIV@host.example.com:51821'
-      '?publickey=PUB&address=10.0.0.2/32&allowedips=0.0.0.0/0,::/0'
+  final fullUri = 'wireguard://$_testPriv@host.example.com:51821'
+      '?publickey=$_testPub&address=10.0.0.2/32&allowedips=0.0.0.0/0,::/0'
       '&mtu=1408&keepalive=25'
       '&jc=10&jmin=50&jmax=100&s1=20&s2=20&s3=60&s4=60'
       '&h1=1234567890&h2=1234567891&h3=1234567892&h4=1234567893'
@@ -36,13 +44,13 @@ void main() {
 
     test('обычный WG (без AWG) → spec.awg == null', () {
       final spec = parseWireguardUri(
-          'wireguard://PRIV@h:51820?publickey=PUB&address=10.0.0.2/32')!;
+          'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32')!;
       expect(spec.awg, isNull);
     });
 
     test('битое число (jc=abc) → поле пропущено, парс не падает', () {
       final spec = parseWireguardUri(
-          'wireguard://P@h:51820?publickey=K&address=10.0.0.2/32&jc=abc&jmin=50')!;
+          'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32&jc=abc&jmin=50')!;
       expect(spec.awg!.fields.containsKey('jc'), false);
       expect(spec.awg!.fields['jmin'], 50);
     });
@@ -75,7 +83,7 @@ void main() {
 
     test('обычный WG emit без AWG-ключей', () {
       final spec = parseWireguardUri(
-          'wireguard://P@h:51820?publickey=K&address=10.0.0.2/32')!;
+          'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32')!;
       final map = spec.emit(TemplateVars.empty).map;
       expect(map.keys.any(Awg.numKeys.contains), false);
       expect(map.keys.any(Awg.strKeys.contains), false);
@@ -92,7 +100,7 @@ void main() {
 
     test('jc=0 (junk off) — явный ноль переживает round-trip', () {
       final s1 = parseWireguardUri(
-          'wireguard://P@h:51820?publickey=K&address=10.0.0.2/32&jc=0')!;
+          'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32&jc=0')!;
       expect(s1.awg!.fields['jc'], 0);
       final s2 = parseWireguardUri(s1.toUri())!;
       expect(s2.awg!.fields['jc'], 0);
@@ -100,7 +108,8 @@ void main() {
   });
 
   group('MTU clamp — min(mtu, 1280) только при AWG-полях', () {
-    const base = 'wireguard://P@h:51820?publickey=K&address=10.0.0.2/32';
+    const base =
+        'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32';
 
     test('AWG без mtu → 1280 (вместо WG-дефолта)', () {
       final spec = parseWireguardUri('$base&jc=10')!;
@@ -123,19 +132,22 @@ void main() {
       expect(spec.mtu, 1280);
     });
 
-    test('plain WG не трогаем: без mtu → 1408, mtu=1420 → 1420', () {
-      expect(parseWireguardUri(base)!.mtu, 1408);
+    // SPEC 103 D-026 — canon = Go: без явного mtu= в URI поле не эмитится
+    // вовсе (ядро само ставит 1408). Было закреплено, что plain WG дефолтит
+    // 1408 в самой модели — неканоничное поведение, тест обновлён.
+    test('plain WG не трогаем: без mtu → не задан, mtu=1420 → 1420', () {
+      expect(parseWireguardUri(base)!.mtu, isNull);
       expect(parseWireguardUri('$base&mtu=1420')!.mtu, 1420);
     });
 
-    // §219 — plain WG без mtu теперь дефолтит 1408 (как URI-парсер), а не null.
-    // Модель не зависит от источника парсинга (JSON vs URI). AWG-clamp до 1280
-    // без изменений.
-    test('JSON endpoint: AWG без mtu → 1280, plain WG без mtu → 1408', () {
+    // §219/D-026 — plain WG без mtu НЕ дефолтит 1408 в модели (ядро само
+    // ставит его); модель не зависит от источника парсинга (JSON vs URI).
+    // AWG-clamp до 1280 без изменений.
+    test('JSON endpoint: AWG без mtu → 1280, plain WG без mtu → не задан', () {
       Map<String, dynamic> entry({bool awg = false, int? mtu}) => {
             'type': 'wireguard',
             'tag': 't',
-            'private_key': 'PRIV',
+            'private_key': _testPriv,
             'address': ['10.0.0.2/32'],
             'mtu': ?mtu,
             if (awg) 'jc': 10,
@@ -143,7 +155,7 @@ void main() {
               {
                 'address': 'host',
                 'port': 51821,
-                'public_key': 'PUB',
+                'public_key': _testPub,
                 'allowed_ips': ['0.0.0.0/0'],
               }
             ],
@@ -152,17 +164,17 @@ void main() {
       expect(
           (parseSingboxEntry(entry(awg: true, mtu: 1420)) as WireguardSpec).mtu,
           1280);
-      expect((parseSingboxEntry(entry()) as WireguardSpec).mtu, 1408);
+      expect((parseSingboxEntry(entry()) as WireguardSpec).mtu, isNull);
       expect((parseSingboxEntry(entry(mtu: 1420)) as WireguardSpec).mtu, 1420);
     });
 
     test('AmneziaWG INI без MTU → 1280', () {
       const conf = '[Interface]\n'
-          'PrivateKey = PRIV\n'
+          'PrivateKey = $_testPriv\n'
           'Address = 10.0.0.2/32\n'
           'Jc = 10\n'
           '[Peer]\n'
-          'PublicKey = PUB\n'
+          'PublicKey = $_testPub\n'
           'Endpoint = host.example.com:51821\n';
       expect(parseWireguardIni(conf)!.mtu, 1280);
     });
@@ -173,7 +185,7 @@ void main() {
       final spec = parseSingboxEntry({
         'type': 'wireguard',
         'tag': 'awg',
-        'private_key': 'PRIV',
+        'private_key': _testPriv,
         'address': ['10.0.0.2/32'],
         'mtu': 1408,
         'jc': 10,
@@ -185,7 +197,7 @@ void main() {
           {
             'address': 'host',
             'port': 51821,
-            'public_key': 'PUB',
+            'public_key': _testPub,
             'allowed_ips': ['0.0.0.0/0'],
           }
         ],
@@ -198,7 +210,7 @@ void main() {
 
     test('AmneziaWG INI (.conf) → spec.awg', () {
       const conf = '[Interface]\n'
-          'PrivateKey = PRIV\n'
+          'PrivateKey = $_testPriv\n'
           'Address = 10.0.0.2/32\n'
           'MTU = 1408\n'
           'Jc = 10\n'
@@ -207,7 +219,7 @@ void main() {
           'H1 = 1234567890\n'
           'I1 = $i1\n'
           '[Peer]\n'
-          'PublicKey = PUB\n'
+          'PublicKey = $_testPub\n'
           'Endpoint = host.example.com:51821\n'
           'PersistentKeepalive = 25\n';
       final spec = parseWireguardIni(conf)!;
@@ -219,7 +231,8 @@ void main() {
   });
 
   group('§112 — ranged magic headers (h1–h4 как N-M)', () {
-    const base = 'wireguard://P@h:51820?publickey=K&address=10.0.0.2/32';
+    const base =
+        'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32';
 
     test('URI: h1=N-M → String, одиночный h2 → int', () {
       final awg =
@@ -241,7 +254,7 @@ void main() {
       final spec = parseSingboxEntry({
         'type': 'wireguard',
         'tag': 'awg',
-        'private_key': 'PRIV',
+        'private_key': _testPriv,
         'address': ['10.0.0.2/32'],
         'h1': '43613244-384550127',
         'h2': 826869626,
@@ -250,7 +263,7 @@ void main() {
           {
             'address': 'host',
             'port': 51821,
-            'public_key': 'PUB',
+            'public_key': _testPub,
             'allowed_ips': ['0.0.0.0/0'],
           }
         ],
@@ -281,7 +294,7 @@ void main() {
       const conf = '[Interface]\n'
           'Address = 10.8.1.25/32\n'
           'DNS = 172.29.172.254, 1.0.0.1\n'
-          'PrivateKey = PRIV\n'
+          'PrivateKey = $_testPriv\n'
           'Jc = 5\n'
           'Jmin = 10\n'
           'Jmax = 50\n'
@@ -296,8 +309,8 @@ void main() {
           'I1 = <b 0x084481800001>\n'
           'I2 = \n'
           '[Peer]\n'
-          'PublicKey = PUB\n'
-          'PresharedKey = PSK\n'
+          'PublicKey = $_testPub\n'
+          'PresharedKey = $_testPsk\n'
           'AllowedIPs = 0.0.0.0/0, ::/0\n'
           'Endpoint = 64.188.69.128:44733\n'
           'PersistentKeepalive = 25\n';
@@ -320,14 +333,14 @@ void main() {
         () {
       const conf = '[Interface]\n'
           'Address = 10.8.1.25/32\n'
-          'PrivateKey = PRIV\n'
+          'PrivateKey = $_testPriv\n'
           'Jc = 5\n'
           'Jmin = 10\n'
           'Jmax = 50\n'
           'H1 = 43613244-384550127\n'
           'I1 = <b 0x084481800001>\n'
           '[Peer]\n'
-          'PublicKey = PUB\n'
+          'PublicKey = $_testPub\n'
           'Endpoint = 64.188.69.128:44733\n';
       final spec = parseWireguardIni(conf, nameHint: 'awg2 export (home)')!;
       expect(spec.tag, 'awg2 export (home)');

@@ -180,11 +180,14 @@ void main() {
       expect(s2.label, original.label);
     });
 
-    test('round-trip preserves password-only auth', () {
+    // SPEC 103 п.6 — canon = Go: userinfo без `:` это username. Было
+    // закреплено обратное (password-only) — неканоничное поведение, тест
+    // обновлён.
+    test('round-trip preserves username-only auth (no colon)', () {
       final original = parseNaive('naive+https://onlypass@host.example.com')!;
       final s2 = parseUri(original.toUri()) as NaiveSpec;
-      expect(s2.username, '');
-      expect(s2.password, 'onlypass');
+      expect(s2.username, 'onlypass');
+      expect(s2.password, '');
     });
 
     test('round-trip preserves extra-headers (sorted)', () {

@@ -57,11 +57,19 @@ void main() {
       expect(t2.tls.alpn, spec.tls.alpn);
     });
 
-    test('invalid congestion_control → default cubic', () {
+    // §103 D-016(в) — было: мусорное значение нормализовалось до 'cubic' и
+    // писалось в эмит явно. Канон: мусор == «параметр не задан», эмиттер
+    // опускает ключ, ядро подставляет свой дефолт само (не эмитим то, что
+    // сами придумали). Совпадает с Go — см. corpus
+    // tuic/unknown_congestion_dropped (node_parser_tuic_test.go:70), где
+    // конфиг вообще не содержит `congestion_control`.
+    test('invalid congestion_control → not set (omitted on emit)', () {
       final spec = parseTuic(
         'tuic://u:p@h:443?congestion_control=bogus',
       );
-      expect(spec!.congestionControl, 'cubic');
+      expect(spec!.congestionControl, isNull);
+      final entry = spec.emit(TemplateVars.empty);
+      expect(entry.map.containsKey('congestion_control'), isFalse);
     });
   });
 }

@@ -33,22 +33,22 @@ void main() {
   group('parseWireguardUri — reserved', () {
     test('reserved=b0,b1,b2 попадает в peer', () {
       final spec = parseWireguardUri(
-          'wireguard://PRIV=@engage.cloudflareclient.com:2408'
-          '?publickey=PUB=&address=172.16.0.2/32&reserved=12,34,56#WARP');
+          'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@engage.cloudflareclient.com:2408'
+          '?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=172.16.0.2/32&reserved=12,34,56#WARP');
       expect(spec, isNotNull);
       expect(spec!.peers.first.reserved, [12, 34, 56]);
     });
 
     test('без reserved → null в peer (обычный WG не ломается)', () {
       final spec = parseWireguardUri(
-          'wireguard://PRIV=@h.example:51820?publickey=PUB=&address=10.0.0.2/32');
+          'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h.example:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32');
       expect(spec!.peers.first.reserved, isNull);
     });
 
     test('client_id (base64) как alias reserved', () {
       final b64 = base64.encode([9, 9, 9]);
       final spec = parseWireguardUri(
-          'wireguard://PRIV=@h.example:2408?publickey=PUB=&address=1.1.1.1/32'
+          'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h.example:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=1.1.1.1/32'
           '&client_id=$b64');
       expect(spec!.peers.first.reserved, [9, 9, 9]);
     });
@@ -104,8 +104,8 @@ void main() {
   });
 
   test('URI round-trip: parse → toUri → parse сохраняет reserved', () {
-    const uri = 'wireguard://PRIV=@engage.cloudflareclient.com:2408'
-        '?publickey=PUB=&address=172.16.0.2/32&reserved=12,34,56#WARP';
+    const uri = 'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@engage.cloudflareclient.com:2408'
+        '?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=172.16.0.2/32&reserved=12,34,56#WARP';
     final spec1 = parseWireguardUri(uri)!;
     final back = spec1.toUri();
     final spec2 = parseWireguardUri(back)!;

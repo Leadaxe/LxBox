@@ -506,7 +506,10 @@ class WizardVar {
   // §120: typed template engine. bool/int коэрсятся по типу; остальные —
   // дословная строка (НЕ угадывание по содержимому). text/enum/secret/outbound/
   // dns_servers — все строковые. §033 добавил outbound/dns_servers.
-  final String type; // bool, int, text, enum, secret, outbound, dns_servers
+  // SPEC 103: канонический набор типов языка шаблонов — 8 (TEMPLATE_LANG §2.2).
+  // text_list добавлен вместе с коэрцией в if_engine (разрыв C6).
+  final String
+      type; // bool, int, text, text_list, enum, secret, outbound, dns_servers
   final String defaultValue;
   final String wizardUI; // edit, fix, hidden
   final List<WizardOption> options; // for enum / text-with-suggestions
@@ -590,7 +593,9 @@ class WizardVar {
       section: section,
       chapter: chapter,
       required: json['required'] as bool? ?? true,
-      onChange: json['on_change'] as Map<String, dynamic>?,
+      // SPEC 107: канон — помеченный `#on_change`; легаси `on_change`
+      // читается бессрочно.
+      onChange: (json['#on_change'] ?? json['on_change']) as Map<String, dynamic>?,
     );
   }
 }
