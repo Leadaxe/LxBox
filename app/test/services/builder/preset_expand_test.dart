@@ -23,13 +23,13 @@ void main() {
 
       expect(f.warnings, isEmpty);
       expect(f.ruleSets.length, 1);
-      expect(f.ruleSets.first['tag'], 'ru-domains');
+      expect(f.ruleSets.first['tag'], 'ru-direct:ru-domains');
       expect(f.dnsRules.single,
-          {'rule_set': 'ru-domains', 'server': 'yandex_doh'});
+          {'rule_set': 'ru-direct:ru-domains', 'server': 'ru-direct:yandex_doh'});
       expect(f.routingRules.single,
-          {'rule_set': 'ru-domains', 'outbound': 'vpn-1'});
+          {'rule_set': 'ru-direct:ru-domains', 'outbound': 'vpn-1'});
       expect(f.dnsServers.length, 1);
-      expect(f.dnsServers.first['tag'], 'yandex_doh');
+      expect(f.dnsServers.first['tag'], 'ru-direct:yandex_doh');
       expect(f.dnsServers.first['detour'], 'vpn-1');
     });
 
@@ -46,10 +46,10 @@ void main() {
 
       expect(f.warnings, isEmpty);
       expect(f.dnsRules.single,
-          {'rule_set': 'ru-domains', 'server': 'yandex_doh'},
+          {'rule_set': 'ru-direct:ru-domains', 'server': 'ru-direct:yandex_doh'},
           reason: 'default_value из шаблона применяется');
       expect(f.dnsServers.length, 1);
-      expect(f.dnsServers.first['tag'], 'yandex_doh');
+      expect(f.dnsServers.first['tag'], 'ru-direct:yandex_doh');
     });
 
     test('optional var: явная пустая строка → фрагменты с @var dropped', () {
@@ -135,7 +135,7 @@ void main() {
       final f = expandPreset(rule, preset);
 
       expect(f.dnsServers.length, 1);
-      expect(f.dnsServers.first['tag'], 'yandex_safe');
+      expect(f.dnsServers.first['tag'], 'ru-direct:yandex_safe');
     });
 
     // §354 — ru-direct БЕЗ var'а `dns_server`: группа зашита литералом в
@@ -154,10 +154,10 @@ void main() {
         );
 
         expect(f.dnsServers.map((s) => s['tag']),
-            ['dns_ru', 'yandex_udp', 'yandex_dot', 'yandex_doh']);
+            ['ru-direct:dns_ru', 'ru-direct:yandex_udp', 'ru-direct:yandex_dot', 'ru-direct:yandex_doh']);
         final grp = f.dnsServers.first;
         expect(grp['type'], 'group');
-        expect(grp['servers'], ['yandex_udp', 'yandex_dot', 'yandex_doh']);
+        expect(grp['servers'], ['ru-direct:yandex_udp', 'ru-direct:yandex_dot', 'ru-direct:yandex_doh']);
         expect(grp['mode'], 'fastest');
         // §319: у группы не бывает detour'а.
         expect(grp.containsKey('detour'), isFalse);
@@ -176,11 +176,11 @@ void main() {
             f.dnsServers.firstWhere((s) => s['tag'] == t);
 
         // UDP — по каналу пресета (ровно тот путь, что висел на мёртвой ноде).
-        expect(byTag('yandex_udp')['detour'], 'vpn-2');
+        expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-2');
         // DoT — через vpn-1, НЕ @outbound: шифрован, утечки нет.
-        expect(byTag('yandex_dot')['detour'], 'vpn-1');
+        expect(byTag('ru-direct:yandex_dot')['detour'], 'vpn-1');
         // DoH — напрямую: detour снят как direct-out (§117).
-        expect(byTag('yandex_doh').containsKey('detour'), isFalse);
+        expect(byTag('ru-direct:yandex_doh').containsKey('detour'), isFalse);
       });
 
       test('правило ссылается на группу литералом, без @-плейсхолдера', () {
@@ -193,7 +193,7 @@ void main() {
           _ruDirectWithDnsGroup(),
         );
 
-        expect(f.dnsRules.single['server'], 'dns_ru');
+        expect(f.dnsRules.single['server'], 'ru-direct:dns_ru');
       });
     });
 
@@ -211,7 +211,7 @@ void main() {
         );
 
         expect(f.dnsServers.length, 1);
-        expect(f.dnsServers.single['tag'], 'yandex_udp');
+        expect(f.dnsServers.single['tag'], 'ru-direct:yandex_udp');
       });
 
       test('выбрана группа → тянет своих членов', () {
@@ -225,7 +225,7 @@ void main() {
         );
 
         expect(f.dnsServers.map((s) => s['tag']),
-            ['dns_ru', 'yandex_udp', 'yandex_dot', 'yandex_doh']);
+            ['ru-direct:dns_ru', 'ru-direct:yandex_udp', 'ru-direct:yandex_dot', 'ru-direct:yandex_doh']);
       });
 
       test('dns_server не выбран → пресет не вносит DNS-серверов', () {
@@ -269,7 +269,7 @@ void main() {
       expect(rs['type'], 'local', reason: 'remote → local (spec §011)');
       expect(rs['path'], '/cache/preset__block-ads__ads-all.srs');
       expect(rs.containsKey('url'), isFalse);
-      expect(rs['tag'], 'ads-all');
+      expect(rs['tag'], 'block-ads:ads-all');
     });
 
     test('remote rule_set + НЕТ cached path → rule_set skipped + warning + '
@@ -323,15 +323,15 @@ void main() {
       expect(f.warnings, isEmpty);
       expect(f.ruleSets.length, 2);
       expect(f.ruleSets.map((rs) => rs['tag']).toSet(),
-          {'ru-domains', 'geoip-ru'});
+          {'ru-direct:ru-domains', 'ru-direct:geoip-ru'});
       // geoip-ru: type конвертирован в local (spec §011)
-      final geoip = f.ruleSets.firstWhere((rs) => rs['tag'] == 'geoip-ru');
+      final geoip = f.ruleSets.firstWhere((rs) => rs['tag'] == 'ru-direct:geoip-ru');
       expect(geoip['type'], 'local');
       expect(geoip['path'], '/cache/preset__ru-direct__geoip-ru.srs');
       expect(geoip.containsKey('enabled'), isFalse,
           reason: 'enabled — наша мета-конвенция, sing-box не знает');
       // routing rule: массив остался (оба tag'а expanded)
-      expect(f.routingRules.single['rule_set'], ['ru-domains', 'geoip-ru']);
+      expect(f.routingRules.single['rule_set'], ['ru-direct:ru-domains', 'ru-direct:geoip-ru']);
       expect(f.routingRules.single['outbound'], 'direct-out');
     });
 
@@ -351,9 +351,9 @@ void main() {
       final f = expandPreset(rule, preset); // srsPaths: {}
 
       expect(f.ruleSets.length, 1, reason: 'только ru-domains expanded');
-      expect(f.ruleSets.first['tag'], 'ru-domains');
+      expect(f.ruleSets.first['tag'], 'ru-direct:ru-domains');
       // routing rule даунгрейдился до single string
-      expect(f.routingRules.single['rule_set'], 'ru-domains');
+      expect(f.routingRules.single['rule_set'], 'ru-direct:ru-domains');
       expect(f.routingRules.single['outbound'], 'direct-out');
       // warning про missing geoip-ru
       expect(f.warnings.any((w) => w.contains('geoip-ru') && w.contains('no cached')),
@@ -379,9 +379,9 @@ void main() {
       expect(f.warnings, isEmpty,
           reason: 'enabled=false — это намеренная конфигурация, не warning');
       expect(f.ruleSets.length, 1, reason: 'geoip-ru gated за enabled var');
-      expect(f.ruleSets.first['tag'], 'ru-domains');
+      expect(f.ruleSets.first['tag'], 'ru-direct:ru-domains');
       // routing rule даунгрейдился до single string (geoip-ru не в expandedTags)
-      expect(f.routingRules.single['rule_set'], 'ru-domains');
+      expect(f.routingRules.single['rule_set'], 'ru-direct:ru-domains');
     });
 
     test('§045: geoip off + .srs НЕ cached → geoip-ru пропускается без '
@@ -402,7 +402,7 @@ void main() {
       expect(f.warnings, isEmpty,
           reason: 'gated rule_set не доходит до cache-check warning');
       expect(f.ruleSets.length, 1);
-      expect(f.routingRules.single['rule_set'], 'ru-domains');
+      expect(f.routingRules.single['rule_set'], 'ru-direct:ru-domains');
     });
 
     test('§045: enabled bool literal true → фрагмент включается', () {
@@ -466,7 +466,7 @@ void main() {
       );
 
       final f = expandPreset(rule, preset);
-      expect(f.routingRules.single, {'rule_set': 'ru-domains', 'action': 'reject'});
+      expect(f.routingRules.single, {'rule_set': 'ru-direct:ru-domains', 'action': 'reject'});
       expect(f.routingRules.single.containsKey('outbound'), isFalse);
     });
 
@@ -489,7 +489,7 @@ void main() {
       );
 
       final f = expandPreset(rule, preset);
-      expect(f.routingRules.single, {'rule_set': 'ads', 'outbound': 'vpn-1'});
+      expect(f.routingRules.single, {'rule_set': 'block-ads:ads', 'outbound': 'vpn-1'});
       expect(f.routingRules.single.containsKey('action'), isFalse);
     });
 
@@ -511,7 +511,7 @@ void main() {
       );
 
       final f = expandPreset(rule, preset);
-      expect(f.routingRules.single, {'rule_set': 'ads', 'action': 'reject'});
+      expect(f.routingRules.single, {'rule_set': 'block-ads:ads', 'action': 'reject'});
     });
 
     // §162 регресс — `@outbound`-форма + var.default_value: "reject".
@@ -552,7 +552,7 @@ void main() {
       );
 
       final f = expandPreset(rule, preset);
-      expect(f.routingRules.single, {'rule_set': 'unknown-apps', 'action': 'reject'});
+      expect(f.routingRules.single, {'rule_set': 'unknown-traffic:unknown-apps', 'action': 'reject'});
       expect(f.routingRules.single.containsKey('outbound'), isFalse,
           reason: 'sing-box не принимает outbound:"reject" — это action');
     });
@@ -578,7 +578,7 @@ void main() {
       final f = expandPreset(rule, preset);
       // Правило проходит валидацию (outbound is String), значение не
       // разрезолвлено — это осознанный pass-through (см. _substitute docstring).
-      expect(f.routingRules.single, {'rule_set': 'x', 'outbound': '@foo'});
+      expect(f.routingRules.single, {'rule_set': 'legacy:x', 'outbound': '@foo'});
     });
 
     test('deep-copy isolation: source preset не мутируется после expansion', () {
@@ -745,12 +745,12 @@ void main() {
       expect(f.warnings, isEmpty);
       // Сервер вливается — не пустой список (регрессия #228).
       expect(f.dnsServers.length, 1);
-      expect(f.dnsServers.first['tag'], 'fakeip');
+      expect(f.dnsServers.first['tag'], 'fakeip:fakeip');
       expect(f.dnsServers.first['type'], 'fakeip');
       // Правило ссылается на реально эмитнутый сервер (не dangling).
       expect(f.dnsRules.single, {
         'query_type': ['A', 'AAAA'],
-        'server': 'fakeip',
+        'server': 'fakeip:fakeip',
       });
       // DNS-only: routing rule нет.
       expect(f.routingRules, isEmpty);
@@ -815,12 +815,12 @@ void main() {
       expect(f.warnings, isEmpty);
       expect(f.routingRules.length, 2);
       expect(f.routingRules[0], {
-        'rule_set': 'ru-domains',
+        'rule_set': 'ru-direct:ru-domains',
         'action': 'resolve',
         'strategy': 'ipv4_only',
       });
       expect(f.routingRules[1],
-          {'rule_set': 'ru-domains', 'outbound': 'direct-out'});
+          {'rule_set': 'ru-direct:ru-domains', 'outbound': 'direct-out'});
     });
 
     test('override vpn-1 → #if-гейт роняет resolve; route получает override',
@@ -836,7 +836,7 @@ void main() {
 
       expect(f.warnings, isEmpty);
       expect(f.routingRules.single,
-          {'rule_set': 'ru-domains', 'outbound': 'vpn-1'},
+          {'rule_set': 'ru-direct:ru-domains', 'outbound': 'vpn-1'},
           reason: 'resolve ipv4_only вреден в туннеле (IPv6 там живёт) — '
               '#if-гейт эмитит его только при direct-out');
     });
@@ -864,8 +864,8 @@ void main() {
 
       expect(f.routingRules.length, 2);
       expect(f.routingRules[0],
-          {'rule_set': 'a', 'action': 'resolve', 'strategy': 'ipv4_only'});
-      expect(f.routingRules[1], {'rule_set': 'a', 'action': 'reject'});
+          {'rule_set': 'x:a', 'action': 'resolve', 'strategy': 'ipv4_only'});
+      expect(f.routingRules[1], {'rule_set': 'x:a', 'action': 'reject'});
     });
 
     test('dangling rule_set в одном элементе → дропается только он + warning',
@@ -887,7 +887,7 @@ void main() {
       );
 
       expect(f.routingRules.single,
-          {'rule_set': 'a', 'outbound': 'direct-out'});
+          {'rule_set': 'x:a', 'outbound': 'direct-out'});
       expect(
         f.warnings.any((w) => w.contains('missing rule_set "missing"')),
         isTrue,
@@ -907,7 +907,7 @@ void main() {
 
       expect(f.warnings, isEmpty);
       expect(f.routingRules.single,
-          {'rule_set': 'ru-domains', 'outbound': 'direct-out'},
+          {'rule_set': 'ru-direct:ru-domains', 'outbound': 'direct-out'},
           reason: 'галка off → ipv4-резолв не эмитится (юзер сам решил)');
     });
 
@@ -1004,7 +1004,7 @@ void main() {
           reason: 'домен + IKE-порты; 1 = #if-ветка портов потеряна');
       final byDomain = f.routingRules[0];
       // Одноэлементный rule_set движок сворачивает в строку.
-      expect(byDomain['rule_set'], 'vowifi-epdg');
+      expect(byDomain['rule_set'], 'vowifi:vowifi-epdg');
       expect(byDomain['outbound'], 'direct-out');
 
       final byPort = f.routingRules[1];
@@ -1015,7 +1015,7 @@ void main() {
       // Домен ePDG — весь 3GPP-суффикс, не только РФ: иностранная SIM
       // тоже должна звонить мимо туннеля.
       final rs = f.ruleSets.single;
-      expect(rs['tag'], 'vowifi-epdg');
+      expect(rs['tag'], 'vowifi:vowifi-epdg');
       expect((rs['rules'] as List).first['domain_suffix'],
           ['pub.3gppnetwork.org']);
     });
@@ -1032,7 +1032,7 @@ void main() {
       );
 
       expect(f.routingRules.length, 1);
-      expect(f.routingRules.single['rule_set'], 'vowifi-epdg');
+      expect(f.routingRules.single['rule_set'], 'vowifi:vowifi-epdg');
     });
 
     test('ru-direct несёт mcc250-суффикс ePDG (РФ-операторы)', () {
@@ -1061,11 +1061,11 @@ void main() {
       final resolve = f.routingRules[0];
       expect(resolve['action'], 'resolve');
       expect(resolve['strategy'], 'ipv4_only');
-      expect(resolve['server'], 'dns_ru',
+      expect(resolve['server'], 'ru-direct:dns_ru',
           reason: 'server из default dns_server — §354 группа (битую ссылку '
               'при выключенном DNS-аспекте снимает '
               'healDanglingResolveServers)');
-      expect(resolve['rule_set'], ['ru-domains', 'ru-services']);
+      expect(resolve['rule_set'], ['ru-direct:ru-domains', 'ru-direct:ru-services']);
       final route = f.routingRules[1];
       expect(route['outbound'], 'direct-out');
       expect(route.containsKey('action'), isFalse);
@@ -1081,12 +1081,12 @@ void main() {
       expect(gate['ip_version'], 6);
       expect(gate['action'], 'predefined');
       expect(gate['rcode'], 'NOERROR');
-      expect(gate['rule_set'], ['ru-domains', 'ru-services']);
+      expect(gate['rule_set'], ['ru-direct:ru-domains', 'ru-direct:ru-services']);
       expect(gate.containsKey('server'), isFalse,
           reason: 'serverless-действие — predefined отвечает сам');
       expect(gate.containsKey('strategy'), isFalse);
       final dnsRoute = f.dnsRules[1];
-      expect(dnsRoute['server'], 'dns_ru');
+      expect(dnsRoute['server'], 'ru-direct:dns_ru');
       expect(dnsRoute.containsKey('ip_version'), isFalse,
           reason: 'маршрут безусловный — не-A/AAAA-запросы (HTTPS type 65) '
               'тоже должны идти в @dns_server');
@@ -1108,12 +1108,12 @@ void main() {
       );
 
       expect(f.dnsServers.map((s) => s['tag']),
-          ['dns_ru', 'yandex_udp', 'yandex_dot', 'yandex_doh']);
+          ['ru-direct:dns_ru', 'ru-direct:yandex_udp', 'ru-direct:yandex_dot', 'ru-direct:yandex_doh']);
       Map<String, dynamic> byTag(String t) =>
           f.dnsServers.firstWhere((s) => s['tag'] == t);
 
-      final grp = byTag('dns_ru');
-      expect(grp['servers'], ['yandex_udp', 'yandex_dot', 'yandex_doh']);
+      final grp = byTag('ru-direct:dns_ru');
+      expect(grp['servers'], ['ru-direct:yandex_udp', 'ru-direct:yandex_dot', 'ru-direct:yandex_doh']);
       expect(grp['mode'], 'fastest');
       expect(grp.containsKey('detour'), isFalse, reason: '§319');
 
@@ -1121,9 +1121,9 @@ void main() {
       // UDP — по каналу пресета (открытый, но идёт туда же, куда трафик);
       // DoT — через vpn-1; DoH — напрямую. Оба шифрованных пути не зависят
       // от @outbound, поэтому мёртвая нода в нём их не трогает.
-      expect(byTag('yandex_udp')['detour'], 'vpn-2');
-      expect(byTag('yandex_dot')['detour'], 'vpn-1');
-      expect(byTag('yandex_doh').containsKey('detour'), isFalse,
+      expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-2');
+      expect(byTag('ru-direct:yandex_dot')['detour'], 'vpn-1');
+      expect(byTag('ru-direct:yandex_doh').containsKey('detour'), isFalse,
           reason: 'direct-out → detour снят (§117)');
     });
 
@@ -1156,8 +1156,8 @@ void main() {
         warningsOut: warnings,
       );
 
-      final grp = emitted.firstWhere((s) => s['tag'] == 'dns_ru');
-      expect(grp['servers'], ['yandex_udp', 'yandex_dot', 'yandex_doh'],
+      final grp = emitted.firstWhere((s) => s['tag'] == 'ru-direct:dns_ru');
+      expect(grp['servers'], ['ru-direct:yandex_udp', 'ru-direct:yandex_dot', 'ru-direct:yandex_doh'],
           reason: 'ни один член не выброшен фильтром §312');
       expect(warnings, isEmpty, reason: 'дропов быть не должно');
     });
@@ -1178,7 +1178,7 @@ void main() {
       expect(f.routingRules.single['outbound'], 'direct-out');
       // §253: AAAA-гейт выпал целиком (array-element #if), маршрут остался.
       expect(f.dnsRules.length, 1);
-      expect(f.dnsRules.single['server'], 'dns_ru');
+      expect(f.dnsRules.single['server'], 'ru-direct:dns_ru');
       expect(f.dnsRules.single.containsKey('ip_version'), isFalse);
       expect(f.dnsRules.single.containsKey('strategy'), isFalse);
     });
@@ -1387,7 +1387,7 @@ void main() {
         preset,
       );
       expect(f.dnsRules.length, 1);
-      expect(f.dnsRules.single['rule_set'], 'cached');
+      expect(f.dnsRules.single['rule_set'], 'x:cached');
       expect(f.warnings.any((w) => w.contains('missing-srs')), isTrue);
     });
 

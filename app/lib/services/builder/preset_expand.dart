@@ -449,12 +449,99 @@ PresetFragments expandPreset(
     dnsServers.add(result);
   }
 
+  return namespacePresetTags(
+    preset.presetId,
+    PresetFragments(
+      dnsServers: dnsServers,
+      dnsRules: dnsRules,
+      ruleSets: expandedRuleSets,
+      routingRules: routingRules,
+      warnings: warnings,
+    ),
+  );
+}
+
+/// §103 C7 (D-012) — неймспейс тегов пресета: `<preset_id>:<tag>`.
+///
+/// Без префикса два пресета с одинаковым локальным тегом (`dns-ru`, `geoip`)
+/// сталкиваются, и побеждает первый — второй молча теряет свой сервер.
+/// Прежний дедуп first-wins сообщал о столкновении warning'ом, но решить его
+/// пользователь не мог: теги задаёт автор шаблона, а не он.
+///
+/// Префиксуются только теги, ОБЪЯВЛЕННЫЕ внутри этого пресета, и ссылки на
+/// них. Ссылка на чужой тег (общий rule_set, канал, `direct-out`) остаётся
+/// нетронутой — иначе правило начнёт указывать в никуда.
+PresetFragments namespacePresetTags(String presetId, PresetFragments f) {
+  if (presetId.isEmpty) return f;
+
+  final localDnsTags = <String>{
+    for (final s in f.dnsServers)
+      if (s['tag'] is String) s['tag'] as String,
+  };
+  final localRuleSetTags = <String>{
+    for (final rs in f.ruleSets)
+      if (rs['tag'] is String) rs['tag'] as String,
+  };
+  if (localDnsTags.isEmpty && localRuleSetTags.isEmpty) return f;
+
+  String qualify(String tag) => '$presetId:$tag';
+
+  Object? mapRef(Object? value, Set<String> local) {
+    if (value is String) return local.contains(value) ? qualify(value) : value;
+    if (value is List) {
+      return [
+        for (final v in value)
+          (v is String && local.contains(v)) ? qualify(v) : v,
+      ];
+    }
+    return value;
+  }
+
+  final dnsServers = [
+    for (final s in f.dnsServers)
+      {
+        ...s,
+        'tag': qualify(s['tag'] as String),
+        // Группа DNS ссылается на своих членов по тегу — те тоже
+        // переименованы.
+        if (s['servers'] != null) 'servers': mapRef(s['servers'], localDnsTags),
+      },
+  ];
+
+  final ruleSets = [
+    for (final rs in f.ruleSets) {...rs, 'tag': qualify(rs['tag'] as String)},
+  ];
+
+  final dnsRules = [
+    for (final r in f.dnsRules)
+      {
+        ...r,
+        if (r['server'] != null) 'server': mapRef(r['server'], localDnsTags),
+        if (r['rule_set'] != null)
+          'rule_set': mapRef(r['rule_set'], localRuleSetTags),
+      },
+  ];
+
+  final routingRules = [
+    for (final r in f.routingRules)
+      {
+        ...r,
+        if (r['rule_set'] != null)
+          'rule_set': mapRef(r['rule_set'], localRuleSetTags),
+        // Route-правило с `action: resolve` несёт `server` — ссылку на
+        // DNS-сервер, объявленный этим же пресетом. Без префикса она станет
+        // битой: sing-box check такое пропускает, а в рантайме резолв
+        // молча уходит не туда.
+        if (r['server'] != null) 'server': mapRef(r['server'], localDnsTags),
+      },
+  ];
+
   return PresetFragments(
     dnsServers: dnsServers,
     dnsRules: dnsRules,
-    ruleSets: expandedRuleSets,
+    ruleSets: ruleSets,
     routingRules: routingRules,
-    warnings: warnings,
+    warnings: f.warnings,
   );
 }
 

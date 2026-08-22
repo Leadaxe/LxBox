@@ -472,6 +472,17 @@ Future<BuildResult> buildConfig({
   // выключенный WARP-пресет из подписки давал 138 идентичных warning'ов на
   // сборку (по 276 на два прохода в дампе 4PDA), вытесняя из лога всё
   // остальное. Имена нод нужны для диагностики, но не все — первые пять.
+  // §103 C7 — миграция ссылок на теги пресетов. ДО деградаций ниже: они
+  // снимают битую ссылку, а мы её чиним, и порядок наоборот означал бы, что
+  // настройка пользователя теряется вместо переезда на новый тег.
+  final healedPrefixes = healPresetTagPrefix(config);
+  if (healedPrefixes.isNotEmpty) {
+    final shown = healedPrefixes.take(5).map((h) => '${h.from} → ${h.to}');
+    emitWarnings.add(
+        'Preset tags migrated to namespaced form (${healedPrefixes.length}): '
+        '${shown.join(', ')}${healedPrefixes.length > 5 ? ', …' : ''}');
+  }
+
   final healedDetours = healDanglingDetours(config);
   final ownersByTarget = <String, List<String>>{};
   for (final h in healedDetours) {

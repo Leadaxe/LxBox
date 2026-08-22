@@ -27,6 +27,7 @@ part 'post_steps/tun_packages.dart';
 part 'post_steps/dns_rules.dart';
 part 'post_steps/custom_rules.dart';
 part 'post_steps/dns_servers.dart';
+part 'post_steps/heal_preset_tag_prefix.dart';
 part 'post_steps/heal_dangling_detours.dart';
 part 'post_steps/heal_dangling_resolve_servers.dart';
 part 'post_steps/heal_legacy_dns_strategy.dart';
