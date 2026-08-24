@@ -129,7 +129,11 @@ void main() {
       expect(m.keepAlive, '45s');
     });
 
-    test('§393 — masque: старая плоская схема ядра ещё читается', () {
+    test('§393/0.8.0 (D-078) — masque: плоские legacy-ключи НЕ переносятся', () {
+      // Директива оператора 25.08: network/sni «не принимаем» — значения
+      // игнорируются (узел живёт на дефолтах), в эмит не протаскиваются
+      // (зеркально Go-стрипу sanitizeSingboxMasqueLegacy: плоский sni рядом
+      // с tls.server_name ронял ядро fail-fast'ом).
       final m = parseSingboxEntry({
         'type': 'masque',
         'tag': 'legacy',
@@ -142,8 +146,8 @@ void main() {
         'sni': '4pda.to',
       }) as MasqueSpec?;
       expect(m, isNotNull);
-      expect(m!.vhttp, 'h2');
-      expect(m.sni, '4pda.to');
+      expect(m!.vhttp, 'h3', reason: 'legacy network игнорируется — дефолт');
+      expect(m.sni, isEmpty, reason: 'плоский sni не переносится');
       expect(m.disableSni, isFalse);
     });
 

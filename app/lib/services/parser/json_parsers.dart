@@ -1122,22 +1122,19 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         if (ipv6.isNotEmpty) ensureCidr(ipv6),
       ];
       if (addrs.isEmpty) return null;
-      // §393 — схема ядра (`vhttp` + вложенный `tls{}`) и старая плоская
-      // (`network`/`sni`). Читаем обе: чужие конфиги и бэкапы, снятые до
-      // миграции, никуда не делись. Новое имя выигрывает.
+      // §393/контракт 0.8.0 (D-078) — только схема ядра (`vhttp` + вложенный
+      // `tls{}`). Плоские legacy-ключи (`network`/`sni`/`skip_cert_verify`)
+      // НЕ переносятся — «не принимаем» (директива оператора 25.08). Читать
+      // их не читаем; в эмит они не попадают по построению (MasqueSpec несёт
+      // только свои поля) — зеркально Go-стрипу sanitizeSingboxMasqueLegacy,
+      // где плоский `sni` рядом с tls.server_name ронял ядро fail-fast'ом.
       final masqueTls = entry['tls'];
       final tlsMap = masqueTls is Map ? masqueTls : const {};
       final vhttpRaw = entry['vhttp']?.toString() ?? '';
-      final vhttpPicked = vhttpRaw.isNotEmpty
-          ? vhttpRaw
-          : (entry['network']?.toString() ?? 'h3');
-      // SPEC 103 п.5 — как в URI-парсере: невалидное значение форсится в h3
-      // (node_parser_masque.go), а не пропускается как есть.
+      // SPEC 103 п.5 — невалидное значение форсится в h3, как в URI-парсере.
       final vhttpJson =
-          (vhttpPicked == 'h3' || vhttpPicked == 'h2') ? vhttpPicked : 'h3';
-      final sniRaw = tlsMap['server_name']?.toString() ??
-          entry['sni']?.toString() ??
-          '';
+          (vhttpRaw == 'h3' || vhttpRaw == 'h2') ? vhttpRaw : 'h3';
+      final sniRaw = tlsMap['server_name']?.toString() ?? '';
       return MasqueSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'masque-$server-$port' : tag,
