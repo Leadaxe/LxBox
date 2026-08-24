@@ -138,15 +138,27 @@ warp[] и dns не реализованы ни в одну сторону (мо�
 записей не переживают round-trip; Dart-раннер игнорирует поля ожиданий
 `disabled_hashes` и `directions`, которые Go-раннер проверяет
 (`corpus_test.go:205-221`, `:271-309`).
-- [ ] B1. `lib/services/lx_backup.dart`: разбор `directions[]` ПЕРВЫМИ
+- [x] B1. `lib/services/lx_backup.dart`: разбор `directions[]` ПЕРВЫМИ
       (канон → Direction), теги пополняют known до разбора правил;
       занятый тег → warning `backup_direction_exists`, не применяется
-- [ ] B2. Экспорт: Directions → `directions[]` (канон; фильтр ТЕЛОМ regex)
-- [ ] B3. Раннер `test/contract/backup_corpus_test.dart`: сверка
+- [x] B2. Экспорт: Directions → `directions[]` (канон; фильтр ТЕЛОМ regex)
+- [x] B3. Раннер `test/contract/backup_corpus_test.dart`: сверка
       `directions[]` из expected (tag/label/filter/include_direct/has_auto)
 - [ ] B4. `directions_created_on_import` зелёный → закоммитить
       `app/contract.lock` (до этого lock НЕ коммитить)
-- [ ] B5. UI restore: создание Направлений при импорте (backup_service)
+- [x] B5. UI restore: создание Направлений при импорте (backup_service)
+
+      СДЕЛАНО, но точка иная, чем предполагала эта строка: не
+      `backup_service.dart` (он про ВНУТРЕННИЙ бэкап — allowlist ключей
+      storage), а `backup_screen.dart` — путь импорта именно LX Backup.
+      Направления применяются ПЕРВЫМИ, до правил (иначе `rules[].outbound`
+      метит в несуществующую цель и правило приезжает выключенным), через
+      `DirectionMutations.bulkReplace` дополнением В КОНЕЦ — существующие
+      не перезаписываются, инвариант «vpn-1 есть и включён» цел, `include[]`
+      приехавших (ссылки только вверх) остаётся осмысленным. Гейт
+      `directionTagConflict` на пути `bulkReplace` отсекает служебные теги и
+      тёзок чужих `<tag>-auto`, которых парсер не ловит. Те же Направления
+      добавлены в `knownOutbounds` при разборе и в экспорт.
 - [ ] B6. Довести импорт до применения: vars, route.final, subscriptions
       (сейчас `backup_screen.dart:417` пишет только rules)
 - [ ] B7. foreignExtensions: ключ хранения (BACKUP.md:12 «LxBox — новый
@@ -172,22 +184,105 @@ warp[] и dns не реализованы ни в одну сторону (мо�
       несуществующий раннер
 
 ## Фаза C — цепочки (SPEC 110 мобилы)
-- [ ] C1. Модель `SourceChain` (hops в порядке ПАКЕТА, idle_timeout,
+- [x] C1. Модель `SourceChain` (hops в порядке ПАКЕТА, idle_timeout,
       strip_evasion, strip, rewrite) — канон `source_chain.schema.json`
-- [ ] C2. Хранение: цепочки в настройках (отдельный список; НЕ узлы подписки)
-- [ ] C3. Сборка: цепочка → узел `type: chain` (raw-объект, как
+
+      СДЕЛАНО: `app/lib/models/source_chain.dart`. `strip_evasion` —
+      nullable ради ТРЁХЗНАЧНОСТИ (нет ключа = умолчание ядра true, false =
+      явное выключение); каталог `strip` закрыт четырьмя ключами и эмитится
+      в порядке каталога, а не порядка Map. `rewrite` хранит `null`-значения
+      дословно: в RFC 7396 это «удалить ключ», и «чистка пустого» сменила бы
+      патч на обратный по смыслу. Там же порты `ChainEmitError` и
+      `ChainOutboundObject` лаунчера.
+- [x] C2. Хранение: цепочки в настройках (отдельный список; НЕ узлы подписки)
+
+      СДЕЛАНО: `app/lib/services/settings_storage/chains.dart` (part по
+      образцу `directions.dart`), ключ `chains` в `allowedTopLevelKeys` и в
+      категории `routing` внутреннего бэкапа. Миграции НЕТ намеренно: ключ
+      новый, «нет `chains`» и «все удалены» — одно состояние (в отличие от
+      `directions`, где пустой список значил бы потерю роутинга).
+      `deleteChain` НЕ вычищает позиции других цепочек — асимметрия с
+      `include` Направлений: снятие позиции превращает маршрут в ДРУГОЙ
+      маршрут, и билдер обязан деградировать цепочку целиком, а не подменять
+      её молча. LX Backup цепочек не переносит — TODO(§393 B-хвост/C9) в
+      `lx_backup.dart` (раздела в контракте нет, лаунчер тоже не кладёт).
+- [x] C3. Сборка: цепочка → узел `type: chain` (raw-объект, как
       `ChainOutboundObject` лаунчера); разрешение после загрузки всех
       источников; ссылка на цепочку только ВЫШЕ по списку
-- [ ] C4. **T9/L6**: канал не берёт цепочку, идущую через него (транзитивно)
-- [ ] C5. Гейт по `Libbox.version()` ≥ 1.14.0-lx.27-rc.5: без поддержки
+
+      СДЕЛАНО: `app/lib/services/builder/chain_nodes.dart` (`resolveChains`),
+      вызов в `build_config.dart` ПОСЛЕ цикла `list.build(ctx)` и ДО
+      `_buildDirectionGroups`; узлы уходят в `outbounds` между узлами
+      подписок и группами Направлений, теги — в конец `selectorTags` (пул
+      отбора). Порядок фикстур корпуса воспроизведён.
+- [x] C4. **T9/L6**: канал не берёт цепочку, идущую через него (транзитивно)
+
+      СДЕЛАНО: `chainPassesThrough` + `dropChainsThroughDirection`
+      (`chain_nodes.dart`), вызов в `_buildDirectionGroups` ПОСЛЕ фильтра —
+      фильтр про цепочки не знает и знать не должен. Плюс заглушки правил
+      3–4 санитайзера заменены реализацией (`sanitize_outbound_graph.dart`,
+      правила 6 и 7 его нумерации): висячий хоп дропает ЦЕПОЧКУ целиком,
+      `pruneChainLeavesUnderGroups` вычищает цепочки из листьев группы,
+      стоящей позицией ≥1. `_isChain` отделён от `_isGroup` — общий ключ
+      `outbounds[]` у них значит разное. Кольца: `_EdgeKind.chainHop` рвётся
+      дропом цепочки, а не снятием позиции.
+- [x] C5. Гейт по `Libbox.version()` ≥ 1.14.0-lx.27-rc.5: без поддержки
       цепочка не эмитится, warning `chain_unsupported_by_core` (реестр)
-- [ ] C6. Валидация формы (L4!): ≥2 позиций, дубли, самоссылка, вложенная
+
+      СДЕЛАНО: `app/lib/services/builder/core_chain_capability.dart`.
+      Мобила читает версию ядра через `VpnPlugin.getCoreVersion` →
+      `Libbox.version()` → `constant.Version` (ldflags от git-тега,
+      `build_shared/tag.go`) — списка тегов сборки libbox наружу не отдаёт,
+      поэтому шов один: версия. Парсер `-lx.N[-rc.M]` честный (строковое
+      сравнение ставило бы `rc.10` перед `rc.5`), финальный релиз старше
+      своих rc, хвост `-g<hash>` игнорируется. Fail-open на пустой/кривой/
+      апстримной строке. Гейт живёт в СБОРКЕ (`BuildSettings.coreVersion`,
+      кэш `CoreVersionCache` на сессию), не в UI.
+- [x] C6. Валидация формы (L4!): ≥2 позиций, дубли, самоссылка, вложенная
       только позицией 0, strip-каталог 4 ключа, utls+reality; детур
       позиции 0 = предупреждение, позиций ≥1 = справка (spec.md, референсы)
-- [ ] C7. UI: экран цепочки (список позиций, порядок пакета подписан,
+
+      СДЕЛАНО: `app/lib/screens/chain_edit/chain_form_validation.dart` —
+      чистый модуль (ни виджетов, ни storage), порт `conflicts()` лаунчера
+      плюс инварианты ядра, которые форме нужны РАНЬШЕ сборки. Находка несёт
+      машинный КОД ([ChainIssueCode]) и УРОВЕНЬ: `blocking` запирает
+      сохранение, `warning`/`info` — нет. Детур разведён по позициям (0 =
+      предупреждение «путь длиннее показанного», ≥1 = справка «ядро
+      перезапишет»), потерянные позиции — предупреждение с перечнем, и только
+      при готовом снимке целей (иначе рабочая цепочка красилась бы красным до
+      первой сборки). `stripsUtls` повторяет лестницу ядра: точечная галка >
+      общий `strip_evasion` > умолчание каталога. Кандидаты позиций —
+      `chain_hop_candidate.dart` + `chain_hop_targets.dart` (источник
+      ОКОНЧАТЕЛЬНЫХ тегов — последний собранный конфиг `HomeState.configModel`,
+      оттуда же reality/detour). Тесты — по инварианту на кейс, по кодам, не
+      по текстам.
+- [x] C7. UI: экран цепочки (список позиций, порядок пакета подписан,
       «+» из существующих целей, Advanced со strip)
-- [ ] C8. Раннер корпуса `contract/corpus/direction/` в Dart (кейсы
+
+      СДЕЛАНО: `app/lib/screens/chain_edit_screen.dart` (идиома
+      `direction_edit_screen`: push + PopScope back-guard + AppBar
+      delete/save; кнопка сохранения ЗАПЕРТА блокирующей находкой — §393 L4).
+      Позиции только выбором из существующих целей (bottom-sheet пикер,
+      занятые исключены), порядок пакета подписан над списком, перестановка
+      стрелками. Advanced: idle_timeout, strip_evasion, каталог strip
+      ТРЁХЗНАЧНЫМИ галками (не тронута = умолчание ядра — иначе «как у ядра»
+      и «я так решил» стали бы неотличимы). `rewrite` формой не правится (по
+      C1: урезанная форма молча потеряла бы произвольный патч), но переживает
+      round-trip. Точка входа — «Add hop chain…» в overflow-меню экрана
+      источников (`subscriptions_screen.dart`), создание через
+      `new_chain_dialog.dart` (тег спрашиваем ДО создания — он immutable),
+      список — `subscriptions_screen/widgets/chains_section.dart` (тег +
+      число хопов; секции нет, пока нет цепочек). Правка/удаление/тумблер
+      зовут `_regenerateAndSave` — цепочка это узел конфига.
+- [~] C8. Раннер корпуса `contract/corpus/direction/` в Dart (кейсы
       chain_* и fold_* — сейчас раннера нет вовсе)
+
+      ЧАСТИЧНО (попутно к C3–C5): раннер существует с A5; шесть кейсов
+      `chain_*` РАСКРЫТЫ и зелёные — вход читает `chains[]` и
+      `core_supports_chain`, выход сверяет и записи `type: chain`; добавлены
+      предикаты кодов `chain_unsupported_by_core` / `chain_hop_missing` /
+      `chain_cycle_through_direction`. `fold_*` остаются na (фаза E закрыта).
+      Открытым остаётся то, что от C8 ещё требуется сверх этого.
 - [ ] C9. Бэкап: цепочка в `extensions.lxbox`? НЕТ — она в каноне источника;
       решить перенос (лаунчер пока цепочки в бэкап не кладёт — сверить и
       сделать одинаково, скорее всего доп. раздел контракта)

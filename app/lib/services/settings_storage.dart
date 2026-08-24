@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/background_mode.dart';
 import '../models/direction.dart';
+import '../models/source_chain.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
@@ -22,6 +23,7 @@ part 'settings_storage/io.dart';
 part 'settings_storage/vars.dart';
 part 'settings_storage/sources_rules.dart';
 part 'settings_storage/directions.dart';
+part 'settings_storage/chains.dart';
 part 'settings_storage/network.dart';
 part 'settings_storage/backup_tun.dart';
 part 'settings_storage/vpn_mode.dart';
@@ -142,6 +144,7 @@ class SettingsStorage {
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
     'directions', // §125/§393 — Направления роутинга (template→storage)
     'directions_migrated', // §125/§393 — guard one-shot миграции
+    'chains', // §393 C2 — источники-цепочки хопов (SPEC 110)
     // §393 A2 — легаси-пары `channels`/`channels_migrated` в allowlist НЕТ
     // намеренно: границы импорта нормализуют имена ДО `replaceRaw`
     // ([normalizeLegacyDirectionKeys]), а старый файл на диске (upgrade-путь)
@@ -363,6 +366,31 @@ class SettingsStorage {
     Map<String, String> varDefaults = const {},
   }) =>
       _migrateDirectionsIfNeeded(gt, varDefaults: varDefaults);
+
+  // ---------------------------------------------------------------------------
+  // §393 C2 — источники-цепочки (chains[]). Третий тип источника рядом с
+  // подпиской и сервером (SPEC 110); НЕ Направление (§393 L5) и НЕ узел
+  // подписки. Порядок списка нормативен: ссылка позиции разрешена только на
+  // цепочку, объявленную ВЫШЕ, — этим исключены циклы между цепочками.
+  // ---------------------------------------------------------------------------
+
+  static Future<List<SourceChain>> getChains() => _getChains();
+
+  static Future<void> setChains(List<SourceChain> chains, {bool flush = true}) =>
+      _setChains(chains, flush: flush);
+
+  /// Добавить цепочку. [tag] опционален (по умолчанию первый свободный
+  /// `chain-N`, [nextChainTag]); throws [StateError] на конфликте тега с
+  /// другой цепочкой или Направлением.
+  static Future<SourceChain> addChain({String? label, String? tag}) =>
+      _addChain(label: label, tag: tag);
+
+  /// Обновить цепочку по [SourceChain.tag]. Throws, если тег не найден.
+  static Future<void> updateChain(SourceChain chain) => _updateChain(chain);
+
+  /// Удалить цепочку. Позиции других цепочек НЕ вычищаются намеренно —
+  /// см. `_deleteChain`.
+  static Future<void> deleteChain(String tag) => _deleteChain(tag);
 
   // ---------------------------------------------------------------------------
   // Last global update timestamp

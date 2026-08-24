@@ -30,6 +30,11 @@ const _topLevelRoutingKeys = {
   // one-shot миграция не пере-сработала поверх восстановленных Направлений.
   'directions',
   'directions_migrated',
+  // §393 C2 — источники-цепочки (SPEC 110). Категория именно routing, а не
+  // serverLists: цепочка — маршрут, а не набор серверов, её позиции ссылаются
+  // на теги Направлений, и восстановить её без них бессмысленно. Пара
+  // «Направления + цепочки» обязана переезжать одним куском.
+  'chains',
   'preset_ids_remapped', // §228 — guard ремапа preset_id; в export иначе
   //                        миграция пере-сработает поверх restored custom_rules
   'route_idle_suspend', // §215 — idle-suspend threshold (route.lx_idle_suspend)

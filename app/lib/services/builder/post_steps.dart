@@ -6,6 +6,7 @@ import 'package:collection/collection.dart';
 import '../../config/consts.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../../models/source_chain.dart' show kChainOutboundType;
 import '../json_clone.dart';
 import '../parser/uri_utils.dart' show isValidRealityPublicKey;
 import '../parser/utls_fingerprint.dart';

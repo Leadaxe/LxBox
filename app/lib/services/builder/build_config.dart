@@ -5,6 +5,7 @@ import '../../models/custom_rule.dart';
 import '../../models/emit_context.dart';
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
+import '../../models/source_chain.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
 import '../../config/consts.dart';
@@ -15,6 +16,7 @@ import '../safe_regex.dart';
 import '../rule_set_downloader.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
+import 'chain_nodes.dart';
 import 'if_engine.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
@@ -58,6 +60,21 @@ class BuildSettings {
   /// поведение через template.groupTemplates (для тестов без storage).
   final List<Direction> directions;
 
+  /// §393 C2/C3 — источники-цепочки хопов (SPEC 110), в порядке объявления.
+  /// Порядок нормативен: позиция вправе сослаться только на цепочку,
+  /// объявленную ВЫШЕ, — этим исключены циклы между цепочками.
+  final List<SourceChain> chains;
+
+  /// §393 C5 — версия установленного ядра (`Libbox.version()`), например
+  /// `"1.14.0-lx.27-rc.6"`. Гейт возможностей живёт в СБОРКЕ, а не в UI:
+  /// ядро без `with_lx_chain` отвергает конфиг ЦЕЛИКОМ на неизвестном типе
+  /// outbound'а, и одна цепочка оставила бы пользователя вообще без VPN.
+  ///
+  /// Пусто = ядро не ответило → fail-open, цепочки эмитятся (деградировать
+  /// на догадке значило бы отнять рабочий маршрут; подробности —
+  /// `core_chain_capability.dart`).
+  final String coreVersion;
+
   /// §046: OS-level split-tunneling apps list. `null` = pipeline возьмёт
   /// дефолт (mode=off — все apps через tun, sing-box обычное поведение).
   final TunAppsConfig? tunApps;
@@ -90,6 +107,8 @@ class BuildSettings {
     this.customRules = const [],
     this.routeFinal = '',
     this.directions = const [],
+    this.chains = const [],
+    this.coreVersion = '',
     this.tunApps,
     this.vpnMode,
     this.idleSuspend = '',
@@ -263,8 +282,43 @@ Future<BuildResult> buildConfig({
     }
   }
 
-  final selectorTags =
-      ctx.selectorEntries.map((e) => e.tag).toList(growable: false);
+  // §393 C3 — цепочки становятся узлами ПОСЛЕ материализации ВСЕХ источников
+  // и ДО сборки Направлений: их теги окончательны только теперь (подписка
+  // переименовывает узлы префиксом и уникализирует дубли), а Направление
+  // отбирает цепочку фильтром наравне с обычным узлом.
+  //
+  // Что считается известным тегом для позиции: КАЖДЫЙ эмитированный узел
+  // (включая detour-серверы, которых нет в пуле отбора, — позицией они
+  // законны), служебные outbound'ы шаблона (`direct-out`/`block` — форма
+  // предлагает их первым хопом «без прокси») и теги ВСЕХ Направлений,
+  // включая выключенные: их теги зарезервированы аллокатором (§351), и
+  // ссылка на них не может уехать в узел-тёзку. Выключенное Направление в
+  // конфиг не попадает — такую позицию поймает граф-санитайзер (§393 A4,
+  // правило 3) и дропнет цепочку целиком уже по факту.
+  final knownChainTargets = <String>{
+    for (final e in ctx.outbounds) e.tag,
+    for (final e in ctx.endpoints) e.tag,
+    for (final raw in (config['outbounds'] as List<dynamic>? ?? const []))
+      if (raw is Map && raw['tag'] is String) raw['tag'] as String,
+    for (final c in directions) c.tag,
+  };
+  final chainResolution = resolveChains(
+    settings.chains,
+    knownTags: knownChainTargets,
+    coreVersion: settings.coreVersion,
+  );
+  for (final d in chainResolution.degraded) {
+    emitWarnings.add(d.reason);
+  }
+
+  // §393 C3 — цепочка идёт в пул отбора Направлений последней, ПОСЛЕ узлов
+  // подписок: порядок пула = порядок конфига, а цепочки эмитятся после всех
+  // источников (корпус `chain_is_a_node_in_directions` нормирует именно
+  // `[…узлы, hop-chain]`).
+  final selectorTags = <String>[
+    ...ctx.selectorEntries.map((e) => e.tag),
+    ...chainResolution.tags,
+  ];
 
   // §248/§254 — эмитированные узлы (те же map-объекты уходят в config ниже):
   // AWG-advisory читает типы. detour больше НЕ правится in-place (§254 —
@@ -283,12 +337,18 @@ Future<BuildResult> buildConfig({
     emitWarnings: emitWarnings,
     directionsWithoutNodes: directionsWithoutNodes,
     passiveCheck: settings.passiveCheck, // §272
+    // §393 C4/T9 — карта позиций для «Направление не берёт цепочку, идущую
+    // через него самого» (транзитивно).
+    chainHops: chainHopsByTag(chainResolution.nodes),
   );
 
   final baseOutbounds = config['outbounds'] as List<dynamic>? ?? const [];
   config['outbounds'] = [
     ...baseOutbounds,
     ...ctx.outbounds.map((e) => e.map),
+    // §393 C3 — цепочки ПЕРЕД группами Направлений: они узлы, а группы их
+    // отбирают (порядок нормативен, корпус `chain_packet_order`).
+    ...chainResolution.nodes,
     ...presetOutbounds,
   ];
 
@@ -636,6 +696,9 @@ List<Map<String, dynamic>> _buildDirectionGroups({
   required List<String> emitWarnings,
   required List<String> directionsWithoutNodes, // §274 — display-имена, out-параметр
   bool passiveCheck = false, // §272 — urltest.passive_check в auto-двойники
+  // §393 C4 — «тег цепочки → её позиции». Пусто = цепочек нет, и весь блок
+  // T9 схлопывается в no-op: конфиги без цепочек собираются как раньше.
+  Map<String, List<String>> chainHops = const {},
 }) {
   // §125 — единственный слой фильтрации нод теперь per-direction regex
   // (node_filter). Глобальный excluded_nodes (§048) удалён.
@@ -657,7 +720,29 @@ List<Map<String, dynamic>> _buildDirectionGroups({
   // §248 — member-set'ы считаем один раз: их делят selector и auto-двойник.
   // §254 — детур-циклы билдер больше НЕ рвёт: детекция и минимальный набор
   // виновников — в validateConfig (fatal, конфиг не собирается).
-  final memberSets = [for (final c in active) nodesFor(c)];
+  // §393 C4 / T9 (§393 L6) — Направление НЕ берёт в состав цепочку, которая
+  // через него же проходит (транзитивно). Считается ПОСЛЕ фильтра: фильтр не
+  // знает, что такое цепочка, и знать не должен — «все узлы» обязано означать
+  // все узлы. Самый частый сценарий ломается сразу: цепочка `[proxy-out,
+  // exit]` при фильтре «всё» у `proxy-out` замкнула бы трафик на себя.
+  final memberSets = <List<String>>[];
+  // Отобранное ФИЛЬТРОМ, до вычета T9. Нужно ровно для одного: не соврать в
+  // предупреждении «node filter matched no nodes». Фильтр, поймавший только
+  // цепочку, которую затем вычел T9, отработал ПРАВИЛЬНО, и посылать
+  // пользователя его чинить («Check its node filter») значит отправить его
+  // искать несуществующую опечатку вместо настоящей причины — а она названа
+  // отдельной строкой про цикл, которая уже выдана выше.
+  final filteredCounts = <int>[];
+  for (final c in active) {
+    final filtered = nodesFor(c);
+    filteredCounts.add(filtered.length);
+    final (:kept, :dropped) =
+        dropChainsThroughDirection(filtered, c.tag, chainHops);
+    memberSets.add(kept);
+    if (dropped.isNotEmpty) {
+      emitWarnings.add(chainCycleThroughDirectionLine(c.displayLabel, dropped));
+    }
+  }
   // §322 — узел автовыбора в urltest-двойник Направления не идёт: urltest внутри
   // urltest мерил бы уже выбранный внутренней группой узел, а не сервер.
   // Тип берём из эмитированных entry (там же, откуда его читает AWG-advisory).
@@ -757,7 +842,10 @@ List<Map<String, dynamic>> _buildDirectionGroups({
     // include_direct это direct-out (юзер сам включил опцию — трафик идёт
     // мимо VPN, врать «blocked» нельзя). Пустой фильтр с 0 нод (нет
     // подписки) НЕ варним — это не вина фильтра.
-    if (nodes.isEmpty && c.nodeFilter.isNotEmpty && selectorTags.isNotEmpty) {
+    if (nodes.isEmpty &&
+        filteredCounts[i] == 0 && // §393 C4 — не винить фильтр за вычет T9
+        c.nodeFilter.isNotEmpty &&
+        selectorTags.isNotEmpty) {
       final effective =
           emptyFallback ? kBlockOutboundTag : selectorOutbounds.first;
       // §393 A3 — исход зависит от того, ЧТО стало первой опцией: block

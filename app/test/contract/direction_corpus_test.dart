@@ -7,6 +7,7 @@ import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
+import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -52,11 +53,6 @@ const _autoDefaultKeys = {'url', 'interval', 'tolerance', 'idle_timeout'};
 
 // ── Скипы ───────────────────────────────────────────────────────────────────
 
-/// `chain_*` — SPEC 110, цепочки-источники. Модели `SourceChain` на мобиле
-/// ещё нет (фаза C, C1–C8), эмиссии `type: chain` тоже.
-const _skipChain = 'TODO(§393 C): цепочки (SPEC 110) на мобиле не реализованы '
-    '— модель SourceChain и эмиссия type:chain приедут фазой C';
-
 /// `fold_*` — SPEC 108, свёртка подписки в группу. Фаза E закрыта решением
 /// оператора (24.08.2026): свёртки на мобиле НЕ БУДЕТ. Кейсы остаются в
 /// общем корпусе ради лаунчера; для LxBox они не применимы навсегда, а не
@@ -78,10 +74,26 @@ const _skipFold = 'na: свёртка подписки в группу (SPEC 108
 /// `_buildDirectionGroups`, что отвечает коду.
 const _warningProbes = <String, bool Function(String)>{
   'direction_filter_matched_nothing': _isFilterMatchedNothing,
+  // §393 C — коды цепочек. Предикаты держатся за ветку билдера, породившую
+  // строку, а не за подстроку общего вида: иначе «chain» матчило бы любой
+  // текст, где встретилось слово.
+  'chain_unsupported_by_core': _isChainUnsupported,
+  'chain_hop_missing': _isChainHopMissing,
+  'chain_cycle_through_direction': _isChainCycleThroughDirection,
 };
 
 bool _isFilterMatchedNothing(String line) =>
     line.contains('node filter matched no nodes');
+
+bool _isChainUnsupported(String line) =>
+    line.contains('does not know the "chain" outbound type');
+
+bool _isChainHopMissing(String line) =>
+    line.contains('A route without a hop is a different route') ||
+    line.contains('a route without a hop would be a different route');
+
+bool _isChainCycleThroughDirection(String line) =>
+    line.contains('was left out of it') || line.contains('were left out of it');
 
 /// Коды, которые LxBox не умеет выдать в принципе (нет фичи). Встретив такой
 /// код в ожиданиях НЕ-скипнутого кейса, раннер обязан упасть, а не молчать —
@@ -140,9 +152,9 @@ void main() {
   group('contract corpus: Directions', () {
     for (final base in cases) {
       final name = base.substring(root.path.length + 1);
-      final skip = name.startsWith('chain_')
-          ? _skipChain
-          : (name.startsWith('fold_') ? _skipFold : null);
+      // §393 C — `chain_*` больше не скипаются: цепочки реализованы
+      // (C1–C5). `fold_*` скипнуты навсегда (фаза E закрыта).
+      final skip = name.startsWith('fold_') ? _skipFold : null;
 
       test(name, () async {
         final input = jsonDecode(File('$base.direction.json').readAsStringSync())
@@ -183,10 +195,26 @@ Future<void> _runCase(
       _toDirection((raw as Map).cast<String, dynamic>()),
   ];
 
+  // §393 C — источники-цепочки в порядке объявления (порядок нормативен:
+  // ссылка позиции разрешена только на объявленную ВЫШЕ).
+  final chains = [
+    for (final raw in ((input['chains'] as List?) ?? const []))
+      _toChain((raw as Map).cast<String, dynamic>()),
+  ];
+  // `core_supports_chain` — единственное свойство ОКРУЖЕНИЯ в корпусе
+  // (README корпуса). У мобилы гейт идёт по версии ядра, поэтому false
+  // переводится в заведомо старую версию, true/отсутствие — в актуальную.
+  final coreSupportsChain = input['core_supports_chain'] as bool? ?? true;
+
   final result = await buildConfig(
     lists: nodeTags.isEmpty ? const [] : [_sourceFor(nodeTags, groupTags)],
     template: _template(),
-    settings: BuildSettings(directions: directions),
+    settings: BuildSettings(
+      directions: directions,
+      chains: chains,
+      coreVersion:
+          coreSupportsChain ? '1.14.0-lx.27-rc.6' : '1.14.0-lx.27-rc.4',
+    ),
   );
   expect(result.validation.isOk, isTrue,
       reason: '$doc\nконфиг не проходит валидацию:\n'
@@ -272,6 +300,21 @@ Direction _toDirection(Map<String, dynamic> c) {
     auto: auto is Map ? _toAuto(auto.cast<String, dynamic>()) : null,
   );
 }
+
+/// Канон (`schema/source_chain.schema.json`) + `tag` корпуса → модель LxBox.
+SourceChain _toChain(Map<String, dynamic> c) => SourceChain(
+      tag: c['tag'] as String? ?? '',
+      label: c['label'] as String? ?? '',
+      hops: ((c['hops'] as List?) ?? const []).cast<String>().toList(),
+      idleTimeout: c['idle_timeout'] as String? ?? '',
+      stripEvasion:
+          c['strip_evasion'] is bool ? c['strip_evasion'] as bool : null,
+      strip: {
+        for (final e in ((c['strip'] as Map?) ?? const {}).entries)
+          if (e.value is bool) e.key.toString(): e.value as bool,
+      },
+      rewrite: ((c['rewrite'] as Map?) ?? const {}).cast<String, dynamic>(),
+    );
 
 DirectionAuto _toAuto(Map<String, dynamic> a) {
   const d = DirectionAuto();
@@ -380,7 +423,11 @@ List<Map<String, dynamic>> _groupsOf(
     final tag = m['tag'] as String? ?? '';
     final type = m['type'] as String? ?? '';
     if (tag.isEmpty || nodeTagSet.contains(tag)) continue;
-    if (type != 'selector' && type != 'urltest') continue;
+    // §393 C — цепочка попадает в ожидания корпуса наравне с группами:
+    // `chain_packet_order` нормирует и её позицию в списке, и порядок хопов.
+    if (type != 'selector' && type != 'urltest' && type != kChainOutboundType) {
+      continue;
+    }
     // Служебные outbound'ы шаблона (`direct-out`) — не группы, но на всякий
     // случай отсекаются типом выше.
     out.add({

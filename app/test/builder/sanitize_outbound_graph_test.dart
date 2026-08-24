@@ -836,4 +836,282 @@ void main() {
           reason: 'endpoint не дропнут, только его detour');
     });
   });
+
+  // ── §393 C4 — цепочки (правила 6 и 7) ────────────────────────────────────
+  //
+  // КЛЮЧЕВАЯ ЛОВУШКА: у `type: chain` хопы лежат в том же ключе `outbounds[]`,
+  // что и состав группы, но значат другое — ПОЗИЦИИ маршрута. Групповая
+  // семантика («исключить призрака из состава») здесь молча увела бы трафик
+  // другим путём, поэтому цепочка дропается ЦЕЛИКОМ.
+
+  group('правило 6 — висячий хоп дропает ЦЕПОЧКУ целиком', () {
+    test('позиция на несуществующий тег → цепочки нет, состав НЕ правится', () {
+      final config = {
+        'outbounds': [
+          {'tag': 'DE', 'type': 'vless'},
+          {
+            'tag': 'ch',
+            'type': 'chain',
+            'outbounds': ['DE', 'gone'],
+          },
+        ],
+      };
+      final warnings = sanitizeOutboundGraph(config);
+      expect(byTag(config, 'ch'), isNull,
+          reason: 'маршрут без хопа — другой маршрут, а не урезанный');
+      expect(byTag(config, 'DE'), isNotNull, reason: 'узел невиновен');
+      expect(warnings.join('\n'), contains('"gone"'));
+      expect(warnings.join('\n'), contains('position 2'));
+    });
+
+    test('живая цепочка не трогается', () {
+      final config = {
+        'outbounds': [
+          {'tag': 'DE', 'type': 'vless'},
+          {'tag': 'NL', 'type': 'vless'},
+          {
+            'tag': 'ch',
+            'type': 'chain',
+            'outbounds': ['DE', 'NL'],
+          },
+        ],
+      };
+      expect(sanitizeOutboundGraph(config), isEmpty);
+      expect(byTag(config, 'ch')!['outbounds'], ['DE', 'NL']);
+    });
+
+    test('каскад: группа опустела → снята → цепочка через неё дропнута', () {
+      // Ровно то, ради чего санитайзер стоит последней точкой: между
+      // `resolveChains` и ним отработали heal'ы, дропнувшие узлы.
+      final config = {
+        'outbounds': [
+          {'tag': 'NL', 'type': 'vless'},
+          {
+            'tag': 'grp',
+            'type': 'selector',
+            'outbounds': ['ghost'],
+          },
+          {
+            'tag': 'ch',
+            'type': 'chain',
+            'outbounds': ['grp', 'NL'],
+          },
+        ],
+      };
+      sanitizeOutboundGraph(config);
+      expect(byTag(config, 'grp'), isNull);
+      expect(byTag(config, 'ch'), isNull, reason: 'позиция исчезла каскадом');
+      expect(byTag(config, 'NL'), isNotNull);
+    });
+
+    test('вложенная цепочка позицией ≥1 дропает внешнюю цепочку', () {
+      // Инвариант ядра: звено — «узел через предыдущую позицию», а цепочка
+      // не узел (`protocol/chain/chain.go:279`). `check` этого не ловит.
+      final config = {
+        'outbounds': [
+          {'tag': 'DE', 'type': 'vless'},
+          {'tag': 'NL', 'type': 'vless'},
+          {
+            'tag': 'inner',
+            'type': 'chain',
+            'outbounds': ['DE', 'NL'],
+          },
+          {
+            'tag': 'outer',
+            'type': 'chain',
+            'outbounds': ['DE', 'inner'],
+          },
+        ],
+      };
+      final warnings = sanitizeOutboundGraph(config);
+      expect(byTag(config, 'outer'), isNull);
+      expect(byTag(config, 'inner'), isNotNull, reason: 'внутренняя невиновна');
+      expect(warnings.join('\n'), contains('only as the first hop'));
+    });
+
+    test('вложенная цепочка ПОЗИЦИЕЙ 0 законна', () {
+      final config = {
+        'outbounds': [
+          {'tag': 'DE', 'type': 'vless'},
+          {'tag': 'NL', 'type': 'vless'},
+          {
+            'tag': 'inner',
+            'type': 'chain',
+            'outbounds': ['DE', 'NL'],
+          },
+          {
+            'tag': 'outer',
+            'type': 'chain',
+            'outbounds': ['inner', 'NL'],
+          },
+        ],
+      };
+      expect(sanitizeOutboundGraph(config), isEmpty);
+      expect(byTag(config, 'outer')!['outbounds'], ['inner', 'NL']);
+    });
+
+    test('цепочка НЕ считается группой: её хопы не «члены состава»', () {
+      // Проверка самой ловушки: будь `chain` в `_isGroup`, призрачный хоп
+      // исключился бы из «состава», а цепочка осталась бы жить урезанной.
+      final config = {
+        'outbounds': [
+          {'tag': 'DE', 'type': 'vless'},
+          {
+            'tag': 'ch',
+            'type': 'chain',
+            'outbounds': ['DE', 'ghost'],
+          },
+        ],
+      };
+      final warnings = sanitizeOutboundGraph(config);
+      expect(byTag(config, 'ch'), isNull);
+      expect(warnings.join('\n'), isNot(contains('excluded from the group')));
+    });
+  });
+
+  group('правило 7 — цепочки в листьях группы, стоящей позицией ≥1', () {
+    test('группа-позиция ≥1 теряет цепочку из состава (сама группа жива)', () {
+      // Ядро обходит ЛИСТЬЯ группы на старте: выбрав внутри неё цепочку,
+      // пользователь получил бы вложенную цепочку не на позиции 0 — падает
+      // `run`, а не `check` (§393 L4).
+      final config = {
+        'outbounds': [
+          {'tag': 'DE', 'type': 'vless'},
+          {'tag': 'NL', 'type': 'vless'},
+          {
+            'tag': 'nested',
+            'type': 'chain',
+            'outbounds': ['DE', 'NL'],
+          },
+          {
+            'tag': 'grp',
+            'type': 'selector',
+            'outbounds': ['DE', 'nested'],
+          },
+          {
+            'tag': 'outer',
+            'type': 'chain',
+            'outbounds': ['NL', 'grp'],
+          },
+        ],
+      };
+      final warnings = sanitizeOutboundGraph(config);
+      expect(byTag(config, 'grp')!['outbounds'], ['DE'],
+          reason: 'цепочка вычеркнута ИЗ СОСТАВА — тут она взаимозаменяемая опция');
+      expect(byTag(config, 'nested'), isNotNull, reason: 'сама цепочка жива');
+      expect(byTag(config, 'outer'), isNotNull);
+      expect(warnings.join('\n'), contains('only as the first hop'));
+    });
+
+    test('ТРАНЗИТИВНО через вложенную группу', () {
+      final config = {
+        'outbounds': [
+          {'tag': 'DE', 'type': 'vless'},
+          {'tag': 'NL', 'type': 'vless'},
+          {
+            'tag': 'nested',
+            'type': 'chain',
+            'outbounds': ['DE', 'NL'],
+          },
+          {
+            'tag': 'inner-grp',
+            'type': 'selector',
+            'outbounds': ['DE', 'nested'],
+          },
+          {
+            'tag': 'outer-grp',
+            'type': 'selector',
+            'outbounds': ['inner-grp'],
+          },
+          {
+            'tag': 'ch',
+            'type': 'chain',
+            'outbounds': ['NL', 'outer-grp'],
+          },
+        ],
+      };
+      sanitizeOutboundGraph(config);
+      expect(byTag(config, 'inner-grp')!['outbounds'], ['DE']);
+    });
+
+    test('группа ПОЗИЦИЕЙ 0 цепочки состав не теряет', () {
+      // Позиция 0 — не звено: там вложенная цепочка законна.
+      final config = {
+        'outbounds': [
+          {'tag': 'DE', 'type': 'vless'},
+          {'tag': 'NL', 'type': 'vless'},
+          {
+            'tag': 'nested',
+            'type': 'chain',
+            'outbounds': ['DE', 'NL'],
+          },
+          {
+            'tag': 'grp',
+            'type': 'selector',
+            'outbounds': ['DE', 'nested'],
+          },
+          {
+            'tag': 'ch',
+            'type': 'chain',
+            'outbounds': ['grp', 'NL'],
+          },
+        ],
+      };
+      expect(sanitizeOutboundGraph(config), isEmpty);
+      expect(byTag(config, 'grp')!['outbounds'], ['DE', 'nested']);
+    });
+
+    test('группа без цепочек в составе не трогается', () {
+      final config = {
+        'outbounds': [
+          {'tag': 'DE', 'type': 'vless'},
+          {'tag': 'NL', 'type': 'vless'},
+          {
+            'tag': 'grp',
+            'type': 'selector',
+            'outbounds': ['DE', 'NL'],
+          },
+          {
+            'tag': 'ch',
+            'type': 'chain',
+            'outbounds': ['DE', 'grp'],
+          },
+        ],
+      };
+      expect(sanitizeOutboundGraph(config), isEmpty);
+      expect(byTag(config, 'grp')!['outbounds'], ['DE', 'NL']);
+    });
+  });
+
+  group('правило 5 — кольцо через позицию цепочки', () {
+    test('цепочка через группу, содержащую саму цепочку → разрыв', () {
+      // Ядро на кольце по ЛЮБЫМ рёбрам отвергает конфиг целиком. Позицию у
+      // цепочки не снимают (остаток был бы другим маршрутом) — рвётся
+      // ребро состава либо дропается цепочка.
+      final config = {
+        'outbounds': [
+          {'tag': 'DE', 'type': 'vless'},
+          {
+            'tag': 'grp',
+            'type': 'selector',
+            'outbounds': ['DE', 'ch'],
+          },
+          {
+            'tag': 'ch',
+            'type': 'chain',
+            'outbounds': ['grp', 'DE'],
+          },
+        ],
+      };
+      final warnings = sanitizeOutboundGraph(config);
+      expect(warnings, isNotEmpty);
+      // Что бы ни было разорвано, кольца не осталось и конфиг валиден.
+      expect(validateConfig(config).isOk, isTrue);
+      final grp = byTag(config, 'grp');
+      final ch = byTag(config, 'ch');
+      expect(grp == null || !(grp['outbounds'] as List).contains('ch') ||
+          ch == null, isTrue);
+    });
+  });
+
 }

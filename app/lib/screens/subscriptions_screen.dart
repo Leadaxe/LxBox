@@ -24,7 +24,11 @@ import 'subscriptions_screen/entry_context_menu.dart';
 import 'subscriptions_screen/folder_picker.dart';
 import 'subscriptions_screen/paste_dialogs.dart';
 import 'subscriptions_screen/public_test_servers.dart';
+import '../models/source_chain.dart';
+import 'chain_edit/new_chain_dialog.dart';
+import 'chain_edit_screen.dart';
 import 'subscriptions_screen/widgets/add_icon_button.dart';
+import 'subscriptions_screen/widgets/chains_section.dart';
 import 'subscriptions_screen/widgets/subscription_entry_tile.dart';
 import 'subscriptions_screen/widgets/subscriptions_empty_state.dart';
 import '../services/l10n/locale_controller.dart';
@@ -61,6 +65,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _inputController = TextEditingController();
   bool _autoUpdateEnabled = true;
 
+  /// §393 C7 — источники-цепочки. Живут в настройках (`chains[]`), а не в
+  /// `SubscriptionController.entries`: цепочка написана пользователем руками и
+  /// обязана пережить и обновление подписки, и её удаление. Отсюда и
+  /// отдельная загрузка — контроллер о них ничего не знает.
+  List<SourceChain> _chains = const [];
+
   /// §375 — есть ли камера. null = ещё не ответил канал; до ответа пункт
   /// «Scan QR code» показываем (проверка мгновенная, на телефоне камера есть
   /// практически всегда). На Android TV — false, пункт прячется.
@@ -81,6 +91,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     super.initState();
     unawaited(_loadAutoUpdateFlag());
     unawaited(_loadCameraAvailability());
+    unawaited(_loadChains());
     // §357 — prefill поля ввода из lxbox-кнопки `add:<uri>` support-ленты.
     final prefill = widget.initialInput;
     if (prefill != null && prefill.trim().isNotEmpty) {
@@ -136,6 +147,82 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final v = await UrlLauncher.hasCamera();
     if (!mounted) return;
     setState(() => _hasCamera = v);
+  }
+
+  // ── §393 C7 — источники-цепочки ────────────────────────────────────────
+
+  Future<void> _loadChains() async {
+    final v = await SettingsStorage.getChains();
+    if (!mounted) return;
+    setState(() => _chains = v);
+  }
+
+  /// Создание цепочки: тег спрашиваем ДО создания (после он immutable — на
+  /// него ссылаются фильтры Направлений, `route_final` и позиции ДРУГИХ
+  /// цепочек), затем сразу открываем форму: пустая цепочка ядру не годится
+  /// (нужно минимум две позиции), и оставлять пользователя наедине со строкой
+  /// «0 hops» смысла нет.
+  Future<void> _addChain() async {
+    final directions = await SettingsStorage.getDirections();
+    if (!mounted) return;
+    final req = await showNewChainDialog(
+      context,
+      usedTags: [
+        ..._chains.map((c) => c.tag),
+        ...directions.map((d) => d.tag),
+      ],
+    );
+    if (req == null || !mounted) return;
+    final SourceChain created;
+    try {
+      created = await SettingsStorage.addChain(
+        tag: req.tag,
+        label: req.label.isEmpty ? null : req.label,
+      );
+    } on StateError catch (e) {
+      // Гонка со вторым источником мутаций (Debug API / restore): форма
+      // считала тег свободным, storage — уже нет.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+      return;
+    }
+    await _loadChains();
+    if (!mounted) return;
+    await _editChain(created);
+  }
+
+  Future<void> _editChain(SourceChain chain) async {
+    final directions = await SettingsStorage.getDirections();
+    if (!mounted) return;
+    final result = await openChainEditor(
+      context,
+      initial: chain,
+      // Последний собранный конфиг — источник ОКОНЧАТЕЛЬНЫХ тегов позиций
+      // (префикс подписки приклеен, дубли уникализированы аллокатором).
+      config: widget.homeController.state.configModel,
+      directions: directions,
+      chains: _chains,
+    );
+    if (result == null || !mounted) return;
+    if (result.wasDeleted) {
+      await SettingsStorage.deleteChain(chain.tag);
+    } else if (result.saved != null) {
+      await SettingsStorage.updateChain(result.saved!);
+    }
+    await _loadChains();
+    if (!mounted) return;
+    // Цепочка — узел конфига: правка маршрута обязана доехать до сборки, иначе
+    // пользователь увидит старый маршрут под новым именем.
+    await _regenerateAndSave();
+  }
+
+  Future<void> _toggleChain(SourceChain chain) async {
+    await SettingsStorage.updateChain(
+        chain.copyWith(enabled: !chain.enabled));
+    await _loadChains();
+    if (!mounted) return;
+    await _regenerateAndSave();
   }
 
   Future<void> _toggleAutoUpdate() async {
@@ -508,6 +595,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     if (v == 'qr') unawaited(_scanQrCode());
                     if (v == 'file') unawaited(_importFromFile());
                     if (v == 'folder') unawaited(_createFolder());
+                    if (v == 'chain') unawaited(_addChain());
                     if (v == 'auto_update') unawaited(_toggleAutoUpdate());
                     if (v == 'sub_settings') _openSubscriptionSettings();
                   },
@@ -523,6 +611,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                       PopupMenuItem(value: 'qr', child: Text(getLocalText.s("Scan QR code"))),
                     PopupMenuItem(value: 'file', child: Text(getLocalText.s("Import from file…"))),
                     PopupMenuItem(value: 'folder', child: Text(getLocalText.s("New folder…"))),
+                    // §393 C7 — цепочка это ТРЕТИЙ ТИП ИСТОЧНИКА (маршрут
+                    // через несколько хопов подряд), поэтому точка входа
+                    // здесь, а не среди Направлений (§393 L5).
+                    PopupMenuItem(
+                        value: 'chain',
+                        child: Text(getLocalText.s("Add hop chain…"))),
                     const PopupMenuDivider(),
                     PopupMenuItem(value: 'public', child: Text(getLocalText.s("Get Public Test Servers"))),
                     const PopupMenuDivider(),
@@ -566,6 +660,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                       ],
                     ),
                   ),
+                ChainsSection(
+                  chains: _chains,
+                  onTap: (c) => unawaited(_editChain(c)),
+                  onToggle: (c) => unawaited(_toggleChain(c)),
+                ),
                 Expanded(
                   child: RefreshIndicator(
                     // Pull-to-refresh (night T3-2): стандартный Android UX-жест,

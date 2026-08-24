@@ -22,6 +22,8 @@ import '../services/node_hash.dart';
 import '../services/node_identity.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
+import '../services/builder/core_chain_capability.dart';
+import '../vpn/box_vpn_client.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/parser/ini_parser.dart';
 import '../services/parser/parse_all.dart';
@@ -1810,6 +1812,14 @@ class SubscriptionController extends ChangeNotifier {
       customRules: await SettingsStorage.getCustomRules(),
       routeFinal: await SettingsStorage.getRouteFinal(),
       directions: await SettingsStorage.getDirections(), // §125
+      chains: await SettingsStorage.getChains(), // §393 C2
+      // §393 C5 — гейт возможностей ядра живёт в СБОРКЕ, не в UI: цепочку
+      // может добавить и Debug API, и restore бэкапа с новой машины, а
+      // отвергнутый ядром конфиг оставит пользователя без VPN целиком.
+      // Кэшируется на сессию — версия ядра вкомпилирована в APK и не меняется
+      // (см. [CoreVersionCache]).
+      coreVersion:
+          await CoreVersionCache.ensure(BoxVpnClient().getCoreVersion),
       tunApps: await SettingsStorage.getTunApps(),
       vpnMode: await SettingsStorage.getVpnMode(),
       idleSuspend: await SettingsStorage.getIdleSuspend(), // §215

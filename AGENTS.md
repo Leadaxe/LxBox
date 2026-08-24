@@ -76,9 +76,10 @@ bash app/tool/sync_contract.sh
   чужие и предшествуют твоей сессии.
 - `git add` / `git commit` суб-агент не делает — коммитит оркестратор.
 - `flutter analyze` baseline = 19 issues (все предсуществующие); новых — 0.
-- Известный допустимый красный полного прогона — ровно один:
-  `test/contract/backup_corpus_test.dart: directions_created_on_import`
-  (до фазы B спеки 393). Любой другой красный — твой.
+- Допустимых красных в полном прогоне НЕТ: `flutter test` зелёный целиком
+  (последний бывший исключением `test/contract/backup_corpus_test.dart:
+  directions_created_on_import` закрыт мини-фазой B спеки 393). Любой
+  красный — твой.
 - После правки UI-строк / шаблона: `dart run tool/l10n/ui_check.dart`,
   `template_check`, `hardcoded_check` — 0 failures / 0 warnings.
 - UI-тексты только EN; русский каталог `app/assets/l10n/ru/*` ключуется

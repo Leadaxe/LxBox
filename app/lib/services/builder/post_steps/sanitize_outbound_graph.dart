@@ -55,24 +55,23 @@ part of '../post_steps.dart';
 /// фикспойнта (лимит `len*4+8` защитный: каждый содержательный проход снимает
 /// ребро или узел, их конечное число).
 ///
-/// TODO(§393 C): правила 3–4 эталона про цепочки. Появятся вместе с
-/// `type: chain` (фаза C, C3/C4), сейчас `chain`-записей билдер не эмитит:
-///  • правило 3 (`sanitizeEntryRefs`, ветка `e.isChain()`): позиция на
-///    несуществующий тег ЛИБО другая цепочка на позиции ≥1 → цепочка
-///    ДРОПАЕТСЯ ЦЕЛИКОМ. Это НЕ групповая семантика: маршрут без хопа —
-///    другой маршрут, исключить хоп из состава нельзя;
-///  • правило 4 (`pruneChainLeavesUnderGroups`): группа, стоящая позицией ≥1
-///    какой-либо цепочки (транзитивно через вложенные группы), не должна
-///    содержать цепочек в участниках — ядро обходит ЛИСТЬЯ группы на старте
-///    и отвергает вложенную цепочку («nested chain is only allowed at
-///    position 0»); `check` этого не ловит, падает только `run` (L4).
+///  6. (§393 C4, эталон — правило 3 `sanitizeEntryRefs`, ветка `isChain()`)
+///     `type: chain`: позиция на несуществующий тег ЛИБО другая цепочка на
+///     позиции ≥1 → цепочка ДРОПАЕТСЯ ЦЕЛИКОМ. Это НЕ групповая семантика:
+///     маршрут без хопа — другой маршрут, исключить хоп из состава нельзя;
+///  7. (§393 C4, эталон `pruneChainLeavesUnderGroups`) группа, стоящая
+///     позицией ≥1 какой-либо цепочки (транзитивно через вложенные группы),
+///     не должна содержать цепочек в участниках — ядро обходит ЛИСТЬЯ группы
+///     на старте и отвергает вложенную цепочку («nested chain is only allowed
+///     at position 0»); `check` этого не ловит, падает только `run` (L4).
 ///
-/// Ловушка на будущее: у `type: chain` хопы лежат в том же ключе
-/// `outbounds[]`, что и состав группы. Записать `chain` в [_isGroup] значило
-/// бы молча выдать ей групповую семантику — призрачный хоп исключился бы из
-/// состава вместо дропа цепочки, и пользователь поехал бы по маршруту, о
-/// котором не просил. До появления обеих веток `chain` намеренно не
-/// считается ни группой (member-рёбра не разбираются), ни узлом с рёбрами.
+/// КЛЮЧЕВАЯ ЛОВУШКА ЦЕПОЧЕК: у `type: chain` хопы лежат в том же ключе
+/// `outbounds[]`, что и состав группы, но значат ДРУГОЕ — позиции маршрута,
+/// а не взаимозаменяемые опции. Записать `chain` в [_isGroup] значило бы
+/// молча выдать ей групповую семантику: призрачный хоп исключился бы из
+/// «состава» вместо дропа цепочки, и пользователь поехал бы по маршруту, о
+/// котором не просил. Поэтому [_isGroup] цепочку НЕ включает, а всё, что
+/// разбирает `outbounds[]`, обязано сначала спросить [_isChain].
 ///
 /// [directionTags] — теги Направлений: только они при опустошении уходят в
 /// block-fallback вместо дропа (Направление — цель правил маршрутизации,
@@ -171,6 +170,15 @@ List<String> sanitizeOutboundGraph(
         changed = true;
       }
     }
+    if (_pruneChainLeavesUnderGroups(
+      entries,
+      alive: alive,
+      byTag: byTag,
+      dropped: dropped,
+      warnings: warnings,
+    )) {
+      changed = true;
+    }
     if (_breakDependencyCycle(
       entries,
       alive: alive,
@@ -235,13 +243,23 @@ List<String> sanitizeOutboundGraph(
 String _tagOf(Map<String, dynamic> e) => e['tag'] as String? ?? '';
 
 /// Группа с ПЕРЕСМАТРИВАЕМЫМ составом. `type: chain` сюда НЕ входит намеренно
-/// (см. TODO(§393 C) в шапке): её `outbounds[]` — позиции маршрута, а не
-/// взаимозаменяемые опции, и «исключить призрака из состава» для неё
-/// означало бы молча увести трафик другим путём.
+/// (см. «ключевая ловушка цепочек» в шапке): её `outbounds[]` — позиции
+/// маршрута, а не взаимозаменяемые опции, и «исключить призрака из состава»
+/// для неё означало бы молча увести трафик другим путём.
 bool _isGroup(Map<String, dynamic> e) {
   final t = e['type'];
   return t == 'selector' || t == 'urltest';
 }
+
+/// §393 C4 — цепочка хопов. Отличается от группы РОВНО типом: ключ
+/// `outbounds[]` у обеих один, а смысл разный.
+bool _isChain(Map<String, dynamic> e) => e['type'] == kChainOutboundType;
+
+/// §393 A4 правило 5 — вид ребра графа зависимостей. От него зависит, ЧЕМ
+/// разрывать кольцо: `detour` снимается ключом, `member` исключается из
+/// состава, а `chainHop` вынуждает дропнуть цепочку целиком — снять позицию
+/// нельзя, маршрут без хопа это другой маршрут (§393 C4).
+enum _EdgeKind { detour, member, chainHop }
 
 List<String> _membersOf(Map<String, dynamic> e) =>
     (e['outbounds'] as List<dynamic>? ?? const []).whereType<String>().toList();
@@ -282,6 +300,47 @@ bool _sanitizeEntryRefs(
         droppedTags.contains(detour) ? sanitizedDetourOwners : danglingDetourOwners;
     (bucket[detour] ??= []).add(tag);
     changed = true;
+  }
+
+  // §393 C4 правило 6 — цепочка. Проверяется ДО группового ветвления и по
+  // своей семантике: у неё в `outbounds[]` лежат ПОЗИЦИИ маршрута.
+  //
+  // Оба нарушения дропают цепочку ЦЕЛИКОМ, а не правят её состав:
+  //   • позиция на несуществующий тег — ядро не стартует на висячей ссылке,
+  //     а «просто убрать позицию» превратило бы маршрут в другой маршрут
+  //     (`[home, de, exit]` без `de` — уже не «через Германию»);
+  //   • другая цепочка на позиции ≥1 — инвариант ядра
+  //     (`protocol/chain/chain.go:279`): звено это «узел через предыдущую
+  //     позицию», а цепочка не узел и не пересобирается под чужой диалер.
+  //
+  // Зачем это ЗДЕСЬ, если `resolveChains` проверяет то же на эмиссии: там
+  // виден список цепочек, здесь — итоговый конфиг. Между ними работают
+  // heal'ы, которые могут дропнуть узел, БЫВШИЙ позицией живой цепочки
+  // (выключенная подписка, снятый REALITY, каскад правила 2). Это и есть
+  // «последняя точка, где виден весь граф».
+  if (_isChain(e)) {
+    final hops = _membersOf(e);
+    for (var i = 0; i < hops.length; i++) {
+      final ref = hops[i];
+      if (!alive(ref)) {
+        drop(
+            e,
+            'hop "$ref" (position ${i + 1}) does not exist in the final '
+                'config — a route without a hop would be a different route');
+        return true;
+      }
+      if (i >= 1) {
+        final t = byTag[ref];
+        if (t != null && !dropped.contains(t) && _isChain(t)) {
+          drop(
+              e,
+              'nested chain "$ref" is at position ${i + 1} — the core allows '
+                  'a nested chain only as the first hop');
+          return true;
+        }
+      }
+    }
+    return changed;
   }
 
   if (!_isGroup(e)) return changed;
@@ -406,6 +465,76 @@ bool _detourReaches(
   return false;
 }
 
+/// §393 C4 правило 7 — порт `pruneChainLeavesUnderGroups` эталона.
+///
+/// Множество групп, достижимых как позиция ≥1 какой-либо цепочки
+/// (транзитивно, через вложенные группы), не должно содержать ЦЕПОЧЕК в
+/// участниках.
+///
+/// Почему транзитивно и почему именно листья. Ядро на старте разворачивает
+/// позицию в тот outbound, который группа выбрала, и обходит ЛИСТЬЯ группы —
+/// то есть проверку «вложенная цепочка только позицией 0» оно применяет не к
+/// записи в конфиге, а к тому, что реально окажется звеном. Группа опций, в
+/// которой лежит цепочка, стоя́ второй позицией другой цепочки, даёт ровно
+/// запрещённую конструкцию — но только в момент выбора этой опции.
+/// `sing-box check` этого не ловит; падает `run` (§393 L4), то есть у
+/// пользователя — при попытке подключиться.
+///
+/// Цепочка исключается ИЗ СОСТАВА ГРУППЫ (а не дропается сама): здесь она
+/// именно взаимозаменяемая опция, и остальные опции группы валидны. Опустевшая
+/// группа и `default` вне состава доработаются правилом 2 на следующей
+/// итерации фикспойнта.
+bool _pruneChainLeavesUnderGroups(
+  List<Map<String, dynamic>> entries, {
+  required bool Function(String) alive,
+  required Map<String, Map<String, dynamic>> byTag,
+  required Set<Map<String, dynamic>> dropped,
+  required List<String> warnings,
+}) {
+  // Стартовое множество: группы, на которые ссылаются позиции ≥1.
+  final queue = <String>[];
+  final seen = <String>{};
+  for (final e in entries) {
+    if (dropped.contains(e) || !_isChain(e)) continue;
+    final hops = _membersOf(e);
+    for (var i = 1; i < hops.length; i++) {
+      final ref = hops[i];
+      final t = byTag[ref];
+      if (t != null && !dropped.contains(t) && _isGroup(t) && seen.add(ref)) {
+        queue.add(ref);
+      }
+    }
+  }
+  var changed = false;
+  while (queue.isNotEmpty) {
+    final tag = queue.removeAt(0);
+    final g = byTag[tag];
+    if (g == null || dropped.contains(g)) continue;
+    final kept = <String>[];
+    final lost = <String>[];
+    for (final ref in _membersOf(g)) {
+      final t = byTag[ref];
+      if (t != null && !dropped.contains(t) && _isChain(t)) {
+        if (!lost.contains(ref)) lost.add(ref);
+        continue;
+      }
+      if (t != null && !dropped.contains(t) && _isGroup(t) && seen.add(ref)) {
+        queue.add(ref);
+      }
+      kept.add(ref);
+    }
+    if (lost.isNotEmpty) {
+      warnings.add(
+          'Group "$tag" is used as a hop (position 2 or later) of a chain, so '
+          'chains ${_quotedList(lost)} were excluded from it — the core allows '
+          'a nested chain only as the first hop and would fail to start.');
+      _setMembers(g, kept);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 /// §393 A4 правило 5 — кольцо по любым рёбрам (`detour` узла, member группы).
 ///
 /// Политика — лаунчера (`breakDependencyCycle`): деградировать с warning, а
@@ -440,6 +569,7 @@ bool _breakDependencyCycle(
   final nodes = <String>[];
   final detourEdge = <String, String>{};
   final memberEdges = <String, List<String>>{};
+  final chainOwners = <String>{};
   for (final e in entries) {
     if (dropped.contains(e)) continue;
     final tag = _tagOf(e);
@@ -449,16 +579,20 @@ bool _breakDependencyCycle(
     if (d is String && d.isNotEmpty && byTag[d] != null && !dropped.contains(byTag[d]!)) {
       detourEdge[tag] = d;
     }
-    if (_isGroup(e)) {
+    // Состав группы и позиции цепочки — рёбра одного графа: ядро на кольце
+    // из любых из них отвергает конфиг целиком. Разводятся они только на
+    // РАЗРЫВЕ (см. [_EdgeKind]), поэтому в детекции лежат вместе.
+    if (_isGroup(e) || _isChain(e)) {
       final live = [
         for (final m in _membersOf(e))
           if (byTag[m] != null && !dropped.contains(byTag[m]!)) m,
       ];
       if (live.isNotEmpty) memberEdges[tag] = live;
+      if (_isChain(e)) chainOwners.add(tag);
     }
   }
 
-  Set<String> cyclicWithout(({String from, String ref, bool isDetour})? cut) =>
+  Set<String> cyclicWithout(({String from, String ref, _EdgeKind kind})? cut) =>
       _cyclicGraphNodes(nodes, detourEdge, memberEdges, cut);
 
   final cyclic = cyclicWithout(null);
@@ -466,16 +600,18 @@ bool _breakDependencyCycle(
 
   // Кандидаты: рёбра, ОБА конца которых циклические (ребро вне кольца его не
   // развяжет). Порядок фиксирован — тай-брейк детерминирован.
-  final candidates = <({String from, String ref, bool isDetour})>[];
+  final candidates = <({String from, String ref, _EdgeKind kind})>[];
   for (final tag in nodes) {
     if (!cyclic.contains(tag)) continue;
     final d = detourEdge[tag];
     if (d != null && cyclic.contains(d)) {
-      candidates.add((from: tag, ref: d, isDetour: true));
+      candidates.add((from: tag, ref: d, kind: _EdgeKind.detour));
     }
+    final kind =
+        chainOwners.contains(tag) ? _EdgeKind.chainHop : _EdgeKind.member;
     for (final m in memberEdges[tag] ?? const <String>[]) {
       if (cyclic.contains(m)) {
-        candidates.add((from: tag, ref: m, isDetour: false));
+        candidates.add((from: tag, ref: m, kind: kind));
       }
     }
   }
@@ -497,33 +633,50 @@ bool _breakDependencyCycle(
   if (bestScore <= 0) return false; // ни одно ребро не развязывает — валидатору
 
   final from = byTag[best.from]!;
-  if (best.isDetour) {
-    warnings.add(
-        'Dependency cycle through detour "${best.from}" → "${best.ref}" — '
-        'detour removed (the node dials directly).');
-    from.remove('detour');
-  } else {
-    warnings.add(
-        'Dependency cycle: "${best.ref}" excluded from group "${best.from}".');
-    _setMembers(from, [for (final m in _membersOf(from)) if (m != best.ref) m]);
+  switch (best.kind) {
+    case _EdgeKind.detour:
+      warnings.add(
+          'Dependency cycle through detour "${best.from}" → "${best.ref}" — '
+          'detour removed (the node dials directly).');
+      from.remove('detour');
+    case _EdgeKind.member:
+      warnings.add(
+          'Dependency cycle: "${best.ref}" excluded from group "${best.from}".');
+      _setMembers(
+          from, [for (final m in _membersOf(from)) if (m != best.ref) m]);
+    case _EdgeKind.chainHop:
+      // §393 C4 — у цепочки позицию не снимают: остаток был бы ДРУГИМ
+      // маршрутом. Дропаем запись целиком (эталон `breakDependencyCycle`,
+      // ветка "chain").
+      dropped.add(from);
+      warnings.add(
+          'Outbound "${best.from}" removed from the config: dependency cycle '
+          'through hop "${best.ref}" — a route without that hop would be a '
+          'different route.');
   }
   return true;
 }
 
 /// Циклические узлы графа санитайзера — итеративный Tarjan SCC (порт
 /// `_cyclicNodes` `validator.dart`): циклична SCC размера >1 либо одиночный
-/// узел с self-loop. [cut] — виртуально снятое ребро (для scoring'а).
+/// узел с self-loop. [cut] — виртуально снятое ребро (для scoring'а);
+/// `member` и `chainHop` режутся одинаково (оба живут в `memberEdges`) —
+/// расходятся они только в ПРИМЕНЕНИИ разрыва.
 Set<String> _cyclicGraphNodes(
   List<String> nodes,
   Map<String, String> detourEdge,
   Map<String, List<String>> memberEdges,
-  ({String from, String ref, bool isDetour})? cut,
+  ({String from, String ref, _EdgeKind kind})? cut,
 ) {
   List<String> adjOf(String u) => [
         for (final m in memberEdges[u] ?? const <String>[])
-          if (!(cut != null && !cut.isDetour && cut.from == u && cut.ref == m)) m,
+          if (!(cut != null &&
+              cut.kind != _EdgeKind.detour &&
+              cut.from == u &&
+              cut.ref == m))
+            m,
         if (detourEdge[u] != null &&
-            !(cut != null && cut.isDetour && cut.from == u))
+            !(cut != null && cut.kind == _EdgeKind.detour && cut.from == u))
           detourEdge[u]!,
       ];
 
