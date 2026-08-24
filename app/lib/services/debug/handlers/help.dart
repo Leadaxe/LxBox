@@ -223,15 +223,23 @@ POST   /subs/{id}/rules/reorder                Body {"order":[old indexes in new
 `?rebuild=true` on any write → auto rebuild-config. Writes go through
 SubscriptionController (fetch-state machine + UI notify), not SettingsStorage directly.
 
-=== Directions CRUD (routing directions vpn-1..vpn-10) ===
+=== Directions CRUD (routing directions) ===
 
 GET    /directions                               List directions (storage shape, snake_case)
-GET    /directions/{tag}                         Single direction (tag = vpn-1..vpn-10)
-POST   /directions[?rebuild=true]                Create. Auto-assigns first free vpn-N tag. Body optional:
-                                                 {"label":"..."} plus any PATCH field below. Limit 10 → 409.
+GET    /directions/{tag}                         Single direction (tag = the direction's outbound tag,
+                                                 e.g. vpn-1 or a custom one)
+POST   /directions[?rebuild=true]                Create. Body optional: {"label":"...","tag":"..."} plus any
+                                                 PATCH field below. No tag → first free vpn-N; a custom tag is
+                                                 accepted as-is. There is NO cap on the number of directions.
+                                                 Rejected tags → 409 with the machine reason in the message:
+                                                 empty | reserved (direct-out/block/dns-out/…) | duplicate |
+                                                 auto_twin (collides with an existing "<tag>-auto" twin).
 PATCH  /directions/{tag}[?rebuild=true]          Partial update: {label,enabled,include_direct,include_block,
-                                                 node_filter,node_filter_invert,default_filter,
+                                                 node_filter,node_filter_invert,default_filter,include,
                                                  interrupt_exist_connections,auto,detour}.
+                                                 include = tags of OTHER directions offered as options inside
+                                                 this one; only targets declared ABOVE in the list are emitted
+                                                 (order is set by /directions/reorder).
                                                  auto is MERGED into current urltest options (nested balancer
                                                  merges too); "auto":null disables the urltest twin.
                                                  tag is immutable; vpn-1 cannot be disabled (409).
@@ -262,6 +270,55 @@ not (include survives a disable, the builder just degrades the emitted
 group). Every mutation response carries
 "healed": {"rules": N, "detours": M, "includes": K} — how many references
 were reset.
+
+=== Chains CRUD (hop chains — third source kind, SPEC 110) ===
+
+A chain is a ROUTE ("client → hop 1 → hop 2 → … → target"), not a choice
+between routes: it lives next to subscriptions and servers as a source, and
+for the rest of the app it looks like a NODE (own tag, picked up by direction
+filters, emitted as one outbound of type "chain"). Stored in the `chains[]`
+key; ORDER IS NORMATIVE — a chain may reference only chains declared ABOVE it,
+which is what rules out cycles.
+
+GET    /chains                                   List chains (storage shape, snake_case)
+GET    /chains/{tag}                             Single chain (404 if unknown)
+POST   /chains[?rebuild=true]                    Create → 201. Body optional: {"tag":"...","label":"..."} plus
+                                                 any PATCH field below. No tag → first free chain-N. The tag is
+                                                 checked against BOTH chains and directions (two outbounds with
+                                                 one tag → the core rejects the whole config): rejected → 409
+                                                 with the machine reason: empty | reserved | duplicate |
+                                                 auto_twin. A body without hops creates an EMPTY chain (same as
+                                                 the UI: the record exists, the route is not filled in yet).
+PATCH  /chains/{tag}[?rebuild=true]              Partial update: {label,enabled,hops,idle_timeout,strip_evasion,
+                                                 strip,rewrite}. tag is immutable (400) — direction filters,
+                                                 route_final and other chains' positions point at it.
+                                                 hops = positions IN PACKET ORDER: [0] is the first hop from the
+                                                 client, the last one is what the target sees. NOT "who through
+                                                 whom" — detour's arrow points the other way.
+                                                 idle_timeout: "" = core default (5m), "0s" = live until stop.
+                                                 strip_evasion is a TRISTATE: omit = keep, null = core default
+                                                 (true, key not written), bool = explicit choice.
+                                                 strip = per-key patch over strip_evasion, REPLACES the map;
+                                                 keys only from tls.fragment | multiplex.padding |
+                                                 xhttp.padding | tls.utls (unknown key → 400).
+                                                 rewrite = JSON merge-patch (RFC 7396) per outbound type, kept
+                                                 verbatim (a null inside DELETES a key — no "empty cleanup").
+DELETE /chains/{tag}[?rebuild=true]              Remove. Positions of OTHER chains pointing at the removed tag
+                                                 are NOT cleaned up (dropping a position makes it a DIFFERENT
+                                                 route) — the build degrades such a chain as a whole
+                                                 ("chain_hop_missing"). The response lists them in
+                                                 "dangling_refs":[tag,...].
+
+Writes go through the SAME validation gate as the edit form (`sing-box check`
+does NOT catch chain start-up errors — a config with tls.utls stripped off a
+reality node passes `check` and dies on `run`, and the core then rejects the
+WHOLE config). A blocking finding → 400 carrying its machine code:
+tooFewHops (<2 positions) | emptyHop | duplicateHop | selfReference |
+nestedNotFirst (a nested chain is only legal at position 0) |
+forwardChainReference (referencing a chain declared below) |
+realityUtlsStripped | tagEmpty | tagTaken. Non-blocking findings (a
+position that is no longer among the targets, a first hop with its own detour)
+do NOT block the write — same line the form draws.
 
 === Folders CRUD (server folders) ===
 
@@ -534,13 +591,19 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PATCH', 'path': '/subs/{id}/rules/{idx}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset of the rule shape', 'description': 'Partial update of one rule'},
     {'method': 'DELETE', 'path': '/subs/{id}/rules/{idx}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove rule. Indexes shift — rebuild the next call from the returned "rules".'},
     {'method': 'POST', 'path': '/subs/{id}/rules/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder (full permutation of 0..n-1). Order matters: rules apply sequentially, last enable/disable wins.'},
-    // Directions CRUD (routing directions vpn-1..vpn-10)
+    // Directions CRUD (routing directions)
     {'method': 'GET', 'path': '/directions', 'description': 'List routing directions (storage shape, snake_case)'},
-    {'method': 'GET', 'path': '/directions/{tag}', 'description': 'Single direction (tag = vpn-1..vpn-10)'},
-    {'method': 'POST', 'path': '/directions', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"label":"..."} + any PATCH field', 'description': 'Create direction; auto-assigns first free vpn-N tag. Limit 10 → 409.'},
-    {'method': 'PATCH', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = direction selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the direction: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours,includes}.'},
+    {'method': 'GET', 'path': '/directions/{tag}', 'description': "Single direction (tag = the direction's outbound tag, e.g. vpn-1 or a custom one)"},
+    {'method': 'POST', 'path': '/directions', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"label":"...","tag":"..."} + any PATCH field', 'description': 'Create direction. No tag → first free vpn-N; a custom tag is accepted as-is. No cap on the number of directions. Rejected tag → 409 with the machine reason: empty|reserved|duplicate|auto_twin.'},
+    {'method': 'PATCH', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,include,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = direction selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the direction: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours,includes}.'},
     {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None; the tag is stripped from every other direction include[]. Response carries "healed":{rules,detours,includes}.'},
     {'method': 'POST', 'path': '/directions/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
+    // Chains CRUD (hop chains, SPEC 110)
+    {'method': 'GET', 'path': '/chains', 'description': 'List hop chains (storage shape, snake_case). Order is normative: a chain may reference only chains declared above it.'},
+    {'method': 'GET', 'path': '/chains/{tag}', 'description': 'Single chain (404 if unknown)'},
+    {'method': 'POST', 'path': '/chains', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"tag":"...","label":"..."} + any PATCH field', 'description': 'Create chain → 201. No tag → first free chain-N. Tag is checked against BOTH chains and directions; rejected → 409 with the machine reason: empty|reserved|duplicate|auto_twin. A body without hops creates an empty chain (same as the UI).'},
+    {'method': 'PATCH', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite}', 'description': 'Partial update. tag is immutable (400). hops = positions in PACKET order ([0] = first hop from the client). strip_evasion is a tristate: omit = keep, null = core default, bool = explicit. strip replaces the map, keys only tls.fragment|multiplex.padding|xhttp.padding|tls.utls. rewrite = RFC 7396 merge-patch per outbound type, kept verbatim. Writes pass the same gate as the edit form; a blocking finding → 400 with its code: tooFewHops|emptyHop|duplicateHop|selfReference|nestedNotFirst|forwardChainReference|realityUtlsStripped|tagEmpty|tagTaken.'},
+    {'method': 'DELETE', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove chain. Positions of other chains pointing at it are NOT cleaned (the build degrades such a chain as a whole, "chain_hop_missing"); the response lists them in "dangling_refs".'},
     // Folders CRUD (server folders)
     {'method': 'GET', 'path': '/folders', 'params': {'reveal': 'true|false (raw carries credentials, hidden by default)'}, 'description': 'List folder entries + members (members addressed by positional index)'},
     {'method': 'POST', 'path': '/folders', 'params': {'rebuild': 'true|false'}, 'body': '{"name":"..."}', 'description': 'Create empty folder → 201. Folder meta is edited via PATCH /subs/{id}.'},
