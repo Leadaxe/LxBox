@@ -250,6 +250,12 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
     final picked = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      // Кандидатов у живого профиля сотни (все узлы подписок) — без потолка
+      // лист накрывал весь экран. Директива оператора 24.08: не выше 3/4;
+      // внутри — собственный скролл листа.
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
       builder: (ctx) => _HopPickerSheet(options: options),
     );
     if (picked == null || !mounted) return;
