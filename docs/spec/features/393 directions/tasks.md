@@ -3,28 +3,43 @@
 Нормативка: [`spec.md`](spec.md). Порядок фаз обязателен; каждая фаза
 кончается зелёными `flutter analyze` + `flutter test` (3340+).
 
-## Фаза A — модель Direction (рефакторинг Channel)
-- [ ] A1. `lib/models/direction.dart`: класс `Direction` = текущий `Channel`
-      + поле `include` (List<String> тегов Направлений-опций, только
-      стоящие ВЫШЕ по списку). `lib/models/channel.dart` → реэкспорт +
-      `@Deprecated typedef Channel = Direction` (27 файлов едут через
-      алиас, миграция колл-сайтов — постепенно в A5)
-- [ ] A2. Произвольные теги: снять жёсткость `vpn-1..10` для НОВЫХ записей
-      (`kMaxChannels` — пересмотреть; `nextDirectionTag` по образцу
-      лаунчера `configtypes.NextDirectionTag`); существующие vpn-N легальны;
-      tag остаётся immutable после создания
-- [ ] A3. Storage: ключ `channels` НЕ менять (L7); чтение/запись `include`;
-      миграция не нужна (новое поле опционально)
-- [ ] A4. Сборка (`services/builder/server_list_build.dart`):
-      - include[] в состав селектора (выше по списку — антицикл);
-      - **L1**: `default`/`options.default` вне состава → ключ снять с
-        warning (порт болезни лаунчера);
-      - **L2**: узел с detour на этот же канал → исключить из состава
-        (порт `detour_group_cycle`)
-- [ ] A5. Переименование в коде: колл-сайты Channel→Direction (sed по lib/,
-      тесты через алиас), UI-тексты «Channels»→«Directions» (EN, L8)
-- [ ] A6. Debug API / автоматизация: пути с channel — проверить, алиасы
-      сохранить
+## Фаза A — модель Direction (рефакторинг Channel, полная чистота)
+
+Решение оператора 24.08.2026: «полная чистота, без хвостов» — переименование
+СКВОЗНОЕ: класс, файлы, колл-сайты (БЕЗ typedef-моста), UI-тексты, debug API
+и storage-ключ. Единственный допустимый хвост — read-side миграция
+легаси-ключей (без неё существующие установки теряют каналы). Downgrade на
+сборку до миграции пере-сеет Направления из шаблона — принято осознанно.
+
+- [ ] A1. Сквозное переименование домена: `lib/models/channel.dart` →
+      `direction.dart` (`Direction`, `DirectionAuto`, `ChannelHealResult` →
+      `DirectionHealResult` и т.д.), ВСЕ колл-сайты сразу (lib/ + test/),
+      файлы `channel_*.dart`/`channels.dart` → `direction_*.dart`/
+      `directions.dart` (git mv), UI-тексты EN «Direction/Directions» (L8),
+      debug API `/channels/*` → `/directions/*` без алиасов (dev-only API).
+      НЕ ТРОГАТЬ IPC/сетевые каналы: `MethodChannel`/`EventChannel`,
+      `cc_channel.dart`, `platform_channels.dart` — сетевой смысл слова
+      остаётся (решение оператора о терминологии)
+- [ ] A2. Storage: ключ `channels` → `directions`, маркер `channels_migrated`
+      → `directions_migrated`; one-shot миграция channels→directions с
+      УДАЛЕНИЕМ легаси-ключей; порядок restore→migrate (внутренний бэкап
+      восстанавливает старый файл со старыми ключами → миграция обязана
+      отработать ПОСЛЕ restore); allowlist `backup_service.dart`: экспорт
+      только новых ключей, restore принимает и легаси-пару (единственный
+      хвост). Тесты: fresh-seed, migrate, restore-старого-файла→migrate,
+      round-trip нового
+- [ ] A3. `include` (List<String> тегов Направлений, только стоящих ВЫШЕ по
+      списку — антицикл) + произвольные теги: `nextDirectionTag` по образцу
+      лаунчера `configtypes.NextDirectionTag` (vpn-N без верхней границы;
+      лимит `kMaxChannels`=10 снять для новых); существующие vpn-N легальны;
+      tag immutable после создания
+- [ ] A4. Граф-санитайзер (порт `core/build/outbound_graph_sanitize.go`
+      лаунчера, НЕ две частные проверки): финальный фикспойнт-проход по
+      всем рёбрам outbound-графа (member/detour; в фазе C добавятся позиции
+      цепочек): висячие ссылки, кросс-рёберные кольца, пустеющие группы,
+      `default`/`options.default` вне состава (L1), узел с detour на группу
+      со своим участием (L2), ПУСТОЕ Направление → block (трафик не идёт
+      мимо VPN). Деградация элемента с warning, не отказ всего конфига
 
 ## Фаза B — Направления в LX Backup (падающий контрактный тест)
 - [ ] B1. `lib/services/lx_backup.dart`: разбор `directions[]` ПЕРВЫМИ
