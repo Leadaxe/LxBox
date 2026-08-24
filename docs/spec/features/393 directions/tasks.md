@@ -33,7 +33,7 @@
       лаунчера `configtypes.NextDirectionTag` (vpn-N без верхней границы;
       лимит `kMaxChannels`=10 снять для новых); существующие vpn-N легальны;
       tag immutable после создания
-- [ ] A4. Граф-санитайзер (порт `core/build/outbound_graph_sanitize.go`
+- [x] A4. Граф-санитайзер (порт `core/build/outbound_graph_sanitize.go`
       лаунчера, НЕ две частные проверки). Разведка 24.08 (скаут sanitizer):
       место — новый post-step `post_steps/sanitize_outbound_graph.dart`,
       вызов в `build_config.dart` между `:536` (healInvalidReality) и
@@ -63,13 +63,62 @@
       - пустое Направление → block: УЖЕ ПРАВИЛЬНО (`:709-740`,
         байт-в-байт `empty_direction_blocks.expected.json`) — закрепить
         раннером A5, не сломать
-- [ ] A5. Раннер корпуса `contract/corpus/direction/` (55 файлов уже
+
+      СДЕЛАНО. Расхождения с эталоном (осознанные, закрыты тестами):
+      1. правило 4 считает «входит в состав» по СТРУКТУРНЫМ рёбрам (вглубь
+         вложенных групп и auto-двойников), а не только прямым совпадением
+         как `detour_group_cycle.go` (там состав группы — плоский список
+         нод, у мобилы селектор Направления держит `<tag>-auto`). Дальше по
+         detour'ам ЧУЖИХ узлов НЕ идёт: транзитивная версия выбрасывала из
+         состава весь невиновный флот кейса §254 и уводила Направление в
+         block вместо снятия одного detour'а у виноватой ноды;
+      2. правило 5 выбирает рвущееся ребро по §254-минимальности
+         (`_cyclicGraphNodes` + scoring), а не «первое замыкающее из DFS»
+         эталона — по той же причине;
+      3. §254-fatal валидатора не удалён: остался последним рубежом на
+         кольца, где ни одно removable-ребро не разваливает цикл.
+- [x] A5. Раннер корпуса `contract/corpus/direction/` (55 файлов уже
       синхронизированы) в `app/test/contract/` по образцу
       `contract_test.dart` (тот читает только corpus/uri). Не-chain кейсы
       сразу: empty_direction_blocks, default_filter_first_match,
       auto_twin_excludes_group_nodes, disabled_direction_skipped,
       empty_pool_no_warning; chain_* — skip со ссылкой на фазу C
-- [ ] A6. Болезнь мобилы: смена `tag_prefix` подписки не каскадирует
+
+      СДЕЛАНО: `app/test/contract/direction_corpus_test.dart` — 16 зелёных,
+      11 именованных скипов (6 `chain_*` → TODO(§393 C), 5 `fold_*` → na,
+      фаза E). Гоняет НАСТОЯЩИЙ `buildConfig` и сверяет группы из готового
+      `config['outbounds']` — позиционно, порядок групп и составов
+      нормативен. `magic` переводит служебные теги корпуса в теги мобилы
+      (`block-out` → `block`).
+
+      Что пришлось починить в СБОРКЕ (фикстура нормативна):
+      1. `<tag>-auto` эмитится ПЕРЕД своим селектором (было наоборот) —
+         README корпуса «сначала auto-группа, потом само Направление»,
+         эталон `direction_twins.go:105-114`;
+      2. `default` Направления с автовыбором = его двойник, когда
+         `defaultFilter` ничего не поймал (не ставился вовсе) — эталон
+         `outbound_generator.go:676-682`, кейсы `auto_twin_emitted_and_
+         default` / `auto_twin_default_yields_to_explicit`.
+
+      Спорная фикстура (одна, задокументирована в раннере
+      `_groupsNotComparable`): `empty_pool_no_warning` ждёт `groups: []`,
+      но это АВАРИЯ СБОРКИ лаунчера (при нулевом пуле
+      `GenerateOutboundsFromParserConfig` возвращает «no nodes parsed from
+      any source», Go-раннер печатает пустой список от `res == nil`), а не
+      свойство модели. У мобилы такого обрыва нет и быть не должно:
+      Направление — цель `route.rules[].outbound`. Мобила применяет ту же
+      политику, которую корпус объявляет верной в `empty_direction_blocks`
+      (§201/§274): `[block, direct-out]` с `default=block`. Раннер сверяет
+      названную кейсом частность (README корпуса:52 — отсутствие
+      предупреждения) и структуру по правилу LxBox, с причиной в reason.
+
+      Не нормативны и сняты с обеих сторон: `interrupt_exist_connections`
+      и `passive_check` (шаблонные, README корпуса это оговаривает);
+      `url`/`interval`/`tolerance`/`idle_timeout` двойника сверяются, только
+      если ожидание их НАЗЫВАЕТ (у мобилы `DirectionAuto` не-nullable, у
+      лаунчера omitempty). Порядок КЛЮЧЕЙ внутри группы не нормативен —
+      Go сравнивает `MarshalIndent` от map, где ключи отсортированы.
+- [x] A6. Болезнь мобилы: смена `tag_prefix` подписки не каскадирует
       (`subscription_detail_screen.dart:796`, `folder_detail_screen.dart:1520`)
       и молча обнуляет regex `nodeFilter` каналов, написанный под старый
       префикс (диагностика только постфактум-SnackBar `build_config:721`).

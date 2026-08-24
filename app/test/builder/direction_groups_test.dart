@@ -14,6 +14,14 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// идёт по новому пути, минуя template-fallback).
 void main() {
   // template без preset-групп: Направления целиком из settings.directions.
+  //
+  // Служебные outbound'ы — ОБА, как их эмитит боевой `wizard_template.json`
+  // (`magic_nodes.direct` = direct-out, `magic_nodes.block` = block). Раньше
+  // здесь стоял один `direct-out`, и фикстура была неверна: `includeBlock` и
+  // block-fallback пишут в состав селектора тег `block`, записи которого в
+  // конфиге не было. Граф-санитайзер (§393 A4) считает живость по ФАКТУ
+  // записи — ровно как `validator.dart` (`allTags`), — и такой `block`
+  // законно вылетал из состава как призрак.
   WizardTemplate template() => WizardTemplate(
         parserConfig: ParserConfigBlock(),
         groupTemplates: GroupTemplates(),
@@ -22,6 +30,7 @@ void main() {
         config: {
           'outbounds': [
             {'tag': 'direct-out', 'type': 'direct'},
+            {'tag': 'block', 'type': 'block'},
           ],
           'route': {'rules': []},
         },

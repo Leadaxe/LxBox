@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:collection/collection.dart';
 
+import '../../config/consts.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 import '../json_clone.dart';
@@ -28,8 +29,8 @@ part 'post_steps/dns_rules.dart';
 part 'post_steps/custom_rules.dart';
 part 'post_steps/dns_servers.dart';
 part 'post_steps/heal_preset_tag_prefix.dart';
-part 'post_steps/heal_dangling_detours.dart';
 part 'post_steps/heal_dangling_resolve_servers.dart';
 part 'post_steps/heal_legacy_dns_strategy.dart';
 part 'post_steps/heal_unknown_utls_fingerprints.dart';
 part 'post_steps/heal_invalid_reality.dart';
+part 'post_steps/sanitize_outbound_graph.dart';

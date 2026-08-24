@@ -12,11 +12,19 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// custom-rule могут целиться в detour-Направление, fallback пустого Направления един
 /// для всех — [block, direct-out] c default=block (§201/§274). Остались:
 /// autoTag-алиас, AWG→WG advisory.
-/// §254 — detour-циклы больше НЕ рвутся edge-strip'ом: детектор в
-/// validateConfig возвращает fatal DetourCycle с минимальным набором
-/// виновников (группа тестов «§254 — detour-циклы»). Harness — как в
-/// direction_groups_test.dart (настоящий buildConfig, directions из settings).
+/// §254 — detour-циклы рвал не билдер, а детектор в validateConfig: fatal
+/// DetourCycle с минимальным набором виновников. §393 A4 сменил политику на
+/// лаунчерную: финальный граф-санитайзер (`sanitizeOutboundGraph`) ЧИНИТ граф
+/// ДО валидатора — деградирует один элемент с warning, §254-fatal остаётся
+/// последним рубежом на неразруленное (группа тестов «§254/§393 A4»).
+/// Harness — как в direction_groups_test.dart (настоящий buildConfig,
+/// directions из settings).
 void main() {
+  // Служебные outbound'ы — ОБА, как в боевом `wizard_template.json`
+  // (`magic_nodes.direct`/`magic_nodes.block`): `includeBlock` и пустой
+  // block-fallback кладут в состав селектора тег `block`, и без его записи
+  // фикстура описывала бы конфиг, которого билдер не собирает. Граф-санитайзер
+  // (§393 A4) считает живость по ФАКТУ записи — как `validator.dart`.
   WizardTemplate template() => WizardTemplate(
         parserConfig: ParserConfigBlock(),
         groupTemplates: GroupTemplates(),
@@ -25,6 +33,7 @@ void main() {
         config: {
           'outbounds': [
             {'tag': 'direct-out', 'type': 'direct'},
+            {'tag': 'block', 'type': 'block'},
           ],
           'route': {'rules': []},
         },
@@ -181,11 +190,26 @@ void main() {
     });
   });
 
-  group('§254 — detour-циклы: fatal + минимальный набор виновников', () {
-    // §254 сменил семантику §248: билдер цикл НЕ рвёт (никакого снятия
-    // detour), детектор в validateConfig возвращает fatal DetourCycle с
-    // минимальным набором culprits — конфиг не собирается, юзер устраняет
-    // причину сам. Хелпер: билд без expect(isOk).
+  group('§254/§393 A4 — detour-циклы: разрывает санитайзер, не валидатор', () {
+    // §254 ввёл fatal DetourCycle с минимальным набором виновников: билдер
+    // цикл НЕ рвал, конфиг не собирался, юзер устранял причину сам.
+    // §393 A4 привёл политику к лаунчеру (`outbound_graph_sanitize.go`):
+    // финальный граф-санитайзер ЧИНИТ граф ДО валидатора — деградирует один
+    // элемент с warning, а не отдаёт ядру конфиг, который оно отвергнет.
+    // §254-fatal остался ПОСЛЕДНИМ рубежом на неразруленное: в сценариях ниже
+    // он уже не срабатывает, `validation.isOk` — true.
+    //
+    // Что сохранилось от §254 — МИНИМАЛЬНОСТЬ: рвётся ровно то ребро, что
+    // развязывает кольцо, невиновные соседи не страдают. «Минимальный набор
+    // виновников» превратился в минимальность разорванных рёбер.
+    //
+    // Разделение труда внутри санитайзера:
+    //   • правило 4 (`detour_group_cycle.go`) — узел, чей detour ведёт в
+    //     группу, в состав которой он сам входит: ВОН ИЗ СОСТАВА, detour
+    //     сохранён (fail-open);
+    //   • правило 5 (`breakDependencyCycle`) — всё прочее кольцо: снимается
+    //     detour у ноды с максимальным «весом» ребра.
+
     Future<BuildResult> buildRaw(
             List<ServerList> lists, List<Direction> directions) =>
         buildConfig(
@@ -197,8 +221,11 @@ void main() {
     List<DetourCycle> cyclesOf(BuildResult r) =>
         r.validation.fatal.whereType<DetourCycle>().toList();
 
-    test('прямой цикл: member.detour=C → fatal, culprit = член, detour цел',
+    test('прямой цикл: member.detour=C → член вон из состава, detour цел',
         () async {
+      // §254 показывал fatal с culprit=[Relay Berlin]. Теперь тот же виновник
+      // деградирует правилом 4: он выпадает из состава vpn-2, а detour —
+      // осознанное решение пользователя — остаётся.
       final r = await buildRaw([
         vlessServer(
             id: 'u',
@@ -209,17 +236,25 @@ void main() {
         const Direction(
             tag: 'vpn-2', label: 'Relay', isDetour: true, nodeFilter: 'Relay'),
       ]);
-      final cycles = cyclesOf(r);
-      expect(cycles, hasLength(1));
-      expect(cycles.single.culprits,
-          [(tag: 'Relay Berlin', detour: 'vpn-2')]);
-      // §254 — конфиг НЕ правится: detour остаётся на месте.
-      expect(byTag(r, 'Relay Berlin')['detour'], 'vpn-2');
-      expect(r.emitWarnings, isNot(contains(contains('removed detour'))));
+      expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
+      expect(cyclesOf(r), isEmpty, reason: '§254-fatal больше не нужен');
+      expect(byTag(r, 'Relay Berlin')['detour'], 'vpn-2',
+          reason: 'fail-open: detour пользователя сохранён');
+      expect(
+          r.emitWarnings,
+          contains(contains(
+              'Outbound "Relay Berlin" detours through group "vpn-2" it '
+              'belongs to')));
+      // Единственный член ушёл → Направление в block-fallback (§201/§274).
+      expect(byTag(r, 'vpn-2')['outbounds'], ['block', 'direct-out']);
+      expect(byTag(r, 'vpn-2')['default'], 'block');
     });
 
-    test('цикл через auto-двойник (detour=<tag>-auto) — тот же fatal',
+    test('цикл через auto-двойник (detour=<tag>-auto) — тот же разрыв',
         () async {
+      // Двойник держит те же ноды, что и селектор: узел выпадает из состава
+      // двойника, тот пустеет и дропается, а висячий detour снимается
+      // правилом 1 на следующей итерации фикспойнта — каскад, а не fatal.
       final r = await buildRaw([
         vlessServer(
             id: 'u',
@@ -234,16 +269,23 @@ void main() {
             nodeFilter: 'Relay',
             auto: DirectionAuto()),
       ]);
-      final cycles = cyclesOf(r);
-      expect(cycles, hasLength(1));
-      expect(cycles.single.culprits.single.tag, 'Relay Berlin');
-      expect(cycles.single.renderEn(), contains('Routing loop'));
+      expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
+      expect(cyclesOf(r), isEmpty);
+      expect(outs(r).any((o) => o['tag'] == 'vpn-2-auto'), isFalse,
+          reason: 'опустевший двойник дропнут');
+      expect(byTag(r, 'Relay Berlin').containsKey('detour'), isFalse,
+          reason: 'detour на дропнутый двойник снят каскадом');
+      expect(r.emitWarnings, contains(contains('Detour removed')));
+      // Сам узел уцелел и остался опцией Направления.
+      expect(byTag(r, 'vpn-2')['outbounds'], ['Relay Berlin']);
     });
 
-    test('транзитивный цикл через промежуточный узел — 1 culprit', () async {
-      // Client ∈ vpn-2; Client→Mid→vpn-2. Оба ребра развязывают цикл
-      // (равный score) — тай-брейк лексикографический даёт Client.
-      // Показывается ОДИН виновник, цикл целиком — в issue.cycle.
+    test('транзитивный цикл через промежуточный узел — рвётся ОДНО ребро',
+        () async {
+      // Client ∈ vpn-2; Client→Mid→vpn-2. Кольцо идёт через detour ЧУЖОГО
+      // узла (Mid), поэтому правило 4 сюда не лезет — работает правило 5.
+      // Оба ребра развязывают цикл (равный score), тай-брейк
+      // лексикографический даёт Client.
       final r = await buildRaw([
         vlessServer(
             id: 'c',
@@ -261,15 +303,19 @@ void main() {
             isDetour: true,
             nodeFilter: 'Client'),
       ]);
-      final cycles = cyclesOf(r);
-      expect(cycles, hasLength(1));
-      expect(cycles.single.culprits, hasLength(1));
-      expect(cycles.single.culprits.single.tag, 'Client');
-      expect(cycles.single.cycle,
-          containsAll(<String>['Client', 'Mid', 'vpn-2']));
+      expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
+      expect(cyclesOf(r), isEmpty);
+      expect(
+          r.emitWarnings,
+          contains(contains(
+              'Dependency cycle through detour "Client" → "Mid"')));
+      expect(byTag(r, 'Client').containsKey('detour'), isFalse);
+      // Минимальность: второе ребро (Mid→vpn-2) не тронуто, состав цел.
+      expect(byTag(r, 'Mid')['detour'], 'vpn-2');
+      expect(byTag(r, 'vpn-2')['outbounds'], ['Client']);
     });
 
-    test('цикл между Направлениями: A∈C1→C2, B∈C2→C1 — один culprit, один issue',
+    test('цикл между Направлениями: A∈C1→C2, B∈C2→C1 — одно разорванное ребро',
         () async {
       final r = await buildRaw([
         vlessServer(
@@ -287,14 +333,19 @@ void main() {
         const Direction(
             tag: 'vpn-3', label: 'C2', isDetour: true, nodeFilter: 'Node B'),
       ]);
-      // Кольцо одно (A→C2→B→C1→A): минимальный набор = 1 ребро (какое —
-      // тай-брейк, оба симметричны).
-      final cycles = cyclesOf(r);
-      expect(cycles, hasLength(1));
-      expect(cycles.single.culprits, hasLength(1));
+      expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
+      expect(cyclesOf(r), isEmpty);
+      // Кольцо одно (A→C2→B→C1→A): рвётся РОВНО одно ребро (какое — тай-брейк,
+      // оба симметричны), состав обоих Направлений уцелел.
+      final broken = r.emitWarnings
+          .where((w) => w.contains('Dependency cycle'))
+          .toList();
+      expect(broken, hasLength(1));
+      expect(byTag(r, 'vpn-2')['outbounds'], ['Node A']);
+      expect(byTag(r, 'vpn-3')['outbounds'], ['Node B']);
     });
 
-    test('ссылка на ОБЫЧНЫЙ Направление (Debug API-сценарий) — тот же fatal',
+    test('ссылка на ОБЫЧНОЕ Направление (Debug API-сценарий) — тот же разрыв',
         () async {
       final r = await buildRaw([
         vlessServer(
@@ -305,14 +356,21 @@ void main() {
         const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(tag: 'vpn-2', label: 'Plain', nodeFilter: 'Node X'),
       ]);
-      expect(cyclesOf(r).single.culprits.single.tag, 'Node X');
+      expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
+      expect(cyclesOf(r), isEmpty);
+      expect(
+          r.emitWarnings,
+          contains(contains(
+              'Outbound "Node X" detours through group "vpn-2" it belongs '
+              'to')));
+      expect(byTag(r, 'Node X')['detour'], 'vpn-2');
     });
 
     test('флагман §248: relay в той же подписке под overrideDetour=C — '
-        'fatal с culprit=relay, клиенты невиновны', () async {
-      // §254 — осознанная смена поведения: раньше edge-strip выпутывал relay
-      // автоматически, теперь юзер устраняет сам (см. spec 254, секция
-      // «Осознанное изменение поведения»).
+        'вон из состава relay, клиенты невиновны', () async {
+      // §254 отдавал это fatal'ом с culprit=relay; §393 A4 вернул
+      // автоматическое выпутывание, но БЕЗ старого edge-strip'а: relay
+      // выпадает из состава (и из auto-двойника), detour у всех троих цел.
       final r = await buildRaw([
         vlessServer(
             id: 'u',
@@ -327,21 +385,38 @@ void main() {
             nodeFilter: 'Relay',
             auto: DirectionAuto()),
       ]);
-      final cycles = cyclesOf(r);
-      expect(cycles, hasLength(1));
-      // Минимальный набор: только relay (член Направления), клиенты — транзит.
-      expect(cycles.single.culprits,
-          [(tag: 'Relay Berlin', detour: 'vpn-2')]);
+      expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
+      expect(cyclesOf(r), isEmpty);
+      // Виновник — только relay (единственный ЧЛЕН Направления); клиенты в
+      // состав не входили и ничего не потеряли.
+      // §393 A4 фикс 4 — агрегация правила 4 по УЗЛУ: relay выброшен и из
+      // селектора Направления, и из его auto-двойника, но warning ОДИН, со
+      // списком обеих групп (а не два одинаковых про одну ноду).
+      final cyclicLines = r.emitWarnings
+          .where((w) => w.contains('it belongs to — excluded'))
+          .toList();
+      expect(cyclicLines, hasLength(1));
+      expect(cyclicLines.single, contains('"Relay Berlin"'));
+      expect(cyclicLines.single, contains('"vpn-2"'));
+      expect(cyclicLines.single, contains('"vpn-2-auto"'));
+      for (final tag in ['Relay Berlin', 'Client A', 'Client B']) {
+        expect(byTag(r, tag)['detour'], 'vpn-2', reason: '$tag: detour цел');
+      }
+      expect(byTag(r, 'vpn-2')['outbounds'], ['block', 'direct-out'],
+          reason: 'состав опустел → block-fallback (§201/§274)');
     });
 
-    test('реальный кейс §254: флот∈C1→C2, одна нода∈C2→C1 — culprit '
-        'ровно она, не флот', () async {
+    test('реальный кейс §254: флот∈C1→C2, одна нода∈C2→C1 — рвётся ребро '
+        'ровно у неё, флот цел', () async {
       // Миниатюра device-кейса: 3 «BL»-ноды в vpn-2 детурят в vpn-3
       // (WARP IN); внутри vpn-3 одна AWG-нода по ошибке детурит обратно в
-      // vpn-2, две MASQUE-ноды чисты. Виновник — ровно AWG (1, не 3).
-      // §301 — фильтры теперь case-insensitive: имя не должно случайно
-      // подпадать под чужой фильтр иным регистром. `BL Helsinki` содержал "in"
-      // и после §301 попадал бы и в vpn-3 (nodeFilter 'IN') — берём `BL Varna`.
+      // vpn-2, две MASQUE-ноды чисты. Это МЕРА МИНИМАЛЬНОСТИ, ради которой
+      // §254 вообще появился: наивный «первое замыкающее ребро из DFS»
+      // эталона отобрал бы detour у двух чистых BL-нод вместо одной виноватой
+      // AWG, а транзитивное правило 4 выбросило бы весь флот из состава vpn-2
+      // и увело бы Направление в block. Верный исход — один снятый detour.
+      // §301 — фильтры case-insensitive: `BL Helsinki` содержал "in" и попал
+      // бы и в vpn-3 (nodeFilter 'IN'), потому берём `BL Varna`.
       final r = await buildRaw([
         vlessServer(
             id: 'bl',
@@ -360,17 +435,26 @@ void main() {
         const Direction(
             tag: 'vpn-3', label: 'WARP IN', isDetour: true, nodeFilter: 'IN'),
       ]);
-      final cycles = cyclesOf(r);
-      expect(cycles, hasLength(1));
-      expect(cycles.single.culprits, [(tag: 'IN Awg', detour: 'vpn-2')]);
-      // Флот не тронут и не оговорён.
-      expect(byTag(r, 'BL Sofia')['detour'], 'vpn-3');
-      expect(cycles.single.renderEn(), isNot(contains('BL Sofia')));
+      expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
+      expect(cyclesOf(r), isEmpty);
+      // Ровно одна деградация, и та — у виноватой ноды.
+      final degraded =
+          r.emitWarnings.where((w) => w.contains('Dependency cycle')).toList();
+      expect(degraded, hasLength(1));
+      expect(degraded.single, contains('"IN Awg"'));
+      expect(byTag(r, 'IN Awg').containsKey('detour'), isFalse);
+      // Флот не тронут: ни detour'ы, ни состав vpn-2, ни упоминание в логе.
+      for (final tag in ['BL Sofia', 'BL Zagreb', 'BL Varna']) {
+        expect(byTag(r, tag)['detour'], 'vpn-3', reason: '$tag невиновен');
+      }
+      expect(byTag(r, 'vpn-2')['outbounds'],
+          ['BL Sofia', 'BL Zagreb', 'BL Varna']);
+      expect(degraded.single, isNot(contains('BL Sofia')));
     });
 
     test('линейная цепочка Направлений C1→C2→C3 без замыкания → ok', () async {
       // Регрессия device-кейса ПОСЛЕ устранения виновника: [BL]→WARP IN→
-      // наружу, WARP OUT→[BL] — ацикличная цепочка, fatal быть не должно.
+      // наружу, WARP OUT→[BL] — ацикличная цепочка, санитайзер молчит.
       final r = await build([
         vlessServer(
             id: 'out',
@@ -392,10 +476,15 @@ void main() {
       ]);
       expect(byTag(r, 'BL Sofia')['detour'], 'vpn-4');
       expect(byTag(r, 'OUT Warp')['detour'], 'vpn-3');
+      expect(r.emitWarnings, isNot(contains(contains('Dependency cycle'))));
+      expect(r.emitWarnings,
+          isNot(contains(contains('it belongs to — excluded'))));
     });
 
-    test('два независимых кольца → два issue, по culprit на каждое',
-        () async {
+    test('два независимых кольца → два разрыва, по одному на кольцо', () async {
+      // Смысл сценария §254 («два issue, по culprit на каждое») сохранён:
+      // независимые кольца обрабатываются независимо, ни одно не глотает
+      // другое — просто мера теперь в разорванных рёбрах, а не в issue.
       final r = await buildRaw([
         vlessServer(
             id: 'x',
@@ -412,11 +501,20 @@ void main() {
         const Direction(
             tag: 'vpn-3', label: 'C2', isDetour: true, nodeFilter: 'Node Y'),
       ]);
-      final cycles = cyclesOf(r);
-      expect(cycles, hasLength(2));
-      expect(
-          cycles.expand((c) => c.culprits.map((x) => x.tag)),
-          containsAll(<String>['Node X', 'Node Y']));
+      expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
+      expect(cyclesOf(r), isEmpty);
+      // По одному разрыву на кольцо — оба узла названы, ни один не пропущен.
+      final degraded = r.emitWarnings
+          .where((w) => w.contains('it belongs to — excluded'))
+          .toList();
+      expect(degraded, hasLength(2));
+      expect(degraded.join('\n'), contains('"Node X"'));
+      expect(degraded.join('\n'), contains('"Node Y"'));
+      // Оба Направления опустели → block-fallback, оба уцелели как цели правил.
+      for (final tag in ['vpn-2', 'vpn-3']) {
+        expect(byTag(r, tag)['outbounds'], ['block', 'direct-out']);
+        expect(byTag(r, tag)['default'], 'block');
+      }
     });
   });
 

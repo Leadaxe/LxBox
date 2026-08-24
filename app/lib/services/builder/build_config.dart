@@ -470,14 +470,6 @@ Future<BuildResult> buildConfig({
     applyTunPackages(config, settings.tunApps!);
   }
 
-  // §172 — деградация битых detour-ссылок ПЕРЕД валидацией: detour на
-  // несуществующий outbound (напр. отключённый WARP-target из подписки) →
-  // снимаем поле, нода работает напрямую, а не роняет весь конфиг (как §169
-  // с REALITY). Снятые detour'ы добавляем в emitWarnings (видно юзеру).
-  // §377 — одна строка на отсутствующий target, а не на каждую ноду: один
-  // выключенный WARP-пресет из подписки давал 138 идентичных warning'ов на
-  // сборку (по 276 на два прохода в дампе 4PDA), вытесняя из лога всё
-  // остальное. Имена нод нужны для диагностики, но не все — первые пять.
   // §103 C7 — миграция ссылок на теги пресетов. ДО деградаций ниже: они
   // снимают битую ссылку, а мы её чиним, и порядок наоборот означал бы, что
   // настройка пользователя теряется вместо переезда на новый тег.
@@ -487,15 +479,6 @@ Future<BuildResult> buildConfig({
     emitWarnings.add(
         'Preset tags migrated to namespaced form (${healedPrefixes.length}): '
         '${shown.join(', ')}${healedPrefixes.length > 5 ? ', …' : ''}');
-  }
-
-  final healedDetours = healDanglingDetours(config);
-  final ownersByTarget = <String, List<String>>{};
-  for (final h in healedDetours) {
-    (ownersByTarget[h.target] ??= []).add(h.owner);
-  }
-  for (final e in ownersByTarget.entries) {
-    emitWarnings.add(_detourRemovedLine(e.key, e.value));
   }
 
   // §247 — деградация битых `server`-ссылок у resolve-правил (симметрично
@@ -546,6 +529,20 @@ Future<BuildResult> buildConfig({
         : 'REALITY removed: outbound "${h.owner}" had invalid public_key '
             '"${h.original}" — node degraded to plain TLS.');
   }
+
+  // §393 A4 — ФИНАЛЬНЫЙ граф-санитайзер. Последняя точка, где виден весь
+  // outbound-граф целиком: все heal'ы выше уже отработали и могли сделать
+  // висячими новые ссылки (снятый REALITY ноду не дропает, но §302-патч или
+  // выключенная подписка — вполне). Поглощает §172 `healDanglingDetours`:
+  // висячий detour — лишь одно из его правил, и агрегация «Detour removed»
+  // (§377, одна строка на target) переехала внутрь. Здесь же чинятся
+  // члены-призраки групп, `default` вне состава (L1 — иначе ядро отвергает
+  // конфиг целиком) и кольца зависимостей — ДО валидатора, чей §254-fatal
+  // остаётся последним рубежом на неразруленное.
+  emitWarnings.addAll(sanitizeOutboundGraph(
+    config,
+    directionTags: {for (final c in directions) c.tag},
+  ));
 
   final validation = validateConfig(config);
   return BuildResult(
@@ -619,21 +616,6 @@ class _BuildCtx implements EmitContext {
 
   @override
   void addToAutoList(SingboxEntry entry) => autoEntries.add(entry);
-}
-
-/// §377 — одна агрегированная строка про снятые detour'ы на отсутствующий
-/// [target]. Имена первых пяти нод — чтобы понять, какая подписка их принесла;
-/// остаток счётчиком. Единственная нода печатается как раньше (без «and 0 more»
-/// и без счётчика: «1 outbound» читается хуже, чем само имя).
-String _detourRemovedLine(String target, List<String> owners) {
-  const shown = 5;
-  final head = owners.take(shown).map((o) => '"$o"').join(', ');
-  final rest = owners.length - shown;
-  final subject = owners.length == 1
-      ? 'outbound $head'
-      : '${owners.length} outbounds ($head${rest > 0 ? ', and $rest more' : ''})';
-  return 'Detour removed: $subject referenced missing "$target" — '
-      '${owners.length == 1 ? 'node works' : 'nodes work'} directly.';
 }
 
 /// Собирает direction-группы (vpn-1..vpn-10 + их auto-двойники). Приватный
@@ -821,12 +803,33 @@ List<Map<String, dynamic>> _buildDirectionGroups({
     if (c.defaultFilter.isNotEmpty) {
       final re = tryCompileRegex(c.defaultFilter, caseSensitive: false);
       final def = re == null ? null : _firstMatch(nodes, re);
-      // Гейт-защита (§141 P1.8b): default обязан быть валидным членом outbounds.
+      // Гейт-защита (§141 P1.8b): default обязан быть валидным членом
+      // outbounds — иначе ядро отвергает конфиг ЦЕЛИКОМ («default outbound
+      // not found», L1). Здесь не-член просто НЕ ставится: ключа нет, ядро
+      // берёт первую опцию — это и есть корректный исход, а не расхождение с
+      // эталоном (`outbound_graph_sanitize.go:216-221` подставляет `kept[0]`
+      // там, где ключ УЖЕ записан и оказался вне состава). Ровно этот случай
+      // — состав ужался каскадом, а default остался от прошлой жизни — чинит
+      // правило 3 санитайзера (§393 A4).
       if (def != null && selectorOutbounds.contains(def)) {
         selector['default'] = def;
       }
     }
-    result.add(selector);
+    // §393 A5 — умолчанием Направления с автовыбором становится его двойник:
+    // ради автовыбора галку и включали, и без ключа ядро взяло бы ПЕРВУЮ
+    // опцию — сегодня это тот же `<tag>-auto`, но стоит юзеру включить
+    // direct/block или сослаться include'ом, и умолчание молча уехало бы на
+    // служебную опцию. Эталон — `outbound_generator.go:676-682`
+    // (`defaultTag == "" && TwinTag != ""`), нормативный кейс корпуса —
+    // `auto_twin_emitted_and_default`.
+    //
+    // Только когда `defaultFilter` пользователя НИЧЕГО не поймал: явно
+    // выбранный узел важнее автовыбора (`auto_twin_default_yields_to_
+    // explicit`). Условие вхождения в состав выполнено по построению —
+    // `emitAuto` кладёт `c.autoTag` первым элементом `selectorOutbounds`.
+    if (emitAuto && !selector.containsKey('default')) {
+      selector['default'] = c.autoTag;
+    }
 
     // urltest-двойник: ТОЛЬКО ноды Направления (без direct/auto). Не эмитим при
     // пустом наборе (urltest без нод недопустим).
@@ -871,6 +874,15 @@ List<Map<String, dynamic>> _buildDirectionGroups({
       }
       result.add(urltest);
     }
+    // §393 A5 — ПОРЯДОК ЭМИССИИ нормативен (corpus/direction/README.md:
+    // «сначала auto-группа, потом само Направление»), поэтому селектор
+    // добавляется ПОСЛЕ своего двойника, а не до. Дело не в эстетике: и
+    // `default`, и первая опция селектора смотрят на `<tag>-auto`, и запись,
+    // на которую ссылаются, обязана лежать в файле раньше ссылки — так
+    // конфиг читается человеком и так его собирает лаунчер
+    // (`direction_twins.go:105-114`: `out = append(out, buildTwin…)`, затем
+    // родитель). Ядру порядок безразличен, читателю и диффу — нет.
+    result.add(selector);
 
     // §393 A3 — тег этого Направления становится законной целью `include`
     // для СЛЕДУЮЩИХ. Регистрируем в конце итерации: свой же тег не должен
