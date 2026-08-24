@@ -34,14 +34,61 @@
       лимит `kMaxChannels`=10 снять для новых); существующие vpn-N легальны;
       tag immutable после создания
 - [ ] A4. Граф-санитайзер (порт `core/build/outbound_graph_sanitize.go`
-      лаунчера, НЕ две частные проверки): финальный фикспойнт-проход по
-      всем рёбрам outbound-графа (member/detour; в фазе C добавятся позиции
-      цепочек): висячие ссылки, кросс-рёберные кольца, пустеющие группы,
-      `default`/`options.default` вне состава (L1), узел с detour на группу
-      со своим участием (L2), ПУСТОЕ Направление → block (трафик не идёт
-      мимо VPN). Деградация элемента с warning, не отказ всего конфига
+      лаунчера, НЕ две частные проверки). Разведка 24.08 (скаут sanitizer):
+      место — новый post-step `post_steps/sanitize_outbound_graph.dart`,
+      вызов в `build_config.dart` между `:536` (healInvalidReality) и
+      `:544` (validateConfig) — последняя точка, где виден весь граф.
+      Фикспойнт (лимит len*4+8, выход по !changed) по
+      `config['outbounds']+config['endpoints']`:
+      - висячий detour → снять ключ (ПОГЛОЩАЕТ `heal_dangling_detours.dart`
+        — старый вызов `:486` снять, иначе двойные warnings);
+      - члены-призраки состава selector/urltest → исключить (сегодня
+        состав фиксируется в `_buildChannelGroups:696-703` и никем не
+        пересматривается — латентно до первого heal'а, дропающего ноду,
+        и станет горячим с chain);
+      - `default` вне состава → заменить на kept[0] с warning (сейчас
+        `:747` молча НЕ ставит — семантика обратная эталону
+        `outbound_graph_sanitize.go:216-221`); default=block от
+        emptyFallback (`:739`) не перетирать;
+      - узел с detour на канал со своим участием → вон из состава,
+        detour сохранить (fail-open; эталон `detour_group_cycle.go:50-77`),
+        точка — `nodesFor` `build_config.dart:658-666` (L2);
+      - кольца по любым рёбрам: ПОЛИТИКА ПРИВЕДЕНА К ЛАУНЧЕРУ — рвать
+        замыкающее ребро по типу (`breakDependencyCycle`, эталон
+        `:348-365`) и деградировать с warning; §254-fatal валидатора
+        остаётся ПОСЛЕДНИМ рубежом для неразруленного (корпус direction/
+        нормативно требует деградации — `chain_cycle_excluded_from_
+        direction.expected.json`). Детекция уже готова: `_cyclicNodes`
+        `validator.dart:339-405`;
+      - пустое Направление → block: УЖЕ ПРАВИЛЬНО (`:709-740`,
+        байт-в-байт `empty_direction_blocks.expected.json`) — закрепить
+        раннером A5, не сломать
+- [ ] A5. Раннер корпуса `contract/corpus/direction/` (55 файлов уже
+      синхронизированы) в `app/test/contract/` по образцу
+      `contract_test.dart` (тот читает только corpus/uri). Не-chain кейсы
+      сразу: empty_direction_blocks, default_filter_first_match,
+      auto_twin_excludes_group_nodes, disabled_direction_skipped,
+      empty_pool_no_warning; chain_* — skip со ссылкой на фазу C
+- [ ] A6. Болезнь мобилы: смена `tag_prefix` подписки не каскадирует
+      (`subscription_detail_screen.dart:796`, `folder_detail_screen.dart:1520`)
+      и молча обнуляет regex `nodeFilter` каналов, написанный под старый
+      префикс (диагностика только постфактум-SnackBar `build_config:721`).
+      Минимум: предупреждение в момент правки префикса при литеральном
+      вхождении старого префикса в фильтры; однозначные вхождения —
+      переписать (образец `clearDetourChannelRefs`, `server_list.dart:646`),
+      неоднозначные не угадывать
 
-## Фаза B — Направления в LX Backup (падающий контрактный тест)
+## Фаза B — LX Backup: Направления + инварианты §1–§3 (падающий контрактный тест)
+
+Разведка 24.08 (скаут backup): мобильный LX Backup — полуфабрикат.
+Применяются ТОЛЬКО rules[] (`backup_screen.dart:417`); vars, route.final,
+subscriptions, foreignExtensions разбираются, показываются в диалоге и
+выбрасываются; servers[] экспортируется пустой оболочкой (без uri/config_json);
+warp[] и dns не реализованы ни в одну сторону (молчаливая потеря — прямое
+нарушение §1/§3 BACKUP.md); per-entity `extensions.<app>` и непонятые поля
+записей не переживают round-trip; Dart-раннер игнорирует поля ожиданий
+`disabled_hashes` и `directions`, которые Go-раннер проверяет
+(`corpus_test.go:205-221`, `:271-309`).
 - [ ] B1. `lib/services/lx_backup.dart`: разбор `directions[]` ПЕРВЫМИ
       (канон → Direction), теги пополняют known до разбора правил;
       занятый тег → warning `backup_direction_exists`, не применяется
@@ -51,6 +98,29 @@
 - [ ] B4. `directions_created_on_import` зелёный → закоммитить
       `app/contract.lock` (до этого lock НЕ коммитить)
 - [ ] B5. UI restore: создание Направлений при импорте (backup_service)
+- [ ] B6. Довести импорт до применения: vars, route.final, subscriptions
+      (сейчас `backup_screen.dart:417` пишет только rules)
+- [ ] B7. foreignExtensions: ключ хранения (BACKUP.md:12 «LxBox — новый
+      ключ allowlist»), сохранение на импорте, возврат в
+      `buildLxBackup(foreignExtensions:)` при экспорте — сейчас круг
+      launcher→LxBox→launcher теряет `extensions.launcher` целиком
+- [ ] B8. warp[] в обе стороны: `WarpAccount.toJson`/`MasqueAccount.toJson`
+      уже есть (`services/warp/`), дискриминатор `type: wg|masque`,
+      merge не перетирает живую регистрацию (эталон `import.go:595-630`);
+      + фикстура warp_roundtrip в корпус (сейчас 0 из 8 кейсов)
+- [ ] B9. dns-секция в обе стороны (kind template|preset|user, final,
+      strategy; эталон `import.go:523-593` — лаунчер этот же баг уже
+      признал и исправил)
+- [ ] B10. Достроить subscriptions[]/servers[]: экспорт disabled-хешей,
+      detour, max_nodes, skip, tag.postfix/mask, update.auto; servers —
+      uri/config_json (сейчас пустая оболочка `lx_backup.dart:199-205`);
+      импорт с разбором полей вместо сырого Map
+- [ ] B11. Per-entity `extensions.<app>` + непонятые поля записей
+      (dns/resolve правил) — переживают round-trip (эталон
+      `import.go:288-322`, `_backup_fields`); корпус-кейс на re-export
+- [ ] B12. Раннер: читать `disabled_hashes` и `directions` из ожиданий
+      (паритет с Go); поправить `corpus/backup/README.md:14` — указан
+      несуществующий раннер
 
 ## Фаза C — цепочки (SPEC 110 мобилы)
 - [ ] C1. Модель `SourceChain` (hops в порядке ПАКЕТА, idle_timeout,
@@ -81,6 +151,30 @@
 - [ ] D2. Если нет — зависимости условий по переменным, точечный rebuild
       (ValueListenable / выборочный setState)
 - [ ] D3. Выключенная строка гасит подпись (visible связь галка→поля)
+- [ ] D4. Load-валидация тела `#enable`: ветка `if (k.startsWith('#'))
+      continue` (`if_engine.dart:600-604`) глотает `#enable` — опечатка в
+      имени var / оба and+or / скаляр грузятся молча (fail-closed спасает
+      от TRUE-вливания, но узел молча исчезает). Проверка `k == enableKey`
+      ПЕРЕД веткой, тем же кодом, что предикаты `#if`
+- [ ] D5. Контрактный рубеж load-валидации: раннер
+      `template_contract_test.dart` не зовёт `validateIfConstructs` вовсе
+      — согласовать с лаунчером формат load-reject-фикстур (контрактная
+      задача ОБЕИХ сторон; Go после 6d43114 в той же ситуации)
+
+## Фаза E — свёртка подписки в группу (SPEC 108 мобилы) — ЖДЁТ РЕШЕНИЯ
+
+Разведка 24.08 (скаут spec108): прямого аналога нет и три из четырёх старых
+флагов лаунчера мобиле не нужны; S3/S4 (группы подписок — не цели правил)
+выполняются by design. Функциональный разрыв один: свернуть подписку в одну
+строку-группу нечем — все узлы падают плоским пулом в селектор канала
+(`build_config.dart:654`), подписка на 500 узлов = 500 строк в UI выбора.
+Продуктовое решение — нужна ли свёртка на мобиле — за оператором.
+Если да: `SubscriptionFold` в `ServerList` по образцу `SourceFold`
+(переиспользовать готовый `DirectionAuto`), группы НЕ хранить — разворачивать
+на каждой сборке (ключ решения лаунчера: переименование при смене префикса
+даром); эмиссия до `baseNodes:654`; взаимодействие с §322 `groupTags`
+(`:676-682` — иначе urltest в urltest); судьба `nodeFilter` для свёрнутой
+подписки; поле в бэкап (ловушка T5 лаунчера).
 
 ## Проверка
 - [ ] `flutter analyze` 0 issues, `flutter test` зелёный целиком
