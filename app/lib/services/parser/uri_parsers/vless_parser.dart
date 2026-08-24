@@ -19,8 +19,8 @@ VlessSpec? parseVless(String uri) {
   final label = decodeFragment(p.fragment);
   final tag = tagFromLabel(label, 'vless', server, port);
 
-  final transport = parseTransport(q);
   final warnings = <NodeWarning>[];
+  final transport = parseTransport(q, warnings: warnings);
   // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
   final tls = normalizeTlsFingerprint(
       parseVlessTls(q, server, port, warnings: warnings), warnings);
@@ -47,7 +47,7 @@ VlessSpec? parseVless(String uri) {
   // на входе, чтобы emit'ить безопасно. См. normalizePacketEncoding.
   if (packetEncoding.isEmpty) {
     final raw = queryParamCI(q, 'packetEncoding') ?? '';
-    packetEncoding = normalizePacketEncoding(raw, tag: tag);
+    packetEncoding = normalizePacketEncoding(raw, tag: tag, warnings: warnings);
   }
 
   if (tls.insecure) warnings.add(const InsecureTlsWarning());

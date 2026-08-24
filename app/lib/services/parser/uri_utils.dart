@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../../models/node_warning.dart';
 import '../app_log.dart';
 
 /// Максимальная длина URI (защита от мусорных base64-бомб). Совпадает с v1.
@@ -238,13 +239,21 @@ bool isTlsInsecure(Map<String, String> q) {
 /// в URI; sing-box принимает только lowercase).
 ///
 /// `tag` — опционально для warning'ов (диагностика проблемной подписки).
-String normalizePacketEncoding(String raw, {String? tag}) {
+/// [warnings] — узловой список: мусорное значение получает
+/// `packet_encoding_unknown` (contract/registry/warnings.json). Пустое и
+/// `none` — «поля нет», не деградация: кода не дают (Go так же).
+String normalizePacketEncoding(
+  String raw, {
+  String? tag,
+  List<NodeWarning>? warnings,
+}) {
   final v = raw.trim().toLowerCase();
   if (v.isEmpty || v == 'none') return '';
   if (v == 'xudp' || v == 'packetaddr') return v;
   AppLog.I.warning(
     "unknown packetEncoding='$raw'${tag != null ? ' in $tag' : ''} — dropping",
   );
+  warnings?.add(PacketEncodingUnknownWarning(raw.trim()));
   return '';
 }
 
@@ -345,6 +354,17 @@ String normalizeRealityShortId(String s) {
   }
   final out = buf.toString();
   return (out.length > 16 || out.length.isOdd) ? '' : out;
+}
+
+/// SPEC 103 `reality_short_id_invalid` — сырое значение `sid` будет
+/// деградировано (не-hex вычищен / всё значение снято). Зеркало Go
+/// `realityShortIDWouldDegrade` (parse_warnings.go:72): непустое сырое
+/// значение, чья нормализация не совпала с `lower(trim(raw))`. Отдельный
+/// предикат, а не флаг из [normalizeRealityShortId], потому что код обязан
+/// встать ДО нормализации — после неё исходного значения уже нет.
+bool realityShortIdWouldDegrade(String raw) {
+  if (raw.isEmpty) return false;
+  return normalizeRealityShortId(raw) != raw.trim().toLowerCase();
 }
 
 /// SPEC 103 D-024 — bare integer (трактуется как секунды) → sing-box

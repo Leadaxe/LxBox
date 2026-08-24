@@ -27,7 +27,8 @@ TuicSpec? parseTuic(String uri) {
   // было в URI вовсе, иначе нормализованное значение (мусор → тоже null, как
   // будто параметра не было — эмиттер тогда не пишет поле, ядро подставит
   // дефолт само).
-  final cc = _normalizeCongestion(q['congestion_control']);
+  final ccRaw = q['congestion_control'];
+  final cc = _normalizeCongestion(ccRaw);
   final urmRaw = q['udp_relay_mode'];
   final urm = urmRaw == null
       ? null
@@ -52,6 +53,12 @@ TuicSpec? parseTuic(String uri) {
   );
 
   final warnings = <NodeWarning>[];
+  // SPEC 103 `tuic_congestion_invalid` (Go: node_parser_tuic.go:73) — значение
+  // вне {cubic, new_reno, bbr} снимается, ядро подставит свой дефолт. Пустое
+  // значение = «не задано», деградацией не считается.
+  if (ccRaw != null && ccRaw.trim().isNotEmpty && cc == null) {
+    warnings.add(TuicCongestionInvalidWarning(ccRaw.trim()));
+  }
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
   // §103 D-024 — heartbeat: голое число (секунды) → duration-строка с

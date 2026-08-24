@@ -13,10 +13,13 @@ import 'uri_utils.dart';
 /// [networkOverride] — если транспорт лежит под другим ключом, чем `type`
 /// (VMess хранит в `network`). [defaultHost] — fallback для h2 когда
 /// `q['host']`/`q['sni']` пусты.
+/// [warnings] — узловой список: конверсия Xray-хвоста `?ed=N` в пути ws
+/// получает `ws_early_data_converted` (contract/registry/warnings.json).
 TransportSpec? parseTransport(
   Map<String, String> q, {
   String? networkOverride,
   String? defaultHost,
+  List<NodeWarning>? warnings,
 }) {
   var typ = ((networkOverride ?? q['type']) ?? '').toLowerCase().trim();
   final headerType = (q['headerType'] ?? '').toLowerCase().trim();
@@ -63,6 +66,12 @@ TransportSpec? parseTransport(
       if (eh == null && edFromPath != null) {
         eh = 'Sec-WebSocket-Protocol';
         ehImplicit = true;
+      }
+      // SPEC 103 `ws_early_data_converted` — путь в конфиг уехал НЕ буквально.
+      // Ровно path-tail форма: плоские `ed=`/`eh=` конверсией не считаются
+      // (Go: noteWSEarlyDataConverted читает только хвост пути).
+      if (edFromPath != null) {
+        warnings?.add(WsEarlyDataConvertedWarning(edFromPath));
       }
       return WsTransport(
         path: path,
@@ -378,13 +387,19 @@ TlsSpec parseVlessTls(
   // TLS, а не отравляем reality.public_key и весь config.json. См.
   // isValidRealityPublicKey.
   if (isValidRealityPublicKey(pbk)) {
+    // SPEC 103 `reality_short_id_invalid` — код ставится ДО нормализации:
+    // после неё исходного значения уже нет, а узел уехал бы с чужим sid.
+    final rawSid = q['sid'] ?? '';
+    if (warnings != null && realityShortIdWouldDegrade(rawSid)) {
+      warnings.add(RealityShortIdInvalidWarning(rawSid.trim()));
+    }
     return TlsSpec(
       enabled: true,
       serverName: sni,
       fingerprint: fp,
       reality: RealitySpec(
         publicKey: pbk,
-        shortId: normalizeRealityShortId(q['sid'] ?? ''),
+        shortId: normalizeRealityShortId(rawSid),
       ),
       insecure: isTlsInsecure(q),
       alpn: alpnFromQuery(q),

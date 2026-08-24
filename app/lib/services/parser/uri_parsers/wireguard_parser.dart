@@ -1,4 +1,5 @@
 import '../../../models/node_spec.dart';
+import '../../../models/node_warning.dart';
 import '../uri_utils.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -89,12 +90,19 @@ WireguardSpec? parseWireguardUri(String uri) {
   // обычный WG без явного mtu= в URI поле не эмитим вовсе — ядро само
   // ставит 1408 (transport/wireguard/endpoint.go), свой дефолт спорит с ним
   // и ломает identity-хеш (CANON §2.4).
-  final awg = Awg.fromQuery(q);
+  // SPEC 103 `awg_header_invalid` — битый magic-header снимается, ядро берёт
+  // WireGuard-дефолт: handshake уходит, ответа нет (тихо сломанный узел).
+  final badHeaders = <(String, String)>[];
+  final awg = Awg.fromQuery(q, badHeaders: badHeaders);
   final rawMtu = int.tryParse(q['mtu'] ?? '');
   final mtu = awg != null ? awgClampMtu(rawMtu, tag) : rawMtu;
 
   return WireguardSpec(
     id: newUuidV4(),
+    warnings: [
+      for (final (field, value) in badHeaders)
+        AwgHeaderInvalidWarning(field, value),
+    ],
     tag: tag,
     label: label,
     server: p.host,

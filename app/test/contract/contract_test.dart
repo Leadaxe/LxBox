@@ -55,6 +55,14 @@ const _warningCodes = <Type, String>{
   DetourChainTooDeepWarning: 'detour_chain_too_deep',
   SelectorAsAutoWarning: 'selector_as_auto',
   GroupMemberMissingWarning: 'group_member_missing',
+  WsEarlyDataConvertedWarning: 'ws_early_data_converted',
+  RealityShortIdInvalidWarning: 'reality_short_id_invalid',
+  NaivePaddingIgnoredWarning: 'naive_padding_ignored',
+  TuicCongestionInvalidWarning: 'tuic_congestion_invalid',
+  AwgHeaderInvalidWarning: 'awg_header_invalid',
+  MasqueVhttpInvalidWarning: 'masque_vhttp_invalid',
+  AnyTlsMinIdleInvalidWarning: 'anytls_min_idle_invalid',
+  PacketEncodingUnknownWarning: 'packet_encoding_unknown',
 };
 
 /// Читает URI из фикстуры: последняя непустая строка, не начинающаяся с '#'
@@ -90,10 +98,15 @@ Map<String, dynamic> _canonNode(NodeSpec spec) {
     node['chain'] = [_canonNode(spec.chained!)];
   }
 
+  // CANON §6 — конверт несёт КОДЫ, и каждый код в списке ровно один раз:
+  // зеркало Go `ParsedNode.AddWarning` (configtypes/types.go:548), который
+  // отбрасывает повтор. Dart-предупреждения при этом остаются пофакторными
+  // (два битых AWG-заголовка = два разных сообщения пользователю), но код
+  // деградации у них общий.
   final codes = <String>[];
   for (final w in spec.warnings) {
     final code = _warningCodes[w.runtimeType];
-    if (code != null) codes.add(code);
+    if (code != null && !codes.contains(code)) codes.add(code);
   }
   if (codes.isNotEmpty) node['warnings'] = codes;
 

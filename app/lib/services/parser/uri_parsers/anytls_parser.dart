@@ -39,6 +39,14 @@ AnyTlsSpec? parseAnyTls(String uri) {
 
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
+  // SPEC 103 `anytls_min_idle_invalid` — не неотрицательное целое: поле
+  // снимается (ядро подставит дефолт), узел живёт. Go: node_parser_anytls.go:40.
+  final minIdleRaw = (q['min_idle_session'] ?? '').trim();
+  final minIdle = int.tryParse(minIdleRaw);
+  if (minIdleRaw.isNotEmpty && (minIdle == null || minIdle < 0)) {
+    warnings.add(AnyTlsMinIdleInvalidWarning(minIdleRaw));
+  }
+
   return AnyTlsSpec(
     id: newUuidV4(),
     tag: tag,
@@ -54,7 +62,7 @@ AnyTlsSpec? parseAnyTls(String uri) {
     idleSessionCheckInterval:
         normalizeSingboxDuration(q['idle_session_check_interval'] ?? ''),
     idleSessionTimeout: normalizeSingboxDuration(q['idle_session_timeout'] ?? ''),
-    minIdleSession: int.tryParse(q['min_idle_session'] ?? ''),
+    minIdleSession: (minIdle != null && minIdle >= 0) ? minIdle : null,
     warnings: warnings,
   );
 }

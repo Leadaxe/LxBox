@@ -1,4 +1,5 @@
 import '../../../models/node_spec.dart';
+import '../../../models/node_warning.dart';
 import '../uri_utils.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -53,9 +54,13 @@ MasqueSpec? parseMasqueUri(String uri) {
       vhttpRaw.isNotEmpty ? vhttpRaw : 'h3';
   // SPEC 103 п.5 — невалидное значение форсится в h3 (node_parser_masque.go:
   // vhttp != "h3" && vhttp != "h2" → forcing h3), а не пропускается как есть.
-  final vhttp = (vhttpPicked == 'h3' || vhttpPicked == 'h2')
-      ? vhttpPicked
-      : 'h3';
+  final warnings = <NodeWarning>[];
+  final vhttpValid = vhttpPicked == 'h3' || vhttpPicked == 'h2';
+  final vhttp = vhttpValid ? vhttpPicked : 'h3';
+  // SPEC 103 `masque_vhttp_invalid` — форс h3 виден пользователю, а не только
+  // в логе лаунчера. Реестр помечает код «Desktop-протокол, в LxBox нет» —
+  // запись протухла: masque в LxBox есть (см. отчёт).
+  if (!vhttpValid) warnings.add(MasqueVhttpInvalidWarning(vhttpPicked));
   final sni = (q['sni'] ?? '').trim(); // server_name-алиас снесён (0.8.0)
   final disableSni = q['disable_sni'] == '1' || q['disable_sni'] == 'true';
   final mtu = int.tryParse(q['mtu'] ?? '') ?? 1280;
@@ -82,5 +87,6 @@ MasqueSpec? parseMasqueUri(String uri) {
     mtu: mtu,
     idleTimeout: idleTimeout,
     keepAlive: keepAlive,
+    warnings: warnings,
   );
 }

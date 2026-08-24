@@ -87,6 +87,15 @@ void main() {
         DetourChainTooDeepWarning() => 'detour_deep',
         SelectorAsAutoWarning() => 'selector_as_auto',
         GroupMemberMissingWarning() => 'group_member_missing',
+        // SPEC 103 — деградации, помеченные кодом на обеих сторонах контракта
+        WsEarlyDataConvertedWarning() => 'ws_early_data_converted',
+        RealityShortIdInvalidWarning() => 'reality_short_id_invalid',
+        NaivePaddingIgnoredWarning() => 'naive_padding_ignored',
+        TuicCongestionInvalidWarning() => 'tuic_congestion_invalid',
+        AwgHeaderInvalidWarning() => 'awg_header_invalid',
+        MasqueVhttpInvalidWarning() => 'masque_vhttp_invalid',
+        AnyTlsMinIdleInvalidWarning() => 'anytls_min_idle_invalid',
+        PacketEncodingUnknownWarning() => 'packet_encoding_unknown',
       };
       expect(label, 'transport');
     });

@@ -1,4 +1,5 @@
 import '../../../models/node_spec.dart';
+import '../../../models/node_warning.dart';
 import '../../../models/tls_spec.dart';
 import '../../app_log.dart';
 import '../uri_utils.dart';
@@ -47,11 +48,15 @@ NaiveSpec? parseNaive(String uri, {bool isQuic = false}) {
   final label = decodeFragment(p.fragment);
   final tag = tagFromLabel(label, 'naive', server, port);
 
-  // padding не имеет соответствия в sing-box — silently drop с log-warn.
+  // padding не имеет соответствия в sing-box — дропаем.
+  // SPEC 103 `naive_padding_ignored` (Go: node_parser_core.go:384) — раньше
+  // только лог; пользователь не узнавал, что параметр его подписки отброшен.
+  final warnings = <NodeWarning>[];
   if (q.containsKey('padding')) {
     AppLog.I.warning(
       "naive: 'padding' parameter has no sing-box equivalent, ignoring",
     );
+    warnings.add(NaivePaddingIgnoredWarning(q['padding'] ?? ''));
   }
 
   // Незнакомые query — лог + игнор.
@@ -80,6 +85,7 @@ NaiveSpec? parseNaive(String uri, {bool isQuic = false}) {
     tls: tls,
     extraHeaders: headers,
     quic: isQuic,
+    warnings: warnings,
   );
 }
 

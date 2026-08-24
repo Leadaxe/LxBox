@@ -758,6 +758,9 @@
   "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the directions' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on.": {
     "value": "Усыплять и туннели активного маршрута (члены пула, выбранный узел) после долгого затишья — например, за ночь. Первое соединение после сна будет дольше примерно на один RTT. Держите значение не меньше тайм-аута простоя Направлений (по умолчанию 30 минут). Требует включённой настройки «Усыплять неактивные туннели»."
   },
+  "AmneziaWG header \"%1$s=%2$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.": {
+    "value": "Заголовок AmneziaWG «%1$s=%2$s» — не число и не диапазон «нижняя-верхняя», поэтому отброшен. Ядро возьмёт обычный заголовок WireGuard, и рукопожатие может не совпасть с сервером."
+  },
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ требует это разрешение для SSID. Нажмите, чтобы выдать."
   },
@@ -781,6 +784,9 @@
   },
   "Any — tap Edit to filter by network / L7 protocol": {
     "value": "Любой — нажмите «Изменить», чтобы фильтровать по сети / L7-протоколу"
+  },
+  "AnyTLS \"min_idle_session=%s\" is not a non-negative whole number — the setting was dropped and the core default applies.": {
+    "value": "В AnyTLS «min_idle_session=%s» — не целое неотрицательное число, поэтому настройка отброшена; действует значение ядра по умолчанию."
   },
   "Anything above is red.": {
     "value": "Всё, что выше, — красный."
@@ -2495,6 +2501,9 @@
   "L×Box runs as a foreground service while VPN is active. A persistent notification is required by Android — it lets you see at a glance that VPN is on, and prevents the system from killing the tunnel in the background.\n\nNo promotional or alert notifications will be sent.": {
     "value": "Пока VPN активен, L×Box работает как foreground-сервис. Android требует для него постоянное уведомление — по нему видно, что VPN включён, и система не закрывает туннель в фоне.\n\nРекламных и прочих оповещений не будет."
   },
+  "MASQUE HTTP version \"%s\" is neither h3 nor h2 — h3 was used instead.": {
+    "value": "Версия HTTP «%s» для MASQUE — не h3 и не h2, поэтому использован h3."
+  },
   "MASQUE registration failed": {
     "value": "Не удалось зарегистрировать MASQUE"
   },
@@ -2594,6 +2603,9 @@
   },
   "NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).": {
     "value": "NaïveProxy не входит в эту сборку libbox (пересоберите с -tags with_naive_outbound)."
+  },
+  "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.": {
+    "value": "У параметра NaïveProxy «padding=%s» нет соответствия в ядре, поэтому он проигнорирован. Узел остаётся рабочим."
   },
   "Nearby Wi-Fi devices": {
     "value": "Устройства Wi-Fi поблизости"
@@ -2970,6 +2982,9 @@
   "PARAMETERS": {
     "value": "ПАРАМЕТРЫ"
   },
+  "Packet encoding \"%s\" is not one the core knows (xudp, packetaddr), so it was dropped — keeping it would crash the core.": {
+    "value": "Упаковка пакетов «%s» ядру неизвестна (оно знает xudp и packetaddr), поэтому отброшена: иначе ядро аварийно завершилось бы."
+  },
   "Parallel — race every query": "Parallel — каждый запрос гонкой",
   "Params": {
     "value": "Параметры"
@@ -3234,6 +3249,9 @@
   },
   "Quit & reopen app?": {
     "value": "Закрыть и снова открыть приложение?"
+  },
+  "REALITY short id \"%s\" is not valid hex, so it was dropped (keeping it would break the whole config). The node connects without a short id.": {
+    "value": "Короткий идентификатор REALITY «%s» — не корректный hex, поэтому отброшен (иначе сломался бы весь конфиг). Узел подключится без короткого идентификатора."
   },
   "Range %1$d..%2$d": {
     "value": "Диапазон %1$d..%2$d"
@@ -4025,6 +4043,9 @@
   "TLS server name (SNI) — optional": {
     "value": "Имя сервера TLS (SNI) — необязательно"
   },
+  "TUIC congestion control \"%s\" is not one of cubic, new_reno, bbr — the setting was dropped and the core default applies.": {
+    "value": "Управление перегрузкой TUIC «%s» не входит в набор cubic, new_reno, bbr, поэтому настройка отброшена; действует значение ядра по умолчанию."
+  },
   "Tag": {
     "value": "Тег"
   },
@@ -4455,6 +4476,9 @@
   },
   "Web page": {
     "value": "Сайт"
+  },
+  "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.": {
+    "value": "Ранние данные WebSocket «?ed=%d» перенесены из пути в отдельное поле, как требует ядро. Узел работает, но путь в конфиге отличается от указанного в ссылке."
   },
   "What goes into this direction": {
     "value": "Что входит в Направление"

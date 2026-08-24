@@ -72,13 +72,14 @@ VmessSpec? _vmessFromJson(Map<String, dynamic> cfg, String rawUri) {
     if (net == 'xhttp' && cfg['mode'] != null)
       'mode': cfg['mode'].toString(),
   };
+  final warnings = <NodeWarning>[];
   final transport = parseTransport(
     q,
     networkOverride: net,
     defaultHost: server,
+    warnings: warnings,
   );
 
-  final warnings = <NodeWarning>[];
   // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
   final tls = normalizeTlsFingerprint(parseVmessTls(cfg, server, net), warnings);
 
@@ -131,7 +132,12 @@ VmessSpec? _vmessLegacy(String s, String fragment, String rawUri) {
 
   // Go: query `type=` (folded case) maps to `network`.
   final net = (q['type'] ?? '').toLowerCase().trim();
-  final transport = parseTransport(q, networkOverride: net.isEmpty ? null : net);
+  final warnings = <NodeWarning>[];
+  final transport = parseTransport(
+    q,
+    networkOverride: net.isEmpty ? null : net,
+    warnings: warnings,
+  );
 
   // Go: tls=1/true/tls → tls_enabled, sni fallback chain sni→peer→server.
   final tlsRaw = (q['tls'] ?? '').toLowerCase().trim();
@@ -140,7 +146,6 @@ VmessSpec? _vmessLegacy(String s, String fragment, String rawUri) {
   if (sni.isEmpty) sni = (q['peer'] ?? '').trim();
   if (sni.isEmpty) sni = host;
   final fp = (q['fp'] ?? '').toLowerCase().trim();
-  final warnings = <NodeWarning>[];
   final tls = tlsEnabled
       ? normalizeTlsFingerprint(
           TlsSpec(

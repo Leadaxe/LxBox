@@ -697,14 +697,26 @@ class Awg {
   /// Из URI query (строки). Числа → `int.tryParse` (битое → пропуск поля, не
   /// валим парс — forward-compat, как mtu/keepalive). h1–h4 дополнительно
   /// принимают диапазон `N-M` (§112). `i*` пустые пропускаем.
-  static Awg? fromQuery(Map<String, String> q) {
+  /// [badHeaders] — SPEC 103 `awg_header_invalid`: сюда собираются пары
+  /// (поле, сырое значение) для h1–h4, чьё значение не uint32 и не диапазон.
+  /// Только magic-headers: битые jc/jmin/jmax/s1–s4 Go роняет молча (эталон
+  /// `applyAWGFields`, node_parser_wireguard.go) — тихий дефолт там не ломает
+  /// handshake, а у заголовка ломает.
+  static Awg? fromQuery(
+    Map<String, String> q, {
+    List<(String, String)>? badHeaders,
+  }) {
     final f = <String, Object>{};
     for (final k in numKeys) {
       final v = q[k];
       if (v == null) continue;
       if (headerKeys.contains(k)) {
         final h = _parseHeader(v.trim());
-        if (h != null) f[k] = h;
+        if (h != null) {
+          f[k] = h;
+        } else if (v.trim().isNotEmpty) {
+          badHeaders?.add((k, v.trim()));
+        }
         continue;
       }
       final n = int.tryParse(v.trim());
