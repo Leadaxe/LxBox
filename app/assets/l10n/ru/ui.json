@@ -3103,6 +3103,12 @@
   "Port 1..65535": {
     "value": "Порт 1..65535"
   },
+  "Position %s is MASQUE with fixed h3: QUIC through the previous hop may hang. Set vhttp: auto (or h2) on the node.": {
+    "value": "Позиция %s — MASQUE с фиксированным h3: QUIC через предыдущий хоп может повиснуть. Включите у узла vhttp: auto (или h2)."
+  },
+  "Position %s is WireGuard behind a TCP hop: the previous server must actually proxy UDP, otherwise the handshake goes nowhere.": {
+    "value": "Позиция %s — WireGuard за TCP-хопом: сервер предыдущей позиции должен реально проксировать UDP, иначе хендшейк уходит в никуда."
+  },
   "Position %s is used more than once — the core rejects a chain with repeats.": {
     "value": "Позиция %s встречается больше одного раза — цепочку с повторами ядро отвергает."
   },

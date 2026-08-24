@@ -55,6 +55,16 @@ enum ChainIssueCode {
   /// Вложенная цепочка НЕ на позиции 0.
   nestedNotFirst,
 
+  /// MASQUE с фиксированным `vhttp: h3` позицией ≥1: QUIC через предыдущий
+  /// хоп может повиснуть без бюджета хендшейка (SPEC 074 ядра). `auto`/`h2`
+  /// легальны и подсказки не получают (директива оператора 25.08).
+  masqueFixedH3OnLink,
+
+  /// WireGuard позицией ≥1 за TCP-хопом: у WG нет TCP-ноги, сервер
+  /// предыдущей позиции обязан реально проксировать UDP — negative-ack в
+  /// протоколах не существует, отказ выглядит чёрной дырой.
+  wgBehindTcpHop,
+
   /// Позиция — цепочка, объявленная НИЖЕ по списку (ссылка вперёд).
   forwardChainReference,
 
@@ -367,6 +377,43 @@ List<ChainFormIssue> validateChainForm(
         "as shown.", _list(detoured)),
       hops: detoured,
     ));
+  }
+
+  // §393/SPEC 074 — грабли живых прогонов 24-25.08, ловим до запуска.
+  // TCP-транспортные протоколы, через которые UDP-туннелю ехать некуда,
+  // если сервер не проксирует UDP. Направления/группы/цепочки предыдущей
+  // позицией — молчим: их фактический выход переменный.
+  const tcpHops = {
+    'vless', 'vmess', 'trojan', 'shadowsocks', 'socks', 'http',
+    'anytls', 'naive', 'shadowtls',
+  };
+  for (var i = 1; i < hops.length; i++) {
+    final c = ctx.candidates[hops[i]];
+    if (c == null) continue;
+    if (c.outboundType == 'masque' && c.masqueVhttp == 'h3') {
+      soft.add(ChainFormIssue(
+        code: ChainIssueCode.masqueFixedH3OnLink,
+        level: ChainIssueLevel.warning,
+        message: getLocalText.s(
+            "Position %s is MASQUE with fixed h3: QUIC through the previous "
+            "hop may hang. Set vhttp: auto (or h2) on the node.", hops[i]),
+        hops: [hops[i]],
+      ));
+    }
+    final prev = ctx.candidates[hops[i - 1]];
+    if (c.outboundType == 'wireguard' &&
+        prev != null &&
+        tcpHops.contains(prev.outboundType)) {
+      soft.add(ChainFormIssue(
+        code: ChainIssueCode.wgBehindTcpHop,
+        level: ChainIssueLevel.warning,
+        message: getLocalText.s(
+            "Position %s is WireGuard behind a TCP hop: the previous server "
+            "must actually proxy UDP, otherwise the handshake goes nowhere.",
+            hops[i]),
+        hops: [hops[i]],
+      ));
+    }
   }
 
   return [...blocking, ...soft];

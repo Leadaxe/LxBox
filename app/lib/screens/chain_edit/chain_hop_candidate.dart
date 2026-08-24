@@ -46,6 +46,7 @@ class ChainHopCandidate {
     this.reality = false,
     this.detour = false,
     this.outboundType = '',
+    this.masqueVhttp = '',
   });
 
   /// Тег outbound'а — то, что уедет в `outbounds[]` цепочки.
@@ -73,6 +74,12 @@ class ChainHopCandidate {
   /// `rewrite`, ключ которой это тип протокола, и опечатка в нём означает
   /// правило, которое молча не применяется.
   final String outboundType;
+
+  /// Для `type: masque` — версия HTTP (`h3`/`h2`/`auto`), иначе ''.
+  /// Нужна подсказке формы: ФИКСИРОВАННЫЙ h3 позицией ≥1 шлёт QUIC через
+  /// предыдущий хоп без бюджета хендшейка (SPEC 074) — может повиснуть;
+  /// `auto`/`h2` легальны и молчат (директива оператора 25.08).
+  final String masqueVhttp;
 }
 
 /// Быстрый доступ к кандидату по тегу.

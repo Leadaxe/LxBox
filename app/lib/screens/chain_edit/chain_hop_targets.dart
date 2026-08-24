@@ -96,6 +96,9 @@ List<ChainHopCandidate> collectChainHopTargets({
       reality: n.securityLabel != null && n.securityLabel!.startsWith('Reality'),
       detour: (n.detour ?? '').isNotEmpty,
       outboundType: n.type,
+      // transportLabel у masque — это и есть vhttp ('h3'/'h2'/'auto',
+      // пусто → дефолт ядра h3), см. ConfigNode._deriveTransport.
+      masqueVhttp: n.type == 'masque' ? (n.transportLabel ?? 'h3') : '',
     ));
   }
   nodes.sort((a, b) => a.tag.compareTo(b.tag));
