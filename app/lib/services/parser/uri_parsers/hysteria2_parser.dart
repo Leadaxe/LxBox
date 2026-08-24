@@ -89,6 +89,12 @@ Hysteria2Spec? parseHysteria2(String uri) {
       : q['alpn']!.split(',').map((e) => e.trim()).toList();
 
   final warnings = <NodeWarning>[];
+  // §103/D-078 — пиннинг сертификата: `pinSHA256=` → tls.
+  // certificate_public_key_sha256 (паритет с лаунчером,
+  // node_parser_hysteria2.go:120). Молча терять параметр = поднимать
+  // соединение слабее, чем обещала подписка: пиннинг это защита от подмены
+  // сертификата, а не косметика. На QUIC валиден (в отличие от utls/reality).
+  final pin = (q['pinSHA256'] ?? q['pinsha256'] ?? '').trim();
   // §281 — fp вне словаря ядра = fatal всего конфига (hysteria2 идёт через
   // тот же tls.NewClient ядра); канонизируем на входе.
   final tls = normalizeTlsFingerprint(
@@ -98,6 +104,7 @@ Hysteria2Spec? parseHysteria2(String uri) {
       fingerprint: fp.isEmpty ? null : fp,
       insecure: isTlsInsecure(q),
       alpn: alpn,
+      certificatePublicKeySha256: pin.isEmpty ? const [] : [pin],
     ),
     warnings,
   );

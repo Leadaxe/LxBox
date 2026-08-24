@@ -10,6 +10,14 @@ class TlsSpec {
   final String? fingerprint; // utls: chrome, firefox, safari, etc.
   final RealitySpec? reality;
 
+  /// §103/D-078 — пиннинг сертификата (`pinSHA256=` в URI подписки →
+  /// `tls.certificate_public_key_sha256`). Base64 SHA-256 публичного ключа;
+  /// список — сервер вправе ротировать ключи. ЗАЩИТА ОТ ПОДМЕНЫ: молча
+  /// терять параметр значило поднимать соединение слабее, чем обещала
+  /// подписка (паритет с лаунчером, outbound_generator.go:496).
+  /// В отличие от utls/reality, на QUIC валиден — не срезается.
+  final List<String> certificatePublicKeySha256;
+
   const TlsSpec({
     required this.enabled,
     this.serverName,
@@ -17,6 +25,7 @@ class TlsSpec {
     this.insecure = false,
     this.fingerprint,
     this.reality,
+    this.certificatePublicKeySha256 = const [],
   });
 
   static const disabled = TlsSpec(enabled: false);
@@ -39,6 +48,10 @@ class TlsSpec {
     }
     if (alpn.isNotEmpty) m['alpn'] = List<String>.from(alpn);
     if (insecure) m['insecure'] = true;
+    if (certificatePublicKeySha256.isNotEmpty) {
+      m['certificate_public_key_sha256'] =
+          List<String>.from(certificatePublicKeySha256);
+    }
     if (!quic && fingerprint != null && fingerprint!.isNotEmpty) {
       m['utls'] = {'enabled': true, 'fingerprint': fingerprint};
     }
@@ -55,6 +68,7 @@ class TlsSpec {
     bool? insecure,
     String? fingerprint,
     RealitySpec? reality,
+    List<String>? certificatePublicKeySha256,
   }) =>
       TlsSpec(
         enabled: enabled ?? this.enabled,
@@ -63,6 +77,8 @@ class TlsSpec {
         insecure: insecure ?? this.insecure,
         fingerprint: fingerprint ?? this.fingerprint,
         reality: reality ?? this.reality,
+        certificatePublicKeySha256:
+            certificatePublicKeySha256 ?? this.certificatePublicKeySha256,
       );
 
   @override
