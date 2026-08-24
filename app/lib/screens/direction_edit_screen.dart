@@ -214,18 +214,19 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
                 !_sameSticky(s.auto!.stickyHash, i.auto!.stickyHash)));
   }
 
-  /// §393 A3 — секция «Include other directions»: чекбокс на каждое
-  /// Направление ВЫШЕ текущего. Пустой список кандидатов → пустая секция
-  /// (у самого верхнего включать нечего, и заголовок над пустотой только
-  /// сбивал бы с толку).
+  /// §393 A3 — подсекция «Other directions» внутри блока состава: чекбокс на
+  /// каждое Направление ВЫШЕ текущего. Пустой список кандидатов → подсекции
+  /// нет вовсе, вместе с разделителем и заголовком (у самого верхнего
+  /// включать нечего, и заголовок над пустотой только сбивал бы с толку).
   List<Widget> _includeSection(ColorScheme cs) {
     if (widget.directionsAbove.isEmpty) return const [];
     return [
-      const SizedBox(height: 8),
-      Text(getLocalText.s("Include other directions"),
+      const Divider(height: 20),
+      Text(getLocalText.s("Other directions"),
           style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
       Text(getLocalText.s("only directions listed above this one"),
           style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+      const SizedBox(height: 4),
       for (final d in widget.directionsAbove)
         CheckboxListTile(
           dense: true,
@@ -316,7 +317,8 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final c = widget.initial;
     final dirty = _isDirty();
 
@@ -401,6 +403,15 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
             ),
             const SizedBox(height: 8),
 
+            // ── Блок 1: СОСТАВ. Всё, что окажется опциями селектора этого
+            // Направления, — одним блоком и в порядке сверху вниз:
+            // direct-out, block, другие Направления. Раньше эти три галки
+            // шли вперемешку с ролью (detour) и поведением при switch, и
+            // юзер не видел, что это один и тот же список опций.
+            _sectionHeader(
+                theme,
+                getLocalText.s("What goes into this direction"),
+                getLocalText.s("options offered in the selector")),
             CheckboxListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
@@ -408,9 +419,35 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
               visualDensity: VisualDensity.compact,
               title: Text(getLocalText.s("Include direct-out"),
                   style: const TextStyle(fontSize: 14)),
+              subtitle: Text(getLocalText.s("direct connection option in the selector"),
+                  style: const TextStyle(fontSize: 11)),
               value: _includeDirect,
               onChanged: (v) => setState(() => _includeDirect = v ?? false),
             ),
+            CheckboxListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              visualDensity: VisualDensity.compact,
+              title: Text(getLocalText.s("Include block"),
+                  style: const TextStyle(fontSize: 14)),
+              subtitle: Text(getLocalText.s("drop traffic option in the selector"),
+                  style: const TextStyle(fontSize: 11)),
+              value: _includeBlock,
+              onChanged: (v) => setState(() => _includeBlock = v ?? false),
+            ),
+            // §393 A3 — другие Направления опциями этого. Показываем ТОЛЬКО
+            // стоящие выше по списку: порядок эмиссии исключает циклы, а
+            // ссылка вниз была бы forward-ref, который ядро не принимает.
+            // У самого верхнего Направления кандидатов нет → подсекции нет.
+            ...(_includeSection(cs)),
+            const SizedBox(height: 12),
+
+            // ── Блок 2: ПОВЕДЕНИЕ. Роль самого Направления (detour-мишень) и
+            // что происходит с живыми соединениями при переключении — другая
+            // ось, чем состав, поэтому отдельной секцией.
+            _sectionHeader(theme, getLocalText.s("Behavior"),
+                getLocalText.s("how this direction acts when used")),
             // §248/§274 — detour-флаг = разрешение выбирать Направление как
             // detour-мишень; роль в правилах ортогональна. vpn-1 — главный
             // Направление и heal-резерв, detour для него запрещён → галку не
@@ -436,23 +473,6 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
                       _labelCtrl.text.trim(), _isDetour);
                 }),
               ),
-            CheckboxListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              visualDensity: VisualDensity.compact,
-              title: Text(getLocalText.s("Include block"),
-                  style: const TextStyle(fontSize: 14)),
-              subtitle: Text(getLocalText.s("drop traffic option in the selector"),
-                  style: const TextStyle(fontSize: 11)),
-              value: _includeBlock,
-              onChanged: (v) => setState(() => _includeBlock = v ?? false),
-            ),
-            // §393 A3 — другие Направления опциями этого. Показываем ТОЛЬКО
-            // стоящие выше по списку: порядок эмиссии исключает циклы, а
-            // ссылка вниз была бы forward-ref, который ядро не принимает.
-            // У самого верхнего Направления кандидатов нет → секции нет.
-            ...(_includeSection(cs)),
             CheckboxListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
@@ -690,6 +710,34 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
   Widget _previewLine(ColorScheme cs, String text) => Text(
         text,
         style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+      );
+
+  /// Заголовок смысловой группы формы. Идиома проекта — та же, что в
+  /// [node_settings_screen.dart] и `custom_rule_edit/widgets/section_header`:
+  /// titleSmall в primary + подпись onSurfaceVariant + Divider под ними.
+  /// Отступы свои: тут ListView уже даёт горизонтальный padding 16.
+  Widget _sectionHeader(ThemeData theme, String title, String description) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              description,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const Divider(),
+          ],
+        ),
       );
 
   // ── §208 — balancer-контролы (round_robin) ──
