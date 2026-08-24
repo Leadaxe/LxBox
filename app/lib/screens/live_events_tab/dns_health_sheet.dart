@@ -5,7 +5,7 @@
 // живой связи. Лист НЕ меняет настройки молча — он объясняет, что можно сделать,
 // и ведёт в нужный экран, где юзер решает сам:
 //
-//   • Open DNS settings — DNS-серверы (их outbound-канал) + final resolver.
+//   • Open DNS settings — DNS-серверы (их outbound-Направление) + final resolver.
 //   • Enable FakeIP — каталог пресетов (таб Presets в Routing), где юзер
 //     добавляет FakeIP. Кнопка видна, только пока пресет не активирован.
 //
@@ -136,7 +136,7 @@ class _DnsHealthSheetState extends State<_DnsHealthSheet> {
             ),
             const SizedBox(height: 8),
             Text(
-              getLocalText.s("Names are not resolving while the connection is alive — the DNS path looks blocked. In DNS settings you can:\n  • route your DNS servers through the VPN — set their outbound to a channel so queries go inside the tunnel;\n  • switch the final resolver to your operator's DNS — works everywhere, but your operator sees every domain.\nFakeIP resolves names inside the tunnel with placeholder IPs — no pre-tunnel DNS leaks."),
+              getLocalText.s("Names are not resolving while the connection is alive — the DNS path looks blocked. In DNS settings you can:\n  • route your DNS servers through the VPN — set their outbound to a direction so queries go inside the tunnel;\n  • switch the final resolver to your operator's DNS — works everywhere, but your operator sees every domain.\nFakeIP resolves names inside the tunnel with placeholder IPs — no pre-tunnel DNS leaks."),
               style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 16),

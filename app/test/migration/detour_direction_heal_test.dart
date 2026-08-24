@@ -4,19 +4,19 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
-/// §248/§274 — storage-heal ссылок при смене detour-роли канала (Решение B
+/// §248/§274 — storage-heal ссылок при смене detour-роли Направления (Решение B
 /// §202, необратимо): flag-unset/disable/delete → detour-ссылки
 /// (overrideDetour одиночки/подписки/папки + FolderMember.detour) → '';
 /// disable/delete дополнительно лечат rules-ссылки (route_final/правила) →
-/// vpn-1. Flag-SET ничего НЕ лечит (§274: флаг — разрешение, канал остаётся
-/// целью правил). Ссылка «на канал» = tag ИЛИ `<tag>-auto`. Интра-омонимы
+/// vpn-1. Flag-SET ничего НЕ лечит (§274: флаг — разрешение, Направление остаётся
+/// целью правил). Ссылка «на Направление» = tag ИЛИ `<tag>-auto`. Интра-омонимы
 /// (значение = bare-тег члена той же папки) пропускаются. Harness — как
-/// channel_heal_refs_test.dart.
+/// direction_heal_refs_test.dart.
 void main() {
   late Directory tmp;
   const channel = MethodChannel('plugins.flutter.io/path_provider');
@@ -48,15 +48,15 @@ void main() {
   String memberRaw(String name) =>
       'vless://u-$name@h.com:443?type=ws&security=tls#$name';
 
-  /// Storage: detour-канал vpn-3 + detour-ссылки на него всех четырёх видов
+  /// Storage: detour-Направление vpn-3 + detour-ссылки на него всех четырёх видов
   /// (одиночка tag, подписка autoTag, папка policy+member) + папка-омоним
   /// (член с bare-тегом 'vpn-3': её ссылки — интра, heal их не трогает).
   Future<void> seedDetourRefsOnVpn3({bool vpn3Detour = true}) async {
     final data = {
       'channels_migrated': true,
       'channels': [
-        const Channel(tag: 'vpn-1', label: 'Main').toJson(),
-        Channel(tag: 'vpn-3', label: 'Relay', isDetour: vpn3Detour).toJson(),
+        const Direction(tag: 'vpn-1', label: 'Main').toJson(),
+        Direction(tag: 'vpn-3', label: 'Relay', isDetour: vpn3Detour).toJson(),
       ],
       'server_lists': [
         UserServer(
@@ -107,7 +107,7 @@ void main() {
     SettingsStorage.resetCacheForTesting();
   }
 
-  Future<Channel> vpn3() async => (await SettingsStorage.getChannels())
+  Future<Direction> vpn3() async => (await SettingsStorage.getDirections())
       .firstWhere((c) => c.tag == 'vpn-3');
 
   Future<ServerList> listById(String id) async =>
@@ -117,7 +117,7 @@ void main() {
       () async {
     await seedDetourRefsOnVpn3();
 
-    final res = await SettingsStorage.updateChannel(
+    final res = await SettingsStorage.updateDirection(
         (await vpn3()).copyWith(isDetour: false));
 
     expect((await listById('u1')).detourPolicy.overrideDetour, '');
@@ -137,29 +137,29 @@ void main() {
   test('flag-unset необратим: повторная установка не воскрешает ссылки',
       () async {
     await seedDetourRefsOnVpn3();
-    await SettingsStorage.updateChannel(
+    await SettingsStorage.updateDirection(
         (await vpn3()).copyWith(isDetour: false));
 
-    await SettingsStorage.updateChannel(
+    await SettingsStorage.updateDirection(
         (await vpn3()).copyWith(isDetour: true));
 
     expect((await listById('u1')).detourPolicy.overrideDetour, '');
   });
 
-  test('disable detour-канала лечит detour-ссылки', () async {
+  test('disable detour-Направления лечит detour-ссылки', () async {
     await seedDetourRefsOnVpn3();
 
-    final res = await SettingsStorage.updateChannel(
+    final res = await SettingsStorage.updateDirection(
         (await vpn3()).copyWith(enabled: false));
 
     expect((await listById('u1')).detourPolicy.overrideDetour, '');
     expect(res.detours, 4);
   });
 
-  test('delete detour-канала лечит detour-ссылки', () async {
+  test('delete detour-Направления лечит detour-ссылки', () async {
     await seedDetourRefsOnVpn3();
 
-    final res = await SettingsStorage.deleteChannel('vpn-3');
+    final res = await SettingsStorage.deleteDirection('vpn-3');
 
     expect((await listById('u1')).detourPolicy.overrideDetour, '');
     expect((await listById('s1')).detourPolicy.overrideDetour, '');
@@ -172,8 +172,8 @@ void main() {
       final data = {
         'channels_migrated': true,
         'channels': [
-          const Channel(tag: 'vpn-1', label: 'Main').toJson(),
-          const Channel(tag: 'vpn-3', label: 'Aux').toJson(),
+          const Direction(tag: 'vpn-1', label: 'Main').toJson(),
+          const Direction(tag: 'vpn-3', label: 'Aux').toJson(),
         ],
         'route_final': routeFinal,
         'custom_rules': [
@@ -200,7 +200,7 @@ void main() {
         () async {
       await seedRulesRefsOnVpn3();
 
-      final res = await SettingsStorage.updateChannel(
+      final res = await SettingsStorage.updateDirection(
           (await vpn3()).copyWith(isDetour: true));
 
       expect(await SettingsStorage.getRouteFinal(), 'vpn-3');
@@ -215,7 +215,7 @@ void main() {
     test('route_final на auto-двойник тоже цел', () async {
       await seedRulesRefsOnVpn3(routeFinal: 'vpn-3-auto');
 
-      await SettingsStorage.updateChannel(
+      await SettingsStorage.updateDirection(
           (await vpn3()).copyWith(isDetour: true));
 
       expect(await SettingsStorage.getRouteFinal(), 'vpn-3-auto');

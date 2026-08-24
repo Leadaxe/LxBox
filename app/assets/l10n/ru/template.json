@@ -356,8 +356,8 @@
   "Quad9 · anti-malware": {
     "value": "Quad9 · защита от вредоносного ПО"
   },
-  "RU DNS group (UDP via channel + DoT via vpn-1 + direct DoH)": {
-    "value": "Группа DNS для RU (UDP через канал + DoT через vpn-1 + прямой DoH)"
+  "RU DNS group (UDP via direction + DoT via vpn-1 + direct DoH)": {
+    "value": "Группа DNS для RU (UDP через Направление + DoT через vpn-1 + прямой DoH)"
   },
   "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact": {
     "value": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). По RFC 6066 поле нечувствительно к регистру, поэтому серверы принимают любую запись; помогает только против наивного сравнения на точное совпадение. Не применяется к узлам REALITY — их SNI должен оставаться байт-в-байт."
@@ -392,8 +392,8 @@
   "Resolve these domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Turn off if your network has functional IPv6.": {
     "value": "Резолвить эти домены только в IPv4. Предотвращает мёртвые IPv6-подключения в сетях без рабочего глобального IPv6. Выключите, если в вашей сети IPv6 работает."
   },
-  "Route BitTorrent traffic. Direct by default, or send it to a separate channel.": {
-    "value": "Маршрутизация BitTorrent-трафика. По умолчанию — напрямую; можно направить в отдельный канал."
+  "Route BitTorrent traffic. Direct by default, or send it to a separate direction.": {
+    "value": "Маршрутизация BitTorrent-трафика. По умолчанию — напрямую; можно направить в отдельное Направление."
   },
   "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc) and Russian IP ranges directly.": {
     "value": "Направляет напрямую российские TLD (.ru/.su/IDN), CDN сервисов (Яндекс/VK/Авито/2ГИС/банки и др.) и российские диапазоны IP."
@@ -404,8 +404,8 @@
   "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves.": {
     "value": "Направлять весь IPv4 и IPv6 через туннель явными полудиапазонами вместо значений sing-box по умолчанию. По умолчанию выключено — включайте, только если стандартная маршрутизация работает неправильно."
   },
-  "Route private IP ranges (LAN). Direct by default, or send to a channel to reach routers/devices over a local VPN.": {
-    "value": "Маршрутизация частных диапазонов IP (LAN). По умолчанию — напрямую; можно направить в канал, чтобы добираться до роутеров и устройств через локальный VPN."
+  "Route private IP ranges (LAN). Direct by default, or send to a direction to reach routers/devices over a local VPN.": {
+    "value": "Маршрутизация частных диапазонов IP (LAN). По умолчанию — напрямую; можно направить в Направление, чтобы добираться до роутеров и устройств через локальный VPN."
   },
   "Russia-only services": {
     "value": "Сервисы только для России"
@@ -428,8 +428,8 @@
   "Send matched domains to this preset's DNS server and apply DNS-level options like Force IPv4. Turn off to keep routing without DNS changes.": {
     "value": "Отправлять совпавшие домены на DNS-сервер этого пресета и применять DNS-опции вроде «Принудительно IPv4». Выключите, чтобы сохранить маршрутизацию без изменений DNS."
   },
-  "Services available only inside Russia. Direct by default, or route via a channel to reach them from abroad.": {
-    "value": "Сервисы, доступные только внутри России. По умолчанию — напрямую; можно направить через канал, чтобы пользоваться ими из-за рубежа."
+  "Services available only inside Russia. Direct by default, or route via a direction to reach them from abroad.": {
+    "value": "Сервисы, доступные только внутри России. По умолчанию — напрямую; можно направить через Направление, чтобы пользоваться ими из-за рубежа."
   },
   "Sniff timeout": {
     "value": "Тайм-аут анализа"
@@ -536,14 +536,14 @@
   "Wait time when automatic detection fails": {
     "value": "Время ожидания, когда автоопределение не сработало"
   },
-  "Where to route BitTorrent. Direct to keep it off the VPN, or pick a channel to tunnel it.": {
-    "value": "Куда направлять BitTorrent: напрямую — мимо VPN, либо выберите канал, чтобы пустить его через туннель."
+  "Where to route BitTorrent. Direct to keep it off the VPN, or pick a direction to tunnel it.": {
+    "value": "Куда направлять BitTorrent: напрямую — мимо VPN, либо выберите Направление, чтобы пустить его через туннель."
   },
-  "Where to route Russia-only services. Direct on a Russian network; pick a Russian channel to reach them from abroad.": {
-    "value": "Куда направлять сервисы, доступные только в России: напрямую — в российской сети, либо через российский канал — чтобы открывать их из-за рубежа."
+  "Where to route Russia-only services. Direct on a Russian network; pick a Russian direction to reach them from abroad.": {
+    "value": "Куда направлять сервисы, доступные только в России: напрямую — в российской сети, либо через российское Направление — чтобы открывать их из-за рубежа."
   },
-  "Where to route private/LAN IPs. Direct for local access, or a channel to reach a remote LAN over VPN.": {
-    "value": "Куда направлять частные/LAN-адреса: напрямую — для локального доступа, либо в канал — чтобы добраться до удалённой LAN через VPN."
+  "Where to route private/LAN IPs. Direct for local access, or a direction to reach a remote LAN over VPN.": {
+    "value": "Куда направлять частные/LAN-адреса: напрямую — для локального доступа, либо в Направление — чтобы добраться до удалённой LAN через VPN."
   },
   "Where to route traffic for Russian domains and IPs": {
     "value": "Куда направлять трафик российских доменов и IP"
@@ -551,8 +551,8 @@
   "Whether the local proxy requires username/password. Forced on for non-loopback listen.": {
     "value": "Требует ли локальный прокси логин и пароль. Принудительно включается при прослушивании не на loopback."
   },
-  "Which channel carries DNS queries to this server": {
-    "value": "Через какой канал идут DNS-запросы к этому серверу"
+  "Which direction carries DNS queries to this server": {
+    "value": "Через какое Направление идут DNS-запросы к этому серверу"
   },
   "Yandex": {
     "value": "Яндекс"

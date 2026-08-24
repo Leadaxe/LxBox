@@ -9,7 +9,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   Set<String> get _srsCached;
   Set<String> get _srsDownloading;
   List<CustomRule> get _customRules;
-  List<Channel> get _channels; // §125
+  List<Direction> get _directions; // §125
   void _invalidateOutboundOptions(); // §219 — сброс кэша опций outbound
   set _template(WizardTemplate? value);
   String get _routeFinal;
@@ -28,22 +28,22 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     final template = await TemplateLoader.load();
     final storedFinal = await SettingsStorage.getRouteFinal();
 
-    // §125 — каналы из storage. Миграция enabled_groups→channels уже отработала
+    // §125 — Направления из storage. Миграция enabled_groups→directions уже отработала
     // в main() init; на пустом списке (старт без миграции в тестах) синтезируем
     // из template, чтобы экран не был пустым.
-    final stored = await SettingsStorage.getChannels();
+    final stored = await SettingsStorage.getDirections();
     if (stored.isEmpty) {
-      await SettingsStorage.migrateChannelsIfNeeded(
+      await SettingsStorage.migrateDirectionsIfNeeded(
         template.groupTemplates,
         varDefaults: {
           for (final v in template.vars) v.name: v.defaultValue,
         },
       );
-      _channels.addAll(await SettingsStorage.getChannels());
+      _directions.addAll(await SettingsStorage.getDirections());
     } else {
-      _channels.addAll(stored);
+      _directions.addAll(stored);
     }
-    _invalidateOutboundOptions(); // §219 — сброс кэша после load каналов
+    _invalidateOutboundOptions(); // §219 — сброс кэша после load Направлений
 
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
     _customRules.addAll(await SettingsStorage.getCustomRules());
@@ -98,7 +98,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   /// flush — mixin'ом (flushToDisk) на dispose/paused.
   @override
   Future<void> stageChanges() async {
-    await ChannelMutations.bulkReplace(_channels, flush: false); // §125/§292
+    await DirectionMutations.bulkReplace(_directions, flush: false); // §125/§292
     await SettingsStorage.saveRouteFinal(_routeFinal, flush: false);
     await SettingsStorage.saveCustomRules(_customRules, flush: false);
     // §076: configDirty уже true (set синхронно в markDirty). НЕ

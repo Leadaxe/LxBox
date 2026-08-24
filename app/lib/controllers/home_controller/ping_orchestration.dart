@@ -32,31 +32,31 @@ mixin _PingMixin on ChangeNotifier {
     final group = _state.selectedGroup;
     final url = pingUrlFor(group);
     final timeoutMs = pingTimeoutFor(group);
-    // §349 — канал снимаем ДО await (как massPingChannel в §325): замер,
-    // снятый URL'ом канала A, не должен уехать в карту канала B, если юзер
+    // §349 — Направление снимаем ДО await (как massPingDirection в §325): замер,
+    // снятый URL'ом Направления A, не должен уехать в карту Направления B, если юзер
     // переключился за время висящего пинга (до 10с таймаута).
-    final channelKey = _state.delayChannelKey;
+    final directionKey = _state.delayDirectionKey;
     try {
       final r = await _cc.urlTestOutbound(nodeTag, link: url, timeoutMs: timeoutMs);
       final ms = r.lastDelayValue; // ok → delay (вкл. 0мс); fail → -1
-      final nextDelay = _delaysWith({nodeTag: ms}, channel: channelKey);
+      final nextDelay = _delaysWith({nodeTag: ms}, direction: directionKey);
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
       if (r.ok) {
-        _emit(_state.copyWith(delayByChannel: nextDelay, pingBusy: nextBusy));
+        _emit(_state.copyWith(delayByDirection: nextDelay, pingBusy: nextBusy));
         _addDebug(DebugSource.app, 'URLTest $nodeTag → $url: ${ms}ms');
       } else {
         final msg = ProbeErrorMsg(nodeTag, _probeHost(url), RawMsg(r.error));
         _emit(_state.copyWith(
-            delayByChannel: nextDelay, pingBusy: nextBusy, lastError: msg));
+            delayByDirection: nextDelay, pingBusy: nextBusy, lastError: msg));
         _addDebug(DebugSource.app, msg.renderEn());
         _rescueGroupsSelecting(nodeTag);
       }
     } catch (e) {
-      final nextDelay = _delaysWith({nodeTag: -1}, channel: channelKey);
+      final nextDelay = _delaysWith({nodeTag: -1}, direction: directionKey);
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
       final msg = _formatProbeError(nodeTag, url, e);
       _emit(_state.copyWith(
-          delayByChannel: nextDelay, pingBusy: nextBusy, lastError: msg));
+          delayByDirection: nextDelay, pingBusy: nextBusy, lastError: msg));
       _addDebug(DebugSource.app, msg.renderEn());
       _rescueGroupsSelecting(nodeTag);
     }
@@ -64,18 +64,18 @@ mixin _PingMixin on ChangeNotifier {
     _recomputeDependencyHealth();
   }
 
-  /// §325 — записать замеры в карту одного канала, не трогая остальные.
+  /// §325 — записать замеры в карту одного Направления, не трогая остальные.
   /// `null`-значение = удалить ключ (используется при старте mass-ping, где
   /// старое число на время прогона уступает место индикатору `pingBusy`).
-  /// [channel] по умолчанию — текущий канал; mass-ping передаёт снимок,
-  /// сделанный на старте прогона (переключение канала в середине не должно
+  /// [direction] по умолчанию — текущее Направление; mass-ping передаёт снимок,
+  /// сделанный на старте прогона (переключение Направления в середине не должно
   /// уводить результаты в чужую карту).
   Map<String, Map<String, int>> _delaysWith(
     Map<String, int?> updates, {
-    String? channel,
+    String? direction,
   }) {
-    final key = channel ?? _state.delayChannelKey;
-    final next = Map<String, Map<String, int>>.from(_state.delayByChannel);
+    final key = direction ?? _state.delayDirectionKey;
+    final next = Map<String, Map<String, int>>.from(_state.delayByDirection);
     final delays = Map<String, int>.from(next[key] ?? const <String, int>{});
     updates.forEach((tag, ms) {
       if (ms == null) {
@@ -301,24 +301,24 @@ mixin _PingMixin on ChangeNotifier {
     final massPingGroup = _state.selectedGroup;
     final massPingUrl = pingUrlFor(massPingGroup);
     final massPingTimeout = pingTimeoutFor(massPingGroup);
-    // §325 — канал-получатель результатов фиксируем тем же снимком: юзер может
-    // переключить канал посреди прогона, и тогда замеры, сделанные URL'ом и
-    // таймаутом канала A, не должны осесть в канале B.
-    final massPingChannel = massPingGroup ?? HomeState.scratchChannel;
+    // §325 — Направление-получатель результатов фиксируем тем же снимком: юзер может
+    // переключить Направление посреди прогона, и тогда замеры, сделанные URL'ом и
+    // таймаутом Направления A, не должны осесть в Направлении B.
+    final massPingDirection = massPingGroup ?? HomeState.scratchDirection;
 
-    // §325 — сброс идёт ТОЛЬКО по этому каналу и только по нодам этого прогона.
+    // §325 — сброс идёт ТОЛЬКО по этому Направлению и только по нодам этого прогона.
     // Раньше чистилась одна общая карта целиком, а заполнялась лишь нодами
-    // текущего канала: замеры всех прочих каналов пропадали («тест-пинг
-    // сбрасывает данные глобально, а тестит только текущий канал» — 4PDA
+    // текущего Направления: замеры всех прочих Направлений пропадали («тест-пинг
+    // сбрасывает данные глобально, а тестит только текущее Направление» — 4PDA
     // #1289/#1290/#1376/#1381/#1382). Замеры пингуемых нод убираем, потому что
     // на время прогона их место занимает индикатор `pingBusy: '…'`; результат
     // ляжет точечно во flush ниже.
     final busyMap = {for (final tag in nodes) tag: '…'};
     final clearedDelay = _delaysWith(
       {for (final tag in nodes) tag: null},
-      channel: massPingChannel,
+      direction: massPingDirection,
     );
-    _emit(_state.copyWith(delayByChannel: clearedDelay, pingBusy: busyMap));
+    _emit(_state.copyWith(delayByDirection: clearedDelay, pingBusy: busyMap));
     _addDebug(DebugSource.app, 'Mass ping started (${nodes.length} nodes, concurrency=$_pingConcurrency)');
 
     // Parallel ping with limited concurrency
@@ -333,12 +333,12 @@ mixin _PingMixin on ChangeNotifier {
     void flush() {
       if (_massPingEpoch != epoch) return;
       if (pendingDelay.isEmpty && pendingBusy.isEmpty) return;
-      final nextDelay = _delaysWith(pendingDelay, channel: massPingChannel);
+      final nextDelay = _delaysWith(pendingDelay, direction: massPingDirection);
       final nextBusy = Map<String, String>.from(_state.pingBusy)
         ..addAll(pendingBusy);
       pendingDelay.clear();
       pendingBusy.clear();
-      _emit(_state.copyWith(delayByChannel: nextDelay, pingBusy: nextBusy));
+      _emit(_state.copyWith(delayByDirection: nextDelay, pingBusy: nextBusy));
       // §355 — batch свежих замеров применён: пересчёт корней беды (гейт по
       // изменению результата внутри — лишние вызовы дёшевы).
       _recomputeDependencyHealth();

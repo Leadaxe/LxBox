@@ -1,16 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
-import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/direction.dart';
 
-/// §248/§274 — parse-гейт detour-инвариантов в Channel.fromJson: restore из
+/// §248/§274 — parse-гейт detour-инвариантов в Direction.fromJson: restore из
 /// backup и ручная правка файла пишут raw JSON мимо UI/storage/API — read-time
 /// коэрс единственная точка, которую не обойти. После §274 гейт остался один:
 /// «vpn-1 не detour». Комбинация detour × include_block легальна — detour
 /// теперь разрешение, а не роль-исключение.
 void main() {
-  group('§248/§274 — Channel.fromJson parse-гейт', () {
+  group('§248/§274 — Direction.fromJson parse-гейт', () {
     test('vpn-1 + detour:true → isDetour коэрсится в false', () {
-      final c = Channel.fromJson({
+      final c = Direction.fromJson({
         'tag': 'vpn-1',
         'label': 'Main',
         'detour': true,
@@ -20,7 +20,7 @@ void main() {
 
     test('detour:true + include_block:true → оба поля true (легально, §274)',
         () {
-      final c = Channel.fromJson({
+      final c = Direction.fromJson({
         'tag': 'vpn-2',
         'label': 'Relay',
         'detour': true,
@@ -30,9 +30,9 @@ void main() {
       expect(c.includeBlock, true);
     });
 
-    test('обычный канал: detour отсутствует → false, include_block живёт',
+    test('обычное Направление: detour отсутствует → false, include_block живёт',
         () {
-      final c = Channel.fromJson({
+      final c = Direction.fromJson({
         'tag': 'vpn-2',
         'label': 'X',
         'include_block': true,
@@ -43,19 +43,19 @@ void main() {
 
     test('toJson↔fromJson roundtrip сохраняет detour + include_block (§274)',
         () {
-      const src = Channel(
+      const src = Direction(
         tag: 'vpn-2',
         label: 'Relay',
         isDetour: true,
         includeBlock: true,
       );
-      final back = Channel.fromJson(src.toJson());
+      final back = Direction.fromJson(src.toJson());
       expect(back.isDetour, true);
       expect(back.includeBlock, true);
     });
 
     test('copyWith(isDetour:) переключает роль', () {
-      const c = Channel(tag: 'vpn-2', label: 'X');
+      const c = Direction(tag: 'vpn-2', label: 'X');
       expect(c.copyWith(isDetour: true).isDetour, true);
       expect(c.copyWith(isDetour: true).copyWith(isDetour: false).isDetour,
           false);
@@ -64,20 +64,20 @@ void main() {
     });
   });
 
-  group('§274 — Channel.displayLabel', () {
+  group('§274 — Direction.displayLabel', () {
     test('detour + label → префикс ⚙ перед label', () {
-      const c = Channel(tag: 'vpn-2', label: 'X', isDetour: true);
+      const c = Direction(tag: 'vpn-2', label: 'X', isDetour: true);
       expect(c.displayLabel, '${kDetourTagPrefix}X');
     });
 
     test('detour + пустой label → префикс ⚙ перед tag', () {
-      const c = Channel(tag: 'vpn-2', label: '', isDetour: true);
+      const c = Direction(tag: 'vpn-2', label: '', isDetour: true);
       expect(c.displayLabel, '${kDetourTagPrefix}vpn-2');
     });
 
     test('дедуп: label уже начинается с ⚙ → второй префикс не добавляется',
         () {
-      const c = Channel(
+      const c = Direction(
         tag: 'vpn-2',
         label: '${kDetourTagPrefix}X',
         isDetour: true,
@@ -86,24 +86,24 @@ void main() {
     });
 
     test('не detour → label как есть, без префикса', () {
-      const c = Channel(tag: 'vpn-2', label: 'X');
+      const c = Direction(tag: 'vpn-2', label: 'X');
       expect(c.displayLabel, 'X');
     });
   });
 
   // §274 — ⚙ живёт в самом label (storage), как ⚙-метка в тегах
-  // detour-серверов: смена флага через copyWith переименовывает канал,
+  // detour-серверов: смена флага через copyWith переименовывает Направление,
   // fromJson нормализует restore/ручную правку. Руками маркер не снять —
   // нормализация вернёт (⚙ зарезервирован).
   group('§274 — normalizeLabel: ⚙ в storage-label', () {
     test('copyWith(isDetour:true) переименовывает label в ⚙-форму', () {
-      const c = Channel(tag: 'vpn-2', label: 'Relay');
+      const c = Direction(tag: 'vpn-2', label: 'Relay');
       final d = c.copyWith(isDetour: true);
       expect(d.label, '${kDetourTagPrefix}Relay');
     });
 
     test('copyWith(isDetour:false) срезает префикс', () {
-      const c = Channel(
+      const c = Direction(
           tag: 'vpn-2', label: '${kDetourTagPrefix}Relay', isDetour: true);
       final d = c.copyWith(isDetour: false);
       expect(d.label, 'Relay');
@@ -111,7 +111,7 @@ void main() {
 
     test('юзер стёр ⚙ при включённой галке → copyWith возвращает префикс',
         () {
-      const c = Channel(
+      const c = Direction(
           tag: 'vpn-2', label: '${kDetourTagPrefix}Relay', isDetour: true);
       final d = c.copyWith(label: 'Relay');
       expect(d.label, '${kDetourTagPrefix}Relay');
@@ -119,28 +119,28 @@ void main() {
 
     test('fromJson нормализует: detour:true без ⚙ в label (правленый backup)',
         () {
-      final c = Channel.fromJson(
+      final c = Direction.fromJson(
           {'tag': 'vpn-2', 'label': 'Relay', 'detour': true});
       expect(c.label, '${kDetourTagPrefix}Relay');
     });
 
-    test('fromJson срезает ⚙ у не-detour канала (маркер зарезервирован)',
+    test('fromJson срезает ⚙ у не-detour Направления (маркер зарезервирован)',
         () {
-      final c = Channel.fromJson(
+      final c = Direction.fromJson(
           {'tag': 'vpn-2', 'label': '${kDetourTagPrefix}Relay'});
       expect(c.label, 'Relay');
     });
 
     test('пустой label не трогается (display-фолбэк на tag в displayLabel)',
         () {
-      const c = Channel(tag: 'vpn-2', label: '', isDetour: true);
+      const c = Direction(tag: 'vpn-2', label: '', isDetour: true);
       expect(c.copyWith(nodeFilter: 'x').label, '');
     });
 
     test('storage roundtrip: label с ⚙ стабилен (без второго префикса)', () {
-      const c = Channel(
+      const c = Direction(
           tag: 'vpn-2', label: '${kDetourTagPrefix}Relay', isDetour: true);
-      final back = Channel.fromJson(c.toJson());
+      final back = Direction.fromJson(c.toJson());
       expect(back.label, '${kDetourTagPrefix}Relay');
       expect(back.isDetour, true);
     });

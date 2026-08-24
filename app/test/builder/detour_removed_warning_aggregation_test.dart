@@ -14,12 +14,12 @@ void main() {
   final template = WizardTemplate(
     parserConfig: ParserConfigBlock(),
     groupTemplates: GroupTemplates(
-      channel: ChannelTemplate(include: const ['direct', 'auto']),
+      direction: DirectionTemplate(include: const ['direct', 'auto']),
       auto: AutoTemplate(
         options: const {'url': 'https://x', 'interval': '30s'},
       ),
-      defaultChannels: [
-        DefaultChannel(tag: 'vpn-1', label: 'vpn-1', defaultEnabled: true),
+      defaultDirections: [
+        DefaultDirection(tag: 'vpn-1', label: 'vpn-1', defaultEnabled: true),
       ],
     ),
     vars: const [],

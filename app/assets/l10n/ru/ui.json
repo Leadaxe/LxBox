@@ -97,14 +97,6 @@
       "other": "%d битых"
     }
   },
-  "%d channels matched no nodes — check their node filters.": {
-    "value": {
-      "one": "%d канал не нашёл ни одного узла — проверьте его фильтр узлов.",
-      "few": "%d канала не нашли ни одного узла — проверьте их фильтры узлов.",
-      "many": "%d каналов не нашли ни одного узла — проверьте их фильтры узлов.",
-      "other": "%d канала не нашли ни одного узла — проверьте их фильтры узлов."
-    }
-  },
   "%d cidrs": {
     "value": {
       "one": "%d CIDR",
@@ -138,6 +130,14 @@
       "few": "осталось %d дня",
       "many": "осталось %d дней",
       "other": "осталось %d дня"
+    }
+  },
+  "%d directions matched no nodes — check their node filters.": {
+    "value": {
+      "one": "%d Направление не нашло ни одного узла — проверьте его фильтр узлов.",
+      "few": "%d Направления не нашли ни одного узла — проверьте их фильтры узлов.",
+      "many": "%d Направлений не нашли ни одного узла — проверьте их фильтры узлов.",
+      "other": "%d Направления не нашли ни одного узла — проверьте их фильтры узлов."
     }
   },
   "%d domains": {
@@ -600,9 +600,6 @@
   "Add by URL…": {
     "value": "Добавить по URL…"
   },
-  "Add channel  (%1$d/%2$d)": {
-    "value": "Добавить канал  (%1$d/%2$d)"
-  },
   "Add condition": {
     "value": "Добавить условие"
   },
@@ -611,6 +608,9 @@
   },
   "Add detour servers to proxy groups (visible in node list)": {
     "value": "Добавлять detour-серверы в прокси-группы (видны в списке узлов)"
+  },
+  "Add direction  (%1$d/%2$d)": {
+    "value": "Добавить Направление  (%1$d/%2$d)"
   },
   "Add from clipboard": {
     "value": "Добавить из буфера обмена"
@@ -684,8 +684,8 @@
   "All": {
     "value": "Все"
   },
-  "All channels": {
-    "value": "Все каналы"
+  "All directions": {
+    "value": "Все Направления"
   },
   "All ways to support": {
     "value": "Все способы поддержки"
@@ -720,8 +720,8 @@
   "Already on this device": {
     "value": "Уже есть на этом устройстве"
   },
-  "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the channels' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on.": {
-    "value": "Усыплять и туннели активного маршрута (члены пула, выбранный узел) после долгого затишья — например, за ночь. Первое соединение после сна будет дольше примерно на один RTT. Держите значение не меньше тайм-аута простоя каналов (по умолчанию 30 минут). Требует включённой настройки «Усыплять неактивные туннели»."
+  "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the directions' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on.": {
+    "value": "Усыплять и туннели активного маршрута (члены пула, выбранный узел) после долгого затишья — например, за ночь. Первое соединение после сна будет дольше примерно на один RTT. Держите значение не меньше тайм-аута простоя Направлений (по умолчанию 30 минут). Требует включённой настройки «Усыплять неактивные туннели»."
   },
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ требует это разрешение для SSID. Нажмите, чтобы выдать."
@@ -947,27 +947,6 @@
   },
   "Chains inside the folder get the folder detour appended": {
     "value": "К цепочкам внутри папки добавляется detour самой папки"
-  },
-  "Channel": {
-    "value": "Канал"
-  },
-  "Channel \"%1$s\" %2$s": {
-    "value": "Канал «%1$s» %2$s"
-  },
-  "Channel \"%s\" is no longer a detour target": {
-    "value": "Канал «%s» больше не является detour-целью"
-  },
-  "Channel \"%s\" matched no nodes — check its node filter.": {
-    "value": "Канал «%s» не нашёл ни одного узла — проверьте его фильтр узлов."
-  },
-  "Channel \"%s\" not found — set to %s, rule disabled": {
-    "value": "Канал «%s» не найден — заменён на %s, правило выключено"
-  },
-  "Channels": {
-    "value": "Каналы"
-  },
-  "Channels and routing rules": {
-    "value": "Каналы и правила маршрутизации"
   },
   "Check": {
     "value": "Проверка"
@@ -1388,11 +1367,11 @@
   "Delete auto node?": {
     "value": "Удалить авто-узел?"
   },
-  "Delete channel": {
-    "value": "Удалить канал"
+  "Delete direction": {
+    "value": "Удалить Направление"
   },
-  "Delete channel?": {
-    "value": "Удалить канал?"
+  "Delete direction?": {
+    "value": "Удалить Направление?"
   },
   "Delete folder": {
     "value": "Удалить папку"
@@ -1468,6 +1447,27 @@
   },
   "Direct (no VPN)": {
     "value": "Напрямую (без VPN)"
+  },
+  "Direction": {
+    "value": "Направление"
+  },
+  "Direction \"%1$s\" %2$s": {
+    "value": "Направление «%1$s» %2$s"
+  },
+  "Direction \"%s\" is no longer a detour target": {
+    "value": "Направление «%s» больше не является detour-целью"
+  },
+  "Direction \"%s\" matched no nodes — check its node filter.": {
+    "value": "Направление «%s» не нашло ни одного узла — проверьте его фильтр узлов."
+  },
+  "Direction \"%s\" not found — set to %s, rule disabled": {
+    "value": "Направление «%s» не найдено — заменено на %s, правило выключено"
+  },
+  "Directions": {
+    "value": "Направления"
+  },
+  "Directions and routing rules": {
+    "value": "Направления и правила маршрутизации"
   },
   "Disable": {
     "value": "Выключить"
@@ -1595,8 +1595,8 @@
   "Edit auto node": {
     "value": "Настройка авто-узла"
   },
-  "Edit channel · %s": {
-    "value": "Изменить канал · %s"
+  "Edit direction · %s": {
+    "value": "Изменить Направление · %s"
   },
   "Edit rule": {
     "value": "Изменить правило"
@@ -1646,8 +1646,8 @@
   "Enabled": {
     "value": "Включён"
   },
-  "Enabled channels appear in the selector on the home screen. Tap a channel to edit its nodes, filter and auto twin.": {
-    "value": "Включённые каналы появляются в селекторе на главном экране. Нажмите на канал, чтобы настроить его узлы, фильтр и auto-двойник."
+  "Enabled directions appear in the selector on the home screen. Tap a direction to edit its nodes, filter and auto twin.": {
+    "value": "Включённые Направления появляются в селекторе на главном экране. Нажмите на Направление, чтобы настроить его узлы, фильтр и auto-двойник."
   },
   "Enabling this category lets other apps receive L×Box events.\n\nEvents do NOT contain subscription / config secrets — only labels (node tags, group names, status).": {
     "value": "Если включить эту категорию, другие приложения смогут получать события L×Box.\n\nСобытия НЕ содержат секретов подписок и конфига — только метки (теги узлов, имена групп, статус)."
@@ -2048,8 +2048,8 @@
   "Hostnames sing-box resolves internally (your VPN server addresses, custom outbound endpoints) will go through your ISP's DNS, bypassing the VPN tunnel. Pick a regular DNS server for full privacy.": {
     "value": "Имена, которые sing-box резолвит сам (адреса ваших VPN-серверов и других исходящих подключений), пойдут через DNS провайдера мимо туннеля VPN. Для полной приватности выберите обычный DNS-сервер."
   },
-  "How it works: channels, rules, DNS, detour, recipes": {
-    "value": "Как это работает: каналы, правила, DNS, detour, рецепты"
+  "How it works: directions, rules, DNS, detour, recipes": {
+    "value": "Как это работает: Направления, правила, DNS, detour, рецепты"
   },
   "How this rule directs and resolves matched traffic.": {
     "value": "Как правило направляет и резолвит совпавший трафик."
@@ -2472,8 +2472,8 @@
   "Name is required": {
     "value": "Укажите имя"
   },
-  "Names are not resolving while the connection is alive — the DNS path looks blocked. In DNS settings you can:\n  • route your DNS servers through the VPN — set their outbound to a channel so queries go inside the tunnel;\n  • switch the final resolver to your operator's DNS — works everywhere, but your operator sees every domain.\nFakeIP resolves names inside the tunnel with placeholder IPs — no pre-tunnel DNS leaks.": {
-    "value": "Имена не резолвятся, хотя соединение живо — путь DNS выглядит заблокированным. В настройках DNS можно:\n  • направить DNS-серверы через VPN — задайте им исходящий канал, чтобы запросы шли внутри туннеля;\n  • переключить финальный резолвер на DNS оператора — работает везде, но оператор видит каждый домен.\nFakeIP резолвит имена внутри туннеля через IP-заглушки — без утечек DNS до туннеля."
+  "Names are not resolving while the connection is alive — the DNS path looks blocked. In DNS settings you can:\n  • route your DNS servers through the VPN — set their outbound to a direction so queries go inside the tunnel;\n  • switch the final resolver to your operator's DNS — works everywhere, but your operator sees every domain.\nFakeIP resolves names inside the tunnel with placeholder IPs — no pre-tunnel DNS leaks.": {
+    "value": "Имена не резолвятся, хотя соединение живо — путь DNS выглядит заблокированным. В настройках DNS можно:\n  • направить DNS-серверы через VPN — задайте им исходящее Направление, чтобы запросы шли внутри туннеля;\n  • переключить финальный резолвер на DNS оператора — работает везде, но оператор видит каждый домен.\nFakeIP резолвит имена внутри туннеля через IP-заглушки — без утечек DNS до туннеля."
   },
   "NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).": {
     "value": "NaïveProxy не входит в эту сборку libbox (пересоберите с -tags with_naive_outbound)."
@@ -2589,8 +2589,8 @@
   "No nodes found": {
     "value": "Узлы не найдены"
   },
-  "No nodes in this channel.\nTry another one.": {
-    "value": "В этом канале нет узлов.\nПопробуйте другой."
+  "No nodes in this direction.\nTry another one.": {
+    "value": "В этом Направлении нет узлов.\nПопробуйте другое."
   },
   "No nodes loaded yet. Apply rules to load them.": {
     "value": "Узлы ещё не загружены. Нажмите «Применить правила», чтобы загрузить."
@@ -2980,8 +2980,8 @@
   "Prefix": {
     "value": "Префикс"
   },
-  "Prefix applied to every server tag in this folder (e.g. \"BL:\" → \"BL: Frankfurt\"). Lets a routing channel match the whole folder by regex.": {
-    "value": "Префикс добавляется к тегу каждого сервера в этой папке (например, «BL:» → «BL: Frankfurt»). Позволяет каналу маршрутизации выбирать всю папку одним regex."
+  "Prefix applied to every server tag in this folder (e.g. \"BL:\" → \"BL: Frankfurt\"). Lets a routing direction match the whole folder by regex.": {
+    "value": "Префикс добавляется к тегу каждого сервера в этой папке (например, «BL:» → «BL: Frankfurt»). Позволяет Направлению маршрутизации выбирать всю папку одним regex."
   },
   "Prefix applied to every tag from this subscription (e.g. \"BL:\" → \"BL: Frankfurt\"). Used to distinguish servers from different subscriptions and resolve name collisions.": {
     "value": "Префикс добавляется к каждому тегу из этой подписки (например, «BL:» → «BL: Frankfurt»). Помогает различать серверы разных подписок и разрешать совпадения имён."
@@ -3463,11 +3463,11 @@
   "Saved as %s (%d bytes)": {
     "value": "Сохранено как %s (%d байт)"
   },
-  "Saved channel \"%1$s\" — %2$s": {
-    "value": "Канал «%1$s» сохранён — %2$s"
+  "Saved direction \"%1$s\" — %2$s": {
+    "value": "Направление «%1$s» сохранено — %2$s"
   },
-  "Saved channel \"%s\"": {
-    "value": "Канал «%s» сохранён"
+  "Saved direction \"%s\"": {
+    "value": "Направление «%s» сохранено"
   },
   "Saved networks": {
     "value": "Сохранённые сети"
@@ -3499,8 +3499,8 @@
   "Select apps": {
     "value": "Выбор приложений"
   },
-  "Select channel": {
-    "value": "Выберите канал"
+  "Select direction": {
+    "value": "Выберите Направление"
   },
   "Select server": {
     "value": "Показать выбранный сервер"
@@ -3515,8 +3515,8 @@
   "Send HWID": {
     "value": "Отправлять HWID"
   },
-  "Send matched traffic to a channel.": {
-    "value": "Отправлять совпавший трафик в канал."
+  "Send matched traffic to a direction.": {
+    "value": "Отправлять совпавший трафик в Направление."
   },
   "Send to another app": {
     "value": "Отправить в другое приложение"
@@ -3821,8 +3821,8 @@
   "Switch tolerance (ms)": {
     "value": "Порог переключения (мс)"
   },
-  "Switchable detour channel": {
-    "value": "Переключаемый detour-канал"
+  "Switchable detour direction": {
+    "value": "Переключаемое detour-Направление"
   },
   "System": {
     "value": "Система"
@@ -4249,8 +4249,8 @@
   "When to pause the tunnel to save battery. Takes effect on next VPN connect.": {
     "value": "Когда приостанавливать туннель ради экономии батареи. Вступает в силу при следующем подключении VPN."
   },
-  "Which channel carries DNS queries to this server. Direct — no detour key in the config.": {
-    "value": "Какой канал несёт DNS-запросы к этому серверу. «Напрямую» — без ключа detour в конфиге."
+  "Which direction carries DNS queries to this server. Direct — no detour key in the config.": {
+    "value": "Какое Направление несёт DNS-запросы к этому серверу. «Напрямую» — без ключа detour в конфиге."
   },
   "While this is on, the per-subscription \"On update\" setting is hidden — everything is applied immediately. Turning it off brings each subscription's own choice back.": {
     "value": "Пока включено, настройка «При обновлении» в подписках скрыта — всё применяется сразу. Выключите — вернётся собственный выбор каждой подписки."
@@ -4311,7 +4311,7 @@
     "value": "кэш"
   },
   "can be picked as a detour target for servers and folders": {
-    "value": "канал можно выбирать как detour-цель для серверов и папок"
+    "value": "Направление можно выбирать как detour-цель для серверов и папок"
   },
   "closed": {
     "value": "закрыто"
@@ -4400,8 +4400,8 @@
   "just now": {
     "value": "только что"
   },
-  "latency-tested twin of this channel": {
-    "value": "двойник этого канала с тестом задержки"
+  "latency-tested twin of this direction": {
+    "value": "двойник этого Направления с тестом задержки"
   },
   "matches": {
     "value": "совпадает с regex"

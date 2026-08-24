@@ -163,7 +163,7 @@ void main() {
         expect(grp.containsKey('detour'), isFalse);
       });
 
-      test('три независимых пути: канал / vpn-1 / напрямую', () {
+      test('три независимых пути: Направление / vpn-1 / напрямую', () {
         final f = expandPreset(
           CustomRulePreset(
             name: 'X',
@@ -175,7 +175,7 @@ void main() {
         Map<String, dynamic> byTag(String t) =>
             f.dnsServers.firstWhere((s) => s['tag'] == t);
 
-        // UDP — по каналу пресета (ровно тот путь, что висел на мёртвой ноде).
+        // UDP — по Направлению пресета (ровно тот путь, что висел на мёртвой ноде).
         expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-2');
         // DoT — через vpn-1, НЕ @outbound: шифрован, утечки нет.
         expect(byTag('ru-direct:yandex_dot')['detour'], 'vpn-1');
@@ -1118,7 +1118,7 @@ void main() {
       expect(grp.containsKey('detour'), isFalse, reason: '§319');
 
       // Три НЕзависимых пути отказа — иначе одна мёртвая нода вешает ru-DNS.
-      // UDP — по каналу пресета (открытый, но идёт туда же, куда трафик);
+      // UDP — по Направлению пресета (открытый, но идёт туда же, куда трафик);
       // DoT — через vpn-1; DoH — напрямую. Оба шифрованных пути не зависят
       // от @outbound, поэтому мёртвая нода в нём их не трогает.
       expect(byTag('ru-direct:yandex_udp')['detour'], 'vpn-2');
@@ -1601,7 +1601,7 @@ SelectableRule _ruDirect() => SelectableRule(
 /// §354: реплика `ru-direct` из шаблона — DNS-группа `dns_ru` зашита
 /// ЛИТЕРАЛОМ в правиле (var'а `dns_server` нет: выбор одиночного сервера
 /// вернул бы единственную точку отказа). Три члена по независимым путям:
-/// UDP через канал пресета, DoT через vpn-1, DoH напрямую.
+/// UDP через Направление пресета, DoT через vpn-1, DoH напрямую.
 SelectableRule _ruDirectWithDnsGroup() => SelectableRule(
       label: 'Russian domains & IPs',
       presetId: 'ru-direct',

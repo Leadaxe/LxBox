@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import '../../models/channel.dart';
+import '../../models/direction.dart';
 import '../../models/custom_rule.dart';
 import '../../models/emit_context.dart';
 import '../../models/parser_config.dart';
@@ -32,18 +32,18 @@ class BuildResult {
   final List<String> emitWarnings;
   final Map<String, String> generatedVars; // подмножество vars, которые сгенерились в процессе
 
-  /// §274 — display-имена каналов, у которых непустой node_filter отсёк все
-  /// ноды (канал живёт на fallback-опциях: block-default, либо
+  /// §274 — display-имена Направлений, у которых непустой node_filter отсёк все
+  /// ноды (Направление живёт на fallback-опциях: block-default, либо
   /// direct/block по include-галкам). UI показывает по ним транзиентный
   /// SnackBar; фактический исход — в тексте [emitWarnings]/AppLog.
-  final List<String> channelsWithoutNodes;
+  final List<String> directionsWithoutNodes;
   const BuildResult({
     required this.configJson,
     required this.config,
     required this.validation,
     required this.emitWarnings,
     required this.generatedVars,
-    this.channelsWithoutNodes = const [],
+    this.directionsWithoutNodes = const [],
   });
 }
 
@@ -54,9 +54,9 @@ class BuildSettings {
   final List<CustomRule> customRules;
   final String routeFinal;
 
-  /// §125 — каналы роутинга (source-of-truth состава). Пусто = старое
+  /// §125 — Направления роутинга (source-of-truth состава). Пусто = старое
   /// поведение через template.groupTemplates (для тестов без storage).
-  final List<Channel> channels;
+  final List<Direction> directions;
 
   /// §046: OS-level split-tunneling apps list. `null` = pipeline возьмёт
   /// дефолт (mode=off — все apps через tun, sing-box обычное поведение).
@@ -79,7 +79,7 @@ class BuildSettings {
   final String idleSuspendReachable;
 
   /// §272: passive health check (ядро SPEC 019, `urltest.passive_check`) —
-  /// пишется в urltest-двойники каналов. Пока свежий успешный TCP-дайл
+  /// пишется в urltest-двойники Направлений. Пока свежий успешный TCP-дайл
   /// подтверждает узел, периодические пробы группы пропускаются.
   /// ⚠ Требует ядра >= ревизии 2026-07-15 (незнакомое поле роняет конфиг).
   final bool passiveCheck;
@@ -89,7 +89,7 @@ class BuildSettings {
     this.enabledGroups = const {},
     this.customRules = const [],
     this.routeFinal = '',
-    this.channels = const [],
+    this.directions = const [],
     this.tunApps,
     this.vpnMode,
     this.idleSuspend = '',
@@ -198,25 +198,25 @@ Future<BuildResult> buildConfig({
     initialRules: route['rules'] as List<dynamic>? ?? const [],
   );
 
-  // §125 — каналы из storage (source-of-truth). Если пусто (тесты без storage /
+  // §125 — Направления из storage (source-of-truth). Если пусто (тесты без storage /
   // первый билд до миграции) — синтезируем из template.groupTemplates через ту
   // же seed-логику, что и one-shot миграция, чтобы билдер всегда работал с
-  // List<Channel> единообразно. autoTags больше не нужен: каждый канал делает
+  // List<Direction> единообразно. autoTags больше не нужен: каждое Направление делает
   // свой urltest-двойник по своему node-set. Резолвится ДО эмита узлов:
-  // теги каналов резервируются в аллокаторе (§351).
-  final channels = settings.channels.isNotEmpty
-      ? settings.channels
-      : _channelsFromTemplate(
+  // теги Направлений резервируются в аллокаторе (§351).
+  final directions = settings.directions.isNotEmpty
+      ? settings.directions
+      : _directionsFromTemplate(
           template.groupTemplates, settings.enabledGroups, resolve);
 
   // buildConfig — тонкий оркестратор. ServerList.build(ctx) сам решает
   // политику, аллоцирует теги через ctx, регистрирует в selector/auto.
   //
-  // §351 — теги каналов (селектор + auto-двойник) резервируются заранее:
-  // _buildChannelGroups эмитит их с фиксированным `c.tag` МИМО allocateTag,
+  // §351 — теги Направлений (селектор + auto-двойник) резервируются заранее:
+  // _buildDirectionGroups эмитит их с фиксированным `c.tag` МИМО allocateTag,
   // и узел подписки с меткой `vpn-1` дал бы дубль тега → отказ ядра на
   // старте. С резервом такой узел получает суффикс `-N` штатным путём.
-  // Фильтр active — тот же, что в _buildChannelGroups (enabled || required);
+  // Фильтр active — тот же, что в _buildDirectionGroups (enabled || required);
   // autoTag резервируем всегда, хотя эмитится он условно: пере-резерв лишь
   // добавит суффикс узлу-тёзке, а обратная ошибка стоила бы старта.
   final ctx = _BuildCtx(
@@ -224,7 +224,7 @@ Future<BuildResult> buildConfig({
     ruleSets,
     passiveCheck: settings.passiveCheck, // §322
     reservedTags: [
-      for (final c in channels.where((c) => c.enabled || c.isRequired)) ...[
+      for (final c in directions.where((c) => c.enabled || c.isRequired)) ...[
         c.tag,
         c.autoTag,
       ],
@@ -269,13 +269,13 @@ Future<BuildResult> buildConfig({
     for (final e in ctx.endpoints) e.map,
   ];
 
-  final channelsWithoutNodes = <String>[]; // §274 — для SnackBar на Home
-  final presetOutbounds = _buildChannelGroups(
-    channels: channels,
+  final directionsWithoutNodes = <String>[]; // §274 — для SnackBar на Home
+  final presetOutbounds = _buildDirectionGroups(
+    directions: directions,
     selectorTags: selectorTags,
     nodeEntries: nodeEntries,
     emitWarnings: emitWarnings,
-    channelsWithoutNodes: channelsWithoutNodes,
+    directionsWithoutNodes: directionsWithoutNodes,
     passiveCheck: settings.passiveCheck, // §272
   );
 
@@ -413,15 +413,15 @@ Future<BuildResult> buildConfig({
     }
   }
 
-  // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённый канал
+  // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённое Направление
   // или legacy ✨auto (которого больше нет, Решение 2/3) схлопывается в vpn-1
   // (неудаляем → всегда валидная мишень).
   // §219 — валидные мишени берём из ФАКТИЧЕСКИ эмитированных `presetOutbounds`
   // (теги селекторов + auto-двойники), а не переугадываем `[tag, autoTag]`:
   // auto-двойник `<tag>-auto` эмитится лишь при `auto != null && nodes.isNotEmpty`
-  // (см. `_buildChannelGroups`), поэтому статичный `autoTag` для канала с пустым
+  // (см. `_buildDirectionGroups`), поэтому статичный `autoTag` для Направления с пустым
   // node-set давал бы висячую ссылку в конфиге (fatal в sing-box).
-  // §274 — detour-каналы валидные rules-мишени (вычитание detourChannelTags
+  // §274 — detour-Направления валидные rules-мишени (вычитание detourDirectionTags
   // из validFinals снято вместе с взаимоисключением ролей §248).
   if (settings.routeFinal.isNotEmpty) {
     final validFinals = <String>{
@@ -548,7 +548,7 @@ Future<BuildResult> buildConfig({
     validation: validation,
     emitWarnings: emitWarnings,
     generatedVars: generatedVars,
-    channelsWithoutNodes: channelsWithoutNodes,
+    directionsWithoutNodes: directionsWithoutNodes,
   );
 }
 
@@ -561,7 +561,7 @@ class _BuildCtx implements EmitContext {
     bool passiveCheck = false,
     Iterable<String> reservedTags = const [],
   }) : _passiveCheck = passiveCheck {
-    _taken.addAll(reservedTags); // §351 — теги каналов, эмитятся мимо аллокатора
+    _taken.addAll(reservedTags); // §351 — теги Направлений, эмитятся мимо аллокатора
   }
   final TemplateVars _vars;
   final RuleSetRegistry _ruleSets;
@@ -630,34 +630,34 @@ String _detourRemovedLine(String target, List<String> owners) {
       '${owners.length == 1 ? 'node works' : 'nodes work'} directly.';
 }
 
-/// Собирает channel-группы (vpn-1..vpn-10 + их auto-двойники). Приватный
+/// Собирает direction-группы (vpn-1..vpn-10 + их auto-двойники). Приватный
 /// helper `buildConfig` — специфичен для одного вызова, выделение в
 /// отдельный файл/модуль не даёт пользы (YAGNI, решение §Принципы #4).
-/// §125 — собирает outbound-группы из пользовательских [channels] (storage).
-/// Каждый **включённый** канал эмитит selector `<tag>`; если у канала есть
+/// §125 — собирает outbound-группы из пользовательских [directions] (storage).
+/// Каждый **включённый** Направление эмитит selector `<tag>`; если у Направления есть
 /// `auto` И его node-set непуст — дополнительно urltest-двойник `<tag>-auto`.
 ///
-/// Per-channel node-set: `selectorTags`, отфильтрованные `channel.nodeFilter`
+/// Per-direction node-set: `selectorTags`, отфильтрованные `direction.nodeFilter`
 /// (regex по **итоговому tag** ноды, §048-style — что видно в имени, то и
 /// матчится). Пустой/невалидный фильтр → все ноды. Это снимает прежнее
 /// допущение «все selector делят один набор нод».
-List<Map<String, dynamic>> _buildChannelGroups({
-  required List<Channel> channels,
+List<Map<String, dynamic>> _buildDirectionGroups({
+  required List<Direction> directions,
   required List<String> selectorTags,
   required List<Map<String, dynamic>> nodeEntries,
   required List<String> emitWarnings,
-  required List<String> channelsWithoutNodes, // §274 — display-имена, out-параметр
+  required List<String> directionsWithoutNodes, // §274 — display-имена, out-параметр
   bool passiveCheck = false, // §272 — urltest.passive_check в auto-двойники
 }) {
-  // §125 — единственный слой фильтрации нод теперь per-channel regex
+  // §125 — единственный слой фильтрации нод теперь per-direction regex
   // (node_filter). Глобальный excluded_nodes (§048) удалён.
   final baseNodes = selectorTags;
 
-  final active = channels.where((c) => c.enabled || c.isRequired).toList();
+  final active = directions.where((c) => c.enabled || c.isRequired).toList();
 
-  /// Ноды канала после regex-фильтра. Пустой/битый regex → все baseNodes.
+  /// Ноды Направления после regex-фильтра. Пустой/битый regex → все baseNodes.
   /// §197 — nodeFilterInvert инвертирует смысл: true → ноды, чей tag НЕ матчит.
-  List<String> nodesFor(Channel c) {
+  List<String> nodesFor(Direction c) {
     if (c.nodeFilter.isEmpty) return baseNodes;
     final re = tryCompileRegex(c.nodeFilter, caseSensitive: false);
     if (re == null) return baseNodes;
@@ -670,7 +670,7 @@ List<Map<String, dynamic>> _buildChannelGroups({
   // §254 — детур-циклы билдер больше НЕ рвёт: детекция и минимальный набор
   // виновников — в validateConfig (fatal, конфиг не собирается).
   final memberSets = [for (final c in active) nodesFor(c)];
-  // §322 — узел автовыбора в urltest-двойник канала не идёт: urltest внутри
+  // §322 — узел автовыбора в urltest-двойник Направления не идёт: urltest внутри
   // urltest мерил бы уже выбранный внутренней группой узел, а не сервер.
   // Тип берём из эмитированных entry (там же, откуда его читает AWG-advisory).
   final groupTags = {
@@ -700,19 +700,19 @@ List<Map<String, dynamic>> _buildChannelGroups({
       if (emitAuto) c.autoTag,
     ];
     // §201/§274 — пустой набор (regex не матчит / нет нод) → fallback на
-    // [block, direct-out] с default=block для ВСЕХ каналов (безопаснее
+    // [block, direct-out] с default=block для ВСЕХ Направлений (безопаснее
     // блокировать, чем выпускать мимо VPN; direct остаётся доступной
     // опцией). Detour-исключение §248 Q1 ([direct], «нет хопа») снято:
-    // detour-канал может одновременно быть целью правил, и direct-fallback
+    // detour-Направление может одновременно быть целью правил, и direct-fallback
     // молча выпускал бы rule-трафик мимо VPN. selector не должен быть
     // пустой группой (fatal в sing-box).
     final emptyFallback = selectorOutbounds.isEmpty;
     if (emptyFallback) {
       selectorOutbounds.addAll([kBlockOutboundTag, kDirectOutboundTag]);
     }
-    // §200/§274 — предупреждаем, если ИМЕННО фильтр канала отсёк все ноды
+    // §200/§274 — предупреждаем, если ИМЕННО фильтр Направления отсёк все ноды
     // (фильтр непустой, но 0 совпадений): в AppLog текстом, в UI
-    // транзиентным SnackBar (channelsWithoutNodes). Текст отражает
+    // транзиентным SnackBar (directionsWithoutNodes). Текст отражает
     // ФАКТИЧЕСКИЙ исход: при emptyFallback ядро берёт default=block, иначе
     // (include_direct/include_block без нод) — ПЕРВУЮ опцию списка, и при
     // include_direct это direct-out (юзер сам включил опцию — трафик идёт
@@ -722,10 +722,10 @@ List<Map<String, dynamic>> _buildChannelGroups({
       final effective =
           emptyFallback ? kBlockOutboundTag : selectorOutbounds.first;
       emitWarnings.add(
-          'Channel "${c.displayLabel}" (${c.tag}): node filter matched no '
+          'Direction "${c.displayLabel}" (${c.tag}): node filter matched no '
           'nodes — ${effective == kDirectOutboundTag ? 'traffic goes direct (no VPN hop)' : 'traffic is blocked (default)'}. '
           'Check its node filter.');
-      channelsWithoutNodes.add(c.displayLabel);
+      directionsWithoutNodes.add(c.displayLabel);
     }
 
     final selector = <String, dynamic>{
@@ -734,11 +734,11 @@ List<Map<String, dynamic>> _buildChannelGroups({
       'outbounds': selectorOutbounds,
       'interrupt_exist_connections': c.interruptExistConnections,
     };
-    // §201/§274 — fallback пустого канала: block для всех.
+    // §201/§274 — fallback пустого Направления: block для всех.
     if (emptyFallback) {
       selector['default'] = kBlockOutboundTag;
     }
-    // §141 — default = первая нода канала, чей итоговый tag матчит defaultFilter.
+    // §141 — default = первая нода Направления, чей итоговый tag матчит defaultFilter.
     // Не матчит/пусто → default не выставляется (sing-box берёт первую опцию).
     if (c.defaultFilter.isNotEmpty) {
       final re = tryCompileRegex(c.defaultFilter, caseSensitive: false);
@@ -750,7 +750,7 @@ List<Map<String, dynamic>> _buildChannelGroups({
     }
     result.add(selector);
 
-    // urltest-двойник: ТОЛЬКО ноды канала (без direct/auto). Не эмитим при
+    // urltest-двойник: ТОЛЬКО ноды Направления (без direct/auto). Не эмитим при
     // пустом наборе (urltest без нод недопустим).
     if (emitAuto) {
       final a = c.auto!;
@@ -797,12 +797,12 @@ List<Map<String, dynamic>> _buildChannelGroups({
   return result;
 }
 
-/// §125 fallback — синтез `List<Channel>` из `template.groupTemplates`, когда
+/// §125 fallback — синтез `List<Direction>` из `template.groupTemplates`, когда
 /// storage ещё пуст (тесты без storage / первый билд до миграции). Та же
-/// seed-логика, что и one-shot миграция `_migrateChannelsIfNeeded`, но auto-
+/// seed-логика, что и one-shot миграция `_migrateDirectionsIfNeeded`, но auto-
 /// параметры резолвятся через [resolve] (@urltest_* vars). §267 — итерируем
-/// `default_channels`, auto-подгруппа при `channel.include ∋ auto`.
-List<Channel> _channelsFromTemplate(
+/// `default_channels`, auto-подгруппа при `direction.include ∋ auto`.
+List<Direction> _directionsFromTemplate(
   GroupTemplates gt,
   Set<String> enabledGroupTags,
   VarResolver resolve,
@@ -810,12 +810,12 @@ List<Channel> _channelsFromTemplate(
   // §327 — дефолты живут в шаблоне (`vars[].default_value`), и `resolve` их уже
   // применил: `vars` в buildConfig наполнен `userVars[name] ?? defaultValue`.
   // Прежние литералы (`'50'`, `'15m'`) были недостижимой копией шаблона и
-  // разошлись с ним (шаблон: 30). Здесь остаются только дефолты `ChannelAuto`
+  // разошлись с ним (шаблон: 30). Здесь остаются только дефолты `DirectionAuto`
   // — последний рубеж, если var из шаблона исчезнет.
-  const fallback = ChannelAuto();
+  const fallback = DirectionAuto();
   String? s(String name) => resolve(name)?.toString();
 
-  ChannelAuto seedAuto() => ChannelAuto(
+  DirectionAuto seedAuto() => DirectionAuto(
         url: s('urltest_url') ?? fallback.url,
         interval: s('urltest_interval') ?? fallback.interval,
         tolerance: int.tryParse(s('urltest_tolerance') ?? '') ?? fallback.tolerance,
@@ -823,9 +823,9 @@ List<Channel> _channelsFromTemplate(
         interruptExistConnections: fallback.interruptExistConnections,
       );
 
-  final hasAuto = gt.channel.include.contains('auto');
-  final out = <Channel>[];
-  for (final dc in gt.defaultChannels) {
+  final hasAuto = gt.direction.include.contains('auto');
+  final out = <Direction>[];
+  for (final dc in gt.defaultDirections) {
     final enabled = dc.tag == 'vpn-1'
         ? true
         : (enabledGroupTags.isEmpty
@@ -833,7 +833,7 @@ List<Channel> _channelsFromTemplate(
             : enabledGroupTags.contains(dc.tag));
     final auto = hasAuto ? seedAuto() : null;
     out.add(
-        Channel.seedFromDefault(dc, gt.channel, enabled: enabled, auto: auto));
+        Direction.seedFromDefault(dc, gt.direction, enabled: enabled, auto: auto));
   }
   return out;
 }

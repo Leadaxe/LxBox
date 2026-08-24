@@ -68,7 +68,7 @@ class WizardTemplate {
     // §267 — group_templates + top-level default_channels (было preset_groups).
     final groupTemplatesJson =
         json['group_templates'] as Map<String, dynamic>? ?? const {};
-    final defaultChannelsJson =
+    final defaultDirectionsJson =
         json['default_channels'] as List<dynamic>? ?? const [];
 
     // Парсим nested `sections` — секция → chapter → vars.
@@ -96,7 +96,7 @@ class WizardTemplate {
     return WizardTemplate(
       parserConfig: ParserConfigBlock.fromJson(pcJson),
       groupTemplates:
-          GroupTemplates.fromJson(groupTemplatesJson, defaultChannelsJson),
+          GroupTemplates.fromJson(groupTemplatesJson, defaultDirectionsJson),
       vars: allVars,
       varSections: sections,
       config: json['config'] as Map<String, dynamic>? ?? {},
@@ -297,18 +297,19 @@ class SpeedTestOptionsModel {
 // §267 — `group_templates` + `default_channels` заменяют плоский `preset_groups`.
 //
 // Раньше `preset_groups` сваливал в один массив три разнородные сущности
-// (шаблон auto-подгруппы под фейковым tag `@auto_proxy_tag`, каналы vpn-N) и
+// (шаблон auto-подгруппы под фейковым tag `@auto_proxy_tag`, Направления vpn-N) и
 // читался только как seed первой миграции. Теперь разделено на:
 //   - `magic_nodes` — реестр служебных нод (auto/direct/block) по role-ключу;
-//   - `channel`/`auto` — шаблоны сборки канала и его urltest-подгруппы;
-//   - `default_channels` — плоский список каналов для сида первого запуска.
+//   - `channel`/`auto` (json-ключи) — шаблоны сборки Направления и его
+//     urltest-подгруппы (Dart-поля `direction`/`auto`);
+//   - `default_channels` — плоский список Направлений для сида первого запуска.
 //
 // Полное описание — docs/spec/tasks/267-group-templates-magic-nodes.md.
 
 /// §267 — служебная нода из `group_templates.magic_nodes`. Ключ мапы = `role`.
 ///
 /// `source` (`generate`/`preset`) — как нода рождается: `generate` — билдер
-/// синтезирует её per-channel (auto/urltest, статического tag нет — тег из
+/// синтезирует её per-direction (auto/urltest, статического tag нет — тег из
 /// `tpl`); `preset` — готовый объект уже лежит в `config.outbounds` (direct/
 /// block, `tag` — ссылка на него). НЕ путать с sing-box outbound-`type`
 /// (`urltest`/`direct`/`block`) — это другая ось.
@@ -338,11 +339,12 @@ class MagicNode {
   }
 }
 
-/// §267 — шаблон обычного канала (selector) из `group_templates.channel`.
-/// `include` — role-ключи `magic_nodes`, показываемые в selector канала
+/// §267 — шаблон обычного Направления (selector) из json-ключа `group_templates.channel`
+/// (Dart-поле `GroupTemplates.direction`).
+/// `include` — role-ключи `magic_nodes`, показываемые в selector Направления
 /// (`direct`/`auto`); `block` по умолчанию не включён.
-class ChannelTemplate {
-  ChannelTemplate({
+class DirectionTemplate {
+  DirectionTemplate({
     this.type = 'selector',
     this.include = const [],
     this.options = const {},
@@ -352,8 +354,8 @@ class ChannelTemplate {
   final List<String> include; // role-ключи magic_nodes
   final Map<String, dynamic> options;
 
-  factory ChannelTemplate.fromJson(Map<String, dynamic> json) {
-    return ChannelTemplate(
+  factory DirectionTemplate.fromJson(Map<String, dynamic> json) {
+    return DirectionTemplate(
       type: json['type'] as String? ?? 'selector',
       include: (json['include'] as List<dynamic>?)
               ?.map((e) => e as String)
@@ -381,9 +383,9 @@ class AutoTemplate {
   }
 }
 
-/// §267 — один канал для сида первого запуска из `default_channels[i]`.
-class DefaultChannel {
-  DefaultChannel({
+/// §267 — одно Направление для сида первого запуска из `default_channels[i]`.
+class DefaultDirection {
+  DefaultDirection({
     required this.tag,
     this.label = '',
     this.defaultEnabled = true,
@@ -393,8 +395,8 @@ class DefaultChannel {
   final String label;
   final bool defaultEnabled;
 
-  factory DefaultChannel.fromJson(Map<String, dynamic> json) {
-    return DefaultChannel(
+  factory DefaultDirection.fromJson(Map<String, dynamic> json) {
+    return DefaultDirection(
       tag: json['tag'] as String? ?? '',
       label: json['label'] as String? ?? '',
       defaultEnabled: json['default_enabled'] as bool? ?? true,
@@ -403,26 +405,27 @@ class DefaultChannel {
 }
 
 /// §267 — верхнеуровневый блок `group_templates` + top-level `default_channels`.
-/// `magicNodes` — реестр по role-ключу; `channel`/`auto` — шаблоны сборки;
-/// `defaultChannels` — сид первого запуска (собирается из top-level ключа,
+/// `magicNodes` — реестр по role-ключу; `direction`/`auto` — шаблоны сборки
+/// (json-ключи `channel`/`auto` — переименование домена сюда не дошло, §393 A2);
+/// `defaultDirections` — сид первого запуска (собирается из top-level ключа,
 /// НЕ внутри `group_templates`).
 class GroupTemplates {
   GroupTemplates({
     this.magicNodes = const {},
-    ChannelTemplate? channel,
+    DirectionTemplate? direction,
     AutoTemplate? auto,
-    this.defaultChannels = const [],
-  })  : channel = channel ?? ChannelTemplate(),
+    this.defaultDirections = const [],
+  })  : direction = direction ?? DirectionTemplate(),
         auto = auto ?? AutoTemplate();
 
   final Map<String, MagicNode> magicNodes; // role → node
-  final ChannelTemplate channel;
+  final DirectionTemplate direction;
   final AutoTemplate auto;
-  final List<DefaultChannel> defaultChannels;
+  final List<DefaultDirection> defaultDirections;
 
   factory GroupTemplates.fromJson(
     Map<String, dynamic> groupTemplatesJson,
-    List<dynamic> defaultChannelsJson,
+    List<dynamic> defaultDirectionsJson,
   ) {
     final nodesJson =
         groupTemplatesJson['magic_nodes'] as Map<String, dynamic>? ?? const {};
@@ -435,20 +438,20 @@ class GroupTemplates {
     }
     return GroupTemplates(
       magicNodes: magicNodes,
-      channel: ChannelTemplate.fromJson(
+      direction: DirectionTemplate.fromJson(
           groupTemplatesJson['channel'] as Map<String, dynamic>? ?? const {}),
       auto: AutoTemplate.fromJson(
           groupTemplatesJson['auto'] as Map<String, dynamic>? ?? const {}),
-      defaultChannels: defaultChannelsJson
+      defaultDirections: defaultDirectionsJson
           .whereType<Map<String, dynamic>>()
-          .map(DefaultChannel.fromJson)
+          .map(DefaultDirection.fromJson)
           .toList(),
     );
   }
 }
 
 /// §267 — резолв `magic_nodes.*.tpl` для `generate`-ноды: подставляет tag
-/// родительского канала в шаблон. Формализует нынешний `Channel.autoTag`.
+/// родительского Направления в шаблон. Формализует нынешний `Direction.autoTag`.
 /// `resolveTpl('{parent_tag}-auto', 'vpn-1') == 'vpn-1-auto'`.
 String resolveTpl(String tpl, String parentTag) =>
     tpl.replaceAll('{parent_tag}', parentTag);

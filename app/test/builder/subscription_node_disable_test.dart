@@ -103,15 +103,15 @@ void main() {
     final template = WizardTemplate(
       parserConfig: ParserConfigBlock(),
       groupTemplates: GroupTemplates(
-        channel: ChannelTemplate(
+        direction: DirectionTemplate(
           include: const ['direct', 'auto'],
           options: const {'interrupt_exist_connections': true},
         ),
         auto: AutoTemplate(
           options: const {'url': 'https://x', 'interval': '30s'},
         ),
-        defaultChannels: [
-          DefaultChannel(tag: 'vpn-1', label: 'vpn-1', defaultEnabled: true),
+        defaultDirections: [
+          DefaultDirection(tag: 'vpn-1', label: 'vpn-1', defaultEnabled: true),
         ],
       ),
       vars: const [],

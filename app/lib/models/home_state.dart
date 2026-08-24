@@ -62,12 +62,12 @@ class HomeState {
     this.ccGroups = const <CcGroup>[],
     this.groups = const <String>[],
     this.groupLabels = const <String, String>{},
-    this.channelAutoTags = const <String>{},
+    this.directionAutoTags = const <String>{},
     this.selectedGroup,
     this.nodes = const <String>[],
     this.activeInGroup,
     this.highlightedNode,
-    this.delayByChannel = const <String, Map<String, int>>{},
+    this.delayByDirection = const <String, Map<String, int>>{},
     this.pingBusy = const <String, String>{},
     this.sickRoots = const <String, List<DependentRef>>{},
     this.debugEvents = const <DebugEntry>[],
@@ -148,77 +148,77 @@ class HomeState {
   final List<CcGroup> ccGroups;
   final List<String> groups;
 
-  /// §125 — tag→label каналов (из storage `channels[]`). Для отображения
-  /// человекочитаемого имени канала в home-dropdown вместо tag ('vpn-1').
+  /// §125 — tag→label Направлений (из storage `directions[]`). Для отображения
+  /// человекочитаемого имени Направления в home-dropdown вместо tag ('vpn-1').
   final Map<String, String> groupLabels;
 
-  /// §322 — auto-теги каналов (`vpn-N-auto`). Пин в верхнюю секцию положен
+  /// §322 — auto-теги Направлений (`vpn-N-auto`). Пин в верхнюю секцию положен
   /// только им: у узла автовыбора подписки/папки тип тоже `urltest`, но он
   /// обычная нода списка и своего места не покидает.
-  final Set<String> channelAutoTags;
+  final Set<String> directionAutoTags;
 
-  /// Человекочитаемое имя группы: label канала из storage, иначе сам tag.
+  /// Человекочитаемое имя группы: label Направления из storage, иначе сам tag.
   String groupLabelOf(String tag) => groupLabels[tag] ?? tag;
 
   final String? selectedGroup;
   final List<String> nodes;
   final String? activeInGroup;
   final String? highlightedNode;
-  /// §325 — замеры пинга **по каналам**: `канал → тег ноды → ms`.
+  /// §325 — замеры пинга **по Направлениям**: `Направление → тег ноды → ms`.
   ///
   /// Раньше это была одна плоская карта на всё приложение, и mass-ping,
-  /// перебирающий ноды только текущего канала, чистил её целиком — пинги всех
-  /// прочих каналов пропадали (жалобы 4PDA #1289/#1290/#1376/#1381/#1382).
-  /// Теперь каждый канал ведёт свои замеры и чужие не трогает.
+  /// перебирающий ноды только текущего Направления, чистил её целиком — пинги всех
+  /// прочих Направлений пропадали (жалобы 4PDA #1289/#1290/#1376/#1381/#1382).
+  /// Теперь каждое Направление ведёт свои замеры и чужие не трогает.
   ///
   /// Разделение нужно не только ради изоляции сброса: ping-URL и таймаут
-  /// резолвятся **per-group** (§040), поэтому «180мс» из канала с быстрым
-  /// endpoint'ом и из канала с медленным — разные величины, и складывать их
+  /// резолвятся **per-group** (§040), поэтому «180мс» из Направления с быстрым
+  /// endpoint'ом и из Направления с медленным — разные величины, и складывать их
   /// в один ключ некорректно.
   ///
-  /// Ключ канала — `selectedGroup`; замеры вне контекста канала (папки,
-  /// проба подписок) живут под [scratchChannel]. Прямо читать эту карту не
+  /// Ключ Направления — `selectedGroup`; замеры вне контекста Направления (папки,
+  /// проба подписок) живут под [scratchDirection]. Прямо читать эту карту не
   /// надо — см. [delayOf] / [delayIsForeign], они дают фоллбэк-семантику.
-  final Map<String, Map<String, int>> delayByChannel;
+  final Map<String, Map<String, int>> delayByDirection;
   final Map<String, String> pingBusy;
 
   /// §355 — «корни беды»: мёртвая нода → её транзитивные пострадавшие (DNS и
-  /// ноды, зависящие через detour/каналы). Пересчитывается HomeController'ом
+  /// ноды, зависящие через detour/Направления). Пересчитывается HomeController'ом
   /// на замерах пинга и смене выбора групп ([DependencyGraph.computeSick]);
   /// пустая map = тревог нет. UI: ⚠-метка на корне + sheet со списком.
   final Map<String, List<DependentRef>> sickRoots;
 
-  /// §325 — псевдо-канал для замеров, сделанных вне выбранного канала
+  /// §325 — псевдо-Направление для замеров, сделанных вне выбранного Направления
   /// (`selectedGroup == null`). Отдельный ключ, а не «сложить в текущий»:
-  /// иначе такие замеры присвоил бы себе случайный канал.
-  static const String scratchChannel = ' scratch';
+  /// иначе такие замеры присвоил бы себе случайный Направление.
+  static const String scratchDirection = ' scratch';
 
-  /// §325 — ключ канала, в который пишутся новые замеры.
-  String get delayChannelKey => selectedGroup ?? scratchChannel;
+  /// §325 — ключ Направления, в который пишутся новые замеры.
+  String get delayDirectionKey => selectedGroup ?? scratchDirection;
 
-  /// §325 — замеры текущего канала (без фоллбэка). Источник истины для
+  /// §325 — замеры текущего Направления (без фоллбэка). Источник истины для
   /// «мерили ли ноду именно здесь».
   Map<String, int> get _ownDelays =>
-      delayByChannel[delayChannelKey] ?? const <String, int>{};
+      delayByDirection[delayDirectionKey] ?? const <String, int>{};
 
-  /// §325 — пинг ноды для показа: свой замер канала, иначе последний известный
+  /// §325 — пинг ноды для показа: свой замер Направления, иначе последний известный
   /// из любого другого (фоллбэк). `null` — ноду не мерили нигде.
   ///
   /// Фоллбэк намеренный: строгая изоляция чтения дала бы пустой список после
-  /// каждого переключения канала и вернула бы ровно ту ручную работу, на
+  /// каждого переключения Направления и вернула бы ровно ту ручную работу, на
   /// которую жаловались (#1290). Чужой замер помечается в UI — [delayIsForeign].
   int? delayOf(String tag) {
     final own = _ownDelays[tag];
     if (own != null) return own;
-    for (final entry in delayByChannel.entries) {
-      if (entry.key == delayChannelKey) continue;
+    for (final entry in delayByDirection.entries) {
+      if (entry.key == delayDirectionKey) continue;
       final v = entry.value[tag];
       if (v != null) return v;
     }
     return null;
   }
 
-  /// §325 — показанный [delayOf] пришёл из ДРУГОГО канала (в текущем ноду не
+  /// §325 — показанный [delayOf] пришёл из ДРУГОГО Направления (в текущем ноду не
   /// мерили). UI рисует такой замер приглушённо и со значком-пометкой.
   bool delayIsForeign(String tag) =>
       !_ownDelays.containsKey(tag) && delayOf(tag) != null;
@@ -313,13 +313,13 @@ class HomeState {
   /// только такие: узел автовыбора подписки (§322) — обычная нода списка и
   /// фильтруется наравне со всеми (regex, чипы, пинг, detour-pool).
   ///
-  /// Шасси = селектор канала (`vpn-N`, ключи `groupLabels` из storage
-  /// `channels[]`, §125) + его auto-двойник (`channelAutoTags`, §322).
+  /// Шасси = селектор Направления (`vpn-N`, ключи `groupLabels` из storage
+  /// `directions[]`, §125) + его auto-двойник (`directionAutoTags`, §322).
   /// `direct`/`block`/`dns` — по ТИПУ, не по тегу: подписка не может прислать
   /// узел такого типа, а теги расходятся (`block` в `magic_nodes` шаблона vs
   /// `block-out` в аллокаторе `build_config`) — литерал был бы ловушкой.
   bool isSystemControlTag(String tag) {
-    if (groupLabels.containsKey(tag) || channelAutoTags.contains(tag)) {
+    if (groupLabels.containsKey(tag) || directionAutoTags.contains(tag)) {
       return true;
     }
     final t = activeModel[tag]?.type;
@@ -332,7 +332,7 @@ class HomeState {
 
   /// Memoized sort — вычисляется один раз на жизнь этого `HomeState`
   /// инстанса. Новый `copyWith` создаёт новый state → новый late-кэш;
-  /// если `nodes`/`sortMode`/`delayByChannel` не поменялись между emit'ами,
+  /// если `nodes`/`sortMode`/`delayByDirection` не поменялись между emit'ами,
   /// HomeController всё равно создаст новый state — это отдельная
   /// оптимизация (batched emit). Здесь спасаем от повторного sort
   /// в пределах одного ребилд-цикла виджетов, который обращается к
@@ -364,7 +364,7 @@ class HomeState {
             // на своём месте в списке.
             (pinAuto &&
                 model[n]?.type == 'urltest' &&
-                channelAutoTags.contains(n)) ||
+                directionAutoTags.contains(n)) ||
             model[n]?.type == 'block') // §201 — block всегда сверху
           n,
     };
@@ -373,7 +373,7 @@ class HomeState {
       ...nodes.where((n) =>
           pinnedSet.contains(n) &&
           model[n]?.type == 'urltest' &&
-          channelAutoTags.contains(n)),
+          directionAutoTags.contains(n)),
       ...nodes.where((n) => pinnedSet.contains(n) && model[n]?.type == 'block'),
     ];
     // §196 — активная нода группы сразу ПОСЛЕ direct/auto, при ЛЮБОЙ сортировке
@@ -416,7 +416,7 @@ class HomeState {
 
   int _compareLatency(String a, String b) {
     // §325 — сортируем по тому же числу, что видит пользователь (вкл. фоллбэк
-    // из чужого канала): иначе нода с показанным «120MS» уезжала бы в хвост
+    // из чужого Направления): иначе нода с показанным «120MS» уезжала бы в хвост
     // к неизмеренным.
     final da = delayOf(a);
     final db = delayOf(b);
@@ -441,12 +441,12 @@ class HomeState {
     List<CcGroup>? ccGroups,
     List<String>? groups,
     Map<String, String>? groupLabels,
-    Set<String>? channelAutoTags,
+    Set<String>? directionAutoTags,
     Object? selectedGroup = _unset,
     List<String>? nodes,
     Object? activeInGroup = _unset,
     Object? highlightedNode = _unset,
-    Map<String, Map<String, int>>? delayByChannel,
+    Map<String, Map<String, int>>? delayByDirection,
     Map<String, String>? pingBusy,
     Map<String, List<DependentRef>>? sickRoots,
     List<DebugEntry>? debugEvents,
@@ -493,7 +493,7 @@ class HomeState {
       ccGroups: ccGroups ?? this.ccGroups,
       groups: groups ?? this.groups,
       groupLabels: groupLabels ?? this.groupLabels,
-      channelAutoTags: channelAutoTags ?? this.channelAutoTags,
+      directionAutoTags: directionAutoTags ?? this.directionAutoTags,
       selectedGroup: identical(selectedGroup, _unset)
           ? this.selectedGroup
           : selectedGroup as String?,
@@ -504,7 +504,7 @@ class HomeState {
       highlightedNode: identical(highlightedNode, _unset)
           ? this.highlightedNode
           : highlightedNode as String?,
-      delayByChannel: delayByChannel ?? this.delayByChannel,
+      delayByDirection: delayByDirection ?? this.delayByDirection,
       pingBusy: pingBusy ?? this.pingBusy,
       sickRoots: sickRoots ?? this.sickRoots,
       debugEvents: debugEvents ?? this.debugEvents,

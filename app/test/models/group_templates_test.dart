@@ -56,11 +56,11 @@ void main() {
       expect(gt.magicNodes['block']!.tpl, isNull);
     });
 
-    test('channel: type/include/options', () {
+    test('direction: type/include/options', () {
       final gt = GroupTemplates.fromJson(gtJson, dcJson);
-      expect(gt.channel.type, 'selector');
-      expect(gt.channel.include, ['direct', 'auto']);
-      expect(gt.channel.options['interrupt_exist_connections'], true);
+      expect(gt.direction.type, 'selector');
+      expect(gt.direction.include, ['direct', 'auto']);
+      expect(gt.direction.options['interrupt_exist_connections'], true);
     });
 
     test('auto-шаблон: сырые @-плейсхолдеры сохраняются (не резолвены)', () {
@@ -70,21 +70,21 @@ void main() {
 
     test('default_channels: tag/label/default_enabled', () {
       final gt = GroupTemplates.fromJson(gtJson, dcJson);
-      expect(gt.defaultChannels.map((d) => d.tag), ['vpn-1', 'vpn-2']);
-      expect(gt.defaultChannels[0].defaultEnabled, true);
-      expect(gt.defaultChannels[1].defaultEnabled, false);
+      expect(gt.defaultDirections.map((d) => d.tag), ['vpn-1', 'vpn-2']);
+      expect(gt.defaultDirections[0].defaultEnabled, true);
+      expect(gt.defaultDirections[1].defaultEnabled, false);
     });
 
     test('пустой JSON → безопасные дефолты', () {
       final gt = GroupTemplates.fromJson(const {}, const []);
       expect(gt.magicNodes, isEmpty);
-      expect(gt.channel.include, isEmpty);
-      expect(gt.defaultChannels, isEmpty);
+      expect(gt.direction.include, isEmpty);
+      expect(gt.defaultDirections, isEmpty);
     });
   });
 
   group('resolveTpl', () {
-    test('{parent_tag} → tag канала', () {
+    test('{parent_tag} → tag Направления', () {
       expect(resolveTpl('{parent_tag}-auto', 'vpn-1'), 'vpn-1-auto');
       expect(resolveTpl('{parent_tag}-auto', 'vpn-10'), 'vpn-10-auto');
     });

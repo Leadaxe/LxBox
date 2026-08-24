@@ -18,7 +18,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   // A ходит через B → B = detour-таргет (isDetour); A/C — payload non-detour.
-  // vpn-1-auto/direct — шасси (§359: канал из groupLabels + его auto-двойник,
+  // vpn-1-auto/direct — шасси (§359: Направление из groupLabels + его auto-двойник,
   // direct по типу). Z — отсутствует в configModel.
   final configRaw = jsonEncode({
     'outbounds': [
@@ -45,9 +45,9 @@ void main() {
     state = HomeState(
       configRaw: configRaw,
       nodes: tags, // для computeListData (viewSortedNodes → sortedNodes)
-      // §359 — шасси задаётся явно: канал из storage + его auto-двойник.
+      // §359 — шасси задаётся явно: Направление из storage + его auto-двойник.
       groupLabels: const {'vpn-1': 'VPN ①'},
-      channelAutoTags: const {'vpn-1-auto'},
+      directionAutoTags: const {'vpn-1-auto'},
     );
   });
 
@@ -106,7 +106,7 @@ void main() {
   // ── §359 — авто-узлы подписок фильтруются как обычные узлы ──────────────
   group('§359 авто-узел подписки — обычная нода', () {
     // Две авто-группы подписки: least_test (без balancer) и round_robin
-    // (с balancer{}, §208). Плюс шасси: канал vpn-1, его двойник, direct, block.
+    // (с balancer{}, §208). Плюс шасси: Направление vpn-1, его двойник, direct, block.
     final subRaw = jsonEncode({
       'outbounds': [
         {'tag': 'sub-🇫🇮 Helsinki', 'type': 'vless'},
@@ -138,12 +138,12 @@ void main() {
         configRaw: subRaw,
         nodes: subTags,
         groupLabels: const {'vpn-1': 'VPN ①'},
-        channelAutoTags: const {'vpn-1-auto'},
+        directionAutoTags: const {'vpn-1-auto'},
       );
     });
 
     test('isSystemControlTag: шасси — да, авто-узлы подписки — нет', () {
-      expect(s.isSystemControlTag('vpn-1'), isTrue, reason: 'селектор канала');
+      expect(s.isSystemControlTag('vpn-1'), isTrue, reason: 'селектор Направления');
       expect(s.isSystemControlTag('vpn-1-auto'), isTrue, reason: 'его двойник');
       expect(s.isSystemControlTag('direct-out'), isTrue, reason: 'по типу');
       expect(s.isSystemControlTag('block'), isTrue, reason: 'по типу');

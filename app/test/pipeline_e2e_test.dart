@@ -10,17 +10,17 @@ import 'package:lxbox/services/subscription/sources.dart';
 void main() {
   final template = WizardTemplate(
     parserConfig: ParserConfigBlock(),
-    // §267 — group_templates: vpn-1 канал (direct+auto), auto-подгруппа.
+    // §267 — group_templates: vpn-1 Направление (direct+auto), auto-подгруппа.
     groupTemplates: GroupTemplates(
-      channel: ChannelTemplate(
+      direction: DirectionTemplate(
         include: const ['direct', 'auto'],
         options: const {'interrupt_exist_connections': true},
       ),
       auto: AutoTemplate(
         options: const {'url': 'https://example.com', 'interval': '30s'},
       ),
-      defaultChannels: [
-        DefaultChannel(tag: 'vpn-1', label: 'vpn-1', defaultEnabled: true),
+      defaultDirections: [
+        DefaultDirection(tag: 'vpn-1', label: 'vpn-1', defaultEnabled: true),
       ],
     ),
     vars: const [],
@@ -78,7 +78,7 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
     expect(tags, containsAll(['VLESS', 'Trojan', 'SS', 'Hy2', 'TUIC']));
     expect(tags, contains('vpn-1'));
     expect(tags, contains('direct-out'));
-    // §125 — глобальный ✨auto больше НЕ канал (Решение 3). vpn-1 имеет ✨auto в
+    // §125 — глобальный ✨auto больше НЕ Направление (Решение 3). vpn-1 имеет ✨auto в
     // add_outbounds → его auto-двойник теперь свой: vpn-1-auto (urltest по нодам
     // vpn-1). Глобального ✨auto в outbounds быть не должно.
     expect(tags, isNot(contains(kAutoOutboundTag)));
@@ -91,7 +91,7 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
     expect(vpn1['outbounds'], contains('vpn-1-auto'));
     expect(vpn1['outbounds'], contains('direct-out'));
 
-    // vpn-1-auto — чистый urltest по нодам канала, БЕЗ direct/auto-членов.
+    // vpn-1-auto — чистый urltest по нодам Направления, БЕЗ direct/auto-членов.
     final vpn1Auto =
         outs.firstWhere((o) => (o as Map)['tag'] == 'vpn-1-auto') as Map;
     expect(vpn1Auto['type'], 'urltest');

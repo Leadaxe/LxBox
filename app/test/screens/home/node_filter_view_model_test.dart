@@ -201,79 +201,79 @@ void main() {
     });
   });
 
-  group('per-channel memory (syncChannel)', () {
-    test('фильтр канала A восстанавливается после A→B→A', () {
-      // войти в канал A
-      vm.syncChannel('A');
+  group('per-direction memory (syncDirection)', () {
+    test('фильтр Направления A восстанавливается после A→B→A', () {
+      // войти в Направление A
+      vm.syncDirection('A');
       vm.toggleProtocol('vless');
       vm.toggleSubscription('sub-1');
       // переключиться на B → A-фильтры сохранены, B чистый
-      vm.syncChannel('B');
+      vm.syncDirection('B');
       expect(vm.enabledProtocols, isEmpty);
       expect(vm.enabledSubscriptions, isEmpty);
       // настроить B
       vm.toggleProtocol('trojan');
       // вернуться в A → восстановлено
-      vm.syncChannel('A');
+      vm.syncDirection('A');
       expect(vm.enabledProtocols, {'vless'});
       expect(vm.enabledSubscriptions, {'sub-1'});
       // снова B → trojan
-      vm.syncChannel('B');
+      vm.syncDirection('B');
       expect(vm.enabledProtocols, {'trojan'});
     });
 
-    test('пустой канал не плодит запись + same-channel no-op', () {
-      vm.syncChannel('A');
+    test('пустое Направление не плодит запись + same-direction no-op', () {
+      vm.syncDirection('A');
       final before = notifications;
-      vm.syncChannel('A'); // no-op
+      vm.syncDirection('A'); // no-op
       expect(notifications, before);
     });
 
-    test('§095 дефолтный ping (200, disabled) переживает смену канала', () {
-      vm.syncChannel('A');
+    test('§095 дефолтный ping (200, disabled) переживает смену Направления', () {
+      vm.syncDirection('A');
       expect(vm.pingController.text, '200');
-      vm.syncChannel('B'); // capture A нормализует дефолт → '' (no orphan)
+      vm.syncDirection('B'); // capture A нормализует дефолт → '' (no orphan)
       expect(vm.pingController.text, '200');
-      vm.syncChannel('A'); // restore A → пусто → дефолтное «200»
+      vm.syncDirection('A'); // restore A → пусто → дефолтное «200»
       expect(vm.pingController.text, '200');
       expect(vm.pingEnabled, false);
     });
 
-    test('detour/show-non-matching глобальны (не per-channel)', () {
-      vm.syncChannel('A');
+    test('detour/show-non-matching глобальны (не per-direction)', () {
+      vm.syncDirection('A');
       vm.setDetourEnabled(true); // → скрыть detour
-      vm.syncChannel('B');
-      // глобальный флаг не сбрасывается при смене канала
+      vm.syncDirection('B');
+      // глобальный флаг не сбрасывается при смене Направления
       expect(vm.detourEnabled, true);
       expect(vm.detourActive, true);
     });
 
-    test('§096 protocol/subscription invert — per-channel', () {
-      vm.syncChannel('A');
+    test('§096 protocol/subscription invert — per-direction', () {
+      vm.syncDirection('A');
       vm.toggleProtocol('vless');
       vm.toggleProtocolsInvert();
       vm.toggleSubscriptionsInvert();
-      vm.syncChannel('B');
+      vm.syncDirection('B');
       expect(vm.protocolsInvert, false, reason: 'B чистый');
       expect(vm.subscriptionsInvert, false);
-      vm.syncChannel('A');
+      vm.syncDirection('A');
       expect(vm.protocolsInvert, true, reason: 'A восстановлен');
       expect(vm.subscriptionsInvert, true);
       expect(vm.enabledProtocols, {'vless'});
     });
 
-    test('§103 variants (+invert) — per-channel', () {
-      vm.syncChannel('A');
+    test('§103 variants (+invert) — per-direction', () {
+      vm.syncDirection('A');
       vm.toggleVariant('xhttp');
       vm.toggleVariant('Reality');
       vm.toggleVariantsInvert();
       expect(vm.variantActive, true);
       expect(vm.isActive, true);
-      vm.syncChannel('B');
+      vm.syncDirection('B');
       expect(vm.enabledVariants, isEmpty, reason: 'B чистый');
       expect(vm.variantsInvert, false);
       expect(vm.variantActive, false);
-      vm.syncChannel('A');
+      vm.syncDirection('A');
       expect(vm.enabledVariants, {'xhttp', 'Reality'},
           reason: 'A восстановлен');
       expect(vm.variantsInvert, true);

@@ -24,7 +24,7 @@
             "type": "outbound",
             "default_value": "direct-out",
             "title": "Outbound",
-            "tooltip": "Which channel carries DNS queries to this server"
+            "tooltip": "Which direction carries DNS queries to this server"
           },
           {
             "name": "dns_ip",
@@ -69,7 +69,7 @@
             "type": "outbound",
             "default_value": "vpn-1",
             "title": "Outbound",
-            "tooltip": "Which channel carries DNS queries to this server"
+            "tooltip": "Which direction carries DNS queries to this server"
           },
           {
             "name": "dns_ip",
@@ -114,7 +114,7 @@
             "type": "outbound",
             "default_value": "direct-out",
             "title": "Outbound",
-            "tooltip": "Which channel carries DNS queries to this server"
+            "tooltip": "Which direction carries DNS queries to this server"
           },
           {
             "name": "dns_ip",
@@ -164,7 +164,7 @@
             "type": "outbound",
             "default_value": "direct-out",
             "title": "Outbound",
-            "tooltip": "Which channel carries DNS queries to this server"
+            "tooltip": "Which direction carries DNS queries to this server"
           },
           {
             "name": "dns_ip",
@@ -209,7 +209,7 @@
             "type": "outbound",
             "default_value": "vpn-1",
             "title": "Outbound",
-            "tooltip": "Which channel carries DNS queries to this server"
+            "tooltip": "Which direction carries DNS queries to this server"
           },
           {
             "name": "dns_ip",
@@ -254,7 +254,7 @@
             "type": "outbound",
             "default_value": "direct-out",
             "title": "Outbound",
-            "tooltip": "Which channel carries DNS queries to this server"
+            "tooltip": "Which direction carries DNS queries to this server"
           },
           {
             "name": "safe_profile",
@@ -1442,7 +1442,7 @@
           "mode": "fastest",
           "error_ttl": "5m",
           "win_ttl": "5m",
-          "description": "RU DNS group (UDP via channel + DoT via vpn-1 + direct DoH)"
+          "description": "RU DNS group (UDP via direction + DoT via vpn-1 + direct DoH)"
         },
         {
           "type": "udp",
@@ -1584,7 +1584,7 @@
       "preset_id": "ru-inside",
       "ui": {
         "label": "Russia-only services",
-        "description": "Services available only inside Russia. Direct by default, or route via a channel to reach them from abroad.",
+        "description": "Services available only inside Russia. Direct by default, or route via a direction to reach them from abroad.",
         "num": 1110,
         "isSortable": true
       },
@@ -1594,7 +1594,7 @@
           "type": "outbound",
           "default_value": "direct-out",
           "title": "Outbound",
-          "tooltip": "Where to route Russia-only services. Direct on a Russian network; pick a Russian channel to reach them from abroad."
+          "tooltip": "Where to route Russia-only services. Direct on a Russian network; pick a Russian direction to reach them from abroad."
         },
         {
           "name": "force_ipv4",
@@ -1636,7 +1636,7 @@
       "preset_id": "bittorrent",
       "ui": {
         "label": "BitTorrent",
-        "description": "Route BitTorrent traffic. Direct by default, or send it to a separate channel.",
+        "description": "Route BitTorrent traffic. Direct by default, or send it to a separate direction.",
         "default": true,
         "num": 980,
         "isSortable": true
@@ -1647,7 +1647,7 @@
           "type": "outbound",
           "default_value": "direct-out",
           "title": "Outbound",
-          "tooltip": "Where to route BitTorrent. Direct to keep it off the VPN, or pick a channel to tunnel it."
+          "tooltip": "Where to route BitTorrent. Direct to keep it off the VPN, or pick a direction to tunnel it."
         }
       ],
       "rule": {
@@ -1661,7 +1661,7 @@
       "preset_id": "private-ip",
       "ui": {
         "label": "Private IPs",
-        "description": "Route private IP ranges (LAN). Direct by default, or send to a channel to reach routers/devices over a local VPN.",
+        "description": "Route private IP ranges (LAN). Direct by default, or send to a direction to reach routers/devices over a local VPN.",
         "num": 950,
         "isSortable": true
       },
@@ -1671,7 +1671,7 @@
           "type": "outbound",
           "default_value": "direct-out",
           "title": "Outbound",
-          "tooltip": "Where to route private/LAN IPs. Direct for local access, or a channel to reach a remote LAN over VPN."
+          "tooltip": "Where to route private/LAN IPs. Direct for local access, or a direction to reach a remote LAN over VPN."
         }
       ],
       "rule": {

@@ -1,32 +1,32 @@
-// §125 — Настраиваемые каналы роутинга.
+// §125 — Настраиваемые Направления роутинга.
 //
-// `Channel` заменяет статичный `PresetGroup` из `wizard_template.json` как
-// source-of-truth: каналы переезжают из template в `lxbox_settings.json`
-// (`channels[]`). Template остаётся seed'ом для первого запуска (см. миграцию
-// в `settings_storage/channels.dart`).
+// `Direction` заменяет статичный `PresetGroup` из `wizard_template.json` как
+// source-of-truth: Направления переезжают из template в `lxbox_settings.json`
+// (`directions[]`). Template остаётся seed'ом для первого запуска (см. миграцию
+// в `settings_storage/directions.dart`).
 //
 // `tag` — СИСТЕМНЫЙ immutable id ('vpn-1'..'vpn-10'): автогенерируется при
 // создании, юзер правит только `label`. immutable tag ⇒ ссылки (route_final /
 // ping_options / custom-rule outbound / detour) стабильны by design.
 //
-// Спека: docs/spec/features/125 configurable-channels/spec.md.
+// Спека: docs/spec/features/125 configurable-directions/spec.md.
 
 import '../config/consts.dart' show kDetourTagPrefix;
-import 'parser_config.dart' show ChannelTemplate, DefaultChannel;
+import 'parser_config.dart' show DirectionTemplate, DefaultDirection;
 
-/// Максимум каналов (Решение 5). vpn-1 неудаляем, N∈1..10.
-const int kMaxChannels = 10;
+/// Максимум Направлений (Решение 5). vpn-1 неудаляем, N∈1..10.
+const int kMaxDirections = 10;
 
-/// §198 — дефолтный label канала по номеру: «VPN ①»…«VPN ⑩». Кружок-цифра —
+/// §198 — дефолтный label Направления по номеру: «VPN ①»…«VPN ⑩». Кружок-цифра —
 /// Unicode «Enclosed Alphanumerics» (① = U+2460, идут подряд 1..10). N вне
 /// 1..10 → без кружка («VPN N»).
-String defaultChannelLabel(int n) {
+String defaultDirectionLabel(int n) {
   if (n < 1 || n > 10) return 'VPN $n';
   return 'VPN ${String.fromCharCode(0x2460 + n - 1)}';
 }
 
-/// Номер канала из tag 'vpn-N' (для дефолтного label). null если не парсится.
-int? channelNumberOf(String tag) {
+/// Номер Направления из tag 'vpn-N' (для дефолтного label). null если не парсится.
+int? directionNumberOf(String tag) {
   final m = RegExp(r'^vpn-(\d+)$').firstMatch(tag);
   return m == null ? null : int.tryParse(m.group(1)!);
 }
@@ -35,12 +35,12 @@ int? channelNumberOf(String tag) {
 const int _kToleranceMax = 65535;
 
 /// §161 — клэмп tolerance/pool_tolerance в uint16 [0, 65535]. §219/§221 —
-/// публичная (channel_edit клэмпит в снапшоте, симметрично clampChannelPool).
-int clampChannelTolerance(int v) => v < 0 ? 0 : (v > _kToleranceMax ? _kToleranceMax : v);
+/// публичная (direction_edit клэмпит в снапшоте, симметрично clampDirectionPool).
+int clampDirectionTolerance(int v) => v < 0 ? 0 : (v > _kToleranceMax ? _kToleranceMax : v);
 
 /// §208 — режим выбора узла в auto-группе (urltest, ядро SPEC 019 V2).
 /// `leastTest` — апстрим: один лучший по delay (как было всегда).
-/// `roundRobin` — балансировка по пулу (читает [Channel.auto] balancer-поля).
+/// `roundRobin` — балансировка по пулу (читает [Direction.auto] balancer-поля).
 enum UrltestMode {
   leastTest('least_test'),
   roundRobin('round_robin');
@@ -85,19 +85,19 @@ const List<StickyHashKey> kDefaultStickyHash = [
 
 /// §208 — нижняя граница размера пула. Ядро `0`→дефолт 3, отриц.→ошибка; из UI
 /// шлём всегда осмысленное (min 1), кламп на клиенте безопаснее. §219 —
-/// публичная (переиспользуется channel_edit_screen для снапшота).
-int clampChannelPool(int v) => v < 1 ? 1 : v;
+/// публичная (переиспользуется direction_edit_screen для снапшота).
+int clampDirectionPool(int v) => v < 1 ? 1 : v;
 
-/// Параметры urltest-двойника канала (`<tag>-auto`). null-аналог на уровне
-/// [Channel.auto] == null означает «галка auto ВЫКЛ, двойник не эмитится».
-/// `tag` двойника НЕ хранится — производный (`channel.autoTag`).
-class ChannelAuto {
-  const ChannelAuto({
+/// Параметры urltest-двойника Направления (`<tag>-auto`). null-аналог на уровне
+/// [Direction.auto] == null означает «галка auto ВЫКЛ, двойник не эмитится».
+/// `tag` двойника НЕ хранится — производный (`direction.autoTag`).
+class DirectionAuto {
+  const DirectionAuto({
     this.url = 'https://cp.cloudflare.com/generate_204',
     // §272 — 15m вместо 5m: на mobile каждый цикл проб дайлит узлы (будит
     // спящие, SPEC 020); с passive_check пробы при живом трафике и так
     // пропускаются, interval задаёт лишь скорость реакции на смерть узла.
-    // Существующие каналы хранят своё значение в JSON — их это не меняет.
+    // Существующие Направления хранят своё значение в JSON — их это не меняет.
     this.interval = '15m',
     this.tolerance = 50,
     this.idleTimeout = '30m',
@@ -118,7 +118,7 @@ class ChannelAuto {
   /// эмитит `balancer{}` в config.
   final UrltestMode mode;
 
-  /// §208 — `balancer.pool`: размер пула round_robin. clamp ≥1 (см. clampChannelPool).
+  /// §208 — `balancer.pool`: размер пула round_robin. clamp ≥1 (см. clampDirectionPool).
   final int pool;
 
   /// §208 — `balancer.pool_tolerance` (мс). 0 = держать пул живых; >0 = отбор
@@ -129,7 +129,7 @@ class ChannelAuto {
   /// → `sticky_hash: []` (липкость выключена, чистая ротация).
   final List<StickyHashKey> stickyHash;
 
-  ChannelAuto copyWith({
+  DirectionAuto copyWith({
     String? url,
     String? interval,
     int? tolerance,
@@ -140,23 +140,23 @@ class ChannelAuto {
     int? poolTolerance,
     List<StickyHashKey>? stickyHash,
   }) =>
-      ChannelAuto(
+      DirectionAuto(
         url: url ?? this.url,
         interval: interval ?? this.interval,
-        tolerance: tolerance == null ? this.tolerance : clampChannelTolerance(tolerance),
+        tolerance: tolerance == null ? this.tolerance : clampDirectionTolerance(tolerance),
         idleTimeout: idleTimeout ?? this.idleTimeout,
         interruptExistConnections:
             interruptExistConnections ?? this.interruptExistConnections,
         mode: mode ?? this.mode,
-        pool: pool == null ? this.pool : clampChannelPool(pool),
+        pool: pool == null ? this.pool : clampDirectionPool(pool),
         poolTolerance:
-            poolTolerance == null ? this.poolTolerance : clampChannelTolerance(poolTolerance),
+            poolTolerance == null ? this.poolTolerance : clampDirectionTolerance(poolTolerance),
         stickyHash: stickyHash ?? this.stickyHash,
       );
 
-  factory ChannelAuto.fromJson(Map<String, dynamic> json) {
+  factory DirectionAuto.fromJson(Map<String, dynamic> json) {
     // §208 — balancer-поля вложены в `balancer{}` (зеркало config-ядра). Старый
-    // канал без `balancer`/`mode` → leastTest + дефолты (обратная совместимость).
+    // Направление без `balancer`/`mode` → leastTest + дефолты (обратная совместимость).
     final bal = json['balancer'];
     final balMap = bal is Map<String, dynamic> ? bal : const <String, dynamic>{};
     final rawSticky = balMap['sticky_hash'];
@@ -166,17 +166,17 @@ class ChannelAuto {
             .whereType<StickyHashKey>()
             .toList()
         : kDefaultStickyHash;
-    return ChannelAuto(
+    return DirectionAuto(
       url: json['url'] as String? ?? 'https://cp.cloudflare.com/generate_204',
       interval: json['interval'] as String? ?? '5m',
-      tolerance: clampChannelTolerance((json['tolerance'] as num?)?.toInt() ?? 50),
+      tolerance: clampDirectionTolerance((json['tolerance'] as num?)?.toInt() ?? 50),
       idleTimeout: json['idle_timeout'] as String? ?? '30m',
       interruptExistConnections:
           json['interrupt_exist_connections'] as bool? ?? false,
       mode: UrltestMode.fromWire(json['mode'] as String?),
-      pool: clampChannelPool((balMap['pool'] as num?)?.toInt() ?? 3),
+      pool: clampDirectionPool((balMap['pool'] as num?)?.toInt() ?? 3),
       poolTolerance:
-          clampChannelTolerance((balMap['pool_tolerance'] as num?)?.toInt() ?? 0),
+          clampDirectionTolerance((balMap['pool_tolerance'] as num?)?.toInt() ?? 0),
       // rawSticky == null (нет balancer) → дефолт; явный [] остаётся пустым.
       stickyHash: rawSticky is List
           ? sticky // (включая пустой [] = выкл)
@@ -187,25 +187,25 @@ class ChannelAuto {
   Map<String, dynamic> toJson() => {
         'url': url,
         'interval': interval,
-        'tolerance': clampChannelTolerance(tolerance),
+        'tolerance': clampDirectionTolerance(tolerance),
         'idle_timeout': idleTimeout,
         'interrupt_exist_connections': interruptExistConnections,
         // §208 — mode всегда; balancer всегда (для round-trip storage). Билдер
         // решает, эмитить ли balancer в config-ЯДРА (только round_robin).
         'mode': mode.wire,
         'balancer': {
-          'pool': clampChannelPool(pool),
-          'pool_tolerance': clampChannelTolerance(poolTolerance),
+          'pool': clampDirectionPool(pool),
+          'pool_tolerance': clampDirectionTolerance(poolTolerance),
           'sticky_hash': stickyHash.map((k) => k.wire).toList(),
         },
       };
 }
 
-/// Пользовательский канал роутинга. Хранится в `channels[]`. На первом запуске
-/// seeded из `template.groupTemplates` (`default_channels` + `channel`-шаблон;
+/// Пользовательское Направление роутинга. Хранится в `directions[]`. На первом запуске
+/// seeded из `template.groupTemplates` (`default_channels` + json-ключ `channel`-шаблона;
 /// см. миграцию, §267).
-class Channel {
-  const Channel({
+class Direction {
+  const Direction({
     required this.tag,
     required this.label,
     this.enabled = true,
@@ -228,17 +228,17 @@ class Channel {
   /// Вкл/выкл (заменяет enabled_groups[]). vpn-1 всегда true инвариантом.
   final bool enabled;
 
-  /// Галка: добавить `direct-out` опцией в селектор канала.
+  /// Галка: добавить `direct-out` опцией в селектор Направления.
   final bool includeDirect;
 
-  /// §201 — галка: добавить `block` (дроп трафика) опцией в селектор канала.
+  /// §201 — галка: добавить `block` (дроп трафика) опцией в селектор Направления.
   final bool includeBlock;
 
   /// regex по ИТОГОВОМУ tag ноды (§048-style, `n.tag.contains`/`RegExp.hasMatch`).
   /// '' → все ноды (текущее поведение).
   final String nodeFilter;
 
-  /// §197 — инверсия node_filter (как `!`-тогл в §048). true → в канал попадают
+  /// §197 — инверсия node_filter (как `!`-тогл в §048). true → в Направление попадают
   /// ноды, чей tag НЕ матчит [nodeFilter] (исключающий фильтр). Пустой
   /// nodeFilter → инверсия игнорируется (все ноды).
   final bool nodeFilterInvert;
@@ -250,20 +250,20 @@ class Channel {
   final bool interruptExistConnections;
 
   /// urltest-двойник. null → галка ВЫКЛ, `<tag>-auto` не эмитится.
-  final ChannelAuto? auto;
+  final DirectionAuto? auto;
 
-  /// §248/§274 — РАЗРЕШЕНИЕ выбирать канал как detour-мишень для
+  /// §248/§274 — РАЗРЕШЕНИЕ выбирать Направление как detour-мишень для
   /// серверов/папок/подписок (пикер §239). Роль в правилах ортогональна:
-  /// канал с флагом остаётся валидной целью route_final / custom-rule
+  /// Направление с флагом остаётся валидной целью route_final / custom-rule
   /// outbound (§274 снял взаимоисключение ролей §248). Маркер в UI —
   /// префикс ⚙ ([displayLabel]). Единственный инвариант («vpn-1 не
-  /// detour») принуждается в [Channel.fromJson] — restore из backup пишет
+  /// detour») принуждается в [Direction.fromJson] — restore из backup пишет
   /// raw JSON мимо UI/storage/API, только read-time коэрс закрывает все пути.
   final bool isDetour;
 
   /// §274 — ⚙ живёт в САМОМ label (storage), как ⚙-метка в тегах
   /// detour-серверов §080/§090: [normalizeLabel] в [copyWith]/[fromJson]
-  /// переименовывает канал при смене флага (set → '⚙ <label>', unset →
+  /// переименовывает Направление при смене флага (set → '⚙ <label>', unset →
   /// префикс срезается; ⚙ зарезервирован как маркер — руками его не снять,
   /// нормализация вернёт). Display-сайты берут имя отсюда: это label (или
   /// tag, если label пуст) + страховочный префикс для объектов, созданных
@@ -274,7 +274,7 @@ class Channel {
     return '$kDetourTagPrefix$base';
   }
 
-  /// §274 — единая точка «переименования» detour-канала: label обязан
+  /// §274 — единая точка «переименования» detour-Направления: label обязан
   /// начинаться с [kDetourTagPrefix] при [isDetour] и НЕ начинаться без
   /// него. Пустой label не трогаем (display-фолбэк на tag — в
   /// [displayLabel]). Зовётся из [copyWith] (редактор, Debug API, storage)
@@ -299,7 +299,7 @@ class Channel {
   /// дефолт route_final. Намеренный хардкод (продуктовое решение).
   bool get isRequired => tag == 'vpn-1';
 
-  Channel copyWith({
+  Direction copyWith({
     String? label,
     bool? enabled,
     bool? includeDirect,
@@ -308,13 +308,13 @@ class Channel {
     bool? nodeFilterInvert,
     String? defaultFilter,
     bool? interruptExistConnections,
-    ChannelAuto? auto,
+    DirectionAuto? auto,
     bool clearAuto = false,
     bool? isDetour,
   }) =>
-      Channel(
+      Direction(
         tag: tag, // immutable — не параметр copyWith
-        // §274 — смена detour-флага переименовывает канал (⚙ в label).
+        // §274 — смена detour-флага переименовывает Направление (⚙ в label).
         label: normalizeLabel(label ?? this.label, isDetour ?? this.isDetour),
         enabled: enabled ?? this.enabled,
         includeDirect: includeDirect ?? this.includeDirect,
@@ -328,16 +328,16 @@ class Channel {
         isDetour: isDetour ?? this.isDetour,
       );
 
-  factory Channel.fromJson(Map<String, dynamic> json) {
+  factory Direction.fromJson(Map<String, dynamic> json) {
     final rawAuto = json['auto'];
     final tag = json['tag'] as String? ?? '';
     // §248/§274 — parse-гейт (единственная точка, которую не обходит restore
-    // из backup / ручная правка файла): vpn-1 — главный канал, дефолтная
+    // из backup / ручная правка файла): vpn-1 — главное Направление, дефолтная
     // мишень всего и heal-резерв, detour-флаг ему запрещён (продуктовое
-    // решение). Коэрция include_block у detour-канала снята §274 —
+    // решение). Коэрция include_block у detour-Направления снята §274 —
     // комбинация легальна.
     final isDetour = tag != 'vpn-1' && (json['detour'] as bool? ?? false);
-    return Channel(
+    return Direction(
       tag: tag,
       // §274 — read-time нормализация ⚙-префикса (restore/ручная правка).
       label: normalizeLabel(json['label'] as String? ?? tag, isDetour),
@@ -350,7 +350,7 @@ class Channel {
       interruptExistConnections:
           json['interrupt_exist_connections'] as bool? ?? true,
       auto: rawAuto is Map<String, dynamic>
-          ? ChannelAuto.fromJson(rawAuto)
+          ? DirectionAuto.fromJson(rawAuto)
           : null,
       isDetour: isDetour,
     );
@@ -370,18 +370,18 @@ class Channel {
         'detour': isDetour, // §248
       };
 
-  /// §267 — seed-канал из `default_channels[i]` + общего `channel`-шаблона
+  /// §267 — seed-Направление из `default_channels[i]` + общего json-шаблона `channel`
   /// (миграция first-run). `auto` берётся снаружи (нужен доступ к urltest-vars),
   /// здесь — только структурные поля. `include` содержит role-ключи
   /// `magic_nodes` (`direct`/`auto`/`block`) — это роли, НЕ теги. См.
-  /// `_migrateChannelsIfNeeded`.
-  static Channel seedFromDefault(
-    DefaultChannel dc,
-    ChannelTemplate tpl, {
+  /// `_migrateDirectionsIfNeeded`.
+  static Direction seedFromDefault(
+    DefaultDirection dc,
+    DirectionTemplate tpl, {
     required bool enabled,
-    ChannelAuto? auto,
+    DirectionAuto? auto,
   }) =>
-      Channel(
+      Direction(
         tag: dc.tag,
         label: dc.label.isEmpty ? dc.tag : dc.label,
         enabled: enabled,

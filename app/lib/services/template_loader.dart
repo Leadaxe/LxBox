@@ -87,7 +87,7 @@ class TemplateLoader {
 /// §267 — сверяет `magic_nodes.*.tag` (source of truth) против const-зеркал
 /// в `consts.dart`. Расхождение (переименовали tag в шаблоне, забыли const)
 /// → бросаем StateError на старте с ясной ошибкой вместо тихой поломки
-/// роутинга. `auto` — производная нода (tag собирается per-channel из tpl),
+/// роутинга. `auto` — производная нода (tag собирается per-direction из tpl),
 /// её `kAutoOutboundTag` = имя-заготовка, сверяется тестом на resolveTpl.
 ///
 /// Top-level (не приватная) — чтобы покрывалась unit-тестом напрямую, без

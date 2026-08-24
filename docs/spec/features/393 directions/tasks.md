@@ -11,7 +11,7 @@
 легаси-ключей (без неё существующие установки теряют каналы). Downgrade на
 сборку до миграции пере-сеет Направления из шаблона — принято осознанно.
 
-- [ ] A1. Сквозное переименование домена: `lib/models/channel.dart` →
+- [x] A1. Сквозное переименование домена: `lib/models/channel.dart` →
       `direction.dart` (`Direction`, `DirectionAuto`, `ChannelHealResult` →
       `DirectionHealResult` и т.д.), ВСЕ колл-сайты сразу (lib/ + test/),
       файлы `channel_*.dart`/`channels.dart` → `direction_*.dart`/

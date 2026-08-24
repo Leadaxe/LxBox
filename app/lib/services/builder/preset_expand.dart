@@ -303,7 +303,7 @@ PresetFragments expandPreset(
       final isIntermediate = _kIntermediateActions.contains(result['action']);
       if (!isIntermediate) {
         // Universal outbound override через `varsValues['outbound']` —
-        // юзер всегда может заменить template-решение любым каналом
+        // юзер всегда может заменить template-решение любым Направлением
         // (reject → direct, direct → vpn-1, reject → vpn-2, и в обратную
         // сторону). Template-форма (`action: reject`, hardcoded outbound,
         // `@outbound`-placeholder) рассматривается как default; override
@@ -469,7 +469,7 @@ PresetFragments expandPreset(
 /// пользователь не мог: теги задаёт автор шаблона, а не он.
 ///
 /// Префиксуются только теги, ОБЪЯВЛЕННЫЕ внутри этого пресета, и ссылки на
-/// них. Ссылка на чужой тег (общий rule_set, канал, `direct-out`) остаётся
+/// них. Ссылка на чужой тег (общий rule_set, Направление, `direct-out`) остаётся
 /// нетронутой — иначе правило начнёт указывать в никуда.
 PresetFragments namespacePresetTags(String presetId, PresetFragments f) {
   if (presetId.isEmpty) return f;
@@ -609,7 +609,7 @@ BundleMerge mergeFragments(List<PresetFragments> all) {
 /// §117: нормализация `detour` у DNS-сервера. Удаляет ключ когда:
 /// - `direct-out` / пустая строка — direct не требует detour (решение №2:
 ///   «нет detour» = и дефолт, и fallback);
-/// - канал отсутствует в [knownOutbounds] (выбранный канал исчез из конфига,
+/// - Направление отсутствует в [knownOutbounds] (выбранное Направление исчезло из конфига,
 ///   вкл. неотрезолвленный `@placeholder`) — отсутствие ключа вместо
 ///   dangling-ссылки.
 ///
@@ -622,7 +622,7 @@ void normalizeDnsDetour(
   // не бывает, запросы несут участники (каждый со своим detour). Ядро
   // принимает у `type: group` ровно {servers, mode, error_ttl, win_ttl}
   // (kernel SPEC 033) и падает на лишнем ключе — «start» отваливался с
-  // ошибкой, стоило выбрать не-direct канал. Чистим ЗДЕСЬ, а не только в
+  // ошибкой, стоило выбрать не-direct Направление. Чистим ЗДЕСЬ, а не только в
   // форме: у пострадавших ключ уже лежит в storage, и без этого конфиг
   // оставался бы битым до ручного захода в редактор.
   if (server['type'] == 'group') {

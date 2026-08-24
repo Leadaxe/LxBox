@@ -359,7 +359,7 @@ void main() {
       expect(out.first.containsKey('description'), false);
     });
 
-    test('кейс репортёра: outbound=канал → detour: "<канал>" в конфиге', () {
+    test('кейс репортёра: outbound=Направление → detour: "<Направление>" в конфиге', () {
       final out = resolveDnsServersBodies(
         resolved: [
           {
@@ -377,7 +377,7 @@ void main() {
       expect(out.first['server'], '8.8.4.4');
     });
 
-    test('detour на исчезнувший канал → ключ не пишется (решение №2)', () {
+    test('detour на исчезнувшее Направление → ключ не пишется (решение №2)', () {
       final out = resolveDnsServersBodies(
         resolved: [
           {
@@ -405,7 +405,7 @@ void main() {
               'type': 'udp',
               'server': '192.168.1.1',
               'server_port': 53,
-              'detour': 'gone-channel',
+              'detour': 'gone-direction',
             },
           },
         ],

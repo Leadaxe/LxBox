@@ -69,8 +69,8 @@ class RegexFilterField extends StatelessWidget {
   final VoidCallback onInvertToggle;
   final VoidCallback? onClear;
 
-  /// §195/§197 — сохранить текущий regex (+инверсию) в активный канал. `null`
-  /// → кнопка 💾 скрыта (нет активного канала). Показывается только при
+  /// §195/§197 — сохранить текущий regex (+инверсию) в активное Направление.
+  /// `null` → кнопка 💾 скрыта (нет активного Направления). Показывается только при
   /// непустом валидном паттерне.
   final void Function(String pattern, bool invert)? onSaveRegex;
 
@@ -111,7 +111,7 @@ class RegexFilterField extends StatelessWidget {
               errorText: valid ? null : 'Invalid regex',
               errorStyle: const TextStyle(fontSize: 10),
               // §195 — суффикс: [💾 save] + [× clear], оба только при непустом
-              // тексте. 💾 — лишь если onSaveRegex задан (есть активный канал) И
+              // тексте. 💾 — лишь если onSaveRegex задан (есть активное Направление) И
               // regex валиден (битый паттерн сохранять нельзя). Каждый — голый
               // SizedBox 28×28, без material 48dp tap-target → suffix не прыгает.
               suffixIcon: controller.text.isEmpty

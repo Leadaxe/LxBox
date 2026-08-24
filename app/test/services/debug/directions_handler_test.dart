@@ -5,12 +5,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
-import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
 import 'package:lxbox/services/debug/debug_registry.dart';
-import 'package:lxbox/services/debug/handlers/channels.dart';
+import 'package:lxbox/services/debug/handlers/directions.dart';
 import 'package:lxbox/services/debug/transport/request.dart';
 import 'package:lxbox/services/debug/transport/response.dart';
 import 'package:lxbox/services/settings_storage.dart';
@@ -27,7 +27,7 @@ class _FakePathProvider extends PathProviderPlatform
   Future<String?> getApplicationDocumentsPath() async => '$tempRoot/docs';
 }
 
-/// §238 — `/channels/*` handler поверх реального SettingsStorage
+/// §238 — `/directions/*` handler поверх реального SettingsStorage
 /// (temp-dir через fake path provider, как в folder_test.dart).
 void main() {
   late Directory tempDir;
@@ -55,14 +55,14 @@ void main() {
 
   setUp(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    tempDir = await Directory.systemTemp.createTemp('channels_handler_');
+    tempDir = await Directory.systemTemp.createTemp('directions_handler_');
     await Directory('${tempDir.path}/docs').create();
     await Directory('${tempDir.path}/support').create();
     PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
     SettingsStorage.resetCacheForTesting();
     // Инвариант продукта: vpn-1 существует всегда (обычно — из миграции).
-    await SettingsStorage.setChannels([
-      const Channel(tag: 'vpn-1', label: 'VPN ①'),
+    await SettingsStorage.setDirections([
+      const Direction(tag: 'vpn-1', label: 'VPN ①'),
     ]);
   });
 
@@ -74,17 +74,17 @@ void main() {
     }
   });
 
-  test('GET /channels — список storage-shape', () async {
-    final r = await channelsHandler(req('GET', '/channels'), ctx());
+  test('GET /directions — список storage-shape', () async {
+    final r = await directionsHandler(req('GET', '/directions'), ctx());
     final list = (r as JsonResponse).body as List;
     expect(list, hasLength(1));
     expect((list.single as Map)['tag'], 'vpn-1');
   });
 
-  test('POST /channels — первый свободный vpn-N + PATCH-поля в один вызов',
+  test('POST /directions — первый свободный vpn-N + PATCH-поля в один вызов',
       () async {
-    final r = await channelsHandler(
-      req('POST', '/channels', body: {
+    final r = await directionsHandler(
+      req('POST', '/directions', body: {
         'label': 'Germany',
         'node_filter': 'DE|Frankfurt',
         'auto': {'interval': '3m'},
@@ -100,36 +100,36 @@ void main() {
     // Немодифицированные auto-поля — дефолты, не null.
     expect((body['auto'] as Map)['tolerance'], 50);
 
-    final stored = await SettingsStorage.getChannels();
+    final stored = await SettingsStorage.getDirections();
     expect(stored.map((c) => c.tag), ['vpn-1', 'vpn-2']);
   });
 
-  test('POST /channels — лимит 10 → 409', () async {
+  test('POST /directions — лимит 10 → 409', () async {
     for (var i = 0; i < 9; i++) {
-      await channelsHandler(req('POST', '/channels'), ctx());
+      await directionsHandler(req('POST', '/directions'), ctx());
     }
-    expect((await SettingsStorage.getChannels()).length, kMaxChannels);
+    expect((await SettingsStorage.getDirections()).length, kMaxDirections);
     await expectLater(
-      channelsHandler(req('POST', '/channels'), ctx()),
+      directionsHandler(req('POST', '/directions'), ctx()),
       throwsA(isA<Conflict>()),
     );
   });
 
-  test('GET /channels/{tag} — single + 404 на неизвестный', () async {
-    final r = await channelsHandler(req('GET', '/channels/vpn-1'), ctx());
+  test('GET /directions/{tag} — single + 404 на неизвестный', () async {
+    final r = await directionsHandler(req('GET', '/directions/vpn-1'), ctx());
     expect(asMap(r)['tag'], 'vpn-1');
     await expectLater(
-      channelsHandler(req('GET', '/channels/vpn-9'), ctx()),
+      directionsHandler(req('GET', '/directions/vpn-9'), ctx()),
       throwsA(isA<NotFound>()),
     );
   });
 
-  group('PATCH /channels/{tag}', () {
+  group('PATCH /directions/{tag}', () {
     test('частичный update не трогает прочие поля', () async {
-      await channelsHandler(
-          req('POST', '/channels', body: {'node_filter': 'NL'}), ctx());
-      final r = await channelsHandler(
-        req('PATCH', '/channels/vpn-2', body: {'label': 'Renamed'}),
+      await directionsHandler(
+          req('POST', '/directions', body: {'node_filter': 'NL'}), ctx());
+      final r = await directionsHandler(
+        req('PATCH', '/directions/vpn-2', body: {'label': 'Renamed'}),
         ctx(),
       );
       final body = asMap(r);
@@ -138,15 +138,15 @@ void main() {
     });
 
     test('auto — merge, не replace; auto:null снимает галку', () async {
-      await channelsHandler(
-        req('POST', '/channels', body: {
+      await directionsHandler(
+        req('POST', '/directions', body: {
           'auto': {'url': 'https://ping.example/gen204', 'interval': '9m'},
         }),
         ctx(),
       );
       // Merge: меняем tolerance — url/interval сохраняются.
-      final r1 = await channelsHandler(
-        req('PATCH', '/channels/vpn-2', body: {
+      final r1 = await directionsHandler(
+        req('PATCH', '/directions/vpn-2', body: {
           'auto': {'tolerance': 100},
         }),
         ctx(),
@@ -157,8 +157,8 @@ void main() {
       expect(auto1['tolerance'], 100);
 
       // Вложенный balancer тоже мержится.
-      final r2 = await channelsHandler(
-        req('PATCH', '/channels/vpn-2', body: {
+      final r2 = await directionsHandler(
+        req('PATCH', '/directions/vpn-2', body: {
           'auto': {
             'mode': 'round_robin',
             'balancer': {'pool': 4},
@@ -172,8 +172,8 @@ void main() {
       expect(auto2['url'], 'https://ping.example/gen204');
 
       // null — снять галку.
-      final r3 = await channelsHandler(
-        req('PATCH', '/channels/vpn-2', body: {'auto': null}),
+      final r3 = await directionsHandler(
+        req('PATCH', '/directions/vpn-2', body: {'auto': null}),
         ctx(),
       );
       expect(asMap(r3)['auto'], isNull);
@@ -181,99 +181,99 @@ void main() {
 
     test('vpn-1 нельзя выключить → 409', () async {
       await expectLater(
-        channelsHandler(
-            req('PATCH', '/channels/vpn-1', body: {'enabled': false}), ctx()),
+        directionsHandler(
+            req('PATCH', '/directions/vpn-1', body: {'enabled': false}), ctx()),
         throwsA(isA<Conflict>()),
       );
     });
 
     test('tag immutable → 400; битый regex → 400', () async {
       await expectLater(
-        channelsHandler(
-            req('PATCH', '/channels/vpn-1', body: {'tag': 'vpn-5'}), ctx()),
+        directionsHandler(
+            req('PATCH', '/directions/vpn-1', body: {'tag': 'vpn-5'}), ctx()),
         throwsA(isA<BadRequest>()),
       );
       await expectLater(
-        channelsHandler(
-            req('PATCH', '/channels/vpn-1', body: {'node_filter': '('}),
+        directionsHandler(
+            req('PATCH', '/directions/vpn-1', body: {'node_filter': '('}),
             ctx()),
         throwsA(isA<BadRequest>()),
       );
     });
 
-    test('выключение канала деградирует route_final на vpn-1', () async {
-      await channelsHandler(req('POST', '/channels'), ctx());
+    test('выключение Направления деградирует route_final на vpn-1', () async {
+      await directionsHandler(req('POST', '/directions'), ctx());
       await SettingsStorage.saveRouteFinal('vpn-2');
-      await channelsHandler(
-          req('PATCH', '/channels/vpn-2', body: {'enabled': false}), ctx());
+      await directionsHandler(
+          req('PATCH', '/directions/vpn-2', body: {'enabled': false}), ctx());
       expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
     });
   });
 
-  group('DELETE /channels/{tag}', () {
+  group('DELETE /directions/{tag}', () {
     test('удаляет + деградирует ссылки; vpn-1 → 409; unknown → 404', () async {
-      await channelsHandler(req('POST', '/channels'), ctx());
+      await directionsHandler(req('POST', '/directions'), ctx());
       await SettingsStorage.saveRouteFinal('vpn-2');
 
-      final r = await channelsHandler(req('DELETE', '/channels/vpn-2'), ctx());
+      final r = await directionsHandler(req('DELETE', '/directions/vpn-2'), ctx());
       expect(asMap(r)['ok'], isTrue);
-      expect((await SettingsStorage.getChannels()).map((c) => c.tag), ['vpn-1']);
+      expect((await SettingsStorage.getDirections()).map((c) => c.tag), ['vpn-1']);
       expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
 
       await expectLater(
-        channelsHandler(req('DELETE', '/channels/vpn-1'), ctx()),
+        directionsHandler(req('DELETE', '/directions/vpn-1'), ctx()),
         throwsA(isA<Conflict>()),
       );
       await expectLater(
-        channelsHandler(req('DELETE', '/channels/vpn-2'), ctx()),
+        directionsHandler(req('DELETE', '/directions/vpn-2'), ctx()),
         throwsA(isA<NotFound>()),
       );
     });
   });
 
-  group('§248/§274 — detour-роль канала', () {
+  group('§248/§274 — detour-роль Направления', () {
     test('GET/PATCH roundtrip поля detour', () async {
-      await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
-      final r1 = await channelsHandler(
-          req('PATCH', '/channels/vpn-2', body: {'detour': true}), ctx());
+      await directionsHandler(req('POST', '/directions'), ctx()); // vpn-2
+      final r1 = await directionsHandler(
+          req('PATCH', '/directions/vpn-2', body: {'detour': true}), ctx());
       expect(asMap(r1)['detour'], isTrue);
-      final r2 = await channelsHandler(req('GET', '/channels/vpn-2'), ctx());
+      final r2 = await directionsHandler(req('GET', '/directions/vpn-2'), ctx());
       expect(asMap(r2)['detour'], isTrue);
       // Снятие роли — тем же полем.
-      final r3 = await channelsHandler(
-          req('PATCH', '/channels/vpn-2', body: {'detour': false}), ctx());
+      final r3 = await directionsHandler(
+          req('PATCH', '/directions/vpn-2', body: {'detour': false}), ctx());
       expect(asMap(r3)['detour'], isFalse);
     });
 
     test('vpn-1 не может стать detour → 409', () async {
       await expectLater(
-        channelsHandler(
-            req('PATCH', '/channels/vpn-1', body: {'detour': true}), ctx()),
+        directionsHandler(
+            req('PATCH', '/directions/vpn-1', body: {'detour': true}), ctx()),
         throwsA(isA<Conflict>()),
       );
     });
 
     test('detour + include_block в одном body — совместимы (§274)', () async {
-      await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
-      final r = await channelsHandler(
-        req('PATCH', '/channels/vpn-2',
+      await directionsHandler(req('POST', '/directions'), ctx()); // vpn-2
+      final r = await directionsHandler(
+        req('PATCH', '/directions/vpn-2',
             body: {'detour': true, 'include_block': true}),
         ctx(),
       );
       expect(asMap(r)['detour'], isTrue);
       expect(asMap(r)['include_block'], isTrue);
-      final stored = (await SettingsStorage.getChannels())
+      final stored = (await SettingsStorage.getDirections())
           .firstWhere((c) => c.tag == 'vpn-2');
       expect(stored.isDetour, isTrue);
       expect(stored.includeBlock, isTrue);
     });
 
-    test('include_block:true на уже-detour канале — принимается (§274)',
+    test('include_block:true на уже-detour Направлении — принимается (§274)',
         () async {
-      await channelsHandler(
-          req('POST', '/channels', body: {'detour': true}), ctx()); // vpn-2
-      final r = await channelsHandler(
-          req('PATCH', '/channels/vpn-2', body: {'include_block': true}),
+      await directionsHandler(
+          req('POST', '/directions', body: {'detour': true}), ctx()); // vpn-2
+      final r = await directionsHandler(
+          req('PATCH', '/directions/vpn-2', body: {'include_block': true}),
           ctx());
       expect(asMap(r)['include_block'], isTrue);
       expect(asMap(r)['detour'], isTrue);
@@ -282,30 +282,30 @@ void main() {
     test('detour:true не трогает сохранённый include_block (§274)', () async {
       // Запрет Q1 снят §274: PATCH одним полем detour не нормализует
       // ранее выставленный include_block — галка выживает.
-      await channelsHandler(
-          req('POST', '/channels', body: {'include_block': true}), ctx());
-      final r = await channelsHandler(
-          req('PATCH', '/channels/vpn-2', body: {'detour': true}), ctx());
+      await directionsHandler(
+          req('POST', '/directions', body: {'include_block': true}), ctx());
+      final r = await directionsHandler(
+          req('PATCH', '/directions/vpn-2', body: {'detour': true}), ctx());
       expect(asMap(r)['detour'], isTrue);
       expect(asMap(r)['include_block'], isTrue);
-      final stored = (await SettingsStorage.getChannels())
+      final stored = (await SettingsStorage.getDirections())
           .firstWhere((c) => c.tag == 'vpn-2');
       expect(stored.isDetour, isTrue);
       expect(stored.includeBlock, isTrue);
     });
 
     test('healed в PATCH: flag-set НЕ лечит rules-ссылки (§274)', () async {
-      await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
+      await directionsHandler(req('POST', '/directions'), ctx()); // vpn-2
       await SettingsStorage.saveRouteFinal('vpn-2');
-      final r = await channelsHandler(
-          req('PATCH', '/channels/vpn-2', body: {'detour': true}), ctx());
+      final r = await directionsHandler(
+          req('PATCH', '/directions/vpn-2', body: {'detour': true}), ctx());
       expect(asMap(r)['healed'], {'rules': 0, 'detours': 0});
       expect(await SettingsStorage.getRouteFinal(), 'vpn-2');
     });
 
     test('healed в DELETE: rules → vpn-1, detour-ссылки → \'\'', () async {
-      await channelsHandler(
-          req('POST', '/channels', body: {'detour': true}), ctx()); // vpn-2
+      await directionsHandler(
+          req('POST', '/directions', body: {'detour': true}), ctx()); // vpn-2
       await SettingsStorage.saveRouteFinal('vpn-2'); // Debug API может и так
       await SettingsStorage.saveServerLists([
         UserServer(
@@ -319,7 +319,7 @@ void main() {
         ),
       ]);
 
-      final r = await channelsHandler(req('DELETE', '/channels/vpn-2'), ctx());
+      final r = await directionsHandler(req('DELETE', '/directions/vpn-2'), ctx());
       expect(asMap(r)['healed'], {'rules': 1, 'detours': 1});
       expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
       final solo = (await SettingsStorage.getServerLists()).single;
@@ -327,24 +327,24 @@ void main() {
     });
   });
 
-  group('POST /channels/reorder', () {
+  group('POST /directions/reorder', () {
     test('переставляет; неполный набор → 400', () async {
-      await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
-      await channelsHandler(req('POST', '/channels'), ctx()); // vpn-3
+      await directionsHandler(req('POST', '/directions'), ctx()); // vpn-2
+      await directionsHandler(req('POST', '/directions'), ctx()); // vpn-3
 
-      final r = await channelsHandler(
-        req('POST', '/channels/reorder', body: {
+      final r = await directionsHandler(
+        req('POST', '/directions/reorder', body: {
           'order': ['vpn-3', 'vpn-1', 'vpn-2'],
         }),
         ctx(),
       );
       expect(asMap(r)['count'], 3);
-      expect((await SettingsStorage.getChannels()).map((c) => c.tag),
+      expect((await SettingsStorage.getDirections()).map((c) => c.tag),
           ['vpn-3', 'vpn-1', 'vpn-2']);
 
       await expectLater(
-        channelsHandler(
-          req('POST', '/channels/reorder', body: {
+        directionsHandler(
+          req('POST', '/directions/reorder', body: {
             'order': ['vpn-1', 'vpn-2'],
           }),
           ctx(),
@@ -352,8 +352,8 @@ void main() {
         throwsA(isA<BadRequest>()),
       );
       await expectLater(
-        channelsHandler(
-          req('POST', '/channels/reorder', body: {
+        directionsHandler(
+          req('POST', '/directions/reorder', body: {
             'order': ['vpn-1', 'vpn-2', 'vpn-9'],
           }),
           ctx(),
@@ -366,7 +366,7 @@ void main() {
   /// §275 — зеркальный ресинк `_entries` контроллера после storage-heal
   /// detour-ссылок. Storage лечится сам; без ресинка следующий `_persist()`
   /// воскресил бы вылеченную ссылку на диске (heal показан юзеру и отменён).
-  /// Мутации идут через `ChannelMutations`, поэтому разделить heal и ресинк
+  /// Мутации идут через `DirectionMutations`, поэтому разделить heal и ресинк
   /// хендлер не может — тесты пиннят это поведение на всех трёх глаголах.
   group('§275 — detour-ресинк контроллера', () {
     /// Одиночка со stale `overrideDetour` на [tag] + rawBody (без него
@@ -395,15 +395,15 @@ void main() {
       return c;
     }
 
-    test('POST /channels: heal при enabled:false зеркалится в entries',
+    test('POST /directions: heal при enabled:false зеркалится в entries',
         () async {
-      // Сценарий restore из backup: ссылка на vpn-2 есть, самого канала нет.
+      // Сценарий restore из backup: ссылка на vpn-2 есть, самого Направления нет.
       final c = await seedControllerWithStaleRef('vpn-2');
 
       // POST с PATCH-полем enabled:false → disabling-переход → heal обоих
       // родов ссылок. Это достижимый путь до detours > 0 на создании.
-      final r = await channelsHandler(
-          req('POST', '/channels', body: {'enabled': false}), ctx());
+      final r = await directionsHandler(
+          req('POST', '/directions', body: {'enabled': false}), ctx());
       expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
 
       // Storage вылечен...
@@ -414,11 +414,11 @@ void main() {
           reason: 'без ресинка следующий _persist воскресил бы vpn-2');
     });
 
-    test('POST /channels: _persist после ресинка не воскрешает ссылку',
+    test('POST /directions: _persist после ресинка не воскрешает ссылку',
         () async {
       final c = await seedControllerWithStaleRef('vpn-2');
-      await channelsHandler(
-          req('POST', '/channels', body: {'enabled': false}), ctx());
+      await directionsHandler(
+          req('POST', '/directions', body: {'enabled': false}), ctx());
 
       // Любая контроллерная мутация с _persist пишет entries на диск.
       await c.renameAt(0, 'Solo Renamed');
@@ -429,23 +429,23 @@ void main() {
           reason: '_persist после ресинка не должен воскрешать ссылку');
     });
 
-    test('PATCH /channels/{tag}: flag-unset зеркалится в entries', () async {
-      await channelsHandler(
-          req('POST', '/channels', body: {'detour': true}), ctx()); // vpn-2
+    test('PATCH /directions/{tag}: flag-unset зеркалится в entries', () async {
+      await directionsHandler(
+          req('POST', '/directions', body: {'detour': true}), ctx()); // vpn-2
       final c = await seedControllerWithStaleRef('vpn-2');
 
-      final r = await channelsHandler(
-          req('PATCH', '/channels/vpn-2', body: {'detour': false}), ctx());
+      final r = await directionsHandler(
+          req('PATCH', '/directions/vpn-2', body: {'detour': false}), ctx());
       expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
       expect(c.entries.single.list.detourPolicy.overrideDetour, '');
     });
 
-    test('DELETE /channels/{tag}: heal зеркалится в entries', () async {
-      await channelsHandler(
-          req('POST', '/channels', body: {'detour': true}), ctx()); // vpn-2
+    test('DELETE /directions/{tag}: heal зеркалится в entries', () async {
+      await directionsHandler(
+          req('POST', '/directions', body: {'detour': true}), ctx()); // vpn-2
       final c = await seedControllerWithStaleRef('vpn-2');
 
-      final r = await channelsHandler(req('DELETE', '/channels/vpn-2'), ctx());
+      final r = await directionsHandler(req('DELETE', '/directions/vpn-2'), ctx());
       expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
       expect(c.entries.single.list.detourPolicy.overrideDetour, '');
     });
@@ -454,8 +454,8 @@ void main() {
       await SettingsStorage.saveServerLists([soloWithDetour('vpn-2')]);
       expect(DebugRegistry.I.sub, isNull);
 
-      final r = await channelsHandler(
-          req('POST', '/channels', body: {'enabled': false}), ctx());
+      final r = await directionsHandler(
+          req('POST', '/directions', body: {'enabled': false}), ctx());
       expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
       final solo = (await SettingsStorage.getServerLists()).single;
       expect(solo.detourPolicy.overrideDetour, '',

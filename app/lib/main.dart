@@ -62,7 +62,7 @@ void main() async {
     // UpdateChecker (см. §066). Раньше версия дублировалась hardcoded const'ом
     // в AboutScreen — поднимать вручную легко забыть (произошло на v1.8.0).
     await VersionInfo.I.init();
-    // §390 — канал установки (GitHub / Play / F-Droid). До runApp: от него
+    // §390 — Канал установки (GitHub / Play / F-Droid). До runApp: от него
     // зависит адрес «где взять новую версию», а снек об апдейте показывается
     // на первом кадре. Резолв дешёвый — dart-define, иначе один native-вызов.
     await InstallSourceResolver.init();
@@ -91,16 +91,16 @@ void main() async {
     // DateFormat('ru') не бросил до того, как flutter_localizations прогреет
     // локаль сам. best-effort (try выше).
     await initializeDateFormatting('ru');
-    // §125 F0 — one-shot миграция enabled_groups[] → channels[] (seed состава
-    // каналов из template на первом запуске). Идемпотентна. ДО первого билда
-    // конфига, чтобы билдер (после F1) читал channels[] как source-of-truth.
+    // §125 F0 — one-shot миграция enabled_groups[] → directions[] (seed состава
+    // Направлений из template на первом запуске). Идемпотентна. ДО первого билда
+    // конфига, чтобы билдер (после F1) читал directions[] как source-of-truth.
     // best-effort: ошибка не валит запуск (try выше).
-    final channelsTemplate = await TemplateLoader.load();
-    await SettingsStorage.migrateChannelsIfNeeded(
-      channelsTemplate.groupTemplates,
-      // §327 — `@urltest_*` в шаблоне auto-канала резолвятся по default_value.
+    final directionsTemplate = await TemplateLoader.load();
+    await SettingsStorage.migrateDirectionsIfNeeded(
+      directionsTemplate.groupTemplates,
+      // §327 — `@urltest_*` в шаблоне auto-Направления резолвятся по default_value.
       varDefaults: {
-        for (final v in channelsTemplate.vars) v.name: v.defaultValue,
+        for (final v in directionsTemplate.vars) v.name: v.defaultValue,
       },
     );
     // §229 — вызов one-shot ремапа preset_id (§228) убран: миграция удалена,

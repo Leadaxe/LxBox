@@ -10,7 +10,7 @@ import '../transport/response.dart';
 /// Routes:
 /// - `GET /pool?tag=<autoTag>` → `{"tag": "...", "slots": [{slot,tag,delay}], "count": N}`
 ///
-/// `tag` — auto-двойник round_robin-канала (напр. `vpn-1-auto`). Не-round_robin
+/// `tag` — auto-двойник round_robin-Направления (напр. `vpn-1-auto`). Не-round_robin
 /// группа / туннель down / пул не готов → `slots: []` (не ошибка — у группы
 /// просто нет пула). `delay`==0 → нода мёртвая/не измерена.
 Future<DebugResponse> poolHandler(DebugRequest req, DebugContext ctx) async {

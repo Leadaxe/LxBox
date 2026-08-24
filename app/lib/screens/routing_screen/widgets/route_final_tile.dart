@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../routing_screen_helpers.dart';
 import '../../../services/l10n/locale_controller.dart';
 
-/// ListTile с дропдауном "Default traffic" (route.final) на табе Channels.
+/// ListTile с дропдауном "Default traffic" (route.final) на табе Directions.
 class RouteFinalTile extends StatelessWidget {
   const RouteFinalTile({
     super.key,

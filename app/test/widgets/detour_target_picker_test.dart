@@ -1,26 +1,26 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/widgets/detour_target_picker.dart';
 
-/// §248 — фильтрация канальной секции пикера цели detour
-/// (pure-хелпер [visibleDetourChannels]): только enabled detour-каналы,
+/// §248 — фильтрация Направления секции пикера цели detour
+/// (pure-хелпер [visibleDetourDirections]): только enabled detour-Направления,
 /// минус омонимы с bare-тегами распарсенных членов текущей папки
 /// (включая выключенных членов — toggle не должен молча менять смысл ссылки).
 void main() {
-  const channels = [
-    Channel(tag: 'vpn-1', label: 'Main'),
-    Channel(tag: 'vpn-2', label: 'Relay', isDetour: true),
-    Channel(tag: 'vpn-3', label: 'Off relay', isDetour: true, enabled: false),
+  const directions = [
+    Direction(tag: 'vpn-1', label: 'Main'),
+    Direction(tag: 'vpn-2', label: 'Relay', isDetour: true),
+    Direction(tag: 'vpn-3', label: 'Off relay', isDetour: true, enabled: false),
   ];
 
-  test('обычный канал скрыт, detour виден, disabled detour скрыт', () {
-    final visible = visibleDetourChannels(channels, null);
+  test('обычное Направление скрыто, detour виден, disabled detour скрыт', () {
+    final visible = visibleDetourDirections(directions, null);
     expect(visible.map((c) => c.tag), ['vpn-2']);
   });
 
   test('омоним скрыт в контексте папки, виден без неё', () {
-    // Член-тёзка канала выключен — коллизия всё равно не создаётся:
+    // Член-тёзка Направления выключен — коллизия всё равно не создаётся:
     // достаточно включиться, чтобы ссылка молча сменила смысл.
     final folder = FolderServers(
       id: 'f1',
@@ -35,12 +35,12 @@ void main() {
         FolderMember(raw: 'vless://u2@h2.com:443?type=ws&security=tls#node-b'),
       ],
     );
-    expect(visibleDetourChannels(channels, folder), isEmpty);
-    // Без контекста папки тот же канал доступен.
-    expect(visibleDetourChannels(channels, null).map((c) => c.tag), ['vpn-2']);
+    expect(visibleDetourDirections(directions, folder), isEmpty);
+    // Без контекста папки тот же Направление доступен.
+    expect(visibleDetourDirections(directions, null).map((c) => c.tag), ['vpn-2']);
   });
 
-  test('папка без тёзок каналы не прячет; битый член омонимом не считается',
+  test('папка без тёзок Направления не прячет; битый член омонимом не считается',
       () {
     final folder = FolderServers(
       id: 'f1',
@@ -54,7 +54,7 @@ void main() {
         FolderMember(raw: 'garbage-not-a-config'),
       ],
     );
-    expect(visibleDetourChannels(channels, folder).map((c) => c.tag),
+    expect(visibleDetourDirections(directions, folder).map((c) => c.tag),
         ['vpn-2']);
   });
 }

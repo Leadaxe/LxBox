@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../models/server_list.dart';
 import '../services/runtime_chain.dart';
 import '../services/settings_storage.dart';
@@ -13,8 +13,8 @@ import 'routing_screen.dart';
 import 'subscription_detail_screen.dart';
 
 /// §258 — общий переход «config-тег → экран владельца». Вынесен из
-/// `home_screen._goToCulpritOwner` (§255) и расширен каналами §125:
-///   канал (tag/autoTag)  → Routing, таб Channels, подсветка канала;
+/// `home_screen._goToCulpritOwner` (§255) и расширен Направлениями §125:
+///   Направление (tag/autoTag)  → Routing, таб Directions, подсветка Направления;
 ///   папка                → FolderDetailScreen + подсветка члена;
 ///   подписка             → SubscriptionDetailScreen (Settings-таб);
 ///   одиночный сервер     → NodeSettingsScreen;
@@ -22,32 +22,32 @@ import 'subscription_detail_screen.dart';
 ///                          detour-cycle sheet — список Servers, View-экран
 ///                          ноды — SnackBar).
 ///
-/// Канальная ветка идёт ПЕРВОЙ: config-тег, равный тегу канала, и есть канал
+/// Направление-ветка идёт ПЕРВОЙ: config-тег, равный тегу Направления, и есть Направление
 /// (билдер дедуплицирует коллизии `allocateTag`-суффиксом; tradeoff-патологию
-/// «нода с именем vpn-N при выключенном канале» см. spec 258).
+/// «нода с именем vpn-N при выключенном Направлении» см. spec 258).
 ///
-/// [channels] — предзагруженный список (View-экран уже держит его для
+/// [directions] — предзагруженный список (View-экран уже держит его для
 /// цепочки); null → грузим из storage.
 Future<void> openTagOwner(
   BuildContext context,
   String tag, {
   required SubscriptionController subController,
   required HomeController homeController,
-  List<Channel>? channels,
+  List<Direction>? directions,
   required VoidCallback onOwnerNotFound,
 }) async {
-  final chs = channels ?? await SettingsStorage.getChannels();
+  final chs = directions ?? await SettingsStorage.getDirections();
   if (!context.mounted) return;
 
-  final channel = channelForTag(tag, chs);
-  if (channel != null) {
+  final direction = directionForTag(tag, chs);
+  if (direction != null) {
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => RoutingScreen(
           subController: subController,
           homeController: homeController,
-          focusChannelTag: channel.tag,
+          focusDirectionTag: direction.tag,
         ),
       ),
     );

@@ -1,19 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/auto_select.dart';
-import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
-/// §125 F1/F2/F3 — билдер собирает outbound-группы из BuildSettings.channels:
-/// per-channel regex node-set, direct/auto-членство из галок, auto-двойник,
-/// default-regex. Проверяем через настоящий buildConfig (channels !== пусто →
+/// §125 F1/F2/F3 — билдер собирает outbound-группы из BuildSettings.directions:
+/// per-direction regex node-set, direct/auto-членство из галок, auto-двойник,
+/// default-regex. Проверяем через настоящий buildConfig (directions !== пусто →
 /// идёт по новому пути, минуя template-fallback).
 void main() {
-  // template без preset-групп: каналы целиком из settings.channels.
+  // template без preset-групп: Направления целиком из settings.directions.
   WizardTemplate template() => WizardTemplate(
         parserConfig: ParserConfigBlock(),
         groupTemplates: GroupTemplates(),
@@ -72,12 +72,12 @@ void main() {
     );
   }
 
-  Future<List<Map<String, dynamic>>> build(List<Channel> channels,
+  Future<List<Map<String, dynamic>>> build(List<Direction> directions,
       {bool passiveCheck = false}) async {
     final r = await buildConfig(
       lists: [await nodes()],
       template: template(),
-      settings: BuildSettings(channels: channels, passiveCheck: passiveCheck),
+      settings: BuildSettings(directions: directions, passiveCheck: passiveCheck),
     );
     expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
     return (r.config['outbounds'] as List).cast<Map<String, dynamic>>();
@@ -87,11 +87,11 @@ void main() {
       outs.firstWhere((o) => o['tag'] == tag);
 
   // §200 — полный BuildResult (для проверки emitWarnings).
-  Future<List<String>> warningsFor(List<Channel> channels) async {
+  Future<List<String>> warningsFor(List<Direction> directions) async {
     final r = await buildConfig(
       lists: [await nodes()],
       template: template(),
-      settings: BuildSettings(channels: channels),
+      settings: BuildSettings(directions: directions),
     );
     return r.emitWarnings;
   }
@@ -99,7 +99,7 @@ void main() {
   group('F1 — членство direct/auto/interrupt из галок', () {
     test('includeDirect=false → нет direct-out в selector', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X', includeDirect: false),
+        const Direction(tag: 'vpn-1', label: 'X', includeDirect: false),
       ]);
       final vpn1 = byTag(outs, 'vpn-1');
       expect(vpn1['outbounds'], isNot(contains('direct-out')));
@@ -108,37 +108,37 @@ void main() {
 
     test('includeDirect=true → direct-out опцией', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X', includeDirect: true),
+        const Direction(tag: 'vpn-1', label: 'X', includeDirect: true),
       ]);
       expect(byTag(outs, 'vpn-1')['outbounds'], contains('direct-out'));
     });
 
     test('§201 — includeBlock=true → block опцией селектора', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X', includeBlock: true),
+        const Direction(tag: 'vpn-1', label: 'X', includeBlock: true),
       ]);
       expect(byTag(outs, 'vpn-1')['outbounds'], contains('block'));
     });
 
     test('§201 — includeBlock=false → нет block', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X'),
+        const Direction(tag: 'vpn-1', label: 'X'),
       ]);
       expect(byTag(outs, 'vpn-1')['outbounds'], isNot(contains('block')));
     });
 
     test('interruptExistConnections=false проброшен', () async {
       final outs = await build([
-        const Channel(
+        const Direction(
             tag: 'vpn-1', label: 'X', interruptExistConnections: false),
       ]);
       expect(byTag(outs, 'vpn-1')['interrupt_exist_connections'], false);
     });
 
-    test('disabled канал не эмитится (vpn-1 всё равно required)', () async {
+    test('disabled Направление не эмитится (vpn-1 всё равно required)', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X'),
-        const Channel(tag: 'vpn-2', label: 'Y', enabled: false),
+        const Direction(tag: 'vpn-1', label: 'X'),
+        const Direction(tag: 'vpn-2', label: 'Y', enabled: false),
       ]);
       expect(outs.any((o) => o['tag'] == 'vpn-1'), true);
       expect(outs.any((o) => o['tag'] == 'vpn-2'), false);
@@ -146,14 +146,14 @@ void main() {
   });
 
   group('F1 — auto-двойник', () {
-    test('§322 — узел автовыбора в selector канала есть, в двойнике нет',
+    test('§322 — узел автовыбора в selector Направления есть, в двойнике нет',
         () async {
       // urltest внутри urltest мерил бы уже выбранный группой узел.
       final r = await buildConfig(
         lists: [await nodesWithAutoGroup()],
         template: template(),
-        settings: const BuildSettings(channels: [
-          Channel(tag: 'vpn-1', label: 'X', auto: ChannelAuto()),
+        settings: const BuildSettings(directions: [
+          Direction(tag: 'vpn-1', label: 'X', auto: DirectionAuto()),
         ]),
       );
       expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
@@ -163,20 +163,20 @@ void main() {
       expect(outs.any((o) => o['tag'] == 'Auto DE'), isTrue);
       expect(byTag(outs, 'vpn-1')['outbounds'], contains('Auto DE'));
 
-      // …но НЕ в urltest-двойник канала.
+      // …но НЕ в urltest-двойник Направления.
       expect(byTag(outs, 'vpn-1-auto')['outbounds'],
           isNot(contains('Auto DE')));
       // Обычные узлы в двойнике остались.
       expect(byTag(outs, 'vpn-1-auto')['outbounds'], contains('🇩🇪 Berlin'));
     });
 
-    test('auto != null → эмит <tag>-auto urltest по нодам канала', () async {
+    test('auto != null → эмит <tag>-auto urltest по нодам Направления', () async {
       final outs = await build([
-        const Channel(
+        const Direction(
           tag: 'vpn-1',
           label: 'X',
           includeDirect: true,
-          auto: ChannelAuto(
+          auto: DirectionAuto(
             url: 'https://t.example/204',
             interval: '4m',
             tolerance: 25,
@@ -203,7 +203,7 @@ void main() {
 
     test('auto == null → нет <tag>-auto', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X'),
+        const Direction(tag: 'vpn-1', label: 'X'),
       ]);
       expect(outs.any((o) => o['tag'] == 'vpn-1-auto'), false);
     });
@@ -213,7 +213,7 @@ void main() {
     // ядро без поля не падает на unknown field).
     test('§272 passiveCheck=true → passive_check в auto-двойнике', () async {
       final outs = await build(
-        [const Channel(tag: 'vpn-1', label: 'X', auto: ChannelAuto())],
+        [const Direction(tag: 'vpn-1', label: 'X', auto: DirectionAuto())],
         passiveCheck: true,
       );
       expect(byTag(outs, 'vpn-1-auto')['passive_check'], true);
@@ -221,7 +221,7 @@ void main() {
 
     test('§272 passiveCheck=false (дефолт) → поля нет', () async {
       final outs = await build(
-        [const Channel(tag: 'vpn-1', label: 'X', auto: ChannelAuto())],
+        [const Direction(tag: 'vpn-1', label: 'X', auto: DirectionAuto())],
       );
       expect(
           byTag(outs, 'vpn-1-auto').containsKey('passive_check'), false);
@@ -230,7 +230,7 @@ void main() {
     // §208 — балансировщик round_robin
     test('leastTest (дефолт) → НЕТ mode/balancer (бит-в-бит апстрим)', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X', auto: ChannelAuto()),
+        const Direction(tag: 'vpn-1', label: 'X', auto: DirectionAuto()),
       ]);
       final auto = byTag(outs, 'vpn-1-auto');
       expect(auto.containsKey('mode'), false);
@@ -240,10 +240,10 @@ void main() {
     test('round_robin → mode + balancer{pool,pool_tolerance,sticky_hash}',
         () async {
       final outs = await build([
-        const Channel(
+        const Direction(
           tag: 'vpn-1',
           label: 'X',
-          auto: ChannelAuto(
+          auto: DirectionAuto(
             mode: UrltestMode.roundRobin,
             pool: 5,
             poolTolerance: 30,
@@ -267,10 +267,10 @@ void main() {
       // Контракт ядра rc.15: пустой [] ядро схлопывает в nil (badjson re-marshal)
       // → дефолтит липкость. Выключение ТОЛЬКО через sentinel ["none"].
       final outs = await build([
-        const Channel(
+        const Direction(
           tag: 'vpn-1',
           label: 'X',
-          auto: ChannelAuto(
+          auto: DirectionAuto(
             mode: UrltestMode.roundRobin,
             stickyHash: <StickyHashKey>[],
           ),
@@ -281,20 +281,20 @@ void main() {
     });
   });
 
-  group('F2 — per-channel regex node-filter', () {
+  group('F2 — per-direction regex node-filter', () {
     test('nodeFilter по эмодзи-флагу → только matched ноды', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'DE/NL', nodeFilter: '🇩🇪|🇳🇱'),
+        const Direction(tag: 'vpn-1', label: 'DE/NL', nodeFilter: '🇩🇪|🇳🇱'),
       ]);
       final ob = byTag(outs, 'vpn-1')['outbounds'] as List;
       expect(ob, containsAll(['🇩🇪 Berlin', '🇩🇪 Premium', '🇳🇱 Amsterdam']));
       expect(ob, isNot(contains('🇺🇸 NYC')));
     });
 
-    test('два канала с разными regex → разные наборы', () async {
+    test('два Направления с разными regex → разные наборы', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'DE', nodeFilter: '🇩🇪'),
-        const Channel(tag: 'vpn-2', label: 'US', nodeFilter: '🇺🇸'),
+        const Direction(tag: 'vpn-1', label: 'DE', nodeFilter: '🇩🇪'),
+        const Direction(tag: 'vpn-2', label: 'US', nodeFilter: '🇺🇸'),
       ]);
       expect((byTag(outs, 'vpn-1')['outbounds'] as List), hasLength(2));
       final us = byTag(outs, 'vpn-2')['outbounds'] as List;
@@ -305,8 +305,8 @@ void main() {
         'чем теги, всё равно матчит (раньше — пустой набор)', () async {
       final outs = await build([
         // теги: `🇩🇪 Berlin`, `🇺🇸 NYC` — фильтр нарочно в другом регистре.
-        const Channel(tag: 'vpn-1', label: 'lower', nodeFilter: 'berlin'),
-        const Channel(tag: 'vpn-2', label: 'lower', nodeFilter: 'nyc'),
+        const Direction(tag: 'vpn-1', label: 'lower', nodeFilter: 'berlin'),
+        const Direction(tag: 'vpn-2', label: 'lower', nodeFilter: 'nyc'),
       ]);
       expect((byTag(outs, 'vpn-1')['outbounds'] as List), ['🇩🇪 Berlin']);
       expect((byTag(outs, 'vpn-2')['outbounds'] as List), ['🇺🇸 NYC']);
@@ -314,14 +314,14 @@ void main() {
 
     test('пустой nodeFilter → все ноды', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'all'),
+        const Direction(tag: 'vpn-1', label: 'all'),
       ]);
       expect((byTag(outs, 'vpn-1')['outbounds'] as List), hasLength(4));
     });
 
     test('§197 — nodeFilterInvert: исключить matched (все КРОМЕ 🇺🇸)', () async {
       final outs = await build([
-        const Channel(
+        const Direction(
             tag: 'vpn-1',
             label: 'not-US',
             nodeFilter: '🇺🇸',
@@ -334,7 +334,7 @@ void main() {
 
     test('§197 — invert + пустой фильтр → все ноды (инверсия игнор)', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'x', nodeFilterInvert: true),
+        const Direction(tag: 'vpn-1', label: 'x', nodeFilterInvert: true),
       ]);
       expect((byTag(outs, 'vpn-1')['outbounds'] as List), hasLength(4));
     });
@@ -344,7 +344,7 @@ void main() {
       // regex матчит всё (.) + invert → ничего не остаётся → block+direct
       // fallback, default=block (§201).
       final outs = await build([
-        const Channel(
+        const Direction(
             tag: 'vpn-1', label: 'x', nodeFilter: '.', nodeFilterInvert: true),
       ]);
       final vpn1 = byTag(outs, 'vpn-1');
@@ -354,7 +354,7 @@ void main() {
 
     test('невалидный regex → fallback на все ноды (не падает)', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'bad', nodeFilter: '[unclosed'),
+        const Direction(tag: 'vpn-1', label: 'bad', nodeFilter: '[unclosed'),
       ]);
       expect((byTag(outs, 'vpn-1')['outbounds'] as List), hasLength(4));
     });
@@ -362,7 +362,7 @@ void main() {
     test('§201 — regex без совпадений → fallback [block, direct-out] default block',
         () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'none', nodeFilter: 'NOMATCH'),
+        const Direction(tag: 'vpn-1', label: 'none', nodeFilter: 'NOMATCH'),
       ]);
       final vpn1 = byTag(outs, 'vpn-1');
       expect(vpn1['outbounds'], ['block', 'direct-out']);
@@ -371,11 +371,11 @@ void main() {
 
     test('пустой node-set → auto-двойник НЕ эмитится', () async {
       final outs = await build([
-        const Channel(
+        const Direction(
           tag: 'vpn-1',
           label: 'none',
           nodeFilter: 'NOMATCH',
-          auto: ChannelAuto(),
+          auto: DirectionAuto(),
         ),
       ]);
       expect(outs.any((o) => o['tag'] == 'vpn-1-auto'), false);
@@ -383,10 +383,10 @@ void main() {
     });
   });
 
-  group('§200 — warning при пустом фильтре канала', () {
+  group('§200 — warning при пустом фильтре Направления', () {
     test('фильтр отсёк все ноды → warning (blocked)', () async {
       final w = await warningsFor([
-        const Channel(tag: 'vpn-1', label: 'Germany', nodeFilter: 'NOMATCH'),
+        const Direction(tag: 'vpn-1', label: 'Germany', nodeFilter: 'NOMATCH'),
       ]);
       expect(
           w.any((s) => s.contains('Germany') && s.contains('blocked')),
@@ -395,7 +395,7 @@ void main() {
 
     test('invert исключает всё → тоже warning', () async {
       final w = await warningsFor([
-        const Channel(
+        const Direction(
             tag: 'vpn-1', label: 'x', nodeFilter: '.', nodeFilterInvert: true),
       ]);
       expect(w.any((s) => s.contains('vpn-1') && s.contains('blocked')), true);
@@ -403,14 +403,14 @@ void main() {
 
     test('пустой фильтр (все ноды) → НЕ варним', () async {
       final w = await warningsFor([
-        const Channel(tag: 'vpn-1', label: 'x'),
+        const Direction(tag: 'vpn-1', label: 'x'),
       ]);
       expect(w.any((s) => s.contains('blocked')), false);
     });
 
     test('фильтр матчит хотя бы одну ноду → НЕ варним', () async {
       final w = await warningsFor([
-        const Channel(tag: 'vpn-1', label: 'x', nodeFilter: '🇩🇪'),
+        const Direction(tag: 'vpn-1', label: 'x', nodeFilter: '🇩🇪'),
       ]);
       expect(w.any((s) => s.contains('blocked')), false);
     });
@@ -419,7 +419,7 @@ void main() {
   group('F3 — default-regex', () {
     test('defaultFilter → первая matched нода как default', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X', defaultFilter: 'Premium'),
+        const Direction(tag: 'vpn-1', label: 'X', defaultFilter: 'Premium'),
       ]);
       expect(byTag(outs, 'vpn-1')['default'], '🇩🇪 Premium');
     });
@@ -427,7 +427,7 @@ void main() {
     test('§301 — defaultFilter регистронезависим (тег `Premium`, фильтр '
         '`premium`)', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X', defaultFilter: 'premium'),
+        const Direction(tag: 'vpn-1', label: 'X', defaultFilter: 'premium'),
       ]);
       expect(byTag(outs, 'vpn-1')['default'], '🇩🇪 Premium');
     });
@@ -435,28 +435,28 @@ void main() {
     test('первая по порядку при нескольких совпадениях', () async {
       // обе 🇩🇪-ноды матчат '🇩🇪' — берём первую (Berlin идёт раньше)
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X', defaultFilter: '🇩🇪'),
+        const Direction(tag: 'vpn-1', label: 'X', defaultFilter: '🇩🇪'),
       ]);
       expect(byTag(outs, 'vpn-1')['default'], '🇩🇪 Berlin');
     });
 
     test('нет совпадений → default не выставляется', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X', defaultFilter: 'NOPE'),
+        const Direction(tag: 'vpn-1', label: 'X', defaultFilter: 'NOPE'),
       ]);
       expect(byTag(outs, 'vpn-1').containsKey('default'), false);
     });
 
     test('пустой defaultFilter → нет default', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X'),
+        const Direction(tag: 'vpn-1', label: 'X'),
       ]);
       expect(byTag(outs, 'vpn-1').containsKey('default'), false);
     });
 
     test('невалидный default-regex → нет default (не падает)', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X', defaultFilter: '[bad'),
+        const Direction(tag: 'vpn-1', label: 'X', defaultFilter: '[bad'),
       ]);
       expect(byTag(outs, 'vpn-1').containsKey('default'), false);
     });
@@ -464,7 +464,7 @@ void main() {
     test('default обязан быть в node-set (не direct-out)', () async {
       // фильтр оставляет 🇩🇪, но default-regex матчит 🇺🇸 (вне набора) → нет default
       final outs = await build([
-        const Channel(
+        const Direction(
             tag: 'vpn-1',
             label: 'X',
             nodeFilter: '🇩🇪',
@@ -477,7 +477,7 @@ void main() {
   group('§125 — глобальный ✨auto отсутствует', () {
     test('никакой ✨auto в outbounds', () async {
       final outs = await build([
-        const Channel(tag: 'vpn-1', label: 'X', auto: ChannelAuto()),
+        const Direction(tag: 'vpn-1', label: 'X', auto: DirectionAuto()),
       ]);
       expect(outs.any((o) => o['tag'] == kAutoOutboundTag), false);
     });
@@ -485,19 +485,19 @@ void main() {
 
   group('F4.5 — деградация dangling route_final → vpn-1', () {
     Future<Map<String, dynamic>> buildWith(
-        List<Channel> channels, String routeFinal) async {
+        List<Direction> directions, String routeFinal) async {
       final r = await buildConfig(
         lists: [await nodes()],
         template: template(),
-        settings: BuildSettings(channels: channels, routeFinal: routeFinal),
+        settings: BuildSettings(directions: directions, routeFinal: routeFinal),
       );
       expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
       return r.config;
     }
 
-    test('route_final на удалённый канал → vpn-1', () async {
+    test('route_final на удалённое Направление → vpn-1', () async {
       final cfg = await buildWith(
-        [const Channel(tag: 'vpn-1', label: 'X')],
+        [const Direction(tag: 'vpn-1', label: 'X')],
         'vpn-7', // не существует
       );
       expect((cfg['route'] as Map)['final'], 'vpn-1');
@@ -505,17 +505,17 @@ void main() {
 
     test('legacy ✨auto-ссылка → vpn-1', () async {
       final cfg = await buildWith(
-        [const Channel(tag: 'vpn-1', label: 'X')],
+        [const Direction(tag: 'vpn-1', label: 'X')],
         kAutoOutboundTag,
       );
       expect((cfg['route'] as Map)['final'], 'vpn-1');
     });
 
-    test('валидный route_final (свой канал) не трогается', () async {
+    test('валидный route_final (своё Направление) не трогается', () async {
       final cfg = await buildWith(
         [
-          const Channel(tag: 'vpn-1', label: 'X'),
-          const Channel(tag: 'vpn-2', label: 'Y'),
+          const Direction(tag: 'vpn-1', label: 'X'),
+          const Direction(tag: 'vpn-2', label: 'Y'),
         ],
         'vpn-2',
       );
@@ -524,23 +524,23 @@ void main() {
 
     test('route_final на свой auto-двойник валиден', () async {
       final cfg = await buildWith(
-        [const Channel(tag: 'vpn-1', label: 'X', auto: ChannelAuto())],
+        [const Direction(tag: 'vpn-1', label: 'X', auto: DirectionAuto())],
         'vpn-1-auto',
       );
       expect((cfg['route'] as Map)['final'], 'vpn-1-auto');
     });
 
-    // §219 — auto-двойник НЕ эмитится, если node-filter канала отсёк все ноды
+    // §219 — auto-двойник НЕ эмитится, если node-filter Направления отсёк все ноды
     // (`auto != null`, но `nodes.isEmpty`). Раньше `<tag>-auto` безусловно
     // попадал в validFinals → route_final на него давал висячую ссылку (fatal).
     // Теперь validFinals = фактически эмитированные outbounds → деградация.
     test('route_final на auto-двойник с пустым node-set → vpn-1', () async {
       final cfg = await buildWith(
         [
-          const Channel(
+          const Direction(
             tag: 'vpn-1',
             label: 'X',
-            auto: ChannelAuto(),
+            auto: DirectionAuto(),
             nodeFilter: '____NOMATCH____', // не матчит ни одну ноду
           ),
         ],
@@ -555,17 +555,17 @@ void main() {
 
     test('direct-out как route_final валиден', () async {
       final cfg = await buildWith(
-        [const Channel(tag: 'vpn-1', label: 'X')],
+        [const Direction(tag: 'vpn-1', label: 'X')],
         'direct-out',
       );
       expect((cfg['route'] as Map)['final'], 'direct-out');
     });
   });
 
-  group('§351 — теги каналов зарезервированы в аллокаторе', () {
+  group('§351 — теги Направлений зарезервированы в аллокаторе', () {
     test('узлы-тёзки vpn-1 / vpn-1-auto получают суффикс, дублей нет',
         () async {
-      // До §351 селектор канала эмитился с фиксированным `c.tag` МИМО
+      // До §351 селектор Направления эмитился с фиксированным `c.tag` МИМО
       // allocateTag — узел подписки с меткой `vpn-1` давал два outbound
       // с одним тегом → отказ ядра на старте.
       final specs = [
@@ -586,7 +586,7 @@ void main() {
         lists: [list],
         template: template(),
         settings: BuildSettings(
-          channels: [const Channel(tag: 'vpn-1', label: 'X')],
+          directions: [const Direction(tag: 'vpn-1', label: 'X')],
         ),
       );
       expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
@@ -595,7 +595,7 @@ void main() {
       expect(tags.toSet().length, tags.length,
           reason: 'дубль тега = отказ ядра на старте: $tags');
       expect(byTag(outs, 'vpn-1')['type'], 'selector',
-          reason: 'vpn-1 — канал, не узел');
+          reason: 'vpn-1 — Направление, не узел');
       expect(tags, contains('vpn-1-1'),
           reason: 'узел-тёзка селектора переехал на суффикс');
       expect(tags, contains('vpn-1-auto-1'),

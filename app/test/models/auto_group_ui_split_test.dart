@@ -6,10 +6,10 @@ import 'package:lxbox/models/home_state.dart';
 import 'package:lxbox/screens/home/node_list_presenter.dart';
 import 'package:lxbox/vpn/cc_channel.dart';
 
-/// §322 — ядру и auto-двойник канала, и узел автовыбора приходят одинаковым
+/// §322 — ядру и auto-двойник Направления, и узел автовыбора приходят одинаковым
 /// `urltest`. Спец-обращение (подмена имени на «✨ Auto», пин в верхнюю
 /// секцию) положено ТОЛЬКО двойнику; различитель — его тег (`vpn-N-auto`,
-/// генерит билдер канала), а не тип.
+/// генерит билдер Направления), а не тип.
 void main() {
   CcGroup ccGroup(String tag, String type, {String selected = ''}) => CcGroup(
         tag: tag,
@@ -24,12 +24,12 @@ void main() {
   HomeState stateWith({
     required List<String> nodes,
     required Set<String> autoTags,
-    Set<String> channelAutoTags = const {},
+    Set<String> directionAutoTags = const {},
     bool pinAuto = true,
   }) =>
       HomeState(
         nodes: nodes,
-        channelAutoTags: channelAutoTags,
+        directionAutoTags: directionAutoTags,
         pinAuto: pinAuto,
         // Пин смотрит ТИП из конфига (§311 activeModel), не из ccGroups.
         configRaw: jsonEncode({
@@ -45,22 +45,22 @@ void main() {
       );
 
   group('пин в верхнюю секцию', () {
-    test('auto-двойник канала пинится', () {
+    test('auto-двойник Направления пинится', () {
       final s = stateWith(
         nodes: ['DE-1', 'vpn-1-auto'],
         autoTags: {'vpn-1-auto'},
-        channelAutoTags: {'vpn-1-auto'},
+        directionAutoTags: {'vpn-1-auto'},
       );
       expect(s.pinnedNodeCount, 1);
       expect(s.sortedNodes.first, 'vpn-1-auto');
     });
 
     test('узел автовыбора §322 НЕ пинится', () {
-      // Тип тот же `urltest`, но тега нет среди канальных.
+      // Тип тот же `urltest`, но тега нет среди Направлений.
       final s = stateWith(
         nodes: ['DE-1', 'L: 🇪🇺 Авто'],
         autoTags: {'L: 🇪🇺 Авто'},
-        channelAutoTags: {'vpn-1-auto'},
+        directionAutoTags: {'vpn-1-auto'},
       );
       expect(s.pinnedNodeCount, 0);
       // Остаётся на своём месте, а не уезжает наверх.
@@ -71,7 +71,7 @@ void main() {
       final s = stateWith(
         nodes: ['DE-1', 'L: 🇪🇺 Авто', 'vpn-1-auto'],
         autoTags: {'L: 🇪🇺 Авто', 'vpn-1-auto'},
-        channelAutoTags: {'vpn-1-auto'},
+        directionAutoTags: {'vpn-1-auto'},
       );
       expect(s.pinnedNodeCount, 1);
       expect(s.sortedNodes.first, 'vpn-1-auto');
@@ -81,7 +81,7 @@ void main() {
       final s = stateWith(
         nodes: ['vpn-1-auto', 'DE-1'],
         autoTags: {'vpn-1-auto'},
-        channelAutoTags: {'vpn-1-auto'},
+        directionAutoTags: {'vpn-1-auto'},
         pinAuto: false,
       );
       expect(s.pinnedNodeCount, 0);

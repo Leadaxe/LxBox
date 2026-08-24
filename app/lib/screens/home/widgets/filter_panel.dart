@@ -37,7 +37,7 @@ class FilterPanel extends StatefulWidget {
   /// §235 — (id, имя) источников: подписки + папки (§234).
   final List<(String, String)> sourceOptions;
 
-  /// §195/§197 — сохранить regex (+инверсию) в активный канал. `null` → 💾 скрыта.
+  /// §195/§197 — сохранить regex (+инверсию) в активное Направление. `null` → 💾 скрыта.
   final void Function(String pattern, bool invert)? onSaveRegex;
 
   @override

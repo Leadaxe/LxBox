@@ -1,26 +1,26 @@
 import 'package:flutter/material.dart';
 
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../services/ui_helpers.dart';
 import 'home/filter_widgets.dart' show NegateToggle;
 import '../services/l10n/locale_controller.dart';
 
-/// §125 — полноэкранный редактор канала роутинга. Идиома проекта
+/// §125 — полноэкранный редактор Направления роутинга. Идиома проекта
 /// ([custom_rule_edit_screen.dart], [dns_server_edit_screen.dart]):
 /// Navigator.push + PopScope back-guard (Save/Keep/Discard) + AppBar
 /// delete/save. tag read-only (системный), label — единственное «имя».
 ///
 /// Live-превью regex: [allNodeTags] — снимок тегов нод подписки (из ccGroups).
 /// Пусто (туннель не поднят) → превью показывает «no node snapshot».
-class ChannelEditScreen extends StatefulWidget {
-  const ChannelEditScreen({
+class DirectionEditScreen extends StatefulWidget {
+  const DirectionEditScreen({
     super.key,
     required this.initial,
     required this.canDelete,
     required this.allNodeTags,
   });
 
-  final Channel initial;
+  final Direction initial;
 
   /// vpn-1 неудаляем → false. Прочие → true.
   final bool canDelete;
@@ -29,10 +29,10 @@ class ChannelEditScreen extends StatefulWidget {
   final List<String> allNodeTags;
 
   @override
-  State<ChannelEditScreen> createState() => _ChannelEditScreenState();
+  State<DirectionEditScreen> createState() => _DirectionEditScreenState();
 }
 
-class _ChannelEditScreenState extends State<ChannelEditScreen> {
+class _DirectionEditScreenState extends State<DirectionEditScreen> {
   late final TextEditingController _labelCtrl;
   late final TextEditingController _nodeFilterCtrl;
   late final TextEditingController _defaultFilterCtrl;
@@ -69,7 +69,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     _nodeFilterInvert = c.nodeFilterInvert;
     _autoEnabled = c.auto != null;
 
-    final a = c.auto ?? const ChannelAuto();
+    final a = c.auto ?? const DirectionAuto();
     _autoUrlCtrl = TextEditingController(text: a.url);
     _autoIntervalCtrl = TextEditingController(text: a.interval);
     _autoToleranceCtrl = TextEditingController(text: a.tolerance.toString());
@@ -117,9 +117,9 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
 
   void _onAnyChange() => setState(() {}); // live-превью + dirty-индикатор
 
-  /// Собирает редактируемое состояние в [Channel] (tag/enabled immutable —
+  /// Собирает редактируемое состояние в [Direction] (tag/enabled immutable —
   /// берутся из initial).
-  Channel _snapshot() {
+  Direction _snapshot() {
     final c = widget.initial;
     return c.copyWith(
       label: _labelCtrl.text.trim().isEmpty
@@ -134,16 +134,16 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       interruptExistConnections: _interrupt,
       clearAuto: !_autoEnabled,
       auto: _autoEnabled
-          ? ChannelAuto(
+          ? DirectionAuto(
               url: _autoUrlCtrl.text.trim(),
               interval: _autoIntervalCtrl.text.trim().isEmpty
                   ? '5m'
                   : _autoIntervalCtrl.text.trim(),
               // §219/§221 — tolerance/pool/poolTolerance клэмпим ЗДЕСЬ (как в
-              // ChannelAuto.toJson/copyWith): прямой конструктор не клэмпит,
+              // DirectionAuto.toJson/copyWith): прямой конструктор не клэмпит,
               // иначе снапшот в памяти (для _isDirty) расходился бы с тем, что
               // реально персистится (uint16 [0,65535], pool≥1).
-              tolerance: clampChannelTolerance(
+              tolerance: clampDirectionTolerance(
                   int.tryParse(_autoToleranceCtrl.text.trim()) ?? 50),
               idleTimeout: _autoIdleCtrl.text.trim().isEmpty
                   ? '30m'
@@ -152,9 +152,9 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               // §208 — balancer (значимы только при round_robin, но храним всегда
               // — переключение режима не теряет настройки пула).
               mode: _autoMode,
-              pool: clampChannelPool(
+              pool: clampDirectionPool(
                   int.tryParse(_autoPoolCtrl.text.trim()) ?? 3),
-              poolTolerance: clampChannelTolerance(
+              poolTolerance: clampDirectionTolerance(
                   int.tryParse(_autoPoolToleranceCtrl.text.trim()) ?? 0),
               // Set→List в фиксированном порядке enum (детерминизм diff/JSON).
               stickyHash: StickyHashKey.values
@@ -212,20 +212,20 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   }
 
   void _save() {
-    Navigator.pop(context, ChannelEditResult.saved(_snapshot()));
+    Navigator.pop(context, DirectionEditResult.saved(_snapshot()));
   }
 
   Future<void> _delete() async {
     final confirmed = await showDeleteConfirmDialog(
       context,
-      title: getLocalText.s("Delete channel?"),
+      title: getLocalText.s("Delete direction?"),
       message: getLocalText.s(
           "Remove \"%1\$s\" (%2\$s)? References to it fall back to vpn-1.",
           widget.initial.label,
           widget.initial.tag),
     ); // §219
     if (confirmed == true && mounted) {
-      Navigator.pop(context, ChannelEditResult.deleted());
+      Navigator.pop(context, DirectionEditResult.deleted());
     }
   }
 
@@ -280,7 +280,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(getLocalText.s("Edit channel · %s", c.tag)),
+          title: Text(getLocalText.s("Edit direction · %s", c.tag)),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: _handleBack,
@@ -288,7 +288,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
           actions: [
             if (widget.canDelete)
               IconButton(
-                tooltip: getLocalText.s("Delete channel"),
+                tooltip: getLocalText.s("Delete direction"),
                 icon: Icon(Icons.delete_outline, color: cs.error),
                 onPressed: _delete,
               ),
@@ -343,9 +343,9 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               value: _includeDirect,
               onChanged: (v) => setState(() => _includeDirect = v ?? false),
             ),
-            // §248/§274 — detour-флаг = разрешение выбирать канал как
+            // §248/§274 — detour-флаг = разрешение выбирать Направление как
             // detour-мишень; роль в правилах ортогональна. vpn-1 — главный
-            // канал и heal-резерв, detour для него запрещён → галку не
+            // Направление и heal-резерв, detour для него запрещён → галку не
             // показываем вовсе. Include block с detour совместим (§274 снял
             // запрет Q1).
             if (!c.isRequired)
@@ -364,7 +364,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                 // страховка). Пустой label не трогаем: display-фолбэк на tag.
                 onChanged: (v) => setState(() {
                   _isDetour = v ?? false;
-                  _labelCtrl.text = Channel.normalizeLabel(
+                  _labelCtrl.text = Direction.normalizeLabel(
                       _labelCtrl.text.trim(), _isDetour);
                 }),
               ),
@@ -468,7 +468,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               visualDensity: VisualDensity.compact,
               title: Text(getLocalText.s("Include auto (urltest)"),
                   style: const TextStyle(fontSize: 14)),
-              subtitle: Text(getLocalText.s("latency-tested twin of this channel"),
+              subtitle: Text(getLocalText.s("latency-tested twin of this direction"),
                   style: const TextStyle(fontSize: 11)),
               value: _autoEnabled,
               onChanged: (v) => setState(() => _autoEnabled = v ?? false),
@@ -768,29 +768,29 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   }
 }
 
-/// Результат редактора: saved (с обновлённым каналом) или deleted.
-class ChannelEditResult {
-  const ChannelEditResult._({this.saved, this.wasDeleted = false});
-  final Channel? saved;
+/// Результат редактора: saved (с обновлённым Направлением) или deleted.
+class DirectionEditResult {
+  const DirectionEditResult._({this.saved, this.wasDeleted = false});
+  final Direction? saved;
   final bool wasDeleted;
 
-  factory ChannelEditResult.saved(Channel channel) =>
-      ChannelEditResult._(saved: channel);
-  factory ChannelEditResult.deleted() =>
-      const ChannelEditResult._(wasDeleted: true);
+  factory DirectionEditResult.saved(Direction direction) =>
+      DirectionEditResult._(saved: direction);
+  factory DirectionEditResult.deleted() =>
+      const DirectionEditResult._(wasDeleted: true);
 }
 
-/// Открывает редактор канала. Возвращает null если юзер ушёл без изменений.
-Future<ChannelEditResult?> openChannelEditor(
+/// Открывает редактор Направления. Возвращает null если юзер ушёл без изменений.
+Future<DirectionEditResult?> openDirectionEditor(
   BuildContext context, {
-  required Channel initial,
+  required Direction initial,
   required bool canDelete,
   required List<String> allNodeTags,
 }) =>
-    Navigator.push<ChannelEditResult>(
+    Navigator.push<DirectionEditResult>(
       context,
       MaterialPageRoute(
-        builder: (_) => ChannelEditScreen(
+        builder: (_) => DirectionEditScreen(
           initial: initial,
           canDelete: canDelete,
           allNodeTags: allNodeTags,

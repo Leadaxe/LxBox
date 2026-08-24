@@ -223,38 +223,38 @@ POST   /subs/{id}/rules/reorder                Body {"order":[old indexes in new
 `?rebuild=true` on any write → auto rebuild-config. Writes go through
 SubscriptionController (fetch-state machine + UI notify), not SettingsStorage directly.
 
-=== Channels CRUD (routing channels vpn-1..vpn-10) ===
+=== Directions CRUD (routing directions vpn-1..vpn-10) ===
 
-GET    /channels                               List channels (storage shape, snake_case)
-GET    /channels/{tag}                         Single channel (tag = vpn-1..vpn-10)
-POST   /channels[?rebuild=true]                Create. Auto-assigns first free vpn-N tag. Body optional:
+GET    /directions                               List directions (storage shape, snake_case)
+GET    /directions/{tag}                         Single direction (tag = vpn-1..vpn-10)
+POST   /directions[?rebuild=true]                Create. Auto-assigns first free vpn-N tag. Body optional:
                                                  {"label":"..."} plus any PATCH field below. Limit 10 → 409.
-PATCH  /channels/{tag}[?rebuild=true]          Partial update: {label,enabled,include_direct,include_block,
+PATCH  /directions/{tag}[?rebuild=true]          Partial update: {label,enabled,include_direct,include_block,
                                                  node_filter,node_filter_invert,default_filter,
                                                  interrupt_exist_connections,auto,detour}.
                                                  auto is MERGED into current urltest options (nested balancer
                                                  merges too); "auto":null disables the urltest twin.
                                                  tag is immutable; vpn-1 cannot be disabled (409).
                                                  node_filter/default_filter are validated as regex (400 on bad).
-                                                 detour:true allows picking the channel as a server/folder/
-                                                 subscription detour target (gear channel). The channel stays
+                                                 detour:true allows picking the direction as a server/folder/
+                                                 subscription detour target (gear direction). The direction stays
                                                  a valid rule target (route_final / custom-rule outbound);
                                                  include_block is allowed alongside detour.
-                                                 vpn-1 cannot be a detour channel (409).
-                                                 Toggling detour RENAMES the channel: the reserved gear
+                                                 vpn-1 cannot be a detour direction (409).
+                                                 Toggling detour RENAMES the direction: the reserved gear
                                                  prefix is added to / stripped from the stored label
                                                  (like detour-server tag marks) — responses carry the
                                                  normalized label, which may differ from what was sent.
-DELETE /channels/{tag}[?rebuild=true]          Remove. vpn-1 is not deletable (409). References to the removed
-                                                 channel (route_final / custom-rule outbound) degrade to vpn-1;
+DELETE /directions/{tag}[?rebuild=true]          Remove. vpn-1 is not deletable (409). References to the removed
+                                                 direction (route_final / custom-rule outbound) degrade to vpn-1;
                                                  detour references (override_detour / members[].detour) reset
                                                  to None.
-POST   /channels/reorder[?rebuild=true]        Body {"order":["vpn-1",...]} — exactly the current tags.
-                                                 Channel order = emit order in the config.
+POST   /directions/reorder[?rebuild=true]        Body {"order":["vpn-1",...]} — exactly the current tags.
+                                                 Direction order = emit order in the config.
 
-Disabling a channel (enabled:false) degrades rule references to vpn-1 and
+Disabling a direction (enabled:false) degrades rule references to vpn-1 and
 resets detour references to None; clearing detour (detour:false) resets
-detour references to None. Setting detour:true heals nothing — the channel
+detour references to None. Setting detour:true heals nothing — the direction
 stays a rule target. Re-enabling / re-flagging does NOT restore healed
 references (same semantics as the UI toggle). Every mutation response
 carries "healed": {"rules": N, "detours": M} — how many references were
@@ -531,13 +531,13 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PATCH', 'path': '/subs/{id}/rules/{idx}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset of the rule shape', 'description': 'Partial update of one rule'},
     {'method': 'DELETE', 'path': '/subs/{id}/rules/{idx}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove rule. Indexes shift — rebuild the next call from the returned "rules".'},
     {'method': 'POST', 'path': '/subs/{id}/rules/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder (full permutation of 0..n-1). Order matters: rules apply sequentially, last enable/disable wins.'},
-    // Channels CRUD (routing channels vpn-1..vpn-10)
-    {'method': 'GET', 'path': '/channels', 'description': 'List routing channels (storage shape, snake_case)'},
-    {'method': 'GET', 'path': '/channels/{tag}', 'description': 'Single channel (tag = vpn-1..vpn-10)'},
-    {'method': 'POST', 'path': '/channels', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"label":"..."} + any PATCH field', 'description': 'Create channel; auto-assigns first free vpn-N tag. Limit 10 → 409.'},
-    {'method': 'PATCH', 'path': '/channels/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = channel selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the channel: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours}.'},
-    {'method': 'DELETE', 'path': '/channels/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove channel. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None. Response carries "healed":{rules,detours}.'},
-    {'method': 'POST', 'path': '/channels/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
+    // Directions CRUD (routing directions vpn-1..vpn-10)
+    {'method': 'GET', 'path': '/directions', 'description': 'List routing directions (storage shape, snake_case)'},
+    {'method': 'GET', 'path': '/directions/{tag}', 'description': 'Single direction (tag = vpn-1..vpn-10)'},
+    {'method': 'POST', 'path': '/directions', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"label":"..."} + any PATCH field', 'description': 'Create direction; auto-assigns first free vpn-N tag. Limit 10 → 409.'},
+    {'method': 'PATCH', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = direction selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the direction: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours}.'},
+    {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None. Response carries "healed":{rules,detours}.'},
+    {'method': 'POST', 'path': '/directions/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
     // Folders CRUD (server folders)
     {'method': 'GET', 'path': '/folders', 'params': {'reveal': 'true|false (raw carries credentials, hidden by default)'}, 'description': 'List folder entries + members (members addressed by positional index)'},
     {'method': 'POST', 'path': '/folders', 'params': {'rebuild': 'true|false'}, 'body': '{"name":"..."}', 'description': 'Create empty folder → 201. Folder meta is edited via PATCH /subs/{id}.'},

@@ -612,17 +612,17 @@ final class FolderServers extends ServerList {
       );
 }
 
-/// §248 — сброс detour-ссылок на канал [tag] (или его auto-двойник
+/// §248 — сброс detour-ссылок на Направление [tag] (или его auto-двойник
 /// `<tag>-auto`) в '' у одного списка: `detourPolicy.overrideDetour` +
 /// личные `FolderMember.detour`. Интра-омонимы пропускаются: значение,
 /// равное bare-тегу распарсенного члена ТОЙ ЖЕ папки (включая выключенных —
 /// toggle члена не должен молча менять смысл ссылки), означает члена, а не
-/// канал. Возвращает копию с изменениями (null = нечего лечить) + счётчик.
+/// Направление. Возвращает копию с изменениями (null = нечего лечить) + счётчик.
 ///
-/// Общее ядро: storage-heal (`_healDetourChannelRefs`) и in-memory ресинк
-/// `SubscriptionController.syncDetourChannelRefsCleared` обязаны сбрасывать
+/// Общее ядро: storage-heal (`_healDetourDirectionRefs`) и in-memory ресинк
+/// `SubscriptionController.syncDetourDirectionRefsCleared` обязаны сбрасывать
 /// одинаково, иначе следующий `_persist()` воскресит вылеченную ссылку.
-({ServerList? healed, int count}) clearDetourChannelRefs(
+({ServerList? healed, int count}) clearDetourDirectionRefs(
     ServerList l, String tag) {
   final autoTag = '$tag-auto';
   bool matches(String v) => v == tag || v == autoTag;

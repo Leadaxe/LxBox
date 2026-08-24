@@ -424,7 +424,7 @@ void main() {
       final t = ActiveTimeTracker.I;
       var fail = true;
       t.uptimeMsProvider = () async {
-        if (fail) throw Exception('channel down');
+        if (fail) throw Exception('direction down');
         return 3600 * 1000;
       };
       expect(await t.totalSeconds(), 0);

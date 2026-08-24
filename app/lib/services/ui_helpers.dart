@@ -20,7 +20,7 @@ mixin SnackHelper<T extends StatefulWidget> on State<T> {
 }
 
 /// §219 — единый confirm-диалог удаления (Cancel / Delete). Delete —
-/// `colorScheme.error`. Был продублирован в custom_rule_edit / channel_edit /
+/// `colorScheme.error`. Был продублирован в custom_rule_edit / direction_edit /
 /// dns_server_edit / routing_screen_menus. Возвращает `true` при подтверждении.
 Future<bool?> showDeleteConfirmDialog(
   BuildContext context, {
@@ -50,7 +50,7 @@ Future<bool?> showDeleteConfirmDialog(
 }
 
 /// §219 — единый диалог «Unsaved changes» (Discard / Keep / Save). Был
-/// идентично продублирован в channel_edit / custom_rule_edit / dns_server_edit
+/// идентично продублирован в direction_edit / custom_rule_edit / dns_server_edit
 /// (`_handleBack`). Возвращает `'save'` / `'discard'` / `'keep'` / `null`
 /// (dismiss). Стилизация: Discard — `colorScheme.error`, Save — bold primary.
 Future<String?> showUnsavedChangesDialog(BuildContext context) {

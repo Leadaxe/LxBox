@@ -7,7 +7,7 @@ import 'package:lxbox/models/memory_limit_setting.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
 /// §271 — memory_limit в §189 native_prefs: default, write-through (JSON +
-/// method channel), нормализация мусора, участие в backup-блоке vpn_settings.
+/// method direction), нормализация мусора, участие в backup-блоке vpn_settings.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory tmp;

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
-import 'channel_filters.dart';
+import 'direction_filters.dart';
 
 /// §085 R3 — view-model для node-filter UI на главном экране.
 ///
@@ -18,11 +18,11 @@ import 'channel_filters.dart';
 ///   ping — помечают ноды matching/non-matching; у каждой категории
 ///   единый `!`-negate (§096);
 /// - **visibility**: [showNonMatching] (dimmed внизу vs скрыты);
-/// - **per-channel memory** (§083): снимок match-фильтров на канал,
-///   save/restore при смене канала через [syncChannel].
+/// - **per-direction memory** (§083): снимок match-фильтров на Направление,
+///   save/restore при смене Направления через [syncDirection].
 ///
-/// Detour-фильтр / `showNonMatching` — глобальные (не входят в per-channel
-/// снимок); match-фильтры (+их invert) — per-channel.
+/// Detour-фильтр / `showNonMatching` — глобальные (не входят в per-direction
+/// снимок); match-фильтры (+их invert) — per-direction.
 class NodeFilterViewModel extends ChangeNotifier {
   // ─── UI ───────────────────────────────────────────────────────────────
   bool _panelExpanded = false;
@@ -185,7 +185,7 @@ class NodeFilterViewModel extends ChangeNotifier {
   /// §095 — поле ping предзаполнено реальным «200» (не placeholder), но чекбокс
   /// выключен: значение видно как настоящее, а не серый hint, при этом фильтр
   /// не активен пока юзер его не включит. Дефолт нормализуется обратно в «пусто»
-  /// при capture, чтобы не плодить orphan-записи per-channel (см. [_capture]).
+  /// при capture, чтобы не плодить orphan-записи per-direction (см. [_capture]).
   static const defaultPingText = '200';
 
   final TextEditingController pingController =
@@ -249,15 +249,15 @@ class NodeFilterViewModel extends ChangeNotifier {
   /// кнопке `Icons.tune` в закрытом режиме.
   bool get hasActiveFilters => isActive || detourActive || nonMatchingHidden;
 
-  // ─── Per-channel memory (§083) ─────────────────────────────────────────
-  final Map<String, ChannelFilters> _byChannel = {};
-  String? _activeChannel;
+  // ─── Per-direction memory (§083) ─────────────────────────────────────────
+  final Map<String, DirectionFilters> _byDirection = {};
+  String? _activeDirection;
 
   /// Дефолтное «200» при выключенном чекбоксе = «ping-фильтр не настроен».
   bool get _pingIsDefault =>
       !_pingEnabled && pingController.text == defaultPingText;
 
-  ChannelFilters _capture() => ChannelFilters(
+  DirectionFilters _capture() => DirectionFilters(
         regexPattern: regexController.text,
         regexInvert: _regexInvert,
         protocols: Set.of(enabledProtocols),
@@ -266,12 +266,12 @@ class NodeFilterViewModel extends ChangeNotifier {
         variantsInvert: _variantsInvert,
         subscriptions: Set.of(enabledSubscriptions),
         subscriptionsInvert: _subscriptionsInvert,
-        // дефолт «200» (disabled) → '' чтобы канал считался пустым (no orphan).
+        // дефолт «200» (disabled) → '' чтобы Направление считалось пустым (no orphan).
         pingText: _pingIsDefault ? '' : pingController.text,
         pingEnabled: _pingEnabled,
       );
 
-  void _restore(ChannelFilters f) {
+  void _restore(DirectionFilters f) {
     _regexTimer?.cancel();
     _pingTimer?.cancel();
     regexController.text = f.regexPattern;
@@ -308,26 +308,26 @@ class NodeFilterViewModel extends ChangeNotifier {
     _pingEnabled = f.pingEnabled;
   }
 
-  /// §083 — реакция на смену канала: save фильтров старого, restore нового.
+  /// §083 — реакция на смену Направления: save фильтров старого, restore нового.
   /// Покрывает все пути (dropdown, connect-time resolve, applyGroup).
   /// `notifyListeners` только если что-то изменилось.
-  void syncChannel(String? channel) {
-    if (channel == _activeChannel) return;
-    final prev = _activeChannel;
+  void syncDirection(String? direction) {
+    if (direction == _activeDirection) return;
+    final prev = _activeDirection;
     if (prev != null) {
       final snap = _capture();
       if (snap.isEmpty) {
-        _byChannel.remove(prev);
+        _byDirection.remove(prev);
       } else {
-        _byChannel[prev] = snap;
+        _byDirection[prev] = snap;
       }
     }
-    if (channel == null) {
-      _activeChannel = null;
+    if (direction == null) {
+      _activeDirection = null;
       return;
     }
-    _restore(_byChannel[channel] ?? ChannelFilters.empty);
-    _activeChannel = channel;
+    _restore(_byDirection[direction] ?? DirectionFilters.empty);
+    _activeDirection = direction;
     notifyListeners();
   }
 

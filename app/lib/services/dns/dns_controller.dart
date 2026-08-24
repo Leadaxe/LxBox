@@ -94,11 +94,11 @@ class DnsController {
     // обёртки `{description, enabled, vars?, server}`.
     final templateByTag = template.dnsOptionsModel.wrappersByTag;
 
-    // §125: активные каналы для outbound-пикера vars (storage, не template).
-    final channels = await SettingsStorage.getChannels();
+    // §125: активные Направления для outbound-пикера vars (storage, не template).
+    final directions = await SettingsStorage.getDirections();
     final outboundOptions = <OutboundOption>[
       const OutboundOption(value: 'direct-out', label: 'direct'),
-      for (final c in channels)
+      for (final c in directions)
         if (c.enabled || c.isRequired)
           OutboundOption(value: c.tag, label: c.displayLabel),
     ];

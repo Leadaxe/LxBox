@@ -23,7 +23,7 @@ class NodeViewItem {
     required this.hasDetour,
     required this.protocolLabel,
     this.outboundType,
-    this.isChannelAuto = false,
+    this.isDirectionAuto = false,
     this.autoGroupLabel,
     this.matches = true,
     this.isSickRoot = false,
@@ -41,8 +41,8 @@ class NodeViewItem {
   /// Последний ping result в ms. `null` если untested. Negative — ERR.
   final int? delay;
 
-  /// §325 — [delay] измерен в ДРУГОМ канале (в текущем ноду ещё не пинговали).
-  /// Замеры ведутся по каналам, потому что ping-URL и таймаут резолвятся
+  /// §325 — [delay] измерен в ДРУГОМ Направлении (в текущем ноду ещё не пинговали).
+  /// Замеры ведутся по Направлениям, потому что ping-URL и таймаут резолвятся
   /// per-group (§040); показываем чужое число как ориентир, но помечаем — оно
   /// получено другим тестом. `NodeRow` рисует такой бейдж приглушённо со
   /// значком `~`.
@@ -66,11 +66,11 @@ class NodeViewItem {
   /// (показываем «Copy detour» / «Copy server + detour»).
   final bool hasDetour;
 
-  /// §322 — `tag` — auto-двойник КАНАЛА (`vpn-N-auto`), а не узел автовыбора
+  /// §322 — `tag` — auto-двойник НАПРАВЛЕНИЯ (`vpn-N-auto`), а не узел автовыбора
   /// подписки/папки. Ядру оба — `urltest`, различает только тег (его генерит
-  /// билдер канала). Двойнику положены подмена имени на «✨ Auto» и пин в
+  /// билдер Направления). Двойнику положены подмена имени на «✨ Auto» и пин в
   /// верхнюю секцию; группе §322 — своё имя и обычное место в списке.
-  final bool isChannelAuto;
+  final bool isDirectionAuto;
 
   /// §322 — метка узла автовыбора: `🎯 [3]` / `🔀 [15/7]`. Рисуется в
   /// подзаголовке ПЕРЕД «→ выбранный», вместо протокола: своего протокола у
@@ -93,7 +93,7 @@ class NodeViewItem {
   final bool matches;
 
   /// §355 — нода мертва И от неё зависят другие (DNS-серверы/ноды через
-  /// detour/каналы): ⚠-метка у имени, тап по ней открывает sheet со списком
+  /// detour/Направления): ⚠-метка у имени, тап по ней открывает sheet со списком
   /// пострадавших (caller передаёт onSickTap). Просто мёртвая нода без
   /// зависимых метку не получает — фильтр от шума.
   final bool isSickRoot;

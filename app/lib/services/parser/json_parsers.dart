@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import '../../models/auto_select.dart';
-import '../../models/channel.dart' show UrltestMode;
+import '../../models/direction.dart' show UrltestMode;
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../models/config_node.dart';
 import '../models/dependency_graph.dart';
 import '../services/runtime_chain.dart';
@@ -19,7 +19,7 @@ import '../services/l10n/locale_controller.dart';
 /// **Overview** (основные параметры + рантайм-цепочка detour, хопы
 /// кликабельны → экран владельца) и **JSON** (прежний read-only дамп §099
 /// с Copy-аффордансом в AppBar). §355 — третья вкладка **Dependents**
-/// (кто зависит от этой ноды по detour/каналам) — видна только когда
+/// (кто зависит от этой ноды по detour/Направлениям) — видна только когда
 /// зависимые есть; ⚠-метка мёртвого корня в списке нод открывает экран
 /// сразу на ней ([openDependents]).
 class OutboundViewScreen extends StatefulWidget {
@@ -66,9 +66,9 @@ class OutboundViewScreen extends StatefulWidget {
 class _OutboundViewScreenState extends State<OutboundViewScreen> {
   late final TextEditingController _jsonCtrl;
 
-  // §258 — каналы: подпись канальных хопов «⚙ label» + канальная ветка
+  // §258 — Направления: подпись Направлений хопов «⚙ label» + Направление-ветка
   // навигации. Цепочка строится после загрузки (initState → _load).
-  List<Channel> _channels = const [];
+  List<Direction> _directions = const [];
   List<RuntimeHop> _hops = const [];
 
   /// §344 — живой пул round_robin-группы (§208 `getPool`). `null` = ещё не
@@ -76,7 +76,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   /// Снимается один раз при открытии: unary-RPC, дёргать на ребилд нельзя.
   List<CcPoolSlot>? _pool;
 
-  /// §344 — режим группы (§322 §6.1: round_robin-канал или `balancer{}` в
+  /// §344 — режим группы (§322 §6.1: round_robin-Направление или `balancer{}` в
   /// конфиге). Не-группа — всегда false.
   bool get _isBalancer =>
       _isGroupNode && widget.homeController.isRoundRobinAuto(widget.tag);
@@ -90,7 +90,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   void initState() {
     super.initState();
     _jsonCtrl = TextEditingController(text: widget.json);
-    _hops = runtimeChainOf(widget.tag, widget.config, channels: _channels);
+    _hops = runtimeChainOf(widget.tag, widget.config, directions: _directions);
     unawaited(_load());
   }
 
@@ -101,11 +101,11 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   }
 
   Future<void> _load() async {
-    final channels = await SettingsStorage.getChannels();
+    final directions = await SettingsStorage.getDirections();
     if (!mounted) return;
     setState(() {
-      _channels = channels;
-      _hops = runtimeChainOf(widget.tag, widget.config, channels: channels);
+      _directions = directions;
+      _hops = runtimeChainOf(widget.tag, widget.config, directions: directions);
     });
     // §344 — живой состав пула. Только для round_robin: у least_test пул
     // пуст по контракту ядра, спрашивать нечего.
@@ -123,7 +123,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       tag,
       subController: widget.subController,
       homeController: widget.homeController,
-      channels: _channels,
+      directions: _directions,
       onOwnerNotFound: () {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -257,7 +257,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
             ? getLocalText.s("DNS server — direct detour")
             : getLocalText.s("Node — direct detour");
       }
-      final label = _channels
+      final label = _directions
           .where((c) => c.tag == via)
           .map((c) => c.label)
           .firstOrNull ??
@@ -607,9 +607,9 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   Widget _hopRow(BuildContext context, RuntimeHop hop,
       {required bool isSelf}) {
     final cs = Theme.of(context).colorScheme;
-    // §274 — ⚙ по флагу канала (displayLabel), а не по факту «хоп — канал»:
+    // §274 — ⚙ по флагу Направления (displayLabel), а не по факту «хоп — Направление»:
     // единый source-of-truth маркера.
-    final ch = hop.channel;
+    final ch = hop.direction;
     final title = ch != null ? ch.displayLabel : hop.tag;
     final subtitle = [
       if (hop.isUnknown) 'not in config' else hop.type,

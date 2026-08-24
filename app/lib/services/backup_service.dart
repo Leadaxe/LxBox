@@ -23,10 +23,10 @@ enum BackupCategory {
 const _topLevelRoutingKeys = {
   'custom_rules',
   'route_final',
-  // §219/§221 — channels + guard миграции. КРИТИЧНО: без них backup/restore на
-  // новом устройстве терял всю модель роутинг-каналов §125 (channels в allowlist
+  // §219/§221 — directions + guard миграции. КРИТИЧНО: без них backup/restore на
+  // новом устройстве терял всю модель роутинг-Направлений §125 (directions в allowlist
   // restore, но забыт в export — асимметрия). channels_migrated нужен, чтобы
-  // one-shot миграция не пере-сработала поверх восстановленных каналов.
+  // one-shot миграция не пере-сработала поверх восстановленных Направлений.
   'channels',
   'channels_migrated',
   'preset_ids_remapped', // §228 — guard ремапа preset_id; в export иначе

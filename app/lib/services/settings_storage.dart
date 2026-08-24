@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/background_mode.dart';
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
@@ -21,7 +21,7 @@ import 'warp/warp_account.dart';
 part 'settings_storage/io.dart';
 part 'settings_storage/vars.dart';
 part 'settings_storage/sources_rules.dart';
-part 'settings_storage/channels.dart';
+part 'settings_storage/directions.dart';
 part 'settings_storage/network.dart';
 part 'settings_storage/backup_tun.dart';
 part 'settings_storage/vpn_mode.dart';
@@ -140,7 +140,7 @@ class SettingsStorage {
     'urltest_passive_check', // §272 — passive health check (urltest.passive_check)
     'excluded_nodes',
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
-    'channels', // §125 — каналы роутинга (template→storage)
+    'channels', // §125 — Направления роутинга (template→storage)
     'channels_migrated', // §125 — guard one-shot миграции
     'tun_apps',
     'vpn_mode',
@@ -300,58 +300,58 @@ class SettingsStorage {
       _saveEnabledGroups(groups, flush: flush);
 
   // ---------------------------------------------------------------------------
-  // §125 — Каналы роутинга (channels[]). Заменяют enabled_groups[] + статичные
+  // §125 — Направления роутинга (directions[]). Заменяют enabled_groups[] + статичные
   // template-пресеты как source-of-truth. На первом запуске seeded из template
-  // (migrateChannelsIfNeeded; §267 — из group_templates). vpn-1 неудаляем, лимит 10.
+  // (migrateDirectionsIfNeeded; §267 — из group_templates). vpn-1 неудаляем, лимит 10.
   // ---------------------------------------------------------------------------
 
-  static Future<List<Channel>> getChannels() => _getChannels();
+  static Future<List<Direction>> getDirections() => _getDirections();
 
-  /// §292 — код приложения зовёт `ChannelMutations.bulkReplace`: bulk-overwrite
+  /// §292 — код приложения зовёт `DirectionMutations.bulkReplace`: bulk-overwrite
   /// мимо heal'а допустим только там, где ссылка структурно не может повиснуть
   /// (staging-буфер, reorder). Голый вызов из `lib/` — предупреждение analyze'а.
   @visibleForTesting
-  static Future<void> setChannels(List<Channel> channels, {bool flush = true}) =>
-      _setChannels(channels, flush: flush);
+  static Future<void> setDirections(List<Direction> directions, {bool flush = true}) =>
+      _setDirections(directions, flush: flush);
 
-  /// Добавить канал: первый свободный 'vpn-N' (N∈2..10). Throws при лимите 10.
+  /// Добавить Направление: первый свободный 'vpn-N' (N∈2..10). Throws при лимите 10.
   ///
-  /// §275 — код приложения зовёт `ChannelMutations.add`: мутаторы каналов
+  /// §275 — код приложения зовёт `DirectionMutations.add`: мутаторы Направлений
   /// парные с ресинком контроллера, здесь — только storage-половина.
   @visibleForTesting
-  static Future<Channel> addChannel({String? label}) => _addChannel(label: label);
+  static Future<Direction> addDirection({String? label}) => _addDirection(label: label);
 
-  /// Обновить канал по [Channel.tag]. Throws если tag не найден.
+  /// Обновить Направление по [Direction.tag]. Throws если tag не найден.
   /// §248 — возвращает счётчики вылеченных ссылок (disable/flag-set →
   /// rules-ссылки → vpn-1; disable/flag-unset → detour-ссылки → '').
   ///
-  /// §275 — код приложения зовёт `ChannelMutations.update`: detour-heal ОБЯЗАН
+  /// §275 — код приложения зовёт `DirectionMutations.update`: detour-heal ОБЯЗАН
   /// зеркалиться в `_entries` контроллера, иначе следующий `_persist()`
   /// воскресит вылеченную ссылку. Голый вызов из `lib/` — предупреждение
   /// analyze'а (это и есть страховка от «забыл ресинк»).
   @visibleForTesting
-  static Future<ChannelHealResult> updateChannel(Channel channel) =>
-      _updateChannel(channel);
+  static Future<DirectionHealResult> updateDirection(Direction direction) =>
+      _updateDirection(direction);
 
-  /// Удалить канал. Throws для 'vpn-1'. Переводит rules-ссылки на 'vpn-1',
+  /// Удалить Направление. Throws для 'vpn-1'. Переводит rules-ссылки на 'vpn-1',
   /// §248 detour-ссылки — на '' (None); возвращает счётчики.
   ///
-  /// §275 — код приложения зовёт `ChannelMutations.delete` (см. выше).
+  /// §275 — код приложения зовёт `DirectionMutations.delete` (см. выше).
   @visibleForTesting
-  static Future<ChannelHealResult> deleteChannel(String tag) =>
-      _deleteChannel(tag);
+  static Future<DirectionHealResult> deleteDirection(String tag) =>
+      _deleteDirection(tag);
 
-  /// One-shot миграция enabled_groups[] → channels[] (seed из template).
-  /// §267 — сид из `template.groupTemplates` (default_channels + channel-шаблон).
+  /// One-shot миграция enabled_groups[] → directions[] (seed из template).
+  /// §267 — сид из `template.groupTemplates` (json-ключи default_channels + channel).
   /// Идемпотентна. Зовётся из main() init до первого билда.
   /// §327 — `varDefaults` (имя var → `default_value`) резолвит `@urltest_*`
   /// в `group_templates.auto.options`: на этом этапе var-substitution ещё не
   /// отработала, а дефолт обязан быть один — шаблонный.
-  static Future<void> migrateChannelsIfNeeded(
+  static Future<void> migrateDirectionsIfNeeded(
     GroupTemplates gt, {
     Map<String, String> varDefaults = const {},
   }) =>
-      _migrateChannelsIfNeeded(gt, varDefaults: varDefaults);
+      _migrateDirectionsIfNeeded(gt, varDefaults: varDefaults);
 
   // ---------------------------------------------------------------------------
   // Last global update timestamp

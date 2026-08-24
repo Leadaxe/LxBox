@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../models/server_list.dart';
 import '../services/error_format.dart';
 import '../services/probe/probe_controller.dart';
@@ -77,9 +77,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   final Set<String> _selectedProtocols = {};
   bool _protocolsInvert = false;
 
-  // §248 — каналы: секция Channels в detour-пикере + подпись «⚙ <label>»
-  // канальной override-цели в Settings-вкладке.
-  List<Channel> _channels = const [];
+  // §248 — Направления: секция Directions в detour-пикере + подпись «⚙ <label>»
+  // Направления override-цели в Settings-вкладке.
+  List<Direction> _directions = const [];
 
   FolderServers get _folder => widget.entry.list as FolderServers;
 
@@ -151,7 +151,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     _nameCtrl = TextEditingController(text: widget.entry.name);
     widget.controller.addListener(_onEntriesChanged); // §278
     unawaited(_loadThresholds());
-    unawaited(_loadChannels());
+    unawaited(_loadDirections());
     final focus = widget.focusMemberIndex;
     if (focus != null && focus >= 0 && focus < _folder.members.length) {
       WidgetsBinding.instance
@@ -189,11 +189,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     });
   }
 
-  /// §248 — загрузка каналов (initState + refresh перед пикером).
-  Future<void> _loadChannels() async {
-    final channels = await SettingsStorage.getChannels();
+  /// §248 — загрузка Направлений (initState + refresh перед пикером).
+  Future<void> _loadDirections() async {
+    final directions = await SettingsStorage.getDirections();
     if (!mounted) return;
-    setState(() => _channels = channels);
+    setState(() => _directions = directions);
   }
 
   @override
@@ -1506,12 +1506,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     return SubscriptionSettingsTab(
       entry: widget.entry,
       folderMode: true, // §239 — адаптированные тексты
-      channels: _channels, // §248 — подпись канальной override-цели
+      directions: _directions, // §248 — подпись Направления override-цели
       // §252 — разворот цели в цепочку «как пакет пойдёт»; интра-члены
       // папки имеют приоритет (bare-тег, зеркало FolderDetourPlan).
       detourPathHopsOf: (stored) => detourPathHops(stored,
           controller: widget.controller,
-          channels: _channels,
+          directions: _directions,
           folder: widget.entry.list is FolderServers
               ? widget.entry.list as FolderServers
               : null),
@@ -1573,13 +1573,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   Future<void> _showOverrideDetourPicker() async {
     // §239 — кандидаты: «свободные» одиночки + члены СВОЕЙ папки (интра-цель
     // хранится голым тегом; exempt-набор в билдере не даёт циклов через цель).
-    // §248 — свежие каналы (могли измениться, пока экран открыт).
-    await _loadChannels();
+    // §248 — свежие Направления (могли измениться, пока экран открыт).
+    await _loadDirections();
     if (!mounted) return;
     final chosen = await showDetourTargetPicker(
       context,
       controller: widget.controller,
-      channels: _channels,
+      directions: _directions,
       currentFolder: _folder,
     );
     if (chosen == null || !mounted) return;

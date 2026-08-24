@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/screens/home/channel_filters.dart';
+import 'package:lxbox/screens/home/direction_filters.dart';
 
-/// §083 — unit tests для `ChannelFilters` snapshot class.
+/// §083 — unit tests для `DirectionFilters` snapshot class.
 void main() {
-  group('ChannelFilters — defaults', () {
+  group('DirectionFilters — defaults', () {
     test('конструктор без аргументов = все дефолты', () {
-      const f = ChannelFilters();
+      const f = DirectionFilters();
       expect(f.regexPattern, '');
       expect(f.regexInvert, false);
       expect(f.protocols, isEmpty);
@@ -17,59 +17,59 @@ void main() {
     });
 
     test('empty constant == дефолтный конструктор', () {
-      expect(ChannelFilters.empty.isEmpty, true);
+      expect(DirectionFilters.empty.isEmpty, true);
     });
   });
 
-  group('ChannelFilters — isEmpty', () {
+  group('DirectionFilters — isEmpty', () {
     test('всё дефолт → isEmpty true', () {
-      expect(const ChannelFilters().isEmpty, true);
+      expect(const DirectionFilters().isEmpty, true);
     });
 
     test('regexPattern непустой → isEmpty false', () {
-      expect(const ChannelFilters(regexPattern: '🇷🇺').isEmpty, false);
+      expect(const DirectionFilters(regexPattern: '🇷🇺').isEmpty, false);
     });
 
     test('regexInvert → isEmpty false', () {
-      expect(const ChannelFilters(regexInvert: true).isEmpty, false);
+      expect(const DirectionFilters(regexInvert: true).isEmpty, false);
     });
 
     test('protocols непустой → isEmpty false', () {
-      expect(const ChannelFilters(protocols: {'vless'}).isEmpty, false);
+      expect(const DirectionFilters(protocols: {'vless'}).isEmpty, false);
     });
 
     test('protocolsInvert → isEmpty false', () {
-      expect(const ChannelFilters(protocolsInvert: true).isEmpty, false);
+      expect(const DirectionFilters(protocolsInvert: true).isEmpty, false);
     });
 
     test('§103 variants непустой → isEmpty false', () {
-      expect(const ChannelFilters(variants: {'xhttp'}).isEmpty, false);
+      expect(const DirectionFilters(variants: {'xhttp'}).isEmpty, false);
     });
 
     test('§103 variantsInvert → isEmpty false', () {
-      expect(const ChannelFilters(variantsInvert: true).isEmpty, false);
+      expect(const DirectionFilters(variantsInvert: true).isEmpty, false);
     });
 
     test('subscriptions непустой → isEmpty false', () {
-      expect(const ChannelFilters(subscriptions: {'sub-1'}).isEmpty, false);
+      expect(const DirectionFilters(subscriptions: {'sub-1'}).isEmpty, false);
     });
 
     test('subscriptionsInvert → isEmpty false', () {
-      expect(const ChannelFilters(subscriptionsInvert: true).isEmpty, false);
+      expect(const DirectionFilters(subscriptionsInvert: true).isEmpty, false);
     });
 
     test('pingText непустой → isEmpty false', () {
-      expect(const ChannelFilters(pingText: '200').isEmpty, false);
+      expect(const DirectionFilters(pingText: '200').isEmpty, false);
     });
 
     test('pingEnabled → isEmpty false', () {
-      expect(const ChannelFilters(pingEnabled: true).isEmpty, false);
+      expect(const DirectionFilters(pingEnabled: true).isEmpty, false);
     });
   });
 
-  group('ChannelFilters — хранит переданные значения', () {
+  group('DirectionFilters — хранит переданные значения', () {
     test('round-trip всех полей', () {
-      const f = ChannelFilters(
+      const f = DirectionFilters(
         regexPattern: 'Moscow',
         regexInvert: true,
         protocols: {'vless', 'vmess'},
@@ -92,11 +92,11 @@ void main() {
 
     test('Set передаётся копией из caller — снимок не мутируется '
         'извне (Set.of в _captureFilters)', () {
-      // ChannelFilters сам не копирует (immutable contract). Гарантия копии
+      // DirectionFilters сам не копирует (immutable contract). Гарантия копии
       // — на стороне _captureFilters (Set.of). Здесь проверяем что
       // переданный Set хранится как есть.
       final protos = {'vless'};
-      final f = ChannelFilters(protocols: protos);
+      final f = DirectionFilters(protocols: protos);
       protos.add('vmess');
       // Без Set.of снимок видит мутацию — это ожидаемо для immutable-by-
       // contract класса; защита на стороне caller (_captureFilters).

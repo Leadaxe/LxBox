@@ -153,7 +153,7 @@ class HomeControls extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              Text(getLocalText.s("Channel"),
+              Text(getLocalText.s("Direction"),
                   style: const TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(width: 12),
               Expanded(
@@ -171,7 +171,7 @@ class HomeControls extends StatelessWidget {
                       value: state.groups.contains(state.selectedGroup)
                           ? state.selectedGroup
                           : null,
-                      hint: Text(getLocalText.s("Select channel")),
+                      hint: Text(getLocalText.s("Select direction")),
                       items: state.groups
                           .map((g) => DropdownMenuItem(
                               value: g, child: Text(state.groupLabelOf(g))))

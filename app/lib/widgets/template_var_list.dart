@@ -62,7 +62,7 @@ class TemplateVarListView extends StatefulWidget {
   /// шапкой).
   final bool showSectionHeaders;
 
-  /// §117: каналы для `type: outbound` vars (Direct + активные каналы).
+  /// §117: Направления для `type: outbound` vars (Direct + активные Направления).
   /// Пусто → outbound-var рендерится текстовым полем (fallback).
   final List<OutboundOption> outboundOptions;
 
@@ -225,8 +225,8 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
         );
 
       case 'outbound':
-        // §117: пикер канала (Direct + активные каналы). Без options —
-        // fallback в text-input (экраны, не передающие каналы).
+        // §117: пикер Направления (Direct + активные Направления). Без options —
+        // fallback в text-input (экраны, не передающие Направления).
         if (widget.outboundOptions.isEmpty) return _buildTextField(v, value);
         return _LabelledField(
           label: v.title.isNotEmpty ? v.title : v.name,

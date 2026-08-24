@@ -129,7 +129,7 @@ class NodeListPresenter {
   /// §359 — у узла автовыбора подписки протокол СВОЙ (`urltest`), а не
   /// унаследованный от выбранного члена: иначе он менялся бы под юзером при
   /// каждом переключении и список «прыгал» бы сам по себе. Fallback на протокол
-  /// члена остаётся для селекторов каналов.
+  /// члена остаётся для селекторов Направлений.
   String? protocolOfTag(String tag, HomeState state) {
     // §311 — activeModel: теги строк приходят из ядра (ccGroups).
     final model = state.activeModel;
@@ -212,7 +212,7 @@ class NodeListPresenter {
         variantsOf: (t) => variantsOfTag(t, state),
         subscriptionsOf: _sourcesOfTag,
         // §325 — фильтр по пингу видит то же число, что показано в строке
-        // (свой замер канала либо фоллбэк из другого).
+        // (свой замер Направления либо фоллбэк из другого).
         pingOf: state.delayOf,
       );
 

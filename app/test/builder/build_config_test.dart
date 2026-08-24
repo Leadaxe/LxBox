@@ -9,17 +9,17 @@ void main() {
   group('buildConfig — smoke', () {
     final template = WizardTemplate(
       parserConfig: ParserConfigBlock(),
-      // §267 — group_templates: vpn-1 канал (direct+auto), auto-подгруппа.
+      // §267 — group_templates: vpn-1 Направление (direct+auto), auto-подгруппа.
       groupTemplates: GroupTemplates(
-        channel: ChannelTemplate(
+        direction: DirectionTemplate(
           include: const ['direct', 'auto'],
           options: const {'interrupt_exist_connections': true},
         ),
         auto: AutoTemplate(
           options: const {'url': 'https://x', 'interval': '30s'},
         ),
-        defaultChannels: [
-          DefaultChannel(tag: 'vpn-1', label: 'vpn-1', defaultEnabled: true),
+        defaultDirections: [
+          DefaultDirection(tag: 'vpn-1', label: 'vpn-1', defaultEnabled: true),
         ],
       ),
       vars: const [],
@@ -67,7 +67,7 @@ void main() {
           reason: result.validation.issues.join('\n'));
       final outs = result.config['outbounds'] as List;
       final tags = outs.map((o) => (o as Map)['tag']).toList();
-      // §125 — глобальный ✨auto заменён на per-channel двойник vpn-1-auto.
+      // §125 — глобальный ✨auto заменён на per-direction двойник vpn-1-auto.
       expect(tags, containsAll(['A', 'B', 'direct-out', 'vpn-1', 'vpn-1-auto']));
       expect(tags, isNot(contains(kAutoOutboundTag)));
 

@@ -41,12 +41,12 @@ void main() {
     ],
   });
 
-  const channelTags = {'vpn-1', 'vpn-2'};
+  const directionTags = {'vpn-1', 'vpn-2'};
   const dnsTags = {'dns-cf', 'dns-google'};
 
   SanitizedImportRule sanitize(dynamic entry) => sanitizeImportedRule(
         entry,
-        channelTags: channelTags,
+        directionTags: directionTags,
         dnsServerTags: dnsTags,
         template: template,
       );
@@ -154,7 +154,7 @@ void main() {
     test('§398 — правило с занятым именем неимпортируемо', () {
       final s = sanitizeImportedRule(
         CustomRuleInline(name: 'My Rule', domains: ['a.com']).toJson(),
-        channelTags: channelTags,
+        directionTags: directionTags,
         dnsServerTags: dnsTags,
         template: template,
         existingNames: {'My Rule'},
@@ -179,7 +179,7 @@ void main() {
       expect(s.warnings.single.missingTag, 'vpn-9');
     });
 
-    test('спец-теги и существующий канал — без лечения', () {
+    test('спец-теги и существующее Направление — без лечения', () {
       for (final ob in ['reject', 'block', 'direct-out', 'vpn-2']) {
         final s = sanitize(
             CustomRuleInline(name: 'R', outbound: ob, domains: ['a.com'])

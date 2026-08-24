@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/auto_select.dart';
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../models/node_spec.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/parser/uri_utils.dart';
@@ -10,10 +10,10 @@ import '../services/ui_helpers.dart';
 
 /// §322 — редактор узла автовыбора внутри папки.
 ///
-/// Идиома проекта ([channel_edit_screen.dart]): Navigator.push + PopScope
+/// Идиома проекта ([direction_edit_screen.dart]): Navigator.push + PopScope
 /// back-guard (Save/Keep/Discard) + AppBar delete/save.
 ///
-/// Отличие от канала: членство здесь — три режима (все / правило / список),
+/// Отличие от Направления: членство здесь — три режима (все / правило / список),
 /// и превью показывает, кто именно попал в пул. [candidates] — узлы папки
 /// (без самой группы), по ним и считается превью.
 class AutoGroupEditScreen extends StatefulWidget {
@@ -668,7 +668,7 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
         ),
       ];
 
-  // Названия ключей — как в §208-редакторе канала: технические термины
+  // Названия ключей — как в §208-редакторе Направления: технические термины
   // config'а, не переводим (l10n-exempt по тому же основанию).
   String _stickyLabel(StickyHashKey k) => switch (k) {
         StickyHashKey.process => 'process',

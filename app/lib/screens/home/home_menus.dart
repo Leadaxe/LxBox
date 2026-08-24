@@ -93,7 +93,7 @@ Future<void> showSortOptionsMenu(
 }
 
 /// §040 — modal bottom sheet настроек ping (long-press по reload-кнопке).
-/// Scope-переключатель All channels / текущий канал (если у канала есть
+/// Scope-переключатель All directions / текущее Направление (если у Направления есть
 /// override — стартует в group-mode с его значениями). Пресеты URL из
 /// template, ручные URL/timeout. Save пишет в [SettingsStorage] (глобально
 /// или per-group) и дёргает `controller.reloadPingOptions()`.
@@ -107,7 +107,7 @@ Future<void> showPingSettings(
   final presets = template.pingOptionsModel.presets;
 
   if (!context.mounted) return;
-  // §040: dialog scope — global / per-group. Если у текущего канала есть
+  // §040: dialog scope — global / per-group. Если у текущего Направления есть
   // override → стартуем в group-mode с его значениями. Иначе global-mode
   // с глобальным URL/timeout (resolved через storage > template).
   final currentGroup = controller.state.selectedGroup ?? '';
@@ -151,7 +151,7 @@ Future<void> showPingSettings(
                 SegmentedButton<bool>(
                   segments: [
                     ButtonSegment(
-                        value: false, label: Text(getLocalText.s("All channels"))),
+                        value: false, label: Text(getLocalText.s("All directions"))),
                     ButtonSegment(
                         value: true,
                         label: Text(currentGroup,

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -7,15 +7,15 @@ import 'package:lxbox/models/validation.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
-/// §248/§274 — detour-каналы в билдере. §274 сменил семантику isDetour с
+/// §248/§274 — detour-Направления в билдере. §274 сменил семантику isDetour с
 /// «роли» на «разрешение»: block-опция совместима с detour, route_final и
-/// custom-rule могут целиться в detour-канал, fallback пустого канала един
+/// custom-rule могут целиться в detour-Направление, fallback пустого Направления един
 /// для всех — [block, direct-out] c default=block (§201/§274). Остались:
 /// autoTag-алиас, AWG→WG advisory.
 /// §254 — detour-циклы больше НЕ рвутся edge-strip'ом: детектор в
 /// validateConfig возвращает fatal DetourCycle с минимальным набором
 /// виновников (группа тестов «§254 — detour-циклы»). Harness — как в
-/// channel_groups_test.dart (настоящий buildConfig, channels из settings).
+/// direction_groups_test.dart (настоящий buildConfig, directions из settings).
 void main() {
   WizardTemplate template() => WizardTemplate(
         parserConfig: ParserConfigBlock(),
@@ -54,12 +54,12 @@ void main() {
         ],
       );
 
-  Future<BuildResult> build(List<ServerList> lists, List<Channel> channels,
+  Future<BuildResult> build(List<ServerList> lists, List<Direction> directions,
       {String routeFinal = ''}) async {
     final r = await buildConfig(
       lists: lists,
       template: template(),
-      settings: BuildSettings(channels: channels, routeFinal: routeFinal),
+      settings: BuildSettings(directions: directions, routeFinal: routeFinal),
     );
     expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
     return r;
@@ -72,31 +72,31 @@ void main() {
       outs(r).firstWhere((o) => o['tag'] == tag);
 
   group('§274 — block-опция и пустой fallback', () {
-    test('block эмитится у detour-канала при includeBlock=true', () async {
+    test('block эмитится у detour-Направления при includeBlock=true', () async {
       // §274 — запрет detour×includeBlock снят (isDetour = разрешение, не
-      // роль): block-опция эмитится в селектор detour-канала как у обычного.
+      // роль): block-опция эмитится в селектор detour-Направления как у обычного.
       final r = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2', label: 'Relay', isDetour: true, includeBlock: true),
       ]);
       expect(byTag(r, 'vpn-2')['outbounds'], contains('block'));
-      // У всех каналов есть ноды → список пустых каналов пуст.
-      expect(r.channelsWithoutNodes, isEmpty);
+      // У всех Направлений есть ноды → список пустых Направлений пуст.
+      expect(r.directionsWithoutNodes, isEmpty);
     });
 
-    test('пустой detour-канал → [block, direct-out] c default=block + warning',
+    test('пустое detour-Направление → [block, direct-out] c default=block + warning',
         () async {
       // §274 — detour-исключение §248 Q1 ([direct-out], «нет хопа») снято:
-      // fallback пустого канала единый для всех — блокировать по умолчанию,
+      // fallback пустого Направления единый для всех — блокировать по умолчанию,
       // direct остаётся доступной опцией.
       final r = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2',
             label: 'Relay',
             isDetour: true,
@@ -105,28 +105,28 @@ void main() {
       final vpn2 = byTag(r, 'vpn-2');
       expect(vpn2['outbounds'], ['block', 'direct-out']);
       expect(vpn2['default'], 'block');
-      // Единый текст warning'а; displayLabel detour-канала — с ⚙-префиксом.
+      // Единый текст warning'а; displayLabel detour-Направления — с ⚙-префиксом.
       expect(
           r.emitWarnings,
           contains(contains(
-              'Channel "⚙ Relay" (vpn-2): node filter matched no nodes')));
-      // §274 — display-имя попадает в channelsWithoutNodes (SnackBar на
-      // Home); канал с нодами (Main) в список не попадает.
-      expect(r.channelsWithoutNodes, ['⚙ Relay']);
+              'Direction "⚙ Relay" (vpn-2): node filter matched no nodes')));
+      // §274 — display-имя попадает в directionsWithoutNodes (SnackBar на
+      // Home); Направление с нодами (Main) в список не попадает.
+      expect(r.directionsWithoutNodes, ['⚙ Relay']);
     });
 
-    test('пустой ОБЫЧНЫЙ канал — прежний §201 [block, direct-out]', () async {
+    test('пустой ОБЫЧНЫЙ Направление — прежний §201 [block, direct-out]', () async {
       final r = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(tag: 'vpn-2', label: 'X', nodeFilter: 'no-such-node'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(tag: 'vpn-2', label: 'X', nodeFilter: 'no-such-node'),
       ]);
       final vpn2 = byTag(r, 'vpn-2');
       expect(vpn2['outbounds'], ['block', 'direct-out']);
       expect(vpn2['default'], 'block');
-      // §274 — display-имя пустого канала в channelsWithoutNodes.
-      expect(r.channelsWithoutNodes, ['X']);
+      // §274 — display-имя пустого Направления в directionsWithoutNodes.
+      expect(r.directionsWithoutNodes, ['X']);
       // Warning говорит правду: emptyFallback → default=block.
       expect(r.emitWarnings,
           contains(contains('traffic is blocked (default)')));
@@ -141,8 +141,8 @@ void main() {
       final r = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2',
             label: 'X',
             includeDirect: true,
@@ -155,29 +155,29 @@ void main() {
           contains(contains('traffic goes direct (no VPN hop)')));
       expect(r.emitWarnings,
           isNot(contains(contains('traffic is blocked'))));
-      expect(r.channelsWithoutNodes, ['X']);
+      expect(r.directionsWithoutNodes, ['X']);
     });
 
-    test('негативные кейсы channelsWithoutNodes: не вина фильтра — не варним',
+    test('негативные кейсы directionsWithoutNodes: не вина фильтра — не варним',
         () async {
-      // (а) Пустой фильтр + есть ноды подписки → канал берёт все ноды.
+      // (а) Пустой фильтр + есть ноды подписки → Направление берёт все ноды.
       final withNodes = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
       ]);
-      expect(withNodes.channelsWithoutNodes, isEmpty);
+      expect(withNodes.directionsWithoutNodes, isEmpty);
       // (б) Непустой фильтр, но подписок нет вовсе (selectorTags пуст) —
       // 0 нод не вина фильтра, SnackBar не показываем.
       final noSubs = await build(<ServerList>[], [
-        const Channel(tag: 'vpn-1', label: 'Main', nodeFilter: 'anything'),
+        const Direction(tag: 'vpn-1', label: 'Main', nodeFilter: 'anything'),
       ]);
-      expect(noSubs.channelsWithoutNodes, isEmpty);
+      expect(noSubs.directionsWithoutNodes, isEmpty);
       // (в) Пустой фильтр и нет подписок — тоже тишина.
       final emptyAll = await build(<ServerList>[], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
       ]);
-      expect(emptyAll.channelsWithoutNodes, isEmpty);
+      expect(emptyAll.directionsWithoutNodes, isEmpty);
     });
   });
 
@@ -187,11 +187,11 @@ void main() {
     // минимальным набором culprits — конфиг не собирается, юзер устраняет
     // причину сам. Хелпер: билд без expect(isOk).
     Future<BuildResult> buildRaw(
-            List<ServerList> lists, List<Channel> channels) =>
+            List<ServerList> lists, List<Direction> directions) =>
         buildConfig(
           lists: lists,
           template: template(),
-          settings: BuildSettings(channels: channels),
+          settings: BuildSettings(directions: directions),
         );
 
     List<DetourCycle> cyclesOf(BuildResult r) =>
@@ -205,8 +205,8 @@ void main() {
             names: ['Relay Berlin'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2', label: 'Relay', isDetour: true, nodeFilter: 'Relay'),
       ]);
       final cycles = cyclesOf(r);
@@ -226,13 +226,13 @@ void main() {
             names: ['Relay Berlin'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2-auto')),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2',
             label: 'Relay',
             isDetour: true,
             nodeFilter: 'Relay',
-            auto: ChannelAuto()),
+            auto: DirectionAuto()),
       ]);
       final cycles = cyclesOf(r);
       expect(cycles, hasLength(1));
@@ -254,8 +254,8 @@ void main() {
             names: ['Mid'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2',
             label: 'Relay',
             isDetour: true,
@@ -269,7 +269,7 @@ void main() {
           containsAll(<String>['Client', 'Mid', 'vpn-2']));
     });
 
-    test('межканальный цикл: A∈C1→C2, B∈C2→C1 — один culprit, один issue',
+    test('цикл между Направлениями: A∈C1→C2, B∈C2→C1 — один culprit, один issue',
         () async {
       final r = await buildRaw([
         vlessServer(
@@ -281,10 +281,10 @@ void main() {
             names: ['Node B'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2', label: 'C1', isDetour: true, nodeFilter: 'Node A'),
-        const Channel(
+        const Direction(
             tag: 'vpn-3', label: 'C2', isDetour: true, nodeFilter: 'Node B'),
       ]);
       // Кольцо одно (A→C2→B→C1→A): минимальный набор = 1 ребро (какое —
@@ -294,7 +294,7 @@ void main() {
       expect(cycles.single.culprits, hasLength(1));
     });
 
-    test('ссылка на ОБЫЧНЫЙ канал (Debug API-сценарий) — тот же fatal',
+    test('ссылка на ОБЫЧНЫЙ Направление (Debug API-сценарий) — тот же fatal',
         () async {
       final r = await buildRaw([
         vlessServer(
@@ -302,8 +302,8 @@ void main() {
             names: ['Node X'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(tag: 'vpn-2', label: 'Plain', nodeFilter: 'Node X'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(tag: 'vpn-2', label: 'Plain', nodeFilter: 'Node X'),
       ]);
       expect(cyclesOf(r).single.culprits.single.tag, 'Node X');
     });
@@ -319,17 +319,17 @@ void main() {
             names: ['Relay Berlin', 'Client A', 'Client B'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2',
             label: 'Relay',
             isDetour: true,
             nodeFilter: 'Relay',
-            auto: ChannelAuto()),
+            auto: DirectionAuto()),
       ]);
       final cycles = cyclesOf(r);
       expect(cycles, hasLength(1));
-      // Минимальный набор: только relay (член канала), клиенты — транзит.
+      // Минимальный набор: только relay (член Направления), клиенты — транзит.
       expect(cycles.single.culprits,
           [(tag: 'Relay Berlin', detour: 'vpn-2')]);
     });
@@ -354,10 +354,10 @@ void main() {
             names: ['IN Awg'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2', label: 'BL', isDetour: true, nodeFilter: 'BL'),
-        const Channel(
+        const Direction(
             tag: 'vpn-3', label: 'WARP IN', isDetour: true, nodeFilter: 'IN'),
       ]);
       final cycles = cyclesOf(r);
@@ -368,7 +368,7 @@ void main() {
       expect(cycles.single.renderEn(), isNot(contains('BL Sofia')));
     });
 
-    test('линейная цепочка каналов C1→C2→C3 без замыкания → ok', () async {
+    test('линейная цепочка Направлений C1→C2→C3 без замыкания → ok', () async {
       // Регрессия device-кейса ПОСЛЕ устранения виновника: [BL]→WARP IN→
       // наружу, WARP OUT→[BL] — ацикличная цепочка, fatal быть не должно.
       final r = await build([
@@ -382,12 +382,12 @@ void main() {
             policy: const DetourPolicy(overrideDetour: 'vpn-4')),
         vlessServer(id: 'in1', names: ['IN Masque'])
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2', label: 'OUT', isDetour: true, nodeFilter: 'OUT'),
-        const Channel(
+        const Direction(
             tag: 'vpn-3', label: 'BL', isDetour: true, nodeFilter: 'BL'),
-        const Channel(
+        const Direction(
             tag: 'vpn-4', label: 'WARP IN', isDetour: true, nodeFilter: 'IN'),
       ]);
       expect(byTag(r, 'BL Sofia')['detour'], 'vpn-4');
@@ -406,10 +406,10 @@ void main() {
             names: ['Node Y'],
             policy: const DetourPolicy(overrideDetour: 'vpn-3')),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2', label: 'C1', isDetour: true, nodeFilter: 'Node X'),
-        const Channel(
+        const Direction(
             tag: 'vpn-3', label: 'C2', isDetour: true, nodeFilter: 'Node Y'),
       ]);
       final cycles = cyclesOf(r);
@@ -420,19 +420,19 @@ void main() {
     });
   });
 
-  group('§274/§248 — custom-rule на detour-канал и омонимия', () {
-    test('custom-rule на detour-канал → конфиг валиден (штатно, §274)',
+  group('§274/§248 — custom-rule на detour-Направление и омонимия', () {
+    test('custom-rule на detour-Направление → конфиг валиден (штатно, §274)',
         () async {
-      // §274 — isDetour это разрешение, не роль: detour-канал остаётся
+      // §274 — isDetour это разрешение, не роль: detour-Направление остаётся
       // валидной целью custom-rule outbound. Селектор vpn-2 в конфиге
       // существует, валидатор доволен, ссылку никто не «чинит».
       final r = await buildConfig(
         lists: [vlessServer(id: 'u', names: ['A'])],
         template: template(),
         settings: BuildSettings(
-          channels: const [
-            Channel(tag: 'vpn-1', label: 'Main'),
-            Channel(tag: 'vpn-2', label: 'Relay', isDetour: true),
+          directions: const [
+            Direction(tag: 'vpn-1', label: 'Main'),
+            Direction(tag: 'vpn-2', label: 'Relay', isDetour: true),
           ],
           customRules: [
             CustomRuleInline(
@@ -444,11 +444,11 @@ void main() {
           reason: r.validation.issues.join('\n'));
     });
 
-    test('омоним: member.detour=тёзка канала → интра-ребро на члена', () async {
-      // Член папки носит bare-тег 'vpn-2' — тёзка detour-канала. Ссылка
+    test('омоним: member.detour=тёзка Направления → интра-ребро на члена', () async {
+      // Член папки носит bare-тег 'vpn-2' — тёзка detour-Направления. Ссылка
       // member B detour='vpn-2' внутри ТОЙ ЖЕ папки означает ЧЛЕНА
       // (приоритет bareIndex FolderDetourPlan): резолв в display-form
-      // 'hm- vpn-2', канал ни при чём — edge-strip рёбер не трогает.
+      // 'hm- vpn-2', Направление ни при чём — edge-strip рёбер не трогает.
       final folder = FolderServers(
         id: 'f1',
         name: 'Homonym',
@@ -466,8 +466,8 @@ void main() {
         folder,
         vlessServer(id: 'x', names: ['Exit Node']),
       ], [
-        const Channel(tag: 'vpn-1', label: 'Main'),
-        const Channel(
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(
             tag: 'vpn-2', label: 'Relay', isDetour: true, nodeFilter: 'Exit'),
       ]);
       expect(byTag(r, 'hm- node-b')['detour'], 'hm- vpn-2');
@@ -476,44 +476,44 @@ void main() {
     });
   });
 
-  group('§274 — route_final может быть detour-каналом', () {
-    test('route_final=detour-канал остаётся, warning отсутствует', () async {
-      // §274 — вычитание detour-тегов из validFinals снято: detour-канал —
+  group('§274 — route_final может быть detour-Направлением', () {
+    test('route_final=detour-Направление остаётся, warning отсутствует', () async {
+      // §274 — вычитание detour-тегов из validFinals снято: detour-Направление —
       // валидная rules-мишень, route.final не переключается на vpn-1.
       final r = await build(
         [vlessServer(id: 'u', names: ['A'])],
         [
-          const Channel(tag: 'vpn-1', label: 'Main'),
-          const Channel(tag: 'vpn-2', label: 'Relay', isDetour: true),
+          const Direction(tag: 'vpn-1', label: 'Main'),
+          const Direction(tag: 'vpn-2', label: 'Relay', isDetour: true),
         ],
         routeFinal: 'vpn-2',
       );
       expect((r.config['route'] as Map)['final'], 'vpn-2');
       expect(
-          r.emitWarnings, isNot(contains(contains('is a detour channel'))));
+          r.emitWarnings, isNot(contains(contains('is a detour direction'))));
       expect(
           r.emitWarnings, isNot(contains(contains('switched to vpn-1'))));
     });
 
-    test('route_final=auto-двойник detour-канала остаётся (двойник эмитится)',
+    test('route_final=auto-двойник detour-Направления остаётся (двойник эмитится)',
         () async {
       // auto включён и ноды есть → 'vpn-2-auto' реально эмитится (§219) и
       // потому валидная мишень.
       final r = await build(
         [vlessServer(id: 'u', names: ['A'])],
         [
-          const Channel(tag: 'vpn-1', label: 'Main'),
-          const Channel(
+          const Direction(tag: 'vpn-1', label: 'Main'),
+          const Direction(
               tag: 'vpn-2',
               label: 'Relay',
               isDetour: true,
-              auto: ChannelAuto()),
+              auto: DirectionAuto()),
         ],
         routeFinal: 'vpn-2-auto',
       );
       expect((r.config['route'] as Map)['final'], 'vpn-2-auto');
       expect(
-          r.emitWarnings, isNot(contains(contains('is a detour channel'))));
+          r.emitWarnings, isNot(contains(contains('is a detour direction'))));
     });
 
     test('route_final=НЕэмитящийся auto-двойник (0 нод) → vpn-1 + warning',
@@ -524,13 +524,13 @@ void main() {
       final r = await build(
         [vlessServer(id: 'u', names: ['A'])],
         [
-          const Channel(tag: 'vpn-1', label: 'Main'),
-          const Channel(
+          const Direction(tag: 'vpn-1', label: 'Main'),
+          const Direction(
               tag: 'vpn-2',
               label: 'Relay',
               isDetour: true,
               nodeFilter: 'no-such-node',
-              auto: ChannelAuto()),
+              auto: DirectionAuto()),
         ],
         routeFinal: 'vpn-2-auto',
       );
@@ -542,12 +542,12 @@ void main() {
               'vpn-1')));
     });
 
-    test('route_final=обычный канал остаётся как есть', () async {
+    test('route_final=обычное Направление остаётся как есть', () async {
       final r = await build(
         [vlessServer(id: 'u', names: ['A'])],
         [
-          const Channel(tag: 'vpn-1', label: 'Main'),
-          const Channel(tag: 'vpn-2', label: 'Plain'),
+          const Direction(tag: 'vpn-1', label: 'Main'),
+          const Direction(tag: 'vpn-2', label: 'Plain'),
         ],
         routeFinal: 'vpn-2',
       );

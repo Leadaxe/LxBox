@@ -312,7 +312,7 @@ Map<String, dynamic> _stripMetaForCompare(Map<String, dynamic> m) {
 ///   DNS-опцией (tag в [ruleReferencedTags], задача 3), — **force-include**
 ///   независимо от `enabled` — иначе DNS-правило ссылается в пустоту.
 /// - `detour` нормализуется ([normalizeDnsDetour]): `direct-out` /
-///   отсутствующий в [knownOutboundTags] канал → ключ не пишется (§117
+///   отсутствующее в [knownOutboundTags] Направление → ключ не пишется (§117
 ///   решение №2). `knownOutboundTags == null` — проверка только на direct-out.
 /// - §312: члены DNS-групп (`type: group`) фильтруются пост-проходом по
 ///   реально эмитированным тегам ([_filterDnsGroupMembers]); каждый дроп —

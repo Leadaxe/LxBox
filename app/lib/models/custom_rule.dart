@@ -264,7 +264,7 @@ sealed class CustomRule {
   /// значение в expansion означает "template-решение as is" (будь то
   /// `@outbound`-sub, hardcoded `outbound`, или shorthand `action: reject`).
   /// Непустое — universal override, заменяет template-решение любым
-  /// каналом (spec §033 Expansion §5).
+  /// Направлением (spec §033 Expansion §5).
   String get outbound => switch (this) {
         CustomRuleInline(:final outbound) => outbound,
         CustomRuleSrs(:final outbound) => outbound,
@@ -1039,7 +1039,7 @@ class CustomRulePreset extends CustomRule {
   /// template-решение независимо от того, задан в шаблоне `@outbound`,
   /// hardcoded `outbound: "<tag>"` или shorthand `action: "reject"`.
   /// Юзер может переключить Block Ads с reject на vpn-1, и наоборот любой
-  /// канал на reject. См. spec §033 Expansion §5 "Universal outbound override".
+  /// Направление на reject. См. spec §033 Expansion §5 "Universal outbound override".
   @override
   CustomRulePreset withOutbound(String outbound) {
     final updated = Map<String, String>.from(varsValues);

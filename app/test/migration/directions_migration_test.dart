@@ -4,11 +4,11 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
-/// §125 F0.3 — миграция enabled_groups[] → channels[] (one-shot seed из template).
+/// §125 F0.3 — миграция enabled_groups[] → directions[] (one-shot seed из template).
 ///
 /// Harness идентичен settings_storage_test.dart: mock path_provider + изоляция
 /// tmp-dir + resetCacheForTesting между прогонами.
@@ -18,11 +18,11 @@ void main() {
 
   String mainPath() => '${tmp.path}/lxbox_settings.json';
 
-  // §267 — group_templates: общий channel-шаблон (direct+auto) для всех каналов
-  // + default_channels vpn-1/vpn-2/vpn-3 + auto-подгруппа. Все каналы одинаковы
+  // §267 — group_templates: общий json-шаблон `channel` (direct+auto) для всех Направлений
+  // + default_channels vpn-1/vpn-2/vpn-3 + auto-подгруппа. Все Направления одинаковы
   // (единый include), в отличие от старой per-group add_outbounds.
   GroupTemplates template() => GroupTemplates(
-        channel: ChannelTemplate(
+        direction: DirectionTemplate(
           include: const ['direct', 'auto'],
           options: const {'interrupt_exist_connections': true},
         ),
@@ -33,16 +33,16 @@ void main() {
             'tolerance': 50,
           },
         ),
-        defaultChannels: [
-          DefaultChannel(tag: 'vpn-1', label: 'Главный', defaultEnabled: true),
-          DefaultChannel(tag: 'vpn-2', label: 'Стриминг', defaultEnabled: false),
-          DefaultChannel(tag: 'vpn-3', defaultEnabled: false),
+        defaultDirections: [
+          DefaultDirection(tag: 'vpn-1', label: 'Главный', defaultEnabled: true),
+          DefaultDirection(tag: 'vpn-2', label: 'Стриминг', defaultEnabled: false),
+          DefaultDirection(tag: 'vpn-3', defaultEnabled: false),
         ],
       );
 
   setUp(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    tmp = await Directory.systemTemp.createTemp('lxbox_channels_mig_');
+    tmp = await Directory.systemTemp.createTemp('lxbox_directions_mig_');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'getApplicationDocumentsDirectory' ||
@@ -69,30 +69,30 @@ void main() {
 
   test('fresh install: seed из template, enabled_groups пуст', () async {
     await seedFile({});
-    await SettingsStorage.migrateChannelsIfNeeded(template());
+    await SettingsStorage.migrateDirectionsIfNeeded(template());
 
-    final channels = await SettingsStorage.getChannels();
-    // §267 — default_channels vpn-1/2/3 → 3 канала (auto не канал — подгруппа).
-    expect(channels.map((c) => c.tag), ['vpn-1', 'vpn-2', 'vpn-3']);
+    final directions = await SettingsStorage.getDirections();
+    // §267 — default_channels vpn-1/2/3 → 3 Направления (auto не Направление — подгруппа).
+    expect(directions.map((c) => c.tag), ['vpn-1', 'vpn-2', 'vpn-3']);
 
-    final vpn1 = channels.firstWhere((c) => c.tag == 'vpn-1');
+    final vpn1 = directions.firstWhere((c) => c.tag == 'vpn-1');
     expect(vpn1.enabled, true); // vpn-1 форсим
-    expect(vpn1.includeDirect, true); // channel.include ∋ direct
-    expect(vpn1.auto, isNotNull); // channel.include ∋ auto → двойник
+    expect(vpn1.includeDirect, true); // direction.include ∋ direct
+    expect(vpn1.auto, isNotNull); // direction.include ∋ auto → двойник
     expect(vpn1.auto!.url, 'https://cp.cloudflare.com/generate_204');
     expect(vpn1.auto!.idleTimeout, '30m');
     expect(vpn1.auto!.interruptExistConnections, false);
     expect(vpn1.interruptExistConnections, true);
 
-    // §267 — все каналы собираются из общего channel-шаблона (единый include),
+    // §267 — все Направления собираются из общего json-шаблона `channel` (единый include),
     // поэтому includeDirect/auto одинаковы у всех; различаются только
     // tag/label/enabled из default_channels.
-    final vpn2 = channels.firstWhere((c) => c.tag == 'vpn-2');
+    final vpn2 = directions.firstWhere((c) => c.tag == 'vpn-2');
     expect(vpn2.enabled, false); // defaultEnabled false
     expect(vpn2.includeDirect, true);
     expect(vpn2.auto, isNotNull);
 
-    final vpn3 = channels.firstWhere((c) => c.tag == 'vpn-3');
+    final vpn3 = directions.firstWhere((c) => c.tag == 'vpn-3');
     expect(vpn3.includeDirect, true);
     expect(vpn3.defaultFilter, ''); // Решение 6
     expect(vpn3.nodeFilter, '');
@@ -103,26 +103,26 @@ void main() {
     await seedFile({
       'enabled_groups': ['vpn-3'],
     });
-    await SettingsStorage.migrateChannelsIfNeeded(template());
+    await SettingsStorage.migrateDirectionsIfNeeded(template());
 
-    final channels = await SettingsStorage.getChannels();
-    expect(channels.firstWhere((c) => c.tag == 'vpn-1').enabled, true); // форс
-    expect(channels.firstWhere((c) => c.tag == 'vpn-2').enabled, false);
-    expect(channels.firstWhere((c) => c.tag == 'vpn-3').enabled, true);
+    final directions = await SettingsStorage.getDirections();
+    expect(directions.firstWhere((c) => c.tag == 'vpn-1').enabled, true); // форс
+    expect(directions.firstWhere((c) => c.tag == 'vpn-2').enabled, false);
+    expect(directions.firstWhere((c) => c.tag == 'vpn-3').enabled, true);
   });
 
   test('идемпотентность: повторный вызов — no-op', () async {
     await seedFile({});
-    await SettingsStorage.migrateChannelsIfNeeded(template());
-    final first = await SettingsStorage.getChannels();
+    await SettingsStorage.migrateDirectionsIfNeeded(template());
+    final first = await SettingsStorage.getDirections();
 
-    // юзер удалил канал после миграции
-    await SettingsStorage.setChannels(
+    // юзер удалил Направление после миграции
+    await SettingsStorage.setDirections(
         first.where((c) => c.tag != 'vpn-2').toList());
     // повторная миграция НЕ должна пересеять vpn-2
-    await SettingsStorage.migrateChannelsIfNeeded(template());
+    await SettingsStorage.migrateDirectionsIfNeeded(template());
 
-    final after = await SettingsStorage.getChannels();
+    final after = await SettingsStorage.getDirections();
     expect(after.map((c) => c.tag), ['vpn-1', 'vpn-3']);
   });
 
@@ -133,7 +133,7 @@ void main() {
     // должен делать `as num?`-каст строки "@urltest_tolerance" → краш миграции
     // → вечный прелоадер Routing (баг dev.91).
     final placeholderTemplate = GroupTemplates(
-      channel: ChannelTemplate(include: const ['auto']),
+      direction: DirectionTemplate(include: const ['auto']),
       auto: AutoTemplate(
         options: const {
           'url': '@urltest_url',
@@ -141,18 +141,18 @@ void main() {
           'tolerance': '@urltest_tolerance', // СТРОКА-плейсхолдер!
         },
       ),
-      defaultChannels: [DefaultChannel(tag: 'vpn-1')],
+      defaultDirections: [DefaultDirection(tag: 'vpn-1')],
     );
     await seedFile({});
-    await SettingsStorage.migrateChannelsIfNeeded(placeholderTemplate);
+    await SettingsStorage.migrateDirectionsIfNeeded(placeholderTemplate);
 
-    final channels = await SettingsStorage.getChannels();
-    final vpn1 = channels.firstWhere((c) => c.tag == 'vpn-1');
+    final directions = await SettingsStorage.getDirections();
+    final vpn1 = directions.firstWhere((c) => c.tag == 'vpn-1');
     expect(vpn1.auto, isNotNull); // двойник засеян, не упал
-    // §327 — плейсхолдеры → дефолты `ChannelAuto` (varDefaults здесь не
+    // §327 — плейсхолдеры → дефолты `DirectionAuto` (varDefaults здесь не
     // передан). Раньше тут стояли литералы из кода seed'а (5m/50), которые
     // разошлись с шаблоном; теперь единственный источник — сам класс.
-    const fallback = ChannelAuto();
+    const fallback = DirectionAuto();
     expect(vpn1.auto!.url, fallback.url);
     expect(vpn1.auto!.interval, fallback.interval);
     expect(vpn1.auto!.tolerance, fallback.tolerance);
@@ -160,92 +160,92 @@ void main() {
 
   test('✨auto с tolerance числом-в-строке → парсится', () async {
     final t = GroupTemplates(
-      channel: ChannelTemplate(include: const ['auto']),
+      direction: DirectionTemplate(include: const ['auto']),
       auto: AutoTemplate(
         options: const {'tolerance': '30'}, // число-в-строке
       ),
-      defaultChannels: [DefaultChannel(tag: 'vpn-1')],
+      defaultDirections: [DefaultDirection(tag: 'vpn-1')],
     );
     await seedFile({});
-    await SettingsStorage.migrateChannelsIfNeeded(t);
-    final vpn1 = (await SettingsStorage.getChannels())
+    await SettingsStorage.migrateDirectionsIfNeeded(t);
+    final vpn1 = (await SettingsStorage.getDirections())
         .firstWhere((c) => c.tag == 'vpn-1');
     expect(vpn1.auto!.tolerance, 30);
   });
 
-  test('channels уже есть → миграция no-op', () async {
+  test('directions уже есть → миграция no-op', () async {
     await seedFile({
       'channels': [
         {'tag': 'vpn-1', 'label': 'Custom', 'enabled': true},
       ],
     });
-    await SettingsStorage.migrateChannelsIfNeeded(template());
+    await SettingsStorage.migrateDirectionsIfNeeded(template());
 
-    final channels = await SettingsStorage.getChannels();
-    expect(channels.length, 1);
-    expect(channels.first.label, 'Custom'); // не перезаписано template'ом
+    final directions = await SettingsStorage.getDirections();
+    expect(directions.length, 1);
+    expect(directions.first.label, 'Custom'); // не перезаписано template'ом
   });
 
   group('CRUD после миграции', () {
     setUp(() async {
       await seedFile({});
-      await SettingsStorage.migrateChannelsIfNeeded(template());
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
     });
 
-    test('addChannel — первый свободный vpn-N', () async {
+    test('addDirection — первый свободный vpn-N', () async {
       // vpn-1/2/3 заняты → vpn-4
-      final ch = await SettingsStorage.addChannel(label: 'Новый');
+      final ch = await SettingsStorage.addDirection(label: 'Новый');
       expect(ch.tag, 'vpn-4');
       expect(ch.label, 'Новый');
-      expect((await SettingsStorage.getChannels()).length, 4);
+      expect((await SettingsStorage.getDirections()).length, 4);
     });
 
-    test('§198 — addChannel без label → дефолт с кружком (VPN ④)', () async {
+    test('§198 — addDirection без label → дефолт с кружком (VPN ④)', () async {
       // vpn-1/2/3 заняты → vpn-4 → «VPN ④».
-      final ch = await SettingsStorage.addChannel();
+      final ch = await SettingsStorage.addDirection();
       expect(ch.tag, 'vpn-4');
       expect(ch.label, 'VPN ④');
     });
 
-    test('addChannel — лимит 10 throws', () async {
+    test('addDirection — лимит 10 throws', () async {
       for (var i = 4; i <= 10; i++) {
-        await SettingsStorage.addChannel();
+        await SettingsStorage.addDirection();
       }
-      expect((await SettingsStorage.getChannels()).length, 10);
-      expect(() => SettingsStorage.addChannel(), throwsStateError);
+      expect((await SettingsStorage.getDirections()).length, 10);
+      expect(() => SettingsStorage.addDirection(), throwsStateError);
     });
 
-    test('deleteChannel vpn-1 throws', () async {
-      expect(() => SettingsStorage.deleteChannel('vpn-1'), throwsStateError);
+    test('deleteDirection vpn-1 throws', () async {
+      expect(() => SettingsStorage.deleteDirection('vpn-1'), throwsStateError);
     });
 
-    test('deleteChannel переводит route_final → vpn-1', () async {
+    test('deleteDirection переводит route_final → vpn-1', () async {
       await SettingsStorage.saveRouteFinal('vpn-2');
-      await SettingsStorage.deleteChannel('vpn-2');
+      await SettingsStorage.deleteDirection('vpn-2');
       expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
-      expect((await SettingsStorage.getChannels()).map((c) => c.tag),
+      expect((await SettingsStorage.getDirections()).map((c) => c.tag),
           ['vpn-1', 'vpn-3']);
     });
 
-    test('route_final на другой канал не трогается', () async {
+    test('route_final на другое Направление не трогается', () async {
       await SettingsStorage.saveRouteFinal('vpn-3');
-      await SettingsStorage.deleteChannel('vpn-2');
+      await SettingsStorage.deleteDirection('vpn-2');
       expect(await SettingsStorage.getRouteFinal(), 'vpn-3');
     });
 
-    test('updateChannel — несуществующий tag throws', () async {
-      const ghost = Channel(tag: 'vpn-9', label: 'ghost');
-      expect(() => SettingsStorage.updateChannel(ghost), throwsStateError);
+    test('updateDirection — несуществующий tag throws', () async {
+      const ghost = Direction(tag: 'vpn-9', label: 'ghost');
+      expect(() => SettingsStorage.updateDirection(ghost), throwsStateError);
     });
   });
 
   // §327 — в РЕАЛЬНОМ шаблоне `group_templates.auto.options` несёт
   // `@urltest_*`-плейсхолдеры (var-substitution идёт позже, в билдере). Раньше
-  // на них срабатывали литералы в коде, и в каналы садились 50/5m вместо
+  // на них срабатывали литералы в коде, и в Направления садились 50/5m вместо
   // шаблонных 30/15m. Дефолт обязан быть один — из `vars[].default_value`.
-  group('§327 seed auto-канала по @var-плейсхолдерам', () {
+  group('§327 seed auto-Направления по @var-плейсхолдерам', () {
     GroupTemplates placeholderTemplate() => GroupTemplates(
-          channel: ChannelTemplate(
+          direction: DirectionTemplate(
             include: const ['direct', 'auto'],
             options: const {'interrupt_exist_connections': true},
           ),
@@ -256,8 +256,8 @@ void main() {
               'tolerance': '@urltest_tolerance',
             },
           ),
-          defaultChannels: [
-            DefaultChannel(tag: 'vpn-1', label: 'Main', defaultEnabled: true),
+          defaultDirections: [
+            DefaultDirection(tag: 'vpn-1', label: 'Main', defaultEnabled: true),
           ],
         );
 
@@ -268,22 +268,22 @@ void main() {
     };
 
     test('плейсхолдеры резолвятся в default_value шаблона', () async {
-      await SettingsStorage.migrateChannelsIfNeeded(
+      await SettingsStorage.migrateDirectionsIfNeeded(
         placeholderTemplate(),
         varDefaults: varDefaults,
       );
-      final auto = (await SettingsStorage.getChannels()).first.auto!;
+      final auto = (await SettingsStorage.getDirections()).first.auto!;
 
       expect(auto.tolerance, 30); // было 50 из литерала
       expect(auto.interval, '15m'); // было '5m'
       expect(auto.url, 'https://example.test/generate_204');
     });
 
-    test('без varDefaults — дефолты ChannelAuto, а не литералы', () async {
+    test('без varDefaults — дефолты DirectionAuto, а не литералы', () async {
       // Var исчезла из шаблона: последний рубеж — дефолт самого класса.
-      await SettingsStorage.migrateChannelsIfNeeded(placeholderTemplate());
-      final auto = (await SettingsStorage.getChannels()).first.auto!;
-      const fallback = ChannelAuto();
+      await SettingsStorage.migrateDirectionsIfNeeded(placeholderTemplate());
+      final auto = (await SettingsStorage.getDirections()).first.auto!;
+      const fallback = DirectionAuto();
 
       expect(auto.tolerance, fallback.tolerance);
       expect(auto.interval, fallback.interval);
@@ -291,17 +291,17 @@ void main() {
     });
 
     test('явное значение в options побеждает default_value', () async {
-      await SettingsStorage.migrateChannelsIfNeeded(
+      await SettingsStorage.migrateDirectionsIfNeeded(
         GroupTemplates(
-          channel: ChannelTemplate(include: const ['direct', 'auto']),
+          direction: DirectionTemplate(include: const ['direct', 'auto']),
           auto: AutoTemplate(
             options: const {'interval': '3m', 'tolerance': 77},
           ),
-          defaultChannels: [DefaultChannel(tag: 'vpn-1', defaultEnabled: true)],
+          defaultDirections: [DefaultDirection(tag: 'vpn-1', defaultEnabled: true)],
         ),
         varDefaults: varDefaults,
       );
-      final auto = (await SettingsStorage.getChannels()).first.auto!;
+      final auto = (await SettingsStorage.getDirections()).first.auto!;
 
       expect(auto.tolerance, 77);
       expect(auto.interval, '3m');

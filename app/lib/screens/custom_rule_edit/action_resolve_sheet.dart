@@ -224,7 +224,7 @@ class _ActionResolveSheetState extends State<_ActionResolveSheet> {
                   contentPadding: EdgeInsets.zero,
                   value: false,
                   title: Text(getLocalText.s("Route to outbound")),
-                  subtitle: Text(getLocalText.s("Send matched traffic to a channel.")),
+                  subtitle: Text(getLocalText.s("Send matched traffic to a direction.")),
                 ),
                 if (!_resolveOnly)
                   Padding(

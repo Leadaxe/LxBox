@@ -164,12 +164,12 @@ class TemplateOverlay {
       }
     }
 
-    // default_channels[] — seed-метки каналов (после seed'а — user data).
-    final channels = t['default_channels'];
-    if (channels is List) {
-      for (final c in channels) {
+    // default_channels[] — seed-метки Направлений (после seed'а — user data).
+    final directions = t['default_channels'];
+    if (directions is List) {
+      for (final c in directions) {
         if (c is Map && c['tag'] is String) {
-          str(c, 'channel.${c['tag']}.label', 'label');
+          str(c, 'direction.${c['tag']}.label', 'label');
         }
       }
     }

@@ -69,7 +69,7 @@ void main() {
           },
         ],
         'route_final': 'vpn-1',
-        // §221 — channels (живая модель роутинга §125) + guard миграции.
+        // §221 — directions (живая модель роутинга §125) + guard миграции.
         'channels': [
           {'tag': 'vpn-1', 'label': 'Main', 'enabled': true},
           {'tag': 'vpn-2', 'label': 'Backup', 'enabled': true},
@@ -195,16 +195,16 @@ void main() {
       expect(st.containsKey('vars'), isFalse);
     });
 
-    test('§221 — channels + channels_migrated экспортируются в routing', () async {
+    test('§221 — ключи channels + channels_migrated экспортируются в routing', () async {
       await seedStorage(sampleSnapshot());
       final svc = const BackupService();
       final json = await svc.buildExport(include: {BackupCategory.routing});
       final st = (jsonDecode(json) as Map<String, dynamic>)['storage']
           as Map<String, dynamic>;
-      // Регрессия: channels был в allowlist restore, но НЕ в export →
-      // вся модель роутинг-каналов §125 терялась при backup на новом устройстве.
+      // Регрессия: directions был в allowlist restore, но НЕ в export →
+      // вся модель роутинг-Направлений §125 терялась при backup на новом устройстве.
       expect(st.containsKey('channels'), isTrue,
-          reason: 'channels обязаны попадать в backup (§125 модель роутинга)');
+          reason: 'directions обязаны попадать в backup (§125 модель роутинга)');
       expect((st['channels'] as List), hasLength(2));
       expect(st.containsKey('channels_migrated'), isTrue,
           reason: 'guard миграции — иначе миграция пере-сработает поверх restore');
@@ -212,7 +212,7 @@ void main() {
 
     // §221 — инвариант против будущих забытых ключей: КАЖДЫЙ top-level ключ из
     // allowedTopLevelKeys (restore принимает) должен экспортироваться при
-    // include={all} (иначе data-loss при backup, как было с channels).
+    // include={all} (иначе data-loss при backup, как было с directions).
     test('§221 — allowlist ⊆ export (все категории)', () async {
       // Снапшот с непустым значением для каждого allowlist-ключа.
       final snap = <String, dynamic>{};
@@ -383,9 +383,9 @@ void main() {
     expect((restored['server_lists'] as List).length, 1);
   });
 
-  test('§248 — detour-роль канала переживает backup round-trip', () async {
+  test('§248 — detour-роль Направления переживает backup round-trip', () async {
     // Restore пишет raw JSON мимо UI/storage-мутаторов — поле `detour`
-    // обязано пережить export→restore и прочитаться в Channel.isDetour
+    // обязано пережить export→restore и прочитаться в Direction.isDetour
     // (parse-гейт fromJson валидную роль не срезает).
     await seedStorage({
       'channels': [
@@ -408,7 +408,7 @@ void main() {
         merge: false, include: {BackupCategory.routing});
     expect(apply.errors, isEmpty);
 
-    final restored = await SettingsStorage.getChannels();
+    final restored = await SettingsStorage.getDirections();
     final vpn2 = restored.firstWhere((c) => c.tag == 'vpn-2');
     expect(vpn2.isDetour, isTrue,
         reason: 'detour-роль не должна теряться при restore');
@@ -416,7 +416,7 @@ void main() {
   });
 
   test('§274 — detour+include_block переживают round-trip оба', () async {
-    // §274 снял взаимоисключение ролей §248: detour-канал — валидная цель
+    // §274 снял взаимоисключение ролей §248: detour-Направление — валидная цель
     // правил, парс-гейт fromJson больше не коэрсит include_block у detour.
     // Оба поля обязаны пережить export→restore как есть.
     await seedStorage({
@@ -441,11 +441,11 @@ void main() {
         merge: false, include: {BackupCategory.routing});
     expect(apply.errors, isEmpty);
 
-    final restored = await SettingsStorage.getChannels();
+    final restored = await SettingsStorage.getDirections();
     final vpn2 = restored.firstWhere((c) => c.tag == 'vpn-2');
     expect(vpn2.isDetour, isTrue);
     expect(vpn2.includeBlock, isTrue,
-        reason: 'include_block у detour-канала не должен коэрситься (§274)');
+        reason: 'include_block у detour-Направления не должен коэрситься (§274)');
   });
 
   group('§159 — allowlist (default-deny) на импорте', () {

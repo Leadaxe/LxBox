@@ -1,16 +1,16 @@
-/// §083 — immutable снимок match-фильтров одного канала (selector group).
+/// §083 — immutable снимок match-фильтров одного Направления (selector group).
 ///
 /// Pure data: `home_screen` делает capture (поля → snapshot) при уходе с
-/// канала и restore (snapshot → поля) при возврате. Хранится в
-/// `Map<String /*channel*/, ChannelFilters>` в памяти (per-session, без
+/// Направления и restore (snapshot → поля) при возврате. Хранится в
+/// `Map<String /*direction*/, DirectionFilters>` в памяти (per-session, без
 /// записи на диск — см. spec §083).
 ///
 /// Содержит **только match-фильтры** (regex/protocol/variants §103/
 /// subscription +их §096 invert, ping). Detour tri-state
 /// (`_detourEnabled`/`_detourInvert`) и `_showNonMatching` остаются
 /// глобальными (про отображение, не про поиск).
-class ChannelFilters {
-  const ChannelFilters({
+class DirectionFilters {
+  const DirectionFilters({
     this.regexPattern = '',
     this.regexInvert = false,
     this.protocols = const <String>{},
@@ -54,12 +54,12 @@ class ChannelFilters {
   /// Ping checkbox on/off.
   final bool pingEnabled;
 
-  /// Дефолтный пустой набор — для канала, у которого ещё нет сохранённых
+  /// Дефолтный пустой набор — для Направления, у которого ещё нет сохранённых
   /// фильтров.
-  static const empty = ChannelFilters();
+  static const empty = DirectionFilters();
 
   /// True если все фильтры в дефолте (ничего не настроено). Используется
-  /// чтобы не плодить orphan-записи в map за пустые каналы.
+  /// чтобы не плодить orphan-записи в map за пустые Направления.
   bool get isEmpty =>
       regexPattern.isEmpty &&
       !regexInvert &&

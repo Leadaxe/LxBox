@@ -96,8 +96,8 @@ class DnsServerEditController extends ChangeNotifier {
   /// только если отличается (иначе резолв и так фоллбэчит на canonical).
   final String canonicalDescription;
 
-  /// Каналы для `type: outbound` vars и inline-detour пикера
-  /// (Direct + активные каналы, решение №2).
+  /// Направления для `type: outbound` vars и inline-detour пикера
+  /// (Direct + активные Направления, решение №2).
   final List<OutboundOption> outboundOptions;
 
   /// Теги DNS-серверов для `type: dns_servers` vars (без самого себя).

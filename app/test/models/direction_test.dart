@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/parser_config.dart';
 
 void main() {
-  group('Channel JSON round-trip', () {
-    test('full channel with auto → JSON → Channel', () {
-      const original = Channel(
+  group('Direction JSON round-trip', () {
+    test('full direction with auto → JSON → Direction', () {
+      const original = Direction(
         tag: 'vpn-2',
         label: 'Стриминг',
         enabled: false,
@@ -13,7 +13,7 @@ void main() {
         nodeFilter: '🇩🇪|🇳🇱',
         defaultFilter: 'Premium',
         interruptExistConnections: false,
-        auto: ChannelAuto(
+        auto: DirectionAuto(
           url: 'https://example.com/generate_204',
           interval: '3m',
           tolerance: 30,
@@ -22,7 +22,7 @@ void main() {
         ),
       );
 
-      final restored = Channel.fromJson(original.toJson());
+      final restored = Direction.fromJson(original.toJson());
 
       expect(restored.tag, 'vpn-2');
       expect(restored.label, 'Стриминг');
@@ -40,38 +40,38 @@ void main() {
     });
 
     test('§201 — includeBlock round-trip + дефолт false', () {
-      const c = Channel(tag: 'vpn-2', label: 'x', includeBlock: true);
-      final r = Channel.fromJson(c.toJson());
+      const c = Direction(tag: 'vpn-2', label: 'x', includeBlock: true);
+      final r = Direction.fromJson(c.toJson());
       expect(r.includeBlock, true);
       expect(c.toJson()['include_block'], true);
-      // дефолт false для старых каналов без ключа
-      expect(Channel.fromJson({'tag': 'vpn-1'}).includeBlock, false);
+      // дефолт false для старых Направлений без ключа
+      expect(Direction.fromJson({'tag': 'vpn-1'}).includeBlock, false);
     });
 
     test('§197 — nodeFilterInvert round-trip', () {
-      const c = Channel(
+      const c = Direction(
           tag: 'vpn-2', label: 'x', nodeFilter: 'bypass', nodeFilterInvert: true);
-      final r = Channel.fromJson(c.toJson());
+      final r = Direction.fromJson(c.toJson());
       expect(r.nodeFilterInvert, true);
       expect(r.nodeFilter, 'bypass');
       expect(c.toJson()['node_filter_invert'], true);
     });
 
-    test('§197 — nodeFilterInvert дефолт false для старых каналов', () {
-      final c = Channel.fromJson({'tag': 'vpn-1', 'node_filter': 'x'});
+    test('§197 — nodeFilterInvert дефолт false для старых Направлений', () {
+      final c = Direction.fromJson({'tag': 'vpn-1', 'node_filter': 'x'});
       expect(c.nodeFilterInvert, false);
     });
 
     test('auto == null survives round-trip (галка ВЫКЛ)', () {
-      const original = Channel(tag: 'vpn-3', label: 'VPN ③');
+      const original = Direction(tag: 'vpn-3', label: 'VPN ③');
       final json = original.toJson();
       expect(json['auto'], isNull);
-      final restored = Channel.fromJson(json);
+      final restored = Direction.fromJson(json);
       expect(restored.auto, isNull);
     });
 
     test('defaults applied on missing keys', () {
-      final c = Channel.fromJson({'tag': 'vpn-5'});
+      final c = Direction.fromJson({'tag': 'vpn-5'});
       expect(c.label, 'vpn-5'); // label fallback к tag
       expect(c.enabled, true);
       expect(c.includeDirect, false);
@@ -82,67 +82,67 @@ void main() {
     });
   });
 
-  group('§198 — defaultChannelLabel (цифра в кружке)', () {
+  group('§198 — defaultDirectionLabel (цифра в кружке)', () {
     test('1..10 → VPN ①..VPN ⑩', () {
-      expect(defaultChannelLabel(1), 'VPN ①');
-      expect(defaultChannelLabel(2), 'VPN ②');
-      expect(defaultChannelLabel(5), 'VPN ⑤');
-      expect(defaultChannelLabel(10), 'VPN ⑩');
+      expect(defaultDirectionLabel(1), 'VPN ①');
+      expect(defaultDirectionLabel(2), 'VPN ②');
+      expect(defaultDirectionLabel(5), 'VPN ⑤');
+      expect(defaultDirectionLabel(10), 'VPN ⑩');
     });
 
     test('вне 1..10 → без кружка', () {
-      expect(defaultChannelLabel(0), 'VPN 0');
-      expect(defaultChannelLabel(11), 'VPN 11');
+      expect(defaultDirectionLabel(0), 'VPN 0');
+      expect(defaultDirectionLabel(11), 'VPN 11');
     });
 
-    test('channelNumberOf парсит vpn-N', () {
-      expect(channelNumberOf('vpn-1'), 1);
-      expect(channelNumberOf('vpn-7'), 7);
-      expect(channelNumberOf('vpn-1-auto'), isNull);
-      expect(channelNumberOf('direct-out'), isNull);
+    test('directionNumberOf парсит vpn-N', () {
+      expect(directionNumberOf('vpn-1'), 1);
+      expect(directionNumberOf('vpn-7'), 7);
+      expect(directionNumberOf('vpn-1-auto'), isNull);
+      expect(directionNumberOf('direct-out'), isNull);
     });
   });
 
-  group('Channel computed', () {
+  group('Direction computed', () {
     test('autoTag производный, не из storage', () {
-      const c = Channel(tag: 'vpn-4', label: 'x');
+      const c = Direction(tag: 'vpn-4', label: 'x');
       expect(c.autoTag, 'vpn-4-auto');
       expect(c.toJson().containsKey('auto_tag'), false);
     });
 
     test('isRequired только для vpn-1', () {
-      expect(const Channel(tag: 'vpn-1', label: 'x').isRequired, true);
-      expect(const Channel(tag: 'vpn-2', label: 'x').isRequired, false);
+      expect(const Direction(tag: 'vpn-1', label: 'x').isRequired, true);
+      expect(const Direction(tag: 'vpn-2', label: 'x').isRequired, false);
     });
   });
 
-  group('ChannelAuto tolerance clamp (§161 uint16)', () {
+  group('DirectionAuto tolerance clamp (§161 uint16)', () {
     test('из JSON выше 65535 → clamp', () {
-      final a = ChannelAuto.fromJson({'tolerance': 999999});
+      final a = DirectionAuto.fromJson({'tolerance': 999999});
       expect(a.tolerance, 65535);
     });
 
     test('отрицательный → 0', () {
-      final a = ChannelAuto.fromJson({'tolerance': -5});
+      final a = DirectionAuto.fromJson({'tolerance': -5});
       expect(a.tolerance, 0);
     });
 
     test('copyWith тоже clamp', () {
-      const a = ChannelAuto();
+      const a = DirectionAuto();
       expect(a.copyWith(tolerance: 70000).tolerance, 65535);
       expect(a.copyWith(tolerance: 100).tolerance, 100);
     });
 
     test('toJson переклампливает на всякий случай', () {
       // конструктор не клампит (const), но toJson — да
-      const a = ChannelAuto(tolerance: 80000);
+      const a = DirectionAuto(tolerance: 80000);
       expect(a.toJson()['tolerance'], 65535);
     });
   });
 
-  group('§208 — ChannelAuto balancer (round_robin)', () {
+  group('§208 — DirectionAuto balancer (round_robin)', () {
     test('дефолты: leastTest, pool 3, poolTolerance 0, sticky process+domain', () {
-      const a = ChannelAuto();
+      const a = DirectionAuto();
       expect(a.mode, UrltestMode.leastTest);
       expect(a.pool, 3);
       expect(a.poolTolerance, 0);
@@ -150,7 +150,7 @@ void main() {
     });
 
     test('старый JSON без mode/balancer → дефолты (обратная совместимость)', () {
-      final a = ChannelAuto.fromJson({
+      final a = DirectionAuto.fromJson({
         'url': 'https://x/204',
         'interval': '5m',
         'tolerance': 50,
@@ -164,13 +164,13 @@ void main() {
     });
 
     test('round_robin полный round-trip через JSON', () {
-      const a = ChannelAuto(
+      const a = DirectionAuto(
         mode: UrltestMode.roundRobin,
         pool: 5,
         poolTolerance: 80,
         stickyHash: [StickyHashKey.domain, StickyHashKey.destIp],
       );
-      final r = ChannelAuto.fromJson(a.toJson());
+      final r = DirectionAuto.fromJson(a.toJson());
       expect(r.mode, UrltestMode.roundRobin);
       expect(r.pool, 5);
       expect(r.poolTolerance, 80);
@@ -178,7 +178,7 @@ void main() {
     });
 
     test('toJson — mode в корне, balancer вложен', () {
-      const a = ChannelAuto(
+      const a = DirectionAuto(
         mode: UrltestMode.roundRobin,
         pool: 4,
         poolTolerance: 10,
@@ -194,34 +194,34 @@ void main() {
 
     test('явный sticky_hash [] → пустой список (липкость выкл)', () {
       // round-trip пустого набора: [] остаётся [], НЕ дефолтится.
-      const a = ChannelAuto(
+      const a = DirectionAuto(
           mode: UrltestMode.roundRobin, stickyHash: <StickyHashKey>[]);
-      final r = ChannelAuto.fromJson(a.toJson());
+      final r = DirectionAuto.fromJson(a.toJson());
       expect(r.stickyHash, isEmpty);
       expect((a.toJson()['balancer'] as Map)['sticky_hash'], isEmpty);
     });
 
     test('pool clamp: 0/отриц → 1', () {
-      expect(ChannelAuto.fromJson({
+      expect(DirectionAuto.fromJson({
         'balancer': {'pool': 0}
       }).pool, 1);
-      expect(ChannelAuto.fromJson({
+      expect(DirectionAuto.fromJson({
         'balancer': {'pool': -3}
       }).pool, 1);
-      expect(const ChannelAuto().copyWith(pool: 0).pool, 1);
+      expect(const DirectionAuto().copyWith(pool: 0).pool, 1);
     });
 
     test('poolTolerance clamp как tolerance (uint16)', () {
-      expect(ChannelAuto.fromJson({
+      expect(DirectionAuto.fromJson({
         'balancer': {'pool_tolerance': 999999}
       }).poolTolerance, 65535);
-      expect(ChannelAuto.fromJson({
+      expect(DirectionAuto.fromJson({
         'balancer': {'pool_tolerance': -5}
       }).poolTolerance, 0);
     });
 
     test('неизвестный sticky-компонент отбрасывается', () {
-      final a = ChannelAuto.fromJson({
+      final a = DirectionAuto.fromJson({
         'balancer': {
           'sticky_hash': ['process', 'bogus', 'dest_port']
         }
@@ -240,7 +240,7 @@ void main() {
     });
 
     test('copyWith балансер-поля', () {
-      const a = ChannelAuto();
+      const a = DirectionAuto();
       final n = a.copyWith(
         mode: UrltestMode.roundRobin,
         pool: 7,
@@ -254,34 +254,34 @@ void main() {
     });
   });
 
-  group('Channel.copyWith', () {
+  group('Direction.copyWith', () {
     test('tag immutable, меняем только label', () {
-      const c = Channel(tag: 'vpn-2', label: 'old');
+      const c = Direction(tag: 'vpn-2', label: 'old');
       final n = c.copyWith(label: 'new');
       expect(n.tag, 'vpn-2');
       expect(n.label, 'new');
     });
 
     test('clearAuto убирает auto', () {
-      const c = Channel(tag: 'vpn-2', label: 'x', auto: ChannelAuto());
+      const c = Direction(tag: 'vpn-2', label: 'x', auto: DirectionAuto());
       expect(c.copyWith(clearAuto: true).auto, isNull);
     });
 
     test('auto сохраняется если не трогали', () {
-      const c = Channel(tag: 'vpn-2', label: 'x', auto: ChannelAuto());
+      const c = Direction(tag: 'vpn-2', label: 'x', auto: DirectionAuto());
       expect(c.copyWith(label: 'y').auto, isNotNull);
     });
   });
 
-  group('Channel.seedFromDefault (миграция §267)', () {
-    test('структурные поля из default_channel + channel-шаблона', () {
+  group('Direction.seedFromDefault (миграция §267)', () {
+    test('структурные поля из default_channels + json-шаблона channel', () {
       final dc =
-          DefaultChannel(tag: 'vpn-1', label: 'Главный', defaultEnabled: true);
-      final tpl = ChannelTemplate(
+          DefaultDirection(tag: 'vpn-1', label: 'Главный', defaultEnabled: true);
+      final tpl = DirectionTemplate(
         include: const ['direct'],
         options: const {'interrupt_exist_connections': true},
       );
-      final c = Channel.seedFromDefault(dc, tpl, enabled: true);
+      final c = Direction.seedFromDefault(dc, tpl, enabled: true);
       expect(c.tag, 'vpn-1');
       expect(c.label, 'Главный');
       expect(c.includeDirect, true); // include ∋ direct
@@ -292,8 +292,8 @@ void main() {
     });
 
     test('label fallback к tag когда пусто; include пуст → без direct', () {
-      final dc = DefaultChannel(tag: 'vpn-3');
-      final c = Channel.seedFromDefault(dc, ChannelTemplate(), enabled: false);
+      final dc = DefaultDirection(tag: 'vpn-3');
+      final c = Direction.seedFromDefault(dc, DirectionTemplate(), enabled: false);
       expect(c.label, 'vpn-3');
       expect(c.includeDirect, false); // include пуст
     });

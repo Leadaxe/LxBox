@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../models/import_rule.dart'; // §388 — ImportRuleAction для варнинга
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
@@ -72,9 +72,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   /// перекрывает дефолт и живёт до ухода с экрана.
   bool? _decodeSource;
 
-  // §248 — каналы: секция Channels в detour-пикере + подпись «⚙ <label>»
-  // канальной override-цели в Settings-вкладке.
-  List<Channel> _channels = const [];
+  // §248 — Направления: секция Directions в detour-пикере + подпись «⚙ <label>»
+  // Направления override-цели в Settings-вкладке.
+  List<Direction> _directions = const [];
 
   /// §338 — глобальная галка перекрывает per-subscription «On update»: строку
   /// не рисуем. Читаем в `initState`: App Settings открываются с home, а не
@@ -201,7 +201,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     // _rebuildRowsFromEntry); _replaceList нотифицирует entry.
     widget.entry.addListener(_onEntryChanged);
     unawaited(_loadNodes());
-    unawaited(_loadChannels());
+    unawaited(_loadDirections());
     unawaited(_loadProbeThresholds()); // §339
     unawaited(_loadAutoReloadOnChange()); // §338
     // При первом заходе на Source — живой GET.
@@ -787,10 +787,10 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     final hasDetour = (_nodes ?? const []).any((n) => n.chained != null);
     return SubscriptionSettingsTab(
       entry: widget.entry,
-      channels: _channels, // §248 — подпись канальной override-цели
+      directions: _directions, // §248 — подпись Направления override-цели
       // §252 — разворот цели в цепочку «как пакет пойдёт» для превью.
       detourPathHopsOf: (stored) => detourPathHops(stored,
-          controller: widget.controller, channels: _channels),
+          controller: widget.controller, directions: _directions),
       hasDetour: hasDetour,
       detourMode: _detourMode,
       onTagPrefixChanged: (val) {
@@ -1054,11 +1054,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     setState(() {});
   }
 
-  /// §248 — загрузка каналов (initState + refresh перед пикером).
-  Future<void> _loadChannels() async {
-    final channels = await SettingsStorage.getChannels();
+  /// §248 — загрузка Направлений (initState + refresh перед пикером).
+  Future<void> _loadDirections() async {
+    final directions = await SettingsStorage.getDirections();
     if (!mounted) return;
-    setState(() => _channels = channels);
+    setState(() => _directions = directions);
   }
 
   /// §338 — галка «автоперезапуск при смене настроек» (App Settings). Включена
@@ -1072,13 +1072,13 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   Future<void> _showOverrideDetourPicker() async {
     // §239 — единый пикер; для подписки кандидаты = только «свободные»
     // одиночки (члены папок живут под политикой своей папки — чужим нельзя).
-    // §248 — свежие каналы (могли измениться, пока экран открыт).
-    await _loadChannels();
+    // §248 — свежие Направления (могли измениться, пока экран открыт).
+    await _loadDirections();
     if (!mounted) return;
     final chosen = await showDetourTargetPicker(
       context,
       controller: widget.controller,
-      channels: _channels,
+      directions: _directions,
     );
     if (chosen == null || !mounted) return;
     setState(() {

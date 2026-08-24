@@ -4,16 +4,16 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
-/// §125 F4.5 + §202 — лечение dangling channel-ссылок в STORAGE (не только в
-/// выхлопе билдера). Когда канал перестаёт быть валидной route-мишенью
+/// §125 F4.5 + §202 — лечение dangling direction-ссылок в STORAGE (не только в
+/// выхлопе билдера). Когда Направление перестаёт быть валидной route-мишенью
 /// (удалён ИЛИ выключен), `route_final` и custom-rule `outbound`, висящие на
 /// его теге, должны немедленно схлопнуться в 'vpn-1' (неудаляемый fallback).
 ///
-/// Harness идентичен channels_migration_test.dart: mock path_provider +
+/// Harness идентичен directions_migration_test.dart: mock path_provider +
 /// изоляция tmp-dir + resetCacheForTesting.
 void main() {
   late Directory tmp;
@@ -43,14 +43,14 @@ void main() {
     } catch (_) {}
   });
 
-  /// Готовит storage с каналами vpn-1/vpn-3, route_final='vpn-3' и одним
+  /// Готовит storage с Направлениями vpn-1/vpn-3, route_final='vpn-3' и одним
   /// custom-rule, чей outbound='vpn-3'. resetCache, чтобы читалось с диска.
   Future<void> seedRefsOnVpn3() async {
     final data = {
       'channels_migrated': true,
       'channels': [
-        Channel(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
-        Channel(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
+        Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
+        Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-3',
       'custom_rules': [
@@ -67,33 +67,33 @@ void main() {
     return rules.single.outbound;
   }
 
-  test('delete канала: route_final + rule outbound → vpn-1 (§125 F4.5)',
+  test('delete Направления: route_final + rule outbound → vpn-1 (§125 F4.5)',
       () async {
     await seedRefsOnVpn3();
     expect(await SettingsStorage.getRouteFinal(), 'vpn-3');
     expect(await ruleOutbound(), 'vpn-3');
 
-    await SettingsStorage.deleteChannel('vpn-3');
+    await SettingsStorage.deleteDirection('vpn-3');
 
     expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
     expect(await ruleOutbound(), 'vpn-1');
   });
 
-  test('disable канала (§202): route_final + rule outbound → vpn-1 в storage',
+  test('disable Направления (§202): route_final + rule outbound → vpn-1 в storage',
       () async {
     await seedRefsOnVpn3();
-    final vpn3 = (await SettingsStorage.getChannels())
+    final vpn3 = (await SettingsStorage.getDirections())
         .firstWhere((c) => c.tag == 'vpn-3');
 
-    // Выключаем канал — это делает его невалидной route-мишенью.
-    await SettingsStorage.updateChannel(vpn3.copyWith(enabled: false));
+    // Выключаем Направление — это делает его невалидной route-мишенью.
+    await SettingsStorage.updateDirection(vpn3.copyWith(enabled: false));
 
     // Storage переписан (не только выхлоп билдера): ссылки на vpn-3 схлопнуты.
     expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
     expect(await ruleOutbound(), 'vpn-1');
-    // Сам канал остаётся в списке (disable ≠ delete).
+    // Сам Направление остаётся в списке (disable ≠ delete).
     expect(
-      (await SettingsStorage.getChannels()).map((c) => c.tag),
+      (await SettingsStorage.getDirections()).map((c) => c.tag),
       containsAll(['vpn-1', 'vpn-3']),
     );
   });
@@ -101,29 +101,29 @@ void main() {
   test('§202 — повторное включение НЕ воскрешает старую ссылку (Решение B)',
       () async {
     await seedRefsOnVpn3();
-    final vpn3 = (await SettingsStorage.getChannels())
+    final vpn3 = (await SettingsStorage.getDirections())
         .firstWhere((c) => c.tag == 'vpn-3');
 
-    await SettingsStorage.updateChannel(vpn3.copyWith(enabled: false));
+    await SettingsStorage.updateDirection(vpn3.copyWith(enabled: false));
     expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
 
     // Включаем обратно — route_final остаётся 'vpn-1', не возвращается на vpn-3.
-    final vpn3off = (await SettingsStorage.getChannels())
+    final vpn3off = (await SettingsStorage.getDirections())
         .firstWhere((c) => c.tag == 'vpn-3');
-    await SettingsStorage.updateChannel(vpn3off.copyWith(enabled: true));
+    await SettingsStorage.updateDirection(vpn3off.copyWith(enabled: true));
 
     expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
     expect(await ruleOutbound(), 'vpn-1');
   });
 
-  test('§202 — выключение НЕ затрагивает ссылки на ДРУГИЕ каналы', () async {
+  test('§202 — выключение НЕ затрагивает ссылки на ДРУГИЕ Направления', () async {
     // route_final='vpn-1', rule outbound='vpn-1'; выключаем vpn-3 → ничего не
     // должно поменяться (heal матчит только выключаемый тег).
     final data = {
       'channels_migrated': true,
       'channels': [
-        Channel(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
-        Channel(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
+        Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
+        Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
       'custom_rules': [
@@ -134,9 +134,9 @@ void main() {
     await File(mainPath()).writeAsString(jsonEncode(data));
     SettingsStorage.resetCacheForTesting();
 
-    final vpn3 = (await SettingsStorage.getChannels())
+    final vpn3 = (await SettingsStorage.getDirections())
         .firstWhere((c) => c.tag == 'vpn-3');
-    await SettingsStorage.updateChannel(vpn3.copyWith(enabled: false));
+    await SettingsStorage.updateDirection(vpn3.copyWith(enabled: false));
 
     expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
     expect(await ruleOutbound(), 'vpn-1');
@@ -147,14 +147,14 @@ void main() {
   // иначе expandPreset эмитит route-правило на несуществующий тег → fatal
   // валидации (DanglingOutboundRef), VPN не стартует.
 
-  /// Storage с каналами vpn-1/vpn-3 и одним preset-правилом, чей override
+  /// Storage с Направлениями vpn-1/vpn-3 и одним preset-правилом, чей override
   /// указывает на vpn-3 (+второй var, который heal терять не должен).
   Future<void> seedPresetOverrideOnVpn3() async {
     final data = {
       'channels_migrated': true,
       'channels': [
-        Channel(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
-        Channel(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
+        Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
+        Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
       'custom_rules': [
@@ -174,11 +174,11 @@ void main() {
     return rules.single as CustomRulePreset;
   }
 
-  test('delete канала: preset varsValues[outbound] → vpn-1', () async {
+  test('delete Направления: preset varsValues[outbound] → vpn-1', () async {
     await seedPresetOverrideOnVpn3();
     expect((await presetRule()).outbound, 'vpn-3');
 
-    await SettingsStorage.deleteChannel('vpn-3');
+    await SettingsStorage.deleteDirection('vpn-3');
 
     final healed = await presetRule();
     expect(healed.varsValues['outbound'], 'vpn-1');
@@ -186,12 +186,12 @@ void main() {
     expect(healed.varsValues['ruleset'], 'ads-all');
   });
 
-  test('disable канала (§202): preset varsValues[outbound] → vpn-1', () async {
+  test('disable Направления (§202): preset varsValues[outbound] → vpn-1', () async {
     await seedPresetOverrideOnVpn3();
-    final vpn3 = (await SettingsStorage.getChannels())
+    final vpn3 = (await SettingsStorage.getDirections())
         .firstWhere((c) => c.tag == 'vpn-3');
 
-    await SettingsStorage.updateChannel(vpn3.copyWith(enabled: false));
+    await SettingsStorage.updateDirection(vpn3.copyWith(enabled: false));
 
     expect((await presetRule()).varsValues['outbound'], 'vpn-1');
   });
@@ -202,8 +202,8 @@ void main() {
     final data = {
       'channels_migrated': true,
       'channels': [
-        Channel(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
-        Channel(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
+        Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
+        Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
       'custom_rules': [
@@ -217,7 +217,7 @@ void main() {
     await File(mainPath()).writeAsString(jsonEncode(data));
     SettingsStorage.resetCacheForTesting();
 
-    await SettingsStorage.deleteChannel('vpn-3');
+    await SettingsStorage.deleteDirection('vpn-3');
 
     final rule = await presetRule();
     expect(rule.varsValues.containsKey('outbound'), isFalse);
@@ -225,23 +225,23 @@ void main() {
   });
 
   test('§202 — disabled → update без смены enabled НЕ перелечивает', () async {
-    // Канал уже выключен; меняем у него label (enabled остаётся false). Heal
+    // Направление уже выключен; меняем у него label (enabled остаётся false). Heal
     // не должен запускаться повторно (wasEnabled=false).
     await seedRefsOnVpn3();
-    final vpn3 = (await SettingsStorage.getChannels())
+    final vpn3 = (await SettingsStorage.getDirections())
         .firstWhere((c) => c.tag == 'vpn-3');
-    await SettingsStorage.updateChannel(vpn3.copyWith(enabled: false));
+    await SettingsStorage.updateDirection(vpn3.copyWith(enabled: false));
     expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
 
     // Возвращаем route_final вручную на vpn-1 уже стоит; меняем label у
-    // выключенного канала — ничего не ломается, ссылки стабильны.
-    final off = (await SettingsStorage.getChannels())
+    // выключенного Направления — ничего не ломается, ссылки стабильны.
+    final off = (await SettingsStorage.getDirections())
         .firstWhere((c) => c.tag == 'vpn-3');
-    await SettingsStorage.updateChannel(off.copyWith(label: 'Renamed'));
+    await SettingsStorage.updateDirection(off.copyWith(label: 'Renamed'));
 
     expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
     expect(
-      (await SettingsStorage.getChannels())
+      (await SettingsStorage.getDirections())
           .firstWhere((c) => c.tag == 'vpn-3')
           .label,
       'Renamed',
