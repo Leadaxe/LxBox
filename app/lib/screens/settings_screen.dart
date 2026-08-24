@@ -18,6 +18,32 @@ import '../services/l10n/locale_controller.dart';
 
 /// VPN Settings — System (`VpnService.Builder` toggles) + Core (sing-box
 /// engine vars, `chapter: 'core'`). Routing/DNS vars живут на своих экранах.
+/// SPEC 393 D3 — гасит подпись выключенной строки настроек.
+///
+/// Visible-связь «галка → поля» должна гасить СТРОКУ целиком, а не только
+/// контрол: §277 сделал серым дропдаун, но подпись и описание оставались в
+/// полную силу — выключенная настройка читалась как активная, и связь была
+/// заметна только при попытке её тронуть.
+///
+/// Именно [Opacity], а не `DefaultTextStyle`: подписи несут ЯВНЫЙ цвет из
+/// `textTheme`/`colorScheme`, унаследованный стиль их не перекрасил бы, и
+/// «починка» осталась бы невидимой. Не `IgnorePointer`/`AbsorbPointer` —
+/// текст и так не интерактивен, гасится ровно читаемость.
+///
+/// 0.38 — коэффициент disabled-состояния Material 3, тот же, которым гаснет
+/// сам контрол: строка и её поле тускнеют одинаково.
+///
+/// Top-level (не приватный метод State) — чтобы покрываться unit-тестом
+/// напрямую, без харнесса всего экрана. Тот же приём, что
+/// `assertMagicNodeMirrors` в `template_loader.dart`.
+Widget dimmedWhenDisabled({required bool enabled, required Widget child}) {
+  if (enabled) return child;
+  return Opacity(opacity: kDisabledRowOpacity, child: child);
+}
+
+/// Непрозрачность выключенной строки — Material 3 disabled state layer.
+const double kDisabledRowOpacity = 0.38;
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
@@ -192,6 +218,14 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
     );
   }
+
+  /// §277/SPEC 393 D3 — ЕДИНСТВЕННЫЙ источник истины для visible-связи
+  /// «базовый порог → reachable-окно». Раньше условие было выписано трижды
+  /// (`enabled:`, `onChanged:` и нигде — у подписи); третье место как раз и
+  /// отставало. Ядро отвергает reachable без базового порога, поэтому связь
+  /// продуктовая, а не косметическая.
+  bool get _idleSuspendReachableEnabled =>
+      _vpnLoaded && _idleSuspend.isNotEmpty;
 
   /// §272 — reachable idle window (route.lx_idle_suspend_reachable).
   /// Config-significant, применяется на следующем подключении.
@@ -397,23 +431,31 @@ class _SettingsScreenState extends State<SettingsScreen>
         // не эмитит). §277 — зависимость выражена disabled-состоянием
         // дропдауна, а НЕ ранним return в onChanged: немой гейт давал
         // видимость выбора без сохранения («значение откатывается»).
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                getLocalText.s("Suspend active-route tunnels"),
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                getLocalText.s("Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the directions' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on."),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ],
+        //
+        // SPEC 393 D3 — гаснет ВСЯ строка, а не только контрол. §277 сделал
+        // серым дропдаун, но подпись и описание оставались в полную силу:
+        // выключенная настройка читалась как активная, и связь галка→поля
+        // была видна только в момент попытки её тронуть.
+        dimmedWhenDisabled(
+          enabled: _idleSuspendReachableEnabled,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  getLocalText.s("Suspend active-route tunnels"),
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  getLocalText.s("Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the directions' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on."),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
           ),
         ),
         Padding(
@@ -425,7 +467,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               isDense: true,
               // §277 — зеркалит onChanged: в disabled-состоянии серым
               // становится и рамка, не только контент.
-              enabled: _vpnLoaded && _idleSuspend.isNotEmpty,
+              enabled: _idleSuspendReachableEnabled,
             ),
             items: [
               DropdownMenuItem<String>(
@@ -445,7 +487,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ],
             // §277 — onChanged: null = честный disabled (серый дропдаун),
             // пока базовый порог выключен.
-            onChanged: (!_vpnLoaded || _idleSuspend.isEmpty)
+            onChanged: !_idleSuspendReachableEnabled
                 ? null
                 : (String? v) {
                     if (v == null) return;

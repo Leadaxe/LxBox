@@ -66,13 +66,10 @@ class TemplateLoader {
 
     final template = WizardTemplate.fromJson(json);
 
-    // §120: валидация #if-конструкций против объявленных var-нод. Кривой #if
-    // в bundled-шаблоне = баг разработчика → бросаем на load (не молча битый
-    // конфиг). byName собирается из template.vars (метаданные/типы).
-    final byName = <String, WizardVar>{
-      for (final v in template.vars) v.name: v,
-    };
-    validateIfConstructs(template.config, byName);
+    // §120 / SPEC 393-D4: валидация условных конструкций против объявленных
+    // var-нод. Кривая конструкция в bundled-шаблоне = баг разработчика →
+    // бросаем на load (не молча битый конфиг).
+    validateTemplateConstructs(json, template);
 
     // §267: инвариант зеркал magic_nodes ↔ consts.dart. Тот же принцип, что
     // validateIfConstructs — расхождение в bundled-шаблоне = баг разработчика,
@@ -82,6 +79,99 @@ class TemplateLoader {
     _cache[tag] = template;
     return template;
   }
+}
+
+/// SPEC 393-D4 — рубеж load-валидации условных конструкций ВСЕГО шаблона.
+///
+/// До этого проверялась одна секция `config`, и симметрия с лаунчером была
+/// нарушена: Go валидирует `params`, `default_value` И `config`
+/// (`core/template/template_validate.go:83`). Мобильный аналог `params` —
+/// `selectable_rules[]` (тела правил, `rule_set[]`, `dns_rules[]`), аналог
+/// `default_value.#if` — `vars[].#on_change.#set` (значение цели — `#if`-узел).
+/// Ни то, ни другое не проверялось вовсе: единственный `#enable` боевого
+/// шаблона живёт в `selectable_rules[2].rule_set[2]`, то есть мимо `config`.
+///
+/// Область видимости имён:
+///   • `config` и `#on_change` глобальных vars — глобальные vars;
+///   • тело пресета — глобальные vars ПЛЮС собственные `vars[]` пресета
+///     (ref-запись `{"ref": "name"}` разрешается в глобальную декларацию —
+///     свой type у неё placeholder'ный).
+///
+/// [raw] — декодированный (и уже оверлеенный) JSON шаблона; [template] — он же
+/// разобранный, источник глобальных объявлений.
+void validateTemplateConstructs(
+  Map<String, dynamic> raw,
+  WizardTemplate template,
+) {
+  final globals = <String, WizardVar>{
+    for (final v in template.vars) v.name: v,
+  };
+
+  validateIfConstructs(raw['config'], globals, path: 'config');
+
+  // `#on_change.#set` глобальных vars: значение цели — `#if`-узел, тот же
+  // движок (evalIfScalar), значит и тот же валидатор.
+  for (final s in (raw['sections'] as List? ?? const [])
+      .whereType<Map<String, dynamic>>()) {
+    final name = s['name'] as String? ?? '';
+    for (final v in (s['vars'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()) {
+      _validateOnChange(v, globals, 'sections[$name].vars[${v['name']}]');
+    }
+  }
+
+  final rules = raw['selectable_rules'] as List? ?? const [];
+  for (var i = 0; i < rules.length; i++) {
+    final r = rules[i];
+    if (r is! Map<String, dynamic>) continue;
+    final id = (r['preset_id'] as String?) ?? '$i';
+    final scope = _presetScope(r, globals);
+    for (final key in const ['rule', 'rules', 'rule_set', 'dns_rules']) {
+      if (!r.containsKey(key)) continue;
+      validateIfConstructs(r[key], scope,
+          path: 'selectable_rules[$id].$key');
+    }
+    for (final v in (r['vars'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()) {
+      _validateOnChange(
+          v, scope, 'selectable_rules[$id].vars[${v['name'] ?? v['ref']}]');
+    }
+  }
+}
+
+/// Область видимости имён внутри пресета: глобальные vars + собственные.
+/// Ref-запись метаданных не несёт — её тип берётся из глобальной декларации,
+/// поэтому она в scope просто не переопределяет глобаль.
+Map<String, WizardVar> _presetScope(
+  Map<String, dynamic> rule,
+  Map<String, WizardVar> globals,
+) {
+  final scope = Map<String, WizardVar>.from(globals);
+  for (final v in (rule['vars'] as List? ?? const [])
+      .whereType<Map<String, dynamic>>()) {
+    final ref = v['ref'] as String? ?? '';
+    if (ref.isNotEmpty) continue; // тип и остальное — у глобали
+    final name = v['name'] as String? ?? '';
+    if (name.isEmpty) continue;
+    scope[name] = WizardVar.fromJson(v);
+  }
+  return scope;
+}
+
+/// `#on_change` (канон) / `on_change` (легаси): `{"#set": {"@target": <#if>}}`.
+/// Каждое значение цели — узел языка, обходится общим валидатором.
+void _validateOnChange(
+  Map<String, dynamic> varJson,
+  Map<String, WizardVar> scope,
+  String path,
+) {
+  final oc = varJson['#on_change'] ?? varJson['on_change'];
+  if (oc is! Map<String, dynamic>) return;
+  final set = oc['#set'] ?? oc['set'];
+  if (set is! Map<String, dynamic>) return;
+  set.forEach((target, node) {
+    validateIfConstructs(node, scope, path: '$path.#on_change.#set[$target]');
+  });
 }
 
 /// §267 — сверяет `magic_nodes.*.tag` (source of truth) против const-зеркал

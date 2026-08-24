@@ -598,9 +598,20 @@ void validateIfConstructs(
         // тело #if… валидируется (включая вложенные #if в value/else)
         continue;
       }
+      if (k == enableKey) {
+        // SPEC 107 (D4) — гейт существования узла: ПОЛНЫЙ язык условий, но
+        // без value/else. Обязан проверяться ДО forward-compat-ветки ниже:
+        // иначе опечатка в имени переменной, оба ключа and+or сразу или
+        // скаляр вместо условия грузятся молча, узел fail-closed выпадает из
+        // конфига, и пользователь узнаёт об ошибке только по отсутствующей
+        // функции. Ровно тот же класс разрыва, что Go закрыл в 6d43114 для
+        // секции config.
+        validateCondNode(entry.value, byName, '$path.$k');
+        continue;
+      }
       if (k.startsWith('#')) {
-        // Сиблинг #if в map-spread, не "#if…" → forward-compat warn+drop в
-        // runtime, не ошибка на load.
+        // Сиблинг #if в map-spread, не "#if…" и не "#enable" →
+        // forward-compat warn+drop в runtime, не ошибка на load.
         continue;
       }
       validateIfConstructs(entry.value, byName, path: '$path.$k');
@@ -614,6 +625,68 @@ void validateIfConstructs(
   }
 }
 
+/// Валидирует ПОЛНОЕ условие языка (§5.1) — зеркало [evalCond]:
+///
+///     cond := pred-list | cond-obj | pred
+///
+/// Используется телом `#enable` (гейта, у которого нет `value`/`else`) и
+/// вложенными условиями внутри predicate-списков. Публичная — по ней стоит
+/// рубеж load-валидации гейтов, и её зовут тесты напрямую.
+void validateCondNode(
+  dynamic cond,
+  Map<String, WizardVar> byName,
+  String path,
+) {
+  // Сахар: голый список ≡ `{"#and": [...]}`.
+  if (cond is List) {
+    if (cond.isEmpty) {
+      throw TemplateIfError('$path: список предикатов должен быть непустым');
+    }
+    for (var i = 0; i < cond.length; i++) {
+      _validatePredicate(cond[i], byName, '$path[$i]');
+    }
+    return;
+  }
+  if (cond is Map<String, dynamic>) {
+    if (hasCondKey(cond, 'and') || hasCondKey(cond, 'or')) {
+      _validateCondObjLists(cond, byName, path);
+      return;
+    }
+    _validatePredicate(cond, byName, path);
+    return;
+  }
+  // Скаляр (число/bool/null) условием не является: рантайм fail-closed гасит
+  // узел молча — на load это ошибка.
+  _validatePredicate(cond, byName, path);
+}
+
+/// and/or-часть условия-объекта: ровно один из ключей, значение — непустой
+/// список валидных предикатов. Общая часть [_validateIfBody] (у `#if` сверх
+/// этого есть `value`/`else`) и [validateCondNode] (у `#enable` их нет).
+void _validateCondObjLists(
+  Map<String, dynamic> body,
+  Map<String, WizardVar> byName,
+  String path,
+) {
+  // SPEC 107: ключевые слова читаются в обеих формах — канонической `#and`/
+  // `#or` и легаси без `#`. Валидатор обязан знать обе, иначе канонический
+  // шаблон не загрузится вовсе.
+  final hasAnd = hasCondKey(body, 'and');
+  final hasOr = hasCondKey(body, 'or');
+  if (hasAnd == hasOr) {
+    throw TemplateIfError(
+        '$path: ровно один из `and`/`or` обязателен (есть оба или ни одного)');
+  }
+  final word = hasAnd ? 'and' : 'or';
+  final list = condKey(body, word);
+  if (list is! List || list.isEmpty) {
+    throw TemplateIfError('$path: `$word` должен быть непустым списком');
+  }
+  for (var i = 0; i < list.length; i++) {
+    _validatePredicate(list[i], byName, '$path.$word[$i]');
+  }
+}
+
 void _validateIfBody(
   dynamic body,
   Map<String, WizardVar> byName,
@@ -622,20 +695,7 @@ void _validateIfBody(
   if (body is! Map<String, dynamic>) {
     throw TemplateIfError('$path: тело #if должно быть объектом');
   }
-  // SPEC 107: ключевые слова читаются в обеих формах — канонической `#and`/
-  // `#or` и легаси без `#`. Валидатор обязан знать обе, иначе канонический
-  // шаблон не загрузится вовсе.
-  final hasAnd = condKey(body, 'and') != null;
-  final hasOr = condKey(body, 'or') != null;
-  if (hasAnd == hasOr) {
-    throw TemplateIfError(
-        '$path: ровно один из `and`/`or` обязателен (есть оба или ни одного)');
-  }
-  final list = (hasAnd ? condKey(body, 'and') : condKey(body, 'or'));
-  if (list is! List || list.isEmpty) {
-    throw TemplateIfError(
-        '$path: `${hasAnd ? 'and' : 'or'}` должен быть непустым списком');
-  }
+  _validateCondObjLists(body, byName, path);
   if (!hasCondKey(body, 'value')) {
     throw TemplateIfError('$path: `value` обязателен');
   }
@@ -648,13 +708,9 @@ void _validateIfBody(
   for (final k in body.keys) {
     if (!allowed.contains(k)) {
       throw TemplateIfError(
-          '\$path: неизвестный inner-ключ `\$k` (схема тела #if закрыта: '
+          '$path: неизвестный inner-ключ `$k` (схема тела #if закрыта: '
           '#and/#or/#value/#else, легаси — без `#`)');
     }
-  }
-  // Предикаты.
-  for (var i = 0; i < list.length; i++) {
-    _validatePredicate(list[i], byName, '$path.${hasAnd ? 'and' : 'or'}[$i]');
   }
   // Рекурсия в value/else (вложенные #if).
   validateIfConstructs(condKey(body, 'value'), byName, path: '$path.value');
@@ -670,6 +726,14 @@ void _validatePredicate(
 ) {
   // bare bool-var
   if (pred is String) {
+    // Предикат, записанный СТРОКОЙ с JSON (SPEC 097): рантайм
+    // (`_evalPredicate`) её разбирает и вычисляет как узел — валидатор обязан
+    // делать то же, а не браковать строку как «не @-имя».
+    final parsed = parseJsonPredicateString(pred);
+    if (parsed != null) {
+      validateCondNode(parsed, byName, path);
+      return;
+    }
     final name = _varName(pred);
     if (name == null) {
       throw TemplateIfError('$path: предикат-строка должна быть `@var`-формой');
@@ -683,12 +747,22 @@ void _validatePredicate(
   }
 
   if (pred is Map<String, dynamic>) {
+    // SPEC 107 (снятие D-018): элемент predicate-списка может быть вложенным
+    // условием-объектом `{"#and": […]}` / `{"#or": […]}` на любую глубину —
+    // рантайм (evalCond → _evalCondition) это исполняет, и валидатор не
+    // вправе браковать рабочую запись.
+    if (hasCondKey(pred, 'and') || hasCondKey(pred, 'or')) {
+      _validateCondObjLists(pred, byName, path);
+      return;
+    }
     // негация
     if (pred.containsKey('#not')) {
       if (pred.length != 1) {
         throw TemplateIfError('$path: `#not` должен быть единственным ключом');
       }
-      _validatePredicate(pred['#not'], byName, '$path.#not');
+      // `#not` отрицает ЛЮБОЕ условие, включая and/or (зеркало
+      // `_evalPredicate`, который зовёт evalCond на внутренность).
+      validateCondNode(pred['#not'], byName, '$path.#not');
       return;
     }
     if (pred.length != 1) {
@@ -737,6 +811,14 @@ void _validatePredicate(
         } on FormatException catch (e) {
           throw TemplateIfError('$path: невалидный `#matches` regexp: $e');
         }
+      } else if (opArg is String) {
+        // SPEC 103 (разрыв C6): строковая форма `{"#in": "@list"}` — ссылка на
+        // text_list-переменную. Рантайм её ИСПОЛНЯЕТ (`_inList`, ветка
+        // `arg is String`), значит валидатор не вправе браковать — иначе
+        // валидатор строже собственного движка, и законный шаблон не грузится
+        // (корпус: predicates/p4_in_text_list_string_form; Go принимает).
+        final ref = _varName(opArg);
+        if (ref != null) _requireVar(byName, ref, path);
       } else if (opArg is! List) {
         throw TemplateIfError('$path: `$op` ожидает список аргументов');
       }
