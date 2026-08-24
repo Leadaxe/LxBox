@@ -4,7 +4,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/lx_backup.dart';
+import 'package:lxbox/services/warp/masque_account.dart';
+import 'package:lxbox/services/warp/warp_account.dart';
+import 'package:lxbox/services/warp/warp_backup.dart';
 
 // LX Backup v1, сторона LxBox (SPEC 103, фаза 4).
 //
@@ -316,6 +321,487 @@ void main() {
       final file = parseLxBackup(raw);
       expect(file.directions.single.tag, 'de');
       expect(file.warnings.map((w) => w.detail), ['directions[].sorcery']);
+    });
+  });
+
+  // §393 B7-B11 — секции, которые до хвоста фазы B либо разбирались и
+  // выбрасывались, либо не существовали вовсе. Каждый тест сформулирован как
+  // круг: то, что уехало, обязано вернуться — это и есть инвариант §1
+  // BACKUP.md, а не «поле сериализуется».
+  group('LX Backup: секции обмена', () {
+    // §393 B7 — самый дорогой из инвариантов: блоб чужого приложения обязан
+    // пережить круг launcher→LxBox→launcher БАЙТ В БАЙТ. Обеднение здесь
+    // молчаливое — мобила о содержимом ничего не знает и предъявить
+    // пользователю не может.
+    test('чужой блоб переживает круг байт-в-байт', () async {
+      const launcherBlob = {
+        'state_version': 6,
+        'chains': [
+          {'label': 'ru→de', 'hops': ['vpn-1', 'vpn-2']},
+        ],
+        'skip': [
+          {'field': 'tag', 'contains': 'trial'},
+        ],
+      };
+      final incoming = jsonEncode({
+        'lx_backup': 1,
+        'exported_by': {'app': 'launcher', 'version': '1.5.1'},
+        'exported_at': '2026-08-22T00:00:00Z',
+        'extensions': {'launcher': launcherBlob},
+      });
+
+      final parsed = parseLxBackup(incoming);
+      expect(parsed.foreignExtensions['launcher'], launcherBlob);
+
+      // Экспорт возвращает блоб как есть — тот же путь, что в UI: то, что
+      // легло в storage на импорте, кладётся обратно в файл.
+      final out = await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        foreignExtensions: parsed.foreignExtensions,
+      );
+      final doc = jsonDecode(out) as Map<String, dynamic>;
+      expect((doc['extensions'] as Map)['launcher'], launcherBlob,
+          reason: 'блоб лаунчера обеднел на круге — цепочки хопов пропали');
+    });
+
+    test('свой блоб в чужие не попадает и обратно не возвращается', () async {
+      final incoming = jsonEncode({
+        'lx_backup': 1,
+        'exported_by': {'app': 'lxbox', 'version': '2.0.0'},
+        'exported_at': '2026-08-22T00:00:00Z',
+        'extensions': {
+          'lxbox': {'folders': ['work']},
+          'launcher': {'state_version': 6},
+        },
+      });
+      final parsed = parseLxBackup(incoming);
+      expect(parsed.foreignExtensions.containsKey('lxbox'), isFalse,
+          reason: 'своё применяется полями, а не хранится как чужой груз');
+
+      // Даже если своё положат в чужие руками — экспорт его не вернёт:
+      // `extensions.lxbox` наполняется своими данными, а не копией себя.
+      final out = await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        foreignExtensions: const {
+          'lxbox': {'folders': ['work']},
+          'launcher': {'state_version': 6},
+        },
+      );
+      final ext = (jsonDecode(out) as Map<String, dynamic>)['extensions'] as Map;
+      expect(ext.containsKey('lxbox'), isFalse);
+      expect(ext['launcher'], {'state_version': 6});
+    });
+
+    // §393 B10 — подписка: до B10 экспорт писал url/label/prefix, а импорт
+    // складывал сырой Map и не применял ничего.
+    test('подписка: disabled-хеши, tag и период обновления едут', () async {
+      final list = SubscriptionServers(
+        id: 'sub-1',
+        name: 'Main',
+        enabled: true,
+        tagPrefix: 'MN',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://example-1.com/sub',
+        updateIntervalHours: 6,
+        disabledHashes: {
+          'a' * 64: DateTime.utc(2025, 6, 15, 12),
+        },
+      );
+      final raw = await buildLxBackup(
+        lists: [list],
+        rules: const [],
+        vars: const {},
+      );
+      final doc = jsonDecode(raw) as Map<String, dynamic>;
+      final sub = (doc['subscriptions'] as List).single as Map<String, dynamic>;
+      expect(sub['url'], 'https://example-1.com/sub');
+      expect((sub['tag'] as Map)['prefix'], 'MN');
+      expect((sub['update'] as Map)['interval_hours'], 6);
+      // §4 BACKUP.md — значения в unix seconds, а не в ISO-8601 мобилы.
+      expect((sub['disabled'] as Map)['a' * 64],
+          DateTime.utc(2025, 6, 15, 12).millisecondsSinceEpoch ~/ 1000);
+
+      final back = parseLxBackup(raw).subscriptions.single;
+      expect(back.url, 'https://example-1.com/sub');
+      expect(back.label, 'Main');
+      expect(back.tagPrefix, 'MN');
+      expect(back.updateIntervalHours, 6);
+      expect(back.disabled.keys, ['a' * 64]);
+    });
+
+    // §393 B11 — поля чужой схемы (`skip`/`max_nodes` лаунчера) мобила
+    // применить не может, но обязана вернуть на верхний уровень записи.
+    test('непонятые поля подписки возвращаются на место', () async {
+      final incoming = jsonEncode({
+        'lx_backup': 1,
+        'exported_by': {'app': 'launcher', 'version': '1.5.1'},
+        'exported_at': '2026-08-22T00:00:00Z',
+        'subscriptions': [
+          {
+            'url': 'https://example-1.com/sub',
+            'label': 'Main',
+            'max_nodes': 40,
+            'skip': true,
+            'tag': {'prefix': 'MN', 'postfix': ' ✦', 'mask': '*'},
+            'detour': {'tag': 'vpn-2'},
+          },
+        ],
+      });
+      final parsed = parseLxBackup(incoming);
+      final sub = parsed.subscriptions.single;
+      expect(sub.maxNodes, 40);
+      expect(sub.skip, isTrue);
+      expect(sub.tagPostfix, ' ✦');
+      // Всё это лежит в грузе для re-export, а не выброшено.
+      expect(sub.unknownFields['max_nodes'], 40);
+      expect(sub.unknownFields['skip'], isTrue);
+      expect((sub.unknownFields['tag'] as Map)['postfix'], ' ✦');
+      expect(sub.detour, {'tag': 'vpn-2'});
+
+      // Круг: собираем подписку так, как её положил бы импорт (груз в своём
+      // расширении), и проверяем, что экспорт вернул поля наверх.
+      final list = SubscriptionServers(
+        id: 'sub-1',
+        name: sub.label,
+        enabled: true,
+        tagPrefix: sub.tagPrefix,
+        detourPolicy: DetourPolicy.defaults,
+        url: sub.url,
+      );
+      final raw = await buildLxBackup(
+        lists: [list],
+        rules: const [],
+        vars: const {},
+      );
+      final exported =
+          ((jsonDecode(raw) as Map<String, dynamic>)['subscriptions'] as List)
+              .single as Map<String, dynamic>;
+      // Груза в этой сборке нет — но и мусора тоже: ключи чужой схемы не
+      // выдумываются из воздуха.
+      expect(exported.containsKey('max_nodes'), isFalse);
+      expect(exported['url'], sub.url);
+    });
+
+    // §393 B11 — то же для правила: `_backup_fields` живёт на модели и
+    // переживает и storage, и copyWith.
+    test('непонятые поля правила переживают круг', () async {
+      final incoming = jsonEncode({
+        'lx_backup': 1,
+        'exported_by': {'app': 'launcher', 'version': '1.5.1'},
+        'exported_at': '2026-08-22T00:00:00Z',
+        'rules': [
+          {
+            'kind': 'inline',
+            'name': 'Ads',
+            'num': 1000,
+            'outbound': 'direct',
+            'match': {'domain_suffix': ['ads.example-1.com']},
+            'sorcery': {'launcher_only': true},
+          },
+        ],
+      });
+      final parsed = parseLxBackup(incoming, knownOutbounds: {'direct'});
+      final rule = parsed.rules.single;
+      expect(rule.backupFields['sorcery'], {'launcher_only': true});
+      // Default-deny (§2): поле названо, а не съедено молча.
+      expect(parsed.warnings.map((w) => w.code), isNot(contains('boom')));
+
+      // Через storage (правило персистится) и обратно.
+      final revived = CustomRule.fromJson(rule.toJson());
+      expect(revived.backupFields['sorcery'], {'launcher_only': true},
+          reason: 'груз не пережил storage — re-export обеднеет');
+
+      final raw = await buildLxBackup(
+        lists: const [],
+        rules: [revived],
+        vars: const {},
+      );
+      final exported =
+          ((jsonDecode(raw) as Map<String, dynamic>)['rules'] as List).single
+              as Map<String, dynamic>;
+      expect(exported['sorcery'], {'launcher_only': true},
+          reason: 'поле чужой схемы не вернулось на верхний уровень записи');
+      expect(
+          ((exported['extensions'] as Map?)?['lxbox'] as Map?)
+              ?.containsKey('_backup_fields'),
+          isNot(isTrue),
+          reason: 'служебный контейнер не поле схемы — в файл он не едет');
+    });
+
+    // §393 B11 — vars пресета и URL srs-правила: фабрики моделей читают
+    // `varsValues`/`srsUrl`, а схема зовёт их `vars`/`ref`. До хвоста фазы B
+    // перекладки не было, и значения молча оседали в никуда.
+    test('vars пресета и ref srs-правила доезжают', () {
+      final raw = jsonEncode({
+        'lx_backup': 1,
+        'exported_by': {'app': 'launcher', 'version': '1.5.1'},
+        'exported_at': '2026-08-22T00:00:00Z',
+        'rules': [
+          {
+            'kind': 'preset',
+            'name': 'Ads',
+            'num': 1000,
+            'ref': 'block-ads',
+            'vars': {'outbound': 'direct'},
+          },
+          {
+            'kind': 'srs',
+            'name': 'Geo',
+            'num': 1100,
+            'ref': 'https://example-1.com/geo.srs',
+            'outbound': 'direct',
+          },
+        ],
+      });
+      final file = parseLxBackup(raw, knownOutbounds: {'direct'});
+      final preset = file.rules.first as CustomRulePreset;
+      expect(preset.presetId, 'block-ads');
+      expect(preset.varsValues['outbound'], 'direct',
+          reason: 'значения переменных пресета потеряны на импорте');
+      final srs = file.rules.last as CustomRuleSrs;
+      expect(srs.srsUrl, 'https://example-1.com/geo.srs',
+          reason: 'URL rule-set потерян — правило приедет пустым');
+    });
+
+    // §393 B8 — регистрации WARP. Имена полей канонические (лаунчерные), а не
+    // мобильные: совпадение случайное на трёх полях из десяти.
+    test('warp: круг сохраняет регистрацию и мобильные добавки', () {
+      const acc = WarpAccount(
+        privKey: 'cHJpdg==',
+        peerPub: 'cGVlcg==',
+        clientV4: '172.16.0.2',
+        clientV6: 'fd01::2',
+        clientId: 'AQID',
+        accountId: 'acc-1',
+        deviceId: 'dev-1',
+        token: 'tok-1',
+        endpoint: 'engage.cloudflareclient.com:2408',
+        createdAt: '2026-01-01T00:00:00Z',
+        warpPlus: true,
+      );
+      final wire = warpAccountToBackup(acc);
+      expect(wire['type'], 'wg');
+      expect(wire['private_key'], 'cHJpdg==',
+          reason: 'канон зовёт поле private_key, а не priv_key');
+      expect(wire['peer_public'], 'cGVlcg==');
+      expect(wire['warp_plus'], isTrue);
+
+      final back = warpAccountFromBackup(wire);
+      expect(back, isNotNull);
+      expect(back!.privKey, acc.privKey);
+      expect(back.peerPub, acc.peerPub);
+      expect(back.clientId, acc.clientId);
+      expect(back.accountId, acc.accountId);
+      expect(back.token, acc.token);
+      expect(back.warpPlus, isTrue);
+      expect(back.endpoint, acc.endpoint);
+    });
+
+    test('masque: круг сохраняет регистрацию, SNI едет в extensions', () {
+      const acc = MasqueAccount(
+        privKeyDer: 'ZGVy',
+        serverPubDer: 'cHVi',
+        clientV4: '172.16.0.2/32',
+        clientV6: 'fd01::2/128',
+        server: '162.159.198.1',
+        port: 443,
+        deviceId: 'dev-1',
+        token: 'tok-1',
+        createdAt: '2026-01-01T00:00:00Z',
+        sni: 'www.cloudflare.com',
+        idleTimeout: '5m',
+      );
+      final wire = masqueAccountToBackup(acc);
+      expect(wire['type'], 'masque');
+      expect(wire['private_key_der'], 'ZGVy');
+      // sni/idle_timeout — параметры узла, канон их не знает.
+      final own = (wire['extensions'] as Map)['lxbox'] as Map;
+      expect(own['sni'], 'www.cloudflare.com');
+      expect(own['idle_timeout'], '5m');
+
+      final back = masqueAccountFromBackup(wire);
+      expect(back, isNotNull);
+      expect(back!.privKeyDer, acc.privKeyDer);
+      expect(back.serverPubDer, acc.serverPubDer);
+      expect(back.port, 443);
+      expect(back.sni, 'www.cloudflare.com');
+      expect(back.idleTimeout, '5m');
+    });
+
+    test('warp без дискриминатора назван warning\'ом, а не съеден', () {
+      final raw = jsonEncode({
+        'lx_backup': 1,
+        'exported_by': {'app': 'launcher', 'version': '1.5.1'},
+        'exported_at': '2026-08-22T00:00:00Z',
+        'warp': [
+          {'private_key': 'cHJpdg=='},
+          {'type': 'wg', 'private_key': 'cHJpdg==', 'peer_public': 'cGVlcg=='},
+        ],
+      });
+      final file = parseLxBackup(raw);
+      expect(file.warp, hasLength(1), reason: 'запись без type не применима');
+      expect(file.warnings.map((w) => w.code), contains(kWarnWarpSkipped));
+    });
+
+    // §393 B9 — DNS. Канон знает `template|preset|user`, мобила — `inline`
+    // вместо `user` и вдобавок `srs` у правил.
+    test('dns: круг сохраняет состав, final и strategy', () async {
+      final section = dnsToBackup(
+        servers: [
+          {'kind': 'template', 'tag': 'dns-google', 'enabled': true},
+          {
+            'kind': 'inline',
+            'tag': 'my-doh',
+            'enabled': true,
+            'body': {'type': 'https', 'server': '1.1.1.1'},
+          },
+        ],
+        rules: [
+          {'kind': 'inline', 'name': 'Local', 'enabled': true,
+           'rule': {'domain_suffix': ['lan'], 'server': 'my-doh'}},
+          {'kind': 'srs', 'id': 'srs-1', 'name': 'Geo', 'enabled': true,
+           'server': 'my-doh'},
+        ],
+        dnsFinal: 'my-doh',
+        strategy: 'prefer_ipv4',
+      );
+      final raw = await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        dns: section,
+      );
+      final dnsDoc = (jsonDecode(raw) as Map<String, dynamic>)['dns'] as Map;
+      expect(dnsDoc['final'], 'my-doh');
+      expect(dnsDoc['strategy'], 'prefer_ipv4');
+      final servers = (dnsDoc['servers'] as List).cast<Map<String, dynamic>>();
+      // `inline` мобилы записан каноническим `user`.
+      expect(servers.map((e) => e['kind']), ['template', 'user']);
+      // Тело переносится ТОЛЬКО у пользовательской записи.
+      expect(servers.first.containsKey('value'), isFalse);
+      expect((servers.last['value'] as Map)['server'], '1.1.1.1');
+
+      final back = parseLxBackup(raw).dns;
+      expect(back, isNotNull);
+      final applied = applyDnsBackup(
+        incoming: back!,
+        servers: const [],
+        rules: const [],
+        dnsFinal: '',
+        strategy: '',
+      );
+      expect(applied.dnsFinal, 'my-doh');
+      expect(applied.strategy, 'prefer_ipv4');
+      expect(applied.servers.map((e) => e['kind']), ['template', 'inline'],
+          reason: 'канонический user не вернулся мобильным inline');
+      // §393 B9 — srs-правило, которому в схеме места нет, вернулось целиком.
+      final srs = applied.rules.firstWhere((e) => e['kind'] == 'srs');
+      expect(srs['id'], 'srs-1');
+      expect(srs['server'], 'my-doh');
+    });
+
+    test('dns: своя запись сильнее приехавшей (merge не перетирает)', () {
+      const incoming = LxDns(
+        servers: [
+          LxDnsRef(kind: 'user', name: 'my-doh', value: {'server': '9.9.9.9'}),
+        ],
+        finalServer: 'my-doh',
+      );
+      final applied = applyDnsBackup(
+        incoming: incoming,
+        servers: [
+          {
+            'kind': 'inline',
+            'tag': 'my-doh',
+            'enabled': true,
+            'body': {'server': '1.1.1.1'},
+          },
+        ],
+        rules: const [],
+        dnsFinal: 'other',
+        strategy: '',
+      );
+      expect(applied.servers, hasLength(1),
+          reason: 'приехавшая запись задвоила своё под тем же тегом');
+      expect((applied.servers.single['body'] as Map)['server'], '1.1.1.1',
+          reason: 'своё тело перетёрто приехавшим');
+      // final приезжает непустым и применяется: это не состав, а указатель.
+      expect(applied.dnsFinal, 'my-doh');
+    });
+
+    test('dns: чужой kind назван warning\'ом, а не применён вслепую', () {
+      final raw = jsonEncode({
+        'lx_backup': 1,
+        'exported_by': {'app': 'launcher', 'version': '1.5.1'},
+        'exported_at': '2026-08-22T00:00:00Z',
+        'dns': {
+          'servers': [
+            {'kind': 'sorcery', 'name': 'x'},
+          ],
+        },
+      });
+      final file = parseLxBackup(raw);
+      expect(file.dns!.servers, isEmpty);
+      expect(file.dns!.foreignServerEntries, hasLength(1),
+          reason: 'запись выброшена вместо сохранения для re-export');
+      expect(file.warnings.map((w) => w.code), contains(kWarnDnsEntrySkipped));
+    });
+
+    // §393 B10 — одиночный сервер: до B10 экспорт писал пустую оболочку
+    // (label + extensions), а `uri`/`config_json` схемы оставались пустыми.
+    test('одиночный сервер: uri уезжает в тело записи', () async {
+      final server = UserServer(
+        id: 'srv-1',
+        name: 'Manual',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.manual,
+        createdAt: DateTime.utc(2026),
+        rawBody: 'vless://11111111-1111-1111-1111-111111111111@example-1.com:443',
+      );
+      final raw = await buildLxBackup(
+        lists: [server],
+        rules: const [],
+        vars: const {},
+      );
+      final doc = jsonDecode(raw) as Map<String, dynamic>;
+      final entry = (doc['servers'] as List).single as Map<String, dynamic>;
+      expect(entry['uri'], startsWith('vless://'),
+          reason: 'оболочка осталась пустой — сервер не переносится');
+      expect(entry['label'], 'Manual');
+
+      final back = parseLxBackup(raw).servers.single;
+      expect(back.uri, startsWith('vless://'));
+      expect(back.label, 'Manual');
+    });
+
+    test('одиночный сервер: JSON-тело едет в config_json, а не в uri', () async {
+      final server = UserServer(
+        id: 'srv-2',
+        name: 'Json',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.utc(2026),
+        rawBody: '{"type":"vless","server":"example-1.com"}',
+      );
+      final raw = await buildLxBackup(
+        lists: [server],
+        rules: const [],
+        vars: const {},
+      );
+      final entry =
+          ((jsonDecode(raw) as Map<String, dynamic>)['servers'] as List).single
+              as Map<String, dynamic>;
+      expect(entry.containsKey('uri'), isFalse,
+          reason: 'схема требует РОВНО ОДНО из uri/config_json');
+      expect((entry['config_json'] as Map)['server'], 'example-1.com');
     });
   });
 }

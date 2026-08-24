@@ -59,6 +59,38 @@ sealed class CustomRule {
   /// отдельного версионированного шага миграции нет.
   int? orderNum;
 
+  /// §393 B11 — поля записи LX Backup, которых мобила не понимает
+  /// (`skip`/`detour` лаунчера и любые будущие ключи схемы).
+  ///
+  /// На поведение не влияют ВООБЩЕ: это транзитный груз, чтобы круг
+  /// launcher→LxBox→launcher вернул правило целым, а не обеднённым
+  /// (§1 BACKUP.md; эталон — `_backup_fields` в `core/backup/import.go`).
+  /// Поле мутабельное и вне конструктора намеренно: конструкторы правил —
+  /// пользовательский ввод, а этот груз кладёт ровно один импортёр.
+  Map<String, dynamic> backupFields = const {};
+
+  /// Ключ хранения [backupFields] в JSON правила. Служебный: подчёркивание
+  /// отделяет его от полей модели и совпадает с именем на стороне лаунчера.
+  static const String backupFieldsKey = '_backup_fields';
+
+  /// Общий хвост `toJson` подклассов: служебный груз пишется только когда он
+  /// есть — у подавляющего большинства правил его нет.
+  Map<String, dynamic> get backupFieldsJson =>
+      backupFields.isEmpty ? const {} : {backupFieldsKey: backupFields};
+
+  /// Обратная операция для `fromJson` подклассов.
+  static Map<String, dynamic> backupFieldsFromJson(Map<String, dynamic> j) {
+    final raw = j[backupFieldsKey];
+    return raw is Map ? raw.cast<String, dynamic>() : const {};
+  }
+
+  /// Переносит служебный груз на новый экземпляр (copyWith/импорт). Возвращает
+  /// [to] — удобно в выражениях.
+  static T carryBackupFields<T extends CustomRule>(T to, CustomRule from) {
+    if (from.backupFields.isNotEmpty) to.backupFields = from.backupFields;
+    return to;
+  }
+
   /// Enum-дискриминатор для JSON. Значения совпадают с именами подклассов
   /// по convention (inline/srs/preset).
   CustomRuleKind get kind;
@@ -303,12 +335,16 @@ sealed class CustomRule {
       (k) => k.name == kindRaw,
       orElse: () => CustomRuleKind.inline,
     );
-    return switch (kind) {
+    final rule = switch (kind) {
       CustomRuleKind.inline => CustomRuleInline.fromJson(j),
       CustomRuleKind.srs => CustomRuleSrs.fromJson(j),
       CustomRuleKind.preset => CustomRulePreset.fromJson(j),
       CustomRuleKind.json => CustomRuleJson.fromJson(j),
     };
+    // §393 B11 — транзитный груз чужих полей читается ЗДЕСЬ, одной точкой на
+    // все виды правил: он одинаков у всех и к их полям отношения не имеет.
+    rule.backupFields = backupFieldsFromJson(j);
+    return rule;
   }
 }
 
@@ -642,6 +678,8 @@ class CustomRuleInline extends CustomRule {
         'outbound': outbound,
         if (dns != null) 'dns': dns!.toJson(),
         if (resolve != null) 'resolve': resolve!.toJson(),
+        // §393 B11 — транзитный груз полей чужой схемы (см. [backupFields]).
+        ...backupFieldsJson,
       };
 
   factory CustomRuleInline.fromJson(Map<String, dynamic> j) => CustomRuleInline(
@@ -696,7 +734,10 @@ class CustomRuleInline extends CustomRule {
     bool clearDns = false,
     RuleResolve? resolve,
   }) =>
-      CustomRuleInline(
+      // §393 B11 — транзитный груз переезжает на копию: он не поле модели, и
+      // без явного переноса терялся бы на любой правке правила.
+      CustomRule.carryBackupFields(
+          CustomRuleInline(
         id: id,
         name: name ?? this.name,
         enabled: enabled ?? this.enabled,
@@ -719,7 +760,7 @@ class CustomRuleInline extends CustomRule {
         outbound: outbound ?? this.outbound,
         dns: clearDns ? null : (dns ?? this.dns),
         resolve: resolve ?? this.resolve,
-      );
+      ), this);
 
   @override
   CustomRuleInline withEnabled(bool enabled) => copyWith(enabled: enabled);
@@ -851,6 +892,7 @@ class CustomRuleSrs extends CustomRule {
         // которое и так подразумевается.
         if (updateIntervalHours != kDefaultSrsTtlHours)
           'updateIntervalHours': updateIntervalHours,
+        ...backupFieldsJson,
       };
 
   factory CustomRuleSrs.fromJson(Map<String, dynamic> j) => CustomRuleSrs(
@@ -906,7 +948,8 @@ class CustomRuleSrs extends CustomRule {
     RuleResolve? resolve,
     int? updateIntervalHours,
   }) =>
-      CustomRuleSrs(
+      CustomRule.carryBackupFields(
+          CustomRuleSrs(
         id: id,
         name: name ?? this.name,
         enabled: enabled ?? this.enabled,
@@ -928,7 +971,7 @@ class CustomRuleSrs extends CustomRule {
         resolve: resolve ?? this.resolve,
         updateIntervalHours:
             updateIntervalHours ?? this.updateIntervalHours,
-      );
+      ), this);
 
   @override
   CustomRuleSrs withEnabled(bool enabled) => copyWith(enabled: enabled);
@@ -1002,6 +1045,7 @@ class CustomRulePreset extends CustomRule {
         if (orderNum != null) 'num': orderNum,
         'presetId': presetId,
         if (varsValues.isNotEmpty) 'varsValues': varsValues,
+        ...backupFieldsJson,
       };
 
   factory CustomRulePreset.fromJson(Map<String, dynamic> j) => CustomRulePreset(
@@ -1020,14 +1064,15 @@ class CustomRulePreset extends CustomRule {
     String? presetId,
     Map<String, String>? varsValues,
   }) =>
-      CustomRulePreset(
+      CustomRule.carryBackupFields(
+          CustomRulePreset(
         id: id,
         name: name ?? this.name,
         enabled: enabled ?? this.enabled,
         orderNum: orderNum ?? this.orderNum,
         presetId: presetId ?? this.presetId,
         varsValues: varsValues ?? this.varsValues,
-      );
+      ), this);
 
   @override
   CustomRulePreset withEnabled(bool enabled) => copyWith(enabled: enabled);
@@ -1092,6 +1137,7 @@ class CustomRuleJson extends CustomRule {
         'kind': kind.name,
         if (orderNum != null) 'num': orderNum,
         'json': json,
+        ...backupFieldsJson,
       };
 
   factory CustomRuleJson.fromJson(Map<String, dynamic> j) => CustomRuleJson(
@@ -1103,13 +1149,14 @@ class CustomRuleJson extends CustomRule {
       );
 
   CustomRuleJson copyWith({String? name, bool? enabled, int? orderNum, String? json}) =>
-      CustomRuleJson(
+      CustomRule.carryBackupFields(
+          CustomRuleJson(
         id: id,
         name: name ?? this.name,
         enabled: enabled ?? this.enabled,
         orderNum: orderNum ?? this.orderNum,
         json: json ?? this.json,
-      );
+      ), this);
 
   @override
   CustomRuleJson withEnabled(bool enabled) => copyWith(enabled: enabled);

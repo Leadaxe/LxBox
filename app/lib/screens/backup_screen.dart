@@ -9,8 +9,12 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
 import '../models/direction.dart';
+import '../models/server_list.dart';
 import '../services/direction_mutations.dart';
+import '../services/dns/dns_backup.dart';
 import '../services/lx_backup.dart';
+import '../services/parser/uri_utils.dart' show newUuidV4;
+import '../services/warp/warp_backup.dart';
 import '../services/settings_storage.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
@@ -317,11 +321,35 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // §393 B2 — Направления едут вместе с правилами: без них правило на
       // принимающей стороне не находит цель и приезжает выключенным.
       final directions = await SettingsStorage.getDirections();
+      // §393 B6 — route.final: до B6 его разбирали на импорте, но никогда не
+      // экспортировали, и круг был односторонним.
+      final routeFinal = await SettingsStorage.getRouteFinal();
+      // §393 B7 — блобы чужих приложений, приехавшие прошлым импортом:
+      // возвращаются в файл нетронутыми (§1 BACKUP.md).
+      final foreignExtensions = await SettingsStorage.getLxBackupExtensions();
+      // §393 B9 — секция DNS: состав серверов/правил + final/strategy.
+      final dns = dnsToBackup(
+        servers: await SettingsStorage.getDnsServers(),
+        rules: await SettingsStorage.getDnsRulesList(),
+        dnsFinal: vars['dns_final'] ?? '',
+        strategy: vars['dns_strategy'] ?? '',
+      );
+      // §393 B8 — регистрации WARP в каноне схемы (`type: wg|masque`).
+      final warpAccount = await SettingsStorage.getWarpAccount();
+      final masqueAccount = await SettingsStorage.getMasqueAccount();
+      final warp = <Map<String, dynamic>>[
+        if (warpAccount != null) warpAccountToBackup(warpAccount),
+        if (masqueAccount != null) masqueAccountToBackup(masqueAccount),
+      ];
       final json = await buildLxBackup(
         lists: lists,
         rules: rules,
         vars: vars,
         directions: directions,
+        routeFinal: routeFinal,
+        foreignExtensions: foreignExtensions,
+        dns: dns,
+        warp: warp,
       );
       const filename = 'lx-backup.json';
       // Размер в БАЙТАХ, а не в code units: на кириллице в именах узлов
@@ -457,6 +485,11 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       }
 
       await SettingsStorage.saveCustomRules(parsed.rules);
+
+      // §393 B6-B9 — остальные секции. До B6 они разбирались, показывались в
+      // диалоге и выбрасывались: пользователь видел «Подписки: 3», нажимал
+      // Import и не получал ни одной.
+      final counts = await _applyLxSections(parsed);
       if (!mounted) return;
 
       final skipped = parsed.warnings.length;
@@ -466,13 +499,27 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // §393 B5 — созданные Направления названы отдельно: правила приехали
       // рабочими именно потому, что цели заведены, и молчать об этом значило
       // бы скрыть половину произошедшего с настройками.
+      //
+      // §393 B6 — то же и с остальными секциями: подписки, DNS, переменные и
+      // регистрации WARP теперь реально применяются, и счётчик обязан их
+      // показать — иначе «Импортировано 0 правил» после файла с тремя
+      // подписками выглядит как отказ, хотя всё применилось.
       final String message;
       if (skipped > 0) {
         message = getLocalText.s("Imported %d rule(s), %d items not applied",
             parsed.rules.length, skipped);
+      } else if (appliedDirections > 0 && counts > 0) {
+        message = getLocalText.s(
+            "Imported %1\$d rules, %2\$d directions and %3\$d settings",
+            parsed.rules.length,
+            appliedDirections,
+            counts);
       } else if (appliedDirections > 0) {
         message = getLocalText.s("Imported %1\$d rules and %2\$d directions",
             parsed.rules.length, appliedDirections);
+      } else if (counts > 0) {
+        message = getLocalText.s("Imported %1\$d rules and %2\$d settings",
+            parsed.rules.length, counts);
       } else {
         message = getLocalText.plural("Imported %d rules", parsed.rules.length);
       }
@@ -483,6 +530,143 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// §393 B6-B9 — применение остальных секций LX Backup. Возвращает число
+  /// применённых сущностей для строки итога.
+  ///
+  /// Всё идёт через штатные сейверы [SettingsStorage], а не мимо: у каждого
+  /// из них своя обвязка (`markConfigDirty`, allowlist, миграции), и запись
+  /// в обход неё дала бы применённую настройку, о которой не знает билдер.
+  Future<int> _applyLxSections(LxBackupFile parsed) async {
+    var applied = 0;
+
+    // §393 B6 — переменные. Фильтр переносимости уже сделал парсер: сюда
+    // доезжают только имена из `registry/vars.json` с portable=true.
+    for (final e in parsed.vars.entries) {
+      await SettingsStorage.setVar(e.key, e.value, flush: false);
+      applied++;
+    }
+
+    // §393 B6 — route.final. Парсер отсекает ссылку в никуда (§3 BACKUP.md:
+    // мёртвый final уводит ВЕСЬ трафик в несуществующий outbound), поэтому
+    // непустое значение здесь уже проверено на известность цели.
+    final routeFinal = parsed.routeFinal;
+    if (routeFinal != null && routeFinal.isNotEmpty) {
+      await SettingsStorage.saveRouteFinal(routeFinal, flush: false);
+      applied++;
+    }
+
+    // §393 B6/B10 — подписки. Identity — URL (он же identity подписки на
+    // обеих сторонах). Своя запись СИЛЬНЕЕ приехавшей: под тем же адресом у
+    // пользователя своё имя, свой префикс тегов и свои выключенные узлы, и
+    // перезапись стёрла бы их. Новая подписка добавляется без узлов —
+    // тело приедет обычным обновлением.
+    final lists = await SettingsStorage.getServerLists();
+    final byUrl = <String, int>{
+      for (var i = 0; i < lists.length; i++)
+        if (lists[i] is SubscriptionServers)
+          (lists[i] as SubscriptionServers).url: i,
+    };
+    final merged = lists.toList();
+    for (final sub in parsed.subscriptions) {
+      if (sub.url.isEmpty) continue;
+      final at = byUrl[sub.url];
+      if (at != null) {
+        // §4 BACKUP.md — отметки выключенных узлов доливаются к своим:
+        // хеш, которого у нас нет, добавляется; свой не перетирается.
+        final existing = merged[at] as SubscriptionServers;
+        final add = <String, DateTime>{
+          for (final e in sub.disabled.entries)
+            if (!existing.disabledHashes.containsKey(e.key))
+              e.key: DateTime.fromMillisecondsSinceEpoch(e.value * 1000,
+                  isUtc: true),
+        };
+        if (add.isEmpty) continue;
+        merged[at] = existing.copyWith(
+          disabledHashes: {...existing.disabledHashes, ...add},
+        );
+        applied++;
+        continue;
+      }
+      merged.add(SubscriptionServers(
+        id: newUuidV4(),
+        name: sub.label,
+        enabled: sub.enabled,
+        tagPrefix: sub.tagPrefix,
+        detourPolicy: DetourPolicy.defaults,
+        url: sub.url,
+        updateIntervalHours: sub.updateIntervalHours ?? 24,
+        disabledHashes: {
+          for (final e in sub.disabled.entries)
+            e.key: DateTime.fromMillisecondsSinceEpoch(e.value * 1000,
+                isUtc: true),
+        },
+      ));
+      byUrl[sub.url] = merged.length - 1;
+      applied++;
+    }
+    // Сравниваем поэлементно по identity: `copyWith` выше создаёт НОВЫЙ
+    // объект на месте старого, и длина списка при этом не меняется — проверка
+    // одной только длины пропустила бы долитые disabled-отметки.
+    final listsChanged = merged.length != lists.length ||
+        [
+          for (var i = 0; i < lists.length; i++)
+            if (!identical(merged[i], lists[i])) i,
+        ].isNotEmpty;
+    if (listsChanged) {
+      await SettingsStorage.saveServerLists(merged);
+    }
+
+    // §393 B9 — DNS. Merge: своя запись под тем же адресом сильнее.
+    final dns = parsed.dns;
+    if (dns != null && !dns.isEmpty) {
+      final vars = await SettingsStorage.getAllVars();
+      final result = applyDnsBackup(
+        incoming: dns,
+        servers: await SettingsStorage.getDnsServers(),
+        rules: await SettingsStorage.getDnsRulesList(),
+        dnsFinal: vars['dns_final'] ?? '',
+        strategy: vars['dns_strategy'] ?? '',
+      );
+      await SettingsStorage.saveDnsServers(result.servers, flush: false);
+      await SettingsStorage.saveDnsRulesList(result.rules, flush: false);
+      await SettingsStorage.setVar('dns_final', result.dnsFinal, flush: false);
+      await SettingsStorage.setVar('dns_strategy', result.strategy,
+          flush: false);
+      applied += result.applied;
+    }
+
+    // §393 B8 — регистрации WARP. Merge НЕ перетирает живую регистрацию:
+    // у Cloudflare адреса привязаны к ключу, и подмена работающего ключа
+    // чужим сломала бы уже собранные узлы этого телефона
+    // (эталон `import.go:importWarp`).
+    for (final entry in parsed.warp) {
+      if (entry['type'] == 'wg') {
+        if (await SettingsStorage.getWarpAccount() != null) continue;
+        final acc = warpAccountFromBackup(entry);
+        if (acc == null) continue;
+        await SettingsStorage.setWarpAccount(acc, flush: false);
+        applied++;
+      } else if (entry['type'] == 'masque') {
+        if (await SettingsStorage.getMasqueAccount() != null) continue;
+        final acc = masqueAccountFromBackup(entry);
+        if (acc == null) continue;
+        await SettingsStorage.setMasqueAccount(acc, flush: false);
+        applied++;
+      }
+    }
+
+    // §393 B7 — блобы чужих приложений ложатся на диск. Без этого шага круг
+    // launcher→LxBox→launcher терял бы `extensions.launcher` целиком: следующий
+    // экспорт с телефона восстанавливать было бы неоткуда.
+    await SettingsStorage.setLxBackupExtensions(parsed.foreignExtensions,
+        flush: false);
+
+    // Единый flush: выше всё писалось `flush: false`, чтобы прерывание в
+    // середине не оставило половину применённых настроек на диске.
+    await SettingsStorage.flushToDisk();
+    return applied;
   }
 
   /// Показывает состав файла и что не применится — до применения.
@@ -497,6 +681,14 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       getLocalText.s("Rules: %d", parsed.rules.length),
       getLocalText.s("Subscriptions: %d", parsed.subscriptions.length),
       getLocalText.s("Variables: %d", parsed.vars.length),
+      // §393 B8/B9 — секции, которые теперь применяются: пользователь должен
+      // увидеть их ДО применения, а не обнаружить постфактум чужой DNS-сервер
+      // в списке.
+      if (parsed.dns != null && !parsed.dns!.isEmpty)
+        getLocalText.s("DNS entries: %d",
+            parsed.dns!.servers.length + parsed.dns!.rules.length),
+      if (parsed.warp.isNotEmpty)
+        getLocalText.s("WARP accounts: %d", parsed.warp.length),
     ];
     if (parsed.warnings.isNotEmpty) {
       lines.add('');

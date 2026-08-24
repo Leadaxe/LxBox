@@ -1333,6 +1333,9 @@
   "DNS cache cleared — reloading": {
     "value": "Кэш DNS очищен — перезагрузка"
   },
+  "DNS entries: %d": {
+    "value": "DNS-записей: %d"
+  },
   "DNS group \"%1$s\": member \"%2$s\" of type \"%3$s\" is not allowed in a group.": "DNS-группа «%1$s»: член «%2$s» типа «%3$s» недопустим в группе.",
   "DNS group \"%s\" has no usable members — enable or add at least one server.": "DNS-группа «%s» осталась без рабочих членов — включите или добавьте хотя бы один сервер.",
   "DNS group loop: %s — fix group membership to start the VPN.": "Цикл DNS-групп: %s — исправьте состав групп, чтобы запустить VPN.",
@@ -2192,6 +2195,12 @@
   "Imported %1$d rules and %2$d directions": {
     "value": "Импортировано правил: %1$d, Направлений: %2$d"
   },
+  "Imported %1$d rules and %2$d settings": {
+    "value": "Импортировано правил: %1$d, настроек: %2$d"
+  },
+  "Imported %1$d rules, %2$d directions and %3$d settings": {
+    "value": "Импортировано правил: %1$d, Направлений: %2$d, настроек: %3$d"
+  },
   "Imported %d DNS entries": {
     "value": "Импортировано DNS-записей: %d"
   },
@@ -2243,9 +2252,6 @@
   },
   "Include direct-out": {
     "value": "Добавлять direct-out"
-  },
-  "Include other directions": {
-    "value": "Добавлять другие Направления"
   },
   "Includes the access token. Sensitive — leave OFF unless you know why.": {
     "value": "Содержит токен доступа. Чувствительные данные — оставьте выключенным, если не уверены."
@@ -2902,6 +2908,9 @@
   },
   "Orange up to, ms": {
     "value": "Оранжевый до, мс"
+  },
+  "Other directions": {
+    "value": "Другие Направления"
   },
   "Outbound": {
     "value": "Исходящий канал"
@@ -4386,6 +4395,9 @@
   "Visible in Debug → Core.": {
     "value": "Видны в Debug → Core."
   },
+  "WARP accounts: %d": {
+    "value": "Аккаунтов WARP: %d"
+  },
   "WARP registration failed": {
     "value": "Не удалось зарегистрировать WARP"
   },
@@ -4394,6 +4406,9 @@
   },
   "Web page": {
     "value": "Сайт"
+  },
+  "What goes into this direction": {
+    "value": "Что входит в Направление"
   },
   "When to pause the tunnel to save battery. Takes effect on next VPN connect.": {
     "value": "Когда приостанавливать туннель ради экономии батареи. Вступает в силу при следующем подключении VPN."
@@ -4492,6 +4507,9 @@
   "detour → %s": {
     "value": "detour → %s"
   },
+  "direct connection option in the selector": {
+    "value": "вариант прямого соединения в селекторе"
+  },
   "direction": {
     "value": "Направление"
   },
@@ -4558,6 +4576,9 @@
   "how much faster a rival must be to win": {
     "value": "насколько быстрее должен быть соперник, чтобы победить"
   },
+  "how this direction acts when used": {
+    "value": "как Направление ведёт себя в работе"
+  },
   "invalid": {
     "value": "некорректный"
   },
@@ -4613,6 +4634,9 @@
   },
   "optional — defaults to the tag": {
     "value": "необязательно — по умолчанию тег"
+  },
+  "options offered in the selector": {
+    "value": "варианты, предлагаемые в селекторе"
   },
   "platform error: %s": {
     "value": "ошибка платформы: %s"

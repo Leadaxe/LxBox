@@ -91,9 +91,22 @@ void main() {
           }
         }
 
-        // TODO(§393 B12): поле ожиданий `disabled_hashes` Go-раннер проверяет
-        // (`corpus_test.go:205-221`), а здесь читать пока нечем — перенос
-        // disabled-отметок узлов не реализован ни в одну сторону.
+        // §393 B12 — отметки выключенных узлов (§4 BACKUP.md). Паритет с
+        // Go-раннером (`corpus_test.go:checkDisabledHashes`): переносятся
+        // ТОЛЬКО по identity-хешу, ожидание — плоский список хешей, которые
+        // обязаны найтись хоть у одной подписки. Тег и подпись у сторон
+        // разные, сопоставлять по ним нечего.
+        final wantHashes =
+            ((expected['disabled_hashes'] as List?) ?? const []).cast<String>();
+        if (wantHashes.isNotEmpty) {
+          final found = <String>{
+            for (final s in file.subscriptions) ...s.disabled.keys,
+          };
+          for (final want in wantHashes) {
+            expect(found, contains(want),
+                reason: 'отметка выключенной ноды $want не перенесена');
+          }
+        }
 
         // Импортёр обязан сохранить блоб ДРУГОГО приложения; свой он
         // применяет полями. Ожидание сформулировано относительно импортёра,
