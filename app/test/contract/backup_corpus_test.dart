@@ -120,6 +120,16 @@ void main() {
             final got = byTag[tag];
             expect(got, isNotNull, reason: 'цепочка $tag не создана импортом');
             expect(got!.label, want['label'] ?? '', reason: '$tag: имя');
+            // enabled — УКАЗАТЕЛЬНАЯ семантика (контракт 0.7.1, кейс
+            // chain_disabled_enabled_default): отсутствие ключа в ожиданиях =
+            // «не проверяем», НЕ «ожидаем false». Обычный bool с дефолтом
+            // потребовал бы выключенности во всех кейсах без поля.
+            final wantEnabled = want['enabled'];
+            if (wantEnabled is bool) {
+              expect(got.enabled, wantEnabled,
+                  reason: '$tag: enabled — отсутствие ключа в записи файла '
+                      'обязано читаться как true, явный false — как false');
+            }
             expect(
               _canonOf(got),
               _deepEqualsJson(want['chain']),
