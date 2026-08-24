@@ -11,18 +11,26 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 // Конформанс-раннер общего корпуса контракта (SPEC 103, фаза 1), сторона
 // LxBox. Аналог core/config/contract_test.go в singbox-launcher — гоняет тот
 // же корпус contract/corpus/uri/**/*.uri через parseUri() и сравнивает
-// результат с <case>.expected.lxbox.json.
+// результат с ожиданием корпуса.
 //
-// Намеренно ОТДЕЛЬНЫЙ файл ожиданий (.expected.lxbox.json), а не
-// <case>.expected.json — тот принадлежит лаунчеру (contract/docs/CANON.md
-// §7, per-app override), Dart его не читает и не перезаписывает.
+// ИСТОЧНИК ОЖИДАНИЯ — ОБЩИЙ `<case>.expected.json`. Он нормативен для ОБЕИХ
+// сторон (contract/README.md §2): именно поэтому изменение канона у лаунчера
+// обязано доехать до нас красным тестом. `<case>.expected.lxbox.json`
+// читается ТОЛЬКО если существует, и означает задокументированное by-design
+// различие — три законных класса перечислены в contract/docs/IDENTITY.md §4a.
+//
+// Раньше раннер читал исключительно override и скипал кейс без него. Это
+// давало обратный эффект: чтобы тест вообще шёл, к каждому кейсу клали копию
+// базы, и 257 из 281 override'а были побайтовыми дублями, которые ничего не
+// проверяли и глушили расхождения. Аудит 25.08 (контракт 0.8.0) их снёс.
 //
 // Регенерация ожиданий LxBox:
 //
 //   cd app && UPDATE_CONTRACT=1 flutter test test/contract/
 //
-// Это ОСОЗНАННЫЙ шаг: expected нормативны для этой стороны, дифф идёт в PR
-// с ревью (contract/README.md §2).
+// ВНИМАНИЕ: регенерация пишет ТОЛЬКО override и только там, где он уже есть
+// либо где результат реально расходится с базой — новые бесхозные копии не
+// создаются. Дифф идёт в PR с ревью (contract/README.md §2).
 
 /// Корень скопированного контракта — кладёт tool/sync_contract.sh.
 const _contractRoot = 'contract';
@@ -31,6 +39,17 @@ const _contractRoot = 'contract';
 /// contract/docs/CANON.md §1) типу kind в конверте. Все схемы вне карты —
 /// обычный outbound; wireguard — endpoint (CANON §1, registry: kind=endpoint).
 const _endpointSchemes = {'wireguard'};
+
+/// Внутреннее имя протокола Dart → каноническое `scheme` контракта
+/// (CANON §1: канон берётся из `registry/protocols/<scheme>.json` → поле
+/// `scheme`). Расходится в одном месте: Dart зовёт протокол
+/// `shadowsocks`, канон схемы — `ss`. Раньше разницу закрывали per-app
+/// override'ы корпуса — но `scheme` определён контрактом одинаково для
+/// обоих приложений, так что это была не by-design разница платформ, а
+/// неканоничное имя в раннере.
+const _canonScheme = <String, String>{
+  'shadowsocks': 'ss',
+};
 
 /// Коды warnings из registry/warnings.json — по runtimeType Dart-класса
 /// (CANON §6: коды, не отрендеренный текст). Список — зеркало
@@ -89,7 +108,7 @@ Map<String, dynamic> _canonNode(NodeSpec spec) {
 
   final node = <String, dynamic>{
     'kind': kind,
-    'scheme': spec.protocol,
+    'scheme': _canonScheme[spec.protocol] ?? spec.protocol,
     if (spec.label.isNotEmpty) 'label': spec.label,
     'entry': entry,
   };
@@ -222,7 +241,8 @@ void main() {
           .replaceAll(r'\', '/');
       final name = rel.substring(0, rel.length - '.uri'.length);
       final basePath = file.path.substring(0, file.path.length - '.uri'.length);
-      final expectedPath = '$basePath.expected.lxbox.json';
+      final baseExpectedPath = '$basePath.expected.json';
+      final overridePath = '$basePath.expected.lxbox.json';
 
       test(name, () {
         final uri = _readCorpusUri(file);
@@ -247,19 +267,37 @@ void main() {
           envelope = _buildEnvelope(nodes: [_canonNode(spec)]);
         }
 
-        final expectedFile = File(expectedPath);
+        final overrideFile = File(overridePath);
+        final baseFile = File(baseExpectedPath);
 
         if (updateGolden) {
-          expectedFile.writeAsStringSync(_prettyPrint(envelope));
+          // Override переписывается, только если он уже заведён (значит,
+          // различие задокументировано) ИЛИ результат действительно
+          // расходится с общей базой. Иначе регенерация плодила бы копии —
+          // ровно ту лавину, которую снёс аудит 0.8.0.
+          if (overrideFile.existsSync()) {
+            overrideFile.writeAsStringSync(_prettyPrint(envelope));
+          } else if (baseFile.existsSync()) {
+            final base = json.decode(baseFile.readAsStringSync())
+                as Map<String, dynamic>;
+            if (!_equalCanon(envelope, base)) {
+              overrideFile.writeAsStringSync(_prettyPrint(envelope));
+            }
+          } else {
+            overrideFile.writeAsStringSync(_prettyPrint(envelope));
+          }
           return;
         }
 
+        // Override — только для by-design различий (IDENTITY §4a); в норме
+        // сверяемся с общим ожиданием, и правка канона у лаунчера доезжает
+        // до нас красным тестом.
+        final expectedFile =
+            overrideFile.existsSync() ? overrideFile : baseFile;
+
         if (!expectedFile.existsSync()) {
-          // Ожидание ещё не сгенерировано для стороны LxBox — не валим
-          // прогон, честно пропускаем (регенерация: UPDATE_CONTRACT=1).
-          markTestSkipped(
-              'нет ${expectedFile.uri.pathSegments.last} — сгенерируйте UPDATE_CONTRACT=1');
-          return;
+          fail('$rel: нет ни ${baseFile.uri.pathSegments.last}, ни '
+              'per-app override — кейс без ожидания не проверяет ничего');
         }
 
         final want = json.decode(expectedFile.readAsStringSync())
