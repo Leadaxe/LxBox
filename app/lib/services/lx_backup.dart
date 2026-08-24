@@ -57,6 +57,9 @@ const Set<String> kLxPortableVars = {
   'tls_fragment_fallback_delay',
   'tls_mixed_case_sni',
   'tls_record_fragment',
+  // SPEC 109 (N7): tun_address стал однострочником на обеих сторонах и
+  // переносим наравне с tun_address6 — адрес TUN не привязан к машине.
+  'tun_address',
   'tun_address6',
   'tun_mtu',
   'tun_stack',
