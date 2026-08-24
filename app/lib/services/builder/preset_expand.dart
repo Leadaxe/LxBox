@@ -168,26 +168,20 @@ PresetFragments expandPreset(
 
   final expandedRuleSets = <Map<String, dynamic>>[];
   for (final rs in preset.ruleSets) {
-    // §045: `enabled: "@var"` convention — фрагмент пропускается если
-    // var резолвится не в "true". Отсутствие поля = always-on.
-    final enabledRaw = rs['enabled'];
-    if (enabledRaw is String) {
-      final substituted = substituteVars(enabledRaw, varsMap);
-      if (substituted is! String || substituted.toLowerCase() != 'true') {
-        continue;
-      }
-    } else if (enabledRaw is bool && !enabledRaw) {
-      continue;
-    }
+    // SPEC 107: гейт фрагмента — #enable (канон) либо легаси
+    // `enabled: "@var"` (§045). Отсутствие обоих = always-on.
+    if (!fragmentGateSatisfied(rs, varsMap)) continue;
 
     final copy = deepCopyJson(rs);
     final result = substituteVars(copy, varsMap);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
     if (result['type'] is! String) continue;
-    // sing-box не знает поля `enabled` на rule_set entry — strip перед
-    // включением в финальный config (наша мета-конвенция, не sing-box).
-    result.remove('enabled');
+    // Служебные ключи гейта — прочь из результата. ВАЖНО: `enabled` снимается
+    // ТОЛЬКО в строковой форме "@var" (наша мета-конвенция). Булев `enabled`
+    // — настоящее поле sing-box (`tls.enabled`, `cache_file.enabled`), его
+    // удаление меняло бы конфиг (ловушка SPEC 107 §11.2).
+    stripFragmentGateKeys(result);
 
     // Remote rule_set — заменяем на local через кэш (spec §011 compliance,
     // task 011). Без path → skip + warning: правило будет частично рабочим
@@ -309,7 +303,7 @@ PresetFragments expandPreset(
       final isIntermediate = _kIntermediateActions.contains(result['action']);
       if (!isIntermediate) {
         // Universal outbound override через `varsValues['outbound']` —
-        // юзер всегда может заменить template-решение любым каналом
+        // юзер всегда может заменить template-решение любым Направлением
         // (reject → direct, direct → vpn-1, reject → vpn-2, и в обратную
         // сторону). Template-форма (`action: reject`, hardcoded outbound,
         // `@outbound`-placeholder) рассматривается как default; override
@@ -455,12 +449,99 @@ PresetFragments expandPreset(
     dnsServers.add(result);
   }
 
+  return namespacePresetTags(
+    preset.presetId,
+    PresetFragments(
+      dnsServers: dnsServers,
+      dnsRules: dnsRules,
+      ruleSets: expandedRuleSets,
+      routingRules: routingRules,
+      warnings: warnings,
+    ),
+  );
+}
+
+/// §103 C7 (D-012) — неймспейс тегов пресета: `<preset_id>:<tag>`.
+///
+/// Без префикса два пресета с одинаковым локальным тегом (`dns-ru`, `geoip`)
+/// сталкиваются, и побеждает первый — второй молча теряет свой сервер.
+/// Прежний дедуп first-wins сообщал о столкновении warning'ом, но решить его
+/// пользователь не мог: теги задаёт автор шаблона, а не он.
+///
+/// Префиксуются только теги, ОБЪЯВЛЕННЫЕ внутри этого пресета, и ссылки на
+/// них. Ссылка на чужой тег (общий rule_set, Направление, `direct-out`) остаётся
+/// нетронутой — иначе правило начнёт указывать в никуда.
+PresetFragments namespacePresetTags(String presetId, PresetFragments f) {
+  if (presetId.isEmpty) return f;
+
+  final localDnsTags = <String>{
+    for (final s in f.dnsServers)
+      if (s['tag'] is String) s['tag'] as String,
+  };
+  final localRuleSetTags = <String>{
+    for (final rs in f.ruleSets)
+      if (rs['tag'] is String) rs['tag'] as String,
+  };
+  if (localDnsTags.isEmpty && localRuleSetTags.isEmpty) return f;
+
+  String qualify(String tag) => '$presetId:$tag';
+
+  Object? mapRef(Object? value, Set<String> local) {
+    if (value is String) return local.contains(value) ? qualify(value) : value;
+    if (value is List) {
+      return [
+        for (final v in value)
+          (v is String && local.contains(v)) ? qualify(v) : v,
+      ];
+    }
+    return value;
+  }
+
+  final dnsServers = [
+    for (final s in f.dnsServers)
+      {
+        ...s,
+        'tag': qualify(s['tag'] as String),
+        // Группа DNS ссылается на своих членов по тегу — те тоже
+        // переименованы.
+        if (s['servers'] != null) 'servers': mapRef(s['servers'], localDnsTags),
+      },
+  ];
+
+  final ruleSets = [
+    for (final rs in f.ruleSets) {...rs, 'tag': qualify(rs['tag'] as String)},
+  ];
+
+  final dnsRules = [
+    for (final r in f.dnsRules)
+      {
+        ...r,
+        if (r['server'] != null) 'server': mapRef(r['server'], localDnsTags),
+        if (r['rule_set'] != null)
+          'rule_set': mapRef(r['rule_set'], localRuleSetTags),
+      },
+  ];
+
+  final routingRules = [
+    for (final r in f.routingRules)
+      {
+        ...r,
+        if (r['rule_set'] != null)
+          'rule_set': mapRef(r['rule_set'], localRuleSetTags),
+        // Route-правило с `action: resolve` несёт `server` — ссылку на
+        // DNS-сервер, объявленный этим же пресетом. Без префикса она станет
+        // битой: sing-box check такое пропускает, а в рантайме резолв
+        // молча уходит не туда.
+        if (r['server'] != null) 'server': mapRef(r['server'], localDnsTags),
+      },
+  ];
+
   return PresetFragments(
     dnsServers: dnsServers,
     dnsRules: dnsRules,
-    ruleSets: expandedRuleSets,
+    ruleSets: ruleSets,
     routingRules: routingRules,
-    warnings: warnings,
+    warnings: f.warnings,
   );
 }
 
@@ -528,7 +609,7 @@ BundleMerge mergeFragments(List<PresetFragments> all) {
 /// §117: нормализация `detour` у DNS-сервера. Удаляет ключ когда:
 /// - `direct-out` / пустая строка — direct не требует detour (решение №2:
 ///   «нет detour» = и дефолт, и fallback);
-/// - канал отсутствует в [knownOutbounds] (выбранный канал исчез из конфига,
+/// - Направление отсутствует в [knownOutbounds] (выбранное Направление исчезло из конфига,
 ///   вкл. неотрезолвленный `@placeholder`) — отсутствие ключа вместо
 ///   dangling-ссылки.
 ///
@@ -541,7 +622,7 @@ void normalizeDnsDetour(
   // не бывает, запросы несут участники (каждый со своим detour). Ядро
   // принимает у `type: group` ровно {servers, mode, error_ttl, win_ttl}
   // (kernel SPEC 033) и падает на лишнем ключе — «start» отваливался с
-  // ошибкой, стоило выбрать не-direct канал. Чистим ЗДЕСЬ, а не только в
+  // ошибкой, стоило выбрать не-direct Направление. Чистим ЗДЕСЬ, а не только в
   // форме: у пострадавших ключ уже лежит в storage, и без этого конфиг
   // оставался бы битым до ручного захода в редактор.
   if (server['type'] == 'group') {
@@ -579,3 +660,57 @@ dynamic substituteVars(dynamic obj, Map<String, dynamic> vars) {
   });
 }
 
+
+
+/// SPEC 107 — гейт фрагмента пресета: `#enable` (канон) плюс легаси
+/// `enabled: "@var"` (§045). Оба присутствуют → and.
+///
+/// Значения подставляются перед вычислением: тело фрагмента может ссылаться
+/// на переменные пресета, которых нет в глобальном резолвере.
+bool fragmentGateSatisfied(
+  Map<String, dynamic> fragment,
+  Map<String, dynamic> varsMap,
+) {
+  final legacy = fragment['enabled'];
+  if (legacy is String) {
+    final substituted = substituteVars(legacy, varsMap);
+    if (substituted is! String || substituted.trim().toLowerCase() != 'true') {
+      return false;
+    }
+  } else if (legacy is bool && !legacy) {
+    // Булев `false` у rule_set — исторически «выключено» (не поле sing-box:
+    // у rule_set такого поля нет).
+    return false;
+  }
+
+  final gate = fragment[enableKey];
+  if (gate == null) return true;
+  final resolve = (String name) {
+    final v = varsMap[name];
+    if (v == null) return null;
+    return v is String ? coerceVarValue(v, _gateVarType(v)) : v;
+  };
+  return evalCond(gate, resolve);
+}
+
+/// Тип для коэрции значения в гейте: варианты пресета приезжают плоскими
+/// строками, объявления типов на этом пути нет. "true"/"false" трактуем как
+/// bool, остальное — текст (равенство сравнивает строки как есть).
+String _gateVarType(String raw) {
+  final t = raw.trim().toLowerCase();
+  return (t == 'true' || t == 'false') ? 'bool' : 'text';
+}
+
+/// Убирает служебные ключи гейта с ВЕРХНЕГО уровня фрагмента.
+///
+/// На верхнем уровне rule_set-фрагмента `enabled` — всегда наша
+/// мета-конвенция (§045): у sing-box такого поля у rule_set нет, обе формы
+/// (строка "@var" и bool) снимаются.
+///
+/// ВЛОЖЕННЫЕ объекты не трогаем: там `enabled` — настоящее поле sing-box
+/// (`tls.enabled`, `cache_file.enabled`), и его удаление меняло бы конфиг
+/// (ловушка SPEC 107 §11.2). Поэтому удаление точечное, а не обходом дерева.
+void stripFragmentGateKeys(Map<String, dynamic> fragment) {
+  fragment.remove(enableKey);
+  fragment.remove('enabled');
+}

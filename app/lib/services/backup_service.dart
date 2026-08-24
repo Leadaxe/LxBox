@@ -8,6 +8,7 @@ import '../vpn/box_vpn_client.dart';
 import 'app_log.dart';
 import 'json_clone.dart';
 import 'settings_storage.dart';
+import 'template_loader.dart';
 
 /// Backup categories — параллельно с UI-toggle'ами в [BackupScreen].
 /// Спека: docs/spec/features/040 backup restore ui/spec.md
@@ -23,12 +24,17 @@ enum BackupCategory {
 const _topLevelRoutingKeys = {
   'custom_rules',
   'route_final',
-  // §219/§221 — channels + guard миграции. КРИТИЧНО: без них backup/restore на
-  // новом устройстве терял всю модель роутинг-каналов §125 (channels в allowlist
-  // restore, но забыт в export — асимметрия). channels_migrated нужен, чтобы
-  // one-shot миграция не пере-сработала поверх восстановленных каналов.
-  'channels',
-  'channels_migrated',
+  // §219/§221 — directions + guard миграции. КРИТИЧНО: без них backup/restore на
+  // новом устройстве терял всю модель роутинг-Направлений §125 (directions в allowlist
+  // restore, но забыт в export — асимметрия). directions_migrated нужен, чтобы
+  // one-shot миграция не пере-сработала поверх восстановленных Направлений.
+  'directions',
+  'directions_migrated',
+  // §393 C2 — источники-цепочки (SPEC 110). Категория именно routing, а не
+  // serverLists: цепочка — маршрут, а не набор серверов, её позиции ссылаются
+  // на теги Направлений, и восстановить её без них бессмысленно. Пара
+  // «Направления + цепочки» обязана переезжать одним куском.
+  'chains',
   'preset_ids_remapped', // §228 — guard ремапа preset_id; в export иначе
   //                        миграция пере-сработает поверх restored custom_rules
   'route_idle_suspend', // §215 — idle-suspend threshold (route.lx_idle_suspend)
@@ -53,6 +59,13 @@ const _topLevelAppKeys = {
   'node_sort_mode',
   'node_manual_order',
   'profiler_retention_sec', // §219/§221 — окно Live-журнала (был в allowlist, не в export)
+  // §393 B7 — чужие блобы LX Backup. Категория именно App settings, а не
+  // Routing: блоб непрозрачен по определению (это данные ЧУЖОГО приложения),
+  // и разложить его по категориям нечем — мобила не знает, что внутри.
+  // Пропустить его во внутреннем бэкапе тоже нельзя: перенос настроек на
+  // новое устройство обязан донести и груз, иначе первый же экспорт оттуда
+  // на десктоп вернётся обеднённым (BACKUP.md §1).
+  'lx_backup_extensions',
 };
 
 /// Sub-keys внутри `vars` относящиеся к Debug API category.
@@ -379,6 +392,31 @@ class BackupService {
         errors.add('Storage: $e');
       }
 
+      // §393 A2 — порядок restore→migrate. Архив старой сборки принёс легаси-пару
+      // `channels`/`channels_migrated` (restore-allowlist их пропускает); без
+      // этого вызова первое же чтение Направлений увидело бы пустой `directions`
+      // и экран показал бы «Направлений нет» до перезапуска app'а. Миграция
+      // идемпотентна — на новом архиве это дешёвый no-op.
+      try {
+        final template = await TemplateLoader.load();
+        await SettingsStorage.migrateDirectionsIfNeeded(
+          template.groupTemplates,
+          varDefaults: {
+            for (final v in template.vars) v.name: v.defaultValue,
+          },
+        );
+      } catch (e) {
+        errors.add('Directions migration: $e');
+      }
+      // §393 D1 — восстановленный архив мог быть снят до перехода цепочек в
+      // общий список источников: позиции назначаем сразу после restore, иначе
+      // экран показал бы их порядок по-старому до перезапуска app'а.
+      try {
+        await SettingsStorage.migrateChainOrderIfNeeded();
+      } catch (e) {
+        errors.add('Chain order migration: $e');
+      }
+
       routing = contents.countFor(BackupCategory.routing);
       appS = contents.countFor(BackupCategory.appSettings);
       debug = contents.countFor(BackupCategory.debugConfig);
@@ -431,13 +469,13 @@ class BackupService {
     return 'lxbox-backup-v$appVersion-$date.json';
   }
 
-  /// Filter storage map по category-toggles. Visible for tests.
+  /// Filter storage map по category-toggles для ЗАПИСИ в архив. Visible for tests.
   @visibleForTesting
   static Map<String, dynamic> filterStorageForExport(
     Map<String, dynamic> raw, {
     required Set<BackupCategory> include,
   }) {
-    return _filterStorageForImport(raw, include: include);
+    return _filterStorage(raw, include: include);
   }
 
   /// Категорийный filter для top-level + vars subkeys по category-toggles
@@ -449,7 +487,18 @@ class BackupService {
   /// чужеродных/«мёртвых» ключей делается отдельно на ВХОДЕ в
   /// `SettingsStorage.replaceRaw` (allowlist default-deny); здесь else-ветки
   /// «unknown → куда-нибудь» нет.
+  /// §393 A2 — единственная асимметрия с export'ом: старый архив несёт
+  /// легаси-пару `channels`/`channels_migrated`, и её имена нормализуются
+  /// ДО фильтра ([normalizeLegacyDirectionKeys]) — в storage легаси не
+  /// попадает, merge-upsert `replaceRaw` коллидирует по одному имени и архив
+  /// честно побеждает живые `directions` (adversarial-ревью A2).
   static Map<String, dynamic> _filterStorageForImport(
+    Map<String, dynamic> raw, {
+    required Set<BackupCategory> include,
+  }) =>
+      _filterStorage(normalizeLegacyDirectionKeys(raw), include: include);
+
+  static Map<String, dynamic> _filterStorage(
     Map<String, dynamic> raw, {
     required Set<BackupCategory> include,
   }) {

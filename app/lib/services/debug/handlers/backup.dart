@@ -2,6 +2,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../l10n/locale_controller.dart';
 import '../../settings_storage.dart';
+import '../../template_loader.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
@@ -74,12 +75,27 @@ Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
   if (storage is Map<String, dynamic>) {
     // §159 — replaceRaw применяет allowlist (default-deny). Отброшенные
     // неизвестные/чужеродные ключи возвращаются и отдаются в ответе.
-    final dropped = await SettingsStorage.replaceRaw(storage, merge: merge);
+    final dropped = await SettingsStorage.replaceRaw(
+        normalizeLegacyDirectionKeys(storage), merge: merge);
     applied['storage_keys'] = storage.length;
     if (dropped.isNotEmpty) applied['dropped_keys'] = dropped;
     // §279 — restore мог привезти другой app_language: полный пайплайн смены
     // локали через владеющий контроллер (не голое значение в сторадже).
     await LocaleController.I.reloadFromStorage();
+    // §393 A2 — порядок restore→migrate. Легаси-пара в storage попасть уже
+    // не может (нормализация имён на входе выше); вызов остаётся ради
+    // fresh-seed, когда тело не принесло Направлений вовсе. Тот же вызов,
+    // что в `BackupService.applyImport`; идемпотентен на новых ключах.
+    final template = await TemplateLoader.load();
+    await SettingsStorage.migrateDirectionsIfNeeded(
+      template.groupTemplates,
+      varDefaults: {
+        for (final v in template.vars) v.name: v.defaultValue,
+      },
+    );
+    // §393 D1 — то же для позиций цепочек: тело могло принести `chains` без
+    // `order` (снято до перехода на общий список источников).
+    await SettingsStorage.migrateChainOrderIfNeeded();
   } else if (storage != null) {
     throw const BadRequest('storage must be a JSON object');
   }

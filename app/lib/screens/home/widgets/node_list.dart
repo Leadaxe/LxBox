@@ -5,14 +5,14 @@ import 'package:flutter/material.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
-import '../../../services/channel_mutations.dart';
+import '../../../services/direction_mutations.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/haptic_service.dart';
 import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
 import '../../../widgets/node_view_item.dart';
 import '../../../widgets/reorder_grab_strip.dart';
-import '../../channel_edit_screen.dart';
+import '../../direction_edit_screen.dart';
 import '../node_actions.dart';
 import '../node_filter_view_model.dart';
 import '../../../models/auto_select.dart';
@@ -87,14 +87,14 @@ class HomeNodeList extends StatelessWidget {
   final GlobalKey Function(String tag) rowKeyFor;
   final void Function(String tag) onSelectServer;
 
-  /// §208 — открыть попап пула round_robin-канала по его auto-тегу (View pool).
+  /// §208 — открыть попап пула round_robin-Направления по его auto-тегу (View pool).
   final void Function(String autoTag) onViewPool;
 
   @override
   Widget build(BuildContext context) {
     // §328 — ноль реальных серверов при туннеле down: гайд с CTA-кнопкой
     // берёт весь экран ДО проверки `nodes.isEmpty` — конфиг из шаблона несёт
-    // control-ноды (direct/каналы), и по ним список выглядел бы «непустым».
+    // control-ноды (direct/Направления), и по ним список выглядел бы «непустым».
     if (showEmptyGuide) {
       return Expanded(
         child: AddServerCta(
@@ -132,7 +132,7 @@ class HomeNodeList extends StatelessWidget {
                       size: 48, color: cs.onSurfaceVariant.withAlpha(120)),
                   const SizedBox(height: 12),
                   Text(
-                    getLocalText.s("No nodes in this channel.\nTry another one."),
+                    getLocalText.s("No nodes in this direction.\nTry another one."),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: cs.onSurfaceVariant,
@@ -198,12 +198,12 @@ class HomeNodeList extends StatelessWidget {
               availableProtocols: data.availableProtocols,
               availableVariants: data.availableVariants,
               sourceOptions: data.sourceOptions,
-              // §195 — 💾 показываем только когда активный канал валиден
+              // §195 — 💾 показываем только когда активное Направление валиден
               // (selectedGroup ∈ groups). Иначе некуда сохранять → null скрывает.
               onSaveRegex: (state.selectedGroup != null &&
                       state.groups.contains(state.selectedGroup))
                   ? (pattern, invert) =>
-                      _saveRegexToChannel(context, pattern, invert)
+                      _saveRegexToDirection(context, pattern, invert)
                   : null,
             ),
           Expanded(
@@ -285,9 +285,9 @@ class HomeNodeList extends StatelessWidget {
         final group = state.groupOf(tag);
         final isUrltestGroup =
             group != null && group.type.toLowerCase().contains('urltest');
-        // §322 — auto-двойник КАНАЛА (не узел автовыбора): только ему положены
+        // §322 — auto-двойник НАПРАВЛЕНИЯ (не узел автовыбора): только ему положены
         // подмена имени «✨ Auto» и пин в верхнюю секцию.
-        final isChannelAuto = controller.isChannelAutoTag(tag);
+        final isDirectionAuto = controller.isDirectionAutoTag(tag);
         // §102 — протокол и variant (transport/awg) берём с ОДНОГО узла:
         // сам tag, либо текущий выбор urltest-группы (§048 fallback).
         final protoSrc = cache.protocolOf(tag) != null
@@ -311,7 +311,7 @@ class HomeNodeList extends StatelessWidget {
               active: tag == state.activeInGroup,
               highlighted: tag == state.highlightedNode,
               delay: state.delayOf(tag),
-              // §325 — замер не этого канала: рисуем приглушённо со значком.
+              // §325 — замер не этого Направления: рисуем приглушённо со значком.
               delayIsForeign: state.delayIsForeign(tag),
               pingBusy: state.pingBusy[tag] == '…',
               tunnelUp: state.tunnelUp,
@@ -323,12 +323,12 @@ class HomeNodeList extends StatelessWidget {
                   cache.rawOf(tag)?['balancer'] != null ? null : urltestNow,
               hasDetour: cache[tag]?.detour != null,
               outboundType: cache[tag]?.type, // §125 — точный тип из конфига
-              // §322 — двойник канала vs узел автовыбора: ядру оба `urltest`.
-              isChannelAuto: isChannelAuto,
+              // §322 — двойник Направления vs узел автовыбора: ядру оба `urltest`.
+              isDirectionAuto: isDirectionAuto,
               // §322 — метка режима узла автовыбора (`🎯 [3]` / `🔀 [15/7]`)
-              // в подзаголовке. Двойник канала сюда не попадает — у него уже
+              // в подзаголовке. Двойник Направления сюда не попадает — у него уже
               // есть подменённое имя «✨ Auto».
-              autoGroupLabel: isChannelAuto
+              autoGroupLabel: isDirectionAuto
                   ? null
                   : _autoLabelWithBadges(
                       controller, subController, cache, tag),
@@ -357,7 +357,7 @@ class HomeNodeList extends StatelessWidget {
             // выбранному серверу» (подсветка + scroll). Иначе null → пункт скрыт.
             onSelectServer:
                 urltestNow != null ? () => onSelectServer(urltestNow) : null,
-            // §208 — «View pool» только для auto-ноды round_robin-канала
+            // §208 — «View pool» только для auto-ноды round_robin-Направления
             // (у least_test пула нет). tag здесь = auto-тег группы.
             onViewPool: (isUrltestGroup && controller.isRoundRobinAuto(tag))
                 ? () => onViewPool(tag)
@@ -431,27 +431,27 @@ class HomeNodeList extends StatelessWidget {
     );
   }
 
-  /// §195 — перенести regex из фильтра на главной в активный канал. Не пишем
+  /// §195 — перенести regex из фильтра на главной в активное Направление. Не пишем
   /// тихо: спрашиваем КУДА (node_filter / default_filter), затем открываем
-  /// редактор канала с предзаполненным полем — юзер видит куда легло значение,
+  /// редактор Направления с предзаполненным полем — юзер видит куда легло значение,
   /// может доредактировать и сохранить явно. Результат применяем здесь (на
-  /// главной нет routing-стейта, который пишет channel-edit).
-  Future<void> _saveRegexToChannel(
+  /// главной нет routing-стейта, который пишет direction-edit).
+  Future<void> _saveRegexToDirection(
       BuildContext context, String pattern, bool invert) async {
     final tag = state.selectedGroup;
     if (tag == null) return;
-    final channels = await SettingsStorage.getChannels();
-    final idx = channels.indexWhere((c) => c.tag == tag);
+    final directions = await SettingsStorage.getDirections();
+    final idx = directions.indexWhere((c) => c.tag == tag);
     if (idx < 0 || !context.mounted) return;
-    final channel = channels[idx];
-    final label = channel.label.isNotEmpty ? channel.label : channel.tag;
+    final direction = directions[idx];
+    final label = direction.label.isNotEmpty ? direction.label : direction.tag;
 
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(getLocalText.s("Apply to %s", label)),
         content: Text(getLocalText.s("Use \"%s\" as…", pattern)),
-        // Горизонтально (Row), порядок: Channel filter → Default → Cancel.
+        // Горизонтально (Row), порядок: Direction filter → Default → Cancel.
         // Короткие лейблы держат всё в один ряд на телефоне.
         actionsAlignment: MainAxisAlignment.end,
         actionsOverflowDirection: VerticalDirection.down,
@@ -477,28 +477,28 @@ class HomeNodeList extends StatelessWidget {
     );
     if (choice == null || !context.mounted) return;
 
-    // Предзаполняем нужное поле и открываем редактор канала (Routing → Channels
-    // → этот канал) — юзер видит подставленное значение и сохраняет явно.
+    // Предзаполняем нужное поле и открываем редактор Направления (Routing → Directions
+    // → это Направление) — юзер видит подставленное значение и сохраняет явно.
     // §197 — для node_filter переносим и инверсию с главного фильтра; default
     // инверсии не имеет (игнор).
     final seeded = choice == 'node'
-        ? channel.copyWith(nodeFilter: pattern, nodeFilterInvert: invert)
-        : channel.copyWith(defaultFilter: pattern);
+        ? direction.copyWith(nodeFilter: pattern, nodeFilterInvert: invert)
+        : direction.copyWith(defaultFilter: pattern);
     final allNodeTags = _allNodeTagsFromState();
-    final result = await openChannelEditor(
+    final result = await openDirectionEditor(
       context,
       initial: seeded,
-      canDelete: !channel.isRequired,
+      canDelete: !direction.isRequired,
       allNodeTags: allNodeTags,
     );
     if (result == null || result.saved == null || !context.mounted) return;
 
-    // Применяем сохранённый канал + rebuild конфига (паттерн node_filter_screen).
-    // §275 — ChannelMutations зеркалит detour-heal в _entries: generateConfig
+    // Применяем сохранённое Направление + rebuild конфига (паттерн node_filter_screen).
+    // §275 — DirectionMutations зеркалит detour-heal в _entries: generateConfig
     // ниже идёт от in-memory контроллера, без ресинка он воскресил бы
     // вылеченный storage.
-    final healed = await ChannelMutations.update(result.saved!, subController);
-    await controller.refreshChannelLabels();
+    final healed = await DirectionMutations.update(result.saved!, subController);
+    await controller.refreshDirectionLabels();
     if (!context.mounted) return;
     final config = await subController.generateConfig();
     if (config != null && context.mounted) {
@@ -510,12 +510,12 @@ class HomeNodeList extends StatelessWidget {
     // здесь нет; §274 убрал flag-set-heal) — досказываем счётчики в том же
     // SnackBar.
     // §292 — части сообщения из единого форматтера (общий с routing_screen).
-    final healedParts = ChannelMutations.healMessageParts(healed);
+    final healedParts = DirectionMutations.healMessageParts(healed);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
           content: Text(healedParts.isEmpty
-              ? getLocalText.s("Saved channel \"%s\"", label)
-              : getLocalText.s("Saved channel \"%1\$s\" — %2\$s", label,
+              ? getLocalText.s("Saved direction \"%s\"", label)
+              : getLocalText.s("Saved direction \"%1\$s\" — %2\$s", label,
                   healedParts.join('; ')))),
     );
     // §338 — при включённой галке пересборка на возврате на home применит

@@ -78,7 +78,8 @@ auth), а не факт, что за границей всё открыто.
 - [Subscriptions CRUD — `/subs/*`](#subscriptions-crud--subs)
   - [identity подписки (§289)](#346--identity-подписки-289)
   - [Import rules CRUD — `/subs/{id}/rules`](#346--import-rules-crud--subsidrules)
-- [Channels CRUD — `/channels/*`](#channels-crud--channels)
+- [Directions CRUD — `/directions/*`](#directions-crud--directions)
+- [Chains CRUD — `/chains/*`](#chains-crud--chains)
 - [Folders CRUD — `/folders/*`](#folders-crud--folders)
 - [WARP — `/warp`](#warp--warp)
 - [Pool — `/pool`](#pool--pool)
@@ -502,53 +503,77 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 
 ---
 
-## Channels CRUD — `/channels/*`
+## Directions CRUD — `/directions/*`
 
-§238 — каналы роутинга §125 (`channels[]` в storage). Обёртка над
-`SettingsStorage.getChannels / addChannel / updateChannel / deleteChannel` —
-семантика идентична UI: `vpn-1` неудаляем и всегда enabled, лимит 10 каналов,
-удаление/выключение канала деградирует rules-ссылки (route_final / custom-rule
-outbound) на `vpn-1` (§202, необратимо), detour-ссылки (`override_detour` /
-`members[].detour`) — в `''` (None, §248). Shape ресурса — storage-JSON канала
-(`Channel.toJson()`, snake_case), включая поле `detour` (§248 — канал как
-detour-прослойка).
+§238 — Направления роутинга §125/§393 (`directions[]` в storage). Обёртка над
+`SettingsStorage.getDirections / addDirection / updateDirection /
+deleteDirection` — семантика идентична UI: `vpn-1` неудаляем и всегда enabled,
+удаление/выключение Направления деградирует rules-ссылки (route_final /
+custom-rule outbound) на `vpn-1` (§202, необратимо), detour-ссылки
+(`override_detour` / `members[].detour`) — в `''` (None, §248). Shape ресурса —
+storage-JSON Направления (`Direction.toJson()`, snake_case), включая поле
+`detour` (§248 — Направление как detour-прослойка).
+
+> **§393 — путь переименован.** До v2.21.0 эти же ресурсы жили под
+> `/channels/*` («каналы роутинга»). Путь сменился на `/directions/*` **без
+> алиаса**: старый `/channels` отдаёт 404, а не редирект. Скрипты правятся
+> заменой сегмента пути — тела запросов и ответов те же, только имя сущности
+> в тексте другое. Данные мигрируют сами (ключ storage `channels` →
+> `directions`, one-shot).
+
+**Теги произвольные, потолка нет** (§393): `vpn-N` — обычные теги, а не
+фиксированный словарь; лимит в 10 Направлений снят. POST без `tag` выдаёт
+первый свободный `vpn-N`, присланный `tag` принимается как есть. Отвергнутый
+тег → 409 с машинной причиной в сообщении: `empty` | `reserved`
+(`direct-out`/`block`/`dns-out`/…) | `duplicate` | `auto_twin` (столкновение с
+существующим двойником `<tag>-auto`).
 
 | Endpoint | Метод | Body |
 |---|---|---|
-| `/channels` | GET | — |
-| `/channels/{tag}` | GET | tag = `vpn-1`..`vpn-10` |
-| `/channels` | POST | опц. `{"label":"..."}` + любые PATCH-поля; tag автоназначается (первый свободный `vpn-N`), 201 |
-| `/channels/{tag}` | PATCH | subset: `label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto,detour` |
-| `/channels/{tag}` | DELETE | — |
-| `/channels/reorder` | POST | `{"order":["vpn-1",...]}` — ровно текущие теги |
+| `/directions` | GET | — |
+| `/directions/{tag}` | GET | tag = тег Направления (`vpn-1` или произвольный) |
+| `/directions` | POST | опц. `{"label":"...","tag":"..."}` + любые PATCH-поля; без `tag` — первый свободный `vpn-N`, 201 |
+| `/directions/{tag}` | PATCH | subset: `label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,include,interrupt_exist_connections,auto,detour` |
+| `/directions/{tag}` | DELETE | — |
+| `/directions/reorder` | POST | `{"order":["vpn-1",...]}` — ровно текущие теги |
 
-Все write'ы принимают `?rebuild=true` (порядок каналов = порядок эмита в
+Все write'ы принимают `?rebuild=true` (порядок Направлений = порядок эмита в
 конфиге, так что reorder тоже config-significant).
 
 ```bash
 # Список
-curl -s -H "$HDR" "$BASE/channels" | jq 'map({tag,label,enabled})'
+curl -s -H "$HDR" "$BASE/directions" | jq 'map({tag,label,enabled})'
 
-# Создать канал с фильтром по немецким нодам и urltest-двойником
+# Создать Направление с фильтром по немецким нодам и urltest-двойником
 curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   -d '{"label":"Germany","node_filter":"DE|Frankfurt","auto":{"interval":"3m"}}' \
-  "$BASE/channels?rebuild=true"
+  "$BASE/directions?rebuild=true"
 # → 201 {"tag":"vpn-2","label":"Germany",...,"rebuilt":true,...}
 
-# Включить round_robin балансировщик на канале
+# Создать Направление с произвольным тегом (§393 — потолка в 10 нет)
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"tag":"ru-exit","label":"RU exit","node_filter":"RU"}' \
+  "$BASE/directions?rebuild=true"
+
+# Включить round_robin балансировщик на Направлении
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   -d '{"auto":{"mode":"round_robin","balancer":{"pool":4}}}' \
-  "$BASE/channels/vpn-2?rebuild=true"
+  "$BASE/directions/vpn-2?rebuild=true"
 
 # Снять галку auto (убрать urltest-двойник)
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
-  -d '{"auto":null}' "$BASE/channels/vpn-2"
+  -d '{"auto":null}' "$BASE/directions/vpn-2"
 
-# Разрешить канал как detour-мишень (§248/§274): появляется в пикерах detour;
-# целью правил остаётся, существующие ссылки правил не трогаются
+# Состав: предложить внутри vpn-2 опциями другие Направления (§393)
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
-  -d '{"detour":true}' "$BASE/channels/vpn-2?rebuild=true"
-# → {"tag":"vpn-2",...,"detour":true,"healed":{"rules":0,"detours":0},"rebuilt":true,...}
+  -d '{"include":["ru-exit"],"include_direct":true}' \
+  "$BASE/directions/vpn-2?rebuild=true"
+
+# Разрешить Направление как detour-мишень (§248/§274): появляется в пикерах
+# detour; целью правил остаётся, существующие ссылки правил не трогаются
+curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"detour":true}' "$BASE/directions/vpn-2?rebuild=true"
+# → {"tag":"vpn-2",...,"detour":true,"healed":{"rules":0,"detours":0,"includes":0},"rebuilt":true,...}
 ```
 
 **Quirks:**
@@ -556,33 +581,146 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   `url`, остальные urltest-опции (и вложенный `balancer{}`) сохраняются.
   Полный reset — прислать все поля явно. `"auto": null` — снять галку.
 - `tag` immutable (системный id) → передан в PATCH → 400. Юзер-имя — `label`.
-- `PATCH vpn-1 {"enabled":false}` и `DELETE /channels/vpn-1` → 409 `conflict`.
+- `include` (§393) — теги **других** Направлений, предлагаемых опциями внутри
+  этого. Эмитятся только цели, объявленные **выше** по списку (порядок задаёт
+  `/directions/reorder`) — порядок и исключает циклы. Ссылка вниз по списку
+  молча не попадает в конфиг.
+- `PATCH vpn-1 {"enabled":false}` и `DELETE /directions/vpn-1` → 409 `conflict`.
 - `detour` (§248/§274): `PATCH vpn-1 {"detour":true}` → 409 `conflict`
-  (vpn-1 — главный канал и heal-резерв, продуктовое решение).
+  (vpn-1 — главное Направление и heal-резерв, продуктовое решение).
   `include_block` с `detour` совместим (§274 снял 409 и тихую нормализацию):
   оба поля принимаются и сохраняются в любой комбинации.
 - **Переименование при смене `detour`** (§274): префикс `⚙ ` в `label`
-  зарезервирован как маркер detour-канала (как ⚙-метка в тегах
+  зарезервирован как маркер detour-Направления (как ⚙-метка в тегах
   detour-серверов). `detour:true` дописывает его в сохранённый `label`,
   `detour:false` срезает; присланный `label` нормализуется так же (маркер у
-  не-detour канала молча срезается). Ответ мутации несёт УЖЕ
+  не-detour Направления молча срезается). Ответ мутации несёт УЖЕ
   нормализованный `label` — он может отличаться от присланного; скрипты,
-  матчащие каналы, должны ключеваться по `tag` (он для этого и immutable).
+  матчащие Направления, должны ключеваться по `tag` (он для этого и immutable).
 - Ответы мутаций (POST/PATCH/DELETE) содержат `"healed": {"rules": N,
-  "detours": M}` — счётчики вылеченных ссылок (API-аналог UI-SnackBar'а):
-  `rules` — route_final / custom-rule outbound → `vpn-1` (disable, delete;
-  §274: detour flag-set НЕ heal-триггер — канал остаётся целью правил,
-  `rules` при `{"detour":true}` всегда 0); `detours` — `override_detour` /
-  `members[].detour` → `''` (disable, delete, detour flag-unset). Ссылкой
-  «на канал» считается его tag И tag urltest-двойника `<tag>-auto`.
-- Выключение канала (enabled:false) деградирует ссылки сразу и **необратимо**
-  — повторное включение старую ссылку не воскрешает (§202, Решение B).
+  "detours": M, "includes": K}` — счётчики вылеченных ссылок (API-аналог
+  UI-SnackBar'а): `rules` — route_final / custom-rule outbound → `vpn-1`
+  (disable, delete; §274: detour flag-set НЕ heal-триггер — Направление
+  остаётся целью правил, `rules` при `{"detour":true}` всегда 0); `detours` —
+  `override_detour` / `members[].detour` → `''` (disable, delete, detour
+  flag-unset); `includes` — вычистка тега из `include[]` остальных
+  Направлений. Ссылкой «на Направление» считается его tag И tag
+  urltest-двойника `<tag>-auto`.
+- **Удаление** вычищает тег из `include[]` всех остальных Направлений,
+  **выключение — нет**: `include` переживает disable, билдер просто
+  деградирует эмитируемую группу.
+- Выключение Направления (enabled:false) деградирует ссылки сразу и
+  **необратимо** — повторное включение старую ссылку не воскрешает (§202,
+  Решение B).
 - `node_filter`/`default_filter` валидируются как regex → битый паттерн 400
   (иначе уронил бы сборку конфига).
 - POST с PATCH-полями применяет их **после** создания: конфликтный body
-  (например невалидный regex в `node_filter`) вернёт ошибку, но канал уже
-  создан — с `label` из body (если был) и дефолтами остальных полей;
+  (например невалидный regex в `node_filter`) вернёт ошибку, но Направление
+  уже создано — с `label` из body (если был) и дефолтами остальных полей;
   прочие PATCH-поля body не применены.
+
+---
+
+## Chains CRUD — `/chains/*`
+
+§393 C / SPEC 110 — **цепочки хопов**, третий вид источника рядом с
+подписками и серверами (`chains[]` в storage). Цепочка — это явный маршрут
+`вы → хоп 1 → хоп 2 → цель`, который эмитится одним outbound'ом
+`type: "chain"`. Не путать с detour: **цепочка — это источник (маршрут)**, а
+detour — свойство отдельного узла. Позиция цепочки — узел, группа или
+Направление.
+
+**Порядок списка нормативен**: цепочка может ссылаться только на цепочки,
+объявленные **выше** неё, — так исключаются циклы. `hops` — позиции в
+**порядке пакета**: `hops[0]` — первый хоп от клиента.
+
+| Endpoint | Метод | Body |
+|---|---|---|
+| `/chains` | GET | — |
+| `/chains/{tag}` | GET | 404, если тега нет |
+| `/chains` | POST | опц. `{"tag":"...","label":"..."}` + любые PATCH-поля; без `tag` — первый свободный `chain-N`, 201 |
+| `/chains/{tag}` | PATCH | subset: `label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite` |
+| `/chains/{tag}` | DELETE | — |
+| `/chains/{tag}/probe` | GET | `?url=&timeout_ms=` — послойная проба |
+
+Тег цепочки проверяется против **и** цепочек, **и** Направлений (два
+outbound'а с одним тегом роняют конфиг): отвергнутый → 409 с той же машинной
+причиной, что у Направлений (`empty` | `reserved` | `duplicate` |
+`auto_twin`). Body без `hops` создаёт пустую цепочку — как и в UI.
+
+Write'ы проходят **тот же гейт, что и форма редактора**; блокирующая находка →
+400 с её кодом:
+
+| Код | Что нарушено |
+|---|---|
+| `tooFewHops` | меньше двух позиций |
+| `emptyHop` | пустая позиция |
+| `duplicateHop` | позиция повторяется |
+| `selfReference` | цепочка ссылается на себя |
+| `nestedNotFirst` | вложенная цепочка не на позиции 0 |
+| `forwardChainReference` | ссылка на цепочку, объявленную ниже по списку |
+| `realityUtlsStripped` | `strip tls.utls` на reality-узле |
+| `tagEmpty` / `tagTaken` | тег пустой / занят |
+
+Этот класс ошибок `sing-box check` **пропускает**, а `run` роняет, — поэтому
+гейт стоит на записи, а не на сборке.
+
+```bash
+# Список (порядок нормативен)
+curl -s -H "$HDR" "$BASE/chains" | jq 'map({tag,label,enabled,hops})'
+
+# Создать цепочку из двух хопов (порядок = порядок пакета)
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"label":"DE → NL","hops":["de-frankfurt-01","nl-ams-02"]}' \
+  "$BASE/chains?rebuild=true"
+# → 201 {"tag":"chain-1",...}
+
+# Переставить позиции / добавить третий хоп
+curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"hops":["de-frankfurt-01","vpn-2","nl-ams-02"]}' \
+  "$BASE/chains/chain-1?rebuild=true"
+
+# Послойная проба (нужен живой VPN)
+curl -s -H "$HDR" "$BASE/chains/chain-1/probe" | jq '.layers'
+```
+
+**`GET /chains/{tag}/probe` — послойная диагностика.** Меряет **префиксы**
+маршрута: слой `k` — путь от клиента через позицию `k`. Ядро регистрирует для
+каждого слоя тег `<chain>#<k>` — это документированный контракт ядра
+(`config.ChainLayerTag`), общий с десктопным лаунчером. **Цена хопа — это
+разность соседних слоёв, а не собственный замер**: хоп нельзя померить в
+отрыве от пути к нему.
+
+- Требует **работающего VPN** (иначе 409): теги слоёв существуют только в
+  запущенном ядре.
+- Позиции берутся из **собранного** конфига; 409, если цепочки в нём нет
+  (выключена, деградирована, ни разу не собиралась).
+- Прогон **последовательный** — худший случай `позиции × timeout_ms`; на
+  длинных цепочках снижай `timeout_ms`, чтобы уложиться в 30-секундный таймаут
+  запроса. Дефолты `url`/`timeout_ms` — из глобальных `ping_options`.
+- Ответ: `layers[{pos, tag, probe_tag, cumulative_ms?, delta_ms?, error?,
+  not_reached?}]`. **Первый упавший слой несёт текст ошибки ядра, а всё, что
+  за ним, помечается `not_reached`** — «где рвётся маршрут» видно сразу.
+
+**Quirks:**
+- `tag` immutable → передан в PATCH → 400.
+- `strip_evasion` — **тристейт**: поле опущено = оставить как есть, `null` =
+  дефолт ядра, bool = явное значение.
+- `strip` **заменяет** карту целиком; ключи только
+  `tls.fragment` | `multiplex.padding` | `xhttp.padding` | `tls.utls`.
+- `rewrite` — merge-patch по RFC 7396, по одному на тип outbound'а, хранится
+  дословно.
+- **DELETE не чистит чужие позиции**: позиции других цепочек, указывающие на
+  удалённый тег, остаются, и такая цепочка деградирует целиком
+  (`chain_hop_missing`); ответ перечисляет их в `"dangling_refs"`.
+- Требование к ядру: `type: chain` есть с **sing-box-lx v1.14.0-lx.27**
+  (в v2.21.0 пин — `v1.14.0-lx.28-rc.1`). На более старом ядре цепочки не
+  собираются.
+- Полевые правила (проверено на живых прогонах): **MASQUE позади TCP-хопа
+  требует `vhttp: auto`** (фиксированный `h3` шлёт QUIC-датаграммы через
+  TCP-хоп без бюджета хендшейка → стабильный `deadline`); **WireGuard за
+  TCP-хопом требует сервера с реальным UDP-проксированием** — у WG
+  альтернативной ноги нет, а детектора «сервер не умеет UDP» не существует.
 
 ---
 
@@ -706,7 +844,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 |---|---|---|
 | `/pool` | GET | `tag=<autoTag>` (обязателен) → `{tag, count, slots:[{slot,tag,delay,alive}]}` |
 
-- `tag` — auto-двойник round_robin-канала (напр. `vpn-1-auto`).
+- `tag` — auto-двойник round_robin-Направления (напр. `vpn-1-auto`).
 - `delay==0` → нода мёртвая / не измерена.
 - Не-round_robin группа / пул не готов → `slots: []` (не ошибка).
 - CC-клиент недоступен (туннель down) → **409** `conflict` (§209 — раньше тихо отдавал `count:0`, что путало диагностику).
@@ -729,7 +867,7 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/node_sort` | GET | →`{"ok":true,"mode":"<str>","order":["tag",...]}` — режим сортировки списка нод + ручной порядок. |
 | `/settings/node_sort` | PUT | `{"mode": "<str>", "order"?: ["tag",...]}`. `mode` = `""`/`latency`/`manual`; `order` опц. (для manual). UI-only (не config-significant). → `{ok, action:"settings-node-sort", mode, order_count}`. |
 | `/settings/enabled_groups` | GET | →`{"ok":true,"groups":["tag",...]}` — членство preset-групп в selector'е. **§125 legacy** — см. PUT-примечание. |
-| `/settings/enabled_groups` | PUT | `{"groups": ["tag",...]}`. **§125 legacy: фактически no-op** — после миграции на `channels[]` билдер читает `enabledGroups` только когда `channels` пуст, иначе `channels[]` перекрывает эту запись. Для управления каналами используйте UI (App Settings → Channels) / backup. `?rebuild=true` пересоберёт конфиг, но результат не изменится. → `{ok, action:"settings-enabled-groups", count, ...rebuild-extras}`. |
+| `/settings/enabled_groups` | PUT | `{"groups": ["tag",...]}`. **§125 legacy: фактически no-op** — после миграции на `directions[]` (§393; ключ storage переименован из `channels`) билдер читает `enabledGroups` только когда `directions` пуст, иначе `directions[]` перекрывает эту запись. Для управления Направлениями используйте UI (App Settings → Directions) / backup. `?rebuild=true` пересоберёт конфиг, но результат не изменится. → `{ok, action:"settings-enabled-groups", count, ...rebuild-extras}`. |
 | `/settings/vpn_mode` | GET | →`{"ok":true,"vpn_mode":{...}}` — текущий `VpnModeConfig`. |
 | `/settings/vpn_mode` | PUT | частичное обновление (copyWith поверх текущего): `mode`/`proxy_protocol`/`proxy_port`/`proxy_listen`/`proxy_auth`/`proxy_user`/`proxy_pass`. **Валидация (§292):** `proxy_listen` — IPv4, `proxy_port` — 1024..65535, `proxy_protocol` — `mixed`\|`http`\|`socks`; невалидное → 400. **§293:** запись идёт через `VpnSettingsFacade` (единый путь с UI) — на смену режима зеркалит native `has_tun` (гейтит `VpnService.prepare`), при auth+пустом пароле генерит его. **Config-significant** (меняет inbounds) → `?rebuild=true`. → `{ok, action:"settings-vpn-mode", vpn_mode, ...rebuild-extras}`. |
 | `/settings/vars/{key}` | PUT | `{"value":"<str>"}`. Для ключей с side-effect-hook (§279: `app_language`) запись идёт через владеющий сервис, не через голый `setVar` — см. «Side-effect vars» ниже. |

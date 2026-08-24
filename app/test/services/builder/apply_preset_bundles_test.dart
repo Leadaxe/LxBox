@@ -26,21 +26,21 @@ void main() {
 
       expect(result.warnings, isEmpty);
       expect(reg.getRuleSets().length, 1);
-      expect(reg.getRuleSets().first['tag'], 'ru-domains');
+      expect(reg.getRuleSets().first['tag'], 'ru-direct:ru-domains');
       expect(reg.getRules().length, 1);
       expect(reg.getRules().first,
-          {'rule_set': 'ru-domains', 'outbound': 'direct-out'});
+          {'rule_set': 'ru-direct:ru-domains', 'outbound': 'direct-out'});
       expect(result.extraDnsServers.length, 1);
-      expect(result.extraDnsServers.first['tag'], 'yandex_doh');
+      expect(result.extraDnsServers.first['tag'], 'ru-direct:yandex_doh');
       expect(result.extraDnsRules.length, 1);
       expect(result.extraDnsRules.first,
-          {'rule_set': 'ru-domains', 'server': 'yandex_doh'});
+          {'rule_set': 'ru-direct:ru-domains', 'server': 'ru-direct:yandex_doh'});
 
       // §033: dnsRulesByPresetId — авторитативный источник для applyCustomDns
       // (по immutable presetId). labelByPresetId — для UI рендера.
       expect(result.dnsRulesByPresetId, hasLength(1));
       expect(result.dnsRulesByPresetId['ru-direct'], [
-        {'rule_set': 'ru-domains', 'server': 'yandex_doh'}
+        {'rule_set': 'ru-direct:ru-domains', 'server': 'ru-direct:yandex_doh'}
       ]);
       expect(result.labelByPresetId['ru-direct'], 'Russian domains direct');
     });
@@ -234,8 +234,8 @@ void main() {
 
       applyPresetBundles(reg, [rule], [preset]);
 
-      expect(reg.getRuleSets().first['tag'], 'ru-domains');
-      expect(reg.getRules().first['rule_set'], 'ru-domains');
+      expect(reg.getRuleSets().first['tag'], 'ru-direct:ru-domains');
+      expect(reg.getRules().first['rule_set'], 'ru-direct:ru-domains');
     });
   });
 }

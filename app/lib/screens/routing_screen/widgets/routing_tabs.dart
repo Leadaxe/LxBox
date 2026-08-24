@@ -2,27 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../../../services/l10n/locale_controller.dart';
 
-/// Таб "Channels": proxy-groups + default-fallback + Auto tuning. Все тайлы
+/// Таб "Directions": proxy-groups + default-fallback + Auto tuning. Все тайлы
 /// собираются в экране и приходят сюда готовыми списками — поведение
 /// идентично исходному inline-ListView.
-class RoutingChannelsTab extends StatelessWidget {
-  const RoutingChannelsTab({
+class RoutingDirectionsTab extends StatelessWidget {
+  const RoutingDirectionsTab({
     super.key,
     required this.bottomPad,
     required this.groupTiles,
-    required this.channelCount,
-    required this.maxChannels,
-    required this.onAddChannel,
+    required this.directionCount,
+    required this.onAddDirection,
     required this.routeFinalTile,
   });
 
   final double bottomPad;
   final List<Widget> groupTiles;
-  final int channelCount;
-  final int maxChannels;
+  final int directionCount;
 
-  /// null = лимит достигнут (Add disabled).
-  final VoidCallback? onAddChannel;
+  /// §393 A3 — лимита на количество Направлений больше нет; callback
+  /// остаётся nullable ради общей идиомы «disabled кнопки».
+  final VoidCallback? onAddDirection;
 
   final Widget routeFinalTile;
 
@@ -33,7 +32,7 @@ class RoutingChannelsTab extends StatelessWidget {
       children: [
         Text(
           getLocalText.s(
-            "Enabled channels appear in the selector on the home screen. Tap a channel to edit its nodes, filter and auto twin.",
+            "Enabled directions appear in the selector on the home screen. Tap a direction to edit its nodes, filter and auto twin.",
           ),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -44,14 +43,10 @@ class RoutingChannelsTab extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: TextButton.icon(
-            onPressed: onAddChannel,
+            onPressed: onAddDirection,
             icon: const Icon(Icons.add, size: 18),
             label: Text(
-              getLocalText.s(
-                "Add channel  (%1\$d/%2\$d)",
-                channelCount,
-                maxChannels,
-              ),
+              getLocalText.s("Add direction  (%d)", directionCount),
             ),
           ),
         ),
@@ -156,7 +151,7 @@ class RoutingRulesTab extends StatelessWidget {
 
 /// §396 — кнопка ⋮ в AppBar экрана Routing: экспорт/импорт правил файлом.
 /// Экран показывает её только на активном табе Rules (гейт по индексу таба
-/// в `routing_screen.dart`) — на Channels/Presets меню про правила сбивало бы
+/// в `routing_screen.dart`) — на Directions/Presets меню про правила сбивало бы
 /// с толку.
 class RulesMenuButton extends StatelessWidget {
   const RulesMenuButton({

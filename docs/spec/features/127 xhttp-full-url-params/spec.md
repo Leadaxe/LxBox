@@ -19,6 +19,15 @@ golden fixture §8). Это **client-side парсинг ссылок** — ла
 хранит те же 6 полей. Реальные подписки шлют расширенный набор (placement/obfs)
 плоско и в `extra` — наш v1 их теряет → нода-сервер на obfs не обслуживается.
 
+> **§399 (обновление).** Состав полей ниже относится не только к URI-ветке.
+> Точка правды — `xhttpFromMap` в
+> [transport.dart](../../../../app/lib/services/parser/transport.dart): её зовут
+> все три ветки разбора XHTTP (URI, Xray-JSON `xhttpSettings`, sing-box-JSON
+> `transport`). Поле, добавленное сюда, обязано появиться во всех трёх сразу —
+> расхождение ловится тестом «три ветки читают один и тот же набор ключей»
+> (`test/parser/xhttp_test.dart`). Подробности и история дефекта —
+> [§399](../../tasks/399-xhttp-fields-lost-in-json-branches.md).
+
 ## Что делаем
 
 ### Поля (15 новых в XhttpTransport, плоско, omitempty)

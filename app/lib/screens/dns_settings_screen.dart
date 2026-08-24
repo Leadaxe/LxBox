@@ -88,8 +88,8 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// Live lookup: storage хранит presetId, UI отображает текущий label.
   Map<String, String> _presetLabelByPresetId = {};
 
-  /// §117: каналы для `type: outbound` vars DNS-серверов — Direct + активные
-  /// каналы (решение №2). Активность = как в `_buildPresetGroups`:
+  /// §117: Направления для `type: outbound` vars DNS-серверов — Direct + активные
+  /// Направления (решение №2). Активность = как в `_buildPresetGroups`:
   /// stored enabled_groups (или default_enabled при пустом) + vpn-1 всегда.
   List<OutboundOption> _outboundOptions = const [];
 

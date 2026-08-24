@@ -112,7 +112,7 @@ class AboutScreen extends StatelessWidget {
                   leading: const Icon(Icons.menu_book_outlined),
                   title: Text(getLocalText.s("User guide")),
                   subtitle: Text(getLocalText.s(
-                      "How it works: channels, rules, DNS, detour, recipes")),
+                      "How it works: directions, rules, DNS, detour, recipes")),
                   trailing: const Icon(Icons.open_in_new, size: 18),
                   onTap: () => ul.UrlLauncher.open(_guideUrl),
                 ),

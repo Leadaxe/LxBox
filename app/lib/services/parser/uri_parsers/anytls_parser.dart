@@ -39,6 +39,14 @@ AnyTlsSpec? parseAnyTls(String uri) {
 
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
+  // SPEC 103 `anytls_min_idle_invalid` — не неотрицательное целое: поле
+  // снимается (ядро подставит дефолт), узел живёт. Go: node_parser_anytls.go:40.
+  final minIdleRaw = (q['min_idle_session'] ?? '').trim();
+  final minIdle = int.tryParse(minIdleRaw);
+  if (minIdleRaw.isNotEmpty && (minIdle == null || minIdle < 0)) {
+    warnings.add(AnyTlsMinIdleInvalidWarning(minIdleRaw));
+  }
+
   return AnyTlsSpec(
     id: newUuidV4(),
     tag: tag,
@@ -48,9 +56,13 @@ AnyTlsSpec? parseAnyTls(String uri) {
     rawUri: uri,
     password: password,
     tls: tls,
-    idleSessionCheckInterval: q['idle_session_check_interval'] ?? '',
-    idleSessionTimeout: q['idle_session_timeout'] ?? '',
-    minIdleSession: int.tryParse(q['min_idle_session'] ?? ''),
+    // SPEC 103 D-024 — голое число (секунды) → duration-строка с суффиксом
+    // `s`; ядро (badoption.Duration) отвергает "30" без единицы измерения
+    // фаталом на весь конфиг (зеркало Go normalizeTuicHeartbeat).
+    idleSessionCheckInterval:
+        normalizeSingboxDuration(q['idle_session_check_interval'] ?? ''),
+    idleSessionTimeout: normalizeSingboxDuration(q['idle_session_timeout'] ?? ''),
+    minIdleSession: (minIdle != null && minIdle >= 0) ? minIdle : null,
     warnings: warnings,
   );
 }

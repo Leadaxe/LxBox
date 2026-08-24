@@ -69,12 +69,12 @@ void main() {
           },
         ],
         'route_final': 'vpn-1',
-        // §221 — channels (живая модель роутинга §125) + guard миграции.
-        'channels': [
+        // §221 — directions (живая модель роутинга §125) + guard миграции.
+        'directions': [
           {'tag': 'vpn-1', 'label': 'Main', 'enabled': true},
           {'tag': 'vpn-2', 'label': 'Backup', 'enabled': true},
         ],
-        'channels_migrated': true,
+        'directions_migrated': true,
         'enabled_groups': ['group-a'],
         'dns_options': {
           'servers': [
@@ -195,24 +195,28 @@ void main() {
       expect(st.containsKey('vars'), isFalse);
     });
 
-    test('§221 — channels + channels_migrated экспортируются в routing', () async {
+    test('§221 — ключи directions + directions_migrated экспортируются в routing',
+        () async {
       await seedStorage(sampleSnapshot());
       final svc = const BackupService();
       final json = await svc.buildExport(include: {BackupCategory.routing});
       final st = (jsonDecode(json) as Map<String, dynamic>)['storage']
           as Map<String, dynamic>;
-      // Регрессия: channels был в allowlist restore, но НЕ в export →
-      // вся модель роутинг-каналов §125 терялась при backup на новом устройстве.
-      expect(st.containsKey('channels'), isTrue,
-          reason: 'channels обязаны попадать в backup (§125 модель роутинга)');
-      expect((st['channels'] as List), hasLength(2));
-      expect(st.containsKey('channels_migrated'), isTrue,
+      // Регрессия: directions был в allowlist restore, но НЕ в export →
+      // вся модель роутинг-Направлений §125 терялась при backup на новом устройстве.
+      expect(st.containsKey('directions'), isTrue,
+          reason: 'directions обязаны попадать в backup (§125 модель роутинга)');
+      expect((st['directions'] as List), hasLength(2));
+      expect(st.containsKey('directions_migrated'), isTrue,
           reason: 'guard миграции — иначе миграция пере-сработает поверх restore');
+      // §393 A2 — легаси-пара ТОЛЬКО на restore: новый архив её не пишет.
+      expect(st.containsKey('channels'), isFalse);
+      expect(st.containsKey('channels_migrated'), isFalse);
     });
 
     // §221 — инвариант против будущих забытых ключей: КАЖДЫЙ top-level ключ из
     // allowedTopLevelKeys (restore принимает) должен экспортироваться при
-    // include={all} (иначе data-loss при backup, как было с channels).
+    // include={all} (иначе data-loss при backup, как было с directions).
     test('§221 — allowlist ⊆ export (все категории)', () async {
       // Снапшот с непустым значением для каждого allowlist-ключа.
       final snap = <String, dynamic>{};
@@ -225,10 +229,10 @@ void main() {
           'dns_options' || 'tun_apps' || 'vpn_mode' || 'ping_options' ||
           'warp_account' || 'masque_account' =>
             {'_probe': 1},
-          'channels' || 'custom_rules' || 'node_manual_order' ||
-          'enabled_groups' || 'excluded_nodes' =>
+          'directions' || 'channels' || 'custom_rules' ||
+          'node_manual_order' || 'enabled_groups' || 'excluded_nodes' =>
             ['_probe'],
-          'channels_migrated' || 'presets_migrated' ||
+          'directions_migrated' || 'channels_migrated' || 'presets_migrated' ||
           'preset_ids_remapped' || 'interrupt_connections_on_switch' =>
             true,
           _ => '_probe', // строковые: route_final, node_sort_mode, ...
@@ -245,9 +249,16 @@ void main() {
       });
       final st = (jsonDecode(json) as Map<String, dynamic>)['storage']
           as Map<String, dynamic>;
+      // §393 A2 — легаси-пары `channels`/`channels_migrated` в allowlist НЕТ:
+      // границы импорта нормализуют имена до `replaceRaw`
+      // (normalizeLegacyDirectionKeys), симметрия §221 полная.
       final missing = SettingsStorage.allowedTopLevelKeys
           .where((k) => !st.containsKey(k))
           .toList();
+      for (final k in const ['channels', 'channels_migrated']) {
+        expect(st.containsKey(k), isFalse,
+            reason: 'легаси-ключ $k не должен попадать в новый архив');
+      }
       expect(missing, isEmpty,
           reason: 'ключи в allowlist restore, но НЕ в export → потеря при '
               'backup. Добавь в _topLevelRoutingKeys/_topLevelAppKeys '
@@ -383,23 +394,23 @@ void main() {
     expect((restored['server_lists'] as List).length, 1);
   });
 
-  test('§248 — detour-роль канала переживает backup round-trip', () async {
+  test('§248 — detour-роль Направления переживает backup round-trip', () async {
     // Restore пишет raw JSON мимо UI/storage-мутаторов — поле `detour`
-    // обязано пережить export→restore и прочитаться в Channel.isDetour
+    // обязано пережить export→restore и прочитаться в Direction.isDetour
     // (parse-гейт fromJson валидную роль не срезает).
     await seedStorage({
-      'channels': [
+      'directions': [
         {'tag': 'vpn-1', 'label': 'Main', 'enabled': true},
         {'tag': 'vpn-2', 'label': 'Relay', 'enabled': true, 'detour': true},
       ],
-      'channels_migrated': true,
+      'directions_migrated': true,
     });
     final svc = const BackupService();
     final exported = await svc.buildExport(include: {BackupCategory.routing});
     // Сырое поле в самом бэкапе (формат переживает и ручную правку файла).
     final st = (jsonDecode(exported) as Map<String, dynamic>)['storage']
         as Map<String, dynamic>;
-    expect(((st['channels'] as List)[1] as Map)['detour'], isTrue);
+    expect(((st['directions'] as List)[1] as Map)['detour'], isTrue);
 
     // Wipe → restore.
     await SettingsStorage.replaceRaw({});
@@ -408,7 +419,7 @@ void main() {
         merge: false, include: {BackupCategory.routing});
     expect(apply.errors, isEmpty);
 
-    final restored = await SettingsStorage.getChannels();
+    final restored = await SettingsStorage.getDirections();
     final vpn2 = restored.firstWhere((c) => c.tag == 'vpn-2');
     expect(vpn2.isDetour, isTrue,
         reason: 'detour-роль не должна теряться при restore');
@@ -416,11 +427,11 @@ void main() {
   });
 
   test('§274 — detour+include_block переживают round-trip оба', () async {
-    // §274 снял взаимоисключение ролей §248: detour-канал — валидная цель
+    // §274 снял взаимоисключение ролей §248: detour-Направление — валидная цель
     // правил, парс-гейт fromJson больше не коэрсит include_block у detour.
     // Оба поля обязаны пережить export→restore как есть.
     await seedStorage({
-      'channels': [
+      'directions': [
         {'tag': 'vpn-1', 'label': 'Main', 'enabled': true},
         {
           'tag': 'vpn-2',
@@ -430,7 +441,7 @@ void main() {
           'include_block': true,
         },
       ],
-      'channels_migrated': true,
+      'directions_migrated': true,
     });
     final svc = const BackupService();
     final exported = await svc.buildExport(include: {BackupCategory.routing});
@@ -441,11 +452,11 @@ void main() {
         merge: false, include: {BackupCategory.routing});
     expect(apply.errors, isEmpty);
 
-    final restored = await SettingsStorage.getChannels();
+    final restored = await SettingsStorage.getDirections();
     final vpn2 = restored.firstWhere((c) => c.tag == 'vpn-2');
     expect(vpn2.isDetour, isTrue);
     expect(vpn2.includeBlock, isTrue,
-        reason: 'include_block у detour-канала не должен коэрситься (§274)');
+        reason: 'include_block у detour-Направления не должен коэрситься (§274)');
   });
 
   group('§159 — allowlist (default-deny) на импорте', () {
@@ -592,5 +603,163 @@ void main() {
     final cr = await SettingsStorage.getCustomRules();
     expect(cr.length, 1);
     expect(cr.first.name, 'X');
+  });
+
+  // ---------------------------------------------------------------------------
+  // §393 A2 — restore старого архива. Внутренний бэкап старой сборки несёт
+  // легаси-пару `channels`/`channels_migrated`: имена нормализуются НА ГРАНИЦЕ
+  // импорта (normalizeLegacyDirectionKeys до `replaceRaw`) — легаси в storage
+  // не попадает, а merge-upsert коллидирует по одному имени `directions`, и
+  // архив честно побеждает живые данные (adversarial-ревью A2: раньше на
+  // merge-дефолте архив молча терялся).
+  // ---------------------------------------------------------------------------
+  group('§393 A2 restore→migrate', () {
+    /// Архив, каким его писала сборка ДО переименования ключа.
+    String legacyArchive() => jsonEncode({
+          'app': 'lxbox',
+          'kind': 'backup',
+          'storage': {
+            'route_final': 'vpn-2',
+            'channels': [
+              {'tag': 'vpn-1', 'label': 'Main', 'enabled': true},
+              {
+                'tag': 'vpn-2',
+                'label': 'Relay',
+                'enabled': true,
+                'detour': true,
+                'node_filter': 'DE',
+              },
+            ],
+            'channels_migrated': true,
+          },
+        });
+
+    Future<Map<String, dynamic>> rawStorage() async =>
+        await SettingsStorage.exportRaw();
+
+    test('старый архив: Направления читаются, легаси-ключей в storage нет',
+        () async {
+      await SettingsStorage.replaceRaw({});
+      final svc = const BackupService();
+      final contents = await svc.parseImport(legacyArchive());
+      final apply = await svc.applyImport(contents,
+          merge: false, include: {BackupCategory.routing});
+      expect(apply.errors, isEmpty);
+      // Легаси-ключи прошли allowlist (не попали в droppedKeys).
+      expect(apply.droppedKeys, isEmpty);
+
+      // Направления видны БЕЗ перезапуска app'а.
+      final restored = await SettingsStorage.getDirections();
+      expect(restored.map((c) => c.tag), ['vpn-1', 'vpn-2']);
+      expect(restored[1].isDetour, isTrue);
+      expect(restored[1].nodeFilter, 'DE');
+      expect(await SettingsStorage.getRouteFinal(), 'vpn-2');
+
+      // Легаси-пары в storage не осталось — миграция их удалила.
+      final raw = await rawStorage();
+      expect(raw.containsKey('channels'), isFalse);
+      expect(raw.containsKey('channels_migrated'), isFalse);
+      expect(raw['directions_migrated'], true);
+    });
+
+    test('старый архив, merge поверх ЖИВЫХ Направлений — архив побеждает',
+        () async {
+      // Канонический сценарий восстановления: свежая установка уже посеяла
+      // (или юзер настроил) свои Направления, затем накатывается старый архив
+      // в merge-дефолте UI. До нормализации имён архивный `channels` ложился
+      // РЯДОМ с живым `directions` и молча выбрасывался веткой-уборщиком.
+      await SettingsStorage.replaceRaw({
+        'directions': [
+          {'tag': 'vpn-1', 'label': 'LIVE-Home', 'enabled': true},
+          {'tag': 'vpn-4', 'label': 'LIVE-Work', 'enabled': true},
+        ],
+        'directions_migrated': true,
+      });
+      final svc = const BackupService();
+      final contents = await svc.parseImport(legacyArchive());
+      final apply = await svc.applyImport(contents,
+          merge: true, include: {BackupCategory.routing});
+      expect(apply.errors, isEmpty);
+
+      final restored = await SettingsStorage.getDirections();
+      // vpn-2 архива — detour-Направление: fromJson сам помечает label
+      // префиксом kDetourTagPrefix (§248), поэтому «⚙ Relay».
+      expect(restored.map((c) => c.label), ['Main', '⚙ Relay'],
+          reason: 'юзер восстанавливает архив РАДИ его Направлений — они '
+              'обязаны заменить живой список, а не молча проиграть ему');
+      final raw = await rawStorage();
+      expect(raw.containsKey('channels'), isFalse);
+      expect(raw.containsKey('channels_migrated'), isFalse);
+    });
+
+    test('новый архив, merge поверх живых Направлений — архив побеждает',
+        () async {
+      await SettingsStorage.replaceRaw({
+        'directions': [
+          {'tag': 'vpn-1', 'label': 'LIVE', 'enabled': true},
+        ],
+        'directions_migrated': true,
+      });
+      final svc = const BackupService();
+      final archive = jsonEncode({
+        'app': 'lxbox',
+        'kind': 'backup',
+        'storage': {
+          'directions': [
+            {'tag': 'vpn-1', 'label': 'ARCHIVE-Main', 'enabled': true},
+            {'tag': 'vpn-2', 'label': 'ARCHIVE-Relay', 'enabled': true},
+          ],
+          'directions_migrated': true,
+        },
+      });
+      await svc.applyImport(await svc.parseImport(archive),
+          merge: true, include: {BackupCategory.routing});
+      expect((await SettingsStorage.getDirections()).map((c) => c.label),
+          ['ARCHIVE-Main', 'ARCHIVE-Relay']);
+    });
+
+    test('re-export после restore старого архива пишет только новые ключи',
+        () async {
+      await SettingsStorage.replaceRaw({});
+      final svc = const BackupService();
+      await svc.applyImport(await svc.parseImport(legacyArchive()),
+          merge: false, include: {BackupCategory.routing});
+
+      final st = (jsonDecode(
+                  await svc.buildExport(include: {BackupCategory.routing}))
+              as Map<String, dynamic>)['storage'] as Map<String, dynamic>;
+      expect(st.containsKey('directions'), isTrue);
+      expect((st['directions'] as List), hasLength(2));
+      expect(st.containsKey('channels'), isFalse);
+      expect(st.containsKey('channels_migrated'), isFalse);
+    });
+
+    test('round-trip нового архива: Направления идентичны', () async {
+      await SettingsStorage.replaceRaw({
+        'directions': [
+          {'tag': 'vpn-1', 'label': 'Main', 'enabled': true},
+          {'tag': 'vpn-2', 'label': 'Work', 'enabled': false, 'node_filter': 'NL'},
+          {'tag': 'vpn-3', 'label': 'Relay', 'enabled': true, 'detour': true},
+        ],
+        'directions_migrated': true,
+        'route_final': 'vpn-3',
+      });
+      final before = await SettingsStorage.getDirections();
+
+      final svc = const BackupService();
+      final exported = await svc.buildExport(include: {BackupCategory.routing});
+      await SettingsStorage.replaceRaw({});
+      final apply = await svc.applyImport(await svc.parseImport(exported),
+          merge: false, include: {BackupCategory.routing});
+      expect(apply.errors, isEmpty);
+      expect(apply.droppedKeys, isEmpty);
+
+      final after = await SettingsStorage.getDirections();
+      expect(after.map((c) => c.toJson()), before.map((c) => c.toJson()));
+      expect(await SettingsStorage.getRouteFinal(), 'vpn-3');
+      final raw = await rawStorage();
+      expect(raw['directions_migrated'], true);
+      expect(raw.containsKey('channels'), isFalse);
+    });
   });
 }

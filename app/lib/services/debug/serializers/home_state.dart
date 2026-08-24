@@ -18,10 +18,11 @@ Map<String, Object?> serializeHomeState(HomeState s) {
     'highlighted_node': s.highlightedNode,
     'groups': s.groups,
     'nodes_count': s.nodes.length,
-    // §325 — замеры разложены по каналам (`канал → тег → ms`); ключ
-    // `' scratch'` = замеры вне выбранного канала. `last_delay` — плоский срез
-    // ТЕКУЩЕГО канала с фоллбэком, ровно то, что видно в списке.
-    'delay_by_channel': s.delayByChannel,
+    // §325 — замеры разложены по Направлениям (`Направление → тег → ms`); ключ
+    // `' scratch'` = замеры вне выбранного Направления. `last_delay` — плоский срез
+    // ТЕКУЩЕГО Направления с фоллбэком, ровно то, что видно в списке.
+    // §393 A2 — было `delay_by_channel`; dev-only JSON, алиас не заводим.
+    'delay_by_direction': s.delayByDirection,
     'last_delay': {
       for (final tag in s.nodes)
         if (s.delayOf(tag) != null) tag: s.delayOf(tag),

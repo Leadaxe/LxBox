@@ -472,7 +472,7 @@ void main() {
       expect(result.dnsMirrors[0].body['action'], 'predefined');
       expect(result.dnsMirrors[0].body.containsKey('server'), isFalse);
       expect(result.dnsMirrors[1].presetId, 'ru-direct');
-      expect(result.dnsMirrors[1].body['server'], 'yandex_udp');
+      expect(result.dnsMirrors[1].body['server'], 'ru-direct:yandex_udp');
       expect(result.dnsRulesByPresetId['ru-direct'], hasLength(2));
     });
   });

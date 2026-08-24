@@ -35,7 +35,7 @@ void main() {
       c.dispose();
     });
 
-    test('inline-detour: выбор канала пишет body.detour, direct-out стирает',
+    test('inline-detour: выбор Направления пишет body.detour, direct-out стирает',
         () {
       final c = makeNew();
       expect(c.inlineDetour, 'direct-out'); // ключа нет → direct

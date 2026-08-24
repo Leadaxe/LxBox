@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
-import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/selector_info.dart';
 import 'package:lxbox/widgets/detour_target_picker.dart';
@@ -18,16 +18,16 @@ void main() {
   String raw(String name) =>
       'vless://u-$name@h.com:443?type=ws&security=tls#$name';
 
-  const relay = Channel(tag: 'vpn-4', label: 'Relay', isDetour: true);
+  const relay = Direction(tag: 'vpn-4', label: 'Relay', isDetour: true);
 
-  test('канал — терминальный хоп с текущим выбором', () {
+  test('Направление — терминальный хоп с текущим выбором', () {
     SelectorInfo.I.setGroups({'vpn-4': '🇳🇱 Нидерланды'});
     final hops = detourPathHops('vpn-4',
-        controller: SubscriptionController(), channels: const [relay]);
+        controller: SubscriptionController(), directions: const [relay]);
     expect(hops, ['⚙ Relay (🇳🇱 Нидерланды)']);
   });
 
-  test('интра-цепочка папки разворачивается до канала', () {
+  test('интра-цепочка папки разворачивается до Направления', () {
     final folder = FolderServers(
       id: 'f',
       name: 'F',
@@ -41,7 +41,7 @@ void main() {
     );
     final hops = detourPathHops('a',
         controller: SubscriptionController(),
-        channels: const [relay],
+        directions: const [relay],
         folder: folder);
     expect(hops, ['⚙ Relay', 'b', 'a']);
   });
@@ -60,14 +60,14 @@ void main() {
     );
     final hops = detourPathHops('a',
         controller: SubscriptionController(),
-        channels: const [],
+        directions: const [],
         folder: folder);
     expect(hops, ['b', 'a']);
   });
 
   test('неизвестная цель — один хоп как есть', () {
     final hops = detourPathHops('ghost-node',
-        controller: SubscriptionController(), channels: const []);
+        controller: SubscriptionController(), directions: const []);
     expect(hops, ['ghost-node']);
   });
 }

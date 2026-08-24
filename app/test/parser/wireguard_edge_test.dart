@@ -5,22 +5,32 @@ import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers/wireguard_parser.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
+// SPEC 103 D-023/D-030 — валидные 32-байтные base64-ключи для фикстур (эталон
+// Go wgTestPub, node_parser_wireguard_test.go). normalizeWGKey (wireguard_
+// parser.dart) с этой правки требует РОВНО 32 байта, короткие плейсхолдеры
+// вроде "PK="/"PUB=" больше не парсятся (null-skip, D-023) — фикстуры ниже
+// используют реальные 32-байтные ключи.
+const _testPub = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=';
+// 32 байта, содержащие сырой '/' в base64-представлении (для §106-теста).
+const _testPrivSlash = 'Bw4VHCMqMTg/Rk1UW2JpcHd+hYyTmqGor7a9xMvS2eA=';
+
 /// §106 — WG/AWG edge cases: raw-`/` в ключе + bare IP без CIDR.
 void main() {
   group('§106 — raw `/` в private key (userInfo)', () {
     test('сырой `/` в ключе → парсится, privateKey восстановлен', () {
       final spec = parseWireguardUri(
-          'wireguard://FgFc1x9371GE/DV6bEexample00000000000000000000=@'
-          'h.example:51820?publickey=PK=&address=10.0.0.2/32');
+          'wireguard://$_testPrivSlash@'
+          'h.example:51820?publickey=$_testPub&address=10.0.0.2/32');
       expect(spec, isNotNull, reason: 'раньше → null (rejected)');
-      expect(spec!.privateKey, 'FgFc1x9371GE/DV6bEexample00000000000000000000=');
+      expect(spec!.privateKey, _testPrivSlash);
     });
 
     test('уже-`%2F`-энкоден → без двойного декода', () {
+      final encoded = _testPrivSlash.replaceAll('/', '%2F');
       final spec = parseWireguardUri(
-          'wireguard://FgFc1x9371GE%2FDV6bE=@h.example:51820'
-          '?publickey=PK=&address=10.0.0.2/32');
-      expect(spec!.privateKey, 'FgFc1x9371GE/DV6bE=');
+          'wireguard://$encoded@h.example:51820'
+          '?publickey=$_testPub&address=10.0.0.2/32');
+      expect(spec!.privateKey, _testPrivSlash);
     });
 
     test('encodeUserInfoSlashes — query со `/` не трогает', () {
@@ -41,7 +51,7 @@ void main() {
 
     test('URI: bare address + bare allowed_ips → CIDR в emit', () {
       final spec = parseWireguardUri(
-          'wireguard://PK=@h.example:51820?publickey=PUB=&'
+          'wireguard://$_testPub@h.example:51820?publickey=$_testPub&'
           'address=172.16.0.2&allowedips=10.0.0.5,fd00::2');
       expect(spec!.localAddresses, ['172.16.0.2/32']);
       expect(spec.peers.first.allowedIps, ['10.0.0.5/32', 'fd00::2/128']);
@@ -55,13 +65,13 @@ void main() {
       final spec = parseSingboxEntry({
         'type': 'wireguard',
         'tag': 'wg',
-        'private_key': 'PK',
+        'private_key': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=',
         'address': ['172.16.0.2'],
         'peers': [
           {
             'address': 'h.example',
             'port': 51820,
-            'public_key': 'PUB',
+            'public_key': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
             'allowed_ips': ['172.16.0.5', '::1'],
           }
         ],

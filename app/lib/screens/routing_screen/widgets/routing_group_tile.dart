@@ -1,46 +1,46 @@
 import 'package:flutter/material.dart';
 
-import '../../../models/channel.dart';
+import '../../../models/direction.dart';
 
-/// §125 — тайл канала на табе Channels. Switch слева (вкл/выкл), тап по телу →
-/// редактор канала. `vpn-1` всегда включён и неудаляем (switch disabled).
-class RoutingChannelTile extends StatelessWidget {
-  const RoutingChannelTile({
+/// §125 — тайл Направления на табе Directions. Switch слева (вкл/выкл), тап по телу →
+/// редактор Направления. `vpn-1` всегда включён и неудаляем (switch disabled).
+class RoutingDirectionTile extends StatelessWidget {
+  const RoutingDirectionTile({
     super.key,
-    required this.channel,
+    required this.direction,
     required this.nodeCount,
     required this.onToggle,
     required this.onTap,
   });
 
-  final Channel channel;
+  final Direction direction;
 
   /// Кол-во нод после фильтра (для subtitle). -1 = снимок недоступен.
   final int nodeCount;
 
-  /// null для required-канала (`vpn-1`) — switch disabled.
+  /// null для required-Направления (`vpn-1`) — switch disabled.
   final ValueChanged<bool>? onToggle;
 
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final isRequired = channel.isRequired;
+    final isRequired = direction.isRequired;
     final nodesStr = nodeCount < 0
-        ? (channel.nodeFilter.isEmpty ? 'all nodes' : 'filtered')
+        ? (direction.nodeFilter.isEmpty ? 'all nodes' : 'filtered')
         : '$nodeCount node${nodeCount == 1 ? '' : 's'}';
-    final autoStr = channel.auto != null ? ' · auto' : '';
+    final autoStr = direction.auto != null ? ' · auto' : '';
     final reqStr = isRequired ? ' · required' : '';
     return ListTile(
       contentPadding: const EdgeInsets.only(left: 8, right: 8),
       leading: Switch(
-        value: isRequired ? true : channel.enabled,
+        value: isRequired ? true : direction.enabled,
         onChanged: isRequired ? null : onToggle,
       ),
-      // §274 — ⚙-префикс detour-канала централизован в displayLabel.
-      title: Text(channel.displayLabel),
+      // §274 — ⚙-префикс detour-Направления централизован в displayLabel.
+      title: Text(direction.displayLabel),
       subtitle: Text(
-        '${channel.tag} · $nodesStr$autoStr$reqStr',
+        '${direction.tag} · $nodesStr$autoStr$reqStr',
         style: const TextStyle(fontSize: 12),
       ),
       trailing: const Icon(Icons.chevron_right),

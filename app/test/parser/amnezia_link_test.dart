@@ -31,7 +31,7 @@ const _awgIni = r'''
 [Interface]
 Address = 10.8.1.2/32
 DNS = $PRIMARY_DNS, $SECONDARY_DNS
-PrivateKey = cGFyc2VyLXRlc3QtcHJpdmF0ZS1rZXktYWJjZGVmZ2g=
+PrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=
 Jc = 4
 Jmin = 40
 Jmax = 70
@@ -43,8 +43,8 @@ H3 = 1842910958
 H4 = 1234567891
 
 [Peer]
-PublicKey = cGFyc2VyLXRlc3QtcHVibGljLWtleS1hYmNkZWZnaA=
-PresharedKey = cGFyc2VyLXRlc3QtcHNrLWtleS1hYmNkZWZnaGlqaw=
+PublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=
+PresharedKey = ccccccccccccccccccccccccccccccccccccccccccA=
 AllowedIPs = 0.0.0.0/0, ::/0
 Endpoint = 203.0.113.10:43210
 PersistentKeepalive = 25
@@ -53,10 +53,10 @@ PersistentKeepalive = 25
 const _plainWgIni = '''
 [Interface]
 Address = 10.0.0.2/32
-PrivateKey = cGFyc2VyLXRlc3QtcHJpdmF0ZS1rZXktYWJjZGVmZ2g=
+PrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=
 
 [Peer]
-PublicKey = cGFyc2VyLXRlc3QtcHVibGljLWtleS1hYmNkZWZnaA=
+PublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=
 Endpoint = 198.51.100.7:51820
 ''';
 

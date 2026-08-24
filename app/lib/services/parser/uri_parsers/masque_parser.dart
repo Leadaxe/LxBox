@@ -1,4 +1,5 @@
 import '../../../models/node_spec.dart';
+import '../../../models/node_warning.dart';
 import '../uri_utils.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -11,7 +12,7 @@ import '../uri_utils.dart';
 // Ключи — base64(DER), как в конфиге ядра. Отличие от WireGuard: нет reserved/
 // allowed_ips/psk/keepalive; есть profile/vhttp/sni.
 //
-// §393 — вход принимает ОБА поколения имён: `vhttp` (ядро) и legacy `network`
+// §393/0.8.0 — легаси-имена (`network`, `server_name`) БОЛЬШЕ НЕ ПРИНИМАЮТСЯ
 // (наши URI, выпущенные до миграции, плюс чужие ссылки). Legacy-имена живут
 // только здесь и в JSON-импорте; модель и эмит знают одно имя.
 //
@@ -46,12 +47,21 @@ MasqueSpec? parseMasqueUri(String uri) {
   if (localAddresses.isEmpty) return null;
 
   final profile = (q['profile'] ?? 'cloudflare').trim();
-  // §393 — `vhttp` приоритетнее legacy `network`; ядро при обоих именах с
-  // разными значениями падает, у нас на входе просто выигрывает новое.
+  // §393/контракт 0.8.0 — legacy `network` снесён (директива оператора
+  // 25.08, D-078): параметр игнорируется, дефолт — vhttp контракта.
   final vhttpRaw = (q['vhttp'] ?? '').trim();
-  final vhttp =
-      vhttpRaw.isNotEmpty ? vhttpRaw : (q['network'] ?? 'h3').trim();
-  final sni = (q['sni'] ?? q['server_name'] ?? '').trim();
+  final vhttpPicked =
+      vhttpRaw.isNotEmpty ? vhttpRaw : 'h3';
+  // SPEC 103 п.5 — невалидное значение форсится в h3 (node_parser_masque.go:
+  // vhttp != "h3" && vhttp != "h2" → forcing h3), а не пропускается как есть.
+  final warnings = <NodeWarning>[];
+  final vhttpValid = vhttpPicked == 'h3' || vhttpPicked == 'h2';
+  final vhttp = vhttpValid ? vhttpPicked : 'h3';
+  // SPEC 103 `masque_vhttp_invalid` — форс h3 виден пользователю, а не только
+  // в логе лаунчера. Реестр помечает код «Desktop-протокол, в LxBox нет» —
+  // запись протухла: masque в LxBox есть (см. отчёт).
+  if (!vhttpValid) warnings.add(MasqueVhttpInvalidWarning(vhttpPicked));
+  final sni = (q['sni'] ?? '').trim(); // server_name-алиас снесён (0.8.0)
   final disableSni = q['disable_sni'] == '1' || q['disable_sni'] == 'true';
   final mtu = int.tryParse(q['mtu'] ?? '') ?? 1280;
   final idleTimeout = (q['idle_timeout'] ?? '').trim();
@@ -77,5 +87,6 @@ MasqueSpec? parseMasqueUri(String uri) {
     mtu: mtu,
     idleTimeout: idleTimeout,
     keepAlive: keepAlive,
+    warnings: warnings,
   );
 }

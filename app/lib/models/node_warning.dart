@@ -411,3 +411,198 @@ final class GroupMemberMissingWarning extends NodeWarning {
   @override
   WarningSeverity get severity => WarningSeverity.warning;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// SPEC 103 — деградации, которые лаунчер уже помечает кодом, а Dart раньше
+// глушил в лог. Восемь классов ниже закрывают разрыв «Go ставит код, Dart
+// молчит»: параметр подписки отбрасывается ОДИНАКОВО, но пользователь мобилы
+// об этом не узнавал. Коды — contract/registry/warnings.json, семантика
+// (когда ставится, что в params) — зеркало Go-эталона, проверяется общим
+// корпусом contract/corpus/uri/**.
+// ════════════════════════════════════════════════════════════════════════════
+
+/// `ws_early_data_converted` (info) — Xray-хвост `?ed=N` в WebSocket-пути
+/// разложен на sing-box-поля `max_early_data` + `early_data_header_name`.
+/// Путь в конфиг попадает НЕ буквально: без конверсии ядро отдало бы хвост
+/// серверу как часть пути и тот ответил бы 404 (issue #96), причём
+/// `sing-box check` при этом проходит. Узел рабочий — отсюда info.
+///
+/// Ставится ровно на path-tail форму (`path=/x?ed=N`), НЕ на плоские
+/// `ed=`/`eh=` в query: те Go вообще не читает как early data-конверсию.
+/// Go-эталон: `noteWSEarlyDataConverted` (node_parser_core.go).
+final class WsEarlyDataConvertedWarning extends NodeWarning {
+  /// Значение `ed` из хвоста пути — оно уехало в `max_early_data`.
+  final int maxEarlyData;
+
+  const WsEarlyDataConvertedWarning(this.maxEarlyData);
+
+  @override
+  List<Object?> get props => [maxEarlyData];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.",
+      maxEarlyData);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
+/// `reality_short_id_invalid` (info) — REALITY `sid` содержит не-hex символы,
+/// нечётной длины или длиннее 16 hex-цифр. Ядро декодирует short_id как hex
+/// в `[8]byte`: любое из этих условий — fatal ВСЕГО конфига на старте.
+/// Значение отбрасывается целиком (пустой short_id для REALITY легален), а не
+/// подгоняется: обрезка дала бы валидную форму с ЧУЖИМ идентификатором —
+/// тихая порча (сервер сверяет sid побайтово).
+///
+/// Go-эталон: `realityShortIDWouldDegrade` (parse_warnings.go:72) —
+/// непустое сырое значение, чья нормализация не совпала с `lower(trim(raw))`.
+final class RealityShortIdInvalidWarning extends NodeWarning {
+  /// Значение, как его написал провайдер.
+  final String value;
+
+  const RealityShortIdInvalidWarning(this.value);
+
+  @override
+  List<Object?> get props => [value];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "REALITY short id \"%s\" is not valid hex, so it was dropped (keeping it would break the whole config). The node connects without a short id.",
+      value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
+/// `naive_padding_ignored` (info) — URI-параметр `padding` у naive не имеет
+/// sing-box-эквивалента; игнорируется, узел живёт.
+final class NaivePaddingIgnoredWarning extends NodeWarning {
+  /// Значение параметра, как оно пришло в ссылке.
+  final String value;
+
+  const NaivePaddingIgnoredWarning(this.value);
+
+  @override
+  List<Object?> get props => [value];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.",
+      value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
+/// `tuic_congestion_invalid` (warning) — TUIC `congestion_control` вне
+/// {cubic, new_reno, bbr}. Поле снимается (ядро подставит свой дефолт),
+/// узел живёт. Go-эталон: node_parser_tuic.go:73.
+final class TuicCongestionInvalidWarning extends NodeWarning {
+  final String value;
+
+  const TuicCongestionInvalidWarning(this.value);
+
+  @override
+  List<Object?> get props => [value];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "TUIC congestion control \"%s\" is not one of cubic, new_reno, bbr — the setting was dropped and the core default applies.",
+      value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// `awg_header_invalid` (warning) — AmneziaWG magic-header (h1–h4) не uint32
+/// и не диапазон `lo-hi`. Поле снимается, ядро возьмёт WireGuard-дефолт —
+/// а с ним handshake не совпадёт с сервером (тихо сломанный узел: рукопожатие
+/// уходит, ответа нет). Отсюда warning, а не info.
+///
+/// Только h1–h4: битые jc/jmin/jmax/s1–s4 Go пропускает молча (debug-лог).
+/// Go-эталон: `applyAWGFields` (node_parser_wireguard.go:400).
+final class AwgHeaderInvalidWarning extends NodeWarning {
+  /// Имя поля — `h1`…`h4`.
+  final String field;
+
+  /// Значение, как его написал провайдер.
+  final String value;
+
+  const AwgHeaderInvalidWarning(this.field, this.value);
+
+  @override
+  List<Object?> get props => [field, value];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "AmneziaWG header \"%1\$s=%2\$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.",
+      field,
+      value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// `masque_vhttp_invalid` (warning) — MASQUE `vhttp` вне {h3, h2};
+/// принудительно h3. Go-эталон: node_parser_masque.go:100.
+final class MasqueVhttpInvalidWarning extends NodeWarning {
+  final String value;
+
+  const MasqueVhttpInvalidWarning(this.value);
+
+  @override
+  List<Object?> get props => [value];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "MASQUE HTTP version \"%s\" is neither h3 nor h2 — h3 was used instead.",
+      value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// `anytls_min_idle_invalid` (warning) — anytls `min_idle_session` не
+/// неотрицательное целое; поле снимается, узел живёт.
+/// Go-эталон: node_parser_anytls.go:40.
+final class AnyTlsMinIdleInvalidWarning extends NodeWarning {
+  final String value;
+
+  const AnyTlsMinIdleInvalidWarning(this.value);
+
+  @override
+  List<Object?> get props => [value];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "AnyTLS \"min_idle_session=%s\" is not a non-negative whole number — the setting was dropped and the core default applies.",
+      value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// `packet_encoding_unknown` (warning) — `packet_encoding` вне
+/// {xudp, packetaddr}. Поле снимается: неизвестное значение даёт не ошибку
+/// конфига, а панику ядра (`unknown packet encoding` → краш libbox целиком).
+///
+/// Пустое значение и `none` — семантический эквивалент «поля нет» (так их
+/// пишут xray-подписки), деградацией не считаются и кода не получают.
+/// Go-эталон: node_parser_core.go:622, singbox_sanitize.go:260.
+final class PacketEncodingUnknownWarning extends NodeWarning {
+  final String value;
+
+  const PacketEncodingUnknownWarning(this.value);
+
+  @override
+  List<Object?> get props => [value];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "Packet encoding \"%s\" is not one the core knows (xudp, packetaddr), so it was dropped — keeping it would crash the core.",
+      value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}

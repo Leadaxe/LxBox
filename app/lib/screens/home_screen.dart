@@ -90,8 +90,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     ));
   }
 
-  /// §208 — попап с составом пула round_robin-канала по его auto-тегу.
-  /// Title = label канала (из groupLabels по базовому tag `<base>-auto`).
+  /// §208 — попап с составом пула round_robin-Направления по его auto-тегу.
+  /// Title = label Направления (из groupLabels по базовому tag `<base>-auto`).
   void _showPool(String autoTag) {
     final base = autoTag.endsWith('-auto')
         ? autoTag.substring(0, autoTag.length - '-auto'.length)
@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Timer? _updateCheckTimer;
 
   // §085 R3 — весь node-filter state (§048 regex/protocols/subscriptions/
-  // ping + show-detour/show-non-matching + §083 per-channel memory)
+  // ping + show-detour/show-non-matching + §083 per-direction memory)
   // инкапсулирован в `NodeFilterViewModel`. home_screen подписывается на
   // него и rebuild'ит (`setState`) на каждый `notifyListeners`.
   late final NodeFilterViewModel _filter;
@@ -223,10 +223,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _prevTunnel = _controller.state.tunnel;
     _prevError = _controller.state.lastError;
     _controller.addListener(_onControllerChange);
-    // §274 — «канал не нашёл узлов» после сборки конфига → транзиентный
+    // §274 — «Направление не нашёл узлов» после сборки конфига → транзиентный
     // SnackBar (паттерн §166: всплывашка снизу, не баннер).
-    _prevNoNodesStamp = _subController.channelsWithoutNodesStamp;
-    _subController.addListener(_onChannelsWithoutNodes);
+    _prevNoNodesStamp = _subController.directionsWithoutNodesStamp;
+    _subController.addListener(_onDirectionsWithoutNodes);
     // §076: global home-return observer триггерит auto-rebuild когда
     // юзер возвращается на home с любого settings screen'а.
     homeReturnObserver.setHandler(_onReturnToHome);
@@ -274,21 +274,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     );
   }
 
-  /// §274 — сборка конфига нашла каналы с фильтром-без-совпадений (канал
+  /// §274 — сборка конфига нашла Направления с фильтром-без-совпадений (Направление
   /// схлопнулся в block): исчезающая всплывашка снизу. Дедуп по stamp —
   /// один показ на сборку.
   int _prevNoNodesStamp = 0;
-  void _onChannelsWithoutNodes() {
-    final stamp = _subController.channelsWithoutNodesStamp;
+  void _onDirectionsWithoutNodes() {
+    final stamp = _subController.directionsWithoutNodesStamp;
     if (stamp == _prevNoNodesStamp) return;
     _prevNoNodesStamp = stamp;
-    final names = _subController.channelsWithoutNodes;
+    final names = _subController.directionsWithoutNodes;
     if (names.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final msg = names.length == 1
-          ? getLocalText.s("Channel \"%s\" matched no nodes — check its node filter.", names.first)
-          : getLocalText.plural("%d channels matched no nodes — check their node filters.", names.length);
+          ? getLocalText.s("Direction \"%s\" matched no nodes — check its node filter.", names.first)
+          : getLocalText.plural("%d directions matched no nodes — check their node filters.", names.length);
       // Без hideCurrentSnackBar: этот показ соседствует с actionable-снеками
       // того же rebuild-флоу («Config rebuilt … restart VPN», heal-счётчики)
       // — гасить их нельзя, встаём в очередь ScaffoldMessenger.
@@ -357,10 +357,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       });
     }
 
-    // §083 — per-channel match-filter memory. Канал сменился → save старого
+    // §083 — per-direction match-filter memory. Направление сменилось → save старого
     // + restore нового. ViewModel сам guard'ит no-op и notify'ит только при
     // реальной смене (→ _onFilterChanged → setState).
-    _filter.syncChannel(state.selectedGroup);
+    _filter.syncDirection(state.selectedGroup);
 
     // §105 — накопление активного времени туннеля (порог support-диалога).
     // tick() дешёвый: пишет не чаще раза в минуту, сам решает когда.
@@ -479,7 +479,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _filter.removeListener(_onFilterChanged);
     _filter.dispose();
     _controller.removeListener(_onControllerChange);
-    _subController.removeListener(_onChannelsWithoutNodes);
+    _subController.removeListener(_onDirectionsWithoutNodes);
     WidgetsBinding.instance.removeObserver(this);
     homeReturnObserver.clearHandler();
     _autoUpdater.dispose();
@@ -860,7 +860,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   /// §255 — тап по ноде-виновнику в sheet: закрыть sheet и открыть экран
   /// владельца. Сама навигация (папка+подсветка / подписка / одиночный /
-  /// канал) — общий §258 `openTagOwner`. Владелец не найден (custom JSON) →
+  /// Направление) — общий §258 `openTagOwner`. Владелец не найден (custom JSON) →
   /// открываем список Servers как fallback.
   void _goToCulpritOwner(String culpritTag) {
     Navigator.of(context).pop(); // закрыть sheet

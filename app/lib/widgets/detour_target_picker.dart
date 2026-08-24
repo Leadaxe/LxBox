@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/subscription_controller.dart';
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../services/selector_info.dart';
@@ -24,16 +24,16 @@ class DetourTarget {
   static const none = DetourTarget(storeValue: '', display: '');
 }
 
-/// §248 — подпись сохранённого detour-значения: тег detour-канала (или его
-/// auto-двойника) → `⚙ <label>`; канал не найден → значение как хранится
+/// §248 — подпись сохранённого detour-значения: тег detour-Направления (или его
+/// auto-двойника) → `⚙ <label>`; Направление не найден → значение как хранится
 /// (сырой тег). Интра-приоритет омонимов (bare-тег члена СВОЕЙ папки
-/// побеждает канал-тёзку, зеркало `FolderDetourPlan`) — забота вызывающего:
-/// он знает контекст папки, здесь только lookup по каналам.
-/// §251 — текущий выбор канала дописывается в скобках (`⚙ <label> (<node>)`),
+/// побеждает Направление-тёзку, зеркало `FolderDetourPlan`) — забота вызывающего:
+/// он знает контекст папки, здесь только lookup по Направлениям.
+/// §251 — текущий выбор Направления дописывается в скобках (`⚙ <label> (<node>)`),
 /// когда известен (туннель up); видно, куда сейчас поедет трафик.
-String detourChannelDisplay(String stored, List<Channel> channels) {
+String detourDirectionDisplay(String stored, List<Direction> directions) {
   if (stored.isEmpty) return stored;
-  for (final c in channels) {
+  for (final c in directions) {
     if (stored == c.tag || stored == c.autoTag) {
       final selected = SelectorInfo.I.selectedOf(stored);
       final pick = (selected != null && selected.isNotEmpty)
@@ -52,8 +52,8 @@ String detourChannelDisplay(String stored, List<Channel> channels) {
 /// Хоп-виды:
 ///  - интра-член [folder] (bare-тег, приоритет FolderDetourPlan) → дальше по
 ///    его личному `member.detour` (интра-контекст той же папки);
-///  - detour-канал (tag/autoTag) → терминальный хоп `⚙ label (выбор)` —
-///    за каналом выбор динамический;
+///  - detour-Направление (tag/autoTag) → терминальный хоп `⚙ label (выбор)` —
+///    за Направлением выбор динамический;
 ///  - свободная одиночка (display-form) → дальше по её `overrideDetour`.
 /// Storage может содержать цикл до сборки (§254 — цикл ловит validateConfig
 /// как fatal) — гейт visited + потолок 6 хопов. Превью best-effort: сложные политики
@@ -61,7 +61,7 @@ String detourChannelDisplay(String stored, List<Channel> channels) {
 List<String> detourPathHops(
   String stored, {
   required SubscriptionController controller,
-  required List<Channel> channels,
+  required List<Direction> directions,
   FolderServers? folder,
 }) {
   final hops = <String>[];
@@ -69,7 +69,7 @@ List<String> detourPathHops(
   var current = stored;
   var folderCtx = folder;
   while (current.isNotEmpty && hops.length < 6 && visited.add(current)) {
-    // 1) Интра-член текущей папки: bare-тег побеждает канал-тёзку (§248).
+    // 1) Интра-член текущей папки: bare-тег побеждает Направление-тёзку (§248).
     FolderMember? member;
     if (folderCtx != null) {
       for (final m in folderCtx.members) {
@@ -84,10 +84,10 @@ List<String> detourPathHops(
       current = member.detour; // интра-цепочка продолжается в той же папке
       continue;
     }
-    // 2) Detour-канал — терминальный (его выбор показываем в скобках).
-    final channelText = detourChannelDisplay(current, channels);
-    if (channelText != current) {
-      hops.add(channelText);
+    // 2) Detour-Направление — терминальный (его выбор показываем в скобках).
+    final directionText = detourDirectionDisplay(current, directions);
+    if (directionText != current) {
+      hops.add(directionText);
       break;
     }
     // 3) Свободная одиночка по display-form тегу → её личный detour.
@@ -113,30 +113,30 @@ List<String> detourPathHops(
   return hops.reversed.toList();
 }
 
-/// §251 — заголовок канала в секции Channels пикера: `⚙ <label>` + текущий
+/// §251 — заголовок Направления в секции Directions пикера: `⚙ <label>` + текущий
 /// выбор селектора в скобках, когда известен.
-String _channelTitle(Channel c) {
+String _directionTitle(Direction c) {
   final selected = SelectorInfo.I.selectedOf(c.tag);
   final pick =
       (selected != null && selected.isNotEmpty) ? ' ($selected)' : '';
   return '${c.displayLabel}$pick'; // §274 — ⚙ централизован в displayLabel
 }
 
-/// §248 — каналы для секции Channels пикера: enabled && isDetour. Омонимия:
-/// канал, чей tag совпадает с bare-тегом распарсенного члена [currentFolder],
+/// §248 — Направления для секции Directions пикера: enabled && isDetour. Омонимия:
+/// Направление, чей tag совпадает с bare-тегом распарсенного члена [currentFolder],
 /// скрыт — такое значение резолвится в члена (интра побеждает, приоритет
-/// bareIndex в FolderDetourPlan), однозначно закодировать выбор канала
+/// bareIndex в FolderDetourPlan), однозначно закодировать выбор Направления
 /// нельзя. Члены без enabled-фильтра: у выключенного тёзки достаточно
 /// включиться, чтобы ссылка молча сменила смысл — коллизию не создаём вовсе.
-List<Channel> visibleDetourChannels(
-    List<Channel> channels, FolderServers? currentFolder) {
+List<Direction> visibleDetourDirections(
+    List<Direction> directions, FolderServers? currentFolder) {
   final memberBareTags = <String>{
     if (currentFolder != null)
       for (final m in currentFolder.members)
         if (m.node != null) m.node!.tag,
   };
   return [
-    for (final c in channels)
+    for (final c in directions)
       if (c.enabled && c.isDetour && !memberBareTags.contains(c.tag)) c,
   ];
 }
@@ -146,8 +146,8 @@ List<Channel> visibleDetourChannels(
 ///  - члены [currentFolder] — только если она задана (member/override
 ///    самой папки); секция сворачиваемая (ExpansionTile);
 ///  - ЧУЖИЕ папки — никогда (их члены живут под чужой политикой);
-///  - §248 — detour-каналы ([channels] с enabled && isDetour) — секцией
-///    Channels выше Standalone; вызывающий грузит SettingsStorage.getChannels
+///  - §248 — detour-Направления ([directions] с enabled && isDetour) — секцией
+///    Directions выше Standalone; вызывающий грузит SettingsStorage.getDirections
 ///    перед показом.
 ///
 /// [selfBareTag] — исключить сам настраиваемый узел (по голому тегу для
@@ -157,7 +157,7 @@ List<Channel> visibleDetourChannels(
 Future<DetourTarget?> showDetourTargetPicker(
   BuildContext context, {
   required SubscriptionController controller,
-  List<Channel> channels = const [],
+  List<Direction> directions = const [],
   FolderServers? currentFolder,
   String selfBareTag = '',
   String selfDisplayTag = '',
@@ -192,8 +192,8 @@ Future<DetourTarget?> showDetourTargetPicker(
     }
   }
 
-  // §248 — detour-каналы (фильтрация — см. [visibleDetourChannels]).
-  final detourChannels = visibleDetourChannels(channels, folder);
+  // §248 — detour-Направления (фильтрация — см. [visibleDetourDirections]).
+  final detourDirections = visibleDetourDirections(directions, folder);
 
   return showModalBottomSheet<DetourTarget>(
     context: context,
@@ -256,22 +256,22 @@ Future<DetourTarget?> showDetourTargetPicker(
                         ],
                 ),
               // §248 — переключаемые прослойки; секция выше Standalone,
-              // пустая (нет подходящих каналов) — не показывается.
-              if (detourChannels.isNotEmpty) ...[
+              // пустая (нет подходящих Направлений) — не показывается.
+              if (detourDirections.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Text(getLocalText.s("Channels"),
+                  child: Text(getLocalText.s("Directions"),
                       style: theme.textTheme.titleSmall
                           ?.copyWith(color: theme.colorScheme.primary)),
                 ),
-                for (final c in detourChannels)
+                for (final c in detourDirections)
                   ListTile(
-                    // §251 — текущий выбор канала в скобках (когда туннель up
+                    // §251 — текущий выбор Направления в скобках (когда туннель up
                     // и группы известны): видно, куда СЕЙЧАС поедет трафик.
-                    title: Text(_channelTitle(c),
+                    title: Text(_directionTitle(c),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
-                      getLocalText.s("Switchable detour channel"),
+                      getLocalText.s("Switchable detour direction"),
                       style: TextStyle(fontSize: 12, color: muted),
                     ),
                     onTap: () => Navigator.pop(

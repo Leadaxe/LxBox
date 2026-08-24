@@ -23,7 +23,7 @@ void main() {
     });
 
     test('ГЛАВНЫЙ кейс: шаблонный конфиг без серверов → гайд', () {
-      // Конфиг существует (direct/каналы/magic-ноды), payload-нод ноль —
+      // Конфиг существует (direct/Направления/magic-ноды), payload-нод ноль —
       // старый предикат (`configRaw.isEmpty`) здесь молчал.
       expect(
         showAddServerGuide(

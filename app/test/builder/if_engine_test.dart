@@ -385,6 +385,149 @@ void main() {
     });
   });
 
+  group('Часть 2 — #if с произвольным суффиксом (SPEC 103)', () {
+    // Эталон — Go singbox-launcher/core/template/substitute.go: isIfKey/
+    // ifKeysSorted. База {"base":1} + три независимых условия на одном
+    // объекте (#if1/#if 2/#if tun-only) — проверяем все 4 комбинации a/b.
+    Map<String, dynamic> buildNode() => <String, dynamic>{
+          'base': 1,
+          '#if1': {
+            'and': ['@a'],
+            'value': {'fromA': 'yes'},
+          },
+          '#if 2': {
+            'and': ['@b'],
+            'value': {'fromB': 'yes'},
+          },
+          '#if tun-only': {
+            'and': ['@a', '@b'],
+            'value': {'both': 'yes'},
+          },
+        };
+
+    test('a=true b=true → все три ветки применены', () {
+      final node = buildNode();
+      walk(node,
+          _resolver({'a': 'true', 'b': 'true'}, {'a': 'bool', 'b': 'bool'}));
+      expect(node, {
+        'base': 1,
+        'both': 'yes',
+        'fromA': 'yes',
+        'fromB': 'yes',
+      });
+    });
+
+    test('a=true b=false → только fromA', () {
+      final node = buildNode();
+      walk(node,
+          _resolver({'a': 'true', 'b': 'false'}, {'a': 'bool', 'b': 'bool'}));
+      expect(node, {
+        'base': 1,
+        'fromA': 'yes',
+      });
+    });
+
+    test('a=false b=true → только fromB', () {
+      final node = buildNode();
+      walk(node,
+          _resolver({'a': 'false', 'b': 'true'}, {'a': 'bool', 'b': 'bool'}));
+      expect(node, {
+        'base': 1,
+        'fromB': 'yes',
+      });
+    });
+
+    test('a=false b=false → ни одна ветка не применена', () {
+      final node = buildNode();
+      walk(node,
+          _resolver({'a': 'false', 'b': 'false'}, {'a': 'bool', 'b': 'bool'}));
+      expect(node, {'base': 1});
+    });
+
+    test('условный элемент массива с суффиксом ("#if v6") ведёт себя как "#if"',
+        () {
+      final list = <dynamic>[
+        'a',
+        {
+          '#if v6': {
+            'and': ['@x'],
+            'value': 'kept',
+          },
+        },
+        'c',
+      ];
+      walk(list, _resolver({'x': 'true'}, {'x': 'bool'}));
+      expect(list, ['a', 'kept', 'c']);
+    });
+
+    test('условный элемент массива с суффиксом выпадает при false без else',
+        () {
+      final list = <dynamic>[
+        'a',
+        {
+          '#if v6': {
+            'and': ['@x'],
+            'value': 'dropped',
+          },
+        },
+        'c',
+      ];
+      walk(list, _resolver({'x': 'false'}, {'x': 'bool'}));
+      expect(list, ['a', 'c']);
+    });
+
+    test('обратная совместимость: голый "#if" работает как раньше', () {
+      final node = <String, dynamic>{
+        'tag': 'x',
+        '#if': {
+          'and': ['@auth'],
+          'value': {'users': 'present'},
+        },
+      };
+      walk(node, _resolver({'auth': 'true'}, {'auth': 'bool'}));
+      expect(node['tag'], 'x');
+      expect(node['users'], 'present');
+      expect(node.containsKey('#if'), false);
+    });
+
+    test('evalIfScalar работает с суффиксом ("#if mode")', () {
+      final node = <String, dynamic>{
+        '#if mode': {
+          'and': ['@ipv6_enabled'],
+          'value': 'prefer_ipv6',
+          'else': 'prefer_ipv4',
+        },
+      };
+      expect(
+          evalIfScalar(node,
+              _resolver({'ipv6_enabled': 'true'}, {'ipv6_enabled': 'bool'})),
+          'prefer_ipv6');
+      expect(
+          evalIfScalar(node,
+              _resolver({'ipv6_enabled': 'false'}, {'ipv6_enabled': 'bool'})),
+          'prefer_ipv4');
+    });
+
+    test('isIfKey/ifKeysSorted: детерминированный порядок нескольких условий',
+        () {
+      expect(isIfKey('#if'), true);
+      expect(isIfKey('#if1'), true);
+      expect(isIfKey('#if 2'), true);
+      expect(isIfKey('#if tun-only'), true);
+      expect(isIfKey('#frobnicate'), false);
+      expect(isIfKey('tag'), false);
+
+      final m = <String, dynamic>{
+        '#if tun-only': 1,
+        '#if1': 2,
+        '#if': 3,
+        '#if 2': 4,
+        'other': 5,
+      };
+      expect(ifKeysSorted(m), ['#if', '#if 2', '#if tun-only', '#if1']);
+    });
+  });
+
   group('Часть 2 — unknown #*-сиблинг forward-compat', () {
     test('unknown #*-ключ-сиблинг → drop, остальное цело', () {
       final node = <String, dynamic>{

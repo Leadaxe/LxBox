@@ -31,8 +31,8 @@ import 'parser/uri_utils.dart' show newUuidV4;
 /// новой версии приложения может нести несовместимую семантику полей.
 const int kRulesExportFormatVersion = 1;
 
-/// Дефолт лечения висячего outbound-тега — тот же, что у удаления канала
-/// (`SettingsStorage.deleteChannel`, §202): основной канал, существует всегда.
+/// Дефолт лечения висячего outbound-тега — тот же, что у удаления Направления
+/// (`SettingsStorage.deleteDirection`, §202): основное Направление, существует всегда.
 const String kImportOutboundFallback = 'vpn-1';
 
 /// Build JSON-строки экспорта для выбранных правил (+ опциональные
@@ -164,7 +164,7 @@ Set<String> referencedDnsServerTags(Iterable<CustomRule> rules) {
 /// Типизированное предупреждение санации — текст рендерит UI через
 /// `getLocalText` (§285: сервис строк не показывает).
 enum ImportRuleWarningKind {
-  /// `outbound` (или preset-override) ссылался на несуществующий канал —
+  /// `outbound` (или preset-override) ссылался на несуществующее Направление —
   /// заменён на [kImportOutboundFallback], правило выключено.
   outboundMissing,
 
@@ -237,8 +237,8 @@ class SanitizedImportRule {
 
 /// Санация одного элемента `rules[]` (§5 спеки §396).
 ///
-/// [channelTags] — теги ВСЕХ каналов получателя (включая выключенные: ссылку
-/// на выключенный канал лечит существующая механика варнингов §274/§277).
+/// [directionTags] — теги ВСЕХ Направлений получателя (включая выключенные: ссылку
+/// на выключенное Направление лечит существующая механика варнингов §274/§277).
 /// [dnsServerTags] — union storage-refs ∪ template (источник дропдауна §117).
 /// [existingNames] — §398: видимые имена правил получателя
 /// (`visibleRuleNames`, §279). Совпадение → элемент неимпортируем: дублей по
@@ -249,7 +249,7 @@ class SanitizedImportRule {
 /// `num` здесь НЕ трогается — это забота [insertImportedRule].
 SanitizedImportRule sanitizeImportedRule(
   dynamic rawEntry, {
-  required Set<String> channelTags,
+  required Set<String> directionTags,
   required Set<String> dnsServerTags,
   required WizardTemplate template,
   Set<String> existingNames = const {},
@@ -311,13 +311,13 @@ SanitizedImportRule sanitizeImportedRule(
   var rule = parsed;
   var forceDisable = false;
 
-  // ── outbound: тег канала получателя, спец-теги или пусто («как в шаблоне»).
+  // ── outbound: тег Направления получателя, спец-теги или пусто («как в шаблоне»).
   final validOutbounds = <String>{
     '',
     kOutboundReject,
     kBlockOutboundTag,
     kDirectOutboundTag,
-    ...channelTags,
+    ...directionTags,
   };
   final outbound = rule.outbound;
   if (!validOutbounds.contains(outbound)) {

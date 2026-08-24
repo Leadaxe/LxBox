@@ -24,7 +24,11 @@ import 'subscriptions_screen/entry_context_menu.dart';
 import 'subscriptions_screen/folder_picker.dart';
 import 'subscriptions_screen/paste_dialogs.dart';
 import 'subscriptions_screen/public_test_servers.dart';
+import '../models/source_chain.dart';
+import 'chain_edit/new_chain_dialog.dart';
+import 'chain_edit_screen.dart';
 import 'subscriptions_screen/widgets/add_icon_button.dart';
+import 'subscriptions_screen/widgets/chains_section.dart';
 import 'subscriptions_screen/widgets/subscription_entry_tile.dart';
 import 'subscriptions_screen/widgets/subscriptions_empty_state.dart';
 import '../services/l10n/locale_controller.dart';
@@ -61,6 +65,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _inputController = TextEditingController();
   bool _autoUpdateEnabled = true;
 
+  /// §393 D1 — источники-цепочки. Рисуются СТРОКАМИ ОБЩЕГО СПИСКА наравне с
+  /// подписками ([_rows]), но живут в своём storage-ключе (`chains[]`), а не в
+  /// `SubscriptionController.entries`: цепочка написана пользователем руками и
+  /// обязана пережить и обновление подписки, и её удаление. Отсюда отдельная
+  /// загрузка — контроллер о них ничего не знает.
+  List<SourceChain> _chains = const [];
+
   /// §375 — есть ли камера. null = ещё не ответил канал; до ответа пункт
   /// «Scan QR code» показываем (проверка мгновенная, на телефоне камера есть
   /// практически всегда). На Android TV — false, пункт прячется.
@@ -81,6 +92,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     super.initState();
     unawaited(_loadAutoUpdateFlag());
     unawaited(_loadCameraAvailability());
+    unawaited(_loadChains());
     // §357 — prefill поля ввода из lxbox-кнопки `add:<uri>` support-ленты.
     final prefill = widget.initialInput;
     if (prefill != null && prefill.trim().isNotEmpty) {
@@ -136,6 +148,115 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final v = await UrlLauncher.hasCamera();
     if (!mounted) return;
     setState(() => _hasCamera = v);
+  }
+
+  // ── §393 C7/D1 — источники-цепочки ─────────────────────────────────────
+
+  Future<void> _loadChains() async {
+    final v = await SettingsStorage.getChains();
+    if (!mounted) return;
+    setState(() => _chains = v);
+  }
+
+  /// Создание цепочки: тег спрашиваем ДО создания (после он immutable — на
+  /// него ссылаются фильтры Направлений, `route_final` и позиции ДРУГИХ
+  /// цепочек), затем сразу открываем форму: пустая цепочка ядру не годится
+  /// (нужно минимум две позиции), и оставлять пользователя наедине со строкой
+  /// «0 hops» смысла нет.
+  Future<void> _addChain() async {
+    final directions = await SettingsStorage.getDirections();
+    if (!mounted) return;
+    final req = await showNewChainDialog(
+      context,
+      usedTags: [
+        ..._chains.map((c) => c.tag),
+        ...directions.map((d) => d.tag),
+      ],
+    );
+    if (req == null || !mounted) return;
+    final SourceChain created;
+    try {
+      created = await SettingsStorage.addChain(
+        tag: req.tag,
+        label: req.label.isEmpty ? null : req.label,
+      );
+    } on StateError catch (e) {
+      // Гонка со вторым источником мутаций (Debug API / restore): форма
+      // считала тег свободным, storage — уже нет.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+      return;
+    }
+    await _loadChains();
+    if (!mounted) return;
+    await _editChain(created);
+  }
+
+  Future<void> _editChain(SourceChain chain) async {
+    final directions = await SettingsStorage.getDirections();
+    if (!mounted) return;
+    final result = await openChainEditor(
+      context,
+      initial: chain,
+      // Последний собранный конфиг — источник ОКОНЧАТЕЛЬНЫХ тегов позиций
+      // (префикс подписки приклеен, дубли уникализированы аллокатором).
+      config: widget.homeController.state.configModel,
+      directions: directions,
+      chains: _chains,
+    );
+    if (result == null || !mounted) return;
+    var chainPositionsRemoved = 0;
+    if (result.wasDeleted) {
+      // §393 D2 — каскад через цепочки-позиции: удаление этой цепочки снимает
+      // её ПОЗИЦИЮ у остальных, но их самих не трогает.
+      final healed = await SettingsStorage.deleteChain(chain.tag);
+      chainPositionsRemoved = healed.positions;
+    } else if (result.saved != null) {
+      await SettingsStorage.updateChain(result.saved!);
+    }
+    await _loadChains();
+    if (!mounted) return;
+    // Укороченный маршрут обязан быть замечен: цепочка ниже двух позиций
+    // теперь не эмитится, 3+ хопов эмитится короче — пользователь узнаёт об
+    // этом здесь, тем же механизмом, что rules/detours-heal (§202/§248).
+    _notifyChainPositionsRemoved(chainPositionsRemoved);
+    // Цепочка — узел конфига: правка маршрута обязана доехать до сборки, иначе
+    // пользователь увидит старый маршрут под новым именем.
+    await _regenerateAndSave();
+  }
+
+  /// §393 D2 — уведомление о вычищенных позициях цепочек.
+  ///
+  /// Тот же механизм, что у rules/detours/includes-heal (§202/§248): счётчик
+  /// в snackbar'е. Показывать обязательно — удаление источника МЕНЯЕТ МАРШРУТ
+  /// уцелевших цепочек (3+ хопов эмитится укороченной, 2-хоповая перестаёт
+  /// эмититься вовсе), и промолчать значило бы подменить маршрут молча.
+  void _notifyChainPositionsRemoved(int removed) {
+    if (removed <= 0 || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(getLocalText.s('%s chain position(s) removed', '$removed')),
+    ));
+  }
+
+  /// §393 D2 — забрать счётчик, накопленный контроллером на удалении
+  /// источника, и показать его. Контроллер копит, экран показывает: у
+  /// контроллера нет `BuildContext`, а у экрана — знания, какие мутации
+  /// сейчас прошли.
+  void _drainChainHealNotice() {
+    final removed = widget.subController.lastChainPositionsRemoved;
+    if (removed <= 0) return;
+    widget.subController.clearChainHealNotice();
+    _notifyChainPositionsRemoved(removed);
+    unawaited(_loadChains()); // строки цепочек показывают новое число хопов
+  }
+
+  Future<void> _toggleChain(SourceChain chain) async {
+    await SettingsStorage.updateChain(
+        chain.copyWith(enabled: !chain.enabled));
+    await _loadChains();
+    if (!mounted) return;
+    await _regenerateAndSave();
   }
 
   Future<void> _toggleAutoUpdate() async {
@@ -234,8 +355,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final n = widget.subController.entries
         .where((e) => e.enabled)
         .fold<int>(0, (s, e) => s + e.nodeCount);
+    // Директива оператора 24.08 («поменял цепочку — конфиг не перестроился
+    // сам»): правка источников при живом туннеле применяется сама через
+    // in-place reload (§367-механика, туннель не рвётся), а не баннером
+    // «перезапустите VPN». Гейт canReload даёт connected + cooldown 3s —
+    // серия быстрых правок не устроит шторм перезагрузок: применится
+    // последняя по баннеру, как раньше.
+    final applied = widget.homeController.canReload;
+    if (applied) unawaited(widget.homeController.reloadVpn());
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(getLocalText.plural("Config regenerated: %d nodes", n)),
+      SnackBar(
+          content: Text(applied
+              ? getLocalText.plural("Config regenerated & applied: %d nodes", n)
+              : getLocalText.plural("Config regenerated: %d nodes", n)),
           duration: const Duration(seconds: 2)),
     );
   }
@@ -471,6 +603,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       animation: widget.subController,
       builder: (context, _) {
         final ctrl = widget.subController;
+        // §393 D2 — счётчик вычищенных позиций накопил контроллер (удаление
+        // источника идёт из контекстного меню, у которого нет ни нашего
+        // состояния, ни списка цепочек). Забираем его ПОСЛЕ кадра: snackbar
+        // во время build запрещён, а мутация уже завершилась — контроллер
+        // как раз поэтому и уведомил.
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _drainChainHealNotice());
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (didPop, _) async {
@@ -508,12 +647,24 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     if (v == 'qr') unawaited(_scanQrCode());
                     if (v == 'file') unawaited(_importFromFile());
                     if (v == 'folder') unawaited(_createFolder());
+                    if (v == 'chain') unawaited(_addChain());
                     if (v == 'auto_update') unawaited(_toggleAutoUpdate());
                     if (v == 'sub_settings') _openSubscriptionSettings();
                   },
                   itemBuilder: (_) => [
+                    // Раскладка утверждена оператором 24.08: четыре смысловые
+                    // секции — создать / получить готовое / импортировать / подписки.
                     PopupMenuItem(value: 'wizard', child: Text(getLocalText.s("Add server…"))),
+                    // §393 C7 — цепочка это ТРЕТИЙ ТИП ИСТОЧНИКА (маршрут через
+                    // несколько хопов подряд): создание рядом с сервером, а не среди
+                    // Направлений (§393 L5).
+                    PopupMenuItem(
+                        value: 'chain',
+                        child: Text(getLocalText.s("Add hop chain…"))),
+                    PopupMenuItem(value: 'folder', child: Text(getLocalText.s("New folder…"))),
+                    const PopupMenuDivider(),
                     PopupMenuItem(value: 'warp', child: Text(getLocalText.s("Get WARP"))),
+                    PopupMenuItem(value: 'public', child: Text(getLocalText.s("Get Public Test Servers"))),
                     const PopupMenuDivider(),
                     PopupMenuItem(value: 'paste', child: Text(getLocalText.s("Paste from clipboard"))),
                     // §375 — на устройстве без камеры (Android TV) пункта нет:
@@ -522,16 +673,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     if (_hasCamera ?? true)
                       PopupMenuItem(value: 'qr', child: Text(getLocalText.s("Scan QR code"))),
                     PopupMenuItem(value: 'file', child: Text(getLocalText.s("Import from file…"))),
-                    PopupMenuItem(value: 'folder', child: Text(getLocalText.s("New folder…"))),
-                    const PopupMenuDivider(),
-                    PopupMenuItem(value: 'public', child: Text(getLocalText.s("Get Public Test Servers"))),
                     const PopupMenuDivider(),
                     CheckedPopupMenuItem<String>(
                       value: 'auto_update',
                       checked: _autoUpdateEnabled,
                       child: Text(getLocalText.s("Auto-update subscriptions")),
                     ),
-                    const PopupMenuDivider(),
                     PopupMenuItem(
                       value: 'sub_settings',
                       child: Text(getLocalText.s("Subscription settings…")),
@@ -650,15 +797,31 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
+  /// §393 D1 — общий список источников: подписки/серверы/папки и цепочки
+  /// ОДНИМ рядом. Порядок цепочек внутри него и есть их взаимный порядок, по
+  /// которому считается инвариант «позиция ссылается только на цепочку ВЫШЕ».
+  ///
+  /// Цепочки идут ПОСЛЕ записей контроллера: `_setChains` нумерует их от длины
+  /// `server_lists`, и рисовать их надо там же, где они лежат. Смешанной
+  /// сортировки нет намеренно — она потребовала бы держать `order` и у
+  /// `ServerList`, то есть переписать общий ordering ради того, чего
+  /// пользователь не просил.
+  List<_SourceRow> _rows(SubscriptionController ctrl) => [
+        for (var i = 0; i < ctrl.entries.length; i++)
+          _SourceRow.entry(ctrl.entries[i], i),
+        for (final c in _chains) _SourceRow.chain(c),
+      ];
+
   Widget _buildList(SubscriptionController ctrl) {
-    if (ctrl.entries.isEmpty) {
+    if (ctrl.entries.isEmpty && _chains.isEmpty) {
       return SubscriptionsEmptyState(
         busy: ctrl.busy,
         onPickPublicTestServer: () => unawaited(_pickPublicTestServer()),
       );
     }
+    final rows = _rows(ctrl);
     return ReorderableListView.builder(
-      // §098 — drag-reorder подписок (grab-strip слева, как routing rules).
+      // §098 — drag-reorder источников (grab-strip слева, как routing rules).
       // AlwaysScrollable — pull-to-refresh на коротких списках. Divider теперь
       // внутри самой строки (у ReorderableListView нет separatorBuilder).
       scrollController: _scrollController,
@@ -668,14 +831,28 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       padding: EdgeInsets.fromLTRB(
           12, 0, 12, MediaQuery.of(context).padding.bottom + 24),
       buildDefaultDragHandles: false,
-      itemCount: ctrl.entries.length,
+      itemCount: rows.length,
       onReorder: (oldIndex, newIndex) {
         // ReorderableListView сдвигает newIndex на 1 при move вниз.
         if (newIndex > oldIndex) newIndex -= 1;
-        unawaited(widget.subController.moveEntry(oldIndex, newIndex));
+        unawaited(_reorderRows(ctrl, oldIndex, newIndex));
       },
       itemBuilder: (context, i) {
-        final entry = ctrl.entries[i];
+        final row = rows[i];
+        final chain = row.chain;
+        if (chain != null) {
+          return KeyedSubtree(
+            key: ValueKey('chain:${chain.tag}'),
+            child: ChainEntryTile(
+              dragIndex: i,
+              chain: chain,
+              onTap: () => unawaited(_editChain(chain)),
+              onToggle: () => unawaited(_toggleChain(chain)),
+            ),
+          );
+        }
+        final entry = row.entry!;
+        final at = row.entryIndex;
         final highlighted = _highlightedEntryId == entry.id;
         final cs = Theme.of(context).colorScheme;
         // §255 — reorder-key остаётся top-level (KeyedSubtree); GlobalKey для
@@ -695,46 +872,108 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             child: SubscriptionEntryTile(
               dragIndex: i,
               entry: entry,
-          onToggle: () {
-            unawaited(widget.subController.toggleAt(i));
-          },
-          onLaunchUrl: _launchUrl,
-          onLongPress: (context) => _showContextMenu(context, i, entry),
-          onTap: (context) {
-            // §234 — папка открывает свой экран (члены + settings).
-            if (entry.list is FolderServers) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => FolderDetailScreen(
-                    entry: entry,
-                    controller: widget.subController,
-                  ),
-                ),
-              );
-              return;
-            }
-            final isDirectServer = entry.url.isEmpty && entry.connections.isNotEmpty;
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => isDirectServer
-                    ? NodeSettingsScreen(
-                        entry: entry,
-                        index: i,
-                        subController: widget.subController,
-                      )
-                    : SubscriptionDetailScreen(
+              onToggle: () {
+                unawaited(widget.subController.toggleAt(at));
+              },
+              onLaunchUrl: _launchUrl,
+              onLongPress: (context) => _showContextMenu(context, at, entry),
+              onTap: (context) {
+                // §234 — папка открывает свой экран (члены + settings).
+                if (entry.list is FolderServers) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FolderDetailScreen(
                         entry: entry,
                         controller: widget.subController,
                       ),
-              ),
-            );
-          },
+                    ),
+                  );
+                  return;
+                }
+                final isDirectServer =
+                    entry.url.isEmpty && entry.connections.isNotEmpty;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => isDirectServer
+                        ? NodeSettingsScreen(
+                            entry: entry,
+                            index: at,
+                            subController: widget.subController,
+                          )
+                        : SubscriptionDetailScreen(
+                            entry: entry,
+                            controller: widget.subController,
+                          ),
+                  ),
+                );
+              },
             ),
           ),
         );
       },
     );
   }
+
+  /// §393 D1 — перестановка в ОБЩЕМ списке источников.
+  ///
+  /// Ряды двух родов лежат в одном списке, но в двух storage-ключах, поэтому
+  /// перестановка раскладывается обратно: подписки — своим `moveEntry`,
+  /// цепочки — своим `reorderChains`. Ключевое свойство (ради него всё и
+  /// затевалось): перетащить подписку МЕЖДУ двумя цепочками ЗАКОННО и
+  /// взаимный порядок цепочек от этого не меняется — значит, ни одна ссылка
+  /// «на цепочку выше» не ломается.
+  Future<void> _reorderRows(
+      SubscriptionController ctrl, int oldIndex, int newIndex) async {
+    if (oldIndex == newIndex) return;
+    final rows = _rows(ctrl);
+    if (oldIndex < 0 || oldIndex >= rows.length) return;
+    if (newIndex < 0 || newIndex >= rows.length) return;
+    final moved = [...rows];
+    moved.insert(newIndex, moved.removeAt(oldIndex));
+
+    if (rows[oldIndex].chain != null) {
+      // Двигали цепочку: у подписок порядок не изменился, переписываем только
+      // взаимный порядок цепочек — в том виде, в каком они легли в общий ряд.
+      await SettingsStorage.reorderChains(
+          [for (final r in moved) if (r.chain != null) r.chain!]);
+      await _loadChains();
+      // Ссылка «только на цепочку выше» — свойство сборки: изменившийся
+      // порядок мог сделать позицию ссылкой вперёд, и об этом обязан сказать
+      // билдер, а не молчащий storage.
+      if (!mounted) return;
+      await _regenerateAndSave();
+      return;
+    }
+
+    // Двигали подписку: цепочки своего взаимного порядка не меняют, а
+    // контроллер работает в СВОЁМ счёте — переводим индексы, отбросив ряды
+    // цепочек.
+    final entryOrder = [
+      for (final r in moved)
+        if (r.entry != null) r.entryIndex,
+    ];
+    final to = entryOrder.indexOf(rows[oldIndex].entryIndex);
+    if (to < 0) return;
+    await widget.subController.moveEntry(rows[oldIndex].entryIndex, to);
+  }
+}
+
+/// §393 D1 — ряд общего списка источников: либо запись контроллера
+/// (подписка/сервер/папка), либо цепочка. Ровно два рода, поэтому обычный
+/// класс с двумя nullable-полями, а не sealed-иерархия: тип живёт внутри
+/// одного экрана и наружу не выходит.
+class _SourceRow {
+  const _SourceRow.entry(this.entry, this.entryIndex) : chain = null;
+  const _SourceRow.chain(this.chain)
+      : entry = null,
+        entryIndex = -1;
+
+  final SubscriptionEntry? entry;
+
+  /// Индекс записи в `SubscriptionController.entries` — счёт контроллера, не
+  /// общего списка. Мутации подписок адресуются им.
+  final int entryIndex;
+  final SourceChain? chain;
 }

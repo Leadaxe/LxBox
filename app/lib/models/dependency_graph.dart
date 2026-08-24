@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'config_node.dart';
 
 /// §355 — один пострадавший от мёртвой ноды-корня: DNS-сервер или нода,
-/// зависящие от неё напрямую (detour) или через канал/цепочку.
+/// зависящие от неё напрямую (detour) или через Направление/цепочку.
 class DependentRef {
   const DependentRef({
     required this.kind,
@@ -18,7 +18,7 @@ class DependentRef {
   final String tag;
 
   /// Тег узла, на который зависимый ссылается СВОИМ detour'ом, когда это не
-  /// сам корень (обычно канал: `yandex_udp → via vpn-2`). `null` — прямой
+  /// сам корень (обычно Направление: `yandex_udp → via vpn-2`). `null` — прямой
   /// detour на корень.
   final String? via;
 
@@ -47,7 +47,7 @@ class DependentRef {
 /// HomeController (та же parse-once дисциплина §091).
 ///
 /// Динамика — два уже существующих потока (§355: никакой новой диагностики):
-/// выбор selector-групп (groups-стрим CC) и замеры пинга (`delayByChannel`).
+/// выбор selector-групп (groups-стрим CC) и замеры пинга (`delayByDirection`).
 class DependencyGraph {
   const DependencyGraph._({
     required Map<String, List<DependentRef>> dependentsOf,
@@ -65,7 +65,7 @@ class DependencyGraph {
         _urltestMembers = const {},
         _payloadTags = const {};
 
-  /// Обратные рёбра: цель (нода или канал) → кто на неё ссылается detour'ом.
+  /// Обратные рёбра: цель (нода или Направление) → кто на неё ссылается detour'ом.
   final Map<String, List<DependentRef>> _dependentsOf;
 
   /// selector-группы → члены (болеют по текущему ВЫБОРУ — см. [computeSick]).
@@ -141,14 +141,14 @@ class DependencyGraph {
     );
   }
 
-  /// Health ноды по замерам всех каналов (§355 §3.3): у замеров нет
+  /// Health ноды по замерам всех Направлений (§355 §3.3): у замеров нет
   /// таймстампов, поэтому правило консервативное — «жива, если хоть в одном
-  /// канале >0»; dead — только когда замеры есть и ВСЕ отрицательные;
+  /// Направлении >0»; dead — только когда замеры есть и ВСЕ отрицательные;
   /// без замеров — unknown (false, не тревожим).
   static bool _isDead(String tag, Map<String, Map<String, int>> delays) {
     var seen = false;
-    for (final channel in delays.values) {
-      final v = channel[tag];
+    for (final direction in delays.values) {
+      final v = direction[tag];
       if (v == null) continue;
       if (v >= 0) return false;
       seen = true;
@@ -160,7 +160,7 @@ class DependencyGraph {
   ///
   /// [selections] — текущий выбор selector-групп (тег группы → выбранный член;
   /// только selector'ы: urltest-выбор сюда не подавать — те самолечатся §308).
-  /// [delays] — `HomeState.delayByChannel` как есть.
+  /// [delays] — `HomeState.delayByDirection` как есть.
   ///
   /// Возвращает только корни с непустым списком пострадавших (dead-нода, от
   /// которой никто не зависит, — не тревога, просто мёртвая нода).
@@ -176,7 +176,7 @@ class DependencyGraph {
     };
     if (dead.isEmpty) return const {};
 
-    // Каналы, где выбран данный узел (обратный индекс выбора).
+    // Направления, где выбран данный узел (обратный индекс выбора).
     final selectedIn = <String, List<String>>{};
     selections.forEach((group, selected) {
       if (_selectorMembers.containsKey(group)) {
@@ -202,7 +202,7 @@ class DependencyGraph {
           ));
           if (!dep.isDns) queue.add(dep.tag);
         }
-        // 2. Selector-каналы, где cur сейчас выбран, — заражаются как
+        // 2. Selector-Направления, где cur сейчас выбран, — заражаются как
         //    транзитные узлы (в affected не попадают: они контекст, не жертва).
         for (final group in selectedIn[cur] ?? const <String>[]) {
           if (visited.add(group)) queue.add(group);

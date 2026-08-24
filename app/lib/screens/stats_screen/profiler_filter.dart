@@ -15,14 +15,14 @@ import '../../services/traffic_profiler.dart';
 ///   потеряшки).
 /// - **Rule** (§230) — по сматчившему route-правилу (`event.rule`; '' = «final»).
 /// - **Outbound** (§230) — по любому звену `outboundChain ∪ detourChain`
-///   (селектор / канал / detour-транспорт).
+///   (селектор / Направление / detour-транспорт).
 /// Плюс кросс-осевой `search` (domain/ip/process, substring, не regex).
 class ProfilerFilter extends ChangeNotifier {
   String _search = '';
   final Set<TrafficEventKind> _kinds = <TrafficEventKind>{};
   final Set<String> _apps = <String>{};
   // §230 — ось Rule (сматчившее route-правило; '' = «final», без правила) и
-  // ось Outbound (любое звено outboundChain ∪ detourChain: селектор/канал/detour).
+  // ось Outbound (любое звено outboundChain ∪ detourChain: селектор/Направление/detour).
   final Set<String> _rules = <String>{};
   final Set<String> _outbounds = <String>{};
   // «Потеряшки» — события без owner'а (unattributed). Галка в App-табе.

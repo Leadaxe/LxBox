@@ -22,8 +22,8 @@ TrojanSpec? parseTrojan(String uri) {
   final label = decodeFragment(p.fragment);
   final tag = tagFromLabel(label, 'trojan', server, port);
 
-  final transport = parseTransport(q);
   final warnings = <NodeWarning>[];
+  final transport = parseTransport(q, warnings: warnings);
   // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
   final tls = normalizeTlsFingerprint(
       parseTrojanTls(q, server, warnings: warnings), warnings);

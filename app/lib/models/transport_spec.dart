@@ -23,17 +23,35 @@ final class WsTransport extends TransportSpec {
   final int? maxEarlyData;
   final String? earlyDataHeaderName;
 
+  /// §103 D-008 / IDENTITY.md §3 — true, когда [earlyDataHeaderName] не был
+  /// задан явно (ни `eh=`, ни JSON-поле), а подставлен нами на эмите как
+  /// дефолт v2ray-конвенции для голого `?ed=N` хвоста пути (см.
+  /// parseTransport). Нужен, чтобы `toUri()`/round-trip не начал сериализовать
+  /// подставленное значение как явное — Go тоже никогда не пишет `eh=` в
+  /// share-URI обратно (shareuri_helpers.go).
+  final bool earlyDataHeaderImplicit;
+
   const WsTransport({
-    this.path = '/',
+    this.path = '',
     this.host = '',
     this.headers = const {},
     this.maxEarlyData,
     this.earlyDataHeaderName,
+    this.earlyDataHeaderImplicit = false,
   });
 
   @override
   (Map<String, dynamic>, List<NodeWarning>) toSingbox(TemplateVars vars) {
-    final m = <String, dynamic>{'type': 'ws', 'path': path};
+    // §103 D-016(в) — пустая строка = путь не задан явно (ни в URI, ни в
+    // JSON) → ключ не пишем (option/v2ray_transport.go omitempty). ВАЖНО:
+    // явный `path=/` (buyer URI ставит его руками) отличается от отсутствия
+    // параметра — Go пишет `path:"/"`, когда параметр БЫЛ в query, поэтому
+    // здесь смотрим только на пустоту строки, не на "== '/'" (парсер отвечает
+    // за то, чтобы отсутствующий параметр давал '' , а не '/').
+    final m = <String, dynamic>{
+      'type': 'ws',
+      if (path.isNotEmpty) 'path': path,
+    };
     if (host.isNotEmpty) {
       m['headers'] = {'Host': host, ...headers};
     } else if (headers.isNotEmpty) {
@@ -83,11 +101,16 @@ final class HttpTransport extends TransportSpec {
 final class HttpUpgradeTransport extends TransportSpec {
   final String path;
   final String host;
-  const HttpUpgradeTransport({this.path = '/', this.host = ''});
+  const HttpUpgradeTransport({this.path = '', this.host = ''});
 
   @override
   (Map<String, dynamic>, List<NodeWarning>) toSingbox(TemplateVars vars) {
-    final m = <String, dynamic>{'type': 'httpupgrade', 'path': path};
+    // §103 D-016(в) — тот же принцип, что и у ws: пустая строка = параметра
+    // не было в источнике, явный `path=/` эмитится как есть.
+    final m = <String, dynamic>{
+      'type': 'httpupgrade',
+      if (path.isNotEmpty) 'path': path,
+    };
     if (host.isNotEmpty) m['host'] = host;
     return (m, const []);
   }
@@ -166,7 +189,12 @@ final class XhttpTransport extends TransportSpec {
 
   @override
   (Map<String, dynamic>, List<NodeWarning>) toSingbox(TemplateVars vars) {
-    final m = <String, dynamic>{'type': 'xhttp', 'path': path};
+    // SPEC 103 CANON §2.4 — дефолтные поля не пишутся: path='/' в конструкторе
+    // ([XhttpTransport.new]) — дефолт для UI/редактора, а не для эмиссии;
+    // Go эмитит path только когда он явно задан в источнике (в т.ч. path=%2F
+    // → "/"), пустой (не заданный) — опускает целиком.
+    final m = <String, dynamic>{'type': 'xhttp'};
+    if (path.isNotEmpty) m['path'] = path;
     final warnings = <NodeWarning>[];
     if (host.isNotEmpty) m['host'] = host;
     if (mode.isNotEmpty) m['mode'] = mode;
@@ -175,11 +203,11 @@ final class XhttpTransport extends TransportSpec {
     if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
 
     // §217 — нормализация против правил ядра normalizeMeta (transport/v2rayxhttp/
-    // meta.go). Комбинации, которые ядро отвергает fatal, чиним на дефолт —
-    // иначе одна битая xhttp-нода роняет ВЕСЬ конфиг на старте. Каждый сброс →
-    // NodeWarning (⚠️ в подписке + строка в AppLog). mode дефолтится ядром
-    // "" → auto (client.go:79), поэтому packet-up только при явном значении.
-    final isPacketUp = mode.toLowerCase() == 'packet-up';
+    // meta.go) остаётся для x_padding_placement/x_padding_method/seq_placement
+    // (не покрыты corpus-кейсами, поведение Go для них ещё не сверено).
+    // session_placement/uplink_data_placement/uplink_http_method ниже —
+    // pure passthrough (см. комментарии на местах, "go": null в
+    // registry/warnings.json xhttp_param_reset).
 
     // --- placement/method enums: значение вне множества ядро роняет fatal ---
     void putEnum(String key, String value, Set<String> allowed) {
@@ -192,39 +220,35 @@ final class XhttpTransport extends TransportSpec {
       }
     }
 
-    putEnum('session_placement', sessionPlacement,
-        const {'path', 'query', 'header', 'cookie'});
+    // SPEC 103 vless/xhttp_placement_bogus_reset — session_placement, ровно
+    // как uplink_data_placement/uplink_http_method ниже, идёт напрямую без
+    // enum-гейта: registry/warnings.json xhttp_param_reset документирует
+    // "go": null — Go пока не нормализует XHTTP-параметры вовсе
+    // (xhttpBuildTransport: "normalization is left to the core", SPEC 102 в
+    // работе). Канон = поведение Go (pass-through, core сам роняет мусор).
+    if (sessionPlacement.isNotEmpty) m['session_placement'] = sessionPlacement;
     if (sessionKey.isNotEmpty) m['session_key'] = sessionKey;
     putEnum('seq_placement', seqPlacement,
         const {'path', 'query', 'header', 'cookie'});
     if (seqKey.isNotEmpty) m['seq_key'] = seqKey;
 
-    // --- uplink_data_placement: enum + header/cookie только в packet-up ---
-    final up = uplinkDataPlacement.toLowerCase();
+    // SPEC 103 vless/xhttp_uplink_header_placement_reset — uplink_data_
+    // placement идёт как pure passthrough (эталон Go xhttpStringFields:
+    // "uplink_data_placement" читается и эмитится без gating на mode или
+    // enum-проверки; core validates). header/cookie вне packet-up — core-side
+    // concern, не парсера.
     if (uplinkDataPlacement.isNotEmpty) {
-      if (!const {'body', 'auto', 'header', 'cookie'}
-          .contains(uplinkDataPlacement)) {
-        warnings.add(XhttpParamResetWarning('uplink_data_placement',
-            XhttpResetReason.invalidPlacementValue,
-            value: uplinkDataPlacement));
-      } else if ((up == 'header' || up == 'cookie') && !isPacketUp) {
-        warnings.add(const XhttpParamResetWarning('uplink_data_placement',
-            XhttpResetReason.placementRequiresPacketUp));
-      } else {
-        m['uplink_data_placement'] = uplinkDataPlacement;
-      }
+      m['uplink_data_placement'] = uplinkDataPlacement;
     }
     if (uplinkDataKey.isNotEmpty) m['uplink_data_key'] = uplinkDataKey;
     if (uplinkChunkSize.isNotEmpty) m['uplink_chunk_size'] = uplinkChunkSize;
 
-    // --- uplink_http_method: GET валиден только в packet-up (meta.go:105) ---
+    // SPEC 103 vless/xhttp_uplink_get_without_packet_up_reset — GET вне
+    // packet-up тоже pure passthrough в Go (meta.go:105 валидирует на
+    // стороне ядра, не парсера); xhttp_uplink_get_packet_up_kept уже
+    // проверяет keep-путь.
     if (uplinkHttpMethod.isNotEmpty) {
-      if (uplinkHttpMethod.toUpperCase() == 'GET' && !isPacketUp) {
-        warnings.add(const XhttpParamResetWarning(
-            'uplink_http_method', XhttpResetReason.getRequiresPacketUp));
-      } else {
-        m['uplink_http_method'] = uplinkHttpMethod;
-      }
+      m['uplink_http_method'] = uplinkHttpMethod;
     }
 
     if (xPaddingObfsMode) m['x_padding_obfs_mode'] = true;

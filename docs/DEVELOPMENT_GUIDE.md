@@ -80,7 +80,7 @@ landmarks:
 | `dns_options` | DNS servers (16 presets) plus rules |
 | `ping_options` | URL, timeout, ping presets |
 | `speed_test_options` | Servers, streams, ping URLs |
-| `group_templates` + `default_channels` | §125/§267 — the SEED for `channels[]` (channels live in storage, not in the template) |
+| `group_templates` + `default_directions` | §125/§267/§393 — the SEED for `directions[]` (directions live in storage, not in the template) |
 | `vars` | Every configuration variable |
 | `selectable_rules` | Routing rules with SRS |
 | `config` | The skeleton of the sing-box config |

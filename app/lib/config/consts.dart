@@ -15,8 +15,8 @@ library;
 /// Имя-заготовка URLTest-группы, авто-выбирающей быстрейшую ноду.
 ///
 /// §267 — зеркало `magic_nodes.auto`. У auto-ноды нет статического tag: реальный
-/// per-channel тег собирается из `magic_nodes.auto.tpl` (`{parent_tag}-auto` →
-/// `vpn-1-auto`, см. `Channel.autoTag` / `resolveTpl`). Эта константа — лишь
+/// per-direction тег собирается из `magic_nodes.auto.tpl` (`{parent_tag}-auto` →
+/// `vpn-1-auto`, см. `Direction.autoTag` / `resolveTpl`). Эта константа — лишь
 /// имя-маркер (иконка/фильтры/сортировка узнают auto по нему).
 const kAutoOutboundTag = '✨auto';
 

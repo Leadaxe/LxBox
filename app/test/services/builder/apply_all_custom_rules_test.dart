@@ -189,9 +189,9 @@ void main() {
       );
 
       expect(result.extraDnsServers.length, 1);
-      expect(result.extraDnsServers.first['tag'], 'yandex_doh');
+      expect(result.extraDnsServers.first['tag'], 'ru-direct:yandex_doh');
       expect(result.dnsRulesByPresetId['ru-direct'], [
-        {'rule_set': 'ru-domains', 'server': 'yandex_doh'}
+        {'rule_set': 'ru-direct:ru-domains', 'server': 'ru-direct:yandex_doh'}
       ]);
       expect(result.labelByPresetId['ru-direct'], 'Russian domains direct');
     });

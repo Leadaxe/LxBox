@@ -51,7 +51,7 @@ void main() {
       );
 
   group('§204 — routingLineOf 1:1 Conn ↔ Event', () {
-    test('канал с auto-двойником: rule final, chains [node, auto, vpn-1]', () {
+    test('Направление с auto-двойником: rule final, chains [node, auto, vpn-1]', () {
       final c = conn(
         domain: 'spotify.com',
         chains: ['✨auto', 'vpn-1'],

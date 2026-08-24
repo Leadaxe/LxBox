@@ -10,8 +10,8 @@ import 'package:lxbox/services/warp/warp_account.dart';
 /// одной регистрации на любом IP:port).
 void main() {
   WarpAccount warp() => const WarpAccount(
-        privKey: 'cHJpdmtleQ==',
-        peerPub: 'cGVlcnB1Yg==',
+        privKey: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=',
+        peerPub: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
         clientV4: '172.16.0.2/32',
         clientV6: '',
         clientId: 'AAAA',

@@ -1,4 +1,4 @@
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../models/config_node.dart';
 import 'selector_info.dart';
 
@@ -23,7 +23,7 @@ class RuntimeHop {
   const RuntimeHop({
     required this.tag,
     required this.type,
-    this.channel,
+    this.direction,
     this.viaSelection = false,
   });
 
@@ -33,14 +33,14 @@ class RuntimeHop {
   /// `type` из конфига; '' = тега нет в конфиге (обрыв цепочки).
   final String type;
 
-  /// Канал §125, если хоп — канал (совпал `tag` или `autoTag`); null = нода.
-  final Channel? channel;
+  /// Направление §125, если хоп — Направление (совпал `tag` или `autoTag`); null = нода.
+  final Direction? direction;
 
   /// Хоп достигнут через ТЕКУЩИЙ выбор селектора (не через detour-поле) —
   /// динамическая часть пути, сменится вместе с выбором.
   final bool viaSelection;
 
-  bool get isChannel => channel != null;
+  bool get isDirection => direction != null;
 
   /// Тег отсутствует в собранном конфиге (битая ссылка / чужой конфиг).
   bool get isUnknown => type.isEmpty;
@@ -49,12 +49,12 @@ class RuntimeHop {
   bool get isGroup => _kGroupTypes.contains(type);
 }
 
-/// Канал §125 по config-тегу: сам селектор (`c.tag`) или его urltest-двойник
-/// (`c.autoTag`). null = не канал. Смотрим ВСЕ каналы (и выключенные):
-/// config-тег, равный тегу канала, и есть канал — билдер дедуплицирует
+/// Направление §125 по config-тегу: сам селектор (`c.tag`) или его urltest-двойник
+/// (`c.autoTag`). null = не Направление. Смотрим ВСЕ Направления (и выключенные):
+/// config-тег, равный тегу Направления, и есть Направление — билдер дедуплицирует
 /// коллизии `allocateTag`-суффиксом (tradeoff-патологию см. spec 258).
-Channel? channelForTag(String tag, List<Channel> channels) {
-  for (final c in channels) {
+Direction? directionForTag(String tag, List<Direction> directions) {
+  for (final c in directions) {
     if (tag == c.tag || tag == c.autoTag) return c;
   }
   return null;
@@ -72,7 +72,7 @@ Channel? channelForTag(String tag, List<Channel> channels) {
 List<RuntimeHop> runtimeChainOf(
   String tag,
   ParsedConfig config, {
-  required List<Channel> channels,
+  required List<Direction> directions,
   String? Function(String tag)? selectedOf,
 }) {
   final selected = selectedOf ?? SelectorInfo.I.selectedOf;
@@ -90,7 +90,7 @@ List<RuntimeHop> runtimeChainOf(
     hops.add(RuntimeHop(
       tag: cur,
       type: node?.type ?? '',
-      channel: channelForTag(cur, channels),
+      direction: directionForTag(cur, directions),
       viaSelection: via,
     ));
     if (node == null) break; // тег вне конфига — дальше идти некуда

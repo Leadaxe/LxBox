@@ -141,14 +141,14 @@ extension ServerListBuild on ServerList {
       // §272/§322 — глобальный «Passive health check»: пропускаем пробу, пока
       // узел и так подтверждён своим трафиком. Для пула из 15 узлов это
       // главная статья расхода батареи. Эмитим только при true (omitempty:
-      // отсутствие = false = апстрим), как канал в build_config.
+      // отсутствие = false = апстрим), как Направление в build_config.
       if (ctx.passiveCheck) entry.map['passive_check'] = true;
       entry.map['tag'] =
           ctx.allocateTag(TagResolver.displayTag(tagPrefix, spec.tag));
       entry.map['outbounds'] = members;
       ctx.addEntry(entry);
       ctx.addToSelectorTagList(entry);
-      // В ✨auto НЕ добавляем, и в urltest-двойник канала группа тоже не
+      // В ✨auto НЕ добавляем, и в urltest-двойник Направления группа тоже не
       // попадёт — билдер отсекает её по `type: urltest` (build_config).
     }
   }

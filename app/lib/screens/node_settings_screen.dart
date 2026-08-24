@@ -7,7 +7,7 @@ import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
 import '../services/settings_storage.dart';
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
@@ -58,9 +58,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   // только для подписи схемы «AmneziaWG (wireguard)».
   bool _isAwg = false;
 
-  // §248 — каналы: секция Channels в пикере + рендер сохранённого канального
+  // §248 — Направления: секция Directions в пикере + рендер сохранённого Направления
   // detour как «⚙ <label>».
-  List<Channel> _channels = const [];
+  List<Direction> _directions = const [];
 
   /// §392 — разобранный узел для вкладки Diagnostics (probe-ветка собирает
   /// из него временный конфиг).
@@ -126,9 +126,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     // восстанавливает — терялось при save.
     _detour = member != null ? member.detour : widget.entry.overrideDetour;
 
-    // §248 — каналы для подписи «⚙ <label>» сохранённого канального detour
+    // §248 — Направления для подписи «⚙ <label>» сохранённого Направления detour
     // (_pickDetour перечитывает свежий список перед показом пикера).
-    _channels = await SettingsStorage.getChannels();
+    _directions = await SettingsStorage.getDirections();
 
     // §239 — кандидаты живут в общем пикере (showDetourTargetPicker):
     // «свободные» одиночки + члены СВОЕЙ папки (для member-режима).
@@ -140,13 +140,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   Future<void> _pickDetour() async {
     final list = widget.entry.list;
     final member = _member;
-    // §248 — свежий список каналов (мог измениться, пока экран открыт).
-    _channels = await SettingsStorage.getChannels();
+    // §248 — свежий список Направлений (мог измениться, пока экран открыт).
+    _directions = await SettingsStorage.getDirections();
     if (!mounted) return;
     final target = await showDetourTargetPicker(
       context,
       controller: widget.subController,
-      channels: _channels,
+      directions: _directions,
       currentFolder:
           (member != null && list is FolderServers) ? list : null,
       selfBareTag: member?.node?.tag ?? '',
@@ -159,9 +159,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     await _persistDetour(target.storeValue);
   }
 
-  /// §248 — подпись сохранённого detour: тег detour-канала (или его
-  /// auto-двойника) → «⚙ <label>»; канал не найден → сырой тег. Интра-омоним
-  /// (bare-тег члена СВОЕЙ папки) побеждает канал-тёзку — резолвится в члена
+  /// §248 — подпись сохранённого detour: тег detour-Направления (или его
+  /// auto-двойника) → «⚙ <label>»; Направление не найден → сырой тег. Интра-омоним
+  /// (bare-тег члена СВОЕЙ папки) побеждает Направление-тёзку — резолвится в члена
   /// (приоритет bareIndex в FolderDetourPlan), показываем как тег.
   String _detourDisplay(String stored) {
     final list = widget.entry.list;
@@ -170,7 +170,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         if (m.node?.tag == stored) return stored;
       }
     }
-    return detourChannelDisplay(stored, _channels);
+    return detourDirectionDisplay(stored, _directions);
   }
 
   /// §252 — полная цепочка хопов от цели detour вглубь (её собственный
@@ -180,7 +180,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     return detourPathHops(
       _detour,
       controller: widget.subController,
-      channels: _channels,
+      directions: _directions,
       folder: (widget.memberIndex != null && list is FolderServers)
           ? list
           : null,
@@ -359,7 +359,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         ListTile(
           leading: const Icon(Icons.alt_route, size: 20),
           title: Text(getLocalText.s("Detour server")),
-          // §248 — канальная цель рендерится как «⚙ <label>».
+          // §248 — Направление-цель рендерится как «⚙ <label>».
           subtitle: Text(_detour.isEmpty
               ? getLocalText.s("None (direct)")
               : _detourDisplay(_detour)),

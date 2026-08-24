@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../models/server_list.dart';
 import '../services/error_format.dart';
 import '../services/probe/probe_controller.dart';
@@ -20,6 +20,7 @@ import 'home/filter_widgets.dart';
 import 'node_settings_screen.dart';
 import 'home/node_list_presenter.dart' show protoLabel;
 import 'subscription_detail_screen/detour_mode.dart';
+import 'subscription_detail_screen/tag_prefix_cascade.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscriptions_screen/folder_picker.dart';
 import '../widgets/detour_target_picker.dart';
@@ -77,9 +78,14 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   final Set<String> _selectedProtocols = {};
   bool _protocolsInvert = false;
 
-  // §248 — каналы: секция Channels в detour-пикере + подпись «⚙ <label>»
-  // канальной override-цели в Settings-вкладке.
-  List<Channel> _channels = const [];
+  // §248 — Направления: секция Directions в detour-пикере + подпись «⚙ <label>»
+  // Направления override-цели в Settings-вкладке.
+  List<Direction> _directions = const [];
+
+  /// §393 A6 — префикс, под который написаны фильтры Направлений: значение
+  /// поля на момент последнего КОММИТА. Зеркало подписки
+  /// (`subscription_detail_screen`) — вкладка Settings общая.
+  late String _committedTagPrefix;
 
   FolderServers get _folder => widget.entry.list as FolderServers;
 
@@ -149,9 +155,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.name);
+    _committedTagPrefix = widget.entry.tagPrefix; // §393 A6
     widget.controller.addListener(_onEntriesChanged); // §278
     unawaited(_loadThresholds());
-    unawaited(_loadChannels());
+    unawaited(_loadDirections());
     final focus = widget.focusMemberIndex;
     if (focus != null && focus >= 0 && focus < _folder.members.length) {
       WidgetsBinding.instance
@@ -189,11 +196,32 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     });
   }
 
-  /// §248 — загрузка каналов (initState + refresh перед пикером).
-  Future<void> _loadChannels() async {
-    final channels = await SettingsStorage.getChannels();
+  /// §393 A6 — префикс допечатан: переписать литеральные вхождения старого
+  /// префикса в фильтрах Направлений, про неоднозначные предупредить.
+  Future<void> _commitTagPrefix() async {
+    final oldPrefix = _committedTagPrefix;
+    final newPrefix = widget.entry.tagPrefix;
+    if (oldPrefix == newPrefix) return;
+    _committedTagPrefix = newPrefix;
+    await _loadDirections();
     if (!mounted) return;
-    setState(() => _channels = channels);
+    final outcome = await applyTagPrefixCascade(
+      directions: _directions,
+      oldPrefix: oldPrefix,
+      newPrefix: newPrefix,
+      sub: widget.controller,
+    );
+    if (!mounted || outcome.isEmpty) return;
+    await _loadDirections(); // переписанные фильтры — в буфер экрана
+    if (!mounted) return;
+    showTagPrefixCascadeSnackBar(context, outcome);
+  }
+
+  /// §248 — загрузка Направлений (initState + refresh перед пикером).
+  Future<void> _loadDirections() async {
+    final directions = await SettingsStorage.getDirections();
+    if (!mounted) return;
+    setState(() => _directions = directions);
   }
 
   @override
@@ -1506,12 +1534,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     return SubscriptionSettingsTab(
       entry: widget.entry,
       folderMode: true, // §239 — адаптированные тексты
-      channels: _channels, // §248 — подпись канальной override-цели
+      directions: _directions, // §248 — подпись Направления override-цели
       // §252 — разворот цели в цепочку «как пакет пойдёт»; интра-члены
       // папки имеют приоритет (bare-тег, зеркало FolderDetourPlan).
       detourPathHopsOf: (stored) => detourPathHops(stored,
           controller: widget.controller,
-          channels: _channels,
+          directions: _directions,
           folder: widget.entry.list is FolderServers
               ? widget.entry.list as FolderServers
               : null),
@@ -1521,6 +1549,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         widget.entry.tagPrefix = val.trim();
         unawaited(widget.controller.persistSources());
       },
+      // §393 A6 — каскад на regex-фильтры Направлений (см. подписку).
+      onTagPrefixCommitted: (_) => unawaited(_commitTagPrefix()),
       onSetDetourMode: _setDetourMode,
       onRegisterDetourServersChanged: (val) {
         setState(() => widget.entry.registerDetourServers = val);
@@ -1573,13 +1603,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   Future<void> _showOverrideDetourPicker() async {
     // §239 — кандидаты: «свободные» одиночки + члены СВОЕЙ папки (интра-цель
     // хранится голым тегом; exempt-набор в билдере не даёт циклов через цель).
-    // §248 — свежие каналы (могли измениться, пока экран открыт).
-    await _loadChannels();
+    // §248 — свежие Направления (могли измениться, пока экран открыт).
+    await _loadDirections();
     if (!mounted) return;
     final chosen = await showDetourTargetPicker(
       context,
       controller: widget.controller,
-      channels: _channels,
+      directions: _directions,
       currentFolder: _folder,
     );
     if (chosen == null || !mounted) return;

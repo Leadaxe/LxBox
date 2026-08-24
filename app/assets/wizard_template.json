@@ -1,131 +1,346 @@
 {
   "parser_config": {
     "version": 5,
-    "parser": {"reload": "12h"}
+    "parser": {
+      "reload": "12h"
+    }
   },
   "dns_options": {
     "servers": [
       {
         "description": "System DNS",
         "enabled": true,
-        "server": {"type": "local", "tag": "local_dns_resolver"}
+        "server": {
+          "type": "local",
+          "tag": "local_dns_resolver"
+        }
       },
       {
         "description": "Google DNS (direct)",
         "enabled": true,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
-          { "name": "dns_ip", "type": "enum", "title": "UDP server IP", "tooltip": "Google Public DNS address. IPv4 — universal; IPv6 — if your network supports it.",
+          {
+            "name": "outbound",
+            "type": "outbound",
+            "default_value": "direct-out",
+            "title": "Outbound",
+            "tooltip": "Which direction carries DNS queries to this server"
+          },
+          {
+            "name": "dns_ip",
+            "type": "enum",
+            "title": "UDP server IP",
+            "tooltip": "Google Public DNS address. IPv4 — universal; IPv6 — if your network supports it.",
             "default_value": "8.8.8.8",
             "options": [
-              {"title": "8.8.8.8 · Primary v4", "value": "8.8.8.8"},
-              {"title": "8.8.4.4 · Secondary v4", "value": "8.8.4.4"},
-              {"title": "2001:4860:4860::8888 · Primary v6", "value": "2001:4860:4860::8888"},
-              {"title": "2001:4860:4860::8844 · Secondary v6", "value": "2001:4860:4860::8844"}
+              {
+                "title": "8.8.8.8 · Primary v4",
+                "value": "8.8.8.8"
+              },
+              {
+                "title": "8.8.4.4 · Secondary v4",
+                "value": "8.8.4.4"
+              },
+              {
+                "title": "2001:4860:4860::8888 · Primary v6",
+                "value": "2001:4860:4860::8888"
+              },
+              {
+                "title": "2001:4860:4860::8844 · Secondary v6",
+                "value": "2001:4860:4860::8844"
+              }
             ]
           }
         ],
-        "server": {"type": "udp", "tag": "google_udp", "server_port": 53, "server": "@dns_ip", "detour": "@outbound"}
+        "server": {
+          "type": "udp",
+          "tag": "google_udp",
+          "server_port": 53,
+          "server": "@dns_ip",
+          "detour": "@outbound"
+        }
       },
       {
         "description": "Google DoT",
         "enabled": true,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "vpn-1", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
-          { "name": "dns_ip", "type": "enum", "title": "DoT server IP", "tooltip": "Google Public DNS address for DNS-over-TLS (port 853).",
+          {
+            "name": "outbound",
+            "type": "outbound",
+            "default_value": "vpn-1",
+            "title": "Outbound",
+            "tooltip": "Which direction carries DNS queries to this server"
+          },
+          {
+            "name": "dns_ip",
+            "type": "enum",
+            "title": "DoT server IP",
+            "tooltip": "Google Public DNS address for DNS-over-TLS (port 853).",
             "default_value": "8.8.8.8",
             "options": [
-              {"title": "8.8.8.8 · Primary v4", "value": "8.8.8.8"},
-              {"title": "8.8.4.4 · Secondary v4", "value": "8.8.4.4"},
-              {"title": "2001:4860:4860::8888 · Primary v6", "value": "2001:4860:4860::8888"},
-              {"title": "2001:4860:4860::8844 · Secondary v6", "value": "2001:4860:4860::8844"}
+              {
+                "title": "8.8.8.8 · Primary v4",
+                "value": "8.8.8.8"
+              },
+              {
+                "title": "8.8.4.4 · Secondary v4",
+                "value": "8.8.4.4"
+              },
+              {
+                "title": "2001:4860:4860::8888 · Primary v6",
+                "value": "2001:4860:4860::8888"
+              },
+              {
+                "title": "2001:4860:4860::8844 · Secondary v6",
+                "value": "2001:4860:4860::8844"
+              }
             ]
           }
         ],
-        "server": {"type": "tls", "tag": "google_dot", "server_port": 853, "server": "@dns_ip", "detour": "@outbound"}
+        "server": {
+          "type": "tls",
+          "tag": "google_dot",
+          "server_port": 853,
+          "server": "@dns_ip",
+          "detour": "@outbound"
+        }
       },
       {
         "description": "Google DoH",
         "enabled": true,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
-          { "name": "dns_ip", "type": "enum", "title": "DoH server IP", "tooltip": "Google Public DNS IP for IP-based DoH. TLS SNI is pinned to dns.google.",
+          {
+            "name": "outbound",
+            "type": "outbound",
+            "default_value": "direct-out",
+            "title": "Outbound",
+            "tooltip": "Which direction carries DNS queries to this server"
+          },
+          {
+            "name": "dns_ip",
+            "type": "enum",
+            "title": "DoH server IP",
+            "tooltip": "Google Public DNS IP for IP-based DoH. TLS SNI is pinned to dns.google.",
             "default_value": "8.8.8.8",
             "options": [
-              {"title": "8.8.8.8 · Primary v4", "value": "8.8.8.8"},
-              {"title": "8.8.4.4 · Secondary v4", "value": "8.8.4.4"},
-              {"title": "2001:4860:4860::8888 · Primary v6", "value": "2001:4860:4860::8888"},
-              {"title": "2001:4860:4860::8844 · Secondary v6", "value": "2001:4860:4860::8844"}
+              {
+                "title": "8.8.8.8 · Primary v4",
+                "value": "8.8.8.8"
+              },
+              {
+                "title": "8.8.4.4 · Secondary v4",
+                "value": "8.8.4.4"
+              },
+              {
+                "title": "2001:4860:4860::8888 · Primary v6",
+                "value": "2001:4860:4860::8888"
+              },
+              {
+                "title": "2001:4860:4860::8844 · Secondary v6",
+                "value": "2001:4860:4860::8844"
+              }
             ]
           }
         ],
-        "server": {"type": "https", "tag": "google_doh", "server_port": 443, "path": "/dns-query", "tls": {"enabled": true, "server_name": "dns.google"}, "server": "@dns_ip", "detour": "@outbound"}
+        "server": {
+          "type": "https",
+          "tag": "google_doh",
+          "server_port": 443,
+          "path": "/dns-query",
+          "tls": {
+            "enabled": true,
+            "server_name": "dns.google"
+          },
+          "server": "@dns_ip",
+          "detour": "@outbound"
+        }
       },
       {
         "description": "Cloudflare UDP",
         "enabled": true,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
-          { "name": "dns_ip", "type": "enum", "title": "UDP server IP", "tooltip": "Cloudflare Public DNS address. IPv4 — universal; IPv6 — if your network supports it.",
+          {
+            "name": "outbound",
+            "type": "outbound",
+            "default_value": "direct-out",
+            "title": "Outbound",
+            "tooltip": "Which direction carries DNS queries to this server"
+          },
+          {
+            "name": "dns_ip",
+            "type": "enum",
+            "title": "UDP server IP",
+            "tooltip": "Cloudflare Public DNS address. IPv4 — universal; IPv6 — if your network supports it.",
             "default_value": "1.1.1.1",
             "options": [
-              {"title": "1.1.1.1 · Primary v4", "value": "1.1.1.1"},
-              {"title": "1.0.0.1 · Secondary v4", "value": "1.0.0.1"},
-              {"title": "2606:4700:4700::1111 · Primary v6", "value": "2606:4700:4700::1111"},
-              {"title": "2606:4700:4700::1001 · Secondary v6", "value": "2606:4700:4700::1001"}
+              {
+                "title": "1.1.1.1 · Primary v4",
+                "value": "1.1.1.1"
+              },
+              {
+                "title": "1.0.0.1 · Secondary v4",
+                "value": "1.0.0.1"
+              },
+              {
+                "title": "2606:4700:4700::1111 · Primary v6",
+                "value": "2606:4700:4700::1111"
+              },
+              {
+                "title": "2606:4700:4700::1001 · Secondary v6",
+                "value": "2606:4700:4700::1001"
+              }
             ]
           }
         ],
-        "server": {"type": "udp", "tag": "cloudflare_udp", "server_port": 53, "server": "@dns_ip", "detour": "@outbound"}
+        "server": {
+          "type": "udp",
+          "tag": "cloudflare_udp",
+          "server_port": 53,
+          "server": "@dns_ip",
+          "detour": "@outbound"
+        }
       },
       {
         "description": "Cloudflare DoT",
         "enabled": true,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "vpn-1", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
-          { "name": "dns_ip", "type": "enum", "title": "DoT server IP", "tooltip": "Cloudflare Public DNS address for DNS-over-TLS (port 853).",
+          {
+            "name": "outbound",
+            "type": "outbound",
+            "default_value": "vpn-1",
+            "title": "Outbound",
+            "tooltip": "Which direction carries DNS queries to this server"
+          },
+          {
+            "name": "dns_ip",
+            "type": "enum",
+            "title": "DoT server IP",
+            "tooltip": "Cloudflare Public DNS address for DNS-over-TLS (port 853).",
             "default_value": "1.1.1.1",
             "options": [
-              {"title": "1.1.1.1 · Primary v4", "value": "1.1.1.1"},
-              {"title": "1.0.0.1 · Secondary v4", "value": "1.0.0.1"},
-              {"title": "2606:4700:4700::1111 · Primary v6", "value": "2606:4700:4700::1111"},
-              {"title": "2606:4700:4700::1001 · Secondary v6", "value": "2606:4700:4700::1001"}
+              {
+                "title": "1.1.1.1 · Primary v4",
+                "value": "1.1.1.1"
+              },
+              {
+                "title": "1.0.0.1 · Secondary v4",
+                "value": "1.0.0.1"
+              },
+              {
+                "title": "2606:4700:4700::1111 · Primary v6",
+                "value": "2606:4700:4700::1111"
+              },
+              {
+                "title": "2606:4700:4700::1001 · Secondary v6",
+                "value": "2606:4700:4700::1001"
+              }
             ]
           }
         ],
-        "server": {"type": "tls", "tag": "cloudflare_dot", "server_port": 853, "server": "@dns_ip", "detour": "@outbound"}
+        "server": {
+          "type": "tls",
+          "tag": "cloudflare_dot",
+          "server_port": 853,
+          "server": "@dns_ip",
+          "detour": "@outbound"
+        }
       },
       {
         "description": "Safe DNS (DoT)",
         "enabled": false,
         "vars": [
-          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
-          { "name": "safe_profile", "type": "enum", "title": "Safe profile", "tooltip": "DNS-over-TLS with built-in blocking: malware (Quad9), ads (AdGuard), or ads + adult (AdGuard Family).",
+          {
+            "name": "outbound",
+            "type": "outbound",
+            "default_value": "direct-out",
+            "title": "Outbound",
+            "tooltip": "Which direction carries DNS queries to this server"
+          },
+          {
+            "name": "safe_profile",
+            "type": "enum",
+            "title": "Safe profile",
+            "tooltip": "DNS-over-TLS with built-in blocking: malware (Quad9), ads (AdGuard), or ads + adult (AdGuard Family).",
             "default_value": "9.9.9.9",
             "options": [
-              {"title": "Quad9 · anti-malware", "value": "9.9.9.9"},
-              {"title": "AdGuard · ad block", "value": "dns.adguard-dns.com"},
-              {"title": "AdGuard Family · ad + adult", "value": "family.adguard-dns.com"}
+              {
+                "title": "Quad9 · anti-malware",
+                "value": "9.9.9.9"
+              },
+              {
+                "title": "AdGuard · ad block",
+                "value": "dns.adguard-dns.com"
+              },
+              {
+                "title": "AdGuard Family · ad + adult",
+                "value": "family.adguard-dns.com"
+              }
             ]
           },
-          {"name": "dom_resolver", "type": "dns_servers", "default_value": "google_udp", "title": "Domain resolver", "tooltip": "DNS server used to resolve the Safe DNS hostname itself (AdGuard profiles use a domain address)."}
+          {
+            "name": "dom_resolver",
+            "type": "dns_servers",
+            "default_value": "google_udp",
+            "title": "Domain resolver",
+            "tooltip": "DNS server used to resolve the Safe DNS hostname itself (AdGuard profiles use a domain address)."
+          }
         ],
-        "server": {"type": "tls", "tag": "safe_dns_dot", "server_port": 853, "server": "@safe_profile", "domain_resolver": "@dom_resolver", "detour": "@outbound"}
+        "server": {
+          "type": "tls",
+          "tag": "safe_dns_dot",
+          "server_port": 853,
+          "server": "@safe_profile",
+          "domain_resolver": "@dom_resolver",
+          "detour": "@outbound"
+        }
       },
       {
         "description": "OpenDNS UDP (direct)",
         "enabled": true,
-        "server": {"type": "udp", "tag": "opendns_udp", "server_port": 53, "server": "208.67.222.222"}
+        "server": {
+          "type": "udp",
+          "tag": "opendns_udp",
+          "server_port": 53,
+          "server": "208.67.222.222"
+        }
       },
       {
         "description": "Quad9 DoH (via VPN, anti-malware)",
         "enabled": true,
-        "server": {"type": "https", "tag": "quad9_doh", "server_port": 443, "server": "9.9.9.9", "path": "/dns-query", "tls": {"enabled": true, "server_name": "dns.quad9.net"}, "detour": "vpn-1"}
+        "server": {
+          "type": "https",
+          "tag": "quad9_doh",
+          "server_port": 443,
+          "server": "9.9.9.9",
+          "path": "/dns-query",
+          "tls": {
+            "enabled": true,
+            "server_name": "dns.quad9.net"
+          },
+          "detour": "vpn-1"
+        }
       },
       {
         "description": "Shield DNS (multi-provider group)",
         "enabled": true,
-        "server": {"type": "group", "tag": "dns_shield", "servers": ["google_udp", "cloudflare_udp", "opendns_udp", "google_doh", "google_dot", "cloudflare_dot", "quad9_doh", "yandex_udp", "yandex_dot"], "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m"}
+        "server": {
+          "type": "group",
+          "tag": "dns_shield",
+          "servers": [
+            "google_udp",
+            "cloudflare_udp",
+            "opendns_udp",
+            "google_doh",
+            "google_dot",
+            "cloudflare_dot",
+            "quad9_doh",
+            "yandex_udp",
+            "yandex_dot"
+          ],
+          "mode": "fastest",
+          "error_ttl": "5m",
+          "win_ttl": "5m"
+        }
       }
     ],
     "rules": []
@@ -134,38 +349,130 @@
     "url": "https://www.gstatic.com/generate_204",
     "timeout_ms": 5000,
     "presets": [
-      {"id": "google-204", "name": "Google 204", "url": "https://www.gstatic.com/generate_204"},
-      {"id": "cloudflare", "name": "Cloudflare", "url": "https://cp.cloudflare.com/generate_204"},
-      {"id": "apple", "name": "Apple", "url": "https://captive.apple.com/hotspot-detect.html"},
-      {"id": "firefox", "name": "Firefox", "url": "https://detectportal.firefox.com/canonical.html"},
-      {"id": "yandex", "name": "Yandex", "url": "https://ya.ru/"}
+      {
+        "id": "google-204",
+        "name": "Google 204",
+        "url": "https://www.gstatic.com/generate_204"
+      },
+      {
+        "id": "cloudflare",
+        "name": "Cloudflare",
+        "url": "https://cp.cloudflare.com/generate_204"
+      },
+      {
+        "id": "apple",
+        "name": "Apple",
+        "url": "https://captive.apple.com/hotspot-detect.html"
+      },
+      {
+        "id": "firefox",
+        "name": "Firefox",
+        "url": "https://detectportal.firefox.com/canonical.html"
+      },
+      {
+        "id": "yandex",
+        "name": "Yandex",
+        "url": "https://ya.ru/"
+      }
     ]
   },
   "speed_test_options": {
     "servers": [
-      {"id": "cloudflare", "name": "Cloudflare", "download_url": "https://speed.cloudflare.com/__down?bytes=25000000", "upload_url": "https://speed.cloudflare.com/__up", "upload_method": "POST", "ping_url": "https://speed.cloudflare.com/__down?bytes=0"},
-      {"id": "hostkey-moscow", "name": "Hostkey (Moscow)", "download_url": "https://spd-rudp.hostkey.ru/files/10mb.bin", "ping_url": "https://spd-rudp.hostkey.ru/"},
-      {"id": "selectel-ru", "name": "Selectel (RU)", "download_url": "https://speedtest.selectel.ru/10MB", "ping_url": "https://speedtest.selectel.ru/"},
-      {"id": "hostkey-frankfurt", "name": "Hostkey (Frankfurt)", "download_url": "https://spd-desrv.hostkey.com/files/10mb.bin", "ping_url": "https://spd-desrv.hostkey.com/"},
-      {"id": "hostkey-amsterdam", "name": "Hostkey (Amsterdam)", "download_url": "https://spd-nlsrv.hostkey.com/files/10mb.bin", "ping_url": "https://spd-nlsrv.hostkey.com/"},
-      {"id": "hostkey-helsinki", "name": "Hostkey (Helsinki)", "download_url": "https://spd-fisrv.hostkey.com/files/10mb.bin", "ping_url": "https://spd-fisrv.hostkey.com/"},
-      {"id": "hostkey-new-york", "name": "Hostkey (New York)", "download_url": "https://spd-uswb.hostkey.com/files/10mb.bin", "ping_url": "https://spd-uswb.hostkey.com/"},
-      {"id": "tele2-eu", "name": "Tele2 (EU)", "download_url": "http://speedtest.tele2.net/10MB.zip", "upload_url": "http://speedtest.tele2.net/upload.php", "ping_url": "http://speedtest.tele2.net/"},
-      {"id": "ovh-france", "name": "OVH (France)", "download_url": "https://proof.ovh.net/files/10Mb.dat", "ping_url": "https://proof.ovh.net/"},
-      {"id": "thinkbroadband-uk", "name": "ThinkBroadband (UK)", "download_url": "http://ipv4.download.thinkbroadband.com/10MB.zip", "ping_url": "http://ipv4.download.thinkbroadband.com/"}
+      {
+        "id": "cloudflare",
+        "name": "Cloudflare",
+        "download_url": "https://speed.cloudflare.com/__down?bytes=25000000",
+        "upload_url": "https://speed.cloudflare.com/__up",
+        "upload_method": "POST",
+        "ping_url": "https://speed.cloudflare.com/__down?bytes=0"
+      },
+      {
+        "id": "hostkey-moscow",
+        "name": "Hostkey (Moscow)",
+        "download_url": "https://spd-rudp.hostkey.ru/files/10mb.bin",
+        "ping_url": "https://spd-rudp.hostkey.ru/"
+      },
+      {
+        "id": "selectel-ru",
+        "name": "Selectel (RU)",
+        "download_url": "https://speedtest.selectel.ru/10MB",
+        "ping_url": "https://speedtest.selectel.ru/"
+      },
+      {
+        "id": "hostkey-frankfurt",
+        "name": "Hostkey (Frankfurt)",
+        "download_url": "https://spd-desrv.hostkey.com/files/10mb.bin",
+        "ping_url": "https://spd-desrv.hostkey.com/"
+      },
+      {
+        "id": "hostkey-amsterdam",
+        "name": "Hostkey (Amsterdam)",
+        "download_url": "https://spd-nlsrv.hostkey.com/files/10mb.bin",
+        "ping_url": "https://spd-nlsrv.hostkey.com/"
+      },
+      {
+        "id": "hostkey-helsinki",
+        "name": "Hostkey (Helsinki)",
+        "download_url": "https://spd-fisrv.hostkey.com/files/10mb.bin",
+        "ping_url": "https://spd-fisrv.hostkey.com/"
+      },
+      {
+        "id": "hostkey-new-york",
+        "name": "Hostkey (New York)",
+        "download_url": "https://spd-uswb.hostkey.com/files/10mb.bin",
+        "ping_url": "https://spd-uswb.hostkey.com/"
+      },
+      {
+        "id": "tele2-eu",
+        "name": "Tele2 (EU)",
+        "download_url": "http://speedtest.tele2.net/10MB.zip",
+        "upload_url": "http://speedtest.tele2.net/upload.php",
+        "ping_url": "http://speedtest.tele2.net/"
+      },
+      {
+        "id": "ovh-france",
+        "name": "OVH (France)",
+        "download_url": "https://proof.ovh.net/files/10Mb.dat",
+        "ping_url": "https://proof.ovh.net/"
+      },
+      {
+        "id": "thinkbroadband-uk",
+        "name": "ThinkBroadband (UK)",
+        "download_url": "http://ipv4.download.thinkbroadband.com/10MB.zip",
+        "ping_url": "http://ipv4.download.thinkbroadband.com/"
+      }
     ],
-    "stream_options": [1, 4, 10],
+    "stream_options": [
+      1,
+      4,
+      10
+    ],
     "default_streams": 4
   },
   "group_templates": {
     "magic_nodes": {
-      "auto": {"title": "Auto", "source": "generate", "tpl": "{parent_tag}-auto"},
-      "direct": {"title": "Direct", "source": "preset", "tag": "direct-out"},
-      "block": {"title": "Block", "source": "preset", "tag": "block"}
+      "auto": {
+        "title": "Auto",
+        "source": "generate",
+        "tpl": "{parent_tag}-auto"
+      },
+      "direct": {
+        "title": "Direct",
+        "source": "preset",
+        "tag": "direct-out"
+      },
+      "block": {
+        "title": "Block",
+        "source": "preset",
+        "tag": "block"
+      }
     },
-    "channel": {
+    "direction": {
       "type": "selector",
-      "include": ["direct", "auto"],
+      "include": [
+        "direct",
+        "auto"
+      ],
       "options": {
         "interrupt_exist_connections": true
       }
@@ -180,9 +487,17 @@
       }
     }
   },
-  "default_channels": [
-    {"tag": "vpn-1", "label": "VPN ①", "default_enabled": true},
-    {"tag": "vpn-2", "label": "VPN ②", "default_enabled": false}
+  "default_directions": [
+    {
+      "tag": "vpn-1",
+      "label": "VPN ①",
+      "default_enabled": true
+    },
+    {
+      "tag": "vpn-2",
+      "label": "VPN ②",
+      "default_enabled": false
+    }
   ],
   "sections": [
     {
@@ -191,13 +506,35 @@
       "chapter": "core",
       "description": "Logging and core settings",
       "vars": [
-        { "name": "log_level", "type": "enum", "wizard_ui": "edit", "title": "Log level", "tooltip": "Verbosity of sing-box logs",
+        {
+          "name": "log_level",
+          "type": "enum",
+          "wizard_ui": "edit",
+          "title": "Log level",
+          "tooltip": "Verbosity of sing-box logs",
           "default_value": "warn",
-          "options": ["trace", "debug", "info", "warn", "error", "fatal", "panic"]
+          "options": [
+            "trace",
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "fatal",
+            "panic"
+          ]
         },
-        { "name": "certificate_store", "type": "enum", "wizard_ui": "edit", "title": "Certificate store", "tooltip": "Root certificates used to verify TLS servers. On Android 7.x and older the system store is outdated — Let's Encrypt and other modern authorities are missing, so TLS nodes fail to connect. Switch to Mozilla or Chrome to use an up-to-date bundle shipped inside the app.",
+        {
+          "name": "certificate_store",
+          "type": "enum",
+          "wizard_ui": "edit",
+          "title": "Certificate store",
+          "tooltip": "Root certificates used to verify TLS servers. On Android 7.x and older the system store is outdated — Let's Encrypt and other modern authorities are missing, so TLS nodes fail to connect. Switch to Mozilla or Chrome to use an up-to-date bundle shipped inside the app.",
           "default_value": "system",
-          "options": ["system", "mozilla", "chrome"]
+          "options": [
+            "system",
+            "mozilla",
+            "chrome"
+          ]
         }
       ]
     },
@@ -207,7 +544,14 @@
       "chapter": "core",
       "description": "Connection and routing behavior",
       "vars": [
-        {"name": "auto_detect_interface", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Auto-detect interface", "tooltip": "Automatically detect the default network interface"}
+        {
+          "name": "auto_detect_interface",
+          "type": "bool",
+          "default_value": "true",
+          "wizard_ui": "edit",
+          "title": "Auto-detect interface",
+          "tooltip": "Automatically detect the default network interface"
+        }
       ]
     },
     {
@@ -216,10 +560,27 @@
       "chapter": "internal",
       "description": "Internal globals referenced by presets — not shown as VPN settings.",
       "vars": [
-        {"name": "resolve_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Resolve destination IP", "tooltip": "Resolve the sniffed domain to an IP before routing, so GeoIP and IP rules can match. Turn off when using FakeIP — the fake IP already carries the domain, and a real lookup here would bypass FakeIP and can fail on a broken resolver."},
-        { "name": "resolve_strategy", "type": "enum", "wizard_ui": "edit", "title": "Resolve strategy", "tooltip": "IP version preference for DNS resolution",
+        {
+          "name": "resolve_enabled",
+          "type": "bool",
+          "default_value": "true",
+          "wizard_ui": "edit",
+          "title": "Resolve destination IP",
+          "tooltip": "Resolve the sniffed domain to an IP before routing, so GeoIP and IP rules can match. Turn off when using FakeIP — the fake IP already carries the domain, and a real lookup here would bypass FakeIP and can fail on a broken resolver."
+        },
+        {
+          "name": "resolve_strategy",
+          "type": "enum",
+          "wizard_ui": "edit",
+          "title": "Resolve strategy",
+          "tooltip": "IP version preference for DNS resolution",
           "default_value": "ipv4_only",
-          "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"]
+          "options": [
+            "prefer_ipv4",
+            "prefer_ipv6",
+            "ipv4_only",
+            "ipv6_only"
+          ]
         }
       ]
     },
@@ -229,17 +590,50 @@
       "chapter": "routing",
       "description": "URLTest tuning for the ✨auto group",
       "vars": [
-        { "name": "urltest_url", "type": "text", "wizard_ui": "edit", "title": "Test URL", "tooltip": "Endpoint for measuring proxy latency. Pick a preset or type any URL — 204 / tiny-body endpoints are best.",
+        {
+          "name": "urltest_url",
+          "type": "text",
+          "wizard_ui": "edit",
+          "title": "Test URL",
+          "tooltip": "Endpoint for measuring proxy latency. Pick a preset or type any URL — 204 / tiny-body endpoints are best.",
           "default_value": "https://cp.cloudflare.com/generate_204",
-          "options": ["https://cp.cloudflare.com/generate_204", "https://www.gstatic.com/generate_204", "https://captive.apple.com/hotspot-detect.html"]
+          "options": [
+            "https://cp.cloudflare.com/generate_204",
+            "https://www.gstatic.com/generate_204",
+            "https://captive.apple.com/hotspot-detect.html"
+          ]
         },
-        { "name": "urltest_interval", "type": "text", "wizard_ui": "edit", "title": "Test interval", "tooltip": "How often sing-box re-tests and re-picks. Lower → faster switching, but more background traffic and battery: each cycle dials the servers (waking suspended tunnels). 15m is the battery-friendly default.",
+        {
+          "name": "urltest_interval",
+          "type": "text",
+          "wizard_ui": "edit",
+          "title": "Test interval",
+          "tooltip": "How often sing-box re-tests and re-picks. Lower → faster switching, but more background traffic and battery: each cycle dials the servers (waking suspended tunnels). 15m is the battery-friendly default.",
           "default_value": "15m",
-          "options": ["30s", "1m", "3m", "5m", "10m", "15m", "30m"]
+          "options": [
+            "30s",
+            "1m",
+            "3m",
+            "5m",
+            "10m",
+            "15m",
+            "30m"
+          ]
         },
-        { "name": "urltest_tolerance", "type": "int", "wizard_ui": "edit", "title": "Tolerance (ms)", "tooltip": "Only switch proxy if latency difference exceeds this",
+        {
+          "name": "urltest_tolerance",
+          "type": "int",
+          "wizard_ui": "edit",
+          "title": "Tolerance (ms)",
+          "tooltip": "Only switch proxy if latency difference exceeds this",
           "default_value": "30",
-          "options": ["10", "30", "50", "100", "200"]
+          "options": [
+            "10",
+            "30",
+            "50",
+            "100",
+            "200"
+          ]
         }
       ]
     },
@@ -249,12 +643,38 @@
       "chapter": "dns",
       "description": "Domain name resolution",
       "vars": [
-        { "name": "dns_strategy", "type": "enum", "wizard_ui": "edit", "title": "Preferred IP version", "tooltip": "DNS resolution strategy",
+        {
+          "name": "dns_strategy",
+          "type": "enum",
+          "wizard_ui": "edit",
+          "title": "Preferred IP version",
+          "tooltip": "DNS resolution strategy",
           "default_value": "ipv4_only",
-          "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"]
+          "options": [
+            "prefer_ipv4",
+            "prefer_ipv6",
+            "ipv4_only",
+            "ipv6_only"
+          ]
         },
-        {"name": "dns_default_domain_resolver", "type": "text", "default_value": "dns_shield", "required": true, "wizard_ui": "fix", "title": "Default domain resolver", "tooltip": "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • cloudflare_udp, google_udp — fast plain UDP\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."},
-        {"name": "dns_final", "type": "text", "default_value": "dns_shield", "required": true, "wizard_ui": "fix", "title": "DNS final", "tooltip": "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, single provider\n  • cloudflare_udp, google_udp — fast plain UDP\n\nlocal_dns_resolver (system DNS) is safe here."}
+        {
+          "name": "dns_default_domain_resolver",
+          "type": "text",
+          "default_value": "dns_shield",
+          "required": true,
+          "wizard_ui": "fix",
+          "title": "Default domain resolver",
+          "tooltip": "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • cloudflare_udp, google_udp — fast plain UDP\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN."
+        },
+        {
+          "name": "dns_final",
+          "type": "text",
+          "default_value": "dns_shield",
+          "required": true,
+          "wizard_ui": "fix",
+          "title": "DNS final",
+          "tooltip": "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, single provider\n  • cloudflare_udp, google_udp — fast plain UDP\n\nlocal_dns_resolver (system DNS) is safe here."
+        }
       ]
     },
     {
@@ -263,23 +683,104 @@
       "chapter": "core",
       "description": "Virtual network interface",
       "vars": [
-        {"name": "tun_address", "type": "text", "default_value": "172.16.0.1/30", "wizard_ui": "edit", "title": "IPv4 address", "tooltip": "TUN interface address (CIDR)"},
-        { "name": "ipv6_enabled", "type": "bool", "wizard_ui": "edit", "title": "Enable IPv6", "tooltip": "Add an IPv6 address to the tunnel. Off by default — turn on only if your network has working IPv6. Turning on sets resolution to prefer IPv4, turning off forces IPv4-only — you can change the strategy in DNS Settings.",
-          "default_value": "false",
-          "on_change": { "set": {
-              "@dns_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}},
-              "@resolve_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}}
-          }}
+        {
+          "name": "tun_address",
+          "type": "text",
+          "default_value": "172.16.0.1/30",
+          "wizard_ui": "edit",
+          "title": "IPv4 address",
+          "tooltip": "TUN interface address (CIDR)"
         },
-        {"name": "tun_address6", "type": "text", "default_value": "fdfe:dcba:9876::1/126", "wizard_ui": "edit", "title": "IPv6 address", "tooltip": "TUN interface IPv6 address (CIDR). Applied only when Enable IPv6 is on."},
-        {"name": "route_address_enable", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "Custom tunnel routes", "tooltip": "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves."},
-        {"name": "tun_name", "type": "text", "default_value": "lxbox", "wizard_ui": "edit", "title": "TUN interface", "tooltip": "system name"},
-        {"name": "tun_mtu", "type": "int", "default_value": "1492", "wizard_ui": "edit", "title": "MTU", "tooltip": "1492 recommended for mobile/WiFi"},
-        {"name": "tun_auto_route", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Auto route", "tooltip": "Let sing-box manage routing table"},
-        {"name": "tun_strict_route", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "Strict route", "tooltip": "May break connectivity on some devices"},
-        { "name": "tun_stack", "type": "enum", "wizard_ui": "edit", "title": "Stack", "tooltip": "system (default), gvisor (userspace), mixed",
+        {
+          "name": "ipv6_enabled",
+          "type": "bool",
+          "wizard_ui": "edit",
+          "title": "Enable IPv6",
+          "tooltip": "Add an IPv6 address to the tunnel. Off by default — turn on only if your network has working IPv6. Turning on sets resolution to prefer IPv4, turning off forces IPv4-only — you can change the strategy in DNS Settings.",
+          "default_value": "false",
+          "#on_change": {
+            "#set": {
+              "@dns_strategy": {
+                "#if": {
+                  "#and": [
+                    "@ipv6_enabled"
+                  ],
+                  "#value": "prefer_ipv4",
+                  "#else": "ipv4_only"
+                }
+              },
+              "@resolve_strategy": {
+                "#if": {
+                  "#and": [
+                    "@ipv6_enabled"
+                  ],
+                  "#value": "prefer_ipv4",
+                  "#else": "ipv4_only"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "tun_address6",
+          "type": "text",
+          "default_value": "fdfe:dcba:9876::1/126",
+          "wizard_ui": "edit",
+          "title": "IPv6 address",
+          "tooltip": "TUN interface IPv6 address (CIDR). Applied only when Enable IPv6 is on."
+        },
+        {
+          "name": "route_address_enable",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "edit",
+          "title": "Custom tunnel routes",
+          "tooltip": "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves."
+        },
+        {
+          "name": "tun_name",
+          "type": "text",
+          "default_value": "lxbox",
+          "wizard_ui": "edit",
+          "title": "TUN interface",
+          "tooltip": "system name"
+        },
+        {
+          "name": "tun_mtu",
+          "type": "int",
+          "default_value": "1492",
+          "wizard_ui": "edit",
+          "title": "MTU",
+          "tooltip": "1492 recommended for mobile/WiFi"
+        },
+        {
+          "name": "tun_auto_route",
+          "type": "bool",
+          "default_value": "true",
+          "wizard_ui": "edit",
+          "title": "Auto route",
+          "tooltip": "Let sing-box manage routing table"
+        },
+        {
+          "name": "tun_strict_route",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "edit",
+          "title": "Strict route",
+          "tooltip": "May break connectivity on some devices"
+        },
+        {
+          "name": "tun_stack",
+          "type": "enum",
+          "wizard_ui": "edit",
+          "title": "Stack",
+          "tooltip": "system (default), gvisor (userspace), mixed",
           "default_value": "system",
-          "options": ["system", "gvisor", "mixed"]
+          "options": [
+            "system",
+            "gvisor",
+            "mixed"
+          ]
         }
       ]
     },
@@ -289,33 +790,100 @@
       "chapter": "core",
       "description": "Local proxy inbound vars (hidden — values come from VpnModeConfig)",
       "vars": [
-        { "name": "vpn_mode", "type": "enum", "wizard_ui": "hidden", "title": "VPN mode", "tooltip": "How the core captures traffic. Set from VPN Settings → Mode.",
+        {
+          "name": "vpn_mode",
+          "type": "enum",
+          "wizard_ui": "hidden",
+          "title": "VPN mode",
+          "tooltip": "How the core captures traffic. Set from VPN Settings → Mode.",
           "default_value": "vpn",
           "options": [
-            {"title": "VPN — system-wide tunnel", "value": "vpn"},
-            {"title": "Proxy — local port only, no TUN", "value": "proxy"},
-            {"title": "VPN + Proxy — both", "value": "vpn_proxy"}
+            {
+              "title": "VPN — system-wide tunnel",
+              "value": "vpn"
+            },
+            {
+              "title": "Proxy — local port only, no TUN",
+              "value": "proxy"
+            },
+            {
+              "title": "VPN + Proxy — both",
+              "value": "vpn_proxy"
+            }
           ]
         },
-        { "name": "proxy_type", "type": "enum", "wizard_ui": "hidden", "title": "Local proxy protocol", "tooltip": "Inbound type for the local proxy port.",
+        {
+          "name": "proxy_type",
+          "type": "enum",
+          "wizard_ui": "hidden",
+          "title": "Local proxy protocol",
+          "tooltip": "Inbound type for the local proxy port.",
           "default_value": "mixed",
           "options": [
-            {"title": "Mixed — HTTP + SOCKS5 on one port", "value": "mixed"},
-            {"title": "HTTP only", "value": "http"},
-            {"title": "SOCKS5 only", "value": "socks"}
+            {
+              "title": "Mixed — HTTP + SOCKS5 on one port",
+              "value": "mixed"
+            },
+            {
+              "title": "HTTP only",
+              "value": "http"
+            },
+            {
+              "title": "SOCKS5 only",
+              "value": "socks"
+            }
           ]
         },
-        { "name": "proxy_listen", "type": "text", "wizard_ui": "hidden", "title": "Listen address", "tooltip": "IPv4 the local proxy binds to. Suggestions above; any valid IPv4 is allowed (e.g. a specific LAN IP). Anything other than 127.x is reachable from the network and forces auth on.",
+        {
+          "name": "proxy_listen",
+          "type": "text",
+          "wizard_ui": "hidden",
+          "title": "Listen address",
+          "tooltip": "IPv4 the local proxy binds to. Suggestions above; any valid IPv4 is allowed (e.g. a specific LAN IP). Anything other than 127.x is reachable from the network and forces auth on.",
           "default_value": "127.0.0.1",
           "options": [
-            {"title": "127.0.0.1 — this device only", "value": "127.0.0.1"},
-            {"title": "0.0.0.0 — all interfaces (LAN)", "value": "0.0.0.0"}
+            {
+              "title": "127.0.0.1 — this device only",
+              "value": "127.0.0.1"
+            },
+            {
+              "title": "0.0.0.0 — all interfaces (LAN)",
+              "value": "0.0.0.0"
+            }
           ]
         },
-        {"name": "proxy_port", "type": "int", "default_value": "2080", "wizard_ui": "hidden", "title": "Listen port", "tooltip": "Local proxy port (1024..65535)."},
-        {"name": "proxy_user", "type": "text", "default_value": "user", "wizard_ui": "hidden", "title": "Proxy username", "tooltip": "Username for proxy auth (when auth is on)."},
-        {"name": "proxy_pass", "type": "secret", "default_value": "", "wizard_ui": "hidden", "title": "Proxy password", "tooltip": "Password for proxy auth. Auto-generated when auth turns on."},
-        {"name": "proxy_auth", "type": "bool", "default_value": "false", "wizard_ui": "hidden", "title": "Require auth", "tooltip": "Whether the local proxy requires username/password. Forced on for non-loopback listen."}
+        {
+          "name": "proxy_port",
+          "type": "int",
+          "default_value": "2080",
+          "wizard_ui": "hidden",
+          "title": "Listen port",
+          "tooltip": "Local proxy port (1024..65535)."
+        },
+        {
+          "name": "proxy_user",
+          "type": "text",
+          "default_value": "user",
+          "wizard_ui": "hidden",
+          "title": "Proxy username",
+          "tooltip": "Username for proxy auth (when auth is on)."
+        },
+        {
+          "name": "proxy_pass",
+          "type": "secret",
+          "default_value": "",
+          "wizard_ui": "hidden",
+          "title": "Proxy password",
+          "tooltip": "Password for proxy auth. Auto-generated when auth turns on."
+        },
+        {
+          "name": "proxy_auth",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "hidden",
+          "title": "Require auth",
+          "tooltip": "Whether the local proxy requires username/password. Forced on for non-loopback listen."
+        }
       ]
     },
     {
@@ -324,10 +892,38 @@
       "chapter": "core",
       "description": "Splits the TLS handshake so it carries no single-packet signature",
       "vars": [
-        {"name": "tls_fragment", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "TLS Fragment", "tooltip": "Split TLS ClientHello into small TCP segments"},
-        {"name": "tls_record_fragment", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "TLS Record Fragment", "tooltip": "Split handshake into multiple TLS records (try this first)"},
-        {"name": "tls_fragment_fallback_delay", "type": "text", "default_value": "500ms", "wizard_ui": "edit", "title": "Fallback delay", "tooltip": "Wait time when automatic detection fails"},
-        {"name": "tls_mixed_case_sni", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "Mixed-case SNI", "tooltip": "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact"}
+        {
+          "name": "tls_fragment",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "edit",
+          "title": "TLS Fragment",
+          "tooltip": "Split TLS ClientHello into small TCP segments"
+        },
+        {
+          "name": "tls_record_fragment",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "edit",
+          "title": "TLS Record Fragment",
+          "tooltip": "Split handshake into multiple TLS records (try this first)"
+        },
+        {
+          "name": "tls_fragment_fallback_delay",
+          "type": "text",
+          "default_value": "500ms",
+          "wizard_ui": "edit",
+          "title": "Fallback delay",
+          "tooltip": "Wait time when automatic detection fails"
+        },
+        {
+          "name": "tls_mixed_case_sni",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "edit",
+          "title": "Mixed-case SNI",
+          "tooltip": "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact"
+        }
       ]
     }
   ],
@@ -336,7 +932,9 @@
       "level": "@log_level",
       "timestamp": true
     },
-    "certificate": {"store": "@certificate_store"},
+    "certificate": {
+      "store": "@certificate_store"
+    },
     "dns": {
       "servers": [],
       "rules": [],
@@ -344,34 +942,97 @@
       "strategy": "@dns_strategy"
     },
     "inbounds": [
-      {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}], "value": {
-          "type": "tun",
-          "tag": "tun-in",
-          "interface_name": "@tun_name",
-          "address": [
-            "@tun_address",
-            {"#if": {"and": ["@ipv6_enabled"], "value": "@tun_address6"}}
+      {
+        "#if": {
+          "#and": [
+            {
+              "@vpn_mode": {
+                "#in": [
+                  "vpn",
+                  "vpn_proxy"
+                ]
+              }
+            }
           ],
-          "#if": {"and": ["@route_address_enable"], "value": {"route_address": ["0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"]}},
-          "mtu": "@tun_mtu",
-          "auto_route": "@tun_auto_route",
-          "strict_route": "@tun_strict_route",
-          "stack": "@tun_stack"
+          "#value": {
+            "type": "tun",
+            "tag": "tun-in",
+            "interface_name": "@tun_name",
+            "address": [
+              "@tun_address",
+              {
+                "#if": {
+                  "#and": [
+                    "@ipv6_enabled"
+                  ],
+                  "#value": "@tun_address6"
+                }
+              }
+            ],
+            "#if": {
+              "#and": [
+                "@route_address_enable"
+              ],
+              "#value": {
+                "route_address": [
+                  "0.0.0.0/1",
+                  "128.0.0.0/1",
+                  "::/1",
+                  "8000::/1"
+                ]
+              }
+            },
+            "mtu": "@tun_mtu",
+            "auto_route": "@tun_auto_route",
+            "strict_route": "@tun_strict_route",
+            "stack": "@tun_stack"
+          }
         }
-      }},
-      {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": {
-          "type": "@proxy_type",
-          "tag": "mixed-in",
-          "listen": "@proxy_listen",
-          "listen_port": "@proxy_port",
-          "#if": {"and": ["@proxy_auth"], "value": {"users": [{"username": "@proxy_user", "password": "@proxy_pass"}]}}
+      },
+      {
+        "#if": {
+          "#and": [
+            {
+              "@vpn_mode": {
+                "#in": [
+                  "proxy",
+                  "vpn_proxy"
+                ]
+              }
+            }
+          ],
+          "#value": {
+            "type": "@proxy_type",
+            "tag": "mixed-in",
+            "listen": "@proxy_listen",
+            "listen_port": "@proxy_port",
+            "#if": {
+              "#and": [
+                "@proxy_auth"
+              ],
+              "#value": {
+                "users": [
+                  {
+                    "username": "@proxy_user",
+                    "password": "@proxy_pass"
+                  }
+                ]
+              }
+            }
+          }
         }
-      }}
+      }
     ],
     "endpoints": [],
     "outbounds": [
-      {"type": "direct", "tag": "direct-out"},
-      {"type": "block", "tag": "block"}
+      {
+        "type": "direct",
+        "tag": "direct-out"
+      },
+      {
+        "type": "block",
+        "tag": "block"
+      }
     ],
     "route": {
       "find_process": true,
@@ -388,224 +1049,808 @@
       }
     },
     "services": [
-      {"type": "oom-killer"}
+      {
+        "type": "oom-killer"
+      }
     ]
   },
   "selectable_rules": [
     {
       "preset_id": "traffic-processing",
-      "ui": {"label": "Traffic Processing", "description": "Core packet handling: sniff the domain, hijack DNS into the tunnel, resolve destinations for routing. Applied first, before all other rules.", "default": true, "locked": true, "num": 0, "isSortable": false},
+      "ui": {
+        "label": "Traffic Processing",
+        "description": "Core packet handling: sniff the domain, hijack DNS into the tunnel, resolve destinations for routing. Applied first, before all other rules.",
+        "default": true,
+        "locked": true,
+        "num": 0,
+        "isSortable": false
+      },
       "vars": [
-        {"name": "sniff_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Packet sniffing", "tooltip": "Detect protocol and domain from packets for accurate routing.\n⚠️ WARNING: turning this off stops protocol matching (e.g. BitTorrent, TLS, QUIC), and domain matching too unless FakeIP is on."},
-        { "name": "sniff_timeout", "type": "enum", "wizard_ui": "edit", "title": "Sniff timeout", "tooltip": "How long to wait for the domain to appear in the packet before giving up.",
-          "default_value": "300ms",
-          "options": ["100ms", "300ms", "500ms", "1s", "3s"]
+        {
+          "name": "sniff_enabled",
+          "type": "bool",
+          "default_value": "true",
+          "wizard_ui": "edit",
+          "title": "Packet sniffing",
+          "tooltip": "Detect protocol and domain from packets for accurate routing.\n⚠️ WARNING: turning this off stops protocol matching (e.g. BitTorrent, TLS, QUIC), and domain matching too unless FakeIP is on."
         },
-        {"name": "hijack_dns_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Hijack DNS", "tooltip": "Route all DNS queries through the tunnel's DNS engine.\n⚠️ WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why."},
-        {"ref": "resolve_enabled"},
-        {"ref": "resolve_strategy"}
+        {
+          "name": "sniff_timeout",
+          "type": "enum",
+          "wizard_ui": "edit",
+          "title": "Sniff timeout",
+          "tooltip": "How long to wait for the domain to appear in the packet before giving up.",
+          "default_value": "300ms",
+          "options": [
+            "100ms",
+            "300ms",
+            "500ms",
+            "1s",
+            "3s"
+          ]
+        },
+        {
+          "name": "hijack_dns_enabled",
+          "type": "bool",
+          "default_value": "true",
+          "wizard_ui": "edit",
+          "title": "Hijack DNS",
+          "tooltip": "Route all DNS queries through the tunnel's DNS engine.\n⚠️ WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why."
+        },
+        {
+          "ref": "resolve_enabled"
+        },
+        {
+          "ref": "resolve_strategy"
+        }
       ],
       "rule": [
-        {"#if": {"and": ["@sniff_enabled"], "value": {
-            "action": "sniff",
-            "inbound": [
-              {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}], "value": "tun-in"}},
-              {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": "mixed-in"}}
+        {
+          "#if": {
+            "#and": [
+              "@sniff_enabled"
             ],
-            "timeout": "@sniff_timeout"
+            "#value": {
+              "action": "sniff",
+              "inbound": [
+                {
+                  "#if": {
+                    "#and": [
+                      {
+                        "@vpn_mode": {
+                          "#in": [
+                            "vpn",
+                            "vpn_proxy"
+                          ]
+                        }
+                      }
+                    ],
+                    "#value": "tun-in"
+                  }
+                },
+                {
+                  "#if": {
+                    "#and": [
+                      {
+                        "@vpn_mode": {
+                          "#in": [
+                            "proxy",
+                            "vpn_proxy"
+                          ]
+                        }
+                      }
+                    ],
+                    "#value": "mixed-in"
+                  }
+                }
+              ],
+              "timeout": "@sniff_timeout"
+            }
           }
-        }},
-        {"#if": {"and": ["@hijack_dns_enabled"], "value": {"protocol": "dns", "action": "hijack-dns"}}},
-        {"#if": {"and": ["@resolve_enabled"], "value": {
-            "action": "resolve",
-            "inbound": [
-              {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}], "value": "tun-in"}},
-              {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": "mixed-in"}}
+        },
+        {
+          "#if": {
+            "#and": [
+              "@hijack_dns_enabled"
             ],
-            "strategy": "@resolve_strategy"
+            "#value": {
+              "protocol": "dns",
+              "action": "hijack-dns"
+            }
           }
-        }}
+        },
+        {
+          "#if": {
+            "#and": [
+              "@resolve_enabled"
+            ],
+            "#value": {
+              "action": "resolve",
+              "inbound": [
+                {
+                  "#if": {
+                    "#and": [
+                      {
+                        "@vpn_mode": {
+                          "#in": [
+                            "vpn",
+                            "vpn_proxy"
+                          ]
+                        }
+                      }
+                    ],
+                    "#value": "tun-in"
+                  }
+                },
+                {
+                  "#if": {
+                    "#and": [
+                      {
+                        "@vpn_mode": {
+                          "#in": [
+                            "proxy",
+                            "vpn_proxy"
+                          ]
+                        }
+                      }
+                    ],
+                    "#value": "mixed-in"
+                  }
+                }
+              ],
+              "strategy": "@resolve_strategy"
+            }
+          }
+        }
       ]
     },
     {
       "preset_id": "block-ads",
-      "ui": {"label": "Block Ads", "description": "Reject ad-related connections. Downloads rule set (~1 MB).", "default": false, "num": 960, "isSortable": true},
+      "ui": {
+        "label": "Block Ads",
+        "description": "Reject ad-related connections. Downloads rule set (~1 MB).",
+        "default": false,
+        "num": 960,
+        "isSortable": true
+      },
       "rule_set": [
-        { "tag": "ads-all", "type": "remote", "format": "binary", "update_interval": "168h",
+        {
+          "tag": "ads-all",
+          "type": "remote",
+          "format": "binary",
+          "update_interval": "168h",
           "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-category-ads-all.srs"
         }
       ],
-      "rule": {"rule_set": "ads-all", "action": "reject"}
+      "rule": {
+        "rule_set": "ads-all",
+        "action": "reject"
+      }
     },
     {
       "preset_id": "ru-direct",
-      "ui": {"label": "Russian domains & IPs", "description": "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc) and Russian IP ranges directly.", "default": true, "num": 1120, "isSortable": true},
+      "ui": {
+        "label": "Russian domains & IPs",
+        "description": "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc) and Russian IP ranges directly.",
+        "default": true,
+        "num": 1120,
+        "isSortable": true
+      },
       "vars": [
-        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route traffic for Russian domains and IPs"},
-        {"name": "dns_enable", "type": "bool", "default_value": "true", "title": "DNS", "tooltip": "Send matched domains to this preset's DNS server and apply DNS-level options like Force IPv4. Turn off to keep routing without DNS changes."},
-        { "name": "dns_ip", "type": "enum", "title": "UDP server IP", "tooltip": "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.",
+        {
+          "name": "outbound",
+          "type": "outbound",
+          "default_value": "direct-out",
+          "title": "Outbound",
+          "tooltip": "Where to route traffic for Russian domains and IPs"
+        },
+        {
+          "name": "dns_enable",
+          "type": "bool",
+          "default_value": "true",
+          "title": "DNS",
+          "tooltip": "Send matched domains to this preset's DNS server and apply DNS-level options like Force IPv4. Turn off to keep routing without DNS changes."
+        },
+        {
+          "name": "dns_ip",
+          "type": "enum",
+          "title": "UDP server IP",
+          "tooltip": "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.",
           "default_value": "77.88.8.8",
           "options": [
-            {"title": "77.88.8.8 · Base", "value": "77.88.8.8"},
-            {"title": "77.88.8.1 · Base alt", "value": "77.88.8.1"},
-            {"title": "2a02:6b8::feed:0ff · Base v6", "value": "2a02:6b8::feed:0ff"},
-            {"title": "77.88.8.88 · Safe", "value": "77.88.8.88"},
-            {"title": "77.88.8.2 · Safe alt", "value": "77.88.8.2"},
-            {"title": "2a02:6b8::feed:bad · Safe v6", "value": "2a02:6b8::feed:bad"},
-            {"title": "2a02:6b8:0:1::feed:bad · Safe v6 alt", "value": "2a02:6b8:0:1::feed:bad"},
-            {"title": "77.88.8.7 · Family", "value": "77.88.8.7"},
-            {"title": "77.88.8.3 · Family alt", "value": "77.88.8.3"},
-            {"title": "2a02:6b8::feed:a11 · Family v6", "value": "2a02:6b8::feed:a11"}
+            {
+              "title": "77.88.8.8 · Base",
+              "value": "77.88.8.8"
+            },
+            {
+              "title": "77.88.8.1 · Base alt",
+              "value": "77.88.8.1"
+            },
+            {
+              "title": "2a02:6b8::feed:0ff · Base v6",
+              "value": "2a02:6b8::feed:0ff"
+            },
+            {
+              "title": "77.88.8.88 · Safe",
+              "value": "77.88.8.88"
+            },
+            {
+              "title": "77.88.8.2 · Safe alt",
+              "value": "77.88.8.2"
+            },
+            {
+              "title": "2a02:6b8::feed:bad · Safe v6",
+              "value": "2a02:6b8::feed:bad"
+            },
+            {
+              "title": "2a02:6b8:0:1::feed:bad · Safe v6 alt",
+              "value": "2a02:6b8:0:1::feed:bad"
+            },
+            {
+              "title": "77.88.8.7 · Family",
+              "value": "77.88.8.7"
+            },
+            {
+              "title": "77.88.8.3 · Family alt",
+              "value": "77.88.8.3"
+            },
+            {
+              "title": "2a02:6b8::feed:a11 · Family v6",
+              "value": "2a02:6b8::feed:a11"
+            }
           ]
         },
-        {"name": "geoip_enabled", "type": "bool", "default_value": "true", "title": "GeoIP IP-range fallback", "tooltip": "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use."},
-        {"name": "force_ipv4", "type": "bool", "default_value": "true", "title": "Force IPv4", "tooltip": "Resolve Russian domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Works through this preset's DNS rule — keep the DNS toggle on. Turn off if your network has functional IPv6."}
+        {
+          "name": "geoip_enabled",
+          "type": "bool",
+          "default_value": "true",
+          "title": "GeoIP IP-range fallback",
+          "tooltip": "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use."
+        },
+        {
+          "name": "force_ipv4",
+          "type": "bool",
+          "default_value": "true",
+          "title": "Force IPv4",
+          "tooltip": "Resolve Russian domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Works through this preset's DNS rule — keep the DNS toggle on. Turn off if your network has functional IPv6."
+        }
       ],
       "rule_set": [
-        { "tag": "ru-domains", "type": "inline",
+        {
+          "tag": "ru-domains",
+          "type": "inline",
           "rules": [
-            {"domain_suffix": ["ru", "su", "xn--p1ai", "xn--p1acf", "xn--80adxhks", "moscow", "tatar", "xn--d1acj3b", "xn--80asehdb", "xn--80aswg", "xn--c1avg", "xn--j1aef"]}
+            {
+              "domain_suffix": [
+                "ru",
+                "su",
+                "xn--p1ai",
+                "xn--p1acf",
+                "xn--80adxhks",
+                "moscow",
+                "tatar",
+                "xn--d1acj3b",
+                "xn--80asehdb",
+                "xn--80aswg",
+                "xn--c1avg",
+                "xn--j1aef"
+              ]
+            }
           ]
         },
-        { "tag": "ru-services", "type": "inline",
+        {
+          "tag": "ru-services",
+          "type": "inline",
           "rules": [
-            {"domain_suffix": ["userapi.com", "avito.st", "yandex.net", "yandex.com", "yastatic.net", "2gis.com", "okko.tv", "premier.one", "lenta.com", "vk.com", "vk-portal.net", "gismeteo.com", "lmru.tech", "mradx.net", "wbstatic.net", "wildberries.by", "trbcdn.net", "sberbank.com",
-      "mcc250.pub.3gppnetwork.org"]}
+            {
+              "domain_suffix": [
+                "userapi.com",
+                "avito.st",
+                "yandex.net",
+                "yandex.com",
+                "yastatic.net",
+                "2gis.com",
+                "okko.tv",
+                "premier.one",
+                "lenta.com",
+                "vk.com",
+                "vk-portal.net",
+                "gismeteo.com",
+                "lmru.tech",
+                "mradx.net",
+                "wbstatic.net",
+                "wildberries.by",
+                "trbcdn.net",
+                "sberbank.com",
+                "mcc250.pub.3gppnetwork.org"
+              ]
+            }
           ]
         },
-        { "tag": "geoip-ru", "enabled": "@geoip_enabled", "type": "remote", "format": "binary", "update_interval": "168h",
+        {
+          "tag": "geoip-ru",
+          "#enable": [
+            "@geoip_enabled"
+          ],
+          "type": "remote",
+          "format": "binary",
+          "update_interval": "168h",
           "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru.srs"
         }
       ],
       "rules": [
-        {"#if": {"and": ["@force_ipv4"], "value": {
-            "rule_set": ["ru-domains", "ru-services"],
-            "action": "resolve",
-            "server": "dns_ru",
-            "strategy": "ipv4_only"
+        {
+          "#if": {
+            "#and": [
+              "@force_ipv4"
+            ],
+            "#value": {
+              "rule_set": [
+                "ru-domains",
+                "ru-services"
+              ],
+              "action": "resolve",
+              "server": "dns_ru",
+              "strategy": "ipv4_only"
+            }
           }
-        }},
-        {"rule_set": ["ru-domains", "ru-services", "geoip-ru"], "outbound": "@outbound"}
+        },
+        {
+          "rule_set": [
+            "ru-domains",
+            "ru-services",
+            "geoip-ru"
+          ],
+          "outbound": "@outbound"
+        }
       ],
       "dns_rules": [
-        {"#if": {"and": ["@force_ipv4"], "value": {"rule_set": ["ru-domains", "ru-services"], "ip_version": 6, "action": "predefined", "rcode": "NOERROR"}}},
-        {"rule_set": ["ru-domains", "ru-services"], "server": "dns_ru", "action": "route"}
+        {
+          "#if": {
+            "#and": [
+              "@force_ipv4"
+            ],
+            "#value": {
+              "rule_set": [
+                "ru-domains",
+                "ru-services"
+              ],
+              "ip_version": 6,
+              "action": "predefined",
+              "rcode": "NOERROR"
+            }
+          }
+        },
+        {
+          "rule_set": [
+            "ru-domains",
+            "ru-services"
+          ],
+          "server": "dns_ru",
+          "action": "route"
+        }
       ],
       "dns_servers": [
-        {"type": "group", "tag": "dns_ru", "servers": ["yandex_udp", "yandex_dot", "yandex_doh"], "mode": "fastest", "error_ttl": "5m", "win_ttl": "5m", "description": "RU DNS group (UDP via channel + DoT via vpn-1 + direct DoH)"},
-        {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@outbound"},
-        {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT (via vpn-1)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "vpn-1"},
-        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH (direct)", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}}
+        {
+          "type": "group",
+          "tag": "dns_ru",
+          "servers": [
+            "yandex_udp",
+            "yandex_dot",
+            "yandex_doh"
+          ],
+          "mode": "fastest",
+          "error_ttl": "5m",
+          "win_ttl": "5m",
+          "description": "RU DNS group (UDP via direction + DoT via vpn-1 + direct DoH)"
+        },
+        {
+          "type": "udp",
+          "tag": "yandex_udp",
+          "server": "@dns_ip",
+          "server_port": 53,
+          "description": "Yandex UDP (IP from above)",
+          "detour": "@outbound"
+        },
+        {
+          "type": "tls",
+          "tag": "yandex_dot",
+          "server": "77.88.8.88",
+          "server_port": 853,
+          "description": "Yandex Safe DoT (via vpn-1)",
+          "tls": {
+            "enabled": true,
+            "server_name": "safe.dot.dns.yandex.net"
+          },
+          "detour": "vpn-1"
+        },
+        {
+          "type": "https",
+          "tag": "yandex_doh",
+          "server": "77.88.8.88",
+          "server_port": 443,
+          "path": "/dns-query",
+          "description": "Yandex Safe DoH (direct)",
+          "tls": {
+            "enabled": true,
+            "server_name": "safe.dot.dns.yandex.net"
+          }
+        }
       ]
     },
     {
       "preset_id": "fakeip",
-      "ui": {"label": "FakeIP", "description": "Instant DNS via placeholder IPs; real names resolve inside the tunnel. Speeds up DNS and prevents pre-tunnel DNS leaks. Not a DPI bypass. Enable below special domains so GeoIP direct routing still works.", "default": false, "num": 1130, "isSortable": true},
+      "ui": {
+        "label": "FakeIP",
+        "description": "Instant DNS via placeholder IPs; real names resolve inside the tunnel. Speeds up DNS and prevents pre-tunnel DNS leaks. Not a DPI bypass. Enable below special domains so GeoIP direct routing still works.",
+        "default": false,
+        "num": 1130,
+        "isSortable": true
+      },
       "vars": [
-        { "name": "rule_enable", "type": "bool", "wizard_ui": "hidden", "required": false,
+        {
+          "name": "rule_enable",
+          "type": "bool",
+          "wizard_ui": "hidden",
+          "required": false,
           "default_value": "true",
-          "on_change": { "set": {
-              "@resolve_enabled": {"#if": {"and": ["@rule_enable", "@dns_enable"], "value": "false", "else": "true"}}
-          }}
+          "#on_change": {
+            "#set": {
+              "@resolve_enabled": {
+                "#if": {
+                  "#and": [
+                    "@rule_enable",
+                    "@dns_enable"
+                  ],
+                  "#value": "false",
+                  "#else": "true"
+                }
+              }
+            }
+          }
         },
-        { "name": "dns_enable", "type": "bool", "title": "DNS", "tooltip": "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset.",
+        {
+          "name": "dns_enable",
+          "type": "bool",
+          "title": "DNS",
+          "tooltip": "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset.",
           "default_value": "true",
-          "on_change": { "set": {
-              "@resolve_enabled": {"#if": {"and": ["@rule_enable", "@dns_enable"], "value": "false", "else": "true"}}
-          }}
+          "#on_change": {
+            "#set": {
+              "@resolve_enabled": {
+                "#if": {
+                  "#and": [
+                    "@rule_enable",
+                    "@dns_enable"
+                  ],
+                  "#value": "false",
+                  "#else": "true"
+                }
+              }
+            }
+          }
         },
-        {"name": "dns_server", "type": "dns_servers", "default_value": "fakeip", "wizard_ui": "hidden", "title": "FakeIP server", "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."},
-        {"name": "force", "type": "bool", "default_value": "true", "title": "Block HTTPS records", "tooltip": "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS."}
+        {
+          "name": "dns_server",
+          "type": "dns_servers",
+          "default_value": "fakeip",
+          "wizard_ui": "hidden",
+          "title": "FakeIP server",
+          "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."
+        },
+        {
+          "name": "force",
+          "type": "bool",
+          "default_value": "true",
+          "title": "Block HTTPS records",
+          "tooltip": "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS."
+        }
       ],
       "dns_rules": [
-        {"#if": {"and": ["@force"], "value": {"query_type": ["HTTPS", "SVCB"], "action": "predefined", "rcode": "NOERROR"}}},
-        {"query_type": ["A", "AAAA"], "server": "@dns_server"}
+        {
+          "#if": {
+            "#and": [
+              "@force"
+            ],
+            "#value": {
+              "query_type": [
+                "HTTPS",
+                "SVCB"
+              ],
+              "action": "predefined",
+              "rcode": "NOERROR"
+            }
+          }
+        },
+        {
+          "query_type": [
+            "A",
+            "AAAA"
+          ],
+          "server": "@dns_server"
+        }
       ],
       "dns_servers": [
-        {"type": "fakeip", "tag": "fakeip", "inet4_range": "198.18.0.0/15", "inet6_range": "fc00::/18", "description": "FakeIP allocator"}
+        {
+          "type": "fakeip",
+          "tag": "fakeip",
+          "inet4_range": "198.18.0.0/15",
+          "inet6_range": "fc00::/18",
+          "description": "FakeIP allocator"
+        }
       ]
     },
     {
       "preset_id": "ru-inside",
-      "ui": {"label": "Russia-only services", "description": "Services available only inside Russia. Direct by default, or route via a channel to reach them from abroad.", "num": 1110, "isSortable": true},
+      "ui": {
+        "label": "Russia-only services",
+        "description": "Services available only inside Russia. Direct by default, or route via a direction to reach them from abroad.",
+        "num": 1110,
+        "isSortable": true
+      },
       "vars": [
-        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route Russia-only services. Direct on a Russian network; pick a Russian channel to reach them from abroad."},
-        {"name": "force_ipv4", "type": "bool", "default_value": "true", "title": "Force IPv4", "tooltip": "Resolve these domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Turn off if your network has functional IPv6."}
+        {
+          "name": "outbound",
+          "type": "outbound",
+          "default_value": "direct-out",
+          "title": "Outbound",
+          "tooltip": "Where to route Russia-only services. Direct on a Russian network; pick a Russian direction to reach them from abroad."
+        },
+        {
+          "name": "force_ipv4",
+          "type": "bool",
+          "default_value": "true",
+          "title": "Force IPv4",
+          "tooltip": "Resolve these domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Turn off if your network has functional IPv6."
+        }
       ],
       "rule_set": [
-        { "tag": "ru-inside", "type": "remote", "format": "binary", "update_interval": "168h",
+        {
+          "tag": "ru-inside",
+          "type": "remote",
+          "format": "binary",
+          "update_interval": "168h",
           "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-ru-available-only-inside.srs"
         }
       ],
       "rules": [
-        {"#if": {"and": ["@force_ipv4"], "value": {"rule_set": "ru-inside", "action": "resolve", "strategy": "ipv4_only"}}},
-        {"rule_set": "ru-inside", "outbound": "@outbound"}
+        {
+          "#if": {
+            "#and": [
+              "@force_ipv4"
+            ],
+            "#value": {
+              "rule_set": "ru-inside",
+              "action": "resolve",
+              "strategy": "ipv4_only"
+            }
+          }
+        },
+        {
+          "rule_set": "ru-inside",
+          "outbound": "@outbound"
+        }
       ]
     },
     {
       "preset_id": "bittorrent",
-      "ui": {"label": "BitTorrent", "description": "Route BitTorrent traffic. Direct by default, or send it to a separate channel.", "default": true, "num": 980, "isSortable": true},
+      "ui": {
+        "label": "BitTorrent",
+        "description": "Route BitTorrent traffic. Direct by default, or send it to a separate direction.",
+        "default": true,
+        "num": 980,
+        "isSortable": true
+      },
       "vars": [
-        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route BitTorrent. Direct to keep it off the VPN, or pick a channel to tunnel it."}
+        {
+          "name": "outbound",
+          "type": "outbound",
+          "default_value": "direct-out",
+          "title": "Outbound",
+          "tooltip": "Where to route BitTorrent. Direct to keep it off the VPN, or pick a direction to tunnel it."
+        }
       ],
-      "rule": {"protocol": ["bittorrent"], "outbound": "@outbound"}
+      "rule": {
+        "protocol": [
+          "bittorrent"
+        ],
+        "outbound": "@outbound"
+      }
     },
     {
       "preset_id": "private-ip",
-      "ui": {"label": "Private IPs", "description": "Route private IP ranges (LAN). Direct by default, or send to a channel to reach routers/devices over a local VPN.", "num": 950, "isSortable": true},
+      "ui": {
+        "label": "Private IPs",
+        "description": "Route private IP ranges (LAN). Direct by default, or send to a direction to reach routers/devices over a local VPN.",
+        "num": 950,
+        "isSortable": true
+      },
       "vars": [
-        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route private/LAN IPs. Direct for local access, or a channel to reach a remote LAN over VPN."}
+        {
+          "name": "outbound",
+          "type": "outbound",
+          "default_value": "direct-out",
+          "title": "Outbound",
+          "tooltip": "Where to route private/LAN IPs. Direct for local access, or a direction to reach a remote LAN over VPN."
+        }
       ],
-      "rule": {"ip_is_private": true, "outbound": "@outbound"}
+      "rule": {
+        "ip_is_private": true,
+        "outbound": "@outbound"
+      }
     },
     {
       "preset_id": "unknown-traffic",
-      "ui": {"label": "Unknown traffic", "description": "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.", "default": false, "num": 1150, "isSortable": true},
+      "ui": {
+        "label": "Unknown traffic",
+        "description": "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.",
+        "default": false,
+        "num": 1150,
+        "isSortable": true
+      },
       "vars": [
-        {"name": "outbound", "type": "outbound", "default_value": "reject", "title": "outbound", "tooltip": "Reject = drop. Or pick Direct to send it outside the VPN."}
+        {
+          "name": "outbound",
+          "type": "outbound",
+          "default_value": "reject",
+          "title": "outbound",
+          "tooltip": "Reject = drop. Or pick Direct to send it outside the VPN."
+        }
       ],
       "rule_set": [
-        { "tag": "unknown-apps", "type": "inline",
+        {
+          "tag": "unknown-apps",
+          "type": "inline",
           "rules": [
-            {"invert": true, "package_name_regex": "^"}
+            {
+              "invert": true,
+              "package_name_regex": "^"
+            }
           ]
         }
       ],
-      "rule": {"rule_set": ["unknown-apps"], "outbound": "@outbound"}
+      "rule": {
+        "rule_set": [
+          "unknown-apps"
+        ],
+        "outbound": "@outbound"
+      }
     },
     {
       "preset_id": "vowifi",
-      "ui": {"label": "VoWiFi (carrier calling)", "description": "Keep Wi-Fi Calling off the VPN. Phones reach the carrier's IMS gateway (ePDG) under the 3GPP service domain, and an IKEv2/IPsec tunnel carries the calls. Routed through a VPN the voice picks up delay and jitter, and the carrier sees the IMS registration coming from a foreign address. Direct keeps calls on the home network.", "default": true, "num": 990, "isSortable": true},
+      "ui": {
+        "label": "VoWiFi (carrier calling)",
+        "description": "Keep Wi-Fi Calling off the VPN. Phones reach the carrier's IMS gateway (ePDG) under the 3GPP service domain, and an IKEv2/IPsec tunnel carries the calls. Routed through a VPN the voice picks up delay and jitter, and the carrier sees the IMS registration coming from a foreign address. Direct keeps calls on the home network.",
+        "default": true,
+        "num": 990,
+        "isSortable": true
+      },
       "vars": [
-        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to send VoWiFi traffic. Direct keeps it off the VPN — that is the point of this preset."},
-        {"name": "ike_ports", "type": "bool", "default_value": "true", "title": "Match IKE ports (500/4500)", "tooltip": "Also route UDP 500/4500 directly. Some modems get the gateway address from the carrier network and never send a DNS query, so the domain rule alone misses them. Those ports carry nothing but IPsec key exchange."}
+        {
+          "name": "outbound",
+          "type": "outbound",
+          "default_value": "direct-out",
+          "title": "Outbound",
+          "tooltip": "Where to send VoWiFi traffic. Direct keeps it off the VPN — that is the point of this preset."
+        },
+        {
+          "name": "ike_ports",
+          "type": "bool",
+          "default_value": "true",
+          "title": "Match IKE ports (500/4500)",
+          "tooltip": "Also route UDP 500/4500 directly. Some modems get the gateway address from the carrier network and never send a DNS query, so the domain rule alone misses them. Those ports carry nothing but IPsec key exchange."
+        }
       ],
       "rule_set": [
-        {"tag": "vowifi-epdg", "type": "inline", "rules": [{"domain_suffix": ["pub.3gppnetwork.org"]}]}
+        {
+          "tag": "vowifi-epdg",
+          "type": "inline",
+          "rules": [
+            {
+              "domain_suffix": [
+                "pub.3gppnetwork.org"
+              ]
+            }
+          ]
+        }
       ],
       "rules": [
-        {"rule_set": ["vowifi-epdg"], "outbound": "@outbound"},
-        {"#if": {"and": ["@ike_ports"], "value": {"network": ["udp"], "port": [500, 4500], "outbound": "@outbound"}}}
+        {
+          "rule_set": [
+            "vowifi-epdg"
+          ],
+          "outbound": "@outbound"
+        },
+        {
+          "#if": {
+            "#and": [
+              "@ike_ports"
+            ],
+            "#value": {
+              "network": [
+                "udp"
+              ],
+              "port": [
+                500,
+                4500
+              ],
+              "outbound": "@outbound"
+            }
+          }
+        }
       ]
     },
     {
       "preset_id": "fcm-push",
-      "ui": {"label": "Google push (FCM)", "description": "Send only Google push traffic (FCM ports 5228-5230 and FCM hosts) outside the VPN, so notifications arrive on time with the screen off. Does not touch the rest of Google Play, so your Play region stays intact. If your DNS goes through the tunnel, add a matching direct rule in DNS settings — otherwise the hosts resolve to the wrong region and push stays silent.", "default": false, "num": 970, "isSortable": true},
+      "ui": {
+        "label": "Google push (FCM)",
+        "description": "Send only Google push traffic (FCM ports 5228-5230 and FCM hosts) outside the VPN, so notifications arrive on time with the screen off. Does not touch the rest of Google Play, so your Play region stays intact. If your DNS goes through the tunnel, add a matching direct rule in DNS settings — otherwise the hosts resolve to the wrong region and push stays silent.",
+        "default": false,
+        "num": 970,
+        "isSortable": true
+      },
       "vars": [
-        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to send push traffic. Direct keeps it off the VPN — that is the point of this preset."},
-        {"name": "gms_only", "type": "bool", "default_value": "false", "title": "Limit to Google Play Services", "tooltip": "Match only traffic from com.google.android.gms instead of any app. Narrower, but app matching works in VPN mode only — leave off if you use proxy mode."}
+        {
+          "name": "outbound",
+          "type": "outbound",
+          "default_value": "direct-out",
+          "title": "Outbound",
+          "tooltip": "Where to send push traffic. Direct keeps it off the VPN — that is the point of this preset."
+        },
+        {
+          "name": "gms_only",
+          "type": "bool",
+          "default_value": "false",
+          "title": "Limit to Google Play Services",
+          "tooltip": "Match only traffic from com.google.android.gms instead of any app. Narrower, but app matching works in VPN mode only — leave off if you use proxy mode."
+        }
       ],
       "rule": {
         "type": "logical",
         "mode": "and",
         "rules": [
-          {"#if": {"and": ["@gms_only"], "value": {"package_name": ["com.google.android.gms"]}}},
-          {"type": "logical", "mode": "or", "rules": [
-            {"domain": ["mtalk.google.com", "mtalk4.google.com", "android.apis.google.com"]},
-            {"domain_suffix": ["firebaseinstallations.googleapis.com", "device-provisioning.googleapis.com", "iid.googleapis.com"]},
-            {"domain_regex": ["^alt\\d+-mtalk\\.google\\.com$"]},
-            {"port_range": ["5228:5230"]}
-          ]}
+          {
+            "#if": {
+              "#and": [
+                "@gms_only"
+              ],
+              "#value": {
+                "package_name": [
+                  "com.google.android.gms"
+                ]
+              }
+            }
+          },
+          {
+            "type": "logical",
+            "mode": "or",
+            "rules": [
+              {
+                "domain": [
+                  "mtalk.google.com",
+                  "mtalk4.google.com",
+                  "android.apis.google.com"
+                ]
+              },
+              {
+                "domain_suffix": [
+                  "firebaseinstallations.googleapis.com",
+                  "device-provisioning.googleapis.com",
+                  "iid.googleapis.com"
+                ]
+              },
+              {
+                "domain_regex": [
+                  "^alt\\d+-mtalk\\.google\\.com$"
+                ]
+              },
+              {
+                "port_range": [
+                  "5228:5230"
+                ]
+              }
+            ]
+          }
         ],
         "outbound": "@outbound"
       }

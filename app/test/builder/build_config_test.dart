@@ -9,17 +9,17 @@ void main() {
   group('buildConfig — smoke', () {
     final template = WizardTemplate(
       parserConfig: ParserConfigBlock(),
-      // §267 — group_templates: vpn-1 канал (direct+auto), auto-подгруппа.
+      // §267 — group_templates: vpn-1 Направление (direct+auto), auto-подгруппа.
       groupTemplates: GroupTemplates(
-        channel: ChannelTemplate(
+        direction: DirectionTemplate(
           include: const ['direct', 'auto'],
           options: const {'interrupt_exist_connections': true},
         ),
         auto: AutoTemplate(
           options: const {'url': 'https://x', 'interval': '30s'},
         ),
-        defaultChannels: [
-          DefaultChannel(tag: 'vpn-1', label: 'vpn-1', defaultEnabled: true),
+        defaultDirections: [
+          DefaultDirection(tag: 'vpn-1', label: 'vpn-1', defaultEnabled: true),
         ],
       ),
       vars: const [],
@@ -67,7 +67,7 @@ void main() {
           reason: result.validation.issues.join('\n'));
       final outs = result.config['outbounds'] as List;
       final tags = outs.map((o) => (o as Map)['tag']).toList();
-      // §125 — глобальный ✨auto заменён на per-channel двойник vpn-1-auto.
+      // §125 — глобальный ✨auto заменён на per-direction двойник vpn-1-auto.
       expect(tags, containsAll(['A', 'B', 'direct-out', 'vpn-1', 'vpn-1-auto']));
       expect(tags, isNot(contains(kAutoOutboundTag)));
 
@@ -79,7 +79,7 @@ void main() {
 
     test('WireGuard node → endpoints array, not outbounds', () async {
       final wg = parseWireguardUri(
-        'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
         id: 'u2',
@@ -226,7 +226,7 @@ void main() {
     // прокидывается в route только когда задан; пусто = omitempty (поля нет).
     test('§215 idleSuspend="30s" → route.lx_idle_suspend', () async {
       final wg = parseWireguardUri(
-        'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
         id: 'u5',
@@ -252,7 +252,7 @@ void main() {
 
     test('§215 idleSuspend="" (default) → нет route.lx_idle_suspend', () async {
       final wg = parseWireguardUri(
-        'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
         id: 'u6',
@@ -280,7 +280,7 @@ void main() {
     // вместе с базовым порогом: ядро отвергает reachable без lx_idle_suspend.
     test('§272 reachable пишется только при включённом idleSuspend', () async {
       final wg = parseWireguardUri(
-        'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
         id: 'u7',

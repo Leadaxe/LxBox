@@ -385,6 +385,13 @@ final class Hysteria2Spec extends NodeSpec {
   final int? upMbps;
   final int? downMbps;
 
+  /// §103 §9.B2 — Hysteria2 multi-port / port hopping: диапазоны/списки
+  /// портов из `mport=`/`ports=` (query) и/или из authority
+  /// (`host:443,20000-30000`), слитые в sing-box `server_ports`
+  /// (`["low:high", ...]`, одиночный порт → `"N:N"`). `null`/пусто —
+  /// не задано, ключ не эмитится (Go: hysteria2_ports.go).
+  final List<String>? serverPorts;
+
   Hysteria2Spec({
     required super.id,
     required super.tag,
@@ -400,6 +407,7 @@ final class Hysteria2Spec extends NodeSpec {
     this.tls = TlsSpec.disabled,
     this.upMbps,
     this.downMbps,
+    this.serverPorts,
     super.chained,
     super.warnings,
   });
@@ -431,6 +439,12 @@ final class NaiveSpec extends NodeSpec {
   final TlsSpec tls;
   final Map<String, String> extraHeaders;
 
+  /// §103 §9.B1 — `naive+quic://` вместо `naive+https://`: транспорт QUIC
+  /// вместо HTTP/2. Go запоминает это как `quic:true` в outbound + фиксирует
+  /// `quic_congestion_control:"bbr"` (единственная опция, других нет).
+  /// `false` — HTTP/2 (дефолт, ключ `quic` не эмитится вовсе).
+  final bool quic;
+
   NaiveSpec({
     required super.id,
     required super.tag,
@@ -442,6 +456,7 @@ final class NaiveSpec extends NodeSpec {
     this.password = '',
     this.tls = TlsSpec.disabled,
     this.extraHeaders = const {},
+    this.quic = false,
     super.chained,
     super.warnings,
   });
@@ -463,10 +478,21 @@ final class NaiveSpec extends NodeSpec {
 final class TuicSpec extends NodeSpec {
   final String uuid;
   final String password;
-  final String congestionControl; // bbr | cubic | new_reno
-  final String udpRelayMode; // native | quic
+  // §103 D-016(в) — null = не было явно задано (URI/JSON) → не эмитим,
+  // ядро подставит свой дефолт (cubic/native, option/tuic.go omitempty).
+  // Непустая строка — значение пришло явно, эмитим как есть (в т.ч. если
+  // оно совпадает с дефолтом ядра: явный cubic ≠ отсутствие поля для UI/
+  // round-trip, но на identity-хеш не влияет — ядро трактует оба одинаково).
+  final String? congestionControl; // bbr | cubic | new_reno
+  final String? udpRelayMode; // native | quic
   final bool zeroRtt;
   final TlsSpec tls;
+
+  /// §103 D-024 — QUIC heartbeat, sing-box duration-строка (напр. "10s").
+  /// null = не задан явно → не эмитим, ядро подставит свой дефолт.
+  /// Нормализация голого числа в секунды — на разборе
+  /// ([normalizeSingboxDuration], зеркало Go normalizeTuicHeartbeat).
+  final String? heartbeat;
 
   TuicSpec({
     required super.id,
@@ -477,10 +503,11 @@ final class TuicSpec extends NodeSpec {
     required super.rawUri,
     required this.uuid,
     required this.password,
-    this.congestionControl = 'cubic',
-    this.udpRelayMode = 'native',
+    this.congestionControl,
+    this.udpRelayMode,
     this.zeroRtt = false,
     this.tls = TlsSpec.disabled,
+    this.heartbeat,
     super.chained,
     super.warnings,
   });
@@ -632,6 +659,14 @@ class Awg {
     'i1', 'i2', 'i3', 'i4', 'i5', 'id', 'ip', 'ib',
   };
 
+  /// Явные CPS-теги i1–i5 (без masquerade-сахара). Эталон Go
+  /// `awgStringFields` — ядро отвергает id/ip/ib одновременно с явным i1
+  /// (D-023/masquerade_suppressed_by_i1: явный i1 подавляет промоушен).
+  static const _iTagKeys = <String>{'i1', 'i2', 'i3', 'i4', 'i5'};
+
+  /// id/ip/ib — masquerade sugar, ядро само разворачивает их в i1.
+  static const _masqueradeKeys = <String>{'id', 'ip', 'ib'};
+
   /// §112 — magic headers: с AWG 2.0 значение бывает диапазоном `N-M`
   /// (ranged headers). Подмножество [numKeys] — consumers, проверяющие
   /// наличие ключа (ini_parser, securityLabel), не меняются.
@@ -642,11 +677,19 @@ class Awg {
   /// здесь = тихо сломанный handshake (исходный баг §112).
   static final _headerRe = RegExp(r'^\d+(-\d+)?$');
 
-  /// h1–h4: `"5"` → `int 5` (type-fidelity §097), `"N-M"` → `String`,
+  /// h1–h4: `"5"` → `int 5` (type-fidelity §097), `"N-M"` → `String`
+  /// нормализованная к возрастающему порядку (D-031: `300-200` → `200-300`,
+  /// эталон Go `parseAWGHeaderRange` — граница диапазона не «другое
+  /// значение», а та же пара, без нормализации одна нода даёт два хеша),
   /// мусор → null (поле пропускается, как `jc=abc`).
   static Object? _parseHeader(String v) {
     if (!_headerRe.hasMatch(v)) return null;
-    return int.tryParse(v) ?? v;
+    final n = int.tryParse(v);
+    if (n != null) return n;
+    final parts = v.split('-');
+    final lo = int.parse(parts[0]);
+    final hi = int.parse(parts[1]);
+    return lo <= hi ? v : '$hi-$lo';
   }
 
   bool get isEmpty => fields.isEmpty;
@@ -654,22 +697,42 @@ class Awg {
   /// Из URI query (строки). Числа → `int.tryParse` (битое → пропуск поля, не
   /// валим парс — forward-compat, как mtu/keepalive). h1–h4 дополнительно
   /// принимают диапазон `N-M` (§112). `i*` пустые пропускаем.
-  static Awg? fromQuery(Map<String, String> q) {
+  /// [badHeaders] — SPEC 103 `awg_header_invalid`: сюда собираются пары
+  /// (поле, сырое значение) для h1–h4, чьё значение не uint32 и не диапазон.
+  /// Только magic-headers: битые jc/jmin/jmax/s1–s4 Go роняет молча (эталон
+  /// `applyAWGFields`, node_parser_wireguard.go) — тихий дефолт там не ломает
+  /// handshake, а у заголовка ломает.
+  static Awg? fromQuery(
+    Map<String, String> q, {
+    List<(String, String)>? badHeaders,
+  }) {
     final f = <String, Object>{};
     for (final k in numKeys) {
       final v = q[k];
       if (v == null) continue;
       if (headerKeys.contains(k)) {
         final h = _parseHeader(v.trim());
-        if (h != null) f[k] = h;
+        if (h != null) {
+          f[k] = h;
+        } else if (v.trim().isNotEmpty) {
+          badHeaders?.add((k, v.trim()));
+        }
         continue;
       }
       final n = int.tryParse(v.trim());
       if (n != null) f[k] = n;
     }
-    for (final k in strKeys) {
+    for (final k in _iTagKeys) {
       final v = q[k];
       if (v != null && v.isNotEmpty) f[k] = v; // регистр НЕ трогаем
+    }
+    // §143/D-023 — masquerade sugar id/ip/ib подавляется явным i1 (ядро
+    // отвергает оба сразу); эталон Go applyAWGFields.
+    if (!f.containsKey('i1')) {
+      for (final k in _masqueradeKeys) {
+        final v = q[k];
+        if (v != null && v.isNotEmpty) f[k] = v;
+      }
     }
     return f.isEmpty ? null : Awg(f);
   }
@@ -1073,6 +1136,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           udpRelayMode: s.udpRelayMode,
           zeroRtt: s.zeroRtt,
           tls: s.tls,
+          heartbeat: s.heartbeat,
           chained: chained,
           warnings: s.warnings,
         ),

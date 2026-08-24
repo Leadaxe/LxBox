@@ -205,11 +205,10 @@ Outbound emitTrojan(TrojanSpec s, TemplateVars vars) {
       if (!s.warnings.contains(w)) s.warnings.add(w);
     }
   }
-  if (s.tls.enabled) {
-    out['tls'] = s.tls.toSingbox();
-  } else {
-    out['tls'] = {'enabled': false};
-  }
+  // §103 D-016(в) — TLS выключен = дефолт ядра (option/trojan.go omitempty),
+  // ключ `tls` не эмитим вовсе (было: {enabled:false}, чего Go не пишет).
+  final tlsMap = s.tls.toSingbox();
+  if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
   _addDetour(out, s);
   return Outbound(out);
 }
@@ -314,6 +313,12 @@ String toUriShadowsocks(ShadowsocksSpec s) {
 Outbound emitHysteria2(Hysteria2Spec s, TemplateVars vars) {
   final out = _baseOutbound('hysteria2', s);
   if (s.password.isNotEmpty) out['password'] = s.password;
+  // §103 §9.B2 — multi-port / port hopping (mport=/ports= query, а также
+  // authority host:443,20000-30000) → sing-box server_ports. Аддитивно к
+  // server_port (Go: hysteria2_ports.go, оба поля живут одновременно).
+  if (s.serverPorts != null && s.serverPorts!.isNotEmpty) {
+    out['server_ports'] = List<String>.from(s.serverPorts!);
+  }
   // §358 — оба типа из enum ядра. Тип и наличие пароля уже отвалидированы
   // парсером (normalizeHysteria2Obfs): сюда доезжает только то, что ядро
   // примет, иначе obfs отсутствует. Плоские min/max внутри `obfs` — так их
@@ -354,11 +359,12 @@ String toUriHysteria2(Hysteria2Spec s) {
   if (s.tls.insecure) q['insecure'] = '1';
   if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
   if (s.tls.fingerprint != null) q['fp'] = s.tls.fingerprint!;
-  // §084 H3: round-trip bandwidth hint'ов. emit пишет up_mbps/down_mbps в
-  // sing-box JSON — URI должен их сохранять, иначе parse→emit→toUri→parse
-  // теряет значения (parseHysteria2 читает те же ключи обратно).
-  if (s.upMbps != null) q['up_mbps'] = s.upMbps.toString();
-  if (s.downMbps != null) q['down_mbps'] = s.downMbps.toString();
+  // §084 H3 / SPEC 103: round-trip bandwidth hint'ов. emit пишет up_mbps/
+  // down_mbps в sing-box JSON (то поле ядра), но URI query-ключ у Go БЕЗ
+  // подчёркивания (shareuri_hysteria2.go: q.Set("upmbps", ...)) — parser
+  // читает те же ключи обратно (см. hysteria2_parser.dart).
+  if (s.upMbps != null) q['upmbps'] = s.upMbps.toString();
+  if (s.downMbps != null) q['downmbps'] = s.downMbps.toString();
   return _buildUri('hysteria2', s.password, s.server, s.port, q, s.label);
 }
 
@@ -372,6 +378,12 @@ Outbound emitNaive(NaiveSpec s, TemplateVars vars) {
   final out = _baseOutbound('naive', s);
   if (s.username.isNotEmpty) out['username'] = s.username;
   if (s.password.isNotEmpty) out['password'] = s.password;
+  // §103 §9.B1 — naive+quic: транспорт QUIC вместо HTTP/2. Go: bbr —
+  // единственная поддерживаемая congestion control, не читается из URI.
+  if (s.quic) {
+    out['quic'] = true;
+    out['quic_congestion_control'] = 'bbr';
+  }
   if (s.extraHeaders.isNotEmpty) {
     final keys = s.extraHeaders.keys.toList()..sort();
     final sorted = <String, String>{};
@@ -432,10 +444,15 @@ String serializeNaiveExtraHeaders(Map<String, String> headers) {
 Outbound emitTuic(TuicSpec s, TemplateVars vars) {
   final out = _baseOutbound('tuic', s)
     ..['uuid'] = s.uuid
-    ..['password'] = s.password
-    ..['congestion_control'] = s.congestionControl
-    ..['udp_relay_mode'] = s.udpRelayMode;
+    ..['password'] = s.password;
+  // §103 D-016(в) — дефолт не эмитим: null = не было задано явно, ядро
+  // подставит cubic/native само (option/tuic.go omitempty).
+  if (s.congestionControl != null) {
+    out['congestion_control'] = s.congestionControl;
+  }
+  if (s.udpRelayMode != null) out['udp_relay_mode'] = s.udpRelayMode;
   if (s.zeroRtt) out['zero_rtt_handshake'] = true;
+  if (s.heartbeat != null) out['heartbeat'] = s.heartbeat;
   // §282 — QUIC не поддерживает uTLS; fp на tuic = мусор подписок.
   out['tls'] = s.tls.toSingboxForQuic();
   _addDetour(out, s);
@@ -444,12 +461,13 @@ Outbound emitTuic(TuicSpec s, TemplateVars vars) {
 
 String toUriTuic(TuicSpec s) {
   final q = <String, String>{
-    'congestion_control': s.congestionControl,
-    'udp_relay_mode': s.udpRelayMode,
+    if (s.congestionControl != null) 'congestion_control': s.congestionControl!,
+    if (s.udpRelayMode != null) 'udp_relay_mode': s.udpRelayMode!,
     if (s.tls.serverName != null) 'sni': s.tls.serverName!,
     if (s.tls.alpn.isNotEmpty) 'alpn': s.tls.alpn.join(','),
     if (s.zeroRtt) 'reduce_rtt': '1',
     if (s.tls.insecure) 'allow_insecure': '1',
+    if (s.heartbeat != null) 'heartbeat': s.heartbeat!,
   };
   final userinfo = '${encodeParam(s.uuid)}:${encodeParam(s.password)}';
   final host = _wrapIpv6(s.server);

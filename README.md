@@ -85,15 +85,15 @@ Subscriptions refresh in the background without spamming providers. Every reques
 <details>
 <summary><strong>Home Screen</strong> — connect and manage nodes</summary>
 
-One-tap VPN start/stop with an animated status chip. Pick a channel, sort nodes by ping/name/manual order, mass-ping every server. The traffic bar shows real-time speed, connection count and uptime.
+One-tap VPN start/stop with an animated status chip. Pick a direction, sort nodes by ping/name/manual order, mass-ping every server. The traffic bar shows real-time speed, connection count and uptime.
 
 - **Node row**: `[ACTIVE] PROTOCOL · · · 50MS` — protocol label from the outbound type, ping right-aligned and coloured by latency; subtitle `PROTOCOL · transport · security` (`VLESS·xhttp·TLS`, `WG·awg2`) shows what is inside a node without opening JSON
 - **Auto nodes in the list** (§322/§344) — the row shows mode and the live pool (`🔀 [15/7]` with country flags); the node detail screen understands urltest modes
 - **⚠ dependency graph** (§355) — if a node with an ERR ping is the detour for other nodes or DNS servers, a ⚠ appears next to its name; tapping it opens the list of affected entries with the dependency path, plus a banner for the DNS branch
-- **Per-channel ping** (§325) — each channel keeps its own measurements (test URL and timeout are per-channel); a node not yet tested in this channel shows the measurement from another one, dimmed and marked `~`
-- **Filter workspace**: a filter panel with **Regex · Protocol · Subscribes · Settings** tabs plus active-filter summary chips; each category has its own `!` inversion; transport/security chip row (`tcp`/`ws`/`grpc`/`quic`/`xhttp` + `TLS`/`Reality`/`awg`…); filters are remembered per channel; regex is case-insensitive at every point (§301)
+- **Per-direction ping** (§325) — each direction keeps its own measurements (test URL and timeout are per-direction); a node not yet tested in this direction shows the measurement from another one, dimmed and marked `~`
+- **Filter workspace**: a filter panel with **Regex · Protocol · Subscribes · Settings** tabs plus active-filter summary chips; each category has its own `!` inversion; transport/security chip row (`tcp`/`ws`/`grpc`/`quic`/`xhttp` + `TLS`/`Reality`/`awg`…); filters are remembered per direction; regex is case-insensitive at every point (§301)
 - **Tri-state detour filter**: show all / hide detours / detours only
-- **Configurable channels** (§125) — up to 10 channel groups (add/rename/delete; `vpn-1` is undeletable), each with a regex node filter, an optional auto twin (`<tag>-auto`, Fastest or Load balance) and an optional Include block
+- **Directions** (§125/§393) — any number of route groups with tags of your choosing (add/rename/delete; `vpn-1` is undeletable), each with a regex node filter, an optional auto twin (`<tag>-auto`, Fastest or Load balance), an optional Include block and other directions listed above it
 - **Empty state** (§328) — with zero servers the home screen shows a full-screen guide linking to Servers and to backup restore, instead of a dead Start button
 - Custom sort order survives restart; long-press: Ping · Use this node · View JSON · Copy URI; "Share URL" without an intermediate dialog (§347)
 </details>
@@ -110,13 +110,13 @@ One-tap VPN start/stop with an animated status chip. Pick a channel, sort nodes 
 <details>
 <summary><strong>Routing</strong> — one unified rule model</summary>
 
-Block ads, route Russian domains directly, send BitTorrent through a chosen channel, route per-app, match private subnets. Every user rule is a single model with all match fields in parallel (OR within a category, AND across them — the sing-box default rule formula).
+Block ads, route Russian domains directly, send BitTorrent through a chosen direction, route per-app, match private subnets. Every user rule is a single model with all match fields in parallel (OR within a category, AND across them — the sing-box default rule formula).
 
-- **4 tabs**: Channels · Presets (read-only catalog → Copy to Rules) · Rules (your registry) · Tunnel apps (OS-level split tunneling)
+- **4 tabs**: Directions · Presets (read-only catalog → Copy to Rules) · Rules (your registry) · Tunnel apps (OS-level split tunneling)
 - **Match fields**: domain / domain_suffix / domain_keyword, ip_cidr, ports and port ranges, packages (per-app), application protocols (tls/quic/bittorrent/…), **traffic type tcp/udp/icmp** (§240 — e.g. UDP direct, TCP through the tunnel), ip_is_private and source_ip_is_private, **inbound** (packet arrived via TUN or via the local proxy, §119), **wifi_ssid / wifi_bssid**, remote .srs rule-set
 - **Traffic Processing** (§264) — a pinned preset at the top of the rule list holding the traffic pre-processing the rest of routing depends on: sniff, Hijack DNS and destination resolution. It cannot be disabled, deleted or moved — you change its settings inside the preset
-- **Action & Resolve** — the gear next to Action, with three modes: plain route to a channel; **Resolve first** — resolve the domain before routing with a forced address family and the full sing-box resolve option set (strategy, DNS server, cache, TTL, client subnet, timeout); **Resolve only** — the rule resolves and lets later rules pick the route. **Force IPv4 (drop AAAA)** (§256) answers AAAA queries locally — a lifesaver on networks with half-broken IPv6
-- **Rule-level DNS** (§257) — the **Send DNS to dedicated server** switch attaches a paired DNS rule to the routing rule: the rule's domains get resolved by a dedicated server (auto = follow the route's channel), so one rule decides both route and resolution
+- **Action & Resolve** — the gear next to Action, with three modes: plain route to a direction; **Resolve first** — resolve the domain before routing with a forced address family and the full sing-box resolve option set (strategy, DNS server, cache, TTL, client subnet, timeout); **Resolve only** — the rule resolves and lets later rules pick the route. **Force IPv4 (drop AAAA)** (§256) answers AAAA queries locally — a lifesaver on networks with half-broken IPv6
+- **Rule-level DNS** (§257) — the **Send DNS to dedicated server** switch attaches a paired DNS rule to the routing rule: the rule's domains get resolved by a dedicated server (auto = follow the route's direction), so one rule decides both route and resolution
 - **Raw-JSON rule** (§225) — a rule can be written as a raw `route.rules` fragment for fields the form doesn't expose; syntax is validated as you type
 - **SRS is local-only** — no auto-update, manual download via the ☁ icon, the rule stays disabled until it is cached
 - Drag-reorder, long-press → Delete with confirmation, dirty-aware save ("Discard changes?"), a View tab with the exact sing-box fragment
@@ -127,9 +127,9 @@ Block ads, route Russian domains directly, send BitTorrent through a chosen chan
 <details>
 <summary><strong>Load balancing</strong> — spread traffic across a pool of servers</summary>
 
-A channel's **auto** group can do more than pick the single fastest node. Switch it to **Load balance** and it spreads new connections across a **pool** of N servers (round-robin), while keeping sessions sticky to their server so TLS/auth don't bounce between IPs.
+A direction's **auto** group can do more than pick the single fastest node. Switch it to **Load balance** and it spreads new connections across a **pool** of N servers (round-robin), while keeping sessions sticky to their server so TLS/auth don't bounce between IPs.
 
-- **Two modes** in the channel editor → *Include auto*: **Fastest** (`least_test`) — one best node by latency; **Load balance** (`round_robin`) — connections rotate across a fixed-size pool of live nodes
+- **Two modes** in the direction editor → *Include auto*: **Fastest** (`least_test`) — one best node by latency; **Load balance** (`round_robin`) — connections rotate across a fixed-size pool of live nodes
 - **Pool size** — how many nodes sit in the pool; **Pool tolerance** — `0` keeps the pool full (speed-agnostic), `>0` evicts slower nodes in favour of faster ones
 - **Sticky session by** — chip row (`process` / `domain` / `source ip` / `dest ip` / `dest port`); a key like `process + domain` lands every connection of one app to one site on the **same** pool server. Clear all chips → pure rotation
 - **View pool** — long-press the auto node → the live pool: `slot · node · delay`
@@ -152,12 +152,28 @@ The rule editor offers chips with **Add current** (read the live SSID), **Pick s
 </details>
 
 <details>
+<summary><strong>Chains of hops</strong> — a route through several servers as a source</summary>
+
+A chain is a **third kind of source**, next to subscriptions and servers: an explicit route `you → hop 1 → hop 2 → destination`, emitted as one outbound of type `chain`. Chains sit in the common source list as equal rows — toggled, dragged and filtered like everything else.
+
+**Chain vs detour** — a chain is a **route (a source)**; detour is a **property of one node** ("this server goes through that one"). Reach for a chain when the route itself is the thing you are building; reach for detour when a single server needs a relay in front of it.
+
+- **Positions are in packet order** — `[0]` is the first hop from you. A position is a node, a group or a **direction**; a direction as a hop makes that step switchable on the fly
+- **Rules of composition** — at least two positions; no empty, duplicate or self-referencing ones; a nested chain only at position 0; a reference only to a chain **declared above** in the list (the order is what rules out cycles)
+- **The editor is the only gate** — `sing-box check` passes this class of error and `run` dies on it, so the form validates the core's start-time invariants before the config is ever built
+- **Layered diagnostics** — a chain's node → Diagnostics: every hop with cumulative latency and its own price (`67 ms → 91 ms (+24) → 96 ms (+5)`). A hop's price is the difference between neighbouring layers, never a measurement of its own. A dead layer shows the core's error text and marks everything behind it "not reached"
+- **Deleting a source cleans its positions** out of chains, with a visible counter; a chain that drops below two positions stops being emitted until repaired. A subscription refresh never touches positions
+- **Field notes** — MASQUE placed after a TCP hop needs `vhttp: auto`; WireGuard behind a TCP hop requires a server that actually proxies UDP
+- Requires core **sing-box-lx v1.14.0-lx.27** or newer (pinned at `v1.14.0-lx.28-rc.1`)
+</details>
+
+<details>
 <summary><strong>Detour</strong> — proxy chains ("go through")</summary>
 
 One server reaches the internet through another: `you → A → B → internet`. Why: exit from the IP of a specific country through a fast nearby server, punch through a block on the server itself, or take a double hop for privacy.
 
-- **One target picker** — a detour is assigned to a single server (Node Settings), to a whole subscription or folder (Settings tab), or to an individual folder member; the target can be another server, a member of the same folder, or a **channel**
-- **Detour channels** (§248/§274) — the "Use as detour" checkbox turns a channel into a switchable relay layer: the core decides which server inside it is used, and the channel stays available to rules and route final (⚙ in its name)
+- **One target picker** — a detour is assigned to a single server (Node Settings), to a whole subscription or folder (Settings tab), or to an individual folder member; the target can be another server, a member of the same folder, or a **direction**
+- **Detour directions** (§248/§274) — the "Use as detour" checkbox turns a direction into a switchable relay layer: the core decides which server inside it is used, and the direction stays available to rules and route final (⚙ in its name)
 - **Chains** — A through B, B through C; inside a folder chains are built directly between members, and the chain preview is shown in subscription and folder settings (§252)
 - **Cycle detector** (§254/§255) — a closed loop stops the config build and names the culprits; tapping a culprit navigates to the owner of that node
 - **⚠ dependency graph** (§355) — a dead node that others route through is flagged on the home screen (see Home Screen)
@@ -168,11 +184,11 @@ One server reaches the internet through another: `you → A → B → internet`.
 <details>
 <summary><strong>DNS</strong> — server groups, failure-tolerant resolution</summary>
 
-A catalog of DNS servers (Cloudflare, Google, Yandex, Quad9, AdGuard, OpenDNS — UDP/DoT/DoH) plus custom ones via JSON. Every server picks the channel it travels through (**Outbound/detour**): DNS can go either direct or through the tunnel.
+A catalog of DNS servers (Cloudflare, Google, Yandex, Quad9, AdGuard, OpenDNS — UDP/DoT/DoH) plus custom ones via JSON. Every server picks the direction it travels through (**Outbound/detour**): DNS can go either direct or through the tunnel.
 
 - **DNS groups** (§312) — several servers under one tag with a selection strategy: **Stable** (stick to a working one), **Fastest** (race, then stick to the winner), **Parallel** (race every query). You build your own in the DNS server editor: type **Group** next to UDP/TLS/HTTPS, members by checkbox, strategy, plus **Error TTL / Win TTL**. Member errors are remembered with a TTL, so a revived path returns on its own; a disabled member doesn't break the config (it is skipped at build time with a warning and returns when re-enabled). The list shows a `GROUP · mode · N` badge, and with the tunnel up you see the current target and each member's state (errors, RTT)
 - **Shield DNS** (§314) — the default on a fresh install: the `dns_shield` group spanning five providers, three transports (UDP/DoT/DoH) and two paths (direct and through the VPN) — no single failure takes resolution down
-- **ru-DNS over three paths** (§354) — the "Russian domains & IPs" preset resolves ru domains through the `dns_ru` group (UDP via the preset's channel, DoT via `vpn-1`, DoH direct): a dead node in the channel no longer hangs ru sites
+- **ru-DNS over three paths** (§354) — the "Russian domains & IPs" preset resolves ru domains through the `dns_ru` group (UDP via the preset's direction, DoT via `vpn-1`, DoH direct): a dead node in the direction no longer hangs ru sites
 - **Group trace in the profiler** (§315) — a DNS event shows which group handled the query, which member answered and with what RTT
 - **DNS Rules** — a separate reorderable list: your own rules (**Add user rule**, a `dns.rules` JSON fragment), rules from enabled presets and from the template, and mirrors of routing rules' DNS blocks (§257) — grouped together and edited on the parent rule's side
 - DNS Final and Default Domain Resolver — the app-facing resolver and the core's internal resolver are set separately
@@ -214,7 +230,7 @@ Built-in speed test with 10 servers worldwide. Per-server ping measures latency 
 <details>
 <summary><strong>Statistics & Connections</strong> — see what's happening</summary>
 
-Three tabs: **Stats** (real-time traffic per channel with expandable cards) · **Conns** (live connections) · **Profiler** (recording of every connection and DNS resolve).
+Three tabs: **Stats** (real-time traffic per direction with expandable cards) · **Conns** (live connections) · **Profiler** (recording of every connection and DNS resolve).
 
 - Every connection shows host, protocol, matched rule, traffic, duration, proxy chain and the owning app with its launcher icon (§154); individual connections can be closed
 - **Detail sheet** (§152) — tap a connection → full metadata plus **Copy JSON** for bug reports
@@ -268,9 +284,9 @@ View and edit the raw sing-box JSON config. The editor is line-based (§333): on
 - **Auto-restart VPN on settings change** (§338) — no manual "Restart"; the "restart VPN" banner is checked against the *running* core and won't appear when there is nothing to apply (§324)
 - **First-run wizard** (§126) — onboarding: notifications → battery optimization → Quick Settings tile
 - **Battery optimization** and **App info (OEM power settings)** — status plus shortcuts into the system whitelists
-- **Auto-ping after connect** — ping the active channel 5 s after the VPN comes up
+- **Auto-ping after connect** — ping the active direction 5 s after the VPN comes up
 - **Interrupt connections on switch** (§143) — drop the group's connections when you switch nodes so traffic moves immediately (default off); re-selecting the already-active node is a no-op (§290)
-- Haptic feedback, Quick connect, Backup & restore (a snapshot of subscriptions, channels, rules and settings, with a preview before restoring)
+- Haptic feedback, Quick connect, Backup & restore (a snapshot of subscriptions, directions, chains, rules and settings, with a preview before restoring)
 </details>
 
 ---
@@ -336,7 +352,7 @@ Full documentation map: **[docs/README.md](docs/README.md)**.
 |----------|-------------|
 | [Documentation index](docs/README.md) | Full map of all docs — start here |
 | [Support the project](docs/DONATE.md) | Ways to support: cryptocurrency, Boosty, and how to help without money |
-| [User Guide](docs/USER_GUIDE.md) | How it works: traffic stages, channels, detour, DNS — not about code, about the logic. Plus recipes: sharing the VPN over Wi-Fi via proxy, pairing with ByeDPI, and a regex reference |
+| [User Guide](docs/USER_GUIDE.md) | How it works: traffic stages, directions, chains, detour, DNS — not about code, about the logic. Plus recipes: sharing the VPN over Wi-Fi via proxy, pairing with ByeDPI, and a regex reference |
 | [Automation](docs/AUTOMATION.md) | Automate L×Box from Tasker / MacroDroid via the Public Intent API (broadcast commands + events, Wi-Fi triggers) |
 | [Debug API](docs/api/debug-api-reference.md) | Full HTTP control/diagnostics surface (subscriptions & rules CRUD, start/stop, config, logs, profiler) |
 | [Security](docs/SECURITY.md) | Threat model — traffic-leak protection, local attack surface, on-device secrets |

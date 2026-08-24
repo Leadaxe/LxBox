@@ -6,6 +6,14 @@ import 'package:lxbox/services/parser/ini_parser.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+// SPEC 103 D-023/D-030 — normalizeWGKey (wireguard_parser.dart) требует
+// РОВНО 32 байта base64; короткие плейсхолдеры вроде "pk"/"pubk" больше не
+// парсятся (null-skip). Валидные 32-байтные ключи для INI-фикстур.
+const _testPriv = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=';
+const _testPub = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=';
+const _testPriv2 = 'ccccccccccccccccccccccccccccccccccccccccccA=';
+const _testPub2 = 'ddddddddddddddddddddddddddddddddddddddddddA=';
+
 void main() {
   group('parseWireguardIni', () {
     test('fixture ini_basic.conf → WireguardSpec with peer', () {
@@ -28,7 +36,7 @@ void main() {
     });
 
     test('IPv6 endpoint [::1]:51820 parses', () {
-      const ini = '[Interface]\nPrivateKey = pk\nAddress = 10.0.0.2/32\n\n[Peer]\nPublicKey = pubk\nEndpoint = [::1]:51820\n';
+      final ini = '[Interface]\nPrivateKey = $_testPriv\nAddress = 10.0.0.2/32\n\n[Peer]\nPublicKey = $_testPub\nEndpoint = [::1]:51820\n';
       final spec = parseWireguardIni(ini);
       expect(spec, isNotNull);
       expect(spec!.server, '::1');
@@ -38,8 +46,8 @@ void main() {
 
   // §243 — имя файла становится tag'ом через фрагмент синтетического URI.
   group('§243 nameHint → tag', () {
-    const ini = '[Interface]\nPrivateKey = pk\nAddress = 10.0.0.2/32\n\n'
-        '[Peer]\nPublicKey = pubk\nEndpoint = h:51820\n';
+    final ini = '[Interface]\nPrivateKey = $_testPriv\nAddress = 10.0.0.2/32\n\n'
+        '[Peer]\nPublicKey = $_testPub\nEndpoint = h:51820\n';
 
     test('nameHint (имя файла) → tag и label = имя файла', () {
       final spec = parseWireguardIni(ini, nameHint: 'proton-nl-42');
@@ -75,17 +83,17 @@ void main() {
       final iniNodes = parseAll(decode(ini), nameHint: 'from-file');
       expect(iniNodes.single.tag, 'from-file');
 
-      const uriLine =
-          'wireguard://PRIV@h:51820?publickey=K&address=10.0.0.2/32';
+      final uriLine =
+          'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32';
       final uriNodes = parseAll(decode(uriLine), nameHint: 'from-file');
       expect(uriNodes.single.tag, 'wireguard-h-51820'); // hint не подмешан
     });
 
     test('parseAll: AmneziaConfig — индексные суффиксы контейнеров', () {
-      const ini2 = '[Interface]\nPrivateKey = pk2\nAddress = 10.0.0.3/32\n\n'
-          '[Peer]\nPublicKey = pubk2\nEndpoint = h2:51820\n';
+      final ini2 = '[Interface]\nPrivateKey = $_testPriv2\nAddress = 10.0.0.3/32\n\n'
+          '[Peer]\nPublicKey = $_testPub2\nEndpoint = h2:51820\n';
       final nodes =
-          parseAll(const AmneziaConfig([ini, ini2]), nameHint: 'multi');
+          parseAll(AmneziaConfig([ini, ini2]), nameHint: 'multi');
       expect(nodes, hasLength(2));
       expect(nodes[0].tag, 'multi');
       expect(nodes[1].tag, 'multi 2');

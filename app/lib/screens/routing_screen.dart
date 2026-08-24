@@ -10,11 +10,11 @@ import 'package:share_plus/share_plus.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
-import '../models/channel.dart';
+import '../models/direction.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/rule_order.dart';
-import '../services/channel_mutations.dart';
+import '../services/direction_mutations.dart';
 import '../services/error_format.dart';
 import '../services/file_export.dart';
 import '../services/file_import.dart';
@@ -31,9 +31,10 @@ import '../services/url_launcher.dart';
 import '../services/utf8_decode.dart';
 import '../widgets/export_action_sheet.dart';
 import '../widgets/outbound_picker.dart';
-import 'channel_edit_screen.dart';
+import 'direction_edit_screen.dart';
 import 'custom_rule_edit_screen.dart';
 import 'lazy_persist_mixin.dart';
+import 'routing_screen/new_direction_dialog.dart';
 import 'routing_screen/routing_screen_helpers.dart';
 import 'routing_screen/routing_screen_menus.dart';
 import 'routing_screen/rule_transfer_dialogs.dart';
@@ -53,16 +54,16 @@ class RoutingScreen extends StatefulWidget {
     super.key,
     required this.subController,
     required this.homeController,
-    this.focusChannelTag,
+    this.focusDirectionTag,
     this.initialPresetsTab = false,
   });
 
   final SubscriptionController subController;
   final HomeController homeController;
 
-  /// §258 — при открытии показать канал с этим тегом и мигнуть его тайлом
-  /// (навигация «хоп рантайм-цепочки → канал», openTagOwner). null = нет.
-  final String? focusChannelTag;
+  /// §258 — при открытии показать Направление с этим тегом и мигнуть его тайлом
+  /// (навигация «хоп рантайм-цепочки → Направление», openTagOwner). null = нет.
+  final String? focusDirectionTag;
 
   /// §262 — открыть сразу на табе Presets (каталог пресетов). Навигация из
   /// листа DNS-health «Enable FakeIP» → юзер видит каталог, находит FakeIP.
@@ -82,10 +83,10 @@ class _RoutingScreenState extends State<RoutingScreen>
   @override
   WizardTemplate? _template;
   @override
-  final _channels = <Channel>[]; // §125 — source-of-truth каналов (storage)
+  final _directions = <Direction>[]; // §125 — source-of-truth Направлений (storage)
   // §219 — кэш опций outbound: _outboundOptions() звался в itemBuilder на КАЖДЫЙ
-  // custom-rule tile (N каналов × M правил реконструкций/build). Инвалидируем
-  // при любой мутации _channels (_invalidateOutboundOptions).
+  // custom-rule tile (N Направлений × M правил реконструкций/build). Инвалидируем
+  // при любой мутации _directions (_invalidateOutboundOptions).
   List<RoutingOutboundOption>? _cachedOutboundOptions;
   @override
   String _routeFinal = '';
@@ -99,24 +100,24 @@ class _RoutingScreenState extends State<RoutingScreen>
   bool _loading = true;
   // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
 
-  // §258 — подсветка канала при focusChannelTag (навигация из рантайм-цепочки
-  // View-экрана). Ключи per-tag: таб Channels — нелениый ListView(children:),
+  // §258 — подсветка Направления при focusDirectionTag (навигация из рантайм-цепочки
+  // View-экрана). Ключи per-tag: таб Directions — нелениый ListView(children:),
   // тайл смонтирован с первого кадра, retry (§255) не нужен.
-  final _channelKeys = <String, GlobalKey>{};
-  String? _highlightedChannelTag;
-  Timer? _channelHighlightTimer;
+  final _directionKeys = <String, GlobalKey>{};
+  String? _highlightedDirectionTag;
+  Timer? _directionHighlightTimer;
 
   @override
   SubscriptionController get lazyController => widget.subController;
 
   // §279 — загрузка стартует из onLocaleTemplateFetch (TemplateAwareState):
   // первый вызов (до первого build) — полный _load(); смена локали — только
-  // refetch локализованного шаблона (буферы каналов/правил юзера не трогаем;
+  // refetch локализованного шаблона (буферы Направлений/правил юзера не трогаем;
   // live-label'ы пресетов и каталог перерендерятся из нового _template).
   @override
   void onLocaleTemplateFetch({required bool first}) {
     if (first) {
-      unawaited(_load().then((_) => _focusChannelIfAny()));
+      unawaited(_load().then((_) => _focusDirectionIfAny()));
     } else {
       unawaited(_refetchTemplate());
     }
@@ -130,20 +131,20 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   @override
   void dispose() {
-    _channelHighlightTimer?.cancel();
+    _directionHighlightTimer?.cancel();
     super.dispose();
   }
 
-  /// §258 — после загрузки каналов: скролл к focusChannelTag + вспышка 2.2 с
+  /// §258 — после загрузки Направлений: скролл к focusDirectionTag + вспышка 2.2 с
   /// (зеркало _focusMember в folder_detail_screen, §255).
-  void _focusChannelIfAny() {
-    final tag = widget.focusChannelTag;
+  void _focusDirectionIfAny() {
+    final tag = widget.focusDirectionTag;
     if (tag == null || !mounted) return;
-    if (!_channels.any((c) => c.tag == tag)) return;
+    if (!_directions.any((c) => c.tag == tag)) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() => _highlightedChannelTag = tag);
-      final ctx = _channelKeys[tag]?.currentContext;
+      setState(() => _highlightedDirectionTag = tag);
+      final ctx = _directionKeys[tag]?.currentContext;
       if (ctx != null) {
         unawaited(
           Scrollable.ensureVisible(
@@ -154,9 +155,9 @@ class _RoutingScreenState extends State<RoutingScreen>
           ),
         );
       }
-      _channelHighlightTimer?.cancel();
-      _channelHighlightTimer = Timer(const Duration(milliseconds: 2200), () {
-        if (mounted) setState(() => _highlightedChannelTag = null);
+      _directionHighlightTimer?.cancel();
+      _directionHighlightTimer = Timer(const Duration(milliseconds: 2200), () {
+        if (mounted) setState(() => _highlightedDirectionTag = null);
       });
     });
   }
@@ -182,16 +183,16 @@ class _RoutingScreenState extends State<RoutingScreen>
   bool _presetNeedsDownload(CustomRulePreset rule, SelectableRule preset) =>
       RoutingHelpers.presetNeedsDownload(rule, preset, _srsCached);
 
-  /// §219 — сбросить кэш опций после мутации `_channels`.
+  /// §219 — сбросить кэш опций после мутации `_directions`.
   @override
   void _invalidateOutboundOptions() => _cachedOutboundOptions = null;
 
   /// См. [RoutingHelpers.outboundOptions] (семантика списка — там). Глобальный
-  /// ✨auto убран — каждый канал имеет свой `<tag>-auto`, который опцией
-  /// роутинга не выставляем (это внутренняя деталь канала). Кэш §219
-  /// инвалидируется на любой мутации каналов.
+  /// ✨auto убран — каждое Направление имеет свой `<tag>-auto`, который опцией
+  /// роутинга не выставляем (это внутренняя деталь Направления). Кэш §219
+  /// инвалидируется на любой мутации Направлений.
   List<RoutingOutboundOption> _outboundOptions() =>
-      _cachedOutboundOptions ??= RoutingHelpers.outboundOptions(_channels);
+      _cachedOutboundOptions ??= RoutingHelpers.outboundOptions(_directions);
 
   @override
   Widget build(BuildContext context) {
@@ -244,7 +245,7 @@ class _RoutingScreenState extends State<RoutingScreen>
               isScrollable: true,
               tabAlignment: TabAlignment.start,
               tabs: [
-                Tab(text: getLocalText.s("Channels")),
+                Tab(text: getLocalText.s("Directions")),
                 Tab(text: getLocalText.s("Presets")),
                 Tab(text: getLocalText.s("Rules")),
                 Tab(text: getLocalText.s("Tunnel apps")),
@@ -253,15 +254,14 @@ class _RoutingScreenState extends State<RoutingScreen>
           ),
           body: TabBarView(
             children: [
-              // ─── Channels: каналы (CRUD) + default fallback + Auto tuning ───
-              RoutingChannelsTab(
+              // ─── Directions: Направления (CRUD) + default fallback + Auto tuning ───
+              RoutingDirectionsTab(
                 bottomPad: bottomPad,
-                groupTiles: _channels.map(_buildChannelTile).toList(),
-                channelCount: _channels.length,
-                maxChannels: kMaxChannels,
-                onAddChannel: _channels.length >= kMaxChannels
-                    ? null
-                    : _addChannel,
+                groupTiles: _directions.map(_buildDirectionTile).toList(),
+                directionCount: _directions.length,
+                // §393 A3 — лимита на количество Направлений больше нет
+                // (паритет с лаунчером); счётчик показывает, сколько их.
+                onAddDirection: _addDirection,
                 routeFinalTile: _buildRouteFinalTile(),
               ),
 
@@ -295,12 +295,12 @@ class _RoutingScreenState extends State<RoutingScreen>
     );
   }
 
-  Widget _buildChannelTile(Channel channel) {
-    // §258 — вспышка при focusChannelTag (стиль как у члена папки, §255).
+  Widget _buildDirectionTile(Direction direction) {
+    // §258 — вспышка при focusDirectionTag (стиль как у члена папки, §255).
     final cs = Theme.of(context).colorScheme;
-    final highlighted = _highlightedChannelTag == channel.tag;
+    final highlighted = _highlightedDirectionTag == direction.tag;
     return AnimatedContainer(
-      key: _channelKeys.putIfAbsent(channel.tag, GlobalKey.new),
+      key: _directionKeys.putIfAbsent(direction.tag, GlobalKey.new),
       duration: const Duration(milliseconds: 200),
       decoration: highlighted
           ? BoxDecoration(
@@ -308,29 +308,29 @@ class _RoutingScreenState extends State<RoutingScreen>
               border: Border(left: BorderSide(color: cs.primary, width: 3)),
             )
           : null,
-      child: RoutingChannelTile(
-        channel: channel,
-        nodeCount: _nodeCountFor(channel),
-        onToggle: (val) => unawaited(_toggleChannel(channel, val)),
-        onTap: () => _editChannel(channel),
+      child: RoutingDirectionTile(
+        direction: direction,
+        nodeCount: _nodeCountFor(direction),
+        onToggle: (val) => unawaited(_toggleDirection(direction, val)),
+        onTap: () => _editDirection(direction),
       ),
     );
   }
 
-  /// Вкл/выкл канала. §202/§248 — идёт через storage-API: disable лечит
+  /// Вкл/выкл Направления. §202/§248 — идёт через storage-API: disable лечит
   /// ссылки покинутых ролей (rules → vpn-1, detour-ссылки → None) и
   /// возвращает счётчики для SnackBar. Storage мутируем ДО локальных
   /// буферов: stageChanges (markDirty) тогда пишет в кэш уже вылеченные
   /// значения, а не затирает их устаревшим буфером экрана.
-  Future<void> _toggleChannel(Channel channel, bool val) async {
-    final next = channel.copyWith(enabled: val);
-    final healed = await ChannelMutations.update(next, widget.subController);
+  Future<void> _toggleDirection(Direction direction, bool val) async {
+    final next = direction.copyWith(enabled: val);
+    final healed = await DirectionMutations.update(next, widget.subController);
     if (!mounted) return;
     await _resyncHealedRefs(healed);
     if (!mounted) return;
     setState(() {
-      final i = _channels.indexWhere((c) => c.tag == channel.tag);
-      if (i >= 0) _channels[i] = next;
+      final i = _directions.indexWhere((c) => c.tag == direction.tag);
+      if (i >= 0) _directions[i] = next;
       _invalidateOutboundOptions();
       _markDirty();
     });
@@ -343,9 +343,9 @@ class _RoutingScreenState extends State<RoutingScreen>
   /// stageChanges затёр бы вылеченные значения устаревшим буфером.
   ///
   /// §275 — detour-ссылки живут в `_entries` контроллера (не в буферах
-  /// экрана); их зеркальный ресинк делает `ChannelMutations` в той же
+  /// экрана); их зеркальный ресинк делает `DirectionMutations` в той же
   /// операции, что и storage-heal — здесь только буферы экрана.
-  Future<void> _resyncHealedRefs(ChannelHealResult healed) async {
+  Future<void> _resyncHealedRefs(DirectionHealResult healed) async {
     if (healed.rules == 0) return;
     final storedFinal = await SettingsStorage.getRouteFinal();
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
@@ -355,35 +355,46 @@ class _RoutingScreenState extends State<RoutingScreen>
   }
 
   /// §248 Q3 — heal молчаливым не бывает: SnackBar со счётчиками вылеченных
-  /// ссылок после мутации канала. [ruleLead] — вводная для rules-части
+  /// ссылок после мутации Направления. [ruleLead] — вводная для rules-части
   /// («disabled» / «deleted»; §274 убрал flag-set-heal и его вводную).
   /// Оба счётчика ненулевые → один суммарный SnackBar. Нулевые → тишина.
   void _notifyHealed(
-    Channel channel,
-    ChannelHealResult healed, {
+    Direction direction,
+    DirectionHealResult healed, {
     required String ruleLead,
   }) {
-    if (healed.rules == 0 && healed.detours == 0) return;
-    final label = channel.label.isNotEmpty ? channel.label : channel.tag;
-    final lead = healed.rules > 0
-        ? getLocalText.s('Channel "%1\$s" %2\$s', label, ruleLead)
-        : getLocalText.s('Channel "%s" is no longer a detour target', label);
+    if (healed.rules == 0 &&
+        healed.detours == 0 &&
+        healed.includes == 0 &&
+        // §393 D2 — вычистка позиций цепочек тоже бывает одиночной: на
+        // Направление могла ссылаться только цепочка. Без этого условия
+        // укорачивание маршрута прошло бы молча.
+        healed.chainPositions == 0) {
+      return;
+    }
+    final label = direction.label.isNotEmpty ? direction.label : direction.tag;
+    // §393 A3 — include-heal бывает ТОЛЬКО на удалении, и там `ruleLead` уже
+    // «deleted»: одиночный include-heal (правила и detour'ы на Направление не
+    // ссылались) берёт ту же вводную, а не detour'ную.
+    final lead = healed.rules > 0 || healed.includes > 0 || healed.chainPositions > 0
+        ? getLocalText.s('Direction "%1\$s" %2\$s', label, ruleLead)
+        : getLocalText.s('Direction "%s" is no longer a detour target', label);
     // §292 — части сообщения из единого форматтера (общий с node_list).
-    final parts = ChannelMutations.healMessageParts(healed);
+    final parts = DirectionMutations.healMessageParts(healed);
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('$lead — ${parts.join(', ')}.')));
   }
 
-  /// Кол-во нод канала после regex-фильтра (для subtitle). -1 = снимок нод
+  /// Кол-во нод Направления после regex-фильтра (для subtitle). -1 = снимок нод
   /// недоступен (туннель не поднят).
-  int _nodeCountFor(Channel channel) {
+  int _nodeCountFor(Direction direction) {
     final all = _allNodeTags();
     if (all.isEmpty) return -1;
-    if (channel.nodeFilter.isEmpty) return all.length;
+    if (direction.nodeFilter.isEmpty) return all.length;
     try {
       // §301 — регистронезависимо, как основное окно и билдер.
-      final re = RegExp(channel.nodeFilter, caseSensitive: false);
+      final re = RegExp(direction.nodeFilter, caseSensitive: false);
       return all.where(re.hasMatch).length;
     } catch (_) {
       return all.length; // невалидный regex → все ноды (как в билдере)
@@ -407,67 +418,103 @@ class _RoutingScreenState extends State<RoutingScreen>
     return out;
   }
 
-  Future<void> _addChannel() async {
-    final created = await ChannelMutations.add();
+  Future<void> _addDirection() async {
+    // §393 A3 — спрашиваем тег ДО создания: после создания он immutable
+    // (на него ссылаются правила/detour'ы). Поле преднаполнено первым
+    // свободным `vpn-N`, так что «просто Create» = прежнее поведение.
+    final req = await showNewDirectionDialog(
+      context,
+      existingTags: _directions.map((c) => c.tag).toList(),
+    );
+    if (req == null || !mounted) return;
+    final Direction created;
+    try {
+      created = await DirectionMutations.add(
+        tag: req.tag,
+        label: req.label.isEmpty ? null : req.label,
+      );
+    } on StateError catch (e) {
+      // Гонка со вторым источником мутаций (Debug API): форма считала тег
+      // свободным, storage — уже нет. Показываем и не создаём.
+      if (!mounted) return;
+      showSnack(e.message);
+      return;
+    }
     if (!mounted) return;
     setState(() {
-      _channels.add(created);
+      _directions.add(created);
       _invalidateOutboundOptions();
     });
     _markDirty();
-    _editChannel(created);
+    _editDirection(created);
   }
 
-  Future<void> _editChannel(Channel channel) async {
-    final result = await openChannelEditor(
+  Future<void> _editDirection(Direction direction) async {
+    // §393 A3 — кандидаты для `include`: только Направления ВЫШЕ текущего по
+    // списку. Порядок исключает циклы по построению, поэтому запрет живёт
+    // прямо в наборе кандидатов, а не в проверке после выбора.
+    final idx = _directions.indexWhere((c) => c.tag == direction.tag);
+    final result = await openDirectionEditor(
       context,
-      initial: channel,
-      canDelete: !channel.isRequired,
+      initial: direction,
+      canDelete: !direction.isRequired,
       allNodeTags: _allNodeTags(),
+      directionsAbove: idx <= 0 ? const [] : _directions.sublist(0, idx),
     );
     if (result == null || !mounted) return;
     if (result.wasDeleted) {
-      // deleteChannel в storage лечит ссылки: rules → vpn-1 (§202),
-      // detour-ссылки → None (§248). Счётчики — в SnackBar ниже.
-      final healed = await ChannelMutations.delete(
-        channel.tag,
+      // deleteDirection в storage лечит ссылки: rules → vpn-1 (§202),
+      // detour-ссылки → None (§248), include-ссылки вычеркнуты (§393 A3).
+      // Счётчики — в SnackBar ниже.
+      final healed = await DirectionMutations.delete(
+        direction.tag,
         widget.subController,
       );
       if (!mounted) return;
       await _resyncHealedRefs(healed);
       if (!mounted) return;
       setState(() {
-        _channels.removeWhere((c) => c.tag == channel.tag);
+        _directions.removeWhere((c) => c.tag == direction.tag);
+        // §393 A3 — include-heal зеркалим в буфер экрана. `_directions` —
+        // не проекция storage, а рабочая копия, и хвост метода
+        // безусловно пишет её обратно через `bulkReplace`: без зеркала
+        // stale-буфер воскресил бы только что вычеркнутый тег на диске.
+        if (healed.includes > 0) {
+          final r = clearIncludeDirectionRefs(_directions, direction.tag);
+          _directions
+            ..clear()
+            ..addAll(r.healed);
+        }
         _invalidateOutboundOptions();
       });
       _markDirty();
-      _notifyHealed(channel, healed, ruleLead: getLocalText.s('deleted'));
+      _notifyHealed(direction, healed, ruleLead: getLocalText.s('deleted'));
     } else if (result.saved != null) {
       final saved = result.saved!;
-      // §202/§248/§274 — persist канала: disable лечит оба рода ссылок,
+      // §202/§248/§274 — persist Направления: disable лечит оба рода ссылок,
       // flag-unset — detour-ссылки; счётчики — в SnackBar ниже.
-      // §275 — ChannelMutations зеркалит detour-heal в _entries контроллера.
-      final healed = await ChannelMutations.update(saved, widget.subController);
+      // §275 — DirectionMutations зеркалит detour-heal в _entries контроллера.
+      final healed = await DirectionMutations.update(saved, widget.subController);
       if (!mounted) return;
       await _resyncHealedRefs(healed);
       if (!mounted) return;
       setState(() {
-        final i = _channels.indexWhere((c) => c.tag == channel.tag);
-        if (i >= 0) _channels[i] = saved;
+        final i = _directions.indexWhere((c) => c.tag == direction.tag);
+        if (i >= 0) _directions[i] = saved;
         _invalidateOutboundOptions();
       });
       _markDirty();
       // §274 — rules-ссылки лечатся только при disable (flag-set больше не
-      // heal-триггер: detour-флаг — разрешение, канал остаётся целью
+      // heal-триггер: detour-флаг — разрешение, Направление остаётся целью
       // правил). ruleLead поэтому один; detours-часть (flag-unset) свою
       // вводную берёт в _notifyHealed.
       _notifyHealed(saved, healed, ruleLead: getLocalText.s('disabled'));
     }
     // §125 — обновить tag→label кеш для home-dropdown (label мог измениться,
-    // канал мог удалиться). stageChanges уже застейджила channels; здесь только
-    // освежаем labels в HomeState. Persist канала — flushToDisk на dispose.
-    await ChannelMutations.bulkReplace(_channels, flush: true);
-    await widget.homeController.refreshChannelLabels();
+    // Направление мог удалиться). stageChanges уже застейджила directions; здесь только
+    // освежаем labels в HomeState. Persist Направления — flushToDisk на dispose.
+    await DirectionMutations.bulkReplace(_directions, flush: true);
+    await widget.homeController.refreshDirectionLabels();
   }
 
   /// Каталог пресетов (read-only). Tap на "Copy" → клонирует в `_customRules`
@@ -693,10 +740,10 @@ class _RoutingScreenState extends State<RoutingScreen>
         return;
       }
 
-      // Контекст санации: теги ВСЕХ каналов (ссылку на выключенный лечит
+      // Контекст санации: теги ВСЕХ Направлений (ссылку на выключенный лечит
       // существующая механика §274/§277) + DNS-теги как в дропдауне §117
       // (`edit_controller._loadDnsServerTags`: storage-refs ∪ template).
-      final channelTags = {for (final c in _channels) c.tag};
+      final directionTags = {for (final c in _directions) c.tag};
       final existingServers = await SettingsStorage.getDnsServers();
       final existingServerTags = <String>{
         for (final s in existingServers)
@@ -742,7 +789,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       for (final entry in contents.rawRules) {
         final item = sanitizeImportedRule(
           entry,
-          channelTags: channelTags,
+          directionTags: directionTags,
           dnsServerTags: dnsServerTags,
           template: template,
           existingNames: takenNames,

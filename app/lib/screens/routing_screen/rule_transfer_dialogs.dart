@@ -565,7 +565,7 @@ Widget _importRow(
 
 String _warningText(ImportRuleWarning w) => switch (w.kind) {
       ImportRuleWarningKind.outboundMissing => getLocalText.s(
-          "Channel \"%s\" not found — set to %s, rule disabled",
+          "Direction \"%s\" not found — set to %s, rule disabled",
           w.missingTag,
           kImportOutboundFallback),
       ImportRuleWarningKind.dnsServerMissing => getLocalText.s(

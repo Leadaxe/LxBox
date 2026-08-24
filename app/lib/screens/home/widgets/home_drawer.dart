@@ -59,7 +59,7 @@ class HomeDrawer extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.alt_route_outlined),
               title: Text(getLocalText.s("Routing")),
-              subtitle: Text(getLocalText.s("Channels and routing rules")),
+              subtitle: Text(getLocalText.s("Directions and routing rules")),
               onTap: () => _go(
                 context,
                 RoutingScreen(

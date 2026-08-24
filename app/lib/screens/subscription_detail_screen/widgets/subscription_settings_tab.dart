@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../controllers/subscription_controller.dart';
-import '../../../models/channel.dart';
+import '../../../models/direction.dart';
 import '../../../models/server_list.dart';
 import '../../../services/subscription/input_helpers.dart';
 import '../../../services/subscription/user_agent.dart';
-import '../../../widgets/detour_target_picker.dart' show detourChannelDisplay;
+import '../../../widgets/detour_target_picker.dart' show detourDirectionDisplay;
 import '../detour_mode.dart';
 import '../subscription_detail_format.dart';
 import '../../../services/l10n/locale_controller.dart';
@@ -19,11 +19,12 @@ class SubscriptionSettingsTab extends StatelessWidget {
     super.key,
     required this.entry,
     this.folderMode = false,
-    this.channels = const [],
+    this.directions = const [],
     this.detourPathHopsOf,
     required this.hasDetour,
     required this.detourMode,
     required this.onTagPrefixChanged,
+    this.onTagPrefixCommitted,
     required this.onSetDetourMode,
     required this.onRegisterDetourServersChanged,
     required this.onRegisterDetourInAutoChanged,
@@ -57,9 +58,9 @@ class SubscriptionSettingsTab extends StatelessWidget {
   /// own detours» вместо «subscription detour servers»).
   final bool folderMode;
 
-  /// §248 — каналы для подписи «⚙ <label>» канальной override-цели
-  /// (экран грузит SettingsStorage.getChannels и передаёт сюда).
-  final List<Channel> channels;
+  /// §248 — Направления для подписи «⚙ <label>» Направления override-цели
+  /// (экран грузит SettingsStorage.getDirections и передаёт сюда).
+  final List<Direction> directions;
 
   /// §252 — разворот цели в цепочку хопов «как пакет пойдёт» (detourPathHops
   /// с controller'ом экрана). null → показываем один хоп (как раньше).
@@ -68,6 +69,13 @@ class SubscriptionSettingsTab extends StatelessWidget {
   final DetourMode detourMode;
 
   final ValueChanged<String> onTagPrefixChanged;
+
+  /// §393 A6 — префикс ДОПЕЧАТАН (поле потеряло фокус либо submit), а не
+  /// «изменился ещё на один символ». Каскад на Направления считается только
+  /// здесь: [onTagPrefixChanged] стреляет на КАЖДОЕ нажатие, и heal по нему
+  /// переписал бы regex-фильтры промежуточными огрызками (`RU:` → `R` → `RU`
+  /// при наборе `RU: v2`), уничтожив их за несколько символов.
+  final ValueChanged<String>? onTagPrefixCommitted;
   final ValueChanged<DetourMode> onSetDetourMode;
   final ValueChanged<bool> onRegisterDetourServersChanged;
   final ValueChanged<bool> onRegisterDetourInAutoChanged;
@@ -93,9 +101,9 @@ class SubscriptionSettingsTab extends StatelessWidget {
   final VoidCallback? onEditIdentityVerOs;
   final VoidCallback? onEditIdentityDeviceModel;
 
-  /// §248 — подпись override-цели: тег detour-канала (или его auto-двойника)
-  /// → «⚙ <label>»; канал не найден → сырой тег. Интра-омоним папки (bare-тег
-  /// собственного члена) побеждает канал-тёзку — это ссылка на члена
+  /// §248 — подпись override-цели: тег detour-Направления (или его auto-двойника)
+  /// → «⚙ <label>»; Направление не найден → сырой тег. Интра-омоним папки (bare-тег
+  /// собственного члена) побеждает Направление-тёзку — это ссылка на члена
   /// (приоритет bareIndex в FolderDetourPlan), показываем как тег.
   String _overrideDisplay() {
     final stored = entry.overrideDetour;
@@ -105,7 +113,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
         if (m.node?.tag == stored) return stored;
       }
     }
-    return detourChannelDisplay(stored, channels);
+    return detourDirectionDisplay(stored, directions);
   }
 
   /// §252 — цепочка хопов цели по ходу пакета (или один хоп, если экран не
@@ -129,22 +137,34 @@ class SubscriptionSettingsTab extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           folderMode
-              ? getLocalText.s("Prefix applied to every server tag in this folder (e.g. \"BL:\" → \"BL: Frankfurt\"). Lets a routing channel match the whole folder by regex.")
+              ? getLocalText.s("Prefix applied to every server tag in this folder (e.g. \"BL:\" → \"BL: Frankfurt\"). Lets a routing direction match the whole folder by regex.")
               : getLocalText.s("Prefix applied to every tag from this subscription (e.g. \"BL:\" → \"BL: Frankfurt\"). Used to distinguish servers from different subscriptions and resolve name collisions."),
           style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: TextFormField(
-            initialValue: entry.tagPrefix,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: getLocalText.s("Prefix"),
-              hintText: getLocalText.s("empty = no prefix"),
-              isDense: true,
+          // §393 A6 — Focus поверх поля: уход фокуса = «допечатал», момент,
+          // когда каскад на Направления считать безопасно (см.
+          // [onTagPrefixCommitted]).
+          child: Focus(
+            onFocusChange: (has) {
+              if (!has) onTagPrefixCommitted?.call(entry.tagPrefix);
+            },
+            child: TextFormField(
+              initialValue: entry.tagPrefix,
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                labelText: getLocalText.s("Prefix"),
+                hintText: getLocalText.s("empty = no prefix"),
+                isDense: true,
+              ),
+              // done снимает фокус → коммит приходит одним путём (через
+              // Focus выше). Свой onFieldSubmitted тут дал бы ВТОРОЙ вызов
+              // на то же событие.
+              textInputAction: TextInputAction.done,
+              onChanged: onTagPrefixChanged,
             ),
-            onChanged: onTagPrefixChanged,
           ),
         ),
         const SizedBox(height: 24),

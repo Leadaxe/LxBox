@@ -10,6 +10,22 @@ L×Box parses proxy URIs from subscriptions and converts them into [sing-box](ht
 - [`app/lib/services/parser/parse_all.dart`](../app/lib/services/parser/parse_all.dart) — orchestrator
 - [`app/lib/models/node_spec.dart`](../app/lib/models/node_spec.dart), [`node_spec_emit.dart`](../app/lib/models/node_spec_emit.dart) — sealed `NodeSpec` + `emit()` / `toUri()`
 
+**Shared contract with the desktop launcher (SPEC 103).** The normative field
+reference lives outside this repo and is vendored into `app/contract/` by
+[`app/tool/sync_contract.sh`](../app/tool/sync_contract.sh) (pinned in
+`app/contract.lock`):
+
+- `contract/registry/protocols/<scheme>.json` — per-scheme query parameters,
+  aliases, allowlists and degradation rules. Where this document and the
+  registry disagree, the registry wins.
+- `contract/docs/CANON.md`, `IDENTITY.md` — how a parsed node is canonicalized
+  and how its identity hash is computed. Both projects must agree, otherwise the
+  same subscription yields different nodes on phone and desktop.
+- `contract/corpus/uri/` — conformance fixtures run by
+  [`app/test/contract/contract_test.dart`](../app/test/contract/contract_test.dart)
+  here and by `core/config/contract_test.go` in the launcher. A parser change
+  that alters behaviour shows up as a corpus diff.
+
 ---
 
 ## Table of Contents

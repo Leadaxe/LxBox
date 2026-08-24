@@ -6,7 +6,7 @@
 /// здесь.
 library;
 
-import 'channel.dart' show UrltestMode, StickyHashKey, kDefaultStickyHash;
+import 'direction.dart' show UrltestMode, StickyHashKey, kDefaultStickyHash;
 
 // ════════════════════════════════════════════════════════════════════════════
 // Членство
@@ -196,8 +196,8 @@ String _unescapeMemberKey(String k) =>
 /// Верхняя граница `pool_tolerance` — ядро SPEC 019, device-verified (§208).
 const int kMaxPoolTolerance = 15000;
 
-/// Параметры автовыбора. Зеркалит `ChannelAuto` (§208), но живёт на узле:
-/// у канала это настройка выхода, здесь — суть самого узла.
+/// Параметры автовыбора. Зеркалит `DirectionAuto` (§208), но живёт на узле:
+/// у Направления это настройка выхода, здесь — суть самого узла.
 class AutoSelectParams {
   final String url;
   final String interval;
@@ -210,7 +210,7 @@ class AutoSelectParams {
 
   /// §208 — рвать ли живые соединения при смене выбранного узла. Дефолт ядра
   /// `false`: старые соединения доживают на прежнем узле, новые открываются
-  /// на новом. Эмитим всегда (как канал), чтобы значение было видно в конфиге.
+  /// на новом. Эмитим всегда (как Направление), чтобы значение было видно в конфиге.
   final bool interruptExistConnections;
 
   const AutoSelectParams({

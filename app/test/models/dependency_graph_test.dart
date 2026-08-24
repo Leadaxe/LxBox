@@ -7,7 +7,7 @@ import 'package:lxbox/models/dependency_graph.dart';
 void main() {
   /// Мини-конфиг инцидента 02.08.2026: dns `yandex_udp` → detour vpn-2
   /// (selector), в vpn-2 выбирается «RU»; плюс нода `chained` с прямым
-  /// detour на «RU» и второй канал vpn-9 поверх `chained` с dns `doh2`.
+  /// detour на «RU» и второе Направление vpn-9 поверх `chained` с dns `doh2`.
   String config({List<String> vpn2Members = const ['RU', 'DE']}) =>
       jsonEncode({
         'outbounds': [
@@ -41,7 +41,7 @@ void main() {
   Map<String, Map<String, int>> delays(Map<String, int> flat) =>
       {'vpn-1': flat};
 
-  test('репро инцидента: dead-нода, выбранная каналом, заражает dns и ноды',
+  test('репро инцидента: dead-нода, выбранная Направлением, заражает dns и ноды',
       () {
     final g = DependencyGraph.fromConfig(config());
     final sick = g.computeSick(
@@ -53,7 +53,7 @@ void main() {
     // Прямой detour на корень — via null.
     expect(tags['chained']!.via, isNull);
     expect(tags['chained']!.kind, 'node');
-    // Через канал vpn-2 — via=vpn-2.
+    // Через Направление vpn-2 — via=vpn-2.
     expect(tags['yandex_udp']!.via, 'vpn-2');
     expect(tags['yandex_udp']!.isDns, isTrue);
     expect(tags['wg-ep']!.via, 'vpn-2');
@@ -62,7 +62,7 @@ void main() {
     expect(tags.containsKey('doh2'), isFalse);
   });
 
-  test('двухступенчатая цепочка: нода → канал → нода → канал → dns', () {
+  test('двухступенчатая цепочка: нода → Направление → нода → Направление → dns', () {
     final g = DependencyGraph.fromConfig(config());
     final sick = g.computeSick(
       selections: {'vpn-2': 'RU', 'vpn-9': 'chained'},
@@ -72,7 +72,7 @@ void main() {
     expect(tags['doh2']!.via, 'vpn-9');
   });
 
-  test('живой замер в любом канале снимает dead (консервативное правило)', () {
+  test('живой замер в любом Направлении снимает dead (консервативное правило)', () {
     final g = DependencyGraph.fromConfig(config());
     final sick = g.computeSick(
       selections: {'vpn-2': 'RU'},
@@ -104,7 +104,7 @@ void main() {
     expect(sick, isEmpty);
   });
 
-  test('urltest-канал не болеет по выбору (самолечение §308)', () {
+  test('urltest-Направление не болеет по выбору (самолечение §308)', () {
     final g = DependencyGraph.fromConfig(jsonEncode({
       'outbounds': [
         {'type': 'vless', 'tag': 'RU'},
@@ -151,13 +151,13 @@ void main() {
     expect(sick['RU']!.single.via, 'auto-x');
   });
 
-  test('смена выбора канала на живую ноду снимает болезнь', () {
+  test('смена выбора Направления на живую ноду снимает болезнь', () {
     final g = DependencyGraph.fromConfig(config());
     final sick = g.computeSick(
       selections: {'vpn-2': 'DE'},
       delays: delays({'RU': -1, 'DE': 120}),
     );
-    // RU мертва, но выбор канала — DE; зависимых через канал нет. Прямой
+    // RU мертва, но выбор Направления — DE; зависимых через Направление нет. Прямой
     // detour chained на RU остаётся — RU корень с одним пострадавшим.
     expect(sick.keys, ['RU']);
     expect(sick['RU']!.map((d) => d.tag), ['chained']);

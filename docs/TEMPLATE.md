@@ -10,7 +10,7 @@ At runtime the builder (`app/lib/services/builder/build_config.dart`) merges:
 - `config` (the template's native sing-box section), plus
 - `selectable_rules[*]` (the presets the user picked in `custom_rules`), plus
 - `dns_options.{servers,rules}` (the current state of storage), plus
-- `group_templates` and `default_channels` (the channel assembly templates, §267), plus
+- `group_templates` and `default_directions` (the direction assembly templates, §267), plus
 - the `vars` substitution (the template vars from storage)
 
 → into the final `<docs>/singbox_config.json` for libbox.
@@ -63,14 +63,14 @@ wizard_template.json
 │   ├─ stream_options              list[3]       parallel-streams choices (e.g. [1,4,10])
 │   └─ default_streams             int           default 4
 │
-├─ group_templates                 object        the channel assembly templates (§267)
+├─ group_templates                 object        the direction assembly templates (§267)
 │   ├─ magic_nodes                  object        a registry of service nodes, keyed by role
 │   │   └─ <role>                   object        role ∈ {auto, direct, block}
 │   │       ├─ title                string        UI-label ("Auto"/"Direct"/"Block")
 │   │       ├─ source               "generate"|"preset"  how the node comes into being
 │   │       ├─ tag                  string?       (preset) a reference into config.outbounds
 │   │       └─ tpl                  string?       (generate) the tag template ("{parent_tag}-auto")
-│   ├─ channel                      object        the template of an ordinary channel (a selector)
+│   ├─ direction                      object        the template of an ordinary direction (a selector)
 │   │   ├─ type                     "selector"
 │   │   ├─ include[]                list[role]    the role keys of magic_nodes (["direct","auto"])
 │   │   └─ options                  object          sing-box selector options (interrupt_exist_connections)
@@ -78,8 +78,8 @@ wizard_template.json
 │       ├─ type                     "urltest"
 │       └─ options                  object          url / interval / tolerance (raw @vars)
 │
-├─ default_channels[]               list          the first-launch channel seed (§267)
-│   └─ <DefaultChannel>             object
+├─ default_directions[]               list          the first-launch direction seed (§267)
+│   └─ <DefaultDirection>             object
 │       ├─ tag                      string        "vpn-1".."vpn-10"
 │       ├─ label                    string        UI display ("VPN ①")
 │       └─ default_enabled          bool          enabled in a fresh install?
@@ -124,7 +124,7 @@ wizard_template.json
 │   ├─ endpoints[]                 list          the wireguard endpoints (filled in from server_lists)
 │   ├─ outbounds[]                 list[2]       the base — direct-out plus block; the rest is added by the builder
 │   │   ├─ {type:"direct", tag:"direct-out"}
-│   │   └─ {type:"block",  tag:"block"}        §201 — the drop-out; a channel selector option and a route_final
+│   │   └─ {type:"block",  tag:"block"}        §201 — the drop-out; a direction selector option and a route_final
 │   ├─ route                       object{5 keys}
 │   │   ├─ find_process            bool          true enables package_name detection
 │   │   ├─ default_domain_resolver "@dns_default_domain_resolver"
@@ -189,8 +189,8 @@ Every key is described in detail in the sections below.
   "dns_options":         { … },     // §043+§044 (servers) + §061 (rules) — defaults
   "ping_options":        { … },     // §040 — ping/test URL + presets
   "speed_test_options":  { … },     // §015 — speed-test endpoints
-  "group_templates":     { … },     // §267 — the magic_nodes registry plus the channel/auto templates
-  "default_channels":    [ … ],     // §267 — the first-launch channel seed (vpn-1, vpn-2)
+  "group_templates":     { … },     // §267 — the magic_nodes registry plus the direction/auto templates
+  "default_directions":    [ … ],     // §267 — the first-launch direction seed (vpn-1, vpn-2)
   "sections":            [ … ],     // Wizard UI chapters (variables grouped by topic)
   "config":              { … },     // the native sing-box sections (log/dns/inbounds/outbounds/route/...)
   "selectable_rules":    [ … ]      // §033 — the preset catalog
@@ -240,14 +240,14 @@ The builder (`resolveTemplateDnsServerBody`) substitutes the vars with the user'
   "enabled":     true,               // default-enabled for auto-discovery
   "vars": [                          // optional (local_dns_resolver has none)
     {"name": "outbound", "type": "outbound", "default_value": "direct-out",
-     "title": "Outbound", "tooltip": "Which channel carries DNS queries…"},
+     "title": "Outbound", "tooltip": "Which direction carries DNS queries…"},
     {"name": "dns_ip", "type": "enum", "default_value": "8.8.8.8",
      "title": "UDP server IP", "options": [ {"title": "…", "value": "8.8.8.8"}, … ]}
   ],
   "server": {                        // sing-box DNS server body + @placeholders
     "type": "udp", "tag": "google_udp", "server_port": 53,
     "server": "@dns_ip",
-    "detour": "@outbound"            // direct-out, or a vanished channel, erases the key
+    "detour": "@outbound"            // direct-out, or a vanished direction, erases the key
   }
 }
 ```
@@ -255,7 +255,7 @@ The builder (`resolveTemplateDnsServerBody`) substitutes the vars with the user'
 The conventions (§117):
 
 - `detour: "@outbound"` with a var default of `direct-out` means the key is **not**
-  written by default (`normalizeDnsDetour`: `direct-out`, an empty value and a channel
+  written by default (`normalizeDnsDetour`: `direct-out`, an empty value and a direction
   unknown to the builder all erase the key; “no detour” is both the default and the fallback).
 - For domain-addressed servers (the address is a hostname): `domain_resolver: "@dom_resolver"` plus
   the var `{type: dns_servers, default_value: "google_udp"}` decides what resolves the
@@ -333,38 +333,38 @@ is keyed by it rather than by index; an unknown id falls back to the default (th
 
 ---
 
-## `group_templates` and `default_channels` — the channel assembly templates (§267)
+## `group_templates` and `default_directions` — the direction assembly templates (§267)
 
-> **§125/§267 — the channels live in storage; the template only seeds them.** The
-> channels moved into storage (`channels[]`, see
-> [STORAGE.md](STORAGE.md#channels--125-the-routing-channels-templatestorage)). On the
-> first launch a one-shot migration seeds `channels[]` from `default_channels` plus
-> `group_templates.channel`; after that the set of channels lives in storage and is
-> edited by the user. The builder reads `channels[]`, not the template. `auto` is not a
-> channel but a subgroup: each channel produces its own `<tag>-auto` twin (a urltest)
-> whenever `channel.include ∋ auto`.
+> **§125/§267 — the directions live in storage; the template only seeds them.** The
+> directions moved into storage (`directions[]`, see
+> [STORAGE.md](STORAGE.md#directions--125-the-routing-directions-templatestorage)). On the
+> first launch a one-shot migration seeds `directions[]` from `default_directions` plus
+> `group_templates.direction`; after that the set of directions lives in storage and is
+> edited by the user. The builder reads `directions[]`, not the template. `auto` is not a
+> direction but a subgroup: each direction produces its own `<tag>-auto` twin (a urltest)
+> whenever `direction.include ∋ auto`.
 >
 > **§267 replaced the flat `preset_groups[]`** (three heterogeneous entries plus the
 > fake variable `@auto_proxy_tag`) with three parts:
 > - `magic_nodes` — a registry of the service nodes (auto/direct/block), keyed by role;
-> - `channel` and `auto` — the templates for assembling a channel and its urltest subgroup;
-> - `default_channels` — a flat list of channels for the seed.
+> - `direction` and `auto` — the templates for assembling a direction and its urltest subgroup;
+> - `default_directions` — a flat list of directions for the seed.
 >
-> **The seed → `channels[i]` mapping** (the one-shot migration):
+> **The seed → `directions[i]` mapping** (the one-shot migration):
 >
-> | template | channels[] |
+> | template | directions[] |
 > |---|---|
-> | `default_channels[i].tag` | `tag` (vpn-1 is forced to `enabled=true`) |
-> | `default_channels[i].label` | `label` (empty falls back to `tag`) |
-> | `default_channels[i].default_enabled` / legacy `enabled_groups[]` | `enabled` |
-> | `channel.include` ∋ `direct` | `include_direct` |
-> | `channel.include` ∋ `auto` | `auto` (a ChannelAuto built from the `auto` template plus the `@urltest_*` vars) |
-> | `channel.include` ∋ `block` | `include_block` (absent from the default → false) |
-> | `channel.options.interrupt_exist_connections` | `interrupt_exist_connections` |
+> | `default_directions[i].tag` | `tag` (vpn-1 is forced to `enabled=true`) |
+> | `default_directions[i].label` | `label` (empty falls back to `tag`) |
+> | `default_directions[i].default_enabled` / legacy `enabled_groups[]` | `enabled` |
+> | `direction.include` ∋ `direct` | `include_direct` |
+> | `direction.include` ∋ `auto` | `auto` (a DirectionAuto built from the `auto` template plus the `@urltest_*` vars) |
+> | `direction.include` ∋ `block` | `include_block` (absent from the default → false) |
+> | `direction.options.interrupt_exist_connections` | `interrupt_exist_connections` |
 > | (not from the template) | `node_filter` and `default_filter` are `''` |
 >
-> Every channel is assembled from the **shared** `channel` template (one `include`);
-> they differ only in `tag`, `label` and `default_enabled` from `default_channels`.
+> Every direction is assembled from the **shared** `direction` template (one `include`);
+> they differ only in `tag`, `label` and `default_enabled` from `default_directions`.
 
 ### `magic_nodes` — the registry of service nodes
 
@@ -384,14 +384,14 @@ source of truth for the tags; the const mirrors `kAuto/Direct/BlockOutboundTag` 
 | Key | Type | Purpose |
 |---|---|---|
 | `title` | string | The UI label of the service node (the Home node display). |
-| `source` | `"generate"` \| `"preset"` | How the node comes into being: `generate` means the builder synthesizes one per channel, `preset` means it references an existing outbound. |
+| `source` | `"generate"` \| `"preset"` | How the node comes into being: `generate` means the builder synthesizes one per direction, `preset` means it references an existing outbound. |
 | `tag` | string? | (preset) A reference to an existing outbound in `config.outbounds`. Absent for `generate`. |
-| `tpl` | string? | (generate) The tag template of the synthesized node. `{parent_tag}` expands to the parent channel's tag. |
+| `tpl` | string? | (generate) The tag template of the synthesized node. `{parent_tag}` expands to the parent direction's tag. |
 
-### `channel` — the template of an ordinary channel (a selector)
+### `direction` — the template of an ordinary direction (a selector)
 
 ```jsonc
-"channel": {
+"direction": {
   "type": "selector",
   "include": ["direct", "auto"],   // the magic_nodes role keys shown in the selector
   "options": { "interrupt_exist_connections": true }
@@ -415,28 +415,29 @@ source of truth for the tags; the const mirrors `kAuto/Direct/BlockOutboundTag` 
 ```
 
 `options` is a raw template (the `@urltest_*` placeholders are resolved later, in the
-builder or the seed). The parameters go into every channel's `<tag>-auto` twin that has
-`channel.include ∋ auto`.
+builder or the seed). The parameters go into every direction's `<tag>-auto` twin that has
+`direction.include ∋ auto`.
 
-### `default_channels[]` — the first-launch channel seed
+### `default_directions[]` — the first-launch direction seed
 
 ```jsonc
-"default_channels": [
+"default_directions": [
   { "tag": "vpn-1", "label": "VPN ①", "default_enabled": true  },
   { "tag": "vpn-2", "label": "VPN ②", "default_enabled": false }
 ]
 ```
 
-The template holds only **two seed channels** (`vpn-1` and `vpn-2`). Further channels (up to
-`vpn-10`, `kMaxChannels = 10`) are created by the user in storage (`channels[]`).
+The template holds only **two seed directions** (`vpn-1` and `vpn-2`). Further directions are
+created by the user in storage (`directions[]`) — §393 removed the cap, so there is no
+limit on how many there can be, and their tags are arbitrary.
 
 | Key | Type | Purpose |
 |---|---|---|
-| `tag` | string | The channel's immutable id (`vpn-1`..`vpn-10`). |
+| `tag` | string | The direction's immutable id. §393 — arbitrary, not a fixed `vpn-N` vocabulary; the seed uses `vpn-1`/`vpn-2`. |
 | `label` | string | The UI display name (empty falls back to `tag`). |
-| `default_enabled` | bool | Affects only the first-launch seed. After the migration, being enabled is decided by `channels[i].enabled` in storage. |
+| `default_enabled` | bool | Affects only the first-launch seed. After the migration, being enabled is decided by `directions[i].enabled` in storage. |
 
-The storage source of truth is `channels[]` in `lxbox_settings.json` (§125). The legacy `enabled_groups[]` is **DEPRECATED** — it is read only by the one-shot migration into `channels[]` and as a fallback seed when `channels[]` is empty (see [STORAGE.md](STORAGE.md#channels--125-the-routing-channels-templatestorage) and the callout above).
+The storage source of truth is `directions[]` in `lxbox_settings.json` (§125). The legacy `enabled_groups[]` is **DEPRECATED** — it is read only by the one-shot migration into `directions[]` and as a fallback seed when `directions[]` is empty (see [STORAGE.md](STORAGE.md#directions--125-the-routing-directions-templatestorage) and the callout above).
 
 ---
 
@@ -554,6 +555,39 @@ Seen in the template:
 
 When extending it (adding a new type), update the Wizard UI renderer in `app/lib/screens/settings_screen.dart` and the coercion logic in `if_engine.dart`.
 
+### Keyword marking and `#enable` (SPEC 107)
+
+**One rule end to end:** `#` marks an engine keyword, `@` marks a variable
+reference, everything else is data.
+
+Canonical keywords: `#if`, `#enable`, `#and`, `#or`, `#not`, `#value`, `#else`,
+`#in`, `#notIn`, `#matches`, `#notEmpty`, `#isEmpty`, `#on_change`, `#set`.
+The unmarked spellings (`and`, `or`, `value`, `else`, `on_change`, `set`) are
+**read indefinitely** — existing templates keep working, and mixed spelling is
+valid.
+
+Conditions nest to any depth:
+
+```jsonc
+{"#enable": {"#or": ["@tun", {"#and": [{"@runtime.platform": "windows"}, "@proxy"]}]}}
+```
+
+`#enable` is a flat gate deciding whether a node exists at all — a preset
+fragment, a variable declaration, a `params` block. It replaces the former
+`enabled: "@var"` convention (§045), which is still accepted:
+
+```jsonc
+{"tag": "geoip", "type": "remote", "#enable": ["@geoip_enabled"], "url": "…"}
+```
+
+`false` drops the node entirely and its contents are not evaluated. Note that a
+**boolean** `enabled` inside a nested object (`tls.enabled`,
+`cache_file.enabled`) is a real sing-box field, never a gate — only the
+top-level rule_set form is our convention.
+
+The full normative specification is `contract/docs/TEMPLATE_LANG.md`; both apps
+are verified against the shared corpus `contract/corpus/template/`.
+
 ### `on_change` — a var's declarative side effect (§232 / §266)
 
 Toggling a var can set derived vars. The syntax reuses the existing `#if` (value/else),
@@ -564,10 +598,10 @@ section-level variant (§232, in memory); the preset-level one (§266, the globa
 ```jsonc
 {
   "name": "ipv6_enabled", "type": "bool", "default_value": "false",
-  "on_change": {
-    "set": {
-      "@dns_strategy":     {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}},
-      "@resolve_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}}
+  "#on_change": {
+    "#set": {
+      "@dns_strategy":     {"#if": {"#and": ["@ipv6_enabled"], "#value": "prefer_ipv4", "#else": "ipv4_only"}},
+      "@resolve_strategy": {"#if": {"#and": ["@ipv6_enabled"], "#value": "prefer_ipv4", "#else": "ipv4_only"}}
     }
   }
 }
@@ -724,7 +758,7 @@ The base of the final sing-box config. It carries `@var` placeholders; the subst
 ```
 
 What the builder adds to this base:
-- `config.outbounds[+]` ← the node outbounds from the enabled `server_lists[]`, plus a selector and a urltest per channel (`channels[]`, §125)
+- `config.outbounds[+]` ← the node outbounds from the enabled `server_lists[]`, plus a selector and a urltest per direction (`directions[]`, §125)
 - `config.dns.servers[+]` ← `dns_options.servers[*]` (resolved through [§044]) plus `selectable_rules[*].dns_servers[*]`
 - `config.dns.rules[+]` ← `dns_options.rules[*]` ([§061]) + `selectable_rules[*].dns_rules`
 - `config.route.rules[+]` ← `selectable_rules[*].rule` (after the enabled check on `selectable_rules[*]`) plus `custom_rules[*]`
@@ -1109,7 +1143,7 @@ and swaps in the translation keyed by that text.
 
 **The traversal schema** (the full table is in [the §279 spec, §3.2](./spec/features/279%20localization/spec.md)):
 the applier visits the display fields of sections, of global and rule-local vars, of magic nodes,
-of channels, of DNS servers and of the ping and speed presets. Not visited (the applier's
+of directions, of DNS servers and of the ping and speed presets. Not visited (the applier's
 whitelist): everything under `config` and `parser_config`, plus `name`, `tag`, `value`,
 `default_value`, `preset_id`, bare-string enum options and `dns_options.rules[].name` (a latent
 identity key) — so those strings never reach an overlay.
@@ -1173,7 +1207,7 @@ on both pseudo-vars (`rule_enable` AND `dns_enable`), so it fires along either p
 
 ## Related documents
 
-- [`STORAGE.md`](./STORAGE.md) — the user state in `lxbox_settings.json` (what the user changes, including the channels)
+- [`STORAGE.md`](./STORAGE.md) — the user state in `lxbox_settings.json` (what the user changes, including the directions)
 - [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution and expansion (formerly feature §005x, superseded by §026)
 - [§026 parser v2](./spec/features/026%20parser%20v2/spec.md) — `parser_config.version`
 - [§033 preset bundles](./spec/features/033%20preset%20bundles/spec.md) — `selectable_rules[]` and expansion

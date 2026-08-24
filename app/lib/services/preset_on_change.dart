@@ -35,7 +35,8 @@ Future<void> applyPresetOnChange(
   // dns_enable несут идентичную формулу — любая из них триггерит пересчёт).
   final targets = <String, Map<String, dynamic>>{};
   for (final v in preset.vars) {
-    final oc = v.onChange?['set'];
+    // Канон — помеченный `#set`; легаси `set` читается бессрочно (SPEC 107).
+    final oc = v.onChange?['#set'] ?? v.onChange?['set'];
     if (oc is! Map<String, dynamic>) continue;
     oc.forEach((target, ifNode) {
       if (ifNode is Map<String, dynamic>) {

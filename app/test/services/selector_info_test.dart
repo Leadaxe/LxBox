@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/screens/stats_screen/routing_section.dart';
 import 'package:lxbox/services/selector_info.dart';
 import 'package:lxbox/services/traffic_profiler.dart';
@@ -8,9 +8,9 @@ import 'package:lxbox/widgets/detour_target_picker.dart';
 
 /// §251 — схлопывание «селектор + его выбор» в `селектор (выбор)`:
 /// pure-fold, обе routingLine-модели (TrafficEvent / CcConnection), строка
-/// Detour общей Routing-секции, подпись канала в пикере. Chain НЕ фолдится.
+/// Detour общей Routing-секции, подпись Направления в пикере. Chain НЕ фолдится.
 ///
-/// Реальный эталон с устройства (WARP-MASQUE через detour-канал vpn-4):
+/// Реальный эталон с устройства (WARP-MASQUE через detour-Направление vpn-4):
 ///   outbound_chain = [WARP out, vpn-1]
 ///   detour_chain   = [vpn-4, 🇳🇱 Нидерланды, WARP in]
 void main() {
@@ -26,7 +26,7 @@ void main() {
       );
     });
 
-    test('две пары (двойной канал в цепочке) — два схлопывания', () {
+    test('две пары (двойное Направление в цепочке) — два схлопывания', () {
       SelectorInfo.I.setFallbackTags(['vpn-4', 'vpn-5']);
       expect(
         foldSelectorPairs(['vpn-4', 'A', 'vpn-5', 'B', 'WARP in']),
@@ -52,8 +52,8 @@ void main() {
       expect(foldSelectorPairs(['vpn-4']), ['vpn-4']);
     });
 
-    test('канал в AUTO: серия селекторов вкладывается, узел не теряется', () {
-      // Ядро для канала в режиме AUTO отдаёт [канал, его двойник, узел, …]
+    test('Направление в AUTO: серия селекторов вкладывается, узел не теряется', () {
+      // Ядро для Направления в режиме AUTO отдаёт [Направление, его двойник, узел, …]
       // (SPEC 017 — разворот вложенных групп в detour-хвосте).
       SelectorInfo.I.setFallbackTags(['vpn-4', 'vpn-4-auto']);
       expect(
@@ -86,7 +86,7 @@ void main() {
       SelectorInfo.I.setFallbackTags(['vpn-2', 'vpn-2-auto']);
       expect(SelectorInfo.I.isSelector('vpn-2-auto'), true);
       expect(SelectorInfo.I.selectedOf('vpn-2'), null);
-      // Удалённый канал уходит при следующем refresh — нода-омоним не
+      // Удалённое Направление уходит при следующем refresh — нода-омоним не
       // фолдится ложно.
       SelectorInfo.I.setFallbackTags(['vpn-1']);
       expect(SelectorInfo.I.isSelector('vpn-2'), false);
@@ -149,7 +149,7 @@ void main() {
       );
     });
 
-    test('без detour-канала строка не меняется (fold = no-op)', () {
+    test('без detour-Направления строка не меняется (fold = no-op)', () {
       SelectorInfo.I.setFallbackTags(['vpn-1']);
       final e = TrafficEvent(
         ts: DateTime.utc(2026, 7, 6),
@@ -180,22 +180,22 @@ void main() {
     });
   });
 
-  group('пикер detour (§251) — текущий выбор канала в скобках', () {
-    const relay = Channel(tag: 'vpn-4', label: 'Relay', isDetour: true);
+  group('пикер detour (§251) — текущий выбор Направления в скобках', () {
+    const relay = Direction(tag: 'vpn-4', label: 'Relay', isDetour: true);
 
-    test('detourChannelDisplay: выбор известен → ⚙ label (node)', () {
+    test('detourDirectionDisplay: выбор известен → ⚙ label (node)', () {
       SelectorInfo.I.setGroups({'vpn-4': '🇳🇱 Нидерланды'});
-      expect(detourChannelDisplay('vpn-4', const [relay]),
+      expect(detourDirectionDisplay('vpn-4', const [relay]),
           '⚙ Relay (🇳🇱 Нидерланды)');
     });
 
-    test('detourChannelDisplay: туннель down → просто ⚙ label', () {
-      expect(detourChannelDisplay('vpn-4', const [relay]), '⚙ Relay');
+    test('detourDirectionDisplay: туннель down → просто ⚙ label', () {
+      expect(detourDirectionDisplay('vpn-4', const [relay]), '⚙ Relay');
     });
 
-    test('detourChannelDisplay: auto-двойник тоже находит канал', () {
+    test('detourDirectionDisplay: auto-двойник тоже находит Направление', () {
       SelectorInfo.I.setGroups({'vpn-4-auto': 'быстрый-node'});
-      expect(detourChannelDisplay('vpn-4-auto', const [relay]),
+      expect(detourDirectionDisplay('vpn-4-auto', const [relay]),
           '⚙ Relay (быстрый-node)');
     });
   });

@@ -31,10 +31,18 @@ class NodeDiagnosticsTab extends StatefulWidget {
     super.key,
     required this.liveTag,
     this.node,
+    this.header,
   });
 
   final NodeSpec? node;
   final String liveTag;
+
+  /// §394 — блок, специфичный для ЭТОГО вида узла, над общей секцией «Check».
+  /// Сейчас единственный такой блок — послойная проба цепочки (её показывает
+  /// только экран просмотра outbound'а типа `chain`). Слот, а не ветка внутри
+  /// вкладки: вкладка общая для трёх экранов, и знание о цепочках здесь
+  /// пришлось бы сопровождать всем трём.
+  final Widget? header;
 
   @override
   State<NodeDiagnosticsTab> createState() => _NodeDiagnosticsTabState();
@@ -107,6 +115,10 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
       padding: EdgeInsets.fromLTRB(
           16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
       children: [
+        if (widget.header != null) ...[
+          widget.header!,
+          const SizedBox(height: 24),
+        ],
         _sectionHeader(getLocalText.s("Check"),
             getLocalText.s("Request is sent through this node"), theme),
         DropdownButtonFormField<String>(

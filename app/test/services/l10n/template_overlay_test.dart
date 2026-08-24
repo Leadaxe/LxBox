@@ -72,7 +72,7 @@ void main() {
             'direct': {'title': 'Direct', 'tag': 'direct-out'},
           },
         },
-        'default_channels': [
+        'default_directions': [
           {'tag': 'vpn-1', 'label': 'VPN 1'},
         ],
         'dns_options': {

@@ -1,5 +1,5 @@
 import '../../config/consts.dart' show kBlockOutboundTag, kDirectOutboundTag;
-import '../../models/channel.dart';
+import '../../models/direction.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 import '../../models/preset_rule_set.dart';
@@ -37,19 +37,19 @@ final SelectableRule kEmptySelectable =
 class RoutingHelpers {
   const RoutingHelpers._();
 
-  /// §125 — outbound-опции для селекторов экрана Routing из списка каналов
+  /// §125 — outbound-опции для селекторов экрана Routing из списка Направлений
   /// (storage). vpn-1 всегда присутствует (required-инвариант), выключенные
-  /// каналы скрыты. §274 — все enabled-каналы валидные цели правил, включая
-  /// detour-каналы (взаимоисключение ролей §248 снято); detour-канал виден
-  /// с ⚙-префиксом ([Channel.displayLabel]). Единственная точка закрывает
+  /// Направления скрыты. §274 — все enabled-Направления валидные цели правил, включая
+  /// detour-Направления (взаимоисключение ролей §248 снято); detour-Направление виден
+  /// с ⚙-префиксом ([Direction.displayLabel]). Единственная точка закрывает
   /// route final, тайлы правил, редактор правила и outbound-var пресетов.
   /// §201 — block всегда доступен (системный), красный как reject; держим
   /// его последним, direct — первым.
-  static List<RoutingOutboundOption> outboundOptions(List<Channel> channels) {
+  static List<RoutingOutboundOption> outboundOptions(List<Direction> directions) {
     final opts = <RoutingOutboundOption>[
       const RoutingOutboundOption(label: 'direct', tag: kDirectOutboundTag),
     ];
-    for (final c in channels) {
+    for (final c in directions) {
       if (c.enabled || c.isRequired) {
         opts.add(RoutingOutboundOption(label: c.displayLabel, tag: c.tag));
       }

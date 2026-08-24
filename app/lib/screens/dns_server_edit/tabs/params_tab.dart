@@ -112,7 +112,7 @@ class DnsServerParamsTab extends StatelessWidget {
                             style: theme.textTheme.bodyLarge),
                         const SizedBox(height: 2),
                         Text(
-                          getLocalText.s("Which channel carries DNS queries to this server. Direct — no detour key in the config."),
+                          getLocalText.s("Which direction carries DNS queries to this server. Direct — no detour key in the config."),
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: cs.onSurfaceVariant),
                         ),

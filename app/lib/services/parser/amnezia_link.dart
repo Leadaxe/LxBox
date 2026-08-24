@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../../models/node_spec.dart';
 import 'body_decoder.dart';
+import 'ini_parser.dart';
 import 'uri_utils.dart';
 
 /// §110 — декод Amnezia `vpn://`-ссылки в WG/AWG INI-тексты.
@@ -19,26 +21,13 @@ DecodedBody decodeAmneziaLink(String link) {
   if (!t.startsWith('vpn://')) {
     return const DecodeFailure('not a vpn:// link');
   }
-  if (t.length > maxURILength) {
+  if (t.length > maxAmneziaLinkLength) {
     return const DecodeFailure('vpn://: link too long');
   }
 
-  final bytes = decodeBase64Safe(t.substring('vpn://'.length));
-  if (bytes == null) return const DecodeFailure('vpn://: invalid base64');
-
-  final json = _inflate(bytes);
-  if (json == null) {
+  final root = _decodeAmneziaRoot(t);
+  if (root == null) {
     return const DecodeFailure('vpn://: payload is neither qCompress nor JSON');
-  }
-
-  Object root;
-  try {
-    root = jsonDecode(json);
-  } catch (_) {
-    return const DecodeFailure('vpn://: payload is not valid JSON');
-  }
-  if (root is! Map<String, dynamic>) {
-    return const DecodeFailure('vpn://: root is not an object');
   }
 
   final containers = root['containers'];
@@ -58,6 +47,97 @@ DecodedBody decodeAmneziaLink(String link) {
     return const DecodeFailure('vpn://: no WireGuard/AmneziaWG containers');
   }
   return AmneziaConfig(inis);
+}
+
+/// §103 §9.B12 — `vpn://` строкой ВНУТРИ построчного URI-списка подписки
+/// (не как тело целиком — тот путь идёт через [decodeAmneziaLink] из
+/// body_decoder). Go принимает такую строку в обход MaxURILength через
+/// ParseNode; Dart parseUri() раньше не имел ветки vpn — строка молча
+/// терялась (разрыв, целевое: Dart добавляет).
+///
+/// В отличие от body-пути (все контейнеры → нода на контейнер), одиночная
+/// URI-строка даёт РОВНО ОДНУ ноду — зеркалим Go
+/// (node_parser_amnezia.go: рекурсивный поиск, defaultContainer предпочтён,
+/// импортируется первый найденный контейнер). Label: `description` →
+/// `hostName` → имя контейнера (Go-порядок; отличается от body-пути, где
+/// Dart берёт nameHint файла — здесь такого контекста нет).
+WireguardSpec? parseAmneziaVpnUri(String link) {
+  final t = link.trim();
+  if (!t.startsWith('vpn://')) return null;
+  // §110 — cap 512 KiB общий с Go (maxAmneziaLinkLength): профиль с
+  // сертификатами штатно больше maxURILength, и общий лимит его терял.
+
+  final root = _decodeAmneziaRoot(t);
+  if (root == null) return null;
+
+  final containers = root['containers'];
+  if (containers is! List || containers.isEmpty) return null;
+
+  final defaultContainer = root['defaultContainer'];
+  final preferredName = defaultContainer is String ? defaultContainer : null;
+
+  // Предпочитаем контейнер с именем == defaultContainer (если он несёт
+  // валидный WG/AWG INI); иначе — первый контейнер с валидным INI.
+  Map? chosen;
+  String? chosenIni;
+  Map? firstWithIni;
+  String? firstWithIniText;
+  for (final c in containers) {
+    if (c is! Map) continue;
+    String? ini;
+    for (final proto in const ['awg', 'wireguard']) {
+      ini = _extractIni(c[proto]);
+      if (ini != null) break;
+    }
+    if (ini == null) continue;
+    firstWithIni ??= c;
+    firstWithIniText ??= ini;
+    final name = c['container'];
+    if (preferredName != null && name == preferredName) {
+      chosen = c;
+      chosenIni = ini;
+      break;
+    }
+  }
+  chosen ??= firstWithIni;
+  chosenIni ??= firstWithIniText;
+  if (chosen == null || chosenIni == null) return null;
+
+  final ini = _substituteDns(chosenIni, root);
+
+  // Go label: description → hostName → имя контейнера.
+  final description = root['description'];
+  final hostName = root['hostName'];
+  final containerName = chosen['container'];
+  final label = (description is String && description.isNotEmpty)
+      ? description
+      : (hostName is String && hostName.isNotEmpty)
+          ? hostName
+          : (containerName is String && containerName.isNotEmpty)
+              ? containerName
+              : null;
+
+  return parseWireguardIni(ini, nameHint: label);
+}
+
+/// base64 (любой из 4 вариантов) → qCompress-инфлейт/несжатый JSON → decode
+/// в Map. `null` при любой ошибке на любом шаге — общий decode-конвейер для
+/// [decodeAmneziaLink] и [parseAmneziaVpnUri].
+Map<String, dynamic>? _decodeAmneziaRoot(String linkTrimmed) {
+  final bytes = decodeBase64Safe(linkTrimmed.substring('vpn://'.length));
+  if (bytes == null) return null;
+
+  final json = _inflate(bytes);
+  if (json == null) return null;
+
+  Object root;
+  try {
+    root = jsonDecode(json);
+  } catch (_) {
+    return null;
+  }
+  if (root is! Map<String, dynamic>) return null;
+  return root;
 }
 
 /// Анти-bomb cap на claimed uncompressed size из qCompress-заголовка.

@@ -23,14 +23,27 @@ TuicSpec? parseTuic(String uri) {
   final label = decodeFragment(p.fragment);
   final tag = tagFromLabel(label, 'tuic', server, port);
 
-  final cc = (q['congestion_control'] ?? 'cubic').toLowerCase().trim();
-  final urm = (q['udp_relay_mode'] ?? 'native').toLowerCase().trim();
+  // §103 D-016(в) — не подставлять дефолт на разборе: null, если параметра не
+  // было в URI вовсе, иначе нормализованное значение (мусор → тоже null, как
+  // будто параметра не было — эмиттер тогда не пишет поле, ядро подставит
+  // дефолт само).
+  final ccRaw = q['congestion_control'];
+  final cc = _normalizeCongestion(ccRaw);
+  final urmRaw = q['udp_relay_mode'];
+  final urm = urmRaw == null
+      ? null
+      : (urmRaw.toLowerCase().trim() == 'quic' ? 'quic' : 'native');
   final zeroRtt = (q['reduce_rtt'] ?? q['zero_rtt'] ?? '0') == '1' ||
       (q['reduce_rtt'] ?? q['zero_rtt'] ?? '').toLowerCase() == 'true';
 
   var sni = q['sni'] ?? '';
   if (sni.isEmpty) sni = server;
-  final alpn = (q['alpn'] ?? 'h3').split(',').map((e) => e.trim()).toList();
+  // §103 D-016(в) — alpn=h3 у TUIC это дефолт ПРОТОКОЛА (не эмитится Go, если
+  // в URI не было явного alpn), не наше подставленное значение.
+  final alpnRaw = q['alpn'];
+  final alpn = (alpnRaw == null || alpnRaw.isEmpty)
+      ? const <String>[]
+      : alpnRaw.split(',').map((e) => e.trim()).toList();
 
   final tls = TlsSpec(
     enabled: true,
@@ -40,7 +53,20 @@ TuicSpec? parseTuic(String uri) {
   );
 
   final warnings = <NodeWarning>[];
+  // SPEC 103 `tuic_congestion_invalid` (Go: node_parser_tuic.go:73) — значение
+  // вне {cubic, new_reno, bbr} снимается, ядро подставит свой дефолт. Пустое
+  // значение = «не задано», деградацией не считается.
+  if (ccRaw != null && ccRaw.trim().isNotEmpty && cc == null) {
+    warnings.add(TuicCongestionInvalidWarning(ccRaw.trim()));
+  }
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
+
+  // §103 D-024 — heartbeat: голое число (секунды) → duration-строка с
+  // суффиксом `s`; параметра не было в URI вовсе → null (не эмитим).
+  final heartbeatRaw = q['heartbeat'];
+  final heartbeat = (heartbeatRaw == null || heartbeatRaw.trim().isEmpty)
+      ? null
+      : normalizeSingboxDuration(heartbeatRaw.trim());
 
   return TuicSpec(
     id: newUuidV4(),
@@ -51,13 +77,20 @@ TuicSpec? parseTuic(String uri) {
     rawUri: uri,
     uuid: uuid,
     password: password,
-    congestionControl: _normalizeCongestion(cc),
-    udpRelayMode: urm == 'quic' ? 'quic' : 'native',
+    congestionControl: cc,
+    udpRelayMode: urm,
     zeroRtt: zeroRtt,
     tls: tls,
+    heartbeat: heartbeat,
     warnings: warnings,
   );
 }
 
-String _normalizeCongestion(String s) =>
-    {'bbr', 'cubic', 'new_reno'}.contains(s) ? s : 'cubic';
+/// `null` при отсутствии параметра ИЛИ мусорном значении — оба случая
+/// «не задано явно» для эмиттера (§103 D-016(в)): битое значение не должно
+/// протащить в конфиг псевдо-явный `cubic`.
+String? _normalizeCongestion(String? raw) {
+  if (raw == null) return null;
+  final s = raw.toLowerCase().trim();
+  return {'bbr', 'cubic', 'new_reno'}.contains(s) ? s : null;
+}

@@ -1,10 +1,19 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../../models/node_warning.dart';
 import '../app_log.dart';
 
 /// Максимальная длина URI (защита от мусорных base64-бомб). Совпадает с v1.
 const int maxURILength = 65536;
+
+/// Отдельный потолок сырой `vpn://`-ссылки (contract/registry/limits.json →
+/// amnezia_link_max_bytes).
+///
+/// Amnezia-профиль везёт целый конфиг, а с сертификатами штатно перерастает
+/// общий [maxURILength]: под общим лимитом такая ссылка молча терялась, хотя
+/// десктоп её принимал (§103 §9.B12).
+const int maxAmneziaLinkLength = 524288;
 
 /// §084 M7 — charset валидного имени HTTP-заголовка из DuckSoft de-facto
 /// спеки naive URI: `! # $ % & ' * + - . 0-9 A-Z \ ^ _ ` a-z | ~`.
@@ -35,6 +44,82 @@ List<int>? decodeBase64Safe(String s) {
     }
   }
   return null;
+}
+
+/// Base64 alphabet lookup (std, index-compatible with url-safe: `+`/`-` and
+/// `/`/`_` map to the same 6-bit value at position 62/63).
+final Map<int, int> _b64CharValue = {
+  for (var i = 0; i < 26; i++) 'A'.codeUnitAt(0) + i: i,
+  for (var i = 0; i < 26; i++) 'a'.codeUnitAt(0) + i: 26 + i,
+  for (var i = 0; i < 10; i++) '0'.codeUnitAt(0) + i: 52 + i,
+  '+'.codeUnitAt(0): 62,
+  '-'.codeUnitAt(0): 62,
+  '/'.codeUnitAt(0): 63,
+  '_'.codeUnitAt(0): 63,
+};
+
+/// Lenient base64 decode matching Go's `encoding/base64` StdEncoding/
+/// URLEncoding: unlike `dart:convert`'s `base64`/`base64Url` codecs, Go does
+/// NOT reject a final group whose unused low padding bits are non-zero
+/// (canonical form has them zero, but Go still decodes the non-canonical
+/// form — D-030's whole premise: `…ccC=` and `…ccA=` both decode to the
+/// same 32 bytes). Dart's strict codec throws `FormatException: Invalid
+/// encoding before padding` on exactly this input, so a manual decode is
+/// needed to match core behavior instead of over-rejecting valid keys.
+/// Accepts std/url-safe chars mixed, with or without `=` padding. Returns
+/// null on any invalid character or on a length that isn't decodable.
+List<int>? _decodeBase64Lenient(String s) {
+  final trimmed = s.replaceAll(RegExp(r'=+$'), '');
+  if (trimmed.isEmpty) return null;
+  final values = <int>[];
+  for (final unit in trimmed.codeUnits) {
+    final v = _b64CharValue[unit];
+    if (v == null) return null;
+    values.add(v);
+  }
+  // 2 leftover chars encode 1 byte, 3 leftover chars encode 2 bytes; 1
+  // leftover char is invalid base64 (needs at least 2).
+  final rem = values.length % 4;
+  if (rem == 1) return null;
+
+  final out = <int>[];
+  var i = 0;
+  while (i + 4 <= values.length) {
+    final n = (values[i] << 18) |
+        (values[i + 1] << 12) |
+        (values[i + 2] << 6) |
+        values[i + 3];
+    out.add((n >> 16) & 0xFF);
+    out.add((n >> 8) & 0xFF);
+    out.add(n & 0xFF);
+    i += 4;
+  }
+  if (rem == 2) {
+    final n = (values[i] << 18) | (values[i + 1] << 12);
+    out.add((n >> 16) & 0xFF);
+  } else if (rem == 3) {
+    final n = (values[i] << 18) | (values[i + 1] << 12) | (values[i + 2] << 6);
+    out.add((n >> 16) & 0xFF);
+    out.add((n >> 8) & 0xFF);
+  }
+  return out;
+}
+
+/// SPEC 103 D-023/D-030 — валидирует и канонизирует WireGuard-ключ
+/// (private/public/preshared) из share-URI или .conf. Эталон Go
+/// `normalizeWGKey` (core/config/subscription/node_parser_wireguard.go):
+/// декодирует любой из 4 вариантов base64 (std/url-safe × padded/unpadded),
+/// лениво (как Go `encoding/base64`, не строгий `dart:convert` — D-030
+/// специально требует принимать неканоническую форму `…ccC=`), требует
+/// РОВНО 32 байта (мусор вроде Proton'овского "*****" или урезанного
+/// `publickey=enabled` иначе не отсеять — D-023), возвращает канонический
+/// std-base64 (D-030: `…ccC=`/`…ccA=` декодируют в одни и те же 32 байта,
+/// но уезжают в конфиг по-разному → разные identity-хеши).
+/// `null` → нода отбрасывается вызывающим (parse_error, CANON §4).
+String? normalizeWGKey(String value) {
+  final raw = _decodeBase64Lenient(value);
+  if (raw == null || raw.length != 32) return null;
+  return base64.encode(raw);
 }
 
 /// §025 — WireGuard `reserved` (Cloudflare WARP client_id), ровно 3 байта.
@@ -91,12 +176,18 @@ String tagFromLabel(String label, String scheme, String server, int port) {
 }
 
 /// Разбор `#fragment` → label.
+///
+/// §103 base64_payload_crlf — base64-обёрнутые hysteria2-ссылки иногда несут
+/// хвостовой CRLF (копипаста из чата) прямо после текста фрагмента; Go
+/// тримит его в конце label-конвейера (textnorm.NormalizeProxyDisplay →
+/// strings.TrimSpace), после sanitize (который намеренно сохраняет \t/\n/\r
+/// в середине строки). Зеркалим: sanitize, затем trim только по краям.
 String decodeFragment(String fragment) {
   if (fragment.isEmpty) return '';
   try {
-    return sanitizeForDisplay(Uri.decodeComponent(fragment));
+    return sanitizeForDisplay(Uri.decodeComponent(fragment)).trim();
   } catch (_) {
-    return sanitizeForDisplay(fragment);
+    return sanitizeForDisplay(fragment).trim();
   }
 }
 
@@ -148,13 +239,21 @@ bool isTlsInsecure(Map<String, String> q) {
 /// в URI; sing-box принимает только lowercase).
 ///
 /// `tag` — опционально для warning'ов (диагностика проблемной подписки).
-String normalizePacketEncoding(String raw, {String? tag}) {
+/// [warnings] — узловой список: мусорное значение получает
+/// `packet_encoding_unknown` (contract/registry/warnings.json). Пустое и
+/// `none` — «поля нет», не деградация: кода не дают (Go так же).
+String normalizePacketEncoding(
+  String raw, {
+  String? tag,
+  List<NodeWarning>? warnings,
+}) {
   final v = raw.trim().toLowerCase();
   if (v.isEmpty || v == 'none') return '';
   if (v == 'xudp' || v == 'packetaddr') return v;
   AppLog.I.warning(
     "unknown packetEncoding='$raw'${tag != null ? ' in $tag' : ''} — dropping",
   );
+  warnings?.add(PacketEncodingUnknownWarning(raw.trim()));
   return '';
 }
 
@@ -255,6 +354,30 @@ String normalizeRealityShortId(String s) {
   }
   final out = buf.toString();
   return (out.length > 16 || out.length.isOdd) ? '' : out;
+}
+
+/// SPEC 103 `reality_short_id_invalid` — сырое значение `sid` будет
+/// деградировано (не-hex вычищен / всё значение снято). Зеркало Go
+/// `realityShortIDWouldDegrade` (parse_warnings.go:72): непустое сырое
+/// значение, чья нормализация не совпала с `lower(trim(raw))`. Отдельный
+/// предикат, а не флаг из [normalizeRealityShortId], потому что код обязан
+/// встать ДО нормализации — после неё исходного значения уже нет.
+bool realityShortIdWouldDegrade(String raw) {
+  if (raw.isEmpty) return false;
+  return normalizeRealityShortId(raw) != raw.trim().toLowerCase();
+}
+
+/// SPEC 103 D-024 — bare integer (трактуется как секунды) → sing-box
+/// duration string (`"30"` → `"30s"`); значение, уже несущее суффикс единицы
+/// измерения (`"30s"`, `"5m"`), проходит без изменений. Зеркало Go
+/// `normalizeTuicHeartbeat` (node_parser_tuic.go) — общий для TUIC heartbeat
+/// и AnyTLS idle_session_*: ядро (`badoption.Duration`) отвергает голое
+/// число ошибкой `time: missing unit in duration` и роняет ВЕСЬ конфиг.
+/// Пустая строка проходит как есть (caller решает, эмитить ли поле).
+String normalizeSingboxDuration(String v) {
+  if (v.isEmpty) return v;
+  final isAllDigits = RegExp(r'^[0-9]+$').hasMatch(v);
+  return isAllDigits ? '${v}s' : v;
 }
 
 /// Нормализация VMess security/cipher к sing-box словарю.

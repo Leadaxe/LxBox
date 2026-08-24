@@ -5,7 +5,8 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/background_mode.dart';
-import '../models/channel.dart';
+import '../models/direction.dart';
+import '../models/source_chain.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
@@ -14,6 +15,7 @@ import '../vpn/box_vpn_client.dart';
 import 'app_log.dart';
 import 'config_dirty_check.dart';
 import 'l10n/app_language_reconcile.dart';
+import 'lx_backup.dart' show kLxAppLxBox;
 import 'template_loader.dart';
 import 'warp/masque_account.dart';
 import 'warp/warp_account.dart';
@@ -21,7 +23,9 @@ import 'warp/warp_account.dart';
 part 'settings_storage/io.dart';
 part 'settings_storage/vars.dart';
 part 'settings_storage/sources_rules.dart';
-part 'settings_storage/channels.dart';
+part 'settings_storage/directions.dart';
+part 'settings_storage/chains.dart';
+part 'settings_storage/lx_backup_extensions.dart';
 part 'settings_storage/network.dart';
 part 'settings_storage/backup_tun.dart';
 part 'settings_storage/vpn_mode.dart';
@@ -140,8 +144,16 @@ class SettingsStorage {
     'urltest_passive_check', // §272 — passive health check (urltest.passive_check)
     'excluded_nodes',
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
-    'channels', // §125 — каналы роутинга (template→storage)
-    'channels_migrated', // §125 — guard one-shot миграции
+    'directions', // §125/§393 — Направления роутинга (template→storage)
+    'directions_migrated', // §125/§393 — guard one-shot миграции
+    'chains', // §393 C2 — источники-цепочки хопов (SPEC 110)
+    // §393 B7 — блобы `extensions.<чужое>` из LX Backup. Хранятся нетронутыми
+    // до следующего экспорта (BACKUP.md §1); в конфиг ядра не идут.
+    'lx_backup_extensions',
+    // §393 A2 — легаси-пары `channels`/`channels_migrated` в allowlist НЕТ
+    // намеренно: границы импорта нормализуют имена ДО `replaceRaw`
+    // ([normalizeLegacyDirectionKeys]), а старый файл на диске (upgrade-путь)
+    // читается миграцией напрямую, мимо allowlist.
     'tun_apps',
     'vpn_mode',
     'warp_account',
@@ -300,58 +312,114 @@ class SettingsStorage {
       _saveEnabledGroups(groups, flush: flush);
 
   // ---------------------------------------------------------------------------
-  // §125 — Каналы роутинга (channels[]). Заменяют enabled_groups[] + статичные
+  // §125 — Направления роутинга (directions[]). Заменяют enabled_groups[] + статичные
   // template-пресеты как source-of-truth. На первом запуске seeded из template
-  // (migrateChannelsIfNeeded; §267 — из group_templates). vpn-1 неудаляем, лимит 10.
+  // (migrateDirectionsIfNeeded; §267 — из group_templates). vpn-1 неудаляем;
+  // лимита на количество нет (§393 A3 — паритет с лаунчером).
   // ---------------------------------------------------------------------------
 
-  static Future<List<Channel>> getChannels() => _getChannels();
+  static Future<List<Direction>> getDirections() => _getDirections();
 
-  /// §292 — код приложения зовёт `ChannelMutations.bulkReplace`: bulk-overwrite
+  /// §292 — код приложения зовёт `DirectionMutations.bulkReplace`: bulk-overwrite
   /// мимо heal'а допустим только там, где ссылка структурно не может повиснуть
   /// (staging-буфер, reorder). Голый вызов из `lib/` — предупреждение analyze'а.
   @visibleForTesting
-  static Future<void> setChannels(List<Channel> channels, {bool flush = true}) =>
-      _setChannels(channels, flush: flush);
+  static Future<void> setDirections(List<Direction> directions, {bool flush = true}) =>
+      _setDirections(directions, flush: flush);
 
-  /// Добавить канал: первый свободный 'vpn-N' (N∈2..10). Throws при лимите 10.
+  /// Добавить Направление. §393 A3 — [tag] опционален (по умолчанию первый
+  /// свободный `vpn-N`, [nextDirectionTag]); throws [StateError] на конфликте
+  /// тега (`directionTagConflict`). Лимита на количество нет.
   ///
-  /// §275 — код приложения зовёт `ChannelMutations.add`: мутаторы каналов
+  /// §275 — код приложения зовёт `DirectionMutations.add`: мутаторы Направлений
   /// парные с ресинком контроллера, здесь — только storage-половина.
   @visibleForTesting
-  static Future<Channel> addChannel({String? label}) => _addChannel(label: label);
+  static Future<Direction> addDirection({String? label, String? tag}) =>
+      _addDirection(label: label, tag: tag);
 
-  /// Обновить канал по [Channel.tag]. Throws если tag не найден.
+  /// Обновить Направление по [Direction.tag]. Throws если tag не найден.
   /// §248 — возвращает счётчики вылеченных ссылок (disable/flag-set →
   /// rules-ссылки → vpn-1; disable/flag-unset → detour-ссылки → '').
   ///
-  /// §275 — код приложения зовёт `ChannelMutations.update`: detour-heal ОБЯЗАН
+  /// §275 — код приложения зовёт `DirectionMutations.update`: detour-heal ОБЯЗАН
   /// зеркалиться в `_entries` контроллера, иначе следующий `_persist()`
   /// воскресит вылеченную ссылку. Голый вызов из `lib/` — предупреждение
   /// analyze'а (это и есть страховка от «забыл ресинк»).
   @visibleForTesting
-  static Future<ChannelHealResult> updateChannel(Channel channel) =>
-      _updateChannel(channel);
+  static Future<DirectionHealResult> updateDirection(Direction direction) =>
+      _updateDirection(direction);
 
-  /// Удалить канал. Throws для 'vpn-1'. Переводит rules-ссылки на 'vpn-1',
+  /// Удалить Направление. Throws для 'vpn-1'. Переводит rules-ссылки на 'vpn-1',
   /// §248 detour-ссылки — на '' (None); возвращает счётчики.
   ///
-  /// §275 — код приложения зовёт `ChannelMutations.delete` (см. выше).
+  /// §275 — код приложения зовёт `DirectionMutations.delete` (см. выше).
   @visibleForTesting
-  static Future<ChannelHealResult> deleteChannel(String tag) =>
-      _deleteChannel(tag);
+  static Future<DirectionHealResult> deleteDirection(String tag) =>
+      _deleteDirection(tag);
 
-  /// One-shot миграция enabled_groups[] → channels[] (seed из template).
-  /// §267 — сид из `template.groupTemplates` (default_channels + channel-шаблон).
-  /// Идемпотентна. Зовётся из main() init до первого билда.
+  /// One-shot миграция состава Направлений: легаси `channels`/`channels_migrated`
+  /// → `directions`/`directions_migrated` с удалением легаси-пары (§393 A2);
+  /// на чистой установке — seed из template (legacy-цепочка `enabled_groups[]`).
+  /// §267 — сид из `template.groupTemplates` (json-ключи default_directions + direction).
+  /// Идемпотентна. Зовётся из main() init до первого билда И из
+  /// `BackupService.applyImport` после restore (порядок restore→migrate).
   /// §327 — `varDefaults` (имя var → `default_value`) резолвит `@urltest_*`
   /// в `group_templates.auto.options`: на этом этапе var-substitution ещё не
   /// отработала, а дефолт обязан быть один — шаблонный.
-  static Future<void> migrateChannelsIfNeeded(
+  static Future<void> migrateDirectionsIfNeeded(
     GroupTemplates gt, {
     Map<String, String> varDefaults = const {},
   }) =>
-      _migrateChannelsIfNeeded(gt, varDefaults: varDefaults);
+      _migrateDirectionsIfNeeded(gt, varDefaults: varDefaults);
+
+  // ---------------------------------------------------------------------------
+  // §393 C2 — источники-цепочки (chains[]). Третий тип источника рядом с
+  // подпиской и сервером (SPEC 110); НЕ Направление (§393 L5) и НЕ узел
+  // подписки. Порядок списка нормативен: ссылка позиции разрешена только на
+  // цепочку, объявленную ВЫШЕ, — этим исключены циклы между цепочками.
+  // ---------------------------------------------------------------------------
+
+  static Future<List<SourceChain>> getChains() => _getChains();
+
+  static Future<void> setChains(List<SourceChain> chains, {bool flush = true}) =>
+      _setChains(chains, flush: flush);
+
+  /// Добавить цепочку. [tag] опционален (по умолчанию первый свободный
+  /// `chain-N`, [nextChainTag]); throws [StateError] на конфликте тега с
+  /// другой цепочкой или Направлением.
+  static Future<SourceChain> addChain({String? label, String? tag}) =>
+      _addChain(label: label, tag: tag);
+
+  /// §393 D3 — создать цепочку ЦЕЛИКОМ, одной записью на диск.
+  ///
+  /// Для вызывающих, которые собирают полную запись и валидируют её ДО
+  /// сохранения (`POST /chains`): отказ не оставляет следов в storage.
+  /// throws [StateError] на конфликте тега — так же, как [addChain].
+  static Future<SourceChain> createChain(SourceChain chain) =>
+      _createChain(chain);
+
+  /// Обновить цепочку по [SourceChain.tag]. Throws, если тег не найден.
+  /// Позиция в общем списке источников не меняется.
+  static Future<void> updateChain(SourceChain chain) => _updateChain(chain);
+
+  /// §393 D1 — переставить цепочки в их взаимном порядке (drag в общем
+  /// списке источников). Принимает полный список в новом порядке.
+  static Future<void> reorderChains(List<SourceChain> chains) =>
+      _reorderChains(chains);
+
+  /// Удалить цепочку. §393 D2 — позиции с её тегом вычищаются из ОСТАЛЬНЫХ
+  /// цепочек (сами они остаются); счётчик снятого — в [ChainHealResult].
+  static Future<ChainHealResult> deleteChain(String tag) => _deleteChain(tag);
+
+  /// §393 D2 — вычистить позиции с тегом [tag] из всех цепочек. Зовётся при
+  /// осознанном удалении ЧУЖОГО источника (сервер, подписка, папка,
+  /// Направление). Обновление подписки сюда НЕ входит — см. `_healChainHops`.
+  static Future<ChainHealResult> healChainHops(String tag, {bool flush = true}) =>
+      _healChainHops(tag, flush: flush);
+
+  /// §393 D1 — one-shot миграция позиций цепочек в общий список источников.
+  /// Идемпотентна; зовётся из тех же точек, что [migrateDirectionsIfNeeded].
+  static Future<void> migrateChainOrderIfNeeded() => _migrateChainOrderIfNeeded();
 
   // ---------------------------------------------------------------------------
   // Last global update timestamp
@@ -392,6 +460,20 @@ class SettingsStorage {
   // ---------------------------------------------------------------------------
   // Route final outbound
   // ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
+  // §393 B7 — чужие блобы LX Backup (`extensions.<приложение>`).
+  // ---------------------------------------------------------------------------
+
+  /// Блобы чужих приложений, приехавшие последним импортом LX Backup.
+  /// Возвращаются в файл при следующем экспорте (BACKUP.md §1).
+  static Future<Map<String, dynamic>> getLxBackupExtensions() =>
+      _getLxBackupExtensions();
+
+  /// Сохраняет чужие блобы (merge по приложению; пустая карта — no-op).
+  static Future<void> setLxBackupExtensions(Map<String, dynamic> blobs,
+          {bool flush = true}) =>
+      _setLxBackupExtensions(blobs, flush: flush);
 
   static Future<String> getRouteFinal() => _getRouteFinal();
 

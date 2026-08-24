@@ -95,16 +95,18 @@ void main() {
     expect(m.containsKey('tls'), isFalse);
   });
 
-  test('§393 — URI пишет vhttp=, но принимает legacy network=', () {
+  test('§393/0.8.0 (D-078) — URI пишет vhttp=, legacy network= НЕ принимает', () {
     final uri = spec().toUri();
     expect(uri, contains('vhttp=h3'));
     expect(uri, isNot(contains('network=')));
 
-    // URI, выпущенный до миграции, продолжает парситься.
+    // Директива оператора 25.08: legacy-имя больше не читается — URI,
+    // выпущенный до миграции, парсится, но параметр игнорируется (узел
+    // живёт на дефолте, а не на значении из ссылки).
     final legacy = uri.replaceAll('vhttp=h3', 'network=h2');
-    expect(parseMasqueUri(legacy)!.vhttp, 'h2');
+    expect(parseMasqueUri(legacy)!.vhttp, 'h3');
 
-    // Оба имени сразу: новое сильнее (ядро на таком падает, мы — нет).
+    // Оба имени сразу: vhttp читается, network не влияет ни на что.
     final both = '$uri&network=h2';
     expect(parseMasqueUri(both)!.vhttp, 'h3');
   });

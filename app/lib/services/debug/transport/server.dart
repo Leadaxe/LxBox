@@ -8,7 +8,8 @@ import '../context.dart';
 import '../contract/errors.dart';
 import '../handlers/action.dart';
 import '../handlers/backup.dart';
-import '../handlers/channels.dart';
+import '../handlers/chains.dart';
+import '../handlers/directions.dart';
 import '../handlers/config.dart';
 import '../handlers/device.dart';
 import '../handlers/diag.dart';
@@ -179,7 +180,8 @@ class DebugServer {
       ..mount('/backup', backupHandler)
       ..mount('/rules', rulesHandler)
       ..mount('/subs', subsHandler)
-      ..mount('/channels', channelsHandler) // §238 — каналы роутинга §125
+      ..mount('/directions', directionsHandler) // §238 — Направления роутинга §125
+      ..mount('/chains', chainsHandler) // §393 C — источники-цепочки SPEC 110
       ..mount('/folders', foldersHandler) // §238 — папки серверов §234
       ..mount('/warp', warpHandler)
       ..mount('/settings', settingsHandler)

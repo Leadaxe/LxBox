@@ -25,11 +25,28 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.0-lx.27-rc.2`** (see `app/android/libbox.version`) —
-hotfixes SPEC 070/071 (a dead detour node no longer freezes the network
-machinery) plus an upstream sync to beta.15 and Go 1.26.6.
+**The current pin: `v1.14.0-lx.27-rc.4`** (see `app/android/libbox.version`) —
+**SPEC 072**, the detour freeze finished off: a failed XHTTP stream raise now
+tears the upload pipe from the reading half (`fail()`), and requests of all
+three modes ride a conn-scoped context instead of the dial context, so the
+15-second dial deadline no longer kills a *live* stream. The field dump this
+fixes was taken on lx.27-rc.2 — 38 minutes of freeze, all traffic dead
+including direct, cured only by force-stop. SPEC 070/071 are absorbed into 072
+as one owner; their mechanisms are unchanged under the old markers.
 
-⚠️ **This bump is NOT API-neutral, unlike every lx.2x bump before it.**
+`rc.3` was skipped on purpose: `1.14.0-lx.27-rc.3-dev` had already shipped in
+field test builds of the mac launcher, so the release took the next number to
+keep field binaries from colliding with the tag.
+
+**This bump IS API-neutral.** A `javap` sweep over all **245** classes of both
+AARs is byte-identical — 3363 lines, zero differences — so no wrapper or
+call-site changes. (Beware the stale `classes.jar` that `libs/` keeps next to
+the AAR: it can lag several cores behind and diffing against it invents
+removals that are not there. Extract `classes.jar` from the actual release AAR
+for both sides.)
+
+⚠️ **The previous pin `v1.14.0-lx.27-rc.2` was NOT API-neutral**, unlike every
+lx.2x bump before it.
 `PlatformInterface` gained a new abstract method:
 
 ```java

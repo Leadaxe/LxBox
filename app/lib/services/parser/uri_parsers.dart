@@ -1,5 +1,6 @@
 import '../../models/auto_select.dart';
 import '../../models/node_spec.dart';
+import 'amnezia_link.dart';
 import 'uri_utils.dart';
 import 'uri_parsers/anytls_parser.dart';
 import 'uri_parsers/auto_group_parser.dart';
@@ -35,10 +36,13 @@ export 'uri_parsers/wireguard_parser.dart';
 /// Диспетчер по схеме URI. Возвращает NodeSpec или null (skip).
 /// Ошибки структуры (отсутствие host, uuid) — null, не throw.
 NodeSpec? parseUri(String uri) {
-  if (uri.length > maxURILength) return null;
   final t = uri.trim();
   if (t.isEmpty) return null;
   final scheme = t.split('://').first.toLowerCase();
+  // vpn:// проверяется своим потолком (maxAmneziaLinkLength): профиль везёт
+  // целый конфиг и штатно перерастает общий лимит — под ним ссылка молча
+  // терялась, хотя десктоп её принимал (§103 §9.B12).
+  if (scheme != 'vpn' && uri.length > maxURILength) return null;
   try {
     switch (scheme) {
       // §322 — синтетическая схема узла автовыбора. Не протокол: несёт
@@ -58,6 +62,8 @@ NodeSpec? parseUri(String uri) {
         return parseHysteria2(t);
       case 'naive+https':
         return parseNaive(t);
+      case 'naive+quic': // §103 §9.B1 — QUIC-транспорт вместо HTTP/2
+        return parseNaive(t, isQuic: true);
       case 'anytls': // §269 — AnyTLS (trojan-подобная URI-форма)
         return parseAnyTls(t);
       case 'tuic':
@@ -78,6 +84,8 @@ NodeSpec? parseUri(String uri) {
         return parseWireguardUri(t);
       case 'masque': // §130 — MASQUE-WARP (CONNECT-IP)
         return parseMasqueUri(t);
+      case 'vpn': // §103 §9.B12 — Amnezia vpn:// строкой внутри URI-списка
+        return parseAmneziaVpnUri(t);
       default:
         return null;
     }

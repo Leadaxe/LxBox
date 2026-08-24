@@ -47,7 +47,7 @@ class NodeRow extends StatelessWidget {
   /// сервером тегу. Иначе null → пункт меню скрыт.
   final VoidCallback? onSelectServer;
 
-  /// §208 — non-null только для auto-ноды round_robin-канала: «View pool» в меню
+  /// §208 — non-null только для auto-ноды round_robin-Направления: «View pool» в меню
   /// → попап с текущим составом пула (getPool). Иначе null → пункт скрыт.
   final VoidCallback? onViewPool;
 
@@ -57,7 +57,7 @@ class NodeRow extends StatelessWidget {
 
   /// Right-side delay label (или PING… / ERR), цвет по latency.
   ///
-  /// §325 — префикс `~` («приблизительно») у замера из другого канала: число
+  /// §325 — префикс `~` («приблизительно») у замера из другого Направления: число
   /// показано как ориентир, но получено чужим тестом (ping-URL и таймаут
   /// резолвятся per-group, §040). Значок текстовый и однознаковый намеренно —
   /// бейдж узкий и моноширинный, иконка сломала бы выравнивание колонки.
@@ -217,13 +217,13 @@ class NodeRow extends StatelessWidget {
   // §125 — служебная нода (direct/auto): по типу из конфига, не по маске имени.
   /// §125/§322 — служебная нода (direct/auto-двойник/block): подменённое имя
   /// и иконка. urltest-группа §322 сюда НЕ входит — она показывает своё имя,
-  /// хотя тип у неё тот же `urltest` (различитель — тег канала, `isChannelAuto`).
+  /// хотя тип у неё тот же `urltest` (различитель — тег Направления, `isDirectionAuto`).
   bool get _isSpecial => _special != null;
 
   SpecialNodeDisplay? get _special {
     final s = specialNodeDisplayForType(item.outboundType);
     if (s == null) return null;
-    if (item.outboundType == 'urltest' && !item.isChannelAuto) return null;
+    if (item.outboundType == 'urltest' && !item.isDirectionAuto) return null;
     return s;
   }
 
@@ -313,7 +313,7 @@ class NodeRow extends StatelessWidget {
               title: Text(getLocalText.s("Select server")),
             ),
           ),
-        // §208 — «View pool»: только для auto-ноды round_robin-канала
+        // §208 — «View pool»: только для auto-ноды round_robin-Направления
         // (onViewPool != null). Попап со слотами пула (getPool).
         if (onViewPool != null)
           PopupMenuItem<String>(

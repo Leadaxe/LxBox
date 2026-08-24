@@ -9,7 +9,7 @@ import '../config/route_config.dart';
 import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
 import '../config/config_parse.dart';
-import '../models/channel.dart' show UrltestMode;
+import '../models/direction.dart' show UrltestMode;
 import '../models/home_state.dart';
 import '../services/app_log.dart';
 import '../services/automation/event_emitter.dart';
@@ -62,21 +62,21 @@ class HomeController extends ChangeNotifier
   /// connections-доставку (single-shot, без pull). false на свежем движке.
   bool _didColdStartResync = false;
 
-  /// §125 — кеш tag→label каналов (storage). Кладётся в state.groupLabels для
-  /// home-dropdown. Обновляется в init + после правок каналов.
-  Map<String, String> _channelLabels = const {};
+  /// §125 — кеш tag→label Направлений (storage). Кладётся в state.groupLabels для
+  /// home-dropdown. Обновляется в init + после правок Направлений.
+  Map<String, String> _directionLabels = const {};
 
-  /// §208 — auto-теги каналов в режиме round_robin (`<tag>-auto`). Для гейта
+  /// §208 — auto-теги Направлений в режиме round_robin (`<tag>-auto`). Для гейта
   /// пункта «View pool» в меню auto-ноды (показываем только для round_robin —
-  /// у least_test пула нет). Обновляется вместе с _channelLabels.
+  /// у least_test пула нет). Обновляется вместе с _directionLabels.
   Set<String> _roundRobinAutoTags = const {};
 
-  /// §322 — auto-теги ВСЕХ каналов (`vpn-N-auto`). Строгий различитель:
-  /// ядру и наша группа §322, и двойник канала — одинаковый `urltest`, а
+  /// §322 — auto-теги ВСЕХ Направлений (`vpn-N-auto`). Строгий различитель:
+  /// ядру и наша группа §322, и двойник Направления — одинаковый `urltest`, а
   /// спец-обращение (подмена имени на «✨ Auto», пин в верхнюю секцию)
-  /// положено только двойнику. Тег канала генерит билдер, он не совпадает
+  /// положено только двойнику. Тег Направления генерит билдер, он не совпадает
   /// со сгенерированным из имени тегом группы §322.
-  Set<String> _channelAutoTags = const {};
+  Set<String> _directionAutoTags = const {};
 
   @override
   HomeState _state = HomeState();
@@ -195,7 +195,7 @@ class HomeController extends ChangeNotifier
 
   Future<void> init() async {
     await _loadSavedConfig();
-    await refreshChannelLabels(); // §125 — labels для home-dropdown
+    await refreshDirectionLabels(); // §125 — labels для home-dropdown
     await reloadPingOptions();
     _statusSub = _vpn.onStatusChanged.listen(_handleStatusEvent);
     // Native шлёт broadcast только на переходы. Если Flutter-процесс умер,
@@ -207,39 +207,39 @@ class HomeController extends ChangeNotifier
     _handleStatusEvent(TunnelStatusEvent(status: pulled, raw: pulled.name));
   }
 
-  /// §125 — перечитать tag→label каналов из storage и положить в state. Зовётся
-  /// из init и после редактирования каналов (Routing), чтобы home-dropdown
+  /// §125 — перечитать tag→label Направлений из storage и положить в state. Зовётся
+  /// из init и после редактирования Направлений (Routing), чтобы home-dropdown
   /// показывал актуальные имена.
-  Future<void> refreshChannelLabels() async {
-    final channels = await SettingsStorage.getChannels();
+  Future<void> refreshDirectionLabels() async {
+    final directions = await SettingsStorage.getDirections();
     if (_disposed) return;
-    // §248/§274 — detour-канал получает ⚙-префикс (display-only,
+    // §248/§274 — detour-Направление получает ⚙-префикс (display-only,
     // централизован в displayLabel): маркер «разрешён как detour-мишень».
-    _channelLabels = {
-      for (final c in channels) c.tag: c.displayLabel,
+    _directionLabels = {
+      for (final c in directions) c.tag: c.displayLabel,
     };
-    // §322 — auto-теги всех каналов (различитель «двойник канала vs группа»).
-    _channelAutoTags = {for (final c in channels) c.autoTag};
-    // §208 — auto-теги round_robin-каналов (для гейта «View pool»).
+    // §322 — auto-теги всех Направлений (различитель «двойник Направления vs группа»).
+    _directionAutoTags = {for (final c in directions) c.autoTag};
+    // §208 — auto-теги round_robin-Направлений (для гейта «View pool»).
     _roundRobinAutoTags = {
-      for (final c in channels)
+      for (final c in directions)
         if (c.auto?.mode == UrltestMode.roundRobin) c.autoTag,
     };
     // §251 — storage-fallback тегов селекторов: fold «селектор (выбор)» в
     // routing-строках работает и до первого подключения (двойники тоже —
     // detour-ссылка может указывать на `<tag>-auto`).
     SelectorInfo.I.setFallbackTags([
-      for (final c in channels) ...[c.tag, c.autoTag],
+      for (final c in directions) ...[c.tag, c.autoTag],
     ]);
     _emit(_state.copyWith(
-      groupLabels: _channelLabels,
-      channelAutoTags: _channelAutoTags, // §322 — гейт пина в верхнюю секцию
+      groupLabels: _directionLabels,
+      directionAutoTags: _directionAutoTags, // §322 — гейт пина в верхнюю секцию
     ));
   }
 
-  /// §322 — true, если [tag] — auto-двойник КАНАЛА (`vpn-N-auto`), а не наша
+  /// §322 — true, если [tag] — auto-двойник НАПРАВЛЕНИЯ (`vpn-N-auto`), а не наша
   /// группа автовыбора. Только двойник получает подмену имени и пин наверх.
-  bool isChannelAutoTag(String tag) => _channelAutoTags.contains(tag);
+  bool isDirectionAutoTag(String tag) => _directionAutoTags.contains(tag);
 
   // ── §322 — ленивый кэш живых пулов для значков в списке ──
   //
@@ -274,7 +274,7 @@ class HomeController extends ChangeNotifier
   }
 
   /// §208/§322 — true, если у urltest-группы [autoTag] есть пул: это либо
-  /// auto-двойник round_robin-канала, либо узел автовыбора (§322) в режиме
+  /// auto-двойник round_robin-Направления, либо узел автовыбора (§322) в режиме
   /// round_robin. Sync-геттер для гейта пункта «View pool» (least_test → пула
   /// нет). Для §322 смотрим тип прямо в конфиге: `balancer{}` в outbound'е
   /// есть только под round_robin (см. AutoSelectParams.toJson).
@@ -338,15 +338,15 @@ class HomeController extends ChangeNotifier
 
   /// §290 — засеять минимум state для тестов `switchNode`-гейта и
   /// automation-preconditions (группа/tunnel/активная нода/список групп) без
-  /// прогона всего стрима групп. §325 — плюс `delayByChannel` для регресса
-  /// «mass-ping не стирает замеры чужих каналов».
+  /// прогона всего стрима групп. §325 — плюс `delayByDirection` для регресса
+  /// «mass-ping не стирает замеры чужих Направлений».
   @visibleForTesting
   void debugSeedNodeState({
     required String group,
     required String activeNode,
     bool tunnelUp = true,
     List<String>? groups,
-    Map<String, Map<String, int>>? delayByChannel,
+    Map<String, Map<String, int>>? delayByDirection,
   }) =>
       _emit(_state.copyWith(
         tunnel: tunnelUp ? TunnelStatus.connected : TunnelStatus.disconnected,
@@ -354,7 +354,7 @@ class HomeController extends ChangeNotifier
         activeInGroup: activeNode,
         highlightedNode: activeNode,
         groups: groups ?? <String>[group],
-        delayByChannel: delayByChannel,
+        delayByDirection: delayByDirection,
       ));
 
   void _handleStatusEvent(TunnelStatusEvent event) {
@@ -440,7 +440,7 @@ class HomeController extends ChangeNotifier
       _stopHeartbeat();
       // §141 P1.2b / §286 — единый контракт «tunnel down»: гасим ВСЁ пробирование
       // (mass-ping + auto-ping-таймер + folder-probe sweep'ы) ПЕРЕД гашением
-      // канала, симметрично `_onTunnelDead`. Иначе воркеры/пробы дописывают
+      // Направления, симметрично `_onTunnelDead`. Иначе воркеры/пробы дописывают
       // stale-результаты в мёртвую сессию (epoch-гейт mass-ping'а их самоисцелит,
       // но folder-probe не epoch-aware — явная отмена детерминирована).
       haltAllProbing();
@@ -1161,10 +1161,10 @@ class HomeController extends ChangeNotifier
     }
 
     _emit(next.copyWith(
-        groups: groups, groupLabels: _channelLabels, selectedGroup: initial));
+        groups: groups, groupLabels: _directionLabels, selectedGroup: initial));
     unawaited(applyGroup(initial));
     // §355 — выбор групп сменился → пересчитать граф зависимостей (мёртвая
-    // нода могла стать/перестать быть корнем беды через выбор канала).
+    // нода могла стать/перестать быть корнем беды через выбор Направления).
     _recomputeDependencyHealth();
   }
 
@@ -1193,7 +1193,7 @@ class HomeController extends ChangeNotifier
     return _depGraph;
   }
 
-  /// §355 — прямые зависимые ноды/канала (кто ссылается detour'ом): вкладка
+  /// §355 — прямые зависимые ноды/Направления (кто ссылается detour'ом): вкладка
   /// «Dependents» в OutboundViewScreen. Статический срез графа, без health.
   List<DependentRef> directDependentsOf(String tag) =>
       _ensureDepGraph().directDependents(tag);
@@ -1214,7 +1214,7 @@ class HomeController extends ChangeNotifier
     };
     final sick = _depGraph.computeSick(
       selections: selections,
-      delays: _state.delayByChannel,
+      delays: _state.delayByDirection,
     );
     if (_sickRootsEqual(sick, _state.sickRoots)) return;
 

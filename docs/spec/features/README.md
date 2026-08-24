@@ -78,6 +78,7 @@
 | 236 | [`236 folder-server-testing/`](236%20folder-server-testing/) | Test servers в папке: headless probe (CommandServer без tun), пороги шкалы, disable slow / delete unreachable / sort by ping | Реализовано |
 | 248 | [`248 detour-channels/`](248%20detour-channels/) | Detour-каналы: канал §125 с галкой «Use as detour» как переключаемая прослойка для detour серверов/папок/подписок (⚙; галка = разрешение, целью правил канал остаётся — §274; циклы ловит fatal-детектор §254) | Реализовано |
 | 392 | [`392 node-diagnostics/`](392%20node-diagnostics/) | Diagnostics на экране узла: GET через узел по тегу (kernel SPEC 058 `GetURLViaOutbound`) с показом сырого ответа — exit-IP/гео/`warp=`; ветка probe (VPN off) ↔ боевое ядро (VPN on) | DEVICE-PENDING |
+| 393 | [`393 directions/`](393%20directions/) | Directions: рефакторинг каналов, бэкап v1.1, цепочки, паритет с лаунчером | ТЗ |
 
 ## Демотированные / superseded (теперь в `../tasks/`)
 
