@@ -64,6 +64,37 @@ void main() {
           expect(file.routeFinal, isNull);
         }
 
+        // §393 B3 — Направления, созданные импортом (паритет с Go-раннером,
+        // `corpus_test.go:checkDirections`). Сверяется КАНОНИЧЕСКАЯ форма, а
+        // не внутренняя структура: именно о ней договорились стороны, и обе
+        // читают одни и те же ожидания.
+        final wantDirections =
+            ((expected['directions'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        if (wantDirections.isNotEmpty) {
+          final byTag = {for (final d in file.directions) d.tag: d};
+          for (final want in wantDirections) {
+            final tag = want['tag'] as String;
+            final got = byTag[tag];
+            expect(got, isNotNull, reason: 'направление $tag не создано импортом');
+            expect(got!.label, want['label'] ?? '', reason: '$tag: имя');
+            // Отбор узлов переносится ТЕЛОМ регулярки — у мобилы nodeFilter
+            // уже хранит тело, обёртки и флагов в нём нет.
+            expect(got.nodeFilter, want['filter'] ?? '', reason: '$tag: отбор');
+            expect(got.nodeFilterInvert, want['invert'] ?? false,
+                reason: '$tag: инверсия отбора');
+            expect(got.includeDirect, want['include_direct'] ?? false,
+                reason: '$tag: опция direct');
+            expect(got.includeBlock, want['include_block'] ?? false,
+                reason: '$tag: опция block');
+            expect(got.auto != null, want['has_auto'] ?? false,
+                reason: '$tag: автовыбор');
+          }
+        }
+
+        // TODO(§393 B12): поле ожиданий `disabled_hashes` Go-раннер проверяет
+        // (`corpus_test.go:205-221`), а здесь читать пока нечем — перенос
+        // disabled-отметок узлов не реализован ни в одну сторону.
+
         // Импортёр обязан сохранить блоб ДРУГОГО приложения; свой он
         // применяет полями. Ожидание сформулировано относительно импортёра,
         // поэтому фикстура одна на обе стороны.

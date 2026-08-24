@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/services/lx_backup.dart';
 
 // LX Backup v1, сторона LxBox (SPEC 103, фаза 4).
@@ -200,6 +201,121 @@ void main() {
           reason: 'mobile-only матчер потерян на round-trip');
       expect(got.wifiSsids, ['HomeNet']);
       expect(got.outbound, 'direct');
+    });
+  });
+
+  // §393 B1/B2 — Направления едут вместе с правилами (BACKUP.md §3, схема
+  // v1.1). Переносится КАНОН (`schema/direction.schema.json`), а не внутренняя
+  // структура: у сторон они разные.
+  group('LX Backup: Направления', () {
+    test('приехавшая цель делает правило РАБОЧИМ, а не выключенным', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "directions": [{"tag": "ru-exit", "label": "Россия", "filter": "RU"}],
+  "rules": [{"kind": "inline", "name": "R", "outbound": "ru-exit", "num": 1}]
+}''';
+      // knownOutbounds намеренно НЕ содержит ru-exit: цель приезжает в этом
+      // же файле, и только порядок «Направления раньше правил» спасает.
+      final file = parseLxBackup(raw, knownOutbounds: {'vpn-1'});
+      expect(file.directions.single.tag, 'ru-exit');
+      expect(file.rules.single.enabled, isTrue,
+          reason: 'цель приехала в файле — правило обязано прийти рабочим');
+      expect(file.warnings, isEmpty);
+    });
+
+    test('занятый тег не применяется и назван warning\'ом', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "directions": [{"tag": "vpn-1", "label": "Чужая"}],
+  "rules": [{"kind": "inline", "name": "R", "outbound": "vpn-1", "num": 1}]
+}''';
+      final file = parseLxBackup(raw, knownOutbounds: {'vpn-1'});
+      expect(file.directions, isEmpty,
+          reason: 'перезапись стёрла бы настройки пользователя');
+      expect(file.warnings.map((w) => w.code), [kWarnDirectionExists]);
+      // Тег всё равно известен — правило цель находит, она просто своя.
+      expect(file.rules.single.enabled, isTrue);
+    });
+
+    test('канон → модель: флаги, тело фильтра, enabled по умолчанию', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "directions": [{
+    "tag": "de",
+    "filter": "DE|Germany",
+    "invert": true,
+    "default": "premium",
+    "include_direct": true,
+    "include_block": true,
+    "include": ["vpn-1"],
+    "auto": {"mode": "round_robin", "interval": "9m", "pool": 5}
+  }]
+}''';
+      final d = parseLxBackup(raw).directions.single;
+      expect(d.enabled, isTrue, reason: 'отсутствие ключа = true по схеме');
+      expect(d.label, '', reason: 'пустое имя законно — показываем tag');
+      expect(d.nodeFilter, 'DE|Germany', reason: 'фильтр едет ТЕЛОМ regex');
+      expect(d.nodeFilterInvert, isTrue);
+      expect(d.defaultFilter, 'premium');
+      expect(d.includeDirect, isTrue);
+      expect(d.includeBlock, isTrue);
+      expect(d.include, ['vpn-1']);
+      expect(d.auto!.mode, UrltestMode.roundRobin);
+      expect(d.auto!.interval, '9m');
+      expect(d.auto!.pool, 5);
+      // Незаданное берётся своим умолчанием, а не чужим нулём.
+      expect(d.auto!.tolerance, const DirectionAuto().tolerance);
+    });
+
+    test('round-trip сохраняет отбор, флаги и автовыбор', () async {
+      const src = Direction(
+        tag: 'de',
+        label: 'Германия',
+        enabled: false,
+        nodeFilter: 'DE',
+        nodeFilterInvert: true,
+        defaultFilter: 'premium',
+        includeDirect: true,
+        include: ['vpn-1'],
+        auto: DirectionAuto(interval: '9m', tolerance: 120),
+      );
+      final raw = await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        directions: const [src],
+      );
+      final doc = jsonDecode(raw) as Map<String, dynamic>;
+      final exported = (doc['directions'] as List).single as Map<String, dynamic>;
+      expect(exported['filter'], 'DE', reason: 'обёртка/флаги в тело не лезут');
+      expect(exported['enabled'], false);
+
+      final back = parseLxBackup(raw).directions.single;
+      expect(back.tag, 'de');
+      expect(back.label, 'Германия');
+      expect(back.enabled, isFalse);
+      expect(back.nodeFilter, 'DE');
+      expect(back.nodeFilterInvert, isTrue);
+      expect(back.defaultFilter, 'premium');
+      expect(back.includeDirect, isTrue);
+      expect(back.includeBlock, isFalse);
+      expect(back.include, ['vpn-1']);
+      expect(back.auto!.interval, '9m');
+      expect(back.auto!.tolerance, 120);
+    });
+
+    test('неизвестное поле записи названо, а не съедено (default-deny)', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "directions": [{"tag": "de", "sorcery": true}]
+}''';
+      final file = parseLxBackup(raw);
+      expect(file.directions.single.tag, 'de');
+      expect(file.warnings.map((w) => w.detail), ['directions[].sorcery']);
     });
   });
 }

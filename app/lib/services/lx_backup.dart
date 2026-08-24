@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../models/custom_rule.dart';
 import '../config/consts.dart';
+import '../models/direction.dart';
 import '../models/server_list.dart';
 
 /// LX Backup v1 — переносимый формат обмена настройками с десктопным
@@ -39,6 +40,14 @@ const String kWarnFinalDropped = 'backup_final_dropped';
 const String kWarnUnknownPreset = 'backup_unknown_preset';
 const String kWarnVarSkipped = 'backup_var_skipped';
 const String kWarnUnknownField = 'backup_unknown_field';
+
+/// §393 B1 — тег приехавшего Направления уже занят на этой стороне.
+///
+/// Приехавшее НЕ применяется: под этим именем у пользователя уже своё
+/// Направление со своими настройками, и перезапись стёрла бы их
+/// (BACKUP.md §3). Правило при этом цель находит — тег совпадает, — поэтому
+/// тег всё равно пополняет known-множество.
+const String kWarnDirectionExists = 'backup_direction_exists';
 
 /// Переносимые имена переменных — зеркало `registry/vars.json` (portable=true).
 ///
@@ -95,6 +104,7 @@ class LxBackupFile {
     required this.exportedByApp,
     required this.exportedByVersion,
     required this.exportedAt,
+    required this.directions,
     required this.rules,
     required this.subscriptions,
     required this.vars,
@@ -107,6 +117,14 @@ class LxBackupFile {
   final String exportedByApp;
   final String exportedByVersion;
   final String exportedAt;
+
+  /// §393 B1 — Направления, ПРИМЕНИМЫЕ на этой стороне: приехавшие в файле
+  /// теги, которых у нас ещё нет. Занятый тег сюда не попадает (он остался
+  /// у пользователя своим) — только в warning `backup_direction_exists`.
+  ///
+  /// Порядок файла нормативен: `include[]` разрешает ссылаться только на
+  /// Направления ВЫШЕ по списку, и перестановка ломала бы состав.
+  final List<Direction> directions;
 
   /// Правила в порядке файла (ось `num` учтена при разборе).
   final List<CustomRule> rules;
@@ -125,12 +143,16 @@ class LxBackupFile {
 
 /// Собирает LX Backup из настроек LxBox.
 ///
+/// [directions] — Направления в порядке списка (§393 B2): они цели правил, и
+/// без них правило приезжало бы на чужую машину выключенным.
+///
 /// [foreignExtensions] — сохранённые блобы других приложений; возвращаются
 /// в файл как есть.
 Future<String> buildLxBackup({
   required List<ServerList> lists,
   required List<CustomRule> rules,
   required Map<String, String> vars,
+  List<Direction> directions = const [],
   String? routeFinal,
   Map<String, dynamic> foreignExtensions = const {},
 }) async {
@@ -169,6 +191,20 @@ Future<String> buildLxBackup({
     'exported_at': DateTime.now().toUtc().toIso8601String(),
     if (subscriptions.isNotEmpty) 'subscriptions': subscriptions,
     if (servers.isNotEmpty) 'servers': servers,
+    // §393 B2 — цели едут ПЕРЕД правилами и в порядке списка: `include[]`
+    // ссылается только вверх, перестановка сломала бы состав.
+    if (directions.isNotEmpty)
+      'directions': [for (final d in directions) _directionToJson(d)],
+    // TODO(§393 B-хвост / C9): цепочек (SPEC 110, `chains[]`) в LX Backup
+    // ПОКА НЕТ — ни здесь, ни в разборе. Это не забывчивость: раздела для
+    // источников-цепочек в контракте (`docs/BACKUP.md`) не объявлено, и
+    // лаунчер их в бэкап тоже не кладёт. Класть их в `extensions.lxbox`
+    // нельзя — цепочка описана каноном ИСТОЧНИКА (`source_chain.schema.json`),
+    // то есть общей моделью обеих сторон, а не мобильным расширением;
+    // односторонний блоб сделал бы круг launcher→LxBox→launcher лживым.
+    // Решается доп. разделом контракта (задача C9) — синхронно с лаунчером.
+    // Внутренний бэкап цепочки уже переносит (`backup_service`, категория
+    // routing), так что перенос устройство→устройство работает.
     if (rules.isNotEmpty) 'rules': [for (final r in rules) _ruleToJson(r)],
     if (portableVars.isNotEmpty) 'vars': portableVars,
     if (routeFinal != null && routeFinal.isNotEmpty)
@@ -293,6 +329,8 @@ LxBackupFile parseLxBackup(
   const known = {
     'lx_backup', 'exported_by', 'exported_at', 'subscriptions', 'servers',
     'rules', 'dns', 'vars', 'route', 'warp', 'extensions',
+    // §393 B1 — схема v1.1: Направления едут вместе с правилами.
+    'directions',
   };
   for (final key in decoded.keys) {
     if (!known.contains(key)) {
@@ -302,11 +340,37 @@ LxBackupFile parseLxBackup(
 
   final by = (decoded['exported_by'] as Map?)?.cast<String, dynamic>() ?? {};
 
+  // §393 B1 — Направления разбираются ПЕРВЫМИ и пополняют known-множество:
+  // правило, чья цель приехала в этом же файле, обязано прийти РАБОЧИМ, а не
+  // выключенным с warning'ом о мёртвой ссылке (BACKUP.md §3).
+  //
+  // Занятый тег — не ошибка файла: у пользователя под этим именем своё
+  // Направление со своими настройками. Приехавшее не применяется (warning),
+  // но тег в known входит — правило цель находит, она просто чужая.
+  final directions = <Direction>[];
+  final knownWithDirections = knownOutbounds.toSet();
+  final takenTags = <String>{
+    for (final t in knownOutbounds) t.trim().toLowerCase(),
+  };
+  for (final item in (decoded['directions'] as List? ?? const [])) {
+    if (item is! Map) continue;
+    final j = item.cast<String, dynamic>();
+    final tag = (j['tag'] as String?)?.trim() ?? '';
+    if (tag.isEmpty) continue; // без тега Направление не адресуемо
+    knownWithDirections.add(tag);
+    if (!takenTags.add(tag.toLowerCase())) {
+      warnings.add(LxBackupWarning(kWarnDirectionExists, tag));
+      continue;
+    }
+    directions.add(_directionFromCanon(j, tag, warnings));
+  }
+
   final rules = <CustomRule>[];
   for (final item in (decoded['rules'] as List? ?? const [])) {
     if (item is! Map) continue;
     final j = item.cast<String, dynamic>();
-    final parsed = _ruleFromJson(j, knownOutbounds, knownPresets, warnings);
+    final parsed =
+        _ruleFromJson(j, knownWithDirections, knownPresets, warnings);
     if (parsed != null) rules.add(parsed);
   }
   // Ось порядка: относительный порядок сохраняется, номера — свои.
@@ -326,7 +390,8 @@ LxBackupFile parseLxBackup(
   final route = (decoded['route'] as Map?)?.cast<String, dynamic>();
   final finalTag = route?['final'] as String?;
   if (finalTag != null && finalTag.isNotEmpty) {
-    if (knownOutbounds.isEmpty || _isKnownOutbound(finalTag, knownOutbounds)) {
+    if (knownOutbounds.isEmpty ||
+        _isKnownOutbound(finalTag, knownWithDirections)) {
       routeFinal = finalTag;
     } else {
       warnings.add(LxBackupWarning(kWarnFinalDropped, finalTag));
@@ -345,6 +410,7 @@ LxBackupFile parseLxBackup(
     exportedByApp: (by['app'] as String?) ?? '',
     exportedByVersion: (by['version'] as String?) ?? '',
     exportedAt: (decoded['exported_at'] as String?) ?? '',
+    directions: directions,
     rules: rules,
     subscriptions: [
       for (final s in (decoded['subscriptions'] as List? ?? const []))
@@ -356,6 +422,144 @@ LxBackupFile parseLxBackup(
     warnings: warnings,
   );
 }
+
+/// Ключи канонической формы Направления (`schema/direction.schema.json`).
+/// Default-deny (§2): всё вне этого списка названо warning'ом, а не съедено.
+const Set<String> _knownDirectionKeys = {
+  'tag', 'label', 'enabled', 'filter', 'invert', 'default',
+  'include_direct', 'include_block', 'include',
+  'interrupt_exist_connections', 'auto',
+};
+
+const Set<String> _knownDirectionAutoKeys = {
+  'mode', 'url', 'interval', 'tolerance', 'idle_timeout',
+  'interrupt_exist_connections', 'pool', 'pool_tolerance', 'sticky_hash',
+};
+
+/// §393 B1 — каноническая форма → мобильное [Direction].
+///
+/// Переносится КАНОН, а не внутренняя структура: у сторон они разные. Отбор
+/// узлов едет ТЕЛОМ регулярки — язык паттернов различается (`/re/i` у
+/// лаунчера, [RegExp] у нас), а тело одинаково, и у мобилы [Direction.nodeFilter]
+/// уже хранит тело. Эталон — `core/backup/directions.go:importDirection`.
+Direction _directionFromCanon(
+  Map<String, dynamic> j,
+  String tag,
+  List<LxBackupWarning> warnings,
+) {
+  for (final key in j.keys) {
+    if (!_knownDirectionKeys.contains(key)) {
+      warnings.add(LxBackupWarning(kWarnUnknownField, 'directions[].$key'));
+    }
+  }
+
+  final rawAuto = j['auto'];
+  return Direction(
+    tag: tag,
+    // Пустое имя — законно: канон говорит «показываем tag».
+    label: (j['label'] as String?) ?? '',
+    // Отсутствие ключа = true (`enabled.default` схемы), а не false.
+    enabled: j['enabled'] as bool? ?? true,
+    nodeFilter: (j['filter'] as String?) ?? '',
+    nodeFilterInvert: j['invert'] as bool? ?? false,
+    defaultFilter: (j['default'] as String?) ?? '',
+    // Служебные опции у сторон зовутся по-своему (`direct-out`/`block-out` у
+    // лаунчера, `direct`/`block` у нас) и потому едут признаками, а не тегами.
+    includeDirect: j['include_direct'] as bool? ?? false,
+    includeBlock: j['include_block'] as bool? ?? false,
+    include: _strList(j['include']),
+    // Отсутствие ключа означает «решает шаблон», а не false: у мобилы
+    // шаблонное значение — true (см. `Direction.interruptExistConnections`).
+    interruptExistConnections: j['interrupt_exist_connections'] as bool? ?? true,
+    auto: rawAuto is Map
+        ? _directionAutoFromCanon(rawAuto.cast<String, dynamic>(), warnings)
+        : null,
+  );
+}
+
+DirectionAuto _directionAutoFromCanon(
+  Map<String, dynamic> j,
+  List<LxBackupWarning> warnings,
+) {
+  for (final key in j.keys) {
+    if (!_knownDirectionAutoKeys.contains(key)) {
+      warnings.add(LxBackupWarning(kWarnUnknownField, 'directions[].auto.$key'));
+    }
+  }
+
+  const fallback = DirectionAuto();
+  final rawSticky = j['sticky_hash'];
+  // Канон: пустой список НЕ выключает липкость (ядро схлопывает его в
+  // умолчание) — выключение это явный ["none"], которого у мобилы нет
+  // отдельным ключом: она выражает его пустым списком.
+  final sticky = rawSticky is List
+      ? (rawSticky.contains('none')
+          ? const <StickyHashKey>[]
+          : rawSticky
+              .map((e) => StickyHashKey.fromWire(e as String?))
+              .whereType<StickyHashKey>()
+              .toList())
+      : fallback.stickyHash;
+
+  return DirectionAuto(
+    mode: UrltestMode.fromWire(j['mode'] as String?),
+    url: (j['url'] as String?) ?? fallback.url,
+    interval: (j['interval'] as String?) ?? fallback.interval,
+    // Ноль от чужой стороны означает «не задано» (`templateIntToBackup`
+    // разворачивает ссылку на переменную шаблона в 0) — берём своё умолчание,
+    // а не чужой ноль: подставлять 0 мс честнее не становится.
+    tolerance: clampDirectionTolerance(
+        (j['tolerance'] as num?)?.toInt() ?? fallback.tolerance),
+    idleTimeout: (j['idle_timeout'] as String?) ?? fallback.idleTimeout,
+    interruptExistConnections: j['interrupt_exist_connections'] as bool? ??
+        fallback.interruptExistConnections,
+    pool: clampDirectionPool((j['pool'] as num?)?.toInt() ?? fallback.pool),
+    poolTolerance: clampDirectionTolerance(
+        (j['pool_tolerance'] as num?)?.toInt() ?? fallback.poolTolerance),
+    stickyHash: sticky,
+  );
+}
+
+/// §393 B2 — мобильное [Direction] → каноническая форма.
+///
+/// Прямые значения, без ссылок: у мобилы ссылочно-served полей (шаблонных
+/// `@urltest_tolerance` лаунчера) нет вовсе — экспортируется то, что лежит.
+Map<String, dynamic> _directionToJson(Direction d) => {
+      'tag': d.tag,
+      if (d.label.isNotEmpty) 'label': d.label,
+      // Ключ пишем только для выключенного: отсутствие = true по схеме, и
+      // «enabled: true» у каждой записи раздувало бы файл без смысла.
+      if (!d.enabled) 'enabled': false,
+      if (d.nodeFilter.isNotEmpty) 'filter': d.nodeFilter,
+      if (d.nodeFilterInvert) 'invert': true,
+      if (d.defaultFilter.isNotEmpty) 'default': d.defaultFilter,
+      if (d.includeDirect) 'include_direct': true,
+      if (d.includeBlock) 'include_block': true,
+      if (d.include.isNotEmpty) 'include': d.include,
+      'interrupt_exist_connections': d.interruptExistConnections,
+      if (d.auto != null) 'auto': _directionAutoToJson(d.auto!),
+    };
+
+Map<String, dynamic> _directionAutoToJson(DirectionAuto a) => {
+      'mode': a.mode.wire,
+      'url': a.url,
+      'interval': a.interval,
+      'tolerance': clampDirectionTolerance(a.tolerance),
+      'idle_timeout': a.idleTimeout,
+      'interrupt_exist_connections': a.interruptExistConnections,
+      // Балансировочные поля значат что-то только у round_robin — у
+      // least_test они уехали бы шумом, который принимающая сторона не
+      // отличит от осознанной настройки.
+      if (a.mode == UrltestMode.roundRobin) ...{
+        'pool': clampDirectionPool(a.pool),
+        'pool_tolerance': clampDirectionTolerance(a.poolTolerance),
+        // Пустой список у мобилы = липкость выключена; канон выражает
+        // выключение явным ["none"], а пустой список схлопнул бы в умолчание.
+        'sticky_hash': a.stickyHash.isEmpty
+            ? const ['none']
+            : [for (final k in a.stickyHash) k.wire],
+      },
+    };
 
 bool _isKnownOutbound(String tag, Set<String> known) {
   final t = tag.trim().toLowerCase();

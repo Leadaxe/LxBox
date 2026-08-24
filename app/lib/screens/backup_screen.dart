@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
+import '../models/direction.dart';
+import '../services/direction_mutations.dart';
 import '../services/lx_backup.dart';
 import '../services/settings_storage.dart';
 import '../services/error_format.dart';
@@ -312,10 +314,14 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       final lists = await SettingsStorage.getServerLists();
       final rules = await SettingsStorage.getCustomRules();
       final vars = await SettingsStorage.getAllVars();
+      // §393 B2 — Направления едут вместе с правилами: без них правило на
+      // принимающей стороне не находит цель и приезжает выключенным.
+      final directions = await SettingsStorage.getDirections();
       final json = await buildLxBackup(
         lists: lists,
         rules: rules,
         vars: vars,
+        directions: directions,
       );
       const filename = 'lx-backup.json';
       // Размер в БАЙТАХ, а не в code units: на кириллице в именах узлов
@@ -400,9 +406,17 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       try {
         // Цели, на которые правилу разрешено ссылаться. Пустой набор означал
         // бы «проверять нечем», и все ссылки прошли бы без проверки.
+        //
+        // §393 B5 — Направления входят сюда обязательно: `rules[].outbound`
+        // адресует именно их (`vpn-1`, `ru-exit`), а не префикс подписки.
+        // Без них правило, метящее в существующее Направление, приезжало бы
+        // выключенным «ссылка в никуда» — при живой и правильной цели.
         final lists = await SettingsStorage.getServerLists();
-        final known = <String>{for (final l in lists) l.tagPrefix}
-          ..removeWhere((t) => t.isEmpty);
+        final directions = await SettingsStorage.getDirections();
+        final known = <String>{
+          for (final l in lists) l.tagPrefix,
+          for (final d in directions) d.tag,
+        }..removeWhere((t) => t.isEmpty);
         parsed = parseLxBackup(raw, knownOutbounds: known);
       } on FormatException catch (e) {
         if (!mounted) return;
@@ -414,16 +428,55 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       final confirmed = await _confirmLxImport(parsed);
       if (confirmed != true) return;
 
+      // §393 B5 — Направления создаются ПЕРВЫМИ, до правил: приехавшее
+      // правило метит в цель, которой на этой стороне ещё нет, и без неё
+      // ядро отвергло бы весь конфиг. Занятые теги сюда уже не доехали —
+      // парсер отсеял их warning'ом `backup_direction_exists`.
+      //
+      // Мутация идёт через DirectionMutations (§275/§292), а не голым
+      // setDirections: инвариант «vpn-1 всегда есть и включён» держится на
+      // том, что список НЕ перезаписывается, а дополняется в конец —
+      // приехавшие Направления встают ниже существующих, и их `include[]`
+      // (ссылки только вверх) остаётся осмысленным.
+      var appliedDirections = 0;
+      if (parsed.directions.isNotEmpty) {
+        final current = await SettingsStorage.getDirections();
+        final merged = current.toList();
+        final used = current.map((d) => d.tag).toList();
+        for (final d in parsed.directions) {
+          // Парсер отсеял только прямые тёзки известных целей; служебные и
+          // тезки чужих `<tag>-auto` (`direct`, `vpn-1-auto` при живом vpn-1)
+          // до storage доходить не должны — этот гейт единственный на пути
+          // bulkReplace, который валидации не делает.
+          if (directionTagConflict(d.tag, used) != null) continue;
+          merged.add(d);
+          used.add(d.tag);
+          appliedDirections++;
+        }
+        if (appliedDirections > 0) await DirectionMutations.bulkReplace(merged);
+      }
+
       await SettingsStorage.saveCustomRules(parsed.rules);
       if (!mounted) return;
 
       final skipped = parsed.warnings.length;
       // Счётное существительное — только через plural: по-русски иначе
       // получится «Импортировано 2 правил».
-      showSnack(skipped == 0
-          ? getLocalText.plural("Imported %d rules", parsed.rules.length)
-          : getLocalText.s("Imported %d rule(s), %d items not applied",
-              parsed.rules.length, skipped));
+      //
+      // §393 B5 — созданные Направления названы отдельно: правила приехали
+      // рабочими именно потому, что цели заведены, и молчать об этом значило
+      // бы скрыть половину произошедшего с настройками.
+      final String message;
+      if (skipped > 0) {
+        message = getLocalText.s("Imported %d rule(s), %d items not applied",
+            parsed.rules.length, skipped);
+      } else if (appliedDirections > 0) {
+        message = getLocalText.s("Imported %1\$d rules and %2\$d directions",
+            parsed.rules.length, appliedDirections);
+      } else {
+        message = getLocalText.plural("Imported %d rules", parsed.rules.length);
+      }
+      showSnack(message);
     } catch (e) {
       if (!mounted) return;
       showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
@@ -436,6 +489,11 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   Future<bool?> _confirmLxImport(LxBackupFile parsed) {
     final lines = <String>[
       getLocalText.s("From %s %s", parsed.exportedByApp, parsed.exportedByVersion),
+      // §393 B5 — Направления названы отдельной строкой: они не «часть
+      // правил», а создаваемые сущности, и пользователь вправе увидеть,
+      // сколько их заведётся, ДО применения.
+      if (parsed.directions.isNotEmpty)
+        getLocalText.s("Directions: %d", parsed.directions.length),
       getLocalText.s("Rules: %d", parsed.rules.length),
       getLocalText.s("Subscriptions: %d", parsed.subscriptions.length),
       getLocalText.s("Variables: %d", parsed.vars.length),
