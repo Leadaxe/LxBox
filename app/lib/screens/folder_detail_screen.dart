@@ -20,6 +20,7 @@ import 'home/filter_widgets.dart';
 import 'node_settings_screen.dart';
 import 'home/node_list_presenter.dart' show protoLabel;
 import 'subscription_detail_screen/detour_mode.dart';
+import 'subscription_detail_screen/tag_prefix_cascade.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscriptions_screen/folder_picker.dart';
 import '../widgets/detour_target_picker.dart';
@@ -80,6 +81,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   // §248 — Направления: секция Directions в detour-пикере + подпись «⚙ <label>»
   // Направления override-цели в Settings-вкладке.
   List<Direction> _directions = const [];
+
+  /// §393 A6 — префикс, под который написаны фильтры Направлений: значение
+  /// поля на момент последнего КОММИТА. Зеркало подписки
+  /// (`subscription_detail_screen`) — вкладка Settings общая.
+  late String _committedTagPrefix;
 
   FolderServers get _folder => widget.entry.list as FolderServers;
 
@@ -149,6 +155,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.name);
+    _committedTagPrefix = widget.entry.tagPrefix; // §393 A6
     widget.controller.addListener(_onEntriesChanged); // §278
     unawaited(_loadThresholds());
     unawaited(_loadDirections());
@@ -187,6 +194,27 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     _highlightTimer = Timer(const Duration(milliseconds: 2200), () {
       if (mounted) setState(() => _highlightedMember = null);
     });
+  }
+
+  /// §393 A6 — префикс допечатан: переписать литеральные вхождения старого
+  /// префикса в фильтрах Направлений, про неоднозначные предупредить.
+  Future<void> _commitTagPrefix() async {
+    final oldPrefix = _committedTagPrefix;
+    final newPrefix = widget.entry.tagPrefix;
+    if (oldPrefix == newPrefix) return;
+    _committedTagPrefix = newPrefix;
+    await _loadDirections();
+    if (!mounted) return;
+    final outcome = await applyTagPrefixCascade(
+      directions: _directions,
+      oldPrefix: oldPrefix,
+      newPrefix: newPrefix,
+      sub: widget.controller,
+    );
+    if (!mounted || outcome.isEmpty) return;
+    await _loadDirections(); // переписанные фильтры — в буфер экрана
+    if (!mounted) return;
+    showTagPrefixCascadeSnackBar(context, outcome);
   }
 
   /// §248 — загрузка Направлений (initState + refresh перед пикером).
@@ -1521,6 +1549,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         widget.entry.tagPrefix = val.trim();
         unawaited(widget.controller.persistSources());
       },
+      // §393 A6 — каскад на regex-фильтры Направлений (см. подписку).
+      onTagPrefixCommitted: (_) => unawaited(_commitTagPrefix()),
       onSetDetourMode: _setDetourMode,
       onRegisterDetourServersChanged: (val) {
         setState(() => widget.entry.registerDetourServers = val);

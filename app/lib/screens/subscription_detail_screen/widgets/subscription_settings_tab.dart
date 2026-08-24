@@ -24,6 +24,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
     required this.hasDetour,
     required this.detourMode,
     required this.onTagPrefixChanged,
+    this.onTagPrefixCommitted,
     required this.onSetDetourMode,
     required this.onRegisterDetourServersChanged,
     required this.onRegisterDetourInAutoChanged,
@@ -68,6 +69,13 @@ class SubscriptionSettingsTab extends StatelessWidget {
   final DetourMode detourMode;
 
   final ValueChanged<String> onTagPrefixChanged;
+
+  /// §393 A6 — префикс ДОПЕЧАТАН (поле потеряло фокус либо submit), а не
+  /// «изменился ещё на один символ». Каскад на Направления считается только
+  /// здесь: [onTagPrefixChanged] стреляет на КАЖДОЕ нажатие, и heal по нему
+  /// переписал бы regex-фильтры промежуточными огрызками (`RU:` → `R` → `RU`
+  /// при наборе `RU: v2`), уничтожив их за несколько символов.
+  final ValueChanged<String>? onTagPrefixCommitted;
   final ValueChanged<DetourMode> onSetDetourMode;
   final ValueChanged<bool> onRegisterDetourServersChanged;
   final ValueChanged<bool> onRegisterDetourInAutoChanged;
@@ -136,15 +144,27 @@ class SubscriptionSettingsTab extends StatelessWidget {
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: TextFormField(
-            initialValue: entry.tagPrefix,
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              labelText: getLocalText.s("Prefix"),
-              hintText: getLocalText.s("empty = no prefix"),
-              isDense: true,
+          // §393 A6 — Focus поверх поля: уход фокуса = «допечатал», момент,
+          // когда каскад на Направления считать безопасно (см.
+          // [onTagPrefixCommitted]).
+          child: Focus(
+            onFocusChange: (has) {
+              if (!has) onTagPrefixCommitted?.call(entry.tagPrefix);
+            },
+            child: TextFormField(
+              initialValue: entry.tagPrefix,
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                labelText: getLocalText.s("Prefix"),
+                hintText: getLocalText.s("empty = no prefix"),
+                isDense: true,
+              ),
+              // done снимает фокус → коммит приходит одним путём (через
+              // Focus выше). Свой onFieldSubmitted тут дал бы ВТОРОЙ вызов
+              // на то же событие.
+              textInputAction: TextInputAction.done,
+              onChanged: onTagPrefixChanged,
             ),
-            onChanged: onTagPrefixChanged,
           ),
         ),
         const SizedBox(height: 24),

@@ -972,6 +972,9 @@
   "Check now": {
     "value": "Проверить сейчас"
   },
+  "Check the filter of: %s — the old prefix is part of a regex construct there and was left as is.": {
+    "value": "Проверьте фильтр: %s — там старый префикс входит в regex-конструкцию и оставлен как есть."
+  },
   "Choose a file first": {
     "value": "Сначала выберите файл"
   },
@@ -1468,6 +1471,9 @@
   },
   "Direction \"%s\" not found — set to %s, rule disabled": {
     "value": "Направление «%s» не найдено — заменено на %s, правило выключено"
+  },
+  "Direction filters updated to the new prefix: %s": {
+    "value": "Фильтры Направлений обновлены под новый префикс: %s"
   },
   "Directions": {
     "value": "Направления"

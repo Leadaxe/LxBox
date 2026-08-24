@@ -23,6 +23,7 @@ import 'probe_gate_mixin.dart';
 import 'subscriptions_screen/entry_context_menu.dart' show showEditSourceDialog;
 import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/subscription_detail_format.dart';
+import 'subscription_detail_screen/tag_prefix_cascade.dart';
 import 'subscription_detail_screen/widgets/subscription_meta.dart';
 import 'subscription_detail_screen/widgets/subscription_filters_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_node_list.dart';
@@ -75,6 +76,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   // §248 — Направления: секция Directions в detour-пикере + подпись «⚙ <label>»
   // Направления override-цели в Settings-вкладке.
   List<Direction> _directions = const [];
+
+  /// §393 A6 — префикс, под который написаны фильтры Направлений: значение
+  /// поля на момент последнего КОММИТА (заход на экран / уход фокуса).
+  /// Каскад считается от него, а не от предыдущего нажатия клавиши.
+  late String _committedTagPrefix;
 
   /// §338 — глобальная галка перекрывает per-subscription «On update»: строку
   /// не рисуем. Читаем в `initState`: App Settings открываются с home, а не
@@ -197,6 +203,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     // Source/Filters сохраняет index Source=2 (слушатель ниже не меняется).
     _tabCtrl = TabController(length: 4, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.name);
+    _committedTagPrefix = widget.entry.tagPrefix; // §393 A6
     // §283 — entry.list может смениться мимо _loadNodes (см.
     // _rebuildRowsFromEntry); _replaceList нотифицирует entry.
     widget.entry.addListener(_onEntryChanged);
@@ -797,6 +804,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         widget.entry.tagPrefix = val.trim();
         unawaited(widget.controller.persistSources());
       },
+      // §393 A6 — каскад на regex-фильтры Направлений, написанные под
+      // СТАРЫЙ префикс: считается на коммите поля, не на каждой клавише.
+      onTagPrefixCommitted: (_) => unawaited(_commitTagPrefix()),
       onSetDetourMode: _setDetourMode,
       onRegisterDetourServersChanged: (val) {
         setState(() => widget.entry.registerDetourServers = val);
@@ -1052,6 +1062,28 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     await widget.controller.updateAt(idx);
     if (!mounted) return;
     setState(() {});
+  }
+
+  /// §393 A6 — префикс допечатан: переписать литеральные вхождения старого
+  /// префикса в фильтрах Направлений, про неоднозначные предупредить.
+  Future<void> _commitTagPrefix() async {
+    final oldPrefix = _committedTagPrefix;
+    final newPrefix = widget.entry.tagPrefix;
+    if (oldPrefix == newPrefix) return;
+    _committedTagPrefix = newPrefix;
+    // Свежий список: Направления могли поменяться, пока экран открыт.
+    await _loadDirections();
+    if (!mounted) return;
+    final outcome = await applyTagPrefixCascade(
+      directions: _directions,
+      oldPrefix: oldPrefix,
+      newPrefix: newPrefix,
+      sub: widget.controller,
+    );
+    if (!mounted || outcome.isEmpty) return;
+    await _loadDirections(); // переписанные фильтры — в буфер экрана
+    if (!mounted) return;
+    showTagPrefixCascadeSnackBar(context, outcome);
   }
 
   /// §248 — загрузка Направлений (initState + refresh перед пикером).
