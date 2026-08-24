@@ -63,7 +63,11 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   // §130 — транспорт WARP: 'wireguard' (дефолт) | 'masque'. MASQUE использует
   // ECDSA-регистрацию и Outbound type:masque (другой пул выходных нод).
   String _transport = 'wireguard';
-  String _masqueNetwork = 'h3'; // h3 (QUIC) | h2 (HTTP/2)
+  // §393/SPEC 074 — дефолт 'auto': h3-нога с бюджетом 3s, фолбэк h2 (TCP).
+  // Работает там, где QUIC/UDP резан (и за TCP-хопами цепочек); нога-победитель
+  // запоминается на процесс. Пулы портов h3/h2 идентичны (warp_endpoints.json),
+  // поэтому один endpoint честен для обеих ног.
+  String _masqueNetwork = 'auto'; // auto | h3 (QUIC) | h2 (HTTP/2)
   final _masqueSni = TextEditingController(); // опц. SNI override
   // §130 — тюнинг ресурсов: idle-suspend (минуты) и QUIC keepalive (секунды).
   // Пусто → дефолт ядра (5m / 30s). Плейсхолдеры показывают дефолт.
@@ -514,6 +518,10 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                               ),
                               items: const [
                                 DropdownMenuItem(
+                                    value: 'auto',
+                                    // l10n-exempt: protocol name
+                                    child: Text('Auto (h3 → h2)')),
+                                DropdownMenuItem(
                                     value: 'h3',
                                     // l10n-exempt: protocol name
                                     child: Text('HTTP/3 (QUIC)')),
@@ -525,7 +533,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                               onChanged: _busy
                                   ? null
                                   : (v) => setState(() {
-                                        _masqueNetwork = v ?? 'h3';
+                                        _masqueNetwork = v ?? 'auto';
                                         // §305 — порт h3≠h2: пересинхронизируем
                                         // под новый транспорт.
                                         _syncDefaultMasquePort();
@@ -538,7 +546,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       Text(
                         _masqueNetwork == 'h2'
                             ? getLocalText.s("HTTP/2 over TCP — use where QUIC/UDP is blocked.")
-                            : getLocalText.s("HTTP/3 over QUIC — the default, fastest path."),
+                            : _masqueNetwork == 'auto'
+                                ? getLocalText.s("Tries HTTP/3 first, falls back to HTTP/2 where QUIC/UDP is blocked — best for hop chains.")
+                                : getLocalText.s("HTTP/3 over QUIC — the default, fastest path."),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -668,8 +678,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                           Expanded(
                             child: TextField(
                               controller: _masqueKeepAlive,
-                              // keep-alive осмыслен только для h3 (QUIC).
-                              enabled: !_busy && _masqueNetwork == 'h3',
+                              // keep-alive осмыслен для h3-ноги (QUIC) — есть
+                              // и у 'h3', и у 'auto'.
+                              enabled: !_busy && _masqueNetwork != 'h2',
                               keyboardType: TextInputType.number,
                               inputFormatters: [
                                 FilteringTextInputFormatter.digitsOnly

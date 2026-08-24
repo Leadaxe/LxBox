@@ -4229,6 +4229,9 @@
   "Transport \"%1$s\" is not supported by sing-box; using \"%2$s\" fallback (node may fail to connect).": {
     "value": "Транспорт «%1$s» не поддерживается sing-box; используется резервный «%2$s» (узел может не подключиться)."
   },
+  "Tries HTTP/3 first, falls back to HTTP/2 where QUIC/UDP is blocked — best for hop chains.": {
+    "value": "Сначала HTTP/3, при недоступности QUIC/UDP — откат на HTTP/2. Лучший выбор для цепочек хопов."
+  },
   "Try a public test server — free, limited, good for first-time check:": {
     "value": "Попробуйте публичный тестовый сервер — бесплатный, с ограничениями, подойдёт для первой проверки:"
   },
