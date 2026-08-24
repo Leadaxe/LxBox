@@ -236,7 +236,21 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
     }
   }
 
+  /// Кандидаты пересобираются на КАЖДОЕ открытие пикера: галка detour у
+  /// Направления могла измениться, пока форма открыта (второе окно, Debug
+  /// API) — initState-снимок протухает (полевая находка оператора 25.08).
+  void _refreshCandidates() {
+    _cands = collectChainHopTargets(
+      config: widget.config,
+      directions: widget.directions,
+      chains: widget.chains,
+      selfTag: widget.initial.tag,
+    );
+    _lookup = chainHopLookup(_cands);
+  }
+
   Future<void> _addHop() async {
+    setState(_refreshCandidates);
     final chosen = _hops.toSet();
     final options = [
       for (final c in _cands)
@@ -644,25 +658,24 @@ class _HopPickerSheet extends StatelessWidget {
   /// Секции в порядке пикера. Пустые не рисуются вовсе (ни заголовка, ни
   /// отступа) — как подсекция Направлений в форме.
   List<List<Widget>> _sections(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    // Типографика — байт-в-байт как у detour-пикера (§239/§248): секция
+    // titleSmall+primary, строки стандартного ListTile (не dense), сабстрока
+    // 12/muted — директива оператора 25.08 «как в detour».
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
     List<Widget> group(String title, List<ChainHopCandidate> items) {
       if (items.isEmpty) return const [];
       return [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: Text(title,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: cs.primary)),
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(color: theme.colorScheme.primary)),
         ),
         for (final c in items)
           ListTile(
-            dense: true,
             title: Text(c.displayLabel.isNotEmpty ? c.displayLabel : c.tag,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13)),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: c.subline.isEmpty
                 ? null
                 : Text(
@@ -671,11 +684,7 @@ class _HopPickerSheet extends StatelessWidget {
                         : c.subline,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontFamily:
-                            c.kind == ChainHopKind.direction ? 'monospace' : null,
-                        color: cs.onSurfaceVariant)),
+                    style: TextStyle(fontSize: 12, color: muted)),
             onTap: () => Navigator.pop(context, c.tag),
           ),
       ];
@@ -683,11 +692,11 @@ class _HopPickerSheet extends StatelessWidget {
 
     List<ChainHopCandidate> of(ChainHopKind k) =>
         [for (final c in options) if (c.kind == k) c];
+    // Директива оператора 25.08: в предложениях только detour-Направления и
+    // серверы; direct-out/группы/цепочки отфильтрованы offered-флагом ещё в
+    // targets — секции им не нужны.
     return [
       group(getLocalText.s("Directions"), of(ChainHopKind.direction)),
-      group(getLocalText.s("Built-in"), of(ChainHopKind.builtin)),
-      group(getLocalText.s("Chains"), of(ChainHopKind.chain)),
-      group(getLocalText.s("Groups"), of(ChainHopKind.group)),
       group(getLocalText.s("Servers"), [
         ...of(ChainHopKind.node),
         ...of(ChainHopKind.unknown),

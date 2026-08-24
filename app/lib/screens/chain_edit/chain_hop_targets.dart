@@ -65,8 +65,11 @@ List<ChainHopCandidate> collectChainHopTargets({
         subline: d.tag));
   }
 
+  // Директива оператора 25.08: direct-out, группы и цепочки в ПРЕДЛОЖЕНИЯ
+  // пикера не идут (позиция = detour-Направление или сервер). Кандидатами-
+  // знанием остаются: существующие позиции этих видов валидны и показываются.
   add(const ChainHopCandidate(
-      tag: kChainBuiltinDirect, kind: ChainHopKind.builtin));
+      tag: kChainBuiltinDirect, kind: ChainHopKind.builtin, offered: false));
 
   // Другие цепочки. НЕ прячем те, что ниже (сценарий рабочий — их можно
   // передвинуть), а помечаем: спрятать значило бы оставить пользователя
@@ -81,6 +84,7 @@ List<ChainHopCandidate> collectChainHopTargets({
     add(ChainHopCandidate(
       tag: c.tag,
       kind: ChainHopKind.chain,
+        offered: false,
       below: belowSelf,
     
         displayLabel: c.displayLabel,
@@ -110,6 +114,7 @@ List<ChainHopCandidate> collectChainHopTargets({
       // пусто → дефолт ядра h3), см. ConfigNode._deriveTransport.
       masqueVhttp: n.type == 'masque' ? (n.transportLabel ?? 'h3') : '',
       subline: _nodeSubline(n, isGroup: isGroup),
+      offered: !isGroup,
     ));
   }
   nodes.sort((a, b) => a.tag.compareTo(b.tag));
