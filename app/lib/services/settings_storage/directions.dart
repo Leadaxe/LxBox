@@ -16,7 +16,16 @@ part of '../settings_storage.dart';
 /// overrideDetour/member.detour → '' (None) при disable/delete/flag-unset;
 /// `includes` — §393 A3, `Direction.include` чужих Направлений → тег вычеркнут
 /// (только delete, см. [clearIncludeDirectionRefs]).
-typedef DirectionHealResult = ({int rules, int detours, int includes});
+/// §393 D2 — `chainPositions`: ПОЗИЦИИ цепочек с тегом удалённого Направления
+/// (только delete, см. [clearChainHopRefs]). Цепочка при этом ОСТАЁТСЯ —
+/// снимается ровно позиция, и потому счётчик обязан быть виден: маршрут 3+
+/// хопов после вычистки эмитится укороченным.
+typedef DirectionHealResult = ({
+  int rules,
+  int detours,
+  int includes,
+  int chainPositions,
+});
 
 Future<List<Direction>> _getDirections() async {
   final data = await _load();
@@ -98,7 +107,7 @@ Future<DirectionHealResult> _updateDirection(Direction direction) async {
   // Вычистить `include` здесь значило бы применить необратимость Решения B
   // (§202) к обратимому действию: пользователь вернул бы галку и обнаружил
   // пустой состав, не понимая, куда делись опции.
-  return (rules: rules, detours: detours, includes: 0);
+  return (rules: rules, detours: detours, includes: 0, chainPositions: 0);
 }
 
 /// Удалить Направление. vpn-1 неудаляем (throws). Любая ссылка на удалённый tag
@@ -119,7 +128,7 @@ Future<DirectionHealResult> _deleteDirection(String tag) async {
   final rules = await _healDirectionRefs(tag);
   final detours = await _healDetourDirectionRefs(tag);
   await _save();
-  return (rules: rules, detours: detours, includes: count);
+  return (rules: rules, detours: detours, includes: count, chainPositions: 0);
 }
 
 /// Перевод rules-ссылок на Направление → 'vpn-1'. Вызывается, когда Направление

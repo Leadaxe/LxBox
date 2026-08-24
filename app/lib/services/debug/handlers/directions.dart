@@ -98,7 +98,8 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   // тега после restore из backup может встретить stale-ссылку — heal тот же,
   // что у PATCH, поэтому и shape ответа единый. Достижимый путь: body с
   // `enabled:false` даёт disabling-переход, а он лечит ОБА рода ссылок.
-  DirectionHealResult healed = (rules: 0, detours: 0, includes: 0);
+  DirectionHealResult healed =
+      (rules: 0, detours: 0, includes: 0, chainPositions: 0);
   final patched = _applyPatch(ch, body, tagConsumed: true);
   if (patched != null) {
     ch = patched;
@@ -111,6 +112,10 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
       'rules': healed.rules,
       'detours': healed.detours,
       'includes': healed.includes, // §393 A3
+      // §393 D2 — ПОЗИЦИИ цепочек, снятые вместе с удалённым Направлением
+      // (сами цепочки остались). Маршрут мог укоротиться — агент обязан
+      // увидеть это в ответе, а не по пропавшему хопу в конфиге.
+      'chain_positions': healed.chainPositions,
     },
     ...extras,
   }, status: 201);
@@ -133,6 +138,10 @@ Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) as
       'rules': healed.rules,
       'detours': healed.detours,
       'includes': healed.includes, // §393 A3
+      // §393 D2 — ПОЗИЦИИ цепочек, снятые вместе с удалённым Направлением
+      // (сами цепочки остались). Маршрут мог укоротиться — агент обязан
+      // увидеть это в ответе, а не по пропавшему хопу в конфиге.
+      'chain_positions': healed.chainPositions,
     },
     ...extras,
   });
@@ -156,6 +165,10 @@ Future<DebugResponse> _delete(String tag, DebugRequest req, DebugContext ctx) as
       'rules': healed.rules,
       'detours': healed.detours,
       'includes': healed.includes, // §393 A3
+      // §393 D2 — ПОЗИЦИИ цепочек, снятые вместе с удалённым Направлением
+      // (сами цепочки остались). Маршрут мог укоротиться — агент обязан
+      // увидеть это в ответе, а не по пропавшему хопу в конфиге.
+      'chain_positions': healed.chainPositions,
     },
     ...extras,
   });

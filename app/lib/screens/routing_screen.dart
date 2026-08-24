@@ -363,14 +363,20 @@ class _RoutingScreenState extends State<RoutingScreen>
     DirectionHealResult healed, {
     required String ruleLead,
   }) {
-    if (healed.rules == 0 && healed.detours == 0 && healed.includes == 0) {
+    if (healed.rules == 0 &&
+        healed.detours == 0 &&
+        healed.includes == 0 &&
+        // §393 D2 — вычистка позиций цепочек тоже бывает одиночной: на
+        // Направление могла ссылаться только цепочка. Без этого условия
+        // укорачивание маршрута прошло бы молча.
+        healed.chainPositions == 0) {
       return;
     }
     final label = direction.label.isNotEmpty ? direction.label : direction.tag;
     // §393 A3 — include-heal бывает ТОЛЬКО на удалении, и там `ruleLead` уже
     // «deleted»: одиночный include-heal (правила и detour'ы на Направление не
     // ссылались) берёт ту же вводную, а не detour'ную.
-    final lead = healed.rules > 0 || healed.includes > 0
+    final lead = healed.rules > 0 || healed.includes > 0 || healed.chainPositions > 0
         ? getLocalText.s('Direction "%1\$s" %2\$s', label, ruleLead)
         : getLocalText.s('Direction "%s" is no longer a detour target', label);
     // §292 — части сообщения из единого форматтера (общий с node_list).

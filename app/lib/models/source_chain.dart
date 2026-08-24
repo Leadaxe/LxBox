@@ -73,6 +73,7 @@ class SourceChain {
     this.stripEvasion,
     this.strip = const {},
     this.rewrite = const {},
+    this.order = -1,
   });
 
   /// Тег будущего outbound'а — он же id записи. Immutable после создания, как
@@ -133,6 +134,28 @@ class SourceChain {
   /// round-trip как есть, без «чистки пустого».
   final Map<String, dynamic> rewrite;
 
+  /// §393 D1 — позиция цепочки в ОБЩЕМ списке источников (тот же список, где
+  /// живут подписки, одиночные серверы и папки).
+  ///
+  /// Цепочка — такой же источник, как подписка (директива оператора 24.08):
+  /// она стоит СТРОКОЙ в общем списке и перетаскивается наравне со всеми.
+  /// Поэтому её место задаётся не отдельным списком `chains`, а индексом в
+  /// общем ordering'е — ровно так же, как у `ServerList` его место задаётся
+  /// индексом в `server_lists`.
+  ///
+  /// Почему поле, а не порядок массива `chains[]`: массив хранит только
+  /// ВЗАИМНЫЙ порядок цепочек, а инвариант «позиция может ссылаться только на
+  /// цепочку ВЫШЕ» считается по ОБЩЕМУ списку. Без абсолютной позиции нельзя
+  /// ответить, стоит ли цепочка выше подписки, между которыми её перетащили,
+  /// — а именно этого требует drag подписки МЕЖДУ двумя цепочками.
+  ///
+  /// Значение — индекс среди всех источников. Дубли и дыры законны (после
+  /// удаления источника индексы не переиспользуются): важен только ПОРЯДОК,
+  /// который нормализуется на каждой записи ([normalizeChainOrder]).
+  /// `-1` = «позиция ещё не назначена» (запись из старого storage или из
+  /// бэкапа) — такие встают в КОНЕЦ, сохраняя взаимный порядок.
+  final int order;
+
   /// Имя для показа. Пустой label → сам тег: выдумывать имя цепочке, которую
   /// пользователь не назвал, значило бы врать о её содержимом.
   String get displayLabel => label.isNotEmpty ? label : tag;
@@ -149,6 +172,7 @@ class SourceChain {
     bool clearStripEvasion = false,
     Map<String, bool>? strip,
     Map<String, dynamic>? rewrite,
+    int? order,
   }) =>
       SourceChain(
         tag: tag, // immutable — не параметр copyWith (как у Direction)
@@ -160,6 +184,7 @@ class SourceChain {
             clearStripEvasion ? null : (stripEvasion ?? this.stripEvasion),
         strip: strip ?? this.strip,
         rewrite: rewrite ?? this.rewrite,
+        order: order ?? this.order,
       );
 
   /// Разбор записи storage / канона схемы.
@@ -193,6 +218,10 @@ class SourceChain {
       },
       rewrite: (deepCloneJson(json['rewrite']) as Map?)?.cast<String, dynamic>() ??
           const {},
+      // §393 D1 — позиция в общем списке источников. Ключа нет (старый
+      // storage, запись из бэкапа) → -1: «не назначена», встанет в конец,
+      // взаимный порядок сохранит миграция/нормализация.
+      order: json['order'] is int ? json['order'] as int : -1,
     );
   }
 
@@ -213,7 +242,71 @@ class SourceChain {
               if (strip.containsKey(key)) key: strip[key],
           },
         if (rewrite.isNotEmpty) 'rewrite': deepCloneJson(rewrite),
+        // §393 D1 — позиция в общем списке источников. Пишется, только когда
+        // назначена: `-1` в файле означал бы «позиция есть и она такая»,
+        // тогда как смысл ровно обратный. КАНОН ЦЕПОЧКИ ЭТОТ КЛЮЧ НЕ ЗНАЕТ
+        // (`source_chain.schema.json`, `additionalProperties: false`) — это
+        // поле storage, и в бэкап оно не уезжает: `_chainCanonToJson`
+        // вычёркивает его наравне с `tag`/`label`/`enabled`.
+        if (order >= 0) 'order': order,
       };
+}
+
+/// §393 D2 — итог вычистки позиций: сколько ПОЗИЦИЙ снято и список цепочек
+/// после вычистки.
+///
+/// `positions` — счётчик для того же механизма, что rules/detours/includes
+/// (§202/§248): snackbar пользователю, `healed`-блок в ответе Debug API.
+/// Он обязан быть виден: цепочка 3+ хопов после вычистки эмитится
+/// УКОРОЧЕННЫМ маршрутом, и молча подменить маршрут нельзя.
+/// `touched` — теги задетых цепочек (диагностика Debug API: агент видит
+/// последствие сразу, а не по пропавшему узлу).
+typedef ChainHealResult = ({
+  List<SourceChain> chains,
+  int positions,
+  List<String> touched,
+});
+
+/// §393 D2 — снять позиции с тегом [deletedTag] из всех [chains].
+///
+/// Вычищается ПОЗИЦИЯ, а не цепочка (директива оператора 24.08): осознанное
+/// удаление источника — высказывание про состав, и маршрут переживает его
+/// укороченным. До D2 ссылки не чистились вовсе и цепочка с висячей позицией
+/// деградировала целиком; граница сдвинута сознательно, а не по недосмотру.
+///
+/// Что НЕ делается здесь и почему:
+///   • цепочка, оставшаяся с <2 позициями, НЕ удаляется — она остаётся в
+///     списке видимой и правится руками. Удалить её значило бы каскадом
+///     стереть пользовательские данные из-за удаления чужого источника;
+///   • пустой [deletedTag] игнорируется: пустая позиция и так невалидна
+///     ([chainEmitError]), а вычистка «по пустому тегу» съела бы их все.
+///
+/// Auto-двойник `<tag>-auto` снимается заодно — по той же причине, что в
+/// [clearIncludeDirectionRefs]: UI-пикеры его не предлагают, но Debug API и
+/// правленый бэкап записать его туда могут.
+ChainHealResult clearChainHopRefs(
+  List<SourceChain> chains,
+  String deletedTag,
+) {
+  if (deletedTag.trim().isEmpty) {
+    return (chains: chains, positions: 0, touched: const []);
+  }
+  final autoTag = '$deletedTag-auto';
+  var positions = 0;
+  final touched = <String>[];
+  final out = <SourceChain>[];
+  for (final c in chains) {
+    final kept =
+        c.hops.where((t) => t != deletedTag && t != autoTag).toList(growable: false);
+    if (kept.length == c.hops.length) {
+      out.add(c);
+      continue;
+    }
+    positions += c.hops.length - kept.length;
+    touched.add(c.tag);
+    out.add(c.copyWith(hops: kept));
+  }
+  return (chains: out, positions: positions, touched: touched);
 }
 
 /// §393 C1 — почему цепочку [c] нельзя выпустить в конфиг; пусто = можно.

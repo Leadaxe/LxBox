@@ -73,7 +73,16 @@ class DirectionMutations {
     // ignore: invalid_use_of_visible_for_testing_member
     final healed = await SettingsStorage.deleteDirection(tag);
     _resync(healed, tag, sub);
-    return healed;
+    // §393 D2 — Направление тоже бывает ПОЗИЦИЕЙ цепочки: удалили его →
+    // позиция уходит, цепочка живёт дальше. Счётчик едет вместе с
+    // rules/detours/includes и показывается тем же snackbar'ом.
+    final chains = await SettingsStorage.healChainHops(tag);
+    return (
+      rules: healed.rules,
+      detours: healed.detours,
+      includes: healed.includes,
+      chainPositions: chains.positions,
+    );
   }
 
   /// §292 — bulk-перезапись всего списка Направлений БЕЗ heal'а. Явный heal-free
@@ -108,6 +117,12 @@ class DirectionMutations {
         // `include` остальных.
         if (healed.includes > 0)
           getLocalText.s('%s direction option(s) removed', '${healed.includes}'),
+        // §393 D2 — четвёртый род ссылки: удалённое Направление вычеркнуто из
+        // ПОЗИЦИЙ цепочек. Сами цепочки остались, но маршрут стал короче —
+        // молчать об этом нельзя.
+        if (healed.chainPositions > 0)
+          getLocalText.s(
+              '%s chain position(s) removed', '${healed.chainPositions}'),
       ];
 
   /// Ресинк идемпотентен (`clearDetourDirectionRefs` → `healed == null`, когда

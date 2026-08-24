@@ -84,46 +84,54 @@ Future<DebugResponse> _single(String tag) async {
   return JsonResponse(c.toJson());
 }
 
+/// §393 D3 — создание АТОМАРНО: собрать полную запись → провалидировать →
+/// записать ОДНОЙ операцией.
+///
+/// Прежде хендлер звал `addChain` (запись на диск), затем применял поля и
+/// только потом валидировал: отказ 400 (один хоп, самоссылка) возвращал
+/// ошибку, а в storage оставалась ПУСТАЯ цепочка, которой пользователь не
+/// просил. Теперь до записи доходит только то, что прошло рубеж, — «не
+/// прошло» не оставляет следов.
+///
+/// Тег для новой записи выбираем здесь же (первый свободный `chain-N`, если
+/// не задан), чтобы валидация видела итоговую запись целиком; коллизии
+/// (пустой / служебный / дубль по цепочкам И Направлениям / тёзка
+/// `<tag>-auto`) по-прежнему проверяет storage тем же `directionTagConflict`,
+/// что зовёт форма создания, — правила не дублируются здесь.
 Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
   final label = fieldString(body, 'label');
-  // Тег опционален — отсутствует → первый свободный `chain-N`
-  // ([nextChainTag]). Валидацию коллизий (пустой / служебный / дубль по
-  // цепочкам И Направлениям / тёзка `<tag>-auto`) делает storage тем же
-  // `directionTagConflict`, что зовёт форма создания, — правила не
-  // дублируются здесь.
   final tag = fieldString(body, 'tag');
+
+  final existing = await SettingsStorage.getChains();
+  final wanted = (tag ?? nextChainTag([
+    ...existing.map((c) => c.tag),
+    ...(await SettingsStorage.getDirections()).map((d) => d.tag),
+  ]))
+      .trim();
+
+  // Черновик записи — ровно то, что ляжет на диск. Ничего ещё не записано.
+  var chain = SourceChain(tag: wanted, label: label ?? wanted, enabled: true);
+  chain = _applyPatch(chain, body, tagConsumed: true) ?? chain;
+
+  // Валидируем, ТОЛЬКО когда маршрут задан. Пустая цепочка законна как
+  // промежуточное состояние: тот же путь проходит UI — диалог создаёт запись
+  // с нулём позиций и сразу открывает форму, которая запрёт сохранение, пока
+  // позиций меньше двух. Запретить пустую здесь значило бы сделать
+  // `POST /chains` без тела невозможным.
+  if (chain.hops.isNotEmpty) await _requireValid(chain, ctx, isNew: true);
+
   final SourceChain created;
   try {
-    created = await SettingsStorage.addChain(label: label, tag: tag);
+    created = await SettingsStorage.createChain(chain);
   } on StateError catch (e) {
     // Конфликт тега — precondition: юзер может выбрать другой и повторить.
     // Машинный код причины (`duplicate`/`reserved`/…) внутри сообщения.
     throw Conflict(e.message);
   }
 
-  // Остальные поля body — как PATCH сразу после создания (один вызов вместо
-  // POST+PATCH). Пустая цепочка ядру не годится (нужно минимум две позиции),
-  // и требовать двух запросов ради одного маршрута смысла нет.
-  var chain = created;
-  final patched = _applyPatch(chain, body, tagConsumed: true);
-  if (patched != null) {
-    chain = patched;
-    // Валидируем, ТОЛЬКО когда маршрут задан. Пустая цепочка законна как
-    // промежуточное состояние: тот же путь проходит UI — диалог создаёт
-    // запись с нулём позиций и сразу открывает форму, которая запрёт
-    // сохранение, пока позиций меньше двух. Запретить пустую здесь значило
-    // бы сделать `POST /chains` без тела невозможным.
-    if (chain.hops.isNotEmpty) await _requireValid(chain, ctx);
-    try {
-      await SettingsStorage.updateChain(chain);
-    } on StateError catch (e) {
-      throw Conflict(e.message);
-    }
-  }
-
   final extras = await maybeRebuild(req, ctx);
-  return JsonResponse({...chain.toJson(), ...extras}, status: 201);
+  return JsonResponse({...created.toJson(), ...extras}, status: 201);
 }
 
 Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) async {
@@ -148,22 +156,20 @@ Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) as
 Future<DebugResponse> _delete(String tag, DebugRequest req, DebugContext ctx) async {
   final chains = await SettingsStorage.getChains();
   if (!chains.any((c) => c.tag == tag)) throw NotFound('chain: $tag');
-  await SettingsStorage.deleteChain(tag);
+  // §393 D2 — каскад: позиции с этим тегом уходят из ОСТАЛЬНЫХ цепочек, сами
+  // они остаются. Рекурсия только через цепочки-позиции: удаление A убирает
+  // позицию A из B, а B живёт дальше (возможно, укороченной).
+  final healed = await SettingsStorage.deleteChain(tag);
   final extras = await maybeRebuild(req, ctx);
-  // Ссылки на удалённый тег в позициях ДРУГИХ цепочек не вычищаются
-  // (`_deleteChain`): снятие позиции превращает маршрут в другой маршрут.
-  // Сборка деградирует такую цепочку целиком (`chain_hop_missing`) — здесь
-  // перечисляем, кого это задело, чтобы агент увидел последствие сразу, а не
-  // по пропавшему узлу.
-  final dangling = [
-    for (final c in chains)
-      if (c.tag != tag && c.hops.contains(tag)) c.tag,
-  ];
   return JsonResponse({
     'ok': true,
     'action': 'chains-delete',
     'tag': tag,
-    'dangling_refs': dangling,
+    // Кого задело и насколько: цепочка ниже двух позиций теперь не эмитится
+    // (`chainEmitError`), цепочка 3+ хопов эмитится УКОРОЧЕННЫМ маршрутом.
+    // Агент обязан увидеть это в ответе, а не по пропавшему хопу в конфиге.
+    'healed': {'chain_positions': healed.positions},
+    'chains_touched': healed.touched,
     ...extras,
   });
 }
@@ -174,16 +180,27 @@ Future<DebugResponse> _delete(String tag, DebugRequest req, DebugContext ctx) as
 /// формы. Предупреждения и справки (потерянная позиция, detour на входе)
 /// write не запрещают — это осознанный выбор пользователя, а не сломанный
 /// конфиг: ровно та же граница, что у [chainFormCanSave].
-Future<void> _requireValid(SourceChain chain, DebugContext ctx) async {
+Future<void> _requireValid(
+  SourceChain chain,
+  DebugContext ctx, {
+  bool isNew = false,
+}) async {
   final chains = await SettingsStorage.getChains();
   final directions = await SettingsStorage.getDirections();
-  // Список цепочек с ПОДСТАВЛЕННЫМ кандидатом: порядок объявления нормативен
-  // (ссылка только на цепочку выше), а редактируемая версия может отличаться
-  // от лежащей на диске.
-  final ordered = [
-    for (final c in chains)
-      if (c.tag == chain.tag) chain else c,
-  ];
+  // Список цепочек с ПОДСТАВЛЕННЫМ кандидатом: порядок нормативен (ссылка
+  // только на цепочку ВЫШЕ по общему списку источников), а редактируемая
+  // версия может отличаться от лежащей на диске.
+  //
+  // §393 D3 — создаваемой на диске ещё нет: она встанет в КОНЕЦ общего списка
+  // (`_createChain`), и валидация обязана видеть её ровно там. Подставить её
+  // в начало значило бы разрешить ссылку вперёд, которую сборка потом
+  // деградирует, — 201 на цепочку, которая не соберётся.
+  final ordered = isNew
+      ? [...chains, chain]
+      : [
+          for (final c in chains)
+            if (c.tag == chain.tag) chain else c,
+        ];
   final config = ctx.home?.state.configModel ?? const ParsedConfig.empty();
   final candidates = chainHopLookup(collectChainHopTargets(
     config: config,

@@ -93,6 +93,9 @@ Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
         for (final v in template.vars) v.name: v.defaultValue,
       },
     );
+    // §393 D1 — то же для позиций цепочек: тело могло принести `chains` без
+    // `order` (снято до перехода на общий список источников).
+    await SettingsStorage.migrateChainOrderIfNeeded();
   } else if (storage != null) {
     throw const BadRequest('storage must be a JSON object');
   }

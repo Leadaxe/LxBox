@@ -2,31 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/screens/subscriptions_screen/widgets/chains_section.dart';
+import 'package:lxbox/widgets/reorder_grab_strip.dart';
 
-// §393 C7 — цепочки в списке источников. Не тест на вёрстку: проверяем, что
-// секция появляется только при наличии цепочек и что тап/тумблер доходят до
-// нужной записи.
+// §393 D1 — цепочка СТРОКОЙ общего списка источников (директива оператора
+// 24.08): отдельной секции «Цепочки хопов» больше нет, ряд тот же, что у
+// подписки. Не тест на вёрстку: проверяем, что ряд несёт идентичность
+// цепочки, тянется за drag-handle наравне со всеми и что тап/тумблер доходят
+// до нужной записи.
 
 Widget _host(List<SourceChain> chains,
         {void Function(SourceChain)? onTap,
         void Function(SourceChain)? onToggle}) =>
     MaterialApp(
       home: Scaffold(
-        body: ChainsSection(
-          chains: chains,
-          onTap: onTap ?? (_) {},
-          onToggle: onToggle ?? (_) {},
+        body: Column(
+          children: [
+            for (var i = 0; i < chains.length; i++)
+              ChainEntryTile(
+                chain: chains[i],
+                dragIndex: i,
+                onTap: () => onTap?.call(chains[i]),
+                onToggle: () => onToggle?.call(chains[i]),
+              ),
+          ],
         ),
       ),
     );
 
 void main() {
-  testWidgets('без цепочек секции нет вовсе', (tester) async {
-    await tester.pumpWidget(_host(const []));
-    await tester.pumpAndSettle();
-    expect(find.byType(ListTile), findsNothing);
-  });
-
   testWidgets('строка показывает имя и тег цепочки', (tester) async {
     await tester.pumpWidget(_host(const [
       SourceChain(tag: 'chain-1', label: 'Via Germany', hops: ['a', 'b']),
@@ -43,6 +46,15 @@ void main() {
     ]));
     await tester.pumpAndSettle();
     expect(find.text('chain-1'), findsOneWidget);
+  });
+
+  testWidgets('у ряда есть grab-strip: цепочка перетаскивается наравне со всеми',
+      (tester) async {
+    await tester.pumpWidget(_host(const [
+      SourceChain(tag: 'chain-1', hops: ['a', 'b']),
+    ]));
+    await tester.pumpAndSettle();
+    expect(find.byType(ReorderGrabStrip), findsOneWidget);
   });
 
   testWidgets('тап уходит в нужную цепочку', (tester) async {

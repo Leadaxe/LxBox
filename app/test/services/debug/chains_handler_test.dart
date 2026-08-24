@@ -244,7 +244,11 @@ void main() {
       expect((await SettingsStorage.getChains()).single.hops, isEmpty);
     });
 
-    test('POST с одной позицией тоже отвергается', () async {
+    test('§393 D3 POST с одной позицией → 400 И НИЧЕГО НЕ ЗАПИСАНО', () async {
+      // Баг с живой проверки: хендлер создавал запись, потом применял поля и
+      // только потом валидировал — 400 возвращался, а ПУСТАЯ цепочка
+      // оставалась в storage. Теперь запись собирается и проверяется до
+      // единственной операции сохранения.
       await expectLater(
         chainsHandler(
           req('POST', '/chains', body: {
@@ -254,6 +258,37 @@ void main() {
         ),
         throwsA(isA<BadRequest>()),
       );
+      expect(await SettingsStorage.getChains(), isEmpty,
+          reason: 'отказ не оставляет следов');
+    });
+
+    test('§393 D3 POST с самоссылкой → 400 И списка не прибавилось', () async {
+      // Самоссылка требует знать тег ДО записи — ровно то, чего не умел
+      // прежний «создать, потом проверить».
+      await chainsHandler(req('POST', '/chains'), ctx()); // chain-1
+      final before = (await SettingsStorage.getChains()).length;
+      await expectLater(
+        chainsHandler(
+          req('POST', '/chains', body: {
+            'tag': 'chain-2',
+            'hops': ['direct-out', 'chain-2'],
+          }),
+          ctx(),
+        ),
+        throwsA(isA<BadRequest>()),
+      );
+      final after = await SettingsStorage.getChains();
+      expect(after.length, before);
+      expect(after.map((c) => c.tag), isNot(contains('chain-2')));
+    });
+
+    test('§393 D3 POST без hops остаётся законным (промежуточное состояние)',
+        () async {
+      // Тот же путь проходит UI: диалог создаёт запись с нулём позиций и сразу
+      // открывает форму, которая запрёт сохранение, пока позиций меньше двух.
+      final r = await chainsHandler(req('POST', '/chains'), ctx());
+      expect(asMap(r)['tag'], 'chain-1');
+      expect((await SettingsStorage.getChains()).single.hops, isEmpty);
     });
 
     test('дубль позиции и самоссылка → 400', () async {
@@ -331,22 +366,26 @@ void main() {
   });
 
   group('DELETE /chains/{tag}', () {
-    test('удаляет; unknown → 404; висячие ссылки перечислены', () async {
+    test('§393 D2 удаляет; unknown → 404; позиция вычищена, цепочка жива',
+        () async {
       await chainsHandler(req('POST', '/chains'), ctx()); // chain-1
       await chainsHandler(
         req('POST', '/chains', body: {
-          'hops': ['chain-1', 'vpn-1'],
+          'hops': ['chain-1', 'vpn-1', 'direct-out'],
         }),
         ctx(),
       ); // chain-2
 
       final r = await chainsHandler(req('DELETE', '/chains/chain-1'), ctx());
       expect(asMap(r)['ok'], isTrue);
-      expect(asMap(r)['dangling_refs'], ['chain-2']);
+      // Счётчик в `healed`-блоке — как у /directions (§202/§248): маршрут
+      // укоротился, и агент обязан увидеть это в ответе.
+      expect((asMap(r)['healed'] as Map)['chain_positions'], 1);
+      expect(asMap(r)['chains_touched'], ['chain-2']);
       final stored = await SettingsStorage.getChains();
-      expect(stored.map((c) => c.tag), ['chain-2']);
-      // Позиция НЕ вычищена: маршрут без хопа — другой маршрут.
-      expect(stored.single.hops, ['chain-1', 'vpn-1']);
+      expect(stored.map((c) => c.tag), ['chain-2'],
+          reason: 'каскад снимает ПОЗИЦИЮ, а не цепочку');
+      expect(stored.single.hops, ['vpn-1', 'direct-out']);
 
       await expectLater(
         chainsHandler(req('DELETE', '/chains/chain-1'), ctx()),

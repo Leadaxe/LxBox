@@ -31,6 +31,7 @@ import '../services/parser/uri_parsers.dart';
 import '../services/parser/uri_utils.dart';
 import '../services/haptic_service.dart';
 import '../services/settings_storage.dart';
+import '../services/tag_resolver.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
 import '../services/subscription/import_rules.dart';
@@ -905,10 +906,56 @@ class SubscriptionController extends ChangeNotifier {
     return _JsonAdd.added;
   }
 
+  /// §393 D2 — сколько позиций цепочек вычищено последним удалением источника.
+  ///
+  /// Читается экраном сразу после `await`-а мутации и показывается snackbar'ом
+  /// — тем же механизмом, что rules/detours/includes-heal (§202/§248).
+  /// Укорачивание маршрута обязано быть заметным: цепочка 3+ хопов после
+  /// вычистки эмитится УКОРОЧЕННЫМ маршрутом, и промолчать об этом значило бы
+  /// подменить пользователю маршрут молча.
+  int _lastChainPositionsRemoved = 0;
+  int get lastChainPositionsRemoved => _lastChainPositionsRemoved;
+  void clearChainHealNotice() => _lastChainPositionsRemoved = 0;
+
+  /// §393 D2 — вычистить позиции цепочек, ссылавшиеся на удалённый источник.
+  ///
+  /// Зовётся ТОЛЬКО из осознанного удаления пользователем. Обновление
+  /// подписки сюда не приходит намеренно (граница зафиксирована оператором):
+  /// пропавший узел может вернуться следующим обновлением, и фоновое событие
+  /// не вправе молча резать маршруты, написанные руками, — там остаётся
+  /// деградация билдера `chain_hop_missing`.
+  /// §393 D2 — теги папки, которые исчезают при роспуске с сохранением
+  /// серверов: сам префикс (группы больше нет) и члены в ПРЕФИКСНОЙ форме.
+  /// Голые теги членов остаются жить одиночными серверами — позиции цепочек
+  /// на них законны и после роспуска.
+  Set<String> _folderPrefixedTags(FolderServers f) {
+    final out = <String>{if (f.tagPrefix.isNotEmpty) f.tagPrefix};
+    if (f.tagPrefix.isEmpty) return out;
+    for (final t in sourceConfigTags(f)) {
+      if (t.startsWith('${f.tagPrefix} ')) out.add(t);
+    }
+    return out;
+  }
+
+  Future<void> _healChainsForRemoved(Iterable<String> tags) async {
+    var removed = 0;
+    for (final t in tags) {
+      final r = await SettingsStorage.healChainHops(t);
+      removed += r.positions;
+    }
+    if (removed > 0) {
+      _lastChainPositionsRemoved += removed;
+      AppLog.I.info('Chain heal: $removed position(s) removed with the source');
+    }
+  }
+
   Future<void> removeAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
-    _entries.removeAt(index);
+    final gone = _entries.removeAt(index);
     await _persist();
+    // §393 D2 — после снятия источника: цепочки, стоявшие на его узлах,
+    // теряют ПОЗИЦИЮ, а не себя целиком.
+    await _healChainsForRemoved(sourceConfigTags(gone.list));
     notifyListeners();
   }
 
@@ -1262,6 +1309,12 @@ class SubscriptionController extends ChangeNotifier {
       );
     }
     await _persist();
+    // §393 D2 — при `keepServers` члены остаются в конфиге одиночными
+    // серверами, но уже БЕЗ префикса папки: исчезают только сам префикс
+    // (группа) и теги в префиксной форме, а голые продолжают жить. Без
+    // keepServers уходит вся папка целиком.
+    await _healChainsForRemoved(
+        keepServers ? _folderPrefixedTags(list) : sourceConfigTags(list));
     notifyListeners();
     AppLog.I.info(
         'Folder deleted: ${list.name} (${keepServers ? 'servers kept' : 'servers removed'})');
@@ -1479,11 +1532,22 @@ class SubscriptionController extends ChangeNotifier {
     final folder = entry.list;
     if (folder is! FolderServers) return;
     if (memberIndex < 0 || memberIndex >= folder.members.length) return;
+    final gone = folder.members[memberIndex];
     final members = [...folder.members]..removeAt(memberIndex);
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
     await _persist();
+    // §393 D2 — член папки — такой же источник узла, как одиночный сервер.
+    await _healChainsForRemoved(_memberTags(folder, gone));
     notifyListeners();
+  }
+
+  /// §393 D2 — теги конфига одного члена папки: голый и с префиксом папки.
+  Set<String> _memberTags(FolderServers f, FolderMember m) {
+    final bare = m.node?.tag ?? '';
+    if (bare.isEmpty) return const {};
+    return {bare, TagResolver.displayTag(f.tagPrefix, bare)}
+      ..removeWhere((t) => t.trim().isEmpty);
   }
 
   /// Ручной порядок членов внутри папки (drag-reorder).
@@ -1610,9 +1674,16 @@ class SubscriptionController extends ChangeNotifier {
         if (!memberIndexes.contains(i)) folder.members[i],
     ];
     if (members.length == folder.members.length) return;
+    final gone = [
+      for (var i = 0; i < folder.members.length; i++)
+        if (memberIndexes.contains(i)) folder.members[i],
+    ];
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
     await _persist();
+    // §393 D2 — как одиночное удаление члена, только пачкой.
+    await _healChainsForRemoved(
+        {for (final m in gone) ..._memberTags(folder, m)});
     notifyListeners();
   }
 

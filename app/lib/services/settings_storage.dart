@@ -390,12 +390,36 @@ class SettingsStorage {
   static Future<SourceChain> addChain({String? label, String? tag}) =>
       _addChain(label: label, tag: tag);
 
+  /// §393 D3 — создать цепочку ЦЕЛИКОМ, одной записью на диск.
+  ///
+  /// Для вызывающих, которые собирают полную запись и валидируют её ДО
+  /// сохранения (`POST /chains`): отказ не оставляет следов в storage.
+  /// throws [StateError] на конфликте тега — так же, как [addChain].
+  static Future<SourceChain> createChain(SourceChain chain) =>
+      _createChain(chain);
+
   /// Обновить цепочку по [SourceChain.tag]. Throws, если тег не найден.
+  /// Позиция в общем списке источников не меняется.
   static Future<void> updateChain(SourceChain chain) => _updateChain(chain);
 
-  /// Удалить цепочку. Позиции других цепочек НЕ вычищаются намеренно —
-  /// см. `_deleteChain`.
-  static Future<void> deleteChain(String tag) => _deleteChain(tag);
+  /// §393 D1 — переставить цепочки в их взаимном порядке (drag в общем
+  /// списке источников). Принимает полный список в новом порядке.
+  static Future<void> reorderChains(List<SourceChain> chains) =>
+      _reorderChains(chains);
+
+  /// Удалить цепочку. §393 D2 — позиции с её тегом вычищаются из ОСТАЛЬНЫХ
+  /// цепочек (сами они остаются); счётчик снятого — в [ChainHealResult].
+  static Future<ChainHealResult> deleteChain(String tag) => _deleteChain(tag);
+
+  /// §393 D2 — вычистить позиции с тегом [tag] из всех цепочек. Зовётся при
+  /// осознанном удалении ЧУЖОГО источника (сервер, подписка, папка,
+  /// Направление). Обновление подписки сюда НЕ входит — см. `_healChainHops`.
+  static Future<ChainHealResult> healChainHops(String tag, {bool flush = true}) =>
+      _healChainHops(tag, flush: flush);
+
+  /// §393 D1 — one-shot миграция позиций цепочек в общий список источников.
+  /// Идемпотентна; зовётся из тех же точек, что [migrateDirectionsIfNeeded].
+  static Future<void> migrateChainOrderIfNeeded() => _migrateChainOrderIfNeeded();
 
   // ---------------------------------------------------------------------------
   // Last global update timestamp

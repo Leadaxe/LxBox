@@ -103,6 +103,11 @@ void main() async {
         for (final v in directionsTemplate.vars) v.name: v.defaultValue,
       },
     );
+    // §393 D1 — цепочки из старого storage (ключ `chains` без `order`)
+    // получают позиции общего списка источников: встают в его конец, взаимный
+    // порядок сохранён. Идемпотентна, ДО первого билда — билдер читает
+    // цепочки уже в порядке общего списка.
+    await SettingsStorage.migrateChainOrderIfNeeded();
     // §229 — вызов one-shot ремапа preset_id (§228) убран: миграция удалена,
     // отработала у всех, кто обновлялся начиная с v2.10.0.
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в

@@ -428,6 +428,9 @@
   "%s copied": {
     "value": "Скопировано: %s"
   },
+  "%s chain position(s) removed": {
+    "value": "позиций цепочек убрано: %s"
+  },
   "%s detour reference(s) reset to None": {
     "value": "detour-ссылок сброшено в None: %s"
   },
@@ -2109,9 +2112,6 @@
   },
   "Hop chain · %s": {
     "value": "Цепочка · %s"
-  },
-  "Hop chains": {
-    "value": "Цепочки хопов"
   },
   "Host": {
     "value": "Хост"

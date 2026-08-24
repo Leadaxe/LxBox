@@ -408,6 +408,14 @@ class BackupService {
       } catch (e) {
         errors.add('Directions migration: $e');
       }
+      // §393 D1 — восстановленный архив мог быть снят до перехода цепочек в
+      // общий список источников: позиции назначаем сразу после restore, иначе
+      // экран показал бы их порядок по-старому до перезапуска app'а.
+      try {
+        await SettingsStorage.migrateChainOrderIfNeeded();
+      } catch (e) {
+        errors.add('Chain order migration: $e');
+      }
 
       routing = contents.countFor(BackupCategory.routing);
       appS = contents.countFor(BackupCategory.appSettings);

@@ -1289,7 +1289,13 @@ Map<String, dynamic> _chainCanonToJson(SourceChain c) {
   final full = c.toJson()
     ..remove('tag')
     ..remove('label')
-    ..remove('enabled');
+    ..remove('enabled')
+    // §393 D1 — `order` тоже идентичность записи, а не маршрут: это МЕСТО
+    // цепочки в общем списке источников ЭТОГО устройства. Схема канона его не
+    // знает (`additionalProperties: false`), и осмысленным на той стороне он
+    // быть не может — там свой список источников. Взаимный порядок цепочек
+    // при этом не теряется: он и есть порядок записей секции `chains[]`.
+    ..remove('order');
   return full;
 }
 

@@ -1,5 +1,6 @@
 import '../services/parser/body_decoder.dart';
 import '../services/parser/parse_all.dart';
+import '../services/tag_resolver.dart';
 import 'import_rule.dart';
 import 'node_spec.dart';
 import 'subscription_meta.dart';
@@ -659,6 +660,39 @@ final class FolderServers extends ServerList {
     if (membersChanged) next = next.copyWith(members: ms);
   }
   return (healed: count > 0 ? next : null, count: count);
+}
+
+/// §393 D2 — теги конфига, которые даёт источник [l]: его узлы с приклеенным
+/// префиксом (плюс голые — префикс мог быть задан позже, чем написана
+/// позиция цепочки) и сам префикс, под которым эмитится группа подписки.
+///
+/// Нужно вычистке позиций цепочек при удалении источника: позиция ссылается
+/// на ТЕГ КОНФИГА (`collectChainHopTargets` берёт их из собранного конфига),
+/// а storage знает источник. Это единственное место, где одно переводится в
+/// другое.
+///
+/// Приблизительность осознанная и односторонняя: аллокатор тегов (§351) мог
+/// выдать узлу-тёзке суффикс, и такой тег сюда не попадёт — позиция с ним
+/// останется висячей и деградирует цепочку, как раньше. Обратной ошибки
+/// (снять лишнее) здесь нет, а она была бы дороже: это чужие маршруты.
+Set<String> sourceConfigTags(ServerList l) {
+  final out = <String>{};
+  if (l.tagPrefix.isNotEmpty) out.add(l.tagPrefix);
+  for (final n in l.nodes) {
+    if (n.tag.isEmpty) continue;
+    out.add(n.tag);
+    out.add(TagResolver.displayTag(l.tagPrefix, n.tag));
+  }
+  if (l is FolderServers) {
+    for (final m in l.members) {
+      final bare = m.node?.tag ?? '';
+      if (bare.isEmpty) continue;
+      out.add(bare);
+      out.add(TagResolver.displayTag(l.tagPrefix, bare));
+    }
+  }
+  out.removeWhere((t) => t.trim().isEmpty);
+  return out;
 }
 
 /// Политика применения detour-серверов (§1.3 спеки 026, перенесено из 018).

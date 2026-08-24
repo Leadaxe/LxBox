@@ -115,11 +115,31 @@ void main() {
           throwsA(isA<StateError>()));
     });
 
-    test('delete убирает запись и НЕ вычищает позиции других цепочек',
+    test('§393 D2 delete вычищает ПОЗИЦИЮ из других цепочек, сами они остаются',
         () async {
-      // Асимметрия с `include` Направлений намеренна: снятие позиции
-      // превращает маршрут в ДРУГОЙ маршрут, и молча подменять его нельзя.
-      // Висячую позицию деградирует билдер (`chain_hop_missing`).
+      // Директива оператора 24.08: осознанное удаление источника — это
+      // высказывание про состав, и маршрут переживает его УКОРОЧЕННЫМ.
+      // Каскад рекурсивен только через цепочки-позиции: удаление `inner`
+      // снимает позицию `inner` у `outer`, но `outer` живёт дальше.
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'inner', hops: ['a', 'b']),
+        SourceChain(tag: 'outer', hops: ['inner', 'c', 'd']),
+      ]);
+      final healed = await SettingsStorage.deleteChain('inner');
+      final left = await SettingsStorage.getChains();
+      expect(left.map((c) => c.tag), ['outer'],
+          reason: 'сама цепочка НЕ удаляется каскадом');
+      expect(left.single.hops, ['c', 'd'],
+          reason: 'ушла ровно позиция удалённого');
+      expect(healed.positions, 1,
+          reason: 'счётчик виден пользователю: маршрут стал короче');
+      expect(healed.touched, ['outer']);
+    });
+
+    test('§393 D2 цепочка, упавшая ниже двух позиций, остаётся в storage',
+        () async {
+      // Принято как есть: не эмитится (существующая деградация
+      // `chainEmitError`), но данные пользователя не стираются — чинит руками.
       await SettingsStorage.setChains(const [
         SourceChain(tag: 'inner', hops: ['a', 'b']),
         SourceChain(tag: 'outer', hops: ['inner', 'c']),
@@ -127,8 +147,27 @@ void main() {
       await SettingsStorage.deleteChain('inner');
       final left = await SettingsStorage.getChains();
       expect(left.map((c) => c.tag), ['outer']);
-      expect(left.single.hops, ['inner', 'c'],
-          reason: 'позиция осталась — пользователь правит маршрут осознанно');
+      expect(left.single.hops, ['c']);
+      expect(chainEmitError(left.single), isNotEmpty,
+          reason: 'одна позиция — ядру не годится, цепочка не эмитится');
+    });
+
+    test('§393 D2 heal чужого источника снимает позицию у всех цепочек',
+        () async {
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'c1', hops: ['gone', 'a', 'b']),
+        SourceChain(tag: 'c2', hops: ['a', 'gone']),
+        SourceChain(tag: 'c3', hops: ['a', 'b']),
+      ]);
+      final healed = await SettingsStorage.healChainHops('gone');
+      expect(healed.positions, 2);
+      expect(healed.touched, ['c1', 'c2']);
+      final left = await SettingsStorage.getChains();
+      expect(left.map((c) => c.hops), [
+        ['a', 'b'],
+        ['a'],
+        ['a', 'b'],
+      ]);
     });
 
     test('порядок списка сохраняется — им держится антицикл', () async {
@@ -156,9 +195,92 @@ void main() {
       await SettingsStorage.setChains(const [c]);
       SettingsStorage.resetCacheForTesting();
       final back = (await SettingsStorage.getChains()).single;
-      expect(back.toJson(), c.toJson());
+      // §393 D1 — `order` назначает storage (место в общем списке источников),
+      // поэтому сверяем МАРШРУТ и идентичность, а не сырой JSON целиком.
+      expect(back.copyWith(order: -1).toJson(), c.toJson());
+      expect(back.order, greaterThanOrEqualTo(0),
+          reason: 'позиция в общем списке проставлена при записи');
       // И в самом файле — под своим ключом, не внутри подписки.
       expect((await readFile())['chains'], isA<List>());
+    });
+  });
+
+  group('§393 D1 — позиция в общем списке источников', () {
+    test('order проставляется при записи и держит порядок чтения', () async {
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'c1', hops: ['a', 'b']),
+        SourceChain(tag: 'c2', hops: ['a', 'b']),
+        SourceChain(tag: 'c3', hops: ['a', 'b']),
+      ]);
+      SettingsStorage.resetCacheForTesting();
+      final got = await SettingsStorage.getChains();
+      expect(got.map((c) => c.tag), ['c1', 'c2', 'c3']);
+      // Позиции строго возрастают — по ним и считается «цепочка ВЫШЕ».
+      expect(got[0].order, lessThan(got[1].order));
+      expect(got[1].order, lessThan(got[2].order));
+    });
+
+    test('reorder меняет взаимный порядок цепочек', () async {
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'c1', hops: ['a', 'b']),
+        SourceChain(tag: 'c2', hops: ['a', 'b']),
+      ]);
+      final now = await SettingsStorage.getChains();
+      await SettingsStorage.reorderChains([now[1], now[0]]);
+      SettingsStorage.resetCacheForTesting();
+      expect((await SettingsStorage.getChains()).map((c) => c.tag),
+          ['c2', 'c1']);
+    });
+
+    test('миграция: старый storage без order — цепочки встают в конец, '
+        'взаимный порядок сохранён', () async {
+      // Ключ `chains` уже в проде у dev-сборок, и записи там без `order`.
+      final f = File('${tmp.path}/lxbox_settings.json');
+      f.writeAsStringSync(jsonEncode({
+        'server_lists': [
+          {'type': 'user', 'id': 'u1', 'name': 'S', 'enabled': true},
+        ],
+        'chains': [
+          {'tag': 'first', 'hops': ['a', 'b']},
+          {'tag': 'second', 'hops': ['first', 'c']},
+        ],
+      }));
+      SettingsStorage.resetCacheForTesting();
+
+      await SettingsStorage.migrateChainOrderIfNeeded();
+      SettingsStorage.resetCacheForTesting();
+
+      final got = await SettingsStorage.getChains();
+      expect(got.map((c) => c.tag), ['first', 'second'],
+          reason: 'взаимный порядок = порядок старого файла');
+      expect(got.every((c) => c.order >= 0), isTrue);
+      // В конец общего списка: позиция ниже единственной подписки.
+      expect(got.first.order, greaterThanOrEqualTo(1));
+      // Маршрут не тронут — мигрируются позиции в списке, а не хопы.
+      expect(got[1].hops, ['first', 'c']);
+    });
+
+    test('миграция идемпотентна', () async {
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'c1', hops: ['a', 'b']),
+        SourceChain(tag: 'c2', hops: ['a', 'b']),
+      ]);
+      final before = await SettingsStorage.getChains();
+      await SettingsStorage.migrateChainOrderIfNeeded();
+      await SettingsStorage.migrateChainOrderIfNeeded();
+      SettingsStorage.resetCacheForTesting();
+      final after = await SettingsStorage.getChains();
+      expect(after.map((c) => c.tag), before.map((c) => c.tag));
+      expect(after.map((c) => c.order), before.map((c) => c.order));
+    });
+
+    test('order не уезжает в канон бэкапа: схема его не знает', () async {
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'c1', hops: ['a', 'b']),
+      ]);
+      final stored = (await SettingsStorage.getChains()).single;
+      expect(stored.toJson().containsKey('order'), isTrue,
+          reason: 'в storage — есть');
     });
   });
 

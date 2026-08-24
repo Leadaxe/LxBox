@@ -1,85 +1,91 @@
-// §393 C7 — секция цепочек хопов на экране источников.
+// §393 D1 — СТРОКА источника-цепочки в общем списке источников.
 //
-// Цепочка — ТРЕТИЙ ТИП ИСТОЧНИКА рядом с подпиской и сервером (§393 L5): она
-// описывает МАРШРУТ, а не выбор между маршрутами, поэтому живёт здесь, а не
-// среди Направлений.
+// Цепочка — ТАКОЙ ЖЕ ИСТОЧНИК, как подписка, одиночный сервер и папка
+// (директива оператора 24.08; так же у лаунчера — `source_tab`, один список).
+// Поэтому она рисуется не отдельной секцией, а обычным рядом ТОГО ЖЕ вида:
+// grab-strip слева, тумблер, заголовок, подзаголовок `tag · N hops`, справа —
+// иконка типа (как `Icons.dns` у одиночного сервера и `Icons.folder_outlined`
+// у папки). И перетаскивается наравне со всеми.
 //
-// Отдельной секцией, а не строкой общего списка: цепочки лежат в настройках
-// (`chains[]`), а не в `SubscriptionController.entries`, и их порядок
-// НОРМАТИВЕН сам по себе — цепочка вправе сослаться только на объявленную
-// ВЫШЕ. Смешав их с подписками в один reorderable-список, мы дали бы
-// перетаскиванием подписки менять смысл ссылок между цепочками.
+// Прежняя отдельная секция «Цепочки хопов» над подписками отвергнута: она
+// говорила пользователю, что цепочка — что-то другое, чем остальные
+// источники, и заодно делала её порядок отдельным от общего.
 //
-// Пока цепочек нет, секции нет вовсе: пустой заголовок над пустотой на экране,
-// где у большинства пользователей цепочек не будет никогда, — только шум.
-// Точка входа живёт в overflow-меню экрана («Add hop chain»).
+// Строение виджета повторяет [SubscriptionEntryTile] дословно (IntrinsicHeight
+// → Row → grab-strip + Column(tile, Divider)): оба ряда живут в ОДНОМ
+// `ReorderableListView`, и разойтись в высоте строки или в положении полосы
+// захвата им нельзя — это была бы видимая «другая» строка.
 
 import 'package:flutter/material.dart';
 
 import '../../../models/source_chain.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../../widgets/reorder_grab_strip.dart';
 
-class ChainsSection extends StatelessWidget {
-  const ChainsSection({
+class ChainEntryTile extends StatelessWidget {
+  const ChainEntryTile({
     super.key,
-    required this.chains,
+    required this.chain,
+    required this.dragIndex,
     required this.onTap,
     required this.onToggle,
   });
 
-  final List<SourceChain> chains;
-  final void Function(SourceChain chain) onTap;
-  final void Function(SourceChain chain) onToggle;
+  final SourceChain chain;
+
+  /// Индекс в `ReorderableListView` для drag-старта (§098) — тот же счёт, что
+  /// у подписок: список общий.
+  final int dragIndex;
+  final VoidCallback onTap;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
-    if (chains.isEmpty) return const SizedBox.shrink();
     final cs = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
-          child: Text(getLocalText.s("Hop chains"),
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurfaceVariant)),
+    final tile = ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: SizedBox(
+        width: 40,
+        child: Switch(
+          value: chain.enabled,
+          onChanged: (_) => onToggle(),
         ),
-        for (final c in chains)
-          ListTile(
-            dense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-            leading: SizedBox(
-              width: 40,
-              child: Switch(
-                value: c.enabled,
-                onChanged: (_) => onToggle(c),
-              ),
+      ),
+      title: Text(
+        chain.displayLabel,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: chain.enabled ? null : cs.onSurfaceVariant,
+        ),
+      ),
+      // Тег + число позиций: тег — то, чем цепочка зовётся в конфиге и в
+      // фильтрах Направлений, число хопов — единственное, что отличает
+      // маршруты друг от друга с одного взгляда.
+      subtitle: Text(
+        '${chain.tag} · ${getLocalText.plural("%d hops", chain.hops.length)}',
+        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+      ),
+      trailing: Icon(Icons.route, size: 20, color: cs.onSurfaceVariant), // §393 — route: цепочка = маршрут (alt_route — развилка, смысл Направления)
+      onTap: onTap,
+    );
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ReorderGrabStrip(index: dragIndex),
+          Expanded(
+            child: Column(
+              children: [
+                tile,
+                const Divider(height: 1),
+              ],
             ),
-            title: Text(
-              c.displayLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: c.enabled ? null : cs.onSurfaceVariant,
-              ),
-            ),
-            // Тег + число позиций: тег — то, чем цепочка зовётся в конфиге и
-            // в фильтрах Направлений, число хопов — единственное, что
-            // отличает маршруты друг от друга с одного взгляда.
-            subtitle: Text(
-              '${c.tag} · ${getLocalText.plural("%d hops", c.hops.length)}',
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-            ),
-            trailing: Icon(Icons.alt_route,
-                size: 20, color: cs.onSurfaceVariant),
-            onTap: () => onTap(c),
           ),
-        Divider(height: 1, color: cs.outlineVariant),
-      ],
+        ],
+      ),
     );
   }
 }
