@@ -308,6 +308,31 @@ DELETE /chains/{tag}[?rebuild=true]              Remove. Positions of OTHER chai
                                                  route) — the build degrades such a chain as a whole
                                                  ("chain_hop_missing"). The response lists them in
                                                  "dangling_refs":[tag,...].
+GET    /chains/{tag}/probe[?url=&timeout_ms=]    Layer-by-layer probe: what EACH hop of the route costs.
+
+Layer probe measures PREFIXES, not hops: position i is unreachable except
+through i-1, so a hop's price is always a subtraction of two neighbouring
+measurements, never a measurement of its own. Layer k is addressed by the tag
+the CORE registers for it — `<chain>#<k>` (protocol/chain, `hopTag`) — the
+same scheme the desktop launcher uses (`config.ChainLayerTag`), so a probe
+reads the same on both apps.
+
+Needs a RUNNING VPN (409 otherwise): those `#k` tags exist only in the running
+core, and chain positions reference tags of the BUILT config, so there is no
+way to raise a probe-only session for a chain the way single nodes do.
+Positions come from the built config, not from storage — the core runs what
+was built, and a chain edited without a rebuild is a different route.
+Sequential by construction; worst case positions × timeout_ms, so lower
+timeout_ms on long chains to stay inside the 30s request timeout. Defaults for
+url/timeout_ms are the global ping_options — the same budget as the node test.
+Response: {layers:[{pos, tag, probe_tag, cumulative_ms?, delta_ms?, error?,
+not_reached?}]}. cumulative_ms is the whole path up to that hop; delta_ms is
+what that hop added (absent when it cannot be computed: first layer, or a
+broken neighbour — a zero would read as "this hop is free"). The first layer
+that fails carries the CORE's own text, and every layer behind it is
+not_reached: the packet does not get there, so measuring them would spend the
+budget proving what is already known. 409 also when the chain is not in the
+built config at all (disabled, degraded at build time, never built).
 
 Writes go through the SAME validation gate as the edit form (`sing-box check`
 does NOT catch chain start-up errors — a config with tls.utls stripped off a
@@ -604,6 +629,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/chains', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"tag":"...","label":"..."} + any PATCH field', 'description': 'Create chain → 201. No tag → first free chain-N. Tag is checked against BOTH chains and directions; rejected → 409 with the machine reason: empty|reserved|duplicate|auto_twin. A body without hops creates an empty chain (same as the UI).'},
     {'method': 'PATCH', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite}', 'description': 'Partial update. tag is immutable (400). hops = positions in PACKET order ([0] = first hop from the client). strip_evasion is a tristate: omit = keep, null = core default, bool = explicit. strip replaces the map, keys only tls.fragment|multiplex.padding|xhttp.padding|tls.utls. rewrite = RFC 7396 merge-patch per outbound type, kept verbatim. Writes pass the same gate as the edit form; a blocking finding → 400 with its code: tooFewHops|emptyHop|duplicateHop|selfReference|nestedNotFirst|forwardChainReference|realityUtlsStripped|tagEmpty|tagTaken.'},
     {'method': 'DELETE', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove chain. Positions of other chains pointing at it are NOT cleaned (the build degrades such a chain as a whole, "chain_hop_missing"); the response lists them in "dangling_refs".'},
+    {'method': 'GET', 'path': '/chains/{tag}/probe', 'params': {'url': 'probe URL (default: global ping_options)', 'timeout_ms': 'per-layer budget (default: global ping_options)'}, 'description': 'Layer-by-layer probe: measures PREFIXES of the route (layer k = path from the client through position k) via the tag the core registers for it, "<chain>#<k>" — the same scheme as the launcher (config.ChainLayerTag). A hop price is the difference of neighbouring layers, never a measurement of its own. Needs a running VPN (409 otherwise): those tags exist only in the running core. Positions come from the BUILT config; 409 if the chain is not in it (disabled, degraded, never built). Sequential — worst case positions × timeout_ms. Response: layers[{pos, tag, probe_tag, cumulative_ms?, delta_ms?, error?, not_reached?}]; the first failing layer carries the core text and everything behind it is not_reached.'},
     // Folders CRUD (server folders)
     {'method': 'GET', 'path': '/folders', 'params': {'reveal': 'true|false (raw carries credentials, hidden by default)'}, 'description': 'List folder entries + members (members addressed by positional index)'},
     {'method': 'POST', 'path': '/folders', 'params': {'rebuild': 'true|false'}, 'body': '{"name":"..."}', 'description': 'Create empty folder → 201. Folder meta is edited via PATCH /subs/{id}.'},

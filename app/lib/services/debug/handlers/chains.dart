@@ -3,6 +3,7 @@ import '../../../models/source_chain.dart';
 import '../../../screens/chain_edit/chain_form_validation.dart';
 import '../../../screens/chain_edit/chain_hop_candidate.dart';
 import '../../../screens/chain_edit/chain_hop_targets.dart';
+import '../../probe/chain_layer_probe.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
@@ -57,7 +58,21 @@ Future<DebugResponse> chainsHandler(DebugRequest req, DebugContext ctx) async {
   }
 
   if (path.startsWith('/chains/')) {
-    final tag = path.substring('/chains/'.length);
+    var tag = path.substring('/chains/'.length);
+    // §394 — единственный под-ресурс цепочки: послойная проба. Разбираем до
+    // общей проверки «тег без слэша», иначе `/chains/{tag}/probe` уходил бы
+    // в 404 вместе с настоящим мусором.
+    if (tag.endsWith('/probe')) {
+      tag = tag.substring(0, tag.length - '/probe'.length);
+      if (tag.isEmpty || tag.contains('/')) {
+        throw NotFound('chains path: $path');
+      }
+      if (req.method != 'GET') {
+        throw BadRequest(
+            'method ${req.method} not allowed on /chains/{tag}/probe');
+      }
+      return _probe(tag, req, ctx);
+    }
     if (tag.isEmpty || tag.contains('/')) {
       throw NotFound('chains path: $path');
     }
@@ -70,6 +85,98 @@ Future<DebugResponse> chainsHandler(DebugRequest req, DebugContext ctx) async {
   }
 
   throw NotFound('chains path: $path');
+}
+
+/// §394 — чем хендлер меряет слои. Шов ради теста: прогон ходит в ядро через
+/// MethodChannel, которого в юнит-тесте нет, а проверять надо СВОЮ логику
+/// хендлера (404/409, форма ответа), не чужой транспорт.
+ChainLayerProbe Function() chainProbeFactory = ChainLayerProbe.new;
+
+/// §394 — `GET /chains/{tag}/probe` — послойная проба цепочки.
+///
+/// ТОТ ЖЕ прогон, что блок «Chain positions» вкладки Diagnostics, и намеренно
+/// тот же: инструмент автоматизации, который меряет иначе, чем экран,
+/// перестаёт быть инструментом отладки экрана.
+///
+/// Позиции берутся из ПОСЛЕДНЕГО СОБРАННОГО КОНФИГА, а не из записи storage:
+/// ядро запустило собранное, служебные теги `<chain>#<i>` регистрирует оно, и
+/// мерить надо работающий маршрут. Правленная без пересборки цепочка в
+/// storage — это другой маршрут, и проба по нему мерила бы позиции, которых в
+/// ядре нет (та же причина, по которой лаунчер спрашивает состав у ядра, а не
+/// у диска: `core/debugapi/chain_endpoints.go`).
+///
+/// Синхронный по ответу: worst-case `positions × timeout_ms` — прогон
+/// последовательный по построению (позиция i недостижима иначе как через
+/// i-1). При длинной цепочке снижайте `timeout_ms`, чтобы уложиться в
+/// request-timeout сервера (30с).
+Future<DebugResponse> _probe(
+    String tag, DebugRequest req, DebugContext ctx) async {
+  final chains = await SettingsStorage.getChains();
+  if (!chains.any((c) => c.tag == tag)) throw NotFound('chain: $tag');
+
+  final config = ctx.home?.state.configModel ?? const ParsedConfig.empty();
+  final hops = chainHopsFromConfig(config[tag]?.raw);
+  if (hops == null) {
+    // Цепочка есть в storage, но узлом конфига не стала: выключена,
+    // деградировала при сборке (`chain_hop_missing` и родня) или конфиг ещё
+    // ни разу не собирался. Ни в одном из случаев её нет в ядре — мерить
+    // нечего, и 409 говорит это прямо, а не пустым списком слоёв.
+    throw Conflict('chain "$tag" is not in the built config — '
+        'it is disabled, degraded at build time, or the config was never '
+        'built; there is nothing running to probe');
+  }
+  if (hops.isEmpty) throw Conflict('chain "$tag" has no positions');
+
+  // Умолчания — те же `ping_options`, что у обычной пробы узла (их подставит
+  // сам прогон): расхождение с кнопкой теста сделало бы «почему цифры
+  // разные» ложной загадкой.
+  final url = req.q('url');
+  final timeoutMs = req.qInt('timeout_ms');
+  if (timeoutMs != null && timeoutMs <= 0) {
+    throw const BadRequest('query param "timeout_ms" must be > 0');
+  }
+
+  final ChainProbeReport report;
+  try {
+    report = await chainProbeFactory().run(tag, hops: hops,
+        url: url, timeoutMs: timeoutMs);
+  } on ChainProbeUnavailable catch (e) {
+    // Туннель выключен — служебных тегов позиций в рантайме нет. Это
+    // предусловие, а не сбой: агент включает VPN и повторяет.
+    if (e.isVpnDown) {
+      throw const Conflict(
+          'VPN is down — chain hops exist only in the running core');
+    }
+    throw Conflict('chain probe unavailable: ${e.reason}');
+  }
+
+  return JsonResponse({
+    'ok': true,
+    'action': 'chain-probe',
+    'tag': tag,
+    'url': report.url,
+    'timeout_ms': report.timeoutMs,
+    'layers': [
+      for (var i = 0; i < report.layers.length; i++)
+        {
+          'pos': report.layers[i].pos,
+          // Тег позиции и тег, которым слой спрашивался у ядра: второй —
+          // схема ядра (`<chain>#<i>`), и агент вправе повторить замер
+          // напрямую через /action/urltest.
+          'tag': report.layers[i].tag,
+          'probe_tag': report.layers[i].probeTag,
+          if (report.layers[i].ok)
+            'cumulative_ms': report.layers[i].cumulativeMs,
+          // Цена именно этого хопа: разность соседних префиксов. Ключа нет,
+          // когда её не вычислить (первый слой, обрыв рядом) — ноль читался
+          // бы как «хоп бесплатный».
+          if (report.deltaAt(i) != null) 'delta_ms': report.deltaAt(i),
+          if (report.layers[i].error.isNotEmpty)
+            'error': report.layers[i].error,
+          if (report.layers[i].notReached) 'not_reached': true,
+        },
+    ],
+  });
 }
 
 Future<DebugResponse> _list() async {

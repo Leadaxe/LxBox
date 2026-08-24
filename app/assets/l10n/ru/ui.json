@@ -425,11 +425,11 @@
       }
     }
   },
-  "%s copied": {
-    "value": "Скопировано: %s"
-  },
   "%s chain position(s) removed": {
     "value": "позиций цепочек убрано: %s"
+  },
+  "%s copied": {
+    "value": "Скопировано: %s"
   },
   "%s detour reference(s) reset to None": {
     "value": "detour-ссылок сброшено в None: %s"
@@ -974,6 +974,14 @@
   "Chain is longer than %d hops and was truncated.": {
     "value": "Цепочка длиннее %d звеньев — лишние отброшены."
   },
+  "Chain positions (%d)": {
+    "value": {
+      "one": "Позиций в цепочке: %d",
+      "few": "Позиций в цепочке: %d",
+      "many": "Позиций в цепочке: %d",
+      "other": "Позиций в цепочке: %d"
+    }
+  },
   "Chain target \"%s\" is a group, which cannot be used as a chain hop. The node connects directly.": {
     "value": "Цель цепочки «%s» — группа, а группа звеном быть не может. Узел подключается напрямую."
   },
@@ -1299,6 +1307,9 @@
   },
   "Credits": {
     "value": "Благодарности"
+  },
+  "Cumulative delay to each hop; (+X) is what that hop added.": {
+    "value": "Накопленная задержка до каждого хопа; (+X) — сколько добавил этот хоп."
   },
   "Custom": {
     "value": "Вручную"
@@ -2491,6 +2502,9 @@
   "Matches when traffic is on a selected network AND matches a selected L7 protocol.": {
     "value": "Совпадает, когда трафик идёт по выбранной сети И соответствует выбранному L7-протоколу."
   },
+  "Measuring…": {
+    "value": "Замеряю…"
+  },
   "Members": "Члены группы",
   "Members connect through their personal detours": {
     "value": "Члены папки подключаются через свои личные detour"
@@ -3137,6 +3151,12 @@
   },
   "Private source IP": {
     "value": "Приватный IP источника"
+  },
+  "Probe again": {
+    "value": "Замерить снова"
+  },
+  "Probe by position": {
+    "value": "Замерить по позициям"
   },
   "Process memory (RSS)": {
     "value": "Память процесса (RSS)"
@@ -3836,6 +3856,9 @@
   "Start the VPN to check this node from here, or open it from its subscription to check it with the VPN off.": {
     "value": "Включите VPN, чтобы проверить узел отсюда, или откройте его из подписки — там проверка работает и с выключенным VPN."
   },
+  "Start the VPN to probe this chain — its hops exist only in the running core.": {
+    "value": "Включите VPN, чтобы замерить эту цепочку: её хопы существуют только в работающем ядре."
+  },
   "State": {
     "value": "Состояние"
   },
@@ -4104,6 +4127,9 @@
   },
   "These route through this node:": {
     "value": "Через этот узел ходят:"
+  },
+  "This chain has no positions to probe.": {
+    "value": "В этой цепочке нет позиций для замера."
   },
   "This deletes the DNS cache (FakeIP allocations and cached responses).\n\n%s": {
     "value": "Кэш DNS будет удалён (выделения FakeIP и закэшированные ответы).\n\n%s"
@@ -4555,6 +4581,9 @@
   "err": {
     "value": "сбой"
   },
+  "error": {
+    "value": "ошибка"
+  },
   "file": {
     "value": "файл"
   },
@@ -4617,6 +4646,9 @@
   },
   "not found": {
     "value": "не найдено"
+  },
+  "not reached": {
+    "value": "не достигнут"
   },
   "of %d nodes": {
     "value": {

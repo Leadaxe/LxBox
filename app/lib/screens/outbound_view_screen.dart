@@ -7,9 +7,11 @@ import '../controllers/subscription_controller.dart';
 import '../models/direction.dart';
 import '../models/config_node.dart';
 import '../models/dependency_graph.dart';
+import '../services/probe/chain_layer_probe.dart';
 import '../services/runtime_chain.dart';
 import '../services/settings_storage.dart';
 import '../vpn/cc_channel.dart';
+import '../widgets/chain_positions_block.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/pool_view_dialog.dart';
 import 'owner_navigation.dart';
@@ -85,6 +87,12 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     final t = widget.config[widget.tag]?.type;
     return t == 'urltest' || t == 'selector';
   }
+
+  /// §394 — позиции цепочки из СОБРАННОГО конфига (`null` = узел не цепочка).
+  /// Оттуда, а не из списка источников: ядро запустило именно собранное, и
+  /// послойная проба обязана мерить работающий маршрут.
+  List<String>? get _chainHops =>
+      chainHopsFromConfig(widget.config[widget.tag]?.raw);
 
   @override
   void initState() {
@@ -224,7 +232,14 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
               // §392 — экран знает узел ТОЛЬКО по тегу собранного конфига
               // (NodeSpec тут нет), поэтому probe-ветка недоступна: при
               // выключенном VPN вкладка объяснит, откуда проверять.
-              NodeDiagnosticsTab(liveTag: widget.tag),
+              // §394 — у цепочки сверху свой блок: послойная проба.
+              NodeDiagnosticsTab(
+                liveTag: widget.tag,
+                header: _chainHops == null
+                    ? null
+                    : ChainPositionsBlock(
+                        chainTag: widget.tag, hops: _chainHops!),
+              ),
             ],
           ),
         ),
