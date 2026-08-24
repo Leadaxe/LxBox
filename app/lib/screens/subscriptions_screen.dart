@@ -355,8 +355,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final n = widget.subController.entries
         .where((e) => e.enabled)
         .fold<int>(0, (s, e) => s + e.nodeCount);
+    // Директива оператора 24.08 («поменял цепочку — конфиг не перестроился
+    // сам»): правка источников при живом туннеле применяется сама через
+    // in-place reload (§367-механика, туннель не рвётся), а не баннером
+    // «перезапустите VPN». Гейт canReload даёт connected + cooldown 3s —
+    // серия быстрых правок не устроит шторм перезагрузок: применится
+    // последняя по баннеру, как раньше.
+    final applied = widget.homeController.canReload;
+    if (applied) unawaited(widget.homeController.reloadVpn());
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(getLocalText.plural("Config regenerated: %d nodes", n)),
+      SnackBar(
+          content: Text(applied
+              ? getLocalText.plural("Config regenerated & applied: %d nodes", n)
+              : getLocalText.plural("Config regenerated: %d nodes", n)),
           duration: const Duration(seconds: 2)),
     );
   }
