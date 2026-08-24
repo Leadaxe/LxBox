@@ -467,7 +467,7 @@
         "tag": "block"
       }
     },
-    "channel": {
+    "direction": {
       "type": "selector",
       "include": [
         "direct",
@@ -487,7 +487,7 @@
       }
     }
   },
-  "default_channels": [
+  "default_directions": [
     {
       "tag": "vpn-1",
       "label": "VPN ①",

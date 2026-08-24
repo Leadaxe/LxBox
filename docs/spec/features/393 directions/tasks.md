@@ -20,7 +20,7 @@
       НЕ ТРОГАТЬ IPC/сетевые каналы: `MethodChannel`/`EventChannel`,
       `cc_channel.dart`, `platform_channels.dart` — сетевой смысл слова
       остаётся (решение оператора о терминологии)
-- [ ] A2. Storage: ключ `channels` → `directions`, маркер `channels_migrated`
+- [x] A2. Storage: ключ `channels` → `directions`, маркер `channels_migrated`
       → `directions_migrated`; one-shot миграция channels→directions с
       УДАЛЕНИЕМ легаси-ключей; порядок restore→migrate (внутренний бэкап
       восстанавливает старый файл со старыми ключами → миграция обязана

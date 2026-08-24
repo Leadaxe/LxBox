@@ -202,7 +202,7 @@ class DirectionAuto {
 }
 
 /// Пользовательское Направление роутинга. Хранится в `directions[]`. На первом запуске
-/// seeded из `template.groupTemplates` (`default_channels` + json-ключ `channel`-шаблона;
+/// seeded из `template.groupTemplates` (`default_directions` + `direction`-шаблон;
 /// см. миграцию, §267).
 class Direction {
   const Direction({
@@ -370,7 +370,7 @@ class Direction {
         'detour': isDetour, // §248
       };
 
-  /// §267 — seed-Направление из `default_channels[i]` + общего json-шаблона `channel`
+  /// §267 — seed-Направление из `default_directions[i]` + общего шаблона `direction`
   /// (миграция first-run). `auto` берётся снаружи (нужен доступ к urltest-vars),
   /// здесь — только структурные поля. `include` содержит role-ключи
   /// `magic_nodes` (`direct`/`auto`/`block`) — это роли, НЕ теги. См.

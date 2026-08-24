@@ -4,7 +4,7 @@ import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/template_loader.dart' show assertMagicNodeMirrors;
 
-/// §267 — парсинг `group_templates` + `magic_nodes` + `default_channels`,
+/// §267 — парсинг `group_templates` + `magic_nodes` + `default_directions`,
 /// хелпер `resolveTpl`, инвариант зеркал `assertMagicNodeMirrors`.
 void main() {
   group('GroupTemplates.fromJson', () {
@@ -18,7 +18,7 @@ void main() {
         'direct': {'title': 'Direct', 'source': 'preset', 'tag': 'direct-out'},
         'block': {'title': 'Block', 'source': 'preset', 'tag': 'block'},
       },
-      'channel': {
+      'direction': {
         'type': 'selector',
         'include': ['direct', 'auto'],
         'options': {'interrupt_exist_connections': true},
@@ -68,7 +68,7 @@ void main() {
       expect(gt.auto.options['url'], '@urltest_url');
     });
 
-    test('default_channels: tag/label/default_enabled', () {
+    test('default_directions: tag/label/default_enabled', () {
       final gt = GroupTemplates.fromJson(gtJson, dcJson);
       expect(gt.defaultDirections.map((d) => d.tag), ['vpn-1', 'vpn-2']);
       expect(gt.defaultDirections[0].defaultEnabled, true);

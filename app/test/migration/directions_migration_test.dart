@@ -8,7 +8,10 @@ import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
-/// §125 F0.3 — миграция enabled_groups[] → directions[] (one-shot seed из template).
+/// §125 F0.3 / §393 A2 — one-shot миграция состава Направлений:
+/// легаси `channels`/`channels_migrated` → `directions`/`directions_migrated`
+/// с УДАЛЕНИЕМ легаси-пары; на чистой установке — seed из template
+/// (legacy-цепочка `enabled_groups[]` сохранена).
 ///
 /// Harness идентичен settings_storage_test.dart: mock path_provider + изоляция
 /// tmp-dir + resetCacheForTesting между прогонами.
@@ -18,8 +21,8 @@ void main() {
 
   String mainPath() => '${tmp.path}/lxbox_settings.json';
 
-  // §267 — group_templates: общий json-шаблон `channel` (direct+auto) для всех Направлений
-  // + default_channels vpn-1/vpn-2/vpn-3 + auto-подгруппа. Все Направления одинаковы
+  // §267 — group_templates: общий шаблон `direction` (direct+auto) для всех Направлений
+  // + default_directions vpn-1/vpn-2/vpn-3 + auto-подгруппа. Все Направления одинаковы
   // (единый include), в отличие от старой per-group add_outbounds.
   GroupTemplates template() => GroupTemplates(
         direction: DirectionTemplate(
@@ -62,6 +65,11 @@ void main() {
     } catch (_) {}
   });
 
+  /// Сырой `lxbox_settings.json` с диска — миграция §393 A2 проверяется по
+  /// НАЛИЧИЮ/ОТСУТСТВИЮ ключей, а не только по видимым Направлениям.
+  Future<Map<String, dynamic>> readFile() async =>
+      jsonDecode(await File(mainPath()).readAsString()) as Map<String, dynamic>;
+
   Future<void> seedFile(Map<String, dynamic> data) async {
     await File(mainPath()).writeAsString(jsonEncode(data));
     SettingsStorage.resetCacheForTesting();
@@ -72,7 +80,7 @@ void main() {
     await SettingsStorage.migrateDirectionsIfNeeded(template());
 
     final directions = await SettingsStorage.getDirections();
-    // §267 — default_channels vpn-1/2/3 → 3 Направления (auto не Направление — подгруппа).
+    // §267 — default_directions vpn-1/2/3 → 3 Направления (auto не Направление — подгруппа).
     expect(directions.map((c) => c.tag), ['vpn-1', 'vpn-2', 'vpn-3']);
 
     final vpn1 = directions.firstWhere((c) => c.tag == 'vpn-1');
@@ -84,9 +92,9 @@ void main() {
     expect(vpn1.auto!.interruptExistConnections, false);
     expect(vpn1.interruptExistConnections, true);
 
-    // §267 — все Направления собираются из общего json-шаблона `channel` (единый include),
+    // §267 — все Направления собираются из общего шаблона `direction` (единый include),
     // поэтому includeDirect/auto одинаковы у всех; различаются только
-    // tag/label/enabled из default_channels.
+    // tag/label/enabled из default_directions.
     final vpn2 = directions.firstWhere((c) => c.tag == 'vpn-2');
     expect(vpn2.enabled, false); // defaultEnabled false
     expect(vpn2.includeDirect, true);
@@ -175,7 +183,7 @@ void main() {
 
   test('directions уже есть → миграция no-op', () async {
     await seedFile({
-      'channels': [
+      'directions': [
         {'tag': 'vpn-1', 'label': 'Custom', 'enabled': true},
       ],
     });
@@ -184,6 +192,145 @@ void main() {
     final directions = await SettingsStorage.getDirections();
     expect(directions.length, 1);
     expect(directions.first.label, 'Custom'); // не перезаписано template'ом
+  });
+
+  // -------------------------------------------------------------------------
+  // §393 A2 — переименование storage-ключа. Ветки миграции по порядку проверки.
+  // -------------------------------------------------------------------------
+  group('§393 A2 legacy-ключи', () {
+    test('fresh-seed кладёт directions + directions_migrated, легаси нет',
+        () async {
+      await seedFile({});
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      final raw = await readFile();
+      expect(raw['directions'], isA<List>());
+      expect(raw['directions_migrated'], true);
+      expect(raw.containsKey('channels'), isFalse);
+      expect(raw.containsKey('channels_migrated'), isFalse);
+    });
+
+    test('channels → directions: список идентичен, легаси-пара удалена',
+        () async {
+      // Апгрейд с досборки §393: данные лежат под старым ключом.
+      final legacy = [
+        {
+          'tag': 'vpn-1',
+          'label': 'Мой первый',
+          'enabled': true,
+          'include_direct': true,
+          'node_filter': 'DE|NL',
+        },
+        {'tag': 'vpn-2', 'label': 'Стриминг', 'enabled': false},
+      ];
+      await seedFile({
+        'channels': legacy,
+        'channels_migrated': true,
+        'route_final': 'vpn-2',
+      });
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      final raw = await readFile();
+      // Данные перенесены ДОСЛОВНО — не пере-сеяны из шаблона.
+      expect(raw['directions'], legacy);
+      expect(raw['directions_migrated'], true);
+      expect(raw.containsKey('channels'), isFalse);
+      expect(raw.containsKey('channels_migrated'), isFalse);
+      // Соседние ключи не тронуты.
+      expect(raw['route_final'], 'vpn-2');
+
+      final directions = await SettingsStorage.getDirections();
+      expect(directions.map((c) => c.tag), ['vpn-1', 'vpn-2']);
+      expect(directions[0].label, 'Мой первый');
+      expect(directions[0].nodeFilter, 'DE|NL');
+      expect(directions[1].enabled, false);
+    });
+
+    test('channels без channels_migrated (прерванная установка) тоже переносится',
+        () async {
+      await seedFile({
+        'channels': [
+          {'tag': 'vpn-1', 'label': 'Only', 'enabled': true},
+        ],
+      });
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      final raw = await readFile();
+      expect((raw['directions'] as List), hasLength(1));
+      expect(raw['directions_migrated'], true);
+      expect(raw.containsKey('channels'), isFalse);
+    });
+
+    test('мигрировано-пусто: channels_migrated без channels → НЕ пересеивать',
+        () async {
+      // Юзер осознанно вычистил список; пере-seed воскресил бы удалённое.
+      await seedFile({'channels_migrated': true});
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      expect(await SettingsStorage.getDirections(), isEmpty);
+      final raw = await readFile();
+      expect(raw['directions_migrated'], true);
+      expect(raw.containsKey('channels_migrated'), isFalse);
+      expect(raw.containsKey('directions'), isFalse);
+    });
+
+    test('directions_migrated без directions → тоже не пересеивать', () async {
+      await seedFile({'directions_migrated': true});
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+      expect(await SettingsStorage.getDirections(), isEmpty);
+    });
+
+    test('хвост легаси рядом с новым ключом вычищается', () async {
+      // Прерванный между записями апгрейд: новый список уже есть, легаси висит.
+      await seedFile({
+        'directions': [
+          {'tag': 'vpn-1', 'label': 'New', 'enabled': true},
+        ],
+        'channels': [
+          {'tag': 'vpn-9', 'label': 'Stale', 'enabled': true},
+        ],
+        'channels_migrated': true,
+      });
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      final raw = await readFile();
+      expect(raw.containsKey('channels'), isFalse);
+      expect(raw.containsKey('channels_migrated'), isFalse);
+      expect(raw['directions_migrated'], true);
+      // Новый список — победитель, легаси не воскрешает vpn-9.
+      final directions = await SettingsStorage.getDirections();
+      expect(directions.map((c) => c.tag), ['vpn-1']);
+    });
+
+    test('legacy-цепочка enabled_groups: старейшая установка сеется по ней',
+        () async {
+      // Ни directions, ни channels* — только enabled_groups. Путь через seed.
+      await seedFile({
+        'enabled_groups': ['vpn-3'],
+      });
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      final directions = await SettingsStorage.getDirections();
+      expect(directions.firstWhere((c) => c.tag == 'vpn-1').enabled, true);
+      expect(directions.firstWhere((c) => c.tag == 'vpn-2').enabled, false);
+      expect(directions.firstWhere((c) => c.tag == 'vpn-3').enabled, true);
+      final raw = await readFile();
+      expect(raw['directions_migrated'], true);
+      expect(raw.containsKey('channels'), isFalse);
+    });
+
+    test('второй вызов после переноса — no-op (идемпотентность)', () async {
+      await seedFile({
+        'channels': [
+          {'tag': 'vpn-1', 'label': 'Keep', 'enabled': true},
+        ],
+      });
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+      // Юзер удалил всё после миграции.
+      await SettingsStorage.setDirections(const []);
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+      expect(await SettingsStorage.getDirections(), isEmpty);
+    });
   });
 
   group('CRUD после миграции', () {

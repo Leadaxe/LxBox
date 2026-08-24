@@ -47,8 +47,8 @@ void main() {
   /// custom-rule, чей outbound='vpn-3'. resetCache, чтобы читалось с диска.
   Future<void> seedRefsOnVpn3() async {
     final data = {
-      'channels_migrated': true,
-      'channels': [
+      'directions_migrated': true,
+      'directions': [
         Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
@@ -120,8 +120,8 @@ void main() {
     // route_final='vpn-1', rule outbound='vpn-1'; выключаем vpn-3 → ничего не
     // должно поменяться (heal матчит только выключаемый тег).
     final data = {
-      'channels_migrated': true,
-      'channels': [
+      'directions_migrated': true,
+      'directions': [
         Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
@@ -151,8 +151,8 @@ void main() {
   /// указывает на vpn-3 (+второй var, который heal терять не должен).
   Future<void> seedPresetOverrideOnVpn3() async {
     final data = {
-      'channels_migrated': true,
-      'channels': [
+      'directions_migrated': true,
+      'directions': [
         Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
@@ -200,8 +200,8 @@ void main() {
     // Нет ключа 'outbound' → template-решение as is (spec §033); heal не
     // должен превращать «юзер не трогал пикер» в явный override на vpn-1.
     final data = {
-      'channels_migrated': true,
-      'channels': [
+      'directions_migrated': true,
+      'directions': [
         Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],

@@ -53,8 +53,8 @@ void main() {
   /// (член с bare-тегом 'vpn-3': её ссылки — интра, heal их не трогает).
   Future<void> seedDetourRefsOnVpn3({bool vpn3Detour = true}) async {
     final data = {
-      'channels_migrated': true,
-      'channels': [
+      'directions_migrated': true,
+      'directions': [
         const Direction(tag: 'vpn-1', label: 'Main').toJson(),
         Direction(tag: 'vpn-3', label: 'Relay', isDetour: vpn3Detour).toJson(),
       ],
@@ -170,8 +170,8 @@ void main() {
   group('§274 — flag-set НЕ лечит rules-ссылки', () {
     Future<void> seedRulesRefsOnVpn3({String routeFinal = 'vpn-3'}) async {
       final data = {
-        'channels_migrated': true,
-        'channels': [
+        'directions_migrated': true,
+        'directions': [
           const Direction(tag: 'vpn-1', label: 'Main').toJson(),
           const Direction(tag: 'vpn-3', label: 'Aux').toJson(),
         ],

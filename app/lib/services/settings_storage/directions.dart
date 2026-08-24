@@ -18,13 +18,13 @@ typedef DirectionHealResult = ({int rules, int detours});
 
 Future<List<Direction>> _getDirections() async {
   final data = await _load();
-  final raw = data['channels'] as List<dynamic>? ?? const [];
+  final raw = data['directions'] as List<dynamic>? ?? const [];
   return raw.whereType<Map<String, dynamic>>().map(Direction.fromJson).toList();
 }
 
 Future<void> _setDirections(List<Direction> directions, {bool flush = true}) async {
   final data = await _load();
-  data['channels'] = directions.map((c) => c.toJson()).toList();
+  data['directions'] = directions.map((c) => c.toJson()).toList();
   SettingsStorage._cache = data;
   SettingsStorage.markConfigDirty(); // §113 — config-significant
   if (flush) await _save();
@@ -168,27 +168,123 @@ Future<int> _healDetourDirectionRefs(String tag) async {
 }
 
 // ---------------------------------------------------------------------------
-// §125 F0.3 — Миграция enabled_groups[] → directions[] (one-shot, first-run seed).
+// §125 F0.3 / §393 A2 — one-shot миграция состава Направлений.
 //
-// Guard-ключ `channels_migrated` (паттерн `_hasDefaultsSeeded`). Принимает
-// template.groupTemplates параметром (storage-слой не знает про template —
-// вызывается из main() init с готовым шаблоном). Идемпотентна: повторный вызов
-// при уже существующем `directions` или поднятом флаге — no-op.
+// Единственная функция, знающая про легаси-ключи (`channels`/`channels_migrated`,
+// `enabled_groups`). Всё остальное в файле читает/пишет ТОЛЬКО `directions` +
+// `directions_migrated` — §393 L7 «полная чистота, включая данные».
 //
-// §267 — сид собирается из `default_channels` (плоский список tag/label/enabled)
-// + общего json-шаблона `channel`; auto-подгруппа заводится когда `direction.include`
-// содержит роль `auto`. Раньше итерировали `preset_groups` со скипом ✨auto —
-// теперь auto больше не «Направление в списке», костыль-скип ушёл.
+// Четыре ветки (в порядке проверки):
+//   1. `directions` есть            → no-op (нормальный второй и далее запуск);
+//   2. `channels` есть              → переносим список под `directions`, легаси-
+//      пару УДАЛЯЕМ, ставим `directions_migrated` (апгрейд с A1-и-раньше);
+//   3. `channels_migrated == true`  → мигрировано-и-опустошено (юзер удалил все
+//      Направления кроме… либо список вычистили): НЕ пересеивать, только
+//      перештамповать маркер и снести легаси;
+//   4. иначе                        → чистая установка ИЛИ старейшая, где есть
+//      только `enabled_groups`: seed из template (legacy-цепочка сохранена
+//      целиком — `getEnabledGroups()` ниже), затем `directions_migrated`.
+//
+// §267 — сид собирается из `default_directions` (плоский список tag/label/enabled)
+// + общего json-шаблона `direction`; auto-подгруппа заводится когда
+// `direction.include` содержит роль `auto`.
+//
+// Идемпотентна: любой повторный вызов после любой ветки уходит в ветку 1 или 3.
+// Зовётся на старте (main() init) ДО первого чтения Направлений и ПОСЛЕ restore
+// внутреннего бэкапа (`BackupService.applyImport` — старый архив приносит
+// легаси-пару в storage, §393 A2 порядок restore→migrate).
 // ---------------------------------------------------------------------------
+
+/// Легаси-ключ состава Направлений (до §393 A2). Живёт ТОЛЬКО в старом
+/// storage-файле на диске (upgrade-путь) — читается и УДАЛЯЕТСЯ миграцией.
+/// В storage через импорт попасть не может: границы импорта нормализуют имя
+/// через [normalizeLegacyDirectionKeys].
+const kLegacyDirectionsKey = 'channels';
+
+/// Легаси-guard one-shot миграции (до §393 A2). Тот же контракт, что и
+/// [kLegacyDirectionsKey].
+const kLegacyDirectionsMigratedKey = 'channels_migrated';
+
+/// §393 A2 — нормализация легаси-имён НА ГРАНИЦЕ импорта (внутренний бэкап,
+/// Debug API `/backup/import`): `channels`→`directions`,
+/// `channels_migrated`→`directions_migrated`.
+///
+/// Зачем именно на границе. Merge-upsert `replaceRaw` сливает ПО ИМЕНИ ключа:
+/// старый архив с `channels` ложился РЯДОМ с живым `directions`, а
+/// ветка-уборщик миграции затем выбрасывала свежевосстановленные данные как
+/// «хвост прерванного апгрейда» — состояния неразличимы по содержимому
+/// (adversarial-ревью A2: молчаливая потеря Направлений на дефолтном
+/// merge-restore). После нормализации коллизия происходит по одному имени и
+/// архив честно побеждает, а легаси-имена в storage не попадают вовсе.
+/// Новое имя в raw сильнее легаси (патологический вход с обоими).
+Map<String, dynamic> normalizeLegacyDirectionKeys(Map<String, dynamic> raw) {
+  if (!raw.containsKey(kLegacyDirectionsKey) &&
+      !raw.containsKey(kLegacyDirectionsMigratedKey)) {
+    return raw;
+  }
+  final out = Map<String, dynamic>.from(raw);
+  final legacy = out.remove(kLegacyDirectionsKey);
+  if (legacy != null && !out.containsKey('directions')) {
+    out['directions'] = legacy;
+  }
+  final legacyMarker = out.remove(kLegacyDirectionsMigratedKey);
+  if (legacyMarker != null && !out.containsKey('directions_migrated')) {
+    out['directions_migrated'] = legacyMarker;
+  }
+  return out;
+}
 
 Future<void> _migrateDirectionsIfNeeded(
   GroupTemplates gt, {
   Map<String, String> varDefaults = const {},
 }) async {
   final data = await _load();
-  if (data['channels'] is List) return; // уже есть — не трогаем
-  if (data['channels_migrated'] == true) return; // мигрировано (пусто) — не пересеивать
 
+  // 1. Уже на новом ключе — не трогаем (самый частый путь).
+  if (data['directions'] is List) {
+    // Хвост от прерванного между записями апгрейда: легаси-пара могла остаться.
+    // ЕДИНСТВЕННЫЙ источник такой картинки: импорт легаси-имена в storage не
+    // пропускает ([normalizeLegacyDirectionKeys] на границах) — уборка тут
+    // безопасна и не может съесть восстановленный архив.
+    if (data.containsKey(kLegacyDirectionsKey) ||
+        data.containsKey(kLegacyDirectionsMigratedKey)) {
+      data.remove(kLegacyDirectionsKey);
+      data.remove(kLegacyDirectionsMigratedKey);
+      data['directions_migrated'] = true;
+      SettingsStorage._cache = data;
+      await _save();
+    }
+    return;
+  }
+
+  // 2. Легаси-список → переносим ДОСЛОВНО (Direction.fromJson/toJson тут не
+  //    нужен: A1 сохранил форму записи, перекладываем сырой JSON — никаких
+  //    потерь на неизвестных полях будущих версий).
+  final legacy = data[kLegacyDirectionsKey];
+  if (legacy is List) {
+    data['directions'] = legacy;
+    data.remove(kLegacyDirectionsKey);
+    data.remove(kLegacyDirectionsMigratedKey);
+    data['directions_migrated'] = true;
+    SettingsStorage._cache = data;
+    await _save();
+    return;
+  }
+
+  // 3. Мигрировано-и-пусто: список Направлений отсутствует ОСОЗНАННО. Пере-сеять
+  //    из шаблона = воскресить удалённое, поэтому только штампуем новый маркер.
+  if (data[kLegacyDirectionsMigratedKey] == true ||
+      data['directions_migrated'] == true) {
+    data.remove(kLegacyDirectionsKey);
+    data.remove(kLegacyDirectionsMigratedKey);
+    data['directions_migrated'] = true;
+    SettingsStorage._cache = data;
+    await _save();
+    return;
+  }
+
+  // 4. Seed из template. Legacy-цепочка `enabled_groups[]` сохранена: старейшие
+  //    установки имеют ТОЛЬКО её, и она задаёт enabled вместо defaultEnabled.
   final enabled = await SettingsStorage.getEnabledGroups(); // legacy set
   final hasAuto = gt.direction.include.contains('auto');
   final directions = <Direction>[];
@@ -203,8 +299,10 @@ Future<void> _migrateDirectionsIfNeeded(
         Direction.seedFromDefault(dc, gt.direction, enabled: isEnabled, auto: auto));
   }
 
-  data['channels'] = directions.map((c) => c.toJson()).toList();
-  data['channels_migrated'] = true;
+  data['directions'] = directions.map((c) => c.toJson()).toList();
+  data.remove(kLegacyDirectionsKey);
+  data.remove(kLegacyDirectionsMigratedKey);
+  data['directions_migrated'] = true;
   SettingsStorage._cache = data;
   await _save();
 }

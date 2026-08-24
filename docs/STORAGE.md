@@ -118,8 +118,8 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ route_idle_suspend            string        §215/§128 — idle-suspend threshold (route.lx_idle_suspend);
 │                                                a duration ("30s"/"5m"), default "30s" (ENABLED), "" = off; config-significant
 ├─ excluded_nodes[]              list          §125 cleanup, DEPRECATED — the global node filter (§048) is gone; safe debris
-├─ enabled_groups[]              list          §125 DEPRECATED — read only by the channels[] migration. Safe debris.
-├─ channels[]                    list          §125 — routing channels (template→storage). See below.
+├─ enabled_groups[]              list          §125 DEPRECATED — read only by the directions[] migration. Safe debris.
+├─ directions[]                  list          §125 — routing directions (template→storage). See below.
 │   └─ <item>                    object
 │       ├─ tag                   string        the system's immutable id 'vpn-1'..'vpn-10' (auto-generated; vpn-1 cannot be deleted)
 │       ├─ label                 string        the display name (entered by the user)
@@ -138,7 +138,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │           ├─ interrupt_exist_connections  bool  urltest.interrupt_exist_connections
 │           ├─ mode              string        §208 — 'least_test' (default) | 'round_robin'
 │           └─ balancer          object{3 keys}  §208 — {pool, pool_tolerance, sticky_hash[]}
-├─ channels_migrated             bool          §125 — the guard for the one-shot enabled_groups→channels migration
+├─ directions_migrated           bool          §125/§393 — the guard for the one-shot directions migration
 ├─ last_global_update            ISO-8601      the timestamp of the last auto-refresh
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
 ├─ preset_ids_remapped           bool          §228 legacy guard (remapping renamed preset_id). The migration was removed in §229; the key is inert
@@ -215,9 +215,9 @@ Android SharedPreferences:
   "route_final":        "<tag>",   // override route.final
   "route_idle_suspend": "30s",     // §215/§128 — idle-suspend threshold (default "30s"; "" = off)
   "excluded_nodes":     [ … ],     // §125 cleanup, DEPRECATED (the global node filter is gone)
-  "enabled_groups":     [ … ],     // §125 DEPRECATED (read only by the channels[] migration)
-  "channels":           [ … ],     // §125 — routing channels (template→storage)
-  "channels_migrated":  true,      // §125 — the guard for the enabled_groups→channels migration
+  "enabled_groups":     [ … ],     // §125 DEPRECATED (read only by the directions[] migration)
+  "directions":         [ … ],     // §125 — routing directions (template→storage)
+  "directions_migrated": true,     // §125/§393 — the guard for the one-shot directions migration
   "last_global_update": "ISO-8601",// the last auto-refresh of subscriptions
   "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
   "interrupt_connections_on_switch": false, // §143 — tear down the group's conns on a node switch (NOT config-significant)
@@ -926,12 +926,12 @@ setting.
 
 ---
 
-## `channels` — [§125], the routing channels (template→storage)
+## `directions` — [§125], the routing directions (template→storage)
 
 The channels (`vpn-1..vpn-10`) moved out of the static `wizard_template.json`
-(§267 — `group_templates` plus `default_channels`; before §267 it was `preset_groups[]`)
+(§267 — `group_templates` plus `default_directions`; before §267 it was `preset_groups[]`)
 and into storage. The template became a **seed** — the defaults for the first launch.
-After the migration the set of channels lives in `channels[]` and is edited by the user
+After the migration the set of directions lives in `directions[]` and is edited by the user
 (Routing → the Channels tab → the channel editor).
 
 - `tag` is the **system's immutable** id (`vpn-1`..`vpn-10`), generated on creation
@@ -981,13 +981,27 @@ After the migration the set of channels lives in `channels[]` and is edited by t
   option). The builder also writes a warning into the config banner (§200) when the
   subscription did have nodes. `block` is always present in `config.outbounds[]` as a
   system outbound and is valid as a `route_final`.
-- **The migration** (one-shot, guarded by `channels_migrated`) seeds from
-  `template.groupTemplates` (§267): `default_channels[i].default_enabled` or the legacy
-  `enabled_groups[]` become `enabled` (vpn-1 is forced to true); `channel.include ∋
-  direct` becomes `include_direct`; `channel.include ∋ auto` becomes `auto` from the
+- **The migration** (one-shot, guarded by `directions_migrated`) seeds from
+  `template.groupTemplates` (§267): `default_directions[i].default_enabled` or the legacy
+  `enabled_groups[]` become `enabled` (vpn-1 is forced to true); `direction.include ∋
+  direct` becomes `include_direct`; `direction.include ∋ auto` becomes `auto` from the
   auto template (the `@urltest_*` vars); and `default_filter` is `''`. The global
-  `✨auto` preset is **not** migrated (it is no longer a channel — each channel makes
+  `✨auto` preset is **not** migrated (it is no longer a direction — each direction makes
   its own twin). `enabled_groups[]` is deprecated once the migration has run.
+- **§393 A2 — the key rename.** The list used to live under `channels` with the guard
+  `channels_migrated`. The same one-shot migration now moves it verbatim to
+  `directions`/`directions_migrated` and **deletes** the legacy pair. Branches, in the
+  order they are checked: `directions` present → no-op; `channels` present → move and
+  delete; `channels_migrated == true` with no list → migrated-and-empty, stamp the new
+  marker but do **not** re-seed; otherwise → seed from the template. The legacy pair
+  is **not** in any allowlist: import boundaries (internal backup `applyImport` and
+  Debug API `/backup/import`) rename it via `normalizeLegacyDirectionKeys` **before**
+  `replaceRaw`, so the merge-upsert collides on the single `directions` name and the
+  archive honestly wins over live data (before this, a legacy archive restored in the
+  default merge mode landed *next to* live `directions` and was silently swallowed by
+  the migration's janitor branch). `applyImport` still runs the migration right after
+  `replaceRaw` — it covers the fresh-seed case when the archive carried no directions
+  at all. Export writes the new names only.
 - **Reference degradation** (healing): once a channel stops being a valid target of a
   given kind, references of that kind are healed straight in storage, **irreversibly**
   (§202 decision B, extended by §248 and adjusted by §274). Rule references
@@ -1023,7 +1037,7 @@ Specs: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20con
 | `route_final` | `String` | An override of `route.final` on top of the template (the chosen default outbound). `''` means the template default. A dangling reference (a deleted channel, or the legacy ✨auto) becomes `vpn-1` at build time (§125). |
 | `route_idle_suspend` | `String` | §215/§128 — the idle-suspend threshold (`route.lx_idle_suspend`, kernel SPEC 020). A duration string (`'30s'` / `'5m'`), **default `'30s'`** (enabled since v2.8.2); `''` means off (the field is not emitted into route). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend` / `saveIdleSuspend`. |
 | `excluded_nodes` | `List<String>` | §125 cleanup, **DEPRECATED** — the global node filter (§048) was removed along with its screen. The key stays in the allowlist (harmless legacy debris); the per-channel `node_filter` (§125) covers filtering now. |
-| `enabled_groups` | `List<String>` | §125, **DEPRECATED** — replaced by `channels[]`. Read only by the one-shot migration; on disk it is harmless debris. |
+| `enabled_groups` | `List<String>` | §125, **DEPRECATED** — replaced by `directions[]`. Read only by the one-shot migration; on disk it is harmless debris. |
 | `last_global_update` | `String` (ISO-8601) | The timestamp of the last successful auto-refresh of all subscriptions. |
 | `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `RoutingScreen._seedDefaultPresets` sets it to true. |
 | `interrupt_connections_on_switch` | `bool` | §143 — tear down the switched group's active connections when the node changes (default `false`, NOT config-significant). See `getInterruptOnSwitch` / `setInterruptOnSwitch`. |

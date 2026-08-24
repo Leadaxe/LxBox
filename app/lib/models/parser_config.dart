@@ -65,11 +65,11 @@ class WizardTemplate {
   factory WizardTemplate.fromJson(Map<String, dynamic> json) {
     final pcJson = json['parser_config'] as Map<String, dynamic>? ?? {};
     final rulesJson = json['selectable_rules'] as List<dynamic>? ?? [];
-    // §267 — group_templates + top-level default_channels (было preset_groups).
+    // §267 — group_templates + top-level default_directions (было preset_groups).
     final groupTemplatesJson =
         json['group_templates'] as Map<String, dynamic>? ?? const {};
     final defaultDirectionsJson =
-        json['default_channels'] as List<dynamic>? ?? const [];
+        json['default_directions'] as List<dynamic>? ?? const [];
 
     // Парсим nested `sections` — секция → chapter → vars.
     // Каждая WizardVar наследует chapter+section от своей секции-родителя.
@@ -294,15 +294,14 @@ class SpeedTestOptionsModel {
       );
 }
 
-// §267 — `group_templates` + `default_channels` заменяют плоский `preset_groups`.
+// §267 — `group_templates` + `default_directions` заменяют плоский `preset_groups`.
 //
 // Раньше `preset_groups` сваливал в один массив три разнородные сущности
 // (шаблон auto-подгруппы под фейковым tag `@auto_proxy_tag`, Направления vpn-N) и
 // читался только как seed первой миграции. Теперь разделено на:
 //   - `magic_nodes` — реестр служебных нод (auto/direct/block) по role-ключу;
-//   - `channel`/`auto` (json-ключи) — шаблоны сборки Направления и его
-//     urltest-подгруппы (Dart-поля `direction`/`auto`);
-//   - `default_channels` — плоский список Направлений для сида первого запуска.
+//   - `direction`/`auto` — шаблоны сборки Направления и его urltest-подгруппы;
+//   - `default_directions` — плоский список Направлений для сида первого запуска.
 //
 // Полное описание — docs/spec/tasks/267-group-templates-magic-nodes.md.
 
@@ -339,7 +338,7 @@ class MagicNode {
   }
 }
 
-/// §267 — шаблон обычного Направления (selector) из json-ключа `group_templates.channel`
+/// §267 — шаблон обычного Направления (selector) из `group_templates.direction`
 /// (Dart-поле `GroupTemplates.direction`).
 /// `include` — role-ключи `magic_nodes`, показываемые в selector Направления
 /// (`direct`/`auto`); `block` по умолчанию не включён.
@@ -383,7 +382,7 @@ class AutoTemplate {
   }
 }
 
-/// §267 — одно Направление для сида первого запуска из `default_channels[i]`.
+/// §267 — одно Направление для сида первого запуска из `default_directions[i]`.
 class DefaultDirection {
   DefaultDirection({
     required this.tag,
@@ -404,11 +403,11 @@ class DefaultDirection {
   }
 }
 
-/// §267 — верхнеуровневый блок `group_templates` + top-level `default_channels`.
+/// §267 — верхнеуровневый блок `group_templates` + top-level `default_directions`.
 /// `magicNodes` — реестр по role-ключу; `direction`/`auto` — шаблоны сборки
-/// (json-ключи `channel`/`auto` — переименование домена сюда не дошло, §393 A2);
-/// `defaultDirections` — сид первого запуска (собирается из top-level ключа,
-/// НЕ внутри `group_templates`).
+/// (§393 A2 — json-ключи приведены к именам Dart-полей); `defaultDirections` —
+/// сид первого запуска (собирается из top-level ключа, НЕ внутри
+/// `group_templates`).
 class GroupTemplates {
   GroupTemplates({
     this.magicNodes = const {},
@@ -439,7 +438,7 @@ class GroupTemplates {
     return GroupTemplates(
       magicNodes: magicNodes,
       direction: DirectionTemplate.fromJson(
-          groupTemplatesJson['channel'] as Map<String, dynamic>? ?? const {}),
+          groupTemplatesJson['direction'] as Map<String, dynamic>? ?? const {}),
       auto: AutoTemplate.fromJson(
           groupTemplatesJson['auto'] as Map<String, dynamic>? ?? const {}),
       defaultDirections: defaultDirectionsJson

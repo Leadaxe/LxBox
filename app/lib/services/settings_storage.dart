@@ -140,8 +140,12 @@ class SettingsStorage {
     'urltest_passive_check', // §272 — passive health check (urltest.passive_check)
     'excluded_nodes',
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
-    'channels', // §125 — Направления роутинга (template→storage)
-    'channels_migrated', // §125 — guard one-shot миграции
+    'directions', // §125/§393 — Направления роутинга (template→storage)
+    'directions_migrated', // §125/§393 — guard one-shot миграции
+    // §393 A2 — легаси-пары `channels`/`channels_migrated` в allowlist НЕТ
+    // намеренно: границы импорта нормализуют имена ДО `replaceRaw`
+    // ([normalizeLegacyDirectionKeys]), а старый файл на диске (upgrade-путь)
+    // читается миграцией напрямую, мимо allowlist.
     'tun_apps',
     'vpn_mode',
     'warp_account',
@@ -341,9 +345,12 @@ class SettingsStorage {
   static Future<DirectionHealResult> deleteDirection(String tag) =>
       _deleteDirection(tag);
 
-  /// One-shot миграция enabled_groups[] → directions[] (seed из template).
-  /// §267 — сид из `template.groupTemplates` (json-ключи default_channels + channel).
-  /// Идемпотентна. Зовётся из main() init до первого билда.
+  /// One-shot миграция состава Направлений: легаси `channels`/`channels_migrated`
+  /// → `directions`/`directions_migrated` с удалением легаси-пары (§393 A2);
+  /// на чистой установке — seed из template (legacy-цепочка `enabled_groups[]`).
+  /// §267 — сид из `template.groupTemplates` (json-ключи default_directions + direction).
+  /// Идемпотентна. Зовётся из main() init до первого билда И из
+  /// `BackupService.applyImport` после restore (порядок restore→migrate).
   /// §327 — `varDefaults` (имя var → `default_value`) резолвит `@urltest_*`
   /// в `group_templates.auto.options`: на этом этапе var-substitution ещё не
   /// отработала, а дефолт обязан быть один — шаблонный.

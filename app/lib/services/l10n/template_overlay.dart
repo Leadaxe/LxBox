@@ -164,8 +164,8 @@ class TemplateOverlay {
       }
     }
 
-    // default_channels[] — seed-метки Направлений (после seed'а — user data).
-    final directions = t['default_channels'];
+    // default_directions[] — seed-метки Направлений (после seed'а — user data).
+    final directions = t['default_directions'];
     if (directions is List) {
       for (final c in directions) {
         if (c is Map && c['tag'] is String) {

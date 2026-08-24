@@ -284,8 +284,8 @@ def format_template(data: dict[str, Any]) -> str:
 
     # §267 — group_templates (magic_nodes реестр + шаблоны Направления/auto) +
     # top-level сид Направлений. Заменили плоский preset_groups.
-    # json-ключи данных остались `channel`/`default_channels` — переименование
-    # домена Направления сюда не дошло (§393 A2).
+    # §393 A2 — json-ключи данных приведены к домену: `direction`/
+    # `default_directions` (было `channel`/`default_channels`).
     gt = data["group_templates"]
     out.append(pad(1) + '"group_templates": {')
     # magic_nodes: role → {title, source, tag?, tpl?} — по строке на роль.
@@ -295,9 +295,9 @@ def format_template(data: dict[str, Any]) -> str:
     for i, role in enumerate(node_keys):
         out.append(pad(3) + f'{json.dumps(role, ensure_ascii=False)}: {compact(nodes[role])}' + ("," if i < len(node_keys) - 1 else ""))
     out.append(pad(2) + "},")
-    # Направление (json-ключ `channel`): type + include (роли) + options.
-    ch = gt["channel"]
-    out.append(pad(2) + '"channel": {')
+    # Направление (`direction`): type + include (роли) + options.
+    ch = gt["direction"]
+    out.append(pad(2) + '"direction": {')
     out.append(pad(3) + f'"type": {json.dumps(ch["type"], ensure_ascii=False)},')
     out.append(pad(3) + f'"include": {compact(ch["include"])},')
     out.append(pad(3) + '"options": {')
@@ -320,8 +320,8 @@ def format_template(data: dict[str, Any]) -> str:
     out.append(pad(2) + "}")
     out.append(pad(1) + "},")
 
-    out.append(pad(1) + '"default_channels": [')
-    dchs = data["default_channels"]
+    out.append(pad(1) + '"default_directions": [')
+    dchs = data["default_directions"]
     for i, dc in enumerate(dchs):
         out.append(pad(2) + compact(dc) + ("," if i < len(dchs) - 1 else ""))
     out.append(pad(1) + "],")

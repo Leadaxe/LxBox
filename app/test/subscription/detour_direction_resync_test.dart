@@ -62,8 +62,8 @@ void main() {
     /// Storage: detour-Направление vpn-2 + одиночка с overrideDetour на него.
     Future<void> seed() async {
       final data = {
-        'channels_migrated': true,
-        'channels': [
+        'directions_migrated': true,
+        'directions': [
           const Direction(tag: 'vpn-1', label: 'Main').toJson(),
           const Direction(tag: 'vpn-2', label: 'Relay', isDetour: true).toJson(),
         ],

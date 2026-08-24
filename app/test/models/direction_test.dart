@@ -274,7 +274,7 @@ void main() {
   });
 
   group('Direction.seedFromDefault (миграция §267)', () {
-    test('структурные поля из default_channels + json-шаблона channel', () {
+    test('структурные поля из default_directions + шаблона direction', () {
       final dc =
           DefaultDirection(tag: 'vpn-1', label: 'Главный', defaultEnabled: true);
       final tpl = DirectionTemplate(

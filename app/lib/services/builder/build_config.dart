@@ -801,7 +801,7 @@ List<Map<String, dynamic>> _buildDirectionGroups({
 /// storage ещё пуст (тесты без storage / первый билд до миграции). Та же
 /// seed-логика, что и one-shot миграция `_migrateDirectionsIfNeeded`, но auto-
 /// параметры резолвятся через [resolve] (@urltest_* vars). §267 — итерируем
-/// `default_channels`, auto-подгруппа при `direction.include ∋ auto`.
+/// `default_directions`, auto-подгруппа при `direction.include ∋ auto`.
 List<Direction> _directionsFromTemplate(
   GroupTemplates gt,
   Set<String> enabledGroupTags,
