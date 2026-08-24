@@ -54,7 +54,15 @@ List<ChainHopCandidate> collectChainHopTargets({
   // тег не даст стартовать ядру.
   for (final d in directions) {
     if (!d.enabled) continue;
-    add(ChainHopCandidate(tag: d.tag, kind: ChainHopKind.direction));
+    // §248/§393 — в предложения пикера идут только detour-Направления
+    // (галка = «можно выбирать промежуточной целью»); остальные остаются
+    // кандидатами-знанием для валидации существующих позиций.
+    add(ChainHopCandidate(
+        tag: d.tag,
+        kind: ChainHopKind.direction,
+        offered: d.isDetour,
+        displayLabel: d.displayLabel,
+        subline: d.tag));
   }
 
   add(const ChainHopCandidate(
@@ -74,7 +82,9 @@ List<ChainHopCandidate> collectChainHopTargets({
       tag: c.tag,
       kind: ChainHopKind.chain,
       below: belowSelf,
-    ));
+    
+        displayLabel: c.displayLabel,
+        subline: '${c.hops.length}',));
   }
 
   // Узлы и группы собранного конфига. Служебные (`direct`/`block`/`dns`) не
@@ -99,6 +109,7 @@ List<ChainHopCandidate> collectChainHopTargets({
       // transportLabel у masque — это и есть vhttp ('h3'/'h2'/'auto',
       // пусто → дефолт ядра h3), см. ConfigNode._deriveTransport.
       masqueVhttp: n.type == 'masque' ? (n.transportLabel ?? 'h3') : '',
+      subline: _nodeSubline(n, isGroup: isGroup),
     ));
   }
   nodes.sort((a, b) => a.tag.compareTo(b.tag));
@@ -115,3 +126,20 @@ List<ChainHopCandidate> collectChainHopTargets({
 /// осознанно: второе — тоже не повод объявлять позиции потерянными, пока
 /// конфиг не собран ни разу.
 bool chainTargetsKnown(ParsedConfig config) => config.byTag.isNotEmpty;
+
+
+/// Сабстрока узла/группы для пикера: данные из собранного конфига,
+/// как в detour-пикере — `TYPE · server:port`, у группы `type · N членов`.
+String _nodeSubline(ConfigNode n, {required bool isGroup}) {
+  if (isGroup) {
+    final members = n.raw['outbounds'];
+    final count = members is List ? members.length : 0;
+    return '${n.type} · $count';
+  }
+  final server = n.raw['server'];
+  final port = n.raw['server_port'];
+  final addr = (server is String && server.isNotEmpty)
+      ? (port == null ? server : '$server:$port')
+      : '';
+  return [n.type.toUpperCase(), if (addr.isNotEmpty) addr].join(' · ');
+}

@@ -240,7 +240,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
     final chosen = _hops.toSet();
     final options = [
       for (final c in _cands)
-        if (!chosen.contains(c.tag)) c,
+        if (!chosen.contains(c.tag) && c.offered) c,
     ];
     if (options.isEmpty) {
       showSnack(getLocalText.s(
@@ -611,7 +611,6 @@ class _HopPickerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -626,30 +625,75 @@ class _HopPickerSheet extends StatelessWidget {
             ),
           ),
           Flexible(
-            child: ListView.builder(
+            // Секции как в detour-пикере (директива оператора 25.08):
+            // Направления / встроенные / цепочки / группы / серверы, у каждой
+            // строки человеческая подпись + сабстрока с данными.
+            child: ListView(
               shrinkWrap: true,
-              itemCount: options.length,
-              itemBuilder: (ctx, i) {
-                final c = options[i];
-                return ListTile(
-                  dense: true,
-                  title: Text(c.tag,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 13, fontFamily: 'monospace')),
-                  subtitle: Text(
-                      chainHopKindText(c.kind),
-                      style:
-                          TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                  onTap: () => Navigator.pop(ctx, c.tag),
-                );
-              },
+              children: [
+                for (final section in _sections(context))
+                  ...section,
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// Секции в порядке пикера. Пустые не рисуются вовсе (ни заголовка, ни
+  /// отступа) — как подсекция Направлений в форме.
+  List<List<Widget>> _sections(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    List<Widget> group(String title, List<ChainHopCandidate> items) {
+      if (items.isEmpty) return const [];
+      return [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+          child: Text(title,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: cs.primary)),
+        ),
+        for (final c in items)
+          ListTile(
+            dense: true,
+            title: Text(c.displayLabel.isNotEmpty ? c.displayLabel : c.tag,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13)),
+            subtitle: c.subline.isEmpty
+                ? null
+                : Text(
+                    c.kind == ChainHopKind.chain
+                        ? getLocalText.plural('%d hops', int.tryParse(c.subline) ?? 0)
+                        : c.subline,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontFamily:
+                            c.kind == ChainHopKind.direction ? 'monospace' : null,
+                        color: cs.onSurfaceVariant)),
+            onTap: () => Navigator.pop(context, c.tag),
+          ),
+      ];
+    }
+
+    List<ChainHopCandidate> of(ChainHopKind k) =>
+        [for (final c in options) if (c.kind == k) c];
+    return [
+      group(getLocalText.s("Directions"), of(ChainHopKind.direction)),
+      group(getLocalText.s("Built-in"), of(ChainHopKind.builtin)),
+      group(getLocalText.s("Chains"), of(ChainHopKind.chain)),
+      group(getLocalText.s("Groups"), of(ChainHopKind.group)),
+      group(getLocalText.s("Servers"), [
+        ...of(ChainHopKind.node),
+        ...of(ChainHopKind.unknown),
+        ...of(ChainHopKind.pending),
+      ]),
+    ];
   }
 }
 
