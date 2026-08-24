@@ -28,7 +28,7 @@
       только новых ключей, restore принимает и легаси-пару (единственный
       хвост). Тесты: fresh-seed, migrate, restore-старого-файла→migrate,
       round-trip нового
-- [ ] A3. `include` (List<String> тегов Направлений, только стоящих ВЫШЕ по
+- [x] A3. `include` (List<String> тегов Направлений, только стоящих ВЫШЕ по
       списку — антицикл) + произвольные теги: `nextDirectionTag` по образцу
       лаунчера `configtypes.NextDirectionTag` (vpn-N без верхней границы;
       лимит `kMaxChannels`=10 снять для новых); существующие vpn-N легальны;

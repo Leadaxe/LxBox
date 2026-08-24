@@ -11,7 +11,6 @@ class RoutingDirectionsTab extends StatelessWidget {
     required this.bottomPad,
     required this.groupTiles,
     required this.directionCount,
-    required this.maxDirections,
     required this.onAddDirection,
     required this.routeFinalTile,
   });
@@ -19,9 +18,9 @@ class RoutingDirectionsTab extends StatelessWidget {
   final double bottomPad;
   final List<Widget> groupTiles;
   final int directionCount;
-  final int maxDirections;
 
-  /// null = лимит достигнут (Add disabled).
+  /// §393 A3 — лимита на количество Направлений больше нет; callback
+  /// остаётся nullable ради общей идиомы «disabled кнопки».
   final VoidCallback? onAddDirection;
 
   final Widget routeFinalTile;
@@ -47,11 +46,7 @@ class RoutingDirectionsTab extends StatelessWidget {
             onPressed: onAddDirection,
             icon: const Icon(Icons.add, size: 18),
             label: Text(
-              getLocalText.s(
-                "Add direction  (%1\$d/%2\$d)",
-                directionCount,
-                maxDirections,
-              ),
+              getLocalText.s("Add direction  (%d)", directionCount),
             ),
           ),
         ),

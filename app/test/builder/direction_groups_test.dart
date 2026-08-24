@@ -562,6 +562,375 @@ void main() {
     });
   });
 
+  group('§393 A3 — include[]: другие Направления опциями селектора', () {
+    test('ссылка ВВЕРХ попадает в состав, warning'"'"'а нет', () async {
+      final directions = [
+        const Direction(tag: 'vpn-1', label: 'A'),
+        const Direction(tag: 'vpn-2', label: 'B', include: ['vpn-1']),
+      ];
+      final outs = await build(directions);
+      expect(byTag(outs, 'vpn-2')['outbounds'], contains('vpn-1'));
+      expect(await warningsFor(directions), isEmpty);
+    });
+
+    test('ссылка ВНИЗ не эмитится + warning (forward-ref ядро не примет)',
+        () async {
+      final directions = [
+        const Direction(tag: 'vpn-1', label: 'A', include: ['vpn-2']),
+        const Direction(tag: 'vpn-2', label: 'B'),
+      ];
+      final outs = await build(directions);
+      expect(byTag(outs, 'vpn-1')['outbounds'], isNot(contains('vpn-2')));
+      final w = await warningsFor(directions);
+      expect(w, hasLength(1));
+      expect(w.single, contains('vpn-2'));
+      expect(w.single, contains('listed above'));
+    });
+
+    test('reorder-сценарий: Направление переехало ВЫШЕ своей цели → '
+        'деградация с warning, конфиг валиден', () async {
+      // vpn-2 ссылался на vpn-1, пока стоял ниже; пользователь перетащил его
+      // наверх — ссылка стала forward-ref. Данные НЕ санитайзятся (лаунчер
+      // на reorder тоже только меняет порядок), деградирует ВЫХЛОП.
+      final reordered = [
+        const Direction(tag: 'vpn-2', label: 'B', include: ['vpn-1']),
+        const Direction(tag: 'vpn-1', label: 'A'),
+      ];
+      final r = await buildConfig(
+        lists: [await nodes()],
+        template: template(),
+        settings: BuildSettings(directions: reordered),
+      );
+      expect(r.validation.isOk, true,
+          reason: r.validation.issues.join('\n'));
+      final outs = (r.config['outbounds'] as List).cast<Map<String, dynamic>>();
+      expect(byTag(outs, 'vpn-2')['outbounds'], isNot(contains('vpn-1')));
+      expect(r.emitWarnings, hasLength(1));
+      expect(r.emitWarnings.single, contains('vpn-1'));
+    });
+
+    test('ВЫКЛЮЧЕННОЕ Направление не эмитится → ссылка на него дропается '
+        'с warning (dangling ref не даёт ядру стартовать)', () async {
+      final directions = [
+        const Direction(tag: 'vpn-1', label: 'A'),
+        const Direction(tag: 'vpn-2', label: 'B', enabled: false),
+        const Direction(tag: 'vpn-3', label: 'C', include: ['vpn-1', 'vpn-2']),
+      ];
+      final outs = await build(directions);
+      final members = byTag(outs, 'vpn-3')['outbounds'] as List;
+      expect(members, contains('vpn-1'));
+      expect(members, isNot(contains('vpn-2')));
+      final w = await warningsFor(directions);
+      expect(w, hasLength(1));
+      expect(w.single, contains('vpn-2'));
+    });
+
+    test('несуществующий тег дропается с warning', () async {
+      final directions = [
+        const Direction(tag: 'vpn-1', label: 'A', include: ['ghost']),
+      ];
+      final outs = await build(directions);
+      expect(byTag(outs, 'vpn-1')['outbounds'], isNot(contains('ghost')));
+      expect((await warningsFor(directions)).single, contains('ghost'));
+    });
+
+    test('самоссылка дропается (кольцо на одном узле)', () async {
+      final directions = [
+        const Direction(tag: 'vpn-1', label: 'A', include: ['vpn-1']),
+      ];
+      final outs = await build(directions);
+      final members = byTag(outs, 'vpn-1')['outbounds'] as List;
+      expect(members.where((t) => t == 'vpn-1'), isEmpty);
+      expect(await warningsFor(directions), hasLength(1));
+    });
+
+    test('auto-двойник include-теги НЕ наследует (паритет с '
+        'direction_twins.go: twin не получает AddOutbounds)', () async {
+      final outs = await build([
+        const Direction(tag: 'vpn-1', label: 'A'),
+        const Direction(
+            tag: 'vpn-2',
+            label: 'B',
+            include: ['vpn-1'],
+            auto: DirectionAuto()),
+      ]);
+      expect(byTag(outs, 'vpn-2')['outbounds'], contains('vpn-1'));
+      // urltest внутри urltest мерил бы выбор группы, а не сервер (§322).
+      expect(byTag(outs, 'vpn-2-auto')['outbounds'], isNot(contains('vpn-1')));
+    });
+
+    test('include живёт рядом с includeDirect/includeBlock, не вместо них',
+        () async {
+      final outs = await build([
+        const Direction(tag: 'vpn-1', label: 'A'),
+        const Direction(
+            tag: 'vpn-2',
+            label: 'B',
+            include: ['vpn-1'],
+            includeDirect: true,
+            includeBlock: true),
+      ]);
+      final members = byTag(outs, 'vpn-2')['outbounds'] as List;
+      expect(members, containsAll(['vpn-1', 'direct-out', 'block']));
+    });
+
+    test('пустое по фильтру Направление с include не уходит в block-fallback',
+        () async {
+      // Ссылка на другое Направление — это тоже опция: селектор не пуст,
+      // значит fallback `[block, direct-out]` не нужен.
+      final directions = [
+        const Direction(tag: 'vpn-1', label: 'A'),
+        const Direction(
+            tag: 'vpn-2', label: 'B', nodeFilter: 'zzz', include: ['vpn-1']),
+      ];
+      final outs = await build(directions);
+      final vpn2 = byTag(outs, 'vpn-2');
+      expect(vpn2['outbounds'], ['vpn-1']);
+      expect(vpn2.containsKey('default'), false);
+      // Про пустой фильтр всё равно предупреждаем, но исход — не «blocked».
+      final w = await warningsFor(directions);
+      expect(w.single, contains('falls back to "vpn-1"'));
+    });
+
+    test('дубли в include схлопываются', () async {
+      final outs = await build([
+        const Direction(tag: 'vpn-1', label: 'A'),
+        const Direction(tag: 'vpn-2', label: 'B', include: ['vpn-1', 'vpn-1']),
+      ]);
+      final members = byTag(outs, 'vpn-2')['outbounds'] as List;
+      expect(members.where((t) => t == 'vpn-1'), hasLength(1));
+    });
+  });
+
+  group('§393 A3 — ПОРЯДОК состава: служебное и include ПЕРЕД узлами', () {
+    // Первый элемент состава = неявный default sing-box (селектор без поля
+    // `default` стартует на первой опции), поэтому порядок здесь —
+    // семантика, а не косметика. Норматив — corpus/direction.
+
+    test('corpus include_earlier_direction: include-тег перед узлами', () async {
+      // Байт-в-байт состав из
+      // contract/corpus/direction/include_earlier_direction.expected.json
+      // (теги узлов подогнаны под узлы этого файла).
+      final outs = await build([
+        const Direction(tag: 'vpn-1', label: 'A', nodeFilter: '🇩🇪 Berlin'),
+        const Direction(
+            tag: 'vpn-2',
+            label: 'B',
+            nodeFilter: '🇩🇪 Berlin',
+            include: ['vpn-1']),
+      ]);
+      expect(byTag(outs, 'vpn-1')['outbounds'], ['🇩🇪 Berlin']);
+      expect(byTag(outs, 'vpn-2')['outbounds'], ['vpn-1', '🇩🇪 Berlin']);
+    });
+
+    test('corpus include_direct_and_block: direct-out, block, узлы', () async {
+      // contract/corpus/direction/include_direct_and_block.expected.json:
+      // служебные опции первыми, direct раньше block.
+      final outs = await build([
+        const Direction(
+            tag: 'vpn-1',
+            label: 'A',
+            nodeFilter: '🇩🇪 Berlin',
+            includeDirect: true,
+            includeBlock: true),
+      ]);
+      expect(byTag(outs, 'vpn-1')['outbounds'],
+          ['direct-out', 'block', '🇩🇪 Berlin']);
+    });
+
+    test('обе категории сразу: auto, direct, block, include, узлы '
+        '(тай-брейк по лаунчеру — AddOutbounds одним списком)', () async {
+      // Кейса с include И служебными опциями в корпусе нет; порядок взят у
+      // лаунчера: форма собирает AddOutbounds как direct → block → прочие
+      // теги (edit_dialog.go), auto-двойник встаёт впереди
+      // (direction_twins.go prependUnique), и весь список эмитится ДО узлов
+      // (outbound_generator.go «Add addOutbounds first»).
+      final outs = await build([
+        const Direction(tag: 'vpn-1', label: 'A'),
+        const Direction(
+          tag: 'vpn-2',
+          label: 'B',
+          nodeFilter: '🇩🇪 Berlin',
+          include: ['vpn-1'],
+          includeDirect: true,
+          includeBlock: true,
+          auto: DirectionAuto(),
+        ),
+      ]);
+      expect(byTag(outs, 'vpn-2')['outbounds'],
+          ['vpn-2-auto', 'direct-out', 'block', 'vpn-1', '🇩🇪 Berlin']);
+    });
+
+    test('узел подписки не становится неявным умолчанием Направления, '
+        'состоящего из ссылок', () async {
+      // Регресс порядка: пока узлы шли первыми, `outbounds.first` был
+      // произвольный сервер подписки — ядро выбирало его умолчанием, хотя
+      // пользователь включил direct-опцию/ссылку осознанно.
+      final outs = await build([
+        const Direction(tag: 'vpn-1', label: 'A'),
+        const Direction(
+            tag: 'vpn-2', label: 'B', include: ['vpn-1'], includeDirect: true),
+      ]);
+      expect((byTag(outs, 'vpn-2')['outbounds'] as List).first, 'direct-out');
+    });
+
+    test('порядок УЗЛОВ внутри состава — порядок конфига, не алфавит',
+        () async {
+      final outs = await build([
+        const Direction(tag: 'vpn-1', label: 'A', includeDirect: true),
+      ]);
+      expect(byTag(outs, 'vpn-1')['outbounds'], [
+        'direct-out',
+        '🇩🇪 Berlin',
+        '🇩🇪 Premium',
+        '🇳🇱 Amsterdam',
+        '🇺🇸 NYC',
+      ]);
+    });
+  });
+
+  group('§393 A3 — резерв тегов ВСЕХ Направлений, включая выключенные', () {
+    test('узел-тёзка ВЫКЛЮЧЕННОГО Направления получает суффикс, а include '
+        'на него не резолвится в узел', () async {
+      // Дыра до фикса: reservedTags строился по `enabled || isRequired`, тег
+      // выключенного vpn-2 не резервировался, узел подписки с меткой `vpn-2`
+      // занимал literal-тег — и ссылка `include: ['vpn-2']` находила в
+      // `emittedAbove`… нет, но узел с этим именем уже лежал в составе от
+      // nodesFor, так что пользователь видел «vpn-2» опцией, ведущей в
+      // чужой сервер вместо выключенного Направления.
+      final specs = [
+        parseUri('vless://u7@h7.com:443?type=ws&security=tls#vpn-2')!,
+      ];
+      final list = UserServer(
+        id: 'u3',
+        name: 'N3',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: specs,
+      );
+      final r = await buildConfig(
+        lists: [list],
+        template: template(),
+        settings: BuildSettings(directions: const [
+          Direction(tag: 'vpn-1', label: 'A'),
+          Direction(tag: 'vpn-2', label: 'B', enabled: false),
+          Direction(tag: 'vpn-3', label: 'C', include: ['vpn-2']),
+        ]),
+      );
+      expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
+      final outs = (r.config['outbounds'] as List).cast<Map<String, dynamic>>();
+      final tags = outs.map((o) => o['tag']).toList();
+      expect(tags, contains('vpn-2-1'),
+          reason: 'узел-тёзка выключенного Направления переехал на суффикс');
+      expect(outs.any((o) => o['tag'] == 'vpn-2'), false,
+          reason: 'выключенное Направление не эмитится, и тег никем не занят');
+      final members = byTag(outs, 'vpn-3')['outbounds'] as List;
+      expect(members, isNot(contains('vpn-2')),
+          reason: 'ни Направления, ни узла под этим именем в составе нет');
+      expect(r.emitWarnings.where((w) => w.contains('vpn-2')), hasLength(1));
+    });
+
+    test('auto-двойник выключенного Направления тоже зарезервирован', () async {
+      final specs = [
+        parseUri('vless://u6@h6.com:443?type=ws&security=tls#vpn-2-auto')!,
+      ];
+      final list = UserServer(
+        id: 'u4',
+        name: 'N4',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: specs,
+      );
+      final r = await buildConfig(
+        lists: [list],
+        template: template(),
+        settings: BuildSettings(directions: const [
+          Direction(tag: 'vpn-1', label: 'A'),
+          Direction(tag: 'vpn-2', label: 'B', enabled: false),
+        ]),
+      );
+      expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
+      final tags = (r.config['outbounds'] as List)
+          .cast<Map<String, dynamic>>()
+          .map((o) => o['tag'])
+          .toList();
+      expect(tags, contains('vpn-2-auto-1'));
+    });
+  });
+
+  group('§393 A3 — гейт directionsWithoutNodes (SnackBar)', () {
+    Future<List<String>> withoutNodesFor(List<Direction> directions) async {
+      final r = await buildConfig(
+        lists: [await nodes()],
+        template: template(),
+        settings: BuildSettings(directions: directions),
+      );
+      return r.directionsWithoutNodes;
+    }
+
+    test('пустой фильтр + include с рабочей целью → warning-текст есть, '
+        'в списке «без узлов» Направления НЕТ', () async {
+      // Состав НЕ деградировал: трафик идёт узлами цели, чинить нечего —
+      // SnackBar «Направления без узлов» звал бы к ложной тревоге.
+      final directions = [
+        const Direction(tag: 'vpn-1', label: 'A'),
+        const Direction(
+            tag: 'vpn-2', label: 'B', nodeFilter: 'zzz', include: ['vpn-1']),
+      ];
+      final w = await warningsFor(directions);
+      expect(w.single, contains('falls back to "vpn-1"'));
+      expect(await withoutNodesFor(directions), isEmpty);
+    });
+
+    test('block-fallback → Направление в списке «без узлов»', () async {
+      final directions = [
+        const Direction(tag: 'vpn-1', label: 'A', nodeFilter: 'zzz'),
+      ];
+      expect(await withoutNodesFor(directions), ['A']);
+    });
+
+    test('единственный direct-out (без нод и без include) → в списке',
+        () async {
+      final directions = [
+        const Direction(
+            tag: 'vpn-1', label: 'A', nodeFilter: 'zzz', includeDirect: true),
+      ];
+      expect(await withoutNodesFor(directions), ['A']);
+    });
+
+    test('direct+block без нод и без include → в списке', () async {
+      final directions = [
+        const Direction(
+            tag: 'vpn-1',
+            label: 'A',
+            nodeFilter: 'zzz',
+            includeDirect: true,
+            includeBlock: true),
+      ];
+      expect(await withoutNodesFor(directions), ['A']);
+    });
+
+    test('include + direct: цель рабочая → НЕ в списке (direct лишь опция)',
+        () async {
+      final directions = [
+        const Direction(tag: 'vpn-1', label: 'A'),
+        const Direction(
+            tag: 'vpn-2',
+            label: 'B',
+            nodeFilter: 'zzz',
+            include: ['vpn-1'],
+            includeDirect: true),
+      ];
+      expect(await withoutNodesFor(directions), isEmpty);
+    });
+  });
+
   group('§351 — теги Направлений зарезервированы в аллокаторе', () {
     test('узлы-тёзки vpn-1 / vpn-1-auto получают суффикс, дублей нет',
         () async {

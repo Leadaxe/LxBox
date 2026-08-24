@@ -306,7 +306,8 @@ class SettingsStorage {
   // ---------------------------------------------------------------------------
   // §125 — Направления роутинга (directions[]). Заменяют enabled_groups[] + статичные
   // template-пресеты как source-of-truth. На первом запуске seeded из template
-  // (migrateDirectionsIfNeeded; §267 — из group_templates). vpn-1 неудаляем, лимит 10.
+  // (migrateDirectionsIfNeeded; §267 — из group_templates). vpn-1 неудаляем;
+  // лимита на количество нет (§393 A3 — паритет с лаунчером).
   // ---------------------------------------------------------------------------
 
   static Future<List<Direction>> getDirections() => _getDirections();
@@ -318,12 +319,15 @@ class SettingsStorage {
   static Future<void> setDirections(List<Direction> directions, {bool flush = true}) =>
       _setDirections(directions, flush: flush);
 
-  /// Добавить Направление: первый свободный 'vpn-N' (N∈2..10). Throws при лимите 10.
+  /// Добавить Направление. §393 A3 — [tag] опционален (по умолчанию первый
+  /// свободный `vpn-N`, [nextDirectionTag]); throws [StateError] на конфликте
+  /// тега (`directionTagConflict`). Лимита на количество нет.
   ///
   /// §275 — код приложения зовёт `DirectionMutations.add`: мутаторы Направлений
   /// парные с ресинком контроллера, здесь — только storage-половина.
   @visibleForTesting
-  static Future<Direction> addDirection({String? label}) => _addDirection(label: label);
+  static Future<Direction> addDirection({String? label, String? tag}) =>
+      _addDirection(label: label, tag: tag);
 
   /// Обновить Направление по [Direction.tag]. Throws если tag не найден.
   /// §248 — возвращает счётчики вылеченных ссылок (disable/flag-set →

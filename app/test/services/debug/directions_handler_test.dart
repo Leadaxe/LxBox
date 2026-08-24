@@ -104,15 +104,54 @@ void main() {
     expect(stored.map((c) => c.tag), ['vpn-1', 'vpn-2']);
   });
 
-  test('POST /directions — лимит 10 → 409', () async {
-    for (var i = 0; i < 9; i++) {
+  test('§393 A3 — POST /directions без лимита: 11-е создаётся', () async {
+    for (var i = 0; i < 10; i++) {
       await directionsHandler(req('POST', '/directions'), ctx());
     }
-    expect((await SettingsStorage.getDirections()).length, kMaxDirections);
-    await expectLater(
-      directionsHandler(req('POST', '/directions'), ctx()),
-      throwsA(isA<Conflict>()),
+    final stored = await SettingsStorage.getDirections();
+    expect(stored.length, kMaxDirections + 1);
+    expect(stored.last.tag, 'vpn-11');
+    expect(stored.last.label, 'VPN 11'); // кружок-цифра кончилась на ⑩
+  });
+
+  test('§393 A3 — POST /directions с кастомным тегом', () async {
+    final r = await directionsHandler(
+      req('POST', '/directions', body: {'tag': 'ru-exit', 'label': 'Russia'}),
+      ctx(),
     );
+    expect(asMap(r)['tag'], 'ru-exit');
+    expect(asMap(r)['label'], 'Russia');
+  });
+
+  test('§393 A3 — POST /directions с занятым/служебным тегом → 409', () async {
+    for (final bad in ['vpn-1', 'direct-out', 'block', 'vpn-1-auto', '  ']) {
+      await expectLater(
+        directionsHandler(req('POST', '/directions', body: {'tag': bad}), ctx()),
+        throwsA(isA<Conflict>()),
+        reason: bad,
+      );
+    }
+  });
+
+  test('§393 A3 — PATCH тега по-прежнему запрещён (immutable)', () async {
+    await expectLater(
+      directionsHandler(
+          req('PATCH', '/directions/vpn-1', body: {'tag': 'x'}), ctx()),
+      throwsA(isA<BadRequest>()),
+    );
+  });
+
+  test('§393 A3 — include принимается PATCH и POST', () async {
+    await directionsHandler(req('POST', '/directions'), ctx()); // vpn-2
+    final r = await directionsHandler(
+      req('PATCH', '/directions/vpn-2', body: {
+        'include': ['vpn-1']
+      }),
+      ctx(),
+    );
+    expect(asMap(r)['include'], ['vpn-1']);
+    final stored = await SettingsStorage.getDirections();
+    expect(stored.firstWhere((c) => c.tag == 'vpn-2').include, ['vpn-1']);
   });
 
   test('GET /directions/{tag} — single + 404 на неизвестный', () async {
@@ -299,7 +338,7 @@ void main() {
       await SettingsStorage.saveRouteFinal('vpn-2');
       final r = await directionsHandler(
           req('PATCH', '/directions/vpn-2', body: {'detour': true}), ctx());
-      expect(asMap(r)['healed'], {'rules': 0, 'detours': 0});
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 0, 'includes': 0});
       expect(await SettingsStorage.getRouteFinal(), 'vpn-2');
     });
 
@@ -320,10 +359,43 @@ void main() {
       ]);
 
       final r = await directionsHandler(req('DELETE', '/directions/vpn-2'), ctx());
-      expect(asMap(r)['healed'], {'rules': 1, 'detours': 1});
+      expect(asMap(r)['healed'], {'rules': 1, 'detours': 1, 'includes': 0});
       expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
       final solo = (await SettingsStorage.getServerLists()).single;
       expect(solo.detourPolicy.overrideDetour, '');
+    });
+
+    test('§393 A3 — healed.includes в DELETE: тег вычеркнут из include '
+        'остальных Направлений', () async {
+      await directionsHandler(req('POST', '/directions'), ctx()); // vpn-2
+      await directionsHandler(
+          req('POST', '/directions', body: {
+            'include': ['vpn-2', 'vpn-1']
+          }),
+          ctx()); // vpn-3
+
+      final r = await directionsHandler(req('DELETE', '/directions/vpn-2'), ctx());
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 0, 'includes': 1});
+      final vpn3 = (await SettingsStorage.getDirections())
+          .firstWhere((c) => c.tag == 'vpn-3');
+      expect(vpn3.include, ['vpn-1']);
+    });
+
+    test('§393 A3 — PATCH enabled:false include НЕ трогает (обратимо)',
+        () async {
+      await directionsHandler(req('POST', '/directions'), ctx()); // vpn-2
+      await directionsHandler(
+          req('POST', '/directions', body: {
+            'include': ['vpn-2']
+          }),
+          ctx()); // vpn-3
+
+      final r = await directionsHandler(
+          req('PATCH', '/directions/vpn-2', body: {'enabled': false}), ctx());
+      expect((asMap(r)['healed'] as Map)['includes'], 0);
+      final vpn3 = (await SettingsStorage.getDirections())
+          .firstWhere((c) => c.tag == 'vpn-3');
+      expect(vpn3.include, ['vpn-2']);
     });
   });
 
@@ -404,7 +476,7 @@ void main() {
       // родов ссылок. Это достижимый путь до detours > 0 на создании.
       final r = await directionsHandler(
           req('POST', '/directions', body: {'enabled': false}), ctx());
-      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1, 'includes': 0});
 
       // Storage вылечен...
       final solo = (await SettingsStorage.getServerLists()).single;
@@ -436,7 +508,7 @@ void main() {
 
       final r = await directionsHandler(
           req('PATCH', '/directions/vpn-2', body: {'detour': false}), ctx());
-      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1, 'includes': 0});
       expect(c.entries.single.list.detourPolicy.overrideDetour, '');
     });
 
@@ -446,7 +518,7 @@ void main() {
       final c = await seedControllerWithStaleRef('vpn-2');
 
       final r = await directionsHandler(req('DELETE', '/directions/vpn-2'), ctx());
-      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1, 'includes': 0});
       expect(c.entries.single.list.detourPolicy.overrideDetour, '');
     });
 
@@ -456,7 +528,7 @@ void main() {
 
       final r = await directionsHandler(
           req('POST', '/directions', body: {'enabled': false}), ctx());
-      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1, 'includes': 0});
       final solo = (await SettingsStorage.getServerLists()).single;
       expect(solo.detourPolicy.overrideDetour, '',
           reason: 'без контроллера нет и entries, которые разъезжаются');

@@ -256,9 +256,12 @@ Disabling a direction (enabled:false) degrades rule references to vpn-1 and
 resets detour references to None; clearing detour (detour:false) resets
 detour references to None. Setting detour:true heals nothing — the direction
 stays a rule target. Re-enabling / re-flagging does NOT restore healed
-references (same semantics as the UI toggle). Every mutation response
-carries "healed": {"rules": N, "detours": M} — how many references were
-reset.
+references (same semantics as the UI toggle). Deleting a direction ALSO
+strips its tag from the include[] of every other direction; disabling does
+not (include survives a disable, the builder just degrades the emitted
+group). Every mutation response carries
+"healed": {"rules": N, "detours": M, "includes": K} — how many references
+were reset.
 
 === Folders CRUD (server folders) ===
 
@@ -535,8 +538,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/directions', 'description': 'List routing directions (storage shape, snake_case)'},
     {'method': 'GET', 'path': '/directions/{tag}', 'description': 'Single direction (tag = vpn-1..vpn-10)'},
     {'method': 'POST', 'path': '/directions', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"label":"..."} + any PATCH field', 'description': 'Create direction; auto-assigns first free vpn-N tag. Limit 10 → 409.'},
-    {'method': 'PATCH', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = direction selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the direction: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours}.'},
-    {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None. Response carries "healed":{rules,detours}.'},
+    {'method': 'PATCH', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = direction selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the direction: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours,includes}.'},
+    {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None; the tag is stripped from every other direction include[]. Response carries "healed":{rules,detours,includes}.'},
     {'method': 'POST', 'path': '/directions/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
     // Folders CRUD (server folders)
     {'method': 'GET', 'path': '/folders', 'params': {'reveal': 'true|false (raw carries credentials, hidden by default)'}, 'description': 'List folder entries + members (members addressed by positional index)'},

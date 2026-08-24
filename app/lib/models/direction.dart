@@ -5,17 +5,46 @@
 // (`directions[]`). Template остаётся seed'ом для первого запуска (см. миграцию
 // в `settings_storage/directions.dart`).
 //
-// `tag` — СИСТЕМНЫЙ immutable id ('vpn-1'..'vpn-10'): автогенерируется при
-// создании, юзер правит только `label`. immutable tag ⇒ ссылки (route_final /
+// `tag` — СИСТЕМНЫЙ immutable id: автовыдаётся как `vpn-N` (§393 A3 —
+// `nextDirectionTag`, без верхней границы) либо задаётся пользователем при
+// создании; после создания не меняется. immutable tag ⇒ ссылки (route_final /
 // ping_options / custom-rule outbound / detour) стабильны by design.
 //
 // Спека: docs/spec/features/125 configurable-directions/spec.md.
 
-import '../config/consts.dart' show kDetourTagPrefix;
+import '../config/consts.dart'
+    show kDetourTagPrefix, kDirectOutboundTag, kBlockOutboundTag;
 import 'parser_config.dart' show DirectionTemplate, DefaultDirection;
 
-/// Максимум Направлений (Решение 5). vpn-1 неудаляем, N∈1..10.
+/// §393 A3 — верхняя граница ДЕФОЛТНЫХ имён «VPN ①..VPN ⑩» (Unicode-блок
+/// Enclosed Alphanumerics кончается на ⑩). Лимитом на СОЗДАНИЕ Направлений
+/// больше НЕ является: паритет с лаунчером
+/// (`configtypes.NextDirectionTag` — потолка нет, лимит LxBox в 10 был
+/// следствием интерфейса, а не модели). N>10 получает честное «VPN 11»
+/// текстом (см. [defaultDirectionLabel]).
 const int kMaxDirections = 10;
+
+/// §393 A3 — префикс автоматически выдаваемых тегов. Общий с лаунчером
+/// (`configtypes.DirectionTagPrefix`): бэкап с десктопа обязан попадать в
+/// существующее Направление, а не заводить рядом второе.
+const String kDirectionTagPrefix = 'vpn-';
+
+/// §393 A3 — первый свободный `vpn-N` среди [usedTags]. Порт
+/// `configtypes.NextDirectionTag`.
+///
+/// Ищет первую свободную позицию, а не «максимум + 1»: после удаления
+/// среднего Направления номера не должны уползать вверх — иначе `vpn-2`
+/// навсегда исчезает из списка, хотя тег свободен, а пользователь видит
+/// растущие числа при трёх живых Направлениях.
+///
+/// Потолка нет: [kMaxDirections] остался границей ДЕФОЛТНЫХ имён, не модели.
+String nextDirectionTag(Iterable<String> usedTags) {
+  final used = usedTags.toSet();
+  for (var i = 1;; i++) {
+    final tag = '$kDirectionTagPrefix$i';
+    if (!used.contains(tag)) return tag;
+  }
+}
 
 /// §198 — дефолтный label Направления по номеру: «VPN ①»…«VPN ⑩». Кружок-цифра —
 /// Unicode «Enclosed Alphanumerics» (① = U+2460, идут подряд 1..10). N вне
@@ -29,6 +58,15 @@ String defaultDirectionLabel(int n) {
 int? directionNumberOf(String tag) {
   final m = RegExp(r'^vpn-(\d+)$').firstMatch(tag);
   return m == null ? null : int.tryParse(m.group(1)!);
+}
+
+/// §393 A3 — дефолтное имя для НОВОГО Направления с тегом [tag]. Для
+/// автовыданного `vpn-N` — «VPN ⓝ» (§198), для произвольного
+/// пользовательского тега — сам тег: выдумывать «VPN» для `ru-exit` значило
+/// бы врать о содержимом.
+String defaultLabelForTag(String tag) {
+  final n = directionNumberOf(tag);
+  return n == null ? tag : defaultDirectionLabel(n);
 }
 
 /// uint16 верхняя граница для `tolerance` (§161 — вне диапазона роняет ядро).
@@ -201,6 +239,114 @@ class DirectionAuto {
       };
 }
 
+/// §393 A3 — нормализация `include` на чтении: только непустые строки после
+/// trim, без дублей, в порядке файла. Не-список / мусор → пустой список.
+List<String> _parseInclude(Object? raw) {
+  if (raw is! List) return const [];
+  final out = <String>[];
+  for (final e in raw) {
+    if (e is! String) continue;
+    final t = e.trim();
+    if (t.isEmpty || out.contains(t)) continue;
+    out.add(t);
+  }
+  return List.unmodifiable(out);
+}
+
+/// §393 A3 — вычеркнуть [deletedTag] из `include` каждого Направления списка.
+/// Чистая функция: возвращает новый список и число вычеркнутых ссылок.
+///
+/// Третий род ссылки на Направление (после rules и detours, §202-паттерн) и
+/// единственный, живущий не в чужом storage-ключе, а в САМОМ списке
+/// Направлений. Из-за этого он нуждается в двух вызовах одной и той же
+/// функции: storage лечит свою копию в `_deleteDirection`, экран роутинга —
+/// свой буфер `_directions`, который он после мутации перезаписывает на диск
+/// через `DirectionMutations.bulkReplace` (иначе stale-буфер воскресил бы
+/// вычеркнутый тег). Отсюда — общая чистая функция вместо двух реализаций.
+///
+/// Зовётся ТОЛЬКО на удалении. Выключение обратимо: цель остаётся в списке,
+/// форма рисует её снятым чекбоксом, билдер деградирует лишь выхлоп с
+/// warning'ом — а вычистка `include` применила бы к обратимому действию
+/// необратимость Решения B (§202).
+///
+/// Auto-двойник `<tag>-auto` вычищается заодно: в `include` он невалиден и так
+/// (билдер сверяет теги с эмитированными СЕЛЕКТОРАМИ), но Debug API и
+/// правленый бэкап записать его туда могут — та же причина, по которой его
+/// проверяет `_healDirectionRefs`.
+({List<Direction> healed, int count}) clearIncludeDirectionRefs(
+  List<Direction> directions,
+  String deletedTag,
+) {
+  final autoTag = '$deletedTag-auto';
+  var count = 0;
+  final out = <Direction>[];
+  for (final c in directions) {
+    final kept = c.include
+        .where((t) => t != deletedTag && t != autoTag)
+        .toList(growable: false);
+    if (kept.length == c.include.length) {
+      out.add(c);
+      continue;
+    }
+    count += c.include.length - kept.length;
+    out.add(c.copyWith(include: kept));
+  }
+  return (healed: out, count: count);
+}
+
+/// §393 A3 — теги, которые не может занять Направление: служебные outbound'ы
+/// принимающего конфига и псевдо-цели правил sing-box.
+///
+/// `direct-out`/`block` — эмитятся шаблоном (`magic_nodes`) и предлагаются
+/// опциями селектора (`include_direct`/`include_block`); Направление с таким
+/// тегом дало бы дубль тега в `outbounds[]` — ядро отвергает конфиг целиком.
+/// `block-out`/`dns-out` — заняты аллокатором тегов билдера
+/// (`_BuildCtx._taken`). `reject`/`drop`/`direct` — ACTION-псевдоцели правил
+/// (`custom_rule.dart:kOutboundReject`, `lx_backup._reservedOutbounds`):
+/// Направление с таким именем сделало бы цель правила двусмысленной.
+///
+/// Тегов `<tag>-auto` тут нет намеренно: они зависят от текущего состава и
+/// проверяются отдельно (см. [directionTagConflict]).
+const Set<String> kReservedDirectionTags = {
+  kDirectOutboundTag,
+  kBlockOutboundTag,
+  'block-out',
+  'dns-out',
+  'direct',
+  'reject',
+  'drop',
+};
+
+/// §393 A3 — суффикс парного urltest-двойника. Источник формулы — тот же,
+/// что у [Direction.autoTag] (`magic_nodes.auto.tpl` = `{parent_tag}-auto`).
+const String kDirectionAutoSuffix = '-auto';
+
+/// §393 A3 — почему [tag] нельзя выдать новому Направлению; null = можно.
+///
+/// Возвращает МАШИННЫЙ код причины (call-site рисует текст): `empty`,
+/// `reserved`, `duplicate`, `auto_twin` (тег занят двойником существующего
+/// Направления либо сам порождает двойник, тезкой уже существующего тега).
+///
+/// [existingTags] — теги уже существующих Направлений.
+String? directionTagConflict(String tag, Iterable<String> existingTags) {
+  final t = tag.trim();
+  if (t.isEmpty) return 'empty';
+  if (kReservedDirectionTags.contains(t)) return 'reserved';
+  final existing = existingTags.toSet();
+  if (existing.contains(t)) return 'duplicate';
+  // Новый тег не должен совпасть с двойником существующего Направления
+  // (`vpn-1-auto` при живом `vpn-1`) …
+  if (t.endsWith(kDirectionAutoSuffix) &&
+      existing.contains(
+          t.substring(0, t.length - kDirectionAutoSuffix.length))) {
+    return 'auto_twin';
+  }
+  // … и его собственный двойник не должен затереть существующий тег
+  // (`vpn-1` при живом `vpn-1-auto`).
+  if (existing.contains('$t$kDirectionAutoSuffix')) return 'auto_twin';
+  return null;
+}
+
 /// Пользовательское Направление роутинга. Хранится в `directions[]`. На первом запуске
 /// seeded из `template.groupTemplates` (`default_directions` + `direction`-шаблон;
 /// см. миграцию, §267).
@@ -211,6 +357,7 @@ class Direction {
     this.enabled = true,
     this.includeDirect = false,
     this.includeBlock = false,
+    this.include = const [],
     this.nodeFilter = '',
     this.nodeFilterInvert = false,
     this.defaultFilter = '',
@@ -219,7 +366,8 @@ class Direction {
     this.isDetour = false,
   });
 
-  /// 'vpn-1'..'vpn-10' — системный immutable id (автоген, юзер НЕ правит).
+  /// Системный immutable id: автовыданный `vpn-N` либо произвольный тег,
+  /// заданный при СОЗДАНИИ (§393 A3). После создания не правится.
   final String tag;
 
   /// Отображаемое имя ("Моя Германия") — единственное, что юзер вводит как «имя».
@@ -233,6 +381,29 @@ class Direction {
 
   /// §201 — галка: добавить `block` (дроп трафика) опцией в селектор Направления.
   final bool includeBlock;
+
+  /// §393 A3 — теги ДРУГИХ Направлений, предлагаемых опциями внутри этого
+  /// (канон `direction.schema.json:include`, лаунчер —
+  /// `Direction.AddOutbounds`). НЕ пересекается с [includeDirect]/
+  /// [includeBlock]: те две — служебные опции `direct-out`/`block`, живут
+  /// отдельными флагами и в `include` не попадают.
+  ///
+  /// АНТИЦИКЛ. Разрешены только Направления, стоящие ВЫШЕ по списку: порядок
+  /// исключает циклы по построению. Инвариант принуждается в ДВУХ местах,
+  /// как у лаунчера:
+  ///   • форма не предлагает кандидатов ниже текущего (`tagsAbove` лаунчера,
+  ///     `direction_edit_screen`);
+  ///   • билдер эмитит в состав только те include-теги, что уже эмитированы
+  ///     ВЫШЕ (`_buildDirectionGroups`); ссылка вниз / на несуществующее /
+  ///     на выключенное Направление молча не эмитится, но даёт warning.
+  ///
+  /// Хранение ссылку НЕ санитайзит (лаунчер тоже: reorder только меняет
+  /// порядок): пользователь вправе подвинуть Направление обратно и вернуть
+  /// смысл ссылке. Деградирует ВЫХЛОП, не данные.
+  ///
+  /// Парный `<tag>-auto` сюда не попадает — двойник является опцией только
+  /// своего Направления (канон схемы + `direction_twins.go`).
+  final List<String> include;
 
   /// regex по ИТОГОВОМУ tag ноды (§048-style, `n.tag.contains`/`RegExp.hasMatch`).
   /// '' → все ноды (текущее поведение).
@@ -304,6 +475,7 @@ class Direction {
     bool? enabled,
     bool? includeDirect,
     bool? includeBlock,
+    List<String>? include,
     String? nodeFilter,
     bool? nodeFilterInvert,
     String? defaultFilter,
@@ -319,6 +491,7 @@ class Direction {
         enabled: enabled ?? this.enabled,
         includeDirect: includeDirect ?? this.includeDirect,
         includeBlock: includeBlock ?? this.includeBlock,
+        include: include ?? this.include,
         nodeFilter: nodeFilter ?? this.nodeFilter,
         nodeFilterInvert: nodeFilterInvert ?? this.nodeFilterInvert,
         defaultFilter: defaultFilter ?? this.defaultFilter,
@@ -344,6 +517,11 @@ class Direction {
       enabled: json['enabled'] as bool? ?? true,
       includeDirect: json['include_direct'] as bool? ?? false,
       includeBlock: json['include_block'] as bool? ?? false,
+      // §393 A3 — отсутствие ключа = пустой список (байт-совместимость §221:
+      // существующие storage/бэкапы ключа не имеют). Мусор (не-строки,
+      // пустые после trim, дубли) отсеиваем на чтении — билдер не должен
+      // разгребать вход руками правленного файла / restore из backup.
+      include: _parseInclude(json['include']),
       nodeFilter: json['node_filter'] as String? ?? '',
       nodeFilterInvert: json['node_filter_invert'] as bool? ?? false,
       defaultFilter: json['default_filter'] as String? ?? '',
@@ -362,6 +540,10 @@ class Direction {
         'enabled': enabled,
         'include_direct': includeDirect,
         'include_block': includeBlock,
+        // §393 A3 — пустой список ключа НЕ пишет: байт-совместимость §221 с
+        // существующими storage-файлами и бэкапами (у них ключа нет вовсе,
+        // и появление `"include": []` меняло бы diff всем сразу).
+        if (include.isNotEmpty) 'include': include,
         'node_filter': nodeFilter,
         'node_filter_invert': nodeFilterInvert,
         'default_filter': defaultFilter,

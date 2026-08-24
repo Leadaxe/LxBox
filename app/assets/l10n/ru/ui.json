@@ -423,6 +423,9 @@
   "%s detour reference(s) reset to None": {
     "value": "detour-ссылок сброшено в None: %s"
   },
+  "%s direction option(s) removed": {
+    "value": "опций-Направлений убрано из состава: %s"
+  },
   "%s of %s servers": {
     "value": "%s из %s серверов"
   },
@@ -525,6 +528,9 @@
   "3. Hit «+». L×Box will fetch, parse and configure — and you can connect from the Home tab.": {
     "value": "3. Нажмите «+». L×Box загрузит, разберёт и настроит всё сам — подключайтесь с главного экрана."
   },
+  "A direction with this tag already exists": {
+    "value": "Направление с таким тегом уже есть"
+  },
   "A routing loop was found between groups. Review the loop below and break it, then start again.": {
     "value": "Обнаружена петля маршрутизации между группами. Просмотрите петлю ниже, разорвите её и запустите снова."
   },
@@ -609,8 +615,8 @@
   "Add detour servers to proxy groups (visible in node list)": {
     "value": "Добавлять detour-серверы в прокси-группы (видны в списке узлов)"
   },
-  "Add direction  (%1$d/%2$d)": {
-    "value": "Добавить Направление  (%1$d/%2$d)"
+  "Add direction  (%d)": {
+    "value": "Добавить Направление  (%d)"
   },
   "Add from clipboard": {
     "value": "Добавить из буфера обмена"
@@ -2170,6 +2176,9 @@
   "Include direct-out": {
     "value": "Добавлять direct-out"
   },
+  "Include other directions": {
+    "value": "Добавлять другие Направления"
+  },
   "Includes the access token. Sensitive — leave OFF unless you know why.": {
     "value": "Содержит токен доступа. Чувствительные данные — оставьте выключенным, если не уверены."
   },
@@ -2504,6 +2513,9 @@
   },
   "New auto node": {
     "value": "Новый авто-узел"
+  },
+  "New direction": {
+    "value": "Новое Направление"
   },
   "New folder": {
     "value": "Новая папка"
@@ -3833,6 +3845,9 @@
   "System default": {
     "value": "Как в системе"
   },
+  "System id, cannot be changed later": {
+    "value": "Системный id, потом не изменить"
+  },
   "System setup": {
     "value": "Настройка системы"
   },
@@ -3856,6 +3871,9 @@
   },
   "Tag (optional)": {
     "value": "Тег (необязательно)"
+  },
+  "Tag cannot be empty": {
+    "value": "Тег не может быть пустым"
   },
   "Tag copied": {
     "value": "Тег скопирован"
@@ -3979,6 +3997,12 @@
   },
   "This subscription has no detour servers of its own. You can still route all its nodes through one of your servers.": {
     "value": "У этой подписки нет собственных detour-серверов. Тем не менее можно направить все её узлы через один из ваших серверов."
+  },
+  "This tag collides with an auto twin (<tag>-auto)": {
+    "value": "Тег конфликтует с авто-двойником (<tag>-auto)"
+  },
+  "This tag is reserved by the config": {
+    "value": "Этот тег зарезервирован конфигом"
   },
   "This will fully close the app process so the new \"Forward sing-box logs\" value is picked up at next launch (Libbox.setup is one-shot per process). VPN service will stop. Tap the app icon to reopen.": {
     "value": "Процесс приложения будет полностью завершён, чтобы новое значение «Пересылать логи sing-box» подхватилось при следующем запуске (Libbox.setup вызывается один раз на процесс). Сервис VPN остановится. Чтобы открыть приложение снова, нажмите на его иконку."
@@ -4425,6 +4449,12 @@
   },
   "off: open connections finish on the old server": {
     "value": "выкл: открытые соединения доживают на прежнем сервере"
+  },
+  "only directions listed above this one": {
+    "value": "только Направления выше этого по списку"
+  },
+  "optional — defaults to the tag": {
+    "value": "необязательно — по умолчанию тег"
   },
   "platform error: %s": {
     "value": "ошибка платформы: %s"

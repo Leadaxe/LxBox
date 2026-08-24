@@ -82,6 +82,131 @@ void main() {
     });
   });
 
+  group('§393 A3 — include[]', () {
+    test('round-trip: список тегов переживает toJson/fromJson', () {
+      const c = Direction(
+          tag: 'vpn-3', label: 'x', include: ['vpn-1', 'vpn-2']);
+      final json = c.toJson();
+      expect(json['include'], ['vpn-1', 'vpn-2']);
+      expect(Direction.fromJson(json).include, ['vpn-1', 'vpn-2']);
+    });
+
+    test('пустой include ключа НЕ пишет (байт-совместимость §221)', () {
+      const c = Direction(tag: 'vpn-1', label: 'x');
+      expect(c.toJson().containsKey('include'), false);
+    });
+
+    test('отсутствие ключа на чтении = пустой список', () {
+      expect(Direction.fromJson({'tag': 'vpn-1'}).include, isEmpty);
+      // Не-список тоже: мусор не должен доезжать до билдера.
+      expect(Direction.fromJson({'tag': 'vpn-1', 'include': 'vpn-2'}).include,
+          isEmpty);
+    });
+
+    test('чтение нормализует: trim, без пустых, без дублей, без не-строк', () {
+      final c = Direction.fromJson({
+        'tag': 'vpn-3',
+        'include': [' vpn-1 ', '', 'vpn-1', 42, 'vpn-2'],
+      });
+      expect(c.include, ['vpn-1', 'vpn-2']);
+    });
+
+    test('include ортогонален includeDirect/includeBlock', () {
+      const c = Direction(
+          tag: 'vpn-2',
+          label: 'x',
+          include: ['vpn-1'],
+          includeDirect: true,
+          includeBlock: true);
+      final r = Direction.fromJson(c.toJson());
+      expect(r.include, ['vpn-1']);
+      expect(r.includeDirect, true);
+      expect(r.includeBlock, true);
+      // Служебные теги в include не дублируются.
+      expect(r.include, isNot(contains('direct-out')));
+      expect(r.include, isNot(contains('block')));
+    });
+
+    test('copyWith меняет include, не трогая прочее', () {
+      const c = Direction(tag: 'vpn-2', label: 'x', includeDirect: true);
+      final r = c.copyWith(include: ['vpn-1']);
+      expect(r.include, ['vpn-1']);
+      expect(r.includeDirect, true);
+      expect(c.include, isEmpty); // исходный не мутирован
+    });
+  });
+
+  group('§393 A3 — nextDirectionTag', () {
+    test('пусто → vpn-1', () {
+      expect(nextDirectionTag(const []), 'vpn-1');
+    });
+
+    test('первый свободный, а не «максимум + 1» (дыра в нумерации)', () {
+      expect(nextDirectionTag(const ['vpn-1', 'vpn-3']), 'vpn-2');
+      expect(nextDirectionTag(const ['vpn-2', 'vpn-3']), 'vpn-1');
+    });
+
+    test('произвольные теги нумерацию не занимают', () {
+      expect(nextDirectionTag(const ['ru-exit', 'proxy-out']), 'vpn-1');
+      expect(nextDirectionTag(const ['vpn-1', 'ru-exit']), 'vpn-2');
+    });
+
+    test('потолка нет: >10 выдаётся штатно', () {
+      final used = [for (var i = 1; i <= 10; i++) 'vpn-$i'];
+      expect(nextDirectionTag(used), 'vpn-11');
+      expect(nextDirectionTag([...used, 'vpn-11', 'vpn-12']), 'vpn-13');
+    });
+
+    test('auto-двойники нумерацию не занимают (vpn-1-auto ≠ vpn-N)', () {
+      expect(nextDirectionTag(const ['vpn-1-auto']), 'vpn-1');
+    });
+  });
+
+  group('§393 A3 — directionTagConflict', () {
+    test('свободный тег → null', () {
+      expect(directionTagConflict('ru-exit', const ['vpn-1']), isNull);
+      expect(directionTagConflict('vpn-2', const ['vpn-1']), isNull);
+    });
+
+    test('пустой / только пробелы → empty', () {
+      expect(directionTagConflict('', const []), 'empty');
+      expect(directionTagConflict('   ', const []), 'empty');
+    });
+
+    test('служебные теги конфига и псевдо-цели правил → reserved', () {
+      for (final t in ['direct-out', 'block', 'block-out', 'dns-out', 'direct',
+        'reject', 'drop']) {
+        expect(directionTagConflict(t, const []), 'reserved', reason: t);
+      }
+    });
+
+    test('дубль существующего → duplicate', () {
+      expect(directionTagConflict('vpn-1', const ['vpn-1']), 'duplicate');
+      // trim применяется до сравнения.
+      expect(directionTagConflict(' vpn-1 ', const ['vpn-1']), 'duplicate');
+    });
+
+    test('коллизия с auto-двойником в обе стороны → auto_twin', () {
+      expect(directionTagConflict('vpn-1-auto', const ['vpn-1']), 'auto_twin');
+      expect(directionTagConflict('exit', const ['exit-auto']), 'auto_twin');
+      // Без родителя `vpn-9` тег `vpn-9-auto` свободен.
+      expect(directionTagConflict('vpn-9-auto', const ['vpn-1']), isNull);
+    });
+  });
+
+  group('§393 A3 — defaultLabelForTag', () {
+    test('vpn-N → «VPN ⓝ», выше 10 — числом', () {
+      expect(defaultLabelForTag('vpn-1'), 'VPN ①');
+      expect(defaultLabelForTag('vpn-10'), 'VPN ⑩');
+      expect(defaultLabelForTag('vpn-11'), 'VPN 11');
+    });
+
+    test('произвольный тег → сам тег', () {
+      expect(defaultLabelForTag('ru-exit'), 'ru-exit');
+      expect(defaultLabelForTag('vpn-1-auto'), 'vpn-1-auto');
+    });
+  });
+
   group('§198 — defaultDirectionLabel (цифра в кружке)', () {
     test('1..10 → VPN ①..VPN ⑩', () {
       expect(defaultDirectionLabel(1), 'VPN ①');

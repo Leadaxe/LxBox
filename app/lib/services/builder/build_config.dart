@@ -216,18 +216,24 @@ Future<BuildResult> buildConfig({
   // _buildDirectionGroups эмитит их с фиксированным `c.tag` МИМО allocateTag,
   // и узел подписки с меткой `vpn-1` дал бы дубль тега → отказ ядра на
   // старте. С резервом такой узел получает суффикс `-N` штатным путём.
-  // Фильтр active — тот же, что в _buildDirectionGroups (enabled || required);
   // autoTag резервируем всегда, хотя эмитится он условно: пере-резерв лишь
   // добавит суффикс узлу-тёзке, а обратная ошибка стоила бы старта.
+  //
+  // §393 A3 — резерв идёт по ВСЕМ Направлениям, а не по активным
+  // (`enabled || required`). Зеркалить фильтр `_buildDirectionGroups` было
+  // ошибкой: тег ВЫКЛЮЧЕННОГО Направления не резервировался, узел подписки
+  // с таким же именем занимал literal-тег, и `include`-ссылка на выключенное
+  // Направление резолвилась НЕ в дроп с warning'ом (её цели в конфиге нет),
+  // а В УЗЕЛ-ТЁЗКУ — который к тому же уже лежал в составе от `nodesFor`.
+  // Пользователь получал «vpn-2» опцией, ведущей в чужой сервер. Резерв
+  // выключенного тега стоит ровно суффикс узлу-тёзке; ошибка стоила
+  // молчаливой подмены маршрута.
   final ctx = _BuildCtx(
     tvars,
     ruleSets,
     passiveCheck: settings.passiveCheck, // §322
     reservedTags: [
-      for (final c in directions.where((c) => c.enabled || c.isRequired)) ...[
-        c.tag,
-        c.autoTag,
-      ],
+      for (final c in directions) ...[c.tag, c.autoTag],
     ],
   );
   for (final list in lists) {
@@ -685,6 +691,12 @@ List<Map<String, dynamic>> _buildDirectionGroups({
       ],
   ];
 
+  // §393 A3 — теги Направлений, УЖЕ эмитированных выше по списку. Только на
+  // них законна ссылка `include`: эмиссия идёт по порядку, и ссылка вниз
+  // была бы forward-ref (антицикл держится порядком, как у лаунчера —
+  // `tagsAbove` в форме + топологический проход генератора).
+  final emittedAbove = <String>{};
+
   final result = <Map<String, dynamic>>[];
   for (var i = 0; i < active.length; i++) {
     final c = active[i];
@@ -692,12 +704,57 @@ List<Map<String, dynamic>> _buildDirectionGroups({
     final autoNodes = autoSets[i]; // §322 — без узлов автовыбора
     final emitAuto = c.auto != null && autoNodes.isNotEmpty;
 
-    // selector outbounds: ноды + (direct?) + (block?) + (<tag>-auto если эмит)
+    // §393 A3 — фильтр include: в состав идут только теги Направлений,
+    // эмитированных ВЫШЕ. Отсеиваются три случая, все одним warning'ом:
+    //   • ссылка ВНИЗ по списку (в т.ч. после reorder — Направление
+    //     переехало выше своей цели): ядро отвергло бы конфиг на
+    //     forward-ref, поэтому деградируем состав, а не ломаем сборку;
+    //   • ссылка на выключенное Направление: его нет в `active`, значит и
+    //     тега в конфиге нет — dangling ref не даёт ядру стартовать;
+    //   • ссылка на несуществующий тег (удалённое Направление, правленый
+    //     руками файл, restore из чужого бэкапа).
+    // Самоссылка отсеивается тем же условием: свой тег в `emittedAbove` ещё
+    // не лежит (кладём его в конце итерации).
+    final includeTags = <String>[];
+    for (final t in c.include) {
+      if (emittedAbove.contains(t)) {
+        if (!includeTags.contains(t)) includeTags.add(t);
+        continue;
+      }
+      emitWarnings.add(
+          'Direction "${c.displayLabel}" (${c.tag}): option "$t" dropped — '
+          'it must be another direction listed above this one (and enabled).');
+    }
+
+    // §393 A3 — ПОРЯДОК СОСТАВА нормативен (corpus/direction/README.md
+    // «сначала служебные опции и ссылки на другие Направления, потом узлы
+    // в порядке конфига»), потому что первый элемент = НЕЯВНЫЙ default
+    // sing-box: селектор без поля `default` стартует на первой опции.
+    // Служебные опции спереди — это и UX (не листать сотню узлов, чтобы
+    // включить direct), и семантика (узел подписки не должен молча стать
+    // умолчанием Направления, состоящего из ссылок).
+    //
+    // Порядок ВНУТРИ служебного блока: `<tag>-auto`, direct-out, block-out,
+    // include-теги. Эталон — лаунчер: у него direct/block и include лежат
+    // ОДНИМ списком `Direction.AddOutbounds`, который эмитится целиком перед
+    // узлами (outbound_generator.go:575-576 «Add addOutbounds first»), а
+    // собирается формой в фиксированном порядке чекбоксов
+    // `direct-out → block → прочие теги` (edit_dialog.go:462-472). У мобилы
+    // те же данные разложены на два флага + список, поэтому порядок
+    // воспроизводим руками. auto-двойник впереди всех — так его кладёт
+    // `direction_twins.go:112` (`prependUnique(twinTag, parent.AddOutbounds)`).
+    //
+    // Обе фикстуры корпуса сходятся на этом порядке: у
+    // `include_earlier_direction` служебных опций нет → `[vpn-1, узлы…]`;
+    // у `include_direct_and_block` нет include → `[direct-out, block-out,
+    // узел]`. Кейса с обеими категориями сразу в корпусе нет — тай-брейк
+    // взят у лаунчера, а не выдуман.
     final selectorOutbounds = <String>[
-      ...nodes,
+      if (emitAuto) c.autoTag,
       if (c.includeDirect) kDirectOutboundTag,
       if (c.includeBlock) kBlockOutboundTag, // §274 — совместим с detour
-      if (emitAuto) c.autoTag,
+      ...includeTags,
+      ...nodes,
     ];
     // §201/§274 — пустой набор (regex не матчит / нет нод) → fallback на
     // [block, direct-out] с default=block для ВСЕХ Направлений (безопаснее
@@ -721,11 +778,32 @@ List<Map<String, dynamic>> _buildDirectionGroups({
     if (nodes.isEmpty && c.nodeFilter.isNotEmpty && selectorTags.isNotEmpty) {
       final effective =
           emptyFallback ? kBlockOutboundTag : selectorOutbounds.first;
+      // §393 A3 — исход зависит от того, ЧТО стало первой опцией: block
+      // (пустой fallback), direct-out (юзер включил галку — трафик идёт мимо
+      // VPN, врать «blocked» нельзя) или другое Направление из `include`,
+      // которое ведёт трафик СВОИМИ узлами (ни то, ни другое).
+      final outcome = switch (effective) {
+        kDirectOutboundTag => 'traffic goes direct (no VPN hop)',
+        kBlockOutboundTag => 'traffic is blocked (default)',
+        _ => 'traffic falls back to "$effective"',
+      };
       emitWarnings.add(
           'Direction "${c.displayLabel}" (${c.tag}): node filter matched no '
-          'nodes — ${effective == kDirectOutboundTag ? 'traffic goes direct (no VPN hop)' : 'traffic is blocked (default)'}. '
+          'nodes — $outcome. '
           'Check its node filter.');
-      directionsWithoutNodes.add(c.displayLabel);
+      // §393 A3 — SnackBar «Направления без узлов» гейтится УЖЕ ИСХОДОМ, а не
+      // фактом пустого node-set. Список `directionsWithoutNodes` в UI зовёт
+      // пользователя чинить фильтр СРОЧНО, потому что Направление
+      // фактически не ведёт трафик: block-fallback (`emptyFallback`) или
+      // единственные служебные опции direct/block. Если же `include[]` дал
+      // рабочих участников — Направление живое, трафик идёт узлами цели, и
+      // поднимать тревогу не за что. Текст в AppLog остаётся в обоих
+      // случаях: он информирует, а не требует действия.
+      final onlyMagic = selectorOutbounds
+          .every((t) => t == kDirectOutboundTag || t == kBlockOutboundTag);
+      if (emptyFallback || onlyMagic) {
+        directionsWithoutNodes.add(c.displayLabel);
+      }
     }
 
     final selector = <String, dynamic>{
@@ -793,6 +871,14 @@ List<Map<String, dynamic>> _buildDirectionGroups({
       }
       result.add(urltest);
     }
+
+    // §393 A3 — тег этого Направления становится законной целью `include`
+    // для СЛЕДУЮЩИХ. Регистрируем в конце итерации: свой же тег не должен
+    // попасть в собственный состав (самоссылка = кольцо на одном узле).
+    // Двойник `<tag>-auto` сюда НЕ кладём — он опция только своего
+    // Направления (канон схемы + `direction_twins.go:buildTwin`, где
+    // производная запись помечена TwinOf и другим не предлагается).
+    emittedAbove.add(c.tag);
   }
   return result;
 }

@@ -13,8 +13,10 @@ part of '../settings_storage.dart';
 /// §248 — счётчики вылеченных ссылок при мутации Направления (SnackBar в UI,
 /// тело ответа Debug API). `rules` — route_final/custom-rule → vpn-1
 /// (только disable/delete, §274 снял flag-set-триггер); `detours` —
-/// overrideDetour/member.detour → '' (None) при disable/delete/flag-unset.
-typedef DirectionHealResult = ({int rules, int detours});
+/// overrideDetour/member.detour → '' (None) при disable/delete/flag-unset;
+/// `includes` — §393 A3, `Direction.include` чужих Направлений → тег вычеркнут
+/// (только delete, см. [clearIncludeDirectionRefs]).
+typedef DirectionHealResult = ({int rules, int detours, int includes});
 
 Future<List<Direction>> _getDirections() async {
   final data = await _load();
@@ -30,19 +32,29 @@ Future<void> _setDirections(List<Direction> directions, {bool flush = true}) asy
   if (flush) await _save();
 }
 
-/// Первый свободный 'vpn-N' (N∈2..10; vpn-1 всегда существует инвариантом).
-/// throws [StateError] при лимите [kMaxDirections].
-Future<Direction> _addDirection({String? label}) async {
+/// Создать Направление.
+///
+/// §393 A3 — лимита на количество БОЛЬШЕ НЕТ (паритет с лаунчером:
+/// `configtypes.NextDirectionTag` потолка не имеет, а прежние 10 были
+/// следствием интерфейса, не модели). [kMaxDirections] остался границей
+/// дефолтных имён «VPN ①..VPN ⑩»: одиннадцатое получает честное «VPN 11».
+///
+/// [tag] — пользовательский тег; по умолчанию первый свободный `vpn-N`
+/// ([nextDirectionTag]). Валидируется [directionTagConflict] (непустой после
+/// trim, не служебный, не дубль, не тёзка чьего-либо `<tag>-auto`) — при
+/// конфликте [StateError] с машинным кодом причины в тексте.
+Future<Direction> _addDirection({String? label, String? tag}) async {
   final directions = (await _getDirections()).toList();
-  if (directions.length >= kMaxDirections) {
-    throw StateError('direction limit ($kMaxDirections) reached');
+  final used = directions.map((c) => c.tag).toList();
+  final wanted = (tag ?? nextDirectionTag(used)).trim();
+  final conflict = directionTagConflict(wanted, used);
+  if (conflict != null) {
+    throw StateError('direction tag "$wanted" rejected: $conflict');
   }
-  final used = directions.map((c) => c.tag).toSet();
-  final tag = [for (var i = 2; i <= kMaxDirections; i++) 'vpn-$i']
-      .firstWhere((t) => !used.contains(t));
-  // §198 — дефолтный label с цифрой-в-кружке по номеру (VPN ②…VPN ⑩).
-  final defaultLabel = defaultDirectionLabel(directionNumberOf(tag) ?? 0);
-  final ch = Direction(tag: tag, label: label ?? defaultLabel, enabled: true);
+  // §198/§393 A3 — дефолтный label: «VPN ⓝ» для автовыданного `vpn-N`,
+  // сам тег для произвольного (выдумывать «VPN» для `ru-exit` — врать).
+  final ch = Direction(
+      tag: wanted, label: label ?? defaultLabelForTag(wanted), enabled: true);
   directions.add(ch);
   await _setDirections(directions);
   return ch;
@@ -78,22 +90,36 @@ Future<DirectionHealResult> _updateDirection(Direction direction) async {
   } else {
     await _setDirections(directions);
   }
-  return (rules: rules, detours: detours);
+  // §393 A3 — include-ссылки на ВЫКЛЮЧЕННОЕ Направление НЕ лечим, в отличие от
+  // rules/detours. Асимметрия намеренная и держится на обратимости:
+  // выключение — состояние, а не исчезновение. Цель остаётся в списке,
+  // форма рисует её чекбоксом (снятым), билдер деградирует ВЫХЛОП с
+  // warning'ом, и включение обратно немедленно возвращает рабочий состав.
+  // Вычистить `include` здесь значило бы применить необратимость Решения B
+  // (§202) к обратимому действию: пользователь вернул бы галку и обнаружил
+  // пустой состав, не понимая, куда делись опции.
+  return (rules: rules, detours: detours, includes: 0);
 }
 
 /// Удалить Направление. vpn-1 неудаляем (throws). Любая ссылка на удалённый tag
-/// (route_final / custom-rule outbound → vpn-1; §248 detour-ссылки → '')
-/// немедленно лечится для UI-консистентности; билдер дополнительно
-/// схлопывает dangling при сборке (§172-паттерн).
+/// (route_final / custom-rule outbound → vpn-1; §248 detour-ссылки → '';
+/// §393 A3 include-ссылки → вычеркнуты) немедленно лечится для
+/// UI-консистентности; билдер дополнительно схлопывает dangling при сборке
+/// (§172-паттерн).
 Future<DirectionHealResult> _deleteDirection(String tag) async {
   if (tag == 'vpn-1') throw StateError('vpn-1 is not deletable');
-  final directions = (await _getDirections()).toList()
+  var directions = (await _getDirections()).toList()
     ..removeWhere((c) => c.tag == tag);
+  // §393 A3 — include-ссылки живут В САМОМ списке Направлений, а не в чужом
+  // storage-ключе: чистим их ДО записи, одной перезаписью, а не отдельным
+  // read-modify-write поверх только что сохранённого списка.
+  final (:healed, :count) = clearIncludeDirectionRefs(directions, tag);
+  directions = healed;
   await _setDirections(directions, flush: false); // единый flush ниже
   final rules = await _healDirectionRefs(tag);
   final detours = await _healDetourDirectionRefs(tag);
   await _save();
-  return (rules: rules, detours: detours);
+  return (rules: rules, detours: detours, includes: count);
 }
 
 /// Перевод rules-ссылок на Направление → 'vpn-1'. Вызывается, когда Направление
@@ -234,6 +260,49 @@ Map<String, dynamic> normalizeLegacyDirectionKeys(Map<String, dynamic> raw) {
   return out;
 }
 
+/// §393 A3 — продуктовый инвариант «vpn-1 существует и включён», закреплённый
+/// в ЕДИНСТВЕННОЙ точке, через которую проходят ВСЕ пути загрузки состава:
+/// старт (`main()` init), restore внутреннего бэкапа (`applyImport` →
+/// migrate) и Debug API `/backup/import`. Все трое зовут
+/// [_migrateDirectionsIfNeeded].
+///
+/// Зачем понадобилось. До §393 A3 инвариант держался КОНСТРУКТИВНО: теги были
+/// только `vpn-N`, `vpn-1` сеялся миграцией и был неудаляем/невыключаем —
+/// список без него нельзя было построить. A3 снял ограничение на форму тега
+/// (`ru-exit` легален) и открыл правленый импорт, и список без `vpn-1` стал
+/// конструируемым: достаточно подсунуть `{"directions":[{"tag":"ru-exit"}]}`.
+/// А целятся в `vpn-1` жёстко:
+///   • `_healDirectionRefs` — `saveRouteFinal('vpn-1')` и `withOutbound('vpn-1')`;
+///   • билдер — деградация dangling `route_final` → `'vpn-1'`
+///     (`build_config.dart`, «switched to vpn-1»).
+/// Без записи-мишени каждый из них пишет висячую ссылку, а висячий
+/// `route.final` — fatal на старте ядра: VPN не поднимается вовсе.
+///
+/// Дёшево: проверка идёт по СЫРОМУ списку (`map['tag']`), без
+/// `Direction.fromJson` — на самом частом пути (ветка 1, vpn-1 на месте) это
+/// один линейный проход и ноль записей на диск. Возвращает `true`, только
+/// если запись вставлена — вызывающий решает, сохранять ли.
+///
+/// Вставляем ПЕРВОЙ: `vpn-1` — умолчание всех heal'ов, и в списке Направлений
+/// (он же порядок эмиссии, он же область видимости `include`) умолчание
+/// должно быть видно всем. Чужие записи сохраняются как есть, в своём порядке.
+bool _ensureRequiredDirection(Map<String, dynamic> data) {
+  final raw = data['directions'];
+  if (raw is! List) return false;
+  for (final e in raw) {
+    if (e is Map && e['tag'] == 'vpn-1') return false;
+  }
+  data['directions'] = [
+    Direction(
+      tag: 'vpn-1',
+      label: defaultLabelForTag('vpn-1'),
+      enabled: true,
+    ).toJson(),
+    ...raw,
+  ];
+  return true;
+}
+
 Future<void> _migrateDirectionsIfNeeded(
   GroupTemplates gt, {
   Map<String, String> varDefaults = const {},
@@ -246,11 +315,16 @@ Future<void> _migrateDirectionsIfNeeded(
     // ЕДИНСТВЕННЫЙ источник такой картинки: импорт легаси-имена в storage не
     // пропускает ([normalizeLegacyDirectionKeys] на границах) — уборка тут
     // безопасна и не может съесть восстановленный архив.
+    var dirty = false;
     if (data.containsKey(kLegacyDirectionsKey) ||
         data.containsKey(kLegacyDirectionsMigratedKey)) {
       data.remove(kLegacyDirectionsKey);
       data.remove(kLegacyDirectionsMigratedKey);
       data['directions_migrated'] = true;
+      dirty = true;
+    }
+    if (_ensureRequiredDirection(data)) dirty = true;
+    if (dirty) {
       SettingsStorage._cache = data;
       await _save();
     }
@@ -266,6 +340,7 @@ Future<void> _migrateDirectionsIfNeeded(
     data.remove(kLegacyDirectionsKey);
     data.remove(kLegacyDirectionsMigratedKey);
     data['directions_migrated'] = true;
+    _ensureRequiredDirection(data); // §393 A3 — легаси-список тоже мог быть без vpn-1
     SettingsStorage._cache = data;
     await _save();
     return;

@@ -247,4 +247,106 @@ void main() {
       'Renamed',
     );
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // §393 A3 — ТРЕТИЙ род ссылки на Направление: `include[]` чужих Направлений.
+  //
+  // От rules и detours отличается тем, что живёт не в чужом storage-ключе, а
+  // в САМОМ списке Направлений. Поэтому лечится ДО записи списка, одной
+  // перезаписью, и по тому же паттерну §202: удаление лечит, выключение —
+  // нет (оно обратимо, билдер деградирует лишь выхлоп).
+  // ─────────────────────────────────────────────────────────────────────
+  group('§393 A3 — heal include при удалении Направления', () {
+    Future<void> seedIncludeChain() async {
+      final data = {
+        'directions_migrated': true,
+        'directions': [
+          const Direction(tag: 'vpn-1', label: 'Main').toJson(),
+          const Direction(tag: 'vpn-2', label: 'Aux').toJson(),
+          const Direction(tag: 'vpn-3', label: 'Third', include: ['vpn-2', 'vpn-1'])
+              .toJson(),
+        ],
+      };
+      await File(mainPath()).writeAsString(jsonEncode(data));
+      SettingsStorage.resetCacheForTesting();
+    }
+
+    Future<List<String>> includeOf(String tag) async =>
+        (await SettingsStorage.getDirections())
+            .firstWhere((c) => c.tag == tag)
+            .include;
+
+    test('delete vpn-2 → include=[vpn-1], счётчик includes==1', () async {
+      await seedIncludeChain();
+      final healed = await SettingsStorage.deleteDirection('vpn-2');
+      expect(await includeOf('vpn-3'), ['vpn-1'],
+          reason: 'осиротевший тег вычеркнут, порядок остальных сохранён');
+      expect(healed.includes, 1);
+      expect(healed.rules, 0);
+      expect(healed.detours, 0);
+    });
+
+    test('disable vpn-2 → include НЕ тронут (выключение обратимо)', () async {
+      await seedIncludeChain();
+      final vpn2 = (await SettingsStorage.getDirections())
+          .firstWhere((c) => c.tag == 'vpn-2');
+      final healed =
+          await SettingsStorage.updateDirection(vpn2.copyWith(enabled: false));
+      expect(await includeOf('vpn-3'), ['vpn-2', 'vpn-1'],
+          reason: 'цель на месте, форма покажет её снятым чекбоксом');
+      expect(healed.includes, 0);
+    });
+
+    test('auto-двойник в include вычищается вместе с тегом', () async {
+      // В `include` `<tag>-auto` невалиден и так (билдер сверяет с
+      // эмитированными СЕЛЕКТОРАМИ), но Debug API и правленый бэкап записать
+      // его туда могут — как и в rules-heal, где двойник проверяется.
+      final data = {
+        'directions_migrated': true,
+        'directions': [
+          const Direction(tag: 'vpn-1', label: 'Main').toJson(),
+          const Direction(tag: 'vpn-2', label: 'Aux').toJson(),
+          const Direction(
+                  tag: 'vpn-3',
+                  label: 'Third',
+                  include: ['vpn-2', 'vpn-2-auto', 'vpn-1'])
+              .toJson(),
+        ],
+      };
+      await File(mainPath()).writeAsString(jsonEncode(data));
+      SettingsStorage.resetCacheForTesting();
+
+      final healed = await SettingsStorage.deleteDirection('vpn-2');
+      expect(await includeOf('vpn-3'), ['vpn-1']);
+      expect(healed.includes, 2, reason: 'тег + его auto-двойник');
+    });
+
+    test('несколько Направлений ссылались — вылечены все, счётчик суммарный',
+        () async {
+      final data = {
+        'directions_migrated': true,
+        'directions': [
+          const Direction(tag: 'vpn-1', label: 'Main').toJson(),
+          const Direction(tag: 'vpn-2', label: 'Aux').toJson(),
+          const Direction(tag: 'vpn-3', label: 'C', include: ['vpn-2']).toJson(),
+          const Direction(tag: 'vpn-4', label: 'D', include: ['vpn-2', 'vpn-1'])
+              .toJson(),
+        ],
+      };
+      await File(mainPath()).writeAsString(jsonEncode(data));
+      SettingsStorage.resetCacheForTesting();
+
+      final healed = await SettingsStorage.deleteDirection('vpn-2');
+      expect(await includeOf('vpn-3'), isEmpty);
+      expect(await includeOf('vpn-4'), ['vpn-1']);
+      expect(healed.includes, 2);
+    });
+
+    test('delete Направления, на которое никто не ссылался → includes==0',
+        () async {
+      await seedIncludeChain();
+      final healed = await SettingsStorage.deleteDirection('vpn-3');
+      expect(healed.includes, 0);
+    });
+  });
 }

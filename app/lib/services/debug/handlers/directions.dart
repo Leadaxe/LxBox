@@ -12,7 +12,8 @@ import '_shared.dart';
 /// Тонкая обёртка над `DirectionMutations.add / update / delete` (§275 —
 /// storage-мутация + зеркальный ресинк `_entries` контроллера одной
 /// операцией) — та же семантика, что у UI:
-/// vpn-1 неудаляем и всегда enabled, лимит [kMaxDirections]. Heal ссылок в
+/// vpn-1 неудаляем и всегда enabled; лимита на количество нет (§393 A3).
+/// Heal ссылок в
 /// storage: rules-ссылки → vpn-1 при удалении/выключении (§202-механика;
 /// установка detour-флага rules НЕ лечит — §274, флаг = разрешение);
 /// detour-ссылки → '' при удалении/выключении/снятии флага (§248);
@@ -20,8 +21,9 @@ import '_shared.dart';
 ///
 /// Routes:
 /// - `GET    /directions`            → list (Direction.toJson, snake_case)
-/// - `POST   /directions`            → create (body: `{"label":"..."}` +
-///                                    опционально любые PATCH-поля)
+/// - `POST   /directions`            → create (body: `{"label":"...",
+///                                    "tag":"..."}` + опционально любые
+///                                    PATCH-поля; `tag` только при создании)
 /// - `POST   /directions/reorder`    → reorder (body: `{"order":[tag,...]}`)
 /// - `GET    /directions/{tag}`      → single
 /// - `PATCH  /directions/{tag}`      → partial update
@@ -78,11 +80,15 @@ Future<DebugResponse> _single(String tag) async {
 Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
   final label = fieldString(body, 'label');
+  // §393 A3 — опциональный пользовательский тег; отсутствует → первый
+  // свободный `vpn-N`. Валидацию (пустой/служебный/дубль/тёзка `<tag>-auto`)
+  // делает storage — одна точка для UI и API.
+  final tag = fieldString(body, 'tag');
   final Direction created;
   try {
-    created = await DirectionMutations.add(label: label);
+    created = await DirectionMutations.add(label: label, tag: tag);
   } on StateError catch (e) {
-    // Лимит Направлений — precondition, юзер может удалить лишний и повторить.
+    // Конфликт тега — precondition: юзер может выбрать другой и повторить.
     throw Conflict(e.message);
   }
   // Остальные поля body — как PATCH сразу после создания (один вызов
@@ -92,8 +98,8 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   // тега после restore из backup может встретить stale-ссылку — heal тот же,
   // что у PATCH, поэтому и shape ответа единый. Достижимый путь: body с
   // `enabled:false` даёт disabling-переход, а он лечит ОБА рода ссылок.
-  DirectionHealResult healed = (rules: 0, detours: 0);
-  final patched = _applyPatch(ch, body);
+  DirectionHealResult healed = (rules: 0, detours: 0, includes: 0);
+  final patched = _applyPatch(ch, body, tagConsumed: true);
   if (patched != null) {
     ch = patched;
     healed = await DirectionMutations.update(ch, ctx.registry.sub);
@@ -101,7 +107,11 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     ...ch.toJson(),
-    'healed': {'rules': healed.rules, 'detours': healed.detours},
+    'healed': {
+      'rules': healed.rules,
+      'detours': healed.detours,
+      'includes': healed.includes, // §393 A3
+    },
     ...extras,
   }, status: 201);
 }
@@ -119,7 +129,11 @@ Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) as
   // UI-SnackBar'а о вылеченных ссылках (§202/§248), heal молчаливым не бывает.
   return JsonResponse({
     ...next.toJson(),
-    'healed': {'rules': healed.rules, 'detours': healed.detours},
+    'healed': {
+      'rules': healed.rules,
+      'detours': healed.detours,
+      'includes': healed.includes, // §393 A3
+    },
     ...extras,
   });
 }
@@ -138,7 +152,11 @@ Future<DebugResponse> _delete(String tag, DebugRequest req, DebugContext ctx) as
     'ok': true,
     'action': 'directions-delete',
     'tag': tag,
-    'healed': {'rules': healed.rules, 'detours': healed.detours},
+    'healed': {
+      'rules': healed.rules,
+      'detours': healed.detours,
+      'includes': healed.includes, // §393 A3
+    },
     ...extras,
   });
 }
@@ -178,8 +196,12 @@ Future<DebugResponse> _reorder(DebugRequest req, DebugContext ctx) async {
 /// Применяет PATCH-поля body к [ch]. Возвращает новый Direction или null,
 /// если ни одно изменяемое поле не передано. Бросает [BadRequest] /
 /// [Conflict] на невалидные значения и нарушение инвариантов.
-Direction? _applyPatch(Direction ch, Map<String, dynamic> body) {
-  if (body.containsKey('tag')) {
+Direction? _applyPatch(Direction ch, Map<String, dynamic> body,
+    {bool tagConsumed = false}) {
+  // §393 A3 — POST принимает `tag` (пожелание для СОЗДАНИЯ, уже применён
+  // выше); PATCH — нет: после создания тег immutable, на него ссылаются
+  // правила/detour'ы.
+  if (!tagConsumed && body.containsKey('tag')) {
     throw const BadRequest('field "tag" is immutable (system id, edit "label" instead)');
   }
 
@@ -222,6 +244,13 @@ Direction? _applyPatch(Direction ch, Map<String, dynamic> body) {
   final label = fieldString(body, 'label');
   final includeDirect = fieldBool(body, 'include_direct');
   final includeBlock = fieldBool(body, 'include_block');
+  // §393 A3 — `include`: теги других Направлений опциями селектора. Здесь
+  // проверяем только ФОРМУ (список строк): «стоит ли цель выше по списку»
+  // зависит от порядка, а порядок меняет отдельный `/directions/reorder` —
+  // санитайзить хранилище на каждый чих значило бы молча стирать ссылку,
+  // которую вернёт следующий reorder. Инвариант деградирует ВЫХЛОП: билдер
+  // не эмитит ссылку вниз и предупреждает (см. `_buildDirectionGroups`).
+  final include = fieldStringList(body, 'include');
   final nodeFilterInvert = fieldBool(body, 'node_filter_invert');
   final interrupt = fieldBool(body, 'interrupt_exist_connections');
 
@@ -243,6 +272,7 @@ Direction? _applyPatch(Direction ch, Map<String, dynamic> body) {
       nodeFilter != null ||
       nodeFilterInvert != null ||
       defaultFilter != null ||
+      include != null ||
       interrupt != null ||
       detour != null ||
       auto != null ||
@@ -254,6 +284,7 @@ Direction? _applyPatch(Direction ch, Map<String, dynamic> body) {
     enabled: enabled,
     includeDirect: includeDirect,
     includeBlock: includeBlock,
+    include: include,
     nodeFilter: nodeFilter,
     nodeFilterInvert: nodeFilterInvert,
     defaultFilter: defaultFilter,

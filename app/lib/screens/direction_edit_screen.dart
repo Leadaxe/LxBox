@@ -18,6 +18,7 @@ class DirectionEditScreen extends StatefulWidget {
     required this.initial,
     required this.canDelete,
     required this.allNodeTags,
+    this.directionsAbove = const [],
   });
 
   final Direction initial;
@@ -27,6 +28,13 @@ class DirectionEditScreen extends StatefulWidget {
 
   /// Снимок тегов нод подписки для live-превью фильтров.
   final List<String> allNodeTags;
+
+  /// §393 A3 — Направления, стоящие ВЫШЕ редактируемого по списку: только их
+  /// законно взять опцией (`include`). Порядок исключает циклы по построению,
+  /// поэтому форма кандидатов ниже не предлагает вовсе (эталон —
+  /// `tagsAbove` лаунчера). У самого верхнего список пуст, и секция не
+  /// рисуется.
+  final List<Direction> directionsAbove;
 
   @override
   State<DirectionEditScreen> createState() => _DirectionEditScreenState();
@@ -46,6 +54,11 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
 
   late bool _includeDirect;
   late bool _includeBlock;
+
+  /// §393 A3 — выбранные теги других Направлений. Set для O(1) галок; в
+  /// снапшот уезжает списком в порядке [DirectionEditScreen.directionsAbove]
+  /// (детерминизм diff/JSON — как со sticky_hash).
+  late Set<String> _include;
   late bool _isDetour;
   late bool _interrupt;
   late bool _nodeFilterInvert;
@@ -64,6 +77,7 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
     _defaultFilterCtrl = TextEditingController(text: c.defaultFilter);
     _includeDirect = c.includeDirect;
     _includeBlock = c.includeBlock;
+    _include = c.include.toSet();
     _isDetour = c.isDetour;
     _interrupt = c.interruptExistConnections;
     _nodeFilterInvert = c.nodeFilterInvert;
@@ -127,6 +141,13 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
           : _labelCtrl.text.trim(),
       includeDirect: _includeDirect,
       includeBlock: _includeBlock,
+      // §393 A3 — сохраняем ТОЛЬКО живых кандидатов сверху: галка снятая
+      // потому, что Направление уехало вниз, честно уходит из данных, а не
+      // висит битой ссылкой. Порядок — по списку кандидатов.
+      include: [
+        for (final d in widget.directionsAbove)
+          if (_include.contains(d.tag)) d.tag,
+      ],
       isDetour: _isDetour,
       nodeFilter: _nodeFilterCtrl.text.trim(),
       nodeFilterInvert: _nodeFilterInvert,
@@ -171,6 +192,7 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
     return s.label != i.label ||
         s.includeDirect != i.includeDirect ||
         s.includeBlock != i.includeBlock ||
+        !_sameTags(s.include, i.include) ||
         s.isDetour != i.isDetour ||
         s.nodeFilter != i.nodeFilter ||
         s.nodeFilterInvert != i.nodeFilterInvert ||
@@ -190,6 +212,52 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
                 s.auto!.pool != i.auto!.pool ||
                 s.auto!.poolTolerance != i.auto!.poolTolerance ||
                 !_sameSticky(s.auto!.stickyHash, i.auto!.stickyHash)));
+  }
+
+  /// §393 A3 — секция «Include other directions»: чекбокс на каждое
+  /// Направление ВЫШЕ текущего. Пустой список кандидатов → пустая секция
+  /// (у самого верхнего включать нечего, и заголовок над пустотой только
+  /// сбивал бы с толку).
+  List<Widget> _includeSection(ColorScheme cs) {
+    if (widget.directionsAbove.isEmpty) return const [];
+    return [
+      const SizedBox(height: 8),
+      Text(getLocalText.s("Include other directions"),
+          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+      Text(getLocalText.s("only directions listed above this one"),
+          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+      for (final d in widget.directionsAbove)
+        CheckboxListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          visualDensity: VisualDensity.compact,
+          title: Text(d.displayLabel, style: const TextStyle(fontSize: 14)),
+          subtitle: Text(d.tag,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: cs.onSurfaceVariant)),
+          value: _include.contains(d.tag),
+          onChanged: (v) => setState(() {
+            if (v ?? false) {
+              _include.add(d.tag);
+            } else {
+              _include.remove(d.tag);
+            }
+          }),
+        ),
+    ];
+  }
+
+  /// §393 A3 — равенство include-наборов (порядок детерминирован снапшотом,
+  /// но сравниваем как последовательности: порядок опций в селекторе значим).
+  static bool _sameTags(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   /// §208 — равенство sticky-наборов (порядок детерминирован в _snapshot, но
@@ -380,6 +448,11 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
               value: _includeBlock,
               onChanged: (v) => setState(() => _includeBlock = v ?? false),
             ),
+            // §393 A3 — другие Направления опциями этого. Показываем ТОЛЬКО
+            // стоящие выше по списку: порядок эмиссии исключает циклы, а
+            // ссылка вниз была бы forward-ref, который ядро не принимает.
+            // У самого верхнего Направления кандидатов нет → секции нет.
+            ...(_includeSection(cs)),
             CheckboxListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
@@ -786,6 +859,7 @@ Future<DirectionEditResult?> openDirectionEditor(
   required Direction initial,
   required bool canDelete,
   required List<String> allNodeTags,
+  List<Direction> directionsAbove = const [],
 }) =>
     Navigator.push<DirectionEditResult>(
       context,
@@ -794,6 +868,7 @@ Future<DirectionEditResult?> openDirectionEditor(
           initial: initial,
           canDelete: canDelete,
           allNodeTags: allNodeTags,
+          directionsAbove: directionsAbove,
         ),
       ),
     );

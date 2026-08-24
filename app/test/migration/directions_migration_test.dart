@@ -319,17 +319,24 @@ void main() {
       expect(raw.containsKey('channels'), isFalse);
     });
 
-    test('второй вызов после переноса — no-op (идемпотентность)', () async {
+    test('второй вызов после переноса не ПЕРЕСЕИВАЕТ шаблон — только '
+        'восстанавливает vpn-1 (§393 A3)', () async {
       await seedFile({
         'channels': [
           {'tag': 'vpn-1', 'label': 'Keep', 'enabled': true},
+          {'tag': 'vpn-7', 'label': 'Seven', 'enabled': true},
         ],
       });
       await SettingsStorage.migrateDirectionsIfNeeded(template());
       // Юзер удалил всё после миграции.
       await SettingsStorage.setDirections(const []);
       await SettingsStorage.migrateDirectionsIfNeeded(template());
-      expect(await SettingsStorage.getDirections(), isEmpty);
+      // Идемпотентность = «не пересеиваем ШАБЛОН»: vpn-2/vpn-3 из
+      // `template()` не воскресли, и удалённый vpn-7 тоже. Но vpn-1 —
+      // продуктовый инвариант (§393 A3), а не элемент сида: в него целятся
+      // heal'ы и деградация билдера, поэтому он восстанавливается.
+      expect((await SettingsStorage.getDirections()).map((c) => c.tag),
+          ['vpn-1']);
     });
   });
 
@@ -354,12 +361,46 @@ void main() {
       expect(ch.label, 'VPN ④');
     });
 
-    test('addDirection — лимит 10 throws', () async {
-      for (var i = 4; i <= 10; i++) {
+    test('§393 A3 — лимита на количество нет: 11-е и 12-е создаются', () async {
+      for (var i = 4; i <= 12; i++) {
         await SettingsStorage.addDirection();
       }
-      expect((await SettingsStorage.getDirections()).length, 10);
-      expect(() => SettingsStorage.addDirection(), throwsStateError);
+      final all = await SettingsStorage.getDirections();
+      expect(all.length, 12);
+      expect(all.map((c) => c.tag).toList(),
+          [for (var i = 1; i <= 12; i++) 'vpn-$i']);
+      // §393 A3 — кружок-цифра кончается на ⑩; дальше честное число.
+      expect(all[9].label, 'VPN ⑩');
+      expect(all[10].label, 'VPN 11');
+      expect(all[11].label, 'VPN 12');
+    });
+
+    test('§393 A3 — addDirection с кастомным тегом', () async {
+      final ch = await SettingsStorage.addDirection(tag: 'ru-exit');
+      expect(ch.tag, 'ru-exit');
+      // Дефолтный label произвольного тега — сам тег (выдумывать «VPN» нельзя).
+      expect(ch.label, 'ru-exit');
+      // Автовыдача не сбилась: следующий свободный `vpn-N` — по-прежнему vpn-4.
+      expect((await SettingsStorage.addDirection()).tag, 'vpn-4');
+    });
+
+    test('§393 A3 — дубль / пустой / служебный тег → StateError', () async {
+      expect(() => SettingsStorage.addDirection(tag: 'vpn-2'), throwsStateError);
+      expect(() => SettingsStorage.addDirection(tag: '   '), throwsStateError);
+      expect(() => SettingsStorage.addDirection(tag: 'direct-out'),
+          throwsStateError);
+      expect(() => SettingsStorage.addDirection(tag: 'block'), throwsStateError);
+      expect(() => SettingsStorage.addDirection(tag: 'reject'), throwsStateError);
+      expect(() => SettingsStorage.addDirection(tag: 'dns-out'), throwsStateError);
+    });
+
+    test('§393 A3 — коллизия с auto-двойником в обе стороны', () async {
+      // Тег-тёзка двойника существующего Направления.
+      expect(() => SettingsStorage.addDirection(tag: 'vpn-1-auto'),
+          throwsStateError);
+      // …и наоборот: собственный двойник нового тега затёр бы существующий.
+      await SettingsStorage.addDirection(tag: 'exit-auto');
+      expect(() => SettingsStorage.addDirection(tag: 'exit'), throwsStateError);
     });
 
     test('deleteDirection vpn-1 throws', () async {
@@ -452,6 +493,93 @@ void main() {
 
       expect(auto.tolerance, 77);
       expect(auto.interval, '3m');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // §393 A3 — инвариант «vpn-1 существует» закреплён в миграции.
+  //
+  // До A3 он держался КОНСТРУКТИВНО: теги были только `vpn-N`, vpn-1 сеялся
+  // и был неудаляем — списка без него не построить. Произвольные теги +
+  // правленый импорт сделали такой список конструируемым, а целятся в vpn-1
+  // жёстко: heal'ы (`saveRouteFinal('vpn-1')`, `withOutbound('vpn-1')`) и
+  // деградация dangling route_final в билдере. Миграция — единственная точка,
+  // через которую проходят ВСЕ пути загрузки (старт, restore внутреннего
+  // бэкапа, Debug API import), поэтому инвариант живёт здесь.
+  // ─────────────────────────────────────────────────────────────────────
+  group('§393 A3 — vpn-1 восстанавливается миграцией', () {
+    test('импорт списка без vpn-1: vpn-1 вставлен ПЕРВЫМ, чужой тег цел',
+        () async {
+      await seedFile({
+        'directions': [
+          {'tag': 'ru-exit', 'label': 'Россия', 'enabled': true},
+        ],
+        'directions_migrated': true,
+      });
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      final directions = await SettingsStorage.getDirections();
+      expect(directions.map((c) => c.tag), ['vpn-1', 'ru-exit'],
+          reason: 'vpn-1 — умолчание всех heal\'ов, ему быть первым');
+      expect(directions.first.enabled, true);
+      expect(directions.first.label, defaultLabelForTag('vpn-1'));
+      // Чужая запись сохранена ЦЕЛИКОМ, а не пересеяна из шаблона.
+      expect(directions[1].label, 'Россия');
+      expect(directions[1].enabled, true);
+    });
+
+    test('vpn-1 на месте → ветка 1 остаётся no-op (файл не переписан)',
+        () async {
+      await seedFile({
+        'directions': [
+          {'tag': 'vpn-1', 'label': 'Keep', 'enabled': true},
+          {'tag': 'ru-exit', 'label': 'Россия', 'enabled': true},
+        ],
+        'directions_migrated': true,
+      });
+      final before = await File(mainPath()).readAsString();
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+      expect(await File(mainPath()).readAsString(), before,
+          reason: 'самый частый путь не должен стоить записи на диск');
+    });
+
+    test('vpn-1 НЕ на первом месте — порядок пользователя не трогаем',
+        () async {
+      await seedFile({
+        'directions': [
+          {'tag': 'ru-exit', 'label': 'Россия', 'enabled': true},
+          {'tag': 'vpn-1', 'label': 'Keep', 'enabled': true},
+        ],
+        'directions_migrated': true,
+      });
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+      expect((await SettingsStorage.getDirections()).map((c) => c.tag),
+          ['ru-exit', 'vpn-1'],
+          reason: 'инвариант — «vpn-1 существует», а не «vpn-1 первый»');
+    });
+
+    test('легаси-перенос (ветка 2) списка без vpn-1 тоже чинится', () async {
+      await seedFile({
+        'channels': [
+          {'tag': 'ru-exit', 'label': 'Россия', 'enabled': true},
+        ],
+      });
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+      expect((await SettingsStorage.getDirections()).map((c) => c.tag),
+          ['vpn-1', 'ru-exit']);
+      final raw = await readFile();
+      expect(raw.containsKey('channels'), isFalse);
+      expect(raw['directions_migrated'], true);
+    });
+
+    test('мусор в списке (не-Map записи) не роняет проверку', () async {
+      await seedFile({
+        'directions': ['garbage', 42, null],
+        'directions_migrated': true,
+      });
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+      expect((await SettingsStorage.getDirections()).map((c) => c.tag),
+          ['vpn-1']);
     });
   });
 }

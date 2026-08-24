@@ -34,6 +34,7 @@ import '../widgets/outbound_picker.dart';
 import 'direction_edit_screen.dart';
 import 'custom_rule_edit_screen.dart';
 import 'lazy_persist_mixin.dart';
+import 'routing_screen/new_direction_dialog.dart';
 import 'routing_screen/routing_screen_helpers.dart';
 import 'routing_screen/routing_screen_menus.dart';
 import 'routing_screen/rule_transfer_dialogs.dart';
@@ -258,10 +259,9 @@ class _RoutingScreenState extends State<RoutingScreen>
                 bottomPad: bottomPad,
                 groupTiles: _directions.map(_buildDirectionTile).toList(),
                 directionCount: _directions.length,
-                maxDirections: kMaxDirections,
-                onAddDirection: _directions.length >= kMaxDirections
-                    ? null
-                    : _addDirection,
+                // §393 A3 — лимита на количество Направлений больше нет
+                // (паритет с лаунчером); счётчик показывает, сколько их.
+                onAddDirection: _addDirection,
                 routeFinalTile: _buildRouteFinalTile(),
               ),
 
@@ -363,9 +363,14 @@ class _RoutingScreenState extends State<RoutingScreen>
     DirectionHealResult healed, {
     required String ruleLead,
   }) {
-    if (healed.rules == 0 && healed.detours == 0) return;
+    if (healed.rules == 0 && healed.detours == 0 && healed.includes == 0) {
+      return;
+    }
     final label = direction.label.isNotEmpty ? direction.label : direction.tag;
-    final lead = healed.rules > 0
+    // §393 A3 — include-heal бывает ТОЛЬКО на удалении, и там `ruleLead` уже
+    // «deleted»: одиночный include-heal (правила и detour'ы на Направление не
+    // ссылались) берёт ту же вводную, а не detour'ную.
+    final lead = healed.rules > 0 || healed.includes > 0
         ? getLocalText.s('Direction "%1\$s" %2\$s', label, ruleLead)
         : getLocalText.s('Direction "%s" is no longer a detour target', label);
     // §292 — части сообщения из единого форматтера (общий с node_list).
@@ -408,7 +413,27 @@ class _RoutingScreenState extends State<RoutingScreen>
   }
 
   Future<void> _addDirection() async {
-    final created = await DirectionMutations.add();
+    // §393 A3 — спрашиваем тег ДО создания: после создания он immutable
+    // (на него ссылаются правила/detour'ы). Поле преднаполнено первым
+    // свободным `vpn-N`, так что «просто Create» = прежнее поведение.
+    final req = await showNewDirectionDialog(
+      context,
+      existingTags: _directions.map((c) => c.tag).toList(),
+    );
+    if (req == null || !mounted) return;
+    final Direction created;
+    try {
+      created = await DirectionMutations.add(
+        tag: req.tag,
+        label: req.label.isEmpty ? null : req.label,
+      );
+    } on StateError catch (e) {
+      // Гонка со вторым источником мутаций (Debug API): форма считала тег
+      // свободным, storage — уже нет. Показываем и не создаём.
+      if (!mounted) return;
+      showSnack(e.message);
+      return;
+    }
     if (!mounted) return;
     setState(() {
       _directions.add(created);
@@ -419,16 +444,22 @@ class _RoutingScreenState extends State<RoutingScreen>
   }
 
   Future<void> _editDirection(Direction direction) async {
+    // §393 A3 — кандидаты для `include`: только Направления ВЫШЕ текущего по
+    // списку. Порядок исключает циклы по построению, поэтому запрет живёт
+    // прямо в наборе кандидатов, а не в проверке после выбора.
+    final idx = _directions.indexWhere((c) => c.tag == direction.tag);
     final result = await openDirectionEditor(
       context,
       initial: direction,
       canDelete: !direction.isRequired,
       allNodeTags: _allNodeTags(),
+      directionsAbove: idx <= 0 ? const [] : _directions.sublist(0, idx),
     );
     if (result == null || !mounted) return;
     if (result.wasDeleted) {
       // deleteDirection в storage лечит ссылки: rules → vpn-1 (§202),
-      // detour-ссылки → None (§248). Счётчики — в SnackBar ниже.
+      // detour-ссылки → None (§248), include-ссылки вычеркнуты (§393 A3).
+      // Счётчики — в SnackBar ниже.
       final healed = await DirectionMutations.delete(
         direction.tag,
         widget.subController,
@@ -438,6 +469,16 @@ class _RoutingScreenState extends State<RoutingScreen>
       if (!mounted) return;
       setState(() {
         _directions.removeWhere((c) => c.tag == direction.tag);
+        // §393 A3 — include-heal зеркалим в буфер экрана. `_directions` —
+        // не проекция storage, а рабочая копия, и хвост метода
+        // безусловно пишет её обратно через `bulkReplace`: без зеркала
+        // stale-буфер воскресил бы только что вычеркнутый тег на диске.
+        if (healed.includes > 0) {
+          final r = clearIncludeDirectionRefs(_directions, direction.tag);
+          _directions
+            ..clear()
+            ..addAll(r.healed);
+        }
         _invalidateOutboundOptions();
       });
       _markDirty();

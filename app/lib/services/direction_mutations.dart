@@ -28,8 +28,13 @@ import 'settings_storage.dart';
 ///   `bulkReplace` (§292), чтобы `setDirections` тоже стал `@visibleForTesting`;
 /// - `sub == null` (контроллер ещё не готов) — ресинк молча пропускается,
 ///   это законно: без контроллера нет и `_entries`, которые расходятся;
-/// - третий род ссылки на Направление, буде появится, — против него работает
-///   только коммент-инвариант в `server_list.dart`.
+/// - третий род ссылки — `include[]` (§393 A3) — закрыт: storage-heal живёт в
+///   `_deleteDirection`, а зеркало для экранного буфера Направлений выдаётся
+///   тем же классом ([clearIncludeRefs]), потому что `include` — ЕДИНСТВЕННЫЙ
+///   род ссылки, живущий не в чужом storage-ключе, а в самом списке
+///   Направлений: экран держит его копию в `_directions` и после мутации
+///   перезаписывает диск через [bulkReplace] — без зеркала stale-буфер
+///   воскресил бы вычеркнутый тег.
 class DirectionMutations {
   const DirectionMutations._();
 
@@ -37,10 +42,12 @@ class DirectionMutations {
   /// поэтому [DirectionHealResult] не возвращает — симметрия с
   /// `SettingsStorage.addDirection`.
   ///
-  /// throws [StateError] при лимите `kMaxDirections`.
-  static Future<Direction> add({String? label}) =>
+  /// §393 A3 — [tag] опционален (по умолчанию первый свободный `vpn-N`).
+  /// throws [StateError] на конфликте тега (`empty`/`reserved`/`duplicate`/
+  /// `auto_twin`, см. `directionTagConflict`). Лимита на количество нет.
+  static Future<Direction> add({String? label, String? tag}) =>
       // ignore: invalid_use_of_visible_for_testing_member
-      SettingsStorage.addDirection(label: label);
+      SettingsStorage.addDirection(label: label, tag: tag);
 
   /// Сохранить Направление + зеркальный ресинк. [sub] — контроллер (nullable:
   /// Debug API может отработать до готовности UI).
@@ -97,6 +104,10 @@ class DirectionMutations {
         if (healed.detours > 0)
           getLocalText.s(
               '%s detour reference(s) reset to None', '${healed.detours}'),
+        // §393 A3 — третий род ссылки: удалённое Направление вычеркнуто из
+        // `include` остальных.
+        if (healed.includes > 0)
+          getLocalText.s('%s direction option(s) removed', '${healed.includes}'),
       ];
 
   /// Ресинк идемпотентен (`clearDetourDirectionRefs` → `healed == null`, когда
