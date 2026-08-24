@@ -1,19 +1,45 @@
 # L×Box v2.21.0
 
-Chains of hops arrive on mobile: build a route through two or more servers,
-drag the order, see the price of every hop in a layered probe — and watch a
-broken layer get named instead of guessing. Directions grow custom tags and
-composition; backups now carry directions and chains between the launcher and
-L×Box; edits apply to a live tunnel on their own.
+**Channels are now Directions** — the rename runs through every screen, and
+through the Debug API path. Chains of hops arrive on mobile: build a route
+through two or more servers, drag the order, see the price of every hop in a
+layered probe — and watch a broken layer get named instead of guessing.
+Directions grow custom tags and composition; backups now carry directions and
+chains between the launcher and L×Box; edits apply to a live tunnel on their
+own.
 
-На мобиле появились цепочки хопов: маршрут через два и более серверов,
-порядок перетаскиванием, цена каждого хопа в послойной пробе — и сломанный
-слой называется по имени, а не угадывается. У Направлений — произвольные теги
-и состав; бэкап переносит Направления и цепочки между лаунчером и L×Box;
-правки применяются к живому туннелю сами.
+**Каналы стали Направлениями** — переименование прошло по всем экранам и по
+пути Debug API. На мобиле появились цепочки хопов: маршрут через два и более
+серверов, порядок перетаскиванием, цена каждого хопа в послойной пробе — и
+сломанный слой называется по имени, а не угадывается. У Направлений —
+произвольные теги и состав; бэкап переносит Направления и цепочки между
+лаунчером и L×Box; правки применяются к живому туннелю сами.
 
 <details open>
 <summary><h2>🇬🇧 English</h2></summary>
+
+## 🏷 Channels are now Directions
+
+The routing entity you pick a route with is renamed **Channel → Direction**
+everywhere it is visible: the routing screen and its tab, the rule editor's
+target picker, the servers filter, menus, hints, empty states and error
+messages. “Channel” is a networking word with other jobs; “Direction” says
+what the thing actually is — a named choice of where traffic goes.
+
+**Your data migrates itself.** The storage key moves `channels` → `directions`
+in a one-shot migration on first launch — directions, their filters, auto
+twins and every rule pointing at them come across as they were. Nothing to
+export, re-create or re-point; backups made by older versions still import.
+
+**The Debug API path changed: `/channels` → `/directions`, with no alias.**
+The old path is gone rather than deprecated, so scripts and automation calling
+it need a one-line edit. `/directions` takes and returns the same shape under
+the new name; `/help` lists the current set.
+
+Tags keep working: `vpn-1 … vpn-10` are ordinary tags now, not a fixed
+vocabulary — existing ones stay valid and referenced. The 10-direction cap
+that came with them is lifted, and new directions can be named anything (see
+below).
 
 ## 🔗 Chains of hops
 
@@ -119,6 +145,30 @@ round-trips, layered probes on a running core.
 
 <details open>
 <summary><h2>🇷🇺 Русский</h2></summary>
+
+## 🏷 Каналы стали Направлениями
+
+Сущность, которой выбирают маршрут, переименована **Канал → Направление**
+везде, где она видна: экран роутинга и его вкладка, выбор цели в редакторе
+правил, фильтр на экране серверов, меню, подсказки, пустые состояния и тексты
+ошибок. «Канал» в сетевой терминологии занят другими смыслами; «Направление»
+называет вещь тем, чем она является, — именованным выбором, куда идёт трафик.
+
+**Данные переезжают сами.** Ключ хранилища меняется `channels` → `directions`
+одноразовой миграцией на первом запуске — Направления, их фильтры,
+авто-двойники и все правила, которые на них ссылаются, приходят как были.
+Ничего выгружать, пересоздавать и перенаправлять не нужно; бэкапы старых
+версий по-прежнему импортируются.
+
+**Путь Debug API сменился: `/channels` → `/directions`, без алиасов.** Старый
+путь именно убран, а не объявлен устаревшим, — скриптам и автоматизации,
+которые в него ходят, нужна правка в одну строку. `/directions` принимает и
+отдаёт то же самое под новым именем; актуальный набор — в `/help`.
+
+Теги продолжают работать: `vpn-1 … vpn-10` теперь обычные теги, а не
+фиксированный словарь, — существующие остаются валидными, и ссылки на них
+живы. Потолок в 10 Направлений, который шёл с этим словарём, снят, а новые
+Направления можно называть как угодно (ниже).
 
 ## 🔗 Цепочки хопов
 

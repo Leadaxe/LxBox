@@ -119,7 +119,7 @@ Platform directly — only through the controllers.
 consumers (no `DebugContext`, widgets or intents appear in its signatures); the external
 adapters (Debug HTTP, the Automation broadcast, the UI) know the transport and the security
 but not what they grant access to; a shared operation is declared once and every adapter
-reduces to calling the facade. The reference shapes: `ChannelMutations` (an atomic
+reduces to calling the facade. The reference shapes: `DirectionMutations` (an atomic
 heal plus resync, with the raw statics `@visibleForTesting`), `SubscriptionController`
 (which owns the server-list mutations, with Debug and Automation delegating to it),
 `ProbeController` (`services/probe/` — a shared probe over the whole ServerList subsystem:
@@ -252,7 +252,7 @@ An asset template read once through `TemplateLoader.load()` (a singleton, deep-c
 | `dns_options.servers` | The canonical DNS servers (system/google/cloudflare/quad9/adguard). Storage keeps kind refs. | Resolved into bodies by `resolveDnsServersBodies` |
 | `dns_options.rules` | The default DNS rules. Storage keeps kind refs (§061 dns-rules-refactor, formerly feature §041). | Resolved by `resolveDnsRulesList` |
 | `ping_options`, `speed_test_options` | UI features (HomeScreen, SpeedTest) | Never reach the sing-box config |
-| `group_templates` + `default_channels` | §125/§267 — the **SEED** for `channels[]` (on the first launch). The builder reads `channels[]` from storage. |
+| `group_templates` + `default_directions` | §125/§267/§393 — the **SEED** for `directions[]` (on the first launch). The builder reads `directions[]` from storage. |
 | `config` | The base of the sing-box config: log, inbounds, the route skeleton | Deep-copied at the start of `buildConfig` |
 | `sections[].vars[]` | The UI's global variables — chapter `core` / `routing` / `dns` | Rendered by `TemplateVarListView` |
 | `selectable_rules` | The catalog of preset rules (legacy inline plus bundle — spec 033) | The Presets tab on the Routing screen |
@@ -343,8 +343,10 @@ wizard_template.json
   │    └── kind: srs
   │         └─ a local rule_set at the cached path plus a routing rule (spec 030)
   ├── dns_options  ──► applyCustomDns(template + extras)                      ──► config.dns
-  └── channels[] (storage) ──► _buildChannelGroups(per-channel node_filter)  ──► config.outbounds
-      (§125/§267: the channels come from channels[], seeded from group_templates plus default_channels; with the block/direct options)
+  ├── directions[] (storage) ──► _buildDirectionGroups(per-direction node_filter) ──► config.outbounds
+  │   (§125/§267: the directions come from directions[], seeded from group_templates plus default_directions; with the block/direct options)
+  └── chains[] (storage) ──► the chain outbounds (type: chain, SPEC 110)      ──► config.outbounds
+      (§393 C: a chain is a SOURCE — an explicit route through 2+ hops, in packet order)
 ```
 
 **Why DoH/DoT in a bundle hardcode `server: "77.88.8.88"` plus `tls.server_name`:**
@@ -422,7 +424,9 @@ config_node.dart             # §091 ConfigNode plus ParsedConfig — the struct
                              #   config's nodes (type/section/detour/isMarkedDetour/detourRefCount/raw);
                              #   the §102/§103 eager transportLabel/securityLabel (the transport slot plus
                              #   TLS/Reality/+Vision, awg/awg2); parsed once per change of configRaw
-channel.dart                 # §125 Channel — the configurable channels (vpn-1 cannot be deleted)
+direction.dart               # §125/§393 Direction — the routing directions (arbitrary tags, no cap; vpn-1 cannot be deleted)
+source_chain.dart            # §393 C SourceChain — a hop chain as a SOURCE (SPEC 110): hops in packet order,
+                             #   strip/rewrite, `order` = the slot in the COMMON source list
 auto_select.dart             # §322 the membership of an auto-select node (a folder) plus its parameters
 import_rule.dart             # §302 ImportRule — the rules applied to a subscription's nodes on import
 dns_ref.dart                 # §294 typed model dns_options.servers[]/rules[] (kind-discriminated refs)
@@ -457,7 +461,7 @@ home/node_list_presenter.dart   # the §089 presenter: the §048 filter/split pl
                                 #   the chip options; §103 variantsOfTag plus the canonical order of the variant chips
 home/node_filter_view_model.dart# a ChangeNotifier VM: the regex/protocol/variants(§103)/sub/ping filters,
                                 #   one !-negate per category (§096) plus the detour tri-state (a checkbox,
-                                #   §096), plus the §083 per-channel memory
+                                #   §096), plus the §083 per-direction memory
 home/node_filter.dart           # a pure NodeFilter helper (the match predicates plus the inverts) plus extractEmojis
 home/node_actions.dart          # the node's long-press actions; §099 — the copy-JSON variants (node /
                                 #   server+detours(N)) moved into a dropdown inside View JSON
@@ -466,7 +470,7 @@ home/home_dialogs.dart          # the top-level dialog and snackbar functions (u
 home/restore_backup.dart        # empty-state quick-restore flow (SAF)
 home/subscription_lookup.dart   # the §091 prefix filter: a node belongs to a subscription ⇔ its tag
                                 #   starts with '$prefix '; it replaced the §077 reverse map over node lists
-home/channel_filters.dart       # §083 an immutable snapshot of a channel's match filters (plus the §103 variants)
+home/direction_filters.dart     # §083 an immutable snapshot of a direction's match filters (plus the §103 variants)
 home/filter_widgets.dart        # the filter chip and row widgets (the §095 viz-toggle chips, the §096 NegateToggle)
 home/widgets/                   # node_list · home_controls · home_drawer (the nav hub) · nodes_header ·
                              #   traffic_bar · status_chip · progress_banner · filter_panel (§095
@@ -489,7 +493,8 @@ app_settings_screen.dart     # the application settings (516 lines): the General
 backup_screen.dart           # the snapshot export/import (229 lines) plus export_card/import_card/preview
 lazy_persist_mixin.dart      # LazyPersistMixin — deferred persistence on the settings screens (flushed on exit)
 # the monolithic single screens (no subfolder, 60–505 lines): about · add_server_wizard ·
-#   app_picker · auto_group_edit (§322, an auto-select node) · channel_edit (§125) ·
+#   app_picker · auto_group_edit (§322, an auto-select node) · direction_edit (§125/§393) ·
+#   chain_edit (§393 C — the hop-chain editor, d&d over positions) ·
 #   config · connections · crash_reports (§316, the core's Go panics) · debug ·
 #   dns_server_edit · folder_detail (§234, a server folder mirroring
 #   subscription_detail) · node_settings · oom_reports (§318, the core's OOM snapshots) ·
@@ -550,7 +555,7 @@ settings_storage/vars.dart          #   the vars domain plus the Wi-Fi history (
 settings_storage/sources_rules.dart #   server_lists (+v1 migration), rules/groups, custom_rules
 settings_storage/network.dart       #   route_final/excluded/dns/ping_options (§040/§061)
 settings_storage/backup_tun.dart    #   the snapshot (§031) plus the tun-apps split tunnel (§046)
-settings_storage/channels.dart      #   §125 the channels (Channel CRUD plus the vpn-1 seed)
+settings_storage/directions.dart    #   §125/§393 the directions (Direction CRUD plus the vpn-1 seed) and chains[]
 settings_storage/native_prefs.dart  #   NativePrefsKeys — the bridge into the Kotlin side's SharedPreferences
 settings_storage/vpn_mode.dart      #   §119 the VPN mode (the per-app allow/deny lists)
 settings_storage/warp.dart          #   §025/§130 the WARP/MASQUE accounts plus the generator's pool
@@ -570,7 +575,8 @@ debug/                       # localhost HTTP Debug API (§031)
   transport/config.dart      #   DebugServerConfig (port/token/timeout/maxBody/unauth-paths)
   transport/middleware/      #   error_mapper · access_log · host_check · auth · timeout
   handlers/                  #   /state /settings /action /profiler /rules /subs /config /logs /device
-                             #     /files /diag /backup /wifi_history /help /ping /warp /channels (§275)
+                             #     /files /diag /backup /wifi_history /help /ping /warp /directions (§275/§393)
+                             #     /chains + /chains/{tag}/probe (§393 C — CRUD plus the layered probe)
                              #     /folders (§238) /pool (§208) (plus the _shared CRUD helpers)
   serializers/               #   home_state · storage (the denylist scrubber) · rules · subs (URL masking)
 warp/                        # §025/§130 WARP plus the MASQUE transport (it feeds warp_wizard_screen)
@@ -807,8 +813,8 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 ├── dns_options             # §043+§044 — default DNS servers + rules
 ├── ping_options            # §040 — default URL + presets
 ├── speed_test_options      # §015 — speed-test endpoints
-├── group_templates         # §267 — the magic_nodes registry plus the channel/auto templates (the SEED for channels)
-├── default_channels[]      # §267 — the channel seed (vpn-1..2); the builder reads channels[] from storage
+├── group_templates         # §267 — the magic_nodes registry plus the direction/auto templates (the SEED for directions)
+├── default_directions[]    # §267 — the direction seed (vpn-1..2); the builder reads directions[] from storage
 ├── sections[]              # §022 — the Wizard UI chapters (the vars grouped by topic)
 ├── config                  # the native sing-box section with @var placeholders
 │   ├── log / dns / inbounds / endpoints / outbounds / experimental
@@ -824,9 +830,9 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 ├── lxbox_settings.json     # SettingsStorage (Dart) — the main state file:
 │                           #   vars / server_lists / custom_rules /
 │                           #   dns_options / ping_options /
-│                           #   route_final / channels[] (§125, replaces enabled_groups) /
+│                           #   route_final / directions[] (§125/§393, replaces enabled_groups) / chains[] (§393 C) /
 │                           #   excluded_nodes (§048 sandbox) / last_global_update /
-│                           #   presets_migrated / channels_migrated
+│                           #   presets_migrated / directions_migrated
 ├── singbox_config.json     # ConfigManager (Kotlin) — the final sing-box JSON
 ├── http_cache/             # HttpCache — the raw body plus headers of the subscriptions
 │   └── <sha1(url)>.{body,headers}
@@ -1024,11 +1030,11 @@ HomeController/UI                    Sing-box (Go goroutines)
 
 ```
 activeConfigRaw (on change) ──► DependencyGraph.fromConfig (models/dependency_graph.dart)
-                              the statics: node/dns --detour--> node|channel; the group membership
-delayByChannel (measurements) ──┐
+                              the statics: node/dns --detour--> node|direction; the group membership
+delayByDirection (measurements) ──┐
 groups stream (the selection) ──┴─► HomeController._recomputeDependencyHealth()
                               computeSick: a dead node (every measurement is ERR) → a BFS upward
-                              along the reverse edges (a selector's choice infects the channel;
+                              along the reverse edges (a selector's choice infects the direction;
                               a urltest is sick only when its whole membership is dead — §308
                               heals itself)
   ↓ (only when the result changes)
@@ -1643,7 +1649,7 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | **122** | **The CommandClient migration** (dropping the Clash HTTP API entirely for the libbox CommandClient) |
 | 123 | The subscription model (three CC clients: status/screen/profiler; the §123/§164 power model) |
 | 124 | Background mode — tunnel sleep (the tunnel's Doze behaviour) |
-| **125** | **Configurable channels** (CRUD channels over channels[]; enabled_groups is DEPRECATED) |
+| **125** | **Configurable directions** (CRUD directions over directions[]; enabled_groups is DEPRECATED) |
 | 126 | First-run wizard |
 | **127** | **XHTTP full URL params** (native XHTTP: mode/x_padding_bytes/no_grpc_header) |
 | **128** | **Idle-suspend** (`route.lx_idle_suspend`, the core's SPEC 020; default `30s`) |
@@ -1651,9 +1657,10 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | **130** | **The MASQUE WARP transport** (the flagship of v2.9.0 — MasqueSpec, Cloudflare QUIC/CONNECT-IP) |
 | **234** | **Server folders** (folders of manual servers: FolderMember plus a per-member toggle and tag_prefix) |
 | 236 | Folder server testing (a headless probe of the folder's members) |
-| **248** | **Detour channels** (channels as detour targets; §254 turns cycles into a fatal with the culprit named) |
+| **248** | **Detour directions** (directions as detour targets; §254 turns cycles into a fatal with the culprit named) |
 | **279** | **Localization** (en plus ru: the dictionary, the template overlay and values-<lang>; §280 phases 0–7) |
 | **283** | **Subscription node disable** (a per-node toggle in a subscription, keyed by the node's identity hash) |
+| **393** | **Directions** (the Channel→Direction rename: arbitrary tags, no cap, include[]; the storage key channels→directions with a one-shot migration) plus **hop chains** (SPEC 110: a chain as a third source kind, `type: chain`, a layered probe) |
 
 **Demoted (through §054) — now in `tasks/`:**
 

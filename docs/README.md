@@ -44,7 +44,7 @@ hand”. Both describe the same operations from opposite sides.
 | [FDROID.md](FDROID.md) | Publishing in the F-Droid catalogue: metadata, reproducible builds, the versionCode scheme |
 | [DIAGNOSTICS.md](DIAGNOSTICS.md) | The on-device diagnostics playbook: Debug API plus CommandClient/profiler endpoints, TCP/DNS analysis, `scripts/lxbox-diag.sh` |
 | [l10n.md](l10n.md) | Localization (§279/§285): natural keys, the dictionary format, adding a language, the checkers |
-| [USER_GUIDE.md](USER_GUIDE.md) · [RU](USER_GUIDE.ru.md) | User guide — how it all works: the stages traffic goes through, channels, detour, DNS, recipes, regex |
+| [USER_GUIDE.md](USER_GUIDE.md) · [RU](USER_GUIDE.ru.md) | User guide — how it all works: the stages traffic goes through, directions, chains of hops, detour, DNS, recipes, regex |
 | [DONATE.md](DONATE.md) · [RU](DONATE.ru.md) | Supporting the project (§362): crypto, Boosty, and how to help without money. The in-app popup is sourced from `donate.json` |
 
 > **RU/EN pairing (§360).** Six documents are kept as pairs: README, USER_GUIDE,

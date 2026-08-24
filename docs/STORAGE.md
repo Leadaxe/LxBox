@@ -121,7 +121,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ enabled_groups[]              list          §125 DEPRECATED — read only by the directions[] migration. Safe debris.
 ├─ directions[]                  list          §125 — routing directions (template→storage). See below.
 │   └─ <item>                    object
-│       ├─ tag                   string        the system's immutable id 'vpn-1'..'vpn-10' (auto-generated; vpn-1 cannot be deleted)
+│       ├─ tag                   string        §393 — the immutable id; any tag (auto 'vpn-N' if omitted); vpn-1 cannot be deleted
 │       ├─ label                 string        the display name (entered by the user)
 │       ├─ enabled               bool          on/off (vpn-1 is always true)
 │       ├─ include_direct        bool          direct-out as a selector option
@@ -129,6 +129,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       ├─ node_filter           string        a regex over the node's final tag; '' means all
 │       ├─ node_filter_invert    bool          §197 — inverts node_filter (the nodes that do NOT match); default false
 │       ├─ default_filter        string        a regex; the first match becomes the default; '' means none
+│       ├─ include[]             list          §393 — tags of OTHER directions offered as options (only those listed ABOVE are emitted)
 │       ├─ interrupt_exist_connections  bool   selector.interrupt_exist_connections
 │       └─ auto                  object?       null = the checkbox is OFF; an object yields the urltest twin <tag>-auto (its tag is derived)
 │           ├─ url               string        urltest test endpoint
@@ -139,6 +140,17 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │           ├─ mode              string        §208 — 'least_test' (default) | 'round_robin'
 │           └─ balancer          object{3 keys}  §208 — {pool, pool_tolerance, sticky_hash[]}
 ├─ directions_migrated           bool          §125/§393 — the guard for the one-shot directions migration
+├─ chains[]                      list          §393 C — hop-chain sources (SPEC 110). See below.
+│   └─ <item>                    object
+│       ├─ tag                   string        the outbound tag = the record id; immutable; unique across chains AND directions
+│       ├─ label                 string        the display name ('' falls back to tag)
+│       ├─ enabled               bool          off = not emitted, not pooled (like a disabled subscription)
+│       ├─ hops[]                list          positions IN PACKET ORDER ([0] = first hop from the client); >= 2
+│       ├─ idle_timeout          string        duration; '' = the core default (5m), '0s' = until shutdown
+│       ├─ strip_evasion         bool?         TRISTATE: null = core default, false = explicitly off
+│       ├─ strip                 object        per-key patch over strip_evasion; keys from kChainStripKeys only
+│       ├─ rewrite               object        RFC 7396 merge-patch per outbound type; verbatim, not form-editable
+│       └─ order                 int           §393 D1 — index in the COMMON source list; -1 = unassigned (goes last)
 ├─ last_global_update            ISO-8601      the timestamp of the last auto-refresh
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
 ├─ preset_ids_remapped           bool          §228 legacy guard (remapping renamed preset_id). The migration was removed in §229; the key is inert
@@ -218,6 +230,7 @@ Android SharedPreferences:
   "enabled_groups":     [ … ],     // §125 DEPRECATED (read only by the directions[] migration)
   "directions":         [ … ],     // §125 — routing directions (template→storage)
   "directions_migrated": true,     // §125/§393 — the guard for the one-shot directions migration
+  "chains":             [ … ],     // §393 C — hop-chain sources (SPEC 110)
   "last_global_update": "ISO-8601",// the last auto-refresh of subscriptions
   "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
   "interrupt_connections_on_switch": false, // §143 — tear down the group's conns on a node switch (NOT config-significant)
@@ -622,7 +635,7 @@ would). The strict `fromJsonStrict` is used only on the Debug write path
 
 **What each kind means:**
 
-- `template` — a reference to a server from the template ([§117]: a `{vars, server}` wrapper, with the tag in `server.tag`). The user can override `enabled` and `description` and choose var values (`varValues`: the `outbound` channel, the IP profile, the domain resolver — see TEMPLATE.md); the body is resolved from the template by substituting the `@var`s (`resolveTemplateDnsServerBody`).
+- `template` — a reference to a server from the template ([§117]: a `{vars, server}` wrapper, with the tag in `server.tag`). The user can override `enabled` and `description` and choose var values (`varValues`: the `outbound` direction, the IP profile, the domain resolver — see TEMPLATE.md); the body is resolved from the template by substituting the `@var`s (`resolveTemplateDnsServerBody`).
 - `preset` — the same, but from the active preset bundle (`server_lists` has nothing to do with it; this means a template preset).
 - `inline` — a user-defined server. `body` is required. When the tag matches a template or preset one AND the shape matches, the builder may collapse it into a `template` or `preset` ref (see `_serverShapesMatch`).
 
@@ -928,21 +941,26 @@ setting.
 
 ## `directions` — [§125], the routing directions (template→storage)
 
-The channels (`vpn-1..vpn-10`) moved out of the static `wizard_template.json`
+The directions moved out of the static `wizard_template.json`
 (§267 — `group_templates` plus `default_directions`; before §267 it was `preset_groups[]`)
 and into storage. The template became a **seed** — the defaults for the first launch.
 After the migration the set of directions lives in `directions[]` and is edited by the user
-(Routing → the Channels tab → the channel editor).
+(Routing → the Directions tab → the direction editor).
 
-- `tag` is the **system's immutable** id (`vpn-1`..`vpn-10`), generated on creation
-  (the first free `vpn-N`); the user only edits `label`. It is the stable key for
+- `tag` is the **immutable** id. It is generated on creation (the first free `vpn-N`) or
+  supplied by the user — §393 lifted the fixed `vpn-1..vpn-10` vocabulary, so any tag is
+  accepted as long as it is non-empty, not reserved (`direct-out`, `block`, `dns-out`…),
+  not already taken and not colliding with an existing `<tag>-auto` twin (the rejection
+  carries a machine reason: `empty` | `reserved` | `duplicate` | `auto_twin`).
+  The user only edits `label`. It is the stable key for
   references (`route_final`, `ping_options`, a custom rule's outbound, a detour).
-  §274 — the `⚙ ` prefix in `label` is reserved as the detour-channel marker (like the
-  ⚙ mark in detour server tags): flipping the `detour` flag renames the channel (set →
+  §274 — the `⚙ ` prefix in `label` is reserved as the detour-direction marker (like the
+  ⚙ mark in detour server tags): flipping the `detour` flag renames the direction (set →
   `⚙ <label>`, unset → the prefix is stripped), and the normalisation lives in
-  `Channel.copyWith` / `fromJson` (covering the editor, the Debug API and restores).
+  `Direction.copyWith` / `fromJson` (covering the editor, the Debug API and restores).
 - `vpn-1` is privileged by product decision: always `enabled`, undeletable, and the
-  default `route_final`. The channel limit is **10**.
+  default `route_final`. §393 removed the cap: there is **no limit** on the number of
+  directions.
 - `auto` (nullable) holds the urltest twin's parameters. `null` means the auto
   checkbox is OFF and `<tag>-auto` is not emitted. `auto.tag` is NOT stored (it is
   derived as `${tag}-auto`). The full shape: `{url, interval, tolerance, idle_timeout,
@@ -956,22 +974,22 @@ After the migration the set of directions lives in `directions[]` and is edited 
   the core's startup). An empty `sticky_hash` reaches the config as the sentinel
   `["none"]` (stickiness disabled, per the core's SPEC 019 contract).
 - `detour` (a bool, default `false` — an absent key reads as false, and there is no
-  migration; §248/§274) is **permission** to pick the channel as a detour target for
+  migration; §248/§274) is **permission** to pick the direction as a detour target for
   servers, folders and subscriptions (the reference value is the `tag`; the §239 picker
-  offers only flagged channels). Its role in rules is orthogonal: a flagged channel
+  offers only flagged directions). Its role in rules is orthogonal: a flagged direction
   remains a valid target for `route_final` and for a custom rule's outbound (§274
   removed both the mutual exclusion of the roles and the `detour ⇒ include_block=false`
-  invariant). The one invariant left: `vpn-1` is never a detour (it is the main channel,
-  the default target and the heal reserve) — enforced on read (`Channel.fromJson`), so
+  invariant). The one invariant left: `vpn-1` is never a detour (it is the main direction,
+  the default target and the heal reserve) — enforced on read (`Direction.fromJson`), so
   neither a backup restore nor hand-editing the file can get around it.
-- **Resolution in the builder**: every enabled channel emits a selector `<tag>` holding
+- **Resolution in the builder**: every enabled direction emits a selector `<tag>` holding
   the nodes that survive `node_filter` (a regex over the final tag, §048 style) plus the
   `direct-out` and `block` options (per `include_direct` / `include_block`, §201); when
   `auto != null` and the node set is non-empty it additionally emits the urltest
-  `<tag>-auto` (the channel's nodes only, with no direct/block/auto). `default` is the
+  `<tag>-auto` (the direction's nodes only, with no direct/block/auto). `default` is the
   first node whose tag matches `default_filter`. An empty or invalid regex means all
   nodes.
-- **Inversion through `node_filter_invert`** (§197): `true` puts into the channel the
+- **Inversion through `node_filter_invert`** (§197): `true` puts into the direction the
   nodes whose tag does **NOT** match `node_filter` (an excluding filter). An empty
   `node_filter` makes the inversion moot (all nodes). Example: `node_filter:"bypass"`
   with `node_filter_invert:true` yields every node except those containing “bypass”.
@@ -1002,27 +1020,27 @@ After the migration the set of directions lives in `directions[]` and is edited 
   the migration's janitor branch). `applyImport` still runs the migration right after
   `replaceRaw` — it covers the fresh-seed case when the archive carried no directions
   at all. Export writes the new names only.
-- **Reference degradation** (healing): once a channel stops being a valid target of a
+- **Reference degradation** (healing): once a direction stops being a valid target of a
   given kind, references of that kind are healed straight in storage, **irreversibly**
   (§202 decision B, extended by §248 and adjusted by §274). Rule references
   (`route_final`, a custom rule's outbound) become `vpn-1` on deletion or disabling
-  (setting the detour flag is NOT a heal trigger — per §274 the channel remains a rule
+  (setting the detour flag is NOT a heal trigger — per §274 the direction remains a rule
   target); detour references (`override_detour`, `members[].detour`) become `''` (None)
-  on deletion, disabling or clearing the detour flag. A “reference to a channel” is its
+  on deletion, disabling or clearing the detour flag. A “reference to a direction” is its
   `tag` OR `<tag>-auto`; a value that coincides with the bare tag of a member of the same
   folder is an intra-reference and healing leaves it alone. A backup restore does not
   re-run healing (the degradations are accepted — the builder collapses danglers at build
   time). Legacy `✨auto` references fall under the same rule. Details:
   [`spec/features/248 detour-channels/`](spec/features/248%20detour-channels/).
-- CRUD: `getChannels` / `setChannels` / `addChannel` (throws at 10) / `updateChannel` /
-  `deleteChannel` (throws for vpn-1) / `migrateChannelsIfNeeded`.
-- ⚠ **Mutate through `services/channel_mutations.dart`**, never directly (§275):
-  `ChannelMutations.add/update/delete` perform the storage heal and the mirroring resync
+- CRUD: `getDirections` / `setDirections` / `addDirection` / `updateDirection` /
+  `deleteDirection` (throws for vpn-1) / `migrateDirectionsIfNeeded`.
+- ⚠ **Mutate through `services/direction_mutations.dart`**, never directly (§275):
+  `DirectionMutations.add/update/delete` perform the storage heal and the mirroring resync
   of the controller's in-memory `_entries` as one operation — otherwise the next
-  `_persist()` resurrects the healed detour references. `addChannel`, `updateChannel` and
-  `deleteChannel` are marked `@visibleForTesting`: calling them from `lib/` past the
-  service is an analyze error. `setChannels` is a raw bulk overwrite with no healing (for
-  persisting the whole list).
+  `_persist()` resurrects the healed detour references. `addDirection`, `updateDirection`
+  and `deleteDirection` are marked `@visibleForTesting`: calling them from `lib/` past the
+  service is an analyze error. `setDirections` is a raw bulk overwrite with no healing
+  (for persisting the whole list).
 
 Specs: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/),
 [`docs/spec/features/248 detour-channels/`](spec/features/248%20detour-channels/)
@@ -1030,13 +1048,84 @@ Specs: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20con
 
 ---
 
+## `chains` — §393 C, the hop-chain sources (SPEC 110)
+
+A chain is a **source** — the same kind of thing as a subscription or a standalone
+server, not a direction. It holds an explicit route (`you → hop 1 → hop 2 → …`)
+and is emitted as one outbound of type `chain`. The model is `SourceChain`
+(`models/source_chain.dart`); the storage shape is its `toJson()` (snake_case).
+
+- `tag` — the future outbound's tag, and the record's id. **Immutable** after
+  creation, like `Direction.tag`: direction filters, `route_final` and the
+  positions of *other* chains reference it. A tag is validated against **both**
+  chains and directions — two outbounds sharing a tag kill the config.
+- `label` — display name; empty falls back to `tag` (inventing a name for a chain
+  the user did not name would lie about its contents).
+- `enabled` — a disabled chain is neither emitted nor pooled, like a disabled
+  subscription. A reference to it from another chain degrades **that whole chain**
+  (`chain_hop_missing`): a route missing a hop is a different route.
+- `hops` — the positions **in packet order**: `[0]` is the first hop from the
+  client, the last one is the address the destination sees. This is deliberately
+  **not** “who goes through whom” — `detour`'s arrow points the other way, and
+  confusing the two builds a *working but wrong* route (SPEC 110 T3), a mistake the
+  user only notices by geolocation. A position may be a node, a subscription group,
+  a direction, a template service tag, or **another chain** — the latter only at
+  position 0 and only one declared **above** in the list; that ordering is what
+  rules out cycles between chains.
+  The core's invariants (`protocol/chain/chain.go`): at least two positions,
+  non-empty, no duplicates, no self-reference. Breaking **any** of them stops the
+  **whole config** from starting, not just the one chain — hence `chainEmitError`
+  checks them and a chain that fails is not emitted at all.
+- `idle_timeout` — how long a link with no live connections survives. Empty = the
+  core's default (5m), `"0s"` = live until shutdown.
+- `strip_evasion` — whether to strip one-sided DPI-evasion tricks off the links.
+  Nullable for **tristate**, not for decoration: `null` = the core's default (true,
+  the key is not written), `false` = the user turned it off explicitly (the key is
+  written). A plain bool could not tell the two apart, and an explicit “off” would
+  silently become “default” if the core ever flipped its default.
+- `strip` — a targeted patch on top of `strip_evasion`: `false` = do not strip,
+  `true` = strip additionally. Keys only from `kChainStripKeys`
+  (`tls.fragment`, `multiplex.padding`, `xhttp.padding`, `tls.utls`).
+- `rewrite` — a JSON merge-patch (RFC 7396) over a node's options, keyed by outbound
+  type, applied to links (position 1 onwards) after `strip`. **Not editable through
+  the form and not meant to be**: a reduced form would silently drop an arbitrary
+  patch across every protocol type. A `null` inside the patch **deletes** the key
+  (RFC 7396), so it is stored and round-trips verbatim, with no “empty cleanup”.
+- `order` (§393 D1) — the chain's position in the **common source list**, the same
+  list that holds subscriptions, standalone servers and folders. A chain sits there
+  as an equal row and is dragged like everything else, so its place is an index into
+  the common ordering rather than a separate list — exactly as a `ServerList` gets
+  its place from its index in `server_lists`.
+  Why a field and not the `chains[]` array order: the array only records the chains'
+  order *relative to each other*, while the “a position may reference only a chain
+  **above**” invariant is computed over the **common** list. Without an absolute
+  position you cannot answer whether a chain sits above a subscription it was dragged
+  past — which is exactly what dragging a subscription *between* two chains requires.
+  Duplicates and gaps are legal (indices are not reused after a deletion): only the
+  **order** matters, and it is normalized on every write (`normalizeChainOrder`).
+  `-1` = “not assigned yet” (a record from older storage or from a backup) — those go
+  to the **end**, keeping their relative order.
+
+**Core requirement**: `type: chain` needs sing-box-lx **v1.14.0-lx.27** or newer
+(v2.21.0 pins `v1.14.0-lx.28-rc.1`).
+
+**Heal on source deletion**: deleting a source strips its **positions** out of every
+chain that used them, with a visible counter — a route that silently got shorter must
+be noticed. A chain that drops below two positions is not emitted until repaired.
+A subscription refresh never touches positions.
+
+**In backup**: chains travel as a root `chains[]` section of the LX Backup (contract
+0.7.1), merged by `tag`; a local chain wins over an arriving namesake, with a warning.
+
+---
+
 ## Other top-level keys
 
 | Key | Type | Purpose |
 |---|---|---|
-| `route_final` | `String` | An override of `route.final` on top of the template (the chosen default outbound). `''` means the template default. A dangling reference (a deleted channel, or the legacy ✨auto) becomes `vpn-1` at build time (§125). |
+| `route_final` | `String` | An override of `route.final` on top of the template (the chosen default outbound). `''` means the template default. A dangling reference (a deleted direction, or the legacy ✨auto) becomes `vpn-1` at build time (§125). |
 | `route_idle_suspend` | `String` | §215/§128 — the idle-suspend threshold (`route.lx_idle_suspend`, kernel SPEC 020). A duration string (`'30s'` / `'5m'`), **default `'30s'`** (enabled since v2.8.2); `''` means off (the field is not emitted into route). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend` / `saveIdleSuspend`. |
-| `excluded_nodes` | `List<String>` | §125 cleanup, **DEPRECATED** — the global node filter (§048) was removed along with its screen. The key stays in the allowlist (harmless legacy debris); the per-channel `node_filter` (§125) covers filtering now. |
+| `excluded_nodes` | `List<String>` | §125 cleanup, **DEPRECATED** — the global node filter (§048) was removed along with its screen. The key stays in the allowlist (harmless legacy debris); the per-direction `node_filter` (§125) covers filtering now. |
 | `enabled_groups` | `List<String>` | §125, **DEPRECATED** — replaced by `directions[]`. Read only by the one-shot migration; on disk it is harmless debris. |
 | `last_global_update` | `String` (ISO-8601) | The timestamp of the last successful auto-refresh of all subscriptions. |
 | `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `RoutingScreen._seedDefaultPresets` sets it to true. |

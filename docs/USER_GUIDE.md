@@ -16,19 +16,20 @@ The terms people mix up most often:
 | **Server** | A single exit point (one country/node) you can connect to. | A house a road leads to. |
 | **Subscription / folder** | **Where servers come from**: a provider's list (subscription) or your own manual batch (folder). | An address book of houses. |
 | **Auto node** | One list entry with **a pool of servers inside** and automatic selection between them. | A house with several doors — the fastest one opens. |
-| **Channel** | **A group of servers for a job**: picks the servers it needs with a filter and switches between them. Channels are what you route traffic across. | A shelf you put the houses you need on. |
+| **Direction** | **A group of servers for a job**: picks the servers it needs with a filter and switches between them. Directions are what you route traffic across. | A shelf you put the houses you need on. |
+| **Chain of hops** | **A route through several servers**, built by you: `you → hop 1 → hop 2 → destination`. A source, like a subscription — not a group. | A route drawn through several houses in order. |
 | **Tunnel apps** | **Who gets let into** L×Box at all (which phone apps). | The turnstile at the entrance. |
 | **Detour** ("through") | One server goes **through** another before reaching the internet (a chain). | The road to the house goes via another house. |
-| **Rules (routing / DNS)** | Exceptions: which traffic goes to which channel and which DNS resolves it. | Forks in the road. |
+| **Rules (routing / DNS)** | Exceptions: which traffic goes to which direction and which DNS resolves it. | Forks in the road. |
 
 The essentials:
 
-- **Server ≠ channel.** A server is a *where to*. A channel is a group of
-  *where to* for a specific job. The same server can belong to several channels.
-- **A subscription/folder is NOT a channel.** It is just a source of servers.
-  Servers from it carry no traffic on their own until a channel picks them up.
-- **Detour is neither a separate server nor a channel.** It is a "go through
-  this one" layer on top of a server/channel/folder.
+- **Server ≠ direction.** A server is a *where to*. A direction is a group of
+  *where to* for a specific job. The same server can belong to several directions.
+- **A subscription/folder is NOT a direction.** It is just a source of servers.
+  Servers from it carry no traffic on their own until a direction picks them up.
+- **Detour is neither a separate server nor a direction.** It is a "go through
+  this one" layer on top of a server/direction/folder.
 
 ---
 
@@ -47,18 +48,18 @@ App traffic passes **four stages** — each answers its own question:
             │  (admitted traffic)
             ▼
  ┌─────────────────────────┐
- │ 2. Channels             │   "WHICH channels exist and WHERE by default?"
+ │ 2. Directions           │   "WHICH directions exist and WHERE by default?"
  │    (Default traffic)    │   VPN = through the tunnel · Direct = straight out.
  └─────────────────────────┘
             │
             ▼
  ┌─────────────────────────┐
  │ 3. Rules                │   "EXCEPTIONS to the default"
- │                         │   Which domain/app goes to which channel.
+ │                         │   Which domain/app goes to which direction.
  └─────────────────────────┘
             │
             ▼
-   VPN channel (server) · Direct · Block
+   VPN direction (server) · Direct · Block
             │
             ▼
  ┌─────────────────────────┐
@@ -69,7 +70,7 @@ App traffic passes **four stages** — each answers its own question:
 The same stages in one line each:
 
 - **Allow-list** — *does this traffic enter L×Box at all?*
-- **Channels** — *which exit path to use by default (through a server or straight out)?*
+- **Directions** — *which exit path to use by default (through a server or straight out)?*
 - **Rules** — *is there a specific rule overriding the default?*
 - **DNS** — *how do we turn a site name into an IP for it?*
 
@@ -196,11 +197,11 @@ name) but doesn't update itself — you update it by supplying a new file
 ### Folder
 
 A folder is **your own group of servers** assembled by hand. Not to be confused
-with a channel:
+with a direction:
 
 - A **folder** answers "*where these servers are kept*" (like a folder of files:
   a shared name, a shared on/off switch, drag-to-reorder).
-- A **channel** answers "*which* servers to use for a job" (see the next
+- A **direction** answers "*which* servers to use for a job" (see the next
   section).
 
 Inside a folder there are **members**. Each member is exactly one server. A
@@ -230,22 +231,22 @@ selection** between them. It appears in two ways:
   explicit checkbox list. Test interval, mode and session stickiness are under
   Advanced.
 
-Not to be confused with a channel's auto twin (`<channel>-auto`, see the
-Channels section): the twin collects the nodes of a **channel** by its filter,
+Not to be confused with a direction's auto twin (`<direction>-auto`, see the
+Directions section): the twin collects the nodes of a **direction** by its filter,
 while an auto node is a standalone node living in the general server list like
 any other.
 
-### How all of this reaches channels
+### How all of this reaches directions
 
 Servers from subscriptions, folders and standalone entries **carry no traffic on
-their own**. They go into a common pool of servers, and it is **channels** that
+their own**. They go into a common pool of servers, and it is **directions** that
 pick what they need from that pool (by filter) and connect. Hence the order:
-first add a subscription/folder/server → then a channel picks them up.
+first add a subscription/folder/server → then a direction picks them up.
 
 > **About the "tag prefix".** In a subscription's or folder's settings you can
 > set a prefix — a short label prepended to the names of all its servers. It is
-> handy for channel filters: give a folder the prefix `mullvad-`, and a channel
-> filtered by `^mullvad-` collects exactly its servers. If you don't use channel
+> handy for direction filters: give a folder the prefix `mullvad-`, and a direction
+> filtered by `^mullvad-` collects exactly its servers. If you don't use direction
 > filters, leave the prefix alone.
 
 ### The subscription screen — what's inside
@@ -295,17 +296,17 @@ Tapping a subscription opens its screen with these tabs:
 
 ---
 
-## 2. Channels — exit paths
+## 2. Directions — exit paths
 
 **Responsible for:** the **exit paths** — where traffic can leave, and which
 path is used **by default**.
 
-By default there are **three** channels: one **VPN channel** (`vpn-1`, your main
+By default there are **three** directions: one **VPN direction** (`vpn-1`, your main
 tunnel) plus two service ones — **Direct** and **Block**. You can **add more**
-VPN channels (for example different servers/groups for different jobs).
+VPN directions (for example different servers/groups for different jobs).
 
-Every channel is an "exit":
-- **VPN channel** (a group of servers from your subscriptions) — out through a
+Every direction is an "exit":
+- **VPN direction** (a group of servers from your subscriptions) — out through a
   server (the tunnel);
 - **Direct** — straight out (past the tunnel, but still through L×Box);
 - **Block** — nowhere (blocked).
@@ -316,23 +317,23 @@ or **Direct**. It applies to captured traffic that no rule matched.
 > **This is the classic source of confusion.** If an app is in the allow-list but
 > **Default traffic = Direct**, its traffic goes out **directly** — and it looks
 > like "the VPN doesn't work". Set **Default traffic = VPN** and it will go
-> through the tunnel. The allow-list decides "let it in or not", Channels decides
+> through the tunnel. The allow-list decides "let it in or not", Directions decides
 > "where to take it". Two different things.
 
-**Automatic node selection.** A VPN channel can have an auto twin
-(`<channel>-auto`) that picks a node from the group by itself. The channel editor
+**Automatic node selection.** A VPN direction can have an auto twin
+(`<direction>-auto`) that picks a node from the group by itself. The direction editor
 offers two modes:
 
 - **Fastest** — all traffic goes to the single fastest node (by latency).
 - **Load balance** — traffic is spread across a pool of several live nodes;
   sessions stick to their node so connections aren't broken by rotation.
 
-**How a channel collects servers (the filter).** A channel doesn't store servers
+**How a direction collects servers (the filter).** A direction doesn't store servers
 inside itself — it **selects** them from the common pool (all your subscriptions
-+ folders + standalone servers). The channel editor has a **Node filter** — a
++ folders + standalone servers). The direction editor has a **Node filter** — a
 filter on the server name:
 
-- empty → **all** servers enter the channel;
+- empty → **all** servers enter the direction;
 - text/regex (e.g. `🇩🇪` or `^mullvad-`) → only servers whose name matched;
 - the **`!`** toggle to the left of the field → the opposite, everything
   **except** the matches.
@@ -340,21 +341,34 @@ filter on the server name:
 Pattern syntax, examples and how negation works — see
 [Regular expressions](#regular-expressions-regex).
 
-That's why **the same server can belong to several channels at once**. A channel
+That's why **the same server can belong to several directions at once**. A direction
 is not "the place a server is kept" but "a rule for selecting servers for a job".
-Example: a "Streaming" channel filtered by `🇩🇪` collects every German server
-from every source; they remain available in the main `vpn-1` channel too.
+Example: a "Streaming" direction filtered by `🇩🇪` collects every German server
+from every source; they remain available in the main `vpn-1` direction too.
 
-> **`vpn-1` is special.** The first channel always exists, cannot be deleted, and
-> references fall back to it when another channel is removed. Treat it as the
-> default channel. There can be up to 10 channels in total.
+> **`vpn-1` is special.** The first direction always exists, cannot be deleted, and
+> references fall back to it when another direction is removed. Treat it as the
+> default direction.
+
+**Names and how many.** A direction's tag is yours to choose — `ru-exit`,
+`streaming`, anything — and **there is no cap on how many you have**. The old
+`vpn-1 … vpn-10` names are just ordinary tags now: existing ones keep working,
+and a new direction created without a name gets the next free `vpn-N`. A tag is
+refused if it is empty, reserved (`direct-out`, `block`, `dns-out`…), already
+taken, or collides with someone's `<tag>-auto` twin — the form says which.
+
+**What goes into a direction.** Besides servers picked by the filter, a
+direction can offer **Direct**, **Block** and **other directions** as options
+inside it. Only directions **listed above** it are available — that ordering is
+what rules out loops. Reorder the list and you change both what can be included
+and the order things are emitted in the config.
 
 ---
 
 ## 3. Rules — how traffic is sorted out
 
 **Responsible for:** exceptions to the default. Which specific traffic goes to
-which channel.
+which direction.
 
 A rule = **conditions + an action**. The editor offers plenty of conditions,
 grouped into sections:
@@ -373,10 +387,10 @@ Within one category it's OR, across categories it's AND (as in sing-box): a rule
 "app Chrome AND domain `*.youtube.com` AND network UDP" fires only when all three
 match.
 
-**The action** is more than "which channel". Next to the action picker there is
+**The action** is more than "which direction". Next to the action picker there is
 the **Action & Resolve** gear:
 
-- **Route to outbound** — the plain route: matched traffic to the chosen channel
+- **Route to outbound** — the plain route: matched traffic to the chosen direction
   (VPN group / Direct / Block);
 - **Resolve first** — resolve the domain first, then route; you can force an
   address family and set resolve parameters (own DNS server, strategy, cache,
@@ -390,18 +404,18 @@ the **Action & Resolve** gear:
 Typical rules:
 - ads/trackers → **Block**;
 - local country domains → **Direct** (faster and needs no VPN);
-- BitTorrent → a dedicated channel;
-- a specific app → a specific channel;
+- BitTorrent → a dedicated direction;
+- a specific app → a specific direction;
 - UDP (games, calls) → direct, TCP → through the tunnel.
 
 Order matters: rules apply top to bottom, the first match wins; if nothing
-matched → **Default traffic** from Channels.
+matched → **Default traffic** from Directions.
 
 ### Pairing a rule with DNS
 
 The rule editor has a DNS block — the **Send DNS to dedicated server** switch. It
 attaches a **paired DNS rule** to the rule: DNS queries for this rule's domains
-go to a dedicated server (auto by default, following the route's channel; you can
+go to a dedicated server (auto by default, following the route's direction; you can
 pick a specific one, enable Force IPv4 and fine-tune options). One rule then
 decides both "where the traffic goes" and "how it is resolved" — no need to build
 a DNS rule by hand. Two limitations the editor warns about itself: the pairing is
@@ -435,10 +449,10 @@ never match DNS queries).
 of its own.
 
 - **DNS servers** — a catalog (Cloudflare/Google/Yandex/Quad9/AdGuard/OpenDNS,
-  UDP/DoT/DoH). For each you choose which channel it travels through
+  UDP/DoT/DoH). For each you choose which direction it travels through
   (**Outbound/detour**) and its IP/profile. If you want the DNS of "important"
   apps to go through the tunnel (so a foreign resolver sees the server's IP
-  rather than your provider's), set that server's Outbound to your VPN channel.
+  rather than your provider's), set that server's Outbound to your VPN direction.
 - **DNS groups** — several servers under one tag. The group decides who answers,
   using one of three strategies: **Stable** — stick to a working server until it
   fails; **Fastest** — race, then stick to the winner; **Parallel** — race on
@@ -467,7 +481,7 @@ of its own.
   On a fresh install it is `dns_shield` (installs upgraded from older versions
   may still have the former `cloudflare_udp` — you can select the group
   yourself). If you want strictly encrypted DNS, set `google_doh` /
-  `cloudflare_dot` or a server with Outbound = VPN channel.
+  `cloudflare_dot` or a server with Outbound = VPN direction.
 - **Default Domain Resolver** — sing-box's own internal resolution (server
   addresses, domains inside routing rules). On a fresh install it is
   `dns_shield`. **Do not set `local_dns_resolver` here** — the system DNS leaks
@@ -480,7 +494,7 @@ of its own.
     sing-box `dns.rules` JSON fragment — an advanced-level tool);
   - **from presets** — an enabled routing preset brings its own DNS rules (for
     instance, "Russian domains & IPs" resolves ru domains through its own
-    `dns_ru` group of three independent paths: UDP via the preset's channel, DoT
+    `dns_ru` group of three independent paths: UDP via the preset's direction, DoT
     via `vpn-1`, DoH direct — so a dead node in one path doesn't hang ru sites);
   - **from the template** — the baseline configuration rules;
   - **mirrors of routing rules** — the very "Send DNS to dedicated server"
@@ -516,8 +530,8 @@ A detour is a **layer**, not a separate entity. You take an existing server and
 tell it "go through this one instead". The target of a detour can be:
 
 - **another server** (a standalone one or a folder member);
-- **a channel** — then the target isn't fixed: the core picks the best server in
-  that channel at connect time (this is a **detour channel**);
+- **a direction** — then the target isn't fixed: the core picks the best server in
+  that direction at connect time (this is a **detour direction**);
 - **None (direct)** — no detour, the server goes out directly (the default).
 
 ### Where it is configured
@@ -532,28 +546,30 @@ to go through" picker. The entry point depends on who you're assigning it to:
 | **A whole folder** | Folder → **Settings** tab | all folder members |
 | **One folder member** | inside the folder, on the member | that member only |
 
-The picker shows sections: **None (direct)**, **Channels** (if detour channels
+The picker shows sections: **None (direct)**, **Directions** (if detour directions
 exist), **This folder** (members of the same folder, when configuring a member)
 and **Standalone servers**. Pick one, save.
 
-### Chains
+### Detour chains
 
-Detours can be built into a **chain**: A through B, B through C — traffic then
-goes `you → A → B → C → internet`. Inside a folder you can build such chains
+Detours can be built into a chain of their own: A through B, B through C —
+traffic then goes `you → A → B → C → internet`. (This is a chain *assembled
+out of detours*; the explicit **Chain of hops** source described below is a
+different thing — see the comparison at the end of that section.) Inside a folder you can build such chains
 directly between its members. L×Box will not let you close a chain into a loop:
 at config build time the cycle detector fires — the start is halted and the error
 dialog names the culprits; tapping a culprit navigates to the node's owner, where
 the loop can be broken. A member serving as an intermediate hop for another is
 marked with a ⚙ icon.
 
-### Detour channels
+### Detour directions
 
-A regular channel can be marked with the "Use as detour" checkbox (channel
-editor). Such a channel becomes **a switchable relay layer**: any server can go
-"through this channel", and which server inside it gets used is decided by the
+A regular direction can be marked with the "Use as detour" checkbox (direction
+editor). Such a direction becomes **a switchable relay layer**: any server can go
+"through this direction", and which server inside it gets used is decided by the
 core (by speed). Useful when you want the intermediate hop to be "the best of a
 group" rather than nailed down. The checkbox is precisely a permission to pick
-the channel as a relay: such a channel **remains** available as a target for
+the direction as a relay: such a direction **remains** available as a target for
 rules and route final (it is marked with ⚙ in the pickers).
 
 ### Limitations
@@ -574,12 +590,104 @@ went through the intermediate server.
 ### A dead hop is visible immediately
 
 If a node with an ERR ping serves as an intermediate hop for others — other nodes
-or DNS servers route through it (directly or via a channel where it is selected) —
+or DNS servers route through it (directly or via a direction where it is selected) —
 a **⚠** icon appears next to its name. Tapping the icon opens the list of
 affected entries with the dependency path: you see exactly who this hop will drag
 down with it. If DNS servers depend on the node, a banner is shown as well —
 domains of such a server silently fail to resolve, and without a hint that looks
 like "the internet died for no reason".
+
+---
+
+## Chains of hops — a route you build yourself
+
+**What it is.** A chain is a **source**, on the same footing as a subscription
+or a standalone server, and it holds an explicit route:
+
+```
+  you → [hop 1] → [hop 2] → [hop 3] → internet
+```
+
+You spell out the order; L×Box builds one exit out of it. A chain shows up in
+the common source list as an ordinary row — it can be switched off, dragged and
+caught by filters like anything else.
+
+### Chain or detour?
+
+They solve the same physical problem from opposite ends, and mixing them up is
+the usual mistake:
+
+| | **Chain of hops** | **Detour** |
+|---|---|---|
+| What it is | a **route** — a source in its own right | a **property of one node** |
+| You are saying | "this route goes through these servers, in this order" | "this server goes through that one" |
+| Where you edit it | in the chain's own editor | on the server / subscription / folder |
+| Reach for it when | the route itself is the thing you're building | a single server needs a relay in front of it |
+
+### Positions
+
+A chain's positions are listed **in packet order**: position 1 is the first hop
+away from you, the last one is where traffic reaches the internet. You reorder
+them by dragging.
+
+A position can be:
+
+- **a server** — a fixed hop;
+- **a group** — the core picks inside it;
+- **a direction** — that step becomes switchable on the fly: change what the
+  direction selects and the hop changes with it;
+- **another chain** — but only as the *first* position (see the rules below).
+
+### The rules a chain must obey
+
+The editor checks these as you type, and refuses to save a chain that breaks
+them. This is deliberate: this exact class of mistake passes the core's own
+config check and only kills it at start-up, so the form is the only place it can
+be caught.
+
+- **At least two positions** — one hop is not a chain; a chain that falls below
+  two stops being emitted until you repair it.
+- **No empty, duplicate or self-referencing positions.**
+- **A nested chain only at position 1** — a chain can start with another chain,
+  but cannot swallow one in the middle.
+- **References only upwards** — a chain may point at a chain listed **above** it,
+  never below. That ordering is what makes loops impossible.
+
+Deleting a server or subscription **removes its positions** from every chain that
+used them, and tells you how many were dropped — a route that quietly got shorter
+is exactly what you must not miss. Refreshing a subscription never touches
+positions.
+
+### Seeing where a chain breaks
+
+Open the chain's node → **Diagnostics**. Every hop is measured as part of the
+whole route so far, and its own price is shown next to it:
+
+```
+  hop 1   67 ms
+  hop 2   91 ms  (+24)
+  hop 3   96 ms  (+5)
+```
+
+The number in brackets is the difference from the previous hop — a hop cannot be
+measured on its own, only as part of the path leading to it. If a hop is dead,
+it shows **the core's own error text**, and everything behind it is marked "not
+reached", so "where does the route break?" is one look rather than a guessing
+game. **Probe again** re-runs the measurement. Diagnostics needs the VPN to be
+running — the per-hop measuring points only exist inside a live core.
+
+### What to watch out for in practice
+
+- **Core version.** Chains need core **sing-box-lx v1.14.0-lx.27** or newer
+  (v2.21.0 ships `v1.14.0-lx.28-rc.1`). On an older core they aren't built.
+- **MASQUE after a TCP hop needs `vhttp: auto`.** With the fixed `h3` setting,
+  a MASQUE hop placed behind a TCP hop sends its QUIC datagrams with no
+  handshake budget and reliably times out. `Auto (h3 → h2)` gives HTTP/3 a
+  3-second budget and then falls back to HTTP/2 over TCP.
+- **WireGuard behind a TCP hop needs a server that really proxies UDP.**
+  WireGuard is UDP-only and has no fallback path. There is no way to detect the
+  bad case in advance: the connection looks successful, and the server either
+  forwards the datagrams or silently drops them.
 
 ---
 
@@ -625,8 +733,8 @@ The order of enabling it, if you really need IPv6:
 ## Common misunderstandings
 
 **"The allow-list doesn't work — I added an app but the VPN doesn't affect it."**
-Check **Channels → Default traffic = VPN**. The allow-list only admits traffic;
-where to take it is decided by Channels. With Default = Direct, captured apps go
+Check **Directions → Default traffic = VPN**. The allow-list only admits traffic;
+where to take it is decided by Directions. With Default = Direct, captured apps go
 out directly.
 
 **"It only started working when I added L×Box itself to the allow-list."**
@@ -635,30 +743,30 @@ both options). L×Box doesn't need its own tunnel — its service traffic and DN
 past the tun by design.
 
 **"I want only the browser through the VPN, everything else direct."**
-Allow-list = the browser only; Channels Default = VPN. L×Box won't touch the
+Allow-list = the browser only; Directions Default = VPN. L×Box won't touch the
 other apps.
 
 **"I want everything through the VPN, but ads blocked and local domains direct."**
-Allow-list = Off (or all the apps you need); Channels Default = VPN; Rules: ads →
+Allow-list = Off (or all the apps you need); Directions Default = VPN; Rules: ads →
 Block, local domains → Direct.
 
 **"My DNS queries are visible to my ISP / go past the VPN."**
 Out of the box, app DNS no longer goes through the ISP's system resolver (DNS
 Final = the `dns_shield` group, which includes both encrypted and tunnelled
 paths). To hide the domains for certain, set DNS Final to an encrypted server
-(`google_doh`/`cloudflare_dot`) or one with Outbound = VPN channel. For internal
+(`google_doh`/`cloudflare_dot`) or one with Outbound = VPN direction. For internal
 resolution: Default Domain Resolver ≠ `local_dns_resolver`.
 
-**"How is a channel different from a subscription/folder?"**
-A subscription and a folder are **where servers come from** (a source). A channel
+**"How is a direction different from a subscription/folder?"**
+A subscription and a folder are **where servers come from** (a source). A direction
 is **a group of servers for a job**; it selects the servers it needs from all
-sources by filter. One server can belong to several channels. You add a
-subscription/folder → its servers land in the common pool → channels pick them
+sources by filter. One server can belong to several directions. You add a
+subscription/folder → its servers land in the common pool → directions pick them
 up.
 
 **"I added a folder/subscription but no traffic goes through it."**
 A source of servers carries no traffic by itself. Check that its servers land in
-the active channel (the channel's filter is empty or matches their names) and
+the active direction (the direction's filter is empty or matches their names) and
 that **Default traffic = VPN**.
 
 **"What is a detour and what is it for?"**
@@ -671,7 +779,7 @@ The default value is None (no detour).
 **"I picked a server as a detour target and it vanished / reset to None."**
 The target is most likely plain WireGuard while the source server is AmneziaWG:
 the core can't carry such a chain, so the choice isn't available. Pick a non-WG
-server or a channel as the target.
+server or a direction as the target.
 
 **"I enabled IPv6 and sites stopped opening."**
 The signature of a network with broken IPv6: a domain resolves to an IPv6 address
@@ -690,10 +798,10 @@ The provider's panel requires a device identifier (HWID) and returns a
 placeholder until it gets one. Enable HWID sending (App Settings → Subscriptions,
 or Fetch identity in the subscription's settings) and refresh the subscription.
 
-**"I switched channels and the pings vanished / show greyed numbers with `~`."**
-Measurements are per-channel (channels have different test URLs and timeouts). A
-grey number with `~` is the latest measurement from another channel, shown for
-reference. Run a mass ping in the current channel and the numbers become "its
+**"I switched directions and the pings vanished / show greyed numbers with `~`."**
+Measurements are per-direction (directions have different test URLs and timeouts). A
+grey number with `~` is the latest measurement from another direction, shown for
+reference. Run a mass ping in the current direction and the numbers become "its
 own".
 
 **"The provider put an 'Auto | Best server' entry in the subscription and it
@@ -720,13 +828,13 @@ The tools, from simplest to deepest:
   answer; a ⚠ icon means other entries route through this node and will suffer
   along with it (tap it to see exactly who).
 - **Statistics** (while the tunnel is up), three tabs:
-  - **Stats** — traffic per channel: you can see where the bytes actually go;
+  - **Stats** — traffic per direction: you can see where the bytes actually go;
   - **Conns** — live connections: which app, to which host, matched by which rule
     and through which chain. One-way connections (data in one direction only) are
     highlighted — a common sign of blocking;
   - **Profiler** — a real-time recording of every connection and DNS resolve,
     with filters by app/domain/IP. It answers "which domain fails to resolve",
-    "which channel did this request take", "where does this app go". For DNS
+    "which direction did this request take", "where does this app go". For DNS
     events you also see how DNS groups behaved: which member answered and which
     stayed silent.
 - **Debug** (side menu) — the app and core log (the Log tab; the verbose switch
@@ -743,7 +851,7 @@ The tools, from simplest to deepest:
 
 > **Where to find things.** Sections open from the **side menu** — swipe from the
 > left edge or tap **≡** on the home screen: *Servers* (servers/subscriptions/
-> folders), *Routing* (channels, rules, tunnel apps), *DNS Settings*.
+> folders), *Routing* (directions, rules, tunnel apps), *DNS Settings*.
 
 1. **A source of servers** — menu → **Servers** → add, choosing the type that
    fits:
@@ -753,7 +861,7 @@ The tools, from simplest to deepest:
 
    No subscription? **Get WARP** provides a working server without one (see
    below).
-2. **Channels** (menu → Routing → Channels) — check that Default traffic =
+2. **Directions** (menu → Routing → Directions) — check that Default traffic =
    **VPN** (if you want everything to go through the tunnel by default).
 3. **Allow-list** (Routing → Tunnel apps) — optional: Off (everything through
    L×Box) or Allow-list (only the selected apps).
@@ -814,14 +922,14 @@ Limitations of this approach:
   password is mandatory.
 - Routing rules do apply to this traffic: the **Inbound** section in the rule
   editor lets you tell "came from the tunnel" from "came from the proxy" — for
-  example, sending proxy guests into a separate channel.
+  example, sending proxy guests into a separate direction.
 
 ### Pairing with ByeDPI (and other local proxies)
 
 ByeDPI (ByeByeDPI) is a separate app that circumvents DPI blocking locally,
 without a server, and exposes the result as a **local SOCKS5 proxy**. L×Box can
 take such a proxy **as an ordinary server** — and from then on it lives by all
-the app's rules: it lands in channels, can be a detour, can take part in
+the app's rules: it lands in directions, can be a detour, can take part in
 automatic selection.
 
 Why: some sites open with DPI circumvention alone, without a foreign server —
@@ -841,7 +949,7 @@ faster and without spending VPS traffic. And the other way around, ByeDPI can si
    `socks5://user:password@127.0.0.1:1080#ByeByeDpi`). The add wizard with type
    SOCKS works too.
 4. From there it's like any other server. Three working scenarios:
-   - **A separate channel** — create a channel filtered to this node and a rule
+   - **A separate direction** — create a direction filtered to this node and a rule
      sending the domains you want into it (YouTube and so on), while everything
      else goes through the foreign server;
    - **Detour** — make ByeDPI the detour of your VPN server: traffic is then
@@ -889,17 +997,17 @@ If WARP's standard address is blocked or barely alive on your network:
 one (by name/regex) and chips by subscription, protocol and transport. To the
 left of the text field is the **`!`** toggle — it inverts the filter (show
 everything that does **not** match); the chips have the same toggle. Filter
-settings are remembered separately for each channel. Pattern syntax — see
+settings are remembered separately for each direction. Pattern syntax — see
 [Regular expressions](#regular-expressions-regex).
 
 **Emoji labels.** A server carries an emoji label in its tag. You can change it
 in **Node Settings** (the emoji picker button); when a server is added, the label
 is filled in automatically from the country/name.
 
-**Each channel has its own pings.** Latency measurements are stored per channel:
-the test URL and timeout are configured per channel, so "180 ms" measured by
-different tests are different quantities. Switching channels doesn't wipe the
-other results. If a node hasn't been measured in the current channel yet, the
+**Each direction has its own pings.** Latency measurements are stored per direction:
+the test URL and timeout are configured per direction, so "180 ms" measured by
+different tests are different quantities. Switching directions doesn't wipe the
+other results. If a node hasn't been measured in the current direction yet, the
 latest measurement from another one is shown — dimmed and marked `~`
 ("approximate"): there is a number, but it came from a different test.
 
@@ -912,7 +1020,7 @@ A regex is a pattern for searching text. In L×Box it shows up in four places, a
 
 | Where | What it filters |
 |---|---|
-| **Node filter** in the channel editor | which servers enter the channel |
+| **Node filter** in the direction editor | which servers enter the direction |
 | **Search** above the server list | what is shown in the list |
 | **Membership rule** of a folder's auto node | which servers are in the pool |
 | **The `matches` condition** in subscription processing rules (Filters) | which nodes the rule applies to |
@@ -927,13 +1035,13 @@ A frequent question: "how do I write *everything except this*?" Doing it through
 the pattern itself is clumsy, so negation was moved into a separate button.
 
 To the left of the input field is the **`!`** toggle — it inverts the result:
-show (or take into the channel) everything that did **not** match the pattern.
+show (or take into the direction) everything that did **not** match the pattern.
 The filter chips (by subscription, protocol, transport) have the same toggles —
 each category inverts independently.
 
-- a channel with "everything except Russian servers": pattern `🇷🇺`, toggle
+- a direction with "everything except Russian servers": pattern `🇷🇺`, toggle
   **`!`** on;
-- a channel with "Russian only": the same pattern, toggle off.
+- a direction with "Russian only": the same pattern, toggle off.
 
 In subscription processing rules (Filters) the toggle's role is played by the
 **Not** checkbox on a condition — same meaning.
@@ -1059,18 +1167,18 @@ Read it as: the 🇫🇮 flag, and nowhere later in the name is there a hash sig
 - **A match is searched anywhere in the name**, not from the start: the pattern
   `DE` finds both "DE-1" and "Nord-DE". Anchor it with `^` and `$` if you need
   the beginning or the end.
-- **An empty field = no filter** (all servers enter the channel).
+- **An empty field = no filter** (all servers enter the direction).
 - **A broken pattern** is flagged with an "Invalid regex" error right in the
-  field; at config build time an unusable channel filter is ignored, meaning the
-  channel gets all servers (not zero).
-- **A filter matching no servers at all** shows a warning — a channel with an
+  field; at config build time an unusable direction filter is ignored, meaning the
+  direction gets all servers (not zero).
+- **A filter matching no servers at all** shows a warning — a direction with an
   empty membership cannot carry traffic.
 - **The filter doesn't hide auto nodes and service entries.** Auto-selection
   nodes (`🔀`/`🎯`), "Block" and similar service rows stay in the list under any
   pattern — they are switching points and cannot be hidden by a filter. If after
   filtering by "🇫🇮 only" you still see `Europe | Auto` and "Block", the pattern
   has nothing to do with it: it isn't applied to them.
-- Under the field in the channel editor there is a **live preview**:
+- Under the field in the direction editor there is a **live preview**:
   `matched: 12 / 37 nodes` — how many servers the pattern caught, before you save
   (with `!` on, the line starts with `excluded →`). The auto node's membership
   rule has the same preview. If the preview says "No node snapshot", the server
@@ -1100,7 +1208,7 @@ involvement. Typical scenarios:
 
 - connecting to the home Wi-Fi → **turn the VPN off**; to someone else's/a public
   one → **turn it on**;
-- launching a specific app → switch to a particular server/channel;
+- launching a specific app → switch to a particular server/direction;
 - on a schedule or by geofence — turn the tunnel on/off.
 
 Automation is **off by default**. Enable it in **App Settings → Automation**
@@ -1128,7 +1236,7 @@ English.
 ## Backup — moving your settings
 
 Opens from menu → **App Settings → General → Backup & restore**. The screen takes
-a snapshot of your configuration: subscriptions, channels, rules and app
+a snapshot of your configuration: subscriptions, directions, chains, rules and app
 settings. Export saves the snapshot to a file, import restores it (with a preview
 before applying). It's a convenient way to move your settings to a new phone or
 to save them before a reinstall.
