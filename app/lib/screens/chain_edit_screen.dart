@@ -28,6 +28,7 @@ import '../models/direction.dart';
 import '../models/source_chain.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
+import '../widgets/reorder_grab_strip.dart';
 import 'chain_edit/chain_form_validation.dart';
 import 'chain_edit/chain_hop_candidate.dart';
 import 'chain_edit/chain_hop_targets.dart';
@@ -262,12 +263,20 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
     });
   }
 
-  void _moveHop(int from, int to) {
-    if (from == to) return;
+  /// Reorder-колбэк `ReorderableListView` (§098-идиома: grab-strip слева,
+  /// как у правил роутинга/подписок). Порядок позиций — это маршрут пакета,
+  /// поэтому перестановка проходит через тот же `setState`, что и
+  /// добавление/удаление: дифф формы и находки пересчитываются на месте.
+  ///
+  /// Колбэк — `onReorderItem` (не устаревший `onReorder`): newIndex здесь уже
+  /// приведён к списку БЕЗ перетаскиваемого элемента, ручной сдвиг «-1 при
+  /// move вниз» не нужен.
+  void _reorderHop(int oldIndex, int newIndex) {
+    if (oldIndex == newIndex) return;
     setState(() {
       final next = [..._hops];
-      final tag = next.removeAt(from);
-      next.insert(to, tag);
+      final tag = next.removeAt(oldIndex);
+      next.insert(newIndex, tag);
       _hops = next;
     });
   }
@@ -428,10 +437,17 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
       );
     }
-    return Column(
-      children: [
-        for (var i = 0; i < _hops.length; i++) _hopTile(i, cs),
-      ],
+    // Вложенный в скроллируемую форму список — как таб правил
+    // ([routing_tabs.dart]) и список DNS-правил: shrinkWrap + отключённый
+    // собственный скролл, drag-старт только с grab-strip.
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
+      itemCount: _hops.length,
+      onReorderItem: _reorderHop,
+      itemBuilder: (ctx, i) =>
+          KeyedSubtree(key: ValueKey('hop-${_hops[i]}'), child: _hopTile(i, cs)),
     );
   }
 
@@ -440,7 +456,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
     final cand = describeChainHop(tag, _lookup,
         targetsKnown: chainTargetsKnown(widget.config));
     final lost = cand.kind == ChainHopKind.unknown;
-    return ListTile(
+    final tile = ListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(
@@ -463,26 +479,20 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
               color: lost ? cs.error : null)),
       subtitle: Text(chainHopKindText(cand.kind),
           style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+      trailing: IconButton(
+        tooltip: getLocalText.s("Remove position"),
+        icon: Icon(Icons.close, size: 18, color: cs.error),
+        onPressed: () => _removeHop(index),
+      ),
+    );
+    // §098 — grab-strip первым ребёнком Row внутри IntrinsicHeight: полоса
+    // тянется на высоту строки (тот же приём, что в custom_rule_tile).
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          IconButton(
-            tooltip: getLocalText.s("Move up"),
-            icon: const Icon(Icons.arrow_upward, size: 18),
-            onPressed: index == 0 ? null : () => _moveHop(index, index - 1),
-          ),
-          IconButton(
-            tooltip: getLocalText.s("Move down"),
-            icon: const Icon(Icons.arrow_downward, size: 18),
-            onPressed: index == _hops.length - 1
-                ? null
-                : () => _moveHop(index, index + 1),
-          ),
-          IconButton(
-            tooltip: getLocalText.s("Remove position"),
-            icon: Icon(Icons.close, size: 18, color: cs.error),
-            onPressed: () => _removeHop(index),
-          ),
+          ReorderGrabStrip(index: index),
+          Expanded(child: tile),
         ],
       ),
     );

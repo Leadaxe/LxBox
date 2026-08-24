@@ -63,12 +63,15 @@ void main() {
     expect(save.onPressed, isNotNull);
   });
 
-  testWidgets('стрелка вниз меняет порядок пакета', (tester) async {
+  testWidgets('reorder-колбэк меняет порядок пакета', (tester) async {
     await tester.pumpWidget(_host(
         const SourceChain(tag: 'via-de', hops: ['home', 'de-exit'])));
     await tester.pumpAndSettle();
-    // Первая активная «вниз» принадлежит позиции 1.
-    await tester.tap(find.byIcon(Icons.arrow_downward).first);
+    // Логика порядка, не жест: дёргаем колбэк списка так же, как это сделал бы
+    // drag позиции 1 на место позиции 2.
+    final list = tester.widget<ReorderableListView>(
+        find.byType(ReorderableListView));
+    list.onReorderItem!(0, 1);
     await tester.pumpAndSettle();
     // Порядок читаем по номерам-аватарам: позиция 1 теперь de-exit.
     final tiles = tester.widgetList<ListTile>(find.byType(ListTile)).toList();

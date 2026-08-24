@@ -2528,9 +2528,6 @@
   "More loops may remain — fix these and try again.": {
     "value": "Могут остаться и другие петли — исправьте эти и попробуйте снова."
   },
-  "Move down": {
-    "value": "Вниз"
-  },
   "Move out of folder": {
     "value": "Вынести из папки"
   },
@@ -2542,9 +2539,6 @@
   },
   "Move to folder…": {
     "value": "Переместить в папку…"
-  },
-  "Move up": {
-    "value": "Вверх"
   },
   "Moved out of folder": {
     "value": "Вынесен из папки"
