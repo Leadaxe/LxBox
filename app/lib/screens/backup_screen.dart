@@ -321,6 +321,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // §393 B2 — Направления едут вместе с правилами: без них правило на
       // принимающей стороне не находит цель и приезжает выключенным.
       final directions = await SettingsStorage.getDirections();
+      // §393 C9 — цепочки хопов (SPEC 110, схема v1.2): корневая секция
+      // `chains[]`, порядок списка нормативен и не сортируется.
+      final chains = await SettingsStorage.getChains();
       // §393 B6 — route.final: до B6 его разбирали на импорте, но никогда не
       // экспортировали, и круг был односторонним.
       final routeFinal = await SettingsStorage.getRouteFinal();
@@ -346,6 +349,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         rules: rules,
         vars: vars,
         directions: directions,
+        chains: chains,
         routeFinal: routeFinal,
         foreignExtensions: foreignExtensions,
         dns: dns,
@@ -441,11 +445,22 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         // выключенным «ссылка в никуда» — при живой и правильной цели.
         final lists = await SettingsStorage.getServerLists();
         final directions = await SettingsStorage.getDirections();
+        // §393 C9 — тег цепочки для остального приложения обычный тег узла:
+        // правило вправе метить в него так же, как в Направление.
+        final chains = await SettingsStorage.getChains();
         final known = <String>{
           for (final l in lists) l.tagPrefix,
           for (final d in directions) d.tag,
+          for (final c in chains) c.tag,
         }..removeWhere((t) => t.isEmpty);
-        parsed = parseLxBackup(raw, knownOutbounds: known);
+        parsed = parseLxBackup(
+          raw,
+          knownOutbounds: known,
+          // Merge цепочек идёт по СВОЕМУ пространству имён: `backup_chain_exists`
+          // отвечает на вопрос «своя цепочка под этим тегом уже есть», а не
+          // «тег вообще занят» (тёзку-Направление отсеет гейт применения).
+          knownChains: {for (final c in chains) c.tag},
+        );
       } on FormatException catch (e) {
         if (!mounted) return;
         _showError(getLocalText.s("Invalid backup"), e.message);
@@ -482,6 +497,37 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
           appliedDirections++;
         }
         if (appliedDirections > 0) await DirectionMutations.bulkReplace(merged);
+      }
+
+      // §393 C9 — цепочки ПОСЛЕ Направлений (позиция может ссылаться на
+      // Направление, заведённое строкой выше) и ДО правил (правило метит в
+      // тег цепочки как в цель). Занятые теги сюда уже не доехали — парсер
+      // отсеял их warning'ом `backup_chain_exists`.
+      //
+      // Порядок приехавшего списка сохраняется и приехавшие встают в КОНЕЦ
+      // своего: вложенная цепочка вправе сослаться только ВВЕРХ по списку, и
+      // вставка в начало замкнула бы цикл, которого канон запрещает.
+      //
+      // Пишем не голым `setChains`, а через тот же гейт, что и Направления:
+      // `directionTagConflict` ловит служебные теги и тёзок `<tag>-auto`, а
+      // общий список тегов цепочек И Направлений — коллизию outbound'ов,
+      // от которой ядро отвергает конфиг ЦЕЛИКОМ (эталон `_addChain`).
+      var appliedChains = 0;
+      if (parsed.chains.isNotEmpty) {
+        final currentChains = await SettingsStorage.getChains();
+        final currentDirections = await SettingsStorage.getDirections();
+        final mergedChains = currentChains.toList();
+        final usedTags = <String>[
+          ...currentChains.map((c) => c.tag),
+          ...currentDirections.map((d) => d.tag),
+        ];
+        for (final c in parsed.chains) {
+          if (directionTagConflict(c.tag, usedTags) != null) continue;
+          mergedChains.add(c);
+          usedTags.add(c.tag);
+          appliedChains++;
+        }
+        if (appliedChains > 0) await SettingsStorage.setChains(mergedChains);
       }
 
       await SettingsStorage.saveCustomRules(parsed.rules);
@@ -523,7 +569,15 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       } else {
         message = getLocalText.plural("Imported %d rules", parsed.rules.length);
       }
-      showSnack(message);
+      // §393 C9 — цепочки названы ОТДЕЛЬНОЙ клаузой, а не влиты в счётчик
+      // настроек: это созданные сущности, как Направления, и «Импортировано
+      // правил: 0, настроек: 2» после файла с двумя маршрутами скрыло бы
+      // ровно то, что произошло. Клауза-суффикс, а не шестая ветка лестницы:
+      // добавить цепочки измерением удвоило бы число строк каталога,
+      // из которых половина не встречается никогда.
+      showSnack(appliedChains > 0
+          ? '$message; ${getLocalText.s("chains: %d", appliedChains)}'
+          : message);
     } catch (e) {
       if (!mounted) return;
       showSnack(getLocalText.s("Import failed: %s", formatUserError(e).render()));
@@ -678,6 +732,10 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // сколько их заведётся, ДО применения.
       if (parsed.directions.isNotEmpty)
         getLocalText.s("Directions: %d", parsed.directions.length),
+      // §393 C9 — цепочки хопов: тоже создаваемые сущности, и их число
+      // пользователь вправе увидеть ДО применения.
+      if (parsed.chains.isNotEmpty)
+        getLocalText.s("Chains: %d", parsed.chains.length),
       getLocalText.s("Rules: %d", parsed.rules.length),
       getLocalText.s("Subscriptions: %d", parsed.subscriptions.length),
       getLocalText.s("Variables: %d", parsed.vars.length),

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/source_chain.dart';
+import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
 
 // Конформанс-раннер корпуса LX Backup (SPEC 103, фаза 4), сторона LxBox.
@@ -91,6 +93,41 @@ void main() {
           }
         }
 
+        // §393 C9 — цепочки хопов (SPEC 110, схема v1.2). Паритет с
+        // Go-раннером (`corpus_test.go:checkChains`).
+        //
+        // Список ИСЧЕРПЫВАЮЩИЙ: проверяется и точное ЧИСЛО цепочек, иначе
+        // запись, пропущенная merge'м по занятому тегу, могла бы тихо
+        // материализоваться второй копией и тест бы этого не заметил.
+        //
+        // `chain` сверяется DEEP-EQUAL канона, без чувствительности к
+        // порядку ключей и ВКЛЮЧАЯ `null` внутри `rewrite`: по RFC 7396
+        // `null` удаляет ключ, то есть несёт смысл, и «схлопывание пустого»
+        // на переносе поменяло бы патч.
+        //
+        // `label` проверяется НАТИВНО (у мобилы это хранимое поле
+        // [SourceChain.label], а не непонятый груз `_backup_fields`, через
+        // который его возит лаунчер) — но сверяется то же ожидание корпуса.
+        final wantChains =
+            ((expected['chains'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        if (wantChains.isNotEmpty) {
+          expect(file.chains, hasLength(wantChains.length),
+              reason: 'число цепочек: пропущенная merge\'ем запись не '
+                  'должна материализоваться второй копией');
+          final byTag = {for (final c in file.chains) c.tag: c};
+          for (final want in wantChains) {
+            final tag = want['tag'] as String;
+            final got = byTag[tag];
+            expect(got, isNotNull, reason: 'цепочка $tag не создана импортом');
+            expect(got!.label, want['label'] ?? '', reason: '$tag: имя');
+            expect(
+              _canonOf(got),
+              _deepEqualsJson(want['chain']),
+              reason: '$tag: канон цепочки искажён',
+            );
+          }
+        }
+
         // §393 B12 — отметки выключенных узлов (§4 BACKUP.md). Паритет с
         // Go-раннером (`corpus_test.go:checkDisabledHashes`): переносятся
         // ТОЛЬКО по identity-хешу, ожидание — плоский список хешей, которые
@@ -123,3 +160,17 @@ void main() {
     }
   });
 }
+
+/// Канон цепочки (`schema/source_chain.schema.json`) из мобильной модели —
+/// ровно поля маршрута, без идентичности записи (`tag`/`label`/`enabled`),
+/// которая в схеме живёт уровнем выше.
+Map<String, dynamic> _canonOf(SourceChain c) => c.toJson()
+  ..remove('tag')
+  ..remove('label')
+  ..remove('enabled');
+
+/// Матчер структурного равенства JSON-деревьев: нечувствителен к порядку
+/// ключей и НЕ схлопывает `null` (RFC 7396 — он удаляет ключ, а не значит
+/// «пусто»). `equals` для вложенных Map/List этого не даёт.
+Matcher _deepEqualsJson(Object? want) =>
+    predicate<Object?>((got) => deepEqualsJson(got, want), 'deep-equals $want');

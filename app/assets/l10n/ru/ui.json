@@ -986,6 +986,9 @@
   "Chains inside the folder get the folder detour appended": {
     "value": "К цепочкам внутри папки добавляется detour самой папки"
   },
+  "Chains: %d": {
+    "value": "Цепочек: %d"
+  },
   "Check": {
     "value": "Проверка"
   },
@@ -4485,6 +4488,9 @@
   },
   "chain": {
     "value": "цепочка"
+  },
+  "chains: %d": {
+    "value": "цепочек: %d"
   },
   "closed": {
     "value": "закрыто"

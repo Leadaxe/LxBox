@@ -10,6 +10,7 @@ import '../models/custom_rule.dart';
 import '../config/consts.dart';
 import '../models/direction.dart';
 import '../models/server_list.dart';
+import '../models/source_chain.dart';
 
 /// LX Backup v1 — переносимый формат обмена настройками с десктопным
 /// лаунчером (SPEC 103, фаза 4).
@@ -48,6 +49,18 @@ const String kWarnUnknownField = 'backup_unknown_field';
 /// (BACKUP.md §3). Правило при этом цель находит — тег совпадает, — поэтому
 /// тег всё равно пополняет known-множество.
 const String kWarnDirectionExists = 'backup_direction_exists';
+
+/// §393 C9 — тег приехавшей цепочки уже занят на этой стороне (SPEC 110,
+/// схема v1.2).
+///
+/// Тот же принцип, что у [kWarnDirectionExists], и та же причина предъявлять
+/// его ВСЕГДА: у цепочки нет стабильного id, идентичность несёт только тег.
+/// Молчаливое «своя победила» скрыло бы случай СЛУЧАЙНЫХ ТЁЗОК — двух
+/// несвязанных маршрутов, одинаково названных на разных устройствах
+/// (BACKUP.md §2). Приехавшая запись не применяется, своя остаётся; тег при
+/// этом пополняет known-множество — правило, метящее в цепочку, цель
+/// находит, она просто чужая.
+const String kWarnChainExists = 'backup_chain_exists';
 
 /// §393 B9 — DNS-запись приехала в виде, которому на этой стороне нет места
 /// (`kind`, которого мобила не знает; тело без опоры на шаблон). Запись едет
@@ -268,6 +281,7 @@ class LxBackupFile {
     required this.exportedAt,
     required this.directions,
     required this.rules,
+    this.chains = const [],
     required this.subscriptions,
     required this.vars,
     required this.routeFinal,
@@ -293,6 +307,16 @@ class LxBackupFile {
 
   /// Правила в порядке файла (ось `num` учтена при разборе).
   final List<CustomRule> rules;
+
+  /// §393 C9 — цепочки хопов, ПРИМЕНИМЫЕ на этой стороне (SPEC 110, схема
+  /// v1.2): приехавшие теги, которых у нас ещё нет. Занятый тег сюда не
+  /// попадает — только в warning [kWarnChainExists].
+  ///
+  /// ПОРЯДОК ФАЙЛА НОРМАТИВЕН и не сортируется: вложенная цепочка вправе
+  /// стоять позицией только у объявленной НИЖЕ по списку, и перестановка
+  /// замкнула бы цикл, которого канон запрещает
+  /// (`schema/source_chain.schema.json`).
+  final List<SourceChain> chains;
 
   /// §393 B10 — подписки, разобранные полями. Применяются поверх существующих
   /// списков по URL (он и есть identity подписки на обеих сторонах).
@@ -335,6 +359,7 @@ Future<String> buildLxBackup({
   required List<CustomRule> rules,
   required Map<String, String> vars,
   List<Direction> directions = const [],
+  List<SourceChain> chains = const [],
   String? routeFinal,
   Map<String, dynamic> foreignExtensions = const {},
   LxDns? dns,
@@ -387,16 +412,18 @@ Future<String> buildLxBackup({
     // ссылается только вверх, перестановка сломала бы состав.
     if (directions.isNotEmpty)
       'directions': [for (final d in directions) _directionToJson(d)],
-    // TODO(§393 B-хвост / C9): цепочек (SPEC 110, `chains[]`) в LX Backup
-    // ПОКА НЕТ — ни здесь, ни в разборе. Это не забывчивость: раздела для
-    // источников-цепочек в контракте (`docs/BACKUP.md`) не объявлено, и
-    // лаунчер их в бэкап тоже не кладёт. Класть их в `extensions.lxbox`
-    // нельзя — цепочка описана каноном ИСТОЧНИКА (`source_chain.schema.json`),
-    // то есть общей моделью обеих сторон, а не мобильным расширением;
-    // односторонний блоб сделал бы круг launcher→LxBox→launcher лживым.
-    // Решается доп. разделом контракта (задача C9) — синхронно с лаунчером.
-    // Внутренний бэкап цепочки уже переносит (`backup_service`, категория
-    // routing), так что перенос устройство→устройство работает.
+    // §393 C9 — цепочки хопов (SPEC 110, схема v1.2): корневая секция
+    // рядом с directions[], а НЕ блоб `extensions.lxbox`. Цепочка описана
+    // каноном ИСТОЧНИКА (`source_chain.schema.json`) — общей моделью обеих
+    // сторон, и односторонний блоб сделал бы круг launcher→LxBox→launcher
+    // лживым.
+    //
+    // Едут ПОСЛЕ directions[] (позиция может ссылаться на Направление) и ДО
+    // rules[] (правило может метить в цепочку как в цель). Порядок списка
+    // сохраняется дословно: ссылка на цепочку разрешена только ВВЕРХ по
+    // списку, и сортировка замкнула бы цикл.
+    if (chains.isNotEmpty)
+      'chains': [for (final c in chains) _chainToJson(c)],
     if (rules.isNotEmpty) 'rules': [for (final r in rules) _ruleToJson(r)],
     // §393 B9 — DNS едет секцией, а не варами: `dns_final`/`dns_strategy` без
     // состава серверов на чужой стороне указывают в пустоту.
@@ -656,10 +683,18 @@ Map<String, dynamic> _ruleToJson(CustomRule rule) {
 ///
 /// [knownOutbounds] — цели, на которые правилу разрешено ссылаться;
 /// пустой набор означает «проверять нечем» — тогда ссылки не режутся.
+///
+/// [knownChains] — теги ЦЕПОЧЕК, уже заведённых на этой стороне (§393 C9).
+/// Отдельно от [knownOutbounds] намеренно: merge цепочек идёт по СВОЕМУ
+/// пространству имён — приехавшая цепочка `relay` при существующем
+/// Направлении `relay` это не «своя цепочка сильнее», а коллизия тегов, и
+/// разгребает её гейт применения ([directionTagConflict]), а не warning
+/// `backup_chain_exists`, который отвечает на другой вопрос.
 LxBackupFile parseLxBackup(
   String raw, {
   Set<String> knownOutbounds = const {},
   Set<String> knownPresets = const {},
+  Set<String> knownChains = const {},
 }) {
   final dynamic decoded = jsonDecode(raw);
   if (decoded is! Map<String, dynamic>) {
@@ -683,6 +718,10 @@ LxBackupFile parseLxBackup(
     'rules', 'dns', 'vars', 'route', 'warp', 'extensions',
     // §393 B1 — схема v1.1: Направления едут вместе с правилами.
     'directions',
+    // §393 C9 — схема v1.2: цепочки хопов (SPEC 110) корневой секцией.
+    // Без записи здесь default-deny выдал бы ложный `backup_unknown_field`
+    // на каждый файл лаунчера с цепочками.
+    'chains',
   };
   for (final key in decoded.keys) {
     if (!known.contains(key)) {
@@ -715,6 +754,35 @@ LxBackupFile parseLxBackup(
       continue;
     }
     directions.add(_directionFromCanon(j, tag, warnings));
+  }
+
+  // §393 C9 — цепочки (SPEC 110, схема v1.2): ПОСЛЕ Направлений (позиция
+  // может ссылаться на Направление) и ДО правил (правило может метить в
+  // цепочку как в цель). Порядок записей файла сохраняется как есть.
+  //
+  // Занятый тег — тот же код-путь, что и дубль ВНУТРИ файла: набор
+  // `takenChainTags` общий, поэтому first-wins по порядку файла, а вторая
+  // запись с тем же тегом получает `backup_chain_exists` наравне с тёзкой
+  // локальной цепочки. Тег пополняет known-множество в ЛЮБОМ случае —
+  // и у применённой, и у пропущенной: цель под этим именем существует.
+  final chains = <SourceChain>[];
+  final takenChainTags = <String>{
+    for (final t in knownChains) t.trim().toLowerCase(),
+  };
+  for (final item in (decoded['chains'] as List? ?? const [])) {
+    if (item is! Map) continue;
+    final j = item.cast<String, dynamic>();
+    final tag = (j['tag'] as String?)?.trim() ?? '';
+    // Без тега цепочка не адресуема, без канона — не маршрут: битую запись
+    // пропускаем молча, как безымянное Направление (защита от правленого
+    // файла, а не потеря данных).
+    if (tag.isEmpty || j['chain'] is! Map) continue;
+    knownWithDirections.add(tag);
+    if (!takenChainTags.add(tag.toLowerCase())) {
+      warnings.add(LxBackupWarning(kWarnChainExists, tag));
+      continue;
+    }
+    chains.add(_chainFromCanon(j, tag, warnings));
   }
 
   final rules = <CustomRule>[];
@@ -787,6 +855,7 @@ LxBackupFile parseLxBackup(
     exportedAt: (decoded['exported_at'] as String?) ?? '',
     directions: directions,
     rules: rules,
+    chains: chains,
     subscriptions: [
       for (final s in (decoded['subscriptions'] as List? ?? const []))
         if (s is Map) _subscriptionFromJson(s.cast<String, dynamic>()),
@@ -1178,6 +1247,84 @@ Map<String, dynamic> _directionAutoToJson(DirectionAuto a) => {
         : [for (final k in a.stickyHash) k.wire],
   },
 };
+
+/// §393 C9 — ключи записи `chains[]`, которые мобила разбирает полями.
+/// Всё остальное — default-deny с warning'ом, как у `directions[]`.
+const Set<String> _knownChainKeys = {
+  'tag',
+  'label',
+  'enabled',
+  'chain',
+  'extensions',
+};
+
+/// §393 C9 — мобильная [SourceChain] → запись секции `chains[]`.
+///
+/// Форма записи: `tag` + опциональные `label`/`enabled` + КАНОН цепочки
+/// отдельным полем `chain`, без дублирования его полей на верхнем уровне
+/// (`schema/backup.schema.json`, секция chains[]).
+///
+/// `label` пишем, только когда он непустой И отличается от тега: канон
+/// говорит «отображаемое имя, только если отличается от тега», а у лаунчера
+/// отдельного понятия подписи нет вовсе — он возит чужое значение нетронутым.
+/// Писать `label == tag` значило бы посылать на ту сторону шум, который она
+/// вернёт обратно неотличимым от осознанного имени.
+Map<String, dynamic> _chainToJson(SourceChain c) => {
+  'tag': c.tag,
+  if (c.label.isNotEmpty && c.label != c.tag) 'label': c.label,
+  // Ключ пишем только для выключенной: отсутствие = true по схеме.
+  if (!c.enabled) 'enabled': false,
+  // Канон как есть — `SourceChain.toJson` уже пишет ровно его поля, минус
+  // идентичность записи (tag/label/enabled), которая живёт уровнем выше.
+  'chain': _chainCanonToJson(c),
+};
+
+/// Канон цепочки (`schema/source_chain.schema.json`) для поля `chain`.
+///
+/// Отдельно от [SourceChain.toJson] намеренно: тот пишет ЗАПИСЬ storage —
+/// с `tag`/`label`/`enabled`, — а канон описывает только МАРШРУТ. Смешать их
+/// значило бы отправить на ту сторону тег дважды и разойтись со схемой
+/// (`additionalProperties: false`).
+Map<String, dynamic> _chainCanonToJson(SourceChain c) {
+  final full = c.toJson()
+    ..remove('tag')
+    ..remove('label')
+    ..remove('enabled');
+  return full;
+}
+
+/// §393 C9 — каноническая запись `chains[]` → мобильная [SourceChain].
+///
+/// Достижимость `hops` здесь НЕ проверяется: хоп — чаще всего узел подписки,
+/// которого до её обновления не существует, и рубеж валидации у обеих сторон
+/// один — сборка конфига (`chain_hop_missing`). Эталон —
+/// `core/backup/import.go:importChain`.
+SourceChain _chainFromCanon(
+  Map<String, dynamic> j,
+  String tag,
+  List<LxBackupWarning> warnings,
+) {
+  for (final key in j.keys) {
+    if (!_knownChainKeys.contains(key)) {
+      warnings.add(LxBackupWarning(kWarnUnknownField, 'chains[].$key'));
+    }
+  }
+
+  final canon =
+      (j['chain'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
+  // Канон разбирается ШТАТНЫМ парсером модели: второй разбор тех же полей
+  // разошёлся бы с ним на первой же правке (трёхзначный `strip_evasion`,
+  // порядок каталога `strip`, `null` внутри `rewrite`).
+  final parsed = SourceChain.fromJson({...canon, 'tag': tag});
+  return parsed.copyWith(
+    // Канон: пустое имя законно — показываем тег.
+    label: (j['label'] as String?) ?? '',
+    // Отсутствие ключа = true (`enabled.default` схемы). В ожиданиях корпуса
+    // ключа нет вовсе, и читать его отсутствие как false значило бы
+    // импортировать выключенными все цепочки лаунчера.
+    enabled: j['enabled'] as bool? ?? true,
+  );
+}
 
 bool _isKnownOutbound(String tag, Set<String> known) {
   final t = tag.trim().toLowerCase();

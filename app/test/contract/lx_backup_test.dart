@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/warp/masque_account.dart';
@@ -328,6 +329,264 @@ void main() {
   // выбрасывались, либо не существовали вовсе. Каждый тест сформулирован как
   // круг: то, что уехало, обязано вернуться — это и есть инвариант §1
   // BACKUP.md, а не «поле сериализуется».
+  // §393 C9 — цепочки хопов (SPEC 110, схема v1.2). Парные тесты к
+  // core/backup/backup_test.go: TestRoundTripChainSources и
+  // TestImportChainTagBusy.
+  group('LX Backup: цепочки хопов', () {
+    test('приехавшая цепочка делает правило РАБОЧИМ, а не выключенным', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "chains": [{"tag": "relay", "chain": {"hops": ["vpn-de", "exit"]}}],
+  "rules": [{"kind": "inline", "name": "R", "outbound": "relay", "num": 1}]
+}''';
+      // knownOutbounds намеренно НЕ содержит relay: цель приезжает в этом же
+      // файле, и только порядок «цепочки раньше правил» спасает.
+      final file = parseLxBackup(raw, knownOutbounds: {'vpn-1'});
+      expect(file.chains.single.tag, 'relay');
+      expect(file.rules.single.enabled, isTrue,
+          reason: 'цель приехала в файле — правило обязано прийти рабочим');
+      expect(file.warnings, isEmpty);
+    });
+
+    // Парный к Go TestImportChainTagBusy: своя цепочка сильнее приехавшей,
+    // и пропуск предъявляется ВСЕГДА — молчание склеило бы случайных тёзок.
+    test('занятый тег: своя цепочка остаётся, приехавшая пропущена', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "chains": [{"tag": "relay", "chain": {"hops": ["theirs-1", "theirs-2"]}}],
+  "rules": [{"kind": "inline", "name": "R", "outbound": "relay", "num": 1}]
+}''';
+      // Своя цепочка `relay` уже заведена: этот набор — ровно то, что экран
+      // берёт из `SettingsStorage.getChains()`.
+      final file = parseLxBackup(
+        raw,
+        knownOutbounds: {'relay'},
+        knownChains: {'relay'},
+      );
+      expect(file.chains, isEmpty,
+          reason: 'перезапись стёрла бы маршрут пользователя');
+      expect(file.warnings.map((w) => w.code), [kWarnChainExists]);
+      // Тег всё равно известен — правило цель находит, она просто своя.
+      expect(file.rules.single.enabled, isTrue);
+    });
+
+    // Дубль ВНУТРИ файла — тот же код-путь, что и тёзка локальной цепочки:
+    // набор занятых тегов общий, поэтому first-wins по порядку файла.
+    test('дубль внутри файла: побеждает первая запись', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "chains": [
+    {"tag": "relay", "chain": {"hops": ["hop-1", "hop-2"]}},
+    {"tag": "relay", "chain": {"hops": ["hop-3", "hop-4"]}}
+  ]
+}''';
+      final file = parseLxBackup(raw);
+      expect(file.chains, hasLength(1));
+      expect(file.chains.single.hops, ['hop-1', 'hop-2'],
+          reason: 'порядок файла нормативен — побеждает первая');
+      expect(file.warnings.map((w) => w.code), [kWarnChainExists]);
+    });
+
+    test('канон → модель: трёхзначный strip_evasion, strip, rewrite', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "chains": [{
+    "tag": "relay",
+    "label": "Мой маршрут",
+    "chain": {
+      "hops": ["a", "b"],
+      "idle_timeout": "0s",
+      "strip_evasion": false,
+      "strip": {"tls.utls": false, "xhttp.padding": true},
+      "rewrite": {"vless": {"flow": null}}
+    }
+  }]
+}''';
+      final c = parseLxBackup(raw).chains.single;
+      expect(c.enabled, isTrue, reason: 'отсутствие ключа = true по схеме');
+      expect(c.label, 'Мой маршрут');
+      expect(c.hops, ['a', 'b']);
+      expect(c.idleTimeout, '0s');
+      // Трёхзначность: явный false НЕ должен слипаться с «ключа не было».
+      expect(c.stripEvasion, isFalse);
+      expect(c.strip, {'xhttp.padding': true, 'tls.utls': false});
+      expect(c.rewrite, {
+        'vless': {'flow': null},
+      });
+      expect(
+        (c.rewrite['vless'] as Map).containsKey('flow'),
+        isTrue,
+        reason: 'null внутри rewrite = удаление ключа по RFC 7396, '
+            'схлопывать его значит поменять патч',
+      );
+    });
+
+    test('ключа strip_evasion не было → null, а не false', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "chains": [{"tag": "relay", "chain": {"hops": ["a", "b"]}}]
+}''';
+      final c = parseLxBackup(raw).chains.single;
+      expect(c.stripEvasion, isNull,
+          reason: 'умолчание ядра (true) и явное выключение — разные вещи');
+    });
+
+    test('битая запись пропускается молча: нет тега / нет канона', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "chains": [
+    {"tag": "", "chain": {"hops": ["a", "b"]}},
+    {"tag": "no-canon"},
+    {"tag": "ok", "chain": {"hops": ["a", "b"]}}
+  ]
+}''';
+      final file = parseLxBackup(raw);
+      expect(file.chains.map((c) => c.tag), ['ok'],
+          reason: 'защита от правленого файла, как у directions[]');
+      expect(file.warnings, isEmpty);
+    });
+
+    test('неизвестный ключ записи назван, а не съеден молча', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "chains": [{
+    "tag": "relay",
+    "chain": {"hops": ["a", "b"]},
+    "sorcery": {"launcher_only": true}
+  }]
+}''';
+      final file = parseLxBackup(raw);
+      expect(file.chains.single.tag, 'relay');
+      expect(file.warnings.map((w) => w.code), [kWarnUnknownField]);
+      expect(file.warnings.single.detail, 'chains[].sorcery');
+    });
+
+    test('корневая секция chains не даёт ложный backup_unknown_field', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "chains": [{"tag": "relay", "chain": {"hops": ["a", "b"]}}]
+}''';
+      expect(parseLxBackup(raw).warnings, isEmpty);
+    });
+
+    // Парный к Go TestRoundTripChainSources.
+    test('round-trip: канон переживает экспорт→импорт дословно', () async {
+      const source = SourceChain(
+        tag: 'chain-1',
+        label: 'Мой маршрут',
+        hops: ['warp', 'vpn ②'],
+        idleTimeout: '0s',
+        stripEvasion: false,
+        strip: {'tls.utls': false},
+        // RFC 7396: null удаляет ключ и обязан пережить перенос как есть.
+        rewrite: {
+          'vless': {'flow': null},
+        },
+      );
+
+      final out = await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        chains: const [source],
+      );
+      final doc = jsonDecode(out) as Map<String, dynamic>;
+      final entry = (doc['chains'] as List).single as Map<String, dynamic>;
+      expect(entry['tag'], 'chain-1');
+      expect(entry['label'], 'Мой маршрут');
+      expect(entry.containsKey('enabled'), isFalse,
+          reason: 'включённая — умолчание схемы, ключ был бы шумом');
+      // Идентичность записи живёт уровнем выше канона: `chain` описывает
+      // только МАРШРУТ (`additionalProperties: false` у схемы источника).
+      final canon = entry['chain'] as Map<String, dynamic>;
+      expect(canon.containsKey('tag'), isFalse);
+      expect(canon.containsKey('label'), isFalse);
+      expect(canon.containsKey('enabled'), isFalse);
+      expect(canon['strip_evasion'], isFalse);
+      expect(canon['rewrite'], {
+        'vless': {'flow': null},
+      });
+
+      final back = parseLxBackup(out).chains.single;
+      expect(back.tag, source.tag);
+      expect(back.label, source.label);
+      expect(back.hops, source.hops);
+      expect(back.idleTimeout, source.idleTimeout);
+      expect(back.stripEvasion, isFalse);
+      expect(back.strip, source.strip);
+      expect(back.rewrite, source.rewrite);
+    });
+
+    test('label не пишется, когда равен тегу или пуст', () async {
+      final out = await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        chains: const [
+          SourceChain(tag: 'chain-1', label: 'chain-1', hops: ['a', 'b']),
+          SourceChain(tag: 'chain-2', label: '', hops: ['a', 'b']),
+        ],
+      );
+      final entries =
+          ((jsonDecode(out) as Map<String, dynamic>)['chains'] as List)
+              .cast<Map<String, dynamic>>();
+      for (final e in entries) {
+        expect(e.containsKey('label'), isFalse,
+            reason: 'канон: имя пишется, ТОЛЬКО если отличается от тега — '
+                'иначе та сторона вернёт шум неотличимым от осознанного имени');
+      }
+    });
+
+    test('выключенная цепочка едет ключом enabled: false', () async {
+      final out = await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        chains: const [
+          SourceChain(tag: 'off', enabled: false, hops: ['a', 'b']),
+        ],
+      );
+      final entry =
+          (((jsonDecode(out) as Map<String, dynamic>)['chains'] as List).single)
+              as Map<String, dynamic>;
+      expect(entry['enabled'], isFalse);
+      expect(parseLxBackup(out).chains.single.enabled, isFalse);
+    });
+
+    test('порядок записей не сортируется ни на импорте, ни на экспорте',
+        () async {
+      // Ссылка на цепочку выше по списку = антицикл: перестановка сломала бы
+      // ровно тот инвариант, ради которого порядок объявлен нормативным.
+      const chains = [
+        SourceChain(tag: 'z-first', hops: ['a', 'b']),
+        SourceChain(tag: 'a-second', hops: ['z-first', 'c']),
+      ];
+      final out = await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        chains: chains,
+      );
+      final tags = [
+        for (final e
+            in ((jsonDecode(out) as Map<String, dynamic>)['chains'] as List))
+          (e as Map<String, dynamic>)['tag'],
+      ];
+      expect(tags, ['z-first', 'a-second'], reason: 'экспорт не сортирует');
+      expect(parseLxBackup(out).chains.map((c) => c.tag),
+          ['z-first', 'a-second'],
+          reason: 'импорт не сортирует');
+    });
+  });
+
   group('LX Backup: секции обмена', () {
     // §393 B7 — самый дорогой из инвариантов: блоб чужого приложения обязан
     // пережить круг launcher→LxBox→launcher БАЙТ В БАЙТ. Обеднение здесь
