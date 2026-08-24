@@ -66,13 +66,23 @@ void main() {
     if (await tempDir.exists()) await tempDir.delete(recursive: true);
   });
 
+  // `_scheduleAutoPing` планируется через unawaited после pullToRefresh —
+  // сколько провернётся эта цепочка, зависит от машины. Фиксированный сон
+  // здесь флейков (50мс стабильно не хватало): ждём УСЛОВИЕ с дедлайном.
+  Future<void> waitUntil(bool Function() cond,
+      {Duration timeout = const Duration(seconds: 5)}) async {
+    final sw = Stopwatch()..start();
+    while (!cond() && sw.elapsed < timeout) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    // По таймауту не бросаем — пусть падает содержательный expect ниже.
+  }
+
   test('reloadVpn при живом туннеле планирует автопинг', () async {
     controller.debugSeedNodeState(group: 'vpn-1', activeNode: 'n1');
 
     await controller.reloadVpn();
-    // `_scheduleAutoPing` планируется через unawaited и внутри читает настройку
-    // (await) — даём микрозадачам провернуться, иначе таймера ещё нет.
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    await waitUntil(() => controller.autoPingScheduledForTesting);
 
     expect(calls, contains('reloadVPN'), reason: 'сам reload должен произойти');
     expect(controller.autoPingScheduledForTesting, isTrue,
@@ -91,12 +101,18 @@ void main() {
     controller.debugSeedNodeState(group: 'vpn-1', activeNode: 'n1');
 
     await controller.reloadVpn();
-    // `_scheduleAutoPing` планируется через unawaited и внутри читает настройку
-    // (await) — даём микрозадачам провернуться, иначе таймера ещё нет.
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    // У негативного кейса нет позитивного сигнала «планирование НЕ произошло».
+    // Якоримся причинно: pullToRefresh (ccGetGroups) идёт ПЕРЕД
+    // _scheduleAutoPing — дожидаемся его, затем короткое удержание: таймер
+    // не должен появиться и после того, как цепочка дошла до планирования.
+    await waitUntil(() => calls.contains('ccGetGroups'));
+    final hold = Stopwatch()..start();
+    while (hold.elapsedMilliseconds < 200) {
+      expect(controller.autoPingScheduledForTesting, isFalse,
+          reason: 'выключенная галка обязана уважаться и на этом пути');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
 
     expect(calls, contains('reloadVPN'));
-    expect(controller.autoPingScheduledForTesting, isFalse,
-        reason: 'выключенная галка обязана уважаться и на этом пути');
   });
 }
