@@ -23,7 +23,7 @@
 - **WARP**: `vhttp: auto` (h3→h2) в визарде MASQUE, дефолт для новых.
 - **Debug API**: CRUD `/chains` + `/chains/{tag}/probe`; справка актуализована.
 - **Шаблоны**: load-валидация `#enable` и всех секций.
-- Ядро: sing-box-lx **v1.14.0-lx.27** (type: chain).
+- Ядро: sing-box-lx **v1.14.0-lx.28-rc.1** (type: chain, варны tunnel died, vhttp=auto).
 
 
 ## [Unreleased]

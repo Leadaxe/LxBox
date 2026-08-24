@@ -98,7 +98,9 @@ behind TCP hops in chains and on networks where QUIC/UDP is cut.
 
 ## 🧰 Core and internals
 
-- Core pinned to **sing-box-lx v1.14.0-lx.27** (final; brings `type: chain`).
+- Core pinned to **sing-box-lx v1.14.0-lx.28-rc.1**: `type: chain`, the
+  layer-tag contract anchored in the core, `masque: tunnel died` warnings
+  naming the guilty layer, and `vhttp` defaulting to `auto`.
 - Debug API: full `/chains` CRUD with the same validation the form enforces,
   `GET /chains/{tag}/probe` for scripted layer probes; `/help` refreshed.
 - Template loading now validates `#enable` bodies and all template sections —
@@ -200,8 +202,9 @@ include, позиции цепочек) до фикспойнта: висячи�
 
 ## 🧰 Ядро и внутренности
 
-- Ядро запинено на **sing-box-lx v1.14.0-lx.27** (финальный; приносит
-  `type: chain`).
+- Ядро запинено на **sing-box-lx v1.14.0-lx.28-rc.1**: `type: chain`,
+  контракт тегов слоёв закреплён в ядре, предупреждения `masque: tunnel
+  died` называют слой-виновник, а `vhttp` по умолчанию — `auto`.
 - Debug API: полный CRUD `/chains` с той же валидацией, что в форме,
   `GET /chains/{tag}/probe` для скриптовых послойных проб; `/help` обновлён.
 - Загрузка шаблона теперь валидирует тела `#enable` и все секции шаблона —
