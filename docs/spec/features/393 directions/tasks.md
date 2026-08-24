@@ -144,7 +144,7 @@ warp[] и dns не реализованы ни в одну сторону (мо�
 - [x] B2. Экспорт: Directions → `directions[]` (канон; фильтр ТЕЛОМ regex)
 - [x] B3. Раннер `test/contract/backup_corpus_test.dart`: сверка
       `directions[]` из expected (tag/label/filter/include_direct/has_auto)
-- [ ] B4. `directions_created_on_import` зелёный → закоммитить
+- [x] B4. `directions_created_on_import` зелёный → закоммитить
       `app/contract.lock` (до этого lock НЕ коммитить)
 - [x] B5. UI restore: создание Направлений при импорте (backup_service)
 
