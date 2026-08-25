@@ -264,10 +264,10 @@ class RuleSetDownloader {
             .timeout(_timeout);
 
         if (resp.statusCode == 304) {
-          return finish(DownloadOutcome.notModified);
+          return await finish(DownloadOutcome.notModified);
         }
         if (resp.statusCode >= 400 && resp.statusCode < 500) {
-          return finish(DownloadOutcome.failed,
+          return await finish(DownloadOutcome.failed,
               error: 'HTTP ${resp.statusCode}');
         }
         if (resp.statusCode != 200 || resp.bodyBytes.isEmpty) {
@@ -275,7 +275,7 @@ class RuleSetDownloader {
             await Future<void>.delayed(backoffs[attempt]);
             continue;
           }
-          return finish(DownloadOutcome.failed,
+          return await finish(DownloadOutcome.failed,
               error: resp.bodyBytes.isEmpty && resp.statusCode == 200
                   ? 'empty body'
                   : 'HTTP ${resp.statusCode}');
@@ -283,17 +283,17 @@ class RuleSetDownloader {
         await tmp.writeAsBytes(resp.bodyBytes, flush: true);
         if (await f.exists()) await f.delete();
         await tmp.rename(f.path);
-        return finish(DownloadOutcome.downloaded,
+        return await finish(DownloadOutcome.downloaded,
             etag: resp.headers['etag']);
       } catch (e) {
         if (attempt < backoffs.length) {
           await Future<void>.delayed(backoffs[attempt]);
           continue;
         }
-        return finish(DownloadOutcome.failed, error: _shortError(e));
+        return await finish(DownloadOutcome.failed, error: _shortError(e));
       }
     }
-    return finish(DownloadOutcome.failed, error: 'retries exhausted');
+    return await finish(DownloadOutcome.failed, error: 'retries exhausted');
   }
 
   /// Тип исключения без стектрейса и без URL — строка попадает в UI.

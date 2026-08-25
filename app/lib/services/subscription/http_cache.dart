@@ -63,7 +63,10 @@ class HttpCache {
       final dir = await _dir();
       final f = File('${dir.path}/${_hash(url)}');
       if (!f.existsSync()) return null;
-      return f.readAsString();
+      // await обязателен: без него ошибка чтения пролетит мимо catch ниже
+      // и вместо null прилетит исключение вызывающему (lint
+      // unawaited_return_in_try_block, Flutter 3.47).
+      return await f.readAsString();
     } catch (_) {
       return null;
     }

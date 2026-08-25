@@ -291,6 +291,11 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   /// Колбэк — `onReorderItem` (не устаревший `onReorder`): newIndex здесь уже
   /// приведён к списку БЕЗ перетаскиваемого элемента, ручной сдвиг «-1 при
   /// move вниз» не нужен.
+  /// Колбэк — `onReorderItem` (не устаревший `onReorder`): newIndex здесь уже
+  /// приведён к списку БЕЗ перетаскиваемого элемента, поэтому ручного сдвига
+  /// «-1 при move вниз» быть не должно — с ним позиция уезжала бы мимо места,
+  /// куда её отпустили. Порядок позиций и есть маршрут, так что ошибка на
+  /// единицу молча поменяла бы цепочку.
   void _reorderHop(int oldIndex, int newIndex) {
     if (oldIndex == newIndex) return;
     setState(() {
