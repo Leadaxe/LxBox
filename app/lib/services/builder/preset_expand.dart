@@ -685,11 +685,12 @@ bool fragmentGateSatisfied(
 
   final gate = fragment[enableKey];
   if (gate == null) return true;
-  final resolve = (String name) {
+  Object? resolve(String name) {
     final v = varsMap[name];
     if (v == null) return null;
     return v is String ? coerceVarValue(v, _gateVarType(v)) : v;
-  };
+  }
+
   return evalCond(gate, resolve);
 }
 

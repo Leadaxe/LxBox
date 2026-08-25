@@ -132,7 +132,11 @@ class NodeFilter {
   /// Regex для emoji extraction. Сочетание Extended_Pictographic (☀, ⚡, 👑,
   /// flag-of-bw-emoji, etc) + Regional_Indicator pair (RIS+RIS = country
   /// flags типа 🇷🇺, которые в Unicode представлены парой code points).
+  // Анализатор Dart 3.13 не разбирает \p{...}-классы Unicode, хотя движок
+  // RegExp с unicode: true их поддерживает — выражение рабочее, проверено
+  // тестами эмодзи-фильтра. Отсюда точечное подавление valid_regexps.
   static final _emojiRe = RegExp(
+    // ignore: valid_regexps
     r'(\p{Regional_Indicator}\p{Regional_Indicator}|\p{Extended_Pictographic})',
     unicode: true,
   );

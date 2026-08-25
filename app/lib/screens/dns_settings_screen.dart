@@ -463,8 +463,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
 
   /// §117 (решение №6): reorder в display-пространстве — группа двигается
   /// как одна единица, standalone-правила не могут попасть внутрь неё.
+  /// Вызывается из `onReorderItem`: newIndex уже приведён к списку БЕЗ
+  /// перетаскиваемого элемента, поэтому сдвига «-1 при move вниз» здесь нет.
   void _onReorderRules(int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) newIndex -= 1;
     final rows = _ruleDisplayRows;
     if (oldIndex < 0 || oldIndex >= rows.length) return;
     final presetBlock = [
@@ -610,7 +611,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
               physics: const NeverScrollableScrollPhysics(),
               buildDefaultDragHandles: false,
               itemCount: rows.length,
-              onReorder: _onReorderRules,
+              onReorderItem: _onReorderRules,
               itemBuilder: (ctx, i) {
                 final row = rows[i];
                 if (row == -1) {

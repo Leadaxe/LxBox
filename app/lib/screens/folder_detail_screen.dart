@@ -1224,8 +1224,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             12, 4, 12, MediaQuery.of(context).padding.bottom + 24),
         buildDefaultDragHandles: false,
         itemCount: members.length,
-        onReorder: (oldIndex, newIndex) {
-          if (newIndex > oldIndex) newIndex -= 1;
+        onReorderItem: (oldIndex, newIndex) {
+          // onReorderItem уже приводит newIndex к списку БЕЗ перетаскиваемого
+          // элемента — ручной сдвиг «-1 при move вниз» здесь не нужен.
           final idx = _index;
           if (idx < 0) return;
           unawaited(widget.controller.reorderMember(idx, oldIndex, newIndex));

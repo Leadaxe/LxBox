@@ -885,8 +885,9 @@ class _RoutingScreenState extends State<RoutingScreen>
   /// пересчёта номеров список пересортировывается, а не переставляется руками.
   void _onReorderCustomRule(int oldIndex, int newIndex) {
     setState(() {
-      // ReorderableListView передаёт newIndex сдвинутым на 1 если move вниз.
-      if (newIndex > oldIndex) newIndex -= 1;
+      // Приходит из `onReorderItem` (RoutingTabs) — newIndex уже приведён к
+      // списку БЕЗ перетаскиваемого элемента, ручного сдвига «-1 при move
+      // вниз» здесь быть не должно.
       final moved = _customRules[oldIndex];
       if (!_isSortable(moved)) return; // несортируемое не двигаем
       // Цель — правило, ЗА которым встаём, в списке БЕЗ самого moved:
