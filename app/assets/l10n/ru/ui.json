@@ -935,9 +935,6 @@
   "Building config...": {
     "value": "Сборка конфига…"
   },
-  "Built-in": {
-    "value": "Встроенные"
-  },
   "By routing rule": {
     "value": "По правилам маршрутизации"
   },
@@ -999,9 +996,6 @@
   },
   "Chain to \"%s\" would loop back on itself, so it was dropped. The node connects directly.": {
     "value": "Цепочка на «%s» замкнулась бы в кольцо и была отброшена. Узел подключается напрямую."
-  },
-  "Chains": {
-    "value": "Цепочки"
   },
   "Chains %s are declared below this one — a chain may only reference chains above it. Move them up, or this chain will not build.": {
     "value": "Цепочки %s объявлены ниже этой — сослаться можно только на цепочку выше по списку. Поднимите их, иначе эта цепочка не соберётся."
@@ -2071,9 +2065,6 @@
   "Group": "Группа",
   "Grouping": {
     "value": "Группировка"
-  },
-  "Groups": {
-    "value": "Группы"
   },
   "HTTP": {
     "value": "HTTP"
