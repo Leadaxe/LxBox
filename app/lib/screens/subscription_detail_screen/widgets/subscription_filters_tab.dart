@@ -164,9 +164,10 @@ class _SubscriptionFiltersTabState extends State<SubscriptionFiltersTab> {
     _notifyChanged();
   }
 
+  /// Вызывается из `onReorderItem`: newIndex уже нормализован под удалённый
+  /// элемент, ручной сдвиг «-1 при move вниз» не нужен.
   void _reorder(int oldIndex, int newIndex) {
     final next = [..._rules];
-    if (newIndex > oldIndex) newIndex -= 1;
     final moved = next.removeAt(oldIndex);
     next.insert(newIndex, moved);
     widget.entry.updateImportRules(next);
@@ -319,7 +320,7 @@ class _SubscriptionFiltersTabState extends State<SubscriptionFiltersTab> {
                   // закреплённую панель под списком.
                   padding: EdgeInsets.zero,
                   itemCount: rules.length,
-                  onReorder: _reorder,
+                  onReorderItem: _reorder,
                   itemBuilder: (context, i) =>
                       _ruleTile(context, rules[i], i, key: ValueKey('rule-$i')),
                 ),

@@ -68,7 +68,8 @@ void main() {
         const SourceChain(tag: 'via-de', hops: ['home', 'de-exit'])));
     await tester.pumpAndSettle();
     // Логика порядка, не жест: дёргаем колбэк списка так же, как это сделал бы
-    // drag позиции 1 на место позиции 2.
+    // drag позиции 1 на место позиции 2. onReorderItem уже нормализует
+    // newIndex под удалённый элемент, поэтому «вниз на одну» это ровно 1.
     final list = tester.widget<ReorderableListView>(
         find.byType(ReorderableListView));
     list.onReorderItem!(0, 1);

@@ -832,9 +832,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           12, 0, 12, MediaQuery.of(context).padding.bottom + 24),
       buildDefaultDragHandles: false,
       itemCount: rows.length,
-      onReorder: (oldIndex, newIndex) {
-        // ReorderableListView сдвигает newIndex на 1 при move вниз.
-        if (newIndex > oldIndex) newIndex -= 1;
+      onReorderItem: (oldIndex, newIndex) {
+        // onReorderItem уже нормализует newIndex под удалённый элемент.
         unawaited(_reorderRows(ctrl, oldIndex, newIndex));
       },
       itemBuilder: (context, i) {

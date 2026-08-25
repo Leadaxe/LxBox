@@ -267,9 +267,9 @@ class HomeNodeList extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 56),
       buildDefaultDragHandles: false,
       itemCount: displayList.length,
-      onReorder: (oldIndex, newIndex) {
-        // ReorderableListView convention: при move-down newIndex отступает.
-        if (newIndex > oldIndex) newIndex -= 1;
+      onReorderItem: (oldIndex, newIndex) {
+        // onReorderItem отдаёт newIndex уже без перетаскиваемого элемента —
+        // сдвиг «-1 при move-down» делать не надо.
         if (oldIndex < pinnedCount) return; // pinned ряды не двигаются
         if (newIndex < pinnedCount) newIndex = pinnedCount; // не дроп в pinned
         final restOnly = displayList.skip(pinnedCount).toList();

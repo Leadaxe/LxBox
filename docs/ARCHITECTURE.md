@@ -50,7 +50,7 @@ The current parser and builder version is **v2** (spec 026, phase 5 completed in
 
 ### Why 24 is the minSdk
 
-- **24 is the absolute floor**: Flutter 3.41.x supports API 24 at the lowest (`FlutterExtension.minSdkVersion = 24`), and libbox.aar is built with `minSdkVersion=23`. Below 24 the app cannot be built at all.
+- **24 is the absolute floor**: Flutter supports API 24 at the lowest (`FlutterExtension.minSdkVersion = 24` — unchanged through 3.47.x, the pin currently in use), and libbox.aar is built with `minSdkVersion=23`. Below 24 the app cannot be built at all.
 - Historically `minSdk=26` was in place from v1.4.0 (“Android 8.0+” in the 1.3.x release notes); it was lowered to 24 in §233 at users' request, since nothing in the code depended on API 26.
 - **The VpnService API** (`setMetered`, `setUnderlyingNetworks`) is available from API 29+, with fallbacks for older versions.
 - **`ActivityManager.getHistoricalProcessExitReasons`** (API 30+) is needed for silent-kill detection in diagnostics.

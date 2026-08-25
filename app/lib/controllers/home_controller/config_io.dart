@@ -198,7 +198,10 @@ mixin _ConfigIoMixin on ChangeNotifier {
     }
     try {
       final canonical = await canonicalJsonForSingboxAsync(raw);
-      return saveParsedConfig(canonical, displayRaw: raw);
+      // await обязателен: без него FormatException из saveParsedConfig
+      // пролетела бы мимо catch ниже и ушла вызывающему вместо false
+      // (lint unawaited_return_in_try_block, Flutter 3.47).
+      return await saveParsedConfig(canonical, displayRaw: raw);
     } on FormatException catch (e) {
       _emit(_state.copyWith(lastError: PrefixedMsg(ErrPrefix.parseConfigFailed, RawMsg(e.message))));
       _addDebug(DebugSource.app, 'Config parse error: ${e.message}');

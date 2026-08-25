@@ -19,7 +19,11 @@ const List<String> kEmojiPalette = [
 
 /// Эмодзи: Extended_Pictographic ИЛИ пара Regional_Indicator (флаги).
 /// Совпадает с `NodeFilter` emoji-regex (§048).
+// Анализатор Dart 3.13 не разбирает \p{...}-классы Unicode, хотя движок
+// RegExp с unicode: true их поддерживает — выражение рабочее (см. §048 и
+// тесты эмодзи). Отсюда точечное подавление valid_regexps.
 final RegExp _emojiRe = RegExp(
+  // ignore: valid_regexps
   r'(\p{Regional_Indicator}\p{Regional_Indicator}|\p{Extended_Pictographic})',
   unicode: true,
 );

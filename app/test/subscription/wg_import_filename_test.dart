@@ -28,26 +28,26 @@ void main() {
 
   // SPEC 103 D-023/D-030 — normalizeWGKey требует РОВНО 32 байта base64;
   // короткие плейсхолдеры вроде "pk"/"pubk" больше не парсятся (null-skip).
-  const _testPriv = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=';
-  const _testPub = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=';
+  const testPriv = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=';
+  const testPub = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=';
 
   // Обычный WG-экспорт (Proton-стиль) и awg2-экспорт с обфускацией.
   final wgIni = '[Interface]\n'
-      'PrivateKey = $_testPriv\n'
+      'PrivateKey = $testPriv\n'
       'Address = 10.0.0.2/32\n'
       '\n'
       '[Peer]\n'
-      'PublicKey = $_testPub\n'
+      'PublicKey = $testPub\n'
       'Endpoint = node.example.com:51820\n';
   final awgIni = '[Interface]\n'
-      'PrivateKey = $_testPriv\n'
+      'PrivateKey = $testPriv\n'
       'Address = 10.8.1.25/32\n'
       'Jc = 5\n'
       'Jmin = 10\n'
       'Jmax = 50\n'
       'I1 = <b 0x084481800001>\n'
       '[Peer]\n'
-      'PublicKey = $_testPub\n'
+      'PublicKey = $testPub\n'
       'Endpoint = 64.188.69.128:44733\n';
 
   setUp(() async {
