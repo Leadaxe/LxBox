@@ -125,9 +125,13 @@ final class HttpUpgradeTransport extends TransportSpec {
 /// деградировал в httpupgrade (стоковое ядро без xhttp) — теперь **нативный**
 /// emit, без подмены wire-протокола.
 ///
-/// Все расширенные поля плоские (String/bool) с omitempty-семантикой: пустое
-/// значение → ключ не эмитим, у ядра свои дефолты (см. URL_PARSING §2). НЕ
-/// вкладывать под-объекты — Go-конфиг тоже плоский в пределах transport.
+/// Расширенные поля плоские (String/bool/int) с omitempty-семантикой: пустое
+/// значение → ключ не эмитим, у ядра свои дефолты (см. URL_PARSING §2).
+///
+/// Единственный вложенный объект, который XHTTP определяет, — `xmux`: его
+/// члены живут здесь плоскими полями и собираются в под-объект только на
+/// эмиссии, ровно как в Go (`xhttpXmuxFromSource`). Других под-объектов в
+/// transport нет.
 ///
 /// NB: на СТОКОВОМ ядре (CI без `with_xhttp`) конфиг с `type=xhttp` отвергается
 /// на load — фича «спит» до релиза fork-ядра (как AWG, §097).
@@ -162,6 +166,23 @@ final class XhttpTransport extends TransportSpec {
   // §127 — packet-up tuning (строка '"N"' или '"N-N"')
   final String scMaxEachPostBytes;
   final String scMinPostsIntervalMs;
+  final String scStreamUpServerSecs;
+
+  // Паритет с Go: ядро декодирует это поле как int, а не как строку
+  // (xhttpIntFields, node_parser_transport.go). -1 = не задано.
+  final int scMaxBufferedPosts;
+
+  // Паритет с Go: no_sse_header рядом с no_grpc_header (xhttpBoolFields).
+  final bool noSseHeader;
+
+  // xmux — плоские поля здесь, под-объект на эмиссии (xhttpXmuxFields).
+  // h_keep_alive_period ядро декодирует как int; -1 = не задано.
+  final String maxConnections;
+  final String maxConcurrency;
+  final String cMaxReuseTimes;
+  final String hMaxRequestTimes;
+  final String hMaxReusableSecs;
+  final int hKeepAlivePeriod;
 
   const XhttpTransport({
     this.path = '/',
@@ -185,6 +206,15 @@ final class XhttpTransport extends TransportSpec {
     this.xPaddingMethod = '',
     this.scMaxEachPostBytes = '',
     this.scMinPostsIntervalMs = '',
+    this.scStreamUpServerSecs = '',
+    this.scMaxBufferedPosts = -1,
+    this.noSseHeader = false,
+    this.maxConnections = '',
+    this.maxConcurrency = '',
+    this.cMaxReuseTimes = '',
+    this.hMaxRequestTimes = '',
+    this.hMaxReusableSecs = '',
+    this.hKeepAlivePeriod = -1,
   });
 
   @override
@@ -200,6 +230,7 @@ final class XhttpTransport extends TransportSpec {
     if (mode.isNotEmpty) m['mode'] = mode;
     if (xPaddingBytes.isNotEmpty) m['x_padding_bytes'] = xPaddingBytes;
     if (noGrpcHeader) m['no_grpc_header'] = true;
+    if (noSseHeader) m['no_sse_header'] = true;
     if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
 
     // §217 — нормализация против правил ядра normalizeMeta (transport/v2rayxhttp/
@@ -264,6 +295,27 @@ final class XhttpTransport extends TransportSpec {
     if (scMinPostsIntervalMs.isNotEmpty) {
       m['sc_min_posts_interval_ms'] = scMinPostsIntervalMs;
     }
+    if (scStreamUpServerSecs.isNotEmpty) {
+      m['sc_stream_up_server_secs'] = scStreamUpServerSecs;
+    }
+    // int-поля: 0 — значащее значение, «не задано» кодируется как -1.
+    if (scMaxBufferedPosts >= 0) m['sc_max_buffered_posts'] = scMaxBufferedPosts;
+
+    // xmux собирается под-объектом и эмитится только непустым — пустой
+    // {"xmux":{}} ядро прочло бы как заданный, но нулевой конфиг.
+    final xmux = <String, dynamic>{};
+    if (maxConcurrency.isNotEmpty) xmux['max_concurrency'] = maxConcurrency;
+    if (maxConnections.isNotEmpty) xmux['max_connections'] = maxConnections;
+    if (cMaxReuseTimes.isNotEmpty) xmux['c_max_reuse_times'] = cMaxReuseTimes;
+    if (hMaxRequestTimes.isNotEmpty) {
+      xmux['h_max_request_times'] = hMaxRequestTimes;
+    }
+    if (hMaxReusableSecs.isNotEmpty) {
+      xmux['h_max_reusable_secs'] = hMaxReusableSecs;
+    }
+    if (hKeepAlivePeriod >= 0) xmux['h_keep_alive_period'] = hKeepAlivePeriod;
+    if (xmux.isNotEmpty) m['xmux'] = xmux;
+
     return (m, warnings);
   }
 }

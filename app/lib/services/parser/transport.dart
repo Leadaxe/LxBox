@@ -255,20 +255,59 @@ XhttpTransport xhttpFromMap(
         _normScRange(_pick(m, 'scMaxEachPostBytes', 'sc_max_each_post_bytes')),
     scMinPostsIntervalMs: _normScRange(
         _pick(m, 'scMinPostsIntervalMs', 'sc_min_posts_interval_ms')),
+    scStreamUpServerSecs: _normScRange(
+        _pick(m, 'scStreamUpServerSecs', 'sc_stream_up_server_secs')),
+    scMaxBufferedPosts:
+        _pickInt(m, 'scMaxBufferedPosts', 'sc_max_buffered_posts'),
+    noSseHeader: _truthy(m['noSSEHeader'] ?? m['no_sse_header']),
+    // xmux — плоские ключи (см. mergeXhttpExtra: вложенный объект из Xray
+    // разворачивается сюда же).
+    maxConnections: _pick(m, 'maxConnections', 'max_connections'),
+    maxConcurrency: _pick(m, 'maxConcurrency', 'max_concurrency'),
+    cMaxReuseTimes: _pick(m, 'cMaxReuseTimes', 'c_max_reuse_times'),
+    hMaxRequestTimes: _pick(m, 'hMaxRequestTimes', 'h_max_request_times'),
+    hMaxReusableSecs: _pick(m, 'hMaxReusableSecs', 'h_max_reusable_secs'),
+    hKeepAlivePeriod: _pickInt(m, 'hKeepAlivePeriod', 'h_keep_alive_period'),
   );
+}
+
+/// Числовое поле XHTTP: ядро декодирует его как int, а не как строку.
+/// Значения приходят строками из всех трёх веток, поэтому «30» и «30.0» дают
+/// одно и то же. Отсутствующий или нечисловой ключ → -1 («не задано»), чтобы
+/// поле не эмитилось: нуль у этих полей — значащее значение, а не пустота
+/// (эталон Go: xhttpLookupInt).
+int _pickInt(Map<String, String> m, String camel, String snake) {
+  final raw = _pick(m, camel, snake);
+  if (raw.isEmpty) return -1;
+  final i = int.tryParse(raw);
+  if (i != null) return i;
+  final d = double.tryParse(raw);
+  if (d != null) return d.toInt();
+  return -1;
 }
 
 /// §399 — JSON-объект `xhttpSettings` / sing-box `transport` → плоская карта
 /// строк, пригодная для [xhttpFromMap].
 ///
-/// Вложенные объекты и массивы отбрасываются: в карту полей укладываются только
-/// скаляры. `extra` и `headers` вызывающая сторона достаёт до этого вызова —
-/// у них своя обработка.
+/// Массивы и вложенные объекты отбрасываются — кроме `xmux`, единственного
+/// под-объекта, который XHTTP определяет: его члены разворачиваются в тот же
+/// плоский слой (имена не конфликтуют с верхнеуровневыми, [xhttpFromMap]
+/// соберёт объект обратно). Эталон Go: xrayFlattenScalars. `extra` и `headers`
+/// вызывающая сторона достаёт до этого вызова — у них своя обработка.
 Map<String, String> xhttpScalarsFromJson(Map raw) {
   final out = <String, String>{};
   raw.forEach((k, v) {
     if (k is! String || v == null) return;
-    if (v is Map || v is List) return;
+    if (v is Map) {
+      if (k.toLowerCase() == 'xmux') {
+        v.forEach((nk, nv) {
+          if (nk is! String || nv == null || nv is Map || nv is List) return;
+          out[nk] = _scalarToString(nv);
+        });
+      }
+      return;
+    }
+    if (v is List) return;
     out[k] = _scalarToString(v);
   });
   return out;
@@ -304,7 +343,22 @@ Map<String, String> mergeXhttpExtra(Map<String, String> q, {Object? raw}) {
   final merged = Map<String, String>.from(q);
   decoded.forEach((k, v) {
     if (k is! String || v == null) return;
-    if (v is Map || v is List) return;
+    if (v is Map) {
+      // `xmux` — единственный вложенный объект XHTTP, и Xray пишет его в
+      // extra именно объектом. Разворачиваем его члены в тот же плоский слой
+      // (их имена не конфликтуют с верхнеуровневыми, xhttpFromMap соберёт
+      // объект обратно) — иначе один и тот же узел читался бы по-разному в
+      // зависимости от формы записи. Эталон Go: xhttpMergeSource /
+      // xrayFlattenScalars.
+      if (k.toLowerCase() == 'xmux') {
+        v.forEach((nk, nv) {
+          if (nk is! String || nv == null || nv is Map || nv is List) return;
+          merged[nk] = _scalarToString(nv);
+        });
+      }
+      return;
+    }
+    if (v is List) return;
     merged[k] = _scalarToString(v);
   });
   return merged;
@@ -601,6 +655,23 @@ Map<String, String> transportToQuery(TransportSpec t) {
           'scMaxEachPostBytes': x.scMaxEachPostBytes,
         if (x.scMinPostsIntervalMs.isNotEmpty)
           'scMinPostsIntervalMs': x.scMinPostsIntervalMs,
+        if (x.scStreamUpServerSecs.isNotEmpty)
+          'scStreamUpServerSecs': x.scStreamUpServerSecs,
+        if (x.scMaxBufferedPosts >= 0)
+          'scMaxBufferedPosts': '${x.scMaxBufferedPosts}',
+        if (x.noSseHeader) 'noSSEHeader': 'true',
+        // xmux пишем теми же плоскими ключами, какими читаем: вложенный
+        // `extra={"xmux":{…}}` понимается на входе, но на выходе он лишний —
+        // плоская форма короче и эквивалентна.
+        if (x.maxConnections.isNotEmpty) 'maxConnections': x.maxConnections,
+        if (x.maxConcurrency.isNotEmpty) 'maxConcurrency': x.maxConcurrency,
+        if (x.cMaxReuseTimes.isNotEmpty) 'cMaxReuseTimes': x.cMaxReuseTimes,
+        if (x.hMaxRequestTimes.isNotEmpty)
+          'hMaxRequestTimes': x.hMaxRequestTimes,
+        if (x.hMaxReusableSecs.isNotEmpty)
+          'hMaxReusableSecs': x.hMaxReusableSecs,
+        if (x.hKeepAlivePeriod >= 0)
+          'hKeepAlivePeriod': '${x.hKeepAlivePeriod}',
       };
   }
 }

@@ -510,6 +510,15 @@ void main() {
         xPaddingMethod: 'tokenish',
         scMaxEachPostBytes: '1000000',
         scMinPostsIntervalMs: '30',
+        scStreamUpServerSecs: '20-80',
+        scMaxBufferedPosts: 30,
+        noSseHeader: true,
+        maxConnections: '1',
+        maxConcurrency: '16-32',
+        cMaxReuseTimes: '5',
+        hMaxRequestTimes: '600',
+        hMaxReusableSecs: '1800',
+        hKeepAlivePeriod: 30,
       );
       final expected = golden.toSingbox(TemplateVars.empty).$1;
 
@@ -532,6 +541,58 @@ void main() {
       expect(singboxTransport(expected).toSingbox(TemplateVars.empty).$1,
           expected,
           reason: 'sing-box-JSON-ветка потеряла поле');
+    });
+
+    // Паритет с Go (SPEC 102 R2): Xray пишет xmux в `extra` вложенным
+    // объектом. Обе формы обязаны давать один и тот же транспорт — иначе один
+    // и тот же узел читается по-разному в зависимости от формы записи.
+    test('extra={"xmux":{…}} эквивалентен плоским ключам', () {
+      final nested = parseTransport({
+        'type': 'xhttp',
+        'path': '/p',
+        'extra':
+            '{"xmux":{"maxConnections":1,"maxConcurrency":"16-32","hKeepAlivePeriod":30},"scMaxBufferedPosts":30}',
+      })! as XhttpTransport;
+      final flat = parseTransport({
+        'type': 'xhttp',
+        'path': '/p',
+        'maxConnections': '1',
+        'maxConcurrency': '16-32',
+        'hKeepAlivePeriod': '30',
+        'scMaxBufferedPosts': '30',
+      })! as XhttpTransport;
+
+      final want = {
+        'type': 'xhttp',
+        'path': '/p',
+        'sc_max_buffered_posts': 30,
+        'xmux': {
+          'max_concurrency': '16-32',
+          'max_connections': '1',
+          'h_keep_alive_period': 30,
+        },
+      };
+      expect(nested.toSingbox(TemplateVars.empty).$1, want);
+      expect(flat.toSingbox(TemplateVars.empty).$1, want);
+    });
+
+    // Нуль у int-полей значащий: «не задано» кодируется как -1, поэтому
+    // scMaxBufferedPosts=0 обязан доехать до конфига, а не исчезнуть.
+    test('int-поля: 0 эмитится, отсутствие — нет', () {
+      final zero = parseTransport({
+        'type': 'xhttp',
+        'scMaxBufferedPosts': '0',
+        'hKeepAlivePeriod': '0',
+      })! as XhttpTransport;
+      final m = zero.toSingbox(TemplateVars.empty).$1;
+      expect(m['sc_max_buffered_posts'], 0);
+      expect((m['xmux'] as Map)['h_keep_alive_period'], 0);
+
+      final absent = parseTransport({'type': 'xhttp'})! as XhttpTransport;
+      final m2 = absent.toSingbox(TemplateVars.empty).$1;
+      expect(m2.containsKey('sc_max_buffered_posts'), isFalse);
+      expect(m2.containsKey('xmux'), isFalse,
+          reason: 'пустой xmux не должен эмититься');
     });
   });
 }
