@@ -168,7 +168,8 @@ class LxSubscription {
   final int? maxNodes;
   final bool? skip;
 
-  /// §4 BACKUP.md — identity-хеш (64 hex) → unix seconds последней встречи.
+  /// §4 BACKUP.md — идентичность узла (§400: тег; из старых бэкапов может
+  /// приехать legacy-хеш 64 hex) → unix seconds последней встречи.
   final Map<String, int> disabled;
 
   /// Политика detour другой стороны: структура чужая, применять нечем.
@@ -481,8 +482,10 @@ Map<String, dynamic> _subscriptionToJson(SubscriptionServers list) {
     if (!list.enabled) 'enabled': false,
     if (tag.isNotEmpty) 'tag': tag,
     if (update.isNotEmpty) 'update': update,
-    // §4 BACKUP.md — отметки выключенных узлов только по identity-хешу;
-    // значения — unix seconds (мобила хранит DateTime).
+    // §4 BACKUP.md — отметки выключенных узлов по идентичности (§400: тег в
+    // рамках источника). Ключи едут КАК ЕСТЬ: не переехавший legacy-хеш
+    // мигрирует на приёмнике при первом разборе источника, а не здесь.
+    // Значения — unix seconds (мобила хранит DateTime).
     if (list.disabledHashes.isNotEmpty)
       'disabled': {
         for (final e in list.disabledHashes.entries)
@@ -947,14 +950,20 @@ LxSubscription _subscriptionFromJson(Map<String, dynamic> j) {
   );
 }
 
-/// §4 BACKUP.md — `disabled`: 64-hex → unix seconds. Значения не тех форм
-/// пропускаются: отметка без времени бесполезна для TTL-очистки.
+/// §4 BACKUP.md — `disabled`: ключ отметки → unix seconds.
+///
+/// §400 — ключом идёт идентичность узла (тег в рамках источника), но
+/// принимаются и legacy-ключи 64-hex из бэкапов, снятых до контракта 0.10.0:
+/// они мигрируют по общему правилу (IDENTITY.md §5.1) при первом разборе
+/// источника уже на приёмнике. Пустой ключ отбрасывается — идентичности
+/// «пустая строка» не существует. Значение не-числом пропускается: отметка
+/// без времени бесполезна для TTL-очистки.
 Map<String, int> _disabledFromJson(Object? raw) {
   if (raw is! Map) return const {};
   final out = <String, int>{};
   raw.forEach((k, v) {
     final key = '$k';
-    if (key.length != 64) return;
+    if (key.isEmpty) return;
     final ts = v is num ? v.toInt() : null;
     if (ts == null) return;
     out[key] = ts;

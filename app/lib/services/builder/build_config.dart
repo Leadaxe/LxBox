@@ -270,9 +270,13 @@ Future<BuildResult> buildConfig({
         s.disabledHashes,
       _ => null,
     };
+    // §400 — та же карта идентичностей от полного списка, что и в билдере:
+    // иначе фильтры warnings и эмиссии разошлись бы на узлах-тёзках.
+    final identities =
+        disabledHashes == null ? null : sourceNodeIdentities(list.nodes);
     for (final node in list.nodes) {
-      if (disabledHashes != null &&
-          disabledHashes.containsKey(nodeIdentityHash(node))) {
+      final identity = identities?[node];
+      if (identity != null && disabledHashes!.containsKey(identity)) {
         continue;
       }
       for (final w in node.warnings) {

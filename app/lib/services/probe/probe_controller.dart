@@ -177,31 +177,41 @@ class ProbeController {
   /// удаление/вставка члена не сдвигает замеры соседей (до §326 ключом была
   /// позиция, и точечное удаление уводило бейджи на строку вверх).
   ///
-  /// Ключ = [nodeIdentityHash] (тот же механизм идентичности, что у per-node
-  /// disable §283). Не tag — внутри папки он не уникален (уникализация
-  /// `allocateTag` живёт в билдере конфига) и мутабелен. Не `NodeSpec.id` —
-  /// это `newUuidV4()`, новый на каждом re-parse `raw`.
+  /// Ключ = идентичность узла (§400: тег, уникализированный внутри
+  /// источника — тот же механизм, что у per-node disable §283). Не финальный
+  /// конфиговый тег — тот несёт префикс подписки и глобальную уникализацию
+  /// `allocateTag` из билдера. Не `NodeSpec.id` — это `newUuidV4()`, новый на
+  /// каждом re-parse `raw`.
   ///
-  /// Битый член (`node == null`, нечитаемый raw) хеша не имеет — ключ
-  /// `raw:<raw>`: пингу он не подлежит, но слот под вердикт занимает.
+  /// Битый член (`node == null`, нечитаемый raw) идентичности не имеет — ключ
+  /// `raw:<raw>`: пингу он не подлежит, но слот под вердикт занимает. Узел без
+  /// имени и узел-группа тоже без идентичности — им остаётся позиционный
+  /// ключ `slot:<i>`.
   ///
-  /// Дубли: одинаковые серверы дают один хеш (в §283 by design). Чтобы они не
-  /// делили одну ячейку результата, повторам добавляется суффикс `#2`, `#3`.
-  /// Ключ остаётся функцией состава, а не позиции: удаление члена в середине
-  /// ключи остальных не меняет, сдвигаются лишь сами дубли — неразличимые по
-  /// определению.
-  static List<String> probeKeys(List<FolderMember> members) => _dedupKeys([
-        for (final m in members)
-          m.node == null ? 'raw:${m.raw}' : nodeIdentityHash(m.node!),
-      ]);
+  /// Ключ — функция состава, а не позиции: удаление члена в середине ключи
+  /// остальных не меняет. Исключение — тёзки: уникализация нумерует их по
+  /// порядку, так что удаление первого сдвигает номер второму.
+  static List<String> probeKeys(List<FolderMember> members) {
+    final identities =
+        sourceNodeIdentities([for (final m in members) ?m.node]);
+    return _dedupKeys([
+      for (final (i, m) in members.indexed)
+        m.node == null
+            ? 'raw:${m.raw}'
+            : (identities[m.node!] ?? 'slot:$i'),
+    ]);
+  }
 
   /// §339 — те же identity-ключи для списка нод (подписка/сервер: у них нет
-  /// raw-члена, null-слот — по позиции). Хеш переживает refresh подписки
-  /// (инстансы подменяются, идентичность — нет).
-  static List<String> probeKeysForNodes(List<NodeSpec?> nodes) => _dedupKeys([
-        for (final (i, n) in nodes.indexed)
-          n == null ? 'slot:$i' : nodeIdentityHash(n),
-      ]);
+  /// raw-члена, null-слот — по позиции). Идентичность переживает refresh
+  /// подписки: инстансы подменяются, тег — нет.
+  static List<String> probeKeysForNodes(List<NodeSpec?> nodes) {
+    final identities = sourceNodeIdentities([for (final n in nodes) ?n]);
+    return _dedupKeys([
+      for (final (i, n) in nodes.indexed)
+        n == null ? 'slot:$i' : (identities[n] ?? 'slot:$i'),
+    ]);
+  }
 
   static List<String> _dedupKeys(List<String> bases) {
     final seen = <String, int>{};

@@ -88,15 +88,15 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   /// зайдя на экран — и тогда `initState` отработает снова.
   bool _autoReloadOnChange = false;
 
-  // §283 — per-node disable. Хеш ноды считается лениво и кэшируется по
-  // identity. Полный проход хеширования происходит ТОЛЬКО когда есть
-  // выключенные отметки — подписка без них не платит ничего.
-  final Map<NodeSpec, String> _hashCache = Map.identity();
+  // §283/§400 — per-node disable. Идентичность узла зависит от соседей по
+  // источнику (уникализация тёзок), поэтому карта считается целиком на
+  // список и кэшируется до его подмены.
+  Map<NodeSpec, String> _identityCache = Map.identity();
   Set<NodeSpec> _togglableNodes = Set.identity();
   Set<NodeSpec> _disabledNodes = Set.identity();
 
   // ─── §339 — Test servers (зеркало папки §236, минус per-list опции) ───
-  // Результаты эфемерны; ключ = identity-хеш (§326: переживает refresh —
+  // Результаты эфемерны; ключ = идентичность узла (§326: переживает refresh —
   // инстансы нод подменяются, идентичность нет).
   final Map<String, ProbeResult> _probe = {};
   Timer? _probeFlushTimer;
@@ -115,13 +115,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     return _probeKeysCache;
   }
 
-  // От какого List<NodeSpec> построены строки/кэш (identity-маркер):
-  // refresh подменяет и список, и инстансы → кэш хешей протухает целиком;
-  // toggle идёт через copyWith с тем же List → кэш живёт (не хешируем
+  // От какого List<NodeSpec> построена карта идентичностей (identity-маркер):
+  // refresh подменяет и список, и инстансы → карта протухает целиком;
+  // toggle идёт через copyWith с тем же List → карта живёт (не пересчитываем
   // 10k нод заново на каждый toggle).
   List<NodeSpec>? _hashedNodesList;
-
-  String _hashOf(NodeSpec n) => _hashCache[n] ??= nodeIdentityHash(n);
 
   /// §283 (ревью) — строки, togglable- и disabled-set'ы пересобираются от
   /// ЖИВЫХ инстансов entry.list.nodes одним местом. Иначе refresh мимо
@@ -131,7 +129,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   void _rebuildRowsFromEntry() {
     final nodes = widget.entry.list.nodes;
     if (!identical(nodes, _hashedNodesList)) {
-      _hashCache.clear();
+      _identityCache = sourceNodeIdentities(nodes);
       _hashedNodesList = nodes;
     }
     final expanded = <NodeSpec>[];
@@ -146,14 +144,16 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     _recomputeDisabled();
   }
 
-  /// Derived-set выключенных нод от `disabledHashes` подписки. Дубли по
-  /// хешу гаснут синхронно — состояние строки считается отсюда.
+  /// Derived-set выключенных нод от `disabledHashes` подписки. Узел без
+  /// идентичности (группа §322, безымянный) отметки иметь не может —
+  /// состояние строки считается отсюда.
   void _recomputeDisabled() {
     final list = widget.entry.list;
     final next = Set<NodeSpec>.identity();
     if (list is SubscriptionServers && list.disabledHashes.isNotEmpty) {
       for (final n in list.nodes) {
-        if (list.disabledHashes.containsKey(_hashOf(n))) {
+        final identity = _identityCache[n];
+        if (identity != null && list.disabledHashes.containsKey(identity)) {
           next.add(n);
           // chained-ребёнок рисуется отдельной строкой — глушим вместе с
           // родителем (он и не эмитится: родитель пропущен целиком).

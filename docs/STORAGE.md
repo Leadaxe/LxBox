@@ -44,7 +44,8 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       │                                      key not written) | "reload" | "none"
 │       ├─ last_node_count       int
 │       ├─ consecutive_fails     int           for the UI's "(N fails)"
-│       ├─ disabled_hashes       map?          §283 — {node identity hash: ISO-8601 lastSeen}; per-node disable
+│       ├─ disabled_hashes       map?          §283/§400 — {node identity: ISO-8601 lastSeen}; per-node disable.
+│       │                                      Identity = the provider's raw tag, made unique within the source
 │       │                                      (§332: one map for both manual and rule marks; Enable rules
 │       │                                       and the "Enable all" button clear them indiscriminately)
 │       ├─ identity              object?       §289 — per-sub override of the fetch identity (null=global);
@@ -345,13 +346,27 @@ Sealed on the `type` field:
                                                // manual ⟳ is not governed by this.
   "last_node_count":       0,
   "consecutive_fails":     0,                 // for the UI's "(N fails)"; freezing is in-memory
-  "disabled_hashes": {                        // §283 — per-node disable (optional; an
-    "<sha256-hex>": "2026-07-18T10:00:00Z"    // empty map is not written). The key is the
-  },                                          // identity hash of the node's substance
-                                              // (emit − tag − detour, see
-                                              // services/node_hash.dart); the value is
-                                              // lastSeen for the TTL GC (clamp(3×interval,
-                                              // 24 h, a month)) on a successful refresh.
+  "disabled_hashes": {                        // §283/§400 — per-node disable (optional; an
+    "NL-42": "2026-07-18T10:00:00Z"           // empty map is not written). The key is the
+  },                                          // node's IDENTITY (contract 0.10.0): the raw
+                                              // provider tag, made unique within the source
+                                              // (first X, then X-2, X-3; the counter is
+                                              // per-source, and the tag is taken BEFORE the
+                                              // subscription's tag_prefix, which the builder
+                                              // adds at emit time). A group node (§322) and a
+                                              // node with an empty tag have no identity and
+                                              // cannot be disabled per-node. Node content
+                                              // (server, port, credentials, SNI, transport) is
+                                              // NOT part of it: a provider rotating the address
+                                              // under the same name keeps the mark, while
+                                              // renaming the node loses it. A key that is 64
+                                              // lowercase hex is a legacy content hash written
+                                              // before §400: on the source's first parse it
+                                              // migrates onto the matching node's identity (or
+                                              // is dropped when no node matches) and the result
+                                              // is persisted at once. The value is lastSeen for
+                                              // the TTL GC (clamp(3×interval, 24 h, a month))
+                                              // on a successful refresh.
   "identity": {                               // §289 — a per-sub override of the fetch
     "user_agent": "MyPanel/1.0",              // identity. Optional: null or absent means
     "send_hwid": true,                        // Default mode (the global SubscriptionIdentity).
@@ -377,9 +392,9 @@ Sealed on the `type` field:
       "conditions": [
         {"path": "tag", "op": "contains", "pattern": "⚡"}
       ],
-      "action": "disable"                     // DISABLE marks the node → its identity hash (of
-    },                                        // the FINAL form, after the patches) is put into
-    {                                         // disabled_hashes on every refresh (rule > TTL GC).
+      "action": "disable"                     // DISABLE marks the node → its identity (§400: the
+    },                                        // tag, which a Replace patch does not touch) is put
+    {                                         // into disabled_hashes on every refresh (rule > TTL GC).
       "conditions": [
         {"path": "", "op": "matches", "pattern": ".*"}
       ],                                      // §332 — ENABLE clears the mark from disabled_hashes,
