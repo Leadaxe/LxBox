@@ -84,8 +84,8 @@ void main() {
 
   test('sni_pool содержит РФ-сайты и международные', () async {
     final p = await WarpEndpointPicker.load();
-    expect(p.sniPool, contains('gosuslugi.ru'));
-    expect(p.sniPool, contains('www.google.com'));
+    expect(p.sniPool, contains('apteka.ru'));
+    expect(p.sniPool, contains('deepseek.com'));
   });
 
   test('§136 WG sni_pool НЕ содержит cloudflare-доменов (device-smoke: режутся)',
