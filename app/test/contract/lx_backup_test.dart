@@ -262,7 +262,6 @@ void main() {
 }''';
       final d = parseLxBackup(raw).directions.single;
       expect(d.enabled, isTrue, reason: 'отсутствие ключа = true по схеме');
-      expect(d.label, '', reason: 'пустое имя законно — показываем tag');
       expect(d.nodeFilter, 'DE|Germany', reason: 'фильтр едет ТЕЛОМ regex');
       expect(d.nodeFilterInvert, isTrue);
       expect(d.defaultFilter, 'premium');
@@ -279,7 +278,6 @@ void main() {
     test('round-trip сохраняет отбор, флаги и автовыбор', () async {
       const src = Direction(
         tag: 'de',
-        label: 'Германия',
         enabled: false,
         nodeFilter: 'DE',
         nodeFilterInvert: true,
@@ -301,7 +299,6 @@ void main() {
 
       final back = parseLxBackup(raw).directions.single;
       expect(back.tag, 'de');
-      expect(back.label, 'Германия');
       expect(back.enabled, isFalse);
       expect(back.nodeFilter, 'DE');
       expect(back.nodeFilterInvert, isTrue);
@@ -408,7 +405,6 @@ void main() {
 }''';
       final c = parseLxBackup(raw).chains.single;
       expect(c.enabled, isTrue, reason: 'отсутствие ключа = true по схеме');
-      expect(c.label, 'Мой маршрут');
       expect(c.hops, ['a', 'b']);
       expect(c.idleTimeout, '0s');
       // Трёхзначность: явный false НЕ должен слипаться с «ключа не было».
@@ -481,7 +477,6 @@ void main() {
     test('round-trip: канон переживает экспорт→импорт дословно', () async {
       const source = SourceChain(
         tag: 'chain-1',
-        label: 'Мой маршрут',
         hops: ['warp', 'vpn ②'],
         idleTimeout: '0s',
         stripEvasion: false,
@@ -501,7 +496,8 @@ void main() {
       final doc = jsonDecode(out) as Map<String, dynamic>;
       final entry = (doc['chains'] as List).single as Map<String, dynamic>;
       expect(entry['tag'], 'chain-1');
-      expect(entry['label'], 'Мой маршрут');
+      // Контракт 0.9.0 / D-082 — `label` не эмитится ни на одном уровне.
+      expect(entry.containsKey('label'), isFalse);
       expect(entry.containsKey('enabled'), isFalse,
           reason: 'включённая — умолчание схемы, ключ был бы шумом');
       // Идентичность записи живёт уровнем выше канона: `chain` описывает
@@ -517,7 +513,6 @@ void main() {
 
       final back = parseLxBackup(out).chains.single;
       expect(back.tag, source.tag);
-      expect(back.label, source.label);
       expect(back.hops, source.hops);
       expect(back.idleTimeout, source.idleTimeout);
       expect(back.stripEvasion, isFalse);
@@ -525,14 +520,14 @@ void main() {
       expect(back.rewrite, source.rewrite);
     });
 
-    test('label не пишется, когда равен тегу или пуст', () async {
+    test('label не пишется никогда (контракт 0.9.0 / D-082)', () async {
       final out = await buildLxBackup(
         lists: const [],
         rules: const [],
         vars: const {},
         chains: const [
-          SourceChain(tag: 'chain-1', label: 'chain-1', hops: ['a', 'b']),
-          SourceChain(tag: 'chain-2', label: '', hops: ['a', 'b']),
+          SourceChain(tag: 'chain-1', hops: ['a', 'b']),
+          SourceChain(tag: 'chain-2', hops: ['a', 'b']),
         ],
       );
       final entries =
@@ -540,8 +535,8 @@ void main() {
               .cast<Map<String, dynamic>>();
       for (final e in entries) {
         expect(e.containsKey('label'), isFalse,
-            reason: 'канон: имя пишется, ТОЛЬКО если отличается от тега — '
-                'иначе та сторона вернёт шум неотличимым от осознанного имени');
+            reason: 'у цепочки одно имя — её tag; лаунчер (D-079) чужой '
+                'label тоже не применяет и не пишет');
       }
     });
 

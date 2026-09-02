@@ -861,8 +861,9 @@ final class MasqueSpec extends NodeSpec {
   /// `cloudflare` (дефолт) | `standard`.
   final String profile;
 
-  /// Версия HTTP: `h3` (QUIC, дефолт) | `h2`. §393 — в конфиге ядра ключ
-  /// `vhttp`; старое имя `network` принимается только на входе.
+  /// Версия HTTP: `h3` (QUIC, дефолт) | `h2` | `auto` (h3 с откатом на h2,
+  /// контракт 0.11.1, ядро >= lx.27). §393 — в конфиге ядра ключ `vhttp`;
+  /// старое имя `network` не принимается (контракт 0.8.0, D-078).
   ///
   /// Имя поля НЕ `transport`: у остальных протоколов так называется
   /// [TransportSpec] (ws/grpc/httpupgrade) — совсем другая сущность.

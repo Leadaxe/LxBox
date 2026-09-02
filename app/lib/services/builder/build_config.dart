@@ -789,7 +789,7 @@ List<Map<String, dynamic>> _buildDirectionGroups({
         continue;
       }
       emitWarnings.add(
-          'Direction "${c.displayLabel}" (${c.tag}): option "$t" dropped — '
+          'Direction "${c.displayLabel}": option "$t" dropped — '
           'it must be another direction listed above this one (and enabled).');
     }
 
@@ -858,7 +858,7 @@ List<Map<String, dynamic>> _buildDirectionGroups({
         _ => 'traffic falls back to "$effective"',
       };
       emitWarnings.add(
-          'Direction "${c.displayLabel}" (${c.tag}): node filter matched no '
+          'Direction "${c.displayLabel}": node filter matched no '
           'nodes — $outcome. '
           'Check its node filter.');
       // §393 A3 — SnackBar «Направления без узлов» гейтится УЖЕ ИСХОДОМ, а не

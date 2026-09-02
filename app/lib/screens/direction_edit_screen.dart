@@ -8,7 +8,7 @@ import '../services/l10n/locale_controller.dart';
 /// §125 — полноэкранный редактор Направления роутинга. Идиома проекта
 /// ([custom_rule_edit_screen.dart], [dns_server_edit_screen.dart]):
 /// Navigator.push + PopScope back-guard (Save/Keep/Discard) + AppBar
-/// delete/save. tag read-only (системный), label — единственное «имя».
+/// delete/save. Имя Направления — его tag, read-only (контракт 0.9.0).
 ///
 /// Live-превью regex: [allNodeTags] — снимок тегов нод подписки (из ccGroups).
 /// Пусто (туннель не поднят) → превью показывает «no node snapshot».
@@ -41,7 +41,6 @@ class DirectionEditScreen extends StatefulWidget {
 }
 
 class _DirectionEditScreenState extends State<DirectionEditScreen> {
-  late final TextEditingController _labelCtrl;
   late final TextEditingController _nodeFilterCtrl;
   late final TextEditingController _defaultFilterCtrl;
   late final TextEditingController _autoUrlCtrl;
@@ -72,7 +71,6 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
   void initState() {
     super.initState();
     final c = widget.initial;
-    _labelCtrl = TextEditingController(text: c.label);
     _nodeFilterCtrl = TextEditingController(text: c.nodeFilter);
     _defaultFilterCtrl = TextEditingController(text: c.defaultFilter);
     _includeDirect = c.includeDirect;
@@ -97,7 +95,6 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
     _autoSticky = a.stickyHash.toSet();
 
     for (final ctrl in [
-      _labelCtrl,
       _nodeFilterCtrl,
       _defaultFilterCtrl,
       _autoUrlCtrl,
@@ -114,7 +111,6 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
   @override
   void dispose() {
     for (final ctrl in [
-      _labelCtrl,
       _nodeFilterCtrl,
       _defaultFilterCtrl,
       _autoUrlCtrl,
@@ -136,9 +132,6 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
   Direction _snapshot() {
     final c = widget.initial;
     return c.copyWith(
-      label: _labelCtrl.text.trim().isEmpty
-          ? c.tag
-          : _labelCtrl.text.trim(),
       includeDirect: _includeDirect,
       includeBlock: _includeBlock,
       // §393 A3 — сохраняем ТОЛЬКО живых кандидатов сверху: галка снятая
@@ -189,8 +182,7 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
   bool _isDirty() {
     final s = _snapshot();
     final i = widget.initial;
-    return s.label != i.label ||
-        s.includeDirect != i.includeDirect ||
+    return s.includeDirect != i.includeDirect ||
         s.includeBlock != i.includeBlock ||
         !_sameTags(s.include, i.include) ||
         s.isDetour != i.isDetour ||
@@ -289,8 +281,7 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
       context,
       title: getLocalText.s("Delete direction?"),
       message: getLocalText.s(
-          "Remove \"%1\$s\" (%2\$s)? References to it fall back to vpn-1.",
-          widget.initial.label,
+          "Remove \"%s\"? References to it fall back to vpn-1.",
           widget.initial.tag),
     ); // §219
     if (confirmed == true && mounted) {
@@ -385,23 +376,18 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
           child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           children: [
-            // системный tag (read-only)
-            Text(c.tag,
-                style: TextStyle(
-                    fontSize: 12,
+            // Контракт 0.9.0 — tag и есть имя Направления, второго нет.
+            // Read-only: на тег ссылаются правила, route_final, include,
+            // позиции цепочек и detour-мишени (см. подпись ниже).
+            Text(c.displayLabel,
+                style: const TextStyle(
+                    fontSize: 16,
                     fontFamily: 'monospace',
-                    color: cs.onSurfaceVariant)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _labelCtrl,
-              decoration: InputDecoration(
-                labelText: getLocalText.s("Title"),
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 8),
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text(getLocalText.s("Name is the tag — it is set once, at creation"),
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            const SizedBox(height: 12),
 
             // ── Блок 1: СОСТАВ. Всё, что окажется опциями селектора этого
             // Направления, — одним блоком и в порядке сверху вниз:
@@ -464,14 +450,9 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
                 subtitle: Text(getLocalText.s("can be picked as a detour target for servers and folders"),
                     style: const TextStyle(fontSize: 11)),
                 value: _isDetour,
-                // §274 — ⚙ живёт в самом label: переименовываем поле СРАЗУ,
-                // не дожидаясь Save (нормализация в _snapshot/copyWith —
-                // страховка). Пустой label не трогаем: display-фолбэк на tag.
-                onChanged: (v) => setState(() {
-                  _isDetour = v ?? false;
-                  _labelCtrl.text = Direction.normalizeLabel(
-                      _labelCtrl.text.trim(), _isDetour);
-                }),
+                // ⚙ — производный маркер над tag (Direction.displayLabel),
+                // в данные он больше не пишется: флага достаточно.
+                onChanged: (v) => setState(() => _isDetour = v ?? false),
               ),
             CheckboxListTile(
               dense: true,

@@ -50,7 +50,6 @@ void main() {
       'directions': [
         Direction(
           tag: 'vpn-1',
-          label: 'Main',
           nodeFilter: nodeFilter,
           defaultFilter: defaultFilter,
         ).toJson(),

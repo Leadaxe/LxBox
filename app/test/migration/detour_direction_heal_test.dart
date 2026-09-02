@@ -55,8 +55,8 @@ void main() {
     final data = {
       'directions_migrated': true,
       'directions': [
-        const Direction(tag: 'vpn-1', label: 'Main').toJson(),
-        Direction(tag: 'vpn-3', label: 'Relay', isDetour: vpn3Detour).toJson(),
+        const Direction(tag: 'vpn-1').toJson(),
+        Direction(tag: 'vpn-3', isDetour: vpn3Detour).toJson(),
       ],
       'server_lists': [
         UserServer(
@@ -172,8 +172,8 @@ void main() {
       final data = {
         'directions_migrated': true,
         'directions': [
-          const Direction(tag: 'vpn-1', label: 'Main').toJson(),
-          const Direction(tag: 'vpn-3', label: 'Aux').toJson(),
+          const Direction(tag: 'vpn-1').toJson(),
+          const Direction(tag: 'vpn-3').toJson(),
         ],
         'route_final': routeFinal,
         'custom_rules': [

@@ -121,8 +121,8 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ enabled_groups[]              list          §125 DEPRECATED — read only by the directions[] migration. Safe debris.
 ├─ directions[]                  list          §125 — routing directions (template→storage). See below.
 │   └─ <item>                    object
-│       ├─ tag                   string        §393 — the immutable id; any tag (auto 'vpn-N' if omitted); vpn-1 cannot be deleted
-│       ├─ label                 string        the display name (entered by the user)
+│       ├─ tag                   string        §393 — the immutable id AND the only name; any tag (auto 'vpn-N' if omitted); vpn-1 cannot be deleted
+│       ├─ (label)               string        REMOVED, contract 0.9.0 — read from old state and DISCARDED, never written back
 │       ├─ enabled               bool          on/off (vpn-1 is always true)
 │       ├─ include_direct        bool          direct-out as a selector option
 │       ├─ include_block         bool          §201 — block (dropping traffic) as a selector option; default false
@@ -142,8 +142,8 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ directions_migrated           bool          §125/§393 — the guard for the one-shot directions migration
 ├─ chains[]                      list          §393 C — hop-chain sources (SPEC 110). See below.
 │   └─ <item>                    object
-│       ├─ tag                   string        the outbound tag = the record id; immutable; unique across chains AND directions
-│       ├─ label                 string        the display name ('' falls back to tag)
+│       ├─ tag                   string        the outbound tag = the record id AND the only name; immutable; unique across chains AND directions
+│       ├─ (label)               string        REMOVED, contract 0.9.0 / D-082 — read from old state and DISCARDED, never written back
 │       ├─ enabled               bool          off = not emitted, not pooled (like a disabled subscription)
 │       ├─ hops[]                list          positions IN PACKET ORDER ([0] = first hop from the client); >= 2
 │       ├─ idle_timeout          string        duration; '' = the core default (5m), '0s' = until shutdown
@@ -952,12 +952,16 @@ After the migration the set of directions lives in `directions[]` and is edited 
   accepted as long as it is non-empty, not reserved (`direct-out`, `block`, `dns-out`…),
   not already taken and not colliding with an existing `<tag>-auto` twin (the rejection
   carries a machine reason: `empty` | `reserved` | `duplicate` | `auto_twin`).
-  The user only edits `label`. It is the stable key for
-  references (`route_final`, `ping_options`, a custom rule's outbound, a detour).
-  §274 — the `⚙ ` prefix in `label` is reserved as the detour-direction marker (like the
-  ⚙ mark in detour server tags): flipping the `detour` flag renames the direction (set →
-  `⚙ <label>`, unset → the prefix is stripped), and the normalisation lives in
-  `Direction.copyWith` / `fromJson` (covering the editor, the Debug API and restores).
+  Contract 0.9.0 removed the second name: **`label` is gone**, and the `tag` is what the
+  user sees everywhere — in the list, in the rule-target dropdown, in the detour picker.
+  Two names for one entity meant the list showed one string and the dropdown another, with
+  no way to connect them. The tag stays the stable key for references (`route_final`,
+  `ping_options`, a custom rule's outbound, a detour), which is exactly why it is
+  read-only after creation. Old state carrying a `label` key still parses: the value is
+  read and **discarded**, and the key dies on the next write (`toJson` never emits it).
+  §274 — the `⚙ ` detour marker is now **derived**, not stored: `Direction.displayLabel`
+  prefixes the tag when the `detour` flag is set. It never enters the data, because a
+  marker inside the tag would move the tag out from under every reference to it.
 - `vpn-1` is privileged by product decision: always `enabled`, undeletable, and the
   default `route_final`. §393 removed the cap: there is **no limit** on the number of
   directions.
@@ -1059,8 +1063,9 @@ and is emitted as one outbound of type `chain`. The model is `SourceChain`
   creation, like `Direction.tag`: direction filters, `route_final` and the
   positions of *other* chains reference it. A tag is validated against **both**
   chains and directions — two outbounds sharing a tag kill the config.
-- `label` — display name; empty falls back to `tag` (inventing a name for a chain
-  the user did not name would lie about its contents).
+- `label` — **REMOVED** (contract 0.9.0 / D-082): a chain's name is its `tag`, and the
+  launcher (D-079) likewise neither applies nor writes a chain `label`. A `label` key in
+  old state or in an imported backup is read and discarded; it is never written back.
 - `enabled` — a disabled chain is neither emitted nor pooled, like a disabled
   subscription. A reference to it from another chain degrades **that whole chain**
   (`chain_hop_missing`): a route missing a hop is a different route.

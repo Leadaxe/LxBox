@@ -682,9 +682,9 @@ void main() {
       expect(apply.errors, isEmpty);
 
       final restored = await SettingsStorage.getDirections();
-      // vpn-2 архива — detour-Направление: fromJson сам помечает label
-      // префиксом kDetourTagPrefix (§248), поэтому «⚙ Relay».
-      expect(restored.map((c) => c.label), ['Main', '⚙ Relay'],
+      // Контракт 0.9.0 — имя Направления = его tag; ⚙ у detour-записи —
+      // производный маркер над тегом (displayLabel), в данных его нет.
+      expect(restored.map((c) => c.displayLabel), ['vpn-1', '⚙ vpn-2'],
           reason: 'юзер восстанавливает архив РАДИ его Направлений — они '
               'обязаны заменить живой список, а не молча проиграть ему');
       final raw = await rawStorage();
@@ -714,8 +714,8 @@ void main() {
       });
       await svc.applyImport(await svc.parseImport(archive),
           merge: true, include: {BackupCategory.routing});
-      expect((await SettingsStorage.getDirections()).map((c) => c.label),
-          ['ARCHIVE-Main', 'ARCHIVE-Relay']);
+      expect((await SettingsStorage.getDirections()).map((c) => c.tag),
+          ['vpn-1', 'vpn-2']);
     });
 
     test('re-export после restore старого архива пишет только новые ключи',

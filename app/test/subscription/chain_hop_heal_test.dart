@@ -70,7 +70,7 @@ void main() {
   Future<void> seed({
     required List<Map<String, dynamic>> lists,
     required List<SourceChain> chains,
-    List<Direction> directions = const [Direction(tag: 'vpn-1', label: 'Main')],
+    List<Direction> directions = const [Direction(tag: 'vpn-1')],
   }) async {
     await File(mainPath()).writeAsString(jsonEncode({
       'directions_migrated': true,
@@ -221,8 +221,8 @@ void main() {
         SourceChain(tag: 'route', hops: ['alpha', 'vpn-2', 'vpn-1']),
       ],
       directions: const [
-        Direction(tag: 'vpn-1', label: 'Main'),
-        Direction(tag: 'vpn-2', label: 'Relay'),
+        Direction(tag: 'vpn-1'),
+        Direction(tag: 'vpn-2'),
       ],
     );
     final ctrl = await boot();

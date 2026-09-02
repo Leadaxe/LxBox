@@ -544,8 +544,9 @@ final class AwgHeaderInvalidWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
-/// `masque_vhttp_invalid` (warning) — MASQUE `vhttp` вне {h3, h2};
-/// принудительно h3. Go-эталон: node_parser_masque.go:100.
+/// `masque_vhttp_invalid` (warning) — MASQUE `vhttp` вне {h3, h2, auto};
+/// принудительно h3. `auto` принят контрактом 0.11.1 (ядро >= lx.27).
+/// Go-эталон: node_parser_masque.go:100.
 final class MasqueVhttpInvalidWarning extends NodeWarning {
   final String value;
 
@@ -556,7 +557,7 @@ final class MasqueVhttpInvalidWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-      "MASQUE HTTP version \"%s\" is neither h3 nor h2 — h3 was used instead.",
+      "MASQUE HTTP version \"%s\" is not h3, h2 or auto — h3 was used instead.",
       value);
 
   @override

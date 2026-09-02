@@ -176,10 +176,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (req == null || !mounted) return;
     final SourceChain created;
     try {
-      created = await SettingsStorage.addChain(
-        tag: req.tag,
-        label: req.label.isEmpty ? null : req.label,
-      );
+      created = await SettingsStorage.addChain(tag: req.tag);
     } on StateError catch (e) {
       // Гонка со вторым источником мутаций (Debug API / restore): форма
       // считала тег свободным, storage — уже нет.

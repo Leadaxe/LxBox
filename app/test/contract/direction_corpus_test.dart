@@ -287,7 +287,6 @@ Direction _toDirection(Map<String, dynamic> c) {
   final auto = c['auto'];
   return Direction(
     tag: c['tag'] as String? ?? '',
-    label: c['label'] as String? ?? '',
     enabled: c['enabled'] as bool? ?? true,
     includeDirect: c['include_direct'] as bool? ?? false,
     includeBlock: c['include_block'] as bool? ?? false,
@@ -304,7 +303,6 @@ Direction _toDirection(Map<String, dynamic> c) {
 /// Канон (`schema/source_chain.schema.json`) + `tag` корпуса → модель LxBox.
 SourceChain _toChain(Map<String, dynamic> c) => SourceChain(
       tag: c['tag'] as String? ?? '',
-      label: c['label'] as String? ?? '',
       hops: ((c['hops'] as List?) ?? const []).cast<String>().toList(),
       idleTimeout: c['idle_timeout'] as String? ?? '',
       stripEvasion:

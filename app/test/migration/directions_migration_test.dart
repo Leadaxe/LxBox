@@ -191,7 +191,7 @@ void main() {
 
     final directions = await SettingsStorage.getDirections();
     expect(directions.length, 1);
-    expect(directions.first.label, 'Custom'); // не перезаписано template'ом
+    expect(directions.first.tag, 'vpn-1'); // не пересеяно template'ом
   });
 
   // -------------------------------------------------------------------------
@@ -241,7 +241,6 @@ void main() {
 
       final directions = await SettingsStorage.getDirections();
       expect(directions.map((c) => c.tag), ['vpn-1', 'vpn-2']);
-      expect(directions[0].label, 'Мой первый');
       expect(directions[0].nodeFilter, 'DE|NL');
       expect(directions[1].enabled, false);
     });
@@ -348,17 +347,9 @@ void main() {
 
     test('addDirection — первый свободный vpn-N', () async {
       // vpn-1/2/3 заняты → vpn-4
-      final ch = await SettingsStorage.addDirection(label: 'Новый');
-      expect(ch.tag, 'vpn-4');
-      expect(ch.label, 'Новый');
-      expect((await SettingsStorage.getDirections()).length, 4);
-    });
-
-    test('§198 — addDirection без label → дефолт с кружком (VPN ④)', () async {
-      // vpn-1/2/3 заняты → vpn-4 → «VPN ④».
       final ch = await SettingsStorage.addDirection();
       expect(ch.tag, 'vpn-4');
-      expect(ch.label, 'VPN ④');
+      expect((await SettingsStorage.getDirections()).length, 4);
     });
 
     test('§393 A3 — лимита на количество нет: 11-е и 12-е создаются', () async {
@@ -369,17 +360,11 @@ void main() {
       expect(all.length, 12);
       expect(all.map((c) => c.tag).toList(),
           [for (var i = 1; i <= 12; i++) 'vpn-$i']);
-      // §393 A3 — кружок-цифра кончается на ⑩; дальше честное число.
-      expect(all[9].label, 'VPN ⑩');
-      expect(all[10].label, 'VPN 11');
-      expect(all[11].label, 'VPN 12');
     });
 
     test('§393 A3 — addDirection с кастомным тегом', () async {
       final ch = await SettingsStorage.addDirection(tag: 'ru-exit');
       expect(ch.tag, 'ru-exit');
-      // Дефолтный label произвольного тега — сам тег (выдумывать «VPN» нельзя).
-      expect(ch.label, 'ru-exit');
       // Автовыдача не сбилась: следующий свободный `vpn-N` — по-прежнему vpn-4.
       expect((await SettingsStorage.addDirection()).tag, 'vpn-4');
     });
@@ -422,7 +407,7 @@ void main() {
     });
 
     test('updateDirection — несуществующий tag throws', () async {
-      const ghost = Direction(tag: 'vpn-9', label: 'ghost');
+      const ghost = Direction(tag: 'vpn-9');
       expect(() => SettingsStorage.updateDirection(ghost), throwsStateError);
     });
   });
@@ -522,9 +507,7 @@ void main() {
       expect(directions.map((c) => c.tag), ['vpn-1', 'ru-exit'],
           reason: 'vpn-1 — умолчание всех heal\'ов, ему быть первым');
       expect(directions.first.enabled, true);
-      expect(directions.first.label, defaultLabelForTag('vpn-1'));
       // Чужая запись сохранена ЦЕЛИКОМ, а не пересеяна из шаблона.
-      expect(directions[1].label, 'Россия');
       expect(directions[1].enabled, true);
     });
 

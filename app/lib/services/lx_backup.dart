@@ -1093,6 +1093,9 @@ LxDnsRef? _dnsRefFromJson(Map<String, dynamic> j) {
 /// Default-deny (§2): всё вне этого списка названо warning'ом, а не съедено.
 const Set<String> _knownDirectionKeys = {
   'tag',
+  // Контракт 0.9.0 — `label` СНЕСЁН: имя Направления одно, tag. Ключ остаётся
+  // в списке известных, чтобы бэкап старой версии / лаунчера не поднимал
+  // warning про неизвестное поле: он законно был, его читают и отбрасывают.
   'label',
   'enabled',
   'filter',
@@ -1137,8 +1140,7 @@ Direction _directionFromCanon(
   final rawAuto = j['auto'];
   return Direction(
     tag: tag,
-    // Пустое имя — законно: канон говорит «показываем tag».
-    label: (j['label'] as String?) ?? '',
+    // Контракт 0.9.0 — `label` читается и ОТБРАСЫВАЕТСЯ: именем остаётся tag.
     // Отсутствие ключа = true (`enabled.default` схемы), а не false.
     enabled: j['enabled'] as bool? ?? true,
     nodeFilter: (j['filter'] as String?) ?? '',
@@ -1213,7 +1215,8 @@ DirectionAuto _directionAutoFromCanon(
 /// `@urltest_tolerance` лаунчера) нет вовсе — экспортируется то, что лежит.
 Map<String, dynamic> _directionToJson(Direction d) => {
   'tag': d.tag,
-  if (d.label.isNotEmpty) 'label': d.label,
+  // Контракт 0.9.0 — `label` не эмитится: канон его не знает
+  // (`direction.schema.json`, additionalProperties:false).
   // Ключ пишем только для выключенного: отсутствие = true по схеме, и
   // «enabled: true» у каждой записи раздувало бы файл без смысла.
   if (!d.enabled) 'enabled': false,
@@ -1252,6 +1255,8 @@ Map<String, dynamic> _directionAutoToJson(DirectionAuto a) => {
 /// Всё остальное — default-deny с warning'ом, как у `directions[]`.
 const Set<String> _knownChainKeys = {
   'tag',
+  // Контракт 0.9.0 / D-082 — `label` снесён; ключ остаётся известным ради
+  // молчаливого чтения старых бэкапов (см. `_knownDirectionKeys`).
   'label',
   'enabled',
   'chain',
@@ -1260,29 +1265,25 @@ const Set<String> _knownChainKeys = {
 
 /// §393 C9 — мобильная [SourceChain] → запись секции `chains[]`.
 ///
-/// Форма записи: `tag` + опциональные `label`/`enabled` + КАНОН цепочки
+/// Форма записи: `tag` + опциональный `enabled` + КАНОН цепочки
 /// отдельным полем `chain`, без дублирования его полей на верхнем уровне
 /// (`schema/backup.schema.json`, секция chains[]).
 ///
-/// `label` пишем, только когда он непустой И отличается от тега: канон
-/// говорит «отображаемое имя, только если отличается от тега», а у лаунчера
-/// отдельного понятия подписи нет вовсе — он возит чужое значение нетронутым.
-/// Писать `label == tag` значило бы посылать на ту сторону шум, который она
-/// вернёт обратно неотличимым от осознанного имени.
+/// Контракт 0.9.0 / D-082 — `label` не пишем вовсе: у цепочки одно имя, тег.
+/// Лаунчер (D-079) чужой `label` тоже не применяет и не пишет.
 Map<String, dynamic> _chainToJson(SourceChain c) => {
   'tag': c.tag,
-  if (c.label.isNotEmpty && c.label != c.tag) 'label': c.label,
   // Ключ пишем только для выключенной: отсутствие = true по схеме.
   if (!c.enabled) 'enabled': false,
   // Канон как есть — `SourceChain.toJson` уже пишет ровно его поля, минус
-  // идентичность записи (tag/label/enabled), которая живёт уровнем выше.
+  // идентичность записи (tag/enabled), которая живёт уровнем выше.
   'chain': _chainCanonToJson(c),
 };
 
 /// Канон цепочки (`schema/source_chain.schema.json`) для поля `chain`.
 ///
 /// Отдельно от [SourceChain.toJson] намеренно: тот пишет ЗАПИСЬ storage —
-/// с `tag`/`label`/`enabled`, — а канон описывает только МАРШРУТ. Смешать их
+/// с `tag`/`enabled`, — а канон описывает только МАРШРУТ. Смешать их
 /// значило бы отправить на ту сторону тег дважды и разойтись со схемой
 /// (`additionalProperties: false`).
 Map<String, dynamic> _chainCanonToJson(SourceChain c) {
@@ -1323,8 +1324,7 @@ SourceChain _chainFromCanon(
   // порядок каталога `strip`, `null` внутри `rewrite`).
   final parsed = SourceChain.fromJson({...canon, 'tag': tag});
   return parsed.copyWith(
-    // Канон: пустое имя законно — показываем тег.
-    label: (j['label'] as String?) ?? '',
+    // Контракт 0.9.0 / D-082 — `label` читается и отбрасывается.
     // Отсутствие ключа = true (`enabled.default` схемы). В ожиданиях корпуса
     // ключа нет вовсе, и читать его отсутствие как false значило бы
     // импортировать выключенными все цепочки лаунчера.
