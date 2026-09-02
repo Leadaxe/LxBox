@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/probe/probe_controller.dart';
@@ -68,13 +69,30 @@ void main() {
     const uriA = 'vless://u1@h1.example:443?type=ws&security=tls#Alpha';
     const uriB = 'vless://u2@h2.example:443?type=ws&security=tls#Beta';
 
-    test('хеш-ключи, дубли с суффиксом, null-слот по позиции', () {
+    test('§400 ключ = идентичность (тег); тёзку разводит `-2`, null → slot',
+        () {
+      // uriA и uriB — разные имена, третий узел тёзка первого («Alpha»).
+      // Суффикс ставит УНИКАЛИЗАЦИЯ идентичности (`-2`), а не `_dedupKeys`
+      // (`#2`): до дедупа дело не доходит, ключи уже разошлись.
       final keys = ProbeController.probeKeysForNodes(
           [node(uriA), node(uriB), node(uriA), null]);
-      expect(keys, hasLength(4));
-      expect(keys[2], '${keys[0]}#2'); // дубль того же сервера
-      expect(keys[3], 'slot:3');
+      expect(keys, ['Alpha', 'Beta', 'Alpha-2', 'slot:3']);
       expect(keys.toSet(), hasLength(4)); // все уникальны
+    });
+
+    test('§400 узел БЕЗ идентичности падает на позиционный slot', () {
+      // Группа идентичности не имеет (§2.3). Ключ ей всё равно нужен —
+      // слот под вердикт занимает каждый член.
+      final keys = ProbeController.probeKeysForNodes([
+        AutoSelectSpec(
+          id: 'g1',
+          tag: 'Auto',
+          label: 'Auto',
+          membership: const RuleMembers(include: '.'),
+        ),
+        node(uriA),
+      ]);
+      expect(keys, ['slot:0', 'Alpha']);
     });
 
     test('ключ — функция идентичности: re-parse даёт тот же ключ', () {
@@ -102,22 +120,27 @@ void main() {
       expect(after.single, before[1]); // ключ B тот же — замер остался при нём
     });
 
-    test('переименование (ремарка) ключ не меняет — это тот же сервер', () {
-      final keys = ProbeController.probeKeys([m(a), m('$a-renamed')]);
-      expect(keys[0], keys[1].split('#').first);
+    test('§400 ПЕРЕИМЕНОВАНИЕ ключ МЕНЯЕТ — это смена идентичности', () {
+      // Инверсия прежнего поведения. Ключ — имя узла: провайдер переименовал
+      // узел, значит для нас это другой узел, и замер к нему не относится.
+      final keys = ProbeController.probeKeys([m(a), m('${a}renamed')]);
+      expect(keys, ['A', 'Arenamed']);
     });
 
-    test('правка параметров узла ключ меняет — считаем другим сервером', () {
-      final keys = ProbeController.probeKeys(
-          [m(a), m('vless://u@h1:8443?type=ws&security=tls#A')]);
-      expect(keys[0], isNot(keys[1]));
+    test('§400 правка АДРЕСА ключ не меняет — имя то же', () {
+      // Обратная сторона: ротация сервера под тем же именем оставляет замер
+      // при узле. Тёзкой второй узел здесь не становится — это отдельный
+      // прогон, счётчик свой.
+      expect(ProbeController.probeKeys([m(a)]),
+          ProbeController.probeKeys([m('vless://u@h9:443?type=ws&security=tls#A')]));
     });
 
-    test('дубли одного сервера получают суффикс, а не делят ячейку', () {
+    test('дубли одного узла ячейку не делят: X, X-2, X-3', () {
+      // Суффикс теперь от уникализации идентичности (§400 §2.2), а не от
+      // `_dedupKeys` — форма другая (`-2`, не `#2`), смысл тот же: замеры
+      // трёх строк не сваливаются в одну ячейку.
       final keys = ProbeController.probeKeys([m(a), m(a), m(a)]);
-      expect(keys.toSet().length, 3);
-      expect(keys[1], '${keys[0]}#2');
-      expect(keys[2], '${keys[0]}#3');
+      expect(keys, ['A', 'A-2', 'A-3']);
     });
 
     test('битый член (node == null) получает raw-ключ', () {
