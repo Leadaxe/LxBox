@@ -16,22 +16,22 @@ void main() {
       final a = parseVless(uri)!;
       final b = parseVless(uri)!;
       expect(a.id == b.id, isFalse, reason: 'id эфемерен — новый на парс');
-      expect(nodeIdentityHash(a), nodeIdentityHash(b));
+      expect(legacyNodeIdentityHash(a), legacyNodeIdentityHash(b));
     });
 
     test('смена только ремарки (#label → tag) хеш НЕ меняет', () {
       final a = parseVless(uri)!;
       final b = parseVless(uri.replaceFirst('#Label', '#Renamed%20NL-42'))!;
       expect(a.tag == b.tag, isFalse);
-      expect(nodeIdentityHash(a), nodeIdentityHash(b));
+      expect(legacyNodeIdentityHash(a), legacyNodeIdentityHash(b));
     });
 
     test('смена сути (uuid / порт) хеш меняет', () {
       final a = parseVless(uri)!;
       final otherUuid = parseVless(uri.replaceFirst('0aa41f0a', '1bb52f1b'))!;
       final otherPort = parseVless(uri.replaceFirst(':443', ':8443'))!;
-      expect(nodeIdentityHash(a), isNot(nodeIdentityHash(otherUuid)));
-      expect(nodeIdentityHash(a), isNot(nodeIdentityHash(otherPort)));
+      expect(legacyNodeIdentityHash(a), isNot(legacyNodeIdentityHash(otherUuid)));
+      expect(legacyNodeIdentityHash(a), isNot(legacyNodeIdentityHash(otherPort)));
     });
 
     test('chained-цепочка (detour) в хеш не входит', () {
@@ -74,7 +74,7 @@ void main() {
       final chained = parseXrayOutbound(xray(withJump: true))!;
       final plain = parseXrayOutbound(xray(withJump: false))!;
       expect(chained.chained, isNotNull, reason: 'фикстура с цепочкой');
-      expect(nodeIdentityHash(chained), nodeIdentityHash(plain));
+      expect(legacyNodeIdentityHash(chained), legacyNodeIdentityHash(plain));
     });
   });
 

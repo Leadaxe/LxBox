@@ -1371,14 +1371,20 @@ const Set<String> _identityAppliedKeys = {
   'device_model',
 };
 
-/// §5 BACKUP.md — `disabled`: 64-hex → unix seconds. Значения не тех форм
-/// пропускаются: отметка без времени бесполезна для TTL-очистки.
+/// §5 BACKUP.md — `disabled`: ключ отметки → unix seconds.
+///
+/// §400 — ключом идёт идентичность узла (тег в рамках источника), но
+/// принимаются и legacy-ключи 64-hex из бэкапов, снятых до контракта 0.10.0:
+/// они мигрируют по общему правилу (IDENTITY.md §5.1) при первом разборе
+/// источника уже на приёмнике. Пустой ключ отбрасывается — идентичности
+/// «пустая строка» не существует. Значение не-числом пропускается: отметка
+/// без времени бесполезна для TTL-очистки.
 Map<String, int> _disabledFromJson(Object? raw) {
   if (raw is! Map) return const {};
   final out = <String, int>{};
   raw.forEach((k, v) {
     final key = '$k';
-    if (key.length != 64) return;
+    if (key.isEmpty) return;
     final ts = v is num ? v.toInt() : null;
     if (ts == null) return;
     out[key] = ts;

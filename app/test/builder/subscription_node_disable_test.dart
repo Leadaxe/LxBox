@@ -69,7 +69,7 @@ void main() {
 
   group('ServerListBuild §283 filter', () {
     test('выключенная нода не эмитится; вторая и selector целы', () {
-      final hashA = nodeIdentityHash(parseUri(uriA)!);
+      final hashA = legacyNodeIdentityHash(parseUri(uriA)!);
       final list = sub({hashA: DateTime.utc(2026, 7, 18)});
 
       final ctx = _FakeCtx();
@@ -85,7 +85,7 @@ void main() {
       // Отметка записана по одному инстансу NodeSpec, фильтр отработал по
       // другому (reparse на загрузке/refresh) — ключ контентный, не object.
       final list = sub({
-        nodeIdentityHash(parseUri(uriA)!): DateTime.utc(2026, 7, 18),
+        legacyNodeIdentityHash(parseUri(uriA)!): DateTime.utc(2026, 7, 18),
       });
       final ctx = _FakeCtx();
       list.build(ctx);
@@ -140,7 +140,7 @@ void main() {
         detourPolicy: DetourPolicy.defaults,
         url: 'https://example.com/sub',
         disabledHashes: {
-          nodeIdentityHash(parseUri(wa)!): DateTime.utc(2026, 7, 18),
+          legacyNodeIdentityHash(parseUri(wa)!): DateTime.utc(2026, 7, 18),
         },
         nodes: [parseUri(wa)!, parseUri(wb)!],
       );
