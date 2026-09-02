@@ -25,7 +25,51 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.0-lx.27-rc.4`** (see `app/android/libbox.version`) —
+**The current pin: `v1.14.0-lx.30`** (see `app/android/libbox.version`) —
+**SPEC 076/059 plus the XHTTP detour DNS fix**: DNS servers of type `udp`,
+`tcp` and `tls` now work behind a `detour` through an XHTTP node. Every such
+query used to die with `write request: context canceled`, which read as red
+URL tests for `masque` and `wireguard` nodes probed by a *domain* URL (the same
+node by IP URL was green) and as a dead system DNS over TUN while the tunnel
+itself was alive. DoH through the same node kept working, because it has its
+own HTTP client and no pool. Cause: the DNS transport pool cancels its dial
+context right after `dial` returns — the standard `net.Dialer` contract — while
+the XHTTP dial handed the connection up *before* the stream was raised and kept
+watching that context. `auto` with REALITY resolves to `stream-one`, so a
+default configuration was affected. `DialContext` for `stream-one`/`stream-up`
+now returns only once the HTTP layer has accepted the request body.
+
+Also in this window: the XHTTP xmux circuit breaker (a CDN resetting upload
+streams used to pin the CPU at 100% until a core restart — 3 consecutive stream
+failures now retire the connection, with a 100 ms→3 s backoff before a new
+transport), `packet-up` uploads surviving a graceful `GOAWAY`, and a `stream-up`
+pool leak. Before that, lx.28 brought MASQUE `vhttp: auto` **as the default**
+(behind a TCP-only hop the tunnel self-rescues into h2 instead of hanging to the
+dial deadline), per-position runtime chain toggles, and the XHTTP
+`session_table` / `session_length` session-id form.
+
+**This bump IS API-neutral for everything LxBox calls.** A `javap` sweep over
+both release AARs (252 → 253 classes) shows **zero removals and zero signature
+changes** — the diff is purely additive and confined to the kernel's own chain
+RPC, which the client does not bind: `ChainPosition.getDisabled/setDisabled`,
+a new `ChainToggleResult` class (`getWarmupError`), and two `CommandClient`
+methods, `setChainPositionEnabled(String, int, boolean)` and
+`getChainCloneConfig(String, int)`. `PlatformInterface` is untouched, so no new
+no-throw stubs are needed. `kUtlsFingerprints`
+(`app/lib/services/parser/utls_fingerprint.dart`) still mirrors the core's
+`uTLSClientHelloID` switch one-for-one — re-checked against the tag, no change.
+
+⚠️ The MASQUE legacy names (`network`, flat `sni` / `skip_cert_verify` /
+`fragment*`) were announced for removal *in* `v1.14.0-lx.30` but are still
+accepted there, with a deprecation warning. Irrelevant to us either way: per
+§393 the client emits only the new set.
+
+Client-side follow-ups this bump makes possible but does not deliver: the chain
+toggle RPC has no binding (the app's chain/detour UI is config-level), and
+`vhttp: auto` becoming the core default means an empty `vhttp` now means `auto`
+rather than `h3`.
+
+The previous pin was `v1.14.0-lx.28-rc.1`; `v1.14.0-lx.27-rc.4` before it —
 **SPEC 072**, the detour freeze finished off: a failed XHTTP stream raise now
 tears the upload pipe from the reading half (`fail()`), and requests of all
 three modes ride a conn-scoped context instead of the dial context, so the
@@ -38,8 +82,8 @@ as one owner; their mechanisms are unchanged under the old markers.
 field test builds of the mac launcher, so the release took the next number to
 keep field binaries from colliding with the tag.
 
-**This bump IS API-neutral.** A `javap` sweep over all **245** classes of both
-AARs is byte-identical — 3363 lines, zero differences — so no wrapper or
+**The lx.27-rc.4 bump was API-neutral.** A `javap` sweep over all **245** classes of both
+AARs was byte-identical — 3363 lines, zero differences — so no wrapper or
 call-site changes. (Beware the stale `classes.jar` that `libs/` keeps next to
 the AAR: it can lag several cores behind and diffing against it invents
 removals that are not there. Extract `classes.jar` from the actual release AAR
@@ -85,8 +129,9 @@ ordinary urltest, with the node in `selected`) | `round_robin` (balancing, with
 the state in `GetPool`) | empty (not a urltest). Promised “in any build”, unlike
 `GetPool`, which sits behind the `with_lx_command` tag.
 
-⚠️ **The Android AAR still does NOT have this field, up to and including
-lx.27-rc.2.** `javap io.nekohasekai.libbox.OutboundGroup` shows no `getMode()`
+⚠️ **The Android AAR still does NOT have this field, re-checked on
+`v1.14.0-lx.30`** (`javap io.nekohasekai.libbox.OutboundGroup` — no `getMode()`;
+originally observed up to and including lx.27-rc.2). `javap io.nekohasekai.libbox.OutboundGroup` shows no `getMode()`
 in either build. Through lx.27-rc.1 the whole Java surface diffed clean against
 lx.25-rc.5 (`javap` over all 228 classes — identical; `classes.jar` itself
 hashes differently, `23b2eb27…` → `c9cc31f7…`, so compare the API, not the
@@ -579,6 +624,9 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
+| **v1.14.0-lx.30** (current pin) | DNS over an XHTTP `detour` fixed: `udp`/`tcp`/`tls` DNS servers behind a `detour` to a VLESS+XHTTP node died on the first query with `write request: context canceled` — red URL tests for `masque`/`wireguard` nodes probed by domain (green by IP), and a dead system DNS over TUN with the tunnel alive. `DialContext` for `stream-one`/`stream-up` now returns only after the HTTP layer accepts the request body, so the pool cancelling its dial context no longer tears the connection down. Java surface: additive only (see the pin section) |
+| **v1.14.0-lx.29** | SPEC 076/059 — XHTTP no longer pins the CPU at 100% when the path resets streams: an xmux circuit breaker (3 consecutive stream failures retire a connection, 100 ms→3 s backoff before a new transport, success counted as *data* not headers). `packet-up` uploads survive a graceful `GOAWAY` (`GetBody` set, so HTTP/2 can retry transparently). A `stream-up` pool leak fixed — the release handle was accepted but never stored, so `openUsage` grew monotonically |
+| **v1.14.0-lx.28** | MASQUE `vhttp: auto` becomes the **default** (SPEC 074) — an empty `vhttp` self-rescues into h2 behind a TCP-only hop instead of hanging to the dial deadline; explicit `h3`/`h2` still pin the mode. XHTTP `session_table` / `session_length` (ported from Xray) replace the dashed-UUID session id with a random string of a chosen alphabet/length — purely client-side, and configuring one without the other is an error. Chain per-position runtime toggles (SPEC 075) with cache-file persistence by position tag: this is where the additive Java surface comes from (`ChainPosition.disabled`, `ChainToggleResult`, `CommandClient.setChainPositionEnabled` / `getChainCloneConfig`); LxBox binds none of it |
 | rc.15 → rc.16 (§214) | XHTTP SPEC 002 v2 fields (otherwise an unknown field kills the config) |
 | rc.18 (§215) | SPEC 020 idle-suspend (`route.lx_idle_suspend`) |
 | rc.19 | idle-suspend behind `with_lx_idle_suspend` (mobile-only, see gotcha 1) |
