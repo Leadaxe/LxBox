@@ -631,7 +631,9 @@ void main() {
       expect(back.endpoint, acc.endpoint);
     });
 
-    test('masque: круг сохраняет регистрацию, SNI едет в extensions', () {
+    // §401, контракт 0.12.2 — sni/idle_timeout лежат ПЛОСКО в записи: карман
+    // extensions.lxbox упразднён, а схема объявляет оба поля поимённо.
+    test('masque: круг сохраняет регистрацию, sni/idle_timeout плоские', () {
       const acc = MasqueAccount(
         privKeyDer: 'ZGVy',
         serverPubDer: 'cHVi',
@@ -648,10 +650,10 @@ void main() {
       final wire = masqueAccountToBackup(acc);
       expect(wire['type'], 'masque');
       expect(wire['private_key_der'], 'ZGVy');
-      // sni/idle_timeout — параметры узла, канон их не знает.
-      final own = (wire['extensions'] as Map)['lxbox'] as Map;
-      expect(own['sni'], 'www.cloudflare.com');
-      expect(own['idle_timeout'], '5m');
+      expect(wire['sni'], 'www.cloudflare.com');
+      expect(wire['idle_timeout'], '5m');
+      expect(wire.containsKey('extensions'), isFalse,
+          reason: 'карман extensions упразднён контрактом 0.12.2');
 
       final back = masqueAccountFromBackup(wire);
       expect(back, isNotNull);
@@ -660,6 +662,104 @@ void main() {
       expect(back.port, 443);
       expect(back.sni, 'www.cloudflare.com');
       expect(back.idleTimeout, '5m');
+    });
+
+    // Необязательность: незаданные поля в файл не едут вовсе, а не пустыми
+    // строками — пустой sni у принимающей стороны это не «SNI отсутствует»,
+    // а объявленное значение, которым она перекрыла бы свой дефолт.
+    test('masque: незаданные sni/idle_timeout в записи отсутствуют', () {
+      const acc = MasqueAccount(
+        privKeyDer: 'ZGVy',
+        serverPubDer: 'cHVi',
+        clientV4: '172.16.0.2/32',
+        clientV6: 'fd01::2/128',
+        server: '162.159.198.1',
+        port: 443,
+        deviceId: 'dev-1',
+        token: 'tok-1',
+        createdAt: '2026-01-01T00:00:00Z',
+      );
+      final wire = masqueAccountToBackup(acc);
+      expect(wire.containsKey('sni'), isFalse);
+      expect(wire.containsKey('idle_timeout'), isFalse);
+      expect(wire.containsKey('extensions'), isFalse);
+    });
+
+    // Круг через ФАЙЛ, а не только через пару функций: плоские поля обязаны
+    // пережить общий обход §401 — иначе они бы уезжали, но приезжали с
+    // backup_unknown_field и в состояние не попадали.
+    test('masque: sni/idle_timeout переживают экспорт→импорт файла', () {
+      const acc = MasqueAccount(
+        privKeyDer: 'ZGVy',
+        serverPubDer: 'cHVi',
+        clientV4: '172.16.0.2/32',
+        clientV6: 'fd01::2/128',
+        server: '162.159.198.1',
+        port: 443,
+        deviceId: 'dev-1',
+        token: 'tok-1',
+        createdAt: '2026-01-01T00:00:00Z',
+        sni: 'www.cloudflare.com',
+        idleTimeout: '5m',
+      );
+      final raw = jsonEncode({
+        'lx_backup': 1,
+        'exported_by': {'app': 'lxbox', 'version': '2.21.0'},
+        'exported_at': '2026-09-02T00:00:00Z',
+        'warp': [masqueAccountToBackup(acc)],
+      });
+
+      final file = parseLxBackup(raw);
+      expect(file.warnings, isEmpty,
+          reason: 'плоские sni/idle_timeout объявлены схемой — не «незнакомое»');
+      expect(file.warp, hasLength(1));
+
+      final back = masqueAccountFromBackup(file.warp.single);
+      expect(back, isNotNull);
+      expect(back!.sni, 'www.cloudflare.com');
+      expect(back.idleTimeout, '5m');
+      expect(back.server, acc.server);
+      expect(back.port, 443);
+    });
+
+    // Старый файл 0.10.x: карман читается общим правилом §401 — ОДИН
+    // backup_extensions_dropped на файл, — а не отдельным разбором warp[].
+    // Аккаунт при этом импортируется: карман потерян, регистрация цела.
+    test('masque: старый файл с extensions даёт один warning, аккаунт цел', () {
+      final raw = jsonEncode({
+        'lx_backup': 1,
+        'exported_by': {'app': 'lxbox', 'version': '2.19.0'},
+        'exported_at': '2026-08-01T00:00:00Z',
+        'warp': [
+          {
+            'type': 'masque',
+            'private_key_der': 'ZGVy',
+            'server_pub_der': 'cHVi',
+            'client_v4': '172.16.0.2/32',
+            'client_v6': 'fd01::2/128',
+            'server': '162.159.198.1',
+            'port': 443,
+            'extensions': {
+              'lxbox': {'sni': 'www.cloudflare.com', 'idle_timeout': '5m'},
+            },
+          },
+        ],
+      });
+
+      final file = parseLxBackup(raw);
+      final codes = file.warnings.map((w) => w.code).toList();
+      expect(codes.where((c) => c == kWarnExtensionsDropped), hasLength(1),
+          reason: 'карман любой глубины даёт ровно один warning на файл');
+      expect(codes, isNot(contains(kWarnUnknownField)),
+          reason: 'внутренности кармана по одной не перечисляются');
+
+      expect(file.warp, hasLength(1));
+      final back = masqueAccountFromBackup(file.warp.single);
+      expect(back, isNotNull, reason: 'регистрация применима и без кармана');
+      expect(back!.privKeyDer, 'ZGVy');
+      expect(back.server, '162.159.198.1');
+      expect(back.sni, isEmpty, reason: 'карман не читается — sni потерян');
+      expect(back.idleTimeout, isEmpty);
     });
 
     test('warp без дискриминатора назван warning\'ом, а не съеден', () {

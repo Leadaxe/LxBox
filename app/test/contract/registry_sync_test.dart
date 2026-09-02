@@ -60,17 +60,6 @@ const _launcherOnlyBackupCodes = <String>{
   'backup_replace_tag_derived',
 };
 
-/// Коды LxBox, которых в реестре пока НЕТ.
-///
-/// Это долг контракта, а не разрешение расходиться: реестр объявлен
-/// нормативным словарём (D-020), и код, живущий только в приложении,
-/// вторая сторона не увидит. Пока владелец контракта их не завёл, тест
-/// держит список явным — чтобы долг был виден, а не растворился.
-const _notYetInRegistry = <String>{
-  'backup_dns_entry_skipped',
-  'backup_warp_skipped',
-};
-
 Map<String, dynamic>? _loadBackupWarnings() {
   final file = File('$_contractRoot/registry/backup_warnings.json');
   if (!file.existsSync()) return null;
@@ -129,8 +118,7 @@ void main() {
       // Код в приложении, которого нет в реестре, — либо забытая запись
       // реестра, либо самодеятельность: словарь нормативен (D-020).
       final missingInRegistry =
-          _codesInCode.difference(registryCodes).difference(_notYetInRegistry).toList()
-            ..sort();
+          _codesInCode.difference(registryCodes).toList()..sort();
       expect(missingInRegistry, isEmpty,
           reason: 'коды эмитятся приложением, но реестр их не знает — '
               'внести в registry/backup_warnings.json или убрать из кода');
@@ -153,13 +141,6 @@ void main() {
           _launcherOnlyBackupCodes.intersection(_codesInCode).toList()..sort();
       expect(staleForeign, isEmpty,
           reason: 'код объявлен «стороной лаунчера», но LxBox его эмитит');
-
-      // То же для долга реестра: код, который владелец контракта завёл,
-      // обязан выйти из списка-заглушки.
-      final staleDebt =
-          _notYetInRegistry.intersection(registryCodes).toList()..sort();
-      expect(staleDebt, isEmpty,
-          reason: 'код уже есть в реестре — убрать из _notYetInRegistry');
 
       // Каждый чужой код обязан существовать в реестре: опечатка в списке
       // исключений иначе тихо ослабила бы обе сверки.

@@ -13,26 +13,20 @@
 /// файл, который лаунчер прочитает как пустую регистрацию.
 ///
 /// Поля, которых у канона нет (мобильная AWG-обфускация §126, SNI и таймауты
-/// MASQUE-узла), едут в `extensions.lxbox` записи: применить их лаунчер не
-/// может, но вернуть обязан (§1 BACKUP.md).
+/// MASQUE-узла), лежат в записи ПЛОСКО, рядом с полями регистрации. Карман
+/// `extensions.lxbox` для них упразднён контрактом 0.12.2: секция `warp[]`
+/// объявлена открытой (`additionalProperties: true`, «поля записи, кроме
+/// объявленных, — snake_case поля самой регистрации»), а `sni` и
+/// `idle_timeout` схема объявляет поимённо с пометкой `extension: mobile`.
+/// Лаунчер их не применяет, но провозит сырым JSON — чужое ОБЪЯВЛЕННОЕ
+/// игнорируется молча, без предупреждения (§1/§2 BACKUP.md).
 library;
 
 import 'masque_account.dart';
 import 'warp_account.dart';
 
-/// Ключ приложения в per-entity `extensions` записи `warp[]`.
-const String _kLxBox = 'lxbox';
-
 /// §393 B8 — [WarpAccount] → каноническая запись `warp[]` (`type: wg`).
 Map<String, dynamic> warpAccountToBackup(WarpAccount acc) {
-  final own = <String, dynamic>{
-    // §126 — AWG-обфускация: у лаунчера в снимке регистрации её нет
-    // (там она свойство узла), а у нас лежит на аккаунте.
-    if (acc.awg != null) 'awg': Map<String, Object>.from(acc.awg!.fields),
-    // Endpoint у канона тоже отсутствует: лаунчер держит его в URI источника.
-    if (acc.endpoint.isNotEmpty && acc.endpoint != WarpAccount.defaultEndpoint)
-      'endpoint': acc.endpoint,
-  };
   return <String, dynamic>{
     'type': 'wg',
     'private_key': acc.privKey,
@@ -46,19 +40,17 @@ Map<String, dynamic> warpAccountToBackup(WarpAccount acc) {
     if (acc.license != null && acc.license!.isNotEmpty) 'license': acc.license,
     if (acc.warpPlus) 'warp_plus': true,
     if (acc.createdAt.isNotEmpty) 'created_at': acc.createdAt,
-    if (own.isNotEmpty) 'extensions': {_kLxBox: own},
+    // §126 — AWG-обфускация: у лаунчера в снимке регистрации её нет
+    // (там она свойство узла), а у нас лежит на аккаунте.
+    if (acc.awg != null) 'awg': Map<String, Object>.from(acc.awg!.fields),
+    // Endpoint у канона тоже отсутствует: лаунчер держит его в URI источника.
+    if (acc.endpoint.isNotEmpty && acc.endpoint != WarpAccount.defaultEndpoint)
+      'endpoint': acc.endpoint,
   };
 }
 
 /// §393 B8 — [MasqueAccount] → каноническая запись `warp[]` (`type: masque`).
 Map<String, dynamic> masqueAccountToBackup(MasqueAccount acc) {
-  // sni/idle_timeout/keep_alive — параметры УЗЛА, а не регистрации: канон их
-  // не знает (`WarpMasqueAccount` их и не хранит), поэтому в своё расширение.
-  final own = <String, dynamic>{
-    if (acc.sni.isNotEmpty) 'sni': acc.sni,
-    if (acc.idleTimeout.isNotEmpty) 'idle_timeout': acc.idleTimeout,
-    if (acc.keepAlive.isNotEmpty) 'keep_alive': acc.keepAlive,
-  };
   return <String, dynamic>{
     'type': 'masque',
     'private_key_der': acc.privKeyDer,
@@ -70,7 +62,12 @@ Map<String, dynamic> masqueAccountToBackup(MasqueAccount acc) {
     if (acc.deviceId.isNotEmpty) 'device_id': acc.deviceId,
     if (acc.token.isNotEmpty) 'token': acc.token,
     if (acc.createdAt.isNotEmpty) 'created_at': acc.createdAt,
-    if (own.isNotEmpty) 'extensions': {_kLxBox: own},
+    // sni/idle_timeout — параметры УЗЛА, а не регистрации: `WarpMasqueAccount`
+    // их не хранит. Схема 0.12.2 объявляет оба поимённо (`extension: mobile`)
+    // ПЛОСКО в записи — необязательные, пишутся только когда заданы.
+    if (acc.sni.isNotEmpty) 'sni': acc.sni,
+    if (acc.idleTimeout.isNotEmpty) 'idle_timeout': acc.idleTimeout,
+    if (acc.keepAlive.isNotEmpty) 'keep_alive': acc.keepAlive,
   };
 }
 
@@ -81,7 +78,6 @@ Map<String, dynamic> masqueAccountToBackup(MasqueAccount acc) {
 /// запись не «частично применяется», она бесполезна целиком.
 WarpAccount? warpAccountFromBackup(Map<String, dynamic> j) {
   if (j['type'] != 'wg') return null;
-  final own = _ownExtensions(j);
   return WarpAccount.fromJson({
     'priv_key': j['private_key'],
     'peer_pub': j['peer_public'],
@@ -91,20 +87,19 @@ WarpAccount? warpAccountFromBackup(Map<String, dynamic> j) {
     'account_id': j['account_id'],
     'device_id': j['device_id'],
     'token': j['token'],
-    // Канон endpoint не переносит — он вернулся из нашего расширения либо
+    // Канон endpoint не переносит — он либо приехал полем записи, либо
     // берётся дефолтный (`engage.cloudflareclient.com:2408`).
-    'endpoint': own['endpoint'] ?? WarpAccount.defaultEndpoint,
+    'endpoint': j['endpoint'] ?? WarpAccount.defaultEndpoint,
     'created_at': j['created_at'],
     'license': j['license'],
     'warp_plus': j['warp_plus'],
-    'awg': ?_awgFrom(own['awg']),
+    'awg': ?_awgFrom(j['awg']),
   });
 }
 
 /// §393 B8 — каноническая запись → [MasqueAccount]; `null` = не разобралось.
 MasqueAccount? masqueAccountFromBackup(Map<String, dynamic> j) {
   if (j['type'] != 'masque') return null;
-  final own = _ownExtensions(j);
   return MasqueAccount.fromJson({
     'priv_key_der': j['private_key_der'],
     'server_pub_der': j['server_pub_der'],
@@ -115,18 +110,13 @@ MasqueAccount? masqueAccountFromBackup(Map<String, dynamic> j) {
     'device_id': j['device_id'],
     'token': j['token'],
     'created_at': j['created_at'],
-    'sni': own['sni'],
-    'idle_timeout': own['idle_timeout'],
-    'keep_alive': own['keep_alive'],
+    'sni': j['sni'],
+    'idle_timeout': j['idle_timeout'],
+    'keep_alive': j['keep_alive'],
   });
 }
 
-Map<String, dynamic> _ownExtensions(Map<String, dynamic> j) {
-  final ext = (j['extensions'] as Map?)?[_kLxBox];
-  return ext is Map ? ext.cast<String, dynamic>() : const {};
-}
-
-/// AWG-поля из своего расширения. Не-Map → `null` (обфускации нет), а не
+/// AWG-поля записи. Не-Map → `null` (обфускации нет), а не
 /// пустой [Awg]: пустой набор полей — это «AWG включён без параметров», и
 /// ядро собрало бы из него другой узел.
 Map<String, dynamic>? _awgFrom(Object? raw) =>

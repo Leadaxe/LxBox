@@ -1088,6 +1088,15 @@ const Set<String> _warpKeys = {
   'server_pub_der',
   'server',
   'port',
+  // §401, контракт 0.12.2 — плоские поля записи вместо упразднённого кармана
+  // `extensions.lxbox`. `sni`/`idle_timeout` схема объявляет поимённо
+  // (`extension: mobile`); `awg`/`endpoint`/`keep_alive` — «snake_case поля
+  // самой регистрации» из открытой части секции (`additionalProperties`).
+  'sni',
+  'idle_timeout',
+  'keep_alive',
+  'awg',
+  'endpoint',
 };
 
 const Set<String> _dnsKeys = {'servers', 'rules', 'final', 'strategy'};
