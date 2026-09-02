@@ -45,14 +45,13 @@ Future<void> _setDirections(List<Direction> directions, {bool flush = true}) asy
 ///
 /// §393 A3 — лимита на количество БОЛЬШЕ НЕТ (паритет с лаунчером:
 /// `configtypes.NextDirectionTag` потолка не имеет, а прежние 10 были
-/// следствием интерфейса, не модели). [kMaxDirections] остался границей
-/// дефолтных имён «VPN ①..VPN ⑩»: одиннадцатое получает честное «VPN 11».
+/// следствием интерфейса, не модели).
 ///
 /// [tag] — пользовательский тег; по умолчанию первый свободный `vpn-N`
 /// ([nextDirectionTag]). Валидируется [directionTagConflict] (непустой после
 /// trim, не служебный, не дубль, не тёзка чьего-либо `<tag>-auto`) — при
 /// конфликте [StateError] с машинным кодом причины в тексте.
-Future<Direction> _addDirection({String? label, String? tag}) async {
+Future<Direction> _addDirection({String? tag}) async {
   final directions = (await _getDirections()).toList();
   final used = directions.map((c) => c.tag).toList();
   final wanted = (tag ?? nextDirectionTag(used)).trim();
@@ -60,10 +59,8 @@ Future<Direction> _addDirection({String? label, String? tag}) async {
   if (conflict != null) {
     throw StateError('direction tag "$wanted" rejected: $conflict');
   }
-  // §198/§393 A3 — дефолтный label: «VPN ⓝ» для автовыданного `vpn-N`,
-  // сам тег для произвольного (выдумывать «VPN» для `ru-exit` — врать).
-  final ch = Direction(
-      tag: wanted, label: label ?? defaultLabelForTag(wanted), enabled: true);
+  // Контракт 0.9.0 — имя у Направления одно, tag: подставлять нечего.
+  final ch = Direction(tag: wanted, enabled: true);
   directions.add(ch);
   await _setDirections(directions);
   return ch;
@@ -302,11 +299,7 @@ bool _ensureRequiredDirection(Map<String, dynamic> data) {
     if (e is Map && e['tag'] == 'vpn-1') return false;
   }
   data['directions'] = [
-    Direction(
-      tag: 'vpn-1',
-      label: defaultLabelForTag('vpn-1'),
-      enabled: true,
-    ).toJson(),
+    Direction(tag: 'vpn-1', enabled: true).toJson(),
     ...raw,
   ];
   return true;

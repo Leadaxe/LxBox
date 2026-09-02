@@ -1132,8 +1132,11 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       final tlsMap = masqueTls is Map ? masqueTls : const {};
       final vhttpRaw = entry['vhttp']?.toString() ?? '';
       // SPEC 103 п.5 — невалидное значение форсится в h3, как в URI-парсере.
-      final vhttpJson =
-          (vhttpRaw == 'h3' || vhttpRaw == 'h2') ? vhttpRaw : 'h3';
+      // Контракт 0.11.1 — `auto` в тройке допустимых (ядро >= lx.27).
+      final vhttpJson = (vhttpRaw == 'h3' || vhttpRaw == 'h2' ||
+              vhttpRaw == 'auto')
+          ? vhttpRaw
+          : 'h3';
       final sniRaw = tlsMap['server_name']?.toString() ?? '';
       return MasqueSpec(
         id: newUuidV4(),

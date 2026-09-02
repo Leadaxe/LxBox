@@ -45,9 +45,9 @@ class DirectionMutations {
   /// §393 A3 — [tag] опционален (по умолчанию первый свободный `vpn-N`).
   /// throws [StateError] на конфликте тега (`empty`/`reserved`/`duplicate`/
   /// `auto_twin`, см. `directionTagConflict`). Лимита на количество нет.
-  static Future<Direction> add({String? label, String? tag}) =>
+  static Future<Direction> add({String? tag}) =>
       // ignore: invalid_use_of_visible_for_testing_member
-      SettingsStorage.addDirection(label: label, tag: tag);
+      SettingsStorage.addDirection(tag: tag);
 
   /// Сохранить Направление + зеркальный ресинк. [sub] — контроллер (nullable:
   /// Debug API может отработать до готовности UI).

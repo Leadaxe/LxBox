@@ -77,7 +77,7 @@ void main() {
       // Два outbound'а с одним тегом — отказ ядра на ВЕСЬ конфиг, поэтому
       // коллизия ловится на входе, а не на сборке.
       await SettingsStorage.setDirections(
-          const [Direction(tag: 'vpn-1', label: 'VPN ①')]);
+          const [Direction(tag: 'vpn-1')]);
       expect(
         () => SettingsStorage.addChain(tag: 'vpn-1'),
         throwsA(isA<StateError>()
@@ -97,16 +97,14 @@ void main() {
     });
 
     test('update пишет по тегу; неизвестный тег — StateError', () async {
-      await SettingsStorage.addChain(tag: 'via-de', label: 'DE');
+      await SettingsStorage.addChain(tag: 'via-de');
       await SettingsStorage.updateChain(const SourceChain(
         tag: 'via-de',
-        label: 'Германия',
         hops: ['home', 'de-exit'],
         idleTimeout: '10m',
         stripEvasion: false,
       ));
       final got = (await SettingsStorage.getChains()).single;
-      expect(got.label, 'Германия');
       expect(got.hops, ['home', 'de-exit']);
       expect(got.idleTimeout, '10m');
       expect(got.stripEvasion, isFalse);
@@ -183,7 +181,6 @@ void main() {
     test('round-trip через файл: полная запись доезжает без потерь', () async {
       const c = SourceChain(
         tag: 'tuned',
-        label: 'Tuned',
         hops: ['a', 'b'],
         idleTimeout: '0s',
         stripEvasion: false,
@@ -287,7 +284,7 @@ void main() {
   group('внутренний backup/restore', () {
     test('цепочки переживают export→restore в категории routing', () async {
       await SettingsStorage.setChains(const [
-        SourceChain(tag: 'via-de', label: 'DE', hops: ['home', 'de']),
+        SourceChain(tag: 'via-de', hops: ['home', 'de']),
       ]);
       final raw = await readFile();
 

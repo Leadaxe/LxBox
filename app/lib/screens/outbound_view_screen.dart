@@ -274,7 +274,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       }
       final label = _directions
           .where((c) => c.tag == via)
-          .map((c) => c.label)
+          .map((c) => c.displayLabel)
           .firstOrNull ??
           via;
       return d.isDns

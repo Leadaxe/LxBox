@@ -93,11 +93,11 @@ ChainResolution resolveChains(
   for (final c in live) {
     void degrade(String code, String reason) =>
         degraded.add(ChainDegradation(
-            tag: c.tag, label: c.displayLabel, reason: reason, code: code));
+            tag: c.tag, label: c.tag, reason: reason, code: code));
 
     if (!supported) {
       degrade('chain_unsupported_by_core',
-          chainUnsupportedByCoreLine(c.displayLabel, coreVersion));
+          chainUnsupportedByCoreLine(c.tag, coreVersion));
       continue;
     }
     // Инварианты ядра — до всего остального: собственные диагностики цепочки
@@ -105,7 +105,7 @@ ChainResolution resolveChains(
     final invalid = chainEmitError(c);
     if (invalid.isNotEmpty) {
       degrade('chain_invalid',
-          'Hop chain "${c.displayLabel}" was skipped: $invalid.');
+          'Hop chain "${c.tag}" was skipped: $invalid.');
       continue;
     }
     // Коллизия имени: цепочка, названная как существующий узел, Направление
@@ -115,7 +115,7 @@ ChainResolution resolveChains(
     if (knownTags.contains(c.tag)) {
       degrade(
           'chain_invalid',
-          'Hop chain "${c.displayLabel}" was skipped: the tag "${c.tag}" is '
+          'Hop chain "${c.tag}" was skipped: the tag "${c.tag}" is '
               'already taken by another outbound, direction or chain.');
       continue;
     }
@@ -135,7 +135,7 @@ ChainResolution resolveChains(
     if (missing.isNotEmpty) {
       degrade(
           'chain_hop_missing',
-          'Hop chain "${c.displayLabel}" was dropped: position $missingAt '
+          'Hop chain "${c.tag}" was dropped: position $missingAt '
               '("$missing") was not found among nodes, directions and chains '
               'declared above it. A route without a hop is a different route, '
               'so the whole chain is skipped.');
@@ -152,7 +152,7 @@ ChainResolution resolveChains(
     if (nested.isNotEmpty) {
       degrade(
           'chain_nested_position',
-          'Hop chain "${c.displayLabel}" was dropped: nested chains '
+          'Hop chain "${c.tag}" was dropped: nested chains '
               '${nested.map((t) => '"$t"').join(', ')} are not at position 1 — '
               'the core allows a nested chain only as the first hop.');
       continue;

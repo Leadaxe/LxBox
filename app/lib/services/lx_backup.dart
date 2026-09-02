@@ -1003,6 +1003,10 @@ const Set<String> _chainKeys = {
   ..._sourceRefKeys,
   'id',
   'tag',
+  // Контракт 0.9.0 / D-082 — `label` цепочки СНЕСЁН: имя одно, тег. Ключ
+  // остаётся известным, чтобы файл старой версии / лаунчера не поднимал
+  // `backup_unknown_field`; разошедшаяся с тегом подпись отбрасывается с
+  // [kWarnLabelDropped] (`chains_roundtrip` корпуса).
   'label',
   'enabled',
   'chain',
@@ -1011,6 +1015,11 @@ const Set<String> _chainKeys = {
 
 const Set<String> _directionKeys = {
   'tag',
+  // Контракт 0.9.0 — `label` СНЁСЕН: имя Направления одно, tag. Ключ остаётся
+  // известным, чтобы файл старой версии / лаунчера не поднимал
+  // `backup_unknown_field`: он законно был, его читают и молча отбрасывают
+  // (warning'а, в отличие от servers[]/chains[] по D-082, здесь нет).
+  'label',
   'enabled',
   'filter',
   'invert',
@@ -1509,9 +1518,9 @@ Direction _directionFromCanon(Map<String, dynamic> j, String tag) {
   final rawAuto = j['auto'];
   return Direction(
     tag: tag,
-    // Имя Направления ровно одно — тег (контракт 0.9.0). Поле модели ждёт
-    // своего сноса отдельной задачей; сюда из файла не приходит ничего.
-    label: '',
+    // Имя Направления ровно одно — тег (контракт 0.9.0/§402): поля `label`
+    // у модели больше нет, из файла ключ читается как известный и молча
+    // отбрасывается (`_directionKeys`).
     // Отсутствие ключа = true (`enabled.default` схемы), а не false.
     enabled: j['enabled'] as bool? ?? true,
     nodeFilter: (j['filter'] as String?) ?? '',
@@ -1626,14 +1635,14 @@ Map<String, dynamic> _chainToJson(SourceChain c) => {
   // Ключ пишем только для выключенной: отсутствие = true по схеме.
   if (!c.enabled) 'enabled': false,
   // Канон как есть — `SourceChain.toJson` уже пишет ровно его поля, минус
-  // идентичность записи (tag/label/enabled), которая живёт уровнем выше.
+  // идентичность записи (tag/enabled), которая живёт уровнем выше.
   'chain': _chainCanonToJson(c),
 };
 
 /// Канон цепочки (`schema/source_chain.schema.json`) для поля `chain`.
 ///
 /// Отдельно от [SourceChain.toJson] намеренно: тот пишет ЗАПИСЬ storage —
-/// с `tag`/`label`/`enabled`, — а канон описывает только МАРШРУТ. Смешать их
+/// с `tag`/`enabled`, — а канон описывает только МАРШРУТ. Смешать их
 /// значило бы отправить на ту сторону тег дважды и разойтись со схемой
 /// (`additionalProperties: false`).
 Map<String, dynamic> _chainCanonToJson(SourceChain c) {

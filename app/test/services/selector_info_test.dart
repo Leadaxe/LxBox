@@ -181,22 +181,22 @@ void main() {
   });
 
   group('пикер detour (§251) — текущий выбор Направления в скобках', () {
-    const relay = Direction(tag: 'vpn-4', label: 'Relay', isDetour: true);
+    const relay = Direction(tag: 'vpn-4', isDetour: true);
 
     test('detourDirectionDisplay: выбор известен → ⚙ label (node)', () {
       SelectorInfo.I.setGroups({'vpn-4': '🇳🇱 Нидерланды'});
       expect(detourDirectionDisplay('vpn-4', const [relay]),
-          '⚙ Relay (🇳🇱 Нидерланды)');
+          '⚙ vpn-4 (🇳🇱 Нидерланды)');
     });
 
     test('detourDirectionDisplay: туннель down → просто ⚙ label', () {
-      expect(detourDirectionDisplay('vpn-4', const [relay]), '⚙ Relay');
+      expect(detourDirectionDisplay('vpn-4', const [relay]), '⚙ vpn-4');
     });
 
     test('detourDirectionDisplay: auto-двойник тоже находит Направление', () {
       SelectorInfo.I.setGroups({'vpn-4-auto': 'быстрый-node'});
       expect(detourDirectionDisplay('vpn-4-auto', const [relay]),
-          '⚙ Relay (быстрый-node)');
+          '⚙ vpn-4 (быстрый-node)');
     });
   });
 }

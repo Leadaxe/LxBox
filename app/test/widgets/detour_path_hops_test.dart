@@ -18,13 +18,13 @@ void main() {
   String raw(String name) =>
       'vless://u-$name@h.com:443?type=ws&security=tls#$name';
 
-  const relay = Direction(tag: 'vpn-4', label: 'Relay', isDetour: true);
+  const relay = Direction(tag: 'vpn-4', isDetour: true);
 
   test('Направление — терминальный хоп с текущим выбором', () {
     SelectorInfo.I.setGroups({'vpn-4': '🇳🇱 Нидерланды'});
     final hops = detourPathHops('vpn-4',
         controller: SubscriptionController(), directions: const [relay]);
-    expect(hops, ['⚙ Relay (🇳🇱 Нидерланды)']);
+    expect(hops, ['⚙ vpn-4 (🇳🇱 Нидерланды)']);
   });
 
   test('интра-цепочка папки разворачивается до Направления', () {
@@ -43,7 +43,7 @@ void main() {
         controller: SubscriptionController(),
         directions: const [relay],
         folder: folder);
-    expect(hops, ['⚙ Relay', 'b', 'a']);
+    expect(hops, ['⚙ vpn-4', 'b', 'a']);
   });
 
   test('цикл в storage не виснет (visited-гейт)', () {

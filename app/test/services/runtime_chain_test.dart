@@ -26,16 +26,16 @@ List<String> _tags(List<RuntimeHop> hops) => [for (final h in hops) h.tag];
 void main() {
   group('directionForTag', () {
     const directions = [
-      Direction(tag: 'vpn-4', label: 'Relay', isDetour: true),
-      Direction(tag: 'vpn-2', label: 'Main'),
+      Direction(tag: 'vpn-4', isDetour: true),
+      Direction(tag: 'vpn-2'),
     ];
 
     test('тег Направления → Направление', () {
-      expect(directionForTag('vpn-4', directions)?.label, 'Relay');
+      expect(directionForTag('vpn-4', directions)?.tag, 'vpn-4');
     });
 
     test('autoTag двойника → тот же Направление', () {
-      expect(directionForTag('vpn-2-auto', directions)?.label, 'Main');
+      expect(directionForTag('vpn-2-auto', directions)?.tag, 'vpn-2');
     });
 
     test('не Направление → null', () {
@@ -74,7 +74,7 @@ void main() {
   });
 
   group('runtimeChainOf — селекторы и Направления', () {
-    const directions = [Direction(tag: 'vpn-4', label: 'Relay', isDetour: true)];
+    const directions = [Direction(tag: 'vpn-4', isDetour: true)];
 
     test('detour в Направление без выбора (туннель down) → обрыв на группе', () {
       final cfg = _cfg([

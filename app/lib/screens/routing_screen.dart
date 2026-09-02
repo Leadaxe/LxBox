@@ -372,7 +372,7 @@ class _RoutingScreenState extends State<RoutingScreen>
         healed.chainPositions == 0) {
       return;
     }
-    final label = direction.label.isNotEmpty ? direction.label : direction.tag;
+    final label = direction.displayLabel;
     // §393 A3 — include-heal бывает ТОЛЬКО на удалении, и там `ruleLead` уже
     // «deleted»: одиночный include-heal (правила и detour'ы на Направление не
     // ссылались) берёт ту же вводную, а не detour'ную.
@@ -429,10 +429,7 @@ class _RoutingScreenState extends State<RoutingScreen>
     if (req == null || !mounted) return;
     final Direction created;
     try {
-      created = await DirectionMutations.add(
-        tag: req.tag,
-        label: req.label.isEmpty ? null : req.label,
-      );
+      created = await DirectionMutations.add(tag: req.tag);
     } on StateError catch (e) {
       // Гонка со вторым источником мутаций (Debug API): форма считала тег
       // свободным, storage — уже нет. Показываем и не создаём.

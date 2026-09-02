@@ -119,7 +119,7 @@ void main() {
     controller = HomeController();
     DebugRegistry.I.home = controller;
     await SettingsStorage.setChains([
-      const SourceChain(tag: 'chain-1', label: 'Double', hops: ['warp', 'al']),
+      const SourceChain(tag: 'chain-1', hops: ['warp', 'al']),
     ]);
   });
 

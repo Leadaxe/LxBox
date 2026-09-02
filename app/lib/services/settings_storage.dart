@@ -329,8 +329,8 @@ class SettingsStorage {
   /// §275 — код приложения зовёт `DirectionMutations.add`: мутаторы Направлений
   /// парные с ресинком контроллера, здесь — только storage-половина.
   @visibleForTesting
-  static Future<Direction> addDirection({String? label, String? tag}) =>
-      _addDirection(label: label, tag: tag);
+  static Future<Direction> addDirection({String? tag}) =>
+      _addDirection(tag: tag);
 
   /// Обновить Направление по [Direction.tag]. Throws если tag не найден.
   /// §248 — возвращает счётчики вылеченных ссылок (disable/flag-set →
@@ -382,8 +382,7 @@ class SettingsStorage {
   /// Добавить цепочку. [tag] опционален (по умолчанию первый свободный
   /// `chain-N`, [nextChainTag]); throws [StateError] на конфликте тега с
   /// другой цепочкой или Направлением.
-  static Future<SourceChain> addChain({String? label, String? tag}) =>
-      _addChain(label: label, tag: tag);
+  static Future<SourceChain> addChain({String? tag}) => _addChain(tag: tag);
 
   /// §393 D3 — создать цепочку ЦЕЛИКОМ, одной записью на диск.
   ///

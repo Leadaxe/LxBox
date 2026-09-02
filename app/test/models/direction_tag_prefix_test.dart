@@ -104,7 +104,7 @@ void main() {
 
   group('analyzeTagPrefixChange', () {
     Direction dir(String tag, {String node = '', String def = ''}) =>
-        Direction(tag: tag, label: tag, nodeFilter: node, defaultFilter: def);
+        Direction(tag: tag, nodeFilter: node, defaultFilter: def);
 
     test('литеральное вхождение → Направление в healed', () {
       final c = analyzeTagPrefixChange(

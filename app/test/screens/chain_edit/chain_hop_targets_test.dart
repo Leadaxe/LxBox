@@ -62,8 +62,8 @@ void main() {
       final cands = collectChainHopTargets(
         config: _config(const []),
         directions: [
-          const Direction(tag: 'vpn-1', label: 'vpn-1'),
-          const Direction(tag: 'vpn-2', label: 'vpn-2', enabled: false),
+          const Direction(tag: 'vpn-1'),
+          const Direction(tag: 'vpn-2', enabled: false),
         ],
         chains: const [],
         selfTag: 'chain-1',
@@ -152,8 +152,8 @@ void main() {
           {'tag': 'aa', 'type': 'vless'},
         ]),
         directions: [
-          const Direction(tag: 'vpn-2', label: 'vpn-2'),
-          const Direction(tag: 'vpn-1', label: 'vpn-1'),
+          const Direction(tag: 'vpn-2'),
+          const Direction(tag: 'vpn-1'),
         ],
         chains: const [],
         selfTag: 'chain-1',

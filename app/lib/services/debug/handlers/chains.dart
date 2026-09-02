@@ -37,9 +37,10 @@ import '_shared.dart';
 ///
 /// Routes:
 /// - `GET    /chains`            → list (SourceChain.toJson, snake_case)
-/// - `POST   /chains`            → create (body: `{"tag":"...","label":"..."}`
-///                                + опционально любые PATCH-поля; `tag`
-///                                только при создании)
+/// - `POST   /chains`            → create (body: `{"tag":"..."}` +
+///                                опционально любые PATCH-поля; `tag` только
+///                                при создании — он же имя цепочки, контракт
+///                                0.9.0. Ключ `label` в теле игнорируется)
 /// - `GET    /chains/{tag}`      → single
 /// - `PATCH  /chains/{tag}`      → partial update
 /// - `DELETE /chains/{tag}`      → remove
@@ -207,7 +208,6 @@ Future<DebugResponse> _single(String tag) async {
 /// что зовёт форма создания, — правила не дублируются здесь.
 Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
-  final label = fieldString(body, 'label');
   final tag = fieldString(body, 'tag');
 
   final existing = await SettingsStorage.getChains();
@@ -218,7 +218,7 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
       .trim();
 
   // Черновик записи — ровно то, что ляжет на диск. Ничего ещё не записано.
-  var chain = SourceChain(tag: wanted, label: label ?? wanted, enabled: true);
+  var chain = SourceChain(tag: wanted, enabled: true);
   chain = _applyPatch(chain, body, tagConsumed: true) ?? chain;
 
   // Валидируем, ТОЛЬКО когда маршрут задан. Пустая цепочка законна как
@@ -349,10 +349,9 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
   // `route_final` и позиции других цепочек.
   if (!tagConsumed && body.containsKey('tag')) {
     throw const BadRequest(
-        'field "tag" is immutable (outbound id, edit "label" instead)');
+        'field "tag" is immutable (outbound id, and the chain\'s only name)');
   }
 
-  final label = fieldString(body, 'label');
   final enabled = fieldBool(body, 'enabled');
   final hops = fieldStringList(body, 'hops');
   final idleTimeout = fieldString(body, 'idle_timeout');
@@ -419,8 +418,7 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
     }
   }
 
-  final changed = label != null ||
-      enabled != null ||
+  final changed = enabled != null ||
       hops != null ||
       idleTimeout != null ||
       stripEvasion != null ||
@@ -430,7 +428,6 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
   if (!changed) return null;
 
   return c.copyWith(
-    label: label,
     enabled: enabled,
     hops: hops,
     idleTimeout: idleTimeout,

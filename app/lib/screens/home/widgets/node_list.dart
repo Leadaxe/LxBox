@@ -444,7 +444,7 @@ class HomeNodeList extends StatelessWidget {
     final idx = directions.indexWhere((c) => c.tag == tag);
     if (idx < 0 || !context.mounted) return;
     final direction = directions[idx];
-    final label = direction.label.isNotEmpty ? direction.label : direction.tag;
+    final label = direction.displayLabel;
 
     final choice = await showDialog<String>(
       context: context,

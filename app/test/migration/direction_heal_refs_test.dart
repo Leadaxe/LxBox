@@ -49,8 +49,8 @@ void main() {
     final data = {
       'directions_migrated': true,
       'directions': [
-        Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
-        Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
+        Direction(tag: 'vpn-1', enabled: true).toJson(),
+        Direction(tag: 'vpn-3', enabled: true).toJson(),
       ],
       'route_final': 'vpn-3',
       'custom_rules': [
@@ -122,8 +122,8 @@ void main() {
     final data = {
       'directions_migrated': true,
       'directions': [
-        Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
-        Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
+        Direction(tag: 'vpn-1', enabled: true).toJson(),
+        Direction(tag: 'vpn-3', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
       'custom_rules': [
@@ -153,8 +153,8 @@ void main() {
     final data = {
       'directions_migrated': true,
       'directions': [
-        Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
-        Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
+        Direction(tag: 'vpn-1', enabled: true).toJson(),
+        Direction(tag: 'vpn-3', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
       'custom_rules': [
@@ -202,8 +202,8 @@ void main() {
     final data = {
       'directions_migrated': true,
       'directions': [
-        Direction(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
-        Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
+        Direction(tag: 'vpn-1', enabled: true).toJson(),
+        Direction(tag: 'vpn-3', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
       'custom_rules': [
@@ -237,14 +237,13 @@ void main() {
     // выключенного Направления — ничего не ломается, ссылки стабильны.
     final off = (await SettingsStorage.getDirections())
         .firstWhere((c) => c.tag == 'vpn-3');
-    await SettingsStorage.updateDirection(off.copyWith(label: 'Renamed'));
+    await SettingsStorage.updateDirection(off.copyWith());
 
     expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
+    // Контракт 0.9.0 — переименования нет: имя Направления = его tag.
     expect(
-      (await SettingsStorage.getDirections())
-          .firstWhere((c) => c.tag == 'vpn-3')
-          .label,
-      'Renamed',
+      (await SettingsStorage.getDirections()).map((c) => c.tag),
+      contains('vpn-3'),
     );
   });
 
@@ -261,9 +260,9 @@ void main() {
       final data = {
         'directions_migrated': true,
         'directions': [
-          const Direction(tag: 'vpn-1', label: 'Main').toJson(),
-          const Direction(tag: 'vpn-2', label: 'Aux').toJson(),
-          const Direction(tag: 'vpn-3', label: 'Third', include: ['vpn-2', 'vpn-1'])
+          const Direction(tag: 'vpn-1').toJson(),
+          const Direction(tag: 'vpn-2').toJson(),
+          const Direction(tag: 'vpn-3', include: ['vpn-2', 'vpn-1'])
               .toJson(),
         ],
       };
@@ -304,11 +303,10 @@ void main() {
       final data = {
         'directions_migrated': true,
         'directions': [
-          const Direction(tag: 'vpn-1', label: 'Main').toJson(),
-          const Direction(tag: 'vpn-2', label: 'Aux').toJson(),
+          const Direction(tag: 'vpn-1').toJson(),
+          const Direction(tag: 'vpn-2').toJson(),
           const Direction(
                   tag: 'vpn-3',
-                  label: 'Third',
                   include: ['vpn-2', 'vpn-2-auto', 'vpn-1'])
               .toJson(),
         ],
@@ -326,10 +324,10 @@ void main() {
       final data = {
         'directions_migrated': true,
         'directions': [
-          const Direction(tag: 'vpn-1', label: 'Main').toJson(),
-          const Direction(tag: 'vpn-2', label: 'Aux').toJson(),
-          const Direction(tag: 'vpn-3', label: 'C', include: ['vpn-2']).toJson(),
-          const Direction(tag: 'vpn-4', label: 'D', include: ['vpn-2', 'vpn-1'])
+          const Direction(tag: 'vpn-1').toJson(),
+          const Direction(tag: 'vpn-2').toJson(),
+          const Direction(tag: 'vpn-3', include: ['vpn-2']).toJson(),
+          const Direction(tag: 'vpn-4', include: ['vpn-2', 'vpn-1'])
               .toJson(),
         ],
       };

@@ -52,7 +52,7 @@ class ChainEntryTile extends StatelessWidget {
         ),
       ),
       title: Text(
-        chain.displayLabel,
+        chain.tag,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(

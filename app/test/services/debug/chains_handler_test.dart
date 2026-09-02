@@ -62,7 +62,7 @@ void main() {
     // Инвариант продукта: vpn-1 существует всегда — цепочка вправе на него
     // сослаться, и тег-коллизия проверяется по обоим спискам сразу.
     await SettingsStorage.setDirections([
-      const Direction(tag: 'vpn-1', label: 'VPN ①'),
+      const Direction(tag: 'vpn-1'),
     ]);
   });
 
@@ -83,6 +83,7 @@ void main() {
       () async {
     final r = await chainsHandler(
       req('POST', '/chains', body: {
+        // Контракт 0.9.0 / D-082 — ключ `label` в теле игнорируется.
         'label': 'Via Germany',
         'hops': ['direct-out', 'vpn-1'],
         'idle_timeout': '30s',
@@ -92,7 +93,7 @@ void main() {
     expect((r as JsonResponse).status, 201);
     final body = r.body as Map<String, dynamic>;
     expect(body['tag'], 'chain-1');
-    expect(body['label'], 'Via Germany');
+    expect(body.containsKey('label'), isFalse);
     expect(body['hops'], ['direct-out', 'vpn-1']);
     expect(body['idle_timeout'], '30s');
 
@@ -117,7 +118,7 @@ void main() {
       ctx(),
     );
     expect(asMap(r)['tag'], 'home-exit');
-    expect(asMap(r)['label'], 'Home');
+    expect(asMap(r).containsKey('label'), isFalse);
   });
 
   test('POST /chains с занятым/служебным тегом → 409', () async {
@@ -154,10 +155,10 @@ void main() {
 
     test('частичный update не трогает прочие поля', () async {
       final r = await chainsHandler(
-        req('PATCH', '/chains/chain-1', body: {'label': 'Renamed'}),
+        req('PATCH', '/chains/chain-1', body: {'idle_timeout': '45s'}),
         ctx(),
       );
-      expect(asMap(r)['label'], 'Renamed');
+      expect(asMap(r)['idle_timeout'], '45s');
       expect(asMap(r)['hops'], ['direct-out', 'vpn-1']);
     });
 
@@ -182,7 +183,7 @@ void main() {
       expect(asMap(off)['strip_evasion'], isFalse);
       // Отсутствие ключа — сохранить явный выбор.
       final keep = await chainsHandler(
-        req('PATCH', '/chains/chain-1', body: {'label': 'Keep'}), ctx());
+        req('PATCH', '/chains/chain-1', body: {}), ctx());
       expect(asMap(keep)['strip_evasion'], isFalse);
       // null — вернуть умолчание ядра: ключа в storage-форме больше нет.
       final cleared = await chainsHandler(

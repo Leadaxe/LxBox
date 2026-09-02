@@ -76,9 +76,10 @@ void main() {
           final byTag = {for (final d in file.directions) d.tag: d};
           for (final want in wantDirections) {
             final tag = want['tag'] as String;
-            final got = byTag[tag];
+            final got = byTag[tag]!;
             expect(got, isNotNull, reason: 'направление $tag не создано импортом');
-            expect(got!.label, want['label'] ?? '', reason: '$tag: имя');
+            // Контракт 0.9.0 — у Направления имя одно, tag: `label` в
+            // ожиданиях корпуса нет, а legacy-ключ во входе отбрасывается.
             // Отбор узлов переносится ТЕЛОМ регулярки — у мобилы nodeFilter
             // уже хранит тело, обёртки и флагов в нём нет.
             expect(got.nodeFilter, want['filter'] ?? '', reason: '$tag: отбор');
@@ -117,9 +118,9 @@ void main() {
           final byTag = {for (final c in file.chains) c.tag: c};
           for (final want in wantChains) {
             final tag = want['tag'] as String;
-            final got = byTag[tag];
+            final got = byTag[tag]!;
             expect(got, isNotNull, reason: 'цепочка $tag не создана импортом');
-            expect(got!.label, want['label'] ?? '', reason: '$tag: имя');
+            // Контракт 0.9.0 / D-082 — имя цепочки = её tag.
             // enabled — УКАЗАТЕЛЬНАЯ семантика (контракт 0.7.1, кейс
             // chain_disabled_enabled_default): отсутствие ключа в ожиданиях =
             // «не проверяем», НЕ «ожидаем false». Обычный bool с дефолтом
