@@ -55,7 +55,7 @@ You enable this yourself, per subscription or globally, and the values are
 yours to edit. Nothing is sent when it is off.
 
 **Cloudflare WARP registration.** If you use *Get WARP*, the app registers a
-tunnel with `api.cloudflareclient.com`. The WireGuard private key is generated
+tunnel with `api.devices.cloudflare.com`. The WireGuard private key is generated
 on your device and never leaves it — only the **public** key is transmitted. The
 request reports a fixed placeholder device model (`PC`), the platform name
 (`Android`) and a fixed locale (`en_US`) rather than your real device details,

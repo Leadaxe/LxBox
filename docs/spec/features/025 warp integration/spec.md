@@ -11,7 +11,7 @@
 
 Дать кнопку **«GET WARP»** в экране Servers: один тап → приложение **само регистрирует устройство в Cloudflare** и добавляет готовый WireGuard-узел в список профилей. Без копипасты конфигов с чужих сайтов.
 
-**Ключевое решение по безопасности.** Приватный ключ WireGuard генерируется **на устройстве** (X25519) и наружу уходит только публичная часть. Мы **не** ходим на сторонние воркеры-генераторы (`warp-generator.github.io` и аналоги) — они отдают приватник, сгенерированный на их сервере, то есть владелец воркера знает ключ туннеля каждого пользователя. Это противоречит смыслу VPN-приложения. Мы общаемся напрямую с официальным `api.cloudflareclient.com`, тем же endpoint'ом, что и `wgcf`/Amnezia/официальный клиент.
+**Ключевое решение по безопасности.** Приватный ключ WireGuard генерируется **на устройстве** (X25519) и наружу уходит только публичная часть. Мы **не** ходим на сторонние воркеры-генераторы (`warp-generator.github.io` и аналоги) — они отдают приватник, сгенерированный на их сервере, то есть владелец воркера знает ключ туннеля каждого пользователя. Это противоречит смыслу VPN-приложения. Мы общаемся напрямую с официальным `api.devices.cloudflare.com`, тем же endpoint'ом, что и `wgcf`/Amnezia/официальный клиент.
 
 ### Согласованные решения
 
@@ -64,7 +64,7 @@
 ### 1. Регистрация — `POST`
 
 ```
-POST https://api.cloudflareclient.com/v0a2158/reg
+POST https://api.devices.cloudflare.com/v0a2158/reg
 Headers:
   Content-Type: application/json
   User-Agent: okhttp/3.12.1
@@ -106,7 +106,7 @@ Body:
 ### 2. WARP+ license — `PATCH` (только если введён ключ)
 
 ```
-PATCH https://api.cloudflareclient.com/v0a2158/reg/<device_id>/account
+PATCH https://api.devices.cloudflare.com/v0a2158/reg/<device_id>/account
 Headers: Authorization: Bearer <token>, CF-Client-Version: a-7.21-0721
 Body:   { "license": "<warp_plus_key>" }
 → account.warp_plus: true при успехе
@@ -182,7 +182,7 @@ class WarpAccount {
 | Случай | Поведение |
 |---|---|
 | Нет сети / таймаут | snackbar «WARP registration failed: <reason>», аккаунт не пишется, узел не добавляется |
-| `api.cloudflareclient.com` заблокирован/недоступен | то же; подсказка в тексте ошибки, что можно зарегистрировать через включённый proxy/detour (будущее) |
+| `api.devices.cloudflare.com` заблокирован/недоступен | то же; подсказка в тексте ошибки, что можно зарегистрировать через включённый proxy/detour (будущее) |
 | Cloudflare сменил версию API (4xx на /reg) | внятная ошибка; версия вынесена в константу для быстрой правки |
 | Невалидный WARP+ ключ (PATCH 4xx) | регистрация free уже прошла — узел добавляем, но показываем «license not applied» |
 | Повторный «Get WARP» | `reuse=true` → тот же узел обновляется, не дубль |
@@ -213,7 +213,7 @@ class WarpAccount {
 
 ## Acceptance criteria
 
-- [ ] «Get WARP» в overflow-меню Servers регистрирует устройство через `api.cloudflareclient.com`.
+- [ ] «Get WARP» в overflow-меню Servers регистрирует устройство через `api.devices.cloudflare.com`.
 - [ ] Приватный ключ генерируется на устройстве; в Cloudflare уходит только публичный (проверяется в тесте — тело /reg содержит `key`, не приватник).
 - [ ] Готовый WireGuard-узел `WARP` появляется в списке и пингуется.
 - [ ] Узел подключается и гонит трафик в VPN-режиме (корректный `reserved`).

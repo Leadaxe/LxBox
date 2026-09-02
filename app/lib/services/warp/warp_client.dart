@@ -15,7 +15,7 @@ import 'warp_account.dart';
 ///
 /// Делает то же, что официальный клиент / `wgcf`: генерит X25519-пару НА
 /// УСТРОЙСТВЕ и регистрирует только публичный ключ через
-/// `api.cloudflareclient.com`. Приватник не покидает телефон. НЕ ходим на
+/// `api.devices.cloudflare.com`. Приватник не покидает телефон. НЕ ходим на
 /// сторонние воркеры-генераторы — они отдают приватник со своего сервера.
 class WarpException implements Exception {
   WarpException(this.message);

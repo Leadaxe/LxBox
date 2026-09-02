@@ -1,5 +1,6 @@
 # В данном форке:
-- заменена используемая для регистрации WARP ссылка на API на незабаненную ссылку на API для Zero Trust.
+- заменена используемая для регистрации WARP ссылка на API на незабаненную ссылку на API для Zero Trust,
+- изменены наборы SNI и конечных точек для WARP.
 # Возможные адреса эндпоинтов WARP по протоколу MASQUE:
 162.159.198.\*, 162.159.199.\* - для обычных пользователей<br />
 162.159.197.\* - доступен только с Zero Trust<br />
@@ -12,7 +13,7 @@
 162.159.198.\* - colo=HEL (аэропорт Хельсинки) <br />
 162.159.199.\* - colo=LED (аэропорт Пулково, Санкт-Петербург)<br />
 
-<p align="center">
+Смотрите https://help-guide.notion.site/Cloudflare-WARP-1f82684dab0d8024a1c8fec230f5e4e1
 
 # L×Box
 
@@ -76,7 +77,7 @@ Add servers by subscription URL, direct proxy link, WireGuard URI/INI, Amnezia `
 Tap **Get WARP** on the servers screen → a tunnel to Cloudflare is registered and added as a node. No copy-pasting configs from third-party generator sites.
 
 - **Transport**: **WireGuard** (default) or **MASQUE** (CONNECT-IP over QUIC/HTTP-3, HTTP/2 fallback — often exits from a foreign IP and looks like plain HTTPS to DPI). For MASQUE you also pick h3/h2, SNI and idle/keep-alive.
-- **On-device registration**: the private key is generated on the phone and never leaves it — only the public key is sent to Cloudflare (`api.cloudflareclient.com`). WireGuard uses X25519, MASQUE uses ECDSA P-256. Third-party generator workers are not used: they hand out a server-generated private key.
+- **On-device registration**: the private key is generated on the phone and never leaves it — only the public key is sent to Cloudflare (`api.devices.cloudflare.com`). WireGuard uses X25519, MASQUE uses ECDSA P-256. Third-party generator workers are not used: they hand out a server-generated private key.
 - **Add Amnezia obfuscation** (WireGuard transport): masks the WARP handshake from DPI with junk traffic mimicking a QUIC-Initial (default) or SIP template; SNI, level and Jc/Jmin/Jmax live under *Advanced*. Enable it when plain WARP is throttled or blocked.
 - **Persistent keepalive** (§304) — a field under *Advanced* (25 s by default): without it the carrier drops the NAT UDP mapping while the node is idle and the node silently dies.
 - **Custom endpoint** — a manual `IP:port` under *Advanced*; for MASQUE, a port picked from the known-working list (§305).
