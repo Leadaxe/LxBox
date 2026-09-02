@@ -28,7 +28,7 @@ class WarpException implements Exception {
 /// периодически бампает версию, тогда правка — здесь. Перед релизом сверять с
 /// актуальным `wgcf`/`warp-cli`.
 class WarpApi {
-  static const String base = 'https://api.cloudflareclient.com';
+  static const String base = 'https://api.devices.cloudflare.com';
   static const String version = 'v0a2158';
   static const String clientVersionHeader = 'a-7.21-0721';
   static const String userAgent = 'okhttp/3.12.1';
