@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
+import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/node_identity.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
@@ -663,6 +664,69 @@ void main() {
       ]);
       expect(r.single.sourceCompact, contains('"tag": "a"'));
       expect(r.single.sourceExtended, contains('route'));
+    });
+  });
+
+  // §404 п.5 / TASKS_LXBOX п.6 — hysteria2 из sing-box JSON. JSON отдаёт
+  // числа как float64 и списки как List<dynamic>: жёсткое приведение
+  // (`as int` / `as List<String>`) молча теряло полосу и диапазоны портов.
+  // Потеря именно молчаливая — узел приезжал, просто без ограничений.
+  group('§404 hysteria2: полоса числами, server_ports массивом', () {
+    Hysteria2Spec parseOne(Map<String, dynamic> entry) {
+      final nodes = parseSingboxConfigs([
+        {
+          'outbounds': [entry],
+        },
+      ]);
+      expect(nodes, hasLength(1), reason: 'узел обязан разобраться');
+      return nodes.single as Hysteria2Spec;
+    }
+
+    Map<String, dynamic> hy2(Map<String, dynamic> extra) => {
+          'type': 'hysteria2',
+          'tag': 'hy2',
+          'server': 'example-2.com',
+          'server_port': 8443,
+          'password': 'testpass123',
+          ...extra,
+        };
+
+    test('int-полоса доезжает до эмиссии', () {
+      final spec = parseOne(hy2({'up_mbps': 30, 'down_mbps': 60}));
+      final map = spec.emit(TemplateVars.empty).map;
+      expect(map['up_mbps'], 30);
+      expect(map['down_mbps'], 60);
+    });
+
+    test('DOUBLE-полоса не теряется: провайдеры пишут 100.0', () {
+      // `as int` на 100.0 бросил бы TypeError, и узел выпал бы целиком
+      // (try/catch на гранулярности узла) — либо, до §404, поле молча
+      // обнулялось.
+      final spec = parseOne(hy2({'up_mbps': 30.0, 'down_mbps': 60.5}));
+      final map = spec.emit(TemplateVars.empty).map;
+      expect(map['up_mbps'], 30);
+      expect(map['down_mbps'], 60, reason: 'дробная часть срезается, не теряется поле');
+    });
+
+    test('server_ports массивом доезжает', () {
+      final spec = parseOne(hy2({'server_ports': <dynamic>['3000:4000']}));
+      expect(spec.emit(TemplateVars.empty).map['server_ports'], ['3000:4000']);
+    });
+
+    test('server_ports НЕ массив → поле отбрасывается, узел жив', () {
+      final spec = parseOne(hy2({'server_ports': '3000:4000'}));
+      expect(spec.emit(TemplateVars.empty).map.containsKey('server_ports'),
+          isFalse);
+      expect(spec.server, 'example-2.com', reason: 'узел не потерян');
+    });
+
+    test('obfs объектом (salamander) — в отличие от строкового obfs v1', () {
+      final spec = parseOne(hy2({
+        'obfs': {'type': 'salamander', 'password': 'testobfs123'},
+      }));
+      final obfs = spec.emit(TemplateVars.empty).map['obfs'] as Map;
+      expect(obfs['type'], 'salamander');
+      expect(obfs['password'], 'testobfs123');
     });
   });
 }
