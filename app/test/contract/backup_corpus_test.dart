@@ -155,16 +155,15 @@ void main() {
           }
         }
 
-        // Импортёр обязан сохранить блоб ДРУГОГО приложения; свой он
-        // применяет полями. Ожидание сформулировано относительно импортёра,
-        // поэтому фикстура одна на обе стороны.
-        if (expected['foreign_extensions_kept_other_app'] == true) {
-          expect(file.foreignExtensions.containsKey(kLxAppLauncher), isTrue,
-              reason: 'блоб extensions.$kLxAppLauncher не сохранён — '
-                  'обратный экспорт обеднеет');
-          expect(file.foreignExtensions.containsKey(kLxAppLxBox), isFalse,
-              reason: 'собственный блоб положен в чужие — он должен '
-                  'применяться полями');
+        // §401 — упразднённый механизм `extensions` (схема 0.10.x): импортёр
+        // обязан отбросить его и назвать ОДНИМ warning'ом на файл, а не
+        // провозить до следующего экспорта (BACKUP_PRINCIPLES.md П3).
+        if (expected['extensions_dropped'] == true) {
+          expect(
+              file.warnings.where((w) => w.code == kWarnExtensionsDropped),
+              hasLength(1),
+              reason: 'карман extensions обязан дать ровно один warning '
+                  'на файл с перечнем затронутых записей');
         }
       });
     }

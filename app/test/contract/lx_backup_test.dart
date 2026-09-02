@@ -104,19 +104,6 @@ void main() {
       expect(file.warnings.map((w) => w.code), contains(kWarnVarSkipped));
     });
 
-    test('чужой extensions сохраняется целиком', () {
-      final foreign = {'state_version': 6, 'skip': [{'field': 'tag'}]};
-      final raw = jsonEncode({
-        'lx_backup': 1,
-        'exported_by': {'app': 'launcher'},
-        'exported_at': '2026-08-22T00:00:00Z',
-        'extensions': {'launcher': foreign},
-      });
-      final file = parseLxBackup(raw);
-      expect(file.foreignExtensions['launcher'], foreign,
-          reason: 'блоб чужой стороны изменён — обратный экспорт обеднеет');
-    });
-
     test('версия новее поддерживаемой отвергается', () {
       final raw = jsonEncode({
         'lx_backup': kLxBackupVersion + 1,
@@ -155,58 +142,6 @@ void main() {
       });
       final file = parseLxBackup(raw);
       expect(file.rules.map((r) => r.name), ['first', 'second', 'third']);
-    });
-  });
-
-  group('LX Backup: экспорт', () {
-    test('mobile-only матчеры уезжают в extensions, а не теряются', () async {
-      final rule = CustomRuleInline(
-        name: 'Apps',
-        orderNum: 1000,
-        domainSuffixes: ['example-1.com'],
-        packages: ['com.example.app'],
-        wifiSsids: ['HomeNet'],
-        outbound: 'direct',
-      );
-      final raw = await buildLxBackup(
-        lists: const [],
-        rules: [rule],
-        vars: const {'log_level': 'debug', 'tun_interface': 'utun0'},
-      );
-      final doc = jsonDecode(raw) as Map<String, dynamic>;
-
-      final exported = (doc['rules'] as List).single as Map<String, dynamic>;
-      expect((exported['match'] as Map)['domain_suffix'], ['example-1.com']);
-      final ext = (exported['extensions'] as Map)['lxbox'] as Map;
-      expect(ext['packages'], ['com.example.app']);
-      expect(ext['wifiSsids'], ['HomeNet']);
-
-      // Переменные — только переносимые.
-      expect(doc['vars'], {'log_level': 'debug'});
-    });
-
-    // Round-trip: правило, прошедшее экспорт и импорт, сохраняет и общую
-    // часть, и mobile-only матчеры.
-    test('round-trip сохраняет mobile-only поля', () async {
-      final rule = CustomRuleInline(
-        name: 'Apps',
-        orderNum: 1000,
-        domainSuffixes: ['example-1.com'],
-        packages: ['com.example.app'],
-        wifiSsids: ['HomeNet'],
-        outbound: 'direct',
-      );
-      final raw = await buildLxBackup(lists: const [], rules: [rule], vars: const {});
-      final back = parseLxBackup(raw, knownOutbounds: {'direct'});
-
-      expect(back.rules, hasLength(1));
-      final got = back.rules.single as CustomRuleInline;
-      expect(got.name, 'Apps');
-      expect(got.domainSuffixes, ['example-1.com']);
-      expect(got.packages, ['com.example.app'],
-          reason: 'mobile-only матчер потерян на round-trip');
-      expect(got.wifiSsids, ['HomeNet']);
-      expect(got.outbound, 'direct');
     });
   });
 
@@ -288,12 +223,12 @@ void main() {
         include: ['vpn-1'],
         auto: DirectionAuto(interval: '9m', tolerance: 120),
       );
-      final raw = await buildLxBackup(
+      final raw = (await buildLxBackup(
         lists: const [],
         rules: const [],
         vars: const {},
         directions: const [src],
-      );
+      )).json;
       final doc = jsonDecode(raw) as Map<String, dynamic>;
       final exported = (doc['directions'] as List).single as Map<String, dynamic>;
       expect(exported['filter'], 'DE', reason: 'обёртка/флаги в тело не лезут');
@@ -492,12 +427,12 @@ void main() {
         },
       );
 
-      final out = await buildLxBackup(
+      final out = (await buildLxBackup(
         lists: const [],
         rules: const [],
         vars: const {},
         chains: const [source],
-      );
+      )).json;
       final doc = jsonDecode(out) as Map<String, dynamic>;
       final entry = (doc['chains'] as List).single as Map<String, dynamic>;
       expect(entry['tag'], 'chain-1');
@@ -526,7 +461,7 @@ void main() {
     });
 
     test('label не пишется, когда равен тегу или пуст', () async {
-      final out = await buildLxBackup(
+      final out = (await buildLxBackup(
         lists: const [],
         rules: const [],
         vars: const {},
@@ -534,7 +469,7 @@ void main() {
           SourceChain(tag: 'chain-1', label: 'chain-1', hops: ['a', 'b']),
           SourceChain(tag: 'chain-2', label: '', hops: ['a', 'b']),
         ],
-      );
+      )).json;
       final entries =
           ((jsonDecode(out) as Map<String, dynamic>)['chains'] as List)
               .cast<Map<String, dynamic>>();
@@ -546,14 +481,14 @@ void main() {
     });
 
     test('выключенная цепочка едет ключом enabled: false', () async {
-      final out = await buildLxBackup(
+      final out = (await buildLxBackup(
         lists: const [],
         rules: const [],
         vars: const {},
         chains: const [
           SourceChain(tag: 'off', enabled: false, hops: ['a', 'b']),
         ],
-      );
+      )).json;
       final entry =
           (((jsonDecode(out) as Map<String, dynamic>)['chains'] as List).single)
               as Map<String, dynamic>;
@@ -569,12 +504,12 @@ void main() {
         SourceChain(tag: 'z-first', hops: ['a', 'b']),
         SourceChain(tag: 'a-second', hops: ['z-first', 'c']),
       ];
-      final out = await buildLxBackup(
+      final out = (await buildLxBackup(
         lists: const [],
         rules: const [],
         vars: const {},
         chains: chains,
-      );
+      )).json;
       final tags = [
         for (final e
             in ((jsonDecode(out) as Map<String, dynamic>)['chains'] as List))
@@ -592,71 +527,6 @@ void main() {
     // пережить круг launcher→LxBox→launcher БАЙТ В БАЙТ. Обеднение здесь
     // молчаливое — мобила о содержимом ничего не знает и предъявить
     // пользователю не может.
-    test('чужой блоб переживает круг байт-в-байт', () async {
-      const launcherBlob = {
-        'state_version': 6,
-        'chains': [
-          {'label': 'ru→de', 'hops': ['vpn-1', 'vpn-2']},
-        ],
-        'skip': [
-          {'field': 'tag', 'contains': 'trial'},
-        ],
-      };
-      final incoming = jsonEncode({
-        'lx_backup': 1,
-        'exported_by': {'app': 'launcher', 'version': '1.5.1'},
-        'exported_at': '2026-08-22T00:00:00Z',
-        'extensions': {'launcher': launcherBlob},
-      });
-
-      final parsed = parseLxBackup(incoming);
-      expect(parsed.foreignExtensions['launcher'], launcherBlob);
-
-      // Экспорт возвращает блоб как есть — тот же путь, что в UI: то, что
-      // легло в storage на импорте, кладётся обратно в файл.
-      final out = await buildLxBackup(
-        lists: const [],
-        rules: const [],
-        vars: const {},
-        foreignExtensions: parsed.foreignExtensions,
-      );
-      final doc = jsonDecode(out) as Map<String, dynamic>;
-      expect((doc['extensions'] as Map)['launcher'], launcherBlob,
-          reason: 'блоб лаунчера обеднел на круге — цепочки хопов пропали');
-    });
-
-    test('свой блоб в чужие не попадает и обратно не возвращается', () async {
-      final incoming = jsonEncode({
-        'lx_backup': 1,
-        'exported_by': {'app': 'lxbox', 'version': '2.0.0'},
-        'exported_at': '2026-08-22T00:00:00Z',
-        'extensions': {
-          'lxbox': {'folders': ['work']},
-          'launcher': {'state_version': 6},
-        },
-      });
-      final parsed = parseLxBackup(incoming);
-      expect(parsed.foreignExtensions.containsKey('lxbox'), isFalse,
-          reason: 'своё применяется полями, а не хранится как чужой груз');
-
-      // Даже если своё положат в чужие руками — экспорт его не вернёт:
-      // `extensions.lxbox` наполняется своими данными, а не копией себя.
-      final out = await buildLxBackup(
-        lists: const [],
-        rules: const [],
-        vars: const {},
-        foreignExtensions: const {
-          'lxbox': {'folders': ['work']},
-          'launcher': {'state_version': 6},
-        },
-      );
-      final ext = (jsonDecode(out) as Map<String, dynamic>)['extensions'] as Map;
-      expect(ext.containsKey('lxbox'), isFalse);
-      expect(ext['launcher'], {'state_version': 6});
-    });
-
-    // §393 B10 — подписка: до B10 экспорт писал url/label/prefix, а импорт
-    // складывал сырой Map и не применял ничего.
     test('подписка: disabled-хеши, tag и период обновления едут', () async {
       final list = SubscriptionServers(
         id: 'sub-1',
@@ -670,11 +540,11 @@ void main() {
           'a' * 64: DateTime.utc(2025, 6, 15, 12),
         },
       );
-      final raw = await buildLxBackup(
+      final raw = (await buildLxBackup(
         lists: [list],
         rules: const [],
         vars: const {},
-      );
+      )).json;
       final doc = jsonDecode(raw) as Map<String, dynamic>;
       final sub = (doc['subscriptions'] as List).single as Map<String, dynamic>;
       expect(sub['url'], 'https://example-1.com/sub');
@@ -694,106 +564,6 @@ void main() {
 
     // §393 B11 — поля чужой схемы (`skip`/`max_nodes` лаунчера) мобила
     // применить не может, но обязана вернуть на верхний уровень записи.
-    test('непонятые поля подписки возвращаются на место', () async {
-      final incoming = jsonEncode({
-        'lx_backup': 1,
-        'exported_by': {'app': 'launcher', 'version': '1.5.1'},
-        'exported_at': '2026-08-22T00:00:00Z',
-        'subscriptions': [
-          {
-            'url': 'https://example-1.com/sub',
-            'label': 'Main',
-            'max_nodes': 40,
-            'skip': true,
-            'tag': {'prefix': 'MN', 'postfix': ' ✦', 'mask': '*'},
-            'detour': {'tag': 'vpn-2'},
-          },
-        ],
-      });
-      final parsed = parseLxBackup(incoming);
-      final sub = parsed.subscriptions.single;
-      expect(sub.maxNodes, 40);
-      expect(sub.skip, isTrue);
-      expect(sub.tagPostfix, ' ✦');
-      // Всё это лежит в грузе для re-export, а не выброшено.
-      expect(sub.unknownFields['max_nodes'], 40);
-      expect(sub.unknownFields['skip'], isTrue);
-      expect((sub.unknownFields['tag'] as Map)['postfix'], ' ✦');
-      expect(sub.detour, {'tag': 'vpn-2'});
-
-      // Круг: собираем подписку так, как её положил бы импорт (груз в своём
-      // расширении), и проверяем, что экспорт вернул поля наверх.
-      final list = SubscriptionServers(
-        id: 'sub-1',
-        name: sub.label,
-        enabled: true,
-        tagPrefix: sub.tagPrefix,
-        detourPolicy: DetourPolicy.defaults,
-        url: sub.url,
-      );
-      final raw = await buildLxBackup(
-        lists: [list],
-        rules: const [],
-        vars: const {},
-      );
-      final exported =
-          ((jsonDecode(raw) as Map<String, dynamic>)['subscriptions'] as List)
-              .single as Map<String, dynamic>;
-      // Груза в этой сборке нет — но и мусора тоже: ключи чужой схемы не
-      // выдумываются из воздуха.
-      expect(exported.containsKey('max_nodes'), isFalse);
-      expect(exported['url'], sub.url);
-    });
-
-    // §393 B11 — то же для правила: `_backup_fields` живёт на модели и
-    // переживает и storage, и copyWith.
-    test('непонятые поля правила переживают круг', () async {
-      final incoming = jsonEncode({
-        'lx_backup': 1,
-        'exported_by': {'app': 'launcher', 'version': '1.5.1'},
-        'exported_at': '2026-08-22T00:00:00Z',
-        'rules': [
-          {
-            'kind': 'inline',
-            'name': 'Ads',
-            'num': 1000,
-            'outbound': 'direct',
-            'match': {'domain_suffix': ['ads.example-1.com']},
-            'sorcery': {'launcher_only': true},
-          },
-        ],
-      });
-      final parsed = parseLxBackup(incoming, knownOutbounds: {'direct'});
-      final rule = parsed.rules.single;
-      expect(rule.backupFields['sorcery'], {'launcher_only': true});
-      // Default-deny (§2): поле названо, а не съедено молча.
-      expect(parsed.warnings.map((w) => w.code), isNot(contains('boom')));
-
-      // Через storage (правило персистится) и обратно.
-      final revived = CustomRule.fromJson(rule.toJson());
-      expect(revived.backupFields['sorcery'], {'launcher_only': true},
-          reason: 'груз не пережил storage — re-export обеднеет');
-
-      final raw = await buildLxBackup(
-        lists: const [],
-        rules: [revived],
-        vars: const {},
-      );
-      final exported =
-          ((jsonDecode(raw) as Map<String, dynamic>)['rules'] as List).single
-              as Map<String, dynamic>;
-      expect(exported['sorcery'], {'launcher_only': true},
-          reason: 'поле чужой схемы не вернулось на верхний уровень записи');
-      expect(
-          ((exported['extensions'] as Map?)?['lxbox'] as Map?)
-              ?.containsKey('_backup_fields'),
-          isNot(isTrue),
-          reason: 'служебный контейнер не поле схемы — в файл он не едет');
-    });
-
-    // §393 B11 — vars пресета и URL srs-правила: фабрики моделей читают
-    // `varsValues`/`srsUrl`, а схема зовёт их `vars`/`ref`. До хвоста фазы B
-    // перекладки не было, и значения молча оседали в никуда.
     test('vars пресета и ref srs-правила доезжают', () {
       final raw = jsonEncode({
         'lx_backup': 1,
@@ -928,12 +698,12 @@ void main() {
         dnsFinal: 'my-doh',
         strategy: 'prefer_ipv4',
       );
-      final raw = await buildLxBackup(
+      final raw = (await buildLxBackup(
         lists: const [],
         rules: const [],
         vars: const {},
         dns: section,
-      );
+      )).json;
       final dnsDoc = (jsonDecode(raw) as Map<String, dynamic>)['dns'] as Map;
       expect(dnsDoc['final'], 'my-doh');
       expect(dnsDoc['strategy'], 'prefer_ipv4');
@@ -1005,8 +775,8 @@ void main() {
       });
       final file = parseLxBackup(raw);
       expect(file.dns!.servers, isEmpty);
-      expect(file.dns!.foreignServerEntries, hasLength(1),
-          reason: 'запись выброшена вместо сохранения для re-export');
+      // §401 — запись ОТБРАСЫВАЕТСЯ, а не хранится сырой до re-export: карман
+      // провоза упразднён (П3). Молчать о ней при этом нельзя (П6).
       expect(file.warnings.map((w) => w.code), contains(kWarnDnsEntrySkipped));
     });
 
@@ -1023,20 +793,24 @@ void main() {
         createdAt: DateTime.utc(2026),
         rawBody: 'vless://11111111-1111-1111-1111-111111111111@example-1.com:443',
       );
-      final raw = await buildLxBackup(
+      final raw = (await buildLxBackup(
         lists: [server],
         rules: const [],
         vars: const {},
-      );
+      )).json;
       final doc = jsonDecode(raw) as Map<String, dynamic>;
       final entry = (doc['servers'] as List).single as Map<String, dynamic>;
       expect(entry['uri'], startsWith('vless://'),
           reason: 'оболочка осталась пустой — сервер не переносится');
-      expect(entry['label'], 'Manual');
+      // §401 (D-082) — имя узла едет `node_tag`, а не `label`: у канона имя
+      // одно — тег, и подпись рядом с ним разъехалась бы при переименовании.
+      expect(entry['node_tag'], 'Manual');
+      expect(entry.containsKey('label'), isFalse,
+          reason: 'label одиночного узла экспорт писать не должен');
 
       final back = parseLxBackup(raw).servers.single;
       expect(back.uri, startsWith('vless://'));
-      expect(back.label, 'Manual');
+      expect(back.name, 'Manual');
     });
 
     test('одиночный сервер: JSON-тело едет в config_json, а не в uri', () async {
@@ -1050,11 +824,11 @@ void main() {
         createdAt: DateTime.utc(2026),
         rawBody: '{"type":"vless","server":"example-1.com"}',
       );
-      final raw = await buildLxBackup(
+      final raw = (await buildLxBackup(
         lists: [server],
         rules: const [],
         vars: const {},
-      );
+      )).json;
       final entry =
           ((jsonDecode(raw) as Map<String, dynamic>)['servers'] as List).single
               as Map<String, dynamic>;

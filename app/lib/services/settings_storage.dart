@@ -15,7 +15,6 @@ import '../vpn/box_vpn_client.dart';
 import 'app_log.dart';
 import 'config_dirty_check.dart';
 import 'l10n/app_language_reconcile.dart';
-import 'lx_backup.dart' show kLxAppLxBox;
 import 'template_loader.dart';
 import 'warp/masque_account.dart';
 import 'warp/warp_account.dart';
@@ -25,7 +24,6 @@ part 'settings_storage/vars.dart';
 part 'settings_storage/sources_rules.dart';
 part 'settings_storage/directions.dart';
 part 'settings_storage/chains.dart';
-part 'settings_storage/lx_backup_extensions.dart';
 part 'settings_storage/network.dart';
 part 'settings_storage/backup_tun.dart';
 part 'settings_storage/vpn_mode.dart';
@@ -147,9 +145,6 @@ class SettingsStorage {
     'directions', // §125/§393 — Направления роутинга (template→storage)
     'directions_migrated', // §125/§393 — guard one-shot миграции
     'chains', // §393 C2 — источники-цепочки хопов (SPEC 110)
-    // §393 B7 — блобы `extensions.<чужое>` из LX Backup. Хранятся нетронутыми
-    // до следующего экспорта (BACKUP.md §1); в конфиг ядра не идут.
-    'lx_backup_extensions',
     // §393 A2 — легаси-пары `channels`/`channels_migrated` в allowlist НЕТ
     // намеренно: границы импорта нормализуют имена ДО `replaceRaw`
     // ([normalizeLegacyDirectionKeys]), а старый файл на диске (upgrade-путь)
@@ -462,19 +457,6 @@ class SettingsStorage {
   // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
-  // §393 B7 — чужие блобы LX Backup (`extensions.<приложение>`).
-  // ---------------------------------------------------------------------------
-
-  /// Блобы чужих приложений, приехавшие последним импортом LX Backup.
-  /// Возвращаются в файл при следующем экспорте (BACKUP.md §1).
-  static Future<Map<String, dynamic>> getLxBackupExtensions() =>
-      _getLxBackupExtensions();
-
-  /// Сохраняет чужие блобы (merge по приложению; пустая карта — no-op).
-  static Future<void> setLxBackupExtensions(Map<String, dynamic> blobs,
-          {bool flush = true}) =>
-      _setLxBackupExtensions(blobs, flush: flush);
-
   static Future<String> getRouteFinal() => _getRouteFinal();
 
   static Future<void> saveRouteFinal(String outbound, {bool flush = true}) =>
