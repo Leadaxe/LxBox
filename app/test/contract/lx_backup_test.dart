@@ -181,6 +181,58 @@ void main() {
       expect(file.rules.single.enabled, isTrue);
     });
 
+    // §406 (D-095) — регистр тега значим: у ядра `VPN-DE` и `vpn-de` — два
+    // разных outbound'а, и объявлять один «уже существующим» нельзя.
+    test('тег в другом регистре — НОВОЕ Направление, не тёзка', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "directions": [{"tag": "VPN-DE", "label": "Германия"}]
+}''';
+      final file = parseLxBackup(raw, knownOutbounds: {'vpn-de'});
+      expect(file.directions.single.tag, 'VPN-DE',
+          reason: 'занятость тега — точное совпадение, как в '
+              'directionTagConflict при создании руками');
+      expect(file.warnings, isEmpty);
+    });
+
+    test('правило на тег в другом регистре выключается', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "rules": [{"kind": "inline", "name": "R", "outbound": "VPN-DE", "num": 1}]
+}''';
+      final file = parseLxBackup(raw, knownOutbounds: {'vpn-de'});
+      expect(file.rules.single.enabled, isFalse,
+          reason: 'ядро тег не свяжет — цель неизвестна, правило '
+              'обязано приехать выключенным');
+      expect(file.warnings.map((w) => w.code), contains(kWarnUnknownOutbound));
+    });
+
+    test('route.final в другом регистре отбрасывается', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "route": {"final": "VPN-DE"}
+}''';
+      final file = parseLxBackup(raw, knownOutbounds: {'vpn-de'});
+      expect(file.routeFinal, isNull);
+      expect(file.warnings.map((w) => w.code), contains(kWarnFinalDropped));
+    });
+
+    test('зарезервированный литерал в другом регистре не литерал', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "rules": [{"kind": "inline", "name": "R", "outbound": "Direct", "num": 1}]
+}''';
+      final file = parseLxBackup(raw, knownOutbounds: {'proxy'});
+      expect(file.rules.single.enabled, isFalse,
+          reason: 'литералы ядра пишутся строчными: `Direct` таким же '
+              'outbound\'ом для ядра не является');
+      expect(file.warnings.map((w) => w.code), contains(kWarnUnknownOutbound));
+    });
+
     test('канон → модель: флаги, тело фильтра, enabled по умолчанию', () {
       const raw = '''
 {
@@ -329,6 +381,22 @@ void main() {
       expect(file.chains.single.hops, ['hop-1', 'hop-2'],
           reason: 'порядок файла нормативен — побеждает первая');
       expect(file.warnings.map((w) => w.code), [kWarnChainExists]);
+    });
+
+    test('тег цепочки в другом регистре — новая цепочка', () {
+      const raw = '''
+{
+  "lx_backup": 1,
+  "chains": [{"tag": "Relay", "chain": {"hops": ["hop-1"]}}]
+}''';
+      final file = parseLxBackup(
+        raw,
+        knownOutbounds: {'relay'},
+        knownChains: {'relay'},
+      );
+      expect(file.chains.single.tag, 'Relay');
+      expect(file.warnings, isEmpty,
+          reason: 'пространство тегов регистрозависимо, как у ядра');
     });
 
     test('канон → модель: трёхзначный strip_evasion, strip, rewrite', () {
@@ -1529,6 +1597,73 @@ void main() {
       final second = mergeBackupServers(first.lists, const [server]);
       expect(second.lists, hasLength(1));
       expect(second.applied, 0);
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
+    // §406 (D-095) — дедуп по КАНОНУ тела, а не по сырой строке
+    // ══════════════════════════════════════════════════════════════════════
+
+    test('config_json с переставленными ключами — тот же сервер', () {
+      // Один и тот же узел, пересобранный другим сериализатором. До §406
+      // сравнивались сырые строки, и порядок ключей заводил двойника.
+      const a = LxServer(configJson: {
+        'type': 'vless',
+        'server': 'h',
+        'server_port': 443,
+      });
+      const b = LxServer(configJson: {
+        'server_port': 443,
+        'server': 'h',
+        'type': 'vless',
+      });
+      final first = mergeBackupServers(const [], const [a]);
+      final second = mergeBackupServers(first.lists, const [b]);
+      expect(second.lists, hasLength(1),
+          reason: 'канон — ключи отсортированы рекурсивно');
+      expect(second.applied, 0);
+    });
+
+    test('config_json с другим tag — тот же сервер', () {
+      // `tag` — имя узла, а не его тело: канон снимает его с верхнего уровня
+      // вместе с `detour` (форма identity-хеша контракта).
+      const a = LxServer(
+          configJson: {'type': 'vless', 'server': 'h', 'tag': 'Berlin'});
+      const b = LxServer(
+          configJson: {'type': 'vless', 'server': 'h', 'tag': 'Берлин'});
+      final first = mergeBackupServers(const [], const [a]);
+      final second = mergeBackupServers(first.lists, const [b]);
+      expect(second.lists, hasLength(1));
+      expect(second.applied, 0);
+    });
+
+    test('uri с другим фрагментом — тот же сервер', () {
+      // Фрагмент `#…` — подпись узла. Тот же сервер под другим именем не
+      // повод заводить вторую запись.
+      final first = mergeBackupServers(
+          const [], const [LxServer(uri: 'vless://u@h:443#Berlin')]);
+      final second = mergeBackupServers(
+          first.lists, const [LxServer(uri: 'vless://u@h:443#Берлин')]);
+      expect(second.lists, hasLength(1),
+          reason: 'канон URI отрезает всё от первого #');
+      expect(second.applied, 0);
+    });
+
+    test('канон тела работает и на членах папки', () {
+      const a = LxServer(uri: 'vless://u@h:443#One', folder: 'DE');
+      const b = LxServer(uri: 'vless://u@h:443#Two', folder: 'DE');
+      final first = mergeBackupServers(const [], const [a]);
+      final second = mergeBackupServers(first.lists, const [b]);
+      expect((second.lists.single as FolderServers).members, hasLength(1));
+      expect(second.applied, 0);
+    });
+
+    test('другой хост — другой сервер, канон не склеивает', () {
+      final first = mergeBackupServers(
+          const [], const [LxServer(uri: 'vless://u@h1:443#N')]);
+      final second = mergeBackupServers(
+          first.lists, const [LxServer(uri: 'vless://u@h2:443#N')]);
+      expect(second.lists, hasLength(2));
+      expect(second.applied, 1);
     });
 
     test('запись без тела пропускается: применять нечего', () {

@@ -11,6 +11,7 @@ import '../config/consts.dart';
 import '../models/direction.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
+import 'node_hash.dart' show deepSortKeys;
 import 'parser/uri_utils.dart' show newUuidV4;
 
 /// LX Backup v1 — переносимый формат обмена настройками с десктопным
@@ -802,8 +803,13 @@ LxBackupFile parseLxBackup(
   // но тег в known входит — правило цель находит, она просто чужая.
   final directions = <Direction>[];
   final knownWithDirections = knownOutbounds.toSet();
+  // §406 (D-095) — занятость тега определяется ТОЧНЫМ совпадением, как при
+  // создании Направления руками (`directionTagConflict`). `VPN-DE` при живом
+  // `vpn-de` — не тёзка, а второе Направление: для ядра это два разных
+  // outbound'а, и объявлять одно из них «уже существующим» значило бы молча
+  // потерять приехавшую запись.
   final takenTags = <String>{
-    for (final t in knownOutbounds) t.trim().toLowerCase(),
+    for (final t in knownOutbounds) t.trim(),
   };
   for (final item in (decoded['directions'] as List? ?? const [])) {
     if (item is! Map) continue;
@@ -811,7 +817,7 @@ LxBackupFile parseLxBackup(
     final tag = (j['tag'] as String?)?.trim() ?? '';
     if (tag.isEmpty) continue; // без тега Направление не адресуемо
     knownWithDirections.add(tag);
-    if (!takenTags.add(tag.toLowerCase())) {
+    if (!takenTags.add(tag)) {
       warnings.add(LxBackupWarning(kWarnDirectionExists, tag));
       continue;
     }
@@ -829,7 +835,7 @@ LxBackupFile parseLxBackup(
   // и у применённой, и у пропущенной: цель под этим именем существует.
   final chains = <SourceChain>[];
   final takenChainTags = <String>{
-    for (final t in knownChains) t.trim().toLowerCase(),
+    for (final t in knownChains) t.trim(),
   };
   for (final item in (decoded['chains'] as List? ?? const [])) {
     if (item is! Map) continue;
@@ -840,7 +846,7 @@ LxBackupFile parseLxBackup(
     // файла, а не потеря данных).
     if (tag.isEmpty || j['chain'] is! Map) continue;
     knownWithDirections.add(tag);
-    if (!takenChainTags.add(tag.toLowerCase())) {
+    if (!takenChainTags.add(tag)) {
       warnings.add(LxBackupWarning(kWarnChainExists, tag));
       continue;
     }
@@ -1707,10 +1713,22 @@ SourceChain _chainFromCanon(Map<String, dynamic> j, String tag) {
   );
 }
 
+/// §406 (D-095) — цель правила и `route.final` опознаются ТОЧНЫМ совпадением
+/// после `trim()`.
+///
+/// Тег outbound'а у ядра регистрозависим: правило на `VPN-DE` при Направлении
+/// `vpn-de` ядро не свяжет ни с чем. Регистронезависимое опознание объявляло
+/// бы такую цель известной и пропускало правило ВКЛЮЧЁННЫМ — то есть ровно в
+/// тот отказ конфига, ради которого гейт и стоит. Разошедшийся регистр — это
+/// неизвестная цель, и правило обязано приехать выключенным.
+///
+/// Зарезервированные литералы сравниваются в каноническом написании ядра
+/// (`_reservedOutbounds`, всё в нижнем регистре): `Direct` таким же
+/// outbound'ом для ядра не является.
 bool _isKnownOutbound(String tag, Set<String> known) {
-  final t = tag.trim().toLowerCase();
+  final t = tag.trim();
   return _reservedOutbounds.contains(t) ||
-      known.map((e) => e.trim().toLowerCase()).contains(t);
+      known.map((e) => e.trim()).contains(t);
 }
 
 /// Запись схемы → правило LxBox.
@@ -1958,6 +1976,45 @@ typedef BackupServerMerge = ({
   int applied,
 });
 
+/// §406 (D-095) — КАНОН ТЕЛА узла для дедупа при импорте.
+///
+/// Идентичности, кроме тела, у одиночной записи `servers[]` нет: `id`
+/// локальный и в файле его не существует, `node_tag` вычисляется из тела.
+/// Значит вопрос «этот узел у меня уже стоит?» решается сравнением тел — и
+/// сравнивать их посимвольно нельзя: одна и та же нода, пересобранная другим
+/// сериализатором, даёт другую строку и второй раз доливается в список.
+///
+/// Форма канона:
+///
+///  * **URI** — всё от первого `#` отрезается, затем `trim()`. Фрагмент это
+///    ИМЯ узла, а не его тело: `vless://…#Berlin` и `vless://…#Берлин` — один
+///    и тот же сервер под двумя подписями, и заводить его дважды не за что.
+///  * **JSON-объект** — из верхнего уровня удаляются `tag` и `detour` (форма
+///    identity-хеша, контракт D-007: `tag` — то же имя, `detour` — способ
+///    дозвона, а не узел), остаток рекурсивно сортируется по ключам
+///    ([deepSortKeys]) и печатается компактно. Перестановка ключей и разный
+///    отступ больше не заводят двойника.
+///  * **Прочее** (не URI и не объект) — `trim()` как есть.
+///
+/// Одна и та же функция канонизирует и приехавшее тело, и локальный
+/// `rawBody`: сравнение имеет смысл, только когда обе стороны приведены к
+/// одной форме.
+String canonicalNodeBody(String body) {
+  final t = body.trim();
+  if (t.startsWith('{')) {
+    final map = _tryDecodeObject(t);
+    if (map != null) {
+      final stripped = Map<String, dynamic>.from(map)
+        ..remove('tag')
+        ..remove('detour');
+      return jsonEncode(deepSortKeys(stripped));
+    }
+    return t;
+  }
+  final hash = t.indexOf('#');
+  return hash < 0 ? t : t.substring(0, hash).trim();
+}
+
 /// §401 (D-08x) + §405 — слияние `servers[]` файла с локальными источниками.
 /// Чистая функция: состояние читает и пишет вызывающий.
 ///
@@ -1970,12 +2027,13 @@ typedef BackupServerMerge = ({
 /// Своя запись СИЛЬНЕЕ приехавшей, как и у подписок: папка с тем же именем не
 /// перезаписывается, а дополняется членами, которых в ней нет.
 ///
-/// **Идентичность узла здесь — его ТЕЛО** (`uri` или сериализованный
-/// `config_json`, сравнение по `trim()`): ни `id`, ни имени в файле у
-/// одиночной записи нет — `node_tag` вычисляется из тела. §405 — совпавшее по
-/// телу пропускается МОЛЧА и `applied` не растёт (применять было нечего),
-/// иначе повторный импорт одного и того же файла удваивал бы список. У членов
-/// папки такой дедуп был с самого начала; здесь он теперь тот же.
+/// **Идентичность узла здесь — его ТЕЛО**, приведённое к канону
+/// ([canonicalNodeBody]): ни `id`, ни имени в файле у одиночной записи нет —
+/// `node_tag` вычисляется из тела. §405 — совпавшее по телу пропускается
+/// МОЛЧА и `applied` не растёт (применять было нечего), иначе повторный
+/// импорт одного и того же файла удваивал бы список. §406 — сравнение идёт по
+/// канону, а не по сырой строке: до этого переставленные ключи
+/// `config_json` и другой фрагмент `#…` у URI давали второй узел.
 BackupServerMerge mergeBackupServers(
   List<ServerList> lists,
   List<LxServer> incoming,
@@ -1989,7 +2047,7 @@ BackupServerMerge mergeBackupServers(
   };
   final singleBodies = <String>{
     for (final l in merged)
-      if (l is UserServer) l.rawBody.trim(),
+      if (l is UserServer) canonicalNodeBody(l.rawBody),
   };
 
   for (final srv in incoming) {
@@ -1999,7 +2057,7 @@ BackupServerMerge mergeBackupServers(
     if (body.isEmpty) continue;
 
     if (srv.folder.isEmpty) {
-      if (!singleBodies.add(body.trim())) continue;
+      if (!singleBodies.add(canonicalNodeBody(body))) continue;
       merged.add(UserServer(
         id: newUuidV4(),
         name: srv.name,
@@ -2032,7 +2090,10 @@ BackupServerMerge mergeBackupServers(
     final folder = merged[at] as FolderServers;
     // Дубль по телу члена не заводим: повторный импорт одного файла не
     // должен удваивать состав папки.
-    if (folder.members.any((m) => m.raw.trim() == body.trim())) continue;
+    final canonBody = canonicalNodeBody(body);
+    if (folder.members.any((m) => canonicalNodeBody(m.raw) == canonBody)) {
+      continue;
+    }
     merged[at] = folder.copyWith(members: [...folder.members, member]);
     applied++;
   }
