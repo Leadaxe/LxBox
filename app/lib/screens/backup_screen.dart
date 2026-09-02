@@ -617,59 +617,28 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       applied++;
     }
 
-    // §393 B6/B10 — подписки. Identity — URL (он же identity подписки на
-    // обеих сторонах). Своя запись СИЛЬНЕЕ приехавшей: под тем же адресом у
-    // пользователя своё имя, свой префикс тегов и свои выключенные узлы, и
-    // перезапись стёрла бы их. Новая подписка добавляется без узлов —
+    // §393 B6/B10 — подписки. Идентичность записи — URL (он же идентичность
+    // подписки на обеих сторонах). Новая подписка добавляется без узлов —
     // тело приедет обычным обновлением.
+    //
+    // §401 (П1) — совпавшая по URL запись ОБНОВЛЯЕТСЯ настройками из файла.
+    // Бэкап — сериализация состояния, и восстановленное состояние обязано
+    // быть неотличимо от настроенного руками; раньше совпавшая запись
+    // получала только доливку disabled-отметок, так что восстановление
+    // СВОЕГО ЖЕ файла на том же устройстве не возвращало ни identity, ни
+    // префикс тегов — пользователь видел «импорт прошёл» и настройки на
+    // месте не находил.
+    //
+    // Исключение ровно одно: disabled-отметки по-прежнему ОБЪЕДИНЯЮТСЯ, а не
+    // замещаются (§393 §4) — отметка, которой в файле нет, могла быть
+    // поставлена уже после экспорта, и молча включать такой узел нельзя.
+    //
+    // Локальные подписки, которых в файле нет, НЕ удаляются: импорт — это
+    // слияние, а полная замена раздела была бы другим решением.
     final lists = await SettingsStorage.getServerLists();
-    final byUrl = <String, int>{
-      for (var i = 0; i < lists.length; i++)
-        if (lists[i] is SubscriptionServers)
-          (lists[i] as SubscriptionServers).url: i,
-    };
-    final merged = lists.toList();
-    for (final sub in parsed.subscriptions) {
-      if (sub.url.isEmpty) continue;
-      final at = byUrl[sub.url];
-      if (at != null) {
-        // §4 BACKUP.md — отметки выключенных узлов доливаются к своим:
-        // хеш, которого у нас нет, добавляется; свой не перетирается.
-        final existing = merged[at] as SubscriptionServers;
-        final add = <String, DateTime>{
-          for (final e in sub.disabled.entries)
-            if (!existing.disabledHashes.containsKey(e.key))
-              e.key: DateTime.fromMillisecondsSinceEpoch(e.value * 1000,
-                  isUtc: true),
-        };
-        if (add.isEmpty) continue;
-        merged[at] = existing.copyWith(
-          disabledHashes: {...existing.disabledHashes, ...add},
-        );
-        applied++;
-        continue;
-      }
-      merged.add(SubscriptionServers(
-        id: newUuidV4(),
-        name: sub.label,
-        enabled: sub.enabled,
-        tagPrefix: sub.tagPrefix,
-        detourPolicy: DetourPolicy.defaults,
-        url: sub.url,
-        updateIntervalHours: sub.updateIntervalHours ?? 24,
-        // §401 (D-083) — per-source identity: чем подписка представляется
-        // провайдеру. Провайдеры ВЕТВЯТ выдачу по UA, и без переноса та же
-        // ссылка отдала бы на новой машине другой набор узлов.
-        identity: sub.identity,
-        disabledHashes: {
-          for (final e in sub.disabled.entries)
-            e.key: DateTime.fromMillisecondsSinceEpoch(e.value * 1000,
-                isUtc: true),
-        },
-      ));
-      byUrl[sub.url] = merged.length - 1;
-      applied++;
-    }
+    final subMerge = mergeBackupSubscriptions(lists, parsed.subscriptions);
+    final merged = subMerge.lists;
+    applied += subMerge.applied;
 
     // §401 (D-08x) — одиночные узлы и папки. Папка не сущность схемы: её
     // члены приехали отдельными записями `servers[]` с общим полем `folder`,

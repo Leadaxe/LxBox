@@ -11,6 +11,7 @@ import '../config/consts.dart';
 import '../models/direction.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
+import 'parser/uri_utils.dart' show newUuidV4;
 
 /// LX Backup v1 — переносимый формат обмена настройками с десктопным
 /// лаунчером (SPEC 103; контракт 0.11.0, §401).
@@ -1833,4 +1834,104 @@ CustomRule? _ruleBodyFromJson(
 List<String> _strList(Object? v) {
   if (v is List) return [for (final e in v) '$e'];
   return const [];
+}
+
+/// Результат слияния подписок файла с локальным состоянием
+/// ([mergeBackupSubscriptions]).
+typedef BackupSubscriptionMerge = ({
+  /// Списки источников после слияния (порядок локальных сохранён, новые — в
+  /// хвосте, в порядке файла).
+  List<ServerList> lists,
+
+  /// URL подписки → её индекс в [lists]. Нужен последующим секциям импорта.
+  Map<String, int> byUrl,
+
+  /// Сколько записей файла реально применилось.
+  int applied,
+});
+
+/// §393 B6/B10 + §401 (П1) — слияние `subscriptions[]` файла с локальными
+/// источниками. Чистая функция: состояние читает и пишет вызывающий.
+///
+/// Идентичность записи — URL: он и есть идентичность подписки на обеих
+/// сторонах контракта.
+///
+/// **Совпавшая по URL запись ОБНОВЛЯЕТСЯ настройками из файла.** Бэкап — это
+/// сериализация состояния (BACKUP_PRINCIPLES П1), и восстановленное состояние
+/// обязано быть неотличимо от настроенного руками. Раньше совпавшая запись
+/// получала только доливку disabled-отметок, поэтому восстановление СВОЕГО ЖЕ
+/// файла на том же устройстве не возвращало ни `identity`, ни префикс тегов:
+/// пользователь видел «импорт прошёл» и настроек на месте не находил.
+///
+/// Исключение ровно одно — **disabled-отметки ОБЪЕДИНЯЮТСЯ**, а не
+/// замещаются (§4 BACKUP.md): отметка, которой в файле нет, могла быть
+/// поставлена уже после экспорта, и молча включать такой узел нельзя.
+///
+/// Локальные подписки, которых в файле нет, НЕ удаляются: импорт — слияние,
+/// а полная замена раздела была бы другим решением.
+///
+/// Новая подписка добавляется БЕЗ узлов: тело приедет обычным обновлением.
+BackupSubscriptionMerge mergeBackupSubscriptions(
+  List<ServerList> lists,
+  List<LxSubscription> incoming,
+) {
+  final byUrl = <String, int>{
+    for (var i = 0; i < lists.length; i++)
+      if (lists[i] is SubscriptionServers)
+        (lists[i] as SubscriptionServers).url: i,
+  };
+  final merged = lists.toList();
+  var applied = 0;
+
+  DateTime at(int unixSeconds) =>
+      DateTime.fromMillisecondsSinceEpoch(unixSeconds * 1000, isUtc: true);
+
+  for (final sub in incoming) {
+    if (sub.url.isEmpty) continue;
+    final idx = byUrl[sub.url];
+    if (idx != null) {
+      final existing = merged[idx] as SubscriptionServers;
+      // Хеш, которого у нас нет, добавляется; свой не перетирается.
+      final add = <String, DateTime>{
+        for (final e in sub.disabled.entries)
+          if (!existing.disabledHashes.containsKey(e.key)) e.key: at(e.value),
+      };
+      merged[idx] = existing.copyWith(
+        disabledHashes: {...existing.disabledHashes, ...add},
+        // Пустое имя в файле именем не является — своё не затираем.
+        name: sub.label.isNotEmpty ? sub.label : null,
+        tagPrefix: sub.tagPrefix,
+        updateIntervalHours: sub.updateIntervalHours,
+        enabled: sub.enabled,
+        // `identity` — слепок целиком: объекта в файле НЕТ значит «настройка
+        // сброшена в дефолт», а не «оставь как было». Иначе состояние без
+        // override'а не переносилось бы вовсе.
+        identity: sub.identity,
+        clearIdentity: sub.identity == null,
+      );
+      applied++;
+      continue;
+    }
+
+    merged.add(SubscriptionServers(
+      id: newUuidV4(),
+      name: sub.label,
+      enabled: sub.enabled,
+      tagPrefix: sub.tagPrefix,
+      detourPolicy: DetourPolicy.defaults,
+      url: sub.url,
+      updateIntervalHours: sub.updateIntervalHours ?? 24,
+      // §401 (D-083) — per-source identity: чем подписка представляется
+      // провайдеру. Провайдеры ВЕТВЯТ выдачу по UA, и без переноса та же
+      // ссылка отдала бы на новой машине другой набор узлов.
+      identity: sub.identity,
+      disabledHashes: {
+        for (final e in sub.disabled.entries) e.key: at(e.value),
+      },
+    ));
+    byUrl[sub.url] = merged.length - 1;
+    applied++;
+  }
+
+  return (lists: merged, byUrl: byUrl, applied: applied);
 }
