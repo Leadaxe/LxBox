@@ -94,6 +94,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   Map<NodeSpec, String> _identityCache = Map.identity();
   Set<NodeSpec> _togglableNodes = Set.identity();
   Set<NodeSpec> _disabledNodes = Set.identity();
+  /// §404 — строки, которые являются ЗВЕНОМ цепочки, а не самостоятельным
+  /// узлом. Раньше это читалось по префиксу `⚙ ` в теге; D-085 велел тегу
+  /// звена быть собственным тегом релея из конфига провайдера, так что
+  /// признак переехал сюда, а `⚙` остался украшением на отрисовке.
+  Set<NodeSpec> _chainHops = Set.identity();
 
   // ─── §339 — Test servers (зеркало папки §236, минус per-list опции) ───
   // Результаты эфемерны; ключ = идентичность узла (§326: переживает refresh —
@@ -132,12 +137,20 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
       _identityCache = sourceNodeIdentities(nodes);
       _hashedNodesList = nodes;
     }
+    // §404 — цепочка разворачивается РЕКУРСИВНО: у Xray-`dialerProxy` релей
+    // сам может звонить через следующий релей, и раньше второй хоп в списке
+    // не показывался вовсе.
     final expanded = <NodeSpec>[];
+    final hops = Set<NodeSpec>.identity();
     for (final node in nodes) {
       expanded.add(node);
-      if (node.chained != null) expanded.add(node.chained!);
+      for (var hop = node.chained; hop != null; hop = hop.chained) {
+        expanded.add(hop);
+        hops.add(hop);
+      }
     }
     _nodes = expanded;
+    _chainHops = hops;
     _togglableNodes = widget.entry.list is SubscriptionServers
         ? (Set<NodeSpec>.identity()..addAll(nodes))
         : Set<NodeSpec>.identity();
@@ -156,8 +169,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         if (identity != null && list.disabledHashes.containsKey(identity)) {
           next.add(n);
           // chained-ребёнок рисуется отдельной строкой — глушим вместе с
-          // родителем (он и не эмитится: родитель пропущен целиком).
-          if (n.chained != null) next.add(n.chained!);
+          // родителем (он и не эмитится: родитель пропущен целиком). §404 —
+          // по всей цепочке, а не только по первому звену.
+          for (var hop = n.chained; hop != null; hop = hop.chained) {
+            next.add(hop);
+          }
         }
       }
     }
@@ -765,6 +781,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
                   // синхронно со строками (одни инстансы — нет рассинхрона).
                   togglableNodes: _togglableNodes,
                   disabledNodes: _disabledNodes,
+                  chainHops: _chainHops, // §404
                   onToggleNode:
                       entry.list is SubscriptionServers ? _toggleNode : null,
                   probe: _probeByNode(), // §339

@@ -379,6 +379,37 @@ final class DetourChainTooDeepWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
+/// §404 / контракт D-085 — у Xray-узла указан `sockopt.dialerProxy`, но
+/// звено непригодно: цели нет в элементе, она не конвертируется в узел, это
+/// группа, либо цепочка зациклена/глубже лимита.
+///
+/// Владелец в таком случае ОТБРАКОВЫВАЕТСЯ ЦЕЛИКОМ — узла с прямым путём не
+/// создаётся. Отличие от `DetourTargetMissingWarning` (sing-box-ветка, §368)
+/// принципиальное: там `detour` — необязательное украшение маршрута, а здесь
+/// провайдер явно завернул дозвон в релей. Подменить его прямым выходом
+/// значит молча вывести трафик наружу мимо того звена, ради которого узел и
+/// прислали.
+///
+/// [label] — имя узла, который выпал; [target] — тег недостижимой цели.
+final class DialerProxyUnusableWarning extends NodeWarning {
+  final String label;
+  final String target;
+
+  const DialerProxyUnusableWarning(this.label, this.target);
+
+  @override
+  List<Object?> get props => [label, target];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "Node \"%1\$s\" was dropped: its relay \"%2\$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.",
+      label,
+      target);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.error;
+}
+
 /// §368 §5.1 — `type: selector` (ручной выбор) импортирован как автовыбор:
 /// своего типа узла у нас нет, а терять собранный руками состав хуже, чем
 /// сменить режим отбора.

@@ -1,4 +1,5 @@
 import '../../models/node_spec.dart';
+import '../../models/node_warning.dart';
 import 'body_decoder.dart';
 import 'ini_parser.dart';
 import 'json_parsers.dart';
@@ -69,14 +70,23 @@ List<NodeSpec> _parseJson(JsonConfig j) {
       // «main». Порядок узлов внутри элемента задаёт парсер.
       final elements =
           (j.value as List).whereType<Map<String, dynamic>>().toList();
-      // §321 P4 — накопитель идентичностей на всю подписку. Между подписками
+      // §321 P4 / §404 D-086 — накопитель ПОДПИСЕЙ дедупа на всю подписку
+      // (эмиссия узла без tag/detour + подпись пути дозвона). Между подписками
       // дедуп НЕ работает намеренно: разные источники = разные
       // tag_prefix/detour_policy, схлопывать их нельзя.
       final seen = <String>{};
       // §321 P6 — таблица синонимов копится по ВСЕЙ подписке: тег провайдера
-      // → идентичность. §322 резолвит по ней состав пула, написанный на чужих
-      // тегах (`selector: ["proxy"]`).
+      // → ключ ПУЛА (`nodeIdentityKey`, грубая четвёрка). §322 резолвит по ней
+      // состав пула, написанный на чужих тегах (`selector: ["proxy"]`).
+      // Гранулярность тут намеренно другая, чем у дедупа: `selector` называет
+      // СЕРВЕР, а не конкретную запись подписки, и подпись §404 (которая
+      // разводит два SNI одного сервера) растащила бы состав пула.
       final synonyms = <String, String>{};
+      // §404 / D-085 — причины отбраковки узлов с недостижимым релеем, которым
+      // не нашлось носителя внутри своего элемента (в элементе не выжил
+      // никто). Вешаем их на первый узел подписки: причина обязана дойти до
+      // пользователя, иначе узел исчезает молча.
+      final dropped = <NodeWarning>[];
 
       // §342 — ДВА прохода: «кто даёт узлу имя» и «в каком порядке узлы идут»
       // — разные задачи, и раньше они решались одной сортировкой.
@@ -113,7 +123,7 @@ List<NodeSpec> _parseJson(JsonConfig j) {
           owner[id] = e;
         }
       }
-      return elements
+      final nodes = elements
           .expand((e) => parseXrayElement(
                 e,
                 // `seen` этого прохода — свой: общий накопитель уже полон, и
@@ -121,9 +131,20 @@ List<NodeSpec> _parseJson(JsonConfig j) {
                 // передаём через `ownedBy`.
                 seen: <String>{},
                 synonyms: synonyms,
-                ownedBy: (id) => identical(owner[id], e),
+                ownedBy: (sig) => identical(owner[sig], e),
+                dropped: dropped,
               ))
           .toList();
+      // §404 P3 — то, что осталось в `dropped`, носителя в своём элементе не
+      // нашло. Последний носитель — первый узел подписки; если и его нет,
+      // подписка пустая и сообщать некому (та же документированная дыра, что
+      // у §321 P5).
+      if (dropped.isNotEmpty && nodes.isNotEmpty) {
+        for (final w in dropped) {
+          if (!nodes.first.warnings.contains(w)) nodes.first.warnings.add(w);
+        }
+      }
+      return nodes;
     // §368 — четыре sing-box-формы отличаются только обёрткой; нормализуем к
     // «массиву конфигов» и отдаём одному ядру. Одиночный outbound больше не
     // ходит в `parseSingboxEntry` напрямую: общий путь даёт ему то же, что
