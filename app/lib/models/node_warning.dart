@@ -390,15 +390,30 @@ final class DetourChainTooDeepWarning extends NodeWarning {
 /// значит молча вывести трафик наружу мимо того звена, ради которого узел и
 /// прислали.
 ///
-/// [label] — имя узла, который выпал; [target] — тег недостижимой цели.
+/// [label] — имя узла, который выпал (то, что пользователь видит в списке);
+/// [target] — тег недостижимой цели; [ownerTag] — СОБСТВЕННЫЙ тег
+/// отбракованного outbound'а из конфига провайдера.
+///
+/// Тег и label — разные вещи, и обе нужны. Label приходит из `remarks`
+/// ЭЛЕМЕНТА и на многоузловом элементе одинаков у всех его узлов; тег
+/// называет конкретный outbound. Контракт (corpus/README «Отбраковки»,
+/// D-088) требует в `dropped[].ref` именно тег: по нему вторая сторона
+/// опознаёт отвергнутую запись, а человеческое имя для машинной сверки не
+/// годится. В тексте пользователю при этом остаётся label — тег провайдера
+/// (`proxy`) ему ничего не говорит.
 final class DialerProxyUnusableWarning extends NodeWarning {
   final String label;
   final String target;
 
-  const DialerProxyUnusableWarning(this.label, this.target);
+  /// Тег отвергнутого outbound'а — `dropped[].ref` контракта. Пусто, если
+  /// провайдер тега не дал: тогда опознать запись можно только по label.
+  final String ownerTag;
+
+  const DialerProxyUnusableWarning(this.label, this.target,
+      {this.ownerTag = ''});
 
   @override
-  List<Object?> get props => [label, target];
+  List<Object?> get props => [label, target, ownerTag];
 
   @override
   String messageWith(GetLocalText t) => t.s(

@@ -14,7 +14,20 @@ import 'uri_parsers.dart';
 /// §243 — [nameHint] (имя файла при импорте) прокидывается только в
 /// INI-ветки: у INI нет собственного имени, tag берётся из фрагмента
 /// синтетического URI. URI-строки и JSON несут имена сами — hint игнорируют.
-List<NodeSpec> parseAll(DecodedBody decoded, {String? nameHint}) {
+///
+/// §404 / D-088 — [dropped] (необязательный) собирает причины ОТБРАКОВКИ
+/// целых записей тела: узел был узнан и осознанно отвергнут (недостижимый
+/// `dialerProxy`), а не «не распознан вовсе». Возвращаемый список узлов о
+/// таких записях не рассказывает по построению — их в нём нет, — а когда
+/// подписка вырождается в пустую, причина не доезжает и до
+/// `nodes.first.warnings`. Параметр не меняет поведения ни одного текущего
+/// вызывающего (все передают его `null`) и нужен конформанс-раннеру корпуса:
+/// конверт контракта несёт `dropped[]` наравне с `nodes[]`.
+List<NodeSpec> parseAll(
+  DecodedBody decoded, {
+  String? nameHint,
+  List<NodeWarning>? dropped,
+}) {
   return switch (decoded) {
     // §302 — источник ноды для UI (вкладка Source на экране ноды): для
     // URI-тел это сама строка. У JSON-веток источник проставляет парсер
@@ -34,7 +47,7 @@ List<NodeSpec> parseAll(DecodedBody decoded, {String? nameHint}) {
         for (var i = 0; i < ts.length; i++)
           parseWireguardIni(ts[i], nameHint: _indexedHint(nameHint, i)),
       ].whereType<NodeSpec>().toList(),
-    JsonConfig() => _parseJson(decoded),
+    JsonConfig() => _parseJson(decoded, dropped),
     DecodeFailure() => const <NodeSpec>[],
   };
 }
@@ -62,7 +75,7 @@ int _payloadCount(Map<String, dynamic> element) {
       .length;
 }
 
-List<NodeSpec> _parseJson(JsonConfig j) {
+List<NodeSpec> _parseJson(JsonConfig j, List<NodeWarning>? out) {
   switch (j.flavor) {
     case JsonFlavor.xrayArray:
       if (j.value is! List) return const [];
@@ -139,6 +152,11 @@ List<NodeSpec> _parseJson(JsonConfig j) {
       // нашло. Последний носитель — первый узел подписки; если и его нет,
       // подписка пустая и сообщать некому (та же документированная дыра, что
       // у §321 P5).
+      // D-088 — отбраковка едет наружу ЦЕЛИКОМ, независимо от того, нашёлся ли
+      // ей носитель среди узлов: конверт контракта различает «запись отвергли»
+      // и «тело не распознано», а `nodes.first.warnings` этого различия не
+      // несёт и на пустой подписке пропадает совсем.
+      out?.addAll(dropped);
       if (dropped.isNotEmpty && nodes.isNotEmpty) {
         for (final w in dropped) {
           if (!nodes.first.warnings.contains(w)) nodes.first.warnings.add(w);

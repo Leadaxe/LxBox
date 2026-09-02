@@ -97,8 +97,39 @@ List<NodeSpec> parseXrayElement(
 
   // Порядок: «main» первым (dialerProxy → тег `proxy` → первый), чтобы у
   // существующих подписок первый узел остался тем же, что и до §310.
+  //
+  // Из кандидатов выпадают ЦЕЛИ дозвона: релей самостоятельным узлом
+  // подписки не становится, он живёт звеном цепочки владельца.
+  //
+  // §404 — исключение из исключения: цель, попавшая в КОЛЬЦО, целью быть не
+  // может. Звено достижимо от владельца по цепочке дозвона; участник кольца
+  // не достижим ни от кого снаружи — «владельца», который бы его вобрал, не
+  // существует. Отсеять такой outbound здесь значит потерять узел МОЛЧА, без
+  // `DialerProxyUnusableWarning`: он исчезал из подписки, и пользователю
+  // никто не говорил почему. Кольцо длины 1 (`dialerProxy` = собственный тег)
+  // — частный случай той же проверки.
+  //
+  // Прочие цели, включая промежуточные звенья многохопа со своим
+  // `dialerProxy`, из кандидатов выпадают как раньше: они живут звеньями
+  // цепочки владельца, а не самостоятельными узлами подписки.
+  bool inDialerCycle(Map<String, dynamic> ob) {
+    final start = ob['tag']?.toString() ?? '';
+    if (start.isEmpty) return false;
+    final seenTags = <String>{start};
+    var ref = dialerRefOf[ob];
+    while (ref != null && ref.isNotEmpty) {
+      if (ref == start) return true;
+      if (!seenTags.add(ref)) return false; // чужое кольцо, не своё
+      final next = byTag[ref];
+      if (next == null) return false;
+      ref = dialerRefOf[next];
+    }
+    return false;
+  }
+
   final candidates = payloadAll
-      .where((o) => !dialerTargets.contains(o['tag']?.toString()))
+      .where((o) =>
+          !dialerTargets.contains(o['tag']?.toString()) || inDialerCycle(o))
       .toList();
   if (candidates.isEmpty) return const [];
   final mainIdx = candidates.indexWhere((o) => dialerRefOf.containsKey(o)) >= 0
@@ -199,8 +230,13 @@ List<NodeSpec> parseXrayElement(
         // прямым путём тут был бы молчаливой деанонимизацией: провайдер
         // завернул дозвон в релей именно потому, что прямой путь зарезан.
         if (chained == null) {
-          dropped?.add(DialerProxyUnusableWarning(label, ref));
-          rejected.add(DialerProxyUnusableWarning(label, ref));
+          // `ownerTag` — СОБСТВЕННЫЙ тег outbound'а: им контракт называет
+          // отвергнутую запись в `dropped[].ref` (D-088). `label` для этого
+          // не годится — он приходит из `remarks` элемента и на многоузловом
+          // элементе одинаков у всех узлов.
+          final w = DialerProxyUnusableWarning(label, ref, ownerTag: obTag);
+          dropped?.add(w);
+          rejected.add(w);
           continue;
         }
       }
