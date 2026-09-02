@@ -34,8 +34,17 @@ void main() {
       final name = base.substring(root.path.length + 1);
       test(name, () {
         final raw = File('$base.backup.json').readAsStringSync();
-        final expected = jsonDecode(File('$base.expected.json').readAsStringSync())
-            as Map<String, dynamic>;
+        // Per-app override читается ТАК ЖЕ, как в URI- и body-раннерах
+        // (contract/corpus/README «Нормативность expected»): он означает
+        // задокументированное by-design различие сторон, а его отсутствие —
+        // что нормативна общая база и правка канона у лаунчера обязана
+        // доехать до нас красным тестом.
+        final overrideFile = File('$base.expected.lxbox.json');
+        final baseFile = File('$base.expected.json');
+        final expectedFile =
+            overrideFile.existsSync() ? overrideFile : baseFile;
+        final expected =
+            jsonDecode(expectedFile.readAsStringSync()) as Map<String, dynamic>;
 
         final file = parseLxBackup(raw, knownOutbounds: {'proxy', 'direct'});
 
@@ -153,6 +162,26 @@ void main() {
           for (final want in wantHashes) {
             expect(found, contains(want),
                 reason: 'отметка выключенной ноды $want не перенесена');
+          }
+        }
+
+        // §401 / контракт 0.12 — ПАПКА. Схема контейнеров не знает: члены
+        // папки едут ОТДЕЛЬНЫМИ записями `servers[]` с полем `folder`, а
+        // собирает их обратно импорт по совпадению имени. Ожидание — карта
+        // {имя папки → теги членов}: проверяется и состав, и то, что запись
+        // БЕЗ `folder` в папку не затесалась.
+        final wantFolders = (expected['folders'] as Map?)?.cast<String, dynamic>();
+        if (wantFolders != null) {
+          final gotFolders = <String, List<String>>{};
+          for (final srv in file.servers) {
+            if (srv.folder.isEmpty) continue;
+            (gotFolders[srv.folder] ??= <String>[]).add(srv.name);
+          }
+          expect(gotFolders.keys.toSet(), wantFolders.keys.toSet(),
+              reason: 'состав папок: имена');
+          for (final entry in wantFolders.entries) {
+            expect(gotFolders[entry.key], (entry.value as List).cast<String>(),
+                reason: 'папка ${entry.key}: состав и порядок членов');
           }
         }
 
