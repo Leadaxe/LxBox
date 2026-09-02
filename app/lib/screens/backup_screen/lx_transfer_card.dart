@@ -48,7 +48,8 @@ class LxTransferCard extends StatelessWidget {
               getLocalText.s(
                 "Move subscriptions, servers, rules and settings between this app "
                 "and the desktop launcher. Anything the other side has no place "
-                "for travels along untouched and comes back intact.",
+                "for is dropped, and the app tells you exactly what did not "
+                "make it.",
               ),
               style: theme.textTheme.bodySmall,
             ),

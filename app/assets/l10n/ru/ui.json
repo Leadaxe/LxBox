@@ -2562,8 +2562,8 @@
   "Move out of folder": {
     "value": "Вынести из папки"
   },
-  "Move subscriptions, servers, rules and settings between this app and the desktop launcher. Anything the other side has no place for travels along untouched and comes back intact.": {
-    "value": "Перенос подписок, серверов, правил и настроек между этим приложением и десктопным лаунчером. Всё, чему на другой стороне нет места, едет вместе с файлом нетронутым и возвращается целым."
+  "Move subscriptions, servers, rules and settings between this app and the desktop launcher. Anything the other side has no place for is dropped, and the app tells you exactly what did not make it.": {
+    "value": "Перенос подписок, серверов, правил и настроек между этим приложением и десктопным лаунчером. Всё, чему на другой стороне нет места, отбрасывается, а приложение прямо называет, что не доехало."
   },
   "Move to folder": {
     "value": "Переместить в папку"
@@ -4828,5 +4828,17 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
+  },
+  "Servers: %d": {
+    "value": "Серверов: %d"
+  },
+  "These settings have no place in the shared format:": {
+    "value": "Этим настройкам нет места в общем формате:"
+  },
+  "Not included in the file": {
+    "value": "Не попало в файл"
+  },
+  "Node \"%1$s\" was dropped: its relay \"%2$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.": {
+    "value": "Узел «%1$s» отброшен: релей «%2$s» отсутствует, непригоден или зациклен. Прямое подключение прошло бы мимо релея."
   }
 }
