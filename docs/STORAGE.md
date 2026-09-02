@@ -714,6 +714,40 @@ The resolve chain in `HomeController`: `groups[tag]` → root → the template d
 
 CRUD helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clearGroupPing`. All of them are sugar over `getPingOptions` / `savePingOptions`, which read and write the whole object.
 
+**The keys of `groups` are direction tags — [§408] holds them to living ones.** A key
+counts as living when a direction with that `tag` exists (in any state, enabled or not)
+or when it is that direction's urltest twin `<tag>-auto` — the same reading of "a
+reference to a direction" the other heals use (§248). The UI only ever writes a plain
+selector tag (the ping dialog keys the map by `state.selectedGroup`, which comes from
+`selectorGroupTags` — selectors only, so never a chain and never a twin), but
+`PUT /settings/ping_options/groups/{tag}` does not validate the tag and a hand-edited
+backup carries whatever it carries.
+
+The invariant is kept at two points:
+
+- **Deleting a direction** drops its key and its `<tag>-auto` key in the same
+  transaction that heals the other four kinds of reference (`route_final` and a rule's
+  `outbound`, the detour references, `include[]`, the chain positions) — one write to
+  disk. Unlike those four, the drop is **not** reported back to the user: they change the
+  route, this only changes how the nodes of a direction that no longer exists were being
+  measured. **Disabling** a direction and clearing its detour flag leave the override
+  alone, exactly as they leave `include[]` alone (§393 A3): disabling is reversible,
+  and switching the direction back on must return what was there.
+- **Loading the set of directions** prunes orphans — any key with no living tag behind
+  it. It runs inside `migrateDirectionsIfNeeded`, which every load path goes through
+  (app start, an internal backup restore, `/backup/import`), for the same reason the
+  "`vpn-1` exists" invariant lives there. There is no separate one-shot with its own
+  guard on purpose: a restored archive brings `ping_options` back whole (it is in the
+  §221 allowlist), and a guarded one-shot would have run once, before the restore, and
+  never again. No ordering hazard: `directions` and `ping_options` share the one storage
+  file and one `_load()`, so the set of directions is already final when the prune reads
+  it.
+
+Whenever the last key goes, the `groups` container goes with it rather than staying `{}`
+— `ping_options` reaches the backup and `/state/storage`, where an empty container would
+read as "there were per-direction overrides and they were all reset" rather than the
+plain truth that there never were any.
+
 ---
 
 ## `tun_apps` — [§046]
@@ -1258,6 +1292,7 @@ The scrubber only handles the `vars` and `server_lists` keys; everything else (`
 [§037]: ./spec/tasks/037-debug-api-write-config-and-lock-rebuild.md
 [§038]: ./spec/features/038%20crash%20diagnostics/spec.md
 [§040]: ./spec/tasks/040-per-group-ping-test-settings.md
+[§408]: ./spec/tasks/408-ping-options-groups-heal.md
 [§061]: ./spec/tasks/061-dns-rules-refactor/spec.md
 [§044]: ./spec/tasks/044-dns-servers-clean-schema.md
 [§046]: ./spec/features/046%20tunnel%20apps%20split-tunneling/spec.md

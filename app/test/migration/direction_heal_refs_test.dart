@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
 /// §125 F4.5 + §202 — лечение dangling direction-ссылок в STORAGE (не только в
@@ -347,6 +348,248 @@ void main() {
       await seedIncludeChain();
       final healed = await SettingsStorage.deleteDirection('vpn-3');
       expect(healed.includes, 0);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §408 — пятый род ссылки на тег Направления: ключ `ping_options.groups`.
+  // ─────────────────────────────────────────────────────────────────────────
+  group('§408 — ping_options.groups', () {
+    /// Шаблон для миграции: те же три Направления, что в
+    /// directions_migration_test.dart. Нужен только веткам, где миграция
+    /// сеет состав; в ветке «directions уже есть» не читается.
+    GroupTemplates template() => GroupTemplates(
+          direction: DirectionTemplate(include: const ['direct']),
+          auto: AutoTemplate(options: const {}),
+          defaultDirections: [
+            DefaultDirection(tag: 'vpn-1', label: 'Main', defaultEnabled: true),
+            DefaultDirection(tag: 'vpn-2', label: 'Aux', defaultEnabled: false),
+          ],
+        );
+
+    Future<void> seedPingGroups(
+      Map<String, dynamic> pingGroups, {
+      List<String> directions = const ['vpn-1', 'vpn-3'],
+      bool migrated = true,
+    }) async {
+      final data = <String, dynamic>{
+        if (migrated) 'directions_migrated': true,
+        'directions': [
+          for (final t in directions)
+            Direction(tag: t, label: t, enabled: true).toJson(),
+        ],
+        'ping_options': {
+          'url': 'https://global.example/generate_204',
+          'timeout_ms': 9000,
+          'groups': pingGroups,
+        },
+      };
+      await File(mainPath()).writeAsString(jsonEncode(data));
+      SettingsStorage.resetCacheForTesting();
+    }
+
+    /// Карта `groups` как она лежит НА ДИСКЕ (не из кеша) — heal обязан
+    /// доезжать до файла тем же `_save()`, что и остальные четыре рода.
+    Future<Map<String, dynamic>?> groupsOnDisk() async {
+      final raw =
+          jsonDecode(await File(mainPath()).readAsString()) as Map<String, dynamic>;
+      final opts = raw['ping_options'] as Map<String, dynamic>?;
+      return opts?['groups'] as Map<String, dynamic>?;
+    }
+
+    test('delete Направления снимает его ключ, чужой не трогает', () async {
+      await seedPingGroups({
+        'vpn-3': {'url': 'https://aux.example/204', 'timeout_ms': 3000},
+        'vpn-1': {'timeout_ms': 1000},
+      });
+
+      await SettingsStorage.deleteDirection('vpn-3');
+
+      final groups = await groupsOnDisk();
+      expect(groups, isNotNull);
+      expect(groups!.containsKey('vpn-3'), isFalse);
+      expect(groups.containsKey('vpn-1'), isTrue);
+      expect((groups['vpn-1'] as Map)['timeout_ms'], 1000);
+      // Глобальные значения — не per-direction, delete их не касается.
+      final opts = await SettingsStorage.getPingOptions();
+      expect(opts['url'], 'https://global.example/generate_204');
+      expect(opts['timeout_ms'], 9000);
+    });
+
+    test('delete снимает и ключ auto-двойника `<tag>-auto`', () async {
+      await seedPingGroups({
+        'vpn-3': {'url': 'https://aux.example/204'},
+        'vpn-3-auto': {'url': 'https://twin.example/204'},
+        'vpn-1': {'timeout_ms': 1000},
+      });
+
+      await SettingsStorage.deleteDirection('vpn-3');
+
+      final groups = await groupsOnDisk();
+      expect(groups!.keys, ['vpn-1']);
+    });
+
+    test('последний ключ ушёл → карта `groups` снимается целиком', () async {
+      await seedPingGroups({
+        'vpn-3': {'url': 'https://aux.example/204'},
+      });
+
+      await SettingsStorage.deleteDirection('vpn-3');
+
+      final raw =
+          jsonDecode(await File(mainPath()).readAsString()) as Map<String, dynamic>;
+      final opts = raw['ping_options'] as Map<String, dynamic>;
+      expect(opts.containsKey('groups'), isFalse);
+      // Сама секция остаётся — в ней живут глобальные url/timeout.
+      expect(opts['timeout_ms'], 9000);
+    });
+
+    test('disable Направления override НЕ трогает (обратимо, как include)',
+        () async {
+      await seedPingGroups({
+        'vpn-3': {'url': 'https://aux.example/204'},
+      });
+      final vpn3 = (await SettingsStorage.getDirections())
+          .firstWhere((c) => c.tag == 'vpn-3');
+
+      await SettingsStorage.updateDirection(vpn3.copyWith(enabled: false));
+
+      final groups = await groupsOnDisk();
+      expect(groups!.containsKey('vpn-3'), isTrue);
+    });
+
+    test('миграция (ветка «directions уже есть») снимает сирот, живых не трогает',
+        () async {
+      // vpn-9 никогда не существовал в этом storage — предсуществующая сирота.
+      await seedPingGroups({
+        'vpn-1': {'timeout_ms': 1000},
+        'vpn-3': {'url': 'https://aux.example/204'},
+        'vpn-9': {'url': 'https://ghost.example/204'},
+      });
+
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      final groups = await groupsOnDisk();
+      expect(groups!.keys.toSet(), {'vpn-1', 'vpn-3'});
+    });
+
+    test('миграция считает живым и `<tag>-auto` живого Направления', () async {
+      await seedPingGroups({
+        'vpn-3': {'url': 'https://aux.example/204'},
+        'vpn-3-auto': {'url': 'https://twin.example/204'},
+        'vpn-9-auto': {'url': 'https://ghost.example/204'},
+      });
+
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      final groups = await groupsOnDisk();
+      expect(groups!.keys.toSet(), {'vpn-3', 'vpn-3-auto'});
+    });
+
+    test('миграция не трогает override выключенного Направления', () async {
+      final data = <String, dynamic>{
+        'directions_migrated': true,
+        'directions': [
+          const Direction(tag: 'vpn-1', label: 'Main').toJson(),
+          const Direction(tag: 'vpn-3', label: 'Aux', enabled: false).toJson(),
+        ],
+        'ping_options': {
+          'groups': {
+            'vpn-3': {'url': 'https://aux.example/204'},
+          },
+        },
+      };
+      await File(mainPath()).writeAsString(jsonEncode(data));
+      SettingsStorage.resetCacheForTesting();
+
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      final groups = await groupsOnDisk();
+      expect(groups!.containsKey('vpn-3'), isTrue);
+    });
+
+    test('все ключи живые → файл не переписывается лишний раз', () async {
+      await seedPingGroups({
+        'vpn-1': {'timeout_ms': 1000},
+      });
+      final before = await File(mainPath()).readAsString();
+
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      expect(await File(mainPath()).readAsString(), before);
+    });
+
+    test('ветка «мигрировано-и-пусто»: Направлений нет → карта уходит целиком',
+        () async {
+      final data = <String, dynamic>{
+        'directions_migrated': true,
+        'ping_options': {
+          'groups': {
+            'vpn-3': {'url': 'https://aux.example/204'},
+          },
+        },
+      };
+      await File(mainPath()).writeAsString(jsonEncode(data));
+      SettingsStorage.resetCacheForTesting();
+
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      expect(await groupsOnDisk(), isNull);
+    });
+
+    test('ветка seed (чистая установка): сироты из восстановленного бэкапа',
+        () async {
+      final data = <String, dynamic>{
+        'ping_options': {
+          'groups': {
+            'vpn-2': {'url': 'https://aux.example/204'},
+            'vpn-9': {'url': 'https://ghost.example/204'},
+          },
+        },
+      };
+      await File(mainPath()).writeAsString(jsonEncode(data));
+      SettingsStorage.resetCacheForTesting();
+
+      // Seed заводит vpn-1/vpn-2 из шаблона — vpn-2 становится живым.
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      final groups = await groupsOnDisk();
+      expect(groups!.keys, ['vpn-2']);
+    });
+
+    test('ветка легаси-списка `channels`: сироты снимаются там же', () async {
+      final data = <String, dynamic>{
+        'channels': [
+          const Direction(tag: 'vpn-1', label: 'Main').toJson(),
+          const Direction(tag: 'vpn-3', label: 'Aux').toJson(),
+        ],
+        'ping_options': {
+          'groups': {
+            'vpn-3': {'url': 'https://aux.example/204'},
+            'vpn-9': {'url': 'https://ghost.example/204'},
+          },
+        },
+      };
+      await File(mainPath()).writeAsString(jsonEncode(data));
+      SettingsStorage.resetCacheForTesting();
+
+      await SettingsStorage.migrateDirectionsIfNeeded(template());
+
+      final groups = await groupsOnDisk();
+      expect(groups!.keys, ['vpn-3']);
+    });
+
+    test('clearGroupPing по-прежнему снимает один ключ (§040 не сломан)',
+        () async {
+      await seedPingGroups({
+        'vpn-1': {'timeout_ms': 1000},
+        'vpn-3': {'url': 'https://aux.example/204'},
+      });
+
+      await SettingsStorage.clearGroupPing('vpn-3');
+
+      final groups = await groupsOnDisk();
+      expect(groups!.keys, ['vpn-1']);
     });
   });
 }
