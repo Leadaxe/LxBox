@@ -85,6 +85,8 @@ void main() {
         DetourTargetMissingWarning() => 'detour_missing',
         DetourToGroupWarning() => 'detour_group',
         DetourChainTooDeepWarning() => 'detour_deep',
+        // §404 — импорт Xray JSON: недостижимый dialerProxy
+        DialerProxyUnusableWarning() => 'dialer_proxy_unusable',
         SelectorAsAutoWarning() => 'selector_as_auto',
         GroupMemberMissingWarning() => 'group_member_missing',
         // SPEC 103 — деградации, помеченные кодом на обеих сторонах контракта

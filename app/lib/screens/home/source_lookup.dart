@@ -91,7 +91,12 @@ TagOwner? ownerOfTag(String culpritTag, List<SubscriptionEntry> entries) {
         }
       } else {
         for (final n in list.nodes) {
-          if (n.tag == bare || n.chained?.tag == bare) return TagOwner(ei);
+          if (n.tag == bare) return TagOwner(ei);
+          // §404 — цепочка бывает многохоповой (`dialerProxy` релея на
+          // следующий релей): ищем по всем звеньям, не только по первому.
+          for (var hop = n.chained; hop != null; hop = hop.chained) {
+            if (hop.tag == bare) return TagOwner(ei);
+          }
         }
       }
     }

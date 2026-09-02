@@ -21,6 +21,7 @@ class SubscriptionNodeList extends StatelessWidget {
     required this.error,
     this.togglableNodes = const {},
     this.disabledNodes = const {},
+    this.chainHops = const {},
     this.onToggleNode,
     this.probe = const {},
     this.probeThresholds = ProbeThresholds.defaults,
@@ -45,12 +46,26 @@ class SubscriptionNodeList extends StatelessWidget {
   /// `disabledHashes`, не по-строчно.
   final Set<NodeSpec> disabledNodes;
 
+  /// §404 — строки-звенья цепочки (identity-set). Тег звена с D-085 — это
+  /// собственный тег релея из конфига провайдера, без украшений, поэтому в
+  /// списке звено ничем не отличалось бы от самостоятельного узла. Значок
+  /// `⚙` вешаем ЗДЕСЬ, на отрисовке: он про то, как строка читается, а не
+  /// про то, что уедет в конфиг ядра.
+  final Set<NodeSpec> chainHops;
+
   final void Function(NodeSpec node)? onToggleNode;
 
   /// §339 — результаты Test servers (identity-map по инстансам top-level
   /// нод; chained-дети без бейджа). Пусто = теста не было.
   final Map<NodeSpec, ProbeResult> probe;
   final ProbeThresholds probeThresholds;
+
+  /// §404 — подпись строки. Звено цепочки помечается `⚙` на отрисовке (в
+  /// теге узла этого маркера больше нет, см. [chainHops]).
+  String _rowTitle(NodeSpec node) {
+    final base = node.label.isNotEmpty ? node.label : node.tag;
+    return chainHops.contains(node) ? '⚙ $base' : base;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +161,7 @@ class SubscriptionNodeList extends StatelessWidget {
             children: [
               Flexible(
                 child: Text(
-                  node.label.isNotEmpty ? node.label : node.tag,
+                  _rowTitle(node),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

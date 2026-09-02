@@ -16,9 +16,15 @@ import 'dart:convert';
 import '../../models/auto_select.dart';
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
+import '../node_hash.dart';
 import '../node_identity.dart';
 import 'json_parsers.dart';
 import 'uri_utils.dart';
+
+// §404 — `kMaxDetourDepth` переехал в `uri_utils` (лимит общий с Xray-веткой,
+// иначе вышел бы круговой импорт). Ре-экспорт держит прежний адрес имени:
+// импортёры `singbox_config` его уже видели.
+export 'uri_utils.dart' show kMaxDetourDepth;
 
 /// §368 §3.1 — служебные типы sing-box: не серверы, узлами не становятся.
 ///
@@ -32,10 +38,6 @@ const _kSingboxServiceTypes = {'direct', 'block', 'dns'};
 /// `AutoSelectSpec` (§5).
 const _kSingboxGroupTypes = {'selector', 'urltest'};
 
-/// §368 §4 P2 — предел длины detour-цепочки. Реальные конфиги — 2–3 звена;
-/// лимит защищает от рекурсии по данным провайдера.
-const int kMaxDetourDepth = 8;
-
 /// Разбор массива sing-box конфигов в список узлов.
 ///
 /// Каждый элемент — самостоятельный конфиг со своими `outbounds`/`endpoints`
@@ -47,11 +49,14 @@ const int kMaxDetourDepth = 8;
 List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
   if (configs.isEmpty) return const [];
 
-  // §321 P4 — накопитель идентичностей на всю подписку. Между подписками дедуп
-  // НЕ работает намеренно: разные источники = разные tag_prefix/detour_policy.
+  // §321 P4 / §404 D-086 — накопитель ПОДПИСЕЙ дедупа на всю подписку. Между
+  // подписками дедуп НЕ работает намеренно: разные источники = разные
+  // tag_prefix/detour_policy.
   final seen = <String>{};
-  // §321 P6 — тег провайдера → идентичность. Копится по ВСЕЙ подписке: и состав
-  // группы, и detour могут ссылаться на тег соседнего элемента.
+  // §321 P6 — тег провайдера → ключ ПУЛА (`nodeIdentityKey`). Копится по ВСЕЙ
+  // подписке: и состав группы, и detour могут ссылаться на тег соседнего
+  // элемента. Гранулярность намеренно грубее подписи дедупа: `selector`
+  // называет СЕРВЕР, а не конкретную запись подписки.
   final synonyms = <String, String>{};
 
   // §342 — ДВА прохода. Проход 1 (черновой, узлы выбрасываются): элементы от
@@ -88,7 +93,7 @@ List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
       // съел бы все узлы. Владение передаём через `ownedBy`.
       seen: <String>{},
       synonyms: synonyms,
-      ownedBy: (id) => identical(owner[id], cfg),
+      ownedBy: (sig) => identical(owner[sig], cfg),
     ));
   }
   return result;
@@ -126,7 +131,7 @@ List<NodeSpec> _parseOne(
   Map<String, dynamic> config, {
   required Set<String> seen,
   required Map<String, String> synonyms,
-  bool Function(String identity)? ownedBy,
+  bool Function(String signature)? ownedBy,
 }) {
   final entries = _allEntries(config);
   if (entries.isEmpty) return const [];
@@ -210,18 +215,23 @@ List<NodeSpec> _parseOne(
       final identity = nodeIdentityKey(spec);
       if (identity != null && rawTag.isNotEmpty) synonyms[rawTag] = identity;
 
-      // §342 — чужой узел: право на него получил другой элемент. Пропускаем ДО
-      // дедупа, чтобы `seen` этого прохода не застолбил идентичность за нами.
-      if (identity != null && ownedBy != null && !ownedBy(identity)) continue;
-      if (identity != null) {
-        if (seen.contains(identity)) continue;
-        seen.add(identity);
-      }
-
-      // §4 — detour-цепочка. Разворачиваем ПОСЛЕ дедупа: у пропущенного дубля
-      // цепочку строить незачем.
+      // §4 — detour-цепочка. Строим ДО дедупа (§404): путь дозвона входит в
+      // подпись, значит без него дедуп не посчитать.
       final chained = _buildChain(ob, byTag, spec.warnings);
       final node = chained == null ? spec : withChained(spec, chained);
+
+      // §404 / D-086 — подпись записи для дедупа: эмиссия узла без tag/detour
+      // + подпись пути дозвона, рекурсивно по хопам. Прежний ключ
+      // `nodeIdentityKey` (четвёрка подключения) не видел ни транспорта, ни
+      // релея: один сервер под двумя SNI и пара «прямая + BYPASS»
+      // схлопывались в одну запись. `nodeIdentityKey` остался ключом ПУЛА
+      // §322 — он выше отдан в `synonyms`.
+      final signature = nodeDedupSignature(node);
+      // §342 — чужой узел: право на него получил другой элемент. Пропускаем ДО
+      // дедупа, чтобы `seen` этого прохода не застолбил подпись за нами.
+      if (ownedBy != null && !ownedBy(signature)) continue;
+      if (seen.contains(signature)) continue;
+      seen.add(signature);
 
       // §302 — исходник узла для UI: compact = сам outbound, extended = весь
       // конфиг как пришёл (его соседи-секции).

@@ -144,9 +144,11 @@ NodeSpec? _findNodeByDisplayTag(
     for (final n in e.list.nodes) {
       if (n.tag == base) return n;
       // Detour-нода живёт под главным как `chained` — в config она тоже
-      // получает prefix. Поищем и там.
-      final ch = n.chained;
-      if (ch != null && ch.tag == base) return ch;
+      // получает prefix. Поищем и там. §404 — цепочка бывает многохоповой,
+      // идём по всем звеньям.
+      for (var hop = n.chained; hop != null; hop = hop.chained) {
+        if (hop.tag == base) return hop;
+      }
     }
   }
   return null;
