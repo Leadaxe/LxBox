@@ -87,8 +87,17 @@ void main() {
             final tag = want['tag'] as String;
             final got = byTag[tag]!;
             expect(got, isNotNull, reason: 'направление $tag не создано импортом');
-            // Контракт 0.9.0 — у Направления имя одно, tag: `label` в
-            // ожиданиях корпуса нет, а legacy-ключ во входе отбрасывается.
+            // §405 — `label` УКАЗАТЕЛЬНОЙ семантики, как `enabled` у цепочек:
+            // поле объявлено в схеме, но применяет его только LxBox (таблица
+            // «Поддержка» BACKUP.md §2, D-094). Базовый golden пишет ожидания
+            // ПРИНИМАЮЩЕЙ стороны лаунчера, у которого имени нет вовсе, и
+            // отсутствие ключа там значит «сторона его не применяет», а не
+            // «имя обязано быть пустым». Кейсы, где имя ПРОВЕРЯЕТСЯ, кладут
+            // ключ явно — своим `.expected.lxbox.json` (chains_roundtrip).
+            final wantLabel = want['label'];
+            if (wantLabel is String) {
+              expect(got.label, wantLabel, reason: '$tag: имя');
+            }
             // Отбор узлов переносится ТЕЛОМ регулярки — у мобилы nodeFilter
             // уже хранит тело, обёртки и флагов в нём нет.
             expect(got.nodeFilter, want['filter'] ?? '', reason: '$tag: отбор');
@@ -117,7 +126,8 @@ void main() {
         //
         // `label` проверяется НАТИВНО (у мобилы это хранимое поле
         // [SourceChain.label], а не непонятый груз `_backup_fields`, через
-        // который его возит лаунчер) — но сверяется то же ожидание корпуса.
+        // который его возит лаунчер) — но сверяется то же ожидание корпуса,
+        // когда оно в кейсе есть (§405, указательная семантика ниже).
         final wantChains =
             ((expected['chains'] as List?) ?? const []).cast<Map<String, dynamic>>();
         if (wantChains.isNotEmpty) {
@@ -129,7 +139,11 @@ void main() {
             final tag = want['tag'] as String;
             final got = byTag[tag]!;
             expect(got, isNotNull, reason: 'цепочка $tag не создана импортом');
-            // Контракт 0.9.0 / D-082 — имя цепочки = её tag.
+            // §405 — та же указательная семантика, что у `directions[]`.
+            final wantChainLabel = want['label'];
+            if (wantChainLabel is String) {
+              expect(got.label, wantChainLabel, reason: '$tag: имя');
+            }
             // enabled — УКАЗАТЕЛЬНАЯ семантика (контракт 0.7.1, кейс
             // chain_disabled_enabled_default): отсутствие ключа в ожиданиях =
             // «не проверяем», НЕ «ожидаем false». Обычный bool с дефолтом

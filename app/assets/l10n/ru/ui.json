@@ -2577,9 +2577,6 @@
   "My DNS": {
     "value": "Мой DNS"
   },
-  "Name is the tag — it is set once, at creation": {
-    "value": "Имя — это тег, он задаётся один раз, при создании"
-  },
   "NETWORK & PROTOCOL": {
     "value": "СЕТЬ И ПРОТОКОЛ"
   },
@@ -3370,8 +3367,8 @@
   "Remove": {
     "value": "Убрать"
   },
-  "Remove \"%s\"? References to it fall back to vpn-1.": {
-    "value": "Удалить «%s»? Ссылки на него переключатся на vpn-1."
+  "Remove \"%1$s\" (%2$s)? References to it fall back to vpn-1.": {
+    "value": "Удалить «%1$s» (%2$s)? Ссылки на него переключатся на vpn-1."
   },
   "Remove \"%s\" from this folder?": {
     "value": "Удалить «%s» из этой папки?"
@@ -4226,6 +4223,9 @@
   "Tip: pull down to refresh, or tap ⟳ in the top bar after adding.": {
     "value": "Совет: потяните список вниз для обновления или нажмите ⟳ в верхней панели после добавления."
   },
+  "Title": {
+    "value": "Название"
+  },
   "To keep the VPN running in background, also disable battery restrictions for L×Box. The settings screen will open — find and toggle:\n\n• \"Battery usage\" → \"Don't optimize\" or \"Allow background activity\"\n\n• On OnePlus / OPPO / Realme also:\n  \"Stop activity when idle\" → OFF": {
     "value": "Чтобы VPN работал в фоне, отключите для L×Box и ограничения батареи. Откроется экран настроек — найдите и переключите:\n\n• «Использование батареи» → «Не оптимизировать» или «Разрешить фоновую активность»\n\n• На OnePlus / OPPO / Realme также:\n  «Останавливать при бездействии» → выкл."
   },
@@ -4704,6 +4704,9 @@
   },
   "only directions listed above this one": {
     "value": "только Направления выше этого по списку"
+  },
+  "optional — defaults to the tag": {
+    "value": "необязательно — по умолчанию тег"
   },
   "options offered in the selector": {
     "value": "варианты, предлагаемые в селекторе"

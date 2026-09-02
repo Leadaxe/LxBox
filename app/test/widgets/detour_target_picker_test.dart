@@ -9,9 +9,9 @@ import 'package:lxbox/widgets/detour_target_picker.dart';
 /// (включая выключенных членов — toggle не должен молча менять смысл ссылки).
 void main() {
   const directions = [
-    Direction(tag: 'vpn-1'),
-    Direction(tag: 'vpn-2', isDetour: true),
-    Direction(tag: 'vpn-3', isDetour: true, enabled: false),
+    Direction(tag: 'vpn-1', label: 'Main'),
+    Direction(tag: 'vpn-2', label: 'Relay', isDetour: true),
+    Direction(tag: 'vpn-3', label: 'Off relay', isDetour: true, enabled: false),
   ];
 
   test('обычное Направление скрыто, detour виден, disabled detour скрыт', () {

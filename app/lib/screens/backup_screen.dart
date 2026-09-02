@@ -9,11 +9,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
 import '../models/direction.dart';
-import '../models/server_list.dart';
 import '../services/direction_mutations.dart';
 import '../services/dns/dns_backup.dart';
 import '../services/lx_backup.dart';
-import '../services/parser/uri_utils.dart' show newUuidV4;
 import '../services/warp/warp_backup.dart';
 import '../services/settings_storage.dart';
 import '../services/error_format.dart';
@@ -640,63 +638,16 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
     final merged = subMerge.lists;
     applied += subMerge.applied;
 
-    // §401 (D-08x) — одиночные узлы и папки. Папка не сущность схемы: её
-    // члены приехали отдельными записями `servers[]` с общим полем `folder`,
-    // и собирается она ПО ЭТОМУ ИМЕНИ — записи с одинаковым `folder`
-    // становятся одной папкой, запись без пометки остаётся в корне списка.
-    //
-    // Порядок членов — порядок записей файла: пользователь раскладывал узлы
-    // сам, и перетасовать состав значило бы потерять его работу.
-    //
-    // Своя запись СИЛЬНЕЕ приехавшей, как и у подписок: папка с тем же именем
-    // не перезаписывается, а дополняется членами, которых в ней нет.
-    final folderAt = <String, int>{
-      for (var i = 0; i < merged.length; i++)
-        if (merged[i] is FolderServers) merged[i].name: i,
-    };
-    for (final srv in parsed.servers) {
-      final body = srv.uri.isNotEmpty
-          ? srv.uri
-          : (srv.configJson == null ? '' : jsonEncode(srv.configJson));
-      if (body.isEmpty) continue;
+    // §401 (D-08x) + §405 — одиночные узлы и папки: слияние живёт чистой
+    // функцией рядом с [mergeBackupSubscriptions] (`services/lx_backup.dart`),
+    // здесь только состояние. Идентичность одиночной записи — её ТЕЛО, папки
+    // — её имя; совпавшее пропускается молча.
+    final srvMerge = mergeBackupServers(merged, parsed.servers);
+    merged
+      ..clear()
+      ..addAll(srvMerge.lists);
+    applied += srvMerge.applied;
 
-      if (srv.folder.isEmpty) {
-        merged.add(UserServer(
-          id: newUuidV4(),
-          name: srv.name,
-          enabled: srv.enabled,
-          tagPrefix: '',
-          detourPolicy: DetourPolicy.defaults,
-          origin: UserSource.manual,
-          createdAt: DateTime.now(),
-          rawBody: body,
-        ));
-        applied++;
-        continue;
-      }
-
-      final member = FolderMember(raw: body, enabled: srv.enabled);
-      final at = folderAt[srv.folder];
-      if (at == null) {
-        merged.add(FolderServers(
-          id: newUuidV4(),
-          name: srv.folder,
-          enabled: true,
-          tagPrefix: '',
-          detourPolicy: DetourPolicy.defaults,
-          members: [member],
-        ));
-        folderAt[srv.folder] = merged.length - 1;
-        applied++;
-        continue;
-      }
-      final folder = merged[at] as FolderServers;
-      // Дубль по телу члена не заводим: повторный импорт одного файла не
-      // должен удваивать состав папки.
-      if (folder.members.any((m) => m.raw == body)) continue;
-      merged[at] = folder.copyWith(members: [...folder.members, member]);
-      applied++;
-    }
     // Сравниваем поэлементно по identity: `copyWith` выше создаёт НОВЫЙ
     // объект на месте старого, и длина списка при этом не меняется — проверка
     // одной только длины пропустила бы долитые disabled-отметки.

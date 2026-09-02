@@ -87,9 +87,9 @@ void main() {
       final r = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
-            tag: 'vpn-2', isDetour: true, includeBlock: true),
+            tag: 'vpn-2', label: 'Relay', isDetour: true, includeBlock: true),
       ]);
       expect(byTag(r, 'vpn-2')['outbounds'], contains('block'));
       // У всех Направлений есть ноды → список пустых Направлений пуст.
@@ -104,37 +104,38 @@ void main() {
       final r = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
             tag: 'vpn-2',
+            label: 'Relay',
             isDetour: true,
             nodeFilter: 'no-such-node'),
       ]);
       final vpn2 = byTag(r, 'vpn-2');
       expect(vpn2['outbounds'], ['block', 'direct-out']);
       expect(vpn2['default'], 'block');
-      // Единый текст warning'а; displayLabel detour-Направления — тег с ⚙.
+      // Единый текст warning'а; displayLabel detour-Направления — с ⚙-префиксом.
       expect(
           r.emitWarnings,
           contains(contains(
-              'Direction "⚙ vpn-2": node filter matched no nodes')));
+              'Direction "⚙ Relay" (vpn-2): node filter matched no nodes')));
       // §274 — display-имя попадает в directionsWithoutNodes (SnackBar на
       // Home); Направление с нодами (Main) в список не попадает.
-      expect(r.directionsWithoutNodes, ['⚙ vpn-2']);
+      expect(r.directionsWithoutNodes, ['⚙ Relay']);
     });
 
     test('пустой ОБЫЧНЫЙ Направление — прежний §201 [block, direct-out]', () async {
       final r = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
-        const Direction(tag: 'vpn-1'),
-        const Direction(tag: 'vpn-2', nodeFilter: 'no-such-node'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(tag: 'vpn-2', label: 'X', nodeFilter: 'no-such-node'),
       ]);
       final vpn2 = byTag(r, 'vpn-2');
       expect(vpn2['outbounds'], ['block', 'direct-out']);
       expect(vpn2['default'], 'block');
       // §274 — display-имя пустого Направления в directionsWithoutNodes.
-      expect(r.directionsWithoutNodes, ['vpn-2']);
+      expect(r.directionsWithoutNodes, ['X']);
       // Warning говорит правду: emptyFallback → default=block.
       expect(r.emitWarnings,
           contains(contains('traffic is blocked (default)')));
@@ -149,9 +150,10 @@ void main() {
       final r = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
             tag: 'vpn-2',
+            label: 'X',
             includeDirect: true,
             nodeFilter: 'no-such-node'),
       ]);
@@ -162,7 +164,7 @@ void main() {
           contains(contains('traffic goes direct (no VPN hop)')));
       expect(r.emitWarnings,
           isNot(contains(contains('traffic is blocked'))));
-      expect(r.directionsWithoutNodes, ['vpn-2']);
+      expect(r.directionsWithoutNodes, ['X']);
     });
 
     test('негативные кейсы directionsWithoutNodes: не вина фильтра — не варним',
@@ -171,18 +173,18 @@ void main() {
       final withNodes = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
       ]);
       expect(withNodes.directionsWithoutNodes, isEmpty);
       // (б) Непустой фильтр, но подписок нет вовсе (selectorTags пуст) —
       // 0 нод не вина фильтра, SnackBar не показываем.
       final noSubs = await build(<ServerList>[], [
-        const Direction(tag: 'vpn-1', nodeFilter: 'anything'),
+        const Direction(tag: 'vpn-1', label: 'Main', nodeFilter: 'anything'),
       ]);
       expect(noSubs.directionsWithoutNodes, isEmpty);
       // (в) Пустой фильтр и нет подписок — тоже тишина.
       final emptyAll = await build(<ServerList>[], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
       ]);
       expect(emptyAll.directionsWithoutNodes, isEmpty);
     });
@@ -230,9 +232,9 @@ void main() {
             names: ['Relay Berlin'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
-            tag: 'vpn-2', isDetour: true, nodeFilter: 'Relay'),
+            tag: 'vpn-2', label: 'Relay', isDetour: true, nodeFilter: 'Relay'),
       ]);
       expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
       expect(cyclesOf(r), isEmpty, reason: '§254-fatal больше не нужен');
@@ -259,9 +261,10 @@ void main() {
             names: ['Relay Berlin'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2-auto')),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
             tag: 'vpn-2',
+            label: 'Relay',
             isDetour: true,
             nodeFilter: 'Relay',
             auto: DirectionAuto()),
@@ -293,9 +296,10 @@ void main() {
             names: ['Mid'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
             tag: 'vpn-2',
+            label: 'Relay',
             isDetour: true,
             nodeFilter: 'Client'),
       ]);
@@ -323,11 +327,11 @@ void main() {
             names: ['Node B'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
-            tag: 'vpn-2', isDetour: true, nodeFilter: 'Node A'),
+            tag: 'vpn-2', label: 'C1', isDetour: true, nodeFilter: 'Node A'),
         const Direction(
-            tag: 'vpn-3', isDetour: true, nodeFilter: 'Node B'),
+            tag: 'vpn-3', label: 'C2', isDetour: true, nodeFilter: 'Node B'),
       ]);
       expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
       expect(cyclesOf(r), isEmpty);
@@ -349,8 +353,8 @@ void main() {
             names: ['Node X'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Direction(tag: 'vpn-1'),
-        const Direction(tag: 'vpn-2', nodeFilter: 'Node X'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
+        const Direction(tag: 'vpn-2', label: 'Plain', nodeFilter: 'Node X'),
       ]);
       expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
       expect(cyclesOf(r), isEmpty);
@@ -373,9 +377,10 @@ void main() {
             names: ['Relay Berlin', 'Client A', 'Client B'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
             tag: 'vpn-2',
+            label: 'Relay',
             isDetour: true,
             nodeFilter: 'Relay',
             auto: DirectionAuto()),
@@ -424,11 +429,11 @@ void main() {
             names: ['IN Awg'],
             policy: const DetourPolicy(overrideDetour: 'vpn-2')),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
-            tag: 'vpn-2', isDetour: true, nodeFilter: 'BL'),
+            tag: 'vpn-2', label: 'BL', isDetour: true, nodeFilter: 'BL'),
         const Direction(
-            tag: 'vpn-3', isDetour: true, nodeFilter: 'IN'),
+            tag: 'vpn-3', label: 'WARP IN', isDetour: true, nodeFilter: 'IN'),
       ]);
       expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
       expect(cyclesOf(r), isEmpty);
@@ -461,13 +466,13 @@ void main() {
             policy: const DetourPolicy(overrideDetour: 'vpn-4')),
         vlessServer(id: 'in1', names: ['IN Masque'])
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
-            tag: 'vpn-2', isDetour: true, nodeFilter: 'OUT'),
+            tag: 'vpn-2', label: 'OUT', isDetour: true, nodeFilter: 'OUT'),
         const Direction(
-            tag: 'vpn-3', isDetour: true, nodeFilter: 'BL'),
+            tag: 'vpn-3', label: 'BL', isDetour: true, nodeFilter: 'BL'),
         const Direction(
-            tag: 'vpn-4', isDetour: true, nodeFilter: 'IN'),
+            tag: 'vpn-4', label: 'WARP IN', isDetour: true, nodeFilter: 'IN'),
       ]);
       expect(byTag(r, 'BL Sofia')['detour'], 'vpn-4');
       expect(byTag(r, 'OUT Warp')['detour'], 'vpn-3');
@@ -490,11 +495,11 @@ void main() {
             names: ['Node Y'],
             policy: const DetourPolicy(overrideDetour: 'vpn-3')),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
-            tag: 'vpn-2', isDetour: true, nodeFilter: 'Node X'),
+            tag: 'vpn-2', label: 'C1', isDetour: true, nodeFilter: 'Node X'),
         const Direction(
-            tag: 'vpn-3', isDetour: true, nodeFilter: 'Node Y'),
+            tag: 'vpn-3', label: 'C2', isDetour: true, nodeFilter: 'Node Y'),
       ]);
       expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
       expect(cyclesOf(r), isEmpty);
@@ -524,8 +529,8 @@ void main() {
         template: template(),
         settings: BuildSettings(
           directions: const [
-            Direction(tag: 'vpn-1'),
-            Direction(tag: 'vpn-2', isDetour: true),
+            Direction(tag: 'vpn-1', label: 'Main'),
+            Direction(tag: 'vpn-2', label: 'Relay', isDetour: true),
           ],
           customRules: [
             CustomRuleInline(
@@ -559,9 +564,9 @@ void main() {
         folder,
         vlessServer(id: 'x', names: ['Exit Node']),
       ], [
-        const Direction(tag: 'vpn-1'),
+        const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
-            tag: 'vpn-2', isDetour: true, nodeFilter: 'Exit'),
+            tag: 'vpn-2', label: 'Relay', isDetour: true, nodeFilter: 'Exit'),
       ]);
       expect(byTag(r, 'hm- node-b')['detour'], 'hm- vpn-2');
       expect(r.emitWarnings, isNot(contains(contains('removed detour'))));
@@ -576,8 +581,8 @@ void main() {
       final r = await build(
         [vlessServer(id: 'u', names: ['A'])],
         [
-          const Direction(tag: 'vpn-1'),
-          const Direction(tag: 'vpn-2', isDetour: true),
+          const Direction(tag: 'vpn-1', label: 'Main'),
+          const Direction(tag: 'vpn-2', label: 'Relay', isDetour: true),
         ],
         routeFinal: 'vpn-2',
       );
@@ -595,9 +600,10 @@ void main() {
       final r = await build(
         [vlessServer(id: 'u', names: ['A'])],
         [
-          const Direction(tag: 'vpn-1'),
+          const Direction(tag: 'vpn-1', label: 'Main'),
           const Direction(
               tag: 'vpn-2',
+              label: 'Relay',
               isDetour: true,
               auto: DirectionAuto()),
         ],
@@ -616,9 +622,10 @@ void main() {
       final r = await build(
         [vlessServer(id: 'u', names: ['A'])],
         [
-          const Direction(tag: 'vpn-1'),
+          const Direction(tag: 'vpn-1', label: 'Main'),
           const Direction(
               tag: 'vpn-2',
+              label: 'Relay',
               isDetour: true,
               nodeFilter: 'no-such-node',
               auto: DirectionAuto()),
@@ -637,8 +644,8 @@ void main() {
       final r = await build(
         [vlessServer(id: 'u', names: ['A'])],
         [
-          const Direction(tag: 'vpn-1'),
-          const Direction(tag: 'vpn-2'),
+          const Direction(tag: 'vpn-1', label: 'Main'),
+          const Direction(tag: 'vpn-2', label: 'Plain'),
         ],
         routeFinal: 'vpn-2',
       );

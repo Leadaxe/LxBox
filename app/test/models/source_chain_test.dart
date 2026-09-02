@@ -22,6 +22,7 @@ void main() {
     test('полная цепочка: idle_timeout / strip / rewrite доезжают дословно', () {
       const c = SourceChain(
         tag: 'tuned',
+        label: 'Tuned',
         hops: ['a', 'b', 'c'],
         idleTimeout: '10m',
         stripEvasion: false,
@@ -37,8 +38,7 @@ void main() {
       expect(back.rewrite, {
         'vless': {'flow': 'xtls-rprx-vision'},
       });
-      // Контракт 0.9.0 / D-082 — `label` в JSON не эмитится.
-      expect(back.toJson().containsKey('label'), false);
+      expect(back.label, 'Tuned');
     });
 
     test('rewrite с null-значением (RFC 7396 «удалить ключ») не теряется', () {
@@ -94,16 +94,17 @@ void main() {
     test('copyWith не трогает tag и умеет снять strip_evasion в «умолчание»',
         () {
       const c = SourceChain(tag: 'c', hops: ['a', 'b'], stripEvasion: false);
-      final off = c.copyWith();
+      final off = c.copyWith(label: 'X');
       expect(off.tag, 'c');
+      expect(off.label, 'X');
       expect(off.stripEvasion, isFalse);
       expect(c.copyWith(clearStripEvasion: true).stripEvasion, isNull);
     });
 
-    test('legacy-ключ label из старого состояния отбрасывается', () {
-      final c = SourceChain.fromJson({'tag': 'chain-1', 'label': 'Двойной'});
-      expect(c.tag, 'chain-1');
-      expect(c.toJson().containsKey('label'), false);
+    test('displayLabel: пустое имя показывает тег', () {
+      expect(const SourceChain(tag: 'chain-1').displayLabel, 'chain-1');
+      expect(const SourceChain(tag: 'chain-1', label: 'Двойной').displayLabel,
+          'Двойной');
     });
   });
 

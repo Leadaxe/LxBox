@@ -16,9 +16,12 @@ import '../config/consts.dart'
     show kDetourTagPrefix, kDirectOutboundTag, kBlockOutboundTag;
 import 'parser_config.dart' show DirectionTemplate, DefaultDirection;
 
-/// Историческая граница на СОЗДАНИЕ Направлений; лимитом больше НЕ является
-/// (§393 A3, паритет с лаунчером: `configtypes.NextDirectionTag` потолка не
-/// имеет). Осталась константой-ориентиром для тестов.
+/// §393 A3 — верхняя граница ДЕФОЛТНЫХ имён «VPN ①..VPN ⑩» (Unicode-блок
+/// Enclosed Alphanumerics кончается на ⑩). Лимитом на СОЗДАНИЕ Направлений
+/// больше НЕ является: паритет с лаунчером
+/// (`configtypes.NextDirectionTag` — потолка нет, лимит LxBox в 10 был
+/// следствием интерфейса, а не модели). N>10 получает честное «VPN 11»
+/// текстом (см. [defaultDirectionLabel]).
 const int kMaxDirections = 10;
 
 /// §393 A3 — префикс автоматически выдаваемых тегов. Общий с лаунчером
@@ -34,13 +37,36 @@ const String kDirectionTagPrefix = 'vpn-';
 /// навсегда исчезает из списка, хотя тег свободен, а пользователь видит
 /// растущие числа при трёх живых Направлениях.
 ///
-/// Потолка нет: [kMaxDirections] — не лимит модели.
+/// Потолка нет: [kMaxDirections] остался границей ДЕФОЛТНЫХ имён, не модели.
 String nextDirectionTag(Iterable<String> usedTags) {
   final used = usedTags.toSet();
   for (var i = 1;; i++) {
     final tag = '$kDirectionTagPrefix$i';
     if (!used.contains(tag)) return tag;
   }
+}
+
+/// §198 — дефолтный label Направления по номеру: «VPN ①»…«VPN ⑩». Кружок-цифра —
+/// Unicode «Enclosed Alphanumerics» (① = U+2460, идут подряд 1..10). N вне
+/// 1..10 → без кружка («VPN N»).
+String defaultDirectionLabel(int n) {
+  if (n < 1 || n > 10) return 'VPN $n';
+  return 'VPN ${String.fromCharCode(0x2460 + n - 1)}';
+}
+
+/// Номер Направления из tag 'vpn-N' (для дефолтного label). null если не парсится.
+int? directionNumberOf(String tag) {
+  final m = RegExp(r'^vpn-(\d+)$').firstMatch(tag);
+  return m == null ? null : int.tryParse(m.group(1)!);
+}
+
+/// §393 A3 — дефолтное имя для НОВОГО Направления с тегом [tag]. Для
+/// автовыданного `vpn-N` — «VPN ⓝ» (§198), для произвольного
+/// пользовательского тега — сам тег: выдумывать «VPN» для `ru-exit` значило
+/// бы врать о содержимом.
+String defaultLabelForTag(String tag) {
+  final n = directionNumberOf(tag);
+  return n == null ? tag : defaultDirectionLabel(n);
 }
 
 /// uint16 верхняя граница для `tolerance` (§161 — вне диапазона роняет ядро).
@@ -327,6 +353,7 @@ String? directionTagConflict(String tag, Iterable<String> existingTags) {
 class Direction {
   const Direction({
     required this.tag,
+    required this.label,
     this.enabled = true,
     this.includeDirect = false,
     this.includeBlock = false,
@@ -342,6 +369,9 @@ class Direction {
   /// Системный immutable id: автовыданный `vpn-N` либо произвольный тег,
   /// заданный при СОЗДАНИИ (§393 A3). После создания не правится.
   final String tag;
+
+  /// Отображаемое имя ("Моя Германия") — единственное, что юзер вводит как «имя».
+  final String label;
 
   /// Вкл/выкл (заменяет enabled_groups[]). vpn-1 всегда true инвариантом.
   final bool enabled;
@@ -402,16 +432,31 @@ class Direction {
   /// raw JSON мимо UI/storage/API, только read-time коэрс закрывает все пути.
   final bool isDetour;
 
-  /// Имя для показа = сам [tag] плюс ⚙-маркер detour-мишени.
-  ///
-  /// Контракт 0.9.0 — второго имени у Направления нет: тег и есть имя.
-  /// ⚙ раньше жил В САМОМ label в storage (§274) и нормализовался при смене
-  /// флага; теперь префикс ЧИСТО производный — вычисляется здесь по
-  /// [isDetour] и в данные не попадает. Дописывать его в tag нельзя: на тег
-  /// ссылаются правила, `include`, хопы цепочек и detour-мишени, и маркер
-  /// увёл бы тег из-под ссылок.
-  String get displayLabel =>
-      isDetour ? '$kDetourTagPrefix$tag' : tag;
+  /// §274 — ⚙ живёт в САМОМ label (storage), как ⚙-метка в тегах
+  /// detour-серверов §080/§090: [normalizeLabel] в [copyWith]/[fromJson]
+  /// переименовывает Направление при смене флага (set → '⚙ <label>', unset →
+  /// префикс срезается; ⚙ зарезервирован как маркер — руками его не снять,
+  /// нормализация вернёт). Display-сайты берут имя отсюда: это label (или
+  /// tag, если label пуст) + страховочный префикс для объектов, созданных
+  /// прямым конструктором мимо нормализации. Дедуп гарантирован.
+  String get displayLabel {
+    final base = label.isNotEmpty ? label : tag;
+    if (!isDetour || base.startsWith(kDetourTagPrefix)) return base;
+    return '$kDetourTagPrefix$base';
+  }
+
+  /// §274 — единая точка «переименования» detour-Направления: label обязан
+  /// начинаться с [kDetourTagPrefix] при [isDetour] и НЕ начинаться без
+  /// него. Пустой label не трогаем (display-фолбэк на tag — в
+  /// [displayLabel]). Зовётся из [copyWith] (редактор, Debug API, storage)
+  /// и [fromJson] (restore из backup / ручная правка файла).
+  static String normalizeLabel(String label, bool isDetour) {
+    if (label.isEmpty) return label;
+    final marked = label.startsWith(kDetourTagPrefix);
+    if (isDetour && !marked) return '$kDetourTagPrefix$label';
+    if (!isDetour && marked) return label.substring(kDetourTagPrefix.length);
+    return label;
+  }
 
   /// Производный tag urltest-двойника. В storage НЕ хранится.
   ///
@@ -426,6 +471,7 @@ class Direction {
   bool get isRequired => tag == 'vpn-1';
 
   Direction copyWith({
+    String? label,
     bool? enabled,
     bool? includeDirect,
     bool? includeBlock,
@@ -440,6 +486,8 @@ class Direction {
   }) =>
       Direction(
         tag: tag, // immutable — не параметр copyWith
+        // §274 — смена detour-флага переименовывает Направление (⚙ в label).
+        label: normalizeLabel(label ?? this.label, isDetour ?? this.isDetour),
         enabled: enabled ?? this.enabled,
         includeDirect: includeDirect ?? this.includeDirect,
         includeBlock: includeBlock ?? this.includeBlock,
@@ -464,9 +512,8 @@ class Direction {
     final isDetour = tag != 'vpn-1' && (json['detour'] as bool? ?? false);
     return Direction(
       tag: tag,
-      // Контракт 0.9.0 — ключ `label` старого состояния ЧИТАЕТСЯ И
-      // ОТБРАСЫВАЕТСЯ: именем остаётся tag. Отдельной миграции файла не
-      // нужно — ключ отмирает на первой же записи (toJson его не пишет).
+      // §274 — read-time нормализация ⚙-префикса (restore/ручная правка).
+      label: normalizeLabel(json['label'] as String? ?? tag, isDetour),
       enabled: json['enabled'] as bool? ?? true,
       includeDirect: json['include_direct'] as bool? ?? false,
       includeBlock: json['include_block'] as bool? ?? false,
@@ -489,7 +536,7 @@ class Direction {
 
   Map<String, dynamic> toJson() => {
         'tag': tag,
-        // Контракт 0.9.0 — `label` не эмитится: имя у Направления одно, tag.
+        'label': label,
         'enabled': enabled,
         'include_direct': includeDirect,
         'include_block': includeBlock,
@@ -518,6 +565,7 @@ class Direction {
   }) =>
       Direction(
         tag: dc.tag,
+        label: dc.label.isEmpty ? dc.tag : dc.label,
         enabled: enabled,
         includeDirect: tpl.include.contains('direct'),
         includeBlock: tpl.include.contains('block'), // §201 (в дефолте нет → false)

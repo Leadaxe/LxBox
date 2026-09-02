@@ -391,12 +391,7 @@ class DefaultDirection {
   });
 
   final String tag;
-
-  /// Контракт 0.9.0 — сид его БОЛЬШЕ НЕ ИСПОЛЬЗУЕТ: у Направления одно имя,
-  /// tag ([Direction.seedFromDefault]). Поле оставлено, чтобы шаблон и его
-  /// l10n-overlay остались байт-совместимыми; читается и никуда не идёт.
   final String label;
-
   final bool defaultEnabled;
 
   factory DefaultDirection.fromJson(Map<String, dynamic> json) {

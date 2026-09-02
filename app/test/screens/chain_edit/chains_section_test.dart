@@ -30,7 +30,16 @@ Widget _host(List<SourceChain> chains,
     );
 
 void main() {
-  testWidgets('строка показывает тег цепочки — её единственное имя',
+  testWidgets('строка показывает имя и тег цепочки', (tester) async {
+    await tester.pumpWidget(_host(const [
+      SourceChain(tag: 'chain-1', label: 'Via Germany', hops: ['a', 'b']),
+    ]));
+    await tester.pumpAndSettle();
+    expect(find.text('Via Germany'), findsOneWidget);
+    expect(find.textContaining('chain-1'), findsOneWidget);
+  });
+
+  testWidgets('без label показываем тег: имени цепочке не выдумываем',
       (tester) async {
     await tester.pumpWidget(_host(const [
       SourceChain(tag: 'chain-1', hops: ['a', 'b']),

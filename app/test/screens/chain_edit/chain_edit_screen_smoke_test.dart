@@ -31,7 +31,7 @@ Widget _host(SourceChain chain) => MaterialApp(
       home: ChainEditScreen(
         initial: chain,
         config: _config(),
-        directions: const [Direction(tag: 'vpn-1')],
+        directions: const [Direction(tag: 'vpn-1', label: 'vpn-1')],
         chains: [chain],
       ),
     );
@@ -155,7 +155,7 @@ void main() {
             },
           ],
         })),
-        directions: const [Direction(tag: 'vpn-1')],
+        directions: const [Direction(tag: 'vpn-1', label: 'vpn-1')],
         chains: const [SourceChain(tag: 'via-de', hops: ['home', 'de-exit'])],
       ),
     ));

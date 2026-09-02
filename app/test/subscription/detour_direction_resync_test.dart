@@ -64,8 +64,8 @@ void main() {
       final data = {
         'directions_migrated': true,
         'directions': [
-          const Direction(tag: 'vpn-1').toJson(),
-          const Direction(tag: 'vpn-2', isDetour: true).toJson(),
+          const Direction(tag: 'vpn-1', label: 'Main').toJson(),
+          const Direction(tag: 'vpn-2', label: 'Relay', isDetour: true).toJson(),
         ],
         'server_lists': [soloWithDetour('vpn-2').toJson()],
       };

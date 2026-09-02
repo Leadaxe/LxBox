@@ -7,6 +7,7 @@ void main() {
     test('full direction with auto → JSON → Direction', () {
       const original = Direction(
         tag: 'vpn-2',
+        label: 'Стриминг',
         enabled: false,
         includeDirect: true,
         nodeFilter: '🇩🇪|🇳🇱',
@@ -24,8 +25,7 @@ void main() {
       final restored = Direction.fromJson(original.toJson());
 
       expect(restored.tag, 'vpn-2');
-      // Контракт 0.9.0 — `label` в JSON не эмитится.
-      expect(original.toJson().containsKey('label'), false);
+      expect(restored.label, 'Стриминг');
       expect(restored.enabled, false);
       expect(restored.includeDirect, true);
       expect(restored.nodeFilter, '🇩🇪|🇳🇱');
@@ -40,7 +40,7 @@ void main() {
     });
 
     test('§201 — includeBlock round-trip + дефолт false', () {
-      const c = Direction(tag: 'vpn-2', includeBlock: true);
+      const c = Direction(tag: 'vpn-2', label: 'x', includeBlock: true);
       final r = Direction.fromJson(c.toJson());
       expect(r.includeBlock, true);
       expect(c.toJson()['include_block'], true);
@@ -50,7 +50,7 @@ void main() {
 
     test('§197 — nodeFilterInvert round-trip', () {
       const c = Direction(
-          tag: 'vpn-2', nodeFilter: 'bypass', nodeFilterInvert: true);
+          tag: 'vpn-2', label: 'x', nodeFilter: 'bypass', nodeFilterInvert: true);
       final r = Direction.fromJson(c.toJson());
       expect(r.nodeFilterInvert, true);
       expect(r.nodeFilter, 'bypass');
@@ -63,7 +63,7 @@ void main() {
     });
 
     test('auto == null survives round-trip (галка ВЫКЛ)', () {
-      const original = Direction(tag: 'vpn-3');
+      const original = Direction(tag: 'vpn-3', label: 'VPN ③');
       final json = original.toJson();
       expect(json['auto'], isNull);
       final restored = Direction.fromJson(json);
@@ -72,6 +72,7 @@ void main() {
 
     test('defaults applied on missing keys', () {
       final c = Direction.fromJson({'tag': 'vpn-5'});
+      expect(c.label, 'vpn-5'); // label fallback к tag
       expect(c.enabled, true);
       expect(c.includeDirect, false);
       expect(c.nodeFilter, '');
@@ -84,14 +85,14 @@ void main() {
   group('§393 A3 — include[]', () {
     test('round-trip: список тегов переживает toJson/fromJson', () {
       const c = Direction(
-          tag: 'vpn-3', include: ['vpn-1', 'vpn-2']);
+          tag: 'vpn-3', label: 'x', include: ['vpn-1', 'vpn-2']);
       final json = c.toJson();
       expect(json['include'], ['vpn-1', 'vpn-2']);
       expect(Direction.fromJson(json).include, ['vpn-1', 'vpn-2']);
     });
 
     test('пустой include ключа НЕ пишет (байт-совместимость §221)', () {
-      const c = Direction(tag: 'vpn-1');
+      const c = Direction(tag: 'vpn-1', label: 'x');
       expect(c.toJson().containsKey('include'), false);
     });
 
@@ -113,6 +114,7 @@ void main() {
     test('include ортогонален includeDirect/includeBlock', () {
       const c = Direction(
           tag: 'vpn-2',
+          label: 'x',
           include: ['vpn-1'],
           includeDirect: true,
           includeBlock: true);
@@ -126,7 +128,7 @@ void main() {
     });
 
     test('copyWith меняет include, не трогая прочее', () {
-      const c = Direction(tag: 'vpn-2', includeDirect: true);
+      const c = Direction(tag: 'vpn-2', label: 'x', includeDirect: true);
       final r = c.copyWith(include: ['vpn-1']);
       expect(r.include, ['vpn-1']);
       expect(r.includeDirect, true);
@@ -192,16 +194,50 @@ void main() {
     });
   });
 
+  group('§393 A3 — defaultLabelForTag', () {
+    test('vpn-N → «VPN ⓝ», выше 10 — числом', () {
+      expect(defaultLabelForTag('vpn-1'), 'VPN ①');
+      expect(defaultLabelForTag('vpn-10'), 'VPN ⑩');
+      expect(defaultLabelForTag('vpn-11'), 'VPN 11');
+    });
+
+    test('произвольный тег → сам тег', () {
+      expect(defaultLabelForTag('ru-exit'), 'ru-exit');
+      expect(defaultLabelForTag('vpn-1-auto'), 'vpn-1-auto');
+    });
+  });
+
+  group('§198 — defaultDirectionLabel (цифра в кружке)', () {
+    test('1..10 → VPN ①..VPN ⑩', () {
+      expect(defaultDirectionLabel(1), 'VPN ①');
+      expect(defaultDirectionLabel(2), 'VPN ②');
+      expect(defaultDirectionLabel(5), 'VPN ⑤');
+      expect(defaultDirectionLabel(10), 'VPN ⑩');
+    });
+
+    test('вне 1..10 → без кружка', () {
+      expect(defaultDirectionLabel(0), 'VPN 0');
+      expect(defaultDirectionLabel(11), 'VPN 11');
+    });
+
+    test('directionNumberOf парсит vpn-N', () {
+      expect(directionNumberOf('vpn-1'), 1);
+      expect(directionNumberOf('vpn-7'), 7);
+      expect(directionNumberOf('vpn-1-auto'), isNull);
+      expect(directionNumberOf('direct-out'), isNull);
+    });
+  });
+
   group('Direction computed', () {
     test('autoTag производный, не из storage', () {
-      const c = Direction(tag: 'vpn-4');
+      const c = Direction(tag: 'vpn-4', label: 'x');
       expect(c.autoTag, 'vpn-4-auto');
       expect(c.toJson().containsKey('auto_tag'), false);
     });
 
     test('isRequired только для vpn-1', () {
-      expect(const Direction(tag: 'vpn-1').isRequired, true);
-      expect(const Direction(tag: 'vpn-2').isRequired, false);
+      expect(const Direction(tag: 'vpn-1', label: 'x').isRequired, true);
+      expect(const Direction(tag: 'vpn-2', label: 'x').isRequired, false);
     });
   });
 
@@ -344,21 +380,21 @@ void main() {
   });
 
   group('Direction.copyWith', () {
-    test('tag immutable — copyWith его не принимает', () {
-      const c = Direction(tag: 'vpn-2');
-      final n = c.copyWith(nodeFilter: 'x');
+    test('tag immutable, меняем только label', () {
+      const c = Direction(tag: 'vpn-2', label: 'old');
+      final n = c.copyWith(label: 'new');
       expect(n.tag, 'vpn-2');
-      expect(n.nodeFilter, 'x');
+      expect(n.label, 'new');
     });
 
     test('clearAuto убирает auto', () {
-      const c = Direction(tag: 'vpn-2', auto: DirectionAuto());
+      const c = Direction(tag: 'vpn-2', label: 'x', auto: DirectionAuto());
       expect(c.copyWith(clearAuto: true).auto, isNull);
     });
 
     test('auto сохраняется если не трогали', () {
-      const c = Direction(tag: 'vpn-2', auto: DirectionAuto());
-      expect(c.copyWith().auto, isNotNull);
+      const c = Direction(tag: 'vpn-2', label: 'x', auto: DirectionAuto());
+      expect(c.copyWith(label: 'y').auto, isNotNull);
     });
   });
 
@@ -372,6 +408,7 @@ void main() {
       );
       final c = Direction.seedFromDefault(dc, tpl, enabled: true);
       expect(c.tag, 'vpn-1');
+      expect(c.label, 'Главный');
       expect(c.includeDirect, true); // include ∋ direct
       expect(c.interruptExistConnections, true);
       expect(c.nodeFilter, '');
@@ -379,10 +416,10 @@ void main() {
       expect(c.auto, isNull); // auto передаётся снаружи; здесь не задан
     });
 
-    test('include пуст → без direct', () {
+    test('label fallback к tag когда пусто; include пуст → без direct', () {
       final dc = DefaultDirection(tag: 'vpn-3');
       final c = Direction.seedFromDefault(dc, DirectionTemplate(), enabled: false);
-      expect(c.tag, 'vpn-3');
+      expect(c.label, 'vpn-3');
       expect(c.includeDirect, false); // include пуст
     });
   });

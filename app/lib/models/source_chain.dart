@@ -66,6 +66,7 @@ const Map<String, bool> kChainStripDefault = {
 class SourceChain {
   const SourceChain({
     required this.tag,
+    this.label = '',
     this.enabled = true,
     this.hops = const [],
     this.idleTimeout = '',
@@ -79,6 +80,9 @@ class SourceChain {
   /// [Direction.tag]: на него ссылаются фильтры Направлений, `route_final` и
   /// позиции ДРУГИХ цепочек.
   final String tag;
+
+  /// Отображаемое имя. Пусто → показываем [tag] (см. [displayLabel]).
+  final String label;
 
   /// Выключенная цепочка не эмитится и не попадает в пул — как выключенная
   /// подписка. Ссылка на неё из другой цепочки деградирует ту цепочку
@@ -152,10 +156,15 @@ class SourceChain {
   /// бэкапа) — такие встают в КОНЕЦ, сохраняя взаимный порядок.
   final int order;
 
+  /// Имя для показа. Пустой label → сам тег: выдумывать имя цепочке, которую
+  /// пользователь не назвал, значило бы врать о её содержимом.
+  String get displayLabel => label.isNotEmpty ? label : tag;
+
   /// Умолчание ядра: отсутствие ключа = true.
   bool get stripEvasionEnabled => stripEvasion ?? true;
 
   SourceChain copyWith({
+    String? label,
     bool? enabled,
     List<String>? hops,
     String? idleTimeout,
@@ -167,6 +176,7 @@ class SourceChain {
   }) =>
       SourceChain(
         tag: tag, // immutable — не параметр copyWith (как у Direction)
+        label: label ?? this.label,
         enabled: enabled ?? this.enabled,
         hops: hops ?? this.hops,
         idleTimeout: idleTimeout ?? this.idleTimeout,
@@ -189,8 +199,7 @@ class SourceChain {
     final tag = (json['tag'] as String? ?? '').trim();
     return SourceChain(
       tag: tag,
-      // Контракт 0.9.0 / D-082 — ключ `label` старого состояния читается и
-      // ОТБРАСЫВАЕТСЯ: имя цепочки — её tag. Отмирает на первой же записи.
+      label: json['label'] as String? ?? '',
       enabled: json['enabled'] as bool? ?? true,
       hops: [
         for (final h in (json['hops'] as List? ?? const []))
@@ -222,7 +231,7 @@ class SourceChain {
   /// бы неотличимы уже в файле.
   Map<String, dynamic> toJson() => {
         'tag': tag,
-        // Контракт 0.9.0 / D-082 — `label` не эмитится: имя одно, tag.
+        'label': label,
         'enabled': enabled,
         'hops': hops,
         if (idleTimeout.isNotEmpty) 'idle_timeout': idleTimeout,
@@ -238,7 +247,7 @@ class SourceChain {
         // тогда как смысл ровно обратный. КАНОН ЦЕПОЧКИ ЭТОТ КЛЮЧ НЕ ЗНАЕТ
         // (`source_chain.schema.json`, `additionalProperties: false`) — это
         // поле storage, и в бэкап оно не уезжает: `_chainCanonToJson`
-        // вычёркивает его наравне с `tag`/`enabled`.
+        // вычёркивает его наравне с `tag`/`label`/`enabled`.
         if (order >= 0) 'order': order,
       };
 }

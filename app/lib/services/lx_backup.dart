@@ -88,9 +88,10 @@ const String kWarnFieldTypeMismatch = 'backup_field_type_mismatch';
 /// ключей их не ловит — без этого кода они пропадали бы совсем молча.
 const String kWarnSourceFlagDropped = 'backup_source_flag_dropped';
 
-/// §401 (D-082) — `label` одиночного узла (сервер/цепочка) разошёлся с тегом
-/// и применён не будет: у канона имени, кроме тега, нет (SPEC 112 контракта,
-/// «идентичность узла = тег»).
+/// §401 (D-082) — `label` одиночного сервера разошёлся с тегом и применён не
+/// будет: у канона имени, кроме тега, нет (SPEC 112 контракта, «идентичность
+/// узла = тег»). §405 — цепочки этот код больше не касается: их `label`
+/// применяет LxBox, оно читается и пишется.
 ///
 /// У сервера БЕЗ `node_tag` подпись ещё может стать именем записи — тогда
 /// потери нет и предупреждения тоже.
@@ -843,7 +844,7 @@ LxBackupFile parseLxBackup(
       warnings.add(LxBackupWarning(kWarnChainExists, tag));
       continue;
     }
-    chains.add(_chainFromCanon(j, tag, warnings));
+    chains.add(_chainFromCanon(j, tag));
   }
 
   final rules = <CustomRule>[];
@@ -1004,10 +1005,12 @@ const Set<String> _chainKeys = {
   ..._sourceRefKeys,
   'id',
   'tag',
-  // Контракт 0.9.0 / D-082 — `label` цепочки СНЕСЁН: имя одно, тег. Ключ
-  // остаётся известным, чтобы файл старой версии / лаунчера не поднимал
-  // `backup_unknown_field`; разошедшаяся с тегом подпись отбрасывается с
-  // [kWarnLabelDropped] (`chains_roundtrip` корпуса).
+  // §405 — `label` цепочки объявлен в схеме, и применяет его ТОЛЬКО LxBox
+  // (колонка «Поддержка» `docs/BACKUP.md` §2, D-094): у нас цепочка носит
+  // собственное имя рядом с тегом-ссылкой, лаунчер не применяет и провозит
+  // молча.
+  // Отсюда: читаем в модель, [kWarnLabelDropped] на нём НЕ поднимаем — терять
+  // нечего, поле наше.
   'label',
   'enabled',
   'chain',
@@ -1016,10 +1019,9 @@ const Set<String> _chainKeys = {
 
 const Set<String> _directionKeys = {
   'tag',
-  // Контракт 0.9.0 — `label` СНЁСЕН: имя Направления одно, tag. Ключ остаётся
-  // известным, чтобы файл старой версии / лаунчера не поднимал
-  // `backup_unknown_field`: он законно был, его читают и молча отбрасывают
-  // (warning'а, в отличие от servers[]/chains[] по D-082, здесь нет).
+  // §405 — `label` Направления объявлен в схеме, и применяет его только
+  // LxBox (колонка «Поддержка» `docs/BACKUP.md` §2, D-094): читается в модель
+  // и пишется обратно; лаунчер не применяет и провозит молча.
   'label',
   'enabled',
   'filter',
@@ -1522,15 +1524,17 @@ LxDnsRef? _dnsRefFromJson(Map<String, dynamic> j) {
 /// уже хранит тело. Эталон — `core/backup/directions.go:importDirection`.
 ///
 /// §401 — неизвестные ключи здесь больше не пересчитываются: их называет
-/// общий обход [_scanUnknown] полным путём. `label` контракт 0.9.0 снёс — он
-/// читается как незнакомый ключ и в модель не кладётся.
+/// общий обход [_scanUnknown] полным путём.
+///
+/// §405 — `label` читается В МОДЕЛЬ: это поле применяет LxBox (колонка
+/// «Поддержка» `docs/BACKUP.md` §2, D-094). Отсутствие ключа — пустое имя, и
+/// показан будет тег ([Direction.displayLabel]).
 Direction _directionFromCanon(Map<String, dynamic> j, String tag) {
   final rawAuto = j['auto'];
   return Direction(
     tag: tag,
-    // Имя Направления ровно одно — тег (контракт 0.9.0/§402): поля `label`
-    // у модели больше нет, из файла ключ читается как известный и молча
-    // отбрасывается (`_directionKeys`).
+    // §405 — пустое имя законно: отображаем тег.
+    label: (j['label'] as String?) ?? '',
     // Отсутствие ключа = true (`enabled.default` схемы), а не false.
     enabled: j['enabled'] as bool? ?? true,
     nodeFilter: (j['filter'] as String?) ?? '',
@@ -1593,10 +1597,14 @@ DirectionAuto _directionAutoFromCanon(Map<String, dynamic> j) {
 /// Прямые значения, без ссылок: у мобилы ссылочно-served полей (шаблонных
 /// `@urltest_tolerance` лаунчера) нет вовсе — экспортируется то, что лежит.
 ///
-/// §401 — `label` не пишется: имя Направления ровно одно — тег (контракт
-/// 0.9.0), и второе имя рядом с ним разъехалось бы при первом переименовании.
+/// §405 — `label` пишется, когда он непустой И отличается от тега. Поле
+/// объявлено в схеме, применяет его только LxBox (колонка «Поддержка»
+/// `docs/BACKUP.md` §2, D-094), лаунчер не применяет и провозит молча.
+/// `label == tag` не пишем: там нет имени, там повтор тега, и на той стороне
+/// он был бы неотличим от осознанно введённого имени.
 Map<String, dynamic> _directionToJson(Direction d) => {
   'tag': d.tag,
+  if (d.label.isNotEmpty && d.label != d.tag) 'label': d.label,
   // Ключ пишем только для выключенного: отсутствие = true по схеме, и
   // «enabled: true» у каждой записи раздувало бы файл без смысла.
   if (!d.enabled) 'enabled': false,
@@ -1633,26 +1641,27 @@ Map<String, dynamic> _directionAutoToJson(DirectionAuto a) => {
 
 /// §393 C9 — мобильная [SourceChain] → запись секции `chains[]`.
 ///
-/// Форма записи: `tag` + опциональный `enabled` + КАНОН цепочки отдельным
-/// полем `chain`, без дублирования его полей на верхнем уровне
+/// Форма записи: `tag` + опциональные `label`/`enabled` + КАНОН цепочки
+/// отдельным полем `chain`, без дублирования его полей на верхнем уровне
 /// (`schema/backup.schema.json`, секция chains[]).
 ///
-/// §401 (D-082) — `label` НЕ пишется: у цепочки имя одно — тег, и подпись
-/// рядом с ним была бы вторым именем, которое разъедется при первом же
-/// переименовании на любой из сторон.
+/// §405 — `label` пишется, когда он непустой И отличается от тега (как у
+/// `directions[]`): поле объявлено в схеме, применяет его только LxBox,
+/// лаунчер не применяет и провозит молча.
 Map<String, dynamic> _chainToJson(SourceChain c) => {
   'tag': c.tag,
+  if (c.label.isNotEmpty && c.label != c.tag) 'label': c.label,
   // Ключ пишем только для выключенной: отсутствие = true по схеме.
   if (!c.enabled) 'enabled': false,
   // Канон как есть — `SourceChain.toJson` уже пишет ровно его поля, минус
-  // идентичность записи (tag/enabled), которая живёт уровнем выше.
+  // идентичность записи (tag/label/enabled), которая живёт уровнем выше.
   'chain': _chainCanonToJson(c),
 };
 
 /// Канон цепочки (`schema/source_chain.schema.json`) для поля `chain`.
 ///
 /// Отдельно от [SourceChain.toJson] намеренно: тот пишет ЗАПИСЬ storage —
-/// с `tag`/`enabled`, — а канон описывает только МАРШРУТ. Смешать их
+/// с `tag`/`label`/`enabled`, — а канон описывает только МАРШРУТ. Смешать их
 /// значило бы отправить на ту сторону тег дважды и разойтись со схемой
 /// (`additionalProperties: false`).
 Map<String, dynamic> _chainCanonToJson(SourceChain c) {
@@ -1676,19 +1685,12 @@ Map<String, dynamic> _chainCanonToJson(SourceChain c) {
 /// один — сборка конфига (`chain_hop_missing`). Эталон —
 /// `core/backup/import.go:importChain`.
 ///
-/// §401 (D-082) — `label` LEGACY-ВХОД: у цепочки имя одно — тег. Разошедшаяся
-/// подпись отбрасывается с [kWarnLabelDropped]; совпавшая с тегом молчит,
-/// потому что терять нечего.
-SourceChain _chainFromCanon(
-  Map<String, dynamic> j,
-  String tag,
-  List<LxBackupWarning> warnings,
-) {
-  final label = (j['label'] as String?)?.trim() ?? '';
-  if (label.isNotEmpty && label != tag) {
-    warnings.add(LxBackupWarning(kWarnLabelDropped, tag));
-  }
-
+/// §405 — `label` читается В МОДЕЛЬ: поле применяет LxBox (колонка
+/// «Поддержка» `docs/BACKUP.md` §2, D-094). [kWarnLabelDropped] не
+/// поднимается —
+/// предупреждать не о чем, ничего не теряется. Отсутствие ключа — пустое имя,
+/// показан будет тег.
+SourceChain _chainFromCanon(Map<String, dynamic> j, String tag) {
   final canon =
       (j['chain'] as Map?)?.cast<String, dynamic>() ??
       const <String, dynamic>{};
@@ -1697,6 +1699,7 @@ SourceChain _chainFromCanon(
   // порядок каталога `strip`, `null` внутри `rewrite`).
   final parsed = SourceChain.fromJson({...canon, 'tag': tag});
   return parsed.copyWith(
+    label: (j['label'] as String?) ?? '',
     // Отсутствие ключа = true (`enabled.default` схемы). В ожиданиях корпуса
     // ключа нет вовсе, и читать его отсутствие как false значило бы
     // импортировать выключенными все цепочки лаунчера.
@@ -1943,4 +1946,96 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
   }
 
   return (lists: merged, byUrl: byUrl, applied: applied);
+}
+
+/// Результат слияния одиночных узлов и папок ([mergeBackupServers]).
+typedef BackupServerMerge = ({
+  /// Списки источников после слияния (порядок локальных сохранён, новые — в
+  /// хвосте, в порядке файла).
+  List<ServerList> lists,
+
+  /// Сколько записей файла реально применилось.
+  int applied,
+});
+
+/// §401 (D-08x) + §405 — слияние `servers[]` файла с локальными источниками.
+/// Чистая функция: состояние читает и пишет вызывающий.
+///
+/// Папка не сущность схемы: её члены приехали отдельными записями `servers[]`
+/// с общим полем `folder`, и собирается она ПО ЭТОМУ ИМЕНИ — записи с
+/// одинаковым `folder` становятся одной папкой, запись без пометки остаётся в
+/// корне списка. Порядок членов — порядок записей файла: пользователь
+/// раскладывал узлы сам, и перетасовать состав значило бы потерять его работу.
+///
+/// Своя запись СИЛЬНЕЕ приехавшей, как и у подписок: папка с тем же именем не
+/// перезаписывается, а дополняется членами, которых в ней нет.
+///
+/// **Идентичность узла здесь — его ТЕЛО** (`uri` или сериализованный
+/// `config_json`, сравнение по `trim()`): ни `id`, ни имени в файле у
+/// одиночной записи нет — `node_tag` вычисляется из тела. §405 — совпавшее по
+/// телу пропускается МОЛЧА и `applied` не растёт (применять было нечего),
+/// иначе повторный импорт одного и того же файла удваивал бы список. У членов
+/// папки такой дедуп был с самого начала; здесь он теперь тот же.
+BackupServerMerge mergeBackupServers(
+  List<ServerList> lists,
+  List<LxServer> incoming,
+) {
+  final merged = lists.toList();
+  var applied = 0;
+
+  final folderAt = <String, int>{
+    for (var i = 0; i < merged.length; i++)
+      if (merged[i] is FolderServers) merged[i].name: i,
+  };
+  final singleBodies = <String>{
+    for (final l in merged)
+      if (l is UserServer) l.rawBody.trim(),
+  };
+
+  for (final srv in incoming) {
+    final body = srv.uri.isNotEmpty
+        ? srv.uri
+        : (srv.configJson == null ? '' : jsonEncode(srv.configJson));
+    if (body.isEmpty) continue;
+
+    if (srv.folder.isEmpty) {
+      if (!singleBodies.add(body.trim())) continue;
+      merged.add(UserServer(
+        id: newUuidV4(),
+        name: srv.name,
+        enabled: srv.enabled,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.manual,
+        createdAt: DateTime.now(),
+        rawBody: body,
+      ));
+      applied++;
+      continue;
+    }
+
+    final member = FolderMember(raw: body, enabled: srv.enabled);
+    final at = folderAt[srv.folder];
+    if (at == null) {
+      merged.add(FolderServers(
+        id: newUuidV4(),
+        name: srv.folder,
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        members: [member],
+      ));
+      folderAt[srv.folder] = merged.length - 1;
+      applied++;
+      continue;
+    }
+    final folder = merged[at] as FolderServers;
+    // Дубль по телу члена не заводим: повторный импорт одного файла не
+    // должен удваивать состав папки.
+    if (folder.members.any((m) => m.raw.trim() == body.trim())) continue;
+    merged[at] = folder.copyWith(members: [...folder.members, member]);
+    applied++;
+  }
+
+  return (lists: merged, applied: applied);
 }

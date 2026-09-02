@@ -91,6 +91,7 @@ class ChainEditScreen extends StatefulWidget {
 }
 
 class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
+  late final TextEditingController _labelCtrl;
   late final TextEditingController _idleCtrl;
 
   late List<String> _hops;
@@ -109,6 +110,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   void initState() {
     super.initState();
     final c = widget.initial;
+    _labelCtrl = TextEditingController(text: c.label)..addListener(_onChange);
     _idleCtrl = TextEditingController(text: c.idleTimeout)
       ..addListener(_onChange);
     _hops = [...c.hops];
@@ -126,6 +128,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
 
   @override
   void dispose() {
+    _labelCtrl.dispose();
     _idleCtrl.dispose();
     super.dispose();
   }
@@ -133,6 +136,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   void _onChange() => setState(() {});
 
   SourceChain _snapshot() => widget.initial.copyWith(
+        label: _labelCtrl.text.trim(),
         enabled: _enabled,
         hops: _hops,
         idleTimeout: _idleCtrl.text.trim(),
@@ -144,7 +148,8 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   bool _isDirty() {
     final s = _snapshot();
     final i = widget.initial;
-    return s.enabled != i.enabled ||
+    return s.label != i.label ||
+        s.enabled != i.enabled ||
         s.idleTimeout != i.idleTimeout ||
         s.stripEvasion != i.stripEvasion ||
         !_sameHops(s.hops, i.hops) ||
@@ -224,7 +229,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
       title: getLocalText.s("Delete hop chain?"),
       message: getLocalText.s(
           "Remove \"%s\"? Other chains using it as a position will stop building until you fix them.",
-          widget.initial.tag),
+          widget.initial.displayLabel),
     );
     if (confirmed == true && mounted) {
       Navigator.pop(context, ChainEditResult.deleted());
@@ -341,18 +346,22 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
           padding: EdgeInsets.fromLTRB(
               16, 12, 16, MediaQuery.of(context).padding.bottom + 32),
           children: [
-            // Контракт 0.9.0 — имя цепочки = её tag, второго нет.
-            // Read-only: на тег ссылаются позиции других цепочек, правила и
-            // Направления.
             Text(c.tag,
-                style: const TextStyle(
-                    fontSize: 16,
+                style: TextStyle(
+                    fontSize: 12,
                     fontFamily: 'monospace',
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: 2),
-            Text(getLocalText.s("Name is the tag — it is set once, at creation"),
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-            const SizedBox(height: 12),
+                    color: cs.onSurfaceVariant)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _labelCtrl,
+              decoration: InputDecoration(
+                labelText: getLocalText.s("Title"),
+                hintText: getLocalText.s("optional — defaults to the tag"),
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
+              style: const TextStyle(fontSize: 14),
+            ),
             SwitchListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,

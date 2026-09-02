@@ -61,7 +61,7 @@ void main() {
     SettingsStorage.resetCacheForTesting();
     // Инвариант продукта: vpn-1 существует всегда (обычно — из миграции).
     await SettingsStorage.setDirections([
-      const Direction(tag: 'vpn-1'),
+      const Direction(tag: 'vpn-1', label: 'VPN ①'),
     ]);
   });
 
@@ -98,7 +98,7 @@ void main() {
       expect((r as JsonResponse).status, 201);
       final body = r.body as Map<String, dynamic>;
       expect(body['tag'], 'vpn-2');
-      expect(body.containsKey('label'), isFalse);
+      expect(body['label'], 'Germany');
       expect(body['node_filter'], 'DE|Frankfurt');
       expect((body['auto'] as Map)['interval'], '3m');
       // Немодифицированные auto-поля — дефолты, не null.
@@ -116,6 +116,7 @@ void main() {
     final stored = await SettingsStorage.getDirections();
     expect(stored.length, kMaxDirections + 1);
     expect(stored.last.tag, 'vpn-11');
+    expect(stored.last.label, 'VPN 11'); // кружок-цифра кончилась на ⑩
   });
 
   test('§393 A3 — POST /directions с кастомным тегом', () async {
@@ -124,7 +125,7 @@ void main() {
       ctx(),
     );
     expect(asMap(r)['tag'], 'ru-exit');
-    expect(asMap(r).containsKey('label'), isFalse);
+    expect(asMap(r)['label'], 'Russia');
   });
 
   test('§393 A3 — POST /directions с занятым/служебным тегом → 409', () async {
@@ -183,11 +184,11 @@ void main() {
         ctx(),
       );
       final r = await directionsHandler(
-        req('PATCH', '/directions/vpn-2', body: {'default_filter': 'Premium'}),
+        req('PATCH', '/directions/vpn-2', body: {'label': 'Renamed'}),
         ctx(),
       );
       final body = asMap(r);
-      expect(body['default_filter'], 'Premium');
+      expect(body['label'], 'Renamed');
       expect(body['node_filter'], 'NL');
     });
 

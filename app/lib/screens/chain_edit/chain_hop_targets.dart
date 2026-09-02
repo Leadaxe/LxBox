@@ -87,7 +87,7 @@ List<ChainHopCandidate> collectChainHopTargets({
         offered: false,
       below: belowSelf,
     
-        displayLabel: c.tag,
+        displayLabel: c.displayLabel,
         subline: '${c.hops.length}',));
   }
 

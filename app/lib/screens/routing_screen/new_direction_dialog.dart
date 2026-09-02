@@ -3,11 +3,10 @@ import 'package:flutter/material.dart';
 import '../../models/direction.dart';
 import '../../services/l10n/locale_controller.dart';
 
-/// §393 A3 — диалог создания Направления: один тег.
+/// §393 A3 — диалог создания Направления: тег + имя.
 ///
-/// Контракт 0.9.0 — второго имени у Направления нет: тег И есть имя. Он же
-/// цель правил, и после создания immutable, поэтому спросить его можно ровно
-/// здесь и только здесь. Поле преднаполнено первым свободным
+/// Тег — системный id и цель правил; после создания он immutable, поэтому
+/// спросить его можно ровно здесь. Поле преднаполнено первым свободным
 /// `vpn-N` ([nextDirectionTag]) — пользователь, которому имя тега безразлично,
 /// жмёт Create и получает ровно прежнее поведение.
 ///
@@ -16,10 +15,14 @@ import '../../services/l10n/locale_controller.dart';
 /// Проверяем на КАЖДЫЙ ввод, а не на Create: тег нельзя переименовать, и
 /// узнать об ошибке после создания было бы поздно.
 class NewDirectionRequest {
-  const NewDirectionRequest({required this.tag});
+  const NewDirectionRequest({required this.tag, required this.label});
 
-  /// Системный id нового Направления — он же его имя (контракт 0.9.0).
+  /// Системный id нового Направления (уже trimmed и проверенный формой).
   final String tag;
+
+  /// Отображаемое имя. Пустое — call-site отдаёт null, и storage подставит
+  /// дефолт по тегу ([defaultLabelForTag]).
+  final String label;
 }
 
 /// Открывает диалог создания. null — пользователь отменил.
@@ -47,17 +50,20 @@ class _NewDirectionDialog extends StatefulWidget {
 
 class _NewDirectionDialogState extends State<_NewDirectionDialog> {
   late final TextEditingController _tagCtrl;
+  late final TextEditingController _labelCtrl;
 
   @override
   void initState() {
     super.initState();
     _tagCtrl = TextEditingController(text: nextDirectionTag(widget.existingTags))
       ..addListener(_onChange);
+    _labelCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _tagCtrl.dispose();
+    _labelCtrl.dispose();
     super.dispose();
   }
 
@@ -98,6 +104,17 @@ class _NewDirectionDialogState extends State<_NewDirectionDialog> {
             ),
             style: const TextStyle(fontSize: 14, fontFamily: 'monospace'),
           ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _labelCtrl,
+            decoration: InputDecoration(
+              labelText: getLocalText.s("Title"),
+              hintText: getLocalText.s("optional — defaults to the tag"),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+            style: const TextStyle(fontSize: 14),
+          ),
         ],
       ),
       actions: [
@@ -110,7 +127,10 @@ class _NewDirectionDialogState extends State<_NewDirectionDialog> {
               ? null
               : () => Navigator.pop(
                     context,
-                    NewDirectionRequest(tag: _tagCtrl.text.trim()),
+                    NewDirectionRequest(
+                      tag: _tagCtrl.text.trim(),
+                      label: _labelCtrl.text.trim(),
+                    ),
                   ),
           child: Text(getLocalText.s("Create")),
         ),

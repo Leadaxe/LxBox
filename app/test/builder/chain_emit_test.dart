@@ -37,7 +37,7 @@ void main() {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
         chains: [const SourceChain(tag: 'via-de', hops: ['DE', 'NL'])],
-        directions: [const Direction(tag: 'vpn-1', nodeFilter: 'via')],
+        directions: [const Direction(tag: 'vpn-1', label: 'V', nodeFilter: 'via')],
       );
       expect(_byTag(r, 'vpn-1')!['outbounds'], ['via-de']);
     });
@@ -46,7 +46,7 @@ void main() {
       final r = await _build(
         nodeTags: ['DE'],
         chains: [const SourceChain(tag: 'ch', hops: ['DE', 'direct-out'])],
-        directions: [const Direction(tag: 'vpn-1')],
+        directions: [const Direction(tag: 'vpn-1', label: 'V')],
       );
       final tags = [
         for (final o in (r.config['outbounds'] as List))
@@ -170,7 +170,7 @@ void main() {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
         chains: [const SourceChain(tag: 'vpn-1', hops: ['DE', 'NL'])],
-        directions: [const Direction(tag: 'vpn-1')],
+        directions: [const Direction(tag: 'vpn-1', label: 'V')],
       );
       final vpn1 = _byTag(r, 'vpn-1')!;
       expect(vpn1['type'], 'selector', reason: 'Направление уцелело');
@@ -195,7 +195,7 @@ void main() {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
         chains: [const SourceChain(tag: 'via-de', hops: ['proxy-out', 'NL'])],
-        directions: [const Direction(tag: 'proxy-out')],
+        directions: [const Direction(tag: 'proxy-out', label: 'P')],
       );
       expect(_byTag(r, 'via-de'), isNotNull, reason: 'сама цепочка жива');
       expect(_byTag(r, 'proxy-out')!['outbounds'], ['DE', 'NL']);
@@ -209,7 +209,7 @@ void main() {
           const SourceChain(tag: 'inner', hops: ['proxy-out', 'NL']),
           const SourceChain(tag: 'outer', hops: ['inner', 'SG']),
         ],
-        directions: [const Direction(tag: 'proxy-out')],
+        directions: [const Direction(tag: 'proxy-out', label: 'P')],
       );
       // Обе цепочки эмитированы, но ни одна не входит в proxy-out: outer
       // проходит через proxy-out ЧЕРЕЗ inner.
@@ -223,8 +223,8 @@ void main() {
         nodeTags: ['DE', 'NL'],
         chains: [const SourceChain(tag: 'via-de', hops: ['proxy-out', 'NL'])],
         directions: [
-          const Direction(tag: 'proxy-out'),
-          const Direction(tag: 'other', nodeFilter: 'via'),
+          const Direction(tag: 'proxy-out', label: 'P'),
+          const Direction(tag: 'other', label: 'O', nodeFilter: 'via'),
         ],
       );
       expect(_byTag(r, 'other')!['outbounds'], ['via-de']);
@@ -239,7 +239,7 @@ void main() {
         nodeTags: ['DE'],
         chains: [const SourceChain(tag: 'via-de', hops: ['proxy-out', 'DE'])],
         directions: [
-          const Direction(tag: 'proxy-out', nodeFilter: 'via')
+          const Direction(tag: 'proxy-out', label: 'P', nodeFilter: 'via')
         ],
       );
       expect(r.emitWarnings.join('\n'), isNot(contains('Check its node filter')));
@@ -255,11 +255,11 @@ void main() {
       final r = await _build(
         nodeTags: ['DE'],
         directions: [
-          const Direction(tag: 'vpn-1', nodeFilter: 'nomatch')
+          const Direction(tag: 'vpn-1', label: 'V', nodeFilter: 'nomatch')
         ],
       );
       expect(r.emitWarnings.join('\n'), contains('Check its node filter'));
-      expect(r.directionsWithoutNodes, ['vpn-1']);
+      expect(r.directionsWithoutNodes, ['V']);
     });
 
     test('без цепочек состав Направления не меняется вовсе', () async {
@@ -275,7 +275,7 @@ void main() {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
         chains: [const SourceChain(tag: 'ch', hops: ['DE', 'NL'])],
-        directions: [const Direction(tag: 'vpn-1')],
+        directions: [const Direction(tag: 'vpn-1', label: 'V')],
         coreVersion: _oldCore,
       );
       expect(_byTag(r, 'ch'), isNull);
@@ -314,7 +314,7 @@ Future<BuildResult> _build({
   required List<String> nodeTags,
   List<SourceChain> chains = const [],
   List<Direction> directions = const [
-    Direction(tag: 'vpn-1')
+    Direction(tag: 'vpn-1', label: 'VPN ①')
   ],
   String coreVersion = _newCore,
 }) =>

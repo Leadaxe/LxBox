@@ -21,11 +21,9 @@ import '_shared.dart';
 ///
 /// Routes:
 /// - `GET    /directions`            → list (Direction.toJson, snake_case)
-/// - `POST   /directions`            → create (body: `{"tag":"..."}` +
-///                                    опционально любые PATCH-поля; `tag`
-///                                    только при создании — он же имя,
-///                                    контракт 0.9.0. Ключ `label` в теле
-///                                    игнорируется)
+/// - `POST   /directions`            → create (body: `{"label":"...",
+///                                    "tag":"..."}` + опционально любые
+///                                    PATCH-поля; `tag` только при создании)
 /// - `POST   /directions/reorder`    → reorder (body: `{"order":[tag,...]}`)
 /// - `GET    /directions/{tag}`      → single
 /// - `PATCH  /directions/{tag}`      → partial update
@@ -81,19 +79,20 @@ Future<DebugResponse> _single(String tag) async {
 
 Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
+  final label = fieldString(body, 'label');
   // §393 A3 — опциональный пользовательский тег; отсутствует → первый
   // свободный `vpn-N`. Валидацию (пустой/служебный/дубль/тёзка `<tag>-auto`)
   // делает storage — одна точка для UI и API.
   final tag = fieldString(body, 'tag');
   final Direction created;
   try {
-    created = await DirectionMutations.add(tag: tag);
+    created = await DirectionMutations.add(label: label, tag: tag);
   } on StateError catch (e) {
     // Конфликт тега — precondition: юзер может выбрать другой и повторить.
     throw Conflict(e.message);
   }
   // Остальные поля body — как PATCH сразу после создания (один вызов
-  // вместо POST+PATCH).
+  // вместо POST+PATCH). label уже применён.
   var ch = created;
   // Свежий tag обычно ни на что не ссылается (счётчики нули), но re-create
   // тега после restore из backup может встретить stale-ссылку — heal тот же,
@@ -216,8 +215,7 @@ Direction? _applyPatch(Direction ch, Map<String, dynamic> body,
   // выше); PATCH — нет: после создания тег immutable, на него ссылаются
   // правила/detour'ы.
   if (!tagConsumed && body.containsKey('tag')) {
-    throw const BadRequest(
-        'field "tag" is immutable (system id, and the direction\'s only name)');
+    throw const BadRequest('field "tag" is immutable (system id, edit "label" instead)');
   }
 
   final enabled = fieldBool(body, 'enabled');
@@ -256,6 +254,7 @@ Direction? _applyPatch(Direction ch, Map<String, dynamic> body,
     }
   }
 
+  final label = fieldString(body, 'label');
   final includeDirect = fieldBool(body, 'include_direct');
   final includeBlock = fieldBool(body, 'include_block');
   // §393 A3 — `include`: теги других Направлений опциями селектора. Здесь
@@ -279,7 +278,8 @@ Direction? _applyPatch(Direction ch, Map<String, dynamic> body,
     );
   }
 
-  final changed = enabled != null ||
+  final changed = label != null ||
+      enabled != null ||
       includeDirect != null ||
       includeBlock != null ||
       nodeFilter != null ||
@@ -293,6 +293,7 @@ Direction? _applyPatch(Direction ch, Map<String, dynamic> body,
   if (!changed) return null;
 
   return ch.copyWith(
+    label: label,
     enabled: enabled,
     includeDirect: includeDirect,
     includeBlock: includeBlock,

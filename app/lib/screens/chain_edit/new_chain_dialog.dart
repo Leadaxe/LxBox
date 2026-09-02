@@ -17,9 +17,10 @@ import '../../models/source_chain.dart';
 import '../../services/l10n/locale_controller.dart';
 
 class NewChainRequest {
-  const NewChainRequest({required this.tag});
+  const NewChainRequest({required this.tag, required this.label});
 
   final String tag;
+  final String label;
 }
 
 /// Открывает диалог создания. null — пользователь отменил.
@@ -45,17 +46,20 @@ class _NewChainDialog extends StatefulWidget {
 
 class _NewChainDialogState extends State<_NewChainDialog> {
   late final TextEditingController _tagCtrl;
+  late final TextEditingController _labelCtrl;
 
   @override
   void initState() {
     super.initState();
     _tagCtrl = TextEditingController(text: nextChainTag(widget.usedTags))
       ..addListener(_onChange);
+    _labelCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _tagCtrl.dispose();
+    _labelCtrl.dispose();
     super.dispose();
   }
 
@@ -103,6 +107,17 @@ class _NewChainDialogState extends State<_NewChainDialog> {
             ),
             style: const TextStyle(fontSize: 14, fontFamily: 'monospace'),
           ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _labelCtrl,
+            decoration: InputDecoration(
+              labelText: getLocalText.s("Title"),
+              hintText: getLocalText.s("optional — defaults to the tag"),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+            style: const TextStyle(fontSize: 14),
+          ),
         ],
       ),
       actions: [
@@ -115,7 +130,10 @@ class _NewChainDialogState extends State<_NewChainDialog> {
               ? null
               : () => Navigator.pop(
                     context,
-                    NewChainRequest(tag: _tagCtrl.text.trim()),
+                    NewChainRequest(
+                      tag: _tagCtrl.text.trim(),
+                      label: _labelCtrl.text.trim(),
+                    ),
                   ),
           child: Text(getLocalText.s("Create")),
         ),
