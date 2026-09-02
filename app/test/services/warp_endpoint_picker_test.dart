@@ -106,8 +106,8 @@ void main() {
     // У MASQUE это реальный SNI QUIC-сессии к Cloudflare — cloudflare-домен тут
     // естественен (в отличие от WG-junk §136), пул специально отдельный.
     expect(p.masqueSniPool, contains('www.cloudflare.com'));
-    expect(p.masqueSniPool, contains('cdn.jsdelivr.net'));
-    expect(p.masqueSniPool, contains('aws.amazon.com'));
+    expect(p.masqueSniPool, contains('deepseek.com'));
+    expect(p.masqueSniPool, contains('pypi.org'));
     // randomMasqueSni отдаёт непустой домен из пула.
     final s = p.randomMasqueSni();
     expect(s, isNotEmpty);
@@ -133,8 +133,8 @@ void main() {
   test('§130 новые чистые домены в обоих пулах (jsdelivr/aws — не cloudflare)',
       () async {
     final p = await WarpEndpointPicker.load();
-    expect(p.sniPool, contains('cdn.jsdelivr.net'));
-    expect(p.sniPool, contains('aws.amazon.com'));
+    expect(p.sniPool, contains('deepseek.com'));
+    expect(p.sniPool, contains('pypi.org'));
   });
 
   // §305 — asset несёт device-verified MASQUE-данные боевого теста.
