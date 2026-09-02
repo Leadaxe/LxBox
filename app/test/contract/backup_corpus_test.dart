@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
@@ -20,10 +21,15 @@ void main() {
   final root = Directory('$_contractRoot/corpus/backup');
   if (!root.existsSync()) return; // контракт не синхронизирован
 
+  // §407 — предсостояние (`<case>.pre.backup.json`) кейсом НЕ является:
+  // раннер обязан отсеять его из списка, иначе погонит его отдельным
+  // прогоном и будет искать несуществующий `<case>.pre.expected.json`
+  // (`contract/corpus/README.md`, «Предсостояние кейса»).
   final cases = root
       .listSync()
       .whereType<File>()
-      .where((f) => f.path.endsWith('.backup.json'))
+      .where((f) =>
+          f.path.endsWith('.backup.json') && !f.path.endsWith('.pre.backup.json'))
       .map((f) =>
           f.path.substring(0, f.path.length - '.backup.json'.length))
       .toList()
@@ -46,7 +52,29 @@ void main() {
         final expected =
             jsonDecode(expectedFile.readAsStringSync()) as Map<String, dynamic>;
 
+        // §407 — ПРЕДСОСТОЯНИЕ. Слияние нельзя проверить импортом в пустоту:
+        // там слияние и замена дают один и тот же итог. Кейс, который его
+        // проверяет, кладёт рядом `<case>.pre.backup.json`; порядок строгий —
+        // пустое состояние → импорт `pre` → импорт самого кейса → сверка.
+        //
+        // «Состояние» здесь — то же, что у приложения: список источников
+        // (`List<ServerList>`). Собирается он ТЕМИ ЖЕ чистыми функциями,
+        // которыми его собирает импорт (`_applySources` в
+        // `screens/backup_screen.dart`): расхождение раннера и приложения
+        // означало бы, что зелёный корпус ничего не гарантирует.
+        //
+        // Предупреждения предсостояния в сверку НЕ идут: оно декорация сцены,
+        // а не предмет кейса.
+        final preFile = File('$base.pre.backup.json');
+        var state = <ServerList>[];
+        if (preFile.existsSync()) {
+          final pre = parseLxBackup(preFile.readAsStringSync(),
+              knownOutbounds: {'proxy', 'direct'});
+          state = _applySources(state, pre);
+        }
+
         final file = parseLxBackup(raw, knownOutbounds: {'proxy', 'direct'});
+        state = _applySources(state, file);
 
         // Коды предупреждений — часть контракта: они отвечают на вопрос
         // «что не применилось», и расхождение означает, что одна из сторон
@@ -184,19 +212,84 @@ void main() {
         // собирает их обратно импорт по совпадению имени. Ожидание — карта
         // {имя папки → теги членов}: проверяется и состав, и то, что запись
         // БЕЗ `folder` в папку не затесалась.
+        //
+        // §407 — состав читается из СОСТОЯНИЯ после слияния, а не из разбора
+        // файла: до 0.12.5 папку описывал один файл целиком, а с
+        // предсостоянием её половина приезжает первым импортом, и разбор
+        // второго о ней уже ничего не знает.
         final wantFolders = (expected['folders'] as Map?)?.cast<String, dynamic>();
         if (wantFolders != null) {
-          final gotFolders = <String, List<String>>{};
-          for (final srv in file.servers) {
-            if (srv.folder.isEmpty) continue;
-            (gotFolders[srv.folder] ??= <String>[]).add(srv.name);
-          }
+          final gotFolders = <String, List<String>>{
+            for (final l in state)
+              if (l is FolderServers)
+                l.name: [for (final m in l.members) m.node?.tag ?? ''],
+          };
           expect(gotFolders.keys.toSet(), wantFolders.keys.toSet(),
               reason: 'состав папок: имена');
           for (final entry in wantFolders.entries) {
             expect(gotFolders[entry.key], (entry.value as List).cast<String>(),
                 reason: 'папка ${entry.key}: состав и порядок членов');
           }
+        }
+
+        // §407 (D-095, BACKUP.md §9 п.1) — ПОДПИСКИ после слияния. Ожидание
+        // ИСЧЕРПЫВАЮЩЕЕ: подписка, которой в нём нет, — это либо не
+        // оставленная локальная, либо задвоенная, и обе ошибки видны только
+        // сверкой всего набора, а не поиском отдельных ключей.
+        //
+        // `postfix` у LxBox поля не имеет вовсе (тег источника здесь только
+        // префикс), поэтому сверяется с пустой строкой: ожидание корпуса
+        // пишет `""` ровно в том же смысле — «постфикса нет».
+        final wantSubs =
+            (expected['subscriptions'] as Map?)?.cast<String, dynamic>();
+        if (wantSubs != null) {
+          final gotSubs = <String, SubscriptionServers>{
+            for (final l in state)
+              if (l is SubscriptionServers) l.url: l,
+          };
+          expect(gotSubs.keys.toSet(), wantSubs.keys.toSet(),
+              reason: 'набор подписок после слияния: ключ — url байт в байт');
+          for (final entry in wantSubs.entries) {
+            final got = gotSubs[entry.key]!;
+            final want = (entry.value as Map).cast<String, dynamic>();
+            expect(got.name, want['label'], reason: '${entry.key}: label');
+            expect(got.tagPrefix, want['prefix'] ?? '',
+                reason: '${entry.key}: префикс тегов');
+            expect('', want['postfix'] ?? '',
+                reason: '${entry.key}: постфикс тегов — поля у LxBox нет');
+            final wantEnabled = want['enabled'];
+            if (wantEnabled is bool) {
+              expect(got.enabled, wantEnabled, reason: '${entry.key}: enabled');
+            }
+            final wantNodes = (want['nodes'] as List?)?.cast<String>();
+            if (wantNodes != null) {
+              // Состав локальной подписки в файл не едет и потеряться на
+              // слиянии не вправе.
+              expect([for (final n in got.nodes) n.tag], wantNodes,
+                  reason: '${entry.key}: состав узлов пережил слияние');
+            }
+            final wantPending = (want['pending_disabled'] as List?)?.cast<String>();
+            if (wantPending != null) {
+              // Объединение двух множеств отметок: порядок в нём смысла не
+              // несёт, поэтому сверка отсортированная.
+              expect(got.disabledHashes.keys.toList()..sort(),
+                  wantPending.toList()..sort(),
+                  reason: '${entry.key}: отметки выключения ОБЪЕДИНЯЮТСЯ, '
+                      'а не замещаются файлом');
+            }
+          }
+        }
+
+        // §407 (BACKUP.md §9 п.2) — КОРНЕВЫЕ одиночные узлы в порядке
+        // состояния: совпавшие по телу держат локальную позицию, новые встают
+        // в конец. Дедуп по телу проверяется именно ОТСУТСТВИЕМ второй записи
+        // в этом списке, а не наличием первой.
+        final wantRootServers = (expected['root_servers'] as List?)?.cast<String>();
+        if (wantRootServers != null) {
+          expect([
+            for (final l in state)
+              if (l is UserServer) l.name,
+          ], wantRootServers, reason: 'корневые одиночные узлы: состав и порядок');
         }
 
         // §401 — упразднённый механизм `extensions` (схема 0.10.x): импортёр
@@ -227,3 +320,13 @@ Map<String, dynamic> _canonOf(SourceChain c) => c.toJson()
 /// «пусто»). `equals` для вложенных Map/List этого не даёт.
 Matcher _deepEqualsJson(Object? want) =>
     predicate<Object?>((got) => deepEqualsJson(got, want), 'deep-equals $want');
+
+/// §407 — сборка состояния источников теми же чистыми функциями, которыми её
+/// делает импорт приложения (`_applySources`, `screens/backup_screen.dart`):
+/// сперва подписки по `url`, затем одиночные узлы и папки по телу. Раннер
+/// отличается от приложения только тем, что состояние держит в списке, а не
+/// в storage — сама норма слияния живёт в одном месте на оба вызова.
+List<ServerList> _applySources(List<ServerList> state, LxBackupFile file) {
+  final subs = mergeBackupSubscriptions(state, file.subscriptions);
+  return mergeBackupServers(subs.lists, file.servers).lists;
+}
