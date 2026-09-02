@@ -344,11 +344,18 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         if (warpAccount != null) warpAccountToBackup(warpAccount),
         if (masqueAccount != null) masqueAccountToBackup(masqueAccount),
       ];
+      // §409 — бюджеты теста узла по Направлениям (`ping_options.groups`,
+      // §040). Форма storage → переносимая форма читается ЗДЕСЬ, а не в
+      // парсере: `SettingsStorage` слою бэкапа не виден.
+      final directionPing = lxDirectionPingFromStorage(
+        await SettingsStorage.getPingOptions(),
+      );
       final built = await buildLxBackup(
         lists: lists,
         rules: rules,
         vars: vars,
         directions: directions,
+        directionPing: directionPing,
         chains: chains,
         routeFinal: routeFinal,
         dns: dns,
@@ -486,6 +493,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // приехавшие Направления встают ниже существующих, и их `include[]`
       // (ссылки только вверх) остаётся осмысленным.
       var appliedDirections = 0;
+      // §409 — тег созданного Направления → его бюджет теста узла (может быть
+      // `null`: Направление приехало без override'а, и тогда писать нечего).
+      final appliedPing = <String, LxDirectionPing?>{};
       if (parsed.directions.isNotEmpty) {
         final current = await SettingsStorage.getDirections();
         final merged = current.toList();
@@ -499,8 +509,27 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
           merged.add(d);
           used.add(d.tag);
           appliedDirections++;
+          // §409 — бюджет теста узла едет с СОЗДАННЫМ Направлением. Тег,
+          // отсеянный гейтом выше, бюджета не получает: под ним живёт своё
+          // Направление, и менять ему настройку файл права не имеет
+          // (§9 BACKUP.md). Парсер по той же причине не кладёт в
+          // `directionPing` теги, занятые на этой стороне.
+          appliedPing[d.tag] = parsed.directionPing[d.tag];
         }
         if (appliedDirections > 0) await DirectionMutations.bulkReplace(merged);
+      }
+
+      // §409 — запись бюджетов ПОСЛЕ bulkReplace: `ping_options.groups`
+      // адресуется тегом Направления, и ключ, повисший без своего
+      // Направления, был бы сиротой, которую §408 всё равно вычистит.
+      for (final entry in appliedPing.entries) {
+        final ping = entry.value;
+        if (ping == null) continue;
+        await SettingsStorage.setGroupPing(
+          entry.key,
+          url: ping.url,
+          timeoutMs: ping.timeoutMs,
+        );
       }
 
       // §393 C9 — цепочки ПОСЛЕ Направлений (позиция может ссылаться на

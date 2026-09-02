@@ -748,6 +748,18 @@ Whenever the last key goes, the `groups` container goes with it rather than stay
 read as "there were per-direction overrides and they were all reset" rather than the
 plain truth that there never were any.
 
+**A `groups` entry travels in the portable backup too — [§409].** It rides inside the
+direction it belongs to, as `directions[].ping_url` / `directions[].ping_timeout_ms`
+(contract 0.12.6, declared in the schema and applied by LxBox only; the launcher carries
+them silently). A missing key means there is no override; an empty URL or a
+non-positive timeout is never written. Not to be confused with `auto.url` /
+`auto.idle_timeout` of the same record: those configure the kernel's urltest twin, these
+are the app's own measuring budget. On import the fields land in `groups[tag]` only for
+directions the file actually **created** — a record whose tag is taken is skipped whole
+(`backup_direction_exists`), and its budget is skipped with it, so a file never rewrites
+the settings of a direction it did not create. The global `url` / `timeout_ms` are not
+part of this: they are an app setting, and their home in the portable format is `vars`.
+
 ---
 
 ## `tun_apps` — [§046]

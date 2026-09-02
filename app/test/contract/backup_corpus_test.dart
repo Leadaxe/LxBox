@@ -137,6 +137,22 @@ void main() {
                 reason: '$tag: опция block');
             expect(got.auto != null, want['has_auto'] ?? false,
                 reason: '$tag: автовыбор');
+            // §409 — бюджет теста узла (`ping_options.groups[tag]`, §040).
+            // Семантика УКАЗАТЕЛЬНАЯ, как у `label`: поля применяет только
+            // LxBox (таблица «Поддержка» BACKUP.md §2), и базовый golden
+            // лаунчера ключей не несёт — отсутствие ожидания значит «сторона
+            // не применяет», а не «override обязан отсутствовать». Кейс, где
+            // бюджет ПРОВЕРЯЕТСЯ, кладёт ключи своим `.expected.lxbox.json`.
+            final gotPing = file.directionPing[tag];
+            final wantPingUrl = want['ping_url'];
+            if (wantPingUrl is String) {
+              expect(gotPing?.url, wantPingUrl, reason: '$tag: URL теста');
+            }
+            final wantPingTimeout = want['ping_timeout_ms'];
+            if (wantPingTimeout is num) {
+              expect(gotPing?.timeoutMs, wantPingTimeout.toInt(),
+                  reason: '$tag: таймаут теста');
+            }
           }
         }
 

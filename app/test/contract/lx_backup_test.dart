@@ -318,6 +318,211 @@ void main() {
     });
   });
 
+  // ════════════════════════════════════════════════════════════════════════
+  // §409 — бюджет теста узла у Направления (`ping_options.groups`, §040)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // Поля `directions[].ping_url` / `ping_timeout_ms` объявлены в схеме
+  // (контракт 0.12.6, D-096), применяет их только LxBox. Смысл переноса — та
+  // же кнопка «Ping» на новой машине: Направление, у которого бюджет был
+  // задан вручную, обязано приехать с ним, а не на глобальном умолчании.
+  group('LX Backup: бюджет теста узла у Направления (§409)', () {
+    const de = Direction(tag: 'de', label: '', nodeFilter: 'DE');
+    const at = Direction(tag: 'at', label: '');
+
+    Future<Map<String, dynamic>> exportDirections(
+      List<Direction> directions,
+      Map<String, LxDirectionPing> ping,
+    ) async {
+      final raw = (await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        directions: directions,
+        directionPing: ping,
+      )).json;
+      return jsonDecode(raw) as Map<String, dynamic>;
+    }
+
+    test('экспорт пишет ТОЛЬКО заданные половины override\'а', () async {
+      final doc = await exportDirections(
+        const [de, at],
+        {
+          'de': LxDirectionPing(url: 'https://de.example/204', timeoutMs: 2500),
+          'at': LxDirectionPing(timeoutMs: 4000),
+        },
+      );
+      final out = (doc['directions'] as List).cast<Map<String, dynamic>>();
+      expect(out[0]['ping_url'], 'https://de.example/204');
+      expect(out[0]['ping_timeout_ms'], 2500);
+      // Незаданная половина ключа не получает: отсутствие ключа и означает
+      // «override нет», а выписать сюда разрешённое глобальное значение
+      // значило бы превратить умолчание в настройку на той стороне.
+      expect(out[1].containsKey('ping_url'), isFalse,
+          reason: 'URL не задавали — ключа быть не должно');
+      expect(out[1]['ping_timeout_ms'], 4000);
+    });
+
+    test('Направление без override едет вовсе без ключей', () async {
+      final doc = await exportDirections(const [de], const {});
+      final out = (doc['directions'] as List).single as Map<String, dynamic>;
+      expect(out.containsKey('ping_url'), isFalse);
+      expect(out.containsKey('ping_timeout_ms'), isFalse);
+    });
+
+    test('пустой URL и неположительный таймаут в файл не едут', () async {
+      // Требование схемы (`ping_url.minLength: 1`,
+      // `ping_timeout_ms.minimum: 1`): пустое значение файл не пройдёт
+      // валидацию, а по смыслу это и не бюджет, а мёртвая кнопка «Ping».
+      final doc = await exportDirections(
+        const [de],
+        {'de': LxDirectionPing(url: '   ', timeoutMs: 0)},
+      );
+      final out = (doc['directions'] as List).single as Map<String, dynamic>;
+      expect(out.containsKey('ping_url'), isFalse);
+      expect(out.containsKey('ping_timeout_ms'), isFalse);
+    });
+
+    test('форма storage → переносимая: читается только groups', () {
+      final ping = lxDirectionPingFromStorage(const {
+        // Глобальные url/timeout_ms — настройка приложения, а не
+        // Направления: в записи `directions[]` им места нет.
+        'url': 'https://global.example/204',
+        'timeout_ms': 9000,
+        'groups': {
+          'de': {'url': 'https://de.example/204', 'timeout_ms': 2500},
+          'at': {'timeout_ms': 4000},
+          // Мусор из storage наружу не едет: пустая половина здесь значит
+          // ровно «override нет».
+          'nl': {'url': '', 'timeout_ms': 0},
+          'se': <String, dynamic>{},
+        },
+      });
+      expect(ping.keys.toSet(), {'de', 'at'});
+      expect(ping['de']!.url, 'https://de.example/204');
+      expect(ping['de']!.timeoutMs, 2500);
+      expect(ping['at']!.url, isNull);
+      expect(ping['at']!.timeoutMs, 4000);
+    });
+
+    test('круг экспорт→импорт возвращает бюджет НОВОГО Направления', () async {
+      final raw = (await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        directions: const [de],
+        directionPing: {
+          'de': LxDirectionPing(url: 'https://de.example/204', timeoutMs: 2500),
+        },
+      )).json;
+      final back = parseLxBackup(raw);
+      expect(back.directions.single.tag, 'de');
+      final ping = back.directionPing['de']!;
+      expect(ping.url, 'https://de.example/204');
+      expect(ping.timeoutMs, 2500);
+      // Форма storage — те же ключи, что пишет диалог §040: применение
+      // кладёт это в `ping_options.groups[tag]` как есть.
+      expect(ping.toStorage(), {
+        'url': 'https://de.example/204',
+        'timeout_ms': 2500,
+      });
+    });
+
+    test('занятый тег: бюджет не приезжает вместе с пропущенной записью', () {
+      // §9 BACKUP.md — Направление с занятым тегом пропускается ЦЕЛИКОМ
+      // (`backup_direction_exists`), значит и бюджет вместе с ним: под этим
+      // именем у пользователя своё Направление со своим бюджетом, и менять
+      // ему настройку файл права не имеет.
+      const raw = '''
+{
+  "lx_backup": 1,
+  "directions": [
+    {"tag": "de", "ping_url": "https://foreign.example/204", "ping_timeout_ms": 111},
+    {"tag": "at", "ping_timeout_ms": 4000}
+  ]
+}''';
+      final file = parseLxBackup(raw, knownOutbounds: {'de'});
+      expect(file.warnings.map((w) => w.code), contains(kWarnDirectionExists));
+      expect(file.directions.map((d) => d.tag), ['at'],
+          reason: 'занятый тег не применяется');
+      expect(file.directionPing.containsKey('de'), isFalse,
+          reason: 'бюджет чужого Направления файлом не переписывается');
+      expect(file.directionPing['at']!.timeoutMs, 4000);
+    });
+
+    test('невалидное значение отбрасывается, Направление применяется', () {
+      // Тип ТОТ, значение вне диапазона: это ровно то, что на этой стороне
+      // означает «override сброшен», и предупреждения не заслуживает.
+      const raw = '''
+{
+  "lx_backup": 1,
+  "directions": [
+    {"tag": "de", "ping_url": "  ", "ping_timeout_ms": 0},
+    {"tag": "at", "ping_timeout_ms": -5}
+  ]
+}''';
+      final file = parseLxBackup(raw);
+      expect(file.directions.map((d) => d.tag), ['de', 'at'],
+          reason: 'из-за одного поля Направление не теряется');
+      expect(file.directionPing, isEmpty);
+      expect(file.warnings, isEmpty,
+          reason: 'тип верный — шуметь не о чем');
+    });
+
+    test('чужой ТИП поля назван backup_field_type_mismatch', () {
+      // Ключ знакомый, разошёлся тип — тот же код, что у
+      // `subscriptions[].skip` (§401): пользователю важно различать «такого
+      // поля тут нет» и «поле есть, но значение записано по-другому».
+      const raw = '''
+{
+  "lx_backup": 1,
+  "directions": [{"tag": "de", "ping_url": 42, "ping_timeout_ms": "3000"}]
+}''';
+      final file = parseLxBackup(raw);
+      expect(file.directions.single.tag, 'de',
+          reason: 'файл читается дальше, а не падает целиком');
+      expect(file.directionPing, isEmpty);
+      expect(
+        file.warnings
+            .where((w) => w.code == kWarnFieldTypeMismatch)
+            .map((w) => w.detail)
+            .toList()
+          ..sort(),
+        ['directions[de].ping_timeout_ms', 'directions[de].ping_url'],
+      );
+    });
+
+    test('поля НЕ дают ложный backup_unknown_field на своём же экспорте',
+        () async {
+      // `_directionKeys` — default-deny на всю глубину файла (§401): ключ,
+      // не объявленный известным, ловится общим обходом, и LxBox ругался бы
+      // на собственный экспорт.
+      final raw = (await buildLxBackup(
+        lists: const [],
+        rules: const [],
+        vars: const {},
+        directions: const [de],
+        directionPing: {
+          'de': LxDirectionPing(url: 'https://de.example/204', timeoutMs: 2500),
+        },
+      )).json;
+      expect(parseLxBackup(raw).warnings, isEmpty);
+    });
+
+    test('экспорт бюджета ДЕТЕРМИНИРОВАН: два прогона байт-идентичны',
+        () async {
+      final ping = {
+        'de': LxDirectionPing(url: 'https://de.example/204', timeoutMs: 2500),
+        'at': LxDirectionPing(timeoutMs: 4000),
+      };
+      String directionsOf(Map<String, dynamic> doc) =>
+          jsonEncode(doc['directions']);
+      final first = await exportDirections(const [de, at], ping);
+      final second = await exportDirections(const [de, at], ping);
+      expect(directionsOf(second), directionsOf(first));
+    });
+  });
+
   // §393 B7-B11 — секции, которые до хвоста фазы B либо разбирались и
   // выбрасывались, либо не существовали вовсе. Каждый тест сформулирован как
   // круг: то, что уехало, обязано вернуться — это и есть инвариант §1

@@ -311,6 +311,79 @@ class LxDns {
       strategy.isEmpty;
 }
 
+/// §409 — per-Направление бюджет теста узла (`ping_options.groups[tag]`,
+/// §040) в переносимой форме: `directions[].ping_url` /
+/// `directions[].ping_timeout_ms`.
+///
+/// Это НЕ `auto.url` / `auto.idle_timeout`: те настраивают urltest-двойника
+/// `<tag>-auto` внутри ядра, а эти — ручной и массовый тест узлов в
+/// приложении. Поля разные по адресату, и слить их значило бы менять
+/// поведение ядра правкой кнопки «Ping».
+///
+/// Поля объявлены в схеме, применяет их только LxBox (колонка «Поддержка»
+/// `docs/BACKUP.md` §2); лаунчер игнорирует молча.
+///
+/// `null` у поля = override этой половины нет.
+///
+/// Нормализация — В КОНСТРУКТОРЕ, а не у каждого вызывающего: схема требует
+/// `ping_url.minLength: 1` и `ping_timeout_ms.minimum: 1` (контракт 0.12.6,
+/// D-096), и пустая строка с нулём — не «строгий бюджет», а мёртвая кнопка
+/// «Ping». Держать проверку в одном месте дешевле, чем ловить её пропуск на
+/// новом пути записи: сюда сходятся и storage, и разбор файла.
+class LxDirectionPing {
+  LxDirectionPing({String? url, int? timeoutMs})
+    : url = (url != null && url.trim().isNotEmpty) ? url.trim() : null,
+      timeoutMs = (timeoutMs != null && timeoutMs > 0) ? timeoutMs : null;
+
+  final String? url;
+  final int? timeoutMs;
+
+  bool get isEmpty => url == null && timeoutMs == null;
+
+  /// Форма хранения (`ping_options.groups[tag]`): те же ключи, что пишет
+  /// `SettingsStorage.setGroupPing`.
+  Map<String, dynamic> toStorage() => <String, dynamic>{
+    if (url != null) 'url': url,
+    if (timeoutMs != null) 'timeout_ms': timeoutMs,
+  };
+}
+
+/// §409 — `ping_options` из storage → карта «тег Направления → бюджет теста»
+/// для [buildLxBackup].
+///
+/// Читается ТОЛЬКО подкарта `groups` (per-Направление override'ы): глобальные
+/// `url`/`timeout_ms` — настройка приложения, а не Направления, и её место в
+/// `vars`, а не в записи `directions[]`.
+///
+/// Фильтр здесь тот же, что и на импорте: пустой URL и неположительный
+/// таймаут в файл не едут — в состоянии они означают «override нет», и
+/// выписать их значило бы отправить на ту сторону мёртвую кнопку «Ping».
+/// Порядок карты — порядок `groups` в storage, но на файл он не влияет:
+/// поля пишутся внутрь записи своего Направления.
+Map<String, LxDirectionPing> lxDirectionPingFromStorage(
+  Map<String, dynamic> pingOptions,
+) {
+  final groups = pingOptions['groups'];
+  if (groups is! Map) return const {};
+  final out = <String, LxDirectionPing>{};
+  for (final entry in groups.entries) {
+    final tag = entry.key;
+    final value = entry.value;
+    if (tag is! String || tag.isEmpty || value is! Map) continue;
+    final rawUrl = value['url'];
+    final rawTimeout = value['timeout_ms'];
+    // Отсев пустого делает конструктор: пустой URL и неположительный таймаут
+    // в storage значат ровно «override нет».
+    final ping = LxDirectionPing(
+      url: rawUrl is String ? rawUrl : null,
+      timeoutMs: rawTimeout is num ? rawTimeout.toInt() : null,
+    );
+    if (ping.isEmpty) continue;
+    out[tag] = ping;
+  }
+  return out;
+}
+
 /// Результат разбора файла.
 class LxBackupFile {
   const LxBackupFile({
@@ -320,6 +393,7 @@ class LxBackupFile {
     required this.exportedAt,
     required this.directions,
     required this.rules,
+    this.directionPing = const {},
     this.chains = const [],
     required this.subscriptions,
     required this.vars,
@@ -342,6 +416,17 @@ class LxBackupFile {
   /// Порядок файла нормативен: `include[]` разрешает ссылаться только на
   /// Направления ВЫШЕ по списку, и перестановка ломала бы состав.
   final List<Direction> directions;
+
+  /// §409 — бюджеты теста узла, приехавшие вместе с Направлениями: тег →
+  /// override. Ключи — ТОЛЬКО теги из [directions]: у Направления с занятым
+  /// тегом приехавшее не применяется целиком (§9 BACKUP.md,
+  /// [kWarnDirectionExists]), и бюджет вместе с ним — иначе файл менял бы
+  /// настройку чужому Направлению, которого сам не создавал.
+  ///
+  /// Отдельной картой, а не полем [Direction]: у мобилы бюджет живёт не в
+  /// Направлении, а в `ping_options.groups[tag]` (§040), и заводить ему
+  /// зеркало в модели значило бы получить второй источник правды.
+  final Map<String, LxDirectionPing> directionPing;
 
   /// Правила в порядке файла (ось `num` учтена при разборе).
   final List<CustomRule> rules;
@@ -394,6 +479,10 @@ class LxBackupExport {
 /// [directions] — Направления в порядке списка (§393 B2): они цели правил, и
 /// без них правило приезжало бы на чужую машину выключенным.
 ///
+/// [directionPing] — §409, бюджеты теста узла по тегу Направления
+/// (`ping_options.groups`, §040). Пишутся только заданные половины; тег без
+/// записи в карте даёт запись Направления без этих ключей.
+///
 /// [dns] — секция DNS в переносимой форме (§393 B9); [warp] — записи
 /// регистраций WG/MASQUE (§393 B8) уже в каноне схемы.
 ///
@@ -405,6 +494,7 @@ Future<LxBackupExport> buildLxBackup({
   required List<CustomRule> rules,
   required Map<String, String> vars,
   List<Direction> directions = const [],
+  Map<String, LxDirectionPing> directionPing = const {},
   List<SourceChain> chains = const [],
   String? routeFinal,
   LxDns? dns,
@@ -454,7 +544,9 @@ Future<LxBackupExport> buildLxBackup({
     // §393 B2 — цели едут ПЕРЕД правилами и в порядке списка: `include[]`
     // ссылается только вверх, перестановка сломала бы состав.
     if (directions.isNotEmpty)
-      'directions': [for (final d in directions) _directionToJson(d)],
+      'directions': [
+        for (final d in directions) _directionToJson(d, directionPing[d.tag]),
+      ],
     // §393 C9 — цепочки хопов (SPEC 110): корневая секция рядом с
     // directions[]. Цепочка описана каноном ИСТОЧНИКА
     // (`source_chain.schema.json`) — общей моделью обеих сторон.
@@ -802,6 +894,8 @@ LxBackupFile parseLxBackup(
   // Направление со своими настройками. Приехавшее не применяется (warning),
   // но тег в known входит — правило цель находит, она просто чужая.
   final directions = <Direction>[];
+  // §409 — бюджеты теста узла применённых Направлений (`ping_options.groups`).
+  final directionPing = <String, LxDirectionPing>{};
   final knownWithDirections = knownOutbounds.toSet();
   // §406 (D-095) — занятость тега определяется ТОЧНЫМ совпадением, как при
   // создании Направления руками (`directionTagConflict`). `VPN-DE` при живом
@@ -822,6 +916,12 @@ LxBackupFile parseLxBackup(
       continue;
     }
     directions.add(_directionFromCanon(j, tag));
+    // §409 — бюджет теста узла разбирается ТОЛЬКО у применённого
+    // Направления: занятый тег уводит запись в `continue` выше, и бюджет
+    // уходит вместе с ней. Иначе файл менял бы настройку Направлению,
+    // которого сам не создавал (§9 BACKUP.md — своё остаётся своим).
+    final ping = _directionPingFromCanon(j, tag, warnings);
+    if (!ping.isEmpty) directionPing[tag] = ping;
   }
 
   // §393 C9 — цепочки (SPEC 110, схема v1.2): ПОСЛЕ Направлений (позиция
@@ -915,6 +1015,7 @@ LxBackupFile parseLxBackup(
     exportedByVersion: (by['version'] as String?) ?? '',
     exportedAt: (decoded['exported_at'] as String?) ?? '',
     directions: directions,
+    directionPing: directionPing,
     rules: rules,
     chains: chains,
     subscriptions: [
@@ -1037,6 +1138,13 @@ const Set<String> _directionKeys = {
   'include_block',
   'include',
   'interrupt_exist_connections',
+  // §409 — бюджет теста узла у Направления (`ping_options.groups[tag]`,
+  // §040). Поля объявлены в схеме, применяет их только LxBox (колонка
+  // «Поддержка» `docs/BACKUP.md` §2); лаунчер не применяет и провозит молча.
+  // Без них файл LxBox ловил бы `backup_unknown_field` на собственном
+  // экспорте.
+  'ping_url',
+  'ping_timeout_ms',
   'auto',
 };
 
@@ -1561,6 +1669,54 @@ Direction _directionFromCanon(Map<String, dynamic> j, String tag) {
   );
 }
 
+/// §409 — `directions[].ping_url` / `directions[].ping_timeout_ms` → бюджет
+/// теста узла ([LxDirectionPing]).
+///
+/// Отсутствие ключа = override нет, и это НЕ ошибка: подавляющее большинство
+/// Направлений живёт на глобальном бюджете.
+///
+/// Валидация повторяет ту, что делает диалог §040 при сохранении: URL идёт
+/// обрезанным по краям и пустым не сохраняется, таймаут — целое положительное.
+/// Значение, не прошедшее её, ОТБРАСЫВАЕТСЯ, а Направление применяется без
+/// него: пустой URL и нулевой таймаут не «строгий бюджет», а мёртвая кнопка
+/// «Ping», и уронить из-за них весь файл значило бы потерять всё прочее (П6).
+///
+/// Тип разошёлся (строка вместо числа, число вместо строки) — знакомый ключ с
+/// чужим значением: [kWarnFieldTypeMismatch], как у `subscriptions[].skip`
+/// (§401). Значение ВНЕ диапазона своего типа (пустая строка, 0, минус)
+/// предупреждения не даёт: тип тот, и приехало ровно то, что на этой стороне
+/// означает «override сброшен».
+LxDirectionPing _directionPingFromCanon(
+  Map<String, dynamic> j,
+  String tag,
+  List<LxBackupWarning> warnings,
+) {
+  final rawUrl = j['ping_url'];
+  if (rawUrl != null && rawUrl is! String) {
+    warnings.add(
+      LxBackupWarning(kWarnFieldTypeMismatch, 'directions[$tag].ping_url'),
+    );
+  }
+
+  final rawTimeout = j['ping_timeout_ms'];
+  // `bool` в Dart не `num`, поэтому отдельной проверки на него не нужно.
+  if (rawTimeout != null && rawTimeout is! num) {
+    warnings.add(
+      LxBackupWarning(
+        kWarnFieldTypeMismatch,
+        'directions[$tag].ping_timeout_ms',
+      ),
+    );
+  }
+
+  // Пустую строку и неположительный таймаут отсеивает конструктор: тип у них
+  // верный, и означают они «override сброшен», а не ошибку файла.
+  return LxDirectionPing(
+    url: rawUrl is String ? rawUrl : null,
+    timeoutMs: rawTimeout is num ? rawTimeout.toInt() : null,
+  );
+}
+
 DirectionAuto _directionAutoFromCanon(Map<String, dynamic> j) {
   const fallback = DirectionAuto();
   final rawSticky = j['sticky_hash'];
@@ -1608,7 +1764,13 @@ DirectionAuto _directionAutoFromCanon(Map<String, dynamic> j) {
 /// `docs/BACKUP.md` §2, D-094), лаунчер не применяет и провозит молча.
 /// `label == tag` не пишем: там нет имени, там повтор тега, и на той стороне
 /// он был бы неотличим от осознанно введённого имени.
-Map<String, dynamic> _directionToJson(Direction d) => {
+///
+/// §409 — `ping_url` / `ping_timeout_ms` пишутся ТОЛЬКО когда у Направления
+/// есть соответствующий override в `ping_options.groups[tag]`: отсутствие
+/// ключа и означает «override нет», а выписывать сюда разрешённое значение
+/// (глобальное или шаблонное) значило бы превратить умолчание в
+/// зафиксированную настройку на принимающей стороне.
+Map<String, dynamic> _directionToJson(Direction d, LxDirectionPing? ping) => {
   'tag': d.tag,
   if (d.label.isNotEmpty && d.label != d.tag) 'label': d.label,
   // Ключ пишем только для выключенного: отсутствие = true по схеме, и
@@ -1621,6 +1783,8 @@ Map<String, dynamic> _directionToJson(Direction d) => {
   if (d.includeBlock) 'include_block': true,
   if (d.include.isNotEmpty) 'include': d.include,
   'interrupt_exist_connections': d.interruptExistConnections,
+  if (ping?.url != null) 'ping_url': ping!.url,
+  if (ping?.timeoutMs != null) 'ping_timeout_ms': ping!.timeoutMs,
   if (d.auto != null) 'auto': _directionAutoToJson(d.auto!),
 };
 
