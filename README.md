@@ -10,9 +10,10 @@
 
 На адресах 162.159.198.\* и 162.159.199.\* возможны разные колокации, например:<br />
 162.159.198.\* - colo=HEL (аэропорт Хельсинки) <br />
-162.159.199.\* - colo=LED (аэропорт Пулково, Санкт-Петербург)
+162.159.199.\* - colo=LED (аэропорт Пулково, Санкт-Петербург)<br />
 
 <p align="center">
+
 # L×Box
 
 [![GitHub](https://img.shields.io/badge/GitHub-Leadaxe%2FLxBox-blue)](https://github.com/Leadaxe/LxBox)
