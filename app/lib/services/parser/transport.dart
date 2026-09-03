@@ -313,6 +313,11 @@ Map<String, String> xhttpScalarsFromJson(Map raw) {
   return out;
 }
 
+/// §410 (2) — ключи, которые Xray при слиянии `extra` всегда берёт из
+/// внешнего объекта (плоских параметров ссылки); значения из `extra`
+/// отбрасываются.
+const _xhttpFlatOnlyKeys = {'host', 'path', 'mode'};
+
 /// §399 — слить `extra` в карту полей. `extra` в приоритете для своих ключей
 /// (поведение Xray и URI-ветки).
 ///
@@ -325,6 +330,15 @@ Map<String, String> xhttpScalarsFromJson(Map raw) {
 /// (`uplink_data_placement can be header only in packet-up mode`).
 /// Эталон Go: `xhttpLookup` читает `extra` первым и при пустом значении
 /// откатывается к плоскому параметру (node_parser_transport.go).
+///
+/// §410 (2) — `host`, `path`, `mode` из `extra` не читаются вовсе. Так делает
+/// сам Xray: `SplitHTTPConfig.Build()` (infra/conf/transport_method.go) при
+/// наличии `extra` берёт его за основу, но host/path/mode перезаписывает
+/// значениями внешнего объекта — то есть плоскими параметрами ссылки. У узла
+/// cumirum в `extra` лежал `"path": "/"`, а рабочий путь `/hls/…` был плоским;
+/// с `/` сервер отвечал 404 на uplink. Здесь LxBox расходится с Go-эталоном
+/// лаунчера (там extra-first и для этих трёх ключей) — расхождение
+/// зафиксировано в таске, предложение в контракт отправлено.
 ///
 /// [raw] — источник `extra`: строка с JSON (URI-ветка, где значение уже
 /// percent-декодировано `Uri.queryParameters`) **или** уже распарсенный `Map`
@@ -353,6 +367,8 @@ Map<String, String> mergeXhttpExtra(Map<String, String> q, {Object? raw}) {
   final merged = Map<String, String>.from(q);
   decoded.forEach((k, v) {
     if (k is! String || v == null) return;
+    // §410 (2) — host/path/mode только из плоских параметров (Xray Build).
+    if (_xhttpFlatOnlyKeys.contains(k.toLowerCase())) return;
     if (v is Map) {
       // `xmux` — единственный вложенный объект XHTTP, и Xray пишет его в
       // extra именно объектом. Разворачиваем его члены в тот же плоский слой

@@ -444,6 +444,29 @@ void main() {
       expect(t.host, '');
     });
 
+    // Xray `SplitHTTPConfig.Build()`: при наличии extra host/path/mode
+    // перезаписываются значениями внешнего объекта, даже непустые из extra
+    // отбрасываются. Остальные поля extra по-прежнему в приоритете.
+    test('extra.host/path/mode не перекрывают плоские даже непустыми (§410)',
+        () {
+      final t = xrayTransport({
+        'mode': 'packet-up',
+        'path': '/real',
+        'host': 'real.example',
+        'xPaddingBytes': '10-20',
+        'extra': {
+          'mode': 'stream-up',
+          'path': '/fake',
+          'host': 'fake.example',
+          'xPaddingBytes': '500-600',
+        },
+      });
+      expect(t.mode, 'packet-up');
+      expect(t.path, '/real');
+      expect(t.host, 'real.example');
+      expect(t.xPaddingBytes, '500-600', reason: 'не host/path/mode — extra');
+    });
+
     test('пустой член extra.xmux не затирает плоское поле (§410)', () {
       final t = xrayTransport({
         'mode': 'packet-up',
@@ -489,9 +512,10 @@ void main() {
       final t = (node! as VlessSpec).transport as XhttpTransport;
       expect(t.mode, 'packet-up');
       expect(t.host, 'media.morphai.cc');
-      // path: в extra лежит "/" — непустое, по контракту extra побеждает
-      // (Go xhttpLookup: primary=extra первым). Так же читала и v2.20.12.
-      expect(t.path, '/');
+      // path: в extra лежит "/", плоско — "/hls/…". Xray (SplitHTTPConfig
+      // .Build) host/path/mode берёт только из внешнего объекта; с "/"
+      // сервер отвечал 404 на uplink (device-verified на эмуляторе).
+      expect(t.path, '/hls/v2/track/8e31c750/');
       final (m, w) = t.toSingbox(TemplateVars.empty);
       expect(m['mode'], 'packet-up');
       expect(m['uplink_data_placement'], 'header');
