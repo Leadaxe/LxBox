@@ -1324,17 +1324,19 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     /// мог последовательно сделать `await stopVPN()` → `await startVPN()`
     /// без race'а в onStartCommand guard (`status != Stopped` → silent).
     ///
-    /// Таймаут 5с — если doStop не доиграл, возвращаем `false`. Caller
-    /// (обычно reconnect) сам решит отменить или повторить.
+    /// §415 — бюджет `BoxVpnService.STOP_AWAIT_TIMEOUT_MS` (9с): если doStop не
+    /// доиграл, возвращаем `false`. Caller (обычно reconnect) сам решит отменить
+    /// или повторить. Значение — общая константа, а не литерал: связь
+    /// «нативный бюджет < Dart-бюджет `_Timeouts.stopVpn`» описана там же.
     private fun stopVpn(result: MethodChannel.Result) {
         pluginScope.launch {
             val ok = try {
-                withTimeout(5_000) {
+                withTimeout(BoxVpnService.STOP_AWAIT_TIMEOUT_MS) {
                     BoxVpnService.stopAwait(context).await()
                 }
                 true
             } catch (e: TimeoutCancellationException) {
-                Log.w(TAG, "[vpn] stopVPN: 5s timeout — native did not report Stopped")
+                Log.w(TAG, "[vpn] stopVPN: ${BoxVpnService.STOP_AWAIT_TIMEOUT_MS}ms timeout — native did not report Stopped")
                 false
             } catch (e: Exception) {
                 Log.e(TAG, "[vpn] stopVPN: exception $e")

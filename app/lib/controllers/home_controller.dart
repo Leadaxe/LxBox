@@ -153,7 +153,26 @@ class HomeController extends ChangeNotifier
   // обрывается: Kotlin перестаёт ЖДАТЬ, но Go-горутина доигрывает endpoint.Close()
   // по цепочке в фоне (воркеры гаснут по порядку, не зомби). Чистый stop = 0.16с,
   // запас до 3с большой; корень (closeService не должен ждать пинг-dial'ы) — в ядре.
-  static const _defaultStoppingTimeout = Duration(seconds: 3);
+  //
+  // §415 — 3с ОКАЗАЛОСЬ МАЛО и порог поднят до 12с. §287 неявно считал, что
+  // teardown либо мгновенный (0.16с), либо зависший; device-замер на тяжёлом
+  // туннеле (AWG/WARP-эндпоинт + ~25 живых соединений) показал третий случай —
+  // МЕДЛЕННЫЙ, НО ЖИВОЙ teardown 5.2с. На 3с эскалация била по здоровой
+  // остановке: force-stop поверх штатной, и юзер видел ложную ошибку.
+  //
+  // Новый порог — backstop, а НЕ конкурент штатному стопу: он обязан быть
+  // больше всей штатной лестницы, чтобы срабатывать только когда та уже
+  // отработала и провалилась.
+  //
+  //   нативный stopAwait     9с   (BoxVpnService.STOP_AWAIT_TIMEOUT_MS)
+  //     < Dart stopVPN      10с   (_Timeouts.stopVpn)
+  //       < эскалация       12с   (здесь)
+  //
+  // Забота §287 (не заставлять юзера ждать зависший WG-teardown) при этом
+  // сохранена: при РЕАЛЬНОМ зависании нативный бюджет истекает на 9с, `stop()`
+  // получает `false` и показывает ошибку — эскалация тут уже не на критическом
+  // пути, она добивает сервис, если ядро так и не отдало Stopped.
+  static const _defaultStoppingTimeout = Duration(seconds: 12);
   static const _defaultConnectingTimeout = Duration(seconds: 15);
   Duration _stoppingTimeout = _defaultStoppingTimeout;
   Duration _connectingTimeout = _defaultConnectingTimeout;

@@ -22,7 +22,16 @@ class _Timeouts {
   static const startVpn = Duration(seconds: 30);
 
   /// `stopVPN` — блокирующий до `setStatus(Stopped)`. Cleanup libbox обычно
-  /// 1-3s. 10s — defensive.
+  /// 1-3s, на тяжёлом туннеле (AWG/WARP + десятки живых соединений) —
+  /// до ~5.2s (device-замер §415). 10s — defensive.
+  ///
+  /// §415 — этот бюджет ОБЯЗАН быть больше нативного
+  /// `BoxVpnService.STOP_AWAIT_TIMEOUT_MS` (9s), с запасом на доставку
+  /// результата через MethodChannel. Иначе Dart отвалится первым и вместо
+  /// честного `false` от native прилетит TimeoutException — юзер получит
+  /// ту же ложную «Stop timed out» при успешной остановке.
+  /// Полная лестница бюджетов — в комментарии к `_defaultStoppingTimeout`
+  /// (`app/lib/controllers/home_controller.dart`).
   static const stopVpn = Duration(seconds: 10);
 
   /// Config save/load — file IO, быстро. 5s покрывает worst-case Android
