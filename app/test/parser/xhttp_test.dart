@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
@@ -5,6 +7,7 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/transport.dart';
+import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §097 — XHTTP (Xray splithttp) нативный transport. По образцу
 /// singbox-launcher SPEC 071: parse (URI camelCase + snake) → emit → round-trip,
@@ -193,14 +196,16 @@ void main() {
       expect(m2['uplink_http_method'], 'GET');
       expect(w2, isEmpty);
 
-      // header-placement без packet-up → пишем как есть, без warning.
+      // §416 отменил passthrough ИМЕННО для header-placement: ядро на нём
+      // роняет весь конфиг, а не одну ноду. Не-header placement'ы (body,
+      // cookie, auto) остаются pass-through, как канон Go и требует.
       final t3 = parseTransport({
         'type': 'xhttp',
-        'uplink_data_placement': 'header',
+        'uplink_data_placement': 'cookie',
         'mode': 'stream-up',
       })!;
       final (m3, w3) = t3.toSingbox(TemplateVars.empty);
-      expect(m3['uplink_data_placement'], 'header');
+      expect(m3['uplink_data_placement'], 'cookie');
       expect(w3.whereType<XhttpParamResetWarning>(), isEmpty);
 
       // "невалидный" enum session_placement → тоже pure passthrough.
@@ -427,6 +432,104 @@ void main() {
       );
     });
 
+    // §410 — регрессия v2.21.0 (4PDA #1740…#1765): Xray кладёт в `extra`
+    // весь объект транспорта с пустыми незаданными полями; `"mode": ""`
+    // затирало плоский `mode=packet-up`, ядро брало `auto` и узел с
+    // `uplinkDataPlacement=header` ронял конфиг целиком. Эталон Go —
+    // `xhttpLookup`: пустое из extra → откат к плоскому значению.
+    test('пустое значение в extra не перекрывает плоское поле (§410)', () {
+      final t = xrayTransport({
+        'mode': 'packet-up',
+        'xPaddingBytes': '10-20',
+        'extra': {'mode': '', 'xPaddingBytes': '', 'host': ''},
+      });
+      expect(t.mode, 'packet-up');
+      expect(t.xPaddingBytes, '10-20');
+      expect(t.host, '');
+    });
+
+    // Xray `SplitHTTPConfig.Build()`: при наличии extra host/path/mode
+    // перезаписываются значениями внешнего объекта, даже непустые из extra
+    // отбрасываются. Остальные поля extra по-прежнему в приоритете.
+    test('extra.host/path/mode не перекрывают плоские даже непустыми (§410)',
+        () {
+      final t = xrayTransport({
+        'mode': 'packet-up',
+        'path': '/real',
+        'host': 'real.example',
+        'xPaddingBytes': '10-20',
+        'extra': {
+          'mode': 'stream-up',
+          'path': '/fake',
+          'host': 'fake.example',
+          'xPaddingBytes': '500-600',
+        },
+      });
+      expect(t.mode, 'packet-up');
+      expect(t.path, '/real');
+      expect(t.host, 'real.example');
+      expect(t.xPaddingBytes, '500-600', reason: 'не host/path/mode — extra');
+    });
+
+    test('пустой член extra.xmux не затирает плоское поле (§410)', () {
+      final t = xrayTransport({
+        'mode': 'packet-up',
+        'xmux': {'maxConcurrency': '16'},
+        'extra': {
+          'xmux': {'maxConcurrency': ''},
+        },
+      });
+      expect(t.maxConcurrency, '16');
+    });
+
+    // Ссылка cumirum (#1755) дословно: mode=packet-up плоско, в extra
+    // "mode":"" + uplinkDataPlacement=header + uplinkHTTPMethod=GET.
+    test('ссылка из подписки с extra.mode="" → mode packet-up в конфиге (§410)',
+        () {
+      const uri =
+          'vless://423b1d79-08c4-403f-9d5e-c541f791b55f@178.176.128.128:443'
+          '?alpn=h2%2Chttp%2F1.1&encryption=none'
+          '&extra=%7B%22host%22%3A%22%22%2C%22path%22%3A%22%2F%22%2C%22mode%22'
+          '%3A%22%22%2C%22headers%22%3Anull%2C%22xPaddingBytes%22%3A%220%22%2C'
+          '%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingKey%22%3A%22%22%2C'
+          '%22xPaddingHeader%22%3A%22%22%2C%22xPaddingPlacement%22%3A%22%22%2C'
+          '%22xPaddingMethod%22%3A%22%22%2C%22uplinkHTTPMethod%22%3A%22GET%22'
+          '%2C%22sessionIDPlacement%22%3A%22cookie%22%2C%22sessionIDKey%22%3A'
+          '%22media_sid%22%2C%22sessionIDTable%22%3A%22%22%2C%22sessionIDLength'
+          '%22%3A%220%22%2C%22seqPlacement%22%3A%22query%22%2C%22seqKey%22%3A'
+          '%22offset%22%2C%22uplinkDataPlacement%22%3A%22header%22%2C'
+          '%22uplinkDataKey%22%3A%22X-Playback-Token%22%2C%22uplinkChunkSize'
+          '%22%3A%220%22%2C%22noGRPCHeader%22%3Afalse%2C%22noSSEHeader%22%3A'
+          'true%2C%22scMaxEachPostBytes%22%3A%22131072-262144%22%2C'
+          '%22scMinPostsIntervalMs%22%3A%225-10%22%2C%22scMaxBufferedPosts%22'
+          '%3A12%2C%22scStreamUpServerSecs%22%3A%221-2%22%2C'
+          '%22serverMaxHeaderBytes%22%3A0%2C%22xmux%22%3A%7B%22maxConcurrency'
+          '%22%3A%220%22%2C%22maxConnections%22%3A%220%22%2C%22cMaxReuseTimes'
+          '%22%3A%220%22%2C%22hMaxRequestTimes%22%3A%220%22%2C'
+          '%22hMaxReusableSecs%22%3A%220%22%2C%22hKeepAlivePeriod%22%3A0%7D%2C'
+          '%22downloadSettings%22%3Anull%2C%22extra%22%3Anull%7D'
+          '&fp=qq&host=media.morphai.cc&mode=packet-up'
+          '&path=%2Fhls%2Fv2%2Ftrack%2F8e31c750%2F&security=tls'
+          '&sni=media.morphai.cc&type=xhttp#t';
+      final node = parseUri(uri);
+      expect(node, isA<VlessSpec>());
+      final t = (node! as VlessSpec).transport as XhttpTransport;
+      expect(t.mode, 'packet-up');
+      expect(t.host, 'media.morphai.cc');
+      // path: в extra лежит "/", плоско — "/hls/…". Xray (SplitHTTPConfig
+      // .Build) host/path/mode берёт только из внешнего объекта; с "/"
+      // сервер отвечал 404 на uplink (device-verified на эмуляторе).
+      expect(t.path, '/hls/v2/track/8e31c750/');
+      final (m, w) = t.toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], 'header');
+      expect(m['uplink_http_method'], 'GET');
+      // sessionIDPlacement/sessionIDKey — ключи вне контракта (Go читает
+      // только session_placement/sessionPlacement), сюда не доезжают.
+      expect(m.containsKey('session_placement'), false);
+      expect(w, isEmpty);
+    });
+
     // Критерий 5 — R6: деградация вместо поломки.
     test('битый / не-объектный extra не роняет разбор узла', () {
       for (final bad in <Object>['не-json', <Object>[], 5, true]) {
@@ -510,6 +613,15 @@ void main() {
         xPaddingMethod: 'tokenish',
         scMaxEachPostBytes: '1000000',
         scMinPostsIntervalMs: '30',
+        scStreamUpServerSecs: '20-80',
+        scMaxBufferedPosts: 30,
+        noSseHeader: true,
+        maxConnections: '1',
+        maxConcurrency: '16-32',
+        cMaxReuseTimes: '5',
+        hMaxRequestTimes: '600',
+        hMaxReusableSecs: '1800',
+        hKeepAlivePeriod: 30,
       );
       final expected = golden.toSingbox(TemplateVars.empty).$1;
 
@@ -532,6 +644,163 @@ void main() {
       expect(singboxTransport(expected).toSingbox(TemplateVars.empty).$1,
           expected,
           reason: 'sing-box-JSON-ветка потеряла поле');
+    });
+
+    // Паритет с Go (SPEC 102 R2): Xray пишет xmux в `extra` вложенным
+    // объектом. Обе формы обязаны давать один и тот же транспорт — иначе один
+    // и тот же узел читается по-разному в зависимости от формы записи.
+    test('extra={"xmux":{…}} эквивалентен плоским ключам', () {
+      final nested = parseTransport({
+        'type': 'xhttp',
+        'path': '/p',
+        'extra':
+            '{"xmux":{"maxConnections":1,"maxConcurrency":"16-32","hKeepAlivePeriod":30},"scMaxBufferedPosts":30}',
+      })! as XhttpTransport;
+      final flat = parseTransport({
+        'type': 'xhttp',
+        'path': '/p',
+        'maxConnections': '1',
+        'maxConcurrency': '16-32',
+        'hKeepAlivePeriod': '30',
+        'scMaxBufferedPosts': '30',
+      })! as XhttpTransport;
+
+      final want = {
+        'type': 'xhttp',
+        'path': '/p',
+        'sc_max_buffered_posts': 30,
+        'xmux': {
+          'max_concurrency': '16-32',
+          'max_connections': '1',
+          'h_keep_alive_period': 30,
+        },
+      };
+      expect(nested.toSingbox(TemplateVars.empty).$1, want);
+      expect(flat.toSingbox(TemplateVars.empty).$1, want);
+    });
+
+    // Нуль у int-полей значащий: «не задано» кодируется как -1, поэтому
+    // scMaxBufferedPosts=0 обязан доехать до конфига, а не исчезнуть.
+    test('int-поля: 0 эмитится, отсутствие — нет', () {
+      final zero = parseTransport({
+        'type': 'xhttp',
+        'scMaxBufferedPosts': '0',
+        'hKeepAlivePeriod': '0',
+      })! as XhttpTransport;
+      final m = zero.toSingbox(TemplateVars.empty).$1;
+      expect(m['sc_max_buffered_posts'], 0);
+      expect((m['xmux'] as Map)['h_keep_alive_period'], 0);
+
+      final absent = parseTransport({'type': 'xhttp'})! as XhttpTransport;
+      final m2 = absent.toSingbox(TemplateVars.empty).$1;
+      expect(m2.containsKey('sc_max_buffered_posts'), isFalse);
+      expect(m2.containsKey('xmux'), isFalse,
+          reason: 'пустой xmux не должен эмититься');
+    });
+  });
+
+  // §416 — форумная жалоба 03.09: узел подписки несёт
+  // uplink_data_placement=header БЕЗ mode, ядро отвергает ВЕСЬ конфиг
+  // («uplink_data_placement can be header only in packet-up mode»), VPN не
+  // поднимается. Guard стоит на эмиссии XhttpTransport — единственной точке,
+  // общей для всех веток источника.
+  group('§416 XHTTP: header-placement требует packet-up', () {
+    test('placement=header без mode → дописан mode: packet-up + warning', () {
+      final (m, w) = const XhttpTransport(
+        path: '/hls/v2/track/8e31c750/',
+        host: 'media.morphai.cc',
+        uplinkDataPlacement: 'header',
+      ).toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], 'header');
+      expect(w, const [XhttpModeForcedPacketUpWarning()]);
+    });
+
+    test('регистр и пробелы нормализуются при сверке, значение — как есть',
+        () {
+      final (m, w) = const XhttpTransport(
+        uplinkDataPlacement: ' Header ',
+      ).toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], ' Header ',
+          reason: 'placement уходит в ядро дословно, нормализация — только '
+              'для сверки');
+      expect(w, const [XhttpModeForcedPacketUpWarning()]);
+    });
+
+    test('placement=header + mode=packet-up → ничего не меняется, тихо', () {
+      final (m, w) = const XhttpTransport(
+        mode: 'packet-up',
+        uplinkDataPlacement: 'header',
+      ).toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], 'header');
+      expect(w, isEmpty);
+    });
+
+    // §169 — отбрасывать, а не подгонять молча: явный чужой mode не
+    // переписываем (это сменило бы wire-протокол узла), снимаем placement.
+    test('placement=header + mode=stream-one → placement снят, mode цел', () {
+      final (m, w) = const XhttpTransport(
+        mode: 'stream-one',
+        uplinkDataPlacement: 'header',
+      ).toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'stream-one');
+      expect(m.containsKey('uplink_data_placement'), isFalse);
+      expect(w, const [
+        XhttpParamResetWarning(
+            'uplink_data_placement', XhttpResetReason.placementRequiresPacketUp)
+      ]);
+    });
+
+    test('placement не header (body/cookie/auto) — узел не трогаем', () {
+      for (final p in ['body', 'auto', 'cookie']) {
+        final (m, w) = XhttpTransport(
+          mode: 'stream-one',
+          uplinkDataPlacement: p,
+        ).toSingbox(TemplateVars.empty);
+        expect(m['mode'], 'stream-one', reason: p);
+        expect(m['uplink_data_placement'], p, reason: p);
+        expect(w, isEmpty, reason: p);
+      }
+    });
+
+    test('узла без placement guard не касается', () {
+      final (m, w) = const XhttpTransport(path: '/x')
+          .toSingbox(TemplateVars.empty);
+      expect(m.containsKey('mode'), isFalse);
+      expect(m.containsKey('uplink_data_placement'), isFalse);
+      expect(w, isEmpty);
+    });
+
+    test('ссылка из жалобы: header без mode через URI-ветку', () {
+      final t = parseTransport({
+        'type': 'xhttp',
+        'host': 'media.morphai.cc',
+        'path': '/hls/v2/track/8e31c750/',
+        'uplinkDataPlacement': 'header',
+        'uplinkHTTPMethod': 'GET',
+      })! as XhttpTransport;
+      expect(t.mode, '', reason: 'парсер mode не выдумывает');
+      final (m, w) = t.toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], 'header');
+      expect(m['uplink_http_method'], 'GET');
+      expect(w, const [XhttpModeForcedPacketUpWarning()]);
+    });
+
+    test('эмиссия детерминирована: два прогона байт в байт', () {
+      const t = XhttpTransport(
+        path: '/p',
+        host: 'h',
+        uplinkDataPlacement: 'header',
+        uplinkHttpMethod: 'GET',
+        maxConnections: '1',
+      );
+      final a = t.toSingbox(TemplateVars.empty);
+      final b = t.toSingbox(TemplateVars.empty);
+      expect(jsonEncode(a.$1), jsonEncode(b.$1));
+      expect(a.$2, b.$2);
     });
   });
 }

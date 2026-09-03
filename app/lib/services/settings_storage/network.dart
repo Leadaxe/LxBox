@@ -176,16 +176,36 @@ Future<void> _setGroupPing(
 Future<void> _clearGroupPing(String groupTag) async {
   if (groupTag.isEmpty) return;
   final opts = await SettingsStorage.getPingOptions();
+  if (!_dropPingGroupKeys(opts, (t) => t == groupTag)) return;
+  await SettingsStorage.savePingOptions(opts);
+}
+
+/// §408 — снять из `ping_options.groups` все ключи, для которых [doomed]
+/// вернул `true`. Мутирует переданный `opts` НА МЕСТЕ и возвращает `true`,
+/// если что-то ушло (вызывающий решает, писать ли на диск).
+///
+/// Пустая карта `groups` удаляется целиком, а не остаётся `{}`: ключ
+/// `ping_options` попадает в бэкап и в `/state/storage`, и пустой контейнер
+/// там читался бы как «per-direction override'ы были и все сброшены», хотя
+/// состояние ровно то же, что и до первого override'а. Тот же приём был в
+/// `_clearGroupPing` с §040 — здесь он просто вынесен в общую точку.
+bool _dropPingGroupKeys(
+  Map<String, dynamic> opts,
+  bool Function(String tag) doomed,
+) {
   final groups = opts['groups'];
-  if (groups is! Map<String, dynamic>) return;
-  if (!groups.containsKey(groupTag)) return;
-  groups.remove(groupTag);
+  if (groups is! Map<String, dynamic>) return false;
+  final doomedKeys = groups.keys.where(doomed).toList();
+  if (doomedKeys.isEmpty) return false;
+  for (final k in doomedKeys) {
+    groups.remove(k);
+  }
   if (groups.isEmpty) {
     opts.remove('groups');
   } else {
     opts['groups'] = groups;
   }
-  await SettingsStorage.savePingOptions(opts);
+  return true;
 }
 
 // §219 — `_getDnsRules` удалён (публичный геттер getDnsRules снят, 0 call-sites).

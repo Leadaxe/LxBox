@@ -28,6 +28,7 @@ docs/
       055-mobile-stack-decision/    # Demoted, historical and superseded specs live here too
       060-libbox-1-13-migration/    # (see §054 spec reorg)
   ARCHITECTURE.md                   # Project architecture
+  GUARDS.md                         # Sanitiser registry: every guard, by layer
   BUILD.md                          # Build instructions
   DEVELOPMENT_REPORT.md             # Development history by stage
   DEVELOPMENT_GUIDE.md              # This document
@@ -173,15 +174,18 @@ The full guide — adding a language, plurals, collisions, `// l10n-exempt` — 
 #### 1. sing-box dependency resolution
 At startup sing-box verifies that every outbound referenced by a group exists. If
 `auto-proxy-out` is empty (or was never created because Include Auto is off)
-while `vpn-1` points at it — **crash**. That is why `_buildPresetOutbounds` does
-a `continue` on an empty urltest group, and why selector groups drop `default`
-when it points at a non-existent tag (`options.remove('default')`).
+while `vpn-1` points at it — **crash**. Worse, the error names the outbound that
+*referenced* the missing tag, not the one at fault.
 
-**What to do:**
-- Never create empty urltest groups (`continue`)
-- Give selector groups a `direct-out` fallback when they have no nodes
-- Validate `knownTags` before adding to `addOutbounds`
-- Test it: disable every subscription → start the VPN → it must not crash
+The guards that prevent this (empty groups never emitted, `default` dropped when
+it points nowhere, dangling detours stripped, cycles untied) live in the graph
+sanitiser and the validator. **Do not restate them here** — the full list, with
+`file:line` and the exact core error each prevents, is
+[`GUARDS.md`](GUARDS.md#layer-4--config-assembly).
+
+**What to do:** when you add a code path that emits an outbound, a group or a
+reference to one, check that path against the layer-4 table before shipping.
+Test it: disable every subscription → start the VPN → it must not crash.
 
 #### 2. local.properties sdk.dir
 Flutter overwrites `sdk.dir` on every run. You need either:

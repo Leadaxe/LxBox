@@ -91,8 +91,18 @@ class SubscriptionEntry extends ChangeNotifier {
   /// Количество chained-детур узлов (⚙). В `nodeCount` они не включены,
   /// потому что в списке `.nodes` детуры живут как поле `.chained` у
   /// главного узла, не отдельным элементом.
-  int get detourCount =>
-      _list.nodes.where((n) => n.chained != null).length;
+  /// §404 — считаем ЗВЕНЬЯ, а не узлов с цепочкой: многохоповый
+  /// `dialerProxy` даёт больше одного outbound'а на владельца, и счётчик
+  /// «+N⚙ nodes» должен показывать, сколько их реально уедет в конфиг.
+  int get detourCount {
+    var n = 0;
+    for (final node in _list.nodes) {
+      for (var hop = node.chained; hop != null; hop = hop.chained) {
+        n++;
+      }
+    }
+    return n;
+  }
 
   bool get registerDetourServers => detourPolicy.registerDetourServers;
   bool get registerDetourInAuto => detourPolicy.registerDetourInAuto;

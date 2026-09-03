@@ -43,7 +43,12 @@ void main() {
   List<String> labelsOf(List<Map<String, dynamic>> elements) =>
       parseAll(decode(jsonEncode(elements))).map((n) => n.label).toList();
 
-  group('P4 — дедуп по (protocol, server, port, credential)', () {
+  // §404 / D-086 — дедуп по ПОДПИСИ ЗАПИСИ: каноническая эмиссия узла без
+  // tag/detour плюс подпись пути дозвона, рекурсивно по хопам. Прежний
+  // грубый ключ `protocol|server|port|credential` считался по СЫРОМУ JSON и
+  // не видел ни транспорта, ни TLS, ни релея — два намеренно разных узла
+  // схлопывались в один молча.
+  group('P4/D-086 — дедуп по подписи записи', () {
     test('один сервер в двух элементах → один узел', () {
       final labels = labelsOf([
         element('🇩🇪 Германия', [vless('1.1.1.1')]),
@@ -68,14 +73,59 @@ void main() {
       expect(labels, hasLength(2));
     });
 
-    test('разный SNI при том же ключе → ОДИН узел (trade-off P4)', () {
-      // Ключ намеренно не включает TLS/транспорт (решение 30.07.2026).
-      // Следствие задокументировано: берётся первый по порядку P2.
+    test('D-086: разный SNI → ДВА узла (прежний ключ их схлопывал)', () {
+      // Инверсия trade-off'а P4. Провайдер прислал две записи намеренно:
+      // один сервер под двумя SNI — это два пути, и второй проваливался в
+      // `continue` молча.
       final labels = labelsOf([
         element('первый', [vless('1.1.1.1', sni: 'a.com')]),
         element('второй', [vless('1.1.1.1', sni: 'b.com')]),
       ]);
-      expect(labels, ['первый']);
+      expect(labels, ['первый', 'второй']);
+    });
+
+    test('D-086: байтовый дубль по-прежнему ОДИН узел', () {
+      // Подпись обязана схлопывать настоящие дубли — иначе 64 записи
+      // Liberty приехали бы 64 узлами вместо 37.
+      final labels = labelsOf([
+        element('первый', [vless('1.1.1.1', sni: 'a.com')]),
+        element('второй', [vless('1.1.1.1', sni: 'a.com', tag: 'other-tag')]),
+      ]);
+      expect(labels, ['первый'],
+          reason: 'тег в подпись не входит: та же запись под другим именем');
+    });
+
+    test('D-086: разный ТРАНСПОРТ → два узла', () {
+      final tcp = vless('1.1.1.1', sni: 'a.com');
+      final ws = vless('1.1.1.1', sni: 'a.com');
+      (ws['streamSettings'] as Map)['network'] = 'ws';
+      (ws['streamSettings'] as Map)['wsSettings'] = {'path': '/w'};
+      expect(labelsOf([element('tcp', [tcp]), element('ws', [ws])]),
+          ['tcp', 'ws']);
+    });
+
+    test('D-086: прямая запись и BYPASS того же сервера → два узла', () {
+      // BYPASS — это другой МАРШРУТ, а не резерв: там, где прямой путь
+      // зарезан, схлопывание оставляло пользователя без рабочего варианта.
+      final direct = vless('1.1.1.1', sni: 'a.com');
+      final viaRelay = vless('1.1.1.1', sni: 'a.com');
+      ((viaRelay['streamSettings'] as Map)['sockopt'] =
+          <String, dynamic>{'dialerProxy': 'relay'});
+      final relay = {
+        'tag': 'relay',
+        'protocol': 'socks',
+        'settings': {
+          'servers': [
+            {'address': '192.0.2.10', 'port': 61000},
+          ],
+        },
+      };
+      final labels = labelsOf([
+        element('прямой', [direct]),
+        element('через релей', [viaRelay, relay]),
+      ]);
+      expect(labels, ['прямой', 'через релей'],
+          reason: 'путь дозвона входит в подпись — записи не одинаковы');
     });
   });
 

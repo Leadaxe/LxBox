@@ -125,9 +125,13 @@ final class HttpUpgradeTransport extends TransportSpec {
 /// деградировал в httpupgrade (стоковое ядро без xhttp) — теперь **нативный**
 /// emit, без подмены wire-протокола.
 ///
-/// Все расширенные поля плоские (String/bool) с omitempty-семантикой: пустое
-/// значение → ключ не эмитим, у ядра свои дефолты (см. URL_PARSING §2). НЕ
-/// вкладывать под-объекты — Go-конфиг тоже плоский в пределах transport.
+/// Расширенные поля плоские (String/bool/int) с omitempty-семантикой: пустое
+/// значение → ключ не эмитим, у ядра свои дефолты (см. URL_PARSING §2).
+///
+/// Единственный вложенный объект, который XHTTP определяет, — `xmux`: его
+/// члены живут здесь плоскими полями и собираются в под-объект только на
+/// эмиссии, ровно как в Go (`xhttpXmuxFromSource`). Других под-объектов в
+/// transport нет.
 ///
 /// NB: на СТОКОВОМ ядре (CI без `with_xhttp`) конфиг с `type=xhttp` отвергается
 /// на load — фича «спит» до релиза fork-ядра (как AWG, §097).
@@ -162,6 +166,23 @@ final class XhttpTransport extends TransportSpec {
   // §127 — packet-up tuning (строка '"N"' или '"N-N"')
   final String scMaxEachPostBytes;
   final String scMinPostsIntervalMs;
+  final String scStreamUpServerSecs;
+
+  // Паритет с Go: ядро декодирует это поле как int, а не как строку
+  // (xhttpIntFields, node_parser_transport.go). -1 = не задано.
+  final int scMaxBufferedPosts;
+
+  // Паритет с Go: no_sse_header рядом с no_grpc_header (xhttpBoolFields).
+  final bool noSseHeader;
+
+  // xmux — плоские поля здесь, под-объект на эмиссии (xhttpXmuxFields).
+  // h_keep_alive_period ядро декодирует как int; -1 = не задано.
+  final String maxConnections;
+  final String maxConcurrency;
+  final String cMaxReuseTimes;
+  final String hMaxRequestTimes;
+  final String hMaxReusableSecs;
+  final int hKeepAlivePeriod;
 
   const XhttpTransport({
     this.path = '/',
@@ -185,6 +206,15 @@ final class XhttpTransport extends TransportSpec {
     this.xPaddingMethod = '',
     this.scMaxEachPostBytes = '',
     this.scMinPostsIntervalMs = '',
+    this.scStreamUpServerSecs = '',
+    this.scMaxBufferedPosts = -1,
+    this.noSseHeader = false,
+    this.maxConnections = '',
+    this.maxConcurrency = '',
+    this.cMaxReuseTimes = '',
+    this.hMaxRequestTimes = '',
+    this.hMaxReusableSecs = '',
+    this.hKeepAlivePeriod = -1,
   });
 
   @override
@@ -200,6 +230,7 @@ final class XhttpTransport extends TransportSpec {
     if (mode.isNotEmpty) m['mode'] = mode;
     if (xPaddingBytes.isNotEmpty) m['x_padding_bytes'] = xPaddingBytes;
     if (noGrpcHeader) m['no_grpc_header'] = true;
+    if (noSseHeader) m['no_sse_header'] = true;
     if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
 
     // §217 — нормализация против правил ядра normalizeMeta (transport/v2rayxhttp/
@@ -232,13 +263,39 @@ final class XhttpTransport extends TransportSpec {
         const {'path', 'query', 'header', 'cookie'});
     if (seqKey.isNotEmpty) m['seq_key'] = seqKey;
 
-    // SPEC 103 vless/xhttp_uplink_header_placement_reset — uplink_data_
-    // placement идёт как pure passthrough (эталон Go xhttpStringFields:
-    // "uplink_data_placement" читается и эмитится без gating на mode или
-    // enum-проверки; core validates). header/cookie вне packet-up — core-side
-    // concern, не парсера.
+    // §416 — единственная точка, где uplink_data_placement уходит в конфиг:
+    // сюда сходятся ВСЕ ветки источника (URI, sing-box JSON, Xray JSON,
+    // ручной редактор), обойти guard нельзя.
+    //
+    // Ядро (transport/v2rayxhttp/meta.go normalizeMeta) отвергает
+    // `header`-placement вне packet-up с fatal на ВЕСЬ конфиг:
+    //   create client transport: xhttp: v2ray-xhttp:
+    //   uplink_data_placement can be header only in packet-up mode
+    // Один узел подписки в такой форме не даёт подняться VPN вовсе.
+    //
+    // Две разные ситуации, две разные реакции:
+    //  * mode не задан — намерения пользователя нет, `header` сам по себе
+    //    его и выражает (осмысленен только в packet-up). Дописываем
+    //    mode: packet-up — узел собирается ровно так, как ждёт сервер.
+    //  * mode задан и это не packet-up — конфликт явный, оба значения
+    //    осмысленны и противоречат друг другу. По §169 «отбрасывать, а не
+    //    подгонять молча»: чужой явный mode не переписываем (это сменило бы
+    //    wire-протокол узла), снимаем placement — ядро возьмёт свой дефолт.
+    // Обе ветки — с предупреждением: поведение изменено, пользователь видит.
     if (uplinkDataPlacement.isNotEmpty) {
-      m['uplink_data_placement'] = uplinkDataPlacement;
+      final placement = uplinkDataPlacement.trim().toLowerCase();
+      final effectiveMode = mode.trim().toLowerCase();
+      final needsPacketUp = placement == 'header';
+      if (needsPacketUp && effectiveMode.isEmpty) {
+        m['mode'] = 'packet-up';
+        m['uplink_data_placement'] = uplinkDataPlacement;
+        warnings.add(const XhttpModeForcedPacketUpWarning());
+      } else if (needsPacketUp && effectiveMode != 'packet-up') {
+        warnings.add(XhttpParamResetWarning('uplink_data_placement',
+            XhttpResetReason.placementRequiresPacketUp));
+      } else {
+        m['uplink_data_placement'] = uplinkDataPlacement;
+      }
     }
     if (uplinkDataKey.isNotEmpty) m['uplink_data_key'] = uplinkDataKey;
     if (uplinkChunkSize.isNotEmpty) m['uplink_chunk_size'] = uplinkChunkSize;
@@ -264,6 +321,27 @@ final class XhttpTransport extends TransportSpec {
     if (scMinPostsIntervalMs.isNotEmpty) {
       m['sc_min_posts_interval_ms'] = scMinPostsIntervalMs;
     }
+    if (scStreamUpServerSecs.isNotEmpty) {
+      m['sc_stream_up_server_secs'] = scStreamUpServerSecs;
+    }
+    // int-поля: 0 — значащее значение, «не задано» кодируется как -1.
+    if (scMaxBufferedPosts >= 0) m['sc_max_buffered_posts'] = scMaxBufferedPosts;
+
+    // xmux собирается под-объектом и эмитится только непустым — пустой
+    // {"xmux":{}} ядро прочло бы как заданный, но нулевой конфиг.
+    final xmux = <String, dynamic>{};
+    if (maxConcurrency.isNotEmpty) xmux['max_concurrency'] = maxConcurrency;
+    if (maxConnections.isNotEmpty) xmux['max_connections'] = maxConnections;
+    if (cMaxReuseTimes.isNotEmpty) xmux['c_max_reuse_times'] = cMaxReuseTimes;
+    if (hMaxRequestTimes.isNotEmpty) {
+      xmux['h_max_request_times'] = hMaxRequestTimes;
+    }
+    if (hMaxReusableSecs.isNotEmpty) {
+      xmux['h_max_reusable_secs'] = hMaxReusableSecs;
+    }
+    if (hKeepAlivePeriod >= 0) xmux['h_keep_alive_period'] = hKeepAlivePeriod;
+    if (xmux.isNotEmpty) m['xmux'] = xmux;
+
     return (m, warnings);
   }
 }

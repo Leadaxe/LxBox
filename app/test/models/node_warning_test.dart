@@ -76,6 +76,8 @@ void main() {
         InsecureTlsWarning() => 'tls',
         NaiveBuildTagWarning() => 'naive_build',
         XhttpParamResetWarning() => 'xhttp_reset',
+        // §416 — header-placement без режима: дописан mode: packet-up
+        XhttpModeForcedPacketUpWarning() => 'xhttp_mode_forced_packet_up',
         UnknownFingerprintWarning() => 'fingerprint',
         EchIgnoredWarning() => 'ech_ignored',
         UnknownObfsWarning() => 'obfs_unknown',
@@ -85,6 +87,8 @@ void main() {
         DetourTargetMissingWarning() => 'detour_missing',
         DetourToGroupWarning() => 'detour_group',
         DetourChainTooDeepWarning() => 'detour_deep',
+        // §404 — импорт Xray JSON: недостижимый dialerProxy
+        DialerProxyUnusableWarning() => 'dialer_proxy_unusable',
         SelectorAsAutoWarning() => 'selector_as_auto',
         GroupMemberMissingWarning() => 'group_member_missing',
         // SPEC 103 — деградации, помеченные кодом на обеих сторонах контракта

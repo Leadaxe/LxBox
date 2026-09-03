@@ -196,6 +196,11 @@ not in getters. See [`spec/tasks/091`](./spec/tasks/091-config-node-model.md),
 
 ## The three-layer Parser v2 pipeline
 
+> Every guard along this pipeline — the points where a value is dropped,
+> normalised, defaulted or a node degraded so that the core does not reject
+> the whole config — is catalogued in [`GUARDS.md`](GUARDS.md), by layer,
+> with `file:line` and the core error each one prevents.
+
 ```
 UI / Controller
   │  paste / URL / QR / file  →  SubscriptionSource
@@ -833,13 +838,17 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 │                           #   route_final / directions[] (§125/§393, replaces enabled_groups) / chains[] (§393 C) /
 │                           #   excluded_nodes (§048 sandbox) / last_global_update /
 │                           #   presets_migrated / directions_migrated
-├── singbox_config.json     # ConfigManager (Kotlin) — the final sing-box JSON
 ├── http_cache/             # HttpCache — the raw body plus headers of the subscriptions
 │   └── <sha1(url)>.{body,headers}
 ├── rule_sets/              # §011 — the cache of binary .srs files
 │   └── <tag>.srs
 ├── applog.txt              # §038/§043 — JSON lines, a 200-line / 64 KB ring
 └── corelog.txt             # §043 — JSON lines, a 200-line / 64 KB ring
+
+<Context.filesDir>/         # native `files/` — NOT the documents dir (Android: app_flutter/);
+│                           # Dart reaches it via BoxVpnClient.getFilesDir() (§316/§414)
+├── singbox_config.json     # ConfigManager (Kotlin) — the final sing-box JSON
+└── cache.db                # libbox cache_file (basePath = filesDir)
 
 SharedPreferences (Android):
 ├── app_theme_mode                       # Flutter UI prefs (haptic_enabled → vars, §159)
@@ -1661,6 +1670,7 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | **279** | **Localization** (en plus ru: the dictionary, the template overlay and values-<lang>; §280 phases 0–7) |
 | **283** | **Subscription node disable** (a per-node toggle in a subscription, keyed by the node's identity hash) |
 | **393** | **Directions** (the Channel→Direction rename: arbitrary tags, no cap, include[]; the storage key channels→directions with a one-shot migration) plus **hop chains** (SPEC 110: a chain as a third source kind, `type: chain`, a layered probe) |
+| 417 | Workspaces (named copies of the whole state — settings + subscription bodies + .srs; Load = auto-save current → copy → re-read in place → rebuild → VPN back up; Save as; the working paths never move) |
 
 **Demoted (through §054) — now in `tasks/`:**
 

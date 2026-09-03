@@ -14,7 +14,10 @@ import '../dns_settings_screen/resolved_server.dart';
 /// Значение = sing-box `type`. Прочие типы (`local`, `h3`, …) формой не
 /// выражаются — редактируются на JSON-вкладке.
 /// §312 — `group` (kernel SPEC 033): группа DNS-серверов с резервированием.
-const kDnsServerModes = ['udp', 'tls', 'https', 'group'];
+const kDnsServerModes = ['udp', 'tls', 'https', 'quic', 'h3', 'group'];
+
+/// §411 — режимы, у которых есть HTTP-path (`/dns-query`): DoH и DoH3.
+const kDnsPathModes = {'https', 'h3'};
 
 /// §312 — режимы выбора цели DNS-группы (kernel SPEC 033).
 const kDnsGroupModes = ['stable', 'fastest', 'parallel'];
@@ -46,8 +49,8 @@ class DnsMemberOption {
 /// Дефолтный порт режима (sing-box применяет его сам при отсутствии
 /// `server_port` — храним ключ только для нестандартных портов).
 int defaultDnsPort(String mode) => switch (mode) {
-  'tls' => 853,
-  'https' => 443,
+  'tls' || 'quic' => 853,
+  'https' || 'h3' => 443,
   _ => 53,
 };
 
@@ -164,8 +167,9 @@ class DnsServerEditController extends ChangeNotifier {
     return d is String && d.isNotEmpty ? d : kDirectOutboundTag;
   }
 
-  /// §117 задача 4b — режим формы: `udp`/`tls`/`https`, либо null когда
-  /// `body.type` формой не выражается (local, h3, …) → JSON-only editing.
+  /// §117 задача 4b — режим формы: `udp`/`tls`/`https`, §411 — `quic`/`h3`,
+  /// либо null когда `body.type` формой не выражается (local, dhcp, …) →
+  /// JSON-only editing.
   String? get serverMode {
     final t = _body['type'];
     return t is String && kDnsServerModes.contains(t) ? t : null;
@@ -318,7 +322,7 @@ class DnsServerEditController extends ChangeNotifier {
   // текстом (затирает невалидный недонабранный JSON — осознанный trade-off:
   // валидный _body — последний источник правды).
 
-  /// Переключение режима UDP/DoT/DoH/Group. Адрес/detour сохраняются между
+  /// Переключение режима UDP/DoT/DoH/DoQ/DoH3/Group. Адрес/detour сохраняются между
   /// транспортными режимами; порт со старого дефолта снимается (ключ уходит —
   /// sing-box применит дефолт нового режима); path/tls чистятся под режим.
   /// §312 — переход В группу чистит транспортные поля (у группы их нет),
@@ -364,9 +368,9 @@ class DnsServerEditController extends ChangeNotifier {
       _body.remove('server_port');
       portCtrl.text = '';
     }
-    if (mode != 'https') _body.remove('path');
+    if (!kDnsPathModes.contains(mode)) _body.remove('path');
     if (mode == 'udp') _body.remove('tls');
-    if (mode != 'https') pathCtrl.text = '';
+    if (!kDnsPathModes.contains(mode)) pathCtrl.text = '';
     if (mode == 'udp') sniCtrl.text = '';
     _syncJsonFromBody();
     notifyListeners();
@@ -445,8 +449,9 @@ class DnsServerEditController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Адрес сервера. Для DoH принимает и URL-вставку
-  /// (`https://host/dns-query` → server=host, path=/dns-query).
+  /// Адрес сервера. Для DoH/DoH3 принимает и URL-вставку
+  /// (`https://host/dns-query` → server=host, path=/dns-query); режим h3
+  /// при вставке сохраняется (§411), остальные переводятся в https.
   /// Hostname-адрес автоматически получает `domain_resolver` (дефолт
   /// google_udp — решение №4); IP-адрес — теряет его.
   void onAddressChanged(String raw) {
@@ -461,7 +466,7 @@ class DnsServerEditController extends ChangeNotifier {
           _body['path'] = uri.path;
           pathCtrl.text = uri.path;
         }
-        if (serverMode != 'https') setServerMode('https');
+        if (!kDnsPathModes.contains(serverMode)) setServerMode('https');
       }
     }
     if (addr.isEmpty) {
@@ -495,7 +500,7 @@ class DnsServerEditController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// DoH path. Пусто → ключ уходит (sing-box дефолт /dns-query).
+  /// DoH/DoH3 path. Пусто → ключ уходит (sing-box дефолт /dns-query).
   void onPathChanged(String raw) {
     final p = raw.trim();
     if (p.isEmpty) {

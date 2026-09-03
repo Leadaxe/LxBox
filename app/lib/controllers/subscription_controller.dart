@@ -221,8 +221,25 @@ class SubscriptionController extends ChangeNotifier {
               cur.nodes.isNotEmpty) {
             continue;
           }
-          final next = cur.copyWith(nodes: nodes, lastNodeCount: nodes.length);
+          // §400 (IDENTITY.md §5.1) — регидрация кэша это тоже первый разбор
+          // источника: узлы появились, значит legacy-ключи можно опознать, не
+          // дожидаясь сетевого refresh. GC здесь по-прежнему НЕ делаем —
+          // кэш не сигнал «узел ушёл» (§283), а миграция чистит только те
+          // ключи, содержимого которых в теле нет.
+          final migrated =
+              migrateLegacyDisabledKeys(cur.disabledHashes, nodes);
+          final next = cur.copyWith(
+            nodes: nodes,
+            lastNodeCount: nodes.length,
+            disabledHashes: migrated,
+          );
           entry._replaceList(next);
+          // Результат миграции обязан лечь на диск: иначе legacy-ключи
+          // прогоняются заново на каждом старте. Метаданные — флаг пересборки
+          // не поднимаем (регидрация состав конфига не меняет).
+          if (!identical(migrated, cur.disabledHashes)) {
+            await _persist(keepDirtyFlag: true);
+          }
           final detours = nodes.where((n) => n.chained != null).length;
           entry.nodeCount = nodes.length;
           entry.status =
@@ -241,12 +258,12 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// §302 — применяет import-rules к разобранным узлам и возвращает
-  /// identity-хеши узлов, помеченных к выключению (Disable) и к
+  /// идентичности узлов, помеченных к выключению (Disable) и к
   /// принудительному включению (Enable, §332).
   ///
-  /// REPLACE патчит `NodeSpec.patchedJson` (узел эмитится из него), поэтому
-  /// хеш считаем ПОСЛЕ применения — выключение и роутинг работают с итоговым
-  /// видом узла, как его увидит билдер.
+  /// §400 — REPLACE патчит `NodeSpec.patchedJson` (узел эмитится из него), но
+  /// идентичность считается от ТЕГА, а патч тег не трогает: правило, меняющее
+  /// server/uuid, отметку больше не срывает.
   ({Set<String> disable, Set<String> enable}) _applyRulesToNodes(
       List<NodeSpec> nodes, List<ImportRule> rules) {
     // §307 — правила НЕ инкрементальны: каждый прогон стартует с чистого
@@ -263,6 +280,10 @@ class SubscriptionController extends ChangeNotifier {
 
     final disable = <String>{};
     final enable = <String>{};
+    // §400 — идентичность узла от его тега, поэтому REPLACE-патч её НЕ
+    // меняет: правило может переписать server/uuid, отметка остаётся на том
+    // же ключе. Карта считается один раз на весь список.
+    final identities = sourceNodeIdentities(nodes);
     result.outcomes.forEach((i, outcome) {
       if (i < 0 || i >= nodes.length) return;
       final node = nodes[i];
@@ -270,8 +291,10 @@ class SubscriptionController extends ChangeNotifier {
         node.patchedJson = outcome.patchedJson;
         node.ruleTrail = outcome.replacements;
       }
-      if (outcome.disabled == true) disable.add(nodeIdentityHash(node));
-      if (outcome.disabled == false) enable.add(nodeIdentityHash(node));
+      final identity = identities[node];
+      if (identity == null) return; // группа/безымянный — отметок не имеет
+      if (outcome.disabled == true) disable.add(identity);
+      if (outcome.disabled == false) enable.add(identity);
     });
 
     // §322 — правила могли переписать `server`/`uuid`, и тогда идентичность
@@ -1404,17 +1427,22 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
-  /// §283 — вкл/выкл одной ноды подписки. Ключ — identity-хеш сути узла
-  /// (node_hash.dart): переживает refresh/рестарт/переименование ноды
-  /// провайдером; дубли одного сервера с разными лейблами гасятся одним
-  /// toggle (by design). При выключении lastSeen = now (старт TTL-отсчёта,
-  /// GC — на успешном сетевом refresh в _fetchEntryByRef).
+  /// §283 — вкл/выкл одной ноды подписки. Ключ — идентичность узла (§400:
+  /// тег, уникализированный внутри источника, node_hash.dart): переживает
+  /// refresh/рестарт и ротацию адреса под тем же именем; переименование ноды
+  /// провайдером отметку теряет — имя и есть идентичность. Дубли одного
+  /// сервера под РАЗНЫМИ именами — разные узлы, гасятся раздельно. При
+  /// выключении lastSeen = now (старт TTL-отсчёта, GC — на успешном сетевом
+  /// refresh в _fetchEntryByRef).
   Future<void> toggleSubscriptionNode(int index, NodeSpec node) async {
     if (index < 0 || index >= _entries.length) return;
     final entry = _entries[index];
     final list = entry.list;
     if (list is! SubscriptionServers) return;
-    final hash = nodeIdentityHash(node);
+    // §400 — идентичность берём из карты источника: она зависит от соседей
+    // (тёзки нумеруются `X`, `X-2`). Узла без идентичности выключить нельзя.
+    final hash = sourceNodeIdentities(list.nodes)[node];
+    if (hash == null) return;
     final next = Map<String, DateTime>.from(list.disabledHashes);
     if (next.containsKey(hash)) {
       next.remove(hash);
@@ -1448,7 +1476,9 @@ class SubscriptionController extends ChangeNotifier {
       final now = DateTime.now();
       next = {
         ...list.disabledHashes,
-        for (final n in list.nodes) nodeIdentityHash(n): now,
+        // Узлы без идентичности (группы §322, безымянные) отметки не
+        // получают — их в карте попросту нет.
+        for (final id in sourceNodeIdentities(list.nodes).values) id: now,
       };
     }
     entry._replaceList(list.copyWith(disabledHashes: next));
@@ -1467,7 +1497,11 @@ class SubscriptionController extends ChangeNotifier {
     final entry = _entries[index];
     final list = entry.list;
     if (list is! SubscriptionServers) return;
-    final hashes = {for (final n in nodes) nodeIdentityHash(n)};
+    // §400 — идентичности от ПОЛНОГО списка источника, а не от переданной
+    // пачки: уникализация тёзок считается по соседям, и подмножество дало бы
+    // другие номера.
+    final identities = sourceNodeIdentities(list.nodes);
+    final hashes = {for (final n in nodes) ?identities[n]};
     if (hashes.isEmpty) return;
     final Map<String, DateTime> next;
     if (enabled) {
@@ -2096,20 +2130,28 @@ class SubscriptionController extends ChangeNotifier {
       final ruleMarks =
           _applyRulesToNodes(result.nodes, current.activeImportRules);
 
+      // §400 (IDENTITY.md §5.1) — миграция legacy-ключей: отметки, записанные
+      // до перехода на тег, опознаются по форме 64-hex и переезжают на
+      // идентичность узла с тем же содержимым. Гоняем по ПОЛНОМУ свежему
+      // списку (до GC и до фильтра выключенных: legacy-ключ опознаётся именно
+      // по выключенному узлу) и ДО GC — иначе GC снёс бы ещё не переехавший
+      // ключ как «не встреченный в теле».
+      final migrated =
+          migrateLegacyDisabledKeys(current.disabledHashes, result.nodes);
+
       // §283 — GC отметок disable ТОЛЬКО здесь (успешный сетевой fetch =
       // единственный сигнал «нода ушла из подписки»; failed fetch и
       // регидрация из кэша состав не проясняют, file:-подписки сюда не
       // доходят — guard выше). Хеш свежих нод считаем лишь когда есть что
       // чистить.
-      final baseDisabled =
-          current.disabledHashes.isEmpty && ruleMarks.disable.isEmpty
-              ? current.disabledHashes
-              : gcDisabledHashes(
-                  current.disabledHashes,
-                  {for (final n in result.nodes) nodeIdentityHash(n)},
-                  updateIntervalHours: nextInterval,
-                  now: ruleNow,
-                );
+      final baseDisabled = migrated.isEmpty && ruleMarks.disable.isEmpty
+          ? migrated
+          : gcDisabledHashes(
+              migrated,
+              sourceNodeIdentities(result.nodes).values.toSet(),
+              updateIntervalHours: nextInterval,
+              now: ruleNow,
+            );
       // §332 — итог правил поверх GC (правило > GC): ENABLE снимает отметки
       // (включая ручные §283), DISABLE ставит.
       final nextDisabled = applyRuleMarks(
@@ -2252,9 +2294,9 @@ class SubscriptionController extends ChangeNotifier {
   /// результат ⇒ поднимать `configDirty` не за что.
   ///
   /// Что входит:
-  /// - identity-хеши узлов **в порядке следования** — порядок значим: от него
-  ///   зависят суффиксы `allocateTag` (`X` / `X-1`) и порядок внутри пулов
-  ///   `urltest`/`selector`. Провайдер переставил узлы — это изменение;
+  /// - контент-хеши узлов с тегом, **в порядке следования** — порядок значим:
+  ///   от него зависят суффиксы `allocateTag` (`X` / `X-1`) и порядок внутри
+  ///   пулов `urltest`/`selector`. Провайдер переставил узлы — это изменение;
   /// - набор disable-отметок (§283) — при том же списке узлов снятая или
   ///   поставленная отметка меняет, что билдер эмитит. Сортируем: порядок
   ///   ключей map'а сам по себе ничего не значит.
@@ -2264,7 +2306,8 @@ class SubscriptionController extends ChangeNotifier {
   /// `consecutiveFails`, `updateIntervalHours` — билдер их не читает.
   ///
   /// Хеши считаются от УЖЕ пропатченных §302-правилами узлов (метод зовётся
-  /// после `_applyRulesToNodes`), тем же `nodeIdentityHash`, что у билдера.
+  /// после `_applyRulesToNodes`) — то есть от той формы, которую увидит
+  /// билдер.
   @visibleForTesting
   static String compositionKeyForTesting(
     List<NodeSpec> nodes,
@@ -2282,7 +2325,14 @@ class SubscriptionController extends ChangeNotifier {
     // отметки приходят из storage и гарантий не дают.
     String lenPrefixed(Iterable<String> items) =>
         items.map((s) => '${s.length}:$s').join();
-    final tags = lenPrefixed(nodes.map(nodeIdentityHash));
+    // §400 — здесь нужен отпечаток СОДЕРЖИМОГО, а не идентичности: вопрос
+    // «изменилось ли то, что уйдёт в конфиг». Идентичность-тег на смену
+    // server/uuid под тем же именем не реагирует (в этом её смысл), поэтому
+    // состав считаем контент-хешем — той же функцией, что до §400, плюс тег
+    // отдельным полем (переименование узла билдер тоже эмитит иначе).
+    final tags = lenPrefixed([
+      for (final n in nodes) '${n.tag}\u0000${legacyNodeIdentityHash(n)}',
+    ]);
     final disabled = lenPrefixed(disabledHashes.toList()..sort());
     return '$tags|$disabled';
   }
@@ -2298,7 +2348,9 @@ class SubscriptionController extends ChangeNotifier {
   String _compositionSignature() {
     final parts = _entries.map((e) {
       final l = e.list;
-      final nodes = l.nodes.map(nodeIdentityHash).join(',');
+      // §400 — тот же контент-отпечаток, что у §331: вопрос «изменилось ли
+      // то, что уйдёт в конфиг», а не «тот ли это узел».
+      final nodes = l.nodes.map(legacyNodeIdentityHash).join(',');
       return '${l.id}:${l.enabled ? 1 : 0}:$nodes';
     });
     return parts.map((s) => '${s.length}:$s').join();

@@ -23,6 +23,13 @@ Future<Map<String, dynamic>> _dumpCache() async {
 /// `merge=false` (default) — replace целиком; `merge=true` — top-level upsert
 /// (присутствующие ключи overwrite, отсутствующие keep), `vars` мерджится
 /// per-subkey. Фильтр применяется к обоим путям.
+///
+/// §413 — при `merge=false` ключи Debug API ([SettingsStorage.debugApiVarKeys]),
+/// которых во входящем `vars` нет, переносятся из текущего стораджа. Экспорт
+/// их по умолчанию не включает (категория «Debug config» выключена, токен —
+/// секрет), и полная замена молча гасила Debug API устройства: порт и токен
+/// уходили вместе со всем `vars`. «Ключа нет в файле» = «не трогать», а не
+/// «сбросить». Ключ, который в файле есть, по-прежнему побеждает.
 Future<List<String>> _replaceRaw(
   Map<String, dynamic> snapshot, {
   bool merge = false,
@@ -61,6 +68,20 @@ Future<List<String>> _replaceRaw(
   }
 
   if (!merge) {
+    // §413 — Debug API устройства переживает полную замену, если файл
+    // о нём молчит.
+    final current = await _load();
+    final currentVars = current['vars'];
+    if (currentVars is Map) {
+      final outVars = (filtered['vars'] as Map<String, dynamic>?) ??
+          <String, dynamic>{};
+      for (final k in SettingsStorage.debugApiVarKeys) {
+        if (!outVars.containsKey(k) && currentVars.containsKey(k)) {
+          outVars[k] = currentVars[k];
+        }
+      }
+      if (outVars.isNotEmpty) filtered['vars'] = outVars;
+    }
     SettingsStorage._cache = filtered;
     await _save();
     return dropped;

@@ -8,12 +8,14 @@ import '../../../services/l10n/locale_controller.dart';
 /// **UDP / DoT / DoH** (sing-box `udp`/`tls`/`https`) + адрес/порт,
 /// для DoH — path, для DoT/DoH — TLS SNI, для hostname-адреса —
 /// Domain resolver (решение №4: чем резолвить имя самого DNS-сервера).
-/// §312 — четвёртый режим **Group** (kernel SPEC 033): члены + режим
+/// §312 — режим **Group** (kernel SPEC 033): члены + режим
 /// выбора + TTL; транспортных полей у группы нет.
+/// §411 — **DoQ** (`quic`, порт 853, как DoT) и **DoH3** (`h3`, порт 443
+/// + path, как DoH): ядро их знает давно, форма не давала выбрать.
 ///
 /// Поля пишут в канонический `body` контроллера — JSON-вкладка показывает
 /// то же тело live (и наоборот: валидный JSON-edit обновляет форму).
-/// `body.type` вне режимов формы (local, h3, …) не выражается —
+/// `body.type` вне режимов формы (local, dhcp, …) не выражается —
 /// показываем пометку «use JSON tab».
 class ServerFormSection extends StatelessWidget {
   const ServerFormSection({super.key, required this.c});
@@ -42,7 +44,7 @@ class ServerFormSection extends StatelessWidget {
             Expanded(
               child: Text(
                 getLocalText.s(
-                  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH.",
+                  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3.",
                   c.rawServerType,
                 ),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
@@ -57,11 +59,12 @@ class ServerFormSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 4),
-        // §312 — 4 режима. На узких экранах сегменты не влезают — дропдаун
-        // (решение юзера №1).
+        // §312 — режимы в сегментах. На узких экранах сегменты не влезают —
+        // дропдаун (решение юзера №1). §411 — сегментов стало шесть, порог
+        // поднят: на телефоне (< 520dp) всегда дропдаун, сегменты — планшет.
         LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth < 340) {
+            if (constraints.maxWidth < 520) {
               return DropdownButtonFormField<String>(
                 key: ValueKey('dns-mode-$mode'),
                 initialValue: mode,
@@ -78,6 +81,10 @@ class ServerFormSection extends StatelessWidget {
                   const DropdownMenuItem(value: 'tls', child: Text('DoT')),
                   // l10n-exempt: protocol name
                   const DropdownMenuItem(value: 'https', child: Text('DoH')),
+                  // l10n-exempt: protocol name
+                  const DropdownMenuItem(value: 'quic', child: Text('DoQ')),
+                  // l10n-exempt: protocol name
+                  const DropdownMenuItem(value: 'h3', child: Text('DoH3')),
                   DropdownMenuItem(
                     value: 'group',
                     child: Text(getLocalText.s("Group")),
@@ -96,6 +103,10 @@ class ServerFormSection extends StatelessWidget {
                 const ButtonSegment(value: 'tls', label: Text('DoT')),
                 // l10n-exempt: protocol name
                 const ButtonSegment(value: 'https', label: Text('DoH')),
+                // l10n-exempt: protocol name
+                const ButtonSegment(value: 'quic', label: Text('DoQ')),
+                // l10n-exempt: protocol name
+                const ButtonSegment(value: 'h3', label: Text('DoH3')),
                 ButtonSegment(
                   value: 'group',
                   label: Text(getLocalText.s("Group")),
@@ -113,6 +124,8 @@ class ServerFormSection extends StatelessWidget {
           child: Text(switch (mode) {
             'tls' => getLocalText.s("DNS-over-TLS · port 853"),
             'https' => getLocalText.s("DNS-over-HTTPS · port 443"),
+            'quic' => getLocalText.s("DNS-over-QUIC · port 853"),
+            'h3' => getLocalText.s("DNS-over-HTTP/3 · port 443"),
             'group' => getLocalText.s(
               "Several servers behind one tag — survives a member failure",
             ),
@@ -133,7 +146,7 @@ class ServerFormSection extends StatelessWidget {
                   keyboardType: TextInputType.url,
                   decoration: InputDecoration(
                     labelText: getLocalText.s("Server address"),
-                    hintText: mode == 'https'
+                    hintText: kDnsPathModes.contains(mode)
                         ? getLocalText.s(
                             "192.168.1.1 / dns.example.com / https://… URL",
                           )
@@ -162,7 +175,7 @@ class ServerFormSection extends StatelessWidget {
               ),
             ],
           ),
-          if (mode == 'https') ...[
+          if (kDnsPathModes.contains(mode)) ...[
             const SizedBox(height: 12),
             TextField(
               controller: c.pathCtrl,

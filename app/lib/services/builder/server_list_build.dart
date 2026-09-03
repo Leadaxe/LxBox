@@ -29,15 +29,21 @@ extension ServerListBuild on ServerList {
     };
 
     // §283 — per-node disable подписки: выключенная нода видна в UI (с
-    // toggle), но в конфиг не эмитится. Ключ — identity-хеш сути узла
-    // (переживает refresh и переименования, см. node_hash.dart). Папки
+    // toggle), но в конфиг не эмитится. Ключ — идентичность узла (§400: тег,
+    // уникализированный внутри источника, см. node_hash.dart). Папки
     // фильтруют members по enabled в конструкторе модели; у подписки nodes
     // нужен UI полным — поэтому фильтр здесь, в билдере.
+    //
+    // Карта считается от ПОЛНОГО списка узлов источника: уникализация
+    // тёзок зависит от соседей, включая выключенных (иначе выключение узла
+    // переименовывало бы следующего тёзку и снимало отметку с него).
     final disabledHashes = switch (this) {
       final SubscriptionServers s when s.disabledHashes.isNotEmpty =>
         s.disabledHashes,
       _ => null,
     };
+    final identities =
+        disabledHashes == null ? null : sourceNodeIdentities(nodes);
 
     // §322 — узлы автовыбора собираем ВТОРЫМ проходом: их `outbounds` — теги
     // членов, а те присваиваются `allocateTag` только в цикле ниже. Копим
@@ -47,8 +53,10 @@ extension ServerListBuild on ServerList {
 
     for (var i = 0; i < nodes.length; i++) {
       final server = nodes[i];
-      if (disabledHashes != null &&
-          disabledHashes.containsKey(nodeIdentityHash(server))) {
+      // Узел без идентичности (группа §322, безымянный) в карте отсутствует —
+      // отметки у него быть не может, и пустой ключ на него не натягиваем.
+      final identity = identities?[server];
+      if (identity != null && disabledHashes!.containsKey(identity)) {
         continue;
       }
       if (server is AutoSelectSpec) {

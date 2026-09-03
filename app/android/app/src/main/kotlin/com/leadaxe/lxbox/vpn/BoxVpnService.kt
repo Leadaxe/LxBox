@@ -47,6 +47,28 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         const val BROADCAST_STATUS = "com.leadaxe.lxbox.BROADCAST_STATUS"
         const val EXTRA_STATUS = "status"
 
+        /// §415 — бюджет ожидания штатной остановки (`stopAwait` → setStatus(Stopped)).
+        ///
+        /// Лестница бюджетов, СТРОГО по возрастанию — иначе внешний слой объявит
+        /// таймаут раньше внутреннего и юзер получит ложную ошибку при успешной
+        /// остановке:
+        ///
+        ///   нативный `STOP_AWAIT_TIMEOUT_MS` (9с)
+        ///     < Dart `_Timeouts.stopVpn` (10с, `app/lib/vpn/box_vpn_client/timeouts.dart`)
+        ///
+        /// Зазор в 1с — на доставку результата обратно через MethodChannel
+        /// (сериализация + hop на Flutter-поток). Если бы бюджеты совпали, Dart
+        /// успел бы отвалиться по таймауту ПЕРВЫМ и `stopVPN()` бросил бы
+        /// TimeoutException вместо честного `false` — та же ложная ошибка,
+        /// только с другой стороны.
+        ///
+        /// Почему 9с, а не прежние 5с: device-замер (эмулятор, AWG/WARP-эндпоинт
+        /// + ~25 живых соединений) показал реальный teardown 5.2с — `closeFileDescriptor`
+        /// один занимает ~1.95с, плюс завершение WireGuard-устройства. 5с резали
+        /// успешную остановку на самом финише. 9с — заведомо больше худшего
+        /// наблюдаемого teardown'а, но всё ещё меньше Dart-бюджета.
+        const val STOP_AWAIT_TIMEOUT_MS = 9_000L
+
         /// §276 — признак «туннель отобрало другое VPN-приложение». Едет рядом с
         /// EXTRA_STATUS=Stopped, а НЕ отдельным значением VpnStatus: revoke —
         /// терминальное состояние, и весь teardown (stopCompleter, onStartCommand
@@ -298,7 +320,9 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
             reconnecting = true
             reconnectScope.launch {
                 val stopped = try {
-                    withTimeout(6_000) { stopAwait(context).await(); true }
+                    // §415 — тот же teardown, что и в обычном stop ⇒ тот же бюджет
+                    // (был свой литерал 6с — резал успешную остановку на 5.2с).
+                    withTimeout(STOP_AWAIT_TIMEOUT_MS) { stopAwait(context).await(); true }
                 } catch (t: Throwable) {
                     Log.w(TAG, "[vpn] reconnect: stop phase failed/timeout: ${t.message}")
                     false

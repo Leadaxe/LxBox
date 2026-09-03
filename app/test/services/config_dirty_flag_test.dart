@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/config_dirty_check.dart';
+import 'package:lxbox/services/platform_channels.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
 /// §113 — config-dirty флаг владеется `SettingsStorage`, поднимается
@@ -30,6 +31,7 @@ void main() {
       return null;
     });
     SettingsStorage.resetCacheForTesting();
+    ConfigDirtyCheck.resetForTesting();
   });
 
   tearDown(() async {
@@ -40,6 +42,69 @@ void main() {
     } on FileSystemException {
       /* ignore */
     }
+  });
+
+  group('§414 — конфиг живёт в native filesDir, не в Documents', () {
+    // На устройстве `ConfigManager.kt` пишет `singbox_config.json` в
+    // `Context.filesDir` (`files/`), а Documents у Flutter — `app_flutter/`.
+    // Здесь filesDir эмулируется отдельной папкой через мок канала ядра.
+    late Directory filesDir;
+    const vpnChannel = MethodChannel(PlatformChannels.methods);
+
+    String nativeConfigPath() => '${filesDir.path}/singbox_config.json';
+
+    setUp(() async {
+      filesDir = await Directory.systemTemp.createTemp('lxbox_dirty_files_');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(vpnChannel, (call) async {
+        if (call.method == 'getFilesDir') return filesDir.path;
+        return null;
+      });
+    });
+
+    tearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(vpnChannel, null);
+      try {
+        if (filesDir.existsSync()) await filesDir.delete(recursive: true);
+      } on FileSystemException {
+        /* ignore */
+      }
+    });
+
+    test('свежий конфиг в filesDir → isDirty=false', () async {
+      await SettingsStorage.setNodeSort('latency', const []);
+      final cfg = File(nativeConfigPath());
+      await cfg.writeAsString('{}');
+      await cfg.setLastModified(DateTime.now().add(const Duration(minutes: 1)));
+
+      expect(await ConfigDirtyCheck.isDirty(), isFalse,
+          reason: 'конфиг новее настроек — пересобирать нечего');
+    });
+
+    test('конфиг только в Documents (старое место) → не считается', () async {
+      await SettingsStorage.setNodeSort('latency', const []);
+      final stale = File(configPath());
+      await stale.writeAsString('{}');
+      await stale.setLastModified(DateTime.now().add(const Duration(minutes: 1)));
+
+      expect(await ConfigDirtyCheck.isDirty(), isTrue,
+          reason: 'в filesDir конфига нет — честно грязно');
+    });
+
+    test('touchConfig выравнивает mtime конфига в filesDir', () async {
+      final cfg = File(nativeConfigPath());
+      await cfg.writeAsString('{}');
+      await cfg.setLastModified(DateTime(2020));
+
+      // Не-config запись → _save → touch конфига (уже по native-пути).
+      await SettingsStorage.setNodeSort('latency', const []);
+
+      expect(SettingsStorage.configDirty, isFalse);
+      expect(cfg.lastModifiedSync().year, greaterThan(2020),
+          reason: 'touch дотянулся до файла в filesDir');
+      expect(await ConfigDirtyCheck.isDirty(), isFalse);
+    });
   });
 
   group('§113 — авто-dirty на config-значимых сейверах', () {
