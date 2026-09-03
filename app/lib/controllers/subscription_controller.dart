@@ -2331,7 +2331,7 @@ class SubscriptionController extends ChangeNotifier {
     // состав считаем контент-хешем — той же функцией, что до §400, плюс тег
     // отдельным полем (переименование узла билдер тоже эмитит иначе).
     final tags = lenPrefixed([
-      for (final n in nodes) '${n.tag} ${legacyNodeIdentityHash(n)}',
+      for (final n in nodes) '${n.tag}\u0000${legacyNodeIdentityHash(n)}',
     ]);
     final disabled = lenPrefixed(disabledHashes.toList()..sort());
     return '$tags|$disabled';
