@@ -263,13 +263,39 @@ final class XhttpTransport extends TransportSpec {
         const {'path', 'query', 'header', 'cookie'});
     if (seqKey.isNotEmpty) m['seq_key'] = seqKey;
 
-    // SPEC 103 vless/xhttp_uplink_header_placement_reset — uplink_data_
-    // placement идёт как pure passthrough (эталон Go xhttpStringFields:
-    // "uplink_data_placement" читается и эмитится без gating на mode или
-    // enum-проверки; core validates). header/cookie вне packet-up — core-side
-    // concern, не парсера.
+    // §416 — единственная точка, где uplink_data_placement уходит в конфиг:
+    // сюда сходятся ВСЕ ветки источника (URI, sing-box JSON, Xray JSON,
+    // ручной редактор), обойти guard нельзя.
+    //
+    // Ядро (transport/v2rayxhttp/meta.go normalizeMeta) отвергает
+    // `header`-placement вне packet-up с fatal на ВЕСЬ конфиг:
+    //   create client transport: xhttp: v2ray-xhttp:
+    //   uplink_data_placement can be header only in packet-up mode
+    // Один узел подписки в такой форме не даёт подняться VPN вовсе.
+    //
+    // Две разные ситуации, две разные реакции:
+    //  * mode не задан — намерения пользователя нет, `header` сам по себе
+    //    его и выражает (осмысленен только в packet-up). Дописываем
+    //    mode: packet-up — узел собирается ровно так, как ждёт сервер.
+    //  * mode задан и это не packet-up — конфликт явный, оба значения
+    //    осмысленны и противоречат друг другу. По §169 «отбрасывать, а не
+    //    подгонять молча»: чужой явный mode не переписываем (это сменило бы
+    //    wire-протокол узла), снимаем placement — ядро возьмёт свой дефолт.
+    // Обе ветки — с предупреждением: поведение изменено, пользователь видит.
     if (uplinkDataPlacement.isNotEmpty) {
-      m['uplink_data_placement'] = uplinkDataPlacement;
+      final placement = uplinkDataPlacement.trim().toLowerCase();
+      final effectiveMode = mode.trim().toLowerCase();
+      final needsPacketUp = placement == 'header';
+      if (needsPacketUp && effectiveMode.isEmpty) {
+        m['mode'] = 'packet-up';
+        m['uplink_data_placement'] = uplinkDataPlacement;
+        warnings.add(const XhttpModeForcedPacketUpWarning());
+      } else if (needsPacketUp && effectiveMode != 'packet-up') {
+        warnings.add(XhttpParamResetWarning('uplink_data_placement',
+            XhttpResetReason.placementRequiresPacketUp));
+      } else {
+        m['uplink_data_placement'] = uplinkDataPlacement;
+      }
     }
     if (uplinkDataKey.isNotEmpty) m['uplink_data_key'] = uplinkDataKey;
     if (uplinkChunkSize.isNotEmpty) m['uplink_chunk_size'] = uplinkChunkSize;

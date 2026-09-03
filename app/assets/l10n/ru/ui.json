@@ -4514,6 +4514,9 @@
   "Writes a new value into the matching nodes.": {
     "value": "Записывает новое значение в подходящие узлы."
   },
+  "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).": {
+    "value": "Режим XHTTP установлен в «packet-up»: ссылка требует передавать данные восходящего потока в заголовке, а ядро принимает это только в таком режиме (иначе конфиг не загрузился бы)."
+  },
   "XHTTP \"%1$s\" reset to default — %2$s (would otherwise break the whole config).": {
     "value": "Параметр XHTTP «%1$s» сброшен на значение по умолчанию — %2$s (иначе сломался бы весь конфиг)."
   },

@@ -76,6 +76,8 @@ void main() {
         InsecureTlsWarning() => 'tls',
         NaiveBuildTagWarning() => 'naive_build',
         XhttpParamResetWarning() => 'xhttp_reset',
+        // §416 — header-placement без режима: дописан mode: packet-up
+        XhttpModeForcedPacketUpWarning() => 'xhttp_mode_forced_packet_up',
         UnknownFingerprintWarning() => 'fingerprint',
         EchIgnoredWarning() => 'ech_ignored',
         UnknownObfsWarning() => 'obfs_unknown',

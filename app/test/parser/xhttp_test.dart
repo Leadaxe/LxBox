@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
@@ -194,14 +196,16 @@ void main() {
       expect(m2['uplink_http_method'], 'GET');
       expect(w2, isEmpty);
 
-      // header-placement без packet-up → пишем как есть, без warning.
+      // §416 отменил passthrough ИМЕННО для header-placement: ядро на нём
+      // роняет весь конфиг, а не одну ноду. Не-header placement'ы (body,
+      // cookie, auto) остаются pass-through, как канон Go и требует.
       final t3 = parseTransport({
         'type': 'xhttp',
-        'uplink_data_placement': 'header',
+        'uplink_data_placement': 'cookie',
         'mode': 'stream-up',
       })!;
       final (m3, w3) = t3.toSingbox(TemplateVars.empty);
-      expect(m3['uplink_data_placement'], 'header');
+      expect(m3['uplink_data_placement'], 'cookie');
       expect(w3.whereType<XhttpParamResetWarning>(), isEmpty);
 
       // "невалидный" enum session_placement → тоже pure passthrough.
@@ -692,6 +696,111 @@ void main() {
       expect(m2.containsKey('sc_max_buffered_posts'), isFalse);
       expect(m2.containsKey('xmux'), isFalse,
           reason: 'пустой xmux не должен эмититься');
+    });
+  });
+
+  // §416 — форумная жалоба 03.09: узел подписки несёт
+  // uplink_data_placement=header БЕЗ mode, ядро отвергает ВЕСЬ конфиг
+  // («uplink_data_placement can be header only in packet-up mode»), VPN не
+  // поднимается. Guard стоит на эмиссии XhttpTransport — единственной точке,
+  // общей для всех веток источника.
+  group('§416 XHTTP: header-placement требует packet-up', () {
+    test('placement=header без mode → дописан mode: packet-up + warning', () {
+      final (m, w) = const XhttpTransport(
+        path: '/hls/v2/track/8e31c750/',
+        host: 'media.morphai.cc',
+        uplinkDataPlacement: 'header',
+      ).toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], 'header');
+      expect(w, const [XhttpModeForcedPacketUpWarning()]);
+    });
+
+    test('регистр и пробелы нормализуются при сверке, значение — как есть',
+        () {
+      final (m, w) = const XhttpTransport(
+        uplinkDataPlacement: ' Header ',
+      ).toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], ' Header ',
+          reason: 'placement уходит в ядро дословно, нормализация — только '
+              'для сверки');
+      expect(w, const [XhttpModeForcedPacketUpWarning()]);
+    });
+
+    test('placement=header + mode=packet-up → ничего не меняется, тихо', () {
+      final (m, w) = const XhttpTransport(
+        mode: 'packet-up',
+        uplinkDataPlacement: 'header',
+      ).toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], 'header');
+      expect(w, isEmpty);
+    });
+
+    // §169 — отбрасывать, а не подгонять молча: явный чужой mode не
+    // переписываем (это сменило бы wire-протокол узла), снимаем placement.
+    test('placement=header + mode=stream-one → placement снят, mode цел', () {
+      final (m, w) = const XhttpTransport(
+        mode: 'stream-one',
+        uplinkDataPlacement: 'header',
+      ).toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'stream-one');
+      expect(m.containsKey('uplink_data_placement'), isFalse);
+      expect(w, const [
+        XhttpParamResetWarning(
+            'uplink_data_placement', XhttpResetReason.placementRequiresPacketUp)
+      ]);
+    });
+
+    test('placement не header (body/cookie/auto) — узел не трогаем', () {
+      for (final p in ['body', 'auto', 'cookie']) {
+        final (m, w) = XhttpTransport(
+          mode: 'stream-one',
+          uplinkDataPlacement: p,
+        ).toSingbox(TemplateVars.empty);
+        expect(m['mode'], 'stream-one', reason: p);
+        expect(m['uplink_data_placement'], p, reason: p);
+        expect(w, isEmpty, reason: p);
+      }
+    });
+
+    test('узла без placement guard не касается', () {
+      final (m, w) = const XhttpTransport(path: '/x')
+          .toSingbox(TemplateVars.empty);
+      expect(m.containsKey('mode'), isFalse);
+      expect(m.containsKey('uplink_data_placement'), isFalse);
+      expect(w, isEmpty);
+    });
+
+    test('ссылка из жалобы: header без mode через URI-ветку', () {
+      final t = parseTransport({
+        'type': 'xhttp',
+        'host': 'media.morphai.cc',
+        'path': '/hls/v2/track/8e31c750/',
+        'uplinkDataPlacement': 'header',
+        'uplinkHTTPMethod': 'GET',
+      })! as XhttpTransport;
+      expect(t.mode, '', reason: 'парсер mode не выдумывает');
+      final (m, w) = t.toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], 'header');
+      expect(m['uplink_http_method'], 'GET');
+      expect(w, const [XhttpModeForcedPacketUpWarning()]);
+    });
+
+    test('эмиссия детерминирована: два прогона байт в байт', () {
+      const t = XhttpTransport(
+        path: '/p',
+        host: 'h',
+        uplinkDataPlacement: 'header',
+        uplinkHttpMethod: 'GET',
+        maxConnections: '1',
+      );
+      final a = t.toSingbox(TemplateVars.empty);
+      final b = t.toSingbox(TemplateVars.empty);
+      expect(jsonEncode(a.$1), jsonEncode(b.$1));
+      expect(a.$2, b.$2);
     });
   });
 }

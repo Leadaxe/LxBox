@@ -93,6 +93,8 @@ const _warningCodes = <Type, String>{
   NaiveBuildTagWarning: 'naive_unavailable',
   UnknownFingerprintWarning: 'utls_fp_unknown',
   XhttpParamResetWarning: 'xhttp_param_reset',
+  // §416 — header-placement без режима: дописан mode: packet-up.
+  XhttpModeForcedPacketUpWarning: 'xhttp_mode_forced_packet_up',
   EchIgnoredWarning: 'ech_ignored',
   UnknownObfsWarning: 'obfs_unknown',
   MissingObfsPasswordWarning: 'obfs_password_missing',

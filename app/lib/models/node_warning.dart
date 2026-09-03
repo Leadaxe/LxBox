@@ -228,6 +228,29 @@ final class XhttpParamResetWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
+/// §416 — XHTTP-узел пришёл с `uplink_data_placement: header`, но без `mode`.
+/// Ядро принимает такой placement только в режиме `packet-up`
+/// (`transport/v2rayxhttp/meta.go normalizeMeta`): без режима оно берёт
+/// дефолт `auto` и роняет ВЕСЬ конфиг fatal при старте —
+/// «uplink_data_placement can be header only in packet-up mode». Одна такая
+/// нода в подписке не даёт подняться VPN вовсе.
+///
+/// Режим дописывается, а не placement снимается: `header` осмыслен ровно в
+/// packet-up, так что источник фактически его и подразумевал — а снятие
+/// placement'а собрало бы узел не так, как ждёт сервер. Явно заданный
+/// НЕ-packet-up режим при этом не переписывается: там конфликт разбирает
+/// [XhttpResetReason.placementRequiresPacketUp] (§169 — отброс, не подгонка).
+final class XhttpModeForcedPacketUpWarning extends NodeWarning {
+  const XhttpModeForcedPacketUpWarning();
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).");
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
 /// §320 — `ech` из подписки проигнорирован. Xray-форма `ech=<name>+<resolver>`
 /// не несёт ключа, а лишь имя для DNS-запроса; подписки кладут туда публичные
 /// ECH-пробники (`ip.gs`, `encryptedsni.com`), чьи ключи не принадлежат серверу
