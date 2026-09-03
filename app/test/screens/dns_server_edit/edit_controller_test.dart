@@ -181,6 +181,64 @@ void main() {
       c.dispose();
     });
 
+    // §411 — DoQ (quic, 853, как DoT) и DoH3 (h3, 443 + path, как DoH).
+    test('DoQ/DoH3: режимы формы и порты по умолчанию (§411)', () {
+      expect(kDnsServerModes, containsAll(['quic', 'h3']));
+      expect(defaultDnsPort('quic'), 853);
+      expect(defaultDnsPort('h3'), 443);
+      final c = makeNew();
+      c.onBodyTextChanged('{"type":"quic","server":"dns.adguard-dns.com"}');
+      expect(c.serverMode, 'quic', reason: 'раньше → null (JSON-only)');
+      c.onBodyTextChanged('{"type":"h3","server":"dns.google"}');
+      expect(c.serverMode, 'h3');
+      c.dispose();
+    });
+
+    test('DoH3: path/SNI живут; уход в DoQ чистит path, tls остаётся (§411)',
+        () {
+      final c = makeNew();
+      c.setServerMode('h3');
+      c.onAddressChanged('8.8.8.8');
+      c.onPathChanged('dns-query');
+      c.onSniChanged('dns.google');
+      expect(c.snapshot()['body'], {
+        'type': 'h3',
+        'server': '8.8.8.8',
+        'path': '/dns-query',
+        'tls': {'enabled': true, 'server_name': 'dns.google'},
+      });
+      c.setServerMode('quic');
+      final body = c.snapshot()['body'] as Map;
+      expect(body['type'], 'quic');
+      expect(body.containsKey('path'), false);
+      expect(body.containsKey('tls'), true, reason: 'SNI валиден для DoQ');
+      expect(body.containsKey('server_port'), false,
+          reason: 'дефолтный порт → дефолт нового режима');
+      c.dispose();
+    });
+
+    test('DoH3 → DoH: стандартный 443 общий, ключ порта не появляется (§411)',
+        () {
+      final c = makeNew();
+      c.setServerMode('h3');
+      c.onAddressChanged('1.1.1.1');
+      c.onPortChanged('443');
+      c.setServerMode('https');
+      expect((c.snapshot()['body'] as Map).containsKey('server_port'), false);
+      c.dispose();
+    });
+
+    test('URL-вставка в режиме DoH3 не сбивает режим на DoH (§411)', () {
+      final c = makeNew(tags: ['google_udp']);
+      c.setServerMode('h3');
+      c.onAddressChanged('https://dns.quad9.net/dns-query');
+      final body = c.snapshot()['body'] as Map;
+      expect(body['type'], 'h3');
+      expect(body['server'], 'dns.quad9.net');
+      expect(body['path'], '/dns-query');
+      c.dispose();
+    });
+
     test('hostname-адрес → авто domain_resolver (google_udp), IP → снимается',
         () {
       final c = makeNew(tags: ['google_udp', 'cloudflare_udp']);

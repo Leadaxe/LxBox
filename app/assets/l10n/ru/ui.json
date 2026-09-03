@@ -1337,8 +1337,8 @@
   "Custom rules, tun apps, DNS options, final outbound": {
     "value": "Свои правила, приложения туннеля, параметры DNS, финальный исходящий канал"
   },
-  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH.": {
-    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH."
+  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3.": {
+    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH / DoQ / DoH3."
   },
   "Cut": {
     "value": "Вырезать"
@@ -1397,8 +1397,14 @@
   "DNS servers and rules": {
     "value": "DNS-серверы и правила"
   },
+  "DNS-over-HTTP/3 · port 443": {
+    "value": "DNS-over-HTTP/3 · порт 443"
+  },
   "DNS-over-HTTPS · port 443": {
     "value": "DNS-over-HTTPS · порт 443"
+  },
+  "DNS-over-QUIC · port 853": {
+    "value": "DNS-over-QUIC · порт 853"
   },
   "DNS-over-TLS · port 853": {
     "value": "DNS-over-TLS · порт 853"
