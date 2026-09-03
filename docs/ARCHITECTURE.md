@@ -196,6 +196,11 @@ not in getters. See [`spec/tasks/091`](./spec/tasks/091-config-node-model.md),
 
 ## The three-layer Parser v2 pipeline
 
+> Every guard along this pipeline — the points where a value is dropped,
+> normalised, defaulted or a node degraded so that the core does not reject
+> the whole config — is catalogued in [`GUARDS.md`](GUARDS.md), by layer,
+> with `file:line` and the core error each one prevents.
+
 ```
 UI / Controller
   │  paste / URL / QR / file  →  SubscriptionSource

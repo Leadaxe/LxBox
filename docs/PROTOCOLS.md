@@ -10,6 +10,12 @@ L×Box parses proxy URIs from subscriptions and converts them into [sing-box](ht
 - [`app/lib/services/parser/parse_all.dart`](../app/lib/services/parser/parse_all.dart) — orchestrator
 - [`app/lib/models/node_spec.dart`](../app/lib/models/node_spec.dart), [`node_spec_emit.dart`](../app/lib/models/node_spec_emit.dart) — sealed `NodeSpec` + `emit()` / `toUri()`
 
+**Sanitisers and guards.** Every place where a value is dropped, normalised,
+defaulted or degraded so the core does not fail — the full registry with
+`file:line` for each guard — is [`GUARDS.md`](GUARDS.md). This document
+describes what the fields *mean*; that one describes what happens when a
+provider sends something the core will not take.
+
 **Shared contract with the desktop launcher (SPEC 103).** The normative field
 reference lives outside this repo and is vendored into `app/contract/` by
 [`app/tool/sync_contract.sh`](../app/tool/sync_contract.sh) (pinned in
