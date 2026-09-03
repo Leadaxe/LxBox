@@ -188,9 +188,8 @@ Every key is described in detail in the sections below.
 Every path is relative to the **Android internal documents directory** (`getApplicationDocumentsDirectory()`). On a device that directory is unreachable without root or the Debug API (`GET /state/storage`).
 
 ```
-getApplicationDocumentsDirectory()/
+getApplicationDocumentsDirectory()/         # Android: Context.getDir("flutter") = app_flutter/
 ├── lxbox_settings.json
-├── singbox_config.json
 ├── http_cache/
 │   ├── <sha1(url)>.body
 │   └── <sha1(url)>.headers
@@ -198,6 +197,10 @@ getApplicationDocumentsDirectory()/
 │   └── <tag>.srs
 ├── applog.txt
 └── corelog.txt
+
+Context.filesDir/                           # native `files/` = Dart getApplicationSupportDirectory();
+├── singbox_config.json                     #   NOT the documents dir above (§414)
+└── cache.db                                # libbox cache_file (basePath = filesDir)
 
 Android SharedPreferences:
 ├── Flutter prefs                # app_theme_mode, haptic_enabled, …
@@ -207,7 +210,7 @@ Android SharedPreferences:
 | File / directory | Written by | What is inside | Spec |
 |---|---|---|---|
 | `lxbox_settings.json` | `SettingsStorage` (Dart) | App settings, vars, server lists, custom rules, DNS, ping. **The main subject of this document.** | — |
-| `singbox_config.json` | `ConfigManager` (Kotlin) | The final sing-box JSON fed to libbox. Regenerated on every `buildConfig`. Not part of a backup. | — |
+| `singbox_config.json` | `ConfigManager` (Kotlin) | The final sing-box JSON fed to libbox. Regenerated on every `buildConfig`. Not part of a backup. Lives in native `Context.filesDir` (`files/`), not in the documents dir — Dart reaches it via `BoxVpnClient.getFilesDir()` (§316/§414). | [§414] |
 | `http_cache/<sha1(url)>.body` + `.headers` | `HttpCache` (Dart) | The raw body and headers of a subscription, for the offline rehydrate at startup. | [§027] |
 | `rule_sets/<tag>.srs` | `RuleSetDownloader` (Dart) | A cache of binary `.srs` rule-set files. | [§011] |
 | `applog.txt` | `AppLog` (Dart) | The app-side warn/error log, JSON lines, a ring buffer of 200 lines / 64 KB. | [§038], [§043][043-applog] |
@@ -1296,6 +1299,7 @@ The scrubber only handles the `vars` and `server_lists` keys; everything else (`
 
 [§011]: ./spec/features/011%20local%20ruleset%20cache/spec.md
 [§027]: ./spec/features/027%20subscription%20auto%20update/spec.md
+[§414]: ./spec/tasks/414-config-dirty-check-files-dir.md
 [§029]: ./spec/features/029%20haptic%20feedback/spec.md
 [§030]: ./spec/features/030%20custom%20routing%20rules/spec.md
 [§031]: ./spec/features/031%20debug%20api/spec.md

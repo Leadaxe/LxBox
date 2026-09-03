@@ -833,13 +833,17 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 │                           #   route_final / directions[] (§125/§393, replaces enabled_groups) / chains[] (§393 C) /
 │                           #   excluded_nodes (§048 sandbox) / last_global_update /
 │                           #   presets_migrated / directions_migrated
-├── singbox_config.json     # ConfigManager (Kotlin) — the final sing-box JSON
 ├── http_cache/             # HttpCache — the raw body plus headers of the subscriptions
 │   └── <sha1(url)>.{body,headers}
 ├── rule_sets/              # §011 — the cache of binary .srs files
 │   └── <tag>.srs
 ├── applog.txt              # §038/§043 — JSON lines, a 200-line / 64 KB ring
 └── corelog.txt             # §043 — JSON lines, a 200-line / 64 KB ring
+
+<Context.filesDir>/         # native `files/` — NOT the documents dir (Android: app_flutter/);
+│                           # Dart reaches it via BoxVpnClient.getFilesDir() (§316/§414)
+├── singbox_config.json     # ConfigManager (Kotlin) — the final sing-box JSON
+└── cache.db                # libbox cache_file (basePath = filesDir)
 
 SharedPreferences (Android):
 ├── app_theme_mode                       # Flutter UI prefs (haptic_enabled → vars, §159)
