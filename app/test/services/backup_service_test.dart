@@ -109,6 +109,33 @@ void main() {
     expect(cr, isEmpty);
   });
 
+  // §413 — экспорт по умолчанию не несёт Debug API (токен — секрет); полная
+  // замена молча гасила Debug API устройства. Ключа нет в файле → не трогать.
+  test('replaceRaw merge=false keeps device Debug API keys absent in snapshot',
+      () async {
+    await seedStorage(sampleSnapshot());
+    await SettingsStorage.replaceRaw({
+      'vars': {'log_level': 'warn'},
+    });
+    expect(await SettingsStorage.getVar('log_level', ''), 'warn');
+    expect(await SettingsStorage.getVar('debug_enabled', ''), 'true');
+    expect(await SettingsStorage.getVar('debug_token', ''), 'secret-token-xyz');
+    expect(await SettingsStorage.getVar('debug_port', ''), '9269');
+    expect(await SettingsStorage.getVar('auto_update_subs', ''), '',
+        reason: 'остальные vars заменены целиком, как и раньше');
+  });
+
+  test('replaceRaw merge=false: Debug API keys from snapshot win', () async {
+    await seedStorage(sampleSnapshot());
+    await SettingsStorage.replaceRaw({
+      'vars': {'debug_port': '8642', 'debug_enabled': 'false'},
+    });
+    expect(await SettingsStorage.getVar('debug_port', ''), '8642');
+    expect(await SettingsStorage.getVar('debug_enabled', ''), 'false');
+    expect(await SettingsStorage.getVar('debug_token', ''), 'secret-token-xyz',
+        reason: 'отсутствующий в файле ключ переносится');
+  });
+
   test('replaceRaw with merge=true preserves untouched keys', () async {
     await seedStorage(sampleSnapshot());
     await SettingsStorage.replaceRaw(

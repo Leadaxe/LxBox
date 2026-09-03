@@ -63,7 +63,7 @@ const _topLevelAppKeys = {
 
 /// Sub-keys внутри `vars` относящиеся к Debug API category.
 /// Sensitive: token даёт полный доступ к app'у через HTTP API.
-const _varDebugKeys = {'debug_enabled', 'debug_token', 'debug_port'};
+const _varDebugKeys = SettingsStorage.debugApiVarKeys;
 
 /// Container распарсенного backup-файла. `storage` — содержимое
 /// `lxbox_settings.json` целиком; `vpnSettings` — native-side VPN toggles.

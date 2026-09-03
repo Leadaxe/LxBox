@@ -102,6 +102,13 @@
 
 ### Fixed
 
+- **Импорт бэкапа с заменой гасил Debug API устройства ([§413](docs/spec/tasks/413-backup-replace-keeps-debug-api.md)).**
+  Экспорт по умолчанию не включает токен и порт Debug API, а импорт с
+  заменой писал `vars` поверх целиком — сервер отладки после рестарта
+  поднимался на дефолтном порту с новым токеном. Теперь ключи Debug API,
+  которых нет в файле, остаются устройству; ключи из файла по-прежнему
+  побеждают.
+
 - **Сервис не стартовал при XHTTP-узле с `extra` в подписке ([§410](docs/spec/tasks/410-xhttp-extra-empty-not-clobber.md)).**
   Регрессия v2.21.0: `Failed to start service … uplink_data_placement can be
   header only in packet-up mode`, если в подписке есть хоть один XHTTP-узел,

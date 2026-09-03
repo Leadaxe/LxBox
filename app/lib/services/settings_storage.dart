@@ -872,6 +872,16 @@ class SettingsStorage {
   /// семантики на call-site.
   static Future<Map<String, dynamic>> exportRaw() => dumpCache();
 
+  /// §413 — подключи `vars` Debug API: секрет и адрес сервера конкретного
+  /// устройства. Экспорт их по умолчанию не включает; полная замена
+  /// ([replaceRaw], `merge=false`) переносит их из текущего стораджа, если
+  /// во входящем снимке их нет.
+  static const Set<String> debugApiVarKeys = {
+    'debug_enabled',
+    'debug_token',
+    'debug_port',
+  };
+
   /// Backup: применить snapshot. `merge=false` (default) — replace (overwrite
   /// cache + flush на disk), `merge=true` — top-level merge: присутствующие в
   /// [snapshot] ключи overwrite, отсутствующие — keep. `vars` мерджится
