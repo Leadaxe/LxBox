@@ -1,4 +1,4 @@
-# L×Box v2.21.1
+# L×Box v2.22.0
 
 **A node's identity is now its tag.** A server rotated under the same name —
 new IP, new SNI, new credentials — stays the same node, and “disabled” stays
@@ -524,7 +524,7 @@ Java-поверхность ядра изменилась только допо�
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.21.1-arm64-v8a.apk
+adb install -r LxBox-v2.22.0-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.

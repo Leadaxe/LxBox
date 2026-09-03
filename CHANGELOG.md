@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [2.22.0] — 2026-09-04
+
 ### Added
 
 - **Идентичность узла подписки — его тег ([§400](docs/spec/tasks/400-identity-tag-mirror.md)).**
