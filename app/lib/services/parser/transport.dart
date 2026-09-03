@@ -316,6 +316,16 @@ Map<String, String> xhttpScalarsFromJson(Map raw) {
 /// §399 — слить `extra` в карту полей. `extra` в приоритете для своих ключей
 /// (поведение Xray и URI-ветки).
 ///
+/// §410 — приоритет только у **непустого** значения. Xray пишет в `extra` весь
+/// объект транспорта, включая незаданные поля пустыми строками
+/// (`"mode": ""`), и тот же узел несёт `mode=packet-up` плоским параметром.
+/// Пустая строка из `extra` не затирает плоское значение — иначе `mode`
+/// пропадает из конфига, ядро берёт `auto`, и узел с
+/// `uplinkDataPlacement=header` роняет весь конфиг на старте
+/// (`uplink_data_placement can be header only in packet-up mode`).
+/// Эталон Go: `xhttpLookup` читает `extra` первым и при пустом значении
+/// откатывается к плоскому параметру (node_parser_transport.go).
+///
 /// [raw] — источник `extra`: строка с JSON (URI-ветка, где значение уже
 /// percent-декодировано `Uri.queryParameters`) **или** уже распарсенный `Map`
 /// (JSON-ветки). Отсутствующий, битый, не-объектный `extra` игнорируется —
@@ -353,13 +363,16 @@ Map<String, String> mergeXhttpExtra(Map<String, String> q, {Object? raw}) {
       if (k.toLowerCase() == 'xmux') {
         v.forEach((nk, nv) {
           if (nk is! String || nv == null || nv is Map || nv is List) return;
-          merged[nk] = _scalarToString(nv);
+          final s = _scalarToString(nv);
+          if (s.isNotEmpty) merged[nk] = s;
         });
       }
       return;
     }
     if (v is List) return;
-    merged[k] = _scalarToString(v);
+    // §410 — пустое значение не перекрывает плоский параметр (см. doc выше).
+    final s = _scalarToString(v);
+    if (s.isNotEmpty) merged[k] = s;
   });
   return merged;
 }

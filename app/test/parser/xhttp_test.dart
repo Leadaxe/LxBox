@@ -5,6 +5,7 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/transport.dart';
+import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §097 — XHTTP (Xray splithttp) нативный transport. По образцу
 /// singbox-launcher SPEC 071: parse (URI camelCase + snake) → emit → round-trip,
@@ -425,6 +426,80 @@ void main() {
         }).xPaddingBytes,
         '50-150',
       );
+    });
+
+    // §410 — регрессия v2.21.0 (4PDA #1740…#1765): Xray кладёт в `extra`
+    // весь объект транспорта с пустыми незаданными полями; `"mode": ""`
+    // затирало плоский `mode=packet-up`, ядро брало `auto` и узел с
+    // `uplinkDataPlacement=header` ронял конфиг целиком. Эталон Go —
+    // `xhttpLookup`: пустое из extra → откат к плоскому значению.
+    test('пустое значение в extra не перекрывает плоское поле (§410)', () {
+      final t = xrayTransport({
+        'mode': 'packet-up',
+        'xPaddingBytes': '10-20',
+        'extra': {'mode': '', 'xPaddingBytes': '', 'host': ''},
+      });
+      expect(t.mode, 'packet-up');
+      expect(t.xPaddingBytes, '10-20');
+      expect(t.host, '');
+    });
+
+    test('пустой член extra.xmux не затирает плоское поле (§410)', () {
+      final t = xrayTransport({
+        'mode': 'packet-up',
+        'xmux': {'maxConcurrency': '16'},
+        'extra': {
+          'xmux': {'maxConcurrency': ''},
+        },
+      });
+      expect(t.maxConcurrency, '16');
+    });
+
+    // Ссылка cumirum (#1755) дословно: mode=packet-up плоско, в extra
+    // "mode":"" + uplinkDataPlacement=header + uplinkHTTPMethod=GET.
+    test('ссылка из подписки с extra.mode="" → mode packet-up в конфиге (§410)',
+        () {
+      const uri =
+          'vless://423b1d79-08c4-403f-9d5e-c541f791b55f@178.176.128.128:443'
+          '?alpn=h2%2Chttp%2F1.1&encryption=none'
+          '&extra=%7B%22host%22%3A%22%22%2C%22path%22%3A%22%2F%22%2C%22mode%22'
+          '%3A%22%22%2C%22headers%22%3Anull%2C%22xPaddingBytes%22%3A%220%22%2C'
+          '%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingKey%22%3A%22%22%2C'
+          '%22xPaddingHeader%22%3A%22%22%2C%22xPaddingPlacement%22%3A%22%22%2C'
+          '%22xPaddingMethod%22%3A%22%22%2C%22uplinkHTTPMethod%22%3A%22GET%22'
+          '%2C%22sessionIDPlacement%22%3A%22cookie%22%2C%22sessionIDKey%22%3A'
+          '%22media_sid%22%2C%22sessionIDTable%22%3A%22%22%2C%22sessionIDLength'
+          '%22%3A%220%22%2C%22seqPlacement%22%3A%22query%22%2C%22seqKey%22%3A'
+          '%22offset%22%2C%22uplinkDataPlacement%22%3A%22header%22%2C'
+          '%22uplinkDataKey%22%3A%22X-Playback-Token%22%2C%22uplinkChunkSize'
+          '%22%3A%220%22%2C%22noGRPCHeader%22%3Afalse%2C%22noSSEHeader%22%3A'
+          'true%2C%22scMaxEachPostBytes%22%3A%22131072-262144%22%2C'
+          '%22scMinPostsIntervalMs%22%3A%225-10%22%2C%22scMaxBufferedPosts%22'
+          '%3A12%2C%22scStreamUpServerSecs%22%3A%221-2%22%2C'
+          '%22serverMaxHeaderBytes%22%3A0%2C%22xmux%22%3A%7B%22maxConcurrency'
+          '%22%3A%220%22%2C%22maxConnections%22%3A%220%22%2C%22cMaxReuseTimes'
+          '%22%3A%220%22%2C%22hMaxRequestTimes%22%3A%220%22%2C'
+          '%22hMaxReusableSecs%22%3A%220%22%2C%22hKeepAlivePeriod%22%3A0%7D%2C'
+          '%22downloadSettings%22%3Anull%2C%22extra%22%3Anull%7D'
+          '&fp=qq&host=media.morphai.cc&mode=packet-up'
+          '&path=%2Fhls%2Fv2%2Ftrack%2F8e31c750%2F&security=tls'
+          '&sni=media.morphai.cc&type=xhttp#t';
+      final node = parseUri(uri);
+      expect(node, isA<VlessSpec>());
+      final t = (node! as VlessSpec).transport as XhttpTransport;
+      expect(t.mode, 'packet-up');
+      expect(t.host, 'media.morphai.cc');
+      // path: в extra лежит "/" — непустое, по контракту extra побеждает
+      // (Go xhttpLookup: primary=extra первым). Так же читала и v2.20.12.
+      expect(t.path, '/');
+      final (m, w) = t.toSingbox(TemplateVars.empty);
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], 'header');
+      expect(m['uplink_http_method'], 'GET');
+      // sessionIDPlacement/sessionIDKey — ключи вне контракта (Go читает
+      // только session_placement/sessionPlacement), сюда не доезжают.
+      expect(m.containsKey('session_placement'), false);
+      expect(w, isEmpty);
     });
 
     // Критерий 5 — R6: деградация вместо поломки.
