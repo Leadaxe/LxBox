@@ -838,17 +838,20 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 │                           #   route_final / directions[] (§125/§393, replaces enabled_groups) / chains[] (§393 C) /
 │                           #   excluded_nodes (§048 sandbox) / last_global_update /
 │                           #   presets_migrated / directions_migrated
-├── http_cache/             # HttpCache — the raw body plus headers of the subscriptions
-│   └── <sha1(url)>.{body,headers}
-├── rule_sets/              # §011 — the cache of binary .srs files
-│   └── <tag>.srs
+├── rule_sets/              # §011 — the cache of binary .srs files (+ §366 .meta.json sidecars)
+│   └── <ruleId>.srs
+├── workspaces.json         # §417 — the workspace manifest (current, slots, pending)
+├── workspaces/<name>/      # §417 — saved workspaces: a copy of lxbox_settings.json,
+│                           #   rule_sets/ and sub_cache/ — the working paths above never move
 ├── applog.txt              # §038/§043 — JSON lines, a 200-line / 64 KB ring
 └── corelog.txt             # §043 — JSON lines, a 200-line / 64 KB ring
 
-<Context.filesDir>/         # native `files/` — NOT the documents dir (Android: app_flutter/);
-│                           # Dart reaches it via BoxVpnClient.getFilesDir() (§316/§414)
+<Context.filesDir>/         # native `files/` = Dart getApplicationSupportDirectory() —
+│                           # NOT the documents dir (Android: app_flutter/) (§316/§414)
 ├── singbox_config.json     # ConfigManager (Kotlin) — the final sing-box JSON
-└── cache.db                # libbox cache_file (basePath = filesDir)
+├── cache.db                # libbox cache_file (basePath = filesDir)
+└── sub_cache/              # HttpCache — the raw body plus headers of the subscriptions;
+    └── <url.hashCode>{,.headers}   # the only persisted source of subscription nodes (§027/§129)
 
 SharedPreferences (Android):
 ├── app_theme_mode                       # Flutter UI prefs (haptic_enabled → vars, §159)

@@ -1,6 +1,6 @@
 # §417 — Workspaces: именованные копии состояния
 
-**Статус:** ТЗ (v1)
+**Статус:** реализовано (v1), DEVICE-PENDING — коммиты `d62d0718`, `9c482774`, `79047ed5`
 **Связанные:** §076 (settings ↔ config lifecycle), §113/§414 (dirty-check по
 mtime), §027/§129 (кэш тел подписок), §011 (кэш .srs), §189 (native-зеркало
 тумблеров), §316 (native `filesDir` из Dart), §286 (probe-lifecycle),
