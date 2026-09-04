@@ -145,11 +145,11 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 ### 2.5 Копирование позиций
 
 `WorkspaceStore` — единственное место, где перечислен состав слота
-(`kSlotEntries`). Источники путей: Documents —
-`getApplicationDocumentsDirectory()`; `files/` —
-`BoxVpnClient.getFilesDir()` (§316) с fallback на
-`getApplicationSupportDirectory()` (тот же каталог на Android; fallback
-нужен тестам). Копия рекурсивная, побайтовая; символических ссылок в этих
+(`kSlotEntries`). Источники путей — те же, что у владельцев файлов:
+`getApplicationDocumentsDirectory()` для настроек и `rule_sets/`,
+`getApplicationSupportDirectory()` для `sub_cache/` (так его открывает
+`HttpCache`; на Android это native `filesDir`). Native-канал `getFilesDir`
+не нужен. Копия рекурсивная, побайтовая; символических ссылок в этих
 каталогах нет.
 
 ### 2.6 Перечитывание без перезапуска
@@ -237,7 +237,7 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 
 | # | Коммит | Файлы |
 |---|---|---|
-| 1 | `WorkspaceStore`: справочник, `kSlotEntries`, `saveTo(name)`, `loadFrom(name)` (5–7 из §2.3), `recover()`, санитизация; тесты на path_provider-моке + `BoxVpnClient.forTest` (`getFilesDir` → temp) | `services/workspaces/workspace_store.dart`, `test/services/workspace_store_test.dart`, `main.dart` (`recover()` перед `bootstrapAndSyncNativePrefs`) |
+| 1 | `WorkspaceStore`: справочник, `kSlotEntries`, `saveAs(name)`, `load(name)` (4–8 из §2.3), `recover()`, `rename`/`delete`/`slotSizeBytes`, `validateName`; тесты на path_provider-моке (оба корня) | `services/workspaces/workspace_store.dart`, `test/services/workspace_store_test.dart`, `main.dart` (`recover()` перед `bootstrapAndSyncNativePrefs`) |
 | 2 | `WorkspaceController` + пересоздание `HomeScreen`; `reloadStateFromDisk()` (таблица §2.6); `pendingAutoConnect` в `_initSubsAndAutoUpdate` | `services/workspaces/workspace_controller.dart`, `main.dart`, `home_screen.dart` |
 | 3 | Попап в AppBar + Save as + экран Manage; l10n | `screens/home/widgets/workspace_menu.dart`, `screens/workspaces_screen.dart`, `assets/l10n/ru/ui.json` |
 | 4 | Доки: STORAGE.md (дерево + таблица с пометкой «в слоте / устройство»), USER_GUIDE, CHANGELOG | docs |

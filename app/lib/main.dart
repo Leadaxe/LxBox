@@ -23,6 +23,7 @@ import 'services/nav/home_return_observer.dart';
 import 'services/settings_storage.dart';
 import 'services/template_loader.dart';
 import 'services/version_info.dart';
+import 'services/workspaces/workspace_store.dart';
 import 'services/wifi_history_listener.dart';
 
 void main() async {
@@ -74,6 +75,10 @@ void main() async {
     // (из обоих файлов applog.txt + corelog.txt — §043) до runApp, чтобы
     // Debug-экран сразу видел pre-crash JVM-events.
     await AppLog.I.initPersistent();
+    // §417 — доводка загрузки workspace, убитой посреди копирования (журнал
+    // `pending` в workspaces.json). ДО первого чтения SettingsStorage: сцена
+    // должна быть целиком одним слотом. Без справочника — один exists().
+    await WorkspaceStore.I.recover();
     // §189 — native_prefs: первый старт seed'ит JSON из native (bootstrap),
     // последующие — sync JSON⇒native (диск-истина перезаливает оперативку).
     // ДО UI (UI читает native-тумблеры из JSON-зеркала) и ДО возможного
