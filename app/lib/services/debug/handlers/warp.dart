@@ -27,7 +27,7 @@ import '_shared.dart';
 ///   "quicParams": {             // §143 masquerade (при obfuscate)
 ///     "sni": "www.google.com",  // пусто → рандом из пула
 ///     "ip": "quic",             // quic|dns|stun|sip
-///     "ib": "chrome",           // chrome|firefox|curl (только quic)
+///     "ib": "curl",             // chrome|firefox|curl (только quic)
 ///     "jc": 4, "jmin": 40, "jmax": 70
 ///   }
 /// }

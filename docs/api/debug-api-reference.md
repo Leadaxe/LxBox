@@ -820,7 +820,7 @@ Body (все поля опциональны):
   "quicParams": {             // только при obfuscate
     "sni": "www.google.com",
     "ip": "quic",             // quic|...
-    "ib": "chrome",           // chrome|firefox|curl
+    "ib": "curl",             // chrome|firefox|curl
     "jc": 4, "jmin": 40, "jmax": 70
   }
 }

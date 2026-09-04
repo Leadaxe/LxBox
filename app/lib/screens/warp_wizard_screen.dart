@@ -47,7 +47,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   List<String> _masqueSniPool = const []; // §130 — SNI-пул для MASQUE-комбобокса
   // §143 — ip (протокол маскировки): quic/dns/stun/sip; ib (браузер) при quic.
   String _masqIp = 'quic';
-  String _masqIb = 'chrome';
+  String _masqIb = 'curl';
   final _jc = TextEditingController(text: '4');
   final _jmin = TextEditingController(text: '40');
   final _jmax = TextEditingController(text: '70');
@@ -236,7 +236,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
       _includeReserved = null; // §142 — вернуть к дефолту по галке
       _sni.text = _picker?.randomSni() ?? ''; // свежий случайный домен
       _masqIp = 'quic'; // §143
-      _masqIb = 'chrome';
+      _masqIb = 'curl';
       _jc.text = '4';
       _jmin.text = '40';
       _jmax.text = '70';
@@ -979,7 +979,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                                     onChanged: _busy
                                         ? null
                                         : (v) => setState(
-                                            () => _masqIb = v ?? 'chrome'),
+                                            () => _masqIb = v ?? 'curl'),
                                   ),
                                 ),
                               ],

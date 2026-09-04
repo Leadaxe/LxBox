@@ -161,7 +161,7 @@ POST /warp[?rebuild=true]                      Registers a WARP node (same path 
                                                    "forceNew":false,         // ignore cache, re-register
                                                    "includeReserved":false,  // null → default by obfuscate
                                                    "quicParams":{"sni":"www.google.com","ip":"quic",
-                                                                 "ib":"chrome","jc":4,"jmin":40,"jmax":70}}
+                                                                 "ib":"curl","jc":4,"jmin":40,"jmax":70}}
                                                   ?rebuild=true → regenerate config + reload core.
 
 === Rules CRUD (custom routing rules, spec 030) ===
