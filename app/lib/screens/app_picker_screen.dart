@@ -248,20 +248,27 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
                       itemBuilder: (context, i) {
                         final app = apps[i];
                         final checked = _selected.contains(app.packageName);
-                        return CheckboxListTile(
-                          value: checked,
-                          onChanged: (v) {
-                            setState(() {
-                              if (v == true) {
-                                _selected.add(app.packageName);
-                              } else {
-                                _selected.remove(app.packageName);
-                              }
-                            });
-                          },
-                          secondary: AnimatedBuilder(
+                        // §412 — тап по строке галочку НЕ переключает: при
+                        // прокрутке длинного списка палец задевал строку и
+                        // снимал выбор незаметно (4PDA #1702). Кликабелен
+                        // только сам Checkbox с его штатной областью
+                        // касания (48dp) — строка без onTap.
+                        return ListTile(
+                          leading: AnimatedBuilder(
                             animation: AppInfoCache.revision,
                             builder: (_, _) => _iconFor(app),
+                          ),
+                          trailing: Checkbox(
+                            value: checked,
+                            onChanged: (v) {
+                              setState(() {
+                                if (v == true) {
+                                  _selected.add(app.packageName);
+                                } else {
+                                  _selected.remove(app.packageName);
+                                }
+                              });
+                            },
                           ),
                           title: Text(
                             app.appName,
@@ -276,7 +283,6 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
                             style: const TextStyle(fontSize: 11),
                           ),
                           dense: true,
-                          controlAffinity: ListTileControlAffinity.trailing,
                         );
                       },
                     ),

@@ -162,7 +162,8 @@ final class SubscriptionServers extends ServerList {
   /// с maxFailsPerSession=5, которое сбрасывается на рестарт (спек §026).
   final int consecutiveFails;
 
-  /// §283 — per-node disable: identity-хеш ноды (см. services/node_hash.dart)
+  /// §283/§400 — per-node disable: идентичность ноды (тег, уникализированный
+  /// внутри источника — см. services/node_hash.dart)
   /// → когда источник ноды последний раз видели в теле подписки (lastSeen —
   /// для TTL-очистки спящих отметок на успешном сетевом refresh). Оверлей
   /// поверх `nodes`: сами ноды остаются видны в UI (с toggle), но builder их

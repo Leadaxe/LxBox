@@ -53,9 +53,13 @@ MasqueSpec? parseMasqueUri(String uri) {
   final vhttpPicked =
       vhttpRaw.isNotEmpty ? vhttpRaw : 'h3';
   // SPEC 103 п.5 — невалидное значение форсится в h3 (node_parser_masque.go:
-  // vhttp != "h3" && vhttp != "h2" → forcing h3), а не пропускается как есть.
+  // vhttp вне тройки → forcing h3), а не пропускается как есть.
+  // Контракт 0.11.1 — `auto` (h3 с откатом на h2) принимается наравне с
+  // h3/h2: ядро понимает его с lx.27. Parse-дефолт без vhttp остаётся
+  // явный `h3` — «нет параметра» и «оператор выбрал auto» не одно и то же.
   final warnings = <NodeWarning>[];
-  final vhttpValid = vhttpPicked == 'h3' || vhttpPicked == 'h2';
+  final vhttpValid =
+      vhttpPicked == 'h3' || vhttpPicked == 'h2' || vhttpPicked == 'auto';
   final vhttp = vhttpValid ? vhttpPicked : 'h3';
   // SPEC 103 `masque_vhttp_invalid` — форс h3 виден пользователю, а не только
   // в логе лаунчера. Реестр помечает код «Desktop-протокол, в LxBox нет» —

@@ -40,6 +40,34 @@ const _contractRoot = 'contract';
 /// обычный outbound; wireguard — endpoint (CANON §1, registry: kind=endpoint).
 const _endpointSchemes = {'wireguard'};
 
+/// Имя стороны в поле `extension` реестра/ожиданий (corpus/README «Отбраковки
+/// и meta.extension»). Чужой extension = схемы у нас нет.
+const _thisSide = 'lxbox';
+
+/// Схемы, объявленные реестром расширением ЧУЖОЙ стороны
+/// (`registry/protocols/<scheme>.json` → `"extension"`).
+///
+/// Каталог корпуса такой схемы пропускается ЦЕЛИКОМ: у LxBox нет парсера
+/// hysteria v1, и каждая его фикстура падала бы «нода не разобралась» —
+/// шум, который прятал бы настоящие расхождения. Пропуск идёт от РЕЕСТРА,
+/// а не от списка в тесте: появится вторая desktop-only схема — раннер
+/// узнает о ней сам, без правки кода.
+Set<String> _foreignExtensionSchemes() {
+  final dir = Directory('$_contractRoot/registry/protocols');
+  if (!dir.existsSync()) return const {};
+  final out = <String>{};
+  for (final f in dir.listSync().whereType<File>()) {
+    if (!f.path.endsWith('.json')) continue;
+    final data = json.decode(f.readAsStringSync()) as Map<String, dynamic>;
+    final ext = data['extension'];
+    if (ext is String && ext.isNotEmpty && ext != _thisSide) {
+      out.add(data['scheme'] as String? ??
+          f.uri.pathSegments.last.replaceFirst('.json', ''));
+    }
+  }
+  return out;
+}
+
 /// Внутреннее имя протокола Dart → каноническое `scheme` контракта
 /// (CANON §1: канон берётся из `registry/protocols/<scheme>.json` → поле
 /// `scheme`). Расходится в одном месте: Dart зовёт протокол
@@ -65,6 +93,8 @@ const _warningCodes = <Type, String>{
   NaiveBuildTagWarning: 'naive_unavailable',
   UnknownFingerprintWarning: 'utls_fp_unknown',
   XhttpParamResetWarning: 'xhttp_param_reset',
+  // §416 — header-placement без режима: дописан mode: packet-up.
+  XhttpModeForcedPacketUpWarning: 'xhttp_mode_forced_packet_up',
   EchIgnoredWarning: 'ech_ignored',
   UnknownObfsWarning: 'obfs_unknown',
   MissingObfsPasswordWarning: 'obfs_password_missing',
@@ -82,7 +112,13 @@ const _warningCodes = <Type, String>{
   MasqueVhttpInvalidWarning: 'masque_vhttp_invalid',
   AnyTlsMinIdleInvalidWarning: 'anytls_min_idle_invalid',
   PacketEncodingUnknownWarning: 'packet_encoding_unknown',
+  // §404 / D-085 — недостижимый `dialerProxy` роняет владельца целиком;
+  // причина уезжает в `dropped[]` конверта (corpus/README, D-088).
+  DialerProxyUnusableWarning: 'dialer_proxy_unusable',
 };
+
+/// Код warning'а по классу — общий для URI- и body-раннеров.
+String? warningCodeOf(NodeWarning w) => _warningCodes[w.runtimeType];
 
 /// Читает URI из фикстуры: последняя непустая строка, не начинающаяся с '#'
 /// (остальные строки — комментарии/источник, contract/corpus/README).
@@ -233,6 +269,8 @@ void main() {
     return;
   }
 
+  final foreign = _foreignExtensionSchemes();
+
   group('Contract corpus (URI)', () {
     for (final file in cases) {
       final rel = file.path
@@ -240,11 +278,19 @@ void main() {
           .replaceFirst(RegExp(r'^[/\\]'), '')
           .replaceAll(r'\', '/');
       final name = rel.substring(0, rel.length - '.uri'.length);
+      final scheme = rel.split('/').first;
       final basePath = file.path.substring(0, file.path.length - '.uri'.length);
       final baseExpectedPath = '$basePath.expected.json';
       final overridePath = '$basePath.expected.lxbox.json';
 
       test(name, () {
+        if (foreign.contains(scheme)) {
+          // Схема — расширение чужой стороны (registry: extension != lxbox).
+          // Парсера у нас нет по контракту, а не по недосмотру.
+          markTestSkipped('$scheme — extension чужой стороны, парсера нет');
+          return;
+        }
+
         final uri = _readCorpusUri(file);
         if (uri == null) {
           fail('$rel: не найдена строка с URI');

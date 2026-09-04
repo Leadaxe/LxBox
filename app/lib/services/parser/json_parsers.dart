@@ -6,6 +6,7 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
+import '../node_hash.dart';
 import 'hysteria2_obfs.dart';
 import 'transport.dart';
 import 'uri_utils.dart';
@@ -19,25 +20,38 @@ import 'utls_fingerprint.dart';
 /// резерва. Теперь каждый VLESS-outbound становится своим узлом.
 ///
 /// Исключение — outbound'ы, на которые ссылается `sockopt.dialerProxy`: они
-/// приезжают как detour-звено (`⚙ <tag>`) своего владельца и самостоятельным
-/// узлом НЕ дублируются (контракт §018 detour-chain не меняется).
+/// приезжают как звено цепочки своего владельца и самостоятельным узлом НЕ
+/// дублируются (контракт §018 detour-chain не меняется).
 ///
 /// §321 — все поддерживаемые protocol'ы, не только VLESS. Служебные
-/// (`freedom`/`blackhole`/`dns`) узлами не становятся; SOCKS — только
-/// detour-звено.
+/// (`freedom`/`blackhole`/`dns`) узлами не становятся; SOCKS — только звено
+/// цепочки.
 ///
-/// [seen] — накопитель §321 P4 (дедуп по `(protocol, server, port, credential)`)
-/// на весь массив подписки. Узел, уже виденный в этом проходе, пропускается.
-/// `null` — дедуп выключен (одиночный элемент вне массива).
-/// [ownedBy] — §342: фильтр «этот сервер закреплён за этим элементом».
+/// §404 / контракт D-086 — дедуп идёт ПОСЛЕ конвертации, по подписи
+/// `nodeDedupSignature` (эмиссия узла без tag/detour + подпись пути дозвона).
+/// Прежний ключ P4 (`protocol|server|port|credential`) считался по сырому
+/// JSON и не видел ни транспорта, ни релея: один сервер под двумя SNI и пара
+/// «прямая + BYPASS» схлопывались в одну запись. Грубый ключ никуда не делся
+/// — он остался ключом ПУЛА §322 (`nodeIdentityKey`, вопрос «какой это
+/// сервер»), и в [synonyms] по-прежнему едет он.
+///
+/// [seen] — накопитель подписей дедупа на весь массив подписки. Запись, уже
+/// виденная в этом проходе, пропускается. `null` — дедуп выключен (одиночный
+/// элемент вне массива).
+/// [ownedBy] — §342: фильтр «эта запись закреплена за этим элементом».
 /// Заполняется черновым проходом `parse_all` (приоритет имён §321 P2) и
-/// позволяет боевому проходу идти в порядке файла, не теряя имена. `null` —
-/// владение не проверяется (одиночный элемент, тесты).
+/// позволяет боевому проходу идти в порядке файла, не теряя имена. Аргумент —
+/// та же подпись дедупа, что копится в [seen]. `null` — владение не
+/// проверяется (одиночный элемент, тесты).
+/// [dropped] — §404 / D-085: причины отбраковки ЦЕЛЫХ узлов, которым не
+/// нашлось носителя внутри элемента. `parse_all` вешает их на первый узел
+/// подписки, чтобы недостижимый релей не превращался в тихую пропажу.
 List<NodeSpec> parseXrayElement(
   Map<String, dynamic> element, {
   Set<String>? seen,
   Map<String, String>? synonyms,
-  bool Function(String identity)? ownedBy,
+  bool Function(String signature)? ownedBy,
+  List<NodeWarning>? dropped,
 }) {
   final outbounds = element['outbounds'];
   if (outbounds is! List) return const [];
@@ -53,6 +67,18 @@ List<NodeSpec> parseXrayElement(
       )
       .toList();
   if (payloadAll.isEmpty) return const [];
+
+  // §404 — таблица «тег outbound'а → сам outbound» на весь элемент. Нужна
+  // рекурсивному обходу цепочки: звено ищет своё следующее звено по тегу, и
+  // цель может лежать где угодно в `outbounds` (в т.ч. среди служебных — те
+  // отсеиваются уже внутри обхода).
+  final byTag = <String, Map<String, dynamic>>{};
+  for (final o in outbounds.whereType<Map<String, dynamic>>()) {
+    final t = o['tag']?.toString() ?? '';
+    // Первый с таким тегом и побеждает: Xray сам резолвит dialerProxy по
+    // первому совпадению, дубли тегов в одном конфиге — ошибка провайдера.
+    if (t.isNotEmpty) byTag.putIfAbsent(t, () => o);
+  }
 
   // dialerProxy-ссылки: цели исключаются из самостоятельных узлов.
   final dialerRefOf = <Map<String, dynamic>, String>{};
@@ -71,8 +97,39 @@ List<NodeSpec> parseXrayElement(
 
   // Порядок: «main» первым (dialerProxy → тег `proxy` → первый), чтобы у
   // существующих подписок первый узел остался тем же, что и до §310.
+  //
+  // Из кандидатов выпадают ЦЕЛИ дозвона: релей самостоятельным узлом
+  // подписки не становится, он живёт звеном цепочки владельца.
+  //
+  // §404 — исключение из исключения: цель, попавшая в КОЛЬЦО, целью быть не
+  // может. Звено достижимо от владельца по цепочке дозвона; участник кольца
+  // не достижим ни от кого снаружи — «владельца», который бы его вобрал, не
+  // существует. Отсеять такой outbound здесь значит потерять узел МОЛЧА, без
+  // `DialerProxyUnusableWarning`: он исчезал из подписки, и пользователю
+  // никто не говорил почему. Кольцо длины 1 (`dialerProxy` = собственный тег)
+  // — частный случай той же проверки.
+  //
+  // Прочие цели, включая промежуточные звенья многохопа со своим
+  // `dialerProxy`, из кандидатов выпадают как раньше: они живут звеньями
+  // цепочки владельца, а не самостоятельными узлами подписки.
+  bool inDialerCycle(Map<String, dynamic> ob) {
+    final start = ob['tag']?.toString() ?? '';
+    if (start.isEmpty) return false;
+    final seenTags = <String>{start};
+    var ref = dialerRefOf[ob];
+    while (ref != null && ref.isNotEmpty) {
+      if (ref == start) return true;
+      if (!seenTags.add(ref)) return false; // чужое кольцо, не своё
+      final next = byTag[ref];
+      if (next == null) return false;
+      ref = dialerRefOf[next];
+    }
+    return false;
+  }
+
   final candidates = payloadAll
-      .where((o) => !dialerTargets.contains(o['tag']?.toString()))
+      .where((o) =>
+          !dialerTargets.contains(o['tag']?.toString()) || inDialerCycle(o))
       .toList();
   if (candidates.isEmpty) return const [];
   final mainIdx = candidates.indexWhere((o) => dialerRefOf.containsKey(o)) >= 0
@@ -115,40 +172,35 @@ List<NodeSpec> parseXrayElement(
   // §321 P5 — протоколы элемента, которые мы не умеем: висят на первом
   // выжившем узле, чтобы пользователь видел, что провайдер прислал больше.
   final unsupported = <String>{};
+  // §404 P3 — узлы, отбракованные из-за недостижимого релея. Вешаем их
+  // причины на первого выжившего ЭТОГО элемента (как P5); если не выжил
+  // никто — причины уже лежат в `dropped` и достанутся подписке целиком.
+  final rejected = <NodeWarning>[];
   for (var i = 0; i < ordered.length; i++) {
     final ob = ordered[i];
     try {
-      // §321 P4 — дедуп ДО конвертации. Индекс `i` для имени берётся из
-      // `ordered` (до дедупа): иначе имена поедут — второй выживший получил бы
-      // i=0 и назвался как `remarks` без суффикса.
-      final identity = _xrayIdentity(ob);
-      // §321 P6 — тег провайдера → идентичность. Копим ДО пропуска дубля:
-      // именно у дублей теги и различаются («Испания» = `proxy`, «Лучший» =
+      // §321 P6 — тег провайдера → ключ ПУЛА (грубая четвёрка `nodeIdentityKey`,
+      // не подпись дедупа §404: `selector` провайдера называет сервер, а не
+      // конкретную запись). Копим ДО пропуска дубля: именно у дублей теги и
+      // различаются («Испания» = `proxy`, «Лучший» =
       // `proxy-45-196-208-40-direct`), а §322 резолвит пул по чужим тегам.
+      final identity = _xrayIdentity(ob);
       final obTag = ob['tag']?.toString() ?? '';
       if (identity != null && obTag.isNotEmpty) synonyms?[obTag] = identity;
-      // §342 — чужой узел: право на него получил другой элемент (тот, чьё имя
-      // осмысленнее). Пропускаем ДО дедупа, чтобы `seen` этого прохода не
-      // «застолбил» идентичность за нами.
-      if (identity != null && ownedBy != null && !ownedBy(identity)) continue;
-      if (identity != null && seen != null) {
-        if (seen.contains(identity)) continue;
-        seen.add(identity);
-      }
 
       // §310 — имя разводим на парсинге: `allocateTag` уникализирует теги лишь
       // на build'е (суффикс `-N`), а в списке узлов пользователь иначе увидит
       // несколько одинаковых строк. Одиночный узел — имя ровно как до §310.
-      final spec = _xrayToSpec(
-        ob,
-        _elementLabel(
-          remarks: remarks,
-          ob: ob,
-          index: i,
-          solo: soloNode,
-          tagUses: tagUses,
-        ),
+      // Индекс `i` берётся из `ordered` (до дедупа): иначе имена поедут —
+      // второй выживший получил бы i=0 и назвался как `remarks` без суффикса.
+      final label = _elementLabel(
+        remarks: remarks,
+        ob: ob,
+        index: i,
+        solo: soloNode,
+        tagUses: tagUses,
       );
+      final spec = _xrayToSpec(ob, label);
       // §321 P5 — неподдержанный protocol не исчезает молча: узел не собрался,
       // но провайдер его прислал. Warning вешаем на СОСЕДА по элементу (у
       // NodeWarning нет носителя без узла); если соседей нет — элемент выпадает
@@ -165,21 +217,44 @@ List<NodeSpec> parseXrayElement(
       // синтетическая заглушка `xray://<tag>`, источником служить не может.
       final compact = _prettyJson(ob);
 
+      // §321/§368/§404 — цепочка релеев. `dialerProxy` в Xray живёт в
+      // `streamSettings.sockopt`, то есть технически возможен у любого
+      // протокола (на практике встречается у VLESS/Trojan); `withChained`
+      // покрывает все типы, кроме группы — та цепочку не несёт. Звено само
+      // может звонить через следующее звено (§404 п.4) — строим рекурсивно.
       final ref = dialerRefOf[ob];
       NodeSpec? chained;
       if (ref != null) {
-        final detour = outbounds.whereType<Map<String, dynamic>>().firstWhere(
-          (o) => o['tag'] == ref,
-          orElse: () => <String, dynamic>{},
-        );
-        if (detour.isNotEmpty) chained = _xrayDetourToSpec(detour);
+        chained = _xrayBuildChain(ob, byTag, ref);
+        // §404 / D-085 — недостижимая цель роняет ВЛАДЕЛЬЦА целиком. Узел с
+        // прямым путём тут был бы молчаливой деанонимизацией: провайдер
+        // завернул дозвон в релей именно потому, что прямой путь зарезан.
+        if (chained == null) {
+          // `ownerTag` — СОБСТВЕННЫЙ тег outbound'а: им контракт называет
+          // отвергнутую запись в `dropped[].ref` (D-088). `label` для этого
+          // не годится — он приходит из `remarks` элемента и на многоузловом
+          // элементе одинаков у всех узлов.
+          final w = DialerProxyUnusableWarning(label, ref, ownerTag: obTag);
+          dropped?.add(w);
+          rejected.add(w);
+          continue;
+        }
       }
 
-      // §321/§368 — detour-звено. `dialerProxy` в Xray живёт в
-      // `streamSettings.sockopt`, то есть технически возможен у любого
-      // протокола (на практике встречается у VLESS/Trojan); `withChained`
-      // покрывает все типы, кроме группы — та цепочку не несёт.
       final node = chained == null ? spec : withChained(spec, chained);
+
+      // §404 / D-086 — дедуп ПОСЛЕ конвертации: подпись считается от готового
+      // узла вместе с путём дозвона.
+      final signature = nodeDedupSignature(node);
+      // §342 — чужая запись: право на неё получил другой элемент (тот, чьё имя
+      // осмысленнее). Пропускаем ДО дедупа, чтобы `seen` этого прохода не
+      // «застолбил» подпись за нами.
+      if (ownedBy != null && !ownedBy(signature)) continue;
+      if (seen != null) {
+        if (seen.contains(signature)) continue;
+        seen.add(signature);
+      }
+
       result.add(
         node
           ..sourceCompact = compact
@@ -201,6 +276,17 @@ List<NodeSpec> parseXrayElement(
   if (unsupported.isNotEmpty && result.isNotEmpty) {
     for (final proto in unsupported) {
       result.first.warnings.add(UnsupportedProtocolWarning(proto));
+    }
+  }
+
+  // §404 P3 — то же для отбракованных владельцев. Носитель нашёлся внутри
+  // элемента → причина висит на нём и из подписочного списка убирается, чтобы
+  // пользователь не увидел одно сообщение дважды. Носителя нет → строка
+  // остаётся в `dropped` и уедет на первый узел подписки (см. parse_all).
+  if (rejected.isNotEmpty && result.isNotEmpty) {
+    for (final w in rejected) {
+      result.first.warnings.add(w);
+      dropped?.remove(w);
     }
   }
 
@@ -401,6 +487,23 @@ String _prettyJson(Object? value) {
   } catch (_) {
     return value.toString();
   }
+}
+
+/// §404 п.5 — массив строк из JSON провайдера (`server_ports`). `null`, если
+/// поля нет или в нём не массив. Элементы приводятся к строке поштучно:
+/// `cast<String>()` на `[443, "20000:30000"]` бросает в момент чтения, и
+/// узел уехал бы в catch целиком, хотя порт-диапазон читается прекрасно.
+/// Пустые элементы выбрасываются, пустой список схлопывается в `null` —
+/// эмиссия пишет поле только при непустом.
+List<String>? _stringListOrNull(Object? raw) {
+  if (raw is! List) return null;
+  final out = <String>[];
+  for (final v in raw) {
+    if (v == null) continue;
+    final s = v.toString().trim();
+    if (s.isNotEmpty) out.add(s);
+  }
+  return out.isEmpty ? null : out;
 }
 
 VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
@@ -672,34 +775,106 @@ Hysteria2Spec? _xrayHy2ToSpec(Map<String, dynamic> o, String remarks) {
   );
 }
 
-NodeSpec? _xrayDetourToSpec(Map<String, dynamic> o) {
-  final protocol = o['protocol']?.toString() ?? '';
-  if (protocol == 'socks') {
-    final servers = (o['settings']?['servers'] as List?)?.cast<Map>();
-    if (servers == null || servers.isEmpty) return null;
-    final s = servers.first;
-    final server = s['address']?.toString() ?? '';
-    final port = (s['port'] as num?)?.toInt() ?? 1080;
-    if (server.isEmpty) return null;
-    final users = (s['users'] as List?)?.cast<Map>() ?? const [];
-    final user = users.isEmpty ? const {} : users.first;
-    final tag = '⚙ ${o['tag'] ?? 'jump'}';
-    return SocksSpec(
-      id: newUuidV4(),
-      tag: tag,
-      label: tag,
-      server: server,
-      port: port,
-      rawUri: 'xray-jump://socks',
-      username: user['user']?.toString() ?? '',
-      password: user['pass']?.toString() ?? '',
-    );
+/// §404 / контракт D-085 — цепочка релеев `sockopt.dialerProxy`, рекурсивно.
+///
+/// [owner] — outbound-владелец (нужен только чтобы посадить его тег в набор
+/// посещённых: `dialerProxy` на самого себя — кольцо длины 1).
+/// [byTag] — все outbound'ы элемента по тегу.
+/// [firstRef] — тег первого звена.
+///
+/// Возвращает звено (со своим звеном внутри) либо `null` — и `null` здесь
+/// означает «ВЛАДЕЛЕЦ НЕГОДЕН», а не «цепочки нет»: вызывающий обязан
+/// отбраковать узел целиком, а не собирать его с прямым путём. Отличие от
+/// sing-box-ветки (`_buildChain`, §368) намеренное: там `detour` —
+/// необязательное украшение маршрута и негодное звено просто срезается, а
+/// здесь провайдер явно завернул дозвон в релей.
+///
+/// Причины негодности: цели нет в элементе; цель — группа или служебный
+/// outbound; цель не конвертируется в узел; кольцо; глубже [kMaxDetourDepth].
+NodeSpec? _xrayBuildChain(
+  Map<String, dynamic> owner,
+  Map<String, Map<String, dynamic>> byTag,
+  String firstRef,
+) {
+  // Кольцо ищем по тегам ТЕКУЩЕЙ цепочки, а не по всему элементу: два разных
+  // узла законно ссылаются на один релей.
+  final visited = <String>{};
+  final ownerTag = owner['tag']?.toString() ?? '';
+  if (ownerTag.isNotEmpty) visited.add(ownerTag);
+
+  NodeSpec? build(String ref, int depth) {
+    if (ref.isEmpty) return null;
+    // Глубже лимита не идём. Лимит общий с sing-box-веткой (§368): цепочка из
+    // данных провайдера не должна уводить рекурсию в стек.
+    if (depth >= kMaxDetourDepth) return null;
+    if (visited.contains(ref)) return null;
+
+    final target = byTag[ref];
+    if (target == null) return null;
+    final protocol = target['protocol']?.toString() ?? '';
+    // Служебный outbound (`freedom`/`blackhole`/`dns`) звеном быть не может.
+    // `dialerProxy: "direct"` в Xray встречается как «ходи напрямую» — но у
+    // нас прямой выход не узел, а подменять релей прямым путём D-085
+    // запрещает: владелец отбраковывается.
+    if (_kXrayServiceProtocols.contains(protocol)) return null;
+
+    visited.add(ref);
+
+    // §404 / D-085 — тег и label звена = СОБСТВЕННЫЙ тег релея из конфига
+    // провайдера (`ru-upstream`), без украшений. Прежний `⚙ <tag>` уезжал в
+    // конфиг ядра как есть и мешался с §274-маркером Направлений, где `⚙`
+    // значит совсем другое. Декорация — дело отображения, не разбора.
+    final NodeSpec? spec;
+    if (protocol == 'socks') {
+      spec = _xraySocksToSpec(target, ref);
+    } else {
+      // Все типы, которые умеет конвертер: релей больше не ограничен
+      // socks/vless — в sing-box `detour` живёт на любом outbound'е.
+      spec = _xrayToSpec(target, ref);
+    }
+    if (spec == null) return null;
+    // Группа цепочку не несёт (`withChained` вернул бы её как есть) —
+    // конвертер её и не отдаёт, но инвариант проверяем явно.
+    if (spec.isGroup) return null;
+
+    // Звено само может звонить через следующее звено.
+    final stream = target['streamSettings'];
+    final sockopt = stream is Map ? stream['sockopt'] : null;
+    final nextRef = sockopt is Map ? sockopt['dialerProxy']?.toString() : null;
+    if (nextRef == null || nextRef.isEmpty) return spec;
+
+    final next = build(nextRef, depth + 1);
+    // Негодное звено В СЕРЕДИНЕ цепочки роняет всю цепочку — и владельца
+    // вместе с ней. Собрать усечённый путь значит выпустить трафик на хоп
+    // раньше, чем задумал провайдер.
+    if (next == null) return null;
+    return withChained(spec, next);
   }
-  if (protocol == 'vless') {
-    final spec = _xrayVlessToSpec(o, '⚙ ${o['tag'] ?? 'jump'}');
-    return spec;
-  }
-  return null;
+
+  return build(firstRef, 0);
+}
+
+/// SOCKS-outbound Xray → узел. Отдельно от `_xrayToSpec`: самостоятельным
+/// узлом подписки socks не становится (§321), он бывает только звеном.
+SocksSpec? _xraySocksToSpec(Map<String, dynamic> o, String label) {
+  final servers = (o['settings']?['servers'] as List?)?.cast<Map>();
+  if (servers == null || servers.isEmpty) return null;
+  final s = servers.first;
+  final server = s['address']?.toString() ?? '';
+  final port = (s['port'] as num?)?.toInt() ?? 1080;
+  if (server.isEmpty) return null;
+  final users = (s['users'] as List?)?.cast<Map>() ?? const [];
+  final user = users.isEmpty ? const {} : users.first;
+  return SocksSpec(
+    id: newUuidV4(),
+    tag: label,
+    label: label,
+    server: server,
+    port: port,
+    rawUri: 'xray-jump://socks',
+    username: user['user']?.toString() ?? '',
+    password: user['pass']?.toString() ?? '',
+  );
 }
 
 TlsSpec _xrayTlsFromStream(Map stream, String server) {
@@ -924,6 +1099,13 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         obfsPassword: obfsNorm.password,
         obfsMinPacketSize: (obfs?['min_packet_size'] as num?)?.toInt(),
         obfsMaxPacketSize: (obfs?['max_packet_size'] as num?)?.toInt(),
+        // §404 п.5 — bandwidth-подсказки и port hopping доезжали только из
+        // URI-формы, из sing-box JSON терялись молча. Читаем как `num`, не как
+        // `int`: провайдеры пишут `"up_mbps": 100.0`, и `as int` уронил бы
+        // весь узел в catch по TypeError.
+        upMbps: (entry['up_mbps'] as num?)?.toInt(),
+        downMbps: (entry['down_mbps'] as num?)?.toInt(),
+        serverPorts: _stringListOrNull(entry['server_ports']),
         tls: _tlsFromSingbox(entry['tls'], server),
       );
     case 'naive':
@@ -1132,8 +1314,11 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       final tlsMap = masqueTls is Map ? masqueTls : const {};
       final vhttpRaw = entry['vhttp']?.toString() ?? '';
       // SPEC 103 п.5 — невалидное значение форсится в h3, как в URI-парсере.
-      final vhttpJson =
-          (vhttpRaw == 'h3' || vhttpRaw == 'h2') ? vhttpRaw : 'h3';
+      // Контракт 0.11.1 — `auto` в тройке допустимых (ядро >= lx.27).
+      final vhttpJson = (vhttpRaw == 'h3' || vhttpRaw == 'h2' ||
+              vhttpRaw == 'auto')
+          ? vhttpRaw
+          : 'h3';
       final sniRaw = tlsMap['server_name']?.toString() ?? '';
       return MasqueSpec(
         id: newUuidV4(),

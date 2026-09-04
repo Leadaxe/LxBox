@@ -1337,8 +1337,8 @@
   "Custom rules, tun apps, DNS options, final outbound": {
     "value": "Свои правила, приложения туннеля, параметры DNS, финальный исходящий канал"
   },
-  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH.": {
-    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH."
+  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3.": {
+    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH / DoQ / DoH3."
   },
   "Cut": {
     "value": "Вырезать"
@@ -1397,8 +1397,14 @@
   "DNS servers and rules": {
     "value": "DNS-серверы и правила"
   },
+  "DNS-over-HTTP/3 · port 443": {
+    "value": "DNS-over-HTTP/3 · порт 443"
+  },
   "DNS-over-HTTPS · port 443": {
     "value": "DNS-over-HTTPS · порт 443"
+  },
+  "DNS-over-QUIC · port 853": {
+    "value": "DNS-over-QUIC · порт 853"
   },
   "DNS-over-TLS · port 853": {
     "value": "DNS-over-TLS · порт 853"
@@ -2492,8 +2498,8 @@
   "L×Box runs as a foreground service while VPN is active. A persistent notification is required by Android — it lets you see at a glance that VPN is on, and prevents the system from killing the tunnel in the background.\n\nNo promotional or alert notifications will be sent.": {
     "value": "Пока VPN активен, L×Box работает как foreground-сервис. Android требует для него постоянное уведомление — по нему видно, что VPN включён, и система не закрывает туннель в фоне.\n\nРекламных и прочих оповещений не будет."
   },
-  "MASQUE HTTP version \"%s\" is neither h3 nor h2 — h3 was used instead.": {
-    "value": "Версия HTTP «%s» для MASQUE — не h3 и не h2, поэтому использован h3."
+  "MASQUE HTTP version \"%s\" is not h3, h2 or auto — h3 was used instead.": {
+    "value": "Версия HTTP «%s» для MASQUE — не h3, не h2 и не auto, поэтому использован h3."
   },
   "MASQUE registration failed": {
     "value": "Не удалось зарегистрировать MASQUE"
@@ -2562,8 +2568,8 @@
   "Move out of folder": {
     "value": "Вынести из папки"
   },
-  "Move subscriptions, servers, rules and settings between this app and the desktop launcher. Anything the other side has no place for travels along untouched and comes back intact.": {
-    "value": "Перенос подписок, серверов, правил и настроек между этим приложением и десктопным лаунчером. Всё, чему на другой стороне нет места, едет вместе с файлом нетронутым и возвращается целым."
+  "Move subscriptions, servers, rules and settings between this app and the desktop launcher. Anything the other side has no place for is dropped, and the app tells you exactly what did not make it.": {
+    "value": "Перенос подписок, серверов, правил и настроек между этим приложением и десктопным лаунчером. Всё, чему на другой стороне нет места, отбрасывается, а приложение прямо называет, что не доехало."
   },
   "Move to folder": {
     "value": "Переместить в папку"
@@ -4508,6 +4514,9 @@
   "Writes a new value into the matching nodes.": {
     "value": "Записывает новое значение в подходящие узлы."
   },
+  "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).": {
+    "value": "Режим XHTTP установлен в «packet-up»: ссылка требует передавать данные восходящего потока в заголовке, а ядро принимает это только в таком режиме (иначе конфиг не загрузился бы)."
+  },
   "XHTTP \"%1$s\" reset to default — %2$s (would otherwise break the whole config).": {
     "value": "Параметр XHTTP «%1$s» сброшен на значение по умолчанию — %2$s (иначе сломался бы весь конфиг)."
   },
@@ -4831,5 +4840,17 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
+  },
+  "Servers: %d": {
+    "value": "Серверов: %d"
+  },
+  "These settings have no place in the shared format:": {
+    "value": "Этим настройкам нет места в общем формате:"
+  },
+  "Not included in the file": {
+    "value": "Не попало в файл"
+  },
+  "Node \"%1$s\" was dropped: its relay \"%2$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.": {
+    "value": "Узел «%1$s» отброшен: релей «%2$s» отсутствует, непригоден или зациклен. Прямое подключение прошло бы мимо релея."
   }
 }

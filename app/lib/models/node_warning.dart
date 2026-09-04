@@ -228,6 +228,29 @@ final class XhttpParamResetWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
+/// §416 — XHTTP-узел пришёл с `uplink_data_placement: header`, но без `mode`.
+/// Ядро принимает такой placement только в режиме `packet-up`
+/// (`transport/v2rayxhttp/meta.go normalizeMeta`): без режима оно берёт
+/// дефолт `auto` и роняет ВЕСЬ конфиг fatal при старте —
+/// «uplink_data_placement can be header only in packet-up mode». Одна такая
+/// нода в подписке не даёт подняться VPN вовсе.
+///
+/// Режим дописывается, а не placement снимается: `header` осмыслен ровно в
+/// packet-up, так что источник фактически его и подразумевал — а снятие
+/// placement'а собрало бы узел не так, как ждёт сервер. Явно заданный
+/// НЕ-packet-up режим при этом не переписывается: там конфликт разбирает
+/// [XhttpResetReason.placementRequiresPacketUp] (§169 — отброс, не подгонка).
+final class XhttpModeForcedPacketUpWarning extends NodeWarning {
+  const XhttpModeForcedPacketUpWarning();
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).");
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
 /// §320 — `ech` из подписки проигнорирован. Xray-форма `ech=<name>+<resolver>`
 /// не несёт ключа, а лишь имя для DNS-запроса; подписки кладут туда публичные
 /// ECH-пробники (`ip.gs`, `encryptedsni.com`), чьи ключи не принадлежат серверу
@@ -377,6 +400,52 @@ final class DetourChainTooDeepWarning extends NodeWarning {
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// §404 / контракт D-085 — у Xray-узла указан `sockopt.dialerProxy`, но
+/// звено непригодно: цели нет в элементе, она не конвертируется в узел, это
+/// группа, либо цепочка зациклена/глубже лимита.
+///
+/// Владелец в таком случае ОТБРАКОВЫВАЕТСЯ ЦЕЛИКОМ — узла с прямым путём не
+/// создаётся. Отличие от `DetourTargetMissingWarning` (sing-box-ветка, §368)
+/// принципиальное: там `detour` — необязательное украшение маршрута, а здесь
+/// провайдер явно завернул дозвон в релей. Подменить его прямым выходом
+/// значит молча вывести трафик наружу мимо того звена, ради которого узел и
+/// прислали.
+///
+/// [label] — имя узла, который выпал (то, что пользователь видит в списке);
+/// [target] — тег недостижимой цели; [ownerTag] — СОБСТВЕННЫЙ тег
+/// отбракованного outbound'а из конфига провайдера.
+///
+/// Тег и label — разные вещи, и обе нужны. Label приходит из `remarks`
+/// ЭЛЕМЕНТА и на многоузловом элементе одинаков у всех его узлов; тег
+/// называет конкретный outbound. Контракт (corpus/README «Отбраковки»,
+/// D-088) требует в `dropped[].ref` именно тег: по нему вторая сторона
+/// опознаёт отвергнутую запись, а человеческое имя для машинной сверки не
+/// годится. В тексте пользователю при этом остаётся label — тег провайдера
+/// (`proxy`) ему ничего не говорит.
+final class DialerProxyUnusableWarning extends NodeWarning {
+  final String label;
+  final String target;
+
+  /// Тег отвергнутого outbound'а — `dropped[].ref` контракта. Пусто, если
+  /// провайдер тега не дал: тогда опознать запись можно только по label.
+  final String ownerTag;
+
+  const DialerProxyUnusableWarning(this.label, this.target,
+      {this.ownerTag = ''});
+
+  @override
+  List<Object?> get props => [label, target, ownerTag];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "Node \"%1\$s\" was dropped: its relay \"%2\$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.",
+      label,
+      target);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.error;
 }
 
 /// §368 §5.1 — `type: selector` (ручной выбор) импортирован как автовыбор:
@@ -544,8 +613,9 @@ final class AwgHeaderInvalidWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
-/// `masque_vhttp_invalid` (warning) — MASQUE `vhttp` вне {h3, h2};
-/// принудительно h3. Go-эталон: node_parser_masque.go:100.
+/// `masque_vhttp_invalid` (warning) — MASQUE `vhttp` вне {h3, h2, auto};
+/// принудительно h3. `auto` принят контрактом 0.11.1 (ядро >= lx.27).
+/// Go-эталон: node_parser_masque.go:100.
 final class MasqueVhttpInvalidWarning extends NodeWarning {
   final String value;
 
@@ -556,7 +626,7 @@ final class MasqueVhttpInvalidWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-      "MASQUE HTTP version \"%s\" is neither h3 nor h2 — h3 was used instead.",
+      "MASQUE HTTP version \"%s\" is not h3, h2 or auto — h3 was used instead.",
       value);
 
   @override

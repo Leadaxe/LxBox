@@ -174,6 +174,11 @@ class NodeEntries {
 `UnsupportedTransportWarning | UnsupportedProtocolWarning | MissingFieldWarning | DeprecatedFlowWarning | InsecureTlsWarning`.
 `warnings` — единственное mutable поле на spec'е. Парсер заполняет при конструировании; `emit` дописывает при fallback'ах. UI рендерит по `severity` (info/warning/error).
 
+> Состав иерархии с тех пор сильно вырос. Актуальный список подклассов и,
+> главное, **где именно каждый ставится и какую ошибку ядра лечит** —
+> [`docs/GUARDS.md`](../../../GUARDS.md). Здесь описан исходный дизайн
+> механизма, не текущий реестр защит.
+
 ### 2.4 `EmitContext` (абстракт, `emit_context.dart`)
 
 ```dart

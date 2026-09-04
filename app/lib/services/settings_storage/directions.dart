@@ -127,8 +127,46 @@ Future<DirectionHealResult> _deleteDirection(String tag) async {
   await _setDirections(directions, flush: false); // единый flush ниже
   final rules = await _healDirectionRefs(tag);
   final detours = await _healDetourDirectionRefs(tag);
+  await _healPingOptionsGroupRefs(tag);
   await _save();
   return (rules: rules, detours: detours, includes: count, chainPositions: 0);
+}
+
+/// §408 — снятие per-direction override'а ping/URLTest (`ping_options.groups`)
+/// удалённого Направления. Пятый род ссылки на тег Направления, до §408
+/// единственный без heal'а: карта переживала удаление, ключ оставался висеть
+/// сиротой, и создание нового Направления с тем же тегом молча наследовало
+/// чужие URL и timeout.
+///
+/// Только на УДАЛЕНИИ, не на disable и не на снятии detour-флага. Асимметрия
+/// та же, что у `include` (§393 A3): выключение — состояние, а не исчезновение;
+/// Направление остаётся в списке, его строка ping-настроек осмысленна, и
+/// включение обратно должно вернуть ровно то, что было. Удаление же
+/// необратимо (Решение B §202) — возвращать нечему.
+///
+/// Ссылка «на Направление» = его тег ИЛИ тег auto-двойника `<tag>-auto`, как в
+/// [_healDirectionRefs]. UI ключ-двойник не создаёт (диалог §040 пишет
+/// `state.selectedGroup`, а он приходит из `selectorGroupTags` — только
+/// selector'ы, urltest в список не попадает), но Debug API
+/// `PUT /settings/ping_options/groups/{tag}` тег не валидирует вовсе, и
+/// правленный бэкап приносит что угодно.
+///
+/// Счётчика наружу не даёт и в [DirectionHealResult] не входит: остальные
+/// четыре рода меняют МАРШРУТ (правило поехало на vpn-1, detour сброшен,
+/// опция вычеркнута, хоп цепочки снят) — про такое пользователю говорят.
+/// Ping-override — настройка ИЗМЕРЕНИЯ узлов удалённого Направления;
+/// сообщать «сброшен 1 ping-override» о сущности, которой больше нет, —
+/// шум в том же SnackBar'е.
+///
+/// Всё flush:false — атомарный `_save()` на вызывающем.
+Future<void> _healPingOptionsGroupRefs(String deletedTag) async {
+  final autoTag = '$deletedTag-auto';
+  final data = await _load();
+  final opts = data['ping_options'];
+  if (opts is! Map<String, dynamic>) return;
+  if (!_dropPingGroupKeys(opts, (t) => t == deletedTag || t == autoTag)) return;
+  data['ping_options'] = opts;
+  SettingsStorage._cache = data;
 }
 
 /// Перевод rules-ссылок на Направление → 'vpn-1'. Вызывается, когда Направление
@@ -312,6 +350,57 @@ bool _ensureRequiredDirection(Map<String, dynamic> data) {
   return true;
 }
 
+/// §408 — one-shot уборка осиротевших ключей `ping_options.groups`.
+///
+/// Дыра предсуществующая: до §408 heal'а у карты не было вовсе, и у любого,
+/// кто когда-либо удалял Направление с персональными URL/timeout, ключ лежит
+/// в storage до сих пор. Новый heal чинит только будущие удаления — уже
+/// накопленных сирот он не видит.
+///
+/// Живёт В МИГРАЦИИ Направлений, а не отдельной one-shot записью с
+/// собственным guard'ом, ровно по причине [_ensureRequiredDirection]:
+/// [_migrateDirectionsIfNeeded] — ЕДИНСТВЕННАЯ точка, через которую проходят
+/// ВСЕ пути загрузки состава (старт `main()`, restore внутреннего бэкапа,
+/// Debug API `/backup/import`), и только там список Направлений заведомо
+/// финальный. Отдельный guard-ключ вдобавок был бы вреден: сироту приносит и
+/// восстановленный архив (бэкап несёт `ping_options` целиком — он в
+/// allowlist'е §221), а one-shot с guard'ом отработал бы один раз до restore
+/// и больше никогда.
+///
+/// Гонки с «ещё не загруженной сущностью» нет: `directions` и `ping_options`
+/// лежат в ОДНОМ файле, читаются одним `_load()`, и на момент вызова список
+/// Направлений в `data` уже приведён к финальному виду всеми ветками
+/// миграции (включая seed и [_ensureRequiredDirection]). Живым считается тег
+/// Направления ЛЮБОГО состояния, включая выключенное, плюс его двойник
+/// `<tag>-auto`: выключение обратимо, override переживает его (см.
+/// [_healPingOptionsGroupRefs]).
+///
+/// Дёшево и по сырым данным (`map['tag']`, без `Direction.fromJson`).
+/// Возвращает `true`, только если что-то снято, — вызывающий решает, писать
+/// ли на диск. На самом частом пути (карты `groups` нет вовсе) выходит на
+/// первой же проверке.
+bool _pruneOrphanPingGroups(Map<String, dynamic> data) {
+  final opts = data['ping_options'];
+  if (opts is! Map<String, dynamic>) return false;
+  if (opts['groups'] is! Map<String, dynamic>) return false;
+  final alive = <String>{};
+  final raw = data['directions'];
+  if (raw is List) {
+    for (final e in raw) {
+      if (e is Map) {
+        final tag = e['tag'];
+        if (tag is String && tag.isNotEmpty) {
+          alive.add(tag);
+          alive.add('$tag-auto');
+        }
+      }
+    }
+  }
+  if (!_dropPingGroupKeys(opts, (t) => !alive.contains(t))) return false;
+  data['ping_options'] = opts;
+  return true;
+}
+
 Future<void> _migrateDirectionsIfNeeded(
   GroupTemplates gt, {
   Map<String, String> varDefaults = const {},
@@ -333,6 +422,7 @@ Future<void> _migrateDirectionsIfNeeded(
       dirty = true;
     }
     if (_ensureRequiredDirection(data)) dirty = true;
+    if (_pruneOrphanPingGroups(data)) dirty = true; // §408
     if (dirty) {
       SettingsStorage._cache = data;
       await _save();
@@ -350,6 +440,7 @@ Future<void> _migrateDirectionsIfNeeded(
     data.remove(kLegacyDirectionsMigratedKey);
     data['directions_migrated'] = true;
     _ensureRequiredDirection(data); // §393 A3 — легаси-список тоже мог быть без vpn-1
+    _pruneOrphanPingGroups(data); // §408
     SettingsStorage._cache = data;
     await _save();
     return;
@@ -362,6 +453,9 @@ Future<void> _migrateDirectionsIfNeeded(
     data.remove(kLegacyDirectionsKey);
     data.remove(kLegacyDirectionsMigratedKey);
     data['directions_migrated'] = true;
+    // §408 — ветка «мигрировано-и-пусто»: Направлений НЕТ осознанно, значит
+    // осиротела ВСЯ карта. Пусть уходит вместе с ними.
+    _pruneOrphanPingGroups(data);
     SettingsStorage._cache = data;
     await _save();
     return;
@@ -387,6 +481,7 @@ Future<void> _migrateDirectionsIfNeeded(
   data.remove(kLegacyDirectionsKey);
   data.remove(kLegacyDirectionsMigratedKey);
   data['directions_migrated'] = true;
+  _pruneOrphanPingGroups(data); // §408
   SettingsStorage._cache = data;
   await _save();
 }

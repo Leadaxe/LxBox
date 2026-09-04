@@ -44,7 +44,8 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       │                                      key not written) | "reload" | "none"
 │       ├─ last_node_count       int
 │       ├─ consecutive_fails     int           for the UI's "(N fails)"
-│       ├─ disabled_hashes       map?          §283 — {node identity hash: ISO-8601 lastSeen}; per-node disable
+│       ├─ disabled_hashes       map?          §283/§400 — {node identity: ISO-8601 lastSeen}; per-node disable.
+│       │                                      Identity = the provider's raw tag, made unique within the source
 │       │                                      (§332: one map for both manual and rule marks; Enable rules
 │       │                                       and the "Enable all" button clear them indiscriminately)
 │       ├─ identity              object?       §289 — per-sub override of the fetch identity (null=global);
@@ -121,8 +122,8 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ enabled_groups[]              list          §125 DEPRECATED — read only by the directions[] migration. Safe debris.
 ├─ directions[]                  list          §125 — routing directions (template→storage). See below.
 │   └─ <item>                    object
-│       ├─ tag                   string        §393 — the immutable id; any tag (auto 'vpn-N' if omitted); vpn-1 cannot be deleted
-│       ├─ label                 string        the display name (entered by the user)
+│       ├─ tag                   string        §393 — the immutable id AND the only name; any tag (auto 'vpn-N' if omitted); vpn-1 cannot be deleted
+│       ├─ label                 string        §405 — the display name ('' falls back to tag); only LxBox applies it, the launcher carries it silently
 │       ├─ enabled               bool          on/off (vpn-1 is always true)
 │       ├─ include_direct        bool          direct-out as a selector option
 │       ├─ include_block         bool          §201 — block (dropping traffic) as a selector option; default false
@@ -143,7 +144,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ chains[]                      list          §393 C — hop-chain sources (SPEC 110). See below.
 │   └─ <item>                    object
 │       ├─ tag                   string        the outbound tag = the record id; immutable; unique across chains AND directions
-│       ├─ label                 string        the display name ('' falls back to tag)
+│       ├─ label                 string        §405 — the display name ('' falls back to tag); only LxBox applies it, the launcher carries it silently
 │       ├─ enabled               bool          off = not emitted, not pooled (like a disabled subscription)
 │       ├─ hops[]                list          positions IN PACKET ORDER ([0] = first hop from the client); >= 2
 │       ├─ idle_timeout          string        duration; '' = the core default (5m), '0s' = until shutdown
@@ -187,9 +188,8 @@ Every key is described in detail in the sections below.
 Every path is relative to the **Android internal documents directory** (`getApplicationDocumentsDirectory()`). On a device that directory is unreachable without root or the Debug API (`GET /state/storage`).
 
 ```
-getApplicationDocumentsDirectory()/
+getApplicationDocumentsDirectory()/         # Android: Context.getDir("flutter") = app_flutter/
 ├── lxbox_settings.json
-├── singbox_config.json
 ├── http_cache/
 │   ├── <sha1(url)>.body
 │   └── <sha1(url)>.headers
@@ -197,6 +197,10 @@ getApplicationDocumentsDirectory()/
 │   └── <tag>.srs
 ├── applog.txt
 └── corelog.txt
+
+Context.filesDir/                           # native `files/` = Dart getApplicationSupportDirectory();
+├── singbox_config.json                     #   NOT the documents dir above (§414)
+└── cache.db                                # libbox cache_file (basePath = filesDir)
 
 Android SharedPreferences:
 ├── Flutter prefs                # app_theme_mode, haptic_enabled, …
@@ -206,7 +210,7 @@ Android SharedPreferences:
 | File / directory | Written by | What is inside | Spec |
 |---|---|---|---|
 | `lxbox_settings.json` | `SettingsStorage` (Dart) | App settings, vars, server lists, custom rules, DNS, ping. **The main subject of this document.** | — |
-| `singbox_config.json` | `ConfigManager` (Kotlin) | The final sing-box JSON fed to libbox. Regenerated on every `buildConfig`. Not part of a backup. | — |
+| `singbox_config.json` | `ConfigManager` (Kotlin) | The final sing-box JSON fed to libbox. Regenerated on every `buildConfig`. Not part of a backup. Lives in native `Context.filesDir` (`files/`), not in the documents dir — Dart reaches it via `BoxVpnClient.getFilesDir()` (§316/§414). | [§414] |
 | `http_cache/<sha1(url)>.body` + `.headers` | `HttpCache` (Dart) | The raw body and headers of a subscription, for the offline rehydrate at startup. | [§027] |
 | `rule_sets/<tag>.srs` | `RuleSetDownloader` (Dart) | A cache of binary `.srs` rule-set files. | [§011] |
 | `applog.txt` | `AppLog` (Dart) | The app-side warn/error log, JSON lines, a ring buffer of 200 lines / 64 KB. | [§038], [§043][043-applog] |
@@ -345,13 +349,27 @@ Sealed on the `type` field:
                                                // manual ⟳ is not governed by this.
   "last_node_count":       0,
   "consecutive_fails":     0,                 // for the UI's "(N fails)"; freezing is in-memory
-  "disabled_hashes": {                        // §283 — per-node disable (optional; an
-    "<sha256-hex>": "2026-07-18T10:00:00Z"    // empty map is not written). The key is the
-  },                                          // identity hash of the node's substance
-                                              // (emit − tag − detour, see
-                                              // services/node_hash.dart); the value is
-                                              // lastSeen for the TTL GC (clamp(3×interval,
-                                              // 24 h, a month)) on a successful refresh.
+  "disabled_hashes": {                        // §283/§400 — per-node disable (optional; an
+    "NL-42": "2026-07-18T10:00:00Z"           // empty map is not written). The key is the
+  },                                          // node's IDENTITY (contract 0.10.0): the raw
+                                              // provider tag, made unique within the source
+                                              // (first X, then X-2, X-3; the counter is
+                                              // per-source, and the tag is taken BEFORE the
+                                              // subscription's tag_prefix, which the builder
+                                              // adds at emit time). A group node (§322) and a
+                                              // node with an empty tag have no identity and
+                                              // cannot be disabled per-node. Node content
+                                              // (server, port, credentials, SNI, transport) is
+                                              // NOT part of it: a provider rotating the address
+                                              // under the same name keeps the mark, while
+                                              // renaming the node loses it. A key that is 64
+                                              // lowercase hex is a legacy content hash written
+                                              // before §400: on the source's first parse it
+                                              // migrates onto the matching node's identity (or
+                                              // is dropped when no node matches) and the result
+                                              // is persisted at once. The value is lastSeen for
+                                              // the TTL GC (clamp(3×interval, 24 h, a month))
+                                              // on a successful refresh.
   "identity": {                               // §289 — a per-sub override of the fetch
     "user_agent": "MyPanel/1.0",              // identity. Optional: null or absent means
     "send_hwid": true,                        // Default mode (the global SubscriptionIdentity).
@@ -377,9 +395,9 @@ Sealed on the `type` field:
       "conditions": [
         {"path": "tag", "op": "contains", "pattern": "⚡"}
       ],
-      "action": "disable"                     // DISABLE marks the node → its identity hash (of
-    },                                        // the FINAL form, after the patches) is put into
-    {                                         // disabled_hashes on every refresh (rule > TTL GC).
+      "action": "disable"                     // DISABLE marks the node → its identity (§400: the
+    },                                        // tag, which a Replace patch does not touch) is put
+    {                                         // into disabled_hashes on every refresh (rule > TTL GC).
       "conditions": [
         {"path": "", "op": "matches", "pattern": ".*"}
       ],                                      // §332 — ENABLE clears the mark from disabled_hashes,
@@ -699,6 +717,52 @@ The resolve chain in `HomeController`: `groups[tag]` → root → the template d
 
 CRUD helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clearGroupPing`. All of them are sugar over `getPingOptions` / `savePingOptions`, which read and write the whole object.
 
+**The keys of `groups` are direction tags — [§408] holds them to living ones.** A key
+counts as living when a direction with that `tag` exists (in any state, enabled or not)
+or when it is that direction's urltest twin `<tag>-auto` — the same reading of "a
+reference to a direction" the other heals use (§248). The UI only ever writes a plain
+selector tag (the ping dialog keys the map by `state.selectedGroup`, which comes from
+`selectorGroupTags` — selectors only, so never a chain and never a twin), but
+`PUT /settings/ping_options/groups/{tag}` does not validate the tag and a hand-edited
+backup carries whatever it carries.
+
+The invariant is kept at two points:
+
+- **Deleting a direction** drops its key and its `<tag>-auto` key in the same
+  transaction that heals the other four kinds of reference (`route_final` and a rule's
+  `outbound`, the detour references, `include[]`, the chain positions) — one write to
+  disk. Unlike those four, the drop is **not** reported back to the user: they change the
+  route, this only changes how the nodes of a direction that no longer exists were being
+  measured. **Disabling** a direction and clearing its detour flag leave the override
+  alone, exactly as they leave `include[]` alone (§393 A3): disabling is reversible,
+  and switching the direction back on must return what was there.
+- **Loading the set of directions** prunes orphans — any key with no living tag behind
+  it. It runs inside `migrateDirectionsIfNeeded`, which every load path goes through
+  (app start, an internal backup restore, `/backup/import`), for the same reason the
+  "`vpn-1` exists" invariant lives there. There is no separate one-shot with its own
+  guard on purpose: a restored archive brings `ping_options` back whole (it is in the
+  §221 allowlist), and a guarded one-shot would have run once, before the restore, and
+  never again. No ordering hazard: `directions` and `ping_options` share the one storage
+  file and one `_load()`, so the set of directions is already final when the prune reads
+  it.
+
+Whenever the last key goes, the `groups` container goes with it rather than staying `{}`
+— `ping_options` reaches the backup and `/state/storage`, where an empty container would
+read as "there were per-direction overrides and they were all reset" rather than the
+plain truth that there never were any.
+
+**A `groups` entry travels in the portable backup too — [§409].** It rides inside the
+direction it belongs to, as `directions[].ping_url` / `directions[].ping_timeout_ms`
+(contract 0.12.6, declared in the schema and applied by LxBox only; the launcher carries
+them silently). A missing key means there is no override; an empty URL or a
+non-positive timeout is never written. Not to be confused with `auto.url` /
+`auto.idle_timeout` of the same record: those configure the kernel's urltest twin, these
+are the app's own measuring budget. On import the fields land in `groups[tag]` only for
+directions the file actually **created** — a record whose tag is taken is skipped whole
+(`backup_direction_exists`), and its budget is skipped with it, so a file never rewrites
+the settings of a direction it did not create. The global `url` / `timeout_ms` are not
+part of this: they are an app setting, and their home in the portable format is `vars`.
+
 ---
 
 ## `tun_apps` — [§046]
@@ -952,8 +1016,13 @@ After the migration the set of directions lives in `directions[]` and is edited 
   accepted as long as it is non-empty, not reserved (`direct-out`, `block`, `dns-out`…),
   not already taken and not colliding with an existing `<tag>-auto` twin (the rejection
   carries a machine reason: `empty` | `reserved` | `duplicate` | `auto_twin`).
-  The user only edits `label`. It is the stable key for
-  references (`route_final`, `ping_options`, a custom rule's outbound, a detour).
+  The user only edits `label`. The tag is the stable key for
+  references (`route_final`, `ping_options`, a custom rule's outbound, a detour), which is
+  exactly why it is read-only after creation; renaming a direction means changing its
+  `label`. §405 — `label` is declared in the backup schema and
+  **only LxBox applies it** (the "Support" column of the contract's `docs/BACKUP.md` §2, D-094):
+  the launcher has no second name for a direction, so it neither applies the key nor
+  warns about it — it carries it through silently.
   §274 — the `⚙ ` prefix in `label` is reserved as the detour-direction marker (like the
   ⚙ mark in detour server tags): flipping the `detour` flag renames the direction (set →
   `⚙ <label>`, unset → the prefix is stripped), and the normalisation lives in
@@ -1060,7 +1129,8 @@ and is emitted as one outbound of type `chain`. The model is `SourceChain`
   positions of *other* chains reference it. A tag is validated against **both**
   chains and directions — two outbounds sharing a tag kill the config.
 - `label` — display name; empty falls back to `tag` (inventing a name for a chain
-  the user did not name would lie about its contents).
+  the user did not name would lie about its contents). §405 — like the direction one, it is
+  declared in the schema and applied **only by LxBox**; the launcher carries it silently.
 - `enabled` — a disabled chain is neither emitted nor pooled, like a disabled
   subscription. A reference to it from another chain degrades **that whole chain**
   (`chain_hop_missing`): a route missing a hop is a different route.
@@ -1229,6 +1299,7 @@ The scrubber only handles the `vars` and `server_lists` keys; everything else (`
 
 [§011]: ./spec/features/011%20local%20ruleset%20cache/spec.md
 [§027]: ./spec/features/027%20subscription%20auto%20update/spec.md
+[§414]: ./spec/tasks/414-config-dirty-check-files-dir.md
 [§029]: ./spec/features/029%20haptic%20feedback/spec.md
 [§030]: ./spec/features/030%20custom%20routing%20rules/spec.md
 [§031]: ./spec/features/031%20debug%20api/spec.md
@@ -1237,6 +1308,7 @@ The scrubber only handles the `vars` and `server_lists` keys; everything else (`
 [§037]: ./spec/tasks/037-debug-api-write-config-and-lock-rebuild.md
 [§038]: ./spec/features/038%20crash%20diagnostics/spec.md
 [§040]: ./spec/tasks/040-per-group-ping-test-settings.md
+[§408]: ./spec/tasks/408-ping-options-groups-heal.md
 [§061]: ./spec/tasks/061-dns-rules-refactor/spec.md
 [§044]: ./spec/tasks/044-dns-servers-clean-schema.md
 [§046]: ./spec/features/046%20tunnel%20apps%20split-tunneling/spec.md

@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/parser/uri_utils.dart';
 import 'package:lxbox/services/node_identity.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 
@@ -425,6 +427,219 @@ void main() {
       expect(nodes.single.server, 'main.example');
       expect(nodes.single.chained, isNotNull, reason: 'цепочка сохранена');
       expect(nodes.single.chained!.server, 'jump.example');
+    });
+
+    // ════════════════════════════════════════════════════════════════════
+    // §404 / D-085 — недостижимый релей роняет ВЛАДЕЛЬЦА целиком
+    // ════════════════════════════════════════════════════════════════════
+    //
+    // Прежде негодная цель просто не давала звена, и владелец собирался с
+    // ПРЯМЫМ путём. Провайдер завернул дозвон в релей именно потому, что
+    // прямой выход нежелателен, — подмена его прямым путём это тихая
+    // деанонимизация, а не деградация.
+    group('§404 dialerProxy непригоден → владелец отброшен', () {
+      /// Владелец с `dialerProxy` на [target] плюс перечисленные соседи.
+      List<NodeSpec> parseWith(String target, List<Map<String, dynamic>> rest,
+          {List<NodeWarning>? dropped}) {
+        final main = vless('proxy', 'main.example');
+        (main['streamSettings'] as Map)['sockopt'] = {'dialerProxy': target};
+        return parseXrayElement(
+          {
+            'remarks': 'Chained',
+            'outbounds': [main, ...rest],
+          },
+          dropped: dropped,
+        );
+      }
+
+      /// Причина отбраковки, где бы она ни оказалась.
+      ///
+      /// §404 P3 — носитель ищется в два шага: сперва первый ВЫЖИВШИЙ узел
+      /// элемента (как §321 P5 вешает warning'и о неподдержанных
+      /// протоколах), и только если в элементе не выжил никто — причина
+      /// уезжает в подписочный `dropped`. Проверять надо оба канала: важно
+      /// не «в какой список легло», а что потеря НЕ молчаливая.
+      Iterable<DialerProxyUnusableWarning> causes(
+              List<NodeSpec> nodes, List<NodeWarning> dropped) =>
+          [
+            ...dropped,
+            for (final n in nodes) ...n.warnings,
+          ].whereType<DialerProxyUnusableWarning>();
+
+      void expectDropped(List<NodeSpec> nodes, List<NodeWarning> dropped,
+          String target) {
+        expect(nodes.where((n) => n.server == 'main.example'), isEmpty,
+            reason: 'узел с прямым путём тут был бы обходом релея');
+        final w = causes(nodes, dropped);
+        expect(w, hasLength(1), reason: 'причина обязана дойти до пользователя');
+        expect(w.single.target, target, reason: 'warning называет цель');
+        expect(w.single.severity, WarningSeverity.error);
+      }
+
+      test('цели нет в элементе', () {
+        final dropped = <NodeWarning>[];
+        expectDropped(parseWith('ghost', const [], dropped: dropped), dropped,
+            'ghost');
+      });
+
+      test('цель СЛУЖЕБНАЯ (freedom) — прямой выход под видом релея', () {
+        final dropped = <NodeWarning>[];
+        final nodes = parseWith(
+            'direct', [
+          {'tag': 'direct', 'protocol': 'freedom'},
+        ],
+            dropped: dropped);
+        expectDropped(nodes, dropped, 'direct');
+      });
+
+      test('цель — blackhole', () {
+        final dropped = <NodeWarning>[];
+        final nodes = parseWith(
+            'block', [
+          {'tag': 'block', 'protocol': 'blackhole'},
+        ],
+            dropped: dropped);
+        expectDropped(nodes, dropped, 'block');
+      });
+
+      test('цель — ГРУППА (балансировщик звеном быть не может)', () {
+        final dropped = <NodeWarning>[];
+        final main = vless('proxy', 'main.example');
+        (main['streamSettings'] as Map)['sockopt'] = {'dialerProxy': 'pool'};
+        final nodes = parseXrayElement(
+          {
+            'remarks': 'Chained',
+            'outbounds': [main, vless('pool-member', 'm.example')],
+            'routing': {
+              'balancers': [
+                {'tag': 'pool', 'selector': ['pool-member']},
+              ],
+            },
+          },
+          dropped: dropped,
+        );
+        // Группа в элементе есть (балансировщик даёт узел автовыбора), но
+        // звеном служить не может — владелец выпадает. Причина при этом
+        // висит на выжившем соседе, а не в подписочном `dropped`.
+        expect(nodes.where((n) => n.server == 'main.example'), isEmpty);
+        expect(causes(nodes, dropped), hasLength(1));
+      });
+
+      test('КОЛЬЦО: dialerProxy на самого себя', () {
+        // Тег владельца засеян в набор посещённых сразу, поэтому кольцо
+        // длины 1 ловится как кольцо, а не как бесконечная рекурсия.
+        final dropped = <NodeWarning>[];
+        expectDropped(parseWith('proxy', const [], dropped: dropped), dropped,
+            'proxy');
+      });
+
+      test('КОЛЬЦО из двух звеньев', () {
+        final dropped = <NodeWarning>[];
+        final relay = vless('relay', 'relay.example');
+        (relay['streamSettings'] as Map)['sockopt'] = {'dialerProxy': 'proxy'};
+        final nodes = parseWith('relay', [relay], dropped: dropped);
+        expect(nodes, isEmpty, reason: 'кольцо не даёт ни одного узла');
+        expect(causes(nodes, dropped), isNotEmpty,
+            reason: 'оба участника кольца выпали — молчать об этом нельзя');
+      });
+
+      test('ГЛУБИНА больше лимита', () {
+        // Цепочка длиннее kMaxDetourDepth: усечь её значило бы выпустить
+        // трафик хопом раньше, чем задумал провайдер.
+        final relays = <Map<String, dynamic>>[];
+        for (var i = 0; i < kMaxDetourDepth + 2; i++) {
+          final r = vless('r$i', 'r$i.example');
+          (r['streamSettings'] as Map)['sockopt'] = {'dialerProxy': 'r${i + 1}'};
+          relays.add(r);
+        }
+        // Последнее звено цепочки — терминальное, без dialerProxy.
+        (relays.last['streamSettings'] as Map).remove('sockopt');
+        final dropped = <NodeWarning>[];
+        final nodes = parseWith('r0', relays, dropped: dropped);
+        expect(nodes.where((n) => n.server == 'main.example'), isEmpty,
+            reason: 'усечённый путь не собираем');
+        expect(causes(nodes, dropped), isNotEmpty);
+      });
+
+      test('носитель есть → warning висит на СОСЕДЕ, не в dropped', () {
+        // §321 P5-механика: причина обязана дойти до пользователя, а
+        // носителем служит первый выживший узел элемента.
+        final main = vless('proxy', 'main.example');
+        (main['streamSettings'] as Map)['sockopt'] = {'dialerProxy': 'ghost'};
+        final dropped = <NodeWarning>[];
+        final nodes = parseXrayElement(
+          {
+            'remarks': 'Mixed',
+            'outbounds': [main, vless('ok', 'alive.example')],
+          },
+          dropped: dropped,
+        );
+        expect(nodes.map((n) => n.server), ['alive.example']);
+        expect(nodes.single.warnings.whereType<DialerProxyUnusableWarning>(),
+            hasLength(1));
+        expect(dropped, isEmpty,
+            reason: 'носитель нашёлся — из подписочного списка причина ушла, '
+                'иначе пользователь увидел бы одно сообщение дважды');
+      });
+    });
+
+    group('§404 многохоп и канон звена', () {
+      test('релей звонит через следующий релей → ВЛОЖЕННЫЙ chained', () {
+        final main = vless('proxy', 'main.example');
+        (main['streamSettings'] as Map)['sockopt'] = {'dialerProxy': 'hop1'};
+        final hop1 = vless('hop1', 'hop1.example');
+        (hop1['streamSettings'] as Map)['sockopt'] = {'dialerProxy': 'hop2'};
+        final nodes = parseXrayElement({
+          'remarks': 'Multi',
+          'outbounds': [main, hop1, vless('hop2', 'hop2.example')],
+        });
+        expect(nodes, hasLength(1), reason: 'звенья отдельными узлами не идут');
+        final owner = nodes.single;
+        expect(owner.server, 'main.example');
+        expect(owner.chained!.server, 'hop1.example');
+        expect(owner.chained!.chained!.server, 'hop2.example');
+        expect(owner.chained!.chained!.chained, isNull);
+      });
+
+      test('D-085: тег и label звена — СЫРОЙ тег релея, без ⚙', () {
+        // `⚙` занят §274-маркером Направлений и в конфиге ядра значит совсем
+        // другое. Маркер переехал на отрисовку списка узлов.
+        final main = vless('proxy', 'main.example');
+        (main['streamSettings'] as Map)['sockopt'] = {
+          'dialerProxy': 'ru-upstream',
+        };
+        final nodes = parseXrayElement({
+          'remarks': 'Chained',
+          'outbounds': [main, vless('ru-upstream', 'relay.example')],
+        });
+        final hop = nodes.single.chained!;
+        expect(hop.tag, 'ru-upstream');
+        expect(hop.label, 'ru-upstream');
+        expect(hop.tag, isNot(contains('⚙')));
+        expect(hop.label, isNot(contains('⚙')));
+      });
+
+      test('релей НЕ становится самостоятельным узлом подписки', () {
+        final main = vless('proxy', 'main.example');
+        (main['streamSettings'] as Map)['sockopt'] = {'dialerProxy': 'relay'};
+        final nodes = parseXrayElement({
+          'remarks': 'Chained',
+          'outbounds': [
+            main,
+            {
+              'tag': 'relay',
+              'protocol': 'socks',
+              'settings': {
+                'servers': [
+                  {'address': '192.0.2.10', 'port': 61000},
+                ],
+              },
+            },
+          ],
+        });
+        expect(nodes.map((n) => n.server), ['main.example']);
+        expect(nodes.single.chained!.protocol, 'socks');
+      });
     });
 
     test('§335+§321: dialerProxy не теряет encryption (регрессия _withChain)', () {

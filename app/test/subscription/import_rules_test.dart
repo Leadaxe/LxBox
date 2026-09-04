@@ -454,7 +454,7 @@ void main() {
   group('§307 identity-хеш и патч', () {
     test('патч только тега не меняет nodeIdentityHash', () {
       final n = fpNode('chrome', name: 'NL');
-      final before = nodeIdentityHash(n);
+      final before = legacyNodeIdentityHash(n);
       final rule = ImportRule(
         conditions: [cond('tag', ImportRuleOperator.contains, 'NL')],
         action: ImportRuleAction.replace,
@@ -462,12 +462,12 @@ void main() {
         replacement: 'Amsterdam',
       );
       n.patchedJson = applyRulesToNode(n, [rule]).patchedJson;
-      expect(nodeIdentityHash(n), before);
+      expect(legacyNodeIdentityHash(n), before);
     });
 
     test('патч сути (fingerprint) меняет хеш — by design §283', () {
       final n = fpNode('firefox');
-      final before = nodeIdentityHash(n);
+      final before = legacyNodeIdentityHash(n);
       final rule = ImportRule(
         conditions: [
           cond('tls.utls.fingerprint', ImportRuleOperator.contains, 'firefox')
@@ -477,7 +477,7 @@ void main() {
         replacement: 'chrome',
       );
       n.patchedJson = applyRulesToNode(n, [rule]).patchedJson;
-      expect(nodeIdentityHash(n), isNot(before),
+      expect(legacyNodeIdentityHash(n), isNot(before),
           reason: 'хеш считается от итогового вида узла');
     });
   });

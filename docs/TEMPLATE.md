@@ -13,7 +13,7 @@ At runtime the builder (`app/lib/services/builder/build_config.dart`) merges:
 - `group_templates` and `default_directions` (the direction assembly templates, §267), plus
 - the `vars` substitution (the template vars from storage)
 
-→ into the final `<docs>/singbox_config.json` for libbox.
+→ into the final `<filesDir>/singbox_config.json` for libbox (native `files/`, see STORAGE.md → Disk layout).
 
 `wizard_template.json` is NEVER modified by the user — it is a catalog. The user's state lives in `lxbox_settings.json` (see [`STORAGE.md`](./STORAGE.md)).
 

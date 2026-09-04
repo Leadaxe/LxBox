@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -127,5 +128,40 @@ void main() {
     expect(parseMasqueUri(s.toUri())!.disableSni, isTrue);
     expect(parseMasqueUri(s.toUri().replaceAll('disable_sni=1', ''))!.disableSni,
         isFalse);
+  });
+
+  // §402 / контракт 0.11.1 — `vhttp=auto` (h3 с откатом на h2). Ядро понимает
+  // его с lx.27; до этого значение было бы мусором и форсилось в h3.
+  group('§402 vhttp=auto', () {
+    test('auto принимается и доезжает до эмиссии', () {
+      final parsed = parseMasqueUri(
+          spec().toUri().replaceAll('vhttp=h3', 'vhttp=auto'))!;
+      expect(parsed.vhttp, 'auto');
+      expect(parsed.warnings, isEmpty,
+          reason: 'значение из тройки контракта — не деградация');
+      expect(parsed.emit(TemplateVars.empty).map['vhttp'], 'auto');
+    });
+
+    test('без параметра дефолт остаётся ЯВНЫЙ h3, а не auto', () {
+      // «Параметра нет» и «оператор выбрал auto» — не одно и то же:
+      // auto разрешает откат на h2, и подставлять его молча нельзя.
+      final noParam = spec().toUri().replaceAll('&vhttp=h3', '');
+      expect(parseMasqueUri(noParam)!.vhttp, 'h3');
+    });
+
+    test('мусорное значение → форс h3 + warning (SPEC 103 п.5)', () {
+      final parsed = parseMasqueUri(
+          spec().toUri().replaceAll('vhttp=h3', 'vhttp=h9'))!;
+      expect(parsed.vhttp, 'h3', reason: 'форсится дефолт, а не едет как есть');
+      expect(parsed.warnings.whereType<MasqueVhttpInvalidWarning>(), hasLength(1),
+          reason: 'форс обязан быть виден пользователю, а не только в логе');
+    });
+
+    test('h2 остаётся валидным (тройка контракта целиком)', () {
+      expect(
+          parseMasqueUri(spec().toUri().replaceAll('vhttp=h3', 'vhttp=h2'))!
+              .vhttp,
+          'h2');
+    });
   });
 }

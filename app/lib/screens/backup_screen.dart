@@ -9,11 +9,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
 import '../models/direction.dart';
-import '../models/server_list.dart';
 import '../services/direction_mutations.dart';
 import '../services/dns/dns_backup.dart';
 import '../services/lx_backup.dart';
-import '../services/parser/uri_utils.dart' show newUuidV4;
 import '../services/warp/warp_backup.dart';
 import '../services/settings_storage.dart';
 import '../services/error_format.dart';
@@ -327,15 +325,17 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // §393 B6 — route.final: до B6 его разбирали на импорте, но никогда не
       // экспортировали, и круг был односторонним.
       final routeFinal = await SettingsStorage.getRouteFinal();
-      // §393 B7 — блобы чужих приложений, приехавшие прошлым импортом:
-      // возвращаются в файл нетронутыми (§1 BACKUP.md).
-      final foreignExtensions = await SettingsStorage.getLxBackupExtensions();
+      // §401 — предупреждения экспорта: настройки, у которых в общей схеме
+      // нет дома, в файл не едут, и пользователь узнаёт об этом ДО того, как
+      // унесёт файл на другую машину (П6).
+      final exportWarnings = <LxBackupWarning>[];
       // §393 B9 — секция DNS: состав серверов/правил + final/strategy.
       final dns = dnsToBackup(
         servers: await SettingsStorage.getDnsServers(),
         rules: await SettingsStorage.getDnsRulesList(),
         dnsFinal: vars['dns_final'] ?? '',
         strategy: vars['dns_strategy'] ?? '',
+        warnings: exportWarnings,
       );
       // §393 B8 — регистрации WARP в каноне схемы (`type: wg|masque`).
       final warpAccount = await SettingsStorage.getWarpAccount();
@@ -344,17 +344,25 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         if (warpAccount != null) warpAccountToBackup(warpAccount),
         if (masqueAccount != null) masqueAccountToBackup(masqueAccount),
       ];
-      final json = await buildLxBackup(
+      // §409 — бюджеты теста узла по Направлениям (`ping_options.groups`,
+      // §040). Форма storage → переносимая форма читается ЗДЕСЬ, а не в
+      // парсере: `SettingsStorage` слою бэкапа не виден.
+      final directionPing = lxDirectionPingFromStorage(
+        await SettingsStorage.getPingOptions(),
+      );
+      final built = await buildLxBackup(
         lists: lists,
         rules: rules,
         vars: vars,
         directions: directions,
+        directionPing: directionPing,
         chains: chains,
         routeFinal: routeFinal,
-        foreignExtensions: foreignExtensions,
         dns: dns,
         warp: warp,
       );
+      final json = built.json;
+      exportWarnings.addAll(built.warnings);
       const filename = 'lx-backup.json';
       // Размер в БАЙТАХ, а не в code units: на кириллице в именах узлов
       // String.length занижал бы цифру против файла на диске.
@@ -377,6 +385,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
           );
           if (!mounted) return;
           showSnack(getLocalText.s("Backup exported (%d bytes)", bytes));
+          _showExportLosses(exportWarnings);
           return;
       }
 
@@ -389,9 +398,11 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       switch (outcome) {
         case SavedToFile(:final name):
           showSnack(getLocalText.s("Saved as %s (%d bytes)", name, bytes));
+          _showExportLosses(exportWarnings);
         case SavedToDownloads(:final name):
           showSnack(
               getLocalText.s("Saved to Downloads: %s (%d bytes)", name, bytes));
+          _showExportLosses(exportWarnings);
         case SaveCancelled():
           break;
         case SaveNoTarget() || SaveFailed():
@@ -482,6 +493,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // приехавшие Направления встают ниже существующих, и их `include[]`
       // (ссылки только вверх) остаётся осмысленным.
       var appliedDirections = 0;
+      // §409 — тег созданного Направления → его бюджет теста узла (может быть
+      // `null`: Направление приехало без override'а, и тогда писать нечего).
+      final appliedPing = <String, LxDirectionPing?>{};
       if (parsed.directions.isNotEmpty) {
         final current = await SettingsStorage.getDirections();
         final merged = current.toList();
@@ -495,8 +509,27 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
           merged.add(d);
           used.add(d.tag);
           appliedDirections++;
+          // §409 — бюджет теста узла едет с СОЗДАННЫМ Направлением. Тег,
+          // отсеянный гейтом выше, бюджета не получает: под ним живёт своё
+          // Направление, и менять ему настройку файл права не имеет
+          // (§9 BACKUP.md). Парсер по той же причине не кладёт в
+          // `directionPing` теги, занятые на этой стороне.
+          appliedPing[d.tag] = parsed.directionPing[d.tag];
         }
         if (appliedDirections > 0) await DirectionMutations.bulkReplace(merged);
+      }
+
+      // §409 — запись бюджетов ПОСЛЕ bulkReplace: `ping_options.groups`
+      // адресуется тегом Направления, и ключ, повисший без своего
+      // Направления, был бы сиротой, которую §408 всё равно вычистит.
+      for (final entry in appliedPing.entries) {
+        final ping = entry.value;
+        if (ping == null) continue;
+        await SettingsStorage.setGroupPing(
+          entry.key,
+          url: ping.url,
+          timeoutMs: ping.timeoutMs,
+        );
       }
 
       // §393 C9 — цепочки ПОСЛЕ Направлений (позиция может ссылаться на
@@ -611,55 +644,39 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       applied++;
     }
 
-    // §393 B6/B10 — подписки. Identity — URL (он же identity подписки на
-    // обеих сторонах). Своя запись СИЛЬНЕЕ приехавшей: под тем же адресом у
-    // пользователя своё имя, свой префикс тегов и свои выключенные узлы, и
-    // перезапись стёрла бы их. Новая подписка добавляется без узлов —
+    // §393 B6/B10 — подписки. Идентичность записи — URL (он же идентичность
+    // подписки на обеих сторонах). Новая подписка добавляется без узлов —
     // тело приедет обычным обновлением.
+    //
+    // §401 (П1) — совпавшая по URL запись ОБНОВЛЯЕТСЯ настройками из файла.
+    // Бэкап — сериализация состояния, и восстановленное состояние обязано
+    // быть неотличимо от настроенного руками; раньше совпавшая запись
+    // получала только доливку disabled-отметок, так что восстановление
+    // СВОЕГО ЖЕ файла на том же устройстве не возвращало ни identity, ни
+    // префикс тегов — пользователь видел «импорт прошёл» и настройки на
+    // месте не находил.
+    //
+    // Исключение ровно одно: disabled-отметки по-прежнему ОБЪЕДИНЯЮТСЯ, а не
+    // замещаются (§393 §4) — отметка, которой в файле нет, могла быть
+    // поставлена уже после экспорта, и молча включать такой узел нельзя.
+    //
+    // Локальные подписки, которых в файле нет, НЕ удаляются: импорт — это
+    // слияние, а полная замена раздела была бы другим решением.
     final lists = await SettingsStorage.getServerLists();
-    final byUrl = <String, int>{
-      for (var i = 0; i < lists.length; i++)
-        if (lists[i] is SubscriptionServers)
-          (lists[i] as SubscriptionServers).url: i,
-    };
-    final merged = lists.toList();
-    for (final sub in parsed.subscriptions) {
-      if (sub.url.isEmpty) continue;
-      final at = byUrl[sub.url];
-      if (at != null) {
-        // §4 BACKUP.md — отметки выключенных узлов доливаются к своим:
-        // хеш, которого у нас нет, добавляется; свой не перетирается.
-        final existing = merged[at] as SubscriptionServers;
-        final add = <String, DateTime>{
-          for (final e in sub.disabled.entries)
-            if (!existing.disabledHashes.containsKey(e.key))
-              e.key: DateTime.fromMillisecondsSinceEpoch(e.value * 1000,
-                  isUtc: true),
-        };
-        if (add.isEmpty) continue;
-        merged[at] = existing.copyWith(
-          disabledHashes: {...existing.disabledHashes, ...add},
-        );
-        applied++;
-        continue;
-      }
-      merged.add(SubscriptionServers(
-        id: newUuidV4(),
-        name: sub.label,
-        enabled: sub.enabled,
-        tagPrefix: sub.tagPrefix,
-        detourPolicy: DetourPolicy.defaults,
-        url: sub.url,
-        updateIntervalHours: sub.updateIntervalHours ?? 24,
-        disabledHashes: {
-          for (final e in sub.disabled.entries)
-            e.key: DateTime.fromMillisecondsSinceEpoch(e.value * 1000,
-                isUtc: true),
-        },
-      ));
-      byUrl[sub.url] = merged.length - 1;
-      applied++;
-    }
+    final subMerge = mergeBackupSubscriptions(lists, parsed.subscriptions);
+    final merged = subMerge.lists;
+    applied += subMerge.applied;
+
+    // §401 (D-08x) + §405 — одиночные узлы и папки: слияние живёт чистой
+    // функцией рядом с [mergeBackupSubscriptions] (`services/lx_backup.dart`),
+    // здесь только состояние. Идентичность одиночной записи — её ТЕЛО, папки
+    // — её имя; совпавшее пропускается молча.
+    final srvMerge = mergeBackupServers(merged, parsed.servers);
+    merged
+      ..clear()
+      ..addAll(srvMerge.lists);
+    applied += srvMerge.applied;
+
     // Сравниваем поэлементно по identity: `copyWith` выше создаёт НОВЫЙ
     // объект на месте старого, и длина списка при этом не меняется — проверка
     // одной только длины пропустила бы долитые disabled-отметки.
@@ -711,11 +728,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       }
     }
 
-    // §393 B7 — блобы чужих приложений ложатся на диск. Без этого шага круг
-    // launcher→LxBox→launcher терял бы `extensions.launcher` целиком: следующий
-    // экспорт с телефона восстанавливать было бы неоткуда.
-    await SettingsStorage.setLxBackupExtensions(parsed.foreignExtensions,
-        flush: false);
+    // §401 — блобы чужих приложений на диск больше не ложатся: провоз
+    // упразднён (П3). Состояние после импорта неотличимо от настроенного
+    // руками — теневого груза в нём нет.
 
     // Единый flush: выше всё писалось `flush: false`, чтобы прерывание в
     // середине не оставило половину применённых настроек на диске.
@@ -738,6 +753,10 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         getLocalText.s("Chains: %d", parsed.chains.length),
       getLocalText.s("Rules: %d", parsed.rules.length),
       getLocalText.s("Subscriptions: %d", parsed.subscriptions.length),
+      // §401 — одиночные узлы и члены папок: до этого их разбирали и не
+      // применяли, и пользователь не видел ни строки о том, что приехало.
+      if (parsed.servers.isNotEmpty)
+        getLocalText.s("Servers: %d", parsed.servers.length),
       getLocalText.s("Variables: %d", parsed.vars.length),
       // §393 B8/B9 — секции, которые теперь применяются: пользователь должен
       // увидеть их ДО применения, а не обнаружить постфактум чужой DNS-сервер
@@ -778,6 +797,20 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         ],
       ),
     );
+  }
+
+  /// §401 — что не поехало в файл. Диалог, а не snack: перечень длиннее
+  /// строки, и потерю настройки пользователь обязан увидеть целиком, а не
+  /// поймать боковым зрением за две секунды (П6).
+  void _showExportLosses(List<LxBackupWarning> warnings) {
+    if (warnings.isEmpty || !mounted) return;
+    final lines = <String>[
+      getLocalText.s("These settings have no place in the shared format:"),
+      '',
+      for (final w in warnings.take(12)) '• ${w.detail}',
+      if (warnings.length > 12) '… +${warnings.length - 12}',
+    ];
+    _showError(getLocalText.s("Not included in the file"), lines.join('\n'));
   }
 
   void _showError(String title, String message) {

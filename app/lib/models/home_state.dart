@@ -191,7 +191,7 @@ class HomeState {
   /// §325 — псевдо-Направление для замеров, сделанных вне выбранного Направления
   /// (`selectedGroup == null`). Отдельный ключ, а не «сложить в текущий»:
   /// иначе такие замеры присвоил бы себе случайный Направление.
-  static const String scratchDirection = ' scratch';
+  static const String scratchDirection = '\u0000scratch';
 
   /// §325 — ключ Направления, в который пишутся новые замеры.
   String get delayDirectionKey => selectedGroup ?? scratchDirection;
