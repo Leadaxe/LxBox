@@ -13,7 +13,7 @@
 162.159.198.\* - colo=HEL (аэропорт Хельсинки) <br />
 162.159.199.\* - colo=LED (аэропорт Пулково, Санкт-Петербург)<br />
 
-Смотрите https://help-guide.notion.site/Cloudflare-WARP-1f82684dab0d8024a1c8fec230f5e4e1
+Конечные точки смотрите по ссылке:   https://help-guide.notion.site/Cloudflare-WARP-1f82684dab0d8024a1c8fec230f5e4e1
 
 # L×Box
 
