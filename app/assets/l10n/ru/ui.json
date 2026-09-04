@@ -4852,5 +4852,59 @@
   },
   "Node \"%1$s\" was dropped: its relay \"%2$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.": {
     "value": "Узел «%1$s» отброшен: релей «%2$s» отсутствует, непригоден или зациклен. Прямое подключение прошло бы мимо релея."
+  },
+  "Workspaces": {
+    "value": "Рабочие пространства"
+  },
+  "Load": {
+    "value": "Загрузить"
+  },
+  "Save as…": {
+    "value": "Сохранить как…"
+  },
+  "Workspace name": {
+    "value": "Имя рабочего пространства"
+  },
+  "Overwrite “%s”?": {
+    "value": "Перезаписать «%s»?"
+  },
+  "A workspace with this name already exists. Its saved state will be replaced.": {
+    "value": "Рабочее пространство с таким именем уже есть. Его сохранённое состояние будет заменено."
+  },
+  "Overwrite": {
+    "value": "Перезаписать"
+  },
+  "Loading workspace…": {
+    "value": "Загрузка рабочего пространства…"
+  },
+  "Workspace “%s” loaded": {
+    "value": "Рабочее пространство «%s» загружено"
+  },
+  "Saved as “%s”": {
+    "value": "Сохранено как «%s»"
+  },
+  "Failed to load workspace: %s": {
+    "value": "Не удалось загрузить рабочее пространство: %s"
+  },
+  "Name is empty": {
+    "value": "Имя пустое"
+  },
+  "Name is too long": {
+    "value": "Имя слишком длинное"
+  },
+  "Name must not contain / or \\": {
+    "value": "Имя не должно содержать / или \\"
+  },
+  "Name must not start with a dot": {
+    "value": "Имя не должно начинаться с точки"
+  },
+  "Workspace not found": {
+    "value": "Рабочее пространство не найдено"
+  },
+  "A workspace with this name already exists": {
+    "value": "Рабочее пространство с таким именем уже есть"
+  },
+  "The current workspace cannot be deleted": {
+    "value": "Текущее рабочее пространство удалить нельзя"
   }
 }

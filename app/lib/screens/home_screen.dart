@@ -49,6 +49,9 @@ import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/probe/probe_lifecycle.dart';
+import '../services/workspaces/workspace_controller.dart';
+import 'home/widgets/workspace_menu.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -216,6 +219,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // §366 — первая проверка TTL rule-set'ов через 30с после старта.
     _ruleSetAutoUpdater.start();
     unawaited(_loadHapticPref());
+    // §417 — справочник workspaces для кнопки в AppBar.
+    unawaited(WorkspaceController.I.refresh());
     // Track tunnel transitions для side-effect'ов (SnackBar при revoke,
     // animation для connecting, auto-dismiss timer для lastError).
     // AnimatedBuilder уже rebuildит UI на notifyListeners; listener здесь
@@ -408,6 +413,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   ///
   /// Закрывает класс «UI пустой после backup-import + restart» / «storage
   /// был мутирован через Debug API» / «kill во время editing → старый config».
+  /// §417 — перед загрузкой workspace: пробы держат `cache.db` (§286),
+  /// туннель — тем более. Возвращает «был ли туннель поднят» — новый
+  /// `HomeScreen` поднимет его после пересборки.
+  Future<bool> _stopForWorkspaceSwitch() async {
+    ProbeLifecycle.I.haltAll();
+    final wasUp = _controller.state.tunnelUp;
+    if (_controller.state.tunnel != TunnelStatus.disconnected) {
+      await _controller.stop();
+    }
+    return wasUp;
+  }
+
   Future<void> _initSubsAndAutoUpdate() async {
     await _subController.init();
 
@@ -427,6 +444,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         AppLog.I.info('bootstrap: entries=$hasEntries emptyConfig=$emptyConfig '
             'tunnelUp=$tunnelUp dirty=$dirty');
 
+        // §417 — одноразовый флаг «VPN был поднят до загрузки workspace».
+        final autoConnect = WorkspaceController.I.takePendingAutoConnect();
         if (hasEntries && emptyConfig && tunnelUp) {
           // §116 case B — конфиг не прочёлся, но туннель жив и несёт рабочий
           // конфиг. НЕ пересобираем (нечего примирять, пересборка+tunnelUp =
@@ -444,6 +463,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           // Внутри тот же generateConfig + saveParsedConfig + §107-restore.
           await _rebuildAndClearDirty(silent: true);
           if (mounted) setState(() {});
+          // §417 — поднять VPN снова ПОСЛЕ пересборки: конфиг слота
+          // записан через saveConfig и лежит в native-кэше. Пересборка не
+          // удалась (dirty остался) — на чужом конфиге не стартуем.
+          if (autoConnect && mounted) {
+            if (!_subController.configDirty) {
+              await _controller.start();
+            } else {
+              AppLog.I.warning(
+                  'workspaces: auto-connect skipped — config still dirty');
+            }
+          }
+        } else if (autoConnect) {
+          AppLog.I.warning('workspaces: auto-connect skipped — nothing to '
+              'rebuild (entries=$hasEntries dirty=$dirty)');
         }
       }
     } catch (e) {
@@ -733,8 +766,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               .any((e) => e.nodeCount > 0 || e.list.nodes.isNotEmpty),
         );
         return Scaffold(
-          // l10n-exempt: brand name, идентичен во всех локалях
-          appBar: AppBar(title: const Text('L×Box')),
+          appBar: AppBar(
+            // l10n-exempt: brand name, идентичен во всех локалях
+            title: const Text('L×Box'),
+            // §417 — имя текущего workspace + попап Load / Save as.
+            actions: [
+              WorkspaceMenuButton(stopVpn: _stopForWorkspaceSwitch),
+              const SizedBox(width: 4),
+            ],
+          ),
           drawer: HomeDrawer(
             controller: _controller,
             subController: _subController,

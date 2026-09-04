@@ -23,6 +23,7 @@ import 'services/nav/home_return_observer.dart';
 import 'services/settings_storage.dart';
 import 'services/template_loader.dart';
 import 'services/version_info.dart';
+import 'services/workspaces/workspace_controller.dart';
 import 'services/workspaces/workspace_store.dart';
 import 'services/wifi_history_listener.dart';
 
@@ -260,7 +261,9 @@ class LxBoxApp extends StatelessWidget {
     // §279 — merged Listenable: смена локали = механизм themeNotifier
     // (rebuild единственного MaterialApp, без remount и подъёма контроллеров).
     return AnimatedBuilder(
-      animation: Listenable.merge([themeNotifier, LocaleController.I]),
+      animation: Listenable.merge(
+        [themeNotifier, LocaleController.I, WorkspaceController.I],
+      ),
       builder: (context, _) {
         // §285 — getLocalText отслеживает применяемую локаль через
         // LocaleController._applyLocale (dict-reload на каждую смену); отдельного
@@ -299,7 +302,10 @@ class LxBoxApp extends StatelessWidget {
           // §076: global observer срабатывает на возврат на home (root)
           // — auto-rebuild config'а если configDirty.
           navigatorObservers: [homeReturnObserver],
-          home: const HomeScreen(),
+          // §417 — смена generation после загрузки workspace пересоздаёт
+          // HomeScreen со всеми контроллерами, которыми он владеет: это и
+          // есть «перечитать всё» без перезапуска процесса.
+          home: HomeScreen(key: ValueKey(WorkspaceController.I.generation)),
         );
       },
     );
