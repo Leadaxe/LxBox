@@ -60,7 +60,7 @@ SERVICES=(
   https://canhazip.com
   # Cloudflare / trace endpoints: reply "ip=<addr>" amid key=value lines.
   # Parsed below. Rarely down or blocked, so good extra balancing samples.
-  https://www.cloudflare.com/cdn-cgi/trace
+  https://cdnjs.cloudflare.com/cdn-cgi/trace
   https://one.one.one.one/cdn-cgi/trace
   https://cloudflare-dns.com/cdn-cgi/trace
 )
