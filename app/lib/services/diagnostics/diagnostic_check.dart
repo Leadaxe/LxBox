@@ -42,7 +42,7 @@ const List<DiagnosticCheck> kDiagnosticChecks = [
   DiagnosticCheck(
     id: 'cf_trace_host',
     title: 'Cloudflare trace (hostname)',
-    url: 'https://cloudflare.com/cdn-cgi/trace',
+    url: 'https://cdnjs.cloudflare.com/cdn-cgi/trace',
   ),
   DiagnosticCheck(
     id: 'ip2location',
