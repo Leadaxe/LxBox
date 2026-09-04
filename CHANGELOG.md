@@ -30,7 +30,8 @@
   таймауте — следующий. Таймаут на запрос к одному хосту 5 с (было 15). Все шаги одной регистрации (MASQUE-enroll, WARP+
   лицензия) идут на хост, который ответил. В MASQUE-регистрации первый POST
   теперь несёт настоящий X25519-ключ вместо случайных байт — новый хост
-  строже проверяет ключ.
+  строже проверяет ключ. Наводка на хост — [PR #101](https://github.com/Leadaxe/LxBox/pull/101) от [@eleutherifer](https://github.com/eleutherifer)
+  (форк [eleutherifer/LxBox](https://github.com/eleutherifer/LxBox)).
 - **MASQUE: пул точек входа разложен по транспортам ([§420](docs/spec/tasks/420-masque-pool-per-transport.md)).**
   Замер живыми туннелями показал, что в блоках Cloudflare `162.159.198.*`
   и `162.159.199.*` адреса `.1` дают только h3 (QUIC), `.2` — h3 и h2, а
@@ -41,10 +42,11 @@
   переключении неподходящий пресет сбрасывается, рекомендуемый —
   `162.159.198.2` (его же отдаёт регистрация), кубик и генератор на h2
   не выдают h3-only адреса. Старый формат JSON в окне эксперимента
-  читается как прежде.
+  читается как прежде. Правило про адреса `.1`/`.2` — из README форка
+  [@eleutherifer](https://github.com/eleutherifer) ([PR #101](https://github.com/Leadaxe/LxBox/pull/101)), подтверждено замером.
 - **SNI-пулы WARP (WireGuard/AWG и MASQUE): добавлены `deepseek.com`, `mail.ru`,
   `max.ru`, `vk.ru`** — домены из «белых» списков, которые DPI режет реже
-  (идея из PR #101). Рекомендуемый MASQUE-SNI прежний —
+  (идея из [PR #101](https://github.com/Leadaxe/LxBox/pull/101) от [@eleutherifer](https://github.com/eleutherifer)). Рекомендуемый MASQUE-SNI прежний —
   `consumer-masque.cloudflareclient.com`, как у официального клиента.
 
 ### Fixed

@@ -8,7 +8,7 @@
 | Коммиты | см. ветку задачи |
 | Связанные spec'ы | [features/025](../features/025%20warp%20integration/spec.md), [features/130](../features/130%20masque-warp-transport/spec.md), [tasks/305](305-masque-endpoint-h2-pool-and-override.md), [tasks/386](386-warp-endpoint-preset-combobox.md) |
 
-Повод — PR #101 (форк, закрыт автором без обсуждения): среди прочего менял
+Повод — [PR #101](https://github.com/Leadaxe/LxBox/pull/101) от [@eleutherifer](https://github.com/eleutherifer), форк [eleutherifer/LxBox](https://github.com/eleutherifer/LxBox) (закрыт автором без обсуждения): среди прочего менял
 `WarpApi.base` на `api.devices.cloudflare.com` с комментарием «незабаненная
 ссылка на API для Zero Trust». Проверено замером; хост действительно нужен.
 

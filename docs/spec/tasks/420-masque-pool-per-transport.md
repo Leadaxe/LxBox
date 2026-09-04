@@ -10,7 +10,8 @@
 
 ## Повод
 
-Замер §418 (живые туннели через sing-box-lx, 05.09.2026) показал, что в
+Правило «транспорт зависит от последней цифры адреса» описал [@eleutherifer](https://github.com/eleutherifer)
+в README форка [eleutherifer/LxBox](https://github.com/eleutherifer/LxBox) ([PR #101](https://github.com/Leadaxe/LxBox/pull/101)). Замер §418 (живые туннели через sing-box-lx, 05.09.2026) показал, что в
 блоках `162.159.198.0/24` и `162.159.199.0/24` транспорт зависит от адреса:
 
 | Адрес | h3 (QUIC/UDP) | h2 (HTTP/2/TCP) |
