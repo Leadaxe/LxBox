@@ -175,7 +175,7 @@ class DiagnosticOutcome {
 | `cf_trace` | Cloudflare trace | `https://1.1.1.1/cdn-cgi/trace` |
 | `ip2location` | IP & location | `https://api.ip2location.io/` |
 | `ipinfo` | IP info | `https://ipinfo.io/json` |
-| `cf_trace_https` | Cloudflare trace (hostname) | `https://cloudflare.com/cdn-cgi/trace` |
+| `cf_trace_https` | Cloudflare trace (hostname) | `https://cdnjs.cloudflare.com/cdn-cgi/trace` |
 
 `cdn-cgi/trace` — дефолт списка: без ключа, читаемые `key=value` построчно,
 несёт `warp=`, которого нет больше нигде. Вариант по имени хоста рядом с
