@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done (device-check коммита 1 — см. Верификация) |
+| Статус | Done — коммит 1 DEVICE-VERIFIED, коммит 2 device-pending |
 | Дата старта | 2026-09-05 |
 | Дата завершения | 2026-09-05 |
-| Коммиты | `e2f0c609` лечение в сборке; коммит 2 — снек fatal с плашки (см. git log §419) |
+| Коммиты | `e2f0c609` лечение в сборке; `02268b3f` снек fatal с плашки |
 | Связанные spec'ы | [tasks/121](121-preset-routing-king-dns-orphans.md) (слой D — автосброс резольвера), [tasks/247](247-custom-rule-resolve-action.md) (деградация битого `server` у resolve-правил — образец), [tasks/254](254-detour-cycle-fatal-detector.md) (sheet для fatal-циклов), [tasks/384](384-fakeip-resolver-gate-and-lost-running-snapshot.md), [features/076](../features/076%20settings-and-config-lifecycle/spec.md), [features/417](../features/417%20workspaces/spec.md) (где всплыло) |
 
 ## Проблема
@@ -55,11 +55,12 @@ to rebuild config» висела с первого запуска и не сни
 `buildConfig` перед `validateConfig`:
 
 - `dns.final` / `route.default_domain_resolver`, которых нет в собранном
-  `dns.servers`, заменяются дефолтом шаблона (`local_dns_resolver` /
-  `cloudflare_udp` — §121 п. 6: оба всегда в каталоге); если дефолт не
-  эмитится — первым эмитированным сервером, пригодным как резольвер (не
-  `fakeip`/`hosts`, §384). Ни одного пригодного — не трогаем, валидатор
-  говорит своё.
+  `dns.servers`, заменяются дефолтом шаблона (`default_value` var'а —
+  сейчас `dns_shield` для обеих; §121 называл `local_dns_resolver` /
+  `cloudflare_udp` — с тех пор шаблон сменил дефолт на группу §354); если
+  дефолт не эмитится — первым эмитированным сервером, пригодным как
+  резольвер (не `fakeip`/`hosts`, §384). Ни одного пригодного — не трогаем,
+  валидатор говорит своё.
 - Замена уходит в `BuildResult.generatedVars` (`dns_final` /
   `dns_default_domain_resolver`) → `SubscriptionController._generate`
   персистит её тем же циклом, что `clash_secret`: следующая сборка чистая,
@@ -98,10 +99,14 @@ to rebuild config» висела с первого запуска и не сни
 - `test/builder/validator_test.dart`, `dns_group_test.dart` — валидатор
   по-прежнему ставит `DanglingDnsServerRef` при прямом вызове (post-step
   лечит ДО него только в `buildConfig`).
-- Device (AVD `LxBox_test`, состояние с битым `ru-direct:yandex_dot`):
-  пересборка проходит, плашка снимается, в vars `dns_final =
-  local_dns_resolver`; снек при ручной пересборке с искусственно
-  сломанным конфигом.
+- Device 05.09 (AVD `LxBox_test`, сборка с §419 поверх состояния с битым
+  `ru-direct:yandex_dot`) — **DEVICE-VERIFIED коммит 1**: первая же
+  bootstrap-сборка → `dns.final reset to "dns_shield": DNS server
+  "ru-direct:yandex_dot" is gone` → `Config saved (35693 bytes)` →
+  `/state config_dirty=false`, плашка снята, vars `dns_final` /
+  `dns_default_domain_resolver` = `dns_shield`. Снек коммита 2 на
+  устройстве не воспроизводился — на стенде не осталось fatal-состояния;
+  путь `generateConfig()==null && !silent` — три строки, покрыт чтением.
 
 ## Docs to update
 
