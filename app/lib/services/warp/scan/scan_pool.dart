@@ -31,7 +31,8 @@ class ScanPool {
     this.masqueHostsPreset = const [],
     this.masqueRecommendedHost = '',
     required this.masqueV4Cidr,
-    required this.masqueH3V4Cidr,
+    this.masqueH3HostsExtra = const [],
+    this.masqueH2Exclude = const [],
     required this.masquePortsH3,
     required this.masquePortsH2,
     required this.masqueSniPool,
@@ -81,23 +82,29 @@ class ScanPool {
 
   // --- MASQUE ---
 
-  /// §386 — готовые хосты для combobox MASQUE-endpoint в визарде (официальный
-  /// домен + device-verified IP). Пусто (старый asset/override) → UI собирает
-  /// фолбэк из /32-записей [masqueH3V4Cidr].
+  /// §386/§420 — общие хосты combobox MASQUE-endpoint: device-verified адреса,
+  /// на которых живут ОБА транспорта (h3 и h2) — `.198.2`, `.199.2`. Их
+  /// показываем при любом выборе транспорта, включая `auto` (h3 с фолбэком на
+  /// h2 на том же адресе — фолбэку есть куда падать). Ключ `hosts_preset`.
   final List<String> masqueHostsPreset;
 
-  /// §386 — рекомендуемый хост из [masqueHostsPreset] (официальный домен
-  /// `consumer-masque.cloudflareclient.com`). ЯВНЫЙ ключ `recommended_host`,
-  /// семантика как у [wgRecommendedEndpoint].
+  /// §386 — рекомендуемый хост, ЯВНЫЙ ключ `recommended_host`; должен быть
+  /// элементом [masqueHostsPreset] (§420: `162.159.198.2` — его же отдаёт
+  /// регистрация). Семантика пометки как у [wgRecommendedEndpoint].
   final String masqueRecommendedHost;
 
-  /// §305 — CIDR-блоки для h2 (h2 живёт по всему блоку). h3 их НЕ использует.
+  /// §305/§420 — CIDR-блоки h2 (`h2.v4_cidr`): h2 живёт по всему блоку, кроме
+  /// [masqueH2Exclude]. h3 их НЕ использует.
   final List<String> masqueV4Cidr;
 
-  /// §305 — device-verified: h3 (QUIC) живёт ТОЛЬКО на этих адресах (CIDR, обычно
-  /// /32), НЕ на всём блоке. Рандомить h3 по широкому CIDR нельзя (попадание ~1%
-  /// → мёртвые ноды). CIDR (а не голый IP) — на будущее (под-диапазоны).
-  final List<String> masqueH3V4Cidr;
+  /// §420 — хосты ТОЛЬКО для h3 (`h3.hosts_extra`): `.198.1`, `.199.1` — по
+  /// TCP 443 там обычный CDN-edge, h2-туннель не поднимается. Полный h3-список
+  /// = [masqueH3Hosts]. Рандомить h3 по блоку нельзя (живы единицы адресов).
+  final List<String> masqueH3HostsExtra;
+
+  /// §420 — адреса, исключённые из h2-рандома (`h2.exclude`): те же h3-only
+  /// хосты. Иначе кубик/генератор на h2 с шансом 1/256 выдаёт мёртвый адрес.
+  final List<String> masqueH2Exclude;
 
   /// §305 — порты MASQUE, задаются отдельными ключами на транспорт. Device-verified
   /// рабочие наборы сейчас СОВПАДАЮТ (все 7: 443/500/1701/4500/4443/8443/8095) —
@@ -120,25 +127,54 @@ class ScanPool {
   /// зашитый список ([WarpApi.fallbackHosts]).
   final List<String> apiHosts;
 
+  /// §420 — все h3-хосты: общие + h3-only, без дублей, порядок сохранён.
+  List<String> get masqueH3Hosts {
+    final seen = <String>{};
+    return [
+      for (final h in [...masqueHostsPreset, ...masqueH3HostsExtra])
+        if (seen.add(h)) h,
+    ];
+  }
+
+  /// §420 — хосты combobox для транспорта: `h3` → [masqueH3Hosts]; `h2` и
+  /// `auto` → только общие [masqueHostsPreset].
+  List<String> masqueHostsFor(String network) =>
+      network == 'h3' ? masqueH3Hosts : masqueHostsPreset;
+
+  /// §420 — случайный MASQUE-IP для транспорта. `h3` → из [masqueH3Hosts];
+  /// `h2`/`auto` → случайный адрес блока [masqueV4Cidr], не из
+  /// [masqueH2Exclude] (несколько попыток; блок из одних исключений → null).
+  /// null и при пустом источнике/битом CIDR — caller оставляет endpoint
+  /// регистрации.
+  String? randomMasqueIp(String network, Random rng) {
+    if (network == 'h3') {
+      final hosts = masqueH3Hosts;
+      return hosts.isEmpty ? null : hosts[rng.nextInt(hosts.length)];
+    }
+    if (masqueV4Cidr.isEmpty) return null;
+    try {
+      for (var i = 0; i < 16; i++) {
+        final cidr = masqueV4Cidr[rng.nextInt(masqueV4Cidr.length)];
+        final ip = randomIpInCidr(cidr, rng);
+        if (!masqueH2Exclude.contains(ip)) return ip;
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
+
   /// Пул пригоден, если валиден хотя бы один транспорт. WG требует портов
-  /// (иначе пробу не собрать); MASQUE использует свои masque-порты.
+  /// (иначе пробу не собрать); MASQUE — h2-блок или h3-хосты.
   bool get hasData {
     final wgOk =
         (wgV4Cidr.isNotEmpty || wgV6Cidr.isNotEmpty) && wgPorts.isNotEmpty;
-    return wgOk || masqueV4Cidr.isNotEmpty;
+    return wgOk || masqueV4Cidr.isNotEmpty || masqueH3Hosts.isNotEmpty;
   }
 
   /// §305 — порты для транспорта: `h2` → h2-набор, иначе h3-набор.
   List<int> masquePortsFor(String network) =>
       network == 'h2' ? masquePortsH2 : masquePortsH3;
-
-  /// §305 — CIDR-источник IP для транспорта. h2 → весь блок (`masqueV4Cidr`);
-  /// h3 → узкий `masqueH3V4Cidr` (device-verified 4 хоста). Фолбэк h3 на блок,
-  /// если h3-список пуст (обратная совместимость со старым asset).
-  List<String> masqueV4CidrFor(String network) {
-    if (network == 'h2') return masqueV4Cidr;
-    return masqueH3V4Cidr.isNotEmpty ? masqueH3V4Cidr : masqueV4Cidr;
-  }
 
   /// Парс полной структуры файла (`{wireguard:{...}, masque:{...}}`). Возвращает
   /// null, если структура битая/пустая (caller прячет генератор). Один парсер и
@@ -162,6 +198,27 @@ class ScanPool {
       return 0;
     }
 
+    // §420 — секция masque по транспортам: `h3: {hosts_extra, ports}`,
+    // `h2: {v4_cidr, exclude, ports}`, общие `hosts_preset`/`recommended_host`.
+    // Старый плоский формат (asset до §420, пользовательский JSON-override)
+    // читается как фолбэк: `v4_cidr` → h2-блок, `ports_h3`/`ports_h2` →
+    // порты, `h3_v4_cidr` (/32-записи) → h3-хосты сверх `hosts_preset`.
+    // Семантика старого override не меняется: его `hosts_preset` — как был.
+    final h3 = (mq['h3'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final h2 = (mq['h2'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final hostsPreset = strs(mq, 'hosts_preset');
+    final h2Cidr = h2.containsKey('v4_cidr') ? strs(h2, 'v4_cidr') : strs(mq, 'v4_cidr');
+    final List<String> h3Extra;
+    if (h3.containsKey('hosts_extra')) {
+      h3Extra = strs(h3, 'hosts_extra');
+    } else {
+      h3Extra = [
+        for (final c in strs(mq, 'h3_v4_cidr'))
+          if (c.endsWith('/32') && !hostsPreset.contains(c.substring(0, c.length - 3)))
+            c.substring(0, c.length - 3),
+      ];
+    }
+
     final pool = ScanPool(
       wgV4Cidr: strs(wg, 'v4_cidr'),
       wgV6Cidr: strs(wg, 'v6_cidr'),
@@ -172,12 +229,13 @@ class ScanPool {
       wgSniPool: strs(wg, 'sni_pool'),
       utlsFpPool: strs(wg, 'utls_fp_pool'),
       wgKeepalive: intOr0(wg, 'keepalive'),
-      masqueHostsPreset: strs(mq, 'hosts_preset'),
+      masqueHostsPreset: hostsPreset,
       masqueRecommendedHost: (mq['recommended_host'] as String?) ?? '',
-      masqueV4Cidr: strs(mq, 'v4_cidr'),
-      masqueH3V4Cidr: strs(mq, 'h3_v4_cidr'),
-      masquePortsH3: ints(mq, 'ports_h3'),
-      masquePortsH2: ints(mq, 'ports_h2'),
+      masqueV4Cidr: h2Cidr,
+      masqueH3HostsExtra: h3Extra,
+      masqueH2Exclude: strs(h2, 'exclude'),
+      masquePortsH3: h3.containsKey('ports') ? ints(h3, 'ports') : ints(mq, 'ports_h3'),
+      masquePortsH2: h2.containsKey('ports') ? ints(h2, 'ports') : ints(mq, 'ports_h2'),
       masqueSniPool: strs(mq, 'sni_pool'),
       masqueRecommendedSni: (mq['recommended_sni'] as String?) ?? '',
       // Пустые/не-строки отбрасываем; хвостовой `/` снимаем — URL клеится

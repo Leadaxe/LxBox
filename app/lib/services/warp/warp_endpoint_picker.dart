@@ -85,19 +85,19 @@ class WarpEndpointPicker {
   /// §386 — рекомендуемый MASQUE-хост (ключ `recommended_host` asset'а).
   String get recommendedMasqueHost => _scan?.masqueRecommendedHost ?? '';
 
-  /// §386 — хосты для combobox MASQUE-endpoint. Приоритет — явный
-  /// `masque.hosts_preset` из asset. Фолбэк для старого asset/override
-  /// без ключа — узкие h3-CIDR (`/32` → голый IP, device-verified живые
-  /// адреса; не-/32 записи пропускаем). Живы и для h2 (подмножество блоков).
-  List<String> get masqueHostsPreset {
-    final preset = _scan?.masqueHostsPreset ?? const <String>[];
-    if (preset.isNotEmpty) return List.unmodifiable(preset);
-    final out = <String>[];
-    for (final cidr in _scan?.masqueH3V4Cidr ?? const <String>[]) {
-      if (cidr.endsWith('/32')) out.add(cidr.substring(0, cidr.length - 3));
-    }
-    return List.unmodifiable(out);
-  }
+  /// §386/§420 — общие хосты combobox MASQUE-endpoint (оба транспорта).
+  List<String> get masqueHostsPreset =>
+      List.unmodifiable(_scan?.masqueHostsPreset ?? const <String>[]);
+
+  /// §420 — хосты combobox для транспорта (`h3` добавляет h3-only адреса,
+  /// `h2`/`auto` — только общие). Пусто, если нет пула.
+  List<String> masqueHostsFor(String network) =>
+      List.unmodifiable(_scan?.masqueHostsFor(network) ?? const <String>[]);
+
+  /// §420 — все известные пресет-хосты (общие + h3-only): по ним визард
+  /// понимает, что в поле стоит пресет, а не ручной IP.
+  List<String> get masqueH3Hosts =>
+      List.unmodifiable(_scan?.masqueH3Hosts ?? const <String>[]);
 
   /// §130 — случайный SNI из MASQUE-пула. '' если пуст.
   String randomMasqueSni() {
@@ -135,20 +135,11 @@ class WarpEndpointPicker {
     return ports.isEmpty ? null : ports[_rng.nextInt(ports.length)];
   }
 
-  /// §305 — случайный MASQUE-IP из случайного блока. null если пусто/битый CIDR
-  /// (caller оставляет endpoint из регистрации).
-  String? randomMasqueIp({String network = 'h3'}) {
-    // §305 — источник ЗАВИСИТ от транспорта: h3 живёт только на 4 хостах, рандом
-    // по всему блоку дал бы мёртвый адрес в ~99% случаев.
-    final blocks = _scan?.masqueV4CidrFor(network) ?? const [];
-    if (blocks.isEmpty) return null;
-    final cidr = blocks[_rng.nextInt(blocks.length)];
-    try {
-      return randomIpInCidr(cidr, _rng);
-    } catch (_) {
-      return null;
-    }
-  }
+  /// §305/§420 — случайный MASQUE-IP для транспорта (h3 — из живых h3-хостов,
+  /// h2 — по блоку минус исключения). null если пусто/битый CIDR (caller
+  /// оставляет endpoint из регистрации).
+  String? randomMasqueIp({String network = 'h3'}) =>
+      _scan?.randomMasqueIp(network, _rng);
 
   /// §305 — сырой JSON asset'а (для дефолта JSON-окна эксперимента). '' при сбое.
   static Future<String> loadRawJson() async {

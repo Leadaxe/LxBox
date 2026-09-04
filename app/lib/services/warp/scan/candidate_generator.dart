@@ -63,12 +63,13 @@ class CandidateGenerator {
       );
 
   ScanCandidate _masqueCandidate(ScanProtocol proto) {
-    // §305 — IP-источник ЗАВИСИТ от транспорта: h3 живёт только на 4 хостах
-    // (masqueH3V4Cidr), h2 — по всему блоку. Рандомить h3 по блоку нельзя.
+    // §305/§420 — IP-источник ЗАВИСИТ от транспорта: h3 — только живые
+    // h3-хосты (masqueH3Hosts), h2 — блок минус h3-only адреса. Протокол
+    // попадает сюда только при непустом источнике (_protocols), но на всякий
+    // случай null → пустой IP (кандидат отбракуется пробой, не крашем).
     final net = proto == ScanProtocol.masqueH2 ? 'h2' : 'h3';
-    final cidr = _pick(_pool.masqueV4CidrFor(net));
     return ScanCandidate(
-      ip: randomIpInCidr(cidr, _rng),
+      ip: _pool.randomMasqueIp(net, _rng) ?? '',
       port: _pickMasquePort(proto),
       protocol: proto,
       sni: _pool.masqueSniPool.isEmpty ? '' : _pick(_pool.masqueSniPool),
@@ -98,10 +99,10 @@ class CandidateGenerator {
         if ((_pool.wgV4Cidr.isNotEmpty || _pool.wgV6Cidr.isNotEmpty) &&
             _pool.wgPorts.isNotEmpty)
           ScanProtocol.awg,
-        if (_pool.masqueV4Cidr.isNotEmpty) ...[
-          ScanProtocol.masqueH3,
-          ScanProtocol.masqueH2,
-        ],
+        // §420 — h3 и h2 гейтятся своими источниками: без h3-хостов h3
+        // не сеем (рандом по блоку = мёртвые ноды), без h2-блока — h2.
+        if (_pool.masqueH3Hosts.isNotEmpty) ScanProtocol.masqueH3,
+        if (_pool.masqueV4Cidr.isNotEmpty) ScanProtocol.masqueH2,
       ];
 
   int _pickWgPort() {

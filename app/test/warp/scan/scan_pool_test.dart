@@ -176,6 +176,100 @@ void main() {
       expect(pool.wgPorts, isEmpty);
     });
 
+    test('§420 masque по транспортам: hosts_preset общий, h3.hosts_extra, '
+        'h2.v4_cidr+exclude, порты в секциях', () {
+      final pool = ScanPool.fromFullJson({
+        'masque': {
+          'hosts_preset': ['162.159.198.2', '162.159.199.2'],
+          'recommended_host': '162.159.198.2',
+          'h3': {
+            'hosts_extra': ['162.159.198.1', '162.159.199.1'],
+            'ports': [443, 4443],
+          },
+          'h2': {
+            'v4_cidr': ['162.159.198.0/24'],
+            'exclude': ['162.159.198.1'],
+            'ports': [500, 8443],
+          },
+        },
+      })!;
+      expect(pool.masqueHostsPreset, ['162.159.198.2', '162.159.199.2']);
+      expect(pool.masqueRecommendedHost, '162.159.198.2');
+      expect(pool.masqueH3HostsExtra, ['162.159.198.1', '162.159.199.1']);
+      expect(pool.masqueH3Hosts, [
+        '162.159.198.2',
+        '162.159.199.2',
+        '162.159.198.1',
+        '162.159.199.1',
+      ]);
+      expect(pool.masqueV4Cidr, ['162.159.198.0/24']);
+      expect(pool.masqueH2Exclude, ['162.159.198.1']);
+      expect(pool.masquePortsH3, [443, 4443]);
+      expect(pool.masquePortsH2, [500, 8443]);
+      expect(pool.masqueHostsFor('h3'), pool.masqueH3Hosts);
+      expect(pool.masqueHostsFor('h2'), ['162.159.198.2', '162.159.199.2']);
+      expect(pool.masqueHostsFor('auto'), ['162.159.198.2', '162.159.199.2']);
+      expect(pool.hasData, isTrue);
+    });
+
+    test('§420 старый плоский формат (override до §420) читается как фолбэк', () {
+      final pool = ScanPool.fromFullJson({
+        'masque': {
+          'v4_cidr': ['162.159.198.0/24', '162.159.199.0/24'],
+          'hosts_preset': ['consumer-masque.cloudflareclient.com', '162.159.198.2'],
+          'h3_v4_cidr': ['162.159.198.1/32', '162.159.198.2/32', '10.0.0.0/8'],
+          'ports_h3': [443],
+          'ports_h2': [500],
+        },
+      })!;
+      expect(pool.masqueV4Cidr, ['162.159.198.0/24', '162.159.199.0/24']);
+      // hosts_preset старого override — как был (семантика не меняется).
+      expect(pool.masqueHostsPreset,
+          ['consumer-masque.cloudflareclient.com', '162.159.198.2']);
+      // /32 из h3_v4_cidr → h3-хосты сверх пресета; не-/32 отбрасываются.
+      expect(pool.masqueH3HostsExtra, ['162.159.198.1']);
+      expect(pool.masqueH2Exclude, isEmpty);
+      expect(pool.masquePortsH3, [443]);
+      expect(pool.masquePortsH2, [500]);
+    });
+
+    test('§420 randomMasqueIp: h3 — только из h3-хостов; h2 — блок минус exclude; '
+        'пустой источник → null', () {
+      final pool = ScanPool.fromFullJson({
+        'masque': {
+          'hosts_preset': ['162.159.198.2'],
+          'h3': {'hosts_extra': ['162.159.198.1']},
+          'h2': {
+            'v4_cidr': ['162.159.198.0/30'],
+            'exclude': ['162.159.198.1'],
+          },
+        },
+      })!;
+      final rng = Random(42);
+      for (var i = 0; i < 200; i++) {
+        expect(pool.randomMasqueIp('h3', rng),
+            anyOf('162.159.198.2', '162.159.198.1'));
+        final h2 = pool.randomMasqueIp('h2', rng);
+        expect(h2, isNotNull);
+        expect(h2, isNot('162.159.198.1'));
+        expect(h2!.startsWith('162.159.198.'), isTrue);
+      }
+      // Блок из одних исключений → null, не бесконечный цикл.
+      final allExcluded = ScanPool.fromFullJson({
+        'masque': {
+          'h2': {'v4_cidr': ['162.159.198.1/32'], 'exclude': ['162.159.198.1']},
+        },
+      })!;
+      expect(allExcluded.randomMasqueIp('h2', rng), isNull);
+      // Только h3-хосты, без h2-блока: пул валиден, h2-рандом пуст.
+      final h3only = ScanPool.fromFullJson({
+        'masque': {'hosts_preset': ['162.159.198.2']},
+      })!;
+      expect(h3only.hasData, isTrue);
+      expect(h3only.randomMasqueIp('h2', rng), isNull);
+      expect(h3only.randomMasqueIp('auto', rng), isNull);
+    });
+
     test('§418 api.hosts: порядок сохраняется, хвостовой / и пустые срезаются',
         () {
       final pool = ScanPool.fromFullJson({

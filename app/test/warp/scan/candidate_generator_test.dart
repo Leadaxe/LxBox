@@ -15,7 +15,9 @@ void main() {
         wgSniPool: ['www.google.com', 'yandex.ru'],
         utlsFpPool: ['chrome', 'firefox', 'safari'],
         masqueV4Cidr: ['162.159.198.0/24', '162.159.199.0/24'],
-        masqueH3V4Cidr: ['162.159.198.1/32', '162.159.199.1/32'],
+        masqueHostsPreset: ['162.159.198.2'],
+        masqueH3HostsExtra: ['162.159.198.1', '162.159.199.1'],
+        masqueH2Exclude: ['162.159.198.1', '162.159.199.1'],
         masquePortsH3: [443, 4443, 8095],
         masquePortsH2: [500, 4500, 8443],
         masqueSniPool: ['www.cloudflare.com', 'yandex.ru'],
@@ -50,8 +52,10 @@ void main() {
 
     test('§305 — h3-IP ТОЛЬКО из h3-списка; h2-IP из блока', () {
       final g = CandidateGenerator(fullPool(), rng: Random(13));
-      // fullPool: h3_v4_cidr = .198.1/.199.1 (/32); h2 v4_cidr = /24 блоки.
-      const h3hosts = {'162.159.198.1', '162.159.199.1'};
+      // fullPool (§420): h3 = общий .198.2 + h3-only .198.1/.199.1; h2 —
+      // /24 блоки минус h3-only адреса.
+      const h3hosts = {'162.159.198.2', '162.159.198.1', '162.159.199.1'};
+      const h2excluded = {'162.159.198.1', '162.159.199.1'};
       var sawH3 = false, sawH2 = false;
       for (final c in g.seed(400)) {
         if (c.protocol == ScanProtocol.masqueH3) {
@@ -62,6 +66,9 @@ void main() {
           // h2 — по блоку, октет варьируется (не только .1).
           expect(c.ip.startsWith('162.159.198.') ||
               c.ip.startsWith('162.159.199.'), isTrue);
+          // §420 — h3-only адреса из h2-рандома исключены.
+          expect(h2excluded.contains(c.ip), isFalse,
+              reason: 'h2 IP ${c.ip} — h3-only хост');
           sawH2 = true;
         }
       }
@@ -93,7 +100,6 @@ void main() {
         wgSniPool: [],
         utlsFpPool: ['chrome'],
         masqueV4Cidr: ['162.159.198.0/24'],
-        masqueH3V4Cidr: [], // фолбэк на блок при пустом h3-списке
         masquePortsH3: [443],
         masquePortsH2: [500],
         masqueSniPool: ['yandex.ru'],
@@ -102,6 +108,8 @@ void main() {
       final protos = g.seed(50).map((c) => c.protocol).toSet();
       expect(protos.contains(ScanProtocol.awg), isFalse);
       expect(protos.every((p) => p.isMasque), isTrue);
+      // §420 — без h3-хостов h3 не сеем (рандом по блоку = мёртвые ноды).
+      expect(protos, [ScanProtocol.masqueH2]);
     });
 
     test('wg-диапазон, но БЕЗ wg-портов → только masque, без краша', () {
@@ -113,7 +121,6 @@ void main() {
         wgSniPool: [],
         utlsFpPool: ['chrome'],
         masqueV4Cidr: ['162.159.198.0/24'],
-        masqueH3V4Cidr: [], // фолбэк на блок при пустом h3-списке
         masquePortsH3: [443],
         masquePortsH2: [500],
         masqueSniPool: ['y'],
