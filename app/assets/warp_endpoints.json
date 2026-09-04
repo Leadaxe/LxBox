@@ -38,7 +38,8 @@
     "sni_pool": [
       "www.google.com", "www.microsoft.com", "www.bing.com", "www.apple.com",
       "www.wikipedia.org", "cdn.jsdelivr.net", "aws.amazon.com", "yandex.ru",
-      "telemost.yandex.ru", "ozon.ru", "rutube.ru", "gosuslugi.ru"
+      "telemost.yandex.ru", "ozon.ru", "rutube.ru", "gosuslugi.ru",
+      "deepseek.com", "mail.ru", "max.ru", "vk.ru"
     ],
     "utls_fp_pool": ["chrome", "firefox", "safari", "edge", "random"]
   },
@@ -69,7 +70,8 @@
       "www.cloudflare.com", "cdn.jsdelivr.net", "aws.amazon.com",
       "www.google.com", "www.microsoft.com", "www.bing.com", "www.apple.com",
       "www.wikipedia.org", "yandex.ru", "telemost.yandex.ru", "ozon.ru",
-      "rutube.ru", "gosuslugi.ru"
+      "rutube.ru", "gosuslugi.ru",
+      "deepseek.com", "mail.ru", "max.ru", "vk.ru"
     ]
   }
 }

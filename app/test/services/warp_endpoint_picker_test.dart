@@ -200,4 +200,14 @@ void main() {
     // битого asset); расхождение = кто-то поправил одно и забыл другое.
     expect(p.apiHosts, WarpApi.fallbackHosts);
   });
+
+  test('05.09.2026: deepseek/mail.ru/max.ru/vk.ru в ОБОИХ SNI-пулах', () async {
+    final p = await WarpEndpointPicker.load();
+    for (final d in ['deepseek.com', 'mail.ru', 'max.ru', 'vk.ru']) {
+      expect(p.sniPool, contains(d));
+      expect(p.masqueSniPool, contains(d));
+    }
+    // Родной SNI официального клиента остаётся первым и рекомендуемым.
+    expect(p.masqueSniPool.first, 'consumer-masque.cloudflareclient.com');
+  });
 }
