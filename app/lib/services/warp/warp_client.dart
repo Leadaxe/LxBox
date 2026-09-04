@@ -63,7 +63,10 @@ class WarpClient {
   /// (`api.hosts`), при битом asset — [WarpApi.fallbackHosts].
   WarpClient({http.Client? client, Duration? timeout, List<String>? apiHosts})
       : _client = client ?? http.Client(),
-        _timeout = timeout ?? const Duration(seconds: 15),
+        // §418 — таймаут на ОДИН запрос к одному хосту (не на весь перебор):
+        // глухой хост из РФ молчит до таймаута, 5 с — цена перехода к
+        // запасному. Здоровый ответ /reg укладывается в 0.5–4 с.
+        _timeout = timeout ?? const Duration(seconds: 5),
         _apiHosts = apiHosts;
 
   final http.Client _client;
