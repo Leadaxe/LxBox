@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done (device-check коммита 1 — см. Верификация) |
 | Дата старта | 2026-09-05 |
-| Дата завершения | — |
-| Коммиты | см. ветку задачи |
+| Дата завершения | 2026-09-05 |
+| Коммиты | `e2f0c609` лечение в сборке; коммит 2 — снек fatal с плашки (см. git log §419) |
 | Связанные spec'ы | [tasks/121](121-preset-routing-king-dns-orphans.md) (слой D — автосброс резольвера), [tasks/247](247-custom-rule-resolve-action.md) (деградация битого `server` у resolve-правил — образец), [tasks/254](254-detour-cycle-fatal-detector.md) (sheet для fatal-циклов), [tasks/384](384-fakeip-resolver-gate-and-lost-running-snapshot.md), [features/076](../features/076%20settings-and-config-lifecycle/spec.md), [features/417](../features/417%20workspaces/spec.md) (где всплыло) |
 
 ## Проблема

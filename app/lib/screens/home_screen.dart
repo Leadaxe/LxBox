@@ -1116,12 +1116,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// Влияет только на ТЕКСТ snackbar'а: сам reload делает `_maybeAutoReload`
   /// после нас. Читается вызывающим (одно чтение storage на пересборку), чтобы
   /// текст и хук судили по одному значению.
+  /// §419 — снек с причиной fatal-сборки. Detour-циклы не дублируем: их
+  /// показывает sheet §254 (вызывающие проверяют `_showDetourCycleSheetIfAny`).
+  void _showRebuildFailed() {
+    if (_subController.lastFatalIssues.whereType<DetourCycle>().isNotEmpty) {
+      return;
+    }
+    final err = _subController.lastError;
+    if (err == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+          getLocalText.s("Config rebuild failed: %s", err.render())),
+      duration: const Duration(seconds: 6),
+    ));
+  }
+
   Future<bool> _rebuildConfig({
     bool silent = false,
     bool autoReload = false,
   }) async {
     final config = await _subController.generateConfig();
-    if (config == null) return false;
+    if (config == null) {
+      // §419 — fatal сборки виден с плашки. Раньше молчали: плашка
+      // «Settings changed» оставалась, тап по ней ничего не показывал.
+      if (mounted && !silent) _showRebuildFailed();
+      return false;
+    }
     if (!mounted) {
       _subController.configDirty = true;
       return false;

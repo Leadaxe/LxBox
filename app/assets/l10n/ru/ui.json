@@ -4921,5 +4921,8 @@
   },
   "Current": {
     "value": "Текущее"
+  },
+  "Config rebuild failed: %s": {
+    "value": "Сборка конфига не удалась: %s"
   }
 }
