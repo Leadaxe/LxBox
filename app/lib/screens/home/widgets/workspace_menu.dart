@@ -6,6 +6,7 @@ import '../../../services/l10n/locale_controller.dart';
 import '../../../services/relative_time.dart';
 import '../../../services/workspaces/workspace_controller.dart';
 import '../../../services/workspaces/workspace_store.dart';
+import '../../workspaces_screen.dart';
 
 /// §417 — кнопка справа от «L×Box»: имя текущего workspace и попап с двумя
 /// разделами — Load (слоты) и Save (Save as…).
@@ -55,6 +56,10 @@ class WorkspaceMenuButton extends StatelessWidget {
         await _load(context, name);
       case _SaveAsAction():
         await _saveAs(context);
+      case _ManageAction():
+        await Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => const WorkspacesScreen(),
+        ));
     }
   }
 
@@ -181,6 +186,10 @@ class _SaveAsAction extends _SheetAction {
   const _SaveAsAction();
 }
 
+class _ManageAction extends _SheetAction {
+  const _ManageAction();
+}
+
 class _WorkspaceSheet extends StatelessWidget {
   const _WorkspaceSheet();
 
@@ -237,6 +246,12 @@ class _WorkspaceSheet extends StatelessWidget {
             leading: const Icon(Icons.save_as_outlined),
             title: Text(getLocalText.s("Save as…")),
             onTap: () => Navigator.pop(context, const _SaveAsAction()),
+          ),
+          const Divider(height: 8),
+          ListTile(
+            leading: const Icon(Icons.tune_outlined),
+            title: Text(getLocalText.s("Manage workspaces…")),
+            onTap: () => Navigator.pop(context, const _ManageAction()),
           ),
           const SizedBox(height: 8),
         ],

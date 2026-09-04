@@ -4906,5 +4906,20 @@
   },
   "The current workspace cannot be deleted": {
     "value": "Текущее рабочее пространство удалить нельзя"
+  },
+  "Manage workspaces…": {
+    "value": "Управление рабочими пространствами…"
+  },
+  "Delete workspace “%s”?": {
+    "value": "Удалить рабочее пространство «%s»?"
+  },
+  "Its saved state will be removed. This cannot be undone.": {
+    "value": "Его сохранённое состояние будет удалено. Отменить это нельзя."
+  },
+  "No workspaces saved yet": {
+    "value": "Сохранённых рабочих пространств пока нет"
+  },
+  "Current": {
+    "value": "Текущее"
   }
 }
