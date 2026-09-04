@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/warp/warp_client.dart' show WarpApi;
 import 'package:lxbox/services/warp/warp_endpoint_picker.dart';
 
 /// §136 — рандом WARP-endpoint из asset (формат ip:port, диапазоны, SNI-пул).
@@ -186,5 +187,17 @@ void main() {
     const allPorts = [443, 500, 1701, 4500, 4443, 8443, 8095];
     expect(allPorts, contains(p.randomMasquePortFor('h3')));
     expect(allPorts, contains(p.randomMasquePortFor('h2')));
+  });
+
+  test('§418 api.hosts из asset: devices первым, legacy запасным; '
+      'зашитый fallback клиента совпадает с asset', () async {
+    final p = await WarpEndpointPicker.load();
+    expect(p.apiHosts, [
+      'https://api.devices.cloudflare.com',
+      'https://api.cloudflareclient.com',
+    ]);
+    // Один список в двух местах намеренно (asset — боевой, const — на случай
+    // битого asset); расхождение = кто-то поправил одно и забыл другое.
+    expect(p.apiHosts, WarpApi.fallbackHosts);
   });
 }

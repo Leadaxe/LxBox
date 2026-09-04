@@ -1,4 +1,10 @@
 {
+  "api": {
+    "hosts": [
+      "https://api.devices.cloudflare.com",
+      "https://api.cloudflareclient.com"
+    ]
+  },
   "wireguard": {
     "v4_cidr": [
       "162.159.192.0/24",

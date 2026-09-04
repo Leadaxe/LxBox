@@ -175,5 +175,36 @@ void main() {
       expect(pool!.hasData, isTrue);
       expect(pool.wgPorts, isEmpty);
     });
+
+    test('§418 api.hosts: порядок сохраняется, хвостовой / и пустые срезаются',
+        () {
+      final pool = ScanPool.fromFullJson({
+        'api': {
+          'hosts': [
+            'https://api.devices.cloudflare.com/',
+            '',
+            ' https://api.cloudflareclient.com ',
+          ],
+        },
+        'wireguard': {
+          'v4_cidr': ['162.159.192.0/24'],
+          'ports': [2408],
+        },
+      });
+      expect(pool!.apiHosts, [
+        'https://api.devices.cloudflare.com',
+        'https://api.cloudflareclient.com',
+      ]);
+    });
+
+    test('§418 api.hosts отсутствует (старый asset/override) → пусто', () {
+      final pool = ScanPool.fromFullJson({
+        'wireguard': {
+          'v4_cidr': ['162.159.192.0/24'],
+          'ports': [2408],
+        },
+      });
+      expect(pool!.apiHosts, isEmpty);
+    });
   });
 }

@@ -112,6 +112,11 @@ class WarpEndpointPicker {
   /// Рекомендуемый MASQUE SNI (ключ `recommended_sni`) — пометка пункта в UI.
   String get recommendedMasqueSni => _scan?.masqueRecommendedSni ?? '';
 
+  /// §418 — хосты API регистрации по порядку предпочтения. Пусто, если asset
+  /// битый/старый — [WarpClient] тогда берёт [WarpApi.fallbackHosts].
+  List<String> get apiHosts =>
+      List.unmodifiable(_scan?.apiHosts ?? const <String>[]);
+
   /// §284 — весь пул (null если asset отсутствует/битый).
   ScanPool? get scan => _scan;
 

@@ -36,6 +36,7 @@ class ScanPool {
     required this.masquePortsH2,
     required this.masqueSniPool,
     this.masqueRecommendedSni = '',
+    this.apiHosts = const [],
   });
 
   // --- WireGuard / AWG ---
@@ -113,6 +114,12 @@ class ScanPool {
   /// как у [wgRecommendedSni] — пометка в UI, без веса в переборе.
   final String masqueRecommendedSni;
 
+  /// §418 — хосты API регистрации (`api.hosts`) по порядку предпочтения:
+  /// первый — дефолт, дальше — запасные на случай сетевой ошибки/таймаута.
+  /// Пусто (старый asset / JSON-override без ключа) → клиент берёт свой
+  /// зашитый список ([WarpApi.fallbackHosts]).
+  final List<String> apiHosts;
+
   /// Пул пригоден, если валиден хотя бы один транспорт. WG требует портов
   /// (иначе пробу не собрать); MASQUE использует свои masque-порты.
   bool get hasData {
@@ -140,6 +147,7 @@ class ScanPool {
     if (json == null) return null;
     final wg = (json['wireguard'] as Map?)?.cast<String, dynamic>() ?? const {};
     final mq = (json['masque'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final api = (json['api'] as Map?)?.cast<String, dynamic>() ?? const {};
 
     List<String> strs(Map m, String k) =>
         (m[k] as List?)?.map((e) => e.toString()).toList() ?? const [];
@@ -172,6 +180,12 @@ class ScanPool {
       masquePortsH2: ints(mq, 'ports_h2'),
       masqueSniPool: strs(mq, 'sni_pool'),
       masqueRecommendedSni: (mq['recommended_sni'] as String?) ?? '',
+      // Пустые/не-строки отбрасываем; хвостовой `/` снимаем — URL клеится
+      // как `$host/$version/reg`.
+      apiHosts: strs(api, 'hosts')
+          .map((h) => h.trim().replaceAll(RegExp(r'/+$'), ''))
+          .where((h) => h.isNotEmpty)
+          .toList(),
     );
     return pool.hasData ? pool : null;
   }
