@@ -1233,6 +1233,30 @@ English.
 
 ---
 
+## Workspaces — named sets of settings
+
+A workspace is a saved copy of everything the app knows: subscriptions with
+their cached node lists, directions, chains, rules, DNS, tunnel apps, the
+operating mode, app settings. Keep a "Home" set and a "Work" set and switch
+between them from the main screen — the button to the right of "L×Box" shows
+the current workspace and opens the menu.
+
+- **Load** — pick a workspace from the list. The current state is saved under
+  its own name first, so nothing is lost; then the chosen one is copied in,
+  the settings are re-read and the config is rebuilt. If the VPN was running,
+  it is stopped for the switch and started again with the new config — expect
+  a few seconds without a tunnel.
+- **Save as…** — save the current state under a new name (or overwrite an
+  existing one). From then on the auto-save on Load goes to that name.
+- **⋮ on a workspace row** — rename or delete. The current workspace cannot
+  be deleted: it is where the auto-save goes.
+
+Until you save anything there is a single workspace called "Default" and
+nothing changes on disk. A workspace stores the settings file, the cached
+subscription bodies and the downloaded rule-set files; the core's own cache is
+rebuilt after a load. Workspaces stay on the device — to move one to another
+phone, load it and use Backup.
+
 ## Backup — moving your settings
 
 Opens from menu → **App Settings → General → Backup & restore**. The screen takes

@@ -7,6 +7,8 @@
     "lib/controllers/home_controller.dart",
     "lib/controllers/home_controller/",
     "lib/controllers/subscription_controller.dart",
-    "lib/screens/home_screen.dart"
+    "lib/screens/home_screen.dart",
+    "lib/services/parser/json_parsers.dart",
+    "lib/services/parser/uri_parsers/wireguard_parser.dart"
   ]
 }

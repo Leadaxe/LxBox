@@ -306,6 +306,21 @@ is known from the check and is substituted into `commit:` verbatim
 (`checkupdates.py`: `if tag: b.commit = tag`). The schema rejects a template with
 `%v`.
 
+### Network requests and the first-run consent
+
+The first-run prompt "Check for updates?" sets `auto_check_updates` (default
+**false**). It gates every background request to the project's own files:
+
+| Request | When | Gated by the flag |
+|---|---|---|
+| GitHub Releases API → `docs/latest.json` fallback | app launch, ≤ once per 24 h | yes (§379) |
+| `app/assets/support.json` — the author's message feed (the same file is bundled into the APK) | home screen with the tunnel up, once per process | yes (§422); without consent the feed comes from the last cached copy, and before that from the bundled one |
+| `app/assets/donate.json` — donation methods (the same file is bundled) | only when the user opens About → Support | no — explicit user action |
+| `public-servers-manifest.json` — community test servers | only when the user opens that screen | no — explicit user action |
+
+So with "Skip" the app makes no request to `raw.githubusercontent.com` on its
+own. This was raised in the fdroiddata review (#61).
+
 ### The price of three ABIs
 
 There is no cache between blocks: each one compiles Go, Chromium and the core

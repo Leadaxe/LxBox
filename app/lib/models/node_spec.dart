@@ -647,7 +647,11 @@ class Awg {
   const Awg(this.fields);
 
   /// key → `int` (числовые jc/jmin/jmax/s1–s4 и одиночные h1–h4) |
-  /// `String` (i1–i5, а также h1–h4-диапазоны `"N-M"` — §112).
+  /// `String` (i1–i5, а также h1–h4-диапазоны `"N-M"` — §112) |
+  /// §421 AWG 3.x: [awg3RangeKeys] → `int` (`N`) | `String` (`"N-M"`),
+  /// [awg3BoolKeys] → `bool` (только `true`; выключенное = ключа нет),
+  /// [headerKey] → `String` (base64 32 байт). Ключи map — JSON-ключи ядра
+  /// (корень endpoint `wireguard`).
   final Map<String, Object> fields;
 
   static const numKeys = <String>{
@@ -658,6 +662,165 @@ class Awg {
   static const strKeys = <String>{
     'i1', 'i2', 'i3', 'i4', 'i5', 'id', 'ip', 'ib',
   };
+
+  // ── §421 — AmneziaWG 3.0/3.1 (SPEC 123 лаунчера, эталон awg3.go) ──────
+  // URI/.conf-параметр = JSON-ключ без подчёркиваний в нижнем регистре
+  // (`content_padding_addition` ↔ `contentpaddingaddition`), как `jc`/`h1`
+  // у AWG2. Эмиттер и парсер ходят парой — схема без emit-ветки молча
+  // урезается на round-trip.
+
+  /// Тайминги/паддинг 3.0: `N` → `int`, `N-M` → `String` (ядро перевыбирает
+  /// значение из диапазона при каждом взводе таймера).
+  static const awg3RangeKeys = <String>{
+    'content_padding_addition',
+    'rekey_after_time',
+    'rekey_timeout',
+    'reject_after_time',
+    'keepalive_timeout',
+    'max_handshake_attempts',
+  };
+
+  /// Булевы 3.1: `on`/`true`/`1` → `true`; `off`/пусто → ключа нет
+  /// (никогда `false` — лишний ключ менял бы identity-хеш узла).
+  static const awg3BoolKeys = <String>{'random_trailers', 'disable_cookies'};
+
+  /// Единственное серверное значение AWG3: ключ защиты заголовка (base64
+  /// 32 байт, `awg genkey`), дословно. Валидируется на узел, не на поле
+  /// (`awg3NodeError` в uri_utils): без верного ключа хендшейк невозможен,
+  /// а ядро отвергает конфиг целиком.
+  static const headerKey = 'header_protection_key';
+
+  /// Минимум s1–s4 при заданном [headerKey]: nonce шифра заголовка берётся
+  /// из первых 12 байт паддинга.
+  static const awg3MinPadding = 12;
+
+  /// Ширина диапазона h1–h4, с которой приёмник сервера начинает путать
+  /// data-пакеты с хендшейком при `random_trailers` (docs-lx §2.10).
+  static const awg3WideHeaderRange = 65536;
+
+  /// Все AWG3 JSON-ключи корня endpoint (маркер уровня 3.x).
+  static const awg3JsonKeys = <String>{
+    headerKey, ...awg3RangeKeys, ...awg3BoolKeys,
+  };
+
+  /// JSON-ключ → URI/.conf-параметр.
+  static String awg3Param(String jsonKey) => jsonKey.replaceAll('_', '');
+
+  /// URI/.conf-параметр → JSON-ключ.
+  static final Map<String, String> awg3ParamToJson = {
+    for (final k in awg3JsonKeys) awg3Param(k): k,
+  };
+
+  static final _uintRe = RegExp(r'^\d+$');
+  static const _uint32Max = 0xFFFFFFFF;
+
+  /// Go `strconv.ParseUint(s, 10, 32)`: только цифры, без знака, ≤ 2³²−1.
+  static int? _parseUint32(String s) {
+    if (!_uintRe.hasMatch(s)) return null;
+    final n = int.tryParse(s);
+    return (n == null || n > _uint32Max) ? null : n;
+  }
+
+  /// Значение AWG3-тайминга: `N` → `int`, `N-M` (N ≤ M, оба uint32) →
+  /// нормализованная `String` `"N-M"`, иначе `null`. Границы НЕ свопаются
+  /// (в отличие от h1–h4, [_parseHeader]): тайминги клиентские, ядро живёт
+  /// на дефолтах, а перевёрнутый диапазон — опечатка, которую человек должен
+  /// увидеть (SPEC 123 §2). Эталон Go `parseAWG3Range`.
+  static Object? parseAwg3Range(String raw) {
+    final v = raw.trim();
+    if (v.isEmpty) return null;
+    final n = _parseUint32(v);
+    if (n != null) return n;
+    final dash = v.indexOf('-');
+    if (dash < 0) return null;
+    final lo = _parseUint32(v.substring(0, dash).trim());
+    final hi = _parseUint32(v.substring(dash + 1).trim());
+    if (lo == null || hi == null || hi < lo) return null;
+    return '$lo-$hi';
+  }
+
+  /// Булево AWG3: `true` — включено; `false` — выключено/пусто (ключ не
+  /// пишется); `null` — мусор (поле снимается с `awg3_field_invalid`).
+  /// Эталон Go `parseAWG3Bool`.
+  static bool? parseAwg3Bool(String raw) {
+    switch (raw.trim().toLowerCase()) {
+      case 'on':
+      case 'true':
+      case '1':
+        return true;
+      case '':
+      case 'off':
+      case 'false':
+      case '0':
+        return false;
+      default:
+        return null;
+    }
+  }
+
+  /// Маркер AWG3 в query (до сборки узла — им решается политика MTU):
+  /// любой непустой AWG3-параметр (даже невалидный) или диапазонный
+  /// `keepalive` (`25-35`). Эталон Go `hasAWG3Params`.
+  static bool hasAwg3Params(Map<String, String> q) {
+    for (final p in awg3ParamToJson.keys) {
+      if ((q[p] ?? '').trim().isNotEmpty) return true;
+    }
+    return (q['keepalive'] ?? '').contains('-');
+  }
+
+  /// Маркер AWG3 в endpoint-JSON: любой AWG3-ключ корня с non-null
+  /// значением или строковый диапазон `persistent_keepalive_interval` у
+  /// любого пира. Эталон Go `HasAWG3Fields`.
+  static bool hasAwg3Json(Map<String, dynamic> m) {
+    if (awg3JsonKeys.any((k) => m[k] != null)) return true;
+    final peers = m['peers'];
+    if (peers is List) {
+      for (final p in peers) {
+        if (p is Map) {
+          final ka = p['persistent_keepalive_interval'];
+          if (ka is String && ka.contains('-')) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// Есть ли в полях хоть один AWG3-ключ.
+  bool get hasAwg3 => awg3JsonKeys.any(fields.containsKey);
+
+  /// Задан ли ключ защиты заголовка (непустая строка).
+  bool get hasHeaderKey =>
+      (fields[headerKey] is String) && (fields[headerKey] as String).isNotEmpty;
+
+  /// `random_trailers` вместе с ШИРОКИМ диапазоном h1–h4 (≥ 65536): ничего
+  /// не снимается, только info-код `awg3_random_trailers_wide_headers`.
+  /// Эталон Go `awg3RandomTrailersWithWideHeaders`.
+  bool get randomTrailersWithWideHeaders {
+    if (fields['random_trailers'] != true) return false;
+    for (final k in headerKeys) {
+      final v = fields[k];
+      if (v is! String) continue;
+      final dash = v.indexOf('-');
+      if (dash < 0) continue;
+      final lo = int.tryParse(v.substring(0, dash));
+      final hi = int.tryParse(v.substring(dash + 1));
+      if (lo == null || hi == null) continue;
+      if (hi >= lo && hi - lo >= awg3WideHeaderRange) return true;
+    }
+    return false;
+  }
+
+  /// Первое из s1–s4, что меньше [awg3MinPadding] (отсутствие = 0), когда
+  /// задан [headerKey]; `null` — всё в порядке или ключа нет.
+  String? get paddingTooShortField {
+    if (!hasHeaderKey) return null;
+    for (final k in const ['s1', 's2', 's3', 's4']) {
+      final v = fields[k];
+      final n = v is int ? v : 0;
+      if (n < awg3MinPadding) return k;
+    }
+    return null;
+  }
 
   /// Явные CPS-теги i1–i5 (без masquerade-сахара). Эталон Go
   /// `awgStringFields` — ядро отвергает id/ip/ib одновременно с явным i1
@@ -702,11 +865,41 @@ class Awg {
   /// Только magic-headers: битые jc/jmin/jmax/s1–s4 Go роняет молча (эталон
   /// `applyAWGFields`, node_parser_wireguard.go) — тихий дефолт там не ломает
   /// handshake, а у заголовка ломает.
+  ///
+  /// §421 — [badAwg3]: пары (параметр, сырое значение) для AWG3-таймингов и
+  /// булевых с мусором/перевёрнутым диапазоном — поле снято, узел живёт
+  /// (`awg3_field_invalid`). Ключ защиты заголовка кладётся как есть — его
+  /// валидирует `awg3NodeError` (на узел, не на поле). Вызывающий обязан
+  /// подать `headerprotectionkey` с сохранённым `+` (queryParamPreservePlus):
+  /// `Uri.queryParameters` превращает `+` base64 в пробел.
   static Awg? fromQuery(
     Map<String, String> q, {
     List<(String, String)>? badHeaders,
+    List<(String, String)>? badAwg3,
   }) {
     final f = <String, Object>{};
+    final hk = (q[awg3Param(headerKey)] ?? '').trim();
+    if (hk.isNotEmpty) f[headerKey] = hk;
+    for (final k in awg3RangeKeys) {
+      final raw = (q[awg3Param(k)] ?? '').trim();
+      if (raw.isEmpty) continue;
+      final v = parseAwg3Range(raw);
+      if (v == null) {
+        badAwg3?.add((awg3Param(k), raw));
+        continue;
+      }
+      f[k] = v;
+    }
+    for (final k in awg3BoolKeys) {
+      final raw = (q[awg3Param(k)] ?? '').trim();
+      if (raw.isEmpty) continue;
+      final v = parseAwg3Bool(raw);
+      if (v == null) {
+        badAwg3?.add((awg3Param(k), raw));
+        continue;
+      }
+      if (v) f[k] = true;
+    }
     for (final k in numKeys) {
       final v = q[k];
       if (v == null) continue;
@@ -754,16 +947,37 @@ class Awg {
       final v = m[k];
       if (v is String && v.isNotEmpty) f[k] = v;
     }
+    // §421 — AWG3: тайминги числом или строкой-диапазоном, булевы только
+    // `true`, ключ защиты — непустая строка (валидация — awg3NodeError).
+    final hk = m[headerKey];
+    if (hk is String && hk.trim().isNotEmpty) f[headerKey] = hk.trim();
+    for (final k in awg3RangeKeys) {
+      final v = m[k];
+      if (v is num) {
+        final n = v.toInt();
+        if (n >= 0 && n <= _uint32Max) f[k] = n;
+      } else if (v is String) {
+        final r = parseAwg3Range(v);
+        if (r != null) f[k] = r;
+      }
+    }
+    for (final k in awg3BoolKeys) {
+      if (m[k] == true) f[k] = true;
+    }
     return f.isEmpty ? null : Awg(f);
   }
 
   /// В endpoint-map (корень). `int`→JSON number, `String`→JSON string
-  /// (h-диапазоны эмитятся строкой — ровно контракт ядра lx.6, §112).
+  /// (h-диапазоны эмитятся строкой — ровно контракт ядра lx.6, §112),
+  /// `bool` → `true` (§421; `false` в полях не бывает).
   void writeInto(Map<String, dynamic> m) => m.addAll(fields);
 
   /// В URI query (числа → строка, `i*` как есть; encode делает `buildQuery`).
-  void writeQuery(Map<String, String> q) =>
-      fields.forEach((k, v) => q[k] = v.toString());
+  /// §421 — AWG3-ключи под URI-именами (без `_`), булевы → `on`.
+  void writeQuery(Map<String, String> q) => fields.forEach((k, v) {
+        final key = awg3JsonKeys.contains(k) ? awg3Param(k) : k;
+        q[key] = v is bool ? 'on' : v.toString();
+      });
 }
 
 class WireguardPeer {
@@ -772,7 +986,10 @@ class WireguardPeer {
   final String endpointHost;
   final int endpointPort;
   final List<String> allowedIps;
-  final int? persistentKeepalive;
+
+  /// `int` секунд, либо §421 AWG3-диапазон `"N-M"` (`String`) — ядро
+  /// перевыбирает интервал при каждом взводе таймера. Эмитится как есть.
+  final Object? persistentKeepalive;
 
   /// §025 — Cloudflare WARP `client_id` (3 байта). В sing-box 1.12+ эмитится
   /// per-peer как `reserved: [b0, b1, b2]`. Без него WARP-handshake проходит,

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../../models/node_spec.dart' show Awg;
 import '../../models/node_warning.dart';
 import '../app_log.dart';
 
@@ -274,6 +275,41 @@ String normalizePacketEncoding(
 /// занижение лишь чуть мельчит пакеты, завышение — тихий облом
 /// (handshake есть, данных нет). Явно заниженный MTU уважаем; обычный
 /// WG не трогаем (вызывать только при наличии AWG-полей).
+/// §421 — проверка AWG3 на УЗЕЛ (не на поле): битый ключ защиты заголовка
+/// или слишком короткий паддинг роняют весь конфиг на загрузке ядра, поэтому
+/// узел выбрасывается (та же политика, что у битого private/public key).
+/// Возвращает причину (`Awg3HeaderKeyInvalidWarning` /
+/// `Awg3PaddingTooShortWarning`) или `null`, если всё в порядке. Валидный
+/// ключ нормализуется В МЕСТЕ (url-safe/без паддинга → std base64 — единственная
+/// форма, которую декодирует ядро; иначе одна нода даёт два identity-хеша).
+/// Эталон Go `validateAWG3` (awg3.go).
+NodeWarning? awg3NodeError(Awg awg) {
+  final raw = awg.fields[Awg.headerKey];
+  if (raw is! String || raw.trim().isEmpty) return null;
+  final bytes = _decodeBase64Lenient(raw.trim());
+  if (bytes == null || bytes.length != 32 || bytes.every((b) => b == 0)) {
+    return const Awg3HeaderKeyInvalidWarning();
+  }
+  awg.fields[Awg.headerKey] = base64.encode(bytes);
+  final short = awg.paddingTooShortField;
+  if (short != null) {
+    return Awg3PaddingTooShortWarning(short, Awg.awg3MinPadding);
+  }
+  return null;
+}
+
+/// §421 — `keepalive`/`PersistentKeepalive`: число как раньше, AWG3-диапазон
+/// `N-M` — строкой; мусор → `null` (пропуск, как раньше). Эталон Go:
+/// `strconv.Atoi` → `parseAWG3Range` (node_parser_wireguard.go).
+Object? parseWgKeepalive(String? raw) {
+  final v = (raw ?? '').trim();
+  if (v.isEmpty) return null;
+  final n = int.tryParse(v);
+  if (n != null) return n;
+  final r = Awg.parseAwg3Range(v);
+  return r is String ? r : null;
+}
+
 int awgClampMtu(int? raw, String tag) {
   if (raw == null) return 1280;
   if (raw <= 1280) return raw;
@@ -306,6 +342,29 @@ String encodeUserInfoSlashes(String uri) {
   return uri.substring(0, start) +
       userInfo.replaceAll('/', '%2F') +
       uri.substring(at);
+}
+
+/// §421 — query-параметр с сохранением сырого `+`. `Uri.queryParameters`
+/// декодирует по правилам `application/x-www-form-urlencoded` и превращает
+/// `+` в пробел — для base64-значения (ключ защиты заголовка AWG3, ключи WG)
+/// это «not base64» и потеря узла. Эталон Go `queryParamPreservePlus`
+/// (node_parser_wireguard.go): берём сырой query, ищем ключ, снимаем только
+/// percent-encoding. `null` — параметра нет.
+String? queryParamPreservePlus(Uri u, String key) {
+  final raw = u.query;
+  if (raw.isEmpty) return null;
+  for (final part in raw.split('&')) {
+    final eq = part.indexOf('=');
+    final k = eq < 0 ? part : part.substring(0, eq);
+    if (k != key) continue;
+    final v = eq < 0 ? '' : part.substring(eq + 1);
+    try {
+      return Uri.decodeComponent(v);
+    } catch (_) {
+      return v;
+    }
+  }
+  return null;
 }
 
 /// Case-insensitive lookup query-параметра. В подписках `packetEncoding`

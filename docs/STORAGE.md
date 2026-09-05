@@ -189,30 +189,42 @@ Every path is relative to the **Android internal documents directory** (`getAppl
 
 ```
 getApplicationDocumentsDirectory()/         # Android: Context.getDir("flutter") = app_flutter/
-├── lxbox_settings.json
-├── http_cache/
-│   ├── <sha1(url)>.body
-│   └── <sha1(url)>.headers
-├── rule_sets/
-│   └── <tag>.srs
-├── applog.txt
-└── corelog.txt
+├── lxbox_settings.json                     # [workspace]
+├── rule_sets/                              # [workspace]
+│   ├── <ruleId>.srs
+│   └── <ruleId>.meta.json                  # §366 sidecar
+├── workspaces.json                         # §417 — the workspace manifest: current, slots, pending
+├── workspaces/                             # §417 — saved workspaces, one folder per name
+│   └── <name>/
+│       ├── lxbox_settings.json
+│       ├── rule_sets/
+│       └── sub_cache/
+├── support_state.json                      # [device] §356
+├── applog.txt                              # [device]
+└── corelog.txt                             # [device]
 
 Context.filesDir/                           # native `files/` = Dart getApplicationSupportDirectory();
-├── singbox_config.json                     #   NOT the documents dir above (§414)
-└── cache.db                                # libbox cache_file (basePath = filesDir)
+├── singbox_config.json                     #   NOT the documents dir above (§414); rebuilt after a workspace load
+├── cache.db                                # libbox cache_file (basePath = filesDir); [device], rebuilt by the core
+└── sub_cache/                              # [workspace] HttpCache — the raw subscription bodies (§027/§129)
+    ├── <url.hashCode>
+    └── <url.hashCode>.headers
 
 Android SharedPreferences:
 ├── Flutter prefs                # app_theme_mode, haptic_enabled, …
 └── boxvpn_boot.*                # pre-Flutter boot flags
 ```
 
+`[workspace]` — part of a saved workspace (§417): copied into `workspaces/<name>/` on Save as and back on Load. `[device]` — stays with the device, never copied.
+
 | File / directory | Written by | What is inside | Spec |
 |---|---|---|---|
+| `workspaces.json` | `WorkspaceStore` (Dart) | The workspace manifest: `current` (the name of the workspace on the working paths), `slots[]` (`name`, `saved_at`), `pending` (a journal of an unfinished load — replayed on the next start). Absent until the first Save as. | [§417] |
+| `workspaces/<name>/` | `WorkspaceStore` (Dart) | A saved workspace: a copy of `lxbox_settings.json`, `rule_sets/` and `sub_cache/`. Not `singbox_config.json` (rebuilt after a load) and not `cache.db` (open under a running core; the core rebuilds it). | [§417] |
 | `lxbox_settings.json` | `SettingsStorage` (Dart) | App settings, vars, server lists, custom rules, DNS, ping. **The main subject of this document.** | — |
 | `singbox_config.json` | `ConfigManager` (Kotlin) | The final sing-box JSON fed to libbox. Regenerated on every `buildConfig`. Not part of a backup. Lives in native `Context.filesDir` (`files/`), not in the documents dir — Dart reaches it via `BoxVpnClient.getFilesDir()` (§316/§414). | [§414] |
-| `http_cache/<sha1(url)>.body` + `.headers` | `HttpCache` (Dart) | The raw body and headers of a subscription, for the offline rehydrate at startup. | [§027] |
-| `rule_sets/<tag>.srs` | `RuleSetDownloader` (Dart) | A cache of binary `.srs` rule-set files. | [§011] |
+| `sub_cache/<url.hashCode>` + `.headers` | `HttpCache` (Dart) | The raw body and headers of a subscription, for the offline rehydrate at startup. **The only persisted source of subscription nodes** — `nodes` is not stored, it is re-parsed from here on every launch. Lives in native `files/` (Dart App Support), not in the documents dir. | [§027], [§129] |
+| `rule_sets/<ruleId>.srs` + `.meta.json` | `RuleSetDownloader` (Dart) | A cache of binary `.srs` rule-set files plus the §366 sidecar (`lastUpdated`, `etag`, `lastError`). The config references them by absolute path; the core never downloads them itself. | [§011] |
 | `applog.txt` | `AppLog` (Dart) | The app-side warn/error log, JSON lines, a ring buffer of 200 lines / 64 KB. | [§038], [§043][043-applog] |
 | `corelog.txt` | `AppLog` (Dart) | The sing-box warn/error log. Lines arrive from Kotlin over `EventChannel lxbox/coreLog` (`BoxService.coreLogDrainer`, in `List<String>` batches); `ClashLogPump` (a legacy name — NOT the Clash API, which was removed in §122) receives them and `AppLog.add(source: core)` writes them here through the same ring-buffer mechanism as `applog.txt`. TRACE and DEBUG are filtered out on the native side. 200 lines / 64 KB. | [§043][043-applog] |
 | Android `SharedPreferences` | Kotlin (`BoxApplication`) plus Flutter (`shared_preferences`) | Pre-Flutter boot flags and UI prefs. See the [“SharedPreferences”](#sharedpreferences-android) section below. | — |

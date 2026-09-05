@@ -1,5 +1,6 @@
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
+import '../../app_log.dart';
 import '../uri_utils.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -67,7 +68,8 @@ WireguardSpec? parseWireguardUri(String uri) {
     if (normalized == null) return null;
     psk = normalized;
   }
-  final keepalive = int.tryParse(q['keepalive'] ?? '');
+  // §421 — число как раньше; AWG3-диапазон `25-35` — строкой.
+  final keepalive = parseWgKeepalive(q['keepalive']);
 
   // §025 — WARP client_id: `reserved=b0,b1,b2` или base64 `client_id`.
   final reservedRaw = q['reserved'] ?? q['client_id'] ?? '';
@@ -93,15 +95,44 @@ WireguardSpec? parseWireguardUri(String uri) {
   // SPEC 103 `awg_header_invalid` — битый magic-header снимается, ядро берёт
   // WireGuard-дефолт: handshake уходит, ответа нет (тихо сломанный узел).
   final badHeaders = <(String, String)>[];
-  final awg = Awg.fromQuery(q, badHeaders: badHeaders);
+  final badAwg3 = <(String, String)>[];
+  // §421 — ключ защиты заголовка читаем с сохранением сырого `+`
+  // (Uri.queryParameters превратил бы его в пробел → «not base64» → узел
+  // потерян); эталон Go queryParamPreservePlus.
+  final headerKeyParam = Awg.awg3Param(Awg.headerKey);
+  final headerKeyRaw = queryParamPreservePlus(p, headerKeyParam);
+  final awgQuery = headerKeyRaw == null
+      ? q
+      : <String, String>{...q, headerKeyParam: headerKeyRaw};
+  final awg =
+      Awg.fromQuery(awgQuery, badHeaders: badHeaders, badAwg3: badAwg3);
+  // §421 — узел с битым ключом защиты / коротким паддингом выбрасывается:
+  // ядро отвергло бы конфиг целиком (SPEC 123 §2). Причина — в debug-лог.
+  if (awg != null) {
+    final dropReason = awg3NodeError(awg);
+    if (dropReason != null) {
+      AppLog.I.debug('$tag: ${dropReason.renderEn()}');
+      return null;
+    }
+  }
   final rawMtu = int.tryParse(q['mtu'] ?? '');
-  final mtu = awg != null ? awgClampMtu(rawMtu, tag) : rawMtu;
+  // §421 — AWG3-маркер (любой AWG3-параметр или диапазонный keepalive) сам
+  // делает узел AmneziaWG даже без AWG2-полей, и кламп до 1280 действует так
+  // же: экспорт Amnezia несёт mtu 1376, но у владельца на нём данные не шли,
+  // а на 1280 туннель заработал (решение 2026-09-05, SPEC 123 / Go
+  // hasAWGParams).
+  final isAwg = awg != null || Awg.hasAwg3Params(q);
+  final mtu = isAwg ? awgClampMtu(rawMtu, tag) : rawMtu;
 
   return WireguardSpec(
     id: newUuidV4(),
     warnings: [
       for (final (field, value) in badHeaders)
         AwgHeaderInvalidWarning(field, value),
+      for (final (field, value) in badAwg3)
+        Awg3FieldInvalidWarning(field, value),
+      if (awg != null && awg.randomTrailersWithWideHeaders)
+        const Awg3RandomTrailersWideHeadersWarning(),
     ],
     tag: tag,
     label: label,

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/warp/warp_client.dart' show WarpApi;
 import 'package:lxbox/services/warp/warp_endpoint_picker.dart';
 
 /// §136 — рандом WARP-endpoint из asset (формат ip:port, диапазоны, SNI-пул).
@@ -27,12 +28,11 @@ void main() {
     }
   });
 
-  test('§386 masqueHostsPreset: recommended — явный ключ (домен), без масок',
-      () async {
+  test('§386/§420 masqueHostsPreset: recommended — явный ключ, IP обоих '
+      'транспортов (его же отдаёт регистрация), без масок', () async {
     final p = await WarpEndpointPicker.load();
-    expect(p.masqueHostsPreset, isNotEmpty);
-    expect(
-        p.recommendedMasqueHost, 'consumer-masque.cloudflareclient.com');
+    expect(p.masqueHostsPreset, ['162.159.198.2', '162.159.199.2']);
+    expect(p.recommendedMasqueHost, '162.159.198.2');
     expect(p.masqueHostsPreset, contains(p.recommendedMasqueHost));
     for (final h in p.masqueHostsPreset) {
       expect(h.contains('/'), isFalse, reason: h);
@@ -141,13 +141,25 @@ void main() {
   test('§305 masque-блоки asset = только живые .198/.199', () async {
     final p = await WarpEndpointPicker.load();
     expect(p.masqueV4Cidr, ['162.159.198.0/24', '162.159.199.0/24']);
-    // §305 — h3 живёт только на 4 хостах (device-verified), не по всему блоку.
-    expect(p.scan!.masqueH3V4Cidr, [
-      '162.159.198.1/32',
-      '162.159.198.2/32',
-      '162.159.199.1/32',
-      '162.159.199.2/32',
+    // §305/§420 — h3 живёт только на 4 хостах (device-verified 05.09.2026
+    // живыми туннелями), не по всему блоку: общие .2 + h3-only .1.
+    expect(p.masqueH3Hosts, [
+      '162.159.198.2',
+      '162.159.199.2',
+      '162.159.198.1',
+      '162.159.199.1',
     ]);
+    expect(p.scan!.masqueH3HostsExtra, ['162.159.198.1', '162.159.199.1']);
+    // §420 — по TCP 443 на .1 сидит CDN-edge: из h2-рандома исключены.
+    expect(p.scan!.masqueH2Exclude, ['162.159.198.1', '162.159.199.1']);
+  });
+
+  test('§420 masqueHostsFor: h3 — общие + h3-only; h2 и auto — только общие',
+      () async {
+    final p = await WarpEndpointPicker.load();
+    expect(p.masqueHostsFor('h3'), p.masqueH3Hosts);
+    expect(p.masqueHostsFor('h2'), ['162.159.198.2', '162.159.199.2']);
+    expect(p.masqueHostsFor('auto'), ['162.159.198.2', '162.159.199.2']);
   });
 
   test('§305 masque-порты: все 7 рабочих у ОБОИХ транспортов', () async {
@@ -178,6 +190,9 @@ void main() {
       expect(ipH2!.startsWith('162.159.198.') ||
           ipH2.startsWith('162.159.199.'), isTrue,
           reason: 'h2 IP $ipH2 вне masque-блоков');
+      // §420 — h3-only адреса (.1) из h2-рандома исключены.
+      expect(ipH2, isNot(anyOf('162.159.198.1', '162.159.199.1')),
+          reason: 'h2 IP $ipH2 — h3-only хост');
       h2seen.add(ipH2);
     }
     // h2 действительно варьируется по блоку, а не сидит на 4 адресах.
@@ -186,5 +201,27 @@ void main() {
     const allPorts = [443, 500, 1701, 4500, 4443, 8443, 8095];
     expect(allPorts, contains(p.randomMasquePortFor('h3')));
     expect(allPorts, contains(p.randomMasquePortFor('h2')));
+  });
+
+  test('§418 api.hosts из asset: devices первым, legacy запасным; '
+      'зашитый fallback клиента совпадает с asset', () async {
+    final p = await WarpEndpointPicker.load();
+    expect(p.apiHosts, [
+      'https://api.devices.cloudflare.com',
+      'https://api.cloudflareclient.com',
+    ]);
+    // Один список в двух местах намеренно (asset — боевой, const — на случай
+    // битого asset); расхождение = кто-то поправил одно и забыл другое.
+    expect(p.apiHosts, WarpApi.fallbackHosts);
+  });
+
+  test('05.09.2026: deepseek/mail.ru/max.ru/vk.ru в ОБОИХ SNI-пулах', () async {
+    final p = await WarpEndpointPicker.load();
+    for (final d in ['deepseek.com', 'mail.ru', 'max.ru', 'vk.ru']) {
+      expect(p.sniPool, contains(d));
+      expect(p.masqueSniPool, contains(d));
+    }
+    // Родной SNI официального клиента остаётся первым и рекомендуемым.
+    expect(p.masqueSniPool.first, 'consumer-masque.cloudflareclient.com');
   });
 }

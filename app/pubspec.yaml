@@ -2,7 +2,7 @@ name: lxbox
 description: L×Box — Android VPN client (sing-box / libbox CommandClient).
 publish_to: 'none'
 
-version: 2.22.0+22200500
+version: 2.23.0+22300500
 # ↑ ФИКСИРОВАННЫЙ placeholder. НЕ редактируется вручную и НЕ бампится в git.
 # Реальная версия вычисляется из git-состояния В МОМЕНТ СБОРКИ и переписывает
 # эту строку прямо перед `flutter build` (файл в репо остаётся 0.0.0+1):
@@ -59,7 +59,8 @@ flutter:
   assets:
     - assets/wizard_template.json
     - assets/l10n/ru/ # §285 — русская локализация (ui.json + template.json; английский базовый, в коде)
-    - assets/donate.json # §362 — способы поддержки (донат-попап в About)
+    - assets/donate.json # §362/§423 — способы поддержки: единственный источник, бандлится и раздаётся с GitHub
+    - assets/support.json # §356/§422 — лента сообщений автора: единственный источник, бандлится и раздаётся с GitHub
     - assets/warp_endpoints.json # §136 — WARP endpoint/SNI random pools
     - assets/icons/app_icon.png
     - assets/icons/cloudflare.png # §025 — официальный логотип Cloudflare (Simple Icons, CC0)

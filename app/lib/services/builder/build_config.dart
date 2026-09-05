@@ -556,6 +556,25 @@ Future<BuildResult> buildConfig({
         'missing DNS server "${h.target}" — falling back to DNS routing.');
   }
 
+  // §419 — битые `dns.final` / `route.default_domain_resolver` (сервер
+  // выключенного/удалённого пресета) → дефолт шаблона, var уходит в
+  // generatedVars и персистится контроллером. Иначе каждая сборка — fatal
+  // DanglingDnsServerRef, а автосброс §121 срабатывал только при открытии
+  // экрана DNS Settings: плашка «Settings changed» висела вечно.
+  final healedResolvers = healDanglingDnsResolvers(
+    config,
+    defaults: {
+      for (final name in const ['dns_final', 'dns_default_domain_resolver'])
+        name: byName[name]?.defaultValue ?? '',
+    },
+  );
+  for (final h in healedResolvers) {
+    generatedVars[h.varName] = h.to;
+    emitWarnings.add(
+        '${h.field} reset to "${h.to}": DNS server "${h.from}" is gone '
+        '(its preset was disabled or removed).');
+  }
+
   // §246 hotfix — легаси `strategy` в dns.rules × query_type/ip_version
   // (FakeIP §228, Force IPv4 §253) = fatal у ядра 1.14 на старте. Снимаем
   // strategy, если несовместимая пара присутствует (деградация вместо

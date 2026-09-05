@@ -11,11 +11,13 @@ import 'settings_storage.dart';
 /// разметку донат-попапа (About): добавить сеть значило править виджет и
 /// выпускать релиз.
 ///
-/// Источник — `docs/donate.json` в репо, раздаётся через
-/// raw.githubusercontent.com (паттерн §356 support.json): адреса правятся без
-/// релиза. Порядок: сеть → кэш последнего удачного ответа
-/// (`donate_cache_json`) → bundled-копия `assets/donate.json` (первый запуск
-/// офлайн). Загрузка ленивая, кэш на процесс.
+/// Источник — `app/assets/donate.json`, единственный (§423, как лента §422):
+/// он бандлится в APK и он же раздаётся через raw.githubusercontent.com —
+/// адреса правятся без релиза. Порядок: сеть → кэш последнего удачного
+/// ответа (`donate_cache_json`) → bundled-копия (первый запуск офлайн).
+/// Загрузка ленивая, кэш на процесс. Гейта `auto_check_updates` здесь нет:
+/// запрос идёт только по явному действию пользователя (About → Support),
+/// фоновых обращений нет.
 @immutable
 class DonateMethod {
   const DonateMethod({
@@ -75,7 +77,7 @@ class DonateMethods {
   static const _url = String.fromEnvironment(
     'LXBOX_DONATE_URL',
     defaultValue:
-        'https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/donate.json',
+        'https://raw.githubusercontent.com/Leadaxe/LxBox/main/app/assets/donate.json',
   );
   static const _httpTimeout = Duration(seconds: 10);
   static const _cacheKey = 'donate_cache_json';

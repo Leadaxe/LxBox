@@ -60,7 +60,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 Пункт **Get WARP** на экране серверов → регистрируется туннель к Cloudflare и добавляется как узел. Без копипасты конфигов с чужих сайтов-генераторов.
 
 - **Транспорт**: **WireGuard** (по умолчанию) или **MASQUE** (CONNECT-IP поверх QUIC/HTTP-3, fallback HTTP/2 — часто выходит с заграничного IP и выглядит для DPI как обычный HTTPS). Для MASQUE выбираются h3/h2, SNI, idle/keep-alive.
-- **Регистрация на устройстве**: приватный ключ генерится на телефоне и не покидает его — в Cloudflare (`api.cloudflareclient.com`) уходит только публичный (WireGuard — X25519, MASQUE — ECDSA P-256). Чужие воркеры-генераторы не используются: они отдают приватник, сгенерированный на их сервере.
+- **Регистрация на устройстве**: приватный ключ генерится на телефоне и не покидает его — в Cloudflare (`api.devices.cloudflare.com`; запасной хост `api.cloudflareclient.com`, если первый недоступен — оба перечислены в asset `warp_endpoints.json`) уходит только публичный (WireGuard — X25519, MASQUE — ECDSA P-256). Чужие воркеры-генераторы не используются: они отдают приватник, сгенерированный на их сервере.
 - **Add Amnezia obfuscation** (транспорт WireGuard): маскирует WARP-handshake от DPI junk-трафиком, имитирующим QUIC-Initial (по умолчанию) или SIP; SNI, level и Jc/Jmin/Jmax — под *Advanced*. Включайте, когда чистый WARP режут или троттлят.
 - **Persistent keepalive** (§304) — поле в *Advanced* (по умолчанию 25 с): без него оператор закрывает UDP-маппинг NAT при простое, и узел молча отваливается.
 - **Свой endpoint** — ручной `IP:port` под *Advanced*; у MASQUE — выбор порта из проверенных рабочих (§305).
