@@ -448,7 +448,7 @@ GET|PUT /settings/enabled_groups               body {"groups":["tag",...]} (conf
 GET|PUT /settings/vpn_mode                     body partial {mode,proxy_protocol,proxy_port,proxy_listen,proxy_auth,proxy_user,proxy_pass} (?rebuild)
 GET|PUT /settings/ping_options                 URLTest defaults. body partial {url?,timeout_ms?,groups?} (groups = per-group overrides map)
 GET|PUT|DELETE /settings/ping_options/groups/{tag}  Per-group URLTest override. PUT body {url?,timeout_ms?} (≥1 required); DELETE clears
-GET|PUT /settings/tun_apps                     Per-app tunnel list. body {"mode":"off|allow|deny","packages":["pkg",...]} (config-significant, ?rebuild)
+GET|PUT /settings/tun_apps                     Per-app tunnel list. body {"mode":"off|allow|deny|direct","packages":["pkg",...]} (config-significant, ?rebuild)
 PUT    /settings/vars/{key}                    body {"value":"..."}; blocklist: debug_token/debug_enabled/debug_port
 DELETE /settings/vars/{key}                    Delete var
 PUT    /settings/dns_options/servers           body {"servers":[...]}
@@ -682,7 +682,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET|PUT', 'path': '/settings/vpn_mode', 'body': 'partial {mode,proxy_protocol,proxy_port,proxy_listen,proxy_auth,proxy_user,proxy_pass}', 'description': 'VPN/proxy mode (config-significant, ?rebuild)'},
     {'method': 'GET|PUT', 'path': '/settings/ping_options', 'body': 'partial {url?,timeout_ms?,groups?}', 'description': 'URLTest defaults (groups = per-group overrides map)'},
     {'method': 'GET|PUT|DELETE', 'path': '/settings/ping_options/groups/{tag}', 'body': '{url?,timeout_ms?} (PUT, ≥1 required)', 'description': 'Per-group URLTest override; DELETE clears it'},
-    {'method': 'GET|PUT', 'path': '/settings/tun_apps', 'body': '{"mode":"off|allow|deny","packages":["pkg",...]}', 'description': 'Per-app tunnel list (config-significant, ?rebuild)'},
+    {'method': 'GET|PUT', 'path': '/settings/tun_apps', 'body': '{"mode":"off|allow|deny|direct","packages":["pkg",...]}', 'description': 'Per-app tunnel list (config-significant, ?rebuild)'},
     {'method': 'PUT', 'path': '/settings/vars/{key}', 'body': '{"value":"..."}', 'description': 'Set var (blocklist: debug_token/debug_enabled/debug_port)'},
     {'method': 'DELETE', 'path': '/settings/vars/{key}', 'description': 'Delete var'},
     {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[...]}', 'description': 'Set DNS servers list'},

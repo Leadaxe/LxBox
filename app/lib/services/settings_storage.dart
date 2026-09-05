@@ -897,22 +897,22 @@ class SettingsStorage {
       _replaceRaw(snapshot, merge: merge);
 
   // ---------------------------------------------------------------------------
-  // Tunnel apps — OS-level split-tunneling (§046)
+  // Tunnel apps — OS-level split-tunneling and direct routing inside VPN (§046)
   //
-  // Storage shape: `{mode: "off"|"allow"|"deny", packages: [pkg, ...]}`.
+  // Storage shape: `{mode: "off"|"allow"|"deny"|"direct", packages: [pkg, ...]}`.
   // Builder transforms into `inbound[tun].include_package` (mode=allow) или
   // `exclude_package` (mode=deny); mode=off → ничего не пишем (sing-box default
   // = всё через tun).
+  // mode=direct → все apps остаются внутри tun, package_name → direct-out
+  // после обработки DNS и перед пользовательскими маршрутами (lockdown).
   //
-  // Native слой (BoxVpnService.kt:557-560) уже умеет — просто читает
+  // Native слой (BoxVpnService.openTun) уже умеет — просто читает
   // `options.includePackage`/`excludePackage` от libbox и зовёт
   // `VpnService.Builder.addAllowedApplication`/`addDisallowedApplication`.
   // applies на `builder.establish()` — на изменение нужен FULL VPN restart.
   // ---------------------------------------------------------------------------
 
   static const _tunAppsModeOff = 'off';
-  static const _tunAppsModeAllow = 'allow';
-  static const _tunAppsModeDeny = 'deny';
 
   /// Возвращает текущий tun-apps config. Default: `{mode: 'off', packages: []}`
   /// — backward-compat для existing юзеров.

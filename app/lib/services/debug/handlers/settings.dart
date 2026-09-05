@@ -669,7 +669,7 @@ Future<DebugResponse> _getTunApps() async {
 }
 
 /// `PUT /settings/tun_apps` — overwrite shape целиком.
-/// Body: `{"mode":"off|allow|deny", "packages":["pkg1","pkg2",...]}`.
+/// Body: `{"mode":"off|allow|deny|direct", "packages":["pkg1","pkg2",...]}`.
 /// Дубликаты в `packages` schлопываются (idempotent). Невалидные fields → 400.
 ///
 /// Изменения требуют **full VPN restart** для apply (Android tun creates только
@@ -681,7 +681,7 @@ Future<DebugResponse> _putTunApps(DebugRequest req, DebugContext ctx) async {
   final mode = body['mode'];
   // §293 — валидатор на модели (единый источник с storage-сеттером).
   if (mode is! String || !TunAppsConfig.isValidMode(mode)) {
-    throw const BadRequest('field "mode" must be one of: off|allow|deny');
+    throw const BadRequest('field "mode" must be one of: off|allow|deny|direct');
   }
 
   final pkgsRaw = body['packages'];

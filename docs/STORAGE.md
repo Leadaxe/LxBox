@@ -779,11 +779,11 @@ part of this: they are an app setting, and their home in the portable format is 
 
 ## `tun_apps` — [§046]
 
-OS-level split tunneling: which applications go through the VPN tun and which go direct over cellular or Wi-Fi (bypassing sing-box entirely).
+App selection for OS-level split tunneling or direct routing through the core.
 
 ```jsonc
 {
-  "mode": "off" | "allow" | "deny",
+  "mode": "off" | "allow" | "deny" | "direct",
   "packages": ["com.example.app", "ru.tinkoff.investing", ...]
 }
 ```
@@ -793,6 +793,21 @@ OS-level split tunneling: which applications go through the VPN tun and which go
 | `"off"` | (nothing is written) | Every app goes through the tun (the Android default) |
 | `"allow"` | `"include_package": [...packages]` | Only the listed apps use the tun. The rest go direct |
 | `"deny"`  | `"exclude_package": [...packages]` | Everything EXCEPT the listed apps uses the tun |
+| `"direct"` | `include_package` / `exclude_package` removed | All apps enter tun; listed packages use `direct-out` inside the core |
+
+**Direct (lockdown):** adds a `package_name` → `direct-out` rule scoped to
+the tun inbound. It follows initial packet processing (`sniff`, `hijack-dns`,
+`resolve`, `route-options`) and precedes other routes. DNS, including FakeIP,
+continues to follow the existing DNS settings; this mode does not provide a
+separate direct DNS resolver. It enables `find_process` and
+`auto_detect_interface` for package lookup and native `protect()` calls on
+outgoing sockets. Without tun (Proxy mode), the setting has no effect.
+
+Apps stay inside the VPN and can connect with Android **Block connections
+without VPN** enabled while the VPN is running. When the VPN stops, lockdown
+blocks these apps too. Android/Shelter profile boundaries remain unchanged.
+The package list is shared across modes and preserved when switching modes.
+Restart the VPN after changing modes.
 
 **The native layer** (`BoxVpnService.kt`) reads `options.includePackage` / `excludePackage` from libbox and calls `VpnService.Builder.addAllowedApplication` / `addDisallowedApplication`.
 

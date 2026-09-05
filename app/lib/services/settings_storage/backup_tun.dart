@@ -115,10 +115,8 @@ Future<TunAppsConfig> _getTunApps() async {
             ?.whereType<String>()
             .toList() ??
         const <String>[];
-    if (mode == SettingsStorage._tunAppsModeAllow ||
-        mode == SettingsStorage._tunAppsModeDeny ||
-        mode == SettingsStorage._tunAppsModeOff) {
-      return TunAppsConfig(mode: mode as String, packages: packages);
+    if (mode is String && TunAppsConfig.isValidMode(mode)) {
+      return TunAppsConfig(mode: mode, packages: packages);
     }
   }
   return const TunAppsConfig(
@@ -129,7 +127,7 @@ Future<TunAppsConfig> _getTunApps() async {
 
 Future<void> _setTunApps(TunAppsConfig cfg, {bool flush = true}) async {
   if (!TunAppsConfig.isValidMode(cfg.mode)) {
-    throw ArgumentError('tun_apps.mode must be off|allow|deny: ${cfg.mode}');
+    throw ArgumentError('tun_apps.mode must be off|allow|deny|direct: ${cfg.mode}');
   }
   final dedup = <String>{};
   for (final p in cfg.packages) {
@@ -151,18 +149,19 @@ Future<void> _setTunApps(TunAppsConfig cfg, {bool flush = true}) async {
 class TunAppsConfig {
   const TunAppsConfig({required this.mode, required this.packages});
 
-  /// `"off"` | `"allow"` | `"deny"`.
+  /// `"off"` | `"allow"` | `"deny"` | `"direct"` (direct routing inside the VPN).
   final String mode;
   final List<String> packages;
 
   /// §293 — валиден ли `mode` (единый источник для write-путей: storage-сеттер
   /// и Debug-handler; был инлайн-список в обоих).
   static bool isValidMode(String mode) =>
-      mode == 'off' || mode == 'allow' || mode == 'deny';
+      mode == 'off' || mode == 'allow' || mode == 'deny' || mode == 'direct';
 
   bool get isOff => mode == 'off';
   bool get isAllow => mode == 'allow';
   bool get isDeny => mode == 'deny';
+  bool get isDirect => mode == 'direct';
 
   TunAppsConfig copyWith({String? mode, List<String>? packages}) =>
       TunAppsConfig(

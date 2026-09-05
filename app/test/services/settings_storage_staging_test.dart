@@ -112,6 +112,30 @@ void main() {
       expect(cfg.mode, 'allow');
       expect(cfg.packages, ['com.a']);
     });
+
+    test('deny → direct preserves packages, staging and mode after restart',
+        () async {
+      await SettingsStorage.setTunApps(
+        const TunAppsConfig(mode: 'deny', packages: ['com.b', 'com.a']),
+      );
+      final previous = await SettingsStorage.getTunApps();
+      await SettingsStorage.setTunApps(
+        previous.copyWith(mode: 'direct'),
+        flush: false,
+      );
+      final staged = await SettingsStorage.getTunApps();
+      expect(staged.isDirect, isTrue);
+      expect(staged.packages, previous.packages);
+      expect((await readDisk())['tun_apps']['mode'], 'deny');
+
+      await SettingsStorage.flushToDisk();
+      SettingsStorage.resetCacheForTesting();
+      final restored = await SettingsStorage.getTunApps();
+      expect(restored.toJson(), staged.toJson());
+
+      await SettingsStorage.setTunApps(restored.copyWith(mode: 'off'));
+      expect((await SettingsStorage.getTunApps()).packages, previous.packages);
+    });
   });
 
   group('§159 — DENY-очистка в _save() удалена', () {

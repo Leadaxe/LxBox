@@ -884,8 +884,8 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/ping_options/groups/{tag}` | GET | override этой группы или **404** если override нет. |
 | `/settings/ping_options/groups/{tag}` | PUT | body `{url?, timeout_ms?}` — минимум одно поле (read-modify-write). → `{ok, action:"settings-ping-options-group-put", group, ...}`. |
 | `/settings/ping_options/groups/{tag}` | DELETE | снять override группы. → `{ok, action:"settings-ping-options-group-delete", group}`. |
-| `/settings/tun_apps` | GET | →`{"mode":"off\|allow\|deny", "packages":[...]}` — §046 OS-level split-tunneling. |
-| `/settings/tun_apps` | PUT | `{"mode":"off\|allow\|deny", "packages":["pkg1","pkg2",...]}` — §046. Replace целиком. Дубликаты в `packages` schлопываются (idempotent). Пустые строки skip'аются. **§293:** `mode` вне `off\|allow\|deny` → 400 (валидатор `TunAppsConfig.isValidMode`); невалидный package-name → 400. Response: `{ok, action, mode, count, rebuild_needed: true, ...rebuild-extras}`. **Требует full VPN restart** для apply (Android tun creates только на `establish()`). |
+| `/settings/tun_apps` | GET | →`{"mode":"off\|allow\|deny\|direct", "packages":[...]}` — §046 per-app tunnel and direct routing settings. |
+| `/settings/tun_apps` | PUT | `{"mode":"off\|allow\|deny\|direct", "packages":["pkg1","pkg2",...]}` — replaces the whole object. Packages are deduplicated; empty strings are skipped. Invalid mode or package name → 400. `direct` keeps apps inside tun and routes selected packages through `direct-out` for Android lockdown. Response: `{ok, action, mode, count, rebuild_needed: true, ...rebuild-extras}`. **Restart the VPN** to apply OS tunnel changes. |
 | `/settings/vpn/allow_bypass` | GET | →`{"enabled": bool}` — §052/§049 F15. |
 | `/settings/vpn/allow_bypass` | PUT | `{"enabled": true\|false}` — §052/§049 F15. Native (`VpnService.Builder.allowBypass()`). Применяется при следующем `establish()` (start или reload VPN). Default false (strict tunnel). |
 | `/settings/vpn/keep_on_exit` | GET | →`{"enabled": bool}` — §052. VPN остаётся активным когда app закрывается. |

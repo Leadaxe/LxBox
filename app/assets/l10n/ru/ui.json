@@ -719,6 +719,9 @@
   "All": {
     "value": "Все"
   },
+  "All apps enter the tunnel and follow your routing rules (default).": {
+    "value": "Все приложения попадают в туннель и следуют вашим правилам маршрутизации (по умолчанию)."
+  },
   "All directions": {
     "value": "Все Направления"
   },
@@ -748,6 +751,9 @@
   },
   "Allow-list": {
     "value": "Белый список"
+  },
+  "Allow-list and Deny-list exclude apps from the tunnel. Android lockdown blocks excluded apps. Direct (lockdown) keeps all apps in the tunnel and connects listed apps directly through LxBox.": {
+    "value": "Списки разрешённых и исключённых оставляют часть приложений вне туннеля. Android lockdown блокирует такие приложения. Режим «Напрямую (lockdown)» сохраняет все приложения в туннеле и подключает приложения из списка напрямую через LxBox."
   },
   "Allowed — foreground service shows VPN status": {
     "value": "Разрешены — foreground-сервис показывает статус VPN"
@@ -1029,6 +1035,9 @@
   },
   "Choose a file first": {
     "value": "Сначала выберите файл"
+  },
+  "Choose how the listed apps use the VPN.\n\n• Off — all apps use the tunnel and your routing rules.\n• Allow-list — only listed apps enter the tunnel.\n• Deny-list — listed apps bypass the tunnel.\n• Direct (lockdown) — all apps enter the tunnel; listed apps connect directly through LxBox before other routing rules. DNS follows your DNS settings.\n\nAndroid blocks apps outside the tunnel when \"Block connections without VPN\" is enabled. Use Direct (lockdown) to keep selected apps connected while the VPN is running. These apps still see an active VPN; when it stops, Android blocks their connections too.\n\nThis applies to the Android profile running LxBox. Restart the VPN after switching modes.": {
+    "value": "Выберите, как приложения из списка используют VPN.\n\n• Выкл. — все приложения используют туннель и ваши правила маршрутизации.\n• Список разрешённых — только приложения из списка попадают в туннель.\n• Список исключённых — приложения из списка обходят туннель.\n• Напрямую (lockdown) — все приложения попадают в туннель; приложения из списка подключаются напрямую через LxBox до остальных правил маршрутизации. DNS работает по вашим настройкам DNS.\n\nAndroid блокирует приложения вне туннеля при включённой настройке «Блокировать соединения без VPN». Используйте режим «Напрямую (lockdown)», чтобы выбранные приложения сохраняли доступ к сети при работающем VPN. Эти приложения по-прежнему видят активный VPN; при его остановке Android также блокирует их соединения.\n\nРежим действует в профиле Android, в котором запущен LxBox. После смены режима перезапустите VPN."
   },
   "Choose…": {
     "value": "Выбрать…"
@@ -1540,6 +1549,9 @@
   },
   "Diagnostics settings": {
     "value": "Настройки диагностики"
+  },
+  "Direct (lockdown)": {
+    "value": "Напрямую (lockdown)"
   },
   "Direct (no VPN)": {
     "value": "Напрямую (без VPN)"
@@ -2922,6 +2934,9 @@
   "Online URL": {
     "value": "Онлайн-URL"
   },
+  "Only selected apps enter the tunnel. Android lockdown blocks all other apps.": {
+    "value": "Только выбранные приложения попадают в туннель. Android lockdown блокирует все остальные приложения."
+  },
   "Only single servers can be moved": {
     "value": "Переносить можно только одиночные серверы"
   },
@@ -3691,6 +3706,12 @@
   "Select server": {
     "value": "Показать выбранный сервер"
   },
+  "Selected apps bypass the tunnel. Android lockdown blocks these apps; use Direct (lockdown) to keep them connected.": {
+    "value": "Выбранные приложения обходят туннель. Android lockdown блокирует их; для доступа к сети используйте режим «Напрямую (lockdown)»."
+  },
+  "Selected apps connect directly through LxBox, even with Android lockdown enabled. Other apps follow routing rules. DNS follows your DNS settings. Requires a running VPN.": {
+    "value": "Выбранные приложения подключаются напрямую через LxBox, даже при включённом Android lockdown. Остальные приложения следуют правилам маршрутизации. DNS работает по вашим настройкам DNS. Требуется работающий VPN."
+  },
   "Selection mode": "Режим выбора",
   "Selector \"%1$s\" default \"%2$s\" is not in the options list.": {
     "value": "У селектора «%1$s» значение по умолчанию «%2$s» отсутствует в списке вариантов."
@@ -4181,9 +4202,6 @@
   "This frees %s. Memory profiles cannot be recovered afterwards.": {
     "value": "Освободится %s. Восстановить профили памяти после удаления нельзя."
   },
-  "This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges require a full VPN restart to apply (Android creates the tun interface only at start).": {
-    "value": "Это разделение туннеля на уровне ОС: оно определяет, какие приложения вообще видят VPN-туннель — пакеты исключённых приложений идут напрямую через мобильную сеть или Wi-Fi, минуя sing-box.\n\n• Выключено — все приложения используют VPN (по умолчанию)\n• Белый список — через VPN идут ТОЛЬКО перечисленные приложения, остальные в обход\n• Чёрный список — перечисленные приложения идут в обход VPN, остальные через туннель\n\nВажно: приложения из белого списка по-прежнему проходят через обычные правила маршрутизации. Приложения в обход туннеля для sing-box невидимы — правила с package_name их не поймают.\n\nИзменения требуют полного перезапуска VPN (Android создаёт tun-интерфейс только при старте)."
-  },
   "This is an auto-select node — it has no connection of its own. Open a member to diagnose it.": {
     "value": "Это узел автовыбора — своего соединения у него нет. Откройте участника, чтобы проверить его."
   },
@@ -4271,8 +4289,8 @@
   "Tunnel apps": {
     "value": "Приложения туннеля"
   },
-  "Tunnel apps — OS-level split": {
-    "value": "Приложения туннеля — разделение на уровне ОС"
+  "Tunnel apps — routing modes": {
+    "value": "Приложения туннеля — режимы маршрутизации"
   },
   "Tunnel is always active. Best reliability — pushes and long-lived sockets survive. Higher battery use.": {
     "value": "Туннель активен всегда. Максимальная надёжность — push-уведомления и долгоживущие соединения сохраняются. Расход батареи выше."

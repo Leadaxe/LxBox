@@ -1,8 +1,10 @@
-// §046 — Tunnel apps tab. OS-level split-tunneling control.
+// §046 — Tunnel apps: OS-level split and direct routing inside the VPN.
 //
 // UI для `tun_apps` storage shape (mode + packages list).
-// Builder applyTunPackages() трансформирует это в config.tun.{include,exclude}_package.
-// Native слой BoxVpnService.kt:557-560 далее пробрасывает в VpnService.Builder.
+// Builder applyTunPackages(): allow/deny → tun.{include,exclude}_package;
+// direct → правило package_name внутри tun (совместимо с Android lockdown).
+// Native слой BoxVpnService.openTun пробрасывает include/exclude в
+// VpnService.Builder.addAllowedApplication/addDisallowedApplication.
 //
 // Изменения требуют **full VPN restart** (не light reload) — addAllowedApplication
 // applies только на builder.establish(). Banner показывается при tunnel up.
@@ -151,9 +153,9 @@ class _TunAppsTabState extends State<TunAppsTab>
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(getLocalText.s("Tunnel apps — OS-level split")),
+        title: Text(getLocalText.s("Tunnel apps — routing modes")),
         content: SingleChildScrollView(
-          child: Text(getLocalText.s("This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges require a full VPN restart to apply (Android creates the tun interface only at start).")),
+          child: Text(getLocalText.s("Choose how the listed apps use the VPN.\n\n• Off — all apps use the tunnel and your routing rules.\n• Allow-list — only listed apps enter the tunnel.\n• Deny-list — listed apps bypass the tunnel.\n• Direct (lockdown) — all apps enter the tunnel; listed apps connect directly through LxBox before other routing rules. DNS follows your DNS settings.\n\nAndroid blocks apps outside the tunnel when \"Block connections without VPN\" is enabled. Use Direct (lockdown) to keep selected apps connected while the VPN is running. These apps still see an active VPN; when it stops, Android blocks their connections too.\n\nThis applies to the Android profile running LxBox. Restart the VPN after switching modes.")),
         ),
         actions: [
           TextButton(
@@ -193,11 +195,7 @@ class _TunAppsTabState extends State<TunAppsTab>
             Text(getLocalText.s("Mode"), style: tt.titleMedium),
             const SizedBox(width: 4),
             Tooltip(
-              message:
-                  'OS-level split-tunneling. Apps in Allow-list go through tun '
-                  '— routing rules apply normally. Apps outside Allow-list (or '
-                  'in Deny-list) bypass VPN entirely; sing-box doesn\'t see '
-                  'them, custom rules with package_name won\'t match.',
+              message: getLocalText.s("Allow-list and Deny-list exclude apps from the tunnel. Android lockdown blocks excluded apps. Direct (lockdown) keeps all apps in the tunnel and connects listed apps directly through LxBox."),
               triggerMode: TooltipTriggerMode.tap,
               child: Icon(
                 Icons.info_outline,
@@ -242,16 +240,22 @@ class _TunAppsTabState extends State<TunAppsTab>
           ],
         ),
         const SizedBox(height: 8),
-        SegmentedButton<String>(
-          segments: [
-            ButtonSegment(value: 'off', label: Text(getLocalText.s("Off"))),
-            ButtonSegment(
-                value: 'allow', label: Text(getLocalText.s("Allow-list"))),
-            ButtonSegment(
-                value: 'deny', label: Text(getLocalText.s("Deny-list"))),
+        DropdownButtonFormField<String>(
+          initialValue: _cfg.mode,
+          isExpanded: true,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+          items: [
+            DropdownMenuItem(value: 'off', child: Text(getLocalText.s("Off"))),
+            DropdownMenuItem(
+                value: 'allow', child: Text(getLocalText.s("Allow-list"))),
+            DropdownMenuItem(
+                value: 'deny', child: Text(getLocalText.s("Deny-list"))),
+            DropdownMenuItem(
+                value: 'direct', child: Text(getLocalText.s("Direct (lockdown)"))),
           ],
-          selected: {_cfg.mode},
-          onSelectionChanged: (s) => _setMode(s.first),
+          onChanged: (mode) {
+            if (mode != null) _setMode(mode);
+          },
         ),
         const SizedBox(height: 8),
         Text(
@@ -359,11 +363,13 @@ class _TunAppsTabState extends State<TunAppsTab>
   String _modeDescription(String mode) {
     switch (mode) {
       case 'allow':
-        return 'Only selected apps go through VPN. Others bypass via cellular/wifi.';
+        return getLocalText.s("Only selected apps enter the tunnel. Android lockdown blocks all other apps.");
       case 'deny':
-        return 'Selected apps bypass VPN. Others go through.';
+        return getLocalText.s("Selected apps bypass the tunnel. Android lockdown blocks these apps; use Direct (lockdown) to keep them connected.");
+      case 'direct':
+        return getLocalText.s("Selected apps connect directly through LxBox, even with Android lockdown enabled. Other apps follow routing rules. DNS follows your DNS settings. Requires a running VPN.");
       default:
-        return 'All apps go through VPN (default).';
+        return getLocalText.s("All apps enter the tunnel and follow your routing rules (default).");
     }
   }
 }

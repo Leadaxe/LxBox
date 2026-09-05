@@ -75,8 +75,9 @@ class BuildSettings {
   /// `core_chain_capability.dart`).
   final String coreVersion;
 
-  /// §046: OS-level split-tunneling apps list. `null` = pipeline возьмёт
-  /// дефолт (mode=off — все apps через tun, sing-box обычное поведение).
+  /// §046: список приложений для OS-level split-tunneling или прямого выхода
+  /// внутри VPN (direct). `null` = pipeline возьмёт дефолт
+  /// (mode=off — все apps через tun, sing-box обычное поведение).
   final TunAppsConfig? tunApps;
 
   /// §119: VPN-mode (proxy/vpn/vpn_proxy). `null` = mode=vpn (текущее
@@ -528,8 +529,10 @@ Future<BuildResult> buildConfig({
   // applyVpnMode удалён. К этому моменту inbounds[] уже финальный: в proxy
   // tun-in физически отсутствует → applyTunPackages (по type=='tun') no-op'ит.
 
-  // §046: OS-level split-tunneling. Должен быть **последним** post-step'ом —
-  // финальный transform tun-inbound, после всего остального.
+  // §046: Tunnel apps. Должен быть **последним** post-step'ом сборки
+  // inbounds, route.rules и DNS — финальный transform tun-inbound.
+  // allow/deny меняют только tun; direct сохраняет начальную обработку DNS
+  // и добавляет package_name → direct-out перед пользовательскими маршрутами.
   if (settings.tunApps != null) {
     applyTunPackages(config, settings.tunApps!);
   }
