@@ -2,7 +2,7 @@
 
 **AmneziaWG 3.0/3.1 arrives.** An Amnezia export with header protection,
 content padding, random trailers and ranged timings now imports as it is and
-connects — with the bundled core updated to `1.14.0-lx.33`. Plus workspaces
+connects — with the bundled core updated to `1.14.0-lx.34`. Plus workspaces
 (named sets of settings you switch from the main screen), Get WARP through a
 host that is reachable from Russia, a MASQUE entry-point list that matches the
 transport, a support feed that stays offline until you allow update checks,
@@ -10,7 +10,7 @@ and the “Settings changed” banner that no longer sticks forever.
 
 **Пришёл AmneziaWG 3.0/3.1.** Экспорт Amnezia с защитой заголовка, паддингом
 содержимого, случайными хвостами и диапазонными таймингами импортируется как
-есть и соединяется — ядро в сборке обновлено до `1.14.0-lx.33`. Плюс
+есть и соединяется — ядро в сборке обновлено до `1.14.0-lx.34`. Плюс
 workspaces (именованные наборы настроек, переключаются с главного экрана),
 Get WARP через хост, доступный из России, список точек входа MASQUE по
 транспорту, support-лента, которая не ходит в сеть без согласия на проверку
@@ -125,13 +125,30 @@ Support reads it only on tap; it never made background requests.
 |---|---|
 | A resolver (`dns.final` / `default_domain_resolver`) pointing at a DNS server of a preset that was later disabled or deleted failed every rebuild on validation: the config was not saved, the banner stayed, a tap on it showed nothing; the auto-reset fired only when DNS Settings was opened | The dangling reference is healed inside the build itself (template default `dns_shield`, the value is written to the settings); if a rebuild still fails, the reason is shown in a snackbar |
 
-## 🧬 Core: `1.14.0-lx.33`
+## 🧬 Core: `1.14.0-lx.34`
 
-`lx.30 → lx.33`. `lx.32` is the first core with the AWG 3.x fields on the
-`wireguard` endpoint; `lx.33` fixes receiving data packets under
-`random_trailers`. A core up to `lx.31` rejects a config with any AWG 3.x key
-as a whole, so the pin and the parser moved in one commit. The Java surface is
-identical to `lx.30` (javap over 253 classes) — no binding changes.
+`lx.30 → lx.34`, two steps in one release.
+
+**`lx.32`/`lx.33` — AmneziaWG 3.x.** `lx.32` is the first core with the AWG 3.x
+fields on the `wireguard` endpoint; `lx.33` fixes receiving data packets under
+`random_trailers`. A core up to `lx.31` rejects a config with any AWG 3.x key as
+a whole, so the pin and the parser moved in one commit.
+
+**`lx.34` — the upstream 1.14.0 stable base** (plus 16 post-release commits).
+Configs and the wire format do not change; what you feel:
+
+- A URL test can no longer hang on a node that accepts the connection and never
+  answers — each probe now runs under its own 15 s deadline.
+- A manual test of a group probes **every** node (upstream `force` semantics)
+  and recurses into nested groups; the periodic ticker keeps the lazy check.
+- Resolver-discovery DNS queries (`_dns.*` SVCB) are answered with an empty
+  NOERROR, so a browser cannot learn an upstream DoH endpoint and go around the
+  tunnel. Inverted DNS rules with address filters from a rule set match again.
+- QUIC throughput on TUIC and naive no longer collapses after an idle period.
+- The system stack keeps a separate TCP NAT port table per address family, and
+  a Wi-Fi ↔ cellular switch no longer blocks the interface monitor.
+
+The Java surface is additive only (javap over 253 classes) — no binding changes.
 
 ## 🧪 Tests
 
@@ -250,13 +267,30 @@ Support читает файл только по тапу, фоновых зап�
 |---|---|
 | Резольвер (`dns.final` / `default_domain_resolver`), указывающий на DNS-сервер пресета, который потом выключили или удалили, ронял каждую пересборку на валидации: конфиг не сохранялся, плашка не снималась, тап по ней ничего не показывал; автосброс срабатывал только при открытии DNS Settings | Битая ссылка лечится в самой сборке (дефолт шаблона `dns_shield`, значение записывается в настройки); если пересборка всё же не удалась — причина показывается снеком |
 
-## 🧬 Ядро: `1.14.0-lx.33`
+## 🧬 Ядро: `1.14.0-lx.34`
 
-`lx.30 → lx.33`. `lx.32` — первое ядро с полями AWG 3.x на endpoint
-`wireguard`; `lx.33` чинит приём data-пакетов при `random_trailers`. Ядро до
-`lx.31` включительно отвергает конфиг с любым AWG3-ключом целиком, поэтому пин
-и парсер поехали одним коммитом. Java-поверхность идентична `lx.30` (javap по
-253 классам) — правок обвязки нет.
+`lx.30 → lx.34`, два шага в одном релизе.
+
+**`lx.32`/`lx.33` — AmneziaWG 3.x.** `lx.32` — первое ядро с полями AWG 3.x на
+endpoint `wireguard`; `lx.33` чинит приём data-пакетов при `random_trailers`.
+Ядро до `lx.31` включительно отвергает конфиг с любым AWG3-ключом целиком,
+поэтому пин и парсер поехали одним коммитом.
+
+**`lx.34` — переход на стабильную базу апстрима 1.14.0** (плюс 16 пострелизных
+коммитов). Конфиги и формат на проводе не меняются; что заметно:
+
+- URL-тест больше не зависает на узле, который принимает соединение и не
+  отвечает, — у каждой пробы свой дедлайн 15 с.
+- Ручной тест группы пробует **все** узлы (семантика `force` апстрима) и
+  заходит во вложенные группы; периодический тикер сохраняет ленивую проверку.
+- DNS-запросы discovery-резолвера (`_dns.*` SVCB) получают пустой NOERROR —
+  браузер не узнаёт внешний DoH-эндпоинт и не уходит мимо туннеля.
+  Инвертированные DNS-правила с адресными фильтрами из rule-set снова матчатся.
+- Скорость QUIC на TUIC и naive не проседает после простоя.
+- У системного стека своя таблица TCP NAT на каждое семейство адресов, а
+  переключение Wi-Fi ↔ сотовая больше не блокирует монитор интерфейсов.
+
+Java-поверхность только аддитивна (javap по 253 классам) — правок обвязки нет.
 
 ## 🧪 Тесты
 
