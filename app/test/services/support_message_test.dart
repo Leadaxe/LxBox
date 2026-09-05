@@ -316,7 +316,7 @@ void main() {
       expect(f2!.messages.single.id, 'net-1');
     });
 
-    test('ни сети, ни кэша → bundled-копия docs/support.json (§422)', () async {
+    test('ни сети, ни кэша → bundled assets/support.json (§422)', () async {
       final svc = SupportMessageService.I;
       svc.httpClientForTesting =
           MockClient((req) async => http.Response('err', 500));

@@ -14,17 +14,17 @@ import 'support_state.dart';
 
 /// §105/§356 — remote-managed лента сообщений «поддержи автора».
 ///
-/// Контент — `docs/support.json` в репо, раздаётся через
-/// raw.githubusercontent.com (паттерн §036 latest.json): автор меняет
-/// тексты/ссылки/пороги/очередь без релиза. Удачный fetch кэшируется
-/// ([SupportState] `cache_json`) — показ работает и офлайн.
+/// Контент — `app/assets/support.json`: один файл на все языки (блок `i18n`
+/// у каждого сообщения, язык выбирается в момент показа). Он же бандлится в
+/// APK и он же раздаётся через raw.githubusercontent.com (паттерн §036
+/// latest.json): автор меняет тексты/ссылки/пороги/очередь без релиза.
+/// Удачный fetch кэшируется ([SupportState] `cache_json`) — показ работает
+/// и офлайн.
 ///
 /// §422 — сеть только с согласия на проверку обновлений
 /// (`auto_check_updates`, вопрос онбординга): без него приложение не делает
 /// ни одного запроса за лентой, а читает кэш, а до первого кэша —
-/// bundled-копию `assets/support.json` (снимок `docs/support.json` на момент
-/// сборки; паритет держит `support_asset_parity_test`). Порядок:
-/// сеть (если разрешена) → кэш → asset → null.
+/// bundled-копию. Порядок: сеть (если разрешена) → кэш → asset → null.
 ///
 /// v2 (§356): вместо одной кампании — очередь сообщений с локалями
 /// (`i18n`, en — обязательный фолбэк) и версионным повторным показом
@@ -207,11 +207,14 @@ class SupportMessageService {
 
   /// Прод-канал — main. Для проверки кампании до публикации можно собрать
   /// тестовый APK с override'ом:
-  /// `--dart-define=LXBOX_SUPPORT_URL=https://raw.githubusercontent.com/Leadaxe/LxBox/develop/docs/support.test.json`
+  /// `--dart-define=LXBOX_SUPPORT_URL=https://raw.githubusercontent.com/Leadaxe/LxBox/develop/app/assets/support.test.json`
+  ///
+  /// §422 — до этого лента жила в `docs/support.json`; версии ≤ 2.22.0 читают
+  /// тот путь, после удаления файла получают 404 и живут на своём кэше.
   static const _url = String.fromEnvironment(
     'LXBOX_SUPPORT_URL',
     defaultValue:
-        'https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/support.json',
+        'https://raw.githubusercontent.com/Leadaxe/LxBox/main/app/assets/support.json',
   );
   static const _httpTimeout = Duration(seconds: 10);
 
