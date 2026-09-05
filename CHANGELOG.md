@@ -52,6 +52,11 @@
 
   Повод — вопрос ревьюера F-Droid (#61).
 
+- **Способы поддержки: единственный источник `app/assets/donate.json` ([§423](docs/spec/tasks/423-donate-json-single-source.md)).**
+  Та же схема: файл бандлится и раздаётся с GitHub, `docs/donate.json`
+  удалён (копии успели разойтись). Гейта нет — попап About → Support читает
+  его только по клику, фоновых запросов у него не было и нет.
+
 - **Get WARP: регистрация через `api.devices.cloudflare.com`, старый хост — запасной ([§418](docs/spec/tasks/418-warp-api-host-failover.md)).**
   `api.cloudflareclient.com` из России не отвечает на TCP вовсе, и «Get WARP»
   падал по таймауту. Хосты API теперь перечислены в asset

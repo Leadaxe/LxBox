@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/donate_methods.dart';
 
-/// §362 — разбор способов поддержки (`docs/donate.json` / bundled-копия).
+/// §362 — разбор способов поддержки (`app/assets/donate.json`).
 void main() {
   group('DonateMethod.fromJson', () {
     test('crypto: адрес обязателен, note опционален', () {

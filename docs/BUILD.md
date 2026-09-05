@@ -56,7 +56,7 @@ the channel is determined at runtime from the installer. See
 | Flag | Values | Who sets it | Why |
 |---|---|---|---|
 | `LXBOX_SUPPORT_URL` | URL | manually, while debugging | §356 — point the support feed at a test source |
-| `DONATE_URL` | URL | manually | source for `docs/donate.json` |
+| `DONATE_URL` | URL | manually | source for `app/assets/donate.json` |
 
 Requires `git` and a JDK (for Gradle); the script downloads the core `app/android/app/libs/libbox.aar` itself.
 
