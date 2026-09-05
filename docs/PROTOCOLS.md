@@ -842,7 +842,7 @@ Scheme aliases: `wireguard://`, `wg://` and `awg://` — all three are parsed by
 | Private key | userinfo | WireGuard private key |
 | Public key | `publickey` | Peer public key (required) |
 | Address | `address` | Comma-separated local addresses (required) |
-| MTU | `mtu` | The MTU value (default 1408; AWG 1.x/2.0 nodes are clamped to `min(mtu, 1280)`, AWG 3.x nodes keep the server value — see [8.5](#85-amneziawg-awg-awg2)) |
+| MTU | `mtu` | The MTU value (default 1408; every AmneziaWG node, 3.x included, is clamped to `min(mtu, 1280)` — see [8.5](#85-amneziawg-awg-awg2)) |
 | Pre-shared key | `presharedkey` | Peer pre-shared key |
 | Keepalive | `keepalive` | Persistent keepalive interval: `N` seconds, or an AWG 3.x range `N-M` (emitted as the string `"N-M"`; the core re-picks the interval on every timer, §421) |
 | Allowed IPs | `allowedips` | Peer allowed IPs (default: `0.0.0.0/0, ::/0`) |
@@ -938,7 +938,7 @@ Why 1280:
 
 An explicitly lower MTU (≤ 1280) is respected as given.
 
-**AWG 3.x is exempt from the clamp** (§421): a node with any AWG 3.x key (even a malformed one) or a ranged `keepalive` keeps the MTU the server prescribed — Amnezia exports 1376 — and without an explicit `mtu` the field is not emitted at all (the core default applies). Header protection and trailers live inside the path's UDP window, so clamping to 1280 would only diverge from the server.
+**AWG 3.x is clamped the same way** (§421, decision of 2026-09-05 after the device acceptance: with the 1376 an Amnezia export carries, no data flowed through the owner's server; with 1280 the tunnel worked). An AWG 3.x marker on its own — any AWG 3.x key, even a malformed one, or a ranged `keepalive` — makes the node AmneziaWG even without a single AWG 2.0 field, so it gets the 1280 default and the clamp like any other AWG node. An explicitly lower value (1200) is respected.
 
 ### INI
 

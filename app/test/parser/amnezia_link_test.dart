@@ -265,8 +265,8 @@ PersistentKeepalive = 25-35
           'hostName': '203.0.113.9',
         };
 
-    test('end-to-end: mtu 1376 из last_config, keepalive "25-35", тайминги, '
-        'булевы, DNS без плейсхолдеров', () {
+    test('end-to-end: mtu 1376 из last_config клампится до 1280, keepalive '
+        '"25-35", тайминги, булевы, DNS без плейсхолдеров', () {
       final link = makeLink(export3(awg3Container()));
       final spec = parseAll(decode(link)).single as WireguardSpec;
       final f = spec.awg!.fields;
@@ -276,13 +276,13 @@ PersistentKeepalive = 25-35
       expect(f['random_trailers'], true);
       expect(f['disable_cookies'], true);
       expect(f['h1'], 1);
-      expect(spec.mtu, 1376);
+      expect(spec.mtu, 1280);
       expect(spec.peers.single.persistentKeepalive, '25-35');
-      expect(spec.rawIni, contains('MTU = 1376'));
+      expect(spec.rawIni, contains('MTU = 1376')); // fidelity исходника
       expect(spec.rawIni, contains('172.29.172.254'));
       expect(spec.rawIni, isNot(contains(r'$PRIMARY_DNS')));
       final map = spec.emit(TemplateVars.empty).map;
-      expect(map['mtu'], 1376);
+      expect(map['mtu'], 1280);
       expect(map['reject_after_time'], '150-180');
     });
 
@@ -290,16 +290,17 @@ PersistentKeepalive = 25-35
       final c = awg3Container();
       final lc = jsonDecode(c['awg']['last_config'] as String) as Map;
       lc['config'] = (lc['config'] as String)
-          .replaceFirst('[Interface]\n', '[Interface]\nMTU = 1300\n');
+          .replaceFirst('[Interface]\n', '[Interface]\nMTU = 1200\n');
       c['awg']['last_config'] = jsonEncode(lc);
       final spec = parseAll(decode(makeLink(export3(c)))).single as WireguardSpec;
-      expect(spec.mtu, 1300);
+      expect(spec.mtu, 1200); // ниже 1280 — уважаем, last_config.mtu не трогает
+      expect(spec.rawIni, isNot(contains('MTU = 1376')));
     });
 
-    test('без last_config.mtu и без MTU — поле не задано (без клампа)', () {
+    test('без last_config.mtu и без MTU — дефолт AmneziaWG 1280', () {
       final spec = parseAll(decode(makeLink(export3(awg3Container(mtu: null)))))
           .single as WireguardSpec;
-      expect(spec.mtu, isNull);
+      expect(spec.mtu, 1280);
     });
   });
 

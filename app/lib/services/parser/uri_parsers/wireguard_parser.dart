@@ -116,10 +116,13 @@ WireguardSpec? parseWireguardUri(String uri) {
     }
   }
   final rawMtu = int.tryParse(q['mtu'] ?? '');
-  // §421 — AWG3-узел (любой AWG3-параметр или диапазонный keepalive) выведен
-  // из-под клампа: MTU задаёт сервер (1376 в экспорте Amnezia).
-  final isAwg3 = Awg.hasAwg3Params(q);
-  final mtu = awg != null && !isAwg3 ? awgClampMtu(rawMtu, tag) : rawMtu;
+  // §421 — AWG3-маркер (любой AWG3-параметр или диапазонный keepalive) сам
+  // делает узел AmneziaWG даже без AWG2-полей, и кламп до 1280 действует так
+  // же: экспорт Amnezia несёт mtu 1376, но у владельца на нём данные не шли,
+  // а на 1280 туннель заработал (решение 2026-09-05, SPEC 123 / Go
+  // hasAWGParams).
+  final isAwg = awg != null || Awg.hasAwg3Params(q);
+  final mtu = isAwg ? awgClampMtu(rawMtu, tag) : rawMtu;
 
   return WireguardSpec(
     id: newUuidV4(),

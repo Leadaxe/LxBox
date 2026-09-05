@@ -1298,8 +1298,9 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
             reserved: reserved,
           ),
         ],
-        // §421 — AWG3-узел выведен из-под клампа (MTU задаёт сервер).
-        mtu: awg != null && !Awg.hasAwg3Json(entry)
+        // §421 — AWG3-маркер (ключ корня или диапазонный keepalive) тоже
+        // делает узел AmneziaWG: кламп до 1280, как у AWG2 (SPEC 123).
+        mtu: awg != null || Awg.hasAwg3Json(entry)
             ? awgClampMtu(rawMtu, wgTag)
             : rawMtu,
         awg: awg,

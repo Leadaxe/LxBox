@@ -19,7 +19,7 @@
   |---|---|
   | `HeaderProtectionKey`, `ContentPaddingAddition`, `RekeyAfterTime`, `RekeyTimeout`, `RejectAfterTime`, `KeepaliveTimeout`, `MaxHandshakeAttempts`, `RandomTrailers`, `DisableCookies` молча выбрасывались | доезжают до ядра одноимёнными snake_case-ключами корня endpoint; `N-M` — строкой, `N` — числом, булевы — `true` только при `on` |
   | `PersistentKeepalive = 25-35` терялся (`int.tryParse`) | `persistent_keepalive_interval: "25-35"` |
-  | MTU AWG3-узла клампился до 1280; `last_config.mtu` экспорта не читался | AWG3-узел сохраняет MTU сервера (1376); `MTU` берётся из `last_config.mtu`, если его нет в `[Interface]` |
+  | `last_config.mtu` экспорта не читался; узел только с AWG3-полями не считался AmneziaWG | `MTU` берётся из `last_config.mtu`, если его нет в `[Interface]`; AWG3-маркер сам делает узел AmneziaWG — кламп до 1280 как у AWG2 (на 1376 из экспорта данные у владельца не шли), явно меньшее значение уважается |
   | — | политика ошибок как у лаунчера (SPEC 123): битый тайминг/булево — поле снято (`awg3_field_invalid`), битый ключ защиты или `s1`–`s4` < 12 — узел выброшен (`awg3_header_key_invalid`, `awg3_padding_too_short`), `random_trailers` + широкий диапазон `h1`–`h4` — info |
   | лейблы `awg`/`awg1.5`/`awg2` | + `awg3` (любой AWG3-ключ или диапазонный keepalive), `awg3.1` (`random_trailers`/`disable_cookies`), суффикс `+` при masquerade |
   | ядро `v1.14.0-lx.30` | `v1.14.0-lx.33` (ядро ≤ lx.31 отвергает конфиг с AWG3-ключами целиком) |

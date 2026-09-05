@@ -369,7 +369,7 @@ void main() {
     const s = '&s1=55&s2=42&s3=40&s4=12';
 
     test('полный набор: диапазоны строкой, одиночное числом, булевы true, '
-        'keepalive "25-35", MTU без клампа', () {
+        'keepalive "25-35", MTU 1376 клампится до 1280', () {
       final spec = parseWireguardUri(uri(
           '&mtu=1376&keepalive=25-35&jc=4&jmin=10&jmax=50$s&h1=1&h2=2&h3=3&h4=4'
           '&headerprotectionkey=$hkQ&contentpaddingaddition=10-100'
@@ -384,13 +384,13 @@ void main() {
       expect(f['random_trailers'], true);
       expect(f['disable_cookies'], true);
       expect(f['h1'], 1); // H1–H4 = 1..4 нормальны при защите заголовка
-      expect(spec.mtu, 1376); // AWG3 — без клампа до 1280
+      expect(spec.mtu, 1280); // AWG3 клампится как AWG2 (решение 2026-09-05)
       expect(spec.peers.single.persistentKeepalive, '25-35');
       expect(spec.warnings, isEmpty);
       final map = spec.emit(TemplateVars.empty).map;
       expect(map['random_trailers'], true);
       expect(map['rekey_timeout'], '3-7');
-      expect(map['mtu'], 1376);
+      expect(map['mtu'], 1280);
       expect(
           (map['peers'] as List).first['persistent_keepalive_interval'], '25-35');
     });
@@ -439,8 +439,8 @@ void main() {
             reason: '$param=$value должно быть снято');
         expect(spec.warnings, contains(Awg3FieldInvalidWarning(param, value)),
             reason: '$param=$value');
-        // Маркер AWG3 даже при невалидном поле: кламп не применяется.
-        expect(spec.mtu, isNull);
+        // Маркер AWG3 даже при невалидном поле: узел — AmneziaWG, дефолт 1280.
+        expect(spec.mtu, 1280);
       });
     });
 
@@ -482,13 +482,16 @@ void main() {
     });
 
     test('keepalive: мусор пропускается; один диапазонный keepalive = '
-        'маркер AWG3 (без клампа, awg == null)', () {
+        'маркер AWG3 (узел AWG даже без AWG2-полей → кламп 1280)', () {
       final junk = parseWireguardUri(uri('&keepalive=abc'))!;
       expect(junk.peers.single.persistentKeepalive, isNull);
-      final ranged =
-          parseWireguardUri(uri('&mtu=1376&jc=4&keepalive=25-35'))!;
+      expect(junk.mtu, isNull); // plain WG без mtu — поле не эмитим
+      final ranged = parseWireguardUri(uri('&mtu=1376&keepalive=25-35'))!;
+      expect(ranged.awg, isNull);
       expect(ranged.peers.single.persistentKeepalive, '25-35');
-      expect(ranged.mtu, 1376);
+      expect(ranged.mtu, 1280);
+      // Явно ниже 1280 — уважаем, как у AWG2.
+      expect(parseWireguardUri(uri('&mtu=1200&keepalive=25-35'))!.mtu, 1200);
     });
 
     test('AWG2 без AWG3-маркеров клампится как раньше', () {
@@ -519,16 +522,16 @@ void main() {
 
     test('round-trip share-URI: spec → toUri → parse сохраняет AWG3-набор', () {
       final spec = parseWireguardUri(uri(
-          '&mtu=1376&keepalive=25-35&jc=4$s&h1=1&headerprotectionkey=$hkQ'
+          '&mtu=1200&keepalive=25-35&jc=4$s&h1=1&headerprotectionkey=$hkQ'
           '&rekeytimeout=3-7&randomtrailers=on&disablecookies=on'))!;
       final again = parseWireguardUri(spec.toUri())!;
       expect(again.awg!.fields, spec.awg!.fields);
-      expect(again.mtu, 1376);
+      expect(again.mtu, 1200);
       expect(again.peers.single.persistentKeepalive, '25-35');
       expect(spec.toUri(), contains('randomtrailers=on'));
     });
 
-    test('JSON endpoint: AWG3-ключи, keepalive строкой, без клампа; '
+    test('JSON endpoint: AWG3-ключи, keepalive строкой, кламп 1280; '
         'битый ключ → null', () {
       final entry = <String, dynamic>{
         'type': 'wireguard',
@@ -559,7 +562,7 @@ void main() {
       expect(f['rekey_timeout'], 5);
       expect(f['random_trailers'], true);
       expect(f.containsKey('disable_cookies'), false); // false = ключа нет
-      expect(spec.mtu, 1376);
+      expect(spec.mtu, 1280);
       expect(spec.peers.single.persistentKeepalive, '25-35');
       final bad = Map<String, dynamic>.from(entry)
         ..['header_protection_key'] = 'AQIDBAUGBwgJCgsMDQ4PEA==';
@@ -594,7 +597,7 @@ void main() {
       expect(f['random_trailers'], true);
       expect(f.containsKey('disable_cookies'), false);
       expect(spec.peers.single.persistentKeepalive, '25-35');
-      expect(spec.mtu, isNull); // AWG3 без MTU — дефолт ядра, не 1280
+      expect(spec.mtu, 1280); // AWG3 без MTU — дефолт AmneziaWG 1280
     });
   });
 }
