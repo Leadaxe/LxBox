@@ -1,4 +1,4 @@
-# L×Box v2.22.1
+# L×Box v2.23.0
 
 **AmneziaWG 3.0/3.1 arrives.** An Amnezia export with header protection,
 content padding, random trailers and ranged timings now imports as it is and
@@ -306,7 +306,7 @@ Java-поверхность только аддитивна (javap по 253 кл
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.22.1-arm64-v8a.apk
+adb install -r LxBox-v2.23.0-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
