@@ -2,7 +2,7 @@
 
 | Field | Value |
 |------|----------|
-| Status | Implemented (analyze ✅, tests ✅, device-test pending) |
+| Status | Implemented, device-verified (AVD, 05.09.2026: экспорт владельца AWG 3.1 → `WG·awg3.1` → handshake → `1.1.1.1/cdn-cgi/trace` ip=77.239.123.44; MTU 1200 через `last_config.mtu`/`[Interface]`) |
 | Started | 2026-09-05 |
 | Trigger | Amnezia экспортирует AWG 3.x серверы контейнером `amnezia-awg2` с `awg.protocol_version: "3.1"`. В `.conf` кроме AWG2-набора стоят `HeaderProtectionKey`, `ContentPaddingAddition`, `RekeyAfterTime`, `RekeyTimeout`, `RejectAfterTime`, `KeepaliveTimeout`, `MaxHandshakeAttempts`, `RandomTrailers`, `DisableCookies`, а `[Peer] PersistentKeepalive` — диапазон `25-35`. Сегодня `_iniToUri` их выбрасывает молча, `int.tryParse('25-35')` роняет keepalive, MTU клампится до 1280 — узел выглядит настроенным, а хендшейк с сервером, шифрующим заголовок, не пройдёт никогда. |
 | Related | [§097](../features/097%20awg2-amneziawg2/spec.md) (модель `Awg`, эмит/парс); [§112](112-awg-ranged-magic-headers.md) (ranged h1–h4); [§148](148-awg-version-labels.md) (лейблы уровня); контракт лаунчера `contract/` — SPEC 123 лаунчера (`SPECS/123-F-N-AWG3/SPEC.md`), корпус `contract/corpus/uri/wireguard/{awg3_full_params,amnezia_vpn_awg3,awg3_header_key_short_dropped}.*` |
@@ -34,7 +34,7 @@ JSON-ключ = опция ядра на **корне** endpoint `wireguard`, р
 | `RandomTrailers` / `randomtrailers` | `random_trailers` | `on`/`true`/`1` → `true`; `off`/пусто → ключа нет (никогда `false`) |
 | `DisableCookies` / `disablecookies` | `disable_cookies` | то же |
 | `[Peer] PersistentKeepalive` / `keepalive` | `peers[0].persistent_keepalive_interval` | `N` → число, `N-M` → строка `"N-M"` |
-| `MTU` (в экспорте AWG3 лежит **не** в `[Interface]`, а рядом в JSON `last_config.mtu`, строкой `"1376"`) | `mtu` | число; для AWG3 **без клампа до 1280** |
+| `MTU` (в экспорте AWG3 лежит **не** в `[Interface]`, а рядом в JSON `last_config.mtu`, строкой `"1376"`) | `mtu` | число; кламп `awgClampMtu` до 1280 действует и для AWG3 (решение владельца 2026-09-05: на 1376 данные не шли) |
 
 `H1–H4 = 1..4` в экспортах AWG3 нормальны (при защите заголовка слово типа
 замаскировано) — не «чинить». Остальные ключи — как AWG2.
@@ -52,8 +52,9 @@ JSON-ключ = опция ядра на **корне** endpoint `wireguard`, р
   → узел выброшен, код `awg3_padding_too_short` (params `field`, `min`=12).
 - `random_trailers: true` при диапазонном `h1`–`h4` с шириной ≥ 65536 →
   info-код `awg3_random_trailers_wide_headers`, ничего не снимать.
-- Кламп MTU (`awgClampMtu`) — только для узла **без** AWG3-маркеров.
-  AWG3-маркер = любой AWG3-ключ на корне или диапазонный keepalive у пира.
+- Кламп MTU (`awgClampMtu`) действует и для AWG3-узлов — как для AWG2.
+  AWG3-маркер (любой AWG3-ключ на корне или диапазонный keepalive у пира)
+  сам по себе делает узел AmneziaWG, даже без AWG2-полей.
 
 ### Лейбл (§148, структурно, без хранения версии)
 
@@ -83,7 +84,7 @@ AWG3-ключ или диапазонный keepalive; оба **старше** `
 4. **`lib/services/parser/uri_parsers/wireguard_parser.dart`** — `keepalive`
    (:70) `N-M` → строка в `persistentKeepalive` (тип поля пира расширить до
    `Object?`/`int | String`; эмиттер `node_spec_emit.dart:615,646` пишет
-   как есть); кламп (:98) обходить при AWG3-маркерах.
+   как есть); кламп (:98) применять и при AWG3-маркерах (узел без AWG2-полей, но с AWG3 — тоже AWG).
 5. **`lib/services/parser/amnezia_link.dart`** — `_extractIni` (:168)
    возвращает только `config`; нужен и `last_config.mtu`: если в
    `[Interface]` нет `MTU`, дописать строку `MTU = N` в INI до `_iniToUri`
@@ -104,7 +105,7 @@ AWG3-ключ или диапазонный keepalive; оба **старше** `
 ## Тесты
 
 Корпус контракта — источник истины: после `sync_contract.sh` `contract_test.dart`
-обязан пройти на `awg3_full_params`, `amnezia_vpn_awg3` (ожидаемо: `mtu: 1376`,
+обязан пройти на `awg3_full_params`, `amnezia_vpn_awg3` (ожидаемо: `mtu: 1280` — 1376 из `last_config` клампится,
 keepalive `"25-35"`, диапазоны строками, булевы `true`, DNS-плейсхолдеров
 нет) и `awg3_header_key_short_dropped` (узел выброшен). Старые AWG2-expected
 (`amnezia_vpn_awg`, `awg_mtu_clamped_1280`, `awg_full_params`) — без
