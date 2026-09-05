@@ -404,83 +404,110 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 1 || 30 }}
 
-      # VirusTotal scans asynchronously -- the upload only queues the file
+      # VirusTotal scans asynchronously -- the upload only queues a file
       # and returns an analysis id, so this polls for the actual verdict
-      # rather than just confirming the upload went through. Free API keys
-      # are capped at 4 req/min; polling every 20s stays under that.
-      # Uploaded files aren't private -- VT shares them with its paying
-      # (threat-intel) customers, so this only runs if you've deliberately
-      # added VIRUSTOTAL_API_KEY as a secret.
-      - name: Scan APK with VirusTotal
+      # per APK rather than just confirming the upload went through.
+      # Scans all APKs (not just one) -- free API keys are capped at
+      # 4 req/min, so with all files this easily takes several minutes;
+      # every VT call is spaced 16s apart to stay under that regardless
+      # of how many files are in flight. Uploaded files aren't private --
+      # VT shares them with its paying (threat-intel) customers, so this
+      # only runs if you've deliberately added VIRUSTOTAL_API_KEY.
+      - name: Scan APKs with VirusTotal
         if: always()
         continue-on-error: true
         env:
           VT_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
         run: |
-          APK_PATH=$(find app/build/app/outputs/flutter-apk -name '*.apk' 2>/dev/null | head -1 || true)
+          mapfile -t APK_PATHS < <(find app/build/app/outputs/flutter-apk -name '*.apk' 2>/dev/null | sort)
+
           if [ -z "$VT_API_KEY" ]; then
             echo "VIRUSTOTAL_API_KEY не задан — пропускаю проверку."
             exit 0
           fi
-          if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
-            echo "APK-файл не найден в app/build/app/outputs/flutter-apk/ — пропускаю проверку."
+          if [ "${#APK_PATHS[@]}" -eq 0 ]; then
+            echo "APK-файлы в app/build/app/outputs/flutter-apk/ не найдены — пропускаю проверку."
             exit 0
           fi
 
-          echo "Отправляю $APK_PATH на VirusTotal..."
-          RESPONSE=$(curl -s -w '\n%{http_code}' "https://www.virustotal.com/api/v3/files/upload_url" -H "x-apikey: $VT_API_KEY")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "VirusTotal вернул ошибку при получении upload_url (HTTP $HTTP_CODE):"
-            echo "$BODY"
-            exit 0
-          fi
-          UPLOAD_URL=$(echo "$BODY" | jq -r '.data // empty')
-          if [ -z "$UPLOAD_URL" ]; then
-            echo "Не удалось получить upload_url из ответа VirusTotal:"
-            echo "$BODY"
-            exit 0
-          fi
+          vt_call() { curl -s -w '\n%{http_code}' "$@" 2>/dev/null || echo -e "\n000"; }
 
-          UPLOAD_RESPONSE=$(curl -s -w '\n%{http_code}' -X POST "$UPLOAD_URL" -H "x-apikey: $VT_API_KEY" -F "file=@$APK_PATH")
-          UPLOAD_HTTP_CODE=$(echo "$UPLOAD_RESPONSE" | tail -1)
-          UPLOAD_BODY=$(echo "$UPLOAD_RESPONSE" | sed '$d')
-          if [ "$UPLOAD_HTTP_CODE" != "200" ]; then
-            echo "VirusTotal вернул ошибку при загрузке файла (HTTP $UPLOAD_HTTP_CODE):"
-            echo "$UPLOAD_BODY"
-            exit 0
-          fi
-          ANALYSIS_ID=$(echo "$UPLOAD_BODY" | jq -r '.data.id // empty')
-          if [ -z "$ANALYSIS_ID" ]; then
-            echo "Не удалось получить analysis id из ответа VirusTotal:"
-            echo "$UPLOAD_BODY"
-            exit 0
-          fi
-          echo "Файл принят, analysis id: $ANALYSIS_ID"
+          declare -A ANALYSIS_ID
+          declare -A DONE
 
-          STATUS="queued"
-          POLL="{}"
-          for i in $(seq 1 20); do
-            sleep 20
-            POLL=$(curl -s "https://www.virustotal.com/api/v3/analyses/$ANALYSIS_ID" -H "x-apikey: $VT_API_KEY")
-            STATUS=$(echo "$POLL" | jq -r '.data.attributes.status // empty')
-            echo "  [$i/20] статус: ${STATUS:-?}"
-            [ "$STATUS" = "completed" ] && break
+          echo "== Отправка (${#APK_PATHS[@]} файлов) =="
+          for APK_PATH in "${APK_PATHS[@]}"; do
+            NAME=$(basename "$APK_PATH")
+            echo "-- $NAME --"
+
+            RESPONSE=$(vt_call "https://www.virustotal.com/api/v3/files/upload_url" -H "x-apikey: $VT_API_KEY")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            sleep 16
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "  ошибка upload_url (HTTP $HTTP_CODE): $BODY"
+              continue
+            fi
+            UPLOAD_URL=$(echo "$BODY" | jq -r '.data // empty')
+            if [ -z "$UPLOAD_URL" ]; then
+              echo "  пустой upload_url: $BODY"
+              continue
+            fi
+
+            UPLOAD_RESPONSE=$(vt_call -X POST "$UPLOAD_URL" -H "x-apikey: $VT_API_KEY" -F "file=@$APK_PATH")
+            UPLOAD_HTTP_CODE=$(echo "$UPLOAD_RESPONSE" | tail -1)
+            UPLOAD_BODY=$(echo "$UPLOAD_RESPONSE" | sed '$d')
+            sleep 16
+            if [ "$UPLOAD_HTTP_CODE" != "200" ]; then
+              echo "  ошибка загрузки (HTTP $UPLOAD_HTTP_CODE): $UPLOAD_BODY"
+              continue
+            fi
+            ID=$(echo "$UPLOAD_BODY" | jq -r '.data.id // empty')
+            if [ -z "$ID" ]; then
+              echo "  нет analysis id: $UPLOAD_BODY"
+              continue
+            fi
+            echo "  принят, analysis id: $ID"
+            ANALYSIS_ID["$NAME"]="$ID"
           done
 
-          REPORT_URL="https://www.virustotal.com/gui/analysis/$ANALYSIS_ID"
-          if [ "$STATUS" != "completed" ]; then
-            echo "Анализ не завершился за отведённое время (~7 мин). Проверить вручную: $REPORT_URL"
+          if [ "${#ANALYSIS_ID[@]}" -eq 0 ]; then
+            echo "Ни один файл не удалось поставить на анализ."
             exit 0
           fi
 
-          echo "$POLL" | jq '.data.attributes.stats'
-          MALICIOUS=$(echo "$POLL" | jq -r '.data.attributes.stats.malicious // 0')
-          SUSPICIOUS=$(echo "$POLL" | jq -r '.data.attributes.stats.suspicious // 0')
+          echo "== Ожидание результатов (${#ANALYSIS_ID[@]} в очереди) =="
+          for round in $(seq 1 25); do
+            ALL_DONE=1
+            for NAME in "${!ANALYSIS_ID[@]}"; do
+              [ -n "${DONE[$NAME]:-}" ] && continue
+              ID="${ANALYSIS_ID[$NAME]}"
+              POLL=$(curl -s "https://www.virustotal.com/api/v3/analyses/$ID" -H "x-apikey: $VT_API_KEY" 2>/dev/null || echo '{}')
+              STATUS=$(echo "$POLL" | jq -r '.data.attributes.status // empty')
+              sleep 16
+              if [ "$STATUS" = "completed" ]; then
+                MALICIOUS=$(echo "$POLL" | jq -r '.data.attributes.stats.malicious // 0')
+                SUSPICIOUS=$(echo "$POLL" | jq -r '.data.attributes.stats.suspicious // 0')
+                echo "$NAME: malicious=$MALICIOUS suspicious=$SUSPICIOUS"
+                DONE["$NAME"]="вредоносным: $MALICIOUS, подозрительным: $SUSPICIOUS"
+              else
+                ALL_DONE=0
+                echo "$NAME: статус ${STATUS:-?} (раунд $round)"
+              fi
+            done
+            [ "$ALL_DONE" = 1 ] && break
+          done
+
           {
-            echo "### VirusTotal: вредоносным считают $MALICIOUS движков, подозрительным — $SUSPICIOUS"
-            echo "Полный отчёт: $REPORT_URL"
+            echo "### VirusTotal"
+            for NAME in "${!ANALYSIS_ID[@]}"; do
+              REPORT_URL="https://www.virustotal.com/gui/analysis/${ANALYSIS_ID[$NAME]}"
+              if [ -n "${DONE[$NAME]:-}" ]; then
+                echo "- **$NAME**: ${DONE[$NAME]}. [Отчёт]($REPORT_URL)"
+              else
+                echo "- **$NAME**: не завершился за отведённое время. [Проверить]($REPORT_URL)"
+              fi
+            done
           } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
       - name: Build AAB (Google Play)
