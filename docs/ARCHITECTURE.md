@@ -838,17 +838,20 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 │                           #   route_final / directions[] (§125/§393, replaces enabled_groups) / chains[] (§393 C) /
 │                           #   excluded_nodes (§048 sandbox) / last_global_update /
 │                           #   presets_migrated / directions_migrated
-├── http_cache/             # HttpCache — the raw body plus headers of the subscriptions
-│   └── <sha1(url)>.{body,headers}
-├── rule_sets/              # §011 — the cache of binary .srs files
-│   └── <tag>.srs
+├── rule_sets/              # §011 — the cache of binary .srs files (+ §366 .meta.json sidecars)
+│   └── <ruleId>.srs
+├── workspaces.json         # §417 — the workspace manifest (current, slots, pending)
+├── workspaces/<name>/      # §417 — saved workspaces: a copy of lxbox_settings.json,
+│                           #   rule_sets/ and sub_cache/ — the working paths above never move
 ├── applog.txt              # §038/§043 — JSON lines, a 200-line / 64 KB ring
 └── corelog.txt             # §043 — JSON lines, a 200-line / 64 KB ring
 
-<Context.filesDir>/         # native `files/` — NOT the documents dir (Android: app_flutter/);
-│                           # Dart reaches it via BoxVpnClient.getFilesDir() (§316/§414)
+<Context.filesDir>/         # native `files/` = Dart getApplicationSupportDirectory() —
+│                           # NOT the documents dir (Android: app_flutter/) (§316/§414)
 ├── singbox_config.json     # ConfigManager (Kotlin) — the final sing-box JSON
-└── cache.db                # libbox cache_file (basePath = filesDir)
+├── cache.db                # libbox cache_file (basePath = filesDir)
+└── sub_cache/              # HttpCache — the raw body plus headers of the subscriptions;
+    └── <url.hashCode>{,.headers}   # the only persisted source of subscription nodes (§027/§129)
 
 SharedPreferences (Android):
 ├── app_theme_mode                       # Flutter UI prefs (haptic_enabled → vars, §159)
@@ -981,7 +984,7 @@ The Cloudflare WARP integration (`services/warp/`, the wizard `screens/warp_wiza
 - **The endpoint generator (§284/§305).** The **“Make experiment”** button in the wizard (`services/warp/scan/`).
 - **The endpoint pool (§305, device-verified).** `assets/warp_endpoints.json` is grouped by transport:
   - `wireguard`: `v4_cidr` · `v6_cidr` · `ports` (2408/500/1701/4500 — the verified ones) · `ports_extra`
-  - `masque`: `v4_cidr` · **`h3_v4_cidr`** · `ports_h3` · `ports_h2` · `sni_pool`.
+  - `masque` (§420): общие `hosts_preset` + `recommended_host` (оба транспорта) · `h3.hosts_extra` (h3-only) · `h2.v4_cidr` + `h2.exclude` · `h3.ports` / `h2.ports` · `sni_pool`. Старые плоские ключи (`v4_cidr`, `h3_v4_cidr`, `ports_h3/h2`) читаются как фолбэк.
 
   The physics of MASQUE (tested for real through a working tunnel): **h2** works on every port.
 

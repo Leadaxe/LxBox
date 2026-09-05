@@ -179,7 +179,39 @@ String? _extractIni(Object? protoObj) {
   final ini = lastConfig['config'];
   if (ini is! String) return null;
   if (!ini.contains('[Interface]') || !ini.contains('[Peer]')) return null;
-  return ini;
+  return _withLastConfigMtu(ini, lastConfig['mtu']);
+}
+
+/// §421 — экспорт AWG3 кладёт MTU не в `[Interface]`, а рядом в
+/// `last_config.mtu` (строкой `"1376"`). Если в `[Interface]` нет `MTU`,
+/// дописываем строку `MTU = N` в INI (текст, не params — одна точка
+/// конвертации, `_iniToUri`). Явный `MTU` в `[Interface]` приоритетнее.
+/// Эталон Go `amneziaPrepareConf`/`amneziaMTUValue`.
+String _withLastConfigMtu(String ini, Object? mtuRaw) {
+  int? mtu;
+  if (mtuRaw is num) {
+    mtu = mtuRaw.toInt();
+  } else if (mtuRaw is String) {
+    mtu = int.tryParse(mtuRaw.trim());
+  }
+  if (mtu == null || mtu <= 0) return ini;
+  final lines = ini.split(RegExp(r'\r?\n'));
+  var section = '';
+  var ifaceIdx = -1;
+  for (var i = 0; i < lines.length; i++) {
+    final t = lines[i].trim();
+    if (t.startsWith('[')) {
+      section = t.toLowerCase();
+      if (section == '[interface]' && ifaceIdx < 0) ifaceIdx = i;
+      continue;
+    }
+    if (section != '[interface]') continue;
+    final eq = t.indexOf('=');
+    if (eq > 0 && t.substring(0, eq).trim().toLowerCase() == 'mtu') return ini;
+  }
+  if (ifaceIdx < 0) return ini;
+  lines.insert(ifaceIdx + 1, 'MTU = $mtu');
+  return lines.join('\n');
 }
 
 /// `$PRIMARY_DNS`/`$SECONDARY_DNS` ← корневые `dns1`/`dns2`. Парсу не

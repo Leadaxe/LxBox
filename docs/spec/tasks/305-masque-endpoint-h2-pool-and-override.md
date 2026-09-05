@@ -1,5 +1,8 @@
 # 305 — MASQUE endpoint: новая схема пула, порт-сплит h3/h2, ручной IP:port
 
+> **§420 (2026-09-05):** секция `masque` asset'а переложена по транспортам (`hosts_preset` общий, `h3.hosts_extra`, `h2.v4_cidr`+`exclude`); `h3_v4_cidr`/`ports_h3`/`ports_h2` — фолбэк для старого JSON. Рекомендуемый хост — `162.159.198.2`, не домен. См. [tasks/420](420-masque-pool-per-transport.md).
+
+
 Статус: **реализовано** (коммиты `1ab043fc`, `3565fe62`), device-verified на CPH2411.
 
 ## Мотивация

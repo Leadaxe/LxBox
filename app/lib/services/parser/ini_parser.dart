@@ -42,7 +42,7 @@ String? _iniToUri(String config, String? nameHint) {
   String presharedKey = '';
   String reserved = ''; // §126 — WARP client_id (reserved/client_id в [Peer])
   int mtu = 0;
-  int keepalive = 0;
+  String keepalive = ''; // §421 — `N` или AWG3-диапазон `N-M`, сырым
   // §097 — AmneziaWG2 поля из [Interface] (Jc/Jmin/.../I1-I5; регистр value
   // сохраняем, ключ lowercase). Прокинем в URI-query → Awg.fromQuery.
   final awg = <String, String>{};
@@ -62,6 +62,10 @@ String? _iniToUri(String config, String? nameHint) {
       if (k == 'address') address = v;
       if (k == 'mtu') mtu = int.tryParse(v) ?? 0;
       if (Awg.numKeys.contains(k) || Awg.strKeys.contains(k)) awg[k] = v;
+      // §421 — AWG3-ключи (HeaderProtectionKey, ContentPaddingAddition,
+      // Rekey*/Reject*/KeepaliveTimeout/MaxHandshakeAttempts, RandomTrailers,
+      // DisableCookies) — под теми же lowercase-именами в query.
+      if (Awg.awg3ParamToJson.containsKey(k)) awg[k] = v;
     } else if (section == '[peer]') {
       if (k == 'publickey') publicKey = v;
       if (k == 'endpoint') endpoint = v;
@@ -71,7 +75,7 @@ String? _iniToUri(String config, String? nameHint) {
       // '0.0.0.0/0') — IPv4-only INI получал лишний IPv6-дефолт-роут.
       if (k == 'allowedips') allowedIps = v;
       if (k == 'presharedkey') presharedKey = v;
-      if (k == 'persistentkeepalive') keepalive = int.tryParse(v) ?? 0;
+      if (k == 'persistentkeepalive') keepalive = v;
       // §126 — WARP `client_id` → reserved. Amnezia-генератор кладёт его в
       // [Peer] как `Reserved` (или `ClientId`); парсер reserved (parseReserved)
       // принимает и `b0,b1,b2`, и base64. Прокидываем сырым в URI-query.
@@ -117,7 +121,7 @@ String? _iniToUri(String config, String? nameHint) {
   if (allowedIps.isNotEmpty) params['allowedips'] = allowedIps;
   if (mtu > 0) params['mtu'] = mtu.toString();
   if (presharedKey.isNotEmpty) params['presharedkey'] = presharedKey;
-  if (keepalive > 0) params['keepalive'] = keepalive.toString();
+  if (keepalive.isNotEmpty) params['keepalive'] = keepalive;
   if (reserved.isNotEmpty) params['reserved'] = reserved; // §126
 
   // §097 — AWG-поля в query (encodeComponent ниже эскейпит i* с <>/пробелами).

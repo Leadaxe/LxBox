@@ -761,6 +761,18 @@
   "AmneziaWG header \"%1$s=%2$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.": {
     "value": "Заголовок AmneziaWG «%1$s=%2$s» — не число и не диапазон «нижняя-верхняя», поэтому отброшен. Ядро возьмёт обычный заголовок WireGuard, и рукопожатие может не совпасть с сервером."
   },
+  "AmneziaWG 3 field \"%1$s=%2$s\" is neither a number, an ordered \"low-high\" range nor on/off, so it was dropped. The core uses its default for it.": {
+    "value": "Поле AmneziaWG 3 «%1$s=%2$s» — не число, не упорядоченный диапазон «нижняя-верхняя» и не on/off, поэтому отброшено. Ядро возьмёт своё значение по умолчанию."
+  },
+  "AmneziaWG 3 header protection key is not a 32-byte base64 key, so the node was skipped: the handshake cannot succeed and the core would reject the whole config.": {
+    "value": "Ключ защиты заголовка AmneziaWG 3 — не 32-байтный ключ base64, поэтому узел пропущен: рукопожатие невозможно, а ядро отвергло бы весь конфиг."
+  },
+  "AmneziaWG 3 padding \"%1$s\" is below %2$d, the minimum required by the header protection key, so the node was skipped: the core would reject the whole config.": {
+    "value": "Паддинг AmneziaWG 3 «%1$s» меньше %2$d — минимума, который требует ключ защиты заголовка, поэтому узел пропущен: ядро отвергло бы весь конфиг."
+  },
+  "AmneziaWG 3 random trailers are combined with a wide magic-header range (65536 or more); the server may mistake some upload packets for handshakes and drop them.": {
+    "value": "Случайные хвосты AmneziaWG 3 сочетаются с широким диапазоном magic-заголовков (65536 и больше); сервер может принять часть исходящих пакетов за рукопожатия и отбросить их."
+  },
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ требует это разрешение для SSID. Нажмите, чтобы выдать."
   },
@@ -4852,5 +4864,68 @@
   },
   "Node \"%1$s\" was dropped: its relay \"%2$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.": {
     "value": "Узел «%1$s» отброшен: релей «%2$s» отсутствует, непригоден или зациклен. Прямое подключение прошло бы мимо релея."
+  },
+  "Workspaces": {
+    "value": "Рабочие пространства"
+  },
+  "Load": {
+    "value": "Загрузить"
+  },
+  "Save as…": {
+    "value": "Сохранить как…"
+  },
+  "Workspace name": {
+    "value": "Имя рабочего пространства"
+  },
+  "Overwrite “%s”?": {
+    "value": "Перезаписать «%s»?"
+  },
+  "A workspace with this name already exists. Its saved state will be replaced.": {
+    "value": "Рабочее пространство с таким именем уже есть. Его сохранённое состояние будет заменено."
+  },
+  "Overwrite": {
+    "value": "Перезаписать"
+  },
+  "Loading workspace…": {
+    "value": "Загрузка рабочего пространства…"
+  },
+  "Workspace “%s” loaded": {
+    "value": "Рабочее пространство «%s» загружено"
+  },
+  "Saved as “%s”": {
+    "value": "Сохранено как «%s»"
+  },
+  "Failed to load workspace: %s": {
+    "value": "Не удалось загрузить рабочее пространство: %s"
+  },
+  "Name is empty": {
+    "value": "Имя пустое"
+  },
+  "Name is too long": {
+    "value": "Имя слишком длинное"
+  },
+  "Name must not contain / or \\": {
+    "value": "Имя не должно содержать / или \\"
+  },
+  "Name must not start with a dot": {
+    "value": "Имя не должно начинаться с точки"
+  },
+  "Workspace not found": {
+    "value": "Рабочее пространство не найдено"
+  },
+  "A workspace with this name already exists": {
+    "value": "Рабочее пространство с таким именем уже есть"
+  },
+  "The current workspace cannot be deleted": {
+    "value": "Текущее рабочее пространство удалить нельзя"
+  },
+  "Delete workspace “%s”?": {
+    "value": "Удалить рабочее пространство «%s»?"
+  },
+  "Its saved state will be removed. This cannot be undone.": {
+    "value": "Его сохранённое состояние будет удалено. Отменить это нельзя."
+  },
+  "Config rebuild failed: %s": {
+    "value": "Сборка конфига не удалась: %s"
   }
 }

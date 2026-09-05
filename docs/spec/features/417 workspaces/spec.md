@@ -1,6 +1,12 @@
 # §417 — Workspaces: именованные копии состояния
 
-**Статус:** ТЗ (v1)
+**Статус:** реализовано (v1); попап с «⋮»-меню на строке слота (`f211527b`) проверен
+владельцем на эмуляторе 05.09.2026 — принят. Device-smoke на AVD LxBox_test 04.09.2026 (сборка 2.22.0-dev.6):
+Save as → Load → Manage проходят, после Load узлы подписок подняты из скопированного
+`sub_cache` (38+1+2), Debug-сервер перезапущен, исключений нет. НЕ проверено: Load под
+поднятым VPN с автозапуском (у стенда конфиг не проходит валидацию — битая ссылка
+`dns.final → ru-direct:yandex_dot`, чужой остаток), kill посреди копирования.
+Коммиты `d62d0718`, `9c482774`, `79047ed5`, `88f8839f`.
 **Связанные:** §076 (settings ↔ config lifecycle), §113/§414 (dirty-check по
 mtime), §027/§129 (кэш тел подписок), §011 (кэш .srs), §189 (native-зеркало
 тумблеров), §316 (native `filesDir` из Dart), §286 (probe-lifecycle),
@@ -145,11 +151,11 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 ### 2.5 Копирование позиций
 
 `WorkspaceStore` — единственное место, где перечислен состав слота
-(`kSlotEntries`). Источники путей: Documents —
-`getApplicationDocumentsDirectory()`; `files/` —
-`BoxVpnClient.getFilesDir()` (§316) с fallback на
-`getApplicationSupportDirectory()` (тот же каталог на Android; fallback
-нужен тестам). Копия рекурсивная, побайтовая; символических ссылок в этих
+(`kSlotEntries`). Источники путей — те же, что у владельцев файлов:
+`getApplicationDocumentsDirectory()` для настроек и `rule_sets/`,
+`getApplicationSupportDirectory()` для `sub_cache/` (так его открывает
+`HttpCache`; на Android это native `filesDir`). Native-канал `getFilesDir`
+не нужен. Копия рекурсивная, побайтовая; символических ссылок в этих
 каталогах нет.
 
 ### 2.6 Перечитывание без перезапуска
@@ -189,30 +195,28 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 │                                        │
 │   ┌──────────────────────────────┐     │
 │   │ LOAD                         │     │
-│   │  ● Home            2 Sep     │     │
-│   │    Work            28 Aug    │     │
-│   │    Lab             15 Aug    │     │
+│   │  ● Home     2 Sep · 1.8 MB ⋮ │     │
+│   │    Work    28 Aug · 1.8 MB ⋮ │     │
+│   │    Lab     15 Aug · 0.9 MB ⋮ │     │
 │   ├──────────────────────────────┤     │
 │   │ SAVE                         │     │
 │   │  ＋ Save as…                 │     │
-│   ├──────────────────────────────┤     │
-│   │  Manage workspaces…          │     │
 │   └──────────────────────────────┘     │
 ```
 
 - Раздел LOAD: слоты по имени, `current` отмечен, у каждого дата
-  `saved_at`. Тап по `current` — закрыть попап (no-op). Тап по другому —
-  §2.3 с прогресс-индикатором на время стопа/копии/пересборки.
+  `saved_at` и размер на диске. Тап по `current` — закрыть попап (no-op).
+  Тап по другому — §2.3 с прогресс-индикатором на время
+  стопа/копии/пересборки.
+- «⋮» на строке слота: переименовать (папка + `current`, если это он),
+  удалить (не `current` — пункт недоступен; подтверждение). Отдельного
+  экрана управления нет (решение 05.09: лишний уровень навигации).
 - «Save as…» — диалог с именем (предзаполнено `current`, если у него уже
   есть папка — пусто). Существующее имя → «Overwrite “Y”?».
-- «Manage workspaces…» — экран-список по образцу
-  [`dns_settings_screen.dart`](../../../../app/lib/screens/dns_settings_screen.dart):
-  переименовать (папка + `current`, если это он), удалить (не `current`;
-  подтверждение).
 - Пока справочника нет: в кнопке «Default», в LOAD — один элемент
   «Default» (отмечен), Save as создаёт справочник.
 - Строки — natural keys в `app/assets/l10n/ru/ui.json` (§285):
-  «Workspaces», «Load», «Save as…», «Manage workspaces…», «Overwrite “%s”?»,
+  «Workspaces», «Load», «Save as…», «Overwrite “%s”?»,
   «Loading workspace…», «Workspace name», «Rename», «Delete», «Default».
 
 ### 2.8 Что происходит с VPN
@@ -237,9 +241,9 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 
 | # | Коммит | Файлы |
 |---|---|---|
-| 1 | `WorkspaceStore`: справочник, `kSlotEntries`, `saveTo(name)`, `loadFrom(name)` (5–7 из §2.3), `recover()`, санитизация; тесты на path_provider-моке + `BoxVpnClient.forTest` (`getFilesDir` → temp) | `services/workspaces/workspace_store.dart`, `test/services/workspace_store_test.dart`, `main.dart` (`recover()` перед `bootstrapAndSyncNativePrefs`) |
-| 2 | `WorkspaceController` + пересоздание `HomeScreen`; `reloadStateFromDisk()` (таблица §2.6); `pendingAutoConnect` в `_initSubsAndAutoUpdate` | `services/workspaces/workspace_controller.dart`, `main.dart`, `home_screen.dart` |
-| 3 | Попап в AppBar + Save as + экран Manage; l10n | `screens/home/widgets/workspace_menu.dart`, `screens/workspaces_screen.dart`, `assets/l10n/ru/ui.json` |
+| 1 | `WorkspaceStore`: справочник, `kSlotEntries`, `saveAs(name)`, `load(name)` (4–8 из §2.3), `recover()`, `rename`/`delete`/`slotSizeBytes`, `validateName`; тесты на path_provider-моке (оба корня) | `services/workspaces/workspace_store.dart`, `test/services/workspace_store_test.dart`, `main.dart` (`recover()` перед `bootstrapAndSyncNativePrefs`) |
+| 2 | `WorkspaceController` (цикл загрузки, `generation`, `takePendingAutoConnect`, перечитывание по таблице §2.6) + пересоздание `HomeScreen` + автозапуск после bootstrap-пересборки; попап в AppBar (Load / Save as) с модальным прогрессом; l10n | `services/workspaces/workspace_controller.dart`, `main.dart`, `home_screen.dart`, `screens/home/widgets/workspace_menu.dart`, `assets/l10n/ru/ui.json` |
+| 3 | Меню «⋮» на строке слота (rename / delete) + размер слота в подзаголовке; экран Manage из первой итерации снят | `workspace_menu.dart` |
 | 4 | Доки: STORAGE.md (дерево + таблица с пометкой «в слоте / устройство»), USER_GUIDE, CHANGELOG | docs |
 
 ## 5. Критерии приёмки

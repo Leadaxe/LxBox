@@ -229,6 +229,27 @@ void main() {
         {'tag': 'awg15p', 'type': 'wireguard', 'i1': '<r 24>', 'id': 'x'},
         {'tag': 'awg2p', 'type': 'wireguard', 's3': 60, 'ib': 'y'},
         {'tag': 'awgponly', 'type': 'wireguard', 'ip': 'quic'},
+        // §421 — AWG 3.x: 3.1 = random_trailers/disable_cookies; 3.0 = любой
+        // другой AWG3-ключ корня или диапазонный keepalive пира. Старше 2.0.
+        {'tag': 'awg31', 'type': 'wireguard', 'jc': 4, 'random_trailers': true},
+        {'tag': 'awg31dc', 'type': 'wireguard', 'disable_cookies': true},
+        {
+          'tag': 'awg3hk',
+          'type': 'wireguard',
+          's3': 40,
+          'h1': '10-20',
+          'header_protection_key': 'k',
+        },
+        {'tag': 'awg3t', 'type': 'wireguard', 'jc': 4, 'rekey_timeout': '3-7'},
+        {
+          'tag': 'awg3ka',
+          'type': 'wireguard',
+          'peers': [
+            {'persistent_keepalive_interval': '25-35'}
+          ],
+        },
+        {'tag': 'awg3p', 'type': 'wireguard', 'rekey_timeout': 5, 'ip': 'x'},
+        {'tag': 'awg31p', 'type': 'wireguard', 'random_trailers': true, 'ib': 'y'},
       ],
     }));
 
@@ -279,6 +300,17 @@ void main() {
       expect(pc['awg2over']?.securityLabel, 'awg2'); // i1+ranged-H → 2.0 старше
       expect(pc['awg1']?.securityLabel, 'awg'); // база + одиночный h1=1
       expect(pc['wg']?.securityLabel, isNull); // plain WG
+    });
+
+    test('§421 security: awg3.1 (trailers/cookies) > awg3 (AWG3-ключ, ranged '
+        'keepalive) > awg2; masquerade → awg3+/awg3.1+', () {
+      expect(pc['awg31']?.securityLabel, 'awg3.1');
+      expect(pc['awg31dc']?.securityLabel, 'awg3.1');
+      expect(pc['awg3hk']?.securityLabel, 'awg3'); // старше awg2 (s3+ranged h)
+      expect(pc['awg3t']?.securityLabel, 'awg3');
+      expect(pc['awg3ka']?.securityLabel, 'awg3'); // только диапазонный keepalive
+      expect(pc['awg3p']?.securityLabel, 'awg3+');
+      expect(pc['awg31p']?.securityLabel, 'awg3.1+');
     });
 
     test('§148 security: masquerade ip/id/ib — awg+ невозможен, мин. awg1.5+',

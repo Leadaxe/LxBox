@@ -1,5 +1,8 @@
 # 386 — WARP wizard: combobox-пресеты у полей с кубиком
 
+> **§420 (2026-09-05):** секция `masque` asset'а переложена по транспортам (`hosts_preset` общий, `h3.hosts_extra`, `h2.v4_cidr`+`exclude`); `h3_v4_cidr`/`ports_h3`/`ports_h2` — фолбэк для старого JSON. Рекомендуемый хост — `162.159.198.2`, не домен. См. [tasks/420](420-masque-pool-per-transport.md).
+
+
 ## Мотивация
 
 Кейс 4PDA (dewch, 09.08.2026): конфиг WARP не заводится, потому что дефолтный

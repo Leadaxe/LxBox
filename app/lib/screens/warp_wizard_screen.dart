@@ -95,7 +95,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   String _lastAutoEndpoint = '';
   // §386 — пресеты для combobox'ов (endpoint WG / IP MASQUE), из asset.
   List<String> _endpointsPreset = const [];
-  List<String> _masqueHostsPreset = const [];
   // §305 — v6-endpoint подставляем только если в системе включён IPv6.
   bool _ipv6Enabled = false;
   // §305 — сервер из последней MASQUE-регистрации (placeholder пустого IP-поля,
@@ -130,7 +129,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
         _sniPool = p.sniPool;
         _masqueSniPool = p.masqueSniPool;
         _endpointsPreset = p.endpointsPreset; // §386
-        _masqueHostsPreset = p.masqueHostsPreset; // §386
         // SNI при открытии — конкретный случайный домен (не «Random»); юзер
         // может выбрать другой/вписать свой или рерольнуть кубиком.
         if (_sni.text.trim().isEmpty) _sni.text = p.randomSni();
@@ -189,6 +187,24 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     final cur = int.tryParse(_masquePort.text.trim());
     if (cur == null || !ports.contains(cur)) {
       _masquePort.text = '${ports.first}';
+    }
+  }
+
+  /// §420 — хосты combobox MASQUE-endpoint под текущий транспорт: h3 —
+  /// общие + h3-only (`.198.1`/`.199.1`), h2/auto — только общие.
+  List<String> get _masqueHostsForNetwork =>
+      _picker?.masqueHostsFor(_masqueNetwork) ?? const <String>[];
+
+  /// §420 — при смене транспорта пресет-хост, которого нет в списке нового
+  /// транспорта (выбрали h3 + `.198.1`, переключились на h2), сбрасываем:
+  /// пустое поле = endpoint регистрации (placeholder), он живёт на обоих.
+  /// Ручной IP (не из пресетов) не трогаем — это выбор юзера.
+  void _syncMasqueHostForNetwork() {
+    final cur = _masqueIp.text.trim();
+    if (cur.isEmpty) return;
+    final known = _picker?.masqueH3Hosts ?? const <String>[];
+    if (known.contains(cur) && !_masqueHostsForNetwork.contains(cur)) {
+      _masqueIp.clear();
     }
   }
 
@@ -537,6 +553,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                                         // §305 — порт h3≠h2: пересинхронизируем
                                         // под новый транспорт.
                                         _syncDefaultMasquePort();
+                                        _syncMasqueHostForNetwork(); // §420
                                       }),
                             ),
                           ),
@@ -574,7 +591,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                                 label: Text(getLocalText.s("Endpoint IP")),
                                 hintText: _masqueRegServer,
                                 dropdownMenuEntries: [
-                                  for (final h in _masqueHostsPreset)
+                                  for (final h in _masqueHostsForNetwork)
                                     _presetEntry(h,
                                         _picker?.recommendedMasqueHost ?? ''),
                                 ],

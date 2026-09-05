@@ -613,6 +613,93 @@ final class AwgHeaderInvalidWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
+/// §421 `awg3_field_invalid` (warning) — AWG 3.x тайминг/паддинг
+/// (content_padding_addition, rekey_*, reject_after_time, keepalive_timeout,
+/// max_handshake_attempts) с мусором или перевёрнутым диапазоном `N>M`,
+/// либо булево (random_trailers/disable_cookies) не on/off. Поле снято, узел
+/// живёт: тайминги клиентские, ядро работает на своих дефолтах. Границы НЕ
+/// свопаются (в отличие от h1–h4). Go-эталон: `applyAWG3Fields` (awg3.go).
+final class Awg3FieldInvalidWarning extends NodeWarning {
+  /// URI/.conf-имя параметра (`contentpaddingaddition`, `randomtrailers`…).
+  final String field;
+
+  /// Значение, как его написал провайдер.
+  final String value;
+
+  const Awg3FieldInvalidWarning(this.field, this.value);
+
+  @override
+  List<Object?> get props => [field, value];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "AmneziaWG 3 field \"%1\$s=%2\$s\" is neither a number, an ordered \"low-high\" range nor on/off, so it was dropped. The core uses its default for it.",
+      field,
+      value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// §421 `awg3_header_key_invalid` (error) — `header_protection_key` не
+/// base64, не 32 байта или все нули. УЗЕЛ выброшен на разборе, а не помечен:
+/// без верного ключа хендшейк невозможен, а ядро отвергает такой конфиг
+/// целиком — один узел лишил бы пользователя VPN. Класс — источник текста
+/// причины для лога отбраковки. Go-эталон: `validateAWG3` (awg3.go).
+final class Awg3HeaderKeyInvalidWarning extends NodeWarning {
+  const Awg3HeaderKeyInvalidWarning();
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "AmneziaWG 3 header protection key is not a 32-byte base64 key, so the node was skipped: the handshake cannot succeed and the core would reject the whole config.");
+
+  @override
+  WarningSeverity get severity => WarningSeverity.error;
+}
+
+/// §421 `awg3_padding_too_short` (error) — при заданном
+/// `header_protection_key` один из s1–s4 меньше 12 (или не задан). УЗЕЛ
+/// выброшен: nonce шифра заголовка берётся из первых 12 байт паддинга, ядро
+/// отвергает такую пару на проверке конфига (docs-lx §2.9/§2.10).
+final class Awg3PaddingTooShortWarning extends NodeWarning {
+  /// `s1`…`s4`.
+  final String field;
+
+  /// Минимум (12).
+  final int min;
+
+  const Awg3PaddingTooShortWarning(this.field, this.min);
+
+  @override
+  List<Object?> get props => [field, min];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "AmneziaWG 3 padding \"%1\$s\" is below %2\$d, the minimum required by the header protection key, so the node was skipped: the core would reject the whole config.",
+      field,
+      min);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.error;
+}
+
+/// §421 `awg3_random_trailers_wide_headers` (info) — `random_trailers`
+/// вместе с ШИРОКИМ диапазоном h1–h4 (ширина ≥ 65536). Ничего не снимается:
+/// это свойство протокола — референсный приёмник сервера принимает
+/// data-датаграммы за кандидатов хендшейка с вероятностью ширина/2³² и
+/// отбрасывает их на MAC, страдает uplink. Go-эталон:
+/// `awg3RandomTrailersWithWideHeaders` (awg3.go).
+final class Awg3RandomTrailersWideHeadersWarning extends NodeWarning {
+  const Awg3RandomTrailersWideHeadersWarning();
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "AmneziaWG 3 random trailers are combined with a wide magic-header range (65536 or more); the server may mistake some upload packets for handshakes and drop them.");
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
 /// `masque_vhttp_invalid` (warning) — MASQUE `vhttp` вне {h3, h2, auto};
 /// принудительно h3. `auto` принят контрактом 0.11.1 (ядро >= lx.27).
 /// Go-эталон: node_parser_masque.go:100.

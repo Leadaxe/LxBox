@@ -1,4 +1,10 @@
 {
+  "api": {
+    "hosts": [
+      "https://api.devices.cloudflare.com",
+      "https://api.cloudflareclient.com"
+    ]
+  },
   "wireguard": {
     "v4_cidr": [
       "162.159.192.0/24",
@@ -54,26 +60,17 @@
     "utls_fp_pool": ["chrome", "firefox", "safari", "edge", "random"]
   },
   "masque": {
-    "v4_cidr": [
-      "162.159.198.0/24",
-      "162.159.199.0/24"
-    ],
-    "recommended_host": "consumer-masque.cloudflareclient.com",
-    "hosts_preset": [
-      "consumer-masque.cloudflareclient.com",
-      "162.159.198.1",
-      "162.159.198.2",
-      "162.159.199.1",
-      "162.159.199.2"
-    ],
-    "h3_v4_cidr": [
-      "162.159.198.1/32",
-      "162.159.198.2/32",
-      "162.159.199.1/32",
-      "162.159.199.2/32"
-    ],
-    "ports_h3": [443, 500, 1701, 4500, 4443, 8443, 8095],
-    "ports_h2": [443, 500, 1701, 4500, 4443, 8443, 8095],
+    "hosts_preset": ["162.159.198.2", "162.159.199.2"],
+    "recommended_host": "162.159.198.2",
+    "h3": {
+      "hosts_extra": ["162.159.198.1", "162.159.199.1"],
+      "ports": [443, 500, 1701, 4500, 4443, 8443, 8095]
+    },
+    "h2": {
+      "v4_cidr": ["162.159.198.0/24", "162.159.199.0/24"],
+      "exclude": ["162.159.198.1", "162.159.199.1"],
+      "ports": [443, 500, 1701, 4500, 4443, 8443, 8095]
+    },
     "recommended_sni": "consumer-masque.cloudflareclient.com",
     "sni_pool": [
       "consumer-masque.cloudflareclient.com", "www.cloudflare.com", 

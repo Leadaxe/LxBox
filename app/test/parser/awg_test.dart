@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/ini_parser.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
@@ -352,6 +353,251 @@ void main() {
       final again = parseWireguardUri(spec.rawUri)!;
       expect(again.tag, 'awg2 export (home)');
       expect(again.awg!.fields['i1'], '<b 0x084481800001>');
+    });
+  });
+
+  // §421 — AmneziaWG 3.0/3.1: защита заголовка, паддинг, хвосты, тайминги.
+  // Эталон — Go awg3.go (SPEC 123); ключи синтетические (32 байта, не нули).
+  group('§421 — AmneziaWG 3.x', () {
+    const hk = 'Bw4VHCMqMTg/Rk1UW2JpcHd+hYyTmqGor7a9xMvS2eA=';
+    // '+' и '/' ключа в query — percent-encoded, как эмитит buildQuery.
+    final hkQ = Uri.encodeQueryComponent(hk).replaceAll('+', '%20');
+    String uri(String extra, {String base = ''}) =>
+        'wireguard://$_testPriv@host.example.com:30565'
+        '?publickey=$_testPub&address=10.8.1.7/32&allowedips=0.0.0.0/0,::/0'
+        '$base$extra#awg3';
+    const s = '&s1=55&s2=42&s3=40&s4=12';
+
+    test('полный набор: диапазоны строкой, одиночное числом, булевы true, '
+        'keepalive "25-35", MTU 1376 клампится до 1280', () {
+      final spec = parseWireguardUri(uri(
+          '&mtu=1376&keepalive=25-35&jc=4&jmin=10&jmax=50$s&h1=1&h2=2&h3=3&h4=4'
+          '&headerprotectionkey=$hkQ&contentpaddingaddition=10-100'
+          '&rekeyaftertime=100-120&rekeytimeout=3-7&rejectaftertime=150-180'
+          '&keepalivetimeout=5-15&maxhandshakeattempts=15'
+          '&randomtrailers=on&disablecookies=on'))!;
+      final f = spec.awg!.fields;
+      expect(f['header_protection_key'], hk);
+      expect(f['content_padding_addition'], '10-100');
+      expect(f['rekey_after_time'], '100-120');
+      expect(f['max_handshake_attempts'], 15); // одиночное → int
+      expect(f['random_trailers'], true);
+      expect(f['disable_cookies'], true);
+      expect(f['h1'], 1); // H1–H4 = 1..4 нормальны при защите заголовка
+      expect(spec.mtu, 1280); // AWG3 клампится как AWG2 (решение 2026-09-05)
+      expect(spec.peers.single.persistentKeepalive, '25-35');
+      expect(spec.warnings, isEmpty);
+      final map = spec.emit(TemplateVars.empty).map;
+      expect(map['random_trailers'], true);
+      expect(map['rekey_timeout'], '3-7');
+      expect(map['mtu'], 1280);
+      expect(
+          (map['peers'] as List).first['persistent_keepalive_interval'], '25-35');
+    });
+
+    test('ключ защиты с сырым "+" в query переживает разбор (не пробел)', () {
+      final spec = parseWireguardUri(uri('$s&headerprotectionkey=$hk'))!;
+      expect(spec.awg!.fields['header_protection_key'], hk);
+    });
+
+    test('url-safe/без паддинга ключ нормализуется к std base64', () {
+      final urlSafe = hk.replaceAll('+', '-').replaceAll('/', '_')
+          .replaceAll('=', '');
+      final spec = parseWireguardUri(uri('$s&headerprotectionkey=$urlSafe'))!;
+      expect(spec.awg!.fields['header_protection_key'], hk);
+    });
+
+    test('булевы off/false/0/пусто → ключа нет; on/true/1 → true', () {
+      for (final v in ['off', 'false', '0', '']) {
+        final spec = parseWireguardUri(uri('$s&randomtrailers=$v'))!;
+        expect(spec.awg!.fields.containsKey('random_trailers'), false,
+            reason: 'randomtrailers=$v');
+        expect(spec.emit(TemplateVars.empty).map.containsKey('random_trailers'),
+            false);
+      }
+      for (final v in ['on', 'true', '1', 'On']) {
+        final spec = parseWireguardUri(uri('$s&disablecookies=$v'))!;
+        expect(spec.awg!.fields['disable_cookies'], true, reason: v);
+      }
+    });
+
+    test('таблица негативов: поле снято, узел жив, awg3_field_invalid', () {
+      const cases = <String, String>{
+        'contentpaddingaddition': 'abc',
+        'rekeyaftertime': '120-100', // N > M — НЕ свопается (в отличие от h)
+        'rekeytimeout': '3-',
+        'rejectaftertime': '-5',
+        'keepalivetimeout': '1-2-3',
+        'maxhandshakeattempts': '4294967296', // > uint32
+        'randomtrailers': 'maybe',
+        'disablecookies': 'yes',
+      };
+      cases.forEach((param, value) {
+        final spec = parseWireguardUri(uri('$s&$param=$value'))!;
+        final json = Awg.awg3ParamToJson[param]!;
+        expect(spec.awg!.fields.containsKey(json), false,
+            reason: '$param=$value должно быть снято');
+        expect(spec.warnings, contains(Awg3FieldInvalidWarning(param, value)),
+            reason: '$param=$value');
+        // Маркер AWG3 даже при невалидном поле: узел — AmneziaWG, дефолт 1280.
+        expect(spec.mtu, 1280);
+      });
+    });
+
+    test('h1–h4 перевёрнутый диапазон по-прежнему свопается (контраст)', () {
+      final spec = parseWireguardUri(uri('$s&h1=300-200'))!;
+      expect(spec.awg!.fields['h1'], '200-300');
+    });
+
+    test('битый ключ защиты (не base64 / 16 байт / нули) → узел выброшен', () {
+      const zero = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+      for (final bad in ['not-base64!', 'AQIDBAUGBwgJCgsMDQ4PEA==', zero]) {
+        expect(parseWireguardUri(uri('$s&headerprotectionkey=$bad')), isNull,
+            reason: bad);
+      }
+    });
+
+    test('ключ защиты + s1–s4 < 12 (или отсутствует) → узел выброшен', () {
+      expect(
+          parseWireguardUri(
+              uri('&s1=55&s2=42&s3=40&s4=11&headerprotectionkey=$hkQ')),
+          isNull);
+      expect(parseWireguardUri(uri('&s1=55&s2=42&s3=40&headerprotectionkey=$hkQ')),
+          isNull);
+      // Без ключа защиты короткий паддинг легален (AWG2-поведение).
+      expect(parseWireguardUri(uri('&s1=5&s4=0')), isNotNull);
+    });
+
+    test('random_trailers + широкий диапазон h → info, ничего не снято', () {
+      final spec = parseWireguardUri(
+          uri('$s&h1=1000-70000&randomtrailers=on'))!;
+      expect(spec.awg!.fields['h1'], '1000-70000');
+      expect(spec.awg!.fields['random_trailers'], true);
+      expect(spec.warnings,
+          contains(const Awg3RandomTrailersWideHeadersWarning()));
+      // Узкий диапазон — без info.
+      final narrow = parseWireguardUri(
+          uri('$s&h1=1000-2000&randomtrailers=on'))!;
+      expect(narrow.warnings, isEmpty);
+    });
+
+    test('keepalive: мусор пропускается; один диапазонный keepalive = '
+        'маркер AWG3 (узел AWG даже без AWG2-полей → кламп 1280)', () {
+      final junk = parseWireguardUri(uri('&keepalive=abc'))!;
+      expect(junk.peers.single.persistentKeepalive, isNull);
+      expect(junk.mtu, isNull); // plain WG без mtu — поле не эмитим
+      final ranged = parseWireguardUri(uri('&mtu=1376&keepalive=25-35'))!;
+      expect(ranged.awg, isNull);
+      expect(ranged.peers.single.persistentKeepalive, '25-35');
+      expect(ranged.mtu, 1280);
+      // Явно ниже 1280 — уважаем, как у AWG2.
+      expect(parseWireguardUri(uri('&mtu=1200&keepalive=25-35'))!.mtu, 1200);
+    });
+
+    test('AWG2 без AWG3-маркеров клампится как раньше', () {
+      final spec = parseWireguardUri(uri('&mtu=1376&jc=4$s'))!;
+      expect(spec.mtu, 1280);
+    });
+
+    test('round-trip writeQuery → fromQuery без потерь (булевы → on)', () {
+      final awg = Awg({
+        'jc': 4,
+        's1': 55, 's2': 42, 's3': 40, 's4': 12,
+        'h1': '1000-2000',
+        'header_protection_key': hk,
+        'content_padding_addition': '10-100',
+        'rekey_after_time': 100,
+        'random_trailers': true,
+      });
+      final q = <String, String>{};
+      awg.writeQuery(q);
+      expect(q['randomtrailers'], 'on');
+      expect(q['contentpaddingaddition'], '10-100');
+      expect(q['rekeyaftertime'], '100');
+      expect(q['headerprotectionkey'], hk);
+      expect(q.containsKey('random_trailers'), false);
+      final again = Awg.fromQuery(q)!;
+      expect(again.fields, awg.fields);
+    });
+
+    test('round-trip share-URI: spec → toUri → parse сохраняет AWG3-набор', () {
+      final spec = parseWireguardUri(uri(
+          '&mtu=1200&keepalive=25-35&jc=4$s&h1=1&headerprotectionkey=$hkQ'
+          '&rekeytimeout=3-7&randomtrailers=on&disablecookies=on'))!;
+      final again = parseWireguardUri(spec.toUri())!;
+      expect(again.awg!.fields, spec.awg!.fields);
+      expect(again.mtu, 1200);
+      expect(again.peers.single.persistentKeepalive, '25-35');
+      expect(spec.toUri(), contains('randomtrailers=on'));
+    });
+
+    test('JSON endpoint: AWG3-ключи, keepalive строкой, кламп 1280; '
+        'битый ключ → null', () {
+      final entry = <String, dynamic>{
+        'type': 'wireguard',
+        'tag': 'awg3',
+        'mtu': 1376,
+        'address': ['10.8.1.7/32'],
+        'private_key': _testPriv,
+        'peers': [
+          {
+            'address': 'host.example.com',
+            'port': 30565,
+            'public_key': _testPub,
+            'allowed_ips': ['0.0.0.0/0'],
+            'persistent_keepalive_interval': '25-35',
+          }
+        ],
+        'jc': 4, 's1': 55, 's2': 42, 's3': 40, 's4': 12,
+        'header_protection_key': hk,
+        'content_padding_addition': '10-100',
+        'rekey_timeout': 5,
+        'random_trailers': true,
+        'disable_cookies': false,
+      };
+      final spec = parseSingboxEntry(entry) as WireguardSpec;
+      final f = spec.awg!.fields;
+      expect(f['header_protection_key'], hk);
+      expect(f['content_padding_addition'], '10-100');
+      expect(f['rekey_timeout'], 5);
+      expect(f['random_trailers'], true);
+      expect(f.containsKey('disable_cookies'), false); // false = ключа нет
+      expect(spec.mtu, 1280);
+      expect(spec.peers.single.persistentKeepalive, '25-35');
+      final bad = Map<String, dynamic>.from(entry)
+        ..['header_protection_key'] = 'AQIDBAUGBwgJCgsMDQ4PEA==';
+      expect(parseSingboxEntry(bad), isNull);
+    });
+
+    test('INI: AWG3-ключи [Interface], PersistentKeepalive = 25-35', () {
+      const conf = '[Interface]\n'
+          'Address = 10.8.1.7/32\n'
+          'PrivateKey = $_testPriv\n'
+          'Jc = 4\n'
+          'S1 = 55\n'
+          'S2 = 42\n'
+          'S3 = 40\n'
+          'S4 = 12\n'
+          'H1 = 1\n'
+          'HeaderProtectionKey = $hk\n'
+          'ContentPaddingAddition = 10-100\n'
+          'RekeyAfterTime = 100-120\n'
+          'RandomTrailers = on\n'
+          'DisableCookies = off\n'
+          '[Peer]\n'
+          'PublicKey = $_testPub\n'
+          'AllowedIPs = 0.0.0.0/0, ::/0\n'
+          'Endpoint = 203.0.113.9:30565\n'
+          'PersistentKeepalive = 25-35\n';
+      final spec = parseWireguardIni(conf)!;
+      final f = spec.awg!.fields;
+      expect(f['header_protection_key'], hk);
+      expect(f['content_padding_addition'], '10-100');
+      expect(f['rekey_after_time'], '100-120');
+      expect(f['random_trailers'], true);
+      expect(f.containsKey('disable_cookies'), false);
+      expect(spec.peers.single.persistentKeepalive, '25-35');
+      expect(spec.mtu, 1280); // AWG3 без MTU — дефолт AmneziaWG 1280
     });
   });
 }
