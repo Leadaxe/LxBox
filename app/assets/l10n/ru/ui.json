@@ -761,6 +761,18 @@
   "AmneziaWG header \"%1$s=%2$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.": {
     "value": "Заголовок AmneziaWG «%1$s=%2$s» — не число и не диапазон «нижняя-верхняя», поэтому отброшен. Ядро возьмёт обычный заголовок WireGuard, и рукопожатие может не совпасть с сервером."
   },
+  "AmneziaWG 3 field \"%1$s=%2$s\" is neither a number, an ordered \"low-high\" range nor on/off, so it was dropped. The core uses its default for it.": {
+    "value": "Поле AmneziaWG 3 «%1$s=%2$s» — не число, не упорядоченный диапазон «нижняя-верхняя» и не on/off, поэтому отброшено. Ядро возьмёт своё значение по умолчанию."
+  },
+  "AmneziaWG 3 header protection key is not a 32-byte base64 key, so the node was skipped: the handshake cannot succeed and the core would reject the whole config.": {
+    "value": "Ключ защиты заголовка AmneziaWG 3 — не 32-байтный ключ base64, поэтому узел пропущен: рукопожатие невозможно, а ядро отвергло бы весь конфиг."
+  },
+  "AmneziaWG 3 padding \"%1$s\" is below %2$d, the minimum required by the header protection key, so the node was skipped: the core would reject the whole config.": {
+    "value": "Паддинг AmneziaWG 3 «%1$s» меньше %2$d — минимума, который требует ключ защиты заголовка, поэтому узел пропущен: ядро отвергло бы весь конфиг."
+  },
+  "AmneziaWG 3 random trailers are combined with a wide magic-header range (65536 or more); the server may mistake some upload packets for handshakes and drop them.": {
+    "value": "Случайные хвосты AmneziaWG 3 сочетаются с широким диапазоном magic-заголовков (65536 и больше); сервер может принять часть исходящих пакетов за рукопожатия и отбросить их."
+  },
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ требует это разрешение для SSID. Нажмите, чтобы выдать."
   },

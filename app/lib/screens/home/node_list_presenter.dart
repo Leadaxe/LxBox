@@ -177,7 +177,7 @@ class NodeListPresenter {
   static const _variantOrder = <String>[
     'tcp', 'ws', 'grpc', 'h2', 'h3', 'httpupgrade', 'quic', 'xhttp',
     'TLS', 'TLS+Vision', 'Reality', 'Reality+Vision',
-    'awg', 'awg1.5', 'awg2',
+    'awg', 'awg1.5', 'awg2', 'awg3', 'awg3.1',
     // §359 — режимы узла автовыбора (§322): свой transport-слот, в конец ряда.
     'least_test', 'round_robin',
   ];

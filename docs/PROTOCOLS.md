@@ -842,9 +842,9 @@ Scheme aliases: `wireguard://`, `wg://` and `awg://` — all three are parsed by
 | Private key | userinfo | WireGuard private key |
 | Public key | `publickey` | Peer public key (required) |
 | Address | `address` | Comma-separated local addresses (required) |
-| MTU | `mtu` | The MTU value (default 1408; AWG nodes are clamped to `min(mtu, 1280)`, see [8.5](#85-amneziawg-awg-awg2)) |
+| MTU | `mtu` | The MTU value (default 1408; AWG 1.x/2.0 nodes are clamped to `min(mtu, 1280)`, AWG 3.x nodes keep the server value — see [8.5](#85-amneziawg-awg-awg2)) |
 | Pre-shared key | `presharedkey` | Peer pre-shared key |
-| Keepalive | `keepalive` | Persistent keepalive interval (seconds) |
+| Keepalive | `keepalive` | Persistent keepalive interval: `N` seconds, or an AWG 3.x range `N-M` (emitted as the string `"N-M"`; the core re-picks the interval on every timer, §421) |
 | Allowed IPs | `allowedips` | Peer allowed IPs (default: `0.0.0.0/0, ::/0`) |
 | Reserved / client_id | `reserved` or `client_id` | Cloudflare WARP client_id — 3 bytes, decimal `b0,b1,b2` or base64 (§025/§126). Emitted **per-peer** as `reserved: [b0,b1,b2]`. Without it a WARP handshake may complete but no data passes. |
 
@@ -909,11 +909,16 @@ awg://PRIVATE_KEY@host:port?publickey=...&address=...&jc=4&jmin=40&jmax=70&s1=0&
 | `h1`–`h4` | int \| `"N-M"` | Magic headers — substituting the packet types. A single `N` is 1.0; a range `N-M` is ranged headers (§112) | AWG 1.0 / 2.0 |
 | `i1`–`i5` | string | CPS decoy packets, in the tag format `<b 0xHEX><r N>…` | AWG 1.5 |
 | `id`, `ip`, `ib` | string | Masquerade sugar (WireSock-style) over `i1` — the core expands it into an `i1` CPS packet itself. **Mutually exclusive with an explicit `i1`** (both at once is a core startup error). §143 | AWG 1.5 |
+| `headerprotectionkey` | base64, 32 bytes | Header protection key (`HeaderProtectionKey`, `awg genkey` on the server) → `header_protection_key`. Copied verbatim (url-safe/unpadded forms are normalised to std base64). With it set, each of `s1`–`s4` must be ≥ 12: the padding carries the header-cipher nonce. §421 | AWG 3.0 |
+| `contentpaddingaddition`, `rekeyaftertime`, `rekeytimeout`, `rejectaftertime`, `keepalivetimeout`, `maxhandshakeattempts` | int \| `"N-M"` | Content padding and client-side timings → `content_padding_addition`, `rekey_after_time`, `rekey_timeout`, `reject_after_time`, `keepalive_timeout`, `max_handshake_attempts`. A single `N` is a JSON number, a range `N-M` a JSON string. §421 | AWG 3.0 |
+| `randomtrailers`, `disablecookies` | `on`/`off` | Random trailers on data packets and cookie suppression → `random_trailers`, `disable_cookies`. `on`/`true`/`1` emits `true`; `off`/empty emits **nothing** (never `false`). §421 | AWG 3.1 |
 
 - The numeric fields are uint32 and are emitted as a JSON **number**.
 - `h1`–`h4` (§112): a value of `N` becomes an `int` (the numeric string `"5"` is normalised to `int 5`), while a range `N-M` becomes a `String` and is emitted as a JSON **string** (the core contract from `lx.6` onwards). We do not validate further (start ≤ end, uint32, non-overlapping ranges) — the core does that with an explicit startup error, and dropping silently here would produce a quietly broken handshake.
 - `i1`–`i5` are strings and **case is preserved** exactly (they are case-sensitive and must not be altered).
 - A malformed number in the query means the field is skipped silently (forward compatibility, as with `mtu` and `keepalive`) and parsing the node does not fail. For `h*`, “malformed” means it fits neither `N` nor `N-M`.
+- AWG 3.x error policy (§421, mirrors the launcher's SPEC 123): a timing/padding value that is not a uint32 nor an **ordered** `N-M` range (`120-100` is not swapped, unlike `h1`–`h4` — a reversed timing is a typo the user must see), or a boolean that is not on/off, **drops the field** with the `awg3_field_invalid` warning; the node lives on the core defaults. A header protection key that is not base64 / not 32 bytes / all zeros, or a key with any of `s1`–`s4` below 12, **drops the node** (`awg3_header_key_invalid`, `awg3_padding_too_short`): the handshake cannot work and the core would reject the whole config. `random_trailers` together with a ranged `h1`–`h4` at least 65536 wide only earns the info `awg3_random_trailers_wide_headers` (the server's reference receiver may mistake upload packets for handshakes).
+- The URI/`.conf` name of an AWG 3.x key is its JSON key lower-cased without underscores (`ContentPaddingAddition` / `contentpaddingaddition` ↔ `content_padding_addition`), the same rule as `Jc` ↔ `jc`. The share-URI emitter writes the booleans back as `on`. `H1`–`H4` equal to `1..4` are normal in AWG 3.x exports (the message type is masked by the header protection) and are not “fixed”.
 
 > **`reserved` ≠ `reserved_zero[3]` — different things sharing the same bytes.**
 > In LxBox terminology `reserved` is the **Cloudflare WARP client_id**, 3 bytes, emitted **per peer** (section 8, `reserved: [b0,b1,b2]`).
@@ -932,6 +937,8 @@ Why 1280:
 - the risks are asymmetric: setting it too low only makes packets slightly smaller, while setting it too high fails silently (the handshake works, no data flows).
 
 An explicitly lower MTU (≤ 1280) is respected as given.
+
+**AWG 3.x is exempt from the clamp** (§421): a node with any AWG 3.x key (even a malformed one) or a ranged `keepalive` keeps the MTU the server prescribed — Amnezia exports 1376 — and without an explicit `mtu` the field is not emitted at all (the core default applies). Header protection and trailers live inside the path's UDP window, so clamping to 1280 would only diverge from the server.
 
 ### INI
 
@@ -983,12 +990,14 @@ Ranged headers (§112) — ranges as strings, single values as numbers, and the 
 
 Parsing back (the JSON editor, Smart-Paste) collects the same fields from the root of the entry (`Awg.fromJson` inside `parseSingboxEntry`).
 
-### AmneziaWG versions: awg / awg1.5 / awg2 (§148)
+### AmneziaWG versions: awg / awg1.5 / awg2 / awg3 / awg3.1 (§148, §421)
 
 A node's subtitle and the variant filter (§102/§103) tell the **AmneziaWG version** apart structurally, by which fields are present in the config ([`config_node.dart`](../app/lib/models/config_node.dart)). This matches Amnezia's own versioning (they publish explicit config-format versions, with migration instructions for 1.0→1.5). The verdict comes from the highest marker present (priority top to bottom):
 
 | Label | Version | What the version added | The marker in the config |
 |-------|--------|---------------------|------------------|
+| `awg3.1` | 3.1 | Random trailers on data packets, cookie suppression | `random_trailers` **or** `disable_cookies` |
+| `awg3` | 3.0 | Header protection, content padding, ranged client timings and keepalive | any other AWG 3.x root key (`header_protection_key`, `content_padding_addition`, `rekey_*`, `reject_after_time`, `keepalive_timeout`, `max_handshake_attempts`) **or** a ranged `persistent_keepalive_interval` (`"N-M"`) on a peer |
 | `awg2` | 2.0 | Dynamics instead of static values: header ranges and random padding on transport messages | a ranged `h1`–`h4` header (`"N-M"`, §112) **or** `s3`/`s4` |
 | `awg1.5` | 1.5 | Signature packets (CPS) — mimicry of a real protocol (a hex snapshot, e.g. a QUIC Initial), sent before the junk chain | any of `i1`–`i5` |
 | `awg` | 1.0 | Basic obfuscation on top of WireGuard | `jc`/`jmin`/`jmax` (junk), `s1`/`s2` (init padding), single-valued `h1`–`h4` (magic headers) |
@@ -1000,14 +1009,14 @@ The `+` suffix is added when the masquerade sugar `ip`/`id`/`ib` is present (§1
 
 | Base (before the suffix) | + masquerade |
 |--------------------|--------------|
-| `awg2` (2.0) | `awg2+` |
+| `awg3.1` / `awg3` / `awg2` | `awg3.1+` / `awg3+` / `awg2+` |
 | `awg1.5` / `awg` / no AWG fields | `awg1.5+` |
 
 The masquerade fields are mutually exclusive with an explicit `i1` at the core level (both at once is a startup error), but the label is derived from the raw JSON before validation — which is why the suffix is checked independently.
 
 ### The core requirement
 
-This only works on the bundled `sing-box-lx` fork core (the `with_awg` build tag). Stock upstream sing-box does not know these fields and **rejects the config at load time**. Ranged headers (`"h1": "N-M"` as a string) require a core of at least `v1.13.13-lx.6` — an older core dies unmarshalling such a config (which is why §112 re-pins [libbox.version](../app/android/libbox.version) in the same commit).
+This only works on the bundled `sing-box-lx` fork core (the `with_awg` build tag). Stock upstream sing-box does not know these fields and **rejects the config at load time**. Ranged headers (`"h1": "N-M"` as a string) require a core of at least `v1.13.13-lx.6` — an older core dies unmarshalling such a config (which is why §112 re-pins [libbox.version](../app/android/libbox.version) in the same commit). The AWG 3.x keys (§421) require at least `v1.14.0-lx.32` (`lx.33` fixes receiving data packets under `random_trailers`); a core up to `lx.31` rejects a config with any AWG 3.x key as a whole. The core ships inside the APK, so LxBox has no runtime gate for it — the pin is bumped in the same commit.
 
 ### Reference
 
@@ -1044,8 +1053,8 @@ Auto-detected when input contains both `[Interface]` and `[Peer]` sections.
 
 The INI config is converted to a `wireguard://` URI internally using `wireGuardConfigToUri()`:
 
-1. Parse `[Interface]`: `PrivateKey`, `Address`, `MTU` plus the AWG fields `Jc`/`Jmin`/`Jmax`/`S1`–`S4`/`H1`–`H4`/`I1`–`I5` (§097, see [8.5](#85-amneziawg-awg-awg2); keys are case-insensitive, the case of the value is preserved, and `i*` are URL-escaped in the query)
-2. Parse `[Peer]`: `PublicKey`, `Endpoint` (host:port), `PresharedKey`, `PersistentKeepalive`, `Reserved`/`ClientId` (WARP client_id, §126)
+1. Parse `[Interface]`: `PrivateKey`, `Address`, `MTU` plus the AWG fields `Jc`/`Jmin`/`Jmax`/`S1`–`S4`/`H1`–`H4`/`I1`–`I5` (§097, see [8.5](#85-amneziawg-awg-awg2); keys are case-insensitive, the case of the value is preserved, and `i*` are URL-escaped in the query) and the AWG 3.x keys `HeaderProtectionKey`, `ContentPaddingAddition`, `RekeyAfterTime`, `RekeyTimeout`, `RejectAfterTime`, `KeepaliveTimeout`, `MaxHandshakeAttempts`, `RandomTrailers`, `DisableCookies` (§421; passed through under the same lower-cased names)
+2. Parse `[Peer]`: `PublicKey`, `Endpoint` (host:port), `PresharedKey`, `PersistentKeepalive` (`N` or the AWG 3.x range `N-M`, passed through as text), `Reserved`/`ClientId` (WARP client_id, §126)
 3. Construct: `wireguard://host:port?publickey=...&privatekey=...&address=...&...#WireGuard`
 4. The resulting URI is then parsed by the standard WireGuard parser (see section 8).
 
@@ -1072,6 +1081,7 @@ vpn://<base64url( qCompress(JSON, 8) )>
 - base64url **without padding** (the `-_` alphabet, `Base64UrlEncoding | OmitTrailingEquals`); the padded and standard variants are accepted too (`decodeBase64Safe`).
 - `qCompress` is 4 big-endian bytes (the uncompressed length) followed by a standard zlib stream. An uncompressed payload (bare base64 JSON) is the fallback, matching Amnezia's `importController`.
 - Inside the JSON: `containers[]` → the `awg` / `wireguard` sub-objects → `last_config` (a JSON string; we defensively accept an object too) → `config`, a ready-made WG/AWG INI (section 9). The `$PRIMARY_DNS` / `$SECONDARY_DNS` placeholders are filled in from the root-level `dns1` / `dns2`.
+- AWG 3.x exports (§421: the `amnezia-awg2` container with `protocol_version: "3.1"`) keep the MTU **outside** the INI — in `last_config.mtu` (the string `"1376"`) next to `config`. When `[Interface]` has no `MTU`, an `MTU = N` line is appended to the INI before the INI → URI conversion (one conversion point; an explicit `MTU` in `[Interface]` wins). The AWG 3.x keys themselves travel inside the INI (section 9).
 
 ### Detection / Flow
 

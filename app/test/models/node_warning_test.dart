@@ -97,6 +97,11 @@ void main() {
         NaivePaddingIgnoredWarning() => 'naive_padding_ignored',
         TuicCongestionInvalidWarning() => 'tuic_congestion_invalid',
         AwgHeaderInvalidWarning() => 'awg_header_invalid',
+        Awg3FieldInvalidWarning() => 'awg3_field_invalid',
+        Awg3HeaderKeyInvalidWarning() => 'awg3_header_key_invalid',
+        Awg3PaddingTooShortWarning() => 'awg3_padding_too_short',
+        Awg3RandomTrailersWideHeadersWarning() =>
+          'awg3_random_trailers_wide_headers',
         MasqueVhttpInvalidWarning() => 'masque_vhttp_invalid',
         AnyTlsMinIdleInvalidWarning() => 'anytls_min_idle_invalid',
         PacketEncodingUnknownWarning() => 'packet_encoding_unknown',

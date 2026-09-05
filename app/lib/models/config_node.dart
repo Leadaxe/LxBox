@@ -121,8 +121,14 @@ class ConfigNode {
       //         s3/s4 (random-padding на transport-сообщения).
       //   1.5 — signature-пакеты (CPS) i1–i5 — hex-снимок реального протокола.
       //   1.0 — базовая обфускация: jc/jmin/jmax, s1/s2, одиночные h1–h4.
+      //   3.1 — random_trailers / disable_cookies (§421).
+      //   3.0 — любой другой AWG3-ключ корня или диапазонный keepalive пира.
       String? base;
-      if (_hasRangedHeader(raw) || raw.containsKey('s3') ||
+      if (Awg.awg3BoolKeys.any((k) => raw[k] != null)) {
+        base = 'awg3.1';
+      } else if (Awg.hasAwg3Json(raw)) {
+        base = 'awg3';
+      } else if (_hasRangedHeader(raw) || raw.containsKey('s3') ||
           raw.containsKey('s4')) {
         base = 'awg2';
       } else if (_signatureKeys.any(raw.containsKey)) {
@@ -137,7 +143,10 @@ class ConfigNode {
       // ядра взаимоисключающи, но лейбл считаем по сырому JSON до валидации.)
       const plusKeys = <String>{'ip', 'id', 'ib'};
       if (plusKeys.any(raw.containsKey)) {
-        return base == 'awg2' ? 'awg2+' : 'awg1.5+';
+        return switch (base) {
+          'awg2' || 'awg3' || 'awg3.1' => '$base+',
+          _ => 'awg1.5+',
+        };
       }
       return base;
     }

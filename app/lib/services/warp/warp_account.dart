@@ -168,7 +168,12 @@ class WarpAccount {
       // Детерминированный порядок: числовые сначала, i* в конце (читаемость).
       final keys = awgFields.keys.toList()..sort();
       for (final k in keys) {
-        b.writeln('${k.toUpperCase()} = ${awgFields[k]}');
+        final v = awgFields[k];
+        // §421 — AWG3: булево → `on`, ключ без `_` (парсер lowercase'ит).
+        final name = Awg.awg3JsonKeys.contains(k)
+            ? Awg.awg3Param(k).toUpperCase()
+            : k.toUpperCase();
+        b.writeln('$name = ${v is bool ? 'on' : v}');
       }
     }
     b

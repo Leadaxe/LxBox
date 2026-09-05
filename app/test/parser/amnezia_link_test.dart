@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/screens/subscriptions_screen/clipboard_analysis.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
@@ -200,6 +201,105 @@ void main() {
       final spec = restored.nodes.single as WireguardSpec;
       expect(spec.awg, isNotNull);
       expect(spec.server, '203.0.113.10');
+    });
+  });
+
+  // §421 — экспорт AWG 3.1: контейнер amnezia-awg2, protocol_version "3.1",
+  // MTU лежит в last_config.mtu (не в [Interface]), DNS через плейсхолдеры.
+  // Ключи синтетические.
+  group('§421 — AWG 3.1 экспорт (amnezia-awg2)', () {
+    const hk = 'Bw4VHCMqMTg/Rk1UW2JpcHd+hYyTmqGor7a9xMvS2eA=';
+    const awg3Ini = r'''
+[Interface]
+Address = 10.8.1.7/32
+DNS = $PRIMARY_DNS, $SECONDARY_DNS
+PrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=
+Jc = 4
+Jmin = 10
+Jmax = 50
+S1 = 55
+S2 = 42
+S3 = 40
+S4 = 12
+H1 = 1
+H2 = 2
+H3 = 3
+H4 = 4
+HeaderProtectionKey = Bw4VHCMqMTg/Rk1UW2JpcHd+hYyTmqGor7a9xMvS2eA=
+ContentPaddingAddition = 10-100
+RekeyAfterTime = 100-120
+RekeyTimeout = 3-7
+RejectAfterTime = 150-180
+KeepaliveTimeout = 5-15
+MaxHandshakeAttempts = 15-20
+RandomTrailers = on
+DisableCookies = on
+
+[Peer]
+PublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=
+PresharedKey = ccccccccccccccccccccccccccccccccccccccccccA=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = 203.0.113.9:30565
+PersistentKeepalive = 25-35
+''';
+    Map<String, dynamic> awg3Container({String? mtu = '1376'}) => {
+          'container': 'amnezia-awg2',
+          'awg': {
+            'last_config': jsonEncode({
+              'config': awg3Ini,
+              'mtu': ?mtu,
+              'port': '30565',
+              'protocol_version': '3.1',
+            }),
+            'port': '30565',
+            'protocol_version': '3.1',
+            'transport_proto': 'udp',
+          },
+        };
+    Map<String, dynamic> export3(Map<String, dynamic> c) => {
+          'containers': [c],
+          'defaultContainer': 'amnezia-awg2',
+          'description': 'AWG3 Node',
+          'dns1': '172.29.172.254',
+          'dns2': '1.0.0.1',
+          'hostName': '203.0.113.9',
+        };
+
+    test('end-to-end: mtu 1376 из last_config, keepalive "25-35", тайминги, '
+        'булевы, DNS без плейсхолдеров', () {
+      final link = makeLink(export3(awg3Container()));
+      final spec = parseAll(decode(link)).single as WireguardSpec;
+      final f = spec.awg!.fields;
+      expect(f['header_protection_key'], hk);
+      expect(f['content_padding_addition'], '10-100');
+      expect(f['max_handshake_attempts'], '15-20');
+      expect(f['random_trailers'], true);
+      expect(f['disable_cookies'], true);
+      expect(f['h1'], 1);
+      expect(spec.mtu, 1376);
+      expect(spec.peers.single.persistentKeepalive, '25-35');
+      expect(spec.rawIni, contains('MTU = 1376'));
+      expect(spec.rawIni, contains('172.29.172.254'));
+      expect(spec.rawIni, isNot(contains(r'$PRIMARY_DNS')));
+      final map = spec.emit(TemplateVars.empty).map;
+      expect(map['mtu'], 1376);
+      expect(map['reject_after_time'], '150-180');
+    });
+
+    test('явный MTU в [Interface] приоритетнее last_config.mtu', () {
+      final c = awg3Container();
+      final lc = jsonDecode(c['awg']['last_config'] as String) as Map;
+      lc['config'] = (lc['config'] as String)
+          .replaceFirst('[Interface]\n', '[Interface]\nMTU = 1300\n');
+      c['awg']['last_config'] = jsonEncode(lc);
+      final spec = parseAll(decode(makeLink(export3(c)))).single as WireguardSpec;
+      expect(spec.mtu, 1300);
+    });
+
+    test('без last_config.mtu и без MTU — поле не задано (без клампа)', () {
+      final spec = parseAll(decode(makeLink(export3(awg3Container(mtu: null)))))
+          .single as WireguardSpec;
+      expect(spec.mtu, isNull);
     });
   });
 

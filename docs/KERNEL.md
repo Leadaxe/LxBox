@@ -25,8 +25,19 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.0-lx.30`** (see `app/android/libbox.version`) —
-**SPEC 076/059 plus the XHTTP detour DNS fix**: DNS servers of type `udp`,
+**The current pin: `v1.14.0-lx.33`** (see `app/android/libbox.version`) —
+**AmneziaWG 3.0/3.1 (§421)**: the `wireguard` endpoint accepts the AWG 3.x
+root keys — `header_protection_key`, `content_padding_addition`, the ranged
+timings `rekey_after_time` / `rekey_timeout` / `reject_after_time` /
+`keepalive_timeout` / `max_handshake_attempts` (a number or an `"N-M"`
+string), `random_trailers`, `disable_cookies`, plus a ranged
+`persistent_keepalive_interval` on a peer. `lx.32` was the first core with the
+fields; `lx.33` fixes receiving data packets under `random_trailers`. A core up
+to `lx.31` rejects a config with any of these keys as a whole, so the pin and
+the parser move in one commit. Java surface: unchanged. Field reference:
+`sing-box-lx/docs-lx/lx-protocols-transports.ru.md` §2.1, §2.7, §2.9, §2.10.
+
+**`v1.14.0-lx.30` — SPEC 076/059 plus the XHTTP detour DNS fix**: DNS servers of type `udp`,
 `tcp` and `tls` now work behind a `detour` through an XHTTP node. Every such
 query used to die with `write request: context canceled`, which read as red
 URL tests for `masque` and `wireguard` nodes probed by a *domain* URL (the same
@@ -624,7 +635,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.0-lx.30** (current pin) | DNS over an XHTTP `detour` fixed: `udp`/`tcp`/`tls` DNS servers behind a `detour` to a VLESS+XHTTP node died on the first query with `write request: context canceled` — red URL tests for `masque`/`wireguard` nodes probed by domain (green by IP), and a dead system DNS over TUN with the tunnel alive. `DialContext` for `stream-one`/`stream-up` now returns only after the HTTP layer accepts the request body, so the pool cancelling its dial context no longer tears the connection down. Java surface: additive only (see the pin section) |
+| **v1.14.0-lx.33** (current pin) | AmneziaWG 3.0/3.1 (§421): AWG 3.x root keys on the `wireguard` endpoint (`header_protection_key`, `content_padding_addition`, ranged timings, `random_trailers`, `disable_cookies`) and a ranged `persistent_keepalive_interval`; `lx.32` introduced the fields, `lx.33` fixes data-packet reception under `random_trailers`. Cores ≤ `lx.31` reject such a config as a whole. Java surface: unchanged |
+| **v1.14.0-lx.30** | DNS over an XHTTP `detour` fixed: `udp`/`tcp`/`tls` DNS servers behind a `detour` to a VLESS+XHTTP node died on the first query with `write request: context canceled` — red URL tests for `masque`/`wireguard` nodes probed by domain (green by IP), and a dead system DNS over TUN with the tunnel alive. `DialContext` for `stream-one`/`stream-up` now returns only after the HTTP layer accepts the request body, so the pool cancelling its dial context no longer tears the connection down. Java surface: additive only (see the pin section) |
 | **v1.14.0-lx.29** | SPEC 076/059 — XHTTP no longer pins the CPU at 100% when the path resets streams: an xmux circuit breaker (3 consecutive stream failures retire a connection, 100 ms→3 s backoff before a new transport, success counted as *data* not headers). `packet-up` uploads survive a graceful `GOAWAY` (`GetBody` set, so HTTP/2 can retry transparently). A `stream-up` pool leak fixed — the release handle was accepted but never stored, so `openUsage` grew monotonically |
 | **v1.14.0-lx.28** | MASQUE `vhttp: auto` becomes the **default** (SPEC 074) — an empty `vhttp` self-rescues into h2 behind a TCP-only hop instead of hanging to the dial deadline; explicit `h3`/`h2` still pin the mode. XHTTP `session_table` / `session_length` (ported from Xray) replace the dashed-UUID session id with a random string of a chosen alphabet/length — purely client-side, and configuring one without the other is an error. Chain per-position runtime toggles (SPEC 075) with cache-file persistence by position tag: this is where the additive Java surface comes from (`ChainPosition.disabled`, `ChainToggleResult`, `CommandClient.setChainPositionEnabled` / `getChainCloneConfig`); LxBox binds none of it |
 | rc.15 → rc.16 (§214) | XHTTP SPEC 002 v2 fields (otherwise an unknown field kills the config) |

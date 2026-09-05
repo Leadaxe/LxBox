@@ -9,6 +9,7 @@ import '../../models/transport_spec.dart';
 import '../node_hash.dart';
 import 'hysteria2_obfs.dart';
 import 'transport.dart';
+import '../app_log.dart';
 import 'uri_utils.dart';
 import 'utls_fingerprint.dart';
 
@@ -1257,6 +1258,15 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       final wgPriv = normalizeWGKey(entry['private_key']?.toString() ?? '');
       final wgPub = normalizeWGKey(p['public_key']?.toString() ?? '');
       if (wgPriv == null || wgPub == null) return null;
+      // §421 — битый ключ защиты заголовка / короткий паддинг: узел
+      // выброшен, как на URI-пути (ядро отвергло бы конфиг целиком).
+      if (awg != null) {
+        final dropReason = awg3NodeError(awg);
+        if (dropReason != null) {
+          AppLog.I.debug('$wgTag: ${dropReason.renderEn()}');
+          return null;
+        }
+      }
       final wgPskRaw = p['pre_shared_key']?.toString() ?? '';
       final String wgPsk;
       if (wgPskRaw.isEmpty) {
@@ -1282,12 +1292,16 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
             endpointHost: peerServer,
             endpointPort: peerPort,
             allowedIps: allowedIps,
-            persistentKeepalive: (p['persistent_keepalive_interval'] as num?)
-                ?.toInt(),
+            // §421 — число или AWG3-диапазон `"N-M"` строкой.
+            persistentKeepalive: _wgKeepaliveFromJson(
+                p['persistent_keepalive_interval']),
             reserved: reserved,
           ),
         ],
-        mtu: awg != null ? awgClampMtu(rawMtu, wgTag) : rawMtu,
+        // §421 — AWG3-узел выведен из-под клампа (MTU задаёт сервер).
+        mtu: awg != null && !Awg.hasAwg3Json(entry)
+            ? awgClampMtu(rawMtu, wgTag)
+            : rawMtu,
         awg: awg,
       );
     case 'masque':
@@ -1459,4 +1473,12 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
     default:
       return null;
   }
+}
+
+/// §421 — `persistent_keepalive_interval` из JSON: число → `int`,
+/// строка-диапазон `"N-M"` → как есть (валидная), иначе `null`.
+Object? _wgKeepaliveFromJson(Object? v) {
+  if (v is num) return v.toInt();
+  if (v is String) return parseWgKeepalive(v);
+  return null;
 }
