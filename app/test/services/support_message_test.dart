@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/support/active_time_tracker.dart';
 import 'package:lxbox/services/support/support_message.dart';
 import 'package:lxbox/services/support/support_state.dart';
@@ -78,6 +79,10 @@ void main() {
     ActiveTimeTracker.I.resetForTesting();
     SupportMessageService.I.appVersionForTesting = '2.20.0';
     SupportMessageService.I.httpClientForTesting = null;
+    // §422 — сеть за лентой открыта только с согласия на проверку обновлений;
+    // сетевые кейсы ниже считают, что оно дано.
+    SettingsStorage.resetCacheForTesting();
+    await SettingsStorage.setAutoCheckUpdates(true);
   });
 
   tearDown(() async {
@@ -311,11 +316,49 @@ void main() {
       expect(f2!.messages.single.id, 'net-1');
     });
 
-    test('ни сети, ни кэша → null', () async {
+    test('ни сети, ни кэша → bundled-копия docs/support.json (§422)', () async {
       final svc = SupportMessageService.I;
       svc.httpClientForTesting =
           MockClient((req) async => http.Response('err', 500));
-      expect(await svc.fetchOrCached(), isNull);
+      final f = await svc.fetchOrCached();
+      expect(f, isNotNull);
+      expect(f!.messages, isNotEmpty);
+      expect(f.messages.first.id, '001-welcome-guide');
+    });
+
+    test('§422: без согласия на обновления — ни одного запроса, читаем кэш',
+        () async {
+      final svc = SupportMessageService.I;
+      // Сначала с согласием — кладём кэш.
+      svc.httpClientForTesting =
+          MockClient((req) async => http.Response(body, 200));
+      expect((await svc.fetchOrCached())!.messages.single.id, 'net-1');
+
+      await SettingsStorage.setAutoCheckUpdates(false);
+      var calls = 0;
+      svc.httpClientForTesting = MockClient((req) async {
+        calls++;
+        return http.Response(body, 200);
+      });
+      final f = await svc.fetchOrCached();
+      expect(calls, 0, reason: 'сеть закрыта — клиент не должен вызываться');
+      expect(f!.messages.single.id, 'net-1', reason: 'кэш, не asset');
+    });
+
+    test('§422: без согласия и без кэша — bundled-копия, сеть не трогается',
+        () async {
+      final svc = SupportMessageService.I;
+      await SettingsStorage.setAutoCheckUpdates(false);
+      var calls = 0;
+      svc.httpClientForTesting = MockClient((req) async {
+        calls++;
+        return http.Response(body, 200);
+      });
+      final f = await svc.fetchOrCached();
+      expect(calls, 0);
+      expect(f!.messages.first.id, '001-welcome-guide');
+      // asset не пишется в кэш — при появлении согласия придёт свежая лента.
+      expect(await SupportState.I.getString('cache_json'), isEmpty);
     });
   });
 

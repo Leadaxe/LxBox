@@ -60,6 +60,7 @@ flutter:
     - assets/wizard_template.json
     - assets/l10n/ru/ # §285 — русская локализация (ui.json + template.json; английский базовый, в коде)
     - assets/donate.json # §362 — способы поддержки (донат-попап в About)
+    - assets/support.json # §422 — bundled-копия docs/support.json (лента без сети; паритет проверяет тест)
     - assets/warp_endpoints.json # §136 — WARP endpoint/SNI random pools
     - assets/icons/app_icon.png
     - assets/icons/cloudflare.png # §025 — официальный логотип Cloudflare (Simple Icons, CC0)

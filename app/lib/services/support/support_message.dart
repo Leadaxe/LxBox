@@ -1,10 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 
 import '../app_log.dart';
 import '../project_links.dart';
+import '../settings_storage.dart';
 import '../update_checker.dart' show isNewer;
 import '../version_info.dart';
 import 'active_time_tracker.dart';
@@ -15,8 +17,14 @@ import 'support_state.dart';
 /// Контент — `docs/support.json` в репо, раздаётся через
 /// raw.githubusercontent.com (паттерн §036 latest.json): автор меняет
 /// тексты/ссылки/пороги/очередь без релиза. Удачный fetch кэшируется
-/// ([SupportState] `cache_json`) — показ работает и офлайн. Ни сети, ни
-/// кэша → не показываем (сообщение без актуальных ссылок бессмысленно).
+/// ([SupportState] `cache_json`) — показ работает и офлайн.
+///
+/// §422 — сеть только с согласия на проверку обновлений
+/// (`auto_check_updates`, вопрос онбординга): без него приложение не делает
+/// ни одного запроса за лентой, а читает кэш, а до первого кэша —
+/// bundled-копию `assets/support.json` (снимок `docs/support.json` на момент
+/// сборки; паритет держит `support_asset_parity_test`). Порядок:
+/// сеть (если разрешена) → кэш → asset → null.
 ///
 /// v2 (§356): вместо одной кампании — очередь сообщений с локалями
 /// (`i18n`, en — обязательный фолбэк) и версионным повторным показом
@@ -217,8 +225,31 @@ class SupportMessageService {
 
   String get _appVersion => appVersionForTesting ?? VersionInfo.I.version;
 
-  /// Сеть (best-effort, кэшируем) → кэш → null.
+  static const _asset = 'assets/support.json';
+
+  /// Сеть (только при `auto_check_updates`, best-effort, кэшируем) → кэш →
+  /// bundled-копия → null.
   Future<SupportFeed?> fetchOrCached() async {
+    if (await SettingsStorage.getAutoCheckUpdates()) {
+      final fresh = await _fetch();
+      if (fresh != null) return fresh;
+    }
+    final cached = await SupportState.I.getString('cache_json');
+    if (cached.isNotEmpty) {
+      final f = _parse(cached);
+      if (f != null) return f;
+    }
+    // §422 — первый запуск без сети или без согласия на неё: снимок ленты на
+    // момент сборки. Ссылки в нём могут устареть, но очередь и пороги живут.
+    try {
+      return _parse(await rootBundle.loadString(_asset));
+    } catch (e) {
+      AppLog.I.debug('SupportMessage: bundled asset failed ($e)');
+      return null;
+    }
+  }
+
+  Future<SupportFeed?> _fetch() async {
     // §221 — закрываем самосозданный http.Client (owned): иначе течёт на каждый
     // fetch с главного экрана (тот же паттерн, что sources/community в §219).
     final owned = httpClientForTesting == null;
@@ -228,7 +259,7 @@ class SupportMessageService {
           .get(Uri.parse(_url), headers: {'User-Agent': 'LxBox/1.x'})
           .timeout(_httpTimeout);
       if (resp.statusCode == 200) {
-        final f = SupportFeed.fromJson(jsonDecode(resp.body));
+        final f = _parse(resp.body);
         if (f != null) {
           await SupportState.I.set('cache_json', resp.body);
           return f;
@@ -239,10 +270,12 @@ class SupportMessageService {
     } finally {
       if (owned) client.close();
     }
-    final cached = await SupportState.I.getString('cache_json');
-    if (cached.isEmpty) return null;
+    return null;
+  }
+
+  static SupportFeed? _parse(String body) {
     try {
-      return SupportFeed.fromJson(jsonDecode(cached));
+      return SupportFeed.fromJson(jsonDecode(body));
     } catch (_) {
       return null;
     }

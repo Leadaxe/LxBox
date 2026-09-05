@@ -1,0 +1,294 @@
+{
+  "$schema_comment": "§356/§357/§362 — remote-managed лента сообщений «поддержи автора». Раздаётся через raw.githubusercontent.com, app кэширует последнее удачное. Правки текстов/ссылок/порогов/очереди НЕ требуют релиза. Порядок массива = очередь показа. min_active_hours — интервал наработки туннеля ПОСЛЕ предыдущего «Прочитал» (или обновления приложения). since_version: бамп выше прочитанной версии = повторный показ обновившимся. skip: true = вывести из ротации. read_delay_seconds — задержка кнопки «Прочитал» (по умолчанию 10). en-блок обязателен (фолбэк), у каждой локали свои ссылки. @плейсхолдеры (ProjectLinks): @selfLink @repoLink @coreLink @launcherLink @tgLink @donateLink @issuesLink @boostyLink @donatePage @guideLink @appVersion — резолвятся в момент показа (@guideLink зависит от локали). Кнопки lxbox://<action>:<payload> — route:<экран>[/<вкладка>] (в т.ч. route:about/donate — попап способов поддержки), add:<uri> (prefill поля Servers), share:<текст> (системный share-лист); mark_read: false — не помечать сообщение прочитанным при тапе.",
+  "snooze_active_hours": 10,
+  "messages": [
+    {
+      "id": "001-welcome-guide",
+      "since_version": "2.0.0",
+      "min_active_hours": 3,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Glad you picked L×Box",
+          "message": "Hi! I'm the author of L×Box. I can see your VPN is already up and running — great.\n\nIf something didn't set up right, or you just want to get more out of the app, there's a detailed user guide: from first launch to server chains. It always lives on GitHub.\n\nGot questions? The Telegram group answers fast.",
+          "links": [
+            {
+              "label": "📖 Open the user guide",
+              "url": "@guideLink"
+            },
+            {
+              "label": "👥 Telegram group",
+              "url": "@tgLink"
+            }
+          ]
+        },
+        "ru": {
+          "title": "Рад, что ты выбрал L×Box",
+          "message": "Привет! Я автор L×Box. Вижу, VPN у тебя уже работает — отлично.\n\nЕсли что-то настроилось не так или просто интересно, как выжать из приложения больше, — есть подробная инструкция: от первого запуска до цепочек серверов. Она всегда лежит на GitHub, не потеряешь.\n\nПоявятся вопросы — в Telegram-группе отвечаем быстро.",
+          "links": [
+            {
+              "label": "📖 Открыть инструкцию",
+              "url": "@guideLink"
+            },
+            {
+              "label": "👥 Telegram-группа",
+              "url": "@tgLink"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "002-telegram",
+      "since_version": "2.0.0",
+      "min_active_hours": 12,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Drop by the Telegram group",
+          "message": "L×Box grows together with its community: half the features came from questions and requests in the group. It's also where news, fresh builds and real-world experience live — which nodes hold speed, how to tune things for your carrier.\n\nGot an idea or a question? Post it in the group — I'm around and I read it.",
+          "links": [
+            {
+              "label": "👥 Open the group",
+              "url": "@tgLink"
+            },
+            {
+              "label": "📖 User guide",
+              "url": "@guideLink"
+            }
+          ]
+        },
+        "ru": {
+          "title": "Загляни в Telegram-группу",
+          "message": "L×Box развивается вместе с сообществом: половина фич появилась из вопросов и просьб в группе. Там же — новости, свежие сборки и живой опыт: какие узлы держат скорость, как настроить под своего оператора.\n\nЕсть идея или вопрос — пиши прямо в группу, я там бываю и читаю.",
+          "links": [
+            {
+              "label": "👥 Открыть группу",
+              "url": "@tgLink"
+            },
+            {
+              "label": "📖 Инструкция",
+              "url": "@guideLink"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "003-star",
+      "since_version": "2.0.0",
+      "min_active_hours": 24,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Give the project a star",
+          "message": "L×Box is free, with no ads and no subscriptions — and it will stay that way.\n\nOne thing I'll ask: star the project on GitHub. Stars are how people discover the app, and for me they're the clearest sign this work matters. Takes half a minute.",
+          "links": [
+            {
+              "label": "⭐ Star on GitHub",
+              "url": "@repoLink"
+            },
+            {
+              "label": "💰 Support the project",
+              "url": "lxbox://route:about/donate"
+            }
+          ]
+        },
+        "ru": {
+          "title": "Поставь звезду на GitHub",
+          "message": "L×Box бесплатный, без рекламы и подписок — и таким останется.\n\nПрошу одного: поставь проекту звезду на GitHub. По звёздам люди находят приложение, и для меня это главный знак, что работа нужна. Займёт полминуты.",
+          "links": [
+            {
+              "label": "⭐ Поставить звезду",
+              "url": "@repoLink"
+            },
+            {
+              "label": "💰 Поддержать проект",
+              "url": "lxbox://route:about/donate"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "004-share",
+      "since_version": "2.0.0",
+      "min_active_hours": 24,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Tell your friends about L×Box",
+          "message": "If the app helps you out, it will help the people close to you too. Send the link to anyone who could use this client: the fresh APK is always on GitHub, installs in five minutes, no app stores needed.\n\nThe more people use it, the faster the project grows.",
+          "links": [
+            {
+              "label": "📤 Share",
+              "url": "lxbox://share:L×Box @selfLink"
+            },
+            {
+              "label": "📦 Download page",
+              "url": "@selfLink"
+            }
+          ]
+        },
+        "ru": {
+          "title": "Расскажи друзьям про L×Box",
+          "message": "Если приложение выручает тебя — оно выручит и твоих близких. Скинь ссылку тому, кому пригодится этот клиент: свежий APK всегда на GitHub, ставится за пять минут, магазины не нужны.\n\nЧем больше людей пользуется, тем быстрее растёт проект.",
+          "links": [
+            {
+              "label": "📤 Поделиться",
+              "url": "lxbox://share:L×Box @selfLink"
+            },
+            {
+              "label": "📦 Страница загрузки",
+              "url": "@selfLink"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "005-profiler",
+      "since_version": "2.0.0",
+      "min_active_hours": 36,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Where do your apps really connect?",
+          "message": "L×Box has a built-in traffic profiler. Start recording — and watch in real time every domain and IP each app on your phone talks to: DNS queries, connections, volumes.\n\nHandy for catching a chatty tracker or figuring out why some app won't work through VPN. The button below opens it right now.",
+          "links": [
+            {
+              "label": "🔍 Open the profiler",
+              "url": "lxbox://route:profiler"
+            },
+            {
+              "label": "💰 Support the project",
+              "url": "lxbox://route:about/donate"
+            }
+          ]
+        },
+        "ru": {
+          "title": "Куда ходят твои приложения?",
+          "message": "В L×Box встроен профайлер трафика. Включи запись — и увидишь в реальном времени каждый домен и IP, к которому обращается любое приложение на телефоне: DNS-запросы, соединения, объёмы.\n\nПолезно, чтобы поймать болтливый трекер или понять, почему какое-то приложение не работает через VPN. Кнопка ниже откроет профайлер прямо сейчас.",
+          "links": [
+            {
+              "label": "🔍 Открыть профайлер",
+              "url": "lxbox://route:profiler"
+            },
+            {
+              "label": "💰 Поддержать проект",
+              "url": "lxbox://route:about/donate"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "006-under-the-hood",
+      "since_version": "2.0.0",
+      "min_active_hours": 36,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "The core was built for the job",
+          "message": "To make L×Box do what it does, I had to take on the core itself — that's how sing-box-lx came about. It adds protocols the base sing-box doesn't have, battery-saving mechanisms when idle, custom DNS modes and load balancing. Take MASQUE to Cloudflare: traffic rides over QUIC/HTTP-3 and looks like plain HTTPS to DPI. All of it stays backward compatible: base sing-box configs work as-is.\n\nThe core is a standalone open project: it builds for Linux, macOS and Windows, and can run on a router. For desktop there's a ready-made Singbox Launcher.\n\nIf you value what's under the hood, star the core project too — it means as much to it as it does to the app itself.",
+          "links": [
+            {
+              "label": "⭐ Star sing-box-lx",
+              "url": "@coreLink"
+            },
+            {
+              "label": "🖥 Singbox Launcher — desktop",
+              "url": "@launcherLink"
+            }
+          ]
+        },
+        "ru": {
+          "title": "Ядро писалось под задачу",
+          "message": "Чтобы L×Box делал то, что делает, пришлось взяться за само ядро: так появился sing-box-lx. В нём — поддержка протоколов, которых нет в базовом sing-box, механизмы экономии батареи в простое, свои DNS-режимы и балансировка нагрузки. Например, MASQUE к Cloudflare: трафик идёт поверх QUIC/HTTP-3 и со стороны выглядит как обычный HTTPS. При этом всё обратно совместимо: конфиги базового sing-box работают без правок.\n\nЯдро — самостоятельный открытый проект: собирается под Linux, macOS и Windows, его можно поставить хоть на роутер. А для компьютера есть готовый Singbox Launcher.\n\nЕсли ценишь то, что под капотом, — поставь звезду и проекту ядра: для него это такая же поддержка, как и для самого приложения.",
+          "links": [
+            {
+              "label": "⭐ Звезда ядру sing-box-lx",
+              "url": "@coreLink"
+            },
+            {
+              "label": "🖥 Singbox Launcher — для компьютера",
+              "url": "@launcherLink"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "007-review",
+      "since_version": "2.0.0",
+      "min_active_hours": 48,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Write a few lines about your experience",
+          "message": "People choose apps by what others say — your two or three honest sentences will help someone decide.\n\nWhat works, what doesn't, which carrier, which nodes — any specifics are valuable. Found a bug? Open an issue on GitHub: a detailed description saves weeks of guesswork.",
+          "links": [
+            {
+              "label": "👥 Telegram group",
+              "url": "@tgLink"
+            },
+            {
+              "label": "🐞 Report an issue",
+              "url": "@issuesLink"
+            }
+          ]
+        },
+        "ru": {
+          "title": "Напиши пару строк о своём опыте",
+          "message": "Люди выбирают приложения по отзывам — твои два-три честных предложения помогут кому-то решиться.\n\nЧто работает, что нет, на каком операторе, какие узлы — любая конкретика ценна. Нашёл проблему — заводи issue на GitHub: подробное описание экономит недели догадок.",
+          "links": [
+            {
+              "label": "👥 Telegram-группа",
+              "url": "@tgLink"
+            },
+            {
+              "label": "🐞 Сообщить о проблеме",
+              "url": "@issuesLink"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "008-donate",
+      "since_version": "2.0.0",
+      "min_active_hours": 72,
+      "min_session_minutes": 5,
+      "i18n": {
+        "en": {
+          "title": "Back the project with money",
+          "message": "I build L×Box in my spare time, while servers and infrastructure cost real money. The project runs on donations — it has no other income.\n\nIf the app has become part of your life, back it: one-time, any amount. Crypto works too — the USDT (TRON) address is on the About screen, other options are behind the button.\n\nThis is the last asking message. From here on — only news and useful stuff. Thanks for reading this far.",
+          "links": [
+            {
+              "label": "💰 Support the project",
+              "url": "lxbox://route:about/donate"
+            },
+            {
+              "label": "⭐ Star, if you haven't yet",
+              "url": "@repoLink"
+            }
+          ]
+        },
+        "ru": {
+          "title": "Поддержи проект деньгами",
+          "message": "L×Box я делаю в свободное время, а серверы и инфраструктура стоят денег. Проект живёт на донаты — других источников у него нет.\n\nЕсли приложение стало частью твоей жизни, поддержи его: разово, любой суммой. Криптой тоже можно — адрес USDT (TRON) есть на экране About, остальные способы за кнопкой.\n\nЭто последнее сообщение с просьбой. Дальше — только новости и полезное. Спасибо, что дочитал до конца.",
+          "links": [
+            {
+              "label": "💰 Поддержать проект",
+              "url": "lxbox://route:about/donate"
+            },
+            {
+              "label": "⭐ Звезда, если ещё нет",
+              "url": "@repoLink"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

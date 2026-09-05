@@ -590,6 +590,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// и из `_onControllerChange` (тикает ~раз/сек при connected) — гейт ловит
   /// момент, когда сессия дорастает до порога, пока экран открыт.
   /// Терминальный (`_supportShown`) — один показ за процесс; fetch — однократ.
+  /// §422 — сеть за лентой только при `auto_check_updates`; иначе
+  /// [SupportMessageService.fetchOrCached] отдаёт кэш или bundled-копию
+  /// без единого запроса (гейт внутри сервиса, здесь ничего не ветвится).
   Future<void> _maybeShowSupport() async {
     if (_supportShown || _supportInFlight || !mounted) return;
     if (_lifecycle != AppLifecycleState.resumed) return;
