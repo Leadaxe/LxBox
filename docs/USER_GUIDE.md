@@ -1248,8 +1248,8 @@ the current workspace and opens the menu.
   a few seconds without a tunnel.
 - **Save as…** — save the current state under a new name (or overwrite an
   existing one). From then on the auto-save on Load goes to that name.
-- **Manage workspaces…** — rename or delete. The current workspace cannot be
-  deleted: it is where the auto-save goes.
+- **⋮ on a workspace row** — rename or delete. The current workspace cannot
+  be deleted: it is where the auto-save goes.
 
 Until you save anything there is a single workspace called "Default" and
 nothing changes on disk. A workspace stores the settings file, the cached

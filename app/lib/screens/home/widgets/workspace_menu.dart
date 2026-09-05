@@ -2,14 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../services/format_utils.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../../services/relative_time.dart';
 import '../../../services/workspaces/workspace_controller.dart';
 import '../../../services/workspaces/workspace_store.dart';
-import '../../workspaces_screen.dart';
 
 /// §417 — кнопка справа от «L×Box»: имя текущего workspace и попап с двумя
-/// разделами — Load (слоты) и Save (Save as…).
+/// разделами — Load (слоты, у каждого меню «⋮»: переименовать / удалить) и
+/// Save (Save as…). Отдельного экрана управления нет.
 ///
 /// Загрузка идёт через [WorkspaceController.load]; на её время поверх
 /// Navigator'а висит модальный прогресс. Маршрут прогресса живёт в
@@ -44,11 +45,14 @@ class WorkspaceMenuButton extends StatelessWidget {
   Future<void> _openSheet(BuildContext context) async {
     final ws = WorkspaceController.I;
     await ws.refresh();
+    final sizes = <String, int>{
+      for (final s in ws.slots) s.name: await WorkspaceStore.I.slotSizeBytes(s.name),
+    };
     if (!context.mounted) return;
     final action = await showModalBottomSheet<_SheetAction>(
       context: context,
       showDragHandle: true,
-      builder: (_) => const _WorkspaceSheet(),
+      builder: (_) => _WorkspaceSheet(sizes: sizes),
     );
     if (action == null || !context.mounted) return;
     switch (action) {
@@ -56,10 +60,10 @@ class WorkspaceMenuButton extends StatelessWidget {
         await _load(context, name);
       case _SaveAsAction():
         await _saveAs(context);
-      case _ManageAction():
-        await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => const WorkspacesScreen(),
-        ));
+      case _RenameAction(:final name):
+        await _rename(context, name);
+      case _DeleteAction(:final name):
+        await _delete(context, name);
     }
   }
 
@@ -147,6 +151,52 @@ class WorkspaceMenuButton extends StatelessWidget {
       messenger.showSnackBar(SnackBar(content: Text(workspaceErrorText(e))));
     }
   }
+
+  Future<void> _rename(BuildContext context, String name) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (_) => WorkspaceNameDialog(
+        initial: name,
+        title: getLocalText.s("Rename"),
+      ),
+    );
+    if (newName == null || newName == name) return;
+    try {
+      await WorkspaceController.I.rename(name, newName);
+    } on WorkspaceError catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(workspaceErrorText(e))));
+    }
+  }
+
+  Future<void> _delete(BuildContext context, String name) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(getLocalText.s(
+            "Delete workspace “%s”?", workspaceDisplayName(name))),
+        content: Text(getLocalText.s(
+            "Its saved state will be removed. This cannot be undone.")),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(getLocalText.s("Cancel")),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(getLocalText.s("Delete")),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await WorkspaceController.I.delete(name);
+    } on WorkspaceError catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(workspaceErrorText(e))));
+    }
+  }
 }
 
 /// «Default» локализуется, имена пользователя — как есть.
@@ -186,12 +236,20 @@ class _SaveAsAction extends _SheetAction {
   const _SaveAsAction();
 }
 
-class _ManageAction extends _SheetAction {
-  const _ManageAction();
+class _RenameAction extends _SheetAction {
+  const _RenameAction(this.name);
+  final String name;
+}
+
+class _DeleteAction extends _SheetAction {
+  const _DeleteAction(this.name);
+  final String name;
 }
 
 class _WorkspaceSheet extends StatelessWidget {
-  const _WorkspaceSheet();
+  const _WorkspaceSheet({required this.sizes});
+
+  final Map<String, int> sizes;
 
   @override
   Widget build(BuildContext context) {
@@ -200,7 +258,8 @@ class _WorkspaceSheet extends StatelessWidget {
     final now = DateTime.now();
     final slots = [...ws.slots]
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    // current без папки (до первого Save as) — показываем первым, без даты.
+    // current без папки (до первого Save as) — показываем первым, без даты
+    // и без меню: переименовывать/удалять ещё нечего.
     final currentHasFolder = slots.any((s) => s.name == ws.current);
 
     Widget section(String title) => Padding(
@@ -212,18 +271,39 @@ class _WorkspaceSheet extends StatelessWidget {
           ),
         );
 
-    Widget slotTile({
-      required String name,
-      DateTime? savedAt,
-    }) {
+    Widget slotTile({required String name, WorkspaceSlot? slot}) {
       final isCurrent = name == ws.current;
+      final size = sizes[name];
+      final subtitle = slot == null
+          ? null
+          : [
+              relativeTime(now, slot.savedAt),
+              if (size != null) formatBytes(size, spaced: true),
+            ].join(' · ');
       return ListTile(
         leading: Icon(
           isCurrent ? Icons.radio_button_checked : Icons.radio_button_off,
           color: isCurrent ? theme.colorScheme.primary : null,
         ),
         title: Text(workspaceDisplayName(name)),
-        subtitle: savedAt == null ? null : Text(relativeTime(now, savedAt)),
+        subtitle: subtitle == null ? null : Text(subtitle),
+        trailing: slot == null
+            ? null
+            : PopupMenuButton<_SheetAction>(
+                onSelected: (a) => Navigator.pop(context, a),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: _RenameAction(name),
+                    child: Text(getLocalText.s("Rename")),
+                  ),
+                  // current — адрес автосохранения, удалить нельзя.
+                  PopupMenuItem(
+                    value: _DeleteAction(name),
+                    enabled: !isCurrent,
+                    child: Text(getLocalText.s("Delete")),
+                  ),
+                ],
+              ),
         onTap: () => Navigator.pop(context, _LoadAction(name)),
       );
     }
@@ -239,19 +319,13 @@ class _WorkspaceSheet extends StatelessWidget {
           ),
           section(getLocalText.s("Load")),
           if (!currentHasFolder) slotTile(name: ws.current),
-          for (final s in slots) slotTile(name: s.name, savedAt: s.savedAt),
+          for (final s in slots) slotTile(name: s.name, slot: s),
           const Divider(height: 8),
           section(getLocalText.s("Save")),
           ListTile(
             leading: const Icon(Icons.save_as_outlined),
             title: Text(getLocalText.s("Save as…")),
             onTap: () => Navigator.pop(context, const _SaveAsAction()),
-          ),
-          const Divider(height: 8),
-          ListTile(
-            leading: const Icon(Icons.tune_outlined),
-            title: Text(getLocalText.s("Manage workspaces…")),
-            onTap: () => Navigator.pop(context, const _ManageAction()),
           ),
           const SizedBox(height: 8),
         ],

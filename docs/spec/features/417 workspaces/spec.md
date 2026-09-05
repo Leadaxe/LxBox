@@ -194,30 +194,28 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 │                                        │
 │   ┌──────────────────────────────┐     │
 │   │ LOAD                         │     │
-│   │  ● Home            2 Sep     │     │
-│   │    Work            28 Aug    │     │
-│   │    Lab             15 Aug    │     │
+│   │  ● Home     2 Sep · 1.8 MB ⋮ │     │
+│   │    Work    28 Aug · 1.8 MB ⋮ │     │
+│   │    Lab     15 Aug · 0.9 MB ⋮ │     │
 │   ├──────────────────────────────┤     │
 │   │ SAVE                         │     │
 │   │  ＋ Save as…                 │     │
-│   ├──────────────────────────────┤     │
-│   │  Manage workspaces…          │     │
 │   └──────────────────────────────┘     │
 ```
 
 - Раздел LOAD: слоты по имени, `current` отмечен, у каждого дата
-  `saved_at`. Тап по `current` — закрыть попап (no-op). Тап по другому —
-  §2.3 с прогресс-индикатором на время стопа/копии/пересборки.
+  `saved_at` и размер на диске. Тап по `current` — закрыть попап (no-op).
+  Тап по другому — §2.3 с прогресс-индикатором на время
+  стопа/копии/пересборки.
+- «⋮» на строке слота: переименовать (папка + `current`, если это он),
+  удалить (не `current` — пункт недоступен; подтверждение). Отдельного
+  экрана управления нет (решение 05.09: лишний уровень навигации).
 - «Save as…» — диалог с именем (предзаполнено `current`, если у него уже
   есть папка — пусто). Существующее имя → «Overwrite “Y”?».
-- «Manage workspaces…» — экран-список по образцу
-  [`dns_settings_screen.dart`](../../../../app/lib/screens/dns_settings_screen.dart):
-  переименовать (папка + `current`, если это он), удалить (не `current`;
-  подтверждение).
 - Пока справочника нет: в кнопке «Default», в LOAD — один элемент
   «Default» (отмечен), Save as создаёт справочник.
 - Строки — natural keys в `app/assets/l10n/ru/ui.json` (§285):
-  «Workspaces», «Load», «Save as…», «Manage workspaces…», «Overwrite “%s”?»,
+  «Workspaces», «Load», «Save as…», «Overwrite “%s”?»,
   «Loading workspace…», «Workspace name», «Rename», «Delete», «Default».
 
 ### 2.8 Что происходит с VPN
@@ -244,7 +242,7 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 |---|---|---|
 | 1 | `WorkspaceStore`: справочник, `kSlotEntries`, `saveAs(name)`, `load(name)` (4–8 из §2.3), `recover()`, `rename`/`delete`/`slotSizeBytes`, `validateName`; тесты на path_provider-моке (оба корня) | `services/workspaces/workspace_store.dart`, `test/services/workspace_store_test.dart`, `main.dart` (`recover()` перед `bootstrapAndSyncNativePrefs`) |
 | 2 | `WorkspaceController` (цикл загрузки, `generation`, `takePendingAutoConnect`, перечитывание по таблице §2.6) + пересоздание `HomeScreen` + автозапуск после bootstrap-пересборки; попап в AppBar (Load / Save as) с модальным прогрессом; l10n | `services/workspaces/workspace_controller.dart`, `main.dart`, `home_screen.dart`, `screens/home/widgets/workspace_menu.dart`, `assets/l10n/ru/ui.json` |
-| 3 | Экран Manage workspaces (rename / delete / размер слота) + пункт в попапе | `screens/workspaces_screen.dart`, `workspace_menu.dart` |
+| 3 | Меню «⋮» на строке слота (rename / delete) + размер слота в подзаголовке; экран Manage из первой итерации снят | `workspace_menu.dart` |
 | 4 | Доки: STORAGE.md (дерево + таблица с пометкой «в слоте / устройство»), USER_GUIDE, CHANGELOG | docs |
 
 ## 5. Критерии приёмки
