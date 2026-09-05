@@ -433,7 +433,7 @@ jobs:
           vt_call() { curl -s -w '\n%{http_code}' "$@" 2>/dev/null || echo -e "\n000"; }
 
           declare -A ANALYSIS_ID
-          declare -A DONE
+          declare -A RESULTS
 
           echo "== Отправка (${#APK_PATHS[@]} файлов) =="
           for APK_PATH in "${APK_PATHS[@]}"; do
@@ -480,7 +480,7 @@ jobs:
           for round in $(seq 1 25); do
             ALL_DONE=1
             for NAME in "${!ANALYSIS_ID[@]}"; do
-              [ -n "${DONE[$NAME]:-}" ] && continue
+              [ -n "${RESULTS[$NAME]:-}" ] && continue
               ID="${ANALYSIS_ID[$NAME]}"
               POLL=$(curl -s "https://www.virustotal.com/api/v3/analyses/$ID" -H "x-apikey: $VT_API_KEY" 2>/dev/null || echo '{}')
               STATUS=$(echo "$POLL" | jq -r '.data.attributes.status // empty')
@@ -489,7 +489,7 @@ jobs:
                 MALICIOUS=$(echo "$POLL" | jq -r '.data.attributes.stats.malicious // 0')
                 SUSPICIOUS=$(echo "$POLL" | jq -r '.data.attributes.stats.suspicious // 0')
                 echo "$NAME: malicious=$MALICIOUS suspicious=$SUSPICIOUS"
-                DONE["$NAME"]="вредоносным: $MALICIOUS, подозрительным: $SUSPICIOUS"
+                RESULTS["$NAME"]="вредоносным: $MALICIOUS, подозрительным: $SUSPICIOUS"
               else
                 ALL_DONE=0
                 echo "$NAME: статус ${STATUS:-?} (раунд $round)"
@@ -502,8 +502,8 @@ jobs:
             echo "### VirusTotal"
             for NAME in "${!ANALYSIS_ID[@]}"; do
               REPORT_URL="https://www.virustotal.com/gui/analysis/${ANALYSIS_ID[$NAME]}"
-              if [ -n "${DONE[$NAME]:-}" ]; then
-                echo "- **$NAME**: ${DONE[$NAME]}. [Отчёт]($REPORT_URL)"
+              if [ -n "${RESULTS[$NAME]:-}" ]; then
+                echo "- **$NAME**: ${RESULTS[$NAME]}. [Отчёт]($REPORT_URL)"
               else
                 echo "- **$NAME**: не завершился за отведённое время. [Проверить]($REPORT_URL)"
               fi
