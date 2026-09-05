@@ -112,44 +112,52 @@ class ConfigNode {
     return false;
   }
 
-  static String? _deriveSecurity(String type, Map<String, dynamic> raw) {
-    if (type == 'wireguard') {
-      // §148 — уровень AWG по наличию полей, по официальному версионированию
-      // AmneziaWG (структурно, без явной версии). Приоритет старший→младший;
-      // ранний return на первом совпадении.
-      //   2.0 — динамика: ranged-заголовки h1–h4 ("N-M") или transport-padding
-      //         s3/s4 (random-padding на transport-сообщения).
-      //   1.5 — signature-пакеты (CPS) i1–i5 — hex-снимок реального протокола.
-      //   1.0 — базовая обфускация: jc/jmin/jmax, s1/s2, одиночные h1–h4.
-      //   3.1 — random_trailers / disable_cookies (§421).
-      //   3.0 — любой другой AWG3-ключ корня или диапазонный keepalive пира.
-      String? base;
-      if (Awg.awg3BoolKeys.any((k) => raw[k] != null)) {
-        base = 'awg3.1';
-      } else if (Awg.hasAwg3Json(raw)) {
-        base = 'awg3';
-      } else if (_hasRangedHeader(raw) || raw.containsKey('s3') ||
-          raw.containsKey('s4')) {
-        base = 'awg2';
-      } else if (_signatureKeys.any(raw.containsKey)) {
-        base = 'awg1.5'; // любой signature-пакет i1–i5
-      } else if (Awg.numKeys.any(raw.containsKey)) {
-        base = 'awg'; // только базовые 1.0-поля
-      }
-      // §148 — masquerade-sugar ip/id/ib (§143) → суффикс `+`. Ядро 009 само
-      // разворачивает их в CPS-пакет i1, т.е. masquerade сам по себе = версия
-      // 1.5. Поэтому `awg+` невозможен: поверх база/база-нет поднимается минимум
-      // до awg1.5+; только уже-2.0 остаётся awg2+. (i1 и ip/id/ib на уровне
-      // ядра взаимоисключающи, но лейбл считаем по сырому JSON до валидации.)
-      const plusKeys = <String>{'ip', 'id', 'ib'};
-      if (plusKeys.any(raw.containsKey)) {
-        return switch (base) {
-          'awg2' || 'awg3' || 'awg3.1' => '$base+',
-          _ => 'awg1.5+',
-        };
-      }
-      return base;
+  /// §148/§421 — уровень AmneziaWG по наличию полей (структурно, без
+  /// `protocol_version`): `awg` / `awg1.5` / `awg2` / `awg3` / `awg3.1`,
+  /// суффикс `+` при masquerade; `null` — обычный WireGuard.
+  static String? _deriveAwgLevel(Map<String, dynamic> raw) {
+    // §148 — уровень AWG по наличию полей, по официальному версионированию
+    // AmneziaWG (структурно, без явной версии). Приоритет старший→младший;
+    // ранний return на первом совпадении.
+    //   2.0 — динамика: ranged-заголовки h1–h4 ("N-M") или transport-padding
+    //         s3/s4 (random-padding на transport-сообщения).
+    //   1.5 — signature-пакеты (CPS) i1–i5 — hex-снимок реального протокола.
+    //   1.0 — базовая обфускация: jc/jmin/jmax, s1/s2, одиночные h1–h4.
+    //   3.1 — random_trailers / disable_cookies (§421).
+    //   3.0 — любой другой AWG3-ключ корня или диапазонный keepalive пира.
+    String? base;
+    if (Awg.awg3BoolKeys.any((k) => raw[k] != null)) {
+      base = 'awg3.1';
+    } else if (Awg.hasAwg3Json(raw)) {
+      base = 'awg3';
+    } else if (_hasRangedHeader(raw) || raw.containsKey('s3') ||
+        raw.containsKey('s4')) {
+      base = 'awg2';
+    } else if (_signatureKeys.any(raw.containsKey)) {
+      base = 'awg1.5'; // любой signature-пакет i1–i5
+    } else if (Awg.numKeys.any(raw.containsKey)) {
+      base = 'awg'; // только базовые 1.0-поля
     }
+    // §148 — masquerade-sugar ip/id/ib (§143) → суффикс `+`. Ядро 009 само
+    // разворачивает их в CPS-пакет i1, т.е. masquerade сам по себе = версия
+    // 1.5. Поэтому `awg+` невозможен: поверх база/база-нет поднимается минимум
+    // до awg1.5+; только уже-2.0 остаётся awg2+. (i1 и ip/id/ib на уровне
+    // ядра взаимоисключающи, но лейбл считаем по сырому JSON до валидации.)
+    const plusKeys = <String>{'ip', 'id', 'ib'};
+    if (plusKeys.any(raw.containsKey)) {
+      return switch (base) {
+        'awg2' || 'awg3' || 'awg3.1' => '$base+',
+        _ => 'awg1.5+',
+      };
+    }
+    return base;
+  }
+
+  /// Слот `securityLabel` — второй чип подзаголовка узла после транспорта.
+  /// Для `wireguard` — уровень AmneziaWG ([_deriveAwgLevel]), для остальных
+  /// протоколов — TLS / Reality (+Vision) по `tls`/`reality`/`flow`.
+  static String? _deriveSecurity(String type, Map<String, dynamic> raw) {
+    if (type == 'wireguard') return _deriveAwgLevel(raw);
     final tls = raw['tls'];
     if (tls is Map && tls['enabled'] == true) {
       final reality = tls['reality'];
