@@ -5,7 +5,7 @@
 | Status | Implemented (unit + widget test) |
 | Started | 2026-09-06 |
 | Trigger | Отчёт k-dmitriy (4PDA, 06.09.2026): после выбора рекомендованного SNI в генераторе WARP узел получает `"server_name": "consumer-masque.cloudflareclient.com (recommended)"`. |
-| Related | [§386](386-warp-endpoint-preset-combobox.md) (пометка recommended в пресетах), [§130](../features/130%20masque/spec.md) (MASQUE-визард), [§420](420-masque-pool-per-transport.md) (пул хостов по транспорту) |
+| Related | [§386](386-warp-endpoint-preset-combobox.md) (пометка recommended в пресетах), [§130](../features/130%20masque-warp-transport/spec.md) (MASQUE-визард), [§420](420-masque-pool-per-transport.md) (пул хостов по транспорту) |
 
 ## Причина
 
