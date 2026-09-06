@@ -4927,5 +4927,20 @@
   },
   "Config rebuild failed: %s": {
     "value": "Сборка конфига не удалась: %s"
+  },
+  "Endpoint pool region": {
+    "value": "Регион пула endpoint'ов"
+  },
+  "Picks the SNI pool for the WARP generator and the experiment by country: Russian domains only make sense behind Russian DPI. Auto = country of the mobile network, then of the device locale.": {
+    "value": "Выбирает SNI-пул для генератора WARP и эксперимента по стране: российские домены имеют смысл только за российским DPI. Auto = страна мобильной сети, затем локали устройства."
+  },
+  "Default (no region)": {
+    "value": "По умолчанию (без региона)"
+  },
+  "Auto · country not detected, default pool": {
+    "value": "Auto · страна не определена, пул по умолчанию"
+  },
+  "Auto · %s": {
+    "value": "Auto · %s"
   }
 }

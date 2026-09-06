@@ -12,6 +12,8 @@ import '../services/settings_storage.dart';
 import '../services/subscription/subscription_identity.dart';
 import '../services/subscription/user_agent.dart';
 import '../services/url_launcher.dart' as ul;
+import '../services/warp/warp_endpoint_picker.dart';
+import '../services/warp/warp_region.dart';
 import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import '../vpn/box_vpn_client.dart';
@@ -86,6 +88,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   String _deviceOs = '';
   String _verOs = '';
   String _deviceModel = '';
+  // §425 — регион пулов WARP + автоопределённая страна.
+  String _warpRegion = SettingsStorage.warpRegionAuto;
+  String _warpDetectedRegion = '';
 
   @override
   void initState() {
@@ -171,8 +176,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         await SettingsStorage.getVar(SubscriptionIdentity.varVerOs, '');
     final deviceModel =
         await SettingsStorage.getVar(SubscriptionIdentity.varDeviceModel, '');
+    final warpRegion = await SettingsStorage.getWarpRegion();
+    final warpDetected = await WarpRegion.detected();
     if (mounted) {
       setState(() {
+        _warpRegion = warpRegion;
+        _warpDetectedRegion = warpDetected;
         _userAgent = userAgent;
         _sendHwid = sendHwid;
         _hwid = hwid;
@@ -637,7 +646,47 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       onEditDeviceOs: () => unawaited(_editDeviceOs()),
       onEditVerOs: () => unawaited(_editVerOs()),
       onEditDeviceModel: () => unawaited(_editDeviceModel()),
+      warpRegion: _warpRegion,
+      warpDetectedRegion: _warpDetectedRegion,
+      onEditWarpRegion: () => unawaited(_editWarpRegion()),
     );
+  }
+
+  /// §425 — выбор региона пулов WARP: auto / default / регионы из asset'а.
+  Future<void> _editWarpRegion() async {
+    final regions = await WarpEndpointPicker.availableRegions();
+    if (!mounted) return;
+    final options = [
+      SettingsStorage.warpRegionAuto,
+      SettingsStorage.warpRegionDefault,
+      ...regions,
+      // Явно выбранный, но пропавший из asset'а регион — показать, не терять.
+      if (_warpRegion != SettingsStorage.warpRegionAuto &&
+          _warpRegion != SettingsStorage.warpRegionDefault &&
+          !regions.contains(_warpRegion))
+        _warpRegion,
+    ];
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(getLocalText.s("Endpoint pool region")),
+        children: [
+          for (final o in options)
+            RadioListTile<String>(
+              value: o,
+              // ignore: deprecated_member_use
+              groupValue: _warpRegion,
+              title: Text(SubscriptionsTab.warpRegionLabel(
+                  o, _warpDetectedRegion)),
+              // ignore: deprecated_member_use
+              onChanged: (v) => Navigator.of(ctx).pop(v),
+            ),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _warpRegion = picked);
+    await SettingsStorage.setWarpRegion(picked);
   }
 
   Widget _buildGeneralTab(BuildContext context) {

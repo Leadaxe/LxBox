@@ -216,6 +216,7 @@ class SettingsStorage {
     'notif_perm_prompted_v1', // §128 — promt уведомлений показан
     'allow_rotation', // §220 — снятие портретной фиксации
     'app_language', // §279 — язык приложения (system|en|ru); НЕ config-var
+    'warp_region', // §425 — регион пулов WARP (auto|default|<cc>); НЕ config-var
   };
 
   /// Полный allowlist для подключей `vars` при импорте: кодовые флаги ∪ все
@@ -717,6 +718,24 @@ class SettingsStorage {
     await setVar('app_language', v);
     await _mirrorAppLanguageToNative(v);
   }
+
+  /// §425 — регион пулов WARP (`assets/warp_endpoints.json` → `loc.<cc>`).
+  /// `auto` — по стране сети/локали, `default` — корень без региона, иначе
+  /// код страны (нижний регистр, 2 буквы). Прочее → `auto`.
+  static const warpRegionAuto = 'auto';
+  static const warpRegionDefault = 'default';
+
+  static String normalizeWarpRegion(String value) {
+    final v = value.trim().toLowerCase();
+    if (v == warpRegionAuto || v == warpRegionDefault) return v;
+    return RegExp(r'^[a-z]{2}$').hasMatch(v) ? v : warpRegionAuto;
+  }
+
+  static Future<String> getWarpRegion() async =>
+      normalizeWarpRegion(await getVar('warp_region', warpRegionAuto));
+
+  static Future<void> setWarpRegion(String value) =>
+      setVar('warp_region', normalizeWarpRegion(value));
 
   // ---------------------------------------------------------------------------
   // App update check (§036) — GitHub Releases polling on launch with 24h cap.
