@@ -28,10 +28,10 @@ Checklist for a manual edit:
 1. `commit:` — the full commit hash of the tag, not the tag name.
    `git rev-parse v2.X.Y^{commit}`.
 2. `versionCode` per block: `scripts/version-code.sh 2.X.Y arm64-v8a`.
-3. `srclibs` — pinned to **commits**, not branches:
-   `sing-box-lx@<commit of the tag in app/android/libbox.version>`,
-   `cronet-go@<commit required by the core's go.mod>`. Check that the cronet
-   commit is reachable: `git ls-remote https://github.com/SagerNet/cronet-go | grep <sha>`.
+3. `srclibs`: the core's ref does not matter, `prebuild:` checks out the tag
+   from `app/android/libbox.version`. `cronet-go@<sha>` must be the commit the
+   core's `go.mod` requires; if it is not, the Chromium `cmp` step fails.
+   Reachability check: `git ls-remote https://github.com/SagerNet/cronet-go | grep <sha>`.
 4. `CurrentVersion` / `CurrentVersionCode`.
 5. Toolchain versions are read from the sources (`android/flutter.version`,
    the core's `go.version`, `android/libbox.version`). No version literals in
@@ -104,9 +104,10 @@ Both core patches are one `sed` over `cmd/internal/build_libbox/main.go`.
    (`cronet-go`, 2026-08-06 and 2026-08-31: `unable to read tree`). fdroidserver
    clones a branch and checks out the SHA, so the SHA must be reachable from a
    branch. Fix: bump the core so `go.mod` points at a live commit.
-10. A srclib pinned to a branch (`sing-box-lx@lx`) builds whatever the branch
-    has at build time, not the tag the app was released with. The build passes
-    and the binary comparison fails.
+10. A kernel bump needs no recipe change: `prebuild:` runs
+    `git -C $$sing-box-lx$$ checkout -f $(cat android/libbox.version)`. Only a
+    change of the cronet-go version in the core's `go.mod` needs one (once
+    between lx.28 and lx.35).
 
 ### Reviewer threads
 
