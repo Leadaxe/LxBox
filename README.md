@@ -1,8 +1,8 @@
 # В данном форке:
 - заменена используемая для регистрации WARP ссылка на API на незабаненную ссылку на API для Zero Trust,
 - изменены наборы SNI для WARP,  
-  например, 2gis.ru, apteka.ru, autonews.ru, beeline.ru, deepseek.com, mail.ru, max.ru, pochta.ru, profi.ru, psbank.ru, pypi.org, rt.ru, rutube.ru, sberbank.ru, vk.ru работают на HTTP/3 на любых портах,  
-  а например, в метро Wi-Fi на портах 443 и 8443 HTTP/3 (QUIC, MASQUE UDP) не работает, а на остальных портах на HTTP/3 не работают сейчас например SNI gosuslugi.ru, lenta.ru, mos.ru, ozon.ru, rzd.ru, yandex.ru, а из зарубежных SNI вообще работают только deepseek.com и pupi.org,  
+  например, 2gis.ru, apteka.ru, autonews.ru, beeline.ru, deepseek.com, mail.ru, pochta.ru, profi.ru, psbank.ru, pypi.org, rt.ru, rutube.ru, sberbank.ru, vk.ru работают на HTTP/3 на любых портах,  
+  а например, в метро Wi-Fi на портах 443 и 8443 HTTP/3 (QUIC, MASQUE UDP) не работает, а на остальных портах на HTTP/3 не работают сейчас например SNI gosuslugi.ru, lenta.ru, max.ru, mos.ru, ozon.ru, rzd.ru, yandex.ru, а из зарубежных SNI вообще работают только deepseek.com и pupi.org,  
 - изменены наборы конечных точек для WARP,  
   например, для WARP WireGuad работают также конечные точки:  
   - 8.6.112.*  
