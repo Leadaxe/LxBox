@@ -90,14 +90,14 @@ void main() {
 
   test('§425 корень sni_pool — международные, БЕЗ .ru; loc.ru — с ними', () async {
     final p = await WarpEndpointPicker.load(region: '');
-    expect(p.sniPool, contains('deepseek.com'));
+    expect(p.sniPool, contains('www.google.com'));
     expect(p.sniPool.where((s) => s.endsWith('.ru')), isEmpty);
     expect(p.masqueSniPool.where((s) => s.endsWith('.ru')), isEmpty);
 
     final ru = await WarpEndpointPicker.load(region: 'ru');
-    expect(ru.sniPool, contains('apteka.ru'));
-    expect(ru.sniPool, contains('deepseek.com'));
-    expect(ru.masqueSniPool, contains('apteka.ru'));
+    expect(ru.sniPool, contains('gosuslugi.ru'));
+    expect(ru.sniPool, contains('www.google.com'));
+    expect(ru.masqueSniPool, contains('gosuslugi.ru'));
     // Регион меняет только SNI-пулы: блоки/порты/пресеты те же.
     expect(ru.endpointsPreset, p.endpointsPreset);
     expect(ru.masqueHostsPreset, p.masqueHostsPreset);
@@ -117,7 +117,7 @@ void main() {
     final a = await WarpEndpointPicker.load(region: '');
     final b = await WarpEndpointPicker.load(region: 'ru');
     expect(identical(a, b), isFalse);
-    expect(b.sniPool, contains('apteka.ru'));
+    expect(b.sniPool, contains('gosuslugi.ru'));
     final c = await WarpEndpointPicker.load(region: 'ru');
     expect(identical(b, c), isTrue);
   });
@@ -140,8 +140,8 @@ void main() {
     // У MASQUE это реальный SNI QUIC-сессии к Cloudflare — cloudflare-домен тут
     // естественен (в отличие от WG-junk §136), пул специально отдельный.
     expect(p.masqueSniPool, contains('www.cloudflare.com'));
-    expect(p.masqueSniPool, contains('deepseek.com'));
-    expect(p.masqueSniPool, contains('pypi.org'));
+    expect(p.masqueSniPool, contains('cdn.jsdelivr.net'));
+    expect(p.masqueSniPool, contains('aws.amazon.com'));
     // randomMasqueSni отдаёт непустой домен из пула.
     final s = p.randomMasqueSni();
     expect(s, isNotEmpty);
@@ -167,8 +167,8 @@ void main() {
   test('§130 новые чистые домены в обоих пулах (jsdelivr/aws — не cloudflare)',
       () async {
     final p = await WarpEndpointPicker.load(region: '');
-    expect(p.sniPool, contains('deepseek.com'));
-    expect(p.sniPool, contains('pypi.org'));
+    expect(p.sniPool, contains('cdn.jsdelivr.net'));
+    expect(p.sniPool, contains('aws.amazon.com'));
   });
 
   // §305 — asset несёт device-verified MASQUE-данные боевого теста.
