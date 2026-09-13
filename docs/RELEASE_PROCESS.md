@@ -306,7 +306,7 @@ curl -sL https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json |
 ### Google Play (AAB)
 
 For every release CI builds an `.aab` (the “Build AAB (Google Play)” step),
-keeps it in the run's artifacts, and the `play` job uploads it to the Play
+keeps it in the run's artifacts, and the `google-play` job (shown as “GooglePlay”) uploads it to the Play
 Console through the Google Play Developer API (§436, see
 [`GOOGLE_PLAY.md`](GOOGLE_PLAY.md#ci-upload)). The job needs the
 `PLAY_SERVICE_ACCOUNT_JSON` secret; without it it logs a warning and skips, so
@@ -316,7 +316,7 @@ variables: `PLAY_TRACK` (default `production`) and `PLAY_RELEASE_STATUS`
 presses Publish; `completed` sends it to review by itself). Release notes come
 from `fastlane/metadata/android/<locale>/changelogs/` — the same files F-Droid
 reads; a file over 500 characters fails the `checks` job on push, before any
-tag. `release` and `publish-manifest` do not depend on `play`: a failed upload
+tag. `release` and `publish-manifest` do not depend on `google-play`: a failed upload
 leaves the GitHub release intact, and the AAB stays in the `android-aab-release`
 artifact for a manual upload.
 
@@ -343,7 +343,7 @@ When editing `ci.yml`, do not add the flag to the APK steps.
 
 ## 3. Troubleshooting
 
-### The `play` job is red
+### The `google-play` job is red
 
 | Log says | Cause | What to do |
 |---|---|---|
@@ -463,7 +463,7 @@ debug build without a clean reinstall.
 - [ ] `main` ← merge `--no-ff --no-commit develop` → `commit -m "Merge ..."` → push; the tag `vX.Y.Z` is pushed **as a separate command**. **NB:** it must be `--no-commit` plus an explicit `commit -m`, not `--no-ff -m` — the latter breaks on “empty commit message” and the tag ends up on the old commit.
 - [ ] `gh run watch` is green; the release holds four APKs `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, signed release; the core version in the APK carries the `-lx` suffix and matches the pin in `app/android/libbox.version` at the tag (check against the file, not from memory).
 - [ ] `publish-manifest` ran — `docs/latest.json` is updated in `main`.
-- [ ] `play` ran — the release is in the Play Console on the `PLAY_TRACK` track with the tag's universal versionCode; with `PLAY_RELEASE_STATUS=draft` press **Publish** there yourself.
+- [ ] `google-play` ran — the release is in the Play Console on the `PLAY_TRACK` track with the tag's universal versionCode; with `PLAY_RELEASE_STATUS=draft` press **Publish** there yourself.
 - [ ] `main` is merged back into `develop` (§2.6) and pushed — **including the `git checkout HEAD -- app/pubspec.yaml` revert before the commit**.
 - [ ] `git describe` on `develop` shows `vX.Y.Z`.
 - [ ] `gh release view vX.Y.Z --json isLatest` → `{"isLatest":true}`.

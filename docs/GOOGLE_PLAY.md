@@ -76,7 +76,7 @@ just as much; they simply preferred not to be listed.
 
 ## CI upload
 
-Since §436 the `play` job in [`ci.yml`](../.github/workflows/ci.yml) uploads
+Since §436 the `google-play` job (shown as “GooglePlay”) in [`ci.yml`](../.github/workflows/ci.yml) uploads
 the AAB on every release tag through the Google Play Developer API. What it
 needs and where it lives:
 
@@ -90,11 +90,11 @@ needs and where it lives:
 | Release notes | `fastlane/metadata/android/{en-US,ru}/changelogs/<versionCode>.txt` → Play locales `en-US`, `ru-RU`. The AAB carries the universal code (…0) while the files are named by the per-ABI codes (…1/…2), so the job takes the first of …0/…2/…1/…4 it finds. Over 500 characters fails the `checks` job on push |
 | Action | `r0adkll/upload-google-play`, pinned by commit — it receives the key |
 
-`release` and `publish-manifest` do not depend on `play`: a failed upload
+`release` and `publish-manifest` do not depend on `google-play`: a failed upload
 leaves the GitHub release intact, and the AAB stays in the run's
 `android-aab-release` artifact for a manual upload. Without the secret the job
 logs a warning and skips, so forks build as before. Failure modes are in
-[`RELEASE_PROCESS.md`](RELEASE_PROCESS.md#the-play-job-is-red).
+[`RELEASE_PROCESS.md`](RELEASE_PROCESS.md#the-google-play-job-is-red).
 
 ## Gotchas
 

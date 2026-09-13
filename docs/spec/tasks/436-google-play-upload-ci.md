@@ -16,7 +16,7 @@ Play)») и кладёт его в артефакт прогона. Дальше
 
 ## Решение
 
-Job `play` в [ci.yml](../../../.github/workflows/ci.yml): `needs: [meta, android]`,
+Job `google-play` (имя в UI — `GooglePlay`) в [ci.yml](../../../.github/workflows/ci.yml): `needs: [meta, android]`,
 гейт `is_release`, параллельно с `release`. Шаги:
 
 | Шаг | Что делает |
@@ -56,7 +56,7 @@ gh variable set PLAY_RELEASE_STATUS -b completed
 описания для этой локали (не ошибка: описание дописывается в консоли).
 
 **Лимит 500 символов** проверяется в job `checks` на каждом push
-(шаг «Fastlane changelogs ≤ 500 chars», все файлы каталога), а не в `play`:
+(шаг «Fastlane changelogs ≤ 500 chars», все файлы каталога), а не в `google-play`:
 тег неподвижен, чинить файл после него некуда. Сейчас максимум — 473.
 
 **Почему action, а не `fastlane supply`.** supply тянет Ruby + gem (~2 мин на
@@ -71,7 +71,7 @@ Action делает ровно одно: AAB + notes на трек. Пин по 
 |---|---|
 | `mappingFile` / `debugSymbols` | minify выключен, `mapping.txt` не существует; символы `libbox` — отдельная история, в консоли это warning, не блокер |
 | Метаданные витрины (описания, скриншоты, рейтинг) | остаются ручными: fastlane-каталог общий с F-Droid, а правила и локали у Play свои |
-| `release` / `publish-manifest` зависят от `play` | каналы независимы: провал заливки в Play не должен снимать GitHub-релиз и `latest.json` |
+| `release` / `publish-manifest` зависят от `google-play` | каналы независимы: провал заливки в Play не должен снимать GitHub-релиз и `latest.json` |
 | Ретраи, ожидание пропагации прав | перезапуск руками: `workflow_dispatch` → `run_mode=release` на теге (§219) |
 | `changesNotSentForReview` | включать вслепую нельзя: тогда выпуск виснет в консоли до ручного «Send for review». Если API так ответил — в консоли незакрытая декларация, закрыть её |
 
@@ -91,7 +91,7 @@ Action делает ровно одно: AAB + notes на трек. Пин по 
 ## Верификация
 
 - [x] YAML валиден (`python3 -c yaml.safe_load`), job виден в графе.
-- [ ] Первый тег после мержа: job `play` зелёный; в консоли на `production`
+- [ ] Первый тег после мержа: job `google-play` зелёный; в консоли на `production`
   черновик с versionCode = universal-код тега и notes en-US / ru-RU.
 - [ ] Ручной Publish черновика → `gh variable set PLAY_RELEASE_STATUS -b completed`
   → статус спеки Done.

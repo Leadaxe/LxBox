@@ -431,7 +431,7 @@ jobs:
       - name: Build AAB (Google Play)
         # Play принимает только AAB. Отдельный формат, отдельный канал:
         # в GitHub Releases по-прежнему уходят APK (шаги выше), сюда не
-        # попадают — бандл забирает job play (§436) и отдаёт в Play API;
+        # попадают — бандл забирает job google-play (§436) и отдаёт в Play API;
         # артефакт прогона остаётся на случай ручной заливки.
         #
         # versionCode = код universal (ABI=0), тот же, что у fat APK этой
@@ -468,8 +468,8 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 1 || 30 }}
 
-  play:
-    name: Upload to Google Play
+  google-play:
+    name: GooglePlay
     needs: [meta, android]
     runs-on: ubuntu-latest
     if: needs.meta.outputs.is_release == 'true'
