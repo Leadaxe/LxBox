@@ -2,8 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done, DEVICE-VERIFIED (AVD LxBox_test, API 34, 13.09.2026) |
 | Дата старта | 2026-09-13 |
+| Дата завершения | 2026-09-13 |
+| Коммиты | `d51dfe1a` код+спека+CHANGELOG; docs-коммит со статусом |
 | Триггер | Play Console, выпуск 22301500 (2.23.1): «Повысьте производительность, уменьшив разрешение растровых изображений» — класс `o1.o` вызывает `BitmapFactory.decodeStream` без `Options` |
 | Связанные | [§372](372-android-tv-no-file-picker.md) (TV без пикера), [§383](383-file-picker-get-content-fallback.md) (GET_CONTENT-фолбэк), [§374](374-backup-save-to-device.md) (сохранение файла), [§333](333-large-text-virtualization.md) (utf8 вместо fromCharCodes) |
 
@@ -101,6 +103,36 @@ text:, subject:)`. Снимаются 12 `// ignore: deprecated_member_use`.
 - §372/§383 (TV-заглушка, GET_CONTENT) — на TV-AVD, если поднят; иначе
   DEVICE-PENDING отдельной строкой.
 - Размер APK до/после (Tika −465 классов, codegen-цепочка не в APK — ноль).
+
+## Результат проверки
+
+`flutter analyze` (весь проект) чисто, 4199 тестов, четыре l10n-чекера по нулям.
+APK arm64: 41 536 392 → 40 836 632 байт (−700 КБ); `org.apache.tika` в dex 486 → 0;
+`inSampleSize` в dex есть; `explorer_not_found` есть, `invalid_format_type` нет.
+
+DEVICE-VERIFIED на AVD LxBox_test (реальный набор: 9 подписок, ~48 узлов):
+
+| Путь | Код | Итог |
+|---|---|---|
+| Servers → Import from file, один файл, узел с кириллицей | `pickFileSafely` → `PickedFile.text` (subscriptions_screen) | «⚡ Москва — узел 1» целиком, через OPEN_DOCUMENT нового плагина |
+| То же, два файла → папка | `_importFilesIntoFolder(List<PickedFile>)` | папка F431 · 2 servers: «Москва — узел 1», «Питер узел 2» |
+| Config Editor → Load from file | config_screen `file.text` | JSON загружен и отформатирован |
+| Config Editor → Share | `SharePlus.instance.share(ShareParams(files:))` | share-sheet «Sharing 1 file lxbox_config.json» |
+| Backup → Export → Save to file | `saveFileSafely` (`saveFile → Uri?`) | CREATE_DOCUMENT, файл 342 КБ в Downloads |
+| Backup → Export → Share | `SharePlus` с файлом | share-sheet «Sharing 1 file lxbox-backup-…json» |
+| Backup → Pick file… (свой экспорт) | backup_screen `utf8DecodeOrNull(file.bytes)` | превью: 33 списка, 27 настроек, 8 тумблеров; Cancel |
+| Routing → Rules → Import rules… | routing_screen `utf8DecodeOrNull(file.bytes)` | превью 4 записей, Import (3); Cancel |
+
+Не прогнано на устройстве:
+- Routing → Export rules: на стенде 0 кастомных правил, кнопка задизейблена; код тот же `saveFileSafely`, что у бэкапа.
+- Restore с Home (`restore_backup.dart`): живёт только в empty-guide (узлов нет), стенд обнулять не стал; читает те же `PickedFile.bytes` строгим `Utf8Decoder`.
+- §383 GET_CONTENT-фолбэк (`_pickViaGetContent` → `PickedFile`): нужен менеджер, отвечающий только на GET_CONTENT (Total Commander на 7.x); на AVD не воспроизводится. Изменение там — только конструктор результата.
+- §372 TV-заглушка: предпроверка `filePickerAction()` не менялась.
+
+Грабли прогона (в память): `build-local-apk.sh` откатывает незакоммиченный pubspec
+(trap `git checkout`); после мажорного бампа плагинов инкрементальный Gradle отдаёт
+пустые модули — `rm -rf app/build`; эмулятор с `-gpu swiftshader_indirect` на
+нагруженном хосте даёт ANR системы, штатный `-gpu host` — нет.
 
 ## Docs to update
 
