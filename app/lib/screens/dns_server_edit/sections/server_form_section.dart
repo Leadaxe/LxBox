@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../services/dns/node_dns_records.dart'
+    show TailscaleEndpointOption;
 import '../edit_controller.dart';
 import '../../../services/l10n/locale_controller.dart';
 
@@ -12,6 +14,9 @@ import '../../../services/l10n/locale_controller.dart';
 /// выбора + TTL; транспортных полей у группы нет.
 /// §411 — **DoQ** (`quic`, порт 853, как DoT) и **DoH3** (`h3`, порт 443
 /// + path, как DoH): ядро их знает давно, форма не давала выбрать.
+/// §435 — режим **Tailscale** (NODE_SECTIONS.md §6): MagicDNS через узел
+/// tailnet — `endpoint` выбором из узлов Tailscale + чекбокс
+/// `accept_default_resolvers`; адреса и detour нет.
 ///
 /// Поля пишут в канонический `body` контроллера — JSON-вкладка показывает
 /// то же тело live (и наоборот: валидный JSON-edit обновляет форму).
@@ -44,7 +49,7 @@ class ServerFormSection extends StatelessWidget {
             Expanded(
               child: Text(
                 getLocalText.s(
-                  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3.",
+                  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.",
                   c.rawServerType,
                 ),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
@@ -89,6 +94,11 @@ class ServerFormSection extends StatelessWidget {
                     value: 'group',
                     child: Text(getLocalText.s("Group")),
                   ),
+                  // l10n-exempt: protocol name
+                  const DropdownMenuItem(
+                    value: 'tailscale',
+                    child: Text('Tailscale'),
+                  ),
                 ],
                 onChanged: (v) {
                   if (v != null) c.setServerMode(v);
@@ -111,6 +121,11 @@ class ServerFormSection extends StatelessWidget {
                   value: 'group',
                   label: Text(getLocalText.s("Group")),
                 ),
+                // l10n-exempt: protocol name
+                const ButtonSegment(
+                  value: 'tailscale',
+                  label: Text('Tailscale'),
+                ),
               ],
               selected: {mode},
               showSelectedIcon: false,
@@ -129,12 +144,17 @@ class ServerFormSection extends StatelessWidget {
             'group' => getLocalText.s(
               "Several servers behind one tag — survives a member failure",
             ),
+            'tailscale' => getLocalText.s(
+              "MagicDNS of the tailnet via a Tailscale node · no address",
+            ),
             _ => getLocalText.s("Plain UDP · port 53 · fast, unencrypted"),
           }, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
         ),
         const SizedBox(height: 12),
         if (mode == 'group') ...[
           _GroupSection(c: c),
+        ] else if (mode == 'tailscale') ...[
+          _TailscaleSection(c: c),
         ] else ...[
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -357,6 +377,88 @@ class _GroupSection extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ],
+    );
+  }
+}
+
+/// §435 — секция формы DNS-сервера `tailscale` (NODE_SECTIONS.md §6, спека
+/// §9.4): `endpoint` выбором из узлов Tailscale + чекбокс
+/// `accept_default_resolvers`. Пикер — по образцу [_DomainResolverPicker]:
+/// текущее значение вне списка (JSON-вкладка / узел удалён) — в начало,
+/// чтобы дропдаун не падал на неизвестном value; нет узлов — подсказка.
+class _TailscaleSection extends StatelessWidget {
+  const _TailscaleSection({required this.c});
+  final DnsServerEditController c;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final current = c.tailscaleEndpoint;
+    final known = c.tailscaleEndpoints;
+    final options = [
+      if (current.isNotEmpty && !known.any((o) => o.tag == current))
+        TailscaleEndpointOption(tag: current, enabled: true),
+      ...known,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (options.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              getLocalText.s("No Tailscale nodes yet — add one on the Servers screen first"),
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+          )
+        else
+          DropdownButtonFormField<String>(
+            // endpoint меняется и из JSON-вкладки — key пересоздаёт FormField
+            // с новым initialValue.
+            key: ValueKey('dns-ts-endpoint-$current'),
+            initialValue: current.isEmpty ? null : current,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: getLocalText.s("Tailscale node"),
+              helperText: getLocalText.s("Which node's tailnet answers the queries"),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: [
+              for (final o in options)
+                DropdownMenuItem(
+                  value: o.tag,
+                  child: Text(
+                    o.enabled
+                        ? o.tag
+                        // Выключенный узел не эмитится — сервер на него
+                        // санитайзер сборки выбросит (как члена группы).
+                        : getLocalText.s("%s · disabled — will be skipped", o.tag),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontFamily: 'monospace',
+                      color: o.enabled ? null : cs.error,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (v) {
+              if (v != null) c.setTailscaleEndpoint(v);
+            },
+          ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(getLocalText.s("Accept default resolvers")),
+          subtitle: Text(
+            getLocalText.s("Names outside the tailnet go to the default DNS servers; off — NXDOMAIN"),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
+          value: c.acceptDefaultResolvers,
+          onChanged: c.setAcceptDefaultResolvers,
         ),
       ],
     );

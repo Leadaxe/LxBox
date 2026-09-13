@@ -113,7 +113,8 @@ class DnsMirrorTile extends StatelessWidget {
   /// передаёт `[body]`.
   final List<Map<String, dynamic>> previewBodies;
 
-  /// `'preset'` | `'rule'` — плашка-источник + label в диалоге.
+  /// `'preset'` | `'rule'` | `'node'` (§435 — DNS-правило из секций узла,
+  /// read-only) — плашка-источник + label в диалоге.
   final String sourceKind;
 
   final bool enabled;
@@ -128,9 +129,12 @@ class DnsMirrorTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final (String badgeText, Color badgeColor) = sourceKind == 'preset'
-        ? ('preset', cs.primary)
-        : ('rule', cs.secondary);
+    final (String badgeText, Color badgeColor) = switch (sourceKind) {
+      'preset' => ('preset', cs.primary),
+      // §435 — правило из секций узла: read-only, плашка «node».
+      'node' => ('node', cs.tertiary),
+      _ => ('rule', cs.secondary),
+    };
     final preview = formatRulesPreview(previewBodies, kind: sourceKind);
     final subtitle = (note != null && note!.isNotEmpty)
         ? '$preview · $note'
