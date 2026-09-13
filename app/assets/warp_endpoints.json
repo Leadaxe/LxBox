@@ -54,7 +54,8 @@
     ],
     "sni_pool": [
       "www.google.com", "www.microsoft.com", "www.bing.com", "www.apple.com",
-      "www.wikipedia.org", "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com"
+      "www.wikipedia.org", "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com",
+      "pypi.org"
     ],
     "utls_fp_pool": ["chrome", "firefox", "safari", "edge", "random"]
   },
@@ -86,7 +87,9 @@
           "yandex.ru", "telemost.yandex.ru", "ozon.ru", "rutube.ru", "gosuslugi.ru",
           "mail.ru", "max.ru", "vk.ru", "www.google.com", "www.microsoft.com",
           "www.bing.com", "www.apple.com", "www.wikipedia.org", "cdn.jsdelivr.net",
-          "aws.amazon.com", "deepseek.com"
+          "aws.amazon.com", "deepseek.com", 
+          "pypi.org",
+          "2gis.ru", "apteka.ru", "autonews.ru", "beeline.ru", "profi.ru", "psbank.ru", "rt.ru", "rutube.ru", "vk.ru"
         ]
       },
       "masque": {
@@ -95,7 +98,9 @@
           "telemost.yandex.ru", "ozon.ru", "rutube.ru", "gosuslugi.ru", "mail.ru",
           "max.ru", "vk.ru", "www.google.com", "www.microsoft.com", "www.bing.com",
           "www.apple.com", "www.wikipedia.org", "cdn.jsdelivr.net", "aws.amazon.com",
-          "deepseek.com"
+          "deepseek.com", 
+          "cdnjs.cloudflare.com", "speed.cloudflare.com", "4pda.to", "pypi.org",
+          "2gis.ru", "apteka.ru", "autonews.ru", "beeline.ru", "profi.ru", "psbank.ru", "rt.ru", "rutube.ru", "vk.ru"
         ]
       }
     }
