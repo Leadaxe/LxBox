@@ -1,3 +1,11 @@
+# L×Box v2.23.2 (zh)
+
+**完整简体中文界面 / Full Simplified Chinese localization.** 界面、设置、向导模板与通知/磁贴/快捷方式全部翻译为简体中文（`assets/l10n/zh/ui.json` 1542 键 + `template.json` 205 键），语言选择器新增「中文（简体）」，并接入 Android `values-zh` 与 `locales_config.xml`。翻译闸门（ui/template/hardcoded/kotlin `--strict`）全绿。
+
+**A zh-CN localization build** carried on top of upstream v2.23.1: the whole UI, settings, wizard templates and the notification/tile/shortcut surfaces are translated to Simplified Chinese, with a new “中文（简体）” entry in the language picker. Signed with the fork's own release key (not interchangeable with upstream/Play builds — uninstall the old build before installing).
+
+---
+
 # L×Box v2.23.1
 
 **A maintenance release around issue #115.** The tunnel now comes back on its
