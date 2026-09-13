@@ -55,7 +55,9 @@
     "sni_pool": [
       "deepseek.com", "pypi.org", "2gis.ru", "apteka.ru", "autonews.ru", 
       "beeline.ru", "mail.ru", "pochta.ru", "profi.ru", 
-      "psbank.ru", "rt.ru", "rutube.ru", "sberbank.ru", "vk.ru"
+      "psbank.ru", "rt.ru", "rutube.ru", "sberbank.ru", "vk.ru",
+      "www.google.com", "www.microsoft.com", "www.bing.com", "www.apple.com",
+      "www.wikipedia.org", "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com"
     ],
     "utls_fp_pool": ["chrome", "firefox", "safari", "edge", "random"]
   },
@@ -73,7 +75,9 @@
     },
     "recommended_sni": "consumer-masque.cloudflareclient.com",
     "sni_pool": [
-      "consumer-masque.cloudflareclient.com", "www.cloudflare.com", 
+      "consumer-masque.cloudflareclient.com", "www.cloudflare.com", "www.google.com",
+      "www.microsoft.com", "www.bing.com", "www.apple.com", "www.wikipedia.org",
+      "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com",
       "cdnjs.cloudflare.com", "speed.cloudflare.com", "4pda.to",
       "deepseek.com", "pypi.org", "2gis.ru", "apteka.ru", "autonews.ru", 
       "beeline.ru", "mail.ru", "pochta.ru", "profi.ru", 
@@ -85,7 +89,7 @@
       "wireguard": {
         "sni_pool": [
           "yandex.ru", "telemost.yandex.ru", "ozon.ru", "rutube.ru", "gosuslugi.ru",
-          "mail.ru", "vk.ru", "www.google.com", "www.microsoft.com",
+          "mail.ru", "max.ru", "vk.ru", "www.google.com", "www.microsoft.com",
           "www.bing.com", "www.apple.com", "www.wikipedia.org", "cdn.jsdelivr.net",
           "aws.amazon.com", "deepseek.com"
         ]
