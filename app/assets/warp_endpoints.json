@@ -79,9 +79,7 @@
       "www.microsoft.com", "www.bing.com", "www.apple.com", "www.wikipedia.org",
       "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com",
       "cdnjs.cloudflare.com", "speed.cloudflare.com", "4pda.to",
-      "deepseek.com", "pypi.org", "2gis.ru", "apteka.ru", "autonews.ru", 
-      "beeline.ru", "mail.ru", "pochta.ru", "profi.ru", 
-      "psbank.ru", "rt.ru", "rutube.ru", "sberbank.ru", "vk.ru"
+      "deepseek.com", "pypi.org"
     ]
   },
   "loc": {
