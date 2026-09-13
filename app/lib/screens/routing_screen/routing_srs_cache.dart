@@ -23,6 +23,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   ]);
   String _presetSrsKey(CustomRulePreset rule, String tag);
   bool _presetNeedsDownload(CustomRulePreset rule, SelectableRule preset);
+  bool _refreshNodeRules(); // §435 — строки правил узлов из контроллера
 
   Future<void> _load() async {
     final template = await TemplateLoader.load();
@@ -88,6 +89,10 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     }
 
     await _refreshSrsCache();
+
+    // §435 — правила узлов из источников контроллера (объединённый порядок
+    // строится в build).
+    _refreshNodeRules();
 
     setState(() {
       _loading = false;
