@@ -7,6 +7,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/custom_rule.dart';
 import '../services/builder/post_steps.dart';
 import '../services/dns/dns_controller.dart';
+import '../services/dns/node_dns_records.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
 import '../services/preset_on_change.dart';
@@ -23,6 +24,7 @@ import 'dns_settings_screen/widgets/dns_mirror_group_card.dart';
 import 'dns_settings_screen/widgets/dns_rule_tile.dart';
 import 'dns_settings_screen/widgets/local_resolver_warning_banner.dart';
 import 'dns_settings_screen/widgets/merged_server_tile.dart';
+import 'dns_settings_screen/widgets/node_dns_tiles.dart';
 import 'dns_settings_screen/widgets/resolver_picker.dart';
 import 'lazy_persist_mixin.dart';
 import '../services/l10n/locale_controller.dart';
@@ -109,6 +111,17 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// (тумблера нет, DNS-блок жив пока routing on).
   Map<String, bool> _presetDnsEnable = const {};
 
+  /// §435 — DNS-серверы/правила узлов (секции) после подстановки `@self`:
+  /// read-only строки внизу списков. Производные (как preset-серверы), в
+  /// [_servers]/[_rules] НЕ кладутся — резолверы отбросили бы чужой kind и
+  /// персистили усечённый список. Перечитываются при правке узла (экран
+  /// слушает [SubscriptionController]).
+  List<NodeDnsServerRecord> _nodeServers = const [];
+  List<NodeDnsRuleRecord> _nodeRules = const [];
+
+  /// §435 — узлы Tailscale для пикера `endpoint` в форме DNS-сервера.
+  List<TailscaleEndpointOption> _tailscaleEndpoints = const [];
+
   bool _loading = true;
   // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
 
@@ -133,6 +146,36 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   // §085 R4 — alias: сохраняет существующие call-sites `_markDirty()`.
   void _markDirty() => markDirty();
 
+  @override
+  void initState() {
+    super.initState();
+    // §435 — правка узла (секции, тумблер, переименование, tag_prefix папки)
+    // при открытом экране перечитывает узловые записи. Свои мутации экрана
+    // сюда не попадают: `configDirty` контроллер ставит без notify.
+    widget.subController.addListener(_onSourcesChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.subController.removeListener(_onSourcesChanged);
+    super.dispose();
+  }
+
+  void _onSourcesChanged() => unawaited(_reloadNodeRecords());
+
+  /// §435 — только узловые записи и опции endpoint, без полного [_load]
+  /// (тот перечитывает буферы экрана; staged-мутации он бы вернул те же, но
+  /// дёргать резолверы серверов/правил на каждый notify незачем).
+  Future<void> _reloadNodeRecords() async {
+    final n = await DnsController.loadNodeRecords();
+    if (!mounted) return;
+    setState(() {
+      _nodeServers = n.servers;
+      _nodeRules = n.rules;
+      _tailscaleEndpoints = n.tailscaleEndpoints;
+    });
+  }
+
   Future<void> _load() async {
     // §300 — вся read+derive-логика вынесена в DnsController.load() (тело
     // verbatim + типизация краёв §294). Экран только присваивает snapshot.
@@ -153,6 +196,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       _strategy = s.strategy;
       _dnsFinal = s.dnsFinal;
       _defaultResolver = s.defaultResolver;
+      _nodeServers = s.nodeServers;
+      _nodeRules = s.nodeRules;
+      _tailscaleEndpoints = s.tailscaleEndpoints;
       _loading = false;
     });
     // §121: исчезнувший resolver-tag сброшен → persist (config dirty).
@@ -237,6 +283,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       outboundOptions: _outboundOptions,
       dnsServerTags: _enabledServerTags,
       dnsMemberOptions: _dnsMemberOptions,
+      tailscaleEndpoints: _tailscaleEndpoints, // §435
       existingTags: {for (final s in _servers) s['tag'].toString()},
     );
     if (result == null || !mounted) return;
@@ -284,6 +331,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       // §117: dom_resolver-пикер — теги без самого сервера (петля).
       dnsServerTags: _enabledServerTags.where((t) => t != tag).toList(),
       dnsMemberOptions: _dnsMemberOptions,
+      tailscaleEndpoints: _tailscaleEndpoints, // §435
       // §117 задача 4b: rename-коллизии (без текущего тега).
       existingTags: {
         for (final s in _servers)
@@ -560,6 +608,16 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                 onTap: _editServer,
                 liveGroup: _liveDnsGroups[entry.tag], // §312
               )),
+          // §435 — серверы узлов (секции) read-only внизу списка: при сборке
+          // они идут после корневых (спека §4 п. 3). Без свитча/тапа —
+          // правятся в редакторе узла.
+          // Ключ по индексу: два узла с одним display-тегом и одинаковыми
+          // секциями дали бы дубль ключа по тегам.
+          for (var i = 0; i < _nodeServers.length; i++)
+            NodeDnsServerTile(
+              key: ValueKey('dns-server-node-$i'),
+              record: _nodeServers[i],
+            ),
 
           const Divider(height: 32),
 
@@ -595,7 +653,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             ],
           ),
           const SizedBox(height: 4),
-          if (_rules.isEmpty && mirrors.isEmpty)
+          if (_rules.isEmpty && mirrors.isEmpty && _nodeRules.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
@@ -642,6 +700,14 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                   ),
                 );
               },
+            ),
+          // §435 — DNS-правила узлов (секции) read-only ПОСЛЕ reorder-списка:
+          // при сборке они идут в конец `dns.rules` (спека §4 п. 3), в
+          // reorder не участвуют, тумблера нет — правятся в редакторе узла.
+          if (_nodeRules.isNotEmpty)
+            NodeDnsRulesCard(
+              key: const ValueKey('dns-node-rules'),
+              records: _nodeRules,
             ),
 
           const Divider(height: 32),
