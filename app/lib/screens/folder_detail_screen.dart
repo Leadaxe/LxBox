@@ -1670,9 +1670,32 @@ class _MemberTile extends StatelessWidget {
         ? getLocalText.s("Unreadable entry")
         : (node.label.isNotEmpty ? node.label : node.tag);
     if (isChainLink) title = '⚙ $title'; // §239 — авто-маркировка звена
+    // §435 — у безадресных (группа §322, Tailscale) адреса нет: только тип,
+    // без «:0».
     final subtitle = node == null
         ? getLocalText.s("Tap to edit or delete")
-        : '${node.protocol.toUpperCase()} · ${node.server}:${node.port}';
+        : node.isAddressless
+            ? node.protocol.toUpperCase()
+            : '${node.protocol.toUpperCase()} · ${node.server}:${node.port}';
+
+    // §435 — маркер «член несёт секции» (правила/DNS узла, контракт ## 13):
+    // видно, у кого связка, не открывая редактор.
+    final badge = _probeBadge(context, theme);
+    final sectionsMark = member.sections == null
+        ? null
+        : Tooltip(
+            message: getLocalText.s("Has node sections"),
+            child: Icon(Icons.account_tree_outlined, size: 16, color: muted),
+          );
+    final Widget? trailing = switch ((sectionsMark, badge)) {
+      (null, null) => null,
+      (final m?, null) => m,
+      (null, final b?) => b,
+      (final m?, final b?) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [m, const SizedBox(width: 8), b],
+        ),
+    };
 
     final tile = ListTile(
       contentPadding: EdgeInsets.zero,
@@ -1698,7 +1721,7 @@ class _MemberTile extends StatelessWidget {
           style: TextStyle(fontSize: 12, color: muted),
           maxLines: 1,
           overflow: TextOverflow.ellipsis),
-      trailing: _probeBadge(context, theme),
+      trailing: trailing,
       onLongPress: onLongPress,
       onTap: onTap,
     );

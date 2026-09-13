@@ -25,6 +25,13 @@ class DetourTarget {
   static const none = DetourTarget(storeValue: '', display: '');
 }
 
+/// Сабстрока узла в пикере: `TYPE · server:port`; у безадресных (§435 —
+/// группа §322, Tailscale) адреса нет — только тип, без `:0`.
+String detourNodeSubline(NodeSpec n) {
+  final type = n.protocol.toUpperCase();
+  return n.isAddressless ? type : '$type · ${n.server}:${n.port}';
+}
+
 /// §248 — подпись сохранённого detour-значения: тег detour-Направления (или его
 /// auto-двойника) → `⚙ <label>`; Направление не найден → значение как хранится
 /// (сырой тег). Интра-приоритет омонимов (bare-тег члена СВОЕЙ папки
@@ -245,7 +252,7 @@ Future<DetourTarget?> showDetourTargetPicker(
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis),
                               subtitle: Text(
-                                '${n.protocol.toUpperCase()} · ${n.server}:${n.port}',
+                                detourNodeSubline(n),
                                 style:
                                     TextStyle(fontSize: 12, color: muted),
                               ),
@@ -293,7 +300,7 @@ Future<DetourTarget?> showDetourTargetPicker(
                     title: Text(display,
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
-                      '${n.protocol.toUpperCase()} · ${n.server}:${n.port}',
+                      detourNodeSubline(n),
                       style: TextStyle(fontSize: 12, color: muted),
                     ),
                     onTap: () => Navigator.pop(ctx,
