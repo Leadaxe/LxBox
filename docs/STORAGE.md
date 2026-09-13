@@ -442,9 +442,44 @@ Sealed on the `type` field:
   "detour_policy": { … },
   "origin":        "paste|file|qr|manual",
   "created_at":    "ISO-8601",
-  "raw_body":      "<original input>"         // kept for reparsing when something goes wrong
+  "raw_body":      "<original input>",        // kept for reparsing when something goes wrong
+  "sections":      { … }                      // §435 — optional, see “Node sections” below
 }
 ```
+
+#### Node sections (§435, contract ## 13)
+
+A free node (a `type: user` entry or a folder member) may carry the config fragment it
+needs — route rules and DNS records — in `sections`. The record form is the contract's
+target form (ONE_NAMESPACE.md §2): **record = app metadata + `body` = the sing-box object
+as is**. The `@self` / `@{self}` placeholders stay in storage verbatim; the final node tag
+is substituted at build time and when displayed.
+
+```jsonc
+"sections": {
+  "rules": [                                   // only kind inline | srs
+    { "kind": "inline", "id": "<uuid>", "name": "@{self} network", "enabled": true, "num": 945,
+      "body": { "ip_cidr": ["100.64.0.0/10"], "outbound": "@self" } }
+  ],
+  "dns": {
+    "servers": [                               // only kind user (tag in metadata, body without tag)
+      { "kind": "user", "tag": "@{self}-dns", "enabled": true,
+        "body": { "type": "tailscale", "endpoint": "@self" } }
+    ],
+    "rules": [                                 // only kind user
+      { "kind": "user", "name": "", "enabled": true,
+        "body": { "domain_suffix": [".ts.net"], "server": "@{self}-dns" } }
+    ]
+  }
+}
+```
+
+Empty sections are not written. A foreign `kind` inside a section is dropped on read
+(the rest of the records survive). `lib/models/node_sections.dart` holds the model,
+`lib/models/record_codec.dart` the record codec — the same code that will parse the root
+`custom_rules` / `dns_options` once storage moves to the contract 1.0 form. Sections are
+**not** exported to the LX Backup until contract 1.0 (the export names the loss with
+`backup_local_only_dropped`); a 0.12 file's `servers[].sections` is ignored silently.
 
 ### `type: "folder"` — `FolderServers` (§234)
 
@@ -465,7 +500,9 @@ A folder of manual servers: a container of members sharing one toggle, `tag_pref
   "members": [                                  // the order here is the order in the UI
     { "raw": "vless://…#Alpha", "enabled": true,
       "detour": "Jump" },                            // §237 — a personal detour (optional)
-    { "raw": "wg://…#Beta",     "enabled": false }   // per-member toggle
+    { "raw": "wg://…#Beta",     "enabled": false },  // per-member toggle
+    { "raw": "{\"type\":\"tailscale\",…}", "enabled": true,
+      "sections": { … } }                            // §435 — node sections (optional), same form as for `type: user`
   ]
 }
 ```
@@ -698,6 +735,10 @@ would). The strict `fromJsonStrict` is used only on the Debug write path
 `type` is the origin discriminator (the predecessor of [§044]'s `kind` — historically a different word).
 
 `type: template/rule` — orphan cleanup: when the title is not found in the active template or preset, the entry is discarded in `resolveDnsRulesList`.
+
+§435: a `kind: inline` rule may carry `"enabled": false` (written only when off; absence = on) —
+the builder skips it. The UI does not toggle root DNS rules yet; the field exists because
+node sections (`sections.dns.rules[]`) use the same record type.
 
 ⚠ §257: on a `kind: preset` entry the `enabled` field is **dead**: the toggle for a
 preset's DNS block moved to the magic var `dns_enable`

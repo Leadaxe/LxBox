@@ -591,6 +591,40 @@ final class NaivePaddingIgnoredWarning extends NodeWarning {
 /// только в логе. Вешается на узел ОДИН раз при первой отброшенной паре.
 /// Собственный `headers` у http/https-прокси под код не попадает.
 /// Go-эталон: node_parser_naive.go parseNaiveExtraHeaders.
+/// §435 — запись секции узла отброшена при разборе документа
+/// (`{ endpoints: [тело], sections: {…} }`): чужой `kind` или битая форма.
+/// Остальные записи живут (NODE_SECTIONS.md §1). Кода контракта нет — UI.
+final class SectionsRecordDroppedWarning extends NodeWarning {
+  /// Путь и причина: `rules[1]: kind "preset" is not allowed in node sections`.
+  final String detail;
+
+  const SectionsRecordDroppedWarning(this.detail);
+
+  @override
+  List<Object?> get props => [detail];
+
+  @override
+  String messageWith(GetLocalText t) =>
+      t.s("Node section record dropped: %s", detail);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
+/// §435 — документ узла несёт и `sections`, и `dns`/`route` (NODE_SECTIONS.md
+/// §7: оба вида в одном документе — ошибка). Парсер подписки берёт `sections`,
+/// редактор узла такой документ не сохраняет. Кода контракта нет — UI.
+final class SectionsConflictWarning extends NodeWarning {
+  const SectionsConflictWarning();
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.");
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
 final class NaiveExtraHeadersInvalidWarning extends NodeWarning {
   /// Отброшенная пара, как она пришла в ссылке (после URL-decode, trim).
   final String entry;

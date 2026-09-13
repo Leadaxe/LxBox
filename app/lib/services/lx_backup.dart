@@ -679,6 +679,9 @@ List<Map<String, dynamic>> _folderToJson(
     if (list.detourPolicy != DetourPolicy.defaults) 'detour_policy',
     // §237 — личный detour члена: у записи схемы такого поля нет.
     if (list.members.any((m) => m.detour.isNotEmpty)) 'member detour',
+    // §435 — секции узла до контракта 1.0 не экспортируются (ONE_NAMESPACE
+    // §4); молчать о потере связки нельзя (П6).
+    if (list.members.any((m) => m.sections != null)) 'sections',
     // Нечитаемый член (§234: raw не распарсился) поедет записью без имени —
     // на приёмнике он не соберётся в узел, и молчать об этом нельзя.
     if (list.members.any((m) => m.raw.trim().isNotEmpty && m.node == null))
@@ -717,6 +720,9 @@ Map<String, dynamic> _serverListToJson(
   _noteLocalOnly(warnings, list.name, [
     if (list.tagPrefix.isNotEmpty) 'tag_prefix',
     if (list.detourPolicy != DetourPolicy.defaults) 'detour_policy',
+    // §435 — секции узла до контракта 1.0 не экспортируются (П6: потеря
+    // связки названа, а не молчалива).
+    if (list is UserServer && list.sections != null) 'sections',
   ]);
 
   var uri = '';
@@ -1109,6 +1115,12 @@ const Set<String> _serverKeys = {
   'enabled',
   'folder',
   'exclude_from_global',
+  // §435 / контракт ## 13 — `sections` объявлено схемой (BACKUP.md §2,
+  // сторона launcher): до контракта 1.0 ни одна сторона его не пишет, а
+  // 0.12-форму записей (`match`/`value`) LxBox не разбирает — второй парсер.
+  // Чужое объявленное игнорируется МОЛЧА (BACKUP.md §1): в allowlist ради
+  // тишины, без ветки в `_serverFromJson`.
+  'sections',
 };
 
 const Set<String> _chainKeys = {

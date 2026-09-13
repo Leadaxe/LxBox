@@ -23,7 +23,7 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// узлов источника, включая уже выключенные. Иначе выключение узла
 /// переименовало бы следующего тёзку (`X-2` → `X`) и сняло отметку уже с
 /// него.
-class _FakeCtx implements EmitContext {
+class _FakeCtx extends EmitContext {
   // §272/§322 — глобальный passive_check; этим тестам он не важен.
   @override
   bool get passiveCheck => false;

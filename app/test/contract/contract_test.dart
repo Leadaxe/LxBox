@@ -38,7 +38,7 @@ const _contractRoot = 'contract';
 /// Соответствие имени каталога корпуса (= scheme из registry/protocols/*.json,
 /// contract/docs/CANON.md §1) типу kind в конверте. Все схемы вне карты —
 /// обычный outbound; wireguard — endpoint (CANON §1, registry: kind=endpoint).
-const _endpointSchemes = {'wireguard'};
+const _endpointSchemes = {'wireguard', 'tailscale'}; // §435 — tailscale тоже endpoint
 
 /// Имя стороны в поле `extension` реестра/ожиданий (corpus/README «Отбраковки
 /// и meta.extension»). Чужой extension = схемы у нас нет.

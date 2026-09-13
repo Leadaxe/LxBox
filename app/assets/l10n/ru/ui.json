@@ -4972,5 +4972,11 @@
   },
   "Region": {
     "value": "Регион"
+  },
+  "Node section record dropped: %s": {
+    "value": "Запись секции узла отброшена: %s"
+  },
+  "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.": {
+    "value": "Документ несёт и «sections», и «dns»/«route»: взяты «sections», остальное проигнорировано."
   }
 }

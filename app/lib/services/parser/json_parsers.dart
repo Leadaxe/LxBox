@@ -1353,6 +1353,18 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         idleTimeout: entry['idle_timeout']?.toString() ?? '',
         keepAlive: entry['keep_alive_period']?.toString() ?? '',
       );
+    case 'tailscale':
+      // §435 / контракт ## 13 (NODE_SECTIONS.md §6) — endpoint без адреса:
+      // принимается из `outbounds[]` и `endpoints[]` без `server`/
+      // `server_port`, тело как есть. Никаких проверок полей: сторона, чьё
+      // ядро без `with_tailscale`, всё равно обязана узел хранить — он
+      // выбрасывается только при сборке (гейт ядра).
+      return TailscaleSpec(
+        id: newUuidV4(),
+        tag: tag.isEmpty ? 'tailscale' : tag,
+        label: label,
+        body: entry,
+      );
     default:
       return null;
   }
