@@ -819,7 +819,10 @@ Map<String, dynamic> _ruleToJson(
       if (rule.sourceIpIsPrivate) 'source_ip_is_private',
     ]);
   } else if (rule is CustomRuleSrs) {
-    out['ref'] = (raw['url'] as String?) ?? (raw['srsUrl'] as String?) ?? '';
+    // ## 12 (D-100) — `ref` = первый набор всегда; `refs` — все по порядку,
+    // только при двух и более (сторона без поддержки читает `ref`).
+    out['ref'] = rule.srsUrl;
+    if (rule.srsUrls.length > 1) out['refs'] = List.of(rule.srsUrls);
     out['outbound'] = (raw['outbound'] as String?) ?? '';
   } else if (rule is CustomRulePreset) {
     out['ref'] = (raw['presetId'] as String?) ?? (raw['ref'] as String?) ?? '';
@@ -1167,6 +1170,7 @@ const Set<String> _ruleKeys = {
   'num',
   'outbound',
   'ref',
+  'refs', // ## 12 (D-100)
   'vars',
   'match',
   'dns',
@@ -1998,6 +2002,8 @@ CustomRule? _ruleBodyFromJson(
         // Тот же случай, что и с `varsValues` выше: фабрика читает `srsUrl`,
         // а не `url`, и URL правила терялся целиком.
         'srsUrl': j['ref'] ?? '',
+        // ## 12 — `refs` главнее `ref`; без него фабрика возьмёт `srsUrl`.
+        'srsUrls': _strList(j['refs']),
         'outbound': outbound,
         'dns': ?j['dns'],
         'resolve': ?j['resolve'],

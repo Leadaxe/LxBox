@@ -3640,6 +3640,12 @@
   "SRS URL is empty": {
     "value": "URL SRS пуст"
   },
+  "SRS: %s (+%d)": {
+    "value": "SRS: %s (+%d)"
+  },
+  "One URL per line — several rule sets in one rule.": {
+    "value": "По одному URL на строку — несколько наборов правил в одном правиле."
+  },
   "SRS: %s": {
     "value": "SRS: %s"
   },

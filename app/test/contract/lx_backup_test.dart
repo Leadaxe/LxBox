@@ -918,6 +918,71 @@ void main() {
           reason: 'URL rule-set потерян — правило приедет пустым');
     });
 
+    // ## 12 контракта (D-100) — несколько наборов одного srs-правила.
+    group('## 12 rules[].refs', () {
+      test('импорт: refs главнее ref; без refs — ref один', () {
+        final raw = jsonEncode({
+          'lx_backup': 1,
+          'exported_by': {'app': 'launcher', 'version': '1.5.6'},
+          'exported_at': '2026-09-05T00:00:00Z',
+          'rules': [
+            {
+              'kind': 'srs',
+              'name': 'Multi',
+              'outbound': 'direct',
+              'num': 1000,
+              'ref': 'https://example.com/rules/a.srs',
+              'refs': [
+                'https://example.com/rules/a.srs',
+                'https://example.com/rules/b.srs',
+              ],
+            },
+            {
+              'kind': 'srs',
+              'name': 'Single',
+              'outbound': 'direct',
+              'num': 1001,
+              'ref': 'https://example.com/rules/d.srs',
+            },
+          ],
+        });
+        final file = parseLxBackup(raw, knownOutbounds: {'direct'});
+        expect(file.warnings, isEmpty, reason: 'refs — поле контракта, не чужое');
+        expect(file.rules.first.srsUrls, [
+          'https://example.com/rules/a.srs',
+          'https://example.com/rules/b.srs',
+        ]);
+        expect(file.rules.last.srsUrls, ['https://example.com/rules/d.srs']);
+      });
+
+      test('экспорт: ref = первый всегда, refs только при двух и более', () async {
+        final raw = (await buildLxBackup(
+          lists: const [],
+          rules: [
+            CustomRuleSrs(
+              name: 'Multi',
+              srsUrls: const ['https://x/a.srs', 'https://x/b.srs'],
+              outbound: 'direct',
+            ),
+            CustomRuleSrs(name: 'Single', srsUrl: 'https://x/d.srs', outbound: 'direct'),
+          ],
+          vars: const {},
+        )).json;
+        final rules = (jsonDecode(raw) as Map<String, dynamic>)['rules'] as List;
+        final multi = rules[0] as Map<String, dynamic>;
+        final single = rules[1] as Map<String, dynamic>;
+        expect(multi['ref'], 'https://x/a.srs');
+        expect(multi['refs'], ['https://x/a.srs', 'https://x/b.srs']);
+        expect(single['ref'], 'https://x/d.srs');
+        expect(single.containsKey('refs'), isFalse);
+
+        // Круг: import(export(x)) = x по составу наборов.
+        final back = parseLxBackup(raw, knownOutbounds: {'direct'});
+        expect(back.rules[0].srsUrls, ['https://x/a.srs', 'https://x/b.srs']);
+        expect(back.rules[1].srsUrls, ['https://x/d.srs']);
+      });
+    });
+
     // §393 B8 — регистрации WARP. Имена полей канонические (лаунчерные), а не
     // мобильные: совпадение случайное на трёх полях из десяти.
     test('warp: круг сохраняет регистрацию и мобильные добавки', () {

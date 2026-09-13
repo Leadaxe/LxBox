@@ -425,10 +425,16 @@ Future<DebugResponse> _downloadSrs(DebugRequest req, DebugContext ctx) async {
     }
   }
   if (rule == null) throw NotFound('rule: $id');
-  if (rule.srsUrl.isEmpty) throw const Conflict('rule has no srsUrl');
-  final path = await RuleSetDownloader.download(id, rule.srsUrl);
-  if (path == null) throw const UpstreamError('srs download failed');
-  return _ok('download-srs', {'rule_id': id, 'path': path});
+  if (rule.srsUrls.isEmpty) throw const Conflict('rule has no srsUrl');
+  // ## 12 — все наборы правила, каждый в свой файл кэша.
+  final paths = <String>[];
+  for (var i = 0; i < rule.srsUrls.length; i++) {
+    final path = await RuleSetDownloader.download(
+        CustomRuleSrs.cacheIdAt(id, i), rule.srsUrls[i]);
+    if (path == null) throw const UpstreamError('srs download failed');
+    paths.add(path);
+  }
+  return _ok('download-srs', {'rule_id': id, 'path': paths.first, 'paths': paths});
 }
 
 Future<DebugResponse> _clearSrs(DebugRequest req, DebugContext ctx) async {

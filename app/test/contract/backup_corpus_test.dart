@@ -92,6 +92,13 @@ void main() {
           expect(file.rules[i].name, wantRules[i]['name'], reason: 'имя правила #$i');
           expect(file.rules[i].enabled, wantRules[i]['enabled'],
               reason: 'состояние правила ${wantRules[i]['name']}');
+          // ## 12 (D-100) — `refs` в ожиданиях необязателен: нет ключа — не
+          // проверяем; есть — все наборы правила по порядку.
+          final wantRefs = wantRules[i]['refs'];
+          if (wantRefs is List) {
+            expect(file.rules[i].srsUrls, wantRefs.cast<String>(),
+                reason: 'refs правила ${wantRules[i]['name']}');
+          }
         }
 
         final wantVars = (expected['vars'] as Map?)?.cast<String, dynamic>();

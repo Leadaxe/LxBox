@@ -155,7 +155,18 @@ Future<DebugResponse> _update(
   if (patchBssids != null) {
     patched['wifiBssids'] = _validateBssids(patchBssids);
   }
-  setIfPresent('srsUrl', fieldString(body, 'srs_url'));
+  // ## 12 — `srs_urls` (список) главнее `srs_url`; одиночный `srs_url`
+  // заменяет весь список одним набором (иначе фабрика прочла бы старый
+  // `srsUrls` из JSON и патч не сработал бы).
+  final srsUrls = fieldStringList(body, 'srs_urls');
+  final srsUrl = fieldString(body, 'srs_url');
+  if (srsUrls != null) {
+    patched['srsUrls'] = srsUrls;
+    patched['srsUrl'] = srsUrls.isEmpty ? '' : srsUrls.first;
+  } else if (srsUrl != null) {
+    patched['srsUrl'] = srsUrl;
+    patched['srsUrls'] = [srsUrl];
+  }
   setIfPresent('outbound', fieldString(body, 'outbound'));
   // Preset-kind поля (task 011 / spec §033).
   setIfPresent('presetId', fieldString(body, 'preset_id'));
@@ -405,6 +416,7 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         name: name,
         enabled: enabled,
         srsUrl: fieldString(j, 'srs_url') ?? '',
+        srsUrls: fieldStringList(j, 'srs_urls') ?? const [], // ## 12
         ports: fieldStringList(j, 'ports') ?? const [],
         portRanges: fieldStringList(j, 'port_ranges') ?? const [],
         packages: fieldStringList(j, 'packages') ?? const [],

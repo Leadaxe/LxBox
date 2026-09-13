@@ -380,9 +380,12 @@ Future<BuildResult> buildConfig({
   // `{type: local, path: …}`). Удалённо ничего не качается.
   final srsPaths = <String, String>{};
   for (final cr in customRules) {
-    if (cr.kind != CustomRuleKind.srs) continue;
-    final p = await RuleSetDownloader.cachedPath(cr.id);
-    if (p != null) srsPaths[cr.id] = p;
+    if (cr is! CustomRuleSrs) continue;
+    // ## 12 — по файлу на каждый набор правила; ключ — id кэша набора.
+    for (final cacheId in cr.cacheIds) {
+      final p = await RuleSetDownloader.cachedPath(cacheId);
+      if (p != null) srsPaths[cacheId] = p;
+    }
   }
   // Bundle presets (spec §033, task 011) — expansion + merge. Регистрирует
   // rule-set и routing-правила в registry, extra DNS-данные возвращает для

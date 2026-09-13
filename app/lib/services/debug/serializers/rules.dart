@@ -58,6 +58,8 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
       return {
         ...base,
         'srs_url': r.srsUrl,
+        // ## 12 — все наборы правила по порядку (`srs_url` = первый).
+        'srs_urls': r.srsUrls,
         if (r.ports.isNotEmpty) 'ports': r.ports,
         if (r.portRanges.isNotEmpty) 'port_ranges': r.portRanges,
         if (r.packages.isNotEmpty) 'packages': r.packages,

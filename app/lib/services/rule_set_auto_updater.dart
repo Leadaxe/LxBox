@@ -220,14 +220,21 @@ class RuleSetAutoUpdater {
       if (!r.enabled) continue;
 
       if (r is CustomRuleSrs) {
-        final url = r.srsUrl.trim();
-        if (url.isEmpty) continue;
-        final meta = await RuleSetDownloader.readMeta(r.id);
-        if (!shouldUpdatePure(
-            meta: meta, intervalHours: r.updateIntervalHours, now: now)) {
-          continue;
+        // ## 12 — кандидат на каждый набор правила, у каждого свой кэш и
+        // свои метаданные; TTL общий (поле правила).
+        for (var i = 0; i < r.srsUrls.length; i++) {
+          final cacheId = CustomRuleSrs.cacheIdAt(r.id, i);
+          final meta = await RuleSetDownloader.readMeta(cacheId);
+          if (!shouldUpdatePure(
+              meta: meta, intervalHours: r.updateIntervalHours, now: now)) {
+            continue;
+          }
+          out.add(_Candidate(
+            cacheId: cacheId,
+            url: r.srsUrls[i],
+            label: i == 0 ? r.name : '${r.name} #${i + 1}',
+          ));
         }
-        out.add(_Candidate(cacheId: r.id, url: url, label: r.name));
         continue;
       }
 

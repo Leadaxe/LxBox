@@ -582,7 +582,8 @@ OR semantics inside a category, AND between them. `protocols` and `ipIsPrivate` 
   "id":          "<uuid>",
   "name":        "<display>",
   "enabled":     true,
-  "srsUrl":      "https://…/something.srs",
+  "srsUrl":      "https://…/something.srs",   // first rule set (always written)
+  "srsUrls":     [ "https://…/a.srs", "https://…/b.srs" ]?,  // §434 — all rule sets, written with 2+ (read first; `srsUrl` = srsUrls[0])
   "ports":       [ … ]?,          // extra filters at the routing-rule level
   "portRanges":  [ … ]?,
   "packages":    [ … ]?,
@@ -595,6 +596,16 @@ OR semantics inside a category, AND between them. `protocols` and `ipIsPrivate` 
 ```
 
 The `.srs` binary itself lives separately in `rule_sets/<tag>.srs` (see the [file table](#disk-layout) above).
+
+`srsUrls` ([§434], contract ## 12 / D-100): one rule may carry several rule sets.
+The builder registers a `rule_set` per URL (tags `<name>`, `<name>-2`, …) and emits
+one route rule with the list of tags; a single URL still emits a string tag, so the
+config is byte-identical to the pre-§434 form. Each URL has its own cache file:
+index 0 is `rule_sets/<id>.srs` (files downloaded before §434 stay valid), index i
+is `rule_sets/<id>~<i>.srs`, with its own `.meta.json`. The rule counts as
+downloaded only when every file is cached; a partial download keeps the rule off.
+In the backup the list travels as `rules[].ref` (first) plus `rules[].refs` (all,
+only with 2+); an importer without `refs` support reads `ref` and gets the first set.
 
 `dns` ([§117] task 3) works as it does for inline, except the mirror references an existing `.srs` tag plus the DNS-safe extra filters (`packages` and wifi). It only works when the rule set contains domains — an IP-only list never matches in a DNS context.
 

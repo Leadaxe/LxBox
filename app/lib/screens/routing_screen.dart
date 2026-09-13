@@ -1090,7 +1090,10 @@ class _RoutingScreenState extends State<RoutingScreen>
     // Подчищаем cached-файлы: SRS — один файл по `id`, preset — по каждому
     // remote rule_set'у пресета + убираем composite-ключи из _srsCached.
     if (rule is CustomRuleSrs) {
-      unawaited(RuleSetDownloader.delete(rule.id));
+      // ## 12 — файл на каждый набор.
+      for (final cacheId in rule.cacheIds) {
+        unawaited(RuleSetDownloader.delete(cacheId));
+      }
     } else if (rule is CustomRulePreset) {
       final preset = _presetFor(rule.presetId);
       if (preset != null) {
@@ -1171,7 +1174,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       final saved = result.saved!;
       final urlChanged =
           current.kind == CustomRuleKind.srs &&
-          current.srsUrl.trim() != saved.srsUrl.trim();
+          current.srsUrls.join('\n') != saved.srsUrls.join('\n');
       final kindChanged = current.kind != saved.kind;
       setState(() {
         // URL или kind поменялись → старый cached-файл невалидный, правило
@@ -1184,7 +1187,12 @@ class _RoutingScreenState extends State<RoutingScreen>
         _markDirty();
       });
       if (urlChanged || kindChanged) {
-        unawaited(RuleSetDownloader.delete(current.id));
+        // ## 12 — старые файлы всех наборов прежнего правила.
+        for (final cacheId in current is CustomRuleSrs
+            ? current.cacheIds
+            : <String>[current.id]) {
+          unawaited(RuleSetDownloader.delete(cacheId));
+        }
       }
     }
   }

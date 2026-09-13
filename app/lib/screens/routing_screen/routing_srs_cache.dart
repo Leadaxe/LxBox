@@ -129,7 +129,12 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
         // Srs-правило резервирует свой id в disk-namespace'е независимо от
         // того, скачан файл или нет — чтобы prune не удалил ещё-не-скачанный.
         activeDiskIds.add(r.id);
-        final cached = await RuleSetDownloader.isCached(r.id);
+        // ## 12 — по файлу на набор; правило «скачано», когда есть ВСЕ.
+        activeDiskIds.addAll(r.cacheIds);
+        var cached = r.cacheIds.isNotEmpty;
+        for (final cacheId in r.cacheIds) {
+          if (!await RuleSetDownloader.isCached(cacheId)) cached = false;
+        }
         if (cached) _srsCached.add(r.id);
         if (!cached && r.enabled) {
           _customRules[i] = r.withEnabled(false);
@@ -236,7 +241,13 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
       return;
     }
     setState(() => _srsDownloading.add(rule.id));
-    final path = await RuleSetDownloader.download(rule.id, rule.srsUrl.trim());
+    // ## 12 — все наборы по порядку; первый провал = провал правила.
+    String? path;
+    for (var i = 0; i < rule.srsUrls.length; i++) {
+      path = await RuleSetDownloader.download(
+          CustomRuleSrs.cacheIdAt(rule.id, i), rule.srsUrls[i]);
+      if (path == null) break;
+    }
     if (!mounted) return;
     setState(() {
       _srsDownloading.remove(rule.id);
