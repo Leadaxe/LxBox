@@ -115,6 +115,7 @@ void main() {
         WsEarlyDataConvertedWarning() => 'ws_early_data_converted',
         RealityShortIdInvalidWarning() => 'reality_short_id_invalid',
         NaivePaddingIgnoredWarning() => 'naive_padding_ignored',
+        NaiveExtraHeadersInvalidWarning() => 'naive_extra_headers_invalid',
         TuicCongestionInvalidWarning() => 'tuic_congestion_invalid',
         AwgHeaderInvalidWarning() => 'awg_header_invalid',
         Awg3FieldInvalidWarning() => 'awg3_field_invalid',

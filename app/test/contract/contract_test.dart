@@ -92,6 +92,8 @@ const _warningCodes = <Type, String>{
   InsecureTlsWarning: 'tls_insecure',
   NaiveBuildTagWarning: 'naive_unavailable',
   UnknownFingerprintWarning: 'utls_fp_unknown',
+  // D-104 — REALITY с отпечатком не из chrome-семейства (SPEC 083 ядра).
+  RealityFingerprintWarning: 'reality_fp_not_chrome',
   XhttpParamResetWarning: 'xhttp_param_reset',
   // §416 — header-placement без режима: дописан mode: packet-up.
   XhttpModeForcedPacketUpWarning: 'xhttp_mode_forced_packet_up',
@@ -107,6 +109,8 @@ const _warningCodes = <Type, String>{
   WsEarlyDataConvertedWarning: 'ws_early_data_converted',
   RealityShortIdInvalidWarning: 'reality_short_id_invalid',
   NaivePaddingIgnoredWarning: 'naive_padding_ignored',
+  // D-105 — отброшенная пара naive extra-headers.
+  NaiveExtraHeadersInvalidWarning: 'naive_extra_headers_invalid',
   TuicCongestionInvalidWarning: 'tuic_congestion_invalid',
   AwgHeaderInvalidWarning: 'awg_header_invalid',
   // §421 — AWG 3.x (SPEC 123): error-коды — причина drop, в конверт узла

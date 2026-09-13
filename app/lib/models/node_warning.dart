@@ -584,6 +584,31 @@ final class NaivePaddingIgnoredWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.info;
 }
 
+/// `naive_extra_headers_invalid` (info, D-105) — пара из naive `extra-headers`
+/// отброшена при разборе: нет `:`, имя вне tchar (RFC 7230) или CR/LF/NUL в
+/// значении. Прочие пары той же ссылки целы, узел живёт, но заголовок, которым
+/// часто открывают доступ на сервере, до него не доедет — раньше это было
+/// только в логе. Вешается на узел ОДИН раз при первой отброшенной паре.
+/// Собственный `headers` у http/https-прокси под код не попадает.
+/// Go-эталон: node_parser_naive.go parseNaiveExtraHeaders.
+final class NaiveExtraHeadersInvalidWarning extends NodeWarning {
+  /// Отброшенная пара, как она пришла в ссылке (после URL-decode, trim).
+  final String entry;
+
+  const NaiveExtraHeadersInvalidWarning(this.entry);
+
+  @override
+  List<Object?> get props => [entry];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "NaïveProxy extra-headers entry \"%s\" is not a valid header and was dropped. Other headers are kept, but the server will not see this one.",
+      entry);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
 /// `tuic_congestion_invalid` (warning) — TUIC `congestion_control` вне
 /// {cubic, new_reno, bbr}. Поле снимается (ядро подставит свой дефолт),
 /// узел живёт. Go-эталон: node_parser_tuic.go:73.

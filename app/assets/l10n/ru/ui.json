@@ -2619,6 +2619,9 @@
   "NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).": {
     "value": "NaïveProxy не входит в эту сборку libbox (пересоберите с -tags with_naive_outbound)."
   },
+  "NaïveProxy extra-headers entry \"%s\" is not a valid header and was dropped. Other headers are kept, but the server will not see this one.": {
+    "value": "Запись extra-headers NaïveProxy «%s» не является корректным заголовком и отброшена. Остальные заголовки сохранены, но этот сервер не увидит."
+  },
   "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.": {
     "value": "У параметра NaïveProxy «padding=%s» нет соответствия в ядре, поэтому он проигнорирован. Узел остаётся рабочим."
   },

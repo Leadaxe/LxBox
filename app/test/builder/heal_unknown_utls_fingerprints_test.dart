@@ -178,6 +178,22 @@ void main() {
       expect(healed, isEmpty, reason: 'восстановление — молча');
       expect(utlsOf(config, 0)['enabled'], true,
           reason: 'без uTLS ядро отвергает reality-outbound на старте');
+      expect(utlsOf(config, 0)['fingerprint'], 'chrome',
+          reason: 'D-104: chrome ЯВНО, не дефолт ядра');
+    });
+
+    test('D-104: REALITY + пустой/пробельный fingerprint → chrome ЯВНО', () {
+      final config = {
+        'outbounds': [
+          realityOutbound('empty', ''),
+          realityOutbound('blank', '  '),
+        ],
+      };
+      final healed = healUnknownUtlsFingerprints(config);
+
+      expect(healed, isEmpty);
+      expect(utlsOf(config, 0)['fingerprint'], 'chrome');
+      expect(utlsOf(config, 1)['fingerprint'], 'chrome');
     });
 
     test(

@@ -21,6 +21,9 @@ part of '../post_steps.dart';
 /// `RealityFingerprintWarning` на ноде (парсер); дефолтный `random`
 /// URI-парсера подменяется тоже, без записи.
 ///
+/// D-104 (контракт 0.12.10): под REALITY пустой или отсутствующий
+/// fingerprint эмитится как `chrome` ЯВНО, а не через дефолт ядра.
+///
 /// Возвращает список замен мусора (`owner → исходное значение`). Пустой =
 /// всё чисто (тихие канонизации псевдонимов в список не попадают).
 List<({String owner, String original})> healUnknownUtlsFingerprints(
@@ -69,11 +72,14 @@ List<({String owner, String original})> healUnknownUtlsFingerprints(
       }
     }
     // SPEC 083 — REALITY принимает только chrome-семейство (см. docstring).
+    // D-104: отсутствующий/пустой fingerprint под REALITY пишется как
+    // `chrome` ЯВНО — на дефолт ядра для пустой строки не полагаемся, чтобы
+    // конфиг не зависел от того, что ядро считает дефолтом в этой версии.
     final realityOn =
         reality is Map<String, dynamic> && reality['enabled'] == true;
     if (realityOn) {
       final cur = utls['fingerprint'];
-      if (cur is String && !isChromeFamilyFingerprint(cur)) {
+      if (cur is! String || cur.isEmpty || !isChromeFamilyFingerprint(cur)) {
         utls['fingerprint'] = 'chrome';
       }
     }

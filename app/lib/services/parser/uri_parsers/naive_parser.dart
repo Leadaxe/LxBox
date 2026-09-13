@@ -67,7 +67,8 @@ NaiveSpec? parseNaive(String uri, {bool isQuic = false}) {
   }
 
   // extra-headers: уже URL-decoded внутри queryParameters.
-  final headers = parseNaiveExtraHeaders(q['extra-headers'] ?? '');
+  final headers =
+      parseNaiveExtraHeaders(q['extra-headers'] ?? '', warnings: warnings);
 
   // Naive accepts ТОЛЬКО enabled/server_name/cert/ECH в TLS-блоке.
   // Никаких alpn/utls/insecure/reality — sing-box валидатор отклонит.
@@ -91,15 +92,32 @@ NaiveSpec? parseNaive(String uri, {bool isQuic = false}) {
 
 /// Парсит уже-URL-decoded строку `Header1: Value1\r\nHeader2: Value2`.
 /// Невалидные пары (нет `:`, имя нарушает charset, пустое имя) — drop с warn.
-Map<String, String> parseNaiveExtraHeaders(String raw) {
+///
+/// D-105 (`naive_extra_headers_invalid`): при первой отброшенной паре в
+/// [warnings] добавляется [NaiveExtraHeadersInvalidWarning] — один раз на
+/// узел, остальные отбросы только в лог. `warnings == null` — молчаливый
+/// режим: так вызывает http/https-парсер, чей собственный `headers` под код
+/// контракта не попадает.
+Map<String, String> parseNaiveExtraHeaders(
+  String raw, {
+  List<NodeWarning>? warnings,
+}) {
   if (raw.isEmpty) return const {};
   final out = <String, String>{};
+  var warned = false;
+  void dropped(String entry) {
+    if (warned || warnings == null) return;
+    warned = true;
+    warnings.add(NaiveExtraHeadersInvalidWarning(entry));
+  }
+
   for (final line in raw.split('\r\n')) {
     final l = line.trim();
     if (l.isEmpty) continue;
     final colon = l.indexOf(':');
     if (colon <= 0) {
       AppLog.I.warning("naive: invalid extra-headers entry '$l', skipping");
+      dropped(l);
       continue;
     }
     final name = l.substring(0, colon).trim();
@@ -107,6 +125,7 @@ Map<String, String> parseNaiveExtraHeaders(String raw) {
     if (!isValidNaiveHeaderName(name)) {
       AppLog.I
           .warning("naive: invalid header name '$name' in extra-headers, skipping");
+      dropped(l);
       continue;
     }
     out[name] = value;
