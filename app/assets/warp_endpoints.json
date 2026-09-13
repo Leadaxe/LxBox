@@ -53,9 +53,7 @@
       5279, 5956, 7103, 7152, 7156, 7281, 7559, 8319, 8742, 8854, 8886
     ],
     "sni_pool": [
-      "deepseek.com", "pypi.org", "2gis.ru", "apteka.ru", "autonews.ru", 
-      "beeline.ru", "mail.ru", "pochta.ru", "profi.ru", 
-      "psbank.ru", "rt.ru", "rutube.ru", "sberbank.ru", "vk.ru",
+      "deepseek.com", "pypi.org",
       "www.google.com", "www.microsoft.com", "www.bing.com", "www.apple.com",
       "www.wikipedia.org", "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com"
     ],
