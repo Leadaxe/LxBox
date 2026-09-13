@@ -2,8 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done. Device-verify не проводился — решение владельца 13.09.2026: QR не ключевая функция, регрессии придут issue от пользователей |
 | Дата старта | 2026-09-13 |
+| Дата завершения | 2026-09-13 |
+| Коммиты | `chore(432)` бамп + спека + CHANGELOG; docs-коммит со статусом |
 | Триггер | Отложено из [§431](431-file-picker-12-plus-plugins-major-bump.md): смена нативного движка не смешивается с бампом file_picker, чтобы регрессию не спутать |
 | Связанные | [§382](382-foss-qr-scanner.md) (сканер на flutter_zxing, дефолты ReaderWidget), [§375](375-qr-scanner-import.md) (контракт исходов), [§380](380-naive-and-reproducible-builds.md) (F-Droid, NDK) |
 
@@ -18,7 +20,7 @@
 | `Format.qrCode` теперь матчит и варианты: Micro QR (`Format.microQRCode`), rMQR (`Format.rmqrCode`) | Принимаем: содержимое всё равно уходит в `addFromInput`, который сам разбирает формат; фильтр по `Code.format` не вводим |
 | UPC-A/UPC-E → 13 цифр | Не касается: сканируем только QR |
 | Снят пин NDK 27.0.12077973 (zxing-cpp 3 собирается NDK 27/28/29) | Закрывает хвост §382 «zxing тянет NDK 27 против r28c в §380»: плагин теперь берёт `flutter.ndkVersion` |
-| Выпилен `isolate_manager` (и discontinued `isolate_contactor`) из зависимостей | Две строки из `pub outdated` уходят сами |
+| Выпилен `isolate_manager` (и discontinued `isolate_contactor`) из зависимостей плагина | Из lock не уходят: их держит `re_editor 0.10.0` — отдельная история |
 | Детект: лучше QR v1 и несколько мелких кодов в кадре, +10–40% скорости на ARM | Профит без правок |
 | `DecodeParams.maxNumberOfSymbols` клампится 1–255 | Не используем |
 
@@ -37,10 +39,10 @@
 
 - `flutter analyze`, `flutter test`, APK через `scripts/build-local-apk.sh`
   (pubspec закоммичен ДО сборки — грабля §431).
-- Device: сканирование QR с vless-ссылкой (кириллическое имя узла) — узел
-  появляется в Servers. На AVD камера — виртуальная сцена; QR подсовывается
-  постером (`emulator/resources/poster.png`, бэкап рядом). Реальная камера —
-  CPH2411, когда будет под рукой.
+- `flutter analyze` чисто, 4209 тестов. Device-тест сканирования не делался
+  (см. статус). Если понадобится: на AVD камера — виртуальная сцена, QR
+  подсовывается постером `emulator/resources/poster.png` (1024×1024, стена
+  сцены), генератор — python `qrcode` на хосте; реальная камера — CPH2411.
 - F-Droid: сборка на buildserver с NDK из `flutter.ndkVersion` — проверится
   ботом на следующем теге; в рецепте fdroiddata пина NDK для zxing нет.
 
