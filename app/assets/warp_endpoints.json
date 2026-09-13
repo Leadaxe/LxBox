@@ -2,7 +2,8 @@
   "api": {
     "hosts": [
       "https://api.devices.cloudflare.com",
-      "https://api.cloudflareclient.com"
+      "https://api.cloudflareclient.com",
+      "https://zero-trust-client.cloudflareclient.com"
     ]
   },
   "wireguard": {

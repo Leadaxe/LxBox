@@ -243,6 +243,7 @@ void main() {
     expect(p.apiHosts, [
       'https://api.devices.cloudflare.com',
       'https://api.cloudflareclient.com',
+      'https://zero-trust-client.cloudflareclient.com'
     ]);
     // Один список в двух местах намеренно (asset — боевой, const — на случай
     // битого asset); расхождение = кто-то поправил одно и забыл другое.

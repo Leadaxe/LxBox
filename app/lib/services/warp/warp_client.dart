@@ -37,6 +37,7 @@ class WarpApi {
   static const List<String> fallbackHosts = [
     'https://api.devices.cloudflare.com',
     'https://api.cloudflareclient.com',
+    'https://zero-trust-client.cloudflareclient.com'
   ];
   static const String version = 'v0a2158';
   static const String clientVersionHeader = 'a-7.21-0721';
