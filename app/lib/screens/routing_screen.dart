@@ -34,7 +34,9 @@ import '../widgets/outbound_picker.dart';
 import 'direction_edit_screen.dart';
 import 'custom_rule_edit_screen.dart';
 import 'lazy_persist_mixin.dart';
+import 'node_settings_screen.dart';
 import 'routing_screen/new_direction_dialog.dart';
+import 'routing_screen/node_rule_rows.dart';
 import 'routing_screen/routing_screen_helpers.dart';
 import 'routing_screen/routing_screen_menus.dart';
 import 'routing_screen/rule_transfer_dialogs.dart';
@@ -100,6 +102,18 @@ class _RoutingScreenState extends State<RoutingScreen>
   bool _loading = true;
   // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
 
+  // §435 — правила узлов (`sections.rules[]` свободных узлов) на общей оси с
+  // корневыми. В `_customRules` НЕ кладутся (буфер персистится целиком,
+  // перечитывается при heal, экспортируется, обходится SRS-кэшем) — отдельный
+  // список ссылок на записи владельцев; объединённый порядок `_rows`
+  // строится в build() из обоих (любая мутация `_customRules` — add/remove/
+  // sort — автоматически даёт свежие индексы, отдельных точек пересборки
+  // нет). Отпечаток — чтобы не перерисовываться на каждое уведомление
+  // контроллера (проба, статусы), а только когда видимое изменилось.
+  final _nodeRules = <NodeRuleRef>[];
+  List<RuleRow> _rows = const [];
+  String _nodeRulesSignature = '';
+
   // §258 — подсветка Направления при focusDirectionTag (навигация из рантайм-цепочки
   // View-экрана). Ключи per-tag: таб Directions — нелениый ListView(children:),
   // тайл смонтирован с первого кадра, retry (§255) не нужен.
@@ -130,9 +144,40 @@ class _RoutingScreenState extends State<RoutingScreen>
   }
 
   @override
+  void initState() {
+    super.initState();
+    // §435 — правка узла при открытом Routing (редактор узла, Debug API,
+    // toggle источника) перечитывает строки правил узлов.
+    widget.subController.addListener(_onSubControllerChanged);
+  }
+
+  @override
   void dispose() {
+    widget.subController.removeListener(_onSubControllerChanged);
     _directionHighlightTimer?.cancel();
     super.dispose();
+  }
+
+  void _onSubControllerChanged() {
+    if (!mounted || _loading) return;
+    if (_refreshNodeRules()) setState(() {});
+  }
+
+  /// §435 — перечитать `_nodeRules` из источников контроллера. Список
+  /// заменяется всегда (ссылки на записи владельцев обновляются после
+  /// персиста), true — если видимое изменилось и нужен setState.
+  @override
+  bool _refreshNodeRules() {
+    final fresh = collectNodeRules([
+      for (final e in widget.subController.entries) e.list,
+    ]);
+    final signature = nodeRulesSignature(fresh);
+    _nodeRules
+      ..clear()
+      ..addAll(fresh);
+    if (signature == _nodeRulesSignature) return false;
+    _nodeRulesSignature = signature;
+    return true;
   }
 
   /// §258 — после загрузки Направлений: скролл к focusDirectionTag + вспышка 2.2 с
@@ -205,6 +250,8 @@ class _RoutingScreenState extends State<RoutingScreen>
 
     final template = _template!;
     final bottomPad = MediaQuery.of(context).padding.bottom + 24;
+    // §435 — объединённый порядок таба Rules: корневые + узловые по оси num.
+    _rows = buildRuleRows(_customRules, _nodeRules);
 
     return DefaultTabController(
       length: 4,
@@ -276,9 +323,9 @@ class _RoutingScreenState extends State<RoutingScreen>
               // ─── Rules: unified custom routing (spec §030) ───
               RoutingRulesTab(
                 bottomPad: bottomPad,
-                itemCount: _customRules.length,
+                itemCount: _rows.length,
                 onReorder: _onReorderCustomRule,
-                itemKey: (i) => ValueKey(_customRules[i].id),
+                itemKey: (i) => ValueKey(_rows[i].rowKey),
                 itemBuilder: _buildCustomRuleTile,
                 onAdd: _addCustomRule,
               ),
@@ -878,28 +925,135 @@ class _RoutingScreenState extends State<RoutingScreen>
   /// и получает `num = target.num + 1` (ленивый сдвиг соседей, см.
   /// `placeRuleAfter`). Порядок в списке — производная от оси, поэтому после
   /// пересчёта номеров список пересортировывается, а не переставляется руками.
+  ///
+  /// §435 — индексы строк объединённого списка `_rows`. `applyRuleDrag`
+  /// гоняет `placeRuleAfter` по временному объединённому списку; сдвиг
+  /// ленивый и может задеть соседей обоих видов, поэтому персистятся обе
+  /// стороны: корневые — как прежде (`_markDirty` → `stageChanges`),
+  /// узловые — во владельца через контроллер. Приходит из `onReorderItem`
+  /// (RoutingTabs) — newIndex уже приведён к списку БЕЗ перетаскиваемого
+  /// элемента, ручного сдвига «-1 при move вниз» здесь быть не должно.
   void _onReorderCustomRule(int oldIndex, int newIndex) {
+    final result = applyRuleDrag(
+      _rows,
+      oldIndex,
+      newIndex,
+      isRootSortable: _isSortable,
+    );
+    if (result.isEmpty) return; // несортируемое не двигаем / ничего не сдвинулось
     setState(() {
-      // Приходит из `onReorderItem` (RoutingTabs) — newIndex уже приведён к
-      // списку БЕЗ перетаскиваемого элемента, ручного сдвига «-1 при move
-      // вниз» здесь быть не должно.
-      final moved = _customRules[oldIndex];
-      if (!_isSortable(moved)) return; // несортируемое не двигаем
-      // Цель — правило, ЗА которым встаём, в списке БЕЗ самого moved:
-      // после удаления moved индексы ниже него смещаются, и брать цель из
-      // исходного списка нельзя (иначе при движении вниз целью становится
-      // элемент, который сам сдвинется). Бросок в начало (newIndex 0) —
-      // «перед первым»: target = null, `placeRuleAfter` уводит в начало
-      // сортируемой части, несортируемая шапка при этом не двигается.
-      final rest = [..._customRules]..removeAt(oldIndex);
-      final target = newIndex == 0 ? null : rest[newIndex - 1];
-      placeRuleAfter(_customRules, moved, target, isSortable: _isSortable);
-      final sorted = sortRulesByNum(_customRules);
-      _customRules
-        ..clear()
-        ..addAll(sorted);
-      _markDirty();
+      if (result.rootChanged) {
+        final sorted = sortRulesByNum(_customRules);
+        _customRules
+          ..clear()
+          ..addAll(sorted);
+        _markDirty();
+      }
+      // Узловые номера уже изменены на месте — `_rows` пересоберётся в build.
     });
+    if (result.nodeUpdates.isNotEmpty) {
+      unawaited(_persistNodeRuleUpdates(result.nodeUpdates));
+    }
+  }
+
+  /// §435 — корневой индекс (`_customRules`) строки [rowIndex]; null — строка
+  /// узлового правила (редактора/удаления у неё нет).
+  int? _rootIndexOfRow(int rowIndex) {
+    if (rowIndex < 0 || rowIndex >= _rows.length) return null;
+    return switch (_rows[rowIndex]) {
+      RootRuleRow(:final index) => index,
+      NodeRuleRow() => null,
+    };
+  }
+
+  /// §435 — открыть узел-владельца правила (одиночный — `NodeSettingsScreen`
+  /// по индексу источника, член папки — с `memberIndex`, как
+  /// `owner_navigation`/`folder_detail_screen`). После возврата строки
+  /// перечитываются (слушатель контроллера сделал бы это и сам, но правка
+  /// без персиста уведомления не даёт).
+  Future<void> _openNodeOfRule(NodeRuleRef ref) async {
+    final entries = widget.subController.entries;
+    if (ref.entryIndex >= entries.length ||
+        entries[ref.entryIndex].id != ref.sourceId) {
+      // Источник уехал между сбором и tap'ом — просто перечитать.
+      setState(() {
+        _refreshNodeRules();
+      });
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => NodeSettingsScreen(
+          entry: entries[ref.entryIndex],
+          index: ref.entryIndex,
+          memberIndex: ref.memberIndex,
+          subController: widget.subController,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _refreshNodeRules();
+    });
+  }
+
+  /// §435 — тумблер узловой строки пишет `enabled` В ЗАПИСЬ УЗЛА. Локальная
+  /// ссылка обновляется сразу (тумблер живой, персист — диск), запись во
+  /// владельца — через контроллер; его уведомление перечитает список.
+  Future<void> _setNodeRuleEnabled(NodeRuleRef ref, bool enabled) async {
+    final i = _nodeRules.indexWhere((r) => r.rowKey == ref.rowKey);
+    if (i >= 0) {
+      setState(() {
+        _nodeRules[i] = ref.copyWith(
+          rule: ref.rule.withEnabled(enabled),
+          displayRule: ref.displayRule.withEnabled(enabled),
+        );
+      });
+    }
+    await _persistNodeRuleUpdates([
+      NodeRuleUpdate(ref: ref, enabled: enabled),
+    ]);
+  }
+
+  /// §435 — разнести изменения записей узлов по владельцам и записать через
+  /// контроллер (`setUserServerSections` / `setMemberSections` персистят и
+  /// поднимают `configDirty`). Владелец, уехавший между сбором и записью
+  /// (индекс за границей, другой id), пропускается — список перечитается.
+  Future<void> _persistNodeRuleUpdates(List<NodeRuleUpdate> updates) async {
+    final byOwner = groupNodeRuleUpdates(updates);
+    var failed = false;
+    for (final e in byOwner.entries) {
+      final owner = e.key;
+      final current = sectionsOfOwner(
+        [for (final x in widget.subController.entries) x.list],
+        owner,
+        sourceId: e.value.first.ref.sourceId,
+      );
+      if (current == null) {
+        failed = true;
+        continue;
+      }
+      final next = applyNodeRuleUpdates(current, e.value);
+      final mi = owner.memberIndex;
+      if (mi == null) {
+        await widget.subController
+            .setUserServerSections(owner.entryIndex, next);
+      } else {
+        final err = await widget.subController
+            .setMemberSections(owner.entryIndex, mi, next);
+        if (err != null) {
+          failed = true;
+          showSnack(err.render());
+        }
+      }
+      if (!mounted) return;
+    }
+    if (failed && mounted) {
+      setState(() {
+        _refreshNodeRules();
+      });
+    }
   }
 
   /// §370 — можно ли двигать правило drag'ом. Несортируемые
@@ -911,7 +1065,49 @@ class _RoutingScreenState extends State<RoutingScreen>
     return _presetFor(rule.presetId)?.isSortable ?? true;
   }
 
-  Widget _buildCustomRuleTile(int index) {
+  /// Тайл строки [rowIndex] объединённого списка (§435): корневое правило
+  /// или правило узла.
+  Widget _buildCustomRuleTile(int rowIndex) {
+    return switch (_rows[rowIndex]) {
+      RootRuleRow(:final index) => _buildRootRuleTile(rowIndex, index),
+      NodeRuleRow(:final ref) => _buildNodeRuleTile(rowIndex, ref),
+    };
+  }
+
+  /// §435 — строка правила узла: та же карточка, но без редактора/удаления
+  /// (tap открывает узел), без outbound-пикера (цель — тег узла, а не
+  /// Направление; пикер подставил бы первую опцию) — outbound после
+  /// подстановки идёт текстом в подзаголовке. Тумблер живой, drag по общей
+  /// оси. ☁-статуса нет: кэш `.srs` узловой записи этот экран не ведёт.
+  Widget _buildNodeRuleTile(int rowIndex, NodeRuleRef ref) {
+    final rule = ref.displayRule;
+    final summary = rule.summary();
+    final outbound = rule.outbound;
+    final subtitle = summary.isEmpty ? outbound : '$summary → $outbound';
+    return CustomRuleTile(
+      index: rowIndex,
+      rule: rule,
+      displayName: rule.name,
+      options: const [],
+      subtitle: subtitle,
+      pickerValue: '',
+      pickerDisabled: false,
+      showOutbound: false,
+      touchesDns: rule.dnsMirrorActive || rule.forceIpv4Active,
+      canDelete: false,
+      originLabel: getLocalText.s("from node %s", ref.finalTag),
+      dimmed: ref.nodeDisabled,
+      statusButton: null,
+      onTap: () => unawaited(_openNodeOfRule(ref)),
+      onLongPressStart: (_) {},
+      onSwitchChanged: (v) => unawaited(_setNodeRuleEnabled(ref, v)),
+      onOutboundChanged: (_) {},
+    );
+  }
+
+  /// Тайл корневого правила: [rowIndex] — позиция в объединённом списке (для
+  /// drag-старта и колбэков по строке), [index] — индекс в `_customRules`.
+  Widget _buildRootRuleTile(int rowIndex, int index) {
     final rule = _customRules[index];
     final options = _outboundOptions();
     final preset = rule.kind == CustomRuleKind.preset
@@ -948,7 +1144,7 @@ class _RoutingScreenState extends State<RoutingScreen>
     }
 
     return CustomRuleTile(
-      index: index,
+      index: rowIndex,
       rule: rule,
       // §279 (§3.5.1) — live display-имя: label пресета из локализованного
       // шаблона + порядковый суффикс копий; fallback — сохранённый снапшот.
@@ -962,8 +1158,8 @@ class _RoutingScreenState extends State<RoutingScreen>
       locked: preset?.locked ?? false,
       sortable: _isSortable(rule),
       statusButton: statusButton,
-      onTap: () => _openCustomRuleEditor(index),
-      onLongPressStart: (pos) => _showRuleContextMenu(index, pos),
+      onTap: () => _openCustomRuleEditor(rowIndex),
+      onLongPressStart: (pos) => _showRuleContextMenu(rowIndex, pos),
       onSwitchChanged: (v) {
         if (v && rule is CustomRuleSrs && !_srsCached.contains(rule.id)) {
           unawaited(_enableAfterDownload(rule));
@@ -1064,9 +1260,11 @@ class _RoutingScreenState extends State<RoutingScreen>
   }
 
   /// Контекстное меню по long-press на tile — только Delete. Refresh для
-  /// srs живёт в редакторе (long-press на cloud ☁).
-  Future<void> _showRuleContextMenu(int index, Offset pos) async {
-    if (index < 0 || index >= _customRules.length) return;
+  /// srs живёт в редакторе (long-press на cloud ☁). [rowIndex] — строка
+  /// объединённого списка (§435); корневой индекс берётся ДО ожидания меню.
+  Future<void> _showRuleContextMenu(int rowIndex, Offset pos) async {
+    final index = _rootIndexOfRow(rowIndex);
+    if (index == null || index >= _customRules.length) return;
     final action = await showRuleContextMenu(context, pos);
     if (!mounted) return;
     if (action == 'delete') {
@@ -1140,7 +1338,11 @@ class _RoutingScreenState extends State<RoutingScreen>
     }
   }
 
-  Future<void> _openCustomRuleEditor(int index) async {
+  /// [rowIndex] — строка объединённого списка (§435); у узловой строки
+  /// редактора нет (tap открывает узел, см. `_buildNodeRuleTile`).
+  Future<void> _openCustomRuleEditor(int rowIndex) async {
+    final index = _rootIndexOfRow(rowIndex);
+    if (index == null || index >= _customRules.length) return;
     final current = _customRules[index];
     // §279 — дедуп по видимым именам (live-label'ы пресетов + снапшоты).
     final existing = visibleRuleNames(
