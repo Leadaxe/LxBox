@@ -66,11 +66,8 @@ final class UnsupportedTransportWarning extends NodeWarning {
   List<Object?> get props => [name, fallback];
 
   @override
-  String messageWith(GetLocalText t) => t.s(
-    "Transport \"%1\$s\" is not supported by sing-box; using \"%2\$s\" fallback (node may fail to connect).",
-    name,
-    fallback,
-  );
+  String messageWith(GetLocalText t) =>
+      t.s("Transport \"%1\$s\" is not supported by sing-box; using \"%2\$s\" fallback (node may fail to connect).", name, fallback);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -84,8 +81,7 @@ final class UnsupportedProtocolWarning extends NodeWarning {
   List<Object?> get props => [scheme];
 
   @override
-  String messageWith(GetLocalText t) =>
-      t.s("Protocol \"%s\" is not supported.", scheme);
+  String messageWith(GetLocalText t) => t.s("Protocol \"%s\" is not supported.", scheme);
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -99,8 +95,7 @@ final class MissingFieldWarning extends NodeWarning {
   List<Object?> get props => [field];
 
   @override
-  String messageWith(GetLocalText t) =>
-      t.s("Required field \"%s\" is missing.", field);
+  String messageWith(GetLocalText t) => t.s("Required field \"%s\" is missing.", field);
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -131,10 +126,7 @@ final class VisionWithTransportWarning extends NodeWarning {
   List<Object?> get props => [transport];
 
   @override
-  String messageWith(GetLocalText t) => t.s(
-    "Flow \"xtls-rprx-vision\" is incompatible with \"%s\" transport — flow dropped.",
-    transport,
-  );
+  String messageWith(GetLocalText t) => t.s("Flow \"xtls-rprx-vision\" is incompatible with \"%s\" transport — flow dropped.", transport);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -144,8 +136,7 @@ final class InsecureTlsWarning extends NodeWarning {
   const InsecureTlsWarning();
 
   @override
-  String messageWith(GetLocalText t) =>
-      t.s("TLS certificate verification is disabled.");
+  String messageWith(GetLocalText t) => t.s("TLS certificate verification is disabled.");
 
   /// Info, не warning — это часто **намеренный** выбор провайдера (REALITY,
   /// IP-литералы, self-signed). Не должен крадовать XHTTP-fallback и прочие
@@ -162,9 +153,7 @@ final class NaiveBuildTagWarning extends NodeWarning {
   const NaiveBuildTagWarning();
 
   @override
-  String messageWith(GetLocalText t) => t.s(
-    "NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).",
-  );
+  String messageWith(GetLocalText t) => t.s("NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).");
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -183,10 +172,7 @@ final class UnknownFingerprintWarning extends NodeWarning {
   List<Object?> get props => [value];
 
   @override
-  String messageWith(GetLocalText t) => t.s(
-    "Unknown uTLS fingerprint \"%s\" replaced with \"chrome\" (would otherwise break the whole config).",
-    value,
-  );
+  String messageWith(GetLocalText t) => t.s("Unknown uTLS fingerprint \"%s\" replaced with \"chrome\" (would otherwise break the whole config).", value);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -206,10 +192,7 @@ final class RealityFingerprintWarning extends NodeWarning {
   List<Object?> get props => [value];
 
   @override
-  String messageWith(GetLocalText t) => t.s(
-    "REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 accept only a Chrome-like ClientHello, so \"chrome\" is used when connecting.",
-    value,
-  );
+  String messageWith(GetLocalText t) => t.s("REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 accept only a Chrome-like ClientHello, so \"chrome\" is used when connecting.", value);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -250,27 +233,15 @@ final class XhttpParamResetWarning extends NodeWarning {
   @override
   String messageWith(GetLocalText t) {
     final why = switch (reason) {
-      XhttpResetReason.invalidEnumValue => t.s(
-        "value \"%1\$s\" is not a valid %2\$s",
-        value,
-        field,
-      ),
-      XhttpResetReason.invalidPlacementValue => t.s(
-        "value \"%s\" is not valid",
-        value,
-      ),
-      XhttpResetReason.placementRequiresPacketUp => t.s(
-        "header/cookie placement requires packet-up mode",
-      ),
-      XhttpResetReason.getRequiresPacketUp => t.s(
-        "GET requires packet-up mode",
-      ),
+      XhttpResetReason.invalidEnumValue =>
+        t.s("value \"%1\$s\" is not a valid %2\$s", value, field),
+      XhttpResetReason.invalidPlacementValue =>
+        t.s("value \"%s\" is not valid", value),
+      XhttpResetReason.placementRequiresPacketUp =>
+        t.s("header/cookie placement requires packet-up mode"),
+      XhttpResetReason.getRequiresPacketUp => t.s("GET requires packet-up mode"),
     };
-    return t.s(
-      "XHTTP \"%1\$s\" reset to default — %2\$s (would otherwise break the whole config).",
-      field,
-      why,
-    );
+    return t.s("XHTTP \"%1\$s\" reset to default — %2\$s (would otherwise break the whole config).", field, why);
   }
 
   @override
@@ -294,8 +265,7 @@ final class XhttpModeForcedPacketUpWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).",
-  );
+      "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).");
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -318,9 +288,8 @@ final class EchIgnoredWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "ECH is not applied: \"%s\" from the link points to a public ECH probe, not to this server — enabling it would break the TLS handshake.",
-    queryName,
-  );
+      "ECH is not applied: \"%s\" from the link points to a public ECH probe, not to this server — enabling it would break the TLS handshake.",
+      queryName);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -341,9 +310,8 @@ final class UnknownObfsWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "Unknown obfuscation type \"%s\" was dropped (the core supports salamander and gecko only, and would otherwise break the whole config). The node connects without obfuscation.",
-    value,
-  );
+      "Unknown obfuscation type \"%s\" was dropped (the core supports salamander and gecko only, and would otherwise break the whole config). The node connects without obfuscation.",
+      value);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -363,9 +331,8 @@ final class MissingObfsPasswordWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "Obfuscation \"%s\" has no password, so it was dropped (the core requires one and would otherwise break the whole config). The node connects without obfuscation.",
-    type,
-  );
+      "Obfuscation \"%s\" has no password, so it was dropped (the core requires one and would otherwise break the whole config). The node connects without obfuscation.",
+      type);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -392,9 +359,8 @@ final class DetourCycleBrokenWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "Chain to \"%s\" would loop back on itself, so it was dropped. The node connects directly.",
-    target,
-  );
+      "Chain to \"%s\" would loop back on itself, so it was dropped. The node connects directly.",
+      target);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -412,9 +378,8 @@ final class DetourTargetMissingWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "Chain target \"%s\" was not found in the config. The node connects directly.",
-    target,
-  );
+      "Chain target \"%s\" was not found in the config. The node connects directly.",
+      target);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -432,9 +397,8 @@ final class DetourToGroupWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "Chain target \"%s\" is a group, which cannot be used as a chain hop. The node connects directly.",
-    target,
-  );
+      "Chain target \"%s\" is a group, which cannot be used as a chain hop. The node connects directly.",
+      target);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -451,8 +415,8 @@ final class DetourChainTooDeepWarning extends NodeWarning {
   List<Object?> get props => [limit];
 
   @override
-  String messageWith(GetLocalText t) =>
-      t.s("Chain is longer than %d hops and was truncated.", limit);
+  String messageWith(GetLocalText t) => t.s(
+      "Chain is longer than %d hops and was truncated.", limit);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -488,21 +452,17 @@ final class DialerProxyUnusableWarning extends NodeWarning {
   /// провайдер тега не дал: тогда опознать запись можно только по label.
   final String ownerTag;
 
-  const DialerProxyUnusableWarning(
-    this.label,
-    this.target, {
-    this.ownerTag = '',
-  });
+  const DialerProxyUnusableWarning(this.label, this.target,
+      {this.ownerTag = ''});
 
   @override
   List<Object?> get props => [label, target, ownerTag];
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "Node \"%1\$s\" was dropped: its relay \"%2\$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.",
-    label,
-    target,
-  );
+      "Node \"%1\$s\" was dropped: its relay \"%2\$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.",
+      label,
+      target);
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -516,8 +476,7 @@ final class SelectorAsAutoWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.",
-  );
+      "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.");
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -535,10 +494,8 @@ final class GroupMemberMissingWarning extends NodeWarning {
   List<Object?> get props => [count];
 
   @override
-  String messageWith(GetLocalText t) => t.plural(
-    "%d group members could not be imported and were left out.",
-    count,
-  );
+  String messageWith(GetLocalText t) =>
+      t.plural("%d group members could not be imported and were left out.", count);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -573,9 +530,8 @@ final class WsEarlyDataConvertedWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.",
-    maxEarlyData,
-  );
+      "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.",
+      maxEarlyData);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -601,9 +557,8 @@ final class RealityShortIdInvalidWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "REALITY short id \"%s\" is not valid hex, so it was dropped (keeping it would break the whole config). The node connects without a short id.",
-    value,
-  );
+      "REALITY short id \"%s\" is not valid hex, so it was dropped (keeping it would break the whole config). The node connects without a short id.",
+      value);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -622,9 +577,8 @@ final class NaivePaddingIgnoredWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.",
-    value,
-  );
+      "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.",
+      value);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -643,9 +597,8 @@ final class TuicCongestionInvalidWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "TUIC congestion control \"%s\" is not one of cubic, new_reno, bbr — the setting was dropped and the core default applies.",
-    value,
-  );
+      "TUIC congestion control \"%s\" is not one of cubic, new_reno, bbr — the setting was dropped and the core default applies.",
+      value);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -672,10 +625,9 @@ final class AwgHeaderInvalidWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "AmneziaWG header \"%1\$s=%2\$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.",
-    field,
-    value,
-  );
+      "AmneziaWG header \"%1\$s=%2\$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.",
+      field,
+      value);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -701,10 +653,9 @@ final class Awg3FieldInvalidWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "AmneziaWG 3 field \"%1\$s=%2\$s\" is neither a number, an ordered \"low-high\" range nor on/off, so it was dropped. The core uses its default for it.",
-    field,
-    value,
-  );
+      "AmneziaWG 3 field \"%1\$s=%2\$s\" is neither a number, an ordered \"low-high\" range nor on/off, so it was dropped. The core uses its default for it.",
+      field,
+      value);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -720,8 +671,7 @@ final class Awg3HeaderKeyInvalidWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "AmneziaWG 3 header protection key is not a 32-byte base64 key, so the node was skipped: the handshake cannot succeed and the core would reject the whole config.",
-  );
+      "AmneziaWG 3 header protection key is not a 32-byte base64 key, so the node was skipped: the handshake cannot succeed and the core would reject the whole config.");
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -745,10 +695,9 @@ final class Awg3PaddingTooShortWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "AmneziaWG 3 padding \"%1\$s\" is below %2\$d, the minimum required by the header protection key, so the node was skipped: the core would reject the whole config.",
-    field,
-    min,
-  );
+      "AmneziaWG 3 padding \"%1\$s\" is below %2\$d, the minimum required by the header protection key, so the node was skipped: the core would reject the whole config.",
+      field,
+      min);
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -765,8 +714,7 @@ final class Awg3RandomTrailersWideHeadersWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "AmneziaWG 3 random trailers are combined with a wide magic-header range (65536 or more); the server may mistake some upload packets for handshakes and drop them.",
-  );
+      "AmneziaWG 3 random trailers are combined with a wide magic-header range (65536 or more); the server may mistake some upload packets for handshakes and drop them.");
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -785,9 +733,8 @@ final class MasqueVhttpInvalidWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "MASQUE HTTP version \"%s\" is not h3, h2 or auto — h3 was used instead.",
-    value,
-  );
+      "MASQUE HTTP version \"%s\" is not h3, h2 or auto — h3 was used instead.",
+      value);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -806,9 +753,8 @@ final class AnyTlsMinIdleInvalidWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "AnyTLS \"min_idle_session=%s\" is not a non-negative whole number — the setting was dropped and the core default applies.",
-    value,
-  );
+      "AnyTLS \"min_idle_session=%s\" is not a non-negative whole number — the setting was dropped and the core default applies.",
+      value);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
@@ -831,9 +777,8 @@ final class PacketEncodingUnknownWarning extends NodeWarning {
 
   @override
   String messageWith(GetLocalText t) => t.s(
-    "Packet encoding \"%s\" is not one the core knows (xudp, packetaddr), so it was dropped — keeping it would crash the core.",
-    value,
-  );
+      "Packet encoding \"%s\" is not one the core knows (xudp, packetaddr), so it was dropped — keeping it would crash the core.",
+      value);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;

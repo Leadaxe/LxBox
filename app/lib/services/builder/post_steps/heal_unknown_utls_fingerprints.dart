@@ -24,8 +24,7 @@ part of '../post_steps.dart';
 /// Возвращает список замен мусора (`owner → исходное значение`). Пустой =
 /// всё чисто (тихие канонизации псевдонимов в список не попадают).
 List<({String owner, String original})> healUnknownUtlsFingerprints(
-  Map<String, dynamic> config,
-) {
+    Map<String, dynamic> config) {
   final healed = <({String owner, String original})>[];
   final outbounds = (config['outbounds'] as List<dynamic>? ?? const [])
       .whereType<Map<String, dynamic>>();

@@ -26,10 +26,8 @@ void main() {
 
     test('регистр и пробелы канонизируются', () {
       expect(normalizeUtlsFingerprintValue('QQ'), (value: 'qq', junk: false));
-      expect(normalizeUtlsFingerprintValue(' Chrome '), (
-        value: 'chrome',
-        junk: false,
-      ));
+      expect(normalizeUtlsFingerprintValue(' Chrome '),
+          (value: 'chrome', junk: false));
     });
 
     test('xray-псевдонимы hello* → семейство, НЕ junk', () {
@@ -80,133 +78,94 @@ void main() {
       expect(isChromeFamilyFingerprint('randomized'), isFalse);
     });
 
-    test(
-      'REALITY + fp=firefox → RealityFingerprintWarning, значение сохранено',
-      () {
-        final spec = parseVless(
+    test('REALITY + fp=firefox → RealityFingerprintWarning, значение сохранено',
+        () {
+      final spec = parseVless(
           'vless://u@h:443?type=tcp&security=reality&encryption=none'
-          '&fp=firefox&pbk=$_validPbk#L',
-        )!;
-        expect(
-          spec.tls.fingerprint,
-          'firefox',
-          reason: 'entry нормативен для контракта — подмена в post-step',
-        );
-        expect(
-          spec.warnings.whereType<RealityFingerprintWarning>().single.value,
-          'firefox',
-        );
-        expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
-      },
-    );
+          '&fp=firefox&pbk=$_validPbk#L')!;
+      expect(spec.tls.fingerprint, 'firefox',
+          reason: 'entry нормативен для контракта — подмена в post-step');
+      expect(spec.warnings.whereType<RealityFingerprintWarning>().single.value,
+          'firefox');
+      expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
+    });
 
-    test(
-      'REALITY + xray-псевдоним hellofirefox_auto → firefox + предупреждение',
-      () {
-        final spec = parseVless(
+    test('REALITY + xray-псевдоним hellofirefox_auto → firefox + предупреждение',
+        () {
+      final spec = parseVless(
           'vless://u@h:443?type=tcp&security=reality&encryption=none'
-          '&fp=hellofirefox_auto&pbk=$_validPbk#L',
-        )!;
-        expect(spec.tls.fingerprint, 'firefox');
-        expect(
-          spec.warnings.whereType<RealityFingerprintWarning>().single.value,
-          'firefox',
-        );
-      },
-    );
+          '&fp=hellofirefox_auto&pbk=$_validPbk#L')!;
+      expect(spec.tls.fingerprint, 'firefox');
+      expect(spec.warnings.whereType<RealityFingerprintWarning>().single.value,
+          'firefox');
+    });
 
-    test(
-      'REALITY + chrome-семейство и дефолтный random → без предупреждения',
-      () {
-        for (final q in [
-          '&fp=chrome',
-          '&fp=chrome_pq',
-          '&fp=HelloChrome_120',
-          '',
-        ]) {
-          final spec = parseVless(
+    test('REALITY + chrome-семейство и дефолтный random → без предупреждения',
+        () {
+      for (final q in ['&fp=chrome', '&fp=chrome_pq', '&fp=HelloChrome_120', '']) {
+        final spec = parseVless(
             'vless://u@h:443?type=tcp&security=reality&encryption=none'
-            '$q&pbk=$_validPbk#L',
-          )!;
-          expect(
-            spec.warnings.whereType<RealityFingerprintWarning>(),
-            isEmpty,
-            reason: 'q="$q"',
-          );
-        }
-      },
-    );
+            '$q&pbk=$_validPbk#L')!;
+        expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty,
+            reason: 'q="$q"');
+      }
+    });
 
     test('plain TLS + fp=firefox → без предупреждения (сервер не REALITY)', () {
       final spec = parseVless(
-        'vless://u@h:443?type=tcp&security=tls&encryption=none'
-        '&fp=firefox&sni=h#L',
-      )!;
+          'vless://u@h:443?type=tcp&security=tls&encryption=none'
+          '&fp=firefox&sni=h#L')!;
       expect(spec.tls.reality, isNull);
       expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty);
     });
 
-    test(
-      'raw sing-box JSON: REALITY + safari — без аккумулятора, значение цело',
-      () {
-        final spec =
-            parseSingboxEntry({
-                  'type': 'vless',
-                  'tag': 't',
-                  'server': 'h',
-                  'server_port': 443,
-                  'uuid': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c',
-                  'tls': {
-                    'enabled': true,
-                    'server_name': 'x.com',
-                    'utls': {'enabled': true, 'fingerprint': 'safari'},
-                    'reality': {'enabled': true, 'public_key': _validPbk},
-                  },
-                })!
-                as VlessSpec;
-        expect(spec.tls.fingerprint, 'safari');
-      },
-    );
+    test('raw sing-box JSON: REALITY + safari — без аккумулятора, значение цело',
+        () {
+      final spec = parseSingboxEntry({
+        'type': 'vless',
+        'tag': 't',
+        'server': 'h',
+        'server_port': 443,
+        'uuid': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c',
+        'tls': {
+          'enabled': true,
+          'server_name': 'x.com',
+          'utls': {'enabled': true, 'fingerprint': 'safari'},
+          'reality': {'enabled': true, 'public_key': _validPbk},
+        },
+      })! as VlessSpec;
+      expect(spec.tls.fingerprint, 'safari');
+    });
   });
 
   group('VLESS (реальный кейс подписки)', () {
     test('REALITY + fp=hellochrome_120 → chrome, МОЛЧА, reality на месте', () {
       final spec = parseVless(
-        'vless://u@h:443?type=tcp&security=reality&encryption=none'
-        '&flow=xtls-rprx-vision&fp=hellochrome_120&pbk=$_validPbk#L',
-      )!;
+          'vless://u@h:443?type=tcp&security=reality&encryption=none'
+          '&flow=xtls-rprx-vision&fp=hellochrome_120&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'chrome');
       expect(spec.tls.reality, isNotNull, reason: 'REALITY не потерян');
-      expect(
-        spec.warnings.whereType<UnknownFingerprintWarning>(),
-        isEmpty,
-        reason: 'псевдоним = синоним, не warning',
-      );
+      expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty,
+          reason: 'псевдоним = синоним, не warning');
     });
 
     test('fp=QQ → qq (регистр)', () {
       final spec = parseVless(
-        'vless://u@h:443?type=grpc&security=reality&fp=QQ&pbk=$_validPbk#L',
-      )!;
+          'vless://u@h:443?type=grpc&security=reality&fp=QQ&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'qq');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
 
     test('мусор → chrome + UnknownFingerprintWarning', () {
-      final spec = parseVless(
-        'vless://u@h:443?security=tls&fp=garbage&sni=x.com#L',
-      )!;
+      final spec =
+          parseVless('vless://u@h:443?security=tls&fp=garbage&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
-      expect(
-        spec.warnings,
-        contains(const UnknownFingerprintWarning('garbage')),
-      );
+      expect(spec.warnings, contains(const UnknownFingerprintWarning('garbage')));
     });
 
     test('emit отдаёт канонизированный utls.fingerprint', () {
       final spec = parseVless(
-        'vless://u@h:443?security=tls&fp=hellochrome_120&sni=x.com#L',
-      )!;
+          'vless://u@h:443?security=tls&fp=hellochrome_120&sni=x.com#L')!;
       final out = spec.emit(TemplateVars.empty).map;
       final utls = (out['tls'] as Map)['utls'] as Map;
       expect(utls['fingerprint'], 'chrome');
@@ -221,16 +180,14 @@ void main() {
   group('остальные URI-парсеры', () {
     test('trojan: псевдоним молча', () {
       final spec = parseTrojan(
-        'trojan://p@h:443?security=tls&fp=hellofirefox_auto&sni=x.com#L',
-      )!;
+          'trojan://p@h:443?security=tls&fp=hellofirefox_auto&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'firefox');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
 
     test('trojan: мусор → chrome + warning', () {
-      final spec = parseTrojan(
-        'trojan://p@h:443?security=tls&fp=bogus&sni=x.com#L',
-      )!;
+      final spec =
+          parseTrojan('trojan://p@h:443?security=tls&fp=bogus&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
       expect(spec.warnings, contains(const UnknownFingerprintWarning('bogus')));
     });
@@ -260,23 +217,23 @@ void main() {
     });
 
     test('anytls: псевдоним молча (через VLESS-конвенцию)', () {
-      final spec = parseAnyTls(
-        'anytls://p@h:443?fp=hellochrome_131&sni=x.com#L',
-      )!;
+      final spec =
+          parseAnyTls('anytls://p@h:443?fp=hellochrome_131&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
 
-    test('hysteria2: мусор → chrome + warning (тот же tls.NewClient ядра)', () {
-      final spec = parseHysteria2('hysteria2://p@h:443?fp=bogus&sni=x.com#L')!;
+    test('hysteria2: мусор → chrome + warning (тот же tls.NewClient ядра)',
+        () {
+      final spec =
+          parseHysteria2('hysteria2://p@h:443?fp=bogus&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
       expect(spec.warnings, contains(const UnknownFingerprintWarning('bogus')));
     });
 
     test('proxy-https: псевдоним молча', () {
       final spec = parseHttpProxy(
-        'proxy-https://u:p@h:443?fp=hellochrome_120&sni=x.com#L',
-      )!;
+          'proxy-https://u:p@h:443?fp=hellochrome_120&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
@@ -290,11 +247,8 @@ void main() {
       final spec = parseHysteria2('hysteria2://p@h:443?fp=chrome&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome', reason: 'в модели fp живёт');
       final tls = emitTls(spec);
-      expect(
-        tls.containsKey('utls'),
-        isFalse,
-        reason: 'uTLS поверх QUIC = мёртвая нода',
-      );
+      expect(tls.containsKey('utls'), isFalse,
+          reason: 'uTLS поверх QUIC = мёртвая нода');
       expect(tls['server_name'], 'x.com', reason: 'остальной TLS цел');
     });
 
@@ -324,9 +278,8 @@ void main() {
     });
 
     test('TCP-протокол (vless) с fp → utls НА МЕСТЕ (контроль)', () {
-      final spec = parseVless(
-        'vless://u@h:443?security=tls&fp=chrome&sni=x.com#L',
-      )!;
+      final spec =
+          parseVless('vless://u@h:443?security=tls&fp=chrome&sni=x.com#L')!;
       final tls = emitTls(spec);
       expect((tls['utls'] as Map)['fingerprint'], 'chrome');
     });
@@ -357,145 +310,135 @@ void main() {
 
   group('JSON-парсеры', () {
     test('xray streamSettings: псевдоним в reality.fingerprint → chrome', () {
-      final spec =
-          parseXrayOutbound(<String, dynamic>{
-                'remarks': 'L',
-                'outbounds': [
-                  {
-                    'protocol': 'vless',
-                    'tag': 'proxy',
-                    'settings': {
-                      'vnext': [
-                        {
-                          'address': 'h',
-                          'port': 443,
-                          'users': [
-                            {'id': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c'},
-                          ],
-                        },
-                      ],
-                    },
-                    'streamSettings': {
-                      'network': 'tcp',
-                      'security': 'reality',
-                      'realitySettings': {
-                        'publicKey': _validPbk,
-                        'fingerprint': 'hellochrome_120',
-                        'serverName': 'x.com',
-                      },
-                    },
-                  },
-                ],
-              })!
-              as VlessSpec;
+      final spec = parseXrayOutbound(<String, dynamic>{
+        'remarks': 'L',
+        'outbounds': [
+          {
+            'protocol': 'vless',
+            'tag': 'proxy',
+            'settings': {
+              'vnext': [
+                {
+                  'address': 'h',
+                  'port': 443,
+                  'users': [
+                    {'id': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c'}
+                  ],
+                }
+              ],
+            },
+            'streamSettings': {
+              'network': 'tcp',
+              'security': 'reality',
+              'realitySettings': {
+                'publicKey': _validPbk,
+                'fingerprint': 'hellochrome_120',
+                'serverName': 'x.com',
+              },
+            },
+          },
+        ],
+      })! as VlessSpec;
       expect(spec.tls.fingerprint, 'chrome');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
 
     test('raw sing-box entry: псевдоним и мусор канонизируются молча', () {
-      VlessSpec entryWithFp(String fp) =>
-          parseSingboxEntry({
-                'type': 'vless',
-                'tag': 't',
-                'server': 'h',
-                'server_port': 443,
-                'uuid': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c',
-                'tls': {
-                  'enabled': true,
-                  'server_name': 'x.com',
-                  'utls': {'enabled': true, 'fingerprint': fp},
-                },
-              })!
-              as VlessSpec;
+      VlessSpec entryWithFp(String fp) => parseSingboxEntry({
+            'type': 'vless',
+            'tag': 't',
+            'server': 'h',
+            'server_port': 443,
+            'uuid': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c',
+            'tls': {
+              'enabled': true,
+              'server_name': 'x.com',
+              'utls': {'enabled': true, 'fingerprint': fp},
+            },
+          })! as VlessSpec;
       expect(entryWithFp('HelloChrome_120').tls.fingerprint, 'chrome');
       expect(entryWithFp('garbage').tls.fingerprint, 'chrome');
     });
 
     test(
-      'РЕВЬЮ §281: REALITY + пустой/пробельный fingerprint → chrome '
-      '(иначе toSingbox не эмитит utls, а ядру uTLS при reality обязателен)',
-      () {
-        for (final fp in ['', '  ']) {
-          final spec =
-              parseSingboxEntry({
-                    'type': 'vless',
-                    'tag': 't',
-                    'server': 'h',
-                    'server_port': 443,
-                    'uuid': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c',
-                    'tls': {
-                      'enabled': true,
-                      'server_name': 'x.com',
-                      'utls': {'enabled': true, 'fingerprint': fp},
-                      'reality': {'enabled': true, 'public_key': _validPbk},
-                    },
-                  })!
-                  as VlessSpec;
-          expect(spec.tls.fingerprint, 'chrome', reason: 'fp="$fp"');
-          expect(spec.tls.reality, isNotNull);
-          final utls =
-              (spec.emit(TemplateVars.empty).map['tls'] as Map)['utls'] as Map;
-          expect(utls['fingerprint'], 'chrome');
-        }
-      },
-    );
+        'РЕВЬЮ §281: REALITY + пустой/пробельный fingerprint → chrome '
+        '(иначе toSingbox не эмитит utls, а ядру uTLS при reality обязателен)',
+        () {
+      for (final fp in ['', '  ']) {
+        final spec = parseSingboxEntry({
+          'type': 'vless',
+          'tag': 't',
+          'server': 'h',
+          'server_port': 443,
+          'uuid': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c',
+          'tls': {
+            'enabled': true,
+            'server_name': 'x.com',
+            'utls': {'enabled': true, 'fingerprint': fp},
+            'reality': {'enabled': true, 'public_key': _validPbk},
+          },
+        })! as VlessSpec;
+        expect(spec.tls.fingerprint, 'chrome', reason: 'fp="$fp"');
+        expect(spec.tls.reality, isNotNull);
+        final utls =
+            (spec.emit(TemplateVars.empty).map['tls'] as Map)['utls'] as Map;
+        expect(utls['fingerprint'], 'chrome');
+      }
+    });
 
     test('РЕВЬЮ §281: xray reality с пустым fingerprint → chrome', () {
-      final spec =
-          parseXrayOutbound(<String, dynamic>{
-                'remarks': 'L',
-                'outbounds': [
-                  {
-                    'protocol': 'vless',
-                    'tag': 'proxy',
-                    'settings': {
-                      'vnext': [
-                        {
-                          'address': 'h',
-                          'port': 443,
-                          'users': [
-                            {'id': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c'},
-                          ],
-                        },
-                      ],
-                    },
-                    'streamSettings': {
-                      'network': 'tcp',
-                      'security': 'reality',
-                      'realitySettings': {
-                        'publicKey': _validPbk,
-                        'fingerprint': '',
-                        'serverName': 'x.com',
-                      },
-                    },
-                  },
-                ],
-              })!
-              as VlessSpec;
+      final spec = parseXrayOutbound(<String, dynamic>{
+        'remarks': 'L',
+        'outbounds': [
+          {
+            'protocol': 'vless',
+            'tag': 'proxy',
+            'settings': {
+              'vnext': [
+                {
+                  'address': 'h',
+                  'port': 443,
+                  'users': [
+                    {'id': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c'}
+                  ],
+                }
+              ],
+            },
+            'streamSettings': {
+              'network': 'tcp',
+              'security': 'reality',
+              'realitySettings': {
+                'publicKey': _validPbk,
+                'fingerprint': '',
+                'serverName': 'x.com',
+              },
+            },
+          },
+        ],
+      })! as VlessSpec;
       expect(spec.tls.fingerprint, 'chrome');
       expect(spec.tls.reality, isNotNull);
     });
 
-    test('РЕВЬЮ §281: naive-entry срезает TLS до enabled/server_name '
+    test(
+        'РЕВЬЮ §281: naive-entry срезает TLS до enabled/server_name '
         '(alpn/utls/insecure/reality для naive = fatal у ядра)', () {
-      final spec =
-          parseSingboxEntry({
-                'type': 'naive',
-                'tag': 't',
-                'server': 'h',
-                'server_port': 443,
-                'username': 'u',
-                'password': 'p',
-                'tls': {
-                  'enabled': true,
-                  'server_name': 'x.com',
-                  'insecure': true,
-                  'alpn': ['h2'],
-                  'utls': {'enabled': true, 'fingerprint': 'chrome'},
-                  'reality': {'enabled': true, 'public_key': _validPbk},
-                },
-              })!
-              as NaiveSpec;
+      final spec = parseSingboxEntry({
+        'type': 'naive',
+        'tag': 't',
+        'server': 'h',
+        'server_port': 443,
+        'username': 'u',
+        'password': 'p',
+        'tls': {
+          'enabled': true,
+          'server_name': 'x.com',
+          'insecure': true,
+          'alpn': ['h2'],
+          'utls': {'enabled': true, 'fingerprint': 'chrome'},
+          'reality': {'enabled': true, 'public_key': _validPbk},
+        },
+      })! as NaiveSpec;
       expect(spec.tls.enabled, isTrue);
       expect(spec.tls.serverName, 'x.com');
       expect(spec.tls.fingerprint, isNull);
