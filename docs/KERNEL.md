@@ -25,8 +25,38 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.0-lx.34`** (see `app/android/libbox.version`) —
-**the upstream 1.14.0 stable base**: the fork rebases from the mid-August 1.14
+**The current pin: `v1.14.0-lx.36`** (see `app/android/libbox.version`) —
+two hotfixes on the same upstream base as lx.34 (sing-box 1.14.0 + 16
+post-release commits); nothing in the configuration or on the wire changes.
+
+- **lx.36 — REALITY against Xray-core ≥ v26.9.8 (core SPEC 083).** The REALITY
+  server now requires the post-quantum `X25519MLKEM768` key share in the
+  ClientHello, placed before the optional `X25519`, and silently forwards
+  anything else to the camouflage site — the core logged
+  `reality verification failed` on every such node. The core used to strip
+  that key share itself (a leftover from uTLS 1.7.2); it no longer does, and
+  the authentication key follows the server's choice (`Ecdhe`, else
+  `MlkemEcdhe`). Servers before v26.9.8 are unaffected (verified against
+  v26.7.11 and v26.7.28). Only the `chrome` fingerprint family carries the
+  key share; LxBox substitutes `chrome` for any other fingerprint on a REALITY
+  node when emitting the config and warns on the node at import (§281).
+- **lx.35 — 100 % CPU until restart with XHTTP behind a CDN that resets
+  streams (core SPEC 082, fork issue #14).** The stream-reset error left the
+  transport conn with the HTTP/2 library's own error type; any HTTP/2 client
+  running *through* that outbound (DoH with `detour`, rule-set
+  `download_detour`, a chained outbound) mistook it for its own stream error
+  and spun in its read loop. The type no longer leaves XHTTP, HTTP and
+  gRPC-lite conns; log text and configs are unchanged.
+
+Java surface: unchanged from lx.34 (both are Go-only fixes under
+`common/tls` and the transports).
+
+Device-verified on the `LxBox_test` AVD against a local Xray v26.9.9
+(`dest = www.apple.com`): with lx.34 both test nodes failed with
+`reality verification failed`; with lx.36 both carry Vision traffic, and a
+node imported with `fp=firefox` reaches the core as `chrome`.
+
+**`v1.14.0-lx.34` — the upstream 1.14.0 stable base**: the fork rebases from the mid-August 1.14
 beta line onto released sing-box 1.14.0 plus 16 post-release commits. Nothing
 in the configuration or on the wire changes; the fork's own layer (AmneziaWG,
 XHTTP, MASQUE, DNS groups, chains, sniffers, lxd, the command protocol) is
@@ -670,7 +700,9 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.0-lx.34** (current pin) | The upstream **1.14.0 stable** base (plus 16 post-release commits): a URL test can no longer hang on an unresponsive node (a 15 s deadline per probe), a manual test now probes every node of a group and recurses into nested groups, `_dns.*` SVCB discovery queries get an empty NOERROR so browsers cannot bypass the tunnel over DoH, inverted DNS rules with rule-set address filters match again, QUIC throughput on TUIC/naive survives an idle period, and sing-tun keeps a separate TCP NAT table per address family. Configs unchanged. Java surface: additive only (see the pin section) |
+| **v1.14.0-lx.36** (current pin) | Hotfix: REALITY nodes on Xray-core ≥ v26.9.8 work again — the core no longer strips the `X25519MLKEM768` key share the server now requires, and derives the auth key the way the server does (core SPEC 083); servers before v26.9.8 unaffected. Only `chrome` fingerprints carry the key share — LxBox emits `chrome` for any REALITY node (§281). Same upstream base as lx.34. |
+| **v1.14.0-lx.35** | Hotfix for fork issue #14: XHTTP behind a CDN that resets HTTP/2 streams could pin the CPU at 100 % until restart — the `http2.StreamError` type no longer leaks out of XHTTP / HTTP / gRPC-lite conns into an HTTP/2 client running through the outbound (core SPEC 082). Same upstream base as lx.34. |
+| **v1.14.0-lx.34** | The upstream **1.14.0 stable** base (plus 16 post-release commits): a URL test can no longer hang on an unresponsive node (a 15 s deadline per probe), a manual test now probes every node of a group and recurses into nested groups, `_dns.*` SVCB discovery queries get an empty NOERROR so browsers cannot bypass the tunnel over DoH, inverted DNS rules with rule-set address filters match again, QUIC throughput on TUIC/naive survives an idle period, and sing-tun keeps a separate TCP NAT table per address family. Configs unchanged. Java surface: additive only (see the pin section) |
 | **v1.14.0-lx.33** | AmneziaWG 3.0/3.1 (§421): AWG 3.x root keys on the `wireguard` endpoint (`header_protection_key`, `content_padding_addition`, ranged timings, `random_trailers`, `disable_cookies`) and a ranged `persistent_keepalive_interval`; `lx.32` introduced the fields, `lx.33` fixes data-packet reception under `random_trailers`. Cores ≤ `lx.31` reject such a config as a whole. Java surface: unchanged |
 | **v1.14.0-lx.30** | DNS over an XHTTP `detour` fixed: `udp`/`tcp`/`tls` DNS servers behind a `detour` to a VLESS+XHTTP node died on the first query with `write request: context canceled` — red URL tests for `masque`/`wireguard` nodes probed by domain (green by IP), and a dead system DNS over TUN with the tunnel alive. `DialContext` for `stream-one`/`stream-up` now returns only after the HTTP layer accepts the request body, so the pool cancelling its dial context no longer tears the connection down. Java surface: additive only (see the pin section) |
 | **v1.14.0-lx.29** | SPEC 076/059 — XHTTP no longer pins the CPU at 100% when the path resets streams: an xmux circuit breaker (3 consecutive stream failures retire a connection, 100 ms→3 s backoff before a new transport, success counted as *data* not headers). `packet-up` uploads survive a graceful `GOAWAY` (`GetBody` set, so HTTP/2 can retry transparently). A `stream-up` pool leak fixed — the release handle was accepted but never stored, so `openUsage` grew monotonically |
