@@ -674,9 +674,10 @@ class _RoutingScreenState extends State<RoutingScreen>
           final tmpDir = await getTemporaryDirectory();
           final path = '${tmpDir.path}/$filename';
           await File(path).writeAsString(json);
-          await Share.shareXFiles([
-            XFile(path, mimeType: 'application/json', name: filename),
-          ], subject: 'LxBox rules');
+          await SharePlus.instance.share(ShareParams(
+            files: [XFile(path, mimeType: 'application/json', name: filename)],
+            subject: 'LxBox rules',
+          ));
           showSnack(getLocalText.s("Rules exported"));
           return;
       }
@@ -720,13 +721,7 @@ class _RoutingScreenState extends State<RoutingScreen>
         return; // cancelled / нет пикера / сбой
       }
       final file = outcome.single;
-      final bytes = file.bytes;
-      String? raw;
-      if (bytes != null) {
-        raw = utf8DecodeOrNull(bytes);
-      } else if (file.path != null) {
-        raw = await File(file.path!).readAsString();
-      }
+      final raw = utf8DecodeOrNull(file.bytes);
       if (raw == null) {
         showSnack(getLocalText.s("Could not read file."));
         return;

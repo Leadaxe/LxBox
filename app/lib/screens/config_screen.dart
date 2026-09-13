@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -77,8 +76,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/lxbox_config.json');
       await file.writeAsString(text);
-      // ignore: deprecated_member_use
-      await Share.shareXFiles([XFile(file.path)], text: 'LxBox config');
+      await SharePlus.instance.share(
+          ShareParams(files: [XFile(file.path)], text: 'LxBox config'));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -122,16 +121,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
         return;
       }
       final file = outcome.single;
-      String text;
-      if (file.bytes != null && file.bytes!.isNotEmpty) {
-        // §333 — utf8, не fromCharCodes: тот трактовал байты как UTF-16
-        // code units и превращал кириллицу в JSON5-комментариях в мусор.
-        text = utf8.decode(file.bytes!, allowMalformed: true);
-      } else if (file.path != null) {
-        text = await File(file.path!).readAsString();
-      } else {
-        return;
-      }
+      // §333 — utf8, не fromCharCodes (см. PickedFile.text).
+      final text = file.text;
       final pretty = await prettyJsonForDisplayAsync(text.trim());
       if (!mounted) return;
       _textController.text = pretty;

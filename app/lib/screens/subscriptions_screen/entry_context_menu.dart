@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -63,7 +62,8 @@ void showEntryContextMenu(
               title: Text(getLocalText.s("Share URL…")),
               onTap: () async {
                 Navigator.pop(ctx);
-                await Share.share(entry.url, subject: 'LxBox subscription');
+                await SharePlus.instance.share(ShareParams(
+                    text: entry.url, subject: 'LxBox subscription'));
               },
             ),
           ListTile(
@@ -315,16 +315,8 @@ Future<void> showEditSourceDialog(
                         return;
                       }
                       final f = outcome.single;
-                      String text;
-                      if (f.bytes != null && f.bytes!.isNotEmpty) {
-                        text = String.fromCharCodes(f.bytes!);
-                      } else if (f.path != null) {
-                        text = await File(f.path!).readAsString();
-                      } else {
-                        return;
-                      }
                       setLocal(() {
-                        pickedBody = text;
+                        pickedBody = f.text;
                         pickedName = f.name;
                       });
                     },

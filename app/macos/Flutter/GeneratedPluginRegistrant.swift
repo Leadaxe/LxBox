@@ -7,7 +7,7 @@ import Foundation
 
 import connectivity_plus
 import device_info_plus
-import file_picker
+import file_picker_darwin
 import file_selector_macos
 import package_info_plus
 import share_plus

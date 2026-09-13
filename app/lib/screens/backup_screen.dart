@@ -152,10 +152,10 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
           final tmpDir = await getTemporaryDirectory();
           final path = '${tmpDir.path}/$filename';
           await File(path).writeAsString(json);
-          await Share.shareXFiles(
-            [XFile(path, mimeType: 'application/json', name: filename)],
+          await SharePlus.instance.share(ShareParams(
+            files: [XFile(path, mimeType: 'application/json', name: filename)],
             subject: 'LxBox backup',
-          );
+          ));
           if (!mounted) return;
           showSnack(getLocalText.s("Backup exported (%d bytes)", bytes));
           return;
@@ -200,13 +200,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         return; // cancelled / нет пикера / сбой
       }
       final file = outcome.single;
-      final bytes = file.bytes;
-      String? raw;
-      if (bytes != null) {
-        raw = utf8DecodeOrNull(bytes);
-      } else if (file.path != null) {
-        raw = await File(file.path!).readAsString();
-      }
+      final raw = utf8DecodeOrNull(file.bytes);
       if (raw == null) {
         if (!mounted) return;
         showSnack(getLocalText.s("Could not read file."));
@@ -380,10 +374,10 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
           final tmpDir = await getTemporaryDirectory();
           final path = '${tmpDir.path}/$filename';
           await File(path).writeAsString(json);
-          await Share.shareXFiles(
-            [XFile(path, mimeType: 'application/json', name: filename)],
+          await SharePlus.instance.share(ShareParams(
+            files: [XFile(path, mimeType: 'application/json', name: filename)],
             subject: 'LX Backup',
-          );
+          ));
           if (!mounted) return;
           showSnack(getLocalText.s("Backup exported (%d bytes)", bytes));
           _showExportLosses(exportWarnings);
@@ -434,12 +428,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         return;
       }
       final file = outcome.single;
-      String? raw;
-      if (file.bytes != null) {
-        raw = utf8DecodeOrNull(file.bytes!);
-      } else if (file.path != null) {
-        raw = await File(file.path!).readAsString();
-      }
+      final raw = utf8DecodeOrNull(file.bytes);
       if (raw == null) {
         if (!mounted) return;
         showSnack(getLocalText.s("Could not read file."));

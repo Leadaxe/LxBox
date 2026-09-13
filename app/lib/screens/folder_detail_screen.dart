@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import '../models/node_spec.dart';
 import '../services/node_identity.dart';
 import 'auto_group_edit_screen.dart';
@@ -743,15 +742,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       var added = 0;
       final errors = <String>[];
       for (final file in outcome.files) {
-        String text;
-        if (file.bytes != null && file.bytes!.isNotEmpty) {
-          text = String.fromCharCodes(file.bytes!);
-        } else if (file.path != null) {
-          text = await File(file.path!).readAsString();
-        } else {
-          continue;
-        }
-        text = text.trim();
+        final text = file.text.trim();
         if (text.isEmpty) continue;
         final idx = _index;
         if (idx < 0) return;

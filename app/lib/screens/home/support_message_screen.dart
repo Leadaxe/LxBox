@@ -114,7 +114,8 @@ class _SupportMessageScreenState extends State<SupportMessageScreen> {
       // `share:` — системный share-лист, экран НЕ закрываем (как https).
       if (isInPlaceSupportAction(action)) {
         buttons.add(FilledButton.tonal(
-          onPressed: () => unawaited(Share.share(action.payload)),
+          onPressed: () => unawaited(
+              SharePlus.instance.share(ShareParams(text: action.payload))),
           child: Text(spec.label),
         ));
         continue;
