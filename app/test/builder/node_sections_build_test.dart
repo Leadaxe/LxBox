@@ -79,7 +79,7 @@ void main() {
         id: 'ts-$tag',
         tag: tag,
         label: tag,
-        body: {'auth_key': 'tskey', if (exitNode != null) 'exit_node': exitNode},
+        body: {'auth_key': 'tskey', 'exit_node': ?exitNode},
       );
 
   UserServer user(NodeSpec node,

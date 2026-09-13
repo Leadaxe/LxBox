@@ -10,7 +10,6 @@ import 'package:lxbox/services/node_identity.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
-import 'package:lxbox/services/parser/singbox_config.dart';
 
 /// §435 / контракт ## 13 — узел Tailscale и извлечение связки из целого
 /// конфига (NODE_SECTIONS.md §6, §7).

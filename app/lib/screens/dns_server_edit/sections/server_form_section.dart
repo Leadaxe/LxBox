@@ -94,10 +94,9 @@ class ServerFormSection extends StatelessWidget {
                     value: 'group',
                     child: Text(getLocalText.s("Group")),
                   ),
-                  // l10n-exempt: protocol name
                   const DropdownMenuItem(
                     value: 'tailscale',
-                    child: Text('Tailscale'),
+                    child: Text('Tailscale'), // l10n-exempt: protocol name
                   ),
                 ],
                 onChanged: (v) {
@@ -121,10 +120,9 @@ class ServerFormSection extends StatelessWidget {
                   value: 'group',
                   label: Text(getLocalText.s("Group")),
                 ),
-                // l10n-exempt: protocol name
                 const ButtonSegment(
                   value: 'tailscale',
-                  label: Text('Tailscale'),
+                  label: Text('Tailscale'), // l10n-exempt: protocol name
                 ),
               ],
               selected: {mode},
