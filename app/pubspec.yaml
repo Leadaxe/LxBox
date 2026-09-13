@@ -59,6 +59,7 @@ flutter:
   assets:
     - assets/wizard_template.json
     - assets/l10n/ru/ # §285 — русская локализация (ui.json + template.json; английский базовый, в коде)
+    - assets/l10n/zh/ # 简体中文本地化（ui.json + template.json；英文为基准键）
     - assets/donate.json # §362/§423 — способы поддержки: единственный источник, бандлится и раздаётся с GitHub
     - assets/support.json # §356/§422 — лента сообщений автора: единственный источник, бандлится и раздаётся с GitHub
     - assets/warp_endpoints.json # §136 — WARP endpoint/SNI random pools
