@@ -1,5 +1,5 @@
 # В данном форке:
-- заменена используемая для регистрации WARP ссылка на API на незабаненную ссылку на API для Zero Trust,
+- добавлены используемые для регистрации WARP ссылки на API api.devices.cloudflare.com и zero-trust-client.cloudflareclient.com,
 - изменены наборы SNI для WARP,  
   добавлены 2gis.ru, apteka.ru, autonews.ru, beeline.ru, deepseek.com, mail.ru, profi.ru, psbank.ru, pypi.org, rt.ru, rutube.ru, vk.ru, которые работают на HTTP/3 при любых условиях,  
   а если срабатывают белые списки на HTTP/3, то не работают сейчас например SNI gosuslugi.ru, lenta.ru, max.ru, mos.ru, ozon.ru, pochta.ru, rzd.ru, sberbank.ru, yandex.ru, а из зарубежных SNI вообще работают только deepseek.com и pupi.org,  
