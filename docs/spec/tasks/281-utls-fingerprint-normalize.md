@@ -126,3 +126,50 @@ xray JSON, raw sing-box JSON) + round-trip emit.
 
 `test/builder/heal_unknown_utls_fingerprints_test.dart` — мусор → chrome +
 запись; псевдоним → молча; валидные/без-tls → no-op; пробельный fp → снят.
+
+## Дополнение 2026-09-13 — REALITY принимает только chrome-семейство (ядро SPEC 083)
+
+**Симптом.** Все REALITY-узлы за Xray-core ≥ v26.9.8 умирают без ошибки:
+сервер (`XTLS/REALITY@8cdf7bf`) требует в ClientHello key_share
+`X25519MLKEM768` **перед** X25519, иначе молча проксирует соединение на
+камуфляжный сайт; на клиенте — `reality verification failed`. Ядро lx.36 сняло
+свой фильтр этого шара, но дальше всё решает отпечаток: из словаря ядра гибрид
+несёт только `HelloChrome_133` (все шесть `chrome*`-имён). `firefox`/`edge`/
+`safari`/`ios`/`android`/`360`/`qq` шлют голый X25519, `random` — один из пяти
+(живой только Chrome), `randomized` — гибрид монетой ½. Это паритет с клиентом
+самого Xray. Разбор и стенд — `sing-box-lx/SPECS/TASKS/083`.
+
+**Решение (два слоя, как выше).**
+
+- *Парсер* — `normalizeTlsFingerprint`: при `reality != null` и
+  канонизированном значении не из `kChromeFamilyFingerprints` плюсует
+  `RealityFingerprintWarning(value)` (severity warning). Значение ноды **не
+  меняется**: `entry` — нормативная часть контракта с лаунчером
+  (`contract/corpus/uri/vless/grpc_reality_no_flow` ожидает `firefox`), а
+  подменять его в одном приложении = расхождение контракта. `random` без
+  предупреждения: это дефолт URI-парсера при пустом `fp` (transport.dart), от
+  явного `fp=random` он неотличим, шум на каждом REALITY-узле без `fp` не нужен.
+- *Post-step* — `healUnknownUtlsFingerprints`: у outbound'а с
+  `reality.enabled == true` отпечаток не из chrome-семейства (включая дефолтный
+  `random`) → `chrome`, **молча** (без записи в `emitWarnings`: пользователю
+  уже сказано на ноде при импорте, а дефолтный `random` — не его выбор). Конфиг
+  ядра не входит в контракт — это единственное место, где подмена легальна и
+  при этом накрывает все пути (парсер, raw JSON, vars).
+
+**Контракт.** `RealityFingerprintWarning` в `_warningCodes` контрактного
+раннера не занесён — кода в `registry/warnings.json` пока нет, класс без кода
+раннер в конверт не пишет (contract_test.dart, `code == null` → пропуск).
+Регистрация кода и зеркальное предупреждение у лаунчера — отдельное решение
+владельца (IDENTITY §4a, класс A); до него поведение приложений по `entry`
+совпадает, расходится только наш конфиг ядра.
+
+**Тесты.** `utls_fingerprint_test.dart` (группа «SPEC 083»): firefox →
+warning + значение цело, псевдоним `hellofirefox_auto` → то же, chrome-семейство
+и дефолт → тихо, plain TLS + firefox → тихо, raw JSON без аккумулятора.
+`heal_unknown_utls_fingerprints_test.dart`: firefox/random/randomized/мусор под
+REALITY → `chrome` (запись только про мусор); chrome-семейство и TLS-без-REALITY
+→ no-op; `reality.enabled=false` → no-op. `node_warning_test.dart`: равенство и
+`renderEn`.
+
+**Что НЕ делает.** Не меняет дефолт `random` в парсере (контракт); не вводит
+UI-выбор отпечатка; не трогает hysteria2/tuic (там utls/reality срезаны §282).

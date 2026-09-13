@@ -20,12 +20,40 @@ void main() {
       );
       expect(
         const XhttpParamResetWarning(
-                'session_placement', XhttpResetReason.invalidEnumValue,
-                value: 'a') ==
+              'session_placement',
+              XhttpResetReason.invalidEnumValue,
+              value: 'a',
+            ) ==
             const XhttpParamResetWarning(
-                'session_placement', XhttpResetReason.invalidEnumValue,
-                value: 'b'),
+              'session_placement',
+              XhttpResetReason.invalidEnumValue,
+              value: 'b',
+            ),
         isFalse,
+      );
+    });
+
+    // SPEC 083 — предупреждение REALITY + не-chrome отпечаток: равенство по
+    // значению, машинный рендер — английский ключ с подставленным именем.
+    test('RealityFingerprintWarning equality + renderEn', () {
+      expect(
+        const RealityFingerprintWarning('firefox'),
+        const RealityFingerprintWarning('firefox'),
+      );
+      expect(
+        const RealityFingerprintWarning('firefox') ==
+            const RealityFingerprintWarning('safari'),
+        isFalse,
+      );
+      expect(
+        const RealityFingerprintWarning('firefox').renderEn(),
+        'REALITY with uTLS fingerprint "firefox": Xray servers since '
+        'v26.9.8 accept only a Chrome-like ClientHello, so "chrome" is used '
+        'when connecting.',
+      );
+      expect(
+        const RealityFingerprintWarning('firefox').severity,
+        WarningSeverity.warning,
       );
     });
 
@@ -34,16 +62,18 @@ void main() {
     test('XhttpParamResetWarning renders verbatim from enum reason', () {
       expect(
         const XhttpParamResetWarning(
-                'session_placement', XhttpResetReason.invalidEnumValue,
-                value: 'bogus')
-            .renderEn(),
+          'session_placement',
+          XhttpResetReason.invalidEnumValue,
+          value: 'bogus',
+        ).renderEn(),
         'XHTTP "session_placement" reset to default — value "bogus" is not '
         'a valid session_placement (would otherwise break the whole config).',
       );
       expect(
         const XhttpParamResetWarning(
-                'uplink_http_method', XhttpResetReason.getRequiresPacketUp)
-            .renderEn(),
+          'uplink_http_method',
+          XhttpResetReason.getRequiresPacketUp,
+        ).renderEn(),
         'XHTTP "uplink_http_method" reset to default — GET requires '
         'packet-up mode (would otherwise break the whole config).',
       );
@@ -62,7 +92,10 @@ void main() {
       // info, не warning — провайдеры часто намеренно ставят флаг (REALITY,
       // self-signed, IP-литералы); UI красит серым, не пугает.
       expect(const InsecureTlsWarning().severity, WarningSeverity.info);
-      expect(const DeprecatedFlowWarning('xtls').severity, WarningSeverity.info);
+      expect(
+        const DeprecatedFlowWarning('xtls').severity,
+        WarningSeverity.info,
+      );
     });
 
     test('exhaustive switch compiles', () {
@@ -79,6 +112,8 @@ void main() {
         // §416 — header-placement без режима: дописан mode: packet-up
         XhttpModeForcedPacketUpWarning() => 'xhttp_mode_forced_packet_up',
         UnknownFingerprintWarning() => 'fingerprint',
+        // SPEC 083 — REALITY принимает только chrome-семейство
+        RealityFingerprintWarning() => 'reality_fingerprint',
         EchIgnoredWarning() => 'ech_ignored',
         UnknownObfsWarning() => 'obfs_unknown',
         MissingObfsPasswordWarning() => 'obfs_no_password',

@@ -7,13 +7,13 @@ import 'package:lxbox/services/builder/post_steps.dart';
 void main() {
   group('healUnknownUtlsFingerprints', () {
     Map<String, dynamic> outbound(String tag, String fp) => {
-          'tag': tag,
-          'type': 'vless',
-          'tls': {
-            'enabled': true,
-            'utls': {'enabled': true, 'fingerprint': fp},
-          },
-        };
+      'tag': tag,
+      'type': 'vless',
+      'tls': {
+        'enabled': true,
+        'utls': {'enabled': true, 'fingerprint': fp},
+      },
+    };
 
     Map utlsOf(Map<String, dynamic> config, int i) =>
         ((config['outbounds'] as List)[i] as Map)['tls']['utls'] as Map;
@@ -92,33 +92,106 @@ void main() {
       expect(healUnknownUtlsFingerprints(config), isEmpty);
     });
 
-    test('пустой конфиг → no-op', () {
-      expect(healUnknownUtlsFingerprints({}), isEmpty);
+    // SPEC 083 (ядро) — Xray ≥ v26.9.8 принимает REALITY только с
+    // chrome-семейством (key_share X25519MLKEM768); подмена на выходе, молча.
+    Map<String, dynamic> realityOutbound(String tag, String fp) => {
+      'tag': tag,
+      'type': 'vless',
+      'tls': {
+        'enabled': true,
+        'utls': {'enabled': true, 'fingerprint': fp},
+        'reality': {'enabled': true, 'public_key': 'pk'},
+      },
+    };
+
+    test('SPEC 083: REALITY + firefox/random/randomized → chrome, молча', () {
+      final config = {
+        'outbounds': [
+          realityOutbound('ff', 'firefox'),
+          realityOutbound('rnd', 'random'),
+          realityOutbound('rz', 'randomized'),
+          realityOutbound('junk', 'garbage'),
+        ],
+      };
+      final healed = healUnknownUtlsFingerprints(config);
+      for (var i = 0; i < 4; i++) {
+        expect(utlsOf(config, i)['fingerprint'], 'chrome', reason: 'i=$i');
+      }
+      expect(healed.map((h) => h.owner), [
+        'junk',
+      ], reason: 'запись только про мусор, подмена под REALITY — молча');
     });
 
-    test('РЕВЬЮ §281: REALITY без utls-блока → минимальный блок восстановлен',
-        () {
+    test(
+      'SPEC 083: REALITY + chrome-семейство и plain TLS + firefox → no-op',
+      () {
+        final config = {
+          'outbounds': [
+            realityOutbound('c', 'chrome'),
+            realityOutbound('cpq', 'chrome_pq'),
+            outbound('tls-ff', 'firefox'),
+          ],
+        };
+        expect(healUnknownUtlsFingerprints(config), isEmpty);
+        expect(utlsOf(config, 0)['fingerprint'], 'chrome');
+        expect(utlsOf(config, 1)['fingerprint'], 'chrome_pq');
+        expect(
+          utlsOf(config, 2)['fingerprint'],
+          'firefox',
+          reason: 'без REALITY отпечаток пользователя не трогаем',
+        );
+      },
+    );
+
+    test('SPEC 083: REALITY + reality.enabled=false + firefox → no-op', () {
       final config = {
         'outbounds': [
           {
-            'tag': 'r',
+            'tag': 'off',
             'type': 'vless',
             'tls': {
               'enabled': true,
-              'reality': {'enabled': true, 'public_key': 'pk'},
+              'utls': {'enabled': true, 'fingerprint': 'firefox'},
+              'reality': {'enabled': false, 'public_key': 'pk'},
             },
           },
         ],
       };
-      final healed = healUnknownUtlsFingerprints(config);
+      expect(healUnknownUtlsFingerprints(config), isEmpty);
+      expect(utlsOf(config, 0)['fingerprint'], 'firefox');
+    });
 
-      expect(healed, isEmpty, reason: 'восстановление — молча');
-      expect(utlsOf(config, 0)['enabled'], true,
-          reason: 'без uTLS ядро отвергает reality-outbound на старте');
+    test('пустой конфиг → no-op', () {
+      expect(healUnknownUtlsFingerprints({}), isEmpty);
     });
 
     test(
-        'РЕВЬЮ §282: QUIC (hysteria2/tuic) → utls И reality СНЯТЫ, '
+      'РЕВЬЮ §281: REALITY без utls-блока → минимальный блок восстановлен',
+      () {
+        final config = {
+          'outbounds': [
+            {
+              'tag': 'r',
+              'type': 'vless',
+              'tls': {
+                'enabled': true,
+                'reality': {'enabled': true, 'public_key': 'pk'},
+              },
+            },
+          ],
+        };
+        final healed = healUnknownUtlsFingerprints(config);
+
+        expect(healed, isEmpty, reason: 'восстановление — молча');
+        expect(
+          utlsOf(config, 0)['enabled'],
+          true,
+          reason: 'без uTLS ядро отвергает reality-outbound на старте',
+        );
+      },
+    );
+
+    test('РЕВЬЮ §282: QUIC (hysteria2/tuic) → utls И reality СНЯТЫ, '
         'НЕ восстановлены (иначе воскрешение мёртвой QUIC-ноды)', () {
       for (final type in ['hysteria2', 'tuic']) {
         final config = {
@@ -140,8 +213,11 @@ void main() {
         expect(healed, isEmpty, reason: '$type: срез — молча');
         final tls = ((config['outbounds'] as List)[0] as Map)['tls'] as Map;
         expect(tls.containsKey('utls'), isFalse, reason: '$type utls снят');
-        expect(tls.containsKey('reality'), isFalse,
-            reason: '$type reality снят');
+        expect(
+          tls.containsKey('reality'),
+          isFalse,
+          reason: '$type reality снят',
+        );
         expect(tls['server_name'], 'x.com', reason: '$type остальное цело');
       }
     });

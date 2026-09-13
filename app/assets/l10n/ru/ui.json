@@ -4337,6 +4337,9 @@
   "Unknown uTLS fingerprint \"%s\" replaced with \"chrome\" (would otherwise break the whole config).": {
     "value": "Неизвестный uTLS fingerprint «%s» заменён на «chrome» (иначе сломался бы весь конфиг)."
   },
+  "REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 accept only a Chrome-like ClientHello, so \"chrome\" is used when connecting.": {
+    "value": "REALITY с uTLS fingerprint «%s»: серверы Xray начиная с v26.9.8 принимают только ClientHello в стиле Chrome, поэтому при подключении используется «chrome»."
+  },
   "Unlimited": {
     "value": "никогда"
   },
