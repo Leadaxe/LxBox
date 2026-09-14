@@ -3,12 +3,18 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
 import 'package:lxbox/services/settings_storage.dart';
+import 'package:lxbox/services/storage_migration/legacy_form_v0.dart';
+
+/// Правило через запись `rules[]` и обратно — путь хранения (§439).
+CustomRule _storageRoundTrip(CustomRule r) =>
+    ruleFromRecord(ruleToRecord(r), unknownAsVerbatim: true).value!;
 
 /// §117 задача 3 — «Опция DNS у правила (DNS follows the rule)».
 ///
@@ -44,21 +50,21 @@ void main() {
   });
 
   group('RuleDns model (§117 задача 3)', () {
-    test('toJson/fromJson roundtrip с dns', () {
+    test('round-trip записи rules[] с dns', () {
       final rule = CustomRuleInline(
         name: 'r1',
         domains: ['example.com'],
         outbound: 'vpn-1',
         dns: const RuleDns(enabled: true, serverTag: 'google_udp'),
       );
-      final restored = CustomRule.fromJson(rule.toJson());
+      final restored = _storageRoundTrip(rule);
       expect(restored.dns, isNotNull);
       expect(restored.dns!.enabled, true);
       expect(restored.dns!.serverTag, 'google_udp');
     });
 
-    test('backward-compat: нет dns в JSON → null, mirror неактивен', () {
-      final restored = CustomRule.fromJson({
+    test('backward-compat: нет dns в форме 2.23.2 → null, mirror неактивен', () {
+      final restored = readLegacyCustomRule({
         'name': 'old',
         'enabled': true,
         'kind': 'inline',
@@ -75,7 +81,7 @@ void main() {
         srsUrl: 'https://e/x.srs',
         dns: const RuleDns(enabled: false, serverTag: 'cloudflare_udp'),
       );
-      final restored = CustomRule.fromJson(rule.toJson());
+      final restored = _storageRoundTrip(rule);
       expect(restored.dns!.enabled, false);
       expect(restored.dns!.serverTag, 'cloudflare_udp');
       expect(restored.dnsMirrorActive, false);
@@ -144,8 +150,8 @@ void main() {
         domains: ['a.com'],
         dns: const RuleDns(forceIpv4: true),
       );
-      expect(on.toJson()['dns'], containsPair('forceIpv4', true));
-      final r = CustomRule.fromJson(on.toJson());
+      expect(ruleToRecord(on)['dns'], containsPair('forceIpv4', true));
+      final r = _storageRoundTrip(on);
       expect(r.dns!.forceIpv4, true);
 
       // false → ключ не пишется (симметрия с resolve-опциями).
@@ -155,7 +161,7 @@ void main() {
         dns: const RuleDns(enabled: true, serverTag: 'google_udp'),
       );
       expect(
-          (off.toJson()['dns'] as Map).containsKey('forceIpv4'), false);
+          (ruleToRecord(off)['dns'] as Map).containsKey('forceIpv4'), false);
     });
 
     test('гейт forceIpv4Active: НЕ требует serverTag; режется port/protocol',

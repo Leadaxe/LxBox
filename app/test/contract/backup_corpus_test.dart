@@ -586,11 +586,7 @@ void _checkSections(_State state, Map<String, dynamic> expected) {
 /// Канон цепочки (`schema/source_chain.schema.json`) из мобильной модели —
 /// ровно поля маршрута, без идентичности записи (`tag`/`label`/`enabled`),
 /// которая в схеме живёт уровнем выше, и без позиции в списке источников.
-Map<String, dynamic> _canonOf(SourceChain c) => c.toJson()
-  ..remove('tag')
-  ..remove('label')
-  ..remove('enabled')
-  ..remove('order');
+Map<String, dynamic> _canonOf(SourceChain c) => c.toCanonJson();
 
 /// Матчер структурного равенства JSON-деревьев: нечувствителен к порядку
 /// ключей и НЕ схлопывает `null` (RFC 7396 — он удаляет ключ, а не значит

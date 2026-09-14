@@ -3,18 +3,17 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/chain_record.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/backup_service.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
-// §393 C2 — хранение источников-цепочек (`chains[]`) и их выживание в
-// ВНУТРЕННЕМ backup/restore.
-//
-// LX Backup цепочек пока НЕ переносит (раздела в контракте нет — TODO C9 в
-// `lx_backup.dart`), а внутренний бэкап обязан: иначе перенос на новое
-// устройство молча терял бы вручную собранные маршруты — ровно та болезнь,
-// которую §219/§221 уже ловили на Направлениях.
+// §393 C2 — хранение источников-цепочек (§439: записи `kind: chain` хвостом
+// `sources[]`) и их выживание во ВНУТРЕННЕМ backup/restore: иначе перенос на
+// новое устройство молча терял бы вручную собранные маршруты — ровно та
+// болезнь, которую §219/§221 уже ловили на Направлениях.
 
 void main() {
   late Directory tmp;
@@ -50,7 +49,7 @@ void main() {
 
   group('CRUD', () {
     test('чистая установка: цепочек нет и никто их не сеет', () async {
-      // Отсутствие `chains` = «цепочек нет», состояние, неотличимое от «все
+      // Нет записей цепочек = «цепочек нет», состояние, неотличимое от «все
       // удалены», — поэтому миграции/seed'а здесь нет и быть не должно.
       expect(await SettingsStorage.getChains(), isEmpty);
     });
@@ -195,18 +194,19 @@ void main() {
       await SettingsStorage.setChains(const [c]);
       SettingsStorage.resetCacheForTesting();
       final back = (await SettingsStorage.getChains()).single;
-      // §393 D1 — `order` назначает storage (место в общем списке источников),
-      // поэтому сверяем МАРШРУТ и идентичность, а не сырой JSON целиком.
-      expect(back.copyWith(order: -1).toJson(), c.toJson());
-      expect(back.order, greaterThanOrEqualTo(0),
-          reason: 'позиция в общем списке проставлена при записи');
-      // И в самом файле — под своим ключом, не внутри подписки.
-      expect((await readFile())['chains'], isA<List>());
+      expect(back, c);
+      // §439 — в файле запись `kind: chain` в `sources[]`, отдельного ключа нет.
+      final file = await readFile();
+      expect(file.containsKey('chains'), isFalse);
+      final records = (file['sources'] as List).cast<Map<String, dynamic>>();
+      expect(records.single['kind'], 'chain');
+      expect(records.single['tag'], 'tuned');
     });
   });
 
-  group('§393 D1 — позиция в общем списке источников', () {
-    test('order проставляется при записи и держит порядок чтения', () async {
+  // §439 §2.3 п. 7 — цепочки хвостом `sources[]`, место цепочки — индекс записи.
+  group('место в общем списке источников', () {
+    test('порядок записей держит порядок чтения', () async {
       await SettingsStorage.setChains(const [
         SourceChain(tag: 'c1', hops: ['a', 'b']),
         SourceChain(tag: 'c2', hops: ['a', 'b']),
@@ -215,9 +215,11 @@ void main() {
       SettingsStorage.resetCacheForTesting();
       final got = await SettingsStorage.getChains();
       expect(got.map((c) => c.tag), ['c1', 'c2', 'c3']);
-      // Позиции строго возрастают — по ним и считается «цепочка ВЫШЕ».
-      expect(got[0].order, lessThan(got[1].order));
-      expect(got[1].order, lessThan(got[2].order));
+      final records = ((await readFile())['sources'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(records.map((r) => r['tag']), ['c1', 'c2', 'c3']);
+      expect(records.every((r) => !r.containsKey('order')), isTrue,
+          reason: 'поля позиции у записи нет');
     });
 
     test('reorder меняет взаимный порядок цепочек', () async {
@@ -232,55 +234,63 @@ void main() {
           ['c2', 'c1']);
     });
 
-    test('миграция: старый storage без order — цепочки встают в конец, '
-        'взаимный порядок сохранён', () async {
-      // Ключ `chains` уже в проде у dev-сборок, и записи там без `order`.
+    test('сохранение источников не трогает цепочки, цепочки — источники',
+        () async {
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'c1', hops: ['a', 'b']),
+        SourceChain(tag: 'c2', hops: ['c1', 'b']),
+      ]);
+      await SettingsStorage.saveServerLists([
+        UserServer(
+          id: 'u1',
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          rawBody: 'vless://11111111-1111-1111-1111-111111111111@198.51.100.1:443#One',
+        ),
+      ]);
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'c2', hops: ['a', 'b']),
+        SourceChain(tag: 'c1', hops: ['a', 'b']),
+      ]);
+      SettingsStorage.resetCacheForTesting();
+
+      final records = ((await readFile())['sources'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(records.map((r) => (r['kind'], r['id'] ?? r['tag'])), [
+        ('server', 'u1'),
+        ('chain', 'c2'),
+        ('chain', 'c1'),
+      ], reason: 'источники впереди, цепочки хвостом в своём порядке');
+      expect((await SettingsStorage.getServerLists()).map((l) => l.id), ['u1']);
+      expect((await SettingsStorage.getChains()).map((c) => c.tag),
+          ['c2', 'c1']);
+    });
+
+    test('форма 2.23.2: цепочки встают хвостом sources[] по старому order, '
+        'без order — в конец в порядке файла', () async {
       final f = File('${tmp.path}/lxbox_settings.json');
       f.writeAsStringSync(jsonEncode({
         'server_lists': [
-          {'type': 'user', 'id': 'u1', 'name': 'S', 'enabled': true},
+          {'type': 'user', 'id': 'u1', 'name': '', 'enabled': true},
         ],
         'chains': [
-          {'tag': 'first', 'hops': ['a', 'b']},
-          {'tag': 'second', 'hops': ['first', 'c']},
+          {'tag': 'no-order', 'hops': ['a', 'b']},
+          {'tag': 'second', 'hops': ['first', 'c'], 'order': 5},
+          {'tag': 'first', 'hops': ['a', 'b'], 'order': 1},
         ],
       }));
       SettingsStorage.resetCacheForTesting();
 
-      await SettingsStorage.migrateChainOrderIfNeeded();
-      SettingsStorage.resetCacheForTesting();
-
       final got = await SettingsStorage.getChains();
-      expect(got.map((c) => c.tag), ['first', 'second'],
-          reason: 'взаимный порядок = порядок старого файла');
-      expect(got.every((c) => c.order >= 0), isTrue);
-      // В конец общего списка: позиция ниже единственной подписки.
-      expect(got.first.order, greaterThanOrEqualTo(1));
+      expect(got.map((c) => c.tag), ['first', 'second', 'no-order']);
       // Маршрут не тронут — мигрируются позиции в списке, а не хопы.
       expect(got[1].hops, ['first', 'c']);
-    });
-
-    test('миграция идемпотентна', () async {
-      await SettingsStorage.setChains(const [
-        SourceChain(tag: 'c1', hops: ['a', 'b']),
-        SourceChain(tag: 'c2', hops: ['a', 'b']),
-      ]);
-      final before = await SettingsStorage.getChains();
-      await SettingsStorage.migrateChainOrderIfNeeded();
-      await SettingsStorage.migrateChainOrderIfNeeded();
-      SettingsStorage.resetCacheForTesting();
-      final after = await SettingsStorage.getChains();
-      expect(after.map((c) => c.tag), before.map((c) => c.tag));
-      expect(after.map((c) => c.order), before.map((c) => c.order));
-    });
-
-    test('order не уезжает в канон бэкапа: схема его не знает', () async {
-      await SettingsStorage.setChains(const [
-        SourceChain(tag: 'c1', hops: ['a', 'b']),
-      ]);
-      final stored = (await SettingsStorage.getChains()).single;
-      expect(stored.toJson().containsKey('order'), isTrue,
-          reason: 'в storage — есть');
+      final records = ((await readFile())['sources'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(records.map((r) => r['kind']),
+          ['server', 'chain', 'chain', 'chain']);
     });
   });
 
@@ -295,7 +305,9 @@ void main() {
         raw,
         include: {BackupCategory.routing},
       );
-      expect(exported['chains'], isA<List>(),
+      expect(
+          (exported['sources'] as List).map((r) => (r as Map)['kind']),
+          ['chain'],
           reason: 'без этого перенос на новое устройство терял бы маршруты');
 
       // Restore на «чистое» устройство.
@@ -317,21 +329,36 @@ void main() {
         await readFile(),
         include: {BackupCategory.appSettings},
       );
-      expect(exported.containsKey('chains'), isFalse);
+      expect(exported.containsKey('sources'), isFalse);
     });
 
-    test('allowlist импорта пропускает chains (иначе default-deny съел бы)',
+    test('allowlist импорта пропускает sources (иначе default-deny съел бы)',
         () async {
       // §159 — default-deny: ключ, забытый в allowlist, молча исчезает на
       // restore. Ровно так уже терялись `masque_account` и `directions`.
-      expect(SettingsStorage.allowedTopLevelKeys.contains('chains'), isTrue);
+      expect(SettingsStorage.allowedTopLevelKeys.contains('sources'), isTrue);
       final dropped = await SettingsStorage.replaceRaw({
-        'chains': [
-          const SourceChain(tag: 'c', hops: ['a', 'b']).toJson(),
+        'storage_version': 1,
+        'sources': [
+          chainToRecord(const SourceChain(tag: 'c', hops: ['a', 'b'])),
         ],
       });
-      expect(dropped, isNot(contains('chains')));
+      expect(dropped, isEmpty);
       expect((await SettingsStorage.getChains()).single.tag, 'c');
+    });
+
+    test('снимок формы 2.23.2 с chains мигрирует на входе replaceRaw',
+        () async {
+      final dropped = await SettingsStorage.replaceRaw({
+        'chains': [
+          {'tag': 'c', 'hops': ['a', 'b'], 'order': 3},
+        ],
+      });
+      expect(dropped, isEmpty);
+      expect((await SettingsStorage.getChains()).single.hops, ['a', 'b']);
+      final file = await readFile();
+      expect(file.containsKey('chains'), isFalse);
+      expect(file['storage_version'], 1);
     });
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/custom_rule.dart';
@@ -158,10 +160,16 @@ void main() {
       expect(back.varsValues, {'outbound': 'vpn-1'});
     });
 
-    test('json: текст как есть', () {
+    test('json: inline + verbatim, объект — в body, тело то же после круга',
+        () {
       final r = CustomRuleJson(name: 'raw', json: '{"outbound":"x"}');
-      final back = ruleFromRecord(ruleToRecord(r)).value! as CustomRuleJson;
-      expect(back.json, '{"outbound":"x"}');
+      final rec = ruleToRecord(r);
+      expect(rec['kind'], 'inline');
+      expect(rec['verbatim'], isTrue);
+      expect(rec['body'], {'outbound': 'x'});
+      final back = ruleFromRecord(rec).value! as CustomRuleJson;
+      expect(jsonDecode(back.json), {'outbound': 'x'});
+      expect(ruleToRecord(back), rec);
     });
   });
 

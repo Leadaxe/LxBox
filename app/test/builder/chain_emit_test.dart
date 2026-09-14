@@ -371,7 +371,6 @@ UserServer _source(List<String> tags) {
     tagPrefix: '',
     detourPolicy: DetourPolicy.defaults,
     origin: UserSource.paste,
-    createdAt: DateTime.fromMillisecondsSinceEpoch(0),
     nodes: nodes,
   );
 }

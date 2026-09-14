@@ -1,8 +1,16 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
+import 'package:lxbox/services/storage_migration/legacy_form_v0.dart';
+
+/// Правило через запись хранения и обратно — путь `SettingsStorage`.
+CustomRule _storageRoundTrip(CustomRule r) =>
+    ruleFromRecord(ruleToRecord(r), unknownAsVerbatim: true).value!;
 
 void main() {
   group('applyCustomRules — inline', () {
@@ -325,7 +333,9 @@ void main() {
     });
   });
 
-  group('CustomRule JSON round-trip', () {
+  // §439 — хранение правил: запись `rules[]` кодеком (путь `SettingsStorage`
+  // читает с `unknownAsVerbatim`).
+  group('CustomRule: запись rules[] round-trip', () {
     test('inline со всеми полями', () {
       final src = CustomRuleInline(
         id: 'id-x',
@@ -338,7 +348,7 @@ void main() {
         network: ['tcp', 'udp'],
         outbound: kOutboundReject,
       );
-      final back = CustomRule.fromJson(src.toJson());
+      final back = _storageRoundTrip(src);
       expect(back, isA<CustomRuleInline>());
       final inline = back as CustomRuleInline;
       expect(inline.id, 'id-x');
@@ -358,14 +368,14 @@ void main() {
         srsUrl: 'https://example.com/rules.srs',
         outbound: 'vpn-1',
       );
-      final back = CustomRule.fromJson(src.toJson());
+      final back = _storageRoundTrip(src);
       expect(back, isA<CustomRuleSrs>());
       final srs = back as CustomRuleSrs;
       expect(srs.srsUrl, 'https://example.com/rules.srs');
     });
 
-    test('legacy target field → outbound', () {
-      final back = CustomRule.fromJson({
+    test('форма 2.23.2: legacy target field → outbound', () {
+      final back = readLegacyCustomRule({
         'id': 'legacy-1',
         'name': 'Legacy',
         'enabled': true,
@@ -748,7 +758,7 @@ void main() {
       expect(rule.containsKey('inbound'), isFalse);
     });
 
-    test('JSON round-trip + backward-compat', () {
+    test('запись rules[] round-trip + форма 2.23.2 без новых ключей', () {
       final r = CustomRuleInline(
         id: 'id-1',
         name: 'r',
@@ -756,17 +766,17 @@ void main() {
         sourceIpIsPrivate: true,
         inbounds: ['mixed-in'],
       );
-      final json = r.toJson();
-      expect(json['sourceIpCidrs'], ['10.0.0.0/8']);
-      expect(json['sourceIpIsPrivate'], true);
-      expect(json['inbounds'], ['mixed-in']);
-      final restored = CustomRule.fromJson(json) as CustomRuleInline;
+      final body = ruleToRecord(r)['body'] as Map<String, dynamic>;
+      expect(body['source_ip_cidr'], ['10.0.0.0/8']);
+      expect(body['source_ip_is_private'], true);
+      expect(body['inbound'], ['mixed-in']);
+      final restored = _storageRoundTrip(r) as CustomRuleInline;
       expect(restored.sourceIpCidrs, ['10.0.0.0/8']);
       expect(restored.sourceIpIsPrivate, isTrue);
       expect(restored.inbounds, ['mixed-in']);
 
       // Старый JSON без новых ключей → пустые/false.
-      final legacy = CustomRule.fromJson({
+      final legacy = readLegacyCustomRule({
         'kind': 'inline',
         'name': 'Legacy',
         'domains': ['ya.ru'],
@@ -775,51 +785,52 @@ void main() {
       expect(legacy.sourceIpIsPrivate, isFalse);
       expect(legacy.inbounds, isEmpty);
 
-      // toJson не пишет пустые.
-      final emptyJson = legacy.toJson();
-      expect(emptyJson.containsKey('sourceIpCidrs'), isFalse);
-      expect(emptyJson.containsKey('sourceIpIsPrivate'), isFalse);
-      expect(emptyJson.containsKey('inbounds'), isFalse);
+      // Запись не пишет пустые.
+      final emptyBody = ruleToRecord(legacy)['body'] as Map<String, dynamic>;
+      expect(emptyBody.containsKey('source_ip_cidr'), isFalse);
+      expect(emptyBody.containsKey('source_ip_is_private'), isFalse);
+      expect(emptyBody.containsKey('inbound'), isFalse);
     });
   });
 
-  // §051 — JSON round-trip для wifi-полей.
-  group('§051 wifi JSON round-trip', () {
-    test('inline: toJson skip empty, fromJson restores', () {
+  // §051 — round-trip записи rules[] для wifi-полей.
+  group('§051 wifi: запись rules[] round-trip', () {
+    test('inline: запись пишет wifi_ssid/wifi_bssid, чтение восстанавливает', () {
       final r = CustomRuleInline(
         id: 'id-1',
         name: 'Home',
         wifiSsids: ['lexRouter'],
         wifiBssids: ['38:2c:4a:cf:6d:5c'],
       );
-      final json = r.toJson();
-      expect(json['wifiSsids'], ['lexRouter']);
-      expect(json['wifiBssids'], ['38:2c:4a:cf:6d:5c']);
+      final body = ruleToRecord(r)['body'] as Map<String, dynamic>;
+      expect(body['wifi_ssid'], ['lexRouter']);
+      expect(body['wifi_bssid'], ['38:2c:4a:cf:6d:5c']);
 
-      final restored =
-          CustomRule.fromJson(json) as CustomRuleInline;
+      final restored = _storageRoundTrip(r) as CustomRuleInline;
       expect(restored.wifiSsids, ['lexRouter']);
       expect(restored.wifiBssids, ['38:2c:4a:cf:6d:5c']);
     });
 
-    test('inline: empty wifi-поля не пишутся в JSON', () {
+    test('inline: empty wifi-поля не пишутся в запись', () {
       final r = CustomRuleInline(name: 'No wifi', domains: ['ya.ru']);
-      final json = r.toJson();
-      expect(json.containsKey('wifiSsids'), isFalse);
-      expect(json.containsKey('wifiBssids'), isFalse);
+      final body = ruleToRecord(r)['body'] as Map<String, dynamic>;
+      expect(body.containsKey('wifi_ssid'), isFalse);
+      expect(body.containsKey('wifi_bssid'), isFalse);
     });
 
     test('inline: BSSID lower-case на read-side (model tolerant)', () {
-      final r = CustomRule.fromJson({
+      final r = ruleFromRecord({
         'kind': 'inline',
         'name': 'X',
-        'wifiBssids': ['38:2C:4A:CF:6D:5C', 'AA:BB:CC:DD:EE:FF'],
-      }) as CustomRuleInline;
+        'body': {
+          'wifi_bssid': ['38:2C:4A:CF:6D:5C', 'AA:BB:CC:DD:EE:FF'],
+        },
+      }, unknownAsVerbatim: true).value! as CustomRuleInline;
       expect(r.wifiBssids, ['38:2c:4a:cf:6d:5c', 'aa:bb:cc:dd:ee:ff']);
     });
 
-    test('inline: backward-compat — старый JSON без wifi-полей', () {
-      final r = CustomRule.fromJson({
+    test('inline: backward-compat — форма 2.23.2 без wifi-полей', () {
+      final r = readLegacyCustomRule({
         'kind': 'inline',
         'name': 'Legacy',
         'domains': ['ya.ru'],
@@ -837,8 +848,7 @@ void main() {
         wifiSsids: ['Office'],
         wifiBssids: ['11:22:33:44:55:66'],
       );
-      final restored =
-          CustomRule.fromJson(r.toJson()) as CustomRuleSrs;
+      final restored = _storageRoundTrip(r) as CustomRuleSrs;
       expect(restored.wifiSsids, ['Office']);
       expect(restored.wifiBssids, ['11:22:33:44:55:66']);
     });
@@ -979,15 +989,21 @@ void main() {
       expect(reg.getRules(), isEmpty);
     });
 
-    test('round-trip toJson/fromJson сохраняет тело', () {
+    test('round-trip записи rules[] сохраняет тело (verbatim)', () {
       final r = CustomRuleJson(
         id: 'j-1',
         name: 'RT',
         json: '{"action":"hijack-dns"}',
       );
-      final restored = CustomRule.fromJson(r.toJson());
+      final record = ruleToRecord(r);
+      expect(record['kind'], 'inline');
+      expect(record['verbatim'], isTrue);
+      expect(record['body'], {'action': 'hijack-dns'});
+      final restored = _storageRoundTrip(r);
       expect(restored, isA<CustomRuleJson>());
-      expect((restored as CustomRuleJson).json, '{"action":"hijack-dns"}');
+      // Текст переформатируется, тело то же.
+      expect(jsonDecode((restored as CustomRuleJson).json),
+          {'action': 'hijack-dns'});
       expect(restored.kind, CustomRuleKind.json);
     });
   });
@@ -1152,8 +1168,7 @@ void main() {
           clientSubnet: '10.0.0.0/8',
         ),
       );
-      final restored =
-          CustomRule.fromJson(r.toJson()) as CustomRuleInline;
+      final restored = _storageRoundTrip(r) as CustomRuleInline;
       final rr = restored.resolve!;
       expect(rr.only, isTrue);
       expect(rr.strategy, 'ipv4_only');
@@ -1165,7 +1180,7 @@ void main() {
       expect(rr.clientSubnet, '10.0.0.0/8');
 
       // Старая запись без resolve.
-      final legacy = CustomRule.fromJson({
+      final legacy = readLegacyCustomRule({
         'name': 'Old',
         'kind': 'inline',
         'domainSuffixes': ['ru'],

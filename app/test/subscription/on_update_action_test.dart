@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/services/storage_migration/legacy_form_v0.dart';
 
 /// §323 — реакция подписки на авто-обновление: персист поля, агрегация
 /// действий за проход апдейтера и гейт «состав не изменился» в
@@ -26,11 +28,11 @@ SubscriptionServers _sub({
 
 void main() {
   group('§323 модель: onUpdateAction персистится', () {
-    test('дефолт — rebuild, ключ в JSON не пишется', () {
-      final json = _sub().toJson();
+    test('дефолт — rebuild, ключ в записи не пишется', () {
+      final json = sourceToRecord(_sub());
       expect(json.containsKey('on_update_action'), isFalse,
           reason: 'дефолт не должен раздувать JSON');
-      final back = ServerList.fromJson(json) as SubscriptionServers;
+      final back = sourceFromRecord(json).value! as SubscriptionServers;
       expect(back.onUpdateAction, SubscriptionOnUpdateAction.rebuild);
     });
 
@@ -39,9 +41,9 @@ void main() {
         SubscriptionOnUpdateAction.reload,
         SubscriptionOnUpdateAction.none,
       ]) {
-        final json = _sub(action: a).toJson();
+        final json = sourceToRecord(_sub(action: a));
         expect(json['on_update_action'], a.name);
-        final back = ServerList.fromJson(json) as SubscriptionServers;
+        final back = sourceFromRecord(json).value! as SubscriptionServers;
         expect(back.onUpdateAction, a, reason: '$a потерялся на round-trip');
       }
     });
@@ -60,7 +62,7 @@ void main() {
       }
     });
 
-    test('старая запись без ключа читается как rebuild (миграции нет)', () {
+    test('запись формы 2.23.2 без ключа читается как rebuild', () {
       final legacy = <String, dynamic>{
         'type': 'subscription',
         'id': 'old',
@@ -70,7 +72,7 @@ void main() {
         'detour_policy': const <String, dynamic>{},
         'url': 'https://example.com/x',
       };
-      final back = ServerList.fromJson(legacy) as SubscriptionServers;
+      final back = readLegacyServerList(legacy) as SubscriptionServers;
       expect(back.onUpdateAction, SubscriptionOnUpdateAction.rebuild);
     });
   });

@@ -7,6 +7,11 @@ import 'package:lxbox/services/rule_transfer.dart';
 
 /// §396 — экспорт/импорт правил файлом: конверт, парс, санация ссылок,
 /// вставка (имя/num). Схема wire-формата — в спеке §396 §3.
+/// Элемент `rules[]` файла правил `format: 1` — ровно то, что пишет экспорт.
+Map<String, dynamic> _fileEntry(CustomRule r) =>
+    ((jsonDecode(buildRulesExport([r])) as Map)['rules'] as List).single
+        as Map<String, dynamic>;
+
 void main() {
   // Шаблон получателя: один пресет с remote rule_set (block-ads, num 960)
   // и один чисто-inline (private-ip, num 950) — хватает для preset-веток.
@@ -112,8 +117,8 @@ void main() {
       final imported = s.rule!;
       // Эквивалентность полей — id намеренно ДРУГОЙ (перегенерация).
       expect(imported.id, isNot(rule.id));
-      final a = imported.toJson()..remove('id');
-      final b = rule.toJson()..remove('id');
+      final a = _fileEntry(imported)..remove('id');
+      final b = _fileEntry(rule)..remove('id');
       expect(a, b);
     });
   });
@@ -144,7 +149,7 @@ void main() {
     test('§398 — любой preset неимпортируем (и знакомый, и чужой)', () {
       for (final pid in ['block-ads', 'private-ip', 'from-the-future']) {
         final s = sanitize(
-            CustomRulePreset(name: 'P', presetId: pid).toJson());
+            _fileEntry(CustomRulePreset(name: 'P', presetId: pid)));
         expect(s.importable, isFalse, reason: pid);
         expect(s.rejectReason, ImportRuleRejectReason.presetNotTransferable,
             reason: pid);
@@ -153,7 +158,7 @@ void main() {
 
     test('§398 — правило с занятым именем неимпортируемо', () {
       final s = sanitizeImportedRule(
-        CustomRuleInline(name: 'My Rule', domains: ['a.com']).toJson(),
+        _fileEntry(CustomRuleInline(name: 'My Rule', domains: ['a.com'])),
         directionTags: directionTags,
         dnsServerTags: dnsTags,
         template: template,
@@ -166,11 +171,11 @@ void main() {
 
   group('санация: outbound', () {
     test('висячий тег → vpn-1 + выключение + warning', () {
-      final s = sanitize(CustomRuleInline(
+      final s = sanitize(_fileEntry(CustomRuleInline(
         name: 'R',
         domains: ['a.com'],
         outbound: 'vpn-9',
-      ).toJson());
+      )));
       final rule = s.rule!;
       expect(rule.outbound, kImportOutboundFallback);
       expect(rule.enabled, isFalse);
@@ -182,8 +187,7 @@ void main() {
     test('спец-теги и существующее Направление — без лечения', () {
       for (final ob in ['reject', 'block', 'direct-out', 'vpn-2']) {
         final s = sanitize(
-            CustomRuleInline(name: 'R', outbound: ob, domains: ['a.com'])
-                .toJson());
+            _fileEntry(CustomRuleInline(name: 'R', outbound: ob, domains: ['a.com'])));
         expect(s.warnings, isEmpty, reason: ob);
         expect(s.rule!.outbound, ob);
         expect(s.rule!.enabled, isTrue, reason: ob);
@@ -192,8 +196,7 @@ void main() {
 
     test('json-правило: пустой outbound не лечится', () {
       final s = sanitize(
-          CustomRuleJson(name: 'J', json: '{"outbound":"direct-out"}')
-              .toJson());
+          _fileEntry(CustomRuleJson(name: 'J', json: '{"outbound":"direct-out"}')));
       expect(s.importable, isTrue);
       expect(s.warnings, isEmpty);
       expect(s.rule!.enabled, isTrue);
@@ -202,12 +205,12 @@ void main() {
 
   group('санация: dns / resolve', () {
     test('висячий dns.serverTag → опция выключена, forceIpv4 выжил', () {
-      final s = sanitize(CustomRuleInline(
+      final s = sanitize(_fileEntry(CustomRuleInline(
         name: 'R',
         domains: ['a.com'],
         dns: const RuleDns(
             enabled: true, serverTag: 'my-doh', forceIpv4: true),
-      ).toJson());
+      )));
       final dns = s.rule!.dns!;
       expect(dns.enabled, isFalse);
       expect(dns.serverTag, '');
@@ -218,22 +221,22 @@ void main() {
     });
 
     test('известный dns.serverTag — без лечения', () {
-      final s = sanitize(CustomRuleInline(
+      final s = sanitize(_fileEntry(CustomRuleInline(
         name: 'R',
         domains: ['a.com'],
         dns: const RuleDns(enabled: true, serverTag: 'dns-cf'),
-      ).toJson());
+      )));
       expect(s.warnings, isEmpty);
       expect(s.rule!.dns!.serverTag, 'dns-cf');
       expect(s.rule!.dns!.enabled, isTrue);
     });
 
     test('висячий resolve.serverTag → auto', () {
-      final s = sanitize(CustomRuleInline(
+      final s = sanitize(_fileEntry(CustomRuleInline(
         name: 'R',
         domains: ['a.com'],
         resolve: const RuleResolve(serverTag: 'my-doh', strategy: 'ipv4_only'),
-      ).toJson());
+      )));
       final resolve = s.rule!.resolve!;
       expect(resolve.serverTag, '');
       expect(resolve.strategy, 'ipv4_only'); // остальное не тронуто
@@ -244,11 +247,11 @@ void main() {
 
   group('санация: srs', () {
     test('srs-правило приезжает выключенным даже если в файле включено', () {
-      final s = sanitize(CustomRuleSrs(
+      final s = sanitize(_fileEntry(CustomRuleSrs(
         name: 'S',
         enabled: true,
         srsUrl: 'https://example.com/x.srs',
-      ).toJson());
+      )));
       expect(s.rule!.enabled, isFalse);
       expect(s.needsSrsDownload, isTrue);
       expect(s.warnings, isEmpty); // штатное поведение, не warning
@@ -259,7 +262,7 @@ void main() {
   group('вставка: имя и num', () {
     test('чужой num из файла не переносится — правило садится в свою зону', () {
       final target = <CustomRule>[];
-      final raw = CustomRuleInline(name: 'A', domains: ['a.com']).toJson()
+      final raw = _fileEntry(CustomRuleInline(name: 'A', domains: ['a.com']))
         ..['num'] = 5; // чужая ось
       final s = sanitize(raw);
       final inserted = insertImportedRule(target, s.rule!, template: template);
@@ -272,12 +275,12 @@ void main() {
       final target = <CustomRule>[];
       final a = insertImportedRule(
           target,
-          sanitize(CustomRuleInline(name: 'A', domains: ['a.com']).toJson())
+          sanitize(_fileEntry(CustomRuleInline(name: 'A', domains: ['a.com'])))
               .rule!,
           template: template);
       final b = insertImportedRule(
           target,
-          sanitize(CustomRuleInline(name: 'B', domains: ['b.com']).toJson())
+          sanitize(_fileEntry(CustomRuleInline(name: 'B', domains: ['b.com'])))
               .rule!,
           template: template);
       expect(a.orderNum, kUserRuleNumStart);
@@ -287,7 +290,7 @@ void main() {
     test('§398 — имя при вставке не мутируется (суффиксов больше нет)', () {
       final target = <CustomRule>[];
       final s =
-          sanitize(CustomRuleInline(name: 'My Rule', domains: ['a.com']).toJson());
+          sanitize(_fileEntry(CustomRuleInline(name: 'My Rule', domains: ['a.com'])));
       final inserted = insertImportedRule(target, s.rule!, template: template);
       expect(inserted.name, 'My Rule');
     });

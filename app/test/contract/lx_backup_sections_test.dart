@@ -43,7 +43,6 @@ void main() {
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
           origin: UserSource.manual,
-          createdAt: DateTime.utc(2026, 9, 14),
           rawBody: '{"type":"tailscale","tag":"home-ts","auth_key":"k"}',
           sections: sections,
         );

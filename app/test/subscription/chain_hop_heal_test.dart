@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/controllers/subscription_controller.dart';
+import 'package:lxbox/models/codec/chain_record.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
@@ -61,7 +63,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: const DetourPolicy(),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         rawBody: nodeRaw(nodeName),
       );
 
@@ -73,10 +74,10 @@ void main() {
     List<Direction> directions = const [Direction(tag: 'vpn-1', label: 'Main')],
   }) async {
     await File(mainPath()).writeAsString(jsonEncode({
+      'storage_version': 1,
       'directions_migrated': true,
       'directions': [for (final d in directions) d.toJson()],
-      'server_lists': lists,
-      'chains': [for (final c in chains) c.toJson()],
+      'sources': [...lists, for (final c in chains) chainToRecord(c)],
     }));
     SettingsStorage.resetCacheForTesting();
   }
@@ -90,7 +91,7 @@ void main() {
 
   test('одиночный сервер удалён → позиция ушла, цепочка осталась', () async {
     await seed(
-      lists: [solo('u1', 'alpha').toJson(), solo('u2', 'beta').toJson()],
+      lists: [sourceToRecord(solo('u1', 'alpha')), sourceToRecord(solo('u2', 'beta'))],
       chains: const [
         SourceChain(tag: 'route', hops: ['alpha', 'beta', 'vpn-1']),
       ],
@@ -119,7 +120,7 @@ void main() {
       url: 'https://example.com/sub',
     );
     await seed(
-      lists: [sub.toJson()],
+      lists: [sourceToRecord(sub)],
       chains: const [
         SourceChain(tag: 'route', hops: ['RU n1', 'vpn-1', 'direct-out']),
       ],
@@ -148,7 +149,7 @@ void main() {
       ],
     );
     await seed(
-      lists: [folder.toJson()],
+      lists: [sourceToRecord(folder)],
       chains: const [
         SourceChain(tag: 'route', hops: ['m1', 'vpn-1', 'direct-out']),
       ],
@@ -175,7 +176,7 @@ void main() {
       ],
     );
     await seed(
-      lists: [folder.toJson()],
+      lists: [sourceToRecord(folder)],
       chains: const [
         SourceChain(tag: 'route', hops: ['m1', 'vpn-1']),
       ],
@@ -201,7 +202,7 @@ void main() {
       ],
     );
     await seed(
-      lists: [folder.toJson()],
+      lists: [sourceToRecord(folder)],
       chains: const [
         SourceChain(tag: 'route', hops: ['m1', 'm2', 'vpn-1']),
       ],
@@ -216,7 +217,7 @@ void main() {
 
   test('Направление удалено → его позиция уходит, цепочка живёт', () async {
     await seed(
-      lists: [solo('u1', 'alpha').toJson()],
+      lists: [sourceToRecord(solo('u1', 'alpha'))],
       chains: const [
         SourceChain(tag: 'route', hops: ['alpha', 'vpn-2', 'vpn-1']),
       ],
@@ -237,7 +238,7 @@ void main() {
   test('цепочка-позиция: удаление A вычищает A из B, B живёт (рекурсия)',
       () async {
     await seed(
-      lists: [solo('u1', 'alpha').toJson()],
+      lists: [sourceToRecord(solo('u1', 'alpha'))],
       chains: const [
         SourceChain(tag: 'A', hops: ['alpha', 'vpn-1']),
         SourceChain(tag: 'B', hops: ['A', 'alpha', 'vpn-1']),
@@ -256,7 +257,7 @@ void main() {
 
   test('2-хоповая после heal остаётся в storage, но не эмитится', () async {
     await seed(
-      lists: [solo('u1', 'alpha').toJson(), solo('u2', 'beta').toJson()],
+      lists: [sourceToRecord(solo('u1', 'alpha')), sourceToRecord(solo('u2', 'beta'))],
       chains: const [
         SourceChain(tag: 'short', hops: ['alpha', 'beta']),
       ],
@@ -274,7 +275,7 @@ void main() {
 
   test('3-хоповая после heal эмитится УКОРОЧЕННОЙ + счётчик', () async {
     await seed(
-      lists: [solo('u1', 'alpha').toJson(), solo('u2', 'beta').toJson()],
+      lists: [sourceToRecord(solo('u1', 'alpha')), sourceToRecord(solo('u2', 'beta'))],
       chains: const [
         SourceChain(tag: 'long', hops: ['alpha', 'beta', 'vpn-1']),
       ],
@@ -305,7 +306,7 @@ void main() {
     await seed(
       lists: [
         {
-          ...sub.toJson(),
+          ...sourceToRecord(sub),
           'nodes': [
             {'tag': 'gone', 'type': 'vless', 'raw': nodeRaw('gone')},
           ],

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
@@ -24,6 +25,10 @@ class _FakePathProvider extends PathProviderPlatform
   @override
   Future<String?> getApplicationDocumentsPath() async => '$tempRoot/docs';
 }
+
+/// Папка через запись `sources[]` и обратно — путь хранения (§439).
+FolderServers _storageRoundTrip(FolderServers f) =>
+    sourceFromRecord(sourceToRecord(f)).value! as FolderServers;
 
 /// §234 — папки серверов: модель (members ↔ nodes), операции контроллера
 /// (состав, перенос, вынос, снапшот по URL) и сборка конфига.
@@ -53,7 +58,7 @@ void main() {
   });
 
   group('§234 FolderServers model', () {
-    test('JSON round-trip: members, enabled-флаги, created_at', () {
+    test('запись sources[] round-trip: members, enabled-флаги, created_at', () {
       final original = FolderServers(
         id: 'f-1',
         name: 'Proton',
@@ -67,10 +72,13 @@ void main() {
         ],
       );
 
-      final j = original.toJson();
-      expect(j['type'], 'folder');
+      final j = sourceToRecord(original);
+      expect(j['kind'], 'folder');
+      expect((j['nodes'] as List).map((n) => (n as Map)['tag']),
+          ['Alpha', 'Beta']);
 
-      final rt = ServerList.fromJson(j) as FolderServers;
+      final rt = _storageRoundTrip(original);
+      expect(rt, original);
       expect(rt.id, 'f-1');
       expect(rt.name, 'Proton');
       expect(rt.tagPrefix, 'pr-');
@@ -93,8 +101,8 @@ void main() {
         pingUrl: 'https://1.1.1.1/cdn-cgi/trace',
         pingTimeoutMs: 3000,
       );
-      // backup-инвариант: поля переживают toJson→fromJson.
-      final rt = ServerList.fromJson(f.toJson()) as FolderServers;
+      // backup-инвариант: поля переживают запись хранения.
+      final rt = _storageRoundTrip(f);
       expect(rt.pingUrl, 'https://1.1.1.1/cdn-cgi/trace');
       expect(rt.pingTimeoutMs, 3000);
 
@@ -107,7 +115,7 @@ void main() {
       final cleared = f.copyWith(clearPing: true);
       expect(cleared.pingUrl, isNull);
       expect(cleared.pingTimeoutMs, isNull);
-      expect(cleared.toJson().containsKey('ping_url'), isFalse);
+      expect(sourceToRecord(cleared).containsKey('ping_url'), isFalse);
 
       // Папка без ping-полей → null (берётся глобальное).
       final plain = FolderServers(
@@ -118,8 +126,7 @@ void main() {
         detourPolicy: DetourPolicy.defaults,
       );
       expect(plain.pingUrl, isNull);
-      expect((ServerList.fromJson(plain.toJson()) as FolderServers).pingUrl,
-          isNull);
+      expect(_storageRoundTrip(plain).pingUrl, isNull);
     });
 
     test('nodes = только включённые члены (builder-контракт)', () {
@@ -151,7 +158,9 @@ void main() {
       expect(folder.members.single.node, isNull);
       expect(folder.nodes, isEmpty);
 
-      final rt = ServerList.fromJson(folder.toJson()) as FolderServers;
+      final record = sourceToRecord(folder);
+      expect(((record['nodes'] as List).single as Map)['kind'], 'unsupported');
+      final rt = _storageRoundTrip(folder);
       expect(rt.members.single.raw, 'garbage-not-a-config');
       expect(rt.members.single.node, isNull);
     });
@@ -494,7 +503,6 @@ void main() {
             tagPrefix: '',
             detourPolicy: DetourPolicy.defaults,
             origin: UserSource.manual,
-            createdAt: DateTime.now(),
             nodes: [
               parseUri(
                   'vless://ju@$host:443?type=ws&security=tls#$tag')!,
@@ -563,7 +571,6 @@ void main() {
             tagPrefix: '',
             detourPolicy: DetourPolicy.defaults,
             origin: UserSource.manual,
-            createdAt: DateTime.now(),
             nodes: [
               parseUri('vless://ju@$host:443?type=ws&security=tls#$tag')!,
             ],

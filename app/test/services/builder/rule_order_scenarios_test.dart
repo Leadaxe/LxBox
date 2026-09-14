@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/builder/rule_order.dart';
@@ -231,8 +232,10 @@ void main() {
       final expected = _axis(rules);
 
       // Сохранили → загрузили.
-      final json = [for (final r in rules) r.toJson()];
-      final loaded = [for (final j in json) CustomRule.fromJson(j)];
+      final json = [for (final r in rules) ruleToRecord(r)];
+      final loaded = [
+        for (final j in json) ruleFromRecord(j, unknownAsVerbatim: true).value!,
+      ];
 
       expect(_axis(sortRulesByNum(loaded)), expected);
       // И повторная нормализация после загрузки ничего не ломает.

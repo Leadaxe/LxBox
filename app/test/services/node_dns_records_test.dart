@@ -74,7 +74,6 @@ void main() {
         tagPrefix: prefix,
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.manual,
-        createdAt: DateTime.utc(2026, 9, 14),
         rawBody: node.toUri(),
         sections: sections,
         nodes: withNodes ? [node] : const [],

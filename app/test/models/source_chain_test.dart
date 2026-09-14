@@ -1,17 +1,26 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/chain_record.dart';
 import 'package:lxbox/models/source_chain.dart';
 
 // §393 C1 — модель источника-цепочки (SPEC 110), канон
 // `contract/schema/source_chain.schema.json`.
 
+/// Цепочка через запись `sources[]` и JSON-текст файла — путь хранения (§439).
+SourceChain _roundTrip(SourceChain c) => chainFromRecord(
+        (jsonDecode(jsonEncode(chainToRecord(c))) as Map).cast<String, dynamic>())
+    .value!;
+
+Map<String, dynamic> _body(SourceChain c) =>
+    chainToRecord(c)['body'] as Map<String, dynamic>;
+
 void main() {
-  group('SourceChain round-trip', () {
+  group('SourceChain: запись sources[] round-trip', () {
     test('минимальная цепочка: hops переживают запись и чтение В ПОРЯДКЕ ПАКЕТА',
         () {
       const c = SourceChain(tag: 'via-de', hops: ['home-vps', 'de-exit']);
-      final back = SourceChain.fromJson(jsonDecode(jsonEncode(c.toJson())));
+      final back = _roundTrip(c);
       // Порядок — смысл записи: перевернув его, получим работающий, но
       // другой маршрут (SPEC 110 T3).
       expect(back.hops, ['home-vps', 'de-exit']);
@@ -31,7 +40,8 @@ void main() {
           'vless': {'flow': 'xtls-rprx-vision'},
         },
       );
-      final back = SourceChain.fromJson(jsonDecode(jsonEncode(c.toJson())));
+      final back = _roundTrip(c);
+      expect(back, c);
       expect(back.idleTimeout, '10m');
       expect(back.stripEvasion, isFalse);
       expect(back.strip, {kChainStripTlsFragment: false, kChainStripTlsUtls: true});
@@ -52,7 +62,7 @@ void main() {
           'vless': {'flow': null},
         },
       );
-      final back = SourceChain.fromJson(jsonDecode(jsonEncode(c.toJson())));
+      final back = _roundTrip(c);
       expect((back.rewrite['vless'] as Map).containsKey('flow'), isTrue);
       expect((back.rewrite['vless'] as Map)['flow'], isNull);
     });
@@ -62,31 +72,47 @@ void main() {
       // Схлопнув их в bool, мы потеряли бы выбор пользователя при смене
       // дефолта ядра.
       const unset = SourceChain(tag: 'c', hops: ['a', 'b']);
-      expect(unset.toJson().containsKey('strip_evasion'), isFalse);
+      expect(_body(unset).containsKey('strip_evasion'), isFalse);
       expect(unset.stripEvasion, isNull);
       expect(unset.stripEvasionEnabled, isTrue);
 
       const off = SourceChain(tag: 'c', hops: ['a', 'b'], stripEvasion: false);
-      expect(off.toJson()['strip_evasion'], isFalse);
+      expect(_body(off)['strip_evasion'], isFalse);
       expect(off.stripEvasionEnabled, isFalse);
-      expect(SourceChain.fromJson(off.toJson()).stripEvasion, isFalse);
+      expect(_roundTrip(off).stripEvasion, isFalse);
+      expect(_roundTrip(unset).stripEvasion, isNull);
     });
 
-    test('пустые каталоги ключей в JSON не создают', () {
+    test('пустые каталоги ключей в записи не создают', () {
       const c = SourceChain(tag: 'c', hops: ['a', 'b']);
-      final j = c.toJson();
+      final j = _body(c);
       expect(j.containsKey('strip'), isFalse);
       expect(j.containsKey('rewrite'), isFalse);
       expect(j.containsKey('idle_timeout'), isFalse);
     });
 
     test('чтение терпимо к мусору: не-строки в hops и чужие ключи strip', () {
-      final back = SourceChain.fromJson({
+      final notes = <String>[];
+      final read = chainFromRecord({
+        'kind': 'chain',
         'tag': 'c',
-        'hops': ['a', 42, null, 'b'],
-        'strip': {'tls.utls': true, 'nonsense': true, 'tls.fragment': 'yes'},
-      });
+        'hops': [
+          {'tag': 'a'},
+          42,
+          null,
+          'b',
+        ],
+        'body': {
+          'type': 'chain',
+          'strip': {'tls.utls': true, 'nonsense': true, 'tls.fragment': 'yes'},
+        },
+      }, notes: notes);
+      final back = read.value!;
+      // Строка — корневая ссылка формы до 1.0; не ссылка — отброс с отметкой.
       expect(back.hops, ['a', 'b']);
+      expect(notes, hasLength(2));
+      expect(read.unknownKeys,
+          ['body.strip.nonsense', 'body.strip.tls.fragment']);
       // Неизвестный ключ отсеян на чтении — ядро на нём не стартует.
       expect(back.strip, {kChainStripTlsUtls: true});
     });

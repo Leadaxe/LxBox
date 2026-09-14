@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/codec/rule_record.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -58,26 +60,26 @@ void main() {
         const Direction(tag: 'vpn-1', label: 'Main').toJson(),
         Direction(tag: 'vpn-3', label: 'Relay', isDetour: vpn3Detour).toJson(),
       ],
-      'server_lists': [
-        UserServer(
+      'storage_version': 1,
+      'sources': [
+        sourceToRecord(UserServer(
           id: 'u1',
           name: 'Solo',
           enabled: true,
           tagPrefix: '',
           detourPolicy: const DetourPolicy(overrideDetour: 'vpn-3'),
           origin: UserSource.paste,
-          createdAt: DateTime.now(),
           rawBody: memberRaw('solo-node'),
-        ).toJson(),
-        SubscriptionServers(
+        )),
+        sourceToRecord(SubscriptionServers(
           id: 's1',
           name: 'Sub',
           enabled: true,
           tagPrefix: '',
           detourPolicy: const DetourPolicy(overrideDetour: 'vpn-3-auto'),
           url: 'https://example.com/sub',
-        ).toJson(),
-        FolderServers(
+        )),
+        sourceToRecord(FolderServers(
           id: 'f1',
           name: 'Folder',
           enabled: true,
@@ -87,10 +89,10 @@ void main() {
             FolderMember(raw: memberRaw('node-a'), detour: 'vpn-3'),
             FolderMember(raw: memberRaw('node-b')),
           ],
-        ).toJson(),
+        )),
         // Папка-омоним: член с bare-тегом 'vpn-3' → ссылки 'vpn-3' внутри
         // НЕЁ означают ЧЛЕНА (приоритет bareIndex FolderDetourPlan).
-        FolderServers(
+        sourceToRecord(FolderServers(
           id: 'f2',
           name: 'Homonym',
           enabled: true,
@@ -100,7 +102,7 @@ void main() {
             FolderMember(raw: memberRaw('vpn-3')),
             FolderMember(raw: memberRaw('node-c'), detour: 'vpn-3'),
           ],
-        ).toJson(),
+        )),
       ],
     };
     await File(mainPath()).writeAsString(jsonEncode(data));
@@ -176,20 +178,20 @@ void main() {
           const Direction(tag: 'vpn-3', label: 'Aux').toJson(),
         ],
         'route_final': routeFinal,
-        'custom_rules': [
-          CustomRuleInline(
-                  name: 'r1', domains: const ['x.com'], outbound: 'vpn-3')
-              .toJson(),
-          CustomRulePreset(
+        'storage_version': 1,
+        'rules': [
+          ruleToRecord(CustomRuleInline(
+                  name: 'r1', domains: const ['x.com'], outbound: 'vpn-3')),
+          ruleToRecord(CustomRulePreset(
             name: 'Block Ads',
             presetId: 'block-ads',
             varsValues: const {'outbound': 'vpn-3'},
-          ).toJson(),
-          CustomRuleSrs(
+          )),
+          ruleToRecord(CustomRuleSrs(
             name: 'GeoIP RU',
             srsUrl: 'https://example.com/geoip-ru.srs',
             outbound: 'vpn-3',
-          ).toJson(),
+          )),
         ],
       };
       await File(mainPath()).writeAsString(jsonEncode(data));

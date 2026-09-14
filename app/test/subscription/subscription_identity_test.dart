@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/subscription/subscription_identity.dart';
 
@@ -141,8 +142,20 @@ void main() {
     });
   });
 
-  group('§289 SubscriptionIdentityOverride JSON round-trip', () {
-    test('полный слепок → JSON → слепок', () {
+  group('§289 SubscriptionIdentityOverride: round-trip записи подписки', () {
+    SubscriptionIdentityOverride roundTrip(SubscriptionIdentityOverride o) =>
+        (sourceFromRecord(sourceToRecord(SubscriptionServers(
+          id: 's',
+          name: 'S',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          url: 'https://e.com/sub',
+          identity: o,
+        ))).value! as SubscriptionServers)
+            .identity!;
+
+    test('полный слепок → запись → слепок', () {
       const o = SubscriptionIdentityOverride(
         userAgent: 'UA',
         sendHwid: true,
@@ -151,7 +164,8 @@ void main() {
         verOs: '14',
         deviceModel: 'Pixel',
       );
-      final r = SubscriptionIdentityOverride.fromJson(o.toJson());
+      final r = roundTrip(o);
+      expect(r, o);
       expect(r.userAgent, 'UA');
       expect(r.sendHwid, isTrue);
       expect(r.hwid, 'HW');
@@ -166,7 +180,7 @@ void main() {
       expect(j.containsKey('user_agent'), isFalse);
       expect(j.containsKey('hwid'), isFalse);
       expect(j['send_hwid'], isFalse);
-      final r = SubscriptionIdentityOverride.fromJson(j);
+      final r = roundTrip(o);
       expect(r.userAgent, '');
       expect(r.hwid, '');
       expect(r.sendHwid, isFalse);

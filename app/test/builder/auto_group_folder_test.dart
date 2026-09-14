@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/auto_select.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/emit_context.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -211,7 +212,18 @@ void main() {
       final m = FolderMember(raw: auto.toUri());
       expect(m.node, isA<AutoSelectSpec>());
 
-      final back = FolderMember.fromJson(m.toJson());
+      final folder = FolderServers(
+        id: 'f1',
+        name: 'F',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        members: [m],
+      );
+      final back =
+          (sourceFromRecord(sourceToRecord(folder)).value! as FolderServers)
+              .members
+              .single;
       final n = back.node;
       expect(n, isA<AutoSelectSpec>());
       expect(n!.label, 'Мой авто');

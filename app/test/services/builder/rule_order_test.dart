@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/builder/rule_order.dart';
@@ -291,18 +292,18 @@ void main() {
     });
   });
 
-  group('JSON round-trip (§370 num в storage)', () {
-    test('orderNum переживает toJson/fromJson', () {
+  group('запись rules[] round-trip (§370 num в storage)', () {
+    test('orderNum переживает запись и чтение', () {
       final r = _inline('a')..orderNum = 1042;
 
-      final back = CustomRule.fromJson(r.toJson());
+      final back = ruleFromRecord(ruleToRecord(r)).value!;
 
       expect(back.orderNum, 1042);
-      expect(r.toJson()['num'], 1042, reason: 'ключ в JSON — `num`');
+      expect(ruleToRecord(r)['num'], 1042, reason: 'ключ в записи — `num`');
     });
 
     test('неразмеченное правило не пишет ключ num', () {
-      expect(_inline('a').toJson().containsKey('num'), isFalse);
+      expect(ruleToRecord(_inline('a')).containsKey('num'), isFalse);
     });
 
     test('copyWith сохраняет orderNum', () {

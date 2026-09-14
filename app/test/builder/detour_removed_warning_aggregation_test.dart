@@ -45,7 +45,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy(overrideDetour: target),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [
           for (var i = 1; i <= count; i++)
             parseUri('vless://u$i@h$i.com:443?type=ws&security=tls#Node-$i')!,

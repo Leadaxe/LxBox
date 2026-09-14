@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/chain_record.dart';
+import 'package:lxbox/models/codec/rule_record.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/node_sections.dart';
@@ -170,7 +173,6 @@ _State _source() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults.copyWith(overrideDetour: 'EU de-1'),
         origin: UserSource.manual,
-        createdAt: created,
         rawBody:
             'vless://11111111-1111-1111-1111-111111111111@example-3.com:443?type=tcp&security=tls&sni=example-3.com#root-jp',
         sections: _sections('@{self} network'),
@@ -182,7 +184,6 @@ _State _source() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: created,
         rawBody: _compact({
           'type': 'trojan',
           'tag': 'json-node',
@@ -336,9 +337,9 @@ Object? _snapshot(_State s) {
   }
 
   return strip(jsonDecode(jsonEncode({
-    'lists': [for (final l in s.lists) l.toJson()],
-    'chains': [for (final c in s.chains) c.toJson()],
-    'rules': [for (final r in s.rules) r.toJson()],
+    'lists': [for (final l in s.lists) sourceToRecord(l)],
+    'chains': [for (final c in s.chains) chainToRecord(c)],
+    'rules': [for (final r in s.rules) ruleToRecord(r)],
     'dns_servers': s.dnsServers,
     'dns_rules': s.dnsRules,
     'dns_final': s.dnsFinal,

@@ -79,59 +79,72 @@ void main() {
           reason: 'новые поля видны по умолчанию');
     });
 
-    // §439 A3 — источники читаются моделями репозитория из записи хранения
-    // (`raw_body`, `members`), секрет гасится в модели: счётчик встаёт на
-    // место поля, битая запись в дамп не попадает.
+    // §439 — источники читаются моделями репозитория из записей `sources[]`,
+    // секрет гасится по пути записи на том же месте: `url` — маской,
+    // `origin.raw` — длиной, `nodes[]` папки — счётчиком. Цепочки идут хвостом,
+    // битая запись в дамп не попадает.
     test(
-        'server_lists: URL маскируется, raw_body → raw_body_bytes, '
-        'members → members_count, битая запись пропускается', () {
+        'sources: URL маскируется, origin.raw → origin.raw_bytes, '
+        'nodes → nodes_count, цепочки хвостом, битая запись пропускается', () {
       final cache = {
-        'server_lists': [
+        'storage_version': 1,
+        'sources': [
           {
-            'type': 'subscription',
+            'kind': 'subscription',
             'id': 's1',
             'name': 'Sub',
             'url': 'https://prov/sub/token',
           },
           {
-            'type': 'user',
-            'id': 'u1',
-            'name': 'Mine',
-            'origin': 'manual',
-            'created_at': '2026-01-01T00:00:00.000',
-            'raw_body': 'vless://uuid@host:443#tag',
+            'kind': 'chain',
+            'tag': 'chain-1',
+            'hops': [
+              {'tag': 'a'},
+              {'tag': 'b'},
+            ],
           },
           {
-            'type': 'folder',
+            'kind': 'server',
+            'id': 'u1',
+            'origin': {'kind': 'uri', 'raw': 'vless://uuid@host:443#tag'},
+          },
+          {
+            'kind': 'folder',
             'id': 'f1',
             'name': 'Folder',
             'created_at': '2026-01-01T00:00:00.000',
-            'members': [
-              {'raw': 'vless://m1-secret@a:443#a', 'enabled': true},
-              {'raw': 'vless://m2-secret@b:443#b', 'enabled': false},
+            'nodes': [
+              {
+                'kind': 'server',
+                'origin': {'kind': 'uri', 'raw': 'vless://m1-secret@a:443#a'},
+              },
+              {
+                'kind': 'server',
+                'enabled': false,
+                'origin': {'kind': 'uri', 'raw': 'vless://m2-secret@b:443#b'},
+              },
             ],
           },
-          {'id': 'broken', 'url': 'https://prov/sub/broken-token'},
+          {'kind': 'subscription', 'url': 'https://prov/sub/broken-token'},
         ],
       };
       final out = serializeStorageCache(cache);
-      final lists = (out['server_lists'] as List).cast<Map>();
-      expect([for (final l in lists) l['id']], ['s1', 'u1', 'f1']);
+      final lists = (out['sources'] as List).cast<Map>();
+      expect([for (final l in lists) l['id'] ?? l['tag']],
+          ['s1', 'u1', 'f1', 'chain-1']);
 
       expect(lists[0]['url'], 'https://prov/***');
 
-      expect(lists[1]['raw_body_bytes'], 25);
-      expect(lists[1].containsKey('raw_body'), isFalse);
-      final userKeys = lists[1].keys.toList();
-      expect(userKeys.last, 'raw_body_bytes',
-          reason: 'счётчик на месте raw_body');
+      expect(lists[1]['origin'], {'kind': 'uri', 'raw_bytes': 25});
 
-      expect(lists[2]['members_count'], 2);
-      expect(lists[2].containsKey('members'), isFalse);
+      expect(lists[2]['nodes_count'], 2);
+      expect(lists[2].containsKey('nodes'), isFalse);
       final folderKeys = lists[2].keys.toList();
-      expect(folderKeys.indexOf('members_count'),
+      expect(folderKeys.indexOf('nodes_count'),
           folderKeys.indexOf('created_at') + 1,
-          reason: 'счётчик на месте members');
+          reason: 'счётчик на месте nodes');
+
+      expect(lists[3]['kind'], 'chain');
 
       final dump = jsonEncode(out);
       for (final secret in [

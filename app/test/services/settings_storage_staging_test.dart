@@ -120,7 +120,10 @@ void main() {
       // §159 — хардкод-очистка «мёртвых» ключей в _save() удалена. Уже лежащий
       // на диске мусор безвреден (никем не читается) и переживает обычный save;
       // чистится только allowlist'ом на ВХОДЕ (replaceRaw), см. backup-тесты.
+      // Файл текущей формы: мёртвые ключи файла 2.23.2 удаляет миграция
+      // хранения §439 при чтении, это другой путь.
       await File(mainPath()).writeAsString(jsonEncode({
+        'storage_version': 1,
         'vars': {'auto_rebuild': 'false', 'alpha': '1'},
       }));
       expect(await SettingsStorage.getVar('alpha', 'def'), '1');

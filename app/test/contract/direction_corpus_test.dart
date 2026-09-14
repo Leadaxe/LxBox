@@ -401,7 +401,6 @@ UserServer _sourceFor(List<String> nodeTags, Set<String> groupTags) {
     tagPrefix: '',
     detourPolicy: DetourPolicy.defaults,
     origin: UserSource.paste,
-    createdAt: DateTime.fromMillisecondsSinceEpoch(0),
     nodes: nodes,
   );
 }

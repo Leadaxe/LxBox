@@ -56,7 +56,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: policy,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [
           for (final n in names)
             parseUri('vless://u-$id@h-$id.com:443?type=ws&security=tls#$n')!,

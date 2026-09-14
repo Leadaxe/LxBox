@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
@@ -54,9 +55,9 @@ void main() {
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-3',
-      'custom_rules': [
-        CustomRuleInline(name: 'r1', domains: const ['x.com'], outbound: 'vpn-3')
-            .toJson(),
+      'storage_version': 1,
+      'rules': [
+        ruleToRecord(CustomRuleInline(name: 'r1', domains: const ['x.com'], outbound: 'vpn-3')),
       ],
     };
     await File(mainPath()).writeAsString(jsonEncode(data));
@@ -127,9 +128,9 @@ void main() {
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
-      'custom_rules': [
-        CustomRuleInline(name: 'r1', domains: const ['x.com'], outbound: 'vpn-1')
-            .toJson(),
+      'storage_version': 1,
+      'rules': [
+        ruleToRecord(CustomRuleInline(name: 'r1', domains: const ['x.com'], outbound: 'vpn-1')),
       ],
     };
     await File(mainPath()).writeAsString(jsonEncode(data));
@@ -158,12 +159,13 @@ void main() {
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
-      'custom_rules': [
-        CustomRulePreset(
+      'storage_version': 1,
+      'rules': [
+        ruleToRecord(CustomRulePreset(
           name: 'Block Ads',
           presetId: 'block-ads',
           varsValues: const {'outbound': 'vpn-3', 'ruleset': 'ads-all'},
-        ).toJson(),
+        )),
       ],
     };
     await File(mainPath()).writeAsString(jsonEncode(data));
@@ -207,12 +209,13 @@ void main() {
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
-      'custom_rules': [
-        CustomRulePreset(
+      'storage_version': 1,
+      'rules': [
+        ruleToRecord(CustomRulePreset(
           name: 'Block Ads',
           presetId: 'block-ads',
           varsValues: const {'ruleset': 'ads-all'},
-        ).toJson(),
+        )),
       ],
     };
     await File(mainPath()).writeAsString(jsonEncode(data));
@@ -373,6 +376,7 @@ void main() {
       bool migrated = true,
     }) async {
       final data = <String, dynamic>{
+        'storage_version': 1,
         if (migrated) 'directions_migrated': true,
         'directions': [
           for (final t in directions)

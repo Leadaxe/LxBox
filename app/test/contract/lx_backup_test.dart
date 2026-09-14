@@ -1306,7 +1306,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.manual,
-        createdAt: DateTime.utc(2026),
         rawBody: 'vless://11111111-1111-1111-1111-111111111111@example-1.com:443',
       );
       final raw = (await buildLxBackup(
@@ -1338,7 +1337,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.utc(2026),
         rawBody: '{"type":"vless","server":"example-1.com"}',
       );
       final raw = (await buildLxBackup(

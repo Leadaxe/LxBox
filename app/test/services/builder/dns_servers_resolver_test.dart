@@ -192,7 +192,8 @@ void main() {
         'enabled': true,
       };
       File('${tmp.path}/lxbox_settings.json').writeAsStringSync(jsonEncode({
-        'dns_options': {
+        'storage_version': 1,
+        'dns': {
           'servers': [legacy],
         },
       }));
@@ -205,10 +206,10 @@ void main() {
       expect(result,
           [const DnsServerTemplate(enabled: true, tag: 'google_udp')]);
       final raw = await SettingsStorage.exportRaw();
-      final servers = (raw['dns_options'] as Map)['servers'] as List;
+      final servers = (raw['dns'] as Map)['servers'] as List;
       expect(servers, [
         legacy,
-        {'enabled': true, 'kind': 'template', 'tag': 'google_udp'},
+        {'kind': 'template', 'tag': 'google_udp', 'enabled': true},
       ]);
     });
 

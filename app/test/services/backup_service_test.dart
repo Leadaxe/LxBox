@@ -33,9 +33,10 @@ void main() {
     if (tmp.existsSync()) await tmp.delete(recursive: true);
   });
 
-  /// Полный snapshot который имитирует «реальное» состояние юзера: vars +
-  /// custom_rules + tun_apps + server_lists + dns_options.
+  /// Полный snapshot который имитирует «реальное» состояние юзера в форме
+  /// хранения §439: vars + rules + tun_apps + sources + dns.
   Map<String, dynamic> sampleSnapshot() => {
+        'storage_version': 1,
         'vars': {
           'log_level': 'info',
           'auto_update_subs': 'true',
@@ -46,26 +47,30 @@ void main() {
           'debug_token': 'secret-token-xyz',
           'debug_port': '9269',
         },
-        'custom_rules': [
+        'rules': [
           {
+            'kind': 'inline',
             'id': 'rule-1',
             'name': 'Ru Apps',
             'enabled': true,
-            'kind': 'inline',
-            'packages': ['ru.tinkoff.investing', 'com.vkontakte.android'],
-            'outbound': 'vpn-2',
+            'body': {
+              'package_name': ['ru.tinkoff.investing', 'com.vkontakte.android'],
+              'outbound': 'vpn-2',
+            },
           },
         ],
         'tun_apps': {
           'mode': 'allow',
           'packages': ['com.example.app'],
         },
-        'server_lists': [
+        'sources': [
           {
+            'kind': 'subscription',
             'id': 'src-1',
-            'type': 'subscription',
             'name': 'My subs',
+            'enabled': true,
             'url': 'https://example.com/sub',
+            'update': {'interval_hours': 24},
           },
         ],
         'route_final': 'vpn-1',
@@ -76,9 +81,14 @@ void main() {
         ],
         'directions_migrated': true,
         'enabled_groups': ['group-a'],
-        'dns_options': {
+        'dns': {
           'servers': [
-            {'tag': 'cloudflare', 'type': 'udp', 'server': '1.1.1.1'}
+            {
+              'kind': 'user',
+              'tag': 'cloudflare',
+              'enabled': true,
+              'body': {'type': 'udp', 'server': '1.1.1.1'},
+            },
           ],
         },
       };
@@ -92,7 +102,7 @@ void main() {
     await seedStorage(snap);
     final raw = await SettingsStorage.exportRaw();
     expect(raw['vars'], isA<Map<String, dynamic>>());
-    expect((raw['custom_rules'] as List).length, 1);
+    expect((raw['rules'] as List).length, 1);
     // Mutating returned map должно не аффектить storage (deep clone).
     raw['vars']['log_level'] = 'debug';
     final fresh = await SettingsStorage.exportRaw();
@@ -170,7 +180,8 @@ void main() {
       expect(parsed['storage'], isA<Map>());
       expect(parsed.containsKey('vpn_settings'), isFalse);
       final st = parsed['storage'] as Map<String, dynamic>;
-      expect(st['custom_rules'], isA<List>());
+      expect(st['rules'], isA<List>());
+      expect(st['storage_version'], 1);
       expect(st['tun_apps'], isA<Map>());
       expect(st['vars']['debug_token'], 'secret-token-xyz');
     });
@@ -202,8 +213,10 @@ void main() {
           as Map<String, dynamic>;
       expect(vars.keys.toSet(),
           {'debug_enabled', 'debug_token', 'debug_port'});
-      expect((parsed['storage'] as Map).containsKey('custom_rules'), isFalse);
-      expect((parsed['storage'] as Map).containsKey('server_lists'), isFalse);
+      expect((parsed['storage'] as Map).containsKey('rules'), isFalse);
+      expect((parsed['storage'] as Map).containsKey('sources'), isFalse);
+      expect((parsed['storage'] as Map)['storage_version'], 1,
+          reason: 'признак формы едет при любом наборе категорий');
     });
 
     test('only routing — top-level routing keys + no vars', () async {
@@ -213,12 +226,13 @@ void main() {
           await svc.buildExport(include: {BackupCategory.routing});
       final parsed = jsonDecode(json) as Map<String, dynamic>;
       final st = parsed['storage'] as Map<String, dynamic>;
-      expect(st.containsKey('custom_rules'), isTrue);
+      expect(st.containsKey('rules'), isTrue);
       expect(st.containsKey('tun_apps'), isTrue);
       expect(st.containsKey('route_final'), isTrue);
       expect(st.containsKey('enabled_groups'), isTrue);
-      expect(st.containsKey('dns_options'), isTrue);
-      expect(st.containsKey('server_lists'), isFalse);
+      expect(st.containsKey('dns'), isTrue);
+      // Источники — категория Server lists: в routing едут только цепочки.
+      expect((st['sources'] as List? ?? const []), isEmpty);
       expect(st.containsKey('vars'), isFalse);
     });
 
@@ -250,17 +264,18 @@ void main() {
       for (final k in SettingsStorage.allowedTopLevelKeys) {
         snap[k] = switch (k) {
           'vars' => {'log_level': 'info'},
-          'server_lists' => [
-              {'id': 's', 'type': 'subscription', 'name': 'n', 'url': 'http://x'}
+          'storage_version' => 1,
+          'sources' => [
+              {'kind': 'subscription', 'id': 's', 'name': 'n', 'url': 'http://x'},
+              {'kind': 'chain', 'tag': 'c', 'hops': []},
             ],
-          'dns_options' || 'tun_apps' || 'vpn_mode' || 'ping_options' ||
+          'dns' || 'tun_apps' || 'vpn_mode' || 'ping_options' ||
           'warp_account' || 'masque_account' =>
             {'_probe': 1},
-          'directions' || 'channels' || 'custom_rules' ||
-          'node_manual_order' || 'enabled_groups' || 'excluded_nodes' =>
+          'directions' || 'rules' || 'node_manual_order' || 'enabled_groups' =>
             ['_probe'],
-          'directions_migrated' || 'channels_migrated' || 'presets_migrated' ||
-          'preset_ids_remapped' || 'interrupt_connections_on_switch' =>
+          'directions_migrated' || 'presets_migrated' ||
+          'interrupt_connections_on_switch' =>
             true,
           _ => '_probe', // строковые: route_final, node_sort_mode, ...
         };
@@ -277,8 +292,8 @@ void main() {
       final st = (jsonDecode(json) as Map<String, dynamic>)['storage']
           as Map<String, dynamic>;
       // §393 A2 — легаси-пары `channels`/`channels_migrated` в allowlist НЕТ:
-      // границы импорта нормализуют имена до `replaceRaw`
-      // (normalizeLegacyDirectionKeys), симметрия §221 полная.
+      // их переименовывает миграция формы хранения до allowlist'а (§439),
+      // симметрия §221 полная.
       final missing = SettingsStorage.allowedTopLevelKeys
           .where((k) => !st.containsKey(k))
           .toList();
@@ -409,16 +424,17 @@ void main() {
 
     // Compare key fields.
     final restored = await SettingsStorage.exportRaw();
-    expect(restored['custom_rules'], original['custom_rules']);
+    expect(restored['rules'], original['rules']);
     expect(restored['tun_apps'], original['tun_apps']);
     expect(restored['route_final'], original['route_final']);
     expect(restored['enabled_groups'], original['enabled_groups']);
-    expect(restored['dns_options'], original['dns_options']);
+    expect(restored['dns'], original['dns']);
+    expect(restored['storage_version'], 1);
     expect((restored['vars'] as Map)['log_level'], 'info');
     expect((restored['vars'] as Map)['debug_token'], 'secret-token-xyz');
     expect((restored['vars'] as Map)['wifi_history'],
         original['vars']['wifi_history']);
-    expect((restored['server_lists'] as List).length, 1);
+    expect(restored['sources'], original['sources']);
   });
 
   test('§248 — detour-роль Направления переживает backup round-trip', () async {
@@ -565,23 +581,39 @@ void main() {
 
     test('legacy top-level ключи отбрасываются (миграции удалены §159)',
         () async {
-      final dropped = await SettingsStorage.replaceRaw({
-        'vars': {'log_level': 'info'},
-        'proxy_sources': [{'url': 'x'}],
-        'app_rules': [{'packages': ['a']}],
-        'enabled_rules': ['r1'],
-        'rule_outbounds': {'r1': 'vpn-1'},
-        'node_overrides': {'x': 1},
-      });
-      expect(
-          dropped,
-          containsAll([
-            'proxy_sources',
-            'app_rules',
-            'enabled_rules',
-            'rule_outbounds',
-            'node_overrides',
-          ]));
+      const deadKeys = [
+        'proxy_sources',
+        'app_rules',
+        'enabled_rules',
+        'rule_outbounds',
+        'node_overrides',
+      ];
+      Map<String, dynamic> snapshot() => {
+            'vars': {'log_level': 'info'},
+            'proxy_sources': [
+              {'url': 'x'}
+            ],
+            'app_rules': [
+              {
+                'packages': ['a']
+              }
+            ],
+            'enabled_rules': ['r1'],
+            'rule_outbounds': {'r1': 'vpn-1'},
+            'node_overrides': {'x': 1},
+          };
+      // Снимок без storage_version — форма 2.23.2: мёртвые ключи удаляет
+      // миграция формы (§439 §1.1) ещё до allowlist'а.
+      final droppedLegacy = await SettingsStorage.replaceRaw(snapshot());
+      expect(droppedLegacy, isEmpty);
+      for (final k in deadKeys) {
+        expect((await SettingsStorage.exportRaw()).containsKey(k), isFalse,
+            reason: '$k не должен попасть в storage');
+      }
+      // Те же ключи в документе текущей формы — отбрасывает allowlist.
+      final dropped = await SettingsStorage.replaceRaw(
+          {'storage_version': 1, ...snapshot()});
+      expect(dropped, containsAll(deadKeys));
       final raw = await SettingsStorage.exportRaw();
       for (final k in [
         'proxy_sources',
@@ -634,11 +666,11 @@ void main() {
 
   // ---------------------------------------------------------------------------
   // §393 A2 — restore старого архива. Внутренний бэкап старой сборки несёт
-  // легаси-пару `channels`/`channels_migrated`: имена нормализуются НА ГРАНИЦЕ
-  // импорта (normalizeLegacyDirectionKeys до `replaceRaw`) — легаси в storage
-  // не попадает, а merge-upsert коллидирует по одному имени `directions`, и
-  // архив честно побеждает живые данные (adversarial-ревью A2: раньше на
-  // merge-дефолте архив молча терялся).
+  // легаси-пару `channels`/`channels_migrated`: имена переименовывает миграция
+  // блока `storage` при разборе архива (§439, до `replaceRaw`) — легаси в
+  // storage не попадает, а merge-upsert коллидирует по одному имени
+  // `directions`, и архив честно побеждает живые данные (adversarial-ревью A2:
+  // раньше на merge-дефолте архив молча терялся).
   // ---------------------------------------------------------------------------
   group('§393 A2 restore→migrate', () {
     /// Архив, каким его писала сборка ДО переименования ключа.

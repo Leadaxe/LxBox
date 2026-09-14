@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/controllers/subscription_controller.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/settings_storage.dart';
@@ -54,7 +55,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy(overrideDetour: overrideDetour),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         rawBody: memberRaw('solo-node'),
       );
 
@@ -67,7 +67,8 @@ void main() {
           const Direction(tag: 'vpn-1', label: 'Main').toJson(),
           const Direction(tag: 'vpn-2', label: 'Relay', isDetour: true).toJson(),
         ],
-        'server_lists': [soloWithDetour('vpn-2').toJson()],
+        'storage_version': 1,
+        'sources': [sourceToRecord(soloWithDetour('vpn-2'))],
       };
       await File(mainPath()).writeAsString(jsonEncode(data));
       SettingsStorage.resetCacheForTesting();
@@ -91,12 +92,13 @@ void main() {
       c.syncDetourDirectionRefsCleared('vpn-2');
       expect(c.entries.single.list.detourPolicy.overrideDetour, '');
 
-      // (б) контроллерная мутация с _persist (rename) НЕ воскрешает
-      // 'vpn-2' на диске — иначе heal был бы показан юзеру, но отменён.
-      await c.renameAt(0, 'Solo Renamed');
+      // (б) контроллерная мутация с _persist (выключение; имя одиночного
+      // сервера записью §439 не хранится) НЕ воскрешает 'vpn-2' на диске —
+      // иначе heal был бы показан юзеру, но отменён.
+      await c.toggleAt(0);
       SettingsStorage.resetCacheForTesting(); // читаем реально с диска
       final saved = (await SettingsStorage.getServerLists()).single;
-      expect(saved.name, 'Solo Renamed');
+      expect(saved.enabled, isFalse);
       expect(saved.detourPolicy.overrideDetour, '',
           reason: '_persist после ресинка не должен воскрешать ссылку');
     });

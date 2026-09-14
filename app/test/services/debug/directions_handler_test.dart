@@ -426,7 +426,6 @@ void main() {
           tagPrefix: '',
           detourPolicy: const DetourPolicy(overrideDetour: 'vpn-2'),
           origin: UserSource.paste,
-          createdAt: DateTime.now(),
         ),
       ]);
 
@@ -569,7 +568,6 @@ void main() {
       tagPrefix: '',
       detourPolicy: DetourPolicy(overrideDetour: tag),
       origin: UserSource.paste,
-      createdAt: DateTime.now(),
       rawBody: 'vless://u-a@h.com:443?type=ws&security=tls#solo-node',
     );
 
@@ -632,10 +630,12 @@ void main() {
         );
 
         // Любая контроллерная мутация с _persist пишет entries на диск.
-        await c.renameAt(0, 'Solo Renamed');
+        // §439 — имя одиночного сервера записью не хранится, след записи —
+        // выключение.
+        await c.toggleAt(0);
         SettingsStorage.resetCacheForTesting(); // читаем реально с диска
         final saved = (await SettingsStorage.getServerLists()).single;
-        expect(saved.name, 'Solo Renamed');
+        expect(saved.enabled, isFalse);
         expect(
           saved.detourPolicy.overrideDetour,
           '',

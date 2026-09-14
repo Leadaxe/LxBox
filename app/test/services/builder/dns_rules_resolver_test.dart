@@ -41,9 +41,18 @@ void main() {
     if (tmp.existsSync()) await tmp.delete(recursive: true);
   });
 
-  // Сырые записи `dns_options.rules` в файл хранения — для форм, которые
-  // модель не выражает (репозиторий их не пишет).
+  // Сырые записи `dns.rules` в файл хранения формы 1.0 — для форм, которые
+  // кодек не читает (репозиторий их не пишет).
   void seedRawRules(List<Map<String, dynamic>> rules) {
+    File('${tmp.path}/lxbox_settings.json').writeAsStringSync(jsonEncode({
+      'storage_version': 1,
+      'dns': {'rules': rules},
+    }));
+  }
+
+  // Файл хранения формы 2.23.2 (`dns_options.rules`): его разбирает миграция
+  // в `_load` (§439).
+  void seedLegacyRules(List<Map<String, dynamic>> rules) {
     File('${tmp.path}/lxbox_settings.json').writeAsStringSync(jsonEncode({
       'dns_options': {'rules': rules},
     }));
@@ -51,7 +60,7 @@ void main() {
 
   Future<List<dynamic>> rawRules() async {
     final raw = await SettingsStorage.exportRaw();
-    return (raw['dns_options'] as Map)['rules'] as List;
+    return (raw['dns'] as Map)['rules'] as List;
   }
 
   group('resolveDnsRulesList (§061 + §033)', () {
@@ -177,7 +186,7 @@ void main() {
     });
   });
 
-  group('§033 legacy (no migration): наверх не отдаётся, в хранении остаётся', () {
+  group('§033 запись, которую кодек не читает: наверх не отдаётся, в хранении остаётся', () {
     test('legacy kind=user', () async {
       final legacy = {
         'enabled': true,
@@ -211,7 +220,7 @@ void main() {
           [const DnsRulePreset(presetId: 'ru-direct', enabled: true)]);
       expect(await rawRules(), [
         legacy,
-        {'kind': 'preset', 'presetId': 'ru-direct', 'enabled': true},
+        {'kind': 'preset', 'ref': 'ru-direct', 'enabled': true},
       ]);
     });
 
@@ -337,8 +346,8 @@ void main() {
 
     test(
         '§439 A1: inline без ключа enabled и srs формы §294 (server и условия '
-        'в body) эмитятся', () async {
-      seedRawRules([
+        'в body) из файла 2.23.2 эмитятся', () async {
+      seedLegacyRules([
         {
           'kind': 'inline',
           'name': 'Local',

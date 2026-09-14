@@ -55,7 +55,6 @@ void main() {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.paste,
-      createdAt: DateTime.now(),
       nodes: specs,
     );
   }
@@ -76,7 +75,6 @@ void main() {
       tagPrefix: base.tagPrefix,
       detourPolicy: base.detourPolicy,
       origin: UserSource.paste,
-      createdAt: DateTime.now(),
       nodes: [...base.nodes, auto],
     );
   }
@@ -817,7 +815,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: specs,
       );
       final r = await buildConfig(
@@ -853,7 +850,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: specs,
       );
       final r = await buildConfig(
@@ -957,7 +953,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: specs,
       );
       final r = await buildConfig(
