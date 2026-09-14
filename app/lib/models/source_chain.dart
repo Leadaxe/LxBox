@@ -16,6 +16,8 @@
 // самое, а смысл у него другой (позиции маршрута, не взаимозаменяемые опции).
 // В конфиг [hops] уходит именно под ключом `outbounds` — форма ядра неизменна.
 
+import 'package:collection/collection.dart';
+
 import '../services/json_clone.dart' show deepCloneJson;
 
 /// Значение поля `type` эмитируемого outbound'а. Ядро без тега сборки
@@ -257,6 +259,28 @@ class SourceChain {
           },
         if (rewrite.isNotEmpty) 'rewrite': deepCloneJson(rewrite),
       };
+
+  static const _eq = DeepCollectionEquality();
+
+  /// Равенство записи (§439): [order] — место цепочки в списке источников, а
+  /// не её значение (в записи 1.0 место — индекс в `sources[]`), поэтому в
+  /// сравнение не входит.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SourceChain &&
+          tag == other.tag &&
+          label == other.label &&
+          enabled == other.enabled &&
+          _eq.equals(hops, other.hops) &&
+          idleTimeout == other.idleTimeout &&
+          stripEvasion == other.stripEvasion &&
+          _eq.equals(strip, other.strip) &&
+          _eq.equals(rewrite, other.rewrite));
+
+  @override
+  int get hashCode => Object.hash(tag, label, enabled, _eq.hash(hops),
+      idleTimeout, stripEvasion, _eq.hash(strip), _eq.hash(rewrite));
 }
 
 /// §393 D2 — итог вычистки позиций: сколько ПОЗИЦИЙ снято и список цепочек

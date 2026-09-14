@@ -1,3 +1,5 @@
+import 'package:collection/collection.dart';
+
 import '../services/parser/body_decoder.dart';
 import '../services/parser/parse_all.dart';
 import '../services/tag_resolver.dart';
@@ -147,7 +149,32 @@ class SubscriptionIdentityOverride {
         verOs: verOs ?? this.verOs,
         deviceModel: deviceModel ?? this.deviceModel,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SubscriptionIdentityOverride &&
+          userAgent == other.userAgent &&
+          sendHwid == other.sendHwid &&
+          hwid == other.hwid &&
+          deviceOs == other.deviceOs &&
+          verOs == other.verOs &&
+          deviceModel == other.deviceModel);
+
+  @override
+  int get hashCode =>
+      Object.hash(userAgent, sendHwid, hwid, deviceOs, verOs, deviceModel);
 }
+
+const _eq = DeepCollectionEquality();
+
+/// §439 п. 10 — отметка выключенного узла в записи хранится unix seconds:
+/// равенство моделей сравнивает её с той же точностью (TTL-очистка от 24 ч
+/// разницы в долях секунды не видит).
+Map<String, int> _disabledSeconds(Map<String, DateTime> marks) => {
+      for (final e in marks.entries)
+        e.key: e.value.millisecondsSinceEpoch ~/ 1000,
+    };
 
 final class SubscriptionServers extends ServerList {
   final String url;
@@ -359,6 +386,54 @@ final class SubscriptionServers extends ServerList {
         onUpdateAction: onUpdateAction ?? this.onUpdateAction,
         nodes: nodes ?? this.nodes,
       );
+
+  /// Равенство записи (§439): `nodes` — кэш выдачи (`sub_cache/`), в
+  /// значение подписки не входит.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SubscriptionServers &&
+          id == other.id &&
+          name == other.name &&
+          enabled == other.enabled &&
+          tagPrefix == other.tagPrefix &&
+          detourPolicy == other.detourPolicy &&
+          url == other.url &&
+          meta == other.meta &&
+          lastUpdated == other.lastUpdated &&
+          lastUpdateAttempt == other.lastUpdateAttempt &&
+          lastUpdateStatus == other.lastUpdateStatus &&
+          updateIntervalHours == other.updateIntervalHours &&
+          lastNodeCount == other.lastNodeCount &&
+          consecutiveFails == other.consecutiveFails &&
+          _eq.equals(_disabledSeconds(disabledHashes),
+              _disabledSeconds(other.disabledHashes)) &&
+          identity == other.identity &&
+          _eq.equals(importRules, other.importRules) &&
+          importRulesEnabled == other.importRulesEnabled &&
+          onUpdateAction == other.onUpdateAction);
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        name,
+        enabled,
+        tagPrefix,
+        detourPolicy,
+        url,
+        meta,
+        lastUpdated,
+        lastUpdateAttempt,
+        lastUpdateStatus,
+        updateIntervalHours,
+        lastNodeCount,
+        consecutiveFails,
+        _eq.hash(_disabledSeconds(disabledHashes)),
+        identity,
+        _eq.hash(importRules),
+        importRulesEnabled,
+        onUpdateAction,
+      );
 }
 
 /// §219 — origin: write-only диагностические метаданные (пишутся в JSON /
@@ -371,7 +446,11 @@ final class SubscriptionServers extends ServerList {
 enum UserSource { paste, file, qr, manual }
 
 final class UserServer extends ServerList {
+  /// §219 — write-only диагностика. Записью 1.0 не хранится (§439: имя
+  /// `origin` занято контрактом): после чтения записи — умолчание `manual`.
   final UserSource origin;
+
+  /// Читателей нет; записью 1.0 не хранится (§439).
   final DateTime createdAt;
   final String rawBody; // оригинал paste'а для reparse в случае багов
 
@@ -388,12 +467,13 @@ final class UserServer extends ServerList {
     required super.enabled,
     required super.tagPrefix,
     required super.detourPolicy,
-    required this.origin,
-    required this.createdAt,
+    this.origin = UserSource.manual,
+    DateTime? createdAt,
     this.rawBody = '',
     NodeSections? sections,
     super.nodes,
-  }) : sections = (sections == null || sections.isEmpty) ? null : sections;
+  })  : createdAt = createdAt ?? DateTime.now(),
+        sections = (sections == null || sections.isEmpty) ? null : sections;
 
   @override
   String get type => 'user';
@@ -474,6 +554,24 @@ final class UserServer extends ServerList {
         sections: clearSections ? null : (sections ?? this.sections),
         nodes: nodes ?? this.nodes,
       );
+
+  /// Равенство записи (§439): `nodes` выводятся из [rawBody]; `name` (с §243
+  /// пуст), [origin] и [createdAt] записью 1.0 не хранятся и в значение
+  /// сервера не входят.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is UserServer &&
+          id == other.id &&
+          enabled == other.enabled &&
+          tagPrefix == other.tagPrefix &&
+          detourPolicy == other.detourPolicy &&
+          rawBody == other.rawBody &&
+          sections == other.sections);
+
+  @override
+  int get hashCode =>
+      Object.hash(id, enabled, tagPrefix, detourPolicy, rawBody, sections);
 }
 
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
@@ -544,6 +642,19 @@ final class FolderMember {
         // Смена raw → re-parse в конструкторе (node: null); иначе нода та же.
         node: raw == null ? node : null,
       );
+
+  /// Равенство записи (§439): [node] выводится из [raw].
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FolderMember &&
+          raw == other.raw &&
+          enabled == other.enabled &&
+          detour == other.detour &&
+          sections == other.sections);
+
+  @override
+  int get hashCode => Object.hash(raw, enabled, detour, sections);
 }
 
 /// §234 — папка ручных серверов: контейнер членов с общим toggle,
@@ -644,6 +755,25 @@ final class FolderServers extends ServerList {
         pingUrl: clearPing ? null : (pingUrl ?? this.pingUrl),
         pingTimeoutMs: clearPing ? null : (pingTimeoutMs ?? this.pingTimeoutMs),
       );
+
+  /// Равенство записи (§439): `nodes` выводятся из [members]; [createdAt]
+  /// записью 1.0 не хранится.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FolderServers &&
+          id == other.id &&
+          name == other.name &&
+          enabled == other.enabled &&
+          tagPrefix == other.tagPrefix &&
+          detourPolicy == other.detourPolicy &&
+          _eq.equals(members, other.members) &&
+          pingUrl == other.pingUrl &&
+          pingTimeoutMs == other.pingTimeoutMs);
+
+  @override
+  int get hashCode => Object.hash(id, name, enabled, tagPrefix, detourPolicy,
+      _eq.hash(members), pingUrl, pingTimeoutMs);
 }
 
 /// §248 — сброс detour-ссылок на Направление [tag] (или его auto-двойник

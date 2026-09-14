@@ -11,6 +11,8 @@
 /// `record_codec.dart`, будущий корневой парсер 1.0.
 library;
 
+import 'package:collection/collection.dart';
+
 import 'custom_rule.dart';
 import 'dns_ref.dart';
 import 'record_codec.dart';
@@ -236,6 +238,20 @@ final class NodeSections {
         dnsServers: dnsServers ?? this.dnsServers,
         dnsRules: dnsRules ?? this.dnsRules,
       );
+
+  static const _eq = ListEquality<Object>();
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is NodeSections &&
+          _eq.equals(rules, other.rules) &&
+          _eq.equals(dnsServers, other.dnsServers) &&
+          _eq.equals(dnsRules, other.dnsRules));
+
+  @override
+  int get hashCode =>
+      Object.hash(_eq.hash(rules), _eq.hash(dnsServers), _eq.hash(dnsRules));
 }
 
 /// Норма лаунчера (14.09.2026, B5): запись секции без `outbound` и без
