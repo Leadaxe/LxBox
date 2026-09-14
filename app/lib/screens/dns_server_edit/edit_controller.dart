@@ -721,7 +721,8 @@ void _stripRefLevelFields(Map<String, dynamic> body) {
     ..remove('_origin')
     ..remove('_kind')
     ..remove('_overrides')
-    ..remove('_preset_label');
+    ..remove('_preset_label')
+    ..remove('_preset_id');
 }
 
 /// §117 задача 4 — InheritedNotifier для раздачи controller'а вниз по tree

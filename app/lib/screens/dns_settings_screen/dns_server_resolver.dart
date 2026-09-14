@@ -38,6 +38,7 @@ List<ResolvedServer> resolveDisplayedServers(
     final Map<String, dynamic> body;
     ServerKind? overrides;
     String? presetLabel;
+    var presetId = '';
     String? canonicalDescription;
     var vars = const <WizardVar>[];
     var varValues = const <String, String>{};
@@ -51,6 +52,7 @@ List<ResolvedServer> resolveDisplayedServers(
           overrides = ServerKind.preset;
           final p = presetServersByTag[tag]!;
           presetLabel = p['_preset_label']?.toString();
+          presetId = p['_preset_id']?.toString() ?? '';
           canonicalDescription = p['description']?.toString();
         } else if (templateByTag.containsKey(tag)) {
           overrides = ServerKind.template;
@@ -60,8 +62,13 @@ List<ResolvedServer> resolveDisplayedServers(
         kind = ServerKind.preset;
         final p = presetServersByTag[tag];
         if (p == null) continue; // orphan
-        body = Map<String, dynamic>.from(p)..remove('_preset_label');
+        body = Map<String, dynamic>.from(p)
+          ..remove('_preset_label')
+          ..remove('_preset_id');
         presetLabel = p['_preset_label']?.toString();
+        presetId = ref.presetId.isNotEmpty
+            ? ref.presetId
+            : p['_preset_id']?.toString() ?? '';
         canonicalDescription = p['description']?.toString();
       case DnsServerTemplate():
         kind = ServerKind.template;
@@ -104,6 +111,7 @@ List<ResolvedServer> resolveDisplayedServers(
       body: body,
       overrides: overrides,
       presetLabel: presetLabel,
+      presetId: presetId,
       vars: vars,
       varValues: varValues,
       usedByRule: ruleRefsByTag[tag],
