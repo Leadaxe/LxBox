@@ -120,80 +120,195 @@ Future<DebugResponse> _update(
   final rules = await SettingsStorage.getCustomRules();
   final idx = rules.indexWhere((r) => r.id == id);
   if (idx < 0) throw NotFound('rule: $id');
-  // Патч через merge-в-JSON-then-fromJson: sealed-иерархия не позволяет
-  // переключать kind через `copyWith`, но JSON round-trip это делает
-  // естественно (spec §030, task 011).
-  final current = rules[idx].toJson();
-  final patched = <String, dynamic>{...current};
-  void setIfPresent(String key, dynamic v) {
-    if (v != null) patched[key] = v;
-  }
-
-  setIfPresent('name', fieldString(body, 'name'));
-  setIfPresent('enabled', fieldBool(body, 'enabled'));
-  final patchKind = _fieldKind(body, 'kind');
-  if (patchKind != null) patched['kind'] = patchKind.name;
-  setIfPresent('domains', fieldStringList(body, 'domains'));
-  setIfPresent('domainSuffixes', fieldStringList(body, 'domain_suffixes'));
-  setIfPresent('domainKeywords', fieldStringList(body, 'domain_keywords'));
-  setIfPresent('ipCidrs', fieldStringList(body, 'ip_cidrs'));
-  setIfPresent('ports', fieldStringList(body, 'ports'));
-  setIfPresent('portRanges', fieldStringList(body, 'port_ranges'));
-  setIfPresent('packages', fieldStringList(body, 'packages'));
-  setIfPresent('protocols', fieldStringList(body, 'protocols'));
-  // §240 — L4-транспорт (tcp/udp/icmp).
-  setIfPresent('network', fieldStringList(body, 'network'));
-  setIfPresent('ipIsPrivate', fieldBool(body, 'ip_is_private'));
-  // §030/new_fields — source-ось + inbound.
-  setIfPresent('sourceIpCidrs', fieldStringList(body, 'source_ip_cidrs'));
-  setIfPresent('sourceIpIsPrivate', fieldBool(body, 'source_ip_is_private'));
-  setIfPresent('inbounds', fieldStringList(body, 'inbounds'));
-  // §051 — wifi-условия. `wifi_ssids` остаётся as-is, `wifi_bssids`
-  // нормализуем lower-case на write-side для consistency.
-  setIfPresent('wifiSsids', fieldStringList(body, 'wifi_ssids'));
-  final patchBssids = fieldStringList(body, 'wifi_bssids');
-  if (patchBssids != null) {
-    patched['wifiBssids'] = _validateBssids(patchBssids);
-  }
-  // ## 12 — `srs_urls` (список) главнее `srs_url`; одиночный `srs_url`
-  // заменяет весь список одним набором (иначе фабрика прочла бы старый
-  // `srsUrls` из JSON и патч не сработал бы).
-  final srsUrls = fieldStringList(body, 'srs_urls');
-  final srsUrl = fieldString(body, 'srs_url');
-  if (srsUrls != null) {
-    patched['srsUrls'] = srsUrls;
-    patched['srsUrl'] = srsUrls.isEmpty ? '' : srsUrls.first;
-  } else if (srsUrl != null) {
-    patched['srsUrl'] = srsUrl;
-    patched['srsUrls'] = [srsUrl];
-  }
-  setIfPresent('outbound', fieldString(body, 'outbound'));
-  // Preset-kind поля (task 011 / spec §033).
-  setIfPresent('presetId', fieldString(body, 'preset_id'));
-  setIfPresent('varsValues', fieldStringMap(body, 'vars_values'));
-  // §117 задача 3 — DNS-опция. `"dns": null` явно очищает поле.
-  if (body.containsKey('dns')) {
-    if (body['dns'] == null) {
-      patched.remove('dns');
-    } else {
-      patched['dns'] = _fieldRuleDns(body, 'dns')!.toJson();
-    }
-  }
-  // §247 — resolve-опция. `"resolve": null` явно очищает поле.
-  if (body.containsKey('resolve')) {
-    if (body['resolve'] == null) {
-      patched.remove('resolve');
-    } else {
-      patched['resolve'] = _fieldRuleResolve(body, 'resolve')!.toJson();
-    }
-  }
-
-  final updated = CustomRule.fromJson(patched);
+  final updated = _patchRule(rules[idx], body);
   rules[idx] = updated;
   await SettingsStorage.saveCustomRules(rules);
   final extras = await maybeRebuild(req, ctx);
   final serialized = await serializeCustomRule(updated);
   return JsonResponse({...serialized, ...extras});
+}
+
+/// Патч правила телом `PATCH /rules/{id}` (snake_case, как у POST).
+///
+/// Отсутствующий ключ оставляет поле как есть; `"dns": null` и
+/// `"resolve": null` очищают опцию. Смена `kind` сначала переводит правило в
+/// новый вид ([_retype]), затем поля патчатся `copyWith` этого вида; поле,
+/// которого у вида нет (`preset_id` у inline, `srs_url` у preset), молча не
+/// применяется.
+///
+/// Поля читаются в прежнем порядке: при нескольких битых полях 400 называет
+/// то же поле.
+CustomRule _patchRule(CustomRule current, Map<String, dynamic> body) {
+  final name = fieldString(body, 'name');
+  final enabled = fieldBool(body, 'enabled');
+  final kind = _fieldKind(body, 'kind') ?? current.kind;
+  final domains = fieldStringList(body, 'domains');
+  final domainSuffixes = fieldStringList(body, 'domain_suffixes');
+  final domainKeywords = fieldStringList(body, 'domain_keywords');
+  final ipCidrs = fieldStringList(body, 'ip_cidrs');
+  final ports = fieldStringList(body, 'ports');
+  final portRanges = fieldStringList(body, 'port_ranges');
+  final packages = fieldStringList(body, 'packages');
+  final protocols = fieldStringList(body, 'protocols');
+  // §240 — L4-транспорт (tcp/udp/icmp).
+  final network = fieldStringList(body, 'network');
+  final ipIsPrivate = fieldBool(body, 'ip_is_private');
+  // §030/new_fields — source-ось + inbound.
+  final sourceIpCidrs = fieldStringList(body, 'source_ip_cidrs');
+  final sourceIpIsPrivate = fieldBool(body, 'source_ip_is_private');
+  final inbounds = fieldStringList(body, 'inbounds');
+  // §051 — wifi-условия. `wifi_ssids` остаётся as-is, `wifi_bssids`
+  // нормализуем lower-case на write-side для consistency.
+  final wifiSsids = fieldStringList(body, 'wifi_ssids');
+  final rawBssids = fieldStringList(body, 'wifi_bssids');
+  final wifiBssids = rawBssids == null ? null : _validateBssids(rawBssids);
+  // ## 12 — `srs_urls` (список) главнее `srs_url`; одиночный `srs_url`
+  // заменяет весь список одним набором.
+  final srsUrlList = fieldStringList(body, 'srs_urls');
+  final srsUrl = fieldString(body, 'srs_url');
+  final srsUrls = srsUrlList ?? (srsUrl == null ? null : [srsUrl]);
+  final outbound = fieldString(body, 'outbound');
+  // Preset-kind поля (task 011 / spec §033).
+  final presetId = fieldString(body, 'preset_id');
+  final varsValues = fieldStringMap(body, 'vars_values');
+  // §117 задача 3 — DNS-опция. `"dns": null` явно очищает поле.
+  final clearDns = body.containsKey('dns') && body['dns'] == null;
+  final dns = clearDns ? null : _fieldRuleDns(body, 'dns');
+  // §247 — resolve-опция. `"resolve": null` явно очищает поле.
+  final clearResolve = body.containsKey('resolve') && body['resolve'] == null;
+  final resolve = clearResolve ? null : _fieldRuleResolve(body, 'resolve');
+
+  return switch (_retype(current, kind)) {
+    final CustomRuleInline r => r.copyWith(
+        name: name,
+        enabled: enabled,
+        domains: domains,
+        domainSuffixes: domainSuffixes,
+        domainKeywords: domainKeywords,
+        ipCidrs: ipCidrs,
+        ports: ports,
+        portRanges: portRanges,
+        packages: packages,
+        protocols: protocols,
+        network: network,
+        ipIsPrivate: ipIsPrivate,
+        sourceIpCidrs: sourceIpCidrs,
+        sourceIpIsPrivate: sourceIpIsPrivate,
+        inbounds: inbounds,
+        wifiSsids: wifiSsids,
+        wifiBssids: wifiBssids,
+        outbound: outbound,
+        dns: dns,
+        clearDns: clearDns,
+        resolve: resolve,
+        clearResolve: clearResolve,
+      ),
+    final CustomRuleSrs r => r.copyWith(
+        name: name,
+        enabled: enabled,
+        srsUrls: srsUrls,
+        ports: ports,
+        portRanges: portRanges,
+        packages: packages,
+        protocols: protocols,
+        network: network,
+        ipIsPrivate: ipIsPrivate,
+        sourceIpCidrs: sourceIpCidrs,
+        sourceIpIsPrivate: sourceIpIsPrivate,
+        inbounds: inbounds,
+        wifiSsids: wifiSsids,
+        wifiBssids: wifiBssids,
+        outbound: outbound,
+        dns: dns,
+        clearDns: clearDns,
+        resolve: resolve,
+        clearResolve: clearResolve,
+      ),
+    final CustomRulePreset r => r.copyWith(
+        name: name,
+        enabled: enabled,
+        presetId: presetId,
+        varsValues: varsValues,
+      ),
+    final CustomRuleJson r => r.copyWith(name: name, enabled: enabled),
+  };
+}
+
+/// Правило вида [kind] с полями [r], которые этот вид умеет держать; прочее —
+/// дефолты вида. Тот же вид — [r] как есть.
+///
+/// У inline и srs общие доп-фильтры, `outbound`, `dns`, `resolve`; домены и
+/// `ip_cidr` есть только у inline, наборы `.srs` и TTL — только у srs. У
+/// preset и json своего `outbound` нет: из них правило уходит на direct-out.
+CustomRule _retype(CustomRule r, CustomRuleKind kind) {
+  if (r.kind == kind) return r;
+  final outbound = switch (r) {
+    CustomRuleInline(:final outbound) || CustomRuleSrs(:final outbound) =>
+      outbound,
+    _ => kDirectOutboundTag,
+  };
+  return switch (kind) {
+    CustomRuleKind.inline => CustomRuleInline(
+        id: r.id,
+        name: r.name,
+        enabled: r.enabled,
+        orderNum: r.orderNum,
+        domains: r.domains,
+        domainSuffixes: r.domainSuffixes,
+        domainKeywords: r.domainKeywords,
+        ipCidrs: r.ipCidrs,
+        ports: r.ports,
+        portRanges: r.portRanges,
+        packages: r.packages,
+        protocols: r.protocols,
+        network: r.network,
+        ipIsPrivate: r.ipIsPrivate,
+        sourceIpCidrs: r.sourceIpCidrs,
+        sourceIpIsPrivate: r.sourceIpIsPrivate,
+        inbounds: r.inbounds,
+        wifiSsids: r.wifiSsids,
+        wifiBssids: r.wifiBssids,
+        outbound: outbound,
+        dns: r.dns,
+        resolve: r.resolve,
+      ),
+    CustomRuleKind.srs => CustomRuleSrs(
+        id: r.id,
+        name: r.name,
+        enabled: r.enabled,
+        orderNum: r.orderNum,
+        srsUrls: r.srsUrls,
+        ports: r.ports,
+        portRanges: r.portRanges,
+        packages: r.packages,
+        protocols: r.protocols,
+        network: r.network,
+        ipIsPrivate: r.ipIsPrivate,
+        sourceIpCidrs: r.sourceIpCidrs,
+        sourceIpIsPrivate: r.sourceIpIsPrivate,
+        inbounds: r.inbounds,
+        wifiSsids: r.wifiSsids,
+        wifiBssids: r.wifiBssids,
+        outbound: outbound,
+        dns: r.dns,
+        resolve: r.resolve,
+      ),
+    CustomRuleKind.preset => CustomRulePreset(
+        id: r.id,
+        name: r.name,
+        enabled: r.enabled,
+        orderNum: r.orderNum,
+        presetId: r.presetId,
+        varsValues: r.varsValues,
+      ),
+    CustomRuleKind.json => CustomRuleJson(
+        id: r.id,
+        name: r.name,
+        enabled: r.enabled,
+        orderNum: r.orderNum,
+        json: r.json,
+      ),
+  };
 }
 
 Future<DebugResponse> _delete(
@@ -364,7 +479,6 @@ CustomRuleKind? _fieldKind(Map<String, dynamic> m, String key) {
 }
 
 /// Строгий парсинг для POST — отклоняет пустое `name`, wrong-types.
-/// Отличается от `CustomRule.fromJson` который лояльно приводит значения.
 /// Возвращает конкретный подкласс по `kind` (sealed dispatch).
 CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
   final name = fieldString(j, 'name') ?? '';
