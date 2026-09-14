@@ -1,0 +1,538 @@
+{
+  "log": {
+    "level": "trace",
+    "timestamp": true
+  },
+  "certificate": {
+    "store": "system"
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "local",
+        "tag": "local_dns_resolver"
+      },
+      {
+        "type": "udp",
+        "tag": "google_udp",
+        "server_port": 53,
+        "server": "8.8.8.8"
+      },
+      {
+        "type": "udp",
+        "tag": "cloudflare_udp",
+        "server_port": 53,
+        "server": "1.1.1.1"
+      },
+      {
+        "type": "https",
+        "tag": "google_doh",
+        "server_port": 443,
+        "path": "/dns-query",
+        "tls": {
+          "enabled": true,
+          "server_name": "dns.google"
+        },
+        "server": "8.8.8.8",
+        "detour": "vpn-1"
+      },
+      {
+        "type": "tls",
+        "tag": "cloudflare_dot",
+        "server_port": 853,
+        "server": "1.1.1.1",
+        "detour": "vpn-1"
+      },
+      {
+        "type": "tls",
+        "tag": "google_dot",
+        "server_port": 853,
+        "server": "8.8.8.8",
+        "detour": "vpn-1"
+      },
+      {
+        "type": "tls",
+        "tag": "safe_dns_dot",
+        "server_port": 853,
+        "server": "9.9.9.9",
+        "domain_resolver": "google_udp"
+      },
+      {
+        "type": "udp",
+        "server": "10.255.255.1",
+        "server_port": 53,
+        "tag": "dns_drop"
+      },
+      {
+        "type": "udp",
+        "tag": "opendns_udp",
+        "server_port": 53,
+        "server": "208.67.222.222"
+      },
+      {
+        "type": "https",
+        "tag": "quad9_doh",
+        "server_port": 443,
+        "server": "9.9.9.9",
+        "path": "/dns-query",
+        "tls": {
+          "enabled": true,
+          "server_name": "dns.quad9.net"
+        },
+        "detour": "vpn-1"
+      },
+      {
+        "type": "group",
+        "tag": "dns_shield",
+        "servers": [
+          "google_udp",
+          "cloudflare_udp",
+          "opendns_udp",
+          "google_doh",
+          "google_dot",
+          "cloudflare_dot",
+          "quad9_doh"
+        ],
+        "mode": "fastest",
+        "error_ttl": "5m",
+        "win_ttl": "5m"
+      },
+      {
+        "type": "udp",
+        "server": "xbox-dns.ru",
+        "domain_resolver": "google_udp",
+        "server_port": 53,
+        "tag": "xbox-dns"
+      },
+      {
+        "type": "quic",
+        "server": "dns.adguard-dns.com",
+        "domain_resolver": "google_udp",
+        "tag": "doq_411_test"
+      },
+      {
+        "type": "h3",
+        "server": "dns.adguard-dns.com",
+        "path": "/dns-query",
+        "domain_resolver": "google_udp",
+        "tag": "doh3_411_test"
+      }
+    ],
+    "rules": [
+      {
+        "domain_suffix": "ntc.party",
+        "query_type": "A",
+        "action": "predefined",
+        "answer": [
+          "ntc.party. IN A 130.255.77.28"
+        ]
+      },
+      {
+        "domain_suffix": "ntc.party",
+        "query_type": "A",
+        "action": "predefined",
+        "answer": [
+          "ntc.party. IN A 130.255.77.28"
+        ]
+      }
+    ],
+    "final": "dns_shield",
+    "strategy": "ipv4_only"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "interface_name": "lxbox",
+      "address": [
+        "172.16.0.1/30"
+      ],
+      "mtu": 1420,
+      "auto_route": true,
+      "strict_route": false,
+      "stack": "system",
+      "exclude_package": [
+        "bypass.whitelist",
+        "com.notcvnt.rknhardering",
+        "io.github.romanvht.byedpi"
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "type": "wireguard",
+      "tag": "🔥⛈️ WARP (AWG 1.5)",
+      "mtu": 1280,
+      "address": [
+        "172.16.0.2/32",
+        "2606:4700:110:8000:0:0:0:1/128"
+      ],
+      "private_key": "E4S1mzKVEZTqhGTBBNnSkiCdJco0cb/bXvVceHCmOZ8=",
+      "peers": [
+        {
+          "address": "188.114.96.8",
+          "port": 5956,
+          "public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+          "reserved": [
+            38,
+            249,
+            0
+          ],
+          "allowed_ips": [
+            "0.0.0.0/0",
+            "::/0"
+          ]
+        }
+      ],
+      "jc": 4,
+      "jmin": 40,
+      "jmax": 70,
+      "s1": 0,
+      "s2": 0,
+      "h1": 1,
+      "h2": 2,
+      "h3": 3,
+      "h4": 4,
+      "id": "telemost.yandex.ru",
+      "ip": "quic",
+      "ib": "chrome"
+    },
+    {
+      "type": "wireguard",
+      "tag": "WireGuard",
+      "mtu": 1200,
+      "address": [
+        "10.8.1.7/32"
+      ],
+      "private_key": "tGUlRmRSjK0DOZeRThlipy6JnZrNQcNf2l7RWVPMkjQ=",
+      "peers": [
+        {
+          "address": "203.0.113.12",
+          "port": 30565,
+          "public_key": "A8Ogl15azQHKm3J2pWHxyhxwBpHp8+Rgh1SUc+MYM2U=",
+          "allowed_ips": [
+            "0.0.0.0/0",
+            "::/0"
+          ],
+          "pre_shared_key": "GgLJPZLQf9u3gp3tmXnB7Jz91zNNHp12R5ZCwlTqFNQ=",
+          "persistent_keepalive_interval": "25-35"
+        }
+      ],
+      "header_protection_key": "9y8wreSR43Z4xBynlPRN+/sr6BhanYwzPY8IEaGLCFQ=",
+      "content_padding_addition": "10-100",
+      "rekey_after_time": "100-120",
+      "rekey_timeout": "3-7",
+      "reject_after_time": "150-180",
+      "keepalive_timeout": "5-15",
+      "max_handshake_attempts": "15-20",
+      "random_trailers": true,
+      "disable_cookies": true,
+      "jc": 4,
+      "jmin": 10,
+      "jmax": 50,
+      "s1": 55,
+      "s2": 42,
+      "s3": 40,
+      "s4": 12,
+      "h1": 1,
+      "h2": 2,
+      "h3": 3,
+      "h4": 4
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct-out"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    },
+    {
+      "type": "vless",
+      "tag": "🇷🇺 Россия (мёртвая, тест)",
+      "server": "192.0.2.1",
+      "server_port": 443,
+      "uuid": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "tls": {
+        "enabled": true,
+        "server_name": "dead.test"
+      }
+    },
+    {
+      "type": "masque",
+      "tag": "🔥🎭 WARP (MASQUE) 2",
+      "server": "162.159.199.253",
+      "server_port": 1701,
+      "profile": "cloudflare",
+      "vhttp": "h2",
+      "private_key": "MHcCAQEEIP74LxOOSvBTVjb3RmEHQflkpCPqadGTQu69fxUv6D0DoAoGCCqGSM49AwEHoUQDQgAE0duI6Lpiv/aKmiKiUXBEfzfo84uciy0c+U/+elVnH9b++C8TjkrwU1Y290ZhB0H5ZKQj6mnRk0LuvX8VL+g9Aw==",
+      "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==",
+      "ip": "172.16.0.2/32",
+      "ipv6": "2606:4700:110:8000:0:0:0:2/128",
+      "tls": {
+        "server_name": "www.wikipedia.org"
+      },
+      "mtu": 1280
+    },
+    {
+      "type": "vless",
+      "tag": "⚡ Москва — узел 1",
+      "server": "example-4.com",
+      "server_port": 443,
+      "uuid": "11111111-2222-3333-4444-555555555555",
+      "transport": {
+        "type": "ws",
+        "path": "/ws",
+        "headers": {
+          "Host": "example-4.com"
+        }
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "example-4.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "random"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "Москва — узел 1",
+      "server": "example-4.com",
+      "server_port": 443,
+      "uuid": "11111111-2222-3333-4444-555555555555",
+      "transport": {
+        "type": "ws",
+        "path": "/ws",
+        "headers": {
+          "Host": "example-4.com"
+        }
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "example-4.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "random"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "Питер узел 2",
+      "server": "example-5.com",
+      "server_port": 443,
+      "uuid": "22222222-2222-3333-4444-555555555555",
+      "transport": {
+        "type": "grpc",
+        "service_name": "g"
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "example-5.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "random"
+        }
+      }
+    },
+    {
+      "type": "socks",
+      "tag": "⚡ test",
+      "server": "139.59.102.20",
+      "server_port": 1080,
+      "version": "5",
+      "username": "user03",
+      "password": "testpass03"
+    },
+    {
+      "tag": "vpn-1-auto",
+      "type": "urltest",
+      "outbounds": [
+        "🔥⛈️ WARP (AWG 1.5)",
+        "🇷🇺 Россия (мёртвая, тест)",
+        "🔥🎭 WARP (MASQUE) 2",
+        "WireGuard",
+        "⚡ Москва — узел 1",
+        "Москва — узел 1",
+        "Питер узел 2",
+        "⚡ test"
+      ],
+      "url": "https://cp.cloudflare.com/generate_204",
+      "interval": "5m",
+      "tolerance": 50,
+      "idle_timeout": "30m",
+      "interrupt_exist_connections": true,
+      "passive_check": true
+    },
+    {
+      "tag": "vpn-1",
+      "type": "selector",
+      "outbounds": [
+        "vpn-1-auto",
+        "direct-out",
+        "block",
+        "🔥⛈️ WARP (AWG 1.5)",
+        "🇷🇺 Россия (мёртвая, тест)",
+        "🔥🎭 WARP (MASQUE) 2",
+        "WireGuard",
+        "⚡ Москва — узел 1",
+        "Москва — узел 1",
+        "Питер узел 2",
+        "⚡ test"
+      ],
+      "interrupt_exist_connections": true,
+      "default": "vpn-1-auto"
+    },
+    {
+      "tag": "vpn-2-auto",
+      "type": "urltest",
+      "outbounds": [
+        "🔥⛈️ WARP (AWG 1.5)",
+        "🇷🇺 Россия (мёртвая, тест)",
+        "🔥🎭 WARP (MASQUE) 2"
+      ],
+      "url": "https://cp.cloudflare.com/generate_204",
+      "interval": "15m",
+      "tolerance": 50,
+      "idle_timeout": "30m",
+      "interrupt_exist_connections": true,
+      "passive_check": true
+    },
+    {
+      "tag": "vpn-2",
+      "type": "selector",
+      "outbounds": [
+        "vpn-2-auto",
+        "direct-out",
+        "🔥⛈️ WARP (AWG 1.5)",
+        "🇷🇺 Россия (мёртвая, тест)",
+        "🔥🎭 WARP (MASQUE) 2"
+      ],
+      "interrupt_exist_connections": true,
+      "default": "vpn-2-auto"
+    },
+    {
+      "tag": "vpn-4-auto",
+      "type": "urltest",
+      "outbounds": [
+        "🇷🇺 Россия (мёртвая, тест)",
+        "WireGuard",
+        "⚡ Москва — узел 1",
+        "Москва — узел 1",
+        "Питер узел 2",
+        "⚡ test"
+      ],
+      "url": "https://cp.cloudflare.com/generate_204",
+      "interval": "5m",
+      "tolerance": 50,
+      "idle_timeout": "30m",
+      "interrupt_exist_connections": true,
+      "passive_check": true
+    },
+    {
+      "tag": "vpn-4",
+      "type": "selector",
+      "outbounds": [
+        "vpn-4-auto",
+        "🇷🇺 Россия (мёртвая, тест)",
+        "WireGuard",
+        "⚡ Москва — узел 1",
+        "Москва — узел 1",
+        "Питер узел 2",
+        "⚡ test"
+      ],
+      "interrupt_exist_connections": true,
+      "default": "vpn-4-auto"
+    },
+    {
+      "tag": "vpn-nolabel",
+      "type": "selector",
+      "outbounds": [
+        "🔥⛈️ WARP (AWG 1.5)",
+        "🇷🇺 Россия (мёртвая, тест)",
+        "🔥🎭 WARP (MASQUE) 2",
+        "WireGuard",
+        "⚡ Москва — узел 1",
+        "Москва — узел 1",
+        "Питер узел 2",
+        "⚡ test"
+      ],
+      "interrupt_exist_connections": true
+    },
+    {
+      "tag": "vpn-de",
+      "type": "selector",
+      "outbounds": [
+        "🔥⛈️ WARP (AWG 1.5)",
+        "🇷🇺 Россия (мёртвая, тест)",
+        "🔥🎭 WARP (MASQUE) 2",
+        "WireGuard",
+        "⚡ Москва — узел 1",
+        "Москва — узел 1",
+        "Питер узел 2",
+        "⚡ test"
+      ],
+      "interrupt_exist_connections": true
+    },
+    {
+      "tag": "VPN-DE",
+      "type": "selector",
+      "outbounds": [
+        "🔥⛈️ WARP (AWG 1.5)",
+        "🇷🇺 Россия (мёртвая, тест)",
+        "🔥🎭 WARP (MASQUE) 2",
+        "WireGuard",
+        "⚡ Москва — узел 1",
+        "Москва — узел 1",
+        "Питер узел 2",
+        "⚡ test"
+      ],
+      "interrupt_exist_connections": true
+    }
+  ],
+  "route": {
+    "find_process": true,
+    "default_domain_resolver": "dns_shield",
+    "rules": [
+      {
+        "action": "sniff",
+        "inbound": [
+          "tun-in"
+        ],
+        "timeout": "300ms"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "action": "resolve",
+        "inbound": [
+          "tun-in"
+        ],
+        "strategy": "ipv4_only"
+      }
+    ],
+    "final": "vpn-1",
+    "auto_detect_interface": true,
+    "rule_set": [],
+    "lx_idle_suspend": "30s",
+    "lx_idle_suspend_reachable": "5m"
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "cache.db",
+      "store_fakeip": true
+    }
+  },
+  "services": [
+    {
+      "type": "oom-killer"
+    }
+  ]
+}

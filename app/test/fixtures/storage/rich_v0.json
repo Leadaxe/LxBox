@@ -1,0 +1,1092 @@
+{
+  "vars": {
+    "log_level": "debug",
+    "tun_mtu": "1400",
+    "tun_stack": "mixed",
+    "dns_final": "my-doh",
+    "dns_strategy": "prefer_ipv4",
+    "dns_default_domain_resolver": "google_udp",
+    "resolve_enabled": "true",
+    "resolve_strategy": "prefer_ipv4",
+    "tls_fragment": "true",
+    "tls_record_fragment": "false",
+    "tls_mixed_case_sni": "false",
+    "urltest_interval": "10m",
+    "ipv6_enabled": "true",
+    "auto_update_subs": "true",
+    "auto_reload_on_change": "false",
+    "debug_enabled": "true",
+    "debug_token": "00000000000000000000000000000000",
+    "app_language": "en"
+  },
+  "server_lists": [
+    {
+      "type": "subscription",
+      "id": "sub-1",
+      "name": "Provider",
+      "enabled": true,
+      "tag_prefix": "PR",
+      "detour_policy": {
+        "register_detour_servers": true,
+        "register_detour_in_auto": true,
+        "use_detour_servers": true,
+        "override_detour": "",
+        "replace_detour_chain": false
+      },
+      "url": "https://example.com/sub/1",
+      "meta": {
+        "upload_bytes": 1024,
+        "download_bytes": 2048,
+        "total_bytes": 1073741824,
+        "expire_timestamp": 1893456000,
+        "support_url": "https://example.com/support",
+        "web_page_url": "https://example.com/",
+        "profile_title": "Provider title",
+        "update_interval_hours": 6
+      },
+      "last_updated": "2026-09-01T10:00:00.000Z",
+      "last_update_attempt": "2026-09-01T10:00:00.000Z",
+      "last_update_status": "ok",
+      "update_interval_hours": 12,
+      "last_node_count": 5,
+      "consecutive_fails": 0,
+      "disabled_hashes": {
+        "NL-2": "2026-09-02T00:00:00.000Z"
+      },
+      "identity": {
+        "user_agent": "lx-test/1.0",
+        "send_hwid": true,
+        "hwid": "00000000-0000-4000-8000-000000000001",
+        "device_os": "Android",
+        "ver_os": "14",
+        "device_model": "Pixel"
+      },
+      "import_rules": [
+        {
+          "conditions": [
+            {
+              "path": "tag",
+              "op": "contains",
+              "pattern": "FI"
+            }
+          ],
+          "action": "replace",
+          "target_path": "server_port",
+          "replacement": "8443"
+        },
+        {
+          "conditions": [
+            {
+              "path": "tag",
+              "op": "matches",
+              "pattern": "^ss",
+              "case_sensitive": true
+            },
+            {
+              "path": "server",
+              "op": "equals",
+              "pattern": "example-99.com",
+              "negate": true
+            }
+          ],
+          "match": "any",
+          "action": "disable"
+        },
+        {
+          "conditions": [
+            {
+              "path": "",
+              "op": "contains",
+              "pattern": "example-11"
+            }
+          ],
+          "action": "replace",
+          "replacement": "example-111",
+          "replace_mode": "substitute",
+          "substitute": "example-11",
+          "enabled": false
+        }
+      ],
+      "on_update_action": "reload"
+    },
+    {
+      "type": "subscription",
+      "id": "sub-2",
+      "name": "Second",
+      "enabled": true,
+      "tag_prefix": "S2",
+      "detour_policy": {
+        "register_detour_servers": true,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "override_detour": "",
+        "replace_detour_chain": false
+      },
+      "url": "https://example.com/sub/2",
+      "last_update_attempt": "2026-09-03T08:30:00.000Z",
+      "last_update_status": "failed",
+      "update_interval_hours": -1,
+      "last_node_count": 3,
+      "consecutive_fails": 3,
+      "import_rules": [
+        {
+          "conditions": [
+            {
+              "path": "tag",
+              "op": "contains",
+              "pattern": "US"
+            }
+          ],
+          "action": "disable"
+        }
+      ],
+      "import_rules_enabled": false,
+      "on_update_action": "none"
+    },
+    {
+      "type": "subscription",
+      "id": "sub-3",
+      "name": "Off sub",
+      "enabled": false,
+      "tag_prefix": "",
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "override_detour": "",
+        "replace_detour_chain": false
+      },
+      "url": "https://example.com/sub/3",
+      "last_update_status": "never",
+      "update_interval_hours": 24,
+      "last_node_count": 0,
+      "consecutive_fails": 0
+    },
+    {
+      "type": "user",
+      "id": "srv-reality",
+      "name": "",
+      "enabled": true,
+      "tag_prefix": "",
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "override_detour": "vpn-3",
+        "replace_detour_chain": false
+      },
+      "origin": "paste",
+      "created_at": "2026-09-01T00:00:00.000Z",
+      "raw_body": "vless://11111111-2222-3333-4444-555555555555@example-1.com:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=abcd1234&sni=www.example.com&fp=chrome#VLESS%20Reality"
+    },
+    {
+      "type": "user",
+      "id": "srv-wg-ini",
+      "name": "",
+      "enabled": true,
+      "tag_prefix": "",
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "override_detour": "",
+        "replace_detour_chain": false
+      },
+      "origin": "file",
+      "created_at": "2026-09-01T00:00:00.000Z",
+      "raw_body": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.0.0.2/32, fd00::2/128\nDNS = 1.1.1.1\nMTU = 1420\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nEndpoint = example-3.com:51820\nPresharedKey = eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=\nPersistentKeepalive = 25\n"
+    },
+    {
+      "type": "user",
+      "id": "srv-hy2",
+      "name": "",
+      "enabled": true,
+      "tag_prefix": "HY",
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": false,
+        "override_detour": "",
+        "replace_detour_chain": false
+      },
+      "origin": "qr",
+      "created_at": "2026-09-01T00:00:00.000Z",
+      "raw_body": "hysteria2://testpass123@example-2.com:443?obfs=salamander&obfs-password=obfspass&sni=example-2.com#Hy2%20Obfs"
+    },
+    {
+      "type": "user",
+      "id": "srv-socks",
+      "name": "",
+      "enabled": false,
+      "tag_prefix": "",
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "override_detour": "",
+        "replace_detour_chain": false
+      },
+      "origin": "manual",
+      "created_at": "2026-09-01T00:00:00.000Z",
+      "raw_body": "socks5://testuser:testpass123@example-1.com:1080#SOCKS%20Auth"
+    },
+    {
+      "type": "user",
+      "id": "srv-ts",
+      "name": "",
+      "enabled": true,
+      "tag_prefix": "",
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "override_detour": "",
+        "replace_detour_chain": false
+      },
+      "origin": "paste",
+      "created_at": "2026-09-01T00:00:00.000Z",
+      "raw_body": "{\"type\":\"tailscale\",\"tag\":\"home-ts\",\"auth_key\":\"tskey-auth-000000000000\",\"hostname\":\"lxbox-test\",\"accept_routes\":true}",
+      "sections": {
+        "rules": [
+          {
+            "kind": "inline",
+            "id": "sec-ts-rule",
+            "name": "@{self} network",
+            "enabled": true,
+            "num": 945,
+            "body": {
+              "ip_cidr": [
+                "100.64.0.0/10"
+              ],
+              "outbound": "@self"
+            }
+          },
+          {
+            "kind": "inline",
+            "id": "sec-ts-off",
+            "name": "@{self} off",
+            "enabled": false,
+            "body": {
+              "domain_suffix": [
+                ".off.ts.net"
+              ],
+              "outbound": "@self"
+            }
+          }
+        ],
+        "dns": {
+          "servers": [
+            {
+              "kind": "user",
+              "tag": "@{self}-dns",
+              "enabled": true,
+              "body": {
+                "type": "tailscale",
+                "endpoint": "@self"
+              }
+            }
+          ],
+          "rules": [
+            {
+              "kind": "user",
+              "name": "",
+              "enabled": true,
+              "body": {
+                "domain_suffix": [
+                  ".ts.net"
+                ],
+                "server": "@{self}-dns"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "user",
+      "id": "srv-multi",
+      "name": "legacy multi",
+      "enabled": true,
+      "tag_prefix": "",
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "override_detour": "",
+        "replace_detour_chain": false
+      },
+      "origin": "paste",
+      "created_at": "2026-08-01T00:00:00.000Z",
+      "raw_body": "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgV1MiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ3cyIsInR5cGUiOiJub25lIiwiaG9zdCI6ImV4YW1wbGUtMS5jb20iLCJwYXRoIjoiL3ZtIiwidGxzIjoidGxzIiwic25pIjoiZXhhbXBsZS0xLmNvbSJ9\ntuic://11111111-2222-3333-4444-555555555555:testpass123@example-1.com:443?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=example-1.com#TUIC%20Basic\n"
+    },
+    {
+      "type": "user",
+      "id": "srv-json-wg",
+      "name": "",
+      "enabled": true,
+      "tag_prefix": "",
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "override_detour": "",
+        "replace_detour_chain": false
+      },
+      "origin": "paste",
+      "created_at": "2026-09-01T00:00:00.000Z",
+      "raw_body": "{\"type\":\"wireguard\",\"tag\":\"singbox-wg-1\",\"address\":[\"10.0.0.2/32\"],\"private_key\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\",\"peers\":[{\"address\":\"example-1.com\",\"port\":51820,\"public_key\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\",\"allowed_ips\":[\"0.0.0.0/0\",\"::/0\"]}],\"mtu\":1420}"
+    },
+    {
+      "type": "folder",
+      "id": "fold-eu",
+      "name": "EU",
+      "enabled": true,
+      "tag_prefix": "EU",
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "override_detour": "",
+        "replace_detour_chain": false
+      },
+      "created_at": "2026-09-01T00:00:00.000Z",
+      "members": [
+        {
+          "raw": "{\"type\":\"vless\",\"tag\":\"de-1\",\"server\":\"example-41.com\",\"server_port\":443,\"uuid\":\"11111111-1111-1111-1111-111111111111\",\"tls\":{\"enabled\":true,\"server_name\":\"example-41.com\"}}",
+          "enabled": true,
+          "sections": {
+            "rules": [
+              {
+                "kind": "inline",
+                "id": "sec-de-rule",
+                "name": "@{self} office",
+                "enabled": true,
+                "num": 1500,
+                "body": {
+                  "domain_suffix": [
+                    ".office.example-40.com"
+                  ],
+                  "outbound": "@self"
+                }
+              }
+            ],
+            "dns": {
+              "servers": [
+                {
+                  "kind": "user",
+                  "tag": "@{self}-dns",
+                  "enabled": true,
+                  "body": {
+                    "type": "udp",
+                    "server": "10.8.0.1",
+                    "detour": "@self"
+                  },
+                  "description": "office dns"
+                }
+              ],
+              "rules": [
+                {
+                  "kind": "user",
+                  "name": "office",
+                  "enabled": true,
+                  "body": {
+                    "domain_suffix": [
+                      ".office.example-40.com"
+                    ],
+                    "server": "@{self}-dns"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "raw": "trojan://testpass123@example-42.com:443?security=tls&sni=example-42.com#nl-1",
+          "enabled": true,
+          "detour": "EU de-1"
+        },
+        {
+          "raw": "trojan://testpass123@example-43.com:443?security=tls&sni=example-43.com#fr-1",
+          "enabled": true,
+          "detour": "VLESS Reality"
+        },
+        {
+          "raw": "wireguard://example-2.com:51820?privatekey=ccccccccccccccccccccccccccccccccccccccccccC%3D&publickey=ddddddddddddddddddddddddddddddddddddddddddD%3D&preshared_key=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE%3D&address=10.0.0.3%2F32,fd00%3A%3A2%2F128&keepalive=25&mtu=1280#WG%20PSK",
+          "enabled": false
+        },
+        {
+          "raw": "not a node at all",
+          "enabled": true
+        }
+      ],
+      "ping_url": "http://1.1.1.1/cdn-cgi/trace",
+      "ping_timeout_ms": 3000
+    },
+    {
+      "type": "folder",
+      "id": "fold-my",
+      "name": "My folder",
+      "enabled": true,
+      "tag_prefix": "My F",
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "override_detour": "EU de-1",
+        "replace_detour_chain": true
+      },
+      "created_at": "2026-09-01T00:00:00.000Z",
+      "members": [
+        {
+          "raw": "trojan://testpass123@example-2.com:443?type=ws&security=tls&path=%2Ftr&host=example-2.com&sni=example-2.com#Trojan%20WS",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "id": "fold-off",
+      "name": "Off folder",
+      "enabled": false,
+      "tag_prefix": "",
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "override_detour": "",
+        "replace_detour_chain": false
+      },
+      "created_at": "2026-09-01T00:00:00.000Z",
+      "members": [
+        {
+          "raw": "trojan://testpass123@example-44.com:443#off-1",
+          "enabled": true
+        }
+      ]
+    }
+  ],
+  "chains": [
+    {
+      "tag": "chain-1",
+      "label": "Work",
+      "enabled": true,
+      "hops": [
+        "EU nl-1",
+        "PR DE-1"
+      ],
+      "idle_timeout": "5m",
+      "strip_evasion": false,
+      "strip": {
+        "tls.fragment": true,
+        "tls.utls": false
+      },
+      "rewrite": {
+        "vless": {
+          "flow": null
+        }
+      },
+      "order": 13
+    },
+    {
+      "tag": "chain-2",
+      "label": "chain-2",
+      "enabled": true,
+      "hops": [
+        "chain-1",
+        "VLESS Reality"
+      ],
+      "order": 14
+    },
+    {
+      "tag": "chain-off",
+      "label": "Disabled",
+      "enabled": false,
+      "hops": [
+        "S2 US-1",
+        "vpn-1"
+      ],
+      "order": 15
+    }
+  ],
+  "custom_rules": [
+    {
+      "id": "r-tp",
+      "name": "Traffic Processing",
+      "enabled": true,
+      "kind": "preset",
+      "num": 0,
+      "presetId": "traffic-processing",
+      "varsValues": {
+        "sniff_timeout": "500ms"
+      }
+    },
+    {
+      "id": "r-ads",
+      "name": "Ads",
+      "enabled": true,
+      "kind": "inline",
+      "num": 960,
+      "domainSuffixes": [
+        ".ads.example-50.com"
+      ],
+      "outbound": "reject"
+    },
+    {
+      "id": "r-all",
+      "name": "All groups",
+      "enabled": true,
+      "kind": "inline",
+      "num": 1000,
+      "domains": [
+        "full.example-51.com"
+      ],
+      "domainSuffixes": [
+        ".example-51.com"
+      ],
+      "domainKeywords": [
+        "example51"
+      ],
+      "ipCidrs": [
+        "198.51.100.0/24"
+      ],
+      "ports": [
+        "443",
+        "8443"
+      ],
+      "portRanges": [
+        "10000:10100"
+      ],
+      "packages": [
+        "com.example.browser"
+      ],
+      "protocols": [
+        "tls",
+        "quic"
+      ],
+      "network": [
+        "tcp"
+      ],
+      "ipIsPrivate": true,
+      "sourceIpCidrs": [
+        "10.0.0.0/8"
+      ],
+      "sourceIpIsPrivate": true,
+      "inbounds": [
+        "tun-in"
+      ],
+      "wifiSsids": [
+        "Home WiFi"
+      ],
+      "wifiBssids": [
+        "aa:bb:cc:dd:ee:ff"
+      ],
+      "outbound": "vpn-2",
+      "dns": {
+        "enabled": true,
+        "serverTag": "my-doh",
+        "forceIpv4": true
+      },
+      "resolve": {
+        "only": false,
+        "strategy": "prefer_ipv4",
+        "serverTag": "my-doh",
+        "disableCache": true,
+        "disableOptimisticCache": true,
+        "rewriteTtl": 60,
+        "timeout": "5s",
+        "clientSubnet": "203.0.113.0/24"
+      }
+    },
+    {
+      "id": "r-resolve-only",
+      "name": "Resolve only",
+      "enabled": true,
+      "kind": "inline",
+      "num": 1005,
+      "domainSuffixes": [
+        ".resolve.example-52.com"
+      ],
+      "outbound": "vpn-1",
+      "resolve": {
+        "only": true,
+        "strategy": "ipv4_only"
+      }
+    },
+    {
+      "id": "r-srs-multi",
+      "name": "Geo sets",
+      "enabled": true,
+      "kind": "srs",
+      "num": 1010,
+      "srsUrl": "https://example.com/rules/a.srs",
+      "srsUrls": [
+        "https://example.com/rules/a.srs",
+        "https://example.com/rules/b.srs"
+      ],
+      "ports": [
+        "443"
+      ],
+      "network": [
+        "tcp"
+      ],
+      "outbound": "direct-out",
+      "dns": {
+        "enabled": true,
+        "serverTag": "google_udp"
+      },
+      "updateIntervalHours": 24
+    },
+    {
+      "id": "r-srs-single",
+      "name": "Uncached set",
+      "enabled": true,
+      "kind": "srs",
+      "num": 1011,
+      "srsUrl": "https://example.com/rules/c.srs",
+      "outbound": "vpn-1"
+    },
+    {
+      "id": "r-json-obj",
+      "name": "Json object",
+      "enabled": true,
+      "kind": "json",
+      "num": 1020,
+      "json": "{\"domain_suffix\": [\".json.example-53.com\"], \"action\": \"route\", \"outbound\": \"vpn-1\"}"
+    },
+    {
+      "id": "r-json-arr",
+      "name": "Json array",
+      "enabled": true,
+      "kind": "json",
+      "num": 1021,
+      "json": "[{\"domain_suffix\": [\".arr1.example-54.com\"], \"outbound\": \"direct-out\"}, {\"ip_cidr\": [\"192.0.2.0/24\"], \"action\": \"reject\"}]"
+    },
+    {
+      "id": "r-json-bad",
+      "name": "Json broken",
+      "enabled": true,
+      "kind": "json",
+      "num": 1022,
+      "json": "{not json"
+    },
+    {
+      "id": "r-json-comment",
+      "name": "Json comment",
+      "enabled": true,
+      "kind": "json",
+      "num": 1023,
+      "json": "{\"//\": \"why this rule exists\", \"domain_keyword\": [\"comment55\"], \"outbound\": \"vpn-2\"}"
+    },
+    {
+      "id": "r-ru",
+      "name": "Russia direct",
+      "enabled": true,
+      "kind": "preset",
+      "num": 1120,
+      "presetId": "ru-direct",
+      "varsValues": {
+        "outbound": "direct-out",
+        "dns_ip": "77.88.8.1",
+        "force_ipv4": "true"
+      }
+    },
+    {
+      "id": "r-ads-preset",
+      "name": "Block ads",
+      "enabled": true,
+      "kind": "preset",
+      "num": 1130,
+      "presetId": "block-ads"
+    },
+    {
+      "id": "r-ports-nan",
+      "name": "Ports with text",
+      "enabled": true,
+      "kind": "inline",
+      "num": 1140,
+      "ports": [
+        "53",
+        "abc"
+      ],
+      "network": [
+        "udp"
+      ],
+      "outbound": "direct-out"
+    },
+    {
+      "id": "r-disabled",
+      "name": "Disabled rule",
+      "enabled": false,
+      "kind": "inline",
+      "num": 1150,
+      "domainSuffixes": [
+        ".disabled.example-56.com"
+      ],
+      "outbound": "vpn-1"
+    },
+    {
+      "id": "r-fcm-off",
+      "name": "FCM push",
+      "enabled": false,
+      "kind": "preset",
+      "num": 1160,
+      "presetId": "fcm-push",
+      "varsValues": {
+        "outbound": "vpn-1",
+        "gms_only": "true"
+      }
+    }
+  ],
+  "dns_options": {
+    "servers": [
+      {
+        "enabled": true,
+        "kind": "inline",
+        "tag": "my-doh",
+        "body": {
+          "type": "https",
+          "server": "example-31.com",
+          "path": "/dns-query",
+          "detour": "vpn-1"
+        },
+        "description": "My DoH"
+      },
+      {
+        "enabled": true,
+        "kind": "inline",
+        "tag": "dns-group",
+        "body": {
+          "type": "group",
+          "servers": [
+            "my-doh",
+            "google_udp",
+            "off-dns"
+          ],
+          "mode": "fastest"
+        }
+      },
+      {
+        "enabled": false,
+        "kind": "inline",
+        "tag": "off-dns",
+        "body": {
+          "type": "udp",
+          "server": "192.0.2.53"
+        }
+      },
+      {
+        "enabled": true,
+        "kind": "template",
+        "tag": "local_dns_resolver"
+      },
+      {
+        "enabled": true,
+        "kind": "template",
+        "tag": "google_udp",
+        "varValues": {
+          "outbound": "direct-out"
+        }
+      },
+      {
+        "enabled": true,
+        "kind": "template",
+        "tag": "google_dot",
+        "description": "Google over TLS"
+      },
+      {
+        "enabled": true,
+        "kind": "template",
+        "tag": "google_doh",
+        "varValues": {
+          "outbound": "vpn-1",
+          "dns_ip": "8.8.4.4"
+        }
+      },
+      {
+        "enabled": false,
+        "kind": "template",
+        "tag": "cloudflare_udp"
+      },
+      {
+        "enabled": true,
+        "kind": "template",
+        "tag": "cloudflare_dot"
+      },
+      {
+        "enabled": false,
+        "kind": "template",
+        "tag": "safe_dns_dot"
+      },
+      {
+        "enabled": true,
+        "kind": "template",
+        "tag": "opendns_udp"
+      },
+      {
+        "enabled": true,
+        "kind": "template",
+        "tag": "quad9_doh"
+      },
+      {
+        "enabled": true,
+        "kind": "template",
+        "tag": "dns_shield"
+      },
+      {
+        "enabled": true,
+        "kind": "preset",
+        "tag": "ru-direct:dns_ru"
+      },
+      {
+        "enabled": false,
+        "kind": "preset",
+        "tag": "ru-direct:yandex_udp",
+        "description": "Yandex (off)"
+      },
+      {
+        "enabled": true,
+        "kind": "preset",
+        "tag": "ru-direct:yandex_dot"
+      },
+      {
+        "enabled": true,
+        "kind": "preset",
+        "tag": "ru-direct:yandex_doh"
+      }
+    ],
+    "rules": [
+      {
+        "enabled": true,
+        "kind": "inline",
+        "name": "Local",
+        "rule": {
+          "domain_suffix": [
+            ".lan"
+          ],
+          "server": "my-doh"
+        }
+      },
+      {
+        "kind": "inline",
+        "name": "Off rule",
+        "rule": {
+          "domain_suffix": [
+            ".off"
+          ],
+          "server": "my-doh"
+        },
+        "enabled": false
+      },
+      {
+        "kind": "inline",
+        "name": "No enabled key",
+        "rule": {
+          "domain_suffix": [
+            ".nokey"
+          ],
+          "server": "google_udp"
+        }
+      },
+      {
+        "enabled": true,
+        "kind": "srs",
+        "name": "ds-geo",
+        "id": "ds_geo1",
+        "server": "google_udp",
+        "rule": {
+          "query_type": [
+            "A",
+            "AAAA"
+          ]
+        }
+      },
+      {
+        "kind": "srs",
+        "name": "ds-model",
+        "id": "ds_model1",
+        "body": {
+          "server": "google_udp"
+        }
+      },
+      {
+        "enabled": true,
+        "kind": "preset",
+        "presetId": "ru-direct"
+      },
+      {
+        "enabled": true,
+        "kind": "template",
+        "name": "legacy-template"
+      }
+    ],
+    "rules_json": "[]"
+  },
+  "directions": [
+    {
+      "tag": "vpn-1",
+      "label": "VPN ①",
+      "enabled": true,
+      "include_direct": true,
+      "include_block": false,
+      "node_filter": "",
+      "node_filter_invert": false,
+      "default_filter": "",
+      "interrupt_exist_connections": true,
+      "auto": {
+        "url": "https://cp.cloudflare.com/generate_204",
+        "interval": "5m",
+        "tolerance": 50,
+        "idle_timeout": "30m",
+        "interrupt_exist_connections": false,
+        "mode": "least_test",
+        "balancer": {
+          "pool": 3,
+          "pool_tolerance": 0,
+          "sticky_hash": [
+            "process",
+            "domain"
+          ]
+        }
+      },
+      "detour": false
+    },
+    {
+      "tag": "vpn-2",
+      "label": "Europe",
+      "enabled": true,
+      "include_direct": false,
+      "include_block": true,
+      "include": [
+        "vpn-1"
+      ],
+      "node_filter": "EU|PR",
+      "node_filter_invert": false,
+      "default_filter": "DE",
+      "interrupt_exist_connections": false,
+      "auto": {
+        "url": "https://cp.cloudflare.com/generate_204",
+        "interval": "10m",
+        "tolerance": 80,
+        "idle_timeout": "30m",
+        "interrupt_exist_connections": true,
+        "mode": "round_robin",
+        "balancer": {
+          "pool": 2,
+          "pool_tolerance": 20,
+          "sticky_hash": [
+            "domain"
+          ]
+        }
+      },
+      "detour": false
+    },
+    {
+      "tag": "vpn-3",
+      "label": "⚙ Detour",
+      "enabled": true,
+      "include_direct": false,
+      "include_block": false,
+      "node_filter": "VLESS|Hy2",
+      "node_filter_invert": false,
+      "default_filter": "",
+      "interrupt_exist_connections": true,
+      "auto": null,
+      "detour": true
+    },
+    {
+      "tag": "vpn-4",
+      "label": "Spare",
+      "enabled": false,
+      "include_direct": true,
+      "include_block": false,
+      "node_filter": "S2",
+      "node_filter_invert": true,
+      "default_filter": "",
+      "interrupt_exist_connections": true,
+      "auto": null,
+      "detour": false
+    }
+  ],
+  "directions_migrated": true,
+  "ping_options": {
+    "url": "https://cp.cloudflare.com/generate_204",
+    "timeout_ms": 5000,
+    "groups": {
+      "vpn-2": {
+        "url": "https://example.com/204",
+        "timeout_ms": 2500
+      }
+    }
+  },
+  "route_final": "vpn-2",
+  "route_idle_suspend": "1m",
+  "route_idle_suspend_reachable": "10m",
+  "urltest_passive_check": false,
+  "tun_apps": {
+    "mode": "deny",
+    "packages": [
+      "com.example.bank",
+      "com.example.bypass"
+    ]
+  },
+  "vpn_mode": {
+    "mode": "vpn_proxy",
+    "proxy_protocol": "socks",
+    "proxy_port": 2081,
+    "proxy_listen": "127.0.0.1",
+    "proxy_auth_enabled": true,
+    "proxy_username": "user",
+    "proxy_password": "testpass123"
+  },
+  "warp_account": {
+    "priv_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+    "peer_pub": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+    "client_v4": "172.16.0.2",
+    "client_v6": "2606:4700:110:8000::2",
+    "client_id": "AAAA",
+    "account_id": "00000000-0000-4000-8000-000000000002",
+    "device_id": "00000000-0000-4000-8000-000000000003",
+    "token": "00000000-0000-4000-8000-000000000004",
+    "endpoint": "162.159.192.1:2408",
+    "created_at": "2026-09-01T00:00:00.000Z",
+    "license": null,
+    "warp_plus": false
+  },
+  "masque_account": {
+    "priv_key_der": "MHcCAQEEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoAoGCCqGSM49AwEHoUQDQgAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "server_pub_der": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "client_v4": "172.16.0.2",
+    "client_v6": "2606:4700:110:8000::3",
+    "server": "162.159.198.1",
+    "port": 443,
+    "device_id": "00000000-0000-4000-8000-000000000005",
+    "token": "00000000-0000-4000-8000-000000000006",
+    "created_at": "2026-09-01T00:00:00.000Z",
+    "sni": "",
+    "idle_timeout": "",
+    "keep_alive": ""
+  },
+  "native_prefs": {
+    "auto_start": false,
+    "keep_on_exit": true,
+    "background_mode": "never",
+    "core_logs_enabled": false,
+    "allow_bypass": false,
+    "auto_redirect": false,
+    "memory_limit": "auto"
+  },
+  "presets_migrated": true,
+  "last_global_update": "2026-09-01T00:00:00.000Z",
+  "interrupt_connections_on_switch": true,
+  "node_sort_mode": "defaultOrder",
+  "node_manual_order": [],
+  "profiler_retention_sec": 600,
+  "enabled_groups": [
+    "vpn-1",
+    "vpn-2"
+  ],
+  "excluded_nodes": [],
+  "preset_ids_remapped": true,
+  "node_overrides": {},
+  "show_detour_servers": true
+}

@@ -1,0 +1,6 @@
+{
+  "content_diff": [
+    "$.chains[tag=chain-1].order: 31 → 34"
+  ],
+  "bytes_identical": false
+}
