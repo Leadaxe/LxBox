@@ -33,8 +33,6 @@ DNS-записи теми же записями, что файл 1.0. Экспо
 - Направления в каноне `direction.schema.json`, DNS-скаляры из `vars` в
   `dns{}`, `route_final` в `route{}`: тонкий слой по BACKUP §1, перевод
   остаётся.
-- Ссылки `{folder_id, tag}` в модели (`hops`, `detour`): хранение держит
-  финальные теги, BACKUP §4 это разрешает (см. 2.3, п. 8).
 - Слияние внутреннего бэкапа (`BackupService`) с LX Backup.
 - `enabled_groups` и `PUT /settings/enabled_groups`.
 
@@ -89,7 +87,7 @@ DNS-записи теми же записями, что файл 1.0. Экспо
 | `id`, `enabled` | те же | те же | К |
 | тег разобранного узла | нет (живёт во фрагменте `raw_body`) | `tag`, пишется из разобранного узла (2.3, п. 1) | К |
 | `rawBody` | `raw_body` (строка) | `origin{kind: uri\|wg_ini\|json, raw}` | К |
-| `detourPolicy.overrideDetour` | `detour_policy.override_detour` | `detour{tag}`, финальный тег | К |
+| `detourPolicy.overrideDetour` | `detour_policy.override_detour` | `detour{folder_id?, tag}` — NodeLink (6.4, D-112) | К |
 | прочие флаги `detourPolicy` | `detour_policy` | `detour_policy` без `override_detour` | L |
 | `tagPrefix` | `tag_prefix` | `tag_policy{prefix}`, только непустой | L |
 | `sections` | `sections` | `sections` | К |
@@ -212,7 +210,7 @@ DNS-записи теми же записями, что файл 1.0. Экспо
 | DNS-правила `kind: srs` | запись вида LxBox | не пишутся, `backup_local_only_dropped` (как 438) |
 | DNS-правила `kind: template` | запись вида LxBox | не пишутся молча (как 438) |
 | префикс тегов с разделителем | `tag_policy.prefix` = префикс модели + пробел | как есть |
-| `detour{tag}`, `hops[{tag}]` с финальным тегом | поле записи | `_LinkIndex` переводит в `{folder_id, tag}` (вопрос Л1) |
+| `detour`, `hops[]` | NodeLink `{folder_id?, tag}` в записи | как есть (6.4, D-112) |
 | `origin` одиночного сервера (`paste\|manual`) | не хранится | — |
 
 Правило экспорта одно: поле L, отличающееся от умолчания, срезается и
@@ -265,7 +263,7 @@ DNS-записи теми же записями, что файл 1.0. Экспо
 | 5 | preset-сервер DNS: в 1.0 `ref = "<preset_id>:<tag>"`, модель знает только тег | `DnsServerPreset.presetId` (новое поле). Заполняет автообнаружение `resolveDnsServersList` (пресет известен в момент добавления) и миграция (`presetIdByDnsServerTag` по шаблону). Пресет не найден — `ref` = тег, дальше orphan-cleanup как сейчас |
 | 6 | DNS: потребители читают сырые `Map`, смена `DnsServerRef.toJson` до них не доходит | словарь меняется у всех потребителей (2.4): `inline` → `user`, `rule` → `body`, `presetId` → `ref`, `varValues` → `vars`. **Ловушка:** `resolveDnsRulesList` молча выбрасывает `kind: user` как наследие §033, `resolveDnsServersList` выбрасывает незнакомый вид — и оба сохраняют результат. Один пропущенный сайт стирает DNS-записи пользователя. Ветки «legacy ignore» удаляются, тест держит записи всех видов 1.0 через оба резолвера |
 | 7 | цепочки — отдельный ключ с `order`; в 1.0 — члены общего `sources[]`. Экран рисует цепочки после всех записей контроллера (`subscriptions_screen.dart`, `_rows`), `_setChains` нумерует от длины `server_lists` | записи цепочек идут хвостом `sources[]` в своём порядке. `SourceChain.order`, `_sortChainsByOrder`, `migrateChainOrderIfNeeded` и их вызовы (`main.dart`, `workspace_controller.dart`, `backup_service.dart`, `handlers/backup.dart`) снимаются. `saveServerLists` переписывает часть без цепочек, `setChains` — часть цепочек. Цепочка членом папки (1.0) у LxBox не заводится: импорт по-прежнему даёт `backup_source_kind_unsupported` |
-| 8 | `hops`, `detour` в модели — финальные теги конфига; в 1.0 — `{folder_id?, tag}` | BACKUP §4: «LxBox адресует хоп тегом и пустой `folder_id` читает как корень — это законная запись». Хранение и экспорт пишут `{tag: <финальный тег>}`, модель не меняется, `_LinkIndex` снимается (Л1: лаунчер 1.6.0 нормализует такую ссылку сам) |
+| 8 | `hops`, `detour` в модели — финальные теги конфига; в 1.0 — `{folder_id?, tag}` | **Решение владельца 14.09 (D-112, 6.4): модель переходит на NodeLink.** `DetourPolicy.overrideDetour`, `FolderMember.detour`, `SourceChain.hops` хранят `{folder_id?, tag}`: у члена папки `folder_id` обязателен, `tag` — сырой тег узла внутри папки (до `tag_policy`/префикса); у корневой ссылки `folder_id` пуст. Финальный тег вычисляет только сборка конфига. Миграция v0 резолвит финальный тег в NodeLink по состоянию до миграции; `_LinkIndex` удаляется вместе с переводчиком (волна C) |
 | 9 | префикс тегов: у контракта разделитель внутри префикса, у модели — снаружи | кодек дописывает один пробел на записи и снимает ровно один хвостовой пробел на чтении (не `trimRight`, как читатель 438): префикс с пробелами, заданный через Debug API, не теряется |
 | 10 | `disabled_hashes` — ISO-8601 с миллисекундами, `disabled` — unix seconds | точность до секунды; TTL-очистка (от 24 ч до месяца) разницы не видит |
 | 11 | TTL srs-правила (§366) кодек не знает | новое поле `update_interval_hours`; экспорт называет потерю |
@@ -417,7 +415,7 @@ Play, F-Droid, APK с GitHub); удаление стирает данные пр
 
 | Часть | Сейчас (438) | После |
 |---|---|---|
-| `sources[]` на экспорте | `_subscription10ToJson`, `_server10ToJson`, `_folder10ToJson`, `_chain10ToJson`, `_identityToJson`, `_prefixToContract` | записи хранения (`sourceToRecord`, `chainToRecord`) + срез полей L по таблице 1.3; `_LinkIndex` (пока Л1); `body` для JSON-исходника с одним outbound (`_origin10`, пока В1) |
+| `sources[]` на экспорте | `_subscription10ToJson`, `_server10ToJson`, `_folder10ToJson`, `_chain10ToJson`, `_identityToJson`, `_prefixToContract` | записи хранения (`sourceToRecord`, `chainToRecord`) + срез полей L по таблице 1.3; NodeLink из записи как есть; `body` для JSON-исходника с одним outbound (`_origin10`, пока В1) |
 | `rules[]` на экспорте | `_rule10ToJson` (json → inline, массив по записям) | записи хранения; срез `verbatim` и `update_interval_hours`; `verbatim` без `body` не пишется, `backup_local_only_dropped` |
 | `dns` на экспорте | `dnsToBackup` → `LxDns` → `_dns10ToJson`, `_presetServerRecord`; экран экспорта грузит шаблон ради `preset_id` | записи `dns.servers/rules` + три скаляра из `vars`; срез `description` и `vars` сервера; `srs`/`template`-правила — как 1.3. Шаблон экрану экспорта больше не нужен: `preset_id` в записи |
 | предупреждения экспорта | `_noteLocalOnly` в каждом писателе | один срез по таблице полей: срезанное поле L, отличное от умолчания, → одно `backup_local_only_dropped` на сущность |
@@ -525,12 +523,12 @@ Play, F-Droid, APK с GitHub); удаление стирает данные пр
 | A1 | граница DNS: все потребители сырых записей `dns_options` переходят на модели `DnsServerRef`/`DnsRuleRef` через один API хранения (`settings_storage/network.dart`); ветки «legacy ignore» в резолверах, выбрасывающие незнакомые виды с сохранением, удаляются; формат файла тот же | 8 | 0 | DNS-потребители из 2.4 кроме `dns_backup.dart`, `rule_transfer.dart`; `lib/services/settings_storage/network.dart`; их тесты |
 | A2 | граница остальных сущностей: `toJson()` моделей перестаёт быть рабочим форматом (сравнение в `isDirty`, JSON-вкладка редактора, носитель `PATCH /rules`, файл правил) — вместо него равенство моделей / явный кодек; всё чтение `server_lists`/`custom_rules`/`chains` — только через `settings_storage/*`; формат файла тот же | 5 | 0 | `lib/screens/custom_rule_edit/**`, `lib/services/rule_transfer.dart`, `lib/services/debug/handlers/rules.dart`, `lib/services/settings_storage/{sources_rules,chains}.dart`, их тесты |
 | A3 | Debug API и бэкап-сервис на моделях: скраббер `/state/storage` (баг `rawBody`), `handlers/backup.dart`, `handlers/settings.dart` DNS PUT, `backup_service.dart` категории | 3 | A1, A2 | `lib/services/debug/**`, `lib/services/backup_service.dart` |
-| B | форма 1.0 в кодеке для всех сущностей (2.3), `legacy_form_v0.dart`, ключи хранения `sources`/`rules`/`dns`, `storage_version`, миграция в `_load` + `.v0.bak`, слоты Workspaces | 12 | A3 | `lib/models/**`, `lib/services/settings_storage*`, `lib/services/storage_migration/**`, `lib/services/workspaces/**`, `lib/main.dart` |
-| C | экспорт LX Backup = срез хранения + тонкий слой; импорт 1.0 через кодек; удаление переводчика 438 и `_LinkIndex` (Л1); файл правил `format: 2`; `dns_backup.dart` | 5 | B | `lib/services/{lx_backup,rule_transfer}.dart`, `lib/services/dns/dns_backup.dart`, `lib/screens/backup_screen*`, `lib/screens/home/restore_backup.dart`, `test/contract/lx_backup*` |
+| B | форма 1.0 в кодеке для всех сущностей (2.3), `legacy_form_v0.dart`, ключи хранения `sources`/`rules`/`dns`, `storage_version`, миграция в `_load` + `.v0.bak`, слоты Workspaces; NodeLink в моделях (`detour`, `detour` члена, `hops`) с резолвом в финальный тег при сборке, пикеры и Debug API на NodeLink, миграция финальных тегов в NodeLink (2.3 п. 8) | 18 | A3 | `lib/models/**`, `lib/services/settings_storage*`, `lib/services/storage_migration/**`, `lib/services/workspaces/**`, `lib/main.dart` |
+| C | экспорт LX Backup = срез хранения + тонкий слой; импорт 1.0 через кодек; удаление переводчика 438 и `_LinkIndex`; файл правил `format: 2`; `dns_backup.dart` | 5 | B | `lib/services/{lx_backup,rule_transfer}.dart`, `lib/services/dns/dns_backup.dart`, `lib/screens/backup_screen*`, `lib/screens/home/restore_backup.dart`, `test/contract/lx_backup*` |
 | D | зачистка тестов, analyze, l10n, доки, статус спеки | 6 | C | `test/**`, `docs/**`, `CHANGELOG.md` |
 | E | AVD (5.3): установка поверх 2.23.2, `/config` до/после, импорт файла лаунчера 1.0, экспорт → импорт | 3 | D | — |
 
-Итого **~45 ч**. A1 и A2 параллельно в отдельных worktree (файлы не
+Итого **~51 ч** (NodeLink +6 ч к волне B). A1 и A2 параллельно в отдельных worktree (файлы не
 пересекаются); остальное последовательно. Порядок влития:
 0 → A1, A2 → A3 → B → C → D → E. Checkout общий: в коммит только свои файлы
 поимённо, перед `git add` смотреть `git diff`.
@@ -591,6 +589,31 @@ Play, F-Droid, APK с GitHub); удаление стирает данные пр
   где, тип, смысл. Список отдаётся после волны кодека и моделей, когда
   зафиксированы имена полей записи; тогда экспорт перестаёт срезать эти поля и
   `backup_local_only_dropped` на них не эмитится.
+
+**Решение владельца 14.09.2026 (поздно вечером, через лаунчер) — NodeLink,
+D-112.** Ссылка на узел во всех проектах — `{folder_id, tag}`, не финальный
+тег. У ссылки на член папки `folder_id` обязателен, `tag` — сырой тег узла
+внутри папки (до `tag_policy`/префикса); у корневого узла `folder_id` пуст,
+`tag` — его тег. Касается detour узла и папки, `hops` цепочки, состава
+auto-группы — в хранении, бэкапе и API. Вывод ответа Л1 «хранение пишет
+`{tag: <финальный тег>}`» **отменён**: хранение LxBox переходит на NodeLink
+напрямую (2.3, п. 8; волна B). Норма — `contract/docs/NODE_LINK.md` и задача
+`## 17` лаунчера (резолв, пустой `folder_id` внутри папки, fail-closed,
+переименование/перенос/смена `tag_policy`, ремап id при импорте); хэш ждём.
+
+Ссылки на узлы в модели LxBox (отправлено лаунчеру 14.09):
+`DetourPolicy.overrideDetour` на любом источнике (сервер, папка, подписка),
+`FolderMember.detour`, `SourceChain.hops` (позицией может быть и группа
+подписки, Направление, служебный тег, другая цепочка). Не ссылки:
+`ExplicitMembers.keys` auto-группы (identity-ключи
+`protocol|server|port|credential`), `RuleMembers` и
+`Direction.node_filter/default_filter` (regex по финальному тегу),
+`Direction.include` (теги Направлений), outbound правил, `route_final`, detour
+DNS-серверов (только Направления, direct, reject), `import_rules`
+(JSONPath над emit-JSON), `disabled_hashes` (хэш узла). По финальному тегу в
+рантайме, вне хранения: Intent `SWITCH_NODE`, выбор узла в Направлении,
+Debug API `/folders/{id}/members/{index}`. Открыто до NODE_LINK.md: как
+NodeLink адресует узел подписки и не-узловые позиции `hops`.
 
 ## 7. Файлы к правке
 
