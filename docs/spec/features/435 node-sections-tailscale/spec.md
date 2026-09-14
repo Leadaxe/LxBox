@@ -1,6 +1,6 @@
 # 435 — Секции узла и Tailscale (контракт ## 13, NODE_SECTIONS.md, ONE_NAMESPACE.md §2)
 
-Статус: **implemented, DEVICE-VERIFIED на AVD** (14.09.2026: ядро lx.36 — путь гейта; ядро lx.38 — живой endpoint tailscale) — волна 2 программы контракта 1.0 (после ## 12, [§434](../../tasks/434-srs-rule-multiple-rule-sets.md)). Релиз — v2.23.2.
+Статус: **implemented, DEVICE-VERIFIED на AVD** (14.09.2026: ядро lx.36 — путь гейта; ядро lx.38 — живой endpoint tailscale) — волна 2 программы контракта 1.0 (после ## 12, [§434](../../tasks/434-srs-rule-multiple-rule-sets.md)). Выпущено в **v2.23.2** (14.09.2026, ядро `v1.14.0-lx.38`).
 Норма — `app/contract/docs/NODE_SECTIONS.md` (семантика) и
 `app/contract/docs/ONE_NAMESPACE.md` §2 (форма записей). Решения владельца
 14.09.2026: секции в состоянии сразу в целевой форме `body`; в бэкап до
