@@ -133,9 +133,13 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 
 Копирование трёх позиций не атомарно как целое. Если процесс убит между
 шагами 4 и 7, сцена — смесь `current` и X. Лечение: копирование
-идемпотентно, поэтому при старте (в `main()`, до
-`bootstrapAndSyncNativePrefs`) `WorkspaceStore.recover()` читает
-`pending` и **повторяет шаги 5–7 целиком**. Слот `current` при повторе
+идемпотентно, поэтому при старте (в `main()`, после
+`AppLog.I.initPersistent` и до первого чтения `SettingsStorage`, включая
+`SubscriptionIdentity.init`) `WorkspaceStore.recover()` читает `pending` и
+**повторяет шаги 5–7 целиком**. Чтение настроек раньше оставит в кэше
+старую сцену (и `_load` мигрирует и запишет её, §439) — первое сохранение
+ляжет поверх доведённого слота. Порядок держит
+`test/contract/startup_order_contract_test.dart`. Слот `current` при повторе
 может получить уже частично перезаписанную сцену — это допустимо: сцена
 на момент убийства и есть последнее известное состояние `current`, а
 `pending.target` был выбран пользователем.
@@ -241,7 +245,7 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 
 | # | Коммит | Файлы |
 |---|---|---|
-| 1 | `WorkspaceStore`: справочник, `kSlotEntries`, `saveAs(name)`, `load(name)` (4–8 из §2.3), `recover()`, `rename`/`delete`/`slotSizeBytes`, `validateName`; тесты на path_provider-моке (оба корня) | `services/workspaces/workspace_store.dart`, `test/services/workspace_store_test.dart`, `main.dart` (`recover()` перед `bootstrapAndSyncNativePrefs`) |
+| 1 | `WorkspaceStore`: справочник, `kSlotEntries`, `saveAs(name)`, `load(name)` (4–8 из §2.3), `recover()`, `rename`/`delete`/`slotSizeBytes`, `validateName`; тесты на path_provider-моке (оба корня) | `services/workspaces/workspace_store.dart`, `test/services/workspace_store_test.dart`, `main.dart` (`recover()` до первого чтения `SettingsStorage`) |
 | 2 | `WorkspaceController` (цикл загрузки, `generation`, `takePendingAutoConnect`, перечитывание по таблице §2.6) + пересоздание `HomeScreen` + автозапуск после bootstrap-пересборки; попап в AppBar (Load / Save as) с модальным прогрессом; l10n | `services/workspaces/workspace_controller.dart`, `main.dart`, `home_screen.dart`, `screens/home/widgets/workspace_menu.dart`, `assets/l10n/ru/ui.json` |
 | 3 | Меню «⋮» на строке слота (rename / delete) + размер слота в подзаголовке; экран Manage из первой итерации снят | `workspace_menu.dart` |
 | 4 | Доки: STORAGE.md (дерево + таблица с пометкой «в слоте / устройство»), USER_GUIDE, CHANGELOG | docs |
