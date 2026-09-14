@@ -184,8 +184,10 @@ Future<Map<String, dynamic>> _loadFromDisk() async {
     SettingsStorage._cache = _freshDoc();
     return SettingsStorage._cache!;
   } catch (_) {
-    // Path provider или filesystem unavailable — degrade к defaultам.
-    SettingsStorage._cache = {};
+    // Path provider или filesystem unavailable — degrade к defaultам. Версия
+    // формы нужна и здесь: запись, которая пройдёт позже, иначе легла бы
+    // документом без неё, и следующий старт мигрировал бы файл этой сборки.
+    SettingsStorage._cache = _freshDoc();
     return SettingsStorage._cache!;
   }
 }

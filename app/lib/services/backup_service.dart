@@ -423,8 +423,8 @@ class BackupService {
         for (final e in contents._chains.corrupt) {
           errors.add('Chain parse: $e');
         }
-        // Цепочки архива заменяют цепочки хранения целиком, как раньше ключ
-        // `chains`; архив без цепочек текущие не трогает.
+        // Цепочки архива заменяют цепочки хранения целиком; архив без цепочек
+        // текущие не трогает.
         if (contents._chains.items.isNotEmpty) {
           try {
             await SettingsStorage.setChains(contents._chains.items);

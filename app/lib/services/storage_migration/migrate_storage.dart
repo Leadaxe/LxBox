@@ -80,10 +80,6 @@ final class StorageMigrationResult {
   /// Что прочитано не дословно или потеряно, с именами записей.
   final List<String> warnings;
 
-  /// `storage_version` больше известной: документ читается как текущий.
-  bool get isNewerThanKnown =>
-      foundVersion != null && foundVersion! > kStorageVersion;
-
   /// Отчёт одной строкой (журнал).
   String get summary => info.join('; ');
 

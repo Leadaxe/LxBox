@@ -50,8 +50,8 @@ class WorkspaceStore {
   ///
   /// НЕ в слоте (спека §417 п. 2.1): `singbox_config.json` (пересобирается
   /// после загрузки всегда), `cache.db` ядра (открыт под живым VPN, копия
-  /// может быть битой), `.bak`/`.tmp` io-слоя, `support_state.json`, логи,
-  /// crash/oom-репорты, тема.
+  /// может быть битой), `.bak`/`.v0.bak`/`.tmp` io-слоя, `support_state.json`,
+  /// логи, crash/oom-репорты, тема.
   static const List<SlotEntry> kSlotEntries = [
     SlotEntry(SlotRoot.documents, 'lxbox_settings.json', isDir: false),
     SlotEntry(SlotRoot.documents, 'rule_sets', isDir: true),
