@@ -259,7 +259,8 @@ class CustomRuleEditController extends ChangeNotifier {
     sourceIpCidrCtrl = TextEditingController(text: r.sourceIpCidrs.join('\n'));
     portCtrl = TextEditingController(text: r.ports.join('\n'));
     portRangeCtrl = TextEditingController(text: r.portRanges.join('\n'));
-    srsUrlCtrl = TextEditingController(text: r.srsUrl);
+    // ## 12 — по одному URL на строку.
+    srsUrlCtrl = TextEditingController(text: r.srsUrls.join('\n'));
     // §366 — TTL есть только у srs-правил; у прочих остаётся дефолт и в
     // сохранение не идёт.
     if (r is CustomRuleSrs) _srsTtlHours = r.updateIntervalHours;
@@ -287,7 +288,7 @@ class CustomRuleEditController extends ChangeNotifier {
     }
 
     if (_kind == CustomRuleKind.srs) {
-      RuleSetDownloader.isCached(r.id).then((cached) {
+      _allSrsCached(r).then((cached) {
         if (_disposed) return;
         _srsState =
             cached ? SrsDownloadState.cached : SrsDownloadState.none;
@@ -585,14 +586,23 @@ class CustomRuleEditController extends ChangeNotifier {
   // ─── SRS download (used by SrsSection cloud-button) ──────────────────
 
   Future<void> downloadSrs() async {
-    final url = srsUrlCtrl.text.trim();
-    if (url.isEmpty) return;
+    final urls = parseSrsUrlsText(srsUrlCtrl.text);
+    if (urls.isEmpty) return;
     _srsState = SrsDownloadState.loading;
     notifyListeners();
-    final path = await RuleSetDownloader.download(initial.id, url);
-    if (_disposed) return;
-    _srsState =
-        path != null ? SrsDownloadState.cached : SrsDownloadState.error;
+    // ## 12 — все наборы по порядку в свои файлы кэша; первый провал =
+    // провал правила (частично скачанное не включаем).
+    var ok = true;
+    for (var i = 0; i < urls.length; i++) {
+      final path = await RuleSetDownloader.download(
+          CustomRuleSrs.cacheIdAt(initial.id, i), urls[i]);
+      if (_disposed) return;
+      if (path == null) {
+        ok = false;
+        break;
+      }
+    }
+    _srsState = ok ? SrsDownloadState.cached : SrsDownloadState.error;
     notifyListeners();
     // §366 — обновить строку «Updated …»: метаданные записал downloader.
     unawaited(_loadSrsMeta(initial.id));
@@ -602,12 +612,28 @@ class CustomRuleEditController extends ChangeNotifier {
   /// трогая правило в storage. _enabled сбрасывается — без cache
   /// правило не может работать.
   Future<void> clearSrsCache() async {
-    await RuleSetDownloader.delete(initial.id);
+    // ## 12 — файлы всех наборов: и сохранённых, и набранных в поле (юзер
+    // мог скачать новый список, не сохраняя правило).
+    final saved = initial.srsUrls.length;
+    final typed = parseSrsUrlsText(srsUrlCtrl.text).length;
+    final n = saved > typed ? saved : typed;
+    for (var i = 0; i < (n == 0 ? 1 : n); i++) {
+      await RuleSetDownloader.delete(CustomRuleSrs.cacheIdAt(initial.id, i));
+    }
     if (_disposed) return;
     _srsState = SrsDownloadState.none;
     _enabled = false;
     _srsLastUpdatedText = null; // §366 — метаданные ушли вместе с файлом
     notifyListeners();
+  }
+
+  /// ## 12 — правило «скачано», когда есть файлы ВСЕХ его наборов.
+  static Future<bool> _allSrsCached(CustomRule r) async {
+    if (r is! CustomRuleSrs || r.srsUrls.isEmpty) return false;
+    for (final cacheId in r.cacheIds) {
+      if (!await RuleSetDownloader.isCached(cacheId)) return false;
+    }
+    return true;
   }
 
   /// На URL-edit: если состояние было `error`, сбрасываем в `none`
@@ -747,7 +773,7 @@ class CustomRuleEditController extends ChangeNotifier {
           name: name,
           enabled: _enabled,
           orderNum: initial.orderNum,
-          srsUrl: srsUrlCtrl.text.trim(),
+          srsUrls: parseSrsUrlsText(srsUrlCtrl.text), // ## 12
           updateIntervalHours: _srsTtlHours, // §366
           ports: norm.normalizedPorts(portCtrl.text),
           portRanges: norm.normalizedPortRanges(portRangeCtrl.text),

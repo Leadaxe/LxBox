@@ -70,6 +70,13 @@ ProbeConfig buildProbeConfig(List<NodeSpec?> nodes) {
       brokenByIndex[i] = 'group';
       continue;
     }
+    // §435 — Tailscale: адреса нет, а probe-конфиг поднимал бы tsnet ради
+    // пинга (вход в tailnet по auth_key, каталог состояния). Не тестируем;
+    // на Home у узла «—» вместо задержки.
+    if (node is TailscaleSpec) {
+      brokenByIndex[i] = 'no-address';
+      continue;
+    }
     try {
       final raw = node.getEntries(null);
       // Зеркалим ServerListBuild: детуры первыми (main ссылается на tag).

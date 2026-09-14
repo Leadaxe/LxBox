@@ -2,6 +2,7 @@ import '../services/parser/body_decoder.dart';
 import '../services/parser/parse_all.dart';
 import '../services/tag_resolver.dart';
 import 'import_rule.dart';
+import 'node_sections.dart';
 import 'node_spec.dart';
 import 'subscription_meta.dart';
 
@@ -374,6 +375,13 @@ final class UserServer extends ServerList {
   final DateTime createdAt;
   final String rawBody; // оригинал paste'а для reparse в случае багов
 
+  /// §435 — секции узла (контракт ## 13): правила маршрута и DNS-записи,
+  /// которые узел носит с собой. Форма хранения — ONE_NAMESPACE §2, с
+  /// плейсхолдерами `@self` как есть. `null` = поля нет (пустые секции не
+  /// пишутся). Истина — это поле; `importedSections` узла, найденные при
+  /// перечитывании `raw_body`, на старте игнорируются.
+  final NodeSections? sections;
+
   UserServer({
     required super.id,
     required super.name,
@@ -383,8 +391,9 @@ final class UserServer extends ServerList {
     required this.origin,
     required this.createdAt,
     this.rawBody = '',
+    NodeSections? sections,
     super.nodes,
-  });
+  }) : sections = (sections == null || sections.isEmpty) ? null : sections;
 
   @override
   String get type => 'user';
@@ -400,6 +409,7 @@ final class UserServer extends ServerList {
         'origin': origin.name,
         'created_at': createdAt.toIso8601String(),
         if (rawBody.isNotEmpty) 'raw_body': rawBody,
+        if (sections != null) 'sections': sections!.toJson(),
       };
 
   factory UserServer.fromJson(Map<String, dynamic> j) {
@@ -431,6 +441,9 @@ final class UserServer extends ServerList {
       createdAt: DateTime.tryParse((j['created_at'] as String?) ?? '') ??
           DateTime.now(),
       rawBody: rawBody,
+      // §435 — секции читаются толерантно: чужой kind внутри отбрасывается,
+      // остальные записи живут (NODE_SECTIONS.md §1).
+      sections: NodeSections.fromJson(j['sections']),
       nodes: nodes,
     );
   }
@@ -444,6 +457,10 @@ final class UserServer extends ServerList {
     DateTime? createdAt,
     String? rawBody,
     List<NodeSpec>? nodes,
+    NodeSections? sections,
+    // §435 — `sections ?? this.sections` не позволяет обнулить: явный флаг
+    // (паттерн `clearDns` у правил).
+    bool clearSections = false,
   }) =>
       UserServer(
         id: id,
@@ -454,6 +471,7 @@ final class UserServer extends ServerList {
         origin: origin ?? this.origin,
         createdAt: createdAt ?? this.createdAt,
         rawBody: rawBody ?? this.rawBody,
+        sections: clearSections ? null : (sections ?? this.sections),
         nodes: nodes ?? this.nodes,
       );
 }
@@ -471,6 +489,9 @@ final class FolderMember {
   /// применяется к нему как подписка к родной цепочке (см. server_list_build).
   final String detour;
 
+  /// §435 — секции узла-члена (контракт ## 13), как у `UserServer.sections`.
+  final NodeSections? sections;
+
   /// Распарсенная нода фрагмента; null = битый raw (member виден в UI как
   /// нечитаемый, юзер может отредактировать/удалить).
   final NodeSpec? node;
@@ -479,8 +500,10 @@ final class FolderMember {
     required this.raw,
     this.enabled = true,
     this.detour = '',
+    NodeSections? sections,
     NodeSpec? node,
-  }) : node = node ?? _parseFirst(raw);
+  })  : sections = (sections == null || sections.isEmpty) ? null : sections,
+        node = node ?? _parseFirst(raw);
 
   static NodeSpec? _parseFirst(String raw) {
     if (raw.trim().isEmpty) return null;
@@ -496,19 +519,28 @@ final class FolderMember {
         'raw': raw,
         'enabled': enabled,
         if (detour.isNotEmpty) 'detour': detour,
+        if (sections != null) 'sections': sections!.toJson(),
       };
 
   factory FolderMember.fromJson(Map<String, dynamic> j) => FolderMember(
         raw: (j['raw'] as String?) ?? '',
         enabled: (j['enabled'] as bool?) ?? true,
         detour: (j['detour'] as String?) ?? '',
+        sections: NodeSections.fromJson(j['sections']),
       );
 
-  FolderMember copyWith({String? raw, bool? enabled, String? detour}) =>
+  FolderMember copyWith({
+    String? raw,
+    bool? enabled,
+    String? detour,
+    NodeSections? sections,
+    bool clearSections = false,
+  }) =>
       FolderMember(
         raw: raw ?? this.raw,
         enabled: enabled ?? this.enabled,
         detour: detour ?? this.detour,
+        sections: clearSections ? null : (sections ?? this.sections),
         // Смена raw → re-parse в конструкторе (node: null); иначе нода та же.
         node: raw == null ? node : null,
       );

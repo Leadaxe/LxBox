@@ -123,6 +123,40 @@ bool coreSupportsChain(String coreVersion) {
   return v.compareTo(min) >= 0;
 }
 
+/// §435 / контракт ## 13 — минимальный релиз ядра с endpoint'ом `tailscale`
+/// в AAR (тег сборки `with_tailscale` + `ts_omit_*`,
+/// `sing-box-lx cmd/internal/build_libbox/main.go`, блок `no-tailscale`
+/// восстановлен апстримным append'ом): `1.14.0-lx.38`. Форк на момент
+/// реализации — lx.37, пин LxBox — lx.36: до бампа узел доезжает только до
+/// гейта.
+const String kTailscaleMinCoreVersion = '1.14.0-lx.38';
+
+/// §435 — знает ли ядро версии [coreVersion] endpoint `tailscale`
+/// (`tailscale_core_unsupported` контракта, D-103). Имя без `core…` в
+/// начале, чтобы не совпасть с одноимённым геттером `EmitContext`.
+///
+/// Та же политика, что у [coreSupportsChain]: fail-open на всём, что не
+/// удалось разобрать — деградировать на догадке значило бы отнять рабочий
+/// узел, а конфиг, отвергнутый ядром, пользователь хотя бы увидит ошибкой
+/// старта.
+bool coreVersionSupportsTailscale(String coreVersion) {
+  final v = CoreVersion.parse(coreVersion);
+  if (v == null) return true;
+  final min = CoreVersion.parse(kTailscaleMinCoreVersion)!;
+  return v.compareTo(min) >= 0;
+}
+
+/// EN-строка предупреждения `tailscale_core_unsupported` (реестр
+/// `registry/warnings.json`, severity warning): узел снят на сборке, конфиг
+/// собирается, остальные узлы на месте.
+String tailscaleUnsupportedByCoreLine(String tag, String coreVersion) {
+  final shown =
+      coreVersion.trim().isEmpty ? 'of unknown version' : coreVersion.trim();
+  return 'Tailscale node "$tag" was skipped: the VPN core ($shown) is older '
+      'than $kTailscaleMinCoreVersion and was built without Tailscale — it '
+      'would reject the whole config. Update the app to get a newer core.';
+}
+
 /// EN-строка предупреждения `chain_unsupported_by_core` (реестр
 /// `registry/warnings.json`, параметры `version` + `tag`).
 ///

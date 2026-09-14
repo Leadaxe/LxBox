@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../validators.dart' as v;
 import '../widgets/section_header.dart';
 import '../../../models/custom_rule.dart'
-    show kDefaultSrsTtlHours, kSrsTtlChoicesHours;
+    show kDefaultSrsTtlHours, kSrsTtlChoicesHours, parseSrsUrlsText;
 import '../../../services/l10n/locale_controller.dart';
 
 /// §053 Stage 2 — состояние ☁ кнопки рядом с SRS URL.
@@ -91,8 +91,10 @@ class _SrsSectionState extends State<SrsSection> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final url = widget.urlCtrl.text.trim();
-    final urlValid = url.isNotEmpty && v.isValidUrl(url);
+    // ## 12 — несколько наборов, по одному URL на строку; ☁ активна, когда
+    // валидны все.
+    final urls = parseSrsUrlsText(widget.urlCtrl.text);
+    final urlValid = urls.isNotEmpty && urls.every(v.isValidUrl);
 
     Widget cloud;
     if (widget.state == SrsDownloadState.loading) {
@@ -141,6 +143,9 @@ class _SrsSectionState extends State<SrsSection> {
         ),
         TextField(
           controller: widget.urlCtrl,
+          // ## 12 — по одному URL на строку.
+          maxLines: null,
+          keyboardType: TextInputType.multiline,
           style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
           decoration: InputDecoration(
             border: const OutlineInputBorder(),
@@ -166,6 +171,13 @@ class _SrsSectionState extends State<SrsSection> {
               padding: const EdgeInsets.only(right: 4),
               child: cloud,
             ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Text(
+            getLocalText.s("One URL per line — several rule sets in one rule."),
+            style: TextStyle(fontSize: 11, color: t.colorScheme.onSurfaceVariant),
           ),
         ),
         const SizedBox(height: 4),

@@ -244,7 +244,11 @@ sealed class DnsRuleRef {
         final name = j['name']?.toString();
         final rule = j['rule'];
         if (name == null || name.isEmpty || rule is! Map) return null;
-        return DnsRuleInline(name: name, rule: rule.cast<String, dynamic>());
+        return DnsRuleInline(
+          name: name,
+          rule: rule.cast<String, dynamic>(),
+          enabled: j['enabled'] != false,
+        );
       case 'srs':
         final id = j['id']?.toString();
         final name = j['name']?.toString();
@@ -287,19 +291,40 @@ sealed class DnsRuleRef {
 }
 
 class DnsRuleInline extends DnsRuleRef {
-  const DnsRuleInline({required this.name, required this.rule});
+  const DnsRuleInline({
+    required this.name,
+    required this.rule,
+    this.enabled = true,
+  });
   final String name;
   final Map<String, dynamic> rule;
+
+  /// §435 — тумблер записи (ONE_NAMESPACE §1: `enabled` у DNS-правил). В JSON
+  /// пишется только `false`: старое хранение без ключа читается как
+  /// «включено», и байт-совместимость `dns_options.rules` сохраняется.
+  final bool enabled;
 
   @override
   String get kind => 'inline';
 
   @override
-  Map<String, dynamic> toJson() =>
-      {'kind': 'inline', 'name': name, 'rule': rule};
+  Map<String, dynamic> toJson() => {
+        'kind': 'inline',
+        'name': name,
+        'rule': rule,
+        if (!enabled) 'enabled': false,
+      };
 
-  DnsRuleInline copyWith({String? name, Map<String, dynamic>? rule}) =>
-      DnsRuleInline(name: name ?? this.name, rule: rule ?? this.rule);
+  DnsRuleInline copyWith({
+    String? name,
+    Map<String, dynamic>? rule,
+    bool? enabled,
+  }) =>
+      DnsRuleInline(
+        name: name ?? this.name,
+        rule: rule ?? this.rule,
+        enabled: enabled ?? this.enabled,
+      );
 }
 
 class DnsRuleSrs extends DnsRuleRef {

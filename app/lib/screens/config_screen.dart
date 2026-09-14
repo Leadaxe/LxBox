@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -14,6 +13,7 @@ import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/lx_code_editor.dart';
 import '../services/file_import.dart';
+import '../widgets/safe_bottom.dart';
 
 /// §333 — страховочный порог: выше него редактор открывается read-only.
 /// Даже построчному редактору многомегабайтный конфиг на слабом устройстве
@@ -76,8 +76,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/lxbox_config.json');
       await file.writeAsString(text);
-      // ignore: deprecated_member_use
-      await Share.shareXFiles([XFile(file.path)], text: 'LxBox config');
+      await SharePlus.instance.share(
+          ShareParams(files: [XFile(file.path)], text: 'LxBox config'));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -121,16 +121,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
         return;
       }
       final file = outcome.single;
-      String text;
-      if (file.bytes != null && file.bytes!.isNotEmpty) {
-        // §333 — utf8, не fromCharCodes: тот трактовал байты как UTF-16
-        // code units и превращал кириллицу в JSON5-комментариях в мусор.
-        text = utf8.decode(file.bytes!, allowMalformed: true);
-      } else if (file.path != null) {
-        text = await File(file.path!).readAsString();
-      } else {
-        return;
-      }
+      // §333 — utf8, не fromCharCodes (см. PickedFile.text).
+      final text = file.text;
       final pretty = await prettyJsonForDisplayAsync(text.trim());
       if (!mounted) return;
       _textController.text = pretty;
@@ -200,7 +192,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
             ],
           ),
           body: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(12).withSafeBottom(context),
             child: Column(
               children: [
                 if (_readOnly)

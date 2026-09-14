@@ -265,23 +265,8 @@ mixin _ConfigIoMixin on ChangeNotifier {
         return false;
       }
       final file = outcome.single;
-      final bytes = file.bytes;
-      final path = file.path;
-      late final String text;
-
-      if (bytes != null && bytes.isNotEmpty) {
-        text = utf8.decode(bytes, allowMalformed: true);
-      } else if (path != null) {
-        try {
-          text = await File(path).readAsString();
-        } on FileSystemException catch (e) {
-          _emit(_state.copyWith(
-              lastError: PrefixedMsg(ErrPrefix.readFileFailed, formatUserError(e)),
-              busy: false));
-          _addDebug(DebugSource.app, 'File read error: $e');
-          return false;
-        }
-      } else {
+      final text = file.text;
+      if (text.isEmpty) {
         _emit(_state.copyWith(lastError: const ErrMsg(ErrKey.failedToReadFile), busy: false));
         _addDebug(DebugSource.app, 'File pick failed: no bytes and no path');
         return false;

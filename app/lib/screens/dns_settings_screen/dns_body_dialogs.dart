@@ -25,6 +25,8 @@ void showRuleBodyDialog(
     'preset' => getLocalText.s("preset"),
     'srs' => getLocalText.s("srs"),
     'rule' => getLocalText.s("routing rule"),
+    // §435 — DNS-правило из секций узла (read-only).
+    'node' => getLocalText.s("node"),
     _ => getLocalText.s("user rule"),
   };
   showDialog<void>(

@@ -3,8 +3,8 @@
 // На устройствах без системного файлового менеджера (типовой случай —
 // Android TV: в прошивках нет DocumentsUI) file_picker не открывает ничего.
 // Плагин проверяет `intent.resolveActivity(packageManager)` перед запуском
-// (file_picker 11.0.2, FileUtils.kt:216) и, не найдя обработчика, отвечает
-// `finishWithError("invalid_format_type", ...)` — на Dart-сторону приходит
+// (android_file_picker 1.1.1, FileUtils.kt:246) и, не найдя обработчика,
+// отвечает `finishWithError("explorer_not_found", ...)` — на Dart-сторону приходит
 // PlatformException. Прямые вызовы FilePicker.pickFiles показывали это как
 // техническую ошибку («Can't handle the provided file type») либо, где стоял
 // общий catch, как ложное «Failed to parse config» — юзер видел тупик, хотя
@@ -13,6 +13,8 @@
 // Обёртка конвертирует ситуацию в доменный исход [PickNoPicker], чтобы UI
 // показал подсказку с альтернативой. Отмена юзером — отдельный исход, а не
 // ошибка: молча выходим.
+
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
@@ -25,7 +27,28 @@ import 'url_launcher.dart';
 
 /// Код ошибки file_picker'а, которым плагин отвечает, когда в системе не
 /// нашлось активити под ACTION_OPEN_DOCUMENT / ACTION_GET_CONTENT.
-const _noPickerCode = 'invalid_format_type';
+/// §431 — в file_picker 12 (android_file_picker) код сменился с
+/// `invalid_format_type` на `explorer_not_found`.
+const _noPickerCode = 'explorer_not_found';
+
+/// §431 — выбранный файл, уже прочитанный в память.
+///
+/// Свой тип вместо `PlatformFile` плагина: в file_picker 12 тот стал
+/// `abstract base` без конструктора (§383-путь строил его руками) и потерял
+/// синхронный `bytes`. Обёртка читает байты сама, поэтому вызывающим не
+/// нужна развилка bytes/path — у них всегда есть [bytes] и [text].
+class PickedFile {
+  const PickedFile({required this.name, required this.bytes});
+
+  /// Имя файла с расширением, как его отдал пикер.
+  final String name;
+
+  final Uint8List bytes;
+
+  /// Содержимое как текст. utf8 с `allowMalformed`, не `fromCharCodes`:
+  /// тот трактовал байты как UTF-16 code units и ломал кириллицу (§333).
+  String get text => utf8.decode(bytes, allowMalformed: true);
+}
 
 /// Результат попытки выбрать файл.
 sealed class PickOutcome {
@@ -36,9 +59,9 @@ sealed class PickOutcome {
 class PickedFiles extends PickOutcome {
   const PickedFiles(this.files);
 
-  final List<PlatformFile> files;
+  final List<PickedFile> files;
 
-  PlatformFile get single => files.single;
+  PickedFile get single => files.single;
 }
 
 /// Юзер закрыл пикер, ничего не выбрав. Не ошибка — вызывающий выходит молча.
@@ -62,13 +85,13 @@ class PickFailed extends PickOutcome {
 
 /// Обёртка над [FilePicker.pickFiles] с разбором исходов.
 ///
-/// Параметры повторяют используемые в приложении; `withData: true` по
-/// умолчанию — все вызывающие читают байты (path на SAF-Uri может быть null).
+/// Параметры повторяют используемые в приложении. Байты читаются здесь же:
+/// path на SAF-Uri может быть null, а `PlatformFile.bytes` в file_picker 12
+/// нет — только `readAsBytes()`.
 Future<PickOutcome> pickFileSafely({
   FileType type = FileType.any,
   List<String>? allowedExtensions,
   bool allowMultiple = false,
-  bool withData = true,
 }) async {
   // §372 — предварительная проверка. На Android TV пикера нет, но intent
   // перехватывает системная заглушка frameworkpackagestubs: она показывает
@@ -95,14 +118,20 @@ Future<PickOutcome> pickFileSafely({
     );
   }
   try {
-    final result = await FilePicker.pickFiles(
+    // allowMultiple deprecated в пользу pickFile(); один вход с параметром
+    // проще двух веток.
+    final picked = await FilePicker.pickFiles(
       type: type,
       allowedExtensions: allowedExtensions,
+      // ignore: deprecated_member_use
       allowMultiple: allowMultiple,
-      withData: withData,
     );
-    if (result == null || result.files.isEmpty) return const PickCancelled();
-    return PickedFiles(result.files);
+    if (picked.isEmpty) return const PickCancelled();
+    final files = <PickedFile>[];
+    for (final f in picked) {
+      files.add(PickedFile(name: f.name, bytes: await f.readAsBytes()));
+    }
+    return PickedFiles(files);
   } on PlatformException catch (e) {
     if (e.code == _noPickerCode) {
       AppLog.I.warning('[pick] no file manager on device (${e.code})');
@@ -125,6 +154,8 @@ Future<PickOutcome> pickFileSafely({
 /// [allowedExtensions] фильтруем сами: `GET_CONTENT` с `*/*` отдаёт что угодно,
 /// а call-site'ы вроде импорта конфига ждут конкретное расширение. Отказ —
 /// [PickFailed] с внятным текстом, а не молчаливое «отменено».
+///
+/// Результат приводится к [PickedFile] — тому же типу, что у плагинного пути.
 Future<PickOutcome> _pickViaGetContent({
   List<String>? allowedExtensions,
   bool allowMultiple = false,
@@ -133,7 +164,7 @@ Future<PickOutcome> _pickViaGetContent({
     final picked =
         await UrlLauncher.pickFilesViaGetContent(allowMultiple: allowMultiple);
     if (picked == null || picked.isEmpty) return const PickCancelled();
-    final files = <PlatformFile>[];
+    final files = <PickedFile>[];
     for (final item in picked) {
       final name = item['name'] as String? ?? 'config';
       final bytes = item['bytes'] as Uint8List?;
@@ -150,7 +181,7 @@ Future<PickOutcome> _pickViaGetContent({
           continue;
         }
       }
-      files.add(PlatformFile(name: name, size: bytes.length, bytes: bytes));
+      files.add(PickedFile(name: name, bytes: bytes));
     }
     if (files.isEmpty) {
       // Юзер что-то выбрал, но всё отсеялось: расширение не то либо файл не

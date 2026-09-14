@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -461,8 +459,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   /// Импорт подписки/конфига из файла. Содержимое (URI-список, JSON-конфиг,
   /// proxy-link) идёт в тот же `addFromInput`, что и paste/manual — парсер
-  /// сам определяет формат. file_picker уже используется на других экранах
-  /// (config_screen / backup) — паттерн чтения bytes/path идентичный.
+  /// сам определяет формат. Файл приходит уже прочитанным ([PickedFile]).
   ///
   /// §234 — multi-select: несколько файлов → все серверы в новую папку
   /// (имена нод — из имён файлов). Один файл — прежние пути (§129
@@ -484,7 +481,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         return;
       }
       final file = outcome.single;
-      final text = (await _readPickedFile(file))?.trim() ?? '';
+      final text = file.text.trim();
       if (text.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -527,16 +524,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
   }
 
-  static Future<String?> _readPickedFile(PlatformFile file) async {
-    if (file.bytes != null && file.bytes!.isNotEmpty) {
-      return String.fromCharCodes(file.bytes!);
-    }
-    if (file.path != null) return File(file.path!).readAsString();
-    return null;
-  }
-
   /// §234 — несколько выбранных файлов → новая папка со всеми серверами.
-  Future<void> _importFilesIntoFolder(List<PlatformFile> files) async {
+  Future<void> _importFilesIntoFolder(List<PickedFile> files) async {
     final name = await showFolderNameDialog(context,
         title: getLocalText.plural("Import %d files into folder", files.length));
     if (name == null || !mounted) return;
@@ -545,7 +534,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     var addedFiles = 0;
     final errors = <String>[];
     for (final file in files) {
-      final text = (await _readPickedFile(file))?.trim() ?? '';
+      final text = file.text.trim();
       if (text.isEmpty) {
         errors.add(getLocalText.s("%s: empty file", file.name));
         continue;

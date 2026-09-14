@@ -1,4 +1,5 @@
 import '../services/builder/rule_set_registry.dart';
+import 'node_spec.dart';
 import 'singbox_entry.dart';
 import 'template_vars.dart';
 
@@ -42,4 +43,20 @@ abstract class EmitContext {
   /// на весь `buildConfig`, доступен post-steps и ServerList.build'у.
   /// Flush в `config.route` делает сам `buildConfig` в конце.
   RuleSetRegistry get ruleSets;
+
+  /// §435 — финальный тег эмитированного узла (после префикса контейнера и
+  /// `allocateTag`). По нему `buildConfig` инжектит секции узла
+  /// (`@self` → этот тег); узел, которого здесь нет, секций не даёт.
+  void noteEmitted(NodeSpec node, String finalTag) {}
+
+  /// §435 — предупреждение сборки из `ServerList.build` (гейт ядра и т.п.):
+  /// уходит в `emitWarnings` наравне с остальными строками отчёта.
+  void warn(String line) {}
+
+  /// §435 — умеет ли установленное ядро endpoint `tailscale`
+  /// (`coreSupportsTailscale`). Дефолт fail-open — как у гейта `chain`.
+  bool get coreSupportsTailscale => true;
+
+  /// §435 — строка версии ядра для текста предупреждения гейта.
+  String get coreVersion => '';
 }

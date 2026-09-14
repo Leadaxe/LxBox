@@ -40,6 +40,18 @@ void main() {
       final name = base.substring(root.path.length + 1);
       test(name, () {
         final raw = File('$base.backup.json').readAsStringSync();
+        // §435 / контракт 1.0 — кейс формата новее читаемого (`lx_backup`
+        // выше kLxBackupVersion) сторона ПРОПУСКАЕТ по маркеру, как чужой
+        // extension (договорённость с лаунчером 14.09.2026), без
+        // override-файлов: секции узлов в бэкапе едут только с 1.0.
+        final marker = jsonDecode(raw);
+        if (marker is Map &&
+            marker['lx_backup'] is num &&
+            (marker['lx_backup'] as num) > kLxBackupVersion) {
+          markTestSkipped(
+              'формат lx_backup ${marker['lx_backup']} новее читаемого $kLxBackupVersion');
+          return;
+        }
         // Per-app override читается ТАК ЖЕ, как в URI- и body-раннерах
         // (contract/corpus/README «Нормативность expected»): он означает
         // задокументированное by-design различие сторон, а его отсутствие —
@@ -92,6 +104,13 @@ void main() {
           expect(file.rules[i].name, wantRules[i]['name'], reason: 'имя правила #$i');
           expect(file.rules[i].enabled, wantRules[i]['enabled'],
               reason: 'состояние правила ${wantRules[i]['name']}');
+          // ## 12 (D-100) — `refs` в ожиданиях необязателен: нет ключа — не
+          // проверяем; есть — все наборы правила по порядку.
+          final wantRefs = wantRules[i]['refs'];
+          if (wantRefs is List) {
+            expect(file.rules[i].srsUrls, wantRefs.cast<String>(),
+                reason: 'refs правила ${wantRules[i]['name']}');
+          }
         }
 
         final wantVars = (expected['vars'] as Map?)?.cast<String, dynamic>();

@@ -52,6 +52,7 @@ reference lives outside this repo and is vendored into `app/contract/` by
 14. [Amnezia vpn:// Link](#92-amnezia-vpn-link)
 15. [TUIC v5](#95-tuic-v5)
 16. [MASQUE (Cloudflare WARP)](#96-masque-cloudflare-warp)
+16a. [Tailscale (endpoint)](#97-tailscale-endpoint)
 17. [JSON Outbound / config (raw sing-box)](#10-json-outbound)
 18. [Xray JSON Array](#11-xray-json-array)
 19. [XHTTP transport](#xhttp-transport)
@@ -1252,6 +1253,40 @@ nodes silently.
 - [WARP integration (§025)](spec/features/025%20warp%20integration/spec.md)
 
 ---
+
+## 9.7 Tailscale (endpoint)
+
+§435 / contract ## 13 (`contract/docs/NODE_SECTIONS.md` §6, registry `protocols/tailscale.json`).
+A sing-box ≥ 1.12 **endpoint** (`type: tailscale`): tsnet runs in user space and joins the
+tailnet by `auth_key`; the node has **no address** (`server`/`server_port` are empty) and
+**no URI form** — it arrives only from sing-box JSON (`outbounds[]` or `endpoints[]`) or from
+the Add Server Wizard's Tailscale mode.
+
+- **Model:** `TailscaleSpec` keeps the body **as is** (`auth_key`, `control_url`, `hostname`,
+  `ephemeral`, `accept_routes`, `exit_node`, `exit_node_allow_lan_access`, `advertise_routes`,
+  `state_directory`, dial fields …) minus `type`/`tag`/`detour`; `toUri()` is the compact JSON
+  text with `tag`, which `decode()` reads back as a single outbound.
+- **Emission:** always into `endpoints[]`. If the body has no `state_directory`, the builder
+  writes `<filesDir>/tailscale/<final tag>` (tag sanitized to `[A-Za-z0-9._-]`, the rest → `_`)
+  at emission only — the stored body never gets a path (it is machine-specific).
+- **Core gate:** the AAR must carry `with_tailscale` (fork `v1.14.0-lx.38` or newer,
+  `kTailscaleMinCoreVersion`). On an older core the node is **skipped at build** with the
+  `tailscale_core_unsupported` warning line; the rest of the config builds. The node stays in
+  storage — it survives a core update and a backup from a desktop.
+- **Directions:** a node without a non-empty `exit_node` is **not** a Direction candidate (it
+  does not reach the internet) and therefore is not listed on Home (Home lists the selector's
+  members); it lives in Servers, the detour picker and chain positions. With `exit_node` it is
+  a candidate like any other node.
+- **Probe:** not tested (no address; a probe config would have to join the tailnet) — “—” instead
+  of a delay.
+- **Companion records (sections):** a Tailscale node normally carries a DNS server
+  `{type: tailscale, endpoint: @self}`, a DNS rule for `.ts.net` and a route rule for
+  `100.64.0.0/10 → @self` — see STORAGE.md “Node sections”. The DNS server type accepts at most
+  one server per endpoint; a dangling `endpoint` drops the server and the rules on it at build.
+- **Whole config as source:** a sing-box config with exactly one payload node yields the node
+  **with** its sections: DNS servers whose `detour`/`endpoint` is the node's tag, DNS rules on
+  those servers, route rules whose `outbound` is the node's tag (rule names — `body.name` or
+  `@{self} rule N`).
 
 ## 10. JSON Outbound
 

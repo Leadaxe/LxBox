@@ -47,6 +47,8 @@ String? nodeIdentityKeyRaw(NodeSpec node) {
     WireguardSpec s => s.privateKey,
     MasqueSpec s => s.privateKeyDer,
     AutoSelectSpec() => '',
+    // §435 — адреса нет, ключа пула нет: `server.isEmpty` выше вернул null.
+    TailscaleSpec() => '',
   };
   return '${node.protocol}|${node.server}|${node.port}|$cred';
 }

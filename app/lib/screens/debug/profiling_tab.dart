@@ -7,6 +7,7 @@ import '../../services/profile_dump_writer.dart';
 import '../../services/ui_helpers.dart';
 import '../../vpn/box_vpn_client.dart';
 import '../../vpn/pprof_profile.dart';
+import '../../widgets/safe_bottom.dart';
 
 /// §207 — вкладка «Profiling» на экране Debug: pprof-слепки живого ядра
 /// (goroutines / CPU / heap / allocs) через libbox PProfServer.
@@ -53,9 +54,8 @@ class _ProfilingTabState extends State<ProfilingTab>
       }
       final path = await ProfileDumpWriter.writeProfile(p, bytes);
       final name = path.split('/').last;
-      // ignore: deprecated_member_use
-      await Share.shareXFiles(
-        [
+      await SharePlus.instance.share(ShareParams(
+        files: [
           XFile(path,
               name: name,
               mimeType: p.isText ? 'text/plain' : 'application/octet-stream')
@@ -64,7 +64,7 @@ class _ProfilingTabState extends State<ProfilingTab>
             ? 'L×Box ${p.label}'
             : 'L×Box ${p.label} — analyze with: go tool pprof $name',
         subject: name,
-      );
+      ));
     } catch (e) {
       showSnack(
           getLocalText.s("Capture failed: %s", formatUserError(e).render()));
@@ -86,7 +86,7 @@ class _ProfilingTabState extends State<ProfilingTab>
     super.build(context);
     final cs = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16).withSafeBottom(context),
       children: [
         Text(
           getLocalText.s("Capture a diagnostic snapshot of the running core and share it. Requires the VPN to be connected."),

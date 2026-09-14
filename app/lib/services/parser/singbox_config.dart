@@ -14,8 +14,12 @@ library;
 import 'dart:convert';
 
 import '../../models/auto_select.dart';
+import '../../models/custom_rule.dart';
+import '../../models/dns_ref.dart';
+import '../../models/node_sections.dart';
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
+import '../../models/record_codec.dart';
 import '../node_hash.dart';
 import '../node_identity.dart';
 import 'json_parsers.dart';
@@ -268,7 +272,145 @@ List<NodeSpec> _parseOne(
     if (spec != null) result.add(spec..sourceExtended = extended);
   }
 
+  // §435 / контракт ## 13 (NODE_SECTIONS.md §6, §7) — целый конфиг как
+  // источник связки: если конфиг дал РОВНО ОДИН не-групповой узел, его
+  // DNS-серверы, DNS-правила и правила маршрута извлекаются в
+  // `importedSections`; документ с явным `sections` читается кодеком. Хозяин
+  // секций — контейнер: контроллер переносит их в `UserServer`/`FolderMember`
+  // при добавлении, у подписок они не применяются.
+  final payload = [for (final n in result) if (!n.isGroup) n];
+  if (payload.length == 1) {
+    final node = payload.single;
+    final explicit = config['sections'];
+    if (explicit is Map) {
+      final dropped = <String>[];
+      node.importedSections =
+          NodeSections.fromJson(explicit, dropped: dropped);
+      for (final d in dropped) {
+        node.warnings.add(SectionsRecordDroppedWarning(d));
+      }
+      if (config['dns'] is Map || config['route'] is Map) {
+        node.warnings.add(const SectionsConflictWarning());
+      }
+    } else {
+      var rawTag = '';
+      for (final e in nodeByTag.entries) {
+        if (identical(e.value, node)) {
+          rawTag = e.key;
+          break;
+        }
+      }
+      if (rawTag.isNotEmpty) {
+        final dropped = <String>[];
+        node.importedSections =
+            extractNodeSections(config, rawTag, dropped: dropped);
+        for (final d in dropped) {
+          node.warnings.add(SectionsRecordDroppedWarning(d));
+        }
+      }
+    }
+  }
+
   return result;
+}
+
+/// §435 (NODE_SECTIONS.md §6) — связка узла [nodeTag] из целого конфига:
+/// DNS-серверы, у которых `detour` или `endpoint` равны тегу узла (или уже
+/// `@self`); DNS-правила, чей `server` — один из взятых серверов; правила
+/// маршрута, чей `outbound` равен тегу узла. Ссылки на тег переписываются в
+/// `@self`, теги серверов — в `@{self}-<тег>`. Всё остальное в `dns`/`route`
+/// игнорируется, как раньше.
+///
+/// Имя извлечённого правила — `name` из тела, если провайдер его дал (в
+/// sing-box такого поля нет, но лаунчер его читает так же), иначе
+/// `@{self} rule N` (N — порядковый среди правил этого узла, с 1); `num` —
+/// `945 + i` в порядке извлечения (паритет с лаунчером, ответ 14.09.2026).
+/// Незнакомые кодеку ключи тела (`rule_set` на набор конфига и т.п.)
+/// теряются: кодек их не хранит.
+NodeSections? extractNodeSections(
+  Map<String, dynamic> config,
+  String nodeTag, {
+  List<String>? dropped,
+}) {
+  bool refersNode(Object? v) => v == nodeTag || v == kSelfPlaceholder;
+
+  final servers = <DnsServerInline>[];
+  final renamed = <String, String>{}; // тег из конфига → @{self}-тег
+  final dns = config['dns'];
+  if (dns is Map) {
+    final rawServers = dns['servers'];
+    if (rawServers is List) {
+      for (final s in rawServers.whereType<Map>()) {
+        final tag = s['tag']?.toString() ?? '';
+        if (tag.isEmpty) continue;
+        if (!refersNode(s['detour']) && !refersNode(s['endpoint'])) continue;
+        final body = Map<String, dynamic>.of(s.cast<String, dynamic>())
+          ..remove('tag');
+        if (refersNode(body['detour'])) body['detour'] = kSelfPlaceholder;
+        if (refersNode(body['endpoint'])) body['endpoint'] = kSelfPlaceholder;
+        final newTag = '$kSelfInlinePlaceholder-$tag';
+        renamed[tag] = newTag;
+        servers.add(DnsServerInline(enabled: true, tag: newTag, body: body));
+      }
+    }
+  }
+
+  final dnsRules = <DnsRuleInline>[];
+  if (dns is Map && renamed.isNotEmpty) {
+    final rawRules = dns['rules'];
+    if (rawRules is List) {
+      for (final r in rawRules.whereType<Map>()) {
+        final srv = r['server'];
+        if (srv is! String || !renamed.containsKey(srv)) continue;
+        final body = Map<String, dynamic>.of(r.cast<String, dynamic>());
+        body['server'] = renamed[srv];
+        dnsRules.add(DnsRuleInline(name: '', rule: body, enabled: true));
+      }
+    }
+  }
+
+  final rules = <CustomRule>[];
+  final route = config['route'];
+  if (route is Map) {
+    final rawRules = route['rules'];
+    if (rawRules is List) {
+      var n = 0;
+      for (final r in rawRules.whereType<Map>()) {
+        if (!refersNode(r['outbound'])) continue;
+        final body = Map<String, dynamic>.of(r.cast<String, dynamic>());
+        body['outbound'] = kSelfPlaceholder;
+        final givenName = body.remove('name');
+        final name = givenName is String && givenName.trim().isNotEmpty
+            ? givenName.trim()
+            : '$kSelfInlinePlaceholder rule ${n + 1}';
+        final read = ruleFromRecord({
+          'kind': 'inline',
+          'name': name,
+          'enabled': true,
+          'num': kNodeRuleDefaultNum + n,
+          'body': body,
+        });
+        final rule = read.value;
+        if (rule == null) {
+          dropped?.add('route.rules: ${read.dropped}');
+          continue;
+        }
+        // Норма B3: `rule_set` конфига и любой незнакомый матчер не
+        // переносятся; вырезать ключ молча нельзя (правило стало бы
+        // match-all на узел) — запись отбрасывается целиком.
+        if (read.unknownKeys.isNotEmpty) {
+          dropped?.add(
+              'route.rules → "$name": body keys not supported here: ${read.unknownKeys.join(', ')}');
+          continue;
+        }
+        rules.add(rule);
+        n++;
+      }
+    }
+  }
+
+  final out = NodeSections(rules: rules, dnsServers: servers, dnsRules: dnsRules);
+  return out.isEmpty ? null : out;
 }
 
 /// §368 §3.3 — имя узла.

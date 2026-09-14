@@ -344,7 +344,9 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 
 ## Subscriptions CRUD — `/subs/*`
 
-Подписки + inline user-servers. Shape в GET — как `/state/subs`.
+Подписки + inline user-servers. Shape в GET — как `/state/subs`. §435 — у
+записи `kind: UserServer` есть `sections` (секции узла как хранятся, с
+плейсхолдерами `@self`; `null` — нет); read-only, PATCH его не принимает.
 
 | Endpoint | Метод | Body |
 |---|---|---|
@@ -745,7 +747,7 @@ credentials (URI/ключи) → по умолчанию скрыт, `?reveal=tr
 | `/folders/{id}` | GET | — |
 | `/folders/{id}` | DELETE | `?keep_servers=true` — вынести членов одиночными серверами (default false — удалить совсем) |
 | `/folders/{id}/members` | POST | ровно одно из: `{"input":"<uri\|WG-ini\|JSON>","name_fallback"?}` (paste) или `{"url":"..."}` (одноразовый снапшот: URL не хранится, авто-обновления нет) |
-| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour}` |
+| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour}` — §435: `sections` члена в GET read-only, PATCH не принимает |
 | `/folders/{id}/members/{idx}` | DELETE | — |
 | `/folders/{id}/members/reorder` | POST | `{"order":[старые индексы в новом порядке]}` — полная перестановка |
 | `/folders/{id}/members/{idx}/ungroup` | POST | член → одиночный сервер сразу после папки |

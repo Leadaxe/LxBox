@@ -1349,9 +1349,6 @@
   "Custom rules, tun apps, DNS options, final outbound": {
     "value": "Свои правила, приложения туннеля, параметры DNS, финальный исходящий канал"
   },
-  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3.": {
-    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH / DoQ / DoH3."
-  },
   "Cut": {
     "value": "Вырезать"
   },
@@ -2619,6 +2616,9 @@
   "NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).": {
     "value": "NaïveProxy не входит в эту сборку libbox (пересоберите с -tags with_naive_outbound)."
   },
+  "NaïveProxy extra-headers entry \"%s\" is not a valid header and was dropped. Other headers are kept, but the server will not see this one.": {
+    "value": "Запись extra-headers NaïveProxy «%s» не является корректным заголовком и отброшена. Остальные заголовки сохранены, но этот сервер не увидит."
+  },
   "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.": {
     "value": "У параметра NaïveProxy «padding=%s» нет соответствия в ядре, поэтому он проигнорирован. Узел остаётся рабочим."
   },
@@ -3637,6 +3637,12 @@
   "SRS URL is empty": {
     "value": "URL SRS пуст"
   },
+  "SRS: %s (+%d)": {
+    "value": "SRS: %s (+%d)"
+  },
+  "One URL per line — several rule sets in one rule.": {
+    "value": "По одному URL на строку — несколько наборов правил в одном правиле."
+  },
   "SRS: %s": {
     "value": "SRS: %s"
   },
@@ -4337,6 +4343,9 @@
   "Unknown uTLS fingerprint \"%s\" replaced with \"chrome\" (would otherwise break the whole config).": {
     "value": "Неизвестный uTLS fingerprint «%s» заменён на «chrome» (иначе сломался бы весь конфиг)."
   },
+  "REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 accept only a Chrome-like ClientHello, so \"chrome\" is used when connecting.": {
+    "value": "REALITY с uTLS fingerprint «%s»: серверы Xray начиная с v26.9.8 принимают только ClientHello в стиле Chrome, поэтому при подключении используется «chrome»."
+  },
   "Unlimited": {
     "value": "никогда"
   },
@@ -4960,5 +4969,157 @@
   },
   "Region": {
     "value": "Регион"
+  },
+  "Node section record dropped: %s": {
+    "value": "Запись секции узла отброшена: %s"
+  },
+  "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.": {
+    "value": "Документ несёт и «sections», и «dns»/«route»: взяты «sections», остальное проигнорировано."
+  },
+  "%d DNS rules": {
+    "value": {
+      "one": "%d DNS-правило",
+      "few": "%d DNS-правила",
+      "many": "%d DNS-правил",
+      "other": "%d DNS-правил"
+    }
+  },
+  "%d DNS servers": {
+    "value": {
+      "one": "%d DNS-сервер",
+      "few": "%d DNS-сервера",
+      "many": "%d DNS-серверов",
+      "other": "%d DNS-серверов"
+    }
+  },
+  "%d rules": {
+    "value": {
+      "one": "%d правило",
+      "few": "%d правила",
+      "many": "%d правил",
+      "other": "%d правил"
+    }
+  },
+  "A one-time key is consumed on the first login; the device identity then lives in the state directory. Clearing the app data registers a new device.": {
+    "value": "Одноразовый ключ расходуется при первом входе; дальше идентичность устройства живёт в каталоге состояния. Очистка данных приложения регистрирует новое устройство."
+  },
+  "Accept default resolvers": {
+    "value": "Принимать резолверы по умолчанию"
+  },
+  "Accept routes": {
+    "value": "Принимать маршруты"
+  },
+  "Auth key": {
+    "value": "Ключ авторизации"
+  },
+  "Auth key required": {
+    "value": "Нужен ключ авторизации"
+  },
+  "Clear sections": {
+    "value": "Очистить секции"
+  },
+  "Clear sections?": {
+    "value": "Очистить секции?"
+  },
+  "Control URL (optional)": {
+    "value": "Control URL (необязательно)"
+  },
+  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.": {
+    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale."
+  },
+  "Ephemeral": {
+    "value": "Эфемерный"
+  },
+  "Exit node (optional)": {
+    "value": "Выходной узел (необязательно)"
+  },
+  "From nodes · read-only, edited in the node": {
+    "value": "Из узлов · только чтение, правятся в узле"
+  },
+  "Has node sections": {
+    "value": "Есть секции узла"
+  },
+  "Hostname (optional)": {
+    "value": "Имя хоста (необязательно)"
+  },
+  "Invalid JSON: empty array": {
+    "value": "Некорректный JSON: пустой массив"
+  },
+  "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
+    "value": "JSON должен быть объектом outbound с «type» или документом с «endpoints»/«outbounds»"
+  },
+  "Leave empty for tailnet access only — the node will not appear in Directions": {
+    "value": "Оставьте пустым для доступа только в tailnet — узел не появится в Направлениях"
+  },
+  "MagicDNS of the tailnet via a Tailscale node · no address": {
+    "value": "MagicDNS сети tailnet через узел Tailscale · без адреса"
+  },
+  "Names outside the tailnet go to the default DNS servers; off — NXDOMAIN": {
+    "value": "Имена вне tailnet идут к DNS-серверам по умолчанию; выкл — NXDOMAIN"
+  },
+  "No Tailscale nodes yet — add one on the Servers screen first": {
+    "value": "Узлов Tailscale пока нет — сначала добавьте узел на экране Servers"
+  },
+  "No address": {
+    "value": "Без адреса"
+  },
+  "No address (Tailscale)": {
+    "value": "Без адреса (Tailscale)"
+  },
+  "Node": {
+    "value": "Узел"
+  },
+  "Paste a sing-box config with dns/route or a document with \"sections\" on the JSON tab to attach the node's rules.": {
+    "value": "Чтобы приложить правила узла, вставьте на вкладке JSON конфиг sing-box с dns/route или документ с «sections»."
+  },
+  "Rules and DNS records this node carries": {
+    "value": "Правила и DNS-записи, которые узел носит с собой"
+  },
+  "Saved · %d section records dropped": {
+    "value": {
+      "one": "Сохранено · %d запись секций отброшена",
+      "few": "Сохранено · %d записи секций отброшены",
+      "many": "Сохранено · %d записей секций отброшено",
+      "other": "Сохранено · %d записей секций отброшено"
+    }
+  },
+  "Sections": {
+    "value": "Секции"
+  },
+  "Sections cleared": {
+    "value": "Секции очищены"
+  },
+  "Shown in Routing and DNS with the node's tag": {
+    "value": "Показываются в Routing и DNS с тегом узла"
+  },
+  "Stored JSON": {
+    "value": "JSON как хранится"
+  },
+  "Tailscale node": {
+    "value": "Узел Tailscale"
+  },
+  "Tailscale node is required": {
+    "value": "Нужно выбрать узел Tailscale"
+  },
+  "The device is removed from the tailnet when it goes offline": {
+    "value": "Устройство удаляется из tailnet, когда уходит в офлайн"
+  },
+  "The document carries both \"sections\" and \"dns\"/\"route\" — keep only one of them": {
+    "value": "Документ несёт и «sections», и «dns»/«route» — оставьте что-то одно"
+  },
+  "The node's rules and DNS records will be removed. The node itself stays.": {
+    "value": "Правила и DNS-записи узла будут удалены. Сам узел останется."
+  },
+  "Use subnet routes advertised by other tailnet devices": {
+    "value": "Использовать маршруты подсетей, которые анонсируют другие устройства tailnet"
+  },
+  "Which node's tailnet answers the queries": {
+    "value": "Чья сеть tailnet отвечает на запросы"
+  },
+  "from node %s": {
+    "value": "из узла %s"
+  },
+  "node is disabled": {
+    "value": "узел выключен"
   }
 }

@@ -519,6 +519,79 @@ void main() {
       ]);
     });
 
+    // ## 12 контракта (D-100) — несколько наборов в одном правиле.
+    group('## 12 srs с несколькими наборами', () {
+      final multi = CustomRuleSrs(
+        id: 'm',
+        name: 'Multi',
+        srsUrls: const [
+          'https://x/a.srs',
+          'https://x/b.srs',
+          'https://x/c.srs',
+        ],
+        outbound: 'proxy',
+      );
+
+      test('rule_set на каждый набор, одно правило со списком тегов', () {
+        final reg = RuleSetRegistry();
+        final warn = applyCustomRules(reg, [multi], srsPaths: {
+          'm': '/cache/m.srs',
+          'm~1': '/cache/m~1.srs',
+          'm~2': '/cache/m~2.srs',
+        });
+        expect(warn, isEmpty);
+        expect(reg.getRuleSets().map((s) => s['tag']),
+            ['Multi', 'Multi-2', 'Multi-3']);
+        expect(reg.getRuleSets().map((s) => s['path']),
+            ['/cache/m.srs', '/cache/m~1.srs', '/cache/m~2.srs']);
+        expect(reg.getRules(), [
+          {
+            'rule_set': ['Multi', 'Multi-2', 'Multi-3'],
+            'outbound': 'proxy',
+          },
+        ]);
+      });
+
+      test('один набор — rule_set строкой, конфиг как до ## 12', () {
+        final reg = RuleSetRegistry();
+        applyCustomRules(
+            reg,
+            [
+              CustomRuleSrs(
+                  id: 's', name: 'S', srsUrl: 'https://x/a.srs', outbound: 'proxy')
+            ],
+            srsPaths: {'s': '/cache/s.srs'});
+        expect(reg.getRules().single['rule_set'], 'S');
+      });
+
+      test('нет файла хотя бы одного набора → правило пропущено с warning', () {
+        final reg = RuleSetRegistry();
+        final warn = applyCustomRules(reg, [multi], srsPaths: {
+          'm': '/cache/m.srs',
+          'm~2': '/cache/m~2.srs',
+        });
+        expect(warn.single, contains('Multi'));
+        expect(reg.getRuleSets(), isEmpty, reason: 'частичной регистрации нет');
+        expect(reg.getRules(), isEmpty);
+      });
+
+      test('resolve-опция: то же множество тегов в resolve-правиле', () {
+        final reg = RuleSetRegistry();
+        final r = multi.copyWith(
+            resolve: const RuleResolve(only: false, strategy: 'ipv4_only'));
+        applyCustomRules(reg, [r], srsPaths: {
+          'm': '/cache/m.srs',
+          'm~1': '/cache/m~1.srs',
+          'm~2': '/cache/m~2.srs',
+        });
+        final rules = reg.getRules();
+        expect(rules, hasLength(2));
+        expect(rules.first['action'], 'resolve');
+        expect(rules.first['rule_set'], ['Multi', 'Multi-2', 'Multi-3']);
+        expect(rules.last['rule_set'], ['Multi', 'Multi-2', 'Multi-3']);
+      });
+    });
+
     test('disabled rule не эмитит wifi-условия', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [

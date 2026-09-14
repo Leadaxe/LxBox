@@ -7,6 +7,9 @@ import '../widgets/outbound_picker.dart';
 import 'dns_server_edit/edit_controller.dart';
 // §312 — опция пикера членов группы нужна caller'у (dns_settings_screen).
 export 'dns_server_edit/edit_controller.dart' show DnsMemberOption;
+// §435 — опция пикера endpoint у сервера tailscale (тот же caller).
+export '../services/dns/node_dns_records.dart' show TailscaleEndpointOption;
+import '../services/dns/node_dns_records.dart' show TailscaleEndpointOption;
 import 'dns_server_edit/tabs/json_tab.dart';
 import 'dns_server_edit/tabs/params_tab.dart';
 import 'dns_settings_screen/resolved_server.dart';
@@ -31,6 +34,7 @@ class DnsServerEditScreen extends StatefulWidget {
     this.outboundOptions = const [],
     this.dnsServerTags = const [],
     this.dnsMemberOptions = const [],
+    this.tailscaleEndpoints = const [],
     this.existingTags = const {},
   });
 
@@ -53,6 +57,9 @@ class DnsServerEditScreen extends StatefulWidget {
   /// fakeip/hosts; disabled помечаются).
   final List<DnsMemberOption> dnsMemberOptions;
 
+  /// §435 — узлы Tailscale для пикера `endpoint` сервера `tailscale`.
+  final List<TailscaleEndpointOption> tailscaleEndpoints;
+
   /// Существующие теги (new-режим): коллизия tag'а → confirm replace.
   final Set<String> existingTags;
 
@@ -74,6 +81,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
       outboundOptions: widget.outboundOptions,
       dnsServerTags: widget.dnsServerTags,
       dnsMemberOptions: widget.dnsMemberOptions,
+      tailscaleEndpoints: widget.tailscaleEndpoints,
     );
   }
 
@@ -103,11 +111,21 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
       }
       // §117 задача 4b: для форменных режимов (UDP/DoT/DoH) адрес обязателен.
       // §312: КРОМЕ группы — у неё вместо адреса участники (`isGroup`).
+      // §435: и КРОМЕ tailscale — у него вместо адреса endpoint.
       if (_ctrl.serverMode != null &&
           !_ctrl.isGroup &&
+          !_ctrl.isTailscale &&
           _ctrl.addressCtrl.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(getLocalText.s("Server address is required"))),
+        );
+        return;
+      }
+      // §435: у tailscale обязателен endpoint — без него сервер мёртв
+      // (санитайзер сборки выбросит его с warning), хранить нечего.
+      if (_ctrl.isTailscale && _ctrl.tailscaleEndpoint.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(getLocalText.s("Tailscale node is required"))),
         );
         return;
       }
@@ -322,6 +340,7 @@ Future<DnsServerEditResult?> openDnsServerEditor(
   List<OutboundOption> outboundOptions = const [],
   List<String> dnsServerTags = const [],
   List<DnsMemberOption> dnsMemberOptions = const [],
+  List<TailscaleEndpointOption> tailscaleEndpoints = const [],
   Set<String> existingTags = const {},
 }) {
   return Navigator.push<DnsServerEditResult>(
@@ -335,6 +354,7 @@ Future<DnsServerEditResult?> openDnsServerEditor(
         outboundOptions: outboundOptions,
         dnsServerTags: dnsServerTags,
         dnsMemberOptions: dnsMemberOptions,
+        tailscaleEndpoints: tailscaleEndpoints,
         existingTags: existingTags,
       ),
     ),

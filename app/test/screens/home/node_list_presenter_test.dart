@@ -225,6 +225,7 @@ void main() {
 
     test('лейблы без перевода: Auto / Fastest / Pool', () {
       expect(protoLabel('urltest'), 'Auto');
+      expect(protoLabel('tailscale'), 'Tailscale'); // §435
       expect(autoModeLabel('least_test'), 'Fastest');
       expect(autoModeLabel('round_robin'), 'Pool');
     });

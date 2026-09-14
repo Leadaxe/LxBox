@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/import_rule.dart';
+import '../models/node_sections.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/ui_msg.dart';
@@ -922,6 +923,9 @@ class SubscriptionController extends ChangeNotifier {
       origin: origin,
       createdAt: DateTime.now(),
       rawBody: text,
+      // §435 — связка из целого конфига с одним узлом / документа с
+      // `sections` (NODE_SECTIONS.md §6): хозяин секций — контейнер.
+      sections: nodes.first.importedSections,
       nodes: nodes,
     ));
     _entries.add(SubscriptionEntry(
@@ -1172,6 +1176,7 @@ class SubscriptionController extends ChangeNotifier {
         origin: UserSource.manual,
         createdAt: DateTime.now(),
         rawBody: m.raw,
+        sections: m.sections, // §435
         nodes: [if (m.node != null) m.node!],
       );
 
@@ -1380,7 +1385,9 @@ class SubscriptionController extends ChangeNotifier {
         }
         raw = _rawWithName(n.toUri(), candidate);
       }
-      added.add(FolderMember(raw: raw));
+      // §435 — секции из целого конфига / документа с `sections` едут в
+      // члена папки вместе с телом.
+      added.add(FolderMember(raw: raw, sections: n.importedSections));
     }
     entry._replaceList(folder.copyWith(members: [...folder.members, ...added]));
     entry.nodeCount = entry.list.nodes.length;
@@ -1551,7 +1558,13 @@ class SubscriptionController extends ChangeNotifier {
       return const ErrMsg(ErrKey.memberParseKeepCurrent);
     }
     final members = [...folder.members];
-    members[memberIndex] = members[memberIndex].copyWith(raw: trimmed);
+    // §435 — голое тело секции не трогает; документ с `sections` или с
+    // `dns`/`route` (извлечение) замещает их целиком (NODE_SECTIONS.md §7).
+    final imported = probe.node!.importedSections;
+    members[memberIndex] = members[memberIndex].copyWith(
+      raw: trimmed,
+      sections: imported,
+    );
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
     await _persist();
@@ -1805,7 +1818,11 @@ class SubscriptionController extends ChangeNotifier {
               FolderMember(
                   raw: memberRawFor(n),
                   enabled: server.enabled,
-                  detour: personalDetour),
+                  detour: personalDetour,
+                  // §435 — секции одиночного едут с его (единственным) узлом.
+                  sections: identical(n, server.nodes.first)
+                      ? server.sections
+                      : null),
           ];
     folderEntry._replaceList(
         folder.copyWith(members: [...folder.members, ...added]));
@@ -1906,6 +1923,61 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
+  /// §435 — native `Context.filesDir` для `state_directory` узлов Tailscale.
+  /// Кэшируется только успешный ответ (в юнит-тестах канала нет → пусто).
+  static String? _filesDirCache;
+  Future<String> _tailscaleStateRoot() async {
+    final cached = _filesDirCache;
+    if (cached != null) return cached;
+    try {
+      final native = await BoxVpnClient().getFilesDir();
+      if (native != null && native.isNotEmpty) {
+        _filesDirCache = native;
+        return native;
+      }
+    } catch (_) {
+      // Канал недоступен (тесты, ранний старт) — без корня.
+    }
+    return '';
+  }
+
+  /// §435 — секции одиночного узла (контракт ## 13): экран Routing пишет
+  /// `enabled`/`num` записи, редактор узла — весь набор или очистку.
+  /// `null` = снять поле.
+  Future<void> setUserServerSections(int index, NodeSections? sections) async {
+    if (index < 0 || index >= _entries.length) return;
+    final list = _entries[index].list;
+    if (list is! UserServer) return;
+    _entries[index]._replaceList(sections == null || sections.isEmpty
+        ? list.copyWith(clearSections: true)
+        : list.copyWith(sections: sections));
+    await _persist();
+    notifyListeners();
+  }
+
+  /// §435 — секции члена папки, симметрично [setUserServerSections].
+  Future<UiMsg?> setMemberSections(
+      int index, int memberIndex, NodeSections? sections) async {
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
+    if (memberIndex < 0 || memberIndex >= folder.members.length) {
+      return const ErrMsg(ErrKey.serverNotFound);
+    }
+    final members = [...folder.members];
+    members[memberIndex] = sections == null || sections.isEmpty
+        ? members[memberIndex].copyWith(clearSections: true)
+        : members[memberIndex].copyWith(sections: sections);
+    entry._replaceList(folder.copyWith(members: members));
+    entry.nodeCount = entry.list.nodes.length;
+    await _persist();
+    notifyListeners();
+    return null;
+  }
+
   Future<String> _generate() async {
     AppLog.I.info('Generating config...');
     _progressMessage = const SubStatusBuildingConfig();
@@ -1931,6 +2003,9 @@ class SubscriptionController extends ChangeNotifier {
       idleSuspendReachable:
           await SettingsStorage.getIdleSuspendReachable(), // §272
       passiveCheck: await SettingsStorage.getPassiveCheck(), // §272
+      // §435 — корень `state_directory` узлов Tailscale: native filesDir
+      // (кэш на процесс, как у §316; без канала — пусто, поле не пишется).
+      tailscaleStateRoot: await _tailscaleStateRoot(),
     );
 
     final lists = _entries.map((e) => e.list).toList();
@@ -2281,6 +2356,9 @@ class SubscriptionController extends ChangeNotifier {
       name: '',
       rawBody: connections.join('\n'),
       nodes: nodes,
+      // §435 — голое тело секции не трогает; документ с `sections` или с
+      // `dns`/`route` замещает их целиком (NODE_SECTIONS.md §7).
+      sections: nodes.isEmpty ? null : nodes.first.importedSections,
     );
     _entries[index]._replaceList(next);
     _entries[index].nodeCount = nodes.length;

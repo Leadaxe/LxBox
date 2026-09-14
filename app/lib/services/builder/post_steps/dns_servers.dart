@@ -325,6 +325,13 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
   Set<String>? knownOutboundTags,
   Set<String> ruleReferencedTags = const {},
   List<String>? warningsOut,
+  // §435 — серверы узлов (тела с `tag`, после подстановки `@self`): в конец
+  // списка ПОСЛЕ корневых refs и ДО фильтра членов групп (иначе сервер узла
+  // вылетел бы из группы как `unknown`). Дубль тега — первый побеждает.
+  List<Map<String, dynamic>> nodeServers = const [],
+  // §435 — эмитированные endpoint'ы `tailscale`: цели поля `endpoint`
+  // DNS-сервера того же типа. `null` = проверку не делать (вызовы UI).
+  Set<String>? tailscaleEndpointTags,
 }) {
   final out = <Map<String, dynamic>>[];
   final seen = <String>{};
@@ -367,16 +374,68 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
     out.add(body);
     seen.add(tag);
   }
+  // §435 — серверы узлов: после корневых, дубль тега — первый побеждает с
+  // warning'ом (NODE_SECTIONS.md §3 п. 5).
+  for (final s in nodeServers) {
+    final tag = s['tag']?.toString() ?? '';
+    if (tag.isEmpty) continue;
+    if (seen.contains(tag)) {
+      warningsOut?.add(
+          'Node DNS server "$tag" dropped: the tag is already taken by another server.');
+      continue;
+    }
+    final body = Map<String, dynamic>.of(s);
+    body['tag'] = tag;
+    normalizeDnsDetour(body, knownOutbounds: knownOutboundTags);
+    out.add(body);
+    seen.add(tag);
+  }
+  if (tailscaleEndpointTags != null) {
+    _sanitizeTailscaleDnsServers(out, tailscaleEndpointTags, warningsOut);
+  }
   _filterDnsGroupMembers(
     out,
     allRefTags: {
       for (final e in resolved)
         if (e['tag'] is String && (e['tag'] as String).isNotEmpty)
           e['tag'] as String,
+      for (final s in nodeServers)
+        if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
+          s['tag'] as String,
     },
     warningsOut: warningsOut,
   );
   return out;
+}
+
+/// §435 — санитайзер ребра `endpoint` у DNS-серверов `tailscale`
+/// (NODE_SECTIONS.md §3 п. 5, §6): висячий `endpoint` → сервер выбрасывается
+/// целиком (ядро отвергло бы конфиг); второй сервер на тот же узел →
+/// выбрасывается (ограничение ядра: не больше одного на узел). Правила на
+/// выброшенный сервер чинит вызывающий (`applyCustomDns`). Работает и для
+/// корневых серверов из формы DNS-сервера, и для узловых.
+void _sanitizeTailscaleDnsServers(
+  List<Map<String, dynamic>> out,
+  Set<String> endpointTags,
+  List<String>? warningsOut,
+) {
+  final usedEndpoints = <String>{};
+  out.removeWhere((body) {
+    if (body['type'] != 'tailscale') return false;
+    final tag = body['tag']?.toString() ?? '';
+    final ep = body['endpoint'];
+    if (ep is! String || ep.isEmpty || !endpointTags.contains(ep)) {
+      warningsOut?.add(
+          'DNS server "$tag" dropped: its Tailscale endpoint "${ep ?? ''}" is not in the config.');
+      return true;
+    }
+    if (!usedEndpoints.add(ep)) {
+      warningsOut?.add(
+          'DNS server "$tag" dropped: Tailscale endpoint "$ep" already has a DNS server (the core allows one per node).');
+      return true;
+    }
+    return false;
+  });
 }
 
 /// §312 — пост-проход фильтра членов DNS-групп (`type: group`, kernel

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -41,14 +40,10 @@ Future<void> restoreFromBackup(
     }
     final file = outcome.single;
     String? raw;
-    if (file.bytes != null) {
-      try {
-        raw = const Utf8Decoder(allowMalformed: false).convert(file.bytes!);
-      } catch (e) {
-        AppLog.I.warning('[restore] backup bytes not valid UTF-8: $e');
-      }
-    } else if (file.path != null) {
-      raw = await File(file.path!).readAsString();
+    try {
+      raw = const Utf8Decoder(allowMalformed: false).convert(file.bytes);
+    } catch (e) {
+      AppLog.I.warning('[restore] backup bytes not valid UTF-8: $e');
     }
     if (raw == null) {
       if (context.mounted) {
