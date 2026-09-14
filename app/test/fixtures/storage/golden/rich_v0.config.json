@@ -153,12 +153,22 @@
         "server": "my-doh"
       },
       {
+        "domain_suffix": [
+          ".nokey"
+        ],
+        "server": "google_udp"
+      },
+      {
         "rule_set": "ds-geo",
         "server": "google_udp",
         "query_type": [
           "A",
           "AAAA"
         ]
+      },
+      {
+        "rule_set": "ds-model",
+        "server": "google_udp"
       },
       {
         "rule_set": [
@@ -982,6 +992,12 @@
         "tag": "ds-geo",
         "format": "binary",
         "path": "<sandbox>/docs/rule_sets/ds_geo1.srs"
+      },
+      {
+        "type": "local",
+        "tag": "ds-model",
+        "format": "binary",
+        "path": "<sandbox>/docs/rule_sets/ds_model1.srs"
       }
     ],
     "lx_idle_suspend": "1m",
