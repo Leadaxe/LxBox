@@ -295,6 +295,11 @@ class SettingsStorage {
   static Future<void> saveServerLists(List<ServerList> lists) =>
       _saveServerLists(lists);
 
+  /// Запись источника в форме хранения — для пака диагностики. JSON записи
+  /// потребитель берёт только отсюда: форму хранения держит репозиторий.
+  static Map<String, dynamic> serverListRecord(ServerList list) =>
+      _serverListRecord(list);
+
   // §159 — getEnabledRules/saveEnabledRules удалены (legacy-миграция снята).
 
   // ---------------------------------------------------------------------------

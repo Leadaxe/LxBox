@@ -38,10 +38,13 @@ Future<List<ServerList>> _getServerLists() async {
 
 Future<void> _saveServerLists(List<ServerList> lists, {bool flush = true}) async {
   final data = await _load();
-  data['server_lists'] = lists.map((e) => e.toJson()).toList();
+  data['server_lists'] = lists.map(_serverListRecord).toList();
   SettingsStorage._cache = data;
   if (flush) await _save();
 }
+
+/// Источник → запись `server_lists[]`.
+Map<String, dynamic> _serverListRecord(ServerList list) => list.toJson();
 
 // §159 — `enabled_rules` API удалён (legacy-миграция в `custom_rules` снята).
 
