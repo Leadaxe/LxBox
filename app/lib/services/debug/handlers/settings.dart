@@ -1,5 +1,6 @@
 import '../../../models/background_mode.dart';
 import '../../../models/dns_ref.dart';
+import '../../../models/record_codec.dart';
 import '../../l10n/locale_controller.dart';
 import '../../vpn_settings/vpn_settings_facade.dart';
 import '../../settings_storage.dart';
@@ -341,11 +342,19 @@ Future<DebugResponse> _deleteVar(String key, DebugRequest req, DebugContext ctx)
 // dns_options
 // ---------------------------------------------------------------------------
 
-/// §043: `{"servers": [{"enabled":bool, "kind":"inline|preset|template",
-/// "tag":str, "body":{...}?}]}` — каждая запись валидируется через
-/// [DnsServerRef.fromJsonStrict]. §439 A1 — полный снимок сервера без `kind`
-/// (форма до §043) больше не принимается: его миграция удалена, запись
-/// осталась бы в хранении мёртвой — 400.
+/// Образец записи DNS-сервера для текста 400.
+const String _dnsServerRecordSample =
+    '{"kind":"user","tag":"my-dns","enabled":true,"body":{"type":"udp","server":"1.1.1.1"}}';
+
+/// Образец записи DNS-правила для текста 400.
+const String _dnsRuleRecordSample =
+    '{"kind":"user","name":"corp","enabled":true,"body":{"domain_suffix":[".corp"],"server":"my-dns"}}';
+
+/// §439 §3.4 — `{"servers": [<запись dns.servers[] 1.0>]}`: `kind`
+/// `user|preset|template`, тег сервера — поле записи, у `preset` — `ref`
+/// `<preset_id>:<tag>`. Каждая запись читается кодеком записей хранения;
+/// нечитаемая (в том числе форма 2.23.2 `kind: inline` и снимок без `kind`) —
+/// 400 с образцом формы записи.
 Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
   if (!body.containsKey('servers')) {
@@ -360,11 +369,13 @@ Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
     if (s is! Map) {
       throw const BadRequest('each servers[i] must be an object');
     }
-    try {
-      servers.add(DnsServerRef.fromJsonStrict(s.cast<String, dynamic>()));
-    } on DnsRefFormatException catch (e) {
-      throw BadRequest(e.message);
+    final read = dnsServerFromRecord(s.cast<String, dynamic>());
+    final server = read.value;
+    if (server == null) {
+      throw BadRequest('${read.dropped}; expected a record like '
+          '$_dnsServerRecordSample (kind user|preset|template)');
     }
+    servers.add(server);
   }
   await SettingsStorage.saveDnsServers(servers);
   final extras = await maybeRebuild(req, ctx);
@@ -378,23 +389,25 @@ Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
 
 Future<DebugResponse> _putDnsRules(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
-  // §294 — `{"rules": [ {kind, …}, … ]}` — массив kind-ref'ов, валидируется
-  // через DnsRuleRef (симметрия с /rules). §439 A1 — строка (`rules_json`,
-  // билдер её не читал с §061) больше не принимается.
+  // §439 §3.4 — `{"rules": [<запись dns.rules[] 1.0>, …]}`: `kind`
+  // `user|preset|srs|template`, читает кодек записей хранения. Форма 2.23.2
+  // (`kind: inline`, `presetId`) и строка `rules_json` — 400.
   final arr = body['rules'];
   if (arr is! List) {
-    throw const BadRequest('field "rules" required (array of kind-refs)');
+    throw const BadRequest('field "rules" required (array of dns rule records)');
   }
   final rules = <DnsRuleRef>[];
   for (final r in arr) {
     if (r is! Map) {
       throw const BadRequest('each rules[i] must be an object');
     }
-    try {
-      rules.add(DnsRuleRef.fromJsonStrict(r.cast<String, dynamic>()));
-    } on DnsRefFormatException catch (e) {
-      throw BadRequest(e.message);
+    final read = dnsRuleFromRecord(r.cast<String, dynamic>());
+    final rule = read.value;
+    if (rule == null) {
+      throw BadRequest('${read.dropped}; expected a record like '
+          '$_dnsRuleRecordSample (kind user|preset|srs|template)');
     }
+    rules.add(rule);
   }
   await SettingsStorage.saveDnsRulesList(rules);
   final extras = await maybeRebuild(req, ctx);

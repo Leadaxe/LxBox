@@ -5,8 +5,11 @@ import '../config/consts.dart'
 import '../models/custom_rule.dart';
 import '../models/dns_ref.dart';
 import '../models/parser_config.dart';
+import '../models/record_codec.dart';
 import 'builder/rule_order.dart' show nextUserRuleNum;
 import 'parser/uri_utils.dart' show newUuidV4;
+import 'storage_migration/legacy_form_v0.dart'
+    show readLegacyCustomRule, readLegacyDnsRule, readLegacyDnsServer;
 
 /// §396 — обмен правилами роутинга файлом (export/import выбранных правил).
 ///
@@ -16,36 +19,44 @@ import 'parser/uri_utils.dart' show newUuidV4;
 /// {
 ///   "app": "lxbox",
 ///   "kind": "rules",
-///   "format": 1,
+///   "format": 2,
 ///   "created_at": "<ISO8601 UTC>",
-///   "source_app_version": "2.20.10+22010",
-///   "rules": [ { "id": …, "name": …, "enabled": …, "kind": …, … } ]
+///   "source_app_version": "2.23.3+22303",
+///   "rules": [ { "kind": …, "id": …, "name": …, "enabled": …, "body": … } ],
+///   "dns_servers": [ { "kind": "user", "tag": …, "body": … } ],
+///   "dns_rules": [ { "kind": "user", "name": …, "body": … } ]
 /// }
 /// ```
 ///
-/// Элемент `rules[]` пишет и читает кодек файла внизу модуля
-/// ([_ruleToFile] / [_ruleFromFile]), а не форма хранения: формат файла
-/// меняется своим номером, независимо от хранения.
+/// §439 — `format: 2`: элементы — записи хранения 1.0, их пишет и читает кодек
+/// записей (`models/record_codec.dart`). Файл правил — обмен между
+/// установками LxBox, поэтому поля LxBox (`verbatim`, `update_interval_hours`,
+/// `description`, `vars` сервера) едут все. `format: 1` (форма хранения
+/// 2.23.2) читают замороженные читатели `legacy_form_v0.dart`.
 ///
 /// Экспорт пишет правила as is (включая `id`/`enabled`/`num`) — вся санация
 /// на стороне импорта: id перегенерируется, чужая ось `num` не переносится,
 /// висячие ссылки лечатся (§5 спеки).
 
-/// Версия схемы конверта. Читатель отвергает `format > 1` — файл из более
-/// новой версии приложения может нести несовместимую семантику полей.
-const int kRulesExportFormatVersion = 1;
+/// Версия схемы конверта, которую пишет экспорт. Читатель отвергает
+/// `format` выше неё — файл из более новой версии приложения может нести
+/// несовместимую семантику полей.
+const int kRulesExportFormatVersion = 2;
+
+/// `format` файлов до §439: элементы в форме хранения 2.23.2.
+const int kRulesFormatLegacy = 1;
 
 /// Дефолт лечения висячего outbound-тега — тот же, что у удаления Направления
 /// (`SettingsStorage.deleteDirection`, §202): основное Направление, существует всегда.
 const String kImportOutboundFallback = 'vpn-1';
 
 /// Build JSON-строки экспорта для выбранных правил (+ опциональные
-/// DNS-секции второго экрана — сырые элементы storage as is).
+/// DNS-секции второго экрана) — записями хранения.
 String buildRulesExport(
   List<CustomRule> rules, {
   String? appVersion,
-  List<Map<String, dynamic>> dnsServers = const [],
-  List<Map<String, dynamic>> dnsRules = const [],
+  List<DnsServerRef> dnsServers = const [],
+  List<DnsRuleRef> dnsRules = const [],
 }) {
   final out = <String, dynamic>{
     'app': 'lxbox',
@@ -54,9 +65,11 @@ String buildRulesExport(
     'created_at': DateTime.now().toUtc().toIso8601String(),
     if (appVersion != null && appVersion.isNotEmpty)
       'source_app_version': appVersion,
-    'rules': [for (final r in rules) _ruleToFile(r)],
-    if (dnsServers.isNotEmpty) 'dns_servers': dnsServers,
-    if (dnsRules.isNotEmpty) 'dns_rules': dnsRules,
+    'rules': [for (final r in rules) ruleToRecord(r)],
+    if (dnsServers.isNotEmpty)
+      'dns_servers': [for (final s in dnsServers) dnsServerToRecord(s)],
+    if (dnsRules.isNotEmpty)
+      'dns_rules': [for (final r in dnsRules) dnsRuleToRecord(r)],
   };
   return const JsonEncoder.withIndent('  ').convert(out);
 }
@@ -76,12 +89,16 @@ String suggestedRulesFilename() {
 /// [sanitizeImportedRule], чтобы один битый элемент не ронял весь файл.
 class RulesImportContents {
   const RulesImportContents({
+    this.format = kRulesExportFormatVersion,
     this.createdAt,
     this.sourceAppVersion,
     required this.rawRules,
     this.rawDnsServers = const [],
     this.rawDnsRules = const [],
   });
+
+  /// `format` конверта: форма элементов ([kRulesFormatLegacy] — 2.23.2).
+  final int format;
 
   final DateTime? createdAt;
   final String? sourceAppVersion;
@@ -144,6 +161,7 @@ RulesImportContents parseRulesImport(String raw) {
   final dnsRules = decoded['dns_rules'];
 
   return RulesImportContents(
+    format: format,
     createdAt: createdAt,
     sourceAppVersion: decoded['source_app_version']?.toString(),
     rawRules: rules,
@@ -250,6 +268,8 @@ class SanitizedImportRule {
 /// Вызывающий добавляет в набор имена уже вставленных элементов файла, чтобы
 /// два одноимённых правила в одном файле не прошли оба.
 ///
+/// [format] — `format` конверта ([RulesImportContents.format]).
+///
 /// `num` здесь НЕ трогается — это забота [insertImportedRule].
 SanitizedImportRule sanitizeImportedRule(
   dynamic rawEntry, {
@@ -257,6 +277,7 @@ SanitizedImportRule sanitizeImportedRule(
   required Set<String> dnsServerTags,
   required WizardTemplate template,
   Set<String> existingNames = const {},
+  int format = kRulesExportFormatVersion,
 }) {
   if (rawEntry is! Map<String, dynamic>) {
     return const SanitizedImportRule(
@@ -265,25 +286,9 @@ SanitizedImportRule sanitizeImportedRule(
     );
   }
 
-  // Элемент без известного kind — мусор или вид из более новой версии: не
-  // угадываем его как inline, отвергаем.
-  final kindRaw = rawEntry['kind']?.toString();
-  final kind =
-      CustomRuleKind.values.where((k) => k.name == kindRaw).firstOrNull;
   final label = rawEntry['name']?.toString() ?? '';
-  if (kind == null) {
-    return SanitizedImportRule(
-      displayLabel: label,
-      rejectReason: ImportRuleRejectReason.unsupportedEntry,
-    );
-  }
-
-  // id перегенерируется конструктором: кодек файла `id` не читает, и
-  // `CustomRule` сам выдаёт новый UUID — повторный импорт не коллизирует.
-  final CustomRule parsed;
-  try {
-    parsed = _ruleFromFile(rawEntry, kind);
-  } catch (_) {
+  final parsed = _ruleOfEntry(rawEntry, format);
+  if (parsed == null) {
     return SanitizedImportRule(
       displayLabel: label,
       rejectReason: ImportRuleRejectReason.unsupportedEntry,
@@ -367,6 +372,28 @@ SanitizedImportRule sanitizeImportedRule(
   );
 }
 
+/// Элемент `rules[]` → правило с новым `id`; `null` — элемент неимпортируем.
+///
+/// `id` файла не читается: `CustomRule` сам выдаёт новый UUID, и повторный
+/// импорт не коллизирует. Элемент без известного `kind` — мусор или вид из
+/// более новой версии: его не угадываем как inline. `format: 1` читает
+/// замороженный читатель 2.23.2 (поле неверного типа бросает — элемент
+/// отвергается), `format: 2` — кодек записей путём хранения: inline-тело,
+/// которое модель не выражает, остаётся сырым правилом.
+CustomRule? _ruleOfEntry(Map<String, dynamic> entry, int format) {
+  final withoutId = {...entry}..remove('id');
+  if (format == kRulesFormatLegacy) {
+    final kind = entry['kind']?.toString();
+    if (!CustomRuleKind.values.any((k) => k.name == kind)) return null;
+    try {
+      return readLegacyCustomRule(withoutId);
+    } catch (_) {
+      return null;
+    }
+  }
+  return ruleFromRecord(withoutId, unknownAsVerbatim: true).value;
+}
+
 /// Вставка санированного правила в список (мутирует [target]): назначение
 /// `num` (§370) + append. Сортировку по оси и персист делает вызывающий —
 /// один раз на весь импорт.
@@ -389,8 +416,8 @@ CustomRule insertImportedRule(
 
 /// Почему элемент DNS-секции не будет импортирован (disabled в превью).
 enum ImportDnsSkipReason {
-  /// Не парсится (`DnsServerRef.fromJson`/`DnsRuleRef.fromJson` → null)
-  /// или сам элемент — не объект.
+  /// Не читается (кодек записей или читатель `format: 1` его не принял) или
+  /// сам элемент — не объект.
   unsupportedEntry,
 
   /// Сервер/правило с этим tag/именем/дублем уже есть у получателя —
@@ -405,16 +432,16 @@ enum ImportDnsSkipReason {
   managedByPresets,
 }
 
-/// Итог санации одного элемента DNS-секции. [item] — готовый к вставке
-/// raw-объект (для srs-правила `id` уже перегенерирован).
-class SanitizedImportDnsItem {
+/// Итог санации одного элемента DNS-секции. [item] — готовая к вставке
+/// модель (у srs-правила `id` уже перегенерирован).
+class SanitizedImportDnsItem<T extends Object> {
   const SanitizedImportDnsItem({
     this.item,
     required this.label,
     this.skipReason,
   });
 
-  final Map<String, dynamic>? item;
+  final T? item;
   final String label;
   final ImportDnsSkipReason? skipReason;
 
@@ -423,22 +450,25 @@ class SanitizedImportDnsItem {
 
 /// Санация элемента `dns_servers[]`.
 ///
-/// [existingTags] — теги `dns_options.servers` получателя;
+/// [existingTags] — теги DNS-серверов получателя;
 /// [templateServerTags] — теги шаблонных серверов его версии приложения.
-SanitizedImportDnsItem sanitizeImportedDnsServer(
+SanitizedImportDnsItem<DnsServerRef> sanitizeImportedDnsServer(
   dynamic raw, {
   required Set<String> existingTags,
   required Set<String> templateServerTags,
+  int format = kRulesExportFormatVersion,
 }) {
   if (raw is! Map) {
     return const SanitizedImportDnsItem(
         label: '', skipReason: ImportDnsSkipReason.unsupportedEntry);
   }
   final map = raw.cast<String, dynamic>();
-  final ref = DnsServerRef.fromJson(map);
+  final ref = format == kRulesFormatLegacy
+      ? readLegacyDnsServer(map)
+      : dnsServerFromRecord(map).value;
   if (ref == null) {
     return SanitizedImportDnsItem(
-      label: map['tag']?.toString() ?? '',
+      label: (map['tag'] ?? map['ref'])?.toString() ?? '',
       skipReason: ImportDnsSkipReason.unsupportedEntry,
     );
   }
@@ -457,35 +487,38 @@ SanitizedImportDnsItem sanitizeImportedDnsServer(
     return SanitizedImportDnsItem(
         label: label, skipReason: ImportDnsSkipReason.notAvailable);
   }
-  return SanitizedImportDnsItem(item: ref.toJson(), label: label);
+  return SanitizedImportDnsItem(item: ref, label: label);
 }
 
 /// Санация элемента `dns_rules[]`.
 ///
-/// [existingRules] — сырые `dns_options.rules` получателя;
+/// [existingRules] — DNS-правила получателя;
 /// [template] — для проверки preset/template-правил.
-SanitizedImportDnsItem sanitizeImportedDnsRule(
+SanitizedImportDnsItem<DnsRuleRef> sanitizeImportedDnsRule(
   dynamic raw, {
-  required List<Map<String, dynamic>> existingRules,
+  required List<DnsRuleRef> existingRules,
   required WizardTemplate template,
+  int format = kRulesExportFormatVersion,
 }) {
   if (raw is! Map) {
     return const SanitizedImportDnsItem(
         label: '', skipReason: ImportDnsSkipReason.unsupportedEntry);
   }
   final map = raw.cast<String, dynamic>();
-  final ref = DnsRuleRef.fromJson(map);
+  final ref = format == kRulesFormatLegacy
+      ? readLegacyDnsRule(map)
+      : dnsRuleFromRecord(map).value;
   if (ref == null) {
     return SanitizedImportDnsItem(
-      label: map['name']?.toString() ?? map['presetId']?.toString() ?? '',
+      label: (map['name'] ?? map['presetId'] ?? map['ref'])?.toString() ?? '',
       skipReason: ImportDnsSkipReason.unsupportedEntry,
     );
   }
 
   switch (ref) {
     case DnsRulePreset():
-      final exists = existingRules.any(
-          (r) => r['kind'] == 'preset' && r['presetId'] == ref.presetId);
+      final exists = existingRules
+          .any((r) => r is DnsRulePreset && r.presetId == ref.presetId);
       if (exists) {
         return SanitizedImportDnsItem(
             label: ref.presetId,
@@ -498,11 +531,11 @@ SanitizedImportDnsItem sanitizeImportedDnsRule(
             label: ref.presetId,
             skipReason: ImportDnsSkipReason.notAvailable);
       }
-      return SanitizedImportDnsItem(item: ref.toJson(), label: ref.presetId);
+      return SanitizedImportDnsItem(item: ref, label: ref.presetId);
 
     case DnsRuleTemplate():
       final exists = existingRules
-          .any((r) => r['kind'] == 'template' && r['name'] == ref.name);
+          .any((r) => r is DnsRuleTemplate && r.name == ref.name);
       if (exists) {
         return SanitizedImportDnsItem(
             label: ref.name, skipReason: ImportDnsSkipReason.alreadyExists);
@@ -514,233 +547,27 @@ SanitizedImportDnsItem sanitizeImportedDnsRule(
         return SanitizedImportDnsItem(
             label: ref.name, skipReason: ImportDnsSkipReason.notAvailable);
       }
-      return SanitizedImportDnsItem(item: ref.toJson(), label: ref.name);
+      return SanitizedImportDnsItem(item: ref, label: ref.name);
 
     case DnsRuleInline():
-      // Точный дубль (name + rule-body) → skip; иначе импортируем как есть.
-      final encoded = jsonEncode(ref.toJson());
-      final dup = existingRules.any((r) =>
-          r['kind'] == 'inline' &&
-          jsonEncode(DnsRuleRef.fromJson(r)?.toJson() ?? const {}) == encoded);
-      if (dup) {
+      // Точный дубль (имя, тело, тумблер) → skip; иначе импортируем как есть.
+      if (existingRules.contains(ref)) {
         return SanitizedImportDnsItem(
             label: ref.name, skipReason: ImportDnsSkipReason.alreadyExists);
       }
-      // `enabled` — вне типизированной модели (форма §294), но живёт в raw
-      // storage: переносим значение автора вместе с правилом.
-      final out = ref.toJson();
-      if (map['enabled'] is bool) out['enabled'] = map['enabled'];
-      return SanitizedImportDnsItem(item: out, label: ref.name);
+      return SanitizedImportDnsItem(item: ref, label: ref.name);
 
     case DnsRuleSrs():
-      final dup = existingRules
-          .any((r) => r['kind'] == 'srs' && r['name'] == ref.name);
+      final dup =
+          existingRules.any((r) => r is DnsRuleSrs && r.name == ref.name);
       if (dup) {
         return SanitizedImportDnsItem(
             label: ref.name, skipReason: ImportDnsSkipReason.alreadyExists);
       }
       // Кэш-файл `.srs` привязан к id — у получателя свой, id перегенерируем.
-      final out = ref.copyWith(id: newUuidV4()).toJson();
-      if (map['enabled'] is bool) out['enabled'] = map['enabled'];
-      return SanitizedImportDnsItem(item: out, label: ref.name);
+      return SanitizedImportDnsItem(
+          item: ref.copyWith(id: newUuidV4()), label: ref.name);
   }
-}
-
-// ─── Кодек элемента `rules[]`, format 1 ──────────────────────────────────
-// Форма элемента заморожена вместе с `format: 1`: ключи camelCase, `kind` —
-// дискриминатор, пустые списки и дефолты не пишутся. Порядок ключей тот же,
-// что в файлах, выпущенных до §439, — экспорт тех же правил даёт тот же файл.
-
-Map<String, dynamic> _ruleToFile(CustomRule r) => switch (r) {
-      CustomRuleInline() => {
-          ..._fileHead(r),
-          if (r.domains.isNotEmpty) 'domains': r.domains,
-          if (r.domainSuffixes.isNotEmpty) 'domainSuffixes': r.domainSuffixes,
-          if (r.domainKeywords.isNotEmpty) 'domainKeywords': r.domainKeywords,
-          if (r.ipCidrs.isNotEmpty) 'ipCidrs': r.ipCidrs,
-          ..._fileFilters(r),
-        },
-      CustomRuleSrs() => {
-          ..._fileHead(r),
-          if (r.srsUrl.isNotEmpty) 'srsUrl': r.srsUrl,
-          // ## 12 — полный список только при двух и более наборах.
-          if (r.srsUrls.length > 1) 'srsUrls': r.srsUrls,
-          ..._fileFilters(r),
-          if (r.updateIntervalHours != kDefaultSrsTtlHours)
-            'updateIntervalHours': r.updateIntervalHours,
-        },
-      CustomRulePreset() => {
-          ..._fileHead(r),
-          'presetId': r.presetId,
-          if (r.varsValues.isNotEmpty) 'varsValues': r.varsValues,
-        },
-      CustomRuleJson() => {
-          ..._fileHead(r),
-          'json': r.json,
-        },
-    };
-
-Map<String, dynamic> _fileHead(CustomRule r) => {
-      'id': r.id,
-      'name': r.name,
-      'enabled': r.enabled,
-      'kind': r.kind.name,
-      if (r.orderNum != null) 'num': r.orderNum,
-    };
-
-/// Доп-фильтры, `outbound` и опции inline/srs — общий хвост двух видов.
-Map<String, dynamic> _fileFilters(CustomRule r) => {
-      if (r.ports.isNotEmpty) 'ports': r.ports,
-      if (r.portRanges.isNotEmpty) 'portRanges': r.portRanges,
-      if (r.packages.isNotEmpty) 'packages': r.packages,
-      if (r.protocols.isNotEmpty) 'protocols': r.protocols,
-      if (r.network.isNotEmpty) 'network': r.network,
-      if (r.ipIsPrivate) 'ipIsPrivate': true,
-      if (r.sourceIpCidrs.isNotEmpty) 'sourceIpCidrs': r.sourceIpCidrs,
-      if (r.sourceIpIsPrivate) 'sourceIpIsPrivate': true,
-      if (r.inbounds.isNotEmpty) 'inbounds': r.inbounds,
-      if (r.wifiSsids.isNotEmpty) 'wifiSsids': r.wifiSsids,
-      if (r.wifiBssids.isNotEmpty) 'wifiBssids': r.wifiBssids,
-      'outbound': r.outbound,
-      if (r.dns != null) 'dns': _dnsToFile(r.dns!),
-      if (r.resolve != null) 'resolve': _resolveToFile(r.resolve!),
-    };
-
-Map<String, dynamic> _dnsToFile(RuleDns d) => {
-      'enabled': d.enabled,
-      'serverTag': d.serverTag,
-      if (d.forceIpv4) 'forceIpv4': true,
-    };
-
-Map<String, dynamic> _resolveToFile(RuleResolve r) => {
-      'only': r.only,
-      if (r.strategy.isNotEmpty) 'strategy': r.strategy,
-      if (r.serverTag.isNotEmpty) 'serverTag': r.serverTag,
-      if (r.disableCache) 'disableCache': true,
-      if (r.disableOptimisticCache) 'disableOptimisticCache': true,
-      if (r.rewriteTtl != null) 'rewriteTtl': r.rewriteTtl,
-      if (r.timeout.isNotEmpty) 'timeout': r.timeout,
-      if (r.clientSubnet.isNotEmpty) 'clientSubnet': r.clientSubnet,
-    };
-
-/// Элемент `rules[]` вида [kind] → правило с новым `id`. Поле неверного типа
-/// (`name` числом, `enabled` строкой, …) бросает — вызывающий отвергает
-/// элемент. Каждый вид читает только свои ключи: чужой ключ, даже битый,
-/// элемент не роняет. `outbound` без значения — прежнее имя `target`, затем
-/// direct-out.
-CustomRule _ruleFromFile(Map<String, dynamic> j, CustomRuleKind kind) {
-  final name = (j['name'] as String?) ?? '';
-  final enabled = (j['enabled'] as bool?) ?? true;
-  final orderNum = j['num'] as int?;
-  switch (kind) {
-    case CustomRuleKind.inline:
-      return CustomRuleInline(
-        name: name,
-        enabled: enabled,
-        orderNum: orderNum,
-        domains: _fileStrings(j['domains']),
-        domainSuffixes: _fileStrings(j['domainSuffixes']),
-        domainKeywords: _fileStrings(j['domainKeywords']),
-        ipCidrs: _fileStrings(j['ipCidrs']),
-        ports: _fileStrings(j['ports']),
-        portRanges: _fileStrings(j['portRanges']),
-        packages: _fileStrings(j['packages']),
-        protocols: _fileStrings(j['protocols']),
-        network: _fileStrings(j['network']),
-        ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
-        sourceIpCidrs: _fileStrings(j['sourceIpCidrs']),
-        sourceIpIsPrivate: (j['sourceIpIsPrivate'] as bool?) ?? false,
-        inbounds: _fileStrings(j['inbounds']),
-        wifiSsids: _fileStrings(j['wifiSsids']),
-        wifiBssids: _fileStrings(j['wifiBssids']),
-        outbound: _fileOutbound(j),
-        dns: _dnsFromFile(j['dns']),
-        resolve: _resolveFromFile(j['resolve']),
-      );
-    case CustomRuleKind.srs:
-      final ttl = j['updateIntervalHours'];
-      final ttlHours = ttl is num ? ttl.toInt() : null;
-      return CustomRuleSrs(
-        name: name,
-        enabled: enabled,
-        orderNum: orderNum,
-        srsUrl: (j['srsUrl'] as String?) ?? '',
-        srsUrls: _fileStrings(j['srsUrls']),
-        ports: _fileStrings(j['ports']),
-        portRanges: _fileStrings(j['portRanges']),
-        packages: _fileStrings(j['packages']),
-        protocols: _fileStrings(j['protocols']),
-        network: _fileStrings(j['network']),
-        ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
-        sourceIpCidrs: _fileStrings(j['sourceIpCidrs']),
-        sourceIpIsPrivate: (j['sourceIpIsPrivate'] as bool?) ?? false,
-        inbounds: _fileStrings(j['inbounds']),
-        wifiSsids: _fileStrings(j['wifiSsids']),
-        wifiBssids: _fileStrings(j['wifiBssids']),
-        outbound: _fileOutbound(j),
-        dns: _dnsFromFile(j['dns']),
-        resolve: _resolveFromFile(j['resolve']),
-        // §366 — нет значения, мусор, отрицательное → дефолт; 0 = Never.
-        updateIntervalHours: ttlHours == null || ttlHours < 0
-            ? kDefaultSrsTtlHours
-            : ttlHours,
-      );
-    case CustomRuleKind.preset:
-      final vars = j['varsValues'];
-      return CustomRulePreset(
-        name: name,
-        enabled: enabled,
-        orderNum: orderNum,
-        presetId: (j['presetId'] as String?) ?? '',
-        varsValues: vars is Map
-            ? {
-                for (final e in vars.entries)
-                  if (e.key is String)
-                    e.key as String: e.value?.toString() ?? '',
-              }
-            : const {},
-      );
-    case CustomRuleKind.json:
-      return CustomRuleJson(
-        name: name,
-        enabled: enabled,
-        orderNum: orderNum,
-        json: (j['json'] as String?) ?? '',
-      );
-  }
-}
-
-String _fileOutbound(Map<String, dynamic> j) =>
-    (j['outbound'] as String?) ?? (j['target'] as String?) ?? kDirectOutboundTag;
-
-List<String> _fileStrings(Object? v) =>
-    v is List ? [for (final e in v) e.toString()] : const [];
-
-RuleDns? _dnsFromFile(Object? v) {
-  if (v is! Map) return null;
-  return RuleDns(
-    enabled: v['enabled'] == true,
-    serverTag: v['serverTag']?.toString() ?? '',
-    forceIpv4: v['forceIpv4'] == true,
-  );
-}
-
-RuleResolve? _resolveFromFile(Object? v) {
-  if (v is! Map) return null;
-  return RuleResolve(
-    only: v['only'] == true,
-    strategy: v['strategy']?.toString() ?? '',
-    serverTag: v['serverTag']?.toString() ?? '',
-    disableCache: v['disableCache'] == true,
-    disableOptimisticCache: v['disableOptimisticCache'] == true,
-    rewriteTtl: switch (v['rewriteTtl']) {
-      final int n when n >= 0 => n,
-      final String s => int.tryParse(s),
-      _ => null,
-    },
-    timeout: v['timeout']?.toString() ?? '',
-    clientSubnet: v['clientSubnet']?.toString() ?? '',
-  );
 }
 
 // ─── helpers: type-preserving запись dns/resolve ─────────────────────────

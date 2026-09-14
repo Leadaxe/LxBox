@@ -872,32 +872,6 @@ class CustomRuleSrs extends CustomRule {
     return getLocalText.s("SRS: %s", first);
   }
 
-  /// Форма 2.23.2 (ключи camelCase). После §439 её зовёт только
-  /// legacy-декодер LX Backup (`lx_backup.dart`); хранение читает кодек.
-  factory CustomRuleSrs.fromJson(Map<String, dynamic> j) => CustomRuleSrs(
-        id: _id(j),
-        name: (j['name'] as String?) ?? '',
-        enabled: (j['enabled'] as bool?) ?? true,
-        orderNum: j['num'] as int?,
-        srsUrl: (j['srsUrl'] as String?) ?? '',
-        srsUrls: _stringList(j['srsUrls']),
-        ports: _stringList(j['ports']),
-        portRanges: _stringList(j['portRanges']),
-        packages: _stringList(j['packages']),
-        protocols: _stringList(j['protocols']),
-        network: _stringList(j['network']),
-        ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
-        sourceIpCidrs: _stringList(j['sourceIpCidrs']),
-        sourceIpIsPrivate: (j['sourceIpIsPrivate'] as bool?) ?? false,
-        inbounds: _stringList(j['inbounds']),
-        wifiSsids: _stringList(j['wifiSsids']),
-        wifiBssids: _stringList(j['wifiBssids']),
-        outbound: _outbound(j),
-        dns: RuleDns.fromJson(j['dns']),
-        resolve: RuleResolve.fromJson(j['resolve']),
-        updateIntervalHours: ttlHoursFrom(j['updateIntervalHours']),
-      );
-
   /// §366 — TTL из JSON. Отсутствие, мусор и отрицательные значения → дефолт;
   /// `0` (Never) сохраняем как есть, это осознанный выбор юзера.
   static int ttlHoursFrom(Object? v) {
@@ -1068,17 +1042,6 @@ class CustomRulePreset extends CustomRule {
         .join(', ');
   }
 
-  /// Форма 2.23.2 (`presetId`, `varsValues`). После §439 её зовёт только
-  /// legacy-декодер LX Backup (`lx_backup.dart`); хранение читает кодек.
-  factory CustomRulePreset.fromJson(Map<String, dynamic> j) => CustomRulePreset(
-        id: _id(j),
-        name: (j['name'] as String?) ?? '',
-        enabled: (j['enabled'] as bool?) ?? true,
-        orderNum: j['num'] as int?,
-        presetId: (j['presetId'] as String?) ?? '',
-        varsValues: _stringMap(j['varsValues']),
-      );
-
   CustomRulePreset copyWith({
     String? name,
     bool? enabled,
@@ -1225,15 +1188,6 @@ String? _canonicalJson(String text) {
   }
 }
 
-String? _id(Map<String, dynamic> j) {
-  final id = j['id'] as String?;
-  return (id?.trim().isNotEmpty ?? false) ? id : null;
-}
-
-/// Читает `outbound`, fallback на legacy-поле `target` (до 1.4.1 rename).
-String _outbound(Map<String, dynamic> j) =>
-    (j['outbound'] as String?) ?? (j['target'] as String?) ?? kDirectOutboundTag;
-
 /// ## 12 — нормализация списка `.srs`-наборов: непустой [srsUrls] главнее
 /// одиночного [srsUrl]; trim, пустые и повторы (с сохранением порядка) — вон.
 List<String> normalizeSrsUrls(String srsUrl, List<String> srsUrls) {
@@ -1268,11 +1222,6 @@ bool _mapEq(Map<String, String> a, Map<String, String> b) {
   return true;
 }
 
-List<String> _stringList(dynamic v) {
-  if (v is! List) return const [];
-  return v.map((e) => e.toString()).toList();
-}
-
 /// §051 — нормализует BSSID к lower-case формату `xx:xx:xx:xx:xx:xx`.
 /// Юзер мог ввести uppercase из браузера/`adb shell` — sing-box матчит
 /// case-sensitive по строкам. Здесь tolerant'но lower-case'им и trim'аем,
@@ -1280,12 +1229,4 @@ List<String> _stringList(dynamic v) {
 List<String> _normalizeBssids(List<String> bssids) {
   if (bssids.isEmpty) return const [];
   return bssids.map((b) => b.trim().toLowerCase()).toList(growable: false);
-}
-
-Map<String, String> _stringMap(dynamic v) {
-  if (v is! Map) return const {};
-  return {
-    for (final e in v.entries)
-      if (e.key is String) e.key as String: e.value?.toString() ?? '',
-  };
 }

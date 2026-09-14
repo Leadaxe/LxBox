@@ -166,42 +166,6 @@ class SourceChain {
         rewrite: rewrite ?? this.rewrite,
       );
 
-  /// Разбор канона схемы с полями источника (`tag`, `label`, `enabled`) —
-  /// так цепочку приносит LX Backup (`lx_backup.dart`); хранение читает
-  /// кодек записи.
-  ///
-  /// Терпимо к мусору на ЧТЕНИИ (правленый файл, чужой бэкап): не-строки в
-  /// [hops] и неизвестные ключи [strip] отсеиваются здесь, а не разгребаются
-  /// билдером. Но отсеивается только то, что не имеет смысла: пустая после
-  /// trim позиция и дубль остаются — их ловит
-  /// [chainEmitError] и деградирует цепочку ЦЕЛИКОМ с внятной причиной,
-  /// потому что молча «починенный» маршрут — это другой маршрут.
-  factory SourceChain.fromJson(Map<String, dynamic> json) {
-    final tag = (json['tag'] as String? ?? '').trim();
-    return SourceChain(
-      tag: tag,
-      label: json['label'] as String? ?? '',
-      enabled: json['enabled'] as bool? ?? true,
-      hops: [
-        for (final h in (json['hops'] as List? ?? const []))
-          if (h is String) h,
-      ],
-      idleTimeout: json['idle_timeout'] as String? ?? '',
-      // Трёхзначность: ключа нет → null (умолчание ядра), не-bool → тоже
-      // null (мусор не должен читаться как явное выключение).
-      stripEvasion: json['strip_evasion'] is bool
-          ? json['strip_evasion'] as bool
-          : null,
-      strip: {
-        for (final key in kChainStripKeys)
-          if ((json['strip'] as Map?)?[key] is bool)
-            key: (json['strip'] as Map)[key] as bool,
-      },
-      rewrite: (deepCloneJson(json['rewrite']) as Map?)?.cast<String, dynamic>() ??
-          const {},
-    );
-  }
-
   /// Канон `source_chain.schema.json`: маршрут и его настройки, без полей
   /// записи источника (`tag`, `label`, `enabled`).
   ///

@@ -14,7 +14,8 @@
 /// `fromJson`.
 ///
 /// Старые имена полей живут только здесь и только на чтении. Зовут модуль
-/// миграция хранения (`migrate_storage.dart`) и входы старой формы.
+/// миграция хранения (`migrate_storage.dart`) и входы старой формы: файл правил
+/// `format: 1` (`rule_transfer.dart` — правила, DNS-серверы и DNS-правила).
 library;
 
 import '../../config/consts.dart' show kDirectOutboundTag;

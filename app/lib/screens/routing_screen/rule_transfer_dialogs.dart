@@ -354,8 +354,8 @@ class RuleImportSelection {
   });
 
   final List<SanitizedImportRule> rules;
-  final List<Map<String, dynamic>> dnsServers;
-  final List<Map<String, dynamic>> dnsRules;
+  final List<DnsServerRef> dnsServers;
+  final List<DnsRuleRef> dnsRules;
 }
 
 /// Превью импорта: шапка (когда/чем создан) + чекбокс на правило с итогом
@@ -364,8 +364,8 @@ class RuleImportSelection {
 Future<RuleImportSelection?> showRuleImportPreview(
   BuildContext context, {
   required List<SanitizedImportRule> items,
-  List<SanitizedImportDnsItem> dnsServers = const [],
-  List<SanitizedImportDnsItem> dnsRules = const [],
+  List<SanitizedImportDnsItem<DnsServerRef>> dnsServers = const [],
+  List<SanitizedImportDnsItem<DnsRuleRef>> dnsRules = const [],
   DateTime? createdAt,
   String? sourceAppVersion,
 }) {
@@ -387,8 +387,8 @@ Future<RuleImportSelection?> showRuleImportPreview(
       builder: (ctx, set) {
         final cs = Theme.of(ctx).colorScheme;
         final total = selected.length + selServers.length + selRules.length;
-        Widget dnsSection(String title, List<SanitizedImportDnsItem> list,
-            Set<int> sel) {
+        Widget dnsSection(String title,
+            List<SanitizedImportDnsItem<Object>> list, Set<int> sel) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -499,7 +499,7 @@ Future<RuleImportSelection?> showRuleImportPreview(
 Widget _importDnsRow(
   BuildContext ctx,
   ColorScheme cs,
-  SanitizedImportDnsItem item, {
+  SanitizedImportDnsItem<Object> item, {
   required bool checked,
   required ValueChanged<bool?>? onChanged,
 }) {

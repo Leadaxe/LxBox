@@ -694,12 +694,11 @@ class _RoutingScreenState extends State<RoutingScreen>
       } catch (_) {
         // PackageInfo может упасть в test environment — graceful skip.
       }
-      // DNS-секции файла правил — форма записей хранения (кодек модели).
       final json = buildRulesExport(
         selected.rules,
         appVersion: appVersion,
-        dnsServers: [for (final s in selected.dnsServers) s.toJson()],
-        dnsRules: [for (final r in selected.dnsRules) r.toJson()],
+        dnsServers: selected.dnsServers,
+        dnsRules: selected.dnsRules,
       );
       final filename = suggestedRulesFilename();
       // Размер в БАЙТАХ, а не code units (§374: String.length считает UTF-16,
@@ -803,14 +802,16 @@ class _RoutingScreenState extends State<RoutingScreen>
             entry,
             existingTags: existingServerTags,
             templateServerTags: templateServerTags,
+            format: contents.format,
           ),
       ];
       final dnsRuleItems = [
         for (final entry in contents.rawDnsRules)
           sanitizeImportedDnsRule(
             entry,
-            existingRules: [for (final r in existingDnsRules) r.toJson()],
+            existingRules: existingDnsRules,
             template: template,
+            format: contents.format,
           ),
       ];
 
@@ -820,7 +821,7 @@ class _RoutingScreenState extends State<RoutingScreen>
         ...existingServerTags,
         ...templateServerTags,
         for (final it in dnsServerItems)
-          if (it.importable) it.item!['tag'].toString(),
+          if (it.item case final server?) server.tag,
       };
 
       // §398 — дедуп по видимому имени (§279): имена получателя плюс имена
@@ -835,6 +836,7 @@ class _RoutingScreenState extends State<RoutingScreen>
           dnsServerTags: dnsServerTags,
           template: template,
           existingNames: takenNames,
+          format: contents.format,
         );
         if (item.importable) takenNames.add(item.rule!.name);
         items.add(item);
@@ -863,21 +865,15 @@ class _RoutingScreenState extends State<RoutingScreen>
       final dnsCount = picked.dnsServers.length + picked.dnsRules.length;
       if (inserted.isEmpty && dnsCount == 0) return;
 
-      // DNS-сущности — прямо в storage (append; санация уже разобрала их
-      // через DnsServerRef/DnsRuleRef, как Debug write-путь §294).
+      // DNS-сущности — прямо в хранение (append; санация уже разобрала их
+      // в модели).
       if (picked.dnsServers.isNotEmpty) {
-        await SettingsStorage.saveDnsServers([
-          ...existingServers,
-          for (final m in picked.dnsServers)
-            ?DnsServerRef.fromJson(m),
-        ]);
+        await SettingsStorage.saveDnsServers(
+            [...existingServers, ...picked.dnsServers]);
       }
       if (picked.dnsRules.isNotEmpty) {
-        await SettingsStorage.saveDnsRulesList([
-          ...existingDnsRules,
-          for (final m in picked.dnsRules)
-            ?DnsRuleRef.fromJson(m),
-        ]);
+        await SettingsStorage.saveDnsRulesList(
+            [...existingDnsRules, ...picked.dnsRules]);
       }
       if (!mounted) return;
 
