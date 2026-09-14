@@ -9,7 +9,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
 import '../models/direction.dart';
-import '../models/dns_ref.dart';
 import '../models/server_list.dart';
 import '../services/direction_mutations.dart';
 import '../services/dns/dns_backup.dart';
@@ -327,22 +326,14 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // нет дома, в файл не едут, и пользователь узнаёт об этом ДО того, как
       // унесёт файл на другую машину (П6).
       final exportWarnings = <LxBackupWarning>[];
-      // §393 B9 — секция DNS: состав серверов/правил + final/strategy.
-      // §438 — preset-сервер едет ссылкой `<preset_id>:<tag>`: пресет,
-      // которому принадлежит тег, знает шаблон.
-      final template = await TemplateLoader.load();
-      // `dns_backup.dart` пока читает форму записей хранения (волна C).
+      // §393 B9 — секция DNS: записи хранения + final/strategy. §439 —
+      // preset-сервер несёт `preset_id` в записи, шаблон не нужен.
       final dns = dnsToBackup(
-        servers: [
-          for (final s in await SettingsStorage.getDnsServers()) s.toJson()
-        ],
-        rules: [
-          for (final r in await SettingsStorage.getDnsRulesList()) r.toJson()
-        ],
+        servers: await SettingsStorage.getDnsServers(),
+        rules: await SettingsStorage.getDnsRulesList(),
         dnsFinal: vars['dns_final'] ?? '',
         strategy: vars['dns_strategy'] ?? '',
         defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
-        presetIdByServerTag: presetIdByDnsServerTag(template.selectableRules),
         warnings: exportWarnings,
       );
       // §393 B8 — регистрации WARP в каноне схемы (`type: wg|masque`).
@@ -449,7 +440,6 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       }
 
       final LxBackupFile parsed;
-      var presetIdByServerTag = const <String, String>{};
       try {
         // Цели, на которые правилу разрешено ссылаться. Пустой набор означал
         // бы «проверять нечем», и все ссылки прошли бы без проверки.
@@ -472,7 +462,6 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         // пресета применить нечем (backup_unknown_preset /
         // backup_dns_entry_skipped).
         final template = await TemplateLoader.load();
-        presetIdByServerTag = presetIdByDnsServerTag(template.selectableRules);
         parsed = parseLxBackup(
           raw,
           knownOutbounds: known,
@@ -557,6 +546,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         folders: parsed.folders,
         sourceIds: subMerge.ids,
         addedSources: subMerge.added,
+        sourceDetours: subMerge.detours,
       );
       final sources = (
         before: lists,
@@ -614,8 +604,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // §393 B6-B9 — остальные секции. До B6 они разбирались, показывались в
       // диалоге и выбрасывались: пользователь видел «Подписки: 3», нажимал
       // Import и не получал ни одной.
-      final counts =
-          await _applyLxSections(parsed, sources, presetIdByServerTag);
+      final counts = await _applyLxSections(parsed, sources);
       if (!mounted) return;
 
       final skipped = parsed.warnings.length;
@@ -680,7 +669,6 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       int applied,
       List<BackupNodeRef> touched,
     }) sources,
-    Map<String, String> presetIdByServerTag,
   ) async {
     var applied = 0;
 
@@ -728,28 +716,16 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
     final dns = parsed.dns;
     if (dns != null && !dns.isEmpty) {
       final vars = await SettingsStorage.getAllVars();
-      // `dns_backup.dart` пока работает с формой записей хранения (волна C).
       final result = applyDnsBackup(
         incoming: dns,
-        servers: [
-          for (final s in await SettingsStorage.getDnsServers()) s.toJson()
-        ],
-        rules: [
-          for (final r in await SettingsStorage.getDnsRulesList()) r.toJson()
-        ],
+        servers: await SettingsStorage.getDnsServers(),
+        rules: await SettingsStorage.getDnsRulesList(),
         dnsFinal: vars['dns_final'] ?? '',
         strategy: vars['dns_strategy'] ?? '',
         defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
-        presetIdByServerTag: presetIdByServerTag,
       );
-      await SettingsStorage.saveDnsServers([
-        for (final m in result.servers)
-          ?DnsServerRef.fromJson(m),
-      ], flush: false);
-      await SettingsStorage.saveDnsRulesList([
-        for (final m in result.rules)
-          ?DnsRuleRef.fromJson(m),
-      ], flush: false);
+      await SettingsStorage.saveDnsServers(result.servers, flush: false);
+      await SettingsStorage.saveDnsRulesList(result.rules, flush: false);
       await SettingsStorage.setVar('dns_final', result.dnsFinal, flush: false);
       await SettingsStorage.setVar('dns_strategy', result.strategy,
           flush: false);

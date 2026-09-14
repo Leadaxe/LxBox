@@ -3,25 +3,24 @@
 /// Схема — `contract/schema/backup.schema.json` (`dns.servers[]`/`dns.rules[]`
 /// с дискриминатором `kind: template|preset|user`, плюс `strategy`/`final`/
 /// `default_domain_resolver`); семантика — `contract/docs/BACKUP.md` §2, §9
-/// п. 5. Эталон обработки — `core/backup/import.go:importDNS`. §438 — в файл
-/// 1.0 записи пишет кодек записей (`record_codec.dart`) из [LxDns].
+/// п. 5. Эталон обработки — `core/backup/import.go:importDNS`.
 ///
-/// Три расхождения между каноном и мобильной моделью, из-за которых нужен
-/// явный маппинг, а не «отдать storage как есть»:
+/// §439 — записи секции — записи хранения `dns{}`: экспорт пишет их кодеком
+/// (`models/codec/dns_record.dart`) и срезает поля LxBox таблицей
+/// `lx_backup_slice.dart`, импорт отдаёт слиянию модели [DnsServerRef] /
+/// [DnsRuleRef]. Что не едет:
 ///
-///  1. **Имя пользовательской записи.** Канон зовёт её `user`, мобильный
-///     storage — `inline`. Понятие одно и то же (тело написал пользователь),
-///     имя разное.
-///  2. **`srs`-правила.** У мобилы DNS-правило бывает ссылкой на скачанный
-///     rule-set (`kind: srs`); в каноне такого происхождения НЕТ. §401 —
-///     карман провоза упразднён (П3), поэтому такая запись в файл не едет и
-///     названа предупреждением `backup_local_only_dropped` на экспорте.
-///  3. **Тело template/preset-записей не переносится вообще** — ни в одну
-///     сторону. Оно принадлежит шаблону ПРИНИМАЮЩЕЙ стороны, и зафиксировать
-///     чужое значило бы навсегда отрезать пользователя от обновлений шаблона
-///     (та же причина, что в `export.go:dnsRefFrom`). Переносится ссылка:
-///     тег у template-сервера, `ref` = `<preset_id>:<tag>` у preset-сервера,
-///     `ref` = `preset_id` у preset-правила.
+///  1. **`srs`-правила.** У LxBox DNS-правило бывает ссылкой на скачанный
+///     rule-set (`kind: srs`); в каноне такого вида НЕТ. Запись не пишется и
+///     названа `backup_local_only_dropped` (§401: карманов провоза нет).
+///  2. **`template`-правила.** Ссылки на правила шаблона: сторона заводит их
+///     сама по своему шаблону, пользовательской настройки в них нет — молча.
+///  3. **`description` и `vars` сервера** — поля LxBox без дома в 1.0,
+///     срезаются с `backup_local_only_dropped`. Тело template/preset-записи
+///     не переносится вовсе: оно принадлежит шаблону принимающей стороны
+///     (`export.go:dnsRefFrom`); переносится ссылка — тег у template, `ref` =
+///     `<preset_id>:<tag>` у preset-сервера, `ref` = `preset_id` у
+///     preset-правила.
 ///
 /// `final`/`strategy`/`default_domain_resolver` секции — те же значения, что
 /// мобильные переносимые переменные `dns_final`/`dns_strategy`/
@@ -32,124 +31,62 @@ library;
 
 import 'dart:convert';
 
-import '../../models/parser_config.dart' show SelectableRule;
+import '../../models/dns_ref.dart';
+import '../../models/record_codec.dart';
 import '../lx_backup.dart';
+import '../lx_backup_slice.dart';
 import '../node_hash.dart' show deepSortKeys;
 
-/// §438 — тег preset-сервера DNS → `preset_id` пресета шаблона, который его
-/// объявляет (`selectable_rules[].dns_servers[].tag`). Нужен, чтобы
-/// собрать `ref` = `<preset_id>:<tag>` у записи, хранящей только тег. Первый
-/// объявивший пресет побеждает.
-Map<String, String> presetIdByDnsServerTag(Iterable<SelectableRule> presets) {
-  final out = <String, String>{};
-  for (final p in presets) {
-    for (final s in p.dnsServers) {
-      final tag = s['tag'];
-      if (tag is String && tag.isNotEmpty) out.putIfAbsent(tag, () => p.presetId);
-    }
-  }
-  return out;
-}
-
-/// §393 B9 — мобильный storage → переносимая секция.
+/// §393 B9 — DNS хранения → секция `dns` файла 1.0; `null` — нечего писать.
 ///
-/// [servers] / [rules] — сырые списки из `dns_options` (см.
-/// `SettingsStorage.getDnsServers` / `getDnsRulesList`).
-///
-/// §438 — форма 1.0: preset-сервер адресуется `ref` = `<preset_id>:<tag>`
-/// (ONE_NAMESPACE §1). У LxBox preset-сервер хранит только тег, пресет
-/// находится по [presetIdByServerTag] (тег сервера пресета → `preset_id`
-/// шаблона); тег без пресета едет как есть. `default_domain_resolver` —
-/// третий скаляр секции (var `dns_default_domain_resolver`).
-///
-/// §401 — [warnings] пополняется потерями экспорта: у канона нет дома ни для
-/// `srs`-правил, ни для значений template-переменных и заметки сервера, и
-/// молчать о них нельзя (П6). DNS-правила вида `template` в 1.0 не выражаются
-/// и не пишутся: это ссылки на правила шаблона, которые сторона заводит сама
-/// по своему шаблону, пользовательской настройки в них нет.
-LxDns dnsToBackup({
-  required List<Map<String, dynamic>> servers,
-  required List<Map<String, dynamic>> rules,
+/// [warnings] пополняется потерями экспорта: одно
+/// `backup_local_only_dropped` на запись (П6).
+Map<String, dynamic>? dnsToBackup({
+  required List<DnsServerRef> servers,
+  required List<DnsRuleRef> rules,
   required String dnsFinal,
   required String strategy,
   String defaultDomainResolver = '',
-  Map<String, String> presetIdByServerTag = const {},
   List<LxBackupWarning>? warnings,
 }) {
-  final localOnly = <String>[];
-  final outServers = <LxDnsRef>[];
-  for (final e in servers) {
-    final kind = _canonKind(e['kind']);
-    final tag = (e['tag'] as String?) ?? '';
-    if (kind == null || tag.isEmpty) continue;
-    final presetId = presetIdByServerTag[tag] ?? '';
-    outServers.add(
-      LxDnsRef(
-        kind: kind,
-        name: kind == 'preset' ? '' : tag,
-        ref: kind != 'preset'
-            ? ''
-            : (presetId.isEmpty ? tag : '$presetId:$tag'),
-        enabled: e['enabled'] as bool? ?? true,
-        // Тело — только у пользовательской записи (см. docstring, п. 3).
-        value: kind == 'user'
-            ? (e['body'] as Map?)?.cast<String, dynamic>()
-            : null,
-      ),
-    );
-    // Значения template-переменных и заметка: мобильные понятия, у канона
-    // места нет. §401 — в файл не едут, потеря названа ниже одной строкой.
-    if (e['varValues'] is Map) localOnly.add('$tag: varValues');
-    if (e['description'] is String) localOnly.add('$tag: description');
-  }
-
-  final outRules = <LxDnsRef>[];
-  for (final e in rules) {
-    final rawKind = '${e['kind']}';
-    if (rawKind == 'srs') {
-      // Происхождения `srs` в каноне нет, и провозить его больше нечем (§401).
-      localOnly.add('${e['name'] ?? 'dns rule'}: srs');
-      continue;
-    }
-    if (rawKind == 'template') continue;
-    final kind = _canonKind(e['kind']);
-    if (kind == null) continue;
-    final name = (e['name'] as String?) ?? '';
-    final presetId = (e['presetId'] as String?) ?? '';
-    final body = (e['rule'] as Map?)?.cast<String, dynamic>();
-    if (kind == 'user' ? body == null : presetId.isEmpty) continue;
-    outRules.add(
-      LxDnsRef(
-        kind: kind,
-        name: kind == 'user' ? name : '',
-        ref: kind == 'preset' ? presetId : '',
-        enabled: e['enabled'] as bool? ?? true,
-        value: kind == 'user' ? body : null,
-      ),
-    );
-  }
-
-  // ОДИН warning на секцию с перечнем: строка на каждую потерю утопила бы
-  // пользователя в списке при большом DNS-конфиге.
-  if (localOnly.isNotEmpty && warnings != null) {
-    warnings.add(
-      LxBackupWarning(kWarnLocalOnlyDropped, 'dns: ${localOnly.join(', ')}'),
-    );
-  }
-
-  return LxDns(
-    servers: outServers,
-    rules: outRules,
-    finalServer: dnsFinal,
-    strategy: strategy,
-    defaultDomainResolver: defaultDomainResolver,
-  );
+  final sink = warnings ?? <LxBackupWarning>[];
+  final outServers = [
+    for (final s in servers)
+      ?exportBackupRecord(BackupRecord.dnsServer, dnsServerToRecord(s),
+          'dns: ${_serverLabel(s)}', sink),
+  ];
+  final outRules = [
+    for (final r in rules)
+      ?exportBackupRecord(BackupRecord.dnsRule, dnsRuleToRecord(r),
+          'dns: ${_ruleLabel(r)}', sink),
+  ];
+  final out = <String, dynamic>{
+    if (strategy.isNotEmpty) 'strategy': strategy,
+    if (dnsFinal.isNotEmpty) 'final': dnsFinal,
+    if (defaultDomainResolver.isNotEmpty)
+      'default_domain_resolver': defaultDomainResolver,
+    if (outServers.isNotEmpty) 'servers': outServers,
+    if (outRules.isNotEmpty) 'rules': outRules,
+  };
+  return out.isEmpty ? null : out;
 }
 
-/// §393 B9 — результат применения секции на мобилу.
+String _serverLabel(DnsServerRef s) => s is DnsServerPreset && s.presetId.isNotEmpty
+    ? '${s.presetId}:${s.tag}'
+    : s.tag;
+
+String _ruleLabel(DnsRuleRef r) => switch (r) {
+      DnsRuleInline(:final name) ||
+      DnsRuleSrs(:final name) ||
+      DnsRuleTemplate(:final name) =>
+        name.isEmpty ? 'dns rule' : name,
+      DnsRulePreset(:final presetId) => presetId,
+    };
+
+/// §393 B9 — результат применения секции.
 typedef DnsBackupApply = ({
-  List<Map<String, dynamic>> servers,
-  List<Map<String, dynamic>> rules,
+  List<DnsServerRef> servers,
+  List<DnsRuleRef> rules,
   String dnsFinal,
   String strategy,
 
@@ -158,114 +95,72 @@ typedef DnsBackupApply = ({
   int applied,
 });
 
-/// §393 B9 — переносимая секция → мобильный storage (merge).
+/// §393 B9 — секция файла → DNS хранения (merge).
 ///
 /// Merge, а не replace: своя настройка сильнее приехавшей (эталон
 /// `import.go:importDNS`). Совпавшая запись остаётся локальной, несовпавшая
 /// дописывается в конец в порядке файла.
 ///
-/// §438 — ключи слияния по BACKUP.md §9 п. 5, одни для обоих форматов:
+/// Ключи слияния по BACKUP.md §9 п. 5, одни для обоих форматов:
 ///
-///  * сервер — `kind` + `tag`, а у `preset` — `kind` + полный `ref`
+///  * сервер — вид + тег, а у `preset` — вид + полный `ref`
 ///    (`<preset_id>:<tag>`): тега у ссылочной записи нет, и ключ по тегу
-///    схлопнул бы все preset-серверы в один. Storage LxBox держит тег сервера
-///    пресета; `ref` своей записи собирается по [presetIdByServerTag];
-///  * правило — `kind` + `ref` + тело: своего имени у правила контракта нет,
-///    различить два правила можно только тем, что они делают. Дописанному
-///    пользовательскому правилу без имени имя выводится из тела (storage
-///    LxBox безымянное правило не держит), с уникализацией суффиксом.
+///    схлопнул бы все preset-серверы в один. Серверы файла между собой тоже
+///    не дублируются: тег — имя outbound'а DNS, второго владельца у него нет;
+///  * правило — вид + `ref` + тело: своего имени у правила контракта нет,
+///    различить два правила можно только тем, что они делают. §439 §6.5
+///    п. 12 — пользовательские правила сверяются только с правилами, которые
+///    стояли ДО импорта (как папки по имени, §9 п. 3): файл — сериализация
+///    состояния, и два одинаковых правила в нём — два правила состояния.
+///    Ссылки (`preset`, `template`) дублем не заводятся. Безымянному
+///    пользовательскому правилу имя выводится из тела с уникализацией
+///    суффиксом; имя из файла остаётся как есть.
 ///
 /// `final`/`strategy`/`default_domain_resolver` применяются только когда
 /// приехали непустыми: пустая строка в файле означает «сторона это не
 /// переносила», а не «сбросить».
 DnsBackupApply applyDnsBackup({
   required LxDns incoming,
-  required List<Map<String, dynamic>> servers,
-  required List<Map<String, dynamic>> rules,
+  required List<DnsServerRef> servers,
+  required List<DnsRuleRef> rules,
   required String dnsFinal,
   required String strategy,
   String defaultDomainResolver = '',
-  Map<String, String> presetIdByServerTag = const {},
 }) {
   var applied = 0;
-  final outServers = [for (final e in servers) Map<String, dynamic>.from(e)];
-  // Ключ preset — полный `ref`: у своей записи он собирается из тега и
-  // пресета шаблона, которому тег принадлежит.
-  String localRef(String tag) {
-    final pid = presetIdByServerTag[tag] ?? '';
-    return pid.isEmpty ? tag : '$pid:$tag';
-  }
-
-  final haveServers = <String>{
-    for (final e in outServers)
-      e['kind'] == 'preset'
-          ? _serverKey('preset', localRef('${e['tag']}'))
-          : _serverKey('${e['kind']}', '${e['tag']}'),
-  };
-  // Storage LxBox держит preset-сервер тегом: второй записи под тем же тегом
+  final outServers = servers.toList();
+  final haveServers = <String>{for (final s in outServers) _serverKey(s)};
+  // Хранение держит preset-сервер тегом: второй записи под тем же тегом
   // (тот же сервер чужого пресета) места нет.
   final presetTags = <String>{
-    for (final e in outServers)
-      if (e['kind'] == 'preset') '${e['tag']}',
+    for (final s in outServers)
+      if (s is DnsServerPreset) s.tag,
   };
-
-  for (final ref in incoming.servers) {
-    final kind = _mobileKind(ref.kind);
-    // preset адресуется `ref` = `<preset_id>:<tag>` (1.0); у записи 0.x
-    // ссылка ехала именем.
-    final fullRef = kind == 'preset' && ref.ref.isNotEmpty ? ref.ref : ref.name;
-    if (fullRef.isEmpty) continue;
-    final at = kind == 'preset' ? fullRef.indexOf(':') : -1;
-    final tag = at < 0 ? fullRef : fullRef.substring(at + 1);
-    if (tag.isEmpty) continue;
-    if (!haveServers.add(_serverKey(kind, fullRef))) continue; // своё сильнее
-    if (kind == 'preset' && !presetTags.add(tag)) continue;
-    outServers.add(<String, dynamic>{
-      'kind': kind,
-      'tag': tag,
-      'enabled': ref.enabled,
-      if (kind == 'inline' && ref.value != null) 'body': ref.value,
-    });
+  for (final s in incoming.servers) {
+    if (!haveServers.add(_serverKey(s))) continue; // своё сильнее
+    if (s is DnsServerPreset && !presetTags.add(s.tag)) continue;
+    outServers.add(s);
     applied++;
   }
 
-  final outRules = [for (final e in rules) Map<String, dynamic>.from(e)];
-  final haveRules = <String>{
-    for (final e in outRules)
-      _ruleKey(
-        '${e['kind']}',
-        name: (e['name'] as String?) ?? '',
-        ref: (e['presetId'] as String?) ?? (e['id'] as String?) ?? '',
-        body: e['rule'],
-      ),
-  };
+  final outRules = rules.toList();
+  final localRules = <String>{for (final r in outRules) _ruleKey(r)};
+  final addedRefs = <String>{};
   final usedNames = <String>{
-    for (final e in outRules)
-      if (e['name'] is String) e['name'] as String,
+    for (final r in outRules)
+      if (_nameOf(r) case final name? when name.isNotEmpty) name,
   };
-
-  for (final ref in incoming.rules) {
-    final kind = _mobileKind(ref.kind);
-    if (kind == 'inline' ? ref.value == null : ref.name.isEmpty && ref.ref.isEmpty) {
-      continue;
+  for (final r in incoming.rules) {
+    final key = _ruleKey(r);
+    if (localRules.contains(key)) continue; // своё сильнее
+    if (r is! DnsRuleInline && !addedRefs.add(key)) continue;
+    final rule = r is DnsRuleInline && r.name.isEmpty
+        ? r.copyWith(name: _uniqueName(_ruleNameFromBody(r.rule), usedNames))
+        : r;
+    if (_nameOf(rule) case final name? when name.isNotEmpty) {
+      usedNames.add(name);
     }
-    final key = _ruleKey(kind, name: ref.name, ref: ref.ref, body: ref.value);
-    if (!haveRules.add(key)) continue; // своё сильнее
-    var name = ref.name;
-    if (kind == 'inline') {
-      name = _uniqueName(
-        name.isNotEmpty ? name : _ruleNameFromBody(ref.value!),
-        usedNames,
-      );
-    }
-    if (name.isNotEmpty) usedNames.add(name);
-    outRules.add(<String, dynamic>{
-      'kind': kind,
-      'enabled': ref.enabled,
-      if (name.isNotEmpty) 'name': name,
-      if (ref.ref.isNotEmpty) 'presetId': ref.ref,
-      if (kind == 'inline' && ref.value != null) 'rule': ref.value,
-    });
+    outRules.add(rule);
     applied++;
   }
 
@@ -285,25 +180,28 @@ DnsBackupApply applyDnsBackup({
   );
 }
 
-String _serverKey(String kind, String tag) => '$kind\u0000$tag';
+String _serverKey(DnsServerRef s) => switch (s) {
+      DnsServerPreset(:final presetId, :final tag) =>
+        'preset\u0000${presetId.isEmpty ? tag : '$presetId:$tag'}',
+      _ => '${s.kind}\u0000${s.tag}',
+    };
 
 /// Ключ DNS-правила: пользовательское — телом в каноне (ключи отсортированы),
-/// ссылочные — ссылкой, шаблонное — именем.
-String _ruleKey(
-  String kind, {
-  required String name,
-  required String ref,
-  Object? body,
-}) {
-  switch (kind) {
-    case 'inline':
-      return 'inline\u0000${body is Map ? jsonEncode(deepSortKeys(body)) : ''}';
-    case 'template':
-      return 'template\u0000$name';
-    default:
-      return '$kind\u0000$ref';
-  }
-}
+/// ссылочные — ссылкой, шаблонное — именем, `srs` — своим `id`.
+String _ruleKey(DnsRuleRef r) => switch (r) {
+      DnsRuleInline(:final rule) => 'user\u0000${jsonEncode(deepSortKeys(rule))}',
+      DnsRulePreset(:final presetId) => 'preset\u0000$presetId',
+      DnsRuleTemplate(:final name) => 'template\u0000$name',
+      DnsRuleSrs(:final id) => 'srs\u0000$id',
+    };
+
+String? _nameOf(DnsRuleRef r) => switch (r) {
+      DnsRuleInline(:final name) ||
+      DnsRuleSrs(:final name) ||
+      DnsRuleTemplate(:final name) =>
+        name,
+      DnsRulePreset() => null,
+    };
 
 /// Имя безымянного пользовательского DNS-правила: первое значение первого
 /// матчера тела (`domain_suffix: [".corp.example"]` → `.corp.example`), без
@@ -326,14 +224,3 @@ String _uniqueName(String base, Set<String> used) {
     if (!used.contains(candidate)) return candidate;
   }
 }
-
-/// Мобильное имя происхождения → каноническое; `null` = у канона места нет.
-String? _canonKind(Object? raw) => switch ('$raw') {
-  'inline' => 'user',
-  'template' => 'template',
-  'preset' => 'preset',
-  _ => null,
-};
-
-/// Каноническое имя происхождения → мобильное.
-String _mobileKind(String canon) => canon == 'user' ? 'inline' : canon;

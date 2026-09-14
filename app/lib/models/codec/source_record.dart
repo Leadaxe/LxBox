@@ -213,9 +213,14 @@ const Set<String> _identityKeys = {
 
 /// Запись `sources[]` → источник LxBox. Запись цепочки читает
 /// `chainFromRecord`; здесь она, как и запись без `id`, — отброс с причиной.
+///
+/// [sectionDrops] получает отбраковки секций узлов структурно (вид и причина
+/// по норме B3, `NodeSections.fromJson`): импорт бэкапа называет их кодом с
+/// `reason`, хранению хватает строк в [notes].
 RecordRead<ServerList> sourceFromRecord(
   Map<String, dynamic> j, {
   List<String>? notes,
+  List<NodeSectionDrop>? sectionDrops,
 }) {
   final kind = j['kind'];
   if (kind is! String || kind.isEmpty) {
@@ -233,8 +238,8 @@ RecordRead<ServerList> sourceFromRecord(
   final unknown = <String>[];
   final ServerList list = switch (kind) {
     kSourceKindSubscription => _subscriptionFromRecord(j, id, notes, unknown),
-    kSourceKindServer => _serverFromRecord(j, id, notes, unknown),
-    _ => _folderFromRecord(j, id, notes, unknown),
+    kSourceKindServer => _serverFromRecord(j, id, notes, unknown, sectionDrops),
+    _ => _folderFromRecord(j, id, notes, unknown, sectionDrops),
   };
   return RecordRead.ok(list, unknownKeys: unknown..sort());
 }
@@ -284,6 +289,7 @@ UserServer _serverFromRecord(
   String id,
   List<String>? notes,
   List<String> unknown,
+  List<NodeSectionDrop>? sectionDrops,
 ) {
   final where = 'server "$id"';
   _collectUnknown(j, _serverKeys, '', unknown);
@@ -297,7 +303,7 @@ UserServer _serverFromRecord(
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
     detourPolicy: _detourPolicyFromRecord(j, where, notes, unknown),
     rawBody: raw,
-    sections: _sectionsFromRecord(j['sections'], where, notes),
+    sections: _sectionsFromRecord(j['sections'], where, notes, sectionDrops),
     // Список растущий: контроллер дописывает узлы на месте (как fromJson).
     nodes: [...nodes],
   );
@@ -308,6 +314,7 @@ FolderServers _folderFromRecord(
   String id,
   List<String>? notes,
   List<String> unknown,
+  List<NodeSectionDrop>? sectionDrops,
 ) {
   final where = 'folder "$id"';
   _collectUnknown(j, _folderKeys, '', unknown);
@@ -315,7 +322,8 @@ FolderServers _folderFromRecord(
   final rawNodes = j['nodes'];
   if (rawNodes is List) {
     for (var i = 0; i < rawNodes.length; i++) {
-      final m = _memberFromRecord(rawNodes[i], where, i, notes, unknown);
+      final m = _memberFromRecord(
+          rawNodes[i], where, i, notes, unknown, sectionDrops);
       if (m != null) members.add(m);
     }
   }
@@ -346,6 +354,7 @@ FolderMember? _memberFromRecord(
   int index,
   List<String>? notes,
   List<String> unknown,
+  List<NodeSectionDrop>? sectionDrops,
 ) {
   final where = '$folderWhere: nodes[$index]';
   final path = 'nodes[$index].';
@@ -367,7 +376,7 @@ FolderMember? _memberFromRecord(
     raw: _rawOf(j, path, unknown),
     enabled: _bool(j['enabled'], true),
     detour: link == null ? '' : modelTagOfLink(link, '$where: detour', notes),
-    sections: _sectionsFromRecord(j['sections'], where, notes),
+    sections: _sectionsFromRecord(j['sections'], where, notes, sectionDrops),
   );
   _checkTag(j, member.node?.tag, where, notes);
   return member;
@@ -506,9 +515,10 @@ NodeSections? _sectionsFromRecord(
   Object? raw,
   String where,
   List<String>? notes,
+  List<NodeSectionDrop>? drops,
 ) {
   final dropped = <String>[];
-  final sections = NodeSections.fromJson(raw, dropped: dropped);
+  final sections = NodeSections.fromJson(raw, dropped: dropped, drops: drops);
   for (final d in dropped) {
     notes?.add('$where: sections $d');
   }

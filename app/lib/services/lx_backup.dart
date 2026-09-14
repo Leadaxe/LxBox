@@ -6,17 +6,21 @@ import 'dart:convert';
 
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../models/custom_rule.dart';
 import '../config/consts.dart';
+import '../models/codec/chain_record.dart';
+import '../models/codec/node_link_record.dart';
+import '../models/codec/source_record.dart';
+import '../models/custom_rule.dart';
 import '../models/direction.dart';
 import '../models/dns_ref.dart';
+import '../models/node_link.dart';
 import '../models/node_sections.dart';
 import '../models/parser_config.dart' show kDefaultRuleNum;
 import '../models/record_codec.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
+import 'lx_backup_slice.dart';
 import 'node_hash.dart' show deepSortKeys;
-import 'parser/body_decoder.dart' show IniConfig, decode;
 import 'parser/uri_utils.dart' show newUuidV4;
 import 'tag_resolver.dart';
 
@@ -259,7 +263,13 @@ class LxSubscription {
     this.id = '',
     this.fullSettings = false,
     this.position = 0,
+    this.detour,
   });
+
+  /// §439 — общий `detour` подписки файла 1.0 (BACKUP.md §9 п. 1): ссылка как
+  /// есть, тег конфига из неё получает слияние узлов ([mergeBackupServers]).
+  /// У 0.x `null` и [fullSettings] ложно: своя ссылка остаётся.
+  final NodeLink? detour;
 
   /// §438 — место записи в `sources[]` файла 1.0: новые источники встают в
   /// конец В ПОРЯДКЕ ФАЙЛА (BACKUP.md §9 п. 8), все виды вместе. У 0.x — 0.
@@ -319,7 +329,7 @@ class LxServer {
   /// §438 — личный detour узла 1.0 (`detour{folder_id?, tag}`): у LxBox это
   /// `overrideDetour` одиночного сервера и `detour` члена папки. Тег конфига
   /// из ссылки получает слияние ([mergeBackupServers]).
-  final LxNodeLink? detour;
+  final NodeLink? detour;
 
   /// URI-строка или текст WG-INI.
   final String uri;
@@ -358,8 +368,8 @@ class LxServer {
 /// идентичность и собственные настройки. Состав едет записями [LxServer] с
 /// [LxServer.folderRef] == [key].
 ///
-/// Применяются настройки, у которых в модели LxBox есть дом: `enabled` и
-/// префикс `tag_policy`. `postfix`, `fold`/`fold_tag`, `detour` — поля
+/// Применяются настройки, у которых в модели LxBox есть дом: `enabled`,
+/// префикс `tag_policy` и общий `detour`. `postfix`, `fold`/`fold_tag` — поля
 /// лаунчера (колонка «Поддержка» BACKUP.md §2), игнорируются молча.
 class LxFolder {
   const LxFolder({
@@ -369,7 +379,11 @@ class LxFolder {
     this.enabled = true,
     this.tagPrefix = '',
     this.position = 0,
+    this.detour,
   });
+
+  /// §439 — общий `detour` папки (BACKUP.md §9 п. 3): ссылка файла как есть.
+  final NodeLink? detour;
 
   /// §438 — место записи в `sources[]` файла (см. [LxSubscription.position]).
   final int position;
@@ -385,44 +399,8 @@ class LxFolder {
   final String tagPrefix;
 }
 
-/// §438 — ссылка формата 1.0 на узел (`hops[]`, `detour`): `folder_id`
-/// контейнера машины-экспортёра и сырой тег. Пустой [folderId] — корневое
-/// пространство финальных тегов (BACKUP.md §6).
-class LxNodeLink {
-  const LxNodeLink({this.folderId = '', required this.tag});
-
-  final String folderId;
-  final String tag;
-}
-
-/// §393 B9 — запись DNS с kind-дискриминатором происхождения
-/// (`template|preset|user` — канон схемы).
-///
-/// Мобильные имена другие (`inline` вместо `user`, плюс `srs` у правил, места
-/// которому в схеме v1 нет), поэтому маппинг явный, а непоместившееся
-/// отбрасывается с [kWarnDnsEntrySkipped] (§401: карман провоза упразднён).
-class LxDnsRef {
-  const LxDnsRef({
-    required this.kind,
-    this.name = '',
-    this.ref = '',
-    this.enabled = true,
-    this.value,
-  });
-
-  final String kind;
-  final String name;
-  final String ref;
-  final bool enabled;
-
-  /// Тело записи. Переносится ТОЛЬКО у `kind=user`: у template/preset тело
-  /// принадлежит шаблону принимающей стороны, и зафиксировать чужое значило бы
-  /// навсегда отрезать пользователя от обновлений шаблона
-  /// (`export.go:dnsRefFrom`).
-  final Map<String, dynamic>? value;
-}
-
-/// §393 B9 — секция `dns` файла.
+/// §393 B9 — секция `dns` файла моделями DNS: записи 1.0 читает кодек
+/// (`codec/dns_record.dart`), записи 0.12 — декодер 0.x.
 class LxDns {
   const LxDns({
     this.servers = const [],
@@ -437,8 +415,8 @@ class LxDns {
   /// правилу, что [finalServer] и [strategy] (BACKUP.md §9 п. 5).
   final String defaultDomainResolver;
 
-  final List<LxDnsRef> servers;
-  final List<LxDnsRef> rules;
+  final List<DnsServerRef> servers;
+  final List<DnsRuleRef> rules;
 
   /// `dns.final` — тег DNS-сервера по умолчанию (мобильная var `dns_final`).
   final String finalServer;
@@ -604,7 +582,7 @@ class LxBackupFile {
   /// В [chains] хопы до слияния лежат сырыми тегами; в теги конфига их
   /// переводит [resolveBackupChainHops], когда известна карта папок. У 0.x
   /// пусто: там позиции уже строки.
-  final Map<String, List<LxNodeLink>> chainHops;
+  final Map<String, List<NodeLink>> chainHops;
 
   /// §393 B9 — секция DNS; `null` = в файле её не было.
   final LxDns? dns;
@@ -634,12 +612,12 @@ class LxBackupExport {
 
 /// Собирает LX Backup формата 1.0 (`lx_backup: 2`) из настроек LxBox.
 ///
-/// §438 — запись = запись состояния (BACKUP.md §1): `sources[]` одним
-/// списком (подписки, одиночные узлы и папки в порядке списка источников,
-/// следом цепочки — так их показывает экран источников), правила и
-/// DNS-записи кодеком записей (`record_codec.dart`), секции узлов как есть.
-/// Тонкий слой — `directions[]`, `disabled{}`, `identity{}`, переносимые
-/// `vars`, `route.final`, `warp[]` — той же формы, что в 0.12.
+/// §439 — файл = срез хранения плюс тонкий слой (BACKUP.md §1). Записи
+/// `sources[]` (подписки, одиночные узлы и папки в порядке списка источников,
+/// следом цепочки — так они лежат хвостом `sources[]` хранения) и `rules[]`
+/// пишет кодек хранения (`models/codec/`); поля LxBox срезает таблица
+/// `lx_backup_slice.dart`. Тонкий слой — `directions[]`, переносимые `vars`,
+/// `route.final`, `warp[]` — той же формы, что в 0.12.
 ///
 /// [directions] — Направления в порядке списка (§393 B2): они цели правил, и
 /// без них правило приезжало бы на чужую машину выключенным.
@@ -647,18 +625,16 @@ class LxBackupExport {
 /// [directionPing] — §409, бюджеты теста узла по тегу Направления
 /// (`ping_options.groups`, §040). Пишутся только заданные половины.
 ///
-/// [dns] — секция DNS в переносимой форме (`dnsToBackup`); [warp] — записи
+/// [dns] — секция `dns` в форме файла (`dnsToBackup`); [warp] — записи
 /// регистраций WG/MASQUE (§393 B8) уже в каноне схемы.
 ///
-/// Ссылки на узлы (`hops[]` цепочки, `detour` узла) у LxBox — теги конфига;
-/// в файл они едут формой `{folder_id?, tag}`: тег члена папки или узла
-/// подписки с префиксом становится сырым тегом с `id` контейнера — обратное
-/// тому, что делает импорт ([resolveBackupChainHops]).
+/// Ссылки на узлы (`hops[]` цепочки, `detour` источника и узла) едут так, как
+/// лежат в записи хранения. Пока модели держат финальный тег строкой, это
+/// корневая ссылка `{tag}`; ссылку без `folder_id` на член папки лаунчер
+/// нормализует на импорте (BACKUP.md §6, ответ Л1).
 ///
-/// Предупреждения: настройки LxBox, которым в 1.0 дома нет (import-rules и
-/// реакция на обновление подписки, политика detour источника, ping-опции
-/// папки, имя цепочки, `srs`-правила DNS …), названы
-/// [kWarnLocalOnlyDropped] — одним на сущность (П6).
+/// Предупреждения: срезанные настройки LxBox — [kWarnLocalOnlyDropped], одно
+/// на сущность (П6).
 Future<LxBackupExport> buildLxBackup({
   required List<ServerList> lists,
   required List<CustomRule> rules,
@@ -667,7 +643,7 @@ Future<LxBackupExport> buildLxBackup({
   Map<String, LxDirectionPing> directionPing = const {},
   List<SourceChain> chains = const [],
   String? routeFinal,
-  LxDns? dns,
+  Map<String, dynamic>? dns,
   List<Map<String, dynamic>> warp = const [],
 }) async {
   var appVersion = '';
@@ -679,15 +655,10 @@ Future<LxBackupExport> buildLxBackup({
   }
 
   final warnings = <LxBackupWarning>[];
-  final links = _LinkIndex(lists);
   final sources = <Map<String, dynamic>>[
-    for (final list in lists)
-      switch (list) {
-        SubscriptionServers() => _subscription10ToJson(list, warnings),
-        FolderServers() => _folder10ToJson(list, links, warnings),
-        UserServer() => _server10ToJson(list, links, warnings),
-      },
-    for (final c in chains) _chain10ToJson(c, links, warnings),
+    for (final list in lists) ?_exportSource(list, warnings),
+    for (final c in chains)
+      ?exportBackupRecord(BackupRecord.chain, chainToRecord(c), c.tag, warnings),
   ];
 
   final portableVars = <String, String>{
@@ -695,9 +666,19 @@ Future<LxBackupExport> buildLxBackup({
       if (kLxPortableVars.contains(e.key)) e.key: e.value,
   };
 
-  final ruleRecords = <Map<String, dynamic>>[
-    for (final r in rules) ..._rule10ToJson(r, warnings),
-  ];
+  final ruleRecords = <Map<String, dynamic>>[];
+  for (final r in rules) {
+    final stored = ruleToRecord(r);
+    // Правило вида json, чей текст объектом не разбирается: тела у записи
+    // нет, и в 1.0 ей дома нет (массивы хранение уже разложило, §439 В2).
+    if (r is CustomRuleJson && stored['body'] == null) {
+      _noteLocalOnly(warnings, r.name, const ['json']);
+      continue;
+    }
+    final record =
+        exportBackupRecord(BackupRecord.rule, stored, r.name, warnings);
+    if (record != null) ruleRecords.add(record);
+  }
 
   // Порядок ключей корня — перечень BACKUP.md §2: файл читают и правят руками,
   // и перестановка ключей между версиями была бы шумом в diff'ах.
@@ -717,7 +698,7 @@ Future<LxBackupExport> buildLxBackup({
         for (final d in directions) _directionToJson(d, directionPing[d.tag]),
       ],
     if (ruleRecords.isNotEmpty) 'rules': ruleRecords,
-    if (dns != null && !dns.isEmpty) 'dns': _dns10ToJson(dns),
+    if (dns != null && dns.isNotEmpty) 'dns': dns,
     if (portableVars.isNotEmpty) 'vars': portableVars,
     if (routeFinal != null && routeFinal.isNotEmpty)
       'route': {'final': routeFinal},
@@ -732,6 +713,85 @@ Future<LxBackupExport> buildLxBackup({
   );
 }
 
+/// §439 — запись хранения → запись файла по таблице среза; срезанные
+/// настройки, отличные от умолчания, называются одним
+/// [kWarnLocalOnlyDropped] на [entity]. `null` — вид записи в 1.0 не пишется.
+Map<String, dynamic>? exportBackupRecord(
+  BackupRecord kind,
+  Map<String, dynamic> stored,
+  String entity,
+  List<LxBackupWarning> warnings,
+) {
+  final slice = sliceBackupRecord(kind, stored);
+  _noteLocalOnly(warnings, entity, slice.dropped);
+  return slice.record;
+}
+
+/// Источник → запись `sources[]` файла: запись хранения, срез и `body`
+/// узлов с JSON-исходником.
+Map<String, dynamic>? _exportSource(
+  ServerList list,
+  List<LxBackupWarning> warnings,
+) {
+  final stored = sourceToRecord(list);
+  final (kind, entity) = switch (list) {
+    SubscriptionServers() =>
+      (BackupRecord.subscription, list.name.isEmpty ? list.url : list.name),
+    UserServer() => (BackupRecord.server, _str(stored['tag'])),
+    FolderServers() => (BackupRecord.folder, list.name),
+  };
+  final record = exportBackupRecord(kind, stored, entity, warnings);
+  if (record == null) return null;
+  return switch (kind) {
+    BackupRecord.server => _withJsonBody(record),
+    BackupRecord.folder => {
+        for (final e in record.entries)
+          e.key: e.key == 'nodes' && e.value is List
+              ? [
+                  for (final n in e.value as List)
+                    // Член без текста — пустая строка папки: переносить
+                    // нечего (хранение держит его `unsupported` без исходника).
+                    if (n is Map && _hasSourceText(n))
+                      _withJsonBody(n.cast<String, dynamic>()),
+                ]
+              : e.value,
+      },
+    _ => record,
+  };
+}
+
+bool _hasSourceText(Map<dynamic, dynamic> node) {
+  final origin = node['origin'];
+  return origin is Map && _str(origin['raw']).trim().isNotEmpty;
+}
+
+/// §439 §4.1 — узел с JSON-исходником из одного outbound несёт и `body`:
+/// объект sing-box без `tag` и `detour` (BACKUP.md §2), сразу за `origin`.
+/// Материализованное тело URI/WG-INI не пишется: принимающая сторона берёт
+/// исходник (BACKUP.md §9 п. 2), а второй эмиттер тел разошёлся бы со
+/// сборкой. Истина узла — текст (В1).
+Map<String, dynamic> _withJsonBody(Map<String, dynamic> node) {
+  final origin = node['origin'];
+  if (origin is! Map || origin['kind'] != 'json') return node;
+  final obj = _tryDecodeObject(_str(origin['raw']).trim());
+  if (obj == null ||
+      obj['type'] is! String ||
+      obj.containsKey('outbounds') ||
+      obj.containsKey('endpoints')) {
+    return node;
+  }
+  return {
+    for (final e in node.entries) ...{
+      e.key: e.value,
+      if (e.key == 'origin')
+        'body': {
+          for (final b in obj.entries)
+            if (b.key != 'tag' && b.key != 'detour') b.key: b.value,
+        },
+    },
+  };
+}
+
 /// §401 — ОДИН warning на сущность с перечнем полей, у которых нет дома в
 /// общей схеме. Пустой перечень предупреждения не даёт: шуметь на каждой
 /// записи подряд значило бы обесценить сам сигнал.
@@ -743,321 +803,6 @@ void _noteLocalOnly(
   if (fields.isEmpty) return;
   warnings.add(
     LxBackupWarning(kWarnLocalOnlyDropped, '$entity: ${fields.join(', ')}'),
-  );
-}
-
-/// §438 — обратный перевод тегов конфига в ссылки формата 1.0.
-///
-/// Тег корневого узла — `{tag}`; тег члена папки (префикс папки + сырой тег)
-/// и узла подписки с префиксом — `{folder_id: id контейнера, tag: сырой}`;
-/// всё прочее (Направления, цепочки, служебные теги) — `{tag}` как есть.
-/// Импорт делает ровно обратное: префикс найденного контейнера + сырой тег.
-class _LinkIndex {
-  _LinkIndex(List<ServerList> lists) {
-    for (final l in lists) {
-      switch (l) {
-        case UserServer():
-          if (l.name.isNotEmpty) _root.add(l.name);
-          for (final n in l.nodes) {
-            _root.add(TagResolver.displayTag(l.tagPrefix, n.tag));
-          }
-        case FolderServers():
-          for (final m in l.members) {
-            final bare = m.node?.tag ?? '';
-            if (bare.isEmpty) continue;
-            _members.putIfAbsent(
-              TagResolver.displayTag(l.tagPrefix, bare),
-              () => (id: l.id, tag: bare),
-            );
-          }
-        case SubscriptionServers():
-          if (l.tagPrefix.isNotEmpty) _prefixes.add((l.tagPrefix, l.id));
-      }
-    }
-  }
-
-  final _root = <String>{};
-  final _members = <String, ({String id, String tag})>{};
-  final _prefixes = <(String, String)>[];
-
-  Map<String, dynamic> link(String tag) {
-    if (_root.contains(tag)) return {'tag': tag};
-    final member = _members[tag];
-    if (member != null) return {'folder_id': member.id, 'tag': member.tag};
-    for (final (prefix, id) in _prefixes) {
-      final head = '$prefix ';
-      if (tag.startsWith(head) && tag.length > head.length) {
-        return {'folder_id': id, 'tag': tag.substring(head.length)};
-      }
-    }
-    return {'tag': tag};
-  }
-}
-
-/// Узел формата 1.0: `origin` из исходника LxBox (текст, каким узел
-/// добавлен) и `body` — объект sing-box, когда исходник им и является.
-/// Материализованное тело URI/WG-INI не пишется: принимающая сторона берёт
-/// исходник (BACKUP.md §9 п. 2), а второй эмиттер тел здесь разошёлся бы со
-/// сборкой.
-Map<String, dynamic> _origin10(String raw) {
-  final t = raw.trim();
-  final obj = _tryDecodeObject(t);
-  if (obj != null) {
-    final isOutbound = obj['type'] is String &&
-        !obj.containsKey('outbounds') &&
-        !obj.containsKey('endpoints');
-    return {
-      'origin': {'kind': 'json', 'raw': raw},
-      if (isOutbound)
-        'body': {
-          for (final e in obj.entries)
-            if (e.key != 'tag' && e.key != 'detour') e.key: e.value,
-        },
-    };
-  }
-  final kind = decode(t) is IniConfig ? 'wg_ini' : 'uri';
-  return {
-    'origin': {'kind': kind, 'raw': raw},
-  };
-}
-
-/// §438 — подписка → запись `sources[]` вида `subscription`.
-Map<String, dynamic> _subscription10ToJson(
-  SubscriptionServers list,
-  List<LxBackupWarning> warnings,
-) {
-  // Дома в 1.0 этим настройкам нет: у лаунчера таких понятий не существует,
-  // а односторонний ключ был бы тайным грузом (П1/П3). `detour` источника
-  // формат знает, но это поле лаунчера (BACKUP.md §2): политика detour LxBox
-  // шире одной ссылки и в файл не едет.
-  _noteLocalOnly(warnings, list.name.isEmpty ? list.url : list.name, [
-    if (list.importRules.isNotEmpty) 'import_rules',
-    if (!list.importRulesEnabled) 'import_rules_enabled',
-    if (list.onUpdateAction != SubscriptionOnUpdateAction.rebuild)
-      'on_update_action',
-    if (list.detourPolicy != DetourPolicy.defaults) 'detour_policy',
-  ]);
-  final identity = _identityToJson(list.identity);
-  return <String, dynamic>{
-    'kind': 'subscription',
-    'enabled': list.enabled,
-    'id': list.id,
-    // `name` подписки — имя ИСТОЧНИКА, а не узла.
-    'name': list.name,
-    if (list.tagPrefix.isNotEmpty)
-      'tag_policy': {'prefix': _prefixToContract(list.tagPrefix)},
-    'url': list.url,
-    'identity': ?identity,
-    'update': {'interval_hours': list.updateIntervalHours},
-    // §5 BACKUP.md — отметки выключенных узлов: тег → unix seconds (мобила
-    // хранит DateTime). Ключ непрозрачен: legacy-хеш 64 hex едет как есть.
-    if (list.disabledHashes.isNotEmpty)
-      'disabled': {
-        for (final e in list.disabledHashes.entries)
-          e.key: e.value.toUtc().millisecondsSinceEpoch ~/ 1000,
-      },
-  };
-}
-
-/// §401 (D-083) — per-source identity → объект схемы.
-///
-/// Пишется, только когда override у подписки ЗАДАН, и только заданными
-/// ключами: у этой настройки «не задано» и «задано пустым» значат разное, и
-/// пустышка в каждом файле отличала бы два одинаковых состояния (П1).
-///
-/// `hash_device_model` схема объявляет, но у нас такой настройки нет — не
-/// пишем: выдумывать значение честнее файл не делает.
-Map<String, dynamic>? _identityToJson(SubscriptionIdentityOverride? id) {
-  if (id == null) return null;
-  final out = <String, dynamic>{
-    if (id.userAgent.isNotEmpty) 'user_agent': id.userAgent,
-    'send_hwid': id.sendHwid,
-    if (id.hwid.isNotEmpty) 'hwid': id.hwid,
-    if (id.deviceOs.isNotEmpty) 'device_os': id.deviceOs,
-    if (id.verOs.isNotEmpty) 'ver_os': id.verOs,
-    if (id.deviceModel.isNotEmpty) 'device_model': id.deviceModel,
-  };
-  return out;
-}
-
-/// §438 — одиночный сервер → запись `sources[]` вида `server`.
-///
-/// Тег записи — имя сервера, а у безымянного — тег его узла. Личный detour
-/// узла (`overrideDetour`) едет ссылкой `detour`; остальные флаги политики
-/// detour дома в 1.0 не имеют. Префикса тегов у корневого узла в 1.0 нет.
-Map<String, dynamic> _server10ToJson(
-  UserServer list,
-  _LinkIndex links,
-  List<LxBackupWarning> warnings,
-) {
-  final tag = list.name.isNotEmpty
-      ? list.name
-      : (list.nodes.isNotEmpty ? list.nodes.first.tag : '');
-  final policy = list.detourPolicy;
-  _noteLocalOnly(warnings, tag, [
-    if (list.tagPrefix.isNotEmpty) 'tag_prefix',
-    if (policy.copyWith(overrideDetour: '') != DetourPolicy.defaults)
-      'detour_policy',
-  ]);
-  return <String, dynamic>{
-    'kind': 'server',
-    if (tag.isNotEmpty) 'tag': tag,
-    'enabled': list.enabled,
-    if (list.rawBody.trim().isNotEmpty) ..._origin10(list.rawBody),
-    if (policy.overrideDetour.isNotEmpty)
-      'detour': links.link(policy.overrideDetour),
-    if (list.sections != null) 'sections': list.sections!.toJson(),
-    'id': list.id,
-  };
-}
-
-/// §438 — папка → запись `sources[]` вида `folder` с составом в `nodes[]`.
-///
-/// Член с разобранным узлом — `server`; член, чей текст не разобрался, —
-/// `unsupported` с исходником (так он и хранится у LxBox, §234).
-Map<String, dynamic> _folder10ToJson(
-  FolderServers list,
-  _LinkIndex links,
-  List<LxBackupWarning> warnings,
-) {
-  _noteLocalOnly(warnings, list.name, [
-    if (list.pingUrl != null) 'ping_url',
-    if (list.pingTimeoutMs != null) 'ping_timeout_ms',
-    if (list.detourPolicy != DetourPolicy.defaults) 'detour_policy',
-  ]);
-  final nodes = <Map<String, dynamic>>[];
-  for (final m in list.members) {
-    if (m.raw.trim().isEmpty) continue;
-    final node = m.node;
-    nodes.add(<String, dynamic>{
-      'kind': node == null ? 'unsupported' : 'server',
-      if (node != null && node.tag.isNotEmpty) 'tag': node.tag,
-      'enabled': m.enabled,
-      ..._origin10(m.raw),
-      if (m.detour.isNotEmpty) 'detour': links.link(m.detour),
-      if (node == null) 'reason': 'the member text does not parse into a node',
-      if (m.sections != null) 'sections': m.sections!.toJson(),
-    });
-  }
-  return <String, dynamic>{
-    'kind': 'folder',
-    'enabled': list.enabled,
-    'id': list.id,
-    'name': list.name,
-    if (list.tagPrefix.isNotEmpty)
-      'tag_policy': {'prefix': _prefixToContract(list.tagPrefix)},
-    'nodes': nodes,
-  };
-}
-
-/// §438 — цепочка → запись `sources[]` вида `chain`: настройки маршрута в
-/// `body` (канон `source_chain.schema.json` без позиций), позиции — ссылками
-/// в `hops[]`. Имени цепочки (`label`) дома в 1.0 нет.
-Map<String, dynamic> _chain10ToJson(
-  SourceChain c,
-  _LinkIndex links,
-  List<LxBackupWarning> warnings,
-) {
-  _noteLocalOnly(warnings, c.tag, [
-    if (c.label.isNotEmpty && c.label != c.tag) 'label',
-  ]);
-  // Позиции уходят ссылками в `hops[]` записи, а не строками тела.
-  final canon = c.toCanonJson()..remove('hops');
-  return <String, dynamic>{
-    'kind': 'chain',
-    'tag': c.tag,
-    'enabled': c.enabled,
-    'body': {'type': kChainOutboundType, ...canon},
-    'hops': [for (final h in c.hops) links.link(h)],
-  };
-}
-
-/// §438 — правило LxBox → записи `rules[]` формата 1.0 (кодек записей).
-///
-/// Правило вида json (§225) — это inline 1.0 с телом как есть. Массив тел —
-/// по записи на тело, в том же месте оси; текст, который телом не
-/// разбирается, дома не имеет и назван [kWarnLocalOnlyDropped].
-List<Map<String, dynamic>> _rule10ToJson(
-  CustomRule rule,
-  List<LxBackupWarning> warnings,
-) {
-  if (rule is! CustomRuleJson) return [ruleToRecord(rule)];
-  Object? decoded;
-  try {
-    decoded = jsonDecode(rule.json);
-  } catch (_) {
-    decoded = null;
-  }
-  final bodies = switch (decoded) {
-    Map() => [decoded.cast<String, dynamic>()],
-    List() when decoded.isNotEmpty && decoded.every((e) => e is Map) => [
-        for (final e in decoded) (e as Map).cast<String, dynamic>(),
-      ],
-    _ => const <Map<String, dynamic>>[],
-  };
-  if (bodies.isEmpty) {
-    _noteLocalOnly(warnings, rule.name, const ['json']);
-    return const [];
-  }
-  return [
-    for (var i = 0; i < bodies.length; i++)
-      <String, dynamic>{
-        'kind': 'inline',
-        if (i == 0) 'id': rule.id,
-        'name': i == 0 ? rule.name : '${rule.name} #${i + 1}',
-        'enabled': rule.enabled,
-        if (rule.orderNum != null) 'num': rule.orderNum,
-        'body': bodies[i],
-      },
-  ];
-}
-
-/// §438 — секция DNS → форма 1.0 кодеком записей: сервер `user` телом без
-/// `tag`, `template` — тегом, `preset` — ссылкой `ref`; правило `user` телом
-/// с `server`, `preset` — ссылкой.
-Map<String, dynamic> _dns10ToJson(LxDns dns) => {
-      if (dns.strategy.isNotEmpty) 'strategy': dns.strategy,
-      if (dns.finalServer.isNotEmpty) 'final': dns.finalServer,
-      if (dns.defaultDomainResolver.isNotEmpty)
-        'default_domain_resolver': dns.defaultDomainResolver,
-      if (dns.servers.isNotEmpty)
-        'servers': [
-          for (final s in dns.servers)
-            switch (s.kind) {
-              'user' => dnsServerToRecord(DnsServerInline(
-                  enabled: s.enabled,
-                  tag: s.name,
-                  body: s.value ?? const {},
-                )),
-              // `ref` собран `dnsToBackup` в форме `<preset_id>:<tag>`.
-              'preset' => _presetServerRecord(s),
-              _ => dnsServerToRecord(
-                  DnsServerTemplate(enabled: s.enabled, tag: s.name)),
-            },
-        ],
-      if (dns.rules.isNotEmpty)
-        'rules': [
-          for (final r in dns.rules)
-            r.kind == 'preset'
-                ? dnsRuleToRecord(
-                    DnsRulePreset(presetId: r.ref, enabled: r.enabled))
-                : dnsRuleToRecord(DnsRuleInline(
-                    name: r.name,
-                    rule: r.value ?? const {},
-                    enabled: r.enabled,
-                  )),
-        ],
-    };
-
-Map<String, dynamic> _presetServerRecord(LxDnsRef s) {
-  final ref = s.ref.isNotEmpty ? s.ref : s.name;
-  final presetId = presetIdOfDnsServerRef(ref);
-  return dnsServerToRecord(
-    DnsServerPreset(
-      enabled: s.enabled,
-      tag: presetId.isEmpty ? ref : ref.substring(ref.indexOf(':') + 1),
-      presetId: presetId,
-    ),
   );
 }
 
@@ -1173,18 +918,16 @@ LxBackupFile _parse0x(
     chains.add(_chainFromCanon(j, tag));
   }
 
-  final rules = <CustomRule>[];
-  for (final item in (decoded['rules'] as List? ?? const [])) {
-    if (item is! Map) continue;
-    final j = item.cast<String, dynamic>();
-    final parsed = _ruleFromJson(
-      j,
-      knownWithDirections,
-      knownPresets,
-      warnings,
-    );
-    if (parsed != null) rules.add(parsed);
-  }
+  final rules = <CustomRule>[
+    for (final item in (decoded['rules'] as List? ?? const []))
+      if (item is Map)
+        ..._ruleFromJson(
+          item.cast<String, dynamic>(),
+          knownWithDirections,
+          knownPresets,
+          warnings,
+        ),
+  ];
 
   // Порядок разбора секций = порядок предупреждений в превью: переменные,
   // `route.final`, `warp[]`, затем записи источников.
@@ -1799,19 +1542,14 @@ SubscriptionIdentityOverride? _identityFromJson(
   if (raw is! Map) return null;
   final j = raw.cast<String, dynamic>();
 
-  final unapplied = <String>[
-    for (final k in _identityKeyOrder)
-      if (j.containsKey(k) && !_identityAppliedKeys.contains(k)) k,
-    ...(j.keys.where((k) => !_identityKeyOrder.contains(k)).toList()..sort()),
-  ];
-  if (unapplied.isNotEmpty) {
-    warnings.add(
-      LxBackupWarning(
-        kWarnSourceIdentityDropped,
-        '$where: ${unapplied.join(', ')}',
-      ),
-    );
-  }
+  _noteIdentityDropped(
+    [
+      for (final k in j.keys)
+        if (!_identityAppliedKeys.contains(k)) k,
+    ],
+    where,
+    warnings,
+  );
 
   return SubscriptionIdentityOverride(
     userAgent: (j['user_agent'] as String?) ?? '',
@@ -1821,6 +1559,28 @@ SubscriptionIdentityOverride? _identityFromJson(
     verOs: (j['ver_os'] as String?) ?? '',
     deviceModel: (j['device_model'] as String?) ?? '',
   );
+}
+
+/// Неприменённые ключи `identity` — ОДНИМ [kWarnSourceIdentityDropped] на
+/// подписку: сначала ключи схемы в её порядке, затем чужие по алфавиту, чтобы
+/// два импорта одного файла давали один и тот же перечень. Общий для входов
+/// 0.x и 1.0.
+void _noteIdentityDropped(
+  Iterable<String> keys,
+  String where,
+  List<LxBackupWarning> warnings,
+) {
+  final set = keys.toSet();
+  final ordered = [
+    for (final k in _identityKeyOrder)
+      if (set.contains(k)) k,
+    ...(set.where((k) => !_identityKeyOrder.contains(k)).toList()..sort()),
+  ];
+  if (ordered.isEmpty) return;
+  warnings.add(LxBackupWarning(
+    kWarnSourceIdentityDropped,
+    '$where: ${ordered.join(', ')}',
+  ));
 }
 
 /// Ключи объекта `identity` в порядке схемы 0.12. Порядок фиксирован, а не
@@ -1907,45 +1667,46 @@ LxServer _serverFromJson(
   );
 }
 
-/// §393 B9 — секция `dns` файла → модель.
+/// §393 B9 — секция `dns` файла 0.12 → модели DNS.
 ///
-/// Канон знает три происхождения (`template|preset|user`), мобила — четыре
-/// имени (`template|preset|inline` у серверов, плюс `srs` у правил).
-/// `user` ↔ `inline` — одно и то же понятие под разными именами.
+/// Канон знает три происхождения (`template|preset|user`), модель LxBox —
+/// своё имя пользовательской записи (`inline`) и ещё `srs` у правил.
 ///
 /// §401 — запись, которой в каноне места нет, ОТБРАСЫВАЕТСЯ с
 /// [kWarnDnsEntrySkipped], а не хранится сырой до следующего экспорта: карман
 /// провоза упразднён (П3), и держать её в состоянии значило бы завести
-/// состояние-призрак, которого пользователь не видит.
+/// состояние-призрак, которого пользователь не видит. Ссылка без адреса и
+/// пользовательская запись без тела применить нечем — пропуск молча, как
+/// всегда делало слияние 0.x.
 LxDns? _dnsFromJson(Map<String, dynamic>? j, List<LxBackupWarning> warnings) {
   if (j == null) return null;
 
-  final servers = <LxDnsRef>[];
+  final servers = <DnsServerRef>[];
   for (final item in (j['servers'] as List? ?? const [])) {
     if (item is! Map) continue;
     final e = item.cast<String, dynamic>();
-    final ref = _dnsRefFromJson(e);
-    if (ref == null) {
+    final kind = (e['kind'] as String?) ?? '';
+    if (!_dns0xKinds.contains(kind)) {
       warnings.add(
         LxBackupWarning(kWarnDnsEntrySkipped, 'dns.servers: kind=${e['kind']}'),
       );
       continue;
     }
-    servers.add(ref);
+    if (_dnsServer0x(e, kind) case final server?) servers.add(server);
   }
 
-  final rules = <LxDnsRef>[];
+  final rules = <DnsRuleRef>[];
   for (final item in (j['rules'] as List? ?? const [])) {
     if (item is! Map) continue;
     final e = item.cast<String, dynamic>();
-    final ref = _dnsRefFromJson(e);
-    if (ref == null) {
+    final kind = (e['kind'] as String?) ?? '';
+    if (!_dns0xKinds.contains(kind)) {
       warnings.add(
         LxBackupWarning(kWarnDnsEntrySkipped, 'dns.rules: kind=${e['kind']}'),
       );
       continue;
     }
-    rules.add(ref);
+    if (_dnsRule0x(e, kind) case final rule?) rules.add(rule);
   }
 
   return LxDns(
@@ -1956,18 +1717,62 @@ LxDns? _dnsFromJson(Map<String, dynamic>? j, List<LxBackupWarning> warnings) {
   );
 }
 
-/// Запись `dns.servers[]` / `dns.rules[]` → [LxDnsRef]; `null` = kind вне
-/// канона (он знает ровно три).
-LxDnsRef? _dnsRefFromJson(Map<String, dynamic> j) {
-  final kind = (j['kind'] as String?) ?? '';
-  if (kind != 'template' && kind != 'preset' && kind != 'user') return null;
-  return LxDnsRef(
-    kind: kind,
-    name: (j['name'] as String?) ?? '',
-    ref: (j['ref'] as String?) ?? '',
-    enabled: j['enabled'] as bool? ?? true,
-    value: (j['value'] as Map?)?.cast<String, dynamic>(),
-  );
+/// Виды DNS-записи канона 0.12.
+const Set<String> _dns0xKinds = {'template', 'preset', 'user'};
+
+/// Запись `dns.servers[]` 0.12 (`name`, `ref`, `value`) → модель. preset
+/// адресуется `ref` = `<preset_id>:<tag>`, а у старых файлов — именем; ссылка
+/// делится по ПЕРВОМУ `:`.
+DnsServerRef? _dnsServer0x(Map<String, dynamic> e, String kind) {
+  final name = _str(e['name']);
+  final enabled = e['enabled'] is bool ? e['enabled'] as bool : true;
+  switch (kind) {
+    case 'user':
+      final value = e['value'];
+      if (name.isEmpty || value is! Map) return null;
+      return DnsServerInline(
+        enabled: enabled,
+        tag: name,
+        body: {...value.cast<String, dynamic>()}..remove('tag'),
+      );
+    case 'preset':
+      final ref = _str(e['ref']).isNotEmpty ? _str(e['ref']) : name;
+      final at = ref.indexOf(':');
+      final tag = at < 0 ? ref : ref.substring(at + 1);
+      if (tag.isEmpty) return null;
+      return DnsServerPreset(
+        enabled: enabled,
+        tag: tag,
+        presetId: at < 0 ? '' : ref.substring(0, at),
+      );
+    default:
+      if (name.isEmpty) return null;
+      return DnsServerTemplate(enabled: enabled, tag: name);
+  }
+}
+
+/// Запись `dns.rules[]` 0.12 → модель: `user` — тело `value`, `preset` —
+/// `ref`, `template` — имя.
+DnsRuleRef? _dnsRule0x(Map<String, dynamic> e, String kind) {
+  final name = _str(e['name']);
+  final enabled = e['enabled'] is bool ? e['enabled'] as bool : true;
+  switch (kind) {
+    case 'user':
+      final value = e['value'];
+      if (value is! Map) return null;
+      return DnsRuleInline(
+        name: name,
+        rule: value.cast<String, dynamic>(),
+        enabled: enabled,
+      );
+    case 'preset':
+      final ref = _str(e['ref']);
+      return ref.isEmpty ? null : DnsRulePreset(presetId: ref, enabled: enabled);
+    default:
+      return name.isEmpty
+          ? null
+          : DnsRuleTemplate(name: name, enabled: enabled);
+  }
 }
 
 /// §393 B1 — каноническая форма → мобильное [Direction].
@@ -2165,17 +1970,28 @@ SourceChain _chainFromCanon(Map<String, dynamic> j, String tag) {
   final canon =
       (j['chain'] as Map?)?.cast<String, dynamic>() ??
       const <String, dynamic>{};
-  // Канон разбирается ШТАТНЫМ парсером модели: второй разбор тех же полей
-  // разошёлся бы с ним на первой же правке (трёхзначный `strip_evasion`,
-  // порядок каталога `strip`, `null` внутри `rewrite`).
-  final parsed = SourceChain.fromJson({...canon, 'tag': tag});
-  return parsed.copyWith(
-    label: (j['label'] as String?) ?? '',
+  // Канон разбирается кодеком цепочки: второй разбор тех же полей разошёлся
+  // бы с ним на первой же правке (трёхзначный `strip_evasion`, порядок
+  // каталога `strip`, `null` внутри `rewrite`). Позиции 0.12 — строки.
+  final label = j['label'];
+  final enabled = j['enabled'];
+  return chainFromRecord({
+    'kind': kSourceKindChain,
+    'tag': tag,
+    if (label is String) 'label': label,
     // Отсутствие ключа = true (`enabled.default` схемы). В ожиданиях корпуса
     // ключа нет вовсе, и читать его отсутствие как false значило бы
     // импортировать выключенными все цепочки лаунчера.
-    enabled: j['enabled'] as bool? ?? true,
-  );
+    if (enabled is bool) 'enabled': enabled,
+    'body': {
+      for (final e in canon.entries)
+        if (e.key != 'hops') e.key: e.value,
+    },
+    'hops': [
+      for (final h in (canon['hops'] is List ? canon['hops'] as List : const []))
+        if (h is String) h,
+    ],
+  }).value!;
 }
 
 /// §406 (D-095) — цель правила и `route.final` опознаются ТОЧНЫМ совпадением
@@ -2196,11 +2012,11 @@ bool _isKnownOutbound(String tag, Set<String> known) {
       known.map((e) => e.trim()).contains(t);
 }
 
-/// Запись схемы → правило LxBox.
+/// Запись схемы → правила LxBox (вид `json` — по записи на тело, D-111).
 ///
 /// Ссылка в никуда не повод терять правило: оно приезжает ВЫКЛЮЧЕННЫМ.
 /// Включённое правило с несуществующей целью роняет конфиг ядра целиком.
-CustomRule? _ruleFromJson(
+List<CustomRule> _ruleFromJson(
   Map<String, dynamic> j,
   Set<String> knownOutbounds,
   Set<String> knownPresets,
@@ -2208,6 +2024,9 @@ CustomRule? _ruleFromJson(
 ) {
   final kindName = (j['kind'] as String?) ?? '';
   final name = (j['name'] as String?) ?? '';
+  if (kindName == 'json') {
+    return _jsonRule0x(j, name, knownOutbounds, warnings);
+  }
   var enabled = (j['enabled'] as bool?) ?? true;
   final rawNum = j['num'];
   final orderNum = rawNum is num ? rawNum.toInt() : null;
@@ -2225,7 +2044,7 @@ CustomRule? _ruleFromJson(
     );
   }
 
-  return _ruleBodyFromJson(
+  final rule = _ruleBodyFromJson(
     j,
     kindName,
     name,
@@ -2235,6 +2054,7 @@ CustomRule? _ruleFromJson(
     knownPresets,
     warnings,
   );
+  return rule == null ? const [] : [rule];
 }
 
 /// Тело разбора правила по виду. Вынесено из [_ruleFromJson], чтобы ветки
@@ -2280,45 +2100,34 @@ CustomRule? _ruleBodyFromJson(
         enabled = false;
         warnings.add(LxBackupWarning(kWarnUnknownPreset, ref));
       }
-      return CustomRulePreset.fromJson({
-        'name': name,
-        'enabled': enabled,
-        'num': ?orderNum,
-        'presetId': ref,
-        // Ключ модели — `varsValues`; `vars` схемы сюда переименовывается.
-        // Совпадения имён нет, и без этого значения переменных пресета молча
-        // оседали в никуда (фабрика читает только `varsValues`).
-        'varsValues': (j['vars'] as Map?)?.cast<String, dynamic>() ?? const {},
-      });
+      // `vars` схемы — значения переменных пресета (`varsValues` модели).
+      final vars = j['vars'];
+      return CustomRulePreset(
+        name: name,
+        enabled: enabled,
+        orderNum: orderNum,
+        presetId: ref,
+        varsValues: vars is Map
+            ? {
+                for (final e in vars.entries)
+                  if (e.key is String)
+                    e.key as String: e.value?.toString() ?? '',
+              }
+            : const {},
+      );
 
     case 'srs':
-      return CustomRuleSrs.fromJson({
-        'name': name,
-        'enabled': enabled,
-        'num': ?orderNum,
-        // Тот же случай, что и с `varsValues` выше: фабрика читает `srsUrl`,
-        // а не `url`, и URL правила терялся целиком.
-        'srsUrl': j['ref'] ?? '',
-        // ## 12 — `refs` главнее `ref`; без него фабрика возьмёт `srsUrl`.
-        'srsUrls': _strList(j['refs']),
-        'outbound': outbound,
-        'dns': ?j['dns'],
-        'resolve': ?j['resolve'],
-      });
-
-    case 'json':
-      // §401 — тело сырого правила в файл не едет (дома в схеме ему нет), и
-      // без тела правило не восстановимо: пропускаем, а не заводим пустую
-      // оболочку, которая на сборке уронит конфиг.
-      //
-      // Код — [kWarnUnknownField], как у любого `kind`, который принимающая
-      // сторона обработать не может (корпус `unknown_rule_kind_skipped`):
-      // [kWarnLocalOnlyDropped] отвечает на другой вопрос — «моя настройка не
-      // поехала в файл», а здесь потеря случилась на ЧУЖОМ экспорте.
-      warnings.add(
-        LxBackupWarning(kWarnUnknownField, 'rules[].kind=json: $name'),
+      return CustomRuleSrs(
+        name: name,
+        enabled: enabled,
+        orderNum: orderNum,
+        // `ref` — первый набор; ## 12 — `refs` главнее `ref`.
+        srsUrl: _str(j['ref']),
+        srsUrls: _strList(j['refs']),
+        outbound: outbound,
+        dns: RuleDns.fromJson(j['dns']),
+        resolve: RuleResolve.fromJson(j['resolve']),
       );
-      return null;
 
     default:
       warnings.add(
@@ -2328,37 +2137,62 @@ CustomRule? _ruleBodyFromJson(
   }
 }
 
+/// §439 (D-111) — сырое правило `kind: json` формата 0.x: тело в `match`,
+/// объект или массив тел. Процедура одна с записью 1.0 ([_splitRuleBodies]);
+/// каждая часть — правило вида json с телом как есть (у LxBox это запись
+/// `inline` + `verbatim`, сборка кладёт тело в конфиг без переписи). Тело не
+/// объект и не массив — запись отбрасывается с [kWarnUnknownField].
+List<CustomRule> _jsonRule0x(
+  Map<String, dynamic> j,
+  String name,
+  Set<String> known,
+  List<LxBackupWarning> warnings,
+) {
+  final match = j['match'];
+  if (match is! Map && match is! List) {
+    warnings.add(
+      LxBackupWarning(kWarnUnknownField, 'rules[].kind=json: $name'),
+    );
+    return const [];
+  }
+  final record = <String, dynamic>{
+    'kind': 'inline',
+    'name': name,
+    if (j['enabled'] is bool) 'enabled': j['enabled'],
+    if (j['num'] is num) 'num': j['num'],
+    'verbatim': true,
+  };
+  return [
+    for (final part in _splitRuleBodies(
+        record, match is Map ? [match] : match, 'rules[$name].match', warnings))
+      if (ruleFromRecord(part).value case final rule?)
+        _gateTarget(rule, _obj(part['body']),
+            _str(part['name']).isEmpty ? 'json' : _str(part['name']),
+            known, warnings),
+  ];
+}
+
 List<String> _strList(Object? v) {
   if (v is List) return [for (final e in v) '$e'];
   return const [];
 }
 
 // ---------------------------------------------------------------------------
-// §438 — декодер формата 1.0 (`lx_backup: 2`).
+// §438/§439 — декодер формата 1.0 (`lx_backup: 2`).
 //
-// Записи файла 1.0 — записи состояния лаунчера («метаданные + body»), и
-// переводятся они в те же промежуточные записи, что даёт декодер 0.x:
-// [LxSubscription], [LxServer], [LxFolder], [SourceChain], [CustomRule],
-// [LxDns]. Слияние дальше одно на оба формата. Правила, DNS-записи и секции
-// узлов читает кодек записей (`record_codec.dart`, `NodeSections.fromJson`) —
-// тот же, что станет корневым парсером хранения в волне 4.
+// Записи файла 1.0 — записи состояния, и разбирает их кодек хранения
+// (`models/codec/`): источники — `sourceFromRecord`, цепочки —
+// `chainFromRecord`, правила и DNS — свои кодеки записей. Поля LxBox, которых
+// контракт не объявил, сняты до кодека (`stripUndeclaredBackupFields`): их
+// назвал обход неизвестных ключей. Итог — те же промежуточные записи, что даёт
+// декодер 0.x ([LxSubscription], [LxServer], [LxFolder], [SourceChain],
+// [CustomRule], [LxDns]), слияние дальше одно на оба формата.
 //
 // Разбор терпим к типам: ключ чужого типа не роняет файл (П6), а читается
 // как отсутствующий.
 // ---------------------------------------------------------------------------
 
 String _str(Object? v) => v is String ? v : '';
-
-/// §438 — `tag_policy.prefix` контракта → префикс LxBox и обратно.
-///
-/// У контракта финальный тег = `prefix` + сырой тег (разделитель — часть
-/// префикса: `"[P] "`), у LxBox = префикс + пробел + сырой тег
-/// ([TagResolver.displayTag]). Без перевода `"[P] "` давал бы у LxBox
-/// `"[P]  NL-1"`, а префикс LxBox `"PR"` у лаунчера — `"PRnode"`, и ссылки
-/// правил на финальные теги расходились бы между сторонами.
-String _prefixFromContract(Object? v) => _str(v).trimRight();
-
-String _prefixToContract(String prefix) => prefix.isEmpty ? '' : '$prefix ';
 
 String _trimmed(Object? v) => v is String ? v.trim() : '';
 
@@ -2367,8 +2201,15 @@ Map<String, dynamic>? _obj(Object? v) =>
 
 List<Object?> _list(Object? v) => v is List ? v : const [];
 
-bool _enabledOf(Map<String, dynamic> j) =>
-    j['enabled'] is bool ? j['enabled'] as bool : true;
+/// `id` для кодека у записи файла без `id`: кодек хранения без него запись не
+/// читает, а импорт такую запись принимает (новой записи `id` выдаст слияние).
+const String _kNoFileId = '\u0000';
+
+/// Ссылка `{folder_id?, tag}` файла; пустой тег — ссылки нет.
+NodeLink? _link10(Object? raw) {
+  final link = nodeLinkFromRecord(raw);
+  return link == null || link.tag.isEmpty ? null : link;
+}
 
 /// Как назвать запись `sources[]` пользователю: адрес подписки, иначе имя,
 /// иначе тег (эталон — `source10Label` лаунчера).
@@ -2379,6 +2220,20 @@ String _source10Label(Map<String, dynamic> j) {
   if (name.isNotEmpty) return name;
   return _trimmed(j['tag']);
 }
+
+/// Запись источника для кодека хранения: без не объявленных контрактом полей
+/// LxBox и с `id` (см. [_kNoFileId]).
+Map<String, dynamic> _sourceForCodec(
+  BackupRecord kind,
+  Map<String, dynamic> j,
+  String fileId, {
+  Map<String, dynamic> override = const {},
+}) =>
+    {
+      ...stripUndeclaredBackupFields(kind, j),
+      ...override,
+      'id': fileId.isEmpty ? _kNoFileId : fileId,
+    };
 
 LxBackupFile _parse10(
   Map<String, dynamic> decoded, {
@@ -2395,7 +2250,7 @@ LxBackupFile _parse10(
   final servers = <LxServer>[];
   final folders = <LxFolder>[];
   final chains = <SourceChain>[];
-  final chainHops = <String, List<LxNodeLink>>{};
+  final chainHops = <String, List<NodeLink>>{};
   final takenChainTags = <String>{
     for (final t in knownChains) t.trim(),
   };
@@ -2414,26 +2269,12 @@ LxBackupFile _parse10(
         if (server != null) servers.add(server);
       case 'folder':
         _dropForeignSections(j, kind, warnings);
-        final id = _trimmed(j['id']);
-        // Имя папки сравнивается как есть (BACKUP.md §9 п. 3): без подрезки.
-        final name = _str(j['name']);
-        // Члены ссылаются на папку ключом, а не именем: в файле бывают тёзки.
-        // У записи без `id` ключ — номер записи с префиксом, которого у
-        // настоящего `id` не бывает.
-        final key = id.isNotEmpty ? id : '${String.fromCharCode(0)}$i';
-        final policy = _obj(j['tag_policy']);
-        folders.add(LxFolder(
-          position: i,
-          key: key,
-          id: id,
-          name: name,
-          enabled: _enabledOf(j),
-          tagPrefix: _prefixFromContract(policy?['prefix']),
-        ));
+        final folder = _folder10(j, i);
+        folders.add(folder);
         for (final rawNode in _list(j['nodes'])) {
           final node = _obj(rawNode);
           if (node == null) continue;
-          final member = _folderMember10(node, name, key, warnings);
+          final member = _folderMember10(node, folder, warnings);
           if (member != null) servers.add(member);
         }
       case 'chain':
@@ -2446,16 +2287,10 @@ LxBackupFile _parse10(
           warnings.add(LxBackupWarning(kWarnChainExists, tag));
           continue;
         }
-        final links = <LxNodeLink>[
-          for (final h in _list(j['hops']))
-            if (_obj(h) case final hop?)
-              LxNodeLink(
-                folderId: _trimmed(hop['folder_id']),
-                tag: _str(hop['tag']),
-              ),
-        ];
-        chains.add(_chain10(j, tag, links, warnings));
-        chainHops[tag] = links;
+        final chain = _chain10(j, tag, warnings);
+        if (chain == null) continue;
+        chains.add(chain.chain);
+        chainHops[tag] = chain.hops;
       default:
         // Корневые `auto`/`unsupported` union не выражает, незнакомый вид —
         // чужая сторона, ушедшая вперёд по схеме. Молча не теряется (П6).
@@ -2467,13 +2302,10 @@ LxBackupFile _parse10(
     }
   }
 
-  final rules = <CustomRule>[];
-  for (final item in _list(decoded['rules'])) {
-    final j = _obj(item);
-    if (j == null) continue;
-    final rule = _rule10(j, known, knownPresets, warnings);
-    if (rule != null) rules.add(rule);
-  }
+  final rules = <CustomRule>[
+    for (final item in _list(decoded['rules']))
+      if (_obj(item) case final j?) ..._rule10(j, known, knownPresets, warnings),
+  ];
 
   final vars = _parseVars(decoded, warnings);
   final routeFinal = _parseRouteFinal(decoded, knownOutbounds, known, warnings);
@@ -2525,85 +2357,77 @@ void _dropForeignSections(
   ));
 }
 
-/// Секции узла `kind: server`: кодек записей и отбраковка по норме B3 с
-/// причиной у каждой отброшенной записи.
-NodeSections? _sections10(
-  Object? raw,
-  String nodeTag,
-  List<LxBackupWarning> warnings,
-) {
-  final drops = <NodeSectionDrop>[];
-  final sections = NodeSections.fromJson(raw, drops: drops);
-  for (final d in drops) {
-    warnings.add(LxBackupWarning(
-      kWarnSectionRecordDropped,
-      '$nodeTag: ${d.text}',
-      kind: d.kind,
-      reason: d.reason,
-    ));
-  }
-  return sections;
-}
-
-/// Узел `kind: server` (корневой или член папки) → [LxServer].
+/// Узел `kind: server` (корневой или член папки) → [LxServer] кодеком
+/// хранения.
 ///
-/// Тело для дедупа и хранения берётся из ИСХОДНИКА (`origin.raw`), а
-/// материализованное `body` — только у узла без исходника (BACKUP.md §9
-/// п. 2). Исходник `json` и тело без исходника получают тег записи: у LxBox
-/// имя узла читается из его JSON, а тег записи и есть идентичность. Текст
-/// URI и WG-INI едет как есть: имя у share-ссылки в разных схемах лежит в
-/// разных местах, и переписывать его импорт не берётся.
+/// Тело для дедупа и хранения — ИСХОДНИК (`origin.raw`), материализованное
+/// `body` — только у узла без исходника (BACKUP.md §9 п. 2). Исходник `json`
+/// и тело без исходника получают тег записи: у LxBox имя узла читается из его
+/// JSON, а тег записи и есть идентичность. Текст URI и WG-INI едет как есть:
+/// имя у share-ссылки в разных схемах лежит в разных местах, и переписывать
+/// его импорт не берётся.
 ///
-/// `detour` узла — ссылка на узел, через который дозваниваться; у LxBox это
-/// личный detour узла, и едет он в обе стороны (§438).
+/// Секции узла читает кодек; отбраковка по норме B3 называется с причиной у
+/// каждой записи. `detour` — ссылка файла как есть: тег конфига из неё
+/// получает слияние по карте контейнеров ([mergeBackupServers]).
 LxServer? _server10(
   Map<String, dynamic> j,
   List<LxBackupWarning> warnings, {
-  String folder = '',
-  String folderRef = '',
+  LxFolder? folder,
   int position = 0,
 }) {
   final tag = _trimmed(j['tag']);
   final origin = _obj(j['origin']);
-  final raw = _str(origin?['raw']);
+  final hasOrigin = _str(origin?['raw']).trim().isNotEmpty;
+  final drops = <NodeSectionDrop>[];
+  final fileId = folder == null ? _trimmed(j['id']) : '';
+  final read = sourceFromRecord(
+    _sourceForCodec(
+      folder == null ? BackupRecord.server : BackupRecord.folderNode,
+      // Пустой исходник — узла без исходника: тело берётся из `body`.
+      hasOrigin ? j : ({...j}..remove('origin')),
+      fileId,
+      override: const {'kind': kSourceKindServer},
+    ),
+    sectionDrops: drops,
+  );
+  final node = read.value;
+  if (node is! UserServer) return null;
+  final raw = node.rawBody;
+  if (raw.trim().isEmpty) return null;
+
   var uri = '';
   Map<String, dynamic>? configJson;
-  if (raw.trim().isNotEmpty) {
-    final obj =
-        _str(origin?['kind']) == 'json' ? _tryDecodeObject(raw.trim()) : null;
-    if (obj != null) {
-      configJson = {...obj, if (tag.isNotEmpty) 'tag': tag};
-    } else {
-      // `uri`, `wg_ini`, будущие виды и нечитаемый json — текст как есть.
-      uri = raw;
-    }
-  } else if (_obj(j['body']) case final body?) {
-    configJson = {
-      if (tag.isNotEmpty) 'tag': tag,
-      for (final e in body.entries)
-        if (e.key != 'tag' && e.key != 'detour') e.key: e.value,
-    };
+  final obj = hasOrigin && _str(origin?['kind']) != 'json'
+      ? null
+      : _tryDecodeObject(raw.trim());
+  if (obj != null) {
+    configJson = {...obj, if (tag.isNotEmpty) 'tag': tag};
+  } else {
+    // `uri`, `wg_ini`, будущие виды и нечитаемый json — текст как есть.
+    uri = raw;
   }
-  if (uri.isEmpty && configJson == null) return null;
 
-  final sectionsPresent = j.containsKey('sections');
-  final detour = _obj(j['detour']);
-  final detourTag = _str(detour?['tag']);
+  for (final d in drops) {
+    warnings.add(LxBackupWarning(
+      kWarnSectionRecordDropped,
+      '$tag: ${d.text}',
+      kind: d.kind,
+      reason: d.reason,
+    ));
+  }
   return LxServer(
-    detour: detourTag.isEmpty
-        ? null
-        : LxNodeLink(folderId: _trimmed(detour?['folder_id']), tag: detourTag),
+    detour: _link10(j['detour']),
     uri: uri,
     configJson: configJson,
     name: tag,
-    enabled: _enabledOf(j),
-    folder: folder,
-    folderRef: folderRef,
+    enabled: node.enabled,
+    folder: folder?.name ?? '',
+    folderRef: folder?.key ?? '',
     position: position,
-    id: folderRef.isEmpty ? _trimmed(j['id']) : '',
-    sections:
-        sectionsPresent ? _sections10(j['sections'], tag, warnings) : null,
-    sectionsPresent: sectionsPresent,
+    id: fileId,
+    sections: node.sections,
+    sectionsPresent: j.containsKey('sections'),
   );
 }
 
@@ -2612,20 +2436,14 @@ LxServer? _server10(
 /// `chain`/`auto` папка LxBox не держит — [kWarnSourceKindUnsupported].
 LxServer? _folderMember10(
   Map<String, dynamic> node,
-  String folderName,
-  String folderKey,
+  LxFolder folder,
   List<LxBackupWarning> warnings,
 ) {
   final kind = _str(node['kind']);
   final tag = _trimmed(node['tag']);
   switch (kind) {
     case 'server':
-      return _server10(
-        node,
-        warnings,
-        folder: folderName,
-        folderRef: folderKey,
-      );
+      return _server10(node, warnings, folder: folder);
     case 'unsupported':
       final raw = _str(_obj(node['origin'])?['raw']);
       if (raw.trim().isNotEmpty) {
@@ -2633,83 +2451,154 @@ LxServer? _folderMember10(
         return LxServer(
           uri: raw,
           name: tag,
-          enabled: _enabledOf(node),
-          folder: folderName,
-          folderRef: folderKey,
+          enabled: node['enabled'] is bool ? node['enabled'] as bool : true,
+          folder: folder.name,
+          folderRef: folder.key,
         );
       }
   }
   warnings.add(LxBackupWarning(
     kWarnSourceKindUnsupported,
-    '$folderName: ${tag.isEmpty ? kind : tag}',
+    '${folder.name}: ${tag.isEmpty ? kind : tag}',
     kind: kind,
   ));
   return null;
 }
 
-/// Подписка 1.0. Применяется то, у чего у LxBox есть дом: имя, `enabled`,
-/// префикс `tag_policy`, интервал `update`, `disabled`, `identity`. Поля
-/// лаунчера (`postfix`, `fold`/`fold_tag`, `detour`, `skip`, `max_nodes`,
-/// `relays_in_directions`, `update.auto_refresh`) игнорируются молча
-/// (BACKUP.md §1, колонка «Поддержка»).
+/// Подписка 1.0 кодеком хранения. Применяется то, у чего у LxBox есть дом:
+/// имя, `enabled`, префикс `tag_policy`, интервал `update`, `disabled`,
+/// `identity`, `detour`. Поля лаунчера (`postfix`, `fold`/`fold_tag`, `skip`,
+/// `max_nodes`, `relays_in_directions`, `update.auto_refresh`) игнорируются
+/// молча (BACKUP.md §1, колонка «Поддержка»).
 LxSubscription _subscription10(
   Map<String, dynamic> j,
   int position,
   List<LxBackupWarning> warnings,
 ) {
-  final policy = _obj(j['tag_policy']) ?? const <String, dynamic>{};
-  final update = _obj(j['update']) ?? const <String, dynamic>{};
-  final interval = update['interval_hours'];
+  final fileId = _trimmed(j['id']);
+  final read = sourceFromRecord(
+      _sourceForCodec(BackupRecord.subscription, j, fileId));
+  final sub = read.value! as SubscriptionServers;
+  _noteIdentityDropped(
+    [
+      for (final k in read.unknownKeys)
+        if (k.startsWith('identity.')) k.substring('identity.'.length),
+    ],
+    _source10Label(j),
+    warnings,
+  );
   return LxSubscription(
-    id: _trimmed(j['id']),
-    url: _str(j['url']),
-    label: _str(j['name']),
-    enabled: _enabledOf(j),
-    tagPrefix: _prefixFromContract(policy['prefix']),
-    updateIntervalHours: interval is num ? interval.toInt() : null,
-    disabled: _disabledFromJson(j['disabled']),
-    identity: _identityFromJson(j['identity'], _source10Label(j), warnings),
+    id: fileId,
+    url: sub.url,
+    label: sub.name,
+    enabled: sub.enabled,
+    tagPrefix: sub.tagPrefix,
+    updateIntervalHours: sub.updateIntervalHours,
+    disabled: {
+      for (final e in sub.disabledHashes.entries)
+        e.key: e.value.millisecondsSinceEpoch ~/ 1000,
+    },
+    identity: sub.identity,
+    detour: _link10(j['detour']),
     fullSettings: true,
     position: position,
   );
 }
 
-/// Ключи тела цепочки, которые применяет модель LxBox (плюс дискриминатор
-/// `type`). Прочее — [kWarnUnknownField]: тело типизировано моделью, и
-/// провезти незнакомый ключ ей некуда.
-const Set<String> _chain10BodyKeys = {
-  'type',
-  'idle_timeout',
-  'rewrite',
-  'strip',
-  'strip_evasion',
-};
-
-/// Цепочка 1.0: настройки маршрута из `body`, позиции — сырыми тегами (в
-/// теги конфига их переводит [resolveBackupChainHops]).
-SourceChain _chain10(
-  Map<String, dynamic> j,
-  String tag,
-  List<LxNodeLink> hops,
-  List<LxBackupWarning> warnings,
-) {
-  final body = _obj(j['body']) ?? const <String, dynamic>{};
-  for (final key in body.keys.toList()..sort()) {
-    if (!_chain10BodyKeys.contains(key)) {
-      warnings.add(
-          LxBackupWarning(kWarnUnknownField, 'sources[$tag].body.$key'));
-    }
-  }
-  return SourceChain.fromJson({
-    for (final e in body.entries)
-      if (_chain10BodyKeys.contains(e.key)) e.key: e.value,
-    'tag': tag,
-    'enabled': _enabledOf(j),
-    'hops': [for (final h in hops) h.tag],
-  });
+/// Папка 1.0 кодеком хранения: `id`, имя, `enabled`, префикс `tag_policy`,
+/// общий `detour`. Состав разбирается узлами ([_folderMember10]).
+LxFolder _folder10(Map<String, dynamic> j, int position) {
+  final fileId = _trimmed(j['id']);
+  final read = sourceFromRecord(_sourceForCodec(
+    BackupRecord.folder,
+    j,
+    fileId,
+    override: const {'nodes': <Object?>[]},
+  ));
+  final folder = read.value! as FolderServers;
+  return LxFolder(
+    position: position,
+    // Члены ссылаются на папку ключом, а не именем: в файле бывают тёзки.
+    // У записи без `id` ключ — номер записи с префиксом, которого у
+    // настоящего `id` не бывает.
+    key: fileId.isNotEmpty ? fileId : '\u0000$position',
+    id: fileId,
+    // Имя папки сравнивается как есть (BACKUP.md §9 п. 3): без подрезки.
+    name: folder.name,
+    enabled: folder.enabled,
+    tagPrefix: folder.tagPrefix,
+    detour: _link10(j['detour']),
+  );
 }
 
-/// Правило 1.0 → правило LxBox через кодек записей.
+/// Цепочка 1.0 кодеком хранения: настройки маршрута из `body`, позиции —
+/// ссылками файла (в теги конфига их переводит [resolveBackupChainHops]).
+/// Ключ тела, которого модель не держит, — [kWarnUnknownField]: тело
+/// типизировано моделью, и провезти его некуда.
+({SourceChain chain, List<NodeLink> hops})? _chain10(
+  Map<String, dynamic> j,
+  String tag,
+  List<LxBackupWarning> warnings,
+) {
+  final read = chainFromRecord(
+    {...stripUndeclaredBackupFields(BackupRecord.chain, j), 'tag': tag},
+  );
+  final chain = read.value;
+  if (chain == null) return null;
+  for (final key in read.unknownKeys) {
+    if (key.startsWith('body.')) {
+      warnings.add(LxBackupWarning(kWarnUnknownField, 'sources[$tag].$key'));
+    }
+  }
+  return (
+    chain: chain,
+    hops: [
+      for (final h in _list(j['hops'])) ?nodeLinkFromRecord(h),
+    ],
+  );
+}
+
+/// §439 (D-111, BACKUP.md §2 «Одно правило — одно тело») — запись правила,
+/// у которой на месте тела ([body]) массив, раскладывается на записи по
+/// элементу-объекту в порядке массива, как если бы массив был развёрнут в
+/// файле подряд: имена `name`, `name #2`… по порядку получившихся записей
+/// (безымянная остаётся безымянной), `enabled` общий, `id` только у первой.
+/// `num` общий: номера файла LxBox сохраняет ([renumberBackupAxis]), и
+/// стабильная сортировка оси держит части подряд на месте исходной записи.
+///
+/// Элемент не объект — [kWarnUnknownField] ([where] называет место), прочие
+/// части идут. Пустой массив — запись отбрасывается тем же кодом. Не массив —
+/// запись как есть.
+List<Map<String, dynamic>> _splitRuleBodies(
+  Map<String, dynamic> record,
+  Object? body,
+  String where,
+  List<LxBackupWarning> warnings,
+) {
+  if (body is! List) return [record];
+  final name = _str(record['name']);
+  final parts = <Map<String, dynamic>>[];
+  for (var i = 0; i < body.length; i++) {
+    final item = body[i];
+    if (item is! Map) {
+      warnings.add(
+          LxBackupWarning(kWarnUnknownField, '$where[$i]: not an object'));
+      continue;
+    }
+    parts.add({
+      for (final e in record.entries)
+        if (e.key != 'id' || parts.isEmpty) e.key: e.value,
+      'name': parts.isEmpty || name.isEmpty ? name : '$name #${parts.length + 1}',
+      'body': item.cast<String, dynamic>(),
+    });
+  }
+  if (body.isEmpty) {
+    warnings.add(LxBackupWarning(kWarnUnknownField, '$where: empty array'));
+  }
+  return parts;
+}
+
+/// Правило 1.0 → правила LxBox через кодек записей (массив тел — D-111).
 ///
 /// `inline` с ключами тела, которых типизированное правило не держит
 /// (`method: drop`, самостоятельный `action`, незнакомый матчер), переносится
@@ -2717,7 +2606,7 @@ SourceChain _chain10(
 /// смысл правила (норма B3). `rule_set` в теле (наборы едут `refs[]`) и
 /// `srs` с незнакомым ключом дома не имеют — запись отбрасывается целиком с
 /// [kWarnUnknownField].
-CustomRule? _rule10(
+List<CustomRule> _rule10(
   Map<String, dynamic> j,
   Set<String> known,
   Set<String> knownPresets,
@@ -2730,9 +2619,27 @@ CustomRule? _rule10(
   if (kind != 'inline' && kind != 'srs' && kind != 'preset') {
     // Вид `json` формата 0.12 в 1.0 снят (он был тем же inline).
     warnings.add(LxBackupWarning(kWarnUnknownField, 'rules[].kind=$kind'));
-    return null;
+    return const [];
   }
-  final read = ruleFromRecord(j);
+  final record = stripUndeclaredBackupFields(BackupRecord.rule, j);
+  return [
+    for (final part in _splitRuleBodies(
+        record, record['body'], 'rules[$label].body', warnings))
+      ?_ruleRecord10(part, kind, known, knownPresets, warnings),
+  ];
+}
+
+CustomRule? _ruleRecord10(
+  Map<String, dynamic> j,
+  String kind,
+  Set<String> known,
+  Set<String> knownPresets,
+  List<LxBackupWarning> warnings,
+) {
+  final name = _str(j['name']);
+  final ref = _str(j['ref']);
+  final label = name.isNotEmpty ? name : (ref.isNotEmpty ? ref : kind);
+  final read = ruleFromRecord(j, unknownAsVerbatim: true);
   final rule = read.value;
   if (rule == null) {
     warnings.add(
@@ -2752,8 +2659,6 @@ CustomRule? _rule10(
     return out;
   }
 
-  final body = _obj(j['body']) ?? const <String, dynamic>{};
-  var out = rule;
   if (read.unknownKeys.isNotEmpty) {
     if (kind != 'inline' || read.unknownKeys.contains('rule_set')) {
       warnings.add(LxBackupWarning(
@@ -2762,13 +2667,6 @@ CustomRule? _rule10(
       ));
       return null;
     }
-    out = CustomRuleJson(
-      id: rule.id,
-      name: rule.name,
-      enabled: rule.enabled,
-      orderNum: rule.orderNum,
-      json: jsonEncode(body),
-    );
     // `dns`/`resolve` — поля LxBox у типизированного правила; у правила вида
     // json им места нет, и молча они не теряются.
     for (final key in const ['dns', 'resolve']) {
@@ -2777,24 +2675,33 @@ CustomRule? _rule10(
       }
     }
   }
-
-  // Цель проверяется, только когда тело её называет: без `outbound` правило
-  // метит в умолчание, у `action: reject` цели нет.
-  final target = _str(body['outbound']);
-  if (target.isNotEmpty &&
-      known.isNotEmpty &&
-      !_isKnownOutbound(target, known)) {
-    warnings.add(LxBackupWarning(kWarnUnknownOutbound, '$label → $target'));
-    out = out.withEnabled(false);
-  }
-  return out;
+  return _gateTarget(rule, _obj(j['body']), label, known, warnings);
 }
 
-/// DNS-секция 1.0 → [LxDns] через кодек записей.
+/// Цель проверяется, только когда тело её называет: без `outbound` правило
+/// метит в умолчание, у `action: reject` цели нет. Неизвестная цель — правило
+/// выключено с [kWarnUnknownOutbound] (BACKUP.md §3).
+CustomRule _gateTarget(
+  CustomRule rule,
+  Map<String, dynamic>? body,
+  String label,
+  Set<String> known,
+  List<LxBackupWarning> warnings,
+) {
+  final target = _str(body?['outbound']);
+  if (target.isEmpty || known.isEmpty || _isKnownOutbound(target, known)) {
+    return rule;
+  }
+  warnings.add(LxBackupWarning(kWarnUnknownOutbound, '$label → $target'));
+  return rule.withEnabled(false);
+}
+
+/// DNS-секция 1.0 → [LxDns] кодеком записей.
 ///
 /// Серверы: `user` (тело без `tag`), `template` (ссылка тегом), `preset`
 /// (ссылка `ref`, тега нет). Правила: `user` (тело с `server`) и `preset`.
-/// Прочее — [kWarnDnsEntrySkipped], как у 0.x.
+/// Прочее — [kWarnDnsEntrySkipped], как у 0.x. Поля LxBox, которых контракт не
+/// объявил (`description`, `vars` сервера), сняты до кодека.
 LxDns? _dns10(
   Object? raw,
   Set<String> knownPresets,
@@ -2803,13 +2710,14 @@ LxDns? _dns10(
   final j = _obj(raw);
   if (j == null) return null;
 
-  final servers = <LxDnsRef>[];
+  final servers = <DnsServerRef>[];
   for (final item in _list(j['servers'])) {
     final e = _obj(item);
     if (e == null) continue;
     final kind = _str(e['kind']);
     final read = (kind == 'user' || kind == 'template' || kind == 'preset')
-        ? dnsServerFromRecord(e)
+        ? dnsServerFromRecord(
+            stripUndeclaredBackupFields(BackupRecord.dnsServer, e))
         : null;
     final server = read?.value;
     if (server == null) {
@@ -2819,62 +2727,42 @@ LxDns? _dns10(
       ));
       continue;
     }
-    // preset — `ref` целиком (`<preset_id>:<tag>`): он и ключ слияния. Пресет,
-    // которого в шаблоне этой стороны нет, применить нечем.
-    final ref = _trimmed(e['ref']);
-    final presetId = presetIdOfDnsServerRef(ref);
+    // Пресет, которого в шаблоне этой стороны нет, применить нечем.
     if (server is DnsServerPreset &&
-        presetId.isNotEmpty &&
+        server.presetId.isNotEmpty &&
         knownPresets.isNotEmpty &&
-        !knownPresets.contains(presetId)) {
-      warnings.add(LxBackupWarning(kWarnDnsEntrySkipped, 'dns.servers: $ref'));
+        !knownPresets.contains(server.presetId)) {
+      warnings.add(LxBackupWarning(
+          kWarnDnsEntrySkipped, 'dns.servers: ${_trimmed(e['ref'])}'));
       continue;
     }
-    servers.add(switch (server) {
-      DnsServerInline() => LxDnsRef(
-          kind: 'user',
-          name: server.tag,
-          enabled: server.enabled,
-          value: server.body,
-        ),
-      DnsServerPreset() => LxDnsRef(
-          kind: 'preset',
-          ref: ref.isNotEmpty ? ref : server.tag,
-          enabled: server.enabled,
-        ),
-      DnsServerTemplate() =>
-        LxDnsRef(kind: 'template', name: server.tag, enabled: server.enabled),
-    });
+    servers.add(server);
   }
 
-  final rules = <LxDnsRef>[];
+  final rules = <DnsRuleRef>[];
   for (final item in _list(j['rules'])) {
     final e = _obj(item);
     if (e == null) continue;
     final kind = _str(e['kind']);
-    final read =
-        (kind == 'user' || kind == 'preset') ? dnsRuleFromRecord(e) : null;
+    // Виды LxBox (`srs`, `template`) читаются, только когда контракт их
+    // объявит (таблица среза).
+    final readable = kind == 'user' ||
+        kind == 'preset' ||
+        ((kind == 'srs' || kind == 'template') &&
+            backupKindTravels(BackupRecord.dnsRule, kind));
+    final read = readable
+        ? dnsRuleFromRecord(stripUndeclaredBackupFields(BackupRecord.dnsRule, e))
+        : null;
     switch (read?.value) {
-      case final DnsRuleInline rule:
-        rules.add(LxDnsRef(
-          kind: 'user',
-          name: rule.name,
-          enabled: rule.enabled,
-          value: rule.rule,
-        ));
       case final DnsRulePreset rule
-          when knownPresets.isEmpty || knownPresets.contains(rule.presetId):
-        rules.add(LxDnsRef(
-          kind: 'preset',
-          ref: rule.presetId,
-          enabled: rule.enabled,
-        ));
-      case DnsRulePreset():
+          when knownPresets.isNotEmpty && !knownPresets.contains(rule.presetId):
         warnings.add(LxBackupWarning(
           kWarnDnsEntrySkipped,
           'dns.rules: ${_str(e['ref'])}',
         ));
-      default:
+      case final DnsRuleRef rule:
+        rules.add(rule);
+      case null:
         warnings.add(LxBackupWarning(
           kWarnDnsEntrySkipped,
           'dns.rules: ${read?.dropped ?? 'kind=$kind'}',
@@ -2897,6 +2785,8 @@ LxDns? _dns10(
 // `backup.schema.json`), написанные руками по той же причине, что у 0.x:
 // контракт — это документ, а не форма наших классов. Списки 0.x и 1.0
 // разные: у 0.x правило несёт `match`/`outbound`, у 1.0 — `body`/`refs`.
+// §439 — к ним добавляются поля LxBox, объявленные контрактом (флаг Л2 таблицы
+// среза `lx_backup_slice.dart`).
 
 const Set<String> _root10Keys = {
   'lx_backup',
@@ -2998,6 +2888,27 @@ const Set<String> _dnsRule10Keys = {
 List<LxBackupWarning> _scanUnknown10(Map<String, dynamic> root) {
   final sc = _UnknownScan();
 
+  final sourceKeys = {
+    ..._source10Keys,
+    ...declaredBackupKeys(BackupRecord.subscription),
+    ...declaredBackupKeys(BackupRecord.server),
+    ...declaredBackupKeys(BackupRecord.folder),
+    ...declaredBackupKeys(BackupRecord.chain),
+  };
+  final nodeKeys = {
+    ..._node10Keys,
+    ...declaredBackupKeys(BackupRecord.folderNode),
+  };
+  final ruleKeys = {..._rule10Keys, ...declaredBackupKeys(BackupRecord.rule)};
+  final dnsServerKeys = {
+    ..._dnsServer10Keys,
+    ...declaredBackupKeys(BackupRecord.dnsServer),
+  };
+  final dnsRuleKeys = {
+    ..._dnsRule10Keys,
+    ...declaredBackupKeys(BackupRecord.dnsRule),
+  };
+
   sc.object('', root, _root10Keys);
   sc.nested(root, 'exported_by', _exportedByKeys);
   sc.nested(root, 'route', _routeKeys);
@@ -3005,8 +2916,8 @@ List<LxBackupWarning> _scanUnknown10(Map<String, dynamic> root) {
   final dns = _obj(root['dns']);
   if (dns != null) {
     sc.object('dns', dns, _dns10Keys);
-    sc.array(dns, 'dns.servers', 'servers', _dnsServer10Keys, 'tag', null);
-    sc.array(dns, 'dns.rules', 'rules', _dnsRule10Keys, 'name', null);
+    sc.array(dns, 'dns.servers', 'servers', dnsServerKeys, 'tag', null);
+    sc.array(dns, 'dns.rules', 'rules', dnsRuleKeys, 'name', null);
   }
 
   void sourceBody(String where, Map<String, dynamic> item) {
@@ -3030,20 +2941,20 @@ List<LxBackupWarning> _scanUnknown10(Map<String, dynamic> root) {
     if (sections != null) {
       final at = '$where.sections';
       sc.object(at, sections, _sections10Keys);
-      sc.array(sections, '$at.rules', 'rules', _rule10Keys, 'name', null);
+      sc.array(sections, '$at.rules', 'rules', ruleKeys, 'name', null);
       final sdns = _obj(sections['dns']);
       if (sdns != null) {
         sc.object('$at.dns', sdns, _sectionsDns10Keys);
         sc.array(
-            sdns, '$at.dns.servers', 'servers', _dnsServer10Keys, 'tag', null);
-        sc.array(sdns, '$at.dns.rules', 'rules', _dnsRule10Keys, 'name', null);
+            sdns, '$at.dns.servers', 'servers', dnsServerKeys, 'tag', null);
+        sc.array(sdns, '$at.dns.rules', 'rules', dnsRuleKeys, 'name', null);
       }
     }
   }
 
-  sc.array(root, 'sources', 'sources', _source10Keys, 'tag', (where, item) {
+  sc.array(root, 'sources', 'sources', sourceKeys, 'tag', (where, item) {
     sourceBody(where, item);
-    sc.array(item, '$where.nodes', 'nodes', _node10Keys, 'tag', sourceBody);
+    sc.array(item, '$where.nodes', 'nodes', nodeKeys, 'tag', sourceBody);
   });
   sc.array(
     root,
@@ -3053,7 +2964,7 @@ List<LxBackupWarning> _scanUnknown10(Map<String, dynamic> root) {
     null,
     sc.directionBody,
   );
-  sc.array(root, 'rules', 'rules', _rule10Keys, 'name', null);
+  sc.array(root, 'rules', 'rules', ruleKeys, 'name', null);
   sc.array(root, 'warp', 'warp', _warpKeys, null, null);
 
   return sc.warnings();
@@ -3079,6 +2990,12 @@ typedef BackupSubscriptionMerge = ({
   /// §438 — `id` заведённой подписки → её место в файле: слияние узлов
   /// ставит новые источники всех видов в порядке файла.
   Map<String, int> added,
+
+  /// §439 — `id` подписки здесь → общий `detour` из файла 1.0 (`null` — снять
+  /// свой). Тег конфига из ссылки получает слияние узлов, когда известна карта
+  /// контейнеров ([mergeBackupServers], `sourceDetours`). Подписок 0.x в
+  /// карте нет: их ссылка остаётся своей.
+  Map<String, NodeLink?> detours,
 });
 
 /// §438 — `id` записи файла для НОВОЙ записи: берётся, если он есть, не занят
@@ -3136,6 +3053,7 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
   final takenIds = <String>{for (final l in merged) l.id};
   final ids = <String, String>{};
   final added = <String, int>{};
+  final detours = <String, NodeLink?>{};
   var applied = 0;
 
   DateTime at(int unixSeconds) =>
@@ -3166,6 +3084,7 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
         clearIdentity: sub.identity == null,
       );
       if (sub.id.isNotEmpty) ids[sub.id] = existing.id;
+      if (sub.fullSettings) detours[existing.id] = sub.detour;
       applied++;
       continue;
     }
@@ -3189,6 +3108,7 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
     ));
     byUrl[sub.url] = merged.length - 1;
     if (sub.id.isNotEmpty) ids[sub.id] = merged.last.id;
+    if (sub.detour != null) detours[merged.last.id] = sub.detour;
     added[merged.last.id] = sub.position;
     applied++;
   }
@@ -3199,6 +3119,7 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
     applied: applied,
     ids: ids,
     added: added,
+    detours: detours,
   );
 }
 
@@ -3296,12 +3217,19 @@ String canonicalNodeBody(String body) {
 /// **Секции** (§438, BACKUP.md §9 п. 2): у совпавшего по телу узла поле
 /// `sections` в файле есть → замещает локальные секции целиком (включая
 /// пустые); поля нет → свои остаются.
+///
+/// **Общий `detour` контейнера** (§439, BACKUP.md §9 пп. 1, 3): у папки 1.0
+/// берётся из её записи, у подписки — из [sourceDetours]
+/// ([mergeBackupSubscriptions]); тег конфига — по той же карте контейнеров,
+/// что у ссылок узлов. Флаги политики detour — настройки LxBox, в файл они не
+/// едут и остаются своими.
 BackupServerMerge mergeBackupServers(
   List<ServerList> lists,
   List<LxServer> incoming, {
   List<LxFolder> folders = const [],
   Map<String, String> sourceIds = const {},
   Map<String, int> addedSources = const {},
+  Map<String, NodeLink?> sourceDetours = const {},
 }) {
   final merged = lists.toList();
   final takenIds = <String>{for (final l in merged) l.id};
@@ -3355,9 +3283,19 @@ BackupServerMerge mergeBackupServers(
 
   // Карта контейнеров для ссылок: подписки (из их слияния) и папки файла.
   final linkIds = {...sourceIds, ...folderIds};
-  String detourOf(LxServer srv) => srv.detour == null
-      ? ''
-      : _linkConfigTag(srv.detour!, prefixById, linkIds);
+  String linkTag(NodeLink? link) =>
+      link == null ? '' : _linkConfigTag(link, prefixById, linkIds);
+  String detourOf(LxServer srv) => linkTag(srv.detour);
+
+  for (var i = 0; i < merged.length; i++) {
+    final l = merged[i];
+    if (l is! SubscriptionServers || !sourceDetours.containsKey(l.id)) continue;
+    final policy =
+        l.detourPolicy.copyWith(overrideDetour: linkTag(sourceDetours[l.id]));
+    if (policy != l.detourPolicy) {
+      merged[i] = l.copyWith(detourPolicy: policy);
+    }
+  }
 
   final singleBodies = <String, int>{};
   for (var i = 0; i < merged.length; i++) {
@@ -3393,9 +3331,16 @@ BackupServerMerge mergeBackupServers(
       final at = matchedAt[item.key];
       if (at != null) {
         final local = merged[at] as FolderServers;
-        if (local.enabled != item.enabled || local.tagPrefix != item.tagPrefix) {
-          merged[at] =
-              local.copyWith(enabled: item.enabled, tagPrefix: item.tagPrefix);
+        final policy = local.detourPolicy
+            .copyWith(overrideDetour: linkTag(item.detour));
+        if (local.enabled != item.enabled ||
+            local.tagPrefix != item.tagPrefix ||
+            local.detourPolicy != policy) {
+          merged[at] = local.copyWith(
+            enabled: item.enabled,
+            tagPrefix: item.tagPrefix,
+            detourPolicy: policy,
+          );
           applied++;
         }
         folderAtKey[item.key] = at;
@@ -3405,7 +3350,8 @@ BackupServerMerge mergeBackupServers(
           name: item.name,
           enabled: item.enabled,
           tagPrefix: item.tagPrefix,
-          detourPolicy: DetourPolicy.defaults,
+          detourPolicy: DetourPolicy.defaults
+              .copyWith(overrideDetour: linkTag(item.detour)),
         ));
         folderAtKey[item.key] = merged.length - 1;
         if (folderByName[item.name] == -1) {
@@ -3567,7 +3513,7 @@ List<SourceChain> resolveBackupChainHops(
     for (final l in lists)
       if (l is! UserServer) l.id: l.tagPrefix,
   };
-  String hopTag(LxNodeLink link) => _linkConfigTag(link, prefixById, folderIds);
+  String hopTag(NodeLink link) => _linkConfigTag(link, prefixById, folderIds);
 
   return [
     for (final c in file.chains)
@@ -3584,7 +3530,7 @@ List<SourceChain> resolveBackupChainHops(
 /// цель разбирает сборка). [prefixById] — префиксы тегов контейнеров по
 /// локальному `id`.
 String _linkConfigTag(
-  LxNodeLink link,
+  NodeLink link,
   Map<String, String> prefixById,
   Map<String, String> ids,
 ) {
