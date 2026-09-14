@@ -511,23 +511,29 @@ Play, F-Droid, APK с GitHub); удаление стирает данные пр
 
 ### 6.1 Волны
 
-| Волна | Что | Часы | Зависит | Файлы (исключительно за волной) |
-|---|---|---|---|---|
-| 0 | фикстуры и golden на текущем коде; снимок AVD | 3 | — | `test/fixtures/storage/**`, `test/storage_migration/config_identity_test.dart` |
-| 1 | кодек: источники, цепочки, пробелы кодека (2.3, пп. 3, 5, 9, 11, 12); `legacy_form_v0.dart`; модели на форму записей (`toJson`/`fromJson`), `DnsServerPreset.presetId`, снятие `SourceChain.order`, `toCanonJson`; тесты моделей | 8 | 0 | `lib/models/{record_codec,server_list,custom_rule,dns_ref,source_chain}.dart`, `lib/services/storage_migration/legacy_form_v0.dart`, `test/models/**` |
-| 2 | хранение: ключи, `migrate_storage.dart`, миграция в `_load`, `.v0.bak`, общий `sources[]` для списков и цепочек, allowlist, `_replaceRaw`; слоты; снятие `migrateChainOrderIfNeeded` и `normalizeLegacyDirectionKeys` | 6 | 1 | `lib/services/settings_storage.dart`, `lib/services/settings_storage/*.dart`, `lib/services/storage_migration/migrate_storage.dart`, `lib/services/workspaces/*.dart`, `lib/main.dart`, `test/services/settings_storage*`, `test/services/chains_storage_test.dart` |
-| 3 | DNS-словарь у потребителей, удаление веток «legacy ignore» и `_migrateLegacyDnsServers`, тест резолверов | 7 | 1 | DNS-потребители из 2.4, **кроме** `dns_backup.dart` и `rule_transfer.dart`; `test/services/builder/dns_*`, `test/screens/dns_*`, `test/services/dns_controller_test.dart` |
-| 4 | бэкапы: экспорт LX Backup срезом хранения, `_parse10` через кодек, `dns_backup.dart`, `backup_service.dart` (категории, миграция блока), `restore_backup.dart`, `backup_screen.dart`, файл правил `format: 2` | 7 | 1; API хранения из спеки | `lib/services/{lx_backup,backup_service,rule_transfer}.dart`, `lib/services/dns/dns_backup.dart`, `lib/screens/backup_screen*`, `lib/screens/home/restore_backup.dart`, `test/contract/lx_backup*`, `test/services/{backup_service,rule_transfer}_test.dart` |
-| 5 | Debug API: скраббер, `handlers/backup.dart` (миграция, `from=v0_bak`), DNS PUT, `PATCH /rules` через `copyWith`, `/chains` без `order`, `help.dart` | 3 | 2 | `lib/services/debug/**`, `test/services/debug/**` |
-| 6 | зачистка тестов, analyze, l10n-чекеры, отчёт о нечитаемых записях на AVD-снимке | 6 | 2–5 | прочие `test/**` |
-| 7 | доки (раздел ниже), статус спеки | 2 | 6 | `docs/**`, `CHANGELOG.md` |
-| 8 | AVD (5.3) | 3 | 7 | — |
+**Решение владельца (14.09.2026, вечер): сначала граница хранения, потом
+формат.** Файл хранения читается в модели ровно в одном месте; сборка
+конфига, экраны, бэкап, файл правил и Debug API работают только с моделями.
+Смена формы на 1.0 после этого — правка кодека и миграция; экспорт LX Backup
+становится срезом хранения, переводчик 438 удаляется, а не переделывается.
+Первые волны не меняют ни формат файла, ни конфиг: golden из волны 0
+остаётся зелёным на каждой из них.
 
-Итого **45 ч** (разброс 40–50). Параллельно после волны 1: волны 2, 3, 4 —
-по одному агенту в своём worktree, файлы не пересекаются; `dns_backup.dart` и
-`rule_transfer.dart` целиком за волной 4. Волна 5 — после влития 2. Порядок
-влития: 0 → 1 → 2 → 3 и 4 → 5 → 6 → 7 → 8. Checkout общий: добавлять в
-коммит только свои файлы поимённо, перед `git add` смотреть `git diff`.
+| Волна | Что | Часы | Зависит | Файлы (за волной) |
+|---|---|---|---|---|
+| 0 | golden на текущем коде: фикстуры хранения (синтетическая богатая + снятая с AVD), `config.json` из каждой, LX Backup-экспорт и импорт; снимок AVD | 3 | — | `test/fixtures/storage/**`, `test/storage_migration/golden_*` |
+| A1 | граница DNS: все потребители сырых записей `dns_options` переходят на модели `DnsServerRef`/`DnsRuleRef` через один API хранения (`settings_storage/network.dart`); ветки «legacy ignore» в резолверах, выбрасывающие незнакомые виды с сохранением, удаляются; формат файла тот же | 8 | 0 | DNS-потребители из 2.4 кроме `dns_backup.dart`, `rule_transfer.dart`; `lib/services/settings_storage/network.dart`; их тесты |
+| A2 | граница остальных сущностей: `toJson()` моделей перестаёт быть рабочим форматом (сравнение в `isDirty`, JSON-вкладка редактора, носитель `PATCH /rules`, файл правил) — вместо него равенство моделей / явный кодек; всё чтение `server_lists`/`custom_rules`/`chains` — только через `settings_storage/*`; формат файла тот же | 5 | 0 | `lib/screens/custom_rule_edit/**`, `lib/services/rule_transfer.dart`, `lib/services/debug/handlers/rules.dart`, `lib/services/settings_storage/{sources_rules,chains}.dart`, их тесты |
+| A3 | Debug API и бэкап-сервис на моделях: скраббер `/state/storage` (баг `rawBody`), `handlers/backup.dart`, `handlers/settings.dart` DNS PUT, `backup_service.dart` категории | 3 | A1, A2 | `lib/services/debug/**`, `lib/services/backup_service.dart` |
+| B | форма 1.0 в кодеке для всех сущностей (2.3), `legacy_form_v0.dart`, ключи хранения `sources`/`rules`/`dns`, `storage_version`, миграция в `_load` + `.v0.bak`, слоты Workspaces | 12 | A3 | `lib/models/**`, `lib/services/settings_storage*`, `lib/services/storage_migration/**`, `lib/services/workspaces/**`, `lib/main.dart` |
+| C | экспорт LX Backup = срез хранения + тонкий слой; импорт 1.0 через кодек; удаление переводчика 438 и `_LinkIndex` (Л1); файл правил `format: 2`; `dns_backup.dart` | 5 | B | `lib/services/{lx_backup,rule_transfer}.dart`, `lib/services/dns/dns_backup.dart`, `lib/screens/backup_screen*`, `lib/screens/home/restore_backup.dart`, `test/contract/lx_backup*` |
+| D | зачистка тестов, analyze, l10n, доки, статус спеки | 6 | C | `test/**`, `docs/**`, `CHANGELOG.md` |
+| E | AVD (5.3): установка поверх 2.23.2, `/config` до/после, импорт файла лаунчера 1.0, экспорт → импорт | 3 | D | — |
+
+Итого **~45 ч**. A1 и A2 параллельно в отдельных worktree (файлы не
+пересекаются); остальное последовательно. Порядок влития:
+0 → A1, A2 → A3 → B → C → D → E. Checkout общий: в коммит только свои файлы
+поимённо, перед `git add` смотреть `git diff`.
 
 ### 6.2 Риски
 
