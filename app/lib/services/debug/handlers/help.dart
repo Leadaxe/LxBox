@@ -451,8 +451,10 @@ GET|PUT|DELETE /settings/ping_options/groups/{tag}  Per-group URLTest override. 
 GET|PUT /settings/tun_apps                     Per-app tunnel list. body {"mode":"off|allow|deny","packages":["pkg",...]} (config-significant, ?rebuild)
 PUT    /settings/vars/{key}                    body {"value":"..."}; blocklist: debug_token/debug_enabled/debug_port
 DELETE /settings/vars/{key}                    Delete var
-PUT    /settings/dns_options/servers           body {"servers":[...]}
-PUT    /settings/dns_options/rules             body {"rules":"<json-string>"}
+PUT    /settings/dns_options/servers           body {"servers":[{"enabled":bool,"kind":"inline|preset|template","tag":"...","body"?:{...}}]}
+                                                 a server without "kind" → 400
+PUT    /settings/dns_options/rules             body {"rules":[{"kind":"...",...}]} — array of DNS rule kind-refs;
+                                                 the old JSON-string form → 400
 PUT    /settings/config_locked                 toggle auto-rebuild lock. body {"locked":true|false}.
                                                  true → SubscriptionController.generateConfig returns null
                                                  silently, the custom config from PUT /config is not overwritten
@@ -685,8 +687,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET|PUT', 'path': '/settings/tun_apps', 'body': '{"mode":"off|allow|deny","packages":["pkg",...]}', 'description': 'Per-app tunnel list (config-significant, ?rebuild)'},
     {'method': 'PUT', 'path': '/settings/vars/{key}', 'body': '{"value":"..."}', 'description': 'Set var (blocklist: debug_token/debug_enabled/debug_port)'},
     {'method': 'DELETE', 'path': '/settings/vars/{key}', 'description': 'Delete var'},
-    {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[...]}', 'description': 'Set DNS servers list'},
-    {'method': 'PUT', 'path': '/settings/dns_options/rules', 'body': '{"rules":"<json-string>"}', 'description': 'Set DNS rules (legacy json-string shape)'},
+    {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[{enabled,kind,tag,body?}]}', 'description': 'Set DNS servers list (kind-refs; a server without kind → 400)'},
+    {'method': 'PUT', 'path': '/settings/dns_options/rules', 'body': '{"rules":[{kind,...}]}', 'description': 'Set DNS rules (array of kind-refs)'},
     {'method': 'GET', 'path': '/settings/core_logs_enabled', 'description': 'Whether sing-box logs are forwarded into /logs/core'},
     {'method': 'PUT', 'path': '/settings/core_logs_enabled', 'body': '{"enabled":true|false}', 'description': 'Toggle core-log forwarding (default false)'},
     {'method': 'GET', 'path': '/settings/core_logs_verbose', 'description': 'Whether TRACE/DEBUG core lines pass the volume filter'},
