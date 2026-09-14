@@ -19,9 +19,13 @@ import 'parser/uri_utils.dart' show newUuidV4;
 ///   "format": 1,
 ///   "created_at": "<ISO8601 UTC>",
 ///   "source_app_version": "2.20.10+22010",
-///   "rules": [ { ...CustomRule.toJson()... } ]
+///   "rules": [ { "id": …, "name": …, "enabled": …, "kind": …, … } ]
 /// }
 /// ```
+///
+/// Элемент `rules[]` пишет и читает кодек файла внизу модуля
+/// ([_ruleToFile] / [_ruleFromFile]), а не форма хранения: формат файла
+/// меняется своим номером, независимо от хранения.
 ///
 /// Экспорт пишет правила as is (включая `id`/`enabled`/`num`) — вся санация
 /// на стороне импорта: id перегенерируется, чужая ось `num` не переносится,
@@ -50,7 +54,7 @@ String buildRulesExport(
     'created_at': DateTime.now().toUtc().toIso8601String(),
     if (appVersion != null && appVersion.isNotEmpty)
       'source_app_version': appVersion,
-    'rules': [for (final r in rules) r.toJson()],
+    'rules': [for (final r in rules) _ruleToFile(r)],
     if (dnsServers.isNotEmpty) 'dns_servers': dnsServers,
     if (dnsRules.isNotEmpty) 'dns_rules': dnsRules,
   };
@@ -261,26 +265,24 @@ SanitizedImportRule sanitizeImportedRule(
     );
   }
 
-  // `CustomRule.fromJson` без kind молча падает в inline (backward-compat
-  // storage) — для импорта это превратило бы мусор в пустое inline-правило,
-  // поэтому kind проверяется ДО fromJson.
+  // Элемент без известного kind — мусор или вид из более новой версии: не
+  // угадываем его как inline, отвергаем.
   final kindRaw = rawEntry['kind']?.toString();
-  final knownKind =
-      CustomRuleKind.values.any((k) => k.name == kindRaw);
+  final kind =
+      CustomRuleKind.values.where((k) => k.name == kindRaw).firstOrNull;
   final label = rawEntry['name']?.toString() ?? '';
-  if (!knownKind) {
+  if (kind == null) {
     return SanitizedImportRule(
       displayLabel: label,
       rejectReason: ImportRuleRejectReason.unsupportedEntry,
     );
   }
 
-  // id перегенерируется конструктором: без ключа `id` fromJson получает null
-  // и `CustomRule` сам выдаёт новый UUID — повторный импорт не коллизирует.
-  final cleaned = Map<String, dynamic>.from(rawEntry)..remove('id');
+  // id перегенерируется конструктором: кодек файла `id` не читает, и
+  // `CustomRule` сам выдаёт новый UUID — повторный импорт не коллизирует.
   final CustomRule parsed;
   try {
-    parsed = CustomRule.fromJson(cleaned);
+    parsed = _ruleFromFile(rawEntry, kind);
   } catch (_) {
     return SanitizedImportRule(
       displayLabel: label,
@@ -542,6 +544,203 @@ SanitizedImportDnsItem sanitizeImportedDnsRule(
       if (map['enabled'] is bool) out['enabled'] = map['enabled'];
       return SanitizedImportDnsItem(item: out, label: ref.name);
   }
+}
+
+// ─── Кодек элемента `rules[]`, format 1 ──────────────────────────────────
+// Форма элемента заморожена вместе с `format: 1`: ключи camelCase, `kind` —
+// дискриминатор, пустые списки и дефолты не пишутся. Порядок ключей тот же,
+// что в файлах, выпущенных до §439, — экспорт тех же правил даёт тот же файл.
+
+Map<String, dynamic> _ruleToFile(CustomRule r) => switch (r) {
+      CustomRuleInline() => {
+          ..._fileHead(r),
+          if (r.domains.isNotEmpty) 'domains': r.domains,
+          if (r.domainSuffixes.isNotEmpty) 'domainSuffixes': r.domainSuffixes,
+          if (r.domainKeywords.isNotEmpty) 'domainKeywords': r.domainKeywords,
+          if (r.ipCidrs.isNotEmpty) 'ipCidrs': r.ipCidrs,
+          ..._fileFilters(r),
+        },
+      CustomRuleSrs() => {
+          ..._fileHead(r),
+          if (r.srsUrl.isNotEmpty) 'srsUrl': r.srsUrl,
+          // ## 12 — полный список только при двух и более наборах.
+          if (r.srsUrls.length > 1) 'srsUrls': r.srsUrls,
+          ..._fileFilters(r),
+          if (r.updateIntervalHours != kDefaultSrsTtlHours)
+            'updateIntervalHours': r.updateIntervalHours,
+        },
+      CustomRulePreset() => {
+          ..._fileHead(r),
+          'presetId': r.presetId,
+          if (r.varsValues.isNotEmpty) 'varsValues': r.varsValues,
+        },
+      CustomRuleJson() => {
+          ..._fileHead(r),
+          'json': r.json,
+        },
+    };
+
+Map<String, dynamic> _fileHead(CustomRule r) => {
+      'id': r.id,
+      'name': r.name,
+      'enabled': r.enabled,
+      'kind': r.kind.name,
+      if (r.orderNum != null) 'num': r.orderNum,
+    };
+
+/// Доп-фильтры, `outbound` и опции inline/srs — общий хвост двух видов.
+Map<String, dynamic> _fileFilters(CustomRule r) => {
+      if (r.ports.isNotEmpty) 'ports': r.ports,
+      if (r.portRanges.isNotEmpty) 'portRanges': r.portRanges,
+      if (r.packages.isNotEmpty) 'packages': r.packages,
+      if (r.protocols.isNotEmpty) 'protocols': r.protocols,
+      if (r.network.isNotEmpty) 'network': r.network,
+      if (r.ipIsPrivate) 'ipIsPrivate': true,
+      if (r.sourceIpCidrs.isNotEmpty) 'sourceIpCidrs': r.sourceIpCidrs,
+      if (r.sourceIpIsPrivate) 'sourceIpIsPrivate': true,
+      if (r.inbounds.isNotEmpty) 'inbounds': r.inbounds,
+      if (r.wifiSsids.isNotEmpty) 'wifiSsids': r.wifiSsids,
+      if (r.wifiBssids.isNotEmpty) 'wifiBssids': r.wifiBssids,
+      'outbound': r.outbound,
+      if (r.dns != null) 'dns': _dnsToFile(r.dns!),
+      if (r.resolve != null) 'resolve': _resolveToFile(r.resolve!),
+    };
+
+Map<String, dynamic> _dnsToFile(RuleDns d) => {
+      'enabled': d.enabled,
+      'serverTag': d.serverTag,
+      if (d.forceIpv4) 'forceIpv4': true,
+    };
+
+Map<String, dynamic> _resolveToFile(RuleResolve r) => {
+      'only': r.only,
+      if (r.strategy.isNotEmpty) 'strategy': r.strategy,
+      if (r.serverTag.isNotEmpty) 'serverTag': r.serverTag,
+      if (r.disableCache) 'disableCache': true,
+      if (r.disableOptimisticCache) 'disableOptimisticCache': true,
+      if (r.rewriteTtl != null) 'rewriteTtl': r.rewriteTtl,
+      if (r.timeout.isNotEmpty) 'timeout': r.timeout,
+      if (r.clientSubnet.isNotEmpty) 'clientSubnet': r.clientSubnet,
+    };
+
+/// Элемент `rules[]` вида [kind] → правило с новым `id`. Поле неверного типа
+/// (`name` числом, `enabled` строкой, …) бросает — вызывающий отвергает
+/// элемент. Каждый вид читает только свои ключи: чужой ключ, даже битый,
+/// элемент не роняет. `outbound` без значения — прежнее имя `target`, затем
+/// direct-out.
+CustomRule _ruleFromFile(Map<String, dynamic> j, CustomRuleKind kind) {
+  final name = (j['name'] as String?) ?? '';
+  final enabled = (j['enabled'] as bool?) ?? true;
+  final orderNum = j['num'] as int?;
+  switch (kind) {
+    case CustomRuleKind.inline:
+      return CustomRuleInline(
+        name: name,
+        enabled: enabled,
+        orderNum: orderNum,
+        domains: _fileStrings(j['domains']),
+        domainSuffixes: _fileStrings(j['domainSuffixes']),
+        domainKeywords: _fileStrings(j['domainKeywords']),
+        ipCidrs: _fileStrings(j['ipCidrs']),
+        ports: _fileStrings(j['ports']),
+        portRanges: _fileStrings(j['portRanges']),
+        packages: _fileStrings(j['packages']),
+        protocols: _fileStrings(j['protocols']),
+        network: _fileStrings(j['network']),
+        ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
+        sourceIpCidrs: _fileStrings(j['sourceIpCidrs']),
+        sourceIpIsPrivate: (j['sourceIpIsPrivate'] as bool?) ?? false,
+        inbounds: _fileStrings(j['inbounds']),
+        wifiSsids: _fileStrings(j['wifiSsids']),
+        wifiBssids: _fileStrings(j['wifiBssids']),
+        outbound: _fileOutbound(j),
+        dns: _dnsFromFile(j['dns']),
+        resolve: _resolveFromFile(j['resolve']),
+      );
+    case CustomRuleKind.srs:
+      final ttl = j['updateIntervalHours'];
+      final ttlHours = ttl is num ? ttl.toInt() : null;
+      return CustomRuleSrs(
+        name: name,
+        enabled: enabled,
+        orderNum: orderNum,
+        srsUrl: (j['srsUrl'] as String?) ?? '',
+        srsUrls: _fileStrings(j['srsUrls']),
+        ports: _fileStrings(j['ports']),
+        portRanges: _fileStrings(j['portRanges']),
+        packages: _fileStrings(j['packages']),
+        protocols: _fileStrings(j['protocols']),
+        network: _fileStrings(j['network']),
+        ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
+        sourceIpCidrs: _fileStrings(j['sourceIpCidrs']),
+        sourceIpIsPrivate: (j['sourceIpIsPrivate'] as bool?) ?? false,
+        inbounds: _fileStrings(j['inbounds']),
+        wifiSsids: _fileStrings(j['wifiSsids']),
+        wifiBssids: _fileStrings(j['wifiBssids']),
+        outbound: _fileOutbound(j),
+        dns: _dnsFromFile(j['dns']),
+        resolve: _resolveFromFile(j['resolve']),
+        // §366 — нет значения, мусор, отрицательное → дефолт; 0 = Never.
+        updateIntervalHours: ttlHours == null || ttlHours < 0
+            ? kDefaultSrsTtlHours
+            : ttlHours,
+      );
+    case CustomRuleKind.preset:
+      final vars = j['varsValues'];
+      return CustomRulePreset(
+        name: name,
+        enabled: enabled,
+        orderNum: orderNum,
+        presetId: (j['presetId'] as String?) ?? '',
+        varsValues: vars is Map
+            ? {
+                for (final e in vars.entries)
+                  if (e.key is String)
+                    e.key as String: e.value?.toString() ?? '',
+              }
+            : const {},
+      );
+    case CustomRuleKind.json:
+      return CustomRuleJson(
+        name: name,
+        enabled: enabled,
+        orderNum: orderNum,
+        json: (j['json'] as String?) ?? '',
+      );
+  }
+}
+
+String _fileOutbound(Map<String, dynamic> j) =>
+    (j['outbound'] as String?) ?? (j['target'] as String?) ?? kDirectOutboundTag;
+
+List<String> _fileStrings(Object? v) =>
+    v is List ? [for (final e in v) e.toString()] : const [];
+
+RuleDns? _dnsFromFile(Object? v) {
+  if (v is! Map) return null;
+  return RuleDns(
+    enabled: v['enabled'] == true,
+    serverTag: v['serverTag']?.toString() ?? '',
+    forceIpv4: v['forceIpv4'] == true,
+  );
+}
+
+RuleResolve? _resolveFromFile(Object? v) {
+  if (v is! Map) return null;
+  return RuleResolve(
+    only: v['only'] == true,
+    strategy: v['strategy']?.toString() ?? '',
+    serverTag: v['serverTag']?.toString() ?? '',
+    disableCache: v['disableCache'] == true,
+    disableOptimisticCache: v['disableOptimisticCache'] == true,
+    rewriteTtl: switch (v['rewriteTtl']) {
+      final int n when n >= 0 => n,
+      final String s => int.tryParse(s),
+      _ => null,
+    },
+    timeout: v['timeout']?.toString() ?? '',
+    clientSubnet: v['clientSubnet']?.toString() ?? '',
+  );
 }
 
 // ─── helpers: type-preserving запись dns/resolve ─────────────────────────
