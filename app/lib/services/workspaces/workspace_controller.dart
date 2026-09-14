@@ -119,6 +119,8 @@ class WorkspaceController extends ChangeNotifier {
   /// не принадлежат `HomeScreen`. Каждый best-effort — как и в `main()`:
   /// провал одного не должен оставить сцену наполовину перечитанной.
   static Future<void> _reloadStateFromDisk() async {
+    // Первое чтение после сброса кэша идёт через `_load()`: файл слота формы
+    // 2.23.2 мигрирует там же (§439 §3.3).
     SettingsStorage.clearCache();
     await _step('native prefs', SettingsStorage.bootstrapAndSyncNativePrefs);
     await _step('locale', LocaleController.I.reloadFromStorage);
