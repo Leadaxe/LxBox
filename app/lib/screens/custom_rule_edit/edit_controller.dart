@@ -832,10 +832,13 @@ class CustomRuleEditController extends ChangeNotifier {
   /// JsonSection и гейта Save). `null` = ок (нет ошибки), иначе краткое
   /// описание. Пустой ввод считается «ещё не заполнено» (ошибка), т.к.
   /// сохранять пустое json-правило смысла нет.
+  ///
+  /// §439 В2 — массив не сохраняется: запись правила держит один объект
+  /// sing-box, несколько правил заводятся отдельно.
   String? get jsonError {
     if (_kind != CustomRuleKind.json) return null;
     final text = jsonCtrl.text.trim();
-    if (text.isEmpty) return 'Enter a JSON object or array of objects.';
+    if (text.isEmpty) return 'Enter a JSON object.';
     final dynamic decoded;
     try {
       decoded = jsonDecode(text);
@@ -844,11 +847,10 @@ class CustomRuleEditController extends ChangeNotifier {
     }
     if (decoded is Map) return null;
     if (decoded is List) {
-      if (decoded.isEmpty) return 'Array is empty.';
-      if (decoded.every((e) => e is Map)) return null;
-      return 'Array must contain only rule objects.';
+      return getLocalText.s(
+          "One rule holds one JSON object. Add each object of the array as a separate rule.");
     }
-    return 'Expected an object or array of objects.';
+    return 'Expected a JSON object.';
   }
 }
 
