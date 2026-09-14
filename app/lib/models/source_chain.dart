@@ -225,14 +225,28 @@ class SourceChain {
     );
   }
 
-  /// Запись в storage. Round-trip обязан быть точным: `strip_evasion`
-  /// пишется, ТОЛЬКО когда пользователь высказался (null = умолчание ядра),
-  /// пустые каталоги ключа не создают — иначе умолчание и явный выбор стали
-  /// бы неотличимы уже в файле.
+  /// Запись в storage: поля источника (`tag`, `label`, `enabled`), канон
+  /// [toCanonJson] и позиция [order].
   Map<String, dynamic> toJson() => {
         'tag': tag,
         'label': label,
         'enabled': enabled,
+        ...toCanonJson(),
+        // §393 D1 — позиция в общем списке источников. Пишется, только когда
+        // назначена: `-1` в файле означал бы «позиция есть и она такая»,
+        // тогда как смысл ровно обратный. Канон цепочки этот ключ не знает
+        // (`source_chain.schema.json`, `additionalProperties: false`), поэтому
+        // он живёт снаружи [toCanonJson].
+        if (order >= 0) 'order': order,
+      };
+
+  /// Канон `source_chain.schema.json`: маршрут и его настройки, без полей
+  /// записи источника (`tag`, `label`, `enabled`) и без [order].
+  ///
+  /// Round-trip обязан быть точным: `strip_evasion` пишется, ТОЛЬКО когда
+  /// пользователь высказался (null = умолчание ядра), пустые каталоги ключа
+  /// не создают — иначе умолчание и явный выбор стали бы неотличимы.
+  Map<String, dynamic> toCanonJson() => {
         'hops': hops,
         if (idleTimeout.isNotEmpty) 'idle_timeout': idleTimeout,
         if (stripEvasion != null) 'strip_evasion': stripEvasion,
@@ -242,13 +256,6 @@ class SourceChain {
               if (strip.containsKey(key)) key: strip[key],
           },
         if (rewrite.isNotEmpty) 'rewrite': deepCloneJson(rewrite),
-        // §393 D1 — позиция в общем списке источников. Пишется, только когда
-        // назначена: `-1` в файле означал бы «позиция есть и она такая»,
-        // тогда как смысл ровно обратный. КАНОН ЦЕПОЧКИ ЭТОТ КЛЮЧ НЕ ЗНАЕТ
-        // (`source_chain.schema.json`, `additionalProperties: false`) — это
-        // поле storage, и в бэкап оно не уезжает: `_chainCanonToJson`
-        // вычёркивает его наравне с `tag`/`label`/`enabled`.
-        if (order >= 0) 'order': order,
       };
 }
 

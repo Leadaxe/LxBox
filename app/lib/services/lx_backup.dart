@@ -961,14 +961,8 @@ Map<String, dynamic> _chain10ToJson(
   _noteLocalOnly(warnings, c.tag, [
     if (c.label.isNotEmpty && c.label != c.tag) 'label',
   ]);
-  final canon = c.toJson()
-    ..remove('tag')
-    ..remove('label')
-    ..remove('enabled')
-    ..remove('hops')
-    // `order` — место цепочки в списке источников ЭТОГО устройства; в файле
-    // его роль играет порядок записей `sources[]`.
-    ..remove('order');
+  // Позиции уходят ссылками в `hops[]` записи, а не строками тела.
+  final canon = c.toCanonJson()..remove('hops');
   return <String, dynamic>{
     'kind': 'chain',
     'tag': c.tag,

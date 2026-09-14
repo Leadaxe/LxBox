@@ -7,6 +7,7 @@ import '../../probe/chain_layer_probe.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
+import '../serializers/chains.dart';
 import '../transport/request.dart';
 import '../transport/response.dart';
 import '_shared.dart';
@@ -36,7 +37,8 @@ import '_shared.dart';
 /// снимок целей есть, иначе рабочая цепочка была бы объявлена битой.
 ///
 /// Routes:
-/// - `GET    /chains`            → list (SourceChain.toJson, snake_case)
+/// - `GET    /chains`            → list ([serializeChain]: поля источника +
+///                                канон `source_chain.schema.json` + `order`)
 /// - `POST   /chains`            → create (body: `{"tag":"...","label":"..."}`
 ///                                + опционально любые PATCH-поля; `tag`
 ///                                только при создании)
@@ -181,14 +183,14 @@ Future<DebugResponse> _probe(
 
 Future<DebugResponse> _list() async {
   final chains = await SettingsStorage.getChains();
-  return JsonResponse(chains.map((c) => c.toJson()).toList());
+  return JsonResponse(chains.map(serializeChain).toList());
 }
 
 Future<DebugResponse> _single(String tag) async {
   final chains = await SettingsStorage.getChains();
   final c = chains.where((c) => c.tag == tag).firstOrNull;
   if (c == null) throw NotFound('chain: $tag');
-  return JsonResponse(c.toJson());
+  return JsonResponse(serializeChain(c));
 }
 
 /// §393 D3 — создание АТОМАРНО: собрать полную запись → провалидировать →
@@ -238,7 +240,7 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   }
 
   final extras = await maybeRebuild(req, ctx);
-  return JsonResponse({...created.toJson(), ...extras}, status: 201);
+  return JsonResponse({...serializeChain(created), ...extras}, status: 201);
 }
 
 Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) async {
@@ -257,7 +259,7 @@ Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) as
     throw Conflict(e.message);
   }
   final extras = await maybeRebuild(req, ctx);
-  return JsonResponse({...next.toJson(), ...extras});
+  return JsonResponse({...serializeChain(next), ...extras});
 }
 
 Future<DebugResponse> _delete(String tag, DebugRequest req, DebugContext ctx) async {
