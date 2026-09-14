@@ -19,8 +19,8 @@ import '../services/l10n/locale_controller.dart';
 ///   routing) разворачивается на каждом `buildConfig`'е — обновил шаблон,
 ///   новое поведение у всех юзеров (spec §033).
 ///
-/// `kind` — дискриминатор для JSON-сериализации (читается `fromJson`-ом
-/// и выбирает правильный подкласс). В рантайме предпочтительнее
+/// Хранение — записи `rules[]` контракта 1.0 кодеком
+/// `codec/rule_record.dart` (§439). В рантайме предпочтительнее
 /// pattern-match `switch(cr)` — даёт exhaustive-проверку от компилятора.
 
 /// §366 — TTL кэша rule-set'а по умолчанию: неделя. Списки блокировок и
@@ -61,15 +61,9 @@ sealed class CustomRule {
   /// отдельного версионированного шага миграции нет.
   int? orderNum;
 
-  /// Enum-дискриминатор для JSON. Значения совпадают с именами подклассов
-  /// по convention (inline/srs/preset).
+  /// Enum-дискриминатор вида. Значения совпадают с именами подклассов
+  /// по convention (inline/srs/preset/json).
   CustomRuleKind get kind;
-
-  /// Форма записи хранения. Зовут репозиторий правил
-  /// (`settings_storage/sources_rules.dart`) и вкладка «storage shape»
-  /// редактора; сравнение правил — `==`, файл правил и Debug API пишут свою
-  /// форму сами.
-  Map<String, dynamic> toJson();
 
   /// Короткая сводка для subtitle на RoutingScreen. Пустая → UI покажет
   /// заглушку "Tap to edit". Существительные-счётчики через getLocalText.plural
@@ -306,24 +300,6 @@ sealed class CustomRule {
   /// Устанавливает outbound. Для `preset` пишет в `varsValues['outbound']`,
   /// для inline/srs — в поле `outbound`.
   CustomRule withOutbound(String outbound);
-
-  /// Фабрика — читает `j['kind']` и делегирует в `fromJson` подкласса.
-  /// Backward-compat: если в JSON нет `kind`, пытается inline. Если есть
-  /// старое поле `target` (до rename в 1.4.1) — читается как `outbound`.
-  factory CustomRule.fromJson(Map<String, dynamic> j) {
-    final kindRaw = j['kind'] as String?;
-    final kind = CustomRuleKind.values.firstWhere(
-      (k) => k.name == kindRaw,
-      orElse: () => CustomRuleKind.inline,
-    );
-    final rule = switch (kind) {
-      CustomRuleKind.inline => CustomRuleInline.fromJson(j),
-      CustomRuleKind.srs => CustomRuleSrs.fromJson(j),
-      CustomRuleKind.preset => CustomRulePreset.fromJson(j),
-      CustomRuleKind.json => CustomRuleJson.fromJson(j),
-    };
-    return rule;
-  }
 }
 
 enum CustomRuleKind { inline, srs, preset, json }
@@ -659,58 +635,6 @@ class CustomRuleInline extends CustomRule {
     return parts.join(' · ');
   }
 
-  @override
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'enabled': enabled,
-        'kind': kind.name,
-        if (orderNum != null) 'num': orderNum,
-        if (domains.isNotEmpty) 'domains': domains,
-        if (domainSuffixes.isNotEmpty) 'domainSuffixes': domainSuffixes,
-        if (domainKeywords.isNotEmpty) 'domainKeywords': domainKeywords,
-        if (ipCidrs.isNotEmpty) 'ipCidrs': ipCidrs,
-        if (ports.isNotEmpty) 'ports': ports,
-        if (portRanges.isNotEmpty) 'portRanges': portRanges,
-        if (packages.isNotEmpty) 'packages': packages,
-        if (protocols.isNotEmpty) 'protocols': protocols,
-        if (network.isNotEmpty) 'network': network,
-        if (ipIsPrivate) 'ipIsPrivate': true,
-        if (sourceIpCidrs.isNotEmpty) 'sourceIpCidrs': sourceIpCidrs,
-        if (sourceIpIsPrivate) 'sourceIpIsPrivate': true,
-        if (inbounds.isNotEmpty) 'inbounds': inbounds,
-        if (wifiSsids.isNotEmpty) 'wifiSsids': wifiSsids,
-        if (wifiBssids.isNotEmpty) 'wifiBssids': wifiBssids,
-        'outbound': outbound,
-        if (dns != null) 'dns': dns!.toJson(),
-        if (resolve != null) 'resolve': resolve!.toJson(),
-      };
-
-  factory CustomRuleInline.fromJson(Map<String, dynamic> j) => CustomRuleInline(
-        id: _id(j),
-        name: (j['name'] as String?) ?? '',
-        enabled: (j['enabled'] as bool?) ?? true,
-        orderNum: j['num'] as int?,
-        domains: _stringList(j['domains']),
-        domainSuffixes: _stringList(j['domainSuffixes']),
-        domainKeywords: _stringList(j['domainKeywords']),
-        ipCidrs: _stringList(j['ipCidrs']),
-        ports: _stringList(j['ports']),
-        portRanges: _stringList(j['portRanges']),
-        packages: _stringList(j['packages']),
-        protocols: _stringList(j['protocols']),
-        network: _stringList(j['network']),
-        ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
-        sourceIpCidrs: _stringList(j['sourceIpCidrs']),
-        sourceIpIsPrivate: (j['sourceIpIsPrivate'] as bool?) ?? false,
-        inbounds: _stringList(j['inbounds']),
-        wifiSsids: _stringList(j['wifiSsids']),
-        wifiBssids: _stringList(j['wifiBssids']),
-        outbound: _outbound(j),
-        dns: RuleDns.fromJson(j['dns']),
-        resolve: RuleResolve.fromJson(j['resolve']),
-      );
-
   CustomRuleInline copyWith({
     String? name,
     bool? enabled,
@@ -948,38 +872,8 @@ class CustomRuleSrs extends CustomRule {
     return getLocalText.s("SRS: %s", first);
   }
 
-  @override
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'enabled': enabled,
-        'kind': kind.name,
-        if (orderNum != null) 'num': orderNum,
-        if (srsUrl.isNotEmpty) 'srsUrl': srsUrl,
-        // ## 12 — полный список только при двух и более: старая версия
-        // приложения прочтёт `srsUrl` и получит первый набор, как раньше.
-        if (srsUrls.length > 1) 'srsUrls': srsUrls,
-        if (ports.isNotEmpty) 'ports': ports,
-        if (portRanges.isNotEmpty) 'portRanges': portRanges,
-        if (packages.isNotEmpty) 'packages': packages,
-        if (protocols.isNotEmpty) 'protocols': protocols,
-        if (network.isNotEmpty) 'network': network,
-        if (ipIsPrivate) 'ipIsPrivate': true,
-        if (sourceIpCidrs.isNotEmpty) 'sourceIpCidrs': sourceIpCidrs,
-        if (sourceIpIsPrivate) 'sourceIpIsPrivate': true,
-        if (inbounds.isNotEmpty) 'inbounds': inbounds,
-        if (wifiSsids.isNotEmpty) 'wifiSsids': wifiSsids,
-        if (wifiBssids.isNotEmpty) 'wifiBssids': wifiBssids,
-        'outbound': outbound,
-        if (dns != null) 'dns': dns!.toJson(),
-        if (resolve != null) 'resolve': resolve!.toJson(),
-        // §366 — дефолт не пишем: старые правила без ключа читаются как
-        // «неделя», и JSON не растёт на каждом правиле ради значения,
-        // которое и так подразумевается.
-        if (updateIntervalHours != kDefaultSrsTtlHours)
-          'updateIntervalHours': updateIntervalHours,
-      };
-
+  /// Форма 2.23.2 (ключи camelCase). После §439 её зовёт только
+  /// legacy-декодер LX Backup (`lx_backup.dart`); хранение читает кодек.
   factory CustomRuleSrs.fromJson(Map<String, dynamic> j) => CustomRuleSrs(
         id: _id(j),
         name: (j['name'] as String?) ?? '',
@@ -1174,17 +1068,8 @@ class CustomRulePreset extends CustomRule {
         .join(', ');
   }
 
-  @override
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'enabled': enabled,
-        'kind': kind.name,
-        if (orderNum != null) 'num': orderNum,
-        'presetId': presetId,
-        if (varsValues.isNotEmpty) 'varsValues': varsValues,
-      };
-
+  /// Форма 2.23.2 (`presetId`, `varsValues`). После §439 её зовёт только
+  /// legacy-декодер LX Backup (`lx_backup.dart`); хранение читает кодек.
   factory CustomRulePreset.fromJson(Map<String, dynamic> j) => CustomRulePreset(
         id: _id(j),
         name: (j['name'] as String?) ?? '',
@@ -1290,24 +1175,6 @@ class CustomRuleJson extends CustomRule {
     if (oneLine.isEmpty) return '';
     return oneLine.length <= 48 ? oneLine : '${oneLine.substring(0, 48)}…';
   }
-
-  @override
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'enabled': enabled,
-        'kind': kind.name,
-        if (orderNum != null) 'num': orderNum,
-        'json': json,
-      };
-
-  factory CustomRuleJson.fromJson(Map<String, dynamic> j) => CustomRuleJson(
-        id: _id(j),
-        name: (j['name'] as String?) ?? '',
-        enabled: (j['enabled'] as bool?) ?? true,
-        orderNum: j['num'] as int?,
-        json: (j['json'] as String?) ?? '',
-      );
 
   CustomRuleJson copyWith({String? name, bool? enabled, int? orderNum, String? json}) =>
       CustomRuleJson(
