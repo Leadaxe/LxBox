@@ -483,8 +483,12 @@ POST   /settings/rebuild-config                Alias /action/rebuild-config
 === Backup ===
 
 GET  /backup/export?include=storage,vpn_settings  Pure-data snapshot for restore (no diag noise). `include` optional; default — both parts.
+                                                 `storage` carries `storage_version`. `from=v0_bak` — `storage` from lxbox_settings.json.v0.bak
+                                                 (the 2.23.2-form state at migration; importable by 2.23.2); 404 when there is no copy.
 POST /backup/import?merge=false&rebuild=false  Accepts the same shape export returns (body {storage?, vpn_settings?}).
                                                  `merge=true` — append/upsert; `rebuild=true` — auto-rebuild config after restore.
+                                                 A `storage` block without `storage_version` (2.23.2 form) is migrated first:
+                                                 `applied.migrated: true` + `applied.migration` {info, warnings}.
 
 === Errors ===
 
@@ -701,8 +705,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/settings/vpn/background_mode', 'description': 'tunnel sleep mode (never|lazy|always)'},
     {'method': 'PUT', 'path': '/settings/vpn/background_mode', 'body': '{"mode":"never|lazy|always"}', 'description': 'Set tunnel sleep mode — apply on next VPN connect'},
     // Backup
-    {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'storage,vpn_settings (default both)'}, 'description': 'Pure-data snapshot (no diag noise)'},
-    {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{storage?, vpn_settings?}', 'description': 'Restore from export'},
+    {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'storage,vpn_settings (default both)', 'from': 'v0_bak (storage from lxbox_settings.json.v0.bak, 404 without a copy)'}, 'description': 'Pure-data snapshot (no diag noise)'},
+    {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{storage?, vpn_settings?}', 'description': 'Restore from export; a storage block without storage_version is migrated (applied.migrated, applied.migration)'},
     // Action additions
     {'method': 'POST', 'path': '/action/preview-empty-state', 'params': {'on': 'true|false'}, 'description': 'Toggle empty-state preview in HomeScreen UI without losing data'},
   ],
