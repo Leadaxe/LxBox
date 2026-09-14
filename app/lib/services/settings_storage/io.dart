@@ -53,32 +53,73 @@ Future<void> _sweepOrphanTmp() async {
   }
 }
 
+/// §439 §3.1 — суффикс копии исходных байтов файла хранения, снятой первой
+/// миграцией формы: `lxbox_settings.json.v0.bak`.
+const _v0BakSuffix = '.v0.bak';
+
+Future<File> _v0BakFile() async {
+  final dir = await getApplicationDocumentsDirectory();
+  return File('${dir.path}/${SettingsStorage._fileName}$_v0BakSuffix');
+}
+
+/// [SettingsStorage.exportV0Backup] — для
+/// `GET /backup/export?include=storage&from=v0_bak`.
+Future<Map<String, dynamic>?> _readV0Backup() async {
+  try {
+    return (await _tryReadFile(await _v0BakFile()))?.doc;
+  } catch (_) {
+    return null;
+  }
+}
+
 /// §072 — попытаться прочитать файл как JSON Map. Возвращает `null` в
 /// четырёх случаях: файл отсутствует / пустой / не Map / FormatException
 /// при парсе. Все «не валидно» сводятся к одному `null` — caller сам
 /// решает что делать (для main → пробовать `.bak`).
-Future<Map<String, dynamic>?> _tryParseFile(File f) async {
+Future<Map<String, dynamic>?> _tryParseFile(File f) async =>
+    (await _tryReadFile(f))?.doc;
+
+/// Прочитанный файл хранения: исходные байты и разобранный документ.
+typedef _SettingsFileRead = ({List<int> bytes, Map<String, dynamic> doc});
+
+/// [_tryParseFile] с исходными байтами: §439 копирует их в `.v0.bak` до
+/// миграции.
+Future<_SettingsFileRead?> _tryReadFile(File f) async {
   if (!await f.exists()) return null;
   try {
-    final raw = await f.readAsString();
-    if (raw.isEmpty) return null;
-    final parsed = jsonDecode(raw);
-    if (parsed is Map<String, dynamic>) return parsed;
+    final bytes = await f.readAsBytes();
+    if (bytes.isEmpty) return null;
+    final parsed = jsonDecode(utf8.decode(bytes));
+    if (parsed is Map<String, dynamic>) return (bytes: bytes, doc: parsed);
     return null;
   } catch (_) {
     return null;
   }
 }
 
+/// Чтение с диска, которое уже идёт: параллельные первые `_load()` ждут одно
+/// чтение, и миграция формы (§439) не пишет файл дважды.
+Future<Map<String, dynamic>>? _loadInFlight;
+
 /// §072 — Decision tree:
-///   main отсутствует   → `{}` (fresh install)
+///   main отсутствует   → `{storage_version: 1}` (fresh install)
 ///   main парсится      → return parsed
 ///   main битый, bak ok → recover из bak, log warning
-///   main битый, bak no → `{}` + sticky `_mainIsCorrupted` flag, log error.
-///                        Main файл НЕ перезаписывается на этом этапе —
-///                        оставляем для ручной диагностики.
-Future<Map<String, dynamic>> _load() async {
-  if (SettingsStorage._cache != null) return SettingsStorage._cache!;
+///   main битый, bak no → `{storage_version: 1}` + sticky `_mainIsCorrupted`
+///                        flag, log error. Main файл НЕ перезаписывается на
+///                        этом этапе — оставляем для ручной диагностики.
+///
+/// §439 §3.1 — разобранный документ (main или `.bak`) проходит миграцию формы
+/// до записи в `_cache`: единственная точка, через которую идут старт,
+/// загрузка слота Workspaces (`clearCache` → `_load`) и тесты.
+Future<Map<String, dynamic>> _load() {
+  final cached = SettingsStorage._cache;
+  if (cached != null) return Future.value(cached);
+  return _loadInFlight ??=
+      _loadFromDisk().whenComplete(() => _loadInFlight = null);
+}
+
+Future<Map<String, dynamic>> _loadFromDisk() async {
   // Wait for any pending save to complete before loading
   if (SettingsStorage._pendingSave != null) await SettingsStorage._pendingSave;
 
@@ -97,31 +138,36 @@ Future<Map<String, dynamic>> _load() async {
     // фиксированный файл.
     await _sweepOrphanTmp();
 
-    // 1. Main отсутствует → fresh install.
+    // 1. Main отсутствует → fresh install. Новый документ сразу несёт версию
+    //    формы: иначе первая запись легла бы без неё, и следующий старт
+    //    принял бы файл этой сборки за форму 2.23.2.
     if (!await main.exists()) {
-      SettingsStorage._cache = {};
+      SettingsStorage._cache = _freshDoc();
       return SettingsStorage._cache!;
     }
 
     // 2. Main парсится → ok.
-    final mainParsed = await _tryParseFile(main);
-    if (mainParsed != null) {
-      SettingsStorage._cache = mainParsed;
+    final mainRead = await _tryReadFile(main);
+    if (mainRead != null) {
+      SettingsStorage._cache =
+          await _migrateOnLoad(mainRead, main: main, bak: bak);
       return SettingsStorage._cache!;
     }
 
     // 3. Main битый. Пробуем `.bak`.
-    final bakParsed = await _tryParseFile(bak);
-    if (bakParsed != null) {
+    final bakRead = await _tryReadFile(bak);
+    if (bakRead != null) {
       AppLog.I.warning(
         'SettingsStorage: main file corrupted, recovered from .bak '
         '(${main.path})',
       );
-      SettingsStorage._cache = bakParsed;
       // НЕ зовём _save() здесь — `_cache` уже консистентный, любой
       // последующий setVar пройдёт через атомарный `_save`. Если
       // процесс убьют до этого — следующий `_load` тот же recovery
-      // повторит (идемпотентно).
+      // повторит (идемпотентно). Исключение — `.bak` формы 2.23.2: миграция
+      // записывает результат сразу (§439 §3.2).
+      SettingsStorage._cache =
+          await _migrateOnLoad(bakRead, main: main, bak: bak);
       return SettingsStorage._cache!;
     }
 
@@ -135,13 +181,122 @@ Future<Map<String, dynamic>> _load() async {
         '(${main.path})',
       );
     }
-    SettingsStorage._cache = {};
+    SettingsStorage._cache = _freshDoc();
     return SettingsStorage._cache!;
   } catch (_) {
-    // Path provider или filesystem unavailable — degrade к defaultам.
-    SettingsStorage._cache = {};
+    // Path provider или filesystem unavailable — degrade к defaultам. Версия
+    // формы нужна и здесь: запись, которая пройдёт позже, иначе легла бы
+    // документом без неё, и следующий старт мигрировал бы файл этой сборки.
+    SettingsStorage._cache = _freshDoc();
     return SettingsStorage._cache!;
   }
+}
+
+/// Пустой документ текущей формы.
+Map<String, dynamic> _freshDoc() =>
+    {kStorageVersionKey: kStorageVersion};
+
+/// §439 §3.1 шаги 2–6 — миграция формы разобранного документа [read].
+///
+/// Документ текущей формы возвращается как есть без записи. Иначе: карта
+/// пресетов из шаблона (ошибка шаблона миграцию не валит) → [migrateStorageDoc]
+/// → копия исходных байтов в `.v0.bak` (только если её нет) → `_atomicSave`
+/// нового документа → одна info-строка и потери warning'ом в AppLog.
+///
+/// `configDirty` не поднимается: конфиг от миграции не меняется. Если конфиг
+/// до миграции был свежее настроек, его mtime выравнивается после записи (как
+/// в `_save`), иначе bootstrap-сравнение §076 приняло бы миграцию за правку.
+///
+/// Сбой самой миграции — строка error и документ как был, без записи: лучше
+/// старая форма в памяти, чем стёртые настройки.
+Future<Map<String, dynamic>> _migrateOnLoad(
+  _SettingsFileRead read, {
+  required File main,
+  required File bak,
+}) async {
+  final doc = read.doc;
+  if (!storageDocNeedsMigration(doc)) {
+    final version = storageDocVersion(doc);
+    if (version != null && version > kStorageVersion) {
+      AppLog.I.error(
+        'SettingsStorage: storage_version $version is newer than this build '
+        'knows ($kStorageVersion); the document is read as the current form, '
+        'unknown top-level keys are kept',
+      );
+    }
+    return doc;
+  }
+
+  final StorageMigrationResult result;
+  try {
+    result = migrateStorageDoc(
+      doc,
+      presetIdByDnsServerTag: await _presetIdsForMigration(),
+    );
+  } catch (e, st) {
+    AppLog.I.error(
+        'SettingsStorage: storage migration failed, the file is left as is: '
+        '$e\n$st');
+    return doc;
+  }
+
+  var configWasDirty = true;
+  try {
+    configWasDirty = await ConfigDirtyCheck.isDirty();
+  } catch (_) {
+    // Не знаем — mtime конфига не трогаем.
+  }
+
+  try {
+    await _writeV0BakOnce(read.bytes);
+  } catch (e) {
+    AppLog.I.error('SettingsStorage: $_v0BakSuffix copy before the storage '
+        'migration failed: $e');
+  }
+
+  try {
+    await _atomicSave(result.doc, main: main, bak: bak, tmp: await _tmpFile());
+    if (!configWasDirty && !SettingsStorage.configDirty) {
+      await ConfigDirtyCheck.touchConfig();
+    }
+  } catch (e) {
+    AppLog.I.error('SettingsStorage: migrated storage not written, the next '
+        'start migrates again: $e');
+  }
+
+  AppLog.I.info('SettingsStorage: storage migrated to storage_version '
+      '${storageDocVersion(result.doc)}'
+      '${result.summary.isEmpty ? '' : ' — ${result.summary}'}');
+  if (result.warnings.isNotEmpty) {
+    AppLog.I.warning(
+        'SettingsStorage: storage migration losses: ${result.warnings.join('; ')}');
+  }
+  return result.doc;
+}
+
+/// Тег preset-сервера DNS → `preset_id` по шаблону (миграция в `_load` и
+/// [SettingsStorage.presetIdsForMigration]). Шаблон не загрузился — пусто:
+/// preset-серверы получают `ref` = тег, дальше orphan-cleanup резолвера.
+Future<Map<String, String>> _presetIdsForMigration() async {
+  try {
+    final template = await TemplateLoader.load();
+    return presetIdsByDnsServerTag(template.selectableRules);
+  } catch (e) {
+    AppLog.I.warning('SettingsStorage: template not loaded for the storage '
+        'migration ($e); preset DNS servers keep ref = tag');
+    return const {};
+  }
+}
+
+/// §439 §3.1 шаг 4 — копия исходных байтов. Существующая копия — самый первый
+/// исходник, её не перетираем. tmp + rename: полуфайла копии не бывает.
+Future<void> _writeV0BakOnce(List<int> bytes) async {
+  final copy = await _v0BakFile();
+  if (await copy.exists()) return;
+  final tmp = File(
+      '${copy.path}.${SettingsStorage._tmpSeq++}${SettingsStorage._tmpSuffix}');
+  await tmp.writeAsBytes(bytes, flush: true);
+  await tmp.rename(copy.path);
 }
 
 /// §072 — атомарная запись:

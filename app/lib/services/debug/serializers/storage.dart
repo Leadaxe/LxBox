@@ -1,7 +1,8 @@
-import 'dart:convert';
-
+import '../../../models/codec/chain_record.dart';
+import '../../../models/codec/source_record.dart';
 import '../../../models/server_list.dart';
 import '../../settings_storage.dart';
+import '../../settings_storage_keys.dart';
 import '../../url_mask.dart';
 
 /// Сериализатор `_cache` для `GET /state/storage` (§031).
@@ -12,12 +13,13 @@ import '../../url_mask.dart';
 /// поля маскируются здесь явно:
 ///
 /// - `vars.debug_token` → `***`
-/// - источники `server_lists[]` читаются моделями репозитория
-///   ([serializeStorageSource]): URL подписки → `scheme://host/***` (provider
-///   token в path), тело одиночного сервера → `raw_body_bytes` (inline URI
-///   несут credentials), члены папки → `members_count` (§234 — raw члена несёт
-///   credentials). Битая запись, которую репозиторий не читает, в дамп не
-///   попадает: скрыть в ней секрет нечем.
+/// - `sources[]` (§439) читаются моделями репозитория и пишутся кодеком
+///   записей ([serializeStorageSource]): `url` подписки →
+///   `scheme://host/***` (provider token в path), `origin.raw` одиночного
+///   сервера → `origin.raw_bytes` (inline URI несут credentials), `nodes[]`
+///   папки → `nodes_count` (текст члена несёт credentials, §234). Цепочки
+///   идут хвостом как есть — секретов в них нет. Запись, которую репозиторий
+///   не читает, в дамп не попадает: скрыть в ней секрет нечем.
 ///
 /// Всё остальное — pass-through. Новый ключ без правила попадает в ответ
 /// как есть; если он чувствительный — добавить rule здесь и в тесте.
@@ -36,9 +38,11 @@ Map<String, Object?> serializeStorageCache(Map<String, dynamic> cache) {
   for (final e in cache.entries) {
     out[e.key] = switch (e.key) {
       'vars' => _scrubVars(e.value),
-      'server_lists' => [
+      kSourcesKey => [
           for (final list in SettingsStorage.serverListsOf(cache))
             serializeStorageSource(list),
+          for (final chain in SettingsStorage.chainsOf(cache))
+            chainToRecord(chain),
         ],
       _ => e.value,
     };
@@ -61,44 +65,21 @@ Object? _scrubVars(dynamic vars) {
   return out;
 }
 
-/// Запись источника [list] для дампа — запись хранения от репозитория, в
-/// которой секрет модели скрыт.
-///
-/// Секрет гасится в модели, до сериализации (`copyWith`), поэтому в дамп он
-/// не попадёт, как бы кодек ни назвал поле. Прежний скраббер угадывал ключи
-/// сырого документа: искал `rawBody`, а в хранении лежит `raw_body`, и тело
-/// одиночного сервера уходило в дамп целиком.
-Map<String, Object?> serializeStorageSource(ServerList list) => switch (list) {
-      SubscriptionServers s => SettingsStorage.serverListRecord(
-          s.copyWith(url: maskSubscriptionUrl(s.url))),
-      UserServer u => _sized(u, u.copyWith(rawBody: ''),
-          counter: 'raw_body_bytes', size: u.rawBody.length),
-      FolderServers f => _sized(f, f.copyWith(members: const []),
-          counter: 'members_count', size: f.members.length),
+/// Запись источника [list] для дампа — запись кодека, в которой секрет
+/// заменён по пути записи на том же месте: `url` подписки — маской,
+/// `origin.raw` сервера — длиной (`origin.raw_bytes`), `nodes[]` папки —
+/// счётчиком (`nodes_count`).
+Map<String, Object?> serializeStorageSource(ServerList list) => {
+      for (final e in sourceToRecord(list).entries)
+        ...switch ((list, e.key)) {
+          (SubscriptionServers s, 'url') => {'url': maskSubscriptionUrl(s.url)},
+          (UserServer u, 'origin') => {
+              'origin': {
+                'kind': (e.value as Map)['kind'],
+                'raw_bytes': u.rawBody.length,
+              },
+            },
+          (FolderServers f, 'nodes') => {'nodes_count': f.members.length},
+          _ => {e.key: e.value},
+        },
     };
-
-/// Запись [full], где поля, которые гашение секрета изменило (сверка с записью
-/// [blank]), заменены одним счётчиком [counter] на месте первого из них.
-/// Какие это поля, говорит сама запись, а не список ключей скраббера.
-/// Секрет и так пуст (пустое тело, папка без членов) — счётчик дописывается
-/// в конец.
-Map<String, Object?> _sized(
-  ServerList full,
-  ServerList blank, {
-  required String counter,
-  required int size,
-}) {
-  final blanked = SettingsStorage.serverListRecord(blank);
-  final out = <String, Object?>{};
-  for (final e in SettingsStorage.serverListRecord(full).entries) {
-    final kept = blanked.containsKey(e.key) &&
-        jsonEncode(blanked[e.key]) == jsonEncode(e.value);
-    if (kept) {
-      out[e.key] = e.value;
-    } else {
-      out.putIfAbsent(counter, () => size);
-    }
-  }
-  out.putIfAbsent(counter, () => size);
-  return out;
-}

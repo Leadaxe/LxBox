@@ -276,11 +276,11 @@ were reset.
 A chain is a ROUTE ("client → hop 1 → hop 2 → … → target"), not a choice
 between routes: it lives next to subscriptions and servers as a source, and
 for the rest of the app it looks like a NODE (own tag, picked up by direction
-filters, emitted as one outbound of type "chain"). Stored in the `chains[]`
-key; ORDER IS NORMATIVE — a chain may reference only chains declared ABOVE it,
-which is what rules out cycles.
+filters, emitted as one outbound of type "chain"). Stored as `kind: chain`
+records at the tail of `sources[]`; ORDER IS NORMATIVE — a chain may reference
+only chains declared ABOVE it, which is what rules out cycles.
 
-GET    /chains                                   List chains: tag, label, enabled + source_chain.schema.json canon + order
+GET    /chains                                   List chains in storage order: tag, label, enabled + source_chain.schema.json canon
 GET    /chains/{tag}                             Single chain (404 if unknown)
 POST   /chains[?rebuild=true]                    Create → 201. Body optional: {"tag":"...","label":"..."} plus
                                                  any PATCH field below. No tag → first free chain-N. The tag is
@@ -483,8 +483,12 @@ POST   /settings/rebuild-config                Alias /action/rebuild-config
 === Backup ===
 
 GET  /backup/export?include=storage,vpn_settings  Pure-data snapshot for restore (no diag noise). `include` optional; default — both parts.
+                                                 `storage` carries `storage_version`. `from=v0_bak` — `storage` from lxbox_settings.json.v0.bak
+                                                 (the 2.23.2-form state at migration; importable by 2.23.2); 404 when there is no copy.
 POST /backup/import?merge=false&rebuild=false  Accepts the same shape export returns (body {storage?, vpn_settings?}).
                                                  `merge=true` — append/upsert; `rebuild=true` — auto-rebuild config after restore.
+                                                 A `storage` block without `storage_version` (2.23.2 form) is migrated first:
+                                                 `applied.migrated: true` + `applied.migration` {info, warnings}.
 
 === Errors ===
 
@@ -626,7 +630,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None; the tag is stripped from every other direction include[]. Response carries "healed":{rules,detours,includes}.'},
     {'method': 'POST', 'path': '/directions/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
     // Chains CRUD (hop chains, SPEC 110)
-    {'method': 'GET', 'path': '/chains', 'description': 'List hop chains: tag, label, enabled + source_chain.schema.json canon + order. Order is normative: a chain may reference only chains declared above it.'},
+    {'method': 'GET', 'path': '/chains', 'description': 'List hop chains in storage order: tag, label, enabled + source_chain.schema.json canon. The list order is normative: a chain may reference only chains declared above it.'},
     {'method': 'GET', 'path': '/chains/{tag}', 'description': 'Single chain (404 if unknown)'},
     {'method': 'POST', 'path': '/chains', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"tag":"...","label":"..."} + any PATCH field', 'description': 'Create chain → 201. No tag → first free chain-N. Tag is checked against BOTH chains and directions; rejected → 409 with the machine reason: empty|reserved|duplicate|auto_twin. A body without hops creates an empty chain (same as the UI).'},
     {'method': 'PATCH', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite}', 'description': 'Partial update. tag is immutable (400). hops = positions in PACKET order ([0] = first hop from the client). strip_evasion is a tristate: omit = keep, null = core default, bool = explicit. strip replaces the map, keys only tls.fragment|multiplex.padding|xhttp.padding|tls.utls. rewrite = RFC 7396 merge-patch per outbound type, kept verbatim. Writes pass the same gate as the edit form; a blocking finding → 400 with its code: tooFewHops|emptyHop|duplicateHop|selfReference|nestedNotFirst|forwardChainReference|realityUtlsStripped|tagEmpty|tagTaken.'},
@@ -701,8 +705,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/settings/vpn/background_mode', 'description': 'tunnel sleep mode (never|lazy|always)'},
     {'method': 'PUT', 'path': '/settings/vpn/background_mode', 'body': '{"mode":"never|lazy|always"}', 'description': 'Set tunnel sleep mode — apply on next VPN connect'},
     // Backup
-    {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'storage,vpn_settings (default both)'}, 'description': 'Pure-data snapshot (no diag noise)'},
-    {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{storage?, vpn_settings?}', 'description': 'Restore from export'},
+    {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'storage,vpn_settings (default both)', 'from': 'v0_bak (storage from lxbox_settings.json.v0.bak, 404 without a copy)'}, 'description': 'Pure-data snapshot (no diag noise)'},
+    {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{storage?, vpn_settings?}', 'description': 'Restore from export; a storage block without storage_version is migrated (applied.migrated, applied.migration)'},
     // Action additions
     {'method': 'POST', 'path': '/action/preview-empty-state', 'params': {'on': 'true|false'}, 'description': 'Toggle empty-state preview in HomeScreen UI without losing data'},
   ],

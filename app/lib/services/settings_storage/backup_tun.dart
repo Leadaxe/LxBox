@@ -34,11 +34,27 @@ Future<List<String>> _replaceRaw(
   Map<String, dynamic> snapshot, {
   bool merge = false,
 }) async {
-  final clean = jsonDecode(jsonEncode(snapshot)) as Map<String, dynamic>;
-
   // Allowlist для vars: кодовые флаги ∪ имена vars из локального template
   // (template в бэкап не входит — резолвим против зашитого в APK, §159).
   final template = await TemplateLoader.load();
+
+  // §439 §3.4 — снимок формы 2.23.2 мигрирует до allowlist'а. Входы бэкапа и
+  // Debug API мигрируют раньше (им нужен отчёт); здесь это no-op, а вызов
+  // страхует прочих вызывающих.
+  final migration = migrateStorageDoc(
+    jsonDecode(jsonEncode(snapshot)) as Map<String, dynamic>,
+    presetIdByDnsServerTag: presetIdsByDnsServerTag(template.selectableRules),
+  );
+  if (migration.info.isNotEmpty) {
+    AppLog.I.info('replaceRaw: snapshot migrated to storage_version '
+        '${storageDocVersion(migration.doc)} — ${migration.summary}');
+  }
+  if (migration.warnings.isNotEmpty) {
+    AppLog.I.warning('replaceRaw: snapshot migration losses: '
+        '${migration.warnings.join('; ')}');
+  }
+  final clean = migration.doc;
+
   final allowedVars =
       SettingsStorage.allowedVarKeys(template.vars.map((v) => v.name));
 

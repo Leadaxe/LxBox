@@ -81,8 +81,8 @@ Map<String, dynamic> _subscriptionToRecord(SubscriptionServers s) => {
     };
 
 /// §439 п. 1–2 — `tag` берётся из разобранного узла (у сервера из нескольких
-/// узлов — первого), исходник пишется целиком. `name` (с §243 пуст),
-/// `origin` модели и `created_at` не пишутся.
+/// узлов — первого), исходник пишется целиком. `name` (с §243 пуст) и
+/// `origin` модели не пишутся.
 Map<String, dynamic> _serverToRecord(UserServer u) {
   final tag = _firstNodeTag(u.nodes, u.rawBody);
   return {
@@ -110,6 +110,8 @@ Map<String, dynamic> _folderToRecord(FolderServers f) => {
       ..._detourPolicyToRecord(f.detourPolicy),
       if (f.pingUrl != null) 'ping_url': f.pingUrl,
       if (f.pingTimeoutMs != null) 'ping_timeout_ms': f.pingTimeoutMs,
+      // L — момент создания: его отдаёт Debug API `/folders`.
+      'created_at': f.createdAt.toIso8601String(),
       'nodes': [for (final m in f.members) _memberToRecord(m)],
     };
 
@@ -193,7 +195,7 @@ const Set<String> _serverKeys = {
 
 const Set<String> _folderKeys = {
   'kind', 'id', 'name', 'enabled', 'tag_policy', 'detour', 'detour_policy',
-  'ping_url', 'ping_timeout_ms', 'nodes',
+  'ping_url', 'ping_timeout_ms', 'created_at', 'nodes',
 };
 
 const Set<String> _memberKeys = {
@@ -331,6 +333,7 @@ FolderServers _folderFromRecord(
         ? pingUrl.trim()
         : null,
     pingTimeoutMs: pingTimeout is num ? pingTimeout.toInt() : null,
+    createdAt: _date(j['created_at']),
   );
 }
 

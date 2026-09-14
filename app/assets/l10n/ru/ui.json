@@ -5121,5 +5121,8 @@
   },
   "node is disabled": {
     "value": "узел выключен"
+  },
+  "One rule holds one JSON object. Add each object of the array as a separate rule.": {
+    "value": "Одно правило — один JSON-объект. Добавьте каждый объект массива отдельным правилом."
   }
 }

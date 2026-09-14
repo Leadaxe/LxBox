@@ -132,6 +132,9 @@ class DnsController {
     final presetLabelByPresetId = <String, String>{};
     final presetDnsEnable = <String, bool>{}; // §257
     final presetServersWithLabel = <Map<String, dynamic>>[];
+    // §439 — тег сервера → `preset_id` пресета, внёсшего его первым (как
+    // дедуп серверов сборки).
+    final presetIdByServerTag = <String, String>{};
     final activeRules = await SettingsStorage.getCustomRules();
     final allPresets = template.selectableRules;
     final activePresetIdsWithDnsRule = <String>{};
@@ -160,6 +163,10 @@ class DnsController {
       }
       presetLabelByPresetId[cr.presetId] = match.label;
       for (final s in fragments.dnsServers) {
+        final tag = s['tag'];
+        if (tag is String && tag.isNotEmpty) {
+          presetIdByServerTag.putIfAbsent(tag, () => cr.presetId);
+        }
         final annotated = Map<String, dynamic>.from(s)
           ..['_preset_label'] = match.label;
         presetServersWithLabel.add(annotated);
@@ -179,9 +186,14 @@ class DnsController {
         if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
           s['tag'] as String: s,
     };
+    // `_preset_id` — для Reset в редакторе сервера (пресет известен, когда
+    // override схлопывается обратно в preset-ref).
+    presetServersByTag.forEach(
+        (tag, s) => s['_preset_id'] = presetIdByServerTag[tag]);
     final resolvedServers = await resolveDnsServersList(
       templateServers: templateServersRaw,
       presetServersByTag: presetServersByTag,
+      presetIdByTag: presetIdByServerTag,
     );
 
     // §117: реальные тела DNS-mirror'ов (rule-источники) для превью.

@@ -554,6 +554,7 @@ Future<BuildResult> buildConfig({
     config,
     template.dnsOptions,
     extraServers: unifiedApply.extraDnsServers,
+    extraServerPresetIds: unifiedApply.dnsServerPresetIdByTag,
     extraDnsRulesByPresetId: unifiedApply.dnsRulesByPresetId,
     activePresetIdsWithDnsRule: activePresetIdsWithDnsRule,
     dnsSrsCachedPaths: dnsSrsCachedPaths,

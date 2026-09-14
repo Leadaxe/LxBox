@@ -13,7 +13,8 @@
 /// Вид `json` (§225) в записи не живёт: [CustomRuleJson] пишется как
 /// `inline` + `verbatim: true`, тело-объект — в `body`; текст, который
 /// объектом не разбирается (битый JSON, массив), — маркер без `body`. Массив
-/// раскладывает на записи вызывающий до кодека (§439 В2).
+/// раскладывает на записи вызывающий до кодека ([splitJsonRuleArrays], §439
+/// В2).
 ///
 /// Чтение терпимо: чужой `kind` и битая форма — [RecordRead.dropped], не
 /// исключение; скаляр вместо списка читается списком; незнакомые ключи корня
@@ -55,6 +56,55 @@ const Set<String> kRuleBodyKeys = {
 
 /// Текст тела [CustomRuleJson], прочитанного из записи.
 const JsonEncoder _verbatimText = JsonEncoder.withIndent('  ');
+
+/// §439 В2 — запись правила держит один объект sing-box, поэтому правило
+/// вида json с массивом, в котором есть объекты, раскладывается до кодека на
+/// правила по объекту: первое сохраняет `id` и имя, следующие — `<имя> #2`,
+/// `<имя> #3`… с новым `id`; `enabled` и `num` общие (как экспорт 438).
+/// Элементы-не-объекты отбрасываются (сборка их и так не эмитит), строка об
+/// этом уходит в [notes]. Прочие правила, включая json, который массивом с
+/// объектами не разбирается, идут как есть. Порядок сохраняется.
+///
+/// Один путь деления на хранение и миграцию формы 2.23.2.
+List<CustomRule> splitJsonRuleArrays(
+  Iterable<CustomRule> rules, {
+  List<String>? notes,
+}) {
+  final out = <CustomRule>[];
+  for (final r in rules) {
+    final array = r is CustomRuleJson ? _arrayOf(r.json) : null;
+    final items = array?.whereType<Map>().toList() ?? const <Map>[];
+    if (items.isEmpty) {
+      out.add(r);
+      continue;
+    }
+    final skipped = array!.length - items.length;
+    if (skipped > 0) {
+      notes?.add('rule "${r.name}": $skipped non-object element(s) of the '
+          'JSON array dropped');
+    }
+    for (var i = 0; i < items.length; i++) {
+      out.add(CustomRuleJson(
+        id: i == 0 ? r.id : null,
+        name: i == 0 ? r.name : '${r.name} #${i + 1}',
+        enabled: r.enabled,
+        orderNum: r.orderNum,
+        json: _verbatimText.convert(items[i]),
+      ));
+    }
+  }
+  return out;
+}
+
+/// Массив из текста json-правила; прочее — null.
+List<dynamic>? _arrayOf(String text) {
+  try {
+    final decoded = jsonDecode(text);
+    return decoded is List ? decoded : null;
+  } on FormatException {
+    return null;
+  }
+}
 
 /// Правило LxBox → запись 1.0.
 Map<String, dynamic> ruleToRecord(CustomRule r) {

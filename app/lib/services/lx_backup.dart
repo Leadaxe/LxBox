@@ -3455,7 +3455,6 @@ BackupServerMerge mergeBackupServers(
         detourPolicy:
             DetourPolicy.defaults.copyWith(overrideDetour: detourOf(srv)),
         origin: UserSource.manual,
-        createdAt: DateTime.now(),
         rawBody: body,
         sections: srv.sections,
       ));

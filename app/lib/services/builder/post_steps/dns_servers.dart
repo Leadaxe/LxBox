@@ -74,11 +74,18 @@ Map<String, dynamic>? resolveTemplateDnsServerBody(
 ///   в storage — append'им новую entry со значением `enabled` из template'а
 ///   (для template) либо `true` (для preset).
 ///
-/// §439 A1 — записи, которые модель не выражает (незнакомый вид, формы до
-/// §044), сюда не приходят и сохранением не стираются: их держит репозиторий.
+/// §439 — [presetIdByTag] (тег сервера → `preset_id` пресета, который его
+/// внёс) заполняет [DnsServerPreset.presetId]: запись 1.0 адресует сервер
+/// `ref` = `<preset_id>:<tag>`. Пресет известен в момент добавления; у
+/// сохранённой записи без него (миграция не нашла пресет) id дописывается,
+/// как только пресет известен.
+///
+/// §439 A1 — записи, которые кодек не читает (незнакомый вид), сюда не
+/// приходят и сохранением не стираются: их держит репозиторий.
 Future<List<DnsServerRef>> resolveDnsServersList({
   required List<Map<String, dynamic>> templateServers,
   required Map<String, Map<String, dynamic>> presetServersByTag,
+  Map<String, String> presetIdByTag = const {},
 }) async {
   final stored = await SettingsStorage.getDnsServers();
   // §117: template-серверы — обёртки `{description, enabled, vars?, server}`,
@@ -96,14 +103,19 @@ Future<List<DnsServerRef>> resolveDnsServersList({
       DnsServerPreset() => presetServersByTag.containsKey(entry.tag),
     };
     if (!keep) continue; // orphan
-    result.add(entry);
+    final presetId = presetIdByTag[entry.tag];
+    result.add(
+        entry is DnsServerPreset && entry.presetId.isEmpty && presetId != null
+            ? entry.copyWith(presetId: presetId)
+            : entry);
     seen.add(entry.tag);
   }
 
   // Step 2: auto-discover missing preset entries (preset > template priority).
   for (final tag in presetServersByTag.keys) {
     if (seen.contains(tag)) continue;
-    result.add(DnsServerPreset(enabled: true, tag: tag));
+    result.add(DnsServerPreset(
+        enabled: true, tag: tag, presetId: presetIdByTag[tag] ?? ''));
     seen.add(tag);
   }
   // Step 3: auto-discover missing template entries (наследуют enabled из template).
@@ -191,6 +203,7 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
       ..remove('enabled')
       ..remove('description')
       ..remove('_preset_label')
+      ..remove('_preset_id')
       ..remove('_origin')
       ..remove('_overrides');
     body['tag'] = tag; // ensure tag set (даже если body lost его при edit'е)

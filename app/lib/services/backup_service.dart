@@ -3,11 +3,15 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../models/codec/chain_record.dart' show kSourceKindChain;
 import '../models/custom_rule.dart';
 import '../models/server_list.dart';
+import '../models/source_chain.dart';
 import 'app_log.dart';
 import 'json_clone.dart';
 import 'settings_storage.dart';
+import 'settings_storage_keys.dart';
+import 'storage_migration/migrate_storage.dart';
 import 'template_loader.dart';
 
 /// Backup categories — параллельно с UI-toggle'ами в [BackupScreen].
@@ -21,8 +25,12 @@ enum BackupCategory {
 }
 
 /// Top-level storage keys относящиеся к Routing категории.
+///
+/// §439 — `sources[]` делится по виду записи: цепочки — Routing, прочие
+/// источники — Server lists ([_filterStorage]); `storage_version` пишется при
+/// любом наборе категорий.
 const _topLevelRoutingKeys = {
-  'custom_rules',
+  kRulesKey,
   'route_final',
   // §219/§221 — directions + guard миграции. КРИТИЧНО: без них backup/restore на
   // новом устройстве терял всю модель роутинг-Направлений §125 (directions в allowlist
@@ -30,22 +38,21 @@ const _topLevelRoutingKeys = {
   // one-shot миграция не пере-сработала поверх восстановленных Направлений.
   'directions',
   'directions_migrated',
-  // §393 C2 — источники-цепочки (SPEC 110). Категория именно routing, а не
-  // serverLists: цепочка — маршрут, а не набор серверов, её позиции ссылаются
-  // на теги Направлений, и восстановить её без них бессмысленно. Пара
-  // «Направления + цепочки» обязана переезжать одним куском.
-  'chains',
-  'preset_ids_remapped', // §228 — guard ремапа preset_id; в export иначе
-  //                        миграция пере-сработает поверх restored custom_rules
   'route_idle_suspend', // §215 — idle-suspend threshold (route.lx_idle_suspend)
   'route_idle_suspend_reachable', // §272 — reachable idle window
   'urltest_passive_check', // §272 — passive health check
   'enabled_groups', // §125 — DEPRECATED (legacy, читается только миграцией)
   'tun_apps',
   'vpn_mode',
-  'excluded_nodes',
-  'dns_options',
+  kDnsKey,
 };
+
+/// §393 C2 — запись цепочки в `sources[]`. Категория именно Routing, а не
+/// Server lists: цепочка — маршрут, а не набор серверов, её позиции ссылаются
+/// на теги Направлений, и восстановить её без них бессмысленно. Пара
+/// «Направления + цепочки» обязана переезжать одним куском.
+bool _isChainRecord(Object? record) =>
+    record is Map && record['kind'] == kSourceKindChain;
 
 /// Top-level storage keys относящиеся к App settings (служебные timestamps,
 /// UI-предпочтения, ping options, WARP-аккаунт).
@@ -68,24 +75,39 @@ const _varDebugKeys = SettingsStorage.debugApiVarKeys;
 /// Container распарсенного backup-файла. `storage` — содержимое
 /// `lxbox_settings.json` целиком; `vpnSettings` — native-side VPN toggles.
 ///
-/// Источники и правила блока `storage` читаются моделями через репозиторий
-/// ([SettingsStorage.serverListsOf], [SettingsStorage.customRulesOf]) — тем же
-/// чтением, что живое хранение; счётчики, разбивка и слияние по `id` идут на
-/// моделях. Документ целиком (`storage`) остаётся для `replaceRaw`.
+/// §439 §3.4 — блок `storage` формы 2.23.2 и раньше мигрирует в форму 1.0 при
+/// создании контейнера ([migrateStorageDoc]): превью, категорийный фильтр и
+/// применение видят уже мигрированный блок. Отчёт — [storageMigration].
+///
+/// Источники, цепочки и правила блока `storage` читаются моделями через
+/// репозиторий ([SettingsStorage.serverListsOf], [SettingsStorage.chainsOf],
+/// [SettingsStorage.customRulesOf]) — тем же чтением, что живое хранение;
+/// счётчики, разбивка и слияние идут на моделях. Документ целиком (`storage`)
+/// остаётся для `replaceRaw`.
 class BackupContents {
+  /// [presetIdByDnsServerTag] — `ref` preset-серверов DNS при миграции блока
+  /// (см. [presetIdsByDnsServerTag]); пусто — `ref` = тег.
   BackupContents({
     this.createdAt,
     this.sourceAppVersion,
-    this.storage,
+    Map<String, dynamic>? storage,
     this.vpnSettings,
-  });
+    Map<String, String> presetIdByDnsServerTag = const {},
+  }) : storageMigration = storage == null
+            ? null
+            : migrateStorageDoc(storage,
+                presetIdByDnsServerTag: presetIdByDnsServerTag);
 
   final DateTime? createdAt;
   final String? sourceAppVersion;
 
-  /// Содержимое `lxbox_settings.json` (top-level keys: vars, server_lists,
-  /// custom_rules, tun_apps, и т.д.). null если в файле нет блока `storage`.
-  final Map<String, dynamic>? storage;
+  /// Итог миграции блока `storage`; null — блока нет.
+  final StorageMigrationResult? storageMigration;
+
+  /// Содержимое `lxbox_settings.json` в форме 1.0 (top-level keys: vars,
+  /// sources, rules, dns, storage_version, tun_apps, и т.д.). null если в
+  /// файле нет блока `storage`.
+  Map<String, dynamic>? get storage => storageMigration?.doc;
 
   /// Native-side VPN system toggles. null если в файле нет блока
   /// `vpn_settings`.
@@ -99,6 +121,11 @@ class BackupContents {
   /// Правила блока [storage].
   late final _EntitiesRead<CustomRule> _rules =
       _readEntities(storage, SettingsStorage.customRulesOf);
+
+  /// Цепочки блока [storage] (записи `kind: chain` в `sources[]`) — для
+  /// merge-импорта категории Routing.
+  late final _EntitiesRead<SourceChain> _chains =
+      _readEntities(storage, SettingsStorage.chainsOf);
 
   /// Какие категории присутствуют в файле — для UI checkbox state'а.
   Set<BackupCategory> availableCategories() {
@@ -149,6 +176,8 @@ class BackupContents {
   }
 
   static bool _hasAnyRouting(Map<String, dynamic> s) {
+    final sources = s[kSourcesKey];
+    if (sources is List && sources.any(_isChainRecord)) return true;
     for (final k in _topLevelRoutingKeys) {
       final v = s[k];
       if (v is List && v.isNotEmpty) return true;
@@ -324,11 +353,14 @@ class BackupService {
       sourceAppVersion: decoded['source_app_version']?.toString(),
       storage: storage,
       vpnSettings: vpn,
+      presetIdByDnsServerTag: storageDocNeedsMigration(storage)
+          ? await SettingsStorage.presetIdsForMigration()
+          : const {},
     );
   }
 
   /// Apply import согласно [include] (юзер мог снять галочки в preview-dialog'е).
-  /// `merge=true` — top-level merge (vars upsert, server_lists append-by-id);
+  /// `merge=true` — top-level merge (vars upsert, источники append-by-id);
   /// `merge=false` — replace (overwrite целиком в указанных категориях).
   Future<BackupApplyResult> applyImport(
     BackupContents contents, {
@@ -345,14 +377,26 @@ class BackupService {
 
     final raw = contents.storage;
     if (raw != null) {
-      // merge: источники дописываются по `id` на моделях, поэтому в документ
-      // для replaceRaw их категория не идёт — иначе upsert затёр бы список.
+      final migration = contents.storageMigration;
+      if (migration != null && migration.migrated) {
+        AppLog.I.info('Backup import: storage block migrated to '
+            'storage_version ${storageDocVersion(migration.doc)}'
+            '${migration.summary.isEmpty ? '' : ' — ${migration.summary}'}');
+      }
+      if (migration != null && migration.warnings.isNotEmpty) {
+        AppLog.I.warning('Backup import: storage migration losses: '
+            '${migration.warnings.join('; ')}');
+      }
+
+      // merge: источники дописываются по `id` на моделях, цепочки заменяют
+      // часть цепочек — в документ для replaceRaw `sources` не идёт, иначе
+      // upsert затёр бы весь список (§439: цепочки и прочие источники — один
+      // ключ).
       final mergeServerLists =
           merge && include.contains(BackupCategory.serverLists);
-      final filtered = _filterStorageForImport(raw,
-          include: mergeServerLists
-              ? include.difference({BackupCategory.serverLists})
-              : include);
+      final mergeChains = merge && include.contains(BackupCategory.routing);
+      final filtered = _filterStorage(raw, include: include);
+      if (merge) filtered.remove(kSourcesKey);
 
       if (mergeServerLists) {
         for (final e in contents._serverLists.corrupt) {
@@ -375,6 +419,21 @@ class BackupService {
         serverLists = contents.countFor(BackupCategory.serverLists);
       }
 
+      if (mergeChains) {
+        for (final e in contents._chains.corrupt) {
+          errors.add('Chain parse: $e');
+        }
+        // Цепочки архива заменяют цепочки хранения целиком; архив без цепочек
+        // текущие не трогает.
+        if (contents._chains.items.isNotEmpty) {
+          try {
+            await SettingsStorage.setChains(contents._chains.items);
+          } catch (e) {
+            errors.add('Chains: $e');
+          }
+        }
+      }
+
       try {
         // §159 — replaceRaw применяет allowlist (default-deny) и возвращает
         // отброшенные ключи. Для нашего бэкапа пусто; для чужого/устаревшего —
@@ -390,11 +449,9 @@ class BackupService {
         errors.add('Storage: $e');
       }
 
-      // §393 A2 — порядок restore→migrate. Архив старой сборки принёс легаси-пару
-      // `channels`/`channels_migrated` (restore-allowlist их пропускает); без
-      // этого вызова первое же чтение Направлений увидело бы пустой `directions`
-      // и экран показал бы «Направлений нет» до перезапуска app'а. Миграция
-      // идемпотентна — на новом архиве это дешёвый no-op.
+      // §393 A2 — порядок restore→migrate. Легаси-пару `channels` уже
+      // переименовала миграция блока; вызов держит seed и vpn-1 для архива без
+      // Направлений. Идемпотентен — на новом архиве это дешёвый no-op.
       try {
         final template = await TemplateLoader.load();
         await SettingsStorage.migrateDirectionsIfNeeded(
@@ -405,14 +462,6 @@ class BackupService {
         );
       } catch (e) {
         errors.add('Directions migration: $e');
-      }
-      // §393 D1 — восстановленный архив мог быть снят до перехода цепочек в
-      // общий список источников: позиции назначаем сразу после restore, иначе
-      // экран показал бы их порядок по-старому до перезапуска app'а.
-      try {
-        await SettingsStorage.migrateChainOrderIfNeeded();
-      } catch (e) {
-        errors.add('Chain order migration: $e');
       }
 
       routing = contents.countFor(BackupCategory.routing);
@@ -485,17 +534,9 @@ class BackupService {
   /// чужеродных/«мёртвых» ключей делается отдельно на ВХОДЕ в
   /// `SettingsStorage.replaceRaw` (allowlist default-deny); здесь else-ветки
   /// «unknown → куда-нибудь» нет.
-  /// §393 A2 — единственная асимметрия с export'ом: старый архив несёт
-  /// легаси-пару `channels`/`channels_migrated`, и её имена нормализуются
-  /// ДО фильтра ([normalizeLegacyDirectionKeys]) — в storage легаси не
-  /// попадает, merge-upsert `replaceRaw` коллидирует по одному имени и архив
-  /// честно побеждает живые `directions` (adversarial-ревью A2).
-  static Map<String, dynamic> _filterStorageForImport(
-    Map<String, dynamic> raw, {
-    required Set<BackupCategory> include,
-  }) =>
-      _filterStorage(normalizeLegacyDirectionKeys(raw), include: include);
-
+  ///
+  /// §439 — на импорте блок уже в форме 1.0 ([BackupContents] мигрирует его
+  /// при разборе): легаси-ключей здесь не бывает.
   static Map<String, dynamic> _filterStorage(
     Map<String, dynamic> raw, {
     required Set<BackupCategory> include,
@@ -509,8 +550,18 @@ class BackupService {
     for (final entry in raw.entries) {
       final key = entry.key;
       final value = entry.value;
-      if (key == 'server_lists') {
-        if (wantServers) out[key] = deepCloneJson(value);
+      if (key == kStorageVersionKey) {
+        // Признак формы едет при любом наборе категорий: без него блок
+        // читался бы как форма 2.23.2.
+        out[key] = value;
+      } else if (key == kSourcesKey) {
+        if (value is List && (wantServers || wantRouting)) {
+          out[key] = [
+            for (final r in value)
+              if (_isChainRecord(r) ? wantRouting : wantServers)
+                deepCloneJson(r),
+          ];
+        }
       } else if (key == 'vars') {
         if (value is Map) {
           final filteredVars = <String, dynamic>{};
@@ -539,5 +590,4 @@ class BackupService {
     }
     return out;
   }
-
 }
