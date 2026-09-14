@@ -106,7 +106,7 @@ void main() {
 
     test('версия новее поддерживаемой отвергается', () {
       final raw = jsonEncode({
-        'lx_backup': kLxBackupVersion + 1,
+        'lx_backup': kLxBackupReadVersion + 1,
         'exported_by': {'app': 'launcher'},
         'exported_at': '2026-08-22T00:00:00Z',
       });

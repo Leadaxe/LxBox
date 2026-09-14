@@ -27,7 +27,10 @@
 /// каналом для сторон, которые секцию не разбирают.
 library;
 
+import 'dart:convert';
+
 import '../lx_backup.dart';
+import '../node_hash.dart' show deepSortKeys;
 
 /// §393 B9 — мобильный storage → переносимая секция.
 ///
@@ -117,36 +120,52 @@ typedef DnsBackupApply = ({
   List<Map<String, dynamic>> rules,
   String dnsFinal,
   String strategy,
+
+  /// §438 — `dns.default_domain_resolver` (var `dns_default_domain_resolver`).
+  String defaultDomainResolver,
   int applied,
 });
 
 /// §393 B9 — переносимая секция → мобильный storage (merge).
 ///
 /// Merge, а не replace: своя настройка сильнее приехавшей (эталон
-/// `import.go:importDNS`). Identity записи — пара «происхождение + адрес»
-/// (kind+tag у сервера, kind+name/presetId у правила): под тем же адресом у
-/// пользователя уже своя запись со своим телом, и перезапись стёрла бы её.
+/// `import.go:importDNS`). Совпавшая запись остаётся локальной, несовпавшая
+/// дописывается в конец в порядке файла.
 ///
-/// `final`/`strategy` применяются только когда приехали непустыми: пустая
-/// строка в файле означает «сторона это не переносила», а не «сбросить».
+/// §438 — ключи слияния по BACKUP.md §9 п. 5, одни для обоих форматов:
+///
+///  * сервер — `kind` + `tag`, а у `preset` — `kind` + `ref`: тега у
+///    ссылочной записи нет, и ключ по тегу схлопнул бы все preset-серверы в
+///    один. У LxBox ссылкой preset-сервера служит тег сервера пресета, и
+///    хранится он в поле `tag`;
+///  * правило — `kind` + `ref` + тело: своего имени у правила контракта нет,
+///    различить два правила можно только тем, что они делают. Дописанному
+///    пользовательскому правилу без имени имя выводится из тела (storage
+///    LxBox безымянное правило не держит), с уникализацией суффиксом.
+///
+/// `final`/`strategy`/`default_domain_resolver` применяются только когда
+/// приехали непустыми: пустая строка в файле означает «сторона это не
+/// переносила», а не «сбросить».
 DnsBackupApply applyDnsBackup({
   required LxDns incoming,
   required List<Map<String, dynamic>> servers,
   required List<Map<String, dynamic>> rules,
   required String dnsFinal,
   required String strategy,
+  String defaultDomainResolver = '',
 }) {
   var applied = 0;
   final outServers = [for (final e in servers) Map<String, dynamic>.from(e)];
   final haveServers = <String>{
-    for (final e in outServers) '${e['kind']} ${e['tag']}',
+    for (final e in outServers) _serverKey('${e['kind']}', '${e['tag']}'),
   };
 
   for (final ref in incoming.servers) {
     final kind = _mobileKind(ref.kind);
-    final tag = ref.name;
+    // preset адресуется `ref` (1.0); у записи 0.x ссылка ехала именем.
+    final tag = kind == 'preset' && ref.ref.isNotEmpty ? ref.ref : ref.name;
     if (tag.isEmpty) continue;
-    if (!haveServers.add('$kind $tag')) continue; // своё сильнее
+    if (!haveServers.add(_serverKey(kind, tag))) continue; // своё сильнее
     outServers.add(<String, dynamic>{
       'kind': kind,
       'tag': tag,
@@ -158,17 +177,38 @@ DnsBackupApply applyDnsBackup({
 
   final outRules = [for (final e in rules) Map<String, dynamic>.from(e)];
   final haveRules = <String>{
-    for (final e in outRules) '${e['kind']} ${e['name']} ${e['presetId']}',
+    for (final e in outRules)
+      _ruleKey(
+        '${e['kind']}',
+        name: (e['name'] as String?) ?? '',
+        ref: (e['presetId'] as String?) ?? (e['id'] as String?) ?? '',
+        body: e['rule'],
+      ),
+  };
+  final usedNames = <String>{
+    for (final e in outRules)
+      if (e['name'] is String) e['name'] as String,
   };
 
   for (final ref in incoming.rules) {
     final kind = _mobileKind(ref.kind);
-    if (ref.name.isEmpty && ref.ref.isEmpty) continue;
-    if (!haveRules.add('$kind ${ref.name} ${ref.ref}')) continue;
+    if (kind == 'inline' ? ref.value == null : ref.name.isEmpty && ref.ref.isEmpty) {
+      continue;
+    }
+    final key = _ruleKey(kind, name: ref.name, ref: ref.ref, body: ref.value);
+    if (!haveRules.add(key)) continue; // своё сильнее
+    var name = ref.name;
+    if (kind == 'inline') {
+      name = _uniqueName(
+        name.isNotEmpty ? name : _ruleNameFromBody(ref.value!),
+        usedNames,
+      );
+    }
+    if (name.isNotEmpty) usedNames.add(name);
     outRules.add(<String, dynamic>{
       'kind': kind,
       'enabled': ref.enabled,
-      if (ref.name.isNotEmpty) 'name': ref.name,
+      if (name.isNotEmpty) 'name': name,
       if (ref.ref.isNotEmpty) 'presetId': ref.ref,
       if (kind == 'inline' && ref.value != null) 'rule': ref.value,
     });
@@ -184,8 +224,53 @@ DnsBackupApply applyDnsBackup({
     rules: outRules,
     dnsFinal: incoming.finalServer.isNotEmpty ? incoming.finalServer : dnsFinal,
     strategy: incoming.strategy.isNotEmpty ? incoming.strategy : strategy,
+    defaultDomainResolver: incoming.defaultDomainResolver.isNotEmpty
+        ? incoming.defaultDomainResolver
+        : defaultDomainResolver,
     applied: applied,
   );
+}
+
+String _serverKey(String kind, String tag) => '$kind\u0000$tag';
+
+/// Ключ DNS-правила: пользовательское — телом в каноне (ключи отсортированы),
+/// ссылочные — ссылкой, шаблонное — именем.
+String _ruleKey(
+  String kind, {
+  required String name,
+  required String ref,
+  Object? body,
+}) {
+  switch (kind) {
+    case 'inline':
+      return 'inline\u0000${body is Map ? jsonEncode(deepSortKeys(body)) : ''}';
+    case 'template':
+      return 'template\u0000$name';
+    default:
+      return '$kind\u0000$ref';
+  }
+}
+
+/// Имя безымянного пользовательского DNS-правила: первое значение первого
+/// матчера тела (`domain_suffix: [".corp.example"]` → `.corp.example`), без
+/// матчера — `server`.
+String _ruleNameFromBody(Map<String, dynamic> body) {
+  for (final e in body.entries) {
+    if (e.key == 'server' || e.key == 'action') continue;
+    final v = e.value;
+    if (v is List && v.isNotEmpty && v.first is String) return v.first as String;
+    if (v is String && v.isNotEmpty) return v;
+  }
+  final server = body['server'];
+  return server is String && server.isNotEmpty ? server : 'rule';
+}
+
+String _uniqueName(String base, Set<String> used) {
+  if (!used.contains(base)) return base;
+  for (var n = 2;; n++) {
+    final candidate = '$base-$n';
+    if (!used.contains(candidate)) return candidate;
+  }
 }
 
 /// Мобильное имя происхождения → каноническое; `null` = у канона места нет.

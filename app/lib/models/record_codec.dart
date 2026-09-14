@@ -161,6 +161,13 @@ RecordRead<CustomRule> ruleFromRecord(Map<String, dynamic> j) {
       final unknown = [
         for (final k in b.keys)
           if (!kRuleBodyKeys.contains(k)) k,
+        // §438 — `action` модель выражает ровно одним значением, `reject`
+        // (цель kOutboundReject). Самостоятельный эффект ядра (`sniff`,
+        // `resolve`, `hijack-dns`, …) у типизированного правила дома не имеет:
+        // прочитанный как правило на direct-out, он молча стал бы маршрутом.
+        // Ключ считается незнакомым, решение принимает вызывающий (секции
+        // отбрасывают запись, корень бэкапа 1.0 переносит тело видом json).
+        if (b.containsKey('action') && b['action'] != 'reject') 'action',
       ]..sort();
       final outbound = _outboundOf(b);
       if (kind == 'inline') {
@@ -268,9 +275,11 @@ Map<String, dynamic> dnsServerToRecord(DnsServerRef s) => switch (s) {
           'body': Map<String, dynamic>.of(s.body)..remove('tag'),
           if (s.description != null) 'description': s.description,
         },
+      // §438 — у записи preset тега нет, её идентичность — `ref`
+      // (BACKUP.md §2, §9 п. 5). У LxBox ссылкой служит тег сервера пресета.
       DnsServerPreset() => {
           'kind': 'preset',
-          'tag': s.tag,
+          'ref': s.tag,
           'enabled': s.enabled,
           if (s.description != null) 'description': s.description,
         },
@@ -286,7 +295,11 @@ Map<String, dynamic> dnsServerToRecord(DnsServerRef s) => switch (s) {
 /// Запись 1.0 → ref DNS-сервера LxBox.
 RecordRead<DnsServerRef> dnsServerFromRecord(Map<String, dynamic> j) {
   final kind = j['kind'];
-  final tag = _optString(j['tag']);
+  // §438 — preset адресуется `ref` (контракт 1.0); `tag` у preset — прежняя
+  // форма этого кодека, читается запасным ходом.
+  final tag = kind == 'preset'
+      ? (_optString(j['ref']) ?? _optString(j['tag']))
+      : _optString(j['tag']);
   if (kind is! String || kind.isEmpty) {
     return const RecordRead.drop('dns server without kind');
   }

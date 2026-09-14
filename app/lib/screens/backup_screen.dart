@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
 import '../models/direction.dart';
+import '../models/server_list.dart';
 import '../services/direction_mutations.dart';
 import '../services/dns/dns_backup.dart';
 import '../services/lx_backup.dart';
@@ -522,6 +523,30 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         );
       }
 
+      // §438 — источники сливаются ДО цепочек и правил: позиции цепочки
+      // формата 1.0 переводятся в теги конфига по карте папок, которую даёт
+      // слияние, а правила узлов встают на общую ось вместе с корневыми.
+      // Слияние одно на оба формата (чистые функции `lx_backup.dart`);
+      // записываются списки ниже, в [_applyLxSections], одним flush'ем.
+      final lists = await SettingsStorage.getServerLists();
+      final subMerge = mergeBackupSubscriptions(lists, parsed.subscriptions);
+      final srvMerge = mergeBackupServers(
+        subMerge.lists,
+        parsed.servers,
+        folders: parsed.folders,
+      );
+      final sources = (
+        before: lists,
+        merged: srvMerge.lists,
+        applied: subMerge.applied + srvMerge.applied,
+        touched: srvMerge.touched,
+      );
+      final incomingChains = resolveBackupChainHops(
+        parsed,
+        srvMerge.lists,
+        srvMerge.folderIds,
+      );
+
       // §393 C9 — цепочки ПОСЛЕ Направлений (позиция может ссылаться на
       // Направление, заведённое строкой выше) и ДО правил (правило метит в
       // тег цепочки как в цель). Занятые теги сюда уже не доехали — парсер
@@ -536,7 +561,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // общий список тегов цепочек И Направлений — коллизию outbound'ов,
       // от которой ядро отвергает конфиг ЦЕЛИКОМ (эталон `_addChain`).
       var appliedChains = 0;
-      if (parsed.chains.isNotEmpty) {
+      if (incomingChains.isNotEmpty) {
         final currentChains = await SettingsStorage.getChains();
         final currentDirections = await SettingsStorage.getDirections();
         final mergedChains = currentChains.toList();
@@ -544,7 +569,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
           ...currentChains.map((c) => c.tag),
           ...currentDirections.map((d) => d.tag),
         ];
-        for (final c in parsed.chains) {
+        for (final c in incomingChains) {
           if (directionTagConflict(c.tag, usedTags) != null) continue;
           mergedChains.add(c);
           usedTags.add(c.tag);
@@ -553,12 +578,20 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         if (appliedChains > 0) await SettingsStorage.setChains(mergedChains);
       }
 
-      await SettingsStorage.saveCustomRules(parsed.rules);
+      // §438 — ось порядка перенумеровывается ОДНИМ проходом по корневым
+      // правилам и правилам узлов, пришедших или узнанных этим импортом
+      // (BACKUP.md §9 п. 7): номера правил узлов проставляются в тех же
+      // записях, что лежат в `sources.merged`.
+      await SettingsStorage.saveCustomRules(renumberBackupAxis(
+        parsed.rules,
+        sources.merged,
+        sources.touched,
+      ));
 
       // §393 B6-B9 — остальные секции. До B6 они разбирались, показывались в
       // диалоге и выбрасывались: пользователь видел «Подписки: 3», нажимал
       // Import и не получал ни одной.
-      final counts = await _applyLxSections(parsed);
+      final counts = await _applyLxSections(parsed, sources);
       if (!mounted) return;
 
       final skipped = parsed.warnings.length;
@@ -615,7 +648,15 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   /// Всё идёт через штатные сейверы [SettingsStorage], а не мимо: у каждого
   /// из них своя обвязка (`markConfigDirty`, allowlist, миграции), и запись
   /// в обход неё дала бы применённую настройку, о которой не знает билдер.
-  Future<int> _applyLxSections(LxBackupFile parsed) async {
+  Future<int> _applyLxSections(
+    LxBackupFile parsed,
+    ({
+      List<ServerList> before,
+      List<ServerList> merged,
+      int applied,
+      List<BackupNodeRef> touched,
+    }) sources,
+  ) async {
     var applied = 0;
 
     // §393 B6 — переменные. Фильтр переносимости уже сделал парсер: сюда
@@ -634,43 +675,22 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       applied++;
     }
 
-    // §393 B6/B10 — подписки. Идентичность записи — URL (он же идентичность
-    // подписки на обеих сторонах). Новая подписка добавляется без узлов —
-    // тело приедет обычным обновлением.
-    //
-    // §401 (П1) — совпавшая по URL запись ОБНОВЛЯЕТСЯ настройками из файла.
-    // Бэкап — сериализация состояния, и восстановленное состояние обязано
-    // быть неотличимо от настроенного руками; раньше совпавшая запись
-    // получала только доливку disabled-отметок, так что восстановление
-    // СВОЕГО ЖЕ файла на том же устройстве не возвращало ни identity, ни
-    // префикс тегов — пользователь видел «импорт прошёл» и настройки на
-    // месте не находил.
-    //
-    // Исключение ровно одно: disabled-отметки по-прежнему ОБЪЕДИНЯЮТСЯ, а не
-    // замещаются (§393 §4) — отметка, которой в файле нет, могла быть
-    // поставлена уже после экспорта, и молча включать такой узел нельзя.
-    //
-    // Локальные подписки, которых в файле нет, НЕ удаляются: импорт — это
-    // слияние, а полная замена раздела была бы другим решением.
-    final lists = await SettingsStorage.getServerLists();
-    final subMerge = mergeBackupSubscriptions(lists, parsed.subscriptions);
-    final merged = subMerge.lists;
-    applied += subMerge.applied;
+    // §393 B6/B10 + §401 + §438 — подписки, одиночные узлы и папки. Слияние
+    // сделано до цепочек (`_onLxImport`): совпавшая по URL подписка и
+    // совпавшая папка берут настройки файла, disabled-отметки объединяются,
+    // узлы дедупятся по телу; локальное, чего в файле нет, остаётся. Здесь —
+    // только запись.
+    final lists = sources.before;
+    final merged = sources.merged;
+    applied += sources.applied;
 
-    // §401 (D-08x) + §405 — одиночные узлы и папки: слияние живёт чистой
-    // функцией рядом с [mergeBackupSubscriptions] (`services/lx_backup.dart`),
-    // здесь только состояние. Идентичность одиночной записи — её ТЕЛО, папки
-    // — её имя; совпавшее пропускается молча.
-    final srvMerge = mergeBackupServers(merged, parsed.servers);
-    merged
-      ..clear()
-      ..addAll(srvMerge.lists);
-    applied += srvMerge.applied;
-
-    // Сравниваем поэлементно по identity: `copyWith` выше создаёт НОВЫЙ
-    // объект на месте старого, и длина списка при этом не меняется — проверка
-    // одной только длины пропустила бы долитые disabled-отметки.
+    // Сравниваем поэлементно по identity: `copyWith` создаёт НОВЫЙ объект на
+    // месте старого, и длина списка при этом не меняется — проверка одной
+    // только длины пропустила бы долитые disabled-отметки. §438 — номера
+    // правил узлов перенумерация ставит в тех же объектах, поэтому узлы,
+    // задетые импортом, сохраняются в любом случае.
     final listsChanged = merged.length != lists.length ||
+        sources.touched.isNotEmpty ||
         [
           for (var i = 0; i < lists.length; i++)
             if (!identical(merged[i], lists[i])) i,
@@ -689,12 +709,20 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         rules: await SettingsStorage.getDnsRulesList(),
         dnsFinal: vars['dns_final'] ?? '',
         strategy: vars['dns_strategy'] ?? '',
+        defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
       );
       await SettingsStorage.saveDnsServers(result.servers, flush: false);
       await SettingsStorage.saveDnsRulesList(result.rules, flush: false);
       await SettingsStorage.setVar('dns_final', result.dnsFinal, flush: false);
       await SettingsStorage.setVar('dns_strategy', result.strategy,
           flush: false);
+      // §438 — третий скаляр секции (формат 1.0); у 0.x он пуст, и var
+      // остаётся своей.
+      if (result.defaultDomainResolver.isNotEmpty) {
+        await SettingsStorage.setVar(
+            'dns_default_domain_resolver', result.defaultDomainResolver,
+            flush: false);
+      }
       applied += result.applied;
     }
 
