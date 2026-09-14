@@ -111,9 +111,11 @@ jobs:
             echo "tag=" >> "$GITHUB_OUTPUT"
             echo "is_release=false" >> "$GITHUB_OUTPUT"
           fi
-          # §436 — релиз-кандидат (vX.Y.Z-rc.N): GitHub-релиз собирается как
-          # обычно, но в Google Play не уходит — job google-play гейтится по
-          # этому флагу. Hotfix (vX.Y.Z-hotfixN) — полноценный релиз, флаг false.
+          # §436 — релиз-кандидат (vX.Y.Z-rc.N) до пользователей не доходит:
+          # GitHub-релиз помечается pre-release (/releases/latest, куда ходит
+          # UpdateChecker, его не видит), docs/latest.json не обновляется, в
+          # Google Play не уходит. Hotfix (vX.Y.Z-hotfixN) — полноценный релиз,
+          # флаг false.
           # Других суффиксов не бывает: version-code.sh падает на неизвестном.
           if [[ "$VERSION" == *-rc.* ]]; then
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
@@ -620,6 +622,9 @@ jobs:
           tag_name: ${{ needs.meta.outputs.tag }}
           name: LxBox ${{ needs.meta.outputs.version }}
           draft: false
+          # §436 — rc помечается pre-release: GitHub не делает его Latest, и
+          # /releases/latest (UpdateChecker) продолжает отдавать прошлый stable.
+          prerelease: ${{ needs.meta.outputs.is_prerelease == 'true' }}
           files: |
             LxBox-${{ needs.meta.outputs.version }}-arm64-v8a.apk
             LxBox-${{ needs.meta.outputs.version }}-armeabi-v7a.apk
@@ -633,7 +638,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: needs.meta.outputs.is_release == 'true'
+    # §436 — rc не трогает latest.json: это фоллбэк UpdateChecker'а, и кандидат
+    # в нём предложился бы всем GitHub-пользователям.
+    if: needs.meta.outputs.is_release == 'true' && needs.meta.outputs.is_prerelease != 'true'
     steps:
       - name: Checkout main
         uses: actions/checkout@v5

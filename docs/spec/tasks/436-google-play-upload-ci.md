@@ -85,10 +85,13 @@ Action делает ровно одно: AAB + notes на трек. Пин по 
 
 ## Риски и edge cases
 
-- **Кандидат на GitHub помечен обычным релизом.** Job `release` флаг
-  `is_prerelease` пока не читает: rc-тег станет «Latest» и попадёт в
-  `latest.json`, UpdateChecker предложит его всем GitHub-пользователям.
-  F-Droid (`UpdateCheckMode: Tags`) тоже может взять rc-тег. Вне этой задачи.
+- **Кандидат на GitHub** (решение владельца 14.09.2026, закрыто): job `release`
+  ставит `prerelease: true` для rc, job `publish-manifest` на rc пропускается.
+  UpdateChecker ходит в `/releases/latest`, который pre-release не отдаёт, а
+  фоллбэк `latest.json` остаётся на прошлом stable — кандидат пользователям
+  не предлагается. APK лежат на странице pre-release для тестеров.
+- **F-Droid** (`UpdateCheckMode: Tags`) может взять rc-тег как новую версию.
+  Лечится `UpdateCheckIgnore` в рецепте fdroiddata — отдельный MR, не сделан.
 - **Код уже занят в Play** (заливали руками) → API «Version code N has already
   been used», job красный, GitHub-релиз цел. Ничего не делать.
 - **401/403 в первые сутки** после приглашения — пропагация прав, не ошибка
