@@ -5,8 +5,7 @@ import 'package:lxbox/models/dns_ref.dart';
 ///
 /// Главный инвариант: **byte-compat round-trip** `fromJson → toJson == input`
 /// для всех kind'ов (§221 backup — форма на диске не мигрируется). Плюс
-/// толерантность чтения (legacy/unknown → null, не бросает) и строгость
-/// write-пути (`fromJsonStrict` бросает).
+/// толерантность чтения (legacy/unknown → null, не бросает).
 void main() {
   group('§294 DnsServerRef round-trip (byte-compat)', () {
     test('inline с body + description', () {
@@ -63,30 +62,6 @@ void main() {
     test('пустой/отсутствующий tag → null', () {
       expect(DnsServerRef.fromJson({'kind': 'preset', 'tag': ''}), isNull);
       expect(DnsServerRef.fromJson({'kind': 'preset'}), isNull);
-    });
-  });
-
-  group('§294 DnsServerRef.fromJsonStrict (write-путь)', () {
-    test('нет kind → бросает', () {
-      expect(() => DnsServerRef.fromJsonStrict({'tag': 'x'}),
-          throwsA(isA<DnsRefFormatException>()));
-    });
-    test('нет tag → бросает', () {
-      expect(() => DnsServerRef.fromJsonStrict({'kind': 'preset'}),
-          throwsA(isA<DnsRefFormatException>()));
-    });
-    test('inline без body → бросает', () {
-      expect(() => DnsServerRef.fromJsonStrict({'kind': 'inline', 'tag': 'x'}),
-          throwsA(isA<DnsRefFormatException>()));
-    });
-    test('unknown kind → бросает', () {
-      expect(
-          () => DnsServerRef.fromJsonStrict({'kind': 'weird', 'tag': 'x'}),
-          throwsA(isA<DnsRefFormatException>()));
-    });
-    test('валидный preset → ок', () {
-      expect(DnsServerRef.fromJsonStrict({'kind': 'preset', 'tag': 'x'}).kind,
-          'preset');
     });
   });
 
@@ -180,22 +155,6 @@ void main() {
     });
     test('preset без presetId → null', () {
       expect(DnsRuleRef.fromJson({'kind': 'preset'}), isNull);
-    });
-  });
-
-  group('§294 DnsRuleRef.fromJsonStrict (write-путь)', () {
-    test('нет kind → бросает', () {
-      expect(() => DnsRuleRef.fromJsonStrict({'name': 'x'}),
-          throwsA(isA<DnsRefFormatException>()));
-    });
-    test('inline без rule → бросает', () {
-      expect(() => DnsRuleRef.fromJsonStrict({'kind': 'inline', 'name': 'x'}),
-          throwsA(isA<DnsRefFormatException>()));
-    });
-    test('валидный template → ок', () {
-      expect(
-          DnsRuleRef.fromJsonStrict({'kind': 'template', 'name': 'x'}).kind,
-          'template');
     });
   });
 }
