@@ -592,7 +592,6 @@ class SubscriptionController extends ChangeNotifier {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         rawBody: tagged.toUri(),
         nodes: [tagged],
       ),
@@ -666,7 +665,6 @@ class SubscriptionController extends ChangeNotifier {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         rawBody: tagged.toUri(),
         nodes: [tagged],
       ),
@@ -710,7 +708,6 @@ class SubscriptionController extends ChangeNotifier {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         rawBody: tagged.toUri(),
         nodes: [tagged],
       ),
@@ -785,7 +782,6 @@ class SubscriptionController extends ChangeNotifier {
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
           origin: origin,
-          createdAt: DateTime.now(),
           rawBody: spec.rawUri,
           nodes: [spec],
         ));
@@ -808,7 +804,6 @@ class SubscriptionController extends ChangeNotifier {
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
           origin: origin,
-          createdAt: DateTime.now(),
           rawBody: trimmed,
           nodes: nodes,
         ));
@@ -828,7 +823,6 @@ class SubscriptionController extends ChangeNotifier {
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
           origin: origin,
-          createdAt: DateTime.now(),
           rawBody: trimmed,
           nodes: [spec],
         ));
@@ -904,7 +898,6 @@ class SubscriptionController extends ChangeNotifier {
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
           origin: origin,
-          createdAt: DateTime.now(),
           rawBody: n.toUri(),
           sections: sectionsForNewNode(n),
           nodes: [n],
@@ -957,7 +950,6 @@ class SubscriptionController extends ChangeNotifier {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: origin,
-      createdAt: DateTime.now(),
       rawBody: text,
       // §435 — связка из целого конфига с одним узлом / документа с
       // `sections` (NODE_SECTIONS.md §6): хозяин секций — контейнер. §437 —
@@ -1211,7 +1203,6 @@ class SubscriptionController extends ChangeNotifier {
             ? DetourPolicy.defaults
             : DetourPolicy.defaults.copyWith(overrideDetour: m.detour),
         origin: UserSource.manual,
-        createdAt: DateTime.now(),
         rawBody: m.raw,
         sections: m.sections, // §435
         nodes: [if (m.node != null) m.node!],

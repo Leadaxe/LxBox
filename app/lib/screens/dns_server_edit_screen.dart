@@ -209,7 +209,10 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
     Navigator.pop(
       context,
       DnsServerEditResult.saved(overrides == ServerKind.preset
-          ? DnsServerPreset(enabled: _ctrl.enabled, tag: resolved.tag)
+          ? DnsServerPreset(
+              enabled: _ctrl.enabled,
+              tag: resolved.tag,
+              presetId: resolved.presetId)
           : DnsServerTemplate(enabled: _ctrl.enabled, tag: resolved.tag)),
     );
   }

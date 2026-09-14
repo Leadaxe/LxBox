@@ -193,7 +193,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.manual,
-      createdAt: DateTime.now(),
       rawBody: spec.toUri(),
       nodes: [spec],
       sections: canonicalTailscaleSections(),
@@ -246,7 +245,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.manual,
-      createdAt: DateTime.now(),
       rawBody: jsonEncode(outboundJson),
       nodes: [spec],
     );
@@ -291,7 +289,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.manual,
-      createdAt: DateTime.now(),
       rawBody: jsonEncode(outboundJson),
       nodes: [spec],
     );

@@ -37,8 +37,9 @@ import '_shared.dart';
 /// снимок целей есть, иначе рабочая цепочка была бы объявлена битой.
 ///
 /// Routes:
-/// - `GET    /chains`            → list ([serializeChain]: поля источника +
-///                                канон `source_chain.schema.json` + `order`)
+/// - `GET    /chains`            → list в порядке хранения ([serializeChain]:
+///                                поля источника + канон
+///                                `source_chain.schema.json`)
 /// - `POST   /chains`            → create (body: `{"tag":"...","label":"..."}`
 ///                                + опционально любые PATCH-поля; `tag`
 ///                                только при создании)

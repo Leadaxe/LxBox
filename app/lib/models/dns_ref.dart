@@ -1,12 +1,14 @@
 // ===========================================================================
-// §294 — модель записей `dns_options.servers[]` и `dns_options.rules[]`
-// (виды записей §043/§033).
+// §294 — модель DNS-записей (виды §043/§033).
 //
 // §439 A1 — единственный рабочий формат DNS выше хранения. Резолверы, сборка,
-// экраны и контроллер DNS работают только с этими типами; сырые записи живут
-// в репозитории `settings_storage/network.dart`, который зовёт [fromJson] /
-// [toJson]. Запись 1.0 (бэкап, секции узла) — отдельный кодек
-// `codec/dns_record.dart`.
+// экраны и контроллер DNS работают только с этими типами. Хранение (`dns{}`
+// в `settings_storage/network.dart`), бэкап и секции узла пишут и читают
+// запись 1.0 кодеком `codec/dns_record.dart`.
+//
+// [fromJson] / [toJson] — форма 2.23.2 (`dns_options`): её ещё говорят файл
+// правил `format: 1` (`rule_transfer.dart`), DNS-секция LX Backup
+// (`dns/dns_backup.dart`) и Debug `PUT /settings/dns_options/*`.
 //
 // Семантика `enabled` при отсутствии ключа:
 // - сервер, inline- и srs-правило — включено (`enabled != false`); [toJson]
@@ -201,7 +203,7 @@ class DnsServerPreset extends DnsServerRef {
 
   /// §439 — пресет шаблона, которому принадлежит сервер: запись 1.0 адресует
   /// его `ref` = `<preset_id>:<tag>`. Пусто — пресет не известен (`ref` = тег).
-  /// Форма хранения 2.23.2 ([toJson]/[DnsServerRef.fromJson]) поля не несёт.
+  /// Форма 2.23.2 ([toJson]/[DnsServerRef.fromJson]) поля не несёт.
   final String presetId;
 
   @override

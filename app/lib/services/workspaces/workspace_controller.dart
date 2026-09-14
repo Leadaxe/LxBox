@@ -129,8 +129,6 @@ class WorkspaceController extends ChangeNotifier {
         varDefaults: {for (final v in t.vars) v.name: v.defaultValue},
       );
     });
-    await _step(
-        'chain order migration', SettingsStorage.migrateChainOrderIfNeeded);
     await _step('automation gates', AutomationEventEmitter.I.reload);
   }
 

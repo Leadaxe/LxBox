@@ -39,6 +39,8 @@ Future<void> applyCustomDns(
   Map<String, dynamic> config,
   Map<String, dynamic> templateDnsOptions, {
   List<Map<String, dynamic>> extraServers = const [],
+  // §439 — тег сервера из [extraServers] → `preset_id` его пресета.
+  Map<String, String> extraServerPresetIds = const {},
   Map<String, List<Map<String, dynamic>>> extraDnsRulesByPresetId = const {},
   Set<String> activePresetIdsWithDnsRule = const {},
   Map<String, String> dnsSrsCachedPaths = const {},
@@ -72,6 +74,7 @@ Future<void> applyCustomDns(
   final resolvedServers = await resolveDnsServersList(
     templateServers: templateServers,
     presetServersByTag: presetServersByTag,
+    presetIdByTag: extraServerPresetIds,
   );
 
   // §117: known outbound-теги (outbounds + endpoints уже в конфиге на этом
