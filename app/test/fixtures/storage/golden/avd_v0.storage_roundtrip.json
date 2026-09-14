@@ -1,6 +1,14 @@
 {
-  "content_diff": [
-    "$.chains[tag=chain-1].order: 31 → 34"
-  ],
+  "migration": {
+    "migrated": true,
+    "info": [
+      "sources: 9 subscriptions, 21 servers, 4 folders, 1 chains",
+      "rules: 1 rules → 1 records",
+      "dns: 15 servers, 2 rules",
+      "dropped keys: preset_ids_remapped"
+    ]
+  },
+  "migrated_file_is_report_doc": true,
+  "content_diff": [],
   "bytes_identical": false
 }

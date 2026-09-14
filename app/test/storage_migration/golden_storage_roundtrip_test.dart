@@ -3,16 +3,23 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/direction_mutations.dart';
 import 'package:lxbox/services/settings_storage.dart';
+import 'package:lxbox/services/storage_migration/migrate_storage.dart';
 
 import 'golden_harness.dart';
 
-// §439 волна 0 — фикстура хранения читается текущим `SettingsStorage` без
-// потерь: все сущности проходят типизированные геттеры и сейверы (модели
-// `fromJson` → `toJson`), и файл после записи сверяется с фикстурой. Это
-// доказательство, что фикстура — настоящая форма 2.23.2, на которую
-// опираются golden конфига и бэкапа. Эталон
-// `golden/<name>.storage_roundtrip.json`: разница содержимого и совпадение
-// байтов.
+// §439 — фикстура хранения формы 2.23.2 мигрирует при первом чтении
+// (`_load`), и документ формы 1.0 проходит все типизированные геттеры и
+// сейверы (кодек записей → модели → кодек) без потерь.
+//
+// Эталон `golden/<name>.storage_roundtrip.json`:
+//   • `migration` — отчёт `migrateStorageDoc` над фикстурой (что сделано и
+//     что прочитано не дословно);
+//   • `migrated_file_is_report_doc` — файл, записанный `_load`, равен
+//     документу отчёта (кроме `id` второй и следующих записей разделённого
+//     json-массива: они новые при каждой миграции);
+//   • `content_diff` / `bytes_identical` — файл после круга через модели
+//     против файла сразу после миграции. Пустая разница и совпадение байтов —
+//     форма 1.0 проходит модели дословно.
 
 void main() {
   for (final name in kStorageFixtures) {
@@ -26,8 +33,17 @@ void main() {
       await box.seed(name);
       t('seeded');
 
-      final raw = jsonDecode(await fixtureFile(name).readAsString())
+      final fixture = jsonDecode(await fixtureFile(name).readAsString())
           as Map<String, dynamic>;
+      final report = migrateStorageDoc(
+        jsonDecode(jsonEncode(fixture)) as Map<String, dynamic>,
+        presetIdByDnsServerTag: await SettingsStorage.presetIdsForMigration(),
+      );
+
+      // Первое чтение мигрирует файл и пишет его.
+      final raw = await SettingsStorage.exportRaw();
+      final migratedText = await box.settingsFile.readAsString();
+      t('migrated');
 
       // Типизированные сущности — через модели.
       await SettingsStorage.saveServerLists(
@@ -41,7 +57,7 @@ void main() {
       await DirectionMutations.bulkReplace(
           await SettingsStorage.getDirections(),
           flush: false);
-      if (raw.containsKey('dns_options')) {
+      if (raw.containsKey('dns')) {
         await SettingsStorage.saveDnsServers(
             await SettingsStorage.getDnsServers(),
             flush: false);
@@ -99,15 +115,34 @@ void main() {
 
       final written = await box.settingsFile.readAsString();
       final reread = jsonDecode(written) as Map<String, dynamic>;
-      // Ожидание: разница содержимого (пусто — фикстура проходит модели без
-      // потерь) и совпадение байтов, то есть порядка ключей и форматирования
-      // `_atomicSave`. Непустая разница — нормализация записи, которая есть
-      // уже сегодня; волны 439 её не расширяют.
       final expectation = {
-        'content_diff': jsonDiff(raw, reread),
-        'bytes_identical': written == await fixtureFile(name).readAsString(),
+        'migration': report.toReportJson(),
+        'migrated_file_is_report_doc':
+            jsonEncode(_withoutSplitIds(jsonDecode(migratedText))) ==
+                jsonEncode(_withoutSplitIds(report.doc)),
+        'content_diff': jsonDiff(jsonDecode(migratedText), reread),
+        'bytes_identical': written == migratedText,
       };
       expectGolden('$name.storage_roundtrip.json', prettyJson(expectation));
     });
   }
+}
+
+/// Документ без `id` записей `rules[]`, заведённых делением json-массива
+/// (`<имя> #N`): миграция выдаёт им новый `id` при каждом прогоне.
+Object? _withoutSplitIds(Object? doc) {
+  if (doc is! Map) return doc;
+  final rules = doc['rules'];
+  if (rules is! List) return doc;
+  final split = RegExp(r' #\d+$');
+  return {
+    ...doc,
+    'rules': [
+      for (final r in rules)
+        if (r is Map && r['name'] is String && split.hasMatch(r['name'] as String))
+          {...r}..remove('id')
+        else
+          r,
+    ],
+  };
 }
