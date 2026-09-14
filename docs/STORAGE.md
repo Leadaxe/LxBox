@@ -459,7 +459,9 @@ is substituted at build time and when displayed.
 "sections": {
   "rules": [                                   // only kind inline | srs
     { "kind": "inline", "id": "<uuid>", "name": "@{self} network", "enabled": true, "num": 945,
-      "body": { "ip_cidr": ["100.64.0.0/10"], "outbound": "@self" } }
+      "body": { "domain_suffix": [".ts.net"],
+                "ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "outbound": "@self" },
+      "resolve": { "only": false, "serverTag": "@{self}-dns" } }
   ],
   "dns": {
     "servers": [                               // only kind user (tag in metadata, body without tag)
@@ -473,6 +475,11 @@ is substituted at build time and when displayed.
   }
 }
 ```
+
+`resolve` (§437) is app metadata, not part of `body`: at build time it emits a
+non-terminal `action: resolve` rule with the node's own DNS server right before the route
+rule, so a name resolved to a FakeIP address still reaches the node and a UDP flow gets an
+address before routing.
 
 Empty sections are not written. A foreign `kind` inside a section is dropped on read
 (the rest of the records survive). `lib/models/node_sections.dart` holds the model,

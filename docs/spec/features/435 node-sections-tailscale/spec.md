@@ -32,7 +32,9 @@
 "sections": {
   "rules": [
     { "kind": "inline", "id": "<uuid>", "name": "@{self} network", "enabled": true, "num": 945,
-      "body": { "ip_cidr": ["100.64.0.0/10"], "outbound": "@self" } }
+      "body": { "domain_suffix": [".ts.net"],
+                "ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "outbound": "@self" },
+      "resolve": { "only": false, "serverTag": "@{self}-dns" } }
   ],
   "dns": {
     "servers": [ { "kind": "user", "tag": "@{self}-dns", "enabled": true,
@@ -48,6 +50,16 @@
 | `server_lists[].type=user` | `sections` (необязателен; пустой не пишется) | `UserServer.toJson` |
 | `server_lists[].type=folder` → `members[]` | `sections` (то же) | `FolderMember.toJson` |
 | подписка, цепочка, Направление | поля нет | — |
+
+Форма правила — §437. `domain_suffix` рядом с `ip_cidr`: внутри одного
+правила это ИЛИ, и имя `host.tailnet.ts.net` матчится под FakeIP, когда
+адреса ещё нет (по `ip_cidr` fqdn без адресов не матчится). Второй CIDR —
+ULA-подсеть tailnet (`tsaddr.TailscaleULARange`): при `prefer_ipv6`/
+`ipv6_only` маршрут с одним v4 промахивается. `resolve` — метаданные LxBox
+вне `body` (вторая сторона игнорирует, ONE_NAMESPACE): при сборке даёт
+нетерминальное правило `action: resolve, server: <тег>-dns` ПЕРЕД маршрутом,
+без которого ядро отбрасывает UDP-поток к endpoint'у («a resolve action is
+required before routing to outbound/tailscale…»). Записей по-прежнему три.
 
 Правило записи: **сущность = метаданные приложения + `body` = объект sing-box
 как есть** (владелец, 14.09.2026). Тег в метаданных — единственное
@@ -164,6 +176,17 @@ tailscale`. Раннеры `contract_test`/`body_contract_test` добавляю
   `outbound`, ни `action`). Ключи `body`, которых кодек не знает (`rule_set`
   на набор конфига и т. п.), — в `unknownKeys` записи.
 
+§437 — в **многоузловом** конфиге (без явного `sections`) те же записи по тем
+же критериям получают узлы `tailscale`: ссылка на тег при нескольких узлах
+однозначна, чужих правил не утащит. Прочие узлы многоузлового конфига — как
+раньше, без секций (правило на прокси есть у любого конфига, опознать связку
+по ссылке нельзя). Контроллер выделяет такие узлы в свои `UserServer`
+(секции живут только у свободных узлов), остаток идёт прежним путём текстом
+без `tailscale`-записей. Свободный узел `tailscale`, созданный вообще без
+записей (голое тело, конфиг без ссылок на тег), получает каноническую связку
+§2 по умолчанию — `sectionsForNewNode` в `models/tailscale_bundle.dart`;
+снимается через Clear sections.
+
 Всё остальное в `dns`/`route` игнорируется, как раньше. Результат кладётся в
 `NodeSpec.importedSections` (mutable, не сериализуется — как
 `sourceCompact`); контейнер (`addFromInput`, `addMembersToFolder`, редактор
@@ -182,7 +205,9 @@ tailscale`. Раннеры `contract_test`/`body_contract_test` добавляю
 (`SectionsConflictWarning`, только UI, кода контракта нет).
 
 У подписок `importedSections` никуда не переносится — секции только у
-свободных узлов.
+свободных узлов. Узел `tailscale` в подписке получает info-строку об этом
+всегда (§437): без связки он входит в tailnet, но связи с пирами не даёт —
+лечится «добавить как сервер».
 
 ## 4. Сборка = инъекция (NODE_SECTIONS §3)
 
@@ -370,15 +395,17 @@ drag. Блокировки/lifecycle корневых серверов их не
 ### 9.5 Add Server Wizard → режим Tailscale
 
 Поля: Tag (обязателен), Auth key (секрет, `obscureText`, обязателен), Control
-URL, Hostname, Ephemeral, Accept routes, Exit node (тег выходного узла
-tailnet). Подсказка под ключом обязательна: «A one-time key is consumed on
+URL, Hostname, Ephemeral, Accept routes, Exit node (IP Tailscale или имя
+машины-пира, анонсирующей exit node). Подсказка под ключом обязательна: «A one-time key is consumed on
 the first login; the device identity then lives in the state directory —
-deleting the app data registers a new device». Результат — `UserServer` с
-`rawBody` = JSON endpoint'а (`toUri()` `TailscaleSpec`) и `sections` с
-канонической связкой из §2 (`@{self}-dns`, правило `.ts.net`, маршрут
-`100.64.0.0/10` на 945 с именем `@{self} network`). Второй узел tailnet —
-ещё один мастер с другим тегом; маршрут `100.64.0.0/10` у второго снимает
-пользователь (Routing → тумблер строки узла).
+deleting the app data registers a new device». Подсказка под Exit node
+называет формат и то, что интернет через пира идёт только когда узел выбран
+Направлением на Home (§437: без exit node узел в интернет не выпускает
+вовсе). Результат — `UserServer` с `rawBody` = JSON endpoint'а (`toUri()`
+`TailscaleSpec`) и `sections` с канонической связкой из §2 (`@{self}-dns`,
+правило `.ts.net`, правило `@{self} network` на 945 с `resolve`). Второй узел
+tailnet — ещё один мастер с другим тегом; правило `@{self} network` у второго
+снимает пользователь (Routing → тумблер строки узла).
 
 ### 9.6 Home и списки
 
