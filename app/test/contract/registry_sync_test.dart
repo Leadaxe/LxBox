@@ -58,6 +58,10 @@ const _launcherOnlyBackupCodes = <String>{
   'backup_local_direction_dropped',
   // side: export — явный тег замены папки/подписки; свёртки у мобилы нет.
   'backup_replace_tag_derived',
+  // side: import 1.0 — отбраковка записи секции узла при чтении `lx_backup: 2`.
+  // LxBox читает 1.0 волной 3 (TASKS_LXBOX ## 16.2); с чтением код переходит
+  // в kWarn*, и эта строка обязана уйти (иначе сработает staleForeign ниже).
+  'backup_section_record_dropped',
 };
 
 Map<String, dynamic>? _loadBackupWarnings() {
