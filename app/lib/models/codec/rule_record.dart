@@ -13,7 +13,8 @@
 /// Вид `json` (§225) в записи не живёт: [CustomRuleJson] пишется как
 /// `inline` + `verbatim: true`, тело-объект — в `body`; текст, который
 /// объектом не разбирается (битый JSON, массив), — маркер без `body`. Массив
-/// раскладывает на записи вызывающий до кодека (§439 В2).
+/// раскладывает на записи вызывающий до кодека ([splitJsonRuleArrays], §439
+/// В2).
 ///
 /// Чтение терпимо: чужой `kind` и битая форма — [RecordRead.dropped], не
 /// исключение; скаляр вместо списка читается списком; незнакомые ключи корня
@@ -55,6 +56,45 @@ const Set<String> kRuleBodyKeys = {
 
 /// Текст тела [CustomRuleJson], прочитанного из записи.
 const JsonEncoder _verbatimText = JsonEncoder.withIndent('  ');
+
+/// §439 В2 — запись правила держит один объект sing-box, поэтому правило
+/// вида json с непустым массивом объектов раскладывается до кодека на
+/// правила по элементу: первое сохраняет `id` и имя, следующие — `<имя> #2`,
+/// `<имя> #3`… с новым `id`; `enabled` и `num` общие (как экспорт 438).
+/// Прочие правила, включая json, который массивом объектов не разбирается,
+/// идут как есть. Порядок сохраняется.
+List<CustomRule> splitJsonRuleArrays(Iterable<CustomRule> rules) {
+  final out = <CustomRule>[];
+  for (final r in rules) {
+    final items = r is CustomRuleJson ? _objectArrayOf(r.json) : null;
+    if (items == null) {
+      out.add(r);
+      continue;
+    }
+    for (var i = 0; i < items.length; i++) {
+      out.add(CustomRuleJson(
+        id: i == 0 ? r.id : null,
+        name: i == 0 ? r.name : '${r.name} #${i + 1}',
+        enabled: r.enabled,
+        orderNum: r.orderNum,
+        json: _verbatimText.convert(items[i]),
+      ));
+    }
+  }
+  return out;
+}
+
+/// Непустой массив объектов из текста json-правила; прочее — null.
+List<Map>? _objectArrayOf(String text) {
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(text);
+  } on FormatException {
+    return null;
+  }
+  if (decoded is! List || decoded.isEmpty) return null;
+  return decoded.every((e) => e is Map) ? decoded.cast<Map>() : null;
+}
 
 /// Правило LxBox → запись 1.0.
 Map<String, dynamic> ruleToRecord(CustomRule r) {

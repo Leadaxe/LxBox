@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../models/codec/source_record.dart';
 import '../models/debug_entry.dart';
 import '../models/server_list.dart';
 import 'app_log.dart';
@@ -249,7 +250,7 @@ class DumpBuilder {
   /// не раздуло для подписок с 200+ узлами). Если нужен полный recreate —
   /// есть url, тело тянется заново.
   static Map<String, dynamic> _sanitizeList(ServerList l) {
-    final j = SettingsStorage.serverListRecord(l);
+    final j = sourceToRecord(l);
     j['_node_tags'] = l.nodes.map((n) => n.tag).toList();
     j['_node_count'] = l.nodes.length;
     return j;

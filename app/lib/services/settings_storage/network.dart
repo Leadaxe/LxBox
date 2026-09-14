@@ -1,11 +1,10 @@
 part of '../settings_storage.dart';
 
-// Route final / excluded nodes / DNS servers+rules (репозиторий моделей
-// DNS, §439 A1) / ping-options для
-// [SettingsStorage].
+// Route final / idle-suspend / passive check / DNS servers+rules (репозиторий
+// моделей DNS, §439) / ping-options для [SettingsStorage].
 //
 // Вынесено `part`'ом — та же библиотека, тот же доступ к `_load`/`_save`/
-// `_cache`. Семантика storage-ключей идентична исходнику.
+// `_cache`.
 
 // ---------------------------------------------------------------------------
 // Route final outbound
@@ -98,24 +97,22 @@ Future<void> _savePassiveCheck(bool enabled, {bool flush = true}) async {
 }
 
 // ---------------------------------------------------------------------------
-// §439 A1 — репозиторий DNS: `dns_options.servers` / `dns_options.rules`
+// §439 — репозиторий DNS: записи `dns.servers[]` / `dns.rules[]` контракта
+// 1.0 кодеком `models/codec/dns_record.dart`.
 //
-// Наверх уходят только модели [DnsServerRef] / [DnsRuleRef]; сырые записи и
-// их кодек (`fromJson`/`toJson` моделей) живут здесь.
+// Наверх уходят только модели [DnsServerRef] / [DnsRuleRef].
 //
-// Инварианты записи:
-// - запись, которую модель не выражает (незнакомый вид, форма до §043, запись
-//   без обязательных полей), наверх не отдаётся и при сохранении остаётся на
-//   своём месте — её не стирает ни резолвер, ни экран;
+// Инварианты записи (§439 A1):
+// - запись, которую кодек не читает (незнакомый вид, нет обязательных
+//   полей), наверх не отдаётся и при сохранении остаётся на своём месте — её
+//   не стирает ни резолвер, ни экран;
 // - неизменённая запись пишется теми же байтами, что лежали: модель, равная
-//   разобранной сохранённой записи, берёт её JSON как есть (порядок ключей и
-//   отсутствующие ключи разных писателей до §439 не переписываются).
-// Прочие ключи `dns_options` (`rules_json` до §061) не читаются и не
-// трогаются.
+//   разобранной сохранённой записи, берёт её JSON как есть (ключи, которые
+//   кодек не читает, не теряются).
 // ---------------------------------------------------------------------------
 
-List<dynamic> _dnsOptionsList(Map<String, dynamic> data, String key) {
-  final dns = data['dns_options'];
+List<dynamic> _dnsList(Map<String, dynamic> data, String key) {
+  final dns = data[kDnsKey];
   if (dns is! Map) return const [];
   final list = dns[key];
   return list is List ? list : const [];
@@ -165,41 +162,46 @@ List<dynamic> _mergeDnsEntries<T>(
   return out;
 }
 
-Future<void> _putDnsOptionsList(String key, List<dynamic> list,
+Future<void> _putDnsList(String key, List<dynamic> list,
     {required bool flush}) async {
   final data = await _load();
-  final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
-  dns[key] = list;
-  data['dns_options'] = dns;
+  final dns = data[kDnsKey];
+  data[kDnsKey] = <String, dynamic>{
+    if (dns is Map) ...dns.cast<String, dynamic>(),
+    key: list,
+  };
   SettingsStorage._cache = data;
   SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();
 }
 
+DnsServerRef? _dnsServerOf(Map<String, dynamic> j) =>
+    dnsServerFromRecord(j).value;
+
+DnsRuleRef? _dnsRuleOf(Map<String, dynamic> j) => dnsRuleFromRecord(j).value;
+
 Future<List<DnsServerRef>> _getDnsServers() async =>
-    _parseDnsEntries(_dnsOptionsList(await _load(), 'servers'),
-        DnsServerRef.fromJson);
+    _parseDnsEntries(_dnsList(await _load(), kDnsServersKey), _dnsServerOf);
 
 Future<void> _saveDnsServers(List<DnsServerRef> servers,
     {bool flush = true}) async {
-  final stored = _dnsOptionsList(await _load(), 'servers');
-  await _putDnsOptionsList(
-    'servers',
-    _mergeDnsEntries(stored, servers, DnsServerRef.fromJson, (s) => s.toJson()),
+  final stored = _dnsList(await _load(), kDnsServersKey);
+  await _putDnsList(
+    kDnsServersKey,
+    _mergeDnsEntries(stored, servers, _dnsServerOf, dnsServerToRecord),
     flush: flush,
   );
 }
 
 Future<List<DnsRuleRef>> _getDnsRulesList() async =>
-    _parseDnsEntries(_dnsOptionsList(await _load(), 'rules'),
-        DnsRuleRef.fromJson);
+    _parseDnsEntries(_dnsList(await _load(), kDnsRulesKey), _dnsRuleOf);
 
 Future<void> _saveDnsRulesList(List<DnsRuleRef> rules,
     {bool flush = true}) async {
-  final stored = _dnsOptionsList(await _load(), 'rules');
-  await _putDnsOptionsList(
-    'rules',
-    _mergeDnsEntries(stored, rules, DnsRuleRef.fromJson, (r) => r.toJson()),
+  final stored = _dnsList(await _load(), kDnsRulesKey);
+  await _putDnsList(
+    kDnsRulesKey,
+    _mergeDnsEntries(stored, rules, _dnsRuleOf, dnsRuleToRecord),
     flush: flush,
   );
 }
