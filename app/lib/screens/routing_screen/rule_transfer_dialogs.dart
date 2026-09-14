@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/custom_rule.dart';
+import '../../models/dns_ref.dart';
 import '../../services/format_utils.dart' show formatDateTime;
 import '../../services/l10n/locale_controller.dart';
 import '../../services/rule_transfer.dart';
@@ -18,8 +19,8 @@ class RuleExportSelection {
   });
 
   final List<CustomRule> rules;
-  final List<Map<String, dynamic>> dnsServers;
-  final List<Map<String, dynamic>> dnsRules;
+  final List<DnsServerRef> dnsServers;
+  final List<DnsRuleRef> dnsRules;
 }
 
 /// Экран выбора правил на экспорт (шаг 1) → экран DNS (шаг 2, §4.2 п.2
@@ -28,16 +29,16 @@ class RuleExportSelection {
 /// попап для списка правил тесен), по умолчанию НИЧЕГО не выбрано, над
 /// списком тумблер Select all / Deselect all.
 ///
-/// [dnsServers] — `dns_options.servers` без `kind: preset`; [dnsRules] —
-/// `dns_options.rules` только inline/srs (фильтрует вызывающий).
+/// [dnsServers] — DNS-серверы без preset-refs; [dnsRules] — только
+/// inline/srs (фильтрует вызывающий).
 /// [templateServerTags] — для предотметки на шаге 2 (referenced-теги,
 /// которых нет в шаблоне). Возвращает составной выбор или null (отмена).
 Future<RuleExportSelection?> showRuleExportPicker(
   BuildContext context, {
   required List<CustomRule> rules,
   required List<String> displayNames,
-  required List<Map<String, dynamic>> dnsServers,
-  required List<Map<String, dynamic>> dnsRules,
+  required List<DnsServerRef> dnsServers,
+  required List<DnsRuleRef> dnsRules,
   required Set<String> templateServerTags,
 }) {
   return Navigator.of(context).push<RuleExportSelection>(
@@ -65,8 +66,8 @@ class _RuleExportScreen extends StatefulWidget {
 
   final List<CustomRule> rules;
   final List<String> displayNames;
-  final List<Map<String, dynamic>> dnsServers;
-  final List<Map<String, dynamic>> dnsRules;
+  final List<DnsServerRef> dnsServers;
+  final List<DnsRuleRef> dnsRules;
   final Set<String> templateServerTags;
 
   @override
@@ -223,8 +224,8 @@ class _DnsExportScreen extends StatefulWidget {
     required this.hasRules,
   });
 
-  final List<Map<String, dynamic>> servers;
-  final List<Map<String, dynamic>> rules;
+  final List<DnsServerRef> servers;
+  final List<DnsRuleRef> rules;
   final Set<String> preselectedServerTags;
 
   /// §398 — выбраны ли правила на шаге 1. false + пустой DNS-выбор → кнопка
@@ -243,16 +244,24 @@ class _DnsExportScreenState extends State<_DnsExportScreen> {
   void initState() {
     super.initState();
     for (var i = 0; i < widget.servers.length; i++) {
-      final tag = widget.servers[i]['tag']?.toString() ?? '';
-      if (widget.preselectedServerTags.contains(tag)) _servers.add(i);
+      if (widget.preselectedServerTags.contains(widget.servers[i].tag)) {
+        _servers.add(i);
+      }
     }
   }
 
-  String _serverLabel(Map<String, dynamic> s) {
-    final tag = s['tag']?.toString() ?? '';
-    final desc = s['description']?.toString() ?? '';
-    return desc.isNotEmpty ? '$desc ($tag)' : tag;
+  String _serverLabel(DnsServerRef s) {
+    final desc = s.description ?? '';
+    return desc.isNotEmpty ? '$desc (${s.tag})' : s.tag;
   }
+
+  static String _ruleLabel(DnsRuleRef r) => switch (r) {
+        DnsRuleInline(:final name) ||
+        DnsRuleSrs(:final name) ||
+        DnsRuleTemplate(:final name) =>
+          name,
+        DnsRulePreset() => '',
+      };
 
   Widget _header(String text) => Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -311,7 +320,7 @@ class _DnsExportScreenState extends State<_DnsExportScreen> {
                     _rules.remove(i);
                   }
                 }),
-                title: Text(widget.rules[i]['name']?.toString() ?? ''),
+                title: Text(_ruleLabel(widget.rules[i])),
               ),
           ],
         ],

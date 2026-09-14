@@ -1,30 +1,47 @@
 // ===========================================================================
-// §294 — storage-level typed model для `dns_options.servers[]` и
-// `dns_options.rules[]` (kind-discriminated refs, §043/§033).
+// §294 — модель записей `dns_options.servers[]` и `dns_options.rules[]`
+// (виды записей §043/§033).
 //
-// Зачем: до §294 обе секции жили как сырые `List<Map<String,dynamic>>` без
-// модели и без write-валидации — Debug `PUT /settings/dns_options/servers`
-// писал verbatim, асимметрично с типизированным `/rules` (sealed CustomRule).
+// §439 A1 — единственный рабочий формат DNS выше хранения. Резолверы, сборка,
+// экраны и контроллер DNS работают только с этими типами; сырые записи живут
+// в репозитории `settings_storage/network.dart`, который зовёт [fromJson] /
+// [toJson]. Запись 1.0 (бэкап, секции узла) — отдельный кодек
+// `record_codec.dart`.
 //
-// Что это НЕ трогает (осознанно, см. spec §294):
-// - render-view `ResolvedServer` + резолвер `resolveDisplayedServers`
-//   (screens/) — downstream VIEW, остаётся как есть; модель лишь типизирует
-//   сырой ref, который резолвер продолжает читать `List<Map>`;
-// - template-view `TemplateDnsServerEntry`/`DnsOptionsModel`
-//   (parser_config.dart) — это template-сторона (canonical), другой JSON;
-// - resolver-owned migration/orphan-cleanup/auto-discover — остаётся в
-//   резолвере (модель НЕ роняет orphan'ы, чтобы не было двойного drop'а);
-// - форма на диске НЕ мигрируется — `toJson` байт-совместим (§221 backup).
+// Семантика `enabled` при отсутствии ключа:
+// - сервер, inline- и srs-правило — включено (`enabled != false`); [toJson]
+//   пишет у правил только `false`. До §439 A1 сборка ждала `enabled == true`
+//   и молча пропускала такие правила (баг, исправлен в A1);
+// - template- и preset-правило — выключено (`enabled == true`, как читала
+//   сборка); [toJson] пишет `enabled` всегда.
 //
-// Дискриминатор — строковый `kind` (как в JSON и как резолвер уже матчит
-// `kind == 'inline'`); модель в `lib/models/` не тянет `ServerKind` из
-// `screens/` (обратная зависимость слоёв запрещена).
+// Значения неизменяемы по договорённости: [fromJson] и [toJson] копируют
+// JSON-поддеревья, модель не делит карты с документом хранения.
 //
-// `fromJson` ТОЛЕРАНТЕН на чтение (не бросает): старые инсталляции и
-// pre-043 legacy full-body снапшоты не должны падать на cold-start — вернёт
-// null, вызывающий пропускает (как резолвер молча дропает unknown-kind).
-// Строгость — ТОЛЬКО на Debug write-пути (там `fromJsonStrict` бросает).
+// [fromJson] терпим к чтению: незнакомый вид или запись без обязательных полей
+// → null. Такую запись репозиторий хранит как есть и наверх не отдаёт.
+// Строгость — только на Debug write-пути ([DnsServerRef.fromJsonStrict]).
+//
+// Дискриминатор — строковый `kind`; модель не тянет `ServerKind` из `screens/`
+// (обратная зависимость слоёв запрещена).
 // ===========================================================================
+
+import 'package:collection/collection.dart';
+
+const _eq = DeepCollectionEquality();
+
+/// Глубокая копия JSON-значения (карты и списки; скаляры как есть).
+Object? _copyJson(Object? v) {
+  if (v is Map) {
+    return <String, dynamic>{
+      for (final e in v.entries) e.key.toString(): _copyJson(e.value),
+    };
+  }
+  if (v is List) return [for (final x in v) _copyJson(x)];
+  return v;
+}
+
+Map<String, dynamic> _copyMap(Map v) => _copyJson(v) as Map<String, dynamic>;
 
 /// Ошибка валидации формы ref'а на write-пути. Debug-handler мапит в
 /// `BadRequest`; модель сама HTTP-типов не знает.
@@ -39,8 +56,6 @@ class DnsRefFormatException implements Exception {
 
 /// Один ref из `dns_options.servers[]`. Форма на диске:
 ///   `{enabled, kind: inline|preset|template, tag, body?, varValues?, description?}`
-/// Порядок ключей в [toJson] совпадает с выводом резолвера
-/// (`enabled, kind, tag, …`) — round-trip байт-совместим.
 sealed class DnsServerRef {
   const DnsServerRef({
     required this.enabled,
@@ -57,10 +72,11 @@ sealed class DnsServerRef {
 
   Map<String, dynamic> toJson();
 
-  /// Толерантный парс — вернёт null на legacy full-body (нет `kind`),
-  /// unknown-kind, отсутствующий/пустой `tag`, inline без Map-`body`.
-  /// Зеркалит фильтр резолвера (`dns_servers.dart` step-2), чтобы модель и
-  /// резолвер дропали одно и то же.
+  /// Та же запись с другим `enabled`.
+  DnsServerRef withEnabled(bool enabled);
+
+  /// Толерантный парс — null на запись без `kind` (формы до §043), незнакомый
+  /// вид, отсутствующий/пустой `tag`, inline без Map-`body`.
   static DnsServerRef? fromJson(Map<String, dynamic> j) {
     final kind = j['kind'];
     final tag = j['tag']?.toString();
@@ -70,11 +86,11 @@ sealed class DnsServerRef {
     switch (kind) {
       case 'inline':
         final body = j['body'];
-        if (body is! Map) return null; // malformed — как резолвер
+        if (body is! Map) return null;
         return DnsServerInline(
           enabled: enabled,
           tag: tag,
-          body: body.cast<String, dynamic>(),
+          body: _copyMap(body),
           description: description,
         );
       case 'preset':
@@ -85,16 +101,18 @@ sealed class DnsServerRef {
         return DnsServerTemplate(
           enabled: enabled,
           tag: tag,
+          // null-значение сборка читала как «не задано» (дефолт var) —
+          // ключ не заводим.
           varValues: vv is Map
               ? {
                   for (final e in vv.entries)
-                    e.key.toString(): e.value.toString()
+                    if (e.value != null) e.key.toString(): e.value.toString()
                 }
               : const {},
           description: description,
         );
       default:
-        return null; // legacy/unknown — dropped
+        return null;
     }
   }
 
@@ -129,6 +147,7 @@ class DnsServerInline extends DnsServerRef {
     super.description,
   });
 
+  /// Тело sing-box-сервера без `tag`/`enabled`/`description` (§044).
   final Map<String, dynamic> body;
 
   @override
@@ -139,9 +158,12 @@ class DnsServerInline extends DnsServerRef {
         'enabled': enabled,
         'kind': 'inline',
         'tag': tag,
-        'body': body,
+        'body': _copyMap(body),
         if (description != null) 'description': description,
       };
+
+  @override
+  DnsServerInline withEnabled(bool enabled) => copyWith(enabled: enabled);
 
   DnsServerInline copyWith({
     bool? enabled,
@@ -155,6 +177,18 @@ class DnsServerInline extends DnsServerRef {
         body: body ?? this.body,
         description: description ?? this.description,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsServerInline &&
+      other.enabled == enabled &&
+      other.tag == tag &&
+      other.description == description &&
+      _eq.equals(other.body, body);
+
+  @override
+  int get hashCode =>
+      Object.hash('inline', enabled, tag, description, _eq.hash(body));
 }
 
 class DnsServerPreset extends DnsServerRef {
@@ -175,12 +209,25 @@ class DnsServerPreset extends DnsServerRef {
         if (description != null) 'description': description,
       };
 
+  @override
+  DnsServerPreset withEnabled(bool enabled) => copyWith(enabled: enabled);
+
   DnsServerPreset copyWith({bool? enabled, String? tag, String? description}) =>
       DnsServerPreset(
         enabled: enabled ?? this.enabled,
         tag: tag ?? this.tag,
         description: description ?? this.description,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsServerPreset &&
+      other.enabled == enabled &&
+      other.tag == tag &&
+      other.description == description;
+
+  @override
+  int get hashCode => Object.hash('preset', enabled, tag, description);
 }
 
 class DnsServerTemplate extends DnsServerRef {
@@ -203,9 +250,12 @@ class DnsServerTemplate extends DnsServerRef {
         'tag': tag,
         // §294 — varValues эмитится только непустой (резолвер так же не пишет
         // пустой varValues); порядок ключей после tag совпадает с выводом.
-        if (varValues.isNotEmpty) 'varValues': varValues,
+        if (varValues.isNotEmpty) 'varValues': Map<String, String>.of(varValues),
         if (description != null) 'description': description,
       };
+
+  @override
+  DnsServerTemplate withEnabled(bool enabled) => copyWith(enabled: enabled);
 
   DnsServerTemplate copyWith({
     bool? enabled,
@@ -219,26 +269,47 @@ class DnsServerTemplate extends DnsServerRef {
         varValues: varValues ?? this.varValues,
         description: description ?? this.description,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsServerTemplate &&
+      other.enabled == enabled &&
+      other.tag == tag &&
+      other.description == description &&
+      _eq.equals(other.varValues, varValues);
+
+  @override
+  int get hashCode =>
+      Object.hash('template', enabled, tag, description, _eq.hash(varValues));
 }
 
 // ─── Rules ──────────────────────────────────────────────────────────────────
 
 /// Один ref из `dns_options.rules[]`. Четыре kind'а с РАЗНЫМИ identity-ключами:
-///   inline `{kind, name, rule}` · srs `{kind, name, id, body?}` ·
-///   preset `{kind, presetId, enabled?}` · template `{kind, name}`.
-/// Preset — позиционный якорь mirror-группы: «мёртвое» поле `enabled`
-/// сохраняется как есть (build_config anchor-семантика), НЕ чистится.
+///   inline `{kind, name, rule}` · srs `{kind, name, id, …}` ·
+///   preset `{kind, presetId}` · template `{kind, name}`; у всех — `enabled`.
+/// Preset — позиционный якорь mirror-группы: его `enabled` сборка с
+/// mirror-группой не читает, но значение сохраняется как есть.
 sealed class DnsRuleRef {
   const DnsRuleRef();
 
   String get kind;
+
+  /// Включено ли правило (отсутствие ключа — см. шапку файла).
+  bool get enabled;
+
   Map<String, dynamic> toJson();
 
-  /// Толерантный парс (не бросает; unknown/legacy → null, дропается как в
-  /// резолвере `dns_rules.dart`).
+  /// Та же запись с другим `enabled`.
+  DnsRuleRef withEnabled(bool enabled);
+
+  /// Толерантный парс (не бросает): незнакомый вид (в том числе `user` и
+  /// `rule` до §033) или запись без обязательных полей → null.
   static DnsRuleRef? fromJson(Map<String, dynamic> j) {
     final kind = j['kind'];
     if (kind is! String) return null;
+    final enabledByDefault = j['enabled'] != false;
+    final enabledExplicit = j['enabled'] == true;
     switch (kind) {
       case 'inline':
         final name = j['name']?.toString();
@@ -246,8 +317,8 @@ sealed class DnsRuleRef {
         if (name == null || name.isEmpty || rule is! Map) return null;
         return DnsRuleInline(
           name: name,
-          rule: rule.cast<String, dynamic>(),
-          enabled: j['enabled'] != false,
+          rule: _copyMap(rule),
+          enabled: enabledByDefault,
         );
       case 'srs':
         final id = j['id']?.toString();
@@ -256,21 +327,28 @@ sealed class DnsRuleRef {
           return null;
         }
         final body = j['body'];
+        final server = j['server'];
+        final rule = j['rule'];
+        final srsUrl = j['srsUrl'];
         return DnsRuleSrs(
           name: name,
           id: id,
-          body: body is Map ? body.cast<String, dynamic>() : null,
+          body: body is Map ? _copyMap(body) : null,
+          server: server is String ? server : null,
+          rule: rule is Map ? _copyMap(rule) : null,
+          srsUrl: srsUrl is String ? srsUrl : null,
+          enabled: enabledByDefault,
         );
       case 'preset':
         final pid = j['presetId']?.toString();
         if (pid == null || pid.isEmpty) return null;
-        return DnsRulePreset(presetId: pid, enabled: j['enabled'] != false);
+        return DnsRulePreset(presetId: pid, enabled: enabledExplicit);
       case 'template':
         final name = j['name']?.toString();
         if (name == null || name.isEmpty) return null;
-        return DnsRuleTemplate(name: name);
+        return DnsRuleTemplate(name: name, enabled: enabledExplicit);
       default:
-        return null; // legacy 'user'/'rule'/unknown — dropped
+        return null;
     }
   }
 
@@ -300,8 +378,8 @@ class DnsRuleInline extends DnsRuleRef {
   final Map<String, dynamic> rule;
 
   /// §435 — тумблер записи (ONE_NAMESPACE §1: `enabled` у DNS-правил). В JSON
-  /// пишется только `false`: старое хранение без ключа читается как
-  /// «включено», и байт-совместимость `dns_options.rules` сохраняется.
+  /// пишется только `false`: запись без ключа читается как «включено».
+  @override
   final bool enabled;
 
   @override
@@ -311,9 +389,12 @@ class DnsRuleInline extends DnsRuleRef {
   Map<String, dynamic> toJson() => {
         'kind': 'inline',
         'name': name,
-        'rule': rule,
+        'rule': _copyMap(rule),
         if (!enabled) 'enabled': false,
       };
+
+  @override
+  DnsRuleInline withEnabled(bool enabled) => copyWith(enabled: enabled);
 
   DnsRuleInline copyWith({
     String? name,
@@ -325,13 +406,41 @@ class DnsRuleInline extends DnsRuleRef {
         rule: rule ?? this.rule,
         enabled: enabled ?? this.enabled,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsRuleInline &&
+      other.name == name &&
+      other.enabled == enabled &&
+      _eq.equals(other.rule, rule);
+
+  @override
+  int get hashCode => Object.hash('inline', name, enabled, _eq.hash(rule));
 }
 
+/// DNS-правило по скачанному rule-set. UI его не создаёт. Тело — `body`
+/// (`server` + доп. условия; форма §294: Debug API, файл правил). `server` /
+/// `rule` / `srsUrl` верхнего уровня — форма §033, её пишут только старые
+/// записи: сборка берёт их раньше `body`, тайл показывает `srsUrl`/`server`.
 class DnsRuleSrs extends DnsRuleRef {
-  const DnsRuleSrs({required this.name, required this.id, this.body});
+  const DnsRuleSrs({
+    required this.name,
+    required this.id,
+    this.body,
+    this.server,
+    this.rule,
+    this.srsUrl,
+    this.enabled = true,
+  });
   final String name;
   final String id;
   final Map<String, dynamic>? body;
+  final String? server;
+  final Map<String, dynamic>? rule;
+  final String? srsUrl;
+
+  @override
+  final bool enabled;
 
   @override
   String get kind => 'srs';
@@ -341,12 +450,49 @@ class DnsRuleSrs extends DnsRuleRef {
         'kind': 'srs',
         'name': name,
         'id': id,
-        if (body != null) 'body': body,
+        if (srsUrl != null) 'srsUrl': srsUrl,
+        if (server != null) 'server': server,
+        if (rule != null) 'rule': _copyMap(rule!),
+        if (body != null) 'body': _copyMap(body!),
+        if (!enabled) 'enabled': false,
       };
 
-  DnsRuleSrs copyWith({String? name, String? id, Map<String, dynamic>? body}) =>
+  @override
+  DnsRuleSrs withEnabled(bool enabled) => copyWith(enabled: enabled);
+
+  DnsRuleSrs copyWith({
+    String? name,
+    String? id,
+    Map<String, dynamic>? body,
+    String? server,
+    Map<String, dynamic>? rule,
+    String? srsUrl,
+    bool? enabled,
+  }) =>
       DnsRuleSrs(
-          name: name ?? this.name, id: id ?? this.id, body: body ?? this.body);
+        name: name ?? this.name,
+        id: id ?? this.id,
+        body: body ?? this.body,
+        server: server ?? this.server,
+        rule: rule ?? this.rule,
+        srsUrl: srsUrl ?? this.srsUrl,
+        enabled: enabled ?? this.enabled,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsRuleSrs &&
+      other.name == name &&
+      other.id == id &&
+      other.server == server &&
+      other.srsUrl == srsUrl &&
+      other.enabled == enabled &&
+      _eq.equals(other.body, body) &&
+      _eq.equals(other.rule, rule);
+
+  @override
+  int get hashCode => Object.hash('srs', name, id, server, srsUrl, enabled,
+      _eq.hash(body), _eq.hash(rule));
 }
 
 class DnsRulePreset extends DnsRuleRef {
@@ -355,6 +501,7 @@ class DnsRulePreset extends DnsRuleRef {
 
   /// §033 — «мёртвое» для активного preset'а, но позиционный anchor
   /// mirror-группы в build_config; сохраняется как есть, не чистится.
+  @override
   final bool enabled;
 
   @override
@@ -364,20 +511,48 @@ class DnsRulePreset extends DnsRuleRef {
   Map<String, dynamic> toJson() =>
       {'kind': 'preset', 'presetId': presetId, 'enabled': enabled};
 
+  @override
+  DnsRulePreset withEnabled(bool enabled) => copyWith(enabled: enabled);
+
   DnsRulePreset copyWith({String? presetId, bool? enabled}) => DnsRulePreset(
       presetId: presetId ?? this.presetId, enabled: enabled ?? this.enabled);
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsRulePreset &&
+      other.presetId == presetId &&
+      other.enabled == enabled;
+
+  @override
+  int get hashCode => Object.hash('preset', presetId, enabled);
 }
 
 class DnsRuleTemplate extends DnsRuleRef {
-  const DnsRuleTemplate({required this.name});
+  const DnsRuleTemplate({required this.name, this.enabled = true});
   final String name;
+
+  @override
+  final bool enabled;
 
   @override
   String get kind => 'template';
 
   @override
-  Map<String, dynamic> toJson() => {'kind': 'template', 'name': name};
+  Map<String, dynamic> toJson() =>
+      {'kind': 'template', 'name': name, 'enabled': enabled};
 
-  DnsRuleTemplate copyWith({String? name}) =>
-      DnsRuleTemplate(name: name ?? this.name);
+  @override
+  DnsRuleTemplate withEnabled(bool enabled) => copyWith(enabled: enabled);
+
+  DnsRuleTemplate copyWith({String? name, bool? enabled}) => DnsRuleTemplate(
+      name: name ?? this.name, enabled: enabled ?? this.enabled);
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsRuleTemplate &&
+      other.name == name &&
+      other.enabled == enabled;
+
+  @override
+  int get hashCode => Object.hash('template', name, enabled);
 }

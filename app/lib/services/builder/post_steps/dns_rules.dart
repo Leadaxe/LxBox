@@ -33,9 +33,8 @@ part of '../post_steps.dart';
 /// Перед сборкой делаем `resolveDnsRulesList` — auto-discovery недостающих
 /// записей + orphan cleanup. Изменённый список сохраняется в storage сразу.
 ///
-/// Legacy записи (§032 shape: `kind: user`, `kind: rule`, `title` вместо `name`)
-/// silently dropped — старые ключи не распознаются, auto-discovery восстанавливает
-/// fresh state.
+/// §439 A1 — записи, которые модель не выражает (в том числе формы §032:
+/// `kind: user`, `kind: rule`), до сборки не доходят и в хранении остаются.
 Future<void> applyCustomDns(
   Map<String, dynamic> config,
   Map<String, dynamic> templateDnsOptions, {
@@ -167,9 +166,7 @@ Future<void> applyCustomDns(
   }
 
   for (final entry in resolved) {
-    final kind = entry['kind'] as String?;
-    if (kind == null) continue;
-    if (kind == 'preset') {
+    if (entry is DnsRulePreset) {
       if (dnsMirrors.isNotEmpty) {
         // §117: запись — позиционный якорь группы; тела preset-правил живут
         // в mirror-группе (порядок routing-правил), per-preset тумблер уже
@@ -181,60 +178,67 @@ Future<void> applyCustomDns(
       // Legacy-ветка (вызовы без dnsMirrors — shim'ы/старые тесты):
       // позиционная эмиссия тел по записи, как до §117 (§253: правил
       // может быть несколько — порядок шаблона).
-      if (entry['enabled'] != true) continue;
-      final pid = entry['presetId'] as String?;
-      if (pid == null || pid.isEmpty) continue;
-      final bodies = extraDnsRulesByPresetId[pid];
+      if (!entry.enabled) continue;
+      final bodies = extraDnsRulesByPresetId[entry.presetId];
       if (bodies != null) outRules.addAll(bodies);
       continue;
     }
-    if (kind == 'template' && dnsMirrors.isNotEmpty && !mirrorGroupEmitted) {
+    if (entry is DnsRuleTemplate &&
+        dnsMirrors.isNotEmpty &&
+        !mirrorGroupEmitted) {
       emitMirrorGroup(); // нет preset-якоря → группа перед template-блоком
     }
-    if (entry['enabled'] != true) continue;
-    if (kind == 'inline') {
-      final body = entry['rule'];
-      if (body is Map<String, dynamic>) outRules.add(body);
-    } else if (kind == 'template') {
-      final name = entry['name'] as String?;
-      if (name == null || name.isEmpty) continue;
-      final t = templateRulesByName[name];
-      if (t != null) {
-        final clean = Map<String, dynamic>.from(t)
-          ..remove('name')
-          ..remove('enabled_default');
-        outRules.add(clean);
-      }
-    } else if (kind == 'srs') {
-      final id = entry['id'] as String?;
-      final name = entry['name'] as String?;
-      final server = entry['server'] as String?;
-      if (id == null || id.isEmpty) continue;
-      if (server == null || server.isEmpty) continue;
-      final path = dnsSrsCachedPaths[id];
-      if (path == null) continue; // no cache → skip silently
-      final tag = (name != null && name.isNotEmpty) ? name : 'dns_srs_$id';
-      extraDnsSrsRuleSets.add({
-        'type': 'local',
-        'tag': tag,
-        'format': 'binary',
-        'path': path,
-      });
-      final dnsRule = <String, dynamic>{
-        'rule_set': tag,
-        'server': server,
-      };
-      // Optional extra fields from rule body (e.g., extra match conditions)
-      final extra = entry['rule'];
-      if (extra is Map<String, dynamic>) {
-        for (final e in extra.entries) {
-          if (e.key == 'rule_set' || e.key == 'server') continue;
-          dnsRule[e.key] = e.value;
+    if (!entry.enabled) continue;
+    switch (entry) {
+      case DnsRuleInline(:final rule):
+        outRules.add(rule);
+      case DnsRuleTemplate(:final name):
+        final t = templateRulesByName[name];
+        if (t != null) {
+          final clean = Map<String, dynamic>.from(t)
+            ..remove('name')
+            ..remove('enabled_default');
+          outRules.add(clean);
         }
-      }
-      outRules.add(dnsRule);
+      case DnsRuleSrs(
+          :final id,
+          :final name,
+          :final body,
+          server: final legacyServer,
+          rule: final legacyRule,
+        ):
+        // §439 A1 — `server` и доп. условия: форма §033 (ключи верхнего
+        // уровня) раньше `body` §294. До A1 сборка читала только форму §033,
+        // и srs-правило формы §294 в конфиг не попадало.
+        final bodyServer = body?['server'];
+        final server =
+            legacyServer ?? (bodyServer is String ? bodyServer : null);
+        final rule = legacyRule ?? body;
+        if (server == null || server.isEmpty) continue;
+        final path = dnsSrsCachedPaths[id];
+        if (path == null) continue; // no cache → skip silently
+        final tag = name.isNotEmpty ? name : 'dns_srs_$id';
+        extraDnsSrsRuleSets.add({
+          'type': 'local',
+          'tag': tag,
+          'format': 'binary',
+          'path': path,
+        });
+        final dnsRule = <String, dynamic>{
+          'rule_set': tag,
+          'server': server,
+        };
+        // Optional extra fields from rule body (e.g., extra match conditions)
+        if (rule != null) {
+          for (final e in rule.entries) {
+            if (e.key == 'rule_set' || e.key == 'server') continue;
+            dnsRule[e.key] = e.value;
+          }
+        }
+        outRules.add(dnsRule);
+      case DnsRulePreset():
+        break; // обработан выше
     }
-    // unknown kind (e.g. legacy 'user', 'rule') — silently dropped
   }
   // §117: якоря не нашлось (нет preset/template записей) → группа в конец.
   if (dnsMirrors.isNotEmpty) emitMirrorGroup();
@@ -290,13 +294,12 @@ Future<void> applyCustomDns(
 ///    блоком, template — в конец).
 /// 3. **Persist:** если результат отличается от storage — сохраняем сразу.
 ///
-/// **Legacy ignore (§033):** старые `kind: user`, `kind: rule`, поле `title`
-/// (вместо `name`) — silently dropped (не распознаются → не попадают в result).
-/// Auto-discovery восстанавливает fresh state.
+/// §439 A1 — записи, которые модель не выражает (незнакомый вид, формы §032),
+/// сюда не приходят и сохранением не стираются: их держит репозиторий.
 ///
 /// Используется и `applyCustomDns` (build pipeline), и `DnsSettingsScreen`
 /// (UI load) — единая точка истины.
-Future<List<Map<String, dynamic>>> resolveDnsRulesList({
+Future<List<DnsRuleRef>> resolveDnsRulesList({
   required List<Map<String, dynamic>> templateRules,
   required Set<String> activePresetIdsWithDnsRule,
 }) async {
@@ -308,46 +311,30 @@ Future<List<Map<String, dynamic>>> resolveDnsRulesList({
         r['name'] as String,
   };
 
-  final result = <Map<String, dynamic>>[];
+  final result = <DnsRuleRef>[];
   final seenTemplateNames = <String>{};
   final seenPresetIds = <String>{};
 
-  for (final raw in stored) {
-    final entry = Map<String, dynamic>.from(raw);
-    final kind = entry['kind'] as String?;
-    if (kind == null) continue;
-
-    if (kind == 'inline') {
-      final name = entry['name'] as String?;
-      if (name == null || name.isEmpty) continue;
-      result.add(entry);
-    } else if (kind == 'srs') {
-      final id = entry['id'] as String?;
-      final name = entry['name'] as String?;
-      if (id == null || id.isEmpty) continue;
-      if (name == null || name.isEmpty) continue;
+  for (final entry in stored) {
+    switch (entry) {
       // SRS-записи всегда сохраняются (cached file проверяется на build,
-      // не здесь). UI пока не показывает их edit/delete.
-      result.add(entry);
-    } else if (kind == 'template') {
-      final name = entry['name'] as String?;
-      if (name == null || name.isEmpty) continue;
-      if (templateNames.contains(name)) {
+      // не здесь).
+      case DnsRuleInline() || DnsRuleSrs():
         result.add(entry);
-        seenTemplateNames.add(name);
-      }
-    } else if (kind == 'preset') {
-      final pid = entry['presetId'] as String?;
-      if (pid == null || pid.isEmpty) continue;
-      // Mandatory link (§033): запись сохраняется только если есть
-      // соответствующий active custom_rules.kind:preset И preset имеет
-      // dns_rule в шаблоне.
-      if (activePresetIdsWithDnsRule.contains(pid)) {
-        result.add(entry);
-        seenPresetIds.add(pid);
-      }
+      case DnsRuleTemplate(:final name):
+        if (templateNames.contains(name)) {
+          result.add(entry);
+          seenTemplateNames.add(name);
+        }
+      case DnsRulePreset(:final presetId):
+        // Mandatory link (§033): запись сохраняется только если есть
+        // соответствующий active custom_rules.kind:preset И preset имеет
+        // dns_rule в шаблоне.
+        if (activePresetIdsWithDnsRule.contains(presetId)) {
+          result.add(entry);
+          seenPresetIds.add(presetId);
+        }
     }
-    // Все остальные kind'ы (legacy 'user', 'rule', неизвестные) — silently dropped
   }
 
   // §061 default order: inline (user) → preset → template.
@@ -358,13 +345,8 @@ Future<List<Map<String, dynamic>>> resolveDnsRulesList({
   // Stored entries сохраняют свой пользовательский порядок (юзер мог
   // перетащить через drag-handle); auto-discovery затрагивает только
   // НОВЫЕ записи.
-  int templateBlockStart = result.length;
-  for (var i = 0; i < result.length; i++) {
-    if (result[i]['kind'] == 'template') {
-      templateBlockStart = i;
-      break;
-    }
-  }
+  var templateBlockStart = result.indexWhere((e) => e is DnsRuleTemplate);
+  if (templateBlockStart < 0) templateBlockStart = result.length;
 
   // Auto-discover недостающие preset DNS rules — вставляем перед template-блоком.
   // §033 auto-link: для каждого active custom_rules.kind:preset (имеющего
@@ -372,11 +354,8 @@ Future<List<Map<String, dynamic>>> resolveDnsRulesList({
   // dns_options.rules с enabled=true.
   for (final pid in activePresetIdsWithDnsRule) {
     if (seenPresetIds.contains(pid)) continue;
-    result.insert(templateBlockStart, {
-      'enabled': true,
-      'kind': 'preset',
-      'presetId': pid,
-    });
+    result.insert(
+        templateBlockStart, DnsRulePreset(presetId: pid, enabled: true));
     templateBlockStart++;
   }
 
@@ -386,40 +365,25 @@ Future<List<Map<String, dynamic>>> resolveDnsRulesList({
     if (name is! String || name.isEmpty) continue;
     if (seenTemplateNames.contains(name)) continue;
     final enabledDefault = r['enabled_default'] != false;
-    result.add({
-      'enabled': enabledDefault,
-      'kind': 'template',
-      'name': name,
-    });
+    result.add(DnsRuleTemplate(name: name, enabled: enabledDefault));
   }
 
   // §117 (решение №6): kind:preset записи — часть атомарной mirror-группы;
   // держим их соседними (компакция к позиции первой). Standalone-правила
   // могут стоять только выше или ниже группы целиком, не внутри.
-  final firstPresetIdx = result.indexWhere((e) => e['kind'] == 'preset');
+  final firstPresetIdx = result.indexWhere((e) => e is DnsRulePreset);
   if (firstPresetIdx >= 0) {
     final presetBlock =
-        result.where((e) => e['kind'] == 'preset').toList(growable: false);
+        result.whereType<DnsRulePreset>().toList(growable: false);
     if (presetBlock.length > 1) {
-      result.removeWhere((e) => e['kind'] == 'preset');
+      result.removeWhere((e) => e is DnsRulePreset);
       result.insertAll(firstPresetIdx, presetBlock);
     }
   }
 
   // Persist если изменилось.
-  if (!_dnsRulesListEqual(stored, result)) {
+  if (!const ListEquality<DnsRuleRef>().equals(stored, result)) {
     await SettingsStorage.saveDnsRulesList(result);
   }
   return result;
-}
-
-bool _dnsRulesListEqual(
-  List<Map<String, dynamic>> a,
-  List<Map<String, dynamic>> b,
-) {
-  if (a.length != b.length) return false;
-  for (var i = 0; i < a.length; i++) {
-    if (jsonEncode(a[i]) != jsonEncode(b[i])) return false;
-  }
-  return true;
 }

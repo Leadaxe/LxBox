@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/custom_rule.dart';
+import '../models/dns_ref.dart';
 import '../services/builder/post_steps.dart';
 import '../services/dns/dns_controller.dart';
 import '../services/dns/node_dns_records.dart';
@@ -31,10 +32,9 @@ import '../services/l10n/locale_controller.dart';
 
 /// DNS Settings (§014, §061 dns-rules-refactor, бывший feature §041).
 ///
-/// §061 — DNS rules refactored to first-class named/toggleable model:
-/// `dns_options.rules: List<{enabled, type, title, rule?}>` где
-/// `type ∈ {user, template, rule}`. Linear order (free reorder через
-/// drag-handle), individual enable/disable, user-rules editable.
+/// §061 — DNS rules refactored to first-class named/toggleable model
+/// ([DnsRuleRef], §033 виды inline/srs/preset/template). Linear order (free
+/// reorder через drag-handle), individual enable/disable, user-rules editable.
 class DnsSettingsScreen extends StatefulWidget {
   const DnsSettingsScreen({
     super.key,
@@ -58,13 +58,13 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   SubscriptionController get lazyController => widget.subController;
 
   /// §043: kind-discriminated refs (резолвер `resolveDnsServersList`):
-  /// - `{enabled, kind: 'inline',   tag, body}` — user-defined OR override
-  /// - `{enabled, kind: 'template', tag}`        — ref на template-server
-  /// - `{enabled, kind: 'preset',   tag}`        — ref на active preset's server
+  /// - [DnsServerInline]   — user-defined OR override
+  /// - [DnsServerTemplate] — ref на template-server
+  /// - [DnsServerPreset]   — ref на active preset's server
   ///
   /// Body для `template`/`preset` берётся из [_templateByTag] / [_presetServersByTag]
-  /// в [_displayedServers] / [_resolveBody].
-  List<Map<String, dynamic>> _servers = [];
+  /// в [_displayedServers].
+  List<DnsServerRef> _servers = [];
 
   /// §043: Tag → template-server map. Lookup canonical body для
   /// `kind: template` ref'ов и для override-detection.
@@ -74,8 +74,8 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// ref'ов и для override-detection. preset > template на tag-collision.
   Map<String, Map<String, dynamic>> _presetServersByTag = {};
 
-  /// §061 + §032: structured rules list `{enabled, kind, title?, presetId?, rule?}`.
-  List<Map<String, dynamic>> _rules = [];
+  /// §061 + §032: structured rules list.
+  List<DnsRuleRef> _rules = [];
 
   /// Name-keyed map: template defaults from wizard_template.json
   /// (used to render content for `kind: template` rows).
@@ -113,9 +113,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
 
   /// §435 — DNS-серверы/правила узлов (секции) после подстановки `@self`:
   /// read-only строки внизу списков. Производные (как preset-серверы), в
-  /// [_servers]/[_rules] НЕ кладутся — резолверы отбросили бы чужой kind и
-  /// персистили усечённый список. Перечитываются при правке узла (экран
-  /// слушает [SubscriptionController]).
+  /// [_servers]/[_rules] НЕ кладутся — стейджинг записал бы их в корневой
+  /// `dns_options`. Перечитываются при правке узла (экран слушает
+  /// [SubscriptionController]).
   List<NodeDnsServerRecord> _nodeServers = const [];
   List<NodeDnsRuleRecord> _nodeRules = const [];
 
@@ -271,27 +271,26 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   Future<void> _addServer() async {
     final result = await openDnsServerEditor(
       context,
-      initialRef: <String, dynamic>{
-        'enabled': true,
-        'kind': 'inline',
-        'tag': 'dns_new',
+      initialRef: DnsServerInline(
+        enabled: true,
+        tag: 'dns_new',
         // §279 seed-time-локализация: метка резолвится через активную локаль
         // в момент создания (дальше — user data, ретроактивно не мигрируется).
-        'description': getLocalText.s("My DNS"),
-        'body': <String, dynamic>{'type': 'udp'},
-      },
+        description: getLocalText.s("My DNS"),
+        body: const <String, dynamic>{'type': 'udp'},
+      ),
       outboundOptions: _outboundOptions,
       dnsServerTags: _enabledServerTags,
       dnsMemberOptions: _dnsMemberOptions,
       tailscaleEndpoints: _tailscaleEndpoints, // §435
-      existingTags: {for (final s in _servers) s['tag'].toString()},
+      existingTags: {for (final s in _servers) s.tag},
     );
     if (result == null || !mounted) return;
     final saved = result.saved;
     if (saved == null) return;
     setState(() {
       // Tag conflict: replace existing (юзер подтвердил в редакторе).
-      _servers.removeWhere((s) => s['tag'] == saved['tag']);
+      _servers.removeWhere((s) => s.tag == saved.tag);
       _servers.add(saved);
       _markDirty();
     });
@@ -301,7 +300,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// Reset-to-canonical и Delete — AppBar-actions редактора, результат
   /// приходит сюда единым `DnsServerEditResult`.
   Future<void> _editServer(String tag) async {
-    final idx = _servers.indexWhere((s) => s['tag'] == tag);
+    final idx = _servers.indexWhere((s) => s.tag == tag);
     if (idx < 0) return;
     ResolvedServer? resolved;
     for (final s in _displayedServers) {
@@ -322,7 +321,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
 
     final result = await openDnsServerEditor(
       context,
-      initialRef: Map<String, dynamic>.from(_servers[idx]),
+      initialRef: _servers[idx],
       resolved: resolved,
       templateWrapper:
           resolved.kind == ServerKind.template ? _templateByTag[tag] : null,
@@ -335,7 +334,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       // §117 задача 4b: rename-коллизии (без текущего тега).
       existingTags: {
         for (final s in _servers)
-          if (s['tag'] != tag) s['tag'].toString(),
+          if (s.tag != tag) s.tag,
       },
     );
     if (result == null || !mounted) return;
@@ -346,7 +345,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         _servers[idx] = result.saved!;
         // §117 задача 4b: rename → каскад по ссылкам, чтобы не орфанить
         // (DNS-правила, resolvers, domain_resolver'ы, DNS-опции правил).
-        final newTag = result.saved!['tag']?.toString() ?? tag;
+        final newTag = result.saved!.tag;
         if (newTag.isNotEmpty && newTag != tag) {
           final updated = renameDnsServerTagRefs(
             servers: _servers,
@@ -376,6 +375,16 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
 
   void _addUserRule() => _showUserRuleEditor(-1);
 
+  /// §033: identity записи для reorder-ключа и диалога удаления — name
+  /// (inline/template/srs) или presetId (preset).
+  static String _ruleIdentity(DnsRuleRef r) => switch (r) {
+        DnsRuleInline(:final name) ||
+        DnsRuleSrs(:final name) ||
+        DnsRuleTemplate(:final name) =>
+          name,
+        DnsRulePreset(:final presetId) => presetId,
+      };
+
   /// §117 задача 3: routing-правила с активным DNS-mirror'ом (routing order).
   List<CustomRule> get _ruleMirrors =>
       [for (final cr in _customRules) if (cr.dnsMirrorActive) cr];
@@ -387,19 +396,19 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// запись → иначе перед template-блоком → иначе в конец.
   List<int> get _ruleDisplayRows {
     final hasGroup =
-        _rules.any((e) => e['kind'] == 'preset') || _ruleMirrors.isNotEmpty;
+        _rules.any((e) => e is DnsRulePreset) || _ruleMirrors.isNotEmpty;
     final rows = <int>[];
     var groupInserted = false;
     for (var i = 0; i < _rules.length; i++) {
-      final kind = _rules[i]['kind'];
-      if (kind == 'preset') {
+      final entry = _rules[i];
+      if (entry is DnsRulePreset) {
         if (!groupInserted) {
           rows.add(-1);
           groupInserted = true;
         }
         continue;
       }
-      if (kind == 'template' && hasGroup && !groupInserted) {
+      if (entry is DnsRuleTemplate && hasGroup && !groupInserted) {
         rows.add(-1);
         groupInserted = true;
       }
@@ -415,10 +424,8 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   List<Widget> _buildMirrorGroupChildren() {
     final presetIdxByPid = <String, int>{};
     for (var i = 0; i < _rules.length; i++) {
-      if (_rules[i]['kind'] == 'preset') {
-        final pid = _rules[i]['presetId']?.toString();
-        if (pid != null && pid.isNotEmpty) presetIdxByPid[pid] = i;
-      }
+      final entry = _rules[i];
+      if (entry is DnsRulePreset) presetIdxByPid[entry.presetId] = i;
     }
     final children = <Widget>[];
     final seenPresetIds = <String>{};
@@ -468,7 +475,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           }
         }
         final missing =
-            !_servers.any((s) => s['tag'] == (cr.dns?.serverTag ?? ''));
+            !_servers.any((s) => s.tag == (cr.dns?.serverTag ?? ''));
         children.add(DnsRuleAspectsTile(
           key: ValueKey('dns-mirror-${cr.id}'),
           title: cr.name,
@@ -518,9 +525,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     if (oldIndex < 0 || oldIndex >= rows.length) return;
     final presetBlock = [
       for (final e in _rules)
-        if (e['kind'] == 'preset') e,
+        if (e is DnsRulePreset) e,
     ];
-    final units = <List<Map<String, dynamic>>>[
+    final units = <List<DnsRuleRef>>[
       for (final r in rows) r == -1 ? presetBlock : [_rules[r]],
     ];
     final moved = units.removeAt(oldIndex);
@@ -535,7 +542,8 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
 
   void _showUserRuleEditor(int index) {
     final isNew = index < 0;
-    final existing = isNew ? null : _rules[index];
+    // Редактор открывается только у inline-тайла (DnsRuleTile).
+    final existing = isNew ? null : _rules[index] as DnsRuleInline;
     showUserRuleEditor(
       context,
       isNew: isNew,
@@ -675,8 +683,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                 if (row == -1) {
                   // Группа draggable только при наличии preset-якорей —
                   // иначе позицию не во что персистить.
-                  final draggable =
-                      _rules.any((e) => e['kind'] == 'preset');
+                  final draggable = _rules.any((e) => e is DnsRulePreset);
                   return DnsMirrorGroupCard(
                     key: const ValueKey('dns-mirror-group'),
                     dragIndex: draggable ? i : null,
@@ -696,7 +703,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                   // §033: identity для reorder — name (inline/template/srs)
                   // или presetId (preset). Нужно стабильное непустое значение.
                   key: ValueKey(
-                    'dns-rule-$row-${_rules[row]['name'] ?? _rules[row]['presetId'] ?? ''}',
+                    'dns-rule-$row-${_ruleIdentity(_rules[row])}',
                   ),
                 );
               },
@@ -747,7 +754,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           if (_defaultResolver == 'local_dns_resolver')
             LocalResolverWarningBanner(
               hasCloudflareUdp:
-                  _servers.any((s) => s['tag'] == 'cloudflare_udp'),
+                  _servers.any((s) => s.tag == 'cloudflare_udp'),
               onSwitchToCloudflareUdp: () => setState(() {
                 _defaultResolver = 'cloudflare_udp';
                 _markDirty();
@@ -811,11 +818,10 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
 
   /// §043: Toggle enabled — обновляет `enabled` в ref'е, kind не меняется.
   void _toggleServerEnabled(String tag, bool value) {
-    final idx = _servers.indexWhere((s) => s['tag'] == tag);
+    final idx = _servers.indexWhere((s) => s.tag == tag);
     if (idx < 0) return;
     setState(() {
-      _servers[idx] = Map<String, dynamic>.from(_servers[idx])
-        ..['enabled'] = value;
+      _servers[idx] = _servers[idx].withEnabled(value);
       _markDirty();
     });
   }
@@ -823,8 +829,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// §033: Toggle enabled на rule-entry (kind не меняется).
   void _toggleRuleEnabled(int index, bool value) {
     setState(() {
-      _rules[index] = Map<String, dynamic>.from(_rules[index])
-        ..['enabled'] = value;
+      _rules[index] = _rules[index].withEnabled(value);
       _markDirty();
     });
   }
@@ -907,7 +912,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// восстановить из шаблона, как template/preset), поэтому через confirm.
   Future<void> _deleteRule(int index) async {
     if (index < 0 || index >= _rules.length) return;
-    final name = _rules[index]['name'] as String? ?? '';
+    final name = _ruleIdentity(_rules[index]);
     final confirmed = await showDeleteConfirmDialog(
       context,
       title: getLocalText.s("Delete rule?"),

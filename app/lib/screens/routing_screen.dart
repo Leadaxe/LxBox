@@ -12,6 +12,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/direction.dart';
 import '../models/custom_rule.dart';
+import '../models/dns_ref.dart';
 import '../models/parser_config.dart';
 import '../services/builder/rule_order.dart';
 import '../services/direction_mutations.dart';
@@ -643,15 +644,13 @@ class _RoutingScreenState extends State<RoutingScreen>
     ];
     // Данные шага 2 (DNS): серверы без preset-refs (их резолвер §294
     // порождает сам), правила — только пользовательские inline/srs.
-    final rawServers = await SettingsStorage.getDnsServers();
     final dnsServers = [
-      for (final s in rawServers)
-        if (s['kind'] != 'preset') s
+      for (final s in await SettingsStorage.getDnsServers())
+        if (s is! DnsServerPreset) s
     ];
-    final rawDnsRules = await SettingsStorage.getDnsRulesList();
     final dnsRules = [
-      for (final r in rawDnsRules)
-        if (r['kind'] == 'inline' || r['kind'] == 'srs') r
+      for (final r in await SettingsStorage.getDnsRulesList())
+        if (r is DnsRuleInline || r is DnsRuleSrs) r
     ];
     if (!mounted) return;
     final selected = await showRuleExportPicker(
@@ -695,11 +694,12 @@ class _RoutingScreenState extends State<RoutingScreen>
       } catch (_) {
         // PackageInfo может упасть в test environment — graceful skip.
       }
+      // DNS-секции файла правил — форма записей хранения (кодек модели).
       final json = buildRulesExport(
         selected.rules,
         appVersion: appVersion,
-        dnsServers: selected.dnsServers,
-        dnsRules: selected.dnsRules,
+        dnsServers: [for (final s in selected.dnsServers) s.toJson()],
+        dnsRules: [for (final r in selected.dnsRules) r.toJson()],
       );
       final filename = suggestedRulesFilename();
       // Размер в БАЙТАХ, а не code units (§374: String.length считает UTF-16,
@@ -789,7 +789,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       final existingServers = await SettingsStorage.getDnsServers();
       final existingServerTags = <String>{
         for (final s in existingServers)
-          if (s['tag']?.toString().isNotEmpty ?? false) s['tag'].toString(),
+          if (s.tag.isNotEmpty) s.tag,
       };
       final existingDnsRules = await SettingsStorage.getDnsRulesList();
       final templateServerTags = {
@@ -809,7 +809,7 @@ class _RoutingScreenState extends State<RoutingScreen>
         for (final entry in contents.rawDnsRules)
           sanitizeImportedDnsRule(
             entry,
-            existingRules: existingDnsRules,
+            existingRules: [for (final r in existingDnsRules) r.toJson()],
             template: template,
           ),
       ];
@@ -863,15 +863,21 @@ class _RoutingScreenState extends State<RoutingScreen>
       final dnsCount = picked.dnsServers.length + picked.dnsRules.length;
       if (inserted.isEmpty && dnsCount == 0) return;
 
-      // DNS-сущности — прямо в storage (append; форма провалидирована
-      // санацией через DnsServerRef/DnsRuleRef, как Debug write-путь §294).
+      // DNS-сущности — прямо в storage (append; санация уже разобрала их
+      // через DnsServerRef/DnsRuleRef, как Debug write-путь §294).
       if (picked.dnsServers.isNotEmpty) {
-        await SettingsStorage.saveDnsServers(
-            [...existingServers, ...picked.dnsServers]);
+        await SettingsStorage.saveDnsServers([
+          ...existingServers,
+          for (final m in picked.dnsServers)
+            ?DnsServerRef.fromJson(m),
+        ]);
       }
       if (picked.dnsRules.isNotEmpty) {
-        await SettingsStorage.saveDnsRulesList(
-            [...existingDnsRules, ...picked.dnsRules]);
+        await SettingsStorage.saveDnsRulesList([
+          ...existingDnsRules,
+          for (final m in picked.dnsRules)
+            ?DnsRuleRef.fromJson(m),
+        ]);
       }
       if (!mounted) return;
 

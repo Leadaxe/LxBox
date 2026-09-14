@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
 import '../models/direction.dart';
+import '../models/dns_ref.dart';
 import '../models/server_list.dart';
 import '../services/direction_mutations.dart';
 import '../services/dns/dns_backup.dart';
@@ -330,9 +331,14 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // §438 — preset-сервер едет ссылкой `<preset_id>:<tag>`: пресет,
       // которому принадлежит тег, знает шаблон.
       final template = await TemplateLoader.load();
+      // `dns_backup.dart` пока читает форму записей хранения (волна C).
       final dns = dnsToBackup(
-        servers: await SettingsStorage.getDnsServers(),
-        rules: await SettingsStorage.getDnsRulesList(),
+        servers: [
+          for (final s in await SettingsStorage.getDnsServers()) s.toJson()
+        ],
+        rules: [
+          for (final r in await SettingsStorage.getDnsRulesList()) r.toJson()
+        ],
         dnsFinal: vars['dns_final'] ?? '',
         strategy: vars['dns_strategy'] ?? '',
         defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
@@ -722,17 +728,28 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
     final dns = parsed.dns;
     if (dns != null && !dns.isEmpty) {
       final vars = await SettingsStorage.getAllVars();
+      // `dns_backup.dart` пока работает с формой записей хранения (волна C).
       final result = applyDnsBackup(
         incoming: dns,
-        servers: await SettingsStorage.getDnsServers(),
-        rules: await SettingsStorage.getDnsRulesList(),
+        servers: [
+          for (final s in await SettingsStorage.getDnsServers()) s.toJson()
+        ],
+        rules: [
+          for (final r in await SettingsStorage.getDnsRulesList()) r.toJson()
+        ],
         dnsFinal: vars['dns_final'] ?? '',
         strategy: vars['dns_strategy'] ?? '',
         defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
         presetIdByServerTag: presetIdByServerTag,
       );
-      await SettingsStorage.saveDnsServers(result.servers, flush: false);
-      await SettingsStorage.saveDnsRulesList(result.rules, flush: false);
+      await SettingsStorage.saveDnsServers([
+        for (final m in result.servers)
+          ?DnsServerRef.fromJson(m),
+      ], flush: false);
+      await SettingsStorage.saveDnsRulesList([
+        for (final m in result.rules)
+          ?DnsRuleRef.fromJson(m),
+      ], flush: false);
       await SettingsStorage.setVar('dns_final', result.dnsFinal, flush: false);
       await SettingsStorage.setVar('dns_strategy', result.strategy,
           flush: false);

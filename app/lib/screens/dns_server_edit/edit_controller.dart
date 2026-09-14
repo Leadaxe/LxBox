@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io' show InternetAddress;
 
-import 'package:collection/collection.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../config/consts.dart' show kDirectOutboundTag;
+import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart' show WizardVar;
 import '../../services/dns/node_dns_records.dart' show TailscaleEndpointOption;
 import '../../widgets/outbound_picker.dart';
@@ -74,9 +74,9 @@ int defaultDnsPort(String mode) => switch (mode) {
 /// Паттерн 1:1 с [CustomRuleEditController] (§053 Stage 3): `ChangeNotifier`
 /// + `isDirty()`/`snapshot()`, раздаётся вниз через [DnsServerEditScope].
 ///
-/// Редактирует **ref-запись** стораджа `{enabled, kind, tag, description?,
-/// body?, varValues?}` — модель/сторадж/эмиссия серверов не меняются
-/// (locked decision №10), это чистый UI поверх задач 1–3.
+/// Редактирует **ref-запись** DNS-сервера ([DnsServerRef]) — модель/сторадж/
+/// эмиссия серверов не меняются (locked decision №10), это чистый UI поверх
+/// задач 1–3.
 ///
 /// **Что владеет controller:**
 /// - `tagCtrl` (inline; locked при edit existing), `descCtrl`,
@@ -103,7 +103,7 @@ class DnsServerEditController extends ChangeNotifier {
 
   /// Исходная ref-запись (для edit — из `_servers`; для new — дефолтная
   /// inline-заготовка). База для dirty-сравнения и snapshot'а.
-  final Map<String, dynamic> initialRef;
+  final DnsServerRef initialRef;
 
   /// Display-модель редактируемого сервера. null = new-режим (inline).
   final ResolvedServer? resolved;
@@ -165,7 +165,7 @@ class DnsServerEditController extends ChangeNotifier {
 
   /// §232 — реактивная модель для [TemplateVarListView] (per-key подписка
   /// полей). Persistence-истина остаётся [_varValues] (сериализуется в
-  /// `out['varValues']` только с явно заданными ключами) — модель сидируется
+  /// `varValues` ref'а только с явно заданными ключами) — модель сидируется
   /// vars+defaults и обновляется TVLV напрямую; [setVarValue] (onChanged)
   /// ведёт запись в [_varValues]. §161: пустое required попадает в модель
   /// display-only и до [_varValues] не доходит.
@@ -232,16 +232,14 @@ class DnsServerEditController extends ChangeNotifier {
 
   void _init() {
     final r = resolved;
-    tagCtrl = TextEditingController(
-      text: r?.tag ?? initialRef['tag']?.toString() ?? '',
-    );
+    final ref = initialRef;
+    tagCtrl = TextEditingController(text: r?.tag ?? ref.tag);
     descCtrl = TextEditingController(
-      text: r?.description ?? initialRef['description']?.toString() ?? '',
+      text: r?.description ?? ref.description ?? '',
     );
-    _enabled = initialRef['enabled'] != false;
-    final vv = initialRef['varValues'];
-    _varValues = vv is Map
-        ? {for (final e in vv.entries) e.key.toString(): '${e.value}'}
+    _enabled = ref.enabled;
+    _varValues = ref is DnsServerTemplate
+        ? Map<String, String>.of(ref.varValues)
         : <String, String>{};
     // §232 — модель для TVLV: все vars с fallback на default (контракт TVLV:
     // «отсутствующий ключ» не различим от пустого — сидируем всё).
@@ -252,8 +250,10 @@ class DnsServerEditController extends ChangeNotifier {
     // tag'а; для new — заготовка из initialRef.
     Map<String, dynamic> body;
     if (kind == ServerKind.inline) {
-      final src = r != null ? r.body : (initialRef['body'] ?? const {});
-      body = src is Map ? Map<String, dynamic>.from(src) : <String, dynamic>{};
+      final src = r != null
+          ? r.body
+          : (ref is DnsServerInline ? ref.body : const <String, dynamic>{});
+      body = Map<String, dynamic>.from(src);
       _stripRefLevelFields(body);
     } else {
       body = const {};
@@ -675,46 +675,36 @@ class DnsServerEditController extends ChangeNotifier {
 
   // ─── Snapshot / dirty ────────────────────────────────────────────────
 
-  /// Текущее состояние формы как ref-запись стораджа. Не валидирует tag
+  /// Текущее состояние формы как ref-запись. Не валидирует tag
   /// (это делает save flow на screen State).
-  Map<String, dynamic> snapshot() {
-    final out = Map<String, dynamic>.from(initialRef);
-    out['enabled'] = _enabled;
+  DnsServerRef snapshot() {
     final desc = descCtrl.text.trim();
-    switch (kind) {
-      case ServerKind.inline:
-        out['kind'] = 'inline';
-        out['tag'] = tagCtrl.text.trim();
-        if (desc.isNotEmpty) {
-          out['description'] = desc;
-        } else {
-          out.remove('description');
-        }
-        out['body'] = _body;
-      case ServerKind.template:
-        // description в ref — только override (иначе резолв фоллбэчит).
-        if (desc.isNotEmpty && desc != canonicalDescription) {
-          out['description'] = desc;
-        } else {
-          out.remove('description');
-        }
-        if (_varValues.isNotEmpty) {
-          out['varValues'] = _varValues;
-        } else {
-          out.remove('varValues');
-        }
-      case ServerKind.preset:
-        if (desc.isNotEmpty && desc != canonicalDescription) {
-          out['description'] = desc;
-        } else {
-          out.remove('description');
-        }
-    }
-    return out;
+    // template/preset: description в ref — только override (иначе резолв
+    // фоллбэчит на canonical).
+    final override =
+        desc.isNotEmpty && desc != canonicalDescription ? desc : null;
+    return switch (kind) {
+      ServerKind.inline => DnsServerInline(
+          enabled: _enabled,
+          tag: tagCtrl.text.trim(),
+          description: desc.isNotEmpty ? desc : null,
+          body: Map<String, dynamic>.of(_body),
+        ),
+      ServerKind.template => DnsServerTemplate(
+          enabled: _enabled,
+          tag: initialRef.tag,
+          varValues: Map<String, String>.of(_varValues),
+          description: override,
+        ),
+      ServerKind.preset => DnsServerPreset(
+          enabled: _enabled,
+          tag: initialRef.tag,
+          description: override,
+        ),
+    };
   }
 
-  bool isDirty() =>
-      !const DeepCollectionEquality().equals(snapshot(), initialRef);
+  bool isDirty() => snapshot() != initialRef;
 }
 
 /// §044/§117: tag/description/enabled живут на ref-level, UI-аннотации не

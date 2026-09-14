@@ -5,6 +5,7 @@ import 'package:collection/collection.dart';
 
 import '../../config/consts.dart';
 import '../../models/custom_rule.dart';
+import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart';
 import '../../models/source_chain.dart' show kChainOutboundType;
 import '../json_clone.dart';

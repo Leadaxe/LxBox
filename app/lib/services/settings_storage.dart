@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/background_mode.dart';
 import '../models/direction.dart';
+import '../models/dns_ref.dart';
 import '../models/source_chain.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/custom_rule.dart';
@@ -545,9 +546,14 @@ class SettingsStorage {
     await _save();
   }
 
-  static Future<List<Map<String, dynamic>>> getDnsServers() => _getDnsServers();
+  /// §439 A1 — DNS-серверы (`dns_options.servers`) моделями. Записи, которые
+  /// модель не выражает, сюда не попадают и сохранением не стираются
+  /// (`settings_storage/network.dart`).
+  static Future<List<DnsServerRef>> getDnsServers() => _getDnsServers();
 
-  static Future<void> saveDnsServers(List<Map<String, dynamic>> servers,
+  /// Сохраняет список серверов целиком. Orphan-cleanup и auto-discovery —
+  /// забота вызывающего (`resolveDnsServersList`).
+  static Future<void> saveDnsServers(List<DnsServerRef> servers,
           {bool flush = true}) =>
       _saveDnsServers(servers, flush: flush);
 
@@ -586,30 +592,13 @@ class SettingsStorage {
   static Future<void> clearGroupPing(String groupTag) =>
       _clearGroupPing(groupTag);
 
-  /// DEPRECATED (§061 dns-rules-refactor, бывший feature §041): legacy
-  /// `dns_options.rules_json` — single JSON-string override. Заменён на
-  /// структурированный [getDnsRulesList]. Поле в storage остаётся для
-  /// downgrade-friendliness, но билдер и UI больше не читают.
-  ///
-  /// §219 — геттер `getDnsRules()` удалён (0 call-sites). `saveDnsRules`
-  /// оставлен: его дёргает legacy Debug-эндпоинт `PUT /settings/dns_options/
-  /// rules`. NB: он пишет в `rules_json`, который билдер игнорирует, — эндпоинт
-  /// фактически no-op; депрекация роута — отдельно (обновить help/reference).
-  @Deprecated('Use saveDnsRulesList() instead. See task 061.')
-  static Future<void> saveDnsRules(String rulesJson) => _saveDnsRules(rulesJson);
+  /// §439 A1 — DNS-правила (`dns_options.rules`, §061/§033) моделями. Пусто —
+  /// auto-discovery билдера/экрана заполнит начальный набор.
+  static Future<List<DnsRuleRef>> getDnsRulesList() => _getDnsRulesList();
 
-  /// Структурированный список DNS-правил (§061 dns-rules-refactor, бывший feature §041). Каждая запись:
-  /// `{enabled: bool, type: 'user'|'template'|'rule', title: String, rule?: Map}`.
-  /// Если ключ отсутствует — возвращает пустой список (auto-discovery в
-  /// builder/UI заполнит начальный набор).
-  static Future<List<Map<String, dynamic>>> getDnsRulesList() =>
-      _getDnsRulesList();
-
-  /// Сохраняет структурированный список DNS-правил. Caller отвечает за
-  /// orphan-cleanup (§061) — выбрасывание `type: template/rule` чьи titles
-  /// не находятся в текущем шаблоне / активных пресетах. Этот метод просто
-  /// пишет, что дали.
-  static Future<void> saveDnsRulesList(List<Map<String, dynamic>> rules,
+  /// Сохраняет список DNS-правил целиком. Orphan-cleanup (§061) — забота
+  /// вызывающего (`resolveDnsRulesList`, `cleanDnsRulesForPersist`).
+  static Future<void> saveDnsRulesList(List<DnsRuleRef> rules,
           {bool flush = true}) =>
       _saveDnsRulesList(rules, flush: flush);
 

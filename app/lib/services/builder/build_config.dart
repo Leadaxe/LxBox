@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../models/direction.dart';
 import '../../models/custom_rule.dart';
+import '../../models/dns_ref.dart';
 import '../../models/emit_context.dart';
 import '../../models/node_sections.dart';
 import '../../models/node_spec.dart' show NodeSpec;
@@ -481,12 +482,9 @@ Future<BuildResult> buildConfig({
   // §033: Resolve cached paths for kind:srs DNS-rules. Same RuleSetDownloader
   // as routing srs but separate id namespace (prefix `ds_` vs route's `r_`).
   final dnsSrsCachedPaths = <String, String>{};
-  for (final entry in dnsRulesStorage) {
-    if (entry['kind'] != 'srs') continue;
-    final id = entry['id'] as String?;
-    if (id == null || id.isEmpty) continue;
-    final p = await RuleSetDownloader.cachedPath(id);
-    if (p != null) dnsSrsCachedPaths[id] = p;
+  for (final entry in dnsRulesStorage.whereType<DnsRuleSrs>()) {
+    final p = await RuleSetDownloader.cachedPath(entry.id);
+    if (p != null) dnsSrsCachedPaths[entry.id] = p;
   }
 
   // §062: единый entry-point — обходит все custom rules (preset/inline/srs)

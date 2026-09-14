@@ -317,11 +317,10 @@ class CustomRuleEditController extends ChangeNotifier {
   Future<void> _loadDnsServerTags() async {
     final stored = await SettingsStorage.getDnsServers();
     final template = await TemplateLoader.load();
-    final tags = <String>{};
-    for (final s in stored) {
-      final tag = s['tag']?.toString();
-      if (tag != null && tag.isNotEmpty) tags.add(tag);
-    }
+    final tags = <String>{
+      for (final s in stored)
+        if (s.tag.isNotEmpty) s.tag,
+    };
     // §279 — typed DnsOptionsModel вместо raw-скана dns_options.servers.
     tags.addAll(template.dnsOptionsModel.servers.map((s) => s.tag));
     if (_disposed) return;
