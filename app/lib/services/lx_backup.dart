@@ -737,7 +737,10 @@ Map<String, dynamic>? _exportSource(
   final (kind, entity) = switch (list) {
     SubscriptionServers() =>
       (BackupRecord.subscription, list.name.isEmpty ? list.url : list.name),
-    UserServer() => (BackupRecord.server, _str(stored['tag'])),
+    UserServer() => (
+        BackupRecord.server,
+        _str(stored['tag']).isEmpty ? list.id : _str(stored['tag']),
+      ),
     FolderServers() => (BackupRecord.folder, list.name),
   };
   final record = exportBackupRecord(kind, stored, entity, warnings);
@@ -2384,7 +2387,7 @@ LxServer? _server10(
   final read = sourceFromRecord(
     _sourceForCodec(
       folder == null ? BackupRecord.server : BackupRecord.folderNode,
-      // Пустой исходник — узла без исходника: тело берётся из `body`.
+      // Пустой исходник читается как его отсутствие: тело берётся из `body`.
       hasOrigin ? j : ({...j}..remove('origin')),
       fileId,
       override: const {'kind': kSourceKindServer},
