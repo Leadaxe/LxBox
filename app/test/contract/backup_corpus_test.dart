@@ -24,15 +24,6 @@ import 'package:lxbox/services/tag_resolver.dart';
 
 const _contractRoot = 'contract';
 
-/// §438 — ожидания стороны LxBox, которых пока нет в корпусе.
-///
-/// Per-app override живёт в корпусе (`<case>.expected.lxbox.json`) и заводит
-/// его владелец корпуса со ссылкой на задокументированное различие. Пока он
-/// не приехал, кейс с различием по модели сторон держит своё ожидание здесь,
-/// с обоснованием в `docs/spec/tasks/438-lx-backup-1-0-read.md`. Override из
-/// корпуса главнее: как только он появится, этот файл перестаёт читаться, и
-/// его нужно удалить.
-const _pendingOverridesDir = 'test/contract/backup_pending_overrides';
 
 void main() {
   final root = Directory('$_contractRoot/corpus/backup');
@@ -58,14 +49,14 @@ void main() {
       test(name, () {
         final raw = File('$base.backup.json').readAsStringSync();
         // Кейс формата новее ЧИТАЕМОГО (`lx_backup` выше
-        // kLxBackupReadVersion) сторона ПРОПУСКАЕТ по маркеру, как чужой
+        // kLxBackupVersion) сторона ПРОПУСКАЕТ по маркеру, как чужой
         // extension, без override-файлов (`contract/corpus/README.md`).
         final marker = jsonDecode(raw);
         if (marker is Map &&
             marker['lx_backup'] is num &&
-            (marker['lx_backup'] as num) > kLxBackupReadVersion) {
+            (marker['lx_backup'] as num) > kLxBackupVersion) {
           markTestSkipped('формат lx_backup ${marker['lx_backup']} новее '
-              'читаемого $kLxBackupReadVersion');
+              'читаемого $kLxBackupVersion');
           return;
         }
         // Per-app override читается ТАК ЖЕ, как в URI- и body-раннерах
@@ -74,11 +65,9 @@ void main() {
         // что нормативна общая база и правка канона у лаунчера обязана
         // доехать до нас красным тестом.
         final overrideFile = File('$base.expected.lxbox.json');
-        final pendingFile = File('$_pendingOverridesDir/$name.expected.lxbox.json');
         final baseFile = File('$base.expected.json');
-        final expectedFile = overrideFile.existsSync()
-            ? overrideFile
-            : (pendingFile.existsSync() ? pendingFile : baseFile);
+        final expectedFile =
+            overrideFile.existsSync() ? overrideFile : baseFile;
         final expected =
             jsonDecode(expectedFile.readAsStringSync()) as Map<String, dynamic>;
 
@@ -195,8 +184,13 @@ class _State {
       knownChains: {for (final c in chains) c.tag},
     );
     final subs = mergeBackupSubscriptions(lists, file.subscriptions);
-    final servers =
-        mergeBackupServers(subs.lists, file.servers, folders: file.folders);
+    final servers = mergeBackupServers(
+      subs.lists,
+      file.servers,
+      folders: file.folders,
+      sourceIds: subs.ids,
+      addedSources: subs.added,
+    );
     lists = servers.lists;
     chains = [
       ...chains,

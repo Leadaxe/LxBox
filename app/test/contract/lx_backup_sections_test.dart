@@ -6,8 +6,8 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/lx_backup.dart';
 
 /// §435 / контракт ## 13 — `servers[].sections` в бэкапе 0.12: объявлено
-/// схемой (сторона launcher) → игнорируется МОЛЧА; до контракта 1.0 LxBox
-/// секции не экспортирует и называет потерю `backup_local_only_dropped`.
+/// схемой (сторона launcher) → игнорируется МОЛЧА. §438 — экспорт 1.0 пишет
+/// секции узла как есть.
 void main() {
   group('§435 импорт 0.12 с sections', () {
     test('sections у servers[] не даёт backup_unknown_field, узел читается', () {
@@ -35,7 +35,7 @@ void main() {
     });
   });
 
-  group('§435 экспорт до 1.0', () {
+  group('§438 экспорт 1.0 с sections', () {
     UserServer user({NodeSections? sections}) => UserServer(
           id: 'u1',
           name: 'home-ts',
@@ -54,22 +54,24 @@ void main() {
       ],
     });
 
-    test('узел с секциями: поле не пишется, потеря названа', () async {
+    List<Map<String, dynamic>> sourcesOf(String raw) =>
+        ((jsonDecode(raw) as Map)['sources'] as List).cast<Map<String, dynamic>>();
+
+    test('узел с секциями: поле пишется как есть, потерь нет', () async {
       final out = await buildLxBackup(lists: [user(sections: sections)], rules: const [], vars: const {});
-      final servers = ((jsonDecode(out.json) as Map)['servers'] as List).cast<Map<String, dynamic>>();
-      expect(servers.single.containsKey('sections'), isFalse);
-      expect(servers.single['node_tag'], 'home-ts');
-      final local = out.warnings.where((w) => w.code == kWarnLocalOnlyDropped).toList();
-      expect(local, hasLength(1));
-      expect(local.single.detail, contains('sections'));
+      final server = sourcesOf(out.json).single;
+      expect(server['tag'], 'home-ts');
+      expect(server['sections'], sections!.toJson());
+      expect(out.warnings, isEmpty);
     });
 
-    test('узел без секций — тишина', () async {
+    test('узел без секций — поля нет', () async {
       final out = await buildLxBackup(lists: [user()], rules: const [], vars: const {});
-      expect(out.warnings.where((w) => w.code == kWarnLocalOnlyDropped), isEmpty);
+      expect(sourcesOf(out.json).single.containsKey('sections'), isFalse);
+      expect(out.warnings, isEmpty);
     });
 
-    test('член папки с секциями — одно предупреждение на папку', () async {
+    test('члены папки носят свои секции внутри nodes[]', () async {
       final folder = FolderServers(
         id: 'f',
         name: 'F',
@@ -78,15 +80,15 @@ void main() {
         detourPolicy: DetourPolicy.defaults,
         members: [
           FolderMember(raw: '{"type":"tailscale","tag":"a","auth_key":"k"}', sections: sections),
-          FolderMember(raw: '{"type":"tailscale","tag":"b","auth_key":"k"}', sections: sections),
+          FolderMember(raw: '{"type":"tailscale","tag":"b","auth_key":"k"}'),
         ],
       );
       final out = await buildLxBackup(lists: [folder], rules: const [], vars: const {});
-      final servers = ((jsonDecode(out.json) as Map)['servers'] as List).cast<Map<String, dynamic>>();
-      expect(servers, hasLength(2));
-      expect(servers.every((s) => !s.containsKey('sections')), isTrue);
-      expect(out.warnings.where((w) => w.code == kWarnLocalOnlyDropped && w.detail.contains('sections')),
-          hasLength(1));
+      final nodes = (sourcesOf(out.json).single['nodes'] as List).cast<Map<String, dynamic>>();
+      expect(nodes.map((n) => n['tag']), ['a', 'b']);
+      expect(nodes[0]['sections'], sections!.toJson());
+      expect(nodes[1].containsKey('sections'), isFalse);
+      expect(out.warnings, isEmpty);
     });
   });
 }

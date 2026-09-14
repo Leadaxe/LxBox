@@ -1,0 +1,276 @@
+{
+  "lx_backup": 2,
+  "exported_by": {
+    "app": "launcher",
+    "version": "fixture",
+    "platform": "test"
+  },
+  "exported_at": "2026-09-14T15:26:12Z",
+  "sources": [
+    {
+      "kind": "server",
+      "tag": "🇯🇵 Tokyo",
+      "enabled": true,
+      "origin": {
+        "kind": "uri",
+        "raw": "vless://uuid@h.example:443?security=reality\u0026pbk=k#Tokyo"
+      },
+      "body": {
+        "type": "vless",
+        "server": "h.example",
+        "server_port": 443
+      },
+      "detour": {
+        "folder_id": "01J00000000000000000000SUB",
+        "tag": "NL-1"
+      },
+      "sections": {
+        "rules": [
+          {
+            "kind": "inline",
+            "name": "@{self} network",
+            "enabled": true,
+            "num": 945,
+            "body": {
+              "ip_cidr": [
+                "100.64.0.0/10"
+              ],
+              "outbound": "@self"
+            }
+          }
+        ],
+        "dns": {
+          "servers": [
+            {
+              "kind": "user",
+              "tag": "@{self}-dns",
+              "enabled": true,
+              "body": {
+                "endpoint": "@self",
+                "type": "tailscale"
+              }
+            }
+          ],
+          "rules": [
+            {
+              "kind": "user",
+              "enabled": true,
+              "body": {
+                "domain_suffix": [
+                  ".ts.net"
+                ],
+                "server": "@{self}-dns"
+              }
+            }
+          ]
+        }
+      },
+      "id": "01J00000000000000000000SRV"
+    },
+    {
+      "kind": "folder",
+      "enabled": true,
+      "id": "01J00000000000000000000FLD",
+      "name": "Личные",
+      "tag_policy": {
+        "prefix": "[F] "
+      },
+      "nodes": [
+        {
+          "kind": "server",
+          "tag": "DE-1",
+          "enabled": true,
+          "origin": {
+            "kind": "uri",
+            "raw": "ss://Y2hhY2hh@de.example:8388#DE-1"
+          },
+          "body": {
+            "type": "shadowsocks",
+            "server": "de.example",
+            "server_port": 8388
+          }
+        },
+        {
+          "kind": "auto",
+          "tag": "быстрые",
+          "enabled": true,
+          "group": {
+            "group_type": "urltest",
+            "members": [
+              {
+                "tag": "DE-1"
+              }
+            ],
+            "strategy": {
+              "interval": "5m"
+            }
+          }
+        }
+      ],
+      "fold": {
+        "mode": "select_auto",
+        "auto": {
+          "mode": "least_test"
+        }
+      },
+      "fold_tag": "личные"
+    },
+    {
+      "kind": "subscription",
+      "enabled": true,
+      "id": "01J00000000000000000000SUB",
+      "name": "Proton NL",
+      "tag_policy": {
+        "prefix": "[P] ",
+        "postfix": " •"
+      },
+      "url": "https://example.invalid/sub?token=abc\u0026kind=all",
+      "skip": [
+        {
+          "tag": "/(RU)/i"
+        }
+      ],
+      "max_nodes": 500,
+      "update": {
+        "interval_hours": 6,
+        "auto_refresh": false
+      },
+      "disabled": {
+        "DE-2": 0
+      }
+    },
+    {
+      "kind": "chain",
+      "tag": "chain-1",
+      "enabled": true,
+      "hops": [
+        {
+          "tag": "🇯🇵 Tokyo"
+        },
+        {
+          "folder_id": "01J00000000000000000000SUB",
+          "tag": "NL-1"
+        }
+      ],
+      "id": "01J0000000000000000000CHN0"
+    }
+  ],
+  "directions": [
+    {
+      "tag": "proxy-out",
+      "auto": {
+        "mode": "least_test"
+      }
+    },
+    {
+      "tag": "video-out",
+      "filter": "(NL)"
+    }
+  ],
+  "rules": [
+    {
+      "kind": "preset",
+      "ref": "ru-direct",
+      "enabled": true,
+      "num": 960,
+      "vars": {
+        "out": "direct-out"
+      }
+    },
+    {
+      "kind": "inline",
+      "name": "X",
+      "enabled": true,
+      "num": 1000,
+      "body": {
+        "port": [
+          443
+        ],
+        "domain_suffix": [
+          "example.com"
+        ],
+        "outbound": "proxy-out"
+      }
+    },
+    {
+      "kind": "inline",
+      "name": "blocked",
+      "enabled": false,
+      "num": 1005,
+      "body": {
+        "domain_suffix": [
+          "ads.example"
+        ],
+        "action": "reject",
+        "method": "drop"
+      }
+    },
+    {
+      "kind": "srs",
+      "name": "three sets",
+      "enabled": true,
+      "num": 1010,
+      "refs": [
+        "https://example.invalid/a.srs",
+        "https://example.invalid/b.srs"
+      ],
+      "body": {
+        "action": "reject"
+      }
+    }
+  ],
+  "dns": {
+    "strategy": "prefer_ipv4",
+    "final": "google_doh",
+    "servers": [
+      {
+        "kind": "template",
+        "tag": "cloudflare_udp",
+        "enabled": true
+      },
+      {
+        "kind": "preset",
+        "ref": "russian:yandex_udp",
+        "enabled": true
+      },
+      {
+        "kind": "user",
+        "tag": "my-doh",
+        "enabled": true,
+        "body": {
+          "detour": "proxy-out",
+          "server": "1.1.1.1",
+          "type": "https"
+        }
+      }
+    ],
+    "rules": [
+      {
+        "kind": "preset",
+        "ref": "russian",
+        "enabled": true
+      },
+      {
+        "kind": "user",
+        "enabled": true,
+        "body": {
+          "rule_set": "ru-domains",
+          "server": "my-doh"
+        }
+      }
+    ]
+  },
+  "vars": {
+    "log_level": "warn"
+  },
+  "warp": [
+    {
+      "client_v4": "172.16.0.2",
+      "client_v6": "fd00::2",
+      "created_at": "2026-08-01T00:00:00Z",
+      "peer_public": "pub",
+      "private_key": "priv",
+      "type": "wg"
+    }
+  ]
+}

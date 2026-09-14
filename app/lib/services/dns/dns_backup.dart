@@ -1,9 +1,10 @@
 /// §393 B9 — секция `dns` в LX Backup: обе стороны.
 ///
 /// Схема — `contract/schema/backup.schema.json` (`dns.servers[]`/`dns.rules[]`
-/// с дискриминатором `kind: template|preset|user`, плюс `final`/`strategy`);
-/// семантика — `contract/docs/BACKUP.md` §2. Эталон обработки —
-/// `core/backup/import.go:importDNS` / `export.go:exportDNS`.
+/// с дискриминатором `kind: template|preset|user`, плюс `strategy`/`final`/
+/// `default_domain_resolver`); семантика — `contract/docs/BACKUP.md` §2, §9
+/// п. 5. Эталон обработки — `core/backup/import.go:importDNS`. §438 — в файл
+/// 1.0 записи пишет кодек записей (`record_codec.dart`) из [LxDns].
 ///
 /// Три расхождения между каноном и мобильной моделью, из-за которых нужен
 /// явный маппинг, а не «отдать storage как есть»:
@@ -19,32 +20,60 @@
 ///     сторону. Оно принадлежит шаблону ПРИНИМАЮЩЕЙ стороны, и зафиксировать
 ///     чужое значило бы навсегда отрезать пользователя от обновлений шаблона
 ///     (та же причина, что в `export.go:dnsRefFrom`). Переносится ссылка:
-///     tag/name у сервера, name/presetId у правила.
+///     тег у template-сервера, `ref` = `<preset_id>:<tag>` у preset-сервера,
+///     `ref` = `preset_id` у preset-правила.
 ///
-/// `final`/`strategy` секции — те же значения, что мобильные переносимые
-/// переменные `dns_final`/`dns_strategy`. В файле они дублируются намеренно:
+/// `final`/`strategy`/`default_domain_resolver` секции — те же значения, что
+/// мобильные переносимые переменные `dns_final`/`dns_strategy`/
+/// `dns_default_domain_resolver`. В файле они дублируются намеренно:
 /// секция самодостаточна (лаунчер читает именно её), а `vars` остаются
 /// каналом для сторон, которые секцию не разбирают.
 library;
 
 import 'dart:convert';
 
+import '../../models/parser_config.dart' show SelectableRule;
 import '../lx_backup.dart';
 import '../node_hash.dart' show deepSortKeys;
+
+/// §438 — тег preset-сервера DNS → `preset_id` пресета шаблона, который его
+/// объявляет (`selectable_rules[].dns_servers[].tag`). Нужен, чтобы
+/// собрать `ref` = `<preset_id>:<tag>` у записи, хранящей только тег. Первый
+/// объявивший пресет побеждает.
+Map<String, String> presetIdByDnsServerTag(Iterable<SelectableRule> presets) {
+  final out = <String, String>{};
+  for (final p in presets) {
+    for (final s in p.dnsServers) {
+      final tag = s['tag'];
+      if (tag is String && tag.isNotEmpty) out.putIfAbsent(tag, () => p.presetId);
+    }
+  }
+  return out;
+}
 
 /// §393 B9 — мобильный storage → переносимая секция.
 ///
 /// [servers] / [rules] — сырые списки из `dns_options` (см.
 /// `SettingsStorage.getDnsServers` / `getDnsRulesList`).
 ///
+/// §438 — форма 1.0: preset-сервер адресуется `ref` = `<preset_id>:<tag>`
+/// (ONE_NAMESPACE §1). У LxBox preset-сервер хранит только тег, пресет
+/// находится по [presetIdByServerTag] (тег сервера пресета → `preset_id`
+/// шаблона); тег без пресета едет как есть. `default_domain_resolver` —
+/// третий скаляр секции (var `dns_default_domain_resolver`).
+///
 /// §401 — [warnings] пополняется потерями экспорта: у канона нет дома ни для
-/// `srs`-правил, ни для значений template-переменных, и молчать о них нельзя
-/// (П6).
+/// `srs`-правил, ни для значений template-переменных и заметки сервера, и
+/// молчать о них нельзя (П6). DNS-правила вида `template` в 1.0 не выражаются
+/// и не пишутся: это ссылки на правила шаблона, которые сторона заводит сама
+/// по своему шаблону, пользовательской настройки в них нет.
 LxDns dnsToBackup({
   required List<Map<String, dynamic>> servers,
   required List<Map<String, dynamic>> rules,
   required String dnsFinal,
   required String strategy,
+  String defaultDomainResolver = '',
+  Map<String, String> presetIdByServerTag = const {},
   List<LxBackupWarning>? warnings,
 }) {
   final localOnly = <String>[];
@@ -53,10 +82,14 @@ LxDns dnsToBackup({
     final kind = _canonKind(e['kind']);
     final tag = (e['tag'] as String?) ?? '';
     if (kind == null || tag.isEmpty) continue;
+    final presetId = presetIdByServerTag[tag] ?? '';
     outServers.add(
       LxDnsRef(
         kind: kind,
-        name: tag,
+        name: kind == 'preset' ? '' : tag,
+        ref: kind != 'preset'
+            ? ''
+            : (presetId.isEmpty ? tag : '$presetId:$tag'),
         enabled: e['enabled'] as bool? ?? true,
         // Тело — только у пользовательской записи (см. docstring, п. 3).
         value: kind == 'user'
@@ -78,22 +111,20 @@ LxDns dnsToBackup({
       localOnly.add('${e['name'] ?? 'dns rule'}: srs');
       continue;
     }
+    if (rawKind == 'template') continue;
     final kind = _canonKind(e['kind']);
     if (kind == null) continue;
     final name = (e['name'] as String?) ?? '';
     final presetId = (e['presetId'] as String?) ?? '';
-    // Пустая запись не адресуема ни на одной стороне: без имени и без
-    // presetId её не с чем сопоставить при merge.
-    if (name.isEmpty && presetId.isEmpty) continue;
+    final body = (e['rule'] as Map?)?.cast<String, dynamic>();
+    if (kind == 'user' ? body == null : presetId.isEmpty) continue;
     outRules.add(
       LxDnsRef(
         kind: kind,
-        name: name,
-        ref: presetId,
+        name: kind == 'user' ? name : '',
+        ref: kind == 'preset' ? presetId : '',
         enabled: e['enabled'] as bool? ?? true,
-        value: kind == 'user'
-            ? (e['rule'] as Map?)?.cast<String, dynamic>()
-            : null,
+        value: kind == 'user' ? body : null,
       ),
     );
   }
@@ -111,6 +142,7 @@ LxDns dnsToBackup({
     rules: outRules,
     finalServer: dnsFinal,
     strategy: strategy,
+    defaultDomainResolver: defaultDomainResolver,
   );
 }
 
@@ -134,10 +166,10 @@ typedef DnsBackupApply = ({
 ///
 /// §438 — ключи слияния по BACKUP.md §9 п. 5, одни для обоих форматов:
 ///
-///  * сервер — `kind` + `tag`, а у `preset` — `kind` + `ref`: тега у
-///    ссылочной записи нет, и ключ по тегу схлопнул бы все preset-серверы в
-///    один. У LxBox ссылкой preset-сервера служит тег сервера пресета, и
-///    хранится он в поле `tag`;
+///  * сервер — `kind` + `tag`, а у `preset` — `kind` + полный `ref`
+///    (`<preset_id>:<tag>`): тега у ссылочной записи нет, и ключ по тегу
+///    схлопнул бы все preset-серверы в один. Storage LxBox держит тег сервера
+///    пресета; `ref` своей записи собирается по [presetIdByServerTag];
 ///  * правило — `kind` + `ref` + тело: своего имени у правила контракта нет,
 ///    различить два правила можно только тем, что они делают. Дописанному
 ///    пользовательскому правилу без имени имя выводится из тела (storage
@@ -153,19 +185,41 @@ DnsBackupApply applyDnsBackup({
   required String dnsFinal,
   required String strategy,
   String defaultDomainResolver = '',
+  Map<String, String> presetIdByServerTag = const {},
 }) {
   var applied = 0;
   final outServers = [for (final e in servers) Map<String, dynamic>.from(e)];
+  // Ключ preset — полный `ref`: у своей записи он собирается из тега и
+  // пресета шаблона, которому тег принадлежит.
+  String localRef(String tag) {
+    final pid = presetIdByServerTag[tag] ?? '';
+    return pid.isEmpty ? tag : '$pid:$tag';
+  }
+
   final haveServers = <String>{
-    for (final e in outServers) _serverKey('${e['kind']}', '${e['tag']}'),
+    for (final e in outServers)
+      e['kind'] == 'preset'
+          ? _serverKey('preset', localRef('${e['tag']}'))
+          : _serverKey('${e['kind']}', '${e['tag']}'),
+  };
+  // Storage LxBox держит preset-сервер тегом: второй записи под тем же тегом
+  // (тот же сервер чужого пресета) места нет.
+  final presetTags = <String>{
+    for (final e in outServers)
+      if (e['kind'] == 'preset') '${e['tag']}',
   };
 
   for (final ref in incoming.servers) {
     final kind = _mobileKind(ref.kind);
-    // preset адресуется `ref` (1.0); у записи 0.x ссылка ехала именем.
-    final tag = kind == 'preset' && ref.ref.isNotEmpty ? ref.ref : ref.name;
+    // preset адресуется `ref` = `<preset_id>:<tag>` (1.0); у записи 0.x
+    // ссылка ехала именем.
+    final fullRef = kind == 'preset' && ref.ref.isNotEmpty ? ref.ref : ref.name;
+    if (fullRef.isEmpty) continue;
+    final at = kind == 'preset' ? fullRef.indexOf(':') : -1;
+    final tag = at < 0 ? fullRef : fullRef.substring(at + 1);
     if (tag.isEmpty) continue;
-    if (!haveServers.add(_serverKey(kind, tag))) continue; // своё сильнее
+    if (!haveServers.add(_serverKey(kind, fullRef))) continue; // своё сильнее
+    if (kind == 'preset' && !presetTags.add(tag)) continue;
     outServers.add(<String, dynamic>{
       'kind': kind,
       'tag': tag,

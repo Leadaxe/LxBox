@@ -17,7 +17,8 @@ test/fixtures/
 ├── wireguard/      # wg:// / wireguard:// URIs + .conf INI
 ├── json/           # Xray JSON array + одиночный sing-box outbound/endpoint
 ├── base64/         # обёртка над URI-списком
-└── subscriptions/  # "сырые" тела подписок (анонимизированные)
+├── subscriptions/  # "сырые" тела подписок (анонимизированные)
+└── lx_backup/      # LX Backup другой стороны: 1.0 лаунчера (Export10 над state/testdata/v8_roundtrip.json)
 ```
 
 ## Конвенции

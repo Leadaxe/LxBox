@@ -266,8 +266,10 @@ String _outboundOf(Map<String, dynamic> body) {
 // ─── DNS-серверы ─────────────────────────────────────────────────────────────
 
 /// Ref DNS-сервера LxBox → запись 1.0. Пользовательская запись — `kind: user`
-/// (у LxBox внутри — `inline`), тело без `tag`.
-Map<String, dynamic> dnsServerToRecord(DnsServerRef s) => switch (s) {
+/// (у LxBox внутри — `inline`), тело без `tag`. [presetId] — пресет шаблона,
+/// которому принадлежит preset-сервер (`ref` = `<preset_id>:<tag>`).
+Map<String, dynamic> dnsServerToRecord(DnsServerRef s, {String? presetId}) =>
+    switch (s) {
       DnsServerInline() => {
           'kind': 'user',
           'tag': s.tag,
@@ -275,11 +277,14 @@ Map<String, dynamic> dnsServerToRecord(DnsServerRef s) => switch (s) {
           'body': Map<String, dynamic>.of(s.body)..remove('tag'),
           if (s.description != null) 'description': s.description,
         },
-      // §438 — у записи preset тега нет, её идентичность — `ref`
-      // (BACKUP.md §2, §9 п. 5). У LxBox ссылкой служит тег сервера пресета.
+      // §438 — у записи preset тега нет, её идентичность — `ref` формы
+      // `<preset_id>:<tag>` (BACKUP.md §2, ONE_NAMESPACE §1). Модель LxBox
+      // хранит только тег сервера пресета; пресет называет [presetId].
       DnsServerPreset() => {
           'kind': 'preset',
-          'ref': s.tag,
+          'ref': presetId == null || presetId.isEmpty
+              ? s.tag
+              : '$presetId:${s.tag}',
           'enabled': s.enabled,
           if (s.description != null) 'description': s.description,
         },
@@ -295,10 +300,12 @@ Map<String, dynamic> dnsServerToRecord(DnsServerRef s) => switch (s) {
 /// Запись 1.0 → ref DNS-сервера LxBox.
 RecordRead<DnsServerRef> dnsServerFromRecord(Map<String, dynamic> j) {
   final kind = j['kind'];
-  // §438 — preset адресуется `ref` (контракт 1.0); `tag` у preset — прежняя
-  // форма этого кодека, читается запасным ходом.
+  // §438 — preset адресуется `ref` формы `<preset_id>:<tag>` (контракт 1.0,
+  // ONE_NAMESPACE §1): делится по ПЕРВОМУ `:`, модели достаётся тег сервера
+  // пресета. `ref` без `:` — тег целиком; `tag` у preset — прежняя форма
+  // этого кодека, запасной ход.
   final tag = kind == 'preset'
-      ? (_optString(j['ref']) ?? _optString(j['tag']))
+      ? (_presetServerTag(_optString(j['ref'])) ?? _optString(j['tag']))
       : _optString(j['tag']);
   if (kind is! String || kind.isEmpty) {
     return const RecordRead.drop('dns server without kind');
@@ -407,6 +414,21 @@ RecordRead<DnsRuleRef> dnsRuleFromRecord(Map<String, dynamic> j) {
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
+
+/// `<preset_id>:<tag>` → `<tag>` (деление по первому `:`); без `:` — как есть.
+String? _presetServerTag(String? ref) {
+  if (ref == null) return null;
+  final at = ref.indexOf(':');
+  if (at < 0) return ref;
+  final tag = ref.substring(at + 1).trim();
+  return tag.isEmpty ? null : tag;
+}
+
+/// `<preset_id>` из `ref` preset-сервера DNS; пусто, если `:` нет.
+String presetIdOfDnsServerRef(String ref) {
+  final at = ref.indexOf(':');
+  return at < 0 ? '' : ref.substring(0, at).trim();
+}
 
 String? _optString(Object? v) {
   if (v is! String) return null;

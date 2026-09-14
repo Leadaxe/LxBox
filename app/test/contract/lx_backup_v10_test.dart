@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
@@ -33,8 +34,13 @@ Map<String, dynamic> _server(String tag, String host, {Object? sections}) => {
   LxBackupFile file,
 ) {
   final subs = mergeBackupSubscriptions(lists, file.subscriptions);
-  final servers =
-      mergeBackupServers(subs.lists, file.servers, folders: file.folders);
+  final servers = mergeBackupServers(
+    subs.lists,
+    file.servers,
+    folders: file.folders,
+    sourceIds: subs.ids,
+    addedSources: subs.added,
+  );
   return (
     lists: servers.lists,
     rules: renumberBackupAxis(file.rules, servers.lists, servers.touched),
@@ -43,13 +49,12 @@ Map<String, dynamic> _server(String tag, String host, {Object? sections}) => {
 
 void main() {
   group('§438 версии формата', () {
-    test('читаем 2, пишем 1', () async {
-      expect(kLxBackupReadVersion, kLxBackupFormat10);
-      expect(kLxBackupWriteVersion, kLxBackupFormat0x);
+    test('пишем 2, читаем 2 и legacy 1', () async {
+      expect(kLxBackupVersion, kLxBackupFormat10);
       final out = await buildLxBackup(lists: const [], rules: const [], vars: const {});
-      expect((jsonDecode(out.json) as Map)['lx_backup'], 1,
-          reason: 'экспорт остаётся 0.12 до записи 1.0');
+      expect((jsonDecode(out.json) as Map)['lx_backup'], 2);
       expect(parseLxBackup(_file({})).version, 2);
+      expect(parseLxBackup(jsonEncode({'lx_backup': 1})).version, 1);
     });
 
     test('больше читаемого и вне {1, 2} — отказ', () {
@@ -241,8 +246,8 @@ void main() {
     });
   });
 
-  group('§438 ось правил одним проходом', () {
-    test('узловые между корневыми, номера подряд от 1000, неразмеченные в хвост', () {
+  group('§438 ось правил: корневые и узловые вместе', () {
+    test('номера файла держатся, неразмеченные корневые — в хвост оси', () {
       final file = parseLxBackup(_file({
         'sources': [
           _server('ts', 'example-1.com', sections: {
@@ -263,22 +268,38 @@ void main() {
       }));
       final out = _apply(const [], file);
       expect([for (final r in out.rules) '${r.name}=${r.orderNum}'],
-          ['head=1000', 'late=1002', 'unmarked=1003']);
+          ['head=0', 'late=1100', 'unmarked=1101']);
       final node = (out.lists.single as UserServer).sections!.rules.single;
-      expect(node.orderNum, 1001, reason: 'без num узловое встаёт на 945');
+      expect(node.orderNum, isNull,
+          reason: 'без num узловое остаётся без номера — сборка ставит его на 945');
     });
 
-    test('0.x тоже перенумеровывается', () {
+    test('номера файла держатся, порядок сохраняется, равные остаются равными', () {
+      // Раскладка шаблона: голова 0, пресеты 950–990, зона 1000–1100,
+      // перехватчики 1110+. Правило из UI после импорта встаёт в конец зоны,
+      // пресет из шаблона — на свой номер, и оба оказываются там же, где до
+      // импорта (§438, v2.23.2 номера сохранял).
       final file = parseLxBackup(jsonEncode({
         'lx_backup': 1,
-        'exported_by': {'app': 'launcher'},
+        'exported_by': {'app': 'lxbox'},
         'rules': [
-          {'kind': 'inline', 'name': 'b', 'num': 9000, 'outbound': 'direct', 'match': {}},
-          {'kind': 'inline', 'name': 'a', 'num': 10, 'outbound': 'direct', 'match': {}},
+          {'kind': 'preset', 'name': 'ru-inside', 'ref': 'ru-inside', 'num': 1110},
+          {'kind': 'inline', 'name': 'user-b', 'num': 1001, 'outbound': 'direct', 'match': {}},
+          {'kind': 'preset', 'name': 'tp', 'ref': 'traffic-processing', 'num': 0},
+          {'kind': 'inline', 'name': 'user-a', 'num': 1000, 'outbound': 'direct', 'match': {}},
+          {'kind': 'inline', 'name': 'dup', 'num': 1000, 'outbound': 'direct', 'match': {}},
+          {'kind': 'preset', 'name': 'private', 'ref': 'private-ip', 'num': 950},
         ],
       }));
       final rules = renumberBackupAxis(file.rules, const [], const []);
-      expect([for (final r in rules) '${r.name}=${r.orderNum}'], ['a=1000', 'b=1001']);
+      expect([for (final r in rules) '${r.name}=${r.orderNum}'], [
+        'tp=0',
+        'private=950',
+        'user-a=1000',
+        'dup=1000',
+        'user-b=1001',
+        'ru-inside=1110',
+      ]);
     });
   });
 
@@ -374,6 +395,60 @@ void main() {
     });
   });
 
+  group('§438 файл 1.0 лаунчера', () {
+    // `test/fixtures/lx_backup/launcher_v8_export10.json` — Export10 лаунчера
+    // над его `core/state/testdata/v8_roundtrip.json` (без правок руками).
+    test('импорт в пустое состояние: ожидаемые потери и только они', () {
+      final template = jsonDecode(File('assets/wizard_template.json').readAsStringSync())
+          as Map<String, dynamic>;
+      final presets = (template['selectable_rules'] as List).cast<Map<String, dynamic>>();
+      final file = parseLxBackup(
+        File('test/fixtures/lx_backup/launcher_v8_export10.json').readAsStringSync(),
+        knownPresets: {for (final p in presets) p['preset_id'] as String},
+      );
+      expect([for (final w in file.warnings) '${w.code} ${w.detail}'], [
+        '$kWarnSourceKindUnsupported Личные: быстрые',
+        '$kWarnDnsEntrySkipped dns.servers: russian:yandex_udp',
+        '$kWarnDnsEntrySkipped dns.rules: russian',
+      ]);
+
+      final state = _apply(const [], file);
+      final kinds = [for (final l in state.lists) l.runtimeType.toString()];
+      expect(kinds, ['UserServer', 'FolderServers', 'SubscriptionServers'],
+          reason: 'порядок файла');
+      final root = state.lists[0] as UserServer;
+      expect(root.name, '🇯🇵 Tokyo');
+      expect(root.detourPolicy.overrideDetour, '[P] NL-1',
+          reason: 'префикс подписки «[P] » у LxBox — «[P]» и пробел');
+      expect(root.sections!.dnsServers.single.tag, '@{self}-dns');
+      final folder = state.lists[1] as FolderServers;
+      expect(folder.tagPrefix, '[F]');
+      expect(folder.members.single.raw, 'ss://Y2hhY2hh@de.example:8388#DE-1',
+          reason: 'исходник члена едет как есть (что LxBox из него разберёт — дело парсера)');
+      final sub = state.lists[2] as SubscriptionServers;
+      expect(sub.tagPrefix, '[P]');
+      expect(sub.updateIntervalHours, 6);
+      expect(sub.disabledHashes.keys, ['DE-2']);
+
+      final subs = mergeBackupSubscriptions(const [], file.subscriptions);
+      final servers = mergeBackupServers(
+        subs.lists,
+        file.servers,
+        folders: file.folders,
+        sourceIds: subs.ids,
+        addedSources: subs.added,
+      );
+      expect(resolveBackupChainHops(file, servers.lists, servers.folderIds).single.hops,
+          ['🇯🇵 Tokyo', '[P] NL-1']);
+      expect(
+        [for (final r in state.rules) '${r.kind.name}:${r.name}:${r.orderNum}'],
+        ['preset:ru-direct:960', 'inline:X:1000', 'json:blocked:1005', 'srs:three sets:1010'],
+      );
+      expect(state.rules[3].outbound, kOutboundReject);
+      expect(file.dns!.servers.map((s) => s.kind), ['template', 'user']);
+    });
+  });
+
   group('§438 кодек и канон тела', () {
     test('action кроме reject — незнакомый ключ; preset-сервер пишется ref', () {
       final read = ruleFromRecord({
@@ -394,12 +469,13 @@ void main() {
       expect(canonicalNodeBody('vless://u@h:443#N'), 'vless://u@h:443');
     });
 
-    test('секции узла: rule_set в теле — reason rule_set, чужой kind — reason kind', () {
+    test('секции узла: rule_set — rule_set, незнакомый ключ — unknown_key, чужой kind — kind', () {
       final drops = <NodeSectionDrop>[];
       NodeSections.fromJson({
         'rules': [
           {'kind': 'preset', 'ref': 'x'},
           {'kind': 'inline', 'name': 'r', 'body': {'rule_set': ['a']}},
+          {'kind': 'inline', 'name': 'p', 'body': {'process_name': ['a']}},
         ],
         'dns': {
           'servers': [
@@ -408,7 +484,7 @@ void main() {
         },
       }, drops: drops);
       expect([for (final d in drops) '${d.kind}:${d.reason}'],
-          ['preset:kind', 'inline:rule_set', 'template:kind']);
+          ['preset:kind', 'inline:rule_set', 'inline:unknown_key', 'template:kind']);
     });
   });
 }

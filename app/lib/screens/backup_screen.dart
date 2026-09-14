@@ -15,6 +15,7 @@ import '../services/dns/dns_backup.dart';
 import '../services/lx_backup.dart';
 import '../services/warp/warp_backup.dart';
 import '../services/settings_storage.dart';
+import '../services/template_loader.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
@@ -326,11 +327,16 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // унесёт файл на другую машину (П6).
       final exportWarnings = <LxBackupWarning>[];
       // §393 B9 — секция DNS: состав серверов/правил + final/strategy.
+      // §438 — preset-сервер едет ссылкой `<preset_id>:<tag>`: пресет,
+      // которому принадлежит тег, знает шаблон.
+      final template = await TemplateLoader.load();
       final dns = dnsToBackup(
         servers: await SettingsStorage.getDnsServers(),
         rules: await SettingsStorage.getDnsRulesList(),
         dnsFinal: vars['dns_final'] ?? '',
         strategy: vars['dns_strategy'] ?? '',
+        defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
+        presetIdByServerTag: presetIdByDnsServerTag(template.selectableRules),
         warnings: exportWarnings,
       );
       // §393 B8 — регистрации WARP в каноне схемы (`type: wg|masque`).
@@ -437,6 +443,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       }
 
       final LxBackupFile parsed;
+      var presetIdByServerTag = const <String, String>{};
       try {
         // Цели, на которые правилу разрешено ссылаться. Пустой набор означал
         // бы «проверять нечем», и все ссылки прошли бы без проверки.
@@ -455,9 +462,17 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
           for (final d in directions) d.tag,
           for (final c in chains) c.tag,
         }..removeWhere((t) => t.isEmpty);
+        // §438 — пресеты шаблона: правило-пресет и preset-сервер DNS чужого
+        // пресета применить нечем (backup_unknown_preset /
+        // backup_dns_entry_skipped).
+        final template = await TemplateLoader.load();
+        presetIdByServerTag = presetIdByDnsServerTag(template.selectableRules);
         parsed = parseLxBackup(
           raw,
           knownOutbounds: known,
+          knownPresets: {
+            for (final p in template.selectableRules) p.presetId,
+          },
           // Merge цепочек идёт по СВОЕМУ пространству имён: `backup_chain_exists`
           // отвечает на вопрос «своя цепочка под этим тегом уже есть», а не
           // «тег вообще занят» (тёзку-Направление отсеет гейт применения).
@@ -534,6 +549,8 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         subMerge.lists,
         parsed.servers,
         folders: parsed.folders,
+        sourceIds: subMerge.ids,
+        addedSources: subMerge.added,
       );
       final sources = (
         before: lists,
@@ -591,7 +608,8 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // §393 B6-B9 — остальные секции. До B6 они разбирались, показывались в
       // диалоге и выбрасывались: пользователь видел «Подписки: 3», нажимал
       // Import и не получал ни одной.
-      final counts = await _applyLxSections(parsed, sources);
+      final counts =
+          await _applyLxSections(parsed, sources, presetIdByServerTag);
       if (!mounted) return;
 
       final skipped = parsed.warnings.length;
@@ -656,6 +674,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       int applied,
       List<BackupNodeRef> touched,
     }) sources,
+    Map<String, String> presetIdByServerTag,
   ) async {
     var applied = 0;
 
@@ -710,6 +729,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         dnsFinal: vars['dns_final'] ?? '',
         strategy: vars['dns_strategy'] ?? '',
         defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
+        presetIdByServerTag: presetIdByServerTag,
       );
       await SettingsStorage.saveDnsServers(result.servers, flush: false);
       await SettingsStorage.saveDnsRulesList(result.rules, flush: false);

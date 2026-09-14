@@ -26,10 +26,13 @@ const int kNodeRuleDefaultNum = 945;
 ///
 /// [kSectionDropKind] — вида записи у секции не бывает (или запись не
 /// читается как запись этого вида); [kSectionDropRuleSet] — в теле правила
-/// стоит `rule_set`; [kSectionDropNotAllowed] — узлу этого вида секции не
+/// стоит `rule_set`; [kSectionDropUnknownKey] — в теле правила ключ, которого
+/// эта сторона не держит (строгость LxBox, NODE_SECTIONS.md §1; detail
+/// называет ключ); [kSectionDropNotAllowed] — узлу этого вида секции не
 /// положены вовсе (ставит импорт, у модели секций такого случая нет).
 const String kSectionDropKind = 'kind';
 const String kSectionDropRuleSet = 'rule_set';
+const String kSectionDropUnknownKey = 'unknown_key';
 const String kSectionDropNotAllowed = 'not_allowed';
 
 /// §438 — отброшенная запись секции: вид, причина из перечня B3 и текст для
@@ -134,14 +137,14 @@ final class NodeSections {
         if (read.unknownKeys.isNotEmpty) {
           final keys = read.unknownKeys.join(', ');
           // §438 — причина по перечню B3: `rule_set` назван нормой; прочие
-          // незнакомые ключи — строгость LxBox (NODE_SECTIONS.md §1), своего
-          // слова в перечне у неё нет, и запись идёт как «не того вида».
+          // незнакомые ключи — строгость LxBox (NODE_SECTIONS.md §1), причина
+          // `unknown_key` (ответ лаунчера 14.09.2026).
           drop(
             'rules[$i]: body keys not supported here: $keys',
             r.kind.name,
             read.unknownKeys.contains('rule_set')
                 ? kSectionDropRuleSet
-                : kSectionDropKind,
+                : kSectionDropUnknownKey,
           );
           unknownKeys?.addAll(read.unknownKeys.map((k) => 'rules[$i].body.$k'));
           continue;

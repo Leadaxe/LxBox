@@ -484,12 +484,12 @@ address before routing.
 Empty sections are not written. A foreign `kind` inside a section is dropped on read
 (the rest of the records survive). `lib/models/node_sections.dart` holds the model,
 `lib/models/record_codec.dart` the record codec — the same code that will parse the root
-`custom_rules` / `dns_options` once storage moves to the contract 1.0 form. Sections are
-**not** exported to the LX Backup until LxBox writes contract 1.0 (the 0.12 export names
-the loss with `backup_local_only_dropped`); a 0.12 file's `servers[].sections` is ignored
-silently. A contract 1.0 file (`lx_backup: 2`) brings them in [§438]: records the section
-may not hold are dropped with `backup_section_record_dropped`, and a node matched by body
-takes the file's `sections` wholesale when the field is present.
+`custom_rules` / `dns_options` once storage moves to the contract 1.0 form. The LX Backup
+(contract 1.0, `lx_backup: 2`, [§438]) carries them as `sources[].sections` of the node,
+in this same form. On import, records the section may not hold are dropped with
+`backup_section_record_dropped`, and a node matched by body takes the file's `sections`
+wholesale when the field is present. A legacy 0.12 file's `servers[].sections` is ignored
+silently.
 
 ### `type: "folder"` — `FolderServers` (§234)
 
@@ -651,8 +651,9 @@ config is byte-identical to the pre-§434 form. Each URL has its own cache file:
 index 0 is `rule_sets/<id>.srs` (files downloaded before §434 stay valid), index i
 is `rule_sets/<id>~<i>.srs`, with its own `.meta.json`. The rule counts as
 downloaded only when every file is cached; a partial download keeps the rule off.
-In the backup the list travels as `rules[].ref` (first) plus `rules[].refs` (all,
-only with 2+); an importer without `refs` support reads `ref` and gets the first set.
+In the LX Backup 1.0 ([§438]) the list travels as `rules[].refs` (always a list); a
+legacy 0.12 file carries `rules[].ref` (first) plus `rules[].refs` (all, only with 2+),
+and the importer reads `refs` before `ref`.
 
 `dns` ([§117] task 3) works as it does for inline, except the mirror references an existing `.srs` tag plus the DNS-safe extra filters (`packages` and wifi). It only works when the rule set contains domains — an IP-only list never matches in a DNS context.
 
@@ -1258,8 +1259,13 @@ chain that used them, with a visible counter — a route that silently got short
 be noticed. A chain that drops below two positions is not emitted until repaired.
 A subscription refresh never touches positions.
 
-**In backup**: chains travel as a root `chains[]` section of the LX Backup (contract
-0.7.1), merged by `tag`; a local chain wins over an arriving namesake, with a warning.
+**In backup**: chains travel as `sources[]` records of `kind: chain` in the LX Backup 1.0
+([§438]): settings in `body`, positions in `hops[]` as `{folder_id?, tag}` links (a
+position on a folder member or a prefixed subscription node becomes the container id plus
+the raw tag, and back on import). They merge by `tag`; a local chain wins over an arriving
+namesake, with a warning. The chain `label` has no home in 1.0 and is named by
+`backup_local_only_dropped` on export. A legacy 0.12 file carries a root `chains[]`
+section (contract 0.7.1).
 
 ---
 
@@ -1393,4 +1399,4 @@ The scrubber only handles the `vars` and `server_lists` keys; everything else (`
 [§220]: ./spec/tasks/220-allow-rotation-setting.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md
-[§438]: ./spec/tasks/438-lx-backup-1-0-read.md
+[§438]: ./spec/tasks/438-lx-backup-1-0-read-write.md
