@@ -17,7 +17,7 @@ Play)») и кладёт его в артефакт прогона. Дальше
 ## Решение
 
 Job `google-play` (имя в UI — `GooglePlay`) в [ci.yml](../../../.github/workflows/ci.yml): `needs: [meta, android]`,
-гейт `is_release`, параллельно с `release`. Шаги:
+гейт `is_release && !is_prerelease`, параллельно с `release`. Шаги:
 
 | Шаг | Что делает |
 |---|---|
@@ -37,6 +37,14 @@ Job `google-play` (имя в UI — `GooglePlay`) в [ci.yml](../../../.github/w
 | Статус выпуска | `vars.PLAY_RELEASE_STATUS`, по умолчанию `draft` |
 | versionCode | `scripts/version-code.sh <ver> universal` — тот же, что зашит в AAB (ABI=0) |
 | Описание выпуска | fastlane-каталог `en-US` → Play-локаль `en-US`, `ru` (соглашение F-Droid) → `ru-RU` |
+
+**Релиз-кандидаты в Play не идут** (решение владельца 14.09.2026). Job `meta`
+отдаёт `is_prerelease=true` для тега `vX.Y.Z-rc.N`; job `google-play` на таком
+теге пропускается (skipped), GitHub-релиз и AAB-артефакт собираются как обычно.
+Hotfix `vX.Y.Z-hotfixN` — полноценный релиз и уходит в Play. Других суффиксов
+нет: `version-code.sh` падает на неизвестном. Проверка на подстроку `-rc.`,
+поэтому dev-сборка после rc-тега (`X.Y.Z-rc.N-dev.M`) тоже помечена, но у неё
+и так `is_release=false`.
 
 **Почему `draft` по умолчанию.** Первый прогон надо увидеть глазами в консоли:
 что легло на трек, с каким кодом, с какими notes. Плюс две внешние задержки,
@@ -77,6 +85,10 @@ Action делает ровно одно: AAB + notes на трек. Пин по 
 
 ## Риски и edge cases
 
+- **Кандидат на GitHub помечен обычным релизом.** Job `release` флаг
+  `is_prerelease` пока не читает: rc-тег станет «Latest» и попадёт в
+  `latest.json`, UpdateChecker предложит его всем GitHub-пользователям.
+  F-Droid (`UpdateCheckMode: Tags`) тоже может взять rc-тег. Вне этой задачи.
 - **Код уже занят в Play** (заливали руками) → API «Version code N has already
   been used», job красный, GitHub-релиз цел. Ничего не делать.
 - **401/403 в первые сутки** после приглашения — пропагация прав, не ошибка

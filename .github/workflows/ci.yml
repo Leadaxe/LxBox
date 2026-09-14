@@ -55,6 +55,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       tag: ${{ steps.meta.outputs.tag }}
       is_release: ${{ steps.meta.outputs.is_release }}
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -109,6 +110,15 @@ jobs:
             echo "version=$VERSION" >> "$GITHUB_OUTPUT"
             echo "tag=" >> "$GITHUB_OUTPUT"
             echo "is_release=false" >> "$GITHUB_OUTPUT"
+          fi
+          # §436 — релиз-кандидат (vX.Y.Z-rc.N): GitHub-релиз собирается как
+          # обычно, но в Google Play не уходит — job google-play гейтится по
+          # этому флагу. Hotfix (vX.Y.Z-hotfixN) — полноценный релиз, флаг false.
+          # Других суффиксов не бывает: version-code.sh падает на неизвестном.
+          if [[ "$VERSION" == *-rc.* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
   checks:
@@ -472,7 +482,8 @@ jobs:
     name: GooglePlay
     needs: [meta, android]
     runs-on: ubuntu-latest
-    if: needs.meta.outputs.is_release == 'true'
+    # Релиз-кандидаты (-rc.N) в Play не идут: job пропускается (skipped).
+    if: needs.meta.outputs.is_release == 'true' && needs.meta.outputs.is_prerelease != 'true'
     # §436 — AAB из job android уезжает в Play Console через Google Play
     # Developer API от имени сервисного аккаунта (секрет
     # PLAY_SERVICE_ACCOUNT_JSON = JSON-ключ целиком; права в Play Console —

@@ -306,7 +306,8 @@ curl -sL https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json |
 ### Google Play (AAB)
 
 For every release CI builds an `.aab` (the “Build AAB (Google Play)” step),
-keeps it in the run's artifacts, and the `google-play` job (shown as “GooglePlay”) uploads it to the Play
+keeps it in the run's artifacts, and on every tag except a release candidate
+(`vX.Y.Z-rc.N`) the `google-play` job (shown as “GooglePlay”) uploads it to the Play
 Console through the Google Play Developer API (§436, see
 [`GOOGLE_PLAY.md`](GOOGLE_PLAY.md#ci-upload)). The job needs the
 `PLAY_SERVICE_ACCOUNT_JSON` secret; without it it logs a warning and skips, so
