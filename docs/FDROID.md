@@ -7,6 +7,7 @@ Related: [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md), [`BUILD.md`](BUILD.md).
 | Recipe | `metadata/com.leadaxe.lxbox.yml` in `fdroid/fdroiddata` (merged 2026-09-06) |
 | Fork for CI runs | `gitlab.com/leadaxe/fdroiddata`, branch `com.leadaxe.lxbox` |
 | MR | [fdroiddata!44731](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/44731) |
+| Open MR | [fdroiddata!48904](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/48904) (2026-09-14): 2.23.2 with the cronet-go fix, x86_64 back, rc tags skipped. Replaces the failed bot MR !48873, answers [#132](https://github.com/Leadaxe/LxBox/issues/132) |
 | RFP | [rfp#4218](https://gitlab.com/fdroid/rfp/-/work_items/4218) |
 
 F-Droid builds from source at `commit:`, including `libbox.aar` from
@@ -31,6 +32,11 @@ Checklist for a manual edit:
 3. `srclibs`: the core's ref does not matter, `prebuild:` checks out the tag
    from `app/android/libbox.version`. `cronet-go@<sha>` must be the commit the
    core's `go.mod` requires; if it is not, the Chromium `cmp` step fails.
+   Take the version of the root module `github.com/sagernet/cronet-go`, not of
+   `cronet-go/lib/android_*`: the root one is the “Generate all package” commit
+   on top of the lib blobs (lx.38 → `0d28acc4`, lx.34 → `45832ab0`), and it is
+   the head of the `go` branch when fresh.
+   `gh api repos/Leadaxe/sing-box-lx/contents/go.mod?ref=<core tag> --jq .content | base64 -d | grep 'cronet-go v'`.
    Reachability check: `git ls-remote https://github.com/SagerNet/cronet-go | grep <sha>`.
 4. `CurrentVersion` / `CurrentVersionCode`.
 5. Toolchain versions are read from the sources (`android/flutter.version`,
@@ -91,8 +97,10 @@ Both core patches are one `sed` over `cmd/internal/build_libbox/main.go`.
    `AllowedAPKSigningKeys` before `MaintainerNotes`.
 6. Job limit: `build_timeout` raised to 5 h in the project API, but the shared
    runner kills a job at **3 h**. Two ABIs take 73 min, three took 2 h 45 min
-   and hit the limit. x86_64 was dropped on 2026-09-06; GitHub releases still
-   ship it. Runner variance: the same Chromium build took 25 min once and 50 min
+   and hit the limit. x86_64 was dropped on 2026-09-06 and returned in
+   !48904 on 2026-09-14 (owner's decision). If a three-block job hits 3 h again,
+   the release can still go through with the x86_64 block marked `disable:`.
+   Runner variance: the same Chromium build took 25 min once and 50 min
    another time.
 7. The first CI run on GitLab needs account verification (phone or card),
    otherwise the pipeline fails as "yaml invalid" with zero jobs.
@@ -106,8 +114,8 @@ Both core patches are one `sed` over `cmd/internal/build_libbox/main.go`.
    branch. Fix: bump the core so `go.mod` points at a live commit.
 10. A kernel bump needs no recipe change: `prebuild:` runs
     `git -C $$sing-box-lx$$ checkout -f $(cat android/libbox.version)`. Only a
-    change of the cronet-go version in the core's `go.mod` needs one (once
-    between lx.28 and lx.35).
+    change of the cronet-go version in the core's `go.mod` needs one (between
+    lx.28 and lx.35, and at lx.38 for 2.23.2: the bot MR failed on `cmp`).
 
 ### Reviewer threads
 
@@ -178,12 +186,19 @@ because the catalogue sorts by versionCode; Flutter's `--split-per-abi`
 
 ```yaml
 AutoUpdateMode: Version
-UpdateCheckMode: Tags
+UpdateCheckMode: Tags ^v\d+\.\d+\.\d+(-hotfix\d+)?$
 VercodeOperation:
   - '%c + 1'
   - '%c + 2'
+  - '%c + 4'
 UpdateCheckData: app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
 ```
+
+The pattern after `Tags` filters tag names: release tags and `-hotfixN` pass,
+release candidates `-rc.N` are never picked up (§436). `UpdateCheckIgnore`
+would not do it: `checkupdates` applies it only in `HTTP` mode and when
+parsing a manifest, not in `Tags` mode with `UpdateCheckData`.
+The pattern, `'%c + 4'` and the x86_64 block are in !48904, pending.
 
 `UpdateCheckData` reads the ABI=0 code from pubspec (`2.23.0+22300500`);
 `VercodeOperation` adds each block's ABI digit, one operation per block.

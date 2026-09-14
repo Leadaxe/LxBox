@@ -90,8 +90,12 @@ Action делает ровно одно: AAB + notes на трек. Пин по 
   UpdateChecker ходит в `/releases/latest`, который pre-release не отдаёт, а
   фоллбэк `latest.json` остаётся на прошлом stable — кандидат пользователям
   не предлагается. APK лежат на странице pre-release для тестеров.
-- **F-Droid** (`UpdateCheckMode: Tags`) может взять rc-тег как новую версию.
-  Лечится `UpdateCheckIgnore` в рецепте fdroiddata — отдельный MR, не сделан.
+- **F-Droid** мог взять rc-тег как новую версию. Решение владельца 14.09.2026:
+  шаблон тега в `UpdateCheckMode: Tags ^v\d+\.\d+\.\d+(-hotfix\d+)?$`,
+  [fdroiddata!48904](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/48904).
+  `UpdateCheckIgnore` не подошёл: `checkupdates` применяет его только в
+  режиме `HTTP` и при разборе манифеста, в `Tags` с `UpdateCheckData` — нет.
+  Подробности в [FDROID.md](../../FDROID.md).
 - **Код уже занят в Play** (заливали руками) → API «Version code N has already
   been used», job красный, GitHub-релиз цел. Ничего не делать.
 - **401/403 в первые сутки** после приглашения — пропагация прав, не ошибка
