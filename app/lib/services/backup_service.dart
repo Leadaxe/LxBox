@@ -3,13 +3,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../models/codec/chain_record.dart';
+import '../models/codec/chain_record.dart' show kSourceKindChain;
 import '../models/custom_rule.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
 import 'app_log.dart';
 import 'json_clone.dart';
 import 'settings_storage.dart';
+import 'settings_storage_keys.dart';
 import 'storage_migration/migrate_storage.dart';
 import 'template_loader.dart';
 
@@ -29,7 +30,7 @@ enum BackupCategory {
 /// источники — Server lists ([_filterStorage]); `storage_version` пишется при
 /// любом наборе категорий.
 const _topLevelRoutingKeys = {
-  StorageDocKeys.rules,
+  kRulesKey,
   'route_final',
   // §219/§221 — directions + guard миграции. КРИТИЧНО: без них backup/restore на
   // новом устройстве терял всю модель роутинг-Направлений §125 (directions в allowlist
@@ -43,7 +44,7 @@ const _topLevelRoutingKeys = {
   'enabled_groups', // §125 — DEPRECATED (legacy, читается только миграцией)
   'tun_apps',
   'vpn_mode',
-  StorageDocKeys.dns,
+  kDnsKey,
 };
 
 /// §393 C2 — запись цепочки в `sources[]`. Категория именно Routing, а не
@@ -78,10 +79,11 @@ const _varDebugKeys = SettingsStorage.debugApiVarKeys;
 /// создании контейнера ([migrateStorageDoc]): превью, категорийный фильтр и
 /// применение видят уже мигрированный блок. Отчёт — [storageMigration].
 ///
-/// Источники и правила блока `storage` читаются моделями через репозиторий
-/// ([SettingsStorage.serverListsOf], [SettingsStorage.customRulesOf]) — тем же
-/// чтением, что живое хранение; счётчики, разбивка и слияние по `id` идут на
-/// моделях. Документ целиком (`storage`) остаётся для `replaceRaw`.
+/// Источники, цепочки и правила блока `storage` читаются моделями через
+/// репозиторий ([SettingsStorage.serverListsOf], [SettingsStorage.chainsOf],
+/// [SettingsStorage.customRulesOf]) — тем же чтением, что живое хранение;
+/// счётчики, разбивка и слияние идут на моделях. Документ целиком (`storage`)
+/// остаётся для `replaceRaw`.
 class BackupContents {
   /// [presetIdByDnsServerTag] — `ref` preset-серверов DNS при миграции блока
   /// (см. [presetIdsByDnsServerTag]); пусто — `ref` = тег.
@@ -122,7 +124,8 @@ class BackupContents {
 
   /// Цепочки блока [storage] (записи `kind: chain` в `sources[]`) — для
   /// merge-импорта категории Routing.
-  late final _EntitiesRead<SourceChain> _chains = _readChains(storage);
+  late final _EntitiesRead<SourceChain> _chains =
+      _readEntities(storage, SettingsStorage.chainsOf);
 
   /// Какие категории присутствуют в файле — для UI checkbox state'а.
   Set<BackupCategory> availableCategories() {
@@ -173,7 +176,7 @@ class BackupContents {
   }
 
   static bool _hasAnyRouting(Map<String, dynamic> s) {
-    final sources = s[StorageDocKeys.sources];
+    final sources = s[kSourcesKey];
     if (sources is List && sources.any(_isChainRecord)) return true;
     for (final k in _topLevelRoutingKeys) {
       final v = s[k];
@@ -225,23 +228,6 @@ _EntitiesRead<T> _readEntities<T>(
 ) {
   final corrupt = <Object>[];
   final items = doc == null ? <T>[] : read(doc, onCorrupt: corrupt.add);
-  return (items: items, corrupt: corrupt);
-}
-
-_EntitiesRead<SourceChain> _readChains(Map<String, dynamic>? doc) {
-  final items = <SourceChain>[];
-  final corrupt = <Object>[];
-  final sources = doc?[StorageDocKeys.sources];
-  if (sources is List) {
-    for (final r in sources.where(_isChainRecord)) {
-      final read = chainFromRecord((r as Map).cast<String, dynamic>());
-      if (read.value != null) {
-        items.add(read.value!);
-      } else {
-        corrupt.add(read.dropped ?? 'chain record does not read');
-      }
-    }
-  }
   return (items: items, corrupt: corrupt);
 }
 
@@ -368,22 +354,9 @@ class BackupService {
       storage: storage,
       vpnSettings: vpn,
       presetIdByDnsServerTag: storageDocNeedsMigration(storage)
-          ? await _presetIdsForMigration()
+          ? await SettingsStorage.presetIdsForMigration()
           : const {},
     );
-  }
-
-  /// §439 — `ref` preset-серверов DNS для миграции блока формы 2.23.2. Шаблон
-  /// не загрузился — пусто: `ref` = тег, дальше orphan-cleanup резолвера.
-  static Future<Map<String, String>> _presetIdsForMigration() async {
-    try {
-      final template = await TemplateLoader.load();
-      return presetIdsByDnsServerTag(template.selectableRules);
-    } catch (e) {
-      AppLog.I.warning('Backup import: template not loaded for the storage '
-          'migration ($e); preset DNS servers keep ref = tag');
-      return const {};
-    }
   }
 
   /// Apply import согласно [include] (юзер мог снять галочки в preview-dialog'е).
@@ -423,7 +396,7 @@ class BackupService {
           merge && include.contains(BackupCategory.serverLists);
       final mergeChains = merge && include.contains(BackupCategory.routing);
       final filtered = _filterStorage(raw, include: include);
-      if (merge) filtered.remove(StorageDocKeys.sources);
+      if (merge) filtered.remove(kSourcesKey);
 
       if (mergeServerLists) {
         for (final e in contents._serverLists.corrupt) {
@@ -577,11 +550,11 @@ class BackupService {
     for (final entry in raw.entries) {
       final key = entry.key;
       final value = entry.value;
-      if (key == StorageDocKeys.version) {
+      if (key == kStorageVersionKey) {
         // Признак формы едет при любом наборе категорий: без него блок
         // читался бы как форма 2.23.2.
         out[key] = value;
-      } else if (key == StorageDocKeys.sources) {
+      } else if (key == kSourcesKey) {
         if (value is List && (wantServers || wantRouting)) {
           out[key] = [
             for (final r in value)
@@ -617,5 +590,4 @@ class BackupService {
     }
     return out;
   }
-
 }

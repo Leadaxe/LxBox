@@ -61,7 +61,7 @@ Future<DebugResponse> _export(DebugRequest req) async {
 
   if (include.contains('storage')) {
     if (from == 'v0_bak') {
-      final v0 = await readSettingsV0Backup();
+      final v0 = await SettingsStorage.exportV0Backup();
       if (v0 == null) {
         throw const NotFound('backup: no lxbox_settings.json.v0.bak on this '
             'device (storage was never migrated from the 2.23.2 form)');

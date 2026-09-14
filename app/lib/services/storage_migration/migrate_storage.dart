@@ -10,8 +10,6 @@
 /// называется в [StorageMigrationResult.warnings] с именами записей.
 library;
 
-import 'dart:convert';
-
 import '../../models/codec/chain_record.dart';
 import '../../models/codec/dns_record.dart';
 import '../../models/codec/rule_record.dart';
@@ -21,21 +19,8 @@ import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart' show SelectableRule;
 import '../../models/server_list.dart';
 import '../json_clone.dart' show deepCloneJson;
+import '../settings_storage_keys.dart';
 import 'legacy_form_v0.dart';
-
-/// Версия формы хранения, которую пишет эта сборка.
-const int kStorageVersion = 1;
-
-/// Ключи верхнего уровня формы 1.0, которые знает миграция.
-///
-/// До влития волны B3a имена живут здесь одним местом; у репозиториев
-/// хранения — свои константы тех же имён.
-abstract final class StorageDocKeys {
-  static const version = 'storage_version';
-  static const sources = 'sources';
-  static const rules = 'rules';
-  static const dns = 'dns';
-}
 
 /// Ключи формы 2.23.2, которые миграция переводит в записи 1.0.
 const Set<String> kLegacyStorageKeys = {
@@ -129,7 +114,7 @@ Map<String, String> presetIdsByDnsServerTag(Iterable<SelectableRule> presets) {
 /// `storage_version` документа; null — ключа нет или значение не версия
 /// (целое от 1).
 int? storageDocVersion(Map<String, dynamic> doc) {
-  final v = doc[StorageDocKeys.version];
+  final v = doc[kStorageVersionKey];
   return v is int && v >= 1 ? v : null;
 }
 
@@ -174,7 +159,7 @@ StorageMigrationResult migrateStorageDoc(
   final warnings = <String>[];
   final convert = version == null;
 
-  final rawVersion = doc[StorageDocKeys.version];
+  final rawVersion = doc[kStorageVersionKey];
   if (rawVersion != null && version == null) {
     warnings.add('storage_version "$rawVersion" is not a version, '
         'the document is read as the legacy form');
@@ -197,33 +182,32 @@ StorageMigrationResult migrateStorageDoc(
   } else {
     warnings.add('storage_version $version with legacy keys '
         '${legacyPresent.join(', ')}: legacy keys dropped, '
-        'records in ${StorageDocKeys.sources}/${StorageDocKeys.rules}/'
-        '${StorageDocKeys.dns} kept');
+        'records in $kSourcesKey/$kRulesKey/$kDnsKey kept');
   }
 
   final dropped = <String>[];
   final renamed = <String>[];
   final out = <String, dynamic>{
-    StorageDocKeys.version: version ?? kStorageVersion,
+    kStorageVersionKey: version ?? kStorageVersion,
   };
   for (final e in doc.entries) {
     final key = e.key;
     switch (key) {
-      case StorageDocKeys.version:
+      case kStorageVersionKey:
         break;
       case _kServerLists || _kChains:
         // Записи цепочек идут хвостом `sources[]` (§439 п. 7): ключ встаёт
         // на место первого из двух.
-        if (sources != null && !out.containsKey(StorageDocKeys.sources)) {
-          out[StorageDocKeys.sources] = sources;
+        if (sources != null && !out.containsKey(kSourcesKey)) {
+          out[kSourcesKey] = sources;
         }
       case _kCustomRules:
-        if (rules != null) out[StorageDocKeys.rules] = rules;
+        if (rules != null) out[kRulesKey] = rules;
       case _kDnsOptions:
-        if (dns != null) out[StorageDocKeys.dns] = dns;
-      case StorageDocKeys.sources when sources != null:
-      case StorageDocKeys.rules when rules != null:
-      case StorageDocKeys.dns when dns != null:
+        if (dns != null) out[kDnsKey] = dns;
+      case kSourcesKey when sources != null:
+      case kRulesKey when rules != null:
+      case kDnsKey when dns != null:
         warnings.add('"$key" without storage_version is replaced by '
             'the legacy keys of the same document');
       case _kLegacyDirections:
@@ -348,7 +332,7 @@ List<Map<String, dynamic>> _convertSources(
     out.add(chainToRecord(c));
   }
 
-  info.add('${StorageDocKeys.sources}: $subscriptions subscriptions, '
+  info.add('$kSourcesKey: $subscriptions subscriptions, '
       '$servers servers, $folders folders, ${chains.length} chains');
   if (multiNode.isNotEmpty) {
     info.add('servers with several nodes kept as one record: '
@@ -412,7 +396,7 @@ List<Map<String, dynamic>> _convertRules(
       warnings.add('rule "${rule.name}": does not convert ($err), dropped');
     }
   }
-  info.add('${StorageDocKeys.rules}: $read rules → ${out.length} records');
+  info.add('$kRulesKey: $read rules → ${out.length} records');
   if (split.isNotEmpty) info.add('json rules split: ${split.join(', ')}');
   return out;
 }
@@ -423,44 +407,23 @@ bool _isPort(String p) {
 }
 
 /// §439 §2.3 п. 3, В2 — json-правило: объект → одна запись `verbatim` с
-/// телом; массив → по записи на объект (`<имя>`, `<имя> #2`, …; первая
-/// держит `id`, `enabled` и `num` общие); прочее → маркер `verbatim` без тела.
+/// телом; массив с объектами → по записи на объект ([splitJsonRuleArrays] —
+/// тот же путь, что у сохранения правил); прочее → маркер `verbatim` без тела.
 List<Map<String, dynamic>> _jsonRuleRecords(
   CustomRuleJson rule,
   List<String> warnings,
 ) {
-  Object? decoded;
-  try {
-    decoded = jsonDecode(rule.json.trim());
-  } catch (_) {
-    decoded = null;
-  }
-  if (decoded is Map) return [ruleToRecord(rule)];
-  if (decoded is List) {
-    final bodies = decoded.whereType<Map>().toList();
-    final skipped = decoded.length - bodies.length;
-    if (skipped > 0) {
-      warnings.add('rule "${rule.name}": $skipped non-object element(s) of '
-          'the JSON array dropped');
-    }
-    if (bodies.isNotEmpty) {
-      return [
-        for (var i = 0; i < bodies.length; i++)
-          ruleToRecord(CustomRuleJson(
-            id: i == 0 ? rule.id : null,
-            name: i == 0 ? rule.name : '${rule.name} #${i + 1}',
-            enabled: rule.enabled,
-            orderNum: rule.orderNum,
-            json: jsonEncode(bodies[i]),
-          )),
-      ];
-    }
-  }
-  if (rule.json.trim().isNotEmpty) {
+  final records = [
+    for (final r in splitJsonRuleArrays([rule], notes: warnings))
+      ruleToRecord(r),
+  ];
+  if (records.length == 1 &&
+      !records.single.containsKey('body') &&
+      rule.json.trim().isNotEmpty) {
     warnings.add('rule "${rule.name}": raw JSON is not an object or an array '
         'of objects, kept without body (the text stays in .v0.bak)');
   }
-  return [ruleToRecord(rule)];
+  return records;
 }
 
 // ─── dns ────────────────────────────────────────────────────────────────────
@@ -509,7 +472,7 @@ Map<String, dynamic> _convertDns(
             'dropped');
       }
     }
-    out['servers'] = list;
+    out[kDnsServersKey] = list;
   } else if (rawServers != null) {
     warnings.add('$_kDnsOptions.servers is not a list, dropped');
   }
@@ -538,7 +501,7 @@ Map<String, dynamic> _convertDns(
         warnings.add('dns rule [$i] "$name": does not read ($err), dropped');
       }
     }
-    out['rules'] = list;
+    out[kDnsRulesKey] = list;
   } else if (rawRules != null) {
     warnings.add('$_kDnsOptions.rules is not a list, dropped');
   }
@@ -549,7 +512,7 @@ Map<String, dynamic> _convertDns(
     warnings.add('$_kDnsOptions.$k: unknown key, dropped');
   }
 
-  info.add('${StorageDocKeys.dns}: $servers servers, $rules rules');
+  info.add('$kDnsKey: $servers servers, $rules rules');
   if (noPreset.isNotEmpty) {
     info.add('dns preset servers without a known preset (ref = tag): '
         '${noPreset.join(', ')}');

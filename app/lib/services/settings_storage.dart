@@ -153,9 +153,8 @@ class SettingsStorage {
     'directions', // §125/§393 — Направления роутинга (template→storage)
     'directions_migrated', // §125/§393 — guard one-shot миграции
     // §393 A2 — легаси-пары `channels`/`channels_migrated` в allowlist НЕТ
-    // намеренно: границы импорта нормализуют имена ДО `replaceRaw`
-    // ([normalizeLegacyDirectionKeys]), а старый файл на диске (upgrade-путь)
-    // читается миграцией напрямую, мимо allowlist.
+    // намеренно: её переименовывает миграция формы (§439, `migrateStorageDoc`)
+    // и в файле на диске, и в снимке `replaceRaw` до allowlist'а.
     'tun_apps',
     'vpn_mode',
     'warp_account',
@@ -437,12 +436,6 @@ class SettingsStorage {
   /// Направление). Обновление подписки сюда НЕ входит — см. `_healChainHops`.
   static Future<ChainHealResult> healChainHops(String tag, {bool flush = true}) =>
       _healChainHops(tag, flush: flush);
-
-  /// §439 — место цепочки задаёт порядок записей `sources[]`, назначать
-  /// позиции нечему. Пустышка держит компиляцию вызовов в зоне миграции
-  /// хранения (`backup_service.dart`, Debug `handlers/backup.dart`) и
-  /// удаляется вместе с ними.
-  static Future<void> migrateChainOrderIfNeeded() async {}
 
   // ---------------------------------------------------------------------------
   // Last global update timestamp
@@ -915,6 +908,16 @@ class SettingsStorage {
   /// [BackupService]. Возвращает то же что [dumpCache] — alias для ясности
   /// семантики на call-site.
   static Future<Map<String, dynamic>> exportRaw() => dumpCache();
+
+  /// §439 §3.5 — документ `lxbox_settings.json.v0.bak`: состояние хранения
+  /// формы 2.23.2 на момент миграции. null — копии нет или она не читается.
+  static Future<Map<String, dynamic>?> exportV0Backup() => _readV0Backup();
+
+  /// §439 §3.1 шаг 2 — тег preset-сервера DNS → `preset_id` по шаблону для
+  /// [migrateStorageDoc] на входах старой формы. Шаблон не загрузился — пусто:
+  /// preset-серверы получают `ref` = тег.
+  static Future<Map<String, String>> presetIdsForMigration() =>
+      _presetIdsForMigration();
 
   /// §413 — подключи `vars` Debug API: секрет и адрес сервера конкретного
   /// устройства. Экспорт их по умолчанию не включает; полная замена

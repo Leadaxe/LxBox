@@ -58,18 +58,30 @@ const Set<String> kRuleBodyKeys = {
 const JsonEncoder _verbatimText = JsonEncoder.withIndent('  ');
 
 /// §439 В2 — запись правила держит один объект sing-box, поэтому правило
-/// вида json с непустым массивом объектов раскладывается до кодека на
-/// правила по элементу: первое сохраняет `id` и имя, следующие — `<имя> #2`,
+/// вида json с массивом, в котором есть объекты, раскладывается до кодека на
+/// правила по объекту: первое сохраняет `id` и имя, следующие — `<имя> #2`,
 /// `<имя> #3`… с новым `id`; `enabled` и `num` общие (как экспорт 438).
-/// Прочие правила, включая json, который массивом объектов не разбирается,
-/// идут как есть. Порядок сохраняется.
-List<CustomRule> splitJsonRuleArrays(Iterable<CustomRule> rules) {
+/// Элементы-не-объекты отбрасываются (сборка их и так не эмитит), строка об
+/// этом уходит в [notes]. Прочие правила, включая json, который массивом с
+/// объектами не разбирается, идут как есть. Порядок сохраняется.
+///
+/// Один путь деления на хранение и миграцию формы 2.23.2.
+List<CustomRule> splitJsonRuleArrays(
+  Iterable<CustomRule> rules, {
+  List<String>? notes,
+}) {
   final out = <CustomRule>[];
   for (final r in rules) {
-    final items = r is CustomRuleJson ? _objectArrayOf(r.json) : null;
-    if (items == null) {
+    final array = r is CustomRuleJson ? _arrayOf(r.json) : null;
+    final items = array?.whereType<Map>().toList() ?? const <Map>[];
+    if (items.isEmpty) {
       out.add(r);
       continue;
+    }
+    final skipped = array!.length - items.length;
+    if (skipped > 0) {
+      notes?.add('rule "${r.name}": $skipped non-object element(s) of the '
+          'JSON array dropped');
     }
     for (var i = 0; i < items.length; i++) {
       out.add(CustomRuleJson(
@@ -84,16 +96,14 @@ List<CustomRule> splitJsonRuleArrays(Iterable<CustomRule> rules) {
   return out;
 }
 
-/// Непустой массив объектов из текста json-правила; прочее — null.
-List<Map>? _objectArrayOf(String text) {
-  final Object? decoded;
+/// Массив из текста json-правила; прочее — null.
+List<dynamic>? _arrayOf(String text) {
   try {
-    decoded = jsonDecode(text);
+    final decoded = jsonDecode(text);
+    return decoded is List ? decoded : null;
   } on FormatException {
     return null;
   }
-  if (decoded is! List || decoded.isEmpty) return null;
-  return decoded.every((e) => e is Map) ? decoded.cast<Map>() : null;
 }
 
 /// Правило LxBox → запись 1.0.

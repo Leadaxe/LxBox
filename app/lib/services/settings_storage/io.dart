@@ -62,10 +62,9 @@ Future<File> _v0BakFile() async {
   return File('${dir.path}/${SettingsStorage._fileName}$_v0BakSuffix');
 }
 
-/// §439 §3.5 — документ `lxbox_settings.json.v0.bak`: состояние хранения
-/// формы 2.23.2 на момент миграции. `null` — копии нет или она не читается.
-/// Для `GET /backup/export?include=storage&from=v0_bak`.
-Future<Map<String, dynamic>?> readSettingsV0Backup() async {
+/// [SettingsStorage.exportV0Backup] — для
+/// `GET /backup/export?include=storage&from=v0_bak`.
+Future<Map<String, dynamic>?> _readV0Backup() async {
   try {
     return (await _tryReadFile(await _v0BakFile()))?.doc;
   } catch (_) {
@@ -193,7 +192,7 @@ Future<Map<String, dynamic>> _loadFromDisk() async {
 
 /// Пустой документ текущей формы.
 Map<String, dynamic> _freshDoc() =>
-    {StorageDocKeys.version: kStorageVersion};
+    {kStorageVersionKey: kStorageVersion};
 
 /// §439 §3.1 шаги 2–6 — миграция формы разобранного документа [read].
 ///
@@ -273,8 +272,9 @@ Future<Map<String, dynamic>> _migrateOnLoad(
   return result.doc;
 }
 
-/// Тег preset-сервера DNS → `preset_id` по шаблону. Шаблон не загрузился —
-/// пусто: preset-серверы получают `ref` = тег, дальше orphan-cleanup резолвера.
+/// Тег preset-сервера DNS → `preset_id` по шаблону (миграция в `_load` и
+/// [SettingsStorage.presetIdsForMigration]). Шаблон не загрузился — пусто:
+/// preset-серверы получают `ref` = тег, дальше orphan-cleanup резолвера.
 Future<Map<String, String>> _presetIdsForMigration() async {
   try {
     final template = await TemplateLoader.load();

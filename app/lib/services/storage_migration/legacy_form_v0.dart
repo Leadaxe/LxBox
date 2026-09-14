@@ -138,8 +138,6 @@ UserServer _readUserServer(Map<String, dynamic> j) {
       (e) => e.name == j['origin'],
       orElse: () => UserSource.manual,
     ),
-    createdAt:
-        DateTime.tryParse((j['created_at'] as String?) ?? '') ?? DateTime.now(),
     rawBody: rawBody,
     sections: NodeSections.fromJson(j['sections']),
     nodes: nodes,

@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
 import '../app_log.dart';
-import '../storage_migration/migrate_storage.dart' show StorageDocKeys;
+import '../settings_storage_keys.dart' show kStorageVersionKey;
 
 /// §417 — Workspaces: именованные копии состояния приложения.
 ///
@@ -305,7 +305,7 @@ class WorkspaceStore {
       if (await copy.exists()) return;
       final bytes = await src.readAsBytes();
       final doc = jsonDecode(utf8.decode(bytes));
-      if (doc is! Map || doc.containsKey(StorageDocKeys.version)) return;
+      if (doc is! Map || doc.containsKey(kStorageVersionKey)) return;
       final tmp = File('${copy.path}.${_tmpSeq++}$_tmpSuffix');
       await tmp.writeAsBytes(bytes, flush: true);
       await tmp.rename(copy.path);
