@@ -98,8 +98,10 @@ Both core patches are one `sed` over `cmd/internal/build_libbox/main.go`.
 6. Job limit: `build_timeout` raised to 5 h in the project API, but the shared
    runner kills a job at **3 h**. Two ABIs take 73 min, three took 2 h 45 min
    and hit the limit. x86_64 was dropped on 2026-09-06 and returned in
-   !48904 on 2026-09-14 (owner's decision). If a three-block job hits 3 h again,
-   the release can still go through with the x86_64 block marked `disable:`.
+   !48904 on 2026-09-14 (owner's decision); that three-block job took 97 min,
+   about 30 min per ABI, and all three matched the GitHub APKs. If a three-block
+   job hits 3 h again, the release can still go through with the x86_64 block
+   marked `disable:`.
    Runner variance: the same Chromium build took 25 min once and 50 min
    another time.
 7. The first CI run on GitLab needs account verification (phone or card),
@@ -198,7 +200,8 @@ The pattern after `Tags` filters tag names: release tags and `-hotfixN` pass,
 release candidates `-rc.N` are never picked up (§436). `UpdateCheckIgnore`
 would not do it: `checkupdates` applies it only in `HTTP` mode and when
 parsing a manifest, not in `Tags` mode with `UpdateCheckData`.
-The pattern, `'%c + 4'` and the x86_64 block are in !48904, pending.
+The pattern, `'%c + 4'` and the x86_64 block are in !48904: pipeline green
+on 2026-09-14, waiting for review.
 
 `UpdateCheckData` reads the ABI=0 code from pubspec (`2.23.0+22300500`);
 `VercodeOperation` adds each block's ABI digit, one operation per block.
