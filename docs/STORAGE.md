@@ -485,8 +485,11 @@ Empty sections are not written. A foreign `kind` inside a section is dropped on 
 (the rest of the records survive). `lib/models/node_sections.dart` holds the model,
 `lib/models/record_codec.dart` the record codec — the same code that will parse the root
 `custom_rules` / `dns_options` once storage moves to the contract 1.0 form. Sections are
-**not** exported to the LX Backup until contract 1.0 (the export names the loss with
-`backup_local_only_dropped`); a 0.12 file's `servers[].sections` is ignored silently.
+**not** exported to the LX Backup until LxBox writes contract 1.0 (the 0.12 export names
+the loss with `backup_local_only_dropped`); a 0.12 file's `servers[].sections` is ignored
+silently. A contract 1.0 file (`lx_backup: 2`) brings them in [§438]: records the section
+may not hold are dropped with `backup_section_record_dropped`, and a node matched by body
+takes the file's `sections` wholesale when the field is present.
 
 ### `type: "folder"` — `FolderServers` (§234)
 
@@ -1390,3 +1393,4 @@ The scrubber only handles the `vars` and `server_lists` keys; everything else (`
 [§220]: ./spec/tasks/220-allow-rotation-setting.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md
+[§438]: ./spec/tasks/438-lx-backup-1-0-read.md
