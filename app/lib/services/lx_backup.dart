@@ -209,6 +209,9 @@ const Set<String> kLxPortableVars = {
 
 /// Зарезервированные цели: существуют всегда, объявлять не нужно.
 const Set<String> _reservedOutbounds = {
+  // Служебный direct шаблона LxBox (`kDirectOutboundTag`): цель по умолчанию
+  // в пикере правил. Без него импорт выключал каждое правило на direct.
+  'direct-out',
   'direct',
   'block',
   'reject',
