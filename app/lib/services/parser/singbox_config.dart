@@ -301,7 +301,12 @@ List<NodeSpec> _parseOne(
         }
       }
       if (rawTag.isNotEmpty) {
-        node.importedSections = extractNodeSections(config, rawTag);
+        final dropped = <String>[];
+        node.importedSections =
+            extractNodeSections(config, rawTag, dropped: dropped);
+        for (final d in dropped) {
+          node.warnings.add(SectionsRecordDroppedWarning(d));
+        }
       }
     }
   }
@@ -323,7 +328,10 @@ List<NodeSpec> _parseOne(
 /// Незнакомые кодеку ключи тела (`rule_set` на набор конфига и т.п.)
 /// теряются: кодек их не хранит.
 NodeSections? extractNodeSections(
-    Map<String, dynamic> config, String nodeTag) {
+  Map<String, dynamic> config,
+  String nodeTag, {
+  List<String>? dropped,
+}) {
   bool refersNode(Object? v) => v == nodeTag || v == kSelfPlaceholder;
 
   final servers = <DnsServerInline>[];
@@ -383,7 +391,18 @@ NodeSections? extractNodeSections(
           'body': body,
         });
         final rule = read.value;
-        if (rule == null) continue;
+        if (rule == null) {
+          dropped?.add('route.rules: ${read.dropped}');
+          continue;
+        }
+        // Норма B3: `rule_set` конфига и любой незнакомый матчер не
+        // переносятся; вырезать ключ молча нельзя (правило стало бы
+        // match-all на узел) — запись отбрасывается целиком.
+        if (read.unknownKeys.isNotEmpty) {
+          dropped?.add(
+              'route.rules → "$name": body keys not supported here: ${read.unknownKeys.join(', ')}');
+          continue;
+        }
         rules.add(rule);
         n++;
       }

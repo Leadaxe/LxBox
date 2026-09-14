@@ -92,14 +92,32 @@ void main() {
       expect(dropped[4], contains('preset'));
     });
 
-    test('незнакомые ключи body уходят в unknownKeys', () {
+    test('незнакомый ключ body (rule_set, process_name) → запись отброшена целиком (B3)', () {
       final unknown = <String>[];
-      NodeSections.fromJson({
+      final dropped = <String>[];
+      final s = NodeSections.fromJson({
         'rules': [
           {'kind': 'inline', 'name': 'a', 'body': {'process_name': ['x'], 'outbound': '@self'}},
+          {'kind': 'inline', 'name': 'b', 'body': {'rule_set': ['geo'], 'outbound': '@self'}},
+          {'kind': 'inline', 'name': 'ok', 'body': {'ip_cidr': ['10.0.0.0/8'], 'outbound': '@self'}},
         ],
-      }, unknownKeys: unknown);
-      expect(unknown, ['rules[0].body.process_name']);
+      }, unknownKeys: unknown, dropped: dropped)!;
+      expect(s.rules.map((r) => r.name), ['ok']);
+      expect(unknown, ['rules[0].body.process_name', 'rules[1].body.rule_set']);
+      expect(dropped, hasLength(2));
+      expect(dropped[1], contains('rule_set'));
+    });
+
+    test('запись без outbound и action получает outbound: @self (B5)', () {
+      final s = NodeSections.fromJson({
+        'rules': [
+          {'kind': 'inline', 'name': 'a', 'body': {'ip_cidr': ['10.0.0.0/8']}},
+          {'kind': 'inline', 'name': 'b', 'body': {'ip_cidr': ['10.0.0.0/8'], 'action': 'reject'}},
+        ],
+      })!;
+      expect((s.rules[0] as CustomRuleInline).outbound, '@self');
+      expect((s.rules[1] as CustomRuleInline).outbound, kOutboundReject);
+      expect((s.toJson()['rules'] as List)[0]['body']['outbound'], '@self');
     });
 
     test('substituteSelf: обе формы, ключи не трогаются, не-плейсхолдеры целы', () {

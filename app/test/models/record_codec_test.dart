@@ -118,7 +118,7 @@ void main() {
   });
 
   group('§435 ruleToRecord / ruleFromRecord — srs / preset / json', () {
-    test('srs: refs снаружи body, rule_set в body не пишется и читается молча', () {
+    test('srs: refs снаружи body, rule_set в body не пишется; при чтении — незнакомый ключ', () {
       final r = CustomRuleSrs(
         id: 's1',
         name: 'Geo',
@@ -135,7 +135,10 @@ void main() {
         ...rec,
         'body': {...rec['body'] as Map, 'rule_set': ['Geo', 'Geo-2']},
       });
-      expect(back.unknownKeys, isEmpty);
+      // Норма B3 (14.09.2026): `rule_set` в теле записи сторона не переносит —
+      // ключ незнакомый, решение об отбросе принимает контекст (секции —
+      // запись целиком).
+      expect(back.unknownKeys, ['rule_set']);
       expect((back.value! as CustomRuleSrs).srsUrls, r.srsUrls);
       expect(back.value!.ports, ['443']);
     });

@@ -74,7 +74,8 @@ final class NodeSections {
           dropped?.add('rules[$i]: not an object');
           continue;
         }
-        final read = ruleFromRecord(rec.cast<String, dynamic>());
+        final record = _withSelfOutbound(rec.cast<String, dynamic>());
+        final read = ruleFromRecord(record);
         final r = read.value;
         if (r == null) {
           dropped?.add('rules[$i]: ${read.dropped}');
@@ -86,8 +87,16 @@ final class NodeSections {
               'rules[$i]: kind "${r.kind.name}" is not allowed in node sections');
           continue;
         }
+        // Норма лаунчера (14.09.2026, B3): ключ тела, который сторона не
+        // переносит (`rule_set` — ссылка на набор конфига, и любой другой
+        // незнакомый матчер), нельзя вырезать молча — без единственного
+        // матчера правило стало бы match-all и завернуло бы весь трафик в
+        // узел. Запись отбрасывается целиком, причина называет ключи.
         if (read.unknownKeys.isNotEmpty) {
+          final keys = read.unknownKeys.join(', ');
+          dropped?.add('rules[$i]: body keys not supported here: $keys');
           unknownKeys?.addAll(read.unknownKeys.map((k) => 'rules[$i].body.$k'));
+          continue;
         }
         rules.add(r);
       }
@@ -170,6 +179,19 @@ final class NodeSections {
         dnsServers: dnsServers ?? this.dnsServers,
         dnsRules: dnsRules ?? this.dnsRules,
       );
+}
+
+/// Норма лаунчера (14.09.2026, B5): запись секции без `outbound` и без
+/// `action` — правило ЭТОГО узла, цель дописывается `@self` (а не дефолт
+/// `direct-out` корневого правила).
+Map<String, dynamic> _withSelfOutbound(Map<String, dynamic> record) {
+  final body = record['body'];
+  if (body is! Map) return record;
+  if (body.containsKey('outbound') || body.containsKey('action')) return record;
+  return {
+    ...record,
+    'body': {...body.cast<String, dynamic>(), 'outbound': kSelfPlaceholder},
+  };
 }
 
 /// Плейсхолдер финального тега узла (NODE_SECTIONS.md §2), ровно две формы:

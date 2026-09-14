@@ -1,6 +1,6 @@
 # 435 — Секции узла и Tailscale (контракт ## 13, NODE_SECTIONS.md, ONE_NAMESPACE.md §2)
 
-Статус: **in progress** — волна 2 программы контракта 1.0 (после ## 12, [§434](../../tasks/434-srs-rule-multiple-rule-sets.md)).
+Статус: **implemented, DEVICE-VERIFIED на AVD** (14.09.2026, ядро lx.36 — путь гейта; живой tsnet ждёт ядра lx.38) — волна 2 программы контракта 1.0 (после ## 12, [§434](../../tasks/434-srs-rule-multiple-rule-sets.md)). Релиз — v2.23.2.
 Норма — `app/contract/docs/NODE_SECTIONS.md` (семантика) и
 `app/contract/docs/ONE_NAMESPACE.md` §2 (форма записей). Решения владельца
 14.09.2026: секции в состоянии сразу в целевой форме `body`; в бэкап до
@@ -390,6 +390,23 @@ deleting the app data registers a new device». Результат — `UserServ
 пикере detour и в позициях цепочек. Это ожидаемо: в интернет он не выпускает,
 а связка (маршрут `100.64.0.0/10` → узел) работает без участия Направлений.
 
+## 9.7 Заделы на волну 4 (корневой парсер 1.0), замечено при сверке с эталоном лаунчера
+
+Эталон форм — `core/state/testdata/v8_roundtrip.json` лаунчера (SPEC 127
+волна 1, 14.09.2026). Секции узла из него читаются кодеком без отбросов и
+round-trip'ятся (без `id` и пустого `name`, которых лаунчер не пишет).
+Что кодек пока не выражает и что решит волна 4:
+
+- `action: reject, method: drop` — у `CustomRuleInline` нет поля `method`,
+  ключ уходит в `unknownKeys` (потеря `drop` → обычный reject);
+- самостоятельные действия в `body` (`action: sniff | hijack-dns | resolve`)
+  — это эффект, а не цель; сегодня такая запись читалась бы как правило на
+  `direct-out`. В секциях узла таких записей не бывает (связка — маршрут на
+  узел), у корня 1.0 нужен либо вид `json`, либо поле действия в модели;
+- DNS-сервер `kind: preset` адресуется у лаунчера `ref` без `tag`
+  (`ref: "russian:yandex_udp"`), у LxBox preset-сервер — `tag`; кодек такой
+  записи не читает (отброс), корень 1.0 должен договорить адресацию.
+
 ## 10. Тесты
 
 - модель: `NodeSections` round-trip JSON (форма §2 байт-в-байт), пустое =
@@ -449,6 +466,26 @@ deleting the app data registers a new device». Результат — `UserServ
    применяются.
 10. Форма DNS-сервера `tailscale` с `endpoint` на удалённый узел → сервер
     выброшен санитайзером с warning, правило на него — тоже.
+
+## 12.1 Проверено на AVD LxBox_test (14.09.2026, сборка develop a07f0ca8, ядро lx.36)
+
+Через Debug API: целый конфиг с узлом Tailscale + связкой → `UserServer` с
+`sections` 1/1/1 (имена `@{self} rule 1`, `@{self}-ts-dns`); rebuild на
+lx.36 — узел снят гейтом, правил и DNS-сервера узла в конфиге нет, строка
+`Tailscale node "…" was skipped` в логе; WireGuard целым конфигом с подсетью за
+пиром → `rule_set: 'avd-wg-home rule 1' → outbound avd-wg-home` в конфиге;
+тот же узел членом папки → `avd-wg-home-1` во всех подстановках (уникализация
+аллокатора); VPN стартует с инжектированным правилом (tunnel connected).
+Через UI: Routing показывает строку «avd-wg-home rule 1 · 1 cidrs →
+avd-wg-home · from node avd-wg-home» с живым тумблером (off/on пишет
+`enabled` в узел) и ручкой drag; DNS Settings — сервер узла с бейджем Node и
+карточка «From nodes · read-only» с правилом; форма DNS-сервера — тип
+Tailscale с пикером узла (avd-ts) и «Accept default resolvers»; редактор
+узла — «No address (Tailscale)», блок Sections «1 rules · 1 DNS servers · 1
+DNS rules», Stored JSON, Clear sections; переименование узла оставляет
+плейсхолдеры в состоянии; мастер Add server → Tailscale создаёт узел с
+канонической связкой. Не проверено: живой вход в tailnet (ядро без тега),
+drag на устройстве (покрыт юнит-тестами), бэкап 1.0 (волна 3).
 
 ## 13. Вопросы лаунчеру и ответы (14.09.2026, singbox-launcher-ef)
 

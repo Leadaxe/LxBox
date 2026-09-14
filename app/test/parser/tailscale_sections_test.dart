@@ -138,24 +138,24 @@ void main() {
       expect(s.dnsRules[0].rule, {'domain_suffix': ['.ts.net'], 'server': '@{self}-ts-dns'});
       expect(s.dnsRules[1].rule, {'domain_suffix': ['.lan'], 'server': '@{self}-lan'});
       // Правила маршрута: по outbound == тег узла; имя из body.name либо
-      // `@{self} rule N`; num = 945 + i; незнакомый rule_set потерян.
-      expect(s.rules, hasLength(2));
+      // `@{self} rule N`; num = 945 + i. Правило с `rule_set` (ссылка на
+      // набор конфига) отброшено целиком с предупреждением (норма B3) — не
+      // вырезано до match-all.
+      expect(s.rules, hasLength(1));
       final r0 = s.rules[0] as CustomRuleInline;
       expect(r0.name, '@{self} rule 1');
       expect(r0.orderNum, 945);
       expect(r0.ipCidrs, ['100.64.0.0/10']);
       expect(r0.outbound, '@self');
-      final r1 = s.rules[1] as CustomRuleInline;
-      expect(r1.name, 'LAN');
-      expect(r1.orderNum, 946);
-      expect(r1.domainSuffixes, ['.lan']);
       // Форма записи — §2 ONE_NAMESPACE.
       final json = s.toJson();
       expect((json['rules'] as List).first['body'], {
         'ip_cidr': ['100.64.0.0/10'],
         'outbound': '@self',
       });
-      expect(node.warnings, isEmpty);
+      final w = node.warnings.whereType<SectionsRecordDroppedWarning>().single;
+      expect(w.detail, contains('LAN'));
+      expect(w.detail, contains('rule_set'));
     });
 
     test('два узла → секций нет', () {
