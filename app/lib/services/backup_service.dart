@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../models/custom_rule.dart';
 import '../models/server_list.dart';
-import '../vpn/box_vpn_client.dart';
 import 'app_log.dart';
 import 'json_clone.dart';
 import 'settings_storage.dart';
@@ -67,8 +67,13 @@ const _varDebugKeys = SettingsStorage.debugApiVarKeys;
 
 /// Container распарсенного backup-файла. `storage` — содержимое
 /// `lxbox_settings.json` целиком; `vpnSettings` — native-side VPN toggles.
+///
+/// Источники и правила блока `storage` читаются моделями через репозиторий
+/// ([SettingsStorage.serverListsOf], [SettingsStorage.customRulesOf]) — тем же
+/// чтением, что живое хранение; счётчики, разбивка и слияние по `id` идут на
+/// моделях. Документ целиком (`storage`) остаётся для `replaceRaw`.
 class BackupContents {
-  const BackupContents({
+  BackupContents({
     this.createdAt,
     this.sourceAppVersion,
     this.storage,
@@ -86,13 +91,20 @@ class BackupContents {
   /// `vpn_settings`.
   final Map<String, dynamic>? vpnSettings;
 
+  /// Источники блока [storage]. Читаются один раз: разбор одиночного сервера
+  /// перечитывает его тело, а превью спрашивает счётчики на каждой перерисовке.
+  late final _EntitiesRead<ServerList> _serverLists =
+      _readEntities(storage, SettingsStorage.serverListsOf);
+
+  /// Правила блока [storage].
+  late final _EntitiesRead<CustomRule> _rules =
+      _readEntities(storage, SettingsStorage.customRulesOf);
+
   /// Какие категории присутствуют в файле — для UI checkbox state'а.
   Set<BackupCategory> availableCategories() {
     final s = storage;
     return {
-      if (s != null && s['server_lists'] is List &&
-          (s['server_lists'] as List).isNotEmpty)
-        BackupCategory.serverLists,
+      if (_serverLists.count > 0) BackupCategory.serverLists,
       if (s != null && _hasAnyRouting(s)) BackupCategory.routing,
       if (s != null && _hasAnyApp(s)) BackupCategory.appSettings,
       if (s != null && _hasAnyDebug(s)) BackupCategory.debugConfig,
@@ -105,14 +117,8 @@ class BackupContents {
   int countFor(BackupCategory cat) {
     final s = storage ?? const <String, dynamic>{};
     return switch (cat) {
-      BackupCategory.serverLists => () {
-          final v = s['server_lists'];
-          return v is List ? v.length : 0;
-        }(),
-      BackupCategory.routing => () {
-          final rules = s['custom_rules'];
-          return rules is List ? rules.length : 0;
-        }(),
+      BackupCategory.serverLists => _serverLists.count,
+      BackupCategory.routing => _rules.count,
       BackupCategory.appSettings => () {
           final vars = s['vars'];
           if (vars is! Map) return 0;
@@ -134,25 +140,12 @@ class BackupContents {
   /// Опциональные «полезные при preview» детали — текущий final outbound.
   String? get routingFinalOutbound => storage?['route_final'] as String?;
 
-  /// Из server_lists — сколько subscriptions vs custom (для UI-надписи).
+  /// Сколько источников — подписки, сколько прочие (для UI-надписи). Битая
+  /// запись считается прочей.
   ({int subs, int custom}) splitServerLists() {
-    final raw = storage?['server_lists'];
-    if (raw is! List) return (subs: 0, custom: 0);
-    var subs = 0;
-    var custom = 0;
-    for (final m in raw.whereType<Map<String, dynamic>>()) {
-      try {
-        final list = ServerList.fromJson(m);
-        if (list is SubscriptionServers) {
-          subs++;
-        } else {
-          custom++;
-        }
-      } catch (_) {
-        custom++;
-      }
-    }
-    return (subs: subs, custom: custom);
+    final subs =
+        _serverLists.items.whereType<SubscriptionServers>().length;
+    return (subs: subs, custom: _serverLists.count - subs);
   }
 
   static bool _hasAnyRouting(Map<String, dynamic> s) {
@@ -186,6 +179,27 @@ class BackupContents {
     }
     return false;
   }
+}
+
+/// Сущности документа, прочитанные репозиторием: модели и ошибки битых
+/// записей. Битая запись входит в [count] — превью показывает, сколько записей
+/// в файле, а не сколько из них прочиталось.
+typedef _EntitiesRead<T> = ({List<T> items, List<Object> corrupt});
+
+extension<T> on _EntitiesRead<T> {
+  int get count => items.length + corrupt.length;
+}
+
+_EntitiesRead<T> _readEntities<T>(
+  Map<String, dynamic>? doc,
+  List<T> Function(
+    Map<String, dynamic> doc, {
+    void Function(Object error)? onCorrupt,
+  }) read,
+) {
+  final corrupt = <Object>[];
+  final items = doc == null ? <T>[] : read(doc, onCorrupt: corrupt.add);
+  return (items: items, corrupt: corrupt);
 }
 
 /// Результат применения import'а — используется UI для SnackBar'а.
@@ -236,13 +250,7 @@ class BackupApplyResult {
 /// Симметрично с HTTP `/backup/*` (см.
 /// `lib/services/debug/handlers/backup.dart`).
 class BackupService {
-  const BackupService({BoxVpnClient? vpn}) : _vpn = vpn;
-
-  // §189 — _vpn больше не используется напрямую (vpn_settings ходят через
-  // SettingsStorage.getNativePrefs/setNativeBool). Поле сохранено для
-  // обратной совместимости конструктора (тесты могут передавать мок).
-  // ignore: unused_field
-  final BoxVpnClient? _vpn;
+  const BackupService();
 
   /// Build JSON-string для export'а согласно [include]'у.
   Future<String> buildExport({required Set<BackupCategory> include}) async {
@@ -337,37 +345,34 @@ class BackupService {
 
     final raw = contents.storage;
     if (raw != null) {
-      final filtered = _filterStorageForImport(raw, include: include);
+      // merge: источники дописываются по `id` на моделях, поэтому в документ
+      // для replaceRaw их категория не идёт — иначе upsert затёр бы список.
+      final mergeServerLists =
+          merge && include.contains(BackupCategory.serverLists);
+      final filtered = _filterStorageForImport(raw,
+          include: mergeServerLists
+              ? include.difference({BackupCategory.serverLists})
+              : include);
 
-      // server_lists merge mode handled in-Map (append-by-id).
-      if (merge && include.contains(BackupCategory.serverLists)) {
-        final incoming = filtered['server_lists'];
-        if (incoming is List) {
-          try {
-            final existing = await SettingsStorage.getServerLists();
-            final ids = existing.map((e) => e.id).toSet();
-            for (final m in incoming.whereType<Map<String, dynamic>>()) {
-              try {
-                final p = ServerList.fromJson(m);
-                if (!ids.contains(p.id)) {
-                  existing.add(p);
-                  serverLists++;
-                }
-              } catch (e) {
-                errors.add('Server list parse: $e');
-              }
+      if (mergeServerLists) {
+        for (final e in contents._serverLists.corrupt) {
+          errors.add('Server list parse: $e');
+        }
+        try {
+          final existing = await SettingsStorage.getServerLists();
+          final ids = existing.map((e) => e.id).toSet();
+          for (final list in contents._serverLists.items) {
+            if (ids.add(list.id)) {
+              existing.add(list);
+              serverLists++;
             }
-            await SettingsStorage.saveServerLists(existing);
-          } catch (e) {
-            errors.add('Server lists: $e');
           }
-          filtered.remove('server_lists');
+          if (serverLists > 0) await SettingsStorage.saveServerLists(existing);
+        } catch (e) {
+          errors.add('Server lists: $e');
         }
       } else if (include.contains(BackupCategory.serverLists)) {
-        final incoming = filtered['server_lists'];
-        if (incoming is List) {
-          serverLists = incoming.length;
-        }
+        serverLists = contents.countFor(BackupCategory.serverLists);
       }
 
       try {

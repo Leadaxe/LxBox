@@ -14,26 +14,33 @@ part of '../settings_storage.dart';
 // импорте бэкапа allowlist'ом.
 // ---------------------------------------------------------------------------
 
-Future<List<ServerList>> _getServerLists() async {
-  final data = await _load();
-  final v2 = data['server_lists'] as List<dynamic>?;
-  if (v2 == null) return const [];
-  // §141 P1.8c — per-entry try/catch: одна битая запись (unknown type,
-  // missing required field → FormatException в *.fromJson) раньше роняла
-  // ВЕСЬ список → app не загружал ни одной подписки. Теперь skip битой
-  // записи с логом, остальные подгружаются.
-  return v2
-      .whereType<Map<String, dynamic>>()
-      .map((m) {
-        try {
-          return ServerList.fromJson(m);
-        } catch (e) {
-          AppLog.I.warning('Skipping corrupt server_list entry: $e');
-          return null;
-        }
-      })
-      .whereType<ServerList>()
-      .toList();
+Future<List<ServerList>> _getServerLists() async => _serverListsOf(
+      await _load(),
+      onCorrupt: (e) =>
+          AppLog.I.warning('Skipping corrupt server_list entry: $e'),
+    );
+
+/// Источники документа хранения [doc]: живого файла, его снимка или блока
+/// `storage` бэкапа — одно чтение на все случаи.
+///
+/// §141 P1.8c — одна битая запись (unknown type, нет обязательного поля →
+/// FormatException в *.fromJson) не роняет весь список: она пропускается,
+/// ошибка уходит в [onCorrupt], остальные читаются.
+List<ServerList> _serverListsOf(
+  Map<String, dynamic> doc, {
+  void Function(Object error)? onCorrupt,
+}) {
+  final raw = doc['server_lists'];
+  if (raw is! List) return [];
+  final out = <ServerList>[];
+  for (final m in raw.whereType<Map<String, dynamic>>()) {
+    try {
+      out.add(ServerList.fromJson(m));
+    } catch (e) {
+      onCorrupt?.call(e);
+    }
+  }
+  return out;
 }
 
 Future<void> _saveServerLists(List<ServerList> lists, {bool flush = true}) async {
@@ -114,14 +121,34 @@ Future<bool> _shouldRefreshSubscriptions(String reloadInterval) async {
 // Per-app rules сюда же (поле `packages`), отдельного типа больше нет.
 // ---------------------------------------------------------------------------
 
-Future<List<CustomRule>> _getCustomRules() async {
-  final data = await _load();
-  // §159 — legacy `app_rules` → `custom_rules` миграция удалена.
-  final list = data['custom_rules'] as List<dynamic>? ?? [];
-  return list
-      .whereType<Map<String, dynamic>>()
-      .map(CustomRule.fromJson)
-      .toList();
+Future<List<CustomRule>> _getCustomRules() async =>
+    _customRulesOf(await _load());
+
+/// Правила документа хранения [doc] (живой файл или блок `storage` бэкапа).
+///
+/// [onCorrupt] задан — битая запись пропускается и уходит в него: так читает
+/// превью бэкапа, которому чужой файл не должен ронять диалог. Не задан —
+/// ошибка разбора летит вызывающему: живое хранение не вправе молча выкинуть
+/// правило, которое следующая запись стёрла бы с диска.
+List<CustomRule> _customRulesOf(
+  Map<String, dynamic> doc, {
+  void Function(Object error)? onCorrupt,
+}) {
+  final raw = doc['custom_rules'];
+  if (raw is! List) return [];
+  final out = <CustomRule>[];
+  for (final m in raw.whereType<Map<String, dynamic>>()) {
+    if (onCorrupt == null) {
+      out.add(CustomRule.fromJson(m));
+      continue;
+    }
+    try {
+      out.add(CustomRule.fromJson(m));
+    } catch (e) {
+      onCorrupt(e);
+    }
+  }
+  return out;
 }
 
 Future<void> _saveCustomRules(List<CustomRule> rules,

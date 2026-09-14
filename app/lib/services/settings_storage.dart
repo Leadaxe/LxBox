@@ -296,8 +296,18 @@ class SettingsStorage {
   static Future<void> saveServerLists(List<ServerList> lists) =>
       _saveServerLists(lists);
 
-  /// Запись источника в форме хранения — для пака диагностики. JSON записи
-  /// потребитель берёт только отсюда: форму хранения держит репозиторий.
+  /// Источники документа хранения [doc] — снимка [dumpCache] или блока
+  /// `storage` бэкапа — тем же чтением, что [getServerLists]. Битая запись
+  /// пропускается, её ошибка уходит в [onCorrupt].
+  static List<ServerList> serverListsOf(
+    Map<String, dynamic> doc, {
+    void Function(Object error)? onCorrupt,
+  }) =>
+      _serverListsOf(doc, onCorrupt: onCorrupt);
+
+  /// Запись источника в форме хранения — для пака диагностики и дампа
+  /// `/state/storage`. JSON записи потребитель берёт только отсюда: форму
+  /// хранения держит репозиторий.
   static Map<String, dynamic> serverListRecord(ServerList list) =>
       _serverListRecord(list);
 
@@ -448,6 +458,15 @@ class SettingsStorage {
   // ---------------------------------------------------------------------------
 
   static Future<List<CustomRule>> getCustomRules() => _getCustomRules();
+
+  /// Правила документа хранения [doc] (блок `storage` бэкапа) тем же чтением,
+  /// что [getCustomRules]. С [onCorrupt] битая запись пропускается и уходит в
+  /// него, без него ошибка разбора летит вызывающему.
+  static List<CustomRule> customRulesOf(
+    Map<String, dynamic> doc, {
+    void Function(Object error)? onCorrupt,
+  }) =>
+      _customRulesOf(doc, onCorrupt: onCorrupt);
 
   static Future<void> saveCustomRules(List<CustomRule> rules,
           {bool flush = true}) =>
