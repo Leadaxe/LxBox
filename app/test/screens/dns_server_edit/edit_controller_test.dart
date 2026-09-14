@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/screens/dns_server_edit/edit_controller.dart';
 import 'package:lxbox/screens/dns_settings_screen/resolved_server.dart';
 
@@ -9,19 +10,18 @@ import 'package:lxbox/screens/dns_settings_screen/resolved_server.dart';
 void main() {
   group('inline (new-режим)', () {
     DnsServerEditController makeNew() => DnsServerEditController(
-          initialRef: {
-            'enabled': true,
-            'kind': 'inline',
-            'tag': 'dns_new',
-            'description': 'My DNS',
-            'body': {'type': 'udp', 'server': '1.1.1.1', 'server_port': 53},
-          },
+          initialRef: const DnsServerInline(
+            enabled: true,
+            tag: 'dns_new',
+            description: 'My DNS',
+            body: {'type': 'udp', 'server': '1.1.1.1', 'server_port': 53},
+          ),
         );
 
     test('snapshot: tag/description из контроллеров, body без detour', () {
       final c = makeNew();
       c.tagCtrl.text = 'my_dns';
-      final snap = c.snapshot();
+      final snap = c.snapshot().toJson();
       expect(snap['kind'], 'inline');
       expect(snap['tag'], 'my_dns');
       expect(snap['description'], 'My DNS');
@@ -40,12 +40,12 @@ void main() {
       final c = makeNew();
       expect(c.inlineDetour, 'direct-out'); // ключа нет → direct
       c.setInlineDetour('vpn-1');
-      expect(c.snapshot()['body']['detour'], 'vpn-1');
+      expect(c.snapshot().toJson()['body']['detour'], 'vpn-1');
       expect(c.inlineDetour, 'vpn-1');
       // JSON-вкладка синхронизирована
       expect(c.bodyCtrl.text, contains('"detour": "vpn-1"'));
       c.setInlineDetour('direct-out');
-      expect((c.snapshot()['body'] as Map).containsKey('detour'), false);
+      expect((c.snapshot().toJson()['body'] as Map).containsKey('detour'), false);
       c.dispose();
     });
 
@@ -55,14 +55,14 @@ void main() {
           '{"type":"tls","server":"9.9.9.9","server_port":853,'
           '"tag":"x","description":"y","enabled":false,"_origin":"z"}');
       expect(c.jsonError, null);
-      expect(c.snapshot()['body'], {
+      expect(c.snapshot().toJson()['body'], {
         'type': 'tls',
         'server': '9.9.9.9',
         'server_port': 853,
       });
       // tag — часть sing-box-тела: в new-режиме синхронизируется в поле Tag.
       expect(c.tagCtrl.text, 'x');
-      expect(c.snapshot()['tag'], 'x');
+      expect(c.snapshot().toJson()['tag'], 'x');
       c.dispose();
     });
 
@@ -79,12 +79,12 @@ void main() {
       final c = makeNew();
       c.onBodyTextChanged('{"type":"udp"');
       expect(c.jsonError, isNotNull);
-      expect(c.snapshot()['body']['server'], '1.1.1.1');
+      expect(c.snapshot().toJson()['body']['server'], '1.1.1.1');
       c.onBodyTextChanged('[1,2]');
       expect(c.jsonError, isNotNull);
       c.onBodyTextChanged('{"type":"udp","server":"8.8.8.8"}');
       expect(c.jsonError, null);
-      expect(c.snapshot()['body']['server'], '8.8.8.8');
+      expect(c.snapshot().toJson()['body']['server'], '8.8.8.8');
       c.dispose();
     });
 
@@ -102,12 +102,11 @@ void main() {
   group('форма inline-сервера — UDP/DoT/DoH (§117 задача 4b)', () {
     DnsServerEditController makeNew({List<String> tags = const []}) =>
         DnsServerEditController(
-          initialRef: {
-            'enabled': true,
-            'kind': 'inline',
-            'tag': 'dns_new',
-            'body': {'type': 'udp'},
-          },
+          initialRef: const DnsServerInline(
+            enabled: true,
+            tag: 'dns_new',
+            body: {'type': 'udp'},
+          ),
           dnsServerTags: tags,
         );
 
@@ -124,11 +123,11 @@ void main() {
       final c = makeNew();
       c.onAddressChanged('9.9.9.9');
       c.onPortChanged('5353');
-      expect(c.snapshot()['body'],
+      expect(c.snapshot().toJson()['body'],
           {'type': 'udp', 'server': '9.9.9.9', 'server_port': 5353});
       c.onPortChanged('');
       expect(
-          (c.snapshot()['body'] as Map).containsKey('server_port'), false);
+          (c.snapshot().toJson()['body'] as Map).containsKey('server_port'), false);
       c.dispose();
     });
 
@@ -138,13 +137,13 @@ void main() {
       c.onAddressChanged('9.9.9.9');
       c.onPortChanged('53'); // дефолт udp
       c.setServerMode('tls');
-      final body = c.snapshot()['body'] as Map;
+      final body = c.snapshot().toJson()['body'] as Map;
       expect(body['type'], 'tls');
       expect(body.containsKey('server_port'), false,
           reason: 'дефолтный порт старого режима → дефолт нового');
       c.onPortChanged('8853'); // кастомный
       c.setServerMode('https');
-      expect(c.snapshot()['body']['server_port'], 8853);
+      expect(c.snapshot().toJson()['body']['server_port'], 8853);
       c.dispose();
     });
 
@@ -154,18 +153,18 @@ void main() {
       c.onAddressChanged('8.8.8.8');
       c.onPathChanged('dns-query'); // без слэша — нормализуется
       c.onSniChanged('dns.google');
-      expect(c.snapshot()['body'], {
+      expect(c.snapshot().toJson()['body'], {
         'type': 'https',
         'server': '8.8.8.8',
         'path': '/dns-query',
         'tls': {'enabled': true, 'server_name': 'dns.google'},
       });
       c.setServerMode('tls');
-      var body = c.snapshot()['body'] as Map;
+      var body = c.snapshot().toJson()['body'] as Map;
       expect(body.containsKey('path'), false);
       expect(body.containsKey('tls'), true, reason: 'SNI валиден для DoT');
       c.setServerMode('udp');
-      body = c.snapshot()['body'] as Map;
+      body = c.snapshot().toJson()['body'] as Map;
       expect(body.containsKey('tls'), false);
       c.dispose();
     });
@@ -173,7 +172,7 @@ void main() {
     test('DoH URL-вставка: https://host/path → server+path+режим', () {
       final c = makeNew(tags: ['google_udp', 'cloudflare_udp']);
       c.onAddressChanged('https://dns.quad9.net/dns-query');
-      final body = c.snapshot()['body'] as Map;
+      final body = c.snapshot().toJson()['body'] as Map;
       expect(body['type'], 'https');
       expect(body['server'], 'dns.quad9.net');
       expect(body['path'], '/dns-query');
@@ -201,14 +200,14 @@ void main() {
       c.onAddressChanged('8.8.8.8');
       c.onPathChanged('dns-query');
       c.onSniChanged('dns.google');
-      expect(c.snapshot()['body'], {
+      expect(c.snapshot().toJson()['body'], {
         'type': 'h3',
         'server': '8.8.8.8',
         'path': '/dns-query',
         'tls': {'enabled': true, 'server_name': 'dns.google'},
       });
       c.setServerMode('quic');
-      final body = c.snapshot()['body'] as Map;
+      final body = c.snapshot().toJson()['body'] as Map;
       expect(body['type'], 'quic');
       expect(body.containsKey('path'), false);
       expect(body.containsKey('tls'), true, reason: 'SNI валиден для DoQ');
@@ -224,7 +223,7 @@ void main() {
       c.onAddressChanged('1.1.1.1');
       c.onPortChanged('443');
       c.setServerMode('https');
-      expect((c.snapshot()['body'] as Map).containsKey('server_port'), false);
+      expect((c.snapshot().toJson()['body'] as Map).containsKey('server_port'), false);
       c.dispose();
     });
 
@@ -232,7 +231,7 @@ void main() {
       final c = makeNew(tags: ['google_udp']);
       c.setServerMode('h3');
       c.onAddressChanged('https://dns.quad9.net/dns-query');
-      final body = c.snapshot()['body'] as Map;
+      final body = c.snapshot().toJson()['body'] as Map;
       expect(body['type'], 'h3');
       expect(body['server'], 'dns.quad9.net');
       expect(body['path'], '/dns-query');
@@ -243,11 +242,11 @@ void main() {
         () {
       final c = makeNew(tags: ['google_udp', 'cloudflare_udp']);
       c.onAddressChanged('dns.adguard-dns.com');
-      expect(c.snapshot()['body']['domain_resolver'], 'google_udp');
+      expect(c.snapshot().toJson()['body']['domain_resolver'], 'google_udp');
       c.setDomainResolver('cloudflare_udp');
-      expect(c.snapshot()['body']['domain_resolver'], 'cloudflare_udp');
+      expect(c.snapshot().toJson()['body']['domain_resolver'], 'cloudflare_udp');
       c.onAddressChanged('94.140.14.14');
-      expect((c.snapshot()['body'] as Map).containsKey('domain_resolver'),
+      expect((c.snapshot().toJson()['body'] as Map).containsKey('domain_resolver'),
           false);
       c.dispose();
     });
@@ -274,10 +273,10 @@ void main() {
           body: {'type': 'udp', 'tag': 'google_udp', 'server': '8.8.8.8'},
         );
 
-    DnsServerEditController makeTpl({Map<String, dynamic>? ref}) =>
+    DnsServerEditController makeTpl({DnsServerRef? ref}) =>
         DnsServerEditController(
-          initialRef:
-              ref ?? {'enabled': true, 'kind': 'template', 'tag': 'google_udp'},
+          initialRef: ref ??
+              const DnsServerTemplate(enabled: true, tag: 'google_udp'),
           resolved: resolvedTemplate(),
           canonicalDescription: 'Google DNS (direct)',
         );
@@ -286,7 +285,7 @@ void main() {
         () {
       final c = makeTpl();
       expect(c.isDirty(), false);
-      final snap = c.snapshot();
+      final snap = c.snapshot().toJson();
       expect(snap.containsKey('description'), false);
       expect(snap.containsKey('varValues'), false);
       c.dispose();
@@ -296,20 +295,21 @@ void main() {
       final c = makeTpl();
       c.setVarValue('outbound', 'vpn-1');
       expect(c.isDirty(), true);
-      expect(c.snapshot()['varValues'], {'outbound': 'vpn-1'});
+      expect(c.snapshot().toJson()['varValues'], {'outbound': 'vpn-1'});
       c.dispose();
     });
 
     test('существующие varValues сохраняются и дополняются', () {
-      final c = makeTpl(ref: {
-        'enabled': true,
-        'kind': 'template',
-        'tag': 'google_udp',
-        'varValues': {'dns_ip': '8.8.4.4'},
-      });
+      final c = makeTpl(
+        ref: const DnsServerTemplate(
+          enabled: true,
+          tag: 'google_udp',
+          varValues: {'dns_ip': '8.8.4.4'},
+        ),
+      );
       expect(c.isDirty(), false);
       c.setVarValue('outbound', 'vpn-1');
-      expect(c.snapshot()['varValues'],
+      expect(c.snapshot().toJson()['varValues'],
           {'dns_ip': '8.8.4.4', 'outbound': 'vpn-1'});
       c.dispose();
     });
@@ -317,9 +317,9 @@ void main() {
     test('description-override пишется только при отличии от canonical', () {
       final c = makeTpl();
       c.descCtrl.text = 'Мой Google';
-      expect(c.snapshot()['description'], 'Мой Google');
+      expect(c.snapshot().toJson()['description'], 'Мой Google');
       c.descCtrl.text = 'Google DNS (direct)'; // вернули canonical
-      expect(c.snapshot().containsKey('description'), false);
+      expect(c.snapshot().toJson().containsKey('description'), false);
       c.dispose();
     });
   });
@@ -327,7 +327,7 @@ void main() {
   group('lifecycle / kinds', () {
     test('locked (used by preset): editor видит lock и label', () {
       final c = DnsServerEditController(
-        initialRef: {'enabled': true, 'kind': 'preset', 'tag': 'yandex_udp'},
+        initialRef: const DnsServerPreset(enabled: true, tag: 'yandex_udp'),
         resolved: const ResolvedServer(
           kind: ServerKind.preset,
           tag: 'yandex_udp',
@@ -347,12 +347,11 @@ void main() {
     test('edit existing: смена tag в JSON = rename (синхронизирует поле Tag)',
         () {
       final c = DnsServerEditController(
-        initialRef: {
-          'enabled': true,
-          'kind': 'inline',
-          'tag': 'my-dns',
-          'body': {'type': 'udp', 'server': '192.168.1.1'},
-        },
+        initialRef: const DnsServerInline(
+          enabled: true,
+          tag: 'my-dns',
+          body: {'type': 'udp', 'server': '192.168.1.1'},
+        ),
         resolved: const ResolvedServer(
           kind: ServerKind.inline,
           tag: 'my-dns',
@@ -367,18 +366,17 @@ void main() {
       // §117 задача 4b: rename разрешён — каскад по ссылкам на save.
       expect(c.jsonError, null);
       expect(c.tagCtrl.text, 'other');
-      expect(c.snapshot()['tag'], 'other');
+      expect(c.snapshot().toJson()['tag'], 'other');
       c.dispose();
     });
 
     test('inline-override: overrides доступен (Reset-action в AppBar)', () {
       final c = DnsServerEditController(
-        initialRef: {
-          'enabled': true,
-          'kind': 'inline',
-          'tag': 'google_udp',
-          'body': {'type': 'udp', 'server': '8.8.4.4'},
-        },
+        initialRef: const DnsServerInline(
+          enabled: true,
+          tag: 'google_udp',
+          body: {'type': 'udp', 'server': '8.8.4.4'},
+        ),
         resolved: const ResolvedServer(
           kind: ServerKind.inline,
           tag: 'google_udp',
@@ -391,7 +389,7 @@ void main() {
       expect(c.overrides, ServerKind.template);
       expect(c.isUserOnly, false);
       // body инициализирован из resolved.body без синтезированного tag'а
-      expect(c.snapshot()['body'], {'type': 'udp', 'server': '8.8.4.4'});
+      expect(c.snapshot().toJson()['body'], {'type': 'udp', 'server': '8.8.4.4'});
       c.dispose();
     });
   });

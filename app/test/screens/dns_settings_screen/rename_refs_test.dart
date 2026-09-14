@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/screens/dns_settings_screen/dns_server_resolver.dart';
 
 /// §117 задача 4b — rename тега DNS-сервера: каскад по всем ссылкам
@@ -10,42 +11,38 @@ void main() {
   group('renameDnsServerTagRefs', () {
     test('каскад: domain_resolver, dns_servers-vars, §061-правила, resolvers',
         () {
-      final servers = <Map<String, dynamic>>[
-        {
-          'enabled': true,
-          'kind': 'inline',
-          'tag': 'my-doh',
-          'body': {
+      final servers = <DnsServerRef>[
+        const DnsServerInline(
+          enabled: true,
+          tag: 'my-doh',
+          body: {
             'type': 'https',
             'server': 'dns.example.com',
             'domain_resolver': 'my-dns',
           },
-        },
-        {
-          'enabled': true,
-          'kind': 'template',
-          'tag': 'safe_dns_dot',
-          'varValues': {
+        ),
+        const DnsServerTemplate(
+          enabled: true,
+          tag: 'safe_dns_dot',
+          varValues: {
             'dom_resolver': 'my-dns',
             'safe_profile': 'my-dns', // enum — совпадение текста, не трогаем
           },
-        },
+        ),
       ];
-      final rules = <Map<String, dynamic>>[
-        {
-          'enabled': true,
-          'kind': 'inline',
-          'name': 'r1',
-          'rule': {'domain': ['x.com'], 'server': 'my-dns'},
-        },
-        {
-          'enabled': true,
-          'kind': 'srs',
-          'id': 'ds_1',
-          'name': 'cn',
-          'server': 'my-dns',
-        },
-        {'enabled': true, 'kind': 'preset', 'presetId': 'p'},
+      final rules = <DnsRuleRef>[
+        const DnsRuleInline(
+          name: 'r1',
+          rule: {'domain': ['x.com'], 'server': 'my-dns'},
+        ),
+        const DnsRuleSrs(id: 'ds_1', name: 'cn', server: 'my-dns'),
+        const DnsRulePreset(presetId: 'p', enabled: true),
+        // §439 A1 — srs формы §294: server в body.
+        const DnsRuleSrs(
+          id: 'ds_2',
+          name: 'body-form',
+          body: {'server': 'my-dns', 'query_type': ['A']},
+        ),
       ];
       final templateByTag = <String, Map<String, dynamic>>{
         'safe_dns_dot': {
@@ -67,26 +64,30 @@ void main() {
         defaultResolver: 'google_udp',
       );
 
-      expect(servers[0]['body']['domain_resolver'], 'home-router');
-      expect(servers[1]['varValues']['dom_resolver'], 'home-router');
-      expect(servers[1]['varValues']['safe_profile'], 'my-dns',
+      expect((servers[0] as DnsServerInline).body['domain_resolver'],
+          'home-router');
+      final tplVars = (servers[1] as DnsServerTemplate).varValues;
+      expect(tplVars['dom_resolver'], 'home-router');
+      expect(tplVars['safe_profile'], 'my-dns',
           reason: 'enum-var с совпавшим текстом не трогается');
-      expect(rules[0]['rule']['server'], 'home-router');
-      expect(rules[1]['server'], 'home-router');
+      expect((rules[0] as DnsRuleInline).rule['server'], 'home-router');
+      expect((rules[1] as DnsRuleSrs).server, 'home-router');
+      expect(rules[2], const DnsRulePreset(presetId: 'p', enabled: true));
+      expect((rules[3] as DnsRuleSrs).body,
+          {'server': 'home-router', 'query_type': ['A']});
       expect(updated.dnsFinal, 'home-router');
       expect(updated.defaultResolver, 'google_udp');
     });
 
     test('нет ссылок → ничего не меняется', () {
-      final servers = <Map<String, dynamic>>[
-        {
-          'enabled': true,
-          'kind': 'inline',
-          'tag': 'other',
-          'body': {'type': 'udp', 'server': '192.168.1.1'},
-        },
+      final servers = <DnsServerRef>[
+        const DnsServerInline(
+          enabled: true,
+          tag: 'other',
+          body: {'type': 'udp', 'server': '192.168.1.1'},
+        ),
       ];
-      final rules = <Map<String, dynamic>>[];
+      final rules = <DnsRuleRef>[];
       final updated = renameDnsServerTagRefs(
         servers: servers,
         rules: rules,
@@ -96,7 +97,12 @@ void main() {
         dnsFinal: 'google_udp',
         defaultResolver: 'cloudflare_udp',
       );
-      expect(servers[0]['body'], {'type': 'udp', 'server': '192.168.1.1'});
+      expect(servers[0],
+          const DnsServerInline(
+            enabled: true,
+            tag: 'other',
+            body: {'type': 'udp', 'server': '192.168.1.1'},
+          ));
       expect(updated.dnsFinal, 'google_udp');
       expect(updated.defaultResolver, 'cloudflare_udp');
     });

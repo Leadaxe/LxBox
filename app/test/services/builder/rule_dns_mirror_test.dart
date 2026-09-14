@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
@@ -549,7 +550,7 @@ void main() {
     test('serverless preset-mirror (predefined) эмитится; route-тело — '
         'с server-гейтом', () async {
       await SettingsStorage.saveDnsRulesList([
-        {'enabled': true, 'kind': 'preset', 'presetId': 'ru-direct'},
+        const DnsRulePreset(presetId: 'ru-direct', enabled: true),
       ]);
 
       final config = <String, dynamic>{};
@@ -624,13 +625,11 @@ void main() {
         'якорь группы — первая kind:preset запись; порядок внутри = '
         'routing-правила', () async {
       await SettingsStorage.saveDnsRulesList([
-        {
-          'enabled': true,
-          'kind': 'inline',
-          'name': 'user-first',
-          'rule': {'domain': ['x.com'], 'server': 'google_udp'},
-        },
-        {'enabled': true, 'kind': 'preset', 'presetId': 'ru-direct'},
+        const DnsRuleInline(
+          name: 'user-first',
+          rule: {'domain': ['x.com'], 'server': 'google_udp'},
+        ),
+        const DnsRulePreset(presetId: 'ru-direct', enabled: true),
       ]);
 
       final config = <String, dynamic>{};
@@ -672,7 +671,7 @@ void main() {
         'lifecycle (locked №7): выключенный сервер, реферимый правилом — '
         'force-include в dns.servers', () async {
       await SettingsStorage.saveDnsServers([
-        {'enabled': false, 'kind': 'template', 'tag': 'google_udp'},
+        const DnsServerTemplate(enabled: false, tag: 'google_udp'),
       ]);
 
       final config = <String, dynamic>{};
@@ -705,14 +704,12 @@ void main() {
   group('resolveDnsRulesList — атомарность mirror-группы (решение №6)', () {
     test('kind:preset записи компактятся к позиции первой', () async {
       await SettingsStorage.saveDnsRulesList([
-        {'enabled': true, 'kind': 'preset', 'presetId': 'p1'},
-        {
-          'enabled': true,
-          'kind': 'inline',
-          'name': 'user-mid',
-          'rule': {'domain': ['x.com'], 'server': 's'},
-        },
-        {'enabled': true, 'kind': 'preset', 'presetId': 'p2'},
+        const DnsRulePreset(presetId: 'p1', enabled: true),
+        const DnsRuleInline(
+          name: 'user-mid',
+          rule: {'domain': ['x.com'], 'server': 's'},
+        ),
+        const DnsRulePreset(presetId: 'p2', enabled: true),
       ]);
 
       final resolved = await resolveDnsRulesList(
@@ -721,12 +718,12 @@ void main() {
       );
 
       expect(
-        [for (final e in resolved) e['kind']],
+        [for (final e in resolved) e.kind],
         ['preset', 'preset', 'inline'],
         reason: 'standalone-запись не может стоять внутри группы',
       );
-      expect(resolved[0]['presetId'], 'p1');
-      expect(resolved[1]['presetId'], 'p2');
+      expect((resolved[0] as DnsRulePreset).presetId, 'p1');
+      expect((resolved[1] as DnsRulePreset).presetId, 'p2');
     });
   });
 }

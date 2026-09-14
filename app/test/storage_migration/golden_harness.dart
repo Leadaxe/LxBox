@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/direction_mutations.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
@@ -252,8 +253,12 @@ Future<({String json, List<LxBackupWarning> warnings})> exportGoldenLxBackup()
   final exportWarnings = <LxBackupWarning>[];
   final template = await TemplateLoader.load();
   final dns = dnsToBackup(
-    servers: await SettingsStorage.getDnsServers(),
-    rules: await SettingsStorage.getDnsRulesList(),
+    servers: [
+      for (final s in await SettingsStorage.getDnsServers()) s.toJson()
+    ],
+    rules: [
+      for (final r in await SettingsStorage.getDnsRulesList()) r.toJson()
+    ],
     dnsFinal: vars['dns_final'] ?? '',
     strategy: vars['dns_strategy'] ?? '',
     defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
@@ -404,15 +409,23 @@ Future<void> _applyParsed(
     final vars = await SettingsStorage.getAllVars();
     final result = applyDnsBackup(
       incoming: dns,
-      servers: await SettingsStorage.getDnsServers(),
-      rules: await SettingsStorage.getDnsRulesList(),
+      servers: [
+        for (final s in await SettingsStorage.getDnsServers()) s.toJson()
+      ],
+      rules: [
+        for (final r in await SettingsStorage.getDnsRulesList()) r.toJson()
+      ],
       dnsFinal: vars['dns_final'] ?? '',
       strategy: vars['dns_strategy'] ?? '',
       defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
       presetIdByServerTag: presetIdByServerTag,
     );
-    await SettingsStorage.saveDnsServers(result.servers, flush: false);
-    await SettingsStorage.saveDnsRulesList(result.rules, flush: false);
+    await SettingsStorage.saveDnsServers([
+      for (final m in result.servers) ?DnsServerRef.fromJson(m),
+    ], flush: false);
+    await SettingsStorage.saveDnsRulesList([
+      for (final m in result.rules) ?DnsRuleRef.fromJson(m),
+    ], flush: false);
     await SettingsStorage.setVar('dns_final', result.dnsFinal, flush: false);
     await SettingsStorage.setVar('dns_strategy', result.strategy, flush: false);
     if (result.defaultDomainResolver.isNotEmpty) {

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/debug/serializers/storage.dart';
 import 'package:lxbox/services/debug/serializers/subs.dart';
@@ -77,27 +79,70 @@ void main() {
           reason: 'новые поля видны по умолчанию');
     });
 
-    test('server_lists: URL маскируется, nodes → count, rawBody → length', () {
+    // §439 A3 — источники читаются моделями репозитория из записи хранения
+    // (`raw_body`, `members`), секрет гасится в модели: счётчик встаёт на
+    // место поля, битая запись в дамп не попадает.
+    test(
+        'server_lists: URL маскируется, raw_body → raw_body_bytes, '
+        'members → members_count, битая запись пропускается', () {
       final cache = {
         'server_lists': [
           {
-            'id': '1',
+            'type': 'subscription',
+            'id': 's1',
+            'name': 'Sub',
             'url': 'https://prov/sub/token',
-            'nodes': [
-              {'tag': 'n1'},
-              {'tag': 'n2'},
-            ],
-            'rawBody': 'vless://uuid@host:443#tag',
           },
+          {
+            'type': 'user',
+            'id': 'u1',
+            'name': 'Mine',
+            'origin': 'manual',
+            'created_at': '2026-01-01T00:00:00.000',
+            'raw_body': 'vless://uuid@host:443#tag',
+          },
+          {
+            'type': 'folder',
+            'id': 'f1',
+            'name': 'Folder',
+            'created_at': '2026-01-01T00:00:00.000',
+            'members': [
+              {'raw': 'vless://m1-secret@a:443#a', 'enabled': true},
+              {'raw': 'vless://m2-secret@b:443#b', 'enabled': false},
+            ],
+          },
+          {'id': 'broken', 'url': 'https://prov/sub/broken-token'},
         ],
       };
       final out = serializeStorageCache(cache);
-      final lists = out['server_lists'] as List;
+      final lists = (out['server_lists'] as List).cast<Map>();
+      expect([for (final l in lists) l['id']], ['s1', 'u1', 'f1']);
+
       expect(lists[0]['url'], 'https://prov/***');
-      expect(lists[0]['nodes_count'], 2);
-      expect(lists[0]['raw_body_bytes'], 25);
-      expect((lists[0] as Map).containsKey('nodes'), isFalse);
-      expect((lists[0] as Map).containsKey('rawBody'), isFalse);
+
+      expect(lists[1]['raw_body_bytes'], 25);
+      expect(lists[1].containsKey('raw_body'), isFalse);
+      final userKeys = lists[1].keys.toList();
+      expect(userKeys.last, 'raw_body_bytes',
+          reason: 'счётчик на месте raw_body');
+
+      expect(lists[2]['members_count'], 2);
+      expect(lists[2].containsKey('members'), isFalse);
+      final folderKeys = lists[2].keys.toList();
+      expect(folderKeys.indexOf('members_count'),
+          folderKeys.indexOf('created_at') + 1,
+          reason: 'счётчик на месте members');
+
+      final dump = jsonEncode(out);
+      for (final secret in [
+        'sub/token',
+        'uuid@host',
+        'm1-secret',
+        'm2-secret',
+        'broken-token',
+      ]) {
+        expect(dump, isNot(contains(secret)));
+      }
     });
 
     test('§219 — warp_account/masque_account НЕ маскируются (root by design)', () {

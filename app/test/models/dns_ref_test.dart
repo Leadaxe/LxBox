@@ -116,8 +116,53 @@ void main() {
       final j = {'kind': 'preset', 'presetId': 'p1', 'enabled': true};
       expect(DnsRuleRef.fromJson(j)!.toJson(), j);
     });
-    test('template', () {
-      final j = {'kind': 'template', 'name': 'ru-direct'};
+    test('template (enabled пишется всегда)', () {
+      final j = {'kind': 'template', 'name': 'ru-direct', 'enabled': true};
+      expect(DnsRuleRef.fromJson(j)!.toJson(), j);
+    });
+    test('srs формы §033 (server/rule/srsUrl верхнего уровня)', () {
+      final j = {
+        'kind': 'srs',
+        'name': 'cn',
+        'id': 'ds_1',
+        'srsUrl': 'https://e/cn.srs',
+        'server': 'cf_doh',
+        'rule': {'query_type': ['A']},
+        'enabled': false,
+      };
+      expect(DnsRuleRef.fromJson(j)!.toJson(), j);
+    });
+  });
+
+  // §439 A1 — отсутствие ключа `enabled`: inline/srs — включено (toJson пишет
+  // только false), template/preset — выключено (toJson пишет всегда).
+  group('§439 DnsRuleRef enabled без ключа', () {
+    test('inline и srs → включено', () {
+      expect(
+          DnsRuleRef.fromJson(
+                  {'kind': 'inline', 'name': 'x', 'rule': {'server': 's'}})!
+              .enabled,
+          isTrue);
+      expect(
+          DnsRuleRef.fromJson({'kind': 'srs', 'name': 'x', 'id': 'i'})!
+              .enabled,
+          isTrue);
+    });
+    test('template и preset → выключено, toJson пишет enabled: false', () {
+      final t = DnsRuleRef.fromJson({'kind': 'template', 'name': 'x'})!;
+      expect(t.enabled, isFalse);
+      expect(t.toJson(), {'kind': 'template', 'name': 'x', 'enabled': false});
+      final p = DnsRuleRef.fromJson({'kind': 'preset', 'presetId': 'p'})!;
+      expect(p.enabled, isFalse);
+      expect(p.toJson(), {'kind': 'preset', 'presetId': 'p', 'enabled': false});
+    });
+    test('inline выключенное → enabled: false в toJson', () {
+      final j = {
+        'kind': 'inline',
+        'name': 'x',
+        'rule': {'server': 's'},
+        'enabled': false,
+      };
       expect(DnsRuleRef.fromJson(j)!.toJson(), j);
     });
   });

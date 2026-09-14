@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
@@ -11,6 +13,10 @@ import 'package:lxbox/services/settings_storage.dart';
 ///
 /// §117: template-серверы — обёртки `{description, enabled, vars?, server}`,
 /// tag в `server.tag`, `@var`-плейсхолдеры в body.
+///
+/// §439 A1 — резолверы работают с моделями [DnsServerRef]; записи, которые
+/// модель не выражает (формы до §043), наверх не отдаются и в хранении
+/// остаются (миграция `_migrateLegacyDnsServers` снята).
 void main() {
   late Directory tmp;
   const channel = MethodChannel('plugins.flutter.io/path_provider');
@@ -164,93 +170,53 @@ void main() {
       );
 
       expect(result.length, 3);
-      expect(result.where((s) => s['kind'] == 'preset').length, 1);
-      expect(result.where((s) => s['kind'] == 'template').length, 2);
+      expect(result.whereType<DnsServerPreset>().length, 1);
+      expect(result.whereType<DnsServerTemplate>().length, 2);
 
       // Preset идёт перед template (priority order).
-      expect(result[0]['kind'], 'preset');
-      expect(result[0]['tag'], 'yandex_udp');
+      expect(result[0], isA<DnsServerPreset>());
+      expect(result[0].tag, 'yandex_udp');
       // §117: tag берётся из server.tag обёртки.
-      expect(result[1]['tag'], 'google_udp');
+      expect(result[1].tag, 'google_udp');
     });
 
-    test('Legacy migration: snapshot == default-резолв обёртки → template ref',
-        () async {
-      // Legacy: full body in storage, no `kind` field. Совпадает с
-      // default-резолвом §117-обёртки (detour=direct-out стёрт).
-      await SettingsStorage.saveDnsServers([
-        {
-          'type': 'udp',
-          'tag': 'google_udp',
-          'server': '8.8.8.8',
-          'server_port': 53,
-          'description': 'Google DNS (direct)',
-          'enabled': true,
-        },
-      ]);
-
-      final result = await resolveDnsServersList(
-        templateServers: [tplGoogleUdp()],
-        presetServersByTag: {},
-      );
-
-      final google = result.firstWhere((s) => s['tag'] == 'google_udp');
-      expect(google['kind'], 'template');
-      expect(google.containsKey('body'), false);
-      expect(google['enabled'], true);
-    });
-
-    test('Legacy migration: shape mismatch → kind: inline with body', () async {
-      // Storage имеет google_udp с другим server-IP (real override).
-      await SettingsStorage.saveDnsServers([
-        {
-          'type': 'udp',
-          'tag': 'google_udp',
-          'server': '8.8.4.4',
-          'server_port': 53,
-          'detour': 'vpn-1',
-          'enabled': true,
-        },
-      ]);
-
-      final result = await resolveDnsServersList(
-        templateServers: [tplGoogleUdp()],
-        presetServersByTag: {},
-      );
-
-      final google = result.firstWhere((s) => s['tag'] == 'google_udp');
-      expect(google['kind'], 'inline');
-      expect(google['body'], isA<Map>());
-      expect(google['body']['detour'], 'vpn-1');
-    });
-
-    test('Legacy migration: pure custom (no canonical) → kind: inline',
-        () async {
-      final custom = {
+    test(
+        'форма до §043 (без kind) — наверх не отдаётся, в хранении остаётся; '
+        'auto-discovery добавляет template ref', () async {
+      final legacy = {
         'type': 'udp',
-        'tag': 'my-custom-dns',
-        'server': '9.9.9.9',
+        'tag': 'google_udp',
+        'server': '8.8.4.4',
         'server_port': 53,
+        'detour': 'vpn-1',
         'enabled': true,
       };
-      await SettingsStorage.saveDnsServers([custom]);
+      File('${tmp.path}/lxbox_settings.json').writeAsStringSync(jsonEncode({
+        'dns_options': {
+          'servers': [legacy],
+        },
+      }));
 
       final result = await resolveDnsServersList(
         templateServers: [tplGoogleUdp()],
         presetServersByTag: {},
       );
 
-      final my = result.firstWhere((s) => s['tag'] == 'my-custom-dns');
-      expect(my['kind'], 'inline');
-      expect(my['body'], isA<Map>());
-      expect(my['body']['server'], '9.9.9.9');
+      expect(result,
+          [const DnsServerTemplate(enabled: true, tag: 'google_udp')]);
+      final raw = await SettingsStorage.exportRaw();
+      final servers = (raw['dns_options'] as Map)['servers'] as List;
+      expect(servers, [
+        legacy,
+        {'enabled': true, 'kind': 'template', 'tag': 'google_udp'},
+      ]);
     });
 
     test('Orphan cleanup: kind:template ref на удалённый tag → drop', () async {
       // §117: удалённые из шаблона теги (quad9_dot и т.п.) орфан-чистятся.
       await SettingsStorage.saveDnsServers([
-        {'enabled': true, 'kind': 'template', 'tag': 'quad9_dot'},
-        {'enabled': true, 'kind': 'template', 'tag': 'google_udp'},
+        const DnsServerTemplate(enabled: true, tag: 'quad9_dot'),
+        const DnsServerTemplate(enabled: true, tag: 'google_udp'),
       ]);
 
       final result = await resolveDnsServersList(
@@ -258,7 +224,7 @@ void main() {
         presetServersByTag: {},
       );
 
-      final tags = result.map((s) => s['tag']).toList();
+      final tags = result.map((s) => s.tag).toList();
       expect(tags, contains('google_udp'));
       expect(tags, isNot(contains('quad9_dot')));
     });
@@ -266,7 +232,7 @@ void main() {
     test('Orphan cleanup: kind:preset ref когда preset deactivated → drop',
         () async {
       await SettingsStorage.saveDnsServers([
-        {'enabled': true, 'kind': 'preset', 'tag': 'orphan_preset_tag'},
+        const DnsServerPreset(enabled: true, tag: 'orphan_preset_tag'),
       ]);
 
       final result = await resolveDnsServersList(
@@ -274,18 +240,17 @@ void main() {
         presetServersByTag: {}, // нет active preset с этим tag
       );
 
-      final tags = result.map((s) => s['tag']).toList();
+      final tags = result.map((s) => s.tag).toList();
       expect(tags, isNot(contains('orphan_preset_tag')));
     });
 
     test('kind:inline preserved at all costs (даже без canonical)', () async {
       await SettingsStorage.saveDnsServers([
-        {
-          'enabled': true,
-          'kind': 'inline',
-          'tag': 'my-dns',
-          'body': {'type': 'udp', 'server': '192.168.1.1', 'server_port': 53},
-        },
+        const DnsServerInline(
+          enabled: true,
+          tag: 'my-dns',
+          body: {'type': 'udp', 'server': '192.168.1.1', 'server_port': 53},
+        ),
       ]);
 
       final result = await resolveDnsServersList(
@@ -294,19 +259,18 @@ void main() {
       );
 
       expect(result.length, 1);
-      expect(result.first['kind'], 'inline');
-      expect(result.first['tag'], 'my-dns');
+      expect(result.first, isA<DnsServerInline>());
+      expect(result.first.tag, 'my-dns');
     });
 
     test('varValues в template ref переживают resolve + orphan cleanup',
         () async {
       await SettingsStorage.saveDnsServers([
-        {
-          'enabled': true,
-          'kind': 'template',
-          'tag': 'google_udp',
-          'varValues': {'outbound': 'vpn-1'},
-        },
+        const DnsServerTemplate(
+          enabled: true,
+          tag: 'google_udp',
+          varValues: {'outbound': 'vpn-1'},
+        ),
       ]);
 
       final result = await resolveDnsServersList(
@@ -314,14 +278,14 @@ void main() {
         presetServersByTag: {},
       );
 
-      final google = result.firstWhere((s) => s['tag'] == 'google_udp');
-      expect(google['varValues'], {'outbound': 'vpn-1'});
+      final google = result.firstWhere((s) => s.tag == 'google_udp');
+      expect((google as DnsServerTemplate).varValues, {'outbound': 'vpn-1'});
     });
 
     test('Already-migrated storage (есть kind) — enabled flag preserved',
         () async {
       await SettingsStorage.saveDnsServers([
-        {'enabled': false, 'kind': 'template', 'tag': 'google_udp'},
+        const DnsServerTemplate(enabled: false, tag: 'google_udp'),
       ]);
 
       final result = await resolveDnsServersList(
@@ -330,12 +294,12 @@ void main() {
       );
 
       // google_udp user-disabled flag preserved
-      final google = result.firstWhere((s) => s['tag'] == 'google_udp');
-      expect(google['enabled'], false);
+      final google = result.firstWhere((s) => s.tag == 'google_udp');
+      expect(google.enabled, false);
       // cloudflare_udp auto-discovered
-      final cf = result.firstWhere((s) => s['tag'] == 'cloudflare_udp');
-      expect(cf['kind'], 'template');
-      expect(cf['enabled'], true);
+      final cf = result.firstWhere((s) => s.tag == 'cloudflare_udp');
+      expect(cf, isA<DnsServerTemplate>());
+      expect(cf.enabled, true);
     });
   });
 
@@ -343,7 +307,7 @@ void main() {
     test('kind:template → server.tag, дефолты vars, direct-out стёрт', () {
       final out = resolveDnsServersBodies(
         resolved: [
-          {'enabled': true, 'kind': 'template', 'tag': 'google_udp'},
+          const DnsServerTemplate(enabled: true, tag: 'google_udp'),
         ],
         templateByTag: {'google_udp': tplGoogleUdp()},
         presetServersByTag: {},
@@ -362,12 +326,11 @@ void main() {
     test('кейс репортёра: outbound=Направление → detour: "<Направление>" в конфиге', () {
       final out = resolveDnsServersBodies(
         resolved: [
-          {
-            'enabled': true,
-            'kind': 'template',
-            'tag': 'google_udp',
-            'varValues': {'outbound': 'vpn-1', 'dns_ip': '8.8.4.4'},
-          },
+          const DnsServerTemplate(
+            enabled: true,
+            tag: 'google_udp',
+            varValues: {'outbound': 'vpn-1', 'dns_ip': '8.8.4.4'},
+          ),
         ],
         templateByTag: {'google_udp': tplGoogleUdp()},
         presetServersByTag: {},
@@ -380,12 +343,11 @@ void main() {
     test('detour на исчезнувшее Направление → ключ не пишется (решение №2)', () {
       final out = resolveDnsServersBodies(
         resolved: [
-          {
-            'enabled': true,
-            'kind': 'template',
-            'tag': 'google_udp',
-            'varValues': {'outbound': 'vpn-3'},
-          },
+          const DnsServerTemplate(
+            enabled: true,
+            tag: 'google_udp',
+            varValues: {'outbound': 'vpn-3'},
+          ),
         ],
         templateByTag: {'google_udp': tplGoogleUdp()},
         presetServersByTag: {},
@@ -397,17 +359,16 @@ void main() {
     test('inline body с dangling detour тоже чистится', () {
       final out = resolveDnsServersBodies(
         resolved: [
-          {
-            'enabled': true,
-            'kind': 'inline',
-            'tag': 'my-dns',
-            'body': {
+          const DnsServerInline(
+            enabled: true,
+            tag: 'my-dns',
+            body: {
               'type': 'udp',
               'server': '192.168.1.1',
               'server_port': 53,
               'detour': 'gone-direction',
             },
-          },
+          ),
         ],
         templateByTag: {},
         presetServersByTag: {},
@@ -419,7 +380,7 @@ void main() {
     test('обёртка без vars (local) резолвится', () {
       final out = resolveDnsServersBodies(
         resolved: [
-          {'enabled': true, 'kind': 'template', 'tag': 'local_dns_resolver'},
+          const DnsServerTemplate(enabled: true, tag: 'local_dns_resolver'),
         ],
         templateByTag: {'local_dns_resolver': tplLocal()},
         presetServersByTag: {},
@@ -431,7 +392,7 @@ void main() {
     test('kind:preset ref → body из presetServersByTag', () {
       final out = resolveDnsServersBodies(
         resolved: [
-          {'enabled': true, 'kind': 'preset', 'tag': 'yandex_udp'},
+          const DnsServerPreset(enabled: true, tag: 'yandex_udp'),
         ],
         templateByTag: {},
         presetServersByTag: {'yandex_udp': presetYandexUdp()},
@@ -445,17 +406,16 @@ void main() {
     test('kind:inline ref → body напрямую', () {
       final out = resolveDnsServersBodies(
         resolved: [
-          {
-            'enabled': true,
-            'kind': 'inline',
-            'tag': 'my-dns',
-            'body': {
+          const DnsServerInline(
+            enabled: true,
+            tag: 'my-dns',
+            body: {
               'type': 'udp',
               'tag': 'my-dns',
               'server': '192.168.1.1',
               'server_port': 53,
             },
-          },
+          ),
         ],
         templateByTag: {},
         presetServersByTag: {},
@@ -467,8 +427,8 @@ void main() {
     test('disabled refs filtered out', () {
       final out = resolveDnsServersBodies(
         resolved: [
-          {'enabled': false, 'kind': 'template', 'tag': 'google_udp'},
-          {'enabled': true, 'kind': 'template', 'tag': 'cloudflare_udp'},
+          const DnsServerTemplate(enabled: false, tag: 'google_udp'),
+          const DnsServerTemplate(enabled: true, tag: 'cloudflare_udp'),
         ],
         templateByTag: {
           'google_udp': tplGoogleUdp(),
@@ -485,7 +445,7 @@ void main() {
         'force-include', () {
       final out = resolveDnsServersBodies(
         resolved: [
-          {'enabled': false, 'kind': 'preset', 'tag': 'yandex_udp'},
+          const DnsServerPreset(enabled: false, tag: 'yandex_udp'),
         ],
         templateByTag: {},
         presetServersByTag: {'yandex_udp': presetYandexUdp()},
@@ -499,7 +459,7 @@ void main() {
     test('Orphan ref (canonical missing) → silently skipped', () {
       final out = resolveDnsServersBodies(
         resolved: [
-          {'enabled': true, 'kind': 'template', 'tag': 'deleted_tag'},
+          const DnsServerTemplate(enabled: true, tag: 'deleted_tag'),
         ],
         templateByTag: {},
         presetServersByTag: {},
@@ -510,19 +470,18 @@ void main() {
     test('Tag dedup: первый wins', () {
       final out = resolveDnsServersBodies(
         resolved: [
-          {
-            'enabled': true,
-            'kind': 'inline',
-            'tag': 'google_udp',
-            'body': {
+          const DnsServerInline(
+            enabled: true,
+            tag: 'google_udp',
+            body: {
               'type': 'udp',
               'tag': 'google_udp',
               'server': '8.8.4.4',
               'server_port': 53,
             },
-          },
+          ),
           // Тот же tag второй раз — skipped
-          {'enabled': true, 'kind': 'template', 'tag': 'google_udp'},
+          const DnsServerTemplate(enabled: true, tag: 'google_udp'),
         ],
         templateByTag: {'google_udp': tplGoogleUdp()},
         presetServersByTag: {},
