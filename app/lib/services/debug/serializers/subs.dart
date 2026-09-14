@@ -41,6 +41,9 @@ Map<String, Object?> serializeSubEntry(
     // §346 — настройки, живущие только у SubscriptionServers. У UserServer /
     // FolderServers полей нет (их никто не фетчит) — ключи не кладём вовсе,
     // чтобы `null` не читался как «Default identity» у записи, где режима нет.
+    // §435 — секции одиночного узла (контракт ## 13), read-only, как
+    // хранятся (с плейсхолдерами `@self`). У подписки/папки ключа нет.
+    if (list is UserServer) 'sections': list.sections?.toJson(),
     if (list is SubscriptionServers) ...{
       'on_update_action': list.onUpdateAction.name, // §323
       // §289 — null = режим Default (глобальная идентичность §118).
@@ -104,4 +107,5 @@ Map<String, Object?> serializeFolderMember(
       'protocol': m.node?.protocol,
       'broken': m.node == null,
       if (reveal) 'raw': m.raw,
+      'sections': m.sections?.toJson(), // §435 — read-only
     };

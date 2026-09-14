@@ -69,12 +69,11 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
     try {
       final path = await DumpBuilder.build();
       final name = path.split('/').last;
-      // ignore: deprecated_member_use
-      await Share.shareXFiles(
-        [XFile(path, name: name, mimeType: 'application/json')],
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(path, name: name, mimeType: 'application/json')],
         text: 'LxBox diagnostic dump',
         subject: name,
-      );
+      ));
     } catch (e) {
       if (!mounted) return;
       showSnack(getLocalText.s("Share failed: %s", formatUserError(e).render()));

@@ -102,7 +102,9 @@ class DnsServerParamsTab extends StatelessWidget {
                 // `type: group` только {servers, mode, error_ttl, win_ttl}
                 // (kernel SPEC 033) и падает на лишнем ключе — поэтому
                 // пикер для группы не рисуем вовсе.
-                if (!c.isGroup)
+                // §435 — у `tailscale` транспорт задаёт `endpoint` (узел
+                // tailnet), поля `detour` у типа нет — пикер тоже прячем.
+                if (!c.isGroup && !c.isTailscale)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
                     child: Column(

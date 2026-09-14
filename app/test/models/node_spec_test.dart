@@ -123,6 +123,8 @@ void main() {
         // §322 — узел-группа: без server/port, отсюда отдельный конструктор.
         AutoSelectSpec(
             id: '14', tag: 't', label: 'l'),
+        // §435 — Tailscale: endpoint без адреса, тело как есть.
+        TailscaleSpec(id: '15', tag: 't', label: 'l', body: const {'auth_key': 'k'}),
       ];
 
       for (final s in specs) {
@@ -141,6 +143,7 @@ void main() {
           MasqueSpec() => 'masque',
           AnyTlsSpec() => 'anytls',
           AutoSelectSpec() => 'urltest',
+          TailscaleSpec() => 'tailscale',
         };
         expect(p, s.protocol);
       }

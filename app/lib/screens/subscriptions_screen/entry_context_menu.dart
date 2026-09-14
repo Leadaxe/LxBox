@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +12,7 @@ import '../../services/subscription/input_helpers.dart';
 import 'folder_picker.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/file_import.dart';
+import '../../widgets/app_bottom_sheet.dart';
 
 /// Long-press bottom-sheet для записи подписки/сервера. Поведение 1:1 с
 /// прежним `_showContextMenu` — копировать URL, share, update,
@@ -29,7 +29,7 @@ void showEntryContextMenu(
     _showFolderContextMenu(context, index, entry, subController);
     return;
   }
-  showModalBottomSheet(
+  showAppBottomSheet(
     context: context,
     builder: (ctx) => SafeArea(
       child: Column(
@@ -62,7 +62,8 @@ void showEntryContextMenu(
               title: Text(getLocalText.s("Share URL…")),
               onTap: () async {
                 Navigator.pop(ctx);
-                await Share.share(entry.url, subject: 'LxBox subscription');
+                await SharePlus.instance.share(ShareParams(
+                    text: entry.url, subject: 'LxBox subscription'));
               },
             ),
           ListTile(
@@ -164,7 +165,7 @@ void _showFolderContextMenu(
   SubscriptionController subController,
 ) {
   final folder = entry.list as FolderServers;
-  showModalBottomSheet<void>(
+  showAppBottomSheet<void>(
     context: context,
     builder: (ctx) => SafeArea(
       child: Column(
@@ -314,16 +315,8 @@ Future<void> showEditSourceDialog(
                         return;
                       }
                       final f = outcome.single;
-                      String text;
-                      if (f.bytes != null && f.bytes!.isNotEmpty) {
-                        text = String.fromCharCodes(f.bytes!);
-                      } else if (f.path != null) {
-                        text = await File(f.path!).readAsString();
-                      } else {
-                        return;
-                      }
                       setLocal(() {
-                        pickedBody = text;
+                        pickedBody = f.text;
                         pickedName = f.name;
                       });
                     },

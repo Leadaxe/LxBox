@@ -68,6 +68,76 @@ void main() {
     });
   });
 
+  group('SPEC 083 — REALITY + отпечаток не из chrome-семейства', () {
+    test('kChromeFamilyFingerprints ⊂ словаря ядра', () {
+      expect(kUtlsFingerprints.containsAll(kChromeFamilyFingerprints), isTrue);
+      expect(isChromeFamilyFingerprint(''), isTrue, reason: 'дефолт ядра');
+      expect(isChromeFamilyFingerprint('chrome_pq'), isTrue);
+      expect(isChromeFamilyFingerprint('firefox'), isFalse);
+      expect(isChromeFamilyFingerprint('random'), isFalse);
+      expect(isChromeFamilyFingerprint('randomized'), isFalse);
+    });
+
+    test('REALITY + fp=firefox → RealityFingerprintWarning, значение сохранено',
+        () {
+      final spec = parseVless(
+          'vless://u@h:443?type=tcp&security=reality&encryption=none'
+          '&fp=firefox&pbk=$_validPbk#L')!;
+      expect(spec.tls.fingerprint, 'firefox',
+          reason: 'entry нормативен для контракта — подмена в post-step');
+      expect(spec.warnings.whereType<RealityFingerprintWarning>().single.value,
+          'firefox');
+      expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
+    });
+
+    test('REALITY + xray-псевдоним hellofirefox_auto → firefox + предупреждение',
+        () {
+      final spec = parseVless(
+          'vless://u@h:443?type=tcp&security=reality&encryption=none'
+          '&fp=hellofirefox_auto&pbk=$_validPbk#L')!;
+      expect(spec.tls.fingerprint, 'firefox');
+      expect(spec.warnings.whereType<RealityFingerprintWarning>().single.value,
+          'firefox');
+    });
+
+    test('REALITY + chrome-семейство и дефолтный random → без предупреждения',
+        () {
+      for (final q in ['&fp=chrome', '&fp=chrome_pq', '&fp=HelloChrome_120', '']) {
+        final spec = parseVless(
+            'vless://u@h:443?type=tcp&security=reality&encryption=none'
+            '$q&pbk=$_validPbk#L')!;
+        expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty,
+            reason: 'q="$q"');
+      }
+    });
+
+    test('plain TLS + fp=firefox → без предупреждения (сервер не REALITY)', () {
+      final spec = parseVless(
+          'vless://u@h:443?type=tcp&security=tls&encryption=none'
+          '&fp=firefox&sni=h#L')!;
+      expect(spec.tls.reality, isNull);
+      expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty);
+    });
+
+    test('raw sing-box JSON: REALITY + safari — без аккумулятора, значение цело',
+        () {
+      final spec = parseSingboxEntry({
+        'type': 'vless',
+        'tag': 't',
+        'server': 'h',
+        'server_port': 443,
+        'uuid': '0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c',
+        'tls': {
+          'enabled': true,
+          'server_name': 'x.com',
+          'utls': {'enabled': true, 'fingerprint': 'safari'},
+          'reality': {'enabled': true, 'public_key': _validPbk},
+        },
+      })! as VlessSpec;
+      expect(spec.tls.fingerprint, 'safari');
+    });
+  });
+
   group('VLESS (реальный кейс подписки)', () {
     test('REALITY + fp=hellochrome_120 → chrome, МОЛЧА, reality на месте', () {
       final spec = parseVless(

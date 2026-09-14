@@ -22,6 +22,7 @@ String protoLabel(String type) => switch (type) {
       'ssh' => 'SSH',
       'socks' => 'SOCKS',
       'http' => 'HTTP',
+      'tailscale' => 'Tailscale', // §435 — l10n-exempt: protocol name
       // §359 — узел автовыбора подписки (§322) как протокол в чипах фильтра.
       // l10n-exempt: протокольный термин, латиница во всех локалях (как VLESS/Hy2).
       'urltest' => 'Auto',

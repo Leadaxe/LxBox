@@ -33,6 +33,7 @@ import 'stats_screen/profiler_filter.dart';
 import 'stats_screen/profiler_filters.dart';
 import 'stats_screen/trace_explorer.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/app_bottom_sheet.dart';
 
 class LiveEventsTab extends StatefulWidget {
   const LiveEventsTab({super.key, this.subController, this.homeController});
@@ -110,7 +111,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     final json =
         const JsonEncoder.withIndent('  ').convert(eventsToJson(_events));
     if (!mounted) return;
-    await showModalBottomSheet<void>(
+    await showAppBottomSheet<void>(
       context: context,
       builder: (sheetCtx) => SafeArea(
         child: Column(
@@ -121,7 +122,8 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
               title: Text(getLocalText.plural("Share %d events (JSON)", _events.length)),
               onTap: () {
                 Navigator.pop(sheetCtx);
-                Share.share(json, subject: 'LxBox profiler export');
+                SharePlus.instance.share(
+                    ShareParams(text: json, subject: 'LxBox profiler export'));
               },
             ),
             ListTile(

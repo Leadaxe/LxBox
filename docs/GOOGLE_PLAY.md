@@ -7,7 +7,7 @@ Related: [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md), [`FDROID.md`](FDROID.md), [
 | Package | `com.leadaxe.lxbox` |
 | Developer account | `leadaxe` (personal; migration to an organization account is pending a D-U-N-S number) |
 | Console mail | `lxboxvpnclient@gmail.com`, `leadaxe@gmail.com` |
-| Artifact | AAB — `flutter build appbundle`, see [`BUILD.md`](BUILD.md) |
+| Artifact | AAB — `flutter build appbundle`, see [`BUILD.md`](BUILD.md); uploaded by CI, see [CI upload](#ci-upload) |
 | Store listing | `fastlane/metadata/android/{en-US,ru}/`, shared with F-Droid |
 
 Unlike F-Droid, Google Play does not build from source: an AAB signed with our
@@ -66,12 +66,35 @@ just as much; they simply preferred not to be listed.
 
 1. Bump the version, tag, and let CI produce the AAB (see
    [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md)).
-2. Upload the AAB to the release track in the Play Console.
+2. CI uploads the AAB to the `PLAY_TRACK` track (see [CI upload](#ci-upload));
+   with `PLAY_RELEASE_STATUS=draft` open the console and press Publish.
 3. Changelog per locale goes into
    `fastlane/metadata/android/<locale>/changelogs/<versionCode>.txt`, ≤ 500
    characters — the same files F-Droid reads.
 4. Screenshots must not show the Servers screen with personal subscriptions;
    use servers from `public-servers-manifest.json`.
+
+## CI upload
+
+Since §436 the `google-play` job (shown as “GooglePlay”) in [`ci.yml`](../.github/workflows/ci.yml) uploads
+the AAB on every release tag through the Google Play Developer API. What it
+needs and where it lives:
+
+| What | Where |
+|---|---|
+| Identity | a service account in the owner's Google Cloud project ("LxBox CI", Google Play Android Developer API enabled); its e-mail is the `client_email` field of the key |
+| Play Console access | Users and permissions → the account is invited on L×Box with "Release to production, exclude devices, and use Play App Signing" and "Release apps to testing tracks"; nothing else |
+| Key | repository secret `PLAY_SERVICE_ACCOUNT_JSON`, the JSON key as is: `gh secret set PLAY_SERVICE_ACCOUNT_JSON < .keys/google-play-publisher.json`. The local copy lives in `.keys/`, which is git-ignored |
+| Track | repository variable `PLAY_TRACK`, default `production` |
+| Release status | repository variable `PLAY_RELEASE_STATUS`, default `draft`: the release appears in the console as a draft and a human presses Publish. `completed` sends it to review by itself: `gh variable set PLAY_RELEASE_STATUS -b completed` |
+| Release notes | `fastlane/metadata/android/{en-US,ru}/changelogs/<versionCode>.txt` → Play locales `en-US`, `ru-RU`. The AAB carries the universal code (…0) while the files are named by the per-ABI codes (…1/…2), so the job takes the first of …0/…2/…1/…4 it finds. Over 500 characters fails the `checks` job on push |
+| Action | `r0adkll/upload-google-play`, pinned by commit — it receives the key |
+
+`release` and `publish-manifest` do not depend on `google-play`: a failed upload
+leaves the GitHub release intact, and the AAB stays in the run's
+`android-aab-release` artifact for a manual upload. Without the secret the job
+logs a warning and skips, so forks build as before. Failure modes are in
+[`RELEASE_PROCESS.md`](RELEASE_PROCESS.md#the-google-play-job-is-red).
 
 ## Gotchas
 

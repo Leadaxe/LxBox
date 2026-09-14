@@ -11,7 +11,7 @@ import 'package:lxbox/services/builder/server_list_build.dart';
 /// §322 — узел автовыбора внутри папки: хранится обычным членом
 /// (`autogroup://` в `raw`), а на билде превращается в `urltest` по членам
 /// ЭТОЙ же папки.
-class _FakeCtx implements EmitContext {
+class _FakeCtx extends EmitContext {
   _FakeCtx({this.passiveCheck = false});
 
   /// §272/§322 — глобальная настройка приложения, доходит до групп через ctx.

@@ -629,6 +629,12 @@ void normalizeDnsDetour(
     server.remove('detour');
     return;
   }
+  // §435 — у DNS-сервера `tailscale` транспорт задаёт `endpoint` (узел
+  // tailnet), поля `detour` у типа нет: лишний ключ роняет ядро на старте.
+  if (server['type'] == 'tailscale') {
+    server.remove('detour');
+    return;
+  }
   final detour = server['detour'];
   if (detour is! String) return;
   if (detour.isEmpty ||

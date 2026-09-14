@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
 import '../../models/subscription_meta.dart';
+import '../app_log.dart';
 import '../parser/body_decoder.dart';
 import '../parser/parse_all.dart';
 import 'subscription_identity.dart';
@@ -106,6 +107,17 @@ Future<ParseResult> parseFromSource(SubscriptionSource source,
     // контроллере уже после парсинга. Так одно правило работает для всех
     // форматов подписки (URI-строки / Xray-JSON / INI).
     final nodes = parseAll(decoded);
+    // §435 / контракт ## 13 (норма E1, 14.09.2026) — секции у узлов подписки
+    // не сохраняются: поле есть только у свободных узлов. Сторона сообщает
+    // уровнем info без кода контракта: связка, извлечённая парсером из тела
+    // провайдера, дальше никуда не идёт.
+    for (final n in nodes) {
+      if (n.importedSections != null) {
+        AppLog.I.info(
+            'Subscription node "${n.tag}" carries sections (route/dns) — '
+            'ignored, sections apply to free nodes only');
+      }
+    }
     return ParseResult(nodes, decoded, meta, fetch.body, fetch.headers);
   } finally {
     if (owned) c.close();

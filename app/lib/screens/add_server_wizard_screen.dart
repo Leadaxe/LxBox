@@ -15,21 +15,25 @@ import '../services/ui_helpers.dart';
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/lx_code_editor.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/safe_bottom.dart';
+import 'add_server_wizard/tailscale_bundle.dart';
 
 // SocksSpec.emit() требует TemplateVars — для wizard-created SOCKS5 без
 // substitution используем пустые. Это match'ит manual UserServer pattern
 // (no template processing).
 final TemplateVars _emptyVars = TemplateVars.empty;
 
-/// §074 — Add server wizard. Full-screen route с 4 tabs: SOCKS5 form,
-/// HTTP form (§222), Paste URI, Paste JSON. Открывается long-press'ом на
-/// «+» в Subscriptions screen.
+/// §074 — Add server wizard. Full-screen route с 5 tabs: SOCKS5 form,
+/// HTTP form (§222), Paste URI, Paste JSON, Tailscale form (§435).
+/// Открывается long-press'ом на «+» в Subscriptions screen.
 ///
 /// Submit поведение:
 ///   - SOCKS5 / HTTP tabs → конструируют `SocksSpec`/`HttpSpec` +
 ///     `UserServer`, через `subController.addUserServer(...)`.
 ///   - URI / JSON tabs → text идёт в `subController.addFromInput(...)`
 ///     (тот же путь что у tap-«+»).
+///   - Tailscale tab (§435) → `TailscaleSpec` + `UserServer` с канонической
+///     связкой секций (`tailscale_bundle.dart`), через `addUserServer`.
 ///
 /// После successful add → callback [onAdded] (regenerate config + save +
 /// snackbar в parent screen).
@@ -86,12 +90,27 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   // Paste JSON tab controller.
   final _jsonCtrl = CodeLineEditingController();
 
+  // §435 — Tailscale tab (NODE_SECTIONS.md §6 «конструктор»). Тело
+  // endpoint'а собирается из полей как есть: пустые не пишутся, булевы —
+  // только `true` (дефолт ядра — false). Auth key — секрет: в лог не идёт,
+  // поле маскировано с show/hide.
+  static const _kDefaultTailscaleTag = 'tailscale';
+  final _tsTag = TextEditingController();
+  final _tsAuthKey = TextEditingController();
+  final _tsControlUrl = TextEditingController();
+  final _tsHostname = TextEditingController();
+  final _tsExitNode = TextEditingController();
+  final _tsFormKey = GlobalKey<FormState>();
+  bool _tsEphemeral = false;
+  bool _tsAcceptRoutes = false;
+  bool _tsShowKey = false;
+
   bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    _tab = TabController(length: 5, vsync: this);
     _tab.addListener(() => setState(() {})); // обновить Add button enabled
   }
 
@@ -110,6 +129,11 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     _httpPass.dispose();
     _uriCtrl.dispose();
     _jsonCtrl.dispose();
+    _tsTag.dispose();
+    _tsAuthKey.dispose();
+    _tsControlUrl.dispose();
+    _tsHostname.dispose();
+    _tsExitNode.dispose();
     super.dispose();
   }
 
@@ -126,10 +150,56 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           await _submitInput(_uriCtrl.text);
         case 3:
           await _submitInput(_jsonCtrl.text);
+        case 4:
+          await _submitTailscale();
       }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// §435 — узел Tailscale: `TailscaleSpec` с телом из полей формы и
+  /// `UserServer` с канонической связкой (маршрут `100.64.0.0/10` → узел,
+  /// DNS-сервер `@{self}-dns`, правило `.ts.net`). `rawBody` = `toUri()` —
+  /// компактный JSON endpoint'а с `tag`: `UserServer.fromJson` ре-парсит его
+  /// как `singboxOutbound`, tag переживает рестарт. Без `exit_node` узел не
+  /// кандидат Направлений (это делает сборка), но связка работает.
+  Future<void> _submitTailscale() async {
+    if (!(_tsFormKey.currentState?.validate() ?? false)) return;
+    final tagInput = _tsTag.text.trim();
+    final tag = tagInput.isNotEmpty ? tagInput : _kDefaultTailscaleTag;
+    final controlUrl = _tsControlUrl.text.trim();
+    final hostname = _tsHostname.text.trim();
+    final exitNode = _tsExitNode.text.trim();
+
+    final spec = TailscaleSpec(
+      id: newUuidV4(),
+      tag: tag,
+      label: tag,
+      body: {
+        'auth_key': _tsAuthKey.text.trim(),
+        if (controlUrl.isNotEmpty) 'control_url': controlUrl,
+        if (hostname.isNotEmpty) 'hostname': hostname,
+        if (_tsEphemeral) 'ephemeral': true,
+        if (_tsAcceptRoutes) 'accept_routes': true,
+        if (exitNode.isNotEmpty) 'exit_node': exitNode,
+      },
+    );
+    // §243 — name всегда пуст: заголовок записи = tag узла.
+    final us = UserServer(
+      id: newUuidV4(),
+      name: '',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      origin: UserSource.manual,
+      createdAt: DateTime.now(),
+      rawBody: spec.toUri(),
+      nodes: [spec],
+      sections: canonicalTailscaleSections(),
+    );
+    await widget.subController.addUserServer(us);
+    await _afterAdd(addedTag: tag);
   }
 
   Future<void> _submitSocks() async {
@@ -292,6 +362,9 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             Tab(text: getLocalText.s("HTTP")),
             Tab(text: getLocalText.s("Paste URI")),
             Tab(text: getLocalText.s("Paste JSON")),
+            // §435 — последней, чтобы индексы прежних вкладок не поехали.
+            // l10n-exempt: protocol name
+            const Tab(text: 'Tailscale'),
           ],
         ),
       ),
@@ -302,7 +375,126 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           _buildHttpForm(context),
           _buildUriPaste(context),
           _buildJsonPaste(context),
+          _buildTailscaleForm(context),
         ],
+      ),
+    );
+  }
+
+  /// §435 — вставка эмодзи из пикера в позицию курсора поля Tag (Tailscale).
+  void _insertTailscaleTagEmoji(String emoji) {
+    final text = _tsTag.text;
+    final sel = _tsTag.selection;
+    final start =
+        (sel.start >= 0 && sel.start <= text.length) ? sel.start : text.length;
+    final end = (sel.end >= 0 && sel.end <= text.length) ? sel.end : start;
+    final insert = '$emoji ';
+    _tsTag.value = TextEditingValue(
+      text: text.replaceRange(start, end, insert),
+      selection: TextSelection.collapsed(offset: start + insert.length),
+    );
+    setState(() {});
+  }
+
+  /// §435 — форма Tailscale (NODE_SECTIONS.md §6): Tag, Auth key (секрет,
+  /// обязателен, с подсказкой про одноразовый ключ и каталог состояния),
+  /// Control URL, Hostname, Ephemeral, Accept routes, Exit node.
+  Widget _buildTailscaleForm(BuildContext context) {
+    final hintStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        );
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32).withSafeBottom(context),
+      child: Form(
+        key: _tsFormKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _label(getLocalText.s("Tag (optional)")),
+            TextFormField(
+              controller: _tsTag,
+              decoration: _input(_kDefaultTailscaleTag).copyWith(
+                suffixIcon: EmojiPickerButton(onPick: _insertTailscaleTagEmoji),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              getLocalText.s("Shown as the server title in the Servers list. If empty, \"%s\" is used.", _kDefaultTailscaleTag),
+              style: hintStyle,
+            ),
+            const SizedBox(height: 12),
+            _label(getLocalText.s("Auth key")),
+            TextFormField(
+              controller: _tsAuthKey,
+              obscureText: !_tsShowKey,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: _input('tskey-auth-…').copyWith(
+                suffixIcon: IconButton(
+                  tooltip: _tsShowKey
+                      ? getLocalText.s("Hide")
+                      : getLocalText.s("Show"),
+                  icon: Icon(
+                    _tsShowKey ? Icons.visibility_off : Icons.visibility,
+                    size: 20,
+                  ),
+                  onPressed: () => setState(() => _tsShowKey = !_tsShowKey),
+                ),
+              ),
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? getLocalText.s("Auth key required")
+                  : null,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              getLocalText.s("A one-time key is consumed on the first login; the device identity then lives in the state directory. Clearing the app data registers a new device."),
+              style: hintStyle,
+            ),
+            const SizedBox(height: 12),
+            _label(getLocalText.s("Control URL (optional)")),
+            TextFormField(
+              controller: _tsControlUrl,
+              decoration: _input('https://controlplane.tailscale.com'),
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+            ),
+            const SizedBox(height: 12),
+            _label(getLocalText.s("Hostname (optional)")),
+            TextFormField(
+              controller: _tsHostname,
+              decoration: _input(''),
+              autocorrect: false,
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(getLocalText.s("Ephemeral")),
+              subtitle: Text(getLocalText.s("The device is removed from the tailnet when it goes offline")),
+              value: _tsEphemeral,
+              onChanged: (v) => setState(() => _tsEphemeral = v),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(getLocalText.s("Accept routes")),
+              subtitle: Text(getLocalText.s("Use subnet routes advertised by other tailnet devices")),
+              value: _tsAcceptRoutes,
+              onChanged: (v) => setState(() => _tsAcceptRoutes = v),
+            ),
+            const SizedBox(height: 12),
+            _label(getLocalText.s("Exit node (optional)")),
+            TextFormField(
+              controller: _tsExitNode,
+              decoration: _input(''),
+              autocorrect: false,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              getLocalText.s("Leave empty for tailnet access only — the node will not appear in Directions"),
+              style: hintStyle,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -324,7 +516,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
 
   Widget _buildSocksForm(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32).withSafeBottom(context),
       child: Form(
         key: _socksFormKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -408,7 +600,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
 
   Widget _buildHttpForm(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32).withSafeBottom(context),
       child: Form(
         key: _httpFormKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,

@@ -245,6 +245,13 @@ sealed class CustomRule {
         _ => '',
       };
 
+  /// ## 12 контракта (D-100) — все `.srs`-наборы правила по порядку; пусто
+  /// у прочих kind'ов.
+  List<String> get srsUrls => switch (this) {
+        CustomRuleSrs(:final srsUrls) => srsUrls,
+        _ => const [],
+      };
+
   /// §225 — сырое тело json-правила. Пусто для остальных kind'ов.
   String get json => switch (this) {
         CustomRuleJson(:final json) => json,
@@ -741,7 +748,8 @@ class CustomRuleSrs extends CustomRule {
     required super.name,
     super.enabled = true,
     super.orderNum,
-    this.srsUrl = '',
+    String srsUrl = '',
+    List<String> srsUrls = const [],
     this.ports = const [],
     this.portRanges = const [],
     this.packages = const [],
@@ -757,10 +765,31 @@ class CustomRuleSrs extends CustomRule {
     this.dns,
     this.resolve,
     this.updateIntervalHours = kDefaultSrsTtlHours,
-  }) : wifiBssids = _normalizeBssids(wifiBssids);
+  })  : wifiBssids = _normalizeBssids(wifiBssids),
+        srsUrls = normalizeSrsUrls(srsUrl, srsUrls);
+
+  /// ## 12 контракта (D-100) — все `.srs`-наборы правила по порядку. Правило
+  /// одно, наборов может быть несколько: сборка регистрирует `rule_set` на
+  /// каждый и эмитит одно routing-правило со списком тегов. Первый набор =
+  /// [srsUrl] (совместимость: хранение пишет `srsUrl` всегда и `srsUrls` при
+  /// двух и более, бэкап — `ref` и `refs`). Кэш каждого набора — свой файл,
+  /// см. [cacheIds].
+  @override
+  List<String> srsUrls;
 
   @override
-  String srsUrl;
+  String get srsUrl => srsUrls.isEmpty ? '' : srsUrls.first;
+
+  /// ## 12 — id файла кэша для набора [index]: первый — сам `id` правила
+  /// (файлы, скачанные до ## 12, остаются валидными), остальные —
+  /// `<id>~<index>`. `~` не встречается в uuid, коллизий с preset-ключами
+  /// (`preset__…`) нет.
+  static String cacheIdAt(String ruleId, int index) =>
+      index == 0 ? ruleId : '$ruleId~$index';
+
+  /// ## 12 — id кэша каждого набора, по порядку [srsUrls].
+  List<String> get cacheIds =>
+      [for (var i = 0; i < srsUrls.length; i++) cacheIdAt(id, i)];
 
   /// §366 — через сколько часов кэш считается протухшим. Авто-обновление
   /// (`RuleSetAutoUpdater`) берёт TTL отсюда; `0` = не обновлять
@@ -822,7 +851,12 @@ class CustomRuleSrs extends CustomRule {
   String summary() {
     if (srsUrl.trim().isEmpty) return '';
     final host = Uri.tryParse(srsUrl)?.host;
-    return getLocalText.s("SRS: %s", host?.isNotEmpty == true ? host! : srsUrl);
+    final first = host?.isNotEmpty == true ? host! : srsUrl;
+    // ## 12 — несколько наборов: хост первого и число остальных.
+    if (srsUrls.length > 1) {
+      return getLocalText.s("SRS: %s (+%d)", first, srsUrls.length - 1);
+    }
+    return getLocalText.s("SRS: %s", first);
   }
 
   @override
@@ -833,6 +867,9 @@ class CustomRuleSrs extends CustomRule {
         'kind': kind.name,
         if (orderNum != null) 'num': orderNum,
         if (srsUrl.isNotEmpty) 'srsUrl': srsUrl,
+        // ## 12 — полный список только при двух и более: старая версия
+        // приложения прочтёт `srsUrl` и получит первый набор, как раньше.
+        if (srsUrls.length > 1) 'srsUrls': srsUrls,
         if (ports.isNotEmpty) 'ports': ports,
         if (portRanges.isNotEmpty) 'portRanges': portRanges,
         if (packages.isNotEmpty) 'packages': packages,
@@ -860,6 +897,7 @@ class CustomRuleSrs extends CustomRule {
         enabled: (j['enabled'] as bool?) ?? true,
         orderNum: j['num'] as int?,
         srsUrl: (j['srsUrl'] as String?) ?? '',
+        srsUrls: _stringList(j['srsUrls']),
         ports: _stringList(j['ports']),
         portRanges: _stringList(j['portRanges']),
         packages: _stringList(j['packages']),
@@ -890,6 +928,7 @@ class CustomRuleSrs extends CustomRule {
     bool? enabled,
     int? orderNum,
     String? srsUrl,
+    List<String>? srsUrls,
     List<String>? ports,
     List<String>? portRanges,
     List<String>? packages,
@@ -912,7 +951,9 @@ class CustomRuleSrs extends CustomRule {
         name: name ?? this.name,
         enabled: enabled ?? this.enabled,
         orderNum: orderNum ?? this.orderNum,
-        srsUrl: srsUrl ?? this.srsUrl,
+        // Список главнее одиночного URL; одиночный (старые вызовы) заменяет
+        // весь список одним набором.
+        srsUrls: srsUrls ?? (srsUrl != null ? [srsUrl] : this.srsUrls),
         ports: ports ?? this.ports,
         portRanges: portRanges ?? this.portRanges,
         packages: packages ?? this.packages,
@@ -1132,6 +1173,22 @@ String? _id(Map<String, dynamic> j) {
 /// Читает `outbound`, fallback на legacy-поле `target` (до 1.4.1 rename).
 String _outbound(Map<String, dynamic> j) =>
     (j['outbound'] as String?) ?? (j['target'] as String?) ?? kDirectOutboundTag;
+
+/// ## 12 — нормализация списка `.srs`-наборов: непустой [srsUrls] главнее
+/// одиночного [srsUrl]; trim, пустые и повторы (с сохранением порядка) — вон.
+List<String> normalizeSrsUrls(String srsUrl, List<String> srsUrls) {
+  final out = <String>[];
+  for (final u in srsUrls.isEmpty ? [srsUrl] : srsUrls) {
+    final t = u.trim();
+    if (t.isNotEmpty && !out.contains(t)) out.add(t);
+  }
+  return out;
+}
+
+/// ## 12 — список наборов из текста поля редактора: по одному URL на строку
+/// (любые пробельные разделители), пустые и повторы отбрасываются.
+List<String> parseSrsUrlsText(String text) =>
+    normalizeSrsUrls('', text.split(RegExp(r'\s+')));
 
 List<String> _stringList(dynamic v) {
   if (v is! List) return const [];

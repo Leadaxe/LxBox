@@ -3,6 +3,8 @@ import 'dart:convert';
 import '../../models/direction.dart';
 import '../../models/custom_rule.dart';
 import '../../models/emit_context.dart';
+import '../../models/node_sections.dart';
+import '../../models/node_spec.dart' show NodeSpec;
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
@@ -17,6 +19,7 @@ import '../rule_set_downloader.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
 import 'chain_nodes.dart';
+import 'core_chain_capability.dart';
 import 'if_engine.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
@@ -101,6 +104,13 @@ class BuildSettings {
   /// ⚠ Требует ядра >= ревизии 2026-07-15 (незнакомое поле роняет конфиг).
   final bool passiveCheck;
 
+  /// §435 — корень для `state_directory` узлов Tailscale: native
+  /// `Context.filesDir` (тот же канал, что у §316). Каталог узла —
+  /// `<корень>/tailscale/<финальный тег>` подставляется при эмиссии, если в
+  /// теле поля нет; в хранимое тело путь не пишется. Пусто (юнит-тесты, канал
+  /// не ответил) — поле не пишется, ядро возьмёт свой дефолт.
+  final String tailscaleStateRoot;
+
   const BuildSettings({
     this.userVars = const {},
     this.enabledGroups = const {},
@@ -114,6 +124,7 @@ class BuildSettings {
     this.idleSuspend = '',
     this.idleSuspendReachable = '',
     this.passiveCheck = false,
+    this.tailscaleStateRoot = '',
   });
 }
 
@@ -254,13 +265,16 @@ Future<BuildResult> buildConfig({
     reservedTags: [
       for (final c in directions) ...[c.tag, c.autoTag],
     ],
+    coreVersion: settings.coreVersion, // §435 — гейт tailscale
   );
   for (final list in lists) {
     list.build(ctx);
   }
 
   // Warnings собираем отдельно прямым обходом (ctx их не знает).
-  final emitWarnings = <String>[];
+  // §435 — кроме строк, которые `ServerList.build` отдал через `ctx.warn`
+  // (гейт ядра `tailscale_core_unsupported`).
+  final emitWarnings = <String>[...ctx.warnings];
   for (final list in lists) {
     if (!list.enabled) continue;
     // §283 — зеркало фильтра ServerListBuild.build: выключенная нода не
@@ -356,6 +370,21 @@ Future<BuildResult> buildConfig({
     ...presetOutbounds,
   ];
 
+  // §435 — `state_directory` узлов Tailscale: каталог на узел, чтобы два узла
+  // tailnet не сели в общий дефолт ядра (NODE_SECTIONS.md §6). Подставляется
+  // ТОЛЬКО при эмиссии и только если корень известен; в хранимое тело путь не
+  // пишется (путь этой машины другой стороне бесполезен).
+  final stateRoot = settings.tailscaleStateRoot.trim();
+  if (stateRoot.isNotEmpty) {
+    for (final ep in ctx.endpoints) {
+      if (ep.map['type'] != 'tailscale') continue;
+      final cur = ep.map['state_directory'];
+      if (cur is String && cur.isNotEmpty) continue;
+      ep.map['state_directory'] =
+          '$stateRoot/tailscale/${tailscaleStateDirName(ep.tag)}';
+    }
+  }
+
   if (ctx.endpoints.isNotEmpty) {
     final baseEndpoints = config['endpoints'] as List<dynamic>? ?? const [];
     config['endpoints'] = [
@@ -364,6 +393,14 @@ Future<BuildResult> buildConfig({
     ];
   }
 
+  // §435 / контракт ## 13 — секции узлов (NODE_SECTIONS.md §3): записи
+  // свободных узлов, эмитированных выше, после подстановки `@self` → финальный
+  // тег дописываются к общим спискам. Правила — на ту же ось `num`, что и
+  // корень с якорями пресетов (без `num` → 945); DNS — в конец. Выключенный,
+  // снятый гейтом или не разобранный узел в `emittedTagByNode` отсутствует и
+  // ничего не даёт. Инвариант: без узлов с секциями конфиг байт-в-байт прежний.
+  final injected = _collectNodeSections(lists, ctx.emittedTagByNode);
+
   // §370 — нормализация порядка по оси `num`: seed обязательного пресета
   // (traffic-processing) + разметка неразмеченных + сортировка. Гарантирует,
   // что несортируемый пресет присутствует и стоит первым, независимо от
@@ -371,7 +408,7 @@ Future<BuildResult> buildConfig({
   // первым). Одноразово здесь → все нижеследующие проходы видят нормализованный
   // список.
   final customRules = normalizeRuleOrder(
-    settings.customRules,
+    [...settings.customRules, ...injected.rules],
     template.selectableRules,
     template,
   );
@@ -380,9 +417,12 @@ Future<BuildResult> buildConfig({
   // `{type: local, path: …}`). Удалённо ничего не качается.
   final srsPaths = <String, String>{};
   for (final cr in customRules) {
-    if (cr.kind != CustomRuleKind.srs) continue;
-    final p = await RuleSetDownloader.cachedPath(cr.id);
-    if (p != null) srsPaths[cr.id] = p;
+    if (cr is! CustomRuleSrs) continue;
+    // ## 12 — по файлу на каждый набор правила; ключ — id кэша набора.
+    for (final cacheId in cr.cacheIds) {
+      final p = await RuleSetDownloader.cachedPath(cacheId);
+      if (p != null) srsPaths[cacheId] = p;
+    }
   }
   // Bundle presets (spec §033, task 011) — expansion + merge. Регистрирует
   // rule-set и routing-правила в registry, extra DNS-данные возвращает для
@@ -521,6 +561,8 @@ Future<BuildResult> buildConfig({
     dnsSrsCachedPaths: dnsSrsCachedPaths,
     dnsMirrors: unifiedApply.dnsMirrors,
     warningsOut: emitWarnings, // §312 — дропы членов DNS-групп
+    nodeServers: injected.dnsServers, // §435 — DNS-записи узлов в конец
+    nodeRules: injected.dnsRules,
   );
 
   // §119/§120: VPN-mode (tun-in/mixed-in/route-rules) теперь декларативен —
@@ -638,6 +680,71 @@ Future<BuildResult> buildConfig({
   );
 }
 
+/// §435 — секции узлов после подстановки `@self`, готовые к инъекции:
+/// правила — на общую ось; DNS — тела с `tag` (серверы) и тела правил.
+class _NodeSectionsInjection {
+  final rules = <CustomRule>[];
+  final dnsServers = <Map<String, dynamic>>[];
+  final dnsRules = <Map<String, dynamic>>[];
+}
+
+/// §435 — обход свободных узлов с секциями (`UserServer.sections`,
+/// `FolderMember.sections`; NODE_SECTIONS.md §1: у подписок и цепочек поля
+/// нет). Узел без финального тега в [emittedTagByNode] пропускается —
+/// выключен, снят гейтом ядра или не разобран. Записи с `enabled: false`
+/// отсеиваются здесь же (§3 п. 3–4).
+_NodeSectionsInjection _collectNodeSections(
+  List<ServerList> lists,
+  Map<NodeSpec, String> emittedTagByNode,
+) {
+  final out = _NodeSectionsInjection();
+  void add(NodeSections? sections, NodeSpec? node) {
+    if (sections == null || sections.isEmpty || node == null) return;
+    final tag = emittedTagByNode[node];
+    if (tag == null || tag.isEmpty) return;
+    final s = sections.substituteSelf(tag);
+    for (final r in s.rules) {
+      if (!r.enabled) continue;
+      r.orderNum ??= kNodeRuleDefaultNum;
+      out.rules.add(r);
+    }
+    for (final srv in s.dnsServers) {
+      if (!srv.enabled) continue;
+      out.dnsServers.add(<String, dynamic>{...srv.body, 'tag': srv.tag});
+    }
+    for (final r in s.dnsRules) {
+      if (!r.enabled) continue;
+      out.dnsRules.add(Map<String, dynamic>.of(r.rule));
+    }
+  }
+
+  for (final list in lists) {
+    if (!list.enabled) continue;
+    switch (list) {
+      case UserServer u:
+        add(u.sections, u.nodes.isEmpty ? null : u.nodes.first);
+      case FolderServers f:
+        for (final m in f.members) {
+          if (!m.enabled) continue;
+          add(m.sections, m.node);
+        }
+      case SubscriptionServers():
+        break;
+    }
+  }
+  return out;
+}
+
+/// §435 — имя каталога состояния узла Tailscale из финального тега: всё вне
+/// `[A-Za-z0-9._-]` → `_` (пробелы, `/`, `:` префикса), пустой результат →
+/// `tailscale`. Тот же allowlist, что у лаунчера (`<exec>/bin/tailscale/…`),
+/// чтобы каталог был один на узел, а не дерево.
+String tailscaleStateDirName(String finalTag) {
+  final cleaned =
+      finalTag.replaceAll(RegExp(r'[^A-Za-z0-9._-]', unicode: true), '_');
+  return cleaned.isEmpty ? 'tailscale' : cleaned;
+}
+
 /// Реализация `EmitContext`: vars + аллокатор уникальных тегов +
 /// аккумуляторы entries + RuleSetRegistry.
 class _BuildCtx implements EmitContext {
@@ -646,18 +753,27 @@ class _BuildCtx implements EmitContext {
     this._ruleSets, {
     bool passiveCheck = false,
     Iterable<String> reservedTags = const [],
-  }) : _passiveCheck = passiveCheck {
+    String coreVersion = '',
+  })  : _passiveCheck = passiveCheck,
+        _coreVersion = coreVersion {
     _taken.addAll(reservedTags); // §351 — теги Направлений, эмитятся мимо аллокатора
   }
   final TemplateVars _vars;
   final RuleSetRegistry _ruleSets;
   final bool _passiveCheck;
+  final String _coreVersion;
   final _taken = <String>{kDirectOutboundTag, 'dns-out', 'block-out'};
 
   final outbounds = <Outbound>[];
   final endpoints = <Endpoint>[];
   final selectorEntries = <SingboxEntry>[];
   final autoEntries = <SingboxEntry>[];
+
+  /// §435 — узел → финальный тег (после префикса и `allocateTag`).
+  final emittedTagByNode = <NodeSpec, String>{};
+
+  /// §435 — строки отчёта из `ServerList.build` (гейт ядра).
+  final warnings = <String>[];
 
   @override
   TemplateVars get vars => _vars;
@@ -667,6 +783,22 @@ class _BuildCtx implements EmitContext {
 
   @override
   bool get passiveCheck => _passiveCheck; // §272/§322
+
+  @override
+  bool get coreSupportsTailscale => coreVersionSupportsTailscale(_coreVersion);
+
+  @override
+  String get coreVersion => _coreVersion;
+
+  @override
+  void noteEmitted(NodeSpec node, String finalTag) {
+    emittedTagByNode[node] = finalTag;
+  }
+
+  @override
+  void warn(String line) {
+    if (!warnings.contains(line)) warnings.add(line);
+  }
 
   @override
   String allocateTag(String baseTag) {

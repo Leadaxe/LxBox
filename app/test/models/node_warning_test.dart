@@ -29,6 +29,24 @@ void main() {
       );
     });
 
+    // SPEC 083 — предупреждение REALITY + не-chrome отпечаток: равенство по
+    // значению, машинный рендер — английский ключ с подставленным именем.
+    test('RealityFingerprintWarning equality + renderEn', () {
+      expect(const RealityFingerprintWarning('firefox'),
+          const RealityFingerprintWarning('firefox'));
+      expect(
+          const RealityFingerprintWarning('firefox') ==
+              const RealityFingerprintWarning('safari'),
+          isFalse);
+      expect(
+          const RealityFingerprintWarning('firefox').renderEn(),
+          'REALITY with uTLS fingerprint "firefox": Xray servers since '
+          'v26.9.8 accept only a Chrome-like ClientHello, so "chrome" is used '
+          'when connecting.');
+      expect(const RealityFingerprintWarning('firefox').severity,
+          WarningSeverity.warning);
+    });
+
     // §279 — XhttpResetReason: message() обязан воспроизводить дословно
     // те же English-фразы, что были free-text до enum'а.
     test('XhttpParamResetWarning renders verbatim from enum reason', () {
@@ -79,6 +97,8 @@ void main() {
         // §416 — header-placement без режима: дописан mode: packet-up
         XhttpModeForcedPacketUpWarning() => 'xhttp_mode_forced_packet_up',
         UnknownFingerprintWarning() => 'fingerprint',
+        // SPEC 083 — REALITY принимает только chrome-семейство
+        RealityFingerprintWarning() => 'reality_fingerprint',
         EchIgnoredWarning() => 'ech_ignored',
         UnknownObfsWarning() => 'obfs_unknown',
         MissingObfsPasswordWarning() => 'obfs_no_password',
@@ -95,6 +115,10 @@ void main() {
         WsEarlyDataConvertedWarning() => 'ws_early_data_converted',
         RealityShortIdInvalidWarning() => 'reality_short_id_invalid',
         NaivePaddingIgnoredWarning() => 'naive_padding_ignored',
+        NaiveExtraHeadersInvalidWarning() => 'naive_extra_headers_invalid',
+        // §435 — только UI, кода контракта нет.
+        SectionsRecordDroppedWarning() => 'sections_record_dropped',
+        SectionsConflictWarning() => 'sections_conflict',
         TuicCongestionInvalidWarning() => 'tuic_congestion_invalid',
         AwgHeaderInvalidWarning() => 'awg_header_invalid',
         Awg3FieldInvalidWarning() => 'awg3_field_invalid',

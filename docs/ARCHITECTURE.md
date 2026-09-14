@@ -404,7 +404,9 @@ node_spec.dart               # the sealed NodeSpec (11 variants: Vless/Vmess/Tro
                              #   the Awg value object (§097): the AWG/AWG2 fields of WireguardSpec (jc/jmin/jmax/
                              #   s1–s4/h1–h4/i1–i5), round-tripping parse/emit; null means ordinary WG
 node_spec_emit.dart          # the emit()/toUri() implementation per variant (NodeSpec → SingboxEntry); parity-tested
-singbox_entry.dart           # sealed SingboxEntry = Outbound | Endpoint (WireGuard → Endpoint)
+singbox_entry.dart           # sealed SingboxEntry = Outbound | Endpoint (WireGuard, Tailscale → Endpoint)
+node_sections.dart           # §435 — NodeSections (rules / dns.servers / dns.rules of a free node), @self substitution
+record_codec.dart            # §435 — contract 1.0 record codec (metadata + body); the future root parser
 node_entries.dart            # NodeEntries{main, detours} — the result of getEntries
 emit_context.dart            # the abstract EmitContext: allocateTag/addEntry plus selector and auto registration
 template_vars.dart           # TemplateVars — the global emit flags (tls_fragment/mux/sniOverride)
@@ -1674,6 +1676,7 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | **283** | **Subscription node disable** (a per-node toggle in a subscription, keyed by the node's identity hash) |
 | **393** | **Directions** (the Channel→Direction rename: arbitrary tags, no cap, include[]; the storage key channels→directions with a one-shot migration) plus **hop chains** (SPEC 110: a chain as a third source kind, `type: chain`, a layered probe) |
 | 417 | Workspaces (named copies of the whole state — settings + subscription bodies + .srs; Load = auto-save current → copy → re-read in place → rebuild → VPN back up; Save as; the working paths never move) |
+| **435** | **Node sections + Tailscale** (contract ## 13: a free node carries its route rules and DNS records in `sections` in the contract 1.0 record form; `@self` = the final tag, substituted at build; `TailscaleSpec` endpoint without an address, core gate by AAR version, `state_directory` per node; the record codec is the future root parser 1.0) |
 
 **Demoted (through §054) — now in `tasks/`:**
 

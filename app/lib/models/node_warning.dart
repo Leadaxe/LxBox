@@ -178,6 +178,26 @@ final class UnknownFingerprintWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
+/// §281 / ядро SPEC 083 — REALITY с uTLS-отпечатком не из chrome-семейства.
+/// REALITY-сервер Xray ≥ v26.9.8 требует в ClientHello key_share
+/// `X25519MLKEM768` перед X25519 и без него молча проксирует соединение на
+/// камуфляжный сайт. Из словаря ядра гибрид несут только chrome-имена; нода
+/// с firefox/safari/ios/… против такого сервера мертва без ошибки. Значение
+/// в ноде сохранено (контракт), в конфиг уходит `chrome` (post-step).
+final class RealityFingerprintWarning extends NodeWarning {
+  final String value;
+  const RealityFingerprintWarning(this.value);
+
+  @override
+  List<Object?> get props => [value];
+
+  @override
+  String messageWith(GetLocalText t) => t.s("REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 accept only a Chrome-like ClientHello, so \"chrome\" is used when connecting.", value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
 /// §217 — причина сброса XHTTP-параметра (§279: enum вместо free-text —
 /// текст рендерится в [XhttpParamResetWarning.message], не хранится).
 enum XhttpResetReason {
@@ -559,6 +579,65 @@ final class NaivePaddingIgnoredWarning extends NodeWarning {
   String messageWith(GetLocalText t) => t.s(
       "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.",
       value);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
+/// `naive_extra_headers_invalid` (info, D-105) — пара из naive `extra-headers`
+/// отброшена при разборе: нет `:`, имя вне tchar (RFC 7230) или CR/LF/NUL в
+/// значении. Прочие пары той же ссылки целы, узел живёт, но заголовок, которым
+/// часто открывают доступ на сервере, до него не доедет — раньше это было
+/// только в логе. Вешается на узел ОДИН раз при первой отброшенной паре.
+/// Собственный `headers` у http/https-прокси под код не попадает.
+/// Go-эталон: node_parser_naive.go parseNaiveExtraHeaders.
+/// §435 — запись секции узла отброшена при разборе документа
+/// (`{ endpoints: [тело], sections: {…} }`): чужой `kind` или битая форма.
+/// Остальные записи живут (NODE_SECTIONS.md §1). Кода контракта нет — UI.
+final class SectionsRecordDroppedWarning extends NodeWarning {
+  /// Путь и причина: `rules[1]: kind "preset" is not allowed in node sections`.
+  final String detail;
+
+  const SectionsRecordDroppedWarning(this.detail);
+
+  @override
+  List<Object?> get props => [detail];
+
+  @override
+  String messageWith(GetLocalText t) =>
+      t.s("Node section record dropped: %s", detail);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
+/// §435 — документ узла несёт и `sections`, и `dns`/`route` (NODE_SECTIONS.md
+/// §7: оба вида в одном документе — ошибка). Парсер подписки берёт `sections`,
+/// редактор узла такой документ не сохраняет. Кода контракта нет — UI.
+final class SectionsConflictWarning extends NodeWarning {
+  const SectionsConflictWarning();
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.");
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
+
+final class NaiveExtraHeadersInvalidWarning extends NodeWarning {
+  /// Отброшенная пара, как она пришла в ссылке (после URL-decode, trim).
+  final String entry;
+
+  const NaiveExtraHeadersInvalidWarning(this.entry);
+
+  @override
+  List<Object?> get props => [entry];
+
+  @override
+  String messageWith(GetLocalText t) => t.s(
+      "NaïveProxy extra-headers entry \"%s\" is not a valid header and was dropped. Other headers are kept, but the server will not see this one.",
+      entry);
 
   @override
   WarningSeverity get severity => WarningSeverity.info;

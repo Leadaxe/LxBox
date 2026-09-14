@@ -13,6 +13,17 @@ part of '../post_steps.dart';
 /// emitWarnings. Пробельное значение → поле снимается (utls остаётся
 /// enabled — пустой fingerprint ядро трактует как chrome).
 ///
+/// SPEC 083 (ядро) — REALITY + отпечаток не из chrome-семейства → `chrome`,
+/// молча: Xray ≥ v26.9.8 отвергает ClientHello без key_share `X25519MLKEM768`
+/// (его несут только chrome-спеки utls), нода была бы мертва без ошибки.
+/// Именно здесь, а не в парсере: значение ноды — нормативный `entry`
+/// контракта с лаунчером, а конфиг ядра — нет. Пользователю об этом говорит
+/// `RealityFingerprintWarning` на ноде (парсер); дефолтный `random`
+/// URI-парсера подменяется тоже, без записи.
+///
+/// D-104 (контракт 0.12.10): под REALITY пустой или отсутствующий
+/// fingerprint эмитится как `chrome` ЯВНО, а не через дефолт ядра.
+///
 /// Возвращает список замен мусора (`owner → исходное значение`). Пустой =
 /// всё чисто (тихие канонизации псевдонимов в список не попадают).
 List<({String owner, String original})> healUnknownUtlsFingerprints(
@@ -47,15 +58,31 @@ List<({String owner, String original})> healUnknownUtlsFingerprints(
     }
     if (utls is! Map<String, dynamic>) continue;
     final fp = utls['fingerprint'];
-    if (fp is! String || fp.isEmpty) continue;
-    final n = normalizeUtlsFingerprintValue(fp);
-    if (n.value == fp) continue;
-    if (n.value.isEmpty) {
-      utls.remove('fingerprint');
-      continue;
+    if (fp is String && fp.isNotEmpty) {
+      final n = normalizeUtlsFingerprintValue(fp);
+      if (n.value != fp) {
+        if (n.value.isEmpty) {
+          utls.remove('fingerprint');
+        } else {
+          utls['fingerprint'] = n.value;
+          if (n.junk) {
+            healed.add((owner: o['tag'] as String? ?? '', original: fp));
+          }
+        }
+      }
     }
-    utls['fingerprint'] = n.value;
-    if (n.junk) healed.add((owner: o['tag'] as String? ?? '', original: fp));
+    // SPEC 083 — REALITY принимает только chrome-семейство (см. docstring).
+    // D-104: отсутствующий/пустой fingerprint под REALITY пишется как
+    // `chrome` ЯВНО — на дефолт ядра для пустой строки не полагаемся, чтобы
+    // конфиг не зависел от того, что ядро считает дефолтом в этой версии.
+    final realityOn =
+        reality is Map<String, dynamic> && reality['enabled'] == true;
+    if (realityOn) {
+      final cur = utls['fingerprint'];
+      if (cur is! String || cur.isEmpty || !isChromeFamilyFingerprint(cur)) {
+        utls['fingerprint'] = 'chrome';
+      }
+    }
   }
   return healed;
 }

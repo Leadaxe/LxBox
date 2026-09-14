@@ -92,6 +92,69 @@ void main() {
       expect(healUnknownUtlsFingerprints(config), isEmpty);
     });
 
+    // SPEC 083 (ядро) — Xray ≥ v26.9.8 принимает REALITY только с
+    // chrome-семейством (key_share X25519MLKEM768); подмена на выходе, молча.
+    Map<String, dynamic> realityOutbound(String tag, String fp) => {
+          'tag': tag,
+          'type': 'vless',
+          'tls': {
+            'enabled': true,
+            'utls': {'enabled': true, 'fingerprint': fp},
+            'reality': {'enabled': true, 'public_key': 'pk'},
+          },
+        };
+
+    test('SPEC 083: REALITY + firefox/random/randomized → chrome, молча', () {
+      final config = {
+        'outbounds': [
+          realityOutbound('ff', 'firefox'),
+          realityOutbound('rnd', 'random'),
+          realityOutbound('rz', 'randomized'),
+          realityOutbound('junk', 'garbage'),
+        ],
+      };
+      final healed = healUnknownUtlsFingerprints(config);
+      for (var i = 0; i < 4; i++) {
+        expect(utlsOf(config, i)['fingerprint'], 'chrome', reason: 'i=$i');
+      }
+      expect(healed.map((h) => h.owner), ['junk'],
+          reason: 'запись только про мусор, подмена под REALITY — молча');
+    });
+
+    test('SPEC 083: REALITY + chrome-семейство и plain TLS + firefox → no-op',
+        () {
+      final config = {
+        'outbounds': [
+          realityOutbound('c', 'chrome'),
+          realityOutbound('cpq', 'chrome_pq'),
+          outbound('tls-ff', 'firefox'),
+        ],
+      };
+      expect(healUnknownUtlsFingerprints(config), isEmpty);
+      expect(utlsOf(config, 0)['fingerprint'], 'chrome');
+      expect(utlsOf(config, 1)['fingerprint'], 'chrome_pq');
+      expect(utlsOf(config, 2)['fingerprint'], 'firefox',
+          reason: 'без REALITY отпечаток пользователя не трогаем');
+    });
+
+    test('SPEC 083: REALITY + reality.enabled=false + firefox → no-op', () {
+      final config = {
+        'outbounds': [
+          {
+            'tag': 'off',
+            'type': 'vless',
+            'tls': {
+              'enabled': true,
+              'utls': {'enabled': true, 'fingerprint': 'firefox'},
+              'reality': {'enabled': false, 'public_key': 'pk'},
+            },
+          },
+        ],
+      };
+      expect(healUnknownUtlsFingerprints(config), isEmpty);
+      expect(utlsOf(config, 0)['fingerprint'], 'firefox');
+    });
+
     test('пустой конфиг → no-op', () {
       expect(healUnknownUtlsFingerprints({}), isEmpty);
     });
@@ -115,6 +178,22 @@ void main() {
       expect(healed, isEmpty, reason: 'восстановление — молча');
       expect(utlsOf(config, 0)['enabled'], true,
           reason: 'без uTLS ядро отвергает reality-outbound на старте');
+      expect(utlsOf(config, 0)['fingerprint'], 'chrome',
+          reason: 'D-104: chrome ЯВНО, не дефолт ядра');
+    });
+
+    test('D-104: REALITY + пустой/пробельный fingerprint → chrome ЯВНО', () {
+      final config = {
+        'outbounds': [
+          realityOutbound('empty', ''),
+          realityOutbound('blank', '  '),
+        ],
+      };
+      final healed = healUnknownUtlsFingerprints(config);
+
+      expect(healed, isEmpty);
+      expect(utlsOf(config, 0)['fingerprint'], 'chrome');
+      expect(utlsOf(config, 1)['fingerprint'], 'chrome');
     });
 
     test(

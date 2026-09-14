@@ -14,7 +14,7 @@
 // ГРАБЛЯ (та же, что в §372): saveFile возвращает null и при отмене
 // юзером, и когда intent перехватила TV-заглушка frameworkpackagestubs —
 // она показывает тост и отвечает RESULT_CANCELED, так что ошибка
-// invalid_format_type даже не возникает. Различить исходы постфактум
+// explorer_not_found даже не возникает. Различить исходы постфактум
 // нельзя, поэтому наличие пикера проверяется ЗАРАНЕЕ, как в pickFileSafely.
 
 import 'dart:convert';
@@ -29,8 +29,9 @@ import 'l10n/locale_controller.dart';
 import 'url_launcher.dart';
 
 /// Код ошибки file_picker'а, когда в системе не нашлось активити под
-/// ACTION_CREATE_DOCUMENT. Тот же код, что у pickFiles (§372).
-const _noPickerCode = 'invalid_format_type';
+/// ACTION_CREATE_DOCUMENT. Тот же код, что у pickFiles (§372); в file_picker
+/// 12 — `explorer_not_found` (§431).
+const _noPickerCode = 'explorer_not_found';
 
 /// Результат попытки сохранить файл.
 sealed class SaveOutcome {
@@ -38,7 +39,7 @@ sealed class SaveOutcome {
 }
 
 /// Сохранено через системный диалог. [name] — имя файла; полный путь не
-/// отдаём: saveFile возвращает path SAF-Uri (`/document/primary:Download/…`),
+/// отдаём: saveFile возвращает SAF-Uri (`content://…/document/primary:Download/…`),
 /// а не путь в файловой системе, и показывать его юзеру бессмысленно.
 class SavedToFile extends SaveOutcome {
   const SavedToFile(this.name);
@@ -85,11 +86,11 @@ Future<SaveOutcome> saveFileSafely({
     return const SaveNoTarget();
   }
   try {
-    final path = await FilePicker.saveFile(
+    final uri = await FilePicker.saveFile(
       fileName: fileName,
       bytes: utf8.encode(content),
     );
-    if (path == null) return const SaveCancelled();
+    if (uri == null) return const SaveCancelled();
     return SavedToFile(fileName);
   } on PlatformException catch (e) {
     if (e.code == _noPickerCode) {

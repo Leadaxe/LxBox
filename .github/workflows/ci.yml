@@ -5,7 +5,7 @@
 #   - main    — только релизные коммиты (merge из develop + тег vX.Y.Z)
 # См. docs/RELEASE_PROCESS.md для полного протокола.
 #
-# 1) Tag push (v*):            checks → build → GitHub Release → publish-manifest
+# 1) Tag push (v*):            checks → build → GitHub Release + Google Play (§436) → publish-manifest
 # 2) push develop / main:      checks only
 # 3) PR → develop / main:      checks only
 # 4) workflow_dispatch:        checks | build | release (ручной)
@@ -200,6 +200,30 @@ jobs:
         if: ${{ github.event.inputs.test_path == '' }}
         working-directory: app
         run: dart run tool/docs/parity_check.dart --strict
+
+      # §436 — описание выпуска для Google Play берётся из тех же
+      # fastlane/metadata/android/<locale>/changelogs/<versionCode>.txt, что
+      # читает F-Droid. Play режет описание на 500 символах и отвергает
+      # загрузку целиком. Ловим на push, а не на теге: тег неподвижен, чинить
+      # файл после него уже некуда. Считаем символы, не байты (кириллица).
+      - name: Fastlane changelogs ≤ 500 chars
+        if: ${{ github.event.inputs.test_path == '' }}
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          FAIL=0
+          for F in fastlane/metadata/android/*/changelogs/*.txt; do
+            N=$(python3 -c 'import sys; print(len(open(sys.argv[1], encoding="utf-8").read().rstrip("\n")))' "$F")
+            if [ "$N" -gt 500 ]; then
+              echo "::error file=$F::$N символов, лимит описания выпуска в Google Play — 500."
+              FAIL=1
+            fi
+          done
+          if [ "$FAIL" -eq 0 ]; then
+            echo "OK: все changelogs ≤ 500 символов."
+          fi
+          exit "$FAIL"
 
       # SPEC 103 фаза 5 — общий контракт с лаунчером. Источник живёт в его
       # репозитории, здесь лежит копия; править её руками нельзя — правка
@@ -407,7 +431,8 @@ jobs:
       - name: Build AAB (Google Play)
         # Play принимает только AAB. Отдельный формат, отдельный канал:
         # в GitHub Releases по-прежнему уходят APK (шаги выше), сюда не
-        # попадают — заливка в Play ручная, артефакт скачивается из прогона.
+        # попадают — бандл забирает job google-play (§436) и отдаёт в Play API;
+        # артефакт прогона остаётся на случай ручной заливки.
         #
         # versionCode = код universal (ABI=0), тот же, что у fat APK этой
         # версии. Play требует уникальности кода в пределах СВОЕГО аккаунта, а
@@ -442,6 +467,105 @@ jobs:
           path: app/build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 1 || 30 }}
+
+  google-play:
+    name: GooglePlay
+    needs: [meta, android]
+    runs-on: ubuntu-latest
+    if: needs.meta.outputs.is_release == 'true'
+    # §436 — AAB из job android уезжает в Play Console через Google Play
+    # Developer API от имени сервисного аккаунта (секрет
+    # PLAY_SERVICE_ACCOUNT_JSON = JSON-ключ целиком; права в Play Console —
+    # только выпуск на рабочий и тестовые треки). Без секрета job зелёный с
+    # warning: форки и прогоны без ключа не ломаем, AAB остаётся в артефакте.
+    #
+    # Параллелен release и publish-manifest, они от него НЕ зависят: провал
+    # заливки в Play не должен снимать GitHub-релиз.
+    #
+    # Трек и статус — repo variables, переключаются без коммита:
+    #   PLAY_TRACK           production | internal | alpha | beta   (default production)
+    #   PLAY_RELEASE_STATUS  draft | completed                       (default draft)
+    # draft: выпуск ложится в консоль черновиком, Publish жмёт человек.
+    # completed: уходит на проверку Google сам.
+    #   gh variable set PLAY_RELEASE_STATUS -b completed
+    steps:
+      - name: Checkout (changelogs + version-code.sh)
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            scripts/version-code.sh
+            fastlane/metadata/android
+          sparse-checkout-cone-mode: false
+
+      - name: Service account present?
+        id: gate
+        env:
+          KEY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::warning::PLAY_SERVICE_ACCOUNT_JSON не задан — заливка в Google Play пропущена. AAB лежит в артефакте android-aab-release этого прогона."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download AAB
+        if: steps.gate.outputs.enabled == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: android-aab-release
+          path: play
+
+      - name: Release notes (fastlane changelogs → whatsnew)
+        if: steps.gate.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.meta.outputs.version }}"
+          VERSION="${VERSION#v}"
+          # Тот же код, что зашит в AAB (шаг Build AAB: universal, ABI=0).
+          BASE=$(scripts/version-code.sh "$VERSION" universal)
+          echo "versionCode (AAB) = $BASE"
+          mkdir -p play/whatsnew
+          # Каталог fastlane `ru` — соглашение F-Droid; Play ждёт ru-RU.
+          for PAIR in en-US:en-US ru:ru-RU; do
+            SRC="${PAIR%%:*}"; LOCALE="${PAIR##*:}"
+            DIR="fastlane/metadata/android/$SRC/changelogs"
+            FILE=""
+            # AAB несёт universal-код (…0), а файлы лежат под per-ABI кодами
+            # (…1/…2, содержимое одно) — так их читает F-Droid по коду каждого
+            # своего APK. Берём первый найденный.
+            for SUFFIX in 0 2 1 4; do
+              CAND="$DIR/$((BASE + SUFFIX)).txt"
+              if [ -f "$CAND" ]; then FILE="$CAND"; break; fi
+            done
+            if [ -z "$FILE" ]; then
+              echo "::warning::Нет changelog для $SRC (коды $BASE…$((BASE + 4))) — выпуск в Play уйдёт без описания для $LOCALE; допишите его в консоли."
+              continue
+            fi
+            # Лимит 500 уже проверен в job checks на каждом файле; здесь
+            # только страховка, чтобы не уронить заливку из-за описания.
+            N=$(python3 -c 'import sys; print(len(open(sys.argv[1], encoding="utf-8").read().rstrip("\n")))' "$FILE")
+            if [ "$N" -gt 500 ]; then
+              echo "::warning::$FILE: $N символов, лимит Play 500 — описание для $LOCALE пропущено."
+              continue
+            fi
+            cp "$FILE" "play/whatsnew/whatsnew-$LOCALE"
+            echo "$LOCALE ← $FILE ($N символов)"
+          done
+          ls -la play/whatsnew
+
+      - name: Upload to Google Play
+        if: steps.gate.outputs.enabled == 'true'
+        # Пин по SHA, не по @v1: шаг получает ключ сервисного аккаунта.
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.leadaxe.lxbox
+          releaseFiles: play/app-release.aab
+          track: ${{ vars.PLAY_TRACK || 'production' }}
+          status: ${{ vars.PLAY_RELEASE_STATUS || 'draft' }}
+          whatsNewDirectory: play/whatsnew
 
   release:
     name: Create Release

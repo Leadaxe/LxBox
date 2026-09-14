@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 void main() {
@@ -78,6 +79,9 @@ void main() {
         'naive+https://u:p@host?extra-headers=X%20User%3Abad%0D%0AX-Good%3Aok',
       );
       expect(spec!.extraHeaders, {'X-Good': 'ok'});
+      // D-105 — отброшенная пара видна на узле кодом naive_extra_headers_invalid.
+      expect(spec.warnings.whereType<NaiveExtraHeadersInvalidWarning>().single,
+          const NaiveExtraHeadersInvalidWarning('X User:bad'));
     });
 
     test('padding query is silently ignored (no field set)', () {
@@ -140,6 +144,31 @@ void main() {
       expect(spec, isNotNull);
       expect(spec!.server, '2001:db8::1');
       expect(spec.port, 8443);
+    });
+  });
+
+  group('D-105 naive_extra_headers_invalid', () {
+    test('валидные пары → warning нет', () {
+      final spec = parseNaive(
+        'naive+https://u:p@host?extra-headers=X-User%3Aalice%0D%0AX-Token%3Axyz',
+      );
+      expect(spec!.warnings.whereType<NaiveExtraHeadersInvalidWarning>(),
+          isEmpty);
+    });
+
+    test('две отброшенные пары → ОДИН warning, с первой парой', () {
+      // "no-colon" (нет `:`) и "X User" (пробел в имени); X-Good цел.
+      final spec = parseNaive(
+        'naive+https://u:p@host?extra-headers=no-colon%0D%0AX%20User%3Abad%0D%0AX-Good%3Aok',
+      );
+      expect(spec!.extraHeaders, {'X-Good': 'ok'});
+      expect(spec.warnings.whereType<NaiveExtraHeadersInvalidWarning>().single,
+          const NaiveExtraHeadersInvalidWarning('no-colon'));
+    });
+
+    test('helper без аккумулятора — молча (http/https headers)', () {
+      expect(parseNaiveExtraHeaders('X User: bad\r\nX-Good: ok'),
+          {'X-Good': 'ok'});
     });
   });
 

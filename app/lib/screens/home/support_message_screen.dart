@@ -114,7 +114,8 @@ class _SupportMessageScreenState extends State<SupportMessageScreen> {
       // `share:` — системный share-лист, экран НЕ закрываем (как https).
       if (isInPlaceSupportAction(action)) {
         buttons.add(FilledButton.tonal(
-          onPressed: () => unawaited(Share.share(action.payload)),
+          onPressed: () => unawaited(
+              SharePlus.instance.share(ShareParams(text: action.payload))),
           child: Text(spec.label),
         ));
         continue;
@@ -138,7 +139,7 @@ class _SupportMessageScreenState extends State<SupportMessageScreen> {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24), // bottom-inset: handled — SafeArea выше
           children: [
             Text(c.title, style: theme.textTheme.headlineSmall),
             const SizedBox(height: 16),

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/widgets/detour_target_picker.dart';
 
@@ -56,5 +57,25 @@ void main() {
     );
     expect(visibleDetourDirections(directions, folder).map((c) => c.tag),
         ['vpn-2']);
+  });
+
+  group('§435 detourNodeSubline', () {
+    test('адресный узел — TYPE · server:port', () {
+      final n = SocksSpec(
+        id: 'a',
+        tag: 's',
+        label: 's',
+        server: 'h.example',
+        port: 1080,
+        rawUri: '',
+      );
+      expect(detourNodeSubline(n), 'SOCKS · h.example:1080');
+    });
+
+    test('Tailscale без адреса — только тип, без «:0»', () {
+      final n = TailscaleSpec(
+          id: 'b', tag: 'ts', label: 'ts', body: const {'auth_key': 'k'});
+      expect(detourNodeSubline(n), 'TAILSCALE');
+    });
   });
 }

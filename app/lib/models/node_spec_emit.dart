@@ -31,6 +31,31 @@ void _addDetour(Map<String, dynamic> out, NodeSpec s) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// Tailscale (§435) — endpoint, тело как есть
+// ════════════════════════════════════════════════════════════════════════════
+
+/// `type`/`tag` первыми (порядок ключей конфига читаемее), дальше тело как
+/// хранится. `state_directory` здесь НЕ подставляется — это делает сборка при
+/// эмиссии (путь этой машины в хранимое тело не пишется, NODE_SECTIONS.md §6).
+Endpoint emitTailscale(TailscaleSpec s, TemplateVars vars) {
+  final map = <String, dynamic>{
+    'type': 'tailscale',
+    'tag': s.tag,
+    ...deepCopyJson(s.body) as Map<String, dynamic>,
+  };
+  _addDetour(map, s);
+  return Endpoint(map);
+}
+
+/// Канонический текст узла Tailscale — компактный JSON endpoint'а (URI-формы
+/// у схемы нет). Без `detour`: цепочка — дело контейнера, а не текста узла.
+String toUriTailscale(TailscaleSpec s) => jsonEncode(<String, dynamic>{
+      'type': 'tailscale',
+      'tag': s.tag,
+      ...s.body,
+    });
+
+// ════════════════════════════════════════════════════════════════════════════
 // VLESS
 // ════════════════════════════════════════════════════════════════════════════
 

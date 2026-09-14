@@ -7,6 +7,7 @@ import '../node_hash.dart';
 import '../node_identity.dart';
 import '../safe_regex.dart';
 import '../tag_resolver.dart';
+import 'core_chain_capability.dart';
 
 /// Сборка одной подписки в контекст `EmitContext`.
 ///
@@ -63,6 +64,18 @@ extension ServerListBuild on ServerList {
         autoSelects.add((server, i));
         continue;
       }
+      // §435 / контракт ## 13 — гейт ядра (`tailscale_core_unsupported`):
+      // ядро без `with_tailscale` отвергает конфиг ЦЕЛИКОМ на неизвестном
+      // типе endpoint'а, и один такой узел оставил бы пользователя без VPN.
+      // Узел живёт в состоянии, при сборке выбрасывается с warning'ом; его
+      // секции не инжектятся (в `noteEmitted` он не попадает).
+      if (server is TailscaleSpec && !ctx.coreSupportsTailscale) {
+        ctx.warn(tailscaleUnsupportedByCoreLine(
+          TagResolver.displayTag(tagPrefix, server.tag),
+          ctx.coreVersion,
+        ));
+        continue;
+      }
       final policy =
           plan == null ? detourPolicy : plan.policyFor(i, detourPolicy);
 
@@ -86,6 +99,8 @@ extension ServerListBuild on ServerList {
       // §322 — итоговый тег нужен второму проходу: пул автовыбора ссылается
       // на членов уже ПОСЛЕ префикса и уникализации.
       resolvedTags[server] = main.map['tag'] as String;
+      // §435 — тот же финальный тег нужен инъекции секций узла (`@self`).
+      ctx.noteEmitted(server, main.map['tag'] as String);
 
       // Применить detour policy.
       if (replaceMode) {
@@ -123,7 +138,14 @@ extension ServerListBuild on ServerList {
       //     регистрируется по тем же register-тогглам (симметрия с ⚙ подписки).
       final isMainAsDetour = main.tag.startsWith(kDetourTagPrefix) ||
           (plan?.isChainLink(i) ?? false);
-      if (!isMainAsDetour) {
+      // §435 — Tailscale без `exit_node` в интернет не выпускает и «страной»
+      // не является (NODE_SECTIONS.md §6): в пул Направлений не идёт ни при
+      // какой политике. В `endpoints[]` он эмитирован (`addEntry` выше) —
+      // законная цель `detour`, `outbound` правила узла и позиции цепочки.
+      final tailnetOnly = server is TailscaleSpec && !server.hasExitNode;
+      if (tailnetOnly) {
+        // ничего: ни selector, ни auto
+      } else if (!isMainAsDetour) {
         ctx.addToSelectorTagList(main);
         ctx.addToAutoList(main);
       } else {

@@ -7,6 +7,7 @@ import '../models/server_list.dart';
 import '../services/selector_info.dart';
 import '../services/tag_resolver.dart';
 import '../services/l10n/locale_controller.dart';
+import 'app_bottom_sheet.dart';
 
 /// §239 — выбранная цель detour-пикера.
 class DetourTarget {
@@ -22,6 +23,13 @@ class DetourTarget {
 
   /// Сентинел «без detour».
   static const none = DetourTarget(storeValue: '', display: '');
+}
+
+/// Сабстрока узла в пикере: `TYPE · server:port`; у безадресных (§435 —
+/// группа §322, Tailscale) адреса нет — только тип, без `:0`.
+String detourNodeSubline(NodeSpec n) {
+  final type = n.protocol.toUpperCase();
+  return n.isAddressless ? type : '$type · ${n.server}:${n.port}';
 }
 
 /// §248 — подпись сохранённого detour-значения: тег detour-Направления (или его
@@ -195,7 +203,7 @@ Future<DetourTarget?> showDetourTargetPicker(
   // §248 — detour-Направления (фильтрация — см. [visibleDetourDirections]).
   final detourDirections = visibleDetourDirections(directions, folder);
 
-  return showModalBottomSheet<DetourTarget>(
+  return showAppBottomSheet<DetourTarget>(
     context: context,
     isScrollControlled: true,
     builder: (ctx) {
@@ -244,7 +252,7 @@ Future<DetourTarget?> showDetourTargetPicker(
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis),
                               subtitle: Text(
-                                '${n.protocol.toUpperCase()} · ${n.server}:${n.port}',
+                                detourNodeSubline(n),
                                 style:
                                     TextStyle(fontSize: 12, color: muted),
                               ),
@@ -292,7 +300,7 @@ Future<DetourTarget?> showDetourTargetPicker(
                     title: Text(display,
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
-                      '${n.protocol.toUpperCase()} · ${n.server}:${n.port}',
+                      detourNodeSubline(n),
                       style: TextStyle(fontSize: 12, color: muted),
                     ),
                     onTap: () => Navigator.pop(ctx,

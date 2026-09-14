@@ -36,6 +36,29 @@ const Set<String> kUtlsFingerprints = {
   'randomized',
 };
 
+/// SPEC 083 (ядро) — chrome-семейство: единственные имена словаря, чья
+/// utls-спека (`HelloChrome_133`) несёт key_share `X25519MLKEM768` перед
+/// X25519. REALITY-сервер Xray ≥ v26.9.8 (`XTLS/REALITY@8cdf7bf`) без этого
+/// шара молча проксирует соединение на камуфляжный сайт (`reality
+/// verification failed`); firefox/edge/safari/ios/android/360/qq шлют голый
+/// X25519, `random` = один из пяти (Chrome — единственный живой),
+/// `randomized` — гибрид монетой. Все шесть имён ядро схлопывает в
+/// `HelloChrome_Auto`.
+const Set<String> kChromeFamilyFingerprints = {
+  'chrome',
+  'chrome_psk',
+  'chrome_psk_shuffle',
+  'chrome_padding_psk_shuffle',
+  'chrome_pq',
+  'chrome_pq_psk',
+};
+
+/// `true`, если [fp] (уже канонизированный) даёт ClientHello, который
+/// принимает REALITY-сервер Xray ≥ v26.9.8. Пустое значение = дефолт ядра
+/// (chrome) — тоже `true`.
+bool isChromeFamilyFingerprint(String fp) =>
+    fp.isEmpty || kChromeFamilyFingerprints.contains(fp);
+
 /// Xray-псевдонимы — сырые имена uTLS-библиотеки, матчим по префиксу
 /// (`hellochrome_120`, `hellochrome_106_shuffle`, `hellorandomizedalpn` …).
 const Map<String, String> _xrayAliasPrefixes = {
@@ -77,6 +100,18 @@ TlsSpec normalizeTlsFingerprint(TlsSpec tls, List<NodeWarning>? warnings) {
   // ядра для пустой строки).
   if (value.isEmpty && tls.reality != null) value = 'chrome';
   if (n.junk) warnings?.add(UnknownFingerprintWarning(fp));
+  // SPEC 083 — REALITY + отпечаток не из chrome-семейства: Xray ≥ v26.9.8
+  // такое приветствие отвергает молча. Значение ноды НЕ меняем (контракт с
+  // лаунчером: `entry` нормативен, CANON §7) — подмена на `chrome` делается
+  // на выходе, в post-step `healUnknownUtlsFingerprints`; здесь только
+  // предупреждение на ноде. `random` — дефолт URI-парсера при пустом `fp`
+  // (transport.dart), от явного `fp=random` неотличим → без предупреждения,
+  // подмена на выходе всё равно сработает.
+  if (tls.reality != null &&
+      value != 'random' &&
+      !isChromeFamilyFingerprint(value)) {
+    warnings?.add(RealityFingerprintWarning(value));
+  }
   if (value == fp) return tls;
   return tls.copyWith(fingerprint: value);
 }

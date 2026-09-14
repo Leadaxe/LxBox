@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import '../models/node_spec.dart';
 import '../services/node_identity.dart';
 import 'auto_group_edit_screen.dart';
@@ -28,6 +27,7 @@ import '../widgets/probe_badge.dart';
 import '../widgets/reorder_grab_strip.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/file_import.dart';
+import '../widgets/app_bottom_sheet.dart';
 
 /// §234 — экран папки серверов. Зеркалит SubscriptionDetailScreen: вкладка
 /// членов (per-member toggle, drag-reorder, long-press меню) + Settings
@@ -335,7 +335,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   /// §236 UI-rework — настройки теста (long-press на кнопке, как на главном):
   /// цель пинга (глобальные ping_options) + пороги цветовой шкалы.
   void _showTestSettings() {
-    showModalBottomSheet<void>(
+    showAppBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
@@ -742,15 +742,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       var added = 0;
       final errors = <String>[];
       for (final file in outcome.files) {
-        String text;
-        if (file.bytes != null && file.bytes!.isNotEmpty) {
-          text = String.fromCharCodes(file.bytes!);
-        } else if (file.path != null) {
-          text = await File(file.path!).readAsString();
-        } else {
-          continue;
-        }
-        text = text.trim();
+        final text = file.text.trim();
         if (text.isEmpty) continue;
         final idx = _index;
         if (idx < 0) return;
@@ -1031,7 +1023,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   void _showMemberMenu(int memberIndex) {
-    showModalBottomSheet<void>(
+    showAppBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
@@ -1678,9 +1670,32 @@ class _MemberTile extends StatelessWidget {
         ? getLocalText.s("Unreadable entry")
         : (node.label.isNotEmpty ? node.label : node.tag);
     if (isChainLink) title = '⚙ $title'; // §239 — авто-маркировка звена
+    // §435 — у безадресных (группа §322, Tailscale) адреса нет: только тип,
+    // без «:0».
     final subtitle = node == null
         ? getLocalText.s("Tap to edit or delete")
-        : '${node.protocol.toUpperCase()} · ${node.server}:${node.port}';
+        : node.isAddressless
+            ? node.protocol.toUpperCase()
+            : '${node.protocol.toUpperCase()} · ${node.server}:${node.port}';
+
+    // §435 — маркер «член несёт секции» (правила/DNS узла, контракт ## 13):
+    // видно, у кого связка, не открывая редактор.
+    final badge = _probeBadge(context, theme);
+    final sectionsMark = member.sections == null
+        ? null
+        : Tooltip(
+            message: getLocalText.s("Has node sections"),
+            child: Icon(Icons.account_tree_outlined, size: 16, color: muted),
+          );
+    final Widget? trailing = switch ((sectionsMark, badge)) {
+      (null, null) => null,
+      (final m?, null) => m,
+      (null, final b?) => b,
+      (final m?, final b?) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [m, const SizedBox(width: 8), b],
+        ),
+    };
 
     final tile = ListTile(
       contentPadding: EdgeInsets.zero,
@@ -1706,7 +1721,7 @@ class _MemberTile extends StatelessWidget {
           style: TextStyle(fontSize: 12, color: muted),
           maxLines: 1,
           overflow: TextOverflow.ellipsis),
-      trailing: _probeBadge(context, theme),
+      trailing: trailing,
       onLongPress: onLongPress,
       onTap: onTap,
     );
