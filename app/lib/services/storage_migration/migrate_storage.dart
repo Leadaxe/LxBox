@@ -183,6 +183,16 @@ StorageMigrationResult migrateStorageDoc(
 
   final dropped = <String>[];
   final renamed = <String>[];
+  // §393 A2 — легаси-пара рядом со списком Направлений (перенесённым из
+  // `channels` или уже лежащим под `directions`) ставила guard
+  // `directions_migrated: true` независимо от значения `channels_migrated`:
+  // прерванная установка писала список без маркера. Переименование держит то
+  // же, иначе список остался бы без guard'а.
+  final legacyDirectionsGuard = (doc.containsKey(_kLegacyDirections) ||
+          doc.containsKey(_kLegacyDirectionsMigrated)) &&
+      !doc.containsKey('directions_migrated') &&
+      (doc['directions'] is List ||
+          (doc[_kLegacyDirections] is List && !doc.containsKey('directions')));
   final out = <String, dynamic>{
     kStorageVersionKey: version ?? kStorageVersion,
   };
@@ -216,7 +226,8 @@ StorageMigrationResult migrateStorageDoc(
         }
       case _kLegacyDirectionsMigrated:
         if (e.value != null && !doc.containsKey('directions_migrated')) {
-          out['directions_migrated'] = deepCloneJson(e.value);
+          out['directions_migrated'] =
+              legacyDirectionsGuard ? true : deepCloneJson(e.value);
           renamed.add('$key → directions_migrated');
         } else {
           dropped.add(key);
@@ -243,6 +254,10 @@ StorageMigrationResult migrateStorageDoc(
           out[key] = deepCloneJson(e.value);
         }
     }
+  }
+
+  if (legacyDirectionsGuard && !out.containsKey('directions_migrated')) {
+    out['directions_migrated'] = true;
   }
 
   if (renamed.isNotEmpty) info.add('renamed: ${renamed.join(', ')}');
