@@ -505,8 +505,9 @@ void main() {
   group('§159 — allowlist (default-deny) на импорте', () {
     test('replaceRaw отбрасывает чужеродный top-level ключ', () async {
       final dropped = await SettingsStorage.replaceRaw({
+        'storage_version': 1,
         'vars': {'log_level': 'info'},
-        'custom_rules': [],
+        'rules': [],
         'totally_random_field_12345': {'nested': 'garbage'},
         'another_alien_key': 'x',
       });
