@@ -676,11 +676,16 @@ rename, D-114 delete, контракт 1.0.1):
 - **Члены группы** — NodeLink; `{tag}` внутри контейнера — пара.
 - **Направления на узлы не ссылаются.** `include` — только Направления,
   фильтры остаются regex.
-- **`ExplicitMembers` autogroup** — сырые теги членов того же контейнера.
-  Миграция переводит составные ключи `protocol|server|port|credential`.
-  Экспорт — `kind: auto` в `nodes[]` папки (`group_type: urltest`,
-  `members`, `strategy` в форме directionAuto), импорт `kind: auto` —
-  autogroup вместо `backup_source_kind_unsupported`.
+- **Autogroup в хранении** — запись `kind: auto` в `nodes[]` папки, та же
+  форма, что в файле: `group_type: urltest`, `members` явными парами
+  `{folder_id, tag}`, `strategy` в форме directionAuto. Текста
+  `origin.raw: "autogroup://…"` в хранении больше нет. Уточнение лаунчера
+  15.09: S1 — терпимость читателя, а не форма писателя; перенос члена
+  переписывает пару реестром. Миграция: `autogroup://` → запись, составные
+  ключи `protocol|server|port|credential` → пары; неоднозначный ключ —
+  warning, член снимается. Импорт `kind: auto` даёт autogroup вместо
+  `backup_source_kind_unsupported`; `selector` с `default` читается как
+  urltest с предупреждением.
 - **Терпимое чтение одинаково у сторон:** S1 член `{tag}` → пара; S2
   `default` строкой → пара; S3 пара с финальным тегом группы → сырой, только
   при единственном кандидате. Иначе ссылка не трогается, её разбирает
@@ -694,7 +699,7 @@ rename, D-114 delete, контракт 1.0.1):
 - N1 — модели `override_detour`/`FolderMember.detour`/`hops` на `NodeLink`,
   резолв на сборке, реестр ссылок (rename переписывает, delete гасит с
   называнием), миграция финальных тегов, S1–S3;
-- N2 — autogroup: сырые теги членов, `kind: auto` в экспорте и импорте,
+- N2 — autogroup записью `kind: auto` в хранении и файле, члены парами,
   уникализация групп.
 
 Ответ LxBox на ## 17.6 (15.09):
