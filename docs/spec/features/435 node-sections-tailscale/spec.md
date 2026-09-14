@@ -1,6 +1,6 @@
 # 435 — Секции узла и Tailscale (контракт ## 13, NODE_SECTIONS.md, ONE_NAMESPACE.md §2)
 
-Статус: **implemented, DEVICE-VERIFIED на AVD** (14.09.2026, ядро lx.36 — путь гейта; живой tsnet ждёт ядра lx.38) — волна 2 программы контракта 1.0 (после ## 12, [§434](../../tasks/434-srs-rule-multiple-rule-sets.md)). Релиз — v2.23.2.
+Статус: **implemented, DEVICE-VERIFIED на AVD** (14.09.2026: ядро lx.36 — путь гейта; ядро lx.38 — живой endpoint tailscale) — волна 2 программы контракта 1.0 (после ## 12, [§434](../../tasks/434-srs-rule-multiple-rule-sets.md)). Релиз — v2.23.2.
 Норма — `app/contract/docs/NODE_SECTIONS.md` (семантика) и
 `app/contract/docs/ONE_NAMESPACE.md` §2 (форма записей). Решения владельца
 14.09.2026: секции в состоянии сразу в целевой форме `body`; в бэкап до
@@ -484,8 +484,18 @@ Tailscale с пикером узла (avd-ts) и «Accept default resolvers»; �
 узла — «No address (Tailscale)», блок Sections «1 rules · 1 DNS servers · 1
 DNS rules», Stored JSON, Clear sections; переименование узла оставляет
 плейсхолдеры в состоянии; мастер Add server → Tailscale создаёт узел с
-канонической связкой. Не проверено: живой вход в tailnet (ядро без тега),
-drag на устройстве (покрыт юнит-тестами), бэкап 1.0 (волна 3).
+канонической связкой.
+
+На ядре **lx.38** (пин релиза v2.23.2): три узла Tailscale эмитятся в
+`endpoints[]` каждый со своим `state_directory`
+(`/data/user/0/com.leadaxe.lxbox/files/tailscale/<тег>`, `🪢 wiz-ts` →
+`__wiz-ts`), правила `rule_set: '<тег> rule 1' → <тег>` и DNS-серверы
+`type: tailscale` с `endpoint` в конфиге, VPN стартует (tunnel connected, без
+ошибки старта), ядро ведёт `endpoint/tailscale[<тег>]`: генерирует nodekey,
+пытается войти и честно сообщает `invalid key: unable to validate API key` на
+тестовом ключе — остальной конфиг работает. Не проверено: вход в tailnet с
+настоящим ключом (нет tailnet у стенда), drag на устройстве (покрыт
+юнит-тестами), бэкап 1.0 (волна 3).
 
 ## 13. Вопросы лаунчеру и ответы (14.09.2026, singbox-launcher-ef)
 
