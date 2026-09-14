@@ -9,6 +9,7 @@ import '../models/import_rule.dart';
 import '../models/node_sections.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
+import '../models/tailscale_bundle.dart';
 import '../models/ui_msg.dart';
 import '../models/subscription_meta.dart';
 import '../models/validation.dart';
@@ -28,6 +29,7 @@ import '../vpn/box_vpn_client.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/parser/ini_parser.dart';
 import '../services/parser/parse_all.dart';
+import '../services/parser/tailscale_split.dart';
 import '../services/parser/uri_parsers.dart';
 import '../services/parser/uri_utils.dart';
 import '../services/haptic_service.dart';
@@ -885,6 +887,40 @@ class SubscriptionController extends ChangeNotifier {
       return _JsonAdd.empty;
     }
 
+    // §437 — узлы Tailscale из многоузловой вставки выделяются в свои
+    // `UserServer`: связка (маршрут в tailnet + DNS-сервер узла) есть только у
+    // свободных узлов, а внутри подписки она бы пропала — устройство видно в
+    // консоли tailnet, а связи с пирами нет. Остаток уезжает прежним путём
+    // ТЕКСТОМ без tailscale-записей: у файловой подписки тело лежит в кэше и
+    // перечитывается на старте, и узел вернулся бы дублем.
+    if (nodes.length > 1 && nodes.any((n) => n is TailscaleSpec)) {
+      final rest = textWithoutTailscale(decoded);
+      var added = false;
+      for (final n in nodes.whereType<TailscaleSpec>()) {
+        final srv = _autoEmoji(UserServer(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          origin: origin,
+          createdAt: DateTime.now(),
+          rawBody: n.toUri(),
+          sections: sectionsForNewNode(n),
+          nodes: [n],
+        ));
+        _entries.add(SubscriptionEntry(list: srv, nodeCount: 1));
+        added = true;
+      }
+      if (rest != null) {
+        final tail = await _addJsonNodes(rest, origin: origin);
+        // Остаток из одних групп — не ошибка вставки: узлы Tailscale уже
+        // добавлены, а сообщение «нет пригодных outbound'ов» соврало бы.
+        if (tail == _JsonAdd.empty && added) _lastError = null;
+      }
+      if (added) return _JsonAdd.added;
+    }
+
     // §368 — контейнер по числу узлов, тем же порогом, что и файловый импорт
     // (§129): один узел — это сервер, несколько — набор.
     //
@@ -924,8 +960,9 @@ class SubscriptionController extends ChangeNotifier {
       createdAt: DateTime.now(),
       rawBody: text,
       // §435 — связка из целого конфига с одним узлом / документа с
-      // `sections` (NODE_SECTIONS.md §6): хозяин секций — контейнер.
-      sections: nodes.first.importedSections,
+      // `sections` (NODE_SECTIONS.md §6): хозяин секций — контейнер. §437 —
+      // узел Tailscale без извлечённых записей получает каноническую связку.
+      sections: sectionsForNewNode(nodes.first),
       nodes: nodes,
     ));
     _entries.add(SubscriptionEntry(
@@ -1386,8 +1423,9 @@ class SubscriptionController extends ChangeNotifier {
         raw = _rawWithName(n.toUri(), candidate);
       }
       // §435 — секции из целого конфига / документа с `sections` едут в
-      // члена папки вместе с телом.
-      added.add(FolderMember(raw: raw, sections: n.importedSections));
+      // члена папки вместе с телом; §437 — узел Tailscale без них получает
+      // каноническую связку.
+      added.add(FolderMember(raw: raw, sections: sectionsForNewNode(n)));
     }
     entry._replaceList(folder.copyWith(members: [...folder.members, ...added]));
     entry.nodeCount = entry.list.nodes.length;
@@ -1418,8 +1456,10 @@ class SubscriptionController extends ChangeNotifier {
       if (cur is! FolderServers || !_entries.contains(entry)) {
         return const ErrMsg(ErrKey.folderNotFound);
       }
-      final added =
-          result.nodes.map((n) => FolderMember(raw: memberRawFor(n))).toList();
+      final added = result.nodes
+          .map((n) =>
+              FolderMember(raw: memberRawFor(n), sections: sectionsForNewNode(n)))
+          .toList();
       entry._replaceList(cur.copyWith(members: [...cur.members, ...added]));
       entry.nodeCount = entry.list.nodes.length;
       await _persist();

@@ -293,25 +293,45 @@ List<NodeSpec> _parseOne(
         node.warnings.add(const SectionsConflictWarning());
       }
     } else {
-      var rawTag = '';
-      for (final e in nodeByTag.entries) {
-        if (identical(e.value, node)) {
-          rawTag = e.key;
-          break;
-        }
-      }
-      if (rawTag.isNotEmpty) {
-        final dropped = <String>[];
-        node.importedSections =
-            extractNodeSections(config, rawTag, dropped: dropped);
-        for (final d in dropped) {
-          node.warnings.add(SectionsRecordDroppedWarning(d));
-        }
-      }
+      _extractInto(node, config, nodeByTag);
+    }
+  } else if (payload.length > 1 && config['sections'] is! Map) {
+    // §437 — многоузловой конфиг («рабочий конфиг из другого клиента»:
+    // endpoint + прокси + `final` на прокси). Узлу Tailscale связка нужна
+    // так же, как одиночному: без неё трафик к 100.x уходит в `route.final`.
+    // Берём только записи с ЯВНОЙ ссылкой на тег узла — при нескольких узлах
+    // это однозначно и чужих правил не утащит. Прочие узлы — как раньше, без
+    // секций: их связка не опознаётся по ссылке (правило на прокси есть у
+    // любого конфига).
+    for (final node in payload.whereType<TailscaleSpec>()) {
+      _extractInto(node, config, nodeByTag);
     }
   }
 
   return result;
+}
+
+/// §435/§437 — извлечь связку [node] из [config] по его тегу в [nodeByTag]
+/// и разложить отброшенные записи в предупреждения узла. Узел без тега в
+/// карте (не попал в неё — тега не было) остаётся без секций.
+void _extractInto(
+  NodeSpec node,
+  Map<String, dynamic> config,
+  Map<String, NodeSpec> nodeByTag,
+) {
+  var rawTag = '';
+  for (final e in nodeByTag.entries) {
+    if (identical(e.value, node)) {
+      rawTag = e.key;
+      break;
+    }
+  }
+  if (rawTag.isEmpty) return;
+  final dropped = <String>[];
+  node.importedSections = extractNodeSections(config, rawTag, dropped: dropped);
+  for (final d in dropped) {
+    node.warnings.add(SectionsRecordDroppedWarning(d));
+  }
 }
 
 /// §435 (NODE_SECTIONS.md §6) — связка узла [nodeTag] из целого конфига:

@@ -6,6 +6,7 @@ import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/tailscale_bundle.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/builder/core_chain_capability.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -130,6 +131,45 @@ void main() {
       // DNS.
       expect(dnsServers(r).last, {'type': 'tailscale', 'endpoint': 'home-ts', 'tag': 'home-ts-dns'});
       expect(dnsRules(r).last, {'domain_suffix': ['.ts.net'], 'server': 'home-ts-dns'});
+      expect(r.emitWarnings, isEmpty);
+    });
+
+    test('§437 связка v2: resolve через <тег>-dns перед терминальным правилом',
+        () async {
+      final r = await buildConfig(
+        lists: [user(ts(), sections: canonicalTailscaleSections())],
+        template: template,
+        settings: settings,
+      );
+      expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
+      // Один headless-набор на оба правила: `.ts.net` ИЛИ обе подсети tailnet.
+      final rs = ((r.config['route'] as Map)['rule_set'] as List)
+          .cast<Map<String, dynamic>>()
+          .where((x) => x['tag'] == 'home-ts network')
+          .single;
+      expect(rs['rules'], [
+        {
+          'domain_suffix': ['.ts.net'],
+          'ip_cidr': ['100.64.0.0/10', 'fd7a:115c:a1e0::/48'],
+        },
+      ]);
+      // Нетерминальный resolve стоит ПЕРЕД маршрутом: без адреса ядро
+      // отбрасывает UDP-поток к endpoint'у.
+      final own = rules(r)
+          .where((x) => x['rule_set'] == 'home-ts network')
+          .toList();
+      expect(own, hasLength(2));
+      expect(own.first['action'], 'resolve');
+      expect(own.first['server'], 'home-ts-dns');
+      expect(own.first.containsKey('outbound'), isFalse);
+      expect(own.last['outbound'], 'home-ts');
+      expect(own.last.containsKey('action'), isFalse);
+      final idx = rules(r).indexOf(own.first);
+      expect(rules(r).indexOf(own.last), idx + 1);
+      expect(dnsServers(r).last,
+          {'type': 'tailscale', 'endpoint': 'home-ts', 'tag': 'home-ts-dns'});
+      expect(dnsRules(r).last,
+          {'domain_suffix': ['.ts.net'], 'server': 'home-ts-dns'});
       expect(r.emitWarnings, isEmpty);
     });
 

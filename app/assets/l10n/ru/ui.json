@@ -5048,8 +5048,8 @@
   "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
     "value": "JSON должен быть объектом outbound с «type» или документом с «endpoints»/«outbounds»"
   },
-  "Leave empty for tailnet access only — the node will not appear in Directions": {
-    "value": "Оставьте пустым для доступа только в tailnet — узел не появится в Направлениях"
+  "Tailscale IP or machine name of a peer that advertises an exit node; pick this node as the Direction on Home to route your internet through it. Leave empty for tailnet access only — the node will not appear in Directions": {
+    "value": "IP Tailscale или имя машины-пира, которая анонсирует exit node; чтобы пустить интернет через него, выберите этот узел Направлением на Home. Оставьте пустым для доступа только в tailnet — узел не появится в Направлениях"
   },
   "MagicDNS of the tailnet via a Tailscale node · no address": {
     "value": "MagicDNS сети tailnet через узел Tailscale · без адреса"
