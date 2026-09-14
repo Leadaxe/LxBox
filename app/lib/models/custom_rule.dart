@@ -63,6 +63,10 @@ sealed class CustomRule {
   /// по convention (inline/srs/preset).
   CustomRuleKind get kind;
 
+  /// Форма записи хранения. Зовут репозиторий правил
+  /// (`settings_storage/sources_rules.dart`) и вкладка «storage shape»
+  /// редактора; сравнение правил — `==`, файл правил и Debug API пишут свою
+  /// форму сами.
   Map<String, dynamic> toJson();
 
   /// Короткая сводка для subtitle на RoutingScreen. Пустая → UI покажет
@@ -365,6 +369,17 @@ class RuleDns {
         serverTag: serverTag ?? this.serverTag,
         forceIpv4: forceIpv4 ?? this.forceIpv4,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RuleDns &&
+          enabled == other.enabled &&
+          serverTag == other.serverTag &&
+          forceIpv4 == other.forceIpv4);
+
+  @override
+  int get hashCode => Object.hash(enabled, serverTag, forceIpv4);
 }
 
 /// §247 — resolve-опция правила (route rule action `resolve`, sing-box 1.14).
@@ -464,6 +479,23 @@ class RuleResolve {
         timeout: timeout ?? this.timeout,
         clientSubnet: clientSubnet ?? this.clientSubnet,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RuleResolve &&
+          only == other.only &&
+          strategy == other.strategy &&
+          serverTag == other.serverTag &&
+          disableCache == other.disableCache &&
+          disableOptimisticCache == other.disableOptimisticCache &&
+          rewriteTtl == other.rewriteTtl &&
+          timeout == other.timeout &&
+          clientSubnet == other.clientSubnet);
+
+  @override
+  int get hashCode => Object.hash(only, strategy, serverTag, disableCache,
+      disableOptimisticCache, rewriteTtl, timeout, clientSubnet);
 }
 
 /// Sentinel-значение для `CustomRuleInline.outbound` / `CustomRuleSrs.outbound`.
@@ -703,6 +735,8 @@ class CustomRuleInline extends CustomRule {
     // когда сняты оба аспекта (не копить мёртвый RuleDns{}).
     bool clearDns = false,
     RuleResolve? resolve,
+    // `"resolve": null` в PATCH Debug API — тот же приём, что clearDns.
+    bool clearResolve = false,
   }) =>
       CustomRuleInline(
         id: id,
@@ -726,8 +760,61 @@ class CustomRuleInline extends CustomRule {
         wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,
         dns: clearDns ? null : (dns ?? this.dns),
-        resolve: resolve ?? this.resolve,
+        resolve: clearResolve ? null : (resolve ?? this.resolve),
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CustomRuleInline &&
+          id == other.id &&
+          name == other.name &&
+          enabled == other.enabled &&
+          orderNum == other.orderNum &&
+          _listEq(domains, other.domains) &&
+          _listEq(domainSuffixes, other.domainSuffixes) &&
+          _listEq(domainKeywords, other.domainKeywords) &&
+          _listEq(ipCidrs, other.ipCidrs) &&
+          _listEq(ports, other.ports) &&
+          _listEq(portRanges, other.portRanges) &&
+          _listEq(packages, other.packages) &&
+          _listEq(protocols, other.protocols) &&
+          _listEq(network, other.network) &&
+          ipIsPrivate == other.ipIsPrivate &&
+          _listEq(sourceIpCidrs, other.sourceIpCidrs) &&
+          sourceIpIsPrivate == other.sourceIpIsPrivate &&
+          _listEq(inbounds, other.inbounds) &&
+          _listEq(wifiSsids, other.wifiSsids) &&
+          _listEq(wifiBssids, other.wifiBssids) &&
+          outbound == other.outbound &&
+          dns == other.dns &&
+          resolve == other.resolve);
+
+  @override
+  int get hashCode => Object.hashAll([
+        id,
+        name,
+        enabled,
+        orderNum,
+        Object.hashAll(domains),
+        Object.hashAll(domainSuffixes),
+        Object.hashAll(domainKeywords),
+        Object.hashAll(ipCidrs),
+        Object.hashAll(ports),
+        Object.hashAll(portRanges),
+        Object.hashAll(packages),
+        Object.hashAll(protocols),
+        Object.hashAll(network),
+        ipIsPrivate,
+        Object.hashAll(sourceIpCidrs),
+        sourceIpIsPrivate,
+        Object.hashAll(inbounds),
+        Object.hashAll(wifiSsids),
+        Object.hashAll(wifiBssids),
+        outbound,
+        dns,
+        resolve,
+      ]);
 
   @override
   CustomRuleInline withEnabled(bool enabled) => copyWith(enabled: enabled);
@@ -944,6 +1031,7 @@ class CustomRuleSrs extends CustomRule {
     RuleDns? dns,
     bool clearDns = false, // §257 — см. CustomRuleInline.copyWith
     RuleResolve? resolve,
+    bool clearResolve = false, // см. CustomRuleInline.copyWith
     int? updateIntervalHours,
   }) =>
       CustomRuleSrs(
@@ -967,10 +1055,59 @@ class CustomRuleSrs extends CustomRule {
         wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,
         dns: clearDns ? null : (dns ?? this.dns),
-        resolve: resolve ?? this.resolve,
+        resolve: clearResolve ? null : (resolve ?? this.resolve),
         updateIntervalHours:
             updateIntervalHours ?? this.updateIntervalHours,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CustomRuleSrs &&
+          id == other.id &&
+          name == other.name &&
+          enabled == other.enabled &&
+          orderNum == other.orderNum &&
+          _listEq(srsUrls, other.srsUrls) &&
+          _listEq(ports, other.ports) &&
+          _listEq(portRanges, other.portRanges) &&
+          _listEq(packages, other.packages) &&
+          _listEq(protocols, other.protocols) &&
+          _listEq(network, other.network) &&
+          ipIsPrivate == other.ipIsPrivate &&
+          _listEq(sourceIpCidrs, other.sourceIpCidrs) &&
+          sourceIpIsPrivate == other.sourceIpIsPrivate &&
+          _listEq(inbounds, other.inbounds) &&
+          _listEq(wifiSsids, other.wifiSsids) &&
+          _listEq(wifiBssids, other.wifiBssids) &&
+          outbound == other.outbound &&
+          dns == other.dns &&
+          resolve == other.resolve &&
+          updateIntervalHours == other.updateIntervalHours);
+
+  @override
+  int get hashCode => Object.hashAll([
+        id,
+        name,
+        enabled,
+        orderNum,
+        Object.hashAll(srsUrls),
+        Object.hashAll(ports),
+        Object.hashAll(portRanges),
+        Object.hashAll(packages),
+        Object.hashAll(protocols),
+        Object.hashAll(network),
+        ipIsPrivate,
+        Object.hashAll(sourceIpCidrs),
+        sourceIpIsPrivate,
+        Object.hashAll(inbounds),
+        Object.hashAll(wifiSsids),
+        Object.hashAll(wifiBssids),
+        outbound,
+        dns,
+        resolve,
+        updateIntervalHours,
+      ]);
 
   @override
   CustomRuleSrs withEnabled(bool enabled) => copyWith(enabled: enabled);
@@ -1071,6 +1208,29 @@ class CustomRulePreset extends CustomRule {
         varsValues: varsValues ?? this.varsValues,
       );
 
+  /// `varsValues` сравнивается как словарь: порядок ключей не значим.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CustomRulePreset &&
+          id == other.id &&
+          name == other.name &&
+          enabled == other.enabled &&
+          orderNum == other.orderNum &&
+          presetId == other.presetId &&
+          _mapEq(varsValues, other.varsValues));
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        name,
+        enabled,
+        orderNum,
+        presetId,
+        Object.hashAllUnordered(
+            varsValues.entries.map((e) => Object.hash(e.key, e.value))),
+      );
+
   @override
   CustomRulePreset withEnabled(bool enabled) => copyWith(enabled: enabled);
   @override
@@ -1154,6 +1314,19 @@ class CustomRuleJson extends CustomRule {
       );
 
   @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CustomRuleJson &&
+          id == other.id &&
+          name == other.name &&
+          enabled == other.enabled &&
+          orderNum == other.orderNum &&
+          json == other.json);
+
+  @override
+  int get hashCode => Object.hash(id, name, enabled, orderNum, json);
+
+  @override
   CustomRuleJson withEnabled(bool enabled) => copyWith(enabled: enabled);
   @override
   CustomRuleJson withName(String name) => copyWith(name: name);
@@ -1189,6 +1362,24 @@ List<String> normalizeSrsUrls(String srsUrl, List<String> srsUrls) {
 /// (любые пробельные разделители), пустые и повторы отбрасываются.
 List<String> parseSrsUrlsText(String text) =>
     normalizeSrsUrls('', text.split(RegExp(r'\s+')));
+
+bool _listEq(List<String> a, List<String> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+bool _mapEq(Map<String, String> a, Map<String, String> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (final e in a.entries) {
+    if (!b.containsKey(e.key) || b[e.key] != e.value) return false;
+  }
+  return true;
+}
 
 List<String> _stringList(dynamic v) {
   if (v is! List) return const [];

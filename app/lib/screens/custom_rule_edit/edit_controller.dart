@@ -740,8 +740,8 @@ class CustomRuleEditController extends ChangeNotifier {
   ///
   /// §381 — `orderNum` (ось §370) переносится из `initial` во ВСЕ ветки:
   /// редактор позицию правила не меняет, а потеря номера читалась как две
-  /// разные жалобы. Без него `isDirty()` (сравнение json'ов) видел разницу по
-  /// ключу `num` ещё до первой правки — «Save changes?» на пустом выходе; а
+  /// разные жалобы. Без него `isDirty()` (равенство моделей) видел разницу по
+  /// `orderNum` ещё до первой правки — «Save changes?» на пустом выходе; а
   /// сохранённое правило уезжало в storage с `num == null` и при следующей
   /// загрузке экрана размечалось `markRuleOrder` заново от `kUserRuleNumStart`,
   /// то есть прыгало в начало пользовательской зоны.
@@ -823,8 +823,7 @@ class CustomRuleEditController extends ChangeNotifier {
     }
   }
 
-  bool isDirty() =>
-      jsonEncode(snapshot().toJson()) != jsonEncode(initial.toJson());
+  bool isDirty() => snapshot() != initial;
 
   /// §225 — валиден ли текущий текст json-правила (для inline-хелпера в
   /// JsonSection и гейта Save). `null` = ок (нет ошибки), иначе краткое
