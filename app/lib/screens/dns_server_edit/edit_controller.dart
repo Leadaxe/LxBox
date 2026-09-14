@@ -699,6 +699,10 @@ class DnsServerEditController extends ChangeNotifier {
       ServerKind.preset => DnsServerPreset(
           enabled: _enabled,
           tag: initialRef.tag,
+          presetId: switch (initialRef) {
+            DnsServerPreset(:final presetId) => presetId,
+            _ => '',
+          },
           description: override,
         ),
     };

@@ -6,7 +6,7 @@
 // экраны и контроллер DNS работают только с этими типами; сырые записи живут
 // в репозитории `settings_storage/network.dart`, который зовёт [fromJson] /
 // [toJson]. Запись 1.0 (бэкап, секции узла) — отдельный кодек
-// `record_codec.dart`.
+// `codec/dns_record.dart`.
 //
 // Семантика `enabled` при отсутствии ключа:
 // - сервер, inline- и srs-правило — включено (`enabled != false`); [toJson]
@@ -195,8 +195,14 @@ class DnsServerPreset extends DnsServerRef {
   const DnsServerPreset({
     required super.enabled,
     required super.tag,
+    this.presetId = '',
     super.description,
   });
+
+  /// §439 — пресет шаблона, которому принадлежит сервер: запись 1.0 адресует
+  /// его `ref` = `<preset_id>:<tag>`. Пусто — пресет не известен (`ref` = тег).
+  /// Форма хранения 2.23.2 ([toJson]/[DnsServerRef.fromJson]) поля не несёт.
+  final String presetId;
 
   @override
   String get kind => 'preset';
@@ -212,10 +218,16 @@ class DnsServerPreset extends DnsServerRef {
   @override
   DnsServerPreset withEnabled(bool enabled) => copyWith(enabled: enabled);
 
-  DnsServerPreset copyWith({bool? enabled, String? tag, String? description}) =>
+  DnsServerPreset copyWith({
+    bool? enabled,
+    String? tag,
+    String? presetId,
+    String? description,
+  }) =>
       DnsServerPreset(
         enabled: enabled ?? this.enabled,
         tag: tag ?? this.tag,
+        presetId: presetId ?? this.presetId,
         description: description ?? this.description,
       );
 
@@ -224,10 +236,12 @@ class DnsServerPreset extends DnsServerRef {
       other is DnsServerPreset &&
       other.enabled == enabled &&
       other.tag == tag &&
+      other.presetId == presetId &&
       other.description == description;
 
   @override
-  int get hashCode => Object.hash('preset', enabled, tag, description);
+  int get hashCode =>
+      Object.hash('preset', enabled, tag, presetId, description);
 }
 
 class DnsServerTemplate extends DnsServerRef {

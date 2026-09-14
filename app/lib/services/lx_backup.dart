@@ -1056,8 +1056,8 @@ Map<String, dynamic> _presetServerRecord(LxDnsRef s) {
     DnsServerPreset(
       enabled: s.enabled,
       tag: presetId.isEmpty ? ref : ref.substring(ref.indexOf(':') + 1),
+      presetId: presetId,
     ),
-    presetId: presetId,
   );
 }
 

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../config/consts.dart' show kDirectOutboundTag;
 import '../services/parser/uri_utils.dart' show newUuidV4;
 import '../services/l10n/locale_controller.dart';
@@ -999,12 +1001,12 @@ class CustomRuleSrs extends CustomRule {
         outbound: _outbound(j),
         dns: RuleDns.fromJson(j['dns']),
         resolve: RuleResolve.fromJson(j['resolve']),
-        updateIntervalHours: _srsTtl(j['updateIntervalHours']),
+        updateIntervalHours: ttlHoursFrom(j['updateIntervalHours']),
       );
 
   /// §366 — TTL из JSON. Отсутствие, мусор и отрицательные значения → дефолт;
   /// `0` (Never) сохраняем как есть, это осознанный выбор юзера.
-  static int _srsTtl(dynamic v) {
+  static int ttlHoursFrom(Object? v) {
     final n = v is num ? v.toInt() : null;
     if (n == null || n < 0) return kDefaultSrsTtlHours;
     return n;
@@ -1258,10 +1260,13 @@ class CustomRulePreset extends CustomRule {
 /// и т.д.) без модели-на-каждое-поле. Действие — часть самого JSON, поэтому
 /// `outbound` отсутствует, а match-секции UI (domain/port/wifi/dns) скрыты.
 ///
-/// `json` хранится как ввёл юзер (не переформатируем). Валидность синтаксиса
-/// проверяется в UI (inline) и в билдере (skip+warning на битом JSON, без
-/// падения сборки). Dangling `outbound` внутри тела ловит `validateConfig`
-/// тем же путём, что и обычные правила.
+/// Валидность синтаксиса проверяется в UI (inline) и в билдере (skip+warning
+/// на битом JSON, без падения сборки). Dangling `outbound` внутри тела ловит
+/// `validateConfig` тем же путём, что и обычные правила.
+///
+/// §439 — вид модели, не записи: в записи 1.0 это `inline` + `verbatim: true`
+/// с телом-объектом (`codec/rule_record.dart`), форматирование текста в
+/// состояние не входит. Отсюда равенство по содержимому JSON.
 class CustomRuleJson extends CustomRule {
   CustomRuleJson({
     super.id,
@@ -1313,6 +1318,9 @@ class CustomRuleJson extends CustomRule {
         json: json ?? this.json,
       );
 
+  /// [json] сравнивается по содержимому: тексты, которые разбираются в один
+  /// и тот же JSON (порядок ключей значим), равны при любых пробелах; текст,
+  /// который не разбирается, — посимвольно.
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1321,10 +1329,13 @@ class CustomRuleJson extends CustomRule {
           name == other.name &&
           enabled == other.enabled &&
           orderNum == other.orderNum &&
-          json == other.json);
+          (json == other.json ||
+              (_canonicalJson(json) ?? json) ==
+                  (_canonicalJson(other.json) ?? other.json)));
 
   @override
-  int get hashCode => Object.hash(id, name, enabled, orderNum, json);
+  int get hashCode =>
+      Object.hash(id, name, enabled, orderNum, _canonicalJson(json) ?? json);
 
   @override
   CustomRuleJson withEnabled(bool enabled) => copyWith(enabled: enabled);
@@ -1337,6 +1348,15 @@ class CustomRuleJson extends CustomRule {
 }
 
 // ─── helpers ───────────────────────────────────────────────────────────
+
+/// Компактная запись разобранного JSON-текста; не разбирается — null.
+String? _canonicalJson(String text) {
+  try {
+    return jsonEncode(jsonDecode(text));
+  } on FormatException {
+    return null;
+  }
+}
 
 String? _id(Map<String, dynamic> j) {
   final id = j['id'] as String?;

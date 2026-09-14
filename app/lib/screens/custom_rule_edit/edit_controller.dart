@@ -822,7 +822,11 @@ class CustomRuleEditController extends ChangeNotifier {
     }
   }
 
-  bool isDirty() => snapshot() != initial;
+  /// Правило вида json равно по содержимому JSON; редактор считает правкой и
+  /// смену форматирования текста.
+  bool isDirty() =>
+      snapshot() != initial ||
+      (_kind == CustomRuleKind.json && jsonCtrl.text != initial.json);
 
   /// §225 — валиден ли текущий текст json-правила (для inline-хелпера в
   /// JsonSection и гейта Save). `null` = ок (нет ошибки), иначе краткое
