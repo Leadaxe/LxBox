@@ -230,4 +230,162 @@ void main() {
       expect(dnsRuleFromRecord({'kind': 'zzz'}).dropped, contains('zzz'));
     });
   });
+
+  // §439 §4.2 — путь хранения: `fromRecord(toRecord(x)) == x` для правил всех
+  // видов (с `unknownAsVerbatim`) и DNS-записей всех видов, через JSON-текст
+  // файла; вторая запись совпадает с первой.
+  group('§439 круг кодека правил хранения', () {
+    CustomRule viaStorage(CustomRule r) => ruleFromRecord(
+          (jsonDecode(jsonEncode(ruleToRecord(r))) as Map)
+              .cast<String, dynamic>(),
+          unknownAsVerbatim: true,
+        ).value!;
+
+    final rules = <CustomRule>[
+      CustomRuleInline(
+        id: 'i1',
+        name: 'Home LAN',
+        enabled: false,
+        orderNum: 945,
+        domainSuffixes: ['.lan'],
+        ipCidrs: ['10.0.0.0/8'],
+        ports: ['443'],
+        portRanges: ['8000:9000'],
+        packages: ['com.app'],
+        network: ['tcp'],
+        wifiSsids: ['home'],
+        outbound: 'vpn-2',
+        dns: const RuleDns(enabled: true, serverTag: 'my-doh', forceIpv4: true),
+        resolve: const RuleResolve(only: true, strategy: 'ipv4_only'),
+      ),
+      CustomRuleInline(name: '  spaced name  ', domains: ['a'], outbound: kOutboundReject),
+      CustomRuleSrs(
+        id: 's1',
+        name: 'Geo sets',
+        orderNum: 1010,
+        srsUrls: ['https://x/a.srs', 'https://x/b.srs'],
+        updateIntervalHours: 720,
+        protocols: ['quic'],
+        outbound: 'vpn-1',
+      ),
+      CustomRuleSrs(id: 's2', name: 'Never', srsUrl: 'https://x/c.srs', updateIntervalHours: 0),
+      CustomRulePreset(
+        id: 'p1',
+        name: 'Russia direct',
+        orderNum: 1120,
+        presetId: 'ru-direct',
+        varsValues: {'outbound': 'direct-out', 'dns_ip': '77.88.8.8'},
+      ),
+      CustomRuleJson(
+        id: 'j1',
+        name: 'Json object',
+        orderNum: 1020,
+        json: '{"//":"note","domain_suffix":[".x"],"action":"route","outbound":"vpn-1"}',
+      ),
+      CustomRuleJson(id: 'j2', name: 'Json broken', json: '{not json'),
+    ];
+
+    for (final r in rules) {
+      test('${r.kind.name} "${r.name}"', () {
+        final back = viaStorage(r);
+        if (r is CustomRuleJson && r.json.startsWith('{not')) {
+          // Нечитаемый текст — маркер без тела: имя, id и ось на месте, тело
+          // пустое (текст остаётся в .v0.bak миграции).
+          expect(back, isA<CustomRuleJson>());
+          expect((back as CustomRuleJson).json, '');
+          expect(back.id, r.id);
+          expect(ruleToRecord(back).containsKey('body'), isFalse);
+          return;
+        }
+        expect(back, r);
+        expect(jsonEncode(ruleToRecord(back)), jsonEncode(ruleToRecord(r)));
+      });
+    }
+
+    test('json-массив: запись держит один объект — splitJsonRuleArrays до '
+        'кодека, каждая часть проходит круг', () {
+      final split = splitJsonRuleArrays([
+        CustomRuleJson(
+          id: 'arr',
+          name: 'Json array',
+          orderNum: 1021,
+          json: '[{"action":"sniff"},{"domain_suffix":[".y"],"outbound":"direct-out"}]',
+        ),
+      ]);
+      expect(split.map((x) => x.name), ['Json array', 'Json array #2']);
+      for (final part in split) {
+        expect(viaStorage(part), part);
+      }
+      // Без деления массив не пережил бы запись: тела у маркера нет.
+      final unsplit = CustomRuleJson(name: 'raw', json: '[{"action":"sniff"}]');
+      expect(ruleToRecord(unsplit).containsKey('body'), isFalse);
+    });
+  });
+
+  group('§439 круг кодека DNS-записей хранения', () {
+    Map<String, dynamic> viaFile(Map<String, dynamic> rec) =>
+        (jsonDecode(jsonEncode(rec)) as Map).cast<String, dynamic>();
+
+    const servers = <DnsServerRef>[
+      DnsServerInline(
+        enabled: false,
+        tag: 'my-doh',
+        body: {'type': 'https', 'server': 'dns.example', 'detour': 'vpn-1'},
+        description: 'Mine',
+      ),
+      DnsServerPreset(enabled: true, tag: 'yandex_udp', presetId: 'ru-direct'),
+      DnsServerPreset(enabled: true, tag: 'orphan'),
+      DnsServerTemplate(
+        enabled: true,
+        tag: 'google_doh',
+        varValues: {'outbound': 'vpn-1', 'dns_ip': '8.8.4.4'},
+        description: '',
+      ),
+    ];
+    for (final s in servers) {
+      test('сервер ${s.kind} "${s.tag}"', () {
+        final rec = dnsServerToRecord(s);
+        final back = dnsServerFromRecord(viaFile(rec)).value!;
+        expect(back, s);
+        expect(dnsServerToRecord(back), rec);
+      });
+    }
+
+    const dnsRules = <DnsRuleRef>[
+      DnsRuleInline(
+        name: 'corp',
+        enabled: false,
+        rule: {
+          'domain_suffix': ['.corp'],
+          'server': 'my-doh',
+        },
+      ),
+      DnsRulePreset(presetId: 'ru-direct', enabled: true),
+      DnsRuleSrs(
+        name: 'geo',
+        id: 'ds_geo',
+        body: {'server': 'google_doh'},
+      ),
+      DnsRuleSrs(
+        name: 'top-level',
+        id: 'ds_top',
+        srsUrl: 'https://x/geo.srs',
+        server: 'my-doh',
+        rule: {
+          'query_type': ['A'],
+        },
+        enabled: false,
+      ),
+      DnsRuleTemplate(name: 'Default', enabled: true),
+      DnsRuleTemplate(name: 'Off', enabled: false),
+    ];
+    for (final (i, r) in dnsRules.indexed) {
+      test('правило #$i ${r.kind}', () {
+        final rec = dnsRuleToRecord(r);
+        final back = dnsRuleFromRecord(viaFile(rec)).value!;
+        expect(back, r);
+        expect(dnsRuleToRecord(back), rec);
+      });
+    }
+  });
 }
