@@ -1,4 +1,8 @@
-import 'subs.dart';
+import 'dart:convert';
+
+import '../../../models/server_list.dart';
+import '../../settings_storage.dart';
+import '../../url_mask.dart';
 
 /// Сериализатор `_cache` для `GET /state/storage` (§031).
 ///
@@ -8,11 +12,12 @@ import 'subs.dart';
 /// поля маскируются здесь явно:
 ///
 /// - `vars.debug_token` → `***`
-/// - `server_lists[].url` → `scheme://host/***` (provider token в path)
-/// - `server_lists[].nodes` → только количество (в узлах могут быть
-///   UUID/password'ы VLESS/Trojan/SS)
-/// - `server_lists[].rawBody` → только длина (inline URI могут содержать
-///   credentials)
+/// - источники `server_lists[]` читаются моделями репозитория
+///   ([serializeStorageSource]): URL подписки → `scheme://host/***` (provider
+///   token в path), тело одиночного сервера → `raw_body_bytes` (inline URI
+///   несут credentials), члены папки → `members_count` (§234 — raw члена несёт
+///   credentials). Битая запись, которую репозиторий не читает, в дамп не
+///   попадает: скрыть в ней секрет нечем.
 ///
 /// Всё остальное — pass-through. Новый ключ без правила попадает в ответ
 /// как есть; если он чувствительный — добавить rule здесь и в тесте.
@@ -29,20 +34,16 @@ import 'subs.dart';
 Map<String, Object?> serializeStorageCache(Map<String, dynamic> cache) {
   final out = <String, Object?>{};
   for (final e in cache.entries) {
-    out[e.key] = _scrub(e.key, e.value);
+    out[e.key] = switch (e.key) {
+      'vars' => _scrubVars(e.value),
+      'server_lists' => [
+          for (final list in SettingsStorage.serverListsOf(cache))
+            serializeStorageSource(list),
+        ],
+      _ => e.value,
+    };
   }
   return out;
-}
-
-Object? _scrub(String key, dynamic value) {
-  switch (key) {
-    case 'vars':
-      return _scrubVars(value);
-    case 'server_lists':
-      return _scrubServerLists(value);
-    default:
-      return value;
-  }
 }
 
 Object? _scrubVars(dynamic vars) {
@@ -60,32 +61,44 @@ Object? _scrubVars(dynamic vars) {
   return out;
 }
 
-Object? _scrubServerLists(dynamic lists) {
-  if (lists is! List) return lists;
-  return lists.whereType<Map>().map(_scrubServerListEntry).toList();
-}
+/// Запись источника [list] для дампа — запись хранения от репозитория, в
+/// которой секрет модели скрыт.
+///
+/// Секрет гасится в модели, до сериализации (`copyWith`), поэтому в дамп он
+/// не попадёт, как бы кодек ни назвал поле. Прежний скраббер угадывал ключи
+/// сырого документа: искал `rawBody`, а в хранении лежит `raw_body`, и тело
+/// одиночного сервера уходило в дамп целиком.
+Map<String, Object?> serializeStorageSource(ServerList list) => switch (list) {
+      SubscriptionServers s => SettingsStorage.serverListRecord(
+          s.copyWith(url: maskSubscriptionUrl(s.url))),
+      UserServer u => _sized(u, u.copyWith(rawBody: ''),
+          counter: 'raw_body_bytes', size: u.rawBody.length),
+      FolderServers f => _sized(f, f.copyWith(members: const []),
+          counter: 'members_count', size: f.members.length),
+    };
 
-Map<String, Object?> _scrubServerListEntry(Map<dynamic, dynamic> m) {
+/// Запись [full], где поля, которые гашение секрета изменило (сверка с записью
+/// [blank]), заменены одним счётчиком [counter] на месте первого из них.
+/// Какие это поля, говорит сама запись, а не список ключей скраббера.
+/// Секрет и так пуст (пустое тело, папка без членов) — счётчик дописывается
+/// в конец.
+Map<String, Object?> _sized(
+  ServerList full,
+  ServerList blank, {
+  required String counter,
+  required int size,
+}) {
+  final blanked = SettingsStorage.serverListRecord(blank);
   final out = <String, Object?>{};
-  for (final e in m.entries) {
-    final k = e.key.toString();
-    switch (k) {
-      case 'url':
-        out[k] = e.value is String
-            ? maskSubscriptionUrl(e.value as String)
-            : e.value;
-      case 'nodes':
-        // Узлы могут содержать credentials в UUID/password → только count.
-        out['nodes_count'] = e.value is List ? (e.value as List).length : 0;
-      case 'rawBody':
-        // UserServer inline URI — могут содержать token'ы. Отдаём длину.
-        out['raw_body_bytes'] = e.value?.toString().length ?? 0;
-      case 'members':
-        // §234 — raw членов папки несёт credentials (URI/ключи) → только count.
-        out['members_count'] = e.value is List ? (e.value as List).length : 0;
-      default:
-        out[k] = e.value;
+  for (final e in SettingsStorage.serverListRecord(full).entries) {
+    final kept = blanked.containsKey(e.key) &&
+        jsonEncode(blanked[e.key]) == jsonEncode(e.value);
+    if (kept) {
+      out[e.key] = e.value;
+    } else {
+      out.putIfAbsent(counter, () => size);
     }
   }
+  out.putIfAbsent(counter, () => size);
   return out;
 }
