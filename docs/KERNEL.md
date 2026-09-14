@@ -25,9 +25,25 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.0-lx.36`** (see `app/android/libbox.version`) —
-two hotfixes on the same upstream base as lx.34 (sing-box 1.14.0 + 16
-post-release commits); nothing in the configuration or on the wire changes.
+**The current pin: `v1.14.0-lx.38`** (see `app/android/libbox.version`) —
+the AAR now carries **`with_tailscale`** plus the eleven `ts_omit_*` trims
+(§435, contract ## 13, owner decision 2026-09-14): the `tailscale` endpoint
+and the `tailscale` DNS server type are compiled in. Measured on the fork side
+(M1 Pro, go1.26.6, NDK r28c): the AAR build time did not grow (the Tailscale
+code was already compiled through `tailssh` under `with_gvisor`; the tag adds
+only `tsnet` and the sing-box glue) and the AAR grew by 2.58 MB (116.8 →
+119.4 MB; arm64 `libbox.so` +1.96 MB). lx.38 also merges the SPEC 084 hotfix
+(an ABBA deadlock of nested selectors, fork issue #20). The Java surface is
+unchanged from lx.36 (javap-diff of `PlatformInterface`, `CommandClient`,
+`CommandClientHandler`, `BoxService`, `Libbox` — identical). The upstream
+base is lx.37's: `upstream/stable` b7eb49bb8 (v1.14.0 + 33), submodules
+wireguard-go v0.0.6 / sing-tun v0.9.3. LxBox gates a Tailscale node on this
+version (`kTailscaleMinCoreVersion`, `core_chain_capability.dart`): on an
+older core the node is skipped at build with `tailscale_core_unsupported`.
+
+**`v1.14.0-lx.36`** — two hotfixes on the same upstream base as lx.34 (sing-box
+1.14.0 + 16 post-release commits); nothing in the configuration or on the wire
+changes.
 
 - **lx.36 — REALITY against Xray-core ≥ v26.9.8 (core SPEC 083).** The REALITY
   server now requires the post-quantum `X25519MLKEM768` key share in the
@@ -621,8 +637,17 @@ client:
 ```
 with_gvisor, with_quic, with_wireguard, with_utls, with_naive_outbound,
 badlinkname, tfogo_checklinkname0,
-with_xhttp, with_awg, with_lx_command, with_lx_idle_suspend
+with_xhttp, with_awg, with_lx_command, with_lx_idle_suspend, with_lx_chain,
+with_openvpn, with_openconnect,
+with_tailscale, ts_omit_logtail, ts_omit_ssh, ts_omit_drive, ts_omit_taildrop,
+ts_omit_webclient, ts_omit_doctor, ts_omit_capture, ts_omit_kube, ts_omit_aws,
+ts_omit_synology, ts_omit_bird
 ```
+
+`with_tailscale` joined the AAR in **lx.38** (§435, contract ## 13; the
+`ts_omit_*` tags only trim what `with_tailscale` pulls in — the upstream
+mobile set). Before lx.38 the AAR was built without it on purpose (APK size);
+LxBox's build gate keeps a Tailscale node out of the config on such a core.
 
 `with_clash_api` is deliberately absent (§122 — CommandClient instead of Clash
 HTTP); `with_usbip` and `with_openvpn` / `with_openconnect` are deliberately
@@ -700,7 +725,9 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.0-lx.36** (current pin) | Hotfix: REALITY nodes on Xray-core ≥ v26.9.8 work again — the core no longer strips the `X25519MLKEM768` key share the server now requires, and derives the auth key the way the server does (core SPEC 083); servers before v26.9.8 unaffected. Only `chrome` fingerprints carry the key share — LxBox emits `chrome` for any REALITY node (§281). Same upstream base as lx.34. |
+| **v1.14.0-lx.38** (current pin) | **Tailscale in the AAR** — `with_tailscale` plus the `ts_omit_*` trims (§435, contract ## 13, D-103): the `tailscale` endpoint and the `tailscale` DNS server type; AAR +2.58 MB, build time unchanged. Plus the SPEC 084 hotfix (ABBA deadlock of nested selectors, fork issue #20). Upstream base of lx.37 (`upstream/stable` v1.14.0 + 33). Java surface unchanged from lx.36. |
+| **v1.14.0-lx.37** | Upstream sync: `upstream/stable` b7eb49bb8 (v1.14.0 + 33), submodules wireguard-go v0.0.6 / sing-tun v0.9.3. No config changes. AAR still without Tailscale. |
+| **v1.14.0-lx.36** | Hotfix: REALITY nodes on Xray-core ≥ v26.9.8 work again — the core no longer strips the `X25519MLKEM768` key share the server now requires, and derives the auth key the way the server does (core SPEC 083); servers before v26.9.8 unaffected. Only `chrome` fingerprints carry the key share — LxBox emits `chrome` for any REALITY node (§281). Same upstream base as lx.34. |
 | **v1.14.0-lx.35** | Hotfix for fork issue #14: XHTTP behind a CDN that resets HTTP/2 streams could pin the CPU at 100 % until restart — the `http2.StreamError` type no longer leaks out of XHTTP / HTTP / gRPC-lite conns into an HTTP/2 client running through the outbound (core SPEC 082). Same upstream base as lx.34. |
 | **v1.14.0-lx.34** | The upstream **1.14.0 stable** base (plus 16 post-release commits): a URL test can no longer hang on an unresponsive node (a 15 s deadline per probe), a manual test now probes every node of a group and recurses into nested groups, `_dns.*` SVCB discovery queries get an empty NOERROR so browsers cannot bypass the tunnel over DoH, inverted DNS rules with rule-set address filters match again, QUIC throughput on TUIC/naive survives an idle period, and sing-tun keeps a separate TCP NAT table per address family. Configs unchanged. Java surface: additive only (see the pin section) |
 | **v1.14.0-lx.33** | AmneziaWG 3.0/3.1 (§421): AWG 3.x root keys on the `wireguard` endpoint (`header_protection_key`, `content_padding_addition`, ranged timings, `random_trailers`, `disable_cookies`) and a ranged `persistent_keepalive_interval`; `lx.32` introduced the fields, `lx.33` fixes data-packet reception under `random_trailers`. Cores ≤ `lx.31` reject such a config as a whole. Java surface: unchanged |
