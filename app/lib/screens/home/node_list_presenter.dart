@@ -206,8 +206,20 @@ class NodeListPresenter {
   /// §091/§235 — какие источники (подписки + папки) владеют тегом
   /// (prefix-based). Тонкая обёртка над pure helper'ом `sourcesOfTag`
   /// (см. `home/source_lookup.dart`).
-  Set<String> _sourcesOfTag(String tag) =>
-      sourcesOfTag(tag, subController.entries);
+  /// §446 — фильтр по источникам зовёт это на КАЖДЫЙ тег, а `sourcesOfTag`
+  /// каждый раз заново перебирает подписки и проверяет их пригодность
+  /// (тип, enabled, непустой префикс). Пригодные пары `(префикс, id)` от тега
+  /// не зависят — считаем их один раз на проход фильтрации.
+  List<(String, String)>? _prefixIndex;
+
+  Set<String> _sourcesOfTag(String tag) {
+    final index = _prefixIndex ??= sourcePrefixIndex(subController.entries);
+    final result = <String>{};
+    for (final (prefix, id) in index) {
+      if (tag.startsWith(prefix)) result.add(id);
+    }
+    return result;
+  }
 
   /// §085 R3 — единый `NodeFilter` из view-model + state-зависимых lookup'ов.
   /// Используется и `computeDisplayList`, и node-list (был дубль §078).
@@ -229,6 +241,14 @@ class NodeListPresenter {
         pingOf: state.delayOf,
       );
 
+  /// §446 — phase 1 фильтра (§048): отсев detour. Был выписан дважды —
+  /// в `computeListData` и в `splitNodes`, слово в слово.
+  List<String> poolOf(List<String> sortedNodes, HomeState state) => sortedNodes
+      .where((t) =>
+          state.isSystemControlTag(t) || // §359
+          filter.detourPoolPasses(state.activeModel[t]?.isDetour ?? false)) // §311
+      .toList();
+
   /// §085 R3 — pool (detour-фильтр) → split на matching/non-matching.
   /// §090 G2 — detour определяется по `ConfigNode.isDetour` (структурно: на ноду
   /// ссылаются как на hop), не по ⚙-метке. §096 — detour бинарный: скрыть
@@ -237,12 +257,11 @@ class NodeListPresenter {
   /// видны, даже если случайно isDetour) и короткозамкнуты в matching.
   /// Возвращает `(matching, nonMatching)`.
   (List<String>, List<String>) splitNodes(
-      List<String> sortedNodes, HomeState state) {
-    final pool = sortedNodes
-        .where((t) =>
-            state.isSystemControlTag(t) || // §359
-            filter.detourPoolPasses(state.activeModel[t]?.isDetour ?? false)) // §311
-        .toList();
+      List<String> sortedNodes, HomeState state,
+      {List<String>? pool}) {
+    // §446 — [pool] передаёт уже посчитанный pool: `computeListData` строил
+    // его сам, а затем этот же проход повторялся здесь один в один.
+    pool ??= poolOf(sortedNodes, state);
     final f = buildNodeFilter(state);
     final matching = <String>[];
     final nonMatching = <String>[];
@@ -259,6 +278,7 @@ class NodeListPresenter {
   /// §078 — текущий displayList снаружи node-list (для ping button →
   /// `runMassUrltest(order:)` в порядке отображения).
   List<String> computeDisplayList(HomeState state) {
+    _prefixIndex = null; // §446 — см. `computeListData`
     final (matching, nonMatching) = splitNodes(viewSortedNodes(state), state);
     return filter.showNonMatching
         ? [...matching, ...nonMatching]
@@ -297,6 +317,10 @@ class NodeListPresenter {
   /// Aggregated данные для render node-list.
   /// Собирает sorted/pool/split/displayList + chip-options одним проходом.
   NodeListData computeListData(HomeState state) {
+    // §446 — индекс префиксов живёт ровно один проход: состав подписок мог
+    // смениться между build'ами, а `computeListData` — единственный вход в
+    // фильтрацию списка.
+    _prefixIndex = null;
     // §048 — двухфазная модель (см. spec):
     // Phase 1 — pool filter: detour (§096 бинарный). §090 G2 — «detour»
     // СТРУКТУРНО: на ноду ссылаются как на detour-таргет (`ConfigNode.isDetour`,
@@ -307,11 +331,7 @@ class NodeListPresenter {
     // §070: используем viewSortedNodes — frozen sort при resortOnManualPing=false
     // (manual single ping не дёргает порядок).
     final allTags = viewSortedNodes(state);
-    final pool = allTags
-        .where((t) =>
-            state.isSystemControlTag(t) || // §359
-            filter.detourPoolPasses(state.activeModel[t]?.isDetour ?? false)) // §311
-        .toList();
+    final pool = poolOf(allTags, state);
 
     // activeModel (§311): configModel/runningModel парсятся один раз при
     // смене raw (см. HomeState), выбор среза — по tunnelUp,
@@ -321,7 +341,7 @@ class NodeListPresenter {
 
     // §048 Phase 2 — match filter: split pool на matching + nonMatching
     // (control-узлы короткозамкнуты в matching, §078). См. `splitNodes`.
-    final (matching, nonMatching) = splitNodes(allTags, state);
+    final (matching, nonMatching) = splitNodes(allTags, state, pool: pool);
     final matchingSet = matching.toSet();
 
     // Render list = matching + (showNonMatching ? nonMatching : []).
