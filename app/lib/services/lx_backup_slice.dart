@@ -17,6 +17,8 @@
 /// потерялось молча.
 library;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 /// Вид записи хранения, чьи поля перечисляет [kBackupFields].
 enum BackupRecord {
   subscription,
@@ -180,13 +182,23 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.dnsRule, 'kind:template', _r),
 ];
 
-final Map<BackupRecord, Map<String, BackupField>> _byRecord = {
-  for (final kind in BackupRecord.values)
-    kind: {
-      for (final f in kBackupFields)
-        if (f.record == kind) f.key: f,
-    },
-};
+Map<BackupRecord, Map<String, BackupField>> _index(List<BackupField> fields) => {
+      for (final kind in BackupRecord.values)
+        kind: {
+          for (final f in fields)
+            if (f.record == kind) f.key: f,
+        },
+    };
+
+Map<BackupRecord, Map<String, BackupField>> _byRecord = _index(kBackupFields);
+
+/// Подмена таблицы среза в тестах: проверка того, что снятие среза с поля —
+/// правка флага [BackupField.declared], и больше ничего (Л2). `null` —
+/// вернуть [kBackupFields].
+@visibleForTesting
+void overrideBackupFieldsForTesting(List<BackupField>? fields) {
+  _byRecord = _index(fields ?? kBackupFields);
+}
 
 /// Ключи полей LxBox, объявленных контрактом (Л2): обход неизвестных ключей
 /// импорта знает их наравне с полями контракта.
