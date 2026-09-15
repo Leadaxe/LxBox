@@ -2,9 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Реализовано: этапы 0, A, B, C и трек N влиты в develop (`230c3354`). Проверка на AVD (волна E, §5.3) не проводилась. Отклонения от плана — §6.6 |
-| Дата | 2026-09-14 (спека), 2026-09-15 (реализация) |
-| Коммиты | `98f01397..230c3354`, 67 коммитов |
+| Статус | Реализовано: этапы 0, A, B, C, трек N, контракт 1.0.1 (Л2 объявлены) и фиксы волны E влиты в develop (`753d10e4`). Волна E на AVD проведена на сборке `230c3354` (§5.3): миграция и конфиг совпали, найденные баги исправлены; повторная проверка после фиксов — отдельно. Отклонения от плана — §6.6 |
+| Дата | 2026-09-14 (спека), 2026-09-15 (реализация, волна E) |
+| Коммиты | `98f01397..753d10e4`, 94 коммита (с доками и синком контракта) |
 | Релиз | 2.23.3, вместе с чтением и записью LX Backup 1.0 ([§438](../../tasks/438-lx-backup-1-0-read-write.md)); переводчик 438 этой спекой удалён |
 | Триггер | решение владельца 14.09.2026 (вечер): релиз с бэкапом 1.0 поверх старой формы хранения не выпускается |
 | Норма | `app/contract/docs/ONE_NAMESPACE.md` §1–§3; `docs/BACKUP.md` §1, §2, §4, §6, §9; `schema/backup.schema.json`; `docs/NODE_SECTIONS.md` §1 |
@@ -197,26 +197,34 @@ DNS-записи теми же записями, что файл 1.0. Экспо
 
 ### 1.3 Поля LxBox без дома в 1.0
 
+Колонка «Экспорт LX Backup» — по факту после контракта 1.0.1 (`3cee2e2d`):
+поля-настройки объявлены в `BACKUP.md` §2 «Поля стороны LxBox» (ответ Л2,
+§6.4). План 14.09 срезал их с `backup_local_only_dropped` (как 438).
+
 | Данные | Где в хранении | Экспорт LX Backup |
 |---|---|---|
-| `import_rules`, `import_rules_enabled`, `on_update_action` подписки | поля записи подписки | срезаются, `backup_local_only_dropped` (как 438) |
-| `detour_policy` подписки и папки; флаги `detour_policy` сервера кроме `override_detour` | поле записи | срезаются, `backup_local_only_dropped` |
-| `tag_policy` одиночного сервера | поле записи | срезается, `backup_local_only_dropped` |
-| `ping_url`, `ping_timeout_ms` папки | поля записи папки | срезаются, `backup_local_only_dropped` |
-| `label` цепочки | поле записи цепочки | срезается, `backup_local_only_dropped` |
-| `meta`, `last_*`, `consecutive_fails` подписки | поля записи | срезаются молча (BACKUP §2: рантайм машины) |
-| `verbatim` правила | поле записи | срезается молча: тело едет, настройки пользователя в маркере нет |
-| `update_interval_hours` srs-правила | поле записи | срезается, `backup_local_only_dropped`. 438 теряет его молча — исправляется здесь |
-| `description` DNS-сервера, `vars` template-сервера | поля записи | срезаются, `backup_local_only_dropped` (как 438) |
-| DNS-правила `kind: srs` | запись вида LxBox | не пишутся, `backup_local_only_dropped` (как 438) |
+| `import_rules`, `import_rules_enabled`, `on_update_action` подписки | поля записи подписки | едут, импорт применяет (объявлены 1.0.1) |
+| `detour_policy` подписки, сервера и папки | поле записи | едут, импорт применяет (объявлены 1.0.1) |
+| `tag_policy` одиночного сервера | поле записи | едет (объявлено 1.0.1); лаунчер у корневого сервера его отбрасывает |
+| `ping_url`, `ping_timeout_ms` папки | поля записи папки | едут (объявлены 1.0.1) |
+| `label` цепочки | поле записи цепочки | едет (объявлено 1.0.1) |
+| `members_rule`, `pool_badge` узла `kind: auto` | внутри `group` | едут вместе с `group` (объявлены 1.0.1) |
+| `meta`, `last_*`, `consecutive_fails` подписки; `created_at` папки | поля записи | срезаются молча (BACKUP §2: рантайм машины) |
+| `verbatim` правила | поле записи | едет (объявлено 1.0.1): тело на приёмнике не перетипизируется. Запись `verbatim` без `body` (текст json-правила не разобрался) не пишется, `backup_local_only_dropped` |
+| `update_interval_hours` srs-правила | поле записи | едет (объявлено 1.0.1). 438 терял его молча |
+| `description` DNS-сервера, `vars` template-сервера | поля записи | едут (объявлены 1.0.1) |
+| DNS-правила `kind: srs` | запись вида LxBox | не пишутся, `backup_local_only_dropped`: контракт вид не объявил |
 | DNS-правила `kind: template` | запись вида LxBox | не пишутся молча (как 438) |
 | префикс тегов с разделителем | `tag_policy.prefix` = префикс модели + пробел | как есть |
 | `detour`, `hops[]` | NodeLink `{folder_id?, tag}` в записи | как есть (6.4, D-112) |
 | `origin` одиночного сервера (`paste\|manual`) | не хранится | — |
 
-Правило экспорта одно: поле L, отличающееся от умолчания, срезается и
-называется одним `backup_local_only_dropped` на сущность; рантайм и
-маркер срезаются молча.
+Правило экспорта одно, таблица `lib/services/lx_backup_slice.dart`: поле
+контракта и объявленное поле LxBox (`declared`) едут; необъявленная
+настройка, отличная от умолчания, срезается и называется одним
+`backup_local_only_dropped` на сущность; рантайм срезается молча. Импорт
+объявленное поле применяет, а его отсутствие в файле значение приёмника не
+сбрасывает (`BACKUP.md` §2): файл лаунчера этих полей не несёт.
 
 ## 2. Подход к коду
 
@@ -477,7 +485,7 @@ Play, F-Droid, APK с GitHub); удаление стирает данные пр
 
 | Инвариант | Проверка |
 |---|---|
-| `config.json` из одного состояния до и после миграции совпадает байт в байт | golden: в волне 0 текущий код собирает конфиг из фикстуры хранения 2.23.2 и пишет эталон; после 439 тест грузит ту же фикстуру (миграция в `_load`), собирает и сравнивает байты. Поля, которые меняются между двумя сборками одного состояния на текущем коде, определяются двойной сборкой в волне 0 и исключаются из сравнения явным списком |
+| `config.json` из одного состояния до и после миграции совпадает байт в байт | golden: в волне 0 текущий код собирает конфиг из фикстуры хранения 2.23.2 и пишет эталон; после 439 тест грузит ту же фикстуру (миграция в `_load`), собирает и сравнивает байты. Поля, которые меняются между двумя сборками одного состояния на текущем коде, определяются двойной сборкой в волне 0 и исключаются из сравнения явным списком. Принятое расхождение — detour члена папки, записанный вручную тегом с префиксом (§6.6, эталон `rich_v0` обновлён `c7f02bb2`) |
 | LX Backup из того же состояния не меняется | golden экспорта 1.0 из волны 0; после 439 — тот же файл, кроме `exported_at` и `exported_by.version`. Ожидаемые расхождения перечислены в тесте: `id` у второй и следующих записей разделённого json-массива, новое предупреждение о TTL srs (в файл не входит) |
 | миграция идемпотентна | `migrateStorageDoc` дважды = один раз; повторный старт не пишет файл |
 | `fromRecord(toRecord(x))` = `x` | кодек: подписка со всеми полями L, сервер с `sections` и `detour`, папка с `unsupported`-членом и префиксом с пробелом, цепочка с `rewrite`, правила всех видов (json-объект, массив, нечитаемый текст, srs с TTL и двумя `refs`, preset с `vars`), DNS всех видов (preset с `presetId`, template с `vars`, srs- и template-правила) — сравнение по `toRecord` и по сборке |
@@ -550,6 +558,36 @@ Play, F-Droid, APK с GitHub); удаление стирает данные пр
 9. Внутренний бэкап шага 2 восстановить в режиме replace → `GET /config` =
    эталон.
 10. VPN: подключение, трафик через узел из папки и через цепочку.
+
+**Результат волны E (15.09.2026).** AVD `LxBox_test`, сборка develop
+`230c3354` поверх 2.23.2 с богатым состоянием. Повторная проверка после
+фиксов (`753d10e4`) — отдельно.
+
+| Шаг | Итог |
+|---|---|
+| 4 | `storage_version: 1`; `.v0.bak` побайтно равен исходнику; `from=v0_bak` отдаёт копию |
+| 5 | `config.json` без пересборки и после неё равен эталону 2.23.2 байт в байт |
+| 6 | экспорт LX Backup 1.0 → импорт без дублей |
+| 7 | экраны без изменений, кроме имени «#2» у второй записи массива и вкладки JSON редактора правила |
+| 8 | слот Workspaces «Work» мигрировал, копия `.v0.bak` лежит в папке слота |
+| 10 | VPN стартует; не поднялся только синтетический узел стенда с неверным ключом |
+| хранение | записи по сущностям совпали с исходником; `hops` указывают на те же узлы; json-массив разделён на записи |
+| реестр ссылок | rename переписал detour, члена autogroup и позицию цепочки; delete погасил ссылки и показал SnackBar |
+
+Найдено и исправлено:
+
+| Баг | Фикс |
+|---|---|
+| preset-сервер DNS: `ref` клеил id пресета поверх уже квалифицированного тега (`ru-direct:ru-direct:dns_ru`), резолвер снимал запись сиротой и заводил новую — терялись выключатель и `description`, при слиянии файла появлялись дубли. Только сборки develop | `2a32130e`: тег модели = тег конфига, `ref` = та же строка; двойной префикс dev-сборок читается терпимо и не пишется |
+| миграция ссылок называла висячими detour на узлы выключенных источников (`🏠 awg2-home`, `🔥🎭 WARP (MASQUE) h2`) | `7b09109c`: пулы тегов «при включении»; у `avd_v0` из четырёх предупреждений осталось одно настоящее (`753d10e4`) |
+| член папки `autogroup://…` из файла `lx_backup: 1` ложился нечитаемым членом рядом с группой | `4e85fd16`: ввозится группой, повторный импорт вторую не заводит; ключ без члена папки снимается из состава с `backup_group_degraded` |
+| SnackBar удаления узла считал члена группы автовыбора detour'ом («detour removed from 2 source(s)») | `a5d015a4`: отдельная строка «N group member(s) removed» с именами групп |
+| внутренний бэкап 2.23.2, Debug `POST /backup/import` и `replaceRaw` мигрировали ссылки без тел подписок из `sub_cache`: цепочка с позицией на узел подписки выпадала вместе с цепочкой, ссылавшейся на неё | `a2eec23c`: словарь тот же, что у `_load` (`subscriptionBodiesForMigration`) |
+| предупреждение о неразрешённом detour — строка на каждый выпавший узел (папка на 138 узлов с одной висячей ссылкой — 138 строк) | `c2e9a22f`: строка на ссылку и причину, формат перечня §377 |
+
+Есть и в 2.23.2, к 439 не относится: экран Routing при входе выключает
+srs-правило без кэша; `POST /backup/import` не перечитывает источники в
+памяти до холодного рестарта.
 
 ## 6. План работ
 
@@ -634,7 +672,8 @@ Play, F-Droid, APK с GitHub); удаление стирает данные пр
   `backup_unknown_field`). Нужен точный список под TASKS_LXBOX §16.7: имя,
   где, тип, смысл. Список отдаётся после волны кодека и моделей, когда
   зафиксированы имена полей записи; тогда экспорт перестаёт срезать эти поля и
-  `backup_local_only_dropped` на них не эмитится.
+  `backup_local_only_dropped` на них не эмитится. **Закрыто контрактом 1.0.1**
+  — итог в конце раздела.
 
 **Решение владельца 14.09.2026 (поздно вечером, через лаунчер) — NodeLink,
 D-112.** Ссылка на узел во всех проектах — `{folder_id, tag}`, не финальный
@@ -728,24 +767,55 @@ DNS-серверов (только Направления, direct, reject), `imp
 Debug API `/folders/{id}/members/{index}`. Открыто до NODE_LINK.md: как
 NodeLink адресует узел подписки и не-узловые позиции `hops`.
 
+**Контракт 1.0.1** (лаунчер `e3a12934`, синк `6dd3ee7a`; D-115, D-116).
+
+- **Л2 — поля объявлены** (`BACKUP.md` §2 «Поля стороны LxBox», «Поддержка:
+  LxBox»): подписка — `detour_policy`, `import_rules`,
+  `import_rules_enabled`, `on_update_action`; сервер — `detour_policy`,
+  `tag_policy`; папка — `detour_policy`, `ping_url`, `ping_timeout_ms`;
+  цепочка — `label`; srs-правило — `update_interval_hours`; inline-правило —
+  `verbatim`; DNS-сервер — `description`, `vars`; `kind: auto` —
+  `group.members_rule`, `group.pool_badge`. Лаунчер их игнорирует молча;
+  отсутствие поля в файле значение приёмника не сбрасывает. У LxBox
+  (`3cee2e2d`): флаг `declared` в `lx_backup_slice.dart`, экспорт пишет поля и
+  `backup_local_only_dropped` на них не эмитит, импорт применяет. Не объявлено
+  DNS-правило `kind: srs` — оно остаётся названной потерей.
+- **`members_rule` и `pool_badge` — внутри `group`** (`5c97735d`), а не на
+  уровне узла. Форма уровня узла ранних сборок 2.23.3 читается молча, `group`
+  сильнее; непустой `group.members` сильнее `members_rule`.
+- **Код `backup_group_degraded {tag, reason}`** (`side: both`, BACKUP §10):
+  `kind: auto` с `group_type: selector` ввозится urltest'ом, `default`
+  отбрасывается (`5bb9549b`, вместо временного `backup_field_type_mismatch`);
+  ключ `autogroup://` файла 0.x без члена папки или с несколькими включёнными снимается из состава группы (`4e85fd16`).
+  `backup_direction_include_dropped` — код стороны лаунчера: LxBox неизвестную
+  строку `include` хранит, предупреждает сборка (ответ 5).
+- **D-115** — группы и `default` адресуются NodeLink, Направления на узлы не
+  ссылаются (выше, «Форма NodeLink согласована»).
+- **D-116 — ось правил на импорте:** номер из файла сохраняется; файл без
+  размеченных корневых правил остаётся неразмеченным (разметка при загрузке
+  Routing по шаблону); неразмеченные корневые в частично размеченном файле
+  встают в хвост не ниже 1000. У LxBox так с `5de4f5a6` (§6.6), правки не
+  потребовалось. DNS-дубли ищутся только среди записей приёмника до импорта
+  (BACKUP §9 п. 5).
+
 ### 6.5 Находки волны 0 (golden `178d6e48`)
 
 Расхождения сегодняшнего кода, найденные на фикстурах `rich_v0` и `avd_v0`.
 Эталоны сняты с ними как есть. Когда исправление меняет эталон, это
 отмечается в коммите, а эталоны обновляются в конце этапа.
 
-| # | Что | Куда | Итог (`230c3354`) |
+| # | Что | Куда | Итог (`753d10e4`) |
 |---|---|---|---|
 | 1 | inline DNS-правило без ключа `enabled` сборка пропускает (ждёт `true`, модель пишет ключ только при `false`) | A1, чинится при переводе сборки на модели | исправлено в A1, эталон обновлён `190fac0c` |
 | 2 | srs DNS-правило: сборка читает `server`/`rule` сверху записи, модель хранит `body` — в конфиг не попадает никогда | A1 | исправлено в A1, `190fac0c` |
 | 3 | `setChains` пересчитывает `order` от длины `server_lists` (AVD: 31 при 34 источниках) | B, `order` снимается | снято вместе с полем `order` |
 | 4 | `setTunApps` сортирует пакеты, у `warp_account.awg` меняется порядок ключей | безвредно, без правки | без правки; единственное байтовое расхождение golden `avd_v0` |
-| 5 | бэкап теряет `varValues` template DNS-сервера (у `google_doh` меняются адрес и detour) | C | `vars` сервера — настройка без дома в 1.0: экспорт называет её `backup_local_only_dropped` |
-| 6 | srs DNS-правило в бэкап не едет и из конфига после импорта пропадает | C, по §1.3 с именованной потерей | называется `backup_local_only_dropped` |
+| 5 | бэкап теряет `varValues` template DNS-сервера (у `google_doh` меняются адрес и detour) | C | **закрыто объявлением** (Л2, контракт 1.0.1, `3cee2e2d`): `vars` и `description` сервера едут и применяются; `google_doh` ушёл из разницы конфига круга бэкапа (`c458fb7e`) |
+| 6 | srs DNS-правило в бэкап не едет и из конфига после импорта пропадает | C, по §1.3 с именованной потерей | **остаётся потерей**: вид `srs` DNS-правила контракт 1.0.1 не объявил, экспорт называет `backup_local_only_dropped` |
 | 7 | импорт выключал правила с outbound `direct-out` (`backup_unknown_outbound`); есть и в 2.23.2 | **исправлено** `d9e85d1b` | исправлено |
 | 8 | json-массив после импорта: второй элемент — inline-правило через `rule_set`, а не сырое тело | B/C, `verbatim` (§2.3 п. 3) | миграция и оба входа LX Backup делят массив на записи `verbatim` (D-111, `f3706fd3`) |
-| 9 | бэкап 1.0 теряет настройки источников: REPLACE из `import_rules`, `detour_policy` подписки, `tag_prefix` сервера, override detour папки — конфиг меняется | C, поля Л2 объявляются в схеме, срез их не режет | detour подписки и папки едет ссылкой (`eba3d584`); остальные настройки называются потерей. Механизм снятия среза флагом `declared` готов (`e8001607`), ни одно поле не отмечено: ждём список полей в схеме лаунчера |
-| 10 | в бэкап не едут `tun_apps`, `vpn_mode`, idle_suspend, reachable, `passive_check` | C: сверить с тонким слоем BACKUP §1, какие из них локальные по норме | в 439 не решалось |
+| 9 | бэкап 1.0 теряет настройки источников: REPLACE из `import_rules`, `detour_policy` подписки, `tag_prefix` сервера, override detour папки — конфиг меняется | C, поля Л2 объявляются в схеме, срез их не режет | **закрыто объявлением** (Л2, контракт 1.0.1): detour подписки и папки едет ссылкой (`eba3d584`), `import_rules`, `detour_policy` источников и `tag_policy` сервера отмечены `declared` (`3cee2e2d`), импорт их применяет (`e8001607`); из разницы конфига круга ушли порт `PR FI-1` из `import_rules`, префикс `HY Hy2 Obfs` и S2 jump в Направлениях (`c458fb7e`) |
+| 10 | в бэкап не едут `tun_apps`, `vpn_mode`, idle_suspend, reachable, `passive_check` | C: сверить с тонким слоем BACKUP §1, какие из них локальные по норме | **local-only по норме**: перечень тонкого слоя BACKUP §1 закрыт обеими сторонами 14.09 (`directions[]`, `fold`, `disabled{}`, переносимые `vars`, `route{final}`, `warp[]`), настроек машины в нём нет; в хранении — local-only (§1.1) |
 | 11 | экспорт пишет `description` DNS-сервера в sections узла, импорт ругается `backup_unknown_field` | C | срез симметричен обходу ключей (`eba3d584`) |
 | 12 | AVD: два inline DNS-правила с одинаковым именем схлопываются в одно при импорте | C | одинаковые правила файла ввозятся все (`ce7d106a`) |
 | 13 | `tls_mixed_case_sni=true` делает сборку недетерминированной (случайный регистр SNI) | в фикстурах флаг выключен | без правки |
@@ -755,30 +825,34 @@ NodeLink адресует узел подписки и не-узловые по�
 | Место плана | Как сделано | Основание |
 |---|---|---|
 | §2.3 п. 8, волна B: NodeLink в моделях | отдельный трек N после волны C: N1 — `DetourPolicy.overrideDetour`, `FolderMember.detour`, `SourceChain.hops` на `NodeLink`, резолв на сборке (`builder/node_link_resolve.dart`), реестр ссылок (`settings_storage/node_link_registry.dart`), миграция финальных тегов (`storage_migration/migrate_node_links.dart`), терпимое чтение S1–S3; N2 — autogroup записью | решения 15.09 (D-113, D-114), форма согласована с лаунчером (§6.4) |
-| §1.2, член папки: autogroup как текст `autogroup://…` в `origin.raw` | запись `kind: auto` (`group{group_type: urltest, members, strategy}`, L: `members_rule`, `pool_badge`), кодек `codec/auto_group_record.dart`; `autogroup://` и его парсер удалены. `migrateAutogroupMembers` переводит и документы `storage_version: 1` ранних сборок 2.23.3 | уточнение лаунчера 15.09 |
-| §2.5 «форму показа согласовать с владельцем» | удаление узла или источника называет задетых одним SnackBar'ом: «detour removed from N source(s)» и «N chain position(s) removed», до трёх имён и `+N` | тот же механизм, что у heal Направлений (§202/§248) |
+| §1.2, член папки: autogroup как текст `autogroup://…` в `origin.raw` | запись `kind: auto` (`group{group_type: urltest, members, strategy}`, поля стороны LxBox `group.members_rule`, `group.pool_badge` — `5c97735d`), кодек `codec/auto_group_record.dart`; `autogroup://` и его парсер удалены. `migrateAutogroupMembers` переводит и документы `storage_version: 1` ранних сборок 2.23.3. Член `autogroup://` файла 0.x ввозится группой тем же переводом (`storage_migration/legacy_autogroup.dart`, `4e85fd16`) | уточнение лаунчера 15.09; контракт 1.0.1 |
+| §2.5 «форму показа согласовать с владельцем» | удаление узла или источника называет задетых одним SnackBar'ом: «detour removed from N source(s)», «N chain position(s) removed» и «N group member(s) removed» (члены групп автовыбора — отдельно, `a5d015a4`), до трёх имён и `+N` | тот же механизм, что у heal Направлений (§202/§248) |
 | — (добавлено) | сырые теги групп источника на общем счётчике с узлами: группы занимают имена после всех узлов, тёзка узла получает `-2` (`cfc80302`) | согласованная форма NodeLink: группы уникализируются вместе с узлами |
 | §4.1 «слияние §9 без изменений» | ссылки файла ставятся после слияния по тегам, под которыми легли члены (`8751c82b`); ось номеров правил — крайние случаи BACKUP §9 п. 7 в форме лаунчера `5cbcc436`: файл без размеченных корневых правил номеров не получает, неразмеченные в частично размеченном файле встают в хвост не ниже 1000 (`5de4f5a6`) | норма лаунчера |
-| §1.3: `detour_policy` подписки и папки срезаются целиком | ссылка `detour` подписки и папки — поле контракта, едет и применяется; срезаются только флаги политики | BACKUP §9 пп. 1, 3 |
-| §6.4 Л2: поля LxBox объявлены — срез не режет | таблица среза `lib/services/lx_backup_slice.dart` с флагом `declared`; флаги не стоят, экспорт называет настройки `backup_local_only_dropped` | список полей для схемы лаунчера не отдан |
+| §1.3: `detour_policy` подписки и папки срезаются целиком | ссылка `detour` подписки и папки — поле контракта, едет и применяется (`eba3d584`); флаги политики едут с контракта 1.0.1 | BACKUP §9 пп. 1, 3; Л2 |
+| §1.3, §4.1: поля L срезаются с `backup_local_only_dropped` | таблица среза `lib/services/lx_backup_slice.dart` с флагом `declared`; с контракта 1.0.1 флаг стоит у всех полей-настроек (§1.3), экспорт их пишет, импорт применяет, отсутствие в файле не сбрасывает (`3cee2e2d`, `e8001607`). Названными потерями остались DNS-правило `kind: srs` и json-правило с нечитаемым текстом (круг бэкапа `c458fb7e`) | Л2, контракт 1.0.1 (§6.4) |
 | §1.2 папка: `created_at` не пишется | пишется полем L: его отдаёт Debug API `/folders`; срез бэкапа снимает молча | Debug API |
 | §2.2: кодеки в `record_codec.dart` | модуль `lib/models/codec/` (`source_record`, `chain_record`, `rule_record`, `dns_record`, `auto_group_record`, `node_link_record`, `record_read`), `record_codec.dart` — реэкспорт; имена ключей хранения — `lib/services/settings_storage_keys.dart` | размер модуля |
 | §3.4 `GET/POST/PATCH /chains` | ответ `serializeChain`: `tag`, `label`, `enabled` + канон `source_chain.schema.json`; позиции — ссылки `{folder_id?, tag}`, строка читается `{tag}` | трек N |
-| §5.2 имена тестов | `storage_migration/golden_{config,backup,storage_roundtrip}_test.dart` вместо `config_identity_test.dart`; добавлены `lx_backup_slice_test`, `lx_backup_d111_test`, `lx_backup_axis_edges_test`, `dns_backup_merge_test`, `legacy_dns_reader_test`, `startup_order_contract_test`; фикстуры `fixtures/storage/{rich_v0,avd_v0}.json`. Тестов реестра ссылок, резолва NodeLink, миграции ссылок и `autogroup://` (трек N) в develop на `230c3354` нет | — |
+| §5.2 имена тестов | `storage_migration/golden_{config,backup,storage_roundtrip}_test.dart` вместо `config_identity_test.dart`; добавлены `lx_backup_slice_test`, `lx_backup_d111_test`, `lx_backup_axis_edges_test`, `dns_backup_merge_test`, `legacy_dns_reader_test`, `startup_order_contract_test`; фикстуры `fixtures/storage/{rich_v0,avd_v0}.json`. Тесты трека N добавлены после `230c3354` (`65b6a52d` и далее): `builder/node_link_resolve_test`, `services/node_link_registry_test`, `storage_migration/migrate_node_links{,_disabled_targets}_test`, `models/auto_group_record_test`, `contract/lx_backup_{group_links,autogroup_0x}_test`, `services/dns/preset_dns_server_ref_test` | — |
+| §2.3 п. 5: `ref` preset-сервера = `presetId` + `:` + тег модели | тег модели — тег конфига (`ru-direct:dns_ru`, как его называет `namespacePresetTags` и держало хранение 2.23.2); `ref` записи — та же строка; повтор пространства ранних сборок (`ru-direct:ru-direct:dns_ru`) читается терпимо и не пишется; миграция ключует карту шаблона тегами хранения 2.23.2 (`2a32130e`) | волна E: кодек клеил id пресета поверх квалифицированного тега, резолвер снимал запись сиротой |
+| §2.3 п. 8: миграция ссылок «по состоянию до миграции» | пул целей строится и для выключенных источников — теги, которые дала бы сборка при включении (`computeDisabledNodeLinkPools`): detour на выключенный сервер или узел выключенной папки не висячий (`7b09109c`) | волна E: ложные предупреждения на стенде |
+| §3.4: `migrateStorageDoc` над блоком внутреннего бэкапа и `POST /backup/import` | ссылки мигрируют тем же словарём, что в `_load`: тела подписок из `sub_cache` (`SettingsStorage.subscriptionBodiesForMigration`, `a2eec23c`); вход — и `replaceRaw` | волна E: без тел позиция на узел подписки оставалась корневой, цепочка выпадала |
+| §2.3 п. 8, решение без владельца: detour члена папки на соседа, записанный тегом **с префиксом** (display-форма, `EU de-1`) | 2.23.2 такую ссылку звеном цепочки папки (§239) не считала, и цель оставалась в группах Направлений; UI 2.23.2 писал ссылку голым тегом (`de-1`), и та уже была звеном. После миграции в NodeLink оба написания — одна пара `{fold-eu, de-1}`, звено; цель уходит из групп Направлений по register-флагам папки. Конфиг меняется только у ручных display-форм: `rich_v0` — −4 строки «EU de-1» в `vpn-1`, `vpn-2` и их `-auto` (`c7f02bb2`), `avd_v0` не тронут | решение координатора 15.09: display-форма бывала только ручной правкой, NodeLink обе формы унифицирует; владельцу не выносилось |
 
 Не покрыто golden: стартовые миграции (`channels` без `directions` и
 прочие), слоты Workspaces, внутренний бэкап `BackupService`, импорт в
 хранение со стартовыми засевами. Это входы волны B.
 
-## 7. Файлы (по факту, `98f01397..230c3354`)
+## 7. Файлы (по факту, `98f01397..753d10e4`)
 
-`app/lib`: 93 файла, +9421 −4286; `app/test`: 96 файлов, +13824 −1400.
+`app/lib`: 94 файла, +9863 −4308; `app/test`: 117 файлов, +17069 −1895.
 
 Новые в `app/lib`:
 
 - кодек записей: `models/codec/source_record.dart`, `chain_record.dart`, `rule_record.dart`, `dns_record.dart`, `auto_group_record.dart`, `node_link_record.dart`, `record_read.dart`; `models/record_codec.dart` — реэкспорт
 - `models/node_link.dart`
-- хранение и миграция: `services/settings_storage_keys.dart`, `services/storage_migration/legacy_form_v0.dart`, `migrate_storage.dart`, `migrate_node_links.dart`
+- хранение и миграция: `services/settings_storage_keys.dart`, `services/storage_migration/legacy_form_v0.dart`, `migrate_storage.dart`, `migrate_node_links.dart`, `legacy_autogroup.dart` (перевод `autogroup://` для миграции и импорта 0.x)
 - ссылки на узлы: `services/settings_storage/node_link_registry.dart`, `services/node_link_address.dart`, `services/builder/node_link_resolve.dart`, `services/builder/node_link_pool.dart`
 - бэкап: `services/lx_backup_slice.dart`
 - Debug API: `services/debug/serializers/chains.dart`
@@ -798,19 +872,21 @@ NodeLink адресует узел подписки и не-узловые по�
 
 Не понадобились правки из плана: `screens/backup_screen/import_preview_dialog.dart`, `screens/home/restore_backup.dart` (превью и восстановление идут через `BackupService`).
 
-Новые тесты: `storage_migration/{migrate_storage,golden_config,golden_backup,golden_storage_roundtrip,legacy_dns_reader}_test.dart` + `golden_harness.dart`; `fixtures/storage/{rich_v0,avd_v0}.json`, `golden/`, `sub_cache/`, `rule_sets/`; `models/record_codec_sources_test.dart`; `services/builder/dns_resolvers_record_kinds_test.dart`; `services/{backup_service_legacy,rule_transfer_format1,lx_backup_slice,workspace_legacy_slot_load}_test.dart`; `services/debug/{backup_import_legacy,dns_put_legacy_rejected}_test.dart`; `services/dns/dns_backup_merge_test.dart`; `contract/{lx_backup_d111,lx_backup_axis_edges,startup_order_contract}_test.dart`.
+Новые тесты: `storage_migration/{migrate_storage,golden_config,golden_backup,golden_storage_roundtrip,legacy_dns_reader}_test.dart` + `golden_harness.dart`; `fixtures/storage/{rich_v0,avd_v0}.json`, `golden/`, `sub_cache/`, `rule_sets/`; `models/record_codec_sources_test.dart`; `services/builder/dns_resolvers_record_kinds_test.dart`; `services/{backup_service_legacy,rule_transfer_format1,lx_backup_slice,workspace_legacy_slot_load}_test.dart`; `services/debug/{backup_import_legacy,dns_put_legacy_rejected}_test.dart`; `services/dns/dns_backup_merge_test.dart`; `contract/{lx_backup_d111,lx_backup_axis_edges,startup_order_contract}_test.dart`. После `230c3354` (трек N, контракт 1.0.1, волна E): `builder/node_link_resolve_test.dart`, `services/node_link_registry_test.dart`, `storage_migration/{migrate_node_links,migrate_node_links_disabled_targets}_test.dart`, `models/auto_group_record_test.dart`, `contract/{lx_backup_group_links,lx_backup_autogroup_0x}_test.dart`, `services/dns/preset_dns_server_ref_test.dart`.
+
+Полный прогон после трека N: 4589 passed, 16 skipped, 0 failed. Пропуски: `v10_group_links` и `v10_dev_forms` корпуса бэкапа ждут от лаунчера ожиданий стороны LxBox (`.expected.lxbox.json`: по ответу LxBox 6 `selector` читается urltest'ом с `backup_group_degraded`), остальные исторические.
 
 ## Docs to update
 
 | Файл | Что | Статус |
 |---|---|---|
-| `docs/STORAGE.md` | дерево и разделы `server_lists`, `custom_rules`, `dns_options`, `chains` → `sources`, `rules`, `dns`; `storage_version`; `.v0.bak` в «Disk layout»; NodeLink; «Legacy and removed keys»; «Debug API exposure» | волна D |
-| `docs/ARCHITECTURE.md` | one-shot миграции: миграция формы §439 вместо форм DNS до §044; модули кодека и NodeLink; поток данных сборки; Feature Specs — строка 439 | волна D |
-| `docs/api/debug-api-reference.md` | `/state/storage`, `/backup/export` (`from=v0_bak`), `/backup/import` (`applied.migrated`), `PUT /settings/dns_options/*` (только записи 1.0, прочее 400), ссылки `{folder_id?, tag}` в `/subs`, `/folders`, `/chains`; bash-примеры | волна D |
-| `docs/TEMPLATE.md`, `docs/DEVELOPMENT_GUIDE.md`, `docs/DIAGNOSTICS.md`, `docs/GUARDS.md` | ссылки на ключи хранения; строки fail-closed резолва NodeLink | волна D |
-| фича-спеки 234, 248, 283, 322, 417, 435 | пометка «форма хранения с 2.23.3» у разделов хранения; тексты истории не переписываются | волна D |
-| `docs/spec/features/README.md`, `docs/ARCHITECTURE.md` → Feature Specs | строка индекса 439 | волна D |
-| `docs/spec/tasks/438-lx-backup-1-0-read-write.md` | переводчик экспорта заменён срезом хранения | волна D |
-| `CHANGELOG.md` | Unreleased: форма хранения, NodeLink, LX Backup как срез, файл правил `format: 2`, Debug API | волна D |
+| `docs/STORAGE.md` | дерево и разделы `server_lists`, `custom_rules`, `dns_options`, `chains` → `sources`, `rules`, `dns`; `storage_version`; `.v0.bak` в «Disk layout»; NodeLink; «Legacy and removed keys»; «Debug API exposure» | `57d10d0e`; контракт 1.0.1 и волна E — правка 15.09 |
+| `docs/ARCHITECTURE.md` | one-shot миграции: миграция формы §439 вместо форм DNS до §044; модули кодека и NodeLink; поток данных сборки; Feature Specs — строка 439 | `b804384f`, `08b652ae` |
+| `docs/api/debug-api-reference.md` | `/state/storage`, `/backup/export` (`from=v0_bak`), `/backup/import` (`applied.migrated`), `PUT /settings/dns_options/*` (только записи 1.0, прочее 400), ссылки `{folder_id?, tag}` в `/subs`, `/folders`, `/chains`; bash-примеры | `353a7e17`; волна E — правка 15.09 |
+| `docs/TEMPLATE.md`, `docs/DEVELOPMENT_GUIDE.md`, `docs/DIAGNOSTICS.md`, `docs/GUARDS.md` | ссылки на ключи хранения; строки fail-closed резолва NodeLink | `b804384f`; GUARDS 4.4a (строка на ссылку) — правка 15.09 |
+| фича-спеки 234, 248, 283, 322, 417, 435 | пометка «форма хранения с 2.23.3» у разделов хранения; тексты истории не переписываются | `d16f84f8`; 322 (`group.members_rule`) — правка 15.09 |
+| `docs/spec/features/README.md`, `docs/ARCHITECTURE.md` → Feature Specs | строка индекса 439 | `08b652ae` |
+| `docs/spec/tasks/438-lx-backup-1-0-read-write.md` | переводчик экспорта заменён срезом хранения | `08b652ae`; Л2 — правка 15.09 |
+| `CHANGELOG.md` | Unreleased: форма хранения, NodeLink, LX Backup как срез, файл правил `format: 2`, Debug API | `4ff726b3`; контракт 1.0.1 и Fixed волны E — правка 15.09 |
 | `RELEASE_NOTES.md`, `docs/releases/v2.23.3.md` | на бампе: откат на 2.23.2 не поддерживается, бэкапы 2.23.3 версия 2.23.2 не читает | черновик вне репозитория до бампа |
-| `app/contract/TASKS_LXBOX.md` | не править у себя: Л2 — список полей лаунчеру по обычному пути синка контракта | открыто |
+| `app/contract/TASKS_LXBOX.md` | не править у себя: Л2 — список полей лаунчеру по обычному пути синка контракта | закрыто: поля объявлены контрактом 1.0.1 (синк `6dd3ee7a`) |

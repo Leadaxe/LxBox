@@ -413,7 +413,7 @@ record_codec.dart            # §435/§439 — re-exports codec/: the contract 1
 codec/                       # §439 — model ↔ record, pure functions, tolerant read
   source_record.dart         #   subscription / server / folder with nodes[] (server, unsupported)
   chain_record.dart          #   kind: chain — body{type: chain, …} + hops[] links
-  auto_group_record.dart     #   folder member kind: auto — group{group_type, members, strategy}
+  auto_group_record.dart     #   folder member kind: auto — group{group_type, members, strategy, members_rule?, pool_badge?}
   rule_record.dart           #   rules[] — body in sing-box keys, refs/ref/vars, verbatim; splitJsonRuleArrays
   dns_record.dart            #   dns.servers[] (user/preset/template), dns.rules[] (user/preset/srs/template)
   node_link_record.dart      #   NodeLink ↔ {folder_id?, tag}; tolerant S1/S3 lifts
@@ -616,8 +616,9 @@ storage_migration/           # §439 — the 2.23.2 form → contract 1.0 record
   legacy_form_v0.dart        #   the frozen 2.23.2 readers (ServerList/CustomRule/SourceChain/DNS refs); also rules file format 1
   migrate_storage.dart       #   migrateStorageDoc — a pure function over the document; dead keys, channels rename, report
   migrate_node_links.dart    #   final tags → NodeLinks by the pre-migration state (sub_cache bodies for subscriptions)
+  legacy_autogroup.dart      #   the frozen autogroup:// reader: members keyed by identity → pairs (migration and 0.x import)
 node_link_address.dart       # §439 node addresses of containers (raw tags) for the registry and the pickers
-lx_backup_slice.dart         # §439 the LX Backup 1.0 slice table: contract / setting / runtime per record key
+lx_backup_slice.dart         # §439 the LX Backup 1.0 slice table: contract / setting / runtime per record key; declared = LxBox field of contract 1.0.1
 nav/home_return_observer.dart          # a global NavigatorObserver (§076): a rebuild on returning home
 app_log.dart                 # AppLog ChangeNotifier-singleton: per-source ring buffers + persistent warn/error (§043)
 app_info_cache.dart          # AppInfoCache — a session cache of AppInfo by package plus a revision ValueNotifier

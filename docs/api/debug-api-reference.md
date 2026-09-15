@@ -944,7 +944,7 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/vpn_mode` | PUT | частичное обновление (copyWith поверх текущего): `mode`/`proxy_protocol`/`proxy_port`/`proxy_listen`/`proxy_auth`/`proxy_user`/`proxy_pass`. **Валидация (§292):** `proxy_listen` — IPv4, `proxy_port` — 1024..65535, `proxy_protocol` — `mixed`\|`http`\|`socks`; невалидное → 400. **§293:** запись идёт через `VpnSettingsFacade` (единый путь с UI) — на смену режима зеркалит native `has_tun` (гейтит `VpnService.prepare`), при auth+пустом пароле генерит его. **Config-significant** (меняет inbounds) → `?rebuild=true`. → `{ok, action:"settings-vpn-mode", vpn_mode, ...rebuild-extras}`. |
 | `/settings/vars/{key}` | PUT | `{"value":"<str>"}`. Для ключей с side-effect-hook (§279: `app_language`) запись идёт через владеющий сервис, не через голый `setVar` — см. «Side-effect vars» ниже. |
 | `/settings/vars/{key}` | DELETE | — (удаляет ключ; не пишет пустую строку). Для hook-ключей = сброс к дефолту через тот же сервис. |
-| `/settings/dns_options/servers` | PUT | **§439:** `{"servers":[<запись dns.servers[]>]}` — только записи формы 1.0, как их отдаёт `GET /state/storage` → `dns.servers`: `{kind:"user", tag, enabled, body, description?}` (`body` — partial sing-box без `tag`), `{kind:"preset", ref:"<preset_id>:<tag>", enabled}`, `{kind:"template", tag, enabled, vars?}`. Список заменяется целиком. Форма 2.23.2 (`kind: inline`, `varValues`, снимок без `kind`) → 400 с образцом записи, хранение не трогается. → `{ok, action:"settings-dns-servers", count}`. Путь URL прежний: это адрес API, не ключ файла. |
+| `/settings/dns_options/servers` | PUT | **§439:** `{"servers":[<запись dns.servers[]>]}` — только записи формы 1.0, как их отдаёт `GET /state/storage` → `dns.servers`: `{kind:"user", tag, enabled, body, description?}` (`body` — partial sing-box без `tag`), `{kind:"preset", ref:"<preset_id>:<tag>", enabled}` (`<tag>` — тег внутри пресета; вся строка — тег сервера в конфиге, например `ru-direct:dns_ru`; повтор пространства `ru-direct:ru-direct:…` ранних сборок 2.23.3 читается как одно), `{kind:"template", tag, enabled, vars?}`. Список заменяется целиком. Форма 2.23.2 (`kind: inline`, `varValues`, снимок без `kind`) → 400 с образцом записи, хранение не трогается. → `{ok, action:"settings-dns-servers", count}`. Путь URL прежний: это адрес API, не ключ файла. |
 | `/settings/dns_options/rules` | PUT | **§439:** `{"rules":[<запись dns.rules[]>]}` — только записи формы 1.0: `{kind:"user", name, enabled, body}` (`body` — правило sing-box с `server`), `{kind:"preset", ref:"<preset_id>", enabled}`, `{kind:"srs", name, id, …}`, `{kind:"template", name, enabled}`. Форма 2.23.2 (`kind: inline` с `rule`, `presetId`) и строка JSON (`rules_json`) → 400 с образцом записи. → `{ok, action:"settings-dns-rules", count}`. |
 | `/settings/config_locked` | PUT | `{"locked": true\|false}` — §037 toggle auto-rebuild lock. true → `generateConfig` возвращает null silently, custom config через `PUT /config` не перетирается UI. |
 | `/settings/core_logs_enabled` | GET | →`{"enabled": bool}` — §043 текущее состояние forwarding'а sing-box логов в `/logs/core`. |
@@ -1182,7 +1182,7 @@ Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/features/040%20backup
 | Endpoint | Что отдаёт / принимает |
 |---|---|
 | `GET /backup/export?include=storage,vpn_settings[&from=v0_bak]` | Snapshot. `include` опц., default — обе части. **§439** `from=v0_bak` — блок `storage` из `lxbox_settings.json.v0.bak` (форма 2.23.2 на момент миграции) вместо живого хранения; копии нет → 404; другое значение `from` → 400 |
-| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{storage?, vpn_settings?}`. **§439** блок `storage` без `storage_version` (форма 2.23.2) сначала мигрирует; ответ `applied.migrated` + `applied.migration` |
+| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{storage?, vpn_settings?}`. **§439** блок `storage` без `storage_version` (форма 2.23.2) сначала мигрирует; ссылки на узлы — тем же словарём, что при старте (тела подписок из `sub_cache`); ответ `applied.migrated` + `applied.migration` |
 
 **Format**:
 ```json
@@ -1247,6 +1247,8 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 curl -s -H "$HDR" "$BASE/backup/export?include=storage&from=v0_bak" > /tmp/lxbox-v0.json
 # 404 — устройство не мигрировало с формы 2.23.2 (чистая установка 2.23.3)
 ```
+
+⚠ Источники в памяти приложения (экран Servers) после `POST /backup/import` не перечитываются до холодного рестарта. Так и в 2.23.2, к §439 не относится.
 
 `merge=false` (default) — replace; `merge=true` — top-level upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
 

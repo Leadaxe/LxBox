@@ -49,7 +49,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       ├─ nodes[]               list          members in UI order:
 │       │   ├─ kind: server      {tag, enabled, origin, detour?, sections?}
 │       │   ├─ kind: unsupported {enabled, origin, reason, detour?, sections?} — text that does not parse
-│       │   └─ kind: auto        {tag, enabled, group{group_type, members[], strategy}, members_rule?, pool_badge?}
+│       │   └─ kind: auto        {tag, enabled, group{group_type, members[]?, strategy, members_rule?, pool_badge?}}
 │       │                        — chain (SourceChain, §393 C) —
 │       ├─ tag, enabled
 │       ├─ label                 string?       LxBox display name
@@ -240,6 +240,22 @@ give typed get/save per entity and keep the invariants between records (the rule
 axis, DNS references, the node-link registry); everything above — the builder,
 screens, backup, Debug API — works on models only.
 
+**LX Backup 1.0 is a slice of these records** (`lib/services/lx_backup_slice.dart`, one
+table per record key). Contract fields travel. LxBox fields that are user settings
+travel too: contract 1.0.1 declares them in `BACKUP.md` §2 "LxBox-side fields"
+(`detour_policy`, `import_rules`, `import_rules_enabled`, `on_update_action` of a
+subscription; `detour_policy`, `tag_policy` of a server; `detour_policy`, `ping_url`,
+`ping_timeout_ms` of a folder; `label` of a chain; `group.members_rule`,
+`group.pool_badge` of an auto node; `update_interval_hours` of an srs rule; `verbatim`;
+`description` and `vars` of a DNS server). The launcher ignores them silently; the
+LxBox import applies them, and a file without such a field does not reset the value of
+a matching record. Runtime (`meta`, `last_*`, `consecutive_fails` of a subscription,
+`created_at` of a folder, the node cache) is cut silently. Named losses
+(`backup_local_only_dropped`) are left for a DNS rule of `kind: srs` and a JSON rule
+whose text never parsed (`verbatim` without `body`); `kind: template` DNS rules are not
+written. A key missing from the table is cut and named, so a new codec field
+cannot leave or get lost silently.
+
 ### What changed against the 2.23.2 form
 
 | 2.23.2 | 2.23.3 |
@@ -305,10 +321,17 @@ the migration: a detour inside a folder onto the tag of an enabled member become
 pair `{folder_id, tag}`; otherwise the final tag is looked up in a dictionary built
 by the same node assembly as the builder (prefixes, unique tags, subscription nodes
 from `sub_cache`); outside the dictionary the "prefix + tag" form is matched across
-containers when exactly one candidate exists. Directions, `direct-out`, template
-service tags and chains stay root `{tag}`. Not found or ambiguous — root `{tag}` with
-a warning. A personal detour onto the node itself and the edge that closed a ring
-inside a folder (2.23.2 did not emit them) are removed with a warning.
+containers when exactly one candidate exists. Targets on disabled sources (a disabled
+server, a member of a disabled folder, a node of a disabled subscription) are looked up
+by the tags the build would give them once enabled, so they are not dangling.
+Directions, `direct-out`, template service tags and chains stay root `{tag}`. Not found
+or ambiguous — root `{tag}` with a warning. A member's detour onto a neighbour written
+with the folder prefix (`EU de-1`, a hand edit) and the bare tag the 2.23.2 UI wrote
+(`de-1`) become the same pair; 2.23.2 did not count the prefixed form as a folder chain
+link (§239), so after the migration the neighbour leaves Direction groups by the
+folder's register flags (an accepted config difference, §439 §6.6). A personal detour
+onto the node itself and the edge that closed a ring inside a folder (2.23.2 did not
+emit them) are removed with a warning.
 
 **Autogroup members.** `RuleMembers` are kept; explicit members keyed by
 `protocol|server|port|credential` become pairs by the nodes of the same folder (among
@@ -331,10 +354,16 @@ scene. Sleeping slots are not migrated until loaded; Save as writes the new form
 | `lxbox_settings.json` on disk | migration in `_load()` |
 | a workspace slot | migration on Load plus a `.v0.bak` copy in the slot folder |
 | internal backup (`app: lxbox`, `kind: backup`) from 2.23.2 or older | `BackupService` migrates the `storage` block before the category filter; the preview counts the migrated block |
-| Debug `POST /backup/import` with a `storage` block without `storage_version` | migrated; `applied.migrated: true` and `applied.migration {info, warnings}` in the response |
+| Debug `POST /backup/import` with a `storage` block without `storage_version` | migrated; `applied.migrated: true` and `applied.migration {info, warnings}` in the response; node references use the same dictionary as `_load()` (below the table) |
 | LX Backup `lx_backup: 1` (0.x) | the legacy 0.x decoder, as before |
 | rules file `kind: rules`, `format: 1` (§396) | the frozen readers of `legacy_form_v0.dart`; export writes `format: 2` |
 | Debug `PUT /settings/dns_options/servers` and `/rules` | records only; the 2.23.2 kind refs and the pre-§043 full body → 400 with a sample record |
+
+The internal backup restore, `POST /backup/import` and `replaceRaw` migrate node
+references with the same dictionary as `_load()`: subscription bodies come from
+`sub_cache` (`SettingsStorage.subscriptionBodiesForMigration`). Without them a chain
+position on a subscription node stayed a root link, and the chain dropped out of the
+config.
 
 ### Downgrade to 2.23.2
 
@@ -640,8 +669,8 @@ detour. A subscription cannot be put into a folder, and there is no nesting.
         "group_type": "urltest",
         "members": [ { "folder_id": "<this folder id>", "tag": "Alpha" } ],
         "strategy": { "mode": "least_test", "url": "…", "interval": "15m", "tolerance": 50,
-                      "idle_timeout": "30m", "interrupt_exist_connections": false } },
-      "pool_badge": "…" }                                                // LxBox, only when not default
+                      "idle_timeout": "30m", "interrupt_exist_connections": false },
+        "pool_badge": "…" } }                                            // LxBox, inside group, only when not default
   ]
 }
 ```
@@ -663,12 +692,19 @@ direction's `auto` (`$defs/directionAuto`: `mode`, `url`, `interval`, `tolerance
 `idle_timeout`, `interrupt_exist_connections`, and `pool` / `pool_tolerance` /
 `sticky_hash` for `round_robin` or when not default; an empty sticky list is written as
 `["none"]`). Explicit membership is `group.members[]` — NodeLink pairs onto members of
-the same folder. Membership by rule is the LxBox field `members_rule: {include,
-exclude}` (regexes, not links); such a group has no `members`. Tolerant read: a member
-`{tag}` becomes a pair with the folder's id; `default` as a string becomes a pair when
-exactly one member has that tag (a LxBox urltest group has no `default`, it is named as
-a loss); `selector` is read as `urltest` with a warning. Before §439 the group was stored
-as the member text `autogroup://…`; the migration converts it, and the URI form is gone.
+the same folder. Membership by rule is `group.members_rule: {include, exclude}`
+(regexes, not links); such a group has no `members`. `members_rule` and `pool_badge`
+are LxBox-side fields inside `group` (contract 1.0.1, `BACKUP.md` §2); early 2.23.3
+builds wrote them next to `group`, and that form is still read silently (`group` wins).
+A non-empty `group.members` wins over `members_rule`. Tolerant read: a member `{tag}`
+becomes a pair with the folder's id; `default` as a string becomes a pair when exactly
+one member has that tag (a LxBox urltest group has no `default`, it is named as a loss);
+`selector` is read as `urltest`, and the LX Backup import names it
+`backup_group_degraded`. Before §439 the group was stored as the member text
+`autogroup://…`; the migration converts it, and the URI form is gone. An `autogroup://`
+member of a legacy 0.x backup file is imported as a group by the same conversion
+(`storage_migration/legacy_autogroup.dart`); a key that matches no member (or several
+enabled ones) is removed from the group with `backup_group_degraded`.
 A folder member of `kind: chain` is not supported and is dropped with a note.
 
 ### `detour_policy` (shared)
@@ -712,8 +748,10 @@ member (`FolderMember.detour`), `hops[]` of a chain (`SourceChain.hops`) and
   a rename (body edit), a move between containers, moving out of a folder, dissolving a
   folder, reordering namesakes and a change of a standalone server's prefix **rewrite**
   the links; deleting a node or a whole source **clears** them (the detour is removed,
-  the position leaves the chain) and the Servers screen names the affected carriers in a
-  SnackBar. A change of a folder's `tag_policy` or name does not change any address.
+  the position leaves the chain, the member leaves the auto node) and the Servers screen
+  names the affected sources, chains and auto nodes in one SnackBar, group members
+  counted apart from detours. A change of a folder's `tag_policy` or name does not
+  change any address.
 - **Tolerant read** on foreign inputs (the LX Backup import, the Debug API): S1 — a root
   `{tag}` inside a container onto its member becomes a pair; S3 — a pair carrying a
   group's final tag becomes its raw tag when exactly one candidate exists. Storage does
@@ -913,14 +951,14 @@ the model's own words (`inline`, `rule`, `presetId`, `varValues`) and a dead `ru
   "body": { "type": "https", "server": "1.1.1.1" },     // a partial sing-box server WITHOUT tag
   "description": "…" }                                  // optional
 
-{ "kind": "preset", "ref": "ru-direct:yandex_udp", "enabled": true }   // "<preset_id>:<tag>"
+{ "kind": "preset", "ref": "ru-direct:yandex_udp", "enabled": true }   // "<preset_id>:<tag inside the preset>"
 
 { "kind": "template", "tag": "google_doh", "enabled": true,
   "vars": { "<name>": "<value>" } }                      // §117 — the chosen var values
 ```
 
 - `template` — a reference to a server from the template ([§117]: a `{vars, server}` wrapper, with the tag in `server.tag`). The user can override `enabled` and `description` and choose var values (`vars`: the `outbound` direction, the IP profile, the domain resolver — see TEMPLATE.md); the body is resolved from the template by substituting the `@var`s (`resolveTemplateDnsServerBody`).
-- `preset` — a server declared by a template preset. The identity is `ref` = `<preset_id>:<tag>`, split on the first `:`. Auto-discovery fills the preset id when the server is added; a `ref` without `:` (the preset was not found) is the tag, and orphan cleanup follows.
+- `preset` — a server declared by a template preset. The identity is `ref` = `<preset_id>:<tag inside the preset>`, split on the first `:`; that string is also the server's config tag (the builder namespaces preset tags, `namespacePresetTags`) and the model's `tag`, so `ref` and tag are one string. Auto-discovery fills the preset id when the server is added; a `ref` without `:` (the preset was not found) is the tag, and orphan cleanup follows. A repeated namespace written by early 2.23.3 builds (`ru-direct:ru-direct:dns_ru`) is read as `ru-direct:dns_ru` and never written.
 - `user` — a user-defined server (the model's `inline`). `body` is required.
 
 The tag lives **only** at the record level; the builder synthesizes `body.tag` back when assembling the config. **Render order in the UI:** `template` → `preset` → `user`.
@@ -1463,9 +1501,10 @@ screen removes its positions from other chains (§393 D2); `DELETE /chains/{tag}
 Debug API does not and lists them in `dangling_refs`. A subscription refresh never
 touches positions.
 
-**In backup**: the LX Backup 1.0 ([§438], §439) carries the record as is; `label` has no
-home in 1.0 and is named by `backup_local_only_dropped` on export (a label equal to the
-tag is not a loss). Chains merge by `tag`; a local chain wins over an arriving namesake,
+**In backup**: the LX Backup 1.0 ([§438], §439) carries the record as is, `label`
+included: it is an LxBox-side field declared by contract 1.0.1 (`BACKUP.md` §2), the
+launcher ignores it, and a file without it does not reset the label of a matching
+chain. Chains merge by `tag`; a local chain wins over an arriving namesake,
 with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0.7.1).
 
 ---

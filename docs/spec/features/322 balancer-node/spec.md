@@ -781,7 +781,8 @@ Detour через ротирующийся пул непредсказуем: к
 > Узел автовыбора в папке хранится записью `kind: auto` в `nodes[]` папки, той
 > же формы, что в LX Backup 1.0: `group{group_type: urltest, members:
 > [{folder_id, tag}], strategy}` (strategy — форма `auto` Направления), поля
-> LxBox `members_rule{include, exclude}` и `pool_badge`. Явный состав — пары
+> стороны LxBox `members_rule{include, exclude}` и `pool_badge` внутри `group`
+> (контракт 1.0.1; объявлены в схеме и едут в LX Backup). Явный состав — пары
 > ссылок на членов той же папки вместо ключей `protocol|server|port|credential`.
 > Форма `autogroup://`, `toUri` и `auto_group_parser.dart` удалены; миграция
 > хранения переводит старые члены (`migrateAutogroupMembers`), неоднозначный
