@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../config/consts.dart' show kBlockOutboundTag, kDirectOutboundTag;
 import '../services/backup_service.dart';
 import '../models/direction.dart';
 import '../models/server_list.dart';
@@ -540,6 +541,10 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // записываются списки ниже, в [_applyLxSections], одним flush'ем.
       final lists = await SettingsStorage.getServerLists();
       final subMerge = mergeBackupSubscriptions(lists, parsed.subscriptions);
+      // §439 — корень результата для подъёма ссылок `{tag}` (NODE_LINK §7.3):
+      // Направления (уже с приехавшими), цепочки здесь и в файле, служебные.
+      final rootDirections = await SettingsStorage.getDirections();
+      final rootChains = await SettingsStorage.getChains();
       final srvMerge = mergeBackupServers(
         subMerge.lists,
         parsed.servers,
@@ -547,6 +552,13 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         sourceIds: subMerge.ids,
         addedSources: subMerge.added,
         sourceDetours: subMerge.detours,
+        rootNames: {
+          kDirectOutboundTag,
+          kBlockOutboundTag,
+          for (final d in rootDirections) ...[d.tag, d.autoTag],
+          for (final c in rootChains) c.tag,
+          for (final c in parsed.chains) c.tag,
+        },
       );
       final sources = (
         before: lists,
@@ -558,6 +570,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         parsed,
         srvMerge.lists,
         srvMerge.folderIds,
+        linkOf: srvMerge.linkOf,
       );
 
       // §393 C9 — цепочки ПОСЛЕ Направлений (позиция может ссылаться на

@@ -24,6 +24,7 @@ import '../models/record_codec.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
 import 'lx_backup_slice.dart';
+import 'node_link_address.dart';
 import 'node_hash.dart' show deepSortKeys;
 import 'parser/uri_utils.dart' show newUuidV4;
 import 'tag_resolver.dart';
@@ -2289,7 +2290,7 @@ bool _carries(BackupRecord kind, Map<String, dynamic> j, String key) =>
     j.containsKey(key) && declaredBackupKeys(kind).contains(key);
 
 /// Флаги политики detour без ссылки (ссылка едет полем `detour`).
-DetourPolicy _flagsOf(DetourPolicy p) => p.copyWith(overrideDetour: '');
+DetourPolicy _flagsOf(DetourPolicy p) => p.copyWith(overrideDetour: NodeLink.none);
 
 LxBackupFile _parse10(
   Map<String, dynamic> decoded, {
@@ -3256,7 +3257,17 @@ typedef BackupServerMerge = ({
   /// §438 — узлы, которые импорт принёс или узнал по телу: их секции идут в
   /// общую перенумерацию оси ([renumberBackupAxis]).
   List<BackupNodeRef> touched,
+
+  /// §439 — ссылка файла → адрес здесь (NODE_LINK §7.2, §7.3): `folder_id`
+  /// по карте контейнеров и тег, под которым лёг член; `{tag}` на члена
+  /// контейнера — пара, если кандидат один (сперва среди узлов файла, затем
+  /// среди узлов приёмника). [legacy] — файл 0.x: тег сверяется и с сырым
+  /// тегом члена. Позиции цепочек переводит [resolveBackupChainHops].
+  BackupLinkMapper linkOf,
 });
+
+/// §439 — перевод ссылки файла в адрес здесь ([BackupServerMerge.linkOf]).
+typedef BackupLinkMapper = NodeLink Function(NodeLink link, {bool legacy});
 
 /// §406 (D-095) — КАНОН ТЕЛА узла для дедупа при импорте.
 ///
@@ -3339,6 +3350,7 @@ BackupServerMerge mergeBackupServers(
   Map<String, String> sourceIds = const {},
   Map<String, int> addedSources = const {},
   Map<String, NodeLink?> sourceDetours = const {},
+  Set<String> rootNames = const {},
 }) {
   final merged = lists.toList();
   final takenIds = <String>{for (final l in merged) l.id};
@@ -3366,10 +3378,6 @@ BackupServerMerge mergeBackupServers(
   final matchedAt = <String, int>{};
   final plannedId = <String, String>{};
   final freshNames = <String>{};
-  final prefixById = <String, String>{
-    for (final l in merged)
-      if (l is! UserServer) l.id: l.tagPrefix,
-  };
   for (final f in folders) {
     int? at;
     if (f.id.isNotEmpty) at = folderById[f.id];
@@ -3386,24 +3394,23 @@ BackupServerMerge mergeBackupServers(
         freshNames.add(f.name);
       }
     }
-    prefixById[localId] = f.tagPrefix;
     if (f.id.isNotEmpty) folderIds[f.id] = localId;
   }
 
   // Карта контейнеров для ссылок: подписки (из их слияния) и папки файла.
   final linkIds = {...sourceIds, ...folderIds};
-  NodeLink linkTag(NodeLink? link) =>
-      link == null ? NodeLink.none : _remapLink(link, linkIds);
-  NodeLink detourOf(LxServer srv) => linkTag(srv.detour);
 
+  // §439 — ссылки файла ставятся ПОСЛЕ слияния (NODE_LINK §7.2, §7.3): карта
+  // папок, места, куда легли члены, и корень результата известны только
+  // тогда. [count] — изменение ссылки считается применённым (у совпавшей
+  // папки, чьи прочие настройки не изменились).
+  final pendingLinks =
+      <({int at, int member, NodeLink? link, bool count})>[];
   for (var i = 0; i < merged.length; i++) {
     final l = merged[i];
     if (l is! SubscriptionServers || !sourceDetours.containsKey(l.id)) continue;
-    final policy =
-        l.detourPolicy.copyWith(overrideDetour: linkTag(sourceDetours[l.id]));
-    if (policy != l.detourPolicy) {
-      merged[i] = l.copyWith(detourPolicy: policy);
-    }
+    pendingLinks
+        .add((at: i, member: -1, link: sourceDetours[l.id], count: false));
   }
 
   final singleBodies = <String, int>{};
@@ -3445,14 +3452,15 @@ BackupServerMerge mergeBackupServers(
       if (at != null) {
         final local = merged[at] as FolderServers;
         final policy = (item.detourPolicy ?? local.detourPolicy)
-            .copyWith(overrideDetour: linkTag(item.detour));
+            .copyWith(overrideDetour: local.detourPolicy.overrideDetour);
         final pingUrl = item.pingUrl ?? local.pingUrl;
         final pingTimeoutMs = item.pingTimeoutMs ?? local.pingTimeoutMs;
-        if (local.enabled != item.enabled ||
+        final changed = local.enabled != item.enabled ||
             local.tagPrefix != item.tagPrefix ||
             local.detourPolicy != policy ||
             local.pingUrl != pingUrl ||
-            local.pingTimeoutMs != pingTimeoutMs) {
+            local.pingTimeoutMs != pingTimeoutMs;
+        if (changed) {
           merged[at] = local.copyWith(
             enabled: item.enabled,
             tagPrefix: item.tagPrefix,
@@ -3462,6 +3470,8 @@ BackupServerMerge mergeBackupServers(
           );
           applied++;
         }
+        pendingLinks
+            .add((at: at, member: -1, link: item.detour, count: !changed));
         folderAtKey[item.key] = at;
       } else {
         merged.add(FolderServers(
@@ -3469,10 +3479,15 @@ BackupServerMerge mergeBackupServers(
           name: item.name,
           enabled: item.enabled,
           tagPrefix: item.tagPrefix,
-          detourPolicy: (item.detourPolicy ?? DetourPolicy.defaults)
-              .copyWith(overrideDetour: linkTag(item.detour)),
+          detourPolicy: item.detourPolicy ?? DetourPolicy.defaults,
           pingUrl: item.pingUrl,
           pingTimeoutMs: item.pingTimeoutMs,
+        ));
+        pendingLinks.add((
+          at: merged.length - 1,
+          member: -1,
+          link: item.detour,
+          count: false,
         ));
         folderAtKey[item.key] = merged.length - 1;
         if (folderByName[item.name] == -1) {
@@ -3500,9 +3515,14 @@ BackupServerMerge mergeBackupServers(
       // Член папки 1.0: папка обработана раньше своих членов.
       final at = folderAtKey[srv.folderRef];
       if (at == null) continue;
+      final count = (merged[at] as FolderServers).members.length;
       applied += _mergeFolderMember(
-          merged, at, srv, body, detourOf(srv), touched,
+          merged, at, srv, body, NodeLink.none, touched,
           landings: landings);
+      if ((merged[at] as FolderServers).members.length > count) {
+        pendingLinks
+            .add((at: at, member: count, link: srv.detour, count: false));
+      }
       continue;
     }
 
@@ -3534,11 +3554,16 @@ BackupServerMerge mergeBackupServers(
         name: srv.name,
         enabled: srv.enabled,
         tagPrefix: srv.tagPrefix ?? '',
-        detourPolicy: (srv.detourPolicy ?? DetourPolicy.defaults)
-            .copyWith(overrideDetour: detourOf(srv)),
+        detourPolicy: srv.detourPolicy ?? DetourPolicy.defaults,
         origin: UserSource.manual,
         rawBody: body,
         sections: srv.sections,
+      ));
+      pendingLinks.add((
+        at: merged.length - 1,
+        member: -1,
+        link: srv.detour,
+        count: false,
       ));
       singleBodies[key] = merged.length - 1;
       touched.add((list: merged.length - 1, member: -1));
@@ -3562,11 +3587,42 @@ BackupServerMerge mergeBackupServers(
       folderByName[srv.folder] = at;
       added[merged.last.id] = position;
     }
-    applied +=
-        _mergeFolderMember(merged, at, srv, body, NodeLink.none, touched);
+    applied += _mergeFolderMember(merged, at, srv, body, NodeLink.none, touched,
+        landings: landings);
   }
 
   applied += _bindBackupAutoGroups(merged, autoGroups, linkIds, landings);
+
+  final linkOf = _backupLinkMapper(
+    merged: merged,
+    incoming: incoming,
+    folders: folders,
+    folderAtKey: folderAtKey,
+    folderByName: folderByName,
+    ids: linkIds,
+    landings: landings,
+    rootNames: rootNames,
+  );
+  for (final p in pendingLinks) {
+    final l = merged[p.at];
+    final link = p.link == null ? NodeLink.none : linkOf(p.link!, at: p.at);
+    if (p.member < 0) {
+      if (l.detourPolicy.overrideDetour == link) continue;
+      final policy = l.detourPolicy.copyWith(overrideDetour: link);
+      merged[p.at] = switch (l) {
+        SubscriptionServers s => s.copyWith(detourPolicy: policy),
+        UserServer u => u.copyWith(detourPolicy: policy),
+        FolderServers f => f.copyWith(detourPolicy: policy),
+      };
+      if (p.count) applied++;
+    } else if (l is FolderServers && p.member < l.members.length) {
+      if (l.members[p.member].detour == link) continue;
+      merged[p.at] = l.copyWith(
+        members: l.members.toList()
+          ..[p.member] = l.members[p.member].copyWith(detour: link),
+      );
+    }
+  }
 
   // Новые источники стоят в хвосте списка (подписки — первыми, их завело
   // слияние подписок); хвост упорядочивается по месту в файле, стабильно.
@@ -3593,7 +3649,139 @@ BackupServerMerge mergeBackupServers(
     applied: applied,
     folderIds: linkIds,
     touched: touched,
+    linkOf: (NodeLink link, {bool legacy = false}) =>
+        linkOf(link, legacy: legacy),
   );
+}
+
+/// §439 — перевод ссылок файла в адреса здесь (NODE_LINK §7.2, §7.3), общий
+/// для detour узлов и контейнеров и позиций цепочек.
+///
+/// - Пара с `folder_id` папки файла → `id` папки здесь и тег, под которым
+///   лёг член ([landings]); S3 — финальный тег группы этой папки вместо
+///   сырого при единственном кандидате. Прочий контейнер — по карте [ids],
+///   нет в карте — как есть (разбирает сборка).
+/// - `{tag}`, занятый корнем результата (одиночный сервер здесь, [rootNames]:
+///   Направления, цепочки, служебные теги), не трогается.
+/// - S1 — носитель в папке [at], тег — сырой тег члена этой папки (файла или
+///   здесь): пара.
+/// - Иначе тег сверяется с финальной формой «префикс + тег» членов папок
+///   ФАЙЛА (у файла 0.x — и с сырым тегом), и только если там такого имени
+///   нет — с членами контейнеров приёмника. Кандидат ровно один — пара;
+///   несколько или ни одного — ссылка как есть, без предупреждения.
+NodeLink Function(NodeLink link, {int? at, bool legacy}) _backupLinkMapper({
+  required List<ServerList> merged,
+  required List<LxServer> incoming,
+  required List<LxFolder> folders,
+  required Map<String, int> folderAtKey,
+  required Map<String, int> folderByName,
+  required Map<String, String> ids,
+  required Map<(int, String), String> landings,
+  required Set<String> rootNames,
+}) {
+  final atByFileId = <String, int>{
+    for (final f in folders)
+      if (f.id.isNotEmpty && folderAtKey[f.key] != null)
+        f.id: folderAtKey[f.key]!,
+  };
+  final folderByKey = {for (final f in folders) f.key: f};
+  final rootTaken = <String>{
+    ...rootNames,
+    for (final l in merged)
+      if (l is UserServer)
+        for (final n in l.nodes)
+          if (n.tag.isNotEmpty) containerFinalForm(l, n.tag),
+  };
+
+  // Члены папок файла: финальная форма и сырой тег → адреса здесь.
+  final fileFinal = <String, Set<NodeLink>>{};
+  final fileRaw = <String, Set<NodeLink>>{};
+  final fileRawAt = <int, Set<String>>{};
+  void addFile(int at, String prefix, String name) {
+    if (name.isEmpty || at < 0 || at >= merged.length) return;
+    final here =
+        NodeLink(folderId: merged[at].id, tag: landings[(at, name)] ?? name);
+    (fileFinal[TagResolver.displayTag(prefix, name)] ??= {}).add(here);
+    (fileRaw[name] ??= {}).add(here);
+    (fileRawAt[at] ??= {}).add(name);
+  }
+
+  for (final srv in incoming) {
+    final name = srv.autoGroup?.tag ?? srv.name;
+    if (srv.folderRef.isNotEmpty) {
+      final f = folderByKey[srv.folderRef];
+      final at = folderAtKey[srv.folderRef];
+      if (f != null && at != null) addFile(at, f.tagPrefix, name);
+    } else if (srv.folder.isNotEmpty) {
+      final at = folderByName[srv.folder];
+      if (at != null) addFile(at, '', name);
+    }
+  }
+
+  // Члены контейнеров приёмника (узлы подписок в хранении не лежат).
+  final hereFinal = <String, Set<NodeLink>>{};
+  final hereRaw = <String, Set<NodeLink>>{};
+  for (final l in merged) {
+    if (l is UserServer) continue;
+    containerRawTags(l).forEach((_, raw) {
+      final here = NodeLink(folderId: l.id, tag: raw);
+      (hereFinal[containerFinalForm(l, raw)] ??= {}).add(here);
+      (hereRaw[raw] ??= {}).add(here);
+    });
+  }
+
+  return (NodeLink link, {int? at, bool legacy = false}) {
+    if (link.isEmpty) return link;
+    if (!link.isRoot) {
+      final fileAt = atByFileId[link.folderId];
+      if (fileAt != null) {
+        final folder = merged[fileAt];
+        final landed = landings[(fileAt, link.tag)];
+        if (landed != null) return NodeLink(folderId: folder.id, tag: landed);
+        final raw = containerRawTags(folder);
+        final groupForms = <String, List<String>>{};
+        raw.forEach((node, tag) {
+          if (node.isGroup) {
+            (groupForms[containerFinalForm(folder, tag)] ??= []).add(tag);
+          }
+        });
+        return lowerGroupFinalLink(
+          NodeLink(folderId: folder.id, tag: link.tag),
+          folder.id,
+          raw.values.toSet(),
+          groupForms,
+        );
+      }
+      final local = ids[link.folderId];
+      return local == null ? link : NodeLink(folderId: local, tag: link.tag);
+    }
+    final t = link.tag;
+    if (rootTaken.contains(t)) return link;
+    // S1 — сосед по папке носителя.
+    if (at != null && at >= 0 && at < merged.length) {
+      final carrier = merged[at];
+      if (carrier is FolderServers) {
+        if (fileRawAt[at]?.contains(t) ?? false) {
+          return NodeLink(
+              folderId: carrier.id, tag: landings[(at, t)] ?? t);
+        }
+        final lifted =
+            liftSiblingLink(link, carrier.id, containerRawTagSet(carrier));
+        if (!lifted.isRoot) return lifted;
+      }
+    }
+    Set<NodeLink> hits(
+      Map<String, Set<NodeLink>> byFinal,
+      Map<String, Set<NodeLink>> byRaw,
+    ) =>
+        {...?byFinal[t], if (legacy) ...?byRaw[t]};
+    final fromFile = hits(fileFinal, fileRaw);
+    if (fromFile.isNotEmpty) {
+      return fromFile.length == 1 ? fromFile.single : link;
+    }
+    final fromHere = hits(hereFinal, hereRaw);
+    return fromHere.length == 1 ? fromHere.single : link;
+  };
 }
 
 /// Член папки [folderAt]: дедуп по канону тела в пределах этой папки, новые
@@ -3719,50 +3907,35 @@ int _bindBackupAutoGroups(
   return applied;
 }
 
-/// §438 — позиции цепочек формата 1.0 → теги конфига LxBox.
+/// §439 — позиции цепочек файла → ссылки здесь.
 ///
-/// Хоп 1.0 — ссылка `{folder_id?, tag}` с сырым тегом (BACKUP.md §4, §6), у
-/// LxBox позиция — тег конфига. `folder_id` сперва переводится по карте
-/// [folderIds] ([mergeBackupServers]), затем тег получает префикс найденного
-/// контейнера — папки или подписки. Контейнера нет (ни в файле, ни здесь) —
-/// хоп ввозится сырым тегом как есть: недостижимая позиция разбирается на
-/// сборке (`chain_hop_missing`), а не импортом. У файла 0.x карты хопов нет,
-/// и цепочки возвращаются как есть.
+/// Хоп 1.0 — ссылка `{folder_id?, tag}` с сырым тегом (BACKUP.md §4, §6):
+/// `folder_id` переводится по карте контейнеров, тег — туда, куда лёг член,
+/// `{tag}` на члена контейнера поднимается до пары ([BackupServerMerge.linkOf],
+/// NODE_LINK §7.3). Позиция 0.x — строка (финальный или сырой тег), читается
+/// корневой ссылкой и поднимается тем же правилом с проверкой сырого тега.
+/// Без [linkOf] переводится только `folder_id` по [folderIds]. Контейнера нет
+/// ни в файле, ни здесь — ссылка ввозится как есть: недостижимую позицию
+/// разбирает сборка (`chain_hop_missing`), а не импорт.
 List<SourceChain> resolveBackupChainHops(
   LxBackupFile file,
   List<ServerList> lists,
-  Map<String, String> folderIds,
-) {
-  if (file.chainHops.isEmpty) return file.chains;
-  final prefixById = <String, String>{
-    for (final l in lists)
-      if (l is! UserServer) l.id: l.tagPrefix,
-  };
-  NodeLink hopTag(NodeLink link) => _remapLink(link, folderIds);
+  Map<String, String> folderIds, {
+  BackupLinkMapper? linkOf,
+}) {
+  NodeLink map(NodeLink link, {required bool legacy}) => linkOf != null
+      ? linkOf(link, legacy: legacy)
+      : _remapLink(link, folderIds);
 
   return [
     for (final c in file.chains)
       if (file.chainHops[c.tag] case final links?)
-        c.copyWith(hops: [for (final l in links) hopTag(l)])
+        c.copyWith(hops: [for (final l in links) map(l, legacy: false)])
+      else if (linkOf != null)
+        c.copyWith(hops: [for (final l in c.hops) map(l, legacy: true)])
       else
         c,
   ];
-}
-
-/// §438 — ссылка `{folder_id?, tag}` → тег конфига LxBox: префикс
-/// контейнера (папки или подписки), найденного по карте [ids], плюс сырой
-/// тег. Контейнера нет — сырой тег как есть (ссылка ввозится, недостижимую
-/// цель разбирает сборка). [prefixById] — префиксы тегов контейнеров по
-/// локальному `id`.
-String _linkConfigTag(
-  NodeLink link,
-  Map<String, String> prefixById,
-  Map<String, String> ids,
-) {
-  if (link.folderId.isEmpty) return link.tag;
-  final prefix = prefixById[ids[link.folderId] ?? link.folderId];
-  if (prefix == null) return link.tag;
-  return TagResolver.displayTag(prefix, link.tag);
 }
 
 /// §439 — `folder_id` ссылки файла → `id` контейнера здесь по карте [ids].

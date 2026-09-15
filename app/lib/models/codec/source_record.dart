@@ -18,7 +18,6 @@ import 'dart:convert';
 
 import '../../services/parser/body_decoder.dart';
 import '../../services/parser/parse_all.dart';
-import '../../services/node_link_address.dart';
 import '../import_rule.dart';
 import '../node_link.dart';
 import '../node_sections.dart';
@@ -223,17 +222,15 @@ const Set<String> _identityKeys = {
 /// по норме B3, `NodeSections.fromJson`): импорт бэкапа называет их кодом с
 /// `reason`, хранению хватает строк в [notes].
 ///
-/// [tolerantLinks] — терпимое чтение ссылок папки (NODE_LINK §7.3): S1
-/// (корневая ссылка на члена этой папки → пара) и S3 (пара с финальным тегом
-/// группы папки → сырой тег), только при единственном кандидате. Хранение
-/// его не включает: писатель хранения пишет пары, а корневая ссылка на
-/// тёзку члена законна (узел в корне) и подъём увёл бы её на другой узел.
-/// Включают входы чужой формы — импорт файла и Debug API.
+/// Ссылки на узлы читаются как лежат (строка — корневой ссылкой): подъём
+/// `{tag}` до пары (S1) и финального тега группы до сырого (S3) делают входы
+/// чужой формы — импорт файла и Debug API (`codec/node_link_record.dart`).
+/// Хранение их не применяет: писатель хранения пишет пары, а корневая ссылка
+/// на тёзку члена законна (узел в корне), и подъём увёл бы её на другой узел.
 RecordRead<ServerList> sourceFromRecord(
   Map<String, dynamic> j, {
   List<String>? notes,
   List<NodeSectionDrop>? sectionDrops,
-  bool tolerantLinks = false,
 }) {
   final kind = j['kind'];
   if (kind is! String || kind.isEmpty) {
@@ -254,10 +251,7 @@ RecordRead<ServerList> sourceFromRecord(
     kSourceKindServer => _serverFromRecord(j, id, notes, unknown, sectionDrops),
     _ => _folderFromRecord(j, id, notes, unknown, sectionDrops),
   };
-  return RecordRead.ok(
-    tolerantLinks && list is FolderServers ? liftFolderLinks(list) : list,
-    unknownKeys: unknown..sort(),
-  );
+  return RecordRead.ok(list, unknownKeys: unknown..sort());
 }
 
 SubscriptionServers _subscriptionFromRecord(
@@ -544,41 +538,6 @@ NodeSections? _sectionsFromRecord(
     notes?.add('$where: sections $d');
   }
   return sections;
-}
-
-/// Терпимое чтение ссылок папки [f] (NODE_LINK §7.3): S1 и S3 над её общим
-/// detour и личными detour членов с кандидатами из членов этой же папки.
-/// Ничего не поднялось — та же папка.
-FolderServers liftFolderLinks(FolderServers f) {
-  final raw = containerRawTags(f);
-  final rawTags = raw.values.toSet();
-  final groupForms = <String, List<String>>{};
-  raw.forEach((node, tag) {
-    if (!node.isGroup) return;
-    (groupForms[containerFinalForm(f, tag)] ??= []).add(tag);
-  });
-  NodeLink lift(NodeLink l) => lowerGroupFinalLink(
-      liftSiblingLink(l, f.id, rawTags), f.id, rawTags, groupForms);
-
-  final override = lift(f.detourPolicy.overrideDetour);
-  var changed = override != f.detourPolicy.overrideDetour;
-  final members = [
-    for (final m in f.members)
-      if (lift(m.detour) case final d when d != m.detour)
-        m.copyWith(detour: d)
-      else
-        m,
-  ];
-  if (!changed) {
-    for (var i = 0; i < members.length; i++) {
-      if (!identical(members[i], f.members[i])) changed = true;
-    }
-  }
-  if (!changed) return f;
-  return f.copyWith(
-    detourPolicy: f.detourPolicy.copyWith(overrideDetour: override),
-    members: members,
-  );
 }
 
 // ─── помощники ──────────────────────────────────────────────────────────────
