@@ -202,6 +202,140 @@ void main() {
     });
   });
 
+  group('§439 ссылки файла: S1, S3 и подъём {tag} (NODE_LINK §7.3)', () {
+    Map<String, dynamic> folder(String id, String prefix, List<Object> nodes) => {
+          'kind': 'folder',
+          'id': id,
+          'name': id,
+          'enabled': true,
+          'tag_policy': {'prefix': prefix},
+          'nodes': nodes,
+        };
+
+    ({List<ServerList> lists, List<List<NodeLink>> hops, LxBackupFile file})
+        import(Map<String, dynamic> body) {
+      final file = parseLxBackup(_file(body));
+      final subs = mergeBackupSubscriptions(const [], file.subscriptions);
+      final servers = mergeBackupServers(subs.lists, file.servers,
+          folders: file.folders,
+          sourceIds: subs.ids,
+          addedSources: subs.added,
+          sourceDetours: subs.detours,
+          rootNames: {'vpn-1'});
+      return (
+        lists: servers.lists,
+        hops: [
+          for (final c in resolveBackupChainHops(
+              file, servers.lists, servers.folderIds,
+              linkOf: servers.linkOf))
+            c.hops,
+        ],
+        file: file,
+      );
+    }
+
+    String idOf(List<ServerList> lists, String name) =>
+        lists.whereType<FolderServers>().singleWhere((f) => f.name == name).id;
+
+    UserServer root(List<ServerList> lists, String name) =>
+        lists.whereType<UserServer>().singleWhere((u) => u.name == name);
+
+    test('{tag} с финальным тегом члена папки файла — пара, если кандидат один',
+        () {
+      final got = import({
+        'sources': [
+          folder('EU', 'EU ', [
+            _server('de-1', 'example-1.com'),
+            _server('de-2', 'example-2.com'),
+          ]),
+          {..._server('R', 'example-3.com'), 'detour': {'tag': 'EU de-1'}},
+          {
+            'kind': 'chain',
+            'tag': 'c',
+            'enabled': true,
+            'body': {'type': 'chain'},
+            'hops': [
+              {'tag': 'EU de-2'},
+              {'tag': 'vpn-1'},
+            ],
+          },
+        ],
+      });
+      expect(got.file.warnings, isEmpty);
+      final eu = idOf(got.lists, 'EU');
+      expect(root(got.lists, 'R').detourPolicy.overrideDetour,
+          NodeLink(folderId: eu, tag: 'de-1'));
+      expect(got.hops.single,
+          [NodeLink(folderId: eu, tag: 'de-2'), const NodeLink(tag: 'vpn-1')]);
+    });
+
+    test('{tag}, занятый корнем результата, и неоднозначный {tag} — как есть, '
+        'без предупреждения', () {
+      final got = import({
+        'sources': [
+          folder('A', 'X ', [_server('a', 'example-1.com')]),
+          folder('B', 'X ', [_server('a', 'example-2.com')]),
+          folder('C', 'Y ', [_server('b', 'example-4.com')]),
+          _server('Y b', 'example-5.com'),
+          {..._server('R1', 'example-6.com'), 'detour': {'tag': 'X a'}},
+          {..._server('R2', 'example-7.com'), 'detour': {'tag': 'Y b'}},
+        ],
+      });
+      expect(got.file.warnings, isEmpty);
+      expect(root(got.lists, 'R1').detourPolicy.overrideDetour,
+          const NodeLink(tag: 'X a'), reason: 'два кандидата');
+      expect(root(got.lists, 'R2').detourPolicy.overrideDetour,
+          const NodeLink(tag: 'Y b'), reason: 'корневой узел сильнее члена');
+    });
+
+    test('S1: {tag} соседа внутри папки носителя — пара', () {
+      final got = import({
+        'sources': [
+          folder('EU', 'EU ', [
+            _server('de-1', 'example-1.com'),
+            {..._server('de-2', 'example-2.com'), 'detour': {'tag': 'de-1'}},
+          ]),
+        ],
+      });
+      final eu = got.lists.whereType<FolderServers>().single;
+      expect(eu.members[1].detour, NodeLink(folderId: eu.id, tag: 'de-1'));
+    });
+
+    test('S3: пара с финальным тегом группы папки файла — сырой тег группы', () {
+      final got = import({
+        'sources': [
+          folder('EU', 'EU ', [
+            _server('de-1', 'example-1.com'),
+            {
+              'kind': 'auto',
+              'tag': 'G',
+              'enabled': true,
+              'group': {
+                'group_type': 'urltest',
+                'members': [
+                  {'folder_id': 'EU', 'tag': 'de-1'},
+                ],
+              },
+            },
+          ]),
+          {
+            'kind': 'chain',
+            'tag': 'c',
+            'enabled': true,
+            'body': {'type': 'chain'},
+            'hops': [
+              {'tag': 'vpn-1'},
+              {'folder_id': 'EU', 'tag': 'EU G'},
+            ],
+          },
+        ],
+      });
+      final eu = idOf(got.lists, 'EU');
+      expect(got.hops.single,
+          [const NodeLink(tag: 'vpn-1'), NodeLink(folderId: eu, tag: 'G')]);
+    });
+  });
+
   group('§438 секции узла', () {
     Map<String, dynamic> sections(String name) => {
           'rules': [

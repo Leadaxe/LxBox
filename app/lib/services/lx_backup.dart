@@ -26,6 +26,8 @@ import '../models/source_chain.dart';
 import 'lx_backup_slice.dart';
 import 'node_link_address.dart';
 import 'node_hash.dart' show deepSortKeys;
+import 'parser/body_decoder.dart';
+import 'parser/parse_all.dart';
 import 'parser/uri_utils.dart' show newUuidV4;
 import 'storage_migration/legacy_autogroup.dart';
 import 'tag_resolver.dart';
@@ -3757,7 +3759,8 @@ NodeLink Function(NodeLink link, {int? at, bool legacy}) _backupLinkMapper({
     ...rootNames,
     for (final l in merged)
       if (l is UserServer)
-        for (final n in l.nodes)
+        // Сервер, заведённый этим импортом, узлов ещё не разобрал: они в тексте.
+        for (final n in l.nodes.isNotEmpty ? l.nodes : _nodesOf(l.rawBody))
           if (n.tag.isNotEmpty) containerFinalForm(l, n.tag),
   };
 
@@ -3854,6 +3857,16 @@ NodeLink Function(NodeLink link, {int? at, bool legacy}) _backupLinkMapper({
     final fromHere = hits(hereFinal, hereRaw);
     return fromHere.length == 1 ? fromHere.single : link;
   };
+}
+
+/// Узлы текста одиночного сервера; не разобрался — пусто.
+List<NodeSpec> _nodesOf(String raw) {
+  if (raw.trim().isEmpty) return const [];
+  try {
+    return parseAll(decode(raw));
+  } catch (_) {
+    return const [];
+  }
 }
 
 /// Финальные формы тега [raw] члена папки файла с префиксом модели [prefix]
