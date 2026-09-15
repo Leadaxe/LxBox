@@ -445,6 +445,9 @@
   "%s direction option(s) removed": {
     "value": "опций-Направлений убрано из состава: %s"
   },
+  "%s group member(s) removed": {
+    "value": "членов групп убрано: %s"
+  },
   "%s of %s servers": {
     "value": "%s из %s серверов"
   },

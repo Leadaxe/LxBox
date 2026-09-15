@@ -231,8 +231,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   /// §439 (D-114) — уведомление о ссылках, погашенных удалением узла или
-  /// источника: кто удалён, у скольких источников снят detour и сколько
-  /// позиций цепочек ушло, с именами (до трёх, дальше `+N`).
+  /// источника: кто удалён, у скольких источников снят detour, сколько членов
+  /// групп и позиций цепочек ушло, с именами (до трёх, дальше `+N`).
   ///
   /// Тот же механизм, что у rules/detours/includes-heal (§202/§248,
   /// `routing_screen._notifyHealed`). Показывать обязательно — удаление МЕНЯЕТ
@@ -267,6 +267,9 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         getLocalText.s('detour removed from %s source(s)',
                 '${change.detourCarriers.length}') +
             names(change.detourCarriers),
+      if (change.groupMembers > 0)
+        getLocalText.s('%s group member(s) removed', '${change.groupMembers}') +
+            names(change.touchedGroups),
       if (change.positions > 0)
         getLocalText.s('%s chain position(s) removed', '${change.positions}') +
             names(change.touchedChains),

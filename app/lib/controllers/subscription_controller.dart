@@ -1033,7 +1033,8 @@ class SubscriptionController extends ChangeNotifier {
     final cleared = r.cleared;
     if (!cleared.isEmpty) {
       AppLog.I.info('Node links cleared: ${cleared.detourCarriers.length} '
-          'detour(s), ${cleared.positions} chain position(s)');
+          'detour(s), ${cleared.groupMembers} group member(s), '
+          '${cleared.positions} chain position(s)');
       if (subject != null) {
         _linkNotices.add(NodeLinkNotice(subject: subject, change: cleared));
       }
@@ -1041,6 +1042,7 @@ class SubscriptionController extends ChangeNotifier {
     if (!r.rewritten.isEmpty) {
       AppLog.I.info('Node links rewritten: '
           '${r.rewritten.detourCarriers.length} detour(s), '
+          '${r.rewritten.groupMembers} group member(s), '
           '${r.rewritten.positions} chain position(s)');
     }
     return cleared;

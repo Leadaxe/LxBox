@@ -31,6 +31,8 @@ final class NodeLinkChange {
     required this.lists,
     required this.chains,
     this.detourCarriers = const [],
+    this.touchedGroups = const [],
+    this.groupMembers = 0,
     this.touchedChains = const [],
     this.positions = 0,
   });
@@ -41,11 +43,17 @@ final class NodeLinkChange {
   /// Цепочки после операции.
   final List<SourceChain> chains;
 
-  /// Носители ссылки, переписанной или погашенной: detour источника и члена,
-  /// состав autogroup. Имя для показа — подписка и папка — имя, сервер, член
-  /// папки и группа — тег узла; пустое имя (член без разобранного узла)
-  /// считается, но не показывается.
+  /// Носители detour-ссылки, переписанной или погашенной: detour источника и
+  /// члена папки. Имя для показа — подписка и папка — имя, сервер и член
+  /// папки — тег узла; пустое имя (член без разобранного узла) считается, но
+  /// не показывается. Член autogroup — не detour: он в [touchedGroups].
   final List<String> detourCarriers;
+
+  /// Теги групп autogroup, у которых задет состав.
+  final List<String> touchedGroups;
+
+  /// Сколько членов групп переписано или снято.
+  final int groupMembers;
 
   /// Подписи цепочек, у которых задета позиция.
   final List<String> touchedChains;
@@ -53,7 +61,8 @@ final class NodeLinkChange {
   /// Сколько позиций цепочек переписано или снято.
   final int positions;
 
-  bool get isEmpty => detourCarriers.isEmpty && positions == 0;
+  bool get isEmpty =>
+      detourCarriers.isEmpty && groupMembers == 0 && positions == 0;
 
   bool get chainsChanged => positions > 0;
 }
@@ -173,6 +182,8 @@ NodeLinkChange _mapLinks(
   required bool dropHop,
 }) {
   final carriers = <String>[];
+  final groups = <String>[];
+  var groupMembers = 0;
   NodeLink? swap(NodeLink l) {
     if (l.isEmpty) return null;
     final next = replace(l);
@@ -205,8 +216,9 @@ NodeLinkChange _mapLinks(
         }
         final group = _mapGroupMembers(member, folderId, swap, dropHop);
         if (group != null) {
-          member = group;
-          carriers.add(m.node?.tag ?? '');
+          member = group.member;
+          groups.add(m.node?.tag ?? '');
+          groupMembers += group.hits;
         }
         if (!identical(member, m)) changed = true;
         members.add(member);
@@ -244,6 +256,8 @@ NodeLinkChange _mapLinks(
     lists: outLists,
     chains: outChains,
     detourCarriers: carriers,
+    touchedGroups: groups,
+    groupMembers: groupMembers,
     touchedChains: touched,
     positions: positions,
   );
@@ -252,8 +266,8 @@ NodeLinkChange _mapLinks(
 /// Состав autogroup члена [m] папки [folderId] через [swap]: член без
 /// `folder_id` — член этой же папки (NODE_LINK §5.1 № 8), переписанный пишется
 /// парой. [drop] — погашенный член уходит из состава. `null` — состав не
-/// задет.
-FolderMember? _mapGroupMembers(
+/// задет; иначе новый член-группа и сколько членов состава задето.
+({FolderMember member, int hits})? _mapGroupMembers(
   FolderMember m,
   String folderId,
   NodeLink? Function(NodeLink link) swap,
@@ -263,7 +277,7 @@ FolderMember? _mapGroupMembers(
   if (g is! AutoSelectSpec) return null;
   final membership = g.membership;
   if (membership is! ExplicitMembers) return null;
-  var hit = false;
+  var hits = 0;
   final links = <NodeLink>[];
   for (final l in membership.members) {
     final address = l.isRoot ? NodeLink(folderId: folderId, tag: l.tag) : l;
@@ -272,13 +286,16 @@ FolderMember? _mapGroupMembers(
       links.add(l);
       continue;
     }
-    hit = true;
+    hits++;
     if (!(drop && next.isEmpty)) links.add(next);
   }
-  if (!hit) return null;
-  return FolderMember.auto(
-    g.copyWith(membership: ExplicitMembers(links)),
-    enabled: m.enabled,
+  if (hits == 0) return null;
+  return (
+    member: FolderMember.auto(
+      g.copyWith(membership: ExplicitMembers(links)),
+      enabled: m.enabled,
+    ),
+    hits: hits,
   );
 }
 
