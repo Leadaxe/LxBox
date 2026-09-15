@@ -58,6 +58,15 @@
 
 ### Storage
 
+> **Форма хранения с 2.23.3 ([§439](../439%20storage-contract-1-0/spec.md)).**
+> Папка — запись `kind: folder` в `sources[]`; `tag_prefix` → `tag_policy{prefix}`
+> (разделитель внутри префикса), `members[]` → `nodes[]` с `kind: server |
+> unsupported | auto`, текст члена — `origin{kind, raw}` плюс `tag` разобранного
+> узла; личный detour члена и общий detour папки — ссылки `{folder_id?, tag}`,
+> у соседа по папке — пара с `id` этой папки и сырым тегом. Действующее
+> описание — `docs/STORAGE.md`, раздел `sources`. Ниже — решение §234 в форме
+> 2.23.2, как было принято.
+
 Внутри существующего `server_lists[]` — просто новый `type`. Ни нового
 top-level ключа, ни миграции: **§221 backup-симметрия не затрагивается**
 (`server_lists` уже и в allowlist, и в export-категории). STORAGE.md —

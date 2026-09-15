@@ -777,6 +777,17 @@ Detour через ротирующийся пул непредсказуем: к
 
 ## 7. Storage: синтетический `autogroup://`
 
+> **Заменено в 2.23.3 ([§439](../439%20storage-contract-1-0/spec.md), трек N2).**
+> Узел автовыбора в папке хранится записью `kind: auto` в `nodes[]` папки, той
+> же формы, что в LX Backup 1.0: `group{group_type: urltest, members:
+> [{folder_id, tag}], strategy}` (strategy — форма `auto` Направления), поля
+> LxBox `members_rule{include, exclude}` и `pool_badge`. Явный состав — пары
+> ссылок на членов той же папки вместо ключей `protocol|server|port|credential`.
+> Форма `autogroup://`, `toUri` и `auto_group_parser.dart` удалены; миграция
+> хранения переводит старые члены (`migrateAutogroupMembers`), неоднозначный
+> ключ снимается с предупреждением. Импорт `kind: auto` из файла даёт узел
+> автовыбора. Текст раздела ниже — решение 31.07.2026 в форме до 2.23.3.
+
 Решение юзера 31.07.2026. Узел автовыбора хранится **обычным членом папки** —
 его URI лежит в `FolderMember.raw` и парсится обратно при загрузке.
 

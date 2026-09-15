@@ -49,6 +49,12 @@
 |---|---|---|
 | `server_lists[].type=user` | `sections` (необязателен; пустой не пишется) | `UserServer.toJson` |
 | `server_lists[].type=folder` → `members[]` | `sections` (то же) | `FolderMember.toJson` |
+
+> **С 2.23.3 ([§439](../439%20storage-contract-1-0/spec.md))** `sections` лежат в
+> записях `sources[]` `kind: server` и `nodes[]` папки, пишет их кодек
+> `lib/models/codec/source_record.dart`. Кодек записей из §2 стал корневым:
+> теми же записями хранятся `rules[]` и `dns{}` (`toJson`/`fromJson` моделей
+> сняты).
 | подписка, цепочка, Направление | поля нет | — |
 
 Форма правила — §437. `domain_suffix` рядом с `ip_cidr`: внутри одного
