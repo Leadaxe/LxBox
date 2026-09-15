@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
@@ -163,6 +164,41 @@ void main() {
       foldersHandler(req('POST', '/folders/$id/members'), ctx()),
       throwsA(isA<BadRequest>()),
     );
+  });
+
+  test('§439 PATCH member detour — ссылка {folder_id?, tag}; строка терпимо; '
+      'null снимает', () async {
+    final id = await createFolder('F');
+    await foldersHandler(
+      req('POST', '/folders/$id/members', body: {'input': '$uriA\n$uriB'}),
+      ctx(),
+    );
+    Future<Object?> patch(Object? detour) async => (asMap(await foldersHandler(
+          req('PATCH', '/folders/$id/members/1', body: {'detour': detour}),
+          ctx(),
+        ))['member'] as Map)['detour'];
+
+    // Пара на соседа — как пришла.
+    expect(await patch({'folder_id': id, 'tag': 'Alpha'}),
+        {'folder_id': id, 'tag': 'Alpha'});
+    FolderServers folder() => controller.entries.single.list as FolderServers;
+    expect(folder().members[1].detour, NodeLink(folderId: id, tag: 'Alpha'));
+
+    // Строка — сырой тег соседа: S1 поднимает до пары.
+    await patch(null);
+    expect(await patch('Alpha'), {'folder_id': id, 'tag': 'Alpha'});
+
+    // Строка вне папки — корневая ссылка; объект без folder_id — тоже.
+    expect(await patch('jump-de'), {'tag': 'jump-de'});
+    expect(await patch({'tag': 'vpn-1'}), {'tag': 'vpn-1'});
+
+    // null и пустой тег — ссылки нет, в ответе null.
+    expect(await patch(null), isNull);
+    expect(folder().members[1].detour, NodeLink.none);
+    expect(await patch({'tag': 'x'}), {'tag': 'x'});
+    expect(await patch({'folder_id': id, 'tag': ''}), isNull);
+
+    await expectLater(patch(42), throwsA(isA<BadRequest>()));
   });
 
   test('PATCH member: enabled / detour / raw; битый raw → 400', () async {

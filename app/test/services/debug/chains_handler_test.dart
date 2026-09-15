@@ -102,6 +102,59 @@ void main() {
     expect(stored.single.hops, const [NodeLink(tag: 'direct-out'), NodeLink(tag: 'vpn-1')]);
   });
 
+  test('§439 POST/PATCH /chains — позиции ссылками {folder_id?, tag}, строка '
+      'терпимо, не ссылка — 400', () async {
+    final r = await chainsHandler(
+      req('POST', '/chains', body: {
+        'hops': [
+          {'folder_id': 'fold-1', 'tag': 'de-1'},
+          'vpn-1',
+        ],
+      }),
+      ctx(),
+    );
+    expect((r as JsonResponse).status, 201);
+    expect(asMap(r)['hops'], [
+      {'folder_id': 'fold-1', 'tag': 'de-1'},
+      {'tag': 'vpn-1'},
+    ]);
+    expect((await SettingsStorage.getChains()).single.hops, const [
+      NodeLink(folderId: 'fold-1', tag: 'de-1'),
+      NodeLink(tag: 'vpn-1'),
+    ]);
+
+    final patched = await chainsHandler(
+      req('PATCH', '/chains/chain-1', body: {
+        'hops': [
+          {'tag': 'direct-out'},
+          {'folder_id': ' fold-1 ', 'tag': 'nl-1'},
+        ],
+      }),
+      ctx(),
+    );
+    expect(asMap(patched)['hops'], [
+      {'tag': 'direct-out'},
+      {'folder_id': 'fold-1', 'tag': 'nl-1'},
+    ], reason: 'folder_id подрезается кодеком');
+
+    await expectLater(
+      chainsHandler(
+        req('PATCH', '/chains/chain-1', body: {
+          'hops': [42, 'vpn-1'],
+        }),
+        ctx(),
+      ),
+      throwsA(isA<BadRequest>()),
+    );
+    await expectLater(
+      chainsHandler(
+        req('PATCH', '/chains/chain-1', body: {'hops': 'vpn-1'}),
+        ctx(),
+      ),
+      throwsA(isA<BadRequest>()),
+    );
+  });
+
   test('POST /chains без тела — пустая цепочка (как в UI: сперва запись)',
       () async {
     final r = await chainsHandler(req('POST', '/chains'), ctx());
