@@ -1676,7 +1676,8 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | **283** | **Subscription node disable** (a per-node toggle in a subscription, keyed by the node's identity hash) |
 | **393** | **Directions** (the Channel→Direction rename: arbitrary tags, no cap, include[]; the storage key channels→directions with a one-shot migration) plus **hop chains** (SPEC 110: a chain as a third source kind, `type: chain`, a layered probe) |
 | 417 | Workspaces (named copies of the whole state — settings + subscription bodies + .srs; Load = auto-save current → copy → re-read in place → rebuild → VPN back up; Save as; the working paths never move) |
-| **435** | **Node sections + Tailscale** (contract ## 13: a free node carries its route rules and DNS records in `sections` in the contract 1.0 record form; `@self` = the final tag, substituted at build; `TailscaleSpec` endpoint without an address, core gate by AAR version, `state_directory` per node; the record codec is the future root parser 1.0) |
+| **435** | **Node sections + Tailscale** (contract ## 13: a free node carries its route rules and DNS records in `sections` in the contract 1.0 record form; `@self` = the final tag, substituted at build; `TailscaleSpec` endpoint without an address, core gate by AAR version, `state_directory` per node) |
+| **439** | **Storage in the contract 1.0 form** (`lxbox_settings.json` keeps `sources[]` / `rules[]` / `dns{}` records with `storage_version: 1`; the 2.23.2 form is migrated inside `_load()` with a `.v0.bak` copy; node references are NodeLinks `{folder_id, tag}` resolved at build, fail-closed; the LX Backup 1.0 export is a slice of storage through the same codec) |
 
 **Demoted (through §054) — now in `tasks/`:**
 

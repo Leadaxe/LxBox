@@ -2,9 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Спека, кода нет |
-| Дата | 2026-09-14 |
-| Релиз | 2.23.3, вместе с чтением и записью LX Backup 1.0 ([§438](../../tasks/438-lx-backup-1-0-read-write.md)) |
+| Статус | Реализовано: этапы 0, A, B, C и трек N влиты в develop (`230c3354`). Проверка на AVD (волна E, §5.3) не проводилась. Отклонения от плана — §6.6 |
+| Дата | 2026-09-14 (спека), 2026-09-15 (реализация) |
+| Коммиты | `98f01397..230c3354`, 67 коммитов |
+| Релиз | 2.23.3, вместе с чтением и записью LX Backup 1.0 ([§438](../../tasks/438-lx-backup-1-0-read-write.md)); переводчик 438 этой спекой удалён |
 | Триггер | решение владельца 14.09.2026 (вечер): релиз с бэкапом 1.0 поверх старой формы хранения не выпускается |
 | Норма | `app/contract/docs/ONE_NAMESPACE.md` §1–§3; `docs/BACKUP.md` §1, §2, §4, §6, §9; `schema/backup.schema.json`; `docs/NODE_SECTIONS.md` §1 |
 | Эталон | лаунчер, SPEC 127 волна 1: `core/state/migration_v7_to_v8.go`, `core/state/load_router.go` (копия `<path>.v7.bak` до миграции), `core/state/testdata/v8_roundtrip.json`; писатель `core/backup/export10.go` |
@@ -733,92 +734,83 @@ NodeLink адресует узел подписки и не-узловые по�
 Эталоны сняты с ними как есть. Когда исправление меняет эталон, это
 отмечается в коммите, а эталоны обновляются в конце этапа.
 
-| # | Что | Куда |
+| # | Что | Куда | Итог (`230c3354`) |
+|---|---|---|---|
+| 1 | inline DNS-правило без ключа `enabled` сборка пропускает (ждёт `true`, модель пишет ключ только при `false`) | A1, чинится при переводе сборки на модели | исправлено в A1, эталон обновлён `190fac0c` |
+| 2 | srs DNS-правило: сборка читает `server`/`rule` сверху записи, модель хранит `body` — в конфиг не попадает никогда | A1 | исправлено в A1, `190fac0c` |
+| 3 | `setChains` пересчитывает `order` от длины `server_lists` (AVD: 31 при 34 источниках) | B, `order` снимается | снято вместе с полем `order` |
+| 4 | `setTunApps` сортирует пакеты, у `warp_account.awg` меняется порядок ключей | безвредно, без правки | без правки; единственное байтовое расхождение golden `avd_v0` |
+| 5 | бэкап теряет `varValues` template DNS-сервера (у `google_doh` меняются адрес и detour) | C | `vars` сервера — настройка без дома в 1.0: экспорт называет её `backup_local_only_dropped` |
+| 6 | srs DNS-правило в бэкап не едет и из конфига после импорта пропадает | C, по §1.3 с именованной потерей | называется `backup_local_only_dropped` |
+| 7 | импорт выключал правила с outbound `direct-out` (`backup_unknown_outbound`); есть и в 2.23.2 | **исправлено** `d9e85d1b` | исправлено |
+| 8 | json-массив после импорта: второй элемент — inline-правило через `rule_set`, а не сырое тело | B/C, `verbatim` (§2.3 п. 3) | миграция и оба входа LX Backup делят массив на записи `verbatim` (D-111, `f3706fd3`) |
+| 9 | бэкап 1.0 теряет настройки источников: REPLACE из `import_rules`, `detour_policy` подписки, `tag_prefix` сервера, override detour папки — конфиг меняется | C, поля Л2 объявляются в схеме, срез их не режет | detour подписки и папки едет ссылкой (`eba3d584`); остальные настройки называются потерей. Механизм снятия среза флагом `declared` готов (`e8001607`), ни одно поле не отмечено: ждём список полей в схеме лаунчера |
+| 10 | в бэкап не едут `tun_apps`, `vpn_mode`, idle_suspend, reachable, `passive_check` | C: сверить с тонким слоем BACKUP §1, какие из них локальные по норме | в 439 не решалось |
+| 11 | экспорт пишет `description` DNS-сервера в sections узла, импорт ругается `backup_unknown_field` | C | срез симметричен обходу ключей (`eba3d584`) |
+| 12 | AVD: два inline DNS-правила с одинаковым именем схлопываются в одно при импорте | C | одинаковые правила файла ввозятся все (`ce7d106a`) |
+| 13 | `tls_mixed_case_sni=true` делает сборку недетерминированной (случайный регистр SNI) | в фикстурах флаг выключен | без правки |
+
+### 6.6 Отклонения от плана
+
+| Место плана | Как сделано | Основание |
 |---|---|---|
-| 1 | inline DNS-правило без ключа `enabled` сборка пропускает (ждёт `true`, модель пишет ключ только при `false`) | A1, чинится при переводе сборки на модели |
-| 2 | srs DNS-правило: сборка читает `server`/`rule` сверху записи, модель хранит `body` — в конфиг не попадает никогда | A1 |
-| 3 | `setChains` пересчитывает `order` от длины `server_lists` (AVD: 31 при 34 источниках) | B, `order` снимается |
-| 4 | `setTunApps` сортирует пакеты, у `warp_account.awg` меняется порядок ключей | безвредно, без правки |
-| 5 | бэкап теряет `varValues` template DNS-сервера (у `google_doh` меняются адрес и detour) | C |
-| 6 | srs DNS-правило в бэкап не едет и из конфига после импорта пропадает | C, по §1.3 с именованной потерей |
-| 7 | импорт выключал правила с outbound `direct-out` (`backup_unknown_outbound`); есть и в 2.23.2 | **исправлено** `d9e85d1b` |
-| 8 | json-массив после импорта: второй элемент — inline-правило через `rule_set`, а не сырое тело | B/C, `verbatim` (§2.3 п. 3) |
-| 9 | бэкап 1.0 теряет настройки источников: REPLACE из `import_rules`, `detour_policy` подписки, `tag_prefix` сервера, override detour папки — конфиг меняется | C, поля Л2 объявляются в схеме, срез их не режет |
-| 10 | в бэкап не едут `tun_apps`, `vpn_mode`, idle_suspend, reachable, `passive_check` | C: сверить с тонким слоем BACKUP §1, какие из них локальные по норме |
-| 11 | экспорт пишет `description` DNS-сервера в sections узла, импорт ругается `backup_unknown_field` | C |
-| 12 | AVD: два inline DNS-правила с одинаковым именем схлопываются в одно при импорте | C |
-| 13 | `tls_mixed_case_sni=true` делает сборку недетерминированной (случайный регистр SNI) | в фикстурах флаг выключен |
+| §2.3 п. 8, волна B: NodeLink в моделях | отдельный трек N после волны C: N1 — `DetourPolicy.overrideDetour`, `FolderMember.detour`, `SourceChain.hops` на `NodeLink`, резолв на сборке (`builder/node_link_resolve.dart`), реестр ссылок (`settings_storage/node_link_registry.dart`), миграция финальных тегов (`storage_migration/migrate_node_links.dart`), терпимое чтение S1–S3; N2 — autogroup записью | решения 15.09 (D-113, D-114), форма согласована с лаунчером (§6.4) |
+| §1.2, член папки: autogroup как текст `autogroup://…` в `origin.raw` | запись `kind: auto` (`group{group_type: urltest, members, strategy}`, L: `members_rule`, `pool_badge`), кодек `codec/auto_group_record.dart`; `autogroup://` и его парсер удалены. `migrateAutogroupMembers` переводит и документы `storage_version: 1` ранних сборок 2.23.3 | уточнение лаунчера 15.09 |
+| §2.5 «форму показа согласовать с владельцем» | удаление узла или источника называет задетых одним SnackBar'ом: «detour removed from N source(s)» и «N chain position(s) removed», до трёх имён и `+N` | тот же механизм, что у heal Направлений (§202/§248) |
+| — (добавлено) | сырые теги групп источника на общем счётчике с узлами: группы занимают имена после всех узлов, тёзка узла получает `-2` (`cfc80302`) | согласованная форма NodeLink: группы уникализируются вместе с узлами |
+| §4.1 «слияние §9 без изменений» | ссылки файла ставятся после слияния по тегам, под которыми легли члены (`8751c82b`); ось номеров правил — крайние случаи BACKUP §9 п. 7 в форме лаунчера `5cbcc436`: файл без размеченных корневых правил номеров не получает, неразмеченные в частично размеченном файле встают в хвост не ниже 1000 (`5de4f5a6`) | норма лаунчера |
+| §1.3: `detour_policy` подписки и папки срезаются целиком | ссылка `detour` подписки и папки — поле контракта, едет и применяется; срезаются только флаги политики | BACKUP §9 пп. 1, 3 |
+| §6.4 Л2: поля LxBox объявлены — срез не режет | таблица среза `lib/services/lx_backup_slice.dart` с флагом `declared`; флаги не стоят, экспорт называет настройки `backup_local_only_dropped` | список полей для схемы лаунчера не отдан |
+| §1.2 папка: `created_at` не пишется | пишется полем L: его отдаёт Debug API `/folders`; срез бэкапа снимает молча | Debug API |
+| §2.2: кодеки в `record_codec.dart` | модуль `lib/models/codec/` (`source_record`, `chain_record`, `rule_record`, `dns_record`, `auto_group_record`, `node_link_record`, `record_read`), `record_codec.dart` — реэкспорт; имена ключей хранения — `lib/services/settings_storage_keys.dart` | размер модуля |
+| §3.4 `GET/POST/PATCH /chains` | ответ `serializeChain`: `tag`, `label`, `enabled` + канон `source_chain.schema.json`; позиции — ссылки `{folder_id?, tag}`, строка читается `{tag}` | трек N |
+| §5.2 имена тестов | `storage_migration/golden_{config,backup,storage_roundtrip}_test.dart` вместо `config_identity_test.dart`; добавлены `lx_backup_slice_test`, `lx_backup_d111_test`, `lx_backup_axis_edges_test`, `dns_backup_merge_test`, `legacy_dns_reader_test`, `startup_order_contract_test`; фикстуры `fixtures/storage/{rich_v0,avd_v0}.json`. Тестов реестра ссылок, резолва NodeLink, миграции ссылок и `autogroup://` (трек N) в develop на `230c3354` нет | — |
 
 Не покрыто golden: стартовые миграции (`channels` без `directions` и
 прочие), слоты Workspaces, внутренний бэкап `BackupService`, импорт в
 хранение со стартовыми засевами. Это входы волны B.
 
-## 7. Файлы к правке
+## 7. Файлы (по факту, `98f01397..230c3354`)
 
-Новые:
+`app/lib`: 93 файла, +9421 −4286; `app/test`: 96 файлов, +13824 −1400.
 
-- `app/lib/services/storage_migration/legacy_form_v0.dart`
-- `app/lib/services/storage_migration/migrate_storage.dart`
-- `app/test/fixtures/storage/**`
-- `app/test/storage_migration/migrate_storage_test.dart`, `config_identity_test.dart`
-- `app/test/models/record_codec_sources_test.dart`
-- `app/test/services/builder/dns_resolvers_record_kinds_test.dart`
-- `app/test/services/backup_service_legacy_test.dart`, `app/test/services/rule_transfer_format1_test.dart`
-- `app/test/services/debug/backup_import_legacy_test.dart`, `dns_put_legacy_rejected_test.dart`
-- `app/test/services/workspace_legacy_slot_load_test.dart`
+Новые в `app/lib`:
 
-Модели и кодек:
+- кодек записей: `models/codec/source_record.dart`, `chain_record.dart`, `rule_record.dart`, `dns_record.dart`, `auto_group_record.dart`, `node_link_record.dart`, `record_read.dart`; `models/record_codec.dart` — реэкспорт
+- `models/node_link.dart`
+- хранение и миграция: `services/settings_storage_keys.dart`, `services/storage_migration/legacy_form_v0.dart`, `migrate_storage.dart`, `migrate_node_links.dart`
+- ссылки на узлы: `services/settings_storage/node_link_registry.dart`, `services/node_link_address.dart`, `services/builder/node_link_resolve.dart`, `services/builder/node_link_pool.dart`
+- бэкап: `services/lx_backup_slice.dart`
+- Debug API: `services/debug/serializers/chains.dart`
 
-- `app/lib/models/record_codec.dart`
-- `app/lib/models/server_list.dart`
-- `app/lib/models/custom_rule.dart`
-- `app/lib/models/dns_ref.dart`
-- `app/lib/models/source_chain.dart`
+Удалены: `services/parser/uri_parsers/auto_group_parser.dart` (`autogroup://`); тесты `models/dns_ref_test.dart`, `models/server_list_json_test.dart` (старая сериализация моделей).
 
-Хранение и старт:
+Изменены в `app/lib`:
 
-- `app/lib/services/settings_storage.dart`
-- `app/lib/services/settings_storage/io.dart`, `sources_rules.dart`, `chains.dart`, `network.dart`, `backup_tun.dart`, `directions.dart`
-- `app/lib/services/workspaces/workspace_store.dart`, `workspace_controller.dart`
-- `app/lib/main.dart`
+- модели: `server_list.dart`, `custom_rule.dart`, `dns_ref.dart`, `source_chain.dart`, `auto_select.dart`, `node_spec.dart`, `node_sections.dart`, `emit_context.dart`
+- хранение и старт: `settings_storage.dart`, `settings_storage/{io,sources_rules,chains,network,backup_tun,directions}.dart`, `workspaces/{workspace_store,workspace_controller}.dart`, `main.dart`
+- сборка: `builder/{build_config,server_list_build,chain_nodes,post_steps}.dart`, `post_steps/{custom_rules,dns_rules,dns_servers}.dart`
+- DNS: `dns/{dns_controller,dns_backup,node_dns_records}.dart`
+- бэкап и перенос: `lx_backup.dart`, `backup_service.dart`, `rule_transfer.dart`, `dump_builder.dart`, `node_hash.dart`, `parser/{singbox_config,uri_parsers}.dart`
+- контроллер: `controllers/subscription_controller.dart`, `subscription_entry.dart`
+- экраны: `add_server_wizard_screen`, `auto_group_edit_screen`, `backup_screen`, `chain_edit/*`, `chain_edit_screen`, `custom_rule_edit/{edit_controller,sections/json_section,tabs/view_tab}`, `dns_server_edit/edit_controller`, `dns_server_edit_screen`, `dns_settings_screen` (+ `dns_server_resolver`, `resolved_server`, `user_rule_editor_sheet`, `widgets/dns_rule_tile`), `folder_detail_screen`, `node_settings_screen`, `routing_screen` (+ `rule_transfer_dialogs`), `subscription_detail_screen` (+ `widgets/subscription_settings_tab`), `subscriptions_screen`; виджеты `detour_target_picker`, `node_row`
+- Debug API: `handlers/{_shared,backup,chains,folders,help,rules,settings,subs}.dart`, `serializers/{storage,subs}.dart`
 
-DNS:
+Не понадобились правки из плана: `screens/backup_screen/import_preview_dialog.dart`, `screens/home/restore_backup.dart` (превью и восстановление идут через `BackupService`).
 
-- `app/lib/screens/dns_settings_screen.dart`
-- `app/lib/screens/dns_settings_screen/dns_server_resolver.dart`, `widgets/dns_rule_tile.dart`, `user_rule_editor_sheet.dart`
-- `app/lib/screens/dns_server_edit/edit_controller.dart`
-- `app/lib/screens/routing_screen.dart`
-- `app/lib/screens/custom_rule_edit/edit_controller.dart` (DNS-серверы для опции правила; `jsonError` — запрет массива; `isDirty`), `tabs/view_tab.dart`
-- `app/lib/services/builder/post_steps/dns_servers.dart`, `dns_rules.dart`
-- `app/lib/services/builder/build_config.dart`
-- `app/lib/services/dns/dns_controller.dart`
-
-Бэкапы и перенос:
-
-- `app/lib/services/lx_backup.dart`
-- `app/lib/services/dns/dns_backup.dart`
-- `app/lib/services/backup_service.dart`
-- `app/lib/services/rule_transfer.dart`
-- `app/lib/screens/backup_screen.dart`, `backup_screen/import_preview_dialog.dart`
-- `app/lib/screens/home/restore_backup.dart`
-- `app/lib/screens/subscriptions_screen.dart` (перестановка цепочек без `order`)
-
-Debug API:
-
-- `app/lib/services/debug/serializers/storage.dart`
-- `app/lib/services/debug/handlers/backup.dart`, `settings.dart`, `rules.dart`, `chains.dart`, `help.dart`
-
-Тесты: 35–45 существующих файлов (5.1).
+Новые тесты: `storage_migration/{migrate_storage,golden_config,golden_backup,golden_storage_roundtrip,legacy_dns_reader}_test.dart` + `golden_harness.dart`; `fixtures/storage/{rich_v0,avd_v0}.json`, `golden/`, `sub_cache/`, `rule_sets/`; `models/record_codec_sources_test.dart`; `services/builder/dns_resolvers_record_kinds_test.dart`; `services/{backup_service_legacy,rule_transfer_format1,lx_backup_slice,workspace_legacy_slot_load}_test.dart`; `services/debug/{backup_import_legacy,dns_put_legacy_rejected}_test.dart`; `services/dns/dns_backup_merge_test.dart`; `contract/{lx_backup_d111,lx_backup_axis_edges,startup_order_contract}_test.dart`.
 
 ## Docs to update
 
-| Файл | Что |
-|---|---|
-| `docs/STORAGE.md` | дерево файла и разделы `server_lists`, `custom_rules`, `dns_options`, `chains` → `sources`, `rules`, `dns`; `storage_version`; `.v0.bak` в «Disk layout»; «Legacy and removed keys» — ключи 2.23.2 и мёртвые ключи; «Debug API exposure» — скраббер |
-| `docs/ARCHITECTURE.md` | список one-shot миграций (`SettingsStorage`): §439 вместо миграции порядка цепочек и форм DNS до §044; строка `record_codec.dart` — корневой кодек хранения; Feature Specs — строка 439 |
-| `docs/api/debug-api-reference.md` | `/state/storage`, `/backup/export` (`from=v0_bak`), `/backup/import` (миграция), `PUT /settings/dns_options/*` (только форма записей), `/chains` без `order`; bash-примеры |
-| `docs/spec/features/README.md` | строка индекса 439 |
-| `docs/spec/tasks/438-lx-backup-1-0-read-write.md` | ссылка: переводчик экспорта заменён срезом хранения |
-| `CHANGELOG.md` | Unreleased: Changed — форма хранения, файл правил `format: 2`, Debug API; Removed — `rules_json`, строковый `PUT /settings/dns_options/rules` |
-| `RELEASE_NOTES.md`, `docs/releases/v2.23.3.md` | на бампе: откат на 2.23.2 не поддерживается, бэкапы 2.23.3 версия 2.23.2 не читает |
-| `app/contract/TASKS_LXBOX.md` | не править у себя: вопросы Л1, Л2 — ответом лаунчеру по обычному пути синка контракта |
+| Файл | Что | Статус |
+|---|---|---|
+| `docs/STORAGE.md` | дерево и разделы `server_lists`, `custom_rules`, `dns_options`, `chains` → `sources`, `rules`, `dns`; `storage_version`; `.v0.bak` в «Disk layout»; NodeLink; «Legacy and removed keys»; «Debug API exposure» | волна D |
+| `docs/ARCHITECTURE.md` | one-shot миграции: миграция формы §439 вместо форм DNS до §044; модули кодека и NodeLink; поток данных сборки; Feature Specs — строка 439 | волна D |
+| `docs/api/debug-api-reference.md` | `/state/storage`, `/backup/export` (`from=v0_bak`), `/backup/import` (`applied.migrated`), `PUT /settings/dns_options/*` (только записи 1.0, прочее 400), ссылки `{folder_id?, tag}` в `/subs`, `/folders`, `/chains`; bash-примеры | волна D |
+| `docs/TEMPLATE.md`, `docs/DEVELOPMENT_GUIDE.md`, `docs/DIAGNOSTICS.md`, `docs/GUARDS.md` | ссылки на ключи хранения; строки fail-closed резолва NodeLink | волна D |
+| фича-спеки 234, 248, 283, 322, 417, 435 | пометка «форма хранения с 2.23.3» у разделов хранения; тексты истории не переписываются | волна D |
+| `docs/spec/features/README.md`, `docs/ARCHITECTURE.md` → Feature Specs | строка индекса 439 | волна D |
+| `docs/spec/tasks/438-lx-backup-1-0-read-write.md` | переводчик экспорта заменён срезом хранения | волна D |
+| `CHANGELOG.md` | Unreleased: форма хранения, NodeLink, LX Backup как срез, файл правил `format: 2`, Debug API | волна D |
+| `RELEASE_NOTES.md`, `docs/releases/v2.23.3.md` | на бампе: откат на 2.23.2 не поддерживается, бэкапы 2.23.3 версия 2.23.2 не читает | черновик вне репозитория до бампа |
+| `app/contract/TASKS_LXBOX.md` | не править у себя: Л2 — список полей лаунчеру по обычному пути синка контракта | открыто |
