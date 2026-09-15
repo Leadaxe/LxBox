@@ -12,6 +12,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/direction.dart';
 import '../models/custom_rule.dart';
+import '../models/dns_ref.dart';
 import '../models/parser_config.dart';
 import '../services/builder/rule_order.dart';
 import '../services/direction_mutations.dart';
@@ -416,14 +417,18 @@ class _RoutingScreenState extends State<RoutingScreen>
         // §393 D2 — вычистка позиций цепочек тоже бывает одиночной: на
         // Направление могла ссылаться только цепочка. Без этого условия
         // укорачивание маршрута прошло бы молча.
-        healed.chainPositions == 0) {
+        healed.chainPositions == 0 &&
+        healed.dnsServers == 0) {
       return;
     }
     final label = direction.label.isNotEmpty ? direction.label : direction.tag;
     // §393 A3 — include-heal бывает ТОЛЬКО на удалении, и там `ruleLead` уже
     // «deleted»: одиночный include-heal (правила и detour'ы на Направление не
     // ссылались) берёт ту же вводную, а не detour'ную.
-    final lead = healed.rules > 0 || healed.includes > 0 || healed.chainPositions > 0
+    final lead = healed.rules > 0 ||
+            healed.includes > 0 ||
+            healed.chainPositions > 0 ||
+            healed.dnsServers > 0
         ? getLocalText.s('Direction "%1\$s" %2\$s', label, ruleLead)
         : getLocalText.s('Direction "%s" is no longer a detour target', label);
     // §292 — части сообщения из единого форматтера (общий с node_list).
@@ -643,15 +648,13 @@ class _RoutingScreenState extends State<RoutingScreen>
     ];
     // Данные шага 2 (DNS): серверы без preset-refs (их резолвер §294
     // порождает сам), правила — только пользовательские inline/srs.
-    final rawServers = await SettingsStorage.getDnsServers();
     final dnsServers = [
-      for (final s in rawServers)
-        if (s['kind'] != 'preset') s
+      for (final s in await SettingsStorage.getDnsServers())
+        if (s is! DnsServerPreset) s
     ];
-    final rawDnsRules = await SettingsStorage.getDnsRulesList();
     final dnsRules = [
-      for (final r in rawDnsRules)
-        if (r['kind'] == 'inline' || r['kind'] == 'srs') r
+      for (final r in await SettingsStorage.getDnsRulesList())
+        if (r is DnsRuleInline || r is DnsRuleSrs) r
     ];
     if (!mounted) return;
     final selected = await showRuleExportPicker(
@@ -789,7 +792,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       final existingServers = await SettingsStorage.getDnsServers();
       final existingServerTags = <String>{
         for (final s in existingServers)
-          if (s['tag']?.toString().isNotEmpty ?? false) s['tag'].toString(),
+          if (s.tag.isNotEmpty) s.tag,
       };
       final existingDnsRules = await SettingsStorage.getDnsRulesList();
       final templateServerTags = {
@@ -803,6 +806,7 @@ class _RoutingScreenState extends State<RoutingScreen>
             entry,
             existingTags: existingServerTags,
             templateServerTags: templateServerTags,
+            format: contents.format,
           ),
       ];
       final dnsRuleItems = [
@@ -811,6 +815,7 @@ class _RoutingScreenState extends State<RoutingScreen>
             entry,
             existingRules: existingDnsRules,
             template: template,
+            format: contents.format,
           ),
       ];
 
@@ -820,7 +825,7 @@ class _RoutingScreenState extends State<RoutingScreen>
         ...existingServerTags,
         ...templateServerTags,
         for (final it in dnsServerItems)
-          if (it.importable) it.item!['tag'].toString(),
+          if (it.item case final server?) server.tag,
       };
 
       // §398 — дедуп по видимому имени (§279): имена получателя плюс имена
@@ -835,6 +840,7 @@ class _RoutingScreenState extends State<RoutingScreen>
           dnsServerTags: dnsServerTags,
           template: template,
           existingNames: takenNames,
+          format: contents.format,
         );
         if (item.importable) takenNames.add(item.rule!.name);
         items.add(item);
@@ -863,8 +869,8 @@ class _RoutingScreenState extends State<RoutingScreen>
       final dnsCount = picked.dnsServers.length + picked.dnsRules.length;
       if (inserted.isEmpty && dnsCount == 0) return;
 
-      // DNS-сущности — прямо в storage (append; форма провалидирована
-      // санацией через DnsServerRef/DnsRuleRef, как Debug write-путь §294).
+      // DNS-сущности — прямо в хранение (append; санация уже разобрала их
+      // в модели).
       if (picked.dnsServers.isNotEmpty) {
         await SettingsStorage.saveDnsServers(
             [...existingServers, ...picked.dnsServers]);

@@ -8,8 +8,10 @@ import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../models/direction.dart';
+import '../models/node_link.dart';
 import '../models/server_list.dart';
 import '../services/error_format.dart';
+import '../services/node_link_address.dart';
 import '../services/probe/probe_controller.dart';
 import '../services/probe/probe_runner.dart';
 import 'probe_gate_mixin.dart';
@@ -101,19 +103,23 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   GlobalKey _memberKey(int i) => _memberKeys.putIfAbsent(i, GlobalKey.new);
 
   /// §239 — голые теги членов, служащих интра-целью detour другого члена
-  /// (⚙-бейдж; в билдере такие регистрируются по register-тогглам).
+  /// (⚙-бейдж; в билдере такие регистрируются по register-тогглам). Интра-
+  /// цель — пара с `id` этой папки (§439).
   Set<String> _chainLinkTags() {
     final folder = _folder;
-    final bare = <String>{
-      for (final m in folder.members)
-        if (m.node != null) m.node!.tag,
-    };
+    final bareByAddress = <NodeLink, String>{};
+    for (var k = 0; k < folder.members.length; k++) {
+      final a = folderMemberAddress(folder, k);
+      if (a != null) bareByAddress[a] = folder.members[k].node!.tag;
+    }
     final links = <String>{};
-    for (final m in folder.members) {
-      final d = m.detour;
-      if (d.isEmpty || !bare.contains(d)) continue;
-      if (d == m.node?.tag) continue; // self не считается
-      links.add(d);
+    for (var k = 0; k < folder.members.length; k++) {
+      final d = folder.members[k].detour;
+      if (d.isEmpty || d.folderId != folder.id) continue;
+      final bare = bareByAddress[d];
+      if (bare == null) continue;
+      if (d == folderMemberAddress(folder, k)) continue; // self не считается
+      links.add(bare);
     }
     return links;
   }
@@ -649,34 +655,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
 
   Future<void> _delete() async {
     // Три исхода: cancel / вынести серверы одиночными / удалить всё.
-    final choice = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(getLocalText.s("Delete folder?")),
-        content: Text(_folder.members.isEmpty
-            ? getLocalText.s("Remove \"%s\"?", widget.entry.displayName)
-            : getLocalText.plural("Folder \"%2\$s\" contains %1\$d servers.",
-                _folder.members.length, widget.entry.displayName)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(getLocalText.s("Cancel"))),
-          if (_folder.members.isNotEmpty)
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'keep'),
-              child: Text(getLocalText.s("Keep servers")),
-            ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'all'),
-            style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: Text(_folder.members.isEmpty
-                ? getLocalText.s("Delete")
-                : getLocalText.s("Delete folder & servers")),
-          ),
-        ],
-      ),
-    );
+    final choice =
+        await showDeleteFolderDialog(context, _folder, widget.entry.displayName);
     if (choice == null || !mounted) return;
     final idx = _index;
     if (idx < 0) {
@@ -791,10 +771,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     );
     if (!mounted || res is! AutoGroupSaved) return;
 
-    // Храним как обычного члена: `autogroup://`-URI парсится обратно при
-    // загрузке (§322 §7), отдельной ветки в модели папки не нужно.
-    final err = await widget.controller
-        .addMembersToFolder(idx, res.spec.toUri());
+    // §439 — член `kind: auto`: группа хранится записью, а не текстом.
+    final err =
+        await widget.controller.addAutoMemberToFolder(idx, res.spec);
     if (!mounted) return;
     if (err != null) {
       await _showError(err.render());
@@ -825,7 +804,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     switch (res) {
       case AutoGroupSaved(:final spec):
         final err = await widget.controller
-            .updateMemberAt(idx, memberIndex, spec.toUri());
+            .updateAutoMemberAt(idx, memberIndex, spec);
         if (!mounted) return;
         if (err != null) {
           await _showError(err.render());
@@ -838,16 +817,19 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     setState(() {});
   }
 
-  /// Члены папки, которые могут попасть в пул: обычные узлы, без групп
-  /// (вложенность urltest в urltest бессмысленна) и без нечитаемых raw.
-  List<({String key, String label})> _poolCandidates(FolderServers folder) {
-    final out = <({String key, String label})>[];
+  /// Члены папки, которые могут попасть в пул: обычные узлы с адресом, без
+  /// групп (вложенность urltest в urltest бессмысленна) и без нечитаемых raw.
+  /// Член адресуется парой `{id папки, сырой тег}` (§439).
+  List<({NodeLink key, String label})> _poolCandidates(FolderServers folder) {
+    final out = <({NodeLink key, String label})>[];
     for (final m in folder.members) {
       final n = m.node;
-      if (n == null || n.isGroup) continue;
-      final k = nodeIdentityKey(n);
-      if (k == null) continue;
-      out.add((key: k, label: n.label.isEmpty ? n.tag : n.label));
+      if (n == null || n.isGroup || n.tag.isEmpty) continue;
+      if (nodeIdentityKey(n) == null) continue;
+      out.add((
+        key: NodeLink(folderId: folder.id, tag: n.tag),
+        label: n.label.isEmpty ? n.tag : n.label,
+      ));
     }
     return out;
   }
@@ -918,8 +900,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     if (!mounted) return;
     final member = _folder.members[memberIndex];
 
-    // §322 — у узла автовыбора свой редактор: сырой `autogroup://`-URI
-    // пользователю показывать нельзя (правило в percent-encoding).
+    // §322 — у узла автовыбора свой редактор: текста у группы нет (§439).
     final node = member.node;
     if (node is AutoSelectSpec) {
       await _editAutoNode(memberIndex, node);
@@ -1023,6 +1004,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   void _showMemberMenu(int memberIndex) {
+    // Авто-узел из папки не выносится: текста у группы нет, одиночным
+    // сервером она стала бы пустой записью. «Move to folder…» остаётся —
+    // там пары членов переписываются.
+    final isGroup = _folder.members[memberIndex].node?.isGroup == true;
     showAppBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -1045,15 +1030,16 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                 unawaited(_moveMember(memberIndex));
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.folder_off_outlined),
-              title: Text(getLocalText.s("Move out of folder")),
-              subtitle: Text(getLocalText.s("Becomes a standalone server")),
-              onTap: () {
-                Navigator.pop(ctx);
-                unawaited(_ungroupMember(memberIndex));
-              },
-            ),
+            if (!isGroup)
+              ListTile(
+                leading: const Icon(Icons.folder_off_outlined),
+                title: Text(getLocalText.s("Move out of folder")),
+                subtitle: Text(getLocalText.s("Becomes a standalone server")),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  unawaited(_ungroupMember(memberIndex));
+                },
+              ),
             ListTile(
               leading: Icon(Icons.delete_outline,
                   color: Theme.of(ctx).colorScheme.error),
@@ -1579,7 +1565,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       switch (mode) {
         case DetourMode.use:
           widget.entry.useDetourServers = true;
-          widget.entry.overrideDetour = '';
+          widget.entry.overrideDetour = NodeLink.none;
         case DetourMode.override:
           widget.entry.useDetourServers = true;
           if (widget.entry.overrideDetour.isEmpty) {
@@ -1587,7 +1573,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           }
         case DetourMode.none:
           widget.entry.useDetourServers = false;
-          widget.entry.overrideDetour = '';
+          widget.entry.overrideDetour = NodeLink.none;
       }
     });
     unawaited(widget.controller.persistSources());
@@ -1607,8 +1593,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     );
     if (chosen == null || !mounted) return;
     setState(() {
-      widget.entry.overrideDetour = chosen.storeValue;
-      if (chosen.storeValue.isNotEmpty) widget.entry.useDetourServers = true;
+      widget.entry.overrideDetour = chosen.link;
+      if (chosen.link.isNotEmpty) widget.entry.useDetourServers = true;
     });
     unawaited(widget.controller.persistSources());
   }

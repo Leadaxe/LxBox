@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
@@ -20,6 +22,14 @@ import 'package:lxbox/services/warp/warp_backup.dart';
 
 const _contractRoot = 'contract';
 
+/// Записи `sources[]` файла 1.0 заданного вида, в порядке файла.
+List<Map<String, dynamic>> _sourcesOf(String raw, String kind) => [
+      for (final e in ((jsonDecode(raw) as Map<String, dynamic>)['sources']
+              as List? ??
+          const []))
+        if ((e as Map)['kind'] == kind) e.cast<String, dynamic>(),
+    ];
+
 void main() {
   group('LX Backup: словарь переносимых переменных', () {
     test('совпадает с реестром', () {
@@ -34,6 +44,9 @@ void main() {
         for (final e in vars.entries)
           if ((e.value as Map)['portable'] == true) e.key,
       };
+      // Пять имён маршрута DNS D-117 с контракта 1.0.2 (D-118) —
+      // `portable: false`, терпимая форма чтения: значение едет записью
+      // `dns.servers[kind=template].vars`. Пропусков в сверке нет.
       expect(kLxPortableVars, registryPortable,
           reason: 'список переносимых переменных разошёлся с реестром: '
               'бэкап либо теряет настройку, либо тащит на чужую машину '
@@ -583,7 +596,7 @@ void main() {
 }''';
       final file = parseLxBackup(raw);
       expect(file.chains, hasLength(1));
-      expect(file.chains.single.hops, ['hop-1', 'hop-2'],
+      expect(file.chains.single.hops, const [NodeLink(tag: 'hop-1'), NodeLink(tag: 'hop-2')],
           reason: 'порядок файла нормативен — побеждает первая');
       expect(file.warnings.map((w) => w.code), [kWarnChainExists]);
     });
@@ -623,7 +636,7 @@ void main() {
       final c = parseLxBackup(raw).chains.single;
       expect(c.enabled, isTrue, reason: 'отсутствие ключа = true по схеме');
       expect(c.label, 'Мой маршрут');
-      expect(c.hops, ['a', 'b']);
+      expect(c.hops, const [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
       expect(c.idleTimeout, '0s');
       // Трёхзначность: явный false НЕ должен слипаться с «ключа не было».
       expect(c.stripEvasion, isFalse);
@@ -697,7 +710,7 @@ void main() {
       const source = SourceChain(
         tag: 'chain-1',
         label: 'Мой маршрут',
-        hops: ['warp', 'vpn ②'],
+        hops: [NodeLink(tag: 'warp'), NodeLink(tag: 'vpn ②')],
         idleTimeout: '0s',
         stripEvasion: false,
         strip: {'tls.utls': false},
@@ -713,27 +726,25 @@ void main() {
         vars: const {},
         chains: const [source],
       )).json;
-      final doc = jsonDecode(out) as Map<String, dynamic>;
-      final entry = (doc['chains'] as List).single as Map<String, dynamic>;
+      final entry = _sourcesOf(out, 'chain').single;
       expect(entry['tag'], 'chain-1');
-      // §405 — имя цепочки едет полем ЗАПИСИ; канон `chain` его не знает.
-      expect(entry['label'], 'Мой маршрут');
-      expect(entry.containsKey('enabled'), isFalse,
-          reason: 'включённая — умолчание схемы, ключ был бы шумом');
-      // Идентичность записи живёт уровнем выше канона: `chain` описывает
-      // только МАРШРУТ (`additionalProperties: false` у схемы источника).
-      final canon = entry['chain'] as Map<String, dynamic>;
-      expect(canon.containsKey('tag'), isFalse);
-      expect(canon.containsKey('label'), isFalse);
-      expect(canon.containsKey('enabled'), isFalse);
-      expect(canon['strip_evasion'], isFalse);
-      expect(canon['rewrite'], {
+      expect(entry['enabled'], isTrue, reason: '1.0 пишет enabled всегда');
+      // §438 — настройки маршрута в `body`, позиции — ссылками `hops[]`.
+      final body = entry['body'] as Map<String, dynamic>;
+      expect(body['type'], 'chain');
+      expect(body.containsKey('tag'), isFalse);
+      expect(body.containsKey('hops'), isFalse);
+      expect(body['strip_evasion'], isFalse);
+      expect(body['rewrite'], {
         'vless': {'flow': null},
       });
+      expect(entry['hops'], [
+        {'tag': 'warp'},
+        {'tag': 'vpn ②'},
+      ]);
 
       final back = parseLxBackup(out).chains.single;
       expect(back.tag, source.tag);
-      expect(back.label, source.label);
       expect(back.hops, source.hops);
       expect(back.idleTimeout, source.idleTimeout);
       expect(back.stripEvasion, isFalse);
@@ -741,24 +752,23 @@ void main() {
       expect(back.rewrite, source.rewrite);
     });
 
-    test('label не пишется, когда равен тегу или пуст', () async {
-      final out = (await buildLxBackup(
+    test('§439 — имя цепочки едет полем стороны LxBox (контракт 1.0.1), потерей не названо',
+        () async {
+      final built = await buildLxBackup(
         lists: const [],
         rules: const [],
         vars: const {},
         chains: const [
-          SourceChain(tag: 'chain-1', label: 'chain-1', hops: ['a', 'b']),
-          SourceChain(tag: 'chain-2', label: '', hops: ['a', 'b']),
+          SourceChain(tag: 'chain-1', label: 'chain-1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+          SourceChain(tag: 'chain-2', label: '', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+          SourceChain(tag: 'chain-3', label: 'Мой маршрут', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
         ],
-      )).json;
-      final entries =
-          ((jsonDecode(out) as Map<String, dynamic>)['chains'] as List)
-              .cast<Map<String, dynamic>>();
-      for (final e in entries) {
-        expect(e.containsKey('label'), isFalse,
-            reason: '§405 — имя пишется, ТОЛЬКО если отличается от тега: '
-                'повтор тега на той стороне неотличим от осознанного имени');
-      }
+      );
+      // Запись хранения как есть: пустое имя не пишется.
+      expect([for (final e in _sourcesOf(built.json, 'chain')) e['label']],
+          ['chain-1', null, 'Мой маршрут']);
+      expect(built.warnings.where((w) => w.code == kWarnLocalOnlyDropped),
+          isEmpty);
     });
 
     test('§405 — имя Направления и цепочки переживает круг экспорт→импорт',
@@ -771,12 +781,13 @@ void main() {
           Direction(tag: 'de', label: 'Германия'),
         ],
         chains: const [
-          SourceChain(tag: 'chain-1', label: 'Мой маршрут', hops: ['a', 'b']),
+          SourceChain(tag: 'chain-1', label: 'Мой маршрут', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
         ],
       )).json;
 
       final back = parseLxBackup(out, knownOutbounds: {'a', 'b'});
       expect(back.directions.single.label, 'Германия');
+      // Контракт 1.0.1 — `label` цепочки объявлен полем стороны LxBox.
       expect(back.chains.single.label, 'Мой маршрут');
       expect(back.warnings, isEmpty,
           reason: 'поле наше — ни unknown_field, ни label_dropped');
@@ -808,12 +819,10 @@ void main() {
         rules: const [],
         vars: const {},
         chains: const [
-          SourceChain(tag: 'off', enabled: false, hops: ['a', 'b']),
+          SourceChain(tag: 'off', enabled: false, hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
         ],
       )).json;
-      final entry =
-          (((jsonDecode(out) as Map<String, dynamic>)['chains'] as List).single)
-              as Map<String, dynamic>;
+      final entry = _sourcesOf(out, 'chain').single;
       expect(entry['enabled'], isFalse);
       expect(parseLxBackup(out).chains.single.enabled, isFalse);
     });
@@ -823,8 +832,8 @@ void main() {
       // Ссылка на цепочку выше по списку = антицикл: перестановка сломала бы
       // ровно тот инвариант, ради которого порядок объявлен нормативным.
       const chains = [
-        SourceChain(tag: 'z-first', hops: ['a', 'b']),
-        SourceChain(tag: 'a-second', hops: ['z-first', 'c']),
+        SourceChain(tag: 'z-first', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'a-second', hops: [NodeLink(tag: 'z-first'), NodeLink(tag: 'c')]),
       ];
       final out = (await buildLxBackup(
         lists: const [],
@@ -832,11 +841,7 @@ void main() {
         vars: const {},
         chains: chains,
       )).json;
-      final tags = [
-        for (final e
-            in ((jsonDecode(out) as Map<String, dynamic>)['chains'] as List))
-          (e as Map<String, dynamic>)['tag'],
-      ];
+      final tags = [for (final e in _sourcesOf(out, 'chain')) e['tag']];
       expect(tags, ['z-first', 'a-second'], reason: 'экспорт не сортирует');
       expect(parseLxBackup(out).chains.map((c) => c.tag),
           ['z-first', 'a-second'],
@@ -867,10 +872,11 @@ void main() {
         rules: const [],
         vars: const {},
       )).json;
-      final doc = jsonDecode(raw) as Map<String, dynamic>;
-      final sub = (doc['subscriptions'] as List).single as Map<String, dynamic>;
+      final sub = _sourcesOf(raw, 'subscription').single;
       expect(sub['url'], 'https://example-1.com/sub');
-      expect((sub['tag'] as Map)['prefix'], 'MN');
+      expect(sub['name'], 'Main');
+      // §438 — у контракта разделитель — часть префикса, у LxBox — пробел.
+      expect((sub['tag_policy'] as Map)['prefix'], 'MN ');
       expect((sub['update'] as Map)['interval_hours'], 6);
       // §4 BACKUP.md — значения в unix seconds, а не в ISO-8601 мобилы.
       expect((sub['disabled'] as Map)['a' * 64],
@@ -955,7 +961,7 @@ void main() {
         expect(file.rules.last.srsUrls, ['https://example.com/rules/d.srs']);
       });
 
-      test('экспорт: ref = первый всегда, refs только при двух и более', () async {
+      test('экспорт 1.0: refs всегда списком', () async {
         final raw = (await buildLxBackup(
           lists: const [],
           rules: [
@@ -971,10 +977,10 @@ void main() {
         final rules = (jsonDecode(raw) as Map<String, dynamic>)['rules'] as List;
         final multi = rules[0] as Map<String, dynamic>;
         final single = rules[1] as Map<String, dynamic>;
-        expect(multi['ref'], 'https://x/a.srs');
+        // §438 — в 1.0 `refs` всегда список, одиночного `ref` у srs нет.
+        expect(multi.containsKey('ref'), isFalse);
         expect(multi['refs'], ['https://x/a.srs', 'https://x/b.srs']);
-        expect(single['ref'], 'https://x/d.srs');
-        expect(single.containsKey('refs'), isFalse);
+        expect(single['refs'], ['https://x/d.srs']);
 
         // Круг: import(export(x)) = x по составу наборов.
         final back = parseLxBackup(raw, knownOutbounds: {'direct'});
@@ -1167,20 +1173,23 @@ void main() {
     // вместо `user` и вдобавок `srs` у правил.
     test('dns: круг сохраняет состав, final и strategy', () async {
       final section = dnsToBackup(
-        servers: [
-          {'kind': 'template', 'tag': 'dns-google', 'enabled': true},
-          {
-            'kind': 'inline',
-            'tag': 'my-doh',
-            'enabled': true,
-            'body': {'type': 'https', 'server': '1.1.1.1'},
-          },
+        servers: const [
+          DnsServerTemplate(enabled: true, tag: 'dns-google'),
+          DnsServerInline(
+            enabled: true,
+            tag: 'my-doh',
+            body: {'type': 'https', 'server': '1.1.1.1'},
+          ),
         ],
-        rules: [
-          {'kind': 'inline', 'name': 'Local', 'enabled': true,
-           'rule': {'domain_suffix': ['lan'], 'server': 'my-doh'}},
-          {'kind': 'srs', 'id': 'srs-1', 'name': 'Geo', 'enabled': true,
-           'server': 'my-doh'},
+        rules: const [
+          DnsRuleInline(
+            name: 'Local',
+            rule: {
+              'domain_suffix': ['lan'],
+              'server': 'my-doh',
+            },
+          ),
+          DnsRuleSrs(name: 'Geo', id: 'srs-1', server: 'my-doh'),
         ],
         dnsFinal: 'my-doh',
         strategy: 'prefer_ipv4',
@@ -1197,9 +1206,10 @@ void main() {
       final servers = (dnsDoc['servers'] as List).cast<Map<String, dynamic>>();
       // `inline` мобилы записан каноническим `user`.
       expect(servers.map((e) => e['kind']), ['template', 'user']);
-      // Тело переносится ТОЛЬКО у пользовательской записи.
-      expect(servers.first.containsKey('value'), isFalse);
-      expect((servers.last['value'] as Map)['server'], '1.1.1.1');
+      // §438 — тело записи 1.0 в `body`, и только у пользовательской записи.
+      expect(servers.first.containsKey('body'), isFalse);
+      expect((servers.last['body'] as Map)['server'], '1.1.1.1');
+      expect(servers.last['tag'], 'my-doh');
 
       final back = parseLxBackup(raw).dns;
       expect(back, isNotNull);
@@ -1212,14 +1222,23 @@ void main() {
       );
       expect(applied.dnsFinal, 'my-doh');
       expect(applied.strategy, 'prefer_ipv4');
-      expect(applied.servers.map((e) => e['kind']), ['template', 'inline'],
+      expect(applied.servers.map((e) => e.kind), ['template', 'inline'],
           reason: 'канонический user не вернулся мобильным inline');
+      expect(applied.rules, const [
+        DnsRuleInline(
+          name: 'Local',
+          rule: {
+            'domain_suffix': ['lan'],
+            'server': 'my-doh',
+          },
+        ),
+      ]);
       // §401 (П3) — `srs`-правило В ФАЙЛ НЕ ЕДЕТ и обратно не приезжает.
       // Раньше оно возилось карманом `extensions` и «возвращалось целиком»;
       // карман упразднён, потому что провоз непонятого делал экспорт
       // нечистой функцией состояния (П1). Круг обязан быть ЧЕСТНЫМ: то, чего
       // в файле нет, из файла не появляется.
-      expect(applied.rules.where((e) => e['kind'] == 'srs'), isEmpty,
+      expect(applied.rules.whereType<DnsRuleSrs>(), isEmpty,
           reason: 'srs приехал обратно — значит карман провоза жив');
     });
 
@@ -1228,14 +1247,12 @@ void main() {
       final warnings = <LxBackupWarning>[];
       final section = dnsToBackup(
         servers: const [],
-        rules: const [
-          {'kind': 'srs', 'id': 'srs-1', 'name': 'Geo', 'enabled': true},
-        ],
+        rules: const [DnsRuleSrs(name: 'Geo', id: 'srs-1')],
         dnsFinal: '',
         strategy: '',
         warnings: warnings,
       );
-      expect(section.rules, isEmpty,
+      expect(section?['rules'], isNull,
           reason: 'происхождения srs у канона нет — записи в файле быть не '
               'должно');
       // П6 — молчаливых потерь нет: пользователь обязан узнать, что правило
@@ -1247,19 +1264,16 @@ void main() {
     test('dns: своя запись сильнее приехавшей (merge не перетирает)', () {
       const incoming = LxDns(
         servers: [
-          LxDnsRef(kind: 'user', name: 'my-doh', value: {'server': '9.9.9.9'}),
+          DnsServerInline(
+              enabled: true, tag: 'my-doh', body: {'server': '9.9.9.9'}),
         ],
         finalServer: 'my-doh',
       );
       final applied = applyDnsBackup(
         incoming: incoming,
-        servers: [
-          {
-            'kind': 'inline',
-            'tag': 'my-doh',
-            'enabled': true,
-            'body': {'server': '1.1.1.1'},
-          },
+        servers: const [
+          DnsServerInline(
+              enabled: true, tag: 'my-doh', body: {'server': '1.1.1.1'}),
         ],
         rules: const [],
         dnsFinal: 'other',
@@ -1267,7 +1281,8 @@ void main() {
       );
       expect(applied.servers, hasLength(1),
           reason: 'приехавшая запись задвоила своё под тем же тегом');
-      expect((applied.servers.single['body'] as Map)['server'], '1.1.1.1',
+      expect((applied.servers.single as DnsServerInline).body['server'],
+          '1.1.1.1',
           reason: 'своё тело перетёрто приехавшим');
       // final приезжает непустым и применяется: это не состав, а указатель.
       expect(applied.dnsFinal, 'my-doh');
@@ -1293,7 +1308,7 @@ void main() {
 
     // §393 B10 — одиночный сервер: до B10 экспорт писал пустую оболочку
     // (label + extensions), а `uri`/`config_json` схемы оставались пустыми.
-    test('одиночный сервер: uri уезжает в тело записи', () async {
+    test('одиночный сервер: uri уезжает в origin записи', () async {
       final server = UserServer(
         id: 'srv-1',
         name: 'Manual',
@@ -1301,21 +1316,24 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.manual,
-        createdAt: DateTime.utc(2026),
-        rawBody: 'vless://11111111-1111-1111-1111-111111111111@example-1.com:443',
+        rawBody:
+            'vless://11111111-1111-1111-1111-111111111111@example-1.com:443#Manual',
       );
       final raw = (await buildLxBackup(
         lists: [server],
         rules: const [],
         vars: const {},
       )).json;
-      final doc = jsonDecode(raw) as Map<String, dynamic>;
-      final entry = (doc['servers'] as List).single as Map<String, dynamic>;
-      expect(entry['uri'], startsWith('vless://'),
-          reason: 'оболочка осталась пустой — сервер не переносится');
-      // §401 (D-082) — имя узла едет `node_tag`, а не `label`: у канона имя
-      // одно — тег, и подпись рядом с ним разъехалась бы при переименовании.
-      expect(entry['node_tag'], 'Manual');
+      final entry = _sourcesOf(raw, 'server').single;
+      // §438 — исходник узла едет `origin`, имя узла — `tag`. §439 п. 1 —
+      // `tag` записи из разобранного узла, а не из `name` модели.
+      expect(entry['origin'], {
+        'kind': 'uri',
+        'raw':
+            'vless://11111111-1111-1111-1111-111111111111@example-1.com:443#Manual',
+      });
+      expect(entry['tag'], 'Manual');
+      expect(entry['id'], 'srv-1');
       expect(entry.containsKey('label'), isFalse,
           reason: 'label одиночного узла экспорт писать не должен');
 
@@ -1324,7 +1342,7 @@ void main() {
       expect(back.name, 'Manual');
     });
 
-    test('одиночный сервер: JSON-тело едет в config_json, а не в uri', () async {
+    test('одиночный сервер: JSON-исходник едет origin json и body', () async {
       final server = UserServer(
         id: 'srv-2',
         name: 'Json',
@@ -1332,7 +1350,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.utc(2026),
         rawBody: '{"type":"vless","server":"example-1.com"}',
       );
       final raw = (await buildLxBackup(
@@ -1340,12 +1357,10 @@ void main() {
         rules: const [],
         vars: const {},
       )).json;
-      final entry =
-          ((jsonDecode(raw) as Map<String, dynamic>)['servers'] as List).single
-              as Map<String, dynamic>;
-      expect(entry.containsKey('uri'), isFalse,
-          reason: 'схема требует РОВНО ОДНО из uri/config_json');
-      expect((entry['config_json'] as Map)['server'], 'example-1.com');
+      final entry = _sourcesOf(raw, 'server').single;
+      // §438 — JSON-исходник: `origin.kind: json` и тело sing-box в `body`.
+      expect((entry['origin'] as Map)['kind'], 'json');
+      expect((entry['body'] as Map)['server'], 'example-1.com');
     });
   });
 
@@ -1388,7 +1403,7 @@ void main() {
             ),
           ),
         ]);
-        final id = ((doc['subscriptions'] as List).single
+        final id = ((doc['sources'] as List).single
             as Map<String, dynamic>)['identity'] as Map<String, dynamic>;
         expect(id['user_agent'], 'v2rayNG/1.8');
         expect(id['send_hwid'], isTrue);
@@ -1401,7 +1416,7 @@ void main() {
       test('override не задан → объекта identity в файле нет', () async {
         final doc = await exportOf([subWith()]);
         expect(
-            ((doc['subscriptions'] as List).single as Map)
+            ((doc['sources'] as List).single as Map)
                 .containsKey('identity'),
             isFalse);
       });
@@ -1458,7 +1473,7 @@ void main() {
           legacy: DateTime.utc(2026, 8, 20),
         }),
       ]);
-      final disabled = ((doc['subscriptions'] as List).single
+      final disabled = ((doc['sources'] as List).single
           as Map<String, dynamic>)['disabled'] as Map;
       expect(disabled.keys.toSet(), {'DE-1', legacy},
           reason: 'ключ для формата обмена НЕПРОЗРАЧЕН: legacy-форма '

@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../models/auto_select.dart';
 import '../models/direction.dart';
+import '../models/node_link.dart';
 import '../models/node_spec.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/parser/uri_utils.dart';
 import '../services/safe_regex.dart';
 import '../services/ui_helpers.dart';
 import '../widgets/safe_bottom.dart';
+import '../widgets/urltest_idle_hint.dart';
 
 /// §322 — редактор узла автовыбора внутри папки.
 ///
@@ -28,8 +30,9 @@ class AutoGroupEditScreen extends StatefulWidget {
   /// `null` — создание нового узла.
   final AutoSelectSpec? initial;
 
-  /// Кандидаты в пул — узлы того же контейнера. Пара (ключ §321, имя).
-  final List<({String key, String label})> candidates;
+  /// Кандидаты в пул — узлы того же контейнера: ссылка на члена
+  /// `{id папки, сырой тег}` (§439) и имя.
+  final List<({NodeLink key, String label})> candidates;
 
   final bool canDelete;
 
@@ -68,13 +71,13 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
   late final TextEditingController _badgeCtrl; // §322 — UI-only значки
 
   late _MembershipMode _mode;
-  late Set<String> _picked; // ключи для режима «список»
+  late Set<NodeLink> _picked; // ссылки для режима «список»
   late UrltestMode _urlMode;
   late Set<StickyHashKey> _sticky;
   late bool _interrupt; // §208 — рвать соединения при смене узла
   bool _advanced = false;
 
-  late final String _initialUri; // снимок для сравнения «грязно ли»
+  late final AutoSelectSpec _initial; // снимок для сравнения «грязно ли»
 
   @override
   void initState() {
@@ -112,11 +115,11 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
         _MembershipMode.all,
       RuleMembers() => _MembershipMode.rule,
     };
-    _picked = m is ExplicitMembers ? m.keys.toSet() : <String>{};
+    _picked = m is ExplicitMembers ? m.members.toSet() : <NodeLink>{};
     _urlMode = p.mode;
     _sticky = p.stickyHash.toSet();
     _interrupt = p.interruptExistConnections;
-    _initialUri = _snapshot().toUri();
+    _initial = _snapshot();
   }
 
   @override
@@ -159,11 +162,9 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
       membership: _membership(),
       params: AutoSelectParams(
         url: _urlCtrl.text.trim().isEmpty ? d.url : _urlCtrl.text.trim(),
-        interval:
-            _intervalCtrl.text.trim().isEmpty ? d.interval : _intervalCtrl.text.trim(),
+        interval: _intervalValue,
         tolerance: int.tryParse(_toleranceCtrl.text.trim()) ?? d.tolerance,
-        idleTimeout:
-            _idleCtrl.text.trim().isEmpty ? d.idleTimeout : _idleCtrl.text.trim(),
+        idleTimeout: _idleValue,
         mode: _urlMode,
         pool: int.tryParse(_poolCtrl.text.trim()) ?? d.pool,
         poolTolerance: clampPoolTolerance(
@@ -181,14 +182,26 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
     );
   }
 
-  bool _isDirty() => _snapshot().toUri() != _initialUri;
+  /// Interval и idle timeout ровно такими, какими они уйдут в хранение:
+  /// пустое поле — умолчание [AutoSelectParams].
+  String get _intervalValue {
+    final v = _intervalCtrl.text.trim();
+    return v.isEmpty ? const AutoSelectParams().interval : v;
+  }
+
+  String get _idleValue {
+    final v = _idleCtrl.text.trim();
+    return v.isEmpty ? const AutoSelectParams().idleTimeout : v;
+  }
+
+  bool _isDirty() => !_snapshot().sameGroupAs(_initial);
 
   // ── Превью состава ──
 
   /// Кандидаты, попавшие в пул при текущих настройках. Повторяет логику
   /// `resolveAutoSelectMembers`, но по именам: синонимов у папочной группы
   /// нет, а у приехавшей из подписки превью всё равно показывает имена.
-  List<({String key, String label})> _matched() {
+  List<({NodeLink key, String label})> _matched() {
     switch (_mode) {
       case _MembershipMode.all:
         return widget.candidates;
@@ -446,7 +459,7 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
   /// Список кандидатов. В режиме «список» — с чекбоксами; иначе только
   /// показывает, кто попал (галочка) и кто нет (приглушённый).
   Widget _memberList(
-      ColorScheme cs, List<({String key, String label})> matched) {
+      ColorScheme cs, List<({NodeLink key, String label})> matched) {
     if (widget.candidates.isEmpty) {
       return _previewLine(cs, getLocalText.s("Folder has no servers yet"));
     }
@@ -624,6 +637,17 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
             ),
           ],
         ),
+        // §442 — interval > idle_timeout: сохранить можно, санитайзер сборки
+        // поднимет idle_timeout до interval. Условие — по значениям, которые
+        // уйдут в хранение (пустое поле — умолчание AutoSelectParams).
+        if (urltestIdleRaiseTarget(_intervalValue, _idleValue)
+            case final target?) ...[
+          const SizedBox(height: 4),
+          UrltestIdleRaiseHint(
+            key: const ValueKey('auto-group-idle-raise-hint'),
+            target: target,
+          ),
+        ],
         const SizedBox(height: 4),
         CheckboxListTile(
           dense: true,

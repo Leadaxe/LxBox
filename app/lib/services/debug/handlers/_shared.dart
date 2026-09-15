@@ -1,3 +1,5 @@
+import '../../../models/codec/node_link_record.dart';
+import '../../../models/node_link.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
@@ -69,6 +71,37 @@ List<String>? fieldStringList(Map<String, dynamic> m, String key) {
     }).toList();
   }
   throw BadRequest('field "$key" must be array, got ${v.runtimeType}');
+}
+
+/// §439 (D-112) — поле-ссылка на узел: объект `{folder_id?, tag}`. Терпимо:
+/// строка — корневая ссылка `{tag}` (форма до 2.23.3), `null` и пустой тег —
+/// ссылки нет ([NodeLink.none]). Ключа нет — `null` (не трогать).
+NodeLink? fieldNodeLink(Map<String, dynamic> m, String key) {
+  if (!m.containsKey(key)) return null;
+  final v = m[key];
+  if (v == null) return NodeLink.none;
+  final link = nodeLinkFromRecord(v);
+  if (link == null) {
+    throw BadRequest('field "$key" must be {"folder_id"?: string, "tag": '
+        'string}, a string or null, got ${v.runtimeType}');
+  }
+  return link.tag.isEmpty ? NodeLink.none : link;
+}
+
+/// §439 — список ссылок на узлы (позиции цепочки): элементы как у
+/// [fieldNodeLink], пустой тег остаётся позицией (её ловит проверка цепочки).
+List<NodeLink>? fieldNodeLinkList(Map<String, dynamic> m, String key) {
+  if (!m.containsKey(key)) return null;
+  final v = m[key];
+  if (v is! List) {
+    throw BadRequest('field "$key" must be array, got ${v.runtimeType}');
+  }
+  return [
+    for (final e in v)
+      nodeLinkFromRecord(e) ??
+          (throw BadRequest('field "$key" must be a list of '
+              '{"folder_id"?: string, "tag": string} or strings')),
+  ];
 }
 
 List<int>? fieldIntList(Map<String, dynamic> m, String key) {

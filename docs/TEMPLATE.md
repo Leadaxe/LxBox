@@ -8,8 +8,8 @@ The complete schema of `app/assets/wizard_template.json` — L×Box's single **c
 
 At runtime the builder (`app/lib/services/builder/build_config.dart`) merges:
 - `config` (the template's native sing-box section), plus
-- `selectable_rules[*]` (the presets the user picked in `custom_rules`), plus
-- `dns_options.{servers,rules}` (the current state of storage), plus
+- `selectable_rules[*]` (the presets the user picked in the storage `rules[]`), plus
+- the storage `dns.{servers,rules}` records, seeded from the template's `dns_options` (§439), plus
 - `group_templates` and `default_directions` (the direction assembly templates, §267), plus
 - the `vars` substitution (the template vars from storage)
 
@@ -106,7 +106,7 @@ wizard_template.json
 │   │   ├─ level                   "@log_level"
 │   │   └─ timestamp               bool
 │   ├─ dns                         object{4 keys}       an empty shell, filled in by the builder
-│   │   ├─ servers[]               list          [] — filled in from dns_options plus selectable_rules
+│   │   ├─ servers[]               list          [] — filled in from the storage dns.servers plus selectable_rules
 │   │   ├─ rules[]                 list          [] — the same
 │   │   ├─ final                   "@dns_final"
 │   │   └─ strategy                "@dns_strategy"
@@ -121,7 +121,7 @@ wizard_template.json
 │   │       ├─ auto_route          "@tun_auto_route"
 │   │       ├─ strict_route        "@tun_strict_route"
 │   │       └─ stack               "@tun_stack"
-│   ├─ endpoints[]                 list          the wireguard endpoints (filled in from server_lists)
+│   ├─ endpoints[]                 list          the wireguard endpoints (filled in from the storage sources[])
 │   ├─ outbounds[]                 list[2]       the base — direct-out plus block; the rest is added by the builder
 │   │   ├─ {type:"direct", tag:"direct-out"}
 │   │   └─ {type:"block",  tag:"block"}        §201 — the drop-out; a direction selector option and a route_final
@@ -143,7 +143,7 @@ wizard_template.json
 │
 └─ selectable_rules[]              list[8]       the preset CATALOG
     └─ <Preset>                    object
-        ├─ preset_id               string        the id referenced from custom_rules (§030)
+        ├─ preset_id               string        the id referenced from rules[].ref in storage (§030, §439)
         ├─ ui                      object          §264 — the preset's metadata (the flat
         │   ├─ label               string        UI display                label/description/
         │   ├─ description         string        the tooltip            defaults were REMOVED,
@@ -217,7 +217,7 @@ Every key is described in detail in the sections below.
 
 ## `dns_options` — §043+§044 (servers) + §061 (rules)
 
-The default DNS configuration for a fresh install. It is stockpiled into the `dns_options` storage on the first launch.
+The default DNS configuration for a fresh install. It is stockpiled into the storage `dns{}` records on the first launch (§439; the storage key was `dns_options` before 2.23.3, the template key keeps its name).
 
 ```jsonc
 {
@@ -232,7 +232,7 @@ The wrapper is `{description, enabled, vars?, server}`, where `server` is a sing
 `@var` placeholders, and `vars` holds the same definitions as preset vars (§033).
 The tag lives in `server.tag` (there is no top-level `tag` any more — see `templateDnsServerTag`).
 The builder (`resolveTemplateDnsServerBody`) substitutes the vars with the user's values
-(`varValues` from the storage ref) or with `default_value`:
+(`vars` of the storage `kind: template` record) or with `default_value`:
 
 ```jsonc
 {
@@ -277,7 +277,7 @@ The seven default servers in the current template:
 
 Currently empty. Since [§039](./spec/tasks/039-empty-template-dns-rules.md) this is deliberate — the user builds their DNS rules themselves.
 
-For the full ref-level shape see [`STORAGE.md` § dns_options](./STORAGE.md#dns_options--061-rules--043043-dns--044-servers).
+For the full record shape in storage see [`STORAGE.md` § dns](./STORAGE.md#dns--044-061-439-dns-servers-and-rules).
 
 ---
 
@@ -549,7 +549,7 @@ Seen in the template:
 | `enum` | **a string** (membership in `options[]` is advisory) | Dropdown |
 | `secret` | **the string verbatim** (never coerce it) | TextField (masked) |
 | `outbound` | **a string** (a selector or node tag) | A dropdown filled at runtime |
-| `dns_servers` | **a string** (a tag from `dns_options.servers`) | A dropdown filled at runtime |
+| `dns_servers` | **a string** (a DNS server tag from the storage `dns.servers`) | A dropdown filled at runtime |
 
 > **§120 — coercion follows the declared type, NOT the content.** `if_engine.dart::coerceVarValue` coerces a value by the `var.type` from the template; the string `"true"` in a `text` var stays a string, while `"1"` in an `int` var becomes a number. That way the value in the config is predictable from the declaration rather than from how it happens to look.
 
@@ -718,15 +718,15 @@ The base of the final sing-box config. It carries `@var` placeholders; the subst
     "timestamp": true
   },
   "dns": {
-    "servers":  [],                              // empty; filled in from dns_options.servers plus selectable_rules[].dns_servers
-    "rules":    [],                              // empty; filled in from dns_options.rules plus selectable_rules[].dns_rules
+    "servers":  [],                              // empty; filled in from the storage dns.servers plus selectable_rules[].dns_servers
+    "rules":    [],                              // empty; filled in from the storage dns.rules plus selectable_rules[].dns_rules
     "final":    "@dns_final",
     "strategy": "@dns_strategy"
   },
   "inbounds": [
     {"type": "tun", "tag": "tun-in", "interface_name": "...", "address": "...", "mtu": ..., "auto_route": ..., "strict_route": ..., "stack": "..."}
   ],
-  "endpoints": [],                               // wireguard endpoints (from server_lists user nodes)
+  "endpoints": [],                               // wireguard endpoints (from the storage sources[] nodes)
   "outbounds": [
     {"type": "direct", "tag": "direct-out"},     // base
     {"type": "block",  "tag": "block"}           // the §201 drop-out; the rest is added by the builder
@@ -758,10 +758,10 @@ The base of the final sing-box config. It carries `@var` placeholders; the subst
 ```
 
 What the builder adds to this base:
-- `config.outbounds[+]` ← the node outbounds from the enabled `server_lists[]`, plus a selector and a urltest per direction (`directions[]`, §125)
-- `config.dns.servers[+]` ← `dns_options.servers[*]` (resolved through [§044]) plus `selectable_rules[*].dns_servers[*]`
-- `config.dns.rules[+]` ← `dns_options.rules[*]` ([§061]) + `selectable_rules[*].dns_rules`
-- `config.route.rules[+]` ← `selectable_rules[*].rule` (after the enabled check on `selectable_rules[*]`) plus `custom_rules[*]`
+- `config.outbounds[+]` ← the node outbounds from the enabled storage `sources[]` (subscriptions, servers, folders, then chains), plus a selector and a urltest per direction (`directions[]`, §125)
+- `config.dns.servers[+]` ← the storage `dns.servers[*]` (resolved through [§044]) plus `selectable_rules[*].dns_servers[*]`
+- `config.dns.rules[+]` ← the storage `dns.rules[*]` ([§061]) + `selectable_rules[*].dns_rules`
+- `config.route.rules[+]` ← `selectable_rules[*].rule` (after the enabled check on `selectable_rules[*]`) plus the storage `rules[*]`
 - `config.route.rule_set[+]` ← `selectable_rules[*].rule_set[*]` (see the section below)
 - `config.inbounds[*]` and the `inbound` route rules are **declarative through `#if`** ([§120]): `tun-in` and `mixed-in` appear according to the mode
 
@@ -775,7 +775,7 @@ Each element is a bundle the user enables or disables on the Routing screen. On 
 
 ```jsonc
 {
-  "preset_id":   "<unique-id>",        // referenced from custom_rules[].presetId
+  "preset_id":   "<unique-id>",        // referenced from the storage rules[].ref (kind: preset)
   "ui": {                               // §264 — the preset's metadata. REQUIRED.
     "label":       "<UI display>",      //   The flat label/description/default at the
     "description": "<tooltip>",         //   top level are GONE; the fallback in

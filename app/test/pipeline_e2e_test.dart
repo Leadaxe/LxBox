@@ -56,7 +56,6 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.paste,
-      createdAt: DateTime.now(),
       rawBody: body,
       nodes: r.nodes,
     );
@@ -111,7 +110,6 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.paste,
-      createdAt: DateTime.now(),
       nodes: r.nodes,
     );
     final result = await buildConfig(
@@ -138,7 +136,6 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.paste,
-      createdAt: DateTime.now(),
       nodes: r.nodes,
     );
     final result = await buildConfig(
@@ -194,7 +191,6 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.paste,
-      createdAt: DateTime.now(),
       rawBody: body,
       nodes: r.nodes,
     );

@@ -111,8 +111,15 @@ Future<ParseResult> parseFromSource(SubscriptionSource source,
     // не сохраняются: поле есть только у свободных узлов. Сторона сообщает
     // уровнем info без кода контракта: связка, извлечённая парсером из тела
     // провайдера, дальше никуда не идёт.
+    // §437 — узлу Tailscale это стоит связи с tailnet целиком, поэтому
+    // говорим прямо и всегда, а не только когда провайдер дал записи.
     for (final n in nodes) {
-      if (n.importedSections != null) {
+      if (n is TailscaleSpec) {
+        AppLog.I.info(
+            'Subscription node "${n.tag}" is a Tailscale endpoint: its tailnet '
+            'route and MagicDNS records apply to free nodes only — add it as a '
+            'server to get them');
+      } else if (n.importedSections != null) {
         AppLog.I.info(
             'Subscription node "${n.tag}" carries sections (route/dns) — '
             'ignored, sections apply to free nodes only');

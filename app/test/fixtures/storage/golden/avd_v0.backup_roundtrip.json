@@ -1,0 +1,7 @@
+{
+  "export_warnings": [],
+  "import_warnings": [],
+  "config_diff": [
+    "$.inbounds[tag=tun-in].exclude_package: [\"bypass.whitelist\",\"com.notcvnt.rknhardering\",\"io.github.romanvht.byedpi\"] → <absent>"
+  ]
+}

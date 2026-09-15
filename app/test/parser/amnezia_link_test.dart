@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/template_vars.dart';
@@ -183,7 +184,7 @@ void main() {
   });
 
   group('персист UserServer с rawBody = vpn:// (§110)', () {
-    test('toJson/fromJson round-trip восстанавливает ноды из ссылки', () {
+    test('round-trip записи sources[] восстанавливает ноды из ссылки', () {
       final link = makeLink(_export([_container('awg', _awgIni)]));
       final server = UserServer(
         id: 'test-id',
@@ -192,11 +193,12 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         rawBody: link,
         nodes: parseAll(decode(link)),
       );
-      final restored = UserServer.fromJson(server.toJson());
+      final restored =
+          sourceFromRecord(sourceToRecord(server)).value! as UserServer;
+      expect(restored, server);
       expect(restored.nodes, hasLength(1));
       final spec = restored.nodes.single as WireguardSpec;
       expect(spec.awg, isNotNull);

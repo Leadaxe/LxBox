@@ -55,12 +55,11 @@ void main() {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.paste,
-      createdAt: DateTime.now(),
       nodes: specs,
     );
   }
 
-  /// §322 — те же узлы + узел автовыбора (`autogroup://`) в том же списке.
+  /// §322 — те же узлы + узел автовыбора в том же списке.
   Future<UserServer> nodesWithAutoGroup() async {
     final base = await nodes();
     final auto = AutoSelectSpec(
@@ -76,7 +75,6 @@ void main() {
       tagPrefix: base.tagPrefix,
       detourPolicy: base.detourPolicy,
       origin: UserSource.paste,
-      createdAt: DateTime.now(),
       nodes: [...base.nodes, auto],
     );
   }
@@ -817,7 +815,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: specs,
       );
       final r = await buildConfig(
@@ -853,7 +850,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: specs,
       );
       final r = await buildConfig(
@@ -957,7 +953,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: specs,
       );
       final r = await buildConfig(

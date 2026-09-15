@@ -52,7 +52,6 @@ SubscriptionEntry _user({
     detourPolicy: DetourPolicy.defaults,
     rawBody: '',
     origin: UserSource.manual,
-    createdAt: DateTime.utc(2025, 1, 1),
     nodes: nodes.map(_node).toList(),
   );
   return SubscriptionEntry(list: list);

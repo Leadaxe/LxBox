@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../models/dns_ref.dart';
 import '../services/ui_helpers.dart';
 import '../widgets/outbound_picker.dart';
 import 'dns_server_edit/edit_controller.dart';
@@ -38,8 +39,8 @@ class DnsServerEditScreen extends StatefulWidget {
     this.existingTags = const {},
   });
 
-  /// Ref-запись стораджа (edit) или дефолтная inline-заготовка (new).
-  final Map<String, dynamic> initialRef;
+  /// Ref-запись (edit) или дефолтная inline-заготовка (new).
+  final DnsServerRef initialRef;
 
   /// Display-модель (null = new-режим: добавление inline-сервера).
   final ResolvedServer? resolved;
@@ -179,11 +180,14 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
   }
 
   /// §043/§117: reset inline-override обратно к canonical (template/preset) —
-  /// ref схлопывается в `{enabled, kind: <canonical>, tag}`.
+  /// ref схлопывается в template/preset-ref с тем же `enabled` и тегом.
   Future<void> _resetToCanonical() async {
     final overrides = _ctrl.overrides;
     final resolved = widget.resolved;
-    if (overrides == null || resolved == null) return;
+    // overrides — вид canonical'а: template или preset.
+    if (overrides == null || overrides == ServerKind.inline || resolved == null) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -204,11 +208,12 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
     if (confirmed != true || !mounted) return;
     Navigator.pop(
       context,
-      DnsServerEditResult.saved({
-        'enabled': _ctrl.enabled,
-        'kind': overrides.name,
-        'tag': resolved.tag,
-      }),
+      DnsServerEditResult.saved(overrides == ServerKind.preset
+          ? DnsServerPreset(
+              enabled: _ctrl.enabled,
+              tag: resolved.tag,
+              presetId: resolved.presetId)
+          : DnsServerTemplate(enabled: _ctrl.enabled, tag: resolved.tag)),
     );
   }
 
@@ -318,12 +323,11 @@ class _SaveIconButton extends StatelessWidget {
 class DnsServerEditResult {
   const DnsServerEditResult._({this.saved, this.wasDeleted = false});
 
-  /// Новый/обновлённый ref `{enabled, kind, tag, description?, body?,
-  /// varValues?}`. Для reset-to-canonical — схлопнутый ref.
-  final Map<String, dynamic>? saved;
+  /// Новый/обновлённый ref. Для reset-to-canonical — схлопнутый ref.
+  final DnsServerRef? saved;
   final bool wasDeleted;
 
-  factory DnsServerEditResult.saved(Map<String, dynamic> ref) =>
+  factory DnsServerEditResult.saved(DnsServerRef ref) =>
       DnsServerEditResult._(saved: ref);
   factory DnsServerEditResult.deleted() =>
       const DnsServerEditResult._(wasDeleted: true);
@@ -333,7 +337,7 @@ class DnsServerEditResult {
 /// изменений.
 Future<DnsServerEditResult?> openDnsServerEditor(
   BuildContext context, {
-  required Map<String, dynamic> initialRef,
+  required DnsServerRef initialRef,
   ResolvedServer? resolved,
   Map<String, dynamic>? templateWrapper,
   String canonicalDescription = '',

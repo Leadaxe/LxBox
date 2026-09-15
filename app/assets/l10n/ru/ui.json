@@ -341,6 +341,14 @@
       "other": "%d сервера"
     }
   },
+  "%d servers deleted": {
+    "value": {
+      "one": "Удалён %d сервер",
+      "few": "Удалено %d сервера",
+      "many": "Удалено %d серверов",
+      "other": "Удалено %d сервера"
+    }
+  },
   "%d src": {
     "value": {
       "one": "%d источник",
@@ -431,11 +439,17 @@
   "%s copied": {
     "value": "Скопировано: %s"
   },
+  "%s DNS server(s) switched to vpn-1": {
+    "value": "DNS-серверов переключено на vpn-1: %s"
+  },
   "%s detour reference(s) reset to None": {
     "value": "detour-ссылок сброшено в None: %s"
   },
   "%s direction option(s) removed": {
     "value": "опций-Направлений убрано из состава: %s"
+  },
+  "%s group member(s) removed": {
+    "value": "членов групп убрано: %s"
   },
   "%s of %s servers": {
     "value": "%s из %s серверов"
@@ -871,6 +885,9 @@
   },
   "Auto (recommended)": {
     "value": "Авто (рекомендуется)"
+  },
+  "Auto nodes are deleted with the folder: %s": {
+    "value": "Авто-узлы удаляются вместе с папкой: %s"
   },
   "Auto-ping after connect": {
     "value": "Автопинг после подключения"
@@ -1993,6 +2010,9 @@
       "other": "В папке «%2$s» %1$d сервера."
     }
   },
+  "Folder \"%s\" deleted": {
+    "value": "Папка «%s» удалена"
+  },
   "Folder has no servers yet": {
     "value": "В папке пока нет серверов"
   },
@@ -2186,6 +2206,9 @@
   "Idle timeout suspends the tunnel after inactivity to save battery (default 5 min). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults.": {
     "value": "Тайм-аут простоя приостанавливает туннель при неактивности ради экономии батареи (по умолчанию 5 мин). Keep-alive пингует QUIC-соединение (по умолчанию 30 сек, только HTTP/3). Оставьте поля пустыми для значений по умолчанию."
   },
+  "Idle timeout will be raised to %s when the config is built": {
+    "value": "При сборке idle timeout будет поднят до %s"
+  },
   "Ignore": {
     "value": "Не напоминать"
   },
@@ -2334,9 +2357,6 @@
   },
   "Interval": {
     "value": "Интервал"
-  },
-  "Interval must be ≤ idle timeout": {
-    "value": "Интервал должен быть ≤ тайм-аута простоя"
   },
   "Invalid JSON: %s": {
     "value": "Некорректный JSON: %s"
@@ -3710,7 +3730,7 @@
     "value": "Выбор приложений"
   },
   "Select direction": {
-    "value": "Выберите Направление"
+    "value": "Направление"
   },
   "Select server": {
     "value": "Показать выбранный сервер"
@@ -3739,6 +3759,9 @@
   },
   "Server": {
     "value": "Сервер"
+  },
+  "Server \"%s\" deleted": {
+    "value": "Сервер «%s» удалён"
   },
   "Server %d": {
     "value": "Сервер %d"
@@ -3982,6 +4005,9 @@
         "value": "Подписка"
       }
     }
+  },
+  "Subscription \"%s\" deleted": {
+    "value": "Подписка «%s» удалена"
   },
   "Subscription URL": {
     "value": "URL подписки"
@@ -4343,8 +4369,8 @@
   "Unknown uTLS fingerprint \"%s\" replaced with \"chrome\" (would otherwise break the whole config).": {
     "value": "Неизвестный uTLS fingerprint «%s» заменён на «chrome» (иначе сломался бы весь конфиг)."
   },
-  "REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 accept only a Chrome-like ClientHello, so \"chrome\" is used when connecting.": {
-    "value": "REALITY с uTLS fingerprint «%s»: серверы Xray начиная с v26.9.8 принимают только ClientHello в стиле Chrome, поэтому при подключении используется «chrome»."
+  "REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 reject this ClientHello. If the connection fails, try \"chrome\".": {
+    "value": "REALITY с uTLS fingerprint «%s»: серверы Xray начиная с v26.9.8 отвергают такой ClientHello. Если соединение не устанавливается, попробуйте «chrome»."
   },
   "Unlimited": {
     "value": "никогда"
@@ -4609,6 +4635,9 @@
   },
   "deleted": {
     "value": "удалён"
+  },
+  "detour removed from %s source(s)": {
+    "value": "detour снят у источников: %s"
   },
   "detour → %s": {
     "value": "detour → %s"
@@ -5048,8 +5077,8 @@
   "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
     "value": "JSON должен быть объектом outbound с «type» или документом с «endpoints»/«outbounds»"
   },
-  "Leave empty for tailnet access only — the node will not appear in Directions": {
-    "value": "Оставьте пустым для доступа только в tailnet — узел не появится в Направлениях"
+  "Tailscale IP or machine name of a peer that advertises an exit node; pick this node as the Direction on Home to route your internet through it. Leave empty for tailnet access only — the node will not appear in Directions": {
+    "value": "IP Tailscale или имя машины-пира, которая анонсирует exit node; чтобы пустить интернет через него, выберите этот узел Направлением на Home. Оставьте пустым для доступа только в tailnet — узел не появится в Направлениях"
   },
   "MagicDNS of the tailnet via a Tailscale node · no address": {
     "value": "MagicDNS сети tailnet через узел Tailscale · без адреса"
@@ -5121,5 +5150,8 @@
   },
   "node is disabled": {
     "value": "узел выключен"
+  },
+  "One rule holds one JSON object. Add each object of the array as a separate rule.": {
+    "value": "Одно правило — один JSON-объект. Добавьте каждый объект массива отдельным правилом."
   }
 }

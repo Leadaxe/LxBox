@@ -92,7 +92,8 @@ const _warningCodes = <Type, String>{
   InsecureTlsWarning: 'tls_insecure',
   NaiveBuildTagWarning: 'naive_unavailable',
   UnknownFingerprintWarning: 'utls_fp_unknown',
-  // D-104 — REALITY с отпечатком не из chrome-семейства (SPEC 083 ядра).
+  // D-119 (заменил D-104) — REALITY с явным отпечатком не из chrome-семейства
+  // (SPEC 083 ядра); отпечаток не подменяется, только код на узле.
   RealityFingerprintWarning: 'reality_fp_not_chrome',
   XhttpParamResetWarning: 'xhttp_param_reset',
   // §416 — header-placement без режима: дописан mode: packet-up.

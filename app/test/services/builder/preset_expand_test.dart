@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/builder/post_steps.dart'
     show resolveDnsServersBodies;
@@ -1148,7 +1149,7 @@ void main() {
       final emitted = resolveDnsServersBodies(
         resolved: [
           for (final s in f.dnsServers)
-            {'kind': 'preset', 'tag': s['tag'], 'enabled': true},
+            DnsServerPreset(enabled: true, tag: s['tag'] as String),
         ],
         templateByTag: const {},
         presetServersByTag: presetServersByTag,

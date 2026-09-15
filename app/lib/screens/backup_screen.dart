@@ -8,10 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
-import '../models/direction.dart';
-import '../services/direction_mutations.dart';
 import '../services/dns/dns_backup.dart';
 import '../services/lx_backup.dart';
+import '../services/lx_backup_import.dart';
+import '../services/record_vars.dart';
 import '../services/warp/warp_backup.dart';
 import '../services/settings_storage.dart';
 import '../services/error_format.dart';
@@ -324,13 +324,19 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // нет дома, в файл не едут, и пользователь узнаёт об этом ДО того, как
       // унесёт файл на другую машину (П6).
       final exportWarnings = <LxBackupWarning>[];
-      // §393 B9 — секция DNS: состав серверов/правил + final/strategy.
+      // §441 — объявления переменных записей шаблона: `vars` template-серверов
+      // и пресетов едут без умолчаний и необъявленных имён (SPEC 129 Н2–Н4).
+      final recordVars = await loadRecordVarDecls();
+      // §393 B9 — секция DNS: записи хранения + final/strategy. §439 —
+      // preset-сервер несёт `preset_id` в записи, шаблон не нужен.
       final dns = dnsToBackup(
         servers: await SettingsStorage.getDnsServers(),
         rules: await SettingsStorage.getDnsRulesList(),
         dnsFinal: vars['dns_final'] ?? '',
         strategy: vars['dns_strategy'] ?? '',
+        defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
         warnings: exportWarnings,
+        recordVars: recordVars,
       );
       // §393 B8 — регистрации WARP в каноне схемы (`type: wg|masque`).
       final warpAccount = await SettingsStorage.getWarpAccount();
@@ -355,6 +361,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         routeFinal: routeFinal,
         dns: dns,
         warp: warp,
+        recordVars: recordVars,
       );
       final json = built.json;
       exportWarnings.addAll(built.warnings);
@@ -435,33 +442,12 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         return;
       }
 
-      final LxBackupFile parsed;
+      // D-117 — план импорта считает сервис: слияние и один список известных
+      // целей после него (BACKUP.md §3). Экран его не собирает.
+      const importer = LxBackupImportService();
+      final LxImportPlan plan;
       try {
-        // Цели, на которые правилу разрешено ссылаться. Пустой набор означал
-        // бы «проверять нечем», и все ссылки прошли бы без проверки.
-        //
-        // §393 B5 — Направления входят сюда обязательно: `rules[].outbound`
-        // адресует именно их (`vpn-1`, `ru-exit`), а не префикс подписки.
-        // Без них правило, метящее в существующее Направление, приезжало бы
-        // выключенным «ссылка в никуда» — при живой и правильной цели.
-        final lists = await SettingsStorage.getServerLists();
-        final directions = await SettingsStorage.getDirections();
-        // §393 C9 — тег цепочки для остального приложения обычный тег узла:
-        // правило вправе метить в него так же, как в Направление.
-        final chains = await SettingsStorage.getChains();
-        final known = <String>{
-          for (final l in lists) l.tagPrefix,
-          for (final d in directions) d.tag,
-          for (final c in chains) c.tag,
-        }..removeWhere((t) => t.isEmpty);
-        parsed = parseLxBackup(
-          raw,
-          knownOutbounds: known,
-          // Merge цепочек идёт по СВОЕМУ пространству имён: `backup_chain_exists`
-          // отвечает на вопрос «своя цепочка под этим тегом уже есть», а не
-          // «тег вообще занят» (тёзку-Направление отсеет гейт применения).
-          knownChains: {for (final c in chains) c.tag},
-        );
+        plan = await importer.prepare(raw);
       } on FormatException catch (e) {
         if (!mounted) return;
         _showError(getLocalText.s("Invalid backup"), e.message);
@@ -469,98 +455,15 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       }
 
       if (!mounted) return;
-      final confirmed = await _confirmLxImport(parsed);
+      final confirmed = await _confirmLxImport(plan.file);
       if (confirmed != true) return;
 
-      // §393 B5 — Направления создаются ПЕРВЫМИ, до правил: приехавшее
-      // правило метит в цель, которой на этой стороне ещё нет, и без неё
-      // ядро отвергло бы весь конфиг. Занятые теги сюда уже не доехали —
-      // парсер отсеял их warning'ом `backup_direction_exists`.
-      //
-      // Мутация идёт через DirectionMutations (§275/§292), а не голым
-      // setDirections: инвариант «vpn-1 всегда есть и включён» держится на
-      // том, что список НЕ перезаписывается, а дополняется в конец —
-      // приехавшие Направления встают ниже существующих, и их `include[]`
-      // (ссылки только вверх) остаётся осмысленным.
-      var appliedDirections = 0;
-      // §409 — тег созданного Направления → его бюджет теста узла (может быть
-      // `null`: Направление приехало без override'а, и тогда писать нечего).
-      final appliedPing = <String, LxDirectionPing?>{};
-      if (parsed.directions.isNotEmpty) {
-        final current = await SettingsStorage.getDirections();
-        final merged = current.toList();
-        final used = current.map((d) => d.tag).toList();
-        for (final d in parsed.directions) {
-          // Парсер отсеял только прямые тёзки известных целей; служебные и
-          // тезки чужих `<tag>-auto` (`direct`, `vpn-1-auto` при живом vpn-1)
-          // до storage доходить не должны — этот гейт единственный на пути
-          // bulkReplace, который валидации не делает.
-          if (directionTagConflict(d.tag, used) != null) continue;
-          merged.add(d);
-          used.add(d.tag);
-          appliedDirections++;
-          // §409 — бюджет теста узла едет с СОЗДАННЫМ Направлением. Тег,
-          // отсеянный гейтом выше, бюджета не получает: под ним живёт своё
-          // Направление, и менять ему настройку файл права не имеет
-          // (§9 BACKUP.md). Парсер по той же причине не кладёт в
-          // `directionPing` теги, занятые на этой стороне.
-          appliedPing[d.tag] = parsed.directionPing[d.tag];
-        }
-        if (appliedDirections > 0) await DirectionMutations.bulkReplace(merged);
-      }
-
-      // §409 — запись бюджетов ПОСЛЕ bulkReplace: `ping_options.groups`
-      // адресуется тегом Направления, и ключ, повисший без своего
-      // Направления, был бы сиротой, которую §408 всё равно вычистит.
-      for (final entry in appliedPing.entries) {
-        final ping = entry.value;
-        if (ping == null) continue;
-        await SettingsStorage.setGroupPing(
-          entry.key,
-          url: ping.url,
-          timeoutMs: ping.timeoutMs,
-        );
-      }
-
-      // §393 C9 — цепочки ПОСЛЕ Направлений (позиция может ссылаться на
-      // Направление, заведённое строкой выше) и ДО правил (правило метит в
-      // тег цепочки как в цель). Занятые теги сюда уже не доехали — парсер
-      // отсеял их warning'ом `backup_chain_exists`.
-      //
-      // Порядок приехавшего списка сохраняется и приехавшие встают в КОНЕЦ
-      // своего: вложенная цепочка вправе сослаться только ВВЕРХ по списку, и
-      // вставка в начало замкнула бы цикл, которого канон запрещает.
-      //
-      // Пишем не голым `setChains`, а через тот же гейт, что и Направления:
-      // `directionTagConflict` ловит служебные теги и тёзок `<tag>-auto`, а
-      // общий список тегов цепочек И Направлений — коллизию outbound'ов,
-      // от которой ядро отвергает конфиг ЦЕЛИКОМ (эталон `_addChain`).
-      var appliedChains = 0;
-      if (parsed.chains.isNotEmpty) {
-        final currentChains = await SettingsStorage.getChains();
-        final currentDirections = await SettingsStorage.getDirections();
-        final mergedChains = currentChains.toList();
-        final usedTags = <String>[
-          ...currentChains.map((c) => c.tag),
-          ...currentDirections.map((d) => d.tag),
-        ];
-        for (final c in parsed.chains) {
-          if (directionTagConflict(c.tag, usedTags) != null) continue;
-          mergedChains.add(c);
-          usedTags.add(c.tag);
-          appliedChains++;
-        }
-        if (appliedChains > 0) await SettingsStorage.setChains(mergedChains);
-      }
-
-      await SettingsStorage.saveCustomRules(parsed.rules);
-
-      // §393 B6-B9 — остальные секции. До B6 они разбирались, показывались в
-      // диалоге и выбрасывались: пользователь видел «Подписки: 3», нажимал
-      // Import и не получал ни одной.
-      final counts = await _applyLxSections(parsed);
+      final result = await importer.apply(plan);
       if (!mounted) return;
 
+      final parsed = result.file;
+      final appliedDirections = result.appliedDirections;
+      final counts = result.appliedSettings;
       final skipped = parsed.warnings.length;
       // Счётное существительное — только через plural: по-русски иначе
       // получится «Импортировано 2 правил».
@@ -598,8 +501,8 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // ровно то, что произошло. Клауза-суффикс, а не шестая ветка лестницы:
       // добавить цепочки измерением удвоило бы число строк каталога,
       // из которых половина не встречается никогда.
-      showSnack(appliedChains > 0
-          ? '$message; ${getLocalText.s("chains: %d", appliedChains)}'
+      showSnack(result.appliedChains > 0
+          ? '$message; ${getLocalText.s("chains: %d", result.appliedChains)}'
           : message);
     } catch (e) {
       if (!mounted) return;
@@ -607,125 +510,6 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  /// §393 B6-B9 — применение остальных секций LX Backup. Возвращает число
-  /// применённых сущностей для строки итога.
-  ///
-  /// Всё идёт через штатные сейверы [SettingsStorage], а не мимо: у каждого
-  /// из них своя обвязка (`markConfigDirty`, allowlist, миграции), и запись
-  /// в обход неё дала бы применённую настройку, о которой не знает билдер.
-  Future<int> _applyLxSections(LxBackupFile parsed) async {
-    var applied = 0;
-
-    // §393 B6 — переменные. Фильтр переносимости уже сделал парсер: сюда
-    // доезжают только имена из `registry/vars.json` с portable=true.
-    for (final e in parsed.vars.entries) {
-      await SettingsStorage.setVar(e.key, e.value, flush: false);
-      applied++;
-    }
-
-    // §393 B6 — route.final. Парсер отсекает ссылку в никуда (§3 BACKUP.md:
-    // мёртвый final уводит ВЕСЬ трафик в несуществующий outbound), поэтому
-    // непустое значение здесь уже проверено на известность цели.
-    final routeFinal = parsed.routeFinal;
-    if (routeFinal != null && routeFinal.isNotEmpty) {
-      await SettingsStorage.saveRouteFinal(routeFinal, flush: false);
-      applied++;
-    }
-
-    // §393 B6/B10 — подписки. Идентичность записи — URL (он же идентичность
-    // подписки на обеих сторонах). Новая подписка добавляется без узлов —
-    // тело приедет обычным обновлением.
-    //
-    // §401 (П1) — совпавшая по URL запись ОБНОВЛЯЕТСЯ настройками из файла.
-    // Бэкап — сериализация состояния, и восстановленное состояние обязано
-    // быть неотличимо от настроенного руками; раньше совпавшая запись
-    // получала только доливку disabled-отметок, так что восстановление
-    // СВОЕГО ЖЕ файла на том же устройстве не возвращало ни identity, ни
-    // префикс тегов — пользователь видел «импорт прошёл» и настройки на
-    // месте не находил.
-    //
-    // Исключение ровно одно: disabled-отметки по-прежнему ОБЪЕДИНЯЮТСЯ, а не
-    // замещаются (§393 §4) — отметка, которой в файле нет, могла быть
-    // поставлена уже после экспорта, и молча включать такой узел нельзя.
-    //
-    // Локальные подписки, которых в файле нет, НЕ удаляются: импорт — это
-    // слияние, а полная замена раздела была бы другим решением.
-    final lists = await SettingsStorage.getServerLists();
-    final subMerge = mergeBackupSubscriptions(lists, parsed.subscriptions);
-    final merged = subMerge.lists;
-    applied += subMerge.applied;
-
-    // §401 (D-08x) + §405 — одиночные узлы и папки: слияние живёт чистой
-    // функцией рядом с [mergeBackupSubscriptions] (`services/lx_backup.dart`),
-    // здесь только состояние. Идентичность одиночной записи — её ТЕЛО, папки
-    // — её имя; совпавшее пропускается молча.
-    final srvMerge = mergeBackupServers(merged, parsed.servers);
-    merged
-      ..clear()
-      ..addAll(srvMerge.lists);
-    applied += srvMerge.applied;
-
-    // Сравниваем поэлементно по identity: `copyWith` выше создаёт НОВЫЙ
-    // объект на месте старого, и длина списка при этом не меняется — проверка
-    // одной только длины пропустила бы долитые disabled-отметки.
-    final listsChanged = merged.length != lists.length ||
-        [
-          for (var i = 0; i < lists.length; i++)
-            if (!identical(merged[i], lists[i])) i,
-        ].isNotEmpty;
-    if (listsChanged) {
-      await SettingsStorage.saveServerLists(merged);
-    }
-
-    // §393 B9 — DNS. Merge: своя запись под тем же адресом сильнее.
-    final dns = parsed.dns;
-    if (dns != null && !dns.isEmpty) {
-      final vars = await SettingsStorage.getAllVars();
-      final result = applyDnsBackup(
-        incoming: dns,
-        servers: await SettingsStorage.getDnsServers(),
-        rules: await SettingsStorage.getDnsRulesList(),
-        dnsFinal: vars['dns_final'] ?? '',
-        strategy: vars['dns_strategy'] ?? '',
-      );
-      await SettingsStorage.saveDnsServers(result.servers, flush: false);
-      await SettingsStorage.saveDnsRulesList(result.rules, flush: false);
-      await SettingsStorage.setVar('dns_final', result.dnsFinal, flush: false);
-      await SettingsStorage.setVar('dns_strategy', result.strategy,
-          flush: false);
-      applied += result.applied;
-    }
-
-    // §393 B8 — регистрации WARP. Merge НЕ перетирает живую регистрацию:
-    // у Cloudflare адреса привязаны к ключу, и подмена работающего ключа
-    // чужим сломала бы уже собранные узлы этого телефона
-    // (эталон `import.go:importWarp`).
-    for (final entry in parsed.warp) {
-      if (entry['type'] == 'wg') {
-        if (await SettingsStorage.getWarpAccount() != null) continue;
-        final acc = warpAccountFromBackup(entry);
-        if (acc == null) continue;
-        await SettingsStorage.setWarpAccount(acc, flush: false);
-        applied++;
-      } else if (entry['type'] == 'masque') {
-        if (await SettingsStorage.getMasqueAccount() != null) continue;
-        final acc = masqueAccountFromBackup(entry);
-        if (acc == null) continue;
-        await SettingsStorage.setMasqueAccount(acc, flush: false);
-        applied++;
-      }
-    }
-
-    // §401 — блобы чужих приложений на диск больше не ложатся: провоз
-    // упразднён (П3). Состояние после импорта неотличимо от настроенного
-    // руками — теневого груза в нём нет.
-
-    // Единый flush: выше всё писалось `flush: false`, чтобы прерывание в
-    // середине не оставило половину применённых настроек на диске.
-    await SettingsStorage.flushToDisk();
-    return applied;
   }
 
   /// Показывает состав файла и что не применится — до применения.

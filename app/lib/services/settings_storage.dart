@@ -5,7 +5,12 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/background_mode.dart';
+import '../models/codec/chain_record.dart';
+import '../models/codec/dns_record.dart';
+import '../models/codec/rule_record.dart';
+import '../models/codec/source_record.dart';
 import '../models/direction.dart';
+import '../models/dns_ref.dart';
 import '../models/source_chain.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/custom_rule.dart';
@@ -15,6 +20,10 @@ import '../vpn/box_vpn_client.dart';
 import 'app_log.dart';
 import 'config_dirty_check.dart';
 import 'l10n/app_language_reconcile.dart';
+import 'record_vars.dart';
+import 'settings_storage_keys.dart';
+import 'storage_migration/migrate_storage.dart';
+import 'subscription/http_cache.dart';
 import 'template_loader.dart';
 import 'warp/masque_account.dart';
 import 'warp/warp_account.dart';
@@ -43,8 +52,9 @@ part 'settings_storage/native_prefs.dart';
 /// библиотека, тот же класс, идентичный доступ к приватным статикам):
 ///   • `io.dart`           — atomic load/save/recovery (§072) + кэш-инфра
 ///   • `vars.dart`         — vars-домен + var-backed feature-флаги
-///   • `sources_rules.dart`— server lists, enabled rules/groups, custom rules
-///   • `network.dart`      — route final, excluded nodes, DNS, ping-options
+///   • `sources_rules.dart`— источники `sources[]`, enabled groups, правила
+///   • `chains.dart`       — цепочки хвостом `sources[]`
+///   • `network.dart`      — route final, DNS `dns{}`, ping-options
 ///   • `backup_tun.dart`   — backup snapshot (§031) + tun-apps (§046)
 class SettingsStorage {
   SettingsStorage._();
@@ -131,24 +141,22 @@ class SettingsStorage {
   /// все имена известны. `vars` — контейнер, его содержимое фильтруется
   /// отдельно через [allowedVarKeys]. Источник правды: STORAGE.md.
   static const allowedTopLevelKeys = <String>{
+    kStorageVersionKey, // §439 — признак формы документа
     'vars',
-    'server_lists',
-    'custom_rules',
-    'dns_options',
+    kSourcesKey, // §439 — источники, хвостом цепочки (§393 C2)
+    kRulesKey,
+    kDnsKey,
     'ping_options',
     'route_final',
     'route_idle_suspend', // §215 — idle-suspend threshold (route.lx_idle_suspend)
     'route_idle_suspend_reachable', // §272 — reachable idle window (route.lx_idle_suspend_reachable)
     'urltest_passive_check', // §272 — passive health check (urltest.passive_check)
-    'excluded_nodes',
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
     'directions', // §125/§393 — Направления роутинга (template→storage)
     'directions_migrated', // §125/§393 — guard one-shot миграции
-    'chains', // §393 C2 — источники-цепочки хопов (SPEC 110)
     // §393 A2 — легаси-пары `channels`/`channels_migrated` в allowlist НЕТ
-    // намеренно: границы импорта нормализуют имена ДО `replaceRaw`
-    // ([normalizeLegacyDirectionKeys]), а старый файл на диске (upgrade-путь)
-    // читается миграцией напрямую, мимо allowlist.
+    // намеренно: её переименовывает миграция формы (§439, `migrateStorageDoc`)
+    // и в файле на диске, и в снимке `replaceRaw` до allowlist'а.
     'tun_apps',
     'vpn_mode',
     'warp_account',
@@ -156,8 +164,6 @@ class SettingsStorage {
     //                   allowlist → терялся при restore (default-deny)
     'last_global_update',
     'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
-    'preset_ids_remapped', // §228 legacy guard; миграция удалена в §229, ключ
-    //                        сохранён (имя не переиспользовать, не мусор)
     'interrupt_connections_on_switch',
     'node_sort_mode',
     'node_manual_order',
@@ -287,13 +293,23 @@ class SettingsStorage {
   static Future<void> removeVar(String name) => _removeVar(name);
 
   // ---------------------------------------------------------------------------
-  // Server lists (v2). Ключ на диске: `server_lists`.
+  // Источники — записи `sources[]` без цепочек (§439).
   // ---------------------------------------------------------------------------
 
   static Future<List<ServerList>> getServerLists() => _getServerLists();
 
+  /// Переписывает источники; цепочки остаются хвостом `sources[]`.
   static Future<void> saveServerLists(List<ServerList> lists) =>
       _saveServerLists(lists);
+
+  /// Источники документа хранения [doc] — снимка [dumpCache] или блока
+  /// `storage` бэкапа — тем же чтением, что [getServerLists]. Нечитаемая
+  /// запись пропускается, причина уходит в [onCorrupt].
+  static List<ServerList> serverListsOf(
+    Map<String, dynamic> doc, {
+    void Function(Object error)? onCorrupt,
+  }) =>
+      _serverListsOf(doc, onCorrupt: onCorrupt);
 
   // §159 — getEnabledRules/saveEnabledRules удалены (legacy-миграция снята).
 
@@ -369,13 +385,23 @@ class SettingsStorage {
       _migrateDirectionsIfNeeded(gt, varDefaults: varDefaults);
 
   // ---------------------------------------------------------------------------
-  // §393 C2 — источники-цепочки (chains[]). Третий тип источника рядом с
-  // подпиской и сервером (SPEC 110); НЕ Направление (§393 L5) и НЕ узел
-  // подписки. Порядок списка нормативен: ссылка позиции разрешена только на
-  // цепочку, объявленную ВЫШЕ, — этим исключены циклы между цепочками.
+  // §393 C2 — источники-цепочки: записи `kind: chain` хвостом `sources[]`
+  // (§439). Тип источника рядом с подпиской и сервером (SPEC 110); НЕ
+  // Направление (§393 L5) и НЕ узел подписки. Порядок списка нормативен:
+  // ссылка позиции разрешена только на цепочку, объявленную ВЫШЕ, — этим
+  // исключены циклы между цепочками.
   // ---------------------------------------------------------------------------
 
   static Future<List<SourceChain>> getChains() => _getChains();
+
+  /// Цепочки документа хранения [doc] (снимок [dumpCache], блок `storage`
+  /// бэкапа) тем же чтением, что [getChains]. Нечитаемая запись
+  /// пропускается, причина уходит в [onCorrupt].
+  static List<SourceChain> chainsOf(
+    Map<String, dynamic> doc, {
+    void Function(Object error)? onCorrupt,
+  }) =>
+      _chainsOf(doc, onCorrupt: onCorrupt);
 
   static Future<void> setChains(List<SourceChain> chains, {bool flush = true}) =>
       _setChains(chains, flush: flush);
@@ -407,15 +433,12 @@ class SettingsStorage {
   /// цепочек (сами они остаются); счётчик снятого — в [ChainHealResult].
   static Future<ChainHealResult> deleteChain(String tag) => _deleteChain(tag);
 
-  /// §393 D2 — вычистить позиции с тегом [tag] из всех цепочек. Зовётся при
-  /// осознанном удалении ЧУЖОГО источника (сервер, подписка, папка,
-  /// Направление). Обновление подписки сюда НЕ входит — см. `_healChainHops`.
+  /// §393 D2 — вычистить позиции-корневые ссылки на [tag] из всех цепочек.
+  /// Зовётся при удалении Направления; ссылки на узлы (сервер, член папки,
+  /// узел подписки) гасит реестр ссылок (`node_link_registry.dart`).
+  /// Обновление подписки сюда НЕ входит — см. `_healChainHops`.
   static Future<ChainHealResult> healChainHops(String tag, {bool flush = true}) =>
       _healChainHops(tag, flush: flush);
-
-  /// §393 D1 — one-shot миграция позиций цепочек в общий список источников.
-  /// Идемпотентна; зовётся из тех же точек, что [migrateDirectionsIfNeeded].
-  static Future<void> migrateChainOrderIfNeeded() => _migrateChainOrderIfNeeded();
 
   // ---------------------------------------------------------------------------
   // Last global update timestamp
@@ -437,11 +460,21 @@ class SettingsStorage {
   // §159 — getRuleOutbounds/saveRuleOutbounds удалены (legacy-миграция снята).
 
   // ---------------------------------------------------------------------------
-  // Custom rules (§030) — единая модель для domain/IP/port/package/protocol/srs.
-  // Per-app rules сюда же (поле `packages`), отдельного типа больше нет.
+  // Custom rules (§030) — записи `rules[]` (§439). Единая модель для
+  // domain/IP/port/package/protocol/srs; per-app rules сюда же (поле
+  // `packages`), отдельного типа нет.
   // ---------------------------------------------------------------------------
 
   static Future<List<CustomRule>> getCustomRules() => _getCustomRules();
+
+  /// Правила документа хранения [doc] (блок `storage` бэкапа) тем же чтением,
+  /// что [getCustomRules]. С [onCorrupt] нечитаемая запись пропускается и
+  /// уходит в него, без него ошибка разбора летит вызывающему.
+  static List<CustomRule> customRulesOf(
+    Map<String, dynamic> doc, {
+    void Function(Object error)? onCorrupt,
+  }) =>
+      _customRulesOf(doc, onCorrupt: onCorrupt);
 
   static Future<void> saveCustomRules(List<CustomRule> rules,
           {bool flush = true}) =>
@@ -485,8 +518,8 @@ class SettingsStorage {
   static Future<void> savePassiveCheck(bool enabled, {bool flush = true}) =>
       _savePassiveCheck(enabled, flush: flush);
 
-  // §125-cleanup — excluded_nodes (§048 глобальный фильтр) удалён. Ключ остаётся
-  // в allowlist (legacy backward-compat, безвредный мусор как enabled_groups).
+  // §125-cleanup — excluded_nodes (§048 глобальный фильтр) удалён; ключ снимает
+  // миграция §439.
 
   // §100 — персист сортировки нод (имя режима + порядок ручной сортировки).
   static Future<({String mode, List<String> order})> getNodeSort() async {
@@ -540,9 +573,14 @@ class SettingsStorage {
     await _save();
   }
 
-  static Future<List<Map<String, dynamic>>> getDnsServers() => _getDnsServers();
+  /// §439 — DNS-серверы (`dns.servers`) моделями. Записи, которые кодек не
+  /// читает, сюда не попадают и сохранением не стираются
+  /// (`settings_storage/network.dart`).
+  static Future<List<DnsServerRef>> getDnsServers() => _getDnsServers();
 
-  static Future<void> saveDnsServers(List<Map<String, dynamic>> servers,
+  /// Сохраняет список серверов целиком. Orphan-cleanup и auto-discovery —
+  /// забота вызывающего (`resolveDnsServersList`).
+  static Future<void> saveDnsServers(List<DnsServerRef> servers,
           {bool flush = true}) =>
       _saveDnsServers(servers, flush: flush);
 
@@ -581,30 +619,13 @@ class SettingsStorage {
   static Future<void> clearGroupPing(String groupTag) =>
       _clearGroupPing(groupTag);
 
-  /// DEPRECATED (§061 dns-rules-refactor, бывший feature §041): legacy
-  /// `dns_options.rules_json` — single JSON-string override. Заменён на
-  /// структурированный [getDnsRulesList]. Поле в storage остаётся для
-  /// downgrade-friendliness, но билдер и UI больше не читают.
-  ///
-  /// §219 — геттер `getDnsRules()` удалён (0 call-sites). `saveDnsRules`
-  /// оставлен: его дёргает legacy Debug-эндпоинт `PUT /settings/dns_options/
-  /// rules`. NB: он пишет в `rules_json`, который билдер игнорирует, — эндпоинт
-  /// фактически no-op; депрекация роута — отдельно (обновить help/reference).
-  @Deprecated('Use saveDnsRulesList() instead. See task 061.')
-  static Future<void> saveDnsRules(String rulesJson) => _saveDnsRules(rulesJson);
+  /// §439 — DNS-правила (`dns.rules`, §061/§033) моделями. Пусто —
+  /// auto-discovery билдера/экрана заполнит начальный набор.
+  static Future<List<DnsRuleRef>> getDnsRulesList() => _getDnsRulesList();
 
-  /// Структурированный список DNS-правил (§061 dns-rules-refactor, бывший feature §041). Каждая запись:
-  /// `{enabled: bool, type: 'user'|'template'|'rule', title: String, rule?: Map}`.
-  /// Если ключ отсутствует — возвращает пустой список (auto-discovery в
-  /// builder/UI заполнит начальный набор).
-  static Future<List<Map<String, dynamic>>> getDnsRulesList() =>
-      _getDnsRulesList();
-
-  /// Сохраняет структурированный список DNS-правил. Caller отвечает за
-  /// orphan-cleanup (§061) — выбрасывание `type: template/rule` чьи titles
-  /// не находятся в текущем шаблоне / активных пресетах. Этот метод просто
-  /// пишет, что дали.
-  static Future<void> saveDnsRulesList(List<Map<String, dynamic>> rules,
+  /// Сохраняет список DNS-правил целиком. Orphan-cleanup (§061) — забота
+  /// вызывающего (`resolveDnsRulesList`, `cleanDnsRulesForPersist`).
+  static Future<void> saveDnsRulesList(List<DnsRuleRef> rules,
           {bool flush = true}) =>
       _saveDnsRulesList(rules, flush: flush);
 
@@ -890,6 +911,24 @@ class SettingsStorage {
   /// [BackupService]. Возвращает то же что [dumpCache] — alias для ясности
   /// семантики на call-site.
   static Future<Map<String, dynamic>> exportRaw() => dumpCache();
+
+  /// §439 §3.5 — документ `lxbox_settings.json.v0.bak`: состояние хранения
+  /// формы 2.23.2 на момент миграции. null — копии нет или она не читается.
+  static Future<Map<String, dynamic>?> exportV0Backup() => _readV0Backup();
+
+  /// §439 §3.1 шаг 2 — тег preset-сервера DNS → `preset_id` по шаблону для
+  /// [migrateStorageDoc] на входах старой формы. Шаблон не загрузился — пусто:
+  /// preset-серверы получают `ref` = тег.
+  static Future<Map<String, String>> presetIdsForMigration() =>
+      _presetIdsForMigration();
+
+  /// §439 п. 8 — тела подписок документа [doc] формы 2.23.2 из `sub_cache`
+  /// («адрес → тело») для [migrateStorageDoc] на входах старой формы: ссылки
+  /// на узлы подписок переводятся в пары тем же словарём, что в `_load`.
+  /// Кэша нет — пусто.
+  static Future<Map<String, String>> subscriptionBodiesForMigration(
+          Map<String, dynamic> doc) =>
+      _subscriptionBodiesForMigration(doc);
 
   /// §413 — подключи `vars` Debug API: секрет и адрес сервера конкретного
   /// устройства. Экспорт их по умолчанию не включает; полная замена

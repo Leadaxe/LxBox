@@ -171,10 +171,17 @@ class HomeControls extends StatelessWidget {
                       value: state.groups.contains(state.selectedGroup)
                           ? state.selectedGroup
                           : null,
-                      hint: Text(getLocalText.s("Select direction")),
+                      // Поле высотой 40: перенос строки обрезал подсказку
+                      // пополам (ru «Выберите Направление»). Одна строка с
+                      // многоточием и у подсказки, и у длинного имени.
+                      hint: Text(getLocalText.s("Select direction"),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
                       items: state.groups
                           .map((g) => DropdownMenuItem(
-                              value: g, child: Text(state.groupLabelOf(g))))
+                              value: g,
+                              child: Text(state.groupLabelOf(g),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis)))
                           .toList(),
                       onChanged: (!state.tunnelUp || state.busy || state.groups.isEmpty)
                           ? null

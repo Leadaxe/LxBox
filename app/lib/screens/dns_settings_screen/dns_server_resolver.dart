@@ -1,4 +1,5 @@
 import '../../models/custom_rule.dart';
+import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart' show WizardVar;
 import '../../services/builder/post_steps.dart'
     show resolveTemplateDnsServerBody;
@@ -21,7 +22,7 @@ import 'resolved_server.dart';
 ///
 /// — pure.
 List<ResolvedServer> resolveDisplayedServers(
-  List<Map<String, dynamic>> servers,
+  List<DnsServerRef> servers,
   Map<String, Map<String, dynamic>> templateByTag,
   Map<String, Map<String, dynamic>> presetServersByTag, {
   // §117 задача 3: tag → имя routing-правила с активной DNS-опцией
@@ -30,67 +31,74 @@ List<ResolvedServer> resolveDisplayedServers(
 }) {
   final out = <ResolvedServer>[];
   for (final ref in servers) {
-    final kindStr = ref['kind']?.toString();
-    final tag = ref['tag']?.toString();
-    if (kindStr == null || tag == null || tag.isEmpty) continue;
-    final kind = ServerKind.tryParse(kindStr);
-    if (kind == null) continue;
+    final tag = ref.tag;
+    if (tag.isEmpty) continue;
 
-    Map<String, dynamic>? body;
+    final ServerKind kind;
+    final Map<String, dynamic> body;
     ServerKind? overrides;
     String? presetLabel;
+    var presetId = '';
     String? canonicalDescription;
     var vars = const <WizardVar>[];
     var varValues = const <String, String>{};
 
-    if (kind == ServerKind.inline) {
-      final b = ref['body'];
-      body = b is Map ? Map<String, dynamic>.from(b) : <String, dynamic>{};
-      // Override-detection (preset wins over template).
-      if (presetServersByTag.containsKey(tag)) {
-        overrides = ServerKind.preset;
-        final p = presetServersByTag[tag]!;
+    switch (ref) {
+      case DnsServerInline():
+        kind = ServerKind.inline;
+        body = Map<String, dynamic>.from(ref.body);
+        // Override-detection (preset wins over template).
+        if (presetServersByTag.containsKey(tag)) {
+          overrides = ServerKind.preset;
+          final p = presetServersByTag[tag]!;
+          presetLabel = p['_preset_label']?.toString();
+          presetId = p['_preset_id']?.toString() ?? '';
+          canonicalDescription = p['description']?.toString();
+        } else if (templateByTag.containsKey(tag)) {
+          overrides = ServerKind.template;
+          canonicalDescription = templateByTag[tag]?['description']?.toString();
+        }
+      case DnsServerPreset():
+        kind = ServerKind.preset;
+        final p = presetServersByTag[tag];
+        if (p == null) continue; // orphan
+        body = Map<String, dynamic>.from(p)
+          ..remove('_preset_label')
+          ..remove('_preset_id');
         presetLabel = p['_preset_label']?.toString();
+        presetId = ref.presetId.isNotEmpty
+            ? ref.presetId
+            : p['_preset_id']?.toString() ?? '';
         canonicalDescription = p['description']?.toString();
-      } else if (templateByTag.containsKey(tag)) {
-        overrides = ServerKind.template;
-        canonicalDescription = templateByTag[tag]?['description']?.toString();
-      }
-    } else if (kind == ServerKind.preset) {
-      final p = presetServersByTag[tag];
-      if (p == null) continue; // orphan
-      body = Map<String, dynamic>.from(p)..remove('_preset_label');
-      presetLabel = p['_preset_label']?.toString();
-      canonicalDescription = p['description']?.toString();
-    } else if (kind == ServerKind.template) {
-      final t = templateByTag[tag];
-      if (t == null) continue; // orphan
-      // §117: обёртка `{description, enabled, vars?, server}` — body это
-      // `server` с подставленными vars; display показывает emit-форму
-      // (detour normalized), поэтому direct-out в диалоге не светится.
-      final vv = ref['varValues'];
-      varValues = vv is Map
-          ? {for (final e in vv.entries) e.key.toString(): '${e.value}'}
-          : const {};
-      body = resolveTemplateDnsServerBody(t, varValues: varValues);
-      if (body == null) continue; // malformed wrapper
-      normalizeDnsDetour(body);
-      vars = (t['vars'] as List<dynamic>? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(WizardVar.fromJson)
-          .toList();
-      canonicalDescription = t['description']?.toString();
+      case DnsServerTemplate():
+        kind = ServerKind.template;
+        final t = templateByTag[tag];
+        if (t == null) continue; // orphan
+        // §117: обёртка `{description, enabled, vars?, server}` — body это
+        // `server` с подставленными vars; display показывает emit-форму
+        // (detour normalized), поэтому direct-out в диалоге не светится.
+        varValues = ref.varValues;
+        final resolvedBody =
+            resolveTemplateDnsServerBody(t, varValues: varValues);
+        if (resolvedBody == null) continue; // malformed wrapper
+        normalizeDnsDetour(resolvedBody);
+        body = resolvedBody;
+        vars = (t['vars'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(WizardVar.fromJson)
+            .toList();
+        canonicalDescription = t['description']?.toString();
     }
 
     // Synthesize tag в body (single source of truth — ref.tag).
     // Strip meta (description/enabled из canonical body не нужны).
-    body!
+    body
       ..['tag'] = tag
       ..remove('description')
       ..remove('enabled');
 
     // Resolved description: ref.description если есть; иначе canonical's.
-    final refDesc = ref['description']?.toString();
+    final refDesc = ref.description;
     final description = (refDesc != null && refDesc.isNotEmpty)
         ? refDesc
         : (canonicalDescription ?? '');
@@ -99,10 +107,11 @@ List<ResolvedServer> resolveDisplayedServers(
       kind: kind,
       tag: tag,
       description: description,
-      enabled: ref['enabled'] != false,
+      enabled: ref.enabled,
       body: body,
       overrides: overrides,
       presetLabel: presetLabel,
+      presetId: presetId,
       vars: vars,
       varValues: varValues,
       usedByRule: ruleRefsByTag[tag],
@@ -141,8 +150,8 @@ List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
 /// возвращает record'ом. Рефы routing-правил (задача 3) — отдельным
 /// [renameRuleDnsServerTag] (другой storage). — pure.
 ({String dnsFinal, String defaultResolver}) renameDnsServerTagRefs({
-  required List<Map<String, dynamic>> servers,
-  required List<Map<String, dynamic>> rules,
+  required List<DnsServerRef> servers,
+  required List<DnsRuleRef> rules,
   required Map<String, Map<String, dynamic>> templateByTag,
   required String oldTag,
   required String newTag,
@@ -150,58 +159,49 @@ List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
   required String defaultResolver,
 }) {
   for (var i = 0; i < servers.length; i++) {
-    final entry = Map<String, dynamic>.from(servers[i]);
-    var changed = false;
-    if (entry['kind'] == 'inline' && entry['body'] is Map) {
-      final body = Map<String, dynamic>.from(entry['body'] as Map);
-      if (body['domain_resolver'] == oldTag) {
-        body['domain_resolver'] = newTag;
-        entry['body'] = body;
-        changed = true;
-      }
-    } else if (entry['kind'] == 'template' && entry['varValues'] is Map) {
-      // Только vars типа dns_servers — enum-значение может текстуально
-      // совпасть с тегом, его не трогаем.
-      final wrapper = templateByTag[entry['tag']?.toString()];
-      final dnsVarNames = <String>{
-        for (final d in (wrapper?['vars'] as List<dynamic>? ?? const [])
-            .whereType<Map<String, dynamic>>())
-          if (d['type'] == 'dns_servers' && d['name'] is String)
-            d['name'] as String,
-      };
-      if (dnsVarNames.isNotEmpty) {
-        final vv = Map<String, dynamic>.from(entry['varValues'] as Map);
-        var vvChanged = false;
-        for (final name in dnsVarNames) {
-          if (vv[name] == oldTag) {
-            vv[name] = newTag;
-            vvChanged = true;
-          }
+    final entry = servers[i];
+    switch (entry) {
+      case DnsServerInline(:final body):
+        if (body['domain_resolver'] == oldTag) {
+          servers[i] = entry.copyWith(
+              body: {...body, 'domain_resolver': newTag});
         }
-        if (vvChanged) {
-          entry['varValues'] = vv;
-          changed = true;
+      case DnsServerTemplate(:final varValues) when varValues.isNotEmpty:
+        // Только vars типа dns_servers — enum-значение может текстуально
+        // совпасть с тегом, его не трогаем.
+        final wrapper = templateByTag[entry.tag];
+        final dnsVarNames = <String>{
+          for (final d in (wrapper?['vars'] as List<dynamic>? ?? const [])
+              .whereType<Map<String, dynamic>>())
+            if (d['type'] == 'dns_servers' && d['name'] is String)
+              d['name'] as String,
+        };
+        if (dnsVarNames.any((name) => varValues[name] == oldTag)) {
+          servers[i] = entry.copyWith(varValues: {
+            for (final e in varValues.entries)
+              e.key: dnsVarNames.contains(e.key) && e.value == oldTag
+                  ? newTag
+                  : e.value,
+          });
         }
-      }
+      case DnsServerTemplate() || DnsServerPreset():
+        break;
     }
-    if (changed) servers[i] = entry;
   }
 
   for (var i = 0; i < rules.length; i++) {
-    final entry = Map<String, dynamic>.from(rules[i]);
-    var changed = false;
-    if (entry['kind'] == 'inline' && entry['rule'] is Map) {
-      final rule = Map<String, dynamic>.from(entry['rule'] as Map);
-      if (rule['server'] == oldTag) {
-        rule['server'] = newTag;
-        entry['rule'] = rule;
-        changed = true;
-      }
-    } else if (entry['kind'] == 'srs' && entry['server'] == oldTag) {
-      entry['server'] = newTag;
-      changed = true;
+    final entry = rules[i];
+    switch (entry) {
+      case DnsRuleInline(:final rule) when rule['server'] == oldTag:
+        rules[i] = entry.copyWith(rule: {...rule, 'server': newTag});
+      case DnsRuleSrs(:final server) when server == oldTag:
+        rules[i] = entry.copyWith(server: newTag);
+      // §439 A1 — сборка читает `server` и из `body` (форма §294).
+      case DnsRuleSrs(:final body?) when body['server'] == oldTag:
+        rules[i] = entry.copyWith(body: {...body, 'server': newTag});
+      default:
+        break;
     }
-    if (changed) rules[i] = entry;
   }
 
   return (
@@ -239,31 +239,18 @@ List<CustomRule> renameRuleDnsServerTag(
 /// resolveDnsRulesList semantics.
 ///
 /// pure.
-List<Map<String, dynamic>> cleanDnsRulesForPersist(
-  List<Map<String, dynamic>> rules,
+List<DnsRuleRef> cleanDnsRulesForPersist(
+  List<DnsRuleRef> rules,
   Map<String, Map<String, dynamic>> templateRulesByName,
   Map<String, List<Map<String, dynamic>>> presetRulesByPresetId,
 ) {
-  return rules.where((e) {
-    final kind = e['kind'] as String?;
-    if (kind == null) return false;
-    if (kind == 'inline') {
-      final name = e['name'] as String?;
-      return name != null && name.isNotEmpty;
-    }
-    if (kind == 'srs') {
-      final id = e['id'] as String?;
-      final name = e['name'] as String?;
-      return id != null && id.isNotEmpty && name != null && name.isNotEmpty;
-    }
-    if (kind == 'template') {
-      final name = e['name'] as String?;
-      return name != null && templateRulesByName.containsKey(name);
-    }
-    if (kind == 'preset') {
-      final pid = e['presetId'] as String?;
-      return pid != null && presetRulesByPresetId.containsKey(pid);
-    }
-    return false;
-  }).toList();
+  return rules
+      .where((e) => switch (e) {
+            DnsRuleInline() || DnsRuleSrs() => true,
+            DnsRuleTemplate(:final name) =>
+              templateRulesByName.containsKey(name),
+            DnsRulePreset(:final presetId) =>
+              presetRulesByPresetId.containsKey(presetId),
+          })
+      .toList();
 }

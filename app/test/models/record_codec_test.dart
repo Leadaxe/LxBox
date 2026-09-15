@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/custom_rule.dart';
@@ -158,10 +160,16 @@ void main() {
       expect(back.varsValues, {'outbound': 'vpn-1'});
     });
 
-    test('json: текст как есть', () {
+    test('json: inline + verbatim, объект — в body, тело то же после круга',
+        () {
       final r = CustomRuleJson(name: 'raw', json: '{"outbound":"x"}');
-      final back = ruleFromRecord(ruleToRecord(r)).value! as CustomRuleJson;
-      expect(back.json, '{"outbound":"x"}');
+      final rec = ruleToRecord(r);
+      expect(rec['kind'], 'inline');
+      expect(rec['verbatim'], isTrue);
+      expect(rec['body'], {'outbound': 'x'});
+      final back = ruleFromRecord(rec).value! as CustomRuleJson;
+      expect(jsonDecode(back.json), {'outbound': 'x'});
+      expect(ruleToRecord(back), rec);
     });
   });
 
@@ -220,6 +228,285 @@ void main() {
       expect(dnsRuleFromRecord({'kind': 'template', 'name': 't'}).value, isA<DnsRuleTemplate>());
       expect(dnsRuleFromRecord({'kind': 'user', 'name': 'x'}).dropped, contains('body'));
       expect(dnsRuleFromRecord({'kind': 'zzz'}).dropped, contains('zzz'));
+    });
+  });
+
+  // §439 §4.2 — путь хранения: `fromRecord(toRecord(x)) == x` для правил всех
+  // видов (с `unknownAsVerbatim`) и DNS-записей всех видов, через JSON-текст
+  // файла; вторая запись совпадает с первой.
+  group('§439 круг кодека правил хранения', () {
+    CustomRule viaStorage(CustomRule r) => ruleFromRecord(
+          (jsonDecode(jsonEncode(ruleToRecord(r))) as Map)
+              .cast<String, dynamic>(),
+          unknownAsVerbatim: true,
+        ).value!;
+
+    final rules = <CustomRule>[
+      CustomRuleInline(
+        id: 'i1',
+        name: 'Home LAN',
+        enabled: false,
+        orderNum: 945,
+        domainSuffixes: ['.lan'],
+        ipCidrs: ['10.0.0.0/8'],
+        ports: ['443'],
+        portRanges: ['8000:9000'],
+        packages: ['com.app'],
+        network: ['tcp'],
+        wifiSsids: ['home'],
+        outbound: 'vpn-2',
+        dns: const RuleDns(enabled: true, serverTag: 'my-doh', forceIpv4: true),
+        resolve: const RuleResolve(only: true, strategy: 'ipv4_only'),
+      ),
+      CustomRuleInline(name: '  spaced name  ', domains: ['a'], outbound: kOutboundReject),
+      CustomRuleSrs(
+        id: 's1',
+        name: 'Geo sets',
+        orderNum: 1010,
+        srsUrls: ['https://x/a.srs', 'https://x/b.srs'],
+        updateIntervalHours: 720,
+        protocols: ['quic'],
+        outbound: 'vpn-1',
+      ),
+      CustomRuleSrs(id: 's2', name: 'Never', srsUrl: 'https://x/c.srs', updateIntervalHours: 0),
+      CustomRulePreset(
+        id: 'p1',
+        name: 'Russia direct',
+        orderNum: 1120,
+        presetId: 'ru-direct',
+        varsValues: {'outbound': 'direct-out', 'dns_ip': '77.88.8.8'},
+      ),
+      CustomRuleJson(
+        id: 'j1',
+        name: 'Json object',
+        orderNum: 1020,
+        json: '{"//":"note","domain_suffix":[".x"],"action":"route","outbound":"vpn-1"}',
+      ),
+      CustomRuleJson(id: 'j2', name: 'Json broken', json: '{not json'),
+    ];
+
+    for (final r in rules) {
+      test('${r.kind.name} "${r.name}"', () {
+        final back = viaStorage(r);
+        if (r is CustomRuleJson && r.json.startsWith('{not')) {
+          // Нечитаемый текст — маркер без тела: имя, id и ось на месте, тело
+          // пустое (текст остаётся в .v0.bak миграции).
+          expect(back, isA<CustomRuleJson>());
+          expect((back as CustomRuleJson).json, '');
+          expect(back.id, r.id);
+          expect(ruleToRecord(back).containsKey('body'), isFalse);
+          return;
+        }
+        expect(back, r);
+        expect(jsonEncode(ruleToRecord(back)), jsonEncode(ruleToRecord(r)));
+      });
+    }
+
+    test('json-массив: запись держит один объект — splitJsonRuleArrays до '
+        'кодека, каждая часть проходит круг', () {
+      final split = splitJsonRuleArrays([
+        CustomRuleJson(
+          id: 'arr',
+          name: 'Json array',
+          orderNum: 1021,
+          json: '[{"action":"sniff"},{"domain_suffix":[".y"],"outbound":"direct-out"}]',
+        ),
+      ]);
+      expect(split.map((x) => x.name), ['Json array', 'Json array #2']);
+      for (final part in split) {
+        expect(viaStorage(part), part);
+      }
+      // Без деления массив не пережил бы запись: тела у маркера нет.
+      final unsplit = CustomRuleJson(name: 'raw', json: '[{"action":"sniff"}]');
+      expect(ruleToRecord(unsplit).containsKey('body'), isFalse);
+    });
+  });
+
+  group('§439 круг кодека DNS-записей хранения', () {
+    Map<String, dynamic> viaFile(Map<String, dynamic> rec) =>
+        (jsonDecode(jsonEncode(rec)) as Map).cast<String, dynamic>();
+
+    const servers = <DnsServerRef>[
+      DnsServerInline(
+        enabled: false,
+        tag: 'my-doh',
+        body: {'type': 'https', 'server': 'dns.example', 'detour': 'vpn-1'},
+        description: 'Mine',
+      ),
+      DnsServerPreset(
+          enabled: true, tag: 'ru-direct:yandex_udp', presetId: 'ru-direct'),
+      DnsServerPreset(
+          enabled: false,
+          tag: 'ru-direct:yandex_doh',
+          presetId: 'ru-direct',
+          description: 'Yandex (off)'),
+      DnsServerPreset(enabled: true, tag: 'orphan'),
+      DnsServerTemplate(
+        enabled: true,
+        tag: 'google_doh',
+        varValues: {'outbound': 'vpn-1', 'dns_ip': '8.8.4.4'},
+        description: '',
+      ),
+    ];
+    for (final s in servers) {
+      test('сервер ${s.kind} "${s.tag}"', () {
+        final rec = dnsServerToRecord(s);
+        final back = dnsServerFromRecord(viaFile(rec)).value!;
+        expect(back, s);
+        expect(dnsServerToRecord(back), rec);
+      });
+    }
+
+    const dnsRules = <DnsRuleRef>[
+      DnsRuleInline(
+        name: 'corp',
+        enabled: false,
+        rule: {
+          'domain_suffix': ['.corp'],
+          'server': 'my-doh',
+        },
+      ),
+      DnsRulePreset(presetId: 'ru-direct', enabled: true),
+      DnsRuleSrs(
+        name: 'geo',
+        id: 'ds_geo',
+        body: {'server': 'google_doh'},
+      ),
+      DnsRuleSrs(
+        name: 'top-level',
+        id: 'ds_top',
+        srsUrl: 'https://x/geo.srs',
+        server: 'my-doh',
+        rule: {
+          'query_type': ['A'],
+        },
+        enabled: false,
+      ),
+      DnsRuleTemplate(name: 'Default', enabled: true),
+      DnsRuleTemplate(name: 'Off', enabled: false),
+    ];
+    for (final (i, r) in dnsRules.indexed) {
+      test('правило #$i ${r.kind}', () {
+        final rec = dnsRuleToRecord(r);
+        final back = dnsRuleFromRecord(viaFile(rec)).value!;
+        expect(back, r);
+        expect(dnsRuleToRecord(back), rec);
+      });
+    }
+  });
+
+  // §439 — тег preset-сервера DNS в модели — тег конфига (`<preset_id>:<тег
+  // внутри пресета>`, `namespacePresetTags`), `ref` записи — та же строка.
+  // Раньше кодек клеил `presetId` к тегу конфига второй раз и при чтении
+  // резал `ref` до тега внутри пресета: резолвер не узнавал сервер, заводил
+  // новый (включённый, без description) и писал `ru-direct:ru-direct:dns_ru`.
+  group('§439 preset-сервер DNS: ref = тег конфига', () {
+    Map<String, dynamic> viaFile(Map<String, dynamic> rec) =>
+        (jsonDecode(jsonEncode(rec)) as Map).cast<String, dynamic>();
+
+    test('запись: ref без повтора пространства, выключатель и description', () {
+      const s = DnsServerPreset(
+        enabled: false,
+        tag: 'ru-direct:dns_ru',
+        presetId: 'ru-direct',
+        description: 'Mine',
+      );
+      final rec = dnsServerToRecord(s);
+      expect(rec, {
+        'kind': 'preset',
+        'ref': 'ru-direct:dns_ru',
+        'enabled': false,
+        'description': 'Mine',
+      });
+      final back = dnsServerFromRecord(viaFile(rec)).value! as DnsServerPreset;
+      expect(back, s);
+      expect(back.tag, 'ru-direct:dns_ru');
+      expect(back.presetId, 'ru-direct');
+      expect(back.enabled, isFalse);
+      expect(back.description, 'Mine');
+      expect(dnsServerToRecord(back), rec);
+    });
+
+    test('круг устойчив: запись → модель → запись три раза подряд', () {
+      var rec = <String, dynamic>{
+        'kind': 'preset',
+        'ref': 'ru-direct:yandex_doh',
+        'enabled': false,
+      };
+      for (var i = 0; i < 3; i++) {
+        rec = dnsServerToRecord(dnsServerFromRecord(viaFile(rec)).value!);
+      }
+      expect(rec, {
+        'kind': 'preset',
+        'ref': 'ru-direct:yandex_doh',
+        'enabled': false,
+      });
+    });
+
+    test('модель без presetId: пространство из тега, ref тот же', () {
+      const s = DnsServerPreset(enabled: true, tag: 'ru-direct:dns_ru');
+      expect(s.presetId, 'ru-direct');
+      expect(
+          s,
+          const DnsServerPreset(
+              enabled: true, tag: 'ru-direct:dns_ru', presetId: 'ru-direct'));
+      expect(dnsServerToRecord(s)['ref'], 'ru-direct:dns_ru');
+      expect(dnsServerFromRecord(dnsServerToRecord(s)).value, s);
+    });
+
+    test('тег внутри пресета при известном presetId (читатель файла 0.x) — '
+        'тег конфига', () {
+      const s =
+          DnsServerPreset(enabled: true, tag: 'dns_ru', presetId: 'ru-direct');
+      expect(s.tag, 'ru-direct:dns_ru');
+      expect(s, const DnsServerPreset(enabled: true, tag: 'ru-direct:dns_ru'));
+      expect(dnsServerToRecord(s)['ref'], 'ru-direct:dns_ru');
+    });
+
+    test('ранняя форма 2.23.3 с повтором пространства читается терпимо', () {
+      final back = dnsServerFromRecord({
+        'kind': 'preset',
+        'ref': 'ru-direct:ru-direct:dns_ru',
+        'enabled': false,
+        'description': 'd',
+      }).value! as DnsServerPreset;
+      expect(back.tag, 'ru-direct:dns_ru');
+      expect(back.presetId, 'ru-direct');
+      expect(back.enabled, isFalse);
+      expect(back.description, 'd');
+      expect(dnsServerToRecord(back)['ref'], 'ru-direct:dns_ru');
+      // Повтор в модели тоже не доезжает до записи.
+      expect(
+          dnsServerToRecord(const DnsServerPreset(
+              enabled: true, tag: 'ru-direct:ru-direct:dns_ru'))['ref'],
+          'ru-direct:dns_ru');
+    });
+
+    test('двоеточие в теге внутри пресета: пресет — до ПЕРВОГО `:`', () {
+      const s = DnsServerPreset(enabled: true, tag: 'p:dns:v6', presetId: 'p');
+      final rec = dnsServerToRecord(s);
+      expect(rec['ref'], 'p:dns:v6');
+      expect(presetIdOfDnsServerRef('p:dns:v6'), 'p');
+      expect(presetIdOfDnsServerRef('yandex_udp'), '');
+      final back = dnsServerFromRecord(rec).value! as DnsServerPreset;
+      expect(back.presetId, 'p');
+      expect(back.tag, 'p:dns:v6');
+      expect(back, s);
+    });
+
+    test('ref без пространства — тег целиком, пресет не известен; прежняя '
+        'форма `tag` читается так же', () {
+      final bare = dnsServerFromRecord({'kind': 'preset', 'ref': 'orphan'})
+          .value! as DnsServerPreset;
+      expect(bare.tag, 'orphan');
+      expect(bare.presetId, '');
+      expect(dnsServerToRecord(bare)['ref'], 'orphan');
+      final old = dnsServerFromRecord({'kind': 'preset', 'tag': 'ru-direct:dns_ru'})
+          .value! as DnsServerPreset;
+      expect(old,
+          const DnsServerPreset(enabled: true, tag: 'ru-direct:dns_ru'));
+      expect(dnsServerFromRecord({'kind': 'preset', 'ref': 'ru-direct:'}).dropped,
+          contains('without tag'));
     });
   });
 }

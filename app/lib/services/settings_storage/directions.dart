@@ -13,18 +13,24 @@ part of '../settings_storage.dart';
 /// §248 — счётчики вылеченных ссылок при мутации Направления (SnackBar в UI,
 /// тело ответа Debug API). `rules` — route_final/custom-rule → vpn-1
 /// (только disable/delete, §274 снял flag-set-триггер); `detours` —
-/// overrideDetour/member.detour → '' (None) при disable/delete/flag-unset;
+/// overrideDetour/member.detour → нет ссылки (None) при disable/delete/flag-unset;
 /// `includes` — §393 A3, `Direction.include` чужих Направлений → тег вычеркнут
 /// (только delete, см. [clearIncludeDirectionRefs]).
 /// §393 D2 — `chainPositions`: ПОЗИЦИИ цепочек с тегом удалённого Направления
 /// (только delete, см. [clearChainHopRefs]). Цепочка при этом ОСТАЁТСЯ —
 /// снимается ровно позиция, и потому счётчик обязан быть виден: маршрут 3+
 /// хопов после вычистки эмитится укороченным.
+/// §441 — `dnsServers`: DNS-серверы, которые называли Направление, → vpn-1,
+/// как цель правила (disable/delete): у template — переменная типа
+/// `outbound` (`vars.outbound`), у пользовательского — `body.detour`, в
+/// корневом списке и в секциях узлов. Без лечения такой сервер выпадает на
+/// сборке (Н10), а его DNS-правила становятся отказом.
 typedef DirectionHealResult = ({
   int rules,
   int detours,
   int includes,
   int chainPositions,
+  int dnsServers,
 });
 
 Future<List<Direction>> _getDirections() async {
@@ -91,9 +97,14 @@ Future<DirectionHealResult> _updateDirection(Direction direction) async {
   final flagUnset = was.isDetour && !direction.isDetour;
   var rules = 0;
   var detours = 0;
+  var dnsServers = 0;
   if (disabling || flagUnset) {
     await _setDirections(directions, flush: false); // единый flush ниже
-    if (disabling) rules = await _healDirectionRefs(direction.tag);
+    if (disabling) {
+      final healed = await _healDirectionRefs(direction.tag);
+      rules = healed.rules;
+      dnsServers = healed.dnsServers;
+    }
     detours = await _healDetourDirectionRefs(direction.tag);
     await _save();
   } else {
@@ -107,11 +118,18 @@ Future<DirectionHealResult> _updateDirection(Direction direction) async {
   // Вычистить `include` здесь значило бы применить необратимость Решения B
   // (§202) к обратимому действию: пользователь вернул бы галку и обнаружил
   // пустой состав, не понимая, куда делись опции.
-  return (rules: rules, detours: detours, includes: 0, chainPositions: 0);
+  return (
+    rules: rules,
+    detours: detours,
+    includes: 0,
+    chainPositions: 0,
+    dnsServers: dnsServers,
+  );
 }
 
 /// Удалить Направление. vpn-1 неудаляем (throws). Любая ссылка на удалённый tag
-/// (route_final / custom-rule outbound → vpn-1; §248 detour-ссылки → '';
+/// (route_final / custom-rule outbound / §441 переменные типа `outbound`
+/// template-серверов DNS и пресетов → vpn-1; §248 detour-ссылки → '';
 /// §393 A3 include-ссылки → вычеркнуты) немедленно лечится для
 /// UI-консистентности; билдер дополнительно схлопывает dangling при сборке
 /// (§172-паттерн).
@@ -125,11 +143,17 @@ Future<DirectionHealResult> _deleteDirection(String tag) async {
   final (:healed, :count) = clearIncludeDirectionRefs(directions, tag);
   directions = healed;
   await _setDirections(directions, flush: false); // единый flush ниже
-  final rules = await _healDirectionRefs(tag);
+  final (:rules, :dnsServers) = await _healDirectionRefs(tag);
   final detours = await _healDetourDirectionRefs(tag);
   await _healPingOptionsGroupRefs(tag);
   await _save();
-  return (rules: rules, detours: detours, includes: count, chainPositions: 0);
+  return (
+    rules: rules,
+    detours: detours,
+    includes: count,
+    chainPositions: 0,
+    dnsServers: dnsServers,
+  );
 }
 
 /// §408 — снятие per-direction override'а ping/URLTest (`ping_options.groups`)
@@ -178,8 +202,20 @@ Future<void> _healPingOptionsGroupRefs(String deletedTag) async {
 /// §248 — ссылка «на Направление» = его тег ИЛИ тег auto-двойника `<tag>-auto`:
 /// UI-пикеры двойник не предлагают, но Debug API / правленный backup могут
 /// записать что угодно.
-Future<int> _healDirectionRefs(String deletedTag) async {
+///
+/// §441 (SPEC 129 §6, D-114) — значение переменной типа `outbound` в записи —
+/// одиночная цель по имени того же класса: у пресета (любое имя этого типа
+/// по объявлению шаблона, `outbound` — всегда) и у template-сервера DNS
+/// (`vars.outbound`; сервер вне шаблона — ключ `outbound` по имени). Лечится
+/// так же → vpn-1, затем Н4: vpn-1, равное умолчанию объявления, снимает ключ
+/// (сервер снова следует шаблону). Detour DNS (D-114) — `body.detour`
+/// пользовательского сервера, корневого и в секциях узлов, — туда же.
+/// `rules` — правила (одно на правило), `dnsServers` — DNS-серверы.
+Future<({int rules, int dnsServers})> _healDirectionRefs(
+    String deletedTag) async {
   final autoTag = '$deletedTag-auto';
+  final retarget = directionRefRetarget(deletedTag, 'vpn-1');
+  final decls = await loadRecordVarDecls();
   var count = 0;
   // route_final
   final routeFinal = await SettingsStorage.getRouteFinal();
@@ -187,38 +223,82 @@ Future<int> _healDirectionRefs(String deletedTag) async {
     await SettingsStorage.saveRouteFinal('vpn-1', flush: false);
     count++;
   }
-  // custom-rule outbounds — kind-agnostic через общие `outbound`/`withOutbound`:
-  // inline/srs — поле `outbound`; preset — override `varsValues['outbound']`
-  // (§033 Expansion §5), без heal он уезжал в expandPreset dangling-тегом →
-  // fatal DanglingOutboundRef, VPN не стартует; json — '' (deletedTag всегда
-  // непустой 'vpn-N', не сматчит). reject/direct-out — не direction-tag'и, под
-  // deletedTag не подпадут. Build-time страховки для rule-outbound НЕТ
-  // (healDanglingDetours §172 чинит только detour-поля, валидатор §141 P0.1
-  // блокирует, не лечит) — storage-heal здесь единственное самолечение.
+  // custom-rule outbounds: inline/srs — поле `outbound`; preset — переменные
+  // типа `outbound` в `varsValues` (§033 Expansion §5, §441), без heal они
+  // уезжали в expandPreset dangling-тегом → fatal DanglingOutboundRef, VPN не
+  // стартует; json — '' (deletedTag всегда непустой, не сматчит).
+  // reject/direct-out — не direction-tag'и, под deletedTag не подпадут.
+  // Build-time страховки для rule-outbound НЕТ (healDanglingDetours §172 чинит
+  // только detour-поля, валидатор §141 P0.1 блокирует, не лечит) —
+  // storage-heal здесь единственное самолечение.
   final rules = await SettingsStorage.getCustomRules();
   var changed = false;
   final healed = rules.map((r) {
-    if (r.outbound == deletedTag || r.outbound == autoTag) {
+    final next = r is CustomRulePreset
+        ? retargetPresetOutboundVars(r, decls, retarget)
+        : (r.outbound == deletedTag || r.outbound == autoTag)
+            ? r.withOutbound('vpn-1')
+            : r;
+    if (!identical(next, r)) {
       changed = true;
       count++;
-      return r.withOutbound('vpn-1');
     }
-    return r;
+    return next;
   }).toList();
   if (changed) {
     await SettingsStorage.saveCustomRules(healed, flush: false);
   }
+  return (
+    rules: count,
+    dnsServers: await _healDnsServerDirectionRefs(retarget, decls),
+  );
+}
+
+/// §441 — ссылки DNS-серверов на Направление по [retarget]: корневой список
+/// ([retargetDnsServerDirectionRefs]: переменные типа `outbound` template,
+/// `body.detour` user) и секции узлов ([retargetSectionsDnsDetours]).
+/// Возвращает число вылеченных серверов. flush:false — атомарный `_save()` на
+/// вызывающем; зеркало секций в контроллере — `DirectionMutations`.
+Future<int> _healDnsServerDirectionRefs(
+  Map<String, String> retarget,
+  RecordVarDecls decls,
+) async {
+  var count = 0;
+  final servers = await SettingsStorage.getDnsServers();
+  var rootCount = 0;
+  final healedServers = <DnsServerRef>[];
+  for (final s in servers) {
+    final next = retargetDnsServerDirectionRefs(s, decls, retarget);
+    if (!identical(next, s)) rootCount++;
+    healedServers.add(next);
+  }
+  if (rootCount > 0) {
+    await SettingsStorage.saveDnsServers(healedServers, flush: false);
+  }
+  count += rootCount;
+
+  final lists = await _getServerLists();
+  var listsChanged = false;
+  final healedLists = <ServerList>[];
+  for (final l in lists) {
+    final r = retargetSectionsDnsDetours(l, retarget);
+    if (r.healed != null) {
+      listsChanged = true;
+      count += r.count;
+    }
+    healedLists.add(r.healed ?? l);
+  }
+  if (listsChanged) await _saveServerLists(healedLists, flush: false);
   return count;
 }
 
-/// §248 — сброс detour-ссылок на Направление → '' (None/direct): overrideDetour
+/// §248 — сброс detour-ссылок на Направление → нет ссылки (None): overrideDetour
 /// одиночки/подписки/папки + личные `FolderMember.detour`. Вызывается, когда
 /// Направление перестаёт быть detour-мишенью: галка detour снята, Направление выключен
 /// или удалён. Необратимо (Решение B §202). Возвращает число сброшенных.
 ///
-/// Интра-омонимия: значение, равное bare-тегу члена ТОЙ ЖЕ папки, — интра-
-/// ссылка на члена (приоритет bareIndex в FolderDetourPlan), Направление тут ни
-/// при чём — пропускаем. Ссылка «на Направление» = tag ИЛИ `<tag>-auto` (двойник).
+/// Ссылка «на Направление» — корневая `{tag}` с tag ИЛИ `<tag>-auto`
+/// (двойник); пара адресует узел контейнера и Направлением не бывает (D-112).
 /// Всё flush:false — атомарный `_save()` на вызывающем.
 Future<int> _healDetourDirectionRefs(String tag) async {
   final lists = await _getServerLists();
@@ -243,18 +323,17 @@ Future<int> _healDetourDirectionRefs(String tag) async {
 // ---------------------------------------------------------------------------
 // §125 F0.3 / §393 A2 — one-shot миграция состава Направлений.
 //
-// Единственная функция, знающая про легаси-ключи (`channels`/`channels_migrated`,
-// `enabled_groups`). Всё остальное в файле читает/пишет ТОЛЬКО `directions` +
-// `directions_migrated` — §393 L7 «полная чистота, включая данные».
+// Легаси-пару `channels`/`channels_migrated` здесь больше не видно: её
+// переименовывает миграция формы хранения (§439,
+// `storage_migration/migrate_storage.dart`) при чтении файла и на входах
+// импорта. Из легаси здесь остаётся `enabled_groups` (seed старейших установок).
 //
-// Четыре ветки (в порядке проверки):
+// Три ветки (в порядке проверки):
 //   1. `directions` есть            → no-op (нормальный второй и далее запуск);
-//   2. `channels` есть              → переносим список под `directions`, легаси-
-//      пару УДАЛЯЕМ, ставим `directions_migrated` (апгрейд с A1-и-раньше);
-//   3. `channels_migrated == true`  → мигрировано-и-опустошено (юзер удалил все
+//   2. `directions_migrated == true` → мигрировано-и-опустошено (юзер удалил все
 //      Направления кроме… либо список вычистили): НЕ пересеивать, только
-//      перештамповать маркер и снести легаси;
-//   4. иначе                        → чистая установка ИЛИ старейшая, где есть
+//      перештамповать маркер;
+//   3. иначе                        → чистая установка ИЛИ старейшая, где есть
 //      только `enabled_groups`: seed из template (legacy-цепочка сохранена
 //      целиком — `getEnabledGroups()` ниже), затем `directions_migrated`.
 //
@@ -262,50 +341,11 @@ Future<int> _healDetourDirectionRefs(String tag) async {
 // + общего json-шаблона `direction`; auto-подгруппа заводится когда
 // `direction.include` содержит роль `auto`.
 //
-// Идемпотентна: любой повторный вызов после любой ветки уходит в ветку 1 или 3.
+// Идемпотентна: любой повторный вызов после любой ветки уходит в ветку 1 или 2.
 // Зовётся на старте (main() init) ДО первого чтения Направлений и ПОСЛЕ restore
-// внутреннего бэкапа (`BackupService.applyImport` — старый архив приносит
-// легаси-пару в storage, §393 A2 порядок restore→migrate).
+// внутреннего бэкапа (`BackupService.applyImport` — архив без Направлений
+// получает seed, §393 порядок restore→migrate).
 // ---------------------------------------------------------------------------
-
-/// Легаси-ключ состава Направлений (до §393 A2). Живёт ТОЛЬКО в старом
-/// storage-файле на диске (upgrade-путь) — читается и УДАЛЯЕТСЯ миграцией.
-/// В storage через импорт попасть не может: границы импорта нормализуют имя
-/// через [normalizeLegacyDirectionKeys].
-const kLegacyDirectionsKey = 'channels';
-
-/// Легаси-guard one-shot миграции (до §393 A2). Тот же контракт, что и
-/// [kLegacyDirectionsKey].
-const kLegacyDirectionsMigratedKey = 'channels_migrated';
-
-/// §393 A2 — нормализация легаси-имён НА ГРАНИЦЕ импорта (внутренний бэкап,
-/// Debug API `/backup/import`): `channels`→`directions`,
-/// `channels_migrated`→`directions_migrated`.
-///
-/// Зачем именно на границе. Merge-upsert `replaceRaw` сливает ПО ИМЕНИ ключа:
-/// старый архив с `channels` ложился РЯДОМ с живым `directions`, а
-/// ветка-уборщик миграции затем выбрасывала свежевосстановленные данные как
-/// «хвост прерванного апгрейда» — состояния неразличимы по содержимому
-/// (adversarial-ревью A2: молчаливая потеря Направлений на дефолтном
-/// merge-restore). После нормализации коллизия происходит по одному имени и
-/// архив честно побеждает, а легаси-имена в storage не попадают вовсе.
-/// Новое имя в raw сильнее легаси (патологический вход с обоими).
-Map<String, dynamic> normalizeLegacyDirectionKeys(Map<String, dynamic> raw) {
-  if (!raw.containsKey(kLegacyDirectionsKey) &&
-      !raw.containsKey(kLegacyDirectionsMigratedKey)) {
-    return raw;
-  }
-  final out = Map<String, dynamic>.from(raw);
-  final legacy = out.remove(kLegacyDirectionsKey);
-  if (legacy != null && !out.containsKey('directions')) {
-    out['directions'] = legacy;
-  }
-  final legacyMarker = out.remove(kLegacyDirectionsMigratedKey);
-  if (legacyMarker != null && !out.containsKey('directions_migrated')) {
-    out['directions_migrated'] = legacyMarker;
-  }
-  return out;
-}
 
 /// §393 A3 — продуктовый инвариант «vpn-1 существует и включён», закреплённый
 /// в ЕДИНСТВЕННОЙ точке, через которую проходят ВСЕ пути загрузки состава:
@@ -409,18 +449,7 @@ Future<void> _migrateDirectionsIfNeeded(
 
   // 1. Уже на новом ключе — не трогаем (самый частый путь).
   if (data['directions'] is List) {
-    // Хвост от прерванного между записями апгрейда: легаси-пара могла остаться.
-    // ЕДИНСТВЕННЫЙ источник такой картинки: импорт легаси-имена в storage не
-    // пропускает ([normalizeLegacyDirectionKeys] на границах) — уборка тут
-    // безопасна и не может съесть восстановленный архив.
     var dirty = false;
-    if (data.containsKey(kLegacyDirectionsKey) ||
-        data.containsKey(kLegacyDirectionsMigratedKey)) {
-      data.remove(kLegacyDirectionsKey);
-      data.remove(kLegacyDirectionsMigratedKey);
-      data['directions_migrated'] = true;
-      dirty = true;
-    }
     if (_ensureRequiredDirection(data)) dirty = true;
     if (_pruneOrphanPingGroups(data)) dirty = true; // §408
     if (dirty) {
@@ -430,28 +459,9 @@ Future<void> _migrateDirectionsIfNeeded(
     return;
   }
 
-  // 2. Легаси-список → переносим ДОСЛОВНО (Direction.fromJson/toJson тут не
-  //    нужен: A1 сохранил форму записи, перекладываем сырой JSON — никаких
-  //    потерь на неизвестных полях будущих версий).
-  final legacy = data[kLegacyDirectionsKey];
-  if (legacy is List) {
-    data['directions'] = legacy;
-    data.remove(kLegacyDirectionsKey);
-    data.remove(kLegacyDirectionsMigratedKey);
-    data['directions_migrated'] = true;
-    _ensureRequiredDirection(data); // §393 A3 — легаси-список тоже мог быть без vpn-1
-    _pruneOrphanPingGroups(data); // §408
-    SettingsStorage._cache = data;
-    await _save();
-    return;
-  }
-
-  // 3. Мигрировано-и-пусто: список Направлений отсутствует ОСОЗНАННО. Пере-сеять
-  //    из шаблона = воскресить удалённое, поэтому только штампуем новый маркер.
-  if (data[kLegacyDirectionsMigratedKey] == true ||
-      data['directions_migrated'] == true) {
-    data.remove(kLegacyDirectionsKey);
-    data.remove(kLegacyDirectionsMigratedKey);
+  // 2. Мигрировано-и-пусто: список Направлений отсутствует ОСОЗНАННО. Пере-сеять
+  //    из шаблона = воскресить удалённое, поэтому только штампуем маркер.
+  if (data['directions_migrated'] == true) {
     data['directions_migrated'] = true;
     // §408 — ветка «мигрировано-и-пусто»: Направлений НЕТ осознанно, значит
     // осиротела ВСЯ карта. Пусть уходит вместе с ними.
@@ -461,7 +471,7 @@ Future<void> _migrateDirectionsIfNeeded(
     return;
   }
 
-  // 4. Seed из template. Legacy-цепочка `enabled_groups[]` сохранена: старейшие
+  // 3. Seed из template. Legacy-цепочка `enabled_groups[]` сохранена: старейшие
   //    установки имеют ТОЛЬКО её, и она задаёт enabled вместо defaultEnabled.
   final enabled = await SettingsStorage.getEnabledGroups(); // legacy set
   final hasAuto = gt.direction.include.contains('auto');
@@ -478,8 +488,6 @@ Future<void> _migrateDirectionsIfNeeded(
   }
 
   data['directions'] = directions.map((c) => c.toJson()).toList();
-  data.remove(kLegacyDirectionsKey);
-  data.remove(kLegacyDirectionsMigratedKey);
   data['directions_migrated'] = true;
   _pruneOrphanPingGroups(data); // §408
   SettingsStorage._cache = data;

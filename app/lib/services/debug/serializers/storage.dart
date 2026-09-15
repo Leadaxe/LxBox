@@ -1,4 +1,9 @@
-import 'subs.dart';
+import '../../../models/codec/chain_record.dart';
+import '../../../models/codec/source_record.dart';
+import '../../../models/server_list.dart';
+import '../../settings_storage.dart';
+import '../../settings_storage_keys.dart';
+import '../../url_mask.dart';
 
 /// Сериализатор `_cache` для `GET /state/storage` (§031).
 ///
@@ -8,11 +13,13 @@ import 'subs.dart';
 /// поля маскируются здесь явно:
 ///
 /// - `vars.debug_token` → `***`
-/// - `server_lists[].url` → `scheme://host/***` (provider token в path)
-/// - `server_lists[].nodes` → только количество (в узлах могут быть
-///   UUID/password'ы VLESS/Trojan/SS)
-/// - `server_lists[].rawBody` → только длина (inline URI могут содержать
-///   credentials)
+/// - `sources[]` (§439) читаются моделями репозитория и пишутся кодеком
+///   записей ([serializeStorageSource]): `url` подписки →
+///   `scheme://host/***` (provider token в path), `origin.raw` одиночного
+///   сервера → `origin.raw_bytes` (inline URI несут credentials), `nodes[]`
+///   папки → `nodes_count` (текст члена несёт credentials, §234). Цепочки
+///   идут хвостом как есть — секретов в них нет. Запись, которую репозиторий
+///   не читает, в дамп не попадает: скрыть в ней секрет нечем.
 ///
 /// Всё остальное — pass-through. Новый ключ без правила попадает в ответ
 /// как есть; если он чувствительный — добавить rule здесь и в тесте.
@@ -29,20 +36,18 @@ import 'subs.dart';
 Map<String, Object?> serializeStorageCache(Map<String, dynamic> cache) {
   final out = <String, Object?>{};
   for (final e in cache.entries) {
-    out[e.key] = _scrub(e.key, e.value);
+    out[e.key] = switch (e.key) {
+      'vars' => _scrubVars(e.value),
+      kSourcesKey => [
+          for (final list in SettingsStorage.serverListsOf(cache))
+            serializeStorageSource(list),
+          for (final chain in SettingsStorage.chainsOf(cache))
+            chainToRecord(chain),
+        ],
+      _ => e.value,
+    };
   }
   return out;
-}
-
-Object? _scrub(String key, dynamic value) {
-  switch (key) {
-    case 'vars':
-      return _scrubVars(value);
-    case 'server_lists':
-      return _scrubServerLists(value);
-    default:
-      return value;
-  }
 }
 
 Object? _scrubVars(dynamic vars) {
@@ -60,32 +65,21 @@ Object? _scrubVars(dynamic vars) {
   return out;
 }
 
-Object? _scrubServerLists(dynamic lists) {
-  if (lists is! List) return lists;
-  return lists.whereType<Map>().map(_scrubServerListEntry).toList();
-}
-
-Map<String, Object?> _scrubServerListEntry(Map<dynamic, dynamic> m) {
-  final out = <String, Object?>{};
-  for (final e in m.entries) {
-    final k = e.key.toString();
-    switch (k) {
-      case 'url':
-        out[k] = e.value is String
-            ? maskSubscriptionUrl(e.value as String)
-            : e.value;
-      case 'nodes':
-        // Узлы могут содержать credentials в UUID/password → только count.
-        out['nodes_count'] = e.value is List ? (e.value as List).length : 0;
-      case 'rawBody':
-        // UserServer inline URI — могут содержать token'ы. Отдаём длину.
-        out['raw_body_bytes'] = e.value?.toString().length ?? 0;
-      case 'members':
-        // §234 — raw членов папки несёт credentials (URI/ключи) → только count.
-        out['members_count'] = e.value is List ? (e.value as List).length : 0;
-      default:
-        out[k] = e.value;
-    }
-  }
-  return out;
-}
+/// Запись источника [list] для дампа — запись кодека, в которой секрет
+/// заменён по пути записи на том же месте: `url` подписки — маской,
+/// `origin.raw` сервера — длиной (`origin.raw_bytes`), `nodes[]` папки —
+/// счётчиком (`nodes_count`).
+Map<String, Object?> serializeStorageSource(ServerList list) => {
+      for (final e in sourceToRecord(list).entries)
+        ...switch ((list, e.key)) {
+          (SubscriptionServers s, 'url') => {'url': maskSubscriptionUrl(s.url)},
+          (UserServer u, 'origin') => {
+              'origin': {
+                'kind': (e.value as Map)['kind'],
+                'raw_bytes': u.rawBody.length,
+              },
+            },
+          (FolderServers f, 'nodes') => {'nodes_count': f.members.length},
+          _ => {e.key: e.value},
+        },
+    };

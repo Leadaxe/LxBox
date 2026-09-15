@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../models/codec/rule_record.dart';
 import '../../../models/custom_rule.dart';
 import '../../../services/builder/post_steps.dart';
 import '../../../services/builder/preset_expand.dart';
@@ -89,13 +90,13 @@ class ViewTab extends StatelessWidget {
       json = '// error: $e';
     }
 
-    // Storage shape — raw JSON как лежит в lxbox_settings.json для этого
-    // правила (поля initial, не snapshot). Полезно когда юзер хочет
-    // видеть что реально сохранено — все поля включая wifi_ssids /
-    // wifi_bssids которые могут быть только partially exposed в Params
-    // tab UI.
+    // Storage shape — запись `rules[]` так, как она лежит в
+    // lxbox_settings.json (§439: кодек записи; поля initial, не snapshot).
+    // Полезно когда юзер хочет видеть что реально сохранено — все поля
+    // включая wifi_ssids / wifi_bssids которые могут быть только partially
+    // exposed в Params tab UI.
     final storageJson =
-        const JsonEncoder.withIndent('  ').convert(c.initial.toJson());
+        const JsonEncoder.withIndent('  ').convert(ruleToRecord(c.initial));
 
     return Padding(
       padding: EdgeInsets.fromLTRB(

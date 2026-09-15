@@ -1,17 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/screens/dns_server_edit/edit_controller.dart';
 import 'package:lxbox/vpn/cc_channel.dart';
 
 /// §312 — форма DNS-группы: round-trip body↔поля, переходы режимов,
 /// duration-валидация; маппинг CcDnsGroup.
+/// Тело inline-сервера снимка контроллера (модель, не форма хранения).
+Map<String, dynamic> bodyOf(DnsServerEditController c) =>
+    (c.snapshot() as DnsServerInline).body;
+
 void main() {
   DnsServerEditController newCtrl(Map<String, dynamic> body) =>
-      DnsServerEditController(initialRef: {
-        'enabled': true,
-        'kind': 'inline',
-        'tag': 'grp',
-        'body': body,
-      });
+      DnsServerEditController(
+        initialRef: DnsServerInline(enabled: true, tag: 'grp', body: body),
+      );
 
   group('§312 edit-controller — группа', () {
     test('body → поля формы', () {
@@ -53,9 +55,9 @@ void main() {
     test('дефолты не материализуются: stable → ключ mode уходит', () {
       final c = newCtrl({'type': 'group', 'servers': ['a'], 'mode': 'fastest'});
       c.setGroupMode('stable');
-      expect(c.snapshot()['body']['mode'], isNull);
+      expect(bodyOf(c)['mode'], isNull);
       c.setGroupMode('parallel');
-      expect(c.snapshot()['body']['mode'], 'parallel');
+      expect(bodyOf(c)['mode'], 'parallel');
       c.dispose();
     });
 
@@ -67,13 +69,13 @@ void main() {
         'win_ttl': '5m',
       });
       c.setServerMode('udp');
-      final afterUdp = c.snapshot()['body'] as Map<String, dynamic>;
+      final afterUdp = bodyOf(c);
       expect(afterUdp['servers'], isNull);
       expect(afterUdp['mode'], isNull);
       expect(afterUdp['win_ttl'], isNull);
 
       c.setServerMode('group');
-      final back = c.snapshot()['body'] as Map<String, dynamic>;
+      final back = bodyOf(c);
       expect(back['type'], 'group');
       expect(back['servers'], isEmpty, reason: 'members заводятся заново');
       expect(back['server'], isNull, reason: 'транспортные поля не у группы');
@@ -88,7 +90,7 @@ void main() {
         'detour': 'vpn-1',
       });
       c.setServerMode('group');
-      final b = c.snapshot()['body'] as Map<String, dynamic>;
+      final b = bodyOf(c);
       expect(b['server'], isNull);
       expect(b['server_port'], isNull);
       expect(b['detour'], isNull);
@@ -112,12 +114,12 @@ void main() {
       c.errorTtlCtrl.text = 'банан';
       c.onErrorTtlChanged('банан');
       expect(c.groupErrorTtlInvalid, isTrue);
-      expect((c.snapshot()['body'] as Map)['error_ttl'], isNull);
+      expect(bodyOf(c)['error_ttl'], isNull);
 
       c.errorTtlCtrl.text = '1h5m30s';
       c.onErrorTtlChanged('1h5m30s');
       expect(c.groupErrorTtlInvalid, isFalse);
-      expect((c.snapshot()['body'] as Map)['error_ttl'], '1h5m30s');
+      expect(bodyOf(c)['error_ttl'], '1h5m30s');
       c.dispose();
     });
 

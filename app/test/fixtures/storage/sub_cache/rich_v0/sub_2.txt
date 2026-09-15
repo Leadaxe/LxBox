@@ -1,0 +1,49 @@
+{
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "JP-1",
+      "server": "example-21.com",
+      "server_port": 443,
+      "uuid": "11111111-2222-3333-4444-666666666666",
+      "tls": {
+        "enabled": true,
+        "server_name": "example-21.com"
+      },
+      "detour": "jump"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "jump",
+      "server": "example-22.com",
+      "server_port": 8388,
+      "method": "aes-256-gcm",
+      "password": "testpass123"
+    },
+    {
+      "type": "trojan",
+      "tag": "US-1",
+      "server": "example-23.com",
+      "server_port": 443,
+      "password": "testpass123",
+      "tls": {
+        "enabled": true,
+        "server_name": "example-23.com"
+      }
+    },
+    {
+      "type": "urltest",
+      "tag": "Fastest",
+      "outbounds": [
+        "JP-1",
+        "US-1"
+      ],
+      "interval": "5m",
+      "tolerance": 100
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}

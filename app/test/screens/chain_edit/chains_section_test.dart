@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/screens/subscriptions_screen/widgets/chains_section.dart';
 import 'package:lxbox/widgets/reorder_grab_strip.dart';
@@ -32,7 +33,7 @@ Widget _host(List<SourceChain> chains,
 void main() {
   testWidgets('строка показывает имя и тег цепочки', (tester) async {
     await tester.pumpWidget(_host(const [
-      SourceChain(tag: 'chain-1', label: 'Via Germany', hops: ['a', 'b']),
+      SourceChain(tag: 'chain-1', label: 'Via Germany', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
     ]));
     await tester.pumpAndSettle();
     expect(find.text('Via Germany'), findsOneWidget);
@@ -42,7 +43,7 @@ void main() {
   testWidgets('без label показываем тег: имени цепочке не выдумываем',
       (tester) async {
     await tester.pumpWidget(_host(const [
-      SourceChain(tag: 'chain-1', hops: ['a', 'b']),
+      SourceChain(tag: 'chain-1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
     ]));
     await tester.pumpAndSettle();
     expect(find.text('chain-1'), findsOneWidget);
@@ -51,7 +52,7 @@ void main() {
   testWidgets('у ряда есть grab-strip: цепочка перетаскивается наравне со всеми',
       (tester) async {
     await tester.pumpWidget(_host(const [
-      SourceChain(tag: 'chain-1', hops: ['a', 'b']),
+      SourceChain(tag: 'chain-1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
     ]));
     await tester.pumpAndSettle();
     expect(find.byType(ReorderGrabStrip), findsOneWidget);
@@ -61,8 +62,8 @@ void main() {
     SourceChain? tapped;
     await tester.pumpWidget(_host(
       const [
-        SourceChain(tag: 'chain-1', hops: ['a', 'b']),
-        SourceChain(tag: 'chain-2', hops: ['c', 'd']),
+        SourceChain(tag: 'chain-1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'chain-2', hops: [NodeLink(tag: 'c'), NodeLink(tag: 'd')]),
       ],
       onTap: (c) => tapped = c,
     ));
@@ -76,8 +77,8 @@ void main() {
     SourceChain? toggled;
     await tester.pumpWidget(_host(
       const [
-        SourceChain(tag: 'chain-1', hops: ['a', 'b']),
-        SourceChain(tag: 'chain-2', hops: ['c', 'd'], enabled: false),
+        SourceChain(tag: 'chain-1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'chain-2', hops: [NodeLink(tag: 'c'), NodeLink(tag: 'd')], enabled: false),
       ],
       onToggle: (c) => toggled = c,
     ));

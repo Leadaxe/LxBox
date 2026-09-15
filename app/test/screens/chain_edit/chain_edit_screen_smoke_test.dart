@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/config_node.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/screens/chain_edit_screen.dart';
 
@@ -39,7 +40,7 @@ Widget _host(SourceChain chain) => MaterialApp(
 void main() {
   testWidgets('форма поднимается и показывает позиции', (tester) async {
     await tester.pumpWidget(_host(
-        const SourceChain(tag: 'via-de', hops: ['home', 'de-exit'])));
+        const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')])));
     await tester.pumpAndSettle();
     expect(find.text('home'), findsOneWidget);
     expect(find.text('de-exit'), findsOneWidget);
@@ -47,7 +48,7 @@ void main() {
 
   testWidgets('одна позиция — кнопка сохранения заперта', (tester) async {
     await tester
-        .pumpWidget(_host(const SourceChain(tag: 'via-de', hops: ['home'])));
+        .pumpWidget(_host(const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home')])));
     await tester.pumpAndSettle();
     final save = tester.widget<IconButton>(
         find.widgetWithIcon(IconButton, Icons.check));
@@ -56,7 +57,7 @@ void main() {
 
   testWidgets('две живые позиции — сохранение доступно', (tester) async {
     await tester.pumpWidget(_host(
-        const SourceChain(tag: 'via-de', hops: ['home', 'de-exit'])));
+        const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')])));
     await tester.pumpAndSettle();
     final save = tester.widget<IconButton>(
         find.widgetWithIcon(IconButton, Icons.check));
@@ -65,7 +66,7 @@ void main() {
 
   testWidgets('reorder-колбэк меняет порядок пакета', (tester) async {
     await tester.pumpWidget(_host(
-        const SourceChain(tag: 'via-de', hops: ['home', 'de-exit'])));
+        const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')])));
     await tester.pumpAndSettle();
     // Логика порядка, не жест: дёргаем колбэк списка так же, как это сделал бы
     // drag позиции 1 на место позиции 2. onReorderItem уже нормализует
@@ -87,7 +88,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(_host(const SourceChain(
       tag: 'via-de',
-      hops: ['home', 'de-reality'],
+      hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-reality')],
       strip: {kChainStripTlsUtls: true},
     )));
     await tester.pumpAndSettle();
@@ -99,7 +100,7 @@ void main() {
   testWidgets('пикер позиций открывается и не предлагает уже занятые',
       (tester) async {
     await tester
-        .pumpWidget(_host(const SourceChain(tag: 'via-de', hops: ['home'])));
+        .pumpWidget(_host(const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home')])));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
@@ -112,7 +113,7 @@ void main() {
   testWidgets('Advanced раскрывается: idle_timeout и каталог strip на месте',
       (tester) async {
     await tester.pumpWidget(_host(
-        const SourceChain(tag: 'via-de', hops: ['home', 'de-exit'])));
+        const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')])));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(ExpansionTile));
     await tester.pumpAndSettle();
@@ -124,7 +125,7 @@ void main() {
 
   testWidgets('галка каталога трёхзначна: не тронута → null', (tester) async {
     await tester.pumpWidget(_host(
-        const SourceChain(tag: 'via-de', hops: ['home', 'de-exit'])));
+        const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')])));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(ExpansionTile));
     await tester.pumpAndSettle();
@@ -143,7 +144,7 @@ void main() {
     // это за «имя занято» значило бы запереть форму у любой рабочей цепочки.
     await tester.pumpWidget(MaterialApp(
       home: ChainEditScreen(
-        initial: const SourceChain(tag: 'via-de', hops: ['home', 'de-exit']),
+        initial: const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')]),
         config: ParsedConfig.parse(jsonEncode({
           'outbounds': [
             {'tag': 'home', 'type': 'vless'},
@@ -156,7 +157,7 @@ void main() {
           ],
         })),
         directions: const [Direction(tag: 'vpn-1', label: 'vpn-1')],
-        chains: const [SourceChain(tag: 'via-de', hops: ['home', 'de-exit'])],
+        chains: const [SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')])],
       ),
     ));
     await tester.pumpAndSettle();

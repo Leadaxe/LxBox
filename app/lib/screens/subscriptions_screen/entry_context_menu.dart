@@ -190,37 +190,8 @@ void _showFolderContextMenu(
                 style: TextStyle(color: Theme.of(context).colorScheme.error)),
             onTap: () async {
               Navigator.pop(ctx);
-              final choice = await showDialog<String>(
-                context: context,
-                builder: (dCtx) => AlertDialog(
-                  title: Text(getLocalText.s("Delete folder?")),
-                  content: Text(folder.members.isEmpty
-                      ? getLocalText.s("Remove \"%s\"?", entry.displayName)
-                      : getLocalText.plural(
-                          "Folder \"%2\$s\" contains %1\$d servers.",
-                          folder.members.length,
-                          entry.displayName)),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(dCtx),
-                        child: Text(getLocalText.s("Cancel"))),
-                    if (folder.members.isNotEmpty)
-                      TextButton(
-                        onPressed: () => Navigator.pop(dCtx, 'keep'),
-                        child: Text(getLocalText.s("Keep servers")),
-                      ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(dCtx, 'all'),
-                      style: TextButton.styleFrom(
-                          foregroundColor:
-                              Theme.of(dCtx).colorScheme.error),
-                      child: Text(folder.members.isEmpty
-                          ? getLocalText.s("Delete")
-                          : getLocalText.s("Delete folder & servers")),
-                    ),
-                  ],
-                ),
-              );
+              final choice = await showDeleteFolderDialog(
+                  context, folder, entry.displayName);
               if (choice == null) return;
               await subController.deleteFolderAt(index,
                   keepServers: choice == 'keep');

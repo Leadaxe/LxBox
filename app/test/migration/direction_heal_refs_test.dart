@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
@@ -54,9 +55,9 @@ void main() {
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-3',
-      'custom_rules': [
-        CustomRuleInline(name: 'r1', domains: const ['x.com'], outbound: 'vpn-3')
-            .toJson(),
+      'storage_version': 1,
+      'rules': [
+        ruleToRecord(CustomRuleInline(name: 'r1', domains: const ['x.com'], outbound: 'vpn-3')),
       ],
     };
     await File(mainPath()).writeAsString(jsonEncode(data));
@@ -127,9 +128,9 @@ void main() {
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
-      'custom_rules': [
-        CustomRuleInline(name: 'r1', domains: const ['x.com'], outbound: 'vpn-1')
-            .toJson(),
+      'storage_version': 1,
+      'rules': [
+        ruleToRecord(CustomRuleInline(name: 'r1', domains: const ['x.com'], outbound: 'vpn-1')),
       ],
     };
     await File(mainPath()).writeAsString(jsonEncode(data));
@@ -150,6 +151,9 @@ void main() {
 
   /// Storage с Направлениями vpn-1/vpn-3 и одним preset-правилом, чей override
   /// указывает на vpn-3 (+второй var, который heal терять не должен).
+  ///
+  /// §441 — второй var объявлен пресетом и не равен умолчанию: необъявленное
+  /// имя запись хранения снимает (SPEC 129 Н2).
   Future<void> seedPresetOverrideOnVpn3() async {
     final data = {
       'directions_migrated': true,
@@ -158,12 +162,13 @@ void main() {
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
-      'custom_rules': [
-        CustomRulePreset(
-          name: 'Block Ads',
-          presetId: 'block-ads',
-          varsValues: const {'outbound': 'vpn-3', 'ruleset': 'ads-all'},
-        ).toJson(),
+      'storage_version': 1,
+      'rules': [
+        ruleToRecord(CustomRulePreset(
+          name: 'FCM push',
+          presetId: 'fcm-push',
+          varsValues: const {'outbound': 'vpn-3', 'gms_only': 'true'},
+        )),
       ],
     };
     await File(mainPath()).writeAsString(jsonEncode(data));
@@ -184,7 +189,7 @@ void main() {
     final healed = await presetRule();
     expect(healed.varsValues['outbound'], 'vpn-1');
     // Остальные user-vars heal не теряет.
-    expect(healed.varsValues['ruleset'], 'ads-all');
+    expect(healed.varsValues['gms_only'], 'true');
   });
 
   test('disable Направления (§202): preset varsValues[outbound] → vpn-1', () async {
@@ -207,12 +212,13 @@ void main() {
         Direction(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
       ],
       'route_final': 'vpn-1',
-      'custom_rules': [
-        CustomRulePreset(
-          name: 'Block Ads',
-          presetId: 'block-ads',
-          varsValues: const {'ruleset': 'ads-all'},
-        ).toJson(),
+      'storage_version': 1,
+      'rules': [
+        ruleToRecord(CustomRulePreset(
+          name: 'FCM push',
+          presetId: 'fcm-push',
+          varsValues: const {'gms_only': 'true'},
+        )),
       ],
     };
     await File(mainPath()).writeAsString(jsonEncode(data));
@@ -222,7 +228,7 @@ void main() {
 
     final rule = await presetRule();
     expect(rule.varsValues.containsKey('outbound'), isFalse);
-    expect(rule.varsValues['ruleset'], 'ads-all');
+    expect(rule.varsValues['gms_only'], 'true');
   });
 
   test('§202 — disabled → update без смены enabled НЕ перелечивает', () async {
@@ -373,6 +379,7 @@ void main() {
       bool migrated = true,
     }) async {
       final data = <String, dynamic>{
+        'storage_version': 1,
         if (migrated) 'directions_migrated': true,
         'directions': [
           for (final t in directions)

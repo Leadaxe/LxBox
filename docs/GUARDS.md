@@ -152,6 +152,7 @@ Three channels, and they are not interchangeable.
 | `fp` is a known xray alias (`hellochrome_120`, …), 9 prefixes | canonicalised **silently** | silent (deliberate) | `utls_fingerprint.dart:41-51, 60-62` | a synonym is not a degradation (principle 3) | §281 |
 | `fp` in any case / with spaces | `trim().toLowerCase()` | silent | `utls_fingerprint.dart:57` | Xray accepts any case | §281 |
 | `fp` empty while `reality != null` | default `chrome` | silent | `utls_fingerprint.dart:78` | REALITY requires a uTLS block ("uTLS is required by reality client" — fatal on outbound creation), and an empty fingerprint emits no block | §281 |
+| `reality != null` and `fp` outside the chrome family (`firefox`, `safari`, `randomized`, …; `random` excluded) | **none** — the value stays in the node and in the config | `RealityFingerprintWarning` (`reality_fp_not_chrome`) | `utls_fingerprint.dart:110-113` | Xray servers since v26.9.8 reject a ClientHello without the `X25519MLKEM768` key share, which only the chrome family carries; the warning suggests `chrome`. The node's fingerprint comes from the subscription and goes into the config as is — the app does not rewrite the source's choice. 2.23.2 replaced it with `chrome` at build time (D-104); dropped in 2.24.0. `random` gets no warning: the parser's default for an empty `fp` cannot be told apart from an explicit one | §444 (D-119) |
 
 ### 1.3 Hysteria2 obfuscation (`hysteria2_obfs.dart`)
 
@@ -326,6 +327,7 @@ placed at this layer cannot be bypassed by adding a new source.
 
 Order matters and is hard-coded in `buildConfig`, not derived from the `part`
 directives in `post_steps.dart` (which is a barrel, not an orchestrator):
+sources emitted → `resolveDeferredDetours` (§439, the second pass over detour links) →
 `resolveChains` → direction groups → `normalizeRuleOrder` → custom rules →
 rule-set flush → `route.final` degrade → TLS transforms → custom DNS →
 `applyTunPackages` → `healPresetTagPrefix` → `healDanglingResolveServers` →
@@ -343,22 +345,23 @@ with a warning rather than hand the core a file it will reject"
 
 | Check | Sanitiser | User sees | Code | Why | Task |
 |---|---|---|---|---|---|
-| `detour` to a non-existent tag | `detour` key removed, node goes direct | `emitWarnings`, aggregated per target (first 5 names + count) | `:293-303`, render `:781` | any dangling reference is fatal for the config **as a whole**, and sing-box names not the culprit but the first outbound referencing it (`dependency[X] not found for outbound[Y]`) | §393 A4 |
-| Same, but the target was removed by the sanitiser itself | separate bucket, different text | `emitWarnings` ("was left with no members and removed during sanitation") | `:299-301`, `:792-795` | "referenced missing X" would be a lie sending the user to hunt a broken subscription instead of what happened | §393 A4 |
-| Ghost members of a `selector`/`urltest` | excluded from the roster | `emitWarnings` | `:371-391` | the core rejects the config on a dangling member | §393 A4 |
-| Group emptied **and** it is a Direction | not dropped: roster becomes `[block, direct-out]`, `default = block` | `emitWarnings` | `:406-419` | removing it would dangle `route.rules[].outbound`; blocking is safer than releasing traffic outside the VPN | §393 A4 |
-| Group emptied, not a Direction | entry dropped whole | `emitWarnings` | `:421`, `:143-147` | cascade cleanup | §393 A4 |
-| Group `default` not among its members | replaced with `kept.first` | `emitWarnings` | `:429-435` | otherwise the core rejects the config ("default outbound not found") | §393 A4 |
-| Node whose detour leads into a group it belongs to | node removed from the roster, **detour kept** (fail-open) | `emitWarnings`, aggregated per node | `:379-399`, render `:772` | the detour was set deliberately; sending the traffic direct would break exactly what the user asked for. Otherwise the kernel would not start (dependency cycle) | §393 A4 |
-| Composite: a node keeps a detour into a Direction that has gone to block | nothing changed — composite warning only | `emitWarnings` | `:206-217`, render `:754` | the node's policy silently inverted while the config stays valid and the core starts; no other warning names the consequence | §393 A4 |
-| `type: chain` hop pointing at a non-existent tag | **chain dropped whole** | `emitWarnings` | `:321-332` | the core will not start on a dangling reference, and "just drop the hop" would make it a different route | §393 C4 |
-| `type: chain` nested chain at position ≥ 1 | chain dropped whole | `emitWarnings` | `:333-341` | core invariant `protocol/chain/chain.go:279` | §393 C4 |
-| Group used as a hop contains chains among its leaves | chains excluded from that group's roster | `emitWarnings` | `:487-535` | the core walks group leaves at start and rejects a nested chain; `check` does not catch it, only `run` does | §393 C4 |
-| Cycle over any edge (detour / member / chainHop) | Tarjan SCC + scoring, **one** edge cut per pass: detour key removed, member excluded, or chain dropped | `emitWarnings`, 3 texts | `:560-657` | which edge to cut is the §254 question — taking the first would cut innocent nodes (the §254 case would have stripped detours from two clean nodes instead of the one at fault) | §393 A4/§254 |
-| No edge unties the cycle (`bestScore <= 0`) | sanitiser gives up | nothing here → fatal `DetourCycle` later | `:633` | hand it to the validator | §393 A4 |
-| A tag counts as "alive" only with an actual entry (`dns-out`/`block-out`/`direct`/`reject`/`drop` are ghosts) | affects all rules above | — | `:125-141` | treating a tag as alive without an entry would leave a reference the validator then kills fatally — fail-open here equals fatal there | §393 A4 |
-| `chain` deliberately excluded from `_isGroup` | trap guard | — | `:249, 256, 68-74` | giving it group semantics would exclude a ghost hop from the "roster" instead of dropping the chain, and the user would travel a route they never asked for | §393 C4 |
-| Fixpoint iteration limit (`len*4 + 8`) exhausted | loop exits | **silent** | `:149-192` | the comment argues it is unreachable (each pass removes an edge or node); there is **no handling and no warning** if it is reached — purpose of the unhandled branch unclear | §393 A4 |
+| `detour` to a non-existent tag (a detour that came inside a node body; storage links are resolved earlier, fail-closed — §4.4a) | `detour` key removed, node goes direct | `emitWarnings`, aggregated per target (first 5 names + count) | `:304-314`, render `:792` | any dangling reference is fatal for the config **as a whole**, and sing-box names not the culprit but the first outbound referencing it (`dependency[X] not found for outbound[Y]`) | §393 A4 |
+| Same, but the target was removed by the sanitiser itself | separate bucket, different text | `emitWarnings` ("was left with no members and removed during sanitation") | `:310-312`, `:803-806` | "referenced missing X" would be a lie sending the user to hunt a broken subscription instead of what happened | §393 A4 |
+| Ghost members of a `selector`/`urltest` | excluded from the roster | `emitWarnings` | `:382-402` | the core rejects the config on a dangling member | §393 A4 |
+| Group emptied **and** it is a Direction | not dropped: roster becomes `[block, direct-out]`, `default = block` | `emitWarnings` | `:417-430` | removing it would dangle `route.rules[].outbound`; blocking is safer than releasing traffic outside the VPN | §393 A4 |
+| Group emptied, not a Direction | entry dropped whole | `emitWarnings` | `:432`, `:148-152` | cascade cleanup | §393 A4 |
+| Group `default` not among its members | replaced with `kept.first` | `emitWarnings` | `:440-446` | otherwise the core rejects the config ("default outbound not found") | §393 A4 |
+| Node whose detour leads into a group it belongs to | node removed from the roster, **detour kept** (fail-open) | `emitWarnings`, aggregated per node | `:390-410`, render `:783` | the detour was set deliberately; sending the traffic direct would break exactly what the user asked for. Otherwise the kernel would not start (dependency cycle) | §393 A4 |
+| Composite: a node keeps a detour into a Direction that has gone to block | nothing changed — composite warning only | `emitWarnings` | `:211-222`, render `:765` | the node's policy silently inverted while the config stays valid and the core starts; no other warning names the consequence | §393 A4 |
+| `type: chain` hop pointing at a non-existent tag | **chain dropped whole** | `emitWarnings` | `:332-343` | the core will not start on a dangling reference, and "just drop the hop" would make it a different route | §393 C4 |
+| `type: chain` nested chain at position ≥ 1 | chain dropped whole | `emitWarnings` | `:344-352` | core invariant `protocol/chain/chain.go:279` | §393 C4 |
+| Group used as a hop contains chains among its leaves | chains excluded from that group's roster | `emitWarnings` | `:498-546` | the core walks group leaves at start and rejects a nested chain; `check` does not catch it, only `run` does | §393 C4 |
+| Cycle over any edge (detour / member / chainHop) | Tarjan SCC + scoring, **one** edge cut per pass: detour key removed, member excluded, or chain dropped | `emitWarnings`, 3 texts | `:571-668` | which edge to cut is the §254 question — taking the first would cut innocent nodes (the §254 case would have stripped detours from two clean nodes instead of the one at fault) | §393 A4/§254 |
+| No edge unties the cycle (`bestScore <= 0`) | sanitiser gives up | nothing here → fatal `DetourCycle` later | `:644` | hand it to the validator | §393 A4 |
+| `urltest` whose `interval` is greater than `idle_timeout` (a missing key or `0` means the core default: 3m / 30m) | `idle_timeout` set to the `interval` string; `interval` is never changed. Values the core would reject, negative values and `selector` are left alone | `emitWarnings` with both values and the reason | `sanitize_urltest_timings.dart:39-65`, call `:234-238`; durations parsed by `core_duration.dart` | the core fills in its defaults and rejects `interval > idle_timeout` in the group constructor (`NewURLTestGroup`, both `least_test` and `round_robin`), so `check` passes and only `run` fails. Shortening `interval` would multiply probes against the provider; a longer `idle_timeout` costs at most one extra probe of an idle group. The core's duration parser knows `d`, `time.ParseDuration` does not | §442 |
+| A tag counts as "alive" only with an actual entry (`dns-out`/`block-out`/`direct`/`reject`/`drop` are ghosts) | affects all rules above | — | `:130-146` | treating a tag as alive without an entry would leave a reference the validator then kills fatally — fail-open here equals fatal there | §393 A4 |
+| `chain` deliberately excluded from `_isGroup` | trap guard | — | `:260, 267, 73-79` | giving it group semantics would exclude a ghost hop from the "roster" instead of dropping the chain, and the user would travel a route they never asked for | §393 C4 |
+| Fixpoint iteration limit (`len*4 + 8`) exhausted | loop exits | **silent** | `:154-197` | the comment argues it is unreachable (each pass removes an edge or node); there is **no handling and no warning** if it is reached — purpose of the unhandled branch unclear | §393 A4 |
 
 ### 4.2 Heal steps (`post_steps/heal_*.dart`)
 
@@ -378,6 +381,8 @@ with a warning rather than hand the core a file it will reject"
 | Known xray fingerprint alias | canonicalised | **silent** | `heal_unknown_utls_fingerprints.dart:51-58` | a synonym, not a degradation | §281 |
 | Unrecognised fingerprint | → `chrome` | `emitWarnings` (`:578`) | `heal_unknown_utls_fingerprints.dart:57-58` | outside the core's case-sensitive vocabulary is a whole-config fatal; discarding would lose a live server | §281 |
 | Whitespace-only fingerprint | key removed, utls stays enabled | silent | `heal_unknown_utls_fingerprints.dart:53-56` | the core treats an empty fingerprint as chrome | §281 |
+| REALITY with a missing, empty or `random` fingerprint | → `chrome`, written explicitly | **silent** | `heal_unknown_utls_fingerprints.dart:78-85` | no choice was made: `random` is the vless/anytls/Xray-JSON parsers' default for an empty `fp` (D-009) and the model does not tell it apart from an explicit `fp=random`, so every `random` is replaced (same as the launcher). Explicit so the config does not depend on the core's default | §444 (D-119) |
+| REALITY with any other fingerprint from the vocabulary (`firefox`, `safari`, `randomized`, …) | **left as is** | `RealityFingerprintWarning` on the node (parser) | `heal_unknown_utls_fingerprints.dart:80-85` | the node's fingerprint comes from the subscription and goes into the config as is; the app does not rewrite the source's choice. 2.23.2 replaced it with `chrome` (D-104) | §444 (D-119) |
 
 ### 4.3 Core capability gate (`chain_nodes.dart`, `core_chain_capability.dart`)
 
@@ -412,6 +417,29 @@ with a warning rather than hand the core a file it will reject"
 | Intra candidate with its edge cut | detour → `''`, reference not emitted | silent | `server_list_build.dart:273-279` | otherwise a bare tag goes into the config as a dangling reference | §239 |
 | Tag allocator exhausts its counter (100000) | returns the **taken** base tag | **silent** | `build_config.dart:658-665` | practically unreachable, but the fail mode is "silently fatal" rather than "silently degrade", and there is no comment — **purpose/deliberateness unclear** | — |
 
+### 4.4a Node links (`node_link_resolve.dart`, `chain_nodes.dart`, `server_list_build.dart`; §439)
+
+Since 2.23.3 `detour` of a source or folder member, chain `hops[]` and the explicit
+members of an auto node are NodeLinks `{folder_id?, tag}` (D-112). They resolve to final
+tags only at build, after every source has emitted (`build_config.dart:289-294`). The rule
+is fail-closed (NODE_LINK §5.1): an unresolved link never becomes a direct connection.
+
+| Check | Sanitiser | User sees | Code | Why | Task |
+|---|---|---|---|---|---|
+| Empty link / container gone / no node with that raw tag / target node skipped by this build / root tag not among nodes, Directions and service tags | detour carrier **dropped from the config** with its own detour hops | `emitWarnings`, one line per link and reason: one carrier keeps `Node "X" was skipped: its detour … did not resolve`, several are listed as the first five names and `and N more` (§377) | `node_link_resolve.dart:120-152`, `build_config.dart:293-294` | before §439 the graph sanitiser removed a dangling `detour` key and the node went direct — traffic left the route the user set | §439 |
+| Detour points at the node itself | carrier dropped | `emitWarnings` | `node_link_resolve.dart:233-236` | the core rejects a self-dependency | §439 |
+| Ring of detour links | **every** participant dropped | `emitWarnings` | `node_link_resolve.dart:240-257` | no participant can be picked as "the culprit" without guessing | §439 |
+| A carrier's target was dropped | the carrier drops too, until a fixed point | `emitWarnings` | `node_link_resolve.dart:259-276` | going through a node that is not in the config is the same dangling reference | §439 |
+| Pair carrying a group's final tag instead of its raw tag (S3) | lowered to the raw tag when exactly one group matches | silent | `node_link_resolve.dart:130-134` | tolerant read agreed with the launcher; with two candidates guessing would pick the wrong group | §439 |
+| Chain position link does not resolve | **chain dropped whole** | `emitWarnings`, `chain_hop_missing` with the resolve reason | `chain_nodes.dart:136-165` | as for an unknown root tag (§393 C3): a route without a hop is a different route | §439 |
+| Auto node member link outside its container or without a node | member dropped | `emitWarnings` (`Auto node "…": member … was dropped`) | `server_list_build.dart:271-300` | a group does not leave its container (§322 §2); a disabled or vanished member has one outcome | §439 |
+| Explicit auto node where no member resolved | node not emitted | `emitWarnings` | `server_list_build.dart:236-241` | an empty urltest stops the core | §322/§439 |
+
+The storage side keeps links valid before the build: renaming (a body edit), moving,
+ungrouping, dissolving a folder, reordering namesakes and changing a standalone server's
+prefix rewrite links; deleting a node or a source clears them and the Servers screen names
+the affected carriers (`settings_storage/node_link_registry.dart`).
+
 ### 4.5 Presets, rules and DNS
 
 | Check | Sanitiser | User sees | Code | Why | Task |
@@ -427,7 +455,11 @@ with a warning rather than hand the core a file it will reject"
 | Preset tag namespacing `<preset_id>:<tag>` | only tags declared here and references to them are prefixed | silent | `preset_expand.dart:474-546` | without it two presets sharing a local tag collide and the second silently loses its server; a reference to someone else's tag is left alone or it would point nowhere | §103 C7 |
 | Duplicate DNS servers / rule_sets across presets | identical → silent skip; conflicting → first wins | `emitWarnings` on conflict | `preset_expand.dart:566-594` | — | §033 |
 | `detour` on a `type: group` DNS server | **unconditionally removed** | silent | `preset_expand.dart:628-631` | the core accepts exactly `{servers, mode, error_ttl, win_ttl}` on a group and fails on an extra key — start broke whenever a non-direct Direction was picked | §319 |
-| DNS server `detour` = `direct-out` / empty / unknown outbound | key removed | silent | `preset_expand.dart:632-638` | absent key beats a dangling reference | §117 |
+| DNS server `detour` = `direct-out` / empty | key removed | silent | `preset_expand.dart:643-646` | `direct-out` is the core's own direct path; the key is noise | §117 |
+| DNS server `detour` (after substitution) names an outbound that is not in the config — second fail-closed line | server **not emitted** | `emitWarnings` | `dns_servers.dart:205-213`, `preset_expand.dart:647-649` | removing the key (the pre-§441 behaviour) sent the server's queries direct, past the route the user picked | §441/§443, SPEC 129 Н10 |
+| DNS rule whose `server` was dropped by the second line | rule kept with its matchers, becomes `action: reject`; route keys (`server`, `strategy`, `disable_cache`, `rewrite_ttl`, `client_subnet`, …) removed | `emitWarnings` | `heal_detour_dropped_dns.dart:54-75` | dropping the rule would hand its domains to `dns.final`, and a direct `final` leaks them | §441/§443, SPEC 129 Н10 |
+| `dns.final` names a server dropped by the second line | `final` key removed, `{"action": "reject"}` with no conditions appended as the last DNS rule | `emitWarnings` | `heal_detour_dropped_dns.dart:76-84` | without `final` the core takes the first server of the list — the template's system resolver; the stub lets no query reach it (`sing-box check` on lx.39 accepts it, the live core answers REFUSED) | §443, SPEC 129 Н10 |
+| `route.default_domain_resolver`, `domain_resolver` of outbounds/endpoints and of DNS servers name a server dropped by the second line | replaced with the template default (`dns_default_domain_resolver`) if emitted and usable, else the first emitted server that is not `fakeip`/`hosts`; nothing to replace with, or the DNS server's address is an IP — key removed; an object value keeps its shape | `emitWarnings` | `heal_detour_dropped_dns.dart:86-136` | the core does not start without a resolver; the server-address resolver works before the tunnel and carries no user domains. Not persisted: the server returns with its Direction | §441/§443, SPEC 129 Н10 |
 | `"//"` comment keys in a raw-JSON rule | **recursively stripped** | `emitWarnings` | `custom_rules.dart:840-858` | sing-box strict-decode on an unknown field drops the whole config at start, and `//` is a common convention — a user copying a commented example got a fatal. Other unknown fields are left alone: their set is unknown to the builder, and cutting blind is worse than letting the core's decoder judge | §350 |
 | Raw JSON: empty / malformed / scalar / no objects / empty after comment stripping | rule skipped | `emitWarnings` (4 texts) | `custom_rules.dart:781-827` | the build does not fail; the rule degrades and the rest of the config survives | §225 |
 | Preset id missing from the template | rule skipped | `emitWarnings` | `custom_rules.dart:154-157` | — | §033 |
@@ -436,6 +468,7 @@ with a warning rather than hand the core a file it will reject"
 | `ip_is_private` / `inbound` / `protocol` inside a headless rule | lifted to routing-rule level | silent | `custom_rules.dart:692-696` | sing-box would cut the config at parse time | §030 |
 | DNS group member is the group itself / duplicated / unknown / disabled | member dropped from the emit; **storage not mutated** | `emitWarnings` per reason | `dns_servers.dart:414-430` | self-inclusion drops the config in the core; a disabled member snaps back when re-enabled | §312 |
 | DNS group empty after that filtering | **not healed, not dropped** — emitted empty | fatal `EmptyDnsGroup` at the validator | `dns_servers.dart:395-397` | deliberately blocks the build so the user decides, instead of degrading silently (anti-pattern §277/§278) | §312 |
+| DNS group emptied because its members were dropped by the second line (`dangling detour`, nested groups included) | group dropped and healed as a server (rules → `reject`, `final` → stub, resolvers → replacement) | `emitWarnings` | `dns_servers.dart:353-389` | the members left for the same fail-closed reason; an empty group would make the build fatal instead of closing the references | §443, SPEC 129 Н10 |
 | Disabled DNS server still referenced by an active preset or rule | force-included | silent | `dns_servers.dart:335-339` | otherwise a DNS rule points into nothing | §117 |
 | Wizard-only fields in a DNS body (`enabled`, `description`, `_origin`, …) | stripped | silent | `dns_servers.dart:359-364` | the core rejects unknown fields | §044 |
 | Orphan/unknown-`kind` DNS entries (legacy) | discarded | silent | `dns_servers.dart:114-123`, `dns_rules.dart:223, 322` | auto-discovery restores fresh state | §043/§044 |
@@ -514,13 +547,13 @@ the "canon = Go behaviour" decision.
 comment at all. Neither purpose could be established from the code.
 
 **4. Unhandled exhaustion branches.** The graph sanitiser's fixpoint limit
-(`sanitize_outbound_graph.dart:149-192`) and the tag allocator's counter
+(`sanitize_outbound_graph.dart:154-197`) and the tag allocator's counter
 (`build_config.dart:658-665`) both exit without a warning if reached. The
 sanitiser's comment argues its branch is unreachable; the allocator has no
 comment, and returning an already-taken tag is a silent fatal in the core.
 
 **5. Depth limits are inconsistent.** `_detourReaches` and
-`_pruneChainLeavesUnderGroups` (`sanitize_outbound_graph.dart:456, 503, 521`)
+`_pruneChainLeavesUnderGroups` (`sanitize_outbound_graph.dart:467, 514, 532`)
 rely on a `seen` set with no depth cap, unlike `kMaxDetourCulprits` in the
 validator and `kMaxDetourDepth` in the parsers. Whether that is a deliberate
 choice is not stated.

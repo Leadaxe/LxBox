@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/screens/chain_edit/chain_form_validation.dart';
 import 'package:lxbox/screens/chain_edit/chain_hop_candidate.dart';
@@ -351,7 +352,7 @@ void main() {
     test('читает hops/strip/strip_evasion как есть', () {
       const c = SourceChain(
         tag: 'via-de',
-        hops: ['a', 'b'],
+        hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
         stripEvasion: false,
         strip: {kChainStripTlsUtls: true},
       );
@@ -362,7 +363,7 @@ void main() {
     });
 
     test('трёхзначность не теряется: нет ключа → умолчание каталога ядра', () {
-      const c = SourceChain(tag: 'via-de', hops: ['a', 'b']);
+      const c = SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
       // tls.utls — единственный ключ каталога, не снимаемый по умолчанию.
       expect(ChainFormState.of(c).stripsUtls, isFalse);
     });

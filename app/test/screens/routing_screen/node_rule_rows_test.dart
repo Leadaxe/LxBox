@@ -42,7 +42,6 @@ void main() {
         tagPrefix: prefix,
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.manual,
-        createdAt: DateTime.utc(2026, 9, 14),
         rawBody: node.toUri(),
         sections: sections,
         nodes: [node],
@@ -87,7 +86,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.manual,
-        createdAt: DateTime.utc(2026, 9, 14),
         rawBody: '',
         sections: NodeSections(rules: [rule('@{self} net')]),
       );

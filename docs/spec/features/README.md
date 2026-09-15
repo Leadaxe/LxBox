@@ -79,7 +79,8 @@
 | 248 | [`248 detour-channels/`](248%20detour-channels/) | Detour-каналы: канал §125 с галкой «Use as detour» как переключаемая прослойка для detour серверов/папок/подписок (⚙; галка = разрешение, целью правил канал остаётся — §274; циклы ловит fatal-детектор §254) | Реализовано |
 | 392 | [`392 node-diagnostics/`](392%20node-diagnostics/) | Diagnostics на экране узла: GET через узел по тегу (kernel SPEC 058 `GetURLViaOutbound`) с показом сырого ответа — exit-IP/гео/`warp=`; ветка probe (VPN off) ↔ боевое ядро (VPN on) | DEVICE-PENDING |
 | 393 | [`393 directions/`](393%20directions/) | Directions: рефакторинг каналов, бэкап v1.1, цепочки, паритет с лаунчером | ТЗ |
-| 435 | [`435 node-sections-tailscale/`](435%20node-sections-tailscale/) | Секции узла (контракт ## 13, форма ONE_NAMESPACE §2) + узел Tailscale: инъекция при сборке, гейт ядра, мастер, Routing/DNS/редактор узла | In progress |
+| 435 | [`435 node-sections-tailscale/`](435%20node-sections-tailscale/) | Секции узла (контракт ## 13, форма ONE_NAMESPACE §2) + узел Tailscale: инъекция при сборке, гейт ядра, мастер, Routing/DNS/редактор узла | Released v2.23.2 (ядро lx.38) |
+| 439 | [`439 storage-contract-1-0/`](439%20storage-contract-1-0/) | Хранение `lxbox_settings.json` в форме записей контракта 1.0 (`sources[]`, `rules[]`, `dns{}`), миграция при загрузке с копией `.v0.bak`, ссылки на узлы `{folder_id, tag}` (NodeLink), экспорт LX Backup — срез хранения | Реализовано, DEVICE-PENDING (2.23.3) |
 | 417 | [`417 workspaces/`](417%20workspaces/) | Workspaces: именованные копии состояния (настройки + кэш подписок + .srs); Load = автосохранение текущего → копия → перечитать без рестарта → пересборка → VPN; Save as; без переезда файлов | DEVICE-PENDING |
 
 ## Демотированные / superseded (теперь в `../tasks/`)

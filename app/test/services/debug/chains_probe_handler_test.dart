@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/home_controller.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
@@ -119,7 +120,7 @@ void main() {
     controller = HomeController();
     DebugRegistry.I.home = controller;
     await SettingsStorage.setChains([
-      const SourceChain(tag: 'chain-1', label: 'Double', hops: ['warp', 'al']),
+      const SourceChain(tag: 'chain-1', label: 'Double', hops: [NodeLink(tag: 'warp'), NodeLink(tag: 'al')]),
     ]);
   });
 
@@ -156,7 +157,11 @@ void main() {
     test('под-ресурс не съедает обычный GET /chains/{tag}', () async {
       final r = asMap(await chainsHandler(get('/chains/chain-1'), ctx()));
       expect(r['tag'], 'chain-1');
-      expect(r['hops'], ['warp', 'al']);
+      // §439 — позиции в ответе — ссылки {folder_id?, tag}.
+      expect(r['hops'], [
+        {'tag': 'warp'},
+        {'tag': 'al'},
+      ]);
     });
   });
 

@@ -35,6 +35,7 @@ PresetApplyResult applyPresetBundles(
   }
   return PresetApplyResult(
     extraDnsServers: state.dnsServers,
+    dnsServerPresetIdByTag: state.dnsServerPresetIdByTag,
     extraDnsRules: state.dnsRules,
     dnsRulesByPresetId: state.dnsRulesByPresetId,
     labelByPresetId: state.labelByPresetId,
@@ -49,6 +50,9 @@ PresetApplyResult applyPresetBundles(
 class _PresetSharedState {
   final List<Map<String, dynamic>> dnsServers = [];
   final Map<String, Map<String, dynamic>> dnsServerByTag = {};
+
+  /// §439 — тег DNS-сервера → `preset_id` пресета, который внёс его первым.
+  final Map<String, String> dnsServerPresetIdByTag = {};
   final List<Map<String, dynamic>> dnsRules = [];
   // §253: пресет может нести несколько DNS-правил (порядок шаблона).
   final Map<String, List<Map<String, dynamic>>> dnsRulesByPresetId = {};
@@ -221,6 +225,7 @@ List<String> _applyPresetSingle(
       final existing = state.dnsServerByTag[tag];
       if (existing == null) {
         state.dnsServerByTag[tag] = s;
+        state.dnsServerPresetIdByTag[tag] = cr.presetId;
         state.dnsServers.add(s);
       } else if (!const DeepCollectionEquality().equals(existing, s)) {
         warnings
@@ -243,6 +248,9 @@ List<String> _applyPresetSingle(
 /// title'а строки. `extraDnsRules` сохранён как legacy / debug.
 class PresetApplyResult {
   final List<Map<String, dynamic>> extraDnsServers;
+
+  /// §439 — тег сервера из [extraDnsServers] → `preset_id` его пресета.
+  final Map<String, String> dnsServerPresetIdByTag;
   final List<Map<String, dynamic>> extraDnsRules;
   final Map<String, List<Map<String, dynamic>>> dnsRulesByPresetId;
   final Map<String, String> labelByPresetId;
@@ -250,6 +258,7 @@ class PresetApplyResult {
 
   const PresetApplyResult({
     this.extraDnsServers = const [],
+    this.dnsServerPresetIdByTag = const {},
     this.extraDnsRules = const [],
     this.dnsRulesByPresetId = const {},
     this.labelByPresetId = const {},
@@ -631,6 +640,7 @@ UnifiedApplyResult applyAllCustomRules(
   }
   return UnifiedApplyResult(
     extraDnsServers: state.dnsServers,
+    dnsServerPresetIdByTag: state.dnsServerPresetIdByTag,
     extraDnsRules: state.dnsRules,
     dnsRulesByPresetId: state.dnsRulesByPresetId,
     labelByPresetId: state.labelByPresetId,
@@ -647,6 +657,9 @@ UnifiedApplyResult applyAllCustomRules(
 /// routing-правила); единственный источник эмиссии группы в [applyCustomDns].
 class UnifiedApplyResult {
   final List<Map<String, dynamic>> extraDnsServers;
+
+  /// §439 — тег сервера из [extraDnsServers] → `preset_id` его пресета.
+  final Map<String, String> dnsServerPresetIdByTag;
   final List<Map<String, dynamic>> extraDnsRules;
   final Map<String, List<Map<String, dynamic>>> dnsRulesByPresetId;
   final Map<String, String> labelByPresetId;
@@ -655,6 +668,7 @@ class UnifiedApplyResult {
 
   const UnifiedApplyResult({
     this.extraDnsServers = const [],
+    this.dnsServerPresetIdByTag = const {},
     this.extraDnsRules = const [],
     this.dnsRulesByPresetId = const {},
     this.labelByPresetId = const {},

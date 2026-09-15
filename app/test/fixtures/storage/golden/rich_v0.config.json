@@ -1,0 +1,1014 @@
+{
+  "log": {
+    "level": "debug",
+    "timestamp": true
+  },
+  "certificate": {
+    "store": "system"
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "https",
+        "server": "example-31.com",
+        "path": "/dns-query",
+        "detour": "vpn-1",
+        "tag": "my-doh"
+      },
+      {
+        "type": "group",
+        "servers": [
+          "my-doh",
+          "google_udp"
+        ],
+        "mode": "fastest",
+        "tag": "dns-group"
+      },
+      {
+        "type": "local",
+        "tag": "local_dns_resolver"
+      },
+      {
+        "type": "udp",
+        "tag": "google_udp",
+        "server_port": 53,
+        "server": "8.8.8.8"
+      },
+      {
+        "type": "tls",
+        "tag": "google_dot",
+        "server_port": 853,
+        "server": "8.8.8.8",
+        "detour": "vpn-1"
+      },
+      {
+        "type": "https",
+        "tag": "google_doh",
+        "server_port": 443,
+        "path": "/dns-query",
+        "tls": {
+          "enabled": true,
+          "server_name": "dns.google"
+        },
+        "server": "8.8.4.4",
+        "detour": "vpn-1"
+      },
+      {
+        "type": "tls",
+        "tag": "cloudflare_dot",
+        "server_port": 853,
+        "server": "1.1.1.1",
+        "detour": "vpn-1"
+      },
+      {
+        "type": "udp",
+        "tag": "opendns_udp",
+        "server_port": 53,
+        "server": "208.67.222.222"
+      },
+      {
+        "type": "https",
+        "tag": "quad9_doh",
+        "server_port": 443,
+        "server": "9.9.9.9",
+        "path": "/dns-query",
+        "tls": {
+          "enabled": true,
+          "server_name": "dns.quad9.net"
+        },
+        "detour": "vpn-1"
+      },
+      {
+        "type": "group",
+        "tag": "dns_shield",
+        "servers": [
+          "google_udp",
+          "opendns_udp",
+          "google_doh",
+          "google_dot",
+          "cloudflare_dot",
+          "quad9_doh"
+        ],
+        "mode": "fastest",
+        "error_ttl": "5m",
+        "win_ttl": "5m"
+      },
+      {
+        "type": "group",
+        "tag": "ru-direct:dns_ru",
+        "servers": [
+          "ru-direct:yandex_udp",
+          "ru-direct:yandex_dot",
+          "ru-direct:yandex_doh"
+        ],
+        "mode": "fastest",
+        "error_ttl": "5m",
+        "win_ttl": "5m"
+      },
+      {
+        "type": "udp",
+        "tag": "ru-direct:yandex_udp",
+        "server": "77.88.8.1",
+        "server_port": 53
+      },
+      {
+        "type": "tls",
+        "tag": "ru-direct:yandex_dot",
+        "server": "77.88.8.88",
+        "server_port": 853,
+        "tls": {
+          "enabled": true,
+          "server_name": "safe.dot.dns.yandex.net"
+        },
+        "detour": "vpn-1"
+      },
+      {
+        "type": "https",
+        "tag": "ru-direct:yandex_doh",
+        "server": "77.88.8.88",
+        "server_port": 443,
+        "path": "/dns-query",
+        "tls": {
+          "enabled": true,
+          "server_name": "safe.dot.dns.yandex.net"
+        }
+      },
+      {
+        "type": "tailscale",
+        "endpoint": "home-ts",
+        "tag": "home-ts-dns"
+      },
+      {
+        "type": "udp",
+        "server": "10.8.0.1",
+        "detour": "EU de-1",
+        "tag": "EU de-1-dns"
+      }
+    ],
+    "rules": [
+      {
+        "domain_suffix": [
+          ".lan"
+        ],
+        "server": "my-doh"
+      },
+      {
+        "domain_suffix": [
+          ".nokey"
+        ],
+        "server": "google_udp"
+      },
+      {
+        "rule_set": "ds-geo",
+        "server": "google_udp",
+        "query_type": [
+          "A",
+          "AAAA"
+        ]
+      },
+      {
+        "rule_set": "ds-model",
+        "server": "google_udp"
+      },
+      {
+        "rule_set": [
+          "ru-direct:ru-domains",
+          "ru-direct:ru-services"
+        ],
+        "ip_version": 6,
+        "action": "predefined",
+        "rcode": "NOERROR"
+      },
+      {
+        "rule_set": [
+          "ru-direct:ru-domains",
+          "ru-direct:ru-services"
+        ],
+        "server": "ru-direct:dns_ru",
+        "action": "route"
+      },
+      {
+        "domain_suffix": [
+          ".ts.net"
+        ],
+        "server": "home-ts-dns"
+      },
+      {
+        "domain_suffix": [
+          ".office.example-40.com"
+        ],
+        "server": "EU de-1-dns"
+      }
+    ],
+    "final": "my-doh",
+    "strategy": "prefer_ipv4"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "interface_name": "lxbox",
+      "address": [
+        "172.16.0.1/30",
+        "fdfe:dcba:9876::1/126"
+      ],
+      "mtu": 1400,
+      "auto_route": true,
+      "strict_route": false,
+      "stack": "mixed",
+      "exclude_package": [
+        "com.example.bank",
+        "com.example.bypass"
+      ]
+    },
+    {
+      "type": "socks",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 2081,
+      "users": [
+        {
+          "username": "user",
+          "password": "testpass123"
+        }
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "type": "wireguard",
+      "tag": "WireGuard",
+      "mtu": 1420,
+      "address": [
+        "10.0.0.2/32",
+        "fd00::2/128"
+      ],
+      "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+      "peers": [
+        {
+          "address": "example-3.com",
+          "port": 51820,
+          "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+          "allowed_ips": [
+            "0.0.0.0/0",
+            "::/0"
+          ],
+          "pre_shared_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=",
+          "persistent_keepalive_interval": 25
+        }
+      ]
+    },
+    {
+      "type": "tailscale",
+      "tag": "home-ts",
+      "auth_key": "tskey-auth-000000000000",
+      "hostname": "lxbox-test",
+      "accept_routes": true,
+      "state_directory": "/data/user/0/com.leadaxe.lxbox/files/tailscale/home-ts"
+    },
+    {
+      "type": "wireguard",
+      "tag": "singbox-wg-1",
+      "mtu": 1420,
+      "address": [
+        "10.0.0.2/32"
+      ],
+      "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+      "peers": [
+        {
+          "address": "example-1.com",
+          "port": 51820,
+          "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+          "allowed_ips": [
+            "0.0.0.0/0",
+            "::/0"
+          ]
+        }
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct-out"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    },
+    {
+      "type": "vless",
+      "tag": "PR DE-1",
+      "server": "example-11.com",
+      "server_port": 443,
+      "uuid": "11111111-2222-3333-4444-555555555555",
+      "transport": {
+        "type": "ws",
+        "path": "/v",
+        "headers": {
+          "Host": "example-11.com"
+        }
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "example-11.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "random"
+        },
+        "fragment": true,
+        "fragment_fallback_delay": "500ms"
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "PR NL-1",
+      "server": "example-12.com",
+      "server_port": 443,
+      "password": "testpass123",
+      "tls": {
+        "enabled": true,
+        "server_name": "example-12.com",
+        "fragment": true,
+        "fragment_fallback_delay": "500ms"
+      }
+    },
+    {
+      "type": "hysteria2",
+      "tag": "PR FI-1",
+      "server": "example-14.com",
+      "server_port": 8443,
+      "password": "testpass123",
+      "tls": {
+        "enabled": true,
+        "server_name": "example-14.com",
+        "fragment": true,
+        "fragment_fallback_delay": "500ms"
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "PR ss-1",
+      "server": "example-15.com",
+      "server_port": 8388,
+      "method": "2022-blake3-aes-256-gcm",
+      "password": "testpass123paddingpaddingpad"
+    },
+    {
+      "type": "vless",
+      "tag": "S2 JP-1",
+      "server": "example-21.com",
+      "server_port": 443,
+      "uuid": "11111111-2222-3333-4444-666666666666",
+      "tls": {
+        "enabled": true,
+        "server_name": "example-21.com"
+      },
+      "detour": "S2 jump"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "S2 jump",
+      "server": "example-22.com",
+      "server_port": 8388,
+      "method": "aes-256-gcm",
+      "password": "testpass123"
+    },
+    {
+      "type": "trojan",
+      "tag": "S2 US-1",
+      "server": "example-23.com",
+      "server_port": 443,
+      "password": "testpass123",
+      "tls": {
+        "enabled": true,
+        "server_name": "example-23.com",
+        "fragment": true,
+        "fragment_fallback_delay": "500ms"
+      }
+    },
+    {
+      "tag": "S2 Fastest",
+      "type": "urltest",
+      "outbounds": [
+        "S2 JP-1",
+        "S2 US-1"
+      ],
+      "url": "https://cp.cloudflare.com/generate_204",
+      "interval": "5m",
+      "tolerance": 100,
+      "idle_timeout": "30m",
+      "interrupt_exist_connections": false
+    },
+    {
+      "type": "vless",
+      "tag": "VLESS Reality",
+      "server": "example-1.com",
+      "server_port": 443,
+      "uuid": "11111111-2222-3333-4444-555555555555",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.example.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "short_id": "abcd1234"
+        }
+      },
+      "detour": "vpn-3"
+    },
+    {
+      "type": "hysteria2",
+      "tag": "HY Hy2 Obfs",
+      "server": "example-2.com",
+      "server_port": 443,
+      "password": "testpass123",
+      "obfs": {
+        "type": "salamander",
+        "password": "obfspass"
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "example-2.com",
+        "fragment": true,
+        "fragment_fallback_delay": "500ms"
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "VMess WS",
+      "server": "example-1.com",
+      "server_port": 443,
+      "uuid": "11111111-2222-3333-4444-555555555555",
+      "security": "auto",
+      "transport": {
+        "type": "ws",
+        "path": "/vm",
+        "headers": {
+          "Host": "example-1.com"
+        }
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "example-1.com",
+        "fragment": true,
+        "fragment_fallback_delay": "500ms"
+      }
+    },
+    {
+      "type": "tuic",
+      "tag": "TUIC Basic",
+      "server": "example-1.com",
+      "server_port": 443,
+      "uuid": "11111111-2222-3333-4444-555555555555",
+      "password": "testpass123",
+      "congestion_control": "bbr",
+      "udp_relay_mode": "native",
+      "tls": {
+        "enabled": true,
+        "server_name": "example-1.com",
+        "alpn": [
+          "h3"
+        ],
+        "fragment": true,
+        "fragment_fallback_delay": "500ms"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "EU de-1",
+      "server": "example-41.com",
+      "server_port": 443,
+      "uuid": "11111111-1111-1111-1111-111111111111",
+      "tls": {
+        "enabled": true,
+        "server_name": "example-41.com",
+        "fragment": true,
+        "fragment_fallback_delay": "500ms"
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "EU nl-1",
+      "server": "example-42.com",
+      "server_port": 443,
+      "password": "testpass123",
+      "tls": {
+        "enabled": true,
+        "server_name": "example-42.com"
+      },
+      "detour": "EU de-1"
+    },
+    {
+      "type": "trojan",
+      "tag": "EU fr-1",
+      "server": "example-43.com",
+      "server_port": 443,
+      "password": "testpass123",
+      "tls": {
+        "enabled": true,
+        "server_name": "example-43.com"
+      },
+      "detour": "VLESS Reality"
+    },
+    {
+      "type": "trojan",
+      "tag": "My F Trojan WS",
+      "server": "example-2.com",
+      "server_port": 443,
+      "password": "testpass123",
+      "transport": {
+        "type": "ws",
+        "path": "/tr",
+        "headers": {
+          "Host": "example-2.com"
+        }
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "example-2.com"
+      },
+      "detour": "EU de-1"
+    },
+    {
+      "tag": "chain-1",
+      "type": "chain",
+      "outbounds": [
+        "EU nl-1",
+        "PR DE-1"
+      ],
+      "idle_timeout": "5m",
+      "strip_evasion": false,
+      "strip": {
+        "tls.fragment": true,
+        "tls.utls": false
+      },
+      "rewrite": {
+        "vless": {
+          "flow": null
+        }
+      }
+    },
+    {
+      "tag": "chain-2",
+      "type": "chain",
+      "outbounds": [
+        "chain-1",
+        "VLESS Reality"
+      ]
+    },
+    {
+      "tag": "vpn-1-auto",
+      "type": "urltest",
+      "outbounds": [
+        "PR DE-1",
+        "PR NL-1",
+        "PR FI-1",
+        "PR ss-1",
+        "S2 JP-1",
+        "S2 jump",
+        "S2 US-1",
+        "VLESS Reality",
+        "WireGuard",
+        "HY Hy2 Obfs",
+        "VMess WS",
+        "TUIC Basic",
+        "singbox-wg-1",
+        "EU nl-1",
+        "EU fr-1",
+        "My F Trojan WS",
+        "chain-1",
+        "chain-2"
+      ],
+      "url": "https://cp.cloudflare.com/generate_204",
+      "interval": "5m",
+      "tolerance": 50,
+      "idle_timeout": "30m",
+      "interrupt_exist_connections": false
+    },
+    {
+      "tag": "vpn-1",
+      "type": "selector",
+      "outbounds": [
+        "vpn-1-auto",
+        "direct-out",
+        "PR DE-1",
+        "PR NL-1",
+        "PR FI-1",
+        "PR ss-1",
+        "S2 JP-1",
+        "S2 jump",
+        "S2 US-1",
+        "S2 Fastest",
+        "VLESS Reality",
+        "WireGuard",
+        "HY Hy2 Obfs",
+        "VMess WS",
+        "TUIC Basic",
+        "singbox-wg-1",
+        "EU nl-1",
+        "EU fr-1",
+        "My F Trojan WS",
+        "chain-1",
+        "chain-2"
+      ],
+      "interrupt_exist_connections": true,
+      "default": "vpn-1-auto"
+    },
+    {
+      "tag": "vpn-2-auto",
+      "type": "urltest",
+      "outbounds": [
+        "PR DE-1",
+        "PR NL-1",
+        "PR FI-1",
+        "PR ss-1",
+        "EU nl-1",
+        "EU fr-1"
+      ],
+      "url": "https://cp.cloudflare.com/generate_204",
+      "interval": "10m",
+      "tolerance": 80,
+      "idle_timeout": "30m",
+      "interrupt_exist_connections": true,
+      "mode": "round_robin",
+      "balancer": {
+        "pool": 2,
+        "pool_tolerance": 20,
+        "sticky_hash": [
+          "domain"
+        ]
+      }
+    },
+    {
+      "tag": "vpn-2",
+      "type": "selector",
+      "outbounds": [
+        "vpn-2-auto",
+        "block",
+        "vpn-1",
+        "PR DE-1",
+        "PR NL-1",
+        "PR FI-1",
+        "PR ss-1",
+        "EU nl-1",
+        "EU fr-1"
+      ],
+      "interrupt_exist_connections": false,
+      "default": "PR DE-1"
+    },
+    {
+      "tag": "vpn-3",
+      "type": "selector",
+      "outbounds": [
+        "HY Hy2 Obfs"
+      ],
+      "interrupt_exist_connections": true
+    }
+  ],
+  "route": {
+    "find_process": true,
+    "default_domain_resolver": "google_udp",
+    "rules": [
+      {
+        "action": "sniff",
+        "inbound": [
+          "tun-in",
+          "mixed-in"
+        ],
+        "timeout": "500ms"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "action": "resolve",
+        "inbound": [
+          "tun-in",
+          "mixed-in"
+        ],
+        "strategy": "prefer_ipv4"
+      },
+      {
+        "rule_set": "home-ts network",
+        "outbound": "home-ts"
+      },
+      {
+        "rule_set": "Ads",
+        "action": "reject"
+      },
+      {
+        "rule_set": "All groups",
+        "protocol": [
+          "tls",
+          "quic"
+        ],
+        "network": [
+          "tcp"
+        ],
+        "ip_is_private": true,
+        "source_ip_is_private": true,
+        "inbound": [
+          "tun-in"
+        ],
+        "action": "resolve",
+        "strategy": "prefer_ipv4",
+        "server": "my-doh",
+        "disable_cache": true,
+        "disable_optimistic_cache": true,
+        "rewrite_ttl": 60,
+        "timeout": "5s",
+        "client_subnet": "203.0.113.0/24"
+      },
+      {
+        "rule_set": "All groups",
+        "protocol": [
+          "tls",
+          "quic"
+        ],
+        "network": [
+          "tcp"
+        ],
+        "ip_is_private": true,
+        "source_ip_is_private": true,
+        "inbound": [
+          "tun-in"
+        ],
+        "outbound": "vpn-2"
+      },
+      {
+        "rule_set": "Resolve only",
+        "action": "resolve",
+        "strategy": "ipv4_only"
+      },
+      {
+        "rule_set": [
+          "Geo sets",
+          "Geo sets-2"
+        ],
+        "port": [
+          443
+        ],
+        "network": [
+          "tcp"
+        ],
+        "outbound": "direct-out"
+      },
+      {
+        "domain_suffix": [
+          ".json.example-53.com"
+        ],
+        "action": "route",
+        "outbound": "vpn-1"
+      },
+      {
+        "domain_suffix": [
+          ".arr1.example-54.com"
+        ],
+        "outbound": "direct-out"
+      },
+      {
+        "ip_cidr": [
+          "192.0.2.0/24"
+        ],
+        "action": "reject"
+      },
+      {
+        "domain_keyword": [
+          "comment55"
+        ],
+        "outbound": "vpn-2"
+      },
+      {
+        "rule_set": [
+          "ru-direct:ru-domains",
+          "ru-direct:ru-services"
+        ],
+        "action": "resolve",
+        "server": "ru-direct:dns_ru",
+        "strategy": "ipv4_only"
+      },
+      {
+        "rule_set": [
+          "ru-direct:ru-domains",
+          "ru-direct:ru-services"
+        ],
+        "outbound": "direct-out"
+      },
+      {
+        "rule_set": "block-ads:ads-all",
+        "action": "reject"
+      },
+      {
+        "rule_set": "Ports with text",
+        "network": [
+          "udp"
+        ],
+        "outbound": "direct-out"
+      },
+      {
+        "rule_set": "EU de-1 office",
+        "outbound": "EU de-1"
+      }
+    ],
+    "final": "vpn-2",
+    "auto_detect_interface": true,
+    "rule_set": [
+      {
+        "type": "inline",
+        "tag": "home-ts network",
+        "rules": [
+          {
+            "ip_cidr": [
+              "100.64.0.0/10"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "inline",
+        "tag": "Ads",
+        "rules": [
+          {
+            "domain_suffix": [
+              ".ads.example-50.com"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "inline",
+        "tag": "All groups",
+        "rules": [
+          {
+            "domain": [
+              "full.example-51.com"
+            ],
+            "domain_suffix": [
+              ".example-51.com"
+            ],
+            "domain_keyword": [
+              "example51"
+            ],
+            "ip_cidr": [
+              "198.51.100.0/24"
+            ],
+            "port": [
+              443,
+              8443
+            ],
+            "port_range": [
+              "10000:10100"
+            ],
+            "package_name": [
+              "com.example.browser"
+            ],
+            "source_ip_cidr": [
+              "10.0.0.0/8"
+            ],
+            "wifi_ssid": [
+              "Home WiFi"
+            ],
+            "wifi_bssid": [
+              "aa:bb:cc:dd:ee:ff"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "inline",
+        "tag": "Resolve only",
+        "rules": [
+          {
+            "domain_suffix": [
+              ".resolve.example-52.com"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "local",
+        "tag": "Geo sets",
+        "format": "binary",
+        "path": "<sandbox>/docs/rule_sets/r-srs-multi.srs"
+      },
+      {
+        "type": "local",
+        "tag": "Geo sets-2",
+        "format": "binary",
+        "path": "<sandbox>/docs/rule_sets/r-srs-multi~1.srs"
+      },
+      {
+        "tag": "ru-direct:ru-domains",
+        "type": "inline",
+        "rules": [
+          {
+            "domain_suffix": [
+              "ru",
+              "su",
+              "xn--p1ai",
+              "xn--p1acf",
+              "xn--80adxhks",
+              "moscow",
+              "tatar",
+              "xn--d1acj3b",
+              "xn--80asehdb",
+              "xn--80aswg",
+              "xn--c1avg",
+              "xn--j1aef"
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "ru-direct:ru-services",
+        "type": "inline",
+        "rules": [
+          {
+            "domain_suffix": [
+              "userapi.com",
+              "avito.st",
+              "yandex.net",
+              "yandex.com",
+              "yastatic.net",
+              "2gis.com",
+              "okko.tv",
+              "premier.one",
+              "lenta.com",
+              "vk.com",
+              "vk-portal.net",
+              "gismeteo.com",
+              "lmru.tech",
+              "mradx.net",
+              "wbstatic.net",
+              "wildberries.by",
+              "trbcdn.net",
+              "sberbank.com",
+              "mcc250.pub.3gppnetwork.org"
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "block-ads:ads-all",
+        "type": "local",
+        "format": "binary",
+        "path": "<sandbox>/docs/rule_sets/preset__block-ads__ads-all.srs"
+      },
+      {
+        "type": "inline",
+        "tag": "Ports with text",
+        "rules": [
+          {
+            "port": [
+              53
+            ]
+          }
+        ]
+      },
+      {
+        "type": "inline",
+        "tag": "EU de-1 office",
+        "rules": [
+          {
+            "domain_suffix": [
+              ".office.example-40.com"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "local",
+        "tag": "ds-geo",
+        "format": "binary",
+        "path": "<sandbox>/docs/rule_sets/ds_geo1.srs"
+      },
+      {
+        "type": "local",
+        "tag": "ds-model",
+        "format": "binary",
+        "path": "<sandbox>/docs/rule_sets/ds_model1.srs"
+      }
+    ],
+    "lx_idle_suspend": "1m",
+    "lx_idle_suspend_reachable": "10m"
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "cache.db",
+      "store_fakeip": true
+    }
+  },
+  "services": [
+    {
+      "type": "oom-killer"
+    }
+  ]
+}

@@ -18,8 +18,10 @@
 // ДРУГОЙ маршрут. Молча подменить его — то же самое, что молча сменить
 // страну выхода.
 
+import '../../models/node_link.dart';
 import '../../models/source_chain.dart';
 import 'core_chain_capability.dart';
+import 'node_link_resolve.dart';
 
 /// Цепочка, не ставшая узлом, и почему.
 ///
@@ -63,11 +65,15 @@ class ChainResolution {
 
 /// §393 C3 — разрешает [chains] в узлы конфига.
 ///
-/// [knownTags] — теги, на которые позиция вправе сослаться: узлы всех
-/// источников, Направления (включая выключенные — их теги зарезервированы
-/// аллокатором, §351) и служебные теги шаблона. Множество мутируется по мере
-/// разрешения: тег каждой успешной цепочки добавляется в него, и следующая
-/// цепочка может им воспользоваться.
+/// [knownTags] — занятые теги конфига: узлы всех источников, Направления
+/// (включая выключенные — их теги зарезервированы аллокатором, §351) и
+/// служебные теги шаблона. По ним ловится коллизия имени цепочки. Множество
+/// мутируется: тег каждой успешной цепочки добавляется в него.
+///
+/// [targets] — словарь ссылок сборки (D-112): позиция-ссылка разрешается в
+/// финальный тег через него. Тег успешной цепочки становится корневым именем,
+/// и следующая цепочка может им воспользоваться. Без словаря (превью, тесты
+/// модели) корневая позиция разрешается по [knownTags], пара — нет.
 ///
 /// [coreVersion] — строка `Libbox.version()`. Гейт §393 C5 стоит ПЕРВЫМ:
 /// ядро без `with_lx_chain` отвергает конфиг ЦЕЛИКОМ на неизвестном типе
@@ -76,6 +82,7 @@ class ChainResolution {
 ChainResolution resolveChains(
   List<SourceChain> chains, {
   required Set<String> knownTags,
+  NodeLinkTargets? targets,
   String coreVersion = '',
 }) {
   final nodes = <Map<String, dynamic>>[];
@@ -119,26 +126,47 @@ ChainResolution resolveChains(
               'already taken by another outbound, direction or chain.');
       continue;
     }
-    // Позиция, которой нет среди известных тегов, — ссылка в никуда, на
-    // которой ядро не стартует. Сюда же попадает ссылка ВПЕРЁД на цепочку,
-    // объявленную ниже: её тега в `knownTags` ещё нет, и это ровно тот
-    // порядок, которым исключены циклы.
-    var missing = '';
+    // Позиция-ссылка, которая не разрешилась, — ссылка в никуда, на которой
+    // ядро не стартует (NODE_LINK §5.1). Сюда же попадает ссылка ВПЕРЁД на
+    // цепочку, объявленную ниже: её тега среди корневых имён ещё нет, и это
+    // ровно тот порядок, которым исключены циклы.
+    final hopTags = <String>[];
+    NodeLink? missing;
+    var missingWhy = '';
     var missingAt = 0;
     for (var i = 0; i < c.hops.length; i++) {
-      if (!knownTags.contains(c.hops[i])) {
-        missing = c.hops[i];
+      final hop = c.hops[i];
+      final String? tag;
+      if (targets != null) {
+        final r = targets.resolve(hop);
+        tag = r.tag;
+        missingWhy = r.reason;
+      } else {
+        tag = hop.isRoot && knownTags.contains(hop.tag) ? hop.tag : null;
+      }
+      if (tag == null) {
+        missing = hop;
         missingAt = i + 1;
         break;
       }
+      hopTags.add(tag);
     }
-    if (missing.isNotEmpty) {
+    if (missing != null) {
+      // Корневая позиция без цели — прежний текст; пара и выпавший узел —
+      // с причиной резолва.
+      final notFound = missing.isRoot &&
+          (targets == null || missingWhy.startsWith('target '));
       degrade(
           'chain_hop_missing',
-          'Hop chain "${c.displayLabel}" was dropped: position $missingAt '
-              '("$missing") was not found among nodes, directions and chains '
-              'declared above it. A route without a hop is a different route, '
-              'so the whole chain is skipped.');
+          notFound
+              ? 'Hop chain "${c.displayLabel}" was dropped: position $missingAt '
+                  '("${missing.tag}") was not found among nodes, directions and '
+                  'chains declared above it. A route without a hop is a '
+                  'different route, so the whole chain is skipped.'
+              : 'Hop chain "${c.displayLabel}" was dropped: position $missingAt '
+                  '(${targets?.describe(missing) ?? '"${missing.tag}"'}) did not '
+                  'resolve — $missingWhy. A route without a hop is a different '
+                  'route, so the whole chain is skipped.');
       continue;
     }
     // Вложенная цепочка законна ТОЛЬКО позицией 0: звено — это «узел через
@@ -146,8 +174,8 @@ ChainResolution resolveChains(
     // диалер (`protocol/chain/chain.go:279`). `check` этого не ловит —
     // падает только `run` (§393 L4).
     final nested = <String>[];
-    for (var i = 1; i < c.hops.length; i++) {
-      if (chainTags.contains(c.hops[i])) nested.add(c.hops[i]);
+    for (var i = 1; i < hopTags.length; i++) {
+      if (chainTags.contains(hopTags[i])) nested.add(hopTags[i]);
     }
     if (nested.isNotEmpty) {
       degrade(
@@ -158,8 +186,9 @@ ChainResolution resolveChains(
       continue;
     }
 
-    nodes.add(chainOutboundObject(c));
+    nodes.add(chainOutboundObject(c, hopTags));
     knownTags.add(c.tag);
+    targets?.addRootNames([c.tag]);
     chainTags.add(c.tag);
   }
   return ChainResolution(nodes: nodes, degraded: degraded);

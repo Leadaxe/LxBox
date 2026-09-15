@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/template_vars.dart';
@@ -28,15 +29,16 @@ void main() {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.manual,
-      createdAt: DateTime.utc(2026, 7, 2),
       rawBody: jsonEncode(spec.emit(TemplateVars.empty).map),
       nodes: [spec],
     );
 
-    final restored = ServerList.fromJson(us.toJson()) as UserServer;
+    final restored =
+        sourceFromRecord(sourceToRecord(us)).value! as UserServer;
 
-    expect(restored.name, 'My HTTP proxy');
-    expect(restored.origin, UserSource.manual);
+    // §439 — имя одиночного сервера (с §243 пустое) записью не хранится.
+    expect(restored, us);
+    expect(restored.name, '');
     expect(restored.nodes.length, 1);
     final node = restored.nodes.first;
     expect(node, isA<HttpSpec>());
@@ -68,11 +70,11 @@ void main() {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.manual,
-      createdAt: DateTime.utc(2026, 7, 2),
       rawBody: jsonEncode(spec.emit(TemplateVars.empty).map),
       nodes: [spec],
     );
-    final restored = ServerList.fromJson(us.toJson()) as UserServer;
+    final restored =
+        sourceFromRecord(sourceToRecord(us)).value! as UserServer;
     final http = restored.nodes.first as HttpSpec;
     expect(http.tag, 'corp-https-out');
     expect(http.username, 'alice');

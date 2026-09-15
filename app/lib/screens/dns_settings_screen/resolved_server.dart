@@ -48,6 +48,7 @@ class ResolvedServer {
     required this.body,
     this.overrides,
     this.presetLabel,
+    this.presetId = '',
     this.vars = const [],
     this.varValues = const {},
     this.usedByRule,
@@ -60,6 +61,10 @@ class ResolvedServer {
   final Map<String, dynamic> body;
   final ServerKind? overrides;
   final String? presetLabel;
+
+  /// §439 — `preset_id` пресета сервера (свой у preset-ref, канонический у
+  /// override пресета); пусто — пресет не известен.
+  final String presetId;
 
   /// §117: var-определения template-обёртки (`{vars, server}`). Только для
   /// `kind: template`; preset-vars редактируются в редакторе правила,

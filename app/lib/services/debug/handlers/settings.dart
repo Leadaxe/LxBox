@@ -1,5 +1,6 @@
 import '../../../models/background_mode.dart';
 import '../../../models/dns_ref.dart';
+import '../../../models/record_codec.dart';
 import '../../l10n/locale_controller.dart';
 import '../../vpn_settings/vpn_settings_facade.dart';
 import '../../settings_storage.dart';
@@ -22,7 +23,7 @@ import '_shared.dart';
 /// - `PUT    /settings/vars/{key}`              body `{"value":"..."}`
 /// - `DELETE /settings/vars/{key}`              — удалить var
 /// - `PUT    /settings/dns_options/servers`     body `{"servers":[...]}`
-/// - `PUT    /settings/dns_options/rules`       body `{"rules":"<json-string>"}`
+/// - `PUT    /settings/dns_options/rules`       body `{"rules":[...]}`
 /// - `GET|PUT /settings/vpn/allow_bypass`        body `{"enabled":bool}`
 /// - `GET|PUT /settings/vpn/keep_on_exit`        body `{"enabled":bool}`
 /// - `GET|PUT /settings/vpn/background_mode`     body `{"mode":"never|lazy|always"}`
@@ -341,15 +342,37 @@ Future<DebugResponse> _deleteVar(String key, DebugRequest req, DebugContext ctx)
 // dns_options
 // ---------------------------------------------------------------------------
 
-/// §043: принимает оба формата:
-/// - **New (kind-refs):** `[{"enabled":bool, "kind":"inline|preset|template", "tag":str, "body":{...}?}]`.
-///   Save as is; render-time resolver `resolveDnsServersList` подхватит.
-/// - **Legacy (full-body snapshot):** `[{type, tag, server, server_port, ...}]`.
-///   Save as is; на ближайший `resolveDnsServersList` migration auto-конвертирует
-///   в kind-refs и persist'нет.
-///
-/// Detection: presence of `kind` field на любом элементе → new format. Иначе
-/// legacy. Mixed формат не поддерживается.
+/// Образец записи DNS-сервера для текста 400.
+const String _dnsServerRecordSample =
+    '{"kind":"user","tag":"my-dns","enabled":true,"body":{"type":"udp","server":"1.1.1.1"}}';
+
+/// Образец записи DNS-правила для текста 400.
+const String _dnsRuleRecordSample =
+    '{"kind":"user","name":"corp","enabled":true,"body":{"domain_suffix":[".corp"],"server":"my-dns"}}';
+
+/// §439 §3.4 — ключ формы 2.23.2 в записи 1.0 → 400. Кодек записей незнакомые
+/// ключи пропускает, и template-сервер с `varValues` лёг бы без значений
+/// переменных при ответе 200, а preset-правило с `presetId` получило бы 400 без
+/// названия поля.
+void _rejectLegacyDnsKeys(
+  Map<dynamic, dynamic> record,
+  List<String> legacyKeys,
+  String sample,
+  String kinds,
+) {
+  for (final key in legacyKeys) {
+    if (record.containsKey(key)) {
+      throw BadRequest('"$key" is the 2.23.2 storage form; expected a record '
+          'like $sample ($kinds)');
+    }
+  }
+}
+
+/// §439 §3.4 — `{"servers": [<запись dns.servers[] 1.0>]}`: `kind`
+/// `user|preset|template`, тег сервера — поле записи, у `preset` — `ref`
+/// `<preset_id>:<tag>`. Каждая запись читается кодеком записей хранения;
+/// нечитаемая (в том числе форма 2.23.2 `kind: inline` и снимок без `kind`) —
+/// 400 с образцом формы записи.
 Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
   if (!body.containsKey('servers')) {
@@ -359,24 +382,21 @@ Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
   if (raw is! List) {
     throw const BadRequest('field "servers" must be array');
   }
-  final servers = <Map<String, dynamic>>[];
+  final servers = <DnsServerRef>[];
   for (final s in raw) {
     if (s is! Map) {
       throw const BadRequest('each servers[i] must be an object');
     }
-    final map = s.cast<String, dynamic>();
-    // §294 — new-format (kind-ref) валидируется через DnsServerRef (симметрия
-    // с типизированным /rules); legacy full-body snapshot (нет `kind`)
-    // пропускается verbatim — резолвер сконвертирует его на ближайший load.
-    if (map.containsKey('kind')) {
-      try {
-        servers.add(DnsServerRef.fromJsonStrict(map).toJson());
-      } on DnsRefFormatException catch (e) {
-        throw BadRequest(e.message);
-      }
-    } else {
-      servers.add(map); // legacy — как раньше
+    // `vars` записи 1.0 — `varValues` формы 2.23.2.
+    _rejectLegacyDnsKeys(s, const ['varValues'], _dnsServerRecordSample,
+        'kind user|preset|template');
+    final read = dnsServerFromRecord(s.cast<String, dynamic>());
+    final server = read.value;
+    if (server == null) {
+      throw BadRequest('${read.dropped}; expected a record like '
+          '$_dnsServerRecordSample (kind user|preset|template)');
     }
+    servers.add(server);
   }
   await SettingsStorage.saveDnsServers(servers);
   final extras = await maybeRebuild(req, ctx);
@@ -390,44 +410,35 @@ Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
 
 Future<DebugResponse> _putDnsRules(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
-  // §294 — новый путь: `{"rules": [ {kind, …}, … ]}` — массив kind-ref'ов,
-  // валидируется через DnsRuleRef (симметрия с /rules) и пишется в живой
-  // `dns_options.rules` через saveDnsRulesList. Билдер читает именно его.
+  // §439 §3.4 — `{"rules": [<запись dns.rules[] 1.0>, …]}`: `kind`
+  // `user|preset|srs|template`, читает кодек записей хранения. Форма 2.23.2
+  // (`kind: inline`, `presetId`) и строка `rules_json` — 400.
   final arr = body['rules'];
-  if (arr is List) {
-    final rules = <Map<String, dynamic>>[];
-    for (final r in arr) {
-      if (r is! Map) {
-        throw const BadRequest('each rules[i] must be an object');
-      }
-      try {
-        rules.add(DnsRuleRef.fromJsonStrict(r.cast<String, dynamic>()).toJson());
-      } on DnsRefFormatException catch (e) {
-        throw BadRequest(e.message);
-      }
+  if (arr is! List) {
+    throw const BadRequest('field "rules" required (array of dns rule records)');
+  }
+  final rules = <DnsRuleRef>[];
+  for (final r in arr) {
+    if (r is! Map) {
+      throw const BadRequest('each rules[i] must be an object');
     }
-    await SettingsStorage.saveDnsRulesList(rules);
-    final extras = await maybeRebuild(req, ctx);
-    return JsonResponse({
-      'ok': true,
-      'action': 'settings-dns-rules',
-      'count': rules.length,
-      ...extras,
-    });
+    // `ref` записи 1.0 — `presetId` формы 2.23.2.
+    _rejectLegacyDnsKeys(r, const ['presetId'], _dnsRuleRecordSample,
+        'kind user|preset|srs|template');
+    final read = dnsRuleFromRecord(r.cast<String, dynamic>());
+    final rule = read.value;
+    if (rule == null) {
+      throw BadRequest('${read.dropped}; expected a record like '
+          '$_dnsRuleRecordSample (kind user|preset|srs|template)');
+    }
+    rules.add(rule);
   }
-  // Legacy: `{"rules": "<json-string>"}` — deprecated `rules_json` (builder
-  // его игнорирует, §061); оставлено для обратной совместимости старых клиентов.
-  final rulesStr = fieldString(body, 'rules');
-  if (rulesStr == null) {
-    throw const BadRequest(
-        'field "rules" required (array of kind-refs, or legacy JSON string)');
-  }
-  await SettingsStorage.saveDnsRules(rulesStr);
+  await SettingsStorage.saveDnsRulesList(rules);
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,
     'action': 'settings-dns-rules',
-    'bytes': rulesStr.length,
+    'count': rules.length,
     ...extras,
   });
 }

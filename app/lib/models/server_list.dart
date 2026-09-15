@@ -1,15 +1,18 @@
+import 'package:collection/collection.dart';
+
 import '../services/parser/body_decoder.dart';
 import '../services/parser/parse_all.dart';
-import '../services/tag_resolver.dart';
+import 'dns_ref.dart';
 import 'import_rule.dart';
+import 'node_link.dart';
 import 'node_sections.dart';
 import 'node_spec.dart';
 import 'subscription_meta.dart';
 
 /// Контейнер узлов (§1 спеки 026). Sealed: `SubscriptionServers` (fetch по
 /// URL) vs `UserServer` (paste/file/qr/manual) vs `FolderServers` (§234 —
-/// папка ручных серверов, состав редактирует юзер). Персистится на диск
-/// `List<ServerList>` с дискриминатором `type`.
+/// папка ручных серверов, состав редактирует юзер). Хранится записями
+/// `sources[]` контракта 1.0 — кодек `codec/source_record.dart` (§439).
 sealed class ServerList {
   final String id; // uuid, стабилен на всём жизненном цикле
   final String name;
@@ -28,22 +31,6 @@ sealed class ServerList {
   }) : nodes = nodes ?? <NodeSpec>[];
 
   String get type;
-
-  Map<String, dynamic> toJson();
-
-  static ServerList fromJson(Map<String, dynamic> j) {
-    final t = j['type'] as String?;
-    switch (t) {
-      case 'subscription':
-        return SubscriptionServers.fromJson(j);
-      case 'user':
-        return UserServer.fromJson(j);
-      case 'folder':
-        return FolderServers.fromJson(j);
-      default:
-        throw FormatException('Unknown ServerList type: $t');
-    }
-  }
 }
 
 /// Статус последней попытки auto-update подписки.
@@ -121,16 +108,6 @@ class SubscriptionIdentityOverride {
         if (deviceModel.isNotEmpty) 'device_model': deviceModel,
       };
 
-  factory SubscriptionIdentityOverride.fromJson(Map<String, dynamic> j) =>
-      SubscriptionIdentityOverride(
-        userAgent: (j['user_agent'] as String?) ?? '',
-        sendHwid: (j['send_hwid'] as bool?) ?? false,
-        hwid: (j['hwid'] as String?) ?? '',
-        deviceOs: (j['device_os'] as String?) ?? '',
-        verOs: (j['ver_os'] as String?) ?? '',
-        deviceModel: (j['device_model'] as String?) ?? '',
-      );
-
   SubscriptionIdentityOverride copyWith({
     String? userAgent,
     bool? sendHwid,
@@ -147,7 +124,32 @@ class SubscriptionIdentityOverride {
         verOs: verOs ?? this.verOs,
         deviceModel: deviceModel ?? this.deviceModel,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SubscriptionIdentityOverride &&
+          userAgent == other.userAgent &&
+          sendHwid == other.sendHwid &&
+          hwid == other.hwid &&
+          deviceOs == other.deviceOs &&
+          verOs == other.verOs &&
+          deviceModel == other.deviceModel);
+
+  @override
+  int get hashCode =>
+      Object.hash(userAgent, sendHwid, hwid, deviceOs, verOs, deviceModel);
 }
+
+const _eq = DeepCollectionEquality();
+
+/// §439 п. 10 — отметка выключенного узла в записи хранится unix seconds:
+/// равенство моделей сравнивает её с той же точностью (TTL-очистка от 24 ч
+/// разницы в долях секунды не видит).
+Map<String, int> _disabledSeconds(Map<String, DateTime> marks) => {
+      for (final e in marks.entries)
+        e.key: e.value.millisecondsSinceEpoch ~/ 1000,
+    };
 
 final class SubscriptionServers extends ServerList {
   final String url;
@@ -169,20 +171,19 @@ final class SubscriptionServers extends ServerList {
   /// для TTL-очистки спящих отметок на успешном сетевом refresh). Оверлей
   /// поверх `nodes`: сами ноды остаются видны в UI (с toggle), но builder их
   /// не эмитит. Персистится (в отличие от nodes) и потому обязан жить в
-  /// трио toJson/fromJson/copyWith — merge-импорт backup гоняет записи через
-  /// fromJson→toJson, поле только в toJson молча терялось бы.
+  /// кодеке записи и в copyWith — поле без чтения молча терялось бы.
   final Map<String, DateTime> disabledHashes;
 
   /// §289 — per-subscription override идентичности фетча. `null` = режим Default
   /// (глобальный `SubscriptionIdentity`); объект = режим Custom (полный слепок).
-  /// Персистится → обязан жить в трио toJson/fromJson/copyWith (как §283
-  /// `disabledHashes`), иначе merge-импорт backup (fromJson→toJson) молча терял бы.
+  /// Персистится → обязан жить в кодеке записи и copyWith (как §283
+  /// `disabledHashes`).
   final SubscriptionIdentityOverride? identity;
 
   /// §302 — per-subscription правила обработки тела на импорте (REPLACE +
   /// DISABLE, см. import_rule.dart). Пустой список = поведение как сейчас.
-  /// Часть сериализации подписки → едет в backup вместе с ней (инвариант §221);
-  /// обязан жить в трио toJson/fromJson/copyWith (как §283 `disabledHashes`).
+  /// Часть записи подписки → едет в backup вместе с ней (инвариант §221);
+  /// обязан жить в кодеке записи и copyWith (как §283 `disabledHashes`).
   final List<ImportRule> importRules;
 
   /// §302 — общий тумблер набора правил. `false` → все правила подписки
@@ -190,9 +191,8 @@ final class SubscriptionServers extends ServerList {
   final bool importRulesEnabled;
 
   /// §323 — реакция на успешное **авто**-обновление (см.
-  /// [SubscriptionOnUpdateAction]). Персистится → обязан жить в трио
-  /// toJson/fromJson/copyWith (как §283 `disabledHashes`), иначе merge-импорт
-  /// backup (fromJson→toJson) молча терял бы выбор юзера.
+  /// [SubscriptionOnUpdateAction]). Персистится → обязан жить в кодеке записи
+  /// и copyWith (как §283 `disabledHashes`).
   final SubscriptionOnUpdateAction onUpdateAction;
 
   SubscriptionServers({
@@ -224,96 +224,6 @@ final class SubscriptionServers extends ServerList {
 
   @override
   String get type => 'subscription';
-
-  @override
-  Map<String, dynamic> toJson() => {
-        'type': type,
-        'id': id,
-        'name': name,
-        'enabled': enabled,
-        'tag_prefix': tagPrefix,
-        'detour_policy': detourPolicy.toJson(),
-        'url': url,
-        if (meta != null) 'meta': meta!.toJson(),
-        if (lastUpdated != null) 'last_updated': lastUpdated!.toIso8601String(),
-        if (lastUpdateAttempt != null)
-          'last_update_attempt': lastUpdateAttempt!.toIso8601String(),
-        'last_update_status': lastUpdateStatus.name,
-        'update_interval_hours': updateIntervalHours,
-        'last_node_count': lastNodeCount,
-        'consecutive_fails': consecutiveFails,
-        if (disabledHashes.isNotEmpty)
-          'disabled_hashes': disabledHashes
-              .map((k, v) => MapEntry(k, v.toIso8601String())),
-        if (identity != null) 'identity': identity!.toJson(),
-        if (importRules.isNotEmpty)
-          'import_rules': importRules.map((r) => r.toJson()).toList(),
-        // Пишем ключ только когда набор выключен (дефолт true) — не раздуваем
-        // JSON у большинства подписок без правил.
-        if (!importRulesEnabled) 'import_rules_enabled': false,
-        // §323 — тем же принципом: дефолт (rebuild) ключа не пишет.
-        if (onUpdateAction != SubscriptionOnUpdateAction.rebuild)
-          'on_update_action': onUpdateAction.name,
-      };
-
-  /// §283 — толерантный парс: не-Map → пусто, битые значения-даты — скип
-  /// записи (отметка без валидного lastSeen бесполезна для TTL).
-  static Map<String, DateTime> _disabledHashesFromJson(dynamic raw) {
-    if (raw is! Map) return const {};
-    final out = <String, DateTime>{};
-    raw.forEach((k, v) {
-      final t = v is String ? DateTime.tryParse(v) : null;
-      if (t != null) out[k.toString()] = t;
-    });
-    return out;
-  }
-
-  factory SubscriptionServers.fromJson(Map<String, dynamic> j) =>
-      SubscriptionServers(
-        id: j['id'] as String,
-        name: (j['name'] as String?) ?? '',
-        enabled: (j['enabled'] as bool?) ?? true,
-        tagPrefix: (j['tag_prefix'] as String?) ?? '',
-        detourPolicy: DetourPolicy.fromJson(
-            (j['detour_policy'] as Map?)?.cast<String, dynamic>() ?? const {}),
-        url: (j['url'] as String?) ?? '',
-        meta: j['meta'] == null
-            ? null
-            : SubscriptionMeta.fromJson(
-                (j['meta'] as Map).cast<String, dynamic>()),
-        lastUpdated: (j['last_updated'] as String?) == null
-            ? null
-            : DateTime.tryParse(j['last_updated'] as String),
-        lastUpdateAttempt: (j['last_update_attempt'] as String?) == null
-            ? null
-            : DateTime.tryParse(j['last_update_attempt'] as String),
-        lastUpdateStatus: UpdateStatus.values.firstWhere(
-          (s) => s.name == j['last_update_status'],
-          orElse: () => UpdateStatus.never,
-        ),
-        updateIntervalHours:
-            (j['update_interval_hours'] as num?)?.toInt() ?? 24,
-        lastNodeCount: (j['last_node_count'] as num?)?.toInt() ?? 0,
-        consecutiveFails: (j['consecutive_fails'] as num?)?.toInt() ?? 0,
-        disabledHashes: _disabledHashesFromJson(j['disabled_hashes']),
-        identity: j['identity'] == null
-            ? null
-            : SubscriptionIdentityOverride.fromJson(
-                (j['identity'] as Map).cast<String, dynamic>()),
-        importRules: _importRulesFromJson(j['import_rules']),
-        importRulesEnabled: (j['import_rules_enabled'] as bool?) ?? true,
-        onUpdateAction:
-            SubscriptionOnUpdateAction.fromJson(j['on_update_action']),
-      );
-
-  /// §302 — толерантный парс: не-List → пусто, не-Map элементы — скип.
-  static List<ImportRule> _importRulesFromJson(dynamic raw) {
-    if (raw is! List) return const [];
-    return raw
-        .whereType<Map>()
-        .map((m) => ImportRule.fromJson(m.cast<String, dynamic>()))
-        .toList();
-  }
 
   SubscriptionServers copyWith({
     String? name,
@@ -359,6 +269,54 @@ final class SubscriptionServers extends ServerList {
         onUpdateAction: onUpdateAction ?? this.onUpdateAction,
         nodes: nodes ?? this.nodes,
       );
+
+  /// Равенство записи (§439): `nodes` — кэш выдачи (`sub_cache/`), в
+  /// значение подписки не входит.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SubscriptionServers &&
+          id == other.id &&
+          name == other.name &&
+          enabled == other.enabled &&
+          tagPrefix == other.tagPrefix &&
+          detourPolicy == other.detourPolicy &&
+          url == other.url &&
+          meta == other.meta &&
+          lastUpdated == other.lastUpdated &&
+          lastUpdateAttempt == other.lastUpdateAttempt &&
+          lastUpdateStatus == other.lastUpdateStatus &&
+          updateIntervalHours == other.updateIntervalHours &&
+          lastNodeCount == other.lastNodeCount &&
+          consecutiveFails == other.consecutiveFails &&
+          _eq.equals(_disabledSeconds(disabledHashes),
+              _disabledSeconds(other.disabledHashes)) &&
+          identity == other.identity &&
+          _eq.equals(importRules, other.importRules) &&
+          importRulesEnabled == other.importRulesEnabled &&
+          onUpdateAction == other.onUpdateAction);
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        name,
+        enabled,
+        tagPrefix,
+        detourPolicy,
+        url,
+        meta,
+        lastUpdated,
+        lastUpdateAttempt,
+        lastUpdateStatus,
+        updateIntervalHours,
+        lastNodeCount,
+        consecutiveFails,
+        _eq.hash(_disabledSeconds(disabledHashes)),
+        identity,
+        _eq.hash(importRules),
+        importRulesEnabled,
+        onUpdateAction,
+      );
 }
 
 /// §219 — origin: write-only диагностические метаданные (пишутся в JSON /
@@ -371,8 +329,10 @@ final class SubscriptionServers extends ServerList {
 enum UserSource { paste, file, qr, manual }
 
 final class UserServer extends ServerList {
+  /// §219 — write-only диагностика. Записью 1.0 не хранится (§439: имя
+  /// `origin` занято контрактом): после чтения записи — умолчание `manual`.
   final UserSource origin;
-  final DateTime createdAt;
+
   final String rawBody; // оригинал paste'а для reparse в случае багов
 
   /// §435 — секции узла (контракт ## 13): правила маршрута и DNS-записи,
@@ -388,8 +348,7 @@ final class UserServer extends ServerList {
     required super.enabled,
     required super.tagPrefix,
     required super.detourPolicy,
-    required this.origin,
-    required this.createdAt,
+    this.origin = UserSource.manual,
     this.rawBody = '',
     NodeSections? sections,
     super.nodes,
@@ -398,63 +357,12 @@ final class UserServer extends ServerList {
   @override
   String get type => 'user';
 
-  @override
-  Map<String, dynamic> toJson() => {
-        'type': type,
-        'id': id,
-        'name': name,
-        'enabled': enabled,
-        'tag_prefix': tagPrefix,
-        'detour_policy': detourPolicy.toJson(),
-        'origin': origin.name,
-        'created_at': createdAt.toIso8601String(),
-        if (rawBody.isNotEmpty) 'raw_body': rawBody,
-        if (sections != null) 'sections': sections!.toJson(),
-      };
-
-  factory UserServer.fromJson(Map<String, dynamic> j) {
-    final rawBody = (j['raw_body'] as String?) ?? '';
-    // Реконструируем `nodes` из rawBody — toJson хранит только raw,
-    // экономя место и избегая дрейфа сериализации NodeSpec. Без этого
-    // после рестарта app узлы UserServer пропадают (NodeSettingsScreen
-    // → пустой `nodes` → бесконечный спиннер на `_load()`).
-    final nodes = <NodeSpec>[];
-    if (rawBody.isNotEmpty) {
-      try {
-        nodes.addAll(parseAll(decode(rawBody)));
-      } catch (_) {
-        // Некорректный raw — оставляем nodes пустым, пользователь увидит
-        // empty entry и сможет удалить.
-      }
-    }
-    return UserServer(
-      id: j['id'] as String,
-      name: (j['name'] as String?) ?? '',
-      enabled: (j['enabled'] as bool?) ?? true,
-      tagPrefix: (j['tag_prefix'] as String?) ?? '',
-      detourPolicy: DetourPolicy.fromJson(
-          (j['detour_policy'] as Map?)?.cast<String, dynamic>() ?? const {}),
-      origin: UserSource.values.firstWhere(
-        (e) => e.name == j['origin'],
-        orElse: () => UserSource.manual,
-      ),
-      createdAt: DateTime.tryParse((j['created_at'] as String?) ?? '') ??
-          DateTime.now(),
-      rawBody: rawBody,
-      // §435 — секции читаются толерантно: чужой kind внутри отбрасывается,
-      // остальные записи живут (NODE_SECTIONS.md §1).
-      sections: NodeSections.fromJson(j['sections']),
-      nodes: nodes,
-    );
-  }
-
   UserServer copyWith({
     String? name,
     bool? enabled,
     String? tagPrefix,
     DetourPolicy? detourPolicy,
     UserSource? origin,
-    DateTime? createdAt,
     String? rawBody,
     List<NodeSpec>? nodes,
     NodeSections? sections,
@@ -469,11 +377,27 @@ final class UserServer extends ServerList {
         tagPrefix: tagPrefix ?? this.tagPrefix,
         detourPolicy: detourPolicy ?? this.detourPolicy,
         origin: origin ?? this.origin,
-        createdAt: createdAt ?? this.createdAt,
         rawBody: rawBody ?? this.rawBody,
         sections: clearSections ? null : (sections ?? this.sections),
         nodes: nodes ?? this.nodes,
       );
+
+  /// Равенство записи (§439): `nodes` выводятся из [rawBody]; `name` (с §243
+  /// пуст) и [origin] записью 1.0 не хранятся и в значение сервера не входят.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is UserServer &&
+          id == other.id &&
+          enabled == other.enabled &&
+          tagPrefix == other.tagPrefix &&
+          detourPolicy == other.detourPolicy &&
+          rawBody == other.rawBody &&
+          sections == other.sections);
+
+  @override
+  int get hashCode =>
+      Object.hash(id, enabled, tagPrefix, detourPolicy, rawBody, sections);
 }
 
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
@@ -484,10 +408,11 @@ final class FolderMember {
   final String raw;
   final bool enabled;
 
-  /// §237 — личный detour члена: display-form тег outbound'а ('' = нет).
-  /// Аналог `DetourPolicy.overrideDetour` одиночного сервера; политика папки
-  /// применяется к нему как подписка к родной цепочке (см. server_list_build).
-  final String detour;
+  /// §237 — личный detour члена: ссылка на узел (D-112; [NodeLink.none] —
+  /// нет). Аналог `DetourPolicy.overrideDetour` одиночного сервера; политика
+  /// папки применяется к нему как подписка к родной цепочке (см.
+  /// server_list_build). Сосед по папке — пара с `id` этой папки.
+  final NodeLink detour;
 
   /// §435 — секции узла-члена (контракт ## 13), как у `UserServer.sections`.
   final NodeSections? sections;
@@ -499,11 +424,16 @@ final class FolderMember {
   FolderMember({
     required this.raw,
     this.enabled = true,
-    this.detour = '',
+    this.detour = NodeLink.none,
     NodeSections? sections,
     NodeSpec? node,
   })  : sections = (sections == null || sections.isEmpty) ? null : sections,
         node = node ?? _parseFirst(raw);
+
+  /// §439 — член-группа (запись `kind: auto`, `codec/auto_group_record.dart`):
+  /// текста нет, узел — сама группа. detour и секций у группы не бывает.
+  FolderMember.auto(AutoSelectSpec group, {bool enabled = true})
+      : this(raw: '', enabled: enabled, node: group);
 
   static NodeSpec? _parseFirst(String raw) {
     if (raw.trim().isEmpty) return null;
@@ -515,24 +445,10 @@ final class FolderMember {
     }
   }
 
-  Map<String, dynamic> toJson() => {
-        'raw': raw,
-        'enabled': enabled,
-        if (detour.isNotEmpty) 'detour': detour,
-        if (sections != null) 'sections': sections!.toJson(),
-      };
-
-  factory FolderMember.fromJson(Map<String, dynamic> j) => FolderMember(
-        raw: (j['raw'] as String?) ?? '',
-        enabled: (j['enabled'] as bool?) ?? true,
-        detour: (j['detour'] as String?) ?? '',
-        sections: NodeSections.fromJson(j['sections']),
-      );
-
   FolderMember copyWith({
     String? raw,
     bool? enabled,
-    String? detour,
+    NodeLink? detour,
     NodeSections? sections,
     bool clearSections = false,
   }) =>
@@ -544,6 +460,25 @@ final class FolderMember {
         // Смена raw → re-parse в конструкторе (node: null); иначе нода та же.
         node: raw == null ? node : null,
       );
+
+  /// Равенство записи (§439): [node] выводится из [raw]; у члена-группы
+  /// текста нет, и значением служит сама группа.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FolderMember &&
+          raw == other.raw &&
+          enabled == other.enabled &&
+          detour == other.detour &&
+          sections == other.sections &&
+          _sameGroup(node, other.node));
+
+  static bool _sameGroup(NodeSpec? a, NodeSpec? b) => a is AutoSelectSpec
+      ? b is AutoSelectSpec && a.sameGroupAs(b)
+      : b is! AutoSelectSpec;
+
+  @override
+  int get hashCode => Object.hash(raw, enabled, detour, sections);
 }
 
 /// §234 — папка ручных серверов: контейнер членов с общим toggle,
@@ -552,6 +487,8 @@ final class FolderMember {
 /// включённых членов — builder работает без folder-ветвлений.
 final class FolderServers extends ServerList {
   final List<FolderMember> members;
+
+  /// Поле LxBox записи (`created_at`, §439): его отдаёт Debug API `/folders`.
   final DateTime createdAt;
 
   /// §284 — опции теста этой папки (override глобальных ping_options). null =
@@ -585,43 +522,10 @@ final class FolderServers extends ServerList {
 
   /// §237 — личные detour'ы, выровненные с [nodes] (тот же фильтр
   /// enabled+parsed, тот же порядок). Builder применяет их пер-нодно.
-  List<String> get nodeDetours => [
+  List<NodeLink> get nodeDetours => [
         for (final m in members)
           if (m.enabled && m.node != null) m.detour,
       ];
-
-  @override
-  Map<String, dynamic> toJson() => {
-        'type': type,
-        'id': id,
-        'name': name,
-        'enabled': enabled,
-        'tag_prefix': tagPrefix,
-        'detour_policy': detourPolicy.toJson(),
-        'created_at': createdAt.toIso8601String(),
-        'members': members.map((m) => m.toJson()).toList(),
-        if (pingUrl != null) 'ping_url': pingUrl,
-        if (pingTimeoutMs != null) 'ping_timeout_ms': pingTimeoutMs,
-      };
-
-  factory FolderServers.fromJson(Map<String, dynamic> j) => FolderServers(
-        id: j['id'] as String,
-        name: (j['name'] as String?) ?? '',
-        enabled: (j['enabled'] as bool?) ?? true,
-        tagPrefix: (j['tag_prefix'] as String?) ?? '',
-        detourPolicy: DetourPolicy.fromJson(
-            (j['detour_policy'] as Map?)?.cast<String, dynamic>() ?? const {}),
-        createdAt: DateTime.tryParse((j['created_at'] as String?) ?? '') ??
-            DateTime.now(),
-        members: ((j['members'] as List?) ?? const [])
-            .whereType<Map>()
-            .map((m) => FolderMember.fromJson(m.cast<String, dynamic>()))
-            .toList(),
-        pingUrl: (j['ping_url'] as String?)?.trim().isNotEmpty == true
-            ? (j['ping_url'] as String).trim()
-            : null,
-        pingTimeoutMs: (j['ping_timeout_ms'] as num?)?.toInt(),
-      );
 
   FolderServers copyWith({
     String? name,
@@ -644,14 +548,32 @@ final class FolderServers extends ServerList {
         pingUrl: clearPing ? null : (pingUrl ?? this.pingUrl),
         pingTimeoutMs: clearPing ? null : (pingTimeoutMs ?? this.pingTimeoutMs),
       );
+
+  /// Равенство записи (§439): `nodes` выводятся из [members].
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FolderServers &&
+          id == other.id &&
+          name == other.name &&
+          enabled == other.enabled &&
+          tagPrefix == other.tagPrefix &&
+          detourPolicy == other.detourPolicy &&
+          _eq.equals(members, other.members) &&
+          createdAt == other.createdAt &&
+          pingUrl == other.pingUrl &&
+          pingTimeoutMs == other.pingTimeoutMs);
+
+  @override
+  int get hashCode => Object.hash(id, name, enabled, tagPrefix, detourPolicy,
+      _eq.hash(members), createdAt, pingUrl, pingTimeoutMs);
 }
 
 /// §248 — сброс detour-ссылок на Направление [tag] (или его auto-двойник
-/// `<tag>-auto`) в '' у одного списка: `detourPolicy.overrideDetour` +
-/// личные `FolderMember.detour`. Интра-омонимы пропускаются: значение,
-/// равное bare-тегу распарсенного члена ТОЙ ЖЕ папки (включая выключенных —
-/// toggle члена не должен молча менять смысл ссылки), означает члена, а не
-/// Направление. Возвращает копию с изменениями (null = нечего лечить) + счётчик.
+/// `<tag>-auto`) у одного списка: `detourPolicy.overrideDetour` + личные
+/// `FolderMember.detour`. Ссылка на Направление — корневая `{tag}` (D-112);
+/// пара адресует узел контейнера и Направлением не бывает, поэтому омонимов
+/// здесь нет. Возвращает копию с изменениями (null = нечего лечить) + счётчик.
 ///
 /// Общее ядро: storage-heal (`_healDetourDirectionRefs`) и in-memory ресинк
 /// `SubscriptionController.syncDetourDirectionRefsCleared` обязаны сбрасывать
@@ -659,20 +581,12 @@ final class FolderServers extends ServerList {
 ({ServerList? healed, int count}) clearDetourDirectionRefs(
     ServerList l, String tag) {
   final autoTag = '$tag-auto';
-  bool matches(String v) => v == tag || v == autoTag;
-
-  final memberBare = l is FolderServers
-      ? <String>{
-          for (final m in l.members)
-            if (m.node != null) m.node!.tag,
-        }
-      : const <String>{};
+  bool matches(NodeLink v) => v.isRoot && (v.tag == tag || v.tag == autoTag);
 
   var count = 0;
   ServerList next = l;
-  final override = l.detourPolicy.overrideDetour;
-  if (matches(override) && !memberBare.contains(override)) {
-    final p = l.detourPolicy.copyWith(overrideDetour: '');
+  if (matches(l.detourPolicy.overrideDetour)) {
+    final p = l.detourPolicy.copyWith(overrideDetour: NodeLink.none);
     next = switch (l) {
       SubscriptionServers s => s.copyWith(detourPolicy: p),
       UserServer u => u.copyWith(detourPolicy: p),
@@ -683,10 +597,10 @@ final class FolderServers extends ServerList {
   if (next is FolderServers) {
     var membersChanged = false;
     final ms = next.members.map((m) {
-      if (matches(m.detour) && !memberBare.contains(m.detour)) {
+      if (matches(m.detour)) {
         membersChanged = true;
         count++;
-        return m.copyWith(detour: '');
+        return m.copyWith(detour: NodeLink.none);
       }
       return m;
     }).toList();
@@ -695,37 +609,53 @@ final class FolderServers extends ServerList {
   return (healed: count > 0 ? next : null, count: count);
 }
 
-/// §393 D2 — теги конфига, которые даёт источник [l]: его узлы с приклеенным
-/// префиксом (плюс голые — префикс мог быть задан позже, чем написана
-/// позиция цепочки) и сам префикс, под которым эмитится группа подписки.
+/// §441 (SPEC 129 §6, D-114) — `body.detour` DNS-серверов в секциях узлов
+/// списка [l] (одиночный сервер, члены папки) по [retarget]
+/// ([retargetDnsServerDetour]). Возвращает копию (null — нечего лечить) и
+/// число переписанных серверов.
 ///
-/// Нужно вычистке позиций цепочек при удалении источника: позиция ссылается
-/// на ТЕГ КОНФИГА (`collectChainHopTargets` берёт их из собранного конфига),
-/// а storage знает источник. Это единственное место, где одно переводится в
-/// другое.
-///
-/// Приблизительность осознанная и односторонняя: аллокатор тегов (§351) мог
-/// выдать узлу-тёзке суффикс, и такой тег сюда не попадёт — позиция с ним
-/// останется висячей и деградирует цепочку, как раньше. Обратной ошибки
-/// (снять лишнее) здесь нет, а она была бы дороже: это чужие маршруты.
-Set<String> sourceConfigTags(ServerList l) {
-  final out = <String>{};
-  if (l.tagPrefix.isNotEmpty) out.add(l.tagPrefix);
-  for (final n in l.nodes) {
-    if (n.tag.isEmpty) continue;
-    out.add(n.tag);
-    out.add(TagResolver.displayTag(l.tagPrefix, n.tag));
-  }
-  if (l is FolderServers) {
-    for (final m in l.members) {
-      final bare = m.node?.tag ?? '';
-      if (bare.isEmpty) continue;
-      out.add(bare);
-      out.add(TagResolver.displayTag(l.tagPrefix, bare));
+/// Общее ядро: storage-heal (`_healDnsServerDirectionRefs`) и in-memory
+/// ресинк `SubscriptionController.syncSectionsDnsDetourRefsHealed` обязаны
+/// переписывать одинаково, иначе следующий `_persist()` воскресит ссылку.
+({ServerList? healed, int count}) retargetSectionsDnsDetours(
+  ServerList l,
+  Map<String, String> retarget,
+) {
+  var count = 0;
+  NodeSections? heal(NodeSections? sections) {
+    if (sections == null || sections.dnsServers.isEmpty) return null;
+    var changed = false;
+    final servers = <DnsServerInline>[];
+    for (final d in sections.dnsServers) {
+      final next = retargetDnsServerDetour(d, retarget);
+      if (!identical(next, d)) {
+        changed = true;
+        count++;
+      }
+      servers.add(next);
     }
+    return changed ? sections.copyWith(dnsServers: servers) : null;
   }
-  out.removeWhere((t) => t.trim().isEmpty);
-  return out;
+
+  switch (l) {
+    case UserServer u:
+      final s = heal(u.sections);
+      return (healed: s == null ? null : u.copyWith(sections: s), count: count);
+    case FolderServers f:
+      var changed = false;
+      final members = <FolderMember>[];
+      for (final m in f.members) {
+        final s = heal(m.sections);
+        if (s != null) changed = true;
+        members.add(s == null ? m : m.copyWith(sections: s));
+      }
+      return (
+        healed: changed ? f.copyWith(members: members) : null,
+        count: count,
+      );
+    case SubscriptionServers():
+      return (healed: null, count: 0);
+  }
 }
 
 /// Политика применения detour-серверов (§1.3 спеки 026, перенесено из 018).
@@ -734,7 +664,9 @@ class DetourPolicy {
   final bool registerDetourServers;
   final bool registerDetourInAuto;
   final bool useDetourServers;
-  final String overrideDetour; // '' = no override
+  /// Ссылка на узел, через который идёт источник (D-112); [NodeLink.none] —
+  /// override не задан.
+  final NodeLink overrideDetour;
   // §073 — поведение overrideDetour: false (default) = APPEND (нативная
   // цепочка из конфига сохраняется, overrideDetour подставляется как
   // tail); true = REPLACE (старое поведение, цепочка отбрасывается).
@@ -744,30 +676,18 @@ class DetourPolicy {
     this.registerDetourServers = false,
     this.registerDetourInAuto = false,
     this.useDetourServers = true,
-    this.overrideDetour = '',
+    this.overrideDetour = NodeLink.none,
     this.replaceDetourChain = false,
   });
 
   static const defaults = DetourPolicy();
 
-  factory DetourPolicy.fromJson(Map<String, dynamic> j) => DetourPolicy(
-        registerDetourServers:
-            (j['register_detour_servers'] as bool?) ?? false,
-        registerDetourInAuto:
-            (j['register_detour_in_auto'] as bool?) ?? false,
-        useDetourServers: (j['use_detour_servers'] as bool?) ?? true,
-        overrideDetour: (j['override_detour'] as String?) ?? '',
-        // Старые backup'ы без ключа → default false (append). См. §073
-        // locked decision #4 (потенциально меняет поведение существующих
-        // юзеров с override — release notes должен это подсветить).
-        replaceDetourChain: (j['replace_detour_chain'] as bool?) ?? false,
-      );
-
+  /// Флаги политики именами записи. Ссылку [overrideDetour] кодек записи
+  /// (`codec/source_record.dart`) переносит полем `detour`.
   Map<String, dynamic> toJson() => {
         'register_detour_servers': registerDetourServers,
         'register_detour_in_auto': registerDetourInAuto,
         'use_detour_servers': useDetourServers,
-        'override_detour': overrideDetour,
         'replace_detour_chain': replaceDetourChain,
       };
 
@@ -775,7 +695,7 @@ class DetourPolicy {
     bool? registerDetourServers,
     bool? registerDetourInAuto,
     bool? useDetourServers,
-    String? overrideDetour,
+    NodeLink? overrideDetour,
     bool? replaceDetourChain,
   }) =>
       DetourPolicy(

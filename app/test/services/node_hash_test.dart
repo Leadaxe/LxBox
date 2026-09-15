@@ -255,6 +255,41 @@ void main() {
   // §400 — идентичность = тег (контракт 0.10.0, IDENTITY.md)
   // ══════════════════════════════════════════════════════════════════════════
 
+  group('§439 sourceNodeRawTags — группы на общем счётчике, после узлов', () {
+    test('узел и группа-тёзка: узел X, группа X-2', () {
+      final node = _node('X');
+      final group = _group('X');
+      final raw = sourceNodeRawTags([node, group]);
+      expect([raw[node], raw[group]], ['X', 'X-2']);
+    });
+
+    test('группа выше узла в теле — всё равно узел X, группа X-2', () {
+      final group = _group('X');
+      final node = _node('X');
+      final raw = sourceNodeRawTags([group, node]);
+      expect([raw[node], raw[group]], ['X', 'X-2']);
+      // Отметка disabled_hashes ключуется идентичностью узла — от группы она
+      // не сдвигается.
+      expect(sourceNodeIdentities([group, node])[node], 'X');
+    });
+
+    test('тёзки-узлы занимают имена первыми: X, X-2, группа X-3', () {
+      final a = _node('X');
+      final group = _group('X');
+      final b = _node('X');
+      final raw = sourceNodeRawTags([a, group, b]);
+      expect([raw[a], raw[b], raw[group]], ['X', 'X-2', 'X-3']);
+      final ids = sourceNodeIdentities([a, group, b]);
+      expect([ids[a], ids[b]], ['X', 'X-2'],
+          reason: 'идентичности узлов те же, что без группы');
+    });
+
+    test('безымянная группа сырого тега не получает', () {
+      final group = _group('');
+      expect(sourceNodeRawTags([group, _node('X')]).containsKey(group), isFalse);
+    });
+  });
+
   group('§400 sourceNodeIdentities', () {
     test('уникализация внутри источника: X, X-2, X-3 в порядке разбора', () {
       final a = _node('X');

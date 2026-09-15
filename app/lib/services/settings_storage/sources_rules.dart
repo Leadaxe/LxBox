@@ -1,46 +1,93 @@
 part of '../settings_storage.dart';
 
-// Server lists / enabled rules+groups / global-update / rule-outbounds /
-// custom rules для [SettingsStorage].
+// Источники / enabled groups / global-update / custom rules для
+// [SettingsStorage].
 //
 // Вынесено `part`'ом — та же библиотека, тот же доступ к `_load`/`_save`/
-// `_cache`. Семантика storage-ключей и миграций идентична исходнику.
+// `_cache`.
 
 // ---------------------------------------------------------------------------
-// Server lists (v2). Ключ на диске: `server_lists`.
-//
-// §159 — legacy-миграция v1 (`proxy_sources` → `server_lists`) удалена. Старый
-// ключ (если ещё лежит у кого-то на диске) безвреден и отбросится при первом
-// импорте бэкапа allowlist'ом.
+// §439 — источники: записи `sources[]` контракта 1.0 кодеком
+// `models/codec/source_record.dart`. Цепочки лежат в том же массиве хвостом
+// (`chains.dart`); здесь читается и переписывается только часть без них.
 // ---------------------------------------------------------------------------
 
-Future<List<ServerList>> _getServerLists() async {
-  final data = await _load();
-  final v2 = data['server_lists'] as List<dynamic>?;
-  if (v2 == null) return const [];
-  // §141 P1.8c — per-entry try/catch: одна битая запись (unknown type,
-  // missing required field → FormatException в *.fromJson) раньше роняла
-  // ВЕСЬ список → app не загружал ни одной подписки. Теперь skip битой
-  // записи с логом, остальные подгружаются.
-  return v2
-      .whereType<Map<String, dynamic>>()
-      .map((m) {
-        try {
-          return ServerList.fromJson(m);
-        } catch (e) {
-          AppLog.I.warning('Skipping corrupt server_list entry: $e');
-          return null;
-        }
-      })
-      .whereType<ServerList>()
-      .toList();
+Future<List<ServerList>> _getServerLists() async => _serverListsOf(
+      await _load(),
+      onCorrupt: (e) => AppLog.I.warning('Skipping unreadable source record: $e'),
+      onNote: _logStorageNoteOnce,
+    );
+
+/// Источники документа хранения [doc]: живого файла, его снимка или блока
+/// `storage` бэкапа — одно чтение на все случаи.
+///
+/// Запись, которую кодек не читает (нет `kind` или `id`, чужой вид), в
+/// список не попадает: причина уходит в [onCorrupt], остальные читаются
+/// (§141 P1.8c). Прочитанное не дословно (тег записи разошёлся с текстом,
+/// отброшенный член папки, ключи, которых модель не держит) — строками в
+/// [onNote].
+List<ServerList> _serverListsOf(
+  Map<String, dynamic> doc, {
+  void Function(Object error)? onCorrupt,
+  void Function(String note)? onNote,
+}) {
+  final out = <ServerList>[];
+  for (final r in _recordsAt(doc[kSourcesKey])) {
+    if (_isChainRecord(r)) continue;
+    final notes = <String>[];
+    final read = sourceFromRecord(r, notes: notes);
+    final list = read.value;
+    if (list == null) {
+      onCorrupt?.call(read.dropped!);
+      continue;
+    }
+    if (onNote != null) {
+      notes.forEach(onNote);
+      if (read.unknownKeys.isNotEmpty) {
+        onNote('${r['kind']} "${list.id}": keys not kept by the model: '
+            '${read.unknownKeys.join(', ')}');
+      }
+    }
+    out.add(list);
+  }
+  return out;
 }
 
+/// Переписать часть `sources[]` без цепочек; записи цепочек остаются
+/// хвостом в своём порядке.
 Future<void> _saveServerLists(List<ServerList> lists, {bool flush = true}) async {
   final data = await _load();
-  data['server_lists'] = lists.map((e) => e.toJson()).toList();
+  data[kSourcesKey] = [
+    for (final l in lists) sourceToRecord(l),
+    for (final r in _recordsAt(data[kSourcesKey]))
+      if (_isChainRecord(r)) r,
+  ];
   SettingsStorage._cache = data;
   if (flush) await _save();
+}
+
+/// Объекты-записи массива [raw]; не объекты пропускаются.
+List<Map<String, dynamic>> _recordsAt(Object? raw) => raw is List
+    ? [
+        for (final e in raw)
+          if (e is Map<String, dynamic>)
+            e
+          else if (e is Map)
+            e.cast<String, dynamic>(),
+      ]
+    : const [];
+
+bool _isChainRecord(Map<String, dynamic> r) => r['kind'] == kSourceKindChain;
+
+/// Строки чтения записей в AppLog — каждая один раз за процесс: источники
+/// перечитываются на каждом обращении, а расхождение живёт до следующей
+/// записи.
+final Set<String> _loggedStorageNotes = {};
+
+void _logStorageNoteOnce(String note) {
+  if (_loggedStorageNotes.add(note)) {
+    AppLog.I.warning('SettingsStorage: $note');
+  }
 }
 
 // §159 — `enabled_rules` API удалён (legacy-миграция в `custom_rules` снята).
@@ -107,24 +154,56 @@ Future<bool> _shouldRefreshSubscriptions(String reloadInterval) async {
 // §159 — `rule_outbounds` API удалён (legacy-миграция в `custom_rules` снята).
 
 // ---------------------------------------------------------------------------
-// Custom rules (§030) — единая модель для domain/IP/port/package/protocol/srs.
-// Per-app rules сюда же (поле `packages`), отдельного типа больше нет.
+// Custom rules (§030) — записи `rules[]` контракта 1.0 кодеком
+// `models/codec/rule_record.dart` (§439). Per-app rules сюда же (поле
+// `packages`), отдельного типа нет.
 // ---------------------------------------------------------------------------
 
-Future<List<CustomRule>> _getCustomRules() async {
-  final data = await _load();
-  // §159 — legacy `app_rules` → `custom_rules` миграция удалена.
-  final list = data['custom_rules'] as List<dynamic>? ?? [];
-  return list
-      .whereType<Map<String, dynamic>>()
-      .map(CustomRule.fromJson)
-      .toList();
+Future<List<CustomRule>> _getCustomRules() async =>
+    _customRulesOf(await _load());
+
+/// Правила документа хранения [doc] (живой файл или блок `storage` бэкапа).
+///
+/// Тело, которое типизированная модель не выражает, читается правилом вида
+/// json (`unknownAsVerbatim`): в конфиг оно уходит как лежит.
+///
+/// [onCorrupt] задан — нечитаемая запись пропускается и уходит в него: так
+/// читает превью бэкапа, которому чужой файл не должен ронять диалог. Не
+/// задан — [FormatException] летит вызывающему: живое хранение не вправе
+/// молча выкинуть правило, которое следующая запись стёрла бы с диска.
+List<CustomRule> _customRulesOf(
+  Map<String, dynamic> doc, {
+  void Function(Object error)? onCorrupt,
+}) {
+  final out = <CustomRule>[];
+  for (final r in _recordsAt(doc[kRulesKey])) {
+    final read = ruleFromRecord(r, unknownAsVerbatim: true);
+    final rule = read.value;
+    if (rule != null) {
+      out.add(rule);
+    } else if (onCorrupt != null) {
+      onCorrupt(read.dropped!);
+    } else {
+      throw FormatException('unreadable rule record: ${read.dropped}');
+    }
+  }
+  return out;
 }
 
+/// §439 В2 — json-правило с массивом раскладывается на правила по элементу
+/// до кодека: запись держит один объект sing-box.
+///
+/// §441 — `vars` правила-пресета пишутся по нормам Н2–Н4 против шаблона
+/// ([normalizePresetRulesVars]): необъявленное имя и значение, равное
+/// умолчанию, снимаются молча.
 Future<void> _saveCustomRules(List<CustomRule> rules,
     {bool flush = true}) async {
+  final decls = await loadRecordVarDecls();
   final data = await _load();
-  data['custom_rules'] = rules.map((r) => r.toJson()).toList();
+  data[kRulesKey] = [
+    for (final r in splitJsonRuleArrays(normalizePresetRulesVars(rules, decls)))
+      ruleToRecord(r),
+  ];
   SettingsStorage._cache = data;
   SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();
@@ -133,10 +212,10 @@ Future<void> _saveCustomRules(List<CustomRule> rules,
 // §229 — one-shot ремап preset_id (§228: `bittorrent-direct`→`bittorrent`,
 // `private-ip-direct`→`private-ip`, `block_unknown`→`unknown-traffic`) удалён:
 // §228 вышел в v2.10.0, обновившиеся юзеры давно отремаплены, код был мёртвым
-// грузом. Guard-ключ `preset_ids_remapped` СОХРАНЁН в persisted-keys
-// (settings_storage.dart) — имя не переиспользовать, старые storage с ним не
-// считать мусором. Пропустивший v2.10.0..v2.17.x получит «Preset not found» на
-// трёх старых id (мягкая деградация: warning + дроп при сборке).
+// грузом. Guard-ключ `preset_ids_remapped` читателей не имеет и удаляется
+// миграцией §439 (имя не переиспользовать). Пропустивший v2.10.0..v2.17.x
+// получит «Preset not found» на трёх старых id (мягкая деградация: warning +
+// дроп при сборке).
 
 /// §159 — флаг «дефолтные пресеты уже засеяны» (fresh-install seed). Хранится
 /// в том же storage-ключе `presets_migrated`, что и снятая legacy-миграция —

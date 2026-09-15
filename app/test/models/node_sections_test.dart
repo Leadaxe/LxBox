@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/dns_record.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_sections.dart';
@@ -170,20 +172,20 @@ void main() {
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
           origin: UserSource.manual,
-          createdAt: DateTime.utc(2026, 9, 14),
           rawBody: '{"type":"tailscale","tag":"ts","auth_key":"k"}',
           sections: sections,
         );
 
     test('UserServer: sections пишется только непустым и переживает round-trip', () {
       final empty = user();
-      expect(empty.toJson().containsKey('sections'), isFalse);
+      expect(sourceToRecord(empty).containsKey('sections'), isFalse);
       expect(user(sections: const NodeSections()).sections, isNull);
 
       final us = user(sections: NodeSections.fromJson(canonical()));
-      final json = us.toJson();
+      final json = sourceToRecord(us);
       expect(json['sections'], canonical());
-      final back = ServerList.fromJson(json) as UserServer;
+      final back = sourceFromRecord(json).value! as UserServer;
+      expect(back, us);
       expect(back.sections!.toJson(), canonical());
       expect(back.nodes.single.protocol, 'tailscale');
     });
@@ -196,29 +198,50 @@ void main() {
       expect(us.copyWith(sections: other).sections!.rules.single.name, 'x');
     });
 
-    test('FolderMember: то же трио toJson/fromJson/copyWith', () {
+    test('FolderMember: запись члена папки, чтение, copyWith', () {
       final m = FolderMember(
         raw: '{"type":"tailscale","tag":"ts","auth_key":"k"}',
         sections: NodeSections.fromJson(canonical()),
       );
       expect(m.node!.protocol, 'tailscale');
-      final json = m.toJson();
+      FolderServers folder(FolderMember member) => FolderServers(
+            id: 'f1',
+            name: 'F',
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            createdAt: DateTime.utc(2026, 9, 14),
+            members: [member],
+          );
+      Map<String, dynamic> memberRecord(FolderMember member) =>
+          (sourceToRecord(folder(member))['nodes'] as List).single
+              as Map<String, dynamic>;
+      final json = memberRecord(m);
       expect(json['sections'], canonical());
-      final back = FolderMember.fromJson(json);
+      final back =
+          (sourceFromRecord(sourceToRecord(folder(m))).value! as FolderServers)
+              .members
+              .single;
+      expect(back, m);
       expect(back.sections!.toJson(), canonical());
       // Смена raw секции не трогает (голое тело — NODE_SECTIONS.md §7).
       expect(back.copyWith(raw: '{"type":"tailscale","tag":"ts2"}').sections, isNotNull);
       expect(back.copyWith(clearSections: true).sections, isNull);
-      expect(FolderMember(raw: 'x').toJson().containsKey('sections'), isFalse);
+      expect(memberRecord(FolderMember(raw: 'x')).containsKey('sections'),
+          isFalse);
     });
 
-    test('DnsRuleInline.enabled: false пишется, отсутствие = true', () {
+    test('DnsRuleInline.enabled: запись пишет всегда, отсутствие ключа = true',
+        () {
       const on = DnsRuleInline(name: 'a', rule: {'server': 'x'});
-      expect(on.toJson().containsKey('enabled'), isFalse);
+      expect(dnsRuleToRecord(on)['enabled'], isTrue);
       const off = DnsRuleInline(name: 'a', rule: {'server': 'x'}, enabled: false);
-      expect(off.toJson()['enabled'], false);
-      expect((DnsRuleRef.fromJson(off.toJson()) as DnsRuleInline).enabled, isFalse);
-      expect((DnsRuleRef.fromJson(on.toJson()) as DnsRuleInline).enabled, isTrue);
+      expect(dnsRuleToRecord(off)['enabled'], false);
+      expect(dnsRuleFromRecord(dnsRuleToRecord(off)).value, off);
+      expect(dnsRuleFromRecord(dnsRuleToRecord(on)).value, on);
+      final withoutKey = dnsRuleToRecord(on)..remove('enabled');
+      expect((dnsRuleFromRecord(withoutKey).value! as DnsRuleInline).enabled,
+          isTrue);
     });
   });
 }

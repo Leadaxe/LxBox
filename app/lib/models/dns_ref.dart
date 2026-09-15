@@ -1,147 +1,71 @@
 // ===========================================================================
-// §294 — storage-level typed model для `dns_options.servers[]` и
-// `dns_options.rules[]` (kind-discriminated refs, §043/§033).
+// §294 — модель DNS-записей (виды §043/§033).
 //
-// Зачем: до §294 обе секции жили как сырые `List<Map<String,dynamic>>` без
-// модели и без write-валидации — Debug `PUT /settings/dns_options/servers`
-// писал verbatim, асимметрично с типизированным `/rules` (sealed CustomRule).
+// §439 A1 — единственный рабочий формат DNS выше хранения. Резолверы, сборка,
+// экраны и контроллер DNS работают только с этими типами. Хранение (`dns{}`
+// в `settings_storage/network.dart`), бэкап, файл правил, секции узла и
+// Debug `PUT /settings/dns_options/*` пишут и читают запись 1.0 кодеком
+// `codec/dns_record.dart`; форму 2.23.2 читают только замороженные читатели
+// `storage_migration/legacy_form_v0.dart`. Своей сериализации у моделей нет.
 //
-// Что это НЕ трогает (осознанно, см. spec §294):
-// - render-view `ResolvedServer` + резолвер `resolveDisplayedServers`
-//   (screens/) — downstream VIEW, остаётся как есть; модель лишь типизирует
-//   сырой ref, который резолвер продолжает читать `List<Map>`;
-// - template-view `TemplateDnsServerEntry`/`DnsOptionsModel`
-//   (parser_config.dart) — это template-сторона (canonical), другой JSON;
-// - resolver-owned migration/orphan-cleanup/auto-discover — остаётся в
-//   резолвере (модель НЕ роняет orphan'ы, чтобы не было двойного drop'а);
-// - форма на диске НЕ мигрируется — `toJson` байт-совместим (§221 backup).
+// Семантика `enabled` при отсутствии ключа в записи (кодек):
+// - сервер, inline- и srs-правило — включено (`enabled != false`);
+// - template-правило — выключено (`enabled == true`, как читала сборка).
 //
-// Дискриминатор — строковый `kind` (как в JSON и как резолвер уже матчит
-// `kind == 'inline'`); модель в `lib/models/` не тянет `ServerKind` из
-// `screens/` (обратная зависимость слоёв запрещена).
+// Значения неизменяемы по договорённости: кодек копирует JSON-поддеревья,
+// модель не делит карты с документом хранения.
 //
-// `fromJson` ТОЛЕРАНТЕН на чтение (не бросает): старые инсталляции и
-// pre-043 legacy full-body снапшоты не должны падать на cold-start — вернёт
-// null, вызывающий пропускает (как резолвер молча дропает unknown-kind).
-// Строгость — ТОЛЬКО на Debug write-пути (там `fromJsonStrict` бросает).
+// Дискриминатор — строковый `kind`; модель не тянет `ServerKind` из `screens/`
+// (обратная зависимость слоёв запрещена).
 // ===========================================================================
 
-/// Ошибка валидации формы ref'а на write-пути. Debug-handler мапит в
-/// `BadRequest`; модель сама HTTP-типов не знает.
-class DnsRefFormatException implements Exception {
-  const DnsRefFormatException(this.message);
-  final String message;
-  @override
-  String toString() => 'DnsRefFormatException: $message';
-}
+import 'package:collection/collection.dart';
+
+const _eq = DeepCollectionEquality();
 
 // ─── Servers ────────────────────────────────────────────────────────────────
 
-/// Один ref из `dns_options.servers[]`. Форма на диске:
-///   `{enabled, kind: inline|preset|template, tag, body?, varValues?, description?}`
-/// Порядок ключей в [toJson] совпадает с выводом резолвера
-/// (`enabled, kind, tag, …`) — round-trip байт-совместим.
+/// Один DNS-сервер хранения (`dns.servers[]`; запись — `codec/dns_record.dart`).
 sealed class DnsServerRef {
   const DnsServerRef({
     required this.enabled,
-    required this.tag,
     this.description,
   });
 
   final bool enabled;
-  final String tag;
+
+  /// Тег сервера в `config.dns.servers[]` — им на сервер ссылаются правила,
+  /// группы, `dns.final` и экраны.
+  String get tag;
+
   final String? description;
 
   /// `inline` | `preset` | `template`.
   String get kind;
 
-  Map<String, dynamic> toJson();
-
-  /// Толерантный парс — вернёт null на legacy full-body (нет `kind`),
-  /// unknown-kind, отсутствующий/пустой `tag`, inline без Map-`body`.
-  /// Зеркалит фильтр резолвера (`dns_servers.dart` step-2), чтобы модель и
-  /// резолвер дропали одно и то же.
-  static DnsServerRef? fromJson(Map<String, dynamic> j) {
-    final kind = j['kind'];
-    final tag = j['tag']?.toString();
-    if (kind is! String || tag == null || tag.isEmpty) return null;
-    final enabled = j['enabled'] != false; // default true
-    final description = j['description']?.toString();
-    switch (kind) {
-      case 'inline':
-        final body = j['body'];
-        if (body is! Map) return null; // malformed — как резолвер
-        return DnsServerInline(
-          enabled: enabled,
-          tag: tag,
-          body: body.cast<String, dynamic>(),
-          description: description,
-        );
-      case 'preset':
-        return DnsServerPreset(
-            enabled: enabled, tag: tag, description: description);
-      case 'template':
-        final vv = j['varValues'];
-        return DnsServerTemplate(
-          enabled: enabled,
-          tag: tag,
-          varValues: vv is Map
-              ? {
-                  for (final e in vv.entries)
-                    e.key.toString(): e.value.toString()
-                }
-              : const {},
-          description: description,
-        );
-      default:
-        return null; // legacy/unknown — dropped
-    }
-  }
-
-  /// Строгий парс для Debug write-пути — бросает [DnsRefFormatException] с
-  /// объяснением вместо тихого drop'а. Используется в `_putDnsServers`.
-  static DnsServerRef fromJsonStrict(Map<String, dynamic> j) {
-    final kind = j['kind'];
-    if (kind is! String || kind.isEmpty) {
-      throw const DnsRefFormatException(
-          'server "kind" required (inline|preset|template)');
-    }
-    final tag = j['tag']?.toString();
-    if (tag == null || tag.isEmpty) {
-      throw const DnsRefFormatException('server "tag" required');
-    }
-    if (kind == 'inline' && j['body'] is! Map) {
-      throw const DnsRefFormatException('inline server requires "body" object');
-    }
-    if (kind != 'inline' && kind != 'preset' && kind != 'template') {
-      throw DnsRefFormatException(
-          'unknown server kind "$kind" (inline|preset|template)');
-    }
-    return fromJson(j)!;
-  }
+  /// Та же запись с другим `enabled`.
+  DnsServerRef withEnabled(bool enabled);
 }
 
 class DnsServerInline extends DnsServerRef {
   const DnsServerInline({
     required super.enabled,
-    required super.tag,
+    required this.tag,
     required this.body,
     super.description,
   });
 
+  @override
+  final String tag;
+
+  /// Тело sing-box-сервера без `tag`/`enabled`/`description` (§044).
   final Map<String, dynamic> body;
 
   @override
   String get kind => 'inline';
 
   @override
-  Map<String, dynamic> toJson() => {
-        'enabled': enabled,
-        'kind': 'inline',
-        'tag': tag,
-        'body': body,
-        if (description != null) 'description': description,
-      };
+  DnsServerInline withEnabled(bool enabled) => copyWith(enabled: enabled);
 
   DnsServerInline copyWith({
     bool? enabled,
@@ -155,41 +79,104 @@ class DnsServerInline extends DnsServerRef {
         body: body ?? this.body,
         description: description ?? this.description,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsServerInline &&
+      other.enabled == enabled &&
+      other.tag == tag &&
+      other.description == description &&
+      _eq.equals(other.body, body);
+
+  @override
+  int get hashCode =>
+      Object.hash('inline', enabled, tag, description, _eq.hash(body));
 }
 
+/// Сервер пресета шаблона (`selectable_rules[].dns_servers[]`).
+///
+/// §439 — одна форма тега: [tag] — тег конфига. Сборка кладёт серверы пресета
+/// в пространство его id (`namespacePresetTags`, §103 C7): сервер `dns_ru`
+/// пресета `ru-direct` в конфиге, в правилах и в `dns.final` называется
+/// `ru-direct:dns_ru`. Запись 1.0 адресует его `ref` =
+/// `<preset_id>:<тег внутри пресета>` (BACKUP.md §2) — это та же строка
+/// (кодек, `dnsServerPresetRef`).
+///
+/// Тег без пространства при известном [presetId] (тег внутри пресета, так
+/// его отдаёт читатель файла 0.x) модель переводит в тег конфига.
 class DnsServerPreset extends DnsServerRef {
   const DnsServerPreset({
     required super.enabled,
-    required super.tag,
+    required String tag,
+    String presetId = '',
     super.description,
-  });
+  })  : _tag = tag,
+        _presetId = presetId;
+
+  final String _tag;
+  final String _presetId;
+
+  @override
+  String get tag => _presetId.isEmpty || _tag.startsWith('$_presetId:')
+      ? _tag
+      : '$_presetId:$_tag';
+
+  /// §439 — пресет, которому принадлежит сервер. Не задан — пространство
+  /// тега (до первого `:`, [presetIdOfDnsServerTag]); пусто — тег без
+  /// пространства, пресет не известен (`ref` = тег).
+  String get presetId =>
+      _presetId.isNotEmpty ? _presetId : presetIdOfDnsServerTag(_tag);
 
   @override
   String get kind => 'preset';
 
   @override
-  Map<String, dynamic> toJson() => {
-        'enabled': enabled,
-        'kind': 'preset',
-        'tag': tag,
-        if (description != null) 'description': description,
-      };
+  DnsServerPreset withEnabled(bool enabled) => copyWith(enabled: enabled);
 
-  DnsServerPreset copyWith({bool? enabled, String? tag, String? description}) =>
+  DnsServerPreset copyWith({
+    bool? enabled,
+    String? tag,
+    String? presetId,
+    String? description,
+  }) =>
       DnsServerPreset(
         enabled: enabled ?? this.enabled,
         tag: tag ?? this.tag,
+        presetId: presetId ?? this.presetId,
         description: description ?? this.description,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsServerPreset &&
+      other.enabled == enabled &&
+      other.tag == tag &&
+      other.presetId == presetId &&
+      other.description == description;
+
+  @override
+  int get hashCode =>
+      Object.hash('preset', enabled, tag, presetId, description);
+}
+
+/// Пространство тега preset-сервера DNS: часть до ПЕРВОГО `:` (id пресета
+/// двоеточия не содержит, тег внутри пресета — может); пусто, если `:` нет
+/// или он первый.
+String presetIdOfDnsServerTag(String tag) {
+  final at = tag.indexOf(':');
+  return at <= 0 ? '' : tag.substring(0, at);
 }
 
 class DnsServerTemplate extends DnsServerRef {
   const DnsServerTemplate({
     required super.enabled,
-    required super.tag,
+    required this.tag,
     this.varValues = const {},
     super.description,
   });
+
+  @override
+  final String tag;
 
   final Map<String, String> varValues;
 
@@ -197,15 +184,7 @@ class DnsServerTemplate extends DnsServerRef {
   String get kind => 'template';
 
   @override
-  Map<String, dynamic> toJson() => {
-        'enabled': enabled,
-        'kind': 'template',
-        'tag': tag,
-        // §294 — varValues эмитится только непустой (резолвер так же не пишет
-        // пустой varValues); порядок ключей после tag совпадает с выводом.
-        if (varValues.isNotEmpty) 'varValues': varValues,
-        if (description != null) 'description': description,
-      };
+  DnsServerTemplate withEnabled(bool enabled) => copyWith(enabled: enabled);
 
   DnsServerTemplate copyWith({
     bool? enabled,
@@ -219,75 +198,50 @@ class DnsServerTemplate extends DnsServerRef {
         varValues: varValues ?? this.varValues,
         description: description ?? this.description,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsServerTemplate &&
+      other.enabled == enabled &&
+      other.tag == tag &&
+      other.description == description &&
+      _eq.equals(other.varValues, varValues);
+
+  @override
+  int get hashCode =>
+      Object.hash('template', enabled, tag, description, _eq.hash(varValues));
+}
+
+/// §441 (SPEC 129 §6, D-114) — `body.detour` пользовательского сервера —
+/// одиночная цель по имени: значение, названное ключом [retarget], заменено
+/// его значением. Не совпало — тот же экземпляр.
+DnsServerInline retargetDnsServerDetour(
+  DnsServerInline server,
+  Map<String, String> retarget,
+) {
+  final detour = server.body['detour'];
+  final to = detour is String ? retarget[detour.trim()] : null;
+  if (to == null) return server;
+  return server.copyWith(body: {...server.body, 'detour': to});
 }
 
 // ─── Rules ──────────────────────────────────────────────────────────────────
 
-/// Один ref из `dns_options.rules[]`. Четыре kind'а с РАЗНЫМИ identity-ключами:
-///   inline `{kind, name, rule}` · srs `{kind, name, id, body?}` ·
-///   preset `{kind, presetId, enabled?}` · template `{kind, name}`.
-/// Preset — позиционный якорь mirror-группы: «мёртвое» поле `enabled`
-/// сохраняется как есть (build_config anchor-семантика), НЕ чистится.
+/// Одно DNS-правило хранения (`dns.rules[]`). Четыре вида с РАЗНЫМИ
+/// identity-ключами: inline — имя и тело · srs — имя и `id` · preset —
+/// `presetId` · template — имя; у всех — `enabled`.
+/// Preset — позиционный якорь mirror-группы: его `enabled` сборка с
+/// mirror-группой не читает, но значение сохраняется как есть.
 sealed class DnsRuleRef {
   const DnsRuleRef();
 
   String get kind;
-  Map<String, dynamic> toJson();
 
-  /// Толерантный парс (не бросает; unknown/legacy → null, дропается как в
-  /// резолвере `dns_rules.dart`).
-  static DnsRuleRef? fromJson(Map<String, dynamic> j) {
-    final kind = j['kind'];
-    if (kind is! String) return null;
-    switch (kind) {
-      case 'inline':
-        final name = j['name']?.toString();
-        final rule = j['rule'];
-        if (name == null || name.isEmpty || rule is! Map) return null;
-        return DnsRuleInline(
-          name: name,
-          rule: rule.cast<String, dynamic>(),
-          enabled: j['enabled'] != false,
-        );
-      case 'srs':
-        final id = j['id']?.toString();
-        final name = j['name']?.toString();
-        if (id == null || id.isEmpty || name == null || name.isEmpty) {
-          return null;
-        }
-        final body = j['body'];
-        return DnsRuleSrs(
-          name: name,
-          id: id,
-          body: body is Map ? body.cast<String, dynamic>() : null,
-        );
-      case 'preset':
-        final pid = j['presetId']?.toString();
-        if (pid == null || pid.isEmpty) return null;
-        return DnsRulePreset(presetId: pid, enabled: j['enabled'] != false);
-      case 'template':
-        final name = j['name']?.toString();
-        if (name == null || name.isEmpty) return null;
-        return DnsRuleTemplate(name: name);
-      default:
-        return null; // legacy 'user'/'rule'/unknown — dropped
-    }
-  }
+  /// Включено ли правило (отсутствие ключа — см. шапку файла).
+  bool get enabled;
 
-  /// Строгий парс для Debug write-пути.
-  static DnsRuleRef fromJsonStrict(Map<String, dynamic> j) {
-    final kind = j['kind'];
-    if (kind is! String || kind.isEmpty) {
-      throw const DnsRefFormatException(
-          'rule "kind" required (inline|srs|preset|template)');
-    }
-    final parsed = fromJson(j);
-    if (parsed == null) {
-      throw DnsRefFormatException(
-          'invalid dns rule of kind "$kind" (missing required fields)');
-    }
-    return parsed;
-  }
+  /// Та же запись с другим `enabled`.
+  DnsRuleRef withEnabled(bool enabled);
 }
 
 class DnsRuleInline extends DnsRuleRef {
@@ -299,21 +253,16 @@ class DnsRuleInline extends DnsRuleRef {
   final String name;
   final Map<String, dynamic> rule;
 
-  /// §435 — тумблер записи (ONE_NAMESPACE §1: `enabled` у DNS-правил). В JSON
-  /// пишется только `false`: старое хранение без ключа читается как
-  /// «включено», и байт-совместимость `dns_options.rules` сохраняется.
+  /// §435 — тумблер записи (ONE_NAMESPACE §1: `enabled` у DNS-правил); запись
+  /// без ключа читается как «включено».
+  @override
   final bool enabled;
 
   @override
   String get kind => 'inline';
 
   @override
-  Map<String, dynamic> toJson() => {
-        'kind': 'inline',
-        'name': name,
-        'rule': rule,
-        if (!enabled) 'enabled': false,
-      };
+  DnsRuleInline withEnabled(bool enabled) => copyWith(enabled: enabled);
 
   DnsRuleInline copyWith({
     String? name,
@@ -325,28 +274,81 @@ class DnsRuleInline extends DnsRuleRef {
         rule: rule ?? this.rule,
         enabled: enabled ?? this.enabled,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsRuleInline &&
+      other.name == name &&
+      other.enabled == enabled &&
+      _eq.equals(other.rule, rule);
+
+  @override
+  int get hashCode => Object.hash('inline', name, enabled, _eq.hash(rule));
 }
 
+/// DNS-правило по скачанному rule-set. UI его не создаёт. Тело — `body`
+/// (`server` + доп. условия; форма §294: Debug API, файл правил). `server` /
+/// `rule` / `srsUrl` — поля §033, их несут только старые записи: сборка берёт
+/// их раньше `body`, тайл показывает `srsUrl`/`server`.
 class DnsRuleSrs extends DnsRuleRef {
-  const DnsRuleSrs({required this.name, required this.id, this.body});
+  const DnsRuleSrs({
+    required this.name,
+    required this.id,
+    this.body,
+    this.server,
+    this.rule,
+    this.srsUrl,
+    this.enabled = true,
+  });
   final String name;
   final String id;
   final Map<String, dynamic>? body;
+  final String? server;
+  final Map<String, dynamic>? rule;
+  final String? srsUrl;
+
+  @override
+  final bool enabled;
 
   @override
   String get kind => 'srs';
 
   @override
-  Map<String, dynamic> toJson() => {
-        'kind': 'srs',
-        'name': name,
-        'id': id,
-        if (body != null) 'body': body,
-      };
+  DnsRuleSrs withEnabled(bool enabled) => copyWith(enabled: enabled);
 
-  DnsRuleSrs copyWith({String? name, String? id, Map<String, dynamic>? body}) =>
+  DnsRuleSrs copyWith({
+    String? name,
+    String? id,
+    Map<String, dynamic>? body,
+    String? server,
+    Map<String, dynamic>? rule,
+    String? srsUrl,
+    bool? enabled,
+  }) =>
       DnsRuleSrs(
-          name: name ?? this.name, id: id ?? this.id, body: body ?? this.body);
+        name: name ?? this.name,
+        id: id ?? this.id,
+        body: body ?? this.body,
+        server: server ?? this.server,
+        rule: rule ?? this.rule,
+        srsUrl: srsUrl ?? this.srsUrl,
+        enabled: enabled ?? this.enabled,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsRuleSrs &&
+      other.name == name &&
+      other.id == id &&
+      other.server == server &&
+      other.srsUrl == srsUrl &&
+      other.enabled == enabled &&
+      _eq.equals(other.body, body) &&
+      _eq.equals(other.rule, rule);
+
+  @override
+  int get hashCode => Object.hash('srs', name, id, server, srsUrl, enabled,
+      _eq.hash(body), _eq.hash(rule));
 }
 
 class DnsRulePreset extends DnsRuleRef {
@@ -355,29 +357,50 @@ class DnsRulePreset extends DnsRuleRef {
 
   /// §033 — «мёртвое» для активного preset'а, но позиционный anchor
   /// mirror-группы в build_config; сохраняется как есть, не чистится.
+  @override
   final bool enabled;
 
   @override
   String get kind => 'preset';
 
   @override
-  Map<String, dynamic> toJson() =>
-      {'kind': 'preset', 'presetId': presetId, 'enabled': enabled};
+  DnsRulePreset withEnabled(bool enabled) => copyWith(enabled: enabled);
 
   DnsRulePreset copyWith({String? presetId, bool? enabled}) => DnsRulePreset(
       presetId: presetId ?? this.presetId, enabled: enabled ?? this.enabled);
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsRulePreset &&
+      other.presetId == presetId &&
+      other.enabled == enabled;
+
+  @override
+  int get hashCode => Object.hash('preset', presetId, enabled);
 }
 
 class DnsRuleTemplate extends DnsRuleRef {
-  const DnsRuleTemplate({required this.name});
+  const DnsRuleTemplate({required this.name, this.enabled = true});
   final String name;
+
+  @override
+  final bool enabled;
 
   @override
   String get kind => 'template';
 
   @override
-  Map<String, dynamic> toJson() => {'kind': 'template', 'name': name};
+  DnsRuleTemplate withEnabled(bool enabled) => copyWith(enabled: enabled);
 
-  DnsRuleTemplate copyWith({String? name}) =>
-      DnsRuleTemplate(name: name ?? this.name);
+  DnsRuleTemplate copyWith({String? name, bool? enabled}) => DnsRuleTemplate(
+      name: name ?? this.name, enabled: enabled ?? this.enabled);
+
+  @override
+  bool operator ==(Object other) =>
+      other is DnsRuleTemplate &&
+      other.name == name &&
+      other.enabled == enabled;
+
+  @override
+  int get hashCode => Object.hash('template', name, enabled);
 }

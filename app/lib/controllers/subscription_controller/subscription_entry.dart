@@ -107,7 +107,7 @@ class SubscriptionEntry extends ChangeNotifier {
   bool get registerDetourServers => detourPolicy.registerDetourServers;
   bool get registerDetourInAuto => detourPolicy.registerDetourInAuto;
   bool get useDetourServers => detourPolicy.useDetourServers;
-  String get overrideDetour => detourPolicy.overrideDetour;
+  NodeLink get overrideDetour => detourPolicy.overrideDetour;
   bool get replaceDetourChain => detourPolicy.replaceDetourChain;
 
   static String formatAgo(DateTime dt) => _formatAgo(dt);
@@ -245,7 +245,7 @@ class SubscriptionEntry extends ChangeNotifier {
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(registerDetourInAuto: v)));
   set useDetourServers(bool v) =>
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(useDetourServers: v)));
-  set overrideDetour(String v) =>
+  set overrideDetour(NodeLink v) =>
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(overrideDetour: v)));
   set replaceDetourChain(bool v) =>
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(replaceDetourChain: v)));

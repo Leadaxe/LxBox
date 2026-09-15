@@ -16,7 +16,11 @@
 // самое, а смысл у него другой (позиции маршрута, не взаимозаменяемые опции).
 // В конфиг [hops] уходит именно под ключом `outbounds` — форма ядра неизменна.
 
+import 'package:collection/collection.dart';
+
 import '../services/json_clone.dart' show deepCloneJson;
+import 'codec/node_link_record.dart' show nodeLinkToRecord;
+import 'node_link.dart';
 
 /// Значение поля `type` эмитируемого outbound'а. Ядро без тега сборки
 /// `with_lx_chain` этот тип не знает и отвергает конфиг ЦЕЛИКОМ (§393 C5).
@@ -62,7 +66,9 @@ const Map<String, bool> kChainStripDefault = {
 /// Источник-цепочка: маршрут через несколько позиций подряд.
 ///
 /// Неизменяемая модель, как [Direction]: мутации идут через [copyWith], а
-/// хранение — списком `chains[]` в `lxbox_settings.json` (§393 C2).
+/// хранение — записями `kind: chain` хвостом `sources[]` в
+/// `lxbox_settings.json` (§439, кодек `codec/chain_record.dart`). Место
+/// цепочки в общем списке источников — индекс записи, поля позиции нет.
 class SourceChain {
   const SourceChain({
     required this.tag,
@@ -73,7 +79,6 @@ class SourceChain {
     this.stripEvasion,
     this.strip = const {},
     this.rewrite = const {},
-    this.order = -1,
   });
 
   /// Тег будущего outbound'а — он же id записи. Immutable после создания, как
@@ -101,11 +106,15 @@ class SourceChain {
   /// шаблона или ДРУГАЯ ЦЕПОЧКА (только позицией 0 и только объявленная ВЫШЕ
   /// по списку — этим порядком исключены циклы между цепочками).
   ///
+  /// Позиция — ссылка на узел (D-112): узел папки или подписки и группа
+  /// подписки — пара `{id контейнера, сырой тег}`, остальное — корневая
+  /// `{tag}`. Финальный тег позиции вычисляет сборка.
+  ///
   /// Инварианты ядра (`protocol/chain/chain.go:85-100`): минимум две
   /// позиции, непустые, без повторов, без ссылки на саму цепочку. Нарушение
   /// ЛЮБОГО не даёт стартовать ВСЕМУ конфигу, а не одной цепочке, — поэтому
   /// проверяет их [chainEmitError], и не прошедшая цепочка не эмитится вовсе.
-  final List<String> hops;
+  final List<NodeLink> hops;
 
   /// Простой, после которого звено без живых соединений удаляется.
   /// Пусто = умолчание ядра (5m), `"0s"` = жить до остановки.
@@ -134,28 +143,6 @@ class SourceChain {
   /// round-trip как есть, без «чистки пустого».
   final Map<String, dynamic> rewrite;
 
-  /// §393 D1 — позиция цепочки в ОБЩЕМ списке источников (тот же список, где
-  /// живут подписки, одиночные серверы и папки).
-  ///
-  /// Цепочка — такой же источник, как подписка (директива оператора 24.08):
-  /// она стоит СТРОКОЙ в общем списке и перетаскивается наравне со всеми.
-  /// Поэтому её место задаётся не отдельным списком `chains`, а индексом в
-  /// общем ordering'е — ровно так же, как у `ServerList` его место задаётся
-  /// индексом в `server_lists`.
-  ///
-  /// Почему поле, а не порядок массива `chains[]`: массив хранит только
-  /// ВЗАИМНЫЙ порядок цепочек, а инвариант «позиция может ссылаться только на
-  /// цепочку ВЫШЕ» считается по ОБЩЕМУ списку. Без абсолютной позиции нельзя
-  /// ответить, стоит ли цепочка выше подписки, между которыми её перетащили,
-  /// — а именно этого требует drag подписки МЕЖДУ двумя цепочками.
-  ///
-  /// Значение — индекс среди всех источников. Дубли и дыры законны (после
-  /// удаления источника индексы не переиспользуются): важен только ПОРЯДОК,
-  /// который нормализуется на каждой записи ([normalizeChainOrder]).
-  /// `-1` = «позиция ещё не назначена» (запись из старого storage или из
-  /// бэкапа) — такие встают в КОНЕЦ, сохраняя взаимный порядок.
-  final int order;
-
   /// Имя для показа. Пустой label → сам тег: выдумывать имя цепочке, которую
   /// пользователь не назвал, значило бы врать о её содержимом.
   String get displayLabel => label.isNotEmpty ? label : tag;
@@ -166,13 +153,12 @@ class SourceChain {
   SourceChain copyWith({
     String? label,
     bool? enabled,
-    List<String>? hops,
+    List<NodeLink>? hops,
     String? idleTimeout,
     bool? stripEvasion,
     bool clearStripEvasion = false,
     Map<String, bool>? strip,
     Map<String, dynamic>? rewrite,
-    int? order,
   }) =>
       SourceChain(
         tag: tag, // immutable — не параметр copyWith (как у Direction)
@@ -184,56 +170,16 @@ class SourceChain {
             clearStripEvasion ? null : (stripEvasion ?? this.stripEvasion),
         strip: strip ?? this.strip,
         rewrite: rewrite ?? this.rewrite,
-        order: order ?? this.order,
       );
 
-  /// Разбор записи storage / канона схемы.
+  /// Канон `source_chain.schema.json`: маршрут и его настройки, без полей
+  /// записи источника (`tag`, `label`, `enabled`).
   ///
-  /// Терпимо к мусору на ЧТЕНИИ (правленый файл, restore из чужого бэкапа,
-  /// Debug API): не-строки в [hops] и неизвестные ключи [strip] отсеиваются
-  /// здесь, а не разгребаются билдером. Но отсеивается только то, что не
-  /// имеет смысла: пустая после trim позиция и дубль остаются — их ловит
-  /// [chainEmitError] и деградирует цепочку ЦЕЛИКОМ с внятной причиной,
-  /// потому что молча «починенный» маршрут — это другой маршрут.
-  factory SourceChain.fromJson(Map<String, dynamic> json) {
-    final tag = (json['tag'] as String? ?? '').trim();
-    return SourceChain(
-      tag: tag,
-      label: json['label'] as String? ?? '',
-      enabled: json['enabled'] as bool? ?? true,
-      hops: [
-        for (final h in (json['hops'] as List? ?? const []))
-          if (h is String) h,
-      ],
-      idleTimeout: json['idle_timeout'] as String? ?? '',
-      // Трёхзначность: ключа нет → null (умолчание ядра), не-bool → тоже
-      // null (мусор не должен читаться как явное выключение).
-      stripEvasion: json['strip_evasion'] is bool
-          ? json['strip_evasion'] as bool
-          : null,
-      strip: {
-        for (final key in kChainStripKeys)
-          if ((json['strip'] as Map?)?[key] is bool)
-            key: (json['strip'] as Map)[key] as bool,
-      },
-      rewrite: (deepCloneJson(json['rewrite']) as Map?)?.cast<String, dynamic>() ??
-          const {},
-      // §393 D1 — позиция в общем списке источников. Ключа нет (старый
-      // storage, запись из бэкапа) → -1: «не назначена», встанет в конец,
-      // взаимный порядок сохранит миграция/нормализация.
-      order: json['order'] is int ? json['order'] as int : -1,
-    );
-  }
-
-  /// Запись в storage. Round-trip обязан быть точным: `strip_evasion`
-  /// пишется, ТОЛЬКО когда пользователь высказался (null = умолчание ядра),
-  /// пустые каталоги ключа не создают — иначе умолчание и явный выбор стали
-  /// бы неотличимы уже в файле.
-  Map<String, dynamic> toJson() => {
-        'tag': tag,
-        'label': label,
-        'enabled': enabled,
-        'hops': hops,
+  /// Round-trip обязан быть точным: `strip_evasion` пишется, ТОЛЬКО когда
+  /// пользователь высказался (null = умолчание ядра), пустые каталоги ключа
+  /// не создают — иначе умолчание и явный выбор стали бы неотличимы.
+  Map<String, dynamic> toCanonJson() => {
+        'hops': [for (final h in hops) nodeLinkToRecord(h)],
         if (idleTimeout.isNotEmpty) 'idle_timeout': idleTimeout,
         if (stripEvasion != null) 'strip_evasion': stripEvasion,
         if (strip.isNotEmpty)
@@ -242,14 +188,26 @@ class SourceChain {
               if (strip.containsKey(key)) key: strip[key],
           },
         if (rewrite.isNotEmpty) 'rewrite': deepCloneJson(rewrite),
-        // §393 D1 — позиция в общем списке источников. Пишется, только когда
-        // назначена: `-1` в файле означал бы «позиция есть и она такая»,
-        // тогда как смысл ровно обратный. КАНОН ЦЕПОЧКИ ЭТОТ КЛЮЧ НЕ ЗНАЕТ
-        // (`source_chain.schema.json`, `additionalProperties: false`) — это
-        // поле storage, и в бэкап оно не уезжает: `_chainCanonToJson`
-        // вычёркивает его наравне с `tag`/`label`/`enabled`.
-        if (order >= 0) 'order': order,
       };
+
+  static const _eq = DeepCollectionEquality();
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SourceChain &&
+          tag == other.tag &&
+          label == other.label &&
+          enabled == other.enabled &&
+          _eq.equals(hops, other.hops) &&
+          idleTimeout == other.idleTimeout &&
+          stripEvasion == other.stripEvasion &&
+          _eq.equals(strip, other.strip) &&
+          _eq.equals(rewrite, other.rewrite));
+
+  @override
+  int get hashCode => Object.hash(tag, label, enabled, _eq.hash(hops),
+      idleTimeout, stripEvasion, _eq.hash(strip), _eq.hash(rewrite));
 }
 
 /// §393 D2 — итог вычистки позиций: сколько ПОЗИЦИЙ снято и список цепочек
@@ -267,7 +225,8 @@ typedef ChainHealResult = ({
   List<String> touched,
 });
 
-/// §393 D2 — снять позиции с тегом [deletedTag] из всех [chains].
+/// §393 D2 — снять позиции, ссылающиеся на корневое имя [deletedTag]
+/// (Направление, цепочка), из всех [chains].
 ///
 /// Вычищается ПОЗИЦИЯ, а не цепочка (директива оператора 24.08): осознанное
 /// удаление источника — высказывание про состав, и маршрут переживает его
@@ -279,7 +238,9 @@ typedef ChainHealResult = ({
 ///     списке видимой и правится руками. Удалить её значило бы каскадом
 ///     стереть пользовательские данные из-за удаления чужого источника;
 ///   • пустой [deletedTag] игнорируется: пустая позиция и так невалидна
-///     ([chainEmitError]), а вычистка «по пустому тегу» съела бы их все.
+///     ([chainEmitError]), а вычистка «по пустому тегу» съела бы их все;
+///   • ссылки на узлы (пары и корневые узлы) гасит реестр ссылок
+///     (`node_link_registry.dart`), а не эта функция.
 ///
 /// Auto-двойник `<tag>-auto` снимается заодно — по той же причине, что в
 /// [clearIncludeDirectionRefs]: UI-пикеры его не предлагают, но Debug API и
@@ -292,12 +253,13 @@ ChainHealResult clearChainHopRefs(
     return (chains: chains, positions: 0, touched: const []);
   }
   final autoTag = '$deletedTag-auto';
+  bool matches(NodeLink h) =>
+      h.isRoot && (h.tag == deletedTag || h.tag == autoTag);
   var positions = 0;
   final touched = <String>[];
   final out = <SourceChain>[];
   for (final c in chains) {
-    final kept =
-        c.hops.where((t) => t != deletedTag && t != autoTag).toList(growable: false);
+    final kept = c.hops.where((h) => !matches(h)).toList(growable: false);
     if (kept.length == c.hops.length) {
       out.add(c);
       continue;
@@ -325,12 +287,14 @@ String chainEmitError(SourceChain c) {
   if (hops.length < 2) {
     return 'chain has a single position: the core needs at least two';
   }
-  final seen = <String>{};
+  final seen = <NodeLink>{};
   for (var i = 0; i < hops.length; i++) {
     final hop = hops[i];
-    if (hop.trim().isEmpty) return 'position ${i + 1} is empty';
-    if (hop == c.tag) return 'position ${i + 1} references the chain itself';
-    if (!seen.add(hop)) return 'position ${i + 1} repeats "$hop"';
+    if (hop.tag.trim().isEmpty) return 'position ${i + 1} is empty';
+    if (hop.isRoot && hop.tag == c.tag) {
+      return 'position ${i + 1} references the chain itself';
+    }
+    if (!seen.add(hop)) return 'position ${i + 1} repeats "${hop.tag}"';
   }
   for (final typeName in c.rewrite.keys) {
     if (typeName.trim().isEmpty) return 'rewrite: empty outbound type name';
@@ -350,10 +314,14 @@ String chainEmitError(SourceChain c) {
 /// Ключ ядра — `outbounds`, наше поле — [SourceChain.hops] (см. комментарий у
 /// типа). Порядок позиций сохраняется дословно: это порядок ПАКЕТА, и
 /// сортировка/дедуп здесь были бы не нормализацией, а сменой маршрута.
-Map<String, dynamic> chainOutboundObject(SourceChain c) => {
+///
+/// [hopTags] — финальные теги позиций в порядке [SourceChain.hops]: ссылки
+/// разрешает сборка (`node_link_resolve.dart`), модель финальных тегов не
+/// знает.
+Map<String, dynamic> chainOutboundObject(SourceChain c, List<String> hopTags) => {
       'tag': c.tag,
       'type': kChainOutboundType,
-      'outbounds': [...c.hops],
+      'outbounds': [...hopTags],
       if (c.idleTimeout.trim().isNotEmpty) 'idle_timeout': c.idleTimeout.trim(),
       if (c.stripEvasion != null) 'strip_evasion': c.stripEvasion,
       if (c.strip.isNotEmpty)

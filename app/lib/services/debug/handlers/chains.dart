@@ -1,12 +1,15 @@
+import '../../../controllers/subscription_controller.dart';
 import '../../../models/config_node.dart';
 import '../../../models/source_chain.dart';
 import '../../../screens/chain_edit/chain_form_validation.dart';
 import '../../../screens/chain_edit/chain_hop_candidate.dart';
 import '../../../screens/chain_edit/chain_hop_targets.dart';
+import '../../builder/node_link_pool.dart';
 import '../../probe/chain_layer_probe.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
+import '../serializers/chains.dart';
 import '../transport/request.dart';
 import '../transport/response.dart';
 import '_shared.dart';
@@ -36,7 +39,9 @@ import '_shared.dart';
 /// снимок целей есть, иначе рабочая цепочка была бы объявлена битой.
 ///
 /// Routes:
-/// - `GET    /chains`            → list (SourceChain.toJson, snake_case)
+/// - `GET    /chains`            → list в порядке хранения ([serializeChain]:
+///                                поля источника + канон
+///                                `source_chain.schema.json`)
 /// - `POST   /chains`            → create (body: `{"tag":"...","label":"..."}`
 ///                                + опционально любые PATCH-поля; `tag`
 ///                                только при создании)
@@ -181,14 +186,14 @@ Future<DebugResponse> _probe(
 
 Future<DebugResponse> _list() async {
   final chains = await SettingsStorage.getChains();
-  return JsonResponse(chains.map((c) => c.toJson()).toList());
+  return JsonResponse(chains.map(serializeChain).toList());
 }
 
 Future<DebugResponse> _single(String tag) async {
   final chains = await SettingsStorage.getChains();
   final c = chains.where((c) => c.tag == tag).firstOrNull;
   if (c == null) throw NotFound('chain: $tag');
-  return JsonResponse(c.toJson());
+  return JsonResponse(serializeChain(c));
 }
 
 /// §393 D3 — создание АТОМАРНО: собрать полную запись → провалидировать →
@@ -238,7 +243,7 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   }
 
   final extras = await maybeRebuild(req, ctx);
-  return JsonResponse({...created.toJson(), ...extras}, status: 201);
+  return JsonResponse({...serializeChain(created), ...extras}, status: 201);
 }
 
 Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) async {
@@ -257,7 +262,7 @@ Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) as
     throw Conflict(e.message);
   }
   final extras = await maybeRebuild(req, ctx);
-  return JsonResponse({...next.toJson(), ...extras});
+  return JsonResponse({...serializeChain(next), ...extras});
 }
 
 Future<DebugResponse> _delete(String tag, DebugRequest req, DebugContext ctx) async {
@@ -309,14 +314,20 @@ Future<void> _requireValid(
             if (c.tag == chain.tag) chain else c,
         ];
   final config = ctx.home?.state.configModel ?? const ParsedConfig.empty();
+  // §439 — пул ссылок: позиция-ссылка сверяется с кандидатами финальным тегом.
+  final lists = [
+    for (final e in ctx.sub?.entries ?? const <SubscriptionEntry>[]) e.list,
+  ];
+  final pool = computeNodeLinkPool(lists, directions: directions);
   final candidates = chainHopLookup(collectChainHopTargets(
     config: config,
     directions: directions,
     chains: ordered,
     selfTag: chain.tag,
+    pool: pool,
   ));
   final issues = validateChainForm(
-    ChainFormState.of(chain),
+    ChainFormState.of(chain, pool: pool, lists: lists),
     ChainFormContext(
       candidates: candidates,
       targetsKnown: chainTargetsKnown(config),
@@ -354,7 +365,9 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
 
   final label = fieldString(body, 'label');
   final enabled = fieldBool(body, 'enabled');
-  final hops = fieldStringList(body, 'hops');
+  // §439 (D-112) — позиции ссылками `{folder_id?, tag}`; строка — корневая
+  // ссылка (форма до 2.23.3).
+  final hops = fieldNodeLinkList(body, 'hops');
   final idleTimeout = fieldString(body, 'idle_timeout');
 
   // Трёхзначность `strip_evasion` (см. [SourceChain.stripEvasion]): ключа нет

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/settings_storage.dart';
@@ -96,12 +97,13 @@ void main() {
       expect(tag, isNot(contains('%')));
     });
 
-    test('имя переживает persist round-trip (rawBody → fromJson)', () async {
+    test('имя переживает persist round-trip (запись sources[])', () async {
       final c = SubscriptionController();
       await c.addFromInput(wgIni, nameHint: 'home-wg');
       final us = c.entries.single.list as UserServer;
       // Путь рестарта: UserServer персистит только rawBody, ноды ре-деривятся.
-      final reloaded = UserServer.fromJson(us.toJson());
+      final reloaded =
+          sourceFromRecord(sourceToRecord(us)).value! as UserServer;
       expect(reloaded.nodes.single.tag, '🏠 home-wg');
     });
 
@@ -164,7 +166,10 @@ void main() {
       expect(node, isNotNull);
       expect(node!.tag, 'proton-nl-1');
       // Имя живёт в raw члена (фрагмент) — переживает persist.
-      final reloaded = FolderMember.fromJson(folder.members.single.toJson());
+      final reloaded =
+          (sourceFromRecord(sourceToRecord(folder)).value! as FolderServers)
+              .members
+              .single;
       expect(reloaded.node!.tag, 'proton-nl-1');
     });
 

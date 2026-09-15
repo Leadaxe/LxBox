@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/template_vars.dart';
@@ -40,17 +41,17 @@ void main() {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.manual,
-      createdAt: DateTime.utc(2026, 6, 5),
       rawBody: jsonEncode(outboundMap),
       nodes: [spec],
     );
 
-    // Persist round-trip.
+    // Persist round-trip (§439: запись `sources[]`).
     final restored =
-        ServerList.fromJson(us.toJson()) as UserServer;
+        sourceFromRecord(sourceToRecord(us)).value! as UserServer;
 
-    expect(restored.name, 'My Local SOCKS');
-    expect(restored.origin, UserSource.manual);
+    // Имя одиночного сервера (с §243 пустое) записью не хранится.
+    expect(restored, us);
+    expect(restored.name, '');
     expect(restored.nodes.length, 1);
     final node = restored.nodes.first;
     expect(node, isA<SocksSpec>());
@@ -80,12 +81,11 @@ void main() {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.manual,
-      createdAt: DateTime.utc(2026, 6, 5),
       rawBody: jsonEncode(spec.emit(TemplateVars.empty).map),
       nodes: [spec],
     );
     final restored =
-        ServerList.fromJson(us.toJson()) as UserServer;
+        sourceFromRecord(sourceToRecord(us)).value! as UserServer;
     final socks = restored.nodes.first as SocksSpec;
     expect(socks.tag, 'proxy-with-auth');
     expect(socks.username, 'alice');
