@@ -8,7 +8,10 @@
       "dropped keys: preset_ids_remapped"
     ],
     "warnings": [
-      "server \"🏠 home\": detour \"🇫🇮⚪Финляндия (БС-4) ☁️ proxy-wl-176-109-88-214\" matches no node, kept as a root link"
+      "server \"🏠 home\": detour \"🇫🇮⚪Финляндия (БС-4) ☁️ proxy-wl-176-109-88-214\" matches no node, kept as a root link",
+      "server \"🔥⛈️ WARP (AWG 1.5) 2\": detour \"🏠 awg2-home\" matches no node, kept as a root link",
+      "folder \"Proton\": detour \"🔥🎭 WARP (MASQUE) h2\" matches no node, kept as a root link",
+      "chain \"chain-1\": position 3 \"🔥🎭 WARP (MASQUE) h2\" matches no node, kept as a root link"
     ]
   },
   "migrated_file_is_report_doc": true,

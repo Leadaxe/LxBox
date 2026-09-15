@@ -15,10 +15,9 @@
 /// 3. не нашлось в словаре (источник или узел выключен, кэша нет) —
 ///    финальная форма тега «префикс + тег» по всем контейнерам: ровно один
 ///    кандидат — пара;
-/// 4. Направление, `direct-out`, служебный тег, цепочка и узел выключенного
-///    одиночного сервера остаются корнем; прочее (не нашлось или
-///    неоднозначно) — корнем с предупреждением: сборка разберёт ссылку
-///    fail-closed;
+/// 4. Направление, `direct-out`, служебный тег и цепочка остаются корнем;
+///    прочее (не нашлось или неоднозначно) — корнем с предупреждением: сборка
+///    разберёт ссылку fail-closed;
 /// 5. личный detour члена на самого себя и ребро, замыкавшее кольцо внутри
 ///    папки, сборка 2.23.2 не эмитила (`FolderDetourPlan`): такая ссылка
 ///    снимается с предупреждением — конфиг не меняется.
@@ -90,16 +89,8 @@ List<Map<String, dynamic>> migrateNodeLinks(
   // Финальная форма «префикс + сырой тег» → адреса, по всем контейнерам
   // (включая выключенные): запасной путь для строк вне словаря.
   final byFinalForm = <String, List<NodeLink>>{};
-  // Узлы одиночных серверов, которых нет в словаре (сервер выключен): их
-  // адрес и есть корневая ссылка финальным тегом (NODE_LINK §2 п. 5).
-  final rootNodeForms = <String>{};
   for (final l in lists) {
-    if (l is UserServer) {
-      for (final n in l.nodes) {
-        if (n.tag.isNotEmpty) rootNodeForms.add(containerFinalForm(l, n.tag));
-      }
-      continue;
-    }
+    if (l is UserServer) continue;
     containerRawTags(l).forEach((_, raw) {
       (byFinalForm[containerFinalForm(l, raw)] ??= [])
           .add(NodeLink(folderId: l.id, tag: raw));
@@ -131,7 +122,6 @@ List<Map<String, dynamic>> migrateNodeLinks(
       return NodeLink(folderId: folder.id, tag: s);
     }
     final candidates = byFinalForm[s] ?? const <NodeLink>[];
-    if (candidates.isEmpty && rootNodeForms.contains(s)) return link;
     if (candidates.length == 1) {
       lifted++;
       return candidates.single;
