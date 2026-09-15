@@ -146,6 +146,33 @@ void main() {
         reason: 'отсутствующий в файле ключ переносится');
   });
 
+  // §447 — флаги стартовых промптов — свойство устройства: полная замена их
+  // не сбрасывает (иначе после restore заново всплывали Add tile и Check for
+  // updates?). `wizard_*` из файла не приходят (нет в allowlist).
+  test('replaceRaw merge=false keeps startup prompt flags', () async {
+    await seedStorage(sampleSnapshot());
+    for (final k in SettingsStorage.startupPromptVarKeys) {
+      await SettingsStorage.setVar(k, '1');
+    }
+    await SettingsStorage.replaceRaw({
+      'vars': {
+        'log_level': 'warn',
+        SettingsStorage.addTilePromptVar: '0',
+        SettingsStorage.notificationPromptVar: '0',
+      },
+    });
+    expect(await SettingsStorage.getVar(SettingsStorage.batteryPromptVar, ''),
+        '1');
+    expect(await SettingsStorage.getVar(SettingsStorage.updateCheckPromptVar, ''),
+        '1');
+    expect(await SettingsStorage.getVar(SettingsStorage.addTilePromptVar, ''),
+        '1', reason: 'wizard_* из файла не импортируется — остаётся флаг устройства');
+    expect(
+        await SettingsStorage.getVar(SettingsStorage.notificationPromptVar, ''),
+        '0',
+        reason: 'ключ из allowlist, который в файле есть, побеждает');
+  });
+
   test('replaceRaw with merge=true preserves untouched keys', () async {
     await seedStorage(sampleSnapshot());
     await SettingsStorage.replaceRaw(
