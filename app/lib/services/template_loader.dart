@@ -5,7 +5,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../config/consts.dart';
 import '../models/parser_config.dart';
 import 'app_log.dart';
-import 'builder/if_engine.dart' show validateIfConstructs;
+import 'builder/if_engine.dart' show TemplateIfError, validateIfConstructs;
 import 'l10n/locale_controller.dart';
 import 'l10n/template_overlay.dart';
 
@@ -120,6 +120,8 @@ void validateTemplateConstructs(
     }
   }
 
+  _validateDnsServerPlaceholders(raw);
+
   final rules = raw['selectable_rules'] as List? ?? const [];
   for (var i = 0; i < rules.length; i++) {
     final r = rules[i];
@@ -137,6 +139,67 @@ void validateTemplateConstructs(
           v, scope, 'selectable_rules[$id].vars[${v['name'] ?? v['ref']}]');
     }
   }
+}
+
+/// §443 (SPEC 129 Н11, D-118) — `@name` в теле шаблонного DNS-сервера
+/// обязан быть объявлен в `vars[]` ЭТОГО сервера.
+///
+/// Сборка подставляет в тело только имена, объявленные сервером
+/// (`resolveTemplateDnsServerBody`): глобальные переменные тела сервера не
+/// видят, и необъявленный плейсхолдер молча выбил бы ключ из тела (у лаунчера
+/// глобальная переменная — расширение desktop, у LxBox его нет). Это ошибка
+/// ШАБЛОНА, а не данных пользователя — отвергается на загрузке.
+///
+/// Проверяются вложенные записи `{description, enabled, vars?, server}`; у
+/// плоской записи объявлений нет, LxBox её сервером не читает. Условия `#if`
+/// / `#enable` в теле — тем же валидатором с областью видимости переменных
+/// сервера.
+void _validateDnsServerPlaceholders(Map<String, dynamic> raw) {
+  final dnsOptions = raw['dns_options'];
+  if (dnsOptions is! Map<String, dynamic>) return;
+  final servers = dnsOptions['servers'] as List? ?? const [];
+  for (var i = 0; i < servers.length; i++) {
+    final entry = servers[i];
+    if (entry is! Map<String, dynamic>) continue;
+    final server = entry['server'];
+    if (server is! Map<String, dynamic>) continue;
+    final tag = server['tag'] as String? ?? '$i';
+    final scope = <String, WizardVar>{
+      for (final v in (entry['vars'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>())
+        if ((v['name'] as String? ?? '').isNotEmpty)
+          v['name'] as String: WizardVar.fromJson(v),
+    };
+    final path = 'dns_options.servers[$tag].server';
+    validateIfConstructs(server, scope, path: path);
+    for (final name in _placeholderNames(server)) {
+      if (!scope.containsKey(name)) {
+        throw TemplateIfError('$path: `@$name` is not declared in the vars of '
+            'DNS server "$tag" (SPEC 129 Н11)');
+      }
+    }
+  }
+}
+
+/// Имена `@name` в значениях JSON-дерева [node] — строка целиком `@name`, как
+/// её читает подстановка (`walk`); ключи объекта не плейсхолдеры.
+Set<String> _placeholderNames(dynamic node, [Set<String>? out]) {
+  final names = out ?? <String>{};
+  if (node is String) {
+    if (node.startsWith('@')) {
+      final name = node.substring(1);
+      if (name.isNotEmpty && !name.contains('@')) names.add(name);
+    }
+  } else if (node is Map) {
+    for (final v in node.values) {
+      _placeholderNames(v, names);
+    }
+  } else if (node is List) {
+    for (final v in node) {
+      _placeholderNames(v, names);
+    }
+  }
+  return names;
 }
 
 /// Область видимости имён внутри пресета: глобальные vars + собственные.
