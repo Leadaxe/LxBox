@@ -208,6 +208,79 @@ void main() {
     });
   });
 
+  group('Л5: vars у DNS-записи не того вида', () {
+    test('user и preset — backup_unknown_field, ключ не применяется; у template — поле',
+        () {
+      final f = decodeLxBackup(
+        _file({
+          'sources': [
+            {
+              'kind': 'server',
+              'id': 'srv-1',
+              'tag': 'home-ts',
+              'enabled': true,
+              'body': {'type': 'socks', 'server': '192.0.2.1', 'server_port': 1080},
+              'sections': {
+                'dns': {
+                  'servers': [
+                    {
+                      'kind': 'user',
+                      'tag': 'ts-dns',
+                      'enabled': true,
+                      'body': {'type': 'udp', 'server': '100.100.100.100'},
+                      'vars': {'outbound': 'vpn-1'},
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+          'dns': {
+            'servers': [
+              {
+                'kind': 'user',
+                'tag': 'my-doh',
+                'enabled': true,
+                'body': {'type': 'https', 'server': '1.1.1.1'},
+                'vars': {'outbound': 'vpn-1'},
+              },
+              {
+                'kind': 'preset',
+                'ref': 'ru-direct:dns_ru',
+                'enabled': true,
+                'vars': {'dns_ip': '77.88.8.1'},
+              },
+              {
+                'kind': 'template',
+                'tag': 'google_udp',
+                'enabled': true,
+                'vars': {'dns_ip': '8.8.4.4'},
+              },
+            ],
+          },
+        }),
+        recordVars: _decls,
+      );
+      expect(
+        [
+          for (final w in f.warnings)
+            if (w.code == kWarnUnknownField) w.detail,
+        ],
+        [
+          'dns.servers[#2].vars',
+          'dns.servers[my-doh].vars',
+          'sources[home-ts].sections.dns.servers[ts-dns].vars',
+        ],
+      );
+      final servers = f.dns!.servers;
+      expect(servers, hasLength(3));
+      expect((servers[0] as DnsServerInline).body,
+          {'type': 'https', 'server': '1.1.1.1'});
+      expect(servers[1], isA<DnsServerPreset>());
+      expect(_varsOf(servers[2]), {'dns_ip': '8.8.4.4'});
+    });
+  });
+
   group('Н8: корневые dns_<tag>_<var>', () {
     LxBackupFile decode(Map<String, dynamic> body, {int version = 2}) =>
         decodeLxBackup(_file(body, version: version), recordVars: _decls);

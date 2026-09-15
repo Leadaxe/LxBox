@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
+import 'package:lxbox/services/direction_mutations.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
 import '../storage_migration/golden_harness.dart';
@@ -190,6 +192,54 @@ void main() {
       final vars = await SettingsStorage.getAllVars();
       expect(vars['dns_final'], 'my-doh');
       expect(vars['dns_default_domain_resolver'], 'google_dot');
+    });
+
+    // SPEC 128 §6 (D-114): переменная типа `outbound` template-сервера —
+    // одиночная цель по имени, как цель правила. Удаление Направления лечит
+    // её в хранении, и сервер не выпадает на сборке.
+    test('rich_v0: удаление vpn-3 — vars.outbound google_dot → vpn-1, как у правила; сервер в конфиге',
+        () async {
+      final box = await StorageSandbox.create();
+      addTearDown(box.dispose);
+      await box.seed('rich_v0');
+
+      await SettingsStorage.saveDnsServers([
+        for (final s in await SettingsStorage.getDnsServers())
+          if (s is DnsServerTemplate && s.tag == 'google_dot')
+            s.copyWith(varValues: {'outbound': 'vpn-3'})
+          else
+            s,
+      ]);
+      await SettingsStorage.saveCustomRules([
+        CustomRuleInline(
+            name: 'to-vpn-3', domains: const ['x.example'], outbound: 'vpn-3'),
+        ...await SettingsStorage.getCustomRules(),
+      ]);
+
+      final healed = await DirectionMutations.delete('vpn-3', null);
+
+      expect(healed.dnsServers, 1);
+      expect(healed.rules, greaterThanOrEqualTo(1));
+      final rule = (await SettingsStorage.getCustomRules())
+          .firstWhere((r) => r.name == 'to-vpn-3');
+      expect(rule.outbound, 'vpn-1');
+      final dot = (await SettingsStorage.getDnsServers())
+          .whereType<DnsServerTemplate>()
+          .firstWhere((s) => s.tag == 'google_dot');
+      expect(dot.varValues, isEmpty,
+          reason: 'vpn-1 — умолчание шаблона: ключ снят (Н4)');
+      expect(DirectionMutations.healMessageParts(healed),
+          contains('1 DNS server(s) switched to vpn-1'));
+
+      final build = await buildGoldenConfig(box);
+      final dns = build.config['dns'] as Map<String, dynamic>;
+      final byTag = {
+        for (final s in (dns['servers'] as List).cast<Map<String, dynamic>>())
+          s['tag']: s,
+      };
+      expect(byTag['google_dot']?['detour'], 'vpn-1');
+      expect(build.warnings.where((w) => w.contains('"google_dot" dropped')),
+          isEmpty);
     });
 
     // Снимок AVD: ключи узлов той же формы, что у настоящих, — конфиг

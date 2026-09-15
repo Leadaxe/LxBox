@@ -196,6 +196,111 @@ void main() {
     });
   });
 
+  group('SPEC 128 §6: цели по имени в переменных типа outbound', () {
+    // google_dot — умолчание `vpn-1`; пресет `russian` объявляет цель под
+    // именем `out`; `dns_ip`/`mode` — не цели, даже если значение совпало.
+    final decls = RecordVarDecls.fromJson({
+      'dns_options': {
+        'servers': [
+          {
+            'vars': [
+              {'name': 'outbound', 'type': 'outbound', 'default_value': 'vpn-1'},
+              {'name': 'dns_ip', 'type': 'enum', 'default_value': '8.8.8.8'},
+            ],
+            'server': {'type': 'tls', 'tag': 'google_dot'},
+          },
+          {
+            'vars': [
+              {'name': 'outbound', 'type': 'outbound', 'default_value': 'direct-out'},
+            ],
+            'server': {'type': 'udp', 'tag': 'google_udp'},
+          },
+        ],
+      },
+      'selectable_rules': [
+        {
+          'preset_id': 'russian',
+          'vars': [
+            {'name': 'out', 'type': 'outbound', 'default_value': 'direct-out'},
+            {'name': 'mode', 'type': 'enum', 'default_value': 'a'},
+          ],
+        },
+      ],
+    });
+
+    test('переименование vpn-3 → vpn-9 переписывает vars сервера и пресета', () {
+      final retarget = directionRefRetarget('vpn-3', 'vpn-9', rename: true);
+      expect(retarget, {'vpn-3': 'vpn-9', 'vpn-3-auto': 'vpn-9-auto'});
+
+      const dot = DnsServerTemplate(enabled: true, tag: 'google_dot', varValues: {
+        'outbound': 'vpn-3',
+        'dns_ip': 'vpn-3',
+      });
+      expect(
+        (retargetDnsServerOutboundVars(dot, decls, retarget)
+                as DnsServerTemplate)
+            .varValues,
+        {'outbound': 'vpn-9', 'dns_ip': 'vpn-3'},
+        reason: 'enum-переменная — не цель',
+      );
+
+      final preset = CustomRulePreset(name: 'RU', presetId: 'russian', varsValues: const {
+        'out': 'vpn-3-auto',
+        'outbound': 'vpn-3',
+        'mode': 'vpn-3',
+      });
+      expect(
+        retargetPresetOutboundVars(preset, decls, retarget).varsValues,
+        {'out': 'vpn-9-auto', 'outbound': 'vpn-9', 'mode': 'vpn-3'},
+      );
+    });
+
+    test('удаление: vpn-1, равное умолчанию, снимает ключ (Н4); иначе остаётся',
+        () {
+      final retarget = directionRefRetarget('vpn-3', 'vpn-1');
+      expect(retarget, {'vpn-3': 'vpn-1', 'vpn-3-auto': 'vpn-1'});
+      const dot = DnsServerTemplate(
+          enabled: true, tag: 'google_dot', varValues: {'outbound': 'vpn-3-auto'});
+      const udp = DnsServerTemplate(
+          enabled: true, tag: 'google_udp', varValues: {'outbound': 'vpn-3'});
+      expect(
+          (retargetDnsServerOutboundVars(dot, decls, retarget)
+                  as DnsServerTemplate)
+              .varValues,
+          isEmpty);
+      expect(
+          (retargetDnsServerOutboundVars(udp, decls, retarget)
+                  as DnsServerTemplate)
+              .varValues,
+          {'outbound': 'vpn-1'});
+    });
+
+    test('объявления нет — ключ outbound по имени; не совпало — тот же экземпляр',
+        () {
+      final retarget = directionRefRetarget('vpn-3', 'vpn-9', rename: true);
+      const foreign = DnsServerTemplate(
+          enabled: true, tag: 'my_tpl', varValues: {'outbound': 'vpn-3', 'x': 'vpn-3'});
+      expect(
+          (retargetDnsServerOutboundVars(foreign, RecordVarDecls.none, retarget)
+                  as DnsServerTemplate)
+              .varValues,
+          {'outbound': 'vpn-9', 'x': 'vpn-3'});
+      final unknownPreset = CustomRulePreset(name: 'Ghost',
+          presetId: 'ghost', varsValues: const {'outbound': 'vpn-3', 'out': 'vpn-3'});
+      expect(
+          retargetPresetOutboundVars(unknownPreset, decls, retarget).varsValues,
+          {'outbound': 'vpn-9', 'out': 'vpn-3'});
+
+      const other = DnsServerTemplate(
+          enabled: true, tag: 'google_dot', varValues: {'outbound': 'vpn-2'});
+      expect(identical(retargetDnsServerOutboundVars(other, decls, retarget), other),
+          isTrue);
+      final inline = CustomRuleInline(name: 'r', outbound: 'vpn-3');
+      expect(identical(retargetPresetOutboundVars(inline, decls, retarget), inline),
+          isTrue);
+    });
+  });
+
   group('условие приёмки L8: конфиг не меняется', () {
     // Каждый пресет шаблона приложения: правило со ВСЕМИ объявленными
     // переменными, выставленными в умолчание (и универсальной целью, равной
