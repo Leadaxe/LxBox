@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
@@ -23,6 +25,17 @@ import 'package:lxbox/services/tag_resolver.dart';
 // выбирает: импорт опознаёт его сам, дальше одно слияние на оба.
 
 const _contractRoot = 'contract';
+
+/// Кейсы, которые сторона пока не проходит по известной причине: имя кейса →
+/// причина пропуска. Ожидание кейса не подгоняется — запись снимается вместе
+/// с работой, которая его закрывает.
+const Map<String, String> _pendingCases = {
+  // Ссылка на узел подписки без узлов (`{folder_id: <подписка>, tag: US-1}`)
+  // и висячая ссылка (`folder_id` без контейнера) моделью, которая держит
+  // финальный тег строкой, не выражаются (§439 §6.4, NODE_LINK.md).
+  'v10_node_links': 'до трека N1: модели держат ссылку на узел финальным '
+      'тегом строкой, NodeLink {folder_id, tag} в моделях — трек N1',
+};
 
 
 void main() {
@@ -46,7 +59,7 @@ void main() {
   group('contract corpus: LX Backup', () {
     for (final base in cases) {
       final name = base.substring(root.path.length + 1);
-      test(name, () {
+      test(name, skip: _pendingCases[name], () {
         final raw = File('$base.backup.json').readAsStringSync();
         // Кейс формата новее ЧИТАЕМОГО (`lx_backup` выше
         // kLxBackupVersion) сторона ПРОПУСКАЕТ по маркеру, как чужой
@@ -107,6 +120,7 @@ void main() {
 
         _checkDirections(file, expected);
         _checkChains(state, expected);
+        _checkDetours(state, expected);
 
         // §393 B12 — отметки выключенных узлов (§4 BACKUP.md). Паритет с
         // Go-раннером (`corpus_test.go:checkDisabledHashes`): ожидание —
@@ -171,8 +185,8 @@ class _State {
   List<ServerList> lists = [];
   List<SourceChain> chains = [];
   List<CustomRule> rules = [];
-  List<Map<String, dynamic>> dnsServers = [];
-  List<Map<String, dynamic>> dnsRules = [];
+  List<DnsServerRef> dnsServers = [];
+  List<DnsRuleRef> dnsRules = [];
   String dnsFinal = '';
   String dnsStrategy = '';
   String dnsResolver = '';
@@ -190,6 +204,7 @@ class _State {
       folders: file.folders,
       sourceIds: subs.ids,
       addedSources: subs.added,
+      sourceDetours: subs.detours,
     );
     lists = servers.lists;
     chains = [
@@ -292,6 +307,15 @@ void _checkRules(_State state, Map<String, dynamic> expected) {
     if (wantOutbound is String && wantOutbound.isNotEmpty) {
       expect(_outboundView(got), wantOutbound,
           reason: 'цель правила ${want['name']}');
+    }
+    // D-111 — тело правила deep-equal: у json-правила — его текст, у
+    // остальных — `body` записи хранения.
+    if (want.containsKey('body')) {
+      final gotBody = got is CustomRuleJson
+          ? jsonDecode(got.json)
+          : ruleToRecord(got)['body'];
+      expect(gotBody, _deepEqualsJson(want['body']),
+          reason: 'тело правила ${want['name']}');
     }
     // §438 — переменные ЭТОГО правила (preset), не глобальные `vars`.
     final wantVars = want['vars'];
@@ -404,9 +428,9 @@ void _checkChains(_State state, Map<String, dynamic> expected) {
     if (wantHops != null) {
       final resolved = [for (final h in got.hops) _resolveHop(h, state.lists)];
       expect(
-        [for (final r in resolved) '${r.folder ?? '<nowhere>'}/${r.tag}'],
-        [for (final w in wantHops) '${w['folder']}/${w['tag']}'],
-        reason: '$tag: позиции как ссылки (папка/тег)',
+        [for (final r in resolved) r.view],
+        [for (final w in wantHops) _wantLinkView(w)],
+        reason: '$tag: позиции как ссылки (контейнер/тег)',
       );
       canon['hops'] = [for (final r in resolved) r.tag];
     }
@@ -415,22 +439,68 @@ void _checkChains(_State state, Map<String, dynamic> expected) {
   }
 }
 
-/// В какой узел состояния попадает позиция цепочки: корневой узел (папка
-/// `''`) или член папки (сырой тег + имя папки). Не нашлось — папка `null`.
-({String tag, String? folder}) _resolveHop(String hop, List<ServerList> lists) {
+/// В какой узел состояния попадает ссылка модели (тег конфига): член папки
+/// (`folder:<имя>/<сырой тег>`), узел подписки
+/// (`subscription:<url>/<сырой тег>`), иначе корневая ссылка (`/<тег>`):
+/// корневой узел, Направление,
+/// цепочка, служебный тег или тег, которого нет.
+({String tag, String view}) _resolveHop(String hop, List<ServerList> lists) {
   for (final l in lists) {
-    if (l is UserServer && l.name == hop) return (tag: hop, folder: '');
-  }
-  for (final l in lists) {
-    if (l is! FolderServers) continue;
-    for (final m in l.members) {
-      final bare = m.node?.tag;
-      if (bare != null && TagResolver.displayTag(l.tagPrefix, bare) == hop) {
-        return (tag: bare, folder: l.name);
-      }
+    switch (l) {
+      case FolderServers():
+        for (final m in l.members) {
+          final bare = m.node?.tag;
+          if (bare != null && TagResolver.displayTag(l.tagPrefix, bare) == hop) {
+            return (tag: bare, view: 'folder:${l.name}/$bare');
+          }
+        }
+      case SubscriptionServers():
+        for (final n in l.nodes) {
+          if (TagResolver.displayTag(l.tagPrefix, n.tag) == hop) {
+            return (tag: n.tag, view: 'subscription:${l.url}/${n.tag}');
+          }
+        }
+      case UserServer():
+        break;
     }
   }
-  return (tag: hop, folder: null);
+  return (tag: hop, view: '/$hop');
+}
+
+/// Ссылка ожидания (`README.md` корпуса, «Ссылка в ожиданиях») в той же
+/// строковой форме, что [_resolveHop]. `folder: ""` — корневая ссылка
+/// (запись ожиданий до NodeLink).
+String _wantLinkView(Map<String, dynamic> w) {
+  final tag = w['tag'];
+  final folder = w['folder'];
+  if (folder is String && folder.isNotEmpty) return 'folder:$folder/$tag';
+  final subscription = w['subscription'];
+  if (subscription is String) return 'subscription:$subscription/$tag';
+  final folderId = w['folder_id'];
+  if (folderId is String) return 'folder_id:$folderId/$tag';
+  return '/$tag';
+}
+
+/// `detours` — личный detour узлов: тег носителя (корневой узел — его тег,
+/// член папки — сырой тег) → ссылка. Карта исчерпывающая: detour у узла,
+/// которого в ожиданиях нет, — расхождение.
+void _checkDetours(_State state, Map<String, dynamic> expected) {
+  final want = (expected['detours'] as Map?)?.cast<String, dynamic>();
+  if (want == null) return;
+  final got = <String, String>{
+    for (final l in state.lists)
+      if (l is UserServer && l.detourPolicy.overrideDetour.isNotEmpty)
+        l.name: _resolveHop(l.detourPolicy.overrideDetour, state.lists).view,
+    for (final l in state.lists)
+      if (l is FolderServers)
+        for (final m in l.members)
+          if (m.detour.isNotEmpty && m.node != null)
+            m.node!.tag: _resolveHop(m.detour, state.lists).view,
+  };
+  expect(got, {
+    for (final e in want.entries)
+      e.key: _wantLinkView((e.value as Map).cast<String, dynamic>()),
+  }, reason: 'detour узлов: носители и ссылки');
 }
 
 /// §401 / контракт 0.12 — ПАПКА: ожидание — карта {имя папки → теги членов}
@@ -526,13 +596,13 @@ void _checkDns(_State state, Map<String, dynamic> expected) {
   expect(state.dnsServers, hasLength(wantServers.length),
       reason: 'число DNS-серверов');
   for (var i = 0; i < wantServers.length; i++) {
-    final got = state.dnsServers[i];
+    // Запись хранения — та же форма, что запись файла: `user`/`preset`/
+    // `template`, тег или `ref`, тело без `tag`.
+    final got = dnsServerToRecord(state.dnsServers[i]);
     final w = wantServers[i];
-    final kind = got['kind'] == 'inline' ? 'user' : '${got['kind']}';
-    final isPreset = kind == 'preset';
-    expect(kind, w['kind'], reason: 'DNS-сервер #$i: вид');
-    expect(isPreset ? '' : got['tag'], w['tag'] ?? '', reason: 'DNS-сервер #$i: тег');
-    expect(isPreset ? got['tag'] : '', w['ref'] ?? '', reason: 'DNS-сервер #$i: ссылка');
+    expect(got['kind'], w['kind'], reason: 'DNS-сервер #$i: вид');
+    expect(got['tag'] ?? '', w['tag'] ?? '', reason: 'DNS-сервер #$i: тег');
+    expect(got['ref'] ?? '', w['ref'] ?? '', reason: 'DNS-сервер #$i: ссылка');
     if (w['enabled'] is bool) {
       expect(got['enabled'], w['enabled'], reason: 'DNS-сервер #$i: enabled');
     }
