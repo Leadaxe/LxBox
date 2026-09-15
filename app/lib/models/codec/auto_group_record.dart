@@ -9,21 +9,25 @@
 ///     "members": [ { "folder_id": "<id папки>", "tag": "de-1" } ],
 ///     "strategy": { "mode": "least_test", "url": "…", "interval": "15m",
 ///                   "tolerance": 50, "idle_timeout": "30m",
-///                   "interrupt_exist_connections": false } },
-///   "members_rule": { "include": "^DE", "exclude": "" },
-///   "pool_badge": "…" }
+///                   "interrupt_exist_connections": false },
+///     "members_rule": { "include": "^DE", "exclude": "" },
+///     "pool_badge": "…" } }
 /// ```
 ///
 /// К — `kind`, `tag`, `enabled`, `group{group_type, members, strategy}`.
-/// L — `members_rule` (членство правилом: регулярки не ссылки, NODE_LINK
-/// §9.1) и `pool_badge` (значки строки списка, в конфиг не уходят). У
-/// группы-правила `members` нет: состав считает сборка.
+/// Поля стороны LxBox внутри `group` (контракт 1.0.1, BACKUP.md §2 «Поля
+/// стороны LxBox»): `members_rule` (членство правилом: регулярки не ссылки,
+/// NODE_LINK §9.1) и `pool_badge` (значки строки списка, в конфиг не уходят).
+/// У группы-правила `members` нет: состав считает сборка.
 ///
 /// Писатель: `group_type` всегда `urltest`, члены — только парами (NODE_LINK
 /// §2 п. 1). Читатель терпим (решение 15.09): член `{tag}` → пара с `id` своей
 /// папки (S1); `default` строкой → пара, если член с этим тегом ровно один
 /// (S2); у urltest-группы LxBox `default` нет, он называется потерей;
-/// `selector` читается urltest'ом с предупреждением.
+/// `selector` читается urltest'ом с предупреждением. `members_rule` и
+/// `pool_badge` уровня узла — форма dev-сборок до контракта 1.0.1 — читаются
+/// молча; `group` сильнее. Непустой `members[]` сильнее `members_rule`: по
+/// схеме группа-правило явного состава не несёт.
 library;
 
 import 'package:collection/collection.dart';
@@ -45,11 +49,14 @@ const String _kGroupSelector = 'selector';
 /// Тег записи без тега (так же называл безымянную группу прежний разбор).
 const String _kUntaggedAuto = 'Auto';
 
+/// `members_rule` и `pool_badge` на уровне узла — dev-форма до 1.0.1.
 const Set<String> _autoKeys = {
   'kind', 'tag', 'enabled', 'group', 'members_rule', 'pool_badge',
 };
 
-const Set<String> _groupKeys = {'group_type', 'default', 'members', 'strategy'};
+const Set<String> _groupKeys = {
+  'group_type', 'default', 'members', 'strategy', 'members_rule', 'pool_badge',
+};
 
 const Set<String> _ruleKeys = {'include', 'exclude'};
 
@@ -83,14 +90,14 @@ Map<String, dynamic> autoGroupMemberToRecord(
                 l.isRoot ? NodeLink(folderId: folderId, tag: l.tag) : l),
         ],
       'strategy': autoSelectParamsToStrategy(group.params),
+      // Поля стороны LxBox (контракт 1.0.1).
+      if (membership is RuleMembers)
+        'members_rule': {
+          'include': membership.include,
+          'exclude': membership.exclude,
+        },
+      if (group.poolBadge != kDefaultPoolBadge) 'pool_badge': group.poolBadge,
     },
-    // L — настройки LxBox.
-    if (membership is RuleMembers)
-      'members_rule': {
-        'include': membership.include,
-        'exclude': membership.exclude,
-      },
-    if (group.poolBadge != kDefaultPoolBadge) 'pool_badge': group.poolBadge,
   };
 }
 
@@ -187,18 +194,21 @@ AutoGroupRead autoGroupMemberFromRecord(
         'the group is urltest');
   }
 
-  final rule = j['members_rule'];
+  // Поле стороны LxBox — в `group`; уровень узла — dev-форма до 1.0.1.
+  final inGroup = group.containsKey('members_rule');
+  final rule = inGroup ? group['members_rule'] : j['members_rule'];
   final AutoSelectMembership membership;
-  if (rule is Map) {
-    _collectUnknown(rule, _ruleKeys, '${path}members_rule.', unknown);
+  if (rule is Map && links.isEmpty) {
+    _collectUnknown(rule, _ruleKeys,
+        '$path${inGroup ? 'group.' : ''}members_rule.', unknown);
     membership = RuleMembers(
       include: rule['include'] is String ? rule['include'] as String : '',
       exclude: rule['exclude'] is String ? rule['exclude'] as String : '',
     );
-    if (links.isNotEmpty) {
-      notes?.add('$where: members_rule wins, group.members ignored');
-    }
   } else {
+    if (rule is Map) {
+      notes?.add('$where: group.members wins, members_rule ignored');
+    }
     membership = ExplicitMembers(links);
   }
 
@@ -206,7 +216,8 @@ AutoGroupRead autoGroupMemberFromRecord(
   if (strategy is Map) {
     _collectUnknown(strategy, _strategyKeys, '${path}group.strategy.', unknown);
   }
-  final badge = j['pool_badge'];
+  final badge =
+      group.containsKey('pool_badge') ? group['pool_badge'] : j['pool_badge'];
   final enabled = j['enabled'];
 
   return (

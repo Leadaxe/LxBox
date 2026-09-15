@@ -2941,7 +2941,11 @@ const Set<String> _group10Keys = {
   'default',
   'members',
   'strategy',
+  // Поля стороны LxBox (контракт 1.0.1).
+  'members_rule',
+  'pool_badge',
 };
+const Set<String> _membersRule10Keys = {'include', 'exclude'};
 const Set<String> _fold10Keys = {'mode', 'auto'};
 const Set<String> _sections10Keys = {'rules', 'dns'};
 const Set<String> _sectionsDns10Keys = {'servers', 'rules'};
@@ -3029,6 +3033,7 @@ List<LxBackupWarning> _scanUnknown10(Map<String, dynamic> root) {
       sc.array(
           group, '$where.group.members', 'members', _link10Keys, 'tag', null);
       sc.nestedAt(group, '$where.group', 'strategy', _directionAutoKeys);
+      sc.nestedAt(group, '$where.group', 'members_rule', _membersRule10Keys);
     }
     final fold = _obj(item['fold']);
     if (fold != null) {
