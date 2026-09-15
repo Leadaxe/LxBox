@@ -350,6 +350,24 @@ const String _dnsServerRecordSample =
 const String _dnsRuleRecordSample =
     '{"kind":"user","name":"corp","enabled":true,"body":{"domain_suffix":[".corp"],"server":"my-dns"}}';
 
+/// §439 §3.4 — ключ формы 2.23.2 в записи 1.0 → 400. Кодек записей незнакомые
+/// ключи пропускает, и template-сервер с `varValues` лёг бы без значений
+/// переменных при ответе 200, а preset-правило с `presetId` получило бы 400 без
+/// названия поля.
+void _rejectLegacyDnsKeys(
+  Map<dynamic, dynamic> record,
+  List<String> legacyKeys,
+  String sample,
+  String kinds,
+) {
+  for (final key in legacyKeys) {
+    if (record.containsKey(key)) {
+      throw BadRequest('"$key" is the 2.23.2 storage form; expected a record '
+          'like $sample ($kinds)');
+    }
+  }
+}
+
 /// §439 §3.4 — `{"servers": [<запись dns.servers[] 1.0>]}`: `kind`
 /// `user|preset|template`, тег сервера — поле записи, у `preset` — `ref`
 /// `<preset_id>:<tag>`. Каждая запись читается кодеком записей хранения;
@@ -369,6 +387,9 @@ Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
     if (s is! Map) {
       throw const BadRequest('each servers[i] must be an object');
     }
+    // `vars` записи 1.0 — `varValues` формы 2.23.2.
+    _rejectLegacyDnsKeys(s, const ['varValues'], _dnsServerRecordSample,
+        'kind user|preset|template');
     final read = dnsServerFromRecord(s.cast<String, dynamic>());
     final server = read.value;
     if (server == null) {
@@ -401,6 +422,9 @@ Future<DebugResponse> _putDnsRules(DebugRequest req, DebugContext ctx) async {
     if (r is! Map) {
       throw const BadRequest('each rules[i] must be an object');
     }
+    // `ref` записи 1.0 — `presetId` формы 2.23.2.
+    _rejectLegacyDnsKeys(r, const ['presetId'], _dnsRuleRecordSample,
+        'kind user|preset|srs|template');
     final read = dnsRuleFromRecord(r.cast<String, dynamic>());
     final rule = read.value;
     if (rule == null) {
