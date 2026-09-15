@@ -74,9 +74,14 @@ void main() {
     }
   });
 
-  Matcher badRequestWith(String fragment) => throwsA(isA<BadRequest>()
-      .having((e) => e.message, 'message', contains(fragment))
-      .having((e) => e.message, 'message', contains('"kind":"user"')));
+  /// 400 с образцом записи 1.0 в тексте; [field] — поле формы 2.23.2, которое
+  /// ответ обязан назвать (у снимка без `kind` поля назвать нечем).
+  Matcher badRequestWith(String? field) {
+    var m = isA<BadRequest>()
+        .having((e) => e.message, 'message', contains('"kind":"user"'));
+    if (field != null) m = m.having((e) => e.message, 'message', contains(field));
+    return throwsA(m);
+  }
 
   group('PUT /settings/dns_options/servers', () {
     test('записи всех видов 1.0 принимаются и ложатся в dns.servers', () async {
@@ -106,7 +111,7 @@ void main() {
       expect((await fileDns())['servers'], records);
     });
 
-    for (final (name, record, fragment) in [
+    for (final (name, record, String? field) in [
       (
         'kind-ref inline',
         {
@@ -115,12 +120,12 @@ void main() {
           'tag': 'x',
           'body': {'type': 'udp', 'server': '1.1.1.1'},
         },
-        'kind "inline"',
+        'inline',
       ),
       (
         'снимок сервера без kind (форма до §043)',
         {'tag': 'x', 'type': 'udp', 'server': '1.1.1.1'},
-        'without "kind"',
+        null,
       ),
       (
         'template с varValues',
@@ -153,7 +158,7 @@ void main() {
                 ],
               }),
               ctx()),
-          badRequestWith(fragment),
+          badRequestWith(field),
         );
         expect(await fileDns(), before);
         expect((await SettingsStorage.getDnsServers()).map((s) => s.tag),
@@ -189,7 +194,7 @@ void main() {
       expect((await fileDns())['rules'], records);
     });
 
-    for (final (name, Object body, fragment) in [
+    for (final (name, Object body, String? field) in [
       (
         'kind-ref inline',
         {
@@ -201,7 +206,7 @@ void main() {
             },
           ],
         },
-        'kind "inline"',
+        'inline',
       ),
       (
         'preset с presetId',
@@ -226,7 +231,7 @@ void main() {
         final before = await fileDns();
         await expectLater(
           settingsHandler(put('/settings/dns_options/rules', body), ctx()),
-          badRequestWith(fragment),
+          badRequestWith(field),
         );
         expect(await fileDns(), before);
       });
