@@ -76,7 +76,10 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     // DNS-экран.
     // Неразмеченные правила ловим ДО нормализации: `markRuleOrder` мутирует
     // `orderNum` на месте, после неё разницы «было/стало» уже не видно.
-    final needsMarking = stripped.any((r) => r.orderNum == null);
+    // D-117 — сдвинутая голова тоже: её номер меняется, а порядок может и
+    // не поменяться.
+    final needsMarking = stripped.any((r) => r.orderNum == null) ||
+        requiredRuleNumsShifted(stripped, template.selectableRules);
     final normalized =
         normalizeRuleOrder(stripped, template.selectableRules, template);
     final orderChanged =
