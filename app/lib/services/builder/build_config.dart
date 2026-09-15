@@ -572,6 +572,14 @@ Future<BuildResult> buildConfig({
   applyTlsFragment(config, vars);
   applyMixedCaseSni(config, vars);
 
+  // §419 / §441 — умолчания шаблона резолверов DNS: замены битых ссылок
+  // (сервер пресета ушёл — [healDanglingDnsResolvers]; сервер выпал из-за
+  // висячего detour — [healDetourDroppedDnsRefs] внутри applyCustomDns).
+  final resolverDefaults = <String, String>{
+    for (final name in const ['dns_final', 'dns_default_domain_resolver'])
+      name: byName[name]?.defaultValue ?? '',
+  };
+
   await applyCustomDns(
     config,
     template.dnsOptions,
@@ -584,6 +592,7 @@ Future<BuildResult> buildConfig({
     warningsOut: emitWarnings, // §312 — дропы членов DNS-групп
     nodeServers: injected.dnsServers, // §435 — DNS-записи узлов в конец
     nodeRules: injected.dnsRules,
+    resolverDefaults: resolverDefaults, // §441 — Н10
   );
 
   // §119/§120: VPN-mode (tun-in/mixed-in/route-rules) теперь декларативен —
@@ -626,10 +635,7 @@ Future<BuildResult> buildConfig({
   // экрана DNS Settings: плашка «Settings changed» висела вечно.
   final healedResolvers = healDanglingDnsResolvers(
     config,
-    defaults: {
-      for (final name in const ['dns_final', 'dns_default_domain_resolver'])
-        name: byName[name]?.defaultValue ?? '',
-    },
+    defaults: resolverDefaults,
   );
   for (final h in healedResolvers) {
     generatedVars[h.varName] = h.to;

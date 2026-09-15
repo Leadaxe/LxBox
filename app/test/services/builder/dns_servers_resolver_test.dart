@@ -341,7 +341,12 @@ void main() {
       expect(out.first['server'], '8.8.4.4');
     });
 
-    test('detour на исчезнувшее Направление → ключ не пишется (решение №2)', () {
+    // §441 (SPEC 128 Н10) — вторая линия fail-closed: снятый ключ пускал
+    // запросы сервера напрямую, мимо выбранного Направления.
+    test('detour на исчезнувшее Направление → сервер не эмитится, warning',
+        () {
+      final warnings = <String>[];
+      final dropped = <String>{};
       final out = resolveDnsServersBodies(
         resolved: [
           const DnsServerTemplate(
@@ -353,11 +358,16 @@ void main() {
         templateByTag: {'google_udp': tplGoogleUdp()},
         presetServersByTag: {},
         knownOutboundTags: {'direct-out', 'vpn-1'}, // vpn-3 выключен
+        warningsOut: warnings,
+        detourDroppedOut: dropped,
       );
-      expect(out.first.containsKey('detour'), false);
+      expect(out, isEmpty);
+      expect(dropped, {'google_udp'});
+      expect(warnings.single, contains('"vpn-3"'));
     });
 
-    test('inline body с dangling detour тоже чистится', () {
+    test('inline body с dangling detour — тоже не эмитится', () {
+      final dropped = <String>{};
       final out = resolveDnsServersBodies(
         resolved: [
           const DnsServerInline(
@@ -374,8 +384,10 @@ void main() {
         templateByTag: {},
         presetServersByTag: {},
         knownOutboundTags: {'direct-out', 'vpn-1'},
+        detourDroppedOut: dropped,
       );
-      expect(out.first.containsKey('detour'), false);
+      expect(out, isEmpty);
+      expect(dropped, {'my-dns'});
     });
 
     test('обёртка без vars (local) резолвится', () {

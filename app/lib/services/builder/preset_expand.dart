@@ -606,15 +606,18 @@ BundleMerge mergeFragments(List<PresetFragments> all) {
   );
 }
 
-/// §117: нормализация `detour` у DNS-сервера. Удаляет ключ когда:
-/// - `direct-out` / пустая строка — direct не требует detour (решение №2:
-///   «нет detour» = и дефолт, и fallback);
-/// - Направление отсутствует в [knownOutbounds] (выбранное Направление исчезло из конфига,
-///   вкл. неотрезолвленный `@placeholder`) — отсутствие ключа вместо
-///   dangling-ссылки.
+/// §117: нормализация `detour` у DNS-сервера. Удаляет ключ когда
+/// `direct-out` / пустая строка — direct не требует detour (решение №2:
+/// «нет detour» = и дефолт, и fallback).
+///
+/// §441 (SPEC 128 Н10) — `detour` на тег, которого нет в [knownOutbounds]
+/// (Направление исчезло из конфига, неотрезолвленный `@placeholder`),
+/// ключ НЕ снимает: снятый ключ молча пускал запросы сервера напрямую, мимо
+/// выбранного маршрута. Возвращает этот тег — сервер выбрасывает вызывающий
+/// ([resolveDnsServersBodies]). `null` — висячей ссылки нет.
 ///
 /// Не-String detour не трогаем — невалидную форму поймает sing-box check.
-void normalizeDnsDetour(
+String? normalizeDnsDetour(
   Map<String, dynamic> server, {
   Set<String>? knownOutbounds,
 }) {
@@ -627,21 +630,24 @@ void normalizeDnsDetour(
   // оставался бы битым до ручного захода в редактор.
   if (server['type'] == 'group') {
     server.remove('detour');
-    return;
+    return null;
   }
   // §435 — у DNS-сервера `tailscale` транспорт задаёт `endpoint` (узел
   // tailnet), поля `detour` у типа нет: лишний ключ роняет ядро на старте.
   if (server['type'] == 'tailscale') {
     server.remove('detour');
-    return;
+    return null;
   }
   final detour = server['detour'];
-  if (detour is! String) return;
-  if (detour.isEmpty ||
-      detour == kDirectOutboundTag ||
-      (knownOutbounds != null && !knownOutbounds.contains(detour))) {
+  if (detour is! String) return null;
+  if (detour.isEmpty || detour == kDirectOutboundTag) {
     server.remove('detour');
+    return null;
   }
+  if (knownOutbounds != null && !knownOutbounds.contains(detour)) {
+    return detour;
+  }
+  return null;
 }
 
 /// Рекурсивная подстановка `@var` + `#if` в JSON-фрагменте пресета.

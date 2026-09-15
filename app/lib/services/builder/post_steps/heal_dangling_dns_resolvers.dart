@@ -30,27 +30,12 @@ List<({String field, String varName, String from, String to})>
 }) {
   final dns = config['dns'];
   if (dns is! Map<String, dynamic>) return const [];
-  final servers = (dns['servers'] as List<dynamic>? ?? const [])
-      .whereType<Map<String, dynamic>>()
-      .toList();
-  final tags = <String>{
-    for (final s in servers) s['tag'] as String? ?? '',
-  }..remove('');
-  if (tags.isEmpty) return const [];
-  const forbidden = {'fakeip', 'hosts'};
-  final usable = <String>[
-    for (final s in servers)
-      if ((s['tag'] as String? ?? '').isNotEmpty &&
-          !forbidden.contains(s['type']))
-        s['tag'] as String,
-  ];
-  if (usable.isEmpty) return const [];
+  final pool = _DnsResolverPool.of(config);
+  if (pool == null) return const [];
 
   String? replacementFor(String current, String varName) {
-    if (current.isEmpty || tags.contains(current)) return null;
-    final def = defaults[varName] ?? '';
-    if (def.isNotEmpty && usable.contains(def)) return def;
-    return usable.first;
+    if (current.isEmpty || pool.tags.contains(current)) return null;
+    return pool.replacement(defaults[varName] ?? '');
   }
 
   final healed = <({String field, String varName, String from, String to})>[];
@@ -86,4 +71,51 @@ List<({String field, String varName, String from, String to})>
     }
   }
   return healed;
+}
+
+/// §419 — эмитированные DNS-серверы как пул замен для резолвер-ссылок:
+/// [tags] — все теги `dns.servers`, [usable] — пригодные резольверы (не
+/// `fakeip`/`hosts`, §384). Одна политика замены на §419 и §441
+/// ([healDetourDroppedDnsRefs]).
+class _DnsResolverPool {
+  _DnsResolverPool(this.tags, this.usable);
+
+  final Set<String> tags;
+  final List<String> usable;
+
+  /// `null` — серверов или пригодных резольверов нет: заменять нечем.
+  static _DnsResolverPool? of(Map<String, dynamic> config) {
+    final dns = config['dns'];
+    if (dns is! Map<String, dynamic>) return null;
+    final servers = (dns['servers'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+    final tags = <String>{
+      for (final s in servers) s['tag'] as String? ?? '',
+    }..remove('');
+    if (tags.isEmpty) return null;
+    const forbidden = {'fakeip', 'hosts'};
+    final usable = <String>[
+      for (final s in servers)
+        if ((s['tag'] as String? ?? '').isNotEmpty &&
+            !forbidden.contains(s['type']))
+          s['tag'] as String,
+    ];
+    if (usable.isEmpty) return null;
+    return _DnsResolverPool(tags, usable);
+  }
+
+  /// Замена битой ссылки: [preferred] (умолчание шаблона), если он пригоден,
+  /// иначе первый пригодный, кроме [except]. `null` — пригодного нет.
+  String? replacement(String preferred, {String except = ''}) {
+    if (preferred.isNotEmpty &&
+        preferred != except &&
+        usable.contains(preferred)) {
+      return preferred;
+    }
+    for (final t in usable) {
+      if (t != except) return t;
+    }
+    return null;
+  }
 }

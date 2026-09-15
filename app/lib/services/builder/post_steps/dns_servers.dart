@@ -28,9 +28,15 @@ Map<String, Map<String, dynamic>> templateDnsServersByTag(
 /// §117: резолв template-обёртки в sing-box server body.
 ///
 /// Deep-copy `server` + подстановка `@var`-плейсхолдеров: значение юзера из
-/// `varValues` ref-записи (непустое) → иначе `default_value` определения
-/// (пустой → null → ключи с этим `@var` выпадают, семантика §033).
-/// Обёртка без `vars` (local_dns_resolver) — чистая копия `server`.
+/// `varValues` ref-записи (непустое после подрезки, §441 Н3) → иначе
+/// `default_value` определения (пустой → null → ключи с этим `@var`
+/// выпадают, семантика §033). Обёртка без `vars` (local_dns_resolver) —
+/// чистая копия `server`.
+///
+/// §441 (SPEC 128 §4.1) — `@name`, которого сервер не объявил, из записи не
+/// подставляется: глобальный проход сборки `dns_options` не видит, и литерал
+/// `@name` ушёл бы в конфиг. Ключ с таким плейсхолдером выпадает, имя — в
+/// [unknownVarsOut] (сборка называет его warning'ом).
 ///
 /// `detour` здесь НЕ нормализуется — это делает caller
 /// ([resolveDnsServersBodies] / UI), у которого есть контекст знакомых
@@ -38,6 +44,7 @@ Map<String, Map<String, dynamic>> templateDnsServersByTag(
 Map<String, dynamic>? resolveTemplateDnsServerBody(
   Map<String, dynamic> wrapper, {
   Map<String, dynamic> varValues = const {},
+  List<String>? unknownVarsOut,
 }) {
   final server = wrapper['server'];
   if (server is! Map) return null;
@@ -48,7 +55,7 @@ Map<String, dynamic>? resolveTemplateDnsServerBody(
           .whereType<Map<String, dynamic>>()) {
     final name = d['name']?.toString();
     if (name == null || name.isEmpty) continue;
-    final user = varValues[name]?.toString();
+    final user = varValues[name]?.toString().trim();
     if (user != null && user.isNotEmpty) {
       varsMap[name] = user;
     } else {
@@ -56,7 +63,14 @@ Map<String, dynamic>? resolveTemplateDnsServerBody(
       varsMap[name] = def.isEmpty ? null : def;
     }
   }
-  final result = substituteVars(body, varsMap);
+  final result = walk(body, (name) {
+    if (!varsMap.containsKey(name)) {
+      unknownVarsOut?.add(name);
+      return Dropped.instance;
+    }
+    final v = varsMap[name];
+    return v ?? Dropped.instance;
+  });
   return result is Map<String, dynamic> ? result : null;
 }
 
@@ -151,9 +165,13 @@ Future<List<DnsServerRef>> resolveDnsServersList({
 ///   пресетом (tag есть в `presetServersByTag`) ИЛИ активным правилом с
 ///   DNS-опцией (tag в [ruleReferencedTags], задача 3), — **force-include**
 ///   независимо от `enabled` — иначе DNS-правило ссылается в пустоту.
-/// - `detour` нормализуется ([normalizeDnsDetour]): `direct-out` /
-///   отсутствующее в [knownOutboundTags] Направление → ключ не пишется (§117
-///   решение №2). `knownOutboundTags == null` — проверка только на direct-out.
+/// - `detour` нормализуется ([normalizeDnsDetour]): `direct-out` → ключ не
+///   пишется (§117 решение №2). §441 (SPEC 128 Н10, вторая линия
+///   fail-closed) — `detour` на тег, которого нет в [knownOutboundTags],
+///   сервер НЕ эмитит: снятый ключ пустил бы его запросы мимо выбранного
+///   маршрута. Тег — в [detourDroppedOut], warning — в [warningsOut]; ссылки
+///   на него лечит [healDetourDroppedDnsRefs]. `knownOutboundTags == null` —
+///   проверка только на direct-out.
 /// - §312: члены DNS-групп (`type: group`) фильтруются пост-проходом по
 ///   реально эмитированным тегам ([_filterDnsGroupMembers]); каждый дроп —
 ///   warning в [warningsOut]. Storage НЕ трогается: выключенный член при
@@ -172,9 +190,23 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
   // §435 — эмитированные endpoint'ы `tailscale`: цели поля `endpoint`
   // DNS-сервера того же типа. `null` = проверку не делать (вызовы UI).
   Set<String>? tailscaleEndpointTags,
+  // §441 (Н10) — теги серверов, выпавших из-за висячего `detour`.
+  Set<String>? detourDroppedOut,
 }) {
   final out = <Map<String, dynamic>>[];
   final seen = <String>{};
+  final detourDropped = <String>{};
+  // §441 (Н10) — висячий detour после подстановки: сервер не эмитится.
+  bool dropForDetour(Map<String, dynamic> body, String tag) {
+    final dangling = normalizeDnsDetour(body, knownOutbounds: knownOutboundTags);
+    if (dangling == null) return false;
+    warningsOut?.add(
+        'DNS server "$tag" dropped: its detour "$dangling" is not in the config.');
+    detourDropped.add(tag);
+    detourDroppedOut?.add(tag);
+    return true;
+  }
+
   for (final entry in resolved) {
     final tag = entry.tag;
     if (tag.isEmpty) continue;
@@ -184,10 +216,12 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
       continue;
     }
     if (seen.contains(tag)) continue;
+    final unknownVars = <String>[];
     final Map<String, dynamic>? body = switch (entry) {
       DnsServerInline(:final body) => Map<String, dynamic>.from(body),
       DnsServerTemplate(:final varValues) => switch (templateByTag[tag]) {
-          final t? => resolveTemplateDnsServerBody(t, varValues: varValues),
+          final t? => resolveTemplateDnsServerBody(t,
+              varValues: varValues, unknownVarsOut: unknownVars),
           null => null,
         },
       DnsServerPreset() => switch (presetServersByTag[tag]) {
@@ -196,6 +230,10 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
         },
     };
     if (body == null) continue;
+    for (final name in unknownVars.toSet()) {
+      warningsOut?.add('DNS server "$tag": "@$name" is not declared by the '
+          'server, the key with it is left out.');
+    }
     body
       ..remove('enabled')
       ..remove('description')
@@ -204,9 +242,9 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
       ..remove('_origin')
       ..remove('_overrides');
     body['tag'] = tag; // ensure tag set (даже если body lost его при edit'е)
-    normalizeDnsDetour(body, knownOutbounds: knownOutboundTags);
-    out.add(body);
     seen.add(tag);
+    if (dropForDetour(body, tag)) continue;
+    out.add(body);
   }
   // §435 — серверы узлов: после корневых, дубль тега — первый побеждает с
   // warning'ом (NODE_SECTIONS.md §3 п. 5).
@@ -220,9 +258,9 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
     }
     final body = Map<String, dynamic>.of(s);
     body['tag'] = tag;
-    normalizeDnsDetour(body, knownOutbounds: knownOutboundTags);
-    out.add(body);
     seen.add(tag);
+    if (dropForDetour(body, tag)) continue;
+    out.add(body);
   }
   if (tailscaleEndpointTags != null) {
     _sanitizeTailscaleDnsServers(out, tailscaleEndpointTags, warningsOut);
@@ -236,6 +274,7 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
         if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
           s['tag'] as String,
     },
+    detourDropped: detourDropped,
     warningsOut: warningsOut,
   );
   return out;
@@ -281,6 +320,7 @@ void _sanitizeTailscaleDnsServers(
 /// + AppLog); storage не мутируется. Причины различаются в тексте:
 /// - `disabled` — тег известен ref-списку, но не эмитится (enabled: false);
 /// - `unknown`  — тега нет вовсе (опечатка через JSON-вкладку / удалён);
+/// - `dangling detour` — сервер выпал из-за висячего `detour` (§441 Н10);
 /// - `itself`   — самовключение (ядро роняет конфиг — снимаем до старта);
 /// - `duplicate` — повтор (группа = множество, порядок не значим).
 ///
@@ -290,6 +330,7 @@ void _sanitizeTailscaleDnsServers(
 void _filterDnsGroupMembers(
   List<Map<String, dynamic>> out, {
   required Set<String> allRefTags,
+  Set<String> detourDropped = const {},
   List<String>? warningsOut,
 }) {
   final emittedTags = <String>{
@@ -310,6 +351,8 @@ void _filterDnsGroupMembers(
       } else if (m.isEmpty || !allRefTags.contains(m)) {
         // Тега нет ни в одном ref'е — опечатка/удалён: надо чинить группу.
         dropReason = 'unknown';
+      } else if (detourDropped.contains(m)) {
+        dropReason = 'dangling detour';
       } else if (!emittedTags.contains(m)) {
         // Ref есть, но не эмитится — выключен: включение вернёт члена.
         dropReason = 'disabled';

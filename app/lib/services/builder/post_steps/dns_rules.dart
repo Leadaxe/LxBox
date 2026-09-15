@@ -51,6 +51,10 @@ Future<void> applyCustomDns(
   // в конец `dns.rules`. `enabled: false` отсеян вызывающим.
   List<Map<String, dynamic>> nodeServers = const [],
   List<Map<String, dynamic>> nodeRules = const [],
+  // §441 (SPEC 128 Н10) — умолчания шаблона `dns_final` /
+  // `dns_default_domain_resolver`: замены ссылок на сервер, выпавший из-за
+  // висячего detour ([healDetourDroppedDnsRefs]).
+  Map<String, String> resolverDefaults = const {},
 }) async {
   final dns = (config['dns'] as Map<String, dynamic>?) ?? <String, dynamic>{};
 
@@ -101,6 +105,8 @@ Future<void> applyCustomDns(
   };
 
   // Refs → final bodies для sing-box config.
+  // §441 — теги серверов, выпавших из-за висячего detour (Н10).
+  final detourDropped = <String>{};
   final serverBodies = resolveDnsServersBodies(
     resolved: resolvedServers,
     templateByTag: templateByTag,
@@ -110,14 +116,20 @@ Future<void> applyCustomDns(
     warningsOut: warningsOut,
     nodeServers: nodeServers, // §435
     tailscaleEndpointTags: tailscaleEndpointTags, // §435
+    detourDroppedOut: detourDropped, // §441
   );
   dns['servers'] = serverBodies;
 
   // §117: реально эмитированные серверы — фильтр mirror'ов с пропавшим
   // serverTag (тихо, без warning — решение №3).
+  //
+  // §441 (Н10) — сервер, выпавший из-за висячего detour, не «пропал»: правила
+  // на него остаются и становятся отказом ([healDetourDroppedDnsRefs]), иначе
+  // их домены ушли бы в `dns.final`.
   final emittedServerTags = <String>{
     for (final s in serverBodies)
       if (s['tag'] is String) s['tag'] as String,
+    ...detourDropped,
   };
 
   // §033: resolve DNS rules — auto-discover + orphan cleanup + persist
@@ -260,6 +272,14 @@ Future<void> applyCustomDns(
     outRules.add(Map<String, dynamic>.of(r));
   }
   if (outRules.isNotEmpty) dns['rules'] = outRules;
+  config['dns'] = dns;
+  // §441 (SPEC 128 Н10) — правила и резолверы на серверы, выпавшие из-за
+  // висячего detour: одно место политики.
+  warningsOut?.addAll(healDetourDroppedDnsRefs(
+    config,
+    detourDropped: detourDropped,
+    defaults: resolverDefaults,
+  ));
   if (extraDnsSrsRuleSets.isNotEmpty) {
     // Подмешиваем в route.rule_set (sing-box рекомендует rule_set'ы держать
     // в одном месте). DNS-rule ссылается на этот tag по имени.
