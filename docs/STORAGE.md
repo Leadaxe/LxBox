@@ -160,6 +160,8 @@ getApplicationDocumentsDirectory()/         # Android: Context.getDir("flutter")
 Context.filesDir/                           # native `files/` = Dart getApplicationSupportDirectory();
 ├── singbox_config.json                     #   NOT the documents dir above (§414); rebuilt after a workspace load
 ├── cache.db                                # libbox cache_file (basePath = filesDir); [device], rebuilt by the core
+├── tailscale/<name>/                       # [device] §435/§445 — tsnet state of one Tailscale node (machine/node keys, login)
+├── tailscale_state.json                    # [device] §445 — index: workspace → node key → directory name in tailscale/
 └── sub_cache/                              # [workspace] HttpCache — the raw subscription bodies (§027/§129)
     ├── <url.hashCode>
     └── <url.hashCode>.headers
@@ -178,6 +180,8 @@ Android SharedPreferences:
 | `lxbox_settings.json` | `SettingsStorage` (Dart) | App settings, vars, sources, rules, DNS, ping. **The main subject of this document.** | — |
 | `lxbox_settings.json.v0.bak` | `SettingsStorage` (Dart) | §439 — the bytes of the 2.23.2-form file as they were before the storage migration. Written once (never overwritten), kept while the app is installed, not part of a workspace or a backup. `GET /backup/export?include=storage&from=v0_bak` returns it for downgrade tests. | [§439] |
 | `singbox_config.json` | `ConfigManager` (Kotlin) | The final sing-box JSON fed to libbox. Regenerated on every `buildConfig`. Not part of a backup. Lives in native `Context.filesDir` (`files/`), not in the documents dir — Dart reaches it via `BoxVpnClient.getFilesDir()` (§316/§414). | [§414] |
+| `tailscale/<name>/` | the core (tsnet) | The state directory of one Tailscale node: `tailscaled.state` (machine and node keys, login), logs. Created by the core on the node's first start; the path comes from `state_directory`, which the build sets from `tailscale_state.json`. Deleted with the node (while the core is stopped) and when no workspace references it. Not part of a workspace copy or a backup. | [§435], [§445] |
+| `tailscale_state.json` | `TailscaleStateStore` (Dart) | The index of Tailscale state directories: `slots` (workspace name → node key → directory name; the key is the server `id`, or the folder/subscription `id` + the raw tag), `legacy` (directories found when the index was created, kept while a workspace has no records). Renaming or moving a node rewrites the key, the directory name never changes. Save as copies a workspace's records, Delete drops them. Not part of a workspace copy or a backup. | [§445] |
 | `sub_cache/<url.hashCode>` + `.headers` | `HttpCache` (Dart) | The raw body and headers of a subscription, for the offline rehydrate at startup. **The only persisted source of subscription nodes** — `nodes` is not stored, it is re-parsed from here on every launch. Lives in native `files/` (Dart App Support), not in the documents dir. | [§027], [§129] |
 | `rule_sets/<ruleId>.srs` + `.meta.json` | `RuleSetDownloader` (Dart) | A cache of binary `.srs` rule-set files plus the §366 sidecar (`lastUpdated`, `etag`, `lastError`). The config references them by absolute path; the core never downloads them itself. | [§011] |
 | `applog.txt` | `AppLog` (Dart) | The app-side warn/error log, JSON lines, a ring buffer of 200 lines / 64 KB. | [§038], [§043][043-applog] |
@@ -1657,3 +1661,5 @@ The scrubber only handles the `vars` and `sources` keys; everything else (`meta.
 [§439]: ./spec/features/439%20storage-contract-1-0/spec.md
 [§370]: ./spec/tasks/370-rule-order-num-axis.md
 [§434]: ./spec/tasks/434-srs-rule-multiple-rule-sets.md
+[§435]: ./spec/features/435%20node-sections-tailscale/spec.md
+[§445]: ./spec/tasks/445-tailscale-state-dir-lifecycle.md
