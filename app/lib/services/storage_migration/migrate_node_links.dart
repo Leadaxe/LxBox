@@ -12,9 +12,13 @@
 ///    Направлений) — узел папки или подписки даёт пару, узел одиночного
 ///    сервера остаётся корневой ссылкой; узлы подписки берутся из кэша
 ///    `sub_cache` ([subscriptionBodies]);
-/// 3. не нашлось в словаре (источник или узел выключен, кэша нет) —
-///    финальная форма тега «префикс + тег» по всем контейнерам: ровно один
-///    кандидат — пара;
+/// 3. не нашлось в словаре — узел выключен (сам, в папке или подписке, или
+///    выключен его источник): словарь «при включении» той же сборки
+///    ([computeDisabledNodeLinkPools]) — узел папки или подписки даёт пару,
+///    узел одиночного сервера остаётся корневой ссылкой; ровно одна цель;
+///    иначе (кэша нет) — финальная форма тега «префикс + тег» по всем
+///    источникам, выключенные включительно: ровно один кандидат — пара у
+///    папки и подписки, корневая ссылка у одиночного сервера;
 /// 4. Направление, `direct-out`, служебный тег и цепочка остаются корнем;
 ///    прочее (не нашлось или неоднозначно) — корнем с предупреждением: сборка
 ///    разберёт ссылку fail-closed;
@@ -73,6 +77,7 @@ List<Map<String, dynamic>> migrateNodeLinks(
         if (d is Map) ?_direction(d.cast<String, dynamic>()),
   ];
   final pool = computeNodeLinkPool(lists, directions: dirs);
+  final disabledPools = computeDisabledNodeLinkPools(lists, directions: dirs);
   final rootNames = <String>{
     kDirectOutboundTag,
     kBlockOutboundTag,
@@ -86,14 +91,24 @@ List<Map<String, dynamic>> migrateNodeLinks(
       if (l is FolderServers) l.id: l,
   };
 
-  // Финальная форма «префикс + сырой тег» → адреса, по всем контейнерам
-  // (включая выключенные): запасной путь для строк вне словаря.
+  // Финальная форма «префикс + сырой тег» → адреса, по всем источникам
+  // (включая выключенные): запасной путь для строк вне словарей. Адрес узла
+  // одиночного сервера — корневая ссылка своей финальной формой.
   final byFinalForm = <String, List<NodeLink>>{};
+  void addForm(String form, NodeLink address) {
+    final list = byFinalForm[form] ??= [];
+    if (!list.contains(address)) list.add(address);
+  }
+
   for (final l in lists) {
-    if (l is UserServer) continue;
+    if (l is UserServer) {
+      for (final address in sourceNodeAddresses(l)) {
+        addForm(address.tag, address);
+      }
+      continue;
+    }
     containerRawTags(l).forEach((_, raw) {
-      (byFinalForm[containerFinalForm(l, raw)] ??= [])
-          .add(NodeLink(folderId: l.id, tag: raw));
+      addForm(containerFinalForm(l, raw), NodeLink(folderId: l.id, tag: raw));
     });
   }
 
@@ -121,10 +136,20 @@ List<Map<String, dynamic>> migrateNodeLinks(
       lifted++;
       return NodeLink(folderId: folder.id, tag: s);
     }
-    final candidates = byFinalForm[s] ?? const <NodeLink>[];
+    final ifEnabled = <NodeLink>{
+      for (final p in disabledPools)
+        if (p.linkOfFinal(s) case final target when p.finalOf(target) != null)
+          target,
+    };
+    final candidates = ifEnabled.isNotEmpty
+        ? ifEnabled.toList()
+        : byFinalForm[s] ?? const <NodeLink>[];
     if (candidates.length == 1) {
+      final target = candidates.single;
+      // Узел одиночного сервера: ссылка уже корневая `{tag}`.
+      if (target.isRoot) return link;
       lifted++;
-      return candidates.single;
+      return target;
     }
     warnings.add(candidates.isEmpty
         ? '$where "$s" matches no node, kept as a root link'

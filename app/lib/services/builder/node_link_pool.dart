@@ -50,6 +50,57 @@ NodeLinkTargets computeNodeLinkPool(
   return targets;
 }
 
+/// Пулы «при включении» (§439, миграция ссылок D-112): для каждого источника
+/// [lists] с выключенным содержимым — сам источник, член папки, узел
+/// подписки — отдельный пул с финальными тегами его узлов, как их назвала бы
+/// сборка, будь он включён целиком: источники перед ним — как есть, теги
+/// считает тот же `ServerList.build` (префиксы, уникализация, резерв тегов
+/// Направлений и служебных outbound'ов). Узлы других источников в такой пул
+/// не попадают — действительные теги даёт [computeNodeLinkPool].
+///
+/// Пул на источник, а не общий: включение одного источника не сдвигает
+/// уникализацию другого, и неоднозначность видна вызывающему.
+List<NodeLinkTargets> computeDisabledNodeLinkPools(
+  List<ServerList> lists, {
+  List<Direction> directions = const [],
+}) {
+  final reserved = [
+    for (final d in directions) ...[d.tag, d.autoTag],
+  ];
+  final live = _PoolCtx(NodeLinkTargets(), reserved);
+  final out = <NodeLinkTargets>[];
+  for (final l in lists) {
+    final whole = _enabledWhole(l);
+    if (whole != null) {
+      final targets = NodeLinkTargets();
+      _buildQuiet(whole, _PoolCtx(targets, live._taken));
+      out.add(targets);
+    }
+    _buildQuiet(l, live);
+  }
+  return out;
+}
+
+/// Источник [l], включённый целиком; null — выключенного в нём нет.
+ServerList? _enabledWhole(ServerList l) => switch (l) {
+      SubscriptionServers s when !s.enabled || s.disabledHashes.isNotEmpty =>
+        s.copyWith(enabled: true, disabledHashes: const {}),
+      UserServer u when !u.enabled => u.copyWith(enabled: true),
+      FolderServers f when !f.enabled || f.members.any((m) => !m.enabled) =>
+        f.copyWith(enabled: true, members: [
+          for (final m in f.members) m.enabled ? m : m.copyWith(enabled: true),
+        ]),
+      _ => null,
+    };
+
+void _buildQuiet(ServerList l, EmitContext ctx) {
+  try {
+    l.build(ctx);
+  } catch (_) {
+    // Как в [computeNodeLinkPool]: источник без эмиссии не даёт тегов.
+  }
+}
+
 /// Показ ссылки [link]: финальный тег узла из пула; ссылка, которой в пуле
 /// нет, — финальная форма по источнику (префикс контейнера + сырой тег) или
 /// тег как есть.
