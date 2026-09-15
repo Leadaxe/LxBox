@@ -84,6 +84,12 @@ class WorkspaceController extends ChangeNotifier {
       await SettingsStorage.flushToDisk();
       final changed = await _store.load(target);
       if (!changed) return WorkspaceLoadOutcome.alreadyCurrent;
+      // §447 — на сцене настройки другого слота, конфиг от прежнего: флаг
+      // поднимается явно, ДО перечитывания. Одного mtime-признака (шаг 8)
+      // мало: flush выше выровнял mtime конфига в ту же секунду, что и touch
+      // настроек, а любой `_save()` при снятом флаге выравнивает его снова —
+      // новый HomeScreen видел «чисто» и стартовал с конфигом прежнего слота.
+      SettingsStorage.markConfigDirty();
       await _reloadStateFromDisk();
       _manifest = await _store.readManifest();
       _pendingAutoConnect = wasUp;

@@ -166,9 +166,17 @@ class SubscriptionController extends ChangeNotifier {
     // possible kill mid-session. Если settings новее чем saved config →
     // есть pending changes, нужен rebuild. Триггерится в home_screen
     // bootstrap path или при первом возврате на home.
-    configDirty = await ConfigDirtyCheck.isDirty();
+    // §447 — флаг, поднятый в этом процессе (загрузка слота Workspaces,
+    // restore), mtime-сравнение не опускает: он живёт статикой в
+    // SettingsStorage и переживает пересоздание HomeScreen, а mtime к этому
+    // моменту уже мог выровнять любой `_save()`.
     if (configDirty) {
-      AppLog.I.info('init: configDirty=true via mtime compare');
+      AppLog.I.info('init: configDirty=true kept from this process');
+    } else {
+      configDirty = await ConfigDirtyCheck.isDirty();
+      if (configDirty) {
+        AppLog.I.info('init: configDirty=true via mtime compare');
+      }
     }
     // Если app был убит во время fetch'а, status=inProgress остаётся
     // на диске и залочит подписку навсегда (guard в _fetchEntryByRef).
