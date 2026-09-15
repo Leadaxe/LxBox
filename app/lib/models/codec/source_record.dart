@@ -3,7 +3,8 @@
 ///
 /// Запись = поля контракта (К) и рядом поля LxBox (L, ONE_NAMESPACE §1).
 /// Кэш и производное не пишутся: `nodes[]` подписки живёт в `sub_cache/`,
-/// узлы сервера и члена папки перечитываются из `origin.raw`.
+/// узлы сервера и члена папки перечитываются из `origin.raw`. Член-группа
+/// папки (`kind: auto`) — запись `codec/auto_group_record.dart`.
 ///
 /// Чтение терпимо: форма нормализуется (ссылка строкой, `body` без
 /// исходника, не тот тип скаляра), битое не бросает. Незнакомые ключи
@@ -23,6 +24,7 @@ import '../node_spec.dart';
 import '../record_codec.dart' show RecordRead;
 import '../server_list.dart';
 import '../subscription_meta.dart';
+import 'auto_group_record.dart';
 import 'node_link_record.dart';
 
 const String kSourceKindSubscription = 'subscription';
@@ -112,13 +114,15 @@ Map<String, dynamic> _folderToRecord(FolderServers f) => {
       if (f.pingTimeoutMs != null) 'ping_timeout_ms': f.pingTimeoutMs,
       // L — момент создания: его отдаёт Debug API `/folders`.
       'created_at': f.createdAt.toIso8601String(),
-      'nodes': [for (final m in f.members) _memberToRecord(m)],
+      'nodes': [for (final m in f.members) _memberToRecord(m, f.id)],
     };
 
 /// Член папки: разобранный — `server` с тегом узла, нет — `unsupported` с
-/// причиной. Член с пустым текстом тоже пишется: хранение его не теряет.
-Map<String, dynamic> _memberToRecord(FolderMember m) {
+/// причиной, группа — `auto`. Член с пустым текстом тоже пишется: хранение
+/// его не теряет.
+Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
   final node = m.node;
+  if (node is AutoSelectSpec) return autoGroupMemberToRecord(m, node, folderId);
   return {
     'kind': node == null ? kNodeKindUnsupported : kSourceKindServer,
     if (node != null && node.tag.isNotEmpty) 'tag': node.tag,
@@ -323,7 +327,7 @@ FolderServers _folderFromRecord(
   if (rawNodes is List) {
     for (var i = 0; i < rawNodes.length; i++) {
       final m = _memberFromRecord(
-          rawNodes[i], where, i, notes, unknown, sectionDrops);
+          rawNodes[i], id, where, i, notes, unknown, sectionDrops);
       if (m != null) members.add(m);
     }
   }
@@ -346,10 +350,11 @@ FolderServers _folderFromRecord(
 }
 
 /// Член папки. Вид записи на чтении не решает (текст побеждает): `server`
-/// и `unsupported` читаются одинаково, запись без вида — тоже. `chain` и
-/// `auto` папка LxBox не держит — отброс с строкой в [notes].
+/// и `unsupported` читаются одинаково, запись без вида — тоже. `auto` —
+/// член-группа; `chain` папка LxBox не держит — отброс с строкой в [notes].
 FolderMember? _memberFromRecord(
   Object? raw,
+  String folderId,
   String folderWhere,
   int index,
   List<String>? notes,
@@ -364,6 +369,15 @@ FolderMember? _memberFromRecord(
   }
   final j = raw.cast<String, dynamic>();
   final kind = j['kind'];
+  if (kind == kNodeKindAuto) {
+    return autoGroupMemberFromRecord(j,
+            folderId: folderId,
+            where: where,
+            notes: notes,
+            unknown: unknown,
+            path: path)
+        .member;
+  }
   if (kind is String &&
       kind != kSourceKindServer &&
       kind != kNodeKindUnsupported) {

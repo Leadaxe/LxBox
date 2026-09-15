@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../models/node_link.dart';
 import '../models/node_spec.dart';
 import '../services/node_identity.dart';
 import 'auto_group_edit_screen.dart';
@@ -791,10 +792,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     );
     if (!mounted || res is! AutoGroupSaved) return;
 
-    // Храним как обычного члена: `autogroup://`-URI парсится обратно при
-    // загрузке (§322 §7), отдельной ветки в модели папки не нужно.
-    final err = await widget.controller
-        .addMembersToFolder(idx, res.spec.toUri());
+    // §439 — член `kind: auto`: группа хранится записью, а не текстом.
+    final err =
+        await widget.controller.addAutoMemberToFolder(idx, res.spec);
     if (!mounted) return;
     if (err != null) {
       await _showError(err.render());
@@ -825,7 +825,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     switch (res) {
       case AutoGroupSaved(:final spec):
         final err = await widget.controller
-            .updateMemberAt(idx, memberIndex, spec.toUri());
+            .updateAutoMemberAt(idx, memberIndex, spec);
         if (!mounted) return;
         if (err != null) {
           await _showError(err.render());
@@ -838,16 +838,19 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     setState(() {});
   }
 
-  /// Члены папки, которые могут попасть в пул: обычные узлы, без групп
-  /// (вложенность urltest в urltest бессмысленна) и без нечитаемых raw.
-  List<({String key, String label})> _poolCandidates(FolderServers folder) {
-    final out = <({String key, String label})>[];
+  /// Члены папки, которые могут попасть в пул: обычные узлы с адресом, без
+  /// групп (вложенность urltest в urltest бессмысленна) и без нечитаемых raw.
+  /// Член адресуется парой `{id папки, сырой тег}` (§439).
+  List<({NodeLink key, String label})> _poolCandidates(FolderServers folder) {
+    final out = <({NodeLink key, String label})>[];
     for (final m in folder.members) {
       final n = m.node;
-      if (n == null || n.isGroup) continue;
-      final k = nodeIdentityKey(n);
-      if (k == null) continue;
-      out.add((key: k, label: n.label.isEmpty ? n.tag : n.label));
+      if (n == null || n.isGroup || n.tag.isEmpty) continue;
+      if (nodeIdentityKey(n) == null) continue;
+      out.add((
+        key: NodeLink(folderId: folder.id, tag: n.tag),
+        label: n.label.isEmpty ? n.tag : n.label,
+      ));
     }
     return out;
   }
@@ -918,8 +921,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     if (!mounted) return;
     final member = _folder.members[memberIndex];
 
-    // §322 — у узла автовыбора свой редактор: сырой `autogroup://`-URI
-    // пользователю показывать нельзя (правило в percent-encoding).
+    // §322 — у узла автовыбора свой редактор: текста у группы нет (§439).
     final node = member.node;
     if (node is AutoSelectSpec) {
       await _editAutoNode(memberIndex, node);

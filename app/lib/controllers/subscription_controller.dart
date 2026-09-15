@@ -5,7 +5,9 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/auto_select.dart';
 import '../models/import_rule.dart';
+import '../models/node_link.dart';
 import '../models/node_sections.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
@@ -1165,6 +1167,72 @@ class SubscriptionController extends ChangeNotifier {
     return n.toUri();
   }
 
+  /// §439 — члены-группы разобранного входа (sing-box-конфиг с
+  /// `urltest`/`selector`) → члены `kind: auto` папки [folderId]. [added]
+  /// выровнен с [nodes] 1:1. Ссылка группы на сырой тег члена входа
+  /// (`sourceNodeRawTags`) становится парой `{id папки, тег узла члена}`;
+  /// член, не ставший узлом папки, из состава уходит.
+  static List<FolderMember> _bindAutoMembers(
+    List<FolderMember> added,
+    List<NodeSpec> nodes,
+    String folderId,
+  ) {
+    if (nodes.length != added.length || !nodes.any((n) => n.isGroup)) {
+      return added;
+    }
+    final rawTags = sourceNodeRawTags(nodes);
+    final memberTag = <String, String>{};
+    for (var i = 0; i < nodes.length; i++) {
+      final raw = rawTags[nodes[i]];
+      final tag = added[i].node?.tag ?? '';
+      if (!nodes[i].isGroup && raw != null && tag.isNotEmpty) {
+        memberTag[raw] = tag;
+      }
+    }
+    return [
+      for (var i = 0; i < added.length; i++)
+        switch (nodes[i]) {
+          final AutoSelectSpec g => FolderMember.auto(
+              g.copyWith(
+                membership: switch (g.membership) {
+                  ExplicitMembers(:final members) => ExplicitMembers([
+                      for (final l in members)
+                        if (memberTag[l.tag] case final t?)
+                          NodeLink(folderId: folderId, tag: t),
+                    ]),
+                  final RuleMembers m => m,
+                },
+              ),
+              enabled: added[i].enabled,
+            ),
+          _ => added[i],
+        },
+    ];
+  }
+
+  /// §439 — член-группа, перенесённая в папку [toId]: её явный состав
+  /// адресовал узлы папки [fromId], а группа не выходит за свой контейнер.
+  /// Пары переезжают на новую папку с теми же тегами — как до §439 ключи
+  /// состава искались среди членов папки, куда группа легла.
+  static FolderMember _rehomeAutoMember(
+      FolderMember m, String fromId, String toId) {
+    final g = m.node;
+    if (g is! AutoSelectSpec) return m;
+    final membership = g.membership;
+    if (membership is! ExplicitMembers) return m;
+    return FolderMember.auto(
+      g.copyWith(
+        membership: ExplicitMembers([
+          for (final l in membership.members)
+            l.isRoot || l.folderId == fromId
+                ? NodeLink(folderId: toId, tag: l.tag)
+                : l,
+        ]),
+      ),
+      enabled: m.enabled,
+    );
+  }
+
   /// Есть ли у raw собственное имя (URI-фрагмент `#name` / JSON `tag`).
   static bool _rawHasOwnName(String raw) {
     final t = raw.trim();
@@ -1403,7 +1471,9 @@ class SubscriptionController extends ChangeNotifier {
     final added = <FolderMember>[];
     for (final n in nodes) {
       var raw = memberRawFor(n);
-      if (nameFallback != null &&
+      // §439 — у группы текста нет, имя ей не раздаётся (член `kind: auto`).
+      if (!n.isGroup &&
+          nameFallback != null &&
           nameFallback.isNotEmpty &&
           !_rawHasOwnName(raw)) {
         var candidate = nameFallback;
@@ -1418,6 +1488,7 @@ class SubscriptionController extends ChangeNotifier {
       // каноническую связку.
       added.add(FolderMember(raw: raw, sections: sectionsForNewNode(n)));
     }
+    added.setAll(0, _bindAutoMembers(added, nodes, folder.id));
     entry._replaceList(folder.copyWith(members: [...folder.members, ...added]));
     entry.nodeCount = entry.list.nodes.length;
     await _persist();
@@ -1447,10 +1518,13 @@ class SubscriptionController extends ChangeNotifier {
       if (cur is! FolderServers || !_entries.contains(entry)) {
         return const ErrMsg(ErrKey.folderNotFound);
       }
-      final added = result.nodes
-          .map((n) =>
-              FolderMember(raw: memberRawFor(n), sections: sectionsForNewNode(n)))
-          .toList();
+      final added = _bindAutoMembers(
+          result.nodes
+              .map((n) => FolderMember(
+                  raw: memberRawFor(n), sections: sectionsForNewNode(n)))
+              .toList(),
+          result.nodes,
+          cur.id);
       entry._replaceList(cur.copyWith(members: [...cur.members, ...added]));
       entry.nodeCount = entry.list.nodes.length;
       await _persist();
@@ -1596,6 +1670,47 @@ class SubscriptionController extends ChangeNotifier {
       raw: trimmed,
       sections: imported,
     );
+    entry._replaceList(folder.copyWith(members: members));
+    entry.nodeCount = entry.list.nodes.length;
+    await _persist();
+    notifyListeners();
+    return null;
+  }
+
+  /// §439 — добавить в папку узел автовыбора (член `kind: auto`). Члены
+  /// группы — ссылки на узлы этой же папки, их собирает редактор.
+  Future<UiMsg?> addAutoMemberToFolder(int index, AutoSelectSpec group) async {
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
+    entry._replaceList(folder.copyWith(
+        members: [...folder.members, FolderMember.auto(group)]));
+    entry.nodeCount = entry.list.nodes.length;
+    await _persist();
+    notifyListeners();
+    AppLog.I.info('Folder "${folder.name}": +1 auto node');
+    return null;
+  }
+
+  /// §439 — заменить группу члена-группы [memberIndex]; `enabled` члена
+  /// остаётся.
+  Future<UiMsg?> updateAutoMemberAt(
+      int index, int memberIndex, AutoSelectSpec group) async {
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
+    if (memberIndex < 0 || memberIndex >= folder.members.length) {
+      return const ErrMsg(ErrKey.serverNotFound);
+    }
+    final members = [...folder.members];
+    members[memberIndex] =
+        FolderMember.auto(group, enabled: members[memberIndex].enabled);
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
     await _persist();
@@ -1801,7 +1916,7 @@ class SubscriptionController extends ChangeNotifier {
     if (memberIndex < 0 || memberIndex >= from.members.length) {
       return const ErrMsg(ErrKey.serverNotFound);
     }
-    final member = from.members[memberIndex];
+    final member = _rehomeAutoMember(from.members[memberIndex], from.id, to.id);
     final fromMembers = [...from.members]..removeAt(memberIndex);
     fromEntry._replaceList(from.copyWith(members: fromMembers));
     fromEntry.nodeCount = fromEntry.list.nodes.length;
@@ -1844,7 +1959,7 @@ class SubscriptionController extends ChangeNotifier {
                 enabled: server.enabled,
                 detour: personalDetour),
           ]
-        : [
+        : _bindAutoMembers([
             for (final n in server.nodes)
               FolderMember(
                   raw: memberRawFor(n),
@@ -1854,7 +1969,7 @@ class SubscriptionController extends ChangeNotifier {
                   sections: identical(n, server.nodes.first)
                       ? server.sections
                       : null),
-          ];
+          ], server.nodes, folder.id);
     folderEntry._replaceList(
         folder.copyWith(members: [...folder.members, ...added]));
     folderEntry.nodeCount = folderEntry.list.nodes.length;

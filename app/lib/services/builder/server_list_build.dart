@@ -160,12 +160,35 @@ extension ServerListBuild on ServerList {
 
     // §322 — второй проход: узлы автовыбора. Их состав — теги членов ЭТОГО же
     // контейнера, известные только теперь.
+    //
+    // §439 — явный член — ссылка `{folder_id, tag}` на СЫРОЙ тег: у папки это
+    // тег члена, у подписки и сервера — тег, уникализированный в источнике
+    // (группы из тела адресуют членов им).
+    final rawTags = this is FolderServers ||
+            !autoSelects.any((a) => a.$1.membership is ExplicitMembers)
+        ? null
+        : sourceNodeRawTags(nodes);
     for (final (spec, _) in autoSelects) {
-      final members = resolveAutoSelectMembers(spec, resolvedTags);
+      final shown = TagResolver.displayTag(tagPrefix, spec.tag);
+      final members = resolveAutoSelectMembers(
+        spec,
+        resolvedTags,
+        containerId: id,
+        rawTags: rawTags,
+        warn: (line) => ctx.warn('Auto node "$shown": $line'),
+      );
       // Пустой urltest роняет старт ядра (validator.dart) — достижимо, если
       // все члены выключены (§283) или подписка обновилась и пул опустел.
-      // Не эмитим вовсе: безопаснее, чем пустая группа.
-      if (members.isEmpty) continue;
+      // Не эмитим вовсе: безопаснее, чем пустая группа. Явный состав, не
+      // давший ни одного члена, называется (NODE_LINK §5.1); правило, ничего
+      // не поймавшее, — законная настройка.
+      if (members.isEmpty) {
+        if (spec.membership is ExplicitMembers) {
+          ctx.warn('Auto node "$shown" was skipped: none of its members '
+              'resolved, an empty group would stop the VPN core');
+        }
+        continue;
+      }
 
       final entry = spec.emit(ctx.vars);
       // §272/§322 — глобальный «Passive health check»: пропускаем пробу, пока
@@ -188,24 +211,44 @@ extension ServerListBuild on ServerList {
 ///
 /// [resolved] — узлы контейнера с их ИТОГОВЫМИ тегами (после префикса и
 /// `allocateTag`). Выключенных (§283) здесь уже нет: их отфильтровал билдер.
+///
+/// §439 — явный член — [NodeLink] на сырой тег члена контейнера [containerId]
+/// (пустой `folderId` — свой контейнер, NODE_LINK §5.1 № 8). Сырой тег узла —
+/// [rawTags] (уникализированный в источнике, `sourceNodeRawTags`), без карты
+/// — `NodeSpec.tag` (член папки); у тёзок побеждает первый. Член, который не
+/// разрешился, отсекается строкой в [warn].
 List<String> resolveAutoSelectMembers(
   AutoSelectSpec spec,
-  Map<NodeSpec, String> resolved,
-) {
+  Map<NodeSpec, String> resolved, {
+  String containerId = '',
+  Map<NodeSpec, String>? rawTags,
+  void Function(String line)? warn,
+}) {
   final out = <String>[];
   switch (spec.membership) {
-    case ExplicitMembers(:final keys):
+    case ExplicitMembers(:final members):
       // Порядок задаёт СПИСОК, а не обход контейнера: пользователь его
       // осмысленно упорядочил (или он приехал из selector).
-      final byKey = <String, String>{};
+      final byRaw = <String, String>{};
       for (final e in resolved.entries) {
-        final k = nodeIdentityKey(e.key);
-        if (k != null) byKey[k] = e.value;
+        final raw = rawTags == null ? e.key.tag : rawTags[e.key];
+        if (raw != null && raw.isNotEmpty) byRaw.putIfAbsent(raw, () => e.value);
       }
-      for (final k in keys) {
-        final tag = byKey[k];
-        // Ключ без узла — член выключен или исчез из подписки. Пропускаем.
-        if (tag != null) out.add(tag);
+      for (final link in members) {
+        if (!link.isRoot && link.folderId != containerId) {
+          // Группа не выходит за свой контейнер (§322 §2).
+          warn?.call('member "${link.tag}" was dropped: it is not a node of '
+              'this container');
+          continue;
+        }
+        final tag = byRaw[link.tag];
+        if (tag == null) {
+          // Выключен, удалён, исчез из подписки — один исход (NODE_LINK §5.1 № 3).
+          warn?.call('member "${link.tag}" was dropped: it has no node '
+              '"${link.tag}"');
+          continue;
+        }
+        if (!out.contains(tag)) out.add(tag);
       }
     case RuleMembers(:final include, :final exclude):
       final inc = tryCompileRegex(include);

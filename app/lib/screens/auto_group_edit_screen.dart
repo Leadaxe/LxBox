@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/auto_select.dart';
 import '../models/direction.dart';
+import '../models/node_link.dart';
 import '../models/node_spec.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/parser/uri_utils.dart';
@@ -28,8 +29,9 @@ class AutoGroupEditScreen extends StatefulWidget {
   /// `null` — создание нового узла.
   final AutoSelectSpec? initial;
 
-  /// Кандидаты в пул — узлы того же контейнера. Пара (ключ §321, имя).
-  final List<({String key, String label})> candidates;
+  /// Кандидаты в пул — узлы того же контейнера: ссылка на члена
+  /// `{id папки, сырой тег}` (§439) и имя.
+  final List<({NodeLink key, String label})> candidates;
 
   final bool canDelete;
 
@@ -68,13 +70,13 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
   late final TextEditingController _badgeCtrl; // §322 — UI-only значки
 
   late _MembershipMode _mode;
-  late Set<String> _picked; // ключи для режима «список»
+  late Set<NodeLink> _picked; // ссылки для режима «список»
   late UrltestMode _urlMode;
   late Set<StickyHashKey> _sticky;
   late bool _interrupt; // §208 — рвать соединения при смене узла
   bool _advanced = false;
 
-  late final String _initialUri; // снимок для сравнения «грязно ли»
+  late final AutoSelectSpec _initial; // снимок для сравнения «грязно ли»
 
   @override
   void initState() {
@@ -112,11 +114,11 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
         _MembershipMode.all,
       RuleMembers() => _MembershipMode.rule,
     };
-    _picked = m is ExplicitMembers ? m.keys.toSet() : <String>{};
+    _picked = m is ExplicitMembers ? m.members.toSet() : <NodeLink>{};
     _urlMode = p.mode;
     _sticky = p.stickyHash.toSet();
     _interrupt = p.interruptExistConnections;
-    _initialUri = _snapshot().toUri();
+    _initial = _snapshot();
   }
 
   @override
@@ -181,14 +183,14 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
     );
   }
 
-  bool _isDirty() => _snapshot().toUri() != _initialUri;
+  bool _isDirty() => !_snapshot().sameGroupAs(_initial);
 
   // ── Превью состава ──
 
   /// Кандидаты, попавшие в пул при текущих настройках. Повторяет логику
   /// `resolveAutoSelectMembers`, но по именам: синонимов у папочной группы
   /// нет, а у приехавшей из подписки превью всё равно показывает имена.
-  List<({String key, String label})> _matched() {
+  List<({NodeLink key, String label})> _matched() {
     switch (_mode) {
       case _MembershipMode.all:
         return widget.candidates;
@@ -446,7 +448,7 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
   /// Список кандидатов. В режиме «список» — с чекбоксами; иначе только
   /// показывает, кто попал (галочка) и кто нет (приглушённый).
   Widget _memberList(
-      ColorScheme cs, List<({String key, String label})> matched) {
+      ColorScheme cs, List<({NodeLink key, String label})> matched) {
     if (widget.candidates.isEmpty) {
       return _previewLine(cs, getLocalText.s("Folder has no servers yet"));
     }

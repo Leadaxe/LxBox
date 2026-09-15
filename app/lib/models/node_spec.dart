@@ -140,8 +140,8 @@ sealed class NodeSpec {
   /// §322 — узел-группа (пул автовыбора), а не соединение. У такого нет
   /// адреса: `server`/`port` пусты, пинг берётся у выбранного члена. Гейт для
   /// операций, требующих `server:port`, и для тех, что раздают ссылку наружу
-  /// (copy / QR / move): `autogroup://`-форма существует ради хранения, но
-  /// переносить её в другой контейнер бессмысленно — см. `autoGroupToUri`.
+  /// (copy / QR / move): ссылки у группы нет, её члены — узлы своего
+  /// контейнера, и в чужом она осмысленной не станет.
   ///
   /// Инвариант: `isGroup ⇔ server.isEmpty && port == 0` (проверяется тестом).
   bool get isGroup => false;
@@ -1215,11 +1215,21 @@ final class AutoSelectSpec extends NodeSpec {
         ...params.toJson(),
       });
 
-  /// §322 §7 — синтетический `autogroup://`. Нужен, чтобы группа хранилась в
-  /// папке общим механизмом (`FolderMember.raw`). НЕ переносимая ссылка:
-  /// правило написано под состав своей папки (см. `autoGroupToUri`).
+  /// URI-формы у группы нет: в папке она хранится записью `kind: auto`
+  /// (§439, кодек `codec/auto_group_record.dart`), в подписке производна от
+  /// тела. Пустая строка — «ссылки нет».
   @override
-  String toUri() => autoGroupToUri(label, membership, params, poolBadge);
+  String toUri() => '';
+
+  /// Значение группы — то, что хранит запись `kind: auto`: тег, подпись,
+  /// членство, параметры, значки. `id` (рантайм) и [tagSynonyms] (производное
+  /// от тела подписки) в значение не входят.
+  bool sameGroupAs(AutoSelectSpec other) =>
+      tag == other.tag &&
+      label == other.label &&
+      membership == other.membership &&
+      params == other.params &&
+      poolBadge == other.poolBadge;
 
   AutoSelectSpec copyWith({
     String? tag,

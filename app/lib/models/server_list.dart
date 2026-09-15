@@ -428,6 +428,11 @@ final class FolderMember {
   })  : sections = (sections == null || sections.isEmpty) ? null : sections,
         node = node ?? _parseFirst(raw);
 
+  /// §439 — член-группа (запись `kind: auto`, `codec/auto_group_record.dart`):
+  /// текста нет, узел — сама группа. detour и секций у группы не бывает.
+  FolderMember.auto(AutoSelectSpec group, {bool enabled = true})
+      : this(raw: '', enabled: enabled, node: group);
+
   static NodeSpec? _parseFirst(String raw) {
     if (raw.trim().isEmpty) return null;
     try {
@@ -454,7 +459,8 @@ final class FolderMember {
         node: raw == null ? node : null,
       );
 
-  /// Равенство записи (§439): [node] выводится из [raw].
+  /// Равенство записи (§439): [node] выводится из [raw]; у члена-группы
+  /// текста нет, и значением служит сама группа.
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -462,7 +468,12 @@ final class FolderMember {
           raw == other.raw &&
           enabled == other.enabled &&
           detour == other.detour &&
-          sections == other.sections);
+          sections == other.sections &&
+          _sameGroup(node, other.node));
+
+  static bool _sameGroup(NodeSpec? a, NodeSpec? b) => a is AutoSelectSpec
+      ? b is AutoSelectSpec && a.sameGroupAs(b)
+      : b is! AutoSelectSpec;
 
   @override
   int get hashCode => Object.hash(raw, enabled, detour, sections);

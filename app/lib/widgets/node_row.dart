@@ -235,9 +235,9 @@ class NodeRow extends StatelessWidget {
     // §201 — block не пингуется (всегда ERR): пункт Ping disabled.
     final canPing = item.tunnelUp && !item.busy && !item.pingBusy && !_isBlock;
     final canActivate = item.tunnelUp && !item.busy && !item.active;
-    // §322 — у группы автовыбора ссылки для копирования нет: `autogroup://`
-    // существует ради хранения и осмыслен только внутри своей папки (в чужой
-    // соберёт её узлы). Гейт по ТИПУ, а не по `_isSpecial`: группа §322 из
+    // §322 — у группы автовыбора ссылки для копирования нет: её члены —
+    // узлы своего контейнера (§439: запись `kind: auto`, а не текст). Гейт по
+    // ТИПУ, а не по `_isSpecial`: группа §322 из
     // «спец»-категории выведена намеренно (своё имя, своё место в списке).
     final showCopy = !_isSpecial && item.outboundType != 'urltest';
     final box = context.findRenderObject() as RenderBox?;

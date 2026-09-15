@@ -6,7 +6,10 @@
 /// здесь.
 library;
 
+import 'package:collection/collection.dart';
+
 import 'direction.dart' show UrltestMode, StickyHashKey, kDefaultStickyHash;
+import 'node_link.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Членство
@@ -38,156 +41,44 @@ final class RuleMembers extends AutoSelectMembership {
     if (parts.isEmpty) return const RuleMembers();
     return RuleMembers(include: '^(${parts.join('|')})');
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RuleMembers &&
+          include == other.include &&
+          exclude == other.exclude);
+
+  @override
+  int get hashCode => Object.hash(include, exclude);
 }
 
-/// Явный список: пользователь отметил членов галочками. Хранит §321-идентичности
-/// (`protocol|server|port|credential`), НЕ теги — тег локален для элемента
-/// подписки и после дедупа не сохраняется.
+/// Явный список: пользователь отметил членов галочками. Хранит ссылки на
+/// членов своего контейнера (D-112, NODE_LINK §2): [NodeLink.folderId] — `id`
+/// папки, [NodeLink.tag] — сырой тег члена (до префикса папки). Финальный тег
+/// вычисляет только сборка (`resolveAutoSelectMembers`).
+///
+/// У группы из тела подписки или многоузлового сервера `folderId` пуст: такой
+/// член адресует свой контейнер (NODE_LINK §5.1 № 8), в хранение группа не
+/// пишется — она производна от тела.
 final class ExplicitMembers extends AutoSelectMembership {
-  final List<String> keys;
+  final List<NodeLink> members;
 
-  const ExplicitMembers(this.keys);
+  const ExplicitMembers(this.members);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ExplicitMembers &&
+          const ListEquality<NodeLink>().equals(members, other.members));
+
+  @override
+  int get hashCode => const ListEquality<NodeLink>().hash(members);
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// URI-форма (§322 §7)
-// ════════════════════════════════════════════════════════════════════════════
 
 /// §322 — regexp по умолчанию для `poolBadge`: первый флаг-эмодзи в имени
 /// узла. Флаг — пара Regional Indicator Symbol (U+1F1E6…U+1F1FF), отсюда `{2}`.
 const String kDefaultPoolBadge = r'[\u{1F1E6}-\u{1F1FF}]{2}';
-
-/// Схема синтетического URI узла автовыбора.
-///
-/// Формы `autogroup://` в природе не существует — она нужна, чтобы группа
-/// хранилась в папке тем же механизмом, что обычные члены (`FolderMember.raw`
-/// → парсинг при загрузке). Это НЕ переносимая ссылка: правило внутри
-/// написано под состав своей папки, вставленное в чужую оно наберёт другие
-/// узлы. UI не даёт её скопировать (§2).
-const String kAutoGroupScheme = 'autogroup';
-
-/// `autogroup://?name=…&include=…&mode=…#Label`
-///
-/// Пустые и дефолтные параметры не пишем — URI остаётся читаемым, а `fromUri`
-/// подставит те же дефолты из [AutoSelectParams].
-String autoGroupToUri(
-  String label,
-  AutoSelectMembership membership,
-  AutoSelectParams params, [
-  String poolBadge = kDefaultPoolBadge,
-]) {
-  const d = AutoSelectParams();
-  final q = <String, String>{};
-
-  switch (membership) {
-    case ExplicitMembers(:final keys):
-      // §352 — ключ = `protocol|server|port|credential`, а credential может
-      // нести запятую (пароль ss/trojan) — сырой join(',') ломал раскрой на
-      // fromUri, член молча выпадал после рестарта. Экранируем per-key.
-      q['members'] = keys.map(_escapeMemberKey).join(',');
-    case RuleMembers(:final include, :final exclude):
-      if (include.isNotEmpty) q['include'] = include;
-      if (exclude.isNotEmpty) q['exclude'] = exclude;
-  }
-
-  if (params.mode != d.mode) q['mode'] = params.mode.wire;
-  if (params.url != d.url) q['url'] = params.url;
-  if (params.interval != d.interval) q['interval'] = params.interval;
-  if (params.tolerance != d.tolerance) q['tolerance'] = '${params.tolerance}';
-  if (params.idleTimeout != d.idleTimeout) q['idle_timeout'] = params.idleTimeout;
-  if (params.interruptExistConnections != d.interruptExistConnections) {
-    q['interrupt'] = '1';
-  }
-  if (params.mode == UrltestMode.roundRobin) {
-    q['pool'] = '${params.pool}';
-    if (params.poolTolerance != d.poolTolerance) {
-      q['pool_tolerance'] = '${params.poolTolerance}';
-    }
-    q['sticky'] = params.stickyHash.map((k) => k.wire).join(',');
-  }
-
-  // §322 — UI-only: в конфиг не уходит, но храниться должен (это настройка
-  // пользователя). Дефолт не пишем — короче URI.
-  if (poolBadge != kDefaultPoolBadge) q['badge'] = poolBadge;
-
-  final query = q.entries
-      .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
-      .join('&');
-  final frag = label.isEmpty ? '' : '#${Uri.encodeComponent(label)}';
-  return '$kAutoGroupScheme://?$query$frag';
-}
-
-/// §352 — узкое экранирование ключа-члена для `members=`-списка: только
-/// разделитель `,` и сам escape-символ `%`. НЕ Uri.encodeComponent: полный
-/// percent-decode на fromUri бросал бы ArgumentError на легаси-ключах с
-/// голым `%` в credential. Старые URI с чистыми ключами (без `%`/`,`)
-/// проходят unescape как есть — миграция не нужна; ключи с запятой и до
-/// §352 были битыми (член выпадал), рабочих состояний не регрессируем.
-String _escapeMemberKey(String k) =>
-    k.replaceAll('%', '%25').replaceAll(',', '%2C');
-
-String _unescapeMemberKey(String k) =>
-    k.replaceAll('%2C', ',').replaceAll('%25', '%');
-
-/// Разбор `autogroup://`. `null` — не наша схема.
-///
-/// Отсутствие `members` означает режим правила: пустые `include`/`exclude` —
-/// это «все члены контейнера», валидная конфигурация.
-({
-  String label,
-  AutoSelectMembership membership,
-  AutoSelectParams params,
-  String poolBadge,
-})? autoGroupFromUri(String raw) {
-  final s = raw.trim();
-  if (!s.toLowerCase().startsWith('$kAutoGroupScheme://')) return null;
-  final uri = Uri.tryParse(s);
-  if (uri == null) return null;
-
-  final q = uri.queryParameters;
-  const d = AutoSelectParams();
-
-  final rawMembers = q['members'];
-  final membership = rawMembers != null
-      ? ExplicitMembers(rawMembers
-          .split(',')
-          .map((e) => _unescapeMemberKey(e.trim()))
-          .where((e) => e.isNotEmpty)
-          .toList())
-      : RuleMembers(
-          include: q['include'] ?? '',
-          exclude: q['exclude'] ?? '',
-        );
-
-  final sticky = q['sticky'];
-  final params = AutoSelectParams(
-    url: q['url'] ?? d.url,
-    interval: q['interval'] ?? d.interval,
-    tolerance: int.tryParse(q['tolerance'] ?? '') ?? d.tolerance,
-    idleTimeout: q['idle_timeout'] ?? d.idleTimeout,
-    interruptExistConnections: q['interrupt'] == '1',
-    mode: UrltestMode.fromWire(q['mode']),
-    pool: int.tryParse(q['pool'] ?? '') ?? d.pool,
-    poolTolerance:
-        clampPoolTolerance(int.tryParse(q['pool_tolerance'] ?? '') ?? d.poolTolerance),
-    // Пустая строка ≠ отсутствие: `sticky=` — осознанно снятые чипы, и
-    // эмиссия превратит их в sentinel ["none"] (§208/§210).
-    stickyHash: sticky == null
-        ? d.stickyHash
-        : sticky
-            .split(',')
-            .map((k) => StickyHashKey.fromWire(k.trim()))
-            .whereType<StickyHashKey>()
-            .toList(),
-  );
-
-  return (
-    label: Uri.decodeComponent(uri.fragment),
-    membership: membership,
-    params: params,
-    poolBadge: q['badge'] ?? kDefaultPoolBadge,
-  );
-}
 
 // ════════════════════════════════════════════════════════════════════════════
 // Параметры urltest
@@ -249,6 +140,26 @@ class AutoSelectParams {
         interruptExistConnections:
             interruptExistConnections ?? this.interruptExistConnections,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AutoSelectParams &&
+          url == other.url &&
+          interval == other.interval &&
+          tolerance == other.tolerance &&
+          idleTimeout == other.idleTimeout &&
+          mode == other.mode &&
+          pool == other.pool &&
+          poolTolerance == other.poolTolerance &&
+          const ListEquality<StickyHashKey>()
+              .equals(stickyHash, other.stickyHash) &&
+          interruptExistConnections == other.interruptExistConnections);
+
+  @override
+  int get hashCode => Object.hash(url, interval, tolerance, idleTimeout, mode,
+      pool, poolTolerance, const ListEquality<StickyHashKey>().hash(stickyHash),
+      interruptExistConnections);
 
   /// Поля sing-box для `type: urltest`.
   ///

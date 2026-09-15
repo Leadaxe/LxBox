@@ -16,6 +16,7 @@ import 'dart:convert';
 import '../../models/auto_select.dart';
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
+import '../../models/node_link.dart';
 import '../../models/node_sections.dart';
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
@@ -80,7 +81,10 @@ List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
   final owner = <String, Map<String, dynamic>>{};
   for (final e in indexed) {
     final before = seen.toSet();
-    _parseOne(e.value, seen: seen, synonyms: synonyms);
+    _parseOne(e.value,
+        seen: seen,
+        synonyms: synonyms,
+        pendingGroups: Map<AutoSelectSpec, _GroupRefs>.identity());
     for (final id in seen.difference(before)) {
       owner[id] = e.value;
     }
@@ -90,6 +94,7 @@ List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
   // только те серверы, что закреплены за ним в проходе 1. Имена те же, позиции
   // авторские.
   final result = <NodeSpec>[];
+  final groups = Map<AutoSelectSpec, _GroupRefs>.identity();
   for (final cfg in configs) {
     result.addAll(_parseOne(
       cfg,
@@ -98,9 +103,63 @@ List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
       seen: <String>{},
       synonyms: synonyms,
       ownedBy: (sig) => identical(owner[sig], cfg),
+      pendingGroups: groups,
     ));
   }
-  return result;
+  return _bindGroupMembers(result, groups);
+}
+
+/// §439 — члены группы до связывания: узел этого конфига или ключ пула
+/// соседнего элемента (§3.6), плюс число потерянных на разборе.
+typedef _GroupRefs = ({List<Object> refs, int lost});
+
+/// §439 — состав групп → ссылки на СЫРЫЕ теги членов (NODE_LINK §2.2).
+///
+/// Сырой тег узла — тег, уникализированный в источнике (`sourceNodeRawTags`):
+/// он зависит от соседей, поэтому связывание идёт по всему списку, после
+/// разбора всех элементов. Ссылка без `folder_id` — «свой контейнер»
+/// (NODE_LINK §5.1 № 8): id подписки парсер не знает, в хранение группа из
+/// тела не пишется. Ключ пула соседнего элемента берёт последний узел с этим
+/// ключом, как прежний резолв состава по ключу на сборке.
+List<NodeSpec> _bindGroupMembers(
+  List<NodeSpec> nodes,
+  Map<AutoSelectSpec, _GroupRefs> groups,
+) {
+  if (groups.isEmpty) return nodes;
+  final rawTags = sourceNodeRawTags(nodes);
+  final byKey = <String, NodeSpec>{};
+  for (final n in nodes) {
+    if (n.isGroup) continue;
+    final key = nodeIdentityKey(n);
+    if (key != null) byKey[key] = n;
+  }
+  final out = <NodeSpec>[];
+  for (final n in nodes) {
+    final pending = n is AutoSelectSpec ? groups[n] : null;
+    if (n is! AutoSelectSpec || pending == null) {
+      out.add(n);
+      continue;
+    }
+    final links = <NodeLink>[];
+    var lost = pending.lost;
+    for (final ref in pending.refs) {
+      final node = ref is NodeSpec ? ref : byKey[ref];
+      final raw = node == null ? null : rawTags[node];
+      if (raw == null) {
+        lost++;
+        continue;
+      }
+      final link = NodeLink(tag: raw);
+      if (!links.contains(link)) links.add(link);
+    }
+    if (lost > 0) n.warnings.add(GroupMemberMissingWarning(lost));
+    // §5.1 — пустой urltest роняет старт ядра: группу без членов не выпускаем.
+    if (links.isEmpty) continue;
+    out.add(n.copyWith(membership: ExplicitMembers(links))
+      ..sourceCompact = n.sourceCompact
+      ..sourceExtended = n.sourceExtended);
+  }
+  return out;
 }
 
 /// §368 §3.2 — сколько payload-элементов описывает конфиг. Служебные и группы
@@ -135,6 +194,7 @@ List<NodeSpec> _parseOne(
   Map<String, dynamic> config, {
   required Set<String> seen,
   required Map<String, String> synonyms,
+  required Map<AutoSelectSpec, _GroupRefs> pendingGroups,
   bool Function(String signature)? ownedBy,
 }) {
   final entries = _allEntries(config);
@@ -268,7 +328,7 @@ List<NodeSpec> _parseOne(
   // §5 — группы ПОСЛЕ узлов: порядок списка = порядок появления, группа логично
   // идёт за своими членами.
   for (final g in groups) {
-    final spec = _groupToSpec(g, nodeByTag, synonyms);
+    final spec = _groupToSpec(g, nodeByTag, synonyms, pendingGroups);
     if (spec != null) result.add(spec..sourceExtended = extended);
   }
 
@@ -583,10 +643,14 @@ NodeSpec? _buildChain(
 ///
 /// `null`, если состав пуст: пустой `urltest` роняет старт ядра
 /// (`server_list_build.dart`), не эмитим вовсе.
+///
+/// §439 — состав копится в [groups] и связывается со ссылками после разбора
+/// всей подписки ([_bindGroupMembers]): сырой тег члена зависит от соседей.
 AutoSelectSpec? _groupToSpec(
   Map<String, dynamic> group,
   Map<String, NodeSpec> nodeByTag,
   Map<String, String> synonyms,
+  Map<AutoSelectSpec, _GroupRefs> groups,
 ) {
   final warnings = <NodeWarning>[];
   final type = group['type']?.toString() ?? '';
@@ -604,6 +668,7 @@ AutoSelectSpec? _groupToSpec(
       : const <String>[];
 
   final keys = <String>[];
+  final refs = <Object>[];
   var lost = 0;
   for (final tag in memberTags) {
     // Свой узел этого конфига — приоритет; иначе тег соседнего элемента через
@@ -616,10 +681,14 @@ AutoSelectSpec? _groupToSpec(
       lost++;
       continue;
     }
-    if (!keys.contains(key)) keys.add(key);
+    if (keys.contains(key)) continue;
+    keys.add(key);
+    refs.add(node ?? key);
   }
-  if (lost > 0) warnings.add(GroupMemberMissingWarning(lost));
-  if (keys.isEmpty) return null;
+  if (keys.isEmpty) {
+    if (lost > 0) warnings.add(GroupMemberMissingWarning(lost));
+    return null;
+  }
 
   final label = group['tag']?.toString() ?? '';
   const d = AutoSelectParams();
@@ -638,17 +707,18 @@ AutoSelectSpec? _groupToSpec(
     mode: d.mode,
   );
 
-  return AutoSelectSpec(
+  final spec = AutoSelectSpec(
     id: newUuidV4(),
     tag: tagFromLabel(label, 'urltest', 'auto', 0),
     label: label,
-    membership: ExplicitMembers(keys),
+    // Ссылки появятся в [_bindGroupMembers]; синонимы явному составу не нужны
+    // — они ограничивают пул правила (§321 P6).
+    membership: const ExplicitMembers([]),
     params: params,
-    // §302 — ремап синонимов при мутации узлов; для ExplicitMembers
-    // scoped-ветка resolveAutoSelectMembers не выполняется.
-    tagSynonyms: Map.of(synonyms),
     warnings: warnings,
   )..sourceCompact = _prettyJson(group);
+  groups[spec] = (refs: refs, lost: lost);
+  return spec;
 }
 
 /// Число из значения провайдера: `7`, `7.0` или `"7"`. Иначе `null`.
