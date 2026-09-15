@@ -122,6 +122,22 @@ class RoutingHelpers {
     return kDirectOutboundTag;
   }
 
+  /// Рисовать ли outbound-пикер в тайле корневого правила.
+  ///
+  /// - json: действие внутри тела, отдельного outbound нет (`withOutbound` —
+  ///   no-op), пикер показывал бы первую опцию и ничего не менял (§447). Как
+  ///   в редакторе, где json-режим пикер скрывает; тело видно в подписи.
+  /// - DNS-only пресет (FakeIP: только dns_rule, без routing rule и без
+  ///   var:outbound) — роутить нечего.
+  /// - user-правило и пресет «not found» — пикер есть (последний рисует
+  ///   warning через pickerDisabled).
+  static bool showsOutboundPicker(CustomRule rule, SelectableRule? preset) =>
+      switch (rule.kind) {
+        CustomRuleKind.json => false,
+        CustomRuleKind.preset => preset == null || preset.hasOutboundAffordance,
+        CustomRuleKind.inline || CustomRuleKind.srs => true,
+      };
+
   static String ruleSubtitle(CustomRule rule, SelectableRule? preset) {
     if (rule.kind == CustomRuleKind.preset) {
       if (preset == null) return getLocalText.s("Preset not found — tap to fix");
