@@ -2203,6 +2203,9 @@
   "Idle timeout suspends the tunnel after inactivity to save battery (default 5 min). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults.": {
     "value": "Тайм-аут простоя приостанавливает туннель при неактивности ради экономии батареи (по умолчанию 5 мин). Keep-alive пингует QUIC-соединение (по умолчанию 30 сек, только HTTP/3). Оставьте поля пустыми для значений по умолчанию."
   },
+  "Idle timeout will be raised to %s when the config is built": {
+    "value": "При сборке idle timeout будет поднят до %s"
+  },
   "Ignore": {
     "value": "Не напоминать"
   },
@@ -2351,9 +2354,6 @@
   },
   "Interval": {
     "value": "Интервал"
-  },
-  "Interval must be ≤ idle timeout": {
-    "value": "Интервал должен быть ≤ тайм-аута простоя"
   },
   "Invalid JSON: %s": {
     "value": "Некорректный JSON: %s"
