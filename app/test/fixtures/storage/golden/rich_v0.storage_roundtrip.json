@@ -8,7 +8,6 @@
       "rules: 15 rules → 16 records",
       "json rules split: \"Json array\" → 2",
       "dns: 17 servers, 7 rules",
-      "dns preset servers without a known preset (ref = tag): ru-direct:dns_ru, ru-direct:yandex_udp, ru-direct:yandex_dot, ru-direct:yandex_doh",
       "dropped keys: excluded_nodes, preset_ids_remapped, node_overrides, show_detour_servers"
     ],
     "warnings": [
