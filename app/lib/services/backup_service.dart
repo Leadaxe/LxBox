@@ -9,6 +9,7 @@ import '../models/server_list.dart';
 import '../models/source_chain.dart';
 import 'app_log.dart';
 import 'json_clone.dart';
+import 'record_vars.dart';
 import 'settings_storage.dart';
 import 'settings_storage_keys.dart';
 import 'storage_migration/migrate_storage.dart';
@@ -96,11 +97,13 @@ class BackupContents {
     this.vpnSettings,
     Map<String, String> presetIdByDnsServerTag = const {},
     Map<String, String> subscriptionBodies = const {},
+    RecordVarDecls recordVars = RecordVarDecls.none,
   }) : storageMigration = storage == null
             ? null
             : migrateStorageDoc(storage,
                 presetIdByDnsServerTag: presetIdByDnsServerTag,
-                subscriptionBodies: subscriptionBodies);
+                subscriptionBodies: subscriptionBodies,
+                recordVars: recordVars);
 
   final DateTime? createdAt;
   final String? sourceAppVersion;
@@ -366,6 +369,8 @@ class BackupService {
       subscriptionBodies: legacy
           ? await SettingsStorage.subscriptionBodiesForMigration(storage)
           : const {},
+      // §441 — Н2–Н4 у vars template-серверов DNS и пресетов.
+      recordVars: legacy ? await loadRecordVarDecls() : RecordVarDecls.none,
     );
   }
 

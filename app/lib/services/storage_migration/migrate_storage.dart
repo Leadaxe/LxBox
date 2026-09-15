@@ -22,6 +22,7 @@ import '../../models/node_spec.dart';
 import '../../models/parser_config.dart' show SelectableRule;
 import '../../models/server_list.dart';
 import '../json_clone.dart' show deepCloneJson;
+import '../record_vars.dart';
 import '../parser/body_decoder.dart';
 import '../parser/parse_all.dart';
 import '../settings_storage_keys.dart';
@@ -149,7 +150,10 @@ bool storageDocNeedsMigration(Map<String, dynamic> doc) =>
 ///   [subscriptionBodies] «адрес → тело `sub_cache`»), `custom_rules` → `rules[]`,
 ///   `dns_options` → `dns{servers, rules}` с `ref` preset-серверов по
 ///   [presetIdByDnsServerTag] (пресет не найден — `ref` = тег); ставится
-///   `storage_version: 1`.
+///   `storage_version: 1`. §441 — `vars` template-серверов DNS и
+///   правил-пресетов пишутся по нормам Н2–Н4 против объявлений [recordVars]
+///   (необъявленное имя и значение, равное умолчанию, снимаются молча);
+///   [RecordVarDecls.none] — как прочитаны.
 /// - Есть `storage_version` и ключи 2.23.2 (2.23.2 поверх данных 2.23.3,
 ///   §3.2) — ключи 2.23.2 отбрасываются с предупреждением, записи
 ///   `sources`/`rules`/`dns` остаются, версия не меняется.
@@ -164,6 +168,7 @@ StorageMigrationResult migrateStorageDoc(
   Map<String, dynamic> doc, {
   Map<String, String> presetIdByDnsServerTag = const {},
   Map<String, String> subscriptionBodies = const {},
+  RecordVarDecls recordVars = RecordVarDecls.none,
 }) {
   final version = storageDocVersion(doc);
   final legacyPresent = [
@@ -223,11 +228,11 @@ StorageMigrationResult migrateStorageDoc(
       );
     }
     if (doc.containsKey(_kCustomRules)) {
-      rules = _convertRules(doc[_kCustomRules], info, warnings);
+      rules = _convertRules(doc[_kCustomRules], recordVars, info, warnings);
     }
     if (doc.containsKey(_kDnsOptions)) {
-      dns = _convertDns(
-          doc[_kDnsOptions], presetIdByDnsServerTag, info, warnings);
+      dns = _convertDns(doc[_kDnsOptions], presetIdByDnsServerTag, recordVars,
+          info, warnings);
     }
   } else {
     warnings.add('storage_version $version with legacy keys '
@@ -552,6 +557,7 @@ Map<String, dynamic>? _autogroupRecord(
 
 List<Map<String, dynamic>> _convertRules(
   Object? raw,
+  RecordVarDecls recordVars,
   List<String> info,
   List<String> warnings,
 ) {
@@ -592,7 +598,7 @@ List<Map<String, dynamic>> _convertRules(
         warnings.add('rule "${rule.name}": non-numeric ports dropped: '
             '${badPorts.join(', ')}');
       }
-      out.add(ruleToRecord(rule));
+      out.add(ruleToRecord(normalizePresetRuleVars(rule, recordVars)));
     } catch (err) {
       warnings.add('rule "${rule.name}": does not convert ($err), dropped');
     }
@@ -632,6 +638,7 @@ List<Map<String, dynamic>> _jsonRuleRecords(
 Map<String, dynamic> _convertDns(
   Object? raw,
   Map<String, String> presetIdByTag,
+  RecordVarDecls recordVars,
   List<String> info,
   List<String> warnings,
 ) {
@@ -666,7 +673,7 @@ Map<String, dynamic> _convertDns(
           if (presetId.isEmpty) noPreset.add(ref.tag);
           ref = ref.copyWith(presetId: presetId);
         }
-        list.add(dnsServerToRecord(ref));
+        list.add(dnsServerToRecord(normalizeDnsServerVars(ref, recordVars)));
         servers++;
       } catch (err) {
         warnings.add('dns server [$i] "${j['tag']}": does not read ($err), '

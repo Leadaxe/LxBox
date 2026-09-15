@@ -183,12 +183,18 @@ DnsRuleRef? _dnsRuleOf(Map<String, dynamic> j) => dnsRuleFromRecord(j).value;
 Future<List<DnsServerRef>> _getDnsServers() async =>
     _parseDnsEntries(_dnsList(await _load(), kDnsServersKey), _dnsServerOf);
 
+/// §441 — значения переменных template-сервера пишутся по нормам Н2–Н4
+/// против шаблона ([normalizeDnsServersVars]): необъявленное имя и значение,
+/// равное умолчанию, снимаются молча. Запись, которую нормализация не
+/// меняет, остаётся теми же байтами.
 Future<void> _saveDnsServers(List<DnsServerRef> servers,
     {bool flush = true}) async {
+  final normalized =
+      normalizeDnsServersVars(servers, await loadRecordVarDecls());
   final stored = _dnsList(await _load(), kDnsServersKey);
   await _putDnsList(
     kDnsServersKey,
-    _mergeDnsEntries(stored, servers, _dnsServerOf, dnsServerToRecord),
+    _mergeDnsEntries(stored, normalized, _dnsServerOf, dnsServerToRecord),
     flush: flush,
   );
 }

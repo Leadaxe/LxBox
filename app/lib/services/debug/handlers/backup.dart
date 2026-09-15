@@ -1,6 +1,7 @@
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../l10n/locale_controller.dart';
+import '../../record_vars.dart';
 import '../../settings_storage.dart';
 import '../../storage_migration/migrate_storage.dart';
 import '../../template_loader.dart';
@@ -108,6 +109,10 @@ Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
       subscriptionBodies: legacy
           ? await SettingsStorage.subscriptionBodiesForMigration(storage)
           : const {},
+      // §441 — Н2–Н4 у vars template-серверов DNS и пресетов.
+      recordVars: legacy
+          ? RecordVarDecls.fromTemplate(template)
+          : RecordVarDecls.none,
     );
     applied['migrated'] = migration.migrated;
     if (migration.migrated || migration.warnings.isNotEmpty) {

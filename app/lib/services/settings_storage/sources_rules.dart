@@ -192,11 +192,17 @@ List<CustomRule> _customRulesOf(
 
 /// §439 В2 — json-правило с массивом раскладывается на правила по элементу
 /// до кодека: запись держит один объект sing-box.
+///
+/// §441 — `vars` правила-пресета пишутся по нормам Н2–Н4 против шаблона
+/// ([normalizePresetRulesVars]): необъявленное имя и значение, равное
+/// умолчанию, снимаются молча.
 Future<void> _saveCustomRules(List<CustomRule> rules,
     {bool flush = true}) async {
+  final decls = await loadRecordVarDecls();
   final data = await _load();
   data[kRulesKey] = [
-    for (final r in splitJsonRuleArrays(rules)) ruleToRecord(r),
+    for (final r in splitJsonRuleArrays(normalizePresetRulesVars(rules, decls)))
+      ruleToRecord(r),
   ];
   SettingsStorage._cache = data;
   SettingsStorage.markConfigDirty(); // §113

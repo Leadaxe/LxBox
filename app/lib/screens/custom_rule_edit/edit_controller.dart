@@ -7,6 +7,7 @@ import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/preset_on_change.dart';
+import '../../services/record_vars.dart';
 import '../../services/relative_time.dart';
 import '../../services/rule_set_downloader.dart';
 import '../../services/settings_storage.dart';
@@ -535,8 +536,33 @@ class CustomRuleEditController extends ChangeNotifier {
   }
 
   void setVarValue(String name, String val) {
-    _varsValues[name] = val;
+    _putVarValue(name, val);
     notifyListeners();
+  }
+
+  /// §441 (Н3/Н4) — запись значения переменной пресета: подрезанное;
+  /// пустое или равное умолчанию объявления снимает ключ (выбор умолчания —
+  /// сброс к шаблону). Имя без объявления (универсальная замена цели
+  /// `outbound`) пишется без сверки с умолчанием.
+  void _putVarValue(String name, String val) {
+    WizardVar? decl;
+    for (final v in preset?.vars ?? const <WizardVar>[]) {
+      if (v.name == name && !v.isRef) {
+        decl = v;
+        break;
+      }
+    }
+    final stored = recordVarValueToStore(
+      val,
+      decl == null
+          ? null
+          : RecordVarDecl(name: decl.name, defaultValue: decl.defaultValue),
+    );
+    if (stored == null) {
+      _varsValues.remove(name);
+    } else {
+      _varsValues[name] = stored;
+    }
   }
 
   /// §117: тоггл DNS-опции. Выбранный serverTag сохраняется при выключении
@@ -664,7 +690,7 @@ class CustomRuleEditController extends ChangeNotifier {
     }
 
     if (!val) {
-      _varsValues[v.name] = 'false';
+      _putVarValue(v.name, 'false');
       notifyListeners();
       _applyPresetOnChange(); // §266 — dns_enable вход формулы on_change
       return false;
@@ -676,7 +702,7 @@ class CustomRuleEditController extends ChangeNotifier {
     }).toList();
 
     if (controlled.isEmpty) {
-      _varsValues[v.name] = 'true';
+      _putVarValue(v.name, 'true');
       notifyListeners();
       _applyPresetOnChange(); // §266
       return false;
@@ -699,7 +725,7 @@ class CustomRuleEditController extends ChangeNotifier {
     if (_disposed) return false;
 
     if (missing.isEmpty) {
-      _varsValues[v.name] = 'true';
+      _putVarValue(v.name, 'true');
       _presetSrsPaths = {..._presetSrsPaths};
       notifyListeners();
       _applyPresetOnChange(); // §266
@@ -724,7 +750,7 @@ class CustomRuleEditController extends ChangeNotifier {
 
     _boolVarDownloading.remove(v.name);
     if (!anyFailed) {
-      _varsValues[v.name] = 'true';
+      _putVarValue(v.name, 'true');
       _presetSrsPaths = {..._presetSrsPaths, ...newPaths};
       _applyPresetOnChange(); // §266
     }

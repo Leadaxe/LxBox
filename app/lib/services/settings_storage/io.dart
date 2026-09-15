@@ -233,6 +233,7 @@ Future<Map<String, dynamic>> _migrateOnLoad(
       doc,
       presetIdByDnsServerTag: await _presetIdsForMigration(),
       subscriptionBodies: await _subscriptionBodiesForMigration(doc),
+      recordVars: await loadRecordVarDecls(), // §441 — Н2–Н4
     );
   } catch (e, st) {
     AppLog.I.error(

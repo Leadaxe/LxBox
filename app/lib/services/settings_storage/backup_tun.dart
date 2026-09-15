@@ -48,6 +48,7 @@ Future<List<String>> _replaceRaw(
     subscriptionBodies: storageDocNeedsMigration(doc)
         ? await _subscriptionBodiesForMigration(doc)
         : const {},
+    recordVars: RecordVarDecls.fromTemplate(template), // §441 — Н2–Н4
   );
   if (migration.info.isNotEmpty) {
     AppLog.I.info('replaceRaw: snapshot migrated to storage_version '

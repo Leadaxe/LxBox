@@ -7,6 +7,7 @@ import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart' show WizardVar;
 import '../../services/dns/node_dns_records.dart' show TailscaleEndpointOption;
+import '../../services/record_vars.dart';
 import '../../widgets/outbound_picker.dart';
 import '../../widgets/var_values_model.dart';
 import '../dns_settings_screen/resolved_server.dart';
@@ -334,8 +335,27 @@ class DnsServerEditController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// §441 (Н3/Н4) — значение пишется подрезанным; пустое или равное
+  /// умолчанию переменной снимает ключ: выбор умолчания — сброс к шаблону.
   void setVarValue(String name, String value) {
-    _varValues[name] = value;
+    WizardVar? decl;
+    for (final v in vars) {
+      if (v.name == name) {
+        decl = v;
+        break;
+      }
+    }
+    final stored = recordVarValueToStore(
+      value,
+      decl == null
+          ? null
+          : RecordVarDecl(name: decl.name, defaultValue: decl.defaultValue),
+    );
+    if (stored == null) {
+      _varValues.remove(name);
+    } else {
+      _varValues[name] = stored;
+    }
     notifyListeners();
   }
 
