@@ -20,7 +20,10 @@ import 'package:lxbox/services/lx_backup_slice.dart';
 /// (`lx_backup_slice.dart`): поле контракта едет, настройка LxBox без дома в
 /// 1.0 срезается одним `backup_local_only_dropped` на сущность, рантайм и
 /// маркеры — молча. Флаг Л2 `declared` снимает срез с поля: оно едет, импорт
-/// его знает и применяет.
+/// его знает и применяет. Контракт 1.0.1 объявил поля стороны LxBox
+/// (`BACKUP.md` §2): в таблице они `declared`, срезается и называется только
+/// DNS-правило `kind: srs`. Механизм среза необъявленной настройки проверяется
+/// подменой таблицы ([_settingsUndeclared]).
 
 const _url = 'https://example-1.com/sub';
 const _uri = 'vless://11111111-1111-1111-1111-111111111111@example-2.com:443'
@@ -166,20 +169,20 @@ List<String> _lines(List<LxBackupWarning> warnings) =>
   );
 }
 
-/// Таблица, в которой все настройки LxBox объявлены контрактом (Л2).
-List<BackupField> _allSettingsDeclared() => [
+/// Таблица, в которой настройки LxBox контрактом НЕ объявлены (форма до 1.0.1):
+/// механизм среза с названием.
+List<BackupField> _settingsUndeclared() => [
       for (final f in kBackupFields)
-        f.fate == BackupFieldFate.setting
-            ? BackupField(f.record, f.key, f.fate, declared: true)
-            : f,
+        f.declared ? BackupField(f.record, f.key, f.fate) : f,
     ];
 
 void main() {
   tearDown(() => overrideBackupFieldsForTesting(null));
 
   group('срез по таблице', () {
-    test('настройки не по умолчанию — одно предупреждение на сущность, в файл '
-        'не едут', () async {
+    test('необъявленные настройки не по умолчанию — одно предупреждение на '
+        'сущность, в файл не едут', () async {
+      overrideBackupFieldsForTesting(_settingsUndeclared());
       final s = _richState();
       final out = await _export(s.lists, chains: s.chains, rules: s.rules);
       expect(_lines(out.warnings), [
@@ -208,7 +211,8 @@ void main() {
           reason: 'рантайм — молча');
     });
 
-    test('умолчания, рантайм и маркер verbatim — без предупреждений', () async {
+    test('умолчания и рантайм — без предупреждений, маркер verbatim едет',
+        () async {
       final sub = SubscriptionServers(
         id: 'sub-1',
         name: 'Provider',
@@ -238,7 +242,8 @@ void main() {
         expect(record.containsKey(key), isFalse, reason: key);
       }
       final rule = ((jsonDecode(out.json) as Map)['rules'] as List).single as Map;
-      expect(rule.containsKey('verbatim'), isFalse);
+      // Контракт 1.0.1 объявил verbatim: тело на приёмнике не перетипизируется.
+      expect(rule['verbatim'], isTrue);
       expect(rule['body'], {'action': 'sniff'});
     });
 
@@ -349,7 +354,9 @@ void main() {
       }
     });
 
-    test('секции узла и члены папки: потеря путём у носителя', () async {
+    test('секции узла и члены папки: необъявленная потеря — путём у носителя',
+        () async {
+      overrideBackupFieldsForTesting(_settingsUndeclared());
       final sections = NodeSections.fromJson({
         'dns': {
           'servers': [
@@ -382,8 +389,30 @@ void main() {
       expect((dns['servers'] as List).single, isNot(contains('description')));
     });
 
-    test('DNS: description и vars сервера названы у каждой записи, srs-правило '
-        'не пишется и названо, template-правило — молча', () async {
+    test('DNS: description и vars сервера едут, srs-правило не пишется и '
+        'названо, template-правило — молча', () async {
+      final warnings = <LxBackupWarning>[];
+      final out = await _export(
+        const [],
+        dnsServers: _richState().dnsServers,
+        dnsRules: const [
+          DnsRuleSrs(name: 'Geo', id: 's1'),
+          DnsRuleTemplate(name: 'Default', enabled: true),
+          DnsRuleInline(name: 'corp', rule: {'server': 'my-doh'}),
+        ],
+        dnsWarnings: warnings,
+      );
+      expect(_lines(warnings), ['$kWarnLocalOnlyDropped dns: Geo: srs']);
+      final dns = (jsonDecode(out.json) as Map)['dns'] as Map;
+      expect([for (final r in dns['rules'] as List) (r as Map)['kind']], ['user']);
+      final servers = (dns['servers'] as List).cast<Map>();
+      expect(servers.first['description'], 'Office');
+      expect(servers.last['vars'], {'dns_ip': '8.8.4.4'});
+    });
+
+    test('DNS: необъявленные description и vars названы у каждой записи',
+        () async {
+      overrideBackupFieldsForTesting(_settingsUndeclared());
       final warnings = <LxBackupWarning>[];
       final out = await _export(
         const [],
@@ -406,7 +435,40 @@ void main() {
   });
 
   group('Л2: declared — поле едет и применяется', () {
-    setUp(() => overrideBackupFieldsForTesting(_allSettingsDeclared()));
+    test('таблица объявляет ровно поля стороны LxBox контракта 1.0.1', () {
+      expect(
+        [
+          for (final f in kBackupFields)
+            if (f.declared) '${f.record.name}.${f.key}',
+        ],
+        [
+          'subscription.detour_policy',
+          'subscription.import_rules',
+          'subscription.import_rules_enabled',
+          'subscription.on_update_action',
+          'server.detour_policy',
+          'server.tag_policy',
+          'folder.detour_policy',
+          'folder.ping_url',
+          'folder.ping_timeout_ms',
+          'chain.label',
+          'rule.update_interval_hours',
+          'rule.verbatim',
+          'dnsServer.vars',
+          'dnsServer.description',
+        ],
+        reason: 'members_rule и pool_badge едут внутри group (поле контракта)',
+      );
+      // НЕ объявлено: DNS-правило kind: srs (BACKUP.md §2) — срез с названием.
+      expect(
+        [
+          for (final f in kBackupFields)
+            if (f.fate == BackupFieldFate.setting && !f.travels)
+              '${f.record.name}.${f.key}',
+        ],
+        ['dnsRule.kind:srs'],
+      );
+    });
 
     test('экспорт пишет объявленные настройки без предупреждений', () async {
       final s = _richState();
@@ -415,7 +477,7 @@ void main() {
           chains: s.chains,
           rules: s.rules,
           dnsServers: s.dnsServers,
-          dnsRules: const [DnsRuleSrs(name: 'Geo', id: 's1')],
+          dnsRules: const [DnsRuleInline(name: 'corp', rule: {'server': 'my-doh'})],
           dnsWarnings: dnsWarnings);
       expect(out.warnings, isEmpty);
       expect(dnsWarnings, isEmpty);
@@ -432,7 +494,7 @@ void main() {
       final dns = doc['dns'] as Map;
       expect(((dns['servers'] as List).first as Map)['description'], 'Office');
       expect(((dns['servers'] as List).last as Map)['vars'], {'dns_ip': '8.8.4.4'});
-      expect(((dns['rules'] as List).single as Map)['kind'], 'srs');
+      expect(((dns['rules'] as List).single as Map)['kind'], 'user');
     });
 
     test('импорт в пустое состояние: не неизвестны и применены', () async {
@@ -538,13 +600,13 @@ void main() {
     }
 
     test('поля не объявлены: отсутствие не сбрасывает значение приёмника', () {
+      overrideBackupFieldsForTesting(_settingsUndeclared());
       final got = _import([local], launcherFile);
       expect(got.file.warnings, isEmpty);
       expectKept(got.lists.single);
     });
 
     test('поля объявлены, но в файле их нет: значение приёмника остаётся', () {
-      overrideBackupFieldsForTesting(_allSettingsDeclared());
       expectKept(_import([local], launcherFile).lists.single);
     });
   });

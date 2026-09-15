@@ -469,7 +469,7 @@ void main() {
       expect(state.lists.whereType<FolderServers>().map((f) => f.members.length), [3, 1]);
     });
 
-    test('настройки без дома в 1.0 названы, а не потеряны молча', () async {
+    test('поля стороны LxBox едут, потеря без дома в 1.0 названа', () async {
       final state = _source();
       state.lists = [
         (state.lists[0] as SubscriptionServers).copyWith(
@@ -493,19 +493,27 @@ void main() {
         const DnsRuleSrs(name: 'Geo', id: 's1'),
       ];
       final out = await _export(state);
+      // Контракт 1.0.1 (BACKUP.md §2 «Поля стороны LxBox»): detour_policy,
+      // on_update_action, ping_url и label цепочки едут, потерей не
+      // называются; json-правило без тела — потеря.
       expect(
         out.warnings.map((w) => '${w.code} ${w.detail}').toList(),
-        [
-          // §439 — общий detour подписки едет ссылкой, срезаются флаги.
-          '$kWarnLocalOnlyDropped Provider: detour_policy, on_update_action',
-          '$kWarnLocalOnlyDropped EU: ping_url',
-          '$kWarnLocalOnlyDropped c: label',
-          '$kWarnLocalOnlyDropped Broken: json',
-        ],
+        ['$kWarnLocalOnlyDropped Broken: json'],
       );
-      final provider = ((jsonDecode(out.json) as Map)['sources'] as List).first as Map;
+      final sources =
+          ((jsonDecode(out.json) as Map)['sources'] as List).cast<Map>();
+      final provider = sources.first;
       expect(provider['detour'], {'tag': 'vpn-1'});
-      expect(provider.containsKey('detour_policy'), isFalse);
+      expect(provider['detour_policy'], {
+        'register_detour_servers': true,
+        'register_detour_in_auto': false,
+        'use_detour_servers': true,
+        'replace_detour_chain': false,
+      });
+      expect(provider['on_update_action'], 'reload');
+      expect(sources.firstWhere((s) => s['id'] == 'fold-a')['ping_url'],
+          'https://example-1.com/204');
+      expect(sources.firstWhere((s) => s['tag'] == 'c')['label'], 'Named');
       final dnsWarnings = <LxBackupWarning>[];
       final dns = dnsToBackup(
         servers: state.dnsServers,

@@ -10,7 +10,9 @@
 /// Флаг [BackupField.declared] — ответ лаунчера Л2 (§439 §6.4): поле LxBox,
 /// объявленное схемой с поддержкой «LxBox», едет в файл как есть, импорт его
 /// применяет, а обход ключей его знает ([declaredBackupKeys]). Снять срез с
-/// поля — правка флага в [kBackupFields], ничего больше.
+/// поля — правка флага в [kBackupFields], ничего больше. Контракт 1.0.1
+/// объявил поля `BACKUP.md` §2 «Поля стороны LxBox»; не объявлено DNS-правило
+/// `kind: srs`.
 ///
 /// Таблица перечисляет ВСЕ ключи записей хранения: ключ, которого в ней нет,
 /// экспорт срезает и называет, чтобы новое поле кодека не уехало и не
@@ -84,10 +86,12 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.subscription, 'update', _c),
   BackupField(BackupRecord.subscription, 'disabled', _c),
   BackupField(BackupRecord.subscription, 'detour', _c),
-  BackupField(BackupRecord.subscription, 'detour_policy', _s),
-  BackupField(BackupRecord.subscription, 'import_rules', _s),
-  BackupField(BackupRecord.subscription, 'import_rules_enabled', _s),
-  BackupField(BackupRecord.subscription, 'on_update_action', _s),
+  BackupField(BackupRecord.subscription, 'detour_policy', _s, declared: true),
+  BackupField(BackupRecord.subscription, 'import_rules', _s, declared: true),
+  BackupField(BackupRecord.subscription, 'import_rules_enabled', _s,
+      declared: true),
+  BackupField(BackupRecord.subscription, 'on_update_action', _s,
+      declared: true),
   // BACKUP.md §2: метаданные выдачи и история обновлений — рантайм машины.
   BackupField(BackupRecord.subscription, 'meta', _r),
   BackupField(BackupRecord.subscription, 'last_updated', _r),
@@ -106,8 +110,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.server, 'body', _c),
   BackupField(BackupRecord.server, 'detour', _c),
   BackupField(BackupRecord.server, 'sections', _c),
-  BackupField(BackupRecord.server, 'detour_policy', _s),
-  BackupField(BackupRecord.server, 'tag_policy', _s),
+  BackupField(BackupRecord.server, 'detour_policy', _s, declared: true),
+  BackupField(BackupRecord.server, 'tag_policy', _s, declared: true),
 
   // ── папка ────────────────────────────────────────────────────────────────
   BackupField(BackupRecord.folder, 'kind', _c),
@@ -116,9 +120,9 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folder, 'enabled', _c),
   BackupField(BackupRecord.folder, 'tag_policy', _c),
   BackupField(BackupRecord.folder, 'detour', _c),
-  BackupField(BackupRecord.folder, 'detour_policy', _s),
-  BackupField(BackupRecord.folder, 'ping_url', _s),
-  BackupField(BackupRecord.folder, 'ping_timeout_ms', _s),
+  BackupField(BackupRecord.folder, 'detour_policy', _s, declared: true),
+  BackupField(BackupRecord.folder, 'ping_url', _s, declared: true),
+  BackupField(BackupRecord.folder, 'ping_timeout_ms', _s, declared: true),
   BackupField(BackupRecord.folder, 'created_at', _r),
   BackupField(BackupRecord.folder, 'nodes', _c),
 
@@ -131,17 +135,16 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folderNode, 'detour', _c),
   BackupField(BackupRecord.folderNode, 'reason', _c),
   BackupField(BackupRecord.folderNode, 'sections', _c),
-  // Член-группа `kind: auto` (§439 N2): состав и стратегия — `group`;
-  // членство правилом и значки строки — настройки LxBox.
+  // Член-группа `kind: auto` (§439 N2): состав и стратегия — `group`; поля
+  // стороны LxBox `members_rule` и `pool_badge` лежат внутри `group`
+  // (контракт 1.0.1) и едут вместе с ним.
   BackupField(BackupRecord.folderNode, 'group', _c),
-  BackupField(BackupRecord.folderNode, 'members_rule', _s),
-  BackupField(BackupRecord.folderNode, 'pool_badge', _s),
 
   // ── цепочка ──────────────────────────────────────────────────────────────
   BackupField(BackupRecord.chain, 'kind', _c),
   BackupField(BackupRecord.chain, 'tag', _c),
   BackupField(BackupRecord.chain, 'enabled', _c),
-  BackupField(BackupRecord.chain, 'label', _s),
+  BackupField(BackupRecord.chain, 'label', _s, declared: true),
   BackupField(BackupRecord.chain, 'body', _c),
   BackupField(BackupRecord.chain, 'hops', _c),
 
@@ -152,11 +155,12 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.rule, 'enabled', _c),
   BackupField(BackupRecord.rule, 'num', _c),
   BackupField(BackupRecord.rule, 'refs', _c),
-  BackupField(BackupRecord.rule, 'update_interval_hours', _s),
+  BackupField(BackupRecord.rule, 'update_interval_hours', _s, declared: true),
   BackupField(BackupRecord.rule, 'ref', _c),
   BackupField(BackupRecord.rule, 'vars', _c),
-  // Маркер: тело едет, настройки пользователя в нём нет (§1.3).
-  BackupField(BackupRecord.rule, 'verbatim', _r),
+  // Маркер: тело едет, настройки пользователя в нём нет (§1.3); объявлен
+  // контрактом 1.0.1 и едет, чтобы тело на приёмнике не перетипизировалось.
+  BackupField(BackupRecord.rule, 'verbatim', _r, declared: true),
   BackupField(BackupRecord.rule, 'body', _c),
   BackupField(BackupRecord.rule, 'dns', _c),
   BackupField(BackupRecord.rule, 'resolve', _c),
@@ -167,8 +171,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.dnsServer, 'ref', _c),
   BackupField(BackupRecord.dnsServer, 'enabled', _c),
   BackupField(BackupRecord.dnsServer, 'body', _c),
-  BackupField(BackupRecord.dnsServer, 'vars', _s),
-  BackupField(BackupRecord.dnsServer, 'description', _s),
+  BackupField(BackupRecord.dnsServer, 'vars', _s, declared: true),
+  BackupField(BackupRecord.dnsServer, 'description', _s, declared: true),
 
   // ── DNS-правило ──────────────────────────────────────────────────────────
   BackupField(BackupRecord.dnsRule, 'kind', _c),

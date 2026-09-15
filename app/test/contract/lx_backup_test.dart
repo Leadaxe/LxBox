@@ -749,7 +749,8 @@ void main() {
       expect(back.rewrite, source.rewrite);
     });
 
-    test('§438 — имени цепочки в 1.0 дома нет: не пишется, потеря названа', () async {
+    test('§439 — имя цепочки едет полем стороны LxBox (контракт 1.0.1), потерей не названо',
+        () async {
       final built = await buildLxBackup(
         lists: const [],
         rules: const [],
@@ -760,15 +761,11 @@ void main() {
           SourceChain(tag: 'chain-3', label: 'Мой маршрут', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
         ],
       );
-      for (final e in _sourcesOf(built.json, 'chain')) {
-        expect(e.containsKey('label'), isFalse);
-      }
-      expect(
-          built.warnings
-              .where((w) => w.code == kWarnLocalOnlyDropped)
-              .map((w) => w.detail),
-          ['chain-3: label'],
-          reason: 'повтор тега и пустое имя потерей не являются');
+      // Запись хранения как есть: пустое имя не пишется.
+      expect([for (final e in _sourcesOf(built.json, 'chain')) e['label']],
+          ['chain-1', null, 'Мой маршрут']);
+      expect(built.warnings.where((w) => w.code == kWarnLocalOnlyDropped),
+          isEmpty);
     });
 
     test('§405 — имя Направления и цепочки переживает круг экспорт→импорт',
@@ -787,8 +784,8 @@ void main() {
 
       final back = parseLxBackup(out, knownOutbounds: {'a', 'b'});
       expect(back.directions.single.label, 'Германия');
-      // §438 — у цепочки 1.0 поля имени нет (потеря названа на экспорте).
-      expect(back.chains.single.label, '');
+      // Контракт 1.0.1 — `label` цепочки объявлен полем стороны LxBox.
+      expect(back.chains.single.label, 'Мой маршрут');
       expect(back.warnings, isEmpty,
           reason: 'поле наше — ни unknown_field, ни label_dropped');
     });
