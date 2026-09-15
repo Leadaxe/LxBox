@@ -55,6 +55,8 @@ class JsonSection extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),
             errorText: errorText,
+            // §447 — длинная причина (массив вместо объекта) переносится.
+            errorMaxLines: 4,
             isDense: true,
           ),
         ),
