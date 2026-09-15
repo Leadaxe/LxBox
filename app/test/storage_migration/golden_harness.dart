@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/services/builder/build_config.dart';
@@ -338,6 +339,8 @@ Future<void> _applyParsed(LxBackupFile parsed) async {
 
   final lists = await SettingsStorage.getServerLists();
   final subMerge = mergeBackupSubscriptions(lists, parsed.subscriptions);
+  final rootDirections = await SettingsStorage.getDirections();
+  final rootChains = await SettingsStorage.getChains();
   final srvMerge = mergeBackupServers(
     subMerge.lists,
     parsed.servers,
@@ -345,11 +348,19 @@ Future<void> _applyParsed(LxBackupFile parsed) async {
     sourceIds: subMerge.ids,
     addedSources: subMerge.added,
     sourceDetours: subMerge.detours,
+    rootNames: {
+      kDirectOutboundTag,
+      kBlockOutboundTag,
+      for (final d in rootDirections) ...[d.tag, d.autoTag],
+      for (final c in rootChains) c.tag,
+      for (final c in parsed.chains) c.tag,
+    },
   );
   final incomingChains = resolveBackupChainHops(
     parsed,
     srvMerge.lists,
     srvMerge.folderIds,
+    linkOf: srvMerge.linkOf,
   );
 
   if (incomingChains.isNotEmpty) {

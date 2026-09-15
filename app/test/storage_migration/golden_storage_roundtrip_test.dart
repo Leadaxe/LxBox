@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/direction_mutations.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/storage_migration/migrate_storage.dart';
+import 'package:lxbox/services/subscription/http_cache.dart';
 
 import 'golden_harness.dart';
 
@@ -35,9 +36,20 @@ void main() {
 
       final fixture = jsonDecode(await fixtureFile(name).readAsString())
           as Map<String, dynamic>;
+      // Как `_load`: пресеты DNS по шаблону и тела подписок из `sub_cache`
+      // (перевод ссылок на узлы подписок, §439 п. 8).
+      final bodies = <String, String>{};
+      for (final l in fixture['server_lists'] as List) {
+        if (l is! Map || l['type'] != 'subscription') continue;
+        final url = l['url'];
+        if (url is! String || bodies.containsKey(url)) continue;
+        final body = await HttpCache.loadBody(url);
+        if (body != null && body.isNotEmpty) bodies[url] = body;
+      }
       final report = migrateStorageDoc(
         jsonDecode(jsonEncode(fixture)) as Map<String, dynamic>,
         presetIdByDnsServerTag: await SettingsStorage.presetIdsForMigration(),
+        subscriptionBodies: bodies,
       );
 
       // Первое чтение мигрирует файл и пишет его.

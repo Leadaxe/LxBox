@@ -29,7 +29,60 @@
       },
       "disabled": {
         "NL-2": 1788307200
-      }
+      },
+      "detour_policy": {
+        "register_detour_servers": true,
+        "register_detour_in_auto": true,
+        "use_detour_servers": true,
+        "replace_detour_chain": false
+      },
+      "import_rules": [
+        {
+          "conditions": [
+            {
+              "path": "tag",
+              "op": "contains",
+              "pattern": "FI"
+            }
+          ],
+          "action": "replace",
+          "target_path": "server_port",
+          "replacement": "8443"
+        },
+        {
+          "conditions": [
+            {
+              "path": "tag",
+              "op": "matches",
+              "pattern": "^ss",
+              "case_sensitive": true
+            },
+            {
+              "path": "server",
+              "op": "equals",
+              "pattern": "example-99.com",
+              "negate": true
+            }
+          ],
+          "match": "any",
+          "action": "disable"
+        },
+        {
+          "conditions": [
+            {
+              "path": "",
+              "op": "contains",
+              "pattern": "example-11"
+            }
+          ],
+          "action": "replace",
+          "replacement": "example-111",
+          "replace_mode": "substitute",
+          "substitute": "example-11",
+          "enabled": false
+        }
+      ],
+      "on_update_action": "reload"
     },
     {
       "kind": "subscription",
@@ -42,7 +95,27 @@
       },
       "update": {
         "interval_hours": -1
-      }
+      },
+      "detour_policy": {
+        "register_detour_servers": true,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "replace_detour_chain": false
+      },
+      "import_rules": [
+        {
+          "conditions": [
+            {
+              "path": "tag",
+              "op": "contains",
+              "pattern": "US"
+            }
+          ],
+          "action": "disable"
+        }
+      ],
+      "import_rules_enabled": false,
+      "on_update_action": "none"
     },
     {
       "kind": "subscription",
@@ -85,6 +158,15 @@
       "origin": {
         "kind": "uri",
         "raw": "hysteria2://testpass123@example-2.com:443?obfs=salamander&obfs-password=obfspass&sni=example-2.com#Hy2%20Obfs"
+      },
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": false,
+        "replace_detour_chain": false
+      },
+      "tag_policy": {
+        "prefix": "HY "
       }
     },
     {
@@ -215,6 +297,8 @@
       "tag_policy": {
         "prefix": "EU "
       },
+      "ping_url": "http://1.1.1.1/cdn-cgi/trace",
+      "ping_timeout_ms": 3000,
       "nodes": [
         {
           "kind": "server",
@@ -260,7 +344,8 @@
                     "type": "udp",
                     "server": "10.8.0.1",
                     "detour": "@self"
-                  }
+                  },
+                  "description": "office dns"
                 }
               ],
               "rules": [
@@ -288,7 +373,8 @@
             "raw": "trojan://testpass123@example-42.com:443?security=tls&sni=example-42.com#nl-1"
           },
           "detour": {
-            "tag": "EU de-1"
+            "folder_id": "fold-eu",
+            "tag": "de-1"
           }
         },
         {
@@ -332,7 +418,14 @@
         "prefix": "My F "
       },
       "detour": {
-        "tag": "EU de-1"
+        "folder_id": "fold-eu",
+        "tag": "de-1"
+      },
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": true,
+        "replace_detour_chain": true
       },
       "nodes": [
         {
@@ -367,6 +460,7 @@
       "kind": "chain",
       "tag": "chain-1",
       "enabled": true,
+      "label": "Work",
       "body": {
         "type": "chain",
         "idle_timeout": "5m",
@@ -383,10 +477,12 @@
       },
       "hops": [
         {
-          "tag": "EU nl-1"
+          "folder_id": "fold-eu",
+          "tag": "nl-1"
         },
         {
-          "tag": "PR DE-1"
+          "folder_id": "sub-1",
+          "tag": "DE-1"
         }
       ]
     },
@@ -394,6 +490,7 @@
       "kind": "chain",
       "tag": "chain-2",
       "enabled": true,
+      "label": "chain-2",
       "body": {
         "type": "chain"
       },
@@ -410,12 +507,14 @@
       "kind": "chain",
       "tag": "chain-off",
       "enabled": false,
+      "label": "Disabled",
       "body": {
         "type": "chain"
       },
       "hops": [
         {
-          "tag": "S2 US-1"
+          "folder_id": "sub-2",
+          "tag": "US-1"
         },
         {
           "tag": "vpn-1"
@@ -600,6 +699,7 @@
         "https://example.com/rules/a.srs",
         "https://example.com/rules/b.srs"
       ],
+      "update_interval_hours": 24,
       "body": {
         "port": [
           443
@@ -633,6 +733,7 @@
       "name": "Json object",
       "enabled": true,
       "num": 1020,
+      "verbatim": true,
       "body": {
         "domain_suffix": [
           ".json.example-53.com"
@@ -647,6 +748,7 @@
       "name": "Json array",
       "enabled": true,
       "num": 1021,
+      "verbatim": true,
       "body": {
         "domain_suffix": [
           ".arr1.example-54.com"
@@ -660,6 +762,7 @@
       "name": "Json array #2",
       "enabled": true,
       "num": 1021,
+      "verbatim": true,
       "body": {
         "ip_cidr": [
           "192.0.2.0/24"
@@ -673,6 +776,7 @@
       "name": "Json comment",
       "enabled": true,
       "num": 1023,
+      "verbatim": true,
       "body": {
         "//": "why this rule exists",
         "domain_keyword": [
@@ -758,7 +862,8 @@
           "server": "example-31.com",
           "path": "/dns-query",
           "detour": "vpn-1"
-        }
+        },
+        "description": "My DoH"
       },
       {
         "kind": "user",
@@ -791,17 +896,25 @@
       {
         "kind": "template",
         "tag": "google_udp",
-        "enabled": true
+        "enabled": true,
+        "vars": {
+          "outbound": "direct-out"
+        }
       },
       {
         "kind": "template",
         "tag": "google_dot",
-        "enabled": true
+        "enabled": true,
+        "description": "Google over TLS"
       },
       {
         "kind": "template",
         "tag": "google_doh",
-        "enabled": true
+        "enabled": true,
+        "vars": {
+          "outbound": "vpn-1",
+          "dns_ip": "8.8.4.4"
+        }
       },
       {
         "kind": "template",
@@ -841,7 +954,8 @@
       {
         "kind": "preset",
         "ref": "ru-direct:yandex_udp",
-        "enabled": false
+        "enabled": false,
+        "description": "Yandex (off)"
       },
       {
         "kind": "preset",

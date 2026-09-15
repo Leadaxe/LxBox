@@ -140,6 +140,12 @@
       "tag_policy": {
         "prefix": "IN: "
       },
+      "detour_policy": {
+        "register_detour_servers": false,
+        "register_detour_in_auto": false,
+        "use_detour_servers": false,
+        "replace_detour_chain": false
+      },
       "nodes": [
         {
           "kind": "server",
@@ -1657,6 +1663,7 @@
       "kind": "chain",
       "tag": "chain-1",
       "enabled": false,
+      "label": "chain-1",
       "body": {
         "type": "chain"
       },
@@ -1785,17 +1792,26 @@
       {
         "kind": "template",
         "tag": "google_udp",
-        "enabled": true
+        "enabled": true,
+        "vars": {
+          "outbound": "direct-out"
+        }
       },
       {
         "kind": "template",
         "tag": "cloudflare_udp",
-        "enabled": true
+        "enabled": true,
+        "vars": {
+          "dns_ip": "1.1.1.1"
+        }
       },
       {
         "kind": "template",
         "tag": "google_doh",
-        "enabled": true
+        "enabled": true,
+        "vars": {
+          "outbound": "vpn-1"
+        }
       },
       {
         "kind": "template",
@@ -1819,7 +1835,8 @@
         "body": {
           "type": "udp",
           "server": "192.168.10.1"
-        }
+        },
+        "description": "My Home DNS"
       },
       {
         "kind": "user",
@@ -1829,7 +1846,8 @@
           "type": "udp",
           "server": "10.255.255.1",
           "server_port": 53
-        }
+        },
+        "description": "Drop Dns"
       },
       {
         "kind": "template",
@@ -1855,7 +1873,8 @@
           "server": "xbox-dns.ru",
           "domain_resolver": "google_udp",
           "server_port": 53
-        }
+        },
+        "description": "xbox-dns.ru"
       },
       {
         "kind": "user",

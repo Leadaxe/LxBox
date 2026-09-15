@@ -4,6 +4,7 @@
     "info": [
       "sources: 3 subscriptions, 7 servers, 3 folders, 3 chains",
       "servers with several nodes kept as one record: 1 (srv-multi)",
+      "node links: 5 final tags → {folder_id, tag}",
       "rules: 15 rules → 16 records",
       "json rules split: \"Json array\" → 2",
       "dns: 17 servers, 7 rules",

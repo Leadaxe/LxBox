@@ -6,6 +6,9 @@
       "rules: 1 rules → 1 records",
       "dns: 15 servers, 2 rules",
       "dropped keys: preset_ids_remapped"
+    ],
+    "warnings": [
+      "server \"🏠 home\": detour \"🇫🇮⚪Финляндия (БС-4) ☁️ proxy-wl-176-109-88-214\" matches no node, kept as a root link"
     ]
   },
   "migrated_file_is_report_doc": true,
