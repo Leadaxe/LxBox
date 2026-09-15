@@ -149,8 +149,8 @@ const String kWarnLocalOnlyDropped = 'backup_local_only_dropped';
 ///
 /// Приехавшее НЕ применяется: под этим именем у пользователя уже своё
 /// Направление со своими настройками, и перезапись стёрла бы их
-/// (BACKUP.md §3). Правило при этом цель находит — тег совпадает, — поэтому
-/// тег всё равно пополняет known-множество.
+/// (BACKUP.md §3). Правило при этом цель находит — тег совпадает: он есть у
+/// приёмника и входит в список известных целей ([lxImportKnownTargets]).
 const String kWarnDirectionExists = 'backup_direction_exists';
 
 /// §393 C9 — тег приехавшей цепочки уже занят на этой стороне (SPEC 110,
@@ -160,9 +160,9 @@ const String kWarnDirectionExists = 'backup_direction_exists';
 /// его ВСЕГДА: у цепочки нет стабильного id, идентичность несёт только тег.
 /// Молчаливое «своя победила» скрыло бы случай СЛУЧАЙНЫХ ТЁЗОК — двух
 /// несвязанных маршрутов, одинаково названных на разных устройствах
-/// (BACKUP.md §2). Приехавшая запись не применяется, своя остаётся; тег при
-/// этом пополняет known-множество — правило, метящее в цепочку, цель
-/// находит, она просто чужая.
+/// (BACKUP.md §2). Приехавшая запись не применяется, своя остаётся; правило,
+/// метящее в цепочку, цель находит — тег есть у приёмника, — она просто
+/// чужая.
 const String kWarnChainExists = 'backup_chain_exists';
 
 /// §393 B9 — DNS-запись приехала в виде, которому на этой стороне нет места
@@ -228,16 +228,24 @@ const Set<String> kLxPortableVars = {
   'urltest_url',
 };
 
-/// Зарезервированные цели: существуют всегда, объявлять не нужно.
+/// Зарезервированные литералы (BACKUP.md §3): существуют всегда, объявлять не
+/// нужно. Служебные теги шаблона (`direct-out`, тег блокировки, outbound'ы и
+/// endpoint'ы `config`) сюда не входят: их называет шаблон приёмника
+/// ([lxImportKnownTargets], `systemTags`).
 const Set<String> _reservedOutbounds = {
-  // Служебный direct шаблона LxBox (`kDirectOutboundTag`): цель по умолчанию
-  // в пикере правил. Без него импорт выключал каждое правило на direct.
-  'direct-out',
   'direct',
   'block',
   'reject',
   'drop',
   'dns-out',
+};
+
+/// D-117 — служебные теги приёмника, когда шаблона нет (корпус, разбор без
+/// состояния): прямой канал и тег блокировки LxBox. У приёмника с шаблоном их
+/// называет сам шаблон.
+const Set<String> kLxImportDefaultSystemTags = {
+  kDirectOutboundTag,
+  kBlockOutboundTag,
 };
 
 /// Предупреждение импорта: код + что затронуто.
@@ -648,6 +656,9 @@ class LxBackupFile {
   final List<Map<String, dynamic>> warp;
 
   final Map<String, String> vars;
+
+  /// `route.final` файла. У [decodeLxBackup] — как в файле; после
+  /// [gateLxBackupTargets] — только известная цель, иначе `null`.
   final String? routeFinal;
 
   final List<LxBackupWarning> warnings;
@@ -877,10 +888,15 @@ Map<String, dynamic>? _tryDecodeObject(String body) {
   }
 }
 
-/// Разбирает LX Backup.
+/// Разбирает LX Backup и сверяет цели правил и `route.final` без состояния
+/// приёмника: известные цели — [knownOutbounds] плюс то, что приехало файлом
+/// ([lxImportKnownTargets]). Импорт в приложение идёт не сюда, а через план
+/// `planLxBackupImport` (`lx_backup_import.dart`): там список считается после
+/// слияния, с узлами и шаблоном приёмника (D-117).
 ///
-/// [knownOutbounds] — цели, на которые правилу разрешено ссылаться;
-/// пустой набор означает «проверять нечем» — тогда ссылки не режутся.
+/// [knownOutbounds] — имена, которые приёмник знает сам (они же заняты для
+/// Направлений файла); пустой набор при файле без целей означает «проверять
+/// нечем» — тогда ссылки не режутся.
 ///
 /// [knownChains] — теги ЦЕПОЧЕК, уже заведённых на этой стороне (§393 C9).
 /// Отдельно от [knownOutbounds] намеренно: merge цепочек идёт по СВОЕМУ
@@ -895,6 +911,35 @@ Map<String, dynamic>? _tryDecodeObject(String body) {
 LxBackupFile parseLxBackup(
   String raw, {
   Set<String> knownOutbounds = const {},
+  Set<String> knownPresets = const {},
+  Set<String> knownChains = const {},
+}) {
+  final file = decodeLxBackup(
+    raw,
+    takenTags: knownOutbounds,
+    knownPresets: knownPresets,
+    knownChains: knownChains,
+  );
+  return gateLxBackupTargets(
+    file,
+    lxImportKnownTargets(
+      directions: file.directions,
+      chainTags: {for (final c in file.chains) c.tag},
+      receiverTargets: {...knownOutbounds, ...knownChains},
+    ),
+  );
+}
+
+/// Декодер LX Backup без проверки целей: записи файла в промежуточную форму,
+/// пресет вне шаблона — выключен. Цели правил и `route.final` сверяет
+/// [gateLxBackupTargets] одним списком после слияния (BACKUP.md §3, D-117):
+/// до слияния декодер не знает ни узлов результата, ни шаблона приёмника.
+///
+/// [takenTags] — теги, занятые у приёмника: Направление файла под таким тегом
+/// не применяется (`backup_direction_exists`).
+LxBackupFile decodeLxBackup(
+  String raw, {
+  Set<String> takenTags = const {},
   Set<String> knownPresets = const {},
   Set<String> knownChains = const {},
 }) {
@@ -917,7 +962,7 @@ LxBackupFile parseLxBackup(
   if (version == kLxBackupFormat10) {
     return _parse10(
       decoded,
-      knownOutbounds: knownOutbounds,
+      takenTags: takenTags,
       knownPresets: knownPresets,
       knownChains: knownChains,
     );
@@ -925,7 +970,7 @@ LxBackupFile parseLxBackup(
   return _parse0x(
     decoded,
     version,
-    knownOutbounds: knownOutbounds,
+    takenTags: takenTags,
     knownPresets: knownPresets,
     knownChains: knownChains,
   );
@@ -935,7 +980,7 @@ LxBackupFile parseLxBackup(
 LxBackupFile _parse0x(
   Map<String, dynamic> decoded,
   int version, {
-  required Set<String> knownOutbounds,
+  required Set<String> takenTags,
   required Set<String> knownPresets,
   required Set<String> knownChains,
 }) {
@@ -946,18 +991,16 @@ LxBackupFile _parse0x(
   // `core/backup/file.go:scanUnknown`).
   final warnings = _scanUnknown(decoded);
 
-  final directions = _parseDirections(decoded, knownOutbounds, warnings);
-  final knownWithDirections = directions.known;
+  final directions = _parseDirections(decoded, takenTags, warnings);
 
   // §393 C9 — цепочки (SPEC 110, схема v1.2): ПОСЛЕ Направлений (позиция
-  // может ссылаться на Направление) и ДО правил (правило может метить в
-  // цепочку как в цель). Порядок записей файла сохраняется как есть.
+  // может ссылаться на Направление). Порядок записей файла сохраняется как
+  // есть.
   //
   // Занятый тег — тот же код-путь, что и дубль ВНУТРИ файла: набор
   // `takenChainTags` общий, поэтому first-wins по порядку файла, а вторая
   // запись с тем же тегом получает `backup_chain_exists` наравне с тёзкой
-  // локальной цепочки. Тег пополняет known-множество в ЛЮБОМ случае —
-  // и у применённой, и у пропущенной: цель под этим именем существует.
+  // локальной цепочки.
   final chains = <SourceChain>[];
   final takenChainTags = <String>{
     for (final t in knownChains) t.trim(),
@@ -970,7 +1013,6 @@ LxBackupFile _parse0x(
     // пропускаем молча, как безымянное Направление (защита от правленого
     // файла, а не потеря данных).
     if (tag.isEmpty || j['chain'] is! Map) continue;
-    knownWithDirections.add(tag);
     if (!takenChainTags.add(tag)) {
       warnings.add(LxBackupWarning(kWarnChainExists, tag));
       continue;
@@ -983,21 +1025,16 @@ LxBackupFile _parse0x(
       if (item is Map)
         ..._ruleFromJson(
           item.cast<String, dynamic>(),
-          knownWithDirections,
           knownPresets,
           warnings,
         ),
   ];
 
   // Порядок разбора секций = порядок предупреждений в превью: переменные,
-  // `route.final`, `warp[]`, затем записи источников.
+  // `warp[]`, затем записи источников; цели правил и `route.final` дописывает
+  // в конец [gateLxBackupTargets].
   final vars = _parseVars(decoded, warnings);
-  final routeFinal = _parseRouteFinal(
-    decoded,
-    knownOutbounds,
-    knownWithDirections,
-    warnings,
-  );
+  final routeFinal = _parseRouteFinal(decoded);
   final warp = _parseWarp(decoded, warnings);
 
   final by = (decoded['exported_by'] as Map?)?.cast<String, dynamic>() ?? {};
@@ -1034,37 +1071,30 @@ LxBackupFile _parse0x(
 typedef _ParsedDirections = ({
   List<Direction> directions,
   Map<String, LxDirectionPing> ping,
-
-  /// Известные цели: [knownOutbounds] разбора плюс теги Направлений файла.
-  /// Изменяемое: декодер дописывает сюда теги цепочек.
-  Set<String> known,
 });
 
-/// §393 B1 — Направления разбираются ПЕРВЫМИ и пополняют known-множество:
-/// правило, чья цель приехала в этом же файле, обязано прийти РАБОЧИМ, а не
-/// выключенным с warning'ом о мёртвой ссылке (BACKUP.md §3). Форма
-/// `directions[]` у 0.x и 1.0 одна (тонкий слой, BACKUP.md §1), поэтому и
-/// разбор один.
+/// §393 B1 — Направления файла. Форма `directions[]` у 0.x и 1.0 одна (тонкий
+/// слой, BACKUP.md §1), поэтому и разбор один. Их теги — известные цели
+/// правил (BACKUP.md §3): список считает [lxImportKnownTargets] после слияния.
 ///
 /// Занятый тег — не ошибка файла: у пользователя под этим именем своё
 /// Направление со своими настройками. Приехавшее не применяется (warning),
-/// но тег в known входит — правило цель находит, она просто чужая.
+/// но цель под этим тегом у приёмника есть — правило её находит.
 _ParsedDirections _parseDirections(
   Map<String, dynamic> decoded,
-  Set<String> knownOutbounds,
+  Set<String> takenTags,
   List<LxBackupWarning> warnings,
 ) {
   final directions = <Direction>[];
   // §409 — бюджеты теста узла применённых Направлений (`ping_options.groups`).
   final directionPing = <String, LxDirectionPing>{};
-  final knownWithDirections = knownOutbounds.toSet();
   // §406 (D-095) — занятость тега определяется ТОЧНЫМ совпадением, как при
   // создании Направления руками (`directionTagConflict`). `VPN-DE` при живом
   // `vpn-de` — не тёзка, а второе Направление: для ядра это два разных
   // outbound'а, и объявлять одно из них «уже существующим» значило бы молча
   // потерять приехавшую запись.
-  final takenTags = <String>{
-    for (final t in knownOutbounds) t.trim(),
+  final taken = <String>{
+    for (final t in takenTags) t.trim(),
   };
   final items = decoded['directions'];
   for (final item in (items is List ? items : const [])) {
@@ -1073,8 +1103,7 @@ _ParsedDirections _parseDirections(
     final rawTag = j['tag'];
     final tag = rawTag is String ? rawTag.trim() : '';
     if (tag.isEmpty) continue; // без тега Направление не адресуемо
-    knownWithDirections.add(tag);
-    if (!takenTags.add(tag)) {
+    if (!taken.add(tag)) {
       warnings.add(LxBackupWarning(kWarnDirectionExists, tag));
       continue;
     }
@@ -1089,7 +1118,6 @@ _ParsedDirections _parseDirections(
   return (
     directions: directions,
     ping: directionPing,
-    known: knownWithDirections,
   );
 }
 
@@ -1111,21 +1139,13 @@ Map<String, String> _parseVars(
   return vars;
 }
 
-/// `route.final` — применяется только при известной цели (BACKUP.md §3).
-String? _parseRouteFinal(
-  Map<String, dynamic> decoded,
-  Set<String> knownOutbounds,
-  Set<String> known,
-  List<LxBackupWarning> warnings,
-) {
+/// `route.final` файла как есть. Применяется только при известной цели
+/// (BACKUP.md §3) — сверяет [gateLxBackupTargets] после слияния.
+String? _parseRouteFinal(Map<String, dynamic> decoded) {
   final route = decoded['route'];
   final finalTag = route is Map ? route['final'] : null;
   if (finalTag is! String || finalTag.isEmpty) return null;
-  if (knownOutbounds.isEmpty || _isKnownOutbound(finalTag, known)) {
-    return finalTag;
-  }
-  warnings.add(LxBackupWarning(kWarnFinalDropped, finalTag));
-  return null;
+  return finalTag;
 }
 
 /// §393 B8 — записи warp[]: разбираются позже, при применении (парсер не
@@ -2130,41 +2150,189 @@ SourceChain _chainFromCanon(Map<String, dynamic> j, String tag) {
 /// outbound'ом для ядра не является.
 bool _isKnownOutbound(String tag, Set<String> known) {
   final t = tag.trim();
-  return _reservedOutbounds.contains(t) ||
-      known.map((e) => e.trim()).contains(t);
+  return _reservedOutbounds.contains(t) || known.contains(t);
+}
+
+/// D-117 — корневые имена результата импорта (BACKUP.md §3, NODE_LINK §8):
+/// служебные теги шаблона приёмника ([systemTags]; без шаблона —
+/// [kLxImportDefaultSystemTags]), теги Направлений и `-auto` тех, у кого есть
+/// автовыбор, теги цепочек. Свёрток у LxBox нет.
+///
+/// [directions] и [chainTags] — то, что окажется у приёмника после слияния:
+/// его собственные записи и приехавшие, прошедшие гейт тегов. Запись файла,
+/// отсеянная гейтом, целью не становится: её тег либо уже есть у приёмника,
+/// либо служебный и Направлению не положен.
+///
+/// Это часть списка известных целей ([lxImportKnownTargets]), которая
+/// известна ДО слияния узлов: её получает подъём ссылок
+/// ([mergeBackupServers], `rootNames`), а корневые узлы результата он
+/// добавляет сам тем же [lxImportRootNodeTags].
+Set<String> lxImportRootNames({
+  Iterable<Direction> directions = const [],
+  Iterable<String> chainTags = const [],
+  Set<String> systemTags = const {},
+}) {
+  final names = <String>{};
+  void add(String tag) {
+    final t = tag.trim();
+    if (t.isNotEmpty) names.add(t);
+  }
+
+  (systemTags.isEmpty ? kLxImportDefaultSystemTags : systemTags).forEach(add);
+  for (final d in directions) {
+    if (d.tag.trim().isEmpty) continue;
+    add(d.tag);
+    // Двойник эмитится только у Направления с автовыбором
+    // (`build_config.dart`, `emitAuto`): цель без него — ссылка в никуда.
+    if (d.auto != null) add(d.autoTag);
+  }
+  chainTags.forEach(add);
+  return names;
+}
+
+/// Теги корневых узлов [lists] — одиночных серверов, под которыми узел
+/// эмитится (префикс сервера + тег узла, [containerFinalForm]).
+Set<String> lxImportRootNodeTags(List<ServerList> lists) => {
+      for (final l in lists)
+        if (l is UserServer)
+          // Сервер, заведённый этим импортом, узлов ещё не разобрал: они в тексте.
+          for (final n in l.nodes.isNotEmpty ? l.nodes : _nodesOf(l.rawBody))
+            if (n.tag.isNotEmpty) containerFinalForm(l, n.tag),
+    };
+
+/// D-117 — ЕДИНСТВЕННЫЙ список известных целей импорта (BACKUP.md §3): цели
+/// правил (`backup_unknown_outbound`), `route.final`
+/// (`backup_final_dropped`) и корневые имена подъёма ссылок.
+///
+/// Считается ПОСЛЕ слияния, по тому, что окажется у приёмника:
+/// [lxImportRootNames] (служебные теги шаблона, Направления и их `-auto`,
+/// цепочки), корневые узлы результата [lists], имена, которые приёмник знает
+/// сам ([receiverTargets]), и зарезервированные литералы.
+///
+/// Раньше списков было два: экран строил его из хранения приёмника ДО
+/// слияния, декодер дописывал теги файла, и ни один не видел `-auto`,
+/// корневых узлов файла и служебных тегов шаблона — импорт в пустое состояние
+/// выключал правила на цели, приехавшие этим же файлом.
+///
+/// `null` — «проверять нечем»: ни шаблона, ни Направлений, ни цепочек, ни
+/// узлов, ни имён приёмника. Тогда цели не режутся — выключить всё подряд
+/// хуже, чем импортировать как есть; умолчания служебных тегов такой список не
+/// открывают.
+Set<String>? lxImportKnownTargets({
+  Iterable<Direction> directions = const [],
+  Iterable<String> chainTags = const [],
+  List<ServerList> lists = const [],
+  Set<String> systemTags = const {},
+  Set<String> receiverTargets = const {},
+}) {
+  final rootNodes = lxImportRootNodeTags(lists);
+  final receiver = {
+    for (final t in receiverTargets)
+      if (t.trim().isNotEmpty) t.trim(),
+  };
+  if (systemTags.isEmpty &&
+      directions.every((d) => d.tag.trim().isEmpty) &&
+      chainTags.every((t) => t.trim().isEmpty) &&
+      rootNodes.isEmpty &&
+      receiver.isEmpty) {
+    return null;
+  }
+  return {
+    ..._reservedOutbounds,
+    ...lxImportRootNames(
+      directions: directions,
+      chainTags: chainTags,
+      systemTags: systemTags,
+    ),
+    ...rootNodes,
+    ...receiver,
+  };
+}
+
+/// Цель правила так, как её называет файл: `outbound` правила inline/srs
+/// (`reject` у отказа), `outbound` тела правила вида json. У пресета цели
+/// нет — она из шаблона. Пустая строка — цели нет, проверять нечего.
+String _ruleTarget(CustomRule r) => switch (r) {
+      CustomRuleInline(:final outbound) => outbound,
+      CustomRuleSrs(:final outbound) => outbound,
+      CustomRulePreset() => '',
+      CustomRuleJson(:final json) => switch (_tryDecodeObject(json.trim())) {
+          {'outbound': final String o} => o,
+          _ => '',
+        },
+    };
+
+/// D-117 — цели правил и `route.final` файла против списка известных целей
+/// [known] ([lxImportKnownTargets]). Один проход на оба формата файла.
+///
+/// Правило с целью, которой нет, приезжает ВЫКЛЮЧЕННЫМ с
+/// [kWarnUnknownOutbound], а не теряется: включённое правило с несуществующей
+/// целью роняет конфиг ядра целиком. `route.final` в никуда не применяется
+/// ([kWarnFinalDropped]): маршрут по умолчанию уводил бы весь трафик в
+/// несуществующий outbound. `known == null` — проверять нечем, файл как есть.
+///
+/// Возвращает новый [LxBackupFile]: правила в том же порядке, предупреждения
+/// дописаны в конец отчёта в порядке правил.
+LxBackupFile gateLxBackupTargets(LxBackupFile file, Set<String>? known) {
+  if (known == null) return file;
+  final warnings = [...file.warnings];
+  final rules = <CustomRule>[];
+  for (final r in file.rules) {
+    final target = _ruleTarget(r);
+    if (target.isEmpty || _isKnownOutbound(target, known)) {
+      rules.add(r);
+      continue;
+    }
+    warnings.add(LxBackupWarning(kWarnUnknownOutbound,
+        '${r.name.isEmpty ? r.kind.name : r.name} → $target'));
+    rules.add(r.withEnabled(false));
+  }
+  var routeFinal = file.routeFinal;
+  if (routeFinal != null &&
+      routeFinal.isNotEmpty &&
+      !_isKnownOutbound(routeFinal, known)) {
+    warnings.add(LxBackupWarning(kWarnFinalDropped, routeFinal));
+    routeFinal = null;
+  }
+  return LxBackupFile(
+    version: file.version,
+    exportedByApp: file.exportedByApp,
+    exportedByVersion: file.exportedByVersion,
+    exportedAt: file.exportedAt,
+    directions: file.directions,
+    directionPing: file.directionPing,
+    rules: rules,
+    chains: file.chains,
+    chainHops: file.chainHops,
+    subscriptions: file.subscriptions,
+    servers: file.servers,
+    folders: file.folders,
+    dns: file.dns,
+    warp: file.warp,
+    vars: file.vars,
+    routeFinal: routeFinal,
+    warnings: warnings,
+  );
 }
 
 /// Запись схемы → правила LxBox (вид `json` — по записи на тело, D-111).
 ///
-/// Ссылка в никуда не повод терять правило: оно приезжает ВЫКЛЮЧЕННЫМ.
-/// Включённое правило с несуществующей целью роняет конфиг ядра целиком.
+/// Цель здесь не сверяется: ссылку в никуда выключает [gateLxBackupTargets]
+/// после слияния.
 List<CustomRule> _ruleFromJson(
   Map<String, dynamic> j,
-  Set<String> knownOutbounds,
   Set<String> knownPresets,
   List<LxBackupWarning> warnings,
 ) {
   final kindName = (j['kind'] as String?) ?? '';
   final name = (j['name'] as String?) ?? '';
   if (kindName == 'json') {
-    return _jsonRule0x(j, name, knownOutbounds, warnings);
+    return _jsonRule0x(j, name, warnings);
   }
-  var enabled = (j['enabled'] as bool?) ?? true;
+  final enabled = (j['enabled'] as bool?) ?? true;
   final rawNum = j['num'];
   final orderNum = rawNum is num ? rawNum.toInt() : null;
   final outbound = (j['outbound'] as String?) ?? '';
-
-  if (outbound.isNotEmpty &&
-      knownOutbounds.isNotEmpty &&
-      !_isKnownOutbound(outbound, knownOutbounds)) {
-    enabled = false;
-    warnings.add(
-      LxBackupWarning(
-        kWarnUnknownOutbound,
-        '${name.isEmpty ? kindName : name} → $outbound',
-      ),
-    );
-  }
 
   final rule = _ruleBodyFromJson(
     j,
@@ -2267,7 +2435,6 @@ CustomRule? _ruleBodyFromJson(
 List<CustomRule> _jsonRule0x(
   Map<String, dynamic> j,
   String name,
-  Set<String> known,
   List<LxBackupWarning> warnings,
 ) {
   final match = j['match'];
@@ -2287,10 +2454,7 @@ List<CustomRule> _jsonRule0x(
   return [
     for (final part in _splitRuleBodies(
         record, match is Map ? [match] : match, 'rules[$name].match', warnings))
-      if (ruleFromRecord(part).value case final rule?)
-        _gateTarget(rule, _obj(part['body']),
-            _str(part['name']).isEmpty ? 'json' : _str(part['name']),
-            known, warnings),
+      ?ruleFromRecord(part).value,
   ];
 }
 
@@ -2368,14 +2532,13 @@ DetourPolicy _flagsOf(DetourPolicy p) => p.copyWith(overrideDetour: NodeLink.non
 
 LxBackupFile _parse10(
   Map<String, dynamic> decoded, {
-  required Set<String> knownOutbounds,
+  required Set<String> takenTags,
   required Set<String> knownPresets,
   required Set<String> knownChains,
 }) {
   final warnings = _scanUnknown10(decoded);
 
-  final parsedDirections = _parseDirections(decoded, knownOutbounds, warnings);
-  final known = parsedDirections.known;
+  final parsedDirections = _parseDirections(decoded, takenTags, warnings);
 
   final subscriptions = <LxSubscription>[];
   final servers = <LxServer>[];
@@ -2413,7 +2576,6 @@ LxBackupFile _parse10(
         // Безымянная цепочка не адресуема: пропуск молча, как в 0.x.
         if (tag.isEmpty) continue;
         _dropForeignSections(j, kind, warnings);
-        known.add(tag);
         if (!takenChainTags.add(tag)) {
           warnings.add(LxBackupWarning(kWarnChainExists, tag));
           continue;
@@ -2435,11 +2597,11 @@ LxBackupFile _parse10(
 
   final rules = <CustomRule>[
     for (final item in _list(decoded['rules']))
-      if (_obj(item) case final j?) ..._rule10(j, known, knownPresets, warnings),
+      if (_obj(item) case final j?) ..._rule10(j, knownPresets, warnings),
   ];
 
   final vars = _parseVars(decoded, warnings);
-  final routeFinal = _parseRouteFinal(decoded, knownOutbounds, known, warnings);
+  final routeFinal = _parseRouteFinal(decoded);
   final warp = _parseWarp(decoded, warnings);
   final dns = _dns10(decoded['dns'], knownPresets, warnings);
 
@@ -2780,7 +2942,6 @@ List<Map<String, dynamic>> _splitRuleBodies(
 /// [kWarnUnknownField].
 List<CustomRule> _rule10(
   Map<String, dynamic> j,
-  Set<String> known,
   Set<String> knownPresets,
   List<LxBackupWarning> warnings,
 ) {
@@ -2797,14 +2958,13 @@ List<CustomRule> _rule10(
   return [
     for (final part in _splitRuleBodies(
         record, record['body'], 'rules[$label].body', warnings))
-      ?_ruleRecord10(part, kind, known, knownPresets, warnings),
+      ?_ruleRecord10(part, kind, knownPresets, warnings),
   ];
 }
 
 CustomRule? _ruleRecord10(
   Map<String, dynamic> j,
   String kind,
-  Set<String> known,
   Set<String> knownPresets,
   List<LxBackupWarning> warnings,
 ) {
@@ -2847,25 +3007,7 @@ CustomRule? _ruleRecord10(
       }
     }
   }
-  return _gateTarget(rule, _obj(j['body']), label, known, warnings);
-}
-
-/// Цель проверяется, только когда тело её называет: без `outbound` правило
-/// метит в умолчание, у `action: reject` цели нет. Неизвестная цель — правило
-/// выключено с [kWarnUnknownOutbound] (BACKUP.md §3).
-CustomRule _gateTarget(
-  CustomRule rule,
-  Map<String, dynamic>? body,
-  String label,
-  Set<String> known,
-  List<LxBackupWarning> warnings,
-) {
-  final target = _str(body?['outbound']);
-  if (target.isEmpty || known.isEmpty || _isKnownOutbound(target, known)) {
-    return rule;
-  }
-  warnings.add(LxBackupWarning(kWarnUnknownOutbound, '$label → $target'));
-  return rule.withEnabled(false);
+  return rule;
 }
 
 /// DNS-секция 1.0 → [LxDns] кодеком записей.
@@ -3755,14 +3897,9 @@ NodeLink Function(NodeLink link, {int? at, bool legacy}) _backupLinkMapper({
         f.id: folderAtKey[f.key]!,
   };
   final folderByKey = {for (final f in folders) f.key: f};
-  final rootTaken = <String>{
-    ...rootNames,
-    for (final l in merged)
-      if (l is UserServer)
-        // Сервер, заведённый этим импортом, узлов ещё не разобрал: они в тексте.
-        for (final n in l.nodes.isNotEmpty ? l.nodes : _nodesOf(l.rawBody))
-          if (n.tag.isNotEmpty) containerFinalForm(l, n.tag),
-  };
+  // Корень результата — тот же список известных целей, что у правил и
+  // `route.final` (D-117): объявленные имена плюс корневые узлы слияния.
+  final rootTaken = <String>{...rootNames, ...lxImportRootNodeTags(merged)};
 
   // Члены папок файла: финальная форма и сырой тег → адреса здесь.
   final fileFinal = <String, Set<NodeLink>>{};

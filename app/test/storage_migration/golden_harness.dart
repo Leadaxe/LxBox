@@ -4,18 +4,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
-import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/services/builder/build_config.dart';
-import 'package:lxbox/services/direction_mutations.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/l10n/locale_controller.dart';
 import 'package:lxbox/services/lx_backup.dart';
+import 'package:lxbox/services/lx_backup_import.dart';
 import 'package:lxbox/services/rule_set_downloader.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/subscription/http_cache.dart';
-import 'package:lxbox/services/template_loader.dart';
 import 'package:lxbox/services/warp/warp_backup.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -47,9 +44,9 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 // вместо сверки.
 //
 // Сборка и бэкап повторяют боевой путь без виджетов: состав `BuildSettings`
-// — `SubscriptionController._generate`, экспорт и импорт LX Backup —
-// `BackupScreen._onLxExport` / `_onLxImport` / `_applyLxSections`. Правка
-// любого из этих мест в `lib/` обязана отразиться здесь.
+// — `SubscriptionController._generate`, экспорт LX Backup —
+// `BackupScreen._onLxExport`, импорт — сервис `LxBackupImportService` (его же
+// зовёт экран). Правка экспорта в `lib/` обязана отразиться здесь.
 
 const kStorageFixturesDir = 'test/fixtures/storage';
 const kStorageGoldenDir = 'test/fixtures/storage/golden';
@@ -288,158 +285,13 @@ Future<({String json, List<LxBackupWarning> warnings})> exportGoldenLxBackup()
   return (json: prettyJson(doc), warnings: exportWarnings);
 }
 
-/// Импорт LX Backup в хранение песочницы — `BackupScreen._onLxImport` +
-/// `_applyLxSections` после подтверждения. Возвращает разобранный файл
-/// (его `warnings` — то, что не применилось).
+/// Импорт LX Backup в хранение песочницы — тот же сервис, что у экрана
+/// (`LxBackupImportService`: план превью, затем запись после подтверждения).
+/// Возвращает разобранный файл (его `warnings` — то, что не применилось).
 Future<LxBackupFile> importGoldenLxBackup(String raw) async {
-  final template = await TemplateLoader.load();
-  final lists = await SettingsStorage.getServerLists();
-  final directions = await SettingsStorage.getDirections();
-  final chains = await SettingsStorage.getChains();
-  final known = <String>{
-    for (final l in lists) l.tagPrefix,
-    for (final d in directions) d.tag,
-    for (final c in chains) c.tag,
-  }..removeWhere((t) => t.isEmpty);
-  final parsed = parseLxBackup(
-    raw,
-    knownOutbounds: known,
-    knownPresets: {for (final p in template.selectableRules) p.presetId},
-    knownChains: {for (final c in chains) c.tag},
-  );
-  await _applyParsed(parsed);
-  return parsed;
-}
-
-Future<void> _applyParsed(LxBackupFile parsed) async {
-  final appliedPing = <String, LxDirectionPing?>{};
-  if (parsed.directions.isNotEmpty) {
-    final current = await SettingsStorage.getDirections();
-    final merged = current.toList();
-    final used = current.map((d) => d.tag).toList();
-    var applied = 0;
-    for (final d in parsed.directions) {
-      if (directionTagConflict(d.tag, used) != null) continue;
-      merged.add(d);
-      used.add(d.tag);
-      applied++;
-      appliedPing[d.tag] = parsed.directionPing[d.tag];
-    }
-    if (applied > 0) await DirectionMutations.bulkReplace(merged);
-  }
-  for (final entry in appliedPing.entries) {
-    final ping = entry.value;
-    if (ping == null) continue;
-    await SettingsStorage.setGroupPing(
-      entry.key,
-      url: ping.url,
-      timeoutMs: ping.timeoutMs,
-    );
-  }
-
-  final lists = await SettingsStorage.getServerLists();
-  final subMerge = mergeBackupSubscriptions(lists, parsed.subscriptions);
-  final rootDirections = await SettingsStorage.getDirections();
-  final rootChains = await SettingsStorage.getChains();
-  final srvMerge = mergeBackupServers(
-    subMerge.lists,
-    parsed.servers,
-    folders: parsed.folders,
-    sourceIds: subMerge.ids,
-    addedSources: subMerge.added,
-    sourceDetours: subMerge.detours,
-    rootNames: {
-      kDirectOutboundTag,
-      kBlockOutboundTag,
-      for (final d in rootDirections) ...[d.tag, d.autoTag],
-      for (final c in rootChains) c.tag,
-      for (final c in parsed.chains) c.tag,
-    },
-  );
-  final incomingChains = resolveBackupChainHops(
-    parsed,
-    srvMerge.lists,
-    srvMerge.folderIds,
-    linkOf: srvMerge.linkOf,
-  );
-
-  if (incomingChains.isNotEmpty) {
-    final currentChains = await SettingsStorage.getChains();
-    final currentDirections = await SettingsStorage.getDirections();
-    final mergedChains = currentChains.toList();
-    final usedTags = <String>[
-      ...currentChains.map((c) => c.tag),
-      ...currentDirections.map((d) => d.tag),
-    ];
-    var appliedChains = 0;
-    for (final c in incomingChains) {
-      if (directionTagConflict(c.tag, usedTags) != null) continue;
-      mergedChains.add(c);
-      usedTags.add(c.tag);
-      appliedChains++;
-    }
-    if (appliedChains > 0) await SettingsStorage.setChains(mergedChains);
-  }
-
-  await SettingsStorage.saveCustomRules(renumberBackupAxis(
-    parsed.rules,
-    srvMerge.lists,
-    srvMerge.touched,
-  ));
-
-  // `_applyLxSections`.
-  for (final e in parsed.vars.entries) {
-    await SettingsStorage.setVar(e.key, e.value, flush: false);
-  }
-  final routeFinal = parsed.routeFinal;
-  if (routeFinal != null && routeFinal.isNotEmpty) {
-    await SettingsStorage.saveRouteFinal(routeFinal, flush: false);
-  }
-  final merged = srvMerge.lists;
-  final listsChanged = merged.length != lists.length ||
-      srvMerge.touched.isNotEmpty ||
-      [
-        for (var i = 0; i < lists.length; i++)
-          if (!identical(merged[i], lists[i])) i,
-      ].isNotEmpty;
-  if (listsChanged) {
-    await SettingsStorage.saveServerLists(merged);
-  }
-  final dns = parsed.dns;
-  if (dns != null && !dns.isEmpty) {
-    final vars = await SettingsStorage.getAllVars();
-    final result = applyDnsBackup(
-      incoming: dns,
-      servers: await SettingsStorage.getDnsServers(),
-      rules: await SettingsStorage.getDnsRulesList(),
-      dnsFinal: vars['dns_final'] ?? '',
-      strategy: vars['dns_strategy'] ?? '',
-      defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
-    );
-    await SettingsStorage.saveDnsServers(result.servers, flush: false);
-    await SettingsStorage.saveDnsRulesList(result.rules, flush: false);
-    await SettingsStorage.setVar('dns_final', result.dnsFinal, flush: false);
-    await SettingsStorage.setVar('dns_strategy', result.strategy, flush: false);
-    if (result.defaultDomainResolver.isNotEmpty) {
-      await SettingsStorage.setVar(
-          'dns_default_domain_resolver', result.defaultDomainResolver,
-          flush: false);
-    }
-  }
-  for (final entry in parsed.warp) {
-    if (entry['type'] == 'wg') {
-      if (await SettingsStorage.getWarpAccount() != null) continue;
-      final acc = warpAccountFromBackup(entry);
-      if (acc == null) continue;
-      await SettingsStorage.setWarpAccount(acc, flush: false);
-    } else if (entry['type'] == 'masque') {
-      if (await SettingsStorage.getMasqueAccount() != null) continue;
-      final acc = masqueAccountFromBackup(entry);
-      if (acc == null) continue;
-      await SettingsStorage.setMasqueAccount(acc, flush: false);
-    }
-  }
-  await SettingsStorage.flushToDisk();
+  const importer = LxBackupImportService();
+  final applied = await importer.apply(await importer.prepare(raw));
+  return applied.file;
 }
 
 /// Warning бэкапа строкой для эталона.
