@@ -55,6 +55,10 @@ const _launcherOnlyBackupCodes = <String>{
   'backup_local_direction_dropped',
   // side: export — явный тег замены папки/подписки; свёртки у мобилы нет.
   'backup_replace_tag_derived',
+  // Контракт 1.0.1, ответ LxBox 5 (TASKS_LXBOX.md §17.8): неизвестную строку
+  // include LxBox хранит и на импорте молчит, предупреждает сборка (кейс
+  // v10_direction_include.expected.lxbox.json).
+  'backup_direction_include_dropped',
 };
 
 Map<String, dynamic>? _loadBackupWarnings() {
@@ -91,6 +95,7 @@ const _codesInCode = <String>{
   // её тем же кодом, что писатель, BACKUP.md §2).
   kWarnSectionRecordDropped,
   kWarnSourceKindUnsupported,
+  kWarnGroupDegraded,
 };
 
 void main() {
