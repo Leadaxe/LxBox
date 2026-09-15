@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../models/direction.dart';
-import '../services/core_duration.dart';
 import '../services/ui_helpers.dart';
 import 'home/filter_widgets.dart' show NegateToggle;
 import '../services/l10n/locale_controller.dart';
 import '../widgets/safe_bottom.dart';
+import '../widgets/urltest_idle_hint.dart';
 
 /// §125 — полноэкранный редактор Направления роутинга. Идиома проекта
 /// ([custom_rule_edit_screen.dart], [dns_server_edit_screen.dart]):
@@ -635,23 +635,12 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
               // §442 — interval > idle_timeout: сохранить можно, санитайзер
               // сборки поднимет idle_timeout до interval. Подсказка, а не
               // ошибка — говорит, что окажется в конфиге.
-              if (_idleRaiseTarget() case final target?) ...[
+              if (urltestIdleRaiseTarget(_autoIntervalValue, _autoIdleValue)
+                  case final target?) ...[
                 const SizedBox(height: 4),
-                Row(
+                UrltestIdleRaiseHint(
                   key: const ValueKey('direction-auto-idle-raise-hint'),
-                  children: [
-                    Icon(Icons.info_outline,
-                        size: 14, color: cs.onSurfaceVariant),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                          getLocalText.s(
-                              "Idle timeout will be raised to %s when the config is built",
-                              target),
-                          style: TextStyle(
-                              fontSize: 11, color: cs.onSurfaceVariant)),
-                    ),
-                  ],
+                  target: target,
                 ),
               ],
               const SizedBox(height: 12),
@@ -857,18 +846,6 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
   String get _autoIdleValue {
     final v = _autoIdleCtrl.text.trim();
     return v.isEmpty ? '30m' : v;
-  }
-
-  /// §442 — до чего сборка поднимет idle_timeout: строка interval, если он
-  /// больше idle_timeout, иначе null. Разбор тем же хелпером, что у
-  /// санитайзера (правила ядра, суффикс `d`); нераспознанное — без подсказки,
-  /// санитайзер его тоже не трогает.
-  String? _idleRaiseTarget() {
-    final interval = _autoIntervalValue;
-    final iv = parseCoreDurationNanos(interval);
-    final idle = parseCoreDurationNanos(_autoIdleValue);
-    if (iv == null || idle == null || iv <= 0 || idle <= 0) return null;
-    return iv > idle ? interval : null;
   }
 
   static String? _firstMatch(List<String> tags, RegExp re) {

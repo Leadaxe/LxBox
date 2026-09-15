@@ -54,6 +54,7 @@
 - Редактор Направления (`direction_edit_screen.dart`): подсказка вместо
   предупреждения, условие считается тем же хелпером по значениям, которые
   уйдут в хранение (пустое поле — умолчание формы `5m`/`30m`).
+- Та же подсказка в редакторе узла автовыбора (`auto_group_edit_screen.dart`, под полями в Advanced; пустое поле — умолчание `AutoSelectParams` `15m`/`30m`): условие и виджет вынесены в `widgets/urltest_idle_hint.dart`, тест `test/screens/auto_group_edit_idle_raise_hint_test.dart`.
 
 ### Расхождения с эталоном лаунчера
 
@@ -78,8 +79,3 @@
 - Golden `test/storage_migration/`: расходящихся пар в фикстурах нет
   (`avd_v0`, `rich_v0`: 5m–15m при 30m), эталоны не менялись.
 - `flutter analyze` 0; полный `flutter test` — 4644 passed, 14 skipped, 0 failed; `ui_check`, `hardcoded_check`, `template_check`, `parity_check` (--strict) — 0.
-
-## Нерешённое
-
-- `idle_timeout` в редакторе узла автовыбора (`auto_group_edit_screen.dart`)
-  без подсказки — санитайзер лечит и там, UI не трогался.

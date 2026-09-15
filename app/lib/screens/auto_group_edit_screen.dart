@@ -9,6 +9,7 @@ import '../services/parser/uri_utils.dart';
 import '../services/safe_regex.dart';
 import '../services/ui_helpers.dart';
 import '../widgets/safe_bottom.dart';
+import '../widgets/urltest_idle_hint.dart';
 
 /// §322 — редактор узла автовыбора внутри папки.
 ///
@@ -161,11 +162,9 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
       membership: _membership(),
       params: AutoSelectParams(
         url: _urlCtrl.text.trim().isEmpty ? d.url : _urlCtrl.text.trim(),
-        interval:
-            _intervalCtrl.text.trim().isEmpty ? d.interval : _intervalCtrl.text.trim(),
+        interval: _intervalValue,
         tolerance: int.tryParse(_toleranceCtrl.text.trim()) ?? d.tolerance,
-        idleTimeout:
-            _idleCtrl.text.trim().isEmpty ? d.idleTimeout : _idleCtrl.text.trim(),
+        idleTimeout: _idleValue,
         mode: _urlMode,
         pool: int.tryParse(_poolCtrl.text.trim()) ?? d.pool,
         poolTolerance: clampPoolTolerance(
@@ -181,6 +180,18 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
       tagSynonyms: widget.initial?.tagSynonyms ?? const {},
       poolBadge: _badgeCtrl.text.trim(),
     );
+  }
+
+  /// Interval и idle timeout ровно такими, какими они уйдут в хранение:
+  /// пустое поле — умолчание [AutoSelectParams].
+  String get _intervalValue {
+    final v = _intervalCtrl.text.trim();
+    return v.isEmpty ? const AutoSelectParams().interval : v;
+  }
+
+  String get _idleValue {
+    final v = _idleCtrl.text.trim();
+    return v.isEmpty ? const AutoSelectParams().idleTimeout : v;
   }
 
   bool _isDirty() => !_snapshot().sameGroupAs(_initial);
@@ -626,6 +637,17 @@ class _AutoGroupEditScreenState extends State<AutoGroupEditScreen> {
             ),
           ],
         ),
+        // §442 — interval > idle_timeout: сохранить можно, санитайзер сборки
+        // поднимет idle_timeout до interval. Условие — по значениям, которые
+        // уйдут в хранение (пустое поле — умолчание AutoSelectParams).
+        if (urltestIdleRaiseTarget(_intervalValue, _idleValue)
+            case final target?) ...[
+          const SizedBox(height: 4),
+          UrltestIdleRaiseHint(
+            key: const ValueKey('auto-group-idle-raise-hint'),
+            target: target,
+          ),
+        ],
         const SizedBox(height: 4),
         CheckboxListTile(
           dense: true,
