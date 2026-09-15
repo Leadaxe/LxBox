@@ -22,6 +22,7 @@ import 'config_dirty_check.dart';
 import 'l10n/app_language_reconcile.dart';
 import 'settings_storage_keys.dart';
 import 'storage_migration/migrate_storage.dart';
+import 'subscription/http_cache.dart';
 import 'template_loader.dart';
 import 'warp/masque_account.dart';
 import 'warp/warp_account.dart';

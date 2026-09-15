@@ -30,6 +30,7 @@ import '../parser/parse_all.dart';
 import '../parser/uri_utils.dart' show newUuidV4, tagFromLabel;
 import '../settings_storage_keys.dart';
 import 'legacy_form_v0.dart';
+import 'migrate_node_links.dart';
 
 /// Ключи формы 2.23.2, которые миграция переводит в записи 1.0.
 const Set<String> kLegacyStorageKeys = {
@@ -136,7 +137,9 @@ bool storageDocNeedsMigration(Map<String, dynamic> doc) =>
 ///   исключение — члены папок `autogroup://` в `sources[]` (записи ранних
 ///   сборок 2.23.3), их переводит [migrateAutogroupMembers].
 /// - Нет `storage_version` — `server_lists`/`chains` → `sources[]` (цепочки
-///   хвостом в порядке старого `order`), `custom_rules` → `rules[]`,
+///   хвостом в порядке старого `order`; ссылки на узлы — NodeLink по
+///   словарю финальных тегов, [migrateNodeLinks], узлы подписок из
+///   [subscriptionBodies] «адрес → тело `sub_cache`»), `custom_rules` → `rules[]`,
 ///   `dns_options` → `dns{servers, rules}` с `ref` preset-серверов по
 ///   [presetIdByDnsServerTag] (пресет не найден — `ref` = тег); ставится
 ///   `storage_version: 1`.
@@ -153,6 +156,7 @@ bool storageDocNeedsMigration(Map<String, dynamic> doc) =>
 StorageMigrationResult migrateStorageDoc(
   Map<String, dynamic> doc, {
   Map<String, String> presetIdByDnsServerTag = const {},
+  Map<String, String> subscriptionBodies = const {},
 }) {
   final version = storageDocVersion(doc);
   final legacyPresent = [
@@ -200,8 +204,16 @@ StorageMigrationResult migrateStorageDoc(
   Map<String, dynamic>? dns;
   if (convert) {
     if (doc.containsKey(_kServerLists) || doc.containsKey(_kChains)) {
-      sources = migrateAutogroupMembers(
-          _convertSources(doc, info, warnings), info, warnings);
+      // §439 п. 8 — финальные теги ссылок → NodeLink по состоянию до
+      // миграции (узлы подписок — из `sub_cache`, [subscriptionBodies]).
+      sources = migrateNodeLinks(
+        migrateAutogroupMembers(
+            _convertSources(doc, info, warnings), info, warnings),
+        directions: doc['directions'] ?? doc[_kLegacyDirections],
+        subscriptionBodies: subscriptionBodies,
+        info: info,
+        warnings: warnings,
+      );
     }
     if (doc.containsKey(_kCustomRules)) {
       rules = _convertRules(doc[_kCustomRules], info, warnings);

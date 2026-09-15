@@ -232,6 +232,7 @@ Future<Map<String, dynamic>> _migrateOnLoad(
     result = migrateStorageDoc(
       doc,
       presetIdByDnsServerTag: await _presetIdsForMigration(),
+      subscriptionBodies: await _subscriptionBodiesForMigration(doc),
     );
   } catch (e, st) {
     AppLog.I.error(
@@ -272,6 +273,24 @@ Future<Map<String, dynamic>> _migrateOnLoad(
         'SettingsStorage: storage migration losses: ${result.warnings.join('; ')}');
   }
   return result.doc;
+}
+
+/// §439 п. 8 — тела подписок из `sub_cache` для перевода ссылок на их узлы
+/// ([migrateStorageDoc]): адрес → тело. Кэша нет — узлы подписки ищутся по
+/// финальной форме тега, а не нашедшиеся ссылки остаются корнем.
+Future<Map<String, String>> _subscriptionBodiesForMigration(
+    Map<String, dynamic> doc) async {
+  final lists = doc['server_lists'];
+  if (lists is! List) return const {};
+  final out = <String, String>{};
+  for (final l in lists) {
+    if (l is! Map || l['type'] != 'subscription') continue;
+    final url = l['url'];
+    if (url is! String || url.isEmpty || out.containsKey(url)) continue;
+    final body = await HttpCache.loadBody(url);
+    if (body != null && body.isNotEmpty) out[url] = body;
+  }
+  return out;
 }
 
 /// Тег preset-сервера DNS → `preset_id` по шаблону (миграция в `_load` и
