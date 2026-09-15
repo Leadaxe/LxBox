@@ -107,3 +107,48 @@ Future<String?> showFolderNameDialog(BuildContext context,
   ctl.dispose();
   return (name == null || name.isEmpty) ? null : name;
 }
+
+/// §234 — подтверждение удаления папки: `'keep'` — вынести серверы одиночными,
+/// `'all'` — удалить вместе с серверами, null — отмена. Авто-узлы роспуск не
+/// переживают (см. `SubscriptionController.deleteFolderAt`): диалог их
+/// называет, а папке из одних авто-узлов «Keep servers» не предлагает.
+Future<String?> showDeleteFolderDialog(
+    BuildContext context, FolderServers folder, String displayName) {
+  final members = folder.members;
+  final groups = [
+    for (final m in members)
+      if (m.node case final n? when n.isGroup) n.label.isNotEmpty ? n.label : n.tag,
+  ];
+  final summary = members.isEmpty
+      ? getLocalText.s("Remove \"%s\"?", displayName)
+      : getLocalText.plural(
+          "Folder \"%2\$s\" contains %1\$d servers.", members.length, displayName);
+  final groupsNote = groups.isEmpty
+      ? null
+      : getLocalText.s("Auto nodes are deleted with the folder: %s", groups.join(', '));
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(getLocalText.s("Delete folder?")),
+      content: Text(groupsNote == null ? summary : '$summary\n\n$groupsNote'),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(getLocalText.s("Cancel"))),
+        if (members.length > groups.length)
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'keep'),
+            child: Text(getLocalText.s("Keep servers")),
+          ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, 'all'),
+          style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error),
+          child: Text(members.isEmpty
+              ? getLocalText.s("Delete")
+              : getLocalText.s("Delete folder & servers")),
+        ),
+      ],
+    ),
+  );
+}

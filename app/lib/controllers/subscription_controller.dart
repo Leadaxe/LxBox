@@ -1465,7 +1465,9 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// Удалить папку. [keepServers] = вынести членов одиночными серверами на
-  /// место папки (порядок и per-member enabled сохраняются).
+  /// место папки (порядок и per-member enabled сохраняются). Авто-узлы
+  /// удаляются и при [keepServers]: текста у группы нет, одиночным сервером
+  /// она стала бы пустой записью, а её пул — узлы этой папки.
   Future<void> deleteFolderAt(int index, {required bool keepServers}) async {
     if (index < 0 || index >= _entries.length) return;
     final list = _entries[index].list;
@@ -1475,7 +1477,7 @@ class SubscriptionController extends ChangeNotifier {
     if (keepServers) {
       _entries.insertAll(
         index,
-        list.members.map((m) {
+        list.members.where((m) => m.node?.isGroup != true).map((m) {
           final us = _memberToUserServer(m);
           return SubscriptionEntry(list: us, nodeCount: us.nodes.length);
         }),
@@ -1819,15 +1821,17 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// Вынести члена из папки в одиночный сервер (вставляется сразу после
-  /// папки). Личные prefix/policy папки НЕ наследуются — дефолты.
+  /// папки). Личные prefix/policy папки НЕ наследуются — дефолты. Авто-узел
+  /// не выносится (no-op): см. [deleteFolderAt].
   Future<void> ungroupMemberAt(int index, int memberIndex) async {
     if (index < 0 || index >= _entries.length) return;
     final entry = _entries[index];
     final folder = entry.list;
     if (folder is! FolderServers) return;
     if (memberIndex < 0 || memberIndex >= folder.members.length) return;
-    final before = _lists();
     final member = folder.members[memberIndex];
+    if (member.node?.isGroup == true) return;
+    final before = _lists();
     final members = [...folder.members]..removeAt(memberIndex);
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;

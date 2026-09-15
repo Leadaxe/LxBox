@@ -9,6 +9,7 @@ import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/node_link.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
@@ -255,6 +256,34 @@ void main() {
       expect(a.enabled, isTrue);
       expect(b.nodes.single.tag, 'Beta');
       expect(b.enabled, isFalse); // per-member toggle сохранён
+    });
+
+    test('deleteFolderAt(keepServers: true): авто-узел удаляется, '
+        'пустым одиночным не выносится', () async {
+      final c = await makeController();
+      await c.addFolder('F');
+      await c.addMembersToFolder(0, uriA);
+      await c.addAutoMemberToFolder(
+          0, AutoSelectSpec(id: 'g', tag: 'Fast', label: 'Fast'));
+      await c.addMembersToFolder(0, uriB);
+
+      await c.deleteFolderAt(0, keepServers: true);
+      expect(c.entries.map((e) => (e.list as UserServer).nodes.single.tag),
+          ['Alpha', 'Beta']);
+      final saved = await SettingsStorage.getServerLists();
+      expect(saved.map((l) => l.nodes.single.tag), ['Alpha', 'Beta']);
+    });
+
+    test('ungroupMemberAt: авто-узел остаётся в папке (no-op)', () async {
+      final c = await makeController();
+      await c.addFolder('F');
+      await c.addAutoMemberToFolder(
+          0, AutoSelectSpec(id: 'g', tag: 'Fast', label: 'Fast'));
+
+      await c.ungroupMemberAt(0, 0);
+      expect(c.entries, hasLength(1));
+      final folder = c.entries.single.list as FolderServers;
+      expect(folder.members.single.node, isA<AutoSelectSpec>());
     });
 
     test('deleteFolderAt(keepServers: false) удаляет всё', () async {

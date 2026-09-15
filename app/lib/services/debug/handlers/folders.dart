@@ -329,6 +329,9 @@ Future<DebugResponse> _ungroupMember(
   final sub = ctx.requireSub();
   final (idx, entry, folder) = _requireFolder(sub, id);
   final i = _memberIndex(idxSeg, folder);
+  if (folder.members[i].node?.isGroup == true) {
+    throw Conflict('member $i is an auto node: it cannot leave its folder');
+  }
   final before = sub.entries.map((e) => e.id).toSet();
   await sub.ungroupMemberAt(idx, i);
   // Одиночный сервер вставляется сразу после папки — но id надёжнее диффом.

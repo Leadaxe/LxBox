@@ -373,7 +373,8 @@ POST   /folders[?rebuild=true]                 Create empty folder. Body {"name"
 GET    /folders/{id}[?reveal=true]             Single folder + members
 DELETE /folders/{id}[?keep_servers=true][?rebuild=true]
                                                Delete. keep_servers=true → members become standalone
-                                                 single servers in place of the folder (default false)
+                                                 single servers in place of the folder (default false);
+                                                 auto nodes are deleted either way
 POST   /folders/{id}/members[?rebuild=true]    Add members. Body: exactly one of
                                                  {"input":"<uri|WG-ini|JSON>", "name_fallback"?:"..."} (paste)
                                                  or {"url":"..."} (one-shot snapshot: fetch → static members,
@@ -390,7 +391,8 @@ POST   /folders/{id}/members/reorder[?rebuild=true]
                                                Body {"order":[old indexes in new order]} — full permutation
 POST   /folders/{id}/members/{idx}/ungroup[?rebuild=true]
                                                Member → standalone single server right after the folder
-                                                 (personal detour becomes its override_detour)
+                                                 (personal detour becomes its override_detour); 409 for an
+                                                 auto node
 POST   /folders/{id}/members/{idx}/move[?rebuild=true]
                                                Body {"to":"<folder id>"} — move member to another folder
 POST   /folders/{id}/move-server[?rebuild=true]
@@ -659,12 +661,12 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/folders', 'params': {'reveal': 'true|false (raw carries credentials, hidden by default)'}, 'description': 'List folder entries + members (members addressed by positional index)'},
     {'method': 'POST', 'path': '/folders', 'params': {'rebuild': 'true|false'}, 'body': '{"name":"..."}', 'description': 'Create empty folder → 201. Folder meta is edited via PATCH /subs/{id}.'},
     {'method': 'GET', 'path': '/folders/{id}', 'params': {'reveal': 'true|false'}, 'description': 'Single folder + members'},
-    {'method': 'DELETE', 'path': '/folders/{id}', 'params': {'keep_servers': 'true|false (default false)', 'rebuild': 'true|false'}, 'description': 'Delete folder. keep_servers=true → members become standalone single servers in place.'},
+    {'method': 'DELETE', 'path': '/folders/{id}', 'params': {'keep_servers': 'true|false (default false)', 'rebuild': 'true|false'}, 'description': 'Delete folder. keep_servers=true → members become standalone single servers in place; auto nodes are deleted either way.'},
     {'method': 'POST', 'path': '/folders/{id}/members', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'exactly one of {"input":"<uri|WG-ini|JSON>","name_fallback"?} (paste) or {"url":"..."} (one-shot snapshot)', 'description': 'Add members. Snapshot: fetch → static members, URL not stored.'},
     {'method': 'PATCH', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {raw,enabled,detour}', 'description': 'Edit member. raw must parse (400 keeps old); detour = personal member detour, node link {folder_id?, tag} (null clears; a string is read as a sibling raw tag or a root {tag}).'},
     {'method': 'DELETE', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove member (indexes shift — use the returned folder snapshot)'},
     {'method': 'POST', 'path': '/folders/{id}/members/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder members (full permutation required)'},
-    {'method': 'POST', 'path': '/folders/{id}/members/{idx}/ungroup', 'params': {'rebuild': 'true|false'}, 'description': 'Member → standalone single server after the folder (personal detour → override_detour)'},
+    {'method': 'POST', 'path': '/folders/{id}/members/{idx}/ungroup', 'params': {'rebuild': 'true|false'}, 'description': 'Member → standalone single server after the folder (personal detour → override_detour); 409 for an auto node'},
     {'method': 'POST', 'path': '/folders/{id}/members/{idx}/move', 'params': {'rebuild': 'true|false'}, 'body': '{"to":"<folder id>"}', 'description': 'Move member to another folder'},
     {'method': 'POST', 'path': '/folders/{id}/move-server', 'params': {'rebuild': 'true|false'}, 'body': '{"server_id":"<subs entry id>"}', 'description': 'Move a standalone single server INTO the folder (splits 1:1 by nodes)'},
     {'method': 'POST', 'path': '/folders/{id}/probe', 'body': 'optional {"url":"...","timeout_ms":N} (defaults = global ping_options)', 'description': 'Headless Test servers run, results in response. Statuses: ok|failed|broken|invalid|not_in_config|pending. Synchronous — lower timeout_ms for big folders (30s request timeout).'},

@@ -655,34 +655,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
 
   Future<void> _delete() async {
     // Три исхода: cancel / вынести серверы одиночными / удалить всё.
-    final choice = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(getLocalText.s("Delete folder?")),
-        content: Text(_folder.members.isEmpty
-            ? getLocalText.s("Remove \"%s\"?", widget.entry.displayName)
-            : getLocalText.plural("Folder \"%2\$s\" contains %1\$d servers.",
-                _folder.members.length, widget.entry.displayName)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(getLocalText.s("Cancel"))),
-          if (_folder.members.isNotEmpty)
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'keep'),
-              child: Text(getLocalText.s("Keep servers")),
-            ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'all'),
-            style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: Text(_folder.members.isEmpty
-                ? getLocalText.s("Delete")
-                : getLocalText.s("Delete folder & servers")),
-          ),
-        ],
-      ),
-    );
+    final choice =
+        await showDeleteFolderDialog(context, _folder, widget.entry.displayName);
     if (choice == null || !mounted) return;
     final idx = _index;
     if (idx < 0) {
@@ -1030,6 +1004,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   void _showMemberMenu(int memberIndex) {
+    // Авто-узел из папки не выносится: текста у группы нет, одиночным
+    // сервером она стала бы пустой записью. «Move to folder…» остаётся —
+    // там пары членов переписываются.
+    final isGroup = _folder.members[memberIndex].node?.isGroup == true;
     showAppBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -1052,15 +1030,16 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                 unawaited(_moveMember(memberIndex));
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.folder_off_outlined),
-              title: Text(getLocalText.s("Move out of folder")),
-              subtitle: Text(getLocalText.s("Becomes a standalone server")),
-              onTap: () {
-                Navigator.pop(ctx);
-                unawaited(_ungroupMember(memberIndex));
-              },
-            ),
+            if (!isGroup)
+              ListTile(
+                leading: const Icon(Icons.folder_off_outlined),
+                title: Text(getLocalText.s("Move out of folder")),
+                subtitle: Text(getLocalText.s("Becomes a standalone server")),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  unawaited(_ungroupMember(memberIndex));
+                },
+              ),
             ListTile(
               leading: Icon(Icons.delete_outline,
                   color: Theme.of(ctx).colorScheme.error),

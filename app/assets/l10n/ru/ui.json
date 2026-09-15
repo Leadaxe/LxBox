@@ -883,6 +883,9 @@
   "Auto (recommended)": {
     "value": "Авто (рекомендуется)"
   },
+  "Auto nodes are deleted with the folder: %s": {
+    "value": "Авто-узлы удаляются вместе с папкой: %s"
+  },
   "Auto-ping after connect": {
     "value": "Автопинг после подключения"
   },
