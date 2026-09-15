@@ -277,7 +277,9 @@ DeferredDetourReport resolveDeferredDetours(
     }
   }
 
-  final warnings = <String>[];
+  // §377 — одна строка на ссылку и причину, а не на узел: папка генератора
+  // на 138 узлов с одной висячей ссылкой дала бы 138 строк на каждую сборку.
+  final carriersByCause = <(String, String), List<String>>{};
   final droppedEntries = Set<SingboxEntry>.identity();
   final droppedNodes = Set<NodeSpec>.identity();
   for (final p in pending) {
@@ -288,16 +290,33 @@ DeferredDetourReport resolveDeferredDetours(
     }
     droppedEntries.addAll(p.entries);
     droppedNodes.add(p.node);
-    final line = 'Node "${p.carrier.tag}" was skipped: its detour '
-        '${targets.describe(p.link)} did not resolve — $why. A node whose '
-        'detour does not resolve is not emitted, so its traffic never goes '
-        'direct.';
-    if (!warnings.contains(line)) warnings.add(line);
+    final carriers =
+        carriersByCause.putIfAbsent((targets.describe(p.link), why), () => []);
+    if (!carriers.contains(p.carrier.tag)) carriers.add(p.carrier.tag);
   }
   targets.markDropped(droppedTags);
   return DeferredDetourReport(
     droppedEntries: droppedEntries,
     droppedNodes: droppedNodes,
-    warnings: warnings,
+    warnings: [
+      for (final e in carriersByCause.entries)
+        _unresolvedDetourLine(e.value, e.key.$1, e.key.$2),
+    ],
   );
+}
+
+/// Строка о носителях [carriers], выпавших из-за одной ссылки [link] с одной
+/// причиной [why]. Формат перечня — §377: первые пять имён, остаток счётчиком.
+String _unresolvedDetourLine(List<String> carriers, String link, String why) {
+  const tail = 'is not emitted, so its traffic never goes direct.';
+  if (carriers.length == 1) {
+    return 'Node "${carriers.single}" was skipped: its detour $link did not '
+        'resolve — $why. A node whose detour does not resolve $tail';
+  }
+  const shown = 5;
+  final head = carriers.take(shown).map((c) => '"$c"').join(', ');
+  final rest = carriers.length - shown;
+  return '${carriers.length} nodes ($head${rest > 0 ? ', and $rest more' : ''}) '
+      'were skipped: their detour $link did not resolve — $why. A node whose '
+      'detour does not resolve $tail';
 }
