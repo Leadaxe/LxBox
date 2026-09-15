@@ -22,21 +22,6 @@ import 'package:lxbox/services/warp/warp_backup.dart';
 
 const _contractRoot = 'contract';
 
-/// Переносимые имена реестра, которых нет в [kLxPortableVars]: имя → причина.
-/// Запись снимается вместе с работой, которая её закрывает; реестр не
-/// подгоняется.
-const _d117DnsRouteVars = 'D-117 (BACKUP.md §9 п. 5): переменная маршрута '
-    'шаблонного DNS-сервера у LxBox живёт в dns.servers[].vars записи '
-    'сервера, а не в корневых vars; перевод корневого имени в запись сервера '
-    'и обратно не сделан';
-const Map<String, String> _pendingPortableVars = {
-  'dns_google_udp_outbound': _d117DnsRouteVars,
-  'dns_google_dot_outbound': _d117DnsRouteVars,
-  'dns_cloudflare_dot_outbound': _d117DnsRouteVars,
-  'dns_safe_dns_dot_outbound': _d117DnsRouteVars,
-  'dns_safe_dns_dot_dom_resolver': _d117DnsRouteVars,
-};
-
 /// Записи `sources[]` файла 1.0 заданного вида, в порядке файла.
 List<Map<String, dynamic>> _sourcesOf(String raw, String kind) => [
       for (final e in ((jsonDecode(raw) as Map<String, dynamic>)['sources']
@@ -59,13 +44,10 @@ void main() {
         for (final e in vars.entries)
           if ((e.value as Map)['portable'] == true) e.key,
       };
-      // Отложенное обязано оставаться в реестре переносимым: иначе запись
-      // пропуска пережила бы свою причину.
-      expect(registryPortable, containsAll(_pendingPortableVars.keys),
-          reason: 'отложенное имя больше не переносимо в реестре — снять '
-              'запись _pendingPortableVars');
-      expect(kLxPortableVars,
-          registryPortable.difference(_pendingPortableVars.keys.toSet()),
+      // Пять имён маршрута DNS D-117 с контракта 1.0.2 (D-118) —
+      // `portable: false`, терпимая форма чтения: значение едет записью
+      // `dns.servers[kind=template].vars`. Пропусков в сверке нет.
+      expect(kLxPortableVars, registryPortable,
           reason: 'список переносимых переменных разошёлся с реестром: '
               'бэкап либо теряет настройку, либо тащит на чужую машину '
               'значение, которое там значит другое');
