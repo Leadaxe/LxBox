@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/screens/dns_server_edit/edit_controller.dart';
 import 'package:lxbox/services/dns/node_dns_records.dart';
 
@@ -7,20 +8,23 @@ import 'package:lxbox/services/dns/node_dns_records.dart';
 /// NODE_SECTIONS.md §6): тело `{type: tailscale, endpoint, accept_default_
 /// resolvers?}` без `server`/`detour`; переходы udp↔tailscale↔group чистят
 /// чужие поля; JSON-вкладка отражается в геттерах формы.
+/// Тело inline-сервера снимка контроллера (модель, не форма хранения).
+Map<String, dynamic> bodyOf(DnsServerEditController c) =>
+    (c.snapshot() as DnsServerInline).body;
+
 void main() {
   DnsServerEditController makeUdp() => DnsServerEditController(
-        initialRef: {
-          'enabled': true,
-          'kind': 'inline',
-          'tag': 'dns_new',
-          'body': {
+        initialRef: const DnsServerInline(
+          enabled: true,
+          tag: 'dns_new',
+          body: {
             'type': 'udp',
             'server': '1.1.1.1',
             'server_port': 5353,
             'detour': 'vpn-1',
             'domain_resolver': 'google_udp',
           },
-        },
+        ),
         tailscaleEndpoints: const [
           TailscaleEndpointOption(tag: 'home-ts', enabled: true),
           TailscaleEndpointOption(tag: 'P off-ts', enabled: false),
@@ -38,7 +42,7 @@ void main() {
     expect(c.serverMode, 'tailscale');
     expect(c.isTailscale, isTrue);
     expect(c.isGroup, isFalse);
-    expect(c.snapshot()['body'], {'type': 'tailscale'});
+    expect(bodyOf(c), {'type': 'tailscale'});
     expect(c.addressCtrl.text, '');
     expect(c.portCtrl.text, '');
     expect(c.tailscaleEndpoint, '');
@@ -54,11 +58,11 @@ void main() {
     c.setServerMode('tailscale');
     c.setTailscaleEndpoint('home-ts');
     expect(c.tailscaleEndpoint, 'home-ts');
-    expect(c.snapshot()['body'], {'type': 'tailscale', 'endpoint': 'home-ts'});
+    expect(bodyOf(c), {'type': 'tailscale', 'endpoint': 'home-ts'});
 
     c.setAcceptDefaultResolvers(true);
     expect(c.acceptDefaultResolvers, isTrue);
-    expect(c.snapshot()['body'], {
+    expect(bodyOf(c), {
       'type': 'tailscale',
       'endpoint': 'home-ts',
       'accept_default_resolvers': true,
@@ -68,7 +72,7 @@ void main() {
     // false → ключ уходит (дефолт ядра), пустой endpoint → ключ уходит.
     c.setAcceptDefaultResolvers(false);
     c.setTailscaleEndpoint('  ');
-    expect(c.snapshot()['body'], {'type': 'tailscale'});
+    expect(bodyOf(c), {'type': 'tailscale'});
     expect(c.isDirty(), isTrue);
     c.dispose();
   });
@@ -81,7 +85,7 @@ void main() {
     c.setServerMode('udp');
     expect(c.serverMode, 'udp');
     expect(c.isTailscale, isFalse);
-    expect(c.snapshot()['body'], {'type': 'udp'});
+    expect(bodyOf(c), {'type': 'udp'});
     expect(c.tailscaleEndpoint, '');
     expect(c.acceptDefaultResolvers, isFalse);
     c.dispose();
@@ -95,14 +99,14 @@ void main() {
 
     c.setServerMode('group');
     expect(c.isGroup, isTrue);
-    expect(c.snapshot()['body'], {'type': 'group', 'servers': <String>[]});
+    expect(bodyOf(c), {'type': 'group', 'servers': <String>[]});
 
     c.toggleGroupMember('cloudflare_udp', true);
     c.setGroupMode('fastest');
     c.onErrorTtlChanged('2m');
     c.setServerMode('tailscale');
     expect(c.isTailscale, isTrue);
-    expect(c.snapshot()['body'], {'type': 'tailscale'});
+    expect(bodyOf(c), {'type': 'tailscale'});
     expect(c.errorTtlCtrl.text, '');
     expect(c.groupMembers, isEmpty);
     c.dispose();
@@ -120,7 +124,7 @@ void main() {
     expect(c.tagCtrl.text, 'ts_dns');
     // Транспортные контроллеры пусты — форма tailscale их не показывает.
     expect(c.addressCtrl.text, '');
-    expect(c.snapshot()['body'], {
+    expect(bodyOf(c), {
       'type': 'tailscale',
       'endpoint': 'P off-ts',
       'accept_default_resolvers': true,
@@ -131,12 +135,11 @@ void main() {
   test('существующий tailscale-сервер: не dirty при открытии, опции переданы',
       () {
     final c = DnsServerEditController(
-      initialRef: {
-        'enabled': true,
-        'kind': 'inline',
-        'tag': 'ts_dns',
-        'body': {'type': 'tailscale', 'endpoint': 'home-ts'},
-      },
+      initialRef: const DnsServerInline(
+        enabled: true,
+        tag: 'ts_dns',
+        body: {'type': 'tailscale', 'endpoint': 'home-ts'},
+      ),
       tailscaleEndpoints: const [
         TailscaleEndpointOption(tag: 'home-ts', enabled: true),
       ],
@@ -148,7 +151,7 @@ void main() {
     // Смена endpoint — dirty; snapshot без server/detour.
     c.setTailscaleEndpoint('other-ts');
     expect(c.isDirty(), isTrue);
-    final body = c.snapshot()['body'] as Map;
+    final body = bodyOf(c);
     expect(body.containsKey('server'), isFalse);
     expect(body.containsKey('detour'), isFalse);
     c.dispose();
@@ -161,7 +164,7 @@ void main() {
     c.setServerMode('tailscale');
     c.setTailscaleEndpoint('home-ts');
     expect(c.inlineDetour, 'direct-out');
-    expect((c.snapshot()['body'] as Map).containsKey('detour'), isFalse);
+    expect(bodyOf(c).containsKey('detour'), isFalse);
     c.dispose();
   });
 }

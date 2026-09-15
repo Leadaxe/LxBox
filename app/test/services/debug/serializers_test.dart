@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/debug/serializers/storage.dart';
 import 'package:lxbox/services/debug/serializers/subs.dart';
@@ -77,27 +79,83 @@ void main() {
           reason: 'новые поля видны по умолчанию');
     });
 
-    test('server_lists: URL маскируется, nodes → count, rawBody → length', () {
+    // §439 — источники читаются моделями репозитория из записей `sources[]`,
+    // секрет гасится по пути записи на том же месте: `url` — маской,
+    // `origin.raw` — длиной, `nodes[]` папки — счётчиком. Цепочки идут хвостом,
+    // битая запись в дамп не попадает.
+    test(
+        'sources: URL маскируется, origin.raw → origin.raw_bytes, '
+        'nodes → nodes_count, цепочки хвостом, битая запись пропускается', () {
       final cache = {
-        'server_lists': [
+        'storage_version': 1,
+        'sources': [
           {
-            'id': '1',
+            'kind': 'subscription',
+            'id': 's1',
+            'name': 'Sub',
             'url': 'https://prov/sub/token',
-            'nodes': [
-              {'tag': 'n1'},
-              {'tag': 'n2'},
-            ],
-            'rawBody': 'vless://uuid@host:443#tag',
           },
+          {
+            'kind': 'chain',
+            'tag': 'chain-1',
+            'hops': [
+              {'tag': 'a'},
+              {'tag': 'b'},
+            ],
+          },
+          {
+            'kind': 'server',
+            'id': 'u1',
+            'origin': {'kind': 'uri', 'raw': 'vless://uuid@host:443#tag'},
+          },
+          {
+            'kind': 'folder',
+            'id': 'f1',
+            'name': 'Folder',
+            'created_at': '2026-01-01T00:00:00.000',
+            'nodes': [
+              {
+                'kind': 'server',
+                'origin': {'kind': 'uri', 'raw': 'vless://m1-secret@a:443#a'},
+              },
+              {
+                'kind': 'server',
+                'enabled': false,
+                'origin': {'kind': 'uri', 'raw': 'vless://m2-secret@b:443#b'},
+              },
+            ],
+          },
+          {'kind': 'subscription', 'url': 'https://prov/sub/broken-token'},
         ],
       };
       final out = serializeStorageCache(cache);
-      final lists = out['server_lists'] as List;
+      final lists = (out['sources'] as List).cast<Map>();
+      expect([for (final l in lists) l['id'] ?? l['tag']],
+          ['s1', 'u1', 'f1', 'chain-1']);
+
       expect(lists[0]['url'], 'https://prov/***');
-      expect(lists[0]['nodes_count'], 2);
-      expect(lists[0]['raw_body_bytes'], 25);
-      expect((lists[0] as Map).containsKey('nodes'), isFalse);
-      expect((lists[0] as Map).containsKey('rawBody'), isFalse);
+
+      expect(lists[1]['origin'], {'kind': 'uri', 'raw_bytes': 25});
+
+      expect(lists[2]['nodes_count'], 2);
+      expect(lists[2].containsKey('nodes'), isFalse);
+      final folderKeys = lists[2].keys.toList();
+      expect(folderKeys.indexOf('nodes_count'),
+          folderKeys.indexOf('created_at') + 1,
+          reason: 'счётчик на месте nodes');
+
+      expect(lists[3]['kind'], 'chain');
+
+      final dump = jsonEncode(out);
+      for (final secret in [
+        'sub/token',
+        'uuid@host',
+        'm1-secret',
+        'm2-secret',
+        'broken-token',
+      ]) {
+        expect(dump, isNot(contains(secret)));
+      }
     });
 
     test('§219 — warp_account/masque_account НЕ маскируются (root by design)', () {

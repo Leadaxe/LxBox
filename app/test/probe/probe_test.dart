@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/probe/probe_config.dart';
@@ -9,6 +10,10 @@ import 'package:lxbox/services/probe/probe_runner.dart';
 
 /// §236 — headless probe: конфиг, раннер (probe-сессия; при живом VPN —
 /// маркер-гейт, боевое ядро НЕ зовётся), пороги шкалы.
+/// §439 N2 — член-группа папки (запись `kind: auto`), текста у неё нет.
+FolderMember _group(String tag) => FolderMember.auto(
+    AutoSelectSpec(id: tag, tag: tag, label: tag, membership: const RuleMembers()));
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -76,7 +81,7 @@ void main() {
     test('§336: узел-группа не эмитится, вердикт group, соседи целы', () {
       final cfg = cfgOf(folder(members: [
         FolderMember(raw: uriA),
-        FolderMember(raw: 'autogroup://#My%20auto'),
+        _group('My auto'),
       ]));
       expect(cfg.tagByIndex, {0: 'Alpha'});
       expect(cfg.brokenByIndex, {1: 'group'});
@@ -89,8 +94,8 @@ void main() {
 
     test('§336: папка из одних групп → configJson == null', () {
       final cfg = cfgOf(folder(members: [
-        FolderMember(raw: 'autogroup://#A1'),
-        FolderMember(raw: 'autogroup://#A2'),
+        _group('A1'),
+        _group('A2'),
       ]));
       expect(cfg.configJson, isNull);
       expect(cfg.brokenByIndex, {0: 'group', 1: 'group'});
@@ -161,7 +166,7 @@ void main() {
       final results = <int, ProbeResult>{};
       final err = await ProbeRunner().run(
         nodesOf(folder(members: [
-          FolderMember(raw: 'autogroup://#My%20auto'),
+          _group('My auto'),
         ])),
         url: '',
         timeoutMs: 0,

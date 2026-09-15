@@ -34,9 +34,9 @@ class JsonSection extends StatelessWidget {
       children: [
         const SectionHeader(
           title: 'Rule body',
-          hint: 'A raw sing-box route rule. Enter a JSON object, or an array '
-              'of objects for several rules. The action (route / reject / '
-              'hijack-dns / sniff / resolve …) is part of the body.',
+          hint: 'A raw sing-box route rule as one JSON object. The action '
+              '(route / reject / hijack-dns / sniff / resolve …) is part of '
+              'the body.',
         ),
         const SizedBox(height: 8),
         TextField(

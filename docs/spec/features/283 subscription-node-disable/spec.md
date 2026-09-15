@@ -104,6 +104,13 @@ final Map<String, DateTime> disabledHashes;
 
 JSON: `'disabled_hashes': {"<hex>": "<iso8601>", ...}`.
 
+> **Форма хранения с 2.23.3 ([§439](../439%20storage-contract-1-0/spec.md)).**
+> Запись подписки в `sources[]` держит отметки полем контракта
+> `disabled: {"<идентичность>": <unix seconds>}` (ключ — сырой тег, §400);
+> миграция переводит ISO-8601 в секунды, TTL-очистке точности до секунды
+> хватает. `toJson`/`fromJson` модели сняты, запись пишет и читает кодек
+> `lib/models/codec/source_record.dart`. Абзацы ниже описывают форму 2.23.2.
+
 - **Парно в `toJson` И `fromJson` И `copyWith`** — обязательное трио.
   Разведка backup: merge-импорт прогоняет записи через `fromJson→toJson`
   (backup_service.dart:337-359), и любая мутация списка = полный re-serialize

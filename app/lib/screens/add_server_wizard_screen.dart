@@ -16,7 +16,7 @@ import '../widgets/emoji_picker_button.dart';
 import '../widgets/lx_code_editor.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/safe_bottom.dart';
-import 'add_server_wizard/tailscale_bundle.dart';
+import '../models/tailscale_bundle.dart';
 
 // SocksSpec.emit() требует TemplateVars — для wizard-created SOCKS5 без
 // substitution используем пустые. Это match'ит manual UserServer pattern
@@ -193,7 +193,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.manual,
-      createdAt: DateTime.now(),
       rawBody: spec.toUri(),
       nodes: [spec],
       sections: canonicalTailscaleSections(),
@@ -246,7 +245,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.manual,
-      createdAt: DateTime.now(),
       rawBody: jsonEncode(outboundJson),
       nodes: [spec],
     );
@@ -291,7 +289,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.manual,
-      createdAt: DateTime.now(),
       rawBody: jsonEncode(outboundJson),
       nodes: [spec],
     );
@@ -490,7 +487,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              getLocalText.s("Leave empty for tailnet access only — the node will not appear in Directions"),
+              getLocalText.s("Tailscale IP or machine name of a peer that advertises an exit node; pick this node as the Direction on Home to route your internet through it. Leave empty for tailnet access only — the node will not appear in Directions"),
               style: hintStyle,
             ),
           ],

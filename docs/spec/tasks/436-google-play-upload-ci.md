@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress — job добавлен, первый прогон на ближайшем теге в режиме `draft`; Done после ручной публикации первого черновика и переключения на `completed` |
+| Статус | In progress — job добавлен. Решение владельца 14.09.2026: полный цикл сразу, `PLAY_RELEASE_STATUS=completed` выставлен до первого прогона (черновик не нужен, ручную отправку на проверку он уже проходил). Done после первого зелёного прогона на теге |
 | Дата старта | 2026-09-14 |
 | Триггер | Вопрос владельца: релиз на GitHub должен сам уезжать в Play и F-Droid. F-Droid уже автоматический (`AutoUpdateMode: Version` + `UpdateCheckMode: Tags` в рецепте, см. [FDROID.md](../../FDROID.md)); в Play AAB заливался руками из артефакта прогона |
 | Связанные | [§379](379-version-code-from-version.md) (versionCode из версии), [§390](390-install-source-aware-update-notice.md) (канал установки, define только у AAB), [§219](219-deep-audit-2026-07.md) (перезапуск release-режима на теге), [GOOGLE_PLAY.md](../../GOOGLE_PLAY.md), [RELEASE_PROCESS.md](../../RELEASE_PROCESS.md) §2 «Google Play (AAB)» |
@@ -17,7 +17,7 @@ Play)») и кладёт его в артефакт прогона. Дальше
 ## Решение
 
 Job `google-play` (имя в UI — `GooglePlay`) в [ci.yml](../../../.github/workflows/ci.yml): `needs: [meta, android]`,
-гейт `is_release`, параллельно с `release`. Шаги:
+гейт `is_release && !is_prerelease`, параллельно с `release`. Шаги:
 
 | Шаг | Что делает |
 |---|---|
@@ -37,6 +37,14 @@ Job `google-play` (имя в UI — `GooglePlay`) в [ci.yml](../../../.github/w
 | Статус выпуска | `vars.PLAY_RELEASE_STATUS`, по умолчанию `draft` |
 | versionCode | `scripts/version-code.sh <ver> universal` — тот же, что зашит в AAB (ABI=0) |
 | Описание выпуска | fastlane-каталог `en-US` → Play-локаль `en-US`, `ru` (соглашение F-Droid) → `ru-RU` |
+
+**Релиз-кандидаты в Play не идут** (решение владельца 14.09.2026). Job `meta`
+отдаёт `is_prerelease=true` для тега `vX.Y.Z-rc.N`; job `google-play` на таком
+теге пропускается (skipped), GitHub-релиз и AAB-артефакт собираются как обычно.
+Hotfix `vX.Y.Z-hotfixN` — полноценный релиз и уходит в Play. Других суффиксов
+нет: `version-code.sh` падает на неизвестном. Проверка на подстроку `-rc.`,
+поэтому dev-сборка после rc-тега (`X.Y.Z-rc.N-dev.M`) тоже помечена, но у неё
+и так `is_release=false`.
 
 **Почему `draft` по умолчанию.** Первый прогон надо увидеть глазами в консоли:
 что легло на трек, с каким кодом, с какими notes. Плюс две внешние задержки,
@@ -77,6 +85,17 @@ Action делает ровно одно: AAB + notes на трек. Пин по 
 
 ## Риски и edge cases
 
+- **Кандидат на GitHub** (решение владельца 14.09.2026, закрыто): job `release`
+  ставит `prerelease: true` для rc, job `publish-manifest` на rc пропускается.
+  UpdateChecker ходит в `/releases/latest`, который pre-release не отдаёт, а
+  фоллбэк `latest.json` остаётся на прошлом stable — кандидат пользователям
+  не предлагается. APK лежат на странице pre-release для тестеров.
+- **F-Droid** мог взять rc-тег как новую версию. Решение владельца 14.09.2026:
+  шаблон тега в `UpdateCheckMode: Tags ^v\d+\.\d+\.\d+(-hotfix\d+)?$`,
+  [fdroiddata!48904](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/48904).
+  `UpdateCheckIgnore` не подошёл: `checkupdates` применяет его только в
+  режиме `HTTP` и при разборе манифеста, в `Tags` с `UpdateCheckData` — нет.
+  Подробности в [FDROID.md](../../FDROID.md).
 - **Код уже занят в Play** (заливали руками) → API «Version code N has already
   been used», job красный, GitHub-релиз цел. Ничего не делать.
 - **401/403 в первые сутки** после приглашения — пропагация прав, не ошибка
@@ -93,8 +112,11 @@ Action делает ровно одно: AAB + notes на трек. Пин по 
 - [x] YAML валиден (`python3 -c yaml.safe_load`), job виден в графе.
 - [ ] Первый тег после мержа: job `google-play` зелёный; в консоли на `production`
   черновик с versionCode = universal-код тега и notes en-US / ru-RU.
-- [ ] Ручной Publish черновика → `gh variable set PLAY_RELEASE_STATUS -b completed`
-  → статус спеки Done.
+- [x] `PLAY_RELEASE_STATUS=completed` — выставлен 14.09.2026 по слову владельца, без
+  этапа черновика. Fallback в YAML остаётся `draft`: если переменную удалить,
+  job вернётся к черновику, а не к автопубликации.
+- [ ] Выпуск ушёл на проверку Google сам (в консоли статус «На проверке»),
+  после одобрения опубликовался без ручного Publish → статус спеки Done.
 
 ## Нерешённое / follow-up
 

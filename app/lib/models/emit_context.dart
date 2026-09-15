@@ -1,3 +1,4 @@
+import '../services/builder/node_link_resolve.dart';
 import '../services/builder/rule_set_registry.dart';
 import 'node_spec.dart';
 import 'singbox_entry.dart';
@@ -59,4 +60,14 @@ abstract class EmitContext {
 
   /// §435 — строка версии ядра для текста предупреждения гейта.
   String get coreVersion => '';
+
+  /// §439 (D-112) — словарь целей ссылок на узлы этой сборки: `build`
+  /// записывает сюда финальные теги узлов под их адресами. `null` — адреса
+  /// никому не нужны.
+  NodeLinkTargets? get linkTargets => null;
+
+  /// §439 — detour-ссылка узла разрешается вторым проходом, когда финальные
+  /// теги всех источников известны (`resolveDeferredDetours`). Контекст без
+  /// сборки конфига ссылку отбрасывает.
+  void deferDetour(DeferredDetour detour) {}
 }

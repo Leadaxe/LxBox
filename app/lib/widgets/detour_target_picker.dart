@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../models/direction.dart';
+import '../models/node_link.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
+import '../services/node_link_address.dart';
 import '../services/selector_info.dart';
 import '../services/tag_resolver.dart';
 import '../services/l10n/locale_controller.dart';
@@ -11,18 +13,19 @@ import 'app_bottom_sheet.dart';
 
 /// §239 — выбранная цель detour-пикера.
 class DetourTarget {
-  const DetourTarget({required this.storeValue, required this.display});
+  const DetourTarget({required this.link, required this.display});
 
-  /// Что сохранять: для свободного сервера — display-form тег (§080);
-  /// для члена ТЕКУЩЕЙ папки — ГОЛЫЙ тег члена (resolve при сборке,
+  /// Что сохранять (D-112): свободный сервер и Направление — корневая
+  /// `{tag}` (финальный тег сервера, тег Направления); член ТЕКУЩЕЙ папки —
+  /// пара `{id папки, сырой тег}` (финальный тег считает сборка, ссылка
   /// переживает смену префикса папки).
-  final String storeValue;
+  final NodeLink link;
 
   /// Человекочитаемая подпись (для сообщений/подсветки).
   final String display;
 
   /// Сентинел «без detour».
-  static const none = DetourTarget(storeValue: '', display: '');
+  static const none = DetourTarget(link: NodeLink.none, display: '');
 }
 
 /// Сабстрока узла в пикере: `TYPE · server:port`; у безадресных (§435 —
@@ -53,68 +56,106 @@ String detourDirectionDisplay(String stored, List<Direction> directions) {
   return stored;
 }
 
-/// §252 — разворот сохранённого detour-значения в цепочку хопов «как пакет
+/// §439 — подпись сохранённой detour-ссылки [link]: корневая — через
+/// [detourDirectionDisplay] (Направление → `⚙ <label>`, прочее — тег); член
+/// папки [folder] (контекст экрана) — его сырой тег; узел другого контейнера
+/// — финальная форма тега по источнику из [controller] (префикс + сырой тег),
+/// без контроллера — сырой тег.
+String detourLinkDisplay(
+  NodeLink link, {
+  required List<Direction> directions,
+  SubscriptionController? controller,
+  FolderServers? folder,
+}) {
+  if (link.isEmpty) return '';
+  if (link.isRoot) return detourDirectionDisplay(link.tag, directions);
+  if (folder != null && folder.id == link.folderId) return link.tag;
+  for (final e in controller?.entries ?? const <SubscriptionEntry>[]) {
+    if (e.list.id == link.folderId) {
+      return containerFinalForm(e.list, link.tag);
+    }
+  }
+  return link.tag;
+}
+
+/// §252 — разворот сохранённой detour-ссылки в цепочку хопов «как пакет
 /// пойдёт», В ПОРЯДКЕ ПАКЕТА: самый глубокий транспорт (вплотную к телефону)
 /// первым, прямой detour ноды — последним (§245: detour — входной; сама
 /// экспансия идёт «цель → её detour → …», результат разворачивается).
 /// Хоп-виды:
-///  - интра-член [folder] (bare-тег, приоритет FolderDetourPlan) → дальше по
-///    его личному `member.detour` (интра-контекст той же папки);
+///  - член папки (пара, D-112) → дальше по его личному `member.detour` в
+///    контексте его папки;
 ///  - detour-Направление (tag/autoTag) → терминальный хоп `⚙ label (выбор)` —
 ///    за Направлением выбор динамический;
-///  - свободная одиночка (display-form) → дальше по её `overrideDetour`.
-/// Storage может содержать цикл до сборки (§254 — цикл ловит validateConfig
-/// как fatal) — гейт visited + потолок 6 хопов. Превью best-effort: сложные политики
+///  - свободная одиночка (корневая ссылка финальным тегом) → дальше по её
+///    `overrideDetour`;
+///  - узел подписки и неизвестная цель — терминальный хоп.
+/// Storage может содержать цикл до сборки (сборка роняет его участников) —
+/// гейт visited + потолок 6 хопов. Превью best-effort: сложные политики
 /// (append/replace, register) не разворачиваем — это про ЛИЧНУЮ ось цели.
 List<String> detourPathHops(
-  String stored, {
+  NodeLink stored, {
   required SubscriptionController controller,
   required List<Direction> directions,
   FolderServers? folder,
 }) {
   final hops = <String>[];
-  final visited = <String>{};
+  final visited = <NodeLink>{};
   var current = stored;
   var folderCtx = folder;
   while (current.isNotEmpty && hops.length < 6 && visited.add(current)) {
-    // 1) Интра-член текущей папки: bare-тег побеждает Направление-тёзку (§248).
-    FolderMember? member;
-    if (folderCtx != null) {
-      for (final m in folderCtx.members) {
-        if (m.node?.tag == current) {
-          member = m;
-          break;
+    // 1) Член папки: пара с `id` папки.
+    if (!current.isRoot) {
+      FolderServers? owner =
+          folderCtx != null && folderCtx.id == current.folderId ? folderCtx : null;
+      if (owner == null) {
+        for (final e in controller.entries) {
+          final l = e.list;
+          if (l is FolderServers && l.id == current.folderId) {
+            owner = l;
+            break;
+          }
         }
       }
-    }
-    if (member != null) {
-      hops.add(current);
-      current = member.detour; // интра-цепочка продолжается в той же папке
+      FolderMember? member;
+      if (owner != null) {
+        for (var k = 0; k < owner.members.length; k++) {
+          if (folderMemberAddress(owner, k) == current) {
+            member = owner.members[k];
+            break;
+          }
+        }
+      }
+      hops.add(detourLinkDisplay(current,
+          directions: directions, controller: controller, folder: folder));
+      if (member == null) break; // узел подписки / неизвестная цель
+      current = member.detour; // цепочка продолжается в папке члена
+      folderCtx = owner;
       continue;
     }
     // 2) Detour-Направление — терминальный (его выбор показываем в скобках).
-    final directionText = detourDirectionDisplay(current, directions);
-    if (directionText != current) {
+    final directionText = detourDirectionDisplay(current.tag, directions);
+    if (directionText != current.tag) {
       hops.add(directionText);
       break;
     }
-    // 3) Свободная одиночка по display-form тегу → её личный detour.
+    // 3) Свободная одиночка по финальному тегу → её личный detour.
     UserServer? owner;
     for (final e in controller.entries) {
       final l = e.list;
       if (l is! UserServer || !l.enabled) continue;
       for (final n in l.nodes) {
-        if (TagResolver.displayTag(l.tagPrefix, n.tag) == current) {
+        if (TagResolver.displayTag(l.tagPrefix, n.tag) == current.tag) {
           owner = l;
           break;
         }
       }
       if (owner != null) break;
     }
-    hops.add(current);
+    hops.add(current.tag);
     if (owner == null) break; // неизвестная цель — дальше не разворачиваем
     current = owner.detourPolicy.overrideDetour;
-    folderCtx = null; // внешняя ссылка — интра-контекст исходной папки кончился
+    folderCtx = null;
   }
   // Экспансия шла «цель → её detour → …» (вглубь); физически пакет идёт
   // из глубины наружу — разворачиваем в порядок пакета.
@@ -187,16 +228,20 @@ Future<DetourTarget?> showDetourTargetPicker(
     }
   }
 
-  // Члены текущей папки (голые теги; битые и self исключены).
-  final members = <(String bare, NodeSpec node)>[];
+  // Члены текущей папки (голые теги для показа, адрес-пара для записи;
+  // битые и self исключены).
+  final members = <(String bare, NodeLink link, NodeSpec node)>[];
   final folder = currentFolder;
   if (folder != null) {
+    final raw = containerRawTags(folder);
     for (final m in folder.members) {
       final n = m.node;
       if (n == null || n.tag.isEmpty) continue;
       if (n.isGroup) continue; // §322 — см. выше
       if (selfBareTag.isNotEmpty && n.tag == selfBareTag) continue;
-      members.add((n.tag, n));
+      final rawTag = raw[n];
+      if (rawTag == null) continue;
+      members.add((n.tag, NodeLink(folderId: folder.id, tag: rawTag), n));
     }
   }
 
@@ -244,7 +289,7 @@ Future<DetourTarget?> showDetourTargetPicker(
                           ),
                         ]
                       : [
-                          for (final (bare, n) in members)
+                          for (final (bare, link, n) in members)
                             ListTile(
                               contentPadding:
                                   const EdgeInsets.only(left: 32, right: 16),
@@ -258,8 +303,7 @@ Future<DetourTarget?> showDetourTargetPicker(
                               ),
                               onTap: () => Navigator.pop(
                                   ctx,
-                                  DetourTarget(
-                                      storeValue: bare, display: bare)),
+                                  DetourTarget(link: link, display: bare)),
                             ),
                         ],
                 ),
@@ -285,7 +329,8 @@ Future<DetourTarget?> showDetourTargetPicker(
                     onTap: () => Navigator.pop(
                         ctx,
                         DetourTarget(
-                            storeValue: c.tag, display: c.displayLabel)),
+                            link: NodeLink(tag: c.tag),
+                            display: c.displayLabel)),
                   ),
               ],
               if (free.isNotEmpty) ...[
@@ -304,7 +349,8 @@ Future<DetourTarget?> showDetourTargetPicker(
                       style: TextStyle(fontSize: 12, color: muted),
                     ),
                     onTap: () => Navigator.pop(ctx,
-                        DetourTarget(storeValue: display, display: display)),
+                        DetourTarget(
+                            link: NodeLink(tag: display), display: display)),
                   ),
               ] else
                 Padding(

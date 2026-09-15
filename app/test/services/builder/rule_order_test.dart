@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/builder/rule_order.dart';
@@ -185,6 +186,50 @@ void main() {
     });
   });
 
+  group('D-117 голова оси на номере шаблона (BACKUP.md §9 п. 7)', () {
+    test('загрузка: сдвинутая голова встаёт на номер шаблона, сортируемый '
+        'пресет и правило пользователя держат свои номера', () {
+      // Хранение после импорта лаунчера 1.5.3–1.5.6: сплошная нумерация.
+      final rules = [
+        _preset('traffic-processing')..orderNum = 1000,
+        _preset('block-ads')..orderNum = 1001,
+        _inline('user')..orderNum = 1002,
+        _preset('fcm-push')..orderNum = 970,
+      ];
+      expect(requiredRuleNumsShifted(rules, _catalog()), isTrue);
+
+      final out = normalizeRuleOrder(rules, _catalog(), _template());
+
+      expect([for (final r in out) '${r.name}=${r.orderNum}'], [
+        'traffic-processing=0',
+        'fcm-push=970',
+        'block-ads=1001',
+        'user=1002',
+      ]);
+      expect(requiredRuleNumsShifted(out, _catalog()), isFalse);
+    });
+
+    test('pinRequiredRuleNums: голова на месте — ничего не меняется', () {
+      final rules = [
+        _preset('traffic-processing')..orderNum = 0,
+        _preset('block-ads')..orderNum = 1003,
+      ];
+      expect(requiredRuleNumsShifted(rules, _catalog()), isFalse);
+      expect(pinRequiredRuleNums(rules, _catalog()), isFalse);
+      expect(rules.map((r) => r.orderNum), [0, 1003]);
+    });
+
+    test('pinRequiredRuleNums: номер ставится и неразмеченной голове, прочие '
+        'неразмеченные остаются разметке', () {
+      final rules = [
+        _inline('user'),
+        _preset('traffic-processing'),
+      ];
+      expect(pinRequiredRuleNums(rules, _catalog()), isTrue);
+      expect(rules.map((r) => r.orderNum), [null, 0]);
+    });
+  });
+
   group('normalizeRuleOrder (§370 полный проход)', () {
     test('seed обязательного пресета + разметка + сортировка', () {
       final rules = [_inline('user')..orderNum = 1000];
@@ -291,18 +336,18 @@ void main() {
     });
   });
 
-  group('JSON round-trip (§370 num в storage)', () {
-    test('orderNum переживает toJson/fromJson', () {
+  group('запись rules[] round-trip (§370 num в storage)', () {
+    test('orderNum переживает запись и чтение', () {
       final r = _inline('a')..orderNum = 1042;
 
-      final back = CustomRule.fromJson(r.toJson());
+      final back = ruleFromRecord(ruleToRecord(r)).value!;
 
       expect(back.orderNum, 1042);
-      expect(r.toJson()['num'], 1042, reason: 'ключ в JSON — `num`');
+      expect(ruleToRecord(r)['num'], 1042, reason: 'ключ в записи — `num`');
     });
 
     test('неразмеченное правило не пишет ключ num', () {
-      expect(_inline('a').toJson().containsKey('num'), isFalse);
+      expect(ruleToRecord(_inline('a')).containsKey('num'), isFalse);
     });
 
     test('copyWith сохраняет orderNum', () {

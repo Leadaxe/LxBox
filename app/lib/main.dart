@@ -68,18 +68,24 @@ void main() async {
     // зависит адрес «где взять новую версию», а снек об апдейте показывается
     // на первом кадре. Резолв дешёвый — dart-define, иначе один native-вызов.
     await InstallSourceResolver.init();
-    // §118 — идентичность фетча подписок (UA override + HWID + device-meta).
-    // После VersionInfo (UA дефолт зависит от версии), до runApp — `_fetch`
-    // читает значения синхронно.
-    await SubscriptionIdentity.init();
     // §038 — подгружаем persistent warning+error entries предыдущей сессии
     // (из обоих файлов applog.txt + corelog.txt — §043) до runApp, чтобы
-    // Debug-экран сразу видел pre-crash JVM-events.
+    // Debug-экран сразу видел pre-crash JVM-events. ДО recover ниже: его
+    // warning запишет applog.txt одной текущей сессией, и записи сессии,
+    // убитой посреди загрузки, пропали бы до чтения.
     await AppLog.I.initPersistent();
     // §417 — доводка загрузки workspace, убитой посреди копирования (журнал
-    // `pending` в workspaces.json). ДО первого чтения SettingsStorage: сцена
-    // должна быть целиком одним слотом. Без справочника — один exists().
+    // `pending` в workspaces.json). ДО первого чтения SettingsStorage (в том
+    // числе SubscriptionIdentity.init): `_load` кладёт сцену в кэш и там же
+    // мигрирует форму хранения (§439), так что прочитанная раньше старая
+    // сцена первым же сохранением легла бы поверх доведённого слота.
+    // Без справочника — один exists(). Порядок держит
+    // test/contract/startup_order_contract_test.dart.
     await WorkspaceStore.I.recover();
+    // §118 — идентичность фетча подписок (UA override + HWID + device-meta).
+    // После VersionInfo (UA дефолт зависит от версии) и recover (читает
+    // SettingsStorage), до runApp — `_fetch` читает значения синхронно.
+    await SubscriptionIdentity.init();
     // §189 — native_prefs: первый старт seed'ит JSON из native (bootstrap),
     // последующие — sync JSON⇒native (диск-истина перезаливает оперативку).
     // ДО UI (UI читает native-тумблеры из JSON-зеркала) и ДО возможного
@@ -109,11 +115,6 @@ void main() async {
         for (final v in directionsTemplate.vars) v.name: v.defaultValue,
       },
     );
-    // §393 D1 — цепочки из старого storage (ключ `chains` без `order`)
-    // получают позиции общего списка источников: встают в его конец, взаимный
-    // порядок сохранён. Идемпотентна, ДО первого билда — билдер читает
-    // цепочки уже в порядке общего списка.
-    await SettingsStorage.migrateChainOrderIfNeeded();
     // §229 — вызов one-shot ремапа preset_id (§228) убран: миграция удалена,
     // отработала у всех, кто обновлялся начиная с v2.10.0.
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в

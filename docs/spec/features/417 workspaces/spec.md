@@ -62,7 +62,15 @@ workspace — это то, из чего он генерируется.
   ядром может быть битой, а битый `cache.db` — это паника на старте, ради
   которой существует сброс §334. Пересоздаётся ядром; теряется только история
   urltest/FakeIP.
-- `.bak`, tmp-файлы io-слоя — служебные.
+- `.bak`, `.v0.bak`, tmp-файлы io-слоя — служебные.
+
+> **Слот формы 2.23.2 ([§439](../439%20storage-contract-1-0/spec.md) §3.3).**
+> Слот, сохранённый до 2.23.3, держит `lxbox_settings.json` без
+> `storage_version`. Load перед копированием слота на сцену кладёт копию его
+> файла в `workspaces/<имя>/lxbox_settings.json.v0.bak` (если копии нет), дальше
+> сцена мигрирует в `_load()` при перечитывании (§2.6). Копия в `kSlotEntries`
+> не входит и на сцену не едет; спящие слоты до загрузки не мигрируют, Save as
+> пишет уже форму 1.0.
 - `support_state.json`, `applog.txt`/`corelog.txt`, crash/oom-репорты,
   тема (SharedPreferences) — свойства устройства, не состояния.
 - Native-зеркало тумблеров `boxvpn_boot` (§189) — перезаписывается из
@@ -133,9 +141,13 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 
 Копирование трёх позиций не атомарно как целое. Если процесс убит между
 шагами 4 и 7, сцена — смесь `current` и X. Лечение: копирование
-идемпотентно, поэтому при старте (в `main()`, до
-`bootstrapAndSyncNativePrefs`) `WorkspaceStore.recover()` читает
-`pending` и **повторяет шаги 5–7 целиком**. Слот `current` при повторе
+идемпотентно, поэтому при старте (в `main()`, после
+`AppLog.I.initPersistent` и до первого чтения `SettingsStorage`, включая
+`SubscriptionIdentity.init`) `WorkspaceStore.recover()` читает `pending` и
+**повторяет шаги 5–7 целиком**. Чтение настроек раньше оставит в кэше
+старую сцену (и `_load` мигрирует и запишет её, §439) — первое сохранение
+ляжет поверх доведённого слота. Порядок держит
+`test/contract/startup_order_contract_test.dart`. Слот `current` при повторе
 может получить уже частично перезаписанную сцену — это допустимо: сцена
 на момент убийства и есть последнее известное состояние `current`, а
 `pending.target` был выбран пользователем.
@@ -241,7 +253,7 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 
 | # | Коммит | Файлы |
 |---|---|---|
-| 1 | `WorkspaceStore`: справочник, `kSlotEntries`, `saveAs(name)`, `load(name)` (4–8 из §2.3), `recover()`, `rename`/`delete`/`slotSizeBytes`, `validateName`; тесты на path_provider-моке (оба корня) | `services/workspaces/workspace_store.dart`, `test/services/workspace_store_test.dart`, `main.dart` (`recover()` перед `bootstrapAndSyncNativePrefs`) |
+| 1 | `WorkspaceStore`: справочник, `kSlotEntries`, `saveAs(name)`, `load(name)` (4–8 из §2.3), `recover()`, `rename`/`delete`/`slotSizeBytes`, `validateName`; тесты на path_provider-моке (оба корня) | `services/workspaces/workspace_store.dart`, `test/services/workspace_store_test.dart`, `main.dart` (`recover()` до первого чтения `SettingsStorage`) |
 | 2 | `WorkspaceController` (цикл загрузки, `generation`, `takePendingAutoConnect`, перечитывание по таблице §2.6) + пересоздание `HomeScreen` + автозапуск после bootstrap-пересборки; попап в AppBar (Load / Save as) с модальным прогрессом; l10n | `services/workspaces/workspace_controller.dart`, `main.dart`, `home_screen.dart`, `screens/home/widgets/workspace_menu.dart`, `assets/l10n/ru/ui.json` |
 | 3 | Меню «⋮» на строке слота (rename / delete) + размер слота в подзаголовке; экран Manage из первой итерации снят | `workspace_menu.dart` |
 | 4 | Доки: STORAGE.md (дерево + таблица с пометкой «в слоте / устройство»), USER_GUIDE, CHANGELOG | docs |

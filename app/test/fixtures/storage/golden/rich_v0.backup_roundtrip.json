@@ -1,0 +1,23 @@
+{
+  "export_warnings": [
+    "backup_local_only_dropped | dns: ds-geo: srs",
+    "backup_local_only_dropped | dns: ds-model: srs",
+    "backup_local_only_dropped | Json broken: json"
+  ],
+  "import_warnings": [],
+  "config_diff": [
+    "$.dns.rules[2→]: {\"rule_set\":\"ds-geo\",\"server\":\"google_udp\",\"query_type\":[\"A\",\"AAAA\"]} → <absent>",
+    "$.dns.rules[3→]: {\"rule_set\":\"ds-model\",\"server\":\"google_udp\"} → <absent>",
+    "$.inbounds[tag=tun-in].exclude_package: [\"com.example.bank\",\"com.example.bypass\"] → <absent>",
+    "$.inbounds[tag=mixed-in]: {\"type\":\"socks\",\"tag\":\"mixed-in\",\"listen\":\"127.0.0.1\",\"listen_port\":2081,\"users\":[{\"username\":\"user\",\"password\":\"testpass123\"}]} → <absent>",
+    "$.outbounds[tag=S2 Fastest].passive_check: <absent> → true",
+    "$.outbounds[tag=vpn-1-auto].passive_check: <absent> → true",
+    "$.outbounds[tag=vpn-2-auto].passive_check: <absent> → true",
+    "$.route.rules[0→0].inbound[1→]: \"mixed-in\" → <absent>",
+    "$.route.rules[2→2].inbound[1→]: \"mixed-in\" → <absent>",
+    "$.route.rule_set[tag=ds-geo]: {\"type\":\"local\",\"tag\":\"ds-geo\",\"format\":\"binary\",\"path\":\"<sandbox>/docs/rule_sets/ds_geo1.srs\"} → <absent>",
+    "$.route.rule_set[tag=ds-model]: {\"type\":\"local\",\"tag\":\"ds-model\",\"format\":\"binary\",\"path\":\"<sandbox>/docs/rule_sets/ds_model1.srs\"} → <absent>",
+    "$.route.lx_idle_suspend: \"1m\" → \"30s\"",
+    "$.route.lx_idle_suspend_reachable: \"10m\" → \"5m\""
+  ]
+}

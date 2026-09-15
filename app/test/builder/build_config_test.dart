@@ -48,7 +48,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: specs,
       );
 
@@ -88,7 +87,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [wg],
       );
 
@@ -114,7 +112,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [spec],
       );
       final result = await buildConfig(
@@ -142,7 +139,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [vless, naive],
       );
       final result = await buildConfig(
@@ -170,13 +166,13 @@ void main() {
       final listA = UserServer(
         id: 'A', name: 'A', enabled: true, tagPrefix: 'BL:',
         detourPolicy: DetourPolicy.defaults,
-        origin: UserSource.paste, createdAt: DateTime.now(),
+        origin: UserSource.paste,
         nodes: [a1, a2],
       );
       final listB = UserServer(
         id: 'B', name: 'B', enabled: true, tagPrefix: 'W:',
         detourPolicy: DetourPolicy.defaults,
-        origin: UserSource.paste, createdAt: DateTime.now(),
+        origin: UserSource.paste,
         nodes: [b1],
       );
       final result = await buildConfig(
@@ -208,7 +204,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: const [],
       );
       final result = await buildConfig(
@@ -235,7 +230,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [wg],
       );
       final result = await buildConfig(
@@ -261,7 +255,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [wg],
       );
       final result = await buildConfig(
@@ -289,7 +282,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [wg],
       );
       // Оба порога заданы → оба в route.

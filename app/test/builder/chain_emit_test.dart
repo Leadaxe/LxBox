@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -23,7 +24,7 @@ void main() {
     test('порядок хопов = порядок ПАКЕТА, ключ ядра — outbounds', () async {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
-        chains: [const SourceChain(tag: 'via-de', hops: ['DE', 'NL'])],
+        chains: [const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')])],
       );
       final chain = _byTag(r, 'via-de')!;
       expect(chain['type'], 'chain');
@@ -36,7 +37,7 @@ void main() {
         () async {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
-        chains: [const SourceChain(tag: 'via-de', hops: ['DE', 'NL'])],
+        chains: [const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')])],
         directions: [const Direction(tag: 'vpn-1', label: 'V', nodeFilter: 'via')],
       );
       expect(_byTag(r, 'vpn-1')!['outbounds'], ['via-de']);
@@ -45,7 +46,7 @@ void main() {
     test('цепочка эмитится ПЕРЕД группами Направлений', () async {
       final r = await _build(
         nodeTags: ['DE'],
-        chains: [const SourceChain(tag: 'ch', hops: ['DE', 'direct-out'])],
+        chains: [const SourceChain(tag: 'ch', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'direct-out')])],
         directions: [const Direction(tag: 'vpn-1', label: 'V')],
       );
       final tags = [
@@ -62,7 +63,7 @@ void main() {
         chains: [
           const SourceChain(
             tag: 'tuned',
-            hops: ['DE', 'NL'],
+            hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')],
             idleTimeout: '10m',
             stripEvasion: false,
             strip: {kChainStripTlsUtls: true, kChainStripTlsFragment: false},
@@ -84,7 +85,7 @@ void main() {
     test('умолчания в конфиг не пишутся', () async {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
-        chains: [const SourceChain(tag: 'ch', hops: ['DE', 'NL'])],
+        chains: [const SourceChain(tag: 'ch', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')])],
       );
       final chain = _byTag(r, 'ch')!;
       expect(chain.containsKey('strip_evasion'), isFalse);
@@ -97,7 +98,7 @@ void main() {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
         chains: [
-          const SourceChain(tag: 'off', hops: ['DE', 'NL'], enabled: false)
+          const SourceChain(tag: 'off', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')], enabled: false)
         ],
       );
       expect(_byTag(r, 'off'), isNull);
@@ -111,8 +112,8 @@ void main() {
       final r = await _build(
         nodeTags: ['DE', 'NL', 'SG'],
         chains: [
-          const SourceChain(tag: 'inner', hops: ['DE', 'NL']),
-          const SourceChain(tag: 'outer', hops: ['inner', 'SG']),
+          const SourceChain(tag: 'inner', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')]),
+          const SourceChain(tag: 'outer', hops: [NodeLink(tag: 'inner'), NodeLink(tag: 'SG')]),
         ],
       );
       expect(_byTag(r, 'inner'), isNotNull);
@@ -128,8 +129,8 @@ void main() {
       final r = await _build(
         nodeTags: ['DE', 'NL', 'SG'],
         chains: [
-          const SourceChain(tag: 'outer', hops: ['inner', 'SG']),
-          const SourceChain(tag: 'inner', hops: ['DE', 'NL']),
+          const SourceChain(tag: 'outer', hops: [NodeLink(tag: 'inner'), NodeLink(tag: 'SG')]),
+          const SourceChain(tag: 'inner', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')]),
         ],
       );
       expect(_byTag(r, 'outer'), isNull, reason: 'ссылка вперёд не эмитится');
@@ -141,7 +142,7 @@ void main() {
     test('позиция в никуда дропает ЦЕПОЧКУ, а не одну позицию', () async {
       final r = await _build(
         nodeTags: ['DE'],
-        chains: [const SourceChain(tag: 'broken', hops: ['DE', 'SG'])],
+        chains: [const SourceChain(tag: 'broken', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'SG')])],
       );
       expect(_byTag(r, 'broken'), isNull);
       // Именно «целиком»: маршрут без хопа — другой маршрут.
@@ -155,8 +156,8 @@ void main() {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
         chains: [
-          const SourceChain(tag: 'inner', hops: ['DE', 'NL']),
-          const SourceChain(tag: 'outer', hops: ['DE', 'inner']),
+          const SourceChain(tag: 'inner', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')]),
+          const SourceChain(tag: 'outer', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'inner')]),
         ],
       );
       expect(_byTag(r, 'outer'), isNull);
@@ -169,7 +170,7 @@ void main() {
       // Два outbound'а с одним тегом — отказ ядра на ВЕСЬ конфиг.
       final r = await _build(
         nodeTags: ['DE', 'NL'],
-        chains: [const SourceChain(tag: 'vpn-1', hops: ['DE', 'NL'])],
+        chains: [const SourceChain(tag: 'vpn-1', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')])],
         directions: [const Direction(tag: 'vpn-1', label: 'V')],
       );
       final vpn1 = _byTag(r, 'vpn-1')!;
@@ -181,7 +182,7 @@ void main() {
         () async {
       final r = await _build(
         nodeTags: ['DE'],
-        chains: [const SourceChain(tag: 'solo', hops: ['DE'])],
+        chains: [const SourceChain(tag: 'solo', hops: [NodeLink(tag: 'DE')])],
       );
       expect(_byTag(r, 'solo'), isNull);
       expect(r.emitWarnings.join('\n'), contains('at least two'));
@@ -194,7 +195,7 @@ void main() {
       // цепочку, которая через это же Направление проходит.
       final r = await _build(
         nodeTags: ['DE', 'NL'],
-        chains: [const SourceChain(tag: 'via-de', hops: ['proxy-out', 'NL'])],
+        chains: [const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'proxy-out'), NodeLink(tag: 'NL')])],
         directions: [const Direction(tag: 'proxy-out', label: 'P')],
       );
       expect(_byTag(r, 'via-de'), isNotNull, reason: 'сама цепочка жива');
@@ -206,8 +207,8 @@ void main() {
       final r = await _build(
         nodeTags: ['DE', 'NL', 'SG'],
         chains: [
-          const SourceChain(tag: 'inner', hops: ['proxy-out', 'NL']),
-          const SourceChain(tag: 'outer', hops: ['inner', 'SG']),
+          const SourceChain(tag: 'inner', hops: [NodeLink(tag: 'proxy-out'), NodeLink(tag: 'NL')]),
+          const SourceChain(tag: 'outer', hops: [NodeLink(tag: 'inner'), NodeLink(tag: 'SG')]),
         ],
         directions: [const Direction(tag: 'proxy-out', label: 'P')],
       );
@@ -221,7 +222,7 @@ void main() {
     test('в ЧУЖОЕ Направление та же цепочка входит обычным узлом', () async {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
-        chains: [const SourceChain(tag: 'via-de', hops: ['proxy-out', 'NL'])],
+        chains: [const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'proxy-out'), NodeLink(tag: 'NL')])],
         directions: [
           const Direction(tag: 'proxy-out', label: 'P'),
           const Direction(tag: 'other', label: 'O', nodeFilter: 'via'),
@@ -237,7 +238,7 @@ void main() {
       // настоящей причины, которая названа отдельной строкой про цикл.
       final r = await _build(
         nodeTags: ['DE'],
-        chains: [const SourceChain(tag: 'via-de', hops: ['proxy-out', 'DE'])],
+        chains: [const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'proxy-out'), NodeLink(tag: 'DE')])],
         directions: [
           const Direction(tag: 'proxy-out', label: 'P', nodeFilter: 'via')
         ],
@@ -274,7 +275,7 @@ void main() {
     test('старое ядро: цепочка не эмитится, остальное собирается', () async {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
-        chains: [const SourceChain(tag: 'ch', hops: ['DE', 'NL'])],
+        chains: [const SourceChain(tag: 'ch', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')])],
         directions: [const Direction(tag: 'vpn-1', label: 'V')],
         coreVersion: _oldCore,
       );
@@ -288,7 +289,7 @@ void main() {
     test('новое ядро: цепочка эмитится', () async {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
-        chains: [const SourceChain(tag: 'ch', hops: ['DE', 'NL'])],
+        chains: [const SourceChain(tag: 'ch', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')])],
         coreVersion: _newCore,
       );
       expect(_byTag(r, 'ch'), isNotNull);
@@ -299,7 +300,7 @@ void main() {
       for (final v in const ['', 'unknown', '1.13.11']) {
         final r = await _build(
           nodeTags: ['DE', 'NL'],
-          chains: [const SourceChain(tag: 'ch', hops: ['DE', 'NL'])],
+          chains: [const SourceChain(tag: 'ch', hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')])],
           coreVersion: v,
         );
         expect(_byTag(r, 'ch'), isNotNull, reason: 'версия "$v"');
@@ -371,7 +372,6 @@ UserServer _source(List<String> tags) {
     tagPrefix: '',
     detourPolicy: DetourPolicy.defaults,
     origin: UserSource.paste,
-    createdAt: DateTime.fromMillisecondsSinceEpoch(0),
     nodes: nodes,
   );
 }

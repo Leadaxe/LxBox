@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/services/dns/dns_controller.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
@@ -30,11 +31,11 @@ void main() {
   });
 
   test('stage() пишет servers/rules/dns-vars в storage', () async {
-    final servers = [
-      {'enabled': true, 'kind': 'inline', 'tag': 't', 'body': {'type': 'udp'}},
+    final servers = <DnsServerRef>[
+      const DnsServerInline(enabled: true, tag: 't', body: {'type': 'udp'}),
     ];
-    final rules = [
-      {'kind': 'inline', 'name': 'r', 'rule': {'server': 'x'}},
+    final rules = <DnsRuleRef>[
+      const DnsRuleInline(name: 'r', rule: {'server': 'x'}),
     ];
     await DnsController.stage(
       servers: servers,
@@ -50,12 +51,8 @@ void main() {
     expect(await SettingsStorage.getVar('dns_final', ''), 'cloudflare_udp');
     expect(await SettingsStorage.getVar('dns_default_domain_resolver', ''),
         'local');
-    final savedServers = await SettingsStorage.getDnsServers();
-    expect(savedServers.length, 1);
-    expect(savedServers.first['tag'], 't');
-    final savedRules = await SettingsStorage.getDnsRulesList();
-    expect(savedRules.length, 1);
-    expect(savedRules.first['name'], 'r');
+    expect(await SettingsStorage.getDnsServers(), servers);
+    expect(await SettingsStorage.getDnsRulesList(), rules);
   });
 
   test('stage() НЕ трогает custom_rules (§295 device-scope)', () async {

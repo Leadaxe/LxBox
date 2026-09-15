@@ -2,12 +2,16 @@ import '../../config/consts.dart';
 import '../../models/emit_context.dart';
 import '../../models/server_list.dart';
 import '../../models/auto_select.dart';
+import '../../models/node_link.dart';
 import '../../models/node_spec.dart';
+import '../../models/singbox_entry.dart';
 import '../node_hash.dart';
 import '../node_identity.dart';
+import '../node_link_address.dart';
 import '../safe_regex.dart';
 import '../tag_resolver.dart';
 import 'core_chain_capability.dart';
+import 'node_link_resolve.dart';
 
 /// Сборка одной подписки в контекст `EmitContext`.
 ///
@@ -16,18 +20,40 @@ import 'core_chain_capability.dart';
 extension ServerListBuild on ServerList {
   /// 1. Для каждого сервера решает, нужно ли пропустить детур.
   /// 2. Зовёт `server.getEntries(ctx, skipDetour)`.
-  /// 3. На каждом entry применяет `_updateEntry`: allocateTag,
-  ///    подмена поля `detour` по политике подписки.
+  /// 3. На каждом entry: allocateTag; detour-ссылка политики (D-112)
+  ///    откладывается до второго прохода сборки (`ctx.deferDetour`), финальный
+  ///    тег узла записывается под его адресом (`ctx.linkTargets`).
   /// 4. Регистрирует entry в ctx: addEntry, selector/auto-списки по политике.
   void build(EmitContext ctx) {
     if (!enabled) return;
-    // §237/§239 — у папки члены несут ЛИЧНЫЙ detour; интра-ссылки (на членов
-    // той же папки) резолвятся планом: цепочки внутри папки, exempt-набор
-    // папочного override, разрыв циклов, register-гейт ⚙-целей.
+    // §237/§239 — у папки члены несут ЛИЧНЫЙ detour; интра-ссылки (пары с
+    // `id` этой папки) дают план: цепочки внутри папки, exempt-набор
+    // папочного override, register-гейт ⚙-целей.
     final plan = switch (this) {
       final FolderServers f => FolderDetourPlan(f),
       _ => null,
     };
+    // §439 — адреса узлов: сырые теги контейнера (у одиночного сервера адрес
+    // корневой — финальный тег).
+    final targets = ctx.linkTargets;
+    final addressTags = (targets == null || this is UserServer)
+        ? null
+        : containerRawTags(this);
+    void noteAddress(NodeSpec node, String baseTag, String finalTag,
+        {bool group = false}) {
+      if (targets == null) return;
+      if (this is UserServer) {
+        targets.noteRootNode(finalTag);
+        return;
+      }
+      final raw = addressTags?[node] ?? baseTag.trim();
+      if (group) {
+        targets.noteGroup(
+            id, raw, TagResolver.displayTag(tagPrefix, raw), finalTag);
+      } else {
+        targets.noteMember(id, raw, finalTag);
+      }
+    }
 
     // §283 — per-node disable подписки: выключенная нода видна в UI (с
     // toggle), но в конфиг не эмитится. Ключ — идентичность узла (§400: тег,
@@ -82,8 +108,8 @@ extension ServerListBuild on ServerList {
       // §073: replaceMode = override + replace toggle ON. Append mode
       // (default false) keeps raw chain (skipDetour: false) и подставляет
       // overrideDetour хвостом цепочки.
-      final replaceMode =
-          policy.overrideDetour.isNotEmpty && policy.replaceDetourChain;
+      final link = policy.overrideDetour;
+      final replaceMode = link.isNotEmpty && policy.replaceDetourChain;
       final skipDetour = !policy.useDetourServers || replaceMode;
 
       final raw = server.getEntries(ctx, skipDetour: skipDetour);
@@ -91,32 +117,56 @@ extension ServerListBuild on ServerList {
       final detours = raw.detours;
 
       // Allocate tags (детуры первыми — чтобы main мог сослаться на tag).
+      final detourBases = <String>[];
       for (final d in detours) {
+        detourBases.add(d.tag);
         d.map['tag'] = ctx.allocateTag(TagResolver.displayTag(tagPrefix, d.tag));
       }
+      final mainBase = main.tag;
       main.map['tag'] =
-          ctx.allocateTag(TagResolver.displayTag(tagPrefix, main.tag));
+          ctx.allocateTag(TagResolver.displayTag(tagPrefix, mainBase));
       // §322 — итоговый тег нужен второму проходу: пул автовыбора ссылается
       // на членов уже ПОСЛЕ префикса и уникализации.
       resolvedTags[server] = main.map['tag'] as String;
       // §435 — тот же финальный тег нужен инъекции секций узла (`@self`).
       ctx.noteEmitted(server, main.map['tag'] as String);
+      // §439 — адрес узла, затем звеньев его родной цепочки (сырой тег узла
+      // сильнее тёзки-звена).
+      noteAddress(server, mainBase, main.tag);
+      for (var k = 0; k < detours.length; k++) {
+        if (this is UserServer) {
+          targets?.noteRootNode(detours[k].tag);
+        } else {
+          targets?.noteMember(id, detourBases[k].trim(), detours[k].tag);
+        }
+      }
 
-      // Применить detour policy.
+      // Применить detour policy. Ссылка разрешается вторым проходом сборки:
+      // финальный тег цели известен только когда собраны все источники.
+      void defer(SingboxEntry holder) => ctx.deferDetour(DeferredDetour(
+            holder: holder,
+            link: link,
+            carrier: main,
+            entries: [...raw.all],
+            node: server,
+          ));
+      // Ключ `detour` держателя не снимается до второго прохода: разрешённая
+      // ссылка пишется на то же место в map (порядок ключей конфига прежний),
+      // а не разрешённая роняет узел целиком.
       if (replaceMode) {
         // REPLACE — цепочка дропнута (skipDetour=true), main → override.
-        main.map['detour'] = policy.overrideDetour;
+        defer(main);
       } else if (!policy.useDetourServers) {
         main.map.remove('detour');
-      } else if (policy.overrideDetour.isNotEmpty) {
+      } else if (link.isNotEmpty) {
         // §073 APPEND — нативная цепочка сохранена, override хвостом.
         if (detours.isEmpty) {
           // Цепочки нет в raw config → 1-hop (как replace).
-          main.map['detour'] = policy.overrideDetour;
+          defer(main);
         } else {
           // node → detours.first → ... → detours.last → overrideDetour
           main.map['detour'] = detours.first.tag;
-          detours.last.map['detour'] = policy.overrideDetour;
+          defer(detours.last);
         }
       } else if (detours.isNotEmpty) {
         main.map['detour'] = detours.first.tag;
@@ -160,12 +210,35 @@ extension ServerListBuild on ServerList {
 
     // §322 — второй проход: узлы автовыбора. Их состав — теги членов ЭТОГО же
     // контейнера, известные только теперь.
+    //
+    // §439 — явный член — ссылка `{folder_id, tag}` на СЫРОЙ тег: у папки это
+    // тег члена, у подписки и сервера — тег, уникализированный в источнике
+    // (группы из тела адресуют членов им).
+    final rawTags = this is FolderServers ||
+            !autoSelects.any((a) => a.$1.membership is ExplicitMembers)
+        ? null
+        : sourceNodeRawTags(nodes);
     for (final (spec, _) in autoSelects) {
-      final members = resolveAutoSelectMembers(spec, resolvedTags);
+      final shown = TagResolver.displayTag(tagPrefix, spec.tag);
+      final members = resolveAutoSelectMembers(
+        spec,
+        resolvedTags,
+        containerId: id,
+        rawTags: rawTags,
+        warn: (line) => ctx.warn('Auto node "$shown": $line'),
+      );
       // Пустой urltest роняет старт ядра (validator.dart) — достижимо, если
       // все члены выключены (§283) или подписка обновилась и пул опустел.
-      // Не эмитим вовсе: безопаснее, чем пустая группа.
-      if (members.isEmpty) continue;
+      // Не эмитим вовсе: безопаснее, чем пустая группа. Явный состав, не
+      // давший ни одного члена, называется (NODE_LINK §5.1); правило, ничего
+      // не поймавшее, — законная настройка.
+      if (members.isEmpty) {
+        if (spec.membership is ExplicitMembers) {
+          ctx.warn('Auto node "$shown" was skipped: none of its members '
+              'resolved, an empty group would stop the VPN core');
+        }
+        continue;
+      }
 
       final entry = spec.emit(ctx.vars);
       // §272/§322 — глобальный «Passive health check»: пропускаем пробу, пока
@@ -175,6 +248,7 @@ extension ServerListBuild on ServerList {
       if (ctx.passiveCheck) entry.map['passive_check'] = true;
       entry.map['tag'] =
           ctx.allocateTag(TagResolver.displayTag(tagPrefix, spec.tag));
+      noteAddress(spec, spec.tag, entry.tag, group: true);
       entry.map['outbounds'] = members;
       ctx.addEntry(entry);
       ctx.addToSelectorTagList(entry);
@@ -188,24 +262,44 @@ extension ServerListBuild on ServerList {
 ///
 /// [resolved] — узлы контейнера с их ИТОГОВЫМИ тегами (после префикса и
 /// `allocateTag`). Выключенных (§283) здесь уже нет: их отфильтровал билдер.
+///
+/// §439 — явный член — [NodeLink] на сырой тег члена контейнера [containerId]
+/// (пустой `folderId` — свой контейнер, NODE_LINK §5.1 № 8). Сырой тег узла —
+/// [rawTags] (уникализированный в источнике, `sourceNodeRawTags`), без карты
+/// — `NodeSpec.tag` (член папки); у тёзок побеждает первый. Член, который не
+/// разрешился, отсекается строкой в [warn].
 List<String> resolveAutoSelectMembers(
   AutoSelectSpec spec,
-  Map<NodeSpec, String> resolved,
-) {
+  Map<NodeSpec, String> resolved, {
+  String containerId = '',
+  Map<NodeSpec, String>? rawTags,
+  void Function(String line)? warn,
+}) {
   final out = <String>[];
   switch (spec.membership) {
-    case ExplicitMembers(:final keys):
+    case ExplicitMembers(:final members):
       // Порядок задаёт СПИСОК, а не обход контейнера: пользователь его
       // осмысленно упорядочил (или он приехал из selector).
-      final byKey = <String, String>{};
+      final byRaw = <String, String>{};
       for (final e in resolved.entries) {
-        final k = nodeIdentityKey(e.key);
-        if (k != null) byKey[k] = e.value;
+        final raw = rawTags == null ? e.key.tag : rawTags[e.key];
+        if (raw != null && raw.isNotEmpty) byRaw.putIfAbsent(raw, () => e.value);
       }
-      for (final k in keys) {
-        final tag = byKey[k];
-        // Ключ без узла — член выключен или исчез из подписки. Пропускаем.
-        if (tag != null) out.add(tag);
+      for (final link in members) {
+        if (!link.isRoot && link.folderId != containerId) {
+          // Группа не выходит за свой контейнер (§322 §2).
+          warn?.call('member "${link.tag}" was dropped: it is not a node of '
+              'this container');
+          continue;
+        }
+        final tag = byRaw[link.tag];
+        if (tag == null) {
+          // Выключен, удалён, исчез из подписки — один исход (NODE_LINK §5.1 № 3).
+          warn?.call('member "${link.tag}" was dropped: it has no node '
+              '"${link.tag}"');
+          continue;
+        }
+        if (!out.contains(tag)) out.add(tag);
       }
     case RuleMembers(:final include, :final exclude):
       final inc = tryCompileRegex(include);
@@ -234,35 +328,36 @@ List<String> resolveAutoSelectMembers(
   return out;
 }
 
-/// §239 — план detour-резолюции папки. Считается один раз на build:
+/// §239 — план detour-структуры папки. Считается один раз на build:
 ///
-/// - **Интра-ссылка**: значение личного detour (или папочного override),
-///   совпадающее с ГОЛЫМ тегом другого члена → цель внутри папки; display-
-///   форма (префикс) подставляется здесь. Иначе значение трактуется как
-///   внешний display-таг (§080). Приоритет члена — папочная область ближе.
-/// - **Циклы** интра-рёбер рвутся (замыкающее ребро выбрасывается) — основной
-///   guard в контроллере (`setMemberDetour`), здесь страховка от ручного
+/// - **Интра-ссылка**: личный detour (или папочный override) — пара с `id`
+///   ЭТОЙ папки (D-112). Сама ссылка не переписывается: финальный тег цели
+///   подставляет второй проход сборки (`node_link_resolve.dart`).
+/// - **Циклы** интра-рёбер для структуры плана рвутся (замыкающее ребро не
+///   считается звеном и не даёт exempt-закрытия); сама ссылка остаётся и
+///   на втором проходе роняет участников кольца с предупреждением. Основной
+///   guard — в контроллере (`setMemberDetour`), здесь страховка от ручного
 ///   бэкапа.
 /// - **Exempt-набор**: если папочный override указывает в СВОЕГО члена X,
 ///   X и всё достижимое из него по интра-рёбрам ведут себя как policy=Use
 ///   (личные сохраняются, папочный не применяется) — иначе `…→X→…→X`.
 /// - **isChainLink**: член-цель чужого интра-detour (для register-гейта).
 class FolderDetourPlan {
-  FolderDetourPlan(FolderServers folder)
-      : _prefix = folder.tagPrefix,
-        _personalRaw = folder.nodeDetours {
+  FolderDetourPlan(FolderServers folder) : _personal = folder.nodeDetours {
     final n = folder.nodes.length;
-    final bareIndex = <String, int>{};
+    final raw = containerRawTags(folder);
+    final rawIndex = <String, int>{};
     for (var i = 0; i < n; i++) {
-      bareIndex.putIfAbsent(folder.nodes[i].tag, () => i);
+      final t = raw[folder.nodes[i]];
+      if (t != null) rawIndex.putIfAbsent(t, () => i);
     }
+    int? intraIndex(NodeLink l) =>
+        l.folderId == folder.id ? rawIndex[l.tag] : null;
 
-    // Интра-рёбра (self-ссылка ребром не считается → внешняя → heal §172).
+    // Интра-рёбра (self-ссылка ребром не считается).
     _edge = List<int?>.filled(n, null);
     for (var i = 0; i < n; i++) {
-      final p = _personalRaw[i];
-      if (p.isEmpty) continue;
-      final j = bareIndex[p];
+      final j = intraIndex(_personal[i]);
       if (j != null && j != i) _edge[i] = j;
     }
 
@@ -289,23 +384,9 @@ class FolderDetourPlan {
       for (final v in _edge) ?v,
     };
 
-    // Резолвнутые личные detour'ы: интра → display-форма; интра-кандидат с
-    // вырезанным ребром (цикл/self) → '' (не эмитим ссылку — иначе голый тег
-    // ушёл бы в конфиг dangling'ом); иначе — внешний display-таг как хранится.
-    _personalResolved = List<String>.generate(n, (i) {
-      final j = _edge[i];
-      if (j != null) return TagResolver.displayTag(_prefix, folder.nodes[j].tag);
-      final p = _personalRaw[i];
-      if (p.isNotEmpty && bareIndex.containsKey(p)) return '';
-      return p;
-    });
-
-    // Папочный override: интра-цель → display + exempt-закрытие.
-    final ov = folder.detourPolicy.overrideDetour;
-    final ovIdx = ov.isEmpty ? null : bareIndex[ov];
+    // Папочный override в своего члена → exempt-закрытие.
+    final ovIdx = intraIndex(folder.detourPolicy.overrideDetour);
     if (ovIdx != null) {
-      _overrideResolved =
-          TagResolver.displayTag(_prefix, folder.nodes[ovIdx].tag);
       final exempt = <int>{};
       int? cur = ovIdx;
       while (cur != null && exempt.add(cur)) {
@@ -313,26 +394,22 @@ class FolderDetourPlan {
       }
       _exempt = exempt;
     } else {
-      _overrideResolved = ov;
       _exempt = const <int>{};
     }
   }
 
-  final String _prefix;
-  final List<String> _personalRaw;
+  final List<NodeLink> _personal;
   late final List<int?> _edge;
   late final Set<int> _chainLinks;
-  late final List<String> _personalResolved;
-  late final String _overrideResolved;
   late final Set<int> _exempt;
 
   /// Член-цель чужого интра-detour → регистрируется как звено (⚙-семантика).
   bool isChainLink(int i) => _chainLinks.contains(i);
 
   /// Эффективная политика ноды [i] поверх папочной [base] (§237-семантика +
-  /// §239 exempt/резолюция).
+  /// §239 exempt).
   DetourPolicy policyFor(int i, DetourPolicy base) {
-    final personal = _personalResolved[i];
+    final personal = _personal[i];
 
     if (_exempt.contains(i)) {
       // Инфраструктура папочного override: как Use — личный сохраняется,
@@ -342,13 +419,10 @@ class FolderDetourPlan {
     }
 
     final folderReplaces =
-        _overrideResolved.isNotEmpty && base.replaceDetourChain;
+        base.overrideDetour.isNotEmpty && base.replaceDetourChain;
     if (personal.isNotEmpty && base.useDetourServers && !folderReplaces) {
       return base.copyWith(
           overrideDetour: personal, replaceDetourChain: false);
-    }
-    if (_overrideResolved != base.overrideDetour) {
-      return base.copyWith(overrideDetour: _overrideResolved);
     }
     return base;
   }

@@ -210,11 +210,13 @@ parseFromSource(source)  ─┐
   │ body_decoder + parsers│
   └───────────────────────┘
   ▼
-ServerList (sealed)  —  SubscriptionServers | UserServer
+ServerList (sealed)  —  SubscriptionServers | UserServer | FolderServers
   │ .build(ctx: EmitContext)
   │   ├─ applies tagPrefix + allocateTag
   │   ├─ per-node emit(vars) → SingboxEntry (Outbound | Endpoint)
-  │   ├─ applies detour policy (register/use/override)
+  │   ├─ applies detour policy (register/use/override); a NodeLink detour is
+  │   │  deferred: its final tag is resolved in a second pass once every source
+  │   │  has emitted (§439, node_link_resolve.dart — fail-closed)
   │   └─ registers in selector / auto-proxy-out groups
   ▼
 buildConfig(lists, settings)
@@ -254,8 +256,8 @@ An asset template read once through `TemplateLoader.load()` (a singleton, deep-c
 | Section | Role | Example / where it is used |
 |---|---|---|
 | `parser_config` | The sing-box `version` plus the reload interval | Emitted straight into the root |
-| `dns_options.servers` | The canonical DNS servers (system/google/cloudflare/quad9/adguard). Storage keeps kind refs. | Resolved into bodies by `resolveDnsServersBodies` |
-| `dns_options.rules` | The default DNS rules. Storage keeps kind refs (§061 dns-rules-refactor, formerly feature §041). | Resolved by `resolveDnsRulesList` |
+| `dns_options.servers` | The canonical DNS servers (system/google/cloudflare/quad9/adguard). Storage keeps `dns.servers[]` records (§439). | Resolved into bodies by `resolveDnsServersBodies` |
+| `dns_options.rules` | The default DNS rules. Storage keeps `dns.rules[]` records (§061 dns-rules-refactor, formerly feature §041; §439). | Resolved by `resolveDnsRulesList` |
 | `ping_options`, `speed_test_options` | UI features (HomeScreen, SpeedTest) | Never reach the sing-box config |
 | `group_templates` + `default_directions` | §125/§267/§393 — the **SEED** for `directions[]` (on the first launch). The builder reads `directions[]` from storage. |
 | `config` | The base of the sing-box config: log, inbounds, the route skeleton | Deep-copied at the start of `buildConfig` |
@@ -347,11 +349,12 @@ wizard_template.json
   │    │       (the tag auto-suffixed through registry.addRuleSet) (spec 030)
   │    └── kind: srs
   │         └─ a local rule_set at the cached path plus a routing rule (spec 030)
-  ├── dns_options  ──► applyCustomDns(template + extras)                      ──► config.dns
+  ├── dns{} (storage) ──► applyCustomDns(template + extras)                   ──► config.dns
   ├── directions[] (storage) ──► _buildDirectionGroups(per-direction node_filter) ──► config.outbounds
   │   (§125/§267: the directions come from directions[], seeded from group_templates plus default_directions; with the block/direct options)
-  └── chains[] (storage) ──► the chain outbounds (type: chain, SPEC 110)      ──► config.outbounds
-      (§393 C: a chain is a SOURCE — an explicit route through 2+ hops, in packet order)
+  └── sources[] kind: chain (storage) ──► the chain outbounds (type: chain, SPEC 110) ──► config.outbounds
+      (§393 C: a chain is a SOURCE — an explicit route through 2+ hops, in packet order;
+       §439: hops are NodeLinks resolved to final tags, an unresolved hop drops the chain)
 ```
 
 **Why DoH/DoT in a bundle hardcode `server: "77.88.8.88"` plus `tls.server_name`:**
@@ -406,7 +409,16 @@ node_spec.dart               # the sealed NodeSpec (11 variants: Vless/Vmess/Tro
 node_spec_emit.dart          # the emit()/toUri() implementation per variant (NodeSpec → SingboxEntry); parity-tested
 singbox_entry.dart           # sealed SingboxEntry = Outbound | Endpoint (WireGuard, Tailscale → Endpoint)
 node_sections.dart           # §435 — NodeSections (rules / dns.servers / dns.rules of a free node), @self substitution
-record_codec.dart            # §435 — contract 1.0 record codec (metadata + body); the future root parser
+record_codec.dart            # §435/§439 — re-exports codec/: the contract 1.0 record codec of storage, backup, rules file, Debug API
+codec/                       # §439 — model ↔ record, pure functions, tolerant read
+  source_record.dart         #   subscription / server / folder with nodes[] (server, unsupported)
+  chain_record.dart          #   kind: chain — body{type: chain, …} + hops[] links
+  auto_group_record.dart     #   folder member kind: auto — group{group_type, members, strategy, members_rule?, pool_badge?}
+  rule_record.dart           #   rules[] — body in sing-box keys, refs/ref/vars, verbatim; splitJsonRuleArrays
+  dns_record.dart            #   dns.servers[] (user/preset/template), dns.rules[] (user/preset/srs/template)
+  node_link_record.dart      #   NodeLink ↔ {folder_id?, tag}; tolerant S1/S3 lifts
+  record_read.dart           #   RecordRead — value or drop reason plus unknown body keys
+node_link.dart               # §439 (D-112) NodeLink {folderId, tag} — a reference to a node; empty folderId = root
 node_entries.dart            # NodeEntries{main, detours} — the result of getEntries
 emit_context.dart            # the abstract EmitContext: allocateTag/addEntry plus selector and auto registration
 template_vars.dart           # TemplateVars — the global emit flags (tls_fragment/mux/sniOverride)
@@ -417,7 +429,8 @@ node_warning.dart            # sealed NodeWarning + WarningSeverity (parse/emit 
 validation.dart              # sealed ValidationIssue + ValidationResult (dangling refs/empty urltest → fatal)
 parser_config.dart           # the wizard_template.json models: WizardTemplate/PresetGroup/SelectableRule/WizardVar
 custom_rule.dart             # the sealed CustomRule = Inline|Srs|Preset (routing rules; →§090, see the Overview)
-server_list.dart             # sealed ServerList = SubscriptionServers | UserServer
+server_list.dart             # sealed ServerList = SubscriptionServers | UserServer | FolderServers; DetourPolicy.overrideDetour
+                             #   and FolderMember.detour are NodeLinks (§439)
 subscription_meta.dart       # SubscriptionMeta — the userinfo headers (traffic/expire/title/update-interval)
 app_info.dart                # AppInfo — the metadata of installed applications (fetched natively)
 background_mode.dart         # the BackgroundMode enum (never|lazy|always) — the tunnel's Doze behaviour
@@ -432,11 +445,11 @@ config_node.dart             # §091 ConfigNode plus ParsedConfig — the struct
                              #   the §102/§103 eager transportLabel/securityLabel (the transport slot plus
                              #   TLS/Reality/+Vision, awg/awg2); parsed once per change of configRaw
 direction.dart               # §125/§393 Direction — the routing directions (arbitrary tags, no cap; vpn-1 cannot be deleted)
-source_chain.dart            # §393 C SourceChain — a hop chain as a SOURCE (SPEC 110): hops in packet order,
-                             #   strip/rewrite, `order` = the slot in the COMMON source list
+source_chain.dart            # §393 C SourceChain — a hop chain as a SOURCE (SPEC 110): hops (NodeLinks, §439)
+                             #   in packet order, strip/rewrite; the place is the record index at the tail of sources[]
 auto_select.dart             # §322 the membership of an auto-select node (a folder) plus its parameters
 import_rule.dart             # §302 ImportRule — the rules applied to a subscription's nodes on import
-dns_ref.dart                 # §294 typed model dns_options.servers[]/rules[] (kind-discriminated refs)
+dns_ref.dart                 # §294/§439 typed models of dns.servers[]/rules[] (DnsServerRef, DnsRuleRef)
 memory_limit_setting.dart    # §271 the core's memory limit (SetupOptions.oomMemoryLimit)
 stop_reason.dart             # §279 a typed reason for an emergency stop or a revoke
 traffic_snapshot.dart        # a snapshot of the traffic aggregates for the home screen
@@ -541,8 +554,10 @@ builder/                     # NodeSpec + template → sing-box config
   post_steps/custom_rules.dart    #   applyAllCustomRules (preset/inline/srs in storage order, §062)
   post_steps/dns_rules.dart       #   applyCustomDns / resolveDnsRulesList (§061+§033)
   post_steps/dns_servers.dart     #   resolveDnsServersList/Bodies (§043+§044)
-  post_steps/heal_dangling_detours.dart # §172 healDanglingDetours: a detour outside allTags is dropped (with a warning),
-                             #   called before validateConfig — a broken detour from a subscription
+  node_link_resolve.dart     #   §439 NodeLinkTargets + resolveDeferredDetours — the second pass over detour links:
+                             #   byFolder[id][raw tag], root nodes and names; an unresolved/self/ring detour drops its
+                             #   carrier with a warning (cascading), never a direct connection
+  node_link_pool.dart        #   §439 computeNodeLinkPool — the same targets for screens (final tags for display)
   post_steps/heal_dangling_resolve_servers.dart # §247 degrading broken server references in resolve rules
   post_steps/heal_legacy_dns_strategy.dart      # §246 a hotfix for an incompatible pair in dns.rules
   post_steps/heal_unknown_utls_fingerprints.dart# §281 insurance against an unknown uTLS fingerprint
@@ -557,12 +572,15 @@ subscription/                # fetching and auto-updating subscriptions
                              #   §101 — an atomic tmp→rename write (kill-safe under an unawaited save)
   input_helpers.dart         #   isSubscriptionUrl/isDirectLink (including awg://, §097)/isWireGuardConfig/isFileSubscription
 settings_storage.dart        # the facade over lxbox_settings.json — thin delegates into the part files
-settings_storage/io.dart            #   the atomic load/save/recovery (main→.bak→{}, §072)
+settings_storage/io.dart            #   the atomic load/save/recovery (main→.bak→{}, §072); §439 the storage migration
+                                    #   inside _load() with the one-time lxbox_settings.json.v0.bak copy
 settings_storage/vars.dart          #   the vars domain plus the Wi-Fi history (§051)
-settings_storage/sources_rules.dart #   server_lists (+v1 migration), rules/groups, custom_rules
-settings_storage/network.dart       #   route_final/excluded/dns/ping_options (§040/§061)
+settings_storage/sources_rules.dart #   sources[] without chains (ServerList records), rules[] (§439)
+settings_storage/chains.dart        #   §393 C/§439 the chain records at the tail of sources[]
+settings_storage/node_link_registry.dart # §439 (D-113/D-114) rewrite links on rename/move, clear them on delete
+settings_storage/network.dart       #   route_final/dns{} models (DnsServerRef/DnsRuleRef)/ping_options (§040/§061/§439)
 settings_storage/backup_tun.dart    #   the snapshot (§031) plus the tun-apps split tunnel (§046)
-settings_storage/directions.dart    #   §125/§393 the directions (Direction CRUD plus the vpn-1 seed) and chains[]
+settings_storage/directions.dart    #   §125/§393 the directions (Direction CRUD plus the vpn-1 seed)
 settings_storage/native_prefs.dart  #   NativePrefsKeys — the bridge into the Kotlin side's SharedPreferences
 settings_storage/vpn_mode.dart      #   §119 the VPN mode (the per-app allow/deny lists)
 settings_storage/warp.dart          #   §025/§130 the WARP/MASQUE accounts plus the generator's pool
@@ -585,14 +603,22 @@ debug/                       # localhost HTTP Debug API (§031)
                              #     /files /diag /backup /wifi_history /help /ping /warp /directions (§275/§393)
                              #     /chains + /chains/{tag}/probe (§393 C — CRUD plus the layered probe)
                              #     /folders (§238) /pool (§208) (plus the _shared CRUD helpers)
-  serializers/               #   home_state · storage (the denylist scrubber) · rules · subs (URL masking)
+  serializers/               #   home_state · storage (the denylist scrubber over sources[] records) · rules · subs (URL masking)
+                             #   · chains (tag/label/enabled + source_chain canon)
 warp/                        # §025/§130 WARP plus the MASQUE transport (it feeds warp_wizard_screen)
   warp_client.dart           #   registration with Cloudflare (POST /reg): the X25519 private key never leaves the device
   warp_account.dart          #   the WARP account (client_id→reserved, the keys)
   warp_endpoint_picker.dart  #   the pool of WARP endpoints plus a random endpoint/SNI (§148, curated)
   scan/                      #   the §284/§305 node generator: random seeding (IP × port × protocol)
   masque_account.dart · masque_keys.dart · masquerade_params.dart  #   §130 MASQUE (Cloudflare QUIC/CONNECT-IP)
-migration/proxy_source_migration.dart  # one-shot v1 proxy_sources → v2 server_lists
+settings_storage_keys.dart   # §439 the top-level storage keys (storage_version, sources, rules, dns)
+storage_migration/           # §439 — the 2.23.2 form → contract 1.0 records
+  legacy_form_v0.dart        #   the frozen 2.23.2 readers (ServerList/CustomRule/SourceChain/DNS refs); also rules file format 1
+  migrate_storage.dart       #   migrateStorageDoc — a pure function over the document; dead keys, channels rename, report
+  migrate_node_links.dart    #   final tags → NodeLinks by the pre-migration state (sub_cache bodies for subscriptions)
+  legacy_autogroup.dart      #   the frozen autogroup:// reader: members keyed by identity → pairs (migration and 0.x import)
+node_link_address.dart       # §439 node addresses of containers (raw tags) for the registry and the pickers
+lx_backup_slice.dart         # §439 the LX Backup 1.0 slice table: contract / setting / runtime per record key; declared = LxBox field of contract 1.0.1
 nav/home_return_observer.dart          # a global NavigatorObserver (§076): a rebuild on returning home
 app_log.dart                 # AppLog ChangeNotifier-singleton: per-source ring buffers + persistent warn/error (§043)
 app_info_cache.dart          # AppInfoCache — a session cache of AppInfo by package plus a revision ValueNotifier
@@ -602,7 +628,7 @@ relative_time.dart           # relativeTime(now, past) — "2h ago" (pure and te
 url_mask.dart                # maskSubscriptionUrl — scheme://host/*** for logs and sharing
 tag_resolver.dart            # §085 TagResolver — the single owner of the display tag (displayTag/isDetour)
 rule_name_resolver.dart      # §165 — mapping the core's rule.String() (lossy and truncated) onto
-                             #   custom_rules[].name for Stats → Traffic by Rule and Conns; with normalisation
+                             #   rules[].name for Stats → Traffic by Rule and Conns; with normalisation
 template_loader.dart         # the wizard_template.json loader (a singleton, deep-copied per build)
 rule_set_downloader.dart     # download+cache remote .srs (parallel, atomic tmp+rename, retry)
 backup_service.dart          # exporting and importing a full settings snapshot (§031)
@@ -810,7 +836,7 @@ Displayed in:
 L×Box's state lives in two places with different semantics:
 
 - **`wizard_template.json`** is the **catalog**: what exists at all (the presets, vars, sections and defaults).
-- **`lxbox_settings.json`** is the **user state**: what the user chose and configured (the vars overrides, custom_rules, and so on).
+- **`lxbox_settings.json`** is the **user state**: what the user chose and configured (the vars overrides, sources, rules, and so on). Since §439 sources, chains, rules and DNS records are stored as contract 1.0 records ([STORAGE.md](STORAGE.md#storage-form-and-migration-439)).
 
 #### Catalog (template, bundled in APK)
 
@@ -835,11 +861,11 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 ```
 <getApplicationDocumentsDirectory>/
 ├── lxbox_settings.json     # SettingsStorage (Dart) — the main state file:
-│                           #   vars / server_lists / custom_rules /
-│                           #   dns_options / ping_options /
-│                           #   route_final / directions[] (§125/§393, replaces enabled_groups) / chains[] (§393 C) /
-│                           #   excluded_nodes (§048 sandbox) / last_global_update /
-│                           #   presets_migrated / directions_migrated
+│                           #   storage_version (§439) / vars / sources[] (subscriptions, servers,
+│                           #   folders, then chains) / rules[] / dns{} / ping_options /
+│                           #   route_final / directions[] (§125/§393, replaces enabled_groups) /
+│                           #   last_global_update / presets_migrated / directions_migrated
+├── lxbox_settings.json.v0.bak  # §439 — the 2.23.2-form original, copied once before the migration
 ├── rule_sets/              # §011 — the cache of binary .srs files (+ §366 .meta.json sidecars)
 │   └── <ruleId>.srs
 ├── workspaces.json         # §417 — the workspace manifest (current, slots, pending)
@@ -902,11 +928,19 @@ the backup block nor in the `native_prefs` JSON section — it lives only in `bo
 
 **Idle-suspend (§128/§215, the core's SPEC 020).** Configuring the threshold (the storage key `route_idle_suspend`).
 
-The one-shot migrations (`SettingsStorage`):
-- `proxy_sources` → `server_lists` (v1 → v2, §033) — `migrateProxySources` on the first read.
-- `app_rules` → `custom_rules` with `packages` (up to v1.3.2 → §030) — `_absorbLegacyAppRules`.
-- `enabled_rules` plus `rule_outbounds` → `custom_rules` (up to §030) — inside `RoutingScreen._load`, guarded by `presets_migrated`.
-- The `dns_options.servers[]` shape: pre-§043 → §043 → §044 — `_migrateLegacyDnsServers` in the builder's post-steps.
+The storage migration (`SettingsStorage`, §439): a document without `storage_version`
+is converted inside `_load()` — the frozen 2.23.2 readers (`storage_migration/legacy_form_v0.dart`)
+read `server_lists` / `chains` / `custom_rules` / `dns_options` into models, the record
+codec writes `sources[]` / `rules[]` / `dns{}`, node references become NodeLinks, folder
+members `autogroup://` become `kind: auto` records, keys with no readers are removed and
+`channels` is renamed; the original bytes go to `lxbox_settings.json.v0.bak` once. The same
+`migrateStorageDoc` runs on the old-form inputs: a workspace slot, the internal backup, Debug
+`POST /backup/import`. `config.json` built from one state before and after the migration is
+byte-identical (golden tests). Details: [STORAGE.md](STORAGE.md#storage-form-and-migration-439).
+
+Removed earlier: `migrateProxySources` (`proxy_sources` → `server_lists`), `_absorbLegacyAppRules`,
+the `enabled_rules` / `rule_outbounds` conversion (§159); `_migrateLegacyDnsServers`
+(pre-§044 DNS server shapes, §439).
 
 Sensitive fields are filtered on `GET /state/storage` by the denylist scrubber in `services/debug/serializers/storage.dart`.
 
@@ -1479,7 +1513,7 @@ user data, and the OS/core payloads (the `RawMsg.detail` passthrough). The units
 | Controller | Responsibility |
 |-----------|---------------|
 | `HomeController` | VPN lifecycle, CommandClient (groups/status/connections), nodes, ping (10 concurrent — `_pingConcurrency`), heartbeat, traffic, configChangedNeedRestart, autoUpdater wiring, haptic on transitions |
-| `SubscriptionController` | CRUD entries (server_lists), `refreshEntry`/persist, `generateConfig` (no HTTP), `bindAutoUpdater`, init sweep (inProgress→failed) |
+| `SubscriptionController` | CRUD entries (`sources[]` records), `refreshEntry`/persist, node-link registry calls on rename/move/delete (§439), `generateConfig` (no HTTP), `bindAutoUpdater`, init sweep (inProgress→failed) |
 | `ThemeNotifier` | Theme mode, SharedPreferences persistence |
 | `HapticService` (singleton) | Event-based haptic with 100 ms throttle, respects system setting (spec 029) |
 | `AutoUpdater` | Owned by HomeScreen; wraps SubscriptionController for 4-trigger auto-update with spam gates (spec 027) |
@@ -1547,7 +1581,7 @@ HomeScreen
 | URLTest hidden from dropdown | Users can't manually select in urltest — confusing UX |
 | **Sealed `NodeSpec`** (Parser v2, v1.3.0) | Exhaustive switch at compile time; no runtime `type == 'vmess'` checks |
 | **3-layer parser/builder** | Separation of concerns: parse ≠ build ≠ emit |
-| **UserServer.toJson stores only rawBody** | `nodes` is derivable via `parseAll(decode(rawBody))` on fromJson; saves disk space, avoids NodeSpec serialization drift |
+| **A server record stores only the source text** (`origin.raw`, §439; before — `raw_body`) | `nodes` is derivable via `parseAll(decode(raw))` on read; saves disk space, avoids NodeSpec serialization drift. The record's `tag` is written for the contract and not applied on read |
 | **AutoUpdater gates** (spec 027) | `minRetryInterval=15min`, `maxFailsPerSession=5`, `_running`/`_inFlight` dedup — subscriptions never spam providers |
 | **configChangedNeedRestart sticky flag** | Restart warning doesn't disappear on Stop-dialog cancel |
 | **TLS-insecure → info severity** | Providers set it intentionally (REALITY, self-signed); shouldn't crowd out genuine warnings |
@@ -1676,7 +1710,8 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | **283** | **Subscription node disable** (a per-node toggle in a subscription, keyed by the node's identity hash) |
 | **393** | **Directions** (the Channel→Direction rename: arbitrary tags, no cap, include[]; the storage key channels→directions with a one-shot migration) plus **hop chains** (SPEC 110: a chain as a third source kind, `type: chain`, a layered probe) |
 | 417 | Workspaces (named copies of the whole state — settings + subscription bodies + .srs; Load = auto-save current → copy → re-read in place → rebuild → VPN back up; Save as; the working paths never move) |
-| **435** | **Node sections + Tailscale** (contract ## 13: a free node carries its route rules and DNS records in `sections` in the contract 1.0 record form; `@self` = the final tag, substituted at build; `TailscaleSpec` endpoint without an address, core gate by AAR version, `state_directory` per node; the record codec is the future root parser 1.0) |
+| **435** | **Node sections + Tailscale** (contract ## 13: a free node carries its route rules and DNS records in `sections` in the contract 1.0 record form; `@self` = the final tag, substituted at build; `TailscaleSpec` endpoint without an address, core gate by AAR version, `state_directory` per node) |
+| **439** | **Storage in the contract 1.0 form** (`lxbox_settings.json` keeps `sources[]` / `rules[]` / `dns{}` records with `storage_version: 1`; the 2.23.2 form is migrated inside `_load()` with a `.v0.bak` copy; node references are NodeLinks `{folder_id, tag}` resolved at build, fail-closed; the LX Backup 1.0 export is a slice of storage through the same codec) |
 
 **Demoted (through §054) — now in `tasks/`:**
 

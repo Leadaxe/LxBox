@@ -94,7 +94,6 @@ void main() {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: UserSource.manual,
-      createdAt: DateTime.now(),
       rawBody: uriA,
       nodes: [parseUri(uriA)!],
     ));

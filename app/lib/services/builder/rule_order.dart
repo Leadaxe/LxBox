@@ -53,6 +53,57 @@ bool markRuleOrder(
   return changed;
 }
 
+/// D-117 (BACKUP.md §9 п. 7) — несортируемый пресет шаблона (`isSortable:
+/// false`, голова `traffic-processing`) встаёт на номер шаблона, даже если
+/// номер у него уже стоит.
+///
+/// Номер головы — часть инварианта оси: `sniff` обязан быть первым правилом
+/// `route.rules`. Сплошная перенумерация импорта (лаунчер 1.5.3–1.5.6, `1000 +
+/// i`) уводила голову в пользовательскую зону, и пресет, включённый позже со
+/// своим номером шаблона (950–990), вставал перед ней. Здесь такие оси
+/// лечатся при загрузке, сборке и после импорта.
+///
+/// Сортируемые пресеты и пользовательские правила не трогаются: их номер
+/// ставит и перетаскивание, и отличить одно от другого по состоянию нечем.
+/// Мутирует элементы на месте; возвращает true, если номер хоть у одного
+/// правила изменён — вызывающий персистит.
+bool pinRequiredRuleNums(
+  List<CustomRule> customRules,
+  List<SelectableRule> selectableRules,
+) {
+  final pinned = {
+    for (final sr in selectableRules)
+      if (!sr.isSortable) sr.presetId: sr.num,
+  };
+  if (pinned.isEmpty) return false;
+  var changed = false;
+  for (final cr in customRules) {
+    if (cr.kind != CustomRuleKind.preset) continue;
+    final n = pinned[cr.presetId];
+    if (n == null || cr.orderNum == n) continue;
+    cr.orderNum = n;
+    changed = true;
+  }
+  return changed;
+}
+
+/// D-117 — есть ли несортируемый пресет не на номере шаблона (без мутации):
+/// экран, решающий, персистить ли нормализованный список, спрашивает ДО
+/// [normalizeRuleOrder] — после неё разницы уже не видно.
+bool requiredRuleNumsShifted(
+  List<CustomRule> customRules,
+  List<SelectableRule> selectableRules,
+) {
+  final pinned = {
+    for (final sr in selectableRules)
+      if (!sr.isSortable) sr.presetId: sr.num,
+  };
+  return customRules.any((cr) =>
+      cr.kind == CustomRuleKind.preset &&
+      pinned.containsKey(cr.presetId) &&
+      cr.orderNum != pinned[cr.presetId]);
+}
+
 /// §370 — отсортировать правила по оси `num` (возрастание).
 ///
 /// При равных `num` сохраняется взаимный порядок (стабильная сортировка):
@@ -140,7 +191,8 @@ List<CustomRule> dedupePresetRules(List<CustomRule> customRules) {
   ];
 }
 
-/// §370 — полный проход: seed обязательных → разметка → сортировка.
+/// §370 — полный проход: seed обязательных → номер головы → разметка →
+/// сортировка.
 ///
 /// Идемпотентен: повторный вызов на нормализованном списке ничего не меняет.
 /// Значения vars существующих пресетов сохраняются (seed только если пресета
@@ -154,6 +206,9 @@ List<CustomRule> normalizeRuleOrder(
   // задвоенном списке он молчал бы, оставив обе копии.
   final deduped = dedupePresetRules(customRules);
   final seeded = seedRequiredPresets(deduped, selectableRules, template);
+  // D-117 — голова на номере шаблона ДО разметки: разметка трогает только
+  // неразмеченные, а сдвинутая голова размечена.
+  pinRequiredRuleNums(seeded, selectableRules);
   markRuleOrder(seeded, selectableRules);
   return sortRulesByNum(seeded);
 }

@@ -1,0 +1,21 @@
+{
+  "migration": {
+    "migrated": true,
+    "info": [
+      "sources: 3 subscriptions, 7 servers, 3 folders, 3 chains",
+      "servers with several nodes kept as one record: 1 (srv-multi)",
+      "node links: 5 final tags → {folder_id, tag}",
+      "rules: 15 rules → 16 records",
+      "json rules split: \"Json array\" → 2",
+      "dns: 17 servers, 7 rules",
+      "dropped keys: excluded_nodes, preset_ids_remapped, node_overrides, show_detour_servers"
+    ],
+    "warnings": [
+      "rule \"Json broken\": raw JSON is not an object or an array of objects, kept without body (the text stays in .v0.bak)",
+      "rule \"Ports with text\": non-numeric ports dropped: abc"
+    ]
+  },
+  "migrated_file_is_report_doc": true,
+  "content_diff": [],
+  "bytes_identical": true
+}

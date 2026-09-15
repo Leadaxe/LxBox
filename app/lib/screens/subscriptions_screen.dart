@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
+import '../services/builder/node_link_pool.dart';
 import '../services/error_format.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
@@ -64,10 +65,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   bool _autoUpdateEnabled = true;
 
   /// §393 D1 — источники-цепочки. Рисуются СТРОКАМИ ОБЩЕГО СПИСКА наравне с
-  /// подписками ([_rows]), но живут в своём storage-ключе (`chains[]`), а не в
-  /// `SubscriptionController.entries`: цепочка написана пользователем руками и
-  /// обязана пережить и обновление подписки, и её удаление. Отсюда отдельная
-  /// загрузка — контроллер о них ничего не знает.
+  /// подписками ([_rows]), но в хранении это своя часть `sources[]` (записи
+  /// `kind: chain` хвостом), а не `SubscriptionController.entries`: цепочка
+  /// написана пользователем руками и обязана пережить и обновление подписки,
+  /// и её удаление. Отсюда отдельная загрузка — контроллер о них ничего не
+  /// знает.
   List<SourceChain> _chains = const [];
 
   /// §375 — есть ли камера. null = ещё не ответил канал; до ответа пункт
@@ -194,6 +196,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   Future<void> _editChain(SourceChain chain) async {
     final directions = await SettingsStorage.getDirections();
     if (!mounted) return;
+    final lists = [for (final e in widget.subController.entries) e.list];
     final result = await openChainEditor(
       context,
       initial: chain,
@@ -202,6 +205,9 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       config: widget.homeController.state.configModel,
       directions: directions,
       chains: _chains,
+      // §439 — пул ссылок: финальный тег позиции ↔ ссылка на узел.
+      pool: computeNodeLinkPool(lists, directions: directions),
+      lists: lists,
     );
     if (result == null || !mounted) return;
     var chainPositionsRemoved = 0;
@@ -224,12 +230,56 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     await _regenerateAndSave();
   }
 
-  /// §393 D2 — уведомление о вычищенных позициях цепочек.
+  /// §439 (D-114) — уведомление о ссылках, погашенных удалением узла или
+  /// источника: кто удалён, у скольких источников снят detour, сколько членов
+  /// групп и позиций цепочек ушло, с именами (до трёх, дальше `+N`).
   ///
-  /// Тот же механизм, что у rules/detours/includes-heal (§202/§248): счётчик
-  /// в snackbar'е. Показывать обязательно — удаление источника МЕНЯЕТ МАРШРУТ
-  /// уцелевших цепочек (3+ хопов эмитится укороченной, 2-хоповая перестаёт
-  /// эмититься вовсе), и промолчать значило бы подменить маршрут молча.
+  /// Тот же механизм, что у rules/detours/includes-heal (§202/§248,
+  /// `routing_screen._notifyHealed`). Показывать обязательно — удаление МЕНЯЕТ
+  /// МАРШРУТ задетых: узел без detour идёт напрямую, цепочка 3+ хопов
+  /// эмитится укороченной, 2-хоповая перестаёт эмититься вовсе.
+  void _notifyLinksCleared(NodeLinkNotice notice) {
+    if (!mounted) return;
+    String names(List<String> carriers) {
+      final all = [
+        for (final n in carriers)
+          if (n.isNotEmpty) n,
+      ];
+      if (all.isEmpty) return '';
+      final shown = all.take(3).map((n) => '"$n"').join(', ');
+      return ' ($shown${all.length > 3 ? ' +${all.length - 3}' : ''})';
+    }
+
+    final subject = notice.subject;
+    final lead = switch (subject.kind) {
+      NodeLinkSubjectKind.server =>
+        getLocalText.s('Server "%s" deleted', subject.name),
+      NodeLinkSubjectKind.subscription =>
+        getLocalText.s('Subscription "%s" deleted', subject.name),
+      NodeLinkSubjectKind.folder =>
+        getLocalText.s('Folder "%s" deleted', subject.name),
+      NodeLinkSubjectKind.servers =>
+        getLocalText.plural('%d servers deleted', subject.count),
+    };
+    final change = notice.change;
+    final parts = [
+      if (change.detourCarriers.isNotEmpty)
+        getLocalText.s('detour removed from %s source(s)',
+                '${change.detourCarriers.length}') +
+            names(change.detourCarriers),
+      if (change.groupMembers > 0)
+        getLocalText.s('%s group member(s) removed', '${change.groupMembers}') +
+            names(change.touchedGroups),
+      if (change.positions > 0)
+        getLocalText.s('%s chain position(s) removed', '${change.positions}') +
+            names(change.touchedChains),
+    ];
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('$lead — ${parts.join(', ')}.'),
+    ));
+  }
+
+  /// §393 D2 — удаление цепочки сняло её позиции у остальных цепочек.
   void _notifyChainPositionsRemoved(int removed) {
     if (removed <= 0 || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -237,16 +287,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     ));
   }
 
-  /// §393 D2 — забрать счётчик, накопленный контроллером на удалении
-  /// источника, и показать его. Контроллер копит, экран показывает: у
-  /// контроллера нет `BuildContext`, а у экрана — знания, какие мутации
-  /// сейчас прошли.
-  void _drainChainHealNotice() {
-    final removed = widget.subController.lastChainPositionsRemoved;
-    if (removed <= 0) return;
-    widget.subController.clearChainHealNotice();
-    _notifyChainPositionsRemoved(removed);
-    unawaited(_loadChains()); // строки цепочек показывают новое число хопов
+  /// §439 — забрать уведомления, накопленные контроллером на удалении, и
+  /// показать их; цепочки перечитать, если реестр ссылок их переписал (иначе
+  /// буфер экрана затёр бы переписанные позиции следующей правкой). Контроллер
+  /// копит, экран показывает: у контроллера нет `BuildContext`, а у экрана —
+  /// знания, какие мутации сейчас прошли.
+  void _drainLinkNotices() {
+    final ctrl = widget.subController;
+    if (ctrl.takeChainsRelinked()) {
+      unawaited(_loadChains()); // строки цепочек показывают новое число хопов
+    }
+    for (final notice in ctrl.takeLinkNotices()) {
+      _notifyLinksCleared(notice);
+    }
   }
 
   Future<void> _toggleChain(SourceChain chain) async {
@@ -592,13 +645,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       animation: widget.subController,
       builder: (context, _) {
         final ctrl = widget.subController;
-        // §393 D2 — счётчик вычищенных позиций накопил контроллер (удаление
-        // источника идёт из контекстного меню, у которого нет ни нашего
-        // состояния, ни списка цепочек). Забираем его ПОСЛЕ кадра: snackbar
-        // во время build запрещён, а мутация уже завершилась — контроллер
-        // как раз поэтому и уведомил.
+        // §439 — уведомления о погашенных ссылках накопил контроллер
+        // (удаление источника идёт из контекстного меню, у которого нет ни
+        // нашего состояния, ни списка цепочек). Забираем их ПОСЛЕ кадра:
+        // snackbar во время build запрещён, а мутация уже завершилась —
+        // контроллер как раз поэтому и уведомил.
         WidgetsBinding.instance
-            .addPostFrameCallback((_) => _drainChainHealNotice());
+            .addPostFrameCallback((_) => _drainLinkNotices());
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (didPop, _) async {
@@ -790,11 +843,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   /// ОДНИМ рядом. Порядок цепочек внутри него и есть их взаимный порядок, по
   /// которому считается инвариант «позиция ссылается только на цепочку ВЫШЕ».
   ///
-  /// Цепочки идут ПОСЛЕ записей контроллера: `_setChains` нумерует их от длины
-  /// `server_lists`, и рисовать их надо там же, где они лежат. Смешанной
-  /// сортировки нет намеренно — она потребовала бы держать `order` и у
-  /// `ServerList`, то есть переписать общий ordering ради того, чего
-  /// пользователь не просил.
+  /// Цепочки идут ПОСЛЕ записей контроллера: в хранении они лежат хвостом
+  /// `sources[]` (§439), и рисовать их надо там же, где они лежат.
   List<_SourceRow> _rows(SubscriptionController ctrl) => [
         for (var i = 0; i < ctrl.entries.length; i++)
           _SourceRow.entry(ctrl.entries[i], i),
@@ -906,9 +956,9 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   /// §393 D1 — перестановка в ОБЩЕМ списке источников.
   ///
-  /// Ряды двух родов лежат в одном списке, но в двух storage-ключах, поэтому
-  /// перестановка раскладывается обратно: подписки — своим `moveEntry`,
-  /// цепочки — своим `reorderChains`. Ключевое свойство (ради него всё и
+  /// Ряды двух родов лежат в одном списке, но в двух частях `sources[]`,
+  /// поэтому перестановка раскладывается обратно: подписки — своим
+  /// `moveEntry`, цепочки — своим `reorderChains`. Ключевое свойство (ради него всё и
   /// затевалось): перетащить подписку МЕЖДУ двумя цепочками ЗАКОННО и
   /// взаимный порядок цепочек от этого не меняется — значит, ни одна ссылка
   /// «на цепочку выше» не ломается.

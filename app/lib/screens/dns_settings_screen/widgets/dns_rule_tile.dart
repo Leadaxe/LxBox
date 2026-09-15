@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../models/dns_ref.dart';
 import '../../../widgets/reorder_grab_strip.dart';
 import '../dns_body_dialogs.dart';
 import '../dns_format.dart';
 import 'dns_badge.dart';
 
-/// §033: builds a tile for a single `dns_options.rules[i]` entry.
+/// §033: builds a tile for a single DNS rule entry ([DnsRuleRef]).
 ///
 /// Lookup maps
 /// (`templateRulesByName`/`presetRulesByPresetId`/`presetLabelByPresetId`) и
@@ -32,7 +33,7 @@ class DnsRuleTile extends StatelessWidget {
   /// mirror-группы, решение №6).
   final int? dragIndex;
 
-  final Map<String, dynamic> entry;
+  final DnsRuleRef entry;
   final Map<String, Map<String, dynamic>> templateRulesByName;
   final Map<String, List<Map<String, dynamic>>> presetRulesByPresetId;
   final Map<String, String> presetLabelByPresetId;
@@ -42,8 +43,8 @@ class DnsRuleTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final kind = entry['kind'] as String? ?? 'inline';
-    final enabled = entry['enabled'] == true;
+    final kind = entry.kind;
+    final enabled = entry.enabled;
     final theme = Theme.of(context);
 
     // §033: title для kind=preset рендерится динамически из текущего шаблона
@@ -52,27 +53,24 @@ class DnsRuleTile extends StatelessWidget {
     Map<String, dynamic>? body;
     // §253: preset может нести несколько DNS-правил — превью/диалог по списку.
     List<Map<String, dynamic>>? bodies;
-    if (kind == 'inline') {
-      displayTitle = entry['name'] as String? ?? '';
-      final r = entry['rule'];
-      if (r is Map<String, dynamic>) body = r;
-    } else if (kind == 'template') {
-      displayTitle = entry['name'] as String? ?? '';
-      body = templateRulesByName[displayTitle];
-    } else if (kind == 'preset') {
-      final pid = entry['presetId'] as String? ?? '';
-      displayTitle = presetLabelByPresetId[pid] ?? pid;
-      bodies = presetRulesByPresetId[pid];
-    } else if (kind == 'srs') {
-      displayTitle = entry['name'] as String? ?? '';
-      // body: показываем сам entry как preview (срz config'а здесь нет — body
-      // строится builder'ом при emit'е). Достаточно для UI.
-      body = {
-        'srsUrl': entry['srsUrl'],
-        'server': entry['server'],
-      };
-    } else {
-      displayTitle = entry['name'] as String? ?? '';
+    switch (entry) {
+      case DnsRuleInline(:final name, :final rule):
+        displayTitle = name;
+        body = rule;
+      case DnsRuleTemplate(:final name):
+        displayTitle = name;
+        body = templateRulesByName[displayTitle];
+      case DnsRulePreset(:final presetId):
+        displayTitle = presetLabelByPresetId[presetId] ?? presetId;
+        bodies = presetRulesByPresetId[presetId];
+      case DnsRuleSrs(:final name, :final srsUrl, :final server):
+        displayTitle = name;
+        // body: показываем сам entry как preview (срz config'а здесь нет — body
+        // строится builder'ом при emit'е). Достаточно для UI.
+        body = {
+          'srsUrl': srsUrl,
+          'server': server,
+        };
     }
 
     final preview = bodies != null

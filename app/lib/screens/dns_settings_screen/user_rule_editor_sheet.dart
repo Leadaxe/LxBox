@@ -2,27 +2,28 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../models/dns_ref.dart';
 import '../../services/error_format.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../widgets/app_bottom_sheet.dart';
 
-/// Bottom-sheet editor for an inline user DNS rule (`kind: inline`).
+/// Bottom-sheet editor for an inline user DNS rule ([DnsRuleInline]).
 ///
-/// `existing` — текущий entry при edit (null при add). `onSave` получает уже
-/// собранный `entry` map (caller решает insert vs replace). `context` —
+/// `existing` — текущее правило при edit (null при add). `onSave` получает уже
+/// собранное правило (caller решает insert vs replace). `context` —
 /// screen context (для `ScaffoldMessenger` снаружи sheet'а).
 void showUserRuleEditor(
   BuildContext context, {
   required bool isNew,
-  required Map<String, dynamic>? existing,
-  required void Function(Map<String, dynamic> entry) onSave,
+  required DnsRuleInline? existing,
+  required void Function(DnsRuleInline entry) onSave,
 }) {
   final nameCtrl = TextEditingController(
-    text: existing?['name']?.toString() ?? '',
+    text: existing?.name ?? '',
   );
-  final body = existing?['rule'];
+  final body = existing?.rule;
   final bodyCtrl = TextEditingController(
-    text: body is Map<String, dynamic>
+    text: body != null
         ? const JsonEncoder.withIndent('  ').convert(body)
         : '{\n  "rule_set": "geoip-ru",\n  "server": "yandex_doh"\n}',
   );
@@ -92,13 +93,11 @@ void showUserRuleEditor(
                 return;
               }
               Navigator.pop(ctx);
-              final entry = <String, dynamic>{
-                'enabled': existing?['enabled'] ?? true,
-                'kind': 'inline',
-                'name': name,
-                'rule': parsed,
-              };
-              onSave(entry);
+              onSave(DnsRuleInline(
+                name: name,
+                rule: parsed,
+                enabled: existing?.enabled ?? true,
+              ));
             },
             child: Text(getLocalText.s("Save")),
           ),

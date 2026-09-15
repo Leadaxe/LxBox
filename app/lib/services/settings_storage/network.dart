@@ -1,10 +1,10 @@
 part of '../settings_storage.dart';
 
-// Route final / excluded nodes / DNS servers+rules / ping-options для
-// [SettingsStorage].
+// Route final / idle-suspend / passive check / DNS servers+rules (репозиторий
+// моделей DNS, §439) / ping-options для [SettingsStorage].
 //
 // Вынесено `part`'ом — та же библиотека, тот же доступ к `_load`/`_save`/
-// `_cache`. Семантика storage-ключей идентична исходнику.
+// `_cache`.
 
 // ---------------------------------------------------------------------------
 // Route final outbound
@@ -96,24 +96,120 @@ Future<void> _savePassiveCheck(bool enabled, {bool flush = true}) async {
   if (flush) await _save();
 }
 
-Future<List<Map<String, dynamic>>> _getDnsServers() async {
-  final data = await _load();
-  final dns = data['dns_options'] as Map<String, dynamic>?;
-  if (dns == null) return [];
-  final servers = dns['servers'] as List<dynamic>?;
-  if (servers == null) return [];
-  return servers.whereType<Map<String, dynamic>>().toList();
+// ---------------------------------------------------------------------------
+// §439 — репозиторий DNS: записи `dns.servers[]` / `dns.rules[]` контракта
+// 1.0 кодеком `models/codec/dns_record.dart`.
+//
+// Наверх уходят только модели [DnsServerRef] / [DnsRuleRef].
+//
+// Инварианты записи (§439 A1):
+// - запись, которую кодек не читает (незнакомый вид, нет обязательных
+//   полей), наверх не отдаётся и при сохранении остаётся на своём месте — её
+//   не стирает ни резолвер, ни экран;
+// - неизменённая запись пишется теми же байтами, что лежали: модель, равная
+//   разобранной сохранённой записи, берёт её JSON как есть (ключи, которые
+//   кодек не читает, не теряются).
+// ---------------------------------------------------------------------------
+
+List<dynamic> _dnsList(Map<String, dynamic> data, String key) {
+  final dns = data[kDnsKey];
+  if (dns is! Map) return const [];
+  final list = dns[key];
+  return list is List ? list : const [];
 }
 
-Future<void> _saveDnsServers(List<Map<String, dynamic>> servers,
-    {bool flush = true}) async {
+List<T> _parseDnsEntries<T>(
+  List<dynamic> stored,
+  T? Function(Map<String, dynamic>) parse,
+) =>
+    [
+      for (final e in stored)
+        if (e is Map)
+          if (parse(e.cast<String, dynamic>()) case final T m) m,
+    ];
+
+/// Сохранённый список + новые модели → список записи (см. инварианты выше).
+List<dynamic> _mergeDnsEntries<T>(
+  List<dynamic> stored,
+  List<T> models,
+  T? Function(Map<String, dynamic>) parse,
+  Map<String, dynamic> Function(T) encode,
+) {
+  final parsed = [
+    for (final e in stored) e is Map ? parse(e.cast<String, dynamic>()) : null,
+  ];
+  final used = List<bool>.filled(stored.length, false);
+  final out = <dynamic>[];
+  for (final m in models) {
+    var reuse = -1;
+    for (var i = 0; i < stored.length; i++) {
+      if (!used[i] && parsed[i] != null && parsed[i] == m) {
+        reuse = i;
+        break;
+      }
+    }
+    if (reuse >= 0) {
+      used[reuse] = true;
+      out.add(stored[reuse]);
+    } else {
+      out.add(encode(m));
+    }
+  }
+  for (var i = 0; i < stored.length; i++) {
+    if (parsed[i] != null) continue;
+    out.insert(i < out.length ? i : out.length, stored[i]);
+  }
+  return out;
+}
+
+Future<void> _putDnsList(String key, List<dynamic> list,
+    {required bool flush}) async {
   final data = await _load();
-  final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
-  dns['servers'] = servers;
-  data['dns_options'] = dns;
+  final dns = data[kDnsKey];
+  data[kDnsKey] = <String, dynamic>{
+    if (dns is Map) ...dns.cast<String, dynamic>(),
+    key: list,
+  };
   SettingsStorage._cache = data;
   SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();
+}
+
+DnsServerRef? _dnsServerOf(Map<String, dynamic> j) =>
+    dnsServerFromRecord(j).value;
+
+DnsRuleRef? _dnsRuleOf(Map<String, dynamic> j) => dnsRuleFromRecord(j).value;
+
+Future<List<DnsServerRef>> _getDnsServers() async =>
+    _parseDnsEntries(_dnsList(await _load(), kDnsServersKey), _dnsServerOf);
+
+/// §441 — значения переменных template-сервера пишутся по нормам Н2–Н4
+/// против шаблона ([normalizeDnsServersVars]): необъявленное имя и значение,
+/// равное умолчанию, снимаются молча. Запись, которую нормализация не
+/// меняет, остаётся теми же байтами.
+Future<void> _saveDnsServers(List<DnsServerRef> servers,
+    {bool flush = true}) async {
+  final normalized =
+      normalizeDnsServersVars(servers, await loadRecordVarDecls());
+  final stored = _dnsList(await _load(), kDnsServersKey);
+  await _putDnsList(
+    kDnsServersKey,
+    _mergeDnsEntries(stored, normalized, _dnsServerOf, dnsServerToRecord),
+    flush: flush,
+  );
+}
+
+Future<List<DnsRuleRef>> _getDnsRulesList() async =>
+    _parseDnsEntries(_dnsList(await _load(), kDnsRulesKey), _dnsRuleOf);
+
+Future<void> _saveDnsRulesList(List<DnsRuleRef> rules,
+    {bool flush = true}) async {
+  final stored = _dnsList(await _load(), kDnsRulesKey);
+  await _putDnsList(
+    kDnsRulesKey,
+    _mergeDnsEntries(stored, rules, _dnsRuleOf, dnsRuleToRecord),
+    flush: flush,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -206,36 +302,4 @@ bool _dropPingGroupKeys(
     opts['groups'] = groups;
   }
   return true;
-}
-
-// §219 — `_getDnsRules` удалён (публичный геттер getDnsRules снят, 0 call-sites).
-
-Future<void> _saveDnsRules(String rulesJson) async {
-  final data = await _load();
-  final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
-  dns['rules_json'] = rulesJson;
-  data['dns_options'] = dns;
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty(); // §113
-  await _save();
-}
-
-Future<List<Map<String, dynamic>>> _getDnsRulesList() async {
-  final data = await _load();
-  final dns = data['dns_options'] as Map<String, dynamic>?;
-  if (dns == null) return [];
-  final rules = dns['rules'] as List<dynamic>?;
-  if (rules == null) return [];
-  return rules.whereType<Map<String, dynamic>>().toList();
-}
-
-Future<void> _saveDnsRulesList(List<Map<String, dynamic>> rules,
-    {bool flush = true}) async {
-  final data = await _load();
-  final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
-  dns['rules'] = rules;
-  data['dns_options'] = dns;
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty(); // §113
-  if (flush) await _save();
 }

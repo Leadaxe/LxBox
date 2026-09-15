@@ -531,6 +531,8 @@ void main() {
     test('vpn-1 на месте → ветка 1 остаётся no-op (файл не переписан)',
         () async {
       await seedFile({
+        // Файл текущей формы: миграция хранения §439 его не переписывает.
+        'storage_version': 1,
         'directions': [
           {'tag': 'vpn-1', 'label': 'Keep', 'enabled': true},
           {'tag': 'ru-exit', 'label': 'Россия', 'enabled': true},

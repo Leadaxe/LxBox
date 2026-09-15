@@ -64,6 +64,11 @@ part of '../post_steps.dart';
 ///     не должна содержать цепочек в участниках — ядро обходит ЛИСТЬЯ группы
 ///     на старте и отвергает вложенную цепочку («nested chain is only allowed
 ///     at position 0»); `check` этого не ловит, падает только `run` (L4).
+///  8. (§442, эталон — правило 6 лаунчера) `urltest` с `interval` больше
+///     `idle_timeout` (в т.ч. умолчания ядра 30m) → `idle_timeout` поднят до
+///     `interval`, сам `interval` не меняется. Не про рёбра, а про опции
+///     группы, поэтому идёт одним проходом по выжившим записям после
+///     фикспойнта (`sanitize_urltest_timings.dart`).
 ///
 /// КЛЮЧЕВАЯ ЛОВУШКА ЦЕПОЧЕК: у `type: chain` хопы лежат в том же ключе
 /// `outbounds[]`, что и состав группы, но значат ДРУГОЕ — позиции маршрута,
@@ -224,6 +229,12 @@ List<String> sanitizeOutboundGraph(
   }
   for (final e in sanitizedDetourOwners.entries) {
     warnings.add(_detourRemovedLine(e.key, e.value, targetSanitized: true));
+  }
+
+  // Правило 8 (§442) — пара interval/idle_timeout у urltest. Только выжившие
+  // записи: warning про группу, которую каскад уже удалил, был бы шумом.
+  for (final e in entries) {
+    if (!dropped.contains(e)) _sanitizeUrltestTimings(e, warnings);
   }
 
   // Мутация СПИСКА на месте, а не переприсваивание: `config` приходит из

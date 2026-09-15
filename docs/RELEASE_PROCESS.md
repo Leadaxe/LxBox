@@ -19,7 +19,8 @@ CI (`.github/workflows/ci.yml`) triggers on:
 
 | Event | What runs |
 |---|---|
-| push of a `v*` tag | `meta` + `checks` + `android` + `release` + `publish-manifest` (a full release) |
+| push of a `v*` tag | `meta` + `checks` + `android` + `release` + `google-play` + `publish-manifest` (a full release) |
+| push of a `vX.Y.Z-rc.N` tag | `meta` + `checks` + `android` + `release` as a **pre-release**; `google-play` and `publish-manifest` are skipped |
 | push to `develop` / `main` | `checks` (analyze and tests only) |
 | PR into `develop` / `main` | `checks` |
 | `workflow_dispatch` + `run_mode=checks` | `checks` |
@@ -33,6 +34,13 @@ make sure the file holds **exactly** the notes meant for this release.
 After the release the bot step `publish-manifest` pushes a
 `chore(release): update docs/latest.json ... [skip ci]` commit to `main`. That is
 the only automatic commit allowed in `main` besides the release merge commits.
+
+A release candidate (`vX.Y.Z-rc.N`, §436) does not reach users. The GitHub
+release is marked pre-release, so it never becomes Latest and
+`/releases/latest`, which UpdateChecker polls, keeps returning the previous
+stable. `docs/latest.json` is not updated, and nothing goes to Google Play.
+The APKs are on the release page for testers. A hotfix `vX.Y.Z-hotfixN` is a
+full release.
 
 ---
 
@@ -283,6 +291,7 @@ the tag) in a separate `fix(ci)` commit.
 ```bash
 gh release view vX.Y.Z --json isLatest,isDraft,isPrerelease
 # → {"isLatest":true, "isDraft":false, "isPrerelease":false}
+# for vX.Y.Z-rc.N → {"isLatest":false, "isDraft":false, "isPrerelease":true}
 
 curl -sL https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json | jq '.tag'
 # → "vX.Y.Z"
@@ -306,7 +315,8 @@ curl -sL https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json |
 ### Google Play (AAB)
 
 For every release CI builds an `.aab` (the “Build AAB (Google Play)” step),
-keeps it in the run's artifacts, and the `google-play` job (shown as “GooglePlay”) uploads it to the Play
+keeps it in the run's artifacts, and on every tag except a release candidate
+(`vX.Y.Z-rc.N`) the `google-play` job (shown as “GooglePlay”) uploads it to the Play
 Console through the Google Play Developer API (§436, see
 [`GOOGLE_PLAY.md`](GOOGLE_PLAY.md#ci-upload)). The job needs the
 `PLAY_SERVICE_ACCOUNT_JSON` secret; without it it logs a warning and skips, so

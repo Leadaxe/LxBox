@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/selector_info.dart';
 import 'package:lxbox/widgets/detour_target_picker.dart';
@@ -22,7 +23,7 @@ void main() {
 
   test('Направление — терминальный хоп с текущим выбором', () {
     SelectorInfo.I.setGroups({'vpn-4': '🇳🇱 Нидерланды'});
-    final hops = detourPathHops('vpn-4',
+    final hops = detourPathHops(const NodeLink(tag: 'vpn-4'),
         controller: SubscriptionController(), directions: const [relay]);
     expect(hops, ['⚙ Relay (🇳🇱 Нидерланды)']);
   });
@@ -35,11 +36,12 @@ void main() {
       tagPrefix: 'p-',
       detourPolicy: DetourPolicy.defaults,
       members: [
-        FolderMember(raw: raw('a'), detour: 'b'),
-        FolderMember(raw: raw('b'), detour: 'vpn-4'),
+        // Интра-ссылка — пара с id папки (D-112), Направление — корневая.
+        FolderMember(raw: raw('a'), detour: const NodeLink(folderId: 'f', tag: 'b')),
+        FolderMember(raw: raw('b'), detour: const NodeLink(tag: 'vpn-4')),
       ],
     );
-    final hops = detourPathHops('a',
+    final hops = detourPathHops(const NodeLink(folderId: 'f', tag: 'a'),
         controller: SubscriptionController(),
         directions: const [relay],
         folder: folder);
@@ -54,11 +56,11 @@ void main() {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       members: [
-        FolderMember(raw: raw('a'), detour: 'b'),
-        FolderMember(raw: raw('b'), detour: 'a'),
+        FolderMember(raw: raw('a'), detour: const NodeLink(folderId: 'f', tag: 'b')),
+        FolderMember(raw: raw('b'), detour: const NodeLink(folderId: 'f', tag: 'a')),
       ],
     );
-    final hops = detourPathHops('a',
+    final hops = detourPathHops(const NodeLink(folderId: 'f', tag: 'a'),
         controller: SubscriptionController(),
         directions: const [],
         folder: folder);
@@ -66,7 +68,7 @@ void main() {
   });
 
   test('неизвестная цель — один хоп как есть', () {
-    final hops = detourPathHops('ghost-node',
+    final hops = detourPathHops(const NodeLink(tag: 'ghost-node'),
         controller: SubscriptionController(), directions: const []);
     expect(hops, ['ghost-node']);
   });

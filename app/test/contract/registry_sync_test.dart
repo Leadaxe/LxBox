@@ -49,15 +49,16 @@ void _checkAllowlist(String name, Set<String> code, Map<String, dynamic> reg) {
 /// это границы, которых у мобилы нет (свёртка папки в группу с явным тегом,
 /// маска тегов подписки, локальные Направления источника).
 const _launcherOnlyBackupCodes = <String>{
-  // side: export — «вид источника, которого схема не знает». У мобилы
-  // провайдерских групп как отдельного вида источника нет.
-  'backup_source_kind_unsupported',
   // tag.mask подписки — поле модели лаунчера; у мобилы prefix/postfix.
   'backup_tag_mask_dropped',
   // Локальные Направления ИСТОЧНИКА — упразднённый класс лаунчера.
   'backup_local_direction_dropped',
   // side: export — явный тег замены папки/подписки; свёртки у мобилы нет.
   'backup_replace_tag_derived',
+  // Контракт 1.0.1, ответ LxBox 5 (TASKS_LXBOX.md §17.8): неизвестную строку
+  // include LxBox хранит и на импорте молчит, предупреждает сборка (кейс
+  // v10_direction_include.expected.lxbox.json).
+  'backup_direction_include_dropped',
 };
 
 Map<String, dynamic>? _loadBackupWarnings() {
@@ -89,6 +90,12 @@ const _codesInCode = <String>{
   kWarnChainExists,
   kWarnDnsEntrySkipped,
   kWarnWarpSkipped,
+  // §438 — чтение контракта 1.0: отбраковка записи секции узла (норма B3) и
+  // запись `sources[]` вида, которому здесь нет места (читатель отвергает
+  // её тем же кодом, что писатель, BACKUP.md §2).
+  kWarnSectionRecordDropped,
+  kWarnSourceKindUnsupported,
+  kWarnGroupDegraded,
 };
 
 void main() {

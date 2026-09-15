@@ -158,9 +158,33 @@ void main() {
       expect(w.detail, contains('rule_set'));
     });
 
-    test('два узла → секций нет', () {
+    test('§437 многоузловой конфиг: tailscale со связкой, прокси — без', () {
       final nodes = parseText({
         ...whole,
+        'outbounds': [
+          {'type': 'vless', 'tag': 'v', 'server': 'a.com', 'server_port': 443, 'uuid': 'u'},
+          {'type': 'trojan', 'tag': 'lan-proxy', 'server': 'b.com', 'server_port': 443, 'password': 'p'},
+        ],
+      });
+      expect(nodes, hasLength(3));
+      final ts = nodes.whereType<TailscaleSpec>().single;
+      // Записи взяты по явной ссылке на тег — те же критерии, что у одиночного.
+      expect(ts.importedSections!.rules.single.ipCidrs, ['100.64.0.0/10']);
+      expect(ts.importedSections!.dnsServers.map((x) => x.tag),
+          ['@{self}-ts-dns', '@{self}-lan']);
+      for (final n in nodes.where((n) => n is! TailscaleSpec)) {
+        expect(n.importedSections, isNull);
+      }
+    });
+
+    test('§437 многоузловой с явным sections → извлечения нет', () {
+      final nodes = parseText({
+        ...whole,
+        'sections': {
+          'rules': [
+            {'kind': 'inline', 'name': 'only', 'body': {'outbound': '@self'}},
+          ],
+        },
         'outbounds': [
           {'type': 'vless', 'tag': 'v', 'server': 'a.com', 'server_port': 443, 'uuid': 'u'},
         ],
@@ -169,6 +193,26 @@ void main() {
       for (final n in nodes) {
         expect(n.importedSections, isNull);
       }
+    });
+
+    test('§437 два tailscale-узла: каждый получает свои записи', () {
+      final nodes = parseText({
+        'endpoints': [
+          tsBody,
+          {'type': 'tailscale', 'tag': 'work-ts', 'auth_key': 'tskey-auth-yyy'},
+        ],
+        'route': {
+          'rules': [
+            {'ip_cidr': ['100.64.0.0/10'], 'outbound': 'home-ts'},
+            {'domain_suffix': ['.work'], 'outbound': 'work-ts'},
+          ],
+        },
+      });
+      final byTag = {for (final n in nodes) n.tag: n};
+      expect(byTag['home-ts']!.importedSections!.rules.single.ipCidrs,
+          ['100.64.0.0/10']);
+      expect(byTag['work-ts']!.importedSections!.rules.single.domainSuffixes,
+          ['.work']);
     });
 
     test('узел без связки в конфиге → секций нет', () {

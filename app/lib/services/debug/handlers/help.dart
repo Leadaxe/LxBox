@@ -190,6 +190,14 @@ PATCH  /subs/{id}[?rebuild=true][?reveal=true] Update meta, any subset: {enabled
                                                  register_detour_in_auto,use_detour_servers,replace_detour_chain,
                                                  on_update_action,import_rules_enabled,identity}.
                                                  url applies to SubscriptionServers only (no-op for UserServer).
+                                                 override_detour = node link {"folder_id"?:"...","tag":"..."}
+                                                 (null clears): a folder member or subscription node is
+                                                 {folder_id, raw tag}, a standalone server or direction is
+                                                 {tag}. A string is read as {tag} (for a folder — as its
+                                                 member's raw tag when one matches). Responses carry the same
+                                                 shape (null when unset). tag_prefix of a standalone server is
+                                                 part of its root address: changing it rewrites links to it.
+                                                 DELETE of a source clears links to its nodes.
                                                  on_update_action: rebuild|reload|none.
                                                  identity is a tristate: omit = keep, null = Default (global
                                                  identity), object = Custom. The object is a PATCH over the
@@ -268,19 +276,22 @@ references (same semantics as the UI toggle). Deleting a direction ALSO
 strips its tag from the include[] of every other direction; disabling does
 not (include survives a disable, the builder just degrades the emitted
 group). Every mutation response carries
-"healed": {"rules": N, "detours": M, "includes": K} — how many references
-were reset.
+"healed": {"rules": N, "detours": M, "includes": K, "chain_positions": C,
+"dns_servers": D} — how many references were reset. dns_servers counts
+DNS servers that named the direction — an outbound-type variable of a
+template server, body.detour of a user server (root list and node
+sections): the value degrades to vpn-1 (disable/delete), like a rule target.
 
 === Chains CRUD (hop chains — third source kind, SPEC 110) ===
 
 A chain is a ROUTE ("client → hop 1 → hop 2 → … → target"), not a choice
 between routes: it lives next to subscriptions and servers as a source, and
 for the rest of the app it looks like a NODE (own tag, picked up by direction
-filters, emitted as one outbound of type "chain"). Stored in the `chains[]`
-key; ORDER IS NORMATIVE — a chain may reference only chains declared ABOVE it,
-which is what rules out cycles.
+filters, emitted as one outbound of type "chain"). Stored as `kind: chain`
+records at the tail of `sources[]`; ORDER IS NORMATIVE — a chain may reference
+only chains declared ABOVE it, which is what rules out cycles.
 
-GET    /chains                                   List chains (storage shape, snake_case)
+GET    /chains                                   List chains in storage order: tag, label, enabled + source_chain.schema.json canon
 GET    /chains/{tag}                             Single chain (404 if unknown)
 POST   /chains[?rebuild=true]                    Create → 201. Body optional: {"tag":"...","label":"..."} plus
                                                  any PATCH field below. No tag → first free chain-N. The tag is
@@ -295,6 +306,13 @@ PATCH  /chains/{tag}[?rebuild=true]              Partial update: {label,enabled,
                                                  hops = positions IN PACKET ORDER: [0] is the first hop from the
                                                  client, the last one is what the target sees. NOT "who through
                                                  whom" — detour's arrow points the other way.
+                                                 Each position is a node link {"folder_id"?:"...","tag":"..."}:
+                                                 a folder member or subscription node (and a subscription
+                                                 group) is {folder_id: <folder/subscription id>, tag: <raw tag,
+                                                 before the prefix>}; a standalone server, direction, direct-out
+                                                 or another chain is {tag} with no folder_id. A plain string is
+                                                 read as {tag}. The build resolves links to final tags; a
+                                                 position that does not resolve drops the whole chain.
                                                  idle_timeout: "" = core default (5m), "0s" = live until stop.
                                                  strip_evasion is a TRISTATE: omit = keep, null = core default
                                                  (true, key not written), bool = explicit choice.
@@ -358,20 +376,26 @@ POST   /folders[?rebuild=true]                 Create empty folder. Body {"name"
 GET    /folders/{id}[?reveal=true]             Single folder + members
 DELETE /folders/{id}[?keep_servers=true][?rebuild=true]
                                                Delete. keep_servers=true → members become standalone
-                                                 single servers in place of the folder (default false)
+                                                 single servers in place of the folder (default false);
+                                                 auto nodes are deleted either way
 POST   /folders/{id}/members[?rebuild=true]    Add members. Body: exactly one of
                                                  {"input":"<uri|WG-ini|JSON>", "name_fallback"?:"..."} (paste)
                                                  or {"url":"..."} (one-shot snapshot: fetch → static members,
                                                  URL is not stored, no auto-update)
 PATCH  /folders/{id}/members/{idx}[?rebuild=true]
                                                Subset {raw,enabled,detour}. raw must parse (400 keeps old);
-                                                 detour = personal member detour tag ('' clears)
+                                                 detour = personal member detour as a node link
+                                                 {"folder_id"?:"...","tag":"..."} (null clears). A plain string
+                                                 is read as a sibling member's raw tag when one matches, else as
+                                                 a root {tag}. A detour that does not resolve at build drops
+                                                 the node (never goes direct).
 DELETE /folders/{id}/members/{idx}[?rebuild=true]  Remove member
 POST   /folders/{id}/members/reorder[?rebuild=true]
                                                Body {"order":[old indexes in new order]} — full permutation
 POST   /folders/{id}/members/{idx}/ungroup[?rebuild=true]
                                                Member → standalone single server right after the folder
-                                                 (personal detour becomes its override_detour)
+                                                 (personal detour becomes its override_detour); 409 for an
+                                                 auto node
 POST   /folders/{id}/members/{idx}/move[?rebuild=true]
                                                Body {"to":"<folder id>"} — move member to another folder
 POST   /folders/{id}/move-server[?rebuild=true]
@@ -451,8 +475,10 @@ GET|PUT|DELETE /settings/ping_options/groups/{tag}  Per-group URLTest override. 
 GET|PUT /settings/tun_apps                     Per-app tunnel list. body {"mode":"off|allow|deny","packages":["pkg",...]} (config-significant, ?rebuild)
 PUT    /settings/vars/{key}                    body {"value":"..."}; blocklist: debug_token/debug_enabled/debug_port
 DELETE /settings/vars/{key}                    Delete var
-PUT    /settings/dns_options/servers           body {"servers":[...]}
-PUT    /settings/dns_options/rules             body {"rules":"<json-string>"}
+PUT    /settings/dns_options/servers           body {"servers":[{"kind":"user|preset|template","tag"?:"...","ref"?:"<preset_id>:<tag>","enabled":bool,"body"?:{...}}]}
+                                                 storage records only; kind "inline" or no "kind" → 400
+PUT    /settings/dns_options/rules             body {"rules":[{"kind":"user|preset|srs|template","name"?,"ref"?,"enabled","body"?}]}
+                                                 storage records only; kind "inline", "presetId" or a JSON string → 400
 PUT    /settings/config_locked                 toggle auto-rebuild lock. body {"locked":true|false}.
                                                  true → SubscriptionController.generateConfig returns null
                                                  silently, the custom config from PUT /config is not overwritten
@@ -481,8 +507,12 @@ POST   /settings/rebuild-config                Alias /action/rebuild-config
 === Backup ===
 
 GET  /backup/export?include=storage,vpn_settings  Pure-data snapshot for restore (no diag noise). `include` optional; default — both parts.
+                                                 `storage` carries `storage_version`. `from=v0_bak` — `storage` from lxbox_settings.json.v0.bak
+                                                 (the 2.23.2-form state at migration; importable by 2.23.2); 404 when there is no copy.
 POST /backup/import?merge=false&rebuild=false  Accepts the same shape export returns (body {storage?, vpn_settings?}).
                                                  `merge=true` — append/upsert; `rebuild=true` — auto-rebuild config after restore.
+                                                 A `storage` block without `storage_version` (2.23.2 form) is migrated first:
+                                                 `applied.migrated: true` + `applied.migration` {info, warnings}.
 
 === Errors ===
 
@@ -605,7 +635,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Alias /state/subs'},
     {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false'}, 'description': 'Single entry'},
     {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries)'},
-    {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity}', 'description': 'Update meta. url is SubscriptionServers-only (no-op for UserServer). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
+    {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity}', 'description': 'Update meta. url is SubscriptionServers-only (no-op for UserServer). override_detour = node link {folder_id?, tag} (null clears; a string is read as {tag}). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
     {'method': 'DELETE', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove entry'},
     {'method': 'POST', 'path': '/subs/{id}/refresh', 'description': 'Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.'},
     {'method': 'POST', 'path': '/subs/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (exactly the current ids)'},
@@ -620,26 +650,26 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/directions', 'description': 'List routing directions (storage shape, snake_case)'},
     {'method': 'GET', 'path': '/directions/{tag}', 'description': "Single direction (tag = the direction's outbound tag, e.g. vpn-1 or a custom one)"},
     {'method': 'POST', 'path': '/directions', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"label":"...","tag":"..."} + any PATCH field', 'description': 'Create direction. No tag → first free vpn-N; a custom tag is accepted as-is. No cap on the number of directions. Rejected tag → 409 with the machine reason: empty|reserved|duplicate|auto_twin.'},
-    {'method': 'PATCH', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,include,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = direction selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the direction: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours,includes}.'},
-    {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None; the tag is stripped from every other direction include[]. Response carries "healed":{rules,detours,includes}.'},
+    {'method': 'PATCH', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,include,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = direction selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the direction: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
+    {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None; the tag is stripped from every other direction include[]; outbound-type variables of template DNS servers and rule presets, and body.detour of user DNS servers (root and node sections), degrade to vpn-1. Response carries "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
     {'method': 'POST', 'path': '/directions/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
     // Chains CRUD (hop chains, SPEC 110)
-    {'method': 'GET', 'path': '/chains', 'description': 'List hop chains (storage shape, snake_case). Order is normative: a chain may reference only chains declared above it.'},
+    {'method': 'GET', 'path': '/chains', 'description': 'List hop chains in storage order: tag, label, enabled + source_chain.schema.json canon. The list order is normative: a chain may reference only chains declared above it.'},
     {'method': 'GET', 'path': '/chains/{tag}', 'description': 'Single chain (404 if unknown)'},
     {'method': 'POST', 'path': '/chains', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"tag":"...","label":"..."} + any PATCH field', 'description': 'Create chain → 201. No tag → first free chain-N. Tag is checked against BOTH chains and directions; rejected → 409 with the machine reason: empty|reserved|duplicate|auto_twin. A body without hops creates an empty chain (same as the UI).'},
-    {'method': 'PATCH', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite}', 'description': 'Partial update. tag is immutable (400). hops = positions in PACKET order ([0] = first hop from the client). strip_evasion is a tristate: omit = keep, null = core default, bool = explicit. strip replaces the map, keys only tls.fragment|multiplex.padding|xhttp.padding|tls.utls. rewrite = RFC 7396 merge-patch per outbound type, kept verbatim. Writes pass the same gate as the edit form; a blocking finding → 400 with its code: tooFewHops|emptyHop|duplicateHop|selfReference|nestedNotFirst|forwardChainReference|realityUtlsStripped|tagEmpty|tagTaken.'},
+    {'method': 'PATCH', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite}', 'description': 'Partial update. tag is immutable (400). hops = positions in PACKET order ([0] = first hop from the client), each a node link {folder_id?, tag} (a string is read as {tag}). strip_evasion is a tristate: omit = keep, null = core default, bool = explicit. strip replaces the map, keys only tls.fragment|multiplex.padding|xhttp.padding|tls.utls. rewrite = RFC 7396 merge-patch per outbound type, kept verbatim. Writes pass the same gate as the edit form; a blocking finding → 400 with its code: tooFewHops|emptyHop|duplicateHop|selfReference|nestedNotFirst|forwardChainReference|realityUtlsStripped|tagEmpty|tagTaken.'},
     {'method': 'DELETE', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove chain. Positions of other chains pointing at it are NOT cleaned (the build degrades such a chain as a whole, "chain_hop_missing"); the response lists them in "dangling_refs".'},
     {'method': 'GET', 'path': '/chains/{tag}/probe', 'params': {'url': 'probe URL (default: global ping_options)', 'timeout_ms': 'per-layer budget (default: global ping_options)'}, 'description': 'Layer-by-layer probe: measures PREFIXES of the route (layer k = path from the client through position k) via the tag the core registers for it, "<chain>#<k>" — the same scheme as the launcher (config.ChainLayerTag). A hop price is the difference of neighbouring layers, never a measurement of its own. Needs a running VPN (409 otherwise): those tags exist only in the running core. Positions come from the BUILT config; 409 if the chain is not in it (disabled, degraded, never built). Sequential — worst case positions × timeout_ms. Response: layers[{pos, tag, probe_tag, cumulative_ms?, delta_ms?, error?, not_reached?}]; the first failing layer carries the core text and everything behind it is not_reached.'},
     // Folders CRUD (server folders)
     {'method': 'GET', 'path': '/folders', 'params': {'reveal': 'true|false (raw carries credentials, hidden by default)'}, 'description': 'List folder entries + members (members addressed by positional index)'},
     {'method': 'POST', 'path': '/folders', 'params': {'rebuild': 'true|false'}, 'body': '{"name":"..."}', 'description': 'Create empty folder → 201. Folder meta is edited via PATCH /subs/{id}.'},
     {'method': 'GET', 'path': '/folders/{id}', 'params': {'reveal': 'true|false'}, 'description': 'Single folder + members'},
-    {'method': 'DELETE', 'path': '/folders/{id}', 'params': {'keep_servers': 'true|false (default false)', 'rebuild': 'true|false'}, 'description': 'Delete folder. keep_servers=true → members become standalone single servers in place.'},
+    {'method': 'DELETE', 'path': '/folders/{id}', 'params': {'keep_servers': 'true|false (default false)', 'rebuild': 'true|false'}, 'description': 'Delete folder. keep_servers=true → members become standalone single servers in place; auto nodes are deleted either way.'},
     {'method': 'POST', 'path': '/folders/{id}/members', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'exactly one of {"input":"<uri|WG-ini|JSON>","name_fallback"?} (paste) or {"url":"..."} (one-shot snapshot)', 'description': 'Add members. Snapshot: fetch → static members, URL not stored.'},
-    {'method': 'PATCH', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {raw,enabled,detour}', 'description': 'Edit member. raw must parse (400 keeps old); detour = personal member detour ("" clears).'},
+    {'method': 'PATCH', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {raw,enabled,detour}', 'description': 'Edit member. raw must parse (400 keeps old); detour = personal member detour, node link {folder_id?, tag} (null clears; a string is read as a sibling raw tag or a root {tag}).'},
     {'method': 'DELETE', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove member (indexes shift — use the returned folder snapshot)'},
     {'method': 'POST', 'path': '/folders/{id}/members/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder members (full permutation required)'},
-    {'method': 'POST', 'path': '/folders/{id}/members/{idx}/ungroup', 'params': {'rebuild': 'true|false'}, 'description': 'Member → standalone single server after the folder (personal detour → override_detour)'},
+    {'method': 'POST', 'path': '/folders/{id}/members/{idx}/ungroup', 'params': {'rebuild': 'true|false'}, 'description': 'Member → standalone single server after the folder (personal detour → override_detour); 409 for an auto node'},
     {'method': 'POST', 'path': '/folders/{id}/members/{idx}/move', 'params': {'rebuild': 'true|false'}, 'body': '{"to":"<folder id>"}', 'description': 'Move member to another folder'},
     {'method': 'POST', 'path': '/folders/{id}/move-server', 'params': {'rebuild': 'true|false'}, 'body': '{"server_id":"<subs entry id>"}', 'description': 'Move a standalone single server INTO the folder (splits 1:1 by nodes)'},
     {'method': 'POST', 'path': '/folders/{id}/probe', 'body': 'optional {"url":"...","timeout_ms":N} (defaults = global ping_options)', 'description': 'Headless Test servers run, results in response. Statuses: ok|failed|broken|invalid|not_in_config|pending. Synchronous — lower timeout_ms for big folders (30s request timeout).'},
@@ -685,8 +715,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET|PUT', 'path': '/settings/tun_apps', 'body': '{"mode":"off|allow|deny","packages":["pkg",...]}', 'description': 'Per-app tunnel list (config-significant, ?rebuild)'},
     {'method': 'PUT', 'path': '/settings/vars/{key}', 'body': '{"value":"..."}', 'description': 'Set var (blocklist: debug_token/debug_enabled/debug_port)'},
     {'method': 'DELETE', 'path': '/settings/vars/{key}', 'description': 'Delete var'},
-    {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[...]}', 'description': 'Set DNS servers list'},
-    {'method': 'PUT', 'path': '/settings/dns_options/rules', 'body': '{"rules":"<json-string>"}', 'description': 'Set DNS rules (legacy json-string shape)'},
+    {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[{kind,tag?,ref?,enabled,body?}]}', 'description': 'Set DNS servers list (storage records; kind user|preset|template, other forms → 400)'},
+    {'method': 'PUT', 'path': '/settings/dns_options/rules', 'body': '{"rules":[{kind,name?,ref?,enabled,body?}]}', 'description': 'Set DNS rules (storage records; kind user|preset|srs|template, other forms → 400)'},
     {'method': 'GET', 'path': '/settings/core_logs_enabled', 'description': 'Whether sing-box logs are forwarded into /logs/core'},
     {'method': 'PUT', 'path': '/settings/core_logs_enabled', 'body': '{"enabled":true|false}', 'description': 'Toggle core-log forwarding (default false)'},
     {'method': 'GET', 'path': '/settings/core_logs_verbose', 'description': 'Whether TRACE/DEBUG core lines pass the volume filter'},
@@ -699,8 +729,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/settings/vpn/background_mode', 'description': 'tunnel sleep mode (never|lazy|always)'},
     {'method': 'PUT', 'path': '/settings/vpn/background_mode', 'body': '{"mode":"never|lazy|always"}', 'description': 'Set tunnel sleep mode — apply on next VPN connect'},
     // Backup
-    {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'storage,vpn_settings (default both)'}, 'description': 'Pure-data snapshot (no diag noise)'},
-    {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{storage?, vpn_settings?}', 'description': 'Restore from export'},
+    {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'storage,vpn_settings (default both)', 'from': 'v0_bak (storage from lxbox_settings.json.v0.bak, 404 without a copy)'}, 'description': 'Pure-data snapshot (no diag noise)'},
+    {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{storage?, vpn_settings?}', 'description': 'Restore from export; a storage block without storage_version is migrated (applied.migrated, applied.migration)'},
     // Action additions
     {'method': 'POST', 'path': '/action/preview-empty-state', 'params': {'on': 'true|false'}, 'description': 'Toggle empty-state preview in HomeScreen UI without losing data'},
   ],

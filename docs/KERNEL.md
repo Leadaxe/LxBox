@@ -25,8 +25,13 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.0-lx.38`** (see `app/android/libbox.version`) —
-the AAR now carries **`with_tailscale`** plus the eleven `ts_omit_*` trims
+**The current pin: `v1.14.0-lx.39`** (see `app/android/libbox.version`) —
+lx.38 plus the SPEC 085 hotfix: UDP through a SOCKS5 proxy whose UDP ASSOCIATE
+reply carries `BND.ADDR` `0.0.0.0`/`::` was dialed at the local system, so UDP
+died silently while TCP worked; the relay address is now replaced by the proxy
+server address, as Xray does (report of 2026-09-14). The Java surface is
+identical to lx.38 (full `javap` diff of `io.nekohasekai.libbox.*` — empty).
+Since lx.38 the AAR carries **`with_tailscale`** plus the eleven `ts_omit_*` trims
 (§435, contract ## 13, owner decision 2026-09-14): the `tailscale` endpoint
 and the `tailscale` DNS server type are compiled in. Measured on the fork side
 (M1 Pro, go1.26.6, NDK r28c): the AAR build time did not grow (the Tailscale
@@ -725,7 +730,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.0-lx.38** (current pin) | **Tailscale in the AAR** — `with_tailscale` plus the `ts_omit_*` trims (§435, contract ## 13, D-103): the `tailscale` endpoint and the `tailscale` DNS server type; AAR +2.58 MB, build time unchanged. Plus the SPEC 084 hotfix (ABBA deadlock of nested selectors, fork issue #20). Upstream base of lx.37 (`upstream/stable` v1.14.0 + 33). Java surface unchanged from lx.36. |
+| **v1.14.0-lx.39** (current pin) | **SOCKS5 UDP hotfix** (fork SPEC 085): a UDP ASSOCIATE reply with `BND.ADDR` `0.0.0.0`/`::` no longer makes the client dial the relay at the local system — the proxy server address is used instead. Java surface identical to lx.38. |
+| **v1.14.0-lx.38** | **Tailscale in the AAR** — `with_tailscale` plus the `ts_omit_*` trims (§435, contract ## 13, D-103): the `tailscale` endpoint and the `tailscale` DNS server type; AAR +2.58 MB, build time unchanged. Plus the SPEC 084 hotfix (ABBA deadlock of nested selectors, fork issue #20). Upstream base of lx.37 (`upstream/stable` v1.14.0 + 33). Java surface unchanged from lx.36. |
 | **v1.14.0-lx.37** | Upstream sync: `upstream/stable` b7eb49bb8 (v1.14.0 + 33), submodules wireguard-go v0.0.6 / sing-tun v0.9.3. No config changes. AAR still without Tailscale. |
 | **v1.14.0-lx.36** | Hotfix: REALITY nodes on Xray-core ≥ v26.9.8 work again — the core no longer strips the `X25519MLKEM768` key share the server now requires, and derives the auth key the way the server does (core SPEC 083); servers before v26.9.8 unaffected. Only `chrome` fingerprints carry the key share — LxBox emits `chrome` for any REALITY node (§281). Same upstream base as lx.34. |
 | **v1.14.0-lx.35** | Hotfix for fork issue #14: XHTTP behind a CDN that resets HTTP/2 streams could pin the CPU at 100 % until restart — the `http2.StreamError` type no longer leaks out of XHTTP / HTTP / gRPC-lite conns into an HTTP/2 client running through the outbound (core SPEC 082). Same upstream base as lx.34. |

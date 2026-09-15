@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/l10n/locale_controller.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/screens/add_server_wizard_screen.dart';
@@ -54,6 +55,10 @@ class _Launcher extends StatelessWidget {
 /// заголовок записи = tag узла. Поле Tag опционально: введённое значение →
 /// tag (живёт в rawBody-JSON, переживает рестарт), пусто → дефолтный tag.
 /// `UserServer.name` визард всегда пишет пустым.
+/// Путь рестарта: сервер через запись `sources[]` и обратно (§439).
+UserServer _storageRoundTrip(UserServer us) =>
+    sourceFromRecord(sourceToRecord(us)).value! as UserServer;
+
 void main() {
   late Directory tempDir;
 
@@ -153,7 +158,7 @@ void main() {
       final us = c.entries.single.list as UserServer;
       // Путь рестарта: UserServer персистит только rawBody (JSON outbound),
       // ноды ре-деривятся parseSingboxEntry'ом — tag обязан выжить.
-      final reloaded = UserServer.fromJson(us.toJson());
+      final reloaded = _storageRoundTrip(us);
       expect(reloaded.name, '');
       expect(reloaded.nodes.single.tag, '🚀 Keep me');
     });
@@ -173,7 +178,7 @@ void main() {
       expect(us.name, '');
       expect(us.nodes.single.tag, '🌍 Corp http');
 
-      final reloaded = UserServer.fromJson(us.toJson());
+      final reloaded = _storageRoundTrip(us);
       expect(reloaded.nodes.single.tag, '🌍 Corp http');
     });
 
@@ -239,7 +244,7 @@ void main() {
       expect(s.dnsRules.single.rule['server'], '@{self}-dns');
     });
 
-    testWidgets('round-trip UserServer.fromJson(toJson): узел и секции целы',
+    testWidgets('round-trip записи sources[]: узел и секции целы',
         (tester) async {
       final c = await openTailscale(tester);
       await tester.enterText(field(0), '🪢 Keep');
@@ -247,7 +252,7 @@ void main() {
       await submit(tester, c);
 
       final us = c.entries.single.list as UserServer;
-      final reloaded = UserServer.fromJson(us.toJson());
+      final reloaded = _storageRoundTrip(us);
       expect(reloaded.name, '');
       final node = reloaded.nodes.single;
       expect(node, isA<TailscaleSpec>());

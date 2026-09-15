@@ -5,6 +5,7 @@ import '../services/ui_helpers.dart';
 import 'home/filter_widgets.dart' show NegateToggle;
 import '../services/l10n/locale_controller.dart';
 import '../widgets/safe_bottom.dart';
+import '../widgets/urltest_idle_hint.dart';
 
 /// §125 — полноэкранный редактор Направления роутинга. Идиома проекта
 /// ([custom_rule_edit_screen.dart], [dns_server_edit_screen.dart]):
@@ -158,18 +159,14 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
       auto: _autoEnabled
           ? DirectionAuto(
               url: _autoUrlCtrl.text.trim(),
-              interval: _autoIntervalCtrl.text.trim().isEmpty
-                  ? '5m'
-                  : _autoIntervalCtrl.text.trim(),
+              interval: _autoIntervalValue,
               // §219/§221 — tolerance/pool/poolTolerance клэмпим ЗДЕСЬ (как в
               // DirectionAuto.toJson/copyWith): прямой конструктор не клэмпит,
               // иначе снапшот в памяти (для _isDirty) расходился бы с тем, что
               // реально персистится (uint16 [0,65535], pool≥1).
               tolerance: clampDirectionTolerance(
                   int.tryParse(_autoToleranceCtrl.text.trim()) ?? 50),
-              idleTimeout: _autoIdleCtrl.text.trim().isEmpty
-                  ? '30m'
-                  : _autoIdleCtrl.text.trim(),
+              idleTimeout: _autoIdleValue,
               interruptExistConnections: _autoInterrupt,
               // §208 — balancer (значимы только при round_robin, но храним всегда
               // — переключение режима не теряет настройки пула).
@@ -635,19 +632,15 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
                 ),
                 style: const TextStyle(fontSize: 13),
               ),
-              // §208 — advisory: interval > idle_timeout роняет старт ядра.
-              if (_intervalExceedsIdle()) ...[
+              // §442 — interval > idle_timeout: сохранить можно, санитайзер
+              // сборки поднимет idle_timeout до interval. Подсказка, а не
+              // ошибка — говорит, что окажется в конфиге.
+              if (urltestIdleRaiseTarget(_autoIntervalValue, _autoIdleValue)
+                  case final target?) ...[
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.warning_amber_rounded,
-                        size: 14, color: cs.error),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(getLocalText.s("Interval must be ≤ idle timeout"),
-                          style: TextStyle(fontSize: 11, color: cs.error)),
-                    ),
-                  ],
+                UrltestIdleRaiseHint(
+                  key: const ValueKey('direction-auto-idle-raise-hint'),
+                  target: target,
                 ),
               ],
               const SizedBox(height: 12),
@@ -843,43 +836,16 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
     }
   }
 
-  /// §208 — advisory: interval > idle_timeout (ядро роняет старт). true →
-  /// показываем предупреждение. Обе строки парсимы и interval строго больше.
-  bool _intervalExceedsIdle() {
-    final iv = _parseDuration(_autoIntervalCtrl.text.trim());
-    final idle = _parseDuration(_autoIdleCtrl.text.trim());
-    if (iv == null || idle == null) return false; // непарсимо → не мешаем
-    return iv > idle;
+  /// Значения полей автовыбора ровно такими, какими они уйдут в хранение:
+  /// пустое поле — умолчание формы.
+  String get _autoIntervalValue {
+    final v = _autoIntervalCtrl.text.trim();
+    return v.isEmpty ? '5m' : v;
   }
 
-  /// Минимальный парсер duration (`90s`/`5m`/`2h`/`1h30m` — простые суффиксы) →
-  /// секунды. null если не распознано. Не претендует на полноту Go time.Duration
-  /// — только для advisory-сравнения interval≤idle.
-  static int? _parseDuration(String s) {
-    if (s.isEmpty) return null;
-    final re = RegExp(r'(\d+)\s*([smhd])', caseSensitive: false);
-    final matches = re.allMatches(s);
-    if (matches.isEmpty) return null;
-    var total = 0;
-    for (final m in matches) {
-      final n = int.tryParse(m.group(1)!);
-      if (n == null) return null;
-      switch (m.group(2)!.toLowerCase()) {
-        case 's':
-          total += n;
-          break;
-        case 'm':
-          total += n * 60;
-          break;
-        case 'h':
-          total += n * 3600;
-          break;
-        case 'd':
-          total += n * 86400;
-          break;
-      }
-    }
-    return total;
+  String get _autoIdleValue {
+    final v = _autoIdleCtrl.text.trim();
+    return v.isEmpty ? '30m' : v;
   }
 
   static String? _firstMatch(List<String> tags, RegExp re) {

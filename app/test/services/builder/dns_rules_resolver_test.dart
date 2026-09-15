@@ -2,15 +2,18 @@
 //
 // Покрывает:
 // - resolveDnsRulesList: orphan cleanup, auto-discovery, persist на изменении,
-//   legacy-shape ignore (старые kind=user/rule + поле title silently dropped)
+//   legacy-shape (старые kind=user/rule + поле title) — наверх не отдаётся,
+//   в хранении остаётся (§439 A1)
 // - applyCustomDns: kind=inline / kind=template / kind=preset / kind=srs
 //   rendering, wizard-fields strip, enabled-skip, linear order
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
@@ -38,6 +41,28 @@ void main() {
     if (tmp.existsSync()) await tmp.delete(recursive: true);
   });
 
+  // Сырые записи `dns.rules` в файл хранения формы 1.0 — для форм, которые
+  // кодек не читает (репозиторий их не пишет).
+  void seedRawRules(List<Map<String, dynamic>> rules) {
+    File('${tmp.path}/lxbox_settings.json').writeAsStringSync(jsonEncode({
+      'storage_version': 1,
+      'dns': {'rules': rules},
+    }));
+  }
+
+  // Файл хранения формы 2.23.2 (`dns_options.rules`): его разбирает миграция
+  // в `_load` (§439).
+  void seedLegacyRules(List<Map<String, dynamic>> rules) {
+    File('${tmp.path}/lxbox_settings.json').writeAsStringSync(jsonEncode({
+      'dns_options': {'rules': rules},
+    }));
+  }
+
+  Future<List<dynamic>> rawRules() async {
+    final raw = await SettingsStorage.exportRaw();
+    return (raw['dns'] as Map)['rules'] as List;
+  }
+
   group('resolveDnsRulesList (§061 + §033)', () {
     test('первый запуск: storage пуст → preset перед template (default order)', () async {
       final templateRules = [
@@ -52,12 +77,9 @@ void main() {
       expect(resolved, hasLength(2));
       // Order: preset first (auto-discovery вставляет ПЕРЕД template-блоком),
       // потом template.
-      expect(resolved[0]['kind'], 'preset');
-      expect(resolved[0]['presetId'], 'ru-direct');
-      expect(resolved[0]['enabled'], true);
-      expect(resolved[1]['kind'], 'template');
-      expect(resolved[1]['name'], 'Default → Google DoH');
-      expect(resolved[1]['enabled'], true);
+      expect(resolved[0], const DnsRulePreset(presetId: 'ru-direct', enabled: true));
+      expect(resolved[1],
+          const DnsRuleTemplate(name: 'Default → Google DoH', enabled: true));
 
       final stored = await SettingsStorage.getDnsRulesList();
       expect(stored, hasLength(2));
@@ -66,8 +88,8 @@ void main() {
     test('новый preset post-install: вставляется ПЕРЕД первой template-записью', () async {
       // Stored: один template и один inline (user)
       await SettingsStorage.saveDnsRulesList([
-        {'enabled': true, 'kind': 'inline', 'name': 'My U', 'rule': {'server': 'u'}},
-        {'enabled': true, 'kind': 'template', 'name': 'T1'},
+        const DnsRuleInline(name: 'My U', rule: {'server': 'u'}),
+        const DnsRuleTemplate(name: 'T1', enabled: true),
       ]);
 
       final resolved = await resolveDnsRulesList(
@@ -79,18 +101,16 @@ void main() {
 
       // Ожидаем: [inline, NEW_PRESET, T1] — preset вставлен ПЕРЕД template.
       expect(resolved, hasLength(3));
-      expect(resolved[0]['kind'], 'inline');
-      expect(resolved[1]['kind'], 'preset');
-      expect(resolved[1]['presetId'], 'new-preset-id');
-      expect(resolved[2]['kind'], 'template');
-      expect(resolved[2]['name'], 'T1');
+      expect(resolved[0], isA<DnsRuleInline>());
+      expect((resolved[1] as DnsRulePreset).presetId, 'new-preset-id');
+      expect((resolved[2] as DnsRuleTemplate).name, 'T1');
     });
 
     test('orphan cleanup: kind=template/preset с unknown identifier выбрасываются', () async {
       await SettingsStorage.saveDnsRulesList([
-        {'enabled': true, 'kind': 'template', 'name': 'Orphan template'},
-        {'enabled': true, 'kind': 'preset', 'presetId': 'orphan-preset'},
-        {'enabled': true, 'kind': 'inline', 'name': 'My user', 'rule': {'server': 'cf'}},
+        const DnsRuleTemplate(name: 'Orphan template', enabled: true),
+        const DnsRulePreset(presetId: 'orphan-preset', enabled: true),
+        const DnsRuleInline(name: 'My user', rule: {'server': 'cf'}),
       ]);
 
       final resolved = await resolveDnsRulesList(
@@ -99,26 +119,22 @@ void main() {
       );
 
       expect(resolved, hasLength(1));
-      expect(resolved.single['kind'], 'inline');
-      expect(resolved.single['name'], 'My user');
+      expect((resolved.single as DnsRuleInline).name, 'My user');
     });
 
     test('inline и srs всегда сохраняются, даже без template/preset', () async {
       await SettingsStorage.saveDnsRulesList([
-        {
-          'enabled': false,
-          'kind': 'inline',
-          'name': 'Disabled inline',
-          'rule': {'rule_set': 'foo', 'server': 'bar'},
-        },
-        {
-          'enabled': true,
-          'kind': 'srs',
-          'id': 'ds_123',
-          'name': 'CN sites',
-          'srsUrl': 'https://example.com/cn.srs',
-          'server': 'cf_doh',
-        },
+        const DnsRuleInline(
+          name: 'Disabled inline',
+          rule: {'rule_set': 'foo', 'server': 'bar'},
+          enabled: false,
+        ),
+        const DnsRuleSrs(
+          id: 'ds_123',
+          name: 'CN sites',
+          srsUrl: 'https://example.com/cn.srs',
+          server: 'cf_doh',
+        ),
       ]);
 
       final resolved = await resolveDnsRulesList(
@@ -127,15 +143,15 @@ void main() {
       );
 
       expect(resolved, hasLength(2));
-      expect(resolved[0]['kind'], 'inline');
-      expect(resolved[1]['kind'], 'srs');
+      expect(resolved[0], isA<DnsRuleInline>());
+      expect(resolved[1], isA<DnsRuleSrs>());
     });
 
     test('reorder сохраняется: stored entries в storage-order, новые в правильных местах', () async {
       // Юзер уже видел template, перетащил выше preset
       await SettingsStorage.saveDnsRulesList([
-        {'enabled': true, 'kind': 'template', 'name': 'A'},
-        {'enabled': true, 'kind': 'preset', 'presetId': 'p-id'},
+        const DnsRuleTemplate(name: 'A', enabled: true),
+        const DnsRulePreset(presetId: 'p-id', enabled: true),
       ]);
 
       final resolved = await resolveDnsRulesList(
@@ -151,14 +167,10 @@ void main() {
       // §117 (решение №6): kind:preset записи — атомарная mirror-группа,
       // компактятся к позиции первой → p-id подтягивается к new-p-id,
       // standalone A не может стоять внутри группы. NEW — в конец.
-      expect(resolved[0]['kind'], 'preset');
-      expect(resolved[0]['presetId'], 'new-p-id');
-      expect(resolved[1]['kind'], 'preset');
-      expect(resolved[1]['presetId'], 'p-id');
-      expect(resolved[2]['kind'], 'template');
-      expect(resolved[2]['name'], 'A');
-      expect(resolved[3]['kind'], 'template');
-      expect(resolved[3]['name'], 'NEW');
+      expect((resolved[0] as DnsRulePreset).presetId, 'new-p-id');
+      expect((resolved[1] as DnsRulePreset).presetId, 'p-id');
+      expect((resolved[2] as DnsRuleTemplate).name, 'A');
+      expect((resolved[3] as DnsRuleTemplate).name, 'NEW');
     });
 
     test('enabled_default: false → новый template-default добавляется выключенным', () async {
@@ -170,46 +182,51 @@ void main() {
       );
 
       expect(resolved, hasLength(1));
-      expect(resolved.single['enabled'], false);
+      expect(resolved.single.enabled, false);
     });
   });
 
-  group('§033 legacy ignore (no migration)', () {
-    test('legacy kind=user silently dropped', () async {
-      await SettingsStorage.saveDnsRulesList([
-        {'enabled': true, 'kind': 'user', 'title': 'Legacy user', 'rule': {'server': 'cf'}},
-      ]);
+  group('§033 запись, которую кодек не читает: наверх не отдаётся, в хранении остаётся', () {
+    test('legacy kind=user', () async {
+      final legacy = {
+        'enabled': true,
+        'kind': 'user',
+        'title': 'Legacy user',
+        'rule': {'server': 'cf'},
+      };
+      seedRawRules([legacy]);
 
       final resolved = await resolveDnsRulesList(
         templateRules: const [],
         activePresetIdsWithDnsRule: const {},
       );
 
-      expect(resolved, isEmpty,
-          reason: 'kind=user не распознан → silently dropped');
+      expect(resolved, isEmpty, reason: 'kind=user не распознан');
+      expect(await rawRules(), [legacy]);
     });
 
-    test('legacy kind=rule silently dropped (orphan even with valid presetId)', () async {
-      await SettingsStorage.saveDnsRulesList([
-        {'enabled': true, 'kind': 'rule', 'presetId': 'ru-direct'},
-      ]);
+    test('legacy kind=rule (даже с валидным presetId)', () async {
+      final legacy = {'enabled': true, 'kind': 'rule', 'presetId': 'ru-direct'};
+      seedRawRules([legacy]);
 
       final resolved = await resolveDnsRulesList(
         templateRules: const [],
         activePresetIdsWithDnsRule: const {'ru-direct'},
       );
 
-      // kind=rule не распознан → запись отсеивается. Но auto-discovery видит
-      // что для presetId 'ru-direct' нет записи и создаёт fresh kind=preset.
-      expect(resolved, hasLength(1));
-      expect(resolved.single['kind'], 'preset');
-      expect(resolved.single['presetId'], 'ru-direct');
+      // kind=rule не распознан → наверх не отдаётся. Auto-discovery видит,
+      // что для presetId 'ru-direct' нет записи, и создаёт fresh kind=preset.
+      expect(resolved,
+          [const DnsRulePreset(presetId: 'ru-direct', enabled: true)]);
+      expect(await rawRules(), [
+        legacy,
+        {'kind': 'preset', 'ref': 'ru-direct', 'enabled': true},
+      ]);
     });
 
-    test('legacy template с title (не name) → orphan, но auto-discovery восстанавливает', () async {
-      await SettingsStorage.saveDnsRulesList([
-        {'enabled': false, 'kind': 'template', 'title': 'Old default'},
-      ]);
+    test('legacy template с title (не name) → auto-discovery добавляет fresh', () async {
+      final legacy = {'enabled': false, 'kind': 'template', 'title': 'Old default'};
+      seedRawRules([legacy]);
 
       final resolved = await resolveDnsRulesList(
         templateRules: [
@@ -218,20 +235,22 @@ void main() {
         activePresetIdsWithDnsRule: const {},
       );
 
-      // Legacy запись имеет title не name → не распознан → дропнут.
+      // Legacy запись имеет title не name → не распознана.
       // Auto-discovery создаёт fresh с enabled_default=true (юзер потерял
       // свой OFF-toggle, ожидаемо при no-migration policy).
-      expect(resolved, hasLength(1));
-      expect(resolved.single['kind'], 'template');
-      expect(resolved.single['name'], 'Old default');
-      expect(resolved.single['enabled'], true);
+      expect(resolved,
+          [const DnsRuleTemplate(name: 'Old default', enabled: true)]);
+      expect(await rawRules(), [
+        legacy,
+        {'kind': 'template', 'name': 'Old default', 'enabled': true},
+      ]);
     });
   });
 
   group('applyCustomDns (§033)', () {
     test('kind=template: copy without name/enabled_default wizard fields', () async {
       await SettingsStorage.saveDnsRulesList([
-        {'enabled': true, 'kind': 'template', 'name': 'Default → Google'},
+        const DnsRuleTemplate(name: 'Default → Google', enabled: true),
       ]);
 
       final config = <String, dynamic>{};
@@ -254,12 +273,10 @@ void main() {
 
     test('kind=inline: rule body берётся из самой записи', () async {
       await SettingsStorage.saveDnsRulesList([
-        {
-          'enabled': true,
-          'kind': 'inline',
-          'name': 'My CF',
-          'rule': {'domain_suffix': ['example.com'], 'server': 'cloudflare_doh'},
-        },
+        const DnsRuleInline(
+          name: 'My CF',
+          rule: {'domain_suffix': ['example.com'], 'server': 'cloudflare_doh'},
+        ),
       ]);
 
       final config = <String, dynamic>{};
@@ -273,7 +290,7 @@ void main() {
 
     test('kind=preset: body из extraDnsRulesByPresetId', () async {
       await SettingsStorage.saveDnsRulesList([
-        {'enabled': true, 'kind': 'preset', 'presetId': 'ru-direct'},
+        const DnsRulePreset(presetId: 'ru-direct', enabled: true),
       ]);
 
       final config = <String, dynamic>{};
@@ -300,14 +317,12 @@ void main() {
 
     test('kind=srs: cached path резолвится → rule_set добавляется в route + DNS rule эмитится', () async {
       await SettingsStorage.saveDnsRulesList([
-        {
-          'enabled': true,
-          'kind': 'srs',
-          'id': 'ds_test',
-          'name': 'CN sites',
-          'srsUrl': 'https://example.com/cn.srs',
-          'server': 'cloudflare_doh',
-        },
+        const DnsRuleSrs(
+          id: 'ds_test',
+          name: 'CN sites',
+          srsUrl: 'https://example.com/cn.srs',
+          server: 'cloudflare_doh',
+        ),
       ]);
 
       final config = <String, dynamic>{};
@@ -329,16 +344,49 @@ void main() {
       ]);
     });
 
+    test(
+        '§439 A1: inline без ключа enabled и srs формы §294 (server и условия '
+        'в body) из файла 2.23.2 эмитятся', () async {
+      seedLegacyRules([
+        {
+          'kind': 'inline',
+          'name': 'Local',
+          'rule': {'domain_suffix': ['lan'], 'server': 'local'},
+        },
+        {
+          'kind': 'srs',
+          'id': 'ds_body',
+          'name': 'Body form',
+          'body': {'server': 'cloudflare_doh', 'query_type': ['A']},
+        },
+      ]);
+
+      final config = <String, dynamic>{};
+      await applyCustomDns(
+        config,
+        {'servers': [], 'rules': []},
+        dnsSrsCachedPaths: const {'ds_body': '/tmp/body.srs'},
+      );
+
+      final dns = config['dns'] as Map<String, dynamic>;
+      expect(dns['rules'], [
+        {'domain_suffix': ['lan'], 'server': 'local'},
+        {
+          'rule_set': 'Body form',
+          'server': 'cloudflare_doh',
+          'query_type': ['A'],
+        },
+      ]);
+    });
+
     test('kind=srs без cached path: silently skip', () async {
       await SettingsStorage.saveDnsRulesList([
-        {
-          'enabled': true,
-          'kind': 'srs',
-          'id': 'ds_test',
-          'name': 'CN sites',
-          'srsUrl': 'https://example.com/cn.srs',
-          'server': 'cloudflare_doh',
-        },
+        const DnsRuleSrs(
+          id: 'ds_test',
+          name: 'CN sites',
+          srsUrl: 'https://example.com/cn.srs',
+          server: 'cloudflare_doh',
+        ),
       ]);
 
       final config = <String, dynamic>{};
@@ -355,18 +403,8 @@ void main() {
 
     test('enabled=false: правило пропускается', () async {
       await SettingsStorage.saveDnsRulesList([
-        {
-          'enabled': false,
-          'kind': 'inline',
-          'name': 'Off',
-          'rule': {'server': 'x'},
-        },
-        {
-          'enabled': true,
-          'kind': 'inline',
-          'name': 'On',
-          'rule': {'server': 'y'},
-        },
+        const DnsRuleInline(name: 'Off', rule: {'server': 'x'}, enabled: false),
+        const DnsRuleInline(name: 'On', rule: {'server': 'y'}),
       ]);
 
       final config = <String, dynamic>{};
@@ -380,9 +418,9 @@ void main() {
 
     test('linear order: storage порядок == финальный dns.rules порядок', () async {
       await SettingsStorage.saveDnsRulesList([
-        {'enabled': true, 'kind': 'preset', 'presetId': 'p-id'},
-        {'enabled': true, 'kind': 'inline', 'name': 'U', 'rule': {'server': 'u'}},
-        {'enabled': true, 'kind': 'template', 'name': 'T'},
+        const DnsRulePreset(presetId: 'p-id', enabled: true),
+        const DnsRuleInline(name: 'U', rule: {'server': 'u'}),
+        const DnsRuleTemplate(name: 'T', enabled: true),
       ]);
 
       final config = <String, dynamic>{};

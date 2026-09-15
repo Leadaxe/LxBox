@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/direction.dart';
+import '../../../models/node_link.dart';
 import '../../../models/server_list.dart';
 import '../../../services/subscription/input_helpers.dart';
 import '../../../services/subscription/user_agent.dart';
-import '../../../widgets/detour_target_picker.dart' show detourDirectionDisplay;
+import '../../../widgets/detour_target_picker.dart' show detourLinkDisplay;
 import '../detour_mode.dart';
 import '../subscription_detail_format.dart';
 import '../../../services/l10n/locale_controller.dart';
@@ -65,7 +66,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
 
   /// §252 — разворот цели в цепочку хопов «как пакет пойдёт» (detourPathHops
   /// с controller'ом экрана). null → показываем один хоп (как раньше).
-  final List<String> Function(String stored)? detourPathHopsOf;
+  final List<String> Function(NodeLink stored)? detourPathHopsOf;
   final bool hasDetour;
   final DetourMode detourMode;
 
@@ -102,19 +103,16 @@ class SubscriptionSettingsTab extends StatelessWidget {
   final VoidCallback? onEditIdentityVerOs;
   final VoidCallback? onEditIdentityDeviceModel;
 
-  /// §248 — подпись override-цели: тег detour-Направления (или его auto-двойника)
-  /// → «⚙ <label>»; Направление не найден → сырой тег. Интра-омоним папки (bare-тег
-  /// собственного члена) побеждает Направление-тёзку — это ссылка на члена
-  /// (приоритет bareIndex в FolderDetourPlan), показываем как тег.
+  /// §248 — подпись override-цели: Направление → «⚙ <label>»; член своей
+  /// папки (пара с `id` папки) — его тег; прочая ссылка — тег (§439,
+  /// [detourLinkDisplay]).
   String _overrideDisplay() {
-    final stored = entry.overrideDetour;
     final list = entry.list;
-    if (folderMode && list is FolderServers) {
-      for (final m in list.members) {
-        if (m.node?.tag == stored) return stored;
-      }
-    }
-    return detourDirectionDisplay(stored, directions);
+    return detourLinkDisplay(
+      entry.overrideDetour,
+      directions: directions,
+      folder: folderMode && list is FolderServers ? list : null,
+    );
   }
 
   /// §252 — цепочка хопов цели по ходу пакета (или один хоп, если экран не

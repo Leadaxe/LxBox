@@ -7,6 +7,7 @@ import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/preset_on_change.dart';
+import '../../services/record_vars.dart';
 import '../../services/relative_time.dart';
 import '../../services/rule_set_downloader.dart';
 import '../../services/settings_storage.dart';
@@ -317,11 +318,10 @@ class CustomRuleEditController extends ChangeNotifier {
   Future<void> _loadDnsServerTags() async {
     final stored = await SettingsStorage.getDnsServers();
     final template = await TemplateLoader.load();
-    final tags = <String>{};
-    for (final s in stored) {
-      final tag = s['tag']?.toString();
-      if (tag != null && tag.isNotEmpty) tags.add(tag);
-    }
+    final tags = <String>{
+      for (final s in stored)
+        if (s.tag.isNotEmpty) s.tag,
+    };
     // §279 — typed DnsOptionsModel вместо raw-скана dns_options.servers.
     tags.addAll(template.dnsOptionsModel.servers.map((s) => s.tag));
     if (_disposed) return;
@@ -536,8 +536,33 @@ class CustomRuleEditController extends ChangeNotifier {
   }
 
   void setVarValue(String name, String val) {
-    _varsValues[name] = val;
+    _putVarValue(name, val);
     notifyListeners();
+  }
+
+  /// §441 (Н3/Н4) — запись значения переменной пресета: подрезанное;
+  /// пустое или равное умолчанию объявления снимает ключ (выбор умолчания —
+  /// сброс к шаблону). Имя без объявления (универсальная замена цели
+  /// `outbound`) пишется без сверки с умолчанием.
+  void _putVarValue(String name, String val) {
+    WizardVar? decl;
+    for (final v in preset?.vars ?? const <WizardVar>[]) {
+      if (v.name == name && !v.isRef) {
+        decl = v;
+        break;
+      }
+    }
+    final stored = recordVarValueToStore(
+      val,
+      decl == null
+          ? null
+          : RecordVarDecl(name: decl.name, defaultValue: decl.defaultValue),
+    );
+    if (stored == null) {
+      _varsValues.remove(name);
+    } else {
+      _varsValues[name] = stored;
+    }
   }
 
   /// §117: тоггл DNS-опции. Выбранный serverTag сохраняется при выключении
@@ -665,7 +690,7 @@ class CustomRuleEditController extends ChangeNotifier {
     }
 
     if (!val) {
-      _varsValues[v.name] = 'false';
+      _putVarValue(v.name, 'false');
       notifyListeners();
       _applyPresetOnChange(); // §266 — dns_enable вход формулы on_change
       return false;
@@ -677,7 +702,7 @@ class CustomRuleEditController extends ChangeNotifier {
     }).toList();
 
     if (controlled.isEmpty) {
-      _varsValues[v.name] = 'true';
+      _putVarValue(v.name, 'true');
       notifyListeners();
       _applyPresetOnChange(); // §266
       return false;
@@ -700,7 +725,7 @@ class CustomRuleEditController extends ChangeNotifier {
     if (_disposed) return false;
 
     if (missing.isEmpty) {
-      _varsValues[v.name] = 'true';
+      _putVarValue(v.name, 'true');
       _presetSrsPaths = {..._presetSrsPaths};
       notifyListeners();
       _applyPresetOnChange(); // §266
@@ -725,7 +750,7 @@ class CustomRuleEditController extends ChangeNotifier {
 
     _boolVarDownloading.remove(v.name);
     if (!anyFailed) {
-      _varsValues[v.name] = 'true';
+      _putVarValue(v.name, 'true');
       _presetSrsPaths = {..._presetSrsPaths, ...newPaths};
       _applyPresetOnChange(); // §266
     }
@@ -740,8 +765,8 @@ class CustomRuleEditController extends ChangeNotifier {
   ///
   /// §381 — `orderNum` (ось §370) переносится из `initial` во ВСЕ ветки:
   /// редактор позицию правила не меняет, а потеря номера читалась как две
-  /// разные жалобы. Без него `isDirty()` (сравнение json'ов) видел разницу по
-  /// ключу `num` ещё до первой правки — «Save changes?» на пустом выходе; а
+  /// разные жалобы. Без него `isDirty()` (равенство моделей) видел разницу по
+  /// `orderNum` ещё до первой правки — «Save changes?» на пустом выходе; а
   /// сохранённое правило уезжало в storage с `num == null` и при следующей
   /// загрузке экрана размечалось `markRuleOrder` заново от `kUserRuleNumStart`,
   /// то есть прыгало в начало пользовательской зоны.
@@ -823,17 +848,23 @@ class CustomRuleEditController extends ChangeNotifier {
     }
   }
 
+  /// Правило вида json равно по содержимому JSON; редактор считает правкой и
+  /// смену форматирования текста.
   bool isDirty() =>
-      jsonEncode(snapshot().toJson()) != jsonEncode(initial.toJson());
+      snapshot() != initial ||
+      (_kind == CustomRuleKind.json && jsonCtrl.text != initial.json);
 
   /// §225 — валиден ли текущий текст json-правила (для inline-хелпера в
   /// JsonSection и гейта Save). `null` = ок (нет ошибки), иначе краткое
   /// описание. Пустой ввод считается «ещё не заполнено» (ошибка), т.к.
   /// сохранять пустое json-правило смысла нет.
+  ///
+  /// §439 В2 — массив не сохраняется: запись правила держит один объект
+  /// sing-box, несколько правил заводятся отдельно.
   String? get jsonError {
     if (_kind != CustomRuleKind.json) return null;
     final text = jsonCtrl.text.trim();
-    if (text.isEmpty) return 'Enter a JSON object or array of objects.';
+    if (text.isEmpty) return 'Enter a JSON object.';
     final dynamic decoded;
     try {
       decoded = jsonDecode(text);
@@ -842,11 +873,10 @@ class CustomRuleEditController extends ChangeNotifier {
     }
     if (decoded is Map) return null;
     if (decoded is List) {
-      if (decoded.isEmpty) return 'Array is empty.';
-      if (decoded.every((e) => e is Map)) return null;
-      return 'Array must contain only rule objects.';
+      return getLocalText.s(
+          "One rule holds one JSON object. Add each object of the array as a separate rule.");
     }
-    return 'Expected an object or array of objects.';
+    return 'Expected a JSON object.';
   }
 }
 

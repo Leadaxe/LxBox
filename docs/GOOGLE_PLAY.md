@@ -86,7 +86,8 @@ needs and where it lives:
 | Play Console access | Users and permissions → the account is invited on L×Box with "Release to production, exclude devices, and use Play App Signing" and "Release apps to testing tracks"; nothing else |
 | Key | repository secret `PLAY_SERVICE_ACCOUNT_JSON`, the JSON key as is: `gh secret set PLAY_SERVICE_ACCOUNT_JSON < .keys/google-play-publisher.json`. The local copy lives in `.keys/`, which is git-ignored |
 | Track | repository variable `PLAY_TRACK`, default `production` |
-| Release status | repository variable `PLAY_RELEASE_STATUS`, default `draft`: the release appears in the console as a draft and a human presses Publish. `completed` sends it to review by itself: `gh variable set PLAY_RELEASE_STATUS -b completed` |
+| Which tags | release tags `vX.Y.Z` and hotfixes `vX.Y.Z-hotfixN`. Release candidates `vX.Y.Z-rc.N` are skipped: job `meta` sets `is_prerelease`, the GitHub release is still built |
+| Release status | repository variable `PLAY_RELEASE_STATUS`. The repository is set to `completed`: the release goes to Google's review by itself and is published once approved (requires Managed publishing to be off in the console). The YAML fallback is `draft` — delete the variable and the release lands as a draft for a human to publish |
 | Release notes | `fastlane/metadata/android/{en-US,ru}/changelogs/<versionCode>.txt` → Play locales `en-US`, `ru-RU`. The AAB carries the universal code (…0) while the files are named by the per-ABI codes (…1/…2), so the job takes the first of …0/…2/…1/…4 it finds. Over 500 characters fails the `checks` job on push |
 | Action | `r0adkll/upload-google-play`, pinned by commit — it receives the key |
 

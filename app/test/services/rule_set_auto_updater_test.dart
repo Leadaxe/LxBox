@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/preset_rule_set.dart';
@@ -116,44 +117,50 @@ void main() {
   });
 
   group('§366 TTL в модели правила', () {
-    test('дефолт — неделя, и он НЕ пишется в JSON', () {
+    test('дефолт — неделя, и он НЕ пишется в запись', () {
       final r = CustomRuleSrs(name: 'x', srsUrl: 'http://a/b.srs');
       expect(r.updateIntervalHours, kDefaultSrsTtlHours);
-      expect(r.toJson().containsKey('updateIntervalHours'), isFalse);
+      expect(ruleToRecord(r).containsKey('update_interval_hours'), isFalse);
     });
 
-    test('не-дефолтный TTL переживает round-trip', () {
+    test('не-дефолтный TTL переживает round-trip записи', () {
       final r = CustomRuleSrs(
           name: 'x', srsUrl: 'http://a/b.srs', updateIntervalHours: 720);
-      final back = CustomRuleSrs.fromJson(r.toJson());
+      final back = ruleFromRecord(ruleToRecord(r)).value! as CustomRuleSrs;
       expect(back.updateIntervalHours, 720);
     });
 
     test('0 (Never) сохраняется, а не подменяется дефолтом', () {
       final r = CustomRuleSrs(
           name: 'x', srsUrl: 'http://a/b.srs', updateIntervalHours: 0);
-      expect(r.toJson()['updateIntervalHours'], 0);
-      expect(CustomRuleSrs.fromJson(r.toJson()).updateIntervalHours, 0);
+      expect(ruleToRecord(r)['update_interval_hours'], 0);
+      expect(
+          (ruleFromRecord(ruleToRecord(r)).value! as CustomRuleSrs)
+              .updateIntervalHours,
+          0);
     });
 
-    test('старое правило без ключа читается как неделя', () {
-      final back = CustomRuleSrs.fromJson({
+    test('запись без ключа читается как неделя', () {
+      final back = ruleFromRecord({
+        'kind': 'srs',
         'id': 'abc',
         'name': 'old',
-        'kind': 'srs',
-        'srsUrl': 'http://a/b.srs',
-      });
+        'ref': 'http://a/b.srs',
+      }).value! as CustomRuleSrs;
       expect(back.updateIntervalHours, kDefaultSrsTtlHours);
     });
 
     test('мусор в поле → дефолт', () {
-      final back = CustomRuleSrs.fromJson({
-        'id': 'abc',
-        'name': 'bad',
-        'kind': 'srs',
-        'updateIntervalHours': -5,
-      });
-      expect(back.updateIntervalHours, kDefaultSrsTtlHours);
+      for (final bad in [-5, 'soon', true]) {
+        final back = ruleFromRecord({
+          'kind': 'srs',
+          'id': 'abc',
+          'name': 'bad',
+          'ref': 'http://a/b.srs',
+          'update_interval_hours': bad,
+        }).value! as CustomRuleSrs;
+        expect(back.updateIntervalHours, kDefaultSrsTtlHours, reason: '$bad');
+      }
     });
 
     test('copyWith сохраняет TTL, если его не передали', () {

@@ -16,6 +16,7 @@
 import '../../models/config_node.dart';
 import '../../models/direction.dart';
 import '../../models/source_chain.dart';
+import '../../services/builder/node_link_resolve.dart';
 import 'chain_hop_candidate.dart';
 
 /// Служебный тег шаблона, законный первой позицией: «первый хоп без прокси».
@@ -30,6 +31,11 @@ const String kChainBuiltinDirect = 'direct-out';
 ///
 /// [selfTag] исключается: ядро отвергает цепочку, содержащую саму себя.
 ///
+/// [pool] — пул ссылок (§439, `computeNodeLinkPool`): узел конфига получает
+/// свой адрес — пару `{id контейнера, сырой тег}` у узла папки или подписки,
+/// корневую ссылку у одиночного сервера. Без пула (или узел, которого в пуле
+/// нет) — корневая ссылка финальным тегом.
+///
 /// [chains] — ВЕСЬ список цепочек в порядке объявления. Стоящие НИЖЕ
 /// редактируемой помечаются [ChainHopCandidate.below]: сборка разрешает
 /// ссылку только вверх по списку, и форма обязана предупредить, а не дать
@@ -39,6 +45,7 @@ List<ChainHopCandidate> collectChainHopTargets({
   required List<Direction> directions,
   required List<SourceChain> chains,
   required String selfTag,
+  NodeLinkTargets? pool,
 }) {
   final seen = <String>{};
   final out = <ChainHopCandidate>[];
@@ -115,6 +122,7 @@ List<ChainHopCandidate> collectChainHopTargets({
       masqueVhttp: n.type == 'masque' ? (n.transportLabel ?? 'h3') : '',
       subline: _nodeSubline(n, isGroup: isGroup),
       offered: !isGroup,
+      link: pool?.linkOfFinal(n.tag),
     ));
   }
   nodes.sort((a, b) => a.tag.compareTo(b.tag));

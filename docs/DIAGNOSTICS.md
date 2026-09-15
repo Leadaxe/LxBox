@@ -62,7 +62,7 @@ Auth: `Authorization: Bearer $TOKEN` (the token is in `vars.debug_token`).
 |---|---|
 | `GET /ping` | A sanity check that needs no auth |
 | `GET /state` | A snapshot of HomeState: tunnel/group/active_node/traffic/last_delay/last_error |
-| `GET /state/storage` | The full `lxbox_settings.json` (sensitive values scrubbed) — vars / server_lists / custom_rules / dns_options / ping_options |
+| `GET /state/storage` | The full `lxbox_settings.json` (sensitive values scrubbed) — storage_version / vars / sources / rules / dns / ping_options (§439 form) |
 | `GET /state/subs` | Subscriptions (with `?reveal=true` — clear URLs) |
 | `GET /state/rules` | Custom rules plus the `srs_cached` / `srs_mtime` flags |
 | `GET /state/vpn` | auto_start / keep_on_exit / battery-optimisation status |

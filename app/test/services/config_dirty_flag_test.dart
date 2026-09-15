@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/services/config_dirty_check.dart';
 import 'package:lxbox/services/platform_channels.dart';
 import 'package:lxbox/services/settings_storage.dart';
@@ -120,7 +121,8 @@ void main() {
 
       SettingsStorage.configDirty = false;
       await SettingsStorage.saveDnsServers([
-        {'tag': 'local', 'address': '1.1.1.1'}
+        const DnsServerInline(
+            enabled: true, tag: 'local', body: {'type': 'udp', 'server': '1.1.1.1'}),
       ]);
       expect(SettingsStorage.configDirty, isTrue);
 

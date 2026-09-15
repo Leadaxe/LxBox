@@ -15,98 +15,62 @@ User state lives in `lxbox_settings.json`; the catalog of presets, vars and sect
 ```
 lxbox_settings.json                          # SettingsStorage (Dart), the main state file
 │
+├─ storage_version               int           §439 — the form of the document; 1 = contract 1.0 records.
+│                                                No key = the 2.23.2 form, migrated on the next _load()
+│
 ├─ vars                          object          template-vars override + app feature flags
 │   └─ <key>: string                           ─ e.g. log_level, dns_final, debug_token,
 │                                                auto_update_subs, last_known_version, ...
 │
-├─ server_lists[]                list          §033 — sealed (subscription / user / folder §234)
-│   └─ <ServerList>              object          discriminator: type
-│       ├─ type                  "subscription"|"user"|"folder"
-│       ├─ id                    uuid          stable
-│       ├─ name                  string        UI display
-│       ├─ enabled               bool
-│       ├─ tag_prefix            string        prefix for node tags
-│       ├─ detour_policy         object{5 keys}       {register_detour_servers, register_detour_in_auto,
-│       │                                       use_detour_servers, override_detour, replace_detour_chain}
-│       │                        — subscription only —
-│       ├─ url                   string?       the subscription URL
-│       ├─ meta                  object?         SubscriptionMeta from the HTTP headers (§027):
-│       │   ├─ upload_bytes / download_bytes / total_bytes  int?
-│       │   ├─ expire_timestamp  int?          unix seconds
-│       │   ├─ support_url / web_page_url      string?
-│       │   ├─ profile_title     string?
-│       │   └─ update_interval_hours           int?
-│       ├─ last_updated          ISO-8601?     on success
-│       ├─ last_update_attempt   ISO-8601?     any attempt
-│       ├─ last_update_status    "never"|"ok"|"failed"|"inProgress"
-│       ├─ update_interval_hours int           default 24; §129 special: -1=never, 0=respect server, N>0=every N h
-│       ├─ on_update_action      string?       §323 — reaction to an AUTO update: "rebuild" (default,
-│       │                                      key not written) | "reload" | "none"
-│       ├─ last_node_count       int
-│       ├─ consecutive_fails     int           for the UI's "(N fails)"
-│       ├─ disabled_hashes       map?          §283/§400 — {node identity: ISO-8601 lastSeen}; per-node disable.
-│       │                                      Identity = the provider's raw tag, made unique within the source
-│       │                                      (§332: one map for both manual and rule marks; Enable rules
-│       │                                       and the "Enable all" button clear them indiscriminately)
-│       ├─ identity              object?       §289 — per-sub override of the fetch identity (null=global);
-│       │                                      {user_agent?, send_hwid, hwid?, device_os?, ver_os?, device_model?}
-│       ├─ import_rules           list?         §302 — rules over a node's emit JSON (conditions → Disable/Replace/
-│       │                                      Enable §332; the last enable/disable that fires wins);
-│       │                                      [{conditions[], match?, action, target_path?, replacement?,
-│       │                                        replace_mode?, substitute?, enabled?}]; conditions[] =
-│       │                                      [{path, op, pattern, negate?, case_sensitive?}]; the legacy flat
-│       │                                      {action, pattern, …} is read by a migration (a condition on tag)
-│       ├─ import_rules_enabled   bool?         §302 — the set's toggle (written only when false; the default is on)
-│       │                        — user only —
-│       ├─ origin                "paste"|"file"|"qr"|"manual"
-│       ├─ created_at            ISO-8601
-│       ├─ raw_body              string        the original, for reparsing
-│       │                        — folder only (§234) —
-│       ├─ created_at            ISO-8601
-│       └─ members[]             list          {raw, enabled, detour?} — one fragment per member (member ↔ node 1:1; §237)
+├─ sources[]                     list          §439 — node sources, then chains, in the user's list order
+│   └─ <record>                  object          discriminator: kind (contract 1.0 record + LxBox fields)
+│       ├─ kind                  "subscription"|"server"|"folder"|"chain"
+│       │                        — subscription (SubscriptionServers) —
+│       ├─ id, name, enabled, url
+│       ├─ tag_policy            object?       {prefix} — the separator is part of the prefix ("PR ")
+│       ├─ identity              object?       §289 — per-sub fetch identity
+│       ├─ update                object        {interval_hours}
+│       ├─ disabled              map?          §283/§400 — {node identity: unix seconds}
+│       ├─ detour                NodeLink?     {folder_id?, tag} — the shared detour of the source
+│       ├─ detour_policy         object?       LxBox: the four flags, only when not default
+│       ├─ import_rules[], import_rules_enabled, on_update_action     LxBox (§302, §323)
+│       ├─ meta, last_updated, last_update_attempt, last_update_status,
+│       │  last_node_count, consecutive_fails                         LxBox runtime
+│       │                        — server (UserServer) —
+│       ├─ id, tag, enabled
+│       ├─ origin                object        {kind: uri|wg_ini|json, raw} — the original text, re-parsed on load
+│       ├─ detour                NodeLink?     personal detour of the server
+│       ├─ sections              object?       §435 — node sections
+│       ├─ detour_policy         object?       LxBox: flags, only when not default
+│       ├─ tag_policy            object?       LxBox: {prefix}, only when set
+│       │                        — folder (FolderServers, §234) —
+│       ├─ id, name, enabled, tag_policy?, detour?
+│       ├─ detour_policy?, ping_url?, ping_timeout_ms?, created_at    LxBox
+│       ├─ nodes[]               list          members in UI order:
+│       │   ├─ kind: server      {tag, enabled, origin, detour?, sections?}
+│       │   ├─ kind: unsupported {enabled, origin, reason, detour?, sections?} — text that does not parse
+│       │   └─ kind: auto        {tag, enabled, group{group_type, members[]?, strategy, members_rule?, pool_badge?}}
+│       │                        — chain (SourceChain, §393 C) —
+│       ├─ tag, enabled
+│       ├─ label                 string?       LxBox display name
+│       ├─ body                  object        {type: chain, idle_timeout?, strip_evasion?, strip?, rewrite?}
+│       └─ hops[]                list          NodeLinks in packet order
 │
-├─ custom_rules[]                list          §030 — sealed (inline / srs / preset)
-│   └─ <CustomRule>              object          discriminator: kind
+├─ rules[]                       list          §030/§439 — route rules, contract 1.0 records
+│   └─ <record>                  object          discriminator: kind
 │       ├─ kind                  "inline"|"srs"|"preset"
-│       ├─ id                    uuid
-│       ├─ name                  string        user-supplied (for a preset, a read-only snapshot)
-│       ├─ enabled               bool
-│       │                        — inline (CustomRuleInline) —
-│       ├─ domains[]             list?         OR group #1: domain (full match)
-│       ├─ domainSuffixes[]      list?         OR group #1: ".ru" etc.
-│       ├─ domainKeywords[]      list?         OR group #1: substring match
-│       ├─ ipCidrs[]             list?         OR group #1: "10.0.0.0/8"
-│       ├─ ports[]               list?         OR group #2: "443"
-│       ├─ portRanges[]          list?         OR group #2: "8000:9000"
-│       ├─ packages[]            list?         OR group #3: package_name
-│       ├─ protocols[]           list?         routing-rule level: bittorrent/tls/http/...
-│       ├─ ipIsPrivate           bool?         routing-rule level
-│       ├─ outbound              tag           "<outbound-tag>" or the "reject" sentinel
-│       ├─ dns                   object? {enabled, serverTag, forceIpv4?}  §117/§256 — a mirror DNS rule plus the AAAA suppressor
-│       ├─ resolve               object? {only, strategy, …}   §247 — the resolve option (route action resolve)
-│       │                        — srs (CustomRuleSrs) —
-│       ├─ srsUrl                string        the URL of the .srs binary
-│       ├─ ports / portRanges / packages / protocols / ipIsPrivate / outbound / dns
-│       │                        — preset (CustomRulePreset) —
-│       ├─ presetId              string        a reference to selectable_rules[].preset_id
-│       └─ varsValues            object          user vars overrides (including 'outbound')
+│       ├─ id, name, enabled, num?              num — §370 ordering axis
+│       ├─ body                  object?       the sing-box rule (inline, srs); outbound or action: reject
+│       ├─ verbatim              true?         inline only — body kept as is (the former kind json, §225)
+│       ├─ refs[]                list          srs — rule-set URLs (§434)
+│       ├─ update_interval_hours int?          srs — §366 TTL, only when not default
+│       ├─ ref, vars             string, object?  preset — preset_id and var overrides
+│       ├─ dns                   object?       §117/§256 — {enabled, serverTag, forceIpv4?}
+│       └─ resolve               object?       §247 — {only, strategy?, serverTag?, …}
 │
-├─ dns_options                   object          §061 (rules) + §043+§044 (servers)
-│   ├─ servers[]                 list          §044 kind-discriminated refs:
-│   │   └─ <DnsServerRef>        object
-│   │       ├─ kind              "template"|"preset"|"inline"
-│   │       ├─ enabled           bool
-│   │       ├─ tag               string        single source of truth (NOT duplicated in body)
-│   │       ├─ description       string?       an optional override; for inline it is primary
-│   │       └─ body              object?         inline only; a partial sing-box server
-│   │                                          WITHOUT tag/description/enabled
-│   ├─ rules[]                   list          §061 origin-discriminated:
-│   │   └─ <DnsRuleRef>          object
-│   │       ├─ enabled           bool
-│   │       ├─ type              "user"|"template"|"rule"
-│   │       ├─ title             string        display
-│   │       └─ rule              object?         the sing-box rule body (for type=user)
-│   └─ rules_json                string        DEPRECATED legacy single-string (§061)
+├─ dns                           object          §044/§061/§439 — DNS records
+│   ├─ servers[]                 list          {kind: user|preset|template, …}
+│   └─ rules[]                   list          {kind: user|preset|srs|template, …}
 │
 ├─ ping_options                  object          §040
 │   ├─ url                       string?       global default URL
@@ -118,7 +82,6 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ route_final                   string        override sing-box route.final
 ├─ route_idle_suspend            string        §215/§128 — idle-suspend threshold (route.lx_idle_suspend);
 │                                                a duration ("30s"/"5m"), default "30s" (ENABLED), "" = off; config-significant
-├─ excluded_nodes[]              list          §125 cleanup, DEPRECATED — the global node filter (§048) is gone; safe debris
 ├─ enabled_groups[]              list          §125 DEPRECATED — read only by the directions[] migration. Safe debris.
 ├─ directions[]                  list          §125 — routing directions (template→storage). See below.
 │   └─ <item>                    object
@@ -141,20 +104,8 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │           ├─ mode              string        §208 — 'least_test' (default) | 'round_robin'
 │           └─ balancer          object{3 keys}  §208 — {pool, pool_tolerance, sticky_hash[]}
 ├─ directions_migrated           bool          §125/§393 — the guard for the one-shot directions migration
-├─ chains[]                      list          §393 C — hop-chain sources (SPEC 110). See below.
-│   └─ <item>                    object
-│       ├─ tag                   string        the outbound tag = the record id; immutable; unique across chains AND directions
-│       ├─ label                 string        §405 — the display name ('' falls back to tag); only LxBox applies it, the launcher carries it silently
-│       ├─ enabled               bool          off = not emitted, not pooled (like a disabled subscription)
-│       ├─ hops[]                list          positions IN PACKET ORDER ([0] = first hop from the client); >= 2
-│       ├─ idle_timeout          string        duration; '' = the core default (5m), '0s' = until shutdown
-│       ├─ strip_evasion         bool?         TRISTATE: null = core default, false = explicitly off
-│       ├─ strip                 object        per-key patch over strip_evasion; keys from kChainStripKeys only
-│       ├─ rewrite               object        RFC 7396 merge-patch per outbound type; verbatim, not form-editable
-│       └─ order                 int           §393 D1 — index in the COMMON source list; -1 = unassigned (goes last)
 ├─ last_global_update            ISO-8601      the timestamp of the last auto-refresh
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
-├─ preset_ids_remapped           bool          §228 legacy guard (remapping renamed preset_id). The migration was removed in §229; the key is inert
 ├─ interrupt_connections_on_switch  bool       §143 — tear down the switched group's connections when the node changes (default false, NOT config-significant)
 ├─ node_sort_mode                string        §100 — the chosen node sort mode ('' means the template default)
 ├─ node_manual_order[]           list          §100 — the manual order of node tags (for mode=manual)
@@ -174,11 +125,11 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
     └─ memory_limit              string        default "auto" — §271: the core's memory limit
                                                  (auto|off|"200"|"384"|"512"|"768" MB)
 
-# §159 — none of the legacy keys (proxy_sources / app_rules / enabled_rules /
-# rule_outbounds / node_overrides / show_detour_servers / vars.auto_rebuild)
-# are processed any more: both the migrations and the DENY `.remove()` calls are
-# gone. If such a key is still on disk it is harmless (nothing reads it) and will
-# be dropped by the allowlist on the first backup import.
+# §439 — the 2.23.2 keys (server_lists / chains / custom_rules / dns_options) and the
+# keys with no readers (excluded_nodes / preset_ids_remapped / proxy_sources /
+# app_rules / enabled_rules / rule_outbounds / node_overrides / show_detour_servers /
+# vars.auto_rebuild; channels / channels_migrated are renamed) are converted or
+# removed by the storage migration, once. See "Storage form and migration" below.
 ```
 
 Every key is described in detail in the sections below.
@@ -190,6 +141,8 @@ Every path is relative to the **Android internal documents directory** (`getAppl
 ```
 getApplicationDocumentsDirectory()/         # Android: Context.getDir("flutter") = app_flutter/
 ├── lxbox_settings.json                     # [workspace]
+├── lxbox_settings.json.bak                 # [device] the previous file, written by _atomicSave
+├── lxbox_settings.json.v0.bak              # [device] §439 — the original 2.23.2-form file, copied once before the migration
 ├── rule_sets/                              # [workspace]
 │   ├── <ruleId>.srs
 │   └── <ruleId>.meta.json                  # §366 sidecar
@@ -197,6 +150,7 @@ getApplicationDocumentsDirectory()/         # Android: Context.getDir("flutter")
 ├── workspaces/                             # §417 — saved workspaces, one folder per name
 │   └── <name>/
 │       ├── lxbox_settings.json
+│       ├── lxbox_settings.json.v0.bak      # §439 — the slot's 2.23.2-form original, copied on its first Load
 │       ├── rule_sets/
 │       └── sub_cache/
 ├── support_state.json                      # [device] §356
@@ -221,7 +175,8 @@ Android SharedPreferences:
 |---|---|---|---|
 | `workspaces.json` | `WorkspaceStore` (Dart) | The workspace manifest: `current` (the name of the workspace on the working paths), `slots[]` (`name`, `saved_at`), `pending` (a journal of an unfinished load — replayed on the next start). Absent until the first Save as. | [§417] |
 | `workspaces/<name>/` | `WorkspaceStore` (Dart) | A saved workspace: a copy of `lxbox_settings.json`, `rule_sets/` and `sub_cache/`. Not `singbox_config.json` (rebuilt after a load) and not `cache.db` (open under a running core; the core rebuilds it). | [§417] |
-| `lxbox_settings.json` | `SettingsStorage` (Dart) | App settings, vars, server lists, custom rules, DNS, ping. **The main subject of this document.** | — |
+| `lxbox_settings.json` | `SettingsStorage` (Dart) | App settings, vars, sources, rules, DNS, ping. **The main subject of this document.** | — |
+| `lxbox_settings.json.v0.bak` | `SettingsStorage` (Dart) | §439 — the bytes of the 2.23.2-form file as they were before the storage migration. Written once (never overwritten), kept while the app is installed, not part of a workspace or a backup. `GET /backup/export?include=storage&from=v0_bak` returns it for downgrade tests. | [§439] |
 | `singbox_config.json` | `ConfigManager` (Kotlin) | The final sing-box JSON fed to libbox. Regenerated on every `buildConfig`. Not part of a backup. Lives in native `Context.filesDir` (`files/`), not in the documents dir — Dart reaches it via `BoxVpnClient.getFilesDir()` (§316/§414). | [§414] |
 | `sub_cache/<url.hashCode>` + `.headers` | `HttpCache` (Dart) | The raw body and headers of a subscription, for the offline rehydrate at startup. **The only persisted source of subscription nodes** — `nodes` is not stored, it is re-parsed from here on every launch. Lives in native `files/` (Dart App Support), not in the documents dir. | [§027], [§129] |
 | `rule_sets/<ruleId>.srs` + `.meta.json` | `RuleSetDownloader` (Dart) | A cache of binary `.srs` rule-set files plus the §366 sidecar (`lastUpdated`, `etag`, `lastError`). The config references them by absolute path; the core never downloads them itself. | [§011] |
@@ -235,18 +190,17 @@ Android SharedPreferences:
 
 ```jsonc
 {
+  "storage_version":    1,         // §439 — the form of the document (no key = the 2.23.2 form)
   "vars":               { … },     // Map<String,String>
-  "server_lists":       [ … ],     // subscription / user
-  "custom_rules":       [ … ],     // sealed: inline / srs / preset
-  "dns_options":        { … },     // rules + servers
+  "sources":            [ … ],     // §439 — subscription / server / folder records, then chain records
+  "rules":              [ … ],     // §439 — route rule records: inline / srs / preset
+  "dns":                { … },     // §439 — {servers[], rules[]} records
   "ping_options":       { … },
   "route_final":        "<tag>",   // override route.final
   "route_idle_suspend": "30s",     // §215/§128 — idle-suspend threshold (default "30s"; "" = off)
-  "excluded_nodes":     [ … ],     // §125 cleanup, DEPRECATED (the global node filter is gone)
   "enabled_groups":     [ … ],     // §125 DEPRECATED (read only by the directions[] migration)
   "directions":         [ … ],     // §125 — routing directions (template→storage)
   "directions_migrated": true,     // §125/§393 — the guard for the one-shot directions migration
-  "chains":             [ … ],     // §393 C — hop-chain sources (SPEC 110)
   "last_global_update": "ISO-8601",// the last auto-refresh of subscriptions
   "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
   "interrupt_connections_on_switch": false, // §143 — tear down the group's conns on a node switch (NOT config-significant)
@@ -261,9 +215,172 @@ Android SharedPreferences:
 }
 ```
 
-The in-memory cache is `SettingsStorage._cache` (lazily loaded). Writes are atomic through `JsonEncoder.withIndent('  ')`. §159 — on `_save()` nothing is removed any more: the DENY list and the migrations are gone, and the input filter is the allowlist on backup import.
+The in-memory cache is `SettingsStorage._cache` (lazily loaded). Writes are atomic through `JsonEncoder.withIndent('  ')`. §159 — on `_save()` nothing is removed: the input filter is the allowlist on backup import, and the only conversion of old keys is the storage migration inside `_load()` (§439, next section).
 
 The per-key specs and shapes are in the sections below.
+
+---
+
+## Storage form and migration (§439)
+
+`lxbox_settings.json` keeps node sources, chains, route rules and DNS records as
+**contract 1.0 records** — the same records the LX Backup 1.0 file carries
+(`contract/docs/ONE_NAMESPACE.md` §1, `BACKUP.md` §2). A record is the contract's
+fields plus LxBox fields next to them (`import_rules`, `detour_policy`, `ping_url`,
+`label`, `verbatim`, …). One codec reads and writes them for storage, the LX Backup,
+the rules file and the Debug API: `lib/models/codec/` (`source_record.dart`,
+`chain_record.dart`, `rule_record.dart`, `dns_record.dart`, `auto_group_record.dart`,
+`node_link_record.dart`; `lib/models/record_codec.dart` re-exports them). The key
+names live in `lib/services/settings_storage_keys.dart`.
+
+Layers (§439 §2.5): the file layer (`settings_storage.dart`, `storage_migration/`)
+reads and writes the document; the codec maps model ↔ record and is tolerant on
+read; models are immutable values; repositories (`settings_storage/<entity>.dart`)
+give typed get/save per entity and keep the invariants between records (the rule
+axis, DNS references, the node-link registry); everything above — the builder,
+screens, backup, Debug API — works on models only.
+
+**LX Backup 1.0 is a slice of these records** (`lib/services/lx_backup_slice.dart`, one
+table per record key). Contract fields travel. LxBox fields that are user settings
+travel too: contract 1.0.1 declares them in `BACKUP.md` §2 "LxBox-side fields"
+(`detour_policy`, `import_rules`, `import_rules_enabled`, `on_update_action` of a
+subscription; `detour_policy`, `tag_policy` of a server; `detour_policy`, `ping_url`,
+`ping_timeout_ms` of a folder; `label` of a chain; `group.members_rule`,
+`group.pool_badge` of an auto node; `update_interval_hours` of an srs rule; `verbatim`;
+`description` and `vars` of a DNS server). The launcher ignores them silently; the
+LxBox import applies them, and a file without such a field does not reset the value of
+a matching record. Runtime (`meta`, `last_*`, `consecutive_fails` of a subscription,
+`created_at` of a folder, the node cache) is cut silently. Named losses
+(`backup_local_only_dropped`) are left for a DNS rule of `kind: srs` and a JSON rule
+whose text never parsed (`verbatim` without `body`); `kind: template` DNS rules are not
+written. A key missing from the table is cut and named, so a new codec field
+cannot leave or get lost silently.
+
+### What changed against the 2.23.2 form
+
+| 2.23.2 | 2.23.3 |
+|---|---|
+| `server_lists[]` with `type: subscription\|user\|folder` | `sources[]` with `kind: subscription\|server\|folder` |
+| `chains[]` with `order` | `kind: chain` records at the tail of `sources[]`; the place is the record index |
+| `custom_rules[]`, matchers in camelCase (`domainSuffixes`, `srsUrl`, `presetId`, `varsValues`) | `rules[]`, `body` with sing-box keys, `refs[]`, `ref`, `vars` |
+| rule `kind: json` with the text in `json` | `kind: inline` + `verbatim: true`, the object in `body`; a JSON array is split into one record per object (`name`, `name #2`, …) |
+| `dns_options{servers[], rules[], rules_json}` | `dns{servers[], rules[]}`; `rules_json` removed |
+| DNS `kind: inline` with `rule` / `varValues` / preset `tag` | `kind: user` with `body` / `vars` / preset `ref: "<preset_id>:<tag>"` |
+| `tag_prefix: "PR"` | `tag_policy: {prefix: "PR "}` — one trailing space added on write, exactly one removed on read |
+| `raw_body` string of a server, `raw` of a folder member | `origin{kind: uri\|wg_ini\|json, raw}` plus `tag` of the parsed node |
+| `members[]` of a folder | `nodes[]` with `kind: server\|unsupported\|auto` |
+| folder member `raw: "autogroup://…"` | `kind: auto` record with `group{group_type: urltest, members[], strategy}` |
+| `disabled_hashes{identity: ISO-8601}` | `disabled{identity: unix seconds}` |
+| `detour_policy.override_detour`, member `detour`, chain `hops[]` — final config tags as strings | `detour` / `hops[]` as NodeLinks `{folder_id?, tag}` |
+| — | `storage_version: 1` |
+
+Not written any more: `name` of a server (empty since §243), `origin` of a server
+(`paste|file|qr|manual`, write-only diagnostics), `created_at` of a server.
+
+### Migration in `_load()`
+
+The marker is `storage_version`. A document without it, or with any of the 2.23.2
+keys (`server_lists`, `chains`, `custom_rules`, `dns_options`), or with a folder
+member `autogroup://…` (early 2.23.3 builds), is migrated inside `_load()`
+(`settings_storage/io.dart`) right after the main file or `.bak` is parsed. App
+start, a workspace load (`clearCache` → `_load`) and tests all pass through it.
+
+1. `presetIdByDnsServerTag` from the template; a template load error does not stop
+   the migration — preset DNS servers get `ref` = tag.
+2. `migrateStorageDoc` (`storage_migration/migrate_storage.dart`, a pure function):
+   the frozen 2.23.2 readers (`legacy_form_v0.dart`) → models → the record codec;
+   node references → NodeLinks (`migrate_node_links.dart`, below); `autogroup://`
+   members → `kind: auto` records (`migrateAutogroupMembers`); keys with no readers
+   removed; `channels`/`channels_migrated` renamed to `directions`/`directions_migrated`
+   when the new names are absent; `storage_version: 1`.
+3. A copy of the original bytes goes to `lxbox_settings.json.v0.bak` — only when there
+   is no copy yet (tmp + rename; the first original is never overwritten).
+4. The new document is written by `_atomicSave` (§072); `.bak` then holds the old file.
+5. One info line in AppLog; losses (unreadable records, unreadable json rules,
+   non-numeric ports, DNS shapes older than §044) as a warning with names.
+
+`configDirty` is not raised: the migration does not change `config.json`. The golden
+tests (`test/storage_migration/golden_config_test.dart`) build the config from two
+2.23.2 fixtures before and after the migration and compare bytes.
+
+| Crash | On disk | Next start |
+|---|---|---|
+| before step 3 | old file | migrates again |
+| between 3 and 4 | old file + `.v0.bak` | migrates again, the copy is kept |
+| inside the rename of step 4 | old or new file | migrates again, or nothing |
+| after step 4 | new file, `.bak` = old file | nothing; a broken main file restores `.bak` of the old form and migrates it |
+
+Idempotent: a document with `storage_version: 1` and no legacy keys is not touched.
+A document with both the version and 2.23.2 keys (2.23.2 installed over 2.23.3 data
+with `adb install -r -d`) keeps its `sources`/`rules`/`dns` records and drops the
+2.23.2 keys with a warning. A version higher than known is read as the current form,
+unknown top-level keys are kept, an error goes to AppLog.
+
+**Node references (`migrate_node_links.dart`).** Resolved against the state before
+the migration: a detour inside a folder onto the tag of an enabled member becomes a
+pair `{folder_id, tag}`; otherwise the final tag is looked up in a dictionary built
+by the same node assembly as the builder (prefixes, unique tags, subscription nodes
+from `sub_cache`); outside the dictionary the "prefix + tag" form is matched across
+containers when exactly one candidate exists. Targets on disabled sources (a disabled
+server, a member of a disabled folder, a node of a disabled subscription) are looked up
+by the tags the build would give them once enabled, so they are not dangling.
+Directions, `direct-out`, template service tags and chains stay root `{tag}`. Not found
+or ambiguous — root `{tag}` with a warning. A member's detour onto a neighbour written
+with the folder prefix (`EU de-1`, a hand edit) and the bare tag the 2.23.2 UI wrote
+(`de-1`) become the same pair; 2.23.2 did not count the prefixed form as a folder chain
+link (§239), so after the migration the neighbour leaves Direction groups by the
+folder's register flags (an accepted config difference, §439 §6.6). A personal detour
+onto the node itself and the edge that closed a ring inside a folder (2.23.2 did not
+emit them) are removed with a warning.
+
+**Autogroup members.** `RuleMembers` are kept; explicit members keyed by
+`protocol|server|port|credential` become pairs by the nodes of the same folder (among
+namesakes by key — the single enabled one). A key without a node, an ambiguous key, a
+node without a tag or with a namesake tag, unreadable group text — warning, the
+member is removed.
+
+### Workspaces (§417)
+
+A slot keeps its own copy of `lxbox_settings.json`. On Load, before the slot is copied
+onto the scene, `WorkspaceStore` copies a slot file without `storage_version` to
+`workspaces/<name>/lxbox_settings.json.v0.bak` (only when there is no copy); the scene
+then migrates in `_load()`. The copy is not in `kSlotEntries` and never reaches the
+scene. Sleeping slots are not migrated until loaded; Save as writes the new form.
+
+### Inputs of the old form
+
+| Input | Behaviour |
+|---|---|
+| `lxbox_settings.json` on disk | migration in `_load()` |
+| a workspace slot | migration on Load plus a `.v0.bak` copy in the slot folder |
+| internal backup (`app: lxbox`, `kind: backup`) from 2.23.2 or older | `BackupService` migrates the `storage` block before the category filter; the preview counts the migrated block |
+| Debug `POST /backup/import` with a `storage` block without `storage_version` | migrated; `applied.migrated: true` and `applied.migration {info, warnings}` in the response; node references use the same dictionary as `_load()` (below the table) |
+| LX Backup `lx_backup: 1` (0.x) | the legacy 0.x decoder, as before |
+| rules file `kind: rules`, `format: 1` (§396) | the frozen readers of `legacy_form_v0.dart`; export writes `format: 2` |
+| Debug `PUT /settings/dns_options/servers` and `/rules` | records only; the 2.23.2 kind refs and the pre-§043 full body → 400 with a sample record |
+
+The internal backup restore, `POST /backup/import` and `replaceRaw` migrate node
+references with the same dictionary as `_load()`: subscription bodies come from
+`sub_cache` (`SettingsStorage.subscriptionBodiesForMigration`). Without them a chain
+position on a subscription node stayed a root link, and the chain dropped out of the
+config.
+
+### Downgrade to 2.23.2
+
+Android does not install a lower versionCode over an installed app, and uninstalling
+removes the app data together with `.v0.bak`. For a user a downgrade is a clean
+2.23.2 plus a restore from a file.
+
+| Scenario | Result |
+|---|---|
+| clean 2.23.2 + internal backup made on 2.23.2 or older | restores as before |
+| clean 2.23.2 + internal backup made on 2.23.3 | the 2.23.2 allowlist drops `sources`, `rules`, `dns`, `storage_version`: no sources, chains, rules or DNS records; directions, `vars`, WARP accounts and modes survive |
+| clean 2.23.2 + LX Backup 1.0 or rules file `format: 2` | refused as newer than supported |
+| 2.23.2 over 2.23.3 data (`adb install -r -d`) | empty source list, no rules, DNS re-seeded from the template; 2.23.2 leaves the 2.23.3 keys in the file. Back on 2.23.3 the document has both the version and 2.23.2 keys: the 2.23.2 keys are dropped, the records stay |
+
+For test benches: `GET /backup/export?include=storage&from=v0_bak` returns `.v0.bak`
+(the state at migration) in the internal backup envelope, which 2.23.2 accepts through
+`POST /backup/import`. There is no UI button for it.
 
 ---
 
@@ -287,7 +404,7 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 | `debug_enabled` | `'false'` | [§031] | The runtime toggle for the Debug API server. |
 | `debug_token` | `''` | [§031] | The Bearer token for every `/api/*` call. |
 | `debug_port` | `'9269'` | [§031] | The TCP port. Range 1024–49151. |
-| `dns_final` | template | [§043][043-dns] | The final DNS resolver (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp`, or any tag from `dns_options.servers`). |
+| `dns_final` | template | [§043][043-dns] | The final DNS resolver (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp`, or any tag from `dns.servers`). |
 | `auto_record_wifi_history` | `'false'` | [§051] Phase 3 | The native `WifiNetworkObserver` pushes the current SSID/BSSID into `wifi_history` after more than 5 minutes on a network. Off by default, as a privacy default. The toggle is in App Settings → Diagnostics. |
 | `probe_ms_green` | `'250'` | §236 | Test servers (folders): the upper bound of the “green” latency, in ms. NOT a config var (it does not mark the config dirty). |
 | `probe_ms_yellow` | `'500'` | §236 | Test servers: the upper bound of the “yellow” latency, in ms. |
@@ -321,74 +438,82 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 
 ---
 
-## `server_lists` — [§033] (v2)
+## `sources` — [§033], §439: node sources and chains
 
-The list of node sources. It used to be `proxy_sources` (v1); §159 removed the migration and the legacy key is ignored.
+The list of sources in the order the user sees them: subscriptions, standalone servers
+and folders, then chains (see [`sources[]` — `kind: chain`](#chains--kind-chain-in-sources-393-c-spec-110)).
+Before §439 the same data lived under `server_lists` (sealed on `type`) and `chains`;
+the migration converts them once (see [Storage form and migration](#storage-form-and-migration-439)).
 
-Sealed on the `type` field:
+The discriminator is `kind`. The record is read by `sourceFromRecord` /
+`chainFromRecord` (`lib/models/codec/`). Reading is tolerant: a link given as a
+string is a root link, a record with `body` and no `origin` (the launcher's form) is
+read as a JSON outbound with the record's `tag`, unknown keys are collected by path,
+and anything read not verbatim (a record `tag` that differs from the parsed text, a
+dropped member or section record) is a note in AppLog. A record without `kind` or
+`id` is skipped.
 
-### `type: "subscription"` — `SubscriptionServers`
+The repositories: `settings_storage/sources_rules.dart` rewrites the part without
+chains (`saveServerLists`), `settings_storage/chains.dart` the chain part
+(`setChains`); neither touches the other part of the array.
+
+### `kind: "subscription"` — `SubscriptionServers`
 
 ```jsonc
 {
-  "type":                  "subscription",
+  "kind":                  "subscription",
   "id":                    "<uuid>",          // stable
   "name":                  "<display>",
   "enabled":               true,
-  "tag_prefix":            "<str>",           // the prefix for node tags at build time
-  "detour_policy":         { … },             // see below
   "url":                   "https://…",       // an online subscription. §129: a file
                                               // subscription becomes "file:<uuid>" (the
                                               // node snapshot lives in HttpCache under
                                               // that key; not a path, no access retained)
-  "meta":                  { … }?,            // SubscriptionMeta — HTTP-headers
-  "last_updated":          "ISO-8601"?,       // on success
-  "last_update_attempt":   "ISO-8601"?,       // any attempt
-  "last_update_status":    "never|ok|failed|inProgress",
-  "update_interval_hours": 24,                 // §129 special values: -1 = never
-                                               // (ignore the server header; set
-                                               // automatically for file: subscriptions),
-                                               // 0 = not on a schedule, but the server's
-                                               // interval is honoured, N>0 = every N h.
-                                               // AutoUpdater skips an interval ≤ 0.
-  "on_update_action":      "reload"?,          // §323 — what to do after a SUCCESSFUL
-                                               // auto update: "rebuild" (the default —
-                                               // rebuild the config, the user applies it),
-                                               // "reload" (plus an in-place core reload,
-                                               // a ~3 s gap), "none" (the node list only).
-                                               // The key is written ONLY for a non-default;
-                                               // absent or malformed means rebuild. The
-                                               // manual ⟳ is not governed by this.
-  "last_node_count":       0,
-  "consecutive_fails":     0,                 // for the UI's "(N fails)"; freezing is in-memory
-  "disabled_hashes": {                        // §283/§400 — per-node disable (optional; an
-    "NL-42": "2026-07-18T10:00:00Z"           // empty map is not written). The key is the
-  },                                          // node's IDENTITY (contract 0.10.0): the raw
-                                              // provider tag, made unique within the source
-                                              // (first X, then X-2, X-3; the counter is
-                                              // per-source, and the tag is taken BEFORE the
-                                              // subscription's tag_prefix, which the builder
-                                              // adds at emit time). A group node (§322) and a
-                                              // node with an empty tag have no identity and
-                                              // cannot be disabled per-node. Node content
-                                              // (server, port, credentials, SNI, transport) is
-                                              // NOT part of it: a provider rotating the address
-                                              // under the same name keeps the mark, while
-                                              // renaming the node loses it. A key that is 64
-                                              // lowercase hex is a legacy content hash written
-                                              // before §400: on the source's first parse it
-                                              // migrates onto the matching node's identity (or
-                                              // is dropped when no node matches) and the result
-                                              // is persisted at once. The value is lastSeen for
-                                              // the TTL GC (clamp(3×interval, 24 h, a month))
-                                              // on a successful refresh.
+  "tag_policy":            { "prefix": "PR " }, // written only when a prefix is set; the
+                                              // separator is part of the prefix (contract
+                                              // form). The model keeps "PR": one trailing
+                                              // space is added on write and exactly one is
+                                              // removed on read, so a prefix with spaces set
+                                              // through the Debug API survives.
   "identity": {                               // §289 — a per-sub override of the fetch
-    "user_agent": "MyPanel/1.0",              // identity. Optional: null or absent means
-    "send_hwid": true,                        // Default mode (the global SubscriptionIdentity).
+    "user_agent": "MyPanel/1.0",              // identity. Optional: absent means Default
+    "send_hwid": true,                        // mode (the global SubscriptionIdentity).
     "hwid": "550e8400-...",                   // An object means Custom mode: the fetch uses
     "device_os": "android",                   // ONLY these values. Empty strings (user_agent/
-    "ver_os": "14",                           // hwid/device_*) are not serialized. Enabled
-    "device_model": "Pixel 7"                 // the global ones; discarded on return to Default.
+    "ver_os": "14",                           // hwid/device_*) are not serialized.
+    "device_model": "Pixel 7"
+  },
+  "update": { "interval_hours": 24 },         // always written. §129 special values: -1 = never
+                                              // (ignore the server header; set automatically
+                                              // for file: subscriptions), 0 = not on a
+                                              // schedule, but the server's interval is
+                                              // honoured, N>0 = every N h. AutoUpdater skips
+                                              // an interval ≤ 0. Absent on read = 24.
+  "disabled": {                               // §283/§400 — per-node disable (not written when
+    "NL-42": 1784368800                       // empty). The key is the node's IDENTITY (contract
+  },                                          // 0.10.0): the raw provider tag, made unique within
+                                              // the source (first X, then X-2, X-3; the counter is
+                                              // per-source and shared with the source's groups,
+                                              // which take their names after all nodes; the tag
+                                              // is taken BEFORE tag_policy). A group node (§322)
+                                              // and a node with an empty tag have no identity and
+                                              // cannot be disabled per-node. Node content (server,
+                                              // port, credentials, SNI, transport) is NOT part of
+                                              // it: a provider rotating the address under the same
+                                              // name keeps the mark, renaming the node loses it.
+                                              // The value is lastSeen in unix seconds for the TTL
+                                              // GC (clamp(3×interval, 24 h, a month)) on a
+                                              // successful refresh. A key that is 64 lowercase hex
+                                              // is a legacy content hash written before §400: on
+                                              // the source's first parse it migrates onto the
+                                              // matching node's identity or is dropped.
+  "detour":                { "tag": "vpn-2" }, // the shared detour of the source, a NodeLink
+                                              // (see "Node references" below); absent = none
+  "detour_policy": {                          // LxBox. Written only when a flag differs from
+    "register_detour_servers": false,         // the default; see "detour_policy" below
+    "register_detour_in_auto": false,
+    "use_detour_servers":      true,
+    "replace_detour_chain":    false
   },
   "import_rules": [                           // §302 — rules over a node's emit JSON (not the body!).
     {                                         // Applied to ALREADY PARSED nodes, in order
@@ -409,57 +534,80 @@ Sealed on the `type` field:
       ],
       "action": "disable"                     // DISABLE marks the node → its identity (§400: the
     },                                        // tag, which a Replace patch does not touch) is put
-    {                                         // into disabled_hashes on every refresh (rule > TTL GC).
+    {                                         // into disabled on every refresh (rule > TTL GC).
       "conditions": [
         {"path": "", "op": "matches", "pattern": ".*"}
-      ],                                      // §332 — ENABLE clears the mark from disabled_hashes,
+      ],                                      // §332 — ENABLE clears the mark from disabled,
       "action": "enable"                      // INCLUDING a manual one (§283). Order matters: the
     }                                         // last enable/disable that fires wins, so an
   ],                                          // enable-everything first is a reset before new
                                               // filters, while disable-everything plus enable-NL
-                                              // is an allowlist. An older app version reads
-                                              // "enable" as a replace with no target → the rule
-                                              // is unusable and is skipped silently (nodes are
-                                              // left intact).
+                                              // is an allowlist.
                                               // The legacy flat {action, pattern, is_regex?, ...}
-                                              // is read by a migration as a condition on tag
-                                              // (replace gains substitute semantics); the first
-                                              // save rewrites it in the new format.
-  "import_rules_enabled": false               // §302 — the set's toggle; written ONLY when
-                                              // false (the default, true, means the set is on).
+                                              // is read as a condition on tag (replace gains
+                                              // substitute semantics); the first save rewrites it.
+  "import_rules_enabled": false,              // §302 — the set's toggle; written ONLY when false.
+  "on_update_action":      "reload",          // §323 — what to do after a SUCCESSFUL auto update:
+                                              // "rebuild" (the default, key not written), "reload"
+                                              // (plus an in-place core reload, a ~3 s gap), "none"
+                                              // (the node list only). The manual ⟳ is not governed
+                                              // by this.
+  // LxBox runtime of the machine — written only when not default:
+  "meta":                  { … },             // SubscriptionMeta from the HTTP headers, see below
+  "last_updated":          "ISO-8601",        // on success
+  "last_update_attempt":   "ISO-8601",        // any attempt
+  "last_update_status":    "ok",              // never|ok|failed|inProgress; "never" is not written
+  "last_node_count":       12,
+  "consecutive_fails":     0                  // for the UI's "(N fails)"; freezing is in-memory
 }
 ```
 
-### `type: "user"` — `UserServer`
+The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_cache/`
+(the raw body, §027/§129) on every launch.
+
+### `kind: "server"` — `UserServer`
 
 ```jsonc
 {
-  "type":          "user",
+  "kind":          "server",
   "id":            "<uuid>",
-  "name":          "<display>",
+  "tag":           "Tokyo",                   // the tag of the parsed node (the first one, when the
+                                              // text holds several — records before §368). Written for
+                                              // the contract; NOT applied on read: the node is re-parsed
+                                              // from origin.raw and the text wins, a mismatch is a note.
   "enabled":       true,
-  "tag_prefix":    "<str>",
-  "detour_policy": { … },
-  "origin":        "paste|file|qr|manual",
-  "created_at":    "ISO-8601",
-  "raw_body":      "<original input>",        // kept for reparsing when something goes wrong
-  "sections":      { … }                      // §435 — optional, see “Node sections” below
+  "origin":        { "kind": "uri", "raw": "vless://…#Tokyo" },
+                                              // the original input, byte for byte. kind is derived from
+                                              // the text: a JSON object → json, a WG INI → wg_ini,
+                                              // anything else → uri. The node is re-parsed from raw on load.
+  "detour":        { "tag": "vpn-2" },        // personal detour, a NodeLink; absent = none
+  "sections":      { … },                     // §435 — optional, see “Node sections” below
+  "detour_policy": { … },                     // LxBox, only when a flag is not default
+  "tag_policy":    { "prefix": "Home " }      // LxBox, only when set. The prefix is part of the
+                                              // server's root address: changing it rewrites the
+                                              // links that point at the server.
 }
 ```
 
+`name` (empty since §243), the `origin` of the model (`paste|file|qr|manual`) and
+`created_at` are not written.
+
 #### Node sections (§435, contract ## 13)
 
-A free node (a `type: user` entry or a folder member) may carry the config fragment it
+A free node (a `kind: server` record or a folder member) may carry the config fragment it
 needs — route rules and DNS records — in `sections`. The record form is the contract's
-target form (ONE_NAMESPACE.md §2): **record = app metadata + `body` = the sing-box object
-as is**. The `@self` / `@{self}` placeholders stay in storage verbatim; the final node tag
-is substituted at build time and when displayed.
+form (ONE_NAMESPACE.md §2): **record = app metadata + `body` = the sing-box object
+as is**, the same records as the root `rules[]` and `dns{}`. The `@self` / `@{self}`
+placeholders stay in storage verbatim; the final node tag is substituted at build time
+and when displayed.
 
 ```jsonc
 "sections": {
   "rules": [                                   // only kind inline | srs
     { "kind": "inline", "id": "<uuid>", "name": "@{self} network", "enabled": true, "num": 945,
-      "body": { "ip_cidr": ["100.64.0.0/10"], "outbound": "@self" } }
+      "body": { "domain_suffix": [".ts.net"],
+                "ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "outbound": "@self" },
+      "resolve": { "only": false, "serverTag": "@{self}-dns" } }
   ],
   "dns": {
     "servers": [                               // only kind user (tag in metadata, body without tag)
@@ -474,50 +622,90 @@ is substituted at build time and when displayed.
 }
 ```
 
+`resolve` (§437) is app metadata, not part of `body`: at build time it emits a
+non-terminal `action: resolve` rule with the node's own DNS server right before the route
+rule, so a name resolved to a FakeIP address still reaches the node and a UDP flow gets an
+address before routing.
+
 Empty sections are not written. A foreign `kind` inside a section is dropped on read
-(the rest of the records survive). `lib/models/node_sections.dart` holds the model,
-`lib/models/record_codec.dart` the record codec — the same code that will parse the root
-`custom_rules` / `dns_options` once storage moves to the contract 1.0 form. Sections are
-**not** exported to the LX Backup until contract 1.0 (the export names the loss with
-`backup_local_only_dropped`); a 0.12 file's `servers[].sections` is ignored silently.
+(the rest of the records survive). `lib/models/node_sections.dart` holds the model. The
+LX Backup (contract 1.0, `lx_backup: 2`, [§438]) carries them as `sources[].sections` of
+the node, in this same form. On import, records the section may not hold are dropped
+with `backup_section_record_dropped`, and a node matched by body takes the file's
+`sections` wholesale when the field is present. A legacy 0.12 file's `servers[].sections`
+is ignored silently.
 
-### `type: "folder"` — `FolderServers` (§234)
+### `kind: "folder"` — `FolderServers` (§234)
 
-A folder of manual servers: a container of members sharing one toggle, `tag_prefix` and
-`detour_policy`. A subscription cannot be put into a folder, and there is no nesting.
+A folder of manual servers: a container of members sharing one toggle, `tag_policy` and
+detour. A subscription cannot be put into a folder, and there is no nesting.
 
 ```jsonc
 {
-  "type":          "folder",
-  "id":            "<uuid>",
-  "name":          "<display>",
-  "enabled":       true,                        // the toggle for the whole folder
-  "tag_prefix":    "<str>",
-  "detour_policy": { … },
-  "created_at":    "ISO-8601",
-  "ping_url":         "<url>",                  // §284 — an optional override of the test URL
-  "ping_timeout_ms":  3000,                     // §284 — an optional override of the timeout
-  "members": [                                  // the order here is the order in the UI
-    { "raw": "vless://…#Alpha", "enabled": true,
-      "detour": "Jump" },                            // §237 — a personal detour (optional)
-    { "raw": "wg://…#Beta",     "enabled": false },  // per-member toggle
-    { "raw": "{\"type\":\"tailscale\",…}", "enabled": true,
-      "sections": { … } }                            // §435 — node sections (optional), same form as for `type: user`
+  "kind":            "folder",
+  "id":              "<uuid>",
+  "name":            "<display>",
+  "enabled":         true,                      // the toggle for the whole folder
+  "tag_policy":      { "prefix": "F " },
+  "detour":          { "tag": "vpn-2" },        // the folder's shared detour, a NodeLink
+  "detour_policy":   { … },                     // LxBox, only when not default
+  "ping_url":        "<url>",                   // LxBox, §284 — an optional override of the test URL
+  "ping_timeout_ms": 3000,                      // LxBox, §284 — an optional override of the timeout
+  "created_at":      "ISO-8601",                // LxBox; returned by Debug API /folders
+  "nodes": [                                    // the order here is the order in the UI
+    { "kind": "server", "tag": "Alpha", "enabled": true,
+      "origin": { "kind": "uri", "raw": "vless://…#Alpha" },
+      "detour": { "folder_id": "<this folder id>", "tag": "Jump" } },  // §237 — personal detour
+    { "kind": "server", "tag": "Beta", "enabled": false,
+      "origin": { "kind": "wg_ini", "raw": "[Interface]\n…" } },       // per-member toggle
+    { "kind": "unsupported", "enabled": true,
+      "origin": { "kind": "uri", "raw": "foo://…" },
+      "reason": "the member text does not parse into a node" },         // visible in the UI, editable
+    { "kind": "server", "tag": "ts", "enabled": true,
+      "origin": { "kind": "json", "raw": "{\"type\":\"tailscale\",…}" },
+      "sections": { … } },                                               // §435 — node sections
+    { "kind": "auto", "tag": "Auto", "enabled": true,                    // §322 — autoselect node
+      "group": {
+        "group_type": "urltest",
+        "members": [ { "folder_id": "<this folder id>", "tag": "Alpha" } ],
+        "strategy": { "mode": "least_test", "url": "…", "interval": "15m", "tolerance": 50,
+                      "idle_timeout": "30m", "interrupt_exist_connections": false },
+        "pool_badge": "…" } }                                            // LxBox, inside group, only when not default
   ]
 }
 ```
 
 `ping_url` and `ping_timeout_ms` (§284) are **the folder's own test options**, and they
 override the global `ping_options` when Test is pressed inside the folder. When absent,
-the global value is used. They are stored in the folder object, so they travel with a
-backup automatically. The “WARP GENERATOR” folder puts an IP URL here
+the global value is used. The “WARP GENERATOR” folder puts an IP URL here
 (`1.1.1.1/cdn-cgi/trace`) — a test by IP, with no DNS.
 
-`raw` is a self-contained parseable fragment (a URI, a WG INI or an outbound JSON);
-the nodes are reconstructed by re-parsing each `raw` on load (just like `raw_body` for a
-user list). In memory `nodes` holds only the enabled members, so the builder needs no
-folder-specific branching. A malformed `raw` yields a member with no node (visible in the
-UI, and editable or removable).
+A member's `origin.raw` is a self-contained parseable fragment (a URI, a WG INI or an
+outbound JSON); the nodes are reconstructed by re-parsing each text on load, as for a
+server. On read the member `kind` does not decide anything (`server` and `unsupported`
+read the same way: the text wins). In memory `nodes` holds only the enabled members, so
+the builder needs no folder-specific branching.
+
+**`kind: auto`** (§322, §439 track N2) — an autoselect node inside the folder.
+`group.group_type` is always `urltest` on write; `strategy` has the shape of a
+direction's `auto` (`$defs/directionAuto`: `mode`, `url`, `interval`, `tolerance`,
+`idle_timeout`, `interrupt_exist_connections`, and `pool` / `pool_tolerance` /
+`sticky_hash` for `round_robin` or when not default; an empty sticky list is written as
+`["none"]`). Explicit membership is `group.members[]` — NodeLink pairs onto members of
+the same folder. Membership by rule is `group.members_rule: {include, exclude}`
+(regexes, not links); such a group has no `members`. `members_rule` and `pool_badge`
+are LxBox-side fields inside `group` (contract 1.0.1, `BACKUP.md` §2); early 2.23.3
+builds wrote them next to `group`, and that form is still read silently (`group` wins).
+A non-empty `group.members` wins over `members_rule`. Tolerant read: a member `{tag}`
+becomes a pair with the folder's id; `default` as a string becomes a pair when exactly
+one member has that tag (a LxBox urltest group has no `default`, it is named as a loss);
+`selector` is read as `urltest`, and the LX Backup import names it
+`backup_group_degraded`. Before §439 the group was stored as the member text
+`autogroup://…`; the migration converts it, and the URI form is gone. An `autogroup://`
+member of a legacy 0.x backup file is imported as a group by the same conversion
+(`storage_migration/legacy_autogroup.dart`); a key that matches no member (or several
+enabled ones) is removed from the group with `backup_group_degraded`.
+A folder member of `kind: chain` is not supported and is dropped with a note.
 
 ### `detour_policy` (shared)
 
@@ -526,10 +714,48 @@ UI, and editable or removable).
   "register_detour_servers":  false,
   "register_detour_in_auto":  false,
   "use_detour_servers":       true,
-  "override_detour":          "",              // '' = no override
-  "replace_detour_chain":     false            // §178 — false appends the override as a tail, true replaces the whole chain
+  "replace_detour_chain":     false            // §178 — false appends the detour as a tail, true replaces the whole chain
 }
 ```
+
+Written only when a flag differs from the default. The detour target itself is the
+record's `detour` (a NodeLink), the model field `DetourPolicy.overrideDetour`.
+
+### Node references — NodeLink (§439, D-112)
+
+A reference to a node is `{folder_id?, tag}` (`lib/models/node_link.dart`,
+`contract/docs/NODE_LINK.md`), never a final config tag. Carriers: `detour` of a
+subscription, server or folder (`DetourPolicy.overrideDetour`), `detour` of a folder
+member (`FolderMember.detour`), `hops[]` of a chain (`SourceChain.hops`) and
+`group.members[]` of a `kind: auto` member.
+
+| Target | Link |
+|---|---|
+| a folder member | `{folder_id: <folder id>, tag: <raw tag before tag_policy>}` |
+| a subscription node or a subscription group | `{folder_id: <subscription id>, tag: <raw tag>}` |
+| a standalone server | `{tag: <its final tag>}` |
+| a direction, `direct-out`, a template service tag, another chain | `{tag}` |
+
+- **Resolve** only at build, in a second pass once every source has final tags
+  (`services/builder/node_link_resolve.dart`): `byFolder[id][raw tag]` for folders and
+  subscriptions, root nodes, root names (directions and their `-auto`, service outbounds,
+  chains). Screens build the same pool (`node_link_pool.dart`) to show final tags.
+- **Fail-closed.** A detour that does not resolve, points at the node itself, or loops
+  drops its carrier from the config with a warning, and the drop cascades to nodes that
+  went through it; it never becomes a direct connection. A chain position that does not
+  resolve drops the whole chain.
+- **The registry** (`settings_storage/node_link_registry.dart`, one for all carriers):
+  a rename (body edit), a move between containers, moving out of a folder, dissolving a
+  folder, reordering namesakes and a change of a standalone server's prefix **rewrite**
+  the links; deleting a node or a whole source **clears** them (the detour is removed,
+  the position leaves the chain, the member leaves the auto node) and the Servers screen
+  names the affected sources, chains and auto nodes in one SnackBar, group members
+  counted apart from detours. A change of a folder's `tag_policy` or name does not
+  change any address.
+- **Tolerant read** on foreign inputs (the LX Backup import, the Debug API): S1 — a root
+  `{tag}` inside a container onto its member becomes a pair; S3 — a pair carrying a
+  group's final tag becomes its raw tag when exactly one candidate exists. Storage does
+  not apply them: a root link onto a namesake of a member is legal.
 
 ### `meta` (optional)
 
@@ -548,27 +774,27 @@ From the subscription's HTTP headers ([§027]):
 }
 ```
 
-The `nodes` array is **not stored** — it is reconstructed at startup from `raw_body` (for a `user` list) or from `http_cache/` (for a `subscription`).
-
 ---
 
-## `custom_rules` — [§030] sealed (inline / srs / preset)
+## `rules` — [§030], §439: route rules (inline / srs / preset)
 
-The discriminator is `kind`. For backward compatibility, a JSON object without `kind` is read as `inline`.
+Contract 1.0 records: metadata plus `body` — the sing-box rule as is. Before §439 the
+list was `custom_rules` with camelCase matcher keys. Codec: `ruleToRecord` /
+`ruleFromRecord` (`lib/models/codec/rule_record.dart`); on the storage path an inline
+record whose body the model cannot express is read as a verbatim rule, not truncated.
+Strings (`id`, `name`) are not trimmed: the name of an srs rule is the `rule_set` tag in
+the config.
 
 **The shared `num` field ([§370])** is the rule's position on a sparse ordering axis.
-All four kinds carry it (written next to `kind`). The layout: `0` is the head
-(`traffic-processing`), `950..990` are the specific presets, `1000..1100` is the
-user-rule zone, and `1110..1150` are the broad catch-alls; the step of 10 between
-template rules leaves room for future insertions (see `ui.num` in TEMPLATE.md).
+All kinds carry it. The layout: `0` is the head (`traffic-processing`), `950..990` are
+the specific presets, `1000..1100` is the user-rule zone, and `1110..1150` are the broad
+catch-alls; the step of 10 between template rules leaves room for future insertions (see
+`ui.num` in TEMPLATE.md).
 
-When the key is **absent**, the rule has not been numbered yet (storage written
-before §370). Numbering happens on the first load of the Routing screen
-(`markRuleOrder`): a preset takes its `num` from the template by `presetId`, and
-everything else is numbered consecutively from `1000` in the array's current order.
-There is NO separate versioned migration step. The consequence: rules from older
-storage land at the start of the user zone and end up with a higher priority than
-anything added after the update.
+When the key is **absent**, the rule has not been numbered yet. Numbering happens on the
+first load of the Routing screen (`markRuleOrder`): a preset takes its `num` from the
+template by preset id, `traffic-processing` gets `0`, and everything else is numbered
+consecutively from `1000` in the array's current order.
 
 The rule order is a sort by `num` (ties keep the array's order). Dragging in the UI
 recomputes the dragged rule's `num` as `target.num + 1`, shifting the neighbours only
@@ -579,185 +805,202 @@ anchors, see `rule_order.dart`).
 
 ```jsonc
 {
-  "kind":           "inline",
-  "num":            1000?,         // §370 — the position on the ordering axis
-  "id":             "<uuid>",
-  "name":           "<display>",
-  "enabled":        true,
-  "domains":        [ … ]?,        // OR group #1
-  "domainSuffixes": [ … ]?,
-  "domainKeywords": [ … ]?,
-  "ipCidrs":        [ … ]?,
-  "ports":          [ … ]?,        // OR group #2: "443"
-  "portRanges":     [ … ]?,        //              "8000:9000", ":3000", "4000:"
-  "packages":       [ … ]?,        // OR group #3
-  "protocols":      [ … ]?,        // routing-rule level (subset of kKnownProtocols)
-  "ipIsPrivate":    true?,         // routing-rule level
-  "outbound":       "<tag>",       // or "reject" (a sentinel → action: reject)
-  "dns":            { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 task 3 + §256
-  "resolve":        { "only": false, "strategy": "ipv4_only", "serverTag": ""?,
-                      "disableCache": true?, "disableOptimisticCache": true?,
-                      "rewriteTtl": 60?, "timeout": "5s"?, "clientSubnet": "…"? }?  // §247
+  "kind":    "inline",
+  "id":      "<uuid>",
+  "name":    "<display>",
+  "enabled": true,
+  "num":     1000,                  // §370 — the position on the ordering axis
+  "body": {
+    "domain":           [ … ],      // OR group #1 (full match)
+    "domain_suffix":    [ … ],
+    "domain_keyword":   [ … ],
+    "ip_cidr":          [ … ],
+    "port":             [ 443 ],    // OR group #2: numbers (non-numeric ports are dropped)
+    "port_range":       [ "8000:9000" ],
+    "package_name":     [ … ],      // OR group #3
+    "protocol":         [ … ],      // routing-rule level (subset of kKnownProtocols)
+    "network":          [ "udp" ],
+    "ip_is_private":    true,       // routing-rule level
+    "source_ip_cidr":   [ … ],
+    "source_ip_is_private": true,
+    "inbound":          [ … ],
+    "wifi_ssid":        [ … ],
+    "wifi_bssid":       [ … ],
+    "outbound":         "<tag>"     // or "action": "reject" instead of outbound
+  },
+  "dns":     { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true },  // §117 task 3 + §256
+  "resolve": { "only": false, "strategy": "ipv4_only", "serverTag": "",
+               "disableCache": true, "disableOptimisticCache": true,
+               "rewriteTtl": 60, "timeout": "5s", "clientSubnet": "…" }                 // §247
 }
 ```
 
-`name` is user-supplied and mutable.
+Only non-empty matchers are written. `name` is user-supplied and mutable.
 
-OR semantics inside a category, AND between them. `protocols` and `ipIsPrivate` are not made headless — they are lifted to the routing-rule level.
+OR semantics inside a category, AND between them. `protocol` and `ip_is_private` are not made headless — they are lifted to the routing-rule level.
 
-`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). It is absent in older records → null → the old behaviour. The gate: with non-empty `ports` or `protocols` the mirror is not emitted.
+`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). Absent → the old behaviour. The gate: with non-empty `port` or `protocol` the mirror is not emitted.
 
-`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order). The same port/protocol gate applies (the DNS layer is blind to port and protocol). Older records → false.
+`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order). The same port/protocol gate applies (the DNS layer is blind to port and protocol).
 
-`resolve` ([§247]) is optional: the builder emits a non-terminal route rule `{rule_set: <the same headless one>, action: resolve, …}` either BEFORE the terminal route (`only: false`, the flagship case — forcing `ipv4_only` for direct branches) or INSTEAD of it (`only: true`, an advanced fall-through). It is absent in older records → null. The gate: for inline rules it is emitted only when the domain group is non-empty (`resolveEligible`); for srs it is always emitted, since a `.srs` may contain domains.
+`resolve` ([§247]) is optional: the builder emits a non-terminal route rule `{rule_set: <the same headless one>, action: resolve, …}` either BEFORE the terminal route (`only: false`, the flagship case — forcing `ipv4_only` for direct branches) or INSTEAD of it (`only: true`, an advanced fall-through). The gate: for inline rules it is emitted only when the domain group is non-empty (`resolveEligible`); for srs it is always emitted, since a `.srs` may contain domains.
+
+#### `verbatim: true` — a raw sing-box rule (§225)
+
+```jsonc
+{ "kind": "inline", "id": "<uuid>", "name": "raw", "enabled": true, "num": 1001,
+  "verbatim": true, "body": { "action": "sniff", "inbound": ["tun-in"] } }
+```
+
+The former rule kind `json` (the model `CustomRuleJson`). The body goes to the config as
+is: `method: drop`, actions other than `reject`, logical rules, `rule_set` in the body.
+One record holds **one** object: a JSON array is split before the codec into one record
+per object (`name`, `name #2`, …; the first keeps `id`, `enabled` and `num` are shared),
+and the rule editor refuses to save an array. Text that does not parse into an object is
+kept as `verbatim: true` without `body` (the build skips it; the text itself is in
+`.v0.bak` when it came from 2.23.2).
 
 ### `kind: "srs"` — `CustomRuleSrs`
 
 ```jsonc
 {
-  "kind":        "srs",
-  "id":          "<uuid>",
-  "name":        "<display>",
-  "enabled":     true,
-  "srsUrl":      "https://…/something.srs",   // first rule set (always written)
-  "srsUrls":     [ "https://…/a.srs", "https://…/b.srs" ]?,  // §434 — all rule sets, written with 2+ (read first; `srsUrl` = srsUrls[0])
-  "ports":       [ … ]?,          // extra filters at the routing-rule level
-  "portRanges":  [ … ]?,
-  "packages":    [ … ]?,
-  "protocols":   [ … ]?,
-  "ipIsPrivate": true?,
-  "outbound":    "<tag>",
-  "dns":         { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true? }?,  // §117 task 3 + §256
-  "resolve":     { "only": false, "strategy": "ipv4_only", … }?          // §247 (as for inline)
+  "kind":    "srs",
+  "id":      "<uuid>",
+  "name":    "<display>",
+  "enabled": true,
+  "num":     1010,
+  "refs":    [ "https://…/a.srs", "https://…/b.srs" ],   // §434 — all rule sets, always a list
+  "update_interval_hours": 24,                           // §366 — TTL, written only when not default
+  "body": {                                              // no domain matchers — they are in the .srs
+    "port": [ … ], "port_range": [ … ], "package_name": [ … ], "protocol": [ … ],
+    "network": [ … ], "ip_is_private": true, "wifi_ssid": [ … ], "outbound": "<tag>"
+  },
+  "dns":     { … },                                      // §117 task 3 + §256
+  "resolve": { … }                                       // §247 (as for inline)
 }
 ```
 
-The `.srs` binary itself lives separately in `rule_sets/<tag>.srs` (see the [file table](#disk-layout) above).
+The `.srs` binary itself lives separately in `rule_sets/<id>.srs` (see the [file table](#disk-layout) above).
 
-`srsUrls` ([§434], contract ## 12 / D-100): one rule may carry several rule sets.
+`refs` ([§434], contract ## 12 / D-100): one rule may carry several rule sets.
 The builder registers a `rule_set` per URL (tags `<name>`, `<name>-2`, …) and emits
-one route rule with the list of tags; a single URL still emits a string tag, so the
-config is byte-identical to the pre-§434 form. Each URL has its own cache file:
-index 0 is `rule_sets/<id>.srs` (files downloaded before §434 stay valid), index i
-is `rule_sets/<id>~<i>.srs`, with its own `.meta.json`. The rule counts as
-downloaded only when every file is cached; a partial download keeps the rule off.
-In the backup the list travels as `rules[].ref` (first) plus `rules[].refs` (all,
-only with 2+); an importer without `refs` support reads `ref` and gets the first set.
+one route rule with the list of tags; a single URL still emits a string tag. Each URL
+has its own cache file: index 0 is `rule_sets/<id>.srs`, index i is
+`rule_sets/<id>~<i>.srs`, with its own `.meta.json`. The rule counts as downloaded only
+when every file is cached; a partial download keeps the rule off. A legacy 0.12 backup
+carries `rules[].ref` (first) plus `rules[].refs` (all, only with 2+), and the importer
+reads `refs` before `ref`.
 
-`dns` ([§117] task 3) works as it does for inline, except the mirror references an existing `.srs` tag plus the DNS-safe extra filters (`packages` and wifi). It only works when the rule set contains domains — an IP-only list never matches in a DNS context.
+`dns` ([§117] task 3) works as it does for inline, except the mirror references an existing `.srs` tag plus the DNS-safe extra filters (`package_name` and wifi). It only works when the rule set contains domains — an IP-only list never matches in a DNS context.
 
 ### `kind: "preset"` — `CustomRulePreset`
 
 ```jsonc
 {
-  "kind":       "preset",
-  "id":         "<uuid>",
-  "name":       "<display, snapshot of preset.label>",
-  "enabled":    true,
-  "presetId":   "<id from template>",
-  "varsValues": { "<varName>": "<value>", "outbound": "<tag>" }?
+  "kind":    "preset",
+  "id":      "<uuid>",
+  "name":    "<display, snapshot of preset.label>",
+  "enabled": true,
+  "num":     960,
+  "ref":     "<preset_id from the template>",
+  "vars":    { "<varName>": "<value>", "outbound": "<tag>" }
 }
 ```
 
-`name` is read-only in the UI (🔒) and is periodically synced with `preset.label` from the template. The contents are expanded on every `buildConfig` through `expandPreset` ([§033]). `outbound` is kept in `varsValues['outbound']` as a universal override ([§033] Expansion §5).
+`name` is read-only in the UI (🔒) and is periodically synced with `preset.label` from the template. The contents are expanded on every `buildConfig` through `expandPreset` ([§033]). `outbound` is kept in `vars['outbound']` as a universal override ([§033] Expansion §5).
 
-> **§265 — ref-var values do NOT live in `varsValues`.** When a preset declares a var
+> **§265 — ref-var values do NOT live in `vars`.** When a preset declares a var
 > as `{"ref":"<global>"}` (for example `traffic-processing` → `resolve_enabled` /
 > `resolve_strategy`), its value lives in the **global** `vars` (top level,
-> `setVar` / `getAllVars`) and NOT in the preset's `varsValues` — one source, so that
-> editing it in the rule and in the owning section cannot diverge. `varsValues` must
-> not contain ref names; `stripRefVarsFromVarsValues`
+> `setVar` / `getAllVars`) and NOT in the preset's `vars` — one source, so that
+> editing it in the rule and in the owning section cannot diverge. The preset's `vars`
+> must not contain ref names; `stripRefVarsFromVarsValues`
 > (`normalize_pinned_presets.dart`) clears out stuck copies when Routing loads
 > (otherwise the subtitle and Debug showed a stale value — `366beec`). See the
 > “ref-vars” section of TEMPLATE.md.
 
 ### Backward-compat
 
-- The `target` field (up to v1.4.1) became `outbound`. It is read under both names.
-- An absent `kind` means `inline` (on the read path).
-- The legacy `app_rules` key (a separate tab up to v1.3.2) — §159 removed the `_absorbLegacyAppRules` migration and the key is ignored (dropped by the allowlist on import).
+The 2.23.2 form (`custom_rules`, camelCase keys, `srsUrl` + `srsUrls`, `presetId`,
+`varsValues`, `kind: json`, the `target` alias of `outbound`, an absent `kind` = inline) is
+read only by the frozen readers of `storage_migration/legacy_form_v0.dart`: the storage
+migration and the rules file `format: 1`.
 
 ---
 
-## `dns_options` — [§061] (rules) + [§043][043-dns] + [§044] (servers)
+## `dns` — [§044], [§061], §439: DNS servers and rules
 
 ```jsonc
 {
-  "servers":     [ <ServerRef>, … ],
-  "rules":       [ <RuleRef>,   … ],
-  "rules_json":  "<deprecated>"
+  "servers": [ <server record>, … ],
+  "rules":   [ <rule record>,   … ]
 }
 ```
 
-**§294 — typing:** the kind refs in `servers[]` and `rules[]` are typed by the model
-`lib/models/dns_ref.dart` (sealed `DnsServerRef` {inline·preset·template} +
-`DnsRuleRef` {inline·srs·preset·template}). **The on-disk shape did NOT change** —
-`toJson` is byte-compatible (§221 backup); `fromJson` is tolerant on read (a legacy
-full body or an unknown kind becomes null and is dropped exactly as the resolver
-would). The strict `fromJsonStrict` is used only on the Debug write path
-(`PUT /settings/dns_options/*` → 400 on a malformed shape). The resolver
-(`resolveDisplayedServers`, the VIEW layer) is untouched.
+Records of the contract 1.0 dictionary (`lib/models/codec/dns_record.dart`), typed by
+the models `DnsServerRef` {inline·preset·template} and `DnsRuleRef`
+{inline·srs·preset·template} (`lib/models/dns_ref.dart`). Every consumer — the
+resolvers, the builder, the DNS screens, the backup — reads the models through
+`settings_storage/network.dart`, not raw maps. Before §439 the key was `dns_options` with
+the model's own words (`inline`, `rule`, `presetId`, `varValues`) and a dead `rules_json`.
 
-### `dns_options.servers[i]` — kind-discriminated ref ([§044])
+### `dns.servers[i]`
 
 ```jsonc
-{
-  "kind":        "template" | "preset" | "inline",
-  "enabled":     <bool>,
-  "tag":         "<string>",        // the SINGLE source of truth, not duplicated in body
-  "description": "<string>"?,        // an optional override; for inline it is primary
-  "body":        { … }?,             // inline only; a partial sing-box server WITHOUT tag/description/enabled
-  "varValues":   { "<name>": "<value>", … }?  // §117, template only: the chosen var values
-}
+{ "kind": "user", "tag": "my-doh", "enabled": true,
+  "body": { "type": "https", "server": "1.1.1.1" },     // a partial sing-box server WITHOUT tag
+  "description": "…" }                                  // optional
+
+{ "kind": "preset", "ref": "ru-direct:yandex_udp", "enabled": true }   // "<preset_id>:<tag inside the preset>"
+
+{ "kind": "template", "tag": "google_doh", "enabled": true,
+  "vars": { "<name>": "<value>" } }                      // §117 — the chosen var values
 ```
 
-**What each kind means:**
+- `template` — a reference to a server from the template ([§117]: a `{vars, server}` wrapper, with the tag in `server.tag`). The user can override `enabled` and `description` and choose var values (`vars`: the `outbound` direction, the IP profile, the domain resolver — see TEMPLATE.md); the body is resolved from the template by substituting the `@var`s (`resolveTemplateDnsServerBody`).
+- `preset` — a server declared by a template preset. The identity is `ref` = `<preset_id>:<tag inside the preset>`, split on the first `:`; that string is also the server's config tag (the builder namespaces preset tags, `namespacePresetTags`) and the model's `tag`, so `ref` and tag are one string. Auto-discovery fills the preset id when the server is added; a `ref` without `:` (the preset was not found) is the tag, and orphan cleanup follows. A repeated namespace written by early 2.23.3 builds (`ru-direct:ru-direct:dns_ru`) is read as `ru-direct:dns_ru` and never written.
+- `user` — a user-defined server (the model's `inline`). `body` is required.
 
-- `template` — a reference to a server from the template ([§117]: a `{vars, server}` wrapper, with the tag in `server.tag`). The user can override `enabled` and `description` and choose var values (`varValues`: the `outbound` direction, the IP profile, the domain resolver — see TEMPLATE.md); the body is resolved from the template by substituting the `@var`s (`resolveTemplateDnsServerBody`).
-- `preset` — the same, but from the active preset bundle (`server_lists` has nothing to do with it; this means a template preset).
-- `inline` — a user-defined server. `body` is required. When the tag matches a template or preset one AND the shape matches, the builder may collapse it into a `template` or `preset` ref (see `_serverShapesMatch`).
+The tag lives **only** at the record level; the builder synthesizes `body.tag` back when assembling the config. **Render order in the UI:** `template` → `preset` → `user`.
 
-**Render order in the UI:** `template` → `preset` → `inline` (sorted by `ServerKind.index`, stable within a group).
-
-**The builder** synthesizes `body.tag` back when assembling the final sing-box config. In storage the tag lives **only** at the ref level.
-
-### `dns_options.rules[i]` — [§061]
+### `dns.rules[i]`
 
 ```jsonc
-{
-  "enabled": <bool>,
-  "type":    "user" | "template" | "rule",
-  "title":   "<display>",
-  "rule":    { … }?                  // the sing-box rule body, for type=user
-}
+{ "kind": "user", "name": "corp", "enabled": true,
+  "body": { "domain_suffix": [".corp"], "server": "my-doh" } }   // the sing-box rule; enabled always written
+
+{ "kind": "preset", "ref": "<preset_id>", "enabled": true }
+
+{ "kind": "srs", "name": "<rule-set tag>", "id": "<uuid>",       // an LxBox kind
+  "srsUrl": "https://…", "server": "<dns tag>", "rule": { … }, "body": { … }, "enabled": false }
+
+{ "kind": "template", "name": "<template rule name>", "enabled": true }  // an LxBox kind
 ```
 
-`type` is the origin discriminator (the predecessor of [§044]'s `kind` — historically a different word).
+`template` rules — orphan cleanup: when the name is not found in the active template, the entry is discarded in `resolveDnsRulesList`. A `template` record without `enabled` reads as off. `srs` writes `enabled` only when false.
 
-`type: template/rule` — orphan cleanup: when the title is not found in the active template or preset, the entry is discarded in `resolveDnsRulesList`.
+§439: the resolvers keep records of every kind. Before, `resolveDnsRulesList` dropped
+`kind: user` as a §033 leftover and `resolveDnsServersList` dropped unknown kinds, and
+both saved the result. Two build fixes came with the move to models: a user rule without
+an `enabled` key is emitted, and an srs DNS rule reaches the config.
 
-§435: a `kind: inline` rule may carry `"enabled": false` (written only when off; absence = on) —
-the builder skips it. The UI does not toggle root DNS rules yet; the field exists because
-node sections (`sections.dns.rules[]`) use the same record type.
-
-⚠ §257: on a `kind: preset` entry the `enabled` field is **dead**: the toggle for a
+⚠ §257: on a `kind: preset` rule record the `enabled` field is **dead**: the toggle for a
 preset's DNS block moved to the magic var `dns_enable`
-(`custom_rules[].varsValues`, see “Magic variables” in TEMPLATE.md). The entry
+(`rules[].vars` of the preset rule, see “Magic variables” in TEMPLATE.md). The entry
 remains only as a **positional anchor** for the mirror group (§117) — it decides
 where the preset's DNS rules sit inside `dns.rules`. Neither the builder nor the UI
-reads its `enabled`; auto-discovery keeps writing `enabled: true`, harmlessly. There
-is no migration — after an update every preset carrying the var has its DNS block on
-(the default is true), and anyone who wants it off can turn it off.
+reads its `enabled`; auto-discovery keeps writing `enabled: true`, harmlessly.
 
 ### Migration history
 
-- v1.5.x: `dns_options.rules_json` — a single JSON string (`@Deprecated`). It is ignored now; the field stays on disk for downgrade safety.
-- v1.6.0 ([§061]): `dns_options.rules[]` — a structured list with `type` / `enabled` / `title` / `rule`.
+- v1.5.x: `dns_options.rules_json` — a single JSON string (`@Deprecated`), ignored since §061.
+- v1.6.0 ([§061]): `dns_options.rules[]` — a structured list.
 - v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — the first kind refs. Back then tag, description and enabled lived inside `body`.
-- v1.6.1 ([§044]): `dns_options.servers[]` — the clean schema. Tag, description and enabled were lifted to the ref level, and the underscore annotations (`_kind`, `_overrides`) were removed.
+- v1.6.1 ([§044]): `dns_options.servers[]` — the clean schema. Tag, description and enabled were lifted to the ref level.
 - v1.7.x ([§117]): template servers inside the template became `{description, enabled, vars?, server}` wrappers, and the `kind: template` ref gained `varValues`.
-- §228: remapping renamed `preset_id`s inside `custom_rules` — `bittorrent-direct`→`bittorrent`, `private-ip-direct`→`private-ip`, `block_unknown`→`unknown-traffic`.
-  **The migration was removed in §229** (it shipped in v2.10.0 and was dropped during development after v2.17.0): everyone upgrading from those versions has already been remapped, and a fresh install never had the old ids.
+- §294: the kind refs typed by `DnsServerRef` / `DnsRuleRef`; the on-disk shape unchanged.
+- §228/§229: remapping renamed `preset_id`s inside `custom_rules` (`bittorrent-direct`→`bittorrent`, `private-ip-direct`→`private-ip`, `block_unknown`→`unknown-traffic`); the migration was removed in §229.
+- 2.23.3 ([§439]): `dns{servers, rules}` in the contract 1.0 dictionary; `rules_json` removed; the migration of pre-§044 server shapes (`_migrateLegacyDnsServers`) removed — the storage migration drops such records with a warning.
 
 ---
 
@@ -854,7 +1097,7 @@ OS-level split tunneling: which applications go through the VPN tun and which go
 
 CRUD: `getTunApps()` / `setTunApps()` (a whole-object replace). API: `GET/PUT /settings/tun_apps` ([the Debug API reference](api/debug-api-reference.md)).
 
-**Interaction with `package_name` rules in custom_rules:** apps in the allow list (or outside the deny list) go through the tun and are then subject to the routing rules; apps outside the tun never reach sing-box at all, so no rule can affect them.
+**Interaction with `package_name` rules in `rules`:** apps in the allow list (or outside the deny list) go through the tun and are then subject to the routing rules; apps outside the tun never reach sing-box at all, so no rule can affect them.
 
 ---
 
@@ -1140,28 +1383,27 @@ After the migration the set of directions lives in `directions[]` and is edited 
   `✨auto` preset is **not** migrated (it is no longer a direction — each direction makes
   its own twin). `enabled_groups[]` is deprecated once the migration has run.
 - **§393 A2 — the key rename.** The list used to live under `channels` with the guard
-  `channels_migrated`. The same one-shot migration now moves it verbatim to
-  `directions`/`directions_migrated` and **deletes** the legacy pair. Branches, in the
-  order they are checked: `directions` present → no-op; `channels` present → move and
-  delete; `channels_migrated == true` with no list → migrated-and-empty, stamp the new
-  marker but do **not** re-seed; otherwise → seed from the template. The legacy pair
-  is **not** in any allowlist: import boundaries (internal backup `applyImport` and
-  Debug API `/backup/import`) rename it via `normalizeLegacyDirectionKeys` **before**
-  `replaceRaw`, so the merge-upsert collides on the single `directions` name and the
-  archive honestly wins over live data (before this, a legacy archive restored in the
-  default merge mode landed *next to* live `directions` and was silently swallowed by
-  the migration's janitor branch). `applyImport` still runs the migration right after
-  `replaceRaw` — it covers the fresh-seed case when the archive carried no directions
-  at all. Export writes the new names only.
+  `channels_migrated`. Since §439 the rename belongs to the storage migration
+  (`migrateStorageDoc`): on the file in `_load()` and on the import boundaries (internal
+  backup, Debug API `/backup/import`) before `replaceRaw`, `channels` /
+  `channels_migrated` become `directions` / `directions_migrated` when the new names are
+  absent (the new name wins; a legacy pair next to a list sets the guard). The merge-upsert
+  then collides on the single `directions` name and the archive wins over live data. The
+  legacy pair is **not** in any allowlist. `migrateDirectionsIfNeeded` has three
+  branches: `directions` present → no-op; `directions_migrated == true` with no list →
+  migrated-and-empty, stamp the marker but do **not** re-seed; otherwise → seed from the
+  template. `applyImport` still runs it right after `replaceRaw` — it covers the
+  fresh-seed case when the archive carried no directions at all. Export writes the new
+  names only.
 - **Reference degradation** (healing): once a direction stops being a valid target of a
   given kind, references of that kind are healed straight in storage, **irreversibly**
   (§202 decision B, extended by §248 and adjusted by §274). Rule references
   (`route_final`, a custom rule's outbound) become `vpn-1` on deletion or disabling
   (setting the detour flag is NOT a heal trigger — per §274 the direction remains a rule
-  target); detour references (`override_detour`, `members[].detour`) become `''` (None)
-  on deletion, disabling or clearing the detour flag. A “reference to a direction” is its
-  `tag` OR `<tag>-auto`; a value that coincides with the bare tag of a member of the same
-  folder is an intra-reference and healing leaves it alone. A backup restore does not
+  target); detour references (`detour` of a source or a folder member) are removed (None)
+  on deletion, disabling or clearing the detour flag. A “reference to a direction” is a
+  root link `{tag}` with its `tag` OR `<tag>-auto`; a pair `{folder_id, tag}` addresses a
+  node of a container and is never a direction (D-112), so healing leaves it alone. A backup restore does not
   re-run healing (the degradations are accepted — the builder collapses danglers at build
   time). Legacy `✨auto` references fall under the same rule. Details:
   [`spec/features/248 detour-channels/`](spec/features/248%20detour-channels/).
@@ -1181,75 +1423,89 @@ Specs: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20con
 
 ---
 
-## `chains` — §393 C, the hop-chain sources (SPEC 110)
+## Chains — `kind: chain` in `sources[]` (§393 C, SPEC 110)
 
 A chain is a **source** — the same kind of thing as a subscription or a standalone
 server, not a direction. It holds an explicit route (`you → hop 1 → hop 2 → …`)
 and is emitted as one outbound of type `chain`. The model is `SourceChain`
-(`models/source_chain.dart`); the storage shape is its `toJson()` (snake_case).
+(`models/source_chain.dart`); the record codec is `codec/chain_record.dart`.
+
+```jsonc
+{
+  "kind":    "chain",
+  "tag":     "chain-1",
+  "enabled": true,
+  "label":   "Work",                                     // LxBox, only when set
+  "body":    { "type": "chain", "idle_timeout": "5m", "strip_evasion": false,
+               "strip": { "tls.fragment": true }, "rewrite": { … } },
+  "hops":    [ { "folder_id": "<subscription id>", "tag": "NL-1" }, { "tag": "Tokyo" } ]
+}
+```
+
+Chain records sit at the **tail** of `sources[]`, after subscriptions, servers and
+folders, in their own order (BACKUP §4: the record order is normative). There is no
+separate key and no position field: before §439 the list was `chains[]` with an `order`
+index into the common source list, and the migration placed the records by that order.
 
 - `tag` — the future outbound's tag, and the record's id. **Immutable** after
   creation, like `Direction.tag`: direction filters, `route_final` and the
   positions of *other* chains reference it. A tag is validated against **both**
   chains and directions — two outbounds sharing a tag kill the config.
 - `label` — display name; empty falls back to `tag` (inventing a name for a chain
-  the user did not name would lie about its contents). §405 — like the direction one, it is
-  declared in the schema and applied **only by LxBox**; the launcher carries it silently.
+  the user did not name would lie about its contents). §405 — applied **only by
+  LxBox**.
 - `enabled` — a disabled chain is neither emitted nor pooled, like a disabled
   subscription. A reference to it from another chain degrades **that whole chain**
   (`chain_hop_missing`): a route missing a hop is a different route.
-- `hops` — the positions **in packet order**: `[0]` is the first hop from the
-  client, the last one is the address the destination sees. This is deliberately
-  **not** “who goes through whom” — `detour`'s arrow points the other way, and
-  confusing the two builds a *working but wrong* route (SPEC 110 T3), a mistake the
-  user only notices by geolocation. A position may be a node, a subscription group,
-  a direction, a template service tag, or **another chain** — the latter only at
-  position 0 and only one declared **above** in the list; that ordering is what
-  rules out cycles between chains.
+- `hops` — NodeLinks (see [Node references](#node-references--nodelink-439-d-112)) **in
+  packet order**: `[0]` is the first hop from the client, the last one is the address
+  the destination sees. This is deliberately **not** “who goes through whom” —
+  `detour`'s arrow points the other way, and confusing the two builds a *working but
+  wrong* route (SPEC 110 T3), a mistake the user only notices by geolocation. A
+  position may be a node, a subscription group, a direction, a template service tag,
+  or **another chain** — the latter only at position 0 and only one declared **above**
+  in the list; that ordering is what rules out cycles between chains.
   The core's invariants (`protocol/chain/chain.go`): at least two positions,
   non-empty, no duplicates, no self-reference. Breaking **any** of them stops the
   **whole config** from starting, not just the one chain — hence `chainEmitError`
-  checks them and a chain that fails is not emitted at all.
-- `idle_timeout` — how long a link with no live connections survives. Empty = the
+  checks them and a chain that fails is not emitted at all. A position that does not
+  resolve at build drops the chain too.
+- `body.idle_timeout` — how long a link with no live connections survives. Empty = the
   core's default (5m), `"0s"` = live until shutdown.
-- `strip_evasion` — whether to strip one-sided DPI-evasion tricks off the links.
-  Nullable for **tristate**, not for decoration: `null` = the core's default (true,
-  the key is not written), `false` = the user turned it off explicitly (the key is
-  written). A plain bool could not tell the two apart, and an explicit “off” would
-  silently become “default” if the core ever flipped its default.
-- `strip` — a targeted patch on top of `strip_evasion`: `false` = do not strip,
+- `body.strip_evasion` — whether to strip one-sided DPI-evasion tricks off the links.
+  Nullable for **tristate**, not for decoration: absent = the core's default (true),
+  `false` = the user turned it off explicitly (the key is written). A plain bool could
+  not tell the two apart, and an explicit “off” would silently become “default” if the
+  core ever flipped its default.
+- `body.strip` — a targeted patch on top of `strip_evasion`: `false` = do not strip,
   `true` = strip additionally. Keys only from `kChainStripKeys`
   (`tls.fragment`, `multiplex.padding`, `xhttp.padding`, `tls.utls`).
-- `rewrite` — a JSON merge-patch (RFC 7396) over a node's options, keyed by outbound
-  type, applied to links (position 1 onwards) after `strip`. **Not editable through
-  the form and not meant to be**: a reduced form would silently drop an arbitrary
-  patch across every protocol type. A `null` inside the patch **deletes** the key
-  (RFC 7396), so it is stored and round-trips verbatim, with no “empty cleanup”.
-- `order` (§393 D1) — the chain's position in the **common source list**, the same
-  list that holds subscriptions, standalone servers and folders. A chain sits there
-  as an equal row and is dragged like everything else, so its place is an index into
-  the common ordering rather than a separate list — exactly as a `ServerList` gets
-  its place from its index in `server_lists`.
-  Why a field and not the `chains[]` array order: the array only records the chains'
-  order *relative to each other*, while the “a position may reference only a chain
-  **above**” invariant is computed over the **common** list. Without an absolute
-  position you cannot answer whether a chain sits above a subscription it was dragged
-  past — which is exactly what dragging a subscription *between* two chains requires.
-  Duplicates and gaps are legal (indices are not reused after a deletion): only the
-  **order** matters, and it is normalized on every write (`normalizeChainOrder`).
-  `-1` = “not assigned yet” (a record from older storage or from a backup) — those go
-  to the **end**, keeping their relative order.
+- `body.rewrite` — a JSON merge-patch (RFC 7396) over a node's options, keyed by
+  outbound type, applied to links (position 1 onwards) after `strip`. **Not editable
+  through the form and not meant to be**: a reduced form would silently drop an
+  arbitrary patch across every protocol type. A `null` inside the patch **deletes** the
+  key (RFC 7396), so it is stored and round-trips verbatim, with no “empty cleanup”.
 
-**Core requirement**: `type: chain` needs sing-box-lx **v1.14.0-lx.27** or newer
-(v2.21.0 pins `v1.14.0-lx.28-rc.1`).
+The invariant “a position may reference only a chain **above**” is computed over the
+mutual order of chains: dragging a subscription between two chains is legal and breaks
+no reference. The Servers screen draws chains after the controller's records, where
+they lie.
 
-**Heal on source deletion**: deleting a source strips its **positions** out of every
-chain that used them, with a visible counter — a route that silently got shorter must
-be noticed. A chain that drops below two positions is not emitted until repaired.
-A subscription refresh never touches positions.
+**Core requirement**: `type: chain` needs sing-box-lx **v1.14.0-lx.27** or newer.
 
-**In backup**: chains travel as a root `chains[]` section of the LX Backup (contract
-0.7.1), merged by `tag`; a local chain wins over an arriving namesake, with a warning.
+**Heal on deletion**: deleting a node or a source removes its **positions** from every
+chain that used them through the node-link registry, and the Servers screen names the
+affected chains — a route that silently got shorter must be noticed. A chain that drops
+below two positions is not emitted until repaired. Deleting a chain on the Servers
+screen removes its positions from other chains (§393 D2); `DELETE /chains/{tag}` in the
+Debug API does not and lists them in `dangling_refs`. A subscription refresh never
+touches positions.
+
+**In backup**: the LX Backup 1.0 ([§438], §439) carries the record as is, `label`
+included: it is an LxBox-side field declared by contract 1.0.1 (`BACKUP.md` §2), the
+launcher ignores it, and a file without it does not reset the label of a matching
+chain. Chains merge by `tag`; a local chain wins over an arriving namesake,
+with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0.7.1).
 
 ---
 
@@ -1259,7 +1515,6 @@ A subscription refresh never touches positions.
 |---|---|---|
 | `route_final` | `String` | An override of `route.final` on top of the template (the chosen default outbound). `''` means the template default. A dangling reference (a deleted direction, or the legacy ✨auto) becomes `vpn-1` at build time (§125). |
 | `route_idle_suspend` | `String` | §215/§128 — the idle-suspend threshold (`route.lx_idle_suspend`, kernel SPEC 020). A duration string (`'30s'` / `'5m'`), **default `'30s'`** (enabled since v2.8.2); `''` means off (the field is not emitted into route). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend` / `saveIdleSuspend`. |
-| `excluded_nodes` | `List<String>` | §125 cleanup, **DEPRECATED** — the global node filter (§048) was removed along with its screen. The key stays in the allowlist (harmless legacy debris); the per-direction `node_filter` (§125) covers filtering now. |
 | `enabled_groups` | `List<String>` | §125, **DEPRECATED** — replaced by `directions[]`. Read only by the one-shot migration; on disk it is harmless debris. |
 | `last_global_update` | `String` (ISO-8601) | The timestamp of the last successful auto-refresh of all subscriptions. |
 | `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `RoutingScreen._seedDefaultPresets` sets it to true. |
@@ -1276,23 +1531,36 @@ A subscription refresh never touches positions.
 
 ## Legacy and removed keys
 
-> **§159 — every migration and DENY `.remove()` is gone.** None of the keys below is
-> converted or cleaned up on `_save()` any more. If such a key is still on an older
-> user's disk it is harmless (nothing reads it) and will be dropped by the strict
-> allowlist (`SettingsStorage.replaceRaw`) on the first backup import. Anyone stuck on a
-> prehistoric version with no migration will carry their settings over through an
-> export/import, or simply tick the boxes again.
+> **§159 — no migration on `_save()`, no DENY `.remove()`.** Keys from older versions
+> are not converted on write. **§439** — the storage migration inside `_load()` runs once
+> per document without `storage_version`: it converts the 2.23.2 keys, renames
+> `channels`, and deletes the keys with no readers listed below. The strict allowlist
+> (`SettingsStorage.replaceRaw`) drops anything else foreign on a backup import.
 
-| Key | Lived until | Replacement | Status (§159) |
-|---|---|---|---|
-| `proxy_sources` | up to v1.3.x | `server_lists` ([§033]) | the migration is gone; the key is ignored. |
-| `app_rules` | up to v1.3.2 | `custom_rules` (kind=inline, with `packages`) — [§030] | the migration is gone; the key is ignored. |
-| `enabled_rules` | up to [§030] | `custom_rules` | both the migration and the API are gone; the key is ignored. |
-| `rule_outbounds` | up to v1.3.2 | `custom_rules.outbound` (or `varsValues.outbound` for a preset) | both the migration and the API are gone; the key is ignored. |
-| `dns_options.rules_json` | [§061] (an intermediate step) | `dns_options.rules[]` | the field stays for downgrade friendliness; it is not read. |
-| `node_overrides` | removed | — | the DENY cleanup is gone; ignored, and dropped on import. |
-| `show_detour_servers` | removed | — | the DENY cleanup is gone; ignored, and dropped on import. |
-| `vars.auto_rebuild` | up to §107 | — (a rebuild is always automatic) | the DENY cleanup is gone; dropped on import. |
+**The 2.23.2 form — converted by the storage migration (§439):**
+
+| Key | Lived until | Replacement |
+|---|---|---|
+| `server_lists` | 2.23.2 | `sources[]` records `kind: subscription\|server\|folder` |
+| `chains` | 2.23.2 | `kind: chain` records at the tail of `sources[]` |
+| `custom_rules` | 2.23.2 | `rules[]` |
+| `dns_options` | 2.23.2 | `dns{servers, rules}` |
+| `channels`, `channels_migrated` | §393 A2 | `directions`, `directions_migrated` |
+
+**Keys with no readers — deleted by the storage migration (§439):**
+
+| Key | Lived until | Replacement |
+|---|---|---|
+| `dns_options.rules_json` | [§061] (an intermediate step) | `dns.rules[]` |
+| `excluded_nodes` | §125 cleanup | the per-direction `node_filter` |
+| `preset_ids_remapped` | §228 guard, migration removed in §229 | — |
+| `proxy_sources` | up to v1.3.x | `sources` ([§033]) |
+| `app_rules` | up to v1.3.2 | `rules` (kind=inline, with `package_name`) — [§030] |
+| `enabled_rules` | up to [§030] | `rules` |
+| `rule_outbounds` | up to v1.3.2 | `body.outbound` of a rule (or `vars.outbound` for a preset) |
+| `node_overrides` | removed | — |
+| `show_detour_servers` | removed | — |
+| `vars.auto_rebuild` | up to §107 | — (a rebuild is always automatic) |
 
 ---
 
@@ -1335,12 +1603,14 @@ Not part of `lxbox_settings.json`. It serves two categories: **pre-Flutter boot 
 `SettingsStorage.dumpCache()` returns a deep copy of the whole `_cache`. `GET /state/storage` ([§031]) uses it with a scrubber:
 
 - `vars.debug_token` → `'***'`
-- `server_lists[].url` is masked (`maskSubscriptionUrl`)
-- `server_lists[].nodes` is replaced by `nodes_count` (nodes can carry credentials in a UUID or password)
-- `server_lists[].rawBody` is replaced by `raw_body_bytes` (its length)
-- `server_lists[].members` is replaced by `members_count` (§234 — a member's raw carries credentials)
+- `sources[]` (§439) are read into models by the repository and written back by the record codec, with secrets replaced in place:
+  - `url` of a subscription is masked (`maskSubscriptionUrl`)
+  - `origin.raw` of a server is replaced by `origin.raw_bytes` (its length; an inline URI carries credentials)
+  - `nodes[]` of a folder is replaced by `nodes_count` (§234 — a member's text carries credentials)
+  - chain records go as they are (no secrets)
+  - a record the repository cannot read is not in the dump: there is nothing to hide its secret with
 
-The scrubber only handles the `vars` and `server_lists` keys; everything else (`meta.*`, `custom_rules`, `dns_options`, the accounts) is returned as-is.
+The scrubber only handles the `vars` and `sources` keys; everything else (`meta.*`, `rules`, `dns`, the accounts) is returned as-is. Before §439 the scrubber looked for a `rawBody` key that storage never had (it was `raw_body`), so the length of a standalone server was not hidden.
 
 > **Deliberate, not a debt (§219):** `warp_account` / `masque_account` (`priv_key`, `token`, `priv_key_der`) and `meta.support_url` / `meta.web_page_url` are **not** scrubbed in `GET /state/storage`. The Debug API grants root access to secrets by design — `GET /backup/export` returns `exportRaw()` verbatim — so masking here would protect nothing while making diagnosis harder. Do not add it as a “security fix”.
 
@@ -1357,7 +1627,7 @@ The scrubber only handles the `vars` and `server_lists` keys; everything else (`
 > Different jobs (show everything versus admit nothing foreign) call for different
 > models. Do NOT “unify” them by mistake.
 
-`PUT /settings/dns_options/servers` accepts three historical formats (the pre-[§043][043-dns] legacy one, [§043][043-dns] and [§044]) — the migration happens on the next `resolveDnsServersList`. See [`api/debug-api-reference.md`](./api/debug-api-reference.md).
+`PUT /settings/dns_options/servers` and `PUT /settings/dns_options/rules` accept only `dns{}` records of the contract 1.0 form (§439); the 2.23.2 kind refs (`kind: inline`, `varValues`, `presetId`, `rule`) and the pre-[§043][043-dns] full body return 400 with a sample record and leave storage untouched. The URL paths keep the old name: they are API addresses, not file keys. See [`api/debug-api-reference.md`](./api/debug-api-reference.md).
 
 ---
 
@@ -1383,3 +1653,7 @@ The scrubber only handles the `vars` and `server_lists` keys; everything else (`
 [§220]: ./spec/tasks/220-allow-rotation-setting.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md
+[§438]: ./spec/tasks/438-lx-backup-1-0-read-write.md
+[§439]: ./spec/features/439%20storage-contract-1-0/spec.md
+[§370]: ./spec/tasks/370-rule-order-num-axis.md
+[§434]: ./spec/tasks/434-srs-rule-multiple-rule-sets.md

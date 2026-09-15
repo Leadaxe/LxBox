@@ -1279,14 +1279,26 @@ the Add Server Wizard's Tailscale mode.
   a candidate like any other node.
 - **Probe:** not tested (no address; a probe config would have to join the tailnet) — “—” instead
   of a delay.
-- **Companion records (sections):** a Tailscale node normally carries a DNS server
-  `{type: tailscale, endpoint: @self}`, a DNS rule for `.ts.net` and a route rule for
-  `100.64.0.0/10 → @self` — see STORAGE.md “Node sections”. The DNS server type accepts at most
-  one server per endpoint; a dangling `endpoint` drops the server and the rules on it at build.
+- **Companion records (sections):** a Tailscale node carries a DNS server
+  `{type: tailscale, endpoint: @self}`, a DNS rule for `.ts.net` and a route rule matching
+  `.ts.net` **or** the tailnet subnets (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`) → `@self`, with a
+  non-terminal `resolve` through that DNS server emitted right before it — see STORAGE.md
+  “Node sections”. The domain match and the `resolve` are what make the node reachable under
+  FakeIP (a name without an address never matches `ip_cidr`) and over UDP (the core drops a
+  flow to an endpoint that has no address yet). A node created without records — a bare body,
+  or a config that never references its tag — gets this bundle by default; Clear sections
+  removes it. The DNS server type accepts at most one server per endpoint; a dangling
+  `endpoint` drops the server and the rules on it at build.
 - **Whole config as source:** a sing-box config with exactly one payload node yields the node
   **with** its sections: DNS servers whose `detour`/`endpoint` is the node's tag, DNS rules on
   those servers, route rules whose `outbound` is the node's tag (rule names — `body.name` or
-  `@{self} rule N`).
+  `@{self} rule N`). In a **multi-node** config (an endpoint next to proxies) the same records
+  are extracted for each `tailscale` node by the explicit reference to its tag, and those nodes
+  become servers of their own — sections live on free nodes only, so inside a subscription the
+  tailnet route would be lost. The remaining nodes take the usual path (one → a server, several
+  → a file subscription) from the text with the `tailscale` entries removed.
+- **Inside a subscription:** a `tailscale` node from a URL subscription gets no sections — the
+  log says so; “add it as a server” is the fix.
 
 ## 10. JSON Outbound
 

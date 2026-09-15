@@ -411,4 +411,66 @@ void main() {
       expect(() => validateTemplateConstructs(json, template), returnsNormally);
     });
   });
+  // §443 (SPEC 129 Н11, D-118) — `@name` в теле шаблонного DNS-сервера обязан
+  // быть объявлен в vars[] этого сервера: сборка подставляет только такие
+  // имена, необъявленный плейсхолдер — ошибка шаблона, а не данных.
+  group('Н11 — плейсхолдеры тела шаблонного DNS-сервера', () {
+    Map<String, dynamic> serverEntry(Map<String, dynamic> json, String tag) =>
+        ((json['dns_options'] as Map)['servers'] as List)
+            .cast<Map<String, dynamic>>()
+            .firstWhere((e) => (e['server'] as Map?)?['tag'] == tag);
+
+    test('боевой шаблон проходит, и в нём есть серверы с @-переменными', () {
+      final json = _shippedTemplate();
+      final withVars = ((json['dns_options'] as Map)['servers'] as List)
+          .cast<Map<String, dynamic>>()
+          .where((e) => jsonEncode(e['server']).contains('"@'));
+      expect(withVars, isNotEmpty,
+          reason: 'без @-переменных в серверах проверка вырождена');
+      expect(() => validateTemplateConstructs(json, WizardTemplate.fromJson(json)),
+          returnsNormally);
+    });
+
+    test('необъявленный @name в теле отвергается', () {
+      final json = _shippedTemplate();
+      (serverEntry(json, 'google_udp')['server'] as Map)['domain_resolver'] =
+          '@dom_resolver';
+      expect(
+        () => validateTemplateConstructs(json, WizardTemplate.fromJson(json)),
+        throwsA(isA<TemplateIfError>().having((e) => e.message, 'message',
+            allOf(contains('google_udp'), contains('@dom_resolver')))),
+      );
+    });
+
+    test('глобальная переменная шаблона телу сервера не видна', () {
+      final json = _shippedTemplate();
+      final template = WizardTemplate.fromJson(json);
+      final global = template.vars.first.name;
+      (serverEntry(json, 'google_dot')['server'] as Map)['strategy'] =
+          '@$global';
+      expect(() => validateTemplateConstructs(json, template),
+          throwsA(isA<TemplateIfError>()));
+    });
+
+    test('условие #if в теле — область видимости переменных сервера', () {
+      final json = _shippedTemplate();
+      final server = serverEntry(json, 'google_udp')['server'] as Map;
+      server['#if'] = {
+        '#and': ['@definitely_not_declared'],
+        '#value': {'strategy': 'ipv4_only'},
+      };
+      expect(
+        () => validateTemplateConstructs(json, WizardTemplate.fromJson(json)),
+        throwsA(isA<TemplateIfError>()),
+      );
+    });
+
+    test('объявленная переменная сервера в строке-элементе массива проходит', () {
+      final json = _shippedTemplate();
+      final entry = serverEntry(json, 'google_udp');
+      (entry['server'] as Map)['servers_extra'] = ['@dns_ip'];
+      expect(() => validateTemplateConstructs(json, WizardTemplate.fromJson(json)),
+          returnsNormally);
+    });
+  });
 }

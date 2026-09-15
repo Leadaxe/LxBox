@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
 import '../app_log.dart';
+import '../settings_storage_keys.dart' show kStorageVersionKey;
 
 /// §417 — Workspaces: именованные копии состояния приложения.
 ///
@@ -49,8 +50,8 @@ class WorkspaceStore {
   ///
   /// НЕ в слоте (спека §417 п. 2.1): `singbox_config.json` (пересобирается
   /// после загрузки всегда), `cache.db` ядра (открыт под живым VPN, копия
-  /// может быть битой), `.bak`/`.tmp` io-слоя, `support_state.json`, логи,
-  /// crash/oom-репорты, тема.
+  /// может быть битой), `.bak`/`.v0.bak`/`.tmp` io-слоя, `support_state.json`,
+  /// логи, crash/oom-репорты, тема.
   static const List<SlotEntry> kSlotEntries = [
     SlotEntry(SlotRoot.documents, 'lxbox_settings.json', isDir: false),
     SlotEntry(SlotRoot.documents, 'rule_sets', isDir: true),
@@ -60,6 +61,7 @@ class WorkspaceStore {
   /// Имя файла настроек — для touch после загрузки и удаления `.bak`.
   static const _settingsFileName = 'lxbox_settings.json';
   static const _settingsBakName = 'lxbox_settings.json.bak';
+  static const _v0BakSuffix = '.v0.bak';
   static const _tmpSuffix = '.tmp';
 
   Future<void> _lock = Future<void>.value();
@@ -193,6 +195,7 @@ class WorkspaceStore {
     final now = DateTime.now();
     await _copySceneToSlot(m.current);
     var next = m.withSlotSaved(m.current, now);
+    await _keepLegacySettingsCopy(target);
     await _copySlotToScene(target);
     await _touchSettings();
     next = next.copyWith(current: target, clearPending: true);
@@ -283,6 +286,32 @@ class WorkspaceStore {
     }
     final bak = File('${(await _docs()).path}/$_settingsBakName');
     if (await bak.exists()) await bak.delete();
+  }
+
+  /// §439 §3.3 — копия исходника у слота. Файл настроек слота [name] без
+  /// `storage_version` (форма 2.23.2) копируется в
+  /// `workspaces/<имя>/lxbox_settings.json.v0.bak`, если копии там ещё нет.
+  /// Сама миграция — при чтении сцены (`_load()`), а `.v0.bak` рядом с рабочим
+  /// файлом уже может держать исходник первой миграции и копию слота не
+  /// запишет. В [kSlotEntries] копия не входит — на сцену она не едет.
+  ///
+  /// Best-effort: сбой копии загрузку не останавливает.
+  Future<void> _keepLegacySettingsCopy(String name) async {
+    try {
+      final slot = await _slotDir(name);
+      final src = File('${slot.path}/$_settingsFileName');
+      if (!await src.exists()) return;
+      final copy = File('${slot.path}/$_settingsFileName$_v0BakSuffix');
+      if (await copy.exists()) return;
+      final bytes = await src.readAsBytes();
+      final doc = jsonDecode(utf8.decode(bytes));
+      if (doc is! Map || doc.containsKey(kStorageVersionKey)) return;
+      final tmp = File('${copy.path}.${_tmpSeq++}$_tmpSuffix');
+      await tmp.writeAsBytes(bytes, flush: true);
+      await tmp.rename(copy.path);
+    } catch (e) {
+      AppLog.I.warning('workspaces: legacy settings copy of "$name" failed: $e');
+    }
   }
 
   /// Настройки заведомо новее `singbox_config.json` → bootstrap-проверка

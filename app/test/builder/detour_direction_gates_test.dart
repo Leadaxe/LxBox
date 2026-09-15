@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/validation.dart';
@@ -56,7 +57,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: policy,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [
           for (final n in names)
             parseUri('vless://u-$id@h-$id.com:443?type=ws&security=tls#$n')!,
@@ -230,7 +230,7 @@ void main() {
         vlessServer(
             id: 'u',
             names: ['Relay Berlin'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-2')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2'))),
       ], [
         const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
@@ -259,7 +259,7 @@ void main() {
         vlessServer(
             id: 'u',
             names: ['Relay Berlin'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-2-auto')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2-auto'))),
       ], [
         const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
@@ -290,11 +290,11 @@ void main() {
         vlessServer(
             id: 'c',
             names: ['Client'],
-            policy: const DetourPolicy(overrideDetour: 'Mid')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'Mid'))),
         vlessServer(
             id: 'm',
             names: ['Mid'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-2')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2'))),
       ], [
         const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
@@ -321,11 +321,11 @@ void main() {
         vlessServer(
             id: 'a',
             names: ['Node A'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-3')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-3'))),
         vlessServer(
             id: 'b',
             names: ['Node B'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-2')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2'))),
       ], [
         const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
@@ -351,7 +351,7 @@ void main() {
         vlessServer(
             id: 'u',
             names: ['Node X'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-2')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2'))),
       ], [
         const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(tag: 'vpn-2', label: 'Plain', nodeFilter: 'Node X'),
@@ -375,7 +375,7 @@ void main() {
         vlessServer(
             id: 'u',
             names: ['Relay Berlin', 'Client A', 'Client B'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-2')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2'))),
       ], [
         const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
@@ -421,13 +421,13 @@ void main() {
         vlessServer(
             id: 'bl',
             names: ['BL Sofia', 'BL Zagreb', 'BL Varna'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-3')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-3'))),
         vlessServer(id: 'in1', names: ['IN Masque A']),
         vlessServer(id: 'in2', names: ['IN Masque B']),
         vlessServer(
             id: 'awg',
             names: ['IN Awg'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-2')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2'))),
       ], [
         const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
@@ -459,11 +459,11 @@ void main() {
         vlessServer(
             id: 'out',
             names: ['OUT Warp'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-3')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-3'))),
         vlessServer(
             id: 'bl',
             names: ['BL Sofia', 'BL Zagreb'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-4')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-4'))),
         vlessServer(id: 'in1', names: ['IN Masque'])
       ], [
         const Direction(tag: 'vpn-1', label: 'Main'),
@@ -489,11 +489,11 @@ void main() {
         vlessServer(
             id: 'x',
             names: ['Node X'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-2')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2'))),
         vlessServer(
             id: 'y',
             names: ['Node Y'],
-            policy: const DetourPolicy(overrideDetour: 'vpn-3')),
+            policy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-3'))),
       ], [
         const Direction(tag: 'vpn-1', label: 'Main'),
         const Direction(
@@ -543,9 +543,8 @@ void main() {
     });
 
     test('омоним: member.detour=тёзка Направления → интра-ребро на члена', () async {
-      // Член папки носит bare-тег 'vpn-2' — тёзка detour-Направления. Ссылка
-      // member B detour='vpn-2' внутри ТОЙ ЖЕ папки означает ЧЛЕНА
-      // (приоритет bareIndex FolderDetourPlan): резолв в display-form
+      // Член папки носит сырой тег 'vpn-2' — тёзка detour-Направления. Ссылка
+      // member B на него — пара {f1, vpn-2} (D-112): резолв в финальный тег
       // 'hm- vpn-2', Направление ни при чём — edge-strip рёбер не трогает.
       final folder = FolderServers(
         id: 'f1',
@@ -557,7 +556,7 @@ void main() {
           FolderMember(raw: 'vless://u@h.com:443?type=ws&security=tls#vpn-2'),
           FolderMember(
               raw: 'vless://u2@h2.com:443?type=ws&security=tls#node-b',
-              detour: 'vpn-2'),
+              detour: const NodeLink(folderId: 'f1', tag: 'vpn-2')),
         ],
       );
       final r = await build([

@@ -1,0 +1,11 @@
+[
+  "SRS rule \"Uncached set\" skipped: no cached file (Download first).",
+  "Raw-JSON rule \"Json broken\" skipped: empty body.",
+  "Raw-JSON rule \"Json comment\": 1 comment key(s) (\"//...\") dropped — the core rejects unknown fields.",
+  "preset \"ru-direct\": remote rule_set \"geoip-ru\" skipped — no cached file (download first)",
+  "DNS group 'dns-group': member 'off-dns' dropped (disabled)",
+  "DNS group 'dns_shield': member 'cloudflare_udp' dropped (disabled)",
+  "DNS group 'dns_shield': member 'yandex_udp' dropped (unknown)",
+  "DNS group 'dns_shield': member 'yandex_dot' dropped (unknown)",
+  "Outbound \"VLESS Reality\" detours through group \"vpn-3\" it belongs to — excluded from it (its detour is kept; otherwise the kernel would not start: dependency cycle)."
+]

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/direction.dart';
 import '../models/import_rule.dart'; // §388 — ImportRuleAction для варнинга
+import '../models/node_link.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/ui_msg.dart';
@@ -1088,6 +1089,10 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     final newPrefix = widget.entry.tagPrefix;
     if (oldPrefix == newPrefix) return;
     _committedTagPrefix = newPrefix;
+    // §439 (D-113) — префикс одиночного сервера входит в его корневой адрес:
+    // ссылки на его узлы переписываются (у подписки — no-op).
+    await widget.controller.relinkServerTagPrefix(widget.entry, oldPrefix);
+    if (!mounted) return;
     // Свежий список: Направления могли поменяться, пока экран открыт.
     await _loadDirections();
     if (!mounted) return;
@@ -1131,10 +1136,10 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     );
     if (chosen == null || !mounted) return;
     setState(() {
-      widget.entry.overrideDetour = chosen.storeValue;
+      widget.entry.overrideDetour = chosen.link;
       // §111: leftover useDetourServers=false (mode был None) молча гасит
       // override в builder'е. Для полного UI идемпотентно.
-      if (chosen.storeValue.isNotEmpty) widget.entry.useDetourServers = true;
+      if (chosen.link.isNotEmpty) widget.entry.useDetourServers = true;
     });
     unawaited(widget.controller.persistSources());
   }
@@ -1199,7 +1204,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
       switch (mode) {
         case DetourMode.use:
           widget.entry.useDetourServers = true;
-          widget.entry.overrideDetour = '';
+          widget.entry.overrideDetour = NodeLink.none;
         case DetourMode.override:
           widget.entry.useDetourServers = true;
           // overrideDetour сохраняем — может уже выбран ранее. Если пусто —
@@ -1209,7 +1214,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
           }
         case DetourMode.none:
           widget.entry.useDetourServers = false;
-          widget.entry.overrideDetour = '';
+          widget.entry.overrideDetour = NodeLink.none;
       }
     });
     unawaited(widget.controller.persistSources());

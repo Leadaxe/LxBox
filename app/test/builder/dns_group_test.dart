@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/validation.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/builder/validator.dart';
@@ -6,9 +7,9 @@ import 'package:lxbox/services/builder/validator.dart';
 /// §312 — DNS-группы (kernel SPEC 033): эмиссионный фильтр членов +
 /// validator (EmptyDnsGroup / BadDnsGroupMember / DnsGroupCycle).
 void main() {
-  Map<String, dynamic> inlineRef(String tag, Map<String, dynamic> body,
+  DnsServerRef inlineRef(String tag, Map<String, dynamic> body,
           {bool enabled = true}) =>
-      {'enabled': enabled, 'kind': 'inline', 'tag': tag, 'body': body};
+      DnsServerInline(enabled: enabled, tag: tag, body: body);
 
   Map<String, dynamic> groupBody(List<String> members,
           {String? mode, String? errorTtl}) =>
@@ -19,7 +20,7 @@ void main() {
         'error_ttl': ?errorTtl,
       };
 
-  List<Map<String, dynamic>> emit(List<Map<String, dynamic>> refs,
+  List<Map<String, dynamic>> emit(List<DnsServerRef> refs,
           {List<String>? warnings}) =>
       resolveDnsServersBodies(
         resolved: refs,

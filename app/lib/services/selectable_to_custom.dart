@@ -1,5 +1,6 @@
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
+import 'record_vars.dart';
 
 /// Конвертер `SelectableRule` (из `wizard_template.json`) → `CustomRulePreset`
 /// (spec §033).
@@ -14,8 +15,18 @@ CustomRulePreset selectableRuleToCustom(
   String? overrideOutbound,
 }) {
   final varsValues = <String, String>{};
-  if (overrideOutbound != null && overrideOutbound.isNotEmpty) {
-    varsValues['outbound'] = overrideOutbound;
+  if (overrideOutbound != null) {
+    // §441 (Н3/Н4) — цель, равная умолчанию объявленной `outbound`, не
+    // пишется: правило следует шаблону.
+    RecordVarDecl? decl;
+    for (final v in sr.vars) {
+      if (v.name == kPresetOutboundVar && !v.isRef) {
+        decl = RecordVarDecl(name: v.name, defaultValue: v.defaultValue);
+        break;
+      }
+    }
+    final stored = recordVarValueToStore(overrideOutbound, decl);
+    if (stored != null) varsValues[kPresetOutboundVar] = stored;
   }
 
   return CustomRulePreset(

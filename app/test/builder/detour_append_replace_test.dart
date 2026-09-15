@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
+import 'package:lxbox/models/codec/source_record.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
@@ -62,9 +64,8 @@ void main() {
         name: 'Test',
         enabled: true,
         tagPrefix: '',
-        detourPolicy: const DetourPolicy(overrideDetour: 'jump-out'),
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'jump-out')),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [spec],
       );
 
@@ -94,11 +95,10 @@ void main() {
         enabled: true,
         tagPrefix: '',
         detourPolicy: const DetourPolicy(
-          overrideDetour: 'jump-out',
+          overrideDetour: NodeLink(tag: 'jump-out'),
           replaceDetourChain: true,
         ),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [spec],
       );
 
@@ -130,7 +130,6 @@ void main() {
         // detour (нет цепочки в config'е, нет override).
         detourPolicy: const DetourPolicy(),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [spec],
       );
 
@@ -162,10 +161,9 @@ void main() {
         tagPrefix: '',
         detourPolicy: const DetourPolicy(
           useDetourServers: false,
-          overrideDetour: 'jump-out',
+          overrideDetour: NodeLink(tag: 'jump-out'),
         ),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [spec],
       );
 
@@ -200,7 +198,6 @@ void main() {
           tagPrefix: 'Home',
           detourPolicy: const DetourPolicy(),
           origin: UserSource.paste,
-          createdAt: DateTime.now(),
           nodes: [parseUri('vless://wg@hop.com:443?type=ws&security=tls#WG')!],
         );
 
@@ -212,9 +209,8 @@ void main() {
         enabled: true,
         tagPrefix: '',
         // §080: picker сохраняет display-form 'Home WG' (= _withPrefix).
-        detourPolicy: const DetourPolicy(overrideDetour: 'Home WG'),
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'Home WG')),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
       );
 
@@ -239,8 +235,8 @@ void main() {
           reason: 'целевой outbound эмитится как prefixed-form "Home WG"');
     });
 
-    test('bare-form override (старый баг) → detour деградирует, конфиг валиден '
-        '(§172)', () async {
+    test('bare-form override (старый баг) → узел выпадает fail-closed, конфиг '
+        'валиден (§439, NODE_LINK §5.1)', () async {
       final consumer = UserServer(
         id: 'consumer-bad',
         name: 'Consumer',
@@ -248,9 +244,8 @@ void main() {
         tagPrefix: '',
         // Pre-§080 поведение: picker сохранял bare 'WG'. Целевой outbound
         // эмитится как 'Home WG' → 'WG' не существует → dangling reference.
-        detourPolicy: const DetourPolicy(overrideDetour: 'WG'),
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'WG')),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
       );
 
@@ -264,20 +259,25 @@ void main() {
       );
 
       final outs = (result.config['outbounds'] as List).cast<Map>();
-      final main = outs.firstWhere((o) => o['tag'] == 'Main');
       final tags = outs.map((o) => o['tag']).toSet();
-      // §172 — detour 'WG' указывал на несуществующий outbound (есть только
-      // 'Home WG') → healDanglingDetours СНЯЛ его. Нода 'Main' осталась,
-      // работает напрямую. Конфиг валиден (раньше был fatal DanglingDetourRef).
-      expect(main.containsKey('detour'), false,
-          reason: '§172 снял битый detour "WG"');
-      expect(tags.contains('Main'), true, reason: 'нода не выброшена');
+      // §439 — корневая ссылка 'WG' не разрешается (корневой узел эмитится
+      // как 'Home WG'). Узел с неразрешённым detour не эмитится: напрямую
+      // трафик не уходит (до §439 §172 снимал detour, и узел шёл напрямую).
+      expect(tags.contains('Main'), false,
+          reason: 'носитель висячей ссылки выпадает, а не идёт напрямую');
+      expect(tags.contains('Home WG'), true, reason: 'цель на месте');
       expect(tags.contains('WG'), false,
           reason: 'bare "WG" не эмитится — это и есть §080 баг');
       expect(result.validation.hasFatal, false,
-          reason: '§172 — битый detour деградировал, не fatal');
-      // warning о снятом detour присутствует.
-      expect(result.emitWarnings.any((w) => w.contains('Detour removed')), true);
+          reason: 'выпавший узел не делает конфиг невалидным');
+      expect(
+          result.emitWarnings,
+          contains(allOf(
+            contains('Node "Main" was skipped: its detour "WG" did not resolve'),
+            contains('never goes direct'),
+          )));
+      expect(result.emitWarnings.any((w) => w.contains('Detour removed')),
+          isFalse);
     });
 
     test('empty tagPrefix target: display-form == bare (regression-free)',
@@ -289,7 +289,6 @@ void main() {
         tagPrefix: '',
         detourPolicy: const DetourPolicy(),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [parseUri('vless://wg@hop.com:443?type=ws&security=tls#WG')!],
       );
       final consumer = UserServer(
@@ -297,9 +296,8 @@ void main() {
         name: 'Consumer',
         enabled: true,
         tagPrefix: '',
-        detourPolicy: const DetourPolicy(overrideDetour: 'WG'),
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'WG')),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
       );
 
@@ -332,7 +330,6 @@ void main() {
         tagPrefix: 'Home',
         detourPolicy: const DetourPolicy(),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [parseUri('vless://wg@hop.com:443?type=ws&security=tls#WG')!],
       );
       final consumer = UserServer(
@@ -340,9 +337,8 @@ void main() {
         name: 'Consumer',
         enabled: true,
         tagPrefix: '',
-        detourPolicy: const DetourPolicy(overrideDetour: 'Home WG'),
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'Home WG')),
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
       );
 
@@ -363,33 +359,61 @@ void main() {
     });
   });
 
-  group('DetourPolicy JSON round-trip — replaceDetourChain', () {
+  group('DetourPolicy в записи sources[] — replaceDetourChain', () {
+    DetourPolicy readPolicy(Map<String, dynamic> record) =>
+        sourceFromRecord(record).value!.detourPolicy;
+
+    UserServer withPolicy(DetourPolicy p) => UserServer(
+          id: 'u1',
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: p,
+        );
+
     test('default false: missing key → false', () {
-      final policy = DetourPolicy.fromJson({
-        'register_detour_servers': true,
-        'register_detour_in_auto': false,
-        'use_detour_servers': true,
-        'override_detour': 'x',
-        // no 'replace_detour_chain' key
+      final policy = readPolicy({
+        'kind': 'server',
+        'id': 'u1',
+        'detour': {'tag': 'x'},
+        'detour_policy': {
+          'register_detour_servers': true,
+          'register_detour_in_auto': false,
+          'use_detour_servers': true,
+          // no 'replace_detour_chain' key
+        },
       });
       expect(policy.replaceDetourChain, false);
+      expect(policy.registerDetourServers, true);
+      expect(policy.overrideDetour, const NodeLink(tag: 'x'));
     });
 
     test('true: serialized round-trip', () {
       const original = DetourPolicy(
-        overrideDetour: 'x',
+        overrideDetour: NodeLink(tag: 'x'),
         replaceDetourChain: true,
       );
-      final restored = DetourPolicy.fromJson(original.toJson());
+      final record = sourceToRecord(withPolicy(original));
+      expect(record['detour'], {'tag': 'x'});
+      expect((record['detour_policy'] as Map).containsKey('override_detour'),
+          isFalse);
+      final restored = readPolicy(record);
       expect(restored, original);
       expect(restored.replaceDetourChain, true);
+    });
+
+    test('умолчания: detour_policy в запись не пишется', () {
+      final record = sourceToRecord(withPolicy(DetourPolicy.defaults));
+      expect(record.containsKey('detour_policy'), isFalse);
+      expect(record.containsKey('detour'), isFalse);
+      expect(readPolicy(record), DetourPolicy.defaults);
     });
 
     test('copyWith updates replaceDetourChain', () {
       const a = DetourPolicy();
       final b = a.copyWith(replaceDetourChain: true);
       expect(b.replaceDetourChain, true);
-      expect(b.overrideDetour, '');
+      expect(b.overrideDetour, NodeLink.none);
       // == check: разные → not equal
       expect(b == a, false);
     });

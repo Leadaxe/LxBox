@@ -8,7 +8,7 @@
 | Коммиты | см. ветку задачи |
 | Связанные spec'ы | [tasks/410](410-xhttp-extra-empty-not-clobber.md), [tasks/399](399-xhttp-fields-lost-in-json-branches.md), [tasks/217](217-xhttp-normalize-invalid-params.md), [tasks/169](169-drop-not-fit.md), [docs/GUARDS.md](../../GUARDS.md) |
 
-Жалоба с форума 03.09. Реальный конфиг подписки, тот же хост `media.morphai.cc`,
+Жалоба с форума 03.09. Реальный конфиг подписки, тот же хост `media.morphei.cc`,
 что и в §410, и та же ошибка ядра — но причина другая.
 
 ## Симптом

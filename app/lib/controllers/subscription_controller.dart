@@ -5,10 +5,13 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/auto_select.dart';
 import '../models/import_rule.dart';
+import '../models/node_link.dart';
 import '../models/node_sections.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
+import '../models/tailscale_bundle.dart';
 import '../models/ui_msg.dart';
 import '../models/subscription_meta.dart';
 import '../models/validation.dart';
@@ -17,10 +20,13 @@ import '../services/automation/event_emitter.dart';
 import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
 import '../services/parse_hints.dart';
+import '../services/record_vars.dart';
 import '../services/relative_time.dart';
 import '../services/node_emoji.dart';
 import '../services/node_hash.dart';
 import '../services/node_identity.dart';
+import '../services/node_link_address.dart';
+import '../services/settings_storage/node_link_registry.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
 import '../services/builder/core_chain_capability.dart';
@@ -28,11 +34,11 @@ import '../vpn/box_vpn_client.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/parser/ini_parser.dart';
 import '../services/parser/parse_all.dart';
+import '../services/parser/tailscale_split.dart';
 import '../services/parser/uri_parsers.dart';
 import '../services/parser/uri_utils.dart';
 import '../services/haptic_service.dart';
 import '../services/settings_storage.dart';
-import '../services/tag_resolver.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
 import '../services/subscription/import_rules.dart';
@@ -590,7 +596,6 @@ class SubscriptionController extends ChangeNotifier {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         rawBody: tagged.toUri(),
         nodes: [tagged],
       ),
@@ -664,7 +669,6 @@ class SubscriptionController extends ChangeNotifier {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         rawBody: tagged.toUri(),
         nodes: [tagged],
       ),
@@ -708,7 +712,6 @@ class SubscriptionController extends ChangeNotifier {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste,
-        createdAt: DateTime.now(),
         rawBody: tagged.toUri(),
         nodes: [tagged],
       ),
@@ -783,7 +786,6 @@ class SubscriptionController extends ChangeNotifier {
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
           origin: origin,
-          createdAt: DateTime.now(),
           rawBody: spec.rawUri,
           nodes: [spec],
         ));
@@ -806,7 +808,6 @@ class SubscriptionController extends ChangeNotifier {
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
           origin: origin,
-          createdAt: DateTime.now(),
           rawBody: trimmed,
           nodes: nodes,
         ));
@@ -826,7 +827,6 @@ class SubscriptionController extends ChangeNotifier {
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
           origin: origin,
-          createdAt: DateTime.now(),
           rawBody: trimmed,
           nodes: [spec],
         ));
@@ -885,6 +885,39 @@ class SubscriptionController extends ChangeNotifier {
       return _JsonAdd.empty;
     }
 
+    // §437 — узлы Tailscale из многоузловой вставки выделяются в свои
+    // `UserServer`: связка (маршрут в tailnet + DNS-сервер узла) есть только у
+    // свободных узлов, а внутри подписки она бы пропала — устройство видно в
+    // консоли tailnet, а связи с пирами нет. Остаток уезжает прежним путём
+    // ТЕКСТОМ без tailscale-записей: у файловой подписки тело лежит в кэше и
+    // перечитывается на старте, и узел вернулся бы дублем.
+    if (nodes.length > 1 && nodes.any((n) => n is TailscaleSpec)) {
+      final rest = textWithoutTailscale(decoded);
+      var added = false;
+      for (final n in nodes.whereType<TailscaleSpec>()) {
+        final srv = _autoEmoji(UserServer(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          origin: origin,
+          rawBody: n.toUri(),
+          sections: sectionsForNewNode(n),
+          nodes: [n],
+        ));
+        _entries.add(SubscriptionEntry(list: srv, nodeCount: 1));
+        added = true;
+      }
+      if (rest != null) {
+        final tail = await _addJsonNodes(rest, origin: origin);
+        // Остаток из одних групп — не ошибка вставки: узлы Tailscale уже
+        // добавлены, а сообщение «нет пригодных outbound'ов» соврало бы.
+        if (tail == _JsonAdd.empty && added) _lastError = null;
+      }
+      if (added) return _JsonAdd.added;
+    }
+
     // §368 — контейнер по числу узлов, тем же порогом, что и файловый импорт
     // (§129): один узел — это сервер, несколько — набор.
     //
@@ -921,11 +954,11 @@ class SubscriptionController extends ChangeNotifier {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: origin,
-      createdAt: DateTime.now(),
       rawBody: text,
       // §435 — связка из целого конфига с одним узлом / документа с
-      // `sections` (NODE_SECTIONS.md §6): хозяин секций — контейнер.
-      sections: nodes.first.importedSections,
+      // `sections` (NODE_SECTIONS.md §6): хозяин секций — контейнер. §437 —
+      // узел Tailscale без извлечённых записей получает каноническую связку.
+      sections: sectionsForNewNode(nodes.first),
       nodes: nodes,
     ));
     _entries.add(SubscriptionEntry(
@@ -933,56 +966,102 @@ class SubscriptionController extends ChangeNotifier {
     return _JsonAdd.added;
   }
 
-  /// §393 D2 — сколько позиций цепочек вычищено последним удалением источника.
+  /// §439 (D-114) — уведомления о ссылках, погашенных удалением узла или
+  /// источника: кого удалили и какие detour'ы и позиции цепочек задело.
   ///
-  /// Читается экраном сразу после `await`-а мутации и показывается snackbar'ом
-  /// — тем же механизмом, что rules/detours/includes-heal (§202/§248).
-  /// Укорачивание маршрута обязано быть заметным: цепочка 3+ хопов после
-  /// вычистки эмитится УКОРОЧЕННЫМ маршрутом, и промолчать об этом значило бы
-  /// подменить пользователю маршрут молча.
-  int _lastChainPositionsRemoved = 0;
-  int get lastChainPositionsRemoved => _lastChainPositionsRemoved;
-  void clearChainHealNotice() => _lastChainPositionsRemoved = 0;
+  /// Читаются экраном после мутации и показываются snackbar'ом — тем же
+  /// механизмом, что rules/detours/includes-heal (§202/§248). Молчать нельзя:
+  /// снятый detour меняет маршрут узла, цепочка 3+ хопов после вычистки
+  /// эмитится УКОРОЧЕННЫМ маршрутом.
+  final List<NodeLinkNotice> _linkNotices = [];
 
-  /// §393 D2 — вычистить позиции цепочек, ссылавшиеся на удалённый источник.
-  ///
-  /// Зовётся ТОЛЬКО из осознанного удаления пользователем. Обновление
-  /// подписки сюда не приходит намеренно (граница зафиксирована оператором):
-  /// пропавший узел может вернуться следующим обновлением, и фоновое событие
-  /// не вправе молча резать маршруты, написанные руками, — там остаётся
-  /// деградация билдера `chain_hop_missing`.
-  /// §393 D2 — теги папки, которые исчезают при роспуске с сохранением
-  /// серверов: сам префикс (группы больше нет) и члены в ПРЕФИКСНОЙ форме.
-  /// Голые теги членов остаются жить одиночными серверами — позиции цепочек
-  /// на них законны и после роспуска.
-  Set<String> _folderPrefixedTags(FolderServers f) {
-    final out = <String>{if (f.tagPrefix.isNotEmpty) f.tagPrefix};
-    if (f.tagPrefix.isEmpty) return out;
-    for (final t in sourceConfigTags(f)) {
-      if (t.startsWith('${f.tagPrefix} ')) out.add(t);
-    }
+  /// Забрать накопленные уведомления (экран показывает, контроллер копит: у
+  /// контроллера нет `BuildContext`).
+  List<NodeLinkNotice> takeLinkNotices() {
+    if (_linkNotices.isEmpty) return const [];
+    final out = List<NodeLinkNotice>.of(_linkNotices);
+    _linkNotices.clear();
     return out;
   }
 
-  Future<void> _healChainsForRemoved(Iterable<String> tags) async {
-    var removed = 0;
-    for (final t in tags) {
-      final r = await SettingsStorage.healChainHops(t);
-      removed += r.positions;
+  /// Реестр ссылок переписал цепочки хранения: экраны с буфером цепочек
+  /// перечитывают их ([takeChainsRelinked]).
+  bool _chainsRelinked = false;
+
+  /// Забрать флаг «цепочки переписаны реестром ссылок».
+  bool takeChainsRelinked() {
+    final v = _chainsRelinked;
+    _chainsRelinked = false;
+    return v;
+  }
+
+  List<ServerList> _lists() => [for (final e in _entries) e.list];
+
+  /// §439 — реестр ссылок (D-113, D-114) после мутации `_entries`: адреса
+  /// узлов [before] → текущие. Удалённые гаснут (и все пары на контейнеры
+  /// [goneContainers]), перенесённые и переименованные переписываются — в
+  /// источниках (`_entries`) и в цепочках хранения. Зовётся ДО `_persist()`:
+  /// источники ложатся на диск уже с переписанными ссылками.
+  ///
+  /// [renamed] — узел, заменивший прежний (правка тела). [subject] — что
+  /// удалено, для уведомления; без него погашенное только логируется.
+  Future<NodeLinkChange?> _relink(
+    List<ServerList> before, {
+    Map<NodeSpec, NodeSpec> renamed = const {},
+    Set<String> goneContainers = const {},
+    NodeLinkSubject? subject,
+  }) async {
+    final after = _lists();
+    final diff = diffNodeAddresses(before, after, renamed: renamed);
+    if (diff.moves.isEmpty && diff.gone.isEmpty && goneContainers.isEmpty) {
+      return null;
     }
-    if (removed > 0) {
-      _lastChainPositionsRemoved += removed;
-      AppLog.I.info('Chain heal: $removed position(s) removed with the source');
+    final chains = await SettingsStorage.getChains();
+    final r = relinkNodeLinks(
+      after,
+      chains,
+      moves: diff.moves,
+      gone: diff.gone,
+      goneContainers: goneContainers,
+    );
+    for (var i = 0; i < _entries.length && i < r.lists.length; i++) {
+      if (!identical(r.lists[i], after[i])) _entries[i]._replaceList(r.lists[i]);
     }
+    if (r.cleared.chainsChanged || r.rewritten.chainsChanged) {
+      await SettingsStorage.setChains(r.chains);
+      _chainsRelinked = true;
+    }
+    final cleared = r.cleared;
+    if (!cleared.isEmpty) {
+      AppLog.I.info('Node links cleared: ${cleared.detourCarriers.length} '
+          'detour(s), ${cleared.groupMembers} group member(s), '
+          '${cleared.positions} chain position(s)');
+      if (subject != null) {
+        _linkNotices.add(NodeLinkNotice(subject: subject, change: cleared));
+      }
+    }
+    if (!r.rewritten.isEmpty) {
+      AppLog.I.info('Node links rewritten: '
+          '${r.rewritten.detourCarriers.length} detour(s), '
+          '${r.rewritten.groupMembers} group member(s), '
+          '${r.rewritten.positions} chain position(s)');
+    }
+    return cleared;
   }
 
   Future<void> removeAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
+    final before = _lists();
     final gone = _entries.removeAt(index);
+    final list = gone.list;
+    // §439 (D-114) — ссылки на узлы удалённого источника гаснут: detour
+    // снимается, позиция уходит из цепочки (цепочка остаётся, §393 D2).
+    await _relink(
+      before,
+      goneContainers: {if (list is! UserServer) list.id},
+      subject: NodeLinkSubject.of(list, name: gone.displayName),
+    );
     await _persist();
-    // §393 D2 — после снятия источника: цепочки, стоявшие на его узлах,
-    // теряют ПОЗИЦИЮ, а не себя целиком.
-    await _healChainsForRemoved(sourceConfigTags(gone.list));
     notifyListeners();
   }
 
@@ -1136,6 +1215,72 @@ class SubscriptionController extends ChangeNotifier {
     return n.toUri();
   }
 
+  /// §439 — члены-группы разобранного входа (sing-box-конфиг с
+  /// `urltest`/`selector`) → члены `kind: auto` папки [folderId]. [added]
+  /// выровнен с [nodes] 1:1. Ссылка группы на сырой тег члена входа
+  /// (`sourceNodeRawTags`) становится парой `{id папки, тег узла члена}`;
+  /// член, не ставший узлом папки, из состава уходит.
+  static List<FolderMember> _bindAutoMembers(
+    List<FolderMember> added,
+    List<NodeSpec> nodes,
+    String folderId,
+  ) {
+    if (nodes.length != added.length || !nodes.any((n) => n.isGroup)) {
+      return added;
+    }
+    final rawTags = sourceNodeRawTags(nodes);
+    final memberTag = <String, String>{};
+    for (var i = 0; i < nodes.length; i++) {
+      final raw = rawTags[nodes[i]];
+      final tag = added[i].node?.tag ?? '';
+      if (!nodes[i].isGroup && raw != null && tag.isNotEmpty) {
+        memberTag[raw] = tag;
+      }
+    }
+    return [
+      for (var i = 0; i < added.length; i++)
+        switch (nodes[i]) {
+          final AutoSelectSpec g => FolderMember.auto(
+              g.copyWith(
+                membership: switch (g.membership) {
+                  ExplicitMembers(:final members) => ExplicitMembers([
+                      for (final l in members)
+                        if (memberTag[l.tag] case final t?)
+                          NodeLink(folderId: folderId, tag: t),
+                    ]),
+                  final RuleMembers m => m,
+                },
+              ),
+              enabled: added[i].enabled,
+            ),
+          _ => added[i],
+        },
+    ];
+  }
+
+  /// §439 — член-группа, перенесённая в папку [toId]: её явный состав
+  /// адресовал узлы папки [fromId], а группа не выходит за свой контейнер.
+  /// Пары переезжают на новую папку с теми же тегами — как до §439 ключи
+  /// состава искались среди членов папки, куда группа легла.
+  static FolderMember _rehomeAutoMember(
+      FolderMember m, String fromId, String toId) {
+    final g = m.node;
+    if (g is! AutoSelectSpec) return m;
+    final membership = g.membership;
+    if (membership is! ExplicitMembers) return m;
+    return FolderMember.auto(
+      g.copyWith(
+        membership: ExplicitMembers([
+          for (final l in membership.members)
+            l.isRoot || l.folderId == fromId
+                ? NodeLink(folderId: toId, tag: l.tag)
+                : l,
+        ]),
+      ),
+      enabled: m.enabled,
+    );
+  }
+
   /// Есть ли у raw собственное имя (URI-фрагмент `#name` / JSON `tag`).
   static bool _rawHasOwnName(String raw) {
     final t = raw.trim();
@@ -1173,8 +1318,8 @@ class SubscriptionController extends ChangeNotifier {
         detourPolicy: m.detour.isEmpty
             ? DetourPolicy.defaults
             : DetourPolicy.defaults.copyWith(overrideDetour: m.detour),
+        // Узел тот же объект: реестр ссылок узнаёт в нём бывшего члена.
         origin: UserSource.manual,
-        createdAt: DateTime.now(),
         rawBody: m.raw,
         sections: m.sections, // §435
         nodes: [if (m.node != null) m.node!],
@@ -1321,28 +1466,33 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// Удалить папку. [keepServers] = вынести членов одиночными серверами на
-  /// место папки (порядок и per-member enabled сохраняются).
+  /// место папки (порядок и per-member enabled сохраняются). Авто-узлы
+  /// удаляются и при [keepServers]: текста у группы нет, одиночным сервером
+  /// она стала бы пустой записью, а её пул — узлы этой папки.
   Future<void> deleteFolderAt(int index, {required bool keepServers}) async {
     if (index < 0 || index >= _entries.length) return;
     final list = _entries[index].list;
     if (list is! FolderServers) return;
+    final before = _lists();
     _entries.removeAt(index);
     if (keepServers) {
       _entries.insertAll(
         index,
-        list.members.map((m) {
+        list.members.where((m) => m.node?.isGroup != true).map((m) {
           final us = _memberToUserServer(m);
           return SubscriptionEntry(list: us, nodeCount: us.nodes.length);
         }),
       );
     }
+    // §439 — при `keepServers` члены остаются одиночными серверами: ссылки
+    // на них переписываются с пары на корневой адрес (D-113). Без
+    // keepServers уходит вся папка — ссылки на её членов гаснут (D-114).
+    await _relink(
+      before,
+      goneContainers: {if (!keepServers) list.id},
+      subject: NodeLinkSubject.of(list),
+    );
     await _persist();
-    // §393 D2 — при `keepServers` члены остаются в конфиге одиночными
-    // серверами, но уже БЕЗ префикса папки: исчезают только сам префикс
-    // (группа) и теги в префиксной форме, а голые продолжают жить. Без
-    // keepServers уходит вся папка целиком.
-    await _healChainsForRemoved(
-        keepServers ? _folderPrefixedTags(list) : sourceConfigTags(list));
     notifyListeners();
     AppLog.I.info(
         'Folder deleted: ${list.name} (${keepServers ? 'servers kept' : 'servers removed'})');
@@ -1375,7 +1525,9 @@ class SubscriptionController extends ChangeNotifier {
     final added = <FolderMember>[];
     for (final n in nodes) {
       var raw = memberRawFor(n);
-      if (nameFallback != null &&
+      // §439 — у группы текста нет, имя ей не раздаётся (член `kind: auto`).
+      if (!n.isGroup &&
+          nameFallback != null &&
           nameFallback.isNotEmpty &&
           !_rawHasOwnName(raw)) {
         var candidate = nameFallback;
@@ -1386,9 +1538,11 @@ class SubscriptionController extends ChangeNotifier {
         raw = _rawWithName(n.toUri(), candidate);
       }
       // §435 — секции из целого конфига / документа с `sections` едут в
-      // члена папки вместе с телом.
-      added.add(FolderMember(raw: raw, sections: n.importedSections));
+      // члена папки вместе с телом; §437 — узел Tailscale без них получает
+      // каноническую связку.
+      added.add(FolderMember(raw: raw, sections: sectionsForNewNode(n)));
     }
+    added.setAll(0, _bindAutoMembers(added, nodes, folder.id));
     entry._replaceList(folder.copyWith(members: [...folder.members, ...added]));
     entry.nodeCount = entry.list.nodes.length;
     await _persist();
@@ -1418,8 +1572,13 @@ class SubscriptionController extends ChangeNotifier {
       if (cur is! FolderServers || !_entries.contains(entry)) {
         return const ErrMsg(ErrKey.folderNotFound);
       }
-      final added =
-          result.nodes.map((n) => FolderMember(raw: memberRawFor(n))).toList();
+      final added = _bindAutoMembers(
+          result.nodes
+              .map((n) => FolderMember(
+                  raw: memberRawFor(n), sections: sectionsForNewNode(n)))
+              .toList(),
+          result.nodes,
+          cur.id);
       entry._replaceList(cur.copyWith(members: [...cur.members, ...added]));
       entry.nodeCount = entry.list.nodes.length;
       await _persist();
@@ -1557,16 +1716,68 @@ class SubscriptionController extends ChangeNotifier {
     if (probe.node == null) {
       return const ErrMsg(ErrKey.memberParseKeepCurrent);
     }
+    final before = _lists();
     final members = [...folder.members];
     // §435 — голое тело секции не трогает; документ с `sections` или с
     // `dns`/`route` (извлечение) замещает их целиком (NODE_SECTIONS.md §7).
     final imported = probe.node!.importedSections;
+    final previous = members[memberIndex].node;
     members[memberIndex] = members[memberIndex].copyWith(
       raw: trimmed,
       sections: imported,
     );
+    final current = members[memberIndex].node;
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
+    // §439 (D-113) — правка тела могла сменить тег: ссылки идут за узлом.
+    await _relink(before, renamed: {
+      if (previous != null && current != null) previous: current,
+    });
+    await _persist();
+    notifyListeners();
+    return null;
+  }
+
+  /// §439 — добавить в папку узел автовыбора (член `kind: auto`). Члены
+  /// группы — ссылки на узлы этой же папки, их собирает редактор.
+  Future<UiMsg?> addAutoMemberToFolder(int index, AutoSelectSpec group) async {
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
+    entry._replaceList(folder.copyWith(
+        members: [...folder.members, FolderMember.auto(group)]));
+    entry.nodeCount = entry.list.nodes.length;
+    await _persist();
+    notifyListeners();
+    AppLog.I.info('Folder "${folder.name}": +1 auto node');
+    return null;
+  }
+
+  /// §439 — заменить группу члена-группы [memberIndex]; `enabled` члена
+  /// остаётся.
+  Future<UiMsg?> updateAutoMemberAt(
+      int index, int memberIndex, AutoSelectSpec group) async {
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.folderNotFound);
+    }
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
+    if (memberIndex < 0 || memberIndex >= folder.members.length) {
+      return const ErrMsg(ErrKey.serverNotFound);
+    }
+    final before = _lists();
+    final members = [...folder.members];
+    final previous = members[memberIndex].node;
+    members[memberIndex] =
+        FolderMember.auto(group, enabled: members[memberIndex].enabled);
+    entry._replaceList(folder.copyWith(members: members));
+    entry.nodeCount = entry.list.nodes.length;
+    // §439 (D-113) — переименование группы переписывает ссылки на неё.
+    await _relink(before, renamed: {?previous: group});
     await _persist();
     notifyListeners();
     return null;
@@ -1579,22 +1790,16 @@ class SubscriptionController extends ChangeNotifier {
     final folder = entry.list;
     if (folder is! FolderServers) return;
     if (memberIndex < 0 || memberIndex >= folder.members.length) return;
+    final before = _lists();
     final gone = folder.members[memberIndex];
     final members = [...folder.members]..removeAt(memberIndex);
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
+    // §439 (D-114) — ссылки на удалённого члена гаснут; тёзка, чей сырой тег
+    // сдвинулся (`X-2` → `X`), уносит свои ссылки с собой.
+    await _relink(before, subject: NodeLinkSubject.member(folder, gone));
     await _persist();
-    // §393 D2 — член папки — такой же источник узла, как одиночный сервер.
-    await _healChainsForRemoved(_memberTags(folder, gone));
     notifyListeners();
-  }
-
-  /// §393 D2 — теги конфига одного члена папки: голый и с префиксом папки.
-  Set<String> _memberTags(FolderServers f, FolderMember m) {
-    final bare = m.node?.tag ?? '';
-    if (bare.isEmpty) return const {};
-    return {bare, TagResolver.displayTag(f.tagPrefix, bare)}
-      ..removeWhere((t) => t.trim().isEmpty);
   }
 
   /// Ручной порядок членов внутри папки (drag-reorder).
@@ -1605,16 +1810,20 @@ class SubscriptionController extends ChangeNotifier {
     if (folder is! FolderServers) return;
     if (from < 0 || from >= folder.members.length) return;
     if (to < 0 || to >= folder.members.length) return;
+    final before = _lists();
     final members = [...folder.members];
     final m = members.removeAt(from);
     members.insert(to, m);
     entry._replaceList(folder.copyWith(members: members));
+    // §439 — перестановка тёзок меняет их сырые теги (`X`/`X-2`).
+    await _relink(before);
     await _persist();
     notifyListeners();
   }
 
   /// Вынести члена из папки в одиночный сервер (вставляется сразу после
-  /// папки). Личные prefix/policy папки НЕ наследуются — дефолты.
+  /// папки). Личные prefix/policy папки НЕ наследуются — дефолты. Авто-узел
+  /// не выносится (no-op): см. [deleteFolderAt].
   Future<void> ungroupMemberAt(int index, int memberIndex) async {
     if (index < 0 || index >= _entries.length) return;
     final entry = _entries[index];
@@ -1622,22 +1831,26 @@ class SubscriptionController extends ChangeNotifier {
     if (folder is! FolderServers) return;
     if (memberIndex < 0 || memberIndex >= folder.members.length) return;
     final member = folder.members[memberIndex];
+    if (member.node?.isGroup == true) return;
+    final before = _lists();
     final members = [...folder.members]..removeAt(memberIndex);
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
     final us = _memberToUserServer(member);
     _entries.insert(
         index + 1, SubscriptionEntry(list: us, nodeCount: us.nodes.length));
+    // §439 (D-113) — член стал корневым узлом: пара → корневой адрес.
+    await _relink(before);
     await _persist();
     notifyListeners();
   }
 
-  /// §237/§239 — личный detour члена: для цели из СВОЕЙ папки хранится
-  /// ГОЛЫЙ тег члена (resolve при сборке — переживает смену префикса), для
-  /// внешней — display-form (§080). Отклоняет self и ребро, замыкающее
-  /// интра-цикл. Возвращает '' при успехе, иначе текст ошибки.
+  /// §237/§239 — личный detour члена: ссылка на узел (D-112) — сосед по
+  /// папке парой с `id` этой папки, прочее — как выбрано в пикере. Отклоняет
+  /// self и ребро, замыкающее интра-цикл. Возвращает null при успехе, иначе
+  /// ошибку.
   Future<UiMsg?> setMemberDetour(
-      int index, int memberIndex, String detour) async {
+      int index, int memberIndex, NodeLink detour) async {
     if (index < 0 || index >= _entries.length) {
       return const ErrMsg(ErrKey.folderNotFound);
     }
@@ -1651,21 +1864,20 @@ class SubscriptionController extends ChangeNotifier {
     if (detour.isNotEmpty) {
       // Интра-цикл: ребро member→target замыкает петлю, если из target по
       // существующим интра-рёбрам достижим сам member.
-      final bare = <String, int>{};
+      final raw = <String, int>{};
       for (var k = 0; k < folder.members.length; k++) {
-        final t = folder.members[k].node?.tag;
-        if (t != null && t.isNotEmpty) bare.putIfAbsent(t, () => k);
+        final a = folderMemberAddress(folder, k);
+        if (a != null) raw.putIfAbsent(a.tag, () => k);
       }
-      final target = bare[detour];
+      int? intra(NodeLink l) => l.folderId == folder.id ? raw[l.tag] : null;
+      final target = intra(detour);
       if (target == memberIndex) {
         return const ErrMsg(ErrKey.detourSelf);
       }
       if (target != null) {
         int? edgeOf(int k) {
           if (k == memberIndex) return target; // новое ребро
-          final d = folder.members[k].detour;
-          if (d.isEmpty) return null;
-          final j = bare[d];
+          final j = intra(folder.members[k].detour);
           return (j != null && j != k) ? j : null;
         }
 
@@ -1721,16 +1933,21 @@ class SubscriptionController extends ChangeNotifier {
         if (!memberIndexes.contains(i)) folder.members[i],
     ];
     if (members.length == folder.members.length) return;
+    final before = _lists();
     final gone = [
       for (var i = 0; i < folder.members.length; i++)
         if (memberIndexes.contains(i)) folder.members[i],
     ];
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
+    // §439 (D-114) — как одиночное удаление члена, только пачкой.
+    await _relink(
+      before,
+      subject: gone.length == 1
+          ? NodeLinkSubject.member(folder, gone.single)
+          : NodeLinkSubject.servers(gone.length),
+    );
     await _persist();
-    // §393 D2 — как одиночное удаление члена, только пачкой.
-    await _healChainsForRemoved(
-        {for (final m in gone) ..._memberTags(folder, m)});
     notifyListeners();
   }
 
@@ -1744,8 +1961,11 @@ class SubscriptionController extends ChangeNotifier {
     if (order.length != folder.members.length) return;
     if (order.toSet().length != order.length) return;
     if (order.any((i) => i < 0 || i >= folder.members.length)) return;
+    final before = _lists();
     entry._replaceList(folder.copyWith(
         members: [for (final i in order) folder.members[i]]));
+    // §439 — перестановка тёзок меняет их сырые теги (`X`/`X-2`).
+    await _relink(before);
     await _persist();
     notifyListeners();
   }
@@ -1770,12 +1990,21 @@ class SubscriptionController extends ChangeNotifier {
     if (memberIndex < 0 || memberIndex >= from.members.length) {
       return const ErrMsg(ErrKey.serverNotFound);
     }
-    final member = from.members[memberIndex];
+    final before = _lists();
+    final moved = from.members[memberIndex];
+    final member = _rehomeAutoMember(moved, from.id, to.id);
     final fromMembers = [...from.members]..removeAt(memberIndex);
     fromEntry._replaceList(from.copyWith(members: fromMembers));
     fromEntry.nodeCount = fromEntry.list.nodes.length;
     toEntry._replaceList(to.copyWith(members: [...to.members, member]));
     toEntry.nodeCount = toEntry.list.nodes.length;
+    // §439 (D-113) — перенос: `folder_id` меняется, ссылки идут за узлом
+    // (группа пересоздаётся с составом на новую папку — узел сопоставляется
+    // явно).
+    await _relink(before, renamed: {
+      if (moved.node != null && member.node != null && moved.node != member.node)
+        moved.node!: member.node!,
+    });
     await _persist();
     notifyListeners();
     return null;
@@ -1800,11 +2029,12 @@ class SubscriptionController extends ChangeNotifier {
     }
     if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
 
+    final before = _lists();
     // §237 — личный detour одиночного (overrideDetour) переезжает в члена;
     // прочая политика (register-флаги и т.п.) заменяется папочной.
     final personalDetour = server.detourPolicy.useDetourServers
         ? server.detourPolicy.overrideDetour
-        : '';
+        : NodeLink.none;
     final added = server.nodes.isEmpty
         // Битый/пустой raw — переносим как есть (член будет виден и правим).
         ? [
@@ -1813,7 +2043,7 @@ class SubscriptionController extends ChangeNotifier {
                 enabled: server.enabled,
                 detour: personalDetour),
           ]
-        : [
+        : _bindAutoMembers([
             for (final n in server.nodes)
               FolderMember(
                   raw: memberRawFor(n),
@@ -1823,11 +2053,17 @@ class SubscriptionController extends ChangeNotifier {
                   sections: identical(n, server.nodes.first)
                       ? server.sections
                       : null),
-          ];
+          ], server.nodes, folder.id);
     folderEntry._replaceList(
         folder.copyWith(members: [...folder.members, ...added]));
     folderEntry.nodeCount = folderEntry.list.nodes.length;
     _entries.remove(serverEntry);
+    // §439 (D-113) — узлы сервера стали членами папки: корневой адрес →
+    // пара. Член разбирает свой текст заново, узел сопоставляется по месту.
+    await _relink(before, renamed: {
+      for (var k = 0; k < server.nodes.length && k < added.length; k++)
+        server.nodes[k]: ?added[k].node,
+    });
     await _persist();
     notifyListeners();
     AppLog.I.info(
@@ -2339,6 +2575,23 @@ class SubscriptionController extends ChangeNotifier {
     await _persist();
   }
 
+  /// §439 (D-113) — префикс одиночного сервера — часть его корневого адреса
+  /// (`{tag: префикс + тег}`): смена [oldPrefix] на текущий переписывает
+  /// ссылки на его узлы. У папки и подписки префикс адрес не меняет
+  /// (NODE_LINK §6 п. 2) — no-op.
+  Future<void> relinkServerTagPrefix(
+      SubscriptionEntry entry, String oldPrefix) async {
+    final list = entry.list;
+    if (list is! UserServer || list.tagPrefix == oldPrefix) return;
+    final index = _entries.indexOf(entry);
+    if (index < 0) return;
+    final before = _lists();
+    before[index] = list.copyWith(tagPrefix: oldPrefix);
+    if (await _relink(before) == null) return;
+    await _persist();
+    notifyListeners();
+  }
+
   /// Обновляет inline-узлы `UserServer` из нового списка URI/JSON строк.
   Future<void> updateConnectionAt(int index, List<String> connections) async {
     if (index < 0 || index >= _entries.length) return;
@@ -2350,6 +2603,7 @@ class SubscriptionController extends ChangeNotifier {
       final decoded = decode(c);
       nodes.addAll(parseAll(decoded));
     }
+    final before = _lists();
     final next = list.copyWith(
       // §243 — displayName у UserServer name игнорирует (legacy v2.11.0 мог
       // записать туда имя файла); при пересохранении затираем совсем.
@@ -2363,6 +2617,12 @@ class SubscriptionController extends ChangeNotifier {
     _entries[index]._replaceList(next);
     _entries[index].nodeCount = nodes.length;
     _entries[index].status = const SubStatusJsonOutbound();
+    // §439 (D-113) — переименование корневого узла правкой тела переписывает
+    // ссылки на него; узлы сопоставляются по месту в теле.
+    await _relink(before, renamed: {
+      for (var k = 0; k < list.nodes.length && k < nodes.length; k++)
+        list.nodes[k]: nodes[k],
+    });
     await _persist();
     notifyListeners();
   }
@@ -2477,6 +2737,23 @@ class SubscriptionController extends ChangeNotifier {
     if (changed) notifyListeners();
   }
 
+  /// §441 — ресинк `_entries` после storage-heal `body.detour` DNS-серверов
+  /// секций узлов на выключенное или удалённое Направление [tag] (→ vpn-1),
+  /// по той же причине, что [syncDetourDirectionRefsCleared]. Ядро общее —
+  /// [retargetSectionsDnsDetours].
+  void syncSectionsDnsDetourRefsHealed(String tag) {
+    final retarget = directionRefRetarget(tag, 'vpn-1');
+    var changed = false;
+    for (final e in _entries) {
+      final r = retargetSectionsDnsDetours(e.list, retarget);
+      if (r.healed != null) {
+        e._replaceList(r.healed!);
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
   ServerList _renameList(ServerList l, String name) => switch (l) {
         SubscriptionServers() => l.copyWith(name: name),
         UserServer() => l.copyWith(name: name),
@@ -2488,4 +2765,50 @@ class SubscriptionController extends ChangeNotifier {
         UserServer() => l.copyWith(enabled: enabled),
         FolderServers() => l.copyWith(enabled: enabled),
       };
+}
+
+/// §439 (D-114) — что удалено: подпись уведомления о погашенных ссылках.
+final class NodeLinkSubject {
+  const NodeLinkSubject._(this.kind, this.name, [this.count = 1]);
+
+  /// Источник целиком: одиночный сервер, подписка или папка. [name] —
+  /// подпись записи в списке (у подписки без имени — адрес).
+  factory NodeLinkSubject.of(ServerList list, {String? name}) =>
+      switch (list) {
+        UserServer u => NodeLinkSubject._(
+            NodeLinkSubjectKind.server,
+            u.nodes.isNotEmpty
+                ? containerFinalForm(u, u.nodes.first.tag)
+                : (name ?? u.name),
+          ),
+        SubscriptionServers s => NodeLinkSubject._(
+            NodeLinkSubjectKind.subscription, name ?? s.name),
+        FolderServers f =>
+          NodeLinkSubject._(NodeLinkSubjectKind.folder, f.name),
+      };
+
+  /// Член папки [folder].
+  factory NodeLinkSubject.member(FolderServers folder, FolderMember m) =>
+      NodeLinkSubject._(
+        NodeLinkSubjectKind.server,
+        m.node == null ? '' : containerFinalForm(folder, m.node!.tag),
+      );
+
+  /// Несколько серверов разом.
+  factory NodeLinkSubject.servers(int count) =>
+      NodeLinkSubject._(NodeLinkSubjectKind.servers, '', count);
+
+  final NodeLinkSubjectKind kind;
+  final String name;
+  final int count;
+}
+
+enum NodeLinkSubjectKind { server, subscription, folder, servers }
+
+/// §439 (D-114) — удаление погасило ссылки: кого удалили и кого задело.
+final class NodeLinkNotice {
+  const NodeLinkNotice({required this.subject, required this.change});
+
+  final NodeLinkSubject subject;
+  final NodeLinkChange change;
 }

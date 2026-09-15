@@ -4,9 +4,8 @@
 // `FolderMember.sections`) хранятся с плейсхолдерами `@self`; экран
 // показывает их read-only ПОСЛЕ подстановки display-тега узла с пометкой
 // «from node <тег>». Записи — производные, как preset-серверы в
-// `DnsController.load`: в `_servers`/`_rules` экрана они не кладутся
-// (резолверы `resolveDnsServersList`/`resolveDnsRulesList` отбросили бы чужой
-// kind и персистили усечённый список).
+// `DnsController.load`: в `_servers`/`_rules` экрана они не кладутся, иначе
+// стейджинг экрана записал бы их в корневой `dns_options`.
 //
 // Чистые функции над `List<ServerList>` — без storage и BuildContext, чтобы
 // тестировались изолированно (`node_dns_records_test.dart`).

@@ -11,6 +11,8 @@
 /// `record_codec.dart`, будущий корневой парсер 1.0.
 library;
 
+import 'package:collection/collection.dart';
+
 import 'custom_rule.dart';
 import 'dns_ref.dart';
 import 'record_codec.dart';
@@ -19,6 +21,35 @@ import 'record_codec.dart';
 /// перед якорем `private-ips` (950) — подсеть tailnet и подсети за пиром
 /// должны матчиться раньше общих правил.
 const int kNodeRuleDefaultNum = 945;
+
+/// Причины отбраковки записи секции (норма B3, `NODE_SECTIONS.md` §1) —
+/// значения `reason` у `backup_section_record_dropped`. Перечень закрыт
+/// контрактом: свои слова стороны заводить не вправе.
+///
+/// [kSectionDropKind] — вида записи у секции не бывает (или запись не
+/// читается как запись этого вида); [kSectionDropRuleSet] — в теле правила
+/// стоит `rule_set`; [kSectionDropUnknownKey] — в теле правила ключ, которого
+/// эта сторона не держит (строгость LxBox, NODE_SECTIONS.md §1; detail
+/// называет ключ); [kSectionDropNotAllowed] — узлу этого вида секции не
+/// положены вовсе (ставит импорт, у модели секций такого случая нет).
+const String kSectionDropKind = 'kind';
+const String kSectionDropRuleSet = 'rule_set';
+const String kSectionDropUnknownKey = 'unknown_key';
+const String kSectionDropNotAllowed = 'not_allowed';
+
+/// §438 — отброшенная запись секции: вид, причина из перечня B3 и текст для
+/// человека (тот же, что уходит в `dropped`).
+final class NodeSectionDrop {
+  const NodeSectionDrop({
+    required this.kind,
+    required this.reason,
+    required this.text,
+  });
+
+  final String kind;
+  final String reason;
+  final String text;
+}
 
 final class NodeSections {
   const NodeSections({
@@ -57,13 +88,26 @@ final class NodeSections {
   /// Чтение формы §2. Не бросает: чужой `kind`, битая форма записи —
   /// в [dropped] (текст для UI редактора узла), незнакомые ключи `body` — в
   /// [unknownKeys]. `null` — поля нет, оно не объект или все списки пусты.
+  ///
+  /// §438 — [drops] получает те же отбраковки структурно (вид и причина по
+  /// норме B3): импорт бэкапа называет их кодом с `reason`.
   static NodeSections? fromJson(
     Object? j, {
     List<String>? dropped,
     List<String>? unknownKeys,
+    List<NodeSectionDrop>? drops,
   }) {
     if (j is! Map) return null;
     final m = j.cast<String, dynamic>();
+
+    void drop(String text, Object? kind, String reason) {
+      dropped?.add(text);
+      drops?.add(NodeSectionDrop(
+        kind: kind is String && kind.isNotEmpty ? kind : '?',
+        reason: reason,
+        text: text,
+      ));
+    }
 
     final rules = <CustomRule>[];
     final rawRules = m['rules'];
@@ -71,20 +115,20 @@ final class NodeSections {
       for (var i = 0; i < rawRules.length; i++) {
         final rec = rawRules[i];
         if (rec is! Map) {
-          dropped?.add('rules[$i]: not an object');
+          drop('rules[$i]: not an object', null, kSectionDropKind);
           continue;
         }
         final record = _withSelfOutbound(rec.cast<String, dynamic>());
         final read = ruleFromRecord(record);
         final r = read.value;
         if (r == null) {
-          dropped?.add('rules[$i]: ${read.dropped}');
+          drop('rules[$i]: ${read.dropped}', record['kind'], kSectionDropKind);
           continue;
         }
         // NODE_SECTIONS.md §1 — в секции допустимы только inline | srs.
         if (r.kind != CustomRuleKind.inline && r.kind != CustomRuleKind.srs) {
-          dropped?.add(
-              'rules[$i]: kind "${r.kind.name}" is not allowed in node sections');
+          drop('rules[$i]: kind "${r.kind.name}" is not allowed in node sections',
+              r.kind.name, kSectionDropKind);
           continue;
         }
         // Норма лаунчера (14.09.2026, B3): ключ тела, который сторона не
@@ -94,7 +138,16 @@ final class NodeSections {
         // узел. Запись отбрасывается целиком, причина называет ключи.
         if (read.unknownKeys.isNotEmpty) {
           final keys = read.unknownKeys.join(', ');
-          dropped?.add('rules[$i]: body keys not supported here: $keys');
+          // §438 — причина по перечню B3: `rule_set` назван нормой; прочие
+          // незнакомые ключи — строгость LxBox (NODE_SECTIONS.md §1), причина
+          // `unknown_key` (ответ лаунчера 14.09.2026).
+          drop(
+            'rules[$i]: body keys not supported here: $keys',
+            r.kind.name,
+            read.unknownKeys.contains('rule_set')
+                ? kSectionDropRuleSet
+                : kSectionDropUnknownKey,
+          );
           unknownKeys?.addAll(read.unknownKeys.map((k) => 'rules[$i].body.$k'));
           continue;
         }
@@ -111,18 +164,21 @@ final class NodeSections {
         for (var i = 0; i < rawServers.length; i++) {
           final rec = rawServers[i];
           if (rec is! Map) {
-            dropped?.add('dns.servers[$i]: not an object');
+            drop('dns.servers[$i]: not an object', null, kSectionDropKind);
             continue;
           }
           final read = dnsServerFromRecord(rec.cast<String, dynamic>());
           final s = read.value;
           if (s == null) {
-            dropped?.add('dns.servers[$i]: ${read.dropped}');
+            drop('dns.servers[$i]: ${read.dropped}', rec['kind'],
+                kSectionDropKind);
             continue;
           }
           if (s is! DnsServerInline) {
-            dropped?.add(
-                'dns.servers[$i]: kind "${s.kind}" is not allowed in node sections');
+            drop(
+                'dns.servers[$i]: kind "${s.kind}" is not allowed in node sections',
+                s.kind,
+                kSectionDropKind);
             continue;
           }
           dnsServers.add(s);
@@ -133,18 +189,21 @@ final class NodeSections {
         for (var i = 0; i < rawDnsRules.length; i++) {
           final rec = rawDnsRules[i];
           if (rec is! Map) {
-            dropped?.add('dns.rules[$i]: not an object');
+            drop('dns.rules[$i]: not an object', null, kSectionDropKind);
             continue;
           }
           final read = dnsRuleFromRecord(rec.cast<String, dynamic>());
           final r = read.value;
           if (r == null) {
-            dropped?.add('dns.rules[$i]: ${read.dropped}');
+            drop('dns.rules[$i]: ${read.dropped}', rec['kind'],
+                kSectionDropKind);
             continue;
           }
           if (r is! DnsRuleInline) {
-            dropped?.add(
-                'dns.rules[$i]: kind "${r.kind}" is not allowed in node sections');
+            drop(
+                'dns.rules[$i]: kind "${r.kind}" is not allowed in node sections',
+                r.kind,
+                kSectionDropKind);
             continue;
           }
           dnsRules.add(r);
@@ -179,6 +238,20 @@ final class NodeSections {
         dnsServers: dnsServers ?? this.dnsServers,
         dnsRules: dnsRules ?? this.dnsRules,
       );
+
+  static const _eq = ListEquality<Object>();
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is NodeSections &&
+          _eq.equals(rules, other.rules) &&
+          _eq.equals(dnsServers, other.dnsServers) &&
+          _eq.equals(dnsRules, other.dnsRules));
+
+  @override
+  int get hashCode =>
+      Object.hash(_eq.hash(rules), _eq.hash(dnsServers), _eq.hash(dnsRules));
 }
 
 /// Норма лаунчера (14.09.2026, B5): запись секции без `outbound` и без

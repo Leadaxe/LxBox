@@ -12,7 +12,7 @@
 addFromInput rejected: Input is not a subscription URL, proxy link, or outbound JSON
 ```
 
-Диагностика на живом сервере (naive, `getall.servebeer.com:26646`):
+Диагностика на живом сервере (naive, `getalk.servebeer.com:26646`):
 
 - `parseUri('naive+https://…')` → валидный `NaiveSpec` ✅ (парсер знает схему)
 - `POST /subs {"input":"naive+https://…"}` → 400, `isDirectLink` вернул `false`
