@@ -19,7 +19,7 @@ import '../models/import_rule.dart';
 import '../models/node_link.dart';
 import '../models/node_sections.dart';
 import '../models/node_spec.dart' show AutoSelectSpec;
-import '../models/parser_config.dart' show kDefaultRuleNum;
+import '../models/parser_config.dart' show kUserRuleNumStart;
 import '../models/record_codec.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
@@ -3780,9 +3780,20 @@ String _linkConfigTag(
 /// головой `traffic-processing`, и `sniff` перестаёт быть первым правилом.
 /// v2.23.2 номера файла сохранял.
 ///
-/// Неразмеченные корневые встают в хвост оси, в порядке файла: без номера
-/// разметка при загрузке поставила бы их поверх размеченных. Правила секций
-/// без номера остаются без него — сборка ставит их на 945.
+/// Крайние случаи (BACKUP.md §9 п. 7, форма лаунчера `5cbcc436`):
+///
+///  * **ни одно корневое правило не размечено** — номера не проставляются
+///    вовсе, правила возвращаются как есть. Разметку даёт загрузка
+///    (`markRuleOrder`): пресету — номер шаблона (голова 0, 950–990 …),
+///    остальным — подряд от [kUserRuleNumStart]. Номера от 1000 всем подряд
+///    поставили бы пресеты-перехватчики и голову `traffic-processing` за
+///    пользовательскими правилами;
+///  * **размечены не все** — неразмеченные корневые встают в хвост оси в
+///    порядке файла (без номера разметка при загрузке поставила бы их поверх
+///    размеченных), но не ниже [kUserRuleNumStart]: хвост файла с номерами
+///    шаблона не уводит правило пользователя в зону пресетов.
+///
+/// Правила секций без номера остаются без него — сборка ставит их на 945.
 ///
 /// Возвращает корневые правила в порядке оси; номера проставляются в тех же
 /// объектах (как во всём §370).
@@ -3791,6 +3802,8 @@ List<CustomRule> renumberBackupAxis(
   List<ServerList> lists,
   List<BackupNodeRef> touched,
 ) {
+  if (rules.every((r) => r.orderNum == null)) return rules;
+
   var last = -1;
   void see(int? n) {
     if (n != null && n > last) last = n;
@@ -3817,7 +3830,7 @@ List<CustomRule> renumberBackupAxis(
     }
   }
 
-  var next = last < 0 ? kDefaultRuleNum : last + 1;
+  var next = last + 1 < kUserRuleNumStart ? kUserRuleNumStart : last + 1;
   for (final r in rules) {
     r.orderNum ??= next++;
   }
