@@ -59,8 +59,9 @@ changes.
   the authentication key follows the server's choice (`Ecdhe`, else
   `MlkemEcdhe`). Servers before v26.9.8 are unaffected (verified against
   v26.7.11 and v26.7.28). Only the `chrome` fingerprint family carries the
-  key share; LxBox substitutes `chrome` for any other fingerprint on a REALITY
-  node when emitting the config and warns on the node at import (§281).
+  key share; LxBox warns on a REALITY node with any other explicit fingerprint
+  and suggests `chrome`, but the node's fingerprint goes into the config as is
+  (§444; 2.23.2 substituted `chrome` at build time).
 - **lx.35 — 100 % CPU until restart with XHTTP behind a CDN that resets
   streams (core SPEC 082, fork issue #14).** The stream-reset error left the
   transport conn with the HTTP/2 library's own error type; any HTTP/2 client
@@ -733,7 +734,7 @@ subscription), the core provides insurance in case the client misses something.
 | **v1.14.0-lx.39** (current pin) | **SOCKS5 UDP hotfix** (fork SPEC 085): a UDP ASSOCIATE reply with `BND.ADDR` `0.0.0.0`/`::` no longer makes the client dial the relay at the local system — the proxy server address is used instead. Java surface identical to lx.38. |
 | **v1.14.0-lx.38** | **Tailscale in the AAR** — `with_tailscale` plus the `ts_omit_*` trims (§435, contract ## 13, D-103): the `tailscale` endpoint and the `tailscale` DNS server type; AAR +2.58 MB, build time unchanged. Plus the SPEC 084 hotfix (ABBA deadlock of nested selectors, fork issue #20). Upstream base of lx.37 (`upstream/stable` v1.14.0 + 33). Java surface unchanged from lx.36. |
 | **v1.14.0-lx.37** | Upstream sync: `upstream/stable` b7eb49bb8 (v1.14.0 + 33), submodules wireguard-go v0.0.6 / sing-tun v0.9.3. No config changes. AAR still without Tailscale. |
-| **v1.14.0-lx.36** | Hotfix: REALITY nodes on Xray-core ≥ v26.9.8 work again — the core no longer strips the `X25519MLKEM768` key share the server now requires, and derives the auth key the way the server does (core SPEC 083); servers before v26.9.8 unaffected. Only `chrome` fingerprints carry the key share — LxBox emits `chrome` for any REALITY node (§281). Same upstream base as lx.34. |
+| **v1.14.0-lx.36** | Hotfix: REALITY nodes on Xray-core ≥ v26.9.8 work again — the core no longer strips the `X25519MLKEM768` key share the server now requires, and derives the auth key the way the server does (core SPEC 083); servers before v26.9.8 unaffected. Only `chrome` fingerprints carry the key share — LxBox 2.23.2 emitted `chrome` for any REALITY node (§281); since 2.24.0 an explicit fingerprint goes into the config as is, with a warning on the node (§444). Same upstream base as lx.34. |
 | **v1.14.0-lx.35** | Hotfix for fork issue #14: XHTTP behind a CDN that resets HTTP/2 streams could pin the CPU at 100 % until restart — the `http2.StreamError` type no longer leaks out of XHTTP / HTTP / gRPC-lite conns into an HTTP/2 client running through the outbound (core SPEC 082). Same upstream base as lx.34. |
 | **v1.14.0-lx.34** | The upstream **1.14.0 stable** base (plus 16 post-release commits): a URL test can no longer hang on an unresponsive node (a 15 s deadline per probe), a manual test now probes every node of a group and recurses into nested groups, `_dns.*` SVCB discovery queries get an empty NOERROR so browsers cannot bypass the tunnel over DoH, inverted DNS rules with rule-set address filters match again, QUIC throughput on TUIC/naive survives an idle period, and sing-tun keeps a separate TCP NAT table per address family. Configs unchanged. Java surface: additive only (see the pin section) |
 | **v1.14.0-lx.33** | AmneziaWG 3.0/3.1 (§421): AWG 3.x root keys on the `wireguard` endpoint (`header_protection_key`, `content_padding_addition`, ranged timings, `random_trailers`, `disable_cookies`) and a ranged `persistent_keepalive_interval`; `lx.32` introduced the fields, `lx.33` fixes data-packet reception under `random_trailers`. Cores ≤ `lx.31` reject such a config as a whole. Java surface: unchanged |

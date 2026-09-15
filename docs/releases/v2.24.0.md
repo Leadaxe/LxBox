@@ -203,6 +203,7 @@ Bugs present in 2.23.2:
 
 | Before | Now |
 |---|---|
+| REALITY nodes had `firefox` and other fingerprints replaced with `chrome` in the config, and connections to some servers did not come up | The node's fingerprint from the subscription goes into the config as is; the app does not rewrite the source's choice. The node warning suggests trying `chrome` ([docs/spec/tasks/444](docs/spec/tasks/444-reality-fingerprint-no-override.md)) |
 | Importing a backup turned off rules whose target was `direct-out` | They arrive as they were |
 | A user DNS rule written without the `enabled` key (backup import, Debug API) was skipped by the build | It is in the config |
 | An srs DNS rule with its body in `body` never reached the config | It is in the config |
@@ -430,6 +431,7 @@ detour подписки, сервера и папки, личный detour чл�
 
 | Было | Стало |
 |---|---|
+| У REALITY-узлов отпечаток `firefox` и другие подменялся в конфиге на `chrome` — соединение с частью серверов не устанавливалось | Отпечаток узла из подписки уходит в конфиг как есть: приложение не переписывает выбор источника. Предупреждение на узле советует попробовать `chrome` ([docs/spec/tasks/444](docs/spec/tasks/444-reality-fingerprint-no-override.md)) |
 | Импорт бэкапа выключал правила с целью `direct-out` | Правила приезжают как были |
 | Пользовательское DNS-правило без ключа `enabled` (импорт бэкапа, Debug API) сборка пропускала | Попадает в конфиг |
 | srs-правило DNS с телом в `body` в конфиг не попадало никогда | Попадает в конфиг |
