@@ -13,10 +13,12 @@ import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
 import '../../config/consts.dart';
 import '../../models/validation.dart';
+import '../app_log.dart';
 import '../json_clone.dart';
 import '../node_hash.dart';
 import '../safe_regex.dart';
 import '../rule_set_downloader.dart';
+import '../tailscale_state/state_keys.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
 import 'chain_nodes.dart';
@@ -108,10 +110,15 @@ class BuildSettings {
 
   /// §435 — корень для `state_directory` узлов Tailscale: native
   /// `Context.filesDir` (тот же канал, что у §316). Каталог узла —
-  /// `<корень>/tailscale/<финальный тег>` подставляется при эмиссии, если в
-  /// теле поля нет; в хранимое тело путь не пишется. Пусто (юнит-тесты, канал
-  /// не ответил) — поле не пишется, ядро возьмёт свой дефолт.
+  /// `<корень>/tailscale/<имя>` подставляется при эмиссии, если в теле поля
+  /// нет; в хранимое тело путь не пишется. Пусто (юнит-тесты, канал не
+  /// ответил) — поле не пишется, ядро возьмёт свой дефолт.
   final String tailscaleStateRoot;
+
+  /// §445 — имена каталогов узлов из индекса `tailscale_state.json`
+  /// (`TailscaleStateStore.prepareForBuild`), карта по ссылке узла. `null` —
+  /// индекса нет (тесты, сбой): имя по финальному тегу, как в 2.24.0.
+  final Map<NodeSpec, String>? tailscaleStateDirs;
 
   const BuildSettings({
     this.userVars = const {},
@@ -127,6 +134,7 @@ class BuildSettings {
     this.idleSuspendReachable = '',
     this.passiveCheck = false,
     this.tailscaleStateRoot = '',
+    this.tailscaleStateDirs,
   });
 }
 
@@ -397,14 +405,27 @@ Future<BuildResult> buildConfig({
   // tailnet не сели в общий дефолт ядра (NODE_SECTIONS.md §6). Подставляется
   // ТОЛЬКО при эмиссии и только если корень известен; в хранимое тело путь не
   // пишется (путь этой машины другой стороне бесполезен).
+  // §445 — имя каталога из индекса по узлу (стабильно при переименовании и
+  // смене префикса); без индекса — по финальному тегу.
   final stateRoot = settings.tailscaleStateRoot.trim();
   if (stateRoot.isNotEmpty) {
+    final stateDirs = settings.tailscaleStateDirs;
+    final dirByTag = <String, String>{
+      if (stateDirs != null)
+        for (final e in ctx.emittedTagByNode.entries)
+          if (stateDirs[e.key] case final String name) e.value: name,
+    };
     for (final ep in ctx.endpoints) {
       if (ep.map['type'] != 'tailscale') continue;
       final cur = ep.map['state_directory'];
       if (cur is String && cur.isNotEmpty) continue;
+      final name = dirByTag[ep.tag];
+      if (name == null && stateDirs != null) {
+        AppLog.I.warning('Tailscale node "${ep.tag}" has no state record, '
+            'directory named by its final tag');
+      }
       ep.map['state_directory'] =
-          '$stateRoot/tailscale/${tailscaleStateDirName(ep.tag)}';
+          '$stateRoot/tailscale/${name ?? tailscaleStateDirName(ep.tag)}';
     }
   }
 
@@ -760,16 +781,6 @@ _NodeSectionsInjection _collectNodeSections(
     }
   }
   return out;
-}
-
-/// §435 — имя каталога состояния узла Tailscale из финального тега: всё вне
-/// `[A-Za-z0-9._-]` → `_` (пробелы, `/`, `:` префикса), пустой результат →
-/// `tailscale`. Тот же allowlist, что у лаунчера (`<exec>/bin/tailscale/…`),
-/// чтобы каталог был один на узел, а не дерево.
-String tailscaleStateDirName(String finalTag) {
-  final cleaned =
-      finalTag.replaceAll(RegExp(r'[^A-Za-z0-9._-]', unicode: true), '_');
-  return cleaned.isEmpty ? 'tailscale' : cleaned;
 }
 
 /// Реализация `EmitContext`: vars + аллокатор уникальных тегов +

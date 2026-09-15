@@ -14,6 +14,7 @@ import '../models/server_list.dart';
 import '../models/tailscale_bundle.dart';
 import '../models/ui_msg.dart';
 import '../models/subscription_meta.dart';
+import '../models/tunnel_status.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
 import '../services/automation/event_emitter.dart';
@@ -27,6 +28,8 @@ import '../services/node_hash.dart';
 import '../services/node_identity.dart';
 import '../services/node_link_address.dart';
 import '../services/settings_storage/node_link_registry.dart';
+import '../services/tailscale_state/state_keys.dart';
+import '../services/tailscale_state/state_store.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
 import '../services/builder/core_chain_capability.dart';
@@ -54,6 +57,7 @@ import '../services/warp/scan/candidate_generator.dart';
 import '../services/warp/scan/scan_models.dart';
 import '../services/warp/scan/scan_node_builder.dart';
 import '../services/warp/scan/scan_pool.dart';
+import '../services/workspaces/workspace_store.dart';
 
 // Та же библиотека (`part`), поэтому library-private доступ
 // (`_replaceList`, `_formatAgo`) к/между основным файлом и part'ом доступен.
@@ -1019,6 +1023,9 @@ class SubscriptionController extends ChangeNotifier {
     NodeLinkSubject? subject,
   }) async {
     final after = _lists();
+    // §445 — записи каталогов состояния Tailscale идут за узлами. До раннего
+    // выхода: перестановка тёзок меняет ключ записи, но не адрес узла.
+    await _relinkTailscaleState(before, after, renamed);
     final diff = diffNodeAddresses(before, after, renamed: renamed);
     if (diff.moves.isEmpty && diff.gone.isEmpty && goneContainers.isEmpty) {
       return null;
@@ -2169,6 +2176,75 @@ class SubscriptionController extends ChangeNotifier {
   /// §435 — native `Context.filesDir` для `state_directory` узлов Tailscale.
   /// Кэшируется только успешный ответ (в юнит-тестах канала нет → пусто).
   static String? _filesDirCache;
+
+  /// §445 — корень каталогов состояния Tailscale для тестов (без native-канала).
+  @visibleForTesting
+  static set debugTailscaleStateRoot(String? root) => _filesDirCache = root;
+
+  /// §445 — ответ «ядро остановлено» для тестов; `null` — native-статус.
+  @visibleForTesting
+  static Future<bool> Function()? debugCoreStopped;
+
+  /// §445 — ядро остановлено: native-статус `Stopped`. Ошибка канала —
+  /// считается поднятым: каталоги состояния не удаляются.
+  static Future<bool> _coreStopped() async {
+    final override = debugCoreStopped;
+    if (override != null) return override();
+    try {
+      final status = await BoxVpnClient().getVpnStatus();
+      return status == TunnelStatus.disconnected ||
+          status == TunnelStatus.revoked;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// §445 — индекс каталогов состояния Tailscale перед сборкой: имена
+  /// каталогов узлов слота `current`, миграция, сироты. `null` — корня нет
+  /// или индекс недоступен (имя по финальному тегу).
+  Future<Map<NodeSpec, String>?> _prepareTailscaleState(
+      String root, List<ServerList> lists) async {
+    if (root.isEmpty) return null;
+    try {
+      final m = await WorkspaceStore.I.readManifest();
+      return await TailscaleStateStore.I.prepareForBuild(
+        root: root,
+        slot: m.current,
+        slotNames: m.names,
+        lists: lists,
+        coreStopped: _coreStopped,
+      );
+    } catch (e) {
+      AppLog.I.warning('Tailscale state index unavailable: $e');
+      return null;
+    }
+  }
+
+  /// §445 — операция реестра над записями каталогов состояния Tailscale
+  /// (переименование, перенос, удаление узла или источника).
+  Future<void> _relinkTailscaleState(
+    List<ServerList> before,
+    List<ServerList> after,
+    Map<NodeSpec, NodeSpec> renamed,
+  ) async {
+    if (!hasTailscaleNodes(before) && !hasTailscaleNodes(after)) return;
+    final root = await _tailscaleStateRoot();
+    if (root.isEmpty) return;
+    try {
+      final m = await WorkspaceStore.I.readManifest();
+      await TailscaleStateStore.I.relink(
+        root: root,
+        slot: m.current,
+        slotNames: m.names,
+        before: before,
+        after: after,
+        renamed: renamed,
+        coreStopped: _coreStopped,
+      );
+    } catch (e) {
+      AppLog.I.warning('Tailscale state relink failed: $e');
+    }
+  }
   Future<String> _tailscaleStateRoot() async {
     final cached = _filesDirCache;
     if (cached != null) return cached;
@@ -2226,6 +2302,11 @@ class SubscriptionController extends ChangeNotifier {
     _progressMessage = const SubStatusBuildingConfig();
     notifyListeners();
 
+    final lists = _entries.map((e) => e.list).toList();
+    // §435 — корень `state_directory` узлов Tailscale: native filesDir
+    // (кэш на процесс, как у §316; без канала — пусто, поле не пишется).
+    final tailscaleStateRoot = await _tailscaleStateRoot();
+
     final settings = BuildSettings(
       userVars: await SettingsStorage.getAllVars(),
       enabledGroups: await SettingsStorage.getEnabledGroups(),
@@ -2246,12 +2327,12 @@ class SubscriptionController extends ChangeNotifier {
       idleSuspendReachable:
           await SettingsStorage.getIdleSuspendReachable(), // §272
       passiveCheck: await SettingsStorage.getPassiveCheck(), // §272
-      // §435 — корень `state_directory` узлов Tailscale: native filesDir
-      // (кэш на процесс, как у §316; без канала — пусто, поле не пишется).
-      tailscaleStateRoot: await _tailscaleStateRoot(),
+      tailscaleStateRoot: tailscaleStateRoot,
+      // §445 — имена каталогов из индекса (стабильны при переименовании).
+      tailscaleStateDirs:
+          await _prepareTailscaleState(tailscaleStateRoot, lists),
     );
 
-    final lists = _entries.map((e) => e.list).toList();
     final result = await buildConfig(lists: lists, settings: settings);
 
     // Записываем обратно то, что buildConfig сгенерил (clash_api/secret на
