@@ -225,9 +225,11 @@ void main() {
       expect(node.isAddressless, isTrue);
       expect((node as TailscaleSpec).hasExitNode, isFalse);
       expect(node.body['auth_key'], 'tskey-auth-secret');
+      // §449 — Hostname приходит с дефолтом; в тестах модель устройства пуста
+      // (`SubscriptionIdentity.init` не звался), отсюда голый префикс.
+      expect(node.body['hostname'], 'LxBox');
       // Пустые поля и выключенные тумблеры в тело не пишутся.
       expect(node.body.containsKey('control_url'), isFalse);
-      expect(node.body.containsKey('hostname'), isFalse);
       expect(node.body.containsKey('ephemeral'), isFalse);
       expect(node.body.containsKey('accept_routes'), isFalse);
       expect(node.body.containsKey('exit_node'), isFalse);
@@ -242,6 +244,22 @@ void main() {
       expect(s.rules.single.orderNum, 945);
       expect(s.dnsServers.single.tag, '@{self}-dns');
       expect(s.dnsRules.single.rule['server'], '@{self}-dns');
+    });
+
+    testWidgets('§449 Hostname с дефолтом LxBox, стирание возвращает пустое тело',
+        (tester) async {
+      final c = await openTailscale(tester);
+      // Поле открывается заполненным — юзер видит имя до создания узла.
+      expect(find.text('LxBox'), findsOneWidget);
+
+      await tester.enterText(field(0), '🪢 Wiped');
+      await tester.enterText(field(1), 'tskey-auth-w');
+      await tester.enterText(field(3), '');
+      await submit(tester, c);
+
+      final node = (c.entries.single.list as UserServer).nodes.single;
+      // Пусто = имя выбирает tsnet, как было до §449.
+      expect((node as TailscaleSpec).body.containsKey('hostname'), isFalse);
     });
 
     testWidgets('round-trip записи sources[]: узел и секции целы',
