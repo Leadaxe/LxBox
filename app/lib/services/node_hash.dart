@@ -17,7 +17,9 @@ import '../models/template_vars.dart';
 ///   следующий `X-2`, затем `X-3`; порядок — порядок разбора, счётчик свой
 ///   на источник (не глобальный);
 /// - узлы-группы (§322 `AutoSelectSpec`) и узлы без имени идентичности НЕ
-///   имеют — пустая строка это «идентичности нет», а не общий ключ.
+///   имеют — пустая строка это «идентичности нет», а не общий ключ. Сырой
+///   тег у группы есть ([sourceNodeRawTags]): по нему её адресует ссылка
+///   (NODE_LINK §5.2), а уникализируется он общим счётчиком с узлами.
 ///
 /// Содержимое узла (server, port, креды, SNI, транспорт, mtu) в
 /// идентичность не входит: провайдер вправе ротировать адрес под тем же
@@ -61,13 +63,36 @@ Duration disabledHashTtl(int updateIntervalHours) {
 /// два разных узла-тёзки из одного тела схлопнулись бы в одну ячейку.
 /// Узлы без идентичности (группы, безымянные) в карту НЕ попадают — вызов
 /// `map[node]` даёт `null`, и это единственная трактовка «отметки нет».
-Map<NodeSpec, String> sourceNodeIdentities(List<NodeSpec> nodes) {
+Map<NodeSpec, String> sourceNodeIdentities(List<NodeSpec> nodes) =>
+    _sourceRawTags(nodes, withGroups: false);
+
+/// Сырые теги ВСЕХ узлов одного источника, включая группы (§439, решение
+/// 15.09: группы уникализируются общим счётчиком с узлами подписки до
+/// `tag_policy`). Адрес члена в ссылке `{folder_id, tag}` (NODE_LINK §2.2).
+///
+/// Счётчик один, но группы занимают имена ПОСЛЕ всех узлов: у узла тег
+/// тот же, что в [sourceNodeIdentities], — отметки `disabled_hashes` от
+/// групп не сдвигаются. Группа-тёзка узла получает `X-2`, где бы в списке
+/// она ни стояла. У узла без имени сырого тега нет.
+Map<NodeSpec, String> sourceNodeRawTags(List<NodeSpec> nodes) =>
+    _sourceRawTags(nodes, withGroups: true);
+
+Map<NodeSpec, String> _sourceRawTags(
+  List<NodeSpec> nodes, {
+  required bool withGroups,
+}) {
   final out = Map<NodeSpec, String>.identity();
   if (nodes.isEmpty) return out;
   final counts = <String, int>{};
   for (final node in nodes) {
     final id = _stampIdentity(node, counts);
     if (id != null) out[node] = id;
+  }
+  if (!withGroups) return out;
+  for (final node in nodes) {
+    if (!node.isGroup) continue;
+    final raw = node.tag.trim();
+    if (raw.isNotEmpty) out[node] = _uniquifyAgainstCounts(raw, counts);
   }
   return out;
 }
