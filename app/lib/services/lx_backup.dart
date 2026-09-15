@@ -1633,6 +1633,17 @@ class _UnknownScan {
     object('$where.$key', obj, known);
   }
 
+  /// §441 (Л5) — `vars` DNS-сервера 1.0 — поле только `kind: template`. У
+  /// `user` и `preset` ключ не применяется (кодек его не читает) и называется
+  /// как незнакомый. Запись чужого вида отбрасывает [_dns10] целиком — её
+  /// ключи не называются.
+  void dnsServer10Body(String where, Map<String, dynamic> item) {
+    final kind = item['kind'];
+    if ((kind == 'user' || kind == 'preset') && item.containsKey('vars')) {
+      _note(where, 'vars');
+    }
+  }
+
   /// Вложенные уровни одного Направления. Общий для корневых `directions[]` и
   /// локальных `subscriptions[].outbounds[]`: форма у них одна.
   void directionBody(String where, Map<String, dynamic> item) {
@@ -3416,7 +3427,8 @@ List<LxBackupWarning> _scanUnknown10(Map<String, dynamic> root) {
   final dns = _obj(root['dns']);
   if (dns != null) {
     sc.object('dns', dns, _dns10Keys);
-    sc.array(dns, 'dns.servers', 'servers', dnsServerKeys, 'tag', null);
+    sc.array(dns, 'dns.servers', 'servers', dnsServerKeys, 'tag',
+        sc.dnsServer10Body);
     sc.array(dns, 'dns.rules', 'rules', dnsRuleKeys, 'name', null);
   }
 
@@ -3447,8 +3459,8 @@ List<LxBackupWarning> _scanUnknown10(Map<String, dynamic> root) {
       final sdns = _obj(sections['dns']);
       if (sdns != null) {
         sc.object('$at.dns', sdns, _sectionsDns10Keys);
-        sc.array(
-            sdns, '$at.dns.servers', 'servers', dnsServerKeys, 'tag', null);
+        sc.array(sdns, '$at.dns.servers', 'servers', dnsServerKeys, 'tag',
+            sc.dnsServer10Body);
         sc.array(sdns, '$at.dns.rules', 'rules', dnsRuleKeys, 'name', null);
       }
     }

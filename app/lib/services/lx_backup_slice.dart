@@ -171,6 +171,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.dnsServer, 'ref', _c),
   BackupField(BackupRecord.dnsServer, 'enabled', _c),
   BackupField(BackupRecord.dnsServer, 'body', _c),
+  // `vars` — поле только `kind: template` (Л5): у `user` и `preset` импорт
+  // называет ключ `backup_unknown_field` (обход ключей `lx_backup.dart`).
   BackupField(BackupRecord.dnsServer, 'vars', _s, declared: true),
   BackupField(BackupRecord.dnsServer, 'description', _s, declared: true),
 
